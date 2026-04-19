@@ -1,0 +1,360 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+enum UserStatus {
+  onboarding
+  active
+  paused
+  suspended
+  pending_investigation
+  banned
+}
+
+enum Language {
+  en
+  ru
+  uk
+}
+
+enum OnboardingStep {
+  consent
+  language
+  conversational
+  completed
+}
+
+enum Gender {
+  male
+  female
+}
+
+enum GenderPreference {
+  men
+  women
+  both
+}
+
+enum Platform {
+  telegram
+  mobile
+  both
+}
+
+enum VerificationStatus {
+  unverified
+  pending
+  verified
+  rejected
+}
+
+enum MatchRadius {
+  campus_only
+  citywide
+}
+
+model User {
+  id               String            @id @default(uuid()) @db.Uuid
+  telegramId       BigInt            @unique @map("telegram_id")
+  email            String?           @unique
+  universityDomain String?           @map("university_domain")
+  firstName        String?           @map("first_name")
+  surname          String?
+  age              Int?
+  gender           Gender?
+  preference       GenderPreference?
+  major            String?
+  language         Language?
+  status           UserStatus        @default(onboarding)
+  onboardingStep   OnboardingStep    @default(consent) @map("onboarding_step")
+  hasConsented     Boolean           @default(false) @map("has_consented")
+  consentedAt      DateTime?         @map("consented_at")
+  emailOtp         String?           @map("email_otp")
+  emailOtpExpiresAt DateTime?        @map("email_otp_expires_at")
+  messageHistory   Json[]            @default([]) @map("message_history")
+  lastMessageAt    DateTime?         @map("last_message_at")
+  /// Last time the "your match is coming tomorrow" pre-batch teaser was sent.
+  /// Prevents re-sending within the same weekly cycle.
+  lastPreMatchAnnounceAt DateTime?   @map("last_pre_match_announce_at")
+  /// Onboarding re-engagement chain: how many touches have been delivered in
+  /// the current drop-off streak (0 = chain idle, 5 = fully exhausted).
+  reEngagementStep   Int             @default(0) @map("re_engagement_step")
+  /// Scheduled moment of the next re-engagement touch. Null = chain inactive
+  /// (either user is still engaged, onboarding complete, or chain exhausted).
+  reEngagementNextAt DateTime?       @map("re_engagement_next_at")
+  /// Accumulated Tier 2 strikes from verified reports.
+  /// 1 → warning; 2 → 14-day suspension; ≥3 → ban.
+  strikes            Int             @default(0)
+  /// When a `suspended` status should auto-revert to `active`.
+  /// Consumed by the match-engine tick; null for all non-suspended users.
+  suspendedUntil     DateTime?       @map("suspended_until")
+  /// Telegram `message_id` of the pinned "next match in …" status banner.
+  /// Null = no banner pinned (either pre-finalize, or user unpinned / deleted).
+  /// Cleared by the status-timer worker on 400/403 edit failures.
+  statusMessageId    Int?            @map("status_message_id")
+  /// Identity origin. Mobile-first users are created with a synthetic negative
+  /// `telegramId` (Telegram never issues negative IDs) — Telegram-targeting
+  /// workers MUST filter `telegramId: { gt: 0 }` or `platform: { in: [telegram, both] }`.
+  platform            Platform       @default(telegram)
+  /// Expo / APNs / FCM push token registered by the mobile app.
+  pushToken           String?        @map("push_token")
+  pushPlatform        String?        @map("push_platform")
+  /// Live-selfie verification state (Phase 6.3 of the product spec).
+  verificationStatus  VerificationStatus @default(unverified) @map("verification_status")
+  /// Storage path (Supabase Storage object key) of the submitted selfie.
+  selfiePath          String?        @map("selfie_path")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  profile Profile?
+  sessions UserSession[]
+
+  matchesAsA Match[] @relation("MatchUserA")
+  matchesAsB Match[] @relation("MatchUserB")
+
+  reportsFiled    Report[] @relation("ReportReporter")
+  reportsAgainst  Report[] @relation("ReportReported")
+
+  @@index([status, reEngagementNextAt])
+  @@index([status, suspendedUntil])
+  @@map("users")
+}
+
+model Profile {
+  id                   String                    @id @default(uuid()) @db.Uuid
+  userId               String                    @unique @map("user_id") @db.Uuid
+  ethnicity            String?
+  height               Int?
+  hobbies              String[]                  @default([])
+  partnerPreferences   String?                   @map("partner_preferences")
+  visualPreferences    Json?                     @map("visual_preferences")
+  psychologicalSummary String?                   @map("psychological_summary")
+  negativeConstraints  String?                   @map("negative_constraints")
+  ageRangeMin          Int?                      @map("age_range_min")
+  ageRangeMax          Int?                      @map("age_range_max")
+  embedding            Unsupported("vector(1536)")?
+  /// 6-dim visual trait vector populated during onboarding from carousel votes
+  /// and explicit preferences. Used by multi-factor match scoring.
+  visualVector         Float[]           @default([]) @map("visual_vector")
+  photos               String[]                  @default([])
+  /// Mobile-side match radius preference. Telegram users inherit the default.
+  matchRadius          MatchRadius               @default(campus_only) @map("match_radius")
+  /// Last time this profile was included in a `Match` row. Used by the
+  /// match-engine tick to avoid re-pairing the same user within a cooldown.
+  lastMatchedAt        DateTime?                 @map("last_matched_at")
+  /// Consecutive weekly batches where this profile was eligible but left
+  /// unpaired. Reset to 0 on a successful pairing. Read by the scoring
+  /// function as a capped priority bonus (see `starvationBonus`).
+  missedWeeks          Int                       @default(0) @map("missed_weeks")
+  /// Timestamp of the most recent batch where this profile was eligible
+  /// but unpaired. Drives the "priority boosted" UX ping.
+  lastMissedAt         DateTime?                 @map("last_missed_at")
+  createdAt            DateTime                  @default(now()) @map("created_at")
+  updatedAt            DateTime                  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+enum MatchStatus {
+  proposed
+  negotiating
+  negotiating_venue
+  scheduled
+  cancelled
+  completed
+  expired
+}
+
+model Match {
+  id           String      @id @default(uuid()) @db.Uuid
+  userAId      String      @map("user_a_id") @db.Uuid
+  userBId      String      @map("user_b_id") @db.Uuid
+  status       MatchStatus @default(proposed)
+  pitchForA    String?     @map("pitch_for_a")
+  pitchForB    String?     @map("pitch_for_b")
+
+  /// Per-user Accept/Decline state. NULL = pending, true = accepted,
+  /// false = declined. Both must be true for the match to enter `negotiating`.
+  acceptedByA  Boolean?    @map("accepted_by_a")
+  acceptedByB  Boolean?    @map("accepted_by_b")
+
+  /// Free-form reason captured from a user who declined the match. AI parses
+  /// this text and appends distilled constraints to `Profile.negativeConstraints`.
+  rejectionReasonA String? @map("rejection_reason_a")
+  rejectionReasonB String? @map("rejection_reason_b")
+
+  /// Progressive scheduling iteration:
+  ///   0 = not yet scheduling (proposed / negotiating / declined)
+  ///   1 = AI proposal round 1
+  ///   2 = AI proposal round 2
+  ///   3 = Telegram Web App calendar (Mini App)
+  schedulingIteration Int       @default(0) @map("scheduling_iteration")
+  /// Timeslots offered to the users in iterations 1 & 2. Stored as an array
+  /// so both the pitch and the callback handler share the same source of truth.
+  proposedTimes       DateTime[] @map("proposed_times")
+  /// Per-user pick from the most recent `proposedTimes` round (ISO timestamp).
+  pickedTimeA         DateTime?  @map("picked_time_a")
+  pickedTimeB         DateTime?  @map("picked_time_b")
+
+  agreedTime   DateTime?   @map("agreed_time")
+  venueName    String?     @map("venue_name")
+  venueAddress String?     @map("venue_address")
+
+  /// Phase 3.4: Concierge venue negotiation (after agreedTime is locked).
+  /// Each user submits a free-text "vibe" (cafe/restaurant/park/etc.) and a
+  /// Telegram Location pin of where they're commuting from. The bot computes
+  /// the great-circle midpoint, safety-parses both vibes against a strict
+  /// public-place whitelist, and queries Google Places centered on the
+  /// midpoint. All fields nullable — populated incrementally as each user
+  /// responds; once all four of (vibeText*, vibeLat*) pairs are present the
+  /// match finalizes to `scheduled`.
+  vibeTextA        String? @map("vibe_text_a")
+  vibeTextB        String? @map("vibe_text_b")
+  vibeLatA         Float?  @map("vibe_lat_a")
+  vibeLngA         Float?  @map("vibe_lng_a")
+  vibeLatB         Float?  @map("vibe_lat_b")
+  vibeLngB         Float?  @map("vibe_lng_b")
+  /// Whitelisted Places category after safety override (cafe | restaurant |
+  /// coffee_shop | park | museum | lounge). Audit trail for overrides.
+  parsedCategoryA  String? @map("parsed_category_a")
+  parsedCategoryB  String? @map("parsed_category_b")
+  /// Resolved midpoint used for the Places query — kept for audit / retries.
+  venueLat         Float?  @map("venue_lat")
+  venueLng         Float?  @map("venue_lng")
+  /// Idempotency marker: when the concierge prompt was dispatched to both users.
+  venuePromptAskedAt DateTime? @map("venue_prompt_asked_at")
+
+  /// Phase 4: Date lifecycle
+  icebreakersSentAt    DateTime? @map("icebreakers_sent_at")
+  /// Phase 4: Safety note sent to the female user 1h before `agreedTime`.
+  /// Idempotency marker — null = not yet sent, timestamp = sent.
+  safetyNoteSentAt     DateTime? @map("safety_note_sent_at")
+  emergencyCancelledBy String?   @map("emergency_cancelled_by") @db.Uuid
+  emergencyReason      String?   @map("emergency_reason")
+  feedbackByA          String?   @map("feedback_by_a")
+  feedbackByB          String?   @map("feedback_by_b")
+
+  /// Timestamp when the AI pitch was dispatched to both users via the queue.
+  /// Used by the 24h TTL cron to expire unanswered proposals.
+  dispatchedAt DateTime? @map("dispatched_at")
+
+  /// Nudge timestamps — prevent double-pinging users who haven't responded.
+  /// nudge1SentAt: first reminder (≥3h after dispatch, or first scheduling reminder).
+  /// nudge2SentAt: second reminder (≥10h after dispatch, or second scheduling reminder).
+  nudge1SentAt DateTime? @map("nudge1_sent_at")
+  nudge2SentAt DateTime? @map("nudge2_sent_at")
+
+  /// Phase 4 mobile: personalised ice-breakers persisted per side so the
+  /// Expo app can display the same topics that Telegram users receive via DM.
+  /// Populated by `runDateLifecycleTick` in the same step that marks
+  /// `icebreakersSentAt`.
+  iceBreakersA String[] @default([]) @map("ice_breakers_a")
+  iceBreakersB String[] @default([]) @map("ice_breakers_b")
+
+  /// Phase 4 mobile: per-side acknowledgement of the pre-date safety brief.
+  /// Flipped by POST /v1/matches/:id/safety-ack. Independent from
+  /// `safetyNoteSentAt` which only tracks the Telegram DM dispatch.
+  safetyAckA Boolean @default(false) @map("safety_ack_a")
+  safetyAckB Boolean @default(false) @map("safety_ack_b")
+
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  userA User @relation("MatchUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB User @relation("MatchUserB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  reports Report[]
+
+  @@index([status, createdAt])
+  @@index([userAId, userBId])
+  @@map("matches")
+}
+
+/// Post-match report filed by one participant against the other.
+/// LLM-triaged into Tier 1 (preference), Tier 2 (ethical), or Tier 3 (safety).
+/// Tier 3 rows stay `adminReviewed=false` until a human clears them.
+model Report {
+  id            String   @id @default(uuid()) @db.Uuid
+  reporterId    String   @map("reporter_id") @db.Uuid
+  reportedId    String   @map("reported_id") @db.Uuid
+  matchId       String   @map("match_id") @db.Uuid
+  rawText       String   @map("raw_text")
+  tier          Int
+  reasonSummary String?  @map("reason_summary")
+  adminReviewed Boolean  @default(false) @map("admin_reviewed")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  reporter User  @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported User  @relation("ReportReported", fields: [reportedId], references: [id], onDelete: Cascade)
+  match    Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([reporterId, matchId])
+  @@index([reportedId, tier, createdAt])
+  @@index([tier, adminReviewed, createdAt])
+  @@map("reports")
+}
+
+model BotSession {
+  key       String   @id
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("bot_sessions")
+}
+
+/// Email-OTP challenges for the public mobile API (`POST /v1/auth/otp/*`).
+/// Keyed by email (not userId) — user rows may not exist yet at request time.
+/// `code` is stored as a bcrypt hash; raw code is only delivered via email.
+model EmailOtp {
+  id         String    @id @default(uuid()) @db.Uuid
+  email      String
+  codeHash   String    @map("code_hash")
+  expiresAt  DateTime  @map("expires_at")
+  attempts   Int       @default(0)
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([email, createdAt])
+  @@map("email_otps")
+}
+
+/// Active mobile refresh tokens. Access JWTs are stateless; refresh tokens are
+/// persisted here (hashed) so revocation / rotation is server-controlled.
+model UserSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  userAgent        String?   @map("user_agent")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@map("user_sessions")
+}
+
+model SystemKnowledge {
+  id        String   @id @default(uuid()) @db.Uuid
+  key       String   @unique
+  title     String
+  content   String   @db.Text
+  category  String   @default("general")
+  priority  Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_knowledge")
+}

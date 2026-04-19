@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gennety Calendar</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font-family: -apple-system, system-ui, sans-serif;
+        margin: 0;
+        padding: 16px;
+        background: var(--tg-theme-bg-color, #fff);
+        color: var(--tg-theme-text-color, #111);
+      }
+      h1 { font-size: 18px; margin: 0 0 12px; }
+      .slots { display: grid; gap: 8px; }
+      button.slot {
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid var(--tg-theme-hint-color, #ccc);
+        background: transparent;
+        color: inherit;
+        font-size: 15px;
+        text-align: left;
+      }
+      button.slot.selected {
+        background: var(--tg-theme-button-color, #2481cc);
+        color: var(--tg-theme-button-text-color, #fff);
+        border-color: transparent;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Pick a time for your date</h1>
+    <div class="slots" id="slots"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

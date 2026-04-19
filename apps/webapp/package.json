@@ -1,0 +1,17 @@
+{
+  "name": "@gennety/webapp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo '[webapp] dev server deferred — see README' && exit 0",
+    "build": "echo '[webapp] build deferred — see README' && exit 0",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo '[webapp] lint deferred' && exit 0",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.4"
+  }
+}

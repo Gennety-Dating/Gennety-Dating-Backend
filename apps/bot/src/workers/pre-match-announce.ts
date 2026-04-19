@@ -1,0 +1,150 @@
+import type { Api, RawApi } from "grammy";
+import { prisma } from "@gennety/db";
+import { env } from "../config.js";
+import { isQuietHours } from "./quiet-hours.js";
+
+/**
+ * Pre-match announcement worker.
+ *
+ * Runs ~24 hours before the weekly matching batch (default: Saturday 18:00).
+ * Sends each active user a casual, warm teaser: "We've been looking for your
+ * match all week — check in tomorrow evening."
+ *
+ * Idempotency: skips users whose `lastPreMatchAnnounceAt` is within the last
+ * 6 days, so re-running the cron or a crash/retry doesn't double-send.
+ *
+ * Quiet hours are respected as always.
+ */
+
+/** Only re-send the teaser after this cooldown (6 days = ~one week cycle). */
+export const ANNOUNCE_COOLDOWN_MS = 6 * 24 * 60 * 60 * 1000;
+
+export interface PreMatchAnnounceOptions {
+  fetchFn?: typeof fetch;
+  now?: Date;
+  batchSize?: number;
+}
+
+export interface AnnounceResult {
+  announced: number;
+}
+
+export async function preMatchAnnounceTick(
+  api: Api<RawApi>,
+  options: PreMatchAnnounceOptions = {},
+): Promise<AnnounceResult> {
+  const now = options.now ?? new Date();
+  if (isQuietHours(now)) return { announced: 0 };
+
+  const fetchFn = options.fetchFn ?? fetch;
+  const batchSize = options.batchSize ?? 100;
+
+  const cooldownCutoff = new Date(now.getTime() - ANNOUNCE_COOLDOWN_MS);
+
+  const users = await prisma.user.findMany({
+    where: {
+      status: "active",
+      OR: [
+        { lastPreMatchAnnounceAt: null },
+        { lastPreMatchAnnounceAt: { lt: cooldownCutoff } },
+      ],
+    },
+    select: {
+      telegramId: true,
+      language: true,
+      firstName: true,
+      lastPreMatchAnnounceAt: true,
+    },
+    take: batchSize,
+  });
+
+  let announced = 0;
+
+  for (const user of users) {
+    try {
+      const text = await generateAnnounce(user, fetchFn);
+      await api.sendMessage(Number(user.telegramId), text, {
+        parse_mode: "Markdown",
+      });
+      await prisma.user.update({
+        where: { telegramId: user.telegramId },
+        data: { lastPreMatchAnnounceAt: now },
+      });
+      announced++;
+    } catch (err) {
+      console.warn(
+        `[pre-match-announce] send failed for ${user.telegramId}:`,
+        (err as Error).message,
+      );
+    }
+  }
+
+  return { announced };
+}
+
+async function generateAnnounce(
+  user: { firstName: string | null; language: string | null },
+  fetchFn: typeof fetch,
+): Promise<string> {
+  const lang = user.language ?? "en";
+  const name = user.firstName ?? "";
+
+  const prompt = `You are Gennety Dating's assistant. Tomorrow evening the weekly matching batch runs — the user will receive their curated match.
+
+User info:
+- Name: ${name || "unknown"}
+- Language: ${lang}
+
+Write a SHORT teaser message (2-3 sentences max) telling them we've been searching for their perfect match all week and they'll get it tomorrow evening. Make it feel exciting and personal — like a friend who's about to reveal a secret. 1-2 emojis max. Write in ${lang}.
+
+Tone: warm, a little mysterious, zero corporate-speak.
+
+CRITICAL: Use strictly gender-neutral language. We do NOT know the user's gender. Avoid any gendered verb forms or adjectives referring to the user. Use neutral imperatives and impersonal constructions.
+
+Good example:
+- "Эй, [name]! Мы целую неделю искали для тебя идеальную пару 🔍 Завтра вечером — покажем. Готовься 👀"
+- "Hey [name]! We've spent the whole week hunting down your perfect match. Tomorrow evening, we're pulling back the curtain 👀"
+
+Output ONLY the message text.`;
+
+  try {
+    const res = await fetchFn("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4.1-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.85,
+        max_completion_tokens: 160,
+      }),
+    });
+
+    if (!res.ok) throw new Error(`OpenAI ${res.status}`);
+
+    const json = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+
+    return (
+      json.choices?.[0]?.message?.content?.trim() ??
+      getAnnounceFallback(name, lang)
+    );
+  } catch {
+    return getAnnounceFallback(name, lang);
+  }
+}
+
+export function getAnnounceFallback(name: string, lang: string): string {
+  const g = name ? `, ${name}` : "";
+  switch (lang) {
+    case "ru":
+      return `Эй${g}! Мы целую неделю искали для тебя идеальную пару 🔍 Завтра вечером — покажем. Готовься 👀`;
+    case "uk":
+      return `Гей${g}! Ми цілий тиждень шукали для тебе ідеальну пару 🔍 Завтра ввечері — покажемо. Готуйся 👀`;
+    default:
+      return `Hey${g}! We've spent the whole week finding your perfect match 🔍 Tomorrow evening — we'll reveal them. Stay tuned 👀`;
+  }
+}

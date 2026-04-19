@@ -1,0 +1,651 @@
+/**
+ * Post-onboarding LLM agent (Menu Agent / LLM Router).
+ *
+ * Handles free-form messages from completed users by:
+ *   1. Building a dynamic system prompt (DB knowledge + user context)
+ *   2. Calling OpenAI with tool definitions for profile editing
+ *   3. Executing tool calls and returning the reply
+ *
+ * Conversation history is stored on User.messageHistory (same column as
+ * onboarding, but the system prompt is rebuilt fresh each session).
+ */
+
+import { prisma, Prisma } from "@gennety/db";
+import {
+  MAX_BIO_LENGTH,
+  MAX_MAJOR_LENGTH,
+  MIN_AGE,
+  MAX_AGE,
+  MAX_HISTORY_FOR_API,
+} from "@gennety/shared";
+import { env } from "../config.js";
+import { buildSystemPrompt } from "./prompt-builder.js";
+import { truncateForApi, type ChatMessage } from "./onboarding-agent.js";
+import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface ToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
+interface ChatCompletionResponse {
+  choices: Array<{
+    message: {
+      role: "assistant";
+      content: string | null;
+      tool_calls?: ToolCall[];
+    };
+    finish_reason: string;
+  }>;
+}
+
+export interface MenuAgentResult {
+  reply: string;
+}
+
+export interface MenuAgentDeps {
+  fetchFn?: typeof fetch;
+}
+
+// ---------------------------------------------------------------------------
+// Tool Definitions
+// ---------------------------------------------------------------------------
+
+const TOOLS = [
+  {
+    type: "function" as const,
+    function: {
+      name: "update_bio",
+      description:
+        "Update the user's psychological summary / bio text. Call when the user wants to change their bio.",
+      parameters: {
+        type: "object",
+        properties: {
+          bio: {
+            type: "string",
+            description: `New bio text (max ${MAX_BIO_LENGTH} characters)`,
+          },
+        },
+        required: ["bio"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "update_major",
+      description:
+        "Update the user's major / field of study.",
+      parameters: {
+        type: "object",
+        properties: {
+          major: {
+            type: "string",
+            description: `Major or field of study (max ${MAX_MAJOR_LENGTH} characters)`,
+          },
+        },
+        required: ["major"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "update_age_range",
+      description:
+        "Update the user's preferred partner age range for matching.",
+      parameters: {
+        type: "object",
+        properties: {
+          min_age: {
+            type: "integer",
+            description: `Minimum preferred age (${MIN_AGE}-${MAX_AGE})`,
+          },
+          max_age: {
+            type: "integer",
+            description: `Maximum preferred age (${MIN_AGE}-${MAX_AGE})`,
+          },
+        },
+        required: ["min_age", "max_age"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "update_partner_preferences",
+      description:
+        "Update the user's free-text partner preference description.",
+      parameters: {
+        type: "object",
+        properties: {
+          preferences: {
+            type: "string",
+            description: "New partner preference description",
+          },
+        },
+        required: ["preferences"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_my_profile",
+      description:
+        "Retrieve the user's current profile information. Call when the user asks to see their profile.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "pause_matching",
+      description:
+        "Pause the user's matching. They won't receive new matches until they resume.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "resume_matching",
+      description:
+        "Resume matching after a pause.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "record_rejection_feedback",
+      description:
+        "Record the reason why the user declined a specific match. Call ONLY when the 'Current User Context' section indicates a pending rejection AND the user has given a concrete, specific reason. If the reason is vague ('не вайбанул', 'just didn't click', 'idk'), first ask 1-2 follow-up questions to extract what exactly didn't work (looks, vibe, interests, lifestyle, etc.). Do NOT call this tool for generic chitchat or when no pending rejection is mentioned in the context.",
+      parameters: {
+        type: "object",
+        properties: {
+          match_id: {
+            type: "string",
+            description:
+              "The UUID of the match being rejected (provided in the pending rejection hint).",
+          },
+          reason: {
+            type: "string",
+            description:
+              "Concrete rejection reason as a full sentence. Must describe a specific trait or mismatch (e.g. 'prefers more extroverted/social types', 'found the bio too focused on career'). Minimum 10 characters.",
+          },
+        },
+        required: ["match_id", "reason"],
+      },
+    },
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Tool Executors
+// ---------------------------------------------------------------------------
+
+async function execUpdateBio(
+  telegramId: bigint,
+  args: { bio: string },
+): Promise<string> {
+  const bio = args.bio.trim();
+  if (bio.length > MAX_BIO_LENGTH) {
+    return JSON.stringify({
+      success: false,
+      error: `Bio must be ${MAX_BIO_LENGTH} characters or less (currently ${bio.length}).`,
+    });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (!user) return JSON.stringify({ success: false, error: "User not found." });
+
+  await prisma.profile.update({
+    where: { userId: user.id },
+    data: { psychologicalSummary: bio },
+  });
+
+  return JSON.stringify({ success: true, message: "Bio updated." });
+}
+
+async function execUpdateMajor(
+  telegramId: bigint,
+  args: { major: string },
+): Promise<string> {
+  const major = args.major.trim();
+  if (major.length > MAX_MAJOR_LENGTH) {
+    return JSON.stringify({
+      success: false,
+      error: `Major must be ${MAX_MAJOR_LENGTH} characters or less.`,
+    });
+  }
+
+  await prisma.user.update({
+    where: { telegramId },
+    data: { major },
+  });
+
+  return JSON.stringify({ success: true, message: "Major updated." });
+}
+
+async function execUpdateAgeRange(
+  telegramId: bigint,
+  args: { min_age: number; max_age: number },
+): Promise<string> {
+  if (args.min_age < MIN_AGE || args.max_age > MAX_AGE || args.min_age > args.max_age) {
+    return JSON.stringify({
+      success: false,
+      error: `Age range must be between ${MIN_AGE} and ${MAX_AGE}, with min ≤ max.`,
+    });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (!user) return JSON.stringify({ success: false, error: "User not found." });
+
+  await prisma.profile.update({
+    where: { userId: user.id },
+    data: { ageRangeMin: args.min_age, ageRangeMax: args.max_age },
+  });
+
+  return JSON.stringify({ success: true, message: `Age range set to ${args.min_age}-${args.max_age}.` });
+}
+
+async function execUpdatePartnerPreferences(
+  telegramId: bigint,
+  args: { preferences: string },
+): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (!user) return JSON.stringify({ success: false, error: "User not found." });
+
+  await prisma.profile.update({
+    where: { userId: user.id },
+    data: { partnerPreferences: args.preferences.trim() },
+  });
+
+  return JSON.stringify({ success: true, message: "Partner preferences updated." });
+}
+
+async function execGetMyProfile(telegramId: bigint): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: {
+      firstName: true,
+      surname: true,
+      age: true,
+      gender: true,
+      preference: true,
+      major: true,
+      universityDomain: true,
+      status: true,
+      profile: {
+        select: {
+          psychologicalSummary: true,
+          hobbies: true,
+          partnerPreferences: true,
+          ageRangeMin: true,
+          ageRangeMax: true,
+          height: true,
+          ethnicity: true,
+          photos: true,
+        },
+      },
+    },
+  });
+
+  if (!user) return JSON.stringify({ success: false, error: "User not found." });
+
+  return JSON.stringify({
+    success: true,
+    profile: {
+      firstName: user.firstName,
+      surname: user.surname,
+      age: user.age,
+      gender: user.gender,
+      preference: user.preference,
+      major: user.major,
+      university: user.universityDomain,
+      status: user.status,
+      bio: user.profile?.psychologicalSummary ?? null,
+      hobbies: user.profile?.hobbies ?? [],
+      partnerPreferences: user.profile?.partnerPreferences ?? null,
+      ageRange: user.profile?.ageRangeMin
+        ? `${user.profile.ageRangeMin}-${user.profile.ageRangeMax}`
+        : null,
+      height: user.profile?.height ?? null,
+      ethnicity: user.profile?.ethnicity ?? null,
+      photoCount: user.profile?.photos?.length ?? 0,
+    },
+  });
+}
+
+async function execPauseMatching(telegramId: bigint): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { status: true },
+  });
+
+  if (user?.status === "paused") {
+    return JSON.stringify({ success: false, error: "Matching is already paused." });
+  }
+
+  await prisma.user.update({
+    where: { telegramId },
+    data: { status: "paused" },
+  });
+
+  return JSON.stringify({ success: true, message: "Matching paused. You won't receive new matches until you resume." });
+}
+
+/**
+ * Persist a conversational rejection reason. Guards:
+ *   - match exists and was declined by this user
+ *   - the corresponding `rejectionReason{A,B}` is still empty (idempotent)
+ *   - reason has at least 10 non-whitespace characters
+ *
+ * On success: writes the reason to the match and appends a distilled
+ * constraint to `Profile.negativeConstraints` via the existing LLM-backed
+ * pipeline.
+ */
+async function execRecordRejectionFeedback(
+  telegramId: bigint,
+  args: { match_id: string; reason: string },
+): Promise<string> {
+  const reason = args.reason.trim();
+  if (reason.length < 10) {
+    return JSON.stringify({
+      success: false,
+      error:
+        "Reason is too vague. Ask the user for a concrete specific reason (looks, vibe, interests, lifestyle) before calling the tool again.",
+    });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true, language: true },
+  });
+  if (!user) return JSON.stringify({ success: false, error: "User not found." });
+
+  const match = await prisma.match.findUnique({
+    where: { id: args.match_id },
+    select: {
+      userAId: true,
+      userBId: true,
+      status: true,
+      acceptedByA: true,
+      acceptedByB: true,
+      rejectionReasonA: true,
+      rejectionReasonB: true,
+    },
+  });
+  if (!match) {
+    return JSON.stringify({
+      success: false,
+      error: "Match not found. Do not call this tool unless a pending rejection is listed in the user context.",
+    });
+  }
+
+  const side: "A" | "B" | null =
+    match.userAId === user.id ? "A" : match.userBId === user.id ? "B" : null;
+  if (!side) {
+    return JSON.stringify({
+      success: false,
+      error: "This match does not belong to the user.",
+    });
+  }
+
+  if (match.status !== "cancelled") {
+    return JSON.stringify({
+      success: false,
+      error: "Match was not declined — cannot record a rejection reason.",
+    });
+  }
+
+  const declined = side === "A" ? match.acceptedByA === false : match.acceptedByB === false;
+  if (!declined) {
+    return JSON.stringify({
+      success: false,
+      error: "The user did not decline this match; the peer did. Do not record a reason on their behalf.",
+    });
+  }
+
+  const existingReason = side === "A" ? match.rejectionReasonA : match.rejectionReasonB;
+  if (existingReason && existingReason.trim().length > 0) {
+    return JSON.stringify({
+      success: true,
+      message: "Rejection reason already recorded for this match. Move on naturally.",
+    });
+  }
+
+  const truncated = reason.slice(0, 1000);
+  await prisma.match.update({
+    where: { id: args.match_id },
+    data: side === "A" ? { rejectionReasonA: truncated } : { rejectionReasonB: truncated },
+  });
+
+  try {
+    await appendNegativeConstraint(user.id, truncated, user.language ?? "en");
+  } catch (err) {
+    console.warn("appendNegativeConstraint failed during rejection feedback:", err);
+  }
+
+  return JSON.stringify({
+    success: true,
+    message:
+      "Reason saved and matching preferences updated. Thank the user briefly and let them know it'll help find a better fit next batch.",
+  });
+}
+
+async function execResumeMatching(telegramId: bigint): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { status: true },
+  });
+
+  if (user?.status === "active") {
+    return JSON.stringify({ success: false, error: "Matching is already active." });
+  }
+
+  await prisma.user.update({
+    where: { telegramId },
+    data: { status: "active" },
+  });
+
+  return JSON.stringify({ success: true, message: "Matching resumed! You'll be included in the next batch." });
+}
+
+// ---------------------------------------------------------------------------
+// Core Agent Loop
+// ---------------------------------------------------------------------------
+
+const MAX_TOOL_ROUNDS = 4;
+
+/**
+ * Run one turn of the post-onboarding menu agent.
+ *
+ * Unlike the onboarding agent, this agent rebuilds the system prompt
+ * from scratch on every turn (dynamic knowledge + user context), so the
+ * first system message in the history is always replaced.
+ */
+export async function runMenuAgentTurn(
+  telegramId: bigint,
+  userMessage: string,
+  deps: MenuAgentDeps = {},
+): Promise<MenuAgentResult> {
+  const fetchFn = deps.fetchFn ?? fetch;
+
+  // Build dynamic system prompt
+  const systemPrompt = await buildSystemPrompt(telegramId);
+
+  // Load existing post-onboarding history
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { messageHistory: true },
+  });
+
+  const stored: ChatMessage[] = (
+    (user?.messageHistory ?? []) as unknown[]
+  ).map((m) => m as unknown as ChatMessage);
+
+  // Build conversation: fresh system prompt + non-system history + new user msg
+  const history: ChatMessage[] = [
+    { role: "system", content: systemPrompt },
+  ];
+
+  // Carry over previous non-system messages (preserves conversation continuity)
+  for (const msg of stored) {
+    if (msg.role !== "system") {
+      history.push(msg);
+    }
+  }
+
+  history.push({ role: "user", content: userMessage });
+
+  // Agent loop
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const response = await callOpenAI(truncateForApi(history, MAX_HISTORY_FOR_API), fetchFn);
+    const choice = response.choices[0];
+    if (!choice) break;
+
+    const assistantMsg = choice.message;
+    history.push({
+      role: "assistant",
+      content: assistantMsg.content,
+      ...(assistantMsg.tool_calls ? { tool_calls: assistantMsg.tool_calls } : {}),
+    });
+
+    if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
+      break;
+    }
+
+    for (const toolCall of assistantMsg.tool_calls) {
+      const fnName = toolCall.function.name;
+      let args: Record<string, unknown>;
+      try {
+        args = JSON.parse(toolCall.function.arguments);
+      } catch {
+        args = {};
+      }
+
+      let result: string;
+      switch (fnName) {
+        case "update_bio":
+          result = await execUpdateBio(telegramId, args as { bio: string });
+          break;
+        case "update_major":
+          result = await execUpdateMajor(telegramId, args as { major: string });
+          break;
+        case "update_age_range":
+          result = await execUpdateAgeRange(
+            telegramId,
+            args as { min_age: number; max_age: number },
+          );
+          break;
+        case "update_partner_preferences":
+          result = await execUpdatePartnerPreferences(
+            telegramId,
+            args as { preferences: string },
+          );
+          break;
+        case "get_my_profile":
+          result = await execGetMyProfile(telegramId);
+          break;
+        case "pause_matching":
+          result = await execPauseMatching(telegramId);
+          break;
+        case "resume_matching":
+          result = await execResumeMatching(telegramId);
+          break;
+        case "record_rejection_feedback":
+          result = await execRecordRejectionFeedback(
+            telegramId,
+            args as { match_id: string; reason: string },
+          );
+          break;
+        default:
+          result = JSON.stringify({ error: `Unknown tool: ${fnName}` });
+      }
+
+      history.push({
+        role: "tool",
+        tool_call_id: toolCall.id,
+        content: result,
+      });
+    }
+  }
+
+  // Persist history (only non-system messages to keep it lean; system prompt is rebuilt)
+  const toStore = history.filter((m) => m.role !== "system");
+  await prisma.user.update({
+    where: { telegramId },
+    data: {
+      messageHistory: toStore as unknown as Prisma.InputJsonValue[],
+      lastMessageAt: new Date(),
+    },
+  });
+
+  const lastAssistant = [...history]
+    .reverse()
+    .find((m) => m.role === "assistant" && m.content);
+  const reply =
+    lastAssistant?.content ?? "Something went wrong. Try again in a moment.";
+
+  return { reply };
+}
+
+// ---------------------------------------------------------------------------
+// OpenAI API Call
+// ---------------------------------------------------------------------------
+
+async function callOpenAI(
+  messages: ChatMessage[],
+  fetchFn: typeof fetch,
+): Promise<ChatCompletionResponse> {
+  const res = await fetchFn("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-5.4-mini",
+      messages,
+      tools: TOOLS,
+      tool_choice: "auto",
+      temperature: 0.5,
+      max_completion_tokens: 512,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`OpenAI API error: ${res.status} ${body}`);
+  }
+
+  return (await res.json()) as ChatCompletionResponse;
+}

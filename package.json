@@ -1,0 +1,26 @@
+{
+  "name": "gennety-dating",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:bot": "pnpm --filter @gennety/bot dev",
+    "dev:webapp": "pnpm --filter @gennety/webapp dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "test:integration": "pnpm --filter @gennety/bot test:integration",
+    "test:db:up": "docker compose -f docker-compose.test.yml up -d",
+    "test:db:down": "docker compose -f docker-compose.test.yml down -v",
+    "test:db:push": "DATABASE_URL=postgresql://gennety:gennety@localhost:5433/gennety_test pnpm --filter @gennety/db db:push",
+    "dev:db:up": "docker compose -f docker-compose.dev.yml up -d",
+    "dev:db:down": "docker compose -f docker-compose.dev.yml down",
+    "dev:db:reset": "docker compose -f docker-compose.dev.yml down -v && docker compose -f docker-compose.dev.yml up -d",
+    "dev:db:push": "DATABASE_URL=postgresql://gennety:gennety@localhost:5434/gennety_dev pnpm --filter @gennety/db db:push",
+    "dev:db:studio": "DATABASE_URL=postgresql://gennety:gennety@localhost:5434/gennety_dev pnpm --filter @gennety/db db:studio",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

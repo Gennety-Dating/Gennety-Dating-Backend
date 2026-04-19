@@ -1,0 +1,45 @@
+import { Bot } from "grammy";
+import type { BotContext } from "./session.js";
+import { sessionMiddleware } from "./session.js";
+import { sequentializeByChat } from "./chat-queue.js";
+import { start } from "./handlers/start.js";
+import { router } from "./handlers/router.js";
+import { matchingRouter } from "./handlers/matching/router.js";
+import { dateRouter } from "./handlers/date/router.js";
+import { voiceHandler } from "./handlers/voice.js";
+
+export function createBot(token: string): Bot<BotContext> {
+  const bot = new Bot<BotContext>(token);
+
+  // Middleware chain
+  bot.use(sequentializeByChat());
+  bot.use(sessionMiddleware());
+
+  // /start command — entry point & resume
+  bot.use(start);
+
+  // Voice notes → Whisper → transcript injected as text, then fall through.
+  // Must run before the FSM/menu routers, both of which read `ctx.message.text`.
+  bot.use(voiceHandler);
+
+  // Matching / scheduling flow (only active for completed users)
+  bot.use(matchingRouter);
+
+  // Date lifecycle flow — emergency cancellation & feedback (Phase 4)
+  bot.use(dateRouter);
+
+  // FSM router — dispatches to onboarding step handlers + menu
+  bot.use(router);
+
+  // Error handler
+  bot.catch(async (err) => {
+    console.error("Bot error:", err);
+    try {
+      await err.ctx.reply("Something went wrong. Please try again or type /menu.");
+    } catch {
+      // Reply itself failed — nothing more we can do.
+    }
+  });
+
+  return bot;
+}

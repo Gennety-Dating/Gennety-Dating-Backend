@@ -1,0 +1,33 @@
+##
+## Local PostgreSQL + pgvector for development (long-running dev DB).
+##
+## Usage:
+##   pnpm dev:db:up       # start
+##   pnpm dev:db:push     # apply Prisma schema
+##   pnpm dev:bot         # run bot locally against this DB
+##   pnpm dev:db:down     # stop (keeps volume)
+##
+## Port 5434 is deliberately offset from the test DB (5433) so both
+## can coexist: you can run integration tests without tearing down dev.
+##
+
+services:
+  postgres-dev:
+    image: pgvector/pgvector:pg16
+    container_name: gennety-dev-db
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: gennety
+      POSTGRES_PASSWORD: gennety
+      POSTGRES_DB: gennety_dev
+    volumes:
+      - pgdev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gennety -d gennety_dev"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdev:

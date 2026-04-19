@@ -1,0 +1,30 @@
+##
+## Local PostgreSQL + pgvector for integration / E2E tests.
+##
+## Usage:
+##   docker compose -f docker-compose.test.yml up -d
+##   DATABASE_URL=postgresql://gennety:gennety@localhost:5433/gennety_test pnpm --filter @gennety/db db:push
+##   pnpm test:integration
+##   docker compose -f docker-compose.test.yml down -v
+##
+
+services:
+  postgres-test:
+    image: pgvector/pgvector:pg16
+    container_name: gennety-test-db
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: gennety
+      POSTGRES_PASSWORD: gennety
+      POSTGRES_DB: gennety_test
+    volumes:
+      - pgtest:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gennety -d gennety_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgtest:
