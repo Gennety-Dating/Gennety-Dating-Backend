@@ -89,8 +89,8 @@ export async function seedUser(opts: SeedUserOpts = {}) {
 interface SeedProfileOpts {
   userId: string;
   psychologicalSummary?: string;
-  visualVector?: number[];
   photos?: string[];
+  eloScore?: number;
 }
 
 export async function seedProfile(opts: SeedProfileOpts) {
@@ -99,8 +99,8 @@ export async function seedProfile(opts: SeedProfileOpts) {
       userId: opts.userId,
       psychologicalSummary:
         opts.psychologicalSummary ?? "Curious analytical thinker.",
-      visualVector: opts.visualVector ?? [0.5, 0.3, 0.8, 0.2, 0.6, 0.4],
       photos: opts.photos ?? ["photo_1"],
+      eloScore: opts.eloScore ?? 500,
     },
   });
 }

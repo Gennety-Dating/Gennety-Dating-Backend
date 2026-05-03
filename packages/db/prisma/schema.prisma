@@ -51,6 +51,12 @@ enum Platform {
 enum VerificationStatus {
   unverified
   pending
+  /// Liveness passed at Persona but the face-match pipeline produced an
+  /// inconclusive score (in [REVIEW, VERIFY) — see env.FACE_MATCH_THRESHOLD_*).
+  /// Admin moderates these in the dashboard; users stay on `active` status
+  /// (they can browse, but appear with a "review" badge to potential
+  /// matches and accrue the unverified Elo penalty until cleared).
+  pending_review
   verified
   rejected
 }
@@ -76,8 +82,24 @@ model User {
   onboardingStep   OnboardingStep    @default(consent) @map("onboarding_step")
   hasConsented     Boolean           @default(false) @map("has_consented")
   consentedAt      DateTime?         @map("consented_at")
+  /// Explicit Terms of Service acceptance from the Initialization & Consent
+  /// screen. Distinct from `hasConsented` (broader onboarding gate) — this
+  /// is the legal ToS click and MUST be true to leave the `consent` step.
+  termsAccepted    Boolean           @default(false) @map("terms_accepted")
+  termsAcceptedAt  DateTime?         @map("terms_accepted_at")
+  /// User opt-in to anonymized research / analytics use of their data.
+  /// Defaults to false (opt-in, never opt-out) per GDPR norms.
+  researchOptIn    Boolean           @default(false) @map("research_opt_in")
   emailOtp         String?           @map("email_otp")
   emailOtpExpiresAt DateTime?        @map("email_otp_expires_at")
+  /// True once the user has successfully verified an OTP for `email`.
+  /// Set in two places: `findOrCreateMobileUser` (mobile API after
+  /// `/v1/auth/otp/verify`) and `execVerifyOtp` in the onboarding agent
+  /// (Telegram bot after the `verify_otp` tool succeeds). Read by the
+  /// onboarding agent to skip the email-collection step entirely when a
+  /// user arrives with their email already verified (e.g. mobile-first
+  /// user later opens the Telegram bot, or restarts onboarding mid-flow).
+  isEmailVerified  Boolean           @default(false) @map("is_email_verified")
   messageHistory   Json[]            @default([]) @map("message_history")
   lastMessageAt    DateTime?         @map("last_message_at")
   /// Last time the "your match is coming tomorrow" pre-batch teaser was sent.
@@ -106,10 +128,48 @@ model User {
   /// Expo / APNs / FCM push token registered by the mobile app.
   pushToken           String?        @map("push_token")
   pushPlatform        String?        @map("push_platform")
-  /// Live-selfie verification state (Phase 6.3 of the product spec).
+  /// Liveness verification state (Phase 6.3 of the product spec).
+  /// Backed by Persona hosted flow (withpersona.com) for both mobile and bot.
   verificationStatus  VerificationStatus @default(unverified) @map("verification_status")
-  /// Storage path (Supabase Storage object key) of the submitted selfie.
+  /// Legacy mobile-side selfie path from the pre-Persona era. No new code
+  /// writes here; kept as nullable for historical rows. Safe to drop later.
   selfiePath          String?        @map("selfie_path")
+  /// Persona `inquiry` id captured from webhook events. Idempotent marker so
+  /// retries don't double-process the same inquiry; also used to cross-link
+  /// the Persona dashboard audit trail.
+  personaInquiryId    String?        @unique @map("persona_inquiry_id")
+  /// Timestamp the inquiry flipped this user to `verified`. Re-verifications
+  /// overwrite.
+  verifiedAt          DateTime?      @map("verified_at")
+  /// Timestamp the user explicitly tapped "Skip" on the verification CTA at
+  /// the end of onboarding. Mutually exclusive with `verifiedAt` — a later
+  /// successful Persona run clears this. Drives the unverified-Elo penalty
+  /// applied at decision time and surfaces in the admin dashboard.
+  verificationSkippedAt DateTime?    @map("verification_skipped_at")
+  /// Supabase Storage path (in env.SUPABASE_SELFIE_BUCKET) of the selfie
+  /// Persona captured during liveness. Set by the verification pipeline
+  /// after a successful `inquiry.approved` event; used as the ground-truth
+  /// reference for face-matching against profile photos (initial pass and
+  /// any future photo edits). Auto-deleted by the retention worker 90 days
+  /// after `verifiedAt` — the storage path is null thereafter even though
+  /// the user remains `verified`. Re-verifications (or photo edits past the
+  /// 90-day window) re-fetch from Persona via `personaInquiryId`.
+  verifiedSelfiePath  String?        @map("verified_selfie_path")
+  /// Minimum face-match similarity (0..1) across all profile photos, taken
+  /// against `verifiedSelfiePath`. Below `env.FACE_MATCH_THRESHOLD_VERIFY`
+  /// → `pending_review` or `rejected`. Null on legacy verified users (the
+  /// migration explicitly opts them out of retroactive face-matching — see
+  /// admin dashboard for the manual re-trigger).
+  faceMatchScore      Float?         @map("face_match_score")
+  /// Timestamp of the most recent face-match pass. Distinct from
+  /// `verifiedAt` (which only flips on the first successful liveness pass)
+  /// — `faceMatchedAt` updates on every photo upload past the initial run.
+  faceMatchedAt       DateTime?      @map("face_matched_at")
+  /// First-touch attribution captured once on user creation. Format is
+  /// free-form (`tg:start_param`, `mobile:utm=ig_story`, `referral:USER_ID`)
+  /// — the analytics layer parses prefixes. Never overwritten after the
+  /// initial write so growth attribution stays stable across re-onboarding.
+  referralSource      String?        @map("referral_source")
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
 
@@ -118,9 +178,15 @@ model User {
 
   matchesAsA Match[] @relation("MatchUserA")
   matchesAsB Match[] @relation("MatchUserB")
+  matchEventsAuthored MatchEvent[] @relation("MatchEventActor")
+  matchEventsTargeted MatchEvent[] @relation("MatchEventTarget")
 
   reportsFiled    Report[] @relation("ReportReporter")
   reportsAgainst  Report[] @relation("ReportReported")
+
+  messages Message[]
+
+  noMatchNotices NoMatchNotice[]
 
   @@index([status, reEngagementNextAt])
   @@index([status, suspendedUntil])
@@ -134,18 +200,53 @@ model Profile {
   height               Int?
   hobbies              String[]                  @default([])
   partnerPreferences   String?                   @map("partner_preferences")
-  visualPreferences    Json?                     @map("visual_preferences")
   psychologicalSummary String?                   @map("psychological_summary")
   negativeConstraints  String?                   @map("negative_constraints")
   ageRangeMin          Int?                      @map("age_range_min")
   ageRangeMax          Int?                      @map("age_range_max")
   embedding            Unsupported("vector(1536)")?
-  /// 6-dim visual trait vector populated during onboarding from carousel votes
-  /// and explicit preferences. Used by multi-factor match scoring.
-  visualVector         Float[]           @default([]) @map("visual_vector")
+  /// M-2: dirty flag set by any code path that mutates a field which feeds
+  /// the embedding (psychologicalSummary, partnerPreferences,
+  /// negativeConstraints, hobbies). The `embedding-refresh` background
+  /// worker picks dirty rows up every few minutes, recomputes via OpenAI,
+  /// and clears the flag. Pre-M-2 the embedding silently went stale every
+  /// time a user edited their profile, degrading match quality forever.
+  embeddingDirty       Boolean   @default(false) @map("embedding_dirty")
+  embeddingDirtyAt     DateTime? @map("embedding_dirty_at")
+  /// Universal Elo rating in [0..1000]. Seeded by the AI vision pass on the
+  /// primary photo when Persona flips the user to `verified`, then updated on
+  /// each Thursday accept/decline event (see `apps/bot/src/utils/elo-calculator.ts`).
+  /// Drives the `V_league` multiplier in match scoring — large rating gaps
+  /// decay the candidate's score so users mostly see opponents in their league.
+  eloScore             Int               @default(500) @map("elo_score")
+  /// Lifetime count of resolved match events used to drive the dynamic K-factor:
+  /// K=40 while < 10 (fast calibration), K=20 thereafter.
+  eloMatchesPlayed     Int               @default(0) @map("elo_matches_played")
+  /// Idempotency marker: timestamp the cold-start AI vision pass seeded
+  /// `eloScore`. Persona webhook retries skip the OpenAI call when set.
+  /// Null on legacy rows and on users who haven't yet completed verification.
+  eloSeededAt          DateTime?         @map("elo_seeded_at")
   photos               String[]                  @default([])
+  /// Per-photo face-match similarity (0..1) against User.verifiedSelfiePath,
+  /// ordered 1:1 with `photos[]`. Empty for unverified users and for
+  /// pre-feature legacy rows. Populated by the verification pipeline on
+  /// initial verify and by the photo-upload gate on every subsequent edit.
+  /// Stored alongside `photos` (rather than computed on the fly) so the
+  /// admin dashboard can spot the *specific* offending photo when a user
+  /// lands in `pending_review`, instead of recomputing N Rekognition calls.
+  photoFaceScores      Float[]                   @default([]) @map("photo_face_scores")
   /// Mobile-side match radius preference. Telegram users inherit the default.
   matchRadius          MatchRadius               @default(campus_only) @map("match_radius")
+  /// Persistent "home base" coordinates used by the Meet-Halfway matching
+  /// algorithm to compute great-circle distance / midpoints between candidates.
+  /// Distinct from `Match.vibeLat{A,B}` which are per-match commute pins set
+  /// during venue negotiation. Nullable: a user may not have shared location
+  /// yet (legacy rows, declined OS prompt). Updated via `POST /v1/me/location`.
+  latitude             Float?                    @map("latitude")
+  longitude            Float?                    @map("longitude")
+  /// Freshness marker for the home coordinates. The matching engine can
+  /// fall back to `matchRadius`-only scoring when this is stale or null.
+  locationUpdatedAt    DateTime?                 @map("location_updated_at")
   /// Last time this profile was included in a `Match` row. Used by the
   /// match-engine tick to avoid re-pairing the same user within a cooldown.
   lastMatchedAt        DateTime?                 @map("last_matched_at")
@@ -153,9 +254,18 @@ model Profile {
   /// unpaired. Reset to 0 on a successful pairing. Read by the scoring
   /// function as a capped priority bonus (see `starvationBonus`).
   missedWeeks          Int                       @default(0) @map("missed_weeks")
+  /// Canonical standby/starvation counter used by the premium "Standby Mode"
+  /// UX. Incremented when a user is eligible for the weekly batch but left
+  /// unmatched; reset to 0 on a successful pairing.
+  standbyCount         Int                       @default(0) @map("standby_count")
   /// Timestamp of the most recent batch where this profile was eligible
   /// but unpaired. Drives the "priority boosted" UX ping.
   lastMissedAt         DateTime?                 @map("last_missed_at")
+  /// Number of times this profile silently let a match proposal expire
+  /// (24h passed without Accept/Decline). Counted post-expiry by
+  /// `expireStaleMatches`. Forgive-once gate: first offense = warning only,
+  /// from the second onwards Elo is decremented as if the user had declined.
+  silentIgnoreCount    Int                       @default(0) @map("silent_ignore_count")
   createdAt            DateTime                  @default(now()) @map("created_at")
   updatedAt            DateTime                  @updatedAt @map("updated_at")
 
@@ -174,6 +284,22 @@ enum MatchStatus {
   expired
 }
 
+enum MatchEventActionType {
+  PROPOSAL_SHOWN
+  ACCEPTED
+  DECLINED
+  DATE_COMPLETED
+  CHEMISTRY_POSITIVE
+  CHEMISTRY_NEGATIVE
+  /// 24h TTL elapsed without the user replying — this row's `actorId` is
+  /// the silent side. Emitted once per offending side per match.
+  EXPIRED_SILENT
+  /// Counterpart event for the side that DID respond on a match where the
+  /// peer went silent past TTL. `actorId` is the responder, `targetId` the
+  /// silent peer. Used for the "your match ignored you" notification audit.
+  EXPIRED_PEER_IGNORED
+}
+
 model Match {
   id           String      @id @default(uuid()) @db.Uuid
   userAId      String      @map("user_a_id") @db.Uuid
@@ -181,6 +307,16 @@ model Match {
   status       MatchStatus @default(proposed)
   pitchForA    String?     @map("pitch_for_a")
   pitchForB    String?     @map("pitch_for_b")
+
+  /// AI Synergy Score — pair-level compatibility metric shown on the match
+  /// reveal and upcoming-date screens. Always clamped server-side to the
+  /// motivating 70..99 range; the LLM is *asked* for that range, but a
+  /// clamp + fallback in `pitch-generator.ts` is the source of truth.
+  /// `synergyReason` is a 1–2 sentence positive justification framed as
+  /// "complementary" (70–79) or "highly aligned" (80–99). The reason is
+  /// generated in side-A's language to keep the column singular per spec.
+  synergyScore  Int?    @map("synergy_score")
+  synergyReason String? @map("synergy_reason")
 
   /// Per-user Accept/Decline state. NULL = pending, true = accepted,
   /// false = declined. Both must be true for the match to enter `negotiating`.
@@ -242,16 +378,42 @@ model Match {
   emergencyReason      String?   @map("emergency_reason")
   feedbackByA          String?   @map("feedback_by_a")
   feedbackByB          String?   @map("feedback_by_b")
+  /// Idempotency marker for the post-date feedback DM. The prompt is sent
+  /// once per match 24h after `agreedTime`; this column gates the cron tick
+  /// so the same pair can't be re-prompted every 2 minutes when one or
+  /// both users haven't replied yet. Pre-C-1 the cron used the status flip
+  /// to `completed` + the null check on `feedbackBy{A,B}` as a dedup, which
+  /// re-fired forever for unanswered prompts.
+  feedbackPromptedAt   DateTime? @map("feedback_prompted_at")
 
   /// Timestamp when the AI pitch was dispatched to both users via the queue.
   /// Used by the 24h TTL cron to expire unanswered proposals.
   dispatchedAt DateTime? @map("dispatched_at")
 
-  /// Nudge timestamps — prevent double-pinging users who haven't responded.
-  /// nudge1SentAt: first reminder (≥3h after dispatch, or first scheduling reminder).
-  /// nudge2SentAt: second reminder (≥10h after dispatch, or second scheduling reminder).
+  /// Telegram `message_id` of the dispatched pitch DM, captured per side.
+  /// Used by the proposal-countdown worker to live-edit the "⏳ Xч left"
+  /// plate, and by the expiry tick to overwrite the pitch with a final
+  /// "срок истёк" notice. NULL when the user has no Telegram presence
+  /// (mobile-first account, `telegramId <= 0`) or when send failed.
+  pitchMessageIdA Int? @map("pitch_message_id_a")
+  pitchMessageIdB Int? @map("pitch_message_id_b")
+
+  /// Legacy nudge columns from the pre-C-6 era when proposal-phase and
+  /// scheduling-phase nudges shared the same two slots. Kept nullable so old
+  /// rows still parse — new code reads/writes the four phase-specific columns
+  /// below. Safe to drop after a few release cycles.
   nudge1SentAt DateTime? @map("nudge1_sent_at")
   nudge2SentAt DateTime? @map("nudge2_sent_at")
+  /// Proposal-phase nudges (status = "proposed", awaiting accept/decline).
+  /// First reminder ≥3h after dispatchedAt, second ≥10h after.
+  proposalNudge1SentAt DateTime? @map("proposal_nudge1_sent_at")
+  proposalNudge2SentAt DateTime? @map("proposal_nudge2_sent_at")
+  /// Scheduling-phase nudges (status = "negotiating", both accepted but no
+  /// agreed slot yet). First reminder ≥6h since last update, second ≥12h.
+  /// Split from the proposal nudges in C-6 so a row that already received a
+  /// proposal nudge doesn't dead-letter the scheduling phase's nudge cadence.
+  schedNudge1SentAt DateTime? @map("sched_nudge1_sent_at")
+  schedNudge2SentAt DateTime? @map("sched_nudge2_sent_at")
 
   /// Phase 4 mobile: personalised ice-breakers persisted per side so the
   /// Expo app can display the same topics that Telegram users receive via DM.
@@ -266,17 +428,79 @@ model Match {
   safetyAckA Boolean @default(false) @map("safety_ack_a")
   safetyAckB Boolean @default(false) @map("safety_ack_b")
 
+  /// Phase 4 "Wingman": single asymmetric insider tip per side. Generated
+  /// when the match flips to `scheduled` (venue locked) and revealed to
+  /// each side only within T-1h of `agreedTime` via the serializer gate.
+  /// `wingmanSentAt` is the T-1h push idempotency marker.
+  wingmanHintA       String?   @map("wingman_hint_a")
+  wingmanHintB       String?   @map("wingman_hint_b")
+  wingmanSentAt      DateTime? @map("wingman_sent_at")
+
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
 
   userA User @relation("MatchUserA", fields: [userAId], references: [id], onDelete: Cascade)
   userB User @relation("MatchUserB", fields: [userBId], references: [id], onDelete: Cascade)
 
+  events MatchEvent[]
   reports Report[]
+  scoreLog MatchScoreLog?
 
   @@index([status, createdAt])
   @@index([userAId, userBId])
   @@map("matches")
+}
+
+/// Score breakdown frozen at match-creation time. One row per Match.
+/// Powers `/admin/analytics/algorithm`: lets us correlate each component
+/// (V_explicit, V_research, V_league, V_penalty) against the eventual
+/// accept/decline outcome — needed for A/B testing scoring weights.
+/// Decoupled from `Match` so the heavy analytics scans don't touch the
+/// hot match table.
+model MatchScoreLog {
+  id                String   @id @default(uuid()) @db.Uuid
+  matchId           String   @unique @map("match_id") @db.Uuid
+  /// Embedding cosine similarity in [0..1] (1 = identical).
+  scoreExplicit     Float    @map("score_explicit")
+  /// Sociological heuristic score in [0..1].
+  scoreResearch     Float    @map("score_research")
+  /// Elo-distance multiplier in [0..1] (1 = same league).
+  scoreLeague       Float    @map("score_league")
+  /// Negative-constraint penalty in [0..1] (higher = worse).
+  scorePenalty      Float    @map("score_penalty")
+  /// Final composite (after weights + starvation bonus).
+  scoreTotal        Float    @map("score_total")
+  /// Pairwise embedding L2 distance, kept for debugging / re-ranking.
+  embeddingDistance Float?   @map("embedding_distance")
+  /// Capped priority bonus from the starvation tier (max of two sides).
+  starvationBonus   Float    @default(0) @map("starvation_bonus")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([scoreTotal])
+  @@map("match_score_logs")
+}
+
+model MatchEvent {
+  id         String               @id @default(uuid()) @db.Uuid
+  matchId    String               @map("match_id") @db.Uuid
+  actorId    String               @map("actor_id") @db.Uuid
+  targetId   String               @map("target_id") @db.Uuid
+  actionType MatchEventActionType @map("action_type")
+  metadata   Json?
+  createdAt  DateTime             @default(now()) @map("created_at")
+
+  match  Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  actor  User  @relation("MatchEventActor", fields: [actorId], references: [id], onDelete: Cascade)
+  target User  @relation("MatchEventTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([matchId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([targetId, createdAt])
+  @@index([actionType, createdAt])
+  @@map("match_events")
 }
 
 /// Post-match report filed by one participant against the other.
@@ -357,4 +581,56 @@ model SystemKnowledge {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("system_knowledge")
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+}
+
+/// Aether Concierge multimodal chat history. Distinct from `User.messageHistory`
+/// (Json[] blob used by the legacy onboarding/menu agents) — this row-per-message
+/// table powers the mobile-side chat UI with image attachments.
+///
+/// `imageUrl` stores the *opaque* Supabase Storage path (e.g.
+/// `{userId}/{ts}.jpg`), never a public URL. Renderers mint short-lived signed
+/// URLs at read time via `createChatImageSignedUrl`.
+model Message {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String      @map("user_id") @db.Uuid
+  role      MessageRole
+  content   String      @db.Text
+  imageUrl  String?     @map("image_url")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("messages")
+}
+
+/// Audit row for the empathetic "no match this week" DM that fires ~15 min
+/// after the Thursday batch for every `active` user the matcher couldn't pair.
+/// `tier` is the consecutive-famine count (1 = first week without a match,
+/// 2 = second, 3+ = third or more) — drives the escalating warmth of the
+/// template selected from `i18n.noMatchThisWeek*`. `dropDate` is truncated
+/// to the UTC day of the cron firing so `@@unique([userId, dropDate])`
+/// doubles as an idempotency guard against accidental re-fires within the
+/// same drop. Read by `/admin/analytics/no-match-notices` for week-over-week
+/// trend tracking — a rising count signals the matchmaker / user base needs
+/// attention before users churn.
+model NoMatchNotice {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tier      Int
+  sentAt    DateTime @default(now()) @map("sent_at")
+  dropDate  DateTime @map("drop_date")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dropDate])
+  @@index([dropDate])
+  @@index([sentAt])
+  @@map("no_match_notices")
 }
