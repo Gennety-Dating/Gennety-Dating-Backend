@@ -17,8 +17,7 @@ export type MenuState =
   | "edit_photos"
   | "edit_bio"
   | "edit_major"
-  | "edit_age_range"
-  | "edit_visual_prefs";
+  | "edit_age_range";
 
 /**
  * Sub-state for the matching / scheduling flow. `idle` means no match is
@@ -38,6 +37,9 @@ export type MatchFlowState =
   | "awaiting_feedback"
   | "awaiting_report_details";
 
+/** Weekly matchmaking resolution used by the mobile countdown / standby UI. */
+export type WeeklyMatchStatus = "pending" | "matched" | "standby";
+
 /** Session data persisted per-user across messages */
 export interface SessionData {
   onboardingStep: OnboardingStep;
@@ -48,8 +50,14 @@ export interface SessionData {
   pendingPhotos: string[];
   /** file_unique_id of each pending photo, for dedupe when Telegram re-delivers album frames */
   pendingPhotoUniqueIds: string[];
-  /** Visual screening votes (used by edit-profile visual re-screening) */
-  visualVotes: Array<{ photoIndex: number; liked: boolean }>;
+  /**
+   * Face-match similarity score (0..1) for each pending photo, parallel to
+   * `pendingPhotos`. Populated by the photo-upload gate (Step 4) when a
+   * verified user adds a new photo. 0 = gate didn't run (user not verified
+   * yet, or fail-open through an infra outage). Persisted to
+   * `Profile.photoFaceScores` on commit.
+   */
+  pendingPhotoScores: number[];
   /** Sub-state for the post-onboarding main menu flows */
   menuState: MenuState;
   /** Sub-state for the matching / scheduling flow (Phase 3) */
@@ -73,7 +81,7 @@ export const DEFAULT_SESSION: SessionData = {
   expectingPhoto: false,
   pendingPhotos: [],
   pendingPhotoUniqueIds: [],
-  visualVotes: [],
+  pendingPhotoScores: [],
   menuState: "idle",
   matchFlow: "idle",
   activeMatchId: null,

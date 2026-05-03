@@ -33,7 +33,6 @@ describe("t (translation)", () => {
       "welcome", "chooseLanguage", "philosophyPitch", "philosophyContinue",
       "askEmail", "invalidEmail", "otpSent", "otpInvalid", "otpExpired",
       "emailVerified", "askFirstName", "askSurname", "askAge", "invalidAge",
-      "visualScreeningIntro", "visualScreeningDone",
       "llmDumpIntro", "llmPrompt", "llmDumpReceived",
       "askPhotos", "photoReceived", "photosEnough", "photosDone",
       "profileReview", "profileConfirm", "profileEdit", "onboardingComplete",
@@ -74,6 +73,6 @@ describe("t (translation)", () => {
     expect(body).toContain("Smith");
     expect(body).toContain("21");
     expect(body).toContain("stanford.edu");
-    expect(body.toLowerCase()).toContain("fixed");
+    expect(body.toLowerCase()).toContain("locked in");
   });
 });

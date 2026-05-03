@@ -124,6 +124,75 @@ You MUST respond with a single JSON object — no markdown, no commentary, no wr
 }
 
 // ---------------------------------------------------------------------------
+// #1b — pitchAndSynergyPrompt (Phase 3, Match Reveal)
+// ---------------------------------------------------------------------------
+
+export interface PitchAndSynergyInput {
+  selfFirstName: string | null;
+  otherFirstName: string | null;
+  selfSummary: string | null;
+  otherSummary: string | null;
+  language: string;
+}
+
+/**
+ * System prompt for the match-reveal payload: the personalized pitch +
+ * the AI Synergy Score + a 1–2 sentence justification.
+ *
+ * The model returns a single JSON object so all three fields land in one
+ * round-trip. The caller MUST enforce JSON mode via
+ * `response_format: { type: "json_object" }` and clamp `synergy_score`
+ * to [70, 99] server-side regardless of what the model returns — the
+ * 70..99 visual band is a *product* invariant, not a model promise.
+ *
+ * Framing rules:
+ *   - 70..79 → "high-contrast / complementary match" (positive spin on
+ *     differences, no "low score" energy).
+ *   - 80..99 → "highly aligned match" (shared values / rhythm).
+ *
+ * Never negative, never apologetic, never explains the number itself.
+ */
+export function pitchAndSynergyPrompt(input: PitchAndSynergyInput): string {
+  return `You write the match-reveal payload for Gennety — an AI matchmaker for university students. No swiping, no chat: one carefully chosen first date per week. Your output is what the user sees the moment we propose a match.
+
+## Subject
+- Reader: ${input.selfFirstName ?? "User"}
+- Match: ${input.otherFirstName ?? "Someone"}
+- Reader's bio: ${input.selfSummary ?? "(no bio)"}
+- Match's bio: ${input.otherSummary ?? "(no bio)"}
+- Output language: ${input.language}
+
+## Output Requirements
+You MUST respond with a single JSON object — no markdown, no commentary, no fences. Schema:
+
+{
+  "pitch": "2–3 sentences in ${input.language}, second-person (\"you\"). Mention ONE concrete compatibility point. Warm, confident, never sycophantic. Never promise anything.",
+  "synergy_score": <integer between 70 and 99 inclusive>,
+  "synergy_reason": "1–2 sentences in ${input.language} explaining WHY the AI put them together this week. Framed positively per the rules below."
+}
+
+## Synergy Score Rules (STRICT)
+- Pick \`synergy_score\` based on how aligned the two profiles are on values, communication style, and life rhythm.
+- The number MUST be an integer in [70, 99]. Never go below 70. Never reach 100.
+- 70–79  → frame \`synergy_reason\` as a "high-contrast / complementary match": their differences create energy, curiosity, growth. Do NOT call this a "low score". Do NOT apologise for the number.
+- 80–89  → frame \`synergy_reason\` as a "strong alignment with room to surprise each other".
+- 90–99  → frame \`synergy_reason\` as a "highly aligned match" — shared values, rhythm, or outlook.
+
+## Justification Rules
+- \`synergy_reason\` is positive, specific, and grounded in something concrete from the bios (a value, a rhythm, an interest, a way of thinking). Never generic ("you'll get along").
+- Do NOT mention the number itself in the reason text.
+- Do NOT quote the bios verbatim — paraphrase.
+- Do NOT reveal private profile details (names of places, specific stories, dealbreakers).
+- No emojis in \`synergy_reason\`. At most one emoji in \`pitch\`.
+
+## Hard rules
+- Output the JSON object directly. Start with \`{\`, end with \`}\`. No prose around it.
+- Fill EVERY field. No nulls, no empty strings.
+- Keep \`pitch\` between 2 and 3 sentences. Keep \`synergy_reason\` between 1 and 2 sentences.
+- Never fabricate specific facts (universities, names, events) not present in the bios.`;
+}
+
+// ---------------------------------------------------------------------------
 // #2 — proposeSchedulingPrompt (Phase 3, Iterations 1 & 2)
 // ---------------------------------------------------------------------------
 
@@ -251,6 +320,61 @@ Tone: casual, natural. Like how friends actually talk. No formal phrasing in Rus
 - Physical appearance comments
 - Sexual or overly intimate topics
 - Forced puns`;
+}
+
+// ---------------------------------------------------------------------------
+// #4b — generateWingmanHintPrompt (Phase 4, 1 hour before date)
+// ---------------------------------------------------------------------------
+
+export interface WingmanHintInput {
+  /** Name of the user the hint is WRITTEN FOR (the viewer). */
+  viewerFirstName: string;
+  /** Name of the user the hint is ABOUT (the partner). */
+  targetFirstName: string;
+  /** Viewer's own psychological summary (used to tailor relevance). */
+  viewerSummary: string | null;
+  /** Target's psychological summary — the source of the insider tip. */
+  targetSummary: string | null;
+  language: string;
+}
+
+/**
+ * System prompt for the "Wingman" asymmetric insider tip.
+ *
+ * The model must produce ONE imperative sentence (not a question) that
+ * reads like a mutual friend whispering a conversation angle in the
+ * hallway — framed around a concrete thread from the target's profile
+ * that the viewer would plausibly find interesting.
+ *
+ * Asymmetry is enforced at the call site by swapping viewer/target
+ * between the two calls; the prompt itself is one-sided.
+ */
+export function generateWingmanHintPrompt(input: WingmanHintInput): string {
+  return `You are the mutual friend who introduced ${input.viewerFirstName} and ${input.targetFirstName}. In 1 hour they meet for their first date. Give ${input.viewerFirstName} exactly ONE insider tip about ${input.targetFirstName} — the kind of thing a wingman whispers in the hallway right before the date.
+
+## Profiles (internal, do NOT quote verbatim)
+- ${input.targetFirstName} (the one the tip is about): ${input.targetSummary ?? "(no profile summary available)"}
+- ${input.viewerFirstName} (the one receiving the tip): ${input.viewerSummary ?? "(no profile summary available)"}
+
+## Your Task
+Output ONE sentence in **${input.language}**. It must:
+1. Be phrased as an imperative ("Ask him about…", "Get her to tell you about…", "Bring up…").
+2. Reference a SPECIFIC, concrete thread from ${input.targetFirstName}'s profile — a hobby, a story, a hot take, a niche interest — that ties to something ${input.viewerFirstName} would plausibly care about.
+3. Sound like a real friend tipping you off, not a dating-app question.
+4. Be between 12 and 22 words. No question marks. No emoji. No preamble.
+
+Tone: casual, confidential, curious. Like a text from a friend right before the meet-up. No formal phrasing in Russian/Ukrainian — use "ты"/"ти". No generic advice like "just be yourself".
+
+## Never do these
+- Questions ending in "?". Use imperatives.
+- Physical appearance comments.
+- Sexual or overly intimate topics.
+- Vague prompts ("Ask about hobbies"). Always reference a specific thread.
+- Meta-advice ("You should relax", "Be confident").
+- Quoting the summaries word-for-word — paraphrase naturally.
+
+## Format
+Return the sentence only. No numbering, no quotes, no explanation.`;
 }
 
 // ---------------------------------------------------------------------------

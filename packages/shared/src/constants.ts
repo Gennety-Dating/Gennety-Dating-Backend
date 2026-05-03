@@ -35,6 +35,8 @@ export const MAX_MAJOR_LENGTH = 100;
 export const DATE_ALERT_HOURS = 3;
 /** How many hours before the date the safety reminder is sent to female users */
 export const PRE_DATE_SAFETY_HOURS = 1;
+/** How many hours before the date the "Wingman" insider tip is revealed */
+export const PRE_DATE_WINGMAN_HOURS = 1;
 /** How many hours after the date we send the feedback prompt */
 export const FEEDBACK_DELAY_HOURS = 24;
 

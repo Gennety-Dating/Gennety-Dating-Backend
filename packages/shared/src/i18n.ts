@@ -34,9 +34,6 @@ const translations = {
     btnMen: "Men",
     btnWomen: "Women",
     btnBoth: "Both",
-    visualScreeningIntro:
-      "Time to figure out your type 👀 I'll show you some photos — tap 👍 or 👎.",
-    visualScreeningDone: "Got your taste saved ✅",
     llmDumpIntro:
       "Now for the fun part 🧠\n\n" +
       "Copy this prompt, paste it into ChatGPT or Claude, " +
@@ -81,6 +78,22 @@ const translations = {
     finishOnboardingFirst:
       "Finish registration first, then the menu and settings will be available.\nType /start to continue.",
 
+    // --- Persona verification CTA (end of onboarding) ---
+    verifyPitch:
+      "Final step. We need to confirm you're a real person.\n\n" +
+      "We compare the selfie captured during verification with every photo in your profile. " +
+      "Photos that don't match you will be rejected.\n\n" +
+      "Skipping verification will significantly lower your starting ELO rating, " +
+      "and the algorithm will surface fewer matches for you.",
+    verifyBtnGo: "🟢 Verify now",
+    verifyBtnSkip: "⚪️ Skip for now",
+    verifySkipped:
+      "Skipped verification. You can run it later from the profile menu " +
+      "to restore your ELO rating.",
+    photoMatchMismatch:
+      "⚠️ This photo doesn't match your verification selfie. " +
+      "Please upload a clear photo of yourself, taken under similar lighting.",
+
     // --- Main Menu ---
     menuTitle: "🎓 *Gennety Menu*\nWhat's up?",
     menuMyProfile: "👤 My Profile",
@@ -118,13 +131,10 @@ const translations = {
     editMajorSaved: "Major updated ✅",
     editPrefsTitle: "🔍 *Search Prefs*\n\nWhat do you want to change?",
     editPrefsAgeBtn: "🎂 Age Range",
-    editPrefsVisualBtn: "👁 Visual Type",
     editPrefsBack: "⬅️ Back to Edit",
     editAgeRangePrompt: "What age range? (e.g. 20-28)\nMin: {min}, Max: {max}.",
     editAgeRangeInvalid: "Didn't get that. Two numbers like 20-28 (range {min}–{max}).",
     editAgeRangeSaved: "Age range updated ✅",
-    editVisualRestart: "Let's redo your visual type 👀",
-    editVisualDone: "Visual prefs updated ✅",
     editProfilePhotosStart: "Send new photos ({min}–{max}). One at a time.",
     editProfilePhotosSaved: "Photos updated ✅",
 
@@ -155,6 +165,9 @@ const translations = {
 
     // --- Matching ---
     matchHeadline: "💘 Found you a match!",
+    matchDeadlineNotice:
+      "You've got 24h to reply. " +
+      "Once you tap — *the decision is final*. No take-backs.",
     matchStreamStart: "Figuring out why you two click…",
     matchBtnAccept: "✅ Accept",
     matchBtnDecline: "❌ Pass",
@@ -162,10 +175,62 @@ const translations = {
     matchBothAccepted: "It's mutual 🔥 Let's find a time.",
     matchDeclined: "All good. Quick — *why*? Helps the AI learn.",
     matchDeclineThanks: "Noted. We'll keep looking 🎯",
-    matchOtherDeclined: "Your match passed this time. We're on it though.",
-    matchStarvationBoosted:
-      "The algorithm didn't find a 10/10 match for you this week. " +
-      "Quality over quantity — your priority is boosted to maximum for next Thursday's drop.",
+    matchPeerDecided:
+      "Your match has already given their answer. Your turn.\n\n" +
+      "*What* they chose — you'll see only after you reply yourself. " +
+      "And remember: your reply is final.",
+    matchPeerWasAccepted: "FYI — your match was in. Just didn't line up this time.",
+    matchPeerWasDeclined: "FYI — your match passed this time.",
+    matchPhotoCaption: "{name}, {age}",
+    matchSynergyHeader: "💎 *Synergy {score}/99* — {reason}",
+    pitchCountdownHours: "⏳ {hours}h left to reply",
+    pitchCountdownMinutes: "⏳ {minutes} min left to reply",
+    pitchExpired: "⏳ Time's up — this proposal expired.",
+    matchExpiredSilentWarning:
+      "Time's up — you didn't reply to your match in 24h. " +
+      "Wait for next Thursday's drop.\n\n" +
+      "Please don't ignore proposals — it's disrespectful to your partner. " +
+      "Next time we'll lower your rating for this.",
+    matchExpiredSilentPenalty:
+      "Time's up — you didn't reply to your match in 24h. " +
+      "Wait for next Thursday's drop.\n\n" +
+      "Your rating has been lowered for ignoring the proposal — it's disrespectful to your partner.",
+    matchExpiredYouMissedDate:
+      "Heads up — your match was actually in. You missed a real date.\n\n",
+    matchExpiredPeerIgnored:
+      "Your match didn't reply within 24h, so the date won't happen. " +
+      "We'll see you in next week's drop.",
+    matchStandbyStatus:
+      "STATUS: STANDBY\n\n" +
+      "We don't compromise on quality. There isn't a high-synergy match for you this week.\n\n" +
+      "Your priority for next week's drop has been boosted.",
+    noMatchThisWeekTier1:
+      "Hey 💫\n\n" +
+      "This week our matchmaker couldn't find you a partner who actually meets our quality bar — " +
+      "and we'd rather wait than pair you with someone who isn't worth your time.\n\n" +
+      "A few honest things to know:\n" +
+      "• We're growing the community fast and refining the matchmaking algorithm every day.\n" +
+      "• A truly fitting partner should arrive in one of the next drops.\n" +
+      "• Every date we set up is *fully on us* — coffee, dinner, the whole thing. ☕️🎬\n\n" +
+      "See you next Thursday at 18:00 ✨",
+    noMatchThisWeekTier2:
+      "Hey 🌿\n\n" +
+      "Second week running and our matchmaker still hasn't found anyone we'd be excited to introduce you to. " +
+      "Thank you for your patience — it means a lot.\n\n" +
+      "What we want you to know:\n" +
+      "• We're actively bringing more students like you into the community and tuning the algorithm in your favour.\n" +
+      "• A genuinely great partner should be just a few drops away.\n" +
+      "• When that date happens, it's *fully covered by us* — that doesn't change.\n\n" +
+      "See you next Thursday at 18:00 — we're working for you 🤍",
+    noMatchThisWeekTier3:
+      "Hey ✨\n\n" +
+      "We owe you another honest update — still no partner that's truly worth your time. " +
+      "We hate this even more than you do, and we're not going to pretend otherwise.\n\n" +
+      "What's actually happening on our side:\n" +
+      "• We're personally watching your queue and pushing the community to grow in your area.\n" +
+      "• The right person will land in one of the coming drops — we won't stop until they do.\n" +
+      "• Your date — whenever it happens — is *fully on us*. That's our promise.\n\n" +
+      "Thank you for trusting us. See you Thursday at 18:00 🤍",
     matchScheduleProposal:
       "How about one of these? Tap what works:",
     matchScheduleIter3:
@@ -191,6 +256,8 @@ const translations = {
     // --- Phase 4: Date ---
     icebreakerIntro:
       "Your date is in 3 hours! Some convo starters for you:\n\n",
+    wingmanHintIntro:
+      "👋 Insider tip — your date's in 1 hour:\n\n",
     emergencyUnlocked:
       "Emergency cancel window is open.\n" +
       "If you really can't make it, tap below.\n" +
@@ -280,9 +347,6 @@ const translations = {
     btnMen: "Мужчины",
     btnWomen: "Женщины",
     btnBoth: "Оба",
-    visualScreeningIntro:
-      "Определим твой тип 👀 Покажу фото — жми 👍 или 👎.",
-    visualScreeningDone: "Вкус сохранён ✅",
     llmDumpIntro:
       "Теперь самое интересное 🧠\n\n" +
       "Скопируй промпт ниже, вставь в ChatGPT или Claude " +
@@ -327,6 +391,22 @@ const translations = {
     finishOnboardingFirst:
       "Сначала заверши регистрацию — тогда меню и настройки станут доступны.\nНапиши /start, чтобы продолжить.",
 
+    // --- Persona verification CTA (end of onboarding) ---
+    verifyPitch:
+      "Финальный шаг. Нам нужно убедиться, что вы реальный человек.\n\n" +
+      "Селфи, которое мы сделаем во время верификации, мы сравним с каждой фотографией в вашем профиле. " +
+      "Фото, на которых не вы, будут отклонены.\n\n" +
+      "Отказ от верификации значительно снизит ваш стартовый ELO-рейтинг, " +
+      "и алгоритм будет предлагать вам меньше встреч.",
+    verifyBtnGo: "🟢 Пройти верификацию",
+    verifyBtnSkip: "⚪️ Пропустить пока",
+    verifySkipped:
+      "Верификация пропущена. Можешь пройти её позже из меню профиля, " +
+      "чтобы вернуть ELO-рейтинг.",
+    photoMatchMismatch:
+      "⚠️ Это фото не совпадает с селфи из верификации. " +
+      "Загрузи, пожалуйста, чёткое фото себя при похожем освещении.",
+
     // --- Main Menu ---
     menuTitle: "🎓 *Меню Gennety*\nЧто делаем?",
     menuMyProfile: "👤 Мой профиль",
@@ -364,13 +444,10 @@ const translations = {
     editMajorSaved: "Специальность обновлена ✅",
     editPrefsTitle: "🔍 *Параметры поиска*\n\nЧто меняем?",
     editPrefsAgeBtn: "🎂 Возраст",
-    editPrefsVisualBtn: "👁 Визуальный тип",
     editPrefsBack: "⬅️ К редактированию",
     editAgeRangePrompt: "Какой возраст? (напр. 20-28)\nМин: {min}, Макс: {max}.",
     editAgeRangeInvalid: "Не понял. Два числа через дефис, напр. 20-28 (от {min} до {max}).",
     editAgeRangeSaved: "Диапазон обновлён ✅",
-    editVisualRestart: "Пересмотрим твой тип 👀",
-    editVisualDone: "Визуальные предпочтения обновлены ✅",
     editProfilePhotosStart: "Скинь новые фото ({min}–{max}). По одному.",
     editProfilePhotosSaved: "Фото обновлены ✅",
 
@@ -401,6 +478,9 @@ const translations = {
 
     // --- Matching ---
     matchHeadline: "💘 Нашли тебе мэтч!",
+    matchDeadlineNotice:
+      "У тебя 24 часа на ответ. " +
+      "Как только нажмёшь — *решение окончательное*. Изменить нельзя.",
     matchStreamStart: "Думаю, почему вы подходите…",
     matchBtnAccept: "✅ Принять",
     matchBtnDecline: "❌ Пас",
@@ -408,10 +488,62 @@ const translations = {
     matchBothAccepted: "Взаимно 🔥 Найдём время.",
     matchDeclined: "Ок. Коротко — *почему*? Так ИИ учится.",
     matchDeclineThanks: "Понял. Ищем дальше 🎯",
-    matchOtherDeclined: "Мэтч в этот раз не сложился. Ищем дальше.",
-    matchStarvationBoosted:
-      "Алгоритм не нашёл тебе мэтч на 10/10 на этой неделе. " +
-      "Лучше меньше, да лучше — твой приоритет поднят на максимум к следующему четвергу.",
+    matchPeerDecided:
+      "Твой мэтч уже дал ответ. Твоя очередь.\n\n" +
+      "*Что* именно он выбрал — увидишь только после своего ответа. " +
+      "И помни: твой выбор окончательный.",
+    matchPeerWasAccepted: "Кстати — твой мэтч был согласен. В этот раз просто не сошлось.",
+    matchPeerWasDeclined: "Кстати — твой мэтч в этот раз отказался.",
+    matchPhotoCaption: "{name}, {age}",
+    matchSynergyHeader: "💎 *Синергия {score}/99* — {reason}",
+    pitchCountdownHours: "⏳ Осталось {hours}ч на ответ",
+    pitchCountdownMinutes: "⏳ Осталось {minutes} мин на ответ",
+    pitchExpired: "⏳ Время вышло — предложение больше не актуально.",
+    matchExpiredSilentWarning:
+      "Время вышло — за сутки ты так и не ответил(-а) на мэтч. " +
+      "Жди следующего четверга.\n\n" +
+      "Пожалуйста, не игнорируй предложения — это неуважение к твоему партнёру. " +
+      "В следующий раз за такое поведение мы снизим твой рейтинг.",
+    matchExpiredSilentPenalty:
+      "Время вышло — за сутки ты так и не ответил(-а) на мэтч. " +
+      "Жди следующего четверга.\n\n" +
+      "Твой рейтинг снижен за игнор — это неуважение к твоему партнёру.",
+    matchExpiredYouMissedDate:
+      "Важно: твой мэтч был согласен прийти — ты пропустил настоящее свидание.\n\n",
+    matchExpiredPeerIgnored:
+      "Партнёр не ответил в течение суток — свидание не состоится. " +
+      "Увидимся в дропе на следующей неделе.",
+    matchStandbyStatus:
+      "STATUS: STANDBY\n\n" +
+      "Мы не идём на компромиссы по качеству. На этой неделе для тебя нет мэтча с высокой синергией.\n\n" +
+      "Твой приоритет на следующую неделю повышен.",
+    noMatchThisWeekTier1:
+      "Привет 💫\n\n" +
+      "На этой неделе наш матчмейкер не нашёл для тебя пары, которая по-настоящему соответствовала бы нашему уровню качества — " +
+      "и мы не готовы пускать «лишь бы было».\n\n" +
+      "Несколько честных вещей:\n" +
+      "• Мы активно расширяем сообщество и каждый день улучшаем алгоритм подбора партнёра.\n" +
+      "• По-настоящему подходящий человек должен появиться в ближайшие дропы.\n" +
+      "• Каждое свидание — *полностью за наш счёт*: кофе, ужин, всё. ☕️🎬\n\n" +
+      "До следующего четверга в 18:00 ✨",
+    noMatchThisWeekTier2:
+      "Привет 🌿\n\n" +
+      "Уже вторая неделя подряд, как наш матчмейкер не находит кого-то, кого мы были бы рады тебе показать. " +
+      "Спасибо, что остаёшься с нами — это правда важно.\n\n" +
+      "Что мы хотим сказать честно:\n" +
+      "• Мы активно приводим новых студентов и настраиваем алгоритм под твои критерии.\n" +
+      "• Действительно стоящий партнёр должен быть всего в нескольких дропах от тебя.\n" +
+      "• Когда свидание случится — оно *полностью за наш счёт*, это не меняется.\n\n" +
+      "До следующего четверга в 18:00 — мы работаем для тебя 🤍",
+    noMatchThisWeekTier3:
+      "Привет ✨\n\n" +
+      "Должны снова быть честными — пары, которая правда стоит твоего времени, всё ещё нет. " +
+      "Нам это не нравится даже сильнее, чем тебе, и мы не будем делать вид, что всё хорошо.\n\n" +
+      "Что мы реально делаем:\n" +
+      "• Лично следим за твоей очередью и подталкиваем рост сообщества в твоём районе.\n" +
+      "• Тот самый человек обязательно появится в одном из ближайших дропов — мы не остановимся.\n" +
+      "• Твоё свидание — когда бы оно ни случилось — *полностью за нами*. Это наше обещание.\n\n" +
+      "Спасибо, что доверяешь. До четверга в 18:00 🤍",
     matchScheduleProposal: "Как тебе эти варианты? Жми подходящий:",
     matchScheduleIter3:
       "Давай через календарь — открой и выбери удобные слоты.\nВыбор сохраняется локально, не потеряется.",
@@ -435,6 +567,8 @@ const translations = {
     // --- Phase 4: Date ---
     icebreakerIntro:
       "Свидание через 3 часа! Вот темы для разговора:\n\n",
+    wingmanHintIntro:
+      "👋 Маленькая подсказка — свидание через час:\n\n",
     emergencyUnlocked:
       "Окно экстренной отмены открыто.\n" +
       "Совсем не можешь прийти — жми кнопку ниже.\n" +
@@ -524,9 +658,6 @@ const translations = {
     btnMen: "Чоловіки",
     btnWomen: "Жінки",
     btnBoth: "Обидва",
-    visualScreeningIntro:
-      "Визначимо твій тип 👀 Покажу фото — тисни 👍 або 👎.",
-    visualScreeningDone: "Смак збережено ✅",
     llmDumpIntro:
       "Тепер найцікавіше 🧠\n\n" +
       "Скопіюй промпт нижче, встав у ChatGPT або Claude " +
@@ -571,6 +702,22 @@ const translations = {
     finishOnboardingFirst:
       "Спочатку заверши реєстрацію — тоді меню та налаштування стануть доступні.\nНапиши /start, щоб продовжити.",
 
+    // --- Persona verification CTA (end of onboarding) ---
+    verifyPitch:
+      "Фінальний крок. Нам треба переконатися, що ти реальна людина.\n\n" +
+      "Селфі, яке ми зробимо під час верифікації, ми порівняємо з кожним фото у твоєму профілі. " +
+      "Фото, на яких не ти, буде відхилено.\n\n" +
+      "Відмова від верифікації суттєво знизить твій стартовий ELO-рейтинг, " +
+      "і алгоритм пропонуватиме тобі менше зустрічей.",
+    verifyBtnGo: "🟢 Пройти верифікацію",
+    verifyBtnSkip: "⚪️ Пропустити поки",
+    verifySkipped:
+      "Верифікацію пропущено. Можеш пройти її пізніше з меню профілю, " +
+      "щоб повернути ELO-рейтинг.",
+    photoMatchMismatch:
+      "⚠️ Це фото не збігається з селфі верифікації. " +
+      "Будь ласка, завантаж чітке фото себе при схожому освітленні.",
+
     // --- Main Menu ---
     menuTitle: "🎓 *Меню Gennety*\nЩо робимо?",
     menuMyProfile: "👤 Мій профіль",
@@ -608,13 +755,10 @@ const translations = {
     editMajorSaved: "Спеціальність оновлено ✅",
     editPrefsTitle: "🔍 *Параметри пошуку*\n\nЩо міняємо?",
     editPrefsAgeBtn: "🎂 Вік",
-    editPrefsVisualBtn: "👁 Візуальний тип",
     editPrefsBack: "⬅️ До редагування",
     editAgeRangePrompt: "Який вік? (напр. 20-28)\nМін: {min}, Макс: {max}.",
     editAgeRangeInvalid: "Не зрозумів. Два числа через дефіс, напр. 20-28 (від {min} до {max}).",
     editAgeRangeSaved: "Діапазон оновлено ✅",
-    editVisualRestart: "Переглянемо твій тип 👀",
-    editVisualDone: "Візуальні вподобання оновлено ✅",
     editProfilePhotosStart: "Скинь нові фото ({min}–{max}). По одному.",
     editProfilePhotosSaved: "Фото оновлено ✅",
 
@@ -645,6 +789,9 @@ const translations = {
 
     // --- Matching ---
     matchHeadline: "💘 Знайшли тобі метч!",
+    matchDeadlineNotice:
+      "У тебе 24 години на відповідь. " +
+      "Щойно натиснеш — *рішення остаточне*. Змінити не можна.",
     matchStreamStart: "Думаю, чому ви підходите…",
     matchBtnAccept: "✅ Прийняти",
     matchBtnDecline: "❌ Пас",
@@ -652,10 +799,62 @@ const translations = {
     matchBothAccepted: "Взаємно 🔥 Знайдемо час.",
     matchDeclined: "Ок. Коротко — *чому*? Так ШІ вчиться.",
     matchDeclineThanks: "Зрозуміли. Шукаємо далі 🎯",
-    matchOtherDeclined: "Метч цього разу не склався. Шукаємо далі.",
-    matchStarvationBoosted:
-      "Алгоритм не знайшов тобі метч на 10/10 цього тижня. " +
-      "Краще менше, та краще — твій пріоритет піднято на максимум до наступного четверга.",
+    matchPeerDecided:
+      "Твій метч уже дав відповідь. Твоя черга.\n\n" +
+      "*Що* саме він обрав — побачиш лише після своєї відповіді. " +
+      "І пам'ятай: твій вибір остаточний.",
+    matchPeerWasAccepted: "До речі — твій метч був згодний. Цього разу просто не склалось.",
+    matchPeerWasDeclined: "До речі — твій метч цього разу відмовився.",
+    matchPhotoCaption: "{name}, {age}",
+    matchSynergyHeader: "💎 *Синергія {score}/99* — {reason}",
+    pitchCountdownHours: "⏳ Залишилось {hours}год на відповідь",
+    pitchCountdownMinutes: "⏳ Залишилось {minutes} хв на відповідь",
+    pitchExpired: "⏳ Час вийшов — пропозиція більше не актуальна.",
+    matchExpiredSilentWarning:
+      "Час вийшов — за добу ти так і не відповів(-ла) на метч. " +
+      "Чекай наступного четверга.\n\n" +
+      "Будь ласка, не ігноруй пропозиції — це неповага до твого партнера. " +
+      "Наступного разу за таку поведінку ми знизимо твій рейтинг.",
+    matchExpiredSilentPenalty:
+      "Час вийшов — за добу ти так і не відповів(-ла) на метч. " +
+      "Чекай наступного четверга.\n\n" +
+      "Твій рейтинг знижено за ігнор — це неповага до твого партнера.",
+    matchExpiredYouMissedDate:
+      "Важливо: твій метч був згодний прийти — ти пропустив справжнє побачення.\n\n",
+    matchExpiredPeerIgnored:
+      "Партнер не відповів протягом доби — побачення не відбудеться. " +
+      "Побачимось у дропі наступного тижня.",
+    matchStandbyStatus:
+      "STATUS: STANDBY\n\n" +
+      "Ми не йдемо на компроміси щодо якості. Цього тижня для тебе немає метчу з високою синергією.\n\n" +
+      "Твій пріоритет на наступний тиждень підвищено.",
+    noMatchThisWeekTier1:
+      "Привіт 💫\n\n" +
+      "Цього тижня наш матчмейкер не знайшов для тебе пари, яка справді відповідала б нашому рівню якості — " +
+      "і ми не готові пропонувати «аби було».\n\n" +
+      "Кілька чесних речей:\n" +
+      "• Ми активно розширюємо спільноту й щодня покращуємо алгоритм підбору партнера.\n" +
+      "• По-справжньому відповідна людина має з'явитися в одному з найближчих дропів.\n" +
+      "• Кожне побачення — *повністю за наш кошт*: кава, вечеря, все. ☕️🎬\n\n" +
+      "До наступного четверга о 18:00 ✨",
+    noMatchThisWeekTier2:
+      "Привіт 🌿\n\n" +
+      "Уже другий тиждень поспіль, як наш матчмейкер не знаходить когось, кого ми були б раді тобі показати. " +
+      "Дякуємо, що лишаєшся з нами — це справді важливо.\n\n" +
+      "Що ми хочемо сказати чесно:\n" +
+      "• Ми активно приводимо нових студентів і налаштовуємо алгоритм під твої критерії.\n" +
+      "• Дійсно вартий партнер має бути всього за кілька дропів від тебе.\n" +
+      "• Коли побачення станеться — воно *повністю за наш кошт*, це не змінюється.\n\n" +
+      "До наступного четверга о 18:00 — ми працюємо для тебе 🤍",
+    noMatchThisWeekTier3:
+      "Привіт ✨\n\n" +
+      "Маємо знову бути чесними — пари, яка справді варта твого часу, досі немає. " +
+      "Нам це не подобається ще більше, ніж тобі, і ми не вдаватимемо, що все добре.\n\n" +
+      "Що ми насправді робимо:\n" +
+      "• Особисто стежимо за твоєю чергою і підштовхуємо ріст спільноти у твоєму районі.\n" +
+      "• Та сама людина обов'язково з'явиться в одному з найближчих дропів — ми не зупинимось.\n" +
+      "• Твоє побачення — коли б воно не сталося — *повністю за нами*. Це наша обіцянка.\n\n" +
+      "Дякуємо, що довіряєш. До четверга о 18:00 🤍",
     matchScheduleProposal: "Як тобі ці варіанти? Тисни зручний:",
     matchScheduleIter3:
       "Давай через календар — відкрий і обери слоти.\nВибір зберігається локально, не загубиться.",
@@ -679,6 +878,8 @@ const translations = {
     // --- Phase 4: Date ---
     icebreakerIntro:
       "Побачення через 3 години! Ось теми для розмови:\n\n",
+    wingmanHintIntro:
+      "👋 Маленька підказка — побачення через годину:\n\n",
     emergencyUnlocked:
       "Вікно екстреного скасування відкрите.\n" +
       "Зовсім не можеш прийти — тисни кнопку нижче.\n" +

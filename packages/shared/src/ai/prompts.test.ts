@@ -3,9 +3,11 @@ import {
   MAGIC_CONTEXT_PROMPT,
   magicContextPrompt,
   parseLLMDumpPrompt,
+  pitchAndSynergyPrompt,
   proposeSchedulingPrompt,
   venueSelectionPrompt,
   generateIceBreakersPrompt,
+  generateWingmanHintPrompt,
   parseRejectionFeedbackPrompt,
   parsePostDateFeedbackPrompt,
   parseReportTriagePrompt,
@@ -116,6 +118,78 @@ describe("parseLLMDumpPrompt", () => {
   });
 });
 
+describe("pitchAndSynergyPrompt", () => {
+  const base = {
+    selfFirstName: "Alice",
+    otherFirstName: "Bob",
+    selfSummary: "Loves jazz and philosophy",
+    otherSummary: "Enjoys hiking and coffee",
+    language: "en",
+  };
+
+  it("includes the JSON schema for all three output fields", () => {
+    const result = pitchAndSynergyPrompt(base);
+    expect(result).toContain('"pitch"');
+    expect(result).toContain('"synergy_score"');
+    expect(result).toContain('"synergy_reason"');
+  });
+
+  it("clamps the score range to 70..99 in-prompt", () => {
+    const result = pitchAndSynergyPrompt(base);
+    expect(result).toMatch(/integer between 70 and 99/);
+    expect(result).toMatch(/Never go below 70/);
+    expect(result).toMatch(/Never reach 100/);
+  });
+
+  it("defines both framing buckets (complementary vs aligned)", () => {
+    const result = pitchAndSynergyPrompt(base);
+    expect(result).toMatch(/70[–-]79/);
+    expect(result).toMatch(/complementary/i);
+    expect(result).toMatch(/90[–-]99/);
+    expect(result).toMatch(/highly aligned/i);
+  });
+
+  it("forbids mentioning the number itself in the reason", () => {
+    const result = pitchAndSynergyPrompt(base);
+    expect(result).toMatch(/NOT mention the number/i);
+  });
+
+  it("requires JSON-only output (mentions JSON for OpenAI JSON mode)", () => {
+    const result = pitchAndSynergyPrompt(base);
+    expect(result).toContain("JSON");
+    expect(result).toMatch(/no markdown/i);
+    expect(result).toMatch(/Start with `\{`/);
+  });
+
+  it("injects both names and summaries", () => {
+    const result = pitchAndSynergyPrompt(base);
+    expect(result).toContain("Alice");
+    expect(result).toContain("Bob");
+    expect(result).toContain("Loves jazz and philosophy");
+    expect(result).toContain("Enjoys hiking and coffee");
+  });
+
+  it("injects the language across the schema fields", () => {
+    const ru = pitchAndSynergyPrompt({ ...base, language: "ru" });
+    expect(ru).toContain("Output language: ru");
+    // Both pitch and reason are language-bound.
+    expect(ru.match(/in ru/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+  });
+
+  it("handles null names and summaries gracefully", () => {
+    const result = pitchAndSynergyPrompt({
+      selfFirstName: null,
+      otherFirstName: null,
+      selfSummary: null,
+      otherSummary: null,
+      language: "en",
+    });
+    expect(result).toContain("Reader: User");
+    expect(result).toContain("Match: Someone");
+    expect(result).toContain("(no bio)");
+  });
+});
+
 describe("proposeSchedulingPrompt", () => {
   const base = {
     selfFirstName: "Alice",
@@ -221,6 +295,51 @@ describe("generateIceBreakersPrompt", () => {
       ...base,
       userSummary: null,
       matchSummary: null,
+    });
+    expect(result).toContain("(no profile summary available)");
+  });
+});
+
+describe("generateWingmanHintPrompt", () => {
+  const base = {
+    viewerFirstName: "Alice",
+    targetFirstName: "Bob",
+    viewerSummary: "Introvert, loves reading and jazz",
+    targetSummary: "Lead of the university debate club, into philosophy",
+    language: "en",
+  };
+
+  it("frames the writer as a mutual friend addressing the viewer about the target", () => {
+    const result = generateWingmanHintPrompt(base);
+    expect(result).toContain("mutual friend");
+    expect(result).toContain("Alice");
+    expect(result).toContain("Bob");
+    // Target summary must be present so the model has the source material.
+    expect(result).toContain("debate club");
+  });
+
+  it("requires a single imperative sentence, not a question", () => {
+    const result = generateWingmanHintPrompt(base);
+    expect(result).toContain("ONE");
+    expect(result).toContain("imperative");
+    expect(result).toMatch(/No question marks?/);
+  });
+
+  it("injects language", () => {
+    const result = generateWingmanHintPrompt({ ...base, language: "ru" });
+    expect(result).toContain("**ru**");
+  });
+
+  it("injects language for Ukrainian", () => {
+    const result = generateWingmanHintPrompt({ ...base, language: "uk" });
+    expect(result).toContain("**uk**");
+  });
+
+  it("handles null summaries without crashing", () => {
+    const result = generateWingmanHintPrompt({
+      ...base,
+      viewerSummary: null,
+      targetSummary: null,
     });
     expect(result).toContain("(no profile summary available)");
   });
