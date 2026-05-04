@@ -17,7 +17,7 @@ import {
   cleanDatabase,
   seedUser,
   seedProfile,
-} from "@gennety/db/test-integration";
+} from "../../../../packages/db/src/test-integration.js";
 import { buildCandidateSql, MATCH_COOLDOWN_MS } from "./match-engine.js";
 
 // ---------------------------------------------------------------------------

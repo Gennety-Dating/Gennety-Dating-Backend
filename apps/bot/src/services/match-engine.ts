@@ -3,12 +3,16 @@ import { prisma } from "@gennety/db";
 /**
  * Match engine — multi-factor candidate scoring.
  *
- * MatchScore = (w1 * V_explicit) + (w2 * V_visual) + (w3 * V_research) - (w4 * V_penalty)
+ * MatchScore = ((w1 * V_explicit) + (w2 * V_research)) * V_league - (w3 * V_penalty)
  *
  * Strategy: **Hybrid SQL + Node.js re-ranking**.
  *   1. SQL pre-filter fetches a wide candidate pool (top N by embedding distance)
  *      with all hard constraints (university, gender, cooldown, no open matches).
  *   2. Node.js applies the full weighted formula and returns the top K.
+ *
+ * `V_league` (universal Elo distance) gates positive score *before* the
+ * negative-constraint penalty so penalty cannot be amplified or diluted by
+ * the league multiplier — only the positive signal is league-gated.
  *
  * Correctness rules (enforced by `buildCandidateQuery`):
  *   1. Only `active` users with completed onboarding are considered.
@@ -35,19 +39,44 @@ export const DEFAULT_CANDIDATE_LIMIT = 5;
 const CANDIDATE_POOL_SIZE = 20;
 
 // ---------------------------------------------------------------------------
-// Scoring weights — sum to 1.0 (penalty is subtracted, not added)
+// Scoring weights
 // ---------------------------------------------------------------------------
 
 export const SCORING_WEIGHTS = {
   /** Semantic embedding similarity (cosine). */
-  explicit: 0.40,
-  /** Visual preference vector similarity. */
-  visual: 0.20,
+  explicit: 0.80,
   /** Sociological baseline heuristics (height, age, social energy). */
-  research: 0.10,
+  research: 0.20,
   /** Negative constraint penalty — subtracted from total. */
   penalty: 0.30,
 } as const;
+
+// ---------------------------------------------------------------------------
+// Elo league penalty
+// ---------------------------------------------------------------------------
+
+/** Elo gap below which the league multiplier is a no-op. */
+export const LEAGUE_TOLERANCE = 150;
+/** Decay slope per Elo point past `LEAGUE_TOLERANCE`. */
+export const LEAGUE_DECAY_PER_POINT = 0.002;
+/** Floor so an out-of-league candidate keeps a small positive weight. */
+export const LEAGUE_FLOOR = 0.1;
+
+/**
+ * `V_league`: Elo-distance multiplier applied to (V_explicit + V_research)
+ * BEFORE the penalty subtraction. Same league = 1.0, decays linearly past
+ * `LEAGUE_TOLERANCE` and clamps at `LEAGUE_FLOOR` so a far-out-of-league pair
+ * never goes negative purely from the league factor.
+ *
+ * Defaults when either side has no rating yet (e.g. mid-onboarding edge):
+ * returns 1.0 — let the embedding decide. The Elo seed lands during the
+ * Persona webhook so this only matters in narrow race windows.
+ */
+export function leagueScore(eloDelta: number): number {
+  const delta = Math.abs(eloDelta);
+  if (delta <= LEAGUE_TOLERANCE) return 1.0;
+  return Math.max(LEAGUE_FLOOR, 1.0 - (delta - LEAGUE_TOLERANCE) * LEAGUE_DECAY_PER_POINT);
+}
 
 // ---------------------------------------------------------------------------
 // Starvation priority — per-missed-week score bonus for unpaired users
@@ -64,12 +93,12 @@ export const STARVATION_CAP = 0.25;
 
 /**
  * Priority bonus for a user who has been eligible-but-unpaired for
- * `missedWeeks` consecutive batches. Linearly scaled by `STARVATION_ALPHA`,
+ * `standbyCount` consecutive batches. Linearly scaled by `STARVATION_ALPHA`,
  * capped at `STARVATION_CAP`. Non-starved users (0 or negative) return 0.
  */
-export function starvationBonus(missedWeeks: number): number {
-  if (missedWeeks <= 0) return 0;
-  return Math.min(STARVATION_CAP, STARVATION_ALPHA * missedWeeks);
+export function starvationBonus(standbyCount: number): number {
+  if (standbyCount <= 0) return 0;
+  return Math.min(STARVATION_CAP, STARVATION_ALPHA * standbyCount);
 }
 
 // ---------------------------------------------------------------------------
@@ -91,8 +120,8 @@ export interface RichCandidateRow extends CandidateRow {
   major: string | null;
   psychologicalSummary: string | null;
   negativeConstraints: string | null;
-  visualVector: number[];
   socialEnergy: string | null;
+  eloScore: number;
 }
 
 /** Seeker profile data needed for scoring. */
@@ -102,8 +131,8 @@ export interface SeekerProfile {
   height: number | null;
   major: string | null;
   negativeConstraints: string | null;
-  visualVector: number[];
   socialEnergy: string | null;
+  eloScore: number;
 }
 
 export interface ScoredCandidate {
@@ -113,8 +142,8 @@ export interface ScoredCandidate {
   score: number;
   breakdown: {
     explicit: number;
-    visual: number;
     research: number;
+    league: number;
     penalty: number;
   };
 }
@@ -142,7 +171,7 @@ export function buildCandidateSql(): string {
       p.height                AS "height",
       p.psychological_summary AS "psychologicalSummary",
       p.negative_constraints  AS "negativeConstraints",
-      p.visual_vector         AS "visualVector",
+      p.elo_score             AS "eloScore",
       (p.embedding <=> $2::vector) AS distance
     FROM users u
     JOIN profiles p ON p.user_id = u.id
@@ -210,19 +239,6 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return dot / denom;
 }
 
-/**
- * V_visual: similarity between seeker's and candidate's visual vectors.
- * Returns 0..1 (1 = perfect match).
- */
-export function visualScore(
-  seekerVisualVec: number[],
-  candidateVisualVec: number[],
-): number {
-  if (seekerVisualVec.length === 0 || candidateVisualVec.length === 0) return 0;
-  // Clamp to [0,1] since visual vectors should already be positive.
-  return Math.max(0, cosineSimilarity(seekerVisualVec, candidateVisualVec));
-}
-
 // ---------------------------------------------------------------------------
 // V_penalty — negative constraints
 // ---------------------------------------------------------------------------
@@ -258,6 +274,27 @@ export function parseNegativeTraits(constraints: string | null): string[] {
   return traits;
 }
 
+/** Escape user-supplied text for safe inclusion in a RegExp source. */
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Match a single trait against the candidate summary using Unicode-aware
+ * word boundaries. Plain `String.includes` was a footgun: `"smoker"` matched
+ * `"non-smoker"`, penalising the perfect candidate. `\b` is ASCII-only so it
+ * misfires on Cyrillic; we use `(?<![\p{L}\p{N}])…(?![\p{L}\p{N}])` instead
+ * to honour ru/uk/en bilingual summaries.
+ */
+function traitHits(summary: string, trait: string): boolean {
+  if (!trait) return false;
+  const re = new RegExp(
+    `(?<![\\p{L}\\p{N}])${escapeRegex(trait)}(?![\\p{L}\\p{N}])`,
+    "iu",
+  );
+  return re.test(summary);
+}
+
 /**
  * V_penalty: check how many of the seeker's negative-constraint traits
  * appear in the candidate's psychological summary. Returns 0..1 where
@@ -271,10 +308,9 @@ export function penaltyScore(
   if (traits.length === 0) return 0;
   if (!candidateSummary) return 0;
 
-  const summaryLower = candidateSummary.toLowerCase();
   let hits = 0;
   for (const trait of traits) {
-    if (summaryLower.includes(trait)) {
+    if (traitHits(candidateSummary, trait)) {
       hits++;
     }
   }
@@ -511,6 +547,9 @@ export function researchScore(
  * Compute the full multi-factor match score for a single candidate.
  * All sub-scores are 0..1; the composite score can go negative if
  * penalty is high enough (such candidates are ranked last).
+ *
+ * Formula: ((w_explicit * V_explicit) + (w_research * V_research)) * V_league
+ *          - (w_penalty * V_penalty)
  */
 export function scoreCandidate(
   seeker: SeekerProfile,
@@ -518,7 +557,6 @@ export function scoreCandidate(
   weights = SCORING_WEIGHTS,
 ): ScoredCandidate {
   const vExplicit = explicitScore(candidate.distance);
-  const vVisual = visualScore(seeker.visualVector, candidate.visualVector);
   const vResearch = researchScore(
     {
       age: seeker.age,
@@ -535,16 +573,14 @@ export function scoreCandidate(
       major: candidate.major,
     },
   );
+  const vLeague = leagueScore(seeker.eloScore - candidate.eloScore);
   const vPenalty = penaltyScore(
     seeker.negativeConstraints,
     candidate.psychologicalSummary,
   );
 
-  const score =
-    weights.explicit * vExplicit +
-    weights.visual * vVisual +
-    weights.research * vResearch -
-    weights.penalty * vPenalty;
+  const positive = (weights.explicit * vExplicit + weights.research * vResearch) * vLeague;
+  const score = positive - weights.penalty * vPenalty;
 
   return {
     userId: candidate.userId,
@@ -553,8 +589,8 @@ export function scoreCandidate(
     score,
     breakdown: {
       explicit: vExplicit,
-      visual: vVisual,
       research: vResearch,
+      league: vLeague,
       penalty: vPenalty,
     },
   };
@@ -601,8 +637,8 @@ export async function findCandidatesFor(
         select: {
           height: true,
           negativeConstraints: true,
-          visualVector: true,
           psychologicalSummary: true,
+          eloScore: true,
         },
       },
     },
@@ -646,8 +682,8 @@ export async function findCandidatesFor(
     height: seeker.profile?.height ?? null,
     major: seeker.major ?? null,
     negativeConstraints: seeker.profile?.negativeConstraints ?? null,
-    visualVector: seeker.profile?.visualVector ?? [],
     socialEnergy: extractSocialEnergy(seeker.profile?.psychologicalSummary ?? null),
+    eloScore: seeker.profile?.eloScore ?? 500,
   };
 
   return rankCandidates(seekerProfile, pool, limit);
@@ -660,10 +696,16 @@ export async function findCandidatesFor(
 /**
  * Create a `Match` row for the given pair in `proposed` state, and bump
  * `lastMatchedAt` on both profiles so the cooldown takes effect.
+ *
+ * `breakdown` (optional) freezes the four score components into
+ * `MatchScoreLog` so the admin dashboard can A/B test scoring weights
+ * against the eventual accept/decline outcome. Callers without scoring
+ * context (tests, manual seeding) may omit it.
  */
 export async function createProposedMatch(
   userAId: string,
   userBId: string,
+  breakdown?: ScoredPair["breakdown"],
 ): Promise<{ id: string }> {
   const now = new Date();
   return prisma.$transaction(async (tx) => {
@@ -675,6 +717,26 @@ export async function createProposedMatch(
       where: { userId: { in: [userAId, userBId] } },
       data: { lastMatchedAt: now },
     });
+    if (breakdown) {
+      const scoreTotal =
+        (SCORING_WEIGHTS.explicit * breakdown.explicit +
+          SCORING_WEIGHTS.research * breakdown.research) *
+          breakdown.league -
+        SCORING_WEIGHTS.penalty * breakdown.penalty +
+        breakdown.starvationBonus;
+      await tx.matchScoreLog.create({
+        data: {
+          matchId: match.id,
+          scoreExplicit: breakdown.explicit,
+          scoreResearch: breakdown.research,
+          scoreLeague: breakdown.league,
+          scorePenalty: breakdown.penalty,
+          scoreTotal,
+          embeddingDistance: breakdown.embeddingDistance,
+          starvationBonus: breakdown.starvationBonus,
+        },
+      });
+    }
     return match;
   });
 }
@@ -688,7 +750,14 @@ export interface WeeklyBatchResult {
   pairs: number;
   matchIds: string[];
   /** Users who were eligible for this batch but left unpaired — their
-   *  `Profile.missedWeeks` was just incremented. Consumed by the UX ping. */
+   *  `Profile.standbyCount` was just incremented. Consumed by the standby UX. */
+  missedUserIds: string[];
+}
+
+export interface WeeklyBatchPlan {
+  eligible: number;
+  pairs: number;
+  finalPairs: ScoredPair[];
   missedUserIds: string[];
 }
 
@@ -702,11 +771,11 @@ export interface BatchUser {
   universityDomain: string | null;
   height: number | null;
   negativeConstraints: string | null;
-  visualVector: number[];
   psychologicalSummary: string | null;
   embeddingLiteral: string | null;
+  eloScore: number;
   /** Consecutive batches this user has been eligible but unpaired. */
-  missedWeeks: number;
+  standbyCount: number;
 }
 
 /** A scored pair produced by the global scoring phase. */
@@ -714,6 +783,17 @@ export interface ScoredPair {
   userAId: string;
   userBId: string;
   score: number;
+  /// Score components averaged across both directions, kept so that
+  /// `MatchScoreLog` can be persisted at match creation. Optional because
+  /// historical callers / tests may not need it.
+  breakdown?: {
+    explicit: number;
+    research: number;
+    league: number;
+    penalty: number;
+    embeddingDistance: number;
+    starvationBonus: number;
+  };
 }
 
 /**
@@ -738,22 +818,38 @@ export function areMutuallyCompatible(a: BatchUser, b: BatchUser): boolean {
 }
 
 /**
- * Score a pair of BatchUsers using the existing multi-factor formula.
+ * Score a pair of BatchUsers using the multi-factor formula.
  * Requires the embedding distance to be pre-computed via SQL.
+ *
+ * The Elo league multiplier is symmetric (|delta|), so the two directions
+ * agree on `V_league` even though `V_penalty` and `V_research` may differ
+ * by direction.
  */
+export interface PairScoreResult {
+  score: number;
+  breakdown: {
+    explicit: number;
+    research: number;
+    league: number;
+    penalty: number;
+    embeddingDistance: number;
+    starvationBonus: number;
+  };
+}
+
 export function scorePair(
   a: BatchUser,
   b: BatchUser,
   embeddingDistance: number,
-): number {
+): PairScoreResult {
   const seekerA: SeekerProfile = {
     age: a.age,
     gender: a.gender,
     height: a.height,
     major: a.major,
     negativeConstraints: a.negativeConstraints,
-    visualVector: a.visualVector,
     socialEnergy: extractSocialEnergy(a.psychologicalSummary),
+    eloScore: a.eloScore,
   };
 
   const candidateB: RichCandidateRow = {
@@ -767,8 +863,8 @@ export function scorePair(
     major: b.major,
     psychologicalSummary: b.psychologicalSummary,
     negativeConstraints: b.negativeConstraints,
-    visualVector: b.visualVector,
     socialEnergy: extractSocialEnergy(b.psychologicalSummary),
+    eloScore: b.eloScore,
   };
 
   const scored = scoreCandidate(seekerA, candidateB);
@@ -780,8 +876,8 @@ export function scorePair(
     height: b.height,
     major: b.major,
     negativeConstraints: b.negativeConstraints,
-    visualVector: b.visualVector,
     socialEnergy: extractSocialEnergy(b.psychologicalSummary),
+    eloScore: b.eloScore,
   };
 
   const candidateA: RichCandidateRow = {
@@ -795,8 +891,8 @@ export function scorePair(
     major: a.major,
     psychologicalSummary: a.psychologicalSummary,
     negativeConstraints: a.negativeConstraints,
-    visualVector: a.visualVector,
     socialEnergy: extractSocialEnergy(a.psychologicalSummary),
+    eloScore: a.eloScore,
   };
 
   const scoredReverse = scoreCandidate(seekerB, candidateA);
@@ -805,8 +901,18 @@ export function scorePair(
   // Starvation priority: boost the pair by the MAX of each side's bonus,
   // never the sum — two starved users shouldn't stack priority and pair
   // off with each other at the expense of fresh users.
-  const bonus = Math.max(starvationBonus(a.missedWeeks), starvationBonus(b.missedWeeks));
-  return base + bonus;
+  const bonus = Math.max(starvationBonus(a.standbyCount), starvationBonus(b.standbyCount));
+  return {
+    score: base + bonus,
+    breakdown: {
+      explicit: (scored.breakdown.explicit + scoredReverse.breakdown.explicit) / 2,
+      research: (scored.breakdown.research + scoredReverse.breakdown.research) / 2,
+      league: (scored.breakdown.league + scoredReverse.breakdown.league) / 2,
+      penalty: (scored.breakdown.penalty + scoredReverse.breakdown.penalty) / 2,
+      embeddingDistance,
+      starvationBonus: bonus,
+    },
+  };
 }
 
 /**
@@ -875,9 +981,9 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
         select: {
           height: true,
           negativeConstraints: true,
-          visualVector: true,
           psychologicalSummary: true,
-          missedWeeks: true,
+          eloScore: true,
+          standbyCount: true,
         },
       },
     },
@@ -906,9 +1012,9 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
         select: {
           height: true,
           negativeConstraints: true,
-          visualVector: true,
           psychologicalSummary: true,
-          missedWeeks: true,
+          eloScore: true,
+          standbyCount: true,
         },
       },
     },
@@ -948,11 +1054,26 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
       universityDomain: u.universityDomain,
       height: u.profile?.height ?? null,
       negativeConstraints: u.profile?.negativeConstraints ?? null,
-      visualVector: u.profile?.visualVector ?? [],
       psychologicalSummary: u.profile?.psychologicalSummary ?? null,
       embeddingLiteral: embeddingMap.get(u.id) ?? null,
-      missedWeeks: u.profile?.missedWeeks ?? 0,
+      eloScore: u.profile?.eloScore ?? 500,
+      standbyCount: u.profile?.standbyCount ?? 0,
     }));
+}
+
+/**
+ * Strict UUID v1-5 regex used to gate any id that's spliced into raw SQL.
+ * The DB column is `@db.Uuid` so values fetched from Prisma are guaranteed
+ * to match this shape — we still validate as defense-in-depth so a future
+ * caller that hands in user-supplied text can't trigger SQL injection
+ * through the `UNION ALL` pair builder.
+ */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Exported for tests. */
+export function isUuid(value: string): boolean {
+  return UUID_RE.test(value);
 }
 
 /**
@@ -974,6 +1095,17 @@ export async function computePairwiseDistances(
       const b = users[j]!;
       if (!areMutuallyCompatible(a, b)) continue;
       if (!a.embeddingLiteral || !b.embeddingLiteral) continue;
+      // Defense-in-depth: refuse to splice anything that doesn't match the
+      // UUID shape into the SQL string. The `users` table column is `@db.Uuid`
+      // so this should never trigger in practice, but a future regression
+      // (e.g. someone calling this fn with stub data from a test or the
+      // mobile API) won't open a SQL-injection hole.
+      if (!isUuid(a.id) || !isUuid(b.id)) {
+        console.warn(
+          `[match-engine] computePairwiseDistances: refusing non-UUID id (a=${a.id}, b=${b.id})`,
+        );
+        continue;
+      }
       pairs.push({ aId: a.id, bId: b.id, aEmb: a.embeddingLiteral, bEmb: b.embeddingLiteral });
     }
   }
@@ -1042,9 +1174,65 @@ async function loadHistoricalMatchPairs(
  */
 export async function runWeeklyBatch(): Promise<WeeklyBatchResult> {
   await autoUnsuspendElapsed();
+  const plan = await previewWeeklyBatch();
+  if (plan.eligible === 0) {
+    return { eligible: 0, pairs: 0, matchIds: [], missedUserIds: [] };
+  }
+
+  // Create match rows.
+  const matchIds: string[] = [];
+  for (const pair of plan.finalPairs) {
+    const match = await createProposedMatch(
+      pair.userAId,
+      pair.userBId,
+      pair.breakdown,
+    );
+    matchIds.push(match.id);
+  }
+
+  // Diff eligible-vs-paired and update starvation counters.
+  const pairedUserIds = plan.finalPairs.flatMap((pair) => [pair.userAId, pair.userBId]);
+  const now = new Date();
+
+  await prisma.$transaction([
+    prisma.profile.updateMany({
+      where: { userId: { in: pairedUserIds } },
+      data: { standbyCount: 0, missedWeeks: 0 },
+    }),
+    prisma.profile.updateMany({
+      where: { userId: { in: plan.missedUserIds } },
+      data: {
+        standbyCount: { increment: 1 },
+        missedWeeks: { increment: 1 },
+        lastMissedAt: now,
+      },
+    }),
+  ]);
+
+  console.log(
+    `[weekly-batch] eligible=${plan.eligible} pairs=${plan.pairs} missed=${plan.missedUserIds.length}`,
+  );
+
+  return {
+    eligible: plan.eligible,
+    pairs: plan.pairs,
+    matchIds,
+    missedUserIds: plan.missedUserIds,
+  };
+}
+
+export async function previewWeeklyBatch(): Promise<WeeklyBatchPlan> {
   const users = await loadEligibleUsers();
-  if (users.length < 2) {
-    return { eligible: users.length, pairs: 0, matchIds: [], missedUserIds: [] };
+  if (users.length === 0) {
+    return { eligible: 0, pairs: 0, finalPairs: [], missedUserIds: [] };
+  }
+  if (users.length === 1) {
+    return {
+      eligible: 1,
+      pairs: 0,
+      finalPairs: [],
+      missedUserIds: [users[0]!.id],
+    };
   }
 
   const userIds = users.map((u) => u.id);
@@ -1057,62 +1245,31 @@ export async function runWeeklyBatch(): Promise<WeeklyBatchResult> {
 
   const distances = await computePairwiseDistances(users);
 
-  // Score all valid pairs.
   const scoredPairs: ScoredPair[] = [];
   for (const [key, distance] of distances) {
     const [aId, bId] = key.split(":");
     if (!aId || !bId) continue;
-
-    // Skip pairs that have ever been matched before (lifetime ban).
     if (historicalPairs.has(`${aId}:${bId}`)) continue;
 
     const a = userMap.get(aId);
     const b = userMap.get(bId);
     if (!a || !b) continue;
 
-    const score = scorePair(a, b, distance);
-    scoredPairs.push({ userAId: aId, userBId: bId, score });
+    const { score, breakdown } = scorePair(a, b, distance);
+    scoredPairs.push({ userAId: aId, userBId: bId, score, breakdown });
   }
 
-  // Greedy pairing.
   const finalPairs = greedyPair(scoredPairs);
-
-  // Create match rows.
-  const matchIds: string[] = [];
-  for (const pair of finalPairs) {
-    const match = await createProposedMatch(pair.userAId, pair.userBId);
-    matchIds.push(match.id);
-  }
-
-  // Diff eligible-vs-paired and update starvation counters.
   const pairedIds = new Set<string>();
-  for (const p of finalPairs) {
-    pairedIds.add(p.userAId);
-    pairedIds.add(p.userBId);
+  for (const pair of finalPairs) {
+    pairedIds.add(pair.userAId);
+    pairedIds.add(pair.userBId);
   }
-  const missedUserIds = users.filter((u) => !pairedIds.has(u.id)).map((u) => u.id);
-  const pairedUserIds = [...pairedIds];
-  const now = new Date();
-
-  await prisma.$transaction([
-    prisma.profile.updateMany({
-      where: { userId: { in: pairedUserIds } },
-      data: { missedWeeks: 0 },
-    }),
-    prisma.profile.updateMany({
-      where: { userId: { in: missedUserIds } },
-      data: { missedWeeks: { increment: 1 }, lastMissedAt: now },
-    }),
-  ]);
-
-  console.log(
-    `[weekly-batch] eligible=${users.length} scored=${scoredPairs.length} pairs=${finalPairs.length} missed=${missedUserIds.length}`,
-  );
 
   return {
     eligible: users.length,
     pairs: finalPairs.length,
-    matchIds,
-    missedUserIds,
+    finalPairs,
+    missedUserIds: users.filter((u) => !pairedIds.has(u.id)).map((u) => u.id),
   };
 }

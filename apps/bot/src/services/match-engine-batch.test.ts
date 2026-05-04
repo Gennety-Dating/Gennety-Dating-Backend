@@ -6,6 +6,7 @@ import {
   starvationBonus,
   STARVATION_ALPHA,
   STARVATION_CAP,
+  isUuid,
   type BatchUser,
   type ScoredPair,
 } from "./match-engine.js";
@@ -23,10 +24,10 @@ function makeBatchUser(overrides: Partial<BatchUser> & { id: string }): BatchUse
     universityDomain: "stanford.edu",
     height: 180,
     negativeConstraints: null,
-    visualVector: [0.5, 0.3, 0.8, 0.2, 0.6, 0.4],
     psychologicalSummary: "Extroverted, curious, analytical thinker.",
     embeddingLiteral: null,
-    missedWeeks: 0,
+    eloScore: 500,
+    standbyCount: 0,
     ...overrides,
   };
 }
@@ -173,7 +174,6 @@ describe("scorePair", () => {
       preference: "women",
       age: 23,
       psychologicalSummary: "Extroverted, creative thinker.",
-      visualVector: [0.5, 0.3, 0.8, 0.2, 0.6, 0.4],
     });
     const b = makeBatchUser({
       id: "b",
@@ -181,10 +181,9 @@ describe("scorePair", () => {
       preference: "men",
       age: 22,
       psychologicalSummary: "Ambivert, loves art and jazz.",
-      visualVector: [0.6, 0.4, 0.7, 0.3, 0.5, 0.5],
     });
 
-    const score = scorePair(a, b, 0.3);
+    const { score } = scorePair(a, b, 0.3);
     expect(score).toBeGreaterThan(0);
     expect(score).toBeLessThanOrEqual(1);
   });
@@ -193,8 +192,8 @@ describe("scorePair", () => {
     const a = makeBatchUser({ id: "a", gender: "male", preference: "women" });
     const b = makeBatchUser({ id: "b", gender: "female", preference: "men" });
 
-    const closeScore = scorePair(a, b, 0.1);
-    const farScore = scorePair(a, b, 1.5);
+    const { score: closeScore } = scorePair(a, b, 0.1);
+    const { score: farScore } = scorePair(a, b, 1.5);
 
     expect(closeScore).toBeGreaterThan(farScore);
   });
@@ -219,19 +218,19 @@ describe("scorePair", () => {
       psychologicalSummary: "Casual smoker who is quite lazy on weekends.",
     });
 
-    const scoreClean = scorePair(a, bClean, 0.3);
-    const scoreSmoker = scorePair(a, bSmoker, 0.3);
+    const { score: scoreClean } = scorePair(a, bClean, 0.3);
+    const { score: scoreSmoker } = scorePair(a, bSmoker, 0.3);
 
     expect(scoreClean).toBeGreaterThan(scoreSmoker);
   });
 });
 
 // ---------------------------------------------------------------------------
-// starvationBonus — capped per-missed-week priority boost
+// starvationBonus — capped per-standby-week priority boost
 // ---------------------------------------------------------------------------
 
 describe("starvationBonus", () => {
-  it("returns 0 for a user who was paired last week (missedWeeks = 0)", () => {
+  it("returns 0 for a user who was paired last week (standbyCount = 0)", () => {
     expect(starvationBonus(0)).toBe(0);
   });
 
@@ -260,12 +259,12 @@ describe("starvationBonus", () => {
 
 describe("scorePair with starvation", () => {
   it("a starved user's score is boosted vs. a freshly-matched user", () => {
-    const fresh = makeBatchUser({ id: "fresh", gender: "female", preference: "men", missedWeeks: 0 });
-    const starved = makeBatchUser({ id: "starved", gender: "female", preference: "men", missedWeeks: 4 });
-    const seeker = makeBatchUser({ id: "m", gender: "male", preference: "women", missedWeeks: 0 });
+    const fresh = makeBatchUser({ id: "fresh", gender: "female", preference: "men", standbyCount: 0 });
+    const starved = makeBatchUser({ id: "starved", gender: "female", preference: "men", standbyCount: 4 });
+    const seeker = makeBatchUser({ id: "m", gender: "male", preference: "women", standbyCount: 0 });
 
-    const baseScore = scorePair(seeker, fresh, 0.3);
-    const boostedScore = scorePair(seeker, starved, 0.3);
+    const { score: baseScore } = scorePair(seeker, fresh, 0.3);
+    const { score: boostedScore } = scorePair(seeker, starved, 0.3);
 
     expect(boostedScore).toBeGreaterThan(baseScore);
     // The delta is exactly starvationBonus(4) since both pair configs are
@@ -274,14 +273,14 @@ describe("scorePair with starvation", () => {
   });
 
   it("uses max(a, b) not sum — two starved users don't stack bonuses", () => {
-    const a = makeBatchUser({ id: "a", gender: "male", preference: "women", missedWeeks: 5 });
-    const b = makeBatchUser({ id: "b", gender: "female", preference: "men", missedWeeks: 5 });
+    const a = makeBatchUser({ id: "a", gender: "male", preference: "women", standbyCount: 5 });
+    const b = makeBatchUser({ id: "b", gender: "female", preference: "men", standbyCount: 5 });
 
-    const aFresh = makeBatchUser({ id: "a", gender: "male", preference: "women", missedWeeks: 0 });
-    const bFresh = makeBatchUser({ id: "b", gender: "female", preference: "men", missedWeeks: 0 });
+    const aFresh = makeBatchUser({ id: "a", gender: "male", preference: "women", standbyCount: 0 });
+    const bFresh = makeBatchUser({ id: "b", gender: "female", preference: "men", standbyCount: 0 });
 
-    const bothStarved = scorePair(a, b, 0.3);
-    const neither = scorePair(aFresh, bFresh, 0.3);
+    const { score: bothStarved } = scorePair(a, b, 0.3);
+    const { score: neither } = scorePair(aFresh, bFresh, 0.3);
 
     const delta = bothStarved - neither;
     // max-not-sum: the delta equals starvationBonus(5), not 2 * starvationBonus(5).
@@ -290,16 +289,41 @@ describe("scorePair with starvation", () => {
   });
 
   it("applied bonus on any pair is bounded by STARVATION_CAP", () => {
-    // Hold everything constant except missedWeeks; saturate the bonus.
-    const aFresh = makeBatchUser({ id: "a", gender: "male", preference: "women", missedWeeks: 0 });
-    const bFresh = makeBatchUser({ id: "b", gender: "female", preference: "men", missedWeeks: 0 });
-    const aSaturated = makeBatchUser({ id: "a", gender: "male", preference: "women", missedWeeks: 9999 });
+    // Hold everything constant except standbyCount; saturate the bonus.
+    const aFresh = makeBatchUser({ id: "a", gender: "male", preference: "women", standbyCount: 0 });
+    const bFresh = makeBatchUser({ id: "b", gender: "female", preference: "men", standbyCount: 0 });
+    const aSaturated = makeBatchUser({ id: "a", gender: "male", preference: "women", standbyCount: 9999 });
 
-    const baseScore = scorePair(aFresh, bFresh, 0.3);
-    const saturatedScore = scorePair(aSaturated, bFresh, 0.3);
+    const { score: baseScore } = scorePair(aFresh, bFresh, 0.3);
+    const { score: saturatedScore } = scorePair(aSaturated, bFresh, 0.3);
 
     const boost = saturatedScore - baseScore;
     expect(boost).toBeLessThanOrEqual(STARVATION_CAP + 1e-9);
     expect(boost).toBeCloseTo(STARVATION_CAP);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isUuid (C-4 SQL-injection defense)
+// ---------------------------------------------------------------------------
+
+describe("isUuid (defense-in-depth for raw SQL splicing)", () => {
+  it("accepts canonical v4 UUIDs", () => {
+    expect(isUuid("550e8400-e29b-41d4-a716-446655440000")).toBe(true);
+    expect(isUuid("550E8400-E29B-41D4-A716-446655440000")).toBe(true);
+  });
+  it("rejects SQL-injection payloads disguised as ids", () => {
+    expect(isUuid("'; DROP TABLE users; --")).toBe(false);
+    expect(isUuid("' OR 1=1 --")).toBe(false);
+    expect(isUuid("a'+(SELECT '1')+'")).toBe(false);
+  });
+  it("rejects empty / non-UUID strings", () => {
+    expect(isUuid("")).toBe(false);
+    expect(isUuid("not-a-uuid")).toBe(false);
+    expect(isUuid("12345")).toBe(false);
+    // Wrong version nibble (must be 1-5)
+    expect(isUuid("550e8400-e29b-71d4-a716-446655440000")).toBe(false);
+    // Wrong variant nibble (must be 8/9/a/b)
+    expect(isUuid("550e8400-e29b-41d4-c716-446655440000")).toBe(false);
   });
 });

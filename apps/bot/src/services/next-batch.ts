@@ -147,6 +147,21 @@ export function getNextBatchDate(
 }
 
 /**
+ * Get the previous occurrence of the weekly batch cron, relative to `now`,
+ * anchored in Europe/Kyiv wall time.
+ */
+export function getPreviousBatchDate(
+  now: Date = new Date(),
+  cronExpression?: string,
+): Date {
+  const next = getNextBatchDate(now, cronExpression);
+  return getNextBatchDate(
+    new Date(next.getTime() - 8 * 24 * 60 * 60 * 1000),
+    cronExpression,
+  );
+}
+
+/**
  * Human-readable string for the next batch date, formatted in Europe/Kyiv.
  * Example: "Thursday, April 16 at 18:00"
  */
