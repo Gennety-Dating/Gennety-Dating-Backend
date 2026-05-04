@@ -53,12 +53,19 @@ Once onboarded, the bot displays a persistent Menu. The menu title uses a `custo
    - Cron job finds pairs on a weekly cadence: **Thursday at 18:00 Europe/Kyiv** (`MATCH_CRON_SCHEDULE = "0 18 * * 4"`, `CRON_TIMEZONE = "Europe/Kyiv"`).
    - A warm pre-match teaser goes out **24 hours earlier, on Wednesday at 18:00 Kyiv** (`PRE_MATCH_ANNOUNCE_CRON_SCHEDULE = "0 18 * * 3"`).
    - **API v9.5 Integration**: The bot uses `sendMessageDraft` to stream the personalized pitch to both users in real-time, making the matchmaking feel dynamic and bespoke.
+   - The pitch streams an explicit irreversibility notice (`matchDeadlineNotice`) right after the headline: users have **24 hours** to reply, and once they tap, the decision is final.
    - Buttons: `[Accept]` / `[Decline]`.
-2. **Rejection Feedback**: If `[Decline]` is clicked, the bot prompts the user to type a reason. AI parses this and updates negative constraints.
-3. **Progressive Scheduling (If both Accept)**:
+2. **Blind Decision Invariant + Peer Nudge**:
+   - **Blind rule**: A user MUST NOT learn what their partner picked until they themselves have committed. The match row stays in `proposed` even after one side declines — the peer's keyboard remains live until either both sides have decided or the 24h TTL expires. The row only flips to `cancelled` once both sides have committed (or to `negotiating` on mutual accept).
+   - **Peer-decided nudge**: The moment the first side commits (accept OR decline), the peer is DM'd a neutral nudge (`matchPeerDecided`) — *"your match has answered, your turn"*. The nudge reveals **nothing** about the answer itself; it's identical for accept and decline.
+   - **Reveal-on-own-decision**: When the second side taps, they get their own ack (`matchAccepted` / `matchDeclined`) plus a follow-up reveal of the partner's choice (`matchPeerWasAccepted` / `matchPeerWasDeclined`). The first decider — who only saw their own ack earlier — is also DM'd the outcome at this moment, so both sides ultimately learn the result.
+   - **Mutual accept** is the one positive exception that reveals symmetrically and immediately via `matchBothAccepted`.
+   - **TTL expiry asymmetry**: If the silent side ghosted a partner who had **accepted**, the expiry message includes a *"you missed a real date"* line (`matchExpiredYouMissedDate`) on top of the standard rating warning/penalty. If the partner declined or also ghosted, the silent message stays neutral — preserving the blind rule even at expiry.
+3. **Rejection Feedback**: After a user declines (and once they've seen the partner's verdict, if any), the bot prompts them to type a reason. AI parses this and updates negative constraints.
+4. **Progressive Scheduling (If both Accept)**:
    - **Iteration 1 & 2 (AI Proposals)**: Bot proposes AI-generated times.
    - **Iteration 3 (Telegram Web App Calendar)**: User opens Mini App. The Mini App uses `DeviceStorage` (API v9.0) to temporarily cache user selections so data isn't lost if they accidentally close the swipe-down window.
-4. **Venue Selection (API Driven)**:
+5. **Venue Selection (API Driven)**:
    - Backend queries Places API near the university or midpoint.
    - **API v9.5 Integration**: The final confirmation message MUST use the `date_time` message entity. This ensures the date (e.g., "Friday at 19:00") is automatically formatted into the user's local timezone and clickable in their Telegram client.
 

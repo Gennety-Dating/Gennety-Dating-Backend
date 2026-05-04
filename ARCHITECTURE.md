@@ -3,6 +3,21 @@
 > Product logic and user flow are in [PRODUCT_SPEC.md](PRODUCT_SPEC.md).  
 > Tech stack and coding rules are in [AGENTS.md](AGENTS.md).
 
+## Production Endpoints
+
+The DigitalOcean droplet (`167.172.178.229`) terminates TLS via **Caddy**
+(auto-renewed Let's Encrypt). DNS for the `gennety.com` zone lives at Hostinger.
+
+| Subdomain | Reverse-proxies to | Purpose |
+|---|---|---|
+| `api-admin.gennety.com` | `localhost:3100` | Admin analytics dashboard API (`ADMIN_API_KEY` auth) |
+| `dating-api.gennety.com` | `localhost:3101` | Public `/v1/*` API for the Expo mobile app **and** the Persona liveness webhook (`/v1/webhooks/persona`). |
+
+**Domain isolation:** `api.gennety.com` is owned by a sibling project — never
+use it for Gennety Dating. Always pick names prefixed with `dating-` here.
+
+Persona production webhook target: `https://dating-api.gennety.com/v1/webhooks/persona`.
+
 ## End-to-End Architecture Schema
 
 ```mermaid
