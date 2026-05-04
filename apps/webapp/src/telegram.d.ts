@@ -13,6 +13,26 @@ interface TelegramWebAppDeviceStorage {
   clear(callback?: (err: string | null, ok: boolean) => void): void;
 }
 
+/**
+ * Telegram-native bottom button. Used as the "Confirm" CTA in the calendar:
+ * `sendData` is silently a no-op when the Mini App is opened via inline
+ * keyboard, so we POST to the bot's public API on MainButton tap instead.
+ */
+interface TelegramWebAppMainButton {
+  text: string;
+  isVisible: boolean;
+  isActive: boolean;
+  show(): void;
+  hide(): void;
+  enable(): void;
+  disable(): void;
+  showProgress(leaveActive?: boolean): void;
+  hideProgress(): void;
+  setText(text: string): void;
+  onClick(handler: () => void): void;
+  offClick(handler: () => void): void;
+}
+
 interface TelegramWebApp {
   /** Raw init data — contains user, auth_date, hash, start_param, etc. */
   initData: string;
@@ -26,11 +46,14 @@ interface TelegramWebApp {
    * Survives swipe-down dismissal of the Web App.
    */
   DeviceStorage: TelegramWebAppDeviceStorage;
+  MainButton: TelegramWebAppMainButton;
   ready(): void;
   expand(): void;
   close(): void;
   /** Send a string payload back to the bot and close the Web App. */
   sendData(data: string): void;
+  /** Native modal alert — used to surface POST errors to the user. */
+  showAlert(message: string, callback?: () => void): void;
 }
 
 interface Window {
