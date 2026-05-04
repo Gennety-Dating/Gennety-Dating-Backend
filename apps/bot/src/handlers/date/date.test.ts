@@ -57,7 +57,6 @@ function createCtx(overrides: {
     ...DEFAULT_SESSION,
     onboardingStep: "completed",
     pendingPhotos: [],
-    visualVotes: [],
     ...overrides.session,
   };
   return {
@@ -286,6 +285,8 @@ describe("date-lifecycle tick", () => {
           userB: { id: "ub-1", telegramId: 1002n, language: "ru", firstName: "Boris" },
         },
       ])
+      // wingman query returns empty (T-1h hasn't fired)
+      .mockResolvedValueOnce([])
       // feedback query returns empty
       .mockResolvedValueOnce([]);
     mMatch.update.mockResolvedValue({});
@@ -299,11 +300,11 @@ describe("date-lifecycle tick", () => {
     expect(result.emergencies).toBe(1);
     // 4 messages: icebreaker A, icebreaker B, emergency A, emergency B
     expect(api.sendMessage).toHaveBeenCalledTimes(4);
-    // Mark as sent
+    // Mark as sent (icebreakers + topic arrays — order-independent shape match)
     expect(mMatch.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "match-1" },
-        data: { icebreakersSentAt: now },
+        data: expect.objectContaining({ icebreakersSentAt: now }),
       }),
     );
   });
@@ -315,6 +316,8 @@ describe("date-lifecycle tick", () => {
 
     mMatch.findMany
       // icebreaker query returns empty
+      .mockResolvedValueOnce([])
+      // wingman query returns empty
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         {
@@ -331,17 +334,117 @@ describe("date-lifecycle tick", () => {
     expect(result.feedbacks).toBe(1);
     // 2 messages: feedback A, feedback B
     expect(api.sendMessage).toHaveBeenCalledTimes(2);
-    // Transition to completed
+    // Transition to completed AND stamp feedbackPromptedAt (C-1 dedup marker).
     expect(mMatch.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "match-2" },
-        data: { status: "completed" },
+        data: { status: "completed", feedbackPromptedAt: now },
       }),
     );
   });
 
+  it("does NOT re-prompt feedback once feedbackPromptedAt is set (C-1)", async () => {
+    // Regression: previously the cron used null `feedbackByA/B` as the dedup
+    // signal, which kept matching every 2 minutes until both users replied.
+    // Now we filter on `feedbackPromptedAt: null` so a one-shot prompt is
+    // truly one-shot.
+    mMatch.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]); // feedback query, filtered to feedbackPromptedAt: null
+
+    const api = { sendMessage: vi.fn() } as any;
+    const result = await runDateLifecycleTick(api, new Date());
+
+    expect(result.feedbacks).toBe(0);
+    // Verify the query filter — should require feedbackPromptedAt: null
+    expect(mMatch.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ feedbackPromptedAt: null }),
+      }),
+    );
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("C-3: ice-breaker batch survives a Telegram send failure", async () => {
+    // Regression: a single 403/blocked send used to abort the for-loop
+    // before icebreakersSentAt was stamped, so the next 2-min tick re-fired
+    // the batch and the survivor got duplicates.
+    const agreedTime = new Date("2026-04-10T19:00:00Z");
+    const now = new Date(agreedTime.getTime() - 2.75 * 60 * 60 * 1000);
+
+    mMatch.findMany
+      .mockResolvedValueOnce([
+        {
+          id: "match-1",
+          agreedTime,
+          userA: { id: "ua-1", telegramId: 1001n, language: "en", firstName: "Alice" },
+          userB: { id: "ub-1", telegramId: 1002n, language: "ru", firstName: "Boris" },
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    mMatch.update.mockResolvedValue({});
+    mProfile.findUnique.mockResolvedValue({ psychologicalSummary: null });
+
+    const api = {
+      sendMessage: vi
+        .fn()
+        // First send to A throws — must NOT abort the rest of the batch
+        .mockRejectedValueOnce(new Error("Forbidden: bot was blocked by the user"))
+        .mockResolvedValue(undefined),
+    } as any;
+
+    const result = await runDateLifecycleTick(api, now);
+
+    expect(result.icebreakers).toBe(1);
+    // The other 3 sends still happen
+    expect(api.sendMessage).toHaveBeenCalledTimes(4);
+    // CRITICAL: idempotency marker stamped despite the failure
+    expect(mMatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "match-1" },
+        data: expect.objectContaining({ icebreakersSentAt: now }),
+      }),
+    );
+  });
+
+  it("C-3: ice-breaker skips mobile-only users (telegramId <= 0n)", async () => {
+    // Mobile-first synthetic users have negative telegramIds. Sending to a
+    // negative chat id throws "chat not found" and used to abort the batch.
+    const agreedTime = new Date("2026-04-10T19:00:00Z");
+    const now = new Date(agreedTime.getTime() - 2.75 * 60 * 60 * 1000);
+
+    mMatch.findMany
+      .mockResolvedValueOnce([
+        {
+          id: "match-3",
+          agreedTime,
+          userA: { id: "ua-3", telegramId: 1001n, language: "en", firstName: "Alice" },
+          userB: { id: "ub-3", telegramId: -42n, language: "en", firstName: "MobileBob" },
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    mMatch.update.mockResolvedValue({});
+    mProfile.findUnique.mockResolvedValue({ psychologicalSummary: null });
+
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    await runDateLifecycleTick(api, now);
+
+    // Only Alice (positive id) gets ice-breaker + emergency = 2 sends.
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    // Bob (-42n) is never sent to.
+    for (const call of (api.sendMessage as any).mock.calls) {
+      expect(call[0]).toBe(1001);
+    }
+  });
+
   it("returns zeros when there are no matches to process", async () => {
-    mMatch.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    mMatch.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
 
     const api = { sendMessage: vi.fn() } as any;
     const result = await runDateLifecycleTick(api, new Date());

@@ -106,11 +106,22 @@ export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
   await ctx.reply(t(lang, "emergencyConfirmed"));
 
-  // Forward exact reason to the other person.
+  // Forward exact reason to the other person — Telegram side only. Mobile
+  // peers see the cancellation via the `/v1/matches/current` poll, plus a
+  // push notification dispatched separately.
   const other = isA ? match.userB : match.userA;
-  const otherLang = (other.language ?? "en") as Language;
-  await ctx.api.sendMessage(
-    Number(other.telegramId),
-    t(otherLang, "emergencyReceivedOther", { reason: trimmedReason }),
-  );
+  if (other.telegramId > 0n) {
+    const otherLang = (other.language ?? "en") as Language;
+    await ctx.api
+      .sendMessage(
+        Number(other.telegramId),
+        t(otherLang, "emergencyReceivedOther", { reason: trimmedReason }),
+      )
+      .catch((err: unknown) => {
+        console.warn(
+          `[emergency] forward failed for ${other.telegramId}:`,
+          err instanceof Error ? err.message : err,
+        );
+      });
+  }
 }

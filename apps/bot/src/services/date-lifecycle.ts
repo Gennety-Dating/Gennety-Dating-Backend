@@ -1,8 +1,17 @@
 import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { prisma } from "@gennety/db";
-import { t, type Language, DATE_ALERT_HOURS, FEEDBACK_DELAY_HOURS, generateIceBreakersPrompt } from "@gennety/shared";
+import {
+  t,
+  type Language,
+  DATE_ALERT_HOURS,
+  FEEDBACK_DELAY_HOURS,
+  PRE_DATE_WINGMAN_HOURS,
+  generateIceBreakersPrompt,
+} from "@gennety/shared";
 import { callOpenAIText } from "./openai.js";
+import { generateAndSaveWingmanHints } from "./wingman-hint.js";
+import { sendPushToUser } from "./push.js";
 
 /**
  * Date lifecycle cron — runs on a fixed interval (e.g. every 2 minutes).
@@ -80,6 +89,7 @@ export interface DateLifecycleResult {
   icebreakers: number;
   emergencies: number;
   feedbacks: number;
+  wingmen: number;
 }
 
 /**
@@ -89,7 +99,12 @@ export async function runDateLifecycleTick(
   api: Api<RawApi>,
   now: Date = new Date(),
 ): Promise<DateLifecycleResult> {
-  const result: DateLifecycleResult = { icebreakers: 0, emergencies: 0, feedbacks: 0 };
+  const result: DateLifecycleResult = {
+    icebreakers: 0,
+    emergencies: 0,
+    feedbacks: 0,
+    wingmen: 0,
+  };
 
   // 1 & 2. Ice-breakers + Emergency window — 3h before agreed_time
   const alertThreshold = new Date(now.getTime() + DATE_ALERT_HOURS * 60 * 60 * 1000);
@@ -97,7 +112,10 @@ export async function runDateLifecycleTick(
   const upcomingDates = await prisma.match.findMany({
     where: {
       status: "scheduled",
-      agreedTime: { lte: alertThreshold },
+      // M-14: gate on `gt: now` so a row whose date already passed (because
+      // a previous tick crashed before stamping `icebreakersSentAt`) doesn't
+      // get a stale "your date is in 3h" message AFTER the date.
+      agreedTime: { gt: now, lte: alertThreshold },
       icebreakersSentAt: null,
     },
     select: {
@@ -139,19 +157,42 @@ export async function runDateLifecycleTick(
     const emergKbA = new InlineKeyboard().text(t(langA, "emergencyBtn"), `emerg:start:${match.id}`);
     const emergKbB = new InlineKeyboard().text(t(langB, "emergencyBtn"), `emerg:start:${match.id}`);
 
-    await Promise.all([
-      api.sendMessage(Number(match.userA.telegramId), msgA),
-      api.sendMessage(Number(match.userB.telegramId), msgB),
-      api.sendMessage(Number(match.userA.telegramId), t(langA, "emergencyUnlocked"), {
+    // Per-leg .catch + telegramId guard. Mobile-first synthetic users
+    // (telegramId <= 0n) get the Expo push path elsewhere; sending to a
+    // negative chat id throws "chat not found" and used to abort the entire
+    // for-loop, leaving icebreakersSentAt null and causing duplicate sends
+    // on the next 2-min tick.
+    const sendIfTelegram = (
+      tgId: bigint,
+      text: string,
+      opts?: Parameters<typeof api.sendMessage>[2],
+    ): Promise<unknown> | null => {
+      if (tgId <= 0n) return null;
+      return api.sendMessage(Number(tgId), text, opts).catch((err: unknown) => {
+        console.warn(
+          `[date-lifecycle] icebreaker/emergency send failed for ${tgId}:`,
+          err instanceof Error ? err.message : err,
+        );
+      });
+    };
+
+    const sends: Array<Promise<unknown> | null> = [
+      sendIfTelegram(match.userA.telegramId, msgA),
+      sendIfTelegram(match.userB.telegramId, msgB),
+      sendIfTelegram(match.userA.telegramId, t(langA, "emergencyUnlocked"), {
         reply_markup: emergKbA,
         parse_mode: "Markdown",
       }),
-      api.sendMessage(Number(match.userB.telegramId), t(langB, "emergencyUnlocked"), {
+      sendIfTelegram(match.userB.telegramId, t(langB, "emergencyUnlocked"), {
         reply_markup: emergKbB,
         parse_mode: "Markdown",
       }),
-    ]);
+    ];
 
+    await Promise.all(sends.filter((p): p is Promise<unknown> => p !== null));
+
+    // Stamp icebreakersSentAt unconditionally — see C-3 in the audit. We'd
+    // rather miss one send than duplicate-spam every 2 minutes.
     await prisma.match.update({
       where: { id: match.id },
       data: {
@@ -165,14 +206,122 @@ export async function runDateLifecycleTick(
     result.emergencies++;
   }
 
+  // 2b. Wingman hints — reveal window opens at T-1h.
+  //
+  // Generation already happened at `scheduled` transition; we may still
+  // call `generateAndSaveWingmanHints` here to cover backfill (matches
+  // that scheduled before this feature shipped, or where the earlier
+  // generation silently fell back to a null row).
+  const wingmanThreshold = new Date(
+    now.getTime() + PRE_DATE_WINGMAN_HOURS * 60 * 60 * 1000,
+  );
+
+  const wingmanTargets = await prisma.match.findMany({
+    where: {
+      status: "scheduled",
+      agreedTime: { lte: wingmanThreshold, gt: now },
+      wingmanSentAt: null,
+    },
+    select: {
+      id: true,
+      wingmanHintA: true,
+      wingmanHintB: true,
+      userA: {
+        select: { id: true, telegramId: true, language: true, platform: true },
+      },
+      userB: {
+        select: { id: true, telegramId: true, language: true, platform: true },
+      },
+    },
+  });
+
+  for (const match of wingmanTargets) {
+    // Backfill if either side is missing; idempotent inside the service.
+    let hintA = match.wingmanHintA;
+    let hintB = match.wingmanHintB;
+    if (!hintA || !hintB) {
+      const generated = await generateAndSaveWingmanHints(match.id);
+      if (generated) {
+        hintA = generated.a;
+        hintB = generated.b;
+      }
+    }
+    if (!hintA || !hintB) continue; // nothing to deliver yet; retry next tick
+
+    const langA = (match.userA.language ?? "en") as Language;
+    const langB = (match.userB.language ?? "en") as Language;
+
+    const deliveries: Array<Promise<unknown>> = [];
+
+    // Telegram DM — telegram + "both" platform users (telegramId > 0).
+    if (
+      (match.userA.platform === "telegram" || match.userA.platform === "both") &&
+      match.userA.telegramId > 0n
+    ) {
+      deliveries.push(
+        api
+          .sendMessage(
+            Number(match.userA.telegramId),
+            `${t(langA, "wingmanHintIntro")}${hintA}`,
+          )
+          .catch((err) => console.warn("[wingman] telegram A failed:", err)),
+      );
+    }
+    if (
+      (match.userB.platform === "telegram" || match.userB.platform === "both") &&
+      match.userB.telegramId > 0n
+    ) {
+      deliveries.push(
+        api
+          .sendMessage(
+            Number(match.userB.telegramId),
+            `${t(langB, "wingmanHintIntro")}${hintB}`,
+          )
+          .catch((err) => console.warn("[wingman] telegram B failed:", err)),
+      );
+    }
+
+    // Expo push — mobile + "both" platform users.
+    if (match.userA.platform === "mobile" || match.userA.platform === "both") {
+      deliveries.push(
+        sendPushToUser(match.userA.id, {
+          title: "Secret Insight",
+          body: hintA,
+          data: { type: "match.wingman", matchId: match.id },
+        }).catch((err) => console.warn("[wingman] push A failed:", err)),
+      );
+    }
+    if (match.userB.platform === "mobile" || match.userB.platform === "both") {
+      deliveries.push(
+        sendPushToUser(match.userB.id, {
+          title: "Secret Insight",
+          body: hintB,
+          data: { type: "match.wingman", matchId: match.id },
+        }).catch((err) => console.warn("[wingman] push B failed:", err)),
+      );
+    }
+
+    await Promise.all(deliveries);
+
+    await prisma.match.update({
+      where: { id: match.id },
+      data: { wingmanSentAt: now },
+    });
+
+    result.wingmen++;
+  }
+
   // 3. Feedback prompt — 24h after agreed_time
   const feedbackThreshold = new Date(now.getTime() - FEEDBACK_DELAY_HOURS * 60 * 60 * 1000);
 
+  // C-1: dedup on `feedbackPromptedAt`, NOT status flip + null feedback.
+  // The previous query re-matched every tick whenever feedback was unanswered
+  // (the common case), spamming both users every 2 minutes after the date.
   const pastDates = await prisma.match.findMany({
     where: {
       status: { in: ["scheduled", "completed"] },
       agreedTime: { lte: feedbackThreshold },
-      OR: [{ feedbackByA: null }, { feedbackByB: null }],
+      feedbackPromptedAt: null,
     },
     select: {
       id: true,
@@ -188,20 +337,43 @@ export async function runDateLifecycleTick(
     const kbA = new InlineKeyboard().text("📝", `feedback:start:${match.id}`);
     const kbB = new InlineKeyboard().text("📝", `feedback:start:${match.id}`);
 
-    await Promise.all([
-      api.sendMessage(Number(match.userA.telegramId), t(langA, "feedbackAsk"), {
-        reply_markup: kbA,
-      }),
-      api.sendMessage(Number(match.userB.telegramId), t(langB, "feedbackAsk"), {
-        reply_markup: kbB,
-      }),
-    ]);
+    // Per-leg .catch + telegramId guard so a blocked / mobile-only user
+    // doesn't abort the loop and re-fire the prompt every 2 minutes.
+    const feedbackSends: Array<Promise<unknown> | null> = [
+      match.userA.telegramId > 0n
+        ? api
+            .sendMessage(Number(match.userA.telegramId), t(langA, "feedbackAsk"), {
+              reply_markup: kbA,
+            })
+            .catch((err: unknown) =>
+              console.warn(
+                `[date-lifecycle] feedback send failed for ${match.userA.telegramId}:`,
+                err instanceof Error ? err.message : err,
+              ),
+            )
+        : null,
+      match.userB.telegramId > 0n
+        ? api
+            .sendMessage(Number(match.userB.telegramId), t(langB, "feedbackAsk"), {
+              reply_markup: kbB,
+            })
+            .catch((err: unknown) =>
+              console.warn(
+                `[date-lifecycle] feedback send failed for ${match.userB.telegramId}:`,
+                err instanceof Error ? err.message : err,
+              ),
+            )
+        : null,
+    ];
 
-    // Mark as completed so we don't re-send. If it was still `scheduled`,
-    // the date has passed — transition it.
+    await Promise.all(feedbackSends.filter((p): p is Promise<unknown> => p !== null));
+
+    // Idempotency marker is set by C-1 patch (feedbackPromptedAt). Status
+    // transition to `completed` is kept here so the post-date timeline is
+    // accurate, but it's NO LONGER the dedup signal.
     await prisma.match.update({
       where: { id: match.id },
-      data: { status: "completed" },
+      data: { status: "completed", feedbackPromptedAt: now },
     });
 
     result.feedbacks++;
