@@ -2,11 +2,13 @@ import { Composer, InlineKeyboard } from "grammy";
 import type { BotContext } from "../session.js";
 import { prisma } from "@gennety/db";
 import { t } from "@gennety/shared";
+import { env } from "../config.js";
 import { showMainMenu } from "./menu/main.js";
 import { showEditProfileMenu } from "./menu/edit-profile.js";
 import { showMyProfile } from "./menu/my-profile.js";
 import { showSettingsMenu } from "./menu/settings.js";
 import { sendConsentPrompt } from "./onboarding/consent.js";
+import { computeDevBypassFields } from "./dev-bypass.js";
 
 const start = new Composer<BotContext>();
 
@@ -17,8 +19,28 @@ start.command("start", async (ctx) => {
   let user = await prisma.user.findUnique({ where: { telegramId } });
 
   if (!user) {
+    // First-touch attribution: capture deep-link start_param from
+    // `/start <param>` (e.g. `https://t.me/bot?start=ig_story`). Stored
+    // once, never overwritten on later /start invocations so the
+    // attribution is stable across re-onboarding.
+    const startPayload = ctx.match?.toString().trim();
+    const referralSource =
+      startPayload && startPayload.length > 0 && startPayload.length <= 64
+        ? `tg:${startPayload}`
+        : null;
+
+    // Dev-only: skip the corporate-email step for whitelisted Telegram IDs.
+    // See `dev-bypass.ts` for the rationale.
+    const bypassFields = computeDevBypassFields(telegramId, env.DEV_OTP_BYPASS_TELEGRAM_IDS);
+    if (bypassFields) {
+      console.warn(
+        `[dev-bypass] Creating user ${telegramId} with synthetic verified email ` +
+          `(DEV_OTP_BYPASS_TELEGRAM_IDS). DO NOT ship this configuration to prod.`,
+      );
+    }
+
     user = await prisma.user.create({
-      data: { telegramId, firstName: null },
+      data: { telegramId, firstName: null, referralSource, ...(bypassFields ?? {}) },
     });
   }
 

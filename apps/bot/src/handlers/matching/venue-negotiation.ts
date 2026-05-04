@@ -32,18 +32,30 @@ import {
 } from "../../services/geo.js";
 import { pickVenueAtMidpoint } from "../../services/venue.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
+import { generateAndSaveWingmanHints } from "../../services/wingman-hint.js";
+import { isTelegramTarget } from "../../utils/telegram-target.js";
 
 /**
  * Build the reply keyboard that surfaces Telegram's `request_location`
  * button. We ship a one-shot keyboard (`one_time_keyboard: true`) so it
  * disappears after the user taps it — location sharing is a single event.
+ *
+ * NB: grammY's `Keyboard.build()` returns the `KeyboardButton[][]` rows array,
+ * NOT a full `ReplyKeyboardMarkup` object. Telegram rejects that with
+ * `400: object expected as reply markup`. The Keyboard *instance* itself
+ * already has `keyboard` / `resize_keyboard` / `one_time_keyboard` populated
+ * by the chained methods, so we serialise it explicitly.
  */
 export function buildLocationRequestKeyboard(lang: Language): ReplyKeyboardMarkup {
   const kb = new Keyboard()
     .requestLocation(t(lang, "venueConciergeBtnLocation"))
     .resized()
     .oneTime();
-  return kb.build() as ReplyKeyboardMarkup;
+  return {
+    keyboard: kb.build(),
+    resize_keyboard: true,
+    one_time_keyboard: true,
+  };
 }
 
 /**
@@ -83,16 +95,26 @@ export async function startVenueNegotiation(
   const langA = (match.userA.language ?? "en") as Language;
   const langB = (match.userB.language ?? "en") as Language;
 
-  await Promise.all([
-    api.sendMessage(Number(match.userA.telegramId), t(langA, "venueConciergeIntro"), {
-      parse_mode: "Markdown",
-      reply_markup: buildLocationRequestKeyboard(langA),
-    }),
-    api.sendMessage(Number(match.userB.telegramId), t(langB, "venueConciergeIntro"), {
-      parse_mode: "Markdown",
-      reply_markup: buildLocationRequestKeyboard(langB),
-    }),
-  ]);
+  // M-17: mobile-only users use the `/v1/matches/:id/vibe-location` route
+  // instead of the Telegram concierge prompt — skip them here.
+  const sends: Array<Promise<unknown>> = [];
+  if (isTelegramTarget(match.userA.telegramId)) {
+    sends.push(
+      api.sendMessage(Number(match.userA.telegramId), t(langA, "venueConciergeIntro"), {
+        parse_mode: "Markdown",
+        reply_markup: buildLocationRequestKeyboard(langA),
+      }),
+    );
+  }
+  if (isTelegramTarget(match.userB.telegramId)) {
+    sends.push(
+      api.sendMessage(Number(match.userB.telegramId), t(langB, "venueConciergeIntro"), {
+        parse_mode: "Markdown",
+        reply_markup: buildLocationRequestKeyboard(langB),
+      }),
+    );
+  }
+  await Promise.all(sends);
 }
 
 /**
@@ -243,14 +265,22 @@ export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<vo
   const langA = (match.userA.language ?? "en") as Language;
   const langB = (match.userB.language ?? "en") as Language;
 
-  await Promise.all([
-    api
-      .sendMessage(Number(match.userA.telegramId), t(langA, "venueSearching"))
-      .catch(() => undefined),
-    api
-      .sendMessage(Number(match.userB.telegramId), t(langB, "venueSearching"))
-      .catch(() => undefined),
-  ]);
+  const searchingSends: Array<Promise<unknown>> = [];
+  if (isTelegramTarget(match.userA.telegramId)) {
+    searchingSends.push(
+      api
+        .sendMessage(Number(match.userA.telegramId), t(langA, "venueSearching"))
+        .catch(() => undefined),
+    );
+  }
+  if (isTelegramTarget(match.userB.telegramId)) {
+    searchingSends.push(
+      api
+        .sendMessage(Number(match.userB.telegramId), t(langB, "venueSearching"))
+        .catch(() => undefined),
+    );
+  }
+  await Promise.all(searchingSends);
 
   const venue = await pickVenueAtMidpoint({
     lat: mid.lat,
@@ -271,16 +301,31 @@ export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<vo
     },
   });
 
+  // Pre-generate Wingman hints now so the T-1h lifecycle tick has them
+  // cached. Fire-and-forget; idempotent regeneration at reveal time
+  // handles any LLM outage that happens during this call.
+  generateAndSaveWingmanHints(matchId).catch((err) => {
+    console.warn(`[wingman] generation failed for match ${matchId}:`, err);
+  });
+
   const venueLabel = `${venue.name} — ${venue.address}`;
   const baseA = t(langA, "matchScheduled", { venue: venueLabel });
   const baseB = t(langB, "matchScheduled", { venue: venueLabel });
   const { text: textA, entity: entA } = buildDateTimeEntity(baseA, match.agreedTime);
   const { text: textB, entity: entB } = buildDateTimeEntity(baseB, match.agreedTime);
 
-  await Promise.all([
-    api.sendMessage(Number(match.userA.telegramId), textA, { entities: [entA] }),
-    api.sendMessage(Number(match.userB.telegramId), textB, { entities: [entB] }),
-  ]);
+  const finalSends: Array<Promise<unknown>> = [];
+  if (isTelegramTarget(match.userA.telegramId)) {
+    finalSends.push(
+      api.sendMessage(Number(match.userA.telegramId), textA, { entities: [entA] }),
+    );
+  }
+  if (isTelegramTarget(match.userB.telegramId)) {
+    finalSends.push(
+      api.sendMessage(Number(match.userB.telegramId), textB, { entities: [entB] }),
+    );
+  }
+  await Promise.all(finalSends);
 }
 
 /**

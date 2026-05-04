@@ -21,6 +21,9 @@ vi.mock("@gennety/db", () => ({
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    matchEvent: {
+      create: vi.fn(),
+    },
   },
 }));
 
@@ -57,7 +60,7 @@ vi.mock("./scheduler.js", () => ({
 
 import { prisma } from "@gennety/db";
 import { handleMatchDecision } from "./decision.js";
-import { buildMatchKeyboard } from "./pitch.js";
+import { buildMatchKeyboard, sendMatchProposal } from "./pitch.js";
 import { appendNegativeConstraint, normalizeReason } from "./negative-constraints.js";
 import { startScheduling } from "./scheduler.js";
 import {
@@ -65,7 +68,6 @@ import {
   preferenceToGenderFilter,
   explicitScore,
   cosineSimilarity,
-  visualScore,
   penaltyScore,
   parseNegativeTraits,
   researchScore,
@@ -87,6 +89,7 @@ type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as { findUnique: MockFn; update: MockFn; updateMany: MockFn };
 const mUser = prisma.user as unknown as { findUnique: MockFn };
 const mProfile = prisma.profile as unknown as { findUnique: MockFn; upsert: MockFn };
+const mMatchEvent = prisma.matchEvent as unknown as { create: MockFn };
 
 function createCtx(overrides: {
   session?: Partial<SessionData>;
@@ -97,7 +100,6 @@ function createCtx(overrides: {
   const session: SessionData = {
     ...DEFAULT_SESSION,
     pendingPhotos: [],
-    visualVotes: [],
     ...overrides.session,
   };
   return {
@@ -173,8 +175,8 @@ function makeSeeker(overrides: Partial<SeekerProfile> = {}): SeekerProfile {
     height: 165,
     major: "computer science",
     negativeConstraints: null,
-    visualVector: [0.8, 0.6, 0.5, 0.7, 0.4, 0.9],
     socialEnergy: "ambivert",
+    eloScore: 500,
     ...overrides,
   };
 }
@@ -191,8 +193,8 @@ function makeCandidate(overrides: Partial<RichCandidateRow> = {}): RichCandidate
     major: "physics",
     psychologicalSummary: "Warm, curious, extroverted. Loves jazz and philosophy.",
     negativeConstraints: null,
-    visualVector: [0.7, 0.5, 0.6, 0.8, 0.3, 0.85],
     socialEnergy: "extrovert",
+    eloScore: 500,
     ...overrides,
   };
 }
@@ -230,19 +232,6 @@ describe("cosineSimilarity", () => {
 
   it("returns 0 for mismatched lengths", () => {
     expect(cosineSimilarity([1, 2], [1, 2, 3])).toBe(0);
-  });
-});
-
-describe("visualScore", () => {
-  it("returns 0 when either vector is empty", () => {
-    expect(visualScore([], [1, 2])).toBe(0);
-    expect(visualScore([1, 2], [])).toBe(0);
-  });
-
-  it("returns high similarity for similar visual vectors", () => {
-    const a = [0.8, 0.6, 0.5, 0.7, 0.4, 0.9];
-    const b = [0.7, 0.5, 0.6, 0.8, 0.3, 0.85];
-    expect(visualScore(a, b)).toBeGreaterThan(0.9);
   });
 });
 
@@ -490,7 +479,6 @@ describe("scoreCandidate — composite formula", () => {
     const goodCandidate = makeCandidate({
       userId: "good",
       distance: 0.4,
-      visualVector: [0.8, 0.6, 0.5, 0.7, 0.4, 0.9],
       psychologicalSummary: "Warm ambivert who loves philosophy and jazz",
     });
 
@@ -498,7 +486,6 @@ describe("scoreCandidate — composite formula", () => {
     const penaltyCandidate = makeCandidate({
       userId: "penalty",
       distance: 0.2, // better embedding distance
-      visualVector: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1], // bad visual match
       psychologicalSummary: "Loud gym bro who parties every night",
     });
 
@@ -518,7 +505,6 @@ describe("scoreCandidate — composite formula", () => {
     });
     const candidate = makeCandidate({
       distance: 1.8, // poor embedding
-      visualVector: [],
       psychologicalSummary: "Arrogant and dismissive know-it-all",
     });
 
@@ -529,8 +515,8 @@ describe("scoreCandidate — composite formula", () => {
   it("breakdown contains all four sub-scores", () => {
     const result = scoreCandidate(makeSeeker(), makeCandidate());
     expect(result.breakdown).toHaveProperty("explicit");
-    expect(result.breakdown).toHaveProperty("visual");
     expect(result.breakdown).toHaveProperty("research");
+    expect(result.breakdown).toHaveProperty("league");
     expect(result.breakdown).toHaveProperty("penalty");
   });
 });
@@ -670,6 +656,183 @@ describe("buildMatchKeyboard (API 9.4 styled buttons)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// sendMatchProposal: photo card + synergy header dispatch
+// ---------------------------------------------------------------------------
+
+describe("sendMatchProposal — photo + synergy dispatch", () => {
+  function makeApi() {
+    return {
+      sendPhoto: vi.fn().mockResolvedValue({ message_id: 9001 }),
+      sendMediaGroup: vi.fn().mockResolvedValue([{ message_id: 9001 }]),
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 9002 }),
+      raw: {
+        sendMessageDraft: vi.fn().mockResolvedValue(undefined),
+      },
+    } as any;
+  }
+
+  function findUniquePayload(overrides: {
+    pitchForA?: string | null;
+    pitchForB?: string | null;
+    synergyScore?: number | null;
+    synergyReason?: string | null;
+    photosA?: string[];
+    photosB?: string[];
+    ageA?: number | null;
+    ageB?: number | null;
+  } = {}) {
+    // `in` so explicit `null` overrides (age missing, synergy missing) win
+    // over the defaults. Plain `??` coerces null back to the default.
+    const pick = <T,>(key: string, fallback: T): T =>
+      key in overrides ? ((overrides as Record<string, unknown>)[key] as T) : fallback;
+    return {
+      id: "match-photo-1",
+      pitchForA: pick<string | null>("pitchForA", "You two click. Both love jazz."),
+      pitchForB: pick<string | null>("pitchForB", "You two click. Both love jazz."),
+      synergyScore: pick<number | null>("synergyScore", 87),
+      synergyReason: pick<string | null>(
+        "synergyReason",
+        "Aligned values and complementary rhythms.",
+      ),
+      userA: {
+        telegramId: 1001n,
+        firstName: "Alice",
+        age: pick<number | null>("ageA", 22),
+        language: "en",
+        profile: {
+          psychologicalSummary: "warm",
+          photos: pick<string[]>("photosA", ["file-a-1"]),
+        },
+      },
+      userB: {
+        telegramId: 1002n,
+        firstName: "Bob",
+        age: pick<number | null>("ageB", 24),
+        language: "en",
+        profile: {
+          psychologicalSummary: "curious",
+          photos: pick<string[]>("photosB", ["file-b-1", "file-b-2"]),
+        },
+      },
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mMatch.update.mockResolvedValue({ id: "match-photo-1" });
+  });
+
+  it("sends partner's media group with `Name, Age` caption to the recipient", async () => {
+    mMatch.findUnique.mockResolvedValue(findUniquePayload());
+    const api = makeApi();
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await sendMatchProposal(api, "match-photo-1", { streamImpl: stream });
+
+    // User A is shown User B's two photos with caption "Bob, 24" on the
+    // first item only. User B is shown User A's single photo via sendPhoto
+    // with caption "Alice, 22".
+    expect(api.sendMediaGroup).toHaveBeenCalledTimes(1);
+    expect(api.sendMediaGroup).toHaveBeenCalledWith(
+      1001,
+      [
+        { type: "photo", media: "file-b-1", caption: "Bob, 24" },
+        { type: "photo", media: "file-b-2" },
+      ],
+    );
+    expect(api.sendPhoto).toHaveBeenCalledTimes(1);
+    expect(api.sendPhoto).toHaveBeenCalledWith(1002, "file-a-1", { caption: "Alice, 22" });
+  });
+
+  it("prepends `💎 Synergy 87/99 — <reason>` to the final pitch chunk", async () => {
+    mMatch.findUnique.mockResolvedValue(findUniquePayload());
+    const api = makeApi();
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await sendMatchProposal(api, "match-photo-1", { streamImpl: stream });
+
+    // streamImpl receives (api, chatId, drafts, options); the final chunk
+    // is the last entry — it should carry both the synergy line and the
+    // countdown plate.
+    const callA = stream.mock.calls.find((c) => c[1] === 1001);
+    const callB = stream.mock.calls.find((c) => c[1] === 1002);
+    expect(callA).toBeDefined();
+    expect(callB).toBeDefined();
+    const draftsA = callA![2] as string[];
+    const draftsB = callB![2] as string[];
+    const finalA = draftsA[draftsA.length - 1]!;
+    const finalB = draftsB[draftsB.length - 1]!;
+    expect(finalA).toContain("Synergy 87/99");
+    expect(finalA).toContain("Aligned values and complementary rhythms.");
+    expect(finalA).toContain("You two click. Both love jazz.");
+    expect(finalB).toContain("Synergy 87/99");
+  });
+
+  it("falls back to name-only caption when age is missing", async () => {
+    mMatch.findUnique.mockResolvedValue(findUniquePayload({ ageB: null }));
+    const api = makeApi();
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await sendMatchProposal(api, "match-photo-1", { streamImpl: stream });
+
+    // User A sees User B's photos — but B has no age, so caption is just "Bob".
+    const mediaCall = api.sendMediaGroup.mock.calls.find((c: unknown[]) => c[0] === 1001);
+    expect(mediaCall).toBeDefined();
+    const media = mediaCall![1] as Array<Record<string, unknown>>;
+    expect(media[0]!.caption).toBe("Bob");
+  });
+
+  it("skips photo dispatch when partner has no photos but still streams pitch", async () => {
+    mMatch.findUnique.mockResolvedValue(findUniquePayload({ photosA: [], photosB: [] }));
+    const api = makeApi();
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await sendMatchProposal(api, "match-photo-1", { streamImpl: stream });
+
+    expect(api.sendPhoto).not.toHaveBeenCalled();
+    expect(api.sendMediaGroup).not.toHaveBeenCalled();
+    expect(stream).toHaveBeenCalledTimes(2);
+  });
+
+  it("swallows photo dispatch errors so a stale file_id can't block the pitch", async () => {
+    mMatch.findUnique.mockResolvedValue(findUniquePayload());
+    const api = makeApi();
+    api.sendMediaGroup.mockRejectedValueOnce(new Error("file_id revoked"));
+    api.sendPhoto.mockRejectedValueOnce(new Error("file_id revoked"));
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await expect(
+      sendMatchProposal(api, "match-photo-1", { streamImpl: stream }),
+    ).resolves.toBeUndefined();
+    expect(stream).toHaveBeenCalledTimes(2);
+  });
+
+  it("omits the synergy header when score/reason are missing on the row", async () => {
+    // Older rows pre-feature might land here without synergy data and with
+    // an injected pitchImpl that also returns nothing — verify we don't
+    // crash and don't render an empty header.
+    mMatch.findUnique.mockResolvedValue(
+      findUniquePayload({ synergyScore: null, synergyReason: null }),
+    );
+    const api = makeApi();
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+    const pitchImpl = vi.fn().mockResolvedValue({
+      pitch: "You two click.",
+      synergyScore: null as unknown as number,
+      synergyReason: "",
+    });
+
+    await sendMatchProposal(api, "match-photo-1", { streamImpl: stream, pitchImpl });
+
+    const callA = stream.mock.calls.find((c) => c[1] === 1001);
+    const draftsA = callA![2] as string[];
+    const finalA = draftsA[draftsA.length - 1]!;
+    expect(finalA).not.toContain("Synergy");
+    expect(finalA).not.toContain("/99");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // decision handler: Accept / Decline / rejection reason
 // ---------------------------------------------------------------------------
 
@@ -696,6 +859,14 @@ describe("matching decision flow", () => {
     expect(mMatch.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "match-1" }, data: { acceptedByA: true } }),
     );
+    expect(mMatchEvent.create).toHaveBeenCalledWith({
+      data: {
+        matchId: "match-1",
+        actorId: "uid-A",
+        targetId: "uid-B",
+        actionType: "ACCEPTED",
+      },
+    });
     // No transition to `negotiating` yet.
     expect(mMatch.updateMany).not.toHaveBeenCalled();
     expect(ctx.reply).toHaveBeenCalled();
@@ -724,6 +895,14 @@ describe("matching decision flow", () => {
 
     const calls = mMatch.update.mock.calls.map((c) => c[0]);
     expect(calls.some((c) => (c.data as { acceptedByB?: boolean }).acceptedByB === true)).toBe(true);
+    expect(mMatchEvent.create).toHaveBeenCalledWith({
+      data: {
+        matchId: "match-1",
+        actorId: "uid-B",
+        targetId: "uid-A",
+        actionType: "ACCEPTED",
+      },
+    });
     expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "match-1", status: "proposed" },
@@ -735,7 +914,11 @@ describe("matching decision flow", () => {
     expect(ctx.reply).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ message_effect_id: "5104841245755180586" }));
   });
 
-  it("decline from userA cancels the match and notifies the peer (no session flag)", async () => {
+  it("first decline keeps match in 'proposed' and sends BLIND nudge (no reveal)", async () => {
+    // Blind-decision: when A declines first, the row must NOT flip to
+    // cancelled — peer's keyboard stays live until they decide or TTL
+    // hits. Peer gets a generic "your match answered, your turn" DM
+    // that gives away nothing about the actual answer.
     mMatch.findUnique.mockResolvedValueOnce(matchRow());
 
     const ctx = createCtx({
@@ -746,15 +929,147 @@ describe("matching decision flow", () => {
 
     await handleMatchDecision(ctx);
 
+    // Status MUST stay 'proposed' — no `status: 'cancelled'` in the update.
     expect(mMatch.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "match-1" },
-        data: { acceptedByA: false, status: "cancelled" },
+        data: { acceptedByA: false },
       }),
     );
-    // Rejection reason is now collected conversationally by the menu agent
-    // via `record_rejection_feedback`; no session flag is set here.
-    expect(ctx.api.sendMessage).toHaveBeenCalled();
+    expect(mMatchEvent.create).toHaveBeenCalledWith({
+      data: {
+        matchId: "match-1",
+        actorId: "uid-A",
+        targetId: "uid-B",
+        actionType: "DECLINED",
+      },
+    });
+
+    // Peer DM must be the neutral nudge, NOT any message that hints
+    // at decline (e.g. nothing matching "passed" / "не сложился").
+    const peerCalls = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+    expect(peerCalls).toHaveLength(1);
+    const [peerChatId, peerText] = peerCalls[0]!;
+    expect(peerChatId).toBe(1002); // userB
+    expect(peerText).toMatch(/your match has already given their answer/i);
+    expect(peerText).not.toMatch(/passed|declined|not in/i);
+  });
+
+  it("first accept sends BLIND nudge to peer (no 'they accepted' leak)", async () => {
+    // Mirror of the decline-blind test for the accept path — the peer
+    // must learn ONLY that the actor answered, not what they answered.
+    mMatch.findUnique.mockResolvedValueOnce(matchRow());
+    mMatch.update.mockResolvedValueOnce({ id: "match-1", acceptedByA: true, acceptedByB: null });
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:accept:match-1",
+      fromId: 1001,
+    });
+
+    await handleMatchDecision(ctx);
+
+    const peerCalls = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+    expect(peerCalls).toHaveLength(1);
+    expect(peerCalls[0]![1]).toMatch(/your match has already given their answer/i);
+    // Must not reveal the accept verdict.
+    expect(peerCalls[0]![1]).not.toMatch(/mutual|accepted|both/i);
+  });
+
+  it("second decider on a peer-declined match: cancels + reveals peer's decline to actor + DMs first-decider", async () => {
+    // A declined first (acceptedByA=false). B now taps Accept. We must:
+    //   1. Flip status to 'cancelled' (both decisions are in).
+    //   2. Tell B their decision was logged (matchAccepted).
+    //   3. Reveal A's prior decline to B inline.
+    //   4. DM A (the first decider) with the outcome reveal — they'd
+    //      seen `matchDeclined` earlier and now learn how it ended.
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ acceptedByA: false, acceptedByB: null }),
+    );
+    mMatch.update
+      .mockResolvedValueOnce({ id: "match-1", acceptedByA: false, acceptedByB: true });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:accept:match-1",
+      fromId: 1002,
+    });
+
+    await handleMatchDecision(ctx);
+
+    // Status flipped to cancelled via updateMany guard.
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "match-1", status: "proposed" },
+        data: { status: "cancelled" },
+      }),
+    );
+
+    // Actor (B) gets two replies: matchAccepted + matchPeerWasDeclined.
+    const replyTexts = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(replyTexts.some((s: string) => /waiting on the other person/i.test(s))).toBe(true);
+    expect(replyTexts.some((s: string) => /your match passed/i.test(s))).toBe(true);
+
+    // First decider (A) gets DM'd the actor's choice — they accepted.
+    const peerSends = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+    expect(peerSends).toHaveLength(1);
+    expect(peerSends[0]![0]).toBe(1001); // userA telegramId
+    expect(peerSends[0]![1]).toMatch(/your match was in/i);
+  });
+
+  it("second decline on a peer-accepted match cancels and reveals both ways", async () => {
+    // A accepted first. B declines. Match cancels; B sees their decline
+    // ack + reveal of A's accept; A is DM'd that B passed.
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ acceptedByA: true, acceptedByB: null }),
+    );
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:decline:match-1",
+      fromId: 1002,
+    });
+
+    await handleMatchDecision(ctx);
+
+    expect(mMatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { acceptedByB: false, status: "cancelled" },
+      }),
+    );
+
+    // Actor (B) sees matchDeclined + matchPeerWasAccepted.
+    const replyTexts = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(replyTexts.some((s: string) => /quick — \*why\*/i.test(s))).toBe(true);
+    expect(replyTexts.some((s: string) => /your match was in/i.test(s))).toBe(true);
+
+    // First decider (A) learns now that B passed.
+    const peerSends = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+    expect(peerSends).toHaveLength(1);
+    expect(peerSends[0]![0]).toBe(1001);
+    expect(peerSends[0]![1]).toMatch(/your match passed/i);
+  });
+
+  it("ignores double-tap from the same side (own decision is final)", async () => {
+    // A already accepted. They tap Decline a second time — must be a
+    // no-op: no DB write, no peer DM, no reply.
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ acceptedByA: true, acceptedByB: null }),
+    );
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:decline:match-1",
+      fromId: 1001,
+    });
+
+    await handleMatchDecision(ctx);
+
+    expect(mMatch.update).not.toHaveBeenCalled();
+    expect(mMatchEvent.create).not.toHaveBeenCalled();
+    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
   });
 
   it("handleMatchDecision no-ops on already-cancelled matches", async () => {
@@ -858,9 +1173,10 @@ describe("datetime-entity", () => {
     const slice = text.slice(entity.offset, entity.offset + entity.length);
     expect(slice.length).toBeGreaterThan(0);
 
-    // Entity carries a unix timestamp in seconds (not ms) inside the
-    // `date_time` extension — assert round-trip via the `as any` escape.
-    const carried = (entity as unknown as { timestamp?: number }).timestamp;
+    // Entity carries the unix timestamp (seconds) in `unix_time` per Bot
+    // API 9.5 spec for `date_time`. Telegram rejects payloads that use
+    // `timestamp` here — see datetime-entity.ts.
+    const carried = (entity as unknown as { unix_time?: number }).unix_time;
     expect(carried).toBe(Math.floor(when.getTime() / 1000));
     expect((entity as unknown as { type: string }).type).toBe("date_time");
   });

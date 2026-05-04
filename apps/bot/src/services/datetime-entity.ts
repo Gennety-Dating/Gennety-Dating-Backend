@@ -45,12 +45,14 @@ export function buildDateTimeEntity(
   const length = utf16Length(PLACEHOLDER_TOKEN);
   const text = `${prefix}${PLACEHOLDER_TOKEN}`;
 
-  // `date_time` entity carries a unix timestamp (seconds) in `timestamp`.
+  // `date_time` entity carries the unix timestamp (seconds) in `unix_time`.
+  // Confirmed empirically: Telegram rejects `timestamp` with
+  // `can't parse MessageEntity: Can't find field "unix_time"`.
   const entity = {
     type: "date_time",
     offset,
     length,
-    timestamp: Math.floor(when.getTime() / 1000),
+    unix_time: Math.floor(when.getTime() / 1000),
   } as unknown as MessageEntity;
 
   return { text, entity };

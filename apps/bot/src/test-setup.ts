@@ -25,3 +25,10 @@ process.env.ADMIN_API_KEY ??= "test-admin-key";
 process.env.ADMIN_PORT ??= "3100";
 process.env.ADMIN_DASHBOARD_ORIGIN ??= "*";
 process.env.WEBAPP_URL ??= "https://test.invalid/calendar";
+
+// Clear secrets that, if present in `.env`, would leak into tests and either
+// hit live services or change branching behaviour. Tests that need these
+// should set them explicitly via `vi.mock("../config.js", ...)`.
+delete process.env.AWS_ACCESS_KEY_ID;
+delete process.env.AWS_SECRET_ACCESS_KEY;
+delete process.env.AWS_REGION;

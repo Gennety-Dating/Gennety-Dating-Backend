@@ -61,7 +61,6 @@ function createCtx(overrides: {
   const session: SessionData = {
     ...DEFAULT_SESSION,
     pendingPhotos: [],
-    visualVotes: [],
     ...overrides.session,
   };
   return {
@@ -106,7 +105,10 @@ describe("scheduler: pure slot helpers", () => {
     expect(kb.inline_keyboard.length).toBe(2);
     for (let i = 0; i < slots.length; i++) {
       const btn = kb.inline_keyboard[i]![0] as { callback_data: string };
-      expect(btn.callback_data).toBe(`sched:pick:match-1:${slots[i]!.toISOString()}`);
+      expect(btn.callback_data).toBe(`sched:pick:match-1:${i}`);
+      // Telegram caps callback_data at 64 bytes — assert we stay well under it
+      // even with a real UUID. Slot index encoding gives us a wide margin.
+      expect(Buffer.byteLength(btn.callback_data, "utf8")).toBeLessThanOrEqual(64);
     }
   });
 
@@ -194,7 +196,8 @@ describe("scheduler: handleSchedulePick overlap detection", () => {
 
     const ctx = createCtx({
       session: { onboardingStep: "completed" },
-      callbackData: "sched:pick:match-1:2099-01-01T00:00:00.000Z",
+      // Index 99 is out-of-bounds for proposedTimes (length 1).
+      callbackData: "sched:pick:match-1:99",
     });
     await handleSchedulePick(ctx);
 
@@ -220,7 +223,8 @@ describe("scheduler: handleSchedulePick overlap detection", () => {
 
     const ctx = createCtx({
       session: { onboardingStep: "completed" },
-      callbackData: `sched:pick:match-1:${slot.toISOString()}`,
+      // Slot index 0 → proposedTimes[0] = slot.
+      callbackData: `sched:pick:match-1:0`,
     });
     await handleSchedulePick(ctx);
 
@@ -253,7 +257,7 @@ describe("scheduler: overlap hands off to venue negotiation", () => {
 
     const ctx = createCtx({
       session: { onboardingStep: "completed" },
-      callbackData: `sched:pick:match-1:${slot.toISOString()}`,
+      callbackData: `sched:pick:match-1:0`,
     });
     await handleSchedulePick(ctx);
 
@@ -270,6 +274,7 @@ describe("scheduler: handleCalendarWebAppData (iteration 3)", () => {
   });
 
   it("parses JSON payload, updates pickedTimeA, and stays open when peer hasn't picked", async () => {
+    const slot = new Date("2026-05-01T19:00:00.000Z");
     mMatch.findUnique
       .mockResolvedValueOnce({
         id: "match-1",
@@ -277,17 +282,18 @@ describe("scheduler: handleCalendarWebAppData (iteration 3)", () => {
         userBId: "uid-B",
         status: "negotiating",
         schedulingIteration: 3,
+        proposedTimes: [slot],
         pickedTimeA: null,
         pickedTimeB: null,
       })
-      .mockResolvedValueOnce({ pickedTimeA: new Date("2026-05-01T19:00:00.000Z"), pickedTimeB: null });
+      .mockResolvedValueOnce({ pickedTimeA: slot, pickedTimeB: null });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
 
     const ctx = createCtx({
       session: { onboardingStep: "completed" },
       webAppData: JSON.stringify({
         matchId: "match-1",
-        pickedIso: "2026-05-01T19:00:00.000Z",
+        pickedIso: slot.toISOString(),
       }),
     });
 
@@ -314,6 +320,7 @@ describe("scheduler: handleCalendarWebAppData (iteration 3)", () => {
       userBId: "uid-B",
       status: "negotiating",
       schedulingIteration: 1,
+      proposedTimes: [],
       pickedTimeA: null,
       pickedTimeB: null,
     });
@@ -323,6 +330,29 @@ describe("scheduler: handleCalendarWebAppData (iteration 3)", () => {
       webAppData: JSON.stringify({
         matchId: "match-1",
         pickedIso: "2026-05-01T19:00:00.000Z",
+      }),
+    });
+    await handleCalendarWebAppData(ctx);
+    expect(mMatch.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects iter-3 picks outside the current proposedTimes allowlist", async () => {
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-1",
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "negotiating",
+      schedulingIteration: 3,
+      proposedTimes: [new Date("2026-05-01T19:00:00.000Z")],
+      pickedTimeA: null,
+      pickedTimeB: null,
+    });
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      webAppData: JSON.stringify({
+        matchId: "match-1",
+        pickedIso: "2026-07-01T19:00:00.000Z",
       }),
     });
     await handleCalendarWebAppData(ctx);

@@ -23,6 +23,12 @@ interface ReportTriageResult {
   reason_summary: string;
 }
 
+interface ResolvedReportTriage {
+  tier: ReportTier;
+  reason_summary: string;
+  manualReviewRequired: boolean;
+}
+
 export async function handleReportOpen(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
   if (!data?.startsWith("report:open:")) return;
@@ -107,26 +113,71 @@ export async function handleReportText(ctx: BotContext): Promise<void> {
 
   const rawText = text.slice(0, MAX_REPORT_LEN);
 
-  // Run the triage. Conservative fallback: if the LLM is unavailable,
-  // treat as Tier 1 so we never auto-penalize without analysis. A human
-  // can re-triage from the admin queue if needed.
+  // Run the triage. If the LLM is unavailable, persist the report straight
+  // into the manual-review queue instead of silently downgrading it.
   const triage = await runTriage(rawText, lang);
   const tier: ReportTier = triage.tier;
   const reasonSummary = triage.reason_summary;
+  let outcome:
+    | Awaited<ReturnType<typeof applyReportAction>>
+    | { kind: "tier1" }
+    | null = null;
 
   try {
-    await prisma.report.create({
-      data: {
-        reporterId: reporter.id,
-        reportedId: reportedUserId,
-        matchId,
-        rawText,
+    if (triage.manualReviewRequired) {
+      await prisma.report.create({
+        data: {
+          reporterId: reporter.id,
+          reportedId: reportedUserId,
+          matchId,
+          rawText,
+          tier: 3,
+          reasonSummary,
+          adminReviewed: false,
+        },
+      });
+    } else if (tier === 1) {
+      await prisma.report.create({
+        data: {
+          reporterId: reporter.id,
+          reportedId: reportedUserId,
+          matchId,
+          rawText,
+          tier,
+          reasonSummary,
+          adminReviewed: true,
+        },
+      });
+      await applyReportAction({
         tier,
+        reporterUserId: reporter.id,
+        reportedUserId,
         reasonSummary,
-        // Tier 3 rows always need human review; Tier 1/2 are fully automated.
-        adminReviewed: tier !== 3,
-      },
-    });
+        language: lang,
+      });
+      outcome = { kind: "tier1" };
+    } else {
+      outcome = await prisma.$transaction(async (tx) => {
+        await tx.report.create({
+          data: {
+            reporterId: reporter.id,
+            reportedId: reportedUserId,
+            matchId,
+            rawText,
+            tier,
+            reasonSummary,
+            adminReviewed: tier !== 3,
+          },
+        });
+        return applyReportAction({
+          tier,
+          reporterUserId: reporter.id,
+          reportedUserId,
+          reasonSummary,
+          language: lang,
+        }, tx);
+      });
+    }
   } catch (err) {
     // Unique violation (reporter already filed on this match) or transient DB error.
     console.warn("Failed to persist report:", err);
@@ -134,26 +185,28 @@ export async function handleReportText(ctx: BotContext): Promise<void> {
     return;
   }
 
-  const outcome = await applyReportAction({
-    tier,
-    reporterUserId: reporter.id,
-    reportedUserId,
-    reasonSummary,
-    language: lang,
-  });
-
-  await notifyReportedUser(ctx.api, reportedUserId, outcome);
+  if (!triage.manualReviewRequired && outcome) {
+    await notifyReportedUser(ctx.api, reportedUserId, outcome);
+  }
 
   const thanksKey =
-    tier === 1 ? "reportThanksT1" : tier === 2 ? "reportThanksT2" : "reportThanksT3";
+    triage.manualReviewRequired || tier === 3
+      ? "reportThanksT3"
+      : tier === 2
+        ? "reportThanksT2"
+        : "reportThanksT1";
   await ctx.reply(t(lang, thanksKey));
 }
 
 async function runTriage(
   rawText: string,
   language: Language,
-): Promise<{ tier: ReportTier; reason_summary: string }> {
-  const fallback = { tier: 1 as ReportTier, reason_summary: "Unclassifiable report" };
+): Promise<ResolvedReportTriage> {
+  const fallback: ResolvedReportTriage = {
+    tier: 3,
+    reason_summary: "Manual review required: triage unavailable",
+    manualReviewRequired: true,
+  };
 
   try {
     const systemPrompt = parseReportTriagePrompt({ language });
@@ -163,7 +216,7 @@ async function runTriage(
     const tier = normalizeTier(parsed.tier);
     const summary = (parsed.reason_summary ?? "").trim().slice(0, 240)
       || fallback.reason_summary;
-    return { tier, reason_summary: summary };
+    return { tier, reason_summary: summary, manualReviewRequired: false };
   } catch {
     return fallback;
   }
