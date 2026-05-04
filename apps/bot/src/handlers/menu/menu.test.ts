@@ -14,6 +14,7 @@ vi.mock("@gennety/db", () => ({
       update: vi.fn(),
       upsert: vi.fn(),
       findUnique: vi.fn(),
+      findFirst: vi.fn().mockResolvedValue({ photos: [] }),
     },
     match: {
       findMany: vi.fn(),
@@ -74,7 +75,6 @@ function createMockCtx(overrides: {
   const session: SessionData = {
     ...DEFAULT_SESSION,
     pendingPhotos: [],
-    visualVotes: [],
     menuState: "idle",
     onboardingStep: "completed",
     ...overrides.session,
@@ -130,6 +130,14 @@ describe("Menu — main keyboard", () => {
     const serialized = JSON.stringify(kb.inline_keyboard);
     expect(serialized).toContain("menu:resume");
     expect(serialized).not.toContain('"menu:pause"');
+  });
+
+  it("buildMainMenuKeyboard hides pause/resume for locked statuses", () => {
+    const ctx = createMockCtx({});
+    const kb = buildMainMenuKeyboard(ctx, "locked");
+    const serialized = JSON.stringify(kb.inline_keyboard);
+    expect(serialized).not.toContain("menu:pause");
+    expect(serialized).not.toContain("menu:resume");
   });
 
   it("showMainMenu queries user status and sends the keyboard", async () => {
@@ -191,7 +199,7 @@ describe("Menu — Pause / Resume", () => {
   });
 
   it("handleResume writes status=active", async () => {
-    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ status: "active" });
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ status: "paused" });
     const ctx = createMockCtx({ callbackData: "menu:resume" });
     await handleResume(ctx);
     expect(prisma.user.update).toHaveBeenCalledWith(
@@ -199,6 +207,13 @@ describe("Menu — Pause / Resume", () => {
         data: expect.objectContaining({ status: "active" }),
       }),
     );
+  });
+
+  it("handleResume ignores non-paused users", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ status: "banned" });
+    const ctx = createMockCtx({ callbackData: "menu:resume" });
+    await handleResume(ctx);
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });
 
@@ -298,10 +313,16 @@ describe("Menu — Edit Profile", () => {
       callbackData: "menu:edit:photos:continue",
     });
     await handleEditPhotosUpload(ctx);
+    // photoFaceScores is committed in lockstep with photos (Step 4 face-match
+    // gate). Pending session has no scores yet, so we expect the array
+    // padded with 0s to keep the index alignment invariant.
     expect(prisma.profile.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { userId: "uuid-user-1" },
-        data: { photos: ["file_1", "file_2", "file_3"] },
+        data: {
+          photos: ["file_1", "file_2", "file_3"],
+          photoFaceScores: [0, 0, 0],
+        },
       }),
     );
     expect(ctx.session.menuState).toBe("idle");
@@ -343,9 +364,13 @@ describe("Menu — Edit Bio", () => {
       messageText: "I love hiking and photography!",
     });
     await handleEditBioInput(ctx);
+    // M-2: write also marks embedding dirty for the background worker.
     expect(prisma.profile.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { psychologicalSummary: "I love hiking and photography!" },
+        data: expect.objectContaining({
+          psychologicalSummary: "I love hiking and photography!",
+          embeddingDirty: true,
+        }),
       }),
     );
     expect(ctx.session.menuState).toBe("idle");
@@ -412,13 +437,12 @@ describe("Menu — Edit Search Preferences", () => {
     (prisma.profile.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
   });
 
-  it("handleEditPrefsOpen shows age and visual preference buttons", async () => {
+  it("handleEditPrefsOpen shows the age range button", async () => {
     const ctx = createMockCtx({ callbackData: "menu:edit:prefs" });
     await handleEditPrefsOpen(ctx);
     const markup = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
     const serialized = JSON.stringify(markup);
     expect(serialized).toContain("menu:edit:prefs:age");
-    expect(serialized).toContain("menu:edit:prefs:visual");
     expect(serialized).toContain("menu:edit");
   });
 

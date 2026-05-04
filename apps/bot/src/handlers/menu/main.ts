@@ -4,27 +4,32 @@ import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
+import { menuToggleStateFor, type MenuToggleState } from "../../services/user-status.js";
 
 /** Build the main menu inline keyboard. Pause/Resume label depends on current user status. */
 export function buildMainMenuKeyboard(
   ctx: BotContext,
-  status: "active" | "paused",
+  status: MenuToggleState,
 ): InlineKeyboard {
   return buildMainMenuKeyboardFor(ctx.session.language, status);
 }
 
 function buildMainMenuKeyboardFor(
   lang: Language,
-  status: "active" | "paused",
+  status: MenuToggleState,
 ): InlineKeyboard {
-  const pauseLabel = status === "paused" ? t(lang, "menuResume") : t(lang, "menuPause");
-  const pauseAction = status === "paused" ? "menu:resume" : "menu:pause";
-
-  return new InlineKeyboard()
+  const kb = new InlineKeyboard()
     .text(t(lang, "menuMyProfile"), "menu:profile")
     .text(t(lang, "menuEdit"), "menu:edit")
-    .row()
-    .text(pauseLabel, pauseAction)
+    .row();
+
+  if (status !== "locked") {
+    const pauseLabel = status === "paused" ? t(lang, "menuResume") : t(lang, "menuPause");
+    const pauseAction = status === "paused" ? "menu:resume" : "menu:pause";
+    kb.text(pauseLabel, pauseAction);
+  }
+
+  return kb
     .text(t(lang, "menuSettings"), "menu:settings")
     .row()
     .text(t(lang, "menuHelp"), "menu:help");
@@ -39,7 +44,7 @@ export async function showMainMenu(ctx: BotContext): Promise<void> {
     where: { telegramId },
     select: { status: true },
   });
-  const status = (user?.status ?? "active") as "active" | "paused";
+  const status = menuToggleStateFor(user?.status);
 
   const { text, options } = buildMainMenuPayload(lang, status);
   await ctx.reply(text, options);
@@ -59,7 +64,7 @@ export async function sendMainMenu(
     where: { telegramId },
     select: { status: true },
   });
-  const status = (user?.status ?? "active") as "active" | "paused";
+  const status = menuToggleStateFor(user?.status);
 
   const { text, options } = buildMainMenuPayload(lang, status);
   await api.sendMessage(chatId, text, options);
@@ -67,7 +72,7 @@ export async function sendMainMenu(
 
 function buildMainMenuPayload(
   lang: Language,
-  status: "active" | "paused",
+  status: MenuToggleState,
 ): { text: string; options: Record<string, unknown> } {
   const menuEmojiId = env.CUSTOM_EMOJI_MENU_ID;
 

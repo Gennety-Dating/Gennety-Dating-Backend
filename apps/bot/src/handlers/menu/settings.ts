@@ -108,7 +108,6 @@ export async function handleDeleteAccountExecute(ctx: BotContext): Promise<void>
   Object.assign(ctx.session, {
     ...DEFAULT_SESSION,
     pendingPhotos: [],
-    visualVotes: [],
     menuState: "idle",
     matchFlow: "idle",
     activeMatchId: null,

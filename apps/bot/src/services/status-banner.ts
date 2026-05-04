@@ -26,6 +26,10 @@ export async function pinStatusBanner(
   });
   if (existing?.statusMessageId) return;
 
+  // M-17: mobile-first synthetic users have negative ids — they don't get
+  // a pinned banner, the mobile app renders the equivalent in-app.
+  if (telegramId <= 0n) return;
+
   const text = formatStatusText(
     { now, nextMatchAt: nextMatchDispatchAt(now) },
     language,

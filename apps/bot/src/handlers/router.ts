@@ -4,9 +4,25 @@ import { t } from "@gennety/shared";
 import { handleConsent } from "./onboarding/consent.js";
 import { handleLanguageSelection } from "./onboarding/language.js";
 import { handleConversational } from "./onboarding/conversational.js";
+import {
+  VERIFY_SKIP_CALLBACK,
+  handleVerificationSkip,
+} from "./onboarding/verification.js";
 import { menuRouter } from "./menu/router.js";
 
 const router = new Composer<BotContext>();
+
+// Verification "Skip" button must be caught before the menu delegation:
+// `finalize_onboarding` sets `onboardingStep='completed'` before the CTA is
+// sent, so without this branch the callback would route to the menu and the
+// Elo penalty would never apply.
+router.use(async (ctx, next) => {
+  if (ctx.callbackQuery?.data === VERIFY_SKIP_CALLBACK) {
+    await handleVerificationSkip(ctx);
+    return;
+  }
+  await next();
+});
 
 // Completed users → delegate to the post-onboarding menu router.
 router.use(async (ctx, next) => {

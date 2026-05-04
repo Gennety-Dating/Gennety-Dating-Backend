@@ -12,8 +12,11 @@ import {
   MAX_MAJOR_LENGTH,
 } from "@gennety/shared";
 import { validateSingleFace } from "../../services/vision/validate-face.js";
+import {
+  fetchTelegramFileBuffer,
+  gateProfilePhoto,
+} from "../../services/face-match-gate.js";
 import { showMainMenu } from "./main.js";
-import { startVisualScreening } from "../onboarding/visual-screening.js";
 
 // ---------------------------------------------------------------------------
 // Edit profile main screen
@@ -113,7 +116,13 @@ export async function handleEditBioInput(ctx: BotContext): Promise<void> {
 
   await prisma.profile.update({
     where: { userId: user.id },
-    data: { psychologicalSummary: text },
+    // M-2: mark the embedding dirty so the background worker recomputes.
+    // Without this, edits silently drift the user's match-score profile.
+    data: {
+      psychologicalSummary: text,
+      embeddingDirty: true,
+      embeddingDirtyAt: new Date(),
+    },
   });
 
   ctx.session.menuState = "idle";
@@ -166,8 +175,6 @@ export async function handleEditPrefsOpen(ctx: BotContext): Promise<void> {
 
   const keyboard = new InlineKeyboard()
     .text(t(lang, "editPrefsAgeBtn"), "menu:edit:prefs:age")
-    .row()
-    .text(t(lang, "editPrefsVisualBtn"), "menu:edit:prefs:visual")
     .row()
     .text(t(lang, "editPrefsBack"), "menu:edit");
 
@@ -227,33 +234,46 @@ export async function handleEditAgeRangeInput(ctx: BotContext): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Edit Visual Preferences (re-trigger carousel)
-// ---------------------------------------------------------------------------
-
-/** Start visual re-screening from edit mode. */
-export async function handleEditVisualStart(ctx: BotContext): Promise<void> {
-  await ctx.answerCallbackQuery();
-  const lang = ctx.session.language;
-  ctx.session.menuState = "edit_visual_prefs";
-  ctx.session.visualVotes = [];
-  await ctx.reply(t(lang, "editVisualRestart"));
-  await startVisualScreening(ctx);
-}
-
-// ---------------------------------------------------------------------------
 // Edit Photos (existing logic, preserved)
 // ---------------------------------------------------------------------------
 
-/** Put the session into "edit_photos" mode and prompt for new photos. */
+/**
+ * Put the session into "edit_photos" mode and prompt for new photos.
+ *
+ * M-3: preload existing photos into `pendingPhotos` so the user is *adding*
+ * to their album, not starting from scratch. Pre-fix tapping "Edit photos"
+ * silently wiped existing photos unless the user re-uploaded everything.
+ */
 export async function handleEditPhotosStart(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
   const lang = ctx.session.language;
+  const telegramId = BigInt(ctx.from!.id);
+
+  const profile = await prisma.profile.findFirst({
+    where: { user: { telegramId } },
+    select: { photos: true, photoFaceScores: true },
+  });
+  const existing = profile?.photos ?? [];
+  const existingScores = profile?.photoFaceScores ?? [];
 
   ctx.session.menuState = "edit_photos";
-  ctx.session.pendingPhotos = [];
+  ctx.session.pendingPhotos = [...existing];
+  // We can't recover `file_unique_id` from a stored `file_id`, so dedupe
+  // for newly-arriving photos starts fresh. The album-retry / double-delivery
+  // dedupe path only matters within a single editing session.
   ctx.session.pendingPhotoUniqueIds = [];
+  // Mirror existing scores 1:1 with the preloaded photos. If the existing
+  // arrays drift (legacy rows from before the face-match column existed),
+  // pad with 0 so the invariant `pendingPhotoScores.length === pendingPhotos.length`
+  // holds — the verification pipeline rerun will refill correct scores.
+  ctx.session.pendingPhotoScores = [
+    ...existingScores,
+    ...Array(Math.max(0, existing.length - existingScores.length)).fill(0),
+  ];
 
-  await ctx.reply(t(lang, "editProfilePhotosStart", { min: MIN_PHOTOS, max: MAX_PHOTOS }));
+  await ctx.reply(
+    t(lang, "editProfilePhotosStart", { min: MIN_PHOTOS, max: MAX_PHOTOS }),
+  );
 }
 
 /**
@@ -299,10 +319,36 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
     return;
   }
 
+  // Face-match gate: for verified users every new photo must depict the
+  // same person as the Persona-captured selfie. Fetch bytes from Telegram
+  // and run the gate; on mismatch we bail before adding to pending list.
+  const telegramId = BigInt(ctx.from!.id);
+  const userRow = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  let gateScore = 0;
+  if (userRow) {
+    const photoBytes = await fetchTelegramFileBuffer(ctx.api, fileId);
+    if (photoBytes) {
+      const gate = await gateProfilePhoto(userRow.id, photoBytes);
+      if (gate.kind === "blocked") {
+        await ctx.reply(t(lang, "photoMatchMismatch"));
+        return;
+      }
+      gateScore = gate.score ?? 0;
+    }
+    // photoBytes === null → fail open, no score available
+  }
+
   ctx.session.pendingPhotos.push(fileId);
   ctx.session.pendingPhotoUniqueIds = [
     ...(ctx.session.pendingPhotoUniqueIds ?? []),
     fileUniqueId,
+  ];
+  ctx.session.pendingPhotoScores = [
+    ...(ctx.session.pendingPhotoScores ?? []),
+    gateScore,
   ];
   const count = ctx.session.pendingPhotos.length;
 
@@ -333,13 +379,30 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
   });
   if (!user) return;
 
+  // Pad scores to match photos length defensively (in case the session
+  // started before the field existed, or the user re-uploaded photos
+  // without the gate populating a score for each).
+  const scores = [
+    ...(ctx.session.pendingPhotoScores ?? []),
+    ...Array(
+      Math.max(
+        0,
+        ctx.session.pendingPhotos.length - (ctx.session.pendingPhotoScores?.length ?? 0),
+      ),
+    ).fill(0),
+  ].slice(0, ctx.session.pendingPhotos.length);
+
   await prisma.profile.update({
     where: { userId: user.id },
-    data: { photos: ctx.session.pendingPhotos },
+    data: {
+      photos: ctx.session.pendingPhotos,
+      photoFaceScores: scores,
+    },
   });
 
   ctx.session.pendingPhotos = [];
   ctx.session.pendingPhotoUniqueIds = [];
+  ctx.session.pendingPhotoScores = [];
   ctx.session.menuState = "idle";
 
   await ctx.reply(t(lang, "editProfilePhotosSaved"));

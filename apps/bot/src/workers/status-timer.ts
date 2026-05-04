@@ -67,6 +67,9 @@ export async function statusTimerTick(
     where: {
       status: "active",
       statusMessageId: { not: null },
+      // M-17: mobile-only synthetic users (negative telegramId) shouldn't
+      // even be scanned — they don't have a Telegram banner to edit.
+      telegramId: { gt: 0n },
     },
     select: {
       telegramId: true,

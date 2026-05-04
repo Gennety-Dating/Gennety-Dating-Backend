@@ -11,7 +11,6 @@ import {
   handleEditPrefsOpen,
   handleEditAgeRangeStart,
   handleEditAgeRangeInput,
-  handleEditVisualStart,
   handleEditPhotosStart,
   handleEditPhotosUpload,
 } from "./edit-profile.js";
@@ -24,7 +23,6 @@ import {
   handleDeleteAccountExecute,
 } from "./settings.js";
 import { handleHelp } from "./help.js";
-import { handleVisualScreening } from "../onboarding/visual-screening.js";
 import { runMenuAgentTurn } from "../../services/menu-agent.js";
 
 /**
@@ -44,22 +42,6 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
   // -----------------------------------------------------------------------
   // Multi-turn sub-flows: consume raw messages based on menuState
   // -----------------------------------------------------------------------
-
-  // Visual preferences re-screening: delegate vs: callbacks to the screening handler.
-  if (ctx.session.menuState === "edit_visual_prefs") {
-    if (data?.startsWith("vs:")) {
-      await handleVisualScreening(ctx);
-      return;
-    }
-    // If the user taps a non-vs: button mid-carousel, reset and fall through.
-    if (data) {
-      ctx.session.menuState = "idle";
-      ctx.session.visualVotes = [];
-    } else {
-      // Ignore stray text during visual screening.
-      return;
-    }
-  }
 
   // Edit photos: consumes raw photo messages.
   if (ctx.session.menuState === "edit_photos") {
@@ -153,9 +135,6 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       return;
     case "menu:edit:prefs:age":
       await handleEditAgeRangeStart(ctx);
-      return;
-    case "menu:edit:prefs:visual":
-      await handleEditVisualStart(ctx);
       return;
     case "menu:edit:photos":
       await handleEditPhotosStart(ctx);
