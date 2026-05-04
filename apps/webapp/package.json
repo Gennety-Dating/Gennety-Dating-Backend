@@ -4,14 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "echo '[webapp] dev server deferred — see README' && exit 0",
-    "build": "echo '[webapp] build deferred — see README' && exit 0",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "echo '[webapp] lint deferred' && exit 0",
     "test": "vitest run"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
+    "vite": "^6.0.0",
     "vitest": "^4.1.4"
   }
 }
