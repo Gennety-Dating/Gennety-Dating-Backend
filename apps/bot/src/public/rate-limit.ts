@@ -52,3 +52,35 @@ export const selfieLimiter = make({
   limit: 5,
   keyGenerator: (req): string => `selfie:${req.userId ?? ipKey(req)}`,
 });
+
+/** Account deletion — 5/hour per user (falls back to IP). Irreversible op. */
+export const accountDeleteLimiter = make({
+  windowMs: 3_600_000,
+  limit: 5,
+  keyGenerator: (req): string => `acct-del:${req.userId ?? ipKey(req)}`,
+  message: { error: "Too many account-deletion attempts, try again later." },
+});
+
+/** Profile photo upload — 10/hour per user (falls back to IP). */
+export const photoUploadLimiter = make({
+  windowMs: 3_600_000,
+  limit: 10,
+  keyGenerator: (req): string => `photo-up:${req.userId ?? ipKey(req)}`,
+  message: { error: "Too many photo uploads, try again later." },
+});
+
+/** Aether Concierge chat turn — 60/hour per user (falls back to IP). */
+export const chatMessageLimiter = make({
+  windowMs: 3_600_000,
+  limit: 60,
+  keyGenerator: (req): string => `chat-msg:${req.userId ?? ipKey(req)}`,
+  message: { error: "Too many chat messages, slow down for a bit." },
+});
+
+/** Aether Concierge image upload — 30/hour per user (falls back to IP). */
+export const chatUploadLimiter = make({
+  windowMs: 3_600_000,
+  limit: 30,
+  keyGenerator: (req): string => `chat-up:${req.userId ?? ipKey(req)}`,
+  message: { error: "Too many image uploads, try again later." },
+});

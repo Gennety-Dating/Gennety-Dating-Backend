@@ -36,7 +36,13 @@ function syntheticTelegramId(): bigint {
 export async function findOrCreateMobileUser(email: string): Promise<User> {
   const normalisedEmail = email.toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email: normalisedEmail } });
-  if (existing) return existing;
+  if (existing) {
+    if (existing.isEmailVerified) return existing;
+    return prisma.user.update({
+      where: { id: existing.id },
+      data: { isEmailVerified: true },
+    });
+  }
 
   const universityDomain = extractDomain(normalisedEmail);
 
@@ -50,6 +56,7 @@ export async function findOrCreateMobileUser(email: string): Promise<User> {
           platform: "mobile",
           status: "onboarding",
           onboardingStep: "consent",
+          isEmailVerified: true,
         },
       });
     } catch (err: unknown) {

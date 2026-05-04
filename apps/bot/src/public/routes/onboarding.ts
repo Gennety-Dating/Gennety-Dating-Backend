@@ -1,10 +1,12 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
-import { prisma, type OnboardingStep } from "@gennety/db";
+import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
 import { voiceLimiter } from "../rate-limit.js";
 import { runAgentTurn } from "../../services/onboarding-agent.js";
 import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
+import { serializeUser } from "./serializers.js";
+import { buildInterviewState, loadStateContext } from "./onboarding-state.js";
 
 export const onboardingRouter: Router = Router();
 
@@ -15,43 +17,11 @@ const upload = multer({
   limits: { fileSize: WHISPER_MAX_BYTES },
 });
 
-interface InterviewStateDto {
-  stepIndex: number;
-  totalSteps: number;
-  question: string | null;
-  completed: boolean;
-  acknowledgement?: string | null;
-}
-
-// Onboarding has 4 discrete DB steps (`OnboardingStep` enum). We expose them
-// as `stepIndex` for the mobile progress bar — the conversational step itself
-// is LLM-driven and has no sub-steps the server tracks.
-const STEP_ORDER: OnboardingStep[] = ["consent", "language", "conversational", "completed"];
-
-function stateFor(step: OnboardingStep, question: string | null): InterviewStateDto {
-  return {
-    stepIndex: STEP_ORDER.indexOf(step),
-    totalSteps: STEP_ORDER.length,
-    question,
-    completed: step === "completed",
-  };
-}
-
 async function loadUser(userId: string) {
   return prisma.user.findUniqueOrThrow({
     where: { id: userId },
     select: { telegramId: true, onboardingStep: true, messageHistory: true, language: true },
   });
-}
-
-function lastAssistantMessage(history: unknown[]): string | null {
-  for (let i = history.length - 1; i >= 0; i--) {
-    const msg = history[i] as { role?: string; content?: string } | null;
-    if (msg?.role === "assistant" && typeof msg.content === "string" && msg.content.trim()) {
-      return msg.content;
-    }
-  }
-  return null;
 }
 
 /**
@@ -61,9 +31,8 @@ function lastAssistantMessage(history: unknown[]): string | null {
  * the first agent turn.
  */
 onboardingRouter.get("/interview", async (req: Request, res: Response): Promise<void> => {
-  const user = await loadUser(req.userId!);
-  const question = lastAssistantMessage(user.messageHistory as unknown[]);
-  res.json(stateFor(user.onboardingStep, question));
+  const ctx = await loadStateContext(req.userId!);
+  res.json(buildInterviewState(ctx));
 });
 
 onboardingRouter.post("/interview/answer", async (req: Request, res: Response): Promise<void> => {
@@ -76,11 +45,49 @@ onboardingRouter.post("/interview/answer", async (req: Request, res: Response): 
   const user = await loadUser(req.userId!);
   const result = await runAgentTurn(user.telegramId, text);
 
-  const reloaded = await prisma.user.findUniqueOrThrow({
+  const ctx = await loadStateContext(req.userId!);
+  res.json(buildInterviewState({ ...ctx, question: result.reply }));
+});
+
+/**
+ * POST /v1/onboarding/consent — Initialization & Consent screen.
+ *
+ * Records the explicit ToS click and the optional research opt-in, then
+ * advances `onboardingStep` from `consent` → `language` (idempotent: a
+ * later step is preserved). `termsAccepted` is the legal gate and MUST be
+ * the boolean literal `true`; `researchOptIn` is optional and defaults to
+ * false. Both fields reject any non-boolean type — no truthy coercion.
+ */
+onboardingRouter.post("/consent", async (req: Request, res: Response): Promise<void> => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const termsAccepted = body.termsAccepted;
+  const researchOptIn = body.researchOptIn;
+
+  if (termsAccepted !== true) {
+    res.status(400).json({ error: "Terms must be accepted" });
+    return;
+  }
+  if (researchOptIn !== undefined && typeof researchOptIn !== "boolean") {
+    res.status(400).json({ error: "Invalid researchOptIn" });
+    return;
+  }
+
+  const current = await prisma.user.findUniqueOrThrow({
     where: { id: req.userId! },
     select: { onboardingStep: true },
   });
-  res.json(stateFor(reloaded.onboardingStep, result.reply));
+
+  const user = await prisma.user.update({
+    where: { id: req.userId! },
+    data: {
+      termsAccepted: true,
+      termsAcceptedAt: new Date(),
+      researchOptIn: researchOptIn ?? false,
+      ...(current.onboardingStep === "consent" ? { onboardingStep: "language" as const } : {}),
+    },
+  });
+
+  res.json({ user: serializeUser(user) });
 });
 
 onboardingRouter.post(
@@ -104,11 +111,7 @@ onboardingRouter.post(
     }
 
     const result = await runAgentTurn(user.telegramId, transcript);
-    const reloaded = await prisma.user.findUniqueOrThrow({
-      where: { id: req.userId! },
-      select: { onboardingStep: true },
-    });
-    const state = stateFor(reloaded.onboardingStep, result.reply);
-    res.json({ ...state, acknowledgement: transcript });
+    const ctx = await loadStateContext(req.userId!);
+    res.json(buildInterviewState({ ...ctx, question: result.reply, acknowledgement: transcript }));
   },
 );

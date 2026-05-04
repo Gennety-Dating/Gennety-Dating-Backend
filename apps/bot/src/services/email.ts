@@ -1,10 +1,11 @@
 import { env } from "../config.js";
 
 export async function sendOtpEmail(to: string, otp: string): Promise<void> {
-  // Local dev: when no Resend key is configured, log the code instead of
-  // throwing. Keeps `pnpm dev:bot` usable against a real DB without
-  // wiring a real email provider. Prod has `RESEND_API_KEY` set.
-  if (!env.RESEND_API_KEY) {
+  // Local dev: log the code instead of calling Resend. Triggers when no key
+  // is configured, or when OTP_LOG_TO_CONSOLE=true is set explicitly (handy
+  // when .env shares SMTP_PASS with prod but the dev sender domain isn't
+  // verified in Resend). Prod has the key set and the flag unset.
+  if (env.OTP_LOG_TO_CONSOLE || !env.RESEND_API_KEY) {
     console.log(`[otp:dev] code for ${to}: ${otp}`);
     return;
   }

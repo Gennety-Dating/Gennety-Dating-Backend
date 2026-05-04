@@ -8,17 +8,43 @@ export interface AccessTokenPayload {
   typ: "access";
 }
 
+/**
+ * M-11 defense. The bot runs in two modes:
+ *   - bot-only (Telegram poller): `JWT_SECRET` is optional — local dev.
+ *   - bot + public `/v1/*` API: `JWT_SECRET` is mandatory.
+ *
+ * `startPublicServer` already gates the listener on `env.JWT_SECRET`, but
+ * `app` (the Express instance) is exported and importable. If anything ever
+ * mounts a route that calls `signAccessToken` without the secret being set,
+ * tokens would be signed with an empty key — accepting forged JWTs is a
+ * total auth bypass.
+ *
+ * `assertJwtSecret()` fails LOUDLY at the call site so the bug surfaces in
+ * staging instead of in prod under a real attacker.
+ */
+function assertJwtSecret(): string {
+  if (!env.JWT_SECRET || env.JWT_SECRET.length < 16) {
+    throw new Error(
+      "JWT_SECRET is missing or too short — refusing to sign/verify tokens. " +
+        "Set JWT_SECRET (≥16 chars) in env before starting the public API.",
+    );
+  }
+  return env.JWT_SECRET;
+}
+
 export function signAccessToken(userId: string): string {
+  const secret = assertJwtSecret();
   const options = { expiresIn: env.JWT_ACCESS_TTL } as jwt.SignOptions;
   return jwt.sign(
     { sub: userId, typ: "access" } satisfies AccessTokenPayload,
-    env.JWT_SECRET,
+    secret,
     options,
   );
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
-  const decoded = jwt.verify(token, env.JWT_SECRET);
+  const secret = assertJwtSecret();
+  const decoded = jwt.verify(token, secret);
   if (
     typeof decoded !== "object" ||
     decoded === null ||
@@ -55,24 +81,72 @@ export async function createRefreshToken(userId: string, userAgent: string | nul
 }
 
 /**
- * Rotate a refresh token: validate, revoke the old session, mint a new one.
- * Returns `null` if the token is invalid, expired, or already revoked.
+ * Rotate a refresh token. Returns `null` for invalid / expired tokens.
+ *
+ * **Reuse detection (C-5).** If the presented token's session is already
+ * revoked, treat it as a stolen-token replay and revoke EVERY active session
+ * for the user (RFC 6749 §10.4 / OAuth Best Current Practice). The legitimate
+ * client will then have to re-authenticate — far better than letting an
+ * attacker in possession of a leaked token mint indefinitely.
+ *
+ * **Atomicity.** The revoke-old + issue-new pair runs inside a single
+ * `prisma.$transaction` so a failure between the two leaves no half-state
+ * (previously: a crash between steps logged the user out without giving
+ * them a new token).
  */
 export async function rotateRefreshToken(
   rawToken: string,
   userAgent: string | null,
 ): Promise<{ userId: string; nextRefreshToken: string } | null> {
   const hash = hashRefreshToken(rawToken);
-  const session = await prisma.userSession.findUnique({ where: { refreshTokenHash: hash } });
-  if (!session || session.revokedAt || session.expiresAt < new Date()) return null;
+  return prisma.$transaction(async (tx) => {
+    const session = await tx.userSession.findUnique({ where: { refreshTokenHash: hash } });
+    if (!session) return null;
 
-  // Rotate: revoke the presented token, issue a fresh one atomically enough.
-  await prisma.userSession.update({
-    where: { id: session.id },
-    data: { revokedAt: new Date() },
+    // Replay defense: a revoked-but-presented token means either the user
+    // raced themselves (rare) OR the token leaked. Either way, hard-revoke
+    // the user's entire session set so the attacker is locked out.
+    if (session.revokedAt) {
+      await tx.userSession.updateMany({
+        where: { userId: session.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      return null;
+    }
+
+    if (session.expiresAt < new Date()) return null;
+
+    const ttlMs = parseDurationToMs(env.JWT_REFRESH_TTL);
+    const newRaw = crypto.randomBytes(48).toString("base64url");
+    const newHash = hashRefreshToken(newRaw);
+    const newExpiresAt = new Date(Date.now() + ttlMs);
+    const revokedAt = new Date();
+
+    // Guard the revoke with `revokedAt: null` so a concurrent rotate cannot
+    // mint a second live session from the same refresh token.
+    const revoked = await tx.userSession.updateMany({
+      where: { id: session.id, revokedAt: null },
+      data: { revokedAt },
+    });
+    if (revoked.count === 0) {
+      await tx.userSession.updateMany({
+        where: { userId: session.userId, revokedAt: null },
+        data: { revokedAt },
+      });
+      return null;
+    }
+
+    await tx.userSession.create({
+      data: {
+        userId: session.userId,
+        refreshTokenHash: newHash,
+        userAgent,
+        expiresAt: newExpiresAt,
+      },
+    });
+
+    return { userId: session.userId, nextRefreshToken: newRaw };
   });
-  const next = await createRefreshToken(session.userId, userAgent);
-  return { userId: session.userId, nextRefreshToken: next };
 }
 
 export async function revokeAllSessions(userId: string): Promise<void> {

@@ -1,4 +1,4 @@
-import { prisma, type MatchStatus } from "@gennety/db";
+import { Prisma, prisma, type MatchStatus } from "@gennety/db";
 import type { Language } from "@gennety/shared";
 import { parseVibe, mergeParsed, type VenueCategory } from "../services/vibe-parser.js";
 import {
@@ -11,6 +11,10 @@ import { pickVenueAtMidpoint } from "../services/venue.js";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
 import { applyReportAction, type ReportTier } from "../services/moderation.js";
 import { sendPushToUser } from "../services/push.js";
+import { generateAndSaveWingmanHints } from "../services/wingman-hint.js";
+import { createMatchEvent } from "../services/match-events.js";
+import { PROPOSAL_TTL_MS } from "../utils/countdown-plate.js";
+import { PRE_DATE_WINGMAN_HOURS } from "@gennety/shared";
 
 /**
  * Mobile-only wrappers around the existing match-engine pipeline. These
@@ -44,6 +48,20 @@ export interface SerializedMatch {
   status: MatchStatus;
   pitchForMe: string | null;
   iceBreakers: string[];
+  /**
+   * Phase 4 "Wingman" — asymmetric insider tip for THIS user about the
+   * partner. `null` until T-1h before `agreedTime`, then the per-side
+   * string from the DB. Gated server-side so clients cannot peek early.
+   */
+  wingmanHint: string | null;
+  /**
+   * AI Synergy Score — pair-level integer in [70, 99] shown on the match
+   * reveal and upcoming-date screens. `null` for legacy rows that pre-date
+   * the feature; the mobile UI hides the card in that case.
+   */
+  synergyScore: number | null;
+  /** 1–2 sentence positive justification, language-aware. */
+  synergyReason: string | null;
   agreedTime: string | null;
   venueName: string | null;
   venueAddress: string | null;
@@ -58,6 +76,24 @@ export interface SerializedMatch {
   myVibeSubmitted: boolean;
   partnerVibeSubmitted: boolean;
   safetyBriefAck: boolean;
+  /**
+   * 24h proposal-response deadline as an ISO timestamp. Populated only
+   * for `status === 'proposed'` matches that have been dispatched —
+   * `null` everywhere else (already accepted, scheduled, expired, etc.).
+   *
+   * The Expo client renders the live countdown locally with a 1-second
+   * tick: `proposalDeadlineAt - serverTimeAt` ≈ remaining duration, then
+   * keep counting down on the client clock. Color thresholds are pure
+   * client logic: `>20h` green, `10-20h` yellow, `<10h` red.
+   */
+  proposalDeadlineAt: string | null;
+  /**
+   * Server's current wall-clock at the time of this response, ISO. The
+   * client subtracts this from its local `Date.now()` to derive an
+   * offset, then applies that offset to `proposalDeadlineAt` so a
+   * device with a skewed clock still shows the correct countdown.
+   */
+  serverTimeAt: string;
 }
 
 // `VibeTag` is a friendlier mobile label. Translate to the existing
@@ -116,8 +152,12 @@ export async function getCurrentMatchForUser(
       userBId: true,
       pitchForA: true,
       pitchForB: true,
+      synergyScore: true,
+      synergyReason: true,
       iceBreakersA: true,
       iceBreakersB: true,
+      wingmanHintA: true,
+      wingmanHintB: true,
       agreedTime: true,
       venueName: true,
       venueAddress: true,
@@ -133,6 +173,7 @@ export async function getCurrentMatchForUser(
       vibeLngB: true,
       safetyAckA: true,
       safetyAckB: true,
+      dispatchedAt: true,
       userA: { select: { firstName: true, age: true, universityDomain: true } },
       userB: { select: { firstName: true, age: true, universityDomain: true } },
     },
@@ -159,11 +200,37 @@ export async function getCurrentMatchForUser(
     match.parsedCategoryB ??
     null;
 
+  // Wingman hint is only revealed within T-1h of the agreed time. This is
+  // the single source of truth for the reveal gate — the column may already
+  // contain the string well ahead of that window (generation happens at
+  // `scheduled` transition), but clients see `null` until the gate opens.
+  const revealAtMs = match.agreedTime
+    ? match.agreedTime.getTime() - PRE_DATE_WINGMAN_HOURS * 60 * 60 * 1000
+    : null;
+  const wingmanUnlocked = revealAtMs !== null && Date.now() >= revealAtMs;
+  const wingmanHint = wingmanUnlocked
+    ? (side === "A" ? match.wingmanHintA : match.wingmanHintB) ?? null
+    : null;
+
+  // 24h response deadline. Only meaningful while the proposal is still
+  // open — once we transition to `negotiating`/`scheduled`/etc. there's
+  // nothing left to count down to. The expiry job overwrites `status`
+  // to `expired` once the deadline passes, so a `proposed` row with a
+  // past deadline is a brief race window the client should treat as
+  // "expiring imminently" rather than "still valid".
+  const proposalDeadlineAt =
+    match.status === "proposed" && match.dispatchedAt
+      ? new Date(match.dispatchedAt.getTime() + PROPOSAL_TTL_MS).toISOString()
+      : null;
+
   return {
     id: match.id,
     status: match.status,
     pitchForMe: side === "A" ? match.pitchForA : match.pitchForB,
     iceBreakers: (side === "A" ? match.iceBreakersA : match.iceBreakersB) ?? [],
+    wingmanHint,
+    synergyScore: match.synergyScore,
+    synergyReason: match.synergyReason,
     agreedTime: match.agreedTime?.toISOString() ?? null,
     venueName: match.venueName,
     venueAddress: match.venueAddress,
@@ -178,6 +245,8 @@ export async function getCurrentMatchForUser(
     myVibeSubmitted,
     partnerVibeSubmitted,
     safetyBriefAck: side === "A" ? match.safetyAckA : match.safetyAckB,
+    proposalDeadlineAt,
+    serverTimeAt: new Date().toISOString(),
   };
 }
 
@@ -198,12 +267,13 @@ export async function applyMatchDecision(
     select: { userAId: true, userBId: true, status: true, acceptedByA: true, acceptedByB: true },
   });
   if (!match) return null;
-  if (match.status === "cancelled" || match.status === "completed" || match.status === "expired") {
+  if (match.status !== "proposed") {
     return null;
   }
 
   const side: MatchSide = match.userAId === userId ? "A" : match.userBId === userId ? "B" : (null as unknown as MatchSide);
   if (!side) return null;
+  const targetId = side === "A" ? match.userBId : match.userAId;
 
   if (decision === "decline") {
     await prisma.match.update({
@@ -213,6 +283,12 @@ export async function applyMatchDecision(
           ? { acceptedByA: false, status: "cancelled" }
           : { acceptedByB: false, status: "cancelled" },
     });
+    await createMatchEvent({
+      matchId,
+      actorId: userId,
+      targetId,
+      actionType: "DECLINED",
+    });
     return getCurrentMatchForUser(userId);
   }
 
@@ -220,6 +296,12 @@ export async function applyMatchDecision(
     where: { id: matchId },
     data: side === "A" ? { acceptedByA: true } : { acceptedByB: true },
     select: { acceptedByA: true, acceptedByB: true },
+  });
+  await createMatchEvent({
+    matchId,
+    actorId: userId,
+    targetId,
+    actionType: "ACCEPTED",
   });
 
   // If both accepted, atomically flip to `negotiating` — the Telegram bot's
@@ -262,12 +344,15 @@ export async function submitVibeLocation(
 ): Promise<SerializedMatch | null> {
   const match = await prisma.match.findUnique({
     where: { id: matchId },
-    select: { userAId: true, userBId: true, status: true },
+    select: { userAId: true, userBId: true, status: true, agreedTime: true },
   });
   if (!match) return null;
   const side = match.userAId === userId ? "A" : match.userBId === userId ? "B" : null;
   if (!side) return null;
   if (match.status !== "negotiating" && match.status !== "negotiating_venue") {
+    return null;
+  }
+  if (!match.agreedTime) {
     return null;
   }
 
@@ -313,6 +398,7 @@ async function tryFinalizeMatchVenue(matchId: string): Promise<void> {
     where: { id: matchId },
     select: {
       status: true,
+      agreedTime: true,
       vibeTextA: true,
       vibeTextB: true,
       vibeLatA: true,
@@ -322,6 +408,7 @@ async function tryFinalizeMatchVenue(matchId: string): Promise<void> {
     },
   });
   if (!match || match.status !== "negotiating_venue") return;
+  if (!match.agreedTime) return;
   if (
     !match.vibeTextA ||
     !match.vibeTextB ||
@@ -362,6 +449,14 @@ async function tryFinalizeMatchVenue(matchId: string): Promise<void> {
       venueLng: mid.lng,
     },
     select: { userAId: true, userBId: true },
+  });
+
+  // Pre-generate the asymmetric "Wingman" hints now so the T-1h lifecycle
+  // tick has them cached. Fire-and-forget: a transient LLM outage here
+  // doesn't block venue finalisation; the tick will retry via the same
+  // idempotent service if either hint is still null at reveal time.
+  generateAndSaveWingmanHints(matchId).catch((err) => {
+    console.warn(`[wingman] generation failed for match ${matchId}:`, err);
   });
 
   await Promise.all([
@@ -430,33 +525,67 @@ export async function submitMatchReport(
   const rawText = payload.message.slice(0, 1000);
   const reasonSummary = rawText.slice(0, 240);
 
+  // M-1: classify Prisma errors specifically (only P2002 is a duplicate),
+  // and keep Tier 2/3 moderation inside the same transaction as the report
+  // row so retries never hit a phantom duplicate with no action applied.
   try {
-    await prisma.report.create({
-      data: {
-        reporterId: reporterUserId,
-        reportedId: reportedUserId,
-        matchId,
-        rawText,
-        tier,
-        reasonSummary,
-        adminReviewed: tier !== 3,
-      },
-    });
-  } catch {
-    return "duplicate";
+    if (tier === 1) {
+      await prisma.report.create({
+        data: {
+          reporterId: reporterUserId,
+          reportedId: reportedUserId,
+          matchId,
+          rawText,
+          tier,
+          reasonSummary,
+          adminReviewed: true,
+        },
+      });
+    } else {
+      await prisma.$transaction(async (tx) => {
+        await tx.report.create({
+          data: {
+            reporterId: reporterUserId,
+            reportedId: reportedUserId,
+            matchId,
+            rawText,
+            tier,
+            reasonSummary,
+            adminReviewed: tier !== 3,
+          },
+        });
+        await applyReportAction({
+          tier,
+          reporterUserId,
+          reportedUserId,
+          reasonSummary,
+          language,
+        }, tx);
+      });
+    }
+  } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2002"
+    ) {
+      return "duplicate";
+    }
+    // Anything else is a real failure — log + re-throw so the caller turns
+    // it into a 500 instead of misreporting it as a 409 dup.
+    console.error("[matches-service] submitMatchReport report.create failed:", err);
+    throw err;
   }
 
   if (tier === 1) {
-    await appendNegativeConstraint(reporterUserId, reasonSummary, language);
-    return "ok";
+    try {
+      await appendNegativeConstraint(reporterUserId, reasonSummary, language);
+    } catch (err) {
+      console.error(
+        "[matches-service] submitMatchReport moderation action failed:",
+        err,
+      );
+      throw err;
+    }
   }
-
-  await applyReportAction({
-    tier,
-    reporterUserId,
-    reportedUserId,
-    reasonSummary,
-    language,
-  });
   return "ok";
 }

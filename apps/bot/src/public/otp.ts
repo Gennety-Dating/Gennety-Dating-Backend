@@ -10,7 +10,10 @@ const MAX_ATTEMPTS = 5;
  * to the user. Older unconsumed codes for the same email are left in place
  * but will be ignored once a newer row exists (we always look up the latest).
  */
-export async function createAndSendOtp(email: string): Promise<void> {
+export async function createAndSendOtp(
+  email: string,
+  send: (email: string, code: string) => Promise<void> = sendOtpEmail,
+): Promise<void> {
   const code = generateOtp(OTP_LENGTH);
   const codeHash = await bcrypt.hash(code, 10);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS);
@@ -19,7 +22,7 @@ export async function createAndSendOtp(email: string): Promise<void> {
     data: { email: email.toLowerCase(), codeHash, expiresAt },
   });
 
-  await sendOtpEmail(email, code);
+  await send(email, code);
 }
 
 export type OtpVerifyResult =

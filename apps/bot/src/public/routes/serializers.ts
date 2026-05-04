@@ -5,7 +5,7 @@ import type { Profile, User } from "@gennety/db";
  * `gennety-mobile/src/api/types.ts` — keep both sides in sync.
  *
  * We intentionally drop Telegram-only fields (`telegramId`, session state,
- * status banner ids) and anything vector-y (`embedding`, `visualVector`).
+ * status banner ids) and the `embedding` vector.
  */
 export interface SerializedUser {
   id: string;
@@ -20,6 +20,8 @@ export interface SerializedUser {
   language: User["language"];
   status: User["status"];
   onboardingStep: User["onboardingStep"];
+  termsAccepted: boolean;
+  researchOptIn: boolean;
 }
 
 export interface SerializedProfile {
@@ -30,6 +32,10 @@ export interface SerializedProfile {
   ageRangeMax: number | null;
   photos: string[];
   matchRadius: Profile["matchRadius"];
+  standbyCount: number;
+  latitude: number | null;
+  longitude: number | null;
+  locationUpdatedAt: string | null;
 }
 
 export function serializeUser(user: User): SerializedUser {
@@ -46,6 +52,8 @@ export function serializeUser(user: User): SerializedUser {
     language: user.language,
     status: user.status,
     onboardingStep: user.onboardingStep,
+    termsAccepted: user.termsAccepted,
+    researchOptIn: user.researchOptIn,
   };
 }
 
@@ -58,5 +66,11 @@ export function serializeProfile(profile: Profile): SerializedProfile {
     ageRangeMax: profile.ageRangeMax,
     photos: profile.photos,
     matchRadius: profile.matchRadius,
+    standbyCount: profile.standbyCount,
+    latitude: profile.latitude,
+    longitude: profile.longitude,
+    locationUpdatedAt: profile.locationUpdatedAt
+      ? profile.locationUpdatedAt.toISOString()
+      : null,
   };
 }
