@@ -1,19 +1,30 @@
+// MUST be the first import: triggers .env.local → .env load BEFORE
+// `@gennety/db` evaluates `new PrismaClient()`. Prisma's own dotenv loader
+// would otherwise read .env first, set DATABASE_URL to the prod URL in
+// process.env, and silently shadow .env.local (dotenv defaults to non-
+// override). Reordering this line breaks local dev — bot then hits prod.
+import "./config.js";
+
 import cron from "node-cron";
 import { ensureMatchPairIndex } from "@gennety/db";
 import { env } from "./config.js";
 import { createBot } from "./bot.js";
-import { runWeeklyBatch } from "./services/match-engine.js";
+import { autoUnsuspendElapsed, runWeeklyBatch } from "./services/match-engine.js";
 import { dispatchMatches } from "./services/dispatch-queue.js";
-import { notifyStarved } from "./services/starvation-notify.js";
+import { sendNoMatchNotices } from "./services/no-match-notifier.js";
 import { expireStaleMatches } from "./services/match-expiry.js";
+import { sendExpiryNotifications } from "./services/expiry-notify.js";
 import { runDateLifecycleTick } from "./services/date-lifecycle.js";
 import { runPreDateSafetyTick } from "./services/pre-date-safety.js";
 import { startAdminServer } from "./admin/server.js";
 import { startPublicServer } from "./public/server.js";
 import { reEngagementTick } from "./workers/re-engagement.js";
 import { matchNudgeTick } from "./workers/match-nudge.js";
+import { proposalCountdownTick } from "./workers/proposal-countdown.js";
 import { preMatchAnnounceTick } from "./workers/pre-match-announce.js";
 import { statusTimerTick } from "./workers/status-timer.js";
+import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
+import { runSelfieRetention } from "./services/selfie-retention.js";
 
 /* ── Process-level crash guard ─────────────────────────────── */
 process.on("uncaughtException", (err) => {
@@ -41,6 +52,24 @@ const CRON_TIMEZONE = process.env.CRON_TIMEZONE ?? "Europe/Kyiv";
  * that have been dispatched but not mutually accepted within 24 hours.
  */
 const EXPIRY_CRON_SCHEDULE = process.env.EXPIRY_CRON_SCHEDULE ?? "*/15 * * * *";
+
+/**
+ * "No match this week" empathetic DM. Default: Thursday 18:15 Kyiv —
+ * 15 minutes after the matching batch so dispatched users get a moment
+ * with their pitch before unmatched users receive the consolation note.
+ * Re-runs are safe (`@@unique([userId, dropDate])` on `NoMatchNotice`).
+ */
+const NO_MATCH_NOTICE_CRON_SCHEDULE =
+  process.env.NO_MATCH_NOTICE_CRON_SCHEDULE ?? "15 18 * * 4";
+
+/**
+ * Proposal-countdown cron: every 5 minutes. The renderer's ceil-hours /
+ * raw-minutes split (in `countdown-plate.ts`) converts this into 1 edit
+ * per match-side per hour during the first 23 hours, then 1 edit every
+ * 5 minutes during the final hour — matching the product cadence.
+ */
+const PROPOSAL_COUNTDOWN_CRON_SCHEDULE =
+  process.env.PROPOSAL_COUNTDOWN_CRON_SCHEDULE ?? "*/5 * * * *";
 
 /**
  * Re-engagement cron: every 5 minutes. The worker picks users whose
@@ -76,6 +105,34 @@ const STATUS_TIMER_CRON_SCHEDULE = process.env.STATUS_TIMER_CRON_SCHEDULE ?? "* 
 const DISPATCH_DELAY_MS = Number(process.env.DISPATCH_DELAY_MS ?? 2000);
 
 /**
+ * M-6: hourly auto-unsuspend. The expiration check used to live ONLY inside
+ * `runWeeklyBatch`, which meant a 14-day suspension that expired on a Friday
+ * morning sat for another 6 days until the next Thursday batch. Running it
+ * hourly keeps the lag below an hour without thrashing the DB.
+ */
+const AUTO_UNSUSPEND_CRON_SCHEDULE =
+  process.env.AUTO_UNSUSPEND_CRON_SCHEDULE ?? "0 * * * *";
+
+/**
+ * M-2: embedding-refresh. Scans dirty profiles every 5 minutes and rebuilds
+ * their pgvector embedding via the OpenAI embeddings API. Pre-M-2 the
+ * embedding silently went stale on every profile edit, slowly degrading
+ * match quality. Capped at 20 rows/tick to bound cost on a busy edit hour.
+ */
+const EMBEDDING_REFRESH_CRON_SCHEDULE =
+  process.env.EMBEDDING_REFRESH_CRON_SCHEDULE ?? "*/5 * * * *";
+
+/**
+ * Verified-selfie retention: GDPR Article 9 requires biometric data is
+ * stored "no longer than necessary". We scrub stored selfies (the
+ * Persona-captured image used as face-match reference) 90 days after
+ * `verifiedAt`. Daily at 03:30 Europe/Kyiv — off-peak, doesn't share
+ * the hour with the weekly matching cron.
+ */
+const SELFIE_RETENTION_CRON_SCHEDULE =
+  process.env.SELFIE_RETENTION_CRON_SCHEDULE ?? "30 3 * * *";
+
+/**
  * Weekly batch: run the global greedy matching algorithm, then dispatch
  * all pitches via the rate-limited queue.
  */
@@ -96,10 +153,12 @@ async function weeklyMatchingJob(): Promise<void> {
     }
 
     if (result.missedUserIds.length > 0) {
-      console.log(`[cron] Notifying ${result.missedUserIds.length} starved users...`);
-      const notify = await notifyStarved(bot.api, result.missedUserIds, DISPATCH_DELAY_MS);
+      // The empathetic "no match this week" DM goes out via the
+      // `NO_MATCH_NOTICE_CRON_SCHEDULE` cron (default 18:15 Kyiv) — kept
+      // separate so users get a brief breather between the dispatch
+      // wave and the consolation message instead of both at once.
       console.log(
-        `[cron] Starvation notify complete: sent=${notify.notified} skipped=${notify.skipped} failed=${notify.failed}`,
+        `[cron] ${result.missedUserIds.length} user(s) unmatched — handled by no-match-notice cron`,
       );
     }
   } catch (err) {
@@ -108,13 +167,20 @@ async function weeklyMatchingJob(): Promise<void> {
 }
 
 /**
- * Expiry job: mark stale proposed matches as expired after 24h TTL.
+ * Expiry job: mark stale proposed matches as expired after 24h TTL,
+ * then DM both sides — the silent user gets a warning (or penalty
+ * confirmation on repeat offense) and the responder is told their match
+ * ignored them.
  */
 async function expiryJob(): Promise<void> {
   try {
     const result = await expireStaleMatches();
     if (result.expired > 0) {
       console.log(`[cron] Expired ${result.expired} stale matches`);
+      const notify = await sendExpiryNotifications(bot.api, result.matches);
+      console.log(
+        `[cron] Expiry notify: notified=${notify.notified} skipped=${notify.skipped} failed=${notify.failed}`,
+      );
     }
   } catch (err) {
     console.error("[cron] Expiry job failed:", err);
@@ -146,6 +212,15 @@ bot.start({
   onStart: async (info) => {
     console.log(`Bot @${info.username} started`);
 
+    if (env.DEV_OTP_BYPASS_TELEGRAM_IDS.size > 0) {
+      const ids = [...env.DEV_OTP_BYPASS_TELEGRAM_IDS].map((id) => id.toString()).join(", ");
+      console.warn(
+        `[dev-bypass] DEV_OTP_BYPASS_TELEGRAM_IDS active for: ${ids}. ` +
+          `These accounts skip corporate-email verification at /start. ` +
+          `MUST be empty in production .env.`,
+      );
+    }
+
     // Idempotent DB indexes that Prisma's `db push` workflow can't express
     // (functional index on canonical pair ordering for the lifetime-ban
     // anti-join in `buildCandidateSql`).
@@ -164,9 +239,9 @@ bot.start({
       { command: "settings", description: "Settings" },
     ]);
     if (env.ADMIN_API_KEY) {
-      startAdminServer();
+      startAdminServer(bot.api);
     }
-    startPublicServer();
+    startPublicServer(bot.api);
 
     // Weekly matching cron (global greedy + automated dispatch).
     cron.schedule(MATCH_CRON_SCHEDULE, () => {
@@ -179,6 +254,40 @@ bot.start({
       void expiryJob();
     });
     console.log(`[cron] Match expiry scheduled: "${EXPIRY_CRON_SCHEDULE}"`);
+
+    // Empathetic "no match this week" DM, 15 min after the Thursday batch.
+    cron.schedule(
+      NO_MATCH_NOTICE_CRON_SCHEDULE,
+      () => {
+        void sendNoMatchNotices(bot.api, new Date(), DISPATCH_DELAY_MS)
+          .then((r) => {
+            if (r.notified > 0 || r.failed > 0) {
+              console.log(
+                `[no-match-notice] notified=${r.notified} tier1=${r.tier1} tier2=${r.tier2} tier3plus=${r.tier3plus} skipped=${r.skipped} failed=${r.failed}`,
+              );
+            }
+          })
+          .catch((err) => console.error("[no-match-notice] tick failed:", err));
+      },
+      { timezone: CRON_TIMEZONE },
+    );
+    console.log(
+      `[cron] No-match notice scheduled: "${NO_MATCH_NOTICE_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+    );
+
+    // Live "⏳ Xh left" countdown plate on proposal pitches.
+    cron.schedule(PROPOSAL_COUNTDOWN_CRON_SCHEDULE, () => {
+      void proposalCountdownTick(bot.api)
+        .then((r) => {
+          if (r.edited > 0 || r.cleared > 0 || r.errors > 0) {
+            console.log(
+              `[proposal-countdown] scanned=${r.scanned} edited=${r.edited} skipped=${r.skippedSameText} cleared=${r.cleared} errors=${r.errors}`,
+            );
+          }
+        })
+        .catch((err) => console.error("[proposal-countdown] tick failed:", err));
+    });
+    console.log(`[cron] Proposal countdown scheduled: "${PROPOSAL_COUNTDOWN_CRON_SCHEDULE}"`);
 
     // Date lifecycle (icebreakers, emergencies, feedback) — kept on setInterval.
     if (DATE_LIFECYCLE_TICK_MS > 0) {
@@ -213,6 +322,31 @@ bot.start({
     }, { timezone: CRON_TIMEZONE });
     console.log(`[cron] Pre-match announce scheduled: "${PRE_MATCH_ANNOUNCE_CRON_SCHEDULE}" (${CRON_TIMEZONE})`);
 
+    // M-6: hourly auto-unsuspend. Lifts Tier 2 suspensions whose
+    // `suspendedUntil` has elapsed without waiting for the weekly batch.
+    cron.schedule(AUTO_UNSUSPEND_CRON_SCHEDULE, () => {
+      void autoUnsuspendElapsed()
+        .then((n) => {
+          if (n > 0) console.log(`[auto-unsuspend] reactivated ${n} user(s)`);
+        })
+        .catch((err) => console.error("[auto-unsuspend] tick failed:", err));
+    });
+    console.log(`[cron] Auto-unsuspend scheduled: "${AUTO_UNSUSPEND_CRON_SCHEDULE}"`);
+
+    // M-2: embedding refresh — picks up dirty profiles and recomputes.
+    cron.schedule(EMBEDDING_REFRESH_CRON_SCHEDULE, () => {
+      void embeddingRefreshTick()
+        .then((r) => {
+          if (r.scanned > 0) {
+            console.log(
+              `[embedding-refresh] scanned=${r.scanned} refreshed=${r.refreshed} failed=${r.failed}`,
+            );
+          }
+        })
+        .catch((err) => console.error("[embedding-refresh] tick failed:", err));
+    });
+    console.log(`[cron] Embedding refresh scheduled: "${EMBEDDING_REFRESH_CRON_SCHEDULE}"`);
+
     // Pinned status banner — discrete countdown to next match dispatch.
     cron.schedule(STATUS_TIMER_CRON_SCHEDULE, () => {
       void statusTimerTick(bot.api).then((r) => {
@@ -224,6 +358,28 @@ bot.start({
       }).catch((err) => console.error("[status-timer] tick failed:", err));
     });
     console.log(`[cron] Status timer scheduled: "${STATUS_TIMER_CRON_SCHEDULE}"`);
+
+    // GDPR Article 9: scrub Persona-captured selfies once they pass the
+    // 90-day retention window. The user stays `verified`; only the stored
+    // reference image is deleted.
+    cron.schedule(
+      SELFIE_RETENTION_CRON_SCHEDULE,
+      () => {
+        void runSelfieRetention()
+          .then((r) => {
+            if (r.scanned > 0 || r.errors > 0) {
+              console.log(
+                `[selfie-retention] scanned=${r.scanned} storage=${r.deletedFromStorage} db=${r.deletedFromDb} errors=${r.errors}`,
+              );
+            }
+          })
+          .catch((err) => console.error("[selfie-retention] tick failed:", err));
+      },
+      { timezone: CRON_TIMEZONE },
+    );
+    console.log(
+      `[cron] Selfie retention scheduled: "${SELFIE_RETENTION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+    );
   },
 });
 
