@@ -65,6 +65,7 @@ describe("re-engagement worker", () => {
 
     const call = (prisma.user.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(call.where.status).toBe("onboarding");
+    expect(call.where.onboardingStep).toEqual({ not: "completed" });
     expect(call.where.reEngagementNextAt).toEqual({ not: null, lte: DAY_TIME });
     expect(call.where.lastMessageAt).toBeUndefined();
   });
@@ -75,6 +76,33 @@ describe("re-engagement worker", () => {
     const count = await reEngagementTick(api, { now: DAY_TIME });
     expect(count).toBe(0);
     expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("self-heals completed onboarding rows without sending reminders", async () => {
+    (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        telegramId: BigInt(333),
+        onboardingStep: "completed",
+        messageHistory: [],
+        language: "ru",
+        firstName: "Alice",
+        lastMessageAt: DROPOFF_TIME,
+        reEngagementStep: 2,
+      },
+    ]);
+
+    const api = createMockApi();
+    const count = await reEngagementTick(api, { now: DAY_TIME });
+
+    expect(count).toBe(0);
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { telegramId: BigInt(333) },
+      data: {
+        reEngagementStep: 0,
+        reEngagementNextAt: null,
+      },
+    });
   });
 
   it("sends touch 1 hook and schedules touch 2 following it", async () => {

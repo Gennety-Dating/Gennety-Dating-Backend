@@ -13,8 +13,17 @@ vi.mock("../config.js", () => ({
   env: { OPENAI_API_KEY: "test-key" },
 }));
 
+vi.mock("../services/match-engine.js", () => ({
+  previewWeeklyBatch: vi.fn(),
+}));
+
 import { prisma } from "@gennety/db";
-import { preMatchAnnounceTick, getAnnounceFallback } from "./pre-match-announce.js";
+import { previewWeeklyBatch } from "../services/match-engine.js";
+import {
+  preMatchAnnounceTick,
+  getAnnounceFallback,
+  getStandbyFallback,
+} from "./pre-match-announce.js";
 
 const DAY_TIME  = new Date("2024-06-15T11:00:00Z");
 const QUIET_TIME = new Date("2024-06-15T02:00:00Z");
@@ -34,6 +43,12 @@ describe("preMatchAnnounceTick", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (previewWeeklyBatch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      eligible: 2,
+      pairs: 1,
+      finalPairs: [{ userAId: "u1", userBId: "u2", score: 0.91 }],
+      missedUserIds: [],
+    });
   });
 
   it("returns 0 during quiet hours without DB query", async () => {
@@ -45,6 +60,12 @@ describe("preMatchAnnounceTick", () => {
   });
 
   it("returns 0 when no active users found", async () => {
+    (previewWeeklyBatch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      eligible: 2,
+      pairs: 1,
+      finalPairs: [{ userAId: "u1", userBId: "u2", score: 0.91 }],
+      missedUserIds: [],
+    });
     (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
     const api = createMockApi();
@@ -56,8 +77,8 @@ describe("preMatchAnnounceTick", () => {
 
   it("sends announce to eligible active users", async () => {
     (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { telegramId: BigInt(1), language: "en", firstName: "Alice", lastPreMatchAnnounceAt: null },
-      { telegramId: BigInt(2), language: "ru", firstName: "Иван",  lastPreMatchAnnounceAt: null },
+      { id: "u1", telegramId: BigInt(1), language: "en", firstName: "Alice", lastPreMatchAnnounceAt: null },
+      { id: "u2", telegramId: BigInt(2), language: "ru", firstName: "Иван", lastPreMatchAnnounceAt: null },
     ]);
 
     const mockFetch = vi.fn().mockResolvedValue(openaiOk("Get ready — your match drops tomorrow!"));
@@ -72,7 +93,7 @@ describe("preMatchAnnounceTick", () => {
 
   it("stamps lastPreMatchAnnounceAt after sending", async () => {
     (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { telegramId: BigInt(1), language: "en", firstName: "Alice", lastPreMatchAnnounceAt: null },
+      { id: "u1", telegramId: BigInt(1), language: "en", firstName: "Alice", lastPreMatchAnnounceAt: null },
     ]);
 
     const mockFetch = vi.fn().mockResolvedValue(openaiOk("Tomorrow!"));
@@ -94,6 +115,7 @@ describe("preMatchAnnounceTick", () => {
 
     const call = (prisma.user.findMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(call.where.status).toBe("active");
+    expect(call.where.id.in).toEqual(["u1", "u2"]);
     // Must have OR condition for null or old announce time
     expect(call.where.OR).toBeDefined();
     expect(call.where.OR).toHaveLength(2);
@@ -101,7 +123,7 @@ describe("preMatchAnnounceTick", () => {
 
   it("uses fallback when OpenAI fails", async () => {
     (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { telegramId: BigInt(1), language: "en", firstName: "Alice", lastPreMatchAnnounceAt: null },
+      { id: "u1", telegramId: BigInt(1), language: "en", firstName: "Alice", lastPreMatchAnnounceAt: null },
     ]);
 
     const mockFetch = vi.fn().mockRejectedValue(new Error("network error"));
@@ -116,7 +138,7 @@ describe("preMatchAnnounceTick", () => {
 
   it("handles blocked users gracefully", async () => {
     (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { telegramId: BigInt(1), language: "en", firstName: "Alice", lastPreMatchAnnounceAt: null },
+      { id: "u1", telegramId: BigInt(1), language: "en", firstName: "Alice", lastPreMatchAnnounceAt: null },
     ]);
 
     const mockFetch = vi.fn().mockResolvedValue(openaiOk("Tomorrow!"));
@@ -126,6 +148,28 @@ describe("preMatchAnnounceTick", () => {
     const result = await preMatchAnnounceTick(api, { fetchFn: mockFetch, now: DAY_TIME });
 
     expect(result.announced).toBe(0);
+  });
+
+  it("sends the standby copy to users previewed as unmatched", async () => {
+    (previewWeeklyBatch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      eligible: 1,
+      pairs: 0,
+      finalPairs: [],
+      missedUserIds: ["u3"],
+    });
+    (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "u3", telegramId: BigInt(3), language: "ru", firstName: "Ира", lastPreMatchAnnounceAt: null },
+    ]);
+
+    const api = createMockApi();
+    const result = await preMatchAnnounceTick(api, { now: DAY_TIME });
+
+    expect(result.announced).toBe(1);
+    expect(api.sendMessage).toHaveBeenCalledWith(
+      3,
+      getStandbyFallback("ru"),
+      { parse_mode: "Markdown" },
+    );
   });
 });
 
@@ -144,5 +188,12 @@ describe("getAnnounceFallback", () => {
   it("works with empty name", () => {
     const msg = getAnnounceFallback("", "en");
     expect(msg).toContain("Hey");
+  });
+});
+
+describe("getStandbyFallback", () => {
+  it("returns the shared standby copy", () => {
+    expect(getStandbyFallback("en")).toContain("STATUS: STANDBY");
+    expect(getStandbyFallback("ru")).toContain("Мы не идём");
   });
 });

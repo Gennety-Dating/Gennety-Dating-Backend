@@ -1,6 +1,8 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
+import { t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
+import { previewWeeklyBatch } from "../services/match-engine.js";
 import { isQuietHours } from "./quiet-hours.js";
 
 /**
@@ -29,6 +31,8 @@ export interface AnnounceResult {
   announced: number;
 }
 
+type PlannedNotificationKind = "matched" | "standby";
+
 export async function preMatchAnnounceTick(
   api: Api<RawApi>,
   options: PreMatchAnnounceOptions = {},
@@ -38,18 +42,34 @@ export async function preMatchAnnounceTick(
 
   const fetchFn = options.fetchFn ?? fetch;
   const batchSize = options.batchSize ?? 100;
-
   const cooldownCutoff = new Date(now.getTime() - ANNOUNCE_COOLDOWN_MS);
+  const plan = await previewWeeklyBatch();
+
+  const plannedKinds = new Map<string, PlannedNotificationKind>();
+  for (const pair of plan.finalPairs) {
+    plannedKinds.set(pair.userAId, "matched");
+    plannedKinds.set(pair.userBId, "matched");
+  }
+  for (const userId of plan.missedUserIds) {
+    plannedKinds.set(userId, "standby");
+  }
+
+  const plannedUserIds = [...plannedKinds.keys()].slice(0, batchSize);
+  if (plannedUserIds.length === 0) {
+    return { announced: 0 };
+  }
 
   const users = await prisma.user.findMany({
     where: {
       status: "active",
+      id: { in: plannedUserIds },
       OR: [
         { lastPreMatchAnnounceAt: null },
         { lastPreMatchAnnounceAt: { lt: cooldownCutoff } },
       ],
     },
     select: {
+      id: true,
       telegramId: true,
       language: true,
       firstName: true,
@@ -61,8 +81,14 @@ export async function preMatchAnnounceTick(
   let announced = 0;
 
   for (const user of users) {
+    const plannedKind = plannedKinds.get(user.id);
+    if (!plannedKind) continue;
+    if (user.telegramId <= 0n) continue;
+
     try {
-      const text = await generateAnnounce(user, fetchFn);
+      const text = plannedKind === "matched"
+        ? await generateAnnounce(user, fetchFn)
+        : getStandbyFallback(user.language ?? "en");
       await api.sendMessage(Number(user.telegramId), text, {
         parse_mode: "Markdown",
       });
@@ -147,4 +173,8 @@ export function getAnnounceFallback(name: string, lang: string): string {
     default:
       return `Hey${g}! We've spent the whole week finding your perfect match 🔍 Tomorrow evening — we'll reveal them. Stay tuned 👀`;
   }
+}
+
+export function getStandbyFallback(lang: Language): string {
+  return t(lang, "matchStandbyStatus");
 }

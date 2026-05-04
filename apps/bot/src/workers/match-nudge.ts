@@ -18,7 +18,7 @@ import { isQuietHours } from "./quiet-hours.js";
  *    - Nudge 1: ≥6h since last update, nudge1SentAt is null.
  *    - Nudge 2: ≥12h since last update, nudge2SentAt is null.
  *
- * Quiet hours (23:00–09:00 UTC) block all sends.
+ * Quiet hours (23:00–09:00 Europe/Kyiv) block all sends.
  */
 
 export const PROPOSAL_NUDGE1_MS = 3 * 60 * 60 * 1000;   //  3 hours
@@ -68,19 +68,21 @@ async function handleProposalNudges(
   const nudge1Cutoff = new Date(now.getTime() - PROPOSAL_NUDGE1_MS);
   const nudge2Cutoff = new Date(now.getTime() - PROPOSAL_NUDGE2_MS);
 
-  // Fetch proposed matches eligible for at least nudge 1.
+  // Fetch proposed matches eligible for at least nudge 1. C-6: use the
+  // phase-specific columns so a leftover nudge stamp from a different phase
+  // (no longer possible after the split, but kept for clarity) can't gate us.
   const matches = await prisma.match.findMany({
     where: {
       status: "proposed",
       dispatchedAt: { not: null, lt: nudge1Cutoff },
-      nudge2SentAt: null, // haven't sent the final nudge yet
+      proposalNudge2SentAt: null, // haven't sent the final nudge yet
       NOT: { AND: [{ acceptedByA: true }, { acceptedByB: true }] },
     },
     select: {
       id: true,
       dispatchedAt: true,
-      nudge1SentAt: true,
-      nudge2SentAt: true,
+      proposalNudge1SentAt: true,
+      proposalNudge2SentAt: true,
       acceptedByA: true,
       acceptedByB: true,
       pitchForA: true,
@@ -95,8 +97,9 @@ async function handleProposalNudges(
 
   for (const match of matches) {
     const dispatched = match.dispatchedAt!;
-    const isNudge2Eligible = dispatched <= nudge2Cutoff && !match.nudge2SentAt;
-    const isNudge1Eligible = !match.nudge1SentAt;
+    const isNudge2Eligible =
+      dispatched <= nudge2Cutoff && !match.proposalNudge2SentAt;
+    const isNudge1Eligible = !match.proposalNudge1SentAt;
 
     // Determine which nudge index to fire (2 takes priority if both eligible).
     const nudgeIndex = isNudge2Eligible ? 2 : isNudge1Eligible ? 1 : 0;
@@ -109,10 +112,10 @@ async function handleProposalNudges(
       pitch: string | null;
     }> = [];
 
-    if (!match.acceptedByA) {
+    if (!match.acceptedByA && match.userA.telegramId > 0n) {
       targets.push({ ...match.userA, pitch: match.pitchForA });
     }
-    if (!match.acceptedByB) {
+    if (!match.acceptedByB && match.userB.telegramId > 0n) {
       targets.push({ ...match.userB, pitch: match.pitchForB });
     }
 
@@ -134,13 +137,13 @@ async function handleProposalNudges(
       }
     }
 
-    // Stamp whichever nudge we just sent.
+    // Stamp whichever nudge we just sent on the proposal-phase column.
     await prisma.match.update({
       where: { id: match.id },
       data:
         nudgeIndex === 2
-          ? { nudge2SentAt: now }
-          : { nudge1SentAt: now },
+          ? { proposalNudge2SentAt: now }
+          : { proposalNudge1SentAt: now },
     });
   }
 
@@ -244,19 +247,25 @@ async function handleSchedulingNudges(
   const nudge1Cutoff = new Date(now.getTime() - SCHED_NUDGE1_MS);
   const nudge2Cutoff = new Date(now.getTime() - SCHED_NUDGE2_MS);
 
+  // C-6 changes:
+  //   1. Use phase-specific schedNudge*SentAt columns so proposal-phase
+  //      stamps (now in proposalNudge*SentAt) don't gate us.
+  //   2. Anchor on `dispatchedAt` instead of `updatedAt`. `updatedAt` was
+  //      bumped each time we wrote a nudge stamp, which reset the 12h cutoff
+  //      and broke the documented 6h/12h cadence.
   const matches = await prisma.match.findMany({
     where: {
       status: "negotiating",
-      nudge2SentAt: null,
+      schedNudge2SentAt: null,
       // At least one side hasn't picked a slot yet.
       OR: [{ pickedTimeA: null }, { pickedTimeB: null }],
-      updatedAt: { lt: nudge1Cutoff },
+      dispatchedAt: { not: null, lt: nudge1Cutoff },
     },
     select: {
       id: true,
-      updatedAt: true,
-      nudge1SentAt: true,
-      nudge2SentAt: true,
+      dispatchedAt: true,
+      schedNudge1SentAt: true,
+      schedNudge2SentAt: true,
       pickedTimeA: true,
       pickedTimeB: true,
       schedulingIteration: true,
@@ -269,14 +278,16 @@ async function handleSchedulingNudges(
   let count = 0;
 
   for (const match of matches) {
-    const isNudge2 = match.updatedAt <= nudge2Cutoff && !match.nudge2SentAt;
-    const isNudge1 = !match.nudge1SentAt;
+    const dispatched = match.dispatchedAt!;
+    const isNudge2 =
+      dispatched <= nudge2Cutoff && !match.schedNudge2SentAt;
+    const isNudge1 = !match.schedNudge1SentAt;
     const nudgeIndex = isNudge2 ? 2 : isNudge1 ? 1 : 0;
     if (nudgeIndex === 0) continue;
 
     const targets = [
-      ...(match.pickedTimeA == null ? [match.userA] : []),
-      ...(match.pickedTimeB == null ? [match.userB] : []),
+      ...(match.pickedTimeA == null && match.userA.telegramId > 0n ? [match.userA] : []),
+      ...(match.pickedTimeB == null && match.userB.telegramId > 0n ? [match.userB] : []),
     ];
 
     for (const target of targets) {
@@ -299,7 +310,10 @@ async function handleSchedulingNudges(
 
     await prisma.match.update({
       where: { id: match.id },
-      data: nudgeIndex === 2 ? { nudge2SentAt: now } : { nudge1SentAt: now },
+      data:
+        nudgeIndex === 2
+          ? { schedNudge2SentAt: now }
+          : { schedNudge1SentAt: now },
     });
   }
 

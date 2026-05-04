@@ -4,6 +4,7 @@ import { env } from "../config.js";
 import {
   computeNextTouch,
   MAX_RE_ENGAGEMENT_STEP,
+  reEngagementStopPatch,
 } from "./re-engagement-schedule.js";
 
 /**
@@ -60,7 +61,11 @@ export async function reEngagementTick(
   const dueUsers = await prisma.user.findMany({
     where: {
       status: "onboarding",
+      onboardingStep: { not: "completed" },
       reEngagementNextAt: { not: null, lte: now },
+      // M-17: synthetic mobile users (negative telegramId) get re-engagement
+      // pushes via Expo, not Telegram DMs.
+      telegramId: { gt: 0n },
     },
     select: {
       telegramId: true,
@@ -77,6 +82,14 @@ export async function reEngagementTick(
   let sent = 0;
 
   for (const user of dueUsers) {
+    if (user.onboardingStep === "completed") {
+      await prisma.user.update({
+        where: { telegramId: user.telegramId },
+        data: reEngagementStopPatch,
+      });
+      continue;
+    }
+
     const currentStep = user.reEngagementStep;
     const nextStep = currentStep + 1;
 

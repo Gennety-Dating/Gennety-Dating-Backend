@@ -79,9 +79,21 @@ export async function appendNegativeConstraint(
     ? `${prefix}\n- ${constraintText}`
     : `- ${constraintText}`;
 
+  // M-2: mark embedding dirty — negative constraints participate in the
+  // penalty score, but the LLM's psychological summary embedding is what
+  // V_explicit reads, so refresh on every constraint change too.
   await prisma.profile.upsert({
     where: { userId },
-    create: { userId, negativeConstraints: merged },
-    update: { negativeConstraints: merged },
+    create: {
+      userId,
+      negativeConstraints: merged,
+      embeddingDirty: true,
+      embeddingDirtyAt: new Date(),
+    },
+    update: {
+      negativeConstraints: merged,
+      embeddingDirty: true,
+      embeddingDirtyAt: new Date(),
+    },
   });
 }

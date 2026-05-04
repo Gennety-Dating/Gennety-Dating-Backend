@@ -20,8 +20,10 @@ import {
   PROPOSAL_NUDGE2_MS,
 } from "./match-nudge.js";
 
-const DAY_TIME  = new Date("2024-06-15T11:00:00Z"); // 11:00 UTC — daytime
-const QUIET_TIME = new Date("2024-06-15T02:00:00Z"); // 02:00 UTC — quiet
+// 2024-06-15 — Kyiv summer time (UTC+3). C-8 anchored quiet hours to Kyiv,
+// so we pick UTC instants whose Kyiv-local hour is unambiguously day/quiet.
+const DAY_TIME = new Date("2024-06-15T11:00:00Z"); //   14:00 Kyiv — daytime
+const QUIET_TIME = new Date("2024-06-15T02:00:00Z"); // 05:00 Kyiv — quiet
 
 function createMockApi() {
   return { sendMessage: vi.fn().mockResolvedValue({}) } as any;
@@ -39,14 +41,32 @@ function makeProposedMatch(overrides: Record<string, unknown> = {}) {
   return {
     id: "match-1",
     dispatchedAt: dispatched,
-    nudge1SentAt: null,
-    nudge2SentAt: null,
+    proposalNudge1SentAt: null,
+    proposalNudge2SentAt: null,
     acceptedByA: null,
     acceptedByB: null,
     pitchForA: "She loves jazz and late-night philosophy debates.",
     pitchForB: "He's into hiking and cooking.",
     userA: { telegramId: BigInt(1), language: "en", firstName: "Alice" },
     userB: { telegramId: BigInt(2), language: "en", firstName: "Bob" },
+    ...overrides,
+  };
+}
+
+function makeNegotiatingMatch(overrides: Record<string, unknown> = {}) {
+  // Both accepted, neither has picked a slot. Anchor `dispatchedAt` 6h+1m ago
+  // to clear the scheduling-phase nudge1 cutoff (SCHED_NUDGE1_MS = 6h).
+  const dispatched = new Date(DAY_TIME.getTime() - 6 * 60 * 60_000 - 60_000);
+  return {
+    id: "match-2",
+    dispatchedAt: dispatched,
+    schedNudge1SentAt: null,
+    schedNudge2SentAt: null,
+    pickedTimeA: null,
+    pickedTimeB: null,
+    schedulingIteration: 1,
+    userA: { telegramId: BigInt(11), language: "en", firstName: "Carol" },
+    userB: { telegramId: BigInt(12), language: "en", firstName: "Dan" },
     ...overrides,
   };
 }
@@ -79,9 +99,9 @@ describe("matchNudgeTick", () => {
     expect(api.sendMessage).toHaveBeenCalledTimes(2);
     expect(api.sendMessage).toHaveBeenCalledWith(1, expect.any(String), expect.anything());
     expect(api.sendMessage).toHaveBeenCalledWith(2, expect.any(String), expect.anything());
-    // stamps nudge1SentAt
+    // stamps proposalNudge1SentAt (C-6 split column)
     expect(prisma.match.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { nudge1SentAt: DAY_TIME } }),
+      expect.objectContaining({ data: { proposalNudge1SentAt: DAY_TIME } }),
     );
   });
 
@@ -105,8 +125,8 @@ describe("matchNudgeTick", () => {
     const dispatched = new Date(DAY_TIME.getTime() - PROPOSAL_NUDGE2_MS - 60_000);
     const match = makeProposedMatch({
       dispatchedAt: dispatched,
-      nudge1SentAt: new Date(DAY_TIME.getTime() - 5 * 60 * 60_000),
-      nudge2SentAt: null,
+      proposalNudge1SentAt: new Date(DAY_TIME.getTime() - 5 * 60 * 60_000),
+      proposalNudge2SentAt: null,
     });
 
     (prisma.match.findMany as ReturnType<typeof vi.fn>)
@@ -119,8 +139,51 @@ describe("matchNudgeTick", () => {
     await matchNudgeTick(api, { fetchFn: mockFetch, now: DAY_TIME });
 
     expect(prisma.match.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { nudge2SentAt: DAY_TIME } }),
+      expect.objectContaining({ data: { proposalNudge2SentAt: DAY_TIME } }),
     );
+  });
+
+  it("C-6: scheduling-phase reads schedNudge*, NOT proposalNudge*", async () => {
+    // Regression: pre-fix, proposal-phase stamps blocked scheduling-phase
+    // nudges via the shared nudge1/2SentAt columns. Verify that a row with
+    // proposalNudge1/2 set still gets a fresh schedNudge1.
+    const match = makeNegotiatingMatch({
+      proposalNudge1SentAt: new Date(DAY_TIME.getTime() - 8 * 60 * 60_000),
+      proposalNudge2SentAt: new Date(DAY_TIME.getTime() - 7 * 60 * 60_000),
+    });
+
+    (prisma.match.findMany as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([]) // proposal query empty
+      .mockResolvedValueOnce([match]); // scheduling query
+
+    const mockFetch = vi.fn().mockResolvedValue(openaiOk("Pick a time!"));
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { fetchFn: mockFetch, now: DAY_TIME });
+
+    expect(result.schedNudges).toBe(2); // both Carol + Dan
+    // Stamps schedNudge1SentAt — NOT proposalNudge*.
+    expect(prisma.match.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { schedNudge1SentAt: DAY_TIME } }),
+    );
+  });
+
+  it("C-6: scheduling phase skips mobile-only users (telegramId <= 0n)", async () => {
+    const match = makeNegotiatingMatch({
+      userB: { telegramId: -10n, language: "en", firstName: "MobileDan" },
+    });
+
+    (prisma.match.findMany as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([match]);
+
+    const mockFetch = vi.fn().mockResolvedValue(openaiOk("Pick a time!"));
+    const api = createMockApi();
+    await matchNudgeTick(api, { fetchFn: mockFetch, now: DAY_TIME });
+
+    // Only Carol (positive id) is messaged.
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage).toHaveBeenCalledWith(11, expect.any(String), expect.anything());
   });
 
   it("uses fallback when OpenAI fails", async () => {
