@@ -22,6 +22,8 @@ import { env } from "../config.js";
 import { buildSystemPrompt } from "./prompt-builder.js";
 import { truncateForApi, type ChatMessage } from "./onboarding-agent.js";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
+import { attachDeclineReasonToMatchEvent } from "./match-events.js";
+import { canResumeMatching } from "./user-status.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -222,7 +224,12 @@ async function execUpdateBio(
 
   await prisma.profile.update({
     where: { userId: user.id },
-    data: { psychologicalSummary: bio },
+    // M-2: mark embedding dirty — bio is the primary embedding input.
+    data: {
+      psychologicalSummary: bio,
+      embeddingDirty: true,
+      embeddingDirtyAt: new Date(),
+    },
   });
 
   return JSON.stringify({ success: true, message: "Bio updated." });
@@ -285,7 +292,12 @@ async function execUpdatePartnerPreferences(
 
   await prisma.profile.update({
     where: { userId: user.id },
-    data: { partnerPreferences: args.preferences.trim() },
+    // M-2: partner preferences feed `buildEmbeddingInput` — mark dirty.
+    data: {
+      partnerPreferences: args.preferences.trim(),
+      embeddingDirty: true,
+      embeddingDirtyAt: new Date(),
+    },
   });
 
   return JSON.stringify({ success: true, message: "Partner preferences updated." });
@@ -447,6 +459,12 @@ async function execRecordRejectionFeedback(
     where: { id: args.match_id },
     data: side === "A" ? { rejectionReasonA: truncated } : { rejectionReasonB: truncated },
   });
+  await attachDeclineReasonToMatchEvent({
+    matchId: args.match_id,
+    actorId: user.id,
+    targetId: side === "A" ? match.userBId : match.userAId,
+    rejectionReason: truncated,
+  });
 
   try {
     await appendNegativeConstraint(user.id, truncated, user.language ?? "en");
@@ -470,11 +488,23 @@ async function execResumeMatching(telegramId: bigint): Promise<string> {
   if (user?.status === "active") {
     return JSON.stringify({ success: false, error: "Matching is already active." });
   }
+  if (!canResumeMatching(user?.status)) {
+    return JSON.stringify({
+      success: false,
+      error: "Matching can only be resumed from a paused account state.",
+    });
+  }
 
-  await prisma.user.update({
-    where: { telegramId },
+  const resumed = await prisma.user.updateMany({
+    where: { telegramId, status: "paused" },
     data: { status: "active" },
   });
+  if (resumed.count === 0) {
+    return JSON.stringify({
+      success: false,
+      error: "Matching can only be resumed from a paused account state.",
+    });
+  }
 
   return JSON.stringify({ success: true, message: "Matching resumed! You'll be included in the next batch." });
 }

@@ -1,9 +1,6 @@
 import { prisma, Prisma } from "@gennety/db";
 import {
   isUniversityEmail,
-  generateOtp,
-  OTP_LENGTH,
-  OTP_TTL_MS,
   MIN_PHOTOS,
   MAX_PHOTOS,
   MIN_AGE,
@@ -13,10 +10,11 @@ import {
   SUMMARIZE_THRESHOLD,
   KEEP_RECENT_MESSAGES,
   MAGIC_CONTEXT_PROMPT,
+  magicContextPrompt,
 } from "@gennety/shared";
 import { env } from "../config.js";
-import { sendOtpEmail } from "./email.js";
 import { analyseAndSaveProfile } from "./profile-analysis.js";
+import { createAndSendOtp, verifyOtp as verifyStoredOtp } from "../public/otp.js";
 import {
   onboardingActivityPatch,
   reEngagementStopPatch,
@@ -57,6 +55,13 @@ export interface AgentTurnResult {
   reply: string;
   expectingPhoto: boolean;
   onboardingComplete: boolean;
+  /**
+   * When true, onboarding data is saved but the user is NOT yet activated —
+   * the bot must send the Sumsub verification CTA and wait for the webhook
+   * before matching is unlocked. False when Sumsub is not configured (local
+   * dev) — in that case onboardingComplete implies the user is already active.
+   */
+  verificationRequired: boolean;
   /** When true, the handler must send MAGIC_CONTEXT_PROMPT in a code block after the reply */
   contextPromptRequested: boolean;
   /**
@@ -88,14 +93,34 @@ Your mission: guide the user through the onboarding process via natural conversa
 - NEVER create an in-app chat between users. This is a "Zero-Chat" philosophy app — we match people and schedule their first date, no messaging.
 - NEVER skip or shortcut any of the required information fields.
 
+## CRITICAL: Honour Information Already Volunteered
+
+Before asking ANY question, scan the user's MOST RECENT message AND the full conversation history for fields they have already given you. Users routinely dump several things in one message — e.g. "Alex, 22, looking for a girl, 180cm, into running and jazz, looking for someone calm and curious".
+
+When this happens:
+1. Extract every field that is clear and concrete (name, age, gender, preference, height, hobbies, partner preferences) and treat them as collected.
+2. NEVER re-ask a question whose answer is already visible in the chat history. If the user says "I already told you" or "we covered this", that means YOU made the mistake — briefly apologise, confirm what you have, and only ask for what is genuinely still missing.
+3. In your reply, confirm in ONE short bubble what you extracted ("got it: Alex, 22, into running and jazz — looking for a girl ✅"), then ask only for the missing pieces. Combining 1–2 missing fields in a single question is fine.
+4. Only ask for a field when you genuinely don't have a concrete value for it. Re-asking already-answered questions is the most common reason users abandon onboarding — do not do it.
+
+This rule overrides the apparent linearity of the flow below: you may skip ahead and harvest in any order, as long as every required field is collected before finalize_onboarding.
+
 ## Onboarding Flow
 You MUST collect ALL of the following before finalizing:
 
 1. **Email verification**: Ask for university email → call send_otp_email → ask for OTP code → call verify_otp. If the user says the code didn't arrive, call resend_otp to re-send it (no need to ask for the email again).
 2. **Profile basics**: First name, age, gender, gender preference (who they are interested in — men, women, or both). ALWAYS ask these questions in the user's chosen language using native words ONLY — never use English terms like "male/female" or "men/women/both" in your message to the user. Map their natural-language answer internally to the tool enum values.
 3. **Extended profile**: Ethnicity (optional but encouraged), height in cm, hobbies/interests (whatever the user shares — one, several, or "no hobbies" are ALL valid; never push for more), partner preferences (one short sentence is plenty)
-4. **Deep context extraction**: After collecting extended profile, call request_context_dump. The system will AUTOMATICALLY send the Magic Prompt to the user in a separate copyable block — you do NOT need to include or display the prompt yourself. After calling the tool, just write a short message explaining: "Copy the prompt above, paste it into your ChatGPT or Claude, and send me back what it says." When the user pastes back a long psychological analysis, call save_context_dump with the full text. If the dump is too short or clearly not a real analysis, ask them to try again. Do NOT skip this step.
-5. **Photos**: Call request_photos. The user MUST send at least ${MIN_PHOTOS} photos — this is a hard minimum. Anything beyond ${MIN_PHOTOS} is PURELY OPTIONAL. Once ${MIN_PHOTOS} verified photos have arrived, DO NOT ask for another one. Briefly offer the option ("you can send one more if you want, or we can move on") and default to moving on. Never chain "one more, one more" requests.
+4. **Deep context extraction**: After collecting extended profile, call request_context_dump. The system will AUTOMATICALLY send the Magic Prompt to the user in a separate copyable block — you do NOT need to include or display the prompt yourself.
+
+   STRICT BOUNDARIES for the reply that accompanies request_context_dump:
+   - Your ONLY job in that turn is the paste-it-back instruction. Tell the user to copy the prompt above and paste it into whatever AI chat they already use — ChatGPT, Claude, Gemini, Perplexity, Grok, DeepSeek, or any other LLM — and send the AI's full response back.
+   - Mention that if the response is long and Telegram splits it into several messages, they should tap the "Done" button that will appear.
+   - Do NOT mention photos. Do NOT mention "next step". Do NOT preview anything that comes after this. From the user's point of view, step 5 does not exist yet.
+   - Do NOT call request_photos in the same turn as request_context_dump under any circumstances. Wait for the user to actually paste back the analysis and for save_context_dump to succeed first.
+
+   When the user pastes back a long psychological analysis, call save_context_dump with the full text. If the dump is too short or clearly not a real analysis, ask them to try again. Do NOT skip this step.
+5. **Photos**: Call request_photos — but ONLY after save_context_dump has been called and returned success. Never call request_photos in the same turn as request_context_dump. The user MUST send at least ${MIN_PHOTOS} photos — this is a hard minimum. Anything beyond ${MIN_PHOTOS} is PURELY OPTIONAL. Once ${MIN_PHOTOS} verified photos have arrived, DO NOT ask for another one. Briefly offer the option ("you can send one more if you want, or we can move on") and default to moving on. Never chain "one more, one more" requests.
 6. **Finalize**: Once ALL fields are collected, context dump saved, and at least ${MIN_PHOTOS} photos uploaded, call save_profile_data with all extracted data, then call finalize_onboarding.
 
 ## CRITICAL: Answer Validation Rules
@@ -329,22 +354,19 @@ async function execSendOtpEmail(
   }
 
   const domain = email.slice(email.indexOf("@") + 1);
-  const otp = generateOtp(OTP_LENGTH);
-  const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
   await prisma.user.update({
     where: { telegramId },
     data: {
       email,
       universityDomain: domain,
-      emailOtp: otp,
-      emailOtpExpiresAt: expiresAt,
+      emailOtp: null,
+      emailOtpExpiresAt: null,
     },
   });
 
   try {
-    const send = deps.sendOtp ?? sendOtpEmail;
-    await send(email, otp);
+    await createAndSendOtp(email, deps.sendOtp);
   } catch (err) {
     console.error(`Failed to send OTP email to ${email}`, err);
     return JSON.stringify({
@@ -375,17 +397,12 @@ async function execResendOtp(
     });
   }
 
-  const otp = generateOtp(OTP_LENGTH);
-  const expiresAt = new Date(Date.now() + OTP_TTL_MS);
-
-  await prisma.user.update({
-    where: { telegramId },
-    data: { emailOtp: otp, emailOtpExpiresAt: expiresAt },
-  });
-
   try {
-    const send = deps.sendOtp ?? sendOtpEmail;
-    await send(user.email, otp);
+    await prisma.user.update({
+      where: { telegramId },
+      data: { emailOtp: null, emailOtpExpiresAt: null },
+    });
+    await createAndSendOtp(user.email, deps.sendOtp);
   } catch (err) {
     console.error(`Failed to resend OTP email to ${user.email}`, err);
     return JSON.stringify({
@@ -406,34 +423,42 @@ async function execVerifyOtp(
 ): Promise<string> {
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { emailOtp: true, emailOtpExpiresAt: true },
+    select: { email: true },
   });
 
-  if (!user?.emailOtp || !user.emailOtpExpiresAt) {
+  if (!user?.email) {
     return JSON.stringify({
       success: false,
       error: "No pending OTP. Please provide your email first.",
     });
   }
 
-  if (new Date() > user.emailOtpExpiresAt) {
-    await prisma.user.update({
-      where: { telegramId },
-      data: { emailOtp: null, emailOtpExpiresAt: null },
-    });
+  const result = await verifyStoredOtp(user.email, args.code.trim());
+  if (!result.ok) {
+    if (result.reason === "expired") {
+      return JSON.stringify({
+        success: false,
+        error: "OTP expired. Use the resend_otp tool to send a new code.",
+      });
+    }
+    if (result.reason === "exhausted") {
+      return JSON.stringify({
+        success: false,
+        error: "Too many incorrect attempts. Use the resend_otp tool to request a new code.",
+      });
+    }
+    if (result.reason === "mismatch") {
+      return JSON.stringify({ success: false, error: "Incorrect OTP code. Try again." });
+    }
     return JSON.stringify({
       success: false,
-      error: "OTP expired. Use the resend_otp tool to send a new code.",
+      error: "No pending OTP. Please provide your email first.",
     });
-  }
-
-  if (args.code.trim() !== user.emailOtp) {
-    return JSON.stringify({ success: false, error: "Incorrect OTP code. Try again." });
   }
 
   await prisma.user.update({
     where: { telegramId },
-    data: { emailOtp: null, emailOtpExpiresAt: null },
+    data: { emailOtp: null, emailOtpExpiresAt: null, isEmailVerified: true },
   });
 
   return JSON.stringify({
@@ -515,7 +540,12 @@ async function execSaveProfileData(
 
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { id: true },
+    select: {
+      id: true,
+      profile: {
+        select: { psychologicalSummary: true },
+      },
+    },
   });
   if (!user) {
     return JSON.stringify({ success: false, error: "User not found." });
@@ -563,11 +593,15 @@ async function execSaveProfileData(
     .filter(Boolean)
     .join("\n");
 
-  const analyse = deps.analyseProfile ?? analyseAndSaveProfile;
-  try {
-    await analyse(user.id, embeddingInput);
-  } catch (err) {
-    console.warn("Embedding generation failed during onboarding:", err);
+  // If the user already pasted the deep context dump, don't overwrite that
+  // richer summary with this synthetic field summary.
+  if (!user.profile?.psychologicalSummary) {
+    const analyse = deps.analyseProfile ?? analyseAndSaveProfile;
+    try {
+      await analyse(user.id, embeddingInput);
+    } catch (err) {
+      console.warn("Embedding generation failed during onboarding:", err);
+    }
   }
 
   return JSON.stringify({
@@ -623,18 +657,33 @@ async function execFinalizeOnboarding(
     });
   }
 
+  // Gate activation on Persona liveness verification (Phase 6.3). The
+  // master kill switch is `ENABLE_PERSONA_VERIFICATION`; the credential
+  // check is a defensive secondary gate so a half-configured deploy
+  // (flag on, creds missing) doesn't strand users at a broken CTA.
+  // When the gate passes, the user stays in `onboarding` status with
+  // `onboardingStep: completed` until either the webhook flips them to
+  // `active` (verified) or they tap "Skip" in `handleVerificationSkip`.
+  const personaEnabled = env.ENABLE_PERSONA_VERIFICATION
+    && Boolean(
+      env.PERSONA_TEMPLATE_ID && env.PERSONA_ENVIRONMENT_ID && env.PERSONA_WEBHOOK_SECRET,
+    );
+
   await prisma.user.update({
     where: { telegramId },
     data: {
       onboardingStep: "completed",
-      status: "active",
+      ...(personaEnabled ? {} : { status: "active" }),
       ...reEngagementStopPatch,
     },
   });
 
   return JSON.stringify({
     success: true,
-    message: "Onboarding complete. User is now active.",
+    message: personaEnabled
+      ? "Onboarding data saved. User must complete Persona verification before matching."
+      : "Onboarding complete. User is now active.",
+    verificationRequired: personaEnabled,
   });
 }
 
@@ -786,7 +835,13 @@ export async function runAgentTurn(
 
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { messageHistory: true, language: true },
+    select: {
+      messageHistory: true,
+      language: true,
+      email: true,
+      universityDomain: true,
+      isEmailVerified: true,
+    },
   });
 
   // Rebuild messages array from stored history
@@ -799,9 +854,15 @@ export async function runAgentTurn(
     const langNote = user?.language
       ? `The user's preferred language is: ${user.language}. Respond in that language unless they switch.`
       : "";
+    // If the user arrives with email already verified (mobile-first flow, or
+    // a Telegram restart after the OTP was previously consumed), suppress
+    // step 1 entirely so the agent doesn't re-ask for an email it already has.
+    const verifiedNote = user?.isEmailVerified && user?.email
+      ? `[VERIFIED EMAIL ON FILE: ${user.email}] The user's university email (@${user.universityDomain ?? user.email.split("@")[1]}) is already verified — DO NOT call send_otp_email, verify_otp, or resend_otp. Skip step 1 of the onboarding flow entirely. Briefly acknowledge ("your @${user.universityDomain ?? user.email.split("@")[1]} email is verified ✅") in the user's language and move directly to profile basics (step 2: first name, age, gender, preference).`
+      : "";
     history.push({
       role: "system",
-      content: `${SYSTEM_PROMPT}\n\n${langNote}`.trim(),
+      content: [SYSTEM_PROMPT, langNote, verifiedNote].filter(Boolean).join("\n\n"),
     });
   }
 
@@ -820,6 +881,7 @@ export async function runAgentTurn(
 
   let expectingPhoto = false;
   let onboardingComplete = false;
+  let verificationRequired = false;
   let contextPromptRequested = false;
   let contextDumpStarted = false;
 
@@ -880,11 +942,14 @@ export async function runAgentTurn(
               message:
                 "Magic Prompt has been sent to the user in a copyable code block right above your next message. " +
                 "Now write ONE short message (2-3 sentences max) telling the user: " +
-                "1) to copy the prompt above, paste it into their ChatGPT or Claude, and send you back whatever it outputs; " +
+                "1) to copy the prompt above and paste it into whatever AI chat they already use — ChatGPT, Claude, Gemini, Perplexity, Grok, DeepSeek, or any other LLM — and send back whatever it outputs; " +
                 "2) if the response is long and Telegram splits it into several messages, they should tap the Done button that will appear. " +
                 "IMPORTANT: The prompt is already visible to the user above your message. " +
                 "Do NOT say you will send it, do NOT say 'next message', do NOT include the prompt text yourself. " +
-                "Refer to it as 'the prompt above' or 'the prompt I just sent'.",
+                "Refer to it as 'the prompt above' or 'the prompt I just sent'. " +
+                "CRITICAL STEP BOUNDARY: Do NOT mention photos. Do NOT mention 'next step'. Do NOT preview what comes after this. " +
+                "Do NOT call request_photos or any other tool in this same turn. End your reply right after the paste-it-back instruction. " +
+                "The user's only job right now is to paste this prompt into their AI and send the response back — nothing else exists for them yet.",
             });
             break;
           case "save_context_dump":
@@ -894,13 +959,39 @@ export async function runAgentTurn(
               deps,
             );
             break;
-          case "request_photos":
+          case "request_photos": {
+            // Defense-in-depth: the system prompt forbids calling request_photos
+            // before save_context_dump succeeds, but LLMs occasionally violate
+            // it — chaining request_context_dump → request_photos in the same
+            // turn, which leaves the user stranded mid-step. Enforce the
+            // ordering server-side by checking that the psychological summary
+            // (only written by execSaveContextDump) exists.
+            const userRow = await prisma.user.findUnique({
+              where: { telegramId },
+              select: {
+                profile: { select: { psychologicalSummary: true } },
+              },
+            });
+            const summary = userRow?.profile?.psychologicalSummary?.trim();
+            if (!summary) {
+              result = JSON.stringify({
+                success: false,
+                error:
+                  "Cannot start photo upload yet — the user has not pasted their AI analysis. " +
+                  "Wait for them to paste the long psychological analysis from their ChatGPT/Claude/etc., " +
+                  "and only call save_context_dump (and then request_photos AFTER it succeeds). " +
+                  "If you just called request_context_dump in this same turn, end your reply now with the " +
+                  "paste-it-back instruction; do NOT call any more tools until the user replies.",
+              });
+              break;
+            }
             expectingPhoto = true;
             result = JSON.stringify({
               success: true,
               message: `Photo upload mode activated. Waiting for ${MIN_PHOTOS}-${MAX_PHOTOS} photos.`,
             });
             break;
+          }
           case "save_profile_data":
             result = await execSaveProfileData(
               telegramId,
@@ -911,8 +1002,14 @@ export async function runAgentTurn(
           case "finalize_onboarding":
             result = await execFinalizeOnboarding(telegramId);
             {
-              const parsed = JSON.parse(result) as { success: boolean };
-              if (parsed.success) onboardingComplete = true;
+              const parsed = JSON.parse(result) as {
+                success: boolean;
+                verificationRequired?: boolean;
+              };
+              if (parsed.success) {
+                onboardingComplete = true;
+                verificationRequired = parsed.verificationRequired === true;
+              }
             }
             break;
           default:
@@ -934,15 +1031,34 @@ export async function runAgentTurn(
         tool_call_id: toolCall.id,
         content: result,
       });
+
+      // Persist the Magic Prompt as an assistant turn so non-Telegram clients
+      // (mobile chat) can render it. Telegram still sends ctx.reply(prompt)
+      // separately; this just records what was already shown.
+      if (fnName === "request_context_dump") {
+        history.push({
+          role: "assistant",
+          content: magicContextPrompt(user?.language ?? "en"),
+        });
+      }
     }
   }
 
-  // Persist updated history + reset the re-engagement chain (user activity).
+  const now = new Date();
+  const reEngagementData = onboardingComplete
+    ? {
+        lastMessageAt: now,
+        ...reEngagementStopPatch,
+      }
+    : onboardingActivityPatch(now);
+
+  // Persist updated history. Any normal onboarding activity re-arms the
+  // reminder chain; successful completion hard-stops it instead.
   await prisma.user.update({
     where: { telegramId },
     data: {
       messageHistory: history as unknown as Prisma.InputJsonValue[],
-      ...onboardingActivityPatch(),
+      ...reEngagementData,
     },
   });
 
@@ -952,7 +1068,14 @@ export async function runAgentTurn(
     .find((m) => m.role === "assistant" && m.content);
   const reply = lastAssistant?.content ?? "Something went wrong on my end. Try again in a sec.";
 
-  return { reply, expectingPhoto, onboardingComplete, contextPromptRequested, contextDumpStarted };
+  return {
+    reply,
+    expectingPhoto,
+    onboardingComplete,
+    verificationRequired,
+    contextPromptRequested,
+    contextDumpStarted,
+  };
 }
 
 /**

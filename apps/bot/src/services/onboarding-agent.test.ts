@@ -40,7 +40,13 @@ vi.mock("./profile-analysis.js", () => ({
   analyseAndSaveProfile: vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: false }),
 }));
 
+vi.mock("../public/otp.js", () => ({
+  createAndSendOtp: vi.fn().mockResolvedValue(undefined),
+  verifyOtp: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
 import { prisma } from "@gennety/db";
+import { createAndSendOtp, verifyOtp } from "../public/otp.js";
 import { runAgentTurn, injectSystemMessage, truncateForApi, summarizeHistory } from "./onboarding-agent.js";
 import type { ChatMessage } from "./onboarding-agent.js";
 
@@ -131,7 +137,6 @@ describe("onboarding-agent", () => {
   });
 
   it("executes send_otp_email tool and feeds result back to LLM", async () => {
-    const mockSendOtp = vi.fn().mockResolvedValue(undefined);
     const mockFetch = vi
       .fn()
       // First call: LLM wants to send OTP
@@ -151,13 +156,16 @@ describe("onboarding-agent", () => {
 
     const result = await runAgentTurn(telegramId, "my email is alice@stanford.edu", {
       fetchFn: mockFetch,
-      sendOtp: mockSendOtp,
+      sendOtp: vi.fn().mockResolvedValue(undefined),
     });
 
-    expect(mockSendOtp).toHaveBeenCalledWith("alice@stanford.edu", expect.any(String));
+    expect(createAndSendOtp).toHaveBeenCalledWith(
+      "alice@stanford.edu",
+      expect.any(Function),
+    );
     expect(result.reply).toBe("I've sent you a verification code! Check your email.");
 
-    // OTP was stored in DB
+    // User email was stored in DB; raw OTP is no longer persisted on the user row.
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -197,7 +205,16 @@ describe("onboarding-agent", () => {
     );
   });
 
-  it("sets expectingPhoto=true when request_photos is called", async () => {
+  it("sets expectingPhoto=true when request_photos is called and the context dump is already saved", async () => {
+    // Two findUnique calls in this turn:
+    //   1. runAgentTurn loads message history at the top
+    //   2. request_photos guard checks profile.psychologicalSummary
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ id: "uuid-1", messageHistory: [], language: "en" })
+      .mockResolvedValueOnce({
+        profile: { psychologicalSummary: "A thoughtful introvert with secure attachment." },
+      });
+
     const mockFetch = vi
       .fn()
       .mockResolvedValueOnce(
@@ -215,6 +232,59 @@ describe("onboarding-agent", () => {
 
     expect(result.expectingPhoto).toBe(true);
     expect(result.reply).toContain("photos");
+  });
+
+  it("blocks request_photos when the context dump has not been saved yet (LLM ordering violation)", async () => {
+    // Defense-in-depth: even though the system prompt forbids it, an LLM may
+    // chain request_context_dump → request_photos in the same turn. The tool
+    // boundary must refuse the second call so the user isn't stranded between
+    // "paste your AI analysis" and "send me photos" with no clear next step.
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ id: "uuid-1", messageHistory: [], language: "en" })
+      .mockResolvedValueOnce({ profile: { psychologicalSummary: null } });
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          { id: "call-1", name: "request_photos", args: {} },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        textResponse("Sorry, please paste your AI analysis first."),
+      );
+
+    const result = await runAgentTurn(telegramId, "anything", {
+      fetchFn: mockFetch,
+    });
+
+    expect(result.expectingPhoto).toBe(false);
+    // The second OpenAI request will see the tool error message; we don't
+    // assert exact reply text since the model is mocked, but expectingPhoto
+    // staying false is the load-bearing check — photo upload mode is gated.
+  });
+
+  it("also blocks request_photos when the user has no profile row at all", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ id: "uuid-1", messageHistory: [], language: "en" })
+      .mockResolvedValueOnce({ profile: null });
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          { id: "call-1", name: "request_photos", args: {} },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        textResponse("Need to do the analysis step first."),
+      );
+
+    const result = await runAgentTurn(telegramId, "skip ahead", {
+      fetchFn: mockFetch,
+    });
+
+    expect(result.expectingPhoto).toBe(false);
   });
 
   it("sets onboardingComplete=true when finalize_onboarding is called with complete data", async () => {
@@ -262,6 +332,17 @@ describe("onboarding-agent", () => {
           onboardingStep: "completed",
           status: "active",
         }),
+      }),
+    );
+
+    const updateCalls = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls;
+    const finalPersist = updateCalls.at(-1)?.[0];
+    expect(finalPersist).toBeDefined();
+    expect(finalPersist.data).toEqual(
+      expect.objectContaining({
+        lastMessageAt: expect.any(Date),
+        reEngagementStep: 0,
+        reEngagementNextAt: null,
       }),
     );
   });
@@ -331,9 +412,9 @@ describe("onboarding-agent", () => {
         language: "en",
       })
       .mockResolvedValueOnce({
-        emailOtp: "123456",
-        emailOtpExpiresAt: new Date(Date.now() + 600_000),
+        email: "alice@stanford.edu",
       });
+    (verifyOtp as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
 
     const mockFetch = vi
       .fn()
@@ -351,6 +432,7 @@ describe("onboarding-agent", () => {
     });
 
     expect(result.reply).toContain("verified");
+    expect(verifyOtp).toHaveBeenCalledWith("alice@stanford.edu", "123456");
   });
 
   it("handles verify_otp with wrong code", async () => {
@@ -361,9 +443,12 @@ describe("onboarding-agent", () => {
         language: "en",
       })
       .mockResolvedValueOnce({
-        emailOtp: "123456",
-        emailOtpExpiresAt: new Date(Date.now() + 600_000),
+        email: "alice@stanford.edu",
       });
+    (verifyOtp as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      reason: "mismatch",
+    });
 
     const mockFetch = vi
       .fn()
@@ -384,8 +469,6 @@ describe("onboarding-agent", () => {
   });
 
   it("executes resend_otp tool and sends a new code", async () => {
-    const mockSendOtp = vi.fn().mockResolvedValue(undefined);
-
     // First findUnique: history lookup in runAgentTurn
     // Second findUnique: email lookup in execResendOtp
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
@@ -411,25 +494,20 @@ describe("onboarding-agent", () => {
 
     const result = await runAgentTurn(telegramId, "I didn't get the code", {
       fetchFn: mockFetch,
-      sendOtp: mockSendOtp,
+      sendOtp: vi.fn().mockResolvedValue(undefined),
     });
 
-    expect(mockSendOtp).toHaveBeenCalledWith("alice@stanford.edu", expect.any(String));
+    expect(createAndSendOtp).toHaveBeenCalledWith(
+      "alice@stanford.edu",
+      expect.any(Function),
+    );
     expect(result.reply).toContain("resent");
-    // New OTP should be saved to DB
     expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          emailOtp: expect.any(String),
-          emailOtpExpiresAt: expect.any(Date),
-        }),
-      }),
+      expect.objectContaining({ data: { emailOtp: null, emailOtpExpiresAt: null } }),
     );
   });
 
   it("resend_otp returns error when email sending fails", async () => {
-    const mockSendOtp = vi.fn().mockRejectedValue(new Error("SMTP failed"));
-
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         id: "uuid-1",
@@ -439,6 +517,7 @@ describe("onboarding-agent", () => {
       .mockResolvedValueOnce({
         email: "alice@stanford.edu",
       });
+    (createAndSendOtp as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("SMTP failed"));
 
     const mockFetch = vi
       .fn()
@@ -453,7 +532,7 @@ describe("onboarding-agent", () => {
 
     const result = await runAgentTurn(telegramId, "resend code please", {
       fetchFn: mockFetch,
-      sendOtp: mockSendOtp,
+      sendOtp: vi.fn().mockResolvedValue(undefined),
     });
 
     // The tool result should indicate failure so the LLM can inform the user
@@ -523,6 +602,14 @@ describe("onboarding-agent", () => {
 
   it("handles save_profile_data tool correctly", async () => {
     const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uuid-1",
+      messageHistory: [],
+      language: "en",
+    }).mockResolvedValueOnce({
+      id: "uuid-1",
+      profile: null,
+    });
     const mockFetch = vi
       .fn()
       .mockResolvedValueOnce(
@@ -573,6 +660,44 @@ describe("onboarding-agent", () => {
         }),
       }),
     );
+  });
+
+  it("does not overwrite an existing deep context summary during save_profile_data", async () => {
+    const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uuid-1",
+      messageHistory: [],
+      language: "en",
+    }).mockResolvedValueOnce({
+      id: "uuid-1",
+      profile: { psychologicalSummary: "Rich context dump summary" },
+    });
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          {
+            id: "call-1",
+            name: "save_profile_data",
+            args: {
+              first_name: "Alice",
+              age: 21,
+              gender: "female",
+              preference: "men",
+              partner_preferences: "someone kind",
+            },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("Profile saved!"));
+
+    await runAgentTurn(telegramId, "here's my info", {
+      fetchFn: mockFetch,
+      analyseProfile: mockAnalyse,
+    });
+
+    expect(mockAnalyse).not.toHaveBeenCalled();
   });
 });
 

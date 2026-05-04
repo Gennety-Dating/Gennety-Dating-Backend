@@ -8,6 +8,7 @@ vi.mock("@gennety/db", () => ({
     user: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     profile: {
       update: vi.fn(),
@@ -18,6 +19,9 @@ vi.mock("@gennety/db", () => ({
       findUnique: vi.fn(),
       findFirst: vi.fn(),
       update: vi.fn(),
+    },
+    matchEvent: {
+      updateMany: vi.fn(),
     },
     systemKnowledge: {
       findMany: vi.fn().mockResolvedValue([]),
@@ -132,6 +136,7 @@ describe("menu-agent record_rejection_feedback", () => {
       },
     );
     (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prisma.user.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
     (prisma.match.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     (prisma.match.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
   });
@@ -171,6 +176,19 @@ describe("menu-agent record_rejection_feedback", () => {
     expect(prisma.match.update).toHaveBeenCalledWith({
       where: { id: matchId },
       data: { rejectionReasonA: "prefers more extroverted social partners" },
+    });
+    expect(prisma.matchEvent.updateMany).toHaveBeenCalledWith({
+      where: {
+        matchId,
+        actorId: "uid-A",
+        targetId: "uid-B",
+        actionType: "DECLINED",
+      },
+      data: {
+        metadata: {
+          rejectionReason: "prefers more extroverted social partners",
+        },
+      },
     });
     expect(appendNegativeConstraint).toHaveBeenCalledWith(
       "uid-A",
@@ -293,5 +311,56 @@ describe("menu-agent record_rejection_feedback", () => {
     // Executor returns success but must not overwrite or re-append.
     expect(prisma.match.update).not.toHaveBeenCalled();
     expect(appendNegativeConstraint).not.toHaveBeenCalled();
+  });
+});
+
+describe("menu-agent resume_matching", () => {
+  const telegramId = BigInt(1001);
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    clearKnowledgeCache();
+    (prisma.systemKnowledge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prisma.user.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { select?: Record<string, unknown> }) => {
+        if (args.select && "matchesAsA" in args.select) {
+          return {
+            id: "uid-A",
+            firstName: "Alice",
+            universityDomain: "stanford.edu",
+            status: "banned",
+            language: "en",
+            matchesAsA: [],
+            matchesAsB: [],
+          };
+        }
+        if (args.select && "messageHistory" in args.select) {
+          return { messageHistory: [] };
+        }
+        if (args.select && "status" in args.select) {
+          return { status: "banned" };
+        }
+        return { id: "uid-A", language: "en" };
+      },
+    );
+  });
+
+  it("refuses to reactivate users outside the paused state", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "call-1", name: "resume_matching", args: {} }]),
+      )
+      .mockResolvedValueOnce(textResponse("I can't resume matching from this account state."));
+
+    await runMenuAgentTurn(telegramId, "resume me", { fetchFn: mockFetch });
+
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    const secondCallBody = JSON.parse(mockFetch.mock.calls[1][1].body);
+    const toolMessage = secondCallBody.messages.find((m: { role: string }) => m.role === "tool");
+    expect(toolMessage).toBeDefined();
+    expect(JSON.parse(toolMessage.content).success).toBe(false);
   });
 });

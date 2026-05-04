@@ -1,5 +1,5 @@
 import type { Api, RawApi } from "grammy";
-import type { InlineKeyboardMarkup, MessageEntity } from "grammy/types";
+import type { InlineKeyboardMarkup, Message, MessageEntity } from "grammy/types";
 import type { BotContext } from "../session.js";
 
 /**
@@ -104,8 +104,8 @@ export async function streamDraftsToChat(
   chatId: number,
   chunks: readonly string[],
   options: StreamDraftsToApiOptions = {},
-): Promise<void> {
-  if (chunks.length === 0) return;
+): Promise<Message.TextMessage | undefined> {
+  if (chunks.length === 0) return undefined;
 
   const stepDelayMs = options.stepDelayMs ?? DEFAULT_STEP_DELAY_MS;
   const wait = options.wait ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
@@ -134,7 +134,7 @@ export async function streamDraftsToChat(
     await wait(stepDelayMs);
   }
 
-  await api.sendMessage(chatId, finalText, {
+  return await api.sendMessage(chatId, finalText, {
     ...(options.replyMarkup ? { reply_markup: options.replyMarkup } : {}),
     ...(options.entities ? { entities: options.entities } : {}),
   });

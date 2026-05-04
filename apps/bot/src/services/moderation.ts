@@ -30,6 +30,8 @@ export interface ApplyReportActionInput {
   language: Language;
 }
 
+type ModerationDb = Pick<typeof prisma, "user" | "match">;
+
 export type ModerationOutcome =
   | { kind: "tier1" }
   | { kind: "tier2_warning"; strikes: 1 }
@@ -39,6 +41,7 @@ export type ModerationOutcome =
 
 export async function applyReportAction(
   input: ApplyReportActionInput,
+  db: ModerationDb = prisma,
 ): Promise<ModerationOutcome> {
   const { tier, reporterUserId, reportedUserId, reasonSummary, language } = input;
 
@@ -48,17 +51,17 @@ export async function applyReportAction(
   }
 
   if (tier === 3) {
-    await prisma.user.update({
+    await db.user.update({
       where: { id: reportedUserId },
       data: { status: "pending_investigation" },
     });
-    await cancelInFlightMatches(reportedUserId);
+    await cancelInFlightMatches(reportedUserId, db);
     return { kind: "tier3_frozen" };
   }
 
   // Tier 2: atomic increment, then branch on the post-increment value so
   // concurrent reports can't race past a threshold.
-  const updated = await prisma.user.update({
+  const updated = await db.user.update({
     where: { id: reportedUserId },
     data: { strikes: { increment: 1 } },
     select: { strikes: true },
@@ -66,20 +69,20 @@ export async function applyReportAction(
 
   const strikes = updated.strikes;
   if (strikes >= 3) {
-    await prisma.user.update({
+    await db.user.update({
       where: { id: reportedUserId },
       data: { status: "banned" },
     });
-    await cancelInFlightMatches(reportedUserId);
+    await cancelInFlightMatches(reportedUserId, db);
     return { kind: "tier2_banned", strikes };
   }
   if (strikes === 2) {
     const until = new Date(Date.now() + SUSPENSION_DAYS * 24 * 60 * 60 * 1000);
-    await prisma.user.update({
+    await db.user.update({
       where: { id: reportedUserId },
       data: { status: "suspended", suspendedUntil: until },
     });
-    await cancelInFlightMatches(reportedUserId);
+    await cancelInFlightMatches(reportedUserId, db);
     return { kind: "tier2_suspended", strikes: 2, until };
   }
   return { kind: "tier2_warning", strikes: 1 };
@@ -90,8 +93,11 @@ export async function applyReportAction(
  * suspended / frozen user as `cancelled` so they don't linger in the
  * pipeline after a status change.
  */
-async function cancelInFlightMatches(userId: string): Promise<void> {
-  await prisma.match.updateMany({
+async function cancelInFlightMatches(
+  userId: string,
+  db: ModerationDb = prisma,
+): Promise<void> {
+  await db.match.updateMany({
     where: {
       status: { in: ["proposed", "negotiating"] },
       OR: [{ userAId: userId }, { userBId: userId }],
@@ -120,6 +126,9 @@ export async function notifyReportedUser(
   const lang: Language = user.language ?? "en";
   const key = messageKeyFor(outcome);
   if (!key) return;
+
+  // M-17: mobile-only users get the moderation outcome via push, not DM.
+  if (user.telegramId <= 0n) return;
 
   try {
     await api.sendMessage(Number(user.telegramId), t(lang, key));

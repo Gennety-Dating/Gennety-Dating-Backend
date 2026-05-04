@@ -1,14 +1,24 @@
 import { env } from "../config.js";
 import type { Language } from "@gennety/shared";
-import { proposeSchedulingPrompt, venueSelectionPrompt } from "@gennety/shared";
+import {
+  pitchAndSynergyPrompt,
+  proposeSchedulingPrompt,
+  venueSelectionPrompt,
+} from "@gennety/shared";
 import { callOpenAIText } from "./openai.js";
 
 /**
- * Pitch generator — produces the personalized "why you two fit" paragraph
+ * Pitch generator — produces the personalized "why you two fit" payload
  * streamed to each user when a match is proposed.
  *
+ * Output is structured: alongside the prose `pitch`, the LLM returns the
+ * AI Synergy Score (70..99 integer) + a 1–2 sentence positive
+ * justification. The synergy fields are persisted on the `Match` row by
+ * `sendMatchProposal` and surfaced to the mobile app via
+ * `SerializedMatch`.
+ *
  * Two modes:
- *   - OpenAI chat-completions when `OPENAI_API_KEY` is set.
+ *   - OpenAI JSON-mode chat-completions when `OPENAI_API_KEY` is set.
  *   - Deterministic local fallback otherwise (so dev + tests never fail).
  *
  * The fallback is intentionally short and generic — it is never shown in
@@ -23,29 +33,49 @@ export interface PitchInput {
   language: Language;
 }
 
-export interface PitchClient {
-  generate(input: PitchInput): Promise<string>;
+export interface PitchResult {
+  pitch: string;
+  /** Always clamped to [70, 99] regardless of what the LLM returned. */
+  synergyScore: number;
+  /** 1–2 sentence positive justification, language-aware. */
+  synergyReason: string;
 }
 
-const MODEL = "gpt-5.4-mini";
-const MAX_TOKENS = 240;
+export interface PitchClient {
+  generate(input: PitchInput): Promise<PitchResult>;
+}
+
+const MODEL = "gpt-4.1-mini";
+const MAX_TOKENS = 480;
+const OPENAI_TIMEOUT_MS = 45_000;
+
+/** Hard product invariant: visual range is always 70..99. */
+export const SYNERGY_MIN = 70;
+export const SYNERGY_MAX = 99;
+
+/** Clamp + round any incoming score into the motivating band. */
+export function clampSynergyScore(raw: unknown): number {
+  const n = typeof raw === "number" && Number.isFinite(raw) ? raw : SYNERGY_MIN;
+  return Math.max(SYNERGY_MIN, Math.min(SYNERGY_MAX, Math.round(n)));
+}
 
 /**
  * Real LLM pitch — kept tiny & stateless. Uses `fetch` directly to avoid
  * pulling in the `openai` package (AGENTS.md — no new deps without approval).
+ *
+ * Enforces JSON mode so the schema is validated by the API itself; the
+ * caller still re-clamps `synergy_score` defensively.
  */
 export function createOpenAIPitchClient(apiKey: string): PitchClient {
   return {
-    async generate(input: PitchInput): Promise<string> {
-      const system = `You write short, warm match pitches for a university dating bot.
-Reply with 2–3 sentences max, in ${input.language}. Second-person ("you").
-Mention one concrete compatibility point. Never promise anything.`;
-      const user = [
-        `Reader: ${input.selfFirstName ?? "User"}`,
-        `Reader bio: ${input.selfSummary ?? "(no bio)"}`,
-        `Match: ${input.otherFirstName ?? "Someone"}`,
-        `Match bio: ${input.otherSummary ?? "(no bio)"}`,
-      ].join("\n");
+    async generate(input: PitchInput): Promise<PitchResult> {
+      const system = pitchAndSynergyPrompt({
+        selfFirstName: input.selfFirstName,
+        otherFirstName: input.otherFirstName,
+        selfSummary: input.selfSummary,
+        otherSummary: input.otherSummary,
+        language: input.language,
+      });
 
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -56,25 +86,49 @@ Mention one concrete compatibility point. Never promise anything.`;
         body: JSON.stringify({
           model: MODEL,
           max_completion_tokens: MAX_TOKENS,
+          temperature: 0.7,
+          response_format: { type: "json_object" },
           messages: [
             { role: "system", content: system },
-            { role: "user", content: user },
+            { role: "user", content: "Generate the match-reveal payload now." },
           ],
         }),
+        signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
       });
       if (!res.ok) {
         const body = await res.text();
         throw new Error(`OpenAI pitch failed: ${res.status} ${body}`);
       }
       const json = (await res.json()) as {
-        choices: Array<{ message: { content: string } }>;
+        choices: Array<{ message: { content: string | null } }>;
       };
-      return json.choices[0]?.message?.content?.trim() ?? "";
+      const raw = json.choices[0]?.message?.content?.trim();
+      if (!raw) throw new Error("OpenAI pitch returned empty content");
+
+      const parsed = JSON.parse(raw) as {
+        pitch?: unknown;
+        synergy_score?: unknown;
+        synergy_reason?: unknown;
+      };
+      const pitch = typeof parsed.pitch === "string" ? parsed.pitch.trim() : "";
+      const synergyReason =
+        typeof parsed.synergy_reason === "string" ? parsed.synergy_reason.trim() : "";
+      if (!pitch || !synergyReason) {
+        throw new Error("OpenAI pitch missing required fields");
+      }
+      return {
+        pitch,
+        synergyScore: clampSynergyScore(parsed.synergy_score),
+        synergyReason,
+      };
     },
   };
 }
 
-/** Deterministic, language-aware fallback used when no API key is set. */
+/**
+ * Deterministic, language-aware pitch fallback used when no API key is set.
+ * Exposed separately so tests can assert prose without invoking the LLM.
+ */
 export function localFallbackPitch(input: PitchInput): string {
   const other = input.otherFirstName ?? "someone";
   switch (input.language) {
@@ -87,20 +141,66 @@ export function localFallbackPitch(input: PitchInput): string {
   }
 }
 
-/** High-level: pick a client and produce a pitch, never throws. */
+/**
+ * Stable pseudo-score for offline / fallback paths so dev runs are
+ * deterministic across restarts. Hash a seed string into [70, 99].
+ */
+export function fallbackSynergyScore(seed: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+  }
+  // Map the unsigned 32-bit hash into the visible band.
+  const span = SYNERGY_MAX - SYNERGY_MIN + 1;
+  return SYNERGY_MIN + (Math.abs(h) % span);
+}
+
+/** Localised generic positive justification for the fallback path. */
+export function localFallbackSynergyReason(language: Language): string {
+  switch (language) {
+    case "ru":
+      return "Ваши взгляды и ритмы дополняют друг друга — есть из чего вырасти и о чём поговорить.";
+    case "uk":
+      return "Ваші погляди та ритми доповнюють одне одного — є з чого зростати та про що поговорити.";
+    default:
+      return "Your values and rhythms quietly complement each other — there's room to grow and plenty to talk about.";
+  }
+}
+
+/**
+ * High-level: pick a client and produce a structured result. Never throws —
+ * always returns a usable `PitchResult` so the dispatch pipeline can't be
+ * blocked by a transient LLM outage.
+ */
 export async function generatePitch(
   input: PitchInput,
   client?: PitchClient,
-): Promise<string> {
+  /** Stable seed for the deterministic fallback score (e.g. match.id). */
+  fallbackSeed?: string,
+): Promise<PitchResult> {
   const impl =
     client ?? (env.OPENAI_API_KEY ? createOpenAIPitchClient(env.OPENAI_API_KEY) : null);
-  if (!impl) return localFallbackPitch(input);
+
+  const fallback = (): PitchResult => ({
+    pitch: localFallbackPitch(input),
+    synergyScore: fallbackSeed
+      ? fallbackSynergyScore(fallbackSeed)
+      : fallbackSynergyScore(`${input.selfFirstName ?? ""}|${input.otherFirstName ?? ""}`),
+    synergyReason: localFallbackSynergyReason(input.language),
+  });
+
+  if (!impl) return fallback();
   try {
-    const text = await impl.generate(input);
-    return text || localFallbackPitch(input);
+    const result = await impl.generate(input);
+    if (!result.pitch) return fallback();
+    return {
+      pitch: result.pitch,
+      synergyScore: clampSynergyScore(result.synergyScore),
+      synergyReason: result.synergyReason || localFallbackSynergyReason(input.language),
+    };
   } catch (err) {
     console.warn("Pitch generation failed, using fallback:", err);
-    return localFallbackPitch(input);
+    return fallback();
   }
 }
 

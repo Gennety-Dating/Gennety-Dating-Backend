@@ -19,6 +19,7 @@ import { showMainMenu } from "../menu/main.js";
 import { withTyping } from "../../utils/with-typing.js";
 import { pinStatusBanner } from "../../services/status-banner.js";
 import { dispatchToChat } from "../../chat-queue.js";
+import { sendVerificationCTA } from "./verification.js";
 
 /** Callback data for the "I've pasted everything" confirmation button */
 const DUMP_DONE_CALLBACK = "dump:done";
@@ -171,6 +172,16 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
   await sendAgentReply(ctx, result.reply);
 
   if (result.onboardingComplete) {
+    // When verification is required (Sumsub configured), send the liveness
+    // CTA instead of the main menu — the user is not yet `active` and
+    // showing the "next match" banner would be misleading. The webhook
+    // flips them to active + pins the banner on GREEN.
+    if (result.verificationRequired) {
+      const sent = await sendVerificationCTA(ctx);
+      if (sent) return;
+      // Fall through to the normal flow if CTA couldn't be sent (misconfig,
+      // Sumsub outage) — better to let the user into the app than to stall.
+    }
     await showMainMenu(ctx);
     await pinStatusBanner(ctx.api, telegramId, ctx.session.language);
   }
@@ -213,6 +224,16 @@ async function handleDumpDone(ctx: BotContext, telegramId: bigint): Promise<void
   await sendAgentReply(ctx, result.reply);
 
   if (result.onboardingComplete) {
+    // When verification is required (Sumsub configured), send the liveness
+    // CTA instead of the main menu — the user is not yet `active` and
+    // showing the "next match" banner would be misleading. The webhook
+    // flips them to active + pins the banner on GREEN.
+    if (result.verificationRequired) {
+      const sent = await sendVerificationCTA(ctx);
+      if (sent) return;
+      // Fall through to the normal flow if CTA couldn't be sent (misconfig,
+      // Sumsub outage) — better to let the user into the app than to stall.
+    }
     await showMainMenu(ctx);
     await pinStatusBanner(ctx.api, telegramId, ctx.session.language);
   }
@@ -521,6 +542,23 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
     if (result.onboardingComplete) {
       // Re-fetch freshly to show the menu in the user's language
       const language = session.language;
+      // Mirror the text-message path (line ~179): if the agent's
+      // `finalize_onboarding` set verificationRequired=true, the user is
+      // still in `status='onboarding'` and must see the Persona CTA before
+      // the main menu — otherwise they're stranded with no way to verify.
+      // Pre-fix this branch jumped straight to the menu and silently
+      // swallowed the CTA when onboarding was completed by a photo upload.
+      if (result.verificationRequired) {
+        const { sendVerificationCTABare } = await import("./verification.js");
+        const sent = await sendVerificationCTABare(
+          acc.api,
+          acc.chatId,
+          acc.telegramId,
+          language,
+        );
+        if (sent) return;
+        // Persona disabled or misconfigured — fall through to the menu.
+      }
       const { sendMainMenu } = await import("../menu/main.js");
       await sendMainMenu(acc.api, acc.chatId, language, acc.telegramId);
       await pinStatusBanner(acc.api, acc.telegramId, language);
