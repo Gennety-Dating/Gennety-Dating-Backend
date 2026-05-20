@@ -101,6 +101,32 @@ Caveats:
 - Before push/PR: `pnpm lint && pnpm test && pnpm build`
 - Never commit `.env`, secrets, or `node_modules`
 
+## Post-Implementation Git Workflow
+
+After meaningful implementation of a new feature, bugfix, UX/API/schema/deploy
+change, preserve rollbackable history by completing the Git handoff before
+finishing:
+
+1. Run the relevant tests, typecheck, or build for the change. Use narrow
+   verification while iterating and broaden when risk justifies it.
+2. Complete the Documentation Impact Check above, and update Obsidian when the
+   change warrants a session, changelog, or ADR note.
+3. Check `git status` and `git diff` before staging.
+4. Stage only changes that belong to the current task. Never stage `.env`,
+   secrets, raw logs, build artifacts, `node_modules`, or unrelated dirty
+   changes from the user.
+5. Commit with a clear, scoped message.
+6. Push to the current upstream branch. If no upstream is configured, use
+   `git push -u origin HEAD`.
+
+Do not create an automatic commit or push after pure analysis, review,
+planning, or an answer that made no implementation changes. If relevant tests,
+typecheck, or build fail, stop before committing unless the user explicitly
+asks to preserve the failing state. If the worktree contains unrelated user
+changes, leave them untouched and tell the user what was left out. If push is
+blocked by authorization, a protected branch, missing remote/upstream, or a
+conflict/non-fast-forward, stop and report the exact cause.
+
 ## Boundaries & Safety
 **Always**
 - Follow the user flow defined in PRODUCT_SPEC.md
