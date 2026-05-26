@@ -23,13 +23,14 @@ export default defineConfig({
     },
   },
   server: {
+    host: "0.0.0.0",
     port: 5173,
     strictPort: true,
     /// Telegram Mini Apps require HTTPS — local dev forwards through a
     /// cloudflared / ngrok tunnel. Vite's host-header check blocks any
     /// host except `localhost` by default; ".trycloudflare.com" covers
     /// `cloudflared tunnel --url`. Production build is unaffected.
-    allowedHosts: [".trycloudflare.com", ".ngrok-free.app", ".ngrok.io"],
+    allowedHosts: [".trycloudflare.com", ".ngrok-free.app", ".ngrok-free.dev", ".ngrok.io"],
     /// Proxy public-API calls to the bot process. The Mini App posts to
     /// `/v1/feedback/post-date` and `/v1/calendar/pick` via a relative
     /// path (`apiBase=""` in dev), so without this the cloudflared tunnel
