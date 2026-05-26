@@ -25,6 +25,7 @@ const TRAP_BACKGROUND =
 const VISUAL_LAST_INDEX = 2;
 const HOOK_AUTO_ADVANCE_MS = 2000;
 const DRUM_CYCLE_INTERVAL_MS = 1500;
+const PRIVACY_POLICY_URL = "https://gennety.com/privacy";
 
 type RemoteUser = TelegramOnboardingState["user"];
 type Phase =
@@ -501,7 +502,13 @@ function ConsentGate(props: { onState: (state: TelegramOnboardingState) => void 
       {error ? <div className="gate-error">{error}</div> : null}
       <label className="check-row">
         <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.currentTarget.checked)} />
-        <span>Я принимаю условия сервиса и политику приватности.</span>
+        <span>
+          Я принимаю условия сервиса и{" "}
+          <a className="gate-link" href={PRIVACY_POLICY_URL} rel="noreferrer" target="_blank">
+            политику приватности
+          </a>
+          .
+        </span>
       </label>
       <label className="check-row">
         <input type="checkbox" checked={research} onChange={(event) => setResearch(event.currentTarget.checked)} />

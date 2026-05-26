@@ -216,6 +216,8 @@ describe("Consent gatekeeper", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           hasConsented: true,
+          termsAccepted: true,
+          termsAcceptedAt: expect.any(Date),
           onboardingStep: "language",
         }),
       }),

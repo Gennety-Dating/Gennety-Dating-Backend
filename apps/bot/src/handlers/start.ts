@@ -161,6 +161,14 @@ async function sendOnboardingMiniAppPrompt(
   await ctx.reply(copy.message, { reply_markup: keyboard });
 }
 
+function shouldUseOnboardingMiniApp(user: User): boolean {
+  if (!env.WEBAPP_URL) return false;
+  if (user.onboardingStep === "completed" || user.onboardingStep === "conversational") {
+    return false;
+  }
+  return !user.termsAccepted || !user.language || !user.isEmailVerified;
+}
+
 start.command("start", async (ctx) => {
   const telegramId = BigInt(ctx.from!.id);
   const startPayload = ctx.match?.toString().trim() ?? "";
@@ -272,7 +280,7 @@ start.command("start", async (ctx) => {
     return;
   }
 
-  if (env.WEBAPP_URL) {
+  if (shouldUseOnboardingMiniApp(user)) {
     await sendOnboardingMiniAppPrompt(
       ctx,
       user,

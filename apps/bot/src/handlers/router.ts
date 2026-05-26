@@ -1,6 +1,7 @@
 import { Composer } from "grammy";
 import type { BotContext } from "../session.js";
 import { t } from "@gennety/shared";
+import { prisma } from "@gennety/db";
 import { handleConsent } from "./onboarding/consent.js";
 import { handleLanguageSelection } from "./onboarding/language.js";
 import { handleConversational } from "./onboarding/conversational.js";
@@ -13,6 +14,27 @@ import {
 import { menuRouter } from "./menu/router.js";
 
 const router = new Composer<BotContext>();
+
+router.use(async (ctx, next) => {
+  if (!ctx.from?.id) {
+    await next();
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(ctx.from.id) },
+    select: { onboardingStep: true, language: true },
+  });
+
+  if (user) {
+    ctx.session.onboardingStep = user.onboardingStep as typeof ctx.session.onboardingStep;
+    if (user.language) {
+      ctx.session.language = user.language as typeof ctx.session.language;
+    }
+  }
+
+  await next();
+});
 
 // Verification "Skip" button must be caught before the menu delegation:
 // `finalize_onboarding` sets `onboardingStep='completed'` before the CTA is

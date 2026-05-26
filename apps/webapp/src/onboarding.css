@@ -882,6 +882,18 @@ button {
   accent-color: #a855f7;
 }
 
+.gate-link {
+  color: #f4f4f5;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: rgba(168, 85, 247, 0.72);
+  text-underline-offset: 3px;
+}
+
+.gate-link:active {
+  color: #d8b4fe;
+}
+
 .otp-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));

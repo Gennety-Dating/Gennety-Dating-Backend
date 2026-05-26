@@ -46,6 +46,8 @@ export async function handleConsent(ctx: BotContext): Promise<void> {
     data: {
       hasConsented: true,
       consentedAt: new Date(),
+      termsAccepted: true,
+      termsAcceptedAt: new Date(),
       onboardingStep: "language",
       ...onboardingActivityPatch(),
     },
