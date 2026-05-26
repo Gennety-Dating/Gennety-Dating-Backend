@@ -40,6 +40,19 @@ vi.mock("../../config.js", () => ({
   },
 }));
 
+vi.mock("../../services/vision/validate-face.js", () => ({
+  validateSingleFace: vi.fn().mockResolvedValue({ ok: true, valid: true }),
+}));
+
+vi.mock("../../services/face-match-gate.js", () => ({
+  fetchTelegramFileBuffer: vi.fn().mockResolvedValue(Buffer.from("photo-bytes")),
+  gateProfilePhoto: vi.fn().mockResolvedValue({ kind: "allowed", score: 0.91 }),
+}));
+
+vi.mock("../../services/verification-pipeline.js", () => ({
+  triggerVerificationRerun: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { prisma } from "@gennety/db";
 import { showMainMenu, buildMainMenuKeyboard } from "./main.js";
 import { handleMyProfile } from "./my-profile.js";
@@ -64,10 +77,17 @@ import {
   handleEditPhotosStart,
   handleEditPhotosUpload,
 } from "./edit-profile.js";
+import { isPinnedMessageServiceUpdate, menuRouter } from "./router.js";
+import { validateSingleFace } from "../../services/vision/validate-face.js";
+import {
+  fetchTelegramFileBuffer,
+  gateProfilePhoto,
+} from "../../services/face-match-gate.js";
 
 function createMockCtx(overrides: {
   session?: Partial<SessionData>;
   callbackData?: string;
+  message?: Record<string, unknown>;
   messageText?: string;
   photoFileIds?: string[];
   fromId?: number;
@@ -80,18 +100,30 @@ function createMockCtx(overrides: {
     ...overrides.session,
   };
 
-  const message = overrides.messageText
+  const message = overrides.message
+    ? overrides.message
+    : overrides.messageText
     ? { text: overrides.messageText }
     : overrides.photoFileIds
       ? { photo: overrides.photoFileIds.map((id) => ({ file_id: id })) }
       : undefined;
+  const callbackQuery = overrides.callbackData ? { data: overrides.callbackData } : undefined;
 
   return {
     session,
     from: { id: overrides.fromId ?? 12345 },
-    callbackQuery: overrides.callbackData ? { data: overrides.callbackData } : undefined,
+    callbackQuery,
     message,
+    update: {
+      ...(message ? { message } : {}),
+      ...(callbackQuery ? { callback_query: callbackQuery } : {}),
+    },
     reply: vi.fn().mockResolvedValue(undefined),
+    api: {
+      getFile: vi.fn(),
+      sendMessage: vi.fn().mockResolvedValue(undefined),
+      token: "test",
+    },
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
   } as any;
 }
@@ -149,6 +181,37 @@ describe("Menu — main keyboard", () => {
     const callArgs = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(callArgs[1].parse_mode).toBe("Markdown");
     expect(callArgs[1].reply_markup).toBeDefined();
+  });
+});
+
+describe("Menu router — Telegram service messages", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ status: "active" });
+  });
+
+  it("ignores the service update emitted when the status banner is pinned", async () => {
+    const message = {
+      message_id: 42,
+      date: 1_775_712_000,
+      chat: { id: 12345, type: "private" },
+      pinned_message: {
+        message_id: 41,
+        date: 1_775_712_000,
+        chat: { id: 12345, type: "private" },
+        text: "Next match drops soon.",
+      },
+    };
+    const ctx = createMockCtx({ message });
+    const next = vi.fn();
+
+    expect(isPinnedMessageServiceUpdate(ctx)).toBe(true);
+
+    await menuRouter.middleware()(ctx, next);
+
+    expect(ctx.reply).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
   });
 });
 
@@ -240,6 +303,8 @@ describe("Menu — Settings (language change)", () => {
     expect(JSON.stringify(markup)).toContain("menu:lang:en");
     expect(JSON.stringify(markup)).toContain("menu:lang:ru");
     expect(JSON.stringify(markup)).toContain("menu:lang:uk");
+    expect(JSON.stringify(markup)).toContain("menu:lang:de");
+    expect(JSON.stringify(markup)).toContain("menu:lang:pl");
   });
 
   it("handleSettingsLanguageSet persists ru and resets menuState", async () => {
@@ -302,6 +367,7 @@ describe("Menu — Edit Profile", () => {
     await handleEditPhotosStart(ctx);
     expect(ctx.session.menuState).toBe("edit_photos");
     expect(ctx.session.pendingPhotos).toEqual([]);
+    expect(ctx.session.pendingProfileMedia).toEqual([]);
   });
 
   it("handleEditPhotosUpload commits on continue button and resets state", async () => {
@@ -321,6 +387,11 @@ describe("Menu — Edit Profile", () => {
         where: { userId: "uuid-user-1" },
         data: {
           photos: ["file_1", "file_2", "file_3"],
+          profileMedia: [
+            { type: "photo", photo: "file_1" },
+            { type: "photo", photo: "file_2" },
+            { type: "photo", photo: "file_3" },
+          ],
           photoFaceScores: [0, 0, 0],
         },
       }),
@@ -337,6 +408,101 @@ describe("Menu — Edit Profile", () => {
     await handleEditPhotosUpload(ctx);
     expect(prisma.profile.update).not.toHaveBeenCalled();
     expect(ctx.session.menuState).toBe("edit_photos");
+  });
+
+  it("handleEditPhotosUpload accepts Live Photo and stores static frame + structured media", async () => {
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        pendingPhotos: [],
+        pendingProfileMedia: [],
+        pendingPhotoUniqueIds: [],
+        pendingPhotoScores: [],
+      },
+      message: {
+        live_photo: {
+          file_id: "live_1",
+          file_unique_id: "live_unique_1",
+          duration: 5,
+          width: 720,
+          height: 1280,
+          file_size: 2048,
+          photo: [
+            {
+              file_id: "static_1",
+              file_unique_id: "static_unique_1",
+              width: 800,
+              height: 800,
+            },
+          ],
+        },
+      },
+    });
+
+    await handleEditPhotosUpload(ctx);
+
+    expect(validateSingleFace).toHaveBeenCalledWith(ctx, "static_1");
+    expect(fetchTelegramFileBuffer).toHaveBeenCalledWith(ctx.api, "static_1");
+    expect(gateProfilePhoto).toHaveBeenCalledWith(
+      "uuid-user-1",
+      Buffer.from("photo-bytes"),
+    );
+    expect(ctx.session.pendingPhotos).toEqual(["static_1"]);
+    expect(ctx.session.pendingProfileMedia).toEqual([
+      {
+        type: "live_photo",
+        photo: "static_1",
+        livePhoto: "live_1",
+        duration: 5,
+        width: 720,
+        height: 1280,
+        fileSize: 2048,
+      },
+    ]);
+    expect(ctx.session.pendingPhotoScores).toEqual([0.91]);
+  });
+
+  it("handleEditPhotosUpload does not add media beyond MAX_PHOTOS", async () => {
+    const existingPhotos = ["file_1", "file_2", "file_3", "file_4"];
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        pendingPhotos: existingPhotos,
+        pendingProfileMedia: existingPhotos.map((photo) => ({ type: "photo", photo })),
+        pendingPhotoUniqueIds: [],
+        pendingPhotoScores: [0, 0, 0, 0],
+      },
+      message: {
+        live_photo: {
+          file_id: "live_extra",
+          file_unique_id: "live_extra_unique",
+          duration: 5,
+          width: 720,
+          height: 1280,
+          photo: [
+            {
+              file_id: "static_extra",
+              file_unique_id: "static_extra_unique",
+              width: 800,
+              height: 800,
+            },
+          ],
+        },
+      },
+    });
+
+    await handleEditPhotosUpload(ctx);
+
+    expect(validateSingleFace).not.toHaveBeenCalled();
+    expect(prisma.profile.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          photos: existingPhotos,
+          profileMedia: existingPhotos.map((photo) => ({ type: "photo", photo })),
+          photoFaceScores: [0, 0, 0, 0],
+        }),
+      }),
+    );
   });
 });
 

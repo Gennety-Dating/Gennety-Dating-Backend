@@ -3,6 +3,7 @@ import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
 import { t } from "@gennety/shared";
 import { onboardingActivityPatch } from "../../workers/re-engagement-schedule.js";
+import { buildLanguageKeyboard } from "../language-keyboard.js";
 
 const PRIVACY_POLICY_URL = "https://gennety.com/privacy";
 
@@ -51,12 +52,7 @@ export async function handleConsent(ctx: BotContext): Promise<void> {
   });
 
   // Immediately show the language picker
-  const keyboard = new InlineKeyboard()
-    .text("English", "lang:en")
-    .text("Русский", "lang:ru")
-    .text("Українська", "lang:uk");
-
   await ctx.reply(t(ctx.session.language, "chooseLanguage"), {
-    reply_markup: keyboard,
+    reply_markup: buildLanguageKeyboard("lang"),
   });
 }

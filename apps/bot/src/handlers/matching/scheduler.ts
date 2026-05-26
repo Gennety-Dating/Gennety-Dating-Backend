@@ -9,83 +9,80 @@ import { startVenueNegotiation } from "./venue-negotiation.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
 
 /**
- * Progressive scheduler.
+ * Calendar-only scheduler.
  *
- * Iterations (PRODUCT_SPEC.md §3.3):
- *   1 & 2: Bot proposes a small set of AI-generated slots. Both users pick.
- *          If their picks overlap → `scheduled`. Otherwise → next iteration.
- *   3:     Telegram Web App Calendar (Mini App). The Mini App posts selected
- *          slots via `Telegram.WebApp.sendData` — consumed by `handleWebAppData`.
+ * Once both users have accepted the match the bot DMs each side a button
+ * that opens the Calendar Mini App. Each user marks any number of slots
+ * they're available; the partner sees those marks live and can either
+ * tap one to lock in a compromise or propose alternatives. The earliest
+ * non-empty intersection of `availableTimesA` and `availableTimesB`
+ * agrees the date and advances to venue negotiation.
  *
- * Callback data formats:
- *   - `sched:pick:{matchId}:{slotIndex}` — iter 1/2 user picks a slot.
- *     We encode the slot's INDEX into `match.proposedTimes`, not the full ISO
- *     timestamp, because Telegram caps `callback_data` at 64 bytes and a
- *     UUIDv4 (36) + ISO-8601 (24) + prefixes (~13) overflows. See `handleSchedulePick`
- *     for the index → Date resolution.
+ * The legacy three-iteration flow (two rounds of bot inline-keyboard
+ * "single slot" picks before falling back to the Mini App) was removed
+ * 2026-05-07 — it was strictly worse UX than going straight to a
+ * peer-aware calendar.
  *
- * The scheduler is called in three places:
- *   - `startScheduling(api, matchId)` — by the decision handler once both
- *     users have accepted.
- *   - `handleSchedulePick(ctx)` — by the router for `sched:pick:*` callbacks.
- *   - `handleCalendarWebAppData(ctx)` — by the router for `web_app_data`
- *     messages coming back from the Mini App.
+ * `proposedTimes` is still the server-side allowlist of valid slots
+ * (the visible grid in the Mini App). It's the only timestamps that
+ * `POST /v1/calendar/pick` will accept, which prevents clients from
+ * smuggling in arbitrary timestamps.
  */
 
-export const MAX_AI_ITERATIONS = 2;
-export const PROPOSALS_PER_ROUND = 3;
+export const CALENDAR_DAY_COUNT = 6;
+
+export const CALENDAR_TIME_SLOTS: ReadonlyArray<{ hour: number; minute: number }> = [
+  { hour: 17, minute: 30 },
+  { hour: 18, minute: 0 },
+  { hour: 18, minute: 30 },
+  { hour: 19, minute: 0 },
+  { hour: 19, minute: 30 },
+];
+
+export const CALENDAR_SLOT_COUNT = CALENDAR_DAY_COUNT * CALENDAR_TIME_SLOTS.length;
 
 /**
- * Generate AI proposal timeslots. Deterministic local stub by default
- * (Friday & Saturday evenings, 2-day lookahead) — the orchestrator swaps
- * this with a live LLM call later. The function is exported so tests can
- * assert the slot shape.
+ * Generate the calendar grid: the next `dayCount` consecutive days starting
+ * tomorrow, with five exact time options per day (17:30, 18:00, 18:30,
+ * 19:00, 19:30 local). No weekday filter — past UX feedback was that
+ * skipping Sun/Mon pruned dates users actually preferred (e.g. Sunday
+ * brunches, Monday holidays). 6 days is "next week's worth of options";
+ * the Mini App groups the exact DateTime allowlist into date → time steps.
+ *
+ * Exported so tests can assert the shape — the Mini App reads the grid
+ * from the server via `GET /v1/calendar/state`, no client-side mirror.
  */
 export function generateProposalSlots(
   now: Date = new Date(),
-  count: number = PROPOSALS_PER_ROUND,
+  dayCount: number = CALENDAR_DAY_COUNT,
 ): Date[] {
-  // Pick the next `count` weekday evenings starting tomorrow. 19:00 local.
   const out: Date[] = [];
   const cursor = new Date(now);
-  cursor.setHours(19, 0, 0, 0);
+  cursor.setHours(0, 0, 0, 0);
   cursor.setDate(cursor.getDate() + 1);
-  while (out.length < count) {
-    const day = cursor.getDay(); // 0 Sun – 6 Sat
-    if (day !== 0 && day !== 1) {
-      // Skip Sunday & Monday so dates land on "weekend vibes" slots.
-      out.push(new Date(cursor));
+  for (let day = 0; day < dayCount; day++) {
+    for (const slot of CALENDAR_TIME_SLOTS) {
+      const candidate = new Date(cursor);
+      candidate.setHours(slot.hour, slot.minute, 0, 0);
+      out.push(candidate);
     }
     cursor.setDate(cursor.getDate() + 1);
   }
   return out;
 }
 
-/**
- * Build the inline keyboard for iteration 1/2 proposals. One button per
- * slot, plus a "None of these work" button that forces next iteration.
- */
-export function buildProposalKeyboard(
-  matchId: string,
-  slots: Date[],
-  _lang: Language,
-): InlineKeyboardMarkup {
-  // Build one button per row; avoid the trailing `.row()` that would
-  // leave an empty last row in `inline_keyboard`.
-  const kb = new InlineKeyboard();
-  slots.forEach((slot, i) => {
-    const label = formatSlotLabel(slot, _lang);
-    // `i` is the slot index in `match.proposedTimes`. Keeps callback_data
-    // under Telegram's 64-byte limit (UUID 36 + idx 1-2 + prefix 11 ≈ 50).
-    kb.text(label, `sched:pick:${matchId}:${i}`);
-    if (i < slots.length - 1) kb.row();
-  });
-  return { inline_keyboard: kb.inline_keyboard };
-}
-
-/** Short, language-aware slot label used on buttons. */
+/** Short, language-aware slot label. Used by the stale-callback fallback. */
 export function formatSlotLabel(slot: Date, lang: Language): string {
-  const locale = lang === "ru" ? "ru-RU" : lang === "uk" ? "uk-UA" : "en-US";
+  const locale =
+    lang === "ru"
+      ? "ru-RU"
+      : lang === "uk"
+        ? "uk-UA"
+        : lang === "de"
+          ? "de-DE"
+          : lang === "pl"
+            ? "pl-PL"
+            : "en-US";
   return slot.toLocaleString(locale, {
     weekday: "short",
     day: "numeric",
@@ -95,7 +92,7 @@ export function formatSlotLabel(slot: Date, lang: Language): string {
   });
 }
 
-/** Iteration 3 keyboard: open the Calendar Mini App. */
+/** Open-the-Mini-App button. */
 export function buildCalendarKeyboard(
   webAppUrl: string,
   lang: Language,
@@ -106,48 +103,26 @@ export function buildCalendarKeyboard(
 
 /**
  * Begin scheduling for a match that has just entered `negotiating`.
- * Iterates to the next round (1, 2, or 3) and sends the appropriate UI
- * to both users.
+ * Generates the slot allowlist once per match (so both users see the
+ * same grid) and DMs the calendar button to whichever side is
+ * Telegram-resident.
  */
 export async function startScheduling(
   api: Api<RawApi>,
   matchId: string,
 ): Promise<void> {
-  const match = await prisma.match.findUnique({
-    where: { id: matchId },
-    select: {
-      id: true,
-      schedulingIteration: true,
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
-    },
-  });
-  if (!match) return;
-
-  const nextIter = match.schedulingIteration + 1;
-
-  if (nextIter <= MAX_AI_ITERATIONS) {
-    await sendIterationProposals(api, matchId, nextIter);
-    return;
-  }
-
-  await sendCalendarIteration(api, matchId);
-}
-
-/** Send iteration 1 or 2 proposal buttons to both users. */
-async function sendIterationProposals(
-  api: Api<RawApi>,
-  matchId: string,
-  iteration: number,
-): Promise<void> {
   const slots = generateProposalSlots();
   await prisma.match.update({
     where: { id: matchId },
     data: {
-      schedulingIteration: iteration,
+      // Iteration tracking is legacy but retained until the cleanup
+      // migration drops it; pinning to 3 keeps any code path that still
+      // reads the column from interpreting the match as "iter-1 inline
+      // keyboard" mid-deploy.
+      schedulingIteration: 3,
       proposedTimes: slots,
-      pickedTimeA: null,
-      pickedTimeB: null,
+      availableTimesA: [],
+      availableTimesB: [],
     },
   });
 
@@ -162,144 +137,27 @@ async function sendIterationProposals(
 
   const langA = (match.userA.language ?? "en") as Language;
   const langB = (match.userB.language ?? "en") as Language;
-
-  // M-17: only DM Telegram-resident users. Mobile-only users see iter-1/2
-  // proposals through the `/v1/matches/current` poll, not via Telegram.
-  const sends: Array<Promise<unknown>> = [];
-  if (isTelegramTarget(match.userA.telegramId)) {
-    sends.push(
-      api.sendMessage(Number(match.userA.telegramId), t(langA, "matchScheduleProposal"), {
-        reply_markup: buildProposalKeyboard(matchId, slots, langA),
-      }),
-    );
-  }
-  if (isTelegramTarget(match.userB.telegramId)) {
-    sends.push(
-      api.sendMessage(Number(match.userB.telegramId), t(langB, "matchScheduleProposal"), {
-        reply_markup: buildProposalKeyboard(matchId, slots, langB),
-      }),
-    );
-  }
-  await Promise.all(sends);
-}
-
-/** Send iteration 3 — Web App Calendar button to both users. */
-async function sendCalendarIteration(
-  api: Api<RawApi>,
-  matchId: string,
-): Promise<void> {
-  const webAppUrl = env.WEBAPP_URL;
-
-  await prisma.match.update({
-    where: { id: matchId },
-    data: { schedulingIteration: 3 },
-  });
-
-  const match = await prisma.match.findUnique({
-    where: { id: matchId },
-    select: {
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
-    },
-  });
-  if (!match) return;
-
-  const langA = (match.userA.language ?? "en") as Language;
-  const langB = (match.userB.language ?? "en") as Language;
-  const url = `${webAppUrl}?match=${matchId}`;
 
   const sends: Array<Promise<unknown>> = [];
   if (isTelegramTarget(match.userA.telegramId)) {
     sends.push(
       api.sendMessage(Number(match.userA.telegramId), t(langA, "matchScheduleIter3"), {
-        reply_markup: buildCalendarKeyboard(url, langA),
+        reply_markup: buildCalendarKeyboard(calendarUrl(matchId, langA), langA),
       }),
     );
   }
   if (isTelegramTarget(match.userB.telegramId)) {
     sends.push(
       api.sendMessage(Number(match.userB.telegramId), t(langB, "matchScheduleIter3"), {
-        reply_markup: buildCalendarKeyboard(url, langB),
+        reply_markup: buildCalendarKeyboard(calendarUrl(matchId, langB), langB),
       }),
     );
   }
   await Promise.all(sends);
 }
 
-/** Callback handler for `sched:pick:*`. */
-export async function handleSchedulePick(ctx: BotContext): Promise<void> {
-  const data = ctx.callbackQuery?.data;
-  if (!data?.startsWith("sched:pick:")) return;
-
-  const parts = data.split(":");
-  const matchId = parts[2];
-  const idxRaw = parts[3];
-  if (!matchId || idxRaw === undefined) return;
-
-  await ctx.answerCallbackQuery();
-
-  const idx = Number(idxRaw);
-  if (!Number.isInteger(idx) || idx < 0) return;
-
-  const match = await prisma.match.findUnique({
-    where: { id: matchId },
-    select: {
-      id: true,
-      userAId: true,
-      userBId: true,
-      status: true,
-      schedulingIteration: true,
-      proposedTimes: true,
-      pickedTimeA: true,
-      pickedTimeB: true,
-    },
-  });
-  if (!match || match.status !== "negotiating") return;
-
-  // Resolve the index into the actual slot. Out-of-bounds = stale button
-  // (e.g. a different iteration's keyboard tapped after `proposedTimes` was
-  // overwritten); silently ignore.
-  if (idx >= match.proposedTimes.length) return;
-  const picked = match.proposedTimes[idx]!;
-
-  const user = await prisma.user.findUnique({
-    where: { telegramId: BigInt(ctx.from!.id) },
-    select: { id: true },
-  });
-  if (!user) return;
-
-  const isA = user.id === match.userAId;
-  const isB = user.id === match.userBId;
-  if (!isA && !isB) return;
-
-  await prisma.match.update({
-    where: { id: match.id },
-    data: isA ? { pickedTimeA: picked } : { pickedTimeB: picked },
-  });
-
-  const lang = ctx.session.language;
-  await ctx.reply(
-    t(lang, "matchSchedulePickedPrefix") + formatSlotLabel(picked, lang),
-  );
-
-  // Reload and evaluate overlap
-  const updated = await prisma.match.findUnique({
-    where: { id: match.id },
-    select: { pickedTimeA: true, pickedTimeB: true, schedulingIteration: true },
-  });
-  if (!updated?.pickedTimeA || !updated.pickedTimeB) {
-    await ctx.reply(t(lang, "matchScheduleWaitingPeer"));
-    return;
-  }
-
-  if (updated.pickedTimeA.getTime() === updated.pickedTimeB.getTime()) {
-    await startVenueNegotiation(ctx.api, match.id, updated.pickedTimeA);
-    return;
-  }
-
-  // No overlap → advance iteration.
-  await ctx.api.sendMessage(ctx.chat!.id, t(lang, "matchScheduleNoOverlap"));
-  await startScheduling(ctx.api, match.id);
+function calendarUrl(matchId: string, lang: Language): string {
+  return `${env.WEBAPP_URL}?match=${matchId}&lang=${lang}`;
 }
 
 export type CalendarPickResult =
@@ -313,29 +171,56 @@ export type CalendarPickResult =
         | "user-not-found"
         | "not-participant";
     }
-  | { ok: true; awaitingPeer: boolean; bothPicked: boolean };
+  | {
+      ok: true;
+      mySlots: string[];
+      peerSlots: string[];
+      agreedTime: string | null;
+      /**
+       * Set when the post-update intersection has *more than one* shared
+       * slot. The Mini App shows a "pick the final one" confirm card to
+       * the actor; tapping a slot triggers a re-POST with that single
+       * iso, which collapses the intersection to size 1 and auto-locks.
+       * Empty / single-element intersections never produce candidates
+       * (the empty case has nothing to confirm; the single case auto-locks).
+       */
+      overlapCandidates: string[];
+      bothPicked: boolean;
+    };
 
 /**
- * Apply an iter-3 calendar slot pick. Shared between two callers:
- *   - The legacy `web_app_data` handler (Mini Apps opened via reply keyboard
- *     or inline mode — currently unused but kept for forward compatibility).
- *   - The `POST /v1/calendar/pick` HTTP endpoint, used when the Mini App is
- *     opened via inline keyboard button (the actual production path; Telegram's
- *     `WebApp.sendData` is silently a no-op for that launch context, hence the
- *     HTTP endpoint).
+ * Apply a calendar update for one side. Replaces that side's
+ * availability set with `pickedIsos` and routes on the post-update
+ * intersection size:
  *
- * Validates match state + slot allowlist, records the pick, and on overlap
- * advances to venue negotiation. On a single-side pick the user is DM'd a
- * "waiting on peer" hint via the bot api.
+ *   - **0 overlaps**: nothing locks. If this was the actor's first
+ *     non-empty submission and the peer hasn't picked yet, DM the peer
+ *     once with the calendar button. If both sides now have non-empty
+ *     sets that don't intersect, DM both about the miss so neither
+ *     stays in the dark waiting.
+ *   - **1 overlap**: auto-lock that slot and advance to venue
+ *     negotiation (the "instant agree" fast path).
+ *   - **>1 overlaps**: do NOT auto-lock — return `overlapCandidates`
+ *     so the Mini App can show a confirm card. The actor picks the
+ *     final slot (single re-POST), which collapses to a 1-overlap and
+ *     hits the lock path. The asymmetry "initiator offers, responder
+ *     decides" is a deliberate UX rule (PRODUCT_SPEC.md §3.6).
+ *
+ * Empty `pickedIsos` is allowed — that's the user clearing their
+ * availability before reopening the picker.
  */
-export async function processCalendarSlotPick(
+export async function processCalendarSlotsUpdate(
   api: Api<RawApi>,
   telegramId: bigint,
   matchId: string,
-  pickedIso: string,
+  pickedIsos: string[],
 ): Promise<CalendarPickResult> {
-  const picked = new Date(pickedIso);
-  if (Number.isNaN(picked.getTime())) return { ok: false, reason: "invalid-iso" };
+  const picks: Date[] = [];
+  for (const iso of pickedIsos) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return { ok: false, reason: "invalid-iso" };
+    picks.push(d);
+  }
 
   const match = await prisma.match.findUnique({
     where: { id: matchId },
@@ -344,18 +229,19 @@ export async function processCalendarSlotPick(
       userAId: true,
       userBId: true,
       status: true,
-      schedulingIteration: true,
       proposedTimes: true,
-      pickedTimeA: true,
-      pickedTimeB: true,
+      availableTimesA: true,
+      availableTimesB: true,
+      userA: { select: { telegramId: true, language: true } },
+      userB: { select: { telegramId: true, language: true } },
     },
   });
   if (!match) return { ok: false, reason: "match-not-found" };
-  if (match.status !== "negotiating" || match.schedulingIteration !== 3) {
-    return { ok: false, reason: "wrong-state" };
-  }
-  if (!match.proposedTimes.some((slot) => slot.getTime() === picked.getTime())) {
-    return { ok: false, reason: "invalid-slot" };
+  if (match.status !== "negotiating") return { ok: false, reason: "wrong-state" };
+
+  const allowed = new Set(match.proposedTimes.map((d) => d.getTime()));
+  for (const p of picks) {
+    if (!allowed.has(p.getTime())) return { ok: false, reason: "invalid-slot" };
   }
 
   const user = await prisma.user.findUnique({
@@ -368,56 +254,260 @@ export async function processCalendarSlotPick(
   const isB = user.id === match.userBId;
   if (!isA && !isB) return { ok: false, reason: "not-participant" };
 
+  // Deduplicate + sort ascending so the array on disk is stable and the
+  // "earliest common slot" rule is straight-forward downstream.
+  const dedupedSorted = Array.from(
+    new Map(picks.map((d) => [d.getTime(), d])).values(),
+  ).sort((a, b) => a.getTime() - b.getTime());
+
+  const actorPrev = isA ? match.availableTimesA : match.availableTimesB;
+  const wasMineEmpty = actorPrev.length === 0;
+  const peerArr = isA ? match.availableTimesB : match.availableTimesA;
+
   await prisma.match.update({
     where: { id: match.id },
-    data: isA ? { pickedTimeA: picked } : { pickedTimeB: picked },
+    data: isA
+      ? { availableTimesA: dedupedSorted }
+      : { availableTimesB: dedupedSorted },
   });
 
-  const updated = await prisma.match.findUnique({
-    where: { id: match.id },
-    select: { pickedTimeA: true, pickedTimeB: true },
-  });
+  // Compute intersection from the just-written values + the peer's
+  // existing array. Prisma can't atomically compute it for us so we
+  // do it in Node.
+  const peerSet = new Set(peerArr.map((d) => d.getTime()));
+  const intersection = dedupedSorted
+    .filter((d) => peerSet.has(d.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
 
-  if (!updated?.pickedTimeA || !updated.pickedTimeB) {
-    const lang = (user.language ?? "en") as Language;
-    await api
-      .sendMessage(Number(telegramId), t(lang, "matchScheduleWaitingPeer"))
-      .catch(() => {});
-    return { ok: true, awaitingPeer: true, bothPicked: false };
+  const peerLang = ((isA ? match.userB.language : match.userA.language) ?? "en") as Language;
+  const peerTelegramId = isA ? match.userB.telegramId : match.userA.telegramId;
+  const actorLang = (user.language ?? "en") as Language;
+  const actorTelegramId = telegramId;
+
+  if (intersection.length === 1) {
+    const agreed = intersection[0]!;
+    await startVenueNegotiation(api, match.id, agreed);
+    return {
+      ok: true,
+      mySlots: dedupedSorted.map((d) => d.toISOString()),
+      peerSlots: peerArr.map((d) => d.toISOString()),
+      agreedTime: agreed.toISOString(),
+      overlapCandidates: [],
+      bothPicked: true,
+    };
   }
 
-  // In iter-3 we treat the *earliest common slot* as agreed — the Mini App
-  // can refine the protocol later. For now, if both users submit the same
-  // ISO timestamp we're done; otherwise we keep iteration 3 open.
-  if (updated.pickedTimeA.getTime() === updated.pickedTimeB.getTime()) {
-    await startVenueNegotiation(api, match.id, updated.pickedTimeA);
+  if (intersection.length > 1) {
+    // Multiple shared slots — let the actor pick the final one via the
+    // Mini App confirm card. Don't DM yet; the actor is still in the
+    // Mini App and the next POST will resolve to a single overlap.
+    return {
+      ok: true,
+      mySlots: dedupedSorted.map((d) => d.toISOString()),
+      peerSlots: peerArr.map((d) => d.toISOString()),
+      agreedTime: null,
+      overlapCandidates: intersection.map((d) => d.toISOString()),
+      bothPicked: true,
+    };
   }
 
-  return { ok: true, awaitingPeer: false, bothPicked: true };
+  // intersection.length === 0
+  if (
+    wasMineEmpty &&
+    dedupedSorted.length > 0 &&
+    peerArr.length === 0
+  ) {
+    // Actor's first non-empty submission AND peer hasn't picked yet.
+    // Ping peer once with the calendar button + send the actor a
+    // confirmation receipt that lands behind the (still-open) Mini App
+    // so it's visible the moment they close it. Subsequent updates rely
+    // on the Mini App's polling + the match-nudge cron.
+    const sends: Array<Promise<unknown>> = [];
+    if (isTelegramTarget(peerTelegramId)) {
+      sends.push(
+        api
+          .sendMessage(Number(peerTelegramId), t(peerLang, "matchSchedulePeerProposed"), {
+            reply_markup: buildCalendarKeyboard(calendarUrl(matchId, peerLang), peerLang),
+          })
+          .catch(() => {}),
+      );
+    }
+    if (isTelegramTarget(actorTelegramId)) {
+      sends.push(
+        api
+          .sendMessage(
+            Number(actorTelegramId),
+            t(actorLang, "matchScheduleSavedConfirmation"),
+          )
+          .catch(() => {}),
+      );
+    }
+    await Promise.all(sends);
+  } else if (
+    dedupedSorted.length > 0 &&
+    peerArr.length > 0 &&
+    !sameSet(dedupedSorted, actorPrev)
+  ) {
+    // Idempotency note: re-saving the *same* set after a prior no-overlap
+    // state would otherwise re-DM the peer on every redundant Save tap.
+    // Gate on actor's set actually changing.
+    // Both sides have submitted, but no shared slot exists. The actor
+    // sees the counter-proposal state inside the Mini App; the peer needs
+    // the Telegram nudge because their partner changed the negotiation.
+    const sends: Array<Promise<unknown>> = [];
+    if (isTelegramTarget(peerTelegramId)) {
+      sends.push(
+        api
+          .sendMessage(Number(peerTelegramId), t(peerLang, "matchSchedulePeerSuggestedAlternative"), {
+            reply_markup: buildCalendarKeyboard(calendarUrl(matchId, peerLang), peerLang),
+          })
+          .catch(() => {}),
+      );
+    }
+    await Promise.all(sends);
+  }
+
+  return {
+    ok: true,
+    mySlots: dedupedSorted.map((d) => d.toISOString()),
+    peerSlots: peerArr.map((d) => d.toISOString()),
+    agreedTime: null,
+    overlapCandidates: [],
+    bothPicked: peerArr.length > 0 && dedupedSorted.length > 0,
+  };
+}
+
+/** Treat two `Date[]` as set-equal under `getTime()` semantics. */
+function sameSet(a: Date[], b: Date[]): boolean {
+  if (a.length !== b.length) return false;
+  const ai = new Set(a.map((d) => d.getTime()));
+  for (const d of b) if (!ai.has(d.getTime())) return false;
+  return true;
 }
 
 /**
- * Consume `web_app_data` from the Calendar Mini App (legacy path: only fires
- * for Mini Apps opened via reply keyboard / inline mode). Production path is
- * the HTTP `POST /v1/calendar/pick` endpoint — see `processCalendarSlotPick`.
+ * Read calendar state for the Mini App's GET /v1/calendar/state endpoint.
+ * Returns the slot allowlist plus *both* sides' selections so the Mini
+ * App can render peer-only / mine / overlap visuals and decide whether
+ * to show the "your partner suggested times" banner.
+ */
+export type CalendarStateResult =
+  | { ok: false; reason: "match-not-found" | "wrong-state" | "user-not-found" | "not-participant" }
+  | {
+      ok: true;
+      proposedTimes: string[];
+      mySlots: string[];
+      peerSlots: string[];
+      agreedTime: string | null;
+      isFirstMover: boolean;
+    };
+
+export async function getCalendarState(
+  telegramId: bigint,
+  matchId: string,
+): Promise<CalendarStateResult> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: {
+      userAId: true,
+      userBId: true,
+      status: true,
+      proposedTimes: true,
+      availableTimesA: true,
+      availableTimesB: true,
+      agreedTime: true,
+    },
+  });
+  if (!match) return { ok: false, reason: "match-not-found" };
+
+  // Reading is allowed for `negotiating` (the active state) and the
+  // brief moment after agreement before the venue flow lands. Anything
+  // beyond that — completed, cancelled, expired — surfaces as
+  // wrong-state so the Mini App shows "calendar closed".
+  if (
+    match.status !== "negotiating" &&
+    match.status !== "negotiating_venue" &&
+    match.status !== "scheduled"
+  ) {
+    return { ok: false, reason: "wrong-state" };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (!user) return { ok: false, reason: "user-not-found" };
+
+  const isA = user.id === match.userAId;
+  const isB = user.id === match.userBId;
+  if (!isA && !isB) return { ok: false, reason: "not-participant" };
+
+  const mine = isA ? match.availableTimesA : match.availableTimesB;
+  const peer = isA ? match.availableTimesB : match.availableTimesA;
+
+  return {
+    ok: true,
+    proposedTimes: match.proposedTimes.map((d) => d.toISOString()),
+    mySlots: mine.map((d) => d.toISOString()),
+    peerSlots: peer.map((d) => d.toISOString()),
+    agreedTime: match.agreedTime?.toISOString() ?? null,
+    isFirstMover: peer.length === 0,
+  };
+}
+
+/**
+ * Stale-callback fallback. Pre-2026-05 `negotiating` matches were sent
+ * inline-keyboard buttons with `sched:pick:*` callback data. Rather
+ * than silently swallowing taps from in-flight matches mid-deploy, we
+ * acknowledge the click and re-deliver the calendar Mini App button.
+ */
+export async function handleSchedulePick(ctx: BotContext): Promise<void> {
+  const data = ctx.callbackQuery?.data;
+  if (!data?.startsWith("sched:pick:")) return;
+  await ctx.answerCallbackQuery();
+
+  const matchId = data.split(":")[2];
+  if (!matchId) return;
+
+  const lang = ctx.session.language;
+  await ctx.reply(t(lang, "matchScheduleIter3"), {
+    reply_markup: buildCalendarKeyboard(calendarUrl(matchId, lang), lang),
+  });
+}
+
+/**
+ * Legacy `web_app_data` consumer. Mini Apps opened from a reply
+ * keyboard or inline mode deliver picks via this channel; the
+ * production launch path (InlineKeyboardButton's `web_app` field)
+ * uses the HTTP endpoint instead because `Telegram.WebApp.sendData`
+ * is silently a no-op there. Kept for forward compatibility.
  */
 export async function handleCalendarWebAppData(ctx: BotContext): Promise<void> {
   const dataStr = ctx.message?.web_app_data?.data;
   if (!dataStr) return;
+  if (!ctx.from?.id) return;
 
-  let parsed: { matchId?: string; pickedIso?: string };
+  let parsed: { matchId?: string; pickedIsos?: string[]; pickedIso?: string };
   try {
     parsed = JSON.parse(dataStr);
   } catch {
     return;
   }
-  if (!parsed.matchId || !parsed.pickedIso) return;
-  if (!ctx.from?.id) return;
+  if (!parsed.matchId) return;
 
-  await processCalendarSlotPick(
+  // Accept either the new array shape or a single ISO from older
+  // Mini App bundles still in the wild.
+  const isos = Array.isArray(parsed.pickedIsos)
+    ? parsed.pickedIsos
+    : typeof parsed.pickedIso === "string"
+      ? [parsed.pickedIso]
+      : null;
+  if (!isos) return;
+
+  await processCalendarSlotsUpdate(
     ctx.api,
     BigInt(ctx.from.id),
     parsed.matchId,
-    parsed.pickedIso,
+    isos,
   );
 }

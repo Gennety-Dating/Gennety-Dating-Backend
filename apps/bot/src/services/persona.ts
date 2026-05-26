@@ -64,15 +64,18 @@ export interface PersonaWebhookPayload {
  * `data.attributes.payload.data.attributes.reference-id` — we use it to
  * resolve the inquiry to our DB user row. Conventionally our `User.id`.
  *
- * When `BOT_USERNAME` is set we also pass `redirect-uri=https://t.me/<bot>`
- * so Persona's "you're done" page bounces the user back to the bot chat
- * (Telegram's universal links open the native app on mobile, the web app
- * on desktop). The DB-side activation still happens via the webhook path
- * — the redirect is purely UX so users don't have to manually find the
- * bot tab again. Webhook delay-vs-redirect race: usually the bot's
- * "✅ Verification complete" DM arrives before the user finishes the
- * redirect, but if it doesn't, the user just sees the persisted CTA still
- * waiting until the webhook lands.
+ * When `BOT_USERNAME` is set we also pass
+ * `redirect-uri=https://t.me/<bot>?start=verify_done` so Persona's "you're
+ * done" page bounces the user back to the bot chat AND triggers a
+ * `/start verify_done` deep-link payload that the bot uses to auto-poll
+ * the verification status (`services/verification-poller.ts`). Without
+ * the `?start=…` part the user would land in the chat with nothing
+ * happening, having to scroll to the original CTA and tap "I'm done"
+ * manually.
+ *
+ * The DB-side activation still happens via the webhook path — the
+ * redirect + auto-poll are purely UX so users don't have to babysit
+ * verification.
  */
 export function buildPersonaHostedUrl(referenceId: string): string {
   if (!env.PERSONA_TEMPLATE_ID || !env.PERSONA_ENVIRONMENT_ID) {
@@ -84,7 +87,7 @@ export function buildPersonaHostedUrl(referenceId: string): string {
     "reference-id": referenceId,
   });
   if (env.BOT_USERNAME) {
-    params.set("redirect-uri", `https://t.me/${env.BOT_USERNAME}`);
+    params.set("redirect-uri", `https://t.me/${env.BOT_USERNAME}?start=verify_done`);
   }
   return `${env.PERSONA_HOSTED_URL_BASE}?${params.toString()}`;
 }

@@ -2,7 +2,7 @@ import type { Api } from "grammy";
 import { prisma } from "@gennety/db";
 import { env } from "../config.js";
 import { compareFaces } from "./face-match.js";
-import { downloadSelfie } from "./storage.js";
+import { downloadSelfie, downloadTelegramFile } from "./storage.js";
 
 /**
  * Photo-upload gate: enforces that any photo a verified user adds to their
@@ -119,22 +119,14 @@ export async function gateProfilePhoto(
  * are stored as `file_id` strings (not Supabase paths). Returns `null` on
  * any failure — the bot caller treats that as "skip the gate" (fail-open),
  * matching the storage-side gate's behavior.
+ *
+ * Thin wrapper over `storage.downloadTelegramFile` so the actual fetch
+ * lives in exactly one place — historically this had its own duplicate
+ * implementation that drifted from the verification-pipeline path.
  */
 export async function fetchTelegramFileBuffer(
   api: Api,
   fileId: string,
 ): Promise<Buffer | null> {
-  if (!env.BOT_TOKEN) return null;
-  try {
-    const file = await api.getFile(fileId);
-    if (!file.file_path) return null;
-    const url = `https://api.telegram.org/file/bot${env.BOT_TOKEN}/${file.file_path}`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const arrayBuf = await res.arrayBuffer();
-    return Buffer.from(arrayBuf);
-  } catch (err) {
-    console.warn(`${LOG_PREFIX} fetchTelegramFileBuffer failed`, { fileId, err });
-    return null;
-  }
+  return downloadTelegramFile(api, fileId);
 }

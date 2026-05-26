@@ -66,6 +66,12 @@ interface SeedUserOpts {
   age?: number;
   status?: "onboarding" | "active" | "paused";
   onboardingStep?: "consent" | "language" | "conversational" | "completed";
+  verificationStatus?:
+    | "unverified"
+    | "pending"
+    | "pending_review"
+    | "verified"
+    | "rejected";
 }
 
 export async function seedUser(opts: SeedUserOpts = {}) {
@@ -81,6 +87,7 @@ export async function seedUser(opts: SeedUserOpts = {}) {
       age: opts.age ?? 22,
       status: opts.status ?? "active",
       onboardingStep: opts.onboardingStep ?? "completed",
+      verificationStatus: opts.verificationStatus ?? "unverified",
       language: "en",
     },
   });

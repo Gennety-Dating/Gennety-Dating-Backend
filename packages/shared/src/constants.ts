@@ -22,6 +22,10 @@ export const OTP_LENGTH = 6;
 export const MIN_PHOTOS = 2;
 export const MAX_PHOTOS = 4;
 
+/** Telegram Live Photo profile-media limits (Bot API 10.0) */
+export const LIVE_PHOTO_MAX_DURATION_SECONDS = 10;
+export const LIVE_PHOTO_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+
 /** Age boundaries */
 export const MIN_AGE = 18;
 export const MAX_AGE = 35;

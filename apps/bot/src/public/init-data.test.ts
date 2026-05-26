@@ -35,7 +35,8 @@ function buildInitData(
   const secretKey = crypto.createHmac("sha256", "WebAppData").update(BOT_TOKEN).digest();
   const hash = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
 
-  params.set("hash", overrides.badHash ? hash.replace(/[0-9a-f]/i, "0") : hash);
+  const badHash = hash.startsWith("0") ? `1${hash.slice(1)}` : `0${hash.slice(1)}`;
+  params.set("hash", overrides.badHash ? badHash : hash);
   return params.toString();
 }
 

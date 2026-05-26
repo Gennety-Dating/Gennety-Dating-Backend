@@ -258,4 +258,9 @@ describe("getFallbackMessage", () => {
     const msg = getFallbackMessage("", "uk", 1);
     expect(msg).toMatch(/Гей/);
   });
+
+  it("supports German and Polish", () => {
+    expect(getFallbackMessage("Max", "de", 1)).toContain("Profil");
+    expect(getFallbackMessage("Ania", "pl", 1)).toContain("profil");
+  });
 });

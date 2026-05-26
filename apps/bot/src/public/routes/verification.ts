@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { prisma } from "@gennety/db";
 import { env } from "../../config.js";
 import { requireAuth } from "../auth-middleware.js";
@@ -15,7 +15,8 @@ const urlLimiter = rateLimit({
   limit: 10,
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  keyGenerator: (req): string => `persona-url:${req.userId ?? req.ip ?? "anon"}`,
+  keyGenerator: (req): string =>
+    `persona-url:${req.userId ?? ipKeyGenerator(req.ip ?? "") ?? "anon"}`,
   message: { error: "Too many verification URL requests, slow down." },
 });
 

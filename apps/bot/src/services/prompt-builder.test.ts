@@ -12,6 +12,9 @@ vi.mock("@gennety/db", () => ({
     user: {
       findUnique: vi.fn(),
     },
+    match: {
+      findFirst: vi.fn(),
+    },
   },
 }));
 
@@ -32,10 +35,12 @@ import {
 
 const mockKnowledge = prisma.systemKnowledge.findMany as ReturnType<typeof vi.fn>;
 const mockUserFind = prisma.user.findUnique as ReturnType<typeof vi.fn>;
+const mockMatchFindFirst = prisma.match.findFirst as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
   clearKnowledgeCache();
+  mockMatchFindFirst.mockResolvedValue(null);
 });
 
 describe("fetchKnowledgeBase", () => {
@@ -170,5 +175,40 @@ describe("buildSystemPrompt", () => {
     const prompt = await buildSystemPrompt(BigInt(22222));
     expect(prompt).toContain("Preferred language: ru");
     expect(prompt).toContain("Respond in the user's preferred language (ru)");
+  });
+
+  it("includes pending rejection follow-up for a proposed self-decline", async () => {
+    mockKnowledge.mockResolvedValue([]);
+    mockMatchFindFirst.mockResolvedValue({ id: "match-1" });
+
+    mockUserFind.mockResolvedValue({
+      id: "uid-A",
+      firstName: "Alice",
+      universityDomain: "stanford.edu",
+      status: "active",
+      language: "en",
+      matchesAsA: [{ status: "proposed", agreedTime: null, venueName: null }],
+      matchesAsB: [],
+    });
+
+    const prompt = await buildSystemPrompt(BigInt(12345));
+
+    expect(mockMatchFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: { in: ["proposed", "cancelled", "expired"] },
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              userAId: "uid-A",
+              acceptedByA: false,
+              rejectionReasonA: null,
+            }),
+          ]),
+        }),
+      }),
+    );
+    expect(prompt).toContain("Pending Rejection Follow-up");
+    expect(prompt).toContain("match-1");
+    expect(prompt).toContain("voice note transcript");
   });
 });

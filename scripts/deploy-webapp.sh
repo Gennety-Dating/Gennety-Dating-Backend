@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Deploy Mini App (calendar) bundle to the production droplet.
+# Deploy Telegram Mini App static bundles to the production droplet.
+#
+# Canonical production deploy/runbook: ../deploy.md
+# This script is only the Mini App static-bundle deploy path.
 #
 # Builds apps/webapp/ via Vite and rsyncs the dist/ to /var/www/dating-app/
 # on the DO droplet, where Caddy serves it under
@@ -24,5 +27,6 @@ rsync -avz --delete \
   apps/webapp/dist/ \
   "$SERVER:$REMOTE_PATH"
 
-echo "→ Done. Smoke test:"
+echo "→ Done. Smoke tests:"
 echo "   curl -sI https://dating-calendar.gennety.com | head -1"
+echo "   curl -sI https://dating-calendar.gennety.com/onboarding.html | head -1"

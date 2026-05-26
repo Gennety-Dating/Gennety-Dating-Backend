@@ -8,6 +8,8 @@ import {
   MAX_AGE,
   MAX_BIO_LENGTH,
   MAX_MAJOR_LENGTH,
+  normalizeProfileMedia,
+  profilePhotoMedia,
 } from "@gennety/shared";
 import { env } from "../../config.js";
 import { requireAuth } from "../auth-middleware.js";
@@ -23,11 +25,14 @@ import {
   uploadProfilePhoto,
 } from "../../services/storage.js";
 import { gateProfilePhoto } from "../../services/face-match-gate.js";
+import { triggerVerificationRerun } from "../../services/verification-pipeline.js";
 import {
   injectSystemMessage,
   runAgentTurn,
 } from "../../services/onboarding-agent.js";
 import { buildInterviewState, loadStateContext } from "./onboarding-state.js";
+import { getBotApi } from "../server.js";
+import { profileMediaToJson } from "../../services/profile-media-json.js";
 
 export const meRouter: Router = Router();
 
@@ -503,9 +508,10 @@ meRouter.post(
 
     const profile = await prisma.profile.findUnique({
       where: { userId: req.userId! },
-      select: { photos: true },
+      select: { photos: true, profileMedia: true },
     });
     const existing = profile?.photos ?? [];
+    const existingMedia = normalizeProfileMedia(profile?.profileMedia ?? [], existing);
     if (existing.length >= MAX_PHOTOS) {
       res.status(409).json({ error: "Photo limit reached", max: MAX_PHOTOS });
       return;
@@ -545,6 +551,7 @@ meRouter.post(
     }
 
     const nextPhotos = [...existing, uploadedPath];
+    const nextMedia = [...existingMedia, profilePhotoMedia(uploadedPath)];
     // Append the gate's per-photo score in lockstep with `photos[]` so the
     // admin dashboard can spot a specific weak photo. `null` (gate didn't
     // run — e.g. unverified user, or fail-open) is preserved as such.
@@ -562,13 +569,29 @@ meRouter.post(
 
     await prisma.profile.upsert({
       where: { userId: req.userId! },
-      update: { photos: nextPhotos, photoFaceScores: nextScores },
+      update: {
+        photos: nextPhotos,
+        profileMedia: profileMediaToJson(nextMedia),
+        photoFaceScores: nextScores,
+      },
       create: {
         userId: req.userId!,
         photos: nextPhotos,
+        profileMedia: profileMediaToJson(nextMedia),
         photoFaceScores: nextScores,
       },
     });
+
+    // The single-photo gate above re-checked just THIS frame against the
+    // verified selfie, but the verification status (`verified` /
+    // `pending_review` / `rejected`) is a function of the WHOLE photo
+    // array. After any add/delete the status can drift — e.g. swapping
+    // out a borderline photo should be able to lift `pending_review`,
+    // and adding a no-face group shot to a `rejected` profile shouldn't
+    // change the verdict but mustn't leave the score map misaligned
+    // either. Fire-and-forget the pipeline; idempotency markers are
+    // cleared inside the helper.
+    queueVerificationRerun(req.userId!);
 
     const photosResponse = await buildPhotosResponse(nextPhotos);
 
@@ -624,16 +647,18 @@ meRouter.delete(
       where: { id: req.userId! },
       select: {
         status: true,
-        profile: { select: { photos: true, photoFaceScores: true } },
+        profile: { select: { photos: true, profileMedia: true, photoFaceScores: true } },
       },
     });
     const photos = user.profile?.photos ?? [];
+    const media = normalizeProfileMedia(user.profile?.profileMedia ?? [], photos);
     if (index >= photos.length) {
       res.status(404).json({ error: "Photo not found" });
       return;
     }
 
     const nextPhotos = [...photos.slice(0, index), ...photos.slice(index + 1)];
+    const nextMedia = [...media.slice(0, index), ...media.slice(index + 1)];
     if (nextPhotos.length < MIN_PHOTOS && user.status === "active") {
       res.status(409).json({ error: "Minimum photos required", min: MIN_PHOTOS });
       return;
@@ -656,9 +681,37 @@ meRouter.delete(
 
     await prisma.profile.update({
       where: { userId: req.userId! },
-      data: { photos: nextPhotos, photoFaceScores: nextScores },
+      data: {
+        photos: nextPhotos,
+        profileMedia: profileMediaToJson(nextMedia),
+        photoFaceScores: nextScores,
+      },
     });
+
+    // After the photo array is committed: re-run the verification pipeline
+    // so the verificationStatus reflects the new set. Fire-and-forget; the
+    // photo-edit response shouldn't block on Persona/Rekognition latency.
+    queueVerificationRerun(req.userId!);
 
     res.json(await buildPhotosResponse(nextPhotos));
   },
 );
+
+/**
+ * Fire-and-forget wrapper around `triggerVerificationRerun` that swallows
+ * the bot-API-not-wired case (express may boot in tests without grammY).
+ * Errors land in stdout — they must NOT bubble back into the photo-edit
+ * response or a Persona outage would show up as a failed photo upload.
+ */
+function queueVerificationRerun(userId: string): void {
+  const api = getBotApi();
+  if (!api) {
+    // No bot api wired — happens in unit-test boots and pre-startup.
+    // The verification pipeline can't fetch Telegram-hosted photos
+    // without it, so skip the rerun rather than half-fail.
+    return;
+  }
+  void triggerVerificationRerun(userId, api).catch((err) => {
+    console.error("[/v1/me/photos] verification rerun failed:", err);
+  });
+}

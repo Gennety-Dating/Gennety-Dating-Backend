@@ -2,8 +2,9 @@ import { Composer } from "grammy";
 import { prisma } from "@gennety/db";
 import type { BotContext } from "../../session.js";
 import { handleMatchDecision } from "./decision.js";
+import { handleDeclineReasonCallback } from "./decline-feedback.js";
 import { handleSchedulePick, handleCalendarWebAppData } from "./scheduler.js";
-import { handleReportOpen, handleReportText } from "./report.js";
+import { handleReportOpen, handleReportCategory, handleReportSkip, handleReportText } from "./report.js";
 import { handleVenueLocation, handleVenueVibe } from "./venue-negotiation.js";
 
 /**
@@ -26,6 +27,12 @@ matchingRouter.use(async (ctx, next) => {
 
   const data = ctx.callbackQuery?.data;
 
+  // Decline feedback quick-reason callbacks.
+  if (data?.startsWith("mdr:") || data?.startsWith("match:decline_reason:")) {
+    await handleDeclineReasonCallback(ctx);
+    return;
+  }
+
   // Match callbacks: Accept / Decline
   if (data?.startsWith("match:accept:") || data?.startsWith("match:decline:")) {
     await handleMatchDecision(ctx);
@@ -41,6 +48,14 @@ matchingRouter.use(async (ctx, next) => {
   // Report callbacks: open the report dialogue from the post-match card
   if (data?.startsWith("report:open:")) {
     await handleReportOpen(ctx);
+    return;
+  }
+  if (data?.startsWith("rc:") || data?.startsWith("report:category:")) {
+    await handleReportCategory(ctx);
+    return;
+  }
+  if (data?.startsWith("rs:") || data?.startsWith("report:skip:")) {
+    await handleReportSkip(ctx);
     return;
   }
 

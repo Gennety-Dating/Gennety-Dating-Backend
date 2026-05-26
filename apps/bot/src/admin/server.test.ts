@@ -105,6 +105,8 @@ const ENDPOINTS = [
   "/admin/analytics/funnel",
   "/admin/analytics/matches",
   "/admin/analytics/no-match-notices",
+  "/admin/reports/stats",
+  "/admin/reports",
   "/admin/users",
   `/admin/users/${MOCK_USER.id}`,
 ];
@@ -250,5 +252,147 @@ describe("POST /admin/users/:id/rerun-verification", () => {
       .post(`/admin/users/00000000-0000-0000-0000-000000000099/rerun-verification`)
       .set(AUTH);
     expect(res.status).toBe(404);
+  });
+});
+
+describe("GET /admin/reports", () => {
+  it("returns paginated reports with moderation context for both users", async () => {
+    const findMany = (prisma.report as unknown as { findMany: ReturnType<typeof vi.fn> })
+      .findMany;
+    const count = (prisma.report as unknown as { count: ReturnType<typeof vi.fn> }).count;
+
+    findMany.mockResolvedValueOnce([
+      {
+        id: "report-1",
+        tier: 3,
+        rawText: "He threatened me after the date.",
+        reasonSummary: "Threatening behavior after the date",
+        adminReviewed: false,
+        createdAt: new Date("2026-05-10T12:00:00Z"),
+        reporter: {
+          id: "user-reporter",
+          firstName: "Alice",
+          surname: "Smith",
+          telegramId: 123456789n,
+          email: "alice@stanford.edu",
+          status: "active",
+          verificationStatus: "verified",
+          isEmailVerified: true,
+          strikes: 0,
+          profile: {
+            height: 165,
+            hobbies: ["jazz", "running"],
+            partnerPreferences: "Curious\nKind",
+            psychologicalSummary: "Structured, reflective, direct communicator.",
+            negativeConstraints: "Smokers",
+            ageRangeMin: 20,
+            ageRangeMax: 27,
+            photos: ["a.jpg", "b.jpg"],
+          },
+        },
+        reported: {
+          id: "user-reported",
+          firstName: "Bob",
+          surname: "Stone",
+          telegramId: 987654321n,
+          email: "bob@berkeley.edu",
+          status: "pending_investigation",
+          verificationStatus: "pending_review",
+          isEmailVerified: true,
+          strikes: 2,
+          profile: {
+            height: 182,
+            hobbies: ["boxing"],
+            partnerPreferences: "Outgoing, witty",
+            psychologicalSummary: null,
+            negativeConstraints: "Long-distance; flaky",
+            ageRangeMin: 19,
+            ageRangeMax: 25,
+            photos: ["x.jpg"],
+          },
+        },
+        match: {
+          id: "match-12345678-abcdef",
+          status: "completed",
+        },
+      },
+    ]);
+    count.mockResolvedValueOnce(1);
+
+    const res = await request(app)
+      .get("/admin/reports?limit=20&offset=0&tier=3&reviewed=false")
+      .set(AUTH);
+
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(1);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0]).toMatchObject({
+      id: "report-1",
+      tier: 3,
+      adminReviewed: false,
+      reporter: {
+        telegramId: "123456789",
+        email: "alice@stanford.edu",
+        status: "active",
+        verificationStatus: "verified",
+        isEmailVerified: true,
+        profile: {
+          partnerPreferences: ["Curious", "Kind"],
+          negativeConstraints: ["Smokers"],
+          photos: ["a.jpg", "b.jpg"],
+        },
+      },
+      reported: {
+        telegramId: "987654321",
+        email: "bob@berkeley.edu",
+        status: "pending_investigation",
+        verificationStatus: "pending_review",
+        strikes: 2,
+        profile: {
+          partnerPreferences: ["Outgoing", "witty"],
+          negativeConstraints: ["Long-distance", "flaky"],
+          photos: ["x.jpg"],
+        },
+      },
+      match: {
+        id: "match-12345678-abcdef",
+        status: "completed",
+      },
+    });
+  });
+});
+
+describe("PATCH /admin/reports/:id/review", () => {
+  it("marks a report as reviewed", async () => {
+    const findUnique = (prisma.report as unknown as { findUnique: ReturnType<typeof vi.fn> })
+      .findUnique;
+    const update = (prisma.report as unknown as { update: ReturnType<typeof vi.fn> }).update;
+
+    findUnique.mockResolvedValueOnce({ id: "report-1" });
+
+    const res = await request(app)
+      .patch("/admin/reports/report-1/review")
+      .set(AUTH);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "report-1" },
+      data: { adminReviewed: true },
+    });
+  });
+
+  it("returns 404 for unknown report id", async () => {
+    const findUnique = (prisma.report as unknown as { findUnique: ReturnType<typeof vi.fn> })
+      .findUnique;
+
+    findUnique.mockResolvedValueOnce(null);
+
+    const res = await request(app)
+      .patch("/admin/reports/missing-report/review")
+      .set(AUTH);
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/not found/i);
   });
 });

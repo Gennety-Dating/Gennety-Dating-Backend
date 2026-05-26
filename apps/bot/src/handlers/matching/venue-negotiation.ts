@@ -18,11 +18,12 @@
  */
 
 import type { Api, RawApi } from "grammy";
-import { Keyboard } from "grammy";
-import type { ReplyKeyboardMarkup } from "grammy/types";
+import { InlineKeyboard, Keyboard } from "grammy";
+import type { InlineKeyboardMarkup, ReplyKeyboardMarkup } from "grammy/types";
 import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
+import { env } from "../../config.js";
 import { parseVibe, mergeParsed } from "../../services/vibe-parser.js";
 import {
   midpoint,
@@ -30,21 +31,21 @@ import {
   venueSearchRadiusMeters,
   type LatLng,
 } from "../../services/geo.js";
-import { pickVenueAtMidpoint } from "../../services/venue.js";
+import { pickVenueAtMidpoint, type Venue } from "../../services/venue.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import { generateAndSaveWingmanHints } from "../../services/wingman-hint.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
 
 /**
  * Build the reply keyboard that surfaces Telegram's `request_location`
- * button. We ship a one-shot keyboard (`one_time_keyboard: true`) so it
- * disappears after the user taps it — location sharing is a single event.
+ * button. Kept exported for the legacy code path / tests; the live
+ * concierge prompt now uses the Mini App map picker instead.
  *
- * NB: grammY's `Keyboard.build()` returns the `KeyboardButton[][]` rows array,
- * NOT a full `ReplyKeyboardMarkup` object. Telegram rejects that with
- * `400: object expected as reply markup`. The Keyboard *instance* itself
- * already has `keyboard` / `resize_keyboard` / `one_time_keyboard` populated
- * by the chained methods, so we serialise it explicitly.
+ * The keyboard is one-shot (`one_time_keyboard: true`) so it auto-hides
+ * after the user taps it. NB: grammY's `Keyboard.build()` returns the
+ * `KeyboardButton[][]` rows array, not a full `ReplyKeyboardMarkup` —
+ * Telegram rejects bare arrays with `400: object expected as reply
+ * markup`, so we serialise explicitly.
  */
 export function buildLocationRequestKeyboard(lang: Language): ReplyKeyboardMarkup {
   const kb = new Keyboard()
@@ -56,6 +57,43 @@ export function buildLocationRequestKeyboard(lang: Language): ReplyKeyboardMarku
     resize_keyboard: true,
     one_time_keyboard: true,
   };
+}
+
+/**
+ * Inline keyboard with a `web_app` button that opens the Location Mini
+ * App. Replaces the legacy `request_location` reply keyboard as the
+ * primary location-input affordance — the reply button is broken on
+ * Telegram Desktop (no GPS) and lets users only share their current
+ * GPS, not a metro stop or a friend's address. The Mini App supports:
+ *  - Type-and-pick autocomplete (Places searchText)
+ *  - Tap on map
+ *  - Drag the marker
+ *
+ * The `?match=…&lang=…` query lets the Mini App scope itself to this
+ * match without requiring the user to be in inline mode.
+ */
+export function buildLocationMapKeyboard(
+  matchId: string,
+  lang: Language,
+): InlineKeyboardMarkup {
+  const url = `${env.WEBAPP_URL}/location.html?match=${matchId}&lang=${lang}`;
+  const kb = new InlineKeyboard().webApp(t(lang, "venueConciergeBtnMap"), url);
+  return { inline_keyboard: kb.inline_keyboard };
+}
+
+function buildScheduledMapsKeyboard(venue: Venue, lang: Language): InlineKeyboardMarkup {
+  const url = buildVenueMapsUrl(venue);
+  const kb = new InlineKeyboard().url(t(lang, "matchScheduledBtnOpenMaps"), url);
+  return { inline_keyboard: kb.inline_keyboard };
+}
+
+function buildVenueMapsUrl(venue: Venue): string {
+  if (venue.googleMapsUri && /^https?:\/\//i.test(venue.googleMapsUri)) {
+    return venue.googleMapsUri;
+  }
+
+  const query = [venue.name, venue.address].filter(Boolean).join(", ");
+  return `https://maps.google.com/?q=${encodeURIComponent(query)}`;
 }
 
 /**
@@ -102,7 +140,7 @@ export async function startVenueNegotiation(
     sends.push(
       api.sendMessage(Number(match.userA.telegramId), t(langA, "venueConciergeIntro"), {
         parse_mode: "Markdown",
-        reply_markup: buildLocationRequestKeyboard(langA),
+        reply_markup: buildLocationMapKeyboard(matchId, langA),
       }),
     );
   }
@@ -110,11 +148,80 @@ export async function startVenueNegotiation(
     sends.push(
       api.sendMessage(Number(match.userB.telegramId), t(langB, "venueConciergeIntro"), {
         parse_mode: "Markdown",
-        reply_markup: buildLocationRequestKeyboard(langB),
+        reply_markup: buildLocationMapKeyboard(matchId, langB),
       }),
     );
   }
   await Promise.all(sends);
+}
+
+/**
+ * Send the side-aware "what's next" ACK after one of (vibeText | vibeLat+Lng)
+ * is saved on a `negotiating_venue` match. Picks one of three messages:
+ *   - both done                → `venueWaitingPeer` (waiting on partner)
+ *   - vibe done, no location   → `venueVibeNoted` + 🗺️ Pick on map button
+ *   - location done, no vibe   → `venueLocationNoted` (text, asks for vibe)
+ *
+ * Centralised here so the bot-message handlers and the Mini App POST
+ * route share the exact same logic — without it, picking location via
+ * the Mini App left the user with no chat-side cue, which read as the
+ * bot ignoring them.
+ *
+ * Returns the chosen i18n key so callers can chain remove_keyboard /
+ * other behaviour off the result if they want; passes-through any
+ * sendMessage failure as a swallowed warn.
+ */
+export async function sendVenuePostSaveAck(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  matchId: string,
+  side: "A" | "B",
+  lang: Language,
+): Promise<"venueWaitingPeer" | "venueVibeNoted" | "venueLocationNoted" | null> {
+  if (!isTelegramTarget(telegramId)) return null;
+
+  const m = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: {
+      vibeTextA: true,
+      vibeTextB: true,
+      vibeLatA: true,
+      vibeLngA: true,
+      vibeLatB: true,
+      vibeLngB: true,
+    },
+  });
+  if (!m) return null;
+
+  const hasVibe = side === "A" ? Boolean(m.vibeTextA) : Boolean(m.vibeTextB);
+  const hasLocation =
+    side === "A"
+      ? m.vibeLatA != null && m.vibeLngA != null
+      : m.vibeLatB != null && m.vibeLngB != null;
+
+  let key: "venueWaitingPeer" | "venueVibeNoted" | "venueLocationNoted";
+  let withMapButton = false;
+  if (hasVibe && hasLocation) {
+    key = "venueWaitingPeer";
+  } else if (hasVibe) {
+    key = "venueVibeNoted";
+    withMapButton = true; // user just saved vibe; surface map button next
+  } else {
+    key = "venueLocationNoted";
+  }
+
+  await api
+    .sendMessage(Number(telegramId), t(lang, key), {
+      // venueLocationNoted carries `*vibe*` markdown to bold the prompt;
+      // the others are plain but Markdown is safe (no offending chars).
+      parse_mode: "Markdown",
+      ...(withMapButton ? { reply_markup: buildLocationMapKeyboard(matchId, lang) } : {}),
+    })
+    .catch((err) => {
+      console.warn(`[venue-ack] sendMessage failed for ${telegramId}:`, err);
+    });
+
+  return key;
 }
 
 /**
@@ -138,21 +245,13 @@ export async function handleVenueLocation(ctx: BotContext): Promise<void> {
 
   const lang = ctx.session.language;
 
-  // Acknowledge. The choice of follow-up copy depends on whether the user
-  // has already sent their vibe text.
-  const refreshed = await prisma.match.findUnique({
-    where: { id: matchId },
-    select: {
-      vibeTextA: true,
-      vibeTextB: true,
-    },
-  });
-  const hasVibe =
-    side === "A" ? Boolean(refreshed?.vibeTextA) : Boolean(refreshed?.vibeTextB);
-
-  await ctx.reply(t(lang, hasVibe ? "venueWaitingPeer" : "venueLocationNoted"), {
-    reply_markup: { remove_keyboard: true },
-  });
+  await sendVenuePostSaveAck(
+    ctx.api,
+    BigInt(ctx.from!.id),
+    matchId,
+    side,
+    lang,
+  );
 
   await tryFinalize(ctx.api, matchId);
 }
@@ -191,21 +290,13 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
     await ctx.reply(t(lang, "venueSafetyOverride"));
   }
 
-  const refreshed = await prisma.match.findUnique({
-    where: { id: matchId },
-    select: {
-      vibeLatA: true,
-      vibeLngA: true,
-      vibeLatB: true,
-      vibeLngB: true,
-    },
-  });
-  const hasLocation =
-    side === "A"
-      ? refreshed?.vibeLatA != null && refreshed?.vibeLngA != null
-      : refreshed?.vibeLatB != null && refreshed?.vibeLngB != null;
-
-  await ctx.reply(t(lang, hasLocation ? "venueWaitingPeer" : "venueVibeNoted"));
+  await sendVenuePostSaveAck(
+    ctx.api,
+    BigInt(ctx.from!.id),
+    matchId,
+    side,
+    lang,
+  );
 
   await tryFinalize(ctx.api, matchId);
 }
@@ -298,6 +389,7 @@ export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<vo
       venueAddress: venue.address,
       venueLat: mid.lat,
       venueLng: mid.lng,
+      venueGoogleMapsUri: venue.googleMapsUri,
     },
   });
 
@@ -308,21 +400,36 @@ export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<vo
     console.warn(`[wingman] generation failed for match ${matchId}:`, err);
   });
 
-  const venueLabel = `${venue.name} — ${venue.address}`;
+  // Append the Google Maps deep-link on a new line when available so
+  // the user can tap to verify the venue exists / pre-check hours and
+  // commute. Telegram auto-linkifies bare URLs in plain text — no
+  // parse_mode needed (and we want to avoid Markdown escaping issues
+  // around place names containing `*` / `_`).
+  const venueLabel = venue.googleMapsUri
+    ? `${venue.name} — ${venue.address}\n${venue.googleMapsUri}`
+    : `${venue.name} — ${venue.address}`;
   const baseA = t(langA, "matchScheduled", { venue: venueLabel });
   const baseB = t(langB, "matchScheduled", { venue: venueLabel });
-  const { text: textA, entity: entA } = buildDateTimeEntity(baseA, match.agreedTime);
-  const { text: textB, entity: entB } = buildDateTimeEntity(baseB, match.agreedTime);
+  const { text: textA, entity: entA } = buildDateTimeEntity(baseA, match.agreedTime, langA);
+  const { text: textB, entity: entB } = buildDateTimeEntity(baseB, match.agreedTime, langB);
+  const mapsKeyboardA = buildScheduledMapsKeyboard(venue, langA);
+  const mapsKeyboardB = buildScheduledMapsKeyboard(venue, langB);
 
   const finalSends: Array<Promise<unknown>> = [];
   if (isTelegramTarget(match.userA.telegramId)) {
     finalSends.push(
-      api.sendMessage(Number(match.userA.telegramId), textA, { entities: [entA] }),
+      api.sendMessage(Number(match.userA.telegramId), textA, {
+        entities: [entA],
+        reply_markup: mapsKeyboardA,
+      }),
     );
   }
   if (isTelegramTarget(match.userB.telegramId)) {
     finalSends.push(
-      api.sendMessage(Number(match.userB.telegramId), textB, { entities: [entB] }),
+      api.sendMessage(Number(match.userB.telegramId), textB, {
+        entities: [entB],
+        reply_markup: mapsKeyboardB,
+      }),
     );
   }
   await Promise.all(finalSends);

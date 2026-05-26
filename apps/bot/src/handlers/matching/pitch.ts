@@ -2,10 +2,10 @@ import type { Api, RawApi } from "grammy";
 import type {
   InlineKeyboardMarkup,
   InlineKeyboardButton,
-  InputMediaPhoto,
+  MessageEntity,
 } from "grammy/types";
 import { prisma } from "@gennety/db";
-import { t, type Language } from "@gennety/shared";
+import { normalizeProfileMedia, t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { streamDraftsToChat } from "../../services/ai-stream.js";
 import {
@@ -18,6 +18,7 @@ import {
   appendCountdownPlate,
   PROPOSAL_TTL_MS,
 } from "../../utils/countdown-plate.js";
+import { sendProfileMediaCard } from "../../services/profile-media-dispatch.js";
 
 /**
  * Telegram media group caps at 10 items per request — we slice down to this
@@ -89,19 +90,56 @@ export function buildMatchKeyboard(
   };
 }
 
+/** Static fallback glyph rendered before the localised "Verified" label
+ *  when no `CUSTOM_EMOJI_VERIFIED_ID` is configured. We pick `✓` because
+ *  it has no skin-tone variant and reads cleanly across themes. */
+const VERIFIED_GLYPH = "✓";
+
+export interface PhotoCaption {
+  caption: string;
+  entities?: MessageEntity[];
+}
+
 /**
- * Build the `Name, Age` caption shown under the partner photo. Falls back
- * to just the name when age is missing (legacy rows pre-mandatory-age).
+ * Build the caption shown under the partner photo.
+ *
+ * - Always: `Name[, Age]` — name-only fallback for legacy rows pre-mandatory-age.
+ * - When `verified` is true, appends a second line with `✓ Verified` (localised).
+ *   The leading `✓` is wrapped in a `custom_emoji` MessageEntity if
+ *   `customEmojiVerifiedId` is set, so Premium clients render an animated
+ *   checkmark; everyone else sees the static glyph.
  */
-function buildPhotoCaption(
+export function buildPhotoCaption(
   lang: Language,
   firstName: string | null,
   age: number | null,
-): string {
+  options: { verified?: boolean; customEmojiVerifiedId?: string } = {},
+): PhotoCaption {
   const name = firstName?.trim() ?? "";
-  if (!name) return "";
-  if (age == null) return name;
-  return t(lang, "matchPhotoCaption", { name, age });
+  if (!name) return { caption: "" };
+
+  const headline = age == null ? name : t(lang, "matchPhotoCaption", { name, age });
+  if (!options.verified) return { caption: headline };
+
+  const label = t(lang, "matchVerifiedLabel");
+  const caption = `${headline}\n${VERIFIED_GLYPH} ${label}`;
+  if (!options.customEmojiVerifiedId) return { caption };
+
+  // The custom_emoji entity must cover an emoji-shaped glyph; `✓` works
+  // because Telegram treats it as the underlying display char. Premium
+  // clients fetch the pack document; non-Premium fall back to the glyph.
+  const offset = headline.length + 1; // skip headline + "\n"
+  return {
+    caption,
+    entities: [
+      {
+        type: "custom_emoji",
+        offset,
+        length: VERIFIED_GLYPH.length,
+        custom_emoji_id: options.customEmojiVerifiedId,
+      },
+    ],
+  };
 }
 
 /**
@@ -114,27 +152,48 @@ function buildPhotoCaption(
  * a stale/invalid `file_id` (e.g. user replaced their photos after the
  * match was scored) can't block the pitch dispatch.
  */
-async function sendPartnerPhotos(
+async function sendPartnerMedia(
   api: Api<RawApi>,
   chatId: number,
   photos: readonly string[],
-  caption: string,
+  profileMedia: unknown,
+  caption: PhotoCaption,
 ): Promise<void> {
-  if (photos.length === 0) return;
-  const slice = photos.slice(0, MAX_MEDIA_GROUP_SIZE);
+  const media = normalizeProfileMedia(profileMedia, photos).slice(0, MAX_MEDIA_GROUP_SIZE);
+  if (media.length === 0) return;
+  const { caption: text, entities } = caption;
   try {
-    if (slice.length === 1) {
-      await api.sendPhoto(chatId, slice[0]!, caption ? { caption } : {});
-      return;
-    }
-    const media: InputMediaPhoto[] = slice.map((fileId, i) => ({
-      type: "photo",
-      media: fileId,
-      ...(i === 0 && caption ? { caption } : {}),
-    }));
-    await api.sendMediaGroup(chatId, media);
+    await sendProfileMediaCard(api, chatId, media, {
+      ...(text ? { caption: text } : {}),
+      ...(text && entities?.length ? { caption_entities: entities } : {}),
+    });
   } catch (err) {
-    console.warn("sendPartnerPhotos failed, skipping photo card:", err);
+    console.warn("sendPartnerMedia failed, skipping photo card:", err);
+  }
+}
+
+/**
+ * Send the closing trust card — a blockquote-formatted note from the
+ * Gennety team explaining that the partner has cleared face-match
+ * verification. Only emitted when `partner.verificationStatus` is
+ * `verified`; unverified partners get no message (no shaming, matches
+ * PRODUCT_SPEC.md §1.4).
+ *
+ * Uses a `blockquote` MessageEntity instead of MarkdownV2 so the body
+ * text doesn't need character escaping.
+ */
+async function sendVerifiedTrustCard(
+  api: Api<RawApi>,
+  chatId: number,
+  lang: Language,
+): Promise<void> {
+  const text = t(lang, "matchVerifiedQuote");
+  try {
+    await api.sendMessage(chatId, text, {
+      entities: [{ type: "blockquote", offset: 0, length: text.length }],
+    });
+  } catch (err) {
+    console.warn("sendVerifiedTrustCard failed, skipping trust card:", err);
   }
 }
 
@@ -161,8 +220,9 @@ export async function sendMatchProposal(
           firstName: true,
           age: true,
           language: true,
+          verificationStatus: true,
           profile: {
-            select: { psychologicalSummary: true, photos: true },
+            select: { psychologicalSummary: true, photos: true, profileMedia: true },
           },
         },
       },
@@ -172,8 +232,9 @@ export async function sendMatchProposal(
           firstName: true,
           age: true,
           language: true,
+          verificationStatus: true,
           profile: {
-            select: { psychologicalSummary: true, photos: true },
+            select: { psychologicalSummary: true, photos: true, profileMedia: true },
           },
         },
       },
@@ -287,26 +348,46 @@ export async function sendMatchProposal(
 
   // Each user sees their PARTNER's photo + name/age caption — the visual
   // anchor for an Accept/Decline decision since there's no user-to-user
-  // chat. Caption uses the *recipient's* locale.
+  // chat. Caption uses the *recipient's* locale. The verified affordance
+  // describes the *partner's* state, so it gates on the partner's row.
   const photosForA = match.userB.profile?.photos ?? [];
   const photosForB = match.userA.profile?.photos ?? [];
-  const captionForA = buildPhotoCaption(langA, match.userB.firstName, match.userB.age);
-  const captionForB = buildPhotoCaption(langB, match.userA.firstName, match.userA.age);
+  const mediaForA = match.userB.profile?.profileMedia ?? [];
+  const mediaForB = match.userA.profile?.profileMedia ?? [];
+  const partnerBVerified = match.userB.verificationStatus === "verified";
+  const partnerAVerified = match.userA.verificationStatus === "verified";
+  const captionForA = buildPhotoCaption(langA, match.userB.firstName, match.userB.age, {
+    verified: partnerBVerified,
+    customEmojiVerifiedId: env.CUSTOM_EMOJI_VERIFIED_ID,
+  });
+  const captionForB = buildPhotoCaption(langB, match.userA.firstName, match.userA.age, {
+    verified: partnerAVerified,
+    customEmojiVerifiedId: env.CUSTOM_EMOJI_VERIFIED_ID,
+  });
 
   // M-17: skip mobile-only users — their pitch goes via the Expo push path,
   // not Telegram drafts. Sending to a negative chat id used to throw and
   // crash the entire weekly-batch dispatch loop.
+  //
+  // The verified trust card lands AFTER the pitch as the closing message —
+  // last argument the user reads before tapping Accept/Decline. Skipped
+  // entirely when the partner isn't `verified` so unverified partners
+  // get no negative signal.
   const sendA = (async () => {
     if (!isTelegramTarget(match.userA.telegramId)) return undefined;
     const chatA = Number(match.userA.telegramId);
-    await sendPartnerPhotos(api, chatA, photosForA, captionForA);
-    return stream(api, chatA, draftsA, { replyMarkup: kbA });
+    await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
+    const result = await stream(api, chatA, draftsA, { replyMarkup: kbA });
+    if (partnerBVerified) await sendVerifiedTrustCard(api, chatA, langA);
+    return result;
   })();
   const sendB = (async () => {
     if (!isTelegramTarget(match.userB.telegramId)) return undefined;
     const chatB = Number(match.userB.telegramId);
-    await sendPartnerPhotos(api, chatB, photosForB, captionForB);
-    return stream(api, chatB, draftsB, { replyMarkup: kbB });
+    await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
+    const result = await stream(api, chatB, draftsB, { replyMarkup: kbB });
+    if (partnerAVerified) await sendVerifiedTrustCard(api, chatB, langB);
+    return result;
   })();
   const [resA, resB] = await Promise.all([sendA, sendB]);
 

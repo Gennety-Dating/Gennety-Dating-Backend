@@ -222,3 +222,103 @@ function pickFirstString(
   }
   return null;
 }
+
+/**
+ * Result of looking up the most recent Persona inquiry for a given
+ * `reference-id`. Used by the bot's pull-fallback when the user taps
+ * "I'm done" — covers cases where the webhook hasn't landed yet (or
+ * never will, e.g. local dev without a public tunnel).
+ */
+export type LatestInquiryResult =
+  | {
+      ok: true;
+      /** `inq_xxx`, ready to feed into `fetchInquirySelfie` / pipeline. */
+      inquiryId: string;
+      /** Raw Persona status — caller maps it onto our verification flow. */
+      status: string;
+      /** When Persona created the inquiry. Used to dedupe / log. */
+      createdAt: string | null;
+    }
+  | { ok: true; inquiryId: null }
+  | {
+      ok: false;
+      error: "not_configured" | "api" | "timeout";
+    };
+
+interface PersonaInquiriesListResponse {
+  data?: Array<{
+    type: "inquiry";
+    id: string;
+    attributes: Record<string, unknown>;
+  }>;
+}
+
+/**
+ * Look up the most recent Persona inquiry whose `reference-id` matches
+ * `referenceId` (which we pass as our internal `User.id` when building the
+ * hosted-flow URL).
+ *
+ * Persona supports `filter[reference-id]=<id>` plus `sort=-created-at` —
+ * we pull the first row of that and return its `id` + `status`.
+ *
+ * Returns:
+ *   - `{ ok: true, inquiryId, status, createdAt }` — inquiry found.
+ *   - `{ ok: true, inquiryId: null }` — no inquiry yet (user opened the
+ *     flow but never started it, or Persona hasn't propagated yet).
+ *   - `{ ok: false, error }` — infra failure; caller should ask the user
+ *     to retry rather than silently failing.
+ *
+ * Never throws — branch on the discriminated `ok` field.
+ */
+export async function fetchLatestInquiryByReference(
+  referenceId: string,
+  options: FetchInquirySelfieOptions = {},
+): Promise<LatestInquiryResult> {
+  const apiKey = options.apiKey ?? env.PERSONA_API_KEY;
+  if (!apiKey) return { ok: false, error: "not_configured" };
+
+  const fetchFn = options.fetchFn ?? fetch;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const params = new URLSearchParams({
+      "filter[reference-id]": referenceId,
+      "page[size]": "1",
+      sort: "-created-at",
+    });
+    const url = `${PERSONA_API_BASE}/inquiries?${params.toString()}`;
+    const res = await fetchFn(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json",
+        "Persona-Version": PERSONA_API_VERSION,
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) return { ok: false, error: "api" };
+
+    const body = (await res.json()) as PersonaInquiriesListResponse;
+    const first = body.data?.[0];
+    if (!first) return { ok: true, inquiryId: null };
+
+    const status = typeof first.attributes.status === "string" ? first.attributes.status : "";
+    const createdAt =
+      typeof first.attributes["created-at"] === "string"
+        ? (first.attributes["created-at"] as string)
+        : null;
+
+    return { ok: true, inquiryId: first.id, status, createdAt };
+  } catch (err) {
+    clearTimeout(timer);
+    if ((err as { name?: string }).name === "AbortError") {
+      return { ok: false, error: "timeout" };
+    }
+    return { ok: false, error: "api" };
+  }
+}

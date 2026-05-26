@@ -9,9 +9,28 @@ import {
   PRE_DATE_WINGMAN_HOURS,
   generateIceBreakersPrompt,
 } from "@gennety/shared";
+import { env } from "../config.js";
 import { callOpenAIText } from "./openai.js";
 import { generateAndSaveWingmanHints } from "./wingman-hint.js";
 import { sendPushToUser } from "./push.js";
+
+/**
+ * Build the post-date feedback DM keyboard: two stacked buttons, form first.
+ * The form opens the Mini App (signed POST to `/v1/feedback/post-date`); the
+ * voice button drops the user into `awaiting_feedback` so the next voice
+ * note (or typed text) is captured.
+ *
+ * Inline `web_app` button labels can't carry custom_emoji entities, so the
+ * leading glyph in each label is plain Unicode — same constraint we hit on
+ * the main menu keyboard (PRODUCT_SPEC.md §2.1).
+ */
+function buildFeedbackKeyboard(matchId: string, lang: Language): InlineKeyboard {
+  const url = `${env.WEBAPP_FEEDBACK_URL}?match=${matchId}&lang=${lang}`;
+  return new InlineKeyboard()
+    .webApp(t(lang, "feedbackBtnForm"), url)
+    .row()
+    .text(t(lang, "feedbackBtnVoice"), `feedback:voice:${matchId}`);
+}
 
 /**
  * Date lifecycle cron — runs on a fixed interval (e.g. every 2 minutes).
@@ -44,10 +63,22 @@ const ICEBREAKER_TOPICS_UK = [
   "З ким би ти повечеряв — з будь-якої епохи?",
   "Чого хочеш навчитись цього року?",
 ];
+const ICEBREAKER_TOPICS_DE = [
+  "Was war das spontanste, was du je gemacht hast?",
+  "Mit wem würdest du gern essen gehen - egal aus welcher Zeit?",
+  "Was möchtest du dieses Jahr lernen?",
+];
+const ICEBREAKER_TOPICS_PL = [
+  "Jaka jest najbardziej spontaniczna rzecz, którą zrobiłeś/zrobiłaś?",
+  "Z kim poszedłbyś/poszłabyś na kolację - z dowolnej epoki?",
+  "Czego chcesz się nauczyć w tym roku?",
+];
 
 function icebreakerTopicsFallback(lang: Language): string[] {
   if (lang === "ru") return ICEBREAKER_TOPICS_RU;
   if (lang === "uk") return ICEBREAKER_TOPICS_UK;
+  if (lang === "de") return ICEBREAKER_TOPICS_DE;
+  if (lang === "pl") return ICEBREAKER_TOPICS_PL;
   return ICEBREAKER_TOPICS_EN;
 }
 
@@ -334,17 +365,27 @@ export async function runDateLifecycleTick(
     const langA = (match.userA.language ?? "en") as Language;
     const langB = (match.userB.language ?? "en") as Language;
 
-    const kbA = new InlineKeyboard().text("📝", `feedback:start:${match.id}`);
-    const kbB = new InlineKeyboard().text("📝", `feedback:start:${match.id}`);
+    const kbA = buildFeedbackKeyboard(match.id, langA);
+    const kbB = buildFeedbackKeyboard(match.id, langB);
+
+    // Bot API 7.6 message_effect — a soft "your moment matters" flourish on
+    // the prompt itself. Empty env falls through to no effect.
+    const effectId = env.MESSAGE_EFFECT_FEEDBACK_ID || undefined;
+    const optsA = {
+      reply_markup: kbA,
+      ...(effectId ? { message_effect_id: effectId } : {}),
+    };
+    const optsB = {
+      reply_markup: kbB,
+      ...(effectId ? { message_effect_id: effectId } : {}),
+    };
 
     // Per-leg .catch + telegramId guard so a blocked / mobile-only user
     // doesn't abort the loop and re-fire the prompt every 2 minutes.
     const feedbackSends: Array<Promise<unknown> | null> = [
       match.userA.telegramId > 0n
         ? api
-            .sendMessage(Number(match.userA.telegramId), t(langA, "feedbackAsk"), {
-              reply_markup: kbA,
-            })
+            .sendMessage(Number(match.userA.telegramId), t(langA, "feedbackInvitation"), optsA)
             .catch((err: unknown) =>
               console.warn(
                 `[date-lifecycle] feedback send failed for ${match.userA.telegramId}:`,
@@ -354,9 +395,7 @@ export async function runDateLifecycleTick(
         : null,
       match.userB.telegramId > 0n
         ? api
-            .sendMessage(Number(match.userB.telegramId), t(langB, "feedbackAsk"), {
-              reply_markup: kbB,
-            })
+            .sendMessage(Number(match.userB.telegramId), t(langB, "feedbackInvitation"), optsB)
             .catch((err: unknown) =>
               console.warn(
                 `[date-lifecycle] feedback send failed for ${match.userB.telegramId}:`,

@@ -1,7 +1,8 @@
 import { InlineKeyboard, InputMediaBuilder } from "grammy";
 import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
-import { t, escapeMd } from "@gennety/shared";
+import { normalizeProfileMedia, t, escapeMd } from "@gennety/shared";
+import { sendProfileMediaCard } from "../../services/profile-media-dispatch.js";
 
 /** Shared profile rendering logic. */
 async function renderMyProfile(ctx: BotContext): Promise<void> {
@@ -31,7 +32,15 @@ async function renderMyProfile(ctx: BotContext): Promise<void> {
 
   // Telegram media groups accept 2–10 items; a single photo goes via replyWithPhoto.
   const photos = user.profile?.photos ?? [];
-  if (photos.length === 1) {
+  const media = normalizeProfileMedia(user.profile?.profileMedia ?? [], photos);
+  const hasLivePhoto = media.some((item) => item.type === "live_photo");
+  if (hasLivePhoto && ctx.chat) {
+    try {
+      await sendProfileMediaCard(ctx.api, ctx.chat.id, media);
+    } catch {
+      // Stale file_ids — skip media and continue with text body.
+    }
+  } else if (photos.length === 1) {
     try {
       await ctx.replyWithPhoto(photos[0]!);
     } catch {

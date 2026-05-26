@@ -12,8 +12,12 @@ import { chatRouter } from "./routes/chat.js";
 import { matchesRouter } from "./routes/matches.js";
 import { countdownRouter } from "./routes/countdown.js";
 import { verificationRouter } from "./routes/verification.js";
+import { webRegistrationRouter } from "./routes/web-registration.js";
 import { createPersonaWebhookRouter } from "./routes/persona-webhook.js";
 import { createCalendarRouter } from "./routes/calendar.js";
+import { createFeedbackRouter } from "./routes/feedback.js";
+import { createLocationRouter } from "./routes/location.js";
+import { createTelegramOnboardingRouter } from "./routes/telegram-onboarding.js";
 
 /**
  * Public `/v1/*` HTTP API consumed by the Expo mobile app.
@@ -50,6 +54,9 @@ app.use(
 let injectedBotApi: Api<RawApi> | null = null;
 let personaRouter: ReturnType<typeof createPersonaWebhookRouter> | null = null;
 let calendarRouter: ReturnType<typeof createCalendarRouter> | null = null;
+let feedbackRouter: ReturnType<typeof createFeedbackRouter> | null = null;
+let locationRouter: ReturnType<typeof createLocationRouter> | null = null;
+let telegramOnboardingRouter: ReturnType<typeof createTelegramOnboardingRouter> | null = null;
 app.use("/v1/webhooks/persona", (req, res, next) => {
   if (!injectedBotApi) {
     res.status(503).json({ error: "Persona webhook not ready" });
@@ -75,12 +82,51 @@ app.use("/v1/calendar", (req, res, next) => {
   calendarRouter(req, res, next);
 });
 
+// Post-date feedback Mini App endpoint — same initData-HMAC auth as
+// /v1/calendar; not behind JWT for the same reason (the Mini App has only
+// the bot's secret, not a user JWT).
+app.use("/v1/feedback", (req, res, next) => {
+  if (!injectedBotApi) {
+    res.status(503).json({ error: "Feedback endpoint not ready" });
+    return;
+  }
+  if (!feedbackRouter) feedbackRouter = createFeedbackRouter(injectedBotApi);
+  feedbackRouter(req, res, next);
+});
+
+// Location Mini App — same initData-HMAC auth as /v1/calendar. Surfaces
+// Google Places search results to the picker UI so users can type an
+// address / metro station instead of (or in addition to) sharing their
+// raw GPS pin via Telegram's reply keyboard.
+app.use("/v1/location", (req, res, next) => {
+  if (!injectedBotApi) {
+    res.status(503).json({ error: "Location endpoint not ready" });
+    return;
+  }
+  if (!locationRouter) locationRouter = createLocationRouter(injectedBotApi);
+  locationRouter(req, res, next);
+});
+
+// Full-screen Telegram onboarding Mini App. Same TMA auth boundary as
+// calendar/location, but it can also dispatch the first post-handoff bot DM.
+app.use("/v1/telegram-onboarding", (req, res, next) => {
+  if (!injectedBotApi) {
+    res.status(503).json({ error: "Telegram onboarding endpoint not ready" });
+    return;
+  }
+  if (!telegramOnboardingRouter) {
+    telegramOnboardingRouter = createTelegramOnboardingRouter(injectedBotApi);
+  }
+  telegramOnboardingRouter(req, res, next);
+});
+
 // Liveness/readiness probe — unauthenticated, intentionally cheap.
 app.get("/v1/ping", (_req: Request, res: Response) => {
   res.json({ ok: true, now: new Date().toISOString() });
 });
 
 app.use("/v1/auth", authRouter);
+app.use("/v1/web-registration", webRegistrationRouter);
 // Mount /v1/me/verification BEFORE /v1/me so Express tries the more-specific
 // prefix first — both routers match `/v1/me/verification/*` otherwise.
 app.use("/v1/me/verification", verificationRouter);
@@ -136,4 +182,20 @@ export function __setPersonaBotApiForTests(api: Api<RawApi> | null): void {
   injectedBotApi = api;
   personaRouter = null;
   calendarRouter = null;
+  feedbackRouter = null;
+  locationRouter = null;
+  telegramOnboardingRouter = null;
+}
+
+/**
+ * Read the injected bot API so handlers that need to dispatch DMs / fetch
+ * Telegram-hosted media (e.g. the verification rerun trigger fired from
+ * `/v1/me/photos`) can reach the bot. Returns null when the API hasn't
+ * been wired yet — early in startup, in tests that boot the express app
+ * without the bot, or if `JWT_SECRET` was empty so `startPublicServer`
+ * never ran. Callers MUST handle the null branch (the rerun helper just
+ * skips and logs).
+ */
+export function getBotApi(): Api<RawApi> | null {
+  return injectedBotApi;
 }

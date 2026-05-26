@@ -1,12 +1,15 @@
 import type { MessageEntity } from "grammy/types";
+import type { Language } from "@gennety/shared";
 
 /**
  * Build a `date_time` MessageEntity for the scheduled-match confirmation.
  *
- * Telegram Bot API 9.5+ introduced the `date_time` entity type: the client
- * renders the wrapped substring in the user's local timezone and makes it
- * tappable (add-to-calendar). We append a placeholder token to the base
- * message and wrap that token in the entity.
+ * Telegram Bot API 9.5+ introduced the `date_time` entity type: tapping the
+ * wrapped substring opens the user's local-timezone add-to-calendar sheet
+ * driven by `unix_time`. The client does NOT auto-style the wrapped text
+ * (no underline / chip), so the wrapped substring must look obviously
+ * tappable on its own. We render a localized date string + leading 📅
+ * affordance and wrap the whole phrase as the entity's tap target.
  *
  * Reference: https://core.telegram.org/bots/api#messageentity
  *
@@ -15,35 +18,55 @@ import type { MessageEntity } from "grammy/types";
  * correct while keeping strict type checking elsewhere.
  */
 
-const PLACEHOLDER_TOKEN = "⏰";
+const RENDER_TZ = "Europe/Kyiv";
+const CALENDAR_AFFORDANCE = "📅 ";
+
+const LOCALE_TAGS: Record<Language, string> = {
+  en: "en-GB",
+  ru: "ru-RU",
+  uk: "uk-UA",
+  de: "de-DE",
+  pl: "pl-PL",
+};
 
 export interface DateTimeEntityResult {
   text: string;
   entity: MessageEntity;
 }
 
-/**
- * UTF-16 code-unit length — what Telegram uses to count `offset`/`length`
- * on entities. `string.length` already returns UTF-16 code units in JS.
- */
 function utf16Length(s: string): number {
   return s.length;
 }
 
+function renderDate(when: Date, language: Language): string {
+  const fmt = new Intl.DateTimeFormat(LOCALE_TAGS[language], {
+    weekday: "short",
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: RENDER_TZ,
+  });
+  return fmt.format(when);
+}
+
 /**
- * Append a clickable date_time token to `baseText` wrapped as a `date_time`
- * MessageEntity. The caller should send the returned `text` with the
- * returned `entity` in `entities: [entity]`.
+ * Append a clickable, localized date phrase to `baseText` and return it
+ * wrapped as a `date_time` MessageEntity. The caller should send the
+ * returned `text` with `entities: [entity]`.
  */
 export function buildDateTimeEntity(
   baseText: string,
   when: Date,
+  language: Language,
 ): DateTimeEntityResult {
   const separator = "\n\n";
+  const placeholder = `${CALENDAR_AFFORDANCE}${renderDate(when, language)}`;
   const prefix = `${baseText}${separator}`;
   const offset = utf16Length(prefix);
-  const length = utf16Length(PLACEHOLDER_TOKEN);
-  const text = `${prefix}${PLACEHOLDER_TOKEN}`;
+  const length = utf16Length(placeholder);
+  const text = `${prefix}${placeholder}`;
 
   // `date_time` entity carries the unix timestamp (seconds) in `unix_time`.
   // Confirmed empirically: Telegram rejects `timestamp` with

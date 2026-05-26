@@ -1,3 +1,4 @@
+import type { Api, RawApi } from "grammy";
 import { env } from "../config.js";
 
 /**
@@ -142,6 +143,59 @@ export async function downloadProfilePhoto(path: string): Promise<Buffer | null>
     const arrayBuf = await res.arrayBuffer();
     return Buffer.from(arrayBuf);
   } catch {
+    return null;
+  }
+}
+
+/**
+ * Download a profile-photo image regardless of where it's stored. The
+ * format of `pathOrFileId` discriminates the source:
+ *   - contains "/"  → Supabase Storage object path (`{userId}/{ts}.jpg`)
+ *   - no "/"        → Telegram `file_id`, fetched via Bot API
+ *
+ * The discriminator is unambiguous: Supabase paths are always
+ * `{userId}/{timestamp}.{ext}` and Telegram file_ids are base64-ish
+ * tokens with no slashes.
+ *
+ * Returns `null` on any failure (storage misconfigured, object missing,
+ * Telegram getFile error, network blip). Caller treats null the same way
+ * as the Supabase-only `downloadProfilePhoto` did — as
+ * `comparison_error` → user lands in `pending_review`.
+ *
+ * `api` is required even when the path turns out to be Supabase, so
+ * callers don't have to branch on the format themselves.
+ */
+export async function downloadProfileImage(
+  pathOrFileId: string,
+  api: Api<RawApi>,
+): Promise<Buffer | null> {
+  if (!pathOrFileId) return null;
+  if (pathOrFileId.includes("/")) {
+    return downloadProfilePhoto(pathOrFileId);
+  }
+  return downloadTelegramFile(api, pathOrFileId);
+}
+
+/**
+ * Download a Telegram-hosted file by `file_id`. Two-step: `getFile` to
+ * resolve the temporary `file_path`, then a plain HTTPS GET against the
+ * Bot API file endpoint. Single source of truth for Telegram file
+ * downloads — `face-match-gate.ts` and the diagnostic scripts both
+ * delegate here.
+ */
+export async function downloadTelegramFile(
+  api: Api<RawApi>,
+  fileId: string,
+): Promise<Buffer | null> {
+  try {
+    const file = await api.getFile(fileId);
+    if (!file.file_path) return null;
+    const url = `https://api.telegram.org/file/bot${api.token}/${file.file_path}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch (err) {
+    console.warn("[storage] downloadTelegramFile failed", { fileId, err });
     return null;
   }
 }

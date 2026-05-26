@@ -73,7 +73,7 @@ type UserRow = {
   gender: "male" | "female" | null;
   preference: "men" | "women" | "both" | null;
   major: string | null;
-  language: "en" | "ru" | "uk" | null;
+  language: "en" | "ru" | "uk" | "de" | "pl" | null;
   status: string;
   onboardingStep: string;
   platform: "telegram" | "mobile" | "both";
@@ -713,6 +713,8 @@ vi.mock("../services/storage.js", () => ({
   // import resolves.
   downloadSelfie: vi.fn(async () => null),
   downloadProfilePhoto: vi.fn(async () => Buffer.from("photo-bytes")),
+  downloadProfileImage: vi.fn(async () => Buffer.from("photo-bytes")),
+  downloadTelegramFile: vi.fn(async () => Buffer.from("photo-bytes")),
 }));
 
 vi.mock("../services/vibe-parser.js", () => ({

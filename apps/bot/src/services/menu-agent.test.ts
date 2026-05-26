@@ -253,7 +253,44 @@ describe("menu-agent record_rejection_feedback", () => {
     expect(appendNegativeConstraint).not.toHaveBeenCalled();
   });
 
-  it("refuses when the match is not cancelled", async () => {
+  it("persists when the first decliner is still in proposed state", async () => {
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "proposed",
+      acceptedByA: false,
+      acceptedByB: null,
+      rejectionReasonA: null,
+      rejectionReasonB: null,
+    });
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          {
+            id: "call-1",
+            name: "record_rejection_feedback",
+            args: { match_id: matchId, reason: "too quiet and reserved" },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("saved for next time"));
+
+    await runMenuAgentTurn(telegramId, "x", { fetchFn: mockFetch });
+
+    expect(prisma.match.update).toHaveBeenCalledWith({
+      where: { id: matchId },
+      data: { rejectionReasonA: "too quiet and reserved" },
+    });
+    expect(appendNegativeConstraint).toHaveBeenCalledWith(
+      "uid-A",
+      "too quiet and reserved",
+      "en",
+    );
+  });
+
+  it("refuses when the user has not personally declined", async () => {
     (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       userAId: "uid-A",
       userBId: "uid-B",
@@ -280,6 +317,7 @@ describe("menu-agent record_rejection_feedback", () => {
     await runMenuAgentTurn(telegramId, "x", { fetchFn: mockFetch });
 
     expect(prisma.match.update).not.toHaveBeenCalled();
+    expect(appendNegativeConstraint).not.toHaveBeenCalled();
   });
 
   it("is idempotent when a reason is already recorded", async () => {

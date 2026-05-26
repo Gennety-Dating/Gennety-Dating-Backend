@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Gennety · Post-date feedback</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/src/feedback.css" />
+  </head>
+  <body>
+    <main class="page" id="page" hidden>
+      <header class="hero">
+        <h1 id="hero-title">How was your date?</h1>
+        <p class="hero-sub" id="hero-sub">A few quick taps. The more honest, the better the next match.</p>
+      </header>
+
+      <section class="card" aria-labelledby="chem-label">
+        <div class="card-header">
+          <span class="card-num">1</span>
+          <h2 id="chem-label">Chemistry</h2>
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-track" id="slider-track">
+            <div class="slider-fill" id="slider-fill"></div>
+            <button class="slider-thumb" type="button" id="slider-thumb" aria-valuemin="1" aria-valuemax="10" aria-valuenow="5" role="slider"></button>
+          </div>
+          <div class="slider-meta">
+            <span class="slider-end" id="slider-end-low">🧊 cold</span>
+            <span class="slider-value" id="slider-value">5</span>
+            <span class="slider-end" id="slider-end-high">⚡ chemistry</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="sd-label">
+        <div class="card-header">
+          <span class="card-num">2</span>
+          <h2 id="sd-label">Second date?</h2>
+        </div>
+        <div class="segmented" role="tablist" id="sd-segmented">
+          <button class="segment" type="button" role="tab" data-value="yes" id="sd-yes">Yes</button>
+          <button class="segment" type="button" role="tab" data-value="maybe" id="sd-maybe">Maybe</button>
+          <button class="segment" type="button" role="tab" data-value="no" id="sd-no">No</button>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="notes-label">
+        <div class="card-header">
+          <span class="card-num">3</span>
+          <h2 id="notes-label">Anything else?</h2>
+        </div>
+        <textarea
+          id="notes"
+          class="notes"
+          maxlength="600"
+          rows="5"
+          aria-describedby="notes-counter"
+        ></textarea>
+        <div class="notes-meta">
+          <span class="notes-hint" id="notes-hint"></span>
+          <span class="notes-counter" id="notes-counter">0 / 600</span>
+        </div>
+      </section>
+
+      <p class="footer-note" id="footer-note"></p>
+    </main>
+
+    <div class="fallback" id="fallback" hidden>
+      <p id="fallback-msg">Open this from the post-date message in the bot.</p>
+    </div>
+
+    <script type="module" src="/src/feedback.ts"></script>
+  </body>
+</html>

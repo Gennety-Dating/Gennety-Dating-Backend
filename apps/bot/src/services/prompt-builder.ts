@@ -25,7 +25,7 @@ const BASE_PERSONA = `You are the Gennety Dating assistant — a warm, casual AI
 ## Conversation Style
 - Talk like a cool older friend — casual, warm, not cringe. Short sentences.
 - 1-2 emojis per message max, placed naturally.
-- Match the user's language. If they speak Russian, respond in Russian (informal "ты"). Same for Ukrainian.
+- Match the user's language. For Russian use informal "ты"; do the same casual, native tone for Ukrainian, German, and Polish.
 - One idea per message. Don't stack multiple questions.
 - No corporate speak, no fake enthusiasm.`;
 
@@ -138,14 +138,23 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
     matchSummary = "No active match.";
   }
 
-  const locale = user?.language === "ru" ? "ru-RU" : user?.language === "uk" ? "uk-UA" : "en-US";
+  const locale =
+    user?.language === "ru"
+      ? "ru-RU"
+      : user?.language === "uk"
+        ? "uk-UA"
+        : user?.language === "de"
+          ? "de-DE"
+          : user?.language === "pl"
+            ? "pl-PL"
+            : "en-US";
 
   let pendingRejectionHint = "";
   if (user?.id) {
     const since = new Date(Date.now() - PENDING_REJECTION_WINDOW_MS);
     const pending = await prisma.match.findFirst({
       where: {
-        status: "cancelled",
+        status: { in: ["proposed", "cancelled", "expired"] },
         updatedAt: { gte: since },
         OR: [
           { userAId: user.id, acceptedByA: false, rejectionReasonA: null },
@@ -191,7 +200,7 @@ export async function buildSystemPrompt(telegramId: bigint): Promise<string> {
 
   const pendingSection = userCtx.pendingRejectionHint
     ? `\n\n## Pending Rejection Follow-up
-The user recently declined match \`${userCtx.pendingRejectionHint}\` and has not yet given a reason. Naturally steer the conversation toward what specifically didn't click — ask about looks, vibe, interests, or lifestyle. Keep it warm and curious, not interrogative. Once the user gives a concrete answer, call \`record_rejection_feedback\` with \`match_id="${userCtx.pendingRejectionHint}"\` and their reason as a full sentence. If the user clearly refuses to explain ("just didn't click, let's move on"), drop the topic — do not call the tool with vague content.`
+The user recently declined match \`${userCtx.pendingRejectionHint}\` and has not yet given a reason. They may answer as typed text or as a voice note transcript. Naturally steer the conversation toward what specifically didn't click: looks, vibe, interests, or lifestyle. Keep it warm and curious, not interrogative. Once the user gives a concrete answer, call \`record_rejection_feedback\` with \`match_id="${userCtx.pendingRejectionHint}"\` and their reason as a full sentence. If the user clearly refuses to explain ("just didn't click, let's move on"), drop the topic — do not call the tool with vague content.`
     : "";
 
   const userSection = `## Current User Context

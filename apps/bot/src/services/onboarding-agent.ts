@@ -9,7 +9,6 @@ import {
   MAX_HISTORY_FOR_API,
   SUMMARIZE_THRESHOLD,
   KEEP_RECENT_MESSAGES,
-  MAGIC_CONTEXT_PROMPT,
   magicContextPrompt,
 } from "@gennety/shared";
 import { env } from "../config.js";
@@ -50,6 +49,64 @@ interface ChatCompletionResponse {
   }>;
 }
 
+function contextDumpInstruction(language: string | null | undefined): string {
+  switch (language) {
+    case "ru":
+      return (
+        "Скопируй промпт выше, вставь его в ChatGPT, Claude или любой другой AI-чат, " +
+        "а потом скинь мне полный ответ.\n\n" +
+        "Это простой анализ твоего психологического профиля — он помогает подобрать " +
+        "тебе пару. Это AI Dating App, и его смысл в том, что он находит максимально " +
+        "подходящего человека. Точно так же мы опрашиваем и всех остальных, чтобы " +
+        "при встрече у тебя не оказалось неожиданных red-флагов.\n\n" +
+        "Если Telegram разобьёт ответ на несколько сообщений, вставляй все части " +
+        "подряд и нажми Done, когда закончишь."
+      );
+    case "uk":
+      return (
+        "Скопіюй промпт вище, встав його в ChatGPT, Claude або будь-який інший AI-чат, " +
+        "а потім надішли мені повну відповідь.\n\n" +
+        "Це простий аналіз твого психологічного профілю — він допомагає підібрати " +
+        "тобі пару. Це AI Dating App, і його сенс у тому, що він знаходить максимально " +
+        "підходящу людину. Так само ми опитуємо й усіх інших, щоб при зустрічі у тебе " +
+        "не виявилось несподіваних red-флагів.\n\n" +
+        "Якщо Telegram розіб'є відповідь на кілька повідомлень, вставляй усі частини " +
+        "підряд і натисни Done, коли закінчиш."
+      );
+    case "de":
+      return (
+        "Kopiere den Prompt oben, füge ihn in ChatGPT, Claude oder einen anderen AI-Chat ein " +
+        "und schick mir danach die vollständige Antwort.\n\n" +
+        "Das ist ein kurzer Blick auf dein psychologisches Profil und hilft mir, dich mit " +
+        "jemandem wirklich Kompatiblem zu matchen. Genau das machen wir für alle, damit die " +
+        "offensichtlichen Red Flags schon gefiltert sind, wenn ihr euch trefft.\n\n" +
+        "Falls Telegram die Antwort in mehrere Nachrichten aufteilt, füge alle Teile nacheinander ein " +
+        "und tippe Done, wenn du fertig bist."
+      );
+    case "pl":
+      return (
+        "Skopiuj prompt powyżej, wklej go do ChatGPT, Claude albo innego czatu AI, " +
+        "a potem wyślij mi pełną odpowiedź.\n\n" +
+        "To szybki odczyt Twojego profilu psychologicznego, który pomaga dobrać Ci " +
+        "naprawdę kompatybilną osobę. Robimy to samo dla wszystkich, więc oczywiste red flagi " +
+        "są odfiltrowane jeszcze przed spotkaniem.\n\n" +
+        "Jeśli Telegram podzieli odpowiedź na kilka wiadomości, wklej wszystkie części po kolei " +
+        "i kliknij Done, gdy skończysz."
+      );
+    default:
+      return (
+        "Copy the prompt above, paste it into ChatGPT, Claude, or any AI chat you use, " +
+        "then send me the full response.\n\n" +
+        "It's a quick read on your psychological profile that helps me match you with " +
+        "someone genuinely compatible. That's the whole point of an AI Dating App — we " +
+        "do the same for everyone, so when you meet your match the obvious red flags " +
+        "are already filtered out.\n\n" +
+        "If Telegram splits the response into several messages, paste every part " +
+        "and tap Done when you're finished."
+      );
+  }
+}
+
 /** Result returned to the bot handler after one agent turn */
 export interface AgentTurnResult {
   reply: string;
@@ -83,12 +140,26 @@ export interface AgentDeps {
 // System Prompt
 // ---------------------------------------------------------------------------
 
-const SYSTEM_PROMPT = `You are the onboarding assistant for Gennety Dating — an AI-first matchmaking service for university students.
+/**
+ * Build the system prompt. When `emailAlreadyVerified` is true (mobile-first
+ * users, dev bypass via `DEV_OTP_BYPASS_TELEGRAM_IDS`, or any other path
+ * that pre-populates `User.isEmailVerified`), the email-verification rule is
+ * dropped from the static prompt entirely. Leaving it in caused the agent to
+ * drift back to "MUST provide corporate email" mid-conversation even after a
+ * separate `verifiedNote` told it to skip step 1, because the strict-rules
+ * line carried much more weight than the trailing override.
+ */
+function buildSystemPrompt(emailAlreadyVerified: boolean): string {
+  const emailRule = emailAlreadyVerified
+    ? "- Email verification has ALREADY been completed for this user before this conversation began. DO NOT ask the user for their email under ANY circumstances. DO NOT mention email verification. Skip step 1 of the Onboarding Flow entirely. Move directly to step 2 (profile basics)."
+    : `- The user MUST provide a corporate university email (domains: ${ALLOWED_EMAIL_DOMAINS.join(", ")}). Do NOT skip email verification.`;
+
+  return `You are the onboarding assistant for Gennety Dating — an AI-first matchmaking service for university students.
 
 Your mission: guide the user through the onboarding process via natural conversation. Extract the required information and use the provided tools to progress through each step.
 
 ## Strict Rules
-- The user MUST provide a corporate university email (domains: ${ALLOWED_EMAIL_DOMAINS.join(", ")}). Do NOT skip email verification.
+${emailRule}
 - Age MUST be between ${MIN_AGE} and ${MAX_AGE}. If the user gives an age outside this range, explain the restriction kindly.
 - NEVER create an in-app chat between users. This is a "Zero-Chat" philosophy app — we match people and schedule their first date, no messaging.
 - NEVER skip or shortcut any of the required information fields.
@@ -100,10 +171,39 @@ Before asking ANY question, scan the user's MOST RECENT message AND the full con
 When this happens:
 1. Extract every field that is clear and concrete (name, age, gender, preference, height, hobbies, partner preferences) and treat them as collected.
 2. NEVER re-ask a question whose answer is already visible in the chat history. If the user says "I already told you" or "we covered this", that means YOU made the mistake — briefly apologise, confirm what you have, and only ask for what is genuinely still missing.
-3. In your reply, confirm in ONE short bubble what you extracted ("got it: Alex, 22, into running and jazz — looking for a girl ✅"), then ask only for the missing pieces. Combining 1–2 missing fields in a single question is fine.
+3. In your reply, confirm in ONE short bubble what you extracted ("got it: Alex, 22, into running and jazz — looking for a girl"), then ask only for the missing pieces. Combining 1–2 missing fields in a single question is fine.
 4. Only ask for a field when you genuinely don't have a concrete value for it. Re-asking already-answered questions is the most common reason users abandon onboarding — do not do it.
 
 This rule overrides the apparent linearity of the flow below: you may skip ahead and harvest in any order, as long as every required field is collected before finalize_onboarding.
+
+### Concrete worked example (the "Ruslan" case)
+
+User's first reply after you ask for name + age:
+> Меня зовут Руслан, мне 21 год. Я ищу красивую, аккуратную и женственную
+> девушку. О себе: 1) Давно увлекаюсь конным спортом. 2) Учусь за границей,
+> но на лето приезжаю сюда. 3) Мой рост — 180 см.
+
+What you MUST extract from this single message:
+- first_name: Руслан
+- age: 21
+- gender: male — "Руслан" is an unambiguously male Russian first name. INFER from gendered first names (Александр, Анна, Виктория, Руслан, …); do NOT ask the user to repeat it.
+- preference: women — "ищу … девушку"
+- partner_preferences: "красивая, аккуратная, женственная"
+- hobbies: ["конный спорт"]
+- height: 180
+
+What you MUST do next: ONE short bubble acknowledging what you got, then ask only for what is genuinely missing (e.g. ethnicity if you still need it, or move directly to step 4 — request_context_dump). Do NOT issue a sequence of "а кого ты ищешь?", "а рост?", "а хобби?", "ещё хобби?", "а партнёр какой?". That sequence is the #1 reason users abandon onboarding.
+
+### FORBIDDEN follow-ups (these are bugs, not features)
+
+- After a clearly gendered first name → DO NOT ask "ты парень или девушка?" / "are you a guy or a girl?". Infer it from the name.
+- After "ищу девушку" / "ищу парня" / "ищу обоих" / "looking for a girl/guy/both" → DO NOT ask "кто тебе нравится?" again. Save the preference.
+- After ANY first hobby reply (one hobby, several, or "no hobbies") → DO NOT ask for another hobby. The first reply IS the answer.
+- After a height like "180 см" / "5'10\"" / "180" appears in any user message → DO NOT re-ask height.
+- After a partner-preferences sentence is given → DO NOT ask the user to elaborate or "tell me more".
+- After save_context_dump succeeds → move straight to request_photos. DO NOT re-ask any profile field.
+
+If you catch yourself drafting one of these forbidden questions, STOP, re-read the conversation history, and ask only for fields that are GENUINELY absent.
 
 ## Onboarding Flow
 You MUST collect ALL of the following before finalizing:
@@ -145,7 +245,7 @@ NEVER move to the next question or topic until the current one has a CONCRETE, S
 ### Required data quality standards:
 - **First name**: An actual name (not "lol", "test", "x")
 - **Age**: A number between ${MIN_AGE} and ${MAX_AGE}
-- **Gender**: A clear answer identifying the user as a man or a woman (in their own language). Internally map to the tool enum.
+- **Gender**: A clear answer identifying the user as a man or a woman (in their own language). If the user's first name is unambiguously gendered in their language (e.g. Александр/Руслан → male, Анна/Виктория → female, Михаил → male, Olga → female), INFER gender from the name and do NOT ask. Only ask when the name is gender-neutral or unknown to you. Internally map to the tool enum.
 - **Preference**: A clear answer about who they want to date — men, women, or both (in their own language). Internally map to the tool enum.
 - **Hobbies**: Whatever the user shares. One hobby is enough. "No hobbies" / "ничего особенного" is a valid answer — save it and move on. NEVER ask for additional hobbies after the first reply.
 - **Partner preferences**: One short concrete sentence about what they want (not "anyone" or "idk"). One sentence is plenty — don't ask for more detail once you have one.
@@ -159,24 +259,38 @@ If ANY required field is missing or vague, go back and collect it before saving.
 
 ## Conversation Style
 - Talk like a cool older friend — casual, warm, not cringe. Short sentences. Easy to scan.
-- No formal phrases: no "Здравствуйте", no "Пожалуйста", no corporate speak. Use "ты" (informal) in Russian/Ukrainian.
-- Use 1-2 emojis per message max, placed naturally. Never overload with emojis.
-- Russian/Ukrainian slang is welcome when natural: вайб, метч, рил, кринж, го.
+- No formal phrases: no "Здравствуйте", no "Пожалуйста", no corporate speak. Use an informal, natural tone in Russian/Ukrainian/German/Polish.
+- Emojis are OPTIONAL. Many messages should have ZERO emojis. When you do use one, ≤1 per message and only if it adds something the words don't.
+- DO NOT slap ✅ on every confirmation. Repeating the same ✅ on every reply is the #1 user-reported annoyance — it reads like a robotic "Complete" stamp. Rotate among nothing / different emojis (👌 🙌 🔥 🎯 🤝 ✨) only when one genuinely fits, and default to no emoji at all on routine acknowledgements. Never start a message with ✅.
+- Native slang is welcome when natural: вайб/метч in Russian or Ukrainian, casual "Match/Date" phrasing in German, and natural Polish dating slang where it fits.
 - One idea per message. Don't stack 3 questions in one bubble.
 - Lead with the action, not the explanation. Tell the user what to do first, then why (if needed).
 - Start with the Zero-Chat pitch: Gennety finds your match, proposes it, schedules the date — no swiping, no chatting. You just show up.
 - Then move into email verification.
 - You can combine related questions (e.g., "What's your name and how old are you?") but get clear answers before moving on.
 - Match the user's language. If they switch, you switch.
-- NEVER inject English words into non-English messages during onboarding. Specifically, when asking about gender or dating preference in Russian/Ukrainian (or any non-English language), do NOT write "male", "female", "men", "women", "both", or phrases like "ты male?" / "Male, female, or both?". Ask naturally in the user's language (e.g. in Russian: "Ты парень или девушка?", "Кто тебе нравится — парни, девушки или все?"; in Ukrainian: "Ти хлопець чи дівчина?", "Хто тобі подобається — хлопці, дівчата чи всі?"). Map the user's natural-language reply to the tool enum values internally — the enums (\`male\`/\`female\`, \`men\`/\`women\`/\`both\`) live only inside tool calls, never in chat messages.
+- NEVER inject English words into non-English messages during onboarding. Specifically, when asking about gender or dating preference in any non-English language, do NOT write "male", "female", "men", "women", "both", or mixed phrases like "ты male?" / "Male, female, or both?". Ask naturally in the user's language (e.g. Russian: "Ты парень или девушка?", "Кто тебе нравится — парни, девушки или все?"; Ukrainian: "Ти хлопець чи дівчина?", "Хто тобі подобається — хлопці, дівчата чи всі?"; German: "Bist du ein Mann oder eine Frau?", "Auf wen stehst du — Männer, Frauen oder beides?"; Polish: "Jesteś mężczyzną czy kobietą?", "Kto Ci się podoba — mężczyźni, kobiety czy obie opcje?"). Map the user's natural-language reply to the tool enum values internally — the enums (\`male\`/\`female\`, \`men\`/\`women\`/\`both\`) live only inside tool calls, never in chat messages.
 - If the user goes off-topic, gently nudge them back — don't lecture.
 - If a photo is rejected (no clear face), explain briefly and ask for another.
 - NEVER use robotic transitions like "Отлично! Переходим к следующему шагу." or fake enthusiasm: "Невероятно!", "Потрясающе!"
+
+## Handling Questions While Awaiting the Pasted AI Analysis
+
+Once you have called \`request_context_dump\`, the Magic Prompt is visible in the chat above the user. They will sometimes reply with a short clarifying question or comment instead of immediately pasting the AI's response — e.g. "why do I need to do this?", "is this safe?", "what's this analysis for?", "can you explain?".
+
+When that happens:
+- Answer warmly and briefly in the user's language. One short paragraph is enough.
+- Do NOT call \`request_context_dump\` again — the prompt is already shown above your previous message and re-issuing it just clutters the chat.
+- Do NOT call any other tools in this turn. Just reply.
+- End by inviting them to paste the AI's response when they're ready.
+
+Reference framing (adapt freely to the user's language and tone): it's a quick read on their psychological profile that helps you match them with someone genuinely compatible. We do the same for everyone, so when they meet their match the obvious red flags are already filtered out. Once they've pasted what their AI returned, you'll move on to photos.
 
 ## Important
 - Do NOT hallucinate or assume values. If the answer is ambiguous, ASK AGAIN — never guess.
 - Call tools when appropriate — don't just talk about doing things.
 - After finalize_onboarding, tell the user they're in and that you'll reach out when there's a match. Keep it brief.`;
+}
 
 // ---------------------------------------------------------------------------
 // Tool Definitions (OpenAI function calling schema)
@@ -250,17 +364,17 @@ const TOOLS = [
     function: {
       name: "save_context_dump",
       description:
-        "Process and save the raw LLM context dump the user pasted back from their ChatGPT/Claude. Call this when the user sends a long message that looks like a psychological profile analysis (contains sections like values, attachment style, fears, etc.).",
+        "Persist the long psychological analysis the user just pasted from their ChatGPT/Claude/etc. Call this when the user's MOST RECENT message looks like a real LLM-generated profile — sections like values, attachment style, communication style, ideal partner, dealbreakers, summary. The server reads the dump from the user's actual message; raw_dump is a hint only and may be omitted or summarized. Do NOT call this if the user's last message is a question, a one-liner, or anything other than a substantial pasted analysis.",
       parameters: {
         type: "object",
         properties: {
           raw_dump: {
             type: "string",
             description:
-              "The full text the user pasted — the output from their personal LLM.",
+              "Optional hint — first ~200 chars of the dump or empty. The server uses the user's actual latest message verbatim, so don't bother re-typing the whole thing here.",
           },
         },
-        required: ["raw_dump"],
+        required: [],
       },
     },
   },
@@ -334,6 +448,177 @@ const TOOLS = [
     },
   },
 ];
+
+const CONTEXT_DUMP_SAVED_MARKER = "[CONTEXT_DUMP_SAVED]";
+const CURRENT_ONBOARDING_STATE_MARKER = "[CURRENT_SAVED_ONBOARDING_STATE]";
+
+interface PersistedOnboardingState {
+  firstName?: string | null;
+  age?: number | null;
+  gender?: string | null;
+  preference?: string | null;
+  email?: string | null;
+  universityDomain?: string | null;
+  isEmailVerified?: boolean | null;
+  profile?: {
+    ethnicity?: string | null;
+    height?: number | null;
+    hobbies?: string[] | null;
+    partnerPreferences?: string | null;
+    photos?: string[] | null;
+  } | null;
+}
+
+function parseJsonObject(content: string | null): Record<string, unknown> | null {
+  if (!content) return null;
+  try {
+    const parsed = JSON.parse(content) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function toolResultSucceeded(content: string | null): boolean {
+  return parseJsonObject(content)?.success === true;
+}
+
+function hasSuccessfulToolResult(
+  history: ChatMessage[],
+  toolName: string,
+): boolean {
+  const toolNamesById = new Map<string, string>();
+
+  for (const message of history) {
+    if (message.role !== "assistant") continue;
+    for (const call of message.tool_calls ?? []) {
+      toolNamesById.set(call.id, call.function.name);
+    }
+  }
+
+  return history.some((message) => {
+    if (message.role !== "tool" || !message.tool_call_id) return false;
+    return (
+      toolNamesById.get(message.tool_call_id) === toolName &&
+      toolResultSucceeded(message.content)
+    );
+  });
+}
+
+function conversationSummarySaysContextDumpSaved(content: string): boolean {
+  if (!content.includes("[Conversation Summary]")) return false;
+  const lower = content.toLowerCase();
+  const mentionsContext =
+    lower.includes("save_context_dump") ||
+    lower.includes("context dump") ||
+    lower.includes("ai analysis") ||
+    lower.includes("psychological analysis");
+  const mentionsSuccess =
+    lower.includes("saved") ||
+    lower.includes("success") ||
+    lower.includes("analysed") ||
+    lower.includes("analyzed");
+  const mentionsMissing =
+    lower.includes("not saved") ||
+    lower.includes("has not") ||
+    lower.includes("missing") ||
+    lower.includes("still needs");
+
+  return mentionsContext && mentionsSuccess && !mentionsMissing;
+}
+
+function hasContextDumpSaved(history: ChatMessage[]): boolean {
+  if (
+    history.some(
+      (message) =>
+        message.role === "system" &&
+        typeof message.content === "string" &&
+        (message.content.includes(CONTEXT_DUMP_SAVED_MARKER) ||
+          conversationSummarySaysContextDumpSaved(message.content)),
+    )
+  ) {
+    return true;
+  }
+
+  return hasSuccessfulToolResult(history, "save_context_dump");
+}
+
+function contextDumpSavedSystemMessage(): ChatMessage {
+  return {
+    role: "system",
+    content:
+      `${CONTEXT_DUMP_SAVED_MARKER}: The user pasted the Magic Prompt / AI analysis, ` +
+      "save_context_dump succeeded, and the deep context is persisted. Do not ask for it again.",
+  };
+}
+
+function status(value: unknown): "saved" | "missing" {
+  if (typeof value === "string") return value.trim() ? "saved" : "missing";
+  if (typeof value === "number") return Number.isFinite(value) ? "saved" : "missing";
+  if (typeof value === "boolean") return value ? "saved" : "missing";
+  if (Array.isArray(value)) return value.length > 0 ? "saved" : "missing";
+  return value ? "saved" : "missing";
+}
+
+function buildCurrentSavedStateSnapshot(
+  user: PersistedOnboardingState | null | undefined,
+  contextDumpSaved: boolean,
+): ChatMessage {
+  const profile = user?.profile ?? null;
+  const hobbies = Array.isArray(profile?.hobbies) ? profile.hobbies : [];
+  const photos = Array.isArray(profile?.photos) ? profile.photos : [];
+  const emailVerified = Boolean(user?.isEmailVerified && user?.email);
+
+  const missing: string[] = [];
+  if (!emailVerified) missing.push("email_verification");
+  if (!user?.firstName) missing.push("first_name");
+  if (!user?.age) missing.push("age");
+  if (!user?.gender) missing.push("gender");
+  if (!user?.preference) missing.push("preference");
+  if (!profile?.height) missing.push("height");
+  if (!profile?.partnerPreferences) missing.push("partner_preferences");
+  if (!contextDumpSaved) missing.push("context_dump");
+  if (photos.length < MIN_PHOTOS) missing.push(`photos_${photos.length}/${MIN_PHOTOS}`);
+
+  const lines = [
+    CURRENT_ONBOARDING_STATE_MARKER,
+    "Use this database snapshot as the source of truth over chat memory.",
+    "Never re-ask a field marked saved here. If a saved field is not visible in the chat, still treat it as collected.",
+    `Email: ${emailVerified ? `verified:${user?.universityDomain ?? "domain_saved"}` : "missing"}`,
+    `Profile basics: first_name=${status(user?.firstName)}, age=${user?.age ?? "missing"}, gender=${user?.gender ?? "missing"}, preference=${user?.preference ?? "missing"}`,
+    `Extended profile: height=${profile?.height ?? "missing"}, ethnicity=${status(profile?.ethnicity)}, hobbies_count=${hobbies.length}, partner_preferences=${status(profile?.partnerPreferences)}`,
+    `Context dump: ${contextDumpSaved ? "saved" : "missing"}`,
+    `Photos: ${photos.length}/${MIN_PHOTOS} required minimum`,
+    `Missing next: ${missing.length ? missing.join(", ") : "none"}`,
+    "If Missing next is context_dump, call request_context_dump now instead of asking profile questions.",
+    "If Context dump is saved and Photos are missing, call request_photos. Finalize only after profile, context dump, and photos are complete.",
+  ];
+
+  return { role: "system", content: lines.join("\n") };
+}
+
+function withCurrentSavedStateSnapshot(
+  messages: ChatMessage[],
+  user: PersistedOnboardingState | null | undefined,
+  fullHistory: ChatMessage[],
+): ChatMessage[] {
+  const cleaned = messages.filter(
+    (message) =>
+      !(
+        message.role === "system" &&
+        typeof message.content === "string" &&
+        message.content.startsWith(CURRENT_ONBOARDING_STATE_MARKER)
+      ),
+  );
+  const snapshot = buildCurrentSavedStateSnapshot(user, hasContextDumpSaved(fullHistory));
+  let insertAt = 0;
+  while (insertAt < cleaned.length && cleaned[insertAt]?.role === "system") {
+    insertAt++;
+  }
+  return [...cleaned.slice(0, insertAt), snapshot, ...cleaned.slice(insertAt)];
+}
 
 // ---------------------------------------------------------------------------
 // Tool Executors
@@ -469,22 +754,21 @@ async function execVerifyOtp(
 
 async function execSaveContextDump(
   telegramId: bigint,
-  args: { raw_dump?: unknown },
+  _args: { raw_dump?: unknown },
   deps: AgentDeps,
+  latestUserMessage: string,
 ): Promise<string> {
-  if (typeof args.raw_dump !== "string") {
-    return JSON.stringify({
-      success: false,
-      error:
-        "Missing or invalid raw_dump argument. You must pass the user's pasted text as raw_dump. Do NOT call save_context_dump until the user has actually pasted their ChatGPT/Claude analysis.",
-    });
-  }
-  const raw = args.raw_dump.trim();
+  // Truth source is the user's actual latest message, not the LLM-supplied
+  // `raw_dump`. LLMs reliably auto-correct / rephrase long text passed
+  // through tool args (single-character drift broke the previous strict
+  // grounding check on real pastes). Hallucination is still blocked: if
+  // the user hasn't pasted anything substantial, length < 200 rejects.
+  const raw = latestUserMessage.trim();
   if (raw.length < 200) {
     return JSON.stringify({
       success: false,
       error:
-        "The text is too short to be a valid context dump. Ask the user to paste the full output from their ChatGPT/Claude.",
+        "The user's latest message is too short to be a real context dump. Ask them to paste the FULL output from their ChatGPT/Claude — not a summary or paraphrase.",
     });
   }
 
@@ -514,36 +798,66 @@ async function execSaveContextDump(
     success: true,
     message:
       "Context dump analysed and saved. Psychological profile and embedding generated. Proceed to photo upload.",
+    next_instruction:
+      "Context dump is now saved. Do not ask for profile fields again; call request_photos unless photos are already complete.",
   });
+}
+
+/**
+ * Scan user-authored messages for a clearly-stated height (cm). Used as a
+ * defense-in-depth check inside `execSaveProfileData`: if the user said
+ * "180 см" / "175 cm" / "5'10\"" in any prior message but the LLM tried to
+ * save without the height field, we'd silently drop a value the user already
+ * volunteered. Returning the matched value here lets the guard surface it
+ * back to the LLM as guidance.
+ *
+ * Conservative on purpose: only matches `<number><optional space>см|cm|sm`
+ * within the plausible 140–220 range. Things like "iPhone 14" or a year
+ * like "2024" don't match.
+ */
+function extractHeightFromHistory(history: ChatMessage[]): number | null {
+  // Note: cannot use \b after the unit because JS regex (without /u) treats
+  // Cyrillic letters as non-word, so "см\b" would never match. Use a
+  // negative lookahead against any letter (Latin or Cyrillic) instead.
+  const re = /(?<!\d)(1[4-9]\d|2[01]\d|220)\s*(?:см|cm|sm)(?![A-Za-zА-Яа-яЁё])/i;
+  for (const msg of history) {
+    if (msg.role !== "user" || typeof msg.content !== "string") continue;
+    const match = msg.content.match(re);
+    if (match) return Number(match[1]);
+  }
+  return null;
 }
 
 async function execSaveProfileData(
   telegramId: bigint,
   args: {
-    first_name: string;
-    age: number;
-    gender: "male" | "female";
-    preference: "men" | "women" | "both";
+    first_name?: string;
+    age?: number;
+    gender?: "male" | "female";
+    preference?: "men" | "women" | "both";
     ethnicity?: string;
     height?: number;
     hobbies?: string[];
     partner_preferences?: string;
   },
-  deps: AgentDeps,
+  _deps: AgentDeps,
+  history: ChatMessage[],
 ): Promise<string> {
-  if (args.age < MIN_AGE || args.age > MAX_AGE) {
-    return JSON.stringify({
-      success: false,
-      error: `Age must be between ${MIN_AGE} and ${MAX_AGE}.`,
-    });
-  }
-
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: {
       id: true,
+      firstName: true,
+      age: true,
+      gender: true,
+      preference: true,
       profile: {
-        select: { psychologicalSummary: true },
+        select: {
+          ethnicity: true,
+          height: true,
+          hobbies: true,
+          partnerPreferences: true,
+        },
       },
     },
   });
@@ -551,13 +865,70 @@ async function execSaveProfileData(
     return JSON.stringify({ success: false, error: "User not found." });
   }
 
+  const firstName = args.first_name?.trim() || user.firstName;
+  const age = args.age ?? user.age;
+  const gender = args.gender ?? (user.gender as "male" | "female" | null);
+  const preference =
+    args.preference ?? (user.preference as "men" | "women" | "both" | null);
+  const ethnicity =
+    args.ethnicity === undefined ? (user.profile?.ethnicity ?? null) : args.ethnicity;
+  const height = args.height ?? user.profile?.height ?? null;
+  const hobbies =
+    args.hobbies === undefined ? (user.profile?.hobbies ?? []) : args.hobbies;
+  const partnerPreferences =
+    args.partner_preferences === undefined
+      ? (user.profile?.partnerPreferences ?? null)
+      : args.partner_preferences;
+
+  if (typeof age !== "number" || age < MIN_AGE || age > MAX_AGE) {
+    return JSON.stringify({
+      success: false,
+      error: `Age must be between ${MIN_AGE} and ${MAX_AGE}.`,
+    });
+  }
+
+  // Defense-in-depth: the system prompt says to extract every field already
+  // volunteered (the "Ruslan" repro). LLMs occasionally still call
+  // save_profile_data with `height` missing even after the user explicitly
+  // wrote "180 см". Re-scan history; if a height is there, refuse the save
+  // and feed the extracted value back so the LLM can retry without re-asking.
+  if (!height) {
+    const inferred = extractHeightFromHistory(history);
+    if (inferred !== null) {
+      return JSON.stringify({
+        success: false,
+        error:
+          `Cannot save — the user already volunteered height = ${inferred} cm in a prior message, ` +
+          `but it's missing from save_profile_data args. Re-call save_profile_data with height=${inferred} ` +
+          `(plus all other fields you already have). Do NOT ask the user for height again.`,
+      });
+    }
+  }
+
+  const missing: string[] = [];
+  if (!firstName) missing.push("first_name");
+  if (!gender) missing.push("gender");
+  if (!preference) missing.push("preference");
+  if (!height) missing.push("height");
+  const partnerPreferencesText = partnerPreferences?.trim() ?? "";
+  if (!partnerPreferencesText) missing.push("partner_preferences");
+
+  if (missing.length > 0) {
+    return JSON.stringify({
+      success: false,
+      error:
+        `Cannot save profile data — missing required fields: ${missing.join(", ")}. ` +
+        "Use the current DB snapshot and chat history to fill already-saved values; only ask the user for truly missing fields.",
+    });
+  }
+
   await prisma.user.update({
     where: { telegramId },
     data: {
-      firstName: args.first_name,
-      age: args.age,
-      gender: args.gender,
-      preference: args.preference,
+      firstName,
+      age,
+      gender,
+      preference,
     },
   });
 
@@ -565,53 +936,40 @@ async function execSaveProfileData(
     where: { userId: user.id },
     create: {
       userId: user.id,
-      ethnicity: args.ethnicity ?? null,
-      height: args.height ?? null,
-      hobbies: args.hobbies ?? [],
-      partnerPreferences: args.partner_preferences ?? null,
+      ethnicity: ethnicity?.trim() || null,
+      height,
+      hobbies,
+      partnerPreferences: partnerPreferencesText,
     },
     update: {
-      ethnicity: args.ethnicity ?? null,
-      height: args.height ?? null,
-      hobbies: args.hobbies ?? [],
-      partnerPreferences: args.partner_preferences ?? null,
+      ethnicity: ethnicity?.trim() || null,
+      height,
+      hobbies,
+      partnerPreferences: partnerPreferencesText,
     },
   });
 
-  // Generate embedding from the profile data for matching
-  const embeddingInput = [
-    args.first_name,
-    `Gender: ${args.gender}`,
-    `Looking for: ${args.preference}`,
-    args.ethnicity ? `Ethnicity: ${args.ethnicity}` : "",
-    args.height ? `Height: ${args.height}cm` : "",
-    args.hobbies?.length ? `Hobbies: ${args.hobbies.join(", ")}` : "",
-    args.partner_preferences
-      ? `Partner preferences: ${args.partner_preferences}`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  // If the user already pasted the deep context dump, don't overwrite that
-  // richer summary with this synthetic field summary.
-  if (!user.profile?.psychologicalSummary) {
-    const analyse = deps.analyseProfile ?? analyseAndSaveProfile;
-    try {
-      await analyse(user.id, embeddingInput);
-    } catch (err) {
-      console.warn("Embedding generation failed during onboarding:", err);
-    }
-  }
-
   return JSON.stringify({
     success: true,
-    message: "Profile data saved successfully.",
+    message: "Profile data saved successfully. Treat these fields as collected.",
+    saved: {
+      first_name: true,
+      age,
+      gender,
+      preference,
+      ethnicity: Boolean(ethnicity?.trim()),
+      height,
+      hobbies_count: hobbies.length,
+      partner_preferences: true,
+    },
+    next_instruction:
+      "Do not ask for saved profile fields again. If context_dump is not saved, call request_context_dump now. If context_dump is saved, continue to photos/finalization as appropriate.",
   });
 }
 
 async function execFinalizeOnboarding(
   telegramId: bigint,
+  contextDumpSaved: boolean,
 ): Promise<string> {
   // Guard: verify all required profile data exists before finalizing
   const user = await prisma.user.findUnique({
@@ -622,12 +980,12 @@ async function execFinalizeOnboarding(
       gender: true,
       preference: true,
       email: true,
+      isEmailVerified: true,
       profile: {
         select: {
           height: true,
           hobbies: true,
           partnerPreferences: true,
-          psychologicalSummary: true,
           photos: true,
         },
       },
@@ -639,13 +997,13 @@ async function execFinalizeOnboarding(
   if (!user?.age) missing.push("age");
   if (!user?.gender) missing.push("gender");
   if (!user?.preference) missing.push("preference");
-  if (!user?.email) missing.push("email (not verified)");
+  if (!user?.email || !user.isEmailVerified) missing.push("email (not verified)");
   if (!user?.profile?.height) missing.push("height");
   // Hobbies are no longer a blocking requirement: whatever the user shared
   // (including "no hobbies" / an empty list) is a valid answer.
   if (!user?.profile?.partnerPreferences)
     missing.push("partner_preferences");
-  if (!user?.profile?.psychologicalSummary)
+  if (!contextDumpSaved)
     missing.push("context_dump (deep profile not yet saved)");
   if (!user?.profile?.photos?.length || user.profile.photos.length < MIN_PHOTOS)
     missing.push(`photos (need at least ${MIN_PHOTOS})`);
@@ -804,9 +1162,18 @@ export async function summarizeHistory(
 
   const json = (await res.json()) as ChatCompletionResponse;
   const summary = json.choices[0]?.message?.content ?? "";
+  const alreadyHasLeadingMarker = systemMessages.some(
+    (message) =>
+      typeof message.content === "string" &&
+      message.content.includes(CONTEXT_DUMP_SAVED_MARKER),
+  );
+  const contextDumpMarker = hasContextDumpSaved(history) && !alreadyHasLeadingMarker
+    ? [contextDumpSavedSystemMessage()]
+    : [];
 
   return [
     ...systemMessages,
+    ...contextDumpMarker,
     { role: "system", content: `[Conversation Summary]: ${summary}` },
     ...recentMessages,
   ];
@@ -841,6 +1208,19 @@ export async function runAgentTurn(
       email: true,
       universityDomain: true,
       isEmailVerified: true,
+      firstName: true,
+      age: true,
+      gender: true,
+      preference: true,
+      profile: {
+        select: {
+          ethnicity: true,
+          height: true,
+          hobbies: true,
+          partnerPreferences: true,
+          photos: true,
+        },
+      },
     },
   });
 
@@ -855,14 +1235,20 @@ export async function runAgentTurn(
       ? `The user's preferred language is: ${user.language}. Respond in that language unless they switch.`
       : "";
     // If the user arrives with email already verified (mobile-first flow, or
-    // a Telegram restart after the OTP was previously consumed), suppress
-    // step 1 entirely so the agent doesn't re-ask for an email it already has.
-    const verifiedNote = user?.isEmailVerified && user?.email
-      ? `[VERIFIED EMAIL ON FILE: ${user.email}] The user's university email (@${user.universityDomain ?? user.email.split("@")[1]}) is already verified — DO NOT call send_otp_email, verify_otp, or resend_otp. Skip step 1 of the onboarding flow entirely. Briefly acknowledge ("your @${user.universityDomain ?? user.email.split("@")[1]} email is verified ✅") in the user's language and move directly to profile basics (step 2: first name, age, gender, preference).`
+    // a Telegram restart after the OTP was previously consumed, or dev
+    // bypass), build the prompt with the email-verification rule omitted
+    // entirely. The agent used to drift back to "MUST provide corporate
+    // email" mid-conversation when only a trailing override note told it to
+    // skip step 1; now the conflicting rule simply isn't in the prompt.
+    const emailAlreadyVerified = Boolean(user?.isEmailVerified && user?.email);
+    const verifiedNote = emailAlreadyVerified
+      ? `[VERIFIED EMAIL ON FILE: ${user!.email}] DO NOT ask the user for their email. DO NOT mention email verification. Skip step 1 of the onboarding flow entirely and move directly to profile basics (step 2). Briefly acknowledge in the user's language (e.g. "your @${user!.universityDomain ?? user!.email!.split("@")[1]} email is already verified"), then ask for first name + age. Do NOT add a ✅ or any "Complete"-style emoji to this acknowledgement.`
       : "";
     history.push({
       role: "system",
-      content: [SYSTEM_PROMPT, langNote, verifiedNote].filter(Boolean).join("\n\n"),
+      content: [buildSystemPrompt(emailAlreadyVerified), langNote, verifiedNote]
+        .filter(Boolean)
+        .join("\n\n"),
     });
   }
 
@@ -888,27 +1274,39 @@ export async function runAgentTurn(
   // Loop: call OpenAI, handle tool_calls, repeat until we get a text reply
   const MAX_TOOL_ROUNDS = 8;
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const response = await callOpenAI(truncateForApi(history), fetchFn);
+    const response = await callOpenAI(
+      withCurrentSavedStateSnapshot(truncateForApi(history), user, history),
+      fetchFn,
+    );
 
     const choice = response.choices[0];
     if (!choice) break;
 
     const assistantMsg = choice.message;
+    const rawToolCalls = assistantMsg.tool_calls ?? [];
+    const contextDumpToolCall = rawToolCalls.find(
+      (call) => call.function.name === "request_context_dump",
+    );
+    const toolCalls = contextDumpToolCall ? [contextDumpToolCall] : rawToolCalls;
+    let stopAfterToolRound = false;
 
-    // Push assistant message to history
+    // Push assistant message to history. If the model bundled request_context_dump
+    // with later tools, keep only that boundary call; unexecuted tool calls would
+    // make future OpenAI requests invalid and, more importantly, would represent
+    // side effects that must wait for the user's pasted dump.
     history.push({
       role: "assistant",
       content: assistantMsg.content,
-      ...(assistantMsg.tool_calls ? { tool_calls: assistantMsg.tool_calls } : {}),
+      ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
     });
 
     // If no tool calls, we have the final reply
-    if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
+    if (toolCalls.length === 0) {
       break;
     }
 
     // Execute each tool call and append results
-    for (const toolCall of assistantMsg.tool_calls) {
+    for (const toolCall of toolCalls) {
       const fnName = toolCall.function.name;
       let args: Record<string, unknown>;
       try {
@@ -940,23 +1338,16 @@ export async function runAgentTurn(
             result = JSON.stringify({
               success: true,
               message:
-                "Magic Prompt has been sent to the user in a copyable code block right above your next message. " +
-                "Now write ONE short message (2-3 sentences max) telling the user: " +
-                "1) to copy the prompt above and paste it into whatever AI chat they already use — ChatGPT, Claude, Gemini, Perplexity, Grok, DeepSeek, or any other LLM — and send back whatever it outputs; " +
-                "2) if the response is long and Telegram splits it into several messages, they should tap the Done button that will appear. " +
-                "IMPORTANT: The prompt is already visible to the user above your message. " +
-                "Do NOT say you will send it, do NOT say 'next message', do NOT include the prompt text yourself. " +
-                "Refer to it as 'the prompt above' or 'the prompt I just sent'. " +
-                "CRITICAL STEP BOUNDARY: Do NOT mention photos. Do NOT mention 'next step'. Do NOT preview what comes after this. " +
-                "Do NOT call request_photos or any other tool in this same turn. End your reply right after the paste-it-back instruction. " +
-                "The user's only job right now is to paste this prompt into their AI and send the response back — nothing else exists for them yet.",
+                "Magic Prompt has been sent. The server is stopping this turn and waiting for the user's pasted LLM response.",
             });
+            stopAfterToolRound = true;
             break;
           case "save_context_dump":
             result = await execSaveContextDump(
               telegramId,
               args as { raw_dump?: unknown },
               deps,
+              userMessage,
             );
             break;
           case "request_photos": {
@@ -964,16 +1355,9 @@ export async function runAgentTurn(
             // before save_context_dump succeeds, but LLMs occasionally violate
             // it — chaining request_context_dump → request_photos in the same
             // turn, which leaves the user stranded mid-step. Enforce the
-            // ordering server-side by checking that the psychological summary
-            // (only written by execSaveContextDump) exists.
-            const userRow = await prisma.user.findUnique({
-              where: { telegramId },
-              select: {
-                profile: { select: { psychologicalSummary: true } },
-              },
-            });
-            const summary = userRow?.profile?.psychologicalSummary?.trim();
-            if (!summary) {
+            // ordering server-side by requiring a successful save_context_dump
+            // tool result, not just any psychologicalSummary row.
+            if (!hasContextDumpSaved(history)) {
               result = JSON.stringify({
                 success: false,
                 error:
@@ -997,10 +1381,14 @@ export async function runAgentTurn(
               telegramId,
               args as Parameters<typeof execSaveProfileData>[1],
               deps,
+              history,
             );
             break;
           case "finalize_onboarding":
-            result = await execFinalizeOnboarding(telegramId);
+            result = await execFinalizeOnboarding(
+              telegramId,
+              hasContextDumpSaved(history),
+            );
             {
               const parsed = JSON.parse(result) as {
                 success: boolean;
@@ -1032,6 +1420,10 @@ export async function runAgentTurn(
         content: result,
       });
 
+      if (fnName === "save_context_dump" && toolResultSucceeded(result)) {
+        history.push(contextDumpSavedSystemMessage());
+      }
+
       // Persist the Magic Prompt as an assistant turn so non-Telegram clients
       // (mobile chat) can render it. Telegram still sends ctx.reply(prompt)
       // separately; this just records what was already shown.
@@ -1040,7 +1432,16 @@ export async function runAgentTurn(
           role: "assistant",
           content: magicContextPrompt(user?.language ?? "en"),
         });
+        history.push({
+          role: "assistant",
+          content: contextDumpInstruction(user?.language),
+        });
+        break;
       }
+    }
+
+    if (stopAfterToolRound) {
+      break;
     }
   }
 

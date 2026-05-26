@@ -14,10 +14,17 @@ import { prisma } from "@gennety/db";
  *   - Mutual decline  → both lose
  *   - A accepts, B declines → B gains (cleared A's bar), A loses (failed B's bar)
  *
- * Dynamic K-factor — K=40 while a user has played < 10 matches (fast
- * calibration for newbies), K=20 thereafter. Each side uses its OWN
+ * Dynamic K-factor — K=20 while a user has played < 10 matches (fast
+ * calibration for newbies), K=10 thereafter. Each side uses its OWN
  * `eloMatchesPlayed` to pick its K, so a calibrated veteran's rating doesn't
  * jolt around when paired with a fresh user.
+ *
+ * The K values are intentionally half the textbook chess defaults (40 / 20):
+ * the photo-derived cold-start seed (`services/elo-seed.ts`) is the
+ * foundational signal, and accept/decline outcomes are a secondary refinement.
+ * Halving K means a user's seed survives ~2x as many matches before the
+ * behavioral signal can fully overwrite it. Tune up only if seed quality
+ * is later shown to be noisy enough that fast post-hoc correction matters.
  *
  * Rating bounds: Elo math is unbounded, but the schema stores `eloScore` as
  * an Int defaulting to 500 with the conceptual range [0..1000]. We clamp
@@ -25,8 +32,8 @@ import { prisma } from "@gennety/db";
  * or run past the league-penalty's calibrated band.
  */
 
-export const K_FACTOR_CALIBRATING = 40;
-export const K_FACTOR_STABLE = 20;
+export const K_FACTOR_CALIBRATING = 20;
+export const K_FACTOR_STABLE = 10;
 export const K_FACTOR_THRESHOLD = 10;
 
 export const ELO_MIN = 0;
@@ -43,9 +50,35 @@ export const ELO_MAX = 1000;
  *   - The peer's rating is left untouched. They did their part — getting
  *     ghosted shouldn't move their number.
  *
- * Tuned small (10) so it nudges behavior without nuking new accounts.
+ * Tuned small (5) so it nudges behavior without nuking new accounts. Halved
+ * alongside the K-factor for the same reason — the photo-derived seed is the
+ * foundational signal and behavioral nudges should be secondary.
  */
-export const SILENT_IGNORE_ELO_PENALTY = 10;
+export const SILENT_IGNORE_ELO_PENALTY = 5;
+
+/**
+ * Small priority/rating bump for the partner whose scheduled date was
+ * emergency-cancelled by the other side. No penalty is applied to the
+ * canceller because the reason may be legitimate, and `eloMatchesPlayed`
+ * stays unchanged because no accept/decline contest resolved.
+ */
+export const EMERGENCY_CANCEL_PEER_ELO_BOOST = 5;
+
+/**
+ * Elo penalty for users who tap "Skip for now" on the verification CTA at the
+ * end of onboarding. Default seed is 500 → drops to 350, which materially
+ * decays the `V_league` multiplier in match scoring and surfaces fewer
+ * candidates — exactly the friction the CTA copy promises.
+ *
+ * Reversible: when a previously-skipped user later runs Persona successfully,
+ * the verification webhook refunds the penalty and clears
+ * `verificationSkippedAt` (see `services/elo-seed.refundSkipPenalty`).
+ *
+ * Lives here (with the other Elo constants) rather than in the onboarding
+ * handler so non-handler layers (`services/elo-seed.ts`) can import without
+ * inverting dependencies.
+ */
+export const UNVERIFIED_ELO_PENALTY = 150;
 
 /** Win = 1, loss = 0. Mirrors the standard Elo `S` term. */
 export type EloOutcome = 1 | 0;
@@ -223,6 +256,39 @@ export async function applySilentIgnorePenalty(
     });
   } catch (err) {
     console.warn("[elo-calculator] applySilentIgnorePenalty failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Apply the small emergency-cancel boost to the partner who was cancelled on.
+ * Idempotency is the caller's job — this helper unconditionally adds
+ * `EMERGENCY_CANCEL_PEER_ELO_BOOST` to `eloScore` (clamped to `ELO_MAX`)
+ * without touching `eloMatchesPlayed`.
+ *
+ * Returns the new rating, or `null` if the profile doesn't exist or the
+ * write fails.
+ */
+export async function applyEmergencyCancellationPeerBoost(
+  userId: string,
+): Promise<number | null> {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const profile = await tx.profile.findUnique({
+        where: { userId },
+        select: { id: true, eloScore: true },
+      });
+      if (!profile) return null;
+      const next = Math.min(ELO_MAX, profile.eloScore + EMERGENCY_CANCEL_PEER_ELO_BOOST);
+      if (next === profile.eloScore) return next;
+      await tx.profile.update({
+        where: { id: profile.id },
+        data: { eloScore: next },
+      });
+      return next;
+    });
+  } catch (err) {
+    console.warn("[elo-calculator] applyEmergencyCancellationPeerBoost failed:", err);
     return null;
   }
 }

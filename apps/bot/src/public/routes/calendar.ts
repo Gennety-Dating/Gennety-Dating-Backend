@@ -2,7 +2,10 @@ import { Router, type Request, type Response } from "express";
 import type { Api, RawApi } from "grammy";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
-import { processCalendarSlotPick } from "../../handlers/matching/scheduler.js";
+import {
+  processCalendarSlotsUpdate,
+  getCalendarState,
+} from "../../handlers/matching/scheduler.js";
 
 /**
  * RFC 4122 UUID shape. We pre-validate `matchId` here because Prisma rejects a
@@ -14,75 +17,64 @@ import { processCalendarSlotPick } from "../../handlers/matching/scheduler.js";
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Calendar Mini App pick endpoint.
+ * Calendar Mini App endpoints.
  *
- * `POST /v1/calendar/pick`
+ *   POST /v1/calendar/pick   — submit / replace this user's availability set
+ *   GET  /v1/calendar/state  — fetch the current grid + both sides' picks
  *
- * Why this exists: when the Mini App is opened via an InlineKeyboardButton's
- * `web_app` field (our production path — see scheduler.ts `buildCalendarKeyboard`),
- * `Telegram.WebApp.sendData` is silently a no-op. The bot never receives the
- * pick. So instead the Mini App authenticates with its `initData` blob and
- * POSTs directly to the bot's public API, where we verify the HMAC and apply
- * the same logic the legacy `web_app_data` handler used.
+ * Auth on both: `Authorization: tma <initData>` — the standard Telegram
+ * Mini App convention. NOT a Bearer JWT — these requests come from the
+ * Mini App, not the mobile app, so the bot's token is the only shared
+ * secret with the Telegram client.
  *
- * Auth: `Authorization: tma <initData>` header — the standard Telegram Mini
- * App convention (TMA = Telegram Mini App). NOT a Bearer JWT — these requests
- * come from the Mini App, not the mobile app, so the bot's token is the only
- * shared secret with the Telegram client.
- *
- * Body: `{ matchId: string, pickedIso: string }` — what slot the user tapped.
- *
- * The router takes `Api` because `processCalendarSlotPick` may DM the user
- * a "waiting on peer" hint when only one side has picked.
+ * The Mini App polls the GET endpoint every few seconds while open so
+ * each side sees the partner's picks land in near-real-time without
+ * pulling in WebSocket infrastructure.
  */
 export function createCalendarRouter(api: Api<RawApi>): Router {
   const router = Router();
 
   router.post("/pick", async (req: Request, res: Response): Promise<void> => {
-    const authHeader = req.header("authorization") ?? req.header("Authorization");
-    if (!authHeader?.startsWith("tma ")) {
-      res.status(401).json({ error: "Missing tma initData" });
-      return;
-    }
-    const initData = authHeader.slice(4).trim();
-    if (!initData) {
-      res.status(401).json({ error: "Empty initData" });
+    const validation = authenticate(req);
+    if (!validation.ok) {
+      res.status(401).json(validation.body);
       return;
     }
 
-    const validation = validateInitData(initData, env.BOT_TOKEN);
-    if (!validation.valid) {
-      res.status(401).json({ error: "Invalid initData", reason: validation.reason });
-      return;
-    }
-
-    const body = req.body as { matchId?: unknown; pickedIso?: unknown } | undefined;
+    const body = req.body as
+      | { matchId?: unknown; pickedIsos?: unknown; pickedIso?: unknown }
+      | undefined;
     const matchId = typeof body?.matchId === "string" ? body.matchId : null;
-    const pickedIso = typeof body?.pickedIso === "string" ? body.pickedIso : null;
-    if (!matchId || !pickedIso) {
-      res.status(400).json({ error: "matchId and pickedIso are required" });
+
+    // Accept the new array shape and the legacy single-ISO shape (for
+    // older Mini App bundles still cached on a user's device).
+    let pickedIsos: string[] | null = null;
+    if (Array.isArray(body?.pickedIsos) && body.pickedIsos.every((x) => typeof x === "string")) {
+      pickedIsos = body.pickedIsos as string[];
+    } else if (typeof body?.pickedIso === "string") {
+      pickedIsos = [body.pickedIso];
+    }
+
+    if (!matchId || pickedIsos === null) {
+      res.status(400).json({ error: "matchId and pickedIsos are required" });
       return;
     }
-    // 404, not 400 — same UX as a UUID that's syntactically valid but unknown.
-    // The Mini App copy is "reopen from the bot" either way, and emitting 404
-    // keeps Mini App alert text consistent for both cases.
     if (!UUID_REGEX.test(matchId)) {
+      // 404, not 400 — same UX as a UUID that's syntactically valid but
+      // unknown. The Mini App copy is "reopen from the bot" either way,
+      // and emitting 404 keeps the alert text consistent for both cases.
       res.status(404).json({ error: "match-not-found" });
       return;
     }
 
-    const result = await processCalendarSlotPick(
+    const result = await processCalendarSlotsUpdate(
       api,
       BigInt(validation.user.id),
       matchId,
-      pickedIso,
+      pickedIsos,
     );
 
     if (!result.ok) {
-      // 4xx — client-fixable (wrong match, stale link, etc.). 404 for "we
-      // don't know about this match" is friendlier than 400 because it lets
-      // the Mini App show a "Reopen the calendar from the bot" message
-      // distinct from "your link is malformed".
       const status =
         result.reason === "match-not-found" || result.reason === "user-not-found"
           ? 404
@@ -95,10 +87,73 @@ export function createCalendarRouter(api: Api<RawApi>): Router {
 
     res.status(200).json({
       ok: true,
-      awaitingPeer: result.awaitingPeer,
+      mySlots: result.mySlots,
+      peerSlots: result.peerSlots,
+      agreedTime: result.agreedTime,
+      overlapCandidates: result.overlapCandidates,
       bothPicked: result.bothPicked,
     });
   });
 
+  router.get("/state", async (req: Request, res: Response): Promise<void> => {
+    const validation = authenticate(req);
+    if (!validation.ok) {
+      res.status(401).json(validation.body);
+      return;
+    }
+
+    const matchId = typeof req.query.matchId === "string" ? req.query.matchId : null;
+    if (!matchId) {
+      res.status(400).json({ error: "matchId is required" });
+      return;
+    }
+    if (!UUID_REGEX.test(matchId)) {
+      res.status(404).json({ error: "match-not-found" });
+      return;
+    }
+
+    const result = await getCalendarState(BigInt(validation.user.id), matchId);
+
+    if (!result.ok) {
+      const status =
+        result.reason === "match-not-found" || result.reason === "user-not-found"
+          ? 404
+          : result.reason === "not-participant"
+            ? 403
+            : 400;
+      res.status(status).json({ error: result.reason });
+      return;
+    }
+
+    res.status(200).json({
+      ok: true,
+      proposedTimes: result.proposedTimes,
+      mySlots: result.mySlots,
+      peerSlots: result.peerSlots,
+      agreedTime: result.agreedTime,
+      isFirstMover: result.isFirstMover,
+    });
+  });
+
   return router;
+}
+
+type AuthOk = { ok: true; user: { id: number } };
+type AuthErr = { ok: false; body: { error: string; reason?: string } };
+
+function authenticate(req: Request): AuthOk | AuthErr {
+  const authHeader = req.header("authorization") ?? req.header("Authorization");
+  if (!authHeader?.startsWith("tma ")) {
+    return { ok: false, body: { error: "Missing tma initData" } };
+  }
+  const initData = authHeader.slice(4).trim();
+  if (!initData) {
+    return { ok: false, body: { error: "Empty initData" } };
+  }
+
+  const validation = validateInitData(initData, env.BOT_TOKEN);
+  if (!validation.valid) {
+    return { ok: false, body: { error: "Invalid initData", reason: validation.reason } };
+  }
+  return { ok: true, user: { id: validation.user.id } };
 }

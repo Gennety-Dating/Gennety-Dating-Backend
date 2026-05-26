@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gennety Location</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --hint: var(--tg-theme-hint-color, #6b7280);
+        --bg: var(--tg-theme-bg-color, #fff);
+        --secondary-bg: var(--tg-theme-secondary-bg-color, #f3f4f6);
+        --text: var(--tg-theme-text-color, #111);
+        --primary: var(--tg-theme-button-color, #2481cc);
+        --primary-text: var(--tg-theme-button-text-color, #fff);
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, system-ui, sans-serif;
+        overflow: hidden;
+      }
+      #app {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      header {
+        padding: 12px 16px 8px;
+        flex: 0 0 auto;
+      }
+      h1 {
+        font-size: 16px;
+        margin: 0 0 8px;
+        font-weight: 600;
+      }
+      .search-wrap {
+        position: relative;
+      }
+      input.search {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--hint);
+        background: var(--secondary-bg);
+        color: var(--text);
+        font-size: 15px;
+        outline: none;
+      }
+      input.search:focus {
+        border-color: var(--primary);
+      }
+      .results {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: var(--bg);
+        border: 1px solid var(--hint);
+        border-radius: 10px;
+        max-height: 280px;
+        overflow-y: auto;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+        display: none;
+      }
+      .results.visible {
+        display: block;
+      }
+      .result {
+        padding: 10px 14px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--secondary-bg);
+      }
+      .result:last-child {
+        border-bottom: none;
+      }
+      .result:hover,
+      .result:active {
+        background: var(--secondary-bg);
+      }
+      .result .primary {
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1.3;
+      }
+      .result .secondary {
+        font-size: 12px;
+        color: var(--hint);
+        margin-top: 2px;
+        line-height: 1.3;
+      }
+      #map {
+        flex: 1 1 auto;
+        width: 100%;
+        z-index: 1;
+      }
+      footer {
+        flex: 0 0 auto;
+        padding: 12px 16px;
+        background: var(--bg);
+        border-top: 1px solid var(--secondary-bg);
+      }
+      .selected {
+        font-size: 13px;
+        color: var(--hint);
+        line-height: 1.4;
+        min-height: 18px;
+      }
+      .selected strong {
+        color: var(--text);
+        font-weight: 500;
+      }
+      #no-context {
+        padding: 20px 16px;
+        color: var(--hint);
+        font-size: 14px;
+      }
+      .empty-hint {
+        font-size: 12px;
+        color: var(--hint);
+        margin-top: 8px;
+        line-height: 1.4;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1 id="title">Where will you be coming from?</h1>
+        <div class="search-wrap">
+          <input
+            type="text"
+            class="search"
+            id="search"
+            placeholder="Metro, address, place…"
+            autocomplete="off"
+          />
+          <div class="results" id="results"></div>
+        </div>
+        <p class="empty-hint" id="empty-hint">
+          Type an address or tap on the map.
+        </p>
+      </header>
+      <div id="map"></div>
+      <footer>
+        <p class="selected" id="selected">&nbsp;</p>
+      </footer>
+    </div>
+    <p id="no-context" style="display: none"></p>
+    <script type="module" src="/src/location.ts"></script>
+  </body>
+</html>

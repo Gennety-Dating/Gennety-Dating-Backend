@@ -21,9 +21,8 @@ import {
 import { env } from "../config.js";
 import { buildSystemPrompt } from "./prompt-builder.js";
 import { truncateForApi, type ChatMessage } from "./onboarding-agent.js";
-import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
-import { attachDeclineReasonToMatchEvent } from "./match-events.js";
 import { canResumeMatching } from "./user-status.js";
+import { recordRejectionFeedback } from "./rejection-feedback.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -388,88 +387,21 @@ async function execRecordRejectionFeedback(
   telegramId: bigint,
   args: { match_id: string; reason: string },
 ): Promise<string> {
-  const reason = args.reason.trim();
-  if (reason.length < 10) {
-    return JSON.stringify({
-      success: false,
-      error:
-        "Reason is too vague. Ask the user for a concrete specific reason (looks, vibe, interests, lifestyle) before calling the tool again.",
-    });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    select: { id: true, language: true },
+  const result = await recordRejectionFeedback({
+    telegramId,
+    matchId: typeof args.match_id === "string" ? args.match_id : "",
+    reason: typeof args.reason === "string" ? args.reason : "",
+    requireConcreteReason: true,
+    updateNegativeConstraints: true,
   });
-  if (!user) return JSON.stringify({ success: false, error: "User not found." });
 
-  const match = await prisma.match.findUnique({
-    where: { id: args.match_id },
-    select: {
-      userAId: true,
-      userBId: true,
-      status: true,
-      acceptedByA: true,
-      acceptedByB: true,
-      rejectionReasonA: true,
-      rejectionReasonB: true,
-    },
-  });
-  if (!match) {
-    return JSON.stringify({
-      success: false,
-      error: "Match not found. Do not call this tool unless a pending rejection is listed in the user context.",
-    });
-  }
+  if (!result.success) return JSON.stringify({ success: false, error: result.error });
 
-  const side: "A" | "B" | null =
-    match.userAId === user.id ? "A" : match.userBId === user.id ? "B" : null;
-  if (!side) {
-    return JSON.stringify({
-      success: false,
-      error: "This match does not belong to the user.",
-    });
-  }
-
-  if (match.status !== "cancelled") {
-    return JSON.stringify({
-      success: false,
-      error: "Match was not declined — cannot record a rejection reason.",
-    });
-  }
-
-  const declined = side === "A" ? match.acceptedByA === false : match.acceptedByB === false;
-  if (!declined) {
-    return JSON.stringify({
-      success: false,
-      error: "The user did not decline this match; the peer did. Do not record a reason on their behalf.",
-    });
-  }
-
-  const existingReason = side === "A" ? match.rejectionReasonA : match.rejectionReasonB;
-  if (existingReason && existingReason.trim().length > 0) {
+  if (result.status === "already_recorded") {
     return JSON.stringify({
       success: true,
       message: "Rejection reason already recorded for this match. Move on naturally.",
     });
-  }
-
-  const truncated = reason.slice(0, 1000);
-  await prisma.match.update({
-    where: { id: args.match_id },
-    data: side === "A" ? { rejectionReasonA: truncated } : { rejectionReasonB: truncated },
-  });
-  await attachDeclineReasonToMatchEvent({
-    matchId: args.match_id,
-    actorId: user.id,
-    targetId: side === "A" ? match.userBId : match.userAId,
-    rejectionReason: truncated,
-  });
-
-  try {
-    await appendNegativeConstraint(user.id, truncated, user.language ?? "en");
-  } catch (err) {
-    console.warn("appendNegativeConstraint failed during rejection feedback:", err);
   }
 
   return JSON.stringify({

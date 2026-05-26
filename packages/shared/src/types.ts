@@ -1,3 +1,5 @@
+import type { ProfileMedia } from "./profile-media.js";
+
 /** Onboarding steps — mirrors the Prisma OnboardingStep enum */
 export type OnboardingStep =
   | "consent"
@@ -5,7 +7,16 @@ export type OnboardingStep =
   | "conversational"
   | "completed";
 
-export type Language = "en" | "ru" | "uk";
+export const SUPPORTED_LANGUAGES = ["en", "ru", "uk", "de", "pl"] as const;
+export type Language = (typeof SUPPORTED_LANGUAGES)[number];
+
+export const LANGUAGE_LABELS: Record<Language, string> = {
+  en: "English",
+  ru: "Русский",
+  uk: "Українська",
+  de: "Deutsch",
+  pl: "Polski",
+};
 
 export type Gender = "male" | "female";
 export type GenderPreference = "men" | "women" | "both";
@@ -48,6 +59,8 @@ export interface SessionData {
   expectingPhoto: boolean;
   /** Temporary storage for collected photos during conversational onboarding */
   pendingPhotos: string[];
+  /** Structured media aligned 1:1 with pendingPhotos; empty legacy sessions normalize from pendingPhotos */
+  pendingProfileMedia: ProfileMedia[];
   /** file_unique_id of each pending photo, for dedupe when Telegram re-delivers album frames */
   pendingPhotoUniqueIds: string[];
   /**
@@ -64,6 +77,8 @@ export interface SessionData {
   matchFlow: MatchFlowState;
   /** Match id currently awaiting this user's text input (rejection reason / calendar) */
   activeMatchId: string | null;
+  /** Selected structured report category while waiting for optional details */
+  pendingReportCategory: string | null;
   /**
    * True after the Magic Prompt has been sent to the user.
    * Incoming text messages are buffered into contextDumpBuffer instead of
@@ -80,11 +95,13 @@ export const DEFAULT_SESSION: SessionData = {
   language: "en",
   expectingPhoto: false,
   pendingPhotos: [],
+  pendingProfileMedia: [],
   pendingPhotoUniqueIds: [],
   pendingPhotoScores: [],
   menuState: "idle",
   matchFlow: "idle",
   activeMatchId: null,
+  pendingReportCategory: null,
   awaitingContextDump: false,
   contextDumpBuffer: "",
 };

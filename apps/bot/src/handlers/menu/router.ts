@@ -19,6 +19,7 @@ import {
   handleSettingsOpen,
   handleSettingsLanguageOpen,
   handleSettingsLanguageSet,
+  handleSettingsVerify,
   handleDeleteAccountConfirm,
   handleDeleteAccountExecute,
 } from "./settings.js";
@@ -52,7 +53,9 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     // If the user taps another menu action mid-upload, fall through and reset state.
     ctx.session.menuState = "idle";
     ctx.session.pendingPhotos = [];
+    ctx.session.pendingProfileMedia = [];
     ctx.session.pendingPhotoUniqueIds = [];
+    ctx.session.pendingPhotoScores = [];
   }
 
   // Edit bio: consumes raw text messages.
@@ -87,6 +90,8 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
   // No active sub-flow — free-form text goes to the LLM Router.
   // -----------------------------------------------------------------------
   if (!data) {
+    if (isPinnedMessageServiceUpdate(ctx)) return;
+
     const text = ctx.message?.text?.trim();
     if (!text) {
       await showMainMenu(ctx);
@@ -155,6 +160,9 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     case "menu:settings:lang":
       await handleSettingsLanguageOpen(ctx);
       return;
+    case "menu:settings:verify":
+      await handleSettingsVerify(ctx);
+      return;
     case "menu:settings:delete":
       await handleDeleteAccountConfirm(ctx);
       return;
@@ -176,3 +184,8 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
 });
 
 export { menuRouter };
+
+export function isPinnedMessageServiceUpdate(ctx: BotContext): boolean {
+  const message = ctx.message;
+  return Boolean(message && "pinned_message" in message);
+}

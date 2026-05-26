@@ -10,13 +10,22 @@ import {
   MAX_AGE,
   MAX_BIO_LENGTH,
   MAX_MAJOR_LENGTH,
+  normalizeProfileMedia,
 } from "@gennety/shared";
 import { validateSingleFace } from "../../services/vision/validate-face.js";
 import {
   fetchTelegramFileBuffer,
   gateProfilePhoto,
 } from "../../services/face-match-gate.js";
+import { triggerVerificationRerun } from "../../services/verification-pipeline.js";
 import { showMainMenu } from "./main.js";
+import {
+  getMessageLivePhoto,
+  incomingLivePhotoMedia,
+  incomingPhotoMedia,
+  type IncomingProfileMedia,
+} from "../../services/telegram-profile-media.js";
+import { profileMediaToJson } from "../../services/profile-media-json.js";
 
 // ---------------------------------------------------------------------------
 // Edit profile main screen
@@ -251,13 +260,15 @@ export async function handleEditPhotosStart(ctx: BotContext): Promise<void> {
 
   const profile = await prisma.profile.findFirst({
     where: { user: { telegramId } },
-    select: { photos: true, photoFaceScores: true },
+    select: { photos: true, profileMedia: true, photoFaceScores: true },
   });
   const existing = profile?.photos ?? [];
   const existingScores = profile?.photoFaceScores ?? [];
+  const existingMedia = normalizeProfileMedia(profile?.profileMedia ?? [], existing);
 
   ctx.session.menuState = "edit_photos";
   ctx.session.pendingPhotos = [...existing];
+  ctx.session.pendingProfileMedia = existingMedia;
   // We can't recover `file_unique_id` from a stored `file_id`, so dedupe
   // for newly-arriving photos starts fresh. The album-retry / double-delivery
   // dedupe path only matters within a single editing session.
@@ -294,17 +305,35 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
   }
 
   const photo = ctx.message?.photo;
-  if (!photo || photo.length === 0) {
+  const livePhoto = getMessageLivePhoto(ctx.message);
+  let incoming: IncomingProfileMedia | null = null;
+  if (livePhoto) {
+    const extracted = incomingLivePhotoMedia(livePhoto);
+    if (!extracted.ok) {
+      await ctx.reply(livePhotoRejectionMessage(lang, extracted.reason));
+      return;
+    }
+    incoming = extracted.media;
+  } else if (photo && photo.length > 0) {
+    incoming = incomingPhotoMedia(photo);
+  }
+
+  if (!incoming) {
     await ctx.reply(t(lang, "editProfilePhotosStart", { min: MIN_PHOTOS, max: MAX_PHOTOS }));
     return;
   }
 
-  const largest = photo[photo.length - 1]!;
-  const fileId = largest.file_id;
-  const fileUniqueId = largest.file_unique_id;
+  const fileId = incoming.staticPhoto.file_id;
+  const fileUniqueId = incoming.uniqueId;
 
   // Dedupe identical frames (album retries / double-delivery).
   if (ctx.session.pendingPhotoUniqueIds?.includes(fileUniqueId)) {
+    return;
+  }
+
+  if (ctx.session.pendingPhotos.length >= MAX_PHOTOS) {
+    await ctx.reply(t(lang, "photoReceived", { n: MAX_PHOTOS, max: MAX_PHOTOS }));
+    await finishEditPhotos(ctx);
     return;
   }
 
@@ -342,6 +371,10 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
   }
 
   ctx.session.pendingPhotos.push(fileId);
+  ctx.session.pendingProfileMedia = [
+    ...normalizeProfileMedia(ctx.session.pendingProfileMedia, ctx.session.pendingPhotos.slice(0, -1)),
+    incoming.profileMedia,
+  ];
   ctx.session.pendingPhotoUniqueIds = [
     ...(ctx.session.pendingPhotoUniqueIds ?? []),
     fileUniqueId,
@@ -396,15 +429,49 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
     where: { userId: user.id },
     data: {
       photos: ctx.session.pendingPhotos,
+      profileMedia: profileMediaToJson(
+        normalizeProfileMedia(
+          ctx.session.pendingProfileMedia,
+          ctx.session.pendingPhotos,
+        ),
+      ),
       photoFaceScores: scores,
     },
   });
 
+  // Re-run face-match verification against the new photo set. The
+  // per-frame `gateProfilePhoto` above blocked obviously-wrong photos
+  // at upload time, but the *aggregate* verification status (verified /
+  // pending_review / rejected) is a function of the WHOLE array — so a
+  // rejected user who replaced their bad photos must be re-evaluated,
+  // and the persisted `photoFaceScores` must stay aligned with `photos`.
+  // Fire-and-forget; pipeline errors land in the bot logs.
+  void triggerVerificationRerun(user.id, ctx.api).catch((err) => {
+    console.error("[edit-profile] verification rerun failed:", err);
+  });
+
   ctx.session.pendingPhotos = [];
+  ctx.session.pendingProfileMedia = [];
   ctx.session.pendingPhotoUniqueIds = [];
   ctx.session.pendingPhotoScores = [];
   ctx.session.menuState = "idle";
 
   await ctx.reply(t(lang, "editProfilePhotosSaved"));
   await showMainMenu(ctx);
+}
+
+type LivePhotoRejectReason = "missing_static" | "too_long" | "too_large";
+
+function livePhotoRejectionMessage(
+  language: Parameters<typeof t>[0],
+  reason: LivePhotoRejectReason,
+): string {
+  switch (reason) {
+    case "missing_static":
+      return t(language, "livePhotoMissingStatic");
+    case "too_long":
+      return t(language, "livePhotoTooLong");
+    case "too_large":
+      return t(language, "livePhotoTooLarge");
+  }
 }

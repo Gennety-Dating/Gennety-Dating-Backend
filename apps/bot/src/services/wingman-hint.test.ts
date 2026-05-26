@@ -95,6 +95,21 @@ describe("generateAndSaveWingmanHints", () => {
     expect(result?.b).toMatch(/excited/);
   });
 
+  it("has German and Polish fallbacks", async () => {
+    mFindUnique.mockResolvedValueOnce(
+      baseMatchRow({
+        userA: { firstName: "Max", language: "de", profile: null },
+        userB: { firstName: "Ania", language: "pl", profile: null },
+      }),
+    );
+    mCall.mockResolvedValueOnce("").mockResolvedValueOnce("");
+
+    const result = await generateAndSaveWingmanHints("m1");
+
+    expect(result?.a).toMatch(/Frag/);
+    expect(result?.b).toMatch(/Zapytaj/);
+  });
+
   it("regenerates only the missing side when one hint is already cached", async () => {
     mFindUnique.mockResolvedValueOnce(
       baseMatchRow({ wingmanHintA: "cached-from-earlier", wingmanHintB: null }),

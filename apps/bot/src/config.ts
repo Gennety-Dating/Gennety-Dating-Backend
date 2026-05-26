@@ -38,8 +38,26 @@ export const env = {
   CUSTOM_EMOJI_MENU_ID: process.env.CUSTOM_EMOJI_MENU_ID ?? "",
   CUSTOM_EMOJI_ACCEPT_ID: process.env.CUSTOM_EMOJI_ACCEPT_ID ?? "",
   CUSTOM_EMOJI_DECLINE_ID: process.env.CUSTOM_EMOJI_DECLINE_ID ?? "",
+  /// Optional animated checkmark emoji shown next to the partner's name
+  /// in the match-pitch photo caption when their `verificationStatus` is
+  /// `verified`. Empty value falls back to a static `✓` glyph (no entity).
+  /// Picked from a public Telegram emoji pack — operator selects the visual.
+  CUSTOM_EMOJI_VERIFIED_ID: process.env.CUSTOM_EMOJI_VERIFIED_ID ?? "",
   MESSAGE_EFFECT_MATCH_ID: process.env.MESSAGE_EFFECT_MATCH_ID ?? "5104841245755180586",
+  /// Optional Bot API 7.6+ message effect attached to the post-date feedback
+  /// DM. Uses a different effect id from `MESSAGE_EFFECT_MATCH_ID` so the
+  /// "your match accepted" sparkle and "tell us how it went" reaction read
+  /// as distinct moments. Empty falls through to no effect.
+  MESSAGE_EFFECT_FEEDBACK_ID: process.env.MESSAGE_EFFECT_FEEDBACK_ID ?? "",
   WEBAPP_URL: process.env.WEBAPP_URL ?? "https://example.invalid/calendar",
+  /// URL of the post-date Feedback Mini App bundle. When unset, derived from
+  /// `WEBAPP_URL` by appending `/feedback.html` — Caddy serves both the
+  /// calendar and the feedback bundle from the same `/var/www/dating-app`
+  /// root in production. Override only if the feedback bundle is hosted
+  /// elsewhere (e.g. a separate Caddy site).
+  WEBAPP_FEEDBACK_URL:
+    process.env.WEBAPP_FEEDBACK_URL ??
+    `${process.env.WEBAPP_URL ?? "https://example.invalid/calendar"}/feedback.html`,
   ADMIN_API_KEY: process.env.ADMIN_API_KEY ?? "",
   ADMIN_PORT: Number(process.env.ADMIN_PORT ?? "3100"),
   ADMIN_DASHBOARD_ORIGIN: process.env.ADMIN_DASHBOARD_ORIGIN ?? "*",
@@ -112,6 +130,24 @@ export const env = {
   /// [REVIEW, VERIFY) flip the user to `pending_review` (admin moderates
   /// in dashboard); scores below this are auto-rejected.
   FACE_MATCH_THRESHOLD_REVIEW: Number(process.env.FACE_MATCH_THRESHOLD_REVIEW ?? "0.75"),
+  /// Minimum number of profile photos (with detectable faces) that must
+  /// score ≥ FACE_MATCH_THRESHOLD_VERIFY for the user to land on the
+  /// `verified` branch. Photos without a detected face (group shots,
+  /// landscapes) are excluded from the count rather than treated as
+  /// hard fails. A single solid match is strong evidence; ops can raise
+  /// this to require multiple corroborating angles. Range ≥ 1.
+  FACE_MATCH_MIN_VERIFIED_PHOTOS: Math.max(
+    1,
+    Number(process.env.FACE_MATCH_MIN_VERIFIED_PHOTOS ?? "1"),
+  ),
+
+  // ── Cold-start Elo seeding via vision (SCUT-FBP5500-style) ──
+  /// Master flag for the AI vision pass that seeds `Profile.eloScore` on the
+  /// `verified` branch of the verification pipeline. Disabled by default so
+  /// the feature can ship dark; flip to `true` after backfill is approved.
+  /// When false, all newly verified users keep the Elo default of 500 and
+  /// `eloSeededAt` stays null — no OpenAI call, no surprises.
+  ELO_VISION_SEED_ENABLED: process.env.ELO_VISION_SEED_ENABLED === "true",
 
   // ── AWS (Rekognition CompareFaces) ───────────────────────────
   /// IAM user with `rekognition:CompareFaces` + `rekognition:DetectFaces`.

@@ -18,7 +18,9 @@
     "dev:db:reset": "docker compose -f docker-compose.dev.yml down -v && docker compose -f docker-compose.dev.yml up -d",
     "dev:db:push": "DATABASE_URL=postgresql://gennety:gennety@localhost:5434/gennety_dev pnpm --filter @gennety/db db:push",
     "dev:db:studio": "DATABASE_URL=postgresql://gennety:gennety@localhost:5434/gennety_dev pnpm --filter @gennety/db db:studio",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "face-eval": "pnpm --filter @gennety/bot exec tsx scripts/face-eval.ts",
+    "face-eval-user": "pnpm --filter @gennety/bot exec tsx scripts/face-eval-user.ts"
   },
   "engines": {
     "node": ">=20.0.0"

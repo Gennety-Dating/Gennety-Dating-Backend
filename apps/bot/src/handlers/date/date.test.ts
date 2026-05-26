@@ -26,12 +26,32 @@ vi.mock("../../config.js", () => ({
     CUSTOM_EMOJI_LIKE_ID: "",
     CUSTOM_EMOJI_DISLIKE_ID: "",
     WEBAPP_URL: "https://test.invalid/calendar",
+    WEBAPP_FEEDBACK_URL: "https://test.invalid/calendar/feedback.html",
+    MESSAGE_EFFECT_FEEDBACK_ID: "",
   },
+}));
+
+vi.mock("../matching/negative-constraints.js", () => ({
+  appendNegativeConstraint: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../../services/openai.js", () => ({
+  callOpenAIJson: vi.fn().mockResolvedValue(null),
+  callOpenAIText: vi.fn().mockResolvedValue(""),
+}));
+
+vi.mock("../../utils/elo-calculator.js", () => ({
+  applyEmergencyCancellationPeerBoost: vi.fn().mockResolvedValue(505),
 }));
 
 import { prisma } from "@gennety/db";
 import { handleEmergencyStart, handleEmergencyReason } from "./emergency.js";
-import { handleFeedbackStart, handleFeedbackText } from "./feedback.js";
+import { applyEmergencyCancellationPeerBoost } from "../../utils/elo-calculator.js";
+import {
+  handleFeedbackVoiceStart,
+  handleFeedbackVoiceText,
+  recordPostDateFeedback,
+} from "./feedback.js";
 import { runDateLifecycleTick } from "../../services/date-lifecycle.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
@@ -42,6 +62,8 @@ const mMatch = prisma.match as unknown as {
 };
 const mUser = prisma.user as unknown as { findUnique: MockFn };
 const mProfile = prisma.profile as unknown as { findUnique: MockFn };
+const mApplyEmergencyCancellationPeerBoost =
+  applyEmergencyCancellationPeerBoost as unknown as MockFn;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -66,6 +88,7 @@ function createCtx(overrides: {
     callbackQuery: overrides.callbackData ? { data: overrides.callbackData } : undefined,
     message: overrides.messageText ? { text: overrides.messageText } : undefined,
     reply: vi.fn().mockResolvedValue(undefined),
+    replyWithChatAction: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     api: {
       sendMessage: vi.fn().mockResolvedValue(undefined),
@@ -95,7 +118,10 @@ function matchRow(partial: Record<string, unknown> = {}): Record<string, unknown
 // ---------------------------------------------------------------------------
 
 describe("emergency cancellation", () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mApplyEmergencyCancellationPeerBoost.mockResolvedValue(505);
+  });
 
   it("handleEmergencyStart sets session to awaiting_emergency_reason", async () => {
     mMatch.findUnique.mockResolvedValueOnce(matchRow());
@@ -131,17 +157,18 @@ describe("emergency cancellation", () => {
     expect(ctx.session.matchFlow).toBe("idle");
   });
 
-  it("handleEmergencyReason cancels match and forwards exact text to peer", async () => {
+  it("handleEmergencyReason cancels match, boosts peer, and quotes exact text", async () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
     mMatch.findUnique.mockResolvedValueOnce(matchRow());
     mMatch.update.mockResolvedValueOnce({});
+    const reason = "болею, прости _[x] <3";
 
     const ctx = createCtx({
       session: {
         matchFlow: "awaiting_emergency_reason",
         activeMatchId: "match-1",
       },
-      messageText: "Family emergency, so sorry!",
+      messageText: reason,
       fromId: 1001,
     });
 
@@ -158,19 +185,26 @@ describe("emergency cancellation", () => {
         data: {
           status: "cancelled",
           emergencyCancelledBy: "uid-A",
-          emergencyReason: "Family emergency, so sorry!",
+          emergencyReason: reason,
         },
       }),
     );
 
+    expect(mApplyEmergencyCancellationPeerBoost).toHaveBeenCalledWith("uid-B");
+
     // Confirmation to canceller
     expect(ctx.reply).toHaveBeenCalled();
 
-    // Exact text forwarded to the other person
-    expect(ctx.api.sendMessage).toHaveBeenCalledWith(
-      1002,
-      expect.stringContaining("Family emergency, so sorry!"),
-    );
+    // Exact text is visually quoted for the other person.
+    expect(ctx.api.sendMessage).toHaveBeenCalledTimes(1);
+    const [chatId, body, options] = ctx.api.sendMessage.mock.calls[0]!;
+    expect(chatId).toBe(1002);
+    expect(body).toContain(reason);
+    expect(body).toContain("This isn't because of you");
+    const entity = (options as { entities: Array<{ type: string; offset: number; length: number }> })
+      .entities[0]!;
+    expect(entity.type).toBe("blockquote");
+    expect((body as string).slice(entity.offset, entity.offset + entity.length)).toBe(reason);
   });
 
   it("handleEmergencyReason no-ops when match is not scheduled", async () => {
@@ -188,6 +222,7 @@ describe("emergency cancellation", () => {
 
     await handleEmergencyReason(ctx);
     expect(mMatch.update).not.toHaveBeenCalled();
+    expect(mApplyEmergencyCancellationPeerBoost).not.toHaveBeenCalled();
   });
 });
 
@@ -195,32 +230,51 @@ describe("emergency cancellation", () => {
 // Feedback handler
 // ---------------------------------------------------------------------------
 
-describe("post-date feedback", () => {
+describe("post-date feedback (voice path)", () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it("handleFeedbackStart sets session to awaiting_feedback", async () => {
+  it("handleFeedbackVoiceStart sets session to awaiting_feedback and asks for a voice", async () => {
     mMatch.findUnique.mockResolvedValueOnce(matchRow({ status: "completed" }));
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
 
-    const ctx = createCtx({ callbackData: "feedback:start:match-1", fromId: 1001 });
-    await handleFeedbackStart(ctx);
+    const ctx = createCtx({ callbackData: "feedback:voice:match-1", fromId: 1001 });
+    await handleFeedbackVoiceStart(ctx);
 
     expect(ctx.session.matchFlow).toBe("awaiting_feedback");
     expect(ctx.session.activeMatchId).toBe("match-1");
+    expect(ctx.replyWithChatAction).toHaveBeenCalledWith("record_voice");
+    expect(ctx.reply).toHaveBeenCalled();
   });
 
-  it("handleFeedbackStart ignores non-completed matches", async () => {
+  it("handleFeedbackVoiceStart ignores non-completed matches (no state change)", async () => {
     mMatch.findUnique.mockResolvedValueOnce(matchRow({ status: "scheduled" }));
 
-    const ctx = createCtx({ callbackData: "feedback:start:match-1", fromId: 1001 });
-    await handleFeedbackStart(ctx);
+    const ctx = createCtx({ callbackData: "feedback:voice:match-1", fromId: 1001 });
+    await handleFeedbackVoiceStart(ctx);
+
+    expect(ctx.session.matchFlow).toBe("idle");
+    expect(ctx.replyWithChatAction).not.toHaveBeenCalled();
+  });
+
+  it("handleFeedbackVoiceStart rejects non-participants (no state change)", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(matchRow({ status: "completed" }));
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-X" });
+
+    const ctx = createCtx({ callbackData: "feedback:voice:match-1", fromId: 9999 });
+    await handleFeedbackVoiceStart(ctx);
 
     expect(ctx.session.matchFlow).toBe("idle");
   });
 
-  it("handleFeedbackText saves feedback for userA and resets session", async () => {
+  it("handleFeedbackVoiceText persists transcribed text for userA and resets session", async () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
-    mMatch.findUnique.mockResolvedValueOnce(matchRow({ status: "completed" }));
+    // recordPostDateFeedback also calls findUnique for the match
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-1",
+      status: "completed",
+      userAId: "uid-A",
+      userBId: "uid-B",
+    });
     mMatch.update.mockResolvedValueOnce({});
 
     const ctx = createCtx({
@@ -229,7 +283,7 @@ describe("post-date feedback", () => {
       fromId: 1001,
     });
 
-    await handleFeedbackText(ctx);
+    await handleFeedbackVoiceText(ctx);
 
     expect(ctx.session.matchFlow).toBe("idle");
     expect(ctx.session.activeMatchId).toBeNull();
@@ -242,9 +296,14 @@ describe("post-date feedback", () => {
     expect(ctx.reply).toHaveBeenCalled();
   });
 
-  it("handleFeedbackText saves feedback for userB", async () => {
+  it("handleFeedbackVoiceText persists feedback for userB", async () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
-    mMatch.findUnique.mockResolvedValueOnce(matchRow({ status: "completed" }));
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-1",
+      status: "completed",
+      userAId: "uid-A",
+      userBId: "uid-B",
+    });
     mMatch.update.mockResolvedValueOnce({});
 
     const ctx = createCtx({
@@ -253,7 +312,7 @@ describe("post-date feedback", () => {
       fromId: 1002,
     });
 
-    await handleFeedbackText(ctx);
+    await handleFeedbackVoiceText(ctx);
 
     expect(mMatch.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -261,6 +320,67 @@ describe("post-date feedback", () => {
         data: { feedbackByB: "Not bad, a bit awkward at first." },
       }),
     );
+  });
+});
+
+describe("recordPostDateFeedback (shared pipeline)", () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it("rejects empty text without touching the DB", async () => {
+    const result = await recordPostDateFeedback({
+      userId: "uid-A",
+      matchId: "match-1",
+      text: "   ",
+      language: "en",
+    });
+    expect(result).toEqual({ ok: false, reason: "empty-text" });
+    expect(mMatch.findUnique).not.toHaveBeenCalled();
+    expect(mMatch.update).not.toHaveBeenCalled();
+  });
+
+  it("returns match-not-found when the row is missing", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(null);
+    const result = await recordPostDateFeedback({
+      userId: "uid-A",
+      matchId: "match-1",
+      text: "good",
+      language: "en",
+    });
+    expect(result).toEqual({ ok: false, reason: "match-not-found" });
+  });
+
+  it("returns wrong-state when the match is not completed yet", async () => {
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-1",
+      status: "scheduled",
+      userAId: "uid-A",
+      userBId: "uid-B",
+    });
+    const result = await recordPostDateFeedback({
+      userId: "uid-A",
+      matchId: "match-1",
+      text: "good",
+      language: "en",
+    });
+    expect(result).toEqual({ ok: false, reason: "wrong-state" });
+    expect(mMatch.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-participants", async () => {
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-1",
+      status: "completed",
+      userAId: "uid-A",
+      userBId: "uid-B",
+    });
+    const result = await recordPostDateFeedback({
+      userId: "uid-stranger",
+      matchId: "match-1",
+      text: "good",
+      language: "en",
+    });
+    expect(result).toEqual({ ok: false, reason: "not-participant" });
+    expect(mMatch.update).not.toHaveBeenCalled();
   });
 });
 
@@ -334,6 +454,22 @@ describe("date-lifecycle tick", () => {
     expect(result.feedbacks).toBe(1);
     // 2 messages: feedback A, feedback B
     expect(api.sendMessage).toHaveBeenCalledTimes(2);
+
+    // Each feedback DM carries the new dual-input keyboard: a `web_app`
+    // button on row 1 (Mini App form) and a callback button on row 2
+    // (`feedback:voice:*`). The keyboard layout is the contract the rest
+    // of the system depends on.
+    const callA = (api.sendMessage as any).mock.calls[0];
+    const replyMarkupA = callA[2].reply_markup as { inline_keyboard: unknown[][] };
+    const rows = replyMarkupA.inline_keyboard;
+    expect(rows).toHaveLength(2);
+    const formBtn = rows[0]![0] as { web_app?: { url: string }; text: string };
+    const voiceBtn = rows[1]![0] as { callback_data?: string; text: string };
+    expect(formBtn.web_app?.url).toContain("/feedback.html");
+    expect(formBtn.web_app?.url).toContain("match=match-2");
+    expect(formBtn.web_app?.url).toContain("lang=en");
+    expect(voiceBtn.callback_data).toBe("feedback:voice:match-2");
+
     // Transition to completed AND stamp feedbackPromptedAt (C-1 dedup marker).
     expect(mMatch.update).toHaveBeenCalledWith(
       expect.objectContaining({

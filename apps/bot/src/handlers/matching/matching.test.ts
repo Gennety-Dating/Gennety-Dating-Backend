@@ -15,6 +15,7 @@ vi.mock("@gennety/db", () => ({
     profile: {
       findUnique: vi.fn(),
       upsert: vi.fn(),
+      updateMany: vi.fn(),
     },
     match: {
       findUnique: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock("@gennety/db", () => ({
     },
     matchEvent: {
       create: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }));
@@ -40,6 +42,7 @@ vi.mock("../../config.js", () => ({
     CUSTOM_EMOJI_DISLIKE_ID: "",
     CUSTOM_EMOJI_ACCEPT_ID: "test-accept-emoji-id",
     CUSTOM_EMOJI_DECLINE_ID: "test-decline-emoji-id",
+    CUSTOM_EMOJI_VERIFIED_ID: "test-verified-emoji-id",
     MESSAGE_EFFECT_MATCH_ID: "5104841245755180586",
     WEBAPP_URL: "https://test.invalid/calendar",
   },
@@ -58,11 +61,32 @@ vi.mock("./scheduler.js", () => ({
   ]),
 }));
 
+vi.mock("../../services/venue.js", async () => {
+  const actual =
+    await vi.importActual<typeof import("../../services/venue.js")>(
+      "../../services/venue.js",
+    );
+  return {
+    ...actual,
+    pickVenueAtMidpoint: vi.fn(async () => ({
+      name: "Test Cafe",
+      address: "123 Test St",
+      googleMapsUri: "https://maps.google.com/?cid=test",
+    })),
+  };
+});
+
+vi.mock("../../services/wingman-hint.js", () => ({
+  generateAndSaveWingmanHints: vi.fn().mockResolvedValue(null),
+}));
+
 import { prisma } from "@gennety/db";
 import { handleMatchDecision } from "./decision.js";
+import { buildDeclineReasonKeyboard, handleDeclineReasonCallback } from "./decline-feedback.js";
 import { buildMatchKeyboard, sendMatchProposal } from "./pitch.js";
 import { appendNegativeConstraint, normalizeReason } from "./negative-constraints.js";
 import { startScheduling } from "./scheduler.js";
+import { tryFinalize } from "./venue-negotiation.js";
 import {
   buildCandidateSql,
   preferenceToGenderFilter,
@@ -82,14 +106,19 @@ import {
 } from "../../services/match-engine.js";
 import type { RichCandidateRow, SeekerProfile } from "../../services/match-engine.js";
 import { localFallbackPitch, splitPitchIntoDrafts } from "../../services/pitch-generator.js";
-import { localStubVenueClient, pickVenueForMatch } from "../../services/venue.js";
+import {
+  localStubVenueClient,
+  pickVenueAtMidpoint,
+  pickVenueForMatch,
+} from "../../services/venue.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as { findUnique: MockFn; update: MockFn; updateMany: MockFn };
 const mUser = prisma.user as unknown as { findUnique: MockFn };
-const mProfile = prisma.profile as unknown as { findUnique: MockFn; upsert: MockFn };
-const mMatchEvent = prisma.matchEvent as unknown as { create: MockFn };
+const mProfile = prisma.profile as unknown as { findUnique: MockFn; upsert: MockFn; updateMany: MockFn };
+const mMatchEvent = prisma.matchEvent as unknown as { create: MockFn; updateMany: MockFn };
+const mPickVenueAtMidpoint = pickVenueAtMidpoint as unknown as MockFn;
 
 function createCtx(overrides: {
   session?: Partial<SessionData>;
@@ -655,6 +684,33 @@ describe("buildMatchKeyboard (API 9.4 styled buttons)", () => {
   });
 });
 
+describe("buildDeclineReasonKeyboard", () => {
+  it("offers quick reasons plus a free-text/voice fallback", () => {
+    const kb = buildDeclineReasonKeyboard("match-42", "en");
+    const buttons = kb.inline_keyboard.flat() as Array<{ text: string; callback_data?: string }>;
+
+    expect(buttons.map((b) => b.text)).toEqual([
+      "Not my type",
+      "Different vibe",
+      "Interests don't match",
+      "Lifestyle mismatch",
+      "Something else",
+    ]);
+    expect(buttons.map((b) => b.callback_data)).toContain("mdr:match-42:interests");
+  });
+
+  it("keeps quick-reason callback_data under Telegram's 64-byte limit with UUID ids", () => {
+    const kb = buildDeclineReasonKeyboard("22b9c76f-8cb5-4669-bba4-00b3ce408cb1", "en");
+    const callbacks = kb.inline_keyboard
+      .flat()
+      .map((b) => (b as { callback_data?: string }).callback_data)
+      .filter((data): data is string => Boolean(data));
+
+    expect(callbacks).toContain("mdr:22b9c76f-8cb5-4669-bba4-00b3ce408cb1:lifestyle");
+    callbacks.forEach((data) => expect(Buffer.byteLength(data, "utf8")).toBeLessThanOrEqual(64));
+  });
+});
+
 // ---------------------------------------------------------------------------
 // sendMatchProposal: photo card + synergy header dispatch
 // ---------------------------------------------------------------------------
@@ -662,6 +718,8 @@ describe("buildMatchKeyboard (API 9.4 styled buttons)", () => {
 describe("sendMatchProposal — photo + synergy dispatch", () => {
   function makeApi() {
     return {
+      token: "test-bot-token",
+      sendLivePhoto: vi.fn().mockResolvedValue({ message_id: 9000 }),
       sendPhoto: vi.fn().mockResolvedValue({ message_id: 9001 }),
       sendMediaGroup: vi.fn().mockResolvedValue([{ message_id: 9001 }]),
       sendMessage: vi.fn().mockResolvedValue({ message_id: 9002 }),
@@ -678,8 +736,12 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
     synergyReason?: string | null;
     photosA?: string[];
     photosB?: string[];
+    profileMediaA?: unknown[];
+    profileMediaB?: unknown[];
     ageA?: number | null;
     ageB?: number | null;
+    verificationA?: string;
+    verificationB?: string;
   } = {}) {
     // `in` so explicit `null` overrides (age missing, synergy missing) win
     // over the defaults. Plain `??` coerces null back to the default.
@@ -699,9 +761,11 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
         firstName: "Alice",
         age: pick<number | null>("ageA", 22),
         language: "en",
+        verificationStatus: pick<string>("verificationA", "unverified"),
         profile: {
           psychologicalSummary: "warm",
           photos: pick<string[]>("photosA", ["file-a-1"]),
+          profileMedia: pick<unknown[]>("profileMediaA", []),
         },
       },
       userB: {
@@ -709,9 +773,11 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
         firstName: "Bob",
         age: pick<number | null>("ageB", 24),
         language: "en",
+        verificationStatus: pick<string>("verificationB", "unverified"),
         profile: {
           psychologicalSummary: "curious",
           photos: pick<string[]>("photosB", ["file-b-1", "file-b-2"]),
+          profileMedia: pick<unknown[]>("profileMediaB", []),
         },
       },
     };
@@ -742,6 +808,74 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
     );
     expect(api.sendPhoto).toHaveBeenCalledTimes(1);
     expect(api.sendPhoto).toHaveBeenCalledWith(1002, "file-a-1", { caption: "Alice, 22" });
+  });
+
+  it("sends a single live profile media item with sendLivePhoto", async () => {
+    mMatch.findUnique.mockResolvedValue(
+      findUniquePayload({
+        photosB: ["bob_static_1"],
+        profileMediaB: [
+          {
+            type: "live_photo",
+            photo: "bob_static_1",
+            livePhoto: "bob_live_1",
+            duration: 4,
+          },
+        ],
+      }),
+    );
+    const api = makeApi();
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await sendMatchProposal(api, "match-photo-1", { streamImpl: stream });
+
+    expect(api.sendLivePhoto).toHaveBeenCalledWith(1001, "bob_live_1", "bob_static_1", {
+      caption: "Bob, 24",
+    });
+  });
+
+  it("sends mixed photo/live albums with caption entities on the first item", async () => {
+    mMatch.findUnique.mockResolvedValue(
+      findUniquePayload({
+        verificationB: "verified",
+        photosB: ["bob_static_1", "bob_static_2"],
+        profileMediaB: [
+          { type: "photo", photo: "bob_static_1" },
+          {
+            type: "live_photo",
+            photo: "bob_static_2",
+            livePhoto: "bob_live_2",
+          },
+        ],
+      }),
+    );
+    const api = makeApi();
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await sendMatchProposal(api, "match-photo-1", { streamImpl: stream });
+
+    const mediaCallA = api.sendMediaGroup.mock.calls.find((c: unknown[]) => c[0] === 1001);
+    expect(mediaCallA).toBeDefined();
+    expect(mediaCallA![1]).toEqual([
+      {
+        type: "photo",
+        media: "bob_static_1",
+        caption: "Bob, 24\n✓ Verified",
+        caption_entities: [
+          {
+            type: "custom_emoji",
+            offset: "Bob, 24\n".length,
+            length: 1,
+            custom_emoji_id: "test-verified-emoji-id",
+          },
+        ],
+      },
+      {
+        type: "live_photo",
+        media: "bob_live_2",
+        photo: "bob_static_2",
+      },
+    ]);
   });
 
   it("prepends `💎 Synergy 87/99 — <reason>` to the final pitch chunk", async () => {
@@ -807,6 +941,60 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
     expect(stream).toHaveBeenCalledTimes(2);
   });
 
+  it("falls back to the static frame when a single Live Photo send fails", async () => {
+    mMatch.findUnique.mockResolvedValue(
+      findUniquePayload({
+        photosB: ["bob_static_1"],
+        profileMediaB: [
+          {
+            type: "live_photo",
+            photo: "bob_static_1",
+            livePhoto: "bob_live_1",
+          },
+        ],
+      }),
+    );
+    const api = makeApi();
+    api.sendLivePhoto.mockRejectedValueOnce(new Error("live unsupported"));
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await expect(
+      sendMatchProposal(api, "match-photo-1", { streamImpl: stream }),
+    ).resolves.toBeUndefined();
+
+    expect(api.sendPhoto).toHaveBeenCalledWith(1001, "bob_static_1", {
+      caption: "Bob, 24",
+    });
+    expect(stream).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to a static media group when a mixed Live Photo album fails", async () => {
+    mMatch.findUnique.mockResolvedValue(
+      findUniquePayload({
+        photosB: ["bob_static_1", "bob_static_2"],
+        profileMediaB: [
+          {
+            type: "live_photo",
+            photo: "bob_static_1",
+            livePhoto: "bob_live_1",
+          },
+          { type: "photo", photo: "bob_static_2" },
+        ],
+      }),
+    );
+    const api = makeApi();
+    api.sendMediaGroup.mockRejectedValueOnce(new Error("live album unsupported"));
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await sendMatchProposal(api, "match-photo-1", { streamImpl: stream });
+
+    expect(api.sendMediaGroup).toHaveBeenNthCalledWith(2, 1001, [
+      { type: "photo", media: "bob_static_1", caption: "Bob, 24" },
+      { type: "photo", media: "bob_static_2" },
+    ]);
+    expect(stream).toHaveBeenCalledTimes(2);
+  });
+
   it("omits the synergy header when score/reason are missing on the row", async () => {
     // Older rows pre-feature might land here without synergy data and with
     // an injected pitchImpl that also returns nothing — verify we don't
@@ -830,6 +1018,68 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
     expect(finalA).not.toContain("Synergy");
     expect(finalA).not.toContain("/99");
   });
+
+  it("renders the verified badge in the partner caption + sends the trust card after the pitch", async () => {
+    // Side A is the recipient; the badge describes the *partner* (B).
+    mMatch.findUnique.mockResolvedValue(
+      findUniquePayload({ verificationB: "verified" }),
+    );
+    const api = makeApi();
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await sendMatchProposal(api, "match-photo-1", { streamImpl: stream });
+
+    // Partner-photo caption now carries `Bob, 24\n✓ Verified` with a
+    // `custom_emoji` entity over the `✓` glyph (offset = headline + "\n").
+    const mediaCallA = api.sendMediaGroup.mock.calls.find((c: unknown[]) => c[0] === 1001);
+    expect(mediaCallA).toBeDefined();
+    const mediaA = mediaCallA![1] as Array<Record<string, unknown>>;
+    expect(mediaA[0]!.caption).toBe("Bob, 24\n✓ Verified");
+    expect(mediaA[0]!.caption_entities).toEqual([
+      {
+        type: "custom_emoji",
+        offset: "Bob, 24\n".length,
+        length: 1,
+        custom_emoji_id: "test-verified-emoji-id",
+      },
+    ]);
+    // Other album items must NOT carry caption fields — Telegram puts the
+    // caption on the first item only.
+    expect(mediaA[1]).toEqual({ type: "photo", media: "file-b-2" });
+
+    // Closing trust card is the last sendMessage to side A's chat, with
+    // a blockquote entity covering the entire body.
+    const trustCalls = api.sendMessage.mock.calls.filter((c: unknown[]) => c[0] === 1001);
+    expect(trustCalls).toHaveLength(1);
+    const [, body, opts] = trustCalls[0]!;
+    expect(body).toContain("face-match");
+    expect((opts as { entities: unknown[] }).entities).toEqual([
+      { type: "blockquote", offset: 0, length: (body as string).length },
+    ]);
+
+    // Side B's partner (A) is unverified → no trust card, no badge for B.
+    const mediaCallB = api.sendPhoto.mock.calls.find((c: unknown[]) => c[0] === 1002);
+    expect(mediaCallB![2]).toEqual({ caption: "Alice, 22" });
+    const trustCallsB = api.sendMessage.mock.calls.filter((c: unknown[]) => c[0] === 1002);
+    expect(trustCallsB).toHaveLength(0);
+  });
+
+  it("omits the verified badge and trust card when the partner is unverified", async () => {
+    mMatch.findUnique.mockResolvedValue(findUniquePayload());
+    const api = makeApi();
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await sendMatchProposal(api, "match-photo-1", { streamImpl: stream });
+
+    // Caption stays at the legacy `Name, Age` form — no extra line, no entities.
+    const mediaCallA = api.sendMediaGroup.mock.calls.find((c: unknown[]) => c[0] === 1001);
+    const mediaA = mediaCallA![1] as Array<Record<string, unknown>>;
+    expect(mediaA[0]!.caption).toBe("Bob, 24");
+    expect(mediaA[0]!.caption_entities).toBeUndefined();
+
+    // No closing trust card on either chat.
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -841,6 +1091,8 @@ describe("matching decision flow", () => {
     vi.clearAllMocks();
     mMatch.update.mockResolvedValue({ id: "match-1", acceptedByA: null, acceptedByB: null });
     mMatch.updateMany.mockResolvedValue({ count: 0 });
+    mMatchEvent.updateMany.mockResolvedValue({ count: 1 });
+    mProfile.updateMany.mockResolvedValue({ count: 1 });
     mUser.findUnique.mockResolvedValue({ id: "uid-A" });
   });
 
@@ -945,6 +1197,23 @@ describe("matching decision flow", () => {
       },
     });
 
+    const [declineText, declineOptions] = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(declineText).toMatch(/main reason/i);
+    expect(declineText).toMatch(/text or voice note/i);
+    expect(declineOptions).toEqual(
+      expect.objectContaining({
+        reply_markup: expect.objectContaining({
+          inline_keyboard: expect.arrayContaining([
+            expect.arrayContaining([
+              expect.objectContaining({
+                callback_data: "mdr:match-1:type",
+              }),
+            ]),
+          ]),
+        }),
+      }),
+    );
+
     // Peer DM must be the neutral nudge, NOT any message that hints
     // at decline (e.g. nothing matching "passed" / "не сложился").
     const peerCalls = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
@@ -1006,10 +1275,24 @@ describe("matching decision flow", () => {
       }),
     );
 
-    // Actor (B) gets two replies: matchAccepted + matchPeerWasDeclined.
+    // Actor (B) gets two replies: matchAccepted + accepted-side support copy.
     const replyTexts = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
     expect(replyTexts.some((s: string) => /waiting on the other person/i.test(s))).toBe(true);
-    expect(replyTexts.some((s: string) => /your match passed/i.test(s))).toBe(true);
+    expect(replyTexts.some((s: string) => /your match didn't agree to meet/i.test(s))).toBe(true);
+    expect(replyTexts.some((s: string) => /boosted your priority for next Thursday/i.test(s))).toBe(true);
+
+    // The user who accepted despite the peer's earlier decline gets a real
+    // priority boost for the next weekly batch.
+    expect(mProfile.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: "uid-B" },
+        data: expect.objectContaining({
+          standbyCount: { increment: 1 },
+          missedWeeks: { increment: 1 },
+          lastMissedAt: expect.any(Date),
+        }),
+      }),
+    );
 
     // First decider (A) gets DM'd the actor's choice — they accepted.
     const peerSends = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
@@ -1020,7 +1303,7 @@ describe("matching decision flow", () => {
 
   it("second decline on a peer-accepted match cancels and reveals both ways", async () => {
     // A accepted first. B declines. Match cancels; B sees their decline
-    // ack + reveal of A's accept; A is DM'd that B passed.
+    // ack + reveal of A's accept; A gets the accepted-side support DM.
     mMatch.findUnique.mockResolvedValueOnce(
       matchRow({ acceptedByA: true, acceptedByB: null }),
     );
@@ -1042,14 +1325,108 @@ describe("matching decision flow", () => {
 
     // Actor (B) sees matchDeclined + matchPeerWasAccepted.
     const replyTexts = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
-    expect(replyTexts.some((s: string) => /quick — \*why\*/i.test(s))).toBe(true);
+    expect(replyTexts.some((s: string) => /main reason/i.test(s))).toBe(true);
     expect(replyTexts.some((s: string) => /your match was in/i.test(s))).toBe(true);
 
-    // First decider (A) learns now that B passed.
+    // First decider (A) accepted, then learns B did not confirm the meeting.
     const peerSends = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
     expect(peerSends).toHaveLength(1);
     expect(peerSends[0]![0]).toBe(1001);
+    expect(peerSends[0]![1]).toMatch(/your match didn't agree to meet/i);
+    expect(peerSends[0]![1]).toMatch(/boosted your priority for next Thursday/i);
+    expect(mProfile.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: "uid-A" },
+        data: expect.objectContaining({
+          standbyCount: { increment: 1 },
+          missedWeeks: { increment: 1 },
+          lastMissedAt: expect.any(Date),
+        }),
+      }),
+    );
+  });
+
+  it("second decline after a peer decline stays neutral and does not boost priority", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ acceptedByA: false, acceptedByB: null }),
+    );
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:decline:match-1",
+      fromId: 1002,
+    });
+
+    await handleMatchDecision(ctx);
+
+    const replyTexts = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(replyTexts.some((s: string) => /your match passed/i.test(s))).toBe(true);
+    expect(replyTexts.some((s: string) => /boosted your priority/i.test(s))).toBe(false);
+
+    const peerSends = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+    expect(peerSends).toHaveLength(1);
     expect(peerSends[0]![1]).toMatch(/your match passed/i);
+    expect(mProfile.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("quick decline reason saves preset feedback without changing negative constraints", async () => {
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({
+        acceptedByA: false,
+        rejectionReasonA: null,
+        rejectionReasonB: null,
+      }),
+    );
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "mdr:match-1:interests",
+      fromId: 1001,
+    });
+
+    await handleDeclineReasonCallback(ctx);
+
+    expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+    expect(mMatch.update).toHaveBeenCalledWith({
+      where: { id: "match-1" },
+      data: { rejectionReasonA: "Preset reason: interests did not match" },
+    });
+    expect(mMatchEvent.updateMany).toHaveBeenCalledWith({
+      where: {
+        matchId: "match-1",
+        actorId: "uid-A",
+        targetId: "uid-B",
+        actionType: "DECLINED",
+      },
+      data: {
+        metadata: {
+          rejectionReason: "Preset reason: interests did not match",
+        },
+      },
+    });
+    expect(mProfile.upsert).not.toHaveBeenCalled();
+    expect((ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toMatch(
+      /next recommendations/i,
+    );
+  });
+
+  it("something else decline reason asks for text or voice without saving a placeholder", async () => {
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "mdr:match-1:other",
+      fromId: 1001,
+    });
+
+    await handleDeclineReasonCallback(ctx);
+
+    expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+    expect(mMatch.update).not.toHaveBeenCalled();
+    expect(mMatchEvent.updateMany).not.toHaveBeenCalled();
+    expect((ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toMatch(
+      /text or voice note/i,
+    );
   });
 
   it("ignores double-tap from the same side (own decision is final)", async () => {
@@ -1083,6 +1460,123 @@ describe("matching decision flow", () => {
 
     await handleMatchDecision(ctx);
     expect(mMatch.update).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// venue negotiation: scheduled final DM
+// ---------------------------------------------------------------------------
+
+describe("venue negotiation finalization", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mMatch.findUnique.mockReset();
+    mMatch.update.mockReset();
+    mPickVenueAtMidpoint.mockReset();
+    mMatch.update.mockResolvedValue({ id: "match-venue-1" });
+    mPickVenueAtMidpoint.mockResolvedValue({
+      name: "Test Cafe",
+      address: "123 Test St",
+      googleMapsUri: "https://maps.google.com/?cid=test",
+    });
+  });
+
+  it("adds a localized Open in Maps URL button to the selected venue, not the midpoint", async () => {
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-venue-1",
+      status: "negotiating_venue",
+      agreedTime: new Date("2026-05-16T16:00:00.000Z"),
+      vibeTextA: "quiet cafe",
+      vibeTextB: "quiet cafe",
+      vibeLatA: 50.45,
+      vibeLngA: 30.52,
+      vibeLatB: 50.45,
+      vibeLngB: 30.52,
+      parsedCategoryA: null,
+      parsedCategoryB: null,
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "ru" },
+    });
+    const api = { sendMessage: vi.fn().mockResolvedValue({}) } as any;
+
+    await tryFinalize(api, "match-venue-1");
+
+    expect(mMatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "scheduled",
+          venueLat: 50.45,
+          venueLng: 30.52,
+        }),
+      }),
+    );
+
+    const finalCalls = api.sendMessage.mock.calls.filter((call: unknown[]) => {
+      const opts = call[2] as { entities?: unknown[] } | undefined;
+      return Array.isArray(opts?.entities);
+    });
+    expect(finalCalls).toHaveLength(2);
+
+    type MapsButton = { text: string; url: string };
+    const getOnlyButton = (call: unknown[]): MapsButton => {
+      const opts = call[2] as {
+        reply_markup?: { inline_keyboard?: MapsButton[][] };
+      };
+      expect(opts.reply_markup?.inline_keyboard).toHaveLength(1);
+      expect(opts.reply_markup?.inline_keyboard?.[0]).toHaveLength(1);
+      return opts.reply_markup!.inline_keyboard![0]![0]!;
+    };
+
+    const callA = finalCalls.find((call: unknown[]) => call[0] === 1001);
+    const callB = finalCalls.find((call: unknown[]) => call[0] === 1002);
+    expect(callA).toBeDefined();
+    expect(callB).toBeDefined();
+
+    expect(getOnlyButton(callA!)).toEqual({
+      text: "📍 Open in Maps",
+      url: "https://maps.google.com/?cid=test",
+    });
+    expect(getOnlyButton(callB!)).toEqual({
+      text: "📍 Открыть в картах",
+      url: "https://maps.google.com/?cid=test",
+    });
+  });
+
+  it("falls back to a Google Maps search URL when the venue has no Places deep-link", async () => {
+    mPickVenueAtMidpoint.mockResolvedValueOnce({
+      name: "Fallback Cafe",
+      address: "123 Test St",
+      googleMapsUri: null,
+    });
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-venue-1",
+      status: "negotiating_venue",
+      agreedTime: new Date("2026-05-16T16:00:00.000Z"),
+      vibeTextA: "quiet cafe",
+      vibeTextB: "quiet cafe",
+      vibeLatA: 50.45,
+      vibeLngA: 30.52,
+      vibeLatB: 50.45,
+      vibeLngB: 30.52,
+      parsedCategoryA: null,
+      parsedCategoryB: null,
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "ru" },
+    });
+    const api = { sendMessage: vi.fn().mockResolvedValue({}) } as any;
+
+    await tryFinalize(api, "match-venue-1");
+
+    const finalCall = api.sendMessage.mock.calls.find((call: unknown[]) => {
+      const opts = call[2] as { entities?: unknown[] } | undefined;
+      return call[0] === 1001 && Array.isArray(opts?.entities);
+    })!;
+    const opts = finalCall[2] as {
+      reply_markup?: { inline_keyboard?: Array<Array<{ url: string }>> };
+    };
+    expect(opts.reply_markup?.inline_keyboard?.[0]?.[0]?.url).toBe(
+      "https://maps.google.com/?q=Fallback%20Cafe%2C%20123%20Test%20St",
+    );
   });
 });
 
@@ -1164,14 +1658,19 @@ describe("venue service", () => {
 // ---------------------------------------------------------------------------
 
 describe("datetime-entity", () => {
-  it("produces a date_time entity whose offset+length cover the placeholder", () => {
+  it("wraps a localized date string with a 📅 affordance as the entity tap target", () => {
     const base = "See you at Coupa Café";
-    const when = new Date("2026-05-01T18:00:00Z");
-    const { text, entity } = buildDateTimeEntity(base, when);
+    // 16 May 2026 19:00 Europe/Kyiv = 16:00Z (Kyiv is UTC+3 in May)
+    const when = new Date("2026-05-16T16:00:00Z");
+    const { text, entity } = buildDateTimeEntity(base, when, "en");
 
-    // The text must contain the base + the placeholder at the entity slice.
     const slice = text.slice(entity.offset, entity.offset + entity.length);
-    expect(slice.length).toBeGreaterThan(0);
+    // 📅 leads the wrapped tap target so the affordance is unmistakable.
+    expect(slice.startsWith("📅 ")).toBe(true);
+    // Rendered in Europe/Kyiv with weekday + day + month + 24h time.
+    expect(slice).toMatch(/Sat/);
+    expect(slice).toMatch(/May/);
+    expect(slice).toMatch(/19:00/);
 
     // Entity carries the unix timestamp (seconds) in `unix_time` per Bot
     // API 9.5 spec for `date_time`. Telegram rejects payloads that use
@@ -1179,5 +1678,24 @@ describe("datetime-entity", () => {
     const carried = (entity as unknown as { unix_time?: number }).unix_time;
     expect(carried).toBe(Math.floor(when.getTime() / 1000));
     expect((entity as unknown as { type: string }).type).toBe("date_time");
+  });
+
+  it("renders month names in the user's language", () => {
+    const when = new Date("2026-05-16T16:00:00Z");
+    const baseEn = "x";
+    const baseRu = "x";
+    const baseUk = "x";
+
+    const en = buildDateTimeEntity(baseEn, when, "en");
+    const ru = buildDateTimeEntity(baseRu, when, "ru");
+    const uk = buildDateTimeEntity(baseUk, when, "uk");
+
+    const sliceEn = en.text.slice(en.entity.offset, en.entity.offset + en.entity.length);
+    const sliceRu = ru.text.slice(ru.entity.offset, ru.entity.offset + ru.entity.length);
+    const sliceUk = uk.text.slice(uk.entity.offset, uk.entity.offset + uk.entity.length);
+
+    expect(sliceEn).toContain("May");
+    expect(sliceRu).toContain("мая");
+    expect(sliceUk).toContain("травня");
   });
 });

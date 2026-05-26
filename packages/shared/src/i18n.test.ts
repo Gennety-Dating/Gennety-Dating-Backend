@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { t } from "./i18n.js";
+import { SUPPORTED_LANGUAGES } from "./types.js";
 
 describe("t (translation)", () => {
   it("returns English string by default", () => {
@@ -15,6 +16,11 @@ describe("t (translation)", () => {
   it("returns Ukrainian string", () => {
     const result = t("uk", "welcome");
     expect(result).toContain("Gennety Dating");
+  });
+
+  it("returns German and Polish strings", () => {
+    expect(t("de", "chooseLanguage")).toContain("Sprache");
+    expect(t("pl", "chooseLanguage")).toContain("język");
   });
 
   it("interpolates parameters", () => {
@@ -48,9 +54,33 @@ describe("t (translation)", () => {
       "helpBody",
     ];
 
-    for (const lang of ["en", "ru", "uk"] as const) {
+    for (const lang of SUPPORTED_LANGUAGES) {
       for (const key of keys) {
         expect(typeof t(lang, key)).toBe("string");
+      }
+    }
+  });
+
+  it("localizes core preregistration and onboarding keys for every supported language", () => {
+    const keys = [
+      "consentMessage",
+      "consentAgree",
+      "askEmail",
+      "otpSent",
+      "emailVerified",
+      "chooseLanguage",
+      "settingsLanguagePick",
+      "verifyPitch",
+      "feedbackThanks",
+    ] as const;
+
+    for (const lang of SUPPORTED_LANGUAGES) {
+      for (const key of keys) {
+        const value = t(lang, key, { email: "test@stanford.edu" });
+        expect(value.length).toBeGreaterThan(0);
+        if (lang === "de" || lang === "pl") {
+          expect(value).not.toBe(t("en", key, { email: "test@stanford.edu" }));
+        }
       }
     }
   });

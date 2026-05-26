@@ -12,11 +12,13 @@ vi.mock("@gennety/db", () => ({
 
 import { prisma } from "@gennety/db";
 import {
+  applyEmergencyCancellationPeerBoost,
   applyEloUpdate,
   expectedScore,
   kFactor,
   resolveMatchElo,
   updateEloScores,
+  EMERGENCY_CANCEL_PEER_ELO_BOOST,
   ELO_MAX,
   ELO_MIN,
   K_FACTOR_CALIBRATING,
@@ -52,15 +54,15 @@ describe("kFactor", () => {
 });
 
 describe("applyEloUpdate", () => {
-  it("a win against an equal opponent on K=40 → +20", () => {
+  it("a win against an equal opponent on K=20 → +10", () => {
     const result = applyEloUpdate({ eloScore: 500, eloMatchesPlayed: 0 }, 500, 1);
-    expect(result.eloScore).toBe(520);
+    expect(result.eloScore).toBe(510);
     expect(result.eloMatchesPlayed).toBe(1);
   });
 
-  it("a loss against an equal opponent on K=40 → -20", () => {
+  it("a loss against an equal opponent on K=20 → -10", () => {
     const result = applyEloUpdate({ eloScore: 500, eloMatchesPlayed: 0 }, 500, 0);
-    expect(result.eloScore).toBe(480);
+    expect(result.eloScore).toBe(490);
   });
 
   it("upset (lower-rated wins) gains more than expected", () => {
@@ -240,5 +242,57 @@ describe("updateEloScores (DB integration)", () => {
     );
     const result = await updateEloScores("uA", "uB", true, true);
     expect(result).toBeNull();
+  });
+});
+
+describe("applyEmergencyCancellationPeerBoost", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("adds only the small emergency-cancel boost and leaves match count untouched", async () => {
+    const tx: TxLike = {
+      profile: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "profile-peer",
+          eloScore: 500,
+        }),
+        update: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (fn: (tx: TxLike) => Promise<unknown>) => fn(tx),
+    );
+
+    const result = await applyEmergencyCancellationPeerBoost("uid-peer");
+
+    expect(result).toBe(500 + EMERGENCY_CANCEL_PEER_ELO_BOOST);
+    expect(tx.profile.update).toHaveBeenCalledWith({
+      where: { id: "profile-peer" },
+      data: { eloScore: 500 + EMERGENCY_CANCEL_PEER_ELO_BOOST },
+    });
+    expect(tx.profile.update.mock.calls[0]![0].data).not.toHaveProperty(
+      "eloMatchesPlayed",
+    );
+  });
+
+  it("clamps the emergency-cancel boost at ELO_MAX", async () => {
+    const tx: TxLike = {
+      profile: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "profile-peer",
+          eloScore: ELO_MAX,
+        }),
+        update: vi.fn(),
+      },
+    };
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (fn: (tx: TxLike) => Promise<unknown>) => fn(tx),
+    );
+
+    const result = await applyEmergencyCancellationPeerBoost("uid-peer");
+
+    expect(result).toBe(ELO_MAX);
+    expect(tx.profile.update).not.toHaveBeenCalled();
   });
 });

@@ -214,16 +214,16 @@ Write a SHORT, casual message (1-2 sentences max) to bring them back. Like a fri
 
 Tone: casual, warm, no cringe. No "Здравствуйте" or formal phrases. Talk like a cool older friend.
 
-CRITICAL: Use strictly gender-neutral language. We do NOT know the user's gender. In Russian/Ukrainian, avoid gendered past-tense verb forms (e.g. do NOT use «упоминал/упоминала», «отвечал/отвечала», «відповів/відповіла» etc.). Rephrase to avoid gendered forms entirely — use infinitives, nouns, or impersonal constructions instead.
+CRITICAL: Use strictly gender-neutral language. We do NOT know the user's gender. In Russian/Ukrainian/Polish, avoid gendered past-tense verb forms (e.g. do NOT use «упоминал/упоминала», «отвечал/отвечала», «відповів/відповіла», "wróciłeś/wróciłaś"). Rephrase to avoid gendered forms entirely — use infinitives, nouns, or impersonal constructions instead.
 
 Good examples:
-- "Эй, [name]! Помнишь про хобби, о которых рассказывал(а)? У нас уже есть мэтчи 👀 Давай дооформим профиль!"
+- "Эй, [name]! Помнишь свои хобби? У нас уже есть мэтчи 👀 Давай дооформим профиль!"
 - "Almost there! Profile is almost done. Come back and let's get you matched."
 
 Bad examples (DON'T do this):
 - "Уважаемый пользователь, напоминаем вам..."
 - "Incredibly exciting matches await you!"
-- Any message with gendered past-tense forms in Russian/Ukrainian (упоминал, ответил, зашёл, etc.)
+- Any message with gendered past-tense forms in Russian/Ukrainian/Polish (упоминал, ответил, зашёл, wróciłeś/wróciłaś, etc.)
 
 Output ONLY the message text.`;
 
@@ -294,6 +294,34 @@ export function getFallbackMessage(
         return `${name ? `${name}, ` : ""}нагадуємо: профіль чекає. Пари добираються за ним 💭`;
       default:
         return `${name ? `${name}, ` : ""}останнє нагадування — без завершеного профілю не зможемо підібрати пару. Будемо раді побачити 🤍`;
+    }
+  }
+  if (lang === "de") {
+    switch (touchIndex) {
+      case 1:
+        return `Hey${greeting}, noch dabei? Dein Profil ist fast fertig 👀`;
+      case 2:
+        return `${name ? `${name}, ` : ""}komm zurück, wenn du kurz Zeit hast - wir schließen dein Profil ab ☕`;
+      case 3:
+        return `${name ? `${name}, ` : ""}abends lässt sich das Profil gut fertig machen. Dauert nur ein paar Minuten 🌙`;
+      case 4:
+        return `${name ? `${name}, ` : ""}kurzer Reminder: dein Profil ist die Basis für deine Matches 💭`;
+      default:
+        return `${name ? `${name}, ` : ""}letzter Reminder - ohne fertiges Profil können wir dich nicht matchen. Wir freuen uns auf dich 🤍`;
+    }
+  }
+  if (lang === "pl") {
+    switch (touchIndex) {
+      case 1:
+        return `Hej${greeting}, nadal z nami? Twój profil jest prawie gotowy 👀`;
+      case 2:
+        return `${name ? `${name}, ` : ""}wróć, gdy masz chwilę - dokończymy profil ☕`;
+      case 3:
+        return `${name ? `${name}, ` : ""}wieczór to dobry moment, żeby domknąć profil. Zajmie parę minut 🌙`;
+      case 4:
+        return `${name ? `${name}, ` : ""}krótkie przypomnienie: profil jest podstawą dopasowań 💭`;
+      default:
+        return `${name ? `${name}, ` : ""}ostatnie przypomnienie - bez gotowego profilu nie możemy dobrać pary. Chętnie Cię zobaczymy 🤍`;
     }
   }
   switch (touchIndex) {

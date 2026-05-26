@@ -1,5 +1,4 @@
 import { InlineKeyboard, type Api } from "grammy";
-import type { PhotoSize } from "grammy/types";
 import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
 import type { SessionData } from "@gennety/shared";
@@ -9,6 +8,9 @@ import {
   MAX_DUMP_BUFFER_CHARS,
   magicContextPrompt,
   DEFAULT_SESSION,
+  normalizeProfileMedia,
+  t,
+  type ProfileMedia,
 } from "@gennety/shared";
 import {
   runAgentTurn,
@@ -20,9 +22,25 @@ import { withTyping } from "../../utils/with-typing.js";
 import { pinStatusBanner } from "../../services/status-banner.js";
 import { dispatchToChat } from "../../chat-queue.js";
 import { sendVerificationCTA } from "./verification.js";
+import {
+  getMessageLivePhoto,
+  incomingLivePhotoMedia,
+  incomingPhotoMedia,
+  type IncomingProfileMedia,
+} from "../../services/telegram-profile-media.js";
+import { profileMediaToJson } from "../../services/profile-media-json.js";
 
 /** Callback data for the "I've pasted everything" confirmation button */
 const DUMP_DONE_CALLBACK = "dump:done";
+
+/**
+ * Heuristic split between a real LLM dump and a clarifying question while
+ * awaitingContextDump is true. Real ChatGPT/Claude responses to the Magic
+ * Prompt run 2,000–15,000 chars; user questions almost never exceed 400.
+ * A long-but-borderline question (> 400) lands in the buffer and is
+ * surfaced by execSaveContextDump's 200-char minimum on Done.
+ */
+const SHORT_MESSAGE_THRESHOLD = 400;
 
 /**
  * Handle all messages during the `conversational` onboarding step.
@@ -47,13 +65,42 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     return;
   }
 
+  // ---- Live Photo message ----
+  const livePhoto = getMessageLivePhoto(ctx.message);
+  if (livePhoto) {
+    if (ctx.session.awaitingContextDump) {
+      ctx.session.expectingPhoto = false;
+      await ctx.reply(contextDumpPhotoNudge(ctx.session.language));
+      return;
+    }
+    const extracted = incomingLivePhotoMedia(livePhoto);
+    if (!extracted.ok) {
+      await ctx.reply(livePhotoRejectionMessage(ctx.session.language, extracted.reason));
+      return;
+    }
+    await handleProfileMediaMessage(
+      ctx,
+      telegramId,
+      extracted.media,
+      ctx.message?.media_group_id,
+    );
+    return;
+  }
+
   // ---- Photo message (compressed or sent as document) ----
   const photo = ctx.message?.photo;
   if (photo && photo.length > 0) {
-    await handlePhotoMessage(
+    if (ctx.session.awaitingContextDump) {
+      ctx.session.expectingPhoto = false;
+      await ctx.reply(contextDumpPhotoNudge(ctx.session.language));
+      return;
+    }
+    const incoming = incomingPhotoMedia(photo);
+    if (!incoming) return;
+    await handleProfileMediaMessage(
       ctx,
       telegramId,
-      photo,
+      incoming,
       ctx.message?.media_group_id,
     );
     return;
@@ -61,13 +108,20 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
 
   const doc = ctx.message?.document;
   if (doc && doc.mime_type?.startsWith("image/")) {
+    if (ctx.session.awaitingContextDump) {
+      ctx.session.expectingPhoto = false;
+      await ctx.reply(contextDumpPhotoNudge(ctx.session.language));
+      return;
+    }
     // Telegram sends uncompressed photos as documents — treat them the same
-    await handlePhotoMessage(
+    const incoming = incomingPhotoMedia([
+      { file_id: doc.file_id, file_unique_id: doc.file_unique_id, width: 0, height: 0 },
+    ]);
+    if (!incoming) return;
+    await handleProfileMediaMessage(
       ctx,
       telegramId,
-      [
-        { file_id: doc.file_id, file_unique_id: doc.file_unique_id, width: 0, height: 0 },
-      ],
+      incoming,
       ctx.message?.media_group_id,
     );
     return;
@@ -86,48 +140,23 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
   // Telegram may split a long paste into multiple messages, so we accumulate
   // all chunks and only forward the full buffer to the agent when the user
   // taps the "Done" button.
+  //
+  // Routing: a short message arriving while the buffer is still empty is
+  // almost certainly a question ("why do I need to do this?"), not the LLM
+  // dump — real ChatGPT/Claude responses to the Magic Prompt run thousands
+  // of chars. Threshold lets the LLM answer the question without trapping
+  // the user in buffer mode.
   if (ctx.session.awaitingContextDump) {
-    const current = ctx.session.contextDumpBuffer;
-
-    // Hard cap: if the paste is already at/over the cap, stop accepting new
-    // chunks and auto-flush what we have. Prevents an abusive/looped paste
-    // from growing the session row without bound.
-    if (current.length >= MAX_DUMP_BUFFER_CHARS) {
-      await ctx.reply(
-        "That's more than I can store — let me work with what you've pasted so far.",
-      );
-      await handleDumpDone(ctx, telegramId);
+    const bufferEmpty = ctx.session.contextDumpBuffer.length === 0;
+    const looksLikeQuestion =
+      bufferEmpty && text.length < SHORT_MESSAGE_THRESHOLD;
+    if (looksLikeQuestion) {
+      // Fall through to the normal runAgentTurn call below — buffer stays
+      // empty, awaitingContextDump stays true, the user can paste afterwards.
+    } else {
+      await handleContextDumpChunk(ctx, telegramId, text);
       return;
     }
-
-    const separator = current.length > 0 ? "\n" : "";
-    const room = MAX_DUMP_BUFFER_CHARS - current.length - separator.length;
-    const truncated = text.length > room;
-    const chunk = truncated ? text.slice(0, Math.max(0, room)) : text;
-    ctx.session.contextDumpBuffer = current + separator + chunk;
-
-    // Only show the confirmation prompt on the first chunk (buffer was empty
-    // before we appended). For subsequent chunks just silently accumulate.
-    if (separator === "") {
-      const doneKeyboard = new InlineKeyboard().text(
-        "Done, I've pasted everything ✅",
-        DUMP_DONE_CALLBACK,
-      );
-      await ctx.reply(
-        "Got a piece ✅ — if there's more, keep pasting. Tap Done when you're finished.",
-        { reply_markup: doneKeyboard },
-      );
-    }
-
-    // If this chunk filled the buffer, auto-flush so we don't silently drop
-    // the rest of the user's paste into the void.
-    if (truncated) {
-      await ctx.reply(
-        "That's all I can store — processing what we have now.",
-      );
-      await handleDumpDone(ctx, telegramId);
-    }
-    return;
   }
 
   // ---- Normal conversational turn ----
@@ -136,9 +165,8 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
   if (result.contextDumpStarted) {
     ctx.session.awaitingContextDump = true;
     ctx.session.contextDumpBuffer = "";
-  }
-
-  if (result.expectingPhoto) {
+    ctx.session.expectingPhoto = false;
+  } else if (result.expectingPhoto) {
     ctx.session.expectingPhoto = true;
   }
 
@@ -147,7 +175,9 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     ctx.session.menuState = "idle";
     ctx.session.expectingPhoto = false;
     ctx.session.pendingPhotos = [];
+    ctx.session.pendingProfileMedia = [];
     ctx.session.pendingPhotoUniqueIds = [];
+    ctx.session.pendingPhotoScores = [];
   }
 
   // Send the Magic Prompt BEFORE the agent reply so it appears above
@@ -188,6 +218,61 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Context dump buffer accumulation
+// ---------------------------------------------------------------------------
+
+/**
+ * Append a text chunk to `contextDumpBuffer` while awaitingContextDump=true.
+ * Caller has already decided this message is a paste, not a question.
+ */
+async function handleContextDumpChunk(
+  ctx: BotContext,
+  telegramId: bigint,
+  text: string,
+): Promise<void> {
+  const current = ctx.session.contextDumpBuffer;
+
+  // Hard cap: if the paste is already at/over the cap, stop accepting new
+  // chunks and auto-flush what we have. Prevents an abusive/looped paste
+  // from growing the session row without bound.
+  if (current.length >= MAX_DUMP_BUFFER_CHARS) {
+    await ctx.reply(
+      "That's more than I can store — let me work with what you've pasted so far.",
+    );
+    await handleDumpDone(ctx, telegramId);
+    return;
+  }
+
+  const separator = current.length > 0 ? "\n" : "";
+  const room = MAX_DUMP_BUFFER_CHARS - current.length - separator.length;
+  const truncated = text.length > room;
+  const chunk = truncated ? text.slice(0, Math.max(0, room)) : text;
+  ctx.session.contextDumpBuffer = current + separator + chunk;
+
+  // Only show the confirmation prompt on the first chunk (buffer was empty
+  // before we appended). For subsequent chunks just silently accumulate.
+  if (separator === "") {
+    const doneKeyboard = new InlineKeyboard().text(
+      "Done, I've pasted everything ✅",
+      DUMP_DONE_CALLBACK,
+    );
+    await ctx.reply(
+      "Got a piece ✅ — if there's more, keep pasting. Tap Done when you're finished.",
+      { reply_markup: doneKeyboard },
+    );
+  }
+
+  // If this chunk filled the buffer, auto-flush so we don't silently drop
+  // the rest of the user's paste into the void.
+  if (truncated) {
+    await ctx.reply(
+      "That's all I can store — processing what we have now.",
+    );
+    await handleDumpDone(ctx, telegramId);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Context dump flush
 // ---------------------------------------------------------------------------
 
@@ -209,7 +294,11 @@ async function handleDumpDone(ctx: BotContext, telegramId: bigint): Promise<void
 
   const result = await withTyping(ctx, () => runAgentTurn(telegramId, buffer));
 
-  if (result.expectingPhoto) {
+  if (result.contextDumpStarted) {
+    ctx.session.awaitingContextDump = true;
+    ctx.session.contextDumpBuffer = "";
+    ctx.session.expectingPhoto = false;
+  } else if (result.expectingPhoto) {
     ctx.session.expectingPhoto = true;
   }
 
@@ -218,7 +307,9 @@ async function handleDumpDone(ctx: BotContext, telegramId: bigint): Promise<void
     ctx.session.menuState = "idle";
     ctx.session.expectingPhoto = false;
     ctx.session.pendingPhotos = [];
+    ctx.session.pendingProfileMedia = [];
     ctx.session.pendingPhotoUniqueIds = [];
+    ctx.session.pendingPhotoScores = [];
   }
 
   await sendAgentReply(ctx, result.reply);
@@ -263,6 +354,21 @@ function escapeHtml(text: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+function contextDumpPhotoNudge(language: string): string {
+  switch (language) {
+    case "ru":
+      return "Сначала скинь ответ из AI-чата на промпт выше. Фото будут следующим шагом.";
+    case "uk":
+      return "Спочатку надішли відповідь з AI-чату на промпт вище. Фото будуть наступним кроком.";
+    case "de":
+      return "Schick zuerst die Antwort aus dem AI-Chat zum Prompt oben. Fotos kommen danach.";
+    case "pl":
+      return "Najpierw wyślij odpowiedź z czatu AI na prompt powyżej. Zdjęcia będą następnym krokiem.";
+    default:
+      return "Send the AI-chat response to the prompt above first. Photos come after that.";
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -314,14 +420,14 @@ interface PhotoBatchAccumulator {
 const photoBatchAccumulators = new Map<number, PhotoBatchAccumulator>();
 const PHOTO_BATCH_DEBOUNCE_MS = 700;
 
-async function handlePhotoMessage(
+async function handleProfileMediaMessage(
   ctx: BotContext,
   telegramId: bigint,
-  photo: PhotoSize[],
+  media: IncomingProfileMedia,
   mediaGroupId: string | undefined,
 ): Promise<void> {
   if (!ctx.chat) return;
-  await handlePhotoFrame(ctx, telegramId, photo, mediaGroupId ?? null);
+  await handlePhotoFrame(ctx, telegramId, media, mediaGroupId ?? null);
 }
 
 /**
@@ -333,7 +439,7 @@ async function handlePhotoMessage(
 async function handlePhotoFrame(
   ctx: BotContext,
   telegramId: bigint,
-  photo: PhotoSize[],
+  media: IncomingProfileMedia,
   mediaGroupId: string | null,
 ): Promise<void> {
   const chatId = ctx.chat!.id;
@@ -377,9 +483,8 @@ async function handlePhotoFrame(
   }
 
   try {
-    const largest = photo[photo.length - 1]!;
-    const fileId = largest.file_id;
-    const fileUniqueId = largest.file_unique_id;
+    const fileId = media.staticPhoto.file_id;
+    const fileUniqueId = media.uniqueId;
 
     if (ctx.session.pendingPhotoUniqueIds?.includes(fileUniqueId)) return;
 
@@ -414,6 +519,10 @@ async function handlePhotoFrame(
     }
 
     ctx.session.pendingPhotos.push(fileId);
+    ctx.session.pendingProfileMedia = [
+      ...normalizeProfileMedia(ctx.session.pendingProfileMedia, ctx.session.pendingPhotos.slice(0, -1)),
+      media.profileMedia,
+    ];
     ctx.session.pendingPhotoUniqueIds = [
       ...(ctx.session.pendingPhotoUniqueIds ?? []),
       fileUniqueId,
@@ -421,7 +530,11 @@ async function handlePhotoFrame(
     ctx.session.expectingPhoto = true;
     acc.validatedCount++;
 
-    await persistPhotos(telegramId, ctx.session.pendingPhotos);
+    await persistPhotos(
+      telegramId,
+      ctx.session.pendingPhotos,
+      ctx.session.pendingProfileMedia,
+    );
   } catch (err) {
     console.error("Photo frame handling failed:", err);
     acc.hadInfraError = true;
@@ -597,21 +710,41 @@ function markOnboardingComplete(session: SessionData): void {
   session.menuState = "idle";
   session.expectingPhoto = false;
   session.pendingPhotos = [];
+  session.pendingProfileMedia = [];
   session.pendingPhotoUniqueIds = [];
+  session.pendingPhotoScores = [];
 }
 
 async function persistPhotos(
   telegramId: bigint,
   photos: string[],
+  profileMedia: readonly ProfileMedia[] = [],
 ): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: { id: true },
   });
   if (!user) return;
+  const normalizedMedia = normalizeProfileMedia(profileMedia, photos);
   await prisma.profile.upsert({
     where: { userId: user.id },
-    create: { userId: user.id, photos },
-    update: { photos },
+    create: { userId: user.id, photos, profileMedia: profileMediaToJson(normalizedMedia) },
+    update: { photos, profileMedia: profileMediaToJson(normalizedMedia) },
   });
+}
+
+type LivePhotoRejectReason = "missing_static" | "too_long" | "too_large";
+
+function livePhotoRejectionMessage(
+  language: SessionData["language"],
+  reason: LivePhotoRejectReason,
+): string {
+  switch (reason) {
+    case "missing_static":
+      return t(language, "livePhotoMissingStatic");
+    case "too_long":
+      return t(language, "livePhotoTooLong");
+    case "too_large":
+      return t(language, "livePhotoTooLarge");
+  }
 }

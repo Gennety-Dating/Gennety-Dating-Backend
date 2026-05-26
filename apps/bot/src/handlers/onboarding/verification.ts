@@ -3,24 +3,20 @@ import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { buildPersonaHostedUrl } from "../../services/persona.js";
+import { pullVerificationStatus } from "../../services/verification-pipeline.js";
 import { showMainMenu } from "../menu/main.js";
 import { pinStatusBanner } from "../../services/status-banner.js";
+import { UNVERIFIED_ELO_PENALTY } from "../../utils/elo-calculator.js";
 import type { BotContext } from "../../session.js";
 
 /** Callback data for the "Skip verification" button on the CTA card. */
 export const VERIFY_SKIP_CALLBACK = "verify:skip";
-
 /**
- * Elo penalty applied to users who tap "Skip" on the verification CTA.
- * Default seed is 500 (`Profile.eloScore`); skipping drops them to 350,
- * which materially decays the V_league multiplier in match scoring and
- * surfaces fewer candidates — exactly the friction the CTA copy promises.
- *
- * The penalty is reversible: if the user later runs Persona successfully,
- * the webhook handler resets `verificationSkippedAt` and the cold-start
- * AI vision pass re-seeds `eloScore` to its true value.
+ * Callback data for the "I'm done" button — pull-fallback when Persona's
+ * webhook hasn't landed yet (or never will, e.g. local dev). See
+ * `pullVerificationStatus` for the full semantic.
  */
-export const UNVERIFIED_ELO_PENALTY = 150;
+export const VERIFY_CHECK_CALLBACK = "verify:check";
 
 /**
  * Send the Persona liveness CTA to the user at the end of onboarding.
@@ -79,6 +75,12 @@ export async function sendVerificationCTABare(
     })
     .catch(() => {});
 
+  // Initial CTA shows only "Verify now" + "Skip" — the auto-poll
+  // (services/verification-poller.ts) handles the post-Persona return,
+  // so the manual "I've finished verification" button is unnecessary
+  // here. It stays wired up as a callback handler and surfaces on the
+  // poller's 5-minute timeout DM as a safety net for edge cases (user
+  // closed Persona without tapping Done, bot restarted mid-poll, etc.).
   const keyboard = new InlineKeyboard()
     .url(t(lang, "verifyBtnGo"), url)
     .row()
@@ -89,12 +91,64 @@ export async function sendVerificationCTABare(
 }
 
 /**
+ * Handle the "✅ I'm done" button — pull Persona's REST API for the user's
+ * latest inquiry and run the pipeline if it's `approved`. Used for cases
+ * where the webhook hasn't arrived yet (or never will, in local dev).
+ *
+ * Webhook stays primary in production — this is a safety net + the only
+ * path that works locally without a public tunnel.
+ */
+export async function handleVerificationCheck(ctx: BotContext): Promise<void> {
+  await ctx.answerCallbackQuery();
+  const lang = ctx.session.language;
+  const telegramId = BigInt(ctx.from!.id);
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (!user) return;
+
+  const outcome = await pullVerificationStatus(user.id, ctx.api);
+
+  switch (outcome.kind) {
+    case "pipeline_ran":
+      // The pipeline already DM'd the user (verified / pending_review /
+      // rejected outcome message). Nothing more to do here.
+      return;
+    case "already_done":
+      // Webhook beat us to it OR user double-tapped after a previous pull.
+      // The verified-state message was already sent when status flipped;
+      // we send a short ack so the click isn't silent.
+      await ctx.reply(t(lang, "verifyCheckAlreadyDone"));
+      return;
+    case "no_inquiry":
+      await ctx.reply(t(lang, "verifyCheckNoInquiry"));
+      return;
+    case "still_pending":
+      await ctx.reply(t(lang, "verifyCheckPending"));
+      return;
+    case "persona_failed":
+      await ctx.reply(t(lang, "verifyCheckPersonaFailed"));
+      return;
+    case "infra_error":
+      await ctx.reply(t(lang, "verifyCheckInfraError"));
+      return;
+  }
+}
+
+/**
  * Handle the "Skip" button on the verification CTA. Drops the user's
  * starting Elo by `UNVERIFIED_ELO_PENALTY`, marks them activated but
- * unverified, and surfaces the main menu.
+ * unverified, and surfaces the main menu + status banner.
  *
- * Idempotent: running it twice doesn't double-penalise the user — the
- * Elo update is gated on `verificationSkippedAt IS NULL`.
+ * Strict idempotency: a second tap (or a Telegram callback retry) early-returns
+ * after acking the callback. Without the gate the visible side-effects
+ * (`verifySkipped` ack + `showMainMenu` + `pinStatusBanner`) all re-fired,
+ * which is what the user-reported "menu duplicates twice at the end of
+ * onboarding" was: same handler executed twice. The Elo penalty path is
+ * still doubly safe via `verificationSkippedAt IS NULL` below, but the
+ * gate here removes the duplicate render before that even matters.
  */
 export async function handleVerificationSkip(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
@@ -108,14 +162,14 @@ export async function handleVerificationSkip(ctx: BotContext): Promise<void> {
   });
   if (!user) return;
 
-  // Apply the Elo penalty exactly once. updateMany returns 0 if the user
-  // already skipped (e.g. button-spam), which prevents stacking penalties.
-  if (!user.verificationSkippedAt) {
-    await prisma.profile.updateMany({
-      where: { userId: user.id },
-      data: { eloScore: { decrement: UNVERIFIED_ELO_PENALTY } },
-    });
-  }
+  // Idempotency: skip already applied. Acking the callback above is enough —
+  // do NOT re-send menu / banner / "skipped" text on the second hit.
+  if (user.verificationSkippedAt) return;
+
+  await prisma.profile.updateMany({
+    where: { userId: user.id },
+    data: { eloScore: { decrement: UNVERIFIED_ELO_PENALTY } },
+  });
 
   await prisma.user.update({
     where: { id: user.id },

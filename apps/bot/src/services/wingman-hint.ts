@@ -21,6 +21,8 @@ const FALLBACK: Record<Language, string> = {
   en: "Ask them about something they've been genuinely excited about this week.",
   ru: "Спроси, чем они по-настоящему загорелись на этой неделе.",
   uk: "Спитай, чим вони по-справжньому запалилися цього тижня.",
+  de: "Frag sie nach etwas, das sie diese Woche wirklich begeistert hat.",
+  pl: "Zapytaj, co naprawdę ich nakręciło w tym tygodniu.",
 };
 
 /**

@@ -12,12 +12,17 @@ vi.mock("@gennety/db", () => ({
     },
     profile: {
       upsert: vi.fn(),
+      updateMany: vi.fn(),
     },
     botSession: {
       findUnique: vi.fn(),
       upsert: vi.fn(),
     },
   },
+}));
+
+vi.mock("../../services/status-banner.js", () => ({
+  pinStatusBanner: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../../services/email.js", () => ({
@@ -64,13 +69,27 @@ import { prisma } from "@gennety/db";
 import { handleConsent, sendConsentPrompt } from "./consent.js";
 import { handleLanguageSelection } from "./language.js";
 import { handleConversational } from "./conversational.js";
+import { handleVerificationSkip } from "./verification.js";
 import { runAgentTurn, injectSystemMessage } from "../../services/onboarding-agent.js";
 import { validateSingleFace } from "../../services/vision/validate-face.js";
+import { showMainMenu } from "../menu/main.js";
+import { pinStatusBanner } from "../../services/status-banner.js";
 
 function createMockCtx(overrides: {
   session?: Partial<SessionData>;
   callbackData?: string;
   messageText?: string;
+  photo?: { file_id: string; file_unique_id: string };
+  livePhoto?: {
+    file_id: string;
+    file_unique_id: string;
+    static_file_id?: string;
+    static_unique_id?: string;
+    duration?: number;
+    file_size?: number;
+    width?: number;
+    height?: number;
+  };
   fromId?: number;
 }) {
   const session: SessionData = {
@@ -78,13 +97,59 @@ function createMockCtx(overrides: {
     ...overrides.session,
   };
 
+  const message = overrides.livePhoto
+    ? {
+        live_photo: {
+          file_id: overrides.livePhoto.file_id,
+          file_unique_id: overrides.livePhoto.file_unique_id,
+          duration: overrides.livePhoto.duration ?? 4,
+          width: overrides.livePhoto.width ?? 720,
+          height: overrides.livePhoto.height ?? 1280,
+          ...(overrides.livePhoto.file_size !== undefined
+            ? { file_size: overrides.livePhoto.file_size }
+            : {}),
+          ...(overrides.livePhoto.static_file_id
+            ? {
+                photo: [
+                  {
+                    file_id: overrides.livePhoto.static_file_id,
+                    file_unique_id: overrides.livePhoto.static_unique_id ?? "static_unique",
+                    width: 800,
+                    height: 800,
+                  },
+                ],
+              }
+            : {}),
+        },
+      }
+    : overrides.photo
+    ? {
+        photo: [
+          {
+            file_id: overrides.photo.file_id,
+            file_unique_id: overrides.photo.file_unique_id,
+            width: 800,
+            height: 800,
+          },
+        ],
+      }
+    : overrides.messageText
+      ? { text: overrides.messageText }
+      : undefined;
+
   return {
     session,
     from: { id: overrides.fromId ?? 12345 },
+    chat: { id: overrides.fromId ?? 12345 },
     callbackQuery: overrides.callbackData ? { data: overrides.callbackData } : undefined,
-    message: overrides.messageText ? { text: overrides.messageText } : undefined,
+    message,
+    api: {
+      sendMessage: vi.fn().mockResolvedValue(undefined),
+      sendChatAction: vi.fn().mockResolvedValue(undefined),
+    },
     reply: vi.fn().mockResolvedValue(undefined),
     replyWithPhoto: vi.fn().mockResolvedValue(undefined),
+    replyWithChatAction: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
   } as any;
 }
@@ -157,6 +222,14 @@ describe("Consent gatekeeper", () => {
     );
     // Should show language picker immediately after consent
     expect(ctx.reply).toHaveBeenCalled();
+    const markup = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[1]
+      ?.reply_markup;
+    const serializedMarkup = JSON.stringify(markup);
+    expect(serializedMarkup).toContain("lang:en");
+    expect(serializedMarkup).toContain("lang:ru");
+    expect(serializedMarkup).toContain("lang:uk");
+    expect(serializedMarkup).toContain("lang:de");
+    expect(serializedMarkup).toContain("lang:pl");
   });
 });
 
@@ -195,6 +268,28 @@ describe("Language selection → conversational transition", () => {
     expect(ctx.session.onboardingStep).toBe("conversational");
   });
 
+  it("language -> conversational on lang:de callback", async () => {
+    const ctx = createMockCtx({
+      session: { onboardingStep: "language" },
+      callbackData: "lang:de",
+    });
+
+    await handleLanguageSelection(ctx);
+    expect(ctx.session.language).toBe("de");
+    expect(ctx.session.onboardingStep).toBe("conversational");
+  });
+
+  it("language -> conversational on lang:pl callback", async () => {
+    const ctx = createMockCtx({
+      session: { onboardingStep: "language" },
+      callbackData: "lang:pl",
+    });
+
+    await handleLanguageSelection(ctx);
+    expect(ctx.session.language).toBe("pl");
+    expect(ctx.session.onboardingStep).toBe("conversational");
+  });
+
   it("kicks off the agent with an intro message after language selection", async () => {
     const ctx = createMockCtx({
       session: { onboardingStep: "language" },
@@ -214,7 +309,7 @@ describe("Language selection → conversational transition", () => {
   it("ignores invalid language callback", async () => {
     const ctx = createMockCtx({
       session: { onboardingStep: "language" },
-      callbackData: "lang:de",
+      callbackData: "lang:fr",
     });
 
     await handleLanguageSelection(ctx);
@@ -268,14 +363,189 @@ describe("Context dump buffering (multi-chunk paste fix)", () => {
     expect(ctx.session.contextDumpBuffer).toBe("");
   });
 
-  it("buffers the first text chunk and shows the Done button", async () => {
+  it("context dump mode wins if the agent also incorrectly signals expectingPhoto", async () => {
+    agentMock.mockResolvedValueOnce({
+      reply: "Paste the AI response first.",
+      expectingPhoto: true,
+      onboardingComplete: false,
+      contextPromptRequested: true,
+      contextDumpStarted: true,
+    });
+
+    const ctx = createMockCtx({
+      session: {
+        onboardingStep: "conversational",
+        awaitingContextDump: false,
+        expectingPhoto: false,
+      },
+      messageText: "ready",
+    });
+
+    await handleConversational(ctx);
+
+    expect(ctx.session.awaitingContextDump).toBe(true);
+    expect(ctx.session.expectingPhoto).toBe(false);
+  });
+
+  it("rejects photos while waiting for the user's LLM dump paste", async () => {
+    const ctx = createMockCtx({
+      session: {
+        onboardingStep: "conversational",
+        awaitingContextDump: true,
+        expectingPhoto: true,
+      },
+      photo: { file_id: "photo_1", file_unique_id: "unique_1" },
+    });
+
+    await handleConversational(ctx);
+
+    expect(validateSingleFace).not.toHaveBeenCalled();
+    expect(agentMock).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith(
+      "Send the AI-chat response to the prompt above first. Photos come after that.",
+    );
+    expect(ctx.session.expectingPhoto).toBe(false);
+  });
+
+  it("accepts a valid Live Photo and validates its static frame", async () => {
+    vi.useFakeTimers();
+    try {
+      (validateSingleFace as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        valid: true,
+      });
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        id: "uuid-live",
+      });
+      (prisma.profile.upsert as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
+
+      const ctx = createMockCtx({
+        session: {
+          onboardingStep: "conversational",
+          expectingPhoto: true,
+          pendingPhotos: [],
+          pendingProfileMedia: [],
+          pendingPhotoUniqueIds: [],
+        },
+        livePhoto: {
+          file_id: "live_video_1",
+          file_unique_id: "live_unique_1",
+          static_file_id: "live_static_1",
+          static_unique_id: "live_static_unique_1",
+          duration: 6,
+          file_size: 1024,
+          width: 720,
+          height: 1280,
+        },
+      });
+
+      await handleConversational(ctx);
+
+      expect(validateSingleFace).toHaveBeenCalledWith(ctx, "live_static_1");
+      expect(ctx.session.pendingPhotos).toEqual(["live_static_1"]);
+      expect(ctx.session.pendingProfileMedia).toEqual([
+        {
+          type: "live_photo",
+          photo: "live_static_1",
+          livePhoto: "live_video_1",
+          duration: 6,
+          width: 720,
+          height: 1280,
+          fileSize: 1024,
+        },
+      ]);
+      expect(prisma.profile.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: "uuid-live" },
+          create: expect.objectContaining({
+            photos: ["live_static_1"],
+            profileMedia: [
+              {
+                type: "live_photo",
+                photo: "live_static_1",
+                livePhoto: "live_video_1",
+                duration: 6,
+                width: 720,
+                height: 1280,
+                fileSize: 1024,
+              },
+            ],
+          }),
+        }),
+      );
+      vi.clearAllTimers();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects Live Photo without a static frame", async () => {
+    const ctx = createMockCtx({
+      session: { onboardingStep: "conversational", expectingPhoto: true },
+      livePhoto: {
+        file_id: "live_video_1",
+        file_unique_id: "live_unique_1",
+      },
+    });
+
+    await handleConversational(ctx);
+
+    expect(validateSingleFace).not.toHaveBeenCalled();
+    expect(prisma.profile.upsert).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith(
+      "That Live Photo is missing its still frame, so I can't verify it. Send it as a regular photo or choose another Live Photo.",
+    );
+  });
+
+  it("rejects Live Photo over the Telegram duration limit", async () => {
+    const ctx = createMockCtx({
+      session: { onboardingStep: "conversational", expectingPhoto: true },
+      livePhoto: {
+        file_id: "live_video_1",
+        file_unique_id: "live_unique_1",
+        static_file_id: "live_static_1",
+        duration: 11,
+      },
+    });
+
+    await handleConversational(ctx);
+
+    expect(validateSingleFace).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith(
+      "Live Photos need to be 10 seconds or shorter. Send a shorter one or a regular photo.",
+    );
+  });
+
+  it("rejects Live Photo over the Telegram file-size limit", async () => {
+    const ctx = createMockCtx({
+      session: { onboardingStep: "conversational", expectingPhoto: true },
+      livePhoto: {
+        file_id: "live_video_1",
+        file_unique_id: "live_unique_1",
+        static_file_id: "live_static_1",
+        file_size: 10 * 1024 * 1024 + 1,
+      },
+    });
+
+    await handleConversational(ctx);
+
+    expect(validateSingleFace).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith(
+      "Live Photos need to be 10 MB or smaller. Send a smaller one or a regular photo.",
+    );
+  });
+
+  it("buffers the first long-paste chunk and shows the Done button", async () => {
+    // Real ChatGPT/Claude responses to the Magic Prompt run thousands of
+    // chars; > 400 routes to buffer mode (vs. the question fall-through).
+    const longPaste = "Here is your psychological analysis. ".repeat(20);
     const ctx = createMockCtx({
       session: {
         onboardingStep: "conversational",
         awaitingContextDump: true,
         contextDumpBuffer: "",
       },
-      messageText: "First chunk of the dump",
+      messageText: longPaste,
     });
 
     await handleConversational(ctx);
@@ -283,11 +553,47 @@ describe("Context dump buffering (multi-chunk paste fix)", () => {
     // Should NOT have called the agent
     expect(agentMock).not.toHaveBeenCalled();
     // Buffer should now contain the chunk
-    expect(ctx.session.contextDumpBuffer).toBe("First chunk of the dump");
+    expect(ctx.session.contextDumpBuffer).toBe(longPaste);
     // Should have replied with the Done-button prompt
     expect(ctx.reply).toHaveBeenCalledTimes(1);
     const replyText = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
     expect(replyText).toContain("Done");
+  });
+
+  it("short message while awaiting dump (empty buffer) is treated as a question, not a paste", async () => {
+    // Most users want to ask "wait, why do I need this?" before pasting
+    // anything. Pre-fix this got swallowed into contextDumpBuffer; now it
+    // falls through to the agent so the LLM can answer.
+    agentMock.mockResolvedValueOnce({
+      reply: "It's a quick read on your psych profile — helps me match you well.",
+      expectingPhoto: false,
+      onboardingComplete: false,
+      contextPromptRequested: false,
+      contextDumpStarted: false,
+    });
+
+    const ctx = createMockCtx({
+      session: {
+        onboardingStep: "conversational",
+        awaitingContextDump: true,
+        contextDumpBuffer: "",
+      },
+      messageText: "А для чего это делать?",
+    });
+
+    await handleConversational(ctx);
+
+    // Agent was invoked with the question
+    expect(agentMock).toHaveBeenCalledWith(BigInt(12345), "А для чего это делать?");
+    // Buffer remains empty; awaitingContextDump remains true so a
+    // subsequent paste still routes through the buffer.
+    expect(ctx.session.contextDumpBuffer).toBe("");
+    expect(ctx.session.awaitingContextDump).toBe(true);
+    // No "Done" button prompt was sent — only the agent's reply.
+    const replies = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0] as string,
+    );
+    expect(replies.some((r) => r.includes("Done"))).toBe(false);
   });
 
   it("silently accumulates subsequent chunks without extra replies", async () => {
@@ -809,5 +1115,105 @@ describe("Album (media_group_id) photo coalescing", () => {
       BigInt(99001),
       expect.stringContaining("BEFORE you called request_photos"),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Verification skip — idempotency
+// ---------------------------------------------------------------------------
+
+describe("handleVerificationSkip — idempotency", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  function createSkipCtx(fromId = 1001) {
+    const session: SessionData = { ...DEFAULT_SESSION };
+    return {
+      session,
+      from: { id: fromId },
+      chat: { id: fromId },
+      callbackQuery: { data: "verify:skip" },
+      reply: vi.fn().mockResolvedValue(undefined),
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      api: {
+        sendMessage: vi.fn().mockResolvedValue(undefined),
+      },
+    } as any;
+  }
+
+  it("first call: applies Elo penalty, activates, renders menu + banner exactly once", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uid-1",
+      verificationSkippedAt: null,
+    });
+    (prisma.profile.updateMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ count: 1 });
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
+
+    const ctx = createSkipCtx();
+    await handleVerificationSkip(ctx);
+
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect(prisma.profile.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          verificationStatus: "unverified",
+          status: "active",
+          onboardingStep: "completed",
+        }),
+      }),
+    );
+    expect(ctx.reply).toHaveBeenCalledTimes(1);
+    expect(showMainMenu).toHaveBeenCalledTimes(1);
+    expect(pinStatusBanner).toHaveBeenCalledTimes(1);
+  });
+
+  it("second call (already skipped): early-returns after callback ack — no re-render of menu/banner", async () => {
+    // Regression: pre-fix, a second tap on the Skip button (or a Telegram
+    // callback retry) re-ran ctx.reply + showMainMenu + pinStatusBanner, which
+    // was the user-reported "menu duplicates twice at the end of onboarding".
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uid-1",
+      verificationSkippedAt: new Date("2026-05-08T20:00:00Z"),
+    });
+
+    const ctx = createSkipCtx();
+    await handleVerificationSkip(ctx);
+
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledTimes(1);
+    // No DB writes — the user is already in the post-skip state.
+    expect(prisma.profile.updateMany).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    // No visible side-effects — the menu/banner from the first call still stand.
+    expect(ctx.reply).not.toHaveBeenCalled();
+    expect(showMainMenu).not.toHaveBeenCalled();
+    expect(pinStatusBanner).not.toHaveBeenCalled();
+  });
+
+  it("two rapid taps on the same Skip button render menu + banner only once", async () => {
+    // First tap: row exists, verificationSkippedAt=null → full path runs.
+    // Second tap (immediately after): row now has verificationSkippedAt set,
+    // so the gate trips and we ack-only.
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ id: "uid-1", verificationSkippedAt: null })
+      .mockResolvedValueOnce({
+        id: "uid-1",
+        verificationSkippedAt: new Date("2026-05-08T20:00:00Z"),
+      });
+    (prisma.profile.updateMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ count: 1 });
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
+
+    const ctx1 = createSkipCtx();
+    const ctx2 = createSkipCtx();
+    await handleVerificationSkip(ctx1);
+    await handleVerificationSkip(ctx2);
+
+    // Penalty applied once, menu rendered once, banner pinned once.
+    expect(prisma.profile.updateMany).toHaveBeenCalledTimes(1);
+    expect(showMainMenu).toHaveBeenCalledTimes(1);
+    expect(pinStatusBanner).toHaveBeenCalledTimes(1);
+    expect(ctx1.reply).toHaveBeenCalledTimes(1);
+    expect(ctx2.reply).not.toHaveBeenCalled();
   });
 });

@@ -1,10 +1,11 @@
 import { prisma } from "@gennety/db";
-import { t, type Language } from "@gennety/shared";
+import { t, type Language, type TranslationKey } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
 import { createMatchEvent } from "../../services/match-events.js";
 import { startScheduling } from "./scheduler.js";
 import { updateEloScores } from "../../utils/elo-calculator.js";
+import { buildDeclineReasonKeyboard } from "./decline-feedback.js";
 
 /**
  * Match decision handler — Accept / Decline.
@@ -98,6 +99,19 @@ function peerPriorAccepted(match: MatchView, side: Side): boolean | null {
   return side === "A" ? match.acceptedByB : match.acceptedByA;
 }
 
+function outcomeRevealKey(
+  userAccepted: boolean,
+  peerAccepted: boolean,
+  acceptedSidePriorityBoosted: boolean,
+): TranslationKey {
+  if (userAccepted && !peerAccepted) {
+    return acceptedSidePriorityBoosted
+      ? "matchAcceptedPeerDeclinedPriority"
+      : "matchAcceptedPeerDeclined";
+  }
+  return peerAccepted ? "matchPeerWasAccepted" : "matchPeerWasDeclined";
+}
+
 export async function handleMatchDecision(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
   if (!data?.startsWith("match:")) return;
@@ -167,9 +181,11 @@ async function sendActorReveal(
   ctx: BotContext,
   peerPrior: boolean | null,
   lang: Language,
+  actorAccepted: boolean,
+  acceptedSidePriorityBoosted: boolean,
 ): Promise<void> {
   if (peerPrior === null) return;
-  const key = peerPrior ? "matchPeerWasAccepted" : "matchPeerWasDeclined";
+  const key = outcomeRevealKey(actorAccepted, peerPrior, acceptedSidePriorityBoosted);
   await ctx.reply(t(lang, key));
 }
 
@@ -183,15 +199,34 @@ async function sendPeerOutcomeReveal(
   ctx: BotContext,
   match: MatchView,
   side: Side,
+  peerAccepted: boolean,
   actorAccepted: boolean,
+  acceptedSidePriorityBoosted: boolean,
 ): Promise<void> {
   const peerLang = peerLangOf(match, side);
   const peerTelegramId = peerTelegramIdOf(match, side);
-  const key = actorAccepted ? "matchPeerWasAccepted" : "matchPeerWasDeclined";
+  const key = outcomeRevealKey(peerAccepted, actorAccepted, acceptedSidePriorityBoosted);
   try {
     await ctx.api.sendMessage(Number(peerTelegramId), t(peerLang, key));
   } catch (err) {
     console.warn("[decision] peer outcome reveal failed:", (err as Error).message);
+  }
+}
+
+async function boostAcceptedSidePriority(userId: string): Promise<boolean> {
+  try {
+    await prisma.profile.updateMany({
+      where: { userId },
+      data: {
+        standbyCount: { increment: 1 },
+        missedWeeks: { increment: 1 },
+        lastMissedAt: new Date(),
+      },
+    });
+    return true;
+  } catch (err) {
+    console.warn("[decision] accepted-side priority boost failed:", (err as Error).message);
+    return false;
   }
 }
 
@@ -269,11 +304,12 @@ async function handleAccept(
     const aDecision: boolean = side === "A" ? true : false;
     const bDecision: boolean = side === "B" ? true : false;
     await updateEloScores(match.userAId, match.userBId, aDecision, bDecision);
+    const acceptedSidePriorityBoosted = await boostAcceptedSidePriority(actorId);
     await ctx.reply(t(lang, "matchAccepted"), {
       ...(effectId ? { message_effect_id: effectId } : {}),
     });
-    await sendActorReveal(ctx, peerPrior, lang);
-    await sendPeerOutcomeReveal(ctx, match, side, true);
+    await sendActorReveal(ctx, peerPrior, lang, true, acceptedSidePriorityBoosted);
+    await sendPeerOutcomeReveal(ctx, match, side, peerPrior, true, acceptedSidePriorityBoosted);
     return;
   }
 
@@ -332,7 +368,9 @@ async function handleDecline(
     await updateEloScores(match.userAId, match.userBId, aDecision, bDecision);
   }
 
-  await ctx.reply(t(lang, "matchDeclined"), { parse_mode: "Markdown" });
+  await ctx.reply(t(lang, "matchDeclined"), {
+    reply_markup: buildDeclineReasonKeyboard(match.id, lang),
+  });
 
   if (peerPrior === null) {
     // Blind nudge — peer doesn't yet know which way the actor went.
@@ -341,6 +379,8 @@ async function handleDecline(
   }
 
   // Both have now decided → reveal both ways.
-  await sendActorReveal(ctx, peerPrior, lang);
-  await sendPeerOutcomeReveal(ctx, match, side, false);
+  const acceptedSidePriorityBoosted =
+    peerPrior === true ? await boostAcceptedSidePriority(targetId) : false;
+  await sendActorReveal(ctx, peerPrior, lang, false, acceptedSidePriorityBoosted);
+  await sendPeerOutcomeReveal(ctx, match, side, peerPrior, false, acceptedSidePriorityBoosted);
 }

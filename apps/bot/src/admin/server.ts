@@ -117,6 +117,76 @@ app.use(retentionRouter);
 app.use(datesRouter);
 app.use(verificationRouter);
 
+type AdminProfileSnapshot = {
+  height: number | null;
+  hobbies: string[];
+  partnerPreferences: string | null;
+  psychologicalSummary: string | null;
+  negativeConstraints: string | null;
+  ageRangeMin: number | null;
+  ageRangeMax: number | null;
+  photos: string[];
+};
+
+function parseProfileList(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(/\r?\n|[;,]/)
+    .map((item) => item.trim().replace(/^[-*•]\s*/, ""))
+    .filter(Boolean);
+}
+
+function serializeAdminProfile(profile: AdminProfileSnapshot | null) {
+  if (!profile) return null;
+  return {
+    height: profile.height,
+    hobbies: profile.hobbies,
+    partnerPreferences: parseProfileList(profile.partnerPreferences),
+    psychologicalSummary: profile.psychologicalSummary,
+    negativeConstraints: parseProfileList(profile.negativeConstraints),
+    ageRangeMin: profile.ageRangeMin,
+    ageRangeMax: profile.ageRangeMax,
+    photos: profile.photos,
+  };
+}
+
+const REPORT_USER_SELECT = {
+  id: true,
+  firstName: true,
+  surname: true,
+  telegramId: true,
+  email: true,
+  status: true,
+  verificationStatus: true,
+  isEmailVerified: true,
+  strikes: true,
+  profile: {
+    select: {
+      height: true,
+      hobbies: true,
+      partnerPreferences: true,
+      psychologicalSummary: true,
+      negativeConstraints: true,
+      ageRangeMin: true,
+      ageRangeMax: true,
+      photos: true,
+    },
+  },
+} as const;
+
+function serializeReportUser<
+  T extends {
+    telegramId: bigint;
+    profile: AdminProfileSnapshot | null;
+  },
+>(user: T) {
+  return {
+    ...user,
+    telegramId: user.telegramId.toString(),
+    profile: serializeAdminProfile(user.profile),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // GET /admin/analytics/demographics
 // ---------------------------------------------------------------------------
@@ -548,10 +618,10 @@ app.get("/admin/reports", async (req: Request, res: Response) => {
           adminReviewed: true,
           createdAt: true,
           reporter: {
-            select: { id: true, firstName: true, surname: true, telegramId: true },
+            select: REPORT_USER_SELECT,
           },
           reported: {
-            select: { id: true, firstName: true, surname: true, telegramId: true, status: true, strikes: true },
+            select: REPORT_USER_SELECT,
           },
           match: {
             select: { id: true, status: true },
@@ -563,8 +633,8 @@ app.get("/admin/reports", async (req: Request, res: Response) => {
 
     const serialized = data.map((r) => ({
       ...r,
-      reporter: { ...r.reporter, telegramId: r.reporter.telegramId.toString() },
-      reported: { ...r.reported, telegramId: r.reported.telegramId.toString() },
+      reporter: serializeReportUser(r.reporter),
+      reported: serializeReportUser(r.reported),
     }));
 
     res.json({ data: serialized, total, limit, offset });

@@ -1,0 +1,475 @@
+# Gennety Dating Deploy
+
+Last verified: 2026-05-04.
+
+This file is the production runbook for the DigitalOcean deployment. It
+contains the real hostnames, paths, service names, and deploy commands. Raw
+secret values are intentionally not duplicated here: keep them only in the
+gitignored env files and provider dashboards listed below.
+
+## Production Inventory
+
+| Item | Value |
+|---|---|
+| Droplet | DigitalOcean droplet `Gennety-Dating` |
+| Public IP | `167.172.178.229` |
+| SSH user | `root` |
+| SSH key on this Mac | `~/.ssh/id_rsa` |
+| Local repo | `/Users/pro/Desktop/Gennety Dating` |
+| GitHub remote | `https://github.com/Gennety-Dating/Gennety-Dating-Backend.git` |
+| Production code path | `/opt/gennety` |
+| Production env file | `/opt/gennety/.env` |
+| Mini App static path | `/var/www/dating-app` |
+| Caddy config | `/etc/caddy/Caddyfile` |
+| PM2 process | `gennety-bot` |
+| PM2 cwd | `/opt/gennety` |
+| PM2 command | `npx tsx apps/bot/src/index.ts` |
+| PM2 startup service | `pm2-root.service` |
+
+## Autonomous Deploy Rule
+
+When asked to deploy, use this file as the canonical source and proceed without
+asking for hostnames, paths, service names, Caddy routes, env-file locations, or
+credential locations. Pick the deploy path from the user's wording:
+
+- "deploy everything", "full deploy", "deploy server", or backend/code changes:
+  use **Deploy Full Server Code**.
+- "deploy Mini App", "deploy webapp", "calendar", or frontend-only changes:
+  use **Deploy Mini App Only**.
+- "env", "token", "secret", "port", or config-only changes:
+  use **Deploy Env-Only Changes**.
+- Prisma schema changes: run the schema step in **Deploy Full Server Code**.
+
+Only stop to ask when access is blocked, required secrets are missing from the
+documented locations, or the requested action is destructive beyond the rollback
+steps documented here.
+
+Production runtime versions verified on the droplet:
+
+- Node.js `v20.20.2`
+- pnpm `10.33.0`
+- npm `10.8.2`
+- PM2 `6.0.14`
+- Caddy `2.6.2`
+
+## Credentials And Secrets
+
+Do not paste raw tokens, passwords, private keys, or database URLs into this
+file. This repo explicitly forbids committing secrets. The deployment still has
+all credential locations documented here:
+
+| Credential | Where to get it |
+|---|---|
+| SSH private key | Local machine: `~/.ssh/id_rsa` |
+| Production bot/env secrets | Droplet: `/opt/gennety/.env` |
+| Local production env copy | Local repo: `.env` |
+| Local dev overrides | Local repo: `.env.local` |
+| DigitalOcean access | DigitalOcean dashboard for droplet `Gennety-Dating` |
+| DNS | Hostinger DNS for `gennety.com` |
+| Telegram production bot | BotFather entry for `@gennetybot`; token is `BOT_TOKEN` |
+| Telegram dev bot | BotFather entry for `@gennetytestbot`; token is in `.env.local` |
+| Supabase Postgres/storage | Supabase dashboard; URL/key values are in `.env` / `/opt/gennety/.env` |
+| OpenAI | OpenAI dashboard; key is `OPENAI_API_KEY` |
+| Resend | Resend dashboard; key is `RESEND_API_KEY` |
+| Persona | Persona dashboard; current env comments say sandbox credentials |
+| AWS Rekognition | AWS IAM user `gennety-bot-rekognition` |
+| Google Places | Google Cloud API key `PLACES_API_KEY` |
+| Expo push | Expo access token `EXPO_ACCESS_TOKEN` |
+
+SSH connect:
+
+```sh
+ssh root@167.172.178.229
+```
+
+SSH connect with explicit key:
+
+```sh
+ssh -i ~/.ssh/id_rsa root@167.172.178.229
+```
+
+List configured production env keys without printing values:
+
+```sh
+ssh root@167.172.178.229 'cut -d= -f1 /opt/gennety/.env'
+```
+
+Edit production env:
+
+```sh
+ssh root@167.172.178.229
+cd /opt/gennety
+cp .env ".env.bak.$(date +%Y%m%d-%H%M%S)"
+nano .env
+pm2 restart gennety-bot --update-env
+pm2 save
+```
+
+Important: production and local development must never share `BOT_TOKEN`.
+Telegram long polling sends each update to only one consumer, so a local
+process using the production token can steal updates from production.
+
+## Production Endpoints
+
+| Endpoint | Target | Purpose |
+|---|---|---|
+| `https://dating-api.gennety.com` | Caddy -> `localhost:3101` | Public `/v1/*` API for mobile app and Persona webhook |
+| `https://api-admin.gennety.com` | Caddy -> `localhost:3100` | Admin analytics API, `ADMIN_API_KEY` bearer auth |
+| `https://dating-calendar.gennety.com` | `/var/www/dating-app` | Telegram Mini App static bundles |
+| `@gennetybot` | PM2 process `gennety-bot` | Production Telegram bot, long polling |
+
+Persona production webhook target:
+
+```text
+https://dating-api.gennety.com/v1/webhooks/persona
+```
+
+Known Caddy config:
+
+```caddyfile
+api-admin.gennety.com {
+    reverse_proxy localhost:3100
+}
+
+dating-api.gennety.com {
+    reverse_proxy /v1/* localhost:3101
+}
+
+dating-calendar.gennety.com {
+    root * /var/www/dating-app
+    file_server
+    encode gzip zstd
+    try_files {path} /index.html
+
+    @assets path *.js *.css *.svg *.png *.woff2
+    header @assets Cache-Control "public, max-age=31536000, immutable"
+    header /index.html Cache-Control "no-cache"
+}
+```
+
+## Preflight Before Deploy
+
+Run from the local repo:
+
+```sh
+cd "/Users/pro/Desktop/Gennety Dating"
+git status --short
+pnpm install
+pnpm test
+pnpm build
+```
+
+For narrow code changes, file-scoped tests are acceptable before the full build:
+
+```sh
+pnpm vitest run path/to/file.test.ts
+pnpm tsc --noEmit --project apps/bot/tsconfig.json
+```
+
+Check production is reachable before changing it:
+
+```sh
+ssh root@167.172.178.229 'pm2 status'
+curl -s https://dating-api.gennety.com/v1/ping
+curl -sI https://dating-calendar.gennety.com
+curl -sI https://dating-calendar.gennety.com/onboarding.html
+curl -sI https://api-admin.gennety.com
+```
+
+Expected smoke results:
+
+- `dating-api.gennety.com/v1/ping` returns JSON with `"ok": true`.
+- `dating-calendar.gennety.com` returns HTTP `200`.
+- `dating-calendar.gennety.com/onboarding.html` returns HTTP `200`.
+- `api-admin.gennety.com` returns HTTP `401` without bearer auth.
+
+## Deploy Full Server Code
+
+The droplet path `/opt/gennety` is not a git checkout. Deploy by syncing the
+local working tree to the server while preserving remote env files.
+
+From the local repo:
+
+```sh
+cd "/Users/pro/Desktop/Gennety Dating"
+
+rsync -az --delete \
+  --exclude '.git/' \
+  --exclude 'node_modules/' \
+  --exclude 'dist/' \
+  --exclude 'tmp/' \
+  --exclude '.env' \
+  --exclude '.env.local' \
+  --exclude '.env.test' \
+  ./ root@167.172.178.229:/opt/gennety/
+```
+
+Then install, validate, and restart on the droplet:
+
+```sh
+ssh root@167.172.178.229
+cd /opt/gennety
+pnpm install --frozen-lockfile
+pnpm --filter @gennety/db db:generate
+pnpm build
+```
+
+If `packages/db/prisma/schema.prisma` changed, update the production database
+schema before restarting the bot:
+
+```sh
+cp .env ".env.bak.$(date +%Y%m%d-%H%M%S)"
+pnpm --filter @gennety/db db:push
+```
+
+There is no Prisma migrations directory in this repo at the moment, so the
+current workflow is Prisma `db:push`. Before risky schema changes, take a
+Supabase backup from the Supabase dashboard. The droplet currently does not
+have `pg_dump` installed.
+
+Restart after the code and any required schema update are both in place:
+
+```sh
+pm2 restart gennety-bot --update-env
+pm2 save
+```
+
+## Deploy Mini App Only
+
+Use the existing script:
+
+```sh
+cd "/Users/pro/Desktop/Gennety Dating"
+./scripts/deploy-webapp.sh
+curl -sI https://dating-calendar.gennety.com
+curl -sI https://dating-calendar.gennety.com/onboarding.html
+```
+
+The script builds `apps/webapp` with Vite and rsyncs:
+
+```text
+apps/webapp/dist/ -> root@167.172.178.229:/var/www/dating-app/
+```
+
+Vite is configured for multiple entries (`vite.config.ts`), so the same rsync
+deploys the Mini Apps together — `index.html` (calendar), `feedback.html`
+(post-date feedback), `location.html` (venue handoff), and `onboarding.html`
+(full-screen Telegram onboarding). Caddy's `try_files {path} /index.html`
+resolves direct hits like `/feedback.html` and `/onboarding.html` before the
+SPA fallback.
+
+The webapp production build bakes in:
+
+```text
+VITE_API_BASE_URL=https://dating-api.gennety.com
+```
+
+## Deploy Env-Only Changes
+
+```sh
+ssh root@167.172.178.229
+cd /opt/gennety
+cp .env ".env.bak.$(date +%Y%m%d-%H%M%S)"
+nano .env
+pm2 restart gennety-bot --update-env
+pm2 save
+pm2 logs gennety-bot --lines 80 --nostream
+curl -s https://dating-api.gennety.com/v1/ping
+```
+
+Required/high-impact env keys:
+
+- Telegram: `BOT_TOKEN`, `BOT_USERNAME`, `WEBAPP_URL`,
+  `WEBAPP_FEEDBACK_URL` (optional — defaults to `${WEBAPP_URL}/feedback.html`,
+  which Caddy already serves from the same `/var/www/dating-app` root),
+  `CUSTOM_EMOJI_MENU_ID`, `CUSTOM_EMOJI_ACCEPT_ID`,
+  `CUSTOM_EMOJI_DECLINE_ID`, `CUSTOM_EMOJI_VERIFIED_ID` (optional —
+  animated checkmark next to a verified partner in the match-pitch caption;
+  empty falls back to a static `✓` glyph), `MESSAGE_EFFECT_MATCH_ID`,
+  `MESSAGE_EFFECT_FEEDBACK_ID` (optional — Bot API 7.6 effect on the T+24 h
+  feedback DM; empty = no effect)
+- Database/storage: `DATABASE_URL`, `SUPABASE_URL`,
+  `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_SELFIE_BUCKET`,
+  `SUPABASE_PHOTO_BUCKET`, `SUPABASE_CHAT_BUCKET`
+- AI/email: `OPENAI_API_KEY`, `RESEND_API_KEY`, `SMTP_FROM`,
+  `OTP_LOG_TO_CONSOLE`
+- Admin API: `ADMIN_API_KEY`, `ADMIN_PORT`, `ADMIN_DASHBOARD_ORIGIN`
+- Public API: `JWT_SECRET`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`,
+  `PUBLIC_PORT`, `PUBLIC_CORS_ORIGIN`
+- Push: `EXPO_ACCESS_TOKEN`
+- Persona: `ENABLE_PERSONA_VERIFICATION`, `PERSONA_TEMPLATE_ID`,
+  `PERSONA_ENVIRONMENT_ID`, `PERSONA_API_KEY`,
+  `PERSONA_WEBHOOK_SECRET`, `PERSONA_HOSTED_URL_BASE`
+- Face match: `FACE_MATCH_PROVIDER`, `FACE_MATCH_THRESHOLD_VERIFY`
+  (default 0.85), `FACE_MATCH_THRESHOLD_REVIEW` (default 0.75),
+  `FACE_MATCH_MIN_VERIFIED_PHOTOS` (default 1), `AWS_REGION`,
+  `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `ELO_VISION_SEED_ENABLED`
+- Venue picker: `PLACES_API_KEY`
+- Optional cron overrides: `MATCH_CRON_SCHEDULE`, `CRON_TIMEZONE`,
+  `EXPIRY_CRON_SCHEDULE`, `NO_MATCH_NOTICE_CRON_SCHEDULE`,
+  `PROPOSAL_COUNTDOWN_CRON_SCHEDULE`, `RE_ENGAGEMENT_CRON_SCHEDULE`,
+  `MATCH_NUDGE_CRON_SCHEDULE`, `PRE_MATCH_ANNOUNCE_CRON_SCHEDULE`,
+  `STATUS_TIMER_CRON_SCHEDULE`, `AUTO_UNSUSPEND_CRON_SCHEDULE`,
+  `EMBEDDING_REFRESH_CRON_SCHEDULE`, `SELFIE_RETENTION_CRON_SCHEDULE`,
+  `DATE_LIFECYCLE_TICK_MS`, `DISPATCH_DELAY_MS`
+
+Production safety checks:
+
+- `DEV_OTP_BYPASS_TELEGRAM_IDS` must be empty in production.
+- `OTP_LOG_TO_CONSOLE` must be `false` or unset in production.
+- `JWT_SECRET` must be set and at least 16 characters, otherwise the public API
+  refuses to start.
+- `PUBLIC_PORT` should remain `3101` unless Caddy is changed too.
+- `ADMIN_PORT` should remain `3100` unless Caddy is changed too.
+- `WEBAPP_URL` should point to `https://dating-calendar.gennety.com`.
+
+## Logs And Operations
+
+PM2:
+
+```sh
+ssh root@167.172.178.229 'pm2 status'
+ssh root@167.172.178.229 'pm2 describe gennety-bot'
+ssh root@167.172.178.229 'pm2 logs gennety-bot --lines 200 --nostream'
+ssh root@167.172.178.229 'pm2 monit'
+```
+
+PM2 log files:
+
+```text
+/root/.pm2/logs/gennety-bot-out.log
+/root/.pm2/logs/gennety-bot-error.log
+```
+
+Warning: bot error logs can include Telegram context objects. Do not paste raw
+logs into public issues or commits without checking for tokens/user data.
+
+Caddy:
+
+```sh
+ssh root@167.172.178.229 'systemctl status caddy --no-pager'
+ssh root@167.172.178.229 'journalctl -u caddy -n 200 --no-pager'
+ssh root@167.172.178.229 'caddy validate --config /etc/caddy/Caddyfile'
+ssh root@167.172.178.229 'systemctl reload caddy'
+```
+
+PM2 startup:
+
+```sh
+ssh root@167.172.178.229 'systemctl status pm2-root --no-pager'
+ssh root@167.172.178.229 'pm2 save'
+```
+
+Manual bot restart:
+
+```sh
+ssh root@167.172.178.229
+cd /opt/gennety
+pm2 restart gennety-bot --update-env
+pm2 logs gennety-bot --lines 100 --nostream
+```
+
+If the PM2 process is missing:
+
+```sh
+ssh root@167.172.178.229
+cd /opt/gennety
+pm2 start bash --name gennety-bot -- -c "npx tsx apps/bot/src/index.ts"
+pm2 save
+systemctl status pm2-root --no-pager
+```
+
+## Database Operations
+
+Generate Prisma client:
+
+```sh
+ssh root@167.172.178.229
+cd /opt/gennety
+pnpm --filter @gennety/db db:generate
+```
+
+Push current Prisma schema to production:
+
+```sh
+ssh root@167.172.178.229
+cd /opt/gennety
+pnpm --filter @gennety/db db:push
+```
+
+Check Prisma version/config:
+
+```sh
+ssh root@167.172.178.229 'pnpm --dir /opt/gennety --filter @gennety/db exec prisma --version'
+```
+
+Current production logs showed this schema drift pattern:
+
+```text
+Prisma P2022: The column `users.referral_source` does not exist in the current database.
+```
+
+If that appears after deploying code that references a new column, run
+`pnpm --filter @gennety/db db:push` on the droplet and restart PM2.
+
+## Caddy Or Domain Changes
+
+Edit and validate:
+
+```sh
+ssh root@167.172.178.229
+nano /etc/caddy/Caddyfile
+caddy fmt --overwrite /etc/caddy/Caddyfile
+caddy validate --config /etc/caddy/Caddyfile
+systemctl reload caddy
+journalctl -u caddy -n 80 --no-pager
+```
+
+DNS for `gennety.com` is managed at Hostinger. All Gennety Dating API domains
+must stay prefixed with `dating-` or `api-admin`; `api.gennety.com` belongs to
+a sibling project and must not be used here.
+
+## Rollback
+
+Code rollback is currently file sync based, not git based on the server.
+
+Fast rollback options:
+
+1. Re-sync a known-good local checkout to `/opt/gennety`.
+2. Restore a previous local commit, then run the full server deploy again.
+3. If only env changed, restore one of `/opt/gennety/.env.bak.*`, then restart
+   PM2.
+4. If only Mini App changed, rebuild and rerun `./scripts/deploy-webapp.sh`
+   from a known-good local checkout.
+
+Env rollback:
+
+```sh
+ssh root@167.172.178.229
+cd /opt/gennety
+ls -lt .env.bak.*
+cp .env.bak.YYYYMMDD-HHMMSS .env
+pm2 restart gennety-bot --update-env
+pm2 save
+```
+
+## Post-Deploy Checklist
+
+```sh
+ssh root@167.172.178.229 'pm2 status'
+ssh root@167.172.178.229 'pm2 logs gennety-bot --lines 100 --nostream'
+curl -s https://dating-api.gennety.com/v1/ping
+curl -sI https://dating-calendar.gennety.com
+curl -sI https://dating-calendar.gennety.com/onboarding.html
+curl -sI https://api-admin.gennety.com
+```
+
+Then check:
+
+- PM2 `gennety-bot` is `online`.
+- Bot log says `Bot @gennetybot started`.
+- Bot log says admin API is listening on `:3100` when `ADMIN_API_KEY` is set.
+- Bot log says public API is listening on `:3101`.
+- Public `/v1/ping` returns `{ "ok": true, ... }`.
+- Calendar and onboarding return HTTP `200`.
+- Admin API returns HTTP `401` without bearer auth.

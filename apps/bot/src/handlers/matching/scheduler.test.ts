@@ -37,13 +37,15 @@ import { prisma } from "@gennety/db";
 import {
   generateProposalSlots,
   formatSlotLabel,
-  buildProposalKeyboard,
   buildCalendarKeyboard,
   startScheduling,
   handleSchedulePick,
   handleCalendarWebAppData,
-  MAX_AI_ITERATIONS,
-  PROPOSALS_PER_ROUND,
+  processCalendarSlotsUpdate,
+  getCalendarState,
+  CALENDAR_DAY_COUNT,
+  CALENDAR_SLOT_COUNT,
+  CALENDAR_TIME_SLOTS,
 } from "./scheduler.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
 
@@ -80,228 +82,542 @@ function createCtx(overrides: {
 }
 
 describe("scheduler: pure slot helpers", () => {
-  it("generateProposalSlots returns PROPOSALS_PER_ROUND slots by default", () => {
+  it("generateProposalSlots returns 6 consecutive days with 5 time choices per day", () => {
     const slots = generateProposalSlots(new Date("2026-04-09T12:00:00Z"));
-    expect(slots.length).toBe(PROPOSALS_PER_ROUND);
-    for (const s of slots) {
-      expect(s.getHours()).toBe(19);
-      const d = s.getDay();
-      expect(d).not.toBe(0); // Sunday excluded
-      expect(d).not.toBe(1); // Monday excluded
+    expect(slots.length).toBe(CALENDAR_SLOT_COUNT);
+    expect(CALENDAR_DAY_COUNT).toBe(6);
+    expect(CALENDAR_TIME_SLOTS).toEqual([
+      { hour: 17, minute: 30 },
+      { hour: 18, minute: 0 },
+      { hour: 18, minute: 30 },
+      { hour: 19, minute: 0 },
+      { hour: 19, minute: 30 },
+    ]);
+
+    for (let day = 0; day < CALENDAR_DAY_COUNT; day++) {
+      const daySlots = slots.slice(
+        day * CALENDAR_TIME_SLOTS.length,
+        (day + 1) * CALENDAR_TIME_SLOTS.length,
+      );
+      expect(daySlots.length).toBe(CALENDAR_TIME_SLOTS.length);
+      expect(daySlots.map((s) => [s.getHours(), s.getMinutes()])).toEqual(
+        CALENDAR_TIME_SLOTS.map((s) => [s.hour, s.minute]),
+      );
+    }
+
+    // Days are CONSECUTIVE (no Sun/Mon skip).
+    for (let i = CALENDAR_TIME_SLOTS.length; i < slots.length; i += CALENDAR_TIME_SLOTS.length) {
+      const dayDiff =
+        (slots[i]!.getTime() - slots[i - CALENDAR_TIME_SLOTS.length]!.getTime()) /
+        (24 * 60 * 60 * 1000);
+      expect(Math.round(dayDiff)).toBe(1);
     }
   });
 
-  it("formatSlotLabel yields a short, non-empty label", () => {
+  it("lets tests request a smaller number of calendar days", () => {
+    const slots = generateProposalSlots(new Date("2026-04-09T12:00:00Z"), 2);
+    expect(slots.length).toBe(2 * CALENDAR_TIME_SLOTS.length);
+  });
+
+  it("formatSlotLabel yields a non-empty label", () => {
     const label = formatSlotLabel(new Date("2026-04-10T19:00:00Z"), "en");
     expect(label.length).toBeGreaterThan(0);
   });
 
-  it("buildProposalKeyboard contains one button per slot and a callback carrying the ISO timestamp", () => {
-    const slots = [
-      new Date("2026-04-10T19:00:00.000Z"),
-      new Date("2026-04-11T19:00:00.000Z"),
-    ];
-    const kb = buildProposalKeyboard("match-1", slots, "en");
-    expect(kb.inline_keyboard.length).toBe(2);
-    for (let i = 0; i < slots.length; i++) {
-      const btn = kb.inline_keyboard[i]![0] as { callback_data: string };
-      expect(btn.callback_data).toBe(`sched:pick:match-1:${i}`);
-      // Telegram caps callback_data at 64 bytes — assert we stay well under it
-      // even with a real UUID. Slot index encoding gives us a wide margin.
-      expect(Buffer.byteLength(btn.callback_data, "utf8")).toBeLessThanOrEqual(64);
-    }
-  });
-
   it("buildCalendarKeyboard emits a web_app button — NOT a plain URL button", () => {
-    const kb = buildCalendarKeyboard("https://example.com/calendar?match=abc", "en");
+    const kb = buildCalendarKeyboard("https://example.com/calendar?match=abc&lang=en", "en");
     const btn = kb.inline_keyboard[0]![0] as { web_app?: { url: string } };
-    expect(btn.web_app?.url).toBe("https://example.com/calendar?match=abc");
+    expect(btn.web_app?.url).toBe("https://example.com/calendar?match=abc&lang=en");
   });
 });
 
-describe("scheduler: startScheduling iteration progression", () => {
+describe("scheduler: startScheduling", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // mockReset clears the queued `mockResolvedValueOnce` returns
+    // (clearAllMocks only zaps call history) — important here because
+    // some tests intentionally don't consume their mUser queue, and
+    // a leftover would silently feed the next test.
+    mMatch.findUnique.mockReset();
+    mMatch.update.mockReset();
+    mUser.findUnique.mockReset();
+    mStartVenue.mockReset();
+    mStartVenue.mockResolvedValue(undefined);
   });
 
-  it("iteration 0 -> iteration 1: writes schedulingIteration=1 and sends proposal messages", async () => {
-    mMatch.findUnique
-      .mockResolvedValueOnce({
-        id: "match-1",
-        schedulingIteration: 0,
-        userA: { telegramId: 1001n, language: "en" },
-        userB: { telegramId: 1002n, language: "en" },
-      })
-      .mockResolvedValueOnce({
-        userA: { telegramId: 1001n, language: "en" },
-        userB: { telegramId: 1002n, language: "en" },
-      });
+  it("writes the proposed-time grid, clears any prior availability, pins iteration=3, and sends the calendar button to both Telegram users", async () => {
     mMatch.update.mockResolvedValue({});
+    mMatch.findUnique.mockResolvedValueOnce({
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "ru" },
+    });
 
     const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
     await startScheduling(api, "match-1");
 
-    const call = mMatch.update.mock.calls[0]![0] as {
-      data: { schedulingIteration: number; proposedTimes: Date[] };
+    const updateArg = mMatch.update.mock.calls[0]![0] as {
+      data: {
+        schedulingIteration: number;
+        proposedTimes: Date[];
+        availableTimesA: Date[];
+        availableTimesB: Date[];
+      };
     };
-    expect(call.data.schedulingIteration).toBe(1);
-    expect(call.data.proposedTimes.length).toBe(PROPOSALS_PER_ROUND);
-    // One message per user.
+    expect(updateArg.data.schedulingIteration).toBe(3);
+    expect(updateArg.data.proposedTimes.length).toBe(CALENDAR_SLOT_COUNT);
+    expect(updateArg.data.availableTimesA).toEqual([]);
+    expect(updateArg.data.availableTimesB).toEqual([]);
     expect(api.sendMessage).toHaveBeenCalledTimes(2);
-  });
-
-  it("iteration 2 -> iteration 3: sends Mini App calendar buttons, sets schedulingIteration=3", async () => {
-    mMatch.findUnique
-      .mockResolvedValueOnce({
-        id: "match-1",
-        schedulingIteration: MAX_AI_ITERATIONS,
-        userA: { telegramId: 1001n, language: "en" },
-        userB: { telegramId: 1002n, language: "en" },
-      })
-      .mockResolvedValueOnce({
-        userA: { telegramId: 1001n, language: "en" },
-        userB: { telegramId: 1002n, language: "en" },
-      });
-    mMatch.update.mockResolvedValue({});
-
-    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
-    await startScheduling(api, "match-1");
-
-    const updates = mMatch.update.mock.calls.map((c) => c[0]);
-    expect(
-      updates.some(
-        (u) => (u.data as { schedulingIteration?: number }).schedulingIteration === 3,
-      ),
-    ).toBe(true);
-    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    // Per-user URL carries `&lang=` so the Mini App can render in their tongue.
+    const sentUrls = api.sendMessage.mock.calls.map(
+      (c: any[]) => (c[2] as { reply_markup: { inline_keyboard: any[][] } }).reply_markup.inline_keyboard[0][0].web_app.url,
+    ) as string[];
+    expect(sentUrls.some((u) => u.includes("lang=en"))).toBe(true);
+    expect(sentUrls.some((u) => u.includes("lang=ru"))).toBe(true);
   });
 });
 
-describe("scheduler: handleSchedulePick overlap detection", () => {
+describe("scheduler: handleSchedulePick (legacy callback fallback)", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // mockReset clears the queued `mockResolvedValueOnce` returns
+    // (clearAllMocks only zaps call history) — important here because
+    // some tests intentionally don't consume their mUser queue, and
+    // a leftover would silently feed the next test.
+    mMatch.findUnique.mockReset();
+    mMatch.update.mockReset();
+    mUser.findUnique.mockReset();
+    mStartVenue.mockReset();
+    mStartVenue.mockResolvedValue(undefined);
   });
 
-  it("rejects a slot not in the current proposedTimes set", async () => {
+  it("acknowledges a stale `sched:pick:*` tap and re-delivers the calendar button instead of silently failing", async () => {
+    const ctx = createCtx({
+      session: { onboardingStep: "completed", language: "en" },
+      callbackData: "sched:pick:match-1:0",
+    });
+
+    await handleSchedulePick(ctx);
+
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect(ctx.reply).toHaveBeenCalledTimes(1);
+    const replyArgs = ctx.reply.mock.calls[0]!;
+    const markup = (replyArgs[1] as { reply_markup: { inline_keyboard: any[][] } }).reply_markup;
+    const btn = markup.inline_keyboard[0]![0] as { web_app?: { url: string } };
+    expect(btn.web_app?.url).toContain("match=match-1");
+    // Critically: we do NOT touch the DB on this fallback path.
+    expect(mMatch.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("scheduler: processCalendarSlotsUpdate", () => {
+  beforeEach(() => {
+    // mockReset clears the queued `mockResolvedValueOnce` returns
+    // (clearAllMocks only zaps call history) — important here because
+    // some tests intentionally don't consume their mUser queue, and
+    // a leftover would silently feed the next test.
+    mMatch.findUnique.mockReset();
+    mMatch.update.mockReset();
+    mUser.findUnique.mockReset();
+    mStartVenue.mockReset();
+    mStartVenue.mockResolvedValue(undefined);
+  });
+
+  function mockMatchInState(overrides: {
+    availableTimesA?: Date[];
+    availableTimesB?: Date[];
+    proposedTimes?: Date[];
+  }) {
     mMatch.findUnique.mockResolvedValueOnce({
       id: "match-1",
       userAId: "uid-A",
       userBId: "uid-B",
       status: "negotiating",
-      schedulingIteration: 1,
-      proposedTimes: [new Date("2026-04-10T19:00:00.000Z")],
-      pickedTimeA: null,
-      pickedTimeB: null,
+      proposedTimes: overrides.proposedTimes ?? [],
+      availableTimesA: overrides.availableTimesA ?? [],
+      availableTimesB: overrides.availableTimesB ?? [],
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "en" },
     });
+  }
 
-    const ctx = createCtx({
-      session: { onboardingStep: "completed" },
-      // Index 99 is out-of-bounds for proposedTimes (length 1).
-      callbackData: "sched:pick:match-1:99",
+  it("rejects an ISO that's not on the proposedTimes allowlist (security boundary)", async () => {
+    mockMatchInState({
+      proposedTimes: [new Date("2026-05-01T19:00:00.000Z")],
     });
-    await handleSchedulePick(ctx);
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
 
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [
+      "2026-09-09T19:00:00.000Z",
+    ]);
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.reason).toBe("invalid-slot");
     expect(mMatch.update).not.toHaveBeenCalled();
   });
 
-  it("writes pickedTimeA when user A picks a valid slot and peer hasn't picked yet", async () => {
-    const slot = new Date("2026-04-10T19:00:00.000Z");
-    mMatch.findUnique
-      .mockResolvedValueOnce({
-        id: "match-1",
-        userAId: "uid-A",
-        userBId: "uid-B",
-        status: "negotiating",
-        schedulingIteration: 1,
-        proposedTimes: [slot],
-        pickedTimeA: null,
-        pickedTimeB: null,
-      })
-      .mockResolvedValueOnce({ pickedTimeA: slot, pickedTimeB: null });
-
-    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
-
-    const ctx = createCtx({
-      session: { onboardingStep: "completed" },
-      // Slot index 0 → proposedTimes[0] = slot.
-      callbackData: `sched:pick:match-1:0`,
+  it("locks in the *earliest* common slot and hands off to venue negotiation when both arrays now intersect", async () => {
+    const early = new Date("2026-05-01T19:00:00.000Z");
+    const middle = new Date("2026-05-02T19:00:00.000Z");
+    const late = new Date("2026-05-03T19:00:00.000Z");
+    // Peer already has [middle, late]. We submit [early, middle] — overlap is
+    // {middle}; that's also the earliest common slot, so we agree on middle.
+    mockMatchInState({
+      proposedTimes: [early, middle, late],
+      availableTimesA: [],
+      availableTimesB: [middle, late],
     });
-    await handleSchedulePick(ctx);
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
 
-    const first = mMatch.update.mock.calls[0]![0] as { data: { pickedTimeA?: Date } };
-    expect(first.data.pickedTimeA?.getTime()).toBe(slot.getTime());
-  });
-});
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [
+      early.toISOString(),
+      middle.toISOString(),
+    ]);
 
-describe("scheduler: overlap hands off to venue negotiation", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("when both users pick the same slot, handleSchedulePick triggers startVenueNegotiation (not direct scheduled)", async () => {
-    const slot = new Date("2026-04-10T19:00:00.000Z");
-    mMatch.findUnique
-      .mockResolvedValueOnce({
-        id: "match-1",
-        userAId: "uid-A",
-        userBId: "uid-B",
-        status: "negotiating",
-        schedulingIteration: 1,
-        proposedTimes: [slot],
-        pickedTimeA: null,
-        pickedTimeB: slot,
-      })
-      // Reload after update: both picks now match.
-      .mockResolvedValueOnce({ pickedTimeA: slot, pickedTimeB: slot });
-    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
-
-    const ctx = createCtx({
-      session: { onboardingStep: "completed" },
-      callbackData: `sched:pick:match-1:0`,
-    });
-    await handleSchedulePick(ctx);
-
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.agreedTime).toBe(middle.toISOString());
     expect(mStartVenue).toHaveBeenCalledTimes(1);
     const [, matchId, agreedTime] = mStartVenue.mock.calls[0]!;
     expect(matchId).toBe("match-1");
-    expect((agreedTime as Date).getTime()).toBe(slot.getTime());
+    expect((agreedTime as Date).getTime()).toBe(middle.getTime());
+  });
+
+  it("on the actor's first non-empty submission, DMs the peer (calendar button) AND sends the actor a confirmation receipt", async () => {
+    const slot = new Date("2026-05-01T19:00:00.000Z");
+    mockMatchInState({
+      proposedTimes: [slot],
+      availableTimesA: [],
+      availableTimesB: [],
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [
+      slot.toISOString(),
+    ]);
+
+    expect(res.ok).toBe(true);
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    // Both DM targets — peer (1002) + actor (1001) — fired exactly once.
+    const targets = api.sendMessage.mock.calls.map((c: any[]) => c[0]).sort();
+    expect(targets).toEqual([1001, 1002]);
+    expect(mStartVenue).not.toHaveBeenCalled();
+  });
+
+  it("returns overlapCandidates and does NOT auto-lock when intersection has more than one slot", async () => {
+    const a = new Date("2026-05-01T19:00:00.000Z");
+    const b = new Date("2026-05-02T19:00:00.000Z");
+    const c = new Date("2026-05-03T19:00:00.000Z");
+    // Peer has [a, b, c]. Actor submits [a, b]. Intersection = [a, b] —
+    // server must NOT pick the earliest; instead returns candidates so
+    // the Mini App's confirm card surfaces them to the actor.
+    mockMatchInState({
+      proposedTimes: [a, b, c],
+      availableTimesA: [],
+      availableTimesB: [a, b, c],
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [
+      a.toISOString(),
+      b.toISOString(),
+    ]);
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.agreedTime).toBeNull();
+      expect(res.overlapCandidates).toEqual([a.toISOString(), b.toISOString()]);
+      expect(res.bothPicked).toBe(true);
+    }
+    // Critical: no venue handoff when overlap is multi.
+    expect(mStartVenue).not.toHaveBeenCalled();
+    // No DMs in the multi-overlap path — actor is still in the Mini App
+    // and the confirm card collapses to size 1 on the next POST.
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("collapses to single-overlap auto-lock on a follow-up POST with one of the candidates", async () => {
+    const a = new Date("2026-05-01T19:00:00.000Z");
+    const b = new Date("2026-05-02T19:00:00.000Z");
+    // Peer has [a, b]. Actor (after multi-overlap card) re-POSTs just
+    // [a] to commit it. Intersection = [a], single — auto-lock fires.
+    mockMatchInState({
+      proposedTimes: [a, b],
+      availableTimesA: [a, b], // their previous multi-overlap submission
+      availableTimesB: [a, b],
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [
+      a.toISOString(),
+    ]);
+
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.agreedTime).toBe(a.toISOString());
+      expect(res.overlapCandidates).toEqual([]);
+    }
+    expect(mStartVenue).toHaveBeenCalledTimes(1);
+  });
+
+  it("when both sides have submitted but no shared slot exists, DMs only the peer with the counter-proposal prompt", async () => {
+    const a = new Date("2026-05-01T19:00:00.000Z");
+    const b = new Date("2026-05-02T19:00:00.000Z");
+    const c = new Date("2026-05-03T19:00:00.000Z");
+    // Peer has [c]. Actor submits [a, b] — no intersection.
+    mockMatchInState({
+      proposedTimes: [a, b, c],
+      availableTimesA: [],
+      availableTimesB: [c],
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [
+      a.toISOString(),
+      b.toISOString(),
+    ]);
+
+    expect(res.ok).toBe(true);
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    const targets = api.sendMessage.mock.calls.map((c: any[]) => c[0]).sort();
+    expect(targets).toEqual([1002]);
+    expect(api.sendMessage.mock.calls[0]![1]).toContain("suggested a different time");
+  });
+
+  it("does NOT re-DM the peer on a redundant re-save with the same set (idempotency)", async () => {
+    const a = new Date("2026-05-01T19:00:00.000Z");
+    const b = new Date("2026-05-02T19:00:00.000Z");
+    const c = new Date("2026-05-03T19:00:00.000Z");
+    // Actor previously submitted [a, b]; peer has [c]. No overlap.
+    // Actor re-saves the SAME [a, b] — should NOT re-spam the peer with
+    // "no overlap" DMs.
+    mockMatchInState({
+      proposedTimes: [a, b, c],
+      availableTimesA: [a, b],
+      availableTimesB: [c],
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    await processCalendarSlotsUpdate(api, 1001n, "match-1", [
+      a.toISOString(),
+      b.toISOString(),
+    ]);
+
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does NOT re-DM the peer on a subsequent update (only the empty→non-empty transition triggers it)", async () => {
+    const slot1 = new Date("2026-05-01T19:00:00.000Z");
+    const slot2 = new Date("2026-05-02T19:00:00.000Z");
+    mockMatchInState({
+      proposedTimes: [slot1, slot2],
+      availableTimesA: [slot1], // already non-empty
+      availableTimesB: [],
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    await processCalendarSlotsUpdate(api, 1001n, "match-1", [
+      slot1.toISOString(),
+      slot2.toISOString(),
+    ]);
+
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("dedupes and sorts the submitted ISO array on disk", async () => {
+    const a = new Date("2026-05-03T19:00:00.000Z");
+    const b = new Date("2026-05-01T19:00:00.000Z");
+    mockMatchInState({
+      proposedTimes: [a, b],
+      availableTimesA: [],
+      availableTimesB: [], // peer empty so no overlap, no DM noise
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    await processCalendarSlotsUpdate(api, 1001n, "match-1", [
+      a.toISOString(),
+      b.toISOString(),
+      a.toISOString(), // duplicate
+    ]);
+
+    const written = (mMatch.update.mock.calls[0]![0] as { data: { availableTimesA: Date[] } })
+      .data.availableTimesA;
+    expect(written.length).toBe(2);
+    expect(written[0]!.getTime()).toBe(b.getTime()); // earliest first
+    expect(written[1]!.getTime()).toBe(a.getTime());
+  });
+
+  it("rejects updates on a match that's no longer in the `negotiating` state", async () => {
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-1",
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "scheduled",
+      proposedTimes: [],
+      availableTimesA: [],
+      availableTimesB: [],
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "en" },
+    });
+
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", []);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.reason).toBe("wrong-state");
   });
 });
 
-describe("scheduler: handleCalendarWebAppData (iteration 3)", () => {
+describe("scheduler: getCalendarState", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // mockReset clears the queued `mockResolvedValueOnce` returns
+    // (clearAllMocks only zaps call history) — important here because
+    // some tests intentionally don't consume their mUser queue, and
+    // a leftover would silently feed the next test.
+    mMatch.findUnique.mockReset();
+    mMatch.update.mockReset();
+    mUser.findUnique.mockReset();
+    mStartVenue.mockReset();
+    mStartVenue.mockResolvedValue(undefined);
   });
 
-  it("parses JSON payload, updates pickedTimeA, and stays open when peer hasn't picked", async () => {
+  it("returns mySlots / peerSlots from the requester's perspective and flags isFirstMover when peer is empty", async () => {
     const slot = new Date("2026-05-01T19:00:00.000Z");
-    mMatch.findUnique
-      .mockResolvedValueOnce({
-        id: "match-1",
-        userAId: "uid-A",
-        userBId: "uid-B",
-        status: "negotiating",
-        schedulingIteration: 3,
-        proposedTimes: [slot],
-        pickedTimeA: null,
-        pickedTimeB: null,
-      })
-      .mockResolvedValueOnce({ pickedTimeA: slot, pickedTimeB: null });
+    mMatch.findUnique.mockResolvedValueOnce({
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "negotiating",
+      proposedTimes: [slot],
+      availableTimesA: [slot],
+      availableTimesB: [],
+      agreedTime: null,
+    });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+
+    const res = await getCalendarState(1001n, "match-1");
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.mySlots).toEqual([slot.toISOString()]);
+      expect(res.peerSlots).toEqual([]);
+      expect(res.isFirstMover).toBe(true);
+    }
+  });
+
+  it("flips mySlots / peerSlots correctly for user B", async () => {
+    const slot = new Date("2026-05-01T19:00:00.000Z");
+    mMatch.findUnique.mockResolvedValueOnce({
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "negotiating",
+      proposedTimes: [slot],
+      availableTimesA: [slot],
+      availableTimesB: [],
+      agreedTime: null,
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
+
+    const res = await getCalendarState(1002n, "match-1");
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.mySlots).toEqual([]);
+      expect(res.peerSlots).toEqual([slot.toISOString()]);
+      // B sees A's slot — B is *not* the first mover.
+      expect(res.isFirstMover).toBe(false);
+    }
+  });
+
+  it("rejects callers who aren't part of the match (403 path)", async () => {
+    mMatch.findUnique.mockResolvedValueOnce({
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "negotiating",
+      proposedTimes: [],
+      availableTimesA: [],
+      availableTimesB: [],
+      agreedTime: null,
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-other" });
+
+    const res = await getCalendarState(9999n, "match-1");
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.reason).toBe("not-participant");
+  });
+});
+
+describe("scheduler: handleCalendarWebAppData (legacy WS path)", () => {
+  beforeEach(() => {
+    // mockReset clears the queued `mockResolvedValueOnce` returns
+    // (clearAllMocks only zaps call history) — important here because
+    // some tests intentionally don't consume their mUser queue, and
+    // a leftover would silently feed the next test.
+    mMatch.findUnique.mockReset();
+    mMatch.update.mockReset();
+    mUser.findUnique.mockReset();
+    mStartVenue.mockReset();
+    mStartVenue.mockResolvedValue(undefined);
+  });
+
+  it("parses the new `pickedIsos` array shape", async () => {
+    const slot = new Date("2026-05-01T19:00:00.000Z");
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-1",
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "negotiating",
+      proposedTimes: [slot],
+      availableTimesA: [],
+      availableTimesB: [],
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "en" },
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
 
     const ctx = createCtx({
       session: { onboardingStep: "completed" },
+      fromId: 1001,
       webAppData: JSON.stringify({
         matchId: "match-1",
-        pickedIso: slot.toISOString(),
+        pickedIsos: [slot.toISOString()],
       }),
     });
 
     await handleCalendarWebAppData(ctx);
 
     expect(mMatch.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ pickedTimeA: expect.any(Date) }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ availableTimesA: expect.any(Array) }),
+      }),
     );
+  });
+
+  it("still accepts the legacy single-`pickedIso` shape from older bundles", async () => {
+    const slot = new Date("2026-05-01T19:00:00.000Z");
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-1",
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "negotiating",
+      proposedTimes: [slot],
+      availableTimesA: [],
+      availableTimesB: [],
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "en" },
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      fromId: 1001,
+      webAppData: JSON.stringify({ matchId: "match-1", pickedIso: slot.toISOString() }),
+    });
+
+    await handleCalendarWebAppData(ctx);
+    expect(mMatch.update).toHaveBeenCalled();
   });
 
   it("ignores malformed JSON payloads", async () => {
@@ -311,51 +627,5 @@ describe("scheduler: handleCalendarWebAppData (iteration 3)", () => {
     });
     await handleCalendarWebAppData(ctx);
     expect(mMatch.findUnique).not.toHaveBeenCalled();
-  });
-
-  it("ignores payloads referencing a non-iter3 match", async () => {
-    mMatch.findUnique.mockResolvedValueOnce({
-      id: "match-1",
-      userAId: "uid-A",
-      userBId: "uid-B",
-      status: "negotiating",
-      schedulingIteration: 1,
-      proposedTimes: [],
-      pickedTimeA: null,
-      pickedTimeB: null,
-    });
-
-    const ctx = createCtx({
-      session: { onboardingStep: "completed" },
-      webAppData: JSON.stringify({
-        matchId: "match-1",
-        pickedIso: "2026-05-01T19:00:00.000Z",
-      }),
-    });
-    await handleCalendarWebAppData(ctx);
-    expect(mMatch.update).not.toHaveBeenCalled();
-  });
-
-  it("rejects iter-3 picks outside the current proposedTimes allowlist", async () => {
-    mMatch.findUnique.mockResolvedValueOnce({
-      id: "match-1",
-      userAId: "uid-A",
-      userBId: "uid-B",
-      status: "negotiating",
-      schedulingIteration: 3,
-      proposedTimes: [new Date("2026-05-01T19:00:00.000Z")],
-      pickedTimeA: null,
-      pickedTimeB: null,
-    });
-
-    const ctx = createCtx({
-      session: { onboardingStep: "completed" },
-      webAppData: JSON.stringify({
-        matchId: "match-1",
-        pickedIso: "2026-07-01T19:00:00.000Z",
-      }),
-    });
-    await handleCalendarWebAppData(ctx);
-    expect(mMatch.update).not.toHaveBeenCalled();
   });
 });

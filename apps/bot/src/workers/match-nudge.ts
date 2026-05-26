@@ -182,7 +182,7 @@ Write a SHORT message (1-2 sentences) reminding them to check their match. Refer
 
 Tone: warm, curious, never pushy. Like texting a friend who forgot to reply.
 
-CRITICAL: Use strictly gender-neutral language. We do NOT know the user's gender. In Russian/Ukrainian, avoid gendered past-tense verb forms (e.g. do NOT use «ответил/ответила», «відповів/відповіла» etc.). Use impersonal or infinitive constructions instead (e.g. «ответа ещё нет», «нема відповіді»).
+CRITICAL: Use strictly gender-neutral language. We do NOT know the user's gender. In Russian/Ukrainian/Polish, avoid gendered past-tense verb forms (e.g. do NOT use «ответил/ответила», «відповів/відповіла», "odpowiedział/odpowiedziała"). Use impersonal or infinitive constructions instead (e.g. «ответа ещё нет», «нема відповіді», "brak odpowiedzi").
 
 Output ONLY the message text.`;
 
@@ -217,7 +217,17 @@ Output ONLY the message text.`;
 }
 
 function getProposalFallback(name: string, lang: string, nudge: number): string {
-  const greeting = name ? `${lang === "ru" ? "Эй" : lang === "uk" ? "Гей" : "Hey"}, ${name}!` : (lang === "ru" ? "Эй!" : lang === "uk" ? "Гей!" : "Hey!");
+  const greetingWord =
+    lang === "ru"
+      ? "Эй"
+      : lang === "uk"
+        ? "Гей"
+        : lang === "de"
+          ? "Hey"
+          : lang === "pl"
+            ? "Hej"
+            : "Hey";
+  const greeting = name ? `${greetingWord}, ${name}!` : `${greetingWord}!`;
   switch (lang) {
     case "ru":
       return nudge === 1
@@ -227,6 +237,14 @@ function getProposalFallback(name: string, lang: string, nudge: number): string 
       return nudge === 1
         ? `${greeting} Ми знайшли для тебе пару — відповіді ще немає 👀`
         : `${greeting} Не забудь — мэтч досі чекає. Зазирни, поки не закінчився термін!`;
+    case "de":
+      return nudge === 1
+        ? `${greeting} Wir haben ein Match für dich gefunden - noch keine Antwort 👀`
+        : `${greeting} Kurzer Reminder - dein Match wartet noch. Lass es nicht ablaufen!`;
+    case "pl":
+      return nudge === 1
+        ? `${greeting} Znaleźliśmy dla Ciebie dopasowanie - jeszcze nie ma odpowiedzi 👀`
+        : `${greeting} Przypominamy - Twoje dopasowanie nadal czeka. Nie pozwól, żeby wygasło!`;
     default:
       return nudge === 1
         ? `${greeting} We found you a match — no response yet 👀`

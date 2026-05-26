@@ -1,105 +1,168 @@
-> **Product logic and user flow** are in [PRODUCT_SPEC.md](PRODUCT_SPEC.md).  
-> **Database schema and system architecture** are in [ARCHITECTURE.md](ARCHITECTURE.md).
+> **Product invariants and user flow** live in [PRODUCT_SPEC.md](PRODUCT_SPEC.md).
+> **System architecture, data ownership, and API topology** live in [ARCHITECTURE.md](ARCHITECTURE.md).
+> **Production deploy/runbook** lives in [deploy.md](deploy.md).
 
-## Architecture & Tech Stack (Preferred)
-- **Bot**: Node.js 20+ + TypeScript + **grammY v2+** (Telegraf v4+ allowed only as fallback)
-- **Mini App**: React 18+ + TypeScript + Vite + `@twa-dev/sdk`
-- **Future Mobile**: React Native + Expo (shared packages must remain compatible)
-- **Database**: PostgreSQL + pgvector + **Prisma** (with Prisma Accelerate / pgvector extension)
-- **AI**: OpenAI / Anthropic (streaming)
-- **Shared**: TypeScript packages (`packages/shared`)
-- **i18n**: i18next + react-i18next
-- **Monorepo**: pnpm workspaces
+## Obsidian Memory Protocol
 
-**Always** refer to the official documentation:  
-https://core.telegram.org/bots/api (Bot API 9.6)  
-https://core.telegram.org/bots/webapps
+This repo is indexed in the local Obsidian vault as part of Gennety Dating.
 
-## Setup & Commands
+Before meaningful implementation work, read:
+- `/Users/pro/Documents/Obsidian Vault/Projects/Project Registry.md`
+- `/Users/pro/Documents/Obsidian Vault/Projects/Gennety Dating/Project Brief.md`
+
+After meaningful implementation, update Obsidian when relevant:
+- `Projects/Gennety Dating/Sessions/` for session summaries
+- `Projects/Gennety Dating/Changelogs/` for shipped behavior, UX, API, deploy, or user-facing changes
+- `Projects/Gennety Dating/ADRs/` for architecture, product strategy, data model, privacy, matching, or core assumption decisions
+
+Do not store secrets, raw env values, private keys, or sensitive user data in Obsidian.
+
+## Purpose
+
+This file is the operating manual for coding agents working in this repo. It
+should describe how to work effectively, not re-explain implementation details
+that are already obvious from code.
+
+When prose and code disagree:
+1. Treat code, tests, Prisma schema, and runtime config as the implementation
+   source of truth.
+2. Treat PRODUCT_SPEC.md as the source of truth for product invariants.
+3. Report the mismatch before making behavior-changing assumptions.
+
+## Current Stack
+
+- **Bot / backend process**: Node.js 20+, TypeScript, grammY, Express.
+- **Telegram Mini App**: Vite + TypeScript using Telegram WebApp globals. It is
+  currently a small vanilla TS app, not a React app.
+- **Mobile surface**: public `/v1/*` API plus `mobile-handoff/` components. A
+  full `apps/mobile` workspace is not present in this repo yet.
+- **Database**: PostgreSQL + pgvector through Prisma (`packages/db`).
+- **AI / media / verification**: OpenAI, Persona, AWS Rekognition, Supabase
+  Storage, Google Places, Expo push.
+- **Shared package**: `packages/shared` for constants, types, i18n, and prompts.
+- **Workspace**: pnpm workspaces.
+
+Use official Telegram docs when changing Bot API or Mini App behavior:
+
+- https://core.telegram.org/bots/api
+- https://core.telegram.org/bots/webapps
+
+## Commands
+
 - Install: `pnpm install`
-- Dev bot: `pnpm --filter bot dev`
-- Dev webapp: `pnpm --filter webapp dev`
+- Dev bot: `pnpm dev:bot`
+- Dev Mini App: `pnpm dev:webapp`
 - Build all: `pnpm build`
-- Lint + fix: `pnpm lint --filter bot --filter webapp --fix`
-- Type check (file-scoped): `pnpm tsc --noEmit --project apps/bot/tsconfig.json path/to/file.ts`
-- Test (file-scoped): `pnpm vitest run path/to/file.test.ts`
-- DB migrations: `pnpm --filter db db:push` or `pnpm prisma migrate dev`
+- Lint all: `pnpm lint`
+- Test all: `pnpm test`
+- Typecheck all: `pnpm typecheck`
+- Dev DB up/down: `pnpm dev:db:up`, `pnpm dev:db:down`
+- Dev DB push/studio/reset: `pnpm dev:db:push`, `pnpm dev:db:studio`,
+  `pnpm dev:db:reset`
+- Test DB up/down/push: `pnpm test:db:up`, `pnpm test:db:down`,
+  `pnpm test:db:push`
 
-All commands must be file-scoped and fast.
+Prefer file-scoped or package-scoped verification while iterating:
 
-## Local Development (dev bot on your machine)
+- Bot test file: `pnpm --filter @gennety/bot exec vitest run src/path/file.test.ts`
+- Shared test file: `pnpm --filter @gennety/shared exec vitest run src/path/file.test.ts`
+- Webapp test file: `pnpm --filter @gennety/webapp exec vitest run src/path/file.test.ts`
+- Bot typecheck: `pnpm --filter @gennety/bot typecheck`
+- DB generate: `pnpm --filter @gennety/db db:generate`
+- DB push: `pnpm --filter @gennety/db db:push`
 
-Prod and local must never share a bot token — Telegram long polling delivers
-each update to exactly one consumer, so they'd steal each other's messages.
+## Project Map
 
-One-time setup:
-1. Create a separate bot in [@BotFather](https://t.me/BotFather) → `/newbot`.
-2. `cp .env.local.example .env.local` and fill in the dev `BOT_TOKEN`.
-3. `pnpm dev:db:up` — start local Postgres + pgvector (port 5434).
-4. `pnpm dev:db:push` — apply Prisma schema to the dev DB.
-
-Daily loop:
-- `pnpm dev:bot` — runs the dev bot via `tsx watch` (hot reload).
-- `pnpm dev:db:studio` — open Prisma Studio against the dev DB.
-- `pnpm dev:db:reset` — wipe & recreate dev DB (destroys volume).
-- `pnpm dev:db:down` — stop dev DB (keeps data).
-
-Env loading order (see `apps/bot/src/config.ts`):
-`.env.local` → `.env` (dotenv `override: false`, so `.env.local` wins).
-Delete `.env.local` to run locally against prod config.
-
-Caveats:
-- All cron jobs in `apps/bot/src/index.ts` also fire locally. The dev DB has
-  no users, so they're no-ops, but don't be surprised by their logs.
-- Mini App local dev needs an HTTPS tunnel (e.g. `cloudflared tunnel --url
-  http://localhost:5173`), then set `WEBAPP_URL` in `.env.local` and register
-  it for the dev bot via BotFather → Configure Mini App.
-
-## Project Structure
 ```
 /
 ├── apps/
-│   ├── bot/          # grammY + FSM + handlers (TypeScript)
-│   ├── webapp/       # React + Vite + Telegram Mini App (Calendar)
-│   └── mobile/       # future: React Native + Expo
+│   ├── bot/          # grammY bot, Express public/admin APIs, workers
+│   └── webapp/       # Vite Telegram Calendar Mini App
+├── mobile-handoff/   # Expo handoff components, not a workspace app
 ├── packages/
-│   ├── shared/       # types, utils, i18n, constants, AI prompts
-│   └── db/           # Prisma schema + client
-├── prisma/           # schema.prisma
-├── .env.example
+│   ├── db/           # Prisma schema, client exports, DB helpers
+│   └── shared/       # constants, i18n, types, AI prompts
+├── scripts/          # local/deploy helper scripts
 ├── AGENTS.md
 ├── PRODUCT_SPEC.md
 ├── ARCHITECTURE.md
-└── turbo.json        # (optional, if you switch to Turbo)
+└── deploy.md
 ```
 
-## Code Style & Conventions
-### Do
-- TypeScript `strict: true` + `exactOptionalPropertyTypes`
-- Named exports, functional style
-- grammY: middleware, Composer, session (when needed)
-- React Mini App: functional components + hooks, full TypeScript + Vite
-- Absolute imports (`@gennety/shared`, `@gennety/bot`)
-- All Telegram Bot API 9.5+ features (`sendMessageDraft` with unique draft_id)
-- Small diffs and file-scoped changes
+## Feature Workflow
 
-### Don't
-- Never use `any`, class components, or legacy Telegraf middleware unless absolutely necessary
-- Never create chat interfaces
-- Never hardcode strings, styles, or time — use shared constants and `date_time` entity
-- Never add new dependencies without approval
+1. Read the existing flow before editing. Start from routes/handlers, then
+   services, then shared constants/prompts, then tests.
+2. Identify whether the change affects product invariants, API contracts,
+   Prisma schema, env vars, cron/deploy behavior, or external services.
+3. Add or update focused tests first when behavior changes.
+4. Implement the smallest change that fits existing boundaries and naming.
+5. Run the narrowest useful tests/typecheck, then broaden only if risk justifies it.
+6. Do the documentation impact check described below.
 
-## Testing Requirements
-- Test-first: new code -> test -> implementation
-- Vitest + @grammyjs/testing (bot) + React Testing Library (webapp)
-- Before any PR: 100% green lint + type check + tests
-- Mock Telegram Bot API and DeviceStorage
+Avoid new abstractions unless they remove real duplication or protect a clear
+contract. Do not add dependencies without approval.
 
-## Git & PR Workflow
-- Conventional commits: `feat:`, `fix:`, `refactor:`, `chore:`
-- PR title: `[sprint-X] Short description`
-- Before push/PR: `pnpm lint && pnpm test && pnpm build`
-- Never commit `.env`, secrets, or `node_modules`
+## Bug Fix Workflow
+
+1. Reproduce the bug with a failing test, fixture, or narrow command when feasible.
+2. Find the root cause; avoid patching only the visible symptom.
+3. Check adjacent flows that share the same service, callback prefix, cron, or DB field.
+4. Add regression coverage for the failing behavior.
+5. Keep the patch small and avoid unrelated cleanup.
+
+## Review Workflow
+
+When asked to review, lead with findings, ordered by severity, with file/line
+references. Focus on:
+
+- Product invariant violations from PRODUCT_SPEC.md.
+- Trust boundary mistakes: Telegram initData, JWT, Persona HMAC, admin bearer auth.
+- Database safety: Prisma schema drift, raw SQL, vector indexes, cascade behavior.
+- Matchmaking invariants: no repeated pair, blind decision, no in-app user chat.
+- Verification bypasses: corporate email, Persona, face-match, skip penalties.
+- Worker side effects: cron idempotency, duplicate DMs, quiet hours, rate limits.
+- Missing tests for changed behavior.
+
+If no issues are found, say that clearly and mention any remaining test or
+runtime risk.
+
+## Product Guardrails
+
+Always preserve these unless the user explicitly asks to redesign the product
+and confirms the tradeoff:
+
+- No user-to-user in-app chat.
+- Corporate/university email verification stays mandatory.
+- Onboarding steps and required data are not skipped.
+- Blind decision invariant: users do not learn the partner's decision before
+  making their own.
+- Persona/face-match verification and unverified Elo penalty stay meaningful.
+- Scheduled-date confirmations use Telegram `date_time` entity where applicable.
+- Telegram Bot API calls should go through grammY abstractions unless the API
+  surface is not typed yet; raw Bot API usage must be isolated and justified.
+
+Ask first before:
+
+- Changing user flow or product rules.
+- Adding external APIs or dependencies.
+- Changing Prisma schema, vector indexes, or destructive DB behavior.
+- Switching workspace/build systems.
+- Touching production secrets or irreversible deploy steps.
+
+## Documentation Impact Check
+
+After any code change, check whether docs need updates. Update docs only when
+the change affects:
+
+- Product invariants or major user flow.
+- Architecture boundaries, data ownership, or external integrations.
+- Public/admin API contracts.
+- Prisma schema, env vars, cron schedules, deployment, or rollback behavior.
+- Agent workflow rules in this file.
+
+Do not document local implementation details just because code changed. If no
+docs are affected, say `Docs unaffected` in the final response or PR notes.
 
 ## Post-Implementation Git Workflow
 
@@ -127,58 +190,76 @@ changes, leave them untouched and tell the user what was left out. If push is
 blocked by authorization, a protected branch, missing remote/upstream, or a
 conflict/non-fast-forward, stop and report the exact cause.
 
-## Boundaries & Safety
-**Always**
-- Follow the user flow defined in PRODUCT_SPEC.md
-- Use `sendMessageDraft` + `icon_custom_emoji_id` + `date_time` entity
-- Validate corporate university email
+## Deployment
 
-**Ask first**
-- Any change to User Flow
-- New external APIs or dependencies
-- Changes to Prisma schema or vector index
-- Switching to Turbo / Nx
+`deploy.md` is canonical for production. When asked to deploy, read it first
+and proceed from the documented hostnames, paths, PM2 service names, Caddy
+routes, env-file locations, and rollback steps.
 
-**Never**
-- Create in-app chat
-- Skip onboarding steps
-- Hardcode sensitive data
-- Make breaking changes in shared packages
+Ask only when access is blocked, required secrets are missing from documented
+locations, or the requested action is destructive beyond the documented rollback.
 
-## Good / Bad Examples
-- Good: `apps/bot/handlers/onboarding/photo-upload.ts` + streaming `sendMessageDraft`
-- Good: `apps/webapp/src/components/Calendar.tsx` with DeviceStorage
-- Bad: any `fetch` instead of grammY, class components in React, missing `date_time` entity
+Production and local development must never share `BOT_TOKEN`; Telegram long
+polling delivers each update to only one consumer.
 
-## When stuck
-1. Ask a clarifying question.
-2. Propose a short plan (max 3 steps).
-3. Open a draft PR with comments.
-4. For Telegram API questions — always link to https://core.telegram.org/bots/api
+## Local Development
+
+One-time setup:
+1. Create a separate dev bot in BotFather.
+2. `cp .env.local.example .env.local` and fill in dev values.
+3. `pnpm dev:db:up`
+4. `pnpm dev:db:push`
+
+Daily loop:
+
+- `pnpm dev:bot`
+- `pnpm dev:webapp`
+- `pnpm dev:db:studio`
+
+Env loading order is `.env.local` then `.env`; `.env.local` wins because
+dotenv does not override already-set keys. Delete `.env.local` only when you
+intentionally want local code to use production-like config.
+
+All cron jobs in `apps/bot/src/index.ts` also fire locally. The dev DB usually
+has no users, so they are mostly no-ops.
+
+Mini App local dev needs HTTPS tunneling, then `WEBAPP_URL` must point to the
+tunnel and the dev bot must be configured in BotFather.
+
+## Style And Safety
+
+- TypeScript strictness is intentional: no `any` unless there is no reasonable
+  typed alternative.
+- Use named exports and existing functional patterns.
+- Keep shared package changes backward-compatible unless explicitly approved.
+- Keep user-facing strings in shared i18n where the surrounding flow is localized.
+- Use shared constants for limits, timings, and product thresholds.
+- Do not commit `.env`, secrets, `node_modules`, build artifacts, or raw logs
+  containing user data.
+- Respect dirty working trees. Never revert unrelated user changes.
 
 ## gstack
 
 ### Web Browsing
 
-Always use the `/browse` skill from gstack for all web browsing tasks. Never use `mcp__claude-in-chrome__*` tools.
+Always use the `/browse` skill from gstack for web browsing tasks. Never use
+`mcp__claude-in-chrome__*` tools.
 
 ### Available Skills
 
-- `/plan-ceo-review` — CEO/founder-mode plan review: rethink the problem, challenge premises, find the 10-star product
-- `/plan-eng-review` — Eng manager-mode plan review: lock in architecture, data flow, edge cases, test coverage
-- `/review` — Pre-landing PR review: analyzes diff for SQL safety, trust boundary violations, side effects
-- `/ship` — Ship workflow: merge base, run tests, review diff, bump version, update changelog, commit, push, create PR
-- `/browse` — Fast headless browser for QA testing and site dogfooding: navigate, interact, verify, diff
-- `/qa` — Systematically QA test a web app and fix bugs found
-- `/setup-browser-cookies` — Import cookies from your real browser into the headless browse session
-- `/retro` — Weekly engineering retrospective: commit history, work patterns, code quality metrics
+- `/plan-ceo-review` - CEO/founder-mode plan review.
+- `/plan-eng-review` - engineering plan review.
+- `/review` - pre-landing PR review.
+- `/ship` - ship workflow.
+- `/browse` - headless browser QA and dogfooding.
+- `/qa` - systematic web app QA.
+- `/setup-browser-cookies` - import cookies into browse session.
+- `/retro` - retrospective over commit history and work patterns.
 
 ### Troubleshooting
 
-If gstack skills aren't working, rebuild by running:
+If gstack skills are not working, rebuild them:
 
 ```sh
 cd .claude/skills/gstack && ./setup
 ```
-
-This builds the browse binary and re-registers all skills.

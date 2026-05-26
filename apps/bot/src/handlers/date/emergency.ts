@@ -1,6 +1,8 @@
 import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
+import type { MessageEntity } from "grammy/types";
 import type { BotContext } from "../../session.js";
+import { applyEmergencyCancellationPeerBoost } from "../../utils/elo-calculator.js";
 
 /**
  * Emergency cancellation flow (PRODUCT_SPEC.md §Phase 4.2).
@@ -9,9 +11,28 @@ import type { BotContext } from "../../session.js";
  * that was sent by the date-lifecycle cron 3h before the date.
  *
  * The handler sets session state to `awaiting_emergency_reason` and waits
- * for a free-text message, which is then forwarded *exactly as-is* to the
- * other person.
+ * for a free-text message, which is then quoted *exactly as-is* to the other
+ * person with a short Gennety note below it.
  */
+
+interface EmergencyCancellationNotice {
+  text: string;
+  entities: MessageEntity[];
+}
+
+export function buildEmergencyCancellationNotice(
+  lang: Language,
+  reason: string,
+): EmergencyCancellationNotice {
+  const prefix = `${t(lang, "emergencyReceivedOtherIntro")}\n\n`;
+  const suffix = `\n\n${t(lang, "emergencyReceivedOtherSoftNote")}`;
+  const text = `${prefix}${reason}${suffix}`;
+  const entities: MessageEntity[] =
+    reason.length > 0
+      ? [{ type: "blockquote", offset: prefix.length, length: reason.length }]
+      : [];
+  return { text, entities };
+}
 
 /** Step 1: User taps the emergency button → ask for reason. */
 export async function handleEmergencyStart(ctx: BotContext): Promise<void> {
@@ -55,7 +76,7 @@ export async function handleEmergencyStart(ctx: BotContext): Promise<void> {
 
 /**
  * Step 2: User sends the free-text cancellation reason.
- * Forward *exact* text to the other person, cancel the match.
+ * Quote the *exact* text to the other person, cancel the match.
  */
 export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
   const reason = ctx.message?.text;
@@ -91,7 +112,7 @@ export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
   const isB = user.id === match.userBId;
   if (!isA && !isB) return;
 
-  const trimmedReason = reason.slice(0, 1000);
+  const forwardedReason = reason.slice(0, 1000);
 
   // Persist cancellation.
   await prisma.match.update({
@@ -99,24 +120,25 @@ export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
     data: {
       status: "cancelled",
       emergencyCancelledBy: user.id,
-      emergencyReason: trimmedReason,
+      emergencyReason: forwardedReason,
     },
   });
+
+  const otherUserId = isA ? match.userBId : match.userAId;
+  await applyEmergencyCancellationPeerBoost(otherUserId);
 
   const lang = ctx.session.language;
   await ctx.reply(t(lang, "emergencyConfirmed"));
 
-  // Forward exact reason to the other person — Telegram side only. Mobile
+  // Quote exact reason to the other person — Telegram side only. Mobile
   // peers see the cancellation via the `/v1/matches/current` poll, plus a
   // push notification dispatched separately.
   const other = isA ? match.userB : match.userA;
   if (other.telegramId > 0n) {
     const otherLang = (other.language ?? "en") as Language;
+    const notice = buildEmergencyCancellationNotice(otherLang, forwardedReason);
     await ctx.api
-      .sendMessage(
-        Number(other.telegramId),
-        t(otherLang, "emergencyReceivedOther", { reason: trimmedReason }),
-      )
+      .sendMessage(Number(other.telegramId), notice.text, { entities: notice.entities })
       .catch((err: unknown) => {
         console.warn(
           `[emergency] forward failed for ${other.telegramId}:`,

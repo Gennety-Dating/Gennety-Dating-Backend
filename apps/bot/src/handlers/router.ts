@@ -5,7 +5,9 @@ import { handleConsent } from "./onboarding/consent.js";
 import { handleLanguageSelection } from "./onboarding/language.js";
 import { handleConversational } from "./onboarding/conversational.js";
 import {
+  VERIFY_CHECK_CALLBACK,
   VERIFY_SKIP_CALLBACK,
+  handleVerificationCheck,
   handleVerificationSkip,
 } from "./onboarding/verification.js";
 import { menuRouter } from "./menu/router.js";
@@ -19,6 +21,10 @@ const router = new Composer<BotContext>();
 router.use(async (ctx, next) => {
   if (ctx.callbackQuery?.data === VERIFY_SKIP_CALLBACK) {
     await handleVerificationSkip(ctx);
+    return;
+  }
+  if (ctx.callbackQuery?.data === VERIFY_CHECK_CALLBACK) {
+    await handleVerificationCheck(ctx);
     return;
   }
   await next();

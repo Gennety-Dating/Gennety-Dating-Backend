@@ -1,13 +1,17 @@
 import { Composer } from "grammy";
 import type { BotContext } from "../../session.js";
 import { handleEmergencyStart, handleEmergencyReason } from "./emergency.js";
-import { handleFeedbackStart, handleFeedbackText } from "./feedback.js";
+import { handleFeedbackVoiceStart, handleFeedbackVoiceText } from "./feedback.js";
 
 /**
  * Date-lifecycle router (Phase 4) — handles:
  *   - `emerg:start:*`  callback → emergency cancellation
- *   - `feedback:start:*` callback → post-date feedback
- *   - Free-text when session is in `awaiting_emergency_reason` or `awaiting_feedback`
+ *   - `feedback:voice:*` callback → opt into the voice-note feedback path
+ *   - Free-text in `awaiting_emergency_reason` or `awaiting_feedback` state
+ *
+ * The post-date feedback Mini App posts directly to `/v1/feedback/post-date`
+ * (signed by Telegram initData) and never enters this router; only the voice
+ * fallback flows through Telegram updates.
  *
  * Registered AFTER the matching router in `bot.ts` but BEFORE the menu
  * router so date callbacks are resolved first.
@@ -29,9 +33,9 @@ dateRouter.use(async (ctx, next) => {
     return;
   }
 
-  // Feedback button
-  if (data?.startsWith("feedback:start:")) {
-    await handleFeedbackStart(ctx);
+  // Voice-feedback opt-in
+  if (data?.startsWith("feedback:voice:")) {
+    await handleFeedbackVoiceStart(ctx);
     return;
   }
 
@@ -41,9 +45,9 @@ dateRouter.use(async (ctx, next) => {
     return;
   }
 
-  // Free-text: feedback
+  // Free-text or transcribed voice: feedback (shared with the form pipeline)
   if (ctx.session.matchFlow === "awaiting_feedback" && ctx.message?.text) {
-    await handleFeedbackText(ctx);
+    await handleFeedbackVoiceText(ctx);
     return;
   }
 

@@ -49,6 +49,21 @@ const MODEL = "gpt-4.1-mini";
 const MAX_TOKENS = 480;
 const OPENAI_TIMEOUT_MS = 45_000;
 
+function localeForLanguage(language: Language): string {
+  switch (language) {
+    case "ru":
+      return "ru-RU";
+    case "uk":
+      return "uk-UA";
+    case "de":
+      return "de-DE";
+    case "pl":
+      return "pl-PL";
+    default:
+      return "en-US";
+  }
+}
+
 /** Hard product invariant: visual range is always 70..99. */
 export const SYNERGY_MIN = 70;
 export const SYNERGY_MAX = 99;
@@ -243,7 +258,7 @@ export interface SchedulingProposalInput {
 
 /** Deterministic fallback for scheduling proposals (no API key). */
 function localFallbackSchedulingProposal(input: SchedulingProposalInput): string {
-  const locale = input.language === "ru" ? "ru-RU" : input.language === "uk" ? "uk-UA" : "en-US";
+  const locale = localeForLanguage(input.language);
   const slots = input.proposedSlots
     .map((s) =>
       s.toLocaleString(locale, {
@@ -261,6 +276,10 @@ function localFallbackSchedulingProposal(input: SchedulingProposalInput): string
       return `Мы подобрали несколько вариантов времени для вашей встречи с ${input.otherFirstName}: ${slots}. Какой вам подходит?`;
     case "uk":
       return `Ми підібрали кілька варіантів часу для вашої зустрічі з ${input.otherFirstName}: ${slots}. Який вам підходить?`;
+    case "de":
+      return `Wir haben ein paar Zeiten für dein Date mit ${input.otherFirstName} gefunden: ${slots}. Welche passt dir?`;
+    case "pl":
+      return `Wybraliśmy kilka terminów randki z ${input.otherFirstName}: ${slots}. Który Ci pasuje?`;
     default:
       return `We've picked a few time options for your date with ${input.otherFirstName}: ${slots}. Which one works for you?`;
   }
@@ -273,7 +292,7 @@ function localFallbackSchedulingProposal(input: SchedulingProposalInput): string
 export async function generateSchedulingProposal(
   input: SchedulingProposalInput,
 ): Promise<string> {
-  const locale = input.language === "ru" ? "ru-RU" : input.language === "uk" ? "uk-UA" : "en-US";
+  const locale = localeForLanguage(input.language);
   const slotLabels = input.proposedSlots.map((s) =>
     s.toLocaleString(locale, {
       weekday: "long",
@@ -321,6 +340,10 @@ function localFallbackVenueMessage(input: VenueMessageInput): string {
       return `Всё готово! Ваше свидание с ${input.otherFirstName} состоится в ${venue}. Удачи!`;
     case "uk":
       return `Все готово! Ваше побачення з ${input.otherFirstName} відбудеться в ${venue}. Удачі!`;
+    case "de":
+      return `Alles klar! Dein Date mit ${input.otherFirstName} findet bei ${venue} statt. Viel Spaß!`;
+    case "pl":
+      return `Gotowe! Twoja randka z ${input.otherFirstName} odbędzie się w ${venue}. Powodzenia!`;
     default:
       return `All set! Your date with ${input.otherFirstName} is at ${venue}. Have a wonderful time!`;
   }
@@ -333,7 +356,7 @@ function localFallbackVenueMessage(input: VenueMessageInput): string {
 export async function generateVenueMessage(
   input: VenueMessageInput,
 ): Promise<string> {
-  const locale = input.language === "ru" ? "ru-RU" : input.language === "uk" ? "uk-UA" : "en-US";
+  const locale = localeForLanguage(input.language);
   const timeLabel = input.agreedTime.toLocaleString(locale, {
     weekday: "long",
     day: "numeric",

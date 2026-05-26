@@ -38,6 +38,12 @@ async function seedFullUser(opts: {
   universityDomain?: string;
   embeddingVal?: number;
   lastMatchedAt?: Date | null;
+  verificationStatus?:
+    | "unverified"
+    | "pending"
+    | "pending_review"
+    | "verified"
+    | "rejected";
 }) {
   const user = await seedUser({
     gender: opts.gender ?? "male",
@@ -45,6 +51,11 @@ async function seedFullUser(opts: {
     universityDomain: opts.universityDomain ?? "stanford.edu",
     status: "active",
     onboardingStep: "completed",
+    // Spread-conditionally: under exactOptionalPropertyTypes, passing
+    // `verificationStatus: undefined` is a type error. Only forward when set.
+    ...(opts.verificationStatus !== undefined
+      ? { verificationStatus: opts.verificationStatus }
+      : {}),
   });
 
   await seedProfile({ userId: user.id });
@@ -318,6 +329,82 @@ describe("match-engine SQL (integration)", () => {
 
     expect(rows.length).toBe(1);
     expect(rows[0]!.userId).toBe(candidate.id);
+  });
+
+  it("excludes candidates with verificationStatus = rejected", async () => {
+    // Re-verification can flip a previously-active user to `rejected`
+    // without touching their `status`. Without the verification gate the
+    // SQL would still hand them out as a match.
+    const seeker = await seedFullUser({ gender: "male", preference: "women" });
+    await seedFullUser({
+      gender: "female",
+      preference: "men",
+      verificationStatus: "rejected",
+    });
+
+    const rows = await queryCandidates(
+      seeker.id,
+      fakeEmbedding(0.5),
+      "stanford.edu",
+      "female",
+      new Date(Date.now() - MATCH_COOLDOWN_MS),
+    );
+
+    expect(rows.length).toBe(0);
+  });
+
+  it("excludes candidates with verificationStatus = pending_review", async () => {
+    // pending_review = admin moderation queue; the user shouldn't surface
+    // as a candidate until ops resolves their case.
+    const seeker = await seedFullUser({ gender: "male", preference: "women" });
+    await seedFullUser({
+      gender: "female",
+      preference: "men",
+      verificationStatus: "pending_review",
+    });
+
+    const rows = await queryCandidates(
+      seeker.id,
+      fakeEmbedding(0.5),
+      "stanford.edu",
+      "female",
+      new Date(Date.now() - MATCH_COOLDOWN_MS),
+    );
+
+    expect(rows.length).toBe(0);
+  });
+
+  it("includes verified, unverified, and pending candidates", async () => {
+    // `unverified` (skipped Persona) carries the Elo penalty but still
+    // matches. `pending` (Persona inquiry mid-flight) is brief so we
+    // optimistically include them.
+    const seeker = await seedFullUser({ gender: "male", preference: "women" });
+    const verified = await seedFullUser({
+      gender: "female",
+      preference: "men",
+      verificationStatus: "verified",
+    });
+    const unverified = await seedFullUser({
+      gender: "female",
+      preference: "men",
+      verificationStatus: "unverified",
+    });
+    const pending = await seedFullUser({
+      gender: "female",
+      preference: "men",
+      verificationStatus: "pending",
+    });
+
+    const rows = await queryCandidates(
+      seeker.id,
+      fakeEmbedding(0.5),
+      "stanford.edu",
+      "female",
+      new Date(Date.now() - MATCH_COOLDOWN_MS),
+    );
+
+    const ids = rows.map((r) => r.userId).sort();
+    expect(ids).toEqual([verified.id, unverified.id, pending.id].sort());
   });
 
   it("orders candidates by embedding distance ASC", async () => {

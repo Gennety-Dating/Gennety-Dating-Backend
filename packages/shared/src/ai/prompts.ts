@@ -25,7 +25,7 @@
  * sizes, sentence caps) rather than character counts — LLMs cannot count
  * characters reliably but can follow "2–3 sentences" consistently.
  *
- * @param language ISO code ("en", "ru", "uk") — free-text fields
+ * @param language ISO code ("en", "ru", "uk", "de", "pl") — free-text fields
  *   (`summary`, `ideal_partner`, `communication_style`) are written in this
  *   language. Enum/tag fields stay in English so the matching engine can
  *   compare them across users.
@@ -222,7 +222,7 @@ export function proposeSchedulingPrompt(input: ProposeSchedulingInput): string {
 - Their match: **${input.otherFirstName}**
 - ${input.selfFirstName}'s profile: ${input.selfSummary ?? "(not available)"}
 - ${input.otherFirstName}'s profile: ${input.otherSummary ?? "(not available)"}
-- Scheduling iteration **${input.iteration}** of 2.${input.iteration === 2 ? "\n- Previous round didn't overlap — keep it chill, not frustrated." : ""}
+- Scheduling iteration **${input.iteration}** of 2.${input.iteration === 2 ? "\n- Previous round didn't overlap — keep it chill and encouraging, not frustrated." : ""}
 
 ## Available Time Slots
 ${slotsFormatted}
@@ -234,7 +234,7 @@ Write a short, casual message (2-4 sentences) in **${input.language}** that:
 3. Sounds like a friend helping coordinate, not a corporate calendar bot.
 4. Ends with a nudge to pick a time.
 
-Tone: casual, like a cool friend. Short sentences. 1 emoji max. No fake enthusiasm. No "Пожалуйста" or formal phrasing in Russian/Ukrainian — use "ты".
+Tone: casual, like a cool friend. Short sentences. 1 emoji max. No fake enthusiasm. No "Пожалуйста" or formal phrasing in Russian/Ukrainian/German/Polish — use informal, natural phrasing.
 Do NOT reveal the other person's private details. Keep some mystery.`;
 }
 
@@ -275,7 +275,7 @@ Write a confirmation message (2-4 sentences) in **${input.language}** that:
 3. Drops a subtle compatibility hint from the profiles.
 4. Ends on a confident note — we did our part, now it's on them.
 
-Tone: casual, like a friend who just hooked you up. Short sentences. 1 emoji max. No fake enthusiasm like "Невероятно!" or "Потрясающе!". No formal phrasing in Russian/Ukrainian — use "ты".
+Tone: casual, like a friend who just hooked you up. Short sentences. 1 emoji max. No fake enthusiasm like "Невероятно!" or "Потрясающе!". No formal phrasing in Russian/Ukrainian/German/Polish — use informal, natural phrasing.
 Do NOT reveal private profile details. Keep some mystery.`;
 }
 
@@ -309,15 +309,15 @@ Generate exactly 3 conversation starters in **${input.language}**. Each must:
 3. Be open-ended — invite a real answer, not yes/no.
 4. Sound like something a friend would suggest, not a dating article.
 
-Tone: casual, natural. Like how friends actually talk. No formal phrasing in Russian/Ukrainian.
+Tone: casual, natural. Like how friends actually talk. No formal phrasing in Russian/Ukrainian/German/Polish.
 
 ## Format
 3 numbered lines. No preamble, no closing.
 
-## Never do these
+## NEVER do these
 - "So, what do you do?" — too basic
 - "You must be [trait]..." — presumptuous
-- Physical appearance comments
+- physical appearance comments
 - Sexual or overly intimate topics
 - Forced puns`;
 }
@@ -363,7 +363,7 @@ Output ONE sentence in **${input.language}**. It must:
 3. Sound like a real friend tipping you off, not a dating-app question.
 4. Be between 12 and 22 words. No question marks. No emoji. No preamble.
 
-Tone: casual, confidential, curious. Like a text from a friend right before the meet-up. No formal phrasing in Russian/Ukrainian — use "ты"/"ти". No generic advice like "just be yourself".
+Tone: casual, confidential, curious. Like a text from a friend right before the meet-up. No formal phrasing in Russian/Ukrainian/German/Polish — use informal, native phrasing. No generic advice like "just be yourself".
 
 ## Never do these
 - Questions ending in "?". Use imperatives.

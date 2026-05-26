@@ -26,6 +26,12 @@ import { prisma } from "@gennety/db";
  *      partner twice. Backed by the `matches_pair_canonical_idx` functional
  *      index on `LEAST/GREATEST(user_a_id, user_b_id)`.
  *   6. Cooldown: skip users whose `lastMatchedAt` is within MATCH_COOLDOWN_MS.
+ *   7. Verification gate: exclude `rejected` (face-match concluded the
+ *      profile is impostor / wrong-person) and `pending_review` (admin
+ *      hasn't cleared them yet). `unverified` (skipped Persona) and
+ *      `pending` (Persona inquiry mid-flight) DO match — the Elo skip
+ *      penalty handles the former and re-verification will move the
+ *      latter to a terminal state shortly.
  */
 
 // ---------------------------------------------------------------------------
@@ -178,6 +184,7 @@ export function buildCandidateSql(): string {
     WHERE u.id <> $1::uuid
       AND u.status = 'active'
       AND u.onboarding_step = 'completed'
+      AND u.verification_status NOT IN ('rejected', 'pending_review')
       AND u.university_domain = $3
       AND p.embedding IS NOT NULL
       AND ($5 = '' OR u.gender::text = $5)
@@ -963,6 +970,8 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
     where: {
       status: "active",
       onboardingStep: "completed",
+      // Verification gate (mirrors `buildCandidateSql` rule 7).
+      verificationStatus: { notIn: ["rejected", "pending_review"] },
       gender: { not: null },
       preference: { not: null },
       universityDomain: { not: null },
@@ -994,6 +1003,8 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
     where: {
       status: "active",
       onboardingStep: "completed",
+      // Verification gate (mirrors `buildCandidateSql` rule 7).
+      verificationStatus: { notIn: ["rejected", "pending_review"] },
       gender: { not: null },
       preference: { not: null },
       universityDomain: { not: null },

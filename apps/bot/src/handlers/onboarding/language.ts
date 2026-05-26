@@ -1,10 +1,10 @@
 import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
-import type { Language } from "@gennety/shared";
+import { SUPPORTED_LANGUAGES, type Language } from "@gennety/shared";
 import { runAgentTurn } from "../../services/onboarding-agent.js";
 import { onboardingActivityPatch } from "../../workers/re-engagement-schedule.js";
 
-const VALID_LANGUAGES = new Set<Language>(["en", "ru", "uk"]);
+const VALID_LANGUAGES = new Set<Language>(SUPPORTED_LANGUAGES);
 
 export async function handleLanguageSelection(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;

@@ -96,6 +96,28 @@ function toolCallResponse(
   };
 }
 
+function contextDumpSavedHistory(): ChatMessage[] {
+  return [
+    { role: "system", content: "system prompt..." },
+    {
+      role: "assistant",
+      content: null,
+      tool_calls: [
+        {
+          id: "call-save-context",
+          type: "function",
+          function: { name: "save_context_dump", arguments: "{}" },
+        },
+      ],
+    },
+    {
+      role: "tool",
+      tool_call_id: "call-save-context",
+      content: JSON.stringify({ success: true }),
+    },
+  ];
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -206,14 +228,25 @@ describe("onboarding-agent", () => {
   });
 
   it("sets expectingPhoto=true when request_photos is called and the context dump is already saved", async () => {
-    // Two findUnique calls in this turn:
-    //   1. runAgentTurn loads message history at the top
-    //   2. request_photos guard checks profile.psychologicalSummary
-    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ id: "uuid-1", messageHistory: [], language: "en" })
-      .mockResolvedValueOnce({
-        profile: { psychologicalSummary: "A thoughtful introvert with secure attachment." },
-      });
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uuid-1",
+      messageHistory: contextDumpSavedHistory(),
+      language: "en",
+      email: "alice@stanford.edu",
+      isEmailVerified: true,
+      universityDomain: "stanford.edu",
+      firstName: "Alice",
+      age: 21,
+      gender: "female",
+      preference: "men",
+      profile: {
+        height: 165,
+        ethnicity: null,
+        hobbies: ["tennis"],
+        partnerPreferences: "someone kind",
+        photos: [],
+      },
+    });
 
     const mockFetch = vi
       .fn()
@@ -234,14 +267,158 @@ describe("onboarding-agent", () => {
     expect(result.reply).toContain("photos");
   });
 
+  it("stops immediately after request_context_dump so the model cannot synthesize the user's dump", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-1",
+      messageHistory: [],
+      language: "ru",
+      email: null,
+      universityDomain: null,
+      isEmailVerified: false,
+    });
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          { id: "call-ctx", name: "request_context_dump", args: {} },
+          {
+            id: "call-save",
+            name: "save_context_dump",
+            args: { raw_dump: "x".repeat(1000) },
+          },
+          { id: "call-photos", name: "request_photos", args: {} },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("This response must never be used."));
+    const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
+
+    const result = await runAgentTurn(telegramId, "готово, дай промпт", {
+      fetchFn: mockFetch,
+      analyseProfile: mockAnalyse,
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockAnalyse).not.toHaveBeenCalled();
+    expect(result.contextPromptRequested).toBe(true);
+    expect(result.contextDumpStarted).toBe(true);
+    expect(result.expectingPhoto).toBe(false);
+    expect(result.reply).toContain("Скопируй промпт выше");
+
+    const updateCalls = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls;
+    const persistedHistory = updateCalls.at(-1)?.[0].data.messageHistory as Array<{
+      role: string;
+      tool_calls?: Array<{ function: { name: string } }>;
+    }>;
+    const persistedToolNames = persistedHistory.flatMap((m) =>
+      m.tool_calls?.map((call) => call.function.name) ?? [],
+    );
+    expect(persistedToolNames).toEqual(["request_context_dump"]);
+  });
+
+  it("saves the user's latest pasted message as the dump, ignoring any LLM rephrasing in raw_dump", async () => {
+    // Real bug: LLMs auto-correct one or two characters when they pass long
+    // text through tool args (e.g. "том" → "то"), which used to fail strict
+    // verbatim grounding and reject the user's perfectly valid paste.
+    // The fix: treat raw_dump as advisory and use the user's actual paste.
+    const userPaste = JSON.stringify({
+      personality_traits: ["curious", "calm", "warm", "direct", "romantic"],
+      communication_style: "Direct and reflective.",
+      interests: ["music", "piano", "dating"],
+      values: ["honesty", "warmth", "stability"],
+      attachment_style: "secure",
+      social_energy: "ambivert",
+      humor_style: "warm",
+      ideal_partner: "Someone emotionally present and sincere.",
+      dealbreakers: ["dishonesty", "coldness"],
+      summary:
+        "A warm, music-oriented person who wants grounded closeness without performance. He values simple honesty, tenderness, and a relationship that feels calm rather than dramatic.",
+    });
+    const llmRephrased = userPaste.replace("warm,", "warm and"); // single-char drift
+    const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        messageHistory: [],
+        language: "en",
+      })
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        firstName: "Alice",
+        language: "en",
+      });
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          {
+            id: "call-save",
+            name: "save_context_dump",
+            args: { raw_dump: llmRephrased },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("Profile saved. Send photos next."));
+
+    const result = await runAgentTurn(telegramId, userPaste, {
+      fetchFn: mockFetch,
+      analyseProfile: mockAnalyse,
+    });
+
+    // Server uses the user's actual paste, not the LLM's rephrased copy.
+    expect(mockAnalyse).toHaveBeenCalledWith("uuid-1", userPaste, undefined, {
+      firstName: "Alice",
+      language: "en",
+    });
+    expect(result.reply).toContain("Profile saved");
+  });
+
+  it("rejects save_context_dump when the user's latest message is too short to be a real dump", async () => {
+    // Hallucination guard: if the LLM calls save_context_dump while the user
+    // hasn't actually pasted anything substantial (< 200 chars), reject —
+    // even if the LLM tries to fabricate content via raw_dump.
+    const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
+    const fabricatedDump =
+      "A".repeat(220) +
+      " fabricated psychological analysis that was never pasted by the user.";
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          {
+            id: "call-save",
+            name: "save_context_dump",
+            args: { raw_dump: fabricatedDump },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("Please paste the actual AI response first."));
+
+    await runAgentTurn(telegramId, "да, давай дальше", {
+      fetchFn: mockFetch,
+      analyseProfile: mockAnalyse,
+    });
+
+    expect(mockAnalyse).not.toHaveBeenCalled();
+    const secondCallBody = JSON.parse(mockFetch.mock.calls[1][1].body);
+    const toolMessage = secondCallBody.messages.find(
+      (m: { role: string }) => m.role === "tool",
+    );
+    expect(JSON.parse(toolMessage.content).error).toContain("too short");
+  });
+
   it("blocks request_photos when the context dump has not been saved yet (LLM ordering violation)", async () => {
     // Defense-in-depth: even though the system prompt forbids it, an LLM may
-    // chain request_context_dump → request_photos in the same turn. The tool
-    // boundary must refuse the second call so the user isn't stranded between
-    // "paste your AI analysis" and "send me photos" with no clear next step.
-    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ id: "uuid-1", messageHistory: [], language: "en" })
-      .mockResolvedValueOnce({ profile: { psychologicalSummary: null } });
+    // skip straight to photos. The guard must require a successful
+    // save_context_dump tool result, not merely a Profile.psychologicalSummary
+    // row, because save_profile_data used to generate a synthetic summary.
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uuid-1",
+      messageHistory: [],
+      language: "en",
+      profile: { psychologicalSummary: "Synthetic field summary" },
+    });
 
     const mockFetch = vi
       .fn()
@@ -265,9 +442,12 @@ describe("onboarding-agent", () => {
   });
 
   it("also blocks request_photos when the user has no profile row at all", async () => {
-    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ id: "uuid-1", messageHistory: [], language: "en" })
-      .mockResolvedValueOnce({ profile: null });
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uuid-1",
+      messageHistory: [],
+      language: "en",
+      profile: null,
+    });
 
     const mockFetch = vi
       .fn()
@@ -292,7 +472,7 @@ describe("onboarding-agent", () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         id: "uuid-1",
-        messageHistory: [],
+        messageHistory: contextDumpSavedHistory(),
         language: "en",
       })
       .mockResolvedValueOnce({
@@ -301,11 +481,11 @@ describe("onboarding-agent", () => {
         gender: "female",
         preference: "men",
         email: "alice@stanford.edu",
+        isEmailVerified: true,
         profile: {
           height: 165,
           hobbies: ["tennis", "reading"],
           partnerPreferences: "someone kind and funny",
-          psychologicalSummary: "A thoughtful introvert with secure attachment.",
           photos: ["photo1", "photo2"],
         },
       });
@@ -361,6 +541,7 @@ describe("onboarding-agent", () => {
         gender: "female",
         preference: "men",
         email: "alice@stanford.edu",
+        isEmailVerified: true,
         profile: {
           height: null,
           hobbies: [],
@@ -596,8 +777,57 @@ describe("onboarding-agent", () => {
 
     // The messages sent to OpenAI should include prior history + new user message
     const calledWith = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(calledWith.messages).toHaveLength(4); // 3 prior + 1 new user
-    expect(calledWith.messages[3].content).toBe("I'm back");
+    expect(calledWith.messages).toHaveLength(5); // 3 prior + DB state snapshot + 1 new user
+    expect(calledWith.messages[1].content).toContain("[CURRENT_SAVED_ONBOARDING_STATE]");
+    expect(calledWith.messages[4].content).toBe("I'm back");
+  });
+
+  it("injects current DB onboarding state into the API call without persisting the snapshot", async () => {
+    const priorHistory = [
+      { role: "system", content: "system prompt..." },
+      { role: "assistant", content: "What is your height?" },
+    ];
+
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-1",
+      messageHistory: priorHistory,
+      language: "en",
+      email: "alice@stanford.edu",
+      isEmailVerified: true,
+      universityDomain: "stanford.edu",
+      firstName: "Alice",
+      age: 21,
+      gender: "female",
+      preference: "men",
+      profile: {
+        ethnicity: null,
+        height: 165,
+        hobbies: ["tennis"],
+        partnerPreferences: "someone kind",
+        photos: [],
+      },
+    });
+
+    const mockFetch = vi.fn().mockResolvedValueOnce(
+      textResponse("Got it, let's do the AI profile step."),
+    );
+
+    await runAgentTurn(telegramId, "I already gave you that", { fetchFn: mockFetch });
+
+    const calledWith = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const snapshot = calledWith.messages.find(
+      (m: { role: string; content?: string }) =>
+        m.role === "system" && m.content?.includes("[CURRENT_SAVED_ONBOARDING_STATE]"),
+    );
+    expect(snapshot).toBeDefined();
+    expect(snapshot?.content).toContain("height=165");
+    expect(snapshot?.content).toContain("Missing next: context_dump");
+
+    const persisted = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]
+      .data.messageHistory as ChatMessage[];
+    expect(
+      persisted.some((m) => m.content?.includes("[CURRENT_SAVED_ONBOARDING_STATE]")),
+    ).toBe(false);
   });
 
   it("handles save_profile_data tool correctly", async () => {
@@ -662,7 +892,114 @@ describe("onboarding-agent", () => {
     );
   });
 
-  it("does not overwrite an existing deep context summary during save_profile_data", async () => {
+  it("save_profile_data fails when the user clearly mentioned height earlier but the LLM omits it", async () => {
+    // Defense-in-depth: if the LLM tries to save without height even though
+    // the user explicitly said "180 см" in a prior message, refuse — the
+    // LLM was about to silently drop a value the user already volunteered.
+    // The guidance message nudges the LLM to re-extract from history.
+    const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
+    const priorHistory = [
+      { role: "system", content: "system prompt..." },
+      { role: "user", content: "Меня зовут Руслан, мне 21. Рост — 180 см. Ищу девушку." },
+      { role: "assistant", content: "Got it!" },
+    ];
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uuid-1",
+      messageHistory: priorHistory,
+      language: "ru",
+    });
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          {
+            id: "call-1",
+            name: "save_profile_data",
+            args: {
+              first_name: "Руслан",
+              age: 21,
+              gender: "male",
+              preference: "women",
+              partner_preferences: "красивая, аккуратная и женственная",
+              // height omitted — guard should fire
+            },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("Sorry, let me re-check."));
+
+    await runAgentTurn(telegramId, "yes save it", {
+      fetchFn: mockFetch,
+      analyseProfile: mockAnalyse,
+    });
+
+    // Profile must NOT have been written: the guard rejected the save.
+    expect(prisma.profile.upsert).not.toHaveBeenCalled();
+
+    // The tool result fed back to the LLM must call out the omission and
+    // surface the value extracted from history so the LLM can retry cleanly.
+    const secondCallBody = JSON.parse(mockFetch.mock.calls[1][1].body);
+    const toolMessage = secondCallBody.messages.find(
+      (m: { role: string }) => m.role === "tool",
+    );
+    const toolContent = JSON.parse(toolMessage.content);
+    expect(toolContent.success).toBe(false);
+    expect(toolContent.error).toContain("height");
+    expect(toolContent.error).toContain("180");
+  });
+
+  it("save_profile_data succeeds when height is supplied even though it was also in history", async () => {
+    // Negative control for the guard above: the LLM extracted height
+    // correctly, so the save must proceed normally.
+    const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
+    const priorHistory = [
+      { role: "system", content: "system prompt..." },
+      { role: "user", content: "Рост у меня 180 см." },
+      { role: "assistant", content: "Noted." },
+    ];
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        messageHistory: priorHistory,
+        language: "ru",
+      })
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        profile: null,
+      });
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          {
+            id: "call-1",
+            name: "save_profile_data",
+            args: {
+              first_name: "Руслан",
+              age: 21,
+              gender: "male",
+              preference: "women",
+              height: 180,
+              partner_preferences: "красивая и женственная",
+            },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("Saved."));
+
+    await runAgentTurn(telegramId, "save it", {
+      fetchFn: mockFetch,
+      analyseProfile: mockAnalyse,
+    });
+
+    expect(prisma.profile.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ height: 180 }),
+      }),
+    );
+  });
+
+  it("does not generate a synthetic deep context summary during save_profile_data", async () => {
     const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "uuid-1",
@@ -670,7 +1007,7 @@ describe("onboarding-agent", () => {
       language: "en",
     }).mockResolvedValueOnce({
       id: "uuid-1",
-      profile: { psychologicalSummary: "Rich context dump summary" },
+      profile: null,
     });
 
     const mockFetch = vi
@@ -685,6 +1022,8 @@ describe("onboarding-agent", () => {
               age: 21,
               gender: "female",
               preference: "men",
+              height: 165,
+              hobbies: ["tennis"],
               partner_preferences: "someone kind",
             },
           },
@@ -889,6 +1228,37 @@ describe("answer validation in system prompt", () => {
     expect(content).toContain("Second attempt");
     expect(content).toContain("Third attempt");
     expect(content).toContain("Required data quality standards");
+  });
+
+  it("system prompt forbids re-asking already-volunteered fields and includes a multi-field example", async () => {
+    // Regression for the Ruslan repro (2026-05-03): a single rich first
+    // message containing name+age+preference+height+hobbies+partner_prefs
+    // used to trigger 5+ redundant follow-up questions. The prompt must
+    // explicitly instruct the LLM to extract everything in one pass and
+    // forbid the most common redundant follow-ups.
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-1",
+      messageHistory: [],
+      language: "en",
+    });
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    const mockFetch = vi.fn().mockResolvedValueOnce(textResponse("Hi!"));
+
+    await runAgentTurn(BigInt(12345), "hi", { fetchFn: mockFetch });
+
+    const calledWith = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const systemMsg = calledWith.messages.find(
+      (m: { role: string }) => m.role === "system",
+    );
+    const content = systemMsg.content as string;
+
+    // The vivid example mirrors the real failure case
+    expect(content).toContain("Руслан");
+    // Concrete forbidden-follow-ups list — the heart of the fix
+    expect(content).toContain("FORBIDDEN");
+    // Gendered-name inference (no "ты парень или девушка?" after Руслан/Анна)
+    expect(content).toMatch(/gendered|inferr?ed?/i);
   });
 
   it("uses temperature 0.4 for deterministic data collection", async () => {
