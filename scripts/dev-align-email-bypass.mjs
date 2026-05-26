@@ -13,15 +13,36 @@
  * Optional:
  *   --primary-tg=782065541 --secondary-tg=5986970093 --force
  */
-import { config } from "dotenv";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { prisma } from "@gennety/db";
 
 const root = resolve(import.meta.dirname, "..");
-const localEnv = resolve(root, ".env.local");
-if (existsSync(localEnv)) config({ path: localEnv });
-config({ path: resolve(root, ".env") });
+
+function loadEnvFile(path, override) {
+  if (!existsSync(path)) return;
+  for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    value = value.replace(/\s+#.*$/, "").trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (override || process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
+
+// Local dev config must win over .env before Prisma is imported.
+loadEnvFile(resolve(root, ".env.local"), true);
+loadEnvFile(resolve(root, ".env"), false);
 
 const args = new Map(
   process.argv.slice(2)
@@ -36,6 +57,7 @@ const apply = args.get("apply") === "true";
 const force = args.get("force") === "true";
 const primaryTg = BigInt(args.get("primary-tg") ?? "782065541");
 const secondaryTg = BigInt(args.get("secondary-tg") ?? "5986970093");
+let prisma;
 
 function maskEmail(email) {
   if (!email || typeof email !== "string") return null;
@@ -45,11 +67,18 @@ function maskEmail(email) {
 }
 
 async function main() {
+  if (args.has("help")) {
+    console.log("Usage: pnpm dev:align-email-bypass [--primary-tg=...] [--secondary-tg=...] [--force]");
+    return;
+  }
+
   if (process.env.BOT_USERNAME !== "gennetytestbot" && !force) {
     throw new Error(
       "Refusing to run outside the DEP bot. Expected BOT_USERNAME=gennetytestbot; pass --force only if you are absolutely sure.",
     );
   }
+
+  ({ prisma } = await import("@gennety/db"));
 
   const primary = await prisma.user.findUnique({
     where: { telegramId: primaryTg },
@@ -142,7 +171,7 @@ async function main() {
 
 main()
   .finally(async () => {
-    await prisma.$disconnect();
+    await prisma?.$disconnect();
   })
   .catch((err) => {
     console.error(err instanceof Error ? err.message : err);
