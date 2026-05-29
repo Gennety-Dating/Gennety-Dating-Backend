@@ -29,10 +29,20 @@ function okResponse(content: string) {
   } as unknown as Response;
 }
 
+function fileResponse(body = "image-bytes", mime = "image/jpeg") {
+  return {
+    ok: true,
+    headers: new Headers({ "content-type": mime }),
+    arrayBuffer: async () => Buffer.from(body).buffer,
+  } as unknown as Response;
+}
+
 describe("validateSingleFace", () => {
   it("returns valid=true when model answers 'true'", async () => {
     const getFile = vi.fn().mockResolvedValue({ file_path: "photos/file_1.jpg" });
-    const fetchFn = vi.fn().mockResolvedValue(okResponse("true"));
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(fileResponse("photo-1"))
+      .mockResolvedValueOnce(okResponse("true"));
 
     const result = await validateSingleFace(ctx, "file-id-1", {
       getFile,
@@ -41,17 +51,23 @@ describe("validateSingleFace", () => {
 
     expect(result).toEqual({ ok: true, valid: true });
     expect(getFile).toHaveBeenCalledWith("file-id-1");
-    // Body should reference the resolved Telegram file URL.
-    const body = JSON.parse((fetchFn.mock.calls[0]![1] as RequestInit).body as string);
-    expect(body.model).toBe("gpt-5.4-nano");
-    expect(body.messages[1].content[0].image_url.url).toBe(
+    expect(fetchFn.mock.calls[0]![0]).toBe(
       "https://api.telegram.org/file/bottest-bot-token/photos/file_1.jpg",
+    );
+    // The OpenAI body should contain a data URL, not a Telegram URL. This keeps
+    // validation independent of OpenAI's ability to fetch Telegram file links.
+    const body = JSON.parse((fetchFn.mock.calls[1]![1] as RequestInit).body as string);
+    expect(body.model).toBe("gpt-5.4-nano");
+    expect(body.messages[1].content[0].image_url.url).toMatch(
+      /^data:image\/jpeg;base64,/,
     );
   });
 
   it("returns valid=false when model answers 'false'", async () => {
     const getFile = vi.fn().mockResolvedValue({ file_path: "photos/file_2.jpg" });
-    const fetchFn = vi.fn().mockResolvedValue(okResponse("false"));
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(fileResponse("photo-2"))
+      .mockResolvedValueOnce(okResponse("false"));
 
     const result = await validateSingleFace(ctx, "file-id-2", {
       getFile,
@@ -63,7 +79,9 @@ describe("validateSingleFace", () => {
 
   it("is case-insensitive and tolerates trailing punctuation", async () => {
     const getFile = vi.fn().mockResolvedValue({ file_path: "p.jpg" });
-    const fetchFn = vi.fn().mockResolvedValue(okResponse("True."));
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(fileResponse("photo"))
+      .mockResolvedValueOnce(okResponse("True."));
 
     const result = await validateSingleFace(ctx, "id", {
       getFile,
@@ -75,7 +93,9 @@ describe("validateSingleFace", () => {
 
   it("returns error=api when OpenAI returns non-200", async () => {
     const getFile = vi.fn().mockResolvedValue({ file_path: "p.jpg" });
-    const fetchFn = vi.fn().mockResolvedValue({ ok: false } as Response);
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(fileResponse("photo"))
+      .mockResolvedValueOnce({ ok: false } as Response);
 
     const result = await validateSingleFace(ctx, "id", {
       getFile,
@@ -87,7 +107,9 @@ describe("validateSingleFace", () => {
 
   it("returns error=api when model reply is ambiguous", async () => {
     const getFile = vi.fn().mockResolvedValue({ file_path: "p.jpg" });
-    const fetchFn = vi.fn().mockResolvedValue(okResponse("maybe?"));
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(fileResponse("photo"))
+      .mockResolvedValueOnce(okResponse("maybe?"));
 
     const result = await validateSingleFace(ctx, "id", {
       getFile,
@@ -124,7 +146,9 @@ describe("validateSingleFace", () => {
 
   it("returns error=timeout when fetch aborts", async () => {
     const getFile = vi.fn().mockResolvedValue({ file_path: "p.jpg" });
-    const fetchFn = vi.fn().mockImplementation(() => {
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(fileResponse("photo"))
+      .mockImplementationOnce(() => {
       const err = new Error("aborted") as Error & { name: string };
       err.name = "AbortError";
       return Promise.reject(err);
@@ -136,6 +160,19 @@ describe("validateSingleFace", () => {
     });
 
     expect(result).toEqual({ ok: false, error: "timeout" });
+  });
+
+  it("returns error=api when Telegram file download fails", async () => {
+    const getFile = vi.fn().mockResolvedValue({ file_path: "p.jpg" });
+    const fetchFn = vi.fn().mockResolvedValue({ ok: false } as Response);
+
+    const result = await validateSingleFace(ctx, "id", {
+      getFile,
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(result).toEqual({ ok: false, error: "api" });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
   it("fails open (valid=true) when OPENAI_API_KEY is not configured", async () => {
