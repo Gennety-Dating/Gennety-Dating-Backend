@@ -95,6 +95,7 @@ describe("validateSingleFace", () => {
     const getFile = vi.fn().mockResolvedValue({ file_path: "p.jpg" });
     const fetchFn = vi.fn()
       .mockResolvedValueOnce(fileResponse("photo"))
+      .mockResolvedValueOnce({ ok: false } as Response)
       .mockResolvedValueOnce({ ok: false } as Response);
 
     const result = await validateSingleFace(ctx, "id", {
@@ -103,6 +104,27 @@ describe("validateSingleFace", () => {
     });
 
     expect(result).toEqual({ ok: false, error: "api" });
+  });
+
+  it("falls back to Telegram file URL when data URL validation fails", async () => {
+    const getFile = vi.fn().mockResolvedValue({ file_path: "photos/file_3.jpg" });
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(fileResponse("photo-3"))
+      .mockResolvedValueOnce({ ok: false } as Response)
+      .mockResolvedValueOnce(okResponse("true"));
+
+    const result = await validateSingleFace(ctx, "file-id-3", {
+      getFile,
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(result).toEqual({ ok: true, valid: true });
+    const fallbackBody = JSON.parse(
+      (fetchFn.mock.calls[2]![1] as RequestInit).body as string,
+    );
+    expect(fallbackBody.messages[1].content[0].image_url.url).toBe(
+      "https://api.telegram.org/file/bottest-bot-token/photos/file_3.jpg",
+    );
   });
 
   it("returns error=api when model reply is ambiguous", async () => {
@@ -149,10 +171,15 @@ describe("validateSingleFace", () => {
     const fetchFn = vi.fn()
       .mockResolvedValueOnce(fileResponse("photo"))
       .mockImplementationOnce(() => {
-      const err = new Error("aborted") as Error & { name: string };
-      err.name = "AbortError";
-      return Promise.reject(err);
-    });
+        const err = new Error("aborted") as Error & { name: string };
+        err.name = "AbortError";
+        return Promise.reject(err);
+      })
+      .mockImplementationOnce(() => {
+        const err = new Error("aborted") as Error & { name: string };
+        err.name = "AbortError";
+        return Promise.reject(err);
+      });
 
     const result = await validateSingleFace(ctx, "id", {
       getFile,

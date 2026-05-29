@@ -83,7 +83,15 @@ export async function validateSingleFaceFromBuffer(
   if (!apiKey) return { ok: true, valid: true };
 
   const dataUrl = `data:${mime || "image/jpeg"};base64,${buffer.toString("base64")}`;
+  return validateSingleFaceImageUrl(dataUrl, apiKey, timeoutMs, fetchFn);
+}
 
+async function validateSingleFaceImageUrl(
+  imageUrl: string,
+  apiKey: string,
+  timeoutMs: number,
+  fetchFn: typeof fetch,
+): Promise<FaceValidationResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -103,7 +111,7 @@ export async function validateSingleFaceFromBuffer(
           { role: "system", content: SYSTEM_PROMPT },
           {
             role: "user",
-            content: [{ type: "image_url", image_url: { url: dataUrl } }],
+            content: [{ type: "image_url", image_url: { url: imageUrl } }],
           },
         ],
       }),
@@ -164,9 +172,15 @@ export async function validateSingleFace(
     return { ok: false, error: "api" };
   }
 
-  return validateSingleFaceFromBuffer(buffer, mime, {
+  const dataUrlResult = await validateSingleFaceFromBuffer(buffer, mime, {
     openaiApiKey: apiKey,
     timeoutMs,
     fetchFn,
   });
+  if (dataUrlResult.ok) return dataUrlResult;
+
+  // Some vision endpoints/models are stricter about data URLs than remote
+  // image URLs. If the server-side byte path fails, fall back to the original
+  // Telegram file URL with the same relaxed profile-photo prompt.
+  return validateSingleFaceImageUrl(fileUrl, apiKey, timeoutMs, fetchFn);
 }
