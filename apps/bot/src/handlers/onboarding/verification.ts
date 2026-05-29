@@ -22,8 +22,10 @@ export const VERIFY_CHECK_CALLBACK = "verify:check";
 /**
  * Send the Persona liveness CTA to the user at the end of onboarding.
  *
- * Two buttons:
+ * Three buttons:
  *   • Verify now → URL button opening the Persona hosted flow.
+ *   • I've finished verification → callback button (`verify:check`) that pulls
+ *     Persona directly when the hosted-flow deep link back to Telegram fails.
  *   • Skip for now → callback button (`verify:skip`) that drops the
  *     user's ELO score and activates them as `verificationStatus=unverified`.
  *
@@ -76,14 +78,13 @@ export async function sendVerificationCTABare(
     })
     .catch(() => {});
 
-  // Initial CTA shows only "Verify now" + "Skip" — the auto-poll
-  // (services/verification-poller.ts) handles the post-Persona return,
-  // so the manual "I've finished verification" button is unnecessary
-  // here. It stays wired up as a callback handler and surfaces on the
-  // poller's 5-minute timeout DM as a safety net for edge cases (user
-  // closed Persona without tapping Done, bot restarted mid-poll, etc.).
+  // The deep link back from Persona starts the auto-poller, but Telegram /
+  // in-app browser handoff can fail. Keep the manual check button visible
+  // on the original CTA so users always have a recovery path.
   const keyboard = new InlineKeyboard()
     .url(t(lang, "verifyBtnGo"), url)
+    .row()
+    .text(t(lang, "verifyBtnCheck"), VERIFY_CHECK_CALLBACK)
     .row()
     .text(t(lang, "verifyBtnSkip"), VERIFY_SKIP_CALLBACK);
 

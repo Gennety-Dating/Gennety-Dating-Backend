@@ -61,6 +61,11 @@ vi.mock("../../config.js", () => ({
     CUSTOM_EMOJI_LIKE_ID: "",
     CUSTOM_EMOJI_DISLIKE_ID: "",
     CUSTOM_EMOJI_MENU_ID: "",
+    ENABLE_PERSONA_VERIFICATION: true,
+    PERSONA_TEMPLATE_ID: "tmpl-test",
+    PERSONA_ENVIRONMENT_ID: "env-test",
+    PERSONA_HOSTED_URL_BASE: "https://withpersona.test/verify",
+    BOT_USERNAME: "gennetytestbot",
     WEBAPP_URL: "https://test.invalid/calendar",
   },
 }));
@@ -69,7 +74,12 @@ import { prisma } from "@gennety/db";
 import { handleConsent, sendConsentPrompt } from "./consent.js";
 import { handleLanguageSelection } from "./language.js";
 import { handleConversational } from "./conversational.js";
-import { handleVerificationSkip } from "./verification.js";
+import {
+  VERIFY_CHECK_CALLBACK,
+  VERIFY_SKIP_CALLBACK,
+  handleVerificationSkip,
+  sendVerificationCTABare,
+} from "./verification.js";
 import { runAgentTurn, injectSystemMessage } from "../../services/onboarding-agent.js";
 import { validateSingleFace } from "../../services/vision/validate-face.js";
 import { showMainMenu } from "../menu/main.js";
@@ -1117,6 +1127,35 @@ describe("Album (media_group_id) photo coalescing", () => {
       BigInt(99001),
       expect.stringContaining("BEFORE you called request_photos"),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Verification CTA — deep-link fallback
+// ---------------------------------------------------------------------------
+
+describe("sendVerificationCTABare", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("includes a manual status-check button in case Persona deep-link return fails", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "user-uuid",
+    });
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) };
+
+    const sent = await sendVerificationCTABare(api as any, 12345, 12345n, "en");
+
+    expect(sent).toBe(true);
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    const [, , options] = api.sendMessage.mock.calls[0]!;
+    const keyboard = options.reply_markup.inline_keyboard;
+    expect(keyboard[0]?.[0]?.url).toContain("withpersona.test");
+    expect(keyboard[0]?.[0]?.url).toContain("start%3Dverify_done");
+    expect(keyboard[1]?.[0]?.callback_data).toBe(VERIFY_CHECK_CALLBACK);
+    expect(keyboard[2]?.[0]?.callback_data).toBe(VERIFY_SKIP_CALLBACK);
   });
 });
 
