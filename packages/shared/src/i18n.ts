@@ -111,6 +111,12 @@ const translations = {
       "If something looks wrong, tap 🟢 Verify now to retry.",
     verifyCheckInfraError:
       "Couldn't reach the verification service just now. Try again in a moment.",
+    verifyOutcomeVerified:
+      "✅ Verification complete — your profile is live. I'll reach out when I find a match.",
+    verifyOutcomePendingReview:
+      "🔍 We're double-checking your profile photos against your verification selfie. This usually takes a few hours — I'll message you the moment it's done.",
+    verifyOutcomeRejected:
+      "⚠️ The photos in your profile don't appear to match the selfie we captured during verification. Please replace them with clear photos of yourself, then open Settings → Verify your account to retry.",
     verifyAutoPollStarted:
       "✨ Got it. Grab a coffee ☕ — I'm cross-checking your selfie against your profile photos. " +
       "Should take a minute or two.",
@@ -520,6 +526,12 @@ const translations = {
       "Если что-то пошло не так — нажми 🟢 Пройти верификацию ещё раз.",
     verifyCheckInfraError:
       "Не получилось достучаться до сервиса верификации. Попробуй ещё раз через минуту.",
+    verifyOutcomeVerified:
+      "✅ Верификация пройдена — профиль активен. Напишу, как только найду подходящий метч.",
+    verifyOutcomePendingReview:
+      "🔍 Мы дополнительно проверяем фото профиля по селфи из верификации. Обычно это занимает несколько часов — я напишу, как только проверка завершится.",
+    verifyOutcomeRejected:
+      "⚠️ Фото в профиле не совпали с селфи из верификации. Замени их на чёткие фотографии себя, затем открой Настройки → Верифицировать аккаунт и попробуй ещё раз.",
     verifyAutoPollStarted:
       "✨ Принято. Хватай кофе ☕ — я сверяю твоё селфи с фото из профиля. " +
       "Это займёт минуту-две.",
@@ -926,6 +938,12 @@ const translations = {
       "Якщо щось не так — натисни 🟢 Пройти верифікацію ще раз.",
     verifyCheckInfraError:
       "Не вдалося достукатися до сервісу верифікації. Спробуй ще раз за хвилину.",
+    verifyOutcomeVerified:
+      "✅ Верифікацію пройдено — профіль активний. Напишу, щойно знайду відповідний метч.",
+    verifyOutcomePendingReview:
+      "🔍 Ми додатково перевіряємо фото профілю за селфі з верифікації. Зазвичай це займає кілька годин — я напишу, щойно перевірка завершиться.",
+    verifyOutcomeRejected:
+      "⚠️ Фото в профілі не збіглися з селфі з верифікації. Заміни їх на чіткі фото себе, потім відкрий Налаштування → Верифікувати акаунт і спробуй ще раз.",
     verifyAutoPollStarted:
       "✨ Прийнято. Хапай каву ☕ — я звіряю твоє селфі з фото у профілі. " +
       "Це займе хвилину-дві.",
@@ -1326,6 +1344,12 @@ const deTranslations: TranslationTable = {
     "Schon verarbeitet - du solltest die Ergebnisnachricht oben bekommen haben. " +
     "Wenn etwas falsch wirkt, tippe auf 🟢 Jetzt verifizieren, um es erneut zu versuchen.",
   verifyCheckInfraError: "Der Verifizierungsdienst ist gerade nicht erreichbar. Versuch es gleich nochmal.",
+  verifyOutcomeVerified:
+    "✅ Verifizierung abgeschlossen - dein Profil ist live. Ich melde mich, sobald ich ein Match finde.",
+  verifyOutcomePendingReview:
+    "🔍 Wir prüfen deine Profilfotos noch einmal gegen dein Verifizierungs-Selfie. Das dauert normalerweise ein paar Stunden - ich melde mich, sobald es erledigt ist.",
+  verifyOutcomeRejected:
+    "⚠️ Die Fotos in deinem Profil scheinen nicht zum Selfie aus der Verifizierung zu passen. Ersetze sie bitte durch klare Fotos von dir und öffne dann Einstellungen → Konto verifizieren, um es erneut zu versuchen.",
   verifyAutoPollStarted:
     "✨ Verstanden. Hol dir einen Kaffee ☕ - ich vergleiche dein Selfie mit deinen Profilfotos. " +
     "Das dauert ein bis zwei Minuten.",
@@ -1684,6 +1708,12 @@ const plTranslations: TranslationTable = {
     "Już przetworzone - powinna pojawić się wiadomość z wynikiem powyżej. " +
     "Jeśli coś wygląda źle, kliknij 🟢 Zweryfikuj teraz, aby spróbować ponownie.",
   verifyCheckInfraError: "Nie udało się teraz połączyć z usługą weryfikacji. Spróbuj za chwilę.",
+  verifyOutcomeVerified:
+    "✅ Weryfikacja zakończona - Twój profil jest aktywny. Odezwę się, gdy znajdę dopasowanie.",
+  verifyOutcomePendingReview:
+    "🔍 Jeszcze raz sprawdzamy zdjęcia z profilu względem selfie z weryfikacji. Zwykle zajmuje to kilka godzin - napiszę, gdy będzie gotowe.",
+  verifyOutcomeRejected:
+    "⚠️ Zdjęcia w profilu nie wyglądają na zgodne z selfie z weryfikacji. Zmień je na wyraźne zdjęcia siebie, potem otwórz Ustawienia → Zweryfikuj konto i spróbuj ponownie.",
   verifyAutoPollStarted:
     "✨ Jasne. Złap kawę ☕ - porównuję selfie z Twoimi zdjęciami profilowymi. " +
     "To potrwa minutę albo dwie.",

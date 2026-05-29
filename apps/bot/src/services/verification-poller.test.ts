@@ -92,6 +92,38 @@ describe("verification-poller", () => {
     expect(isPolling(USER_ID)).toBe(false);
   });
 
+  it("DMs stored rejected status on already_done and stops", async () => {
+    const api = makeApi();
+    const pull = pullSequence({
+      kind: "already_done",
+      verificationStatus: "rejected",
+    });
+
+    startPoll(USER_ID, TG_ID, "ru", api as never, depsWith(pull));
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0]![1]).toMatch(/не совпали/i);
+    expect(isPolling(USER_ID)).toBe(false);
+  });
+
+  it("DMs stored pending_review status on already_done and stops", async () => {
+    const api = makeApi();
+    const pull = pullSequence({
+      kind: "already_done",
+      verificationStatus: "pending_review",
+    });
+
+    startPoll(USER_ID, TG_ID, "en", api as never, depsWith(pull));
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0]![1]).toMatch(/double-checking/i);
+    expect(isPolling(USER_ID)).toBe(false);
+  });
+
   it("times out after MAX_ATTEMPTS still_pending and DMs with a safety-net button", async () => {
     const api = makeApi();
     const pull = pullSequence({ kind: "still_pending", personaStatus: "pending" });

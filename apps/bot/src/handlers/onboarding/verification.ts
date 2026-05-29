@@ -3,6 +3,7 @@ import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { buildPersonaHostedUrl } from "../../services/persona.js";
+import { terminalVerificationMessage } from "../../services/verification-messages.js";
 import { pullVerificationStatus } from "../../services/verification-pipeline.js";
 import { showMainMenu } from "../menu/main.js";
 import { pinStatusBanner } from "../../services/status-banner.js";
@@ -118,9 +119,9 @@ export async function handleVerificationCheck(ctx: BotContext): Promise<void> {
       return;
     case "already_done":
       // Webhook beat us to it OR user double-tapped after a previous pull.
-      // The verified-state message was already sent when status flipped;
-      // we send a short ack so the click isn't silent.
-      await ctx.reply(t(lang, "verifyCheckAlreadyDone"));
+      // Remind them of the stored terminal state so the click is never silent
+      // and doesn't rely on an older message still being visible.
+      await ctx.reply(terminalVerificationMessage(lang, outcome.verificationStatus));
       return;
     case "no_inquiry":
       await ctx.reply(t(lang, "verifyCheckNoInquiry"));

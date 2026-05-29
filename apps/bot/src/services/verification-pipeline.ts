@@ -85,6 +85,8 @@ export type VerificationOutcome =
     }
   | { kind: "rejected"; userId: string; score: number; scores: number[] };
 
+export type TerminalVerificationStatus = "verified" | "pending_review" | "rejected";
+
 /**
  * Injectable dependencies — production wires them up to the real services
  * via `runFaceMatchVerification`. Tests pass stubs that return canned
@@ -830,7 +832,7 @@ export type PullVerificationOutcome =
   | { kind: "pipeline_ran"; pipelineOutcome: VerificationOutcome }
   /** User already in a terminal state — nothing to do. Caller should be silent
    *  or just remind them of their current status. */
-  | { kind: "already_done"; verificationStatus: string }
+  | { kind: "already_done"; verificationStatus: TerminalVerificationStatus }
   /** Persona REST API or our DB lookup failed transiently — ask user to retry. */
   | { kind: "infra_error"; reason: "not_configured" | "api" | "timeout" | "user_missing" }
   /** No inquiry yet for this user (they opened the URL but never started). */

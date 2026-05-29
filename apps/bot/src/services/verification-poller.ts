@@ -5,6 +5,7 @@ import {
   pullVerificationStatus,
   type PullVerificationOutcome,
 } from "./verification-pipeline.js";
+import { terminalVerificationMessage } from "./verification-messages.js";
 import { VERIFY_CHECK_CALLBACK } from "../handlers/onboarding/verification.js";
 
 /**
@@ -49,7 +50,8 @@ const defaultDeps: PollerDeps = {
  * flight for this user, the existing interval is cleared and replaced.
  *
  * Side-effects on outcome:
- *   - `pipeline_ran` / `already_done` → stop. Pipeline already DM'd the user.
+ *   - `pipeline_ran`                 → stop. Pipeline already DM'd the user.
+ *   - `already_done`                 → stop + remind user of stored terminal status.
  *   - `still_pending` / `no_inquiry`  → keep polling until attempts run out.
  *   - `persona_failed`                → stop + DM retry instructions.
  *   - `infra_error`                   → stop + DM transient-error message.
@@ -111,9 +113,17 @@ async function tick(
 
   switch (outcome.kind) {
     case "pipeline_ran":
-    case "already_done":
       // Pipeline (or earlier webhook) already DM'd the user — stay silent.
       stopPoll(userId, deps);
+      return;
+
+    case "already_done":
+      stopPoll(userId, deps);
+      await safeSend(
+        api,
+        telegramId,
+        terminalVerificationMessage(language, outcome.verificationStatus),
+      );
       return;
 
     case "no_inquiry":
