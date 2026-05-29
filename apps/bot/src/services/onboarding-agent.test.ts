@@ -158,6 +158,21 @@ describe("onboarding-agent", () => {
     );
   });
 
+  it("deduplicates an accidentally repeated assistant bubble before replying and persisting", async () => {
+    const duplicate =
+      "Понял: Alexey, 24.\nКто тебе нравится — парни, девушки или оба?\n" +
+      "Понял: Alexey, 24.\nКто тебе нравится — парни, девушки или оба?";
+    const mockFetch = vi.fn().mockResolvedValueOnce(textResponse(duplicate));
+
+    const result = await runAgentTurn(telegramId, "my name is Alexey", { fetchFn: mockFetch });
+
+    expect(result.reply).toBe("Понял: Alexey, 24.\nКто тебе нравится — парни, девушки или оба?");
+    const persisted = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]
+      .data.messageHistory as ChatMessage[];
+    const assistant = [...persisted].reverse().find((m: ChatMessage) => m.role === "assistant");
+    expect(assistant?.content).toBe(result.reply);
+  });
+
   it("executes send_otp_email tool and feeds result back to LLM", async () => {
     const mockFetch = vi
       .fn()
@@ -275,6 +290,13 @@ describe("onboarding-agent", () => {
       email: null,
       universityDomain: null,
       isEmailVerified: false,
+      profile: {
+        ethnicity: "Ukrainian",
+        height: 180,
+        hobbies: ["reading"],
+        partnerPreferences: "someone kind",
+        photos: [],
+      },
     });
 
     const mockFetch = vi
@@ -314,6 +336,87 @@ describe("onboarding-agent", () => {
       m.tool_calls?.map((call) => call.function.name) ?? [],
     );
     expect(persistedToolNames).toEqual(["request_context_dump"]);
+  });
+
+  it("blocks request_context_dump until ethnicity has been asked once", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-1",
+      messageHistory: [],
+      language: "ru",
+      email: "alice@stanford.edu",
+      universityDomain: "stanford.edu",
+      isEmailVerified: true,
+      firstName: "Алексей",
+      age: 24,
+      gender: "male",
+      preference: "women",
+      profile: {
+        ethnicity: null,
+        height: 176,
+        hobbies: ["готовка"],
+        partnerPreferences: "девушка, которая любит готовить",
+        photos: [],
+      },
+    });
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "call-ctx", name: "request_context_dump", args: {} }]),
+      )
+      .mockResolvedValueOnce(
+        textResponse("И ещё один необязательный момент: какая у тебя национальность или этнический бэкграунд? Можно пропустить."),
+      );
+
+    const result = await runAgentTurn(telegramId, "готово, дай промпт", {
+      fetchFn: mockFetch,
+    });
+
+    expect(result.contextPromptRequested).toBe(false);
+    expect(result.reply).toContain("национальность");
+    const secondCallBody = JSON.parse(mockFetch.mock.calls[1][1].body);
+    const toolMessage = secondCallBody.messages.find(
+      (m: { role: string }) => m.role === "tool",
+    );
+    expect(JSON.parse(toolMessage.content).error).toContain("ethnicity");
+  });
+
+  it("allows request_context_dump after ethnicity was already asked once", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-1",
+      messageHistory: [
+        { role: "system", content: "system prompt..." },
+        { role: "assistant", content: "Какая у тебя национальность или этнический бэкграунд? Можно пропустить." },
+        { role: "user", content: "пропустим" },
+      ],
+      language: "ru",
+      email: "alice@stanford.edu",
+      universityDomain: "stanford.edu",
+      isEmailVerified: true,
+      firstName: "Алексей",
+      age: 24,
+      gender: "male",
+      preference: "women",
+      profile: {
+        ethnicity: null,
+        height: 176,
+        hobbies: ["готовка"],
+        partnerPreferences: "девушка, которая любит готовить",
+        photos: [],
+      },
+    });
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "call-ctx", name: "request_context_dump", args: {} }]),
+      );
+
+    const result = await runAgentTurn(telegramId, "ок дальше", {
+      fetchFn: mockFetch,
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(result.contextPromptRequested).toBe(true);
+    expect(result.reply).toContain("Скопируй промпт выше");
   });
 
   it("saves the user's latest pasted message as the dump, ignoring any LLM rephrasing in raw_dump", async () => {
@@ -888,6 +991,47 @@ describe("onboarding-agent", () => {
           hobbies: ["tennis", "reading"],
           partnerPreferences: "someone kind and funny",
         }),
+      }),
+    );
+  });
+
+  it("does not persist placeholder ethnicity values as real profile data", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uuid-1",
+      messageHistory: [],
+      language: "ru",
+    }).mockResolvedValueOnce({
+      id: "uuid-1",
+      profile: null,
+    });
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          {
+            id: "call-1",
+            name: "save_profile_data",
+            args: {
+              first_name: "Алексей",
+              age: 24,
+              gender: "male",
+              preference: "women",
+              ethnicity: "не указано",
+              height: 176,
+              hobbies: ["готовка"],
+              partner_preferences: "девушка, которая любит готовить",
+            },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("Saved."));
+
+    await runAgentTurn(telegramId, "save it", { fetchFn: mockFetch });
+
+    expect(prisma.profile.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ ethnicity: null }),
+        update: expect.objectContaining({ ethnicity: null }),
       }),
     );
   });

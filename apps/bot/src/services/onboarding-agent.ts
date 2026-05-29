@@ -169,7 +169,7 @@ ${emailRule}
 Before asking ANY question, scan the user's MOST RECENT message AND the full conversation history for fields they have already given you. Users routinely dump several things in one message — e.g. "Alex, 22, looking for a girl, 180cm, into running and jazz, looking for someone calm and curious".
 
 When this happens:
-1. Extract every field that is clear and concrete (name, age, gender, preference, height, hobbies, partner preferences) and treat them as collected.
+1. Extract every field that is clear and concrete (name, age, gender, preference, ethnicity/nationality, height, hobbies, partner preferences) and treat them as collected.
 2. NEVER re-ask a question whose answer is already visible in the chat history. If the user says "I already told you" or "we covered this", that means YOU made the mistake — briefly apologise, confirm what you have, and only ask for what is genuinely still missing.
 3. In your reply, confirm in ONE short bubble what you extracted ("got it: Alex, 22, into running and jazz — looking for a girl"), then ask only for the missing pieces. Combining 1–2 missing fields in a single question is fine.
 4. Only ask for a field when you genuinely don't have a concrete value for it. Re-asking already-answered questions is the most common reason users abandon onboarding — do not do it.
@@ -192,11 +192,12 @@ What you MUST extract from this single message:
 - hobbies: ["конный спорт"]
 - height: 180
 
-What you MUST do next: ONE short bubble acknowledging what you got, then ask only for what is genuinely missing (e.g. ethnicity if you still need it, or move directly to step 4 — request_context_dump). Do NOT issue a sequence of "а кого ты ищешь?", "а рост?", "а хобби?", "ещё хобби?", "а партнёр какой?". That sequence is the #1 reason users abandon onboarding.
+What you MUST do next: ONE short bubble acknowledging what you got, then ask only for what is genuinely missing (e.g. ethnicity/nationality if you still need it, or move directly to step 4 — request_context_dump). Do NOT issue a sequence of "а кого ты ищешь?", "а рост?", "а хобби?", "ещё хобби?", "а партнёр какой?". That sequence is the #1 reason users abandon onboarding.
 
 ### FORBIDDEN follow-ups (these are bugs, not features)
 
 - After a clearly gendered first name → DO NOT ask "ты парень или девушка?" / "are you a guy or a girl?". Infer it from the name.
+- If the user's gender answer is contradictory or joking (e.g. "I'm a guy and a girl at the same time"), do NOT guess. Ask one short clarification because the matching engine currently needs one of two profile values.
 - After "ищу девушку" / "ищу парня" / "ищу обоих" / "looking for a girl/guy/both" → DO NOT ask "кто тебе нравится?" again. Save the preference.
 - After ANY first hobby reply (one hobby, several, or "no hobbies") → DO NOT ask for another hobby. The first reply IS the answer.
 - After a height like "180 см" / "5'10\"" / "180" appears in any user message → DO NOT re-ask height.
@@ -210,7 +211,7 @@ You MUST collect ALL of the following before finalizing:
 
 1. **Email verification**: Ask for university email → call send_otp_email → ask for OTP code → call verify_otp. If the user says the code didn't arrive, call resend_otp to re-send it (no need to ask for the email again).
 2. **Profile basics**: First name, age, gender, gender preference (who they are interested in — men, women, or both). ALWAYS ask these questions in the user's chosen language using native words ONLY — never use English terms like "male/female" or "men/women/both" in your message to the user. Map their natural-language answer internally to the tool enum values.
-3. **Extended profile**: Ethnicity (optional but encouraged), height in cm, hobbies/interests (whatever the user shares — one, several, or "no hobbies" are ALL valid; never push for more), partner preferences (one short sentence is plenty)
+3. **Extended profile**: Ethnicity/nationality (optional but encouraged; ask exactly once before the Magic Prompt if it was not already given, and accept skipping), height in cm, hobbies/interests (whatever the user shares — one, several, or "no hobbies" are ALL valid; never push for more), partner preferences (one short sentence is plenty)
 4. **Deep context extraction**: After collecting extended profile, call request_context_dump. The system will AUTOMATICALLY send the Magic Prompt to the user in a separate copyable block — you do NOT need to include or display the prompt yourself.
 
    STRICT BOUNDARIES for the reply that accompanies request_context_dump:
@@ -248,12 +249,13 @@ NEVER move to the next question or topic until the current one has a CONCRETE, S
 - **Gender**: A clear answer identifying the user as a man or a woman (in their own language). If the user's first name is unambiguously gendered in their language (e.g. Александр/Руслан → male, Анна/Виктория → female, Михаил → male, Olga → female), INFER gender from the name and do NOT ask. Only ask when the name is gender-neutral or unknown to you. Internally map to the tool enum.
 - **Preference**: A clear answer about who they want to date — men, women, or both (in their own language). Internally map to the tool enum.
 - **Hobbies**: Whatever the user shares. One hobby is enough. "No hobbies" / "ничего особенного" is a valid answer — save it and move on. NEVER ask for additional hobbies after the first reply.
+- **Ethnicity/nationality**: Ask once in a casual optional way before request_context_dump unless the user already volunteered it. If they skip, ignore it, or say they prefer not to answer, proceed with ethnicity unset. NEVER fabricate placeholders like "не указано", "not specified", "unknown", or "n/a".
 - **Partner preferences**: One short concrete sentence about what they want (not "anyone" or "idk"). One sentence is plenty — don't ask for more detail once you have one.
 - **Height**: A plausible number in cm (140-220) — if the user is unsure of cm, help convert from feet/inches
 
 ### Tracking what you've collected:
 Before calling save_profile_data, mentally verify you have ALL of these with concrete values:
-- Email verified, First name, Age, Gender, Preference, Height, Hobbies (whatever the user gave — even an empty list is fine), Partner preferences (one sentence), Context dump saved (via save_context_dump), Photos (${MIN_PHOTOS}+)
+- Email verified, First name, Age, Gender, Preference, Ethnicity/nationality asked once or already volunteered/skipped, Height, Hobbies (whatever the user gave — even an empty list is fine), Partner preferences (one sentence), Context dump saved (via save_context_dump), Photos (${MIN_PHOTOS}+)
 
 If ANY required field is missing or vague, go back and collect it before saving.
 
@@ -554,6 +556,37 @@ function contextDumpSavedSystemMessage(): ChatMessage {
   };
 }
 
+function normalizeForRepeatDetection(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function dedupeRepeatedAssistantText(content: string | null | undefined): string | null {
+  if (typeof content !== "string" || !content.trim()) return content ?? null;
+
+  const trimmed = content.trimEnd();
+  const lineParts = trimmed.split(/\n{1,2}/);
+  if (lineParts.length % 2 === 0) {
+    const midpoint = lineParts.length / 2;
+    const first = lineParts.slice(0, midpoint).join("\n");
+    const second = lineParts.slice(midpoint).join("\n");
+    if (normalizeForRepeatDetection(first) === normalizeForRepeatDetection(second)) {
+      return first.trimEnd();
+    }
+  }
+
+  const half = Math.floor(trimmed.length / 2);
+  const firstHalf = trimmed.slice(0, half);
+  const secondHalf = trimmed.slice(half);
+  if (
+    trimmed.length > 24 &&
+    normalizeForRepeatDetection(firstHalf) === normalizeForRepeatDetection(secondHalf)
+  ) {
+    return firstHalf.trimEnd();
+  }
+
+  return content;
+}
+
 function status(value: unknown): "saved" | "missing" {
   if (typeof value === "string") return value.trim() ? "saved" : "missing";
   if (typeof value === "number") return Number.isFinite(value) ? "saved" : "missing";
@@ -592,6 +625,7 @@ function buildCurrentSavedStateSnapshot(
     `Context dump: ${contextDumpSaved ? "saved" : "missing"}`,
     `Photos: ${photos.length}/${MIN_PHOTOS} required minimum`,
     `Missing next: ${missing.length ? missing.join(", ") : "none"}`,
+    "Ethnicity is optional, but if it is missing you must ask it once before request_context_dump unless the chat already shows you asked or the user skipped it.",
     "If Missing next is context_dump, call request_context_dump now instead of asking profile questions.",
     "If Context dump is saved and Photos are missing, call request_photos. Finalize only after profile, context dump, and photos are complete.",
   ];
@@ -828,6 +862,43 @@ function extractHeightFromHistory(history: ChatMessage[]): number | null {
   return null;
 }
 
+function hasEthnicityPromptAlreadyHappened(history: ChatMessage[]): boolean {
+  const promptRe =
+    /(ethnicity|nationality|background|origin|национальн|национальность|этнич|этнос|происхождени|по происхождению|корни|етніч|національн|pochodzen|narodowo|herkunft|ethnisch)/i;
+  return history.some(
+    (msg) => msg.role === "assistant" && typeof msg.content === "string" && promptRe.test(msg.content),
+  );
+}
+
+function shouldBlockContextDumpForEthnicity(
+  user: PersistedOnboardingState | null | undefined,
+  history: ChatMessage[],
+): boolean {
+  return !user?.profile?.ethnicity && !hasEthnicityPromptAlreadyHappened(history);
+}
+
+function normalizeOptionalEthnicity(value: string | null | undefined): string | null {
+  if (value === undefined || value === null) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.toLowerCase().replace(/[.\s_-]+/g, " ");
+  const placeholders = new Set([
+    "не указано",
+    "не указан",
+    "неизвестно",
+    "нет данных",
+    "n/a",
+    "na",
+    "not specified",
+    "not provided",
+    "unknown",
+    "unspecified",
+    "none",
+    "null",
+  ]);
+  return placeholders.has(normalized) ? null : trimmed;
+}
+
 async function execSaveProfileData(
   telegramId: bigint,
   args: {
@@ -871,7 +942,9 @@ async function execSaveProfileData(
   const preference =
     args.preference ?? (user.preference as "men" | "women" | "both" | null);
   const ethnicity =
-    args.ethnicity === undefined ? (user.profile?.ethnicity ?? null) : args.ethnicity;
+    args.ethnicity === undefined
+      ? normalizeOptionalEthnicity(user.profile?.ethnicity ?? null)
+      : normalizeOptionalEthnicity(args.ethnicity);
   const height = args.height ?? user.profile?.height ?? null;
   const hobbies =
     args.hobbies === undefined ? (user.profile?.hobbies ?? []) : args.hobbies;
@@ -936,13 +1009,13 @@ async function execSaveProfileData(
     where: { userId: user.id },
     create: {
       userId: user.id,
-      ethnicity: ethnicity?.trim() || null,
+      ethnicity,
       height,
       hobbies,
       partnerPreferences: partnerPreferencesText,
     },
     update: {
-      ethnicity: ethnicity?.trim() || null,
+      ethnicity,
       height,
       hobbies,
       partnerPreferences: partnerPreferencesText,
@@ -957,7 +1030,7 @@ async function execSaveProfileData(
       age,
       gender,
       preference,
-      ethnicity: Boolean(ethnicity?.trim()),
+      ethnicity: Boolean(ethnicity),
       height,
       hobbies_count: hobbies.length,
       partner_preferences: true,
@@ -1283,6 +1356,7 @@ export async function runAgentTurn(
     if (!choice) break;
 
     const assistantMsg = choice.message;
+    const assistantContent = dedupeRepeatedAssistantText(assistantMsg.content);
     const rawToolCalls = assistantMsg.tool_calls ?? [];
     const contextDumpToolCall = rawToolCalls.find(
       (call) => call.function.name === "request_context_dump",
@@ -1296,7 +1370,7 @@ export async function runAgentTurn(
     // side effects that must wait for the user's pasted dump.
     history.push({
       role: "assistant",
-      content: assistantMsg.content,
+      content: assistantContent,
       ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
     });
 
@@ -1333,14 +1407,24 @@ export async function runAgentTurn(
             result = await execResendOtp(telegramId, deps);
             break;
           case "request_context_dump":
-            contextPromptRequested = true;
-            contextDumpStarted = true;
-            result = JSON.stringify({
-              success: true,
-              message:
-                "Magic Prompt has been sent. The server is stopping this turn and waiting for the user's pasted LLM response.",
-            });
-            stopAfterToolRound = true;
+            if (shouldBlockContextDumpForEthnicity(user, history)) {
+              result = JSON.stringify({
+                success: false,
+                error:
+                  "Before request_context_dump, ask the user ONE short optional ethnicity/nationality question in their language. " +
+                  "Example in Russian: \"И ещё один необязательный момент: какая у тебя национальность или этнический бэкграунд? Можно пропустить.\" " +
+                  "Do not ask any other profile question in that message. If they skip, ignore it, or answer another field, you may proceed next time.",
+              });
+            } else {
+              contextPromptRequested = true;
+              contextDumpStarted = true;
+              result = JSON.stringify({
+                success: true,
+                message:
+                  "Magic Prompt has been sent. The server is stopping this turn and waiting for the user's pasted LLM response.",
+              });
+              stopAfterToolRound = true;
+            }
             break;
           case "save_context_dump":
             result = await execSaveContextDump(
