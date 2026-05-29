@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchInquirySelfie } from "./persona-api.js";
+import { fetchInquirySelfie, fetchLatestInquiryByReference } from "./persona-api.js";
 
 const INQUIRY_ID = "inq_abc123";
 const PHOTO_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0x42]); // fake JPEG bytes
@@ -232,5 +232,68 @@ describe("fetchInquirySelfie — error paths", () => {
     }) as unknown as typeof fetch;
     const result = await fetchInquirySelfie(INQUIRY_ID, { fetchFn, apiKey: API_KEY });
     expect(result).toEqual({ ok: false, error: "timeout" });
+  });
+});
+
+function listResponse(data: unknown[]): Response {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({ data }),
+  } as unknown as Response;
+}
+
+function inquiry(id: string, status: string, createdAt: string) {
+  return {
+    type: "inquiry",
+    id,
+    attributes: {
+      status,
+      "created-at": createdAt,
+    },
+  };
+}
+
+describe("fetchLatestInquiryByReference", () => {
+  it("prefers a newer actionable approved inquiry over a latest abandoned created row", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      listResponse([
+        inquiry("inq_created", "created", "2026-05-29T03:35:39.000Z"),
+        inquiry("inq_approved", "approved", "2026-05-29T03:32:13.000Z"),
+      ]),
+    );
+
+    const result = await fetchLatestInquiryByReference("user-1", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+      apiKey: API_KEY,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      inquiryId: "inq_approved",
+      status: "approved",
+      createdAt: "2026-05-29T03:32:13.000Z",
+    });
+  });
+
+  it("falls back to the newest non-actionable inquiry when nothing terminal exists", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      listResponse([
+        inquiry("inq_created", "created", "2026-05-29T03:35:39.000Z"),
+        inquiry("inq_pending", "pending", "2026-05-29T03:32:13.000Z"),
+      ]),
+    );
+
+    const result = await fetchLatestInquiryByReference("user-1", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+      apiKey: API_KEY,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      inquiryId: "inq_created",
+      status: "created",
+      createdAt: "2026-05-29T03:35:39.000Z",
+    });
   });
 });

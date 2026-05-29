@@ -254,12 +254,16 @@ interface PersonaInquiriesListResponse {
 }
 
 /**
- * Look up the most recent Persona inquiry whose `reference-id` matches
+ * Look up the most relevant Persona inquiry whose `reference-id` matches
  * `referenceId` (which we pass as our internal `User.id` when building the
  * hosted-flow URL).
  *
- * Persona supports `filter[reference-id]=<id>` plus `sort=-created-at` —
- * we pull the first row of that and return its `id` + `status`.
+ * Persona supports `filter[reference-id]=<id>` plus `sort=-created-at`.
+ * We pull a small window and prefer the newest actionable terminal inquiry
+ * (`approved`, `declined`, `failed`, `expired`) over a newer abandoned
+ * `created` row. This matters when the user opens the hosted flow again
+ * after completing an earlier attempt: the latest row can be `created`,
+ * while the useful verification result is the approved row immediately below.
  *
  * Returns:
  *   - `{ ok: true, inquiryId, status, createdAt }` — inquiry found.
@@ -286,7 +290,7 @@ export async function fetchLatestInquiryByReference(
   try {
     const params = new URLSearchParams({
       "filter[reference-id]": referenceId,
-      "page[size]": "1",
+      "page[size]": "10",
       sort: "-created-at",
     });
     const url = `${PERSONA_API_BASE}/inquiries?${params.toString()}`;
@@ -304,10 +308,13 @@ export async function fetchLatestInquiryByReference(
     if (!res.ok) return { ok: false, error: "api" };
 
     const body = (await res.json()) as PersonaInquiriesListResponse;
-    const first = body.data?.[0];
+    const rows = body.data ?? [];
+    const first = rows.find((row) =>
+      isActionableInquiryStatus(readInquiryStatus(row)),
+    ) ?? rows[0];
     if (!first) return { ok: true, inquiryId: null };
 
-    const status = typeof first.attributes.status === "string" ? first.attributes.status : "";
+    const status = readInquiryStatus(first);
     const createdAt =
       typeof first.attributes["created-at"] === "string"
         ? (first.attributes["created-at"] as string)
@@ -321,4 +328,19 @@ export async function fetchLatestInquiryByReference(
     }
     return { ok: false, error: "api" };
   }
+}
+
+function readInquiryStatus(row: {
+  attributes: Record<string, unknown>;
+}): string {
+  return typeof row.attributes.status === "string" ? row.attributes.status : "";
+}
+
+function isActionableInquiryStatus(status: string): boolean {
+  return (
+    status === "approved" ||
+    status === "declined" ||
+    status === "failed" ||
+    status === "expired"
+  );
 }
