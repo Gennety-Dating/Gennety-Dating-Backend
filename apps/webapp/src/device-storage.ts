@@ -65,12 +65,14 @@ export async function loadPickedSet(matchId: string): Promise<string[] | null> {
   if (raw.startsWith("[")) {
     try {
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) && parsed.every((x) => typeof x === "string") ? parsed : null;
+      return Array.isArray(parsed) && parsed.every((x) => typeof x === "string")
+        ? normalizeIsoList(parsed)
+        : null;
     } catch {
       return null;
     }
   }
-  return [raw];
+  return normalizeIsoList([raw]);
 }
 
 export async function clearPicked(matchId: string): Promise<void> {
@@ -86,4 +88,12 @@ export async function clearPicked(matchId: string): Promise<void> {
   await new Promise<void>((resolve) => {
     ds.removeItem(key(matchId), () => resolve());
   });
+}
+
+function normalizeIsoList(values: string[]): string[] | null {
+  const normalized = values.filter((value) => {
+    if (value.trim() === "") return false;
+    return !Number.isNaN(new Date(value).getTime());
+  });
+  return normalized.length > 0 ? normalized : null;
 }

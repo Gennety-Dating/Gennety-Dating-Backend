@@ -46,6 +46,22 @@ describe("device-storage (no Telegram, falls back to localStorage)", () => {
     expect(result).toEqual(["2026-05-01T19:00:00.000Z"]);
   });
 
+  it("loadPickedSet drops empty or malformed cached values", async () => {
+    (globalThis as any).window.localStorage.getItem = vi.fn(() =>
+      JSON.stringify(["", "not-a-date", "2026-05-01T19:00:00.000Z"]),
+    );
+    const mod = await importModule();
+    const result = await mod.loadPickedSet("match-1");
+    expect(result).toEqual(["2026-05-01T19:00:00.000Z"]);
+  });
+
+  it("loadPickedSet returns null when a legacy cached value is empty", async () => {
+    (globalThis as any).window.localStorage.getItem = vi.fn(() => "");
+    const mod = await importModule();
+    const result = await mod.loadPickedSet("match-1");
+    expect(result).toBeNull();
+  });
+
   it("loadPickedSet upgrades a legacy single-string value into a one-item array", async () => {
     // Older Mini App bundles wrote a bare ISO string. Backwards-compat path.
     (globalThis as any).window.localStorage.getItem = vi.fn(

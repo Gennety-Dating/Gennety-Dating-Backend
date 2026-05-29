@@ -114,6 +114,7 @@ function applyState(state: CalendarState, firstLoad: boolean): void {
   confirmedMine = new Set(state.mySlots);
   agreedTime = state.agreedTime;
   isFirstMover = state.isFirstMover;
+  selected = pruneToProposedTimes(selected);
 
   // First load: if the user has nothing cached locally, mirror the
   // server's view so toggles feel intuitive (re-tapping a slot
@@ -420,6 +421,7 @@ function handleMainButton(): void {
 
 async function handleSave(): Promise<void> {
   if (!app || saving) return;
+  selected = pruneToProposedTimes(selected);
   saving = true;
   app.MainButton.setText(tr(lang, "btnSaving"));
   app.MainButton.showProgress();
@@ -458,6 +460,18 @@ async function handleSave(): Promise<void> {
     app.showAlert(msg);
     updateMainButton();
   }
+}
+
+function pruneToProposedTimes(values: ReadonlySet<string>): Set<string> {
+  if (values.size === 0) return new Set();
+  const allowed = new Set(proposedTimes);
+  const pruned = new Set<string>();
+  for (const iso of values) {
+    if (allowed.has(iso) && !Number.isNaN(new Date(iso).getTime())) {
+      pruned.add(iso);
+    }
+  }
+  return pruned;
 }
 
 async function handleConfirmOverlap(): Promise<void> {
@@ -584,6 +598,7 @@ function errorMessage(err: CalendarApiError): string {
     case "user-not-found":
       return tr(lang, "errMatchGone");
     case "invalid-slot":
+    case "invalid-iso":
       return tr(lang, "errInvalidSlot");
     case "wrong-state":
       return tr(lang, "errWrongState");
