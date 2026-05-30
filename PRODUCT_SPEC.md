@@ -126,8 +126,18 @@ Hard rules baked into the agent prompt:
 After `finalize_onboarding` the bot sends the **verification CTA**
 (`handlers/onboarding/verification.ts`):
 
-- **Verify now** — opens the Persona hosted flow
-  (`buildPersonaHostedUrl(userId)`); `verificationStatus → pending`.
+- **Verify now** — opens the **Verification Mini App**
+  (`apps/webapp/verification.html`) via `InlineKeyboardButton.web_app`,
+  so Persona's KYC flow runs inline inside the native Telegram WebView
+  (no redirect to `withpersona.com`, no in-app browser frame). The Mini
+  App mounts Persona Embedded SDK v5 against `/v1/verification/mini-app/init`
+  config; terminal SDK events POST to `/v1/verification/mini-app/event`
+  which triggers the existing pull-fallback pipeline. `verificationStatus
+  → pending` is written on `/init`. When `WEBAPP_URL` isn't a real HTTPS
+  host (dev without a tunnel) the bot silently falls back to the legacy
+  `InlineKeyboardButton.url` opening the hosted flow at
+  `buildPersonaHostedUrl(userId)`. Mobile (Expo) still uses the hosted
+  URL via `/v1/me/verification/url` — it isn't a Telegram client.
 - **Skip for now** — flips `verificationSkippedAt`, drops
   `Profile.eloScore` by `UNVERIFIED_ELO_PENALTY` (= 150 from a 500 default),
   and activates the user as `unverified`. Reversible by later running Persona.

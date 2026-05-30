@@ -75,7 +75,6 @@ import { handleConsent, sendConsentPrompt } from "./consent.js";
 import { handleLanguageSelection } from "./language.js";
 import { handleConversational } from "./conversational.js";
 import {
-  VERIFY_CHECK_CALLBACK,
   VERIFY_SKIP_CALLBACK,
   handleVerificationSkip,
   sendVerificationCTABare,
@@ -1131,7 +1130,7 @@ describe("Album (media_group_id) photo coalescing", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Verification CTA — deep-link fallback
+// Verification CTA — Mini App + dev fallback to hosted URL
 // ---------------------------------------------------------------------------
 
 describe("sendVerificationCTABare", () => {
@@ -1139,7 +1138,7 @@ describe("sendVerificationCTABare", () => {
     vi.clearAllMocks();
   });
 
-  it("includes a manual status-check button in case Persona deep-link return fails", async () => {
+  it("renders the web_app Verification Mini App button (prod path) + Skip fallback", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "user-uuid",
     });
@@ -1152,10 +1151,52 @@ describe("sendVerificationCTABare", () => {
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     const [, , options] = api.sendMessage.mock.calls[0]!;
     const keyboard = options.reply_markup.inline_keyboard;
-    expect(keyboard[0]?.[0]?.url).toContain("withpersona.test");
-    expect(keyboard[0]?.[0]?.url).toContain("start%3Dverify_done");
-    expect(keyboard[1]?.[0]?.callback_data).toBe(VERIFY_CHECK_CALLBACK);
-    expect(keyboard[2]?.[0]?.callback_data).toBe(VERIFY_SKIP_CALLBACK);
+    // Two rows now: web_app Verify button + Skip callback. The legacy
+    // "I've finished" manual-check button was removed because the embedded
+    // SDK posts back to /v1/verification/mini-app/event automatically.
+    expect(keyboard).toHaveLength(2);
+    expect(keyboard[0]?.[0]?.web_app?.url).toBe(
+      "https://test.invalid/calendar/verification.html?lang=en",
+    );
+    // Make sure we're NOT serving the legacy Persona URL or the legacy
+    // verify:check callback — both should be gone from the CTA surface.
+    expect(keyboard[0]?.[0]?.url).toBeUndefined();
+    expect(keyboard[1]?.[0]?.callback_data).toBe(VERIFY_SKIP_CALLBACK);
+    // Side-effect: status flipped to `pending` so the rest of the bot can
+    // surface "review in progress" without waiting on the first Persona event.
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user-uuid" },
+      data: { verificationStatus: "pending" },
+    });
+  });
+
+  it("falls back to hosted Persona URL when WEBAPP_URL is the example.invalid placeholder", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "user-uuid",
+    });
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) };
+
+    // Temporarily flip the env mock to the dev-default placeholder. The
+    // production prefix check is the only differentiator between web_app
+    // and hosted-URL paths — see sendVerificationCTABare.
+    const cfg = (await import("../../config.js")) as unknown as {
+      env: Record<string, unknown>;
+    };
+    const prev = cfg.env.WEBAPP_URL;
+    cfg.env.WEBAPP_URL = "https://example.invalid/calendar";
+    try {
+      const sent = await sendVerificationCTABare(api as any, 12345, 12345n, "en");
+      expect(sent).toBe(true);
+      const [, , options] = api.sendMessage.mock.calls[0]!;
+      const keyboard = options.reply_markup.inline_keyboard;
+      expect(keyboard[0]?.[0]?.url).toContain("withpersona.test");
+      expect(keyboard[0]?.[0]?.url).toContain("start%3Dverify_done");
+      expect(keyboard[0]?.[0]?.web_app).toBeUndefined();
+      expect(keyboard[1]?.[0]?.callback_data).toBe(VERIFY_SKIP_CALLBACK);
+    } finally {
+      cfg.env.WEBAPP_URL = prev;
+    }
   });
 });
 

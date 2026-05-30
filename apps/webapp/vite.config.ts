@@ -2,8 +2,8 @@ import { defineConfig } from "vite";
 import { resolve } from "node:path";
 
 /**
- * Multi-entry Vite config — calendar, feedback, location, and onboarding
- * Mini Apps ship from the same `dist/`, so a single Caddy site
+ * Multi-entry Vite config — calendar, feedback, location, onboarding, and
+ * verification Mini Apps ship from the same `dist/`, so a single Caddy site
  * (`dating-calendar.gennety.com`) serves them all. Adding a new Mini App
  * later is a one-line `input` addition.
  */
@@ -19,6 +19,7 @@ export default defineConfig({
         feedback: resolve(__dirname, "feedback.html"),
         location: resolve(__dirname, "location.html"),
         onboarding: resolve(__dirname, "onboarding.html"),
+        verification: resolve(__dirname, "verification.html"),
       },
     },
   },

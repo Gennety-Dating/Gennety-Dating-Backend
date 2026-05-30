@@ -173,6 +173,7 @@ ssh root@167.172.178.229 'pm2 status'
 curl -s https://dating-api.gennety.com/v1/ping
 curl -sI https://dating-calendar.gennety.com
 curl -sI https://dating-calendar.gennety.com/onboarding.html
+curl -sI https://dating-calendar.gennety.com/verification.html
 curl -sI https://api-admin.gennety.com
 ```
 
@@ -181,6 +182,7 @@ Expected smoke results:
 - `dating-api.gennety.com/v1/ping` returns JSON with `"ok": true`.
 - `dating-calendar.gennety.com` returns HTTP `200`.
 - `dating-calendar.gennety.com/onboarding.html` returns HTTP `200`.
+- `dating-calendar.gennety.com/verification.html` returns HTTP `200`.
 - `api-admin.gennety.com` returns HTTP `401` without bearer auth.
 
 ## Deploy Full Server Code
@@ -243,6 +245,7 @@ cd "/Users/pro/Desktop/Gennety Dating"
 ./scripts/deploy-webapp.sh
 curl -sI https://dating-calendar.gennety.com
 curl -sI https://dating-calendar.gennety.com/onboarding.html
+curl -sI https://dating-calendar.gennety.com/verification.html
 ```
 
 The script builds `apps/webapp` with Vite and rsyncs:
@@ -253,10 +256,20 @@ apps/webapp/dist/ -> root@167.172.178.229:/var/www/dating-app/
 
 Vite is configured for multiple entries (`vite.config.ts`), so the same rsync
 deploys the Mini Apps together — `index.html` (calendar), `feedback.html`
-(post-date feedback), `location.html` (venue handoff), and `onboarding.html`
-(full-screen Telegram onboarding). Caddy's `try_files {path} /index.html`
-resolves direct hits like `/feedback.html` and `/onboarding.html` before the
-SPA fallback.
+(post-date feedback), `location.html` (venue handoff), `onboarding.html`
+(full-screen Telegram onboarding), and `verification.html` (Persona
+Embedded SDK KYC flow). Caddy's `try_files {path} /index.html` resolves
+direct hits like `/feedback.html` and `/onboarding.html` before the SPA
+fallback.
+
+Persona embedded flow needs two one-time setup steps on the provider side
+(they don't affect rsync output, but skipping either breaks the Mini App):
+1. **BotFather** `/setdomain` → `dating-calendar.gennety.com` for
+   `@gennetybot`. Without this, the Mini App can't request camera
+   permissions inside the Telegram WebView.
+2. **Persona Dashboard** → Embedded flow → Allowed origins must include
+   `https://dating-calendar.gennety.com`. Without this, the SDK rejects
+   the iframe mount with a CORS error.
 
 The webapp production build bakes in:
 
@@ -461,6 +474,7 @@ ssh root@167.172.178.229 'pm2 logs gennety-bot --lines 100 --nostream'
 curl -s https://dating-api.gennety.com/v1/ping
 curl -sI https://dating-calendar.gennety.com
 curl -sI https://dating-calendar.gennety.com/onboarding.html
+curl -sI https://dating-calendar.gennety.com/verification.html
 curl -sI https://api-admin.gennety.com
 ```
 
@@ -471,5 +485,5 @@ Then check:
 - Bot log says admin API is listening on `:3100` when `ADMIN_API_KEY` is set.
 - Bot log says public API is listening on `:3101`.
 - Public `/v1/ping` returns `{ "ok": true, ... }`.
-- Calendar and onboarding return HTTP `200`.
+- Calendar, onboarding, and verification Mini Apps return HTTP `200`.
 - Admin API returns HTTP `401` without bearer auth.

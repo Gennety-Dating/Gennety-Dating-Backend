@@ -7,3 +7,6 @@ dist/
 .turbo/
 .claude/
 tmp/
+*.bak
+.env.local.bak*
+.env*.bak*

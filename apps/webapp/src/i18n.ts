@@ -57,6 +57,13 @@ interface Strings {
   locConfirming: string;
   locSaved: string;
   locErrInvalidCoords: string;
+  // Verification Mini App (Phase 6.3 — Persona embedded flow)
+  verifyMiniAppLoading: string;
+  verifyMiniAppFinishing: string;
+  verifyMiniAppError: string;
+  verifyMiniAppCloseBtn: string;
+  verifyMiniAppAlreadyVerified: string;
+  verifyMiniAppNotConfigured: string;
 }
 
 const dict: Record<Lang, Strings> = {
@@ -107,6 +114,14 @@ const dict: Record<Lang, Strings> = {
     locConfirming: "Saving…",
     locSaved: "✅ Saved. Heading back to the bot.",
     locErrInvalidCoords: "That location seems invalid — try again.",
+    verifyMiniAppLoading: "Opening verification…",
+    verifyMiniAppFinishing: "Almost done. Checking results…",
+    verifyMiniAppError: "Couldn't start verification. Please try again.",
+    verifyMiniAppCloseBtn: "Close",
+    verifyMiniAppAlreadyVerified:
+      "You're already verified — nothing to do here.",
+    verifyMiniAppNotConfigured:
+      "Verification isn't available right now. Please try again later.",
   },
   ru: {
     title: "Выбери время для свидания",
@@ -155,6 +170,14 @@ const dict: Record<Lang, Strings> = {
     locConfirming: "Сохраняем…",
     locSaved: "✅ Сохранено. Возвращайся в бота.",
     locErrInvalidCoords: "Странные координаты — попробуй ещё раз.",
+    verifyMiniAppLoading: "Открываем верификацию…",
+    verifyMiniAppFinishing: "Готово. Проверяем результат…",
+    verifyMiniAppError: "Не удалось запустить проверку. Попробуйте ещё раз.",
+    verifyMiniAppCloseBtn: "Закрыть",
+    verifyMiniAppAlreadyVerified:
+      "Ты уже верифицирован — здесь делать нечего.",
+    verifyMiniAppNotConfigured:
+      "Верификация сейчас недоступна. Попробуй позже.",
   },
   uk: {
     title: "Обери час для побачення",
@@ -203,6 +226,14 @@ const dict: Record<Lang, Strings> = {
     locConfirming: "Зберігаємо…",
     locSaved: "✅ Збережено. Повертайся в бота.",
     locErrInvalidCoords: "Дивні координати — спробуй ще раз.",
+    verifyMiniAppLoading: "Відкриваємо верифікацію…",
+    verifyMiniAppFinishing: "Готово. Перевіряємо результат…",
+    verifyMiniAppError: "Не вдалося запустити перевірку. Спробуйте ще раз.",
+    verifyMiniAppCloseBtn: "Закрити",
+    verifyMiniAppAlreadyVerified:
+      "Ти вже верифікований — тут робити нічого.",
+    verifyMiniAppNotConfigured:
+      "Верифікація зараз недоступна. Спробуй пізніше.",
   },
   de: {
     title: "Wähle eine Zeit für dein Date",
@@ -251,6 +282,15 @@ const dict: Record<Lang, Strings> = {
     locConfirming: "Speichern...",
     locSaved: "Gespeichert. Zurück zum Bot.",
     locErrInvalidCoords: "Diese Position wirkt ungültig - versuch es erneut.",
+    verifyMiniAppLoading: "Verifizierung wird geöffnet...",
+    verifyMiniAppFinishing: "Gleich fertig. Ergebnis wird geprüft...",
+    verifyMiniAppError:
+      "Verifizierung konnte nicht gestartet werden. Bitte versuch es erneut.",
+    verifyMiniAppCloseBtn: "Schließen",
+    verifyMiniAppAlreadyVerified:
+      "Du bist bereits verifiziert - hier gibt's nichts zu tun.",
+    verifyMiniAppNotConfigured:
+      "Verifizierung ist derzeit nicht verfügbar. Bitte versuch es später.",
   },
   pl: {
     title: "Wybierz termin randki",
@@ -299,6 +339,15 @@ const dict: Record<Lang, Strings> = {
     locConfirming: "Zapisywanie...",
     locSaved: "Zapisano. Wróć do bota.",
     locErrInvalidCoords: "Ta lokalizacja wygląda nieprawidłowo - spróbuj ponownie.",
+    verifyMiniAppLoading: "Otwieramy weryfikację...",
+    verifyMiniAppFinishing: "Już prawie. Sprawdzamy wynik...",
+    verifyMiniAppError:
+      "Nie udało się uruchomić weryfikacji. Spróbuj ponownie.",
+    verifyMiniAppCloseBtn: "Zamknij",
+    verifyMiniAppAlreadyVerified:
+      "Jesteś już zweryfikowany - tu nie ma co robić.",
+    verifyMiniAppNotConfigured:
+      "Weryfikacja jest teraz niedostępna. Spróbuj później.",
   },
 };
 

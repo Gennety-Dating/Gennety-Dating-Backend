@@ -126,6 +126,12 @@ const translations = {
       "Verification didn't pass on Persona's side. Tap 🟢 Verify now to retry.",
     verifyAutoPollInfraError:
       "Couldn't reach the verification service. Try again in a moment.",
+    // Persona Embedded Mini App copy (verification.html)
+    verifyMiniAppLoading: "Opening verification…",
+    verifyMiniAppFinishing: "Almost done. Checking results…",
+    verifyMiniAppError:
+      "Couldn't start verification. Please try again.",
+    verifyMiniAppCloseBtn: "Close",
     photoMatchMismatch:
       "⚠️ This photo doesn't match your verification selfie. " +
       "Please upload a clear photo of yourself, taken under similar lighting.",
@@ -541,6 +547,12 @@ const translations = {
       "Верификация не прошла на стороне Persona. Нажми 🟢 Пройти верификацию, чтобы попробовать ещё раз.",
     verifyAutoPollInfraError:
       "Не получилось достучаться до сервиса верификации. Попробуй ещё раз через минуту.",
+    // Persona Embedded Mini App copy (verification.html)
+    verifyMiniAppLoading: "Открываем верификацию…",
+    verifyMiniAppFinishing: "Готово. Проверяем результат…",
+    verifyMiniAppError:
+      "Не удалось запустить проверку. Попробуйте ещё раз.",
+    verifyMiniAppCloseBtn: "Закрыть",
     photoMatchMismatch:
       "⚠️ Это фото не совпадает с селфи из верификации. " +
       "Загрузи, пожалуйста, чёткое фото себя при похожем освещении.",
@@ -953,6 +965,12 @@ const translations = {
       "Верифікація не пройшла на стороні Persona. Натисни 🟢 Пройти верифікацію, щоб спробувати ще раз.",
     verifyAutoPollInfraError:
       "Не вдалося достукатися до сервісу верифікації. Спробуй ще раз за хвилину.",
+    // Persona Embedded Mini App copy (verification.html)
+    verifyMiniAppLoading: "Відкриваємо верифікацію…",
+    verifyMiniAppFinishing: "Готово. Перевіряємо результат…",
+    verifyMiniAppError:
+      "Не вдалося запустити перевірку. Спробуйте ще раз.",
+    verifyMiniAppCloseBtn: "Закрити",
     photoMatchMismatch:
       "⚠️ Це фото не збігається з селфі верифікації. " +
       "Будь ласка, завантаж чітке фото себе при схожому освітленні.",
@@ -1357,6 +1375,11 @@ const deTranslations: TranslationTable = {
     "Hm, das dauert länger als sonst. Tippe unten auf den Button, wenn ich nochmal prüfen soll.",
   verifyAutoPollPersonaFailed: "Die Verifizierung ist bei Persona fehlgeschlagen. Tippe auf 🟢 Jetzt verifizieren, um es erneut zu versuchen.",
   verifyAutoPollInfraError: "Der Verifizierungsdienst ist nicht erreichbar. Versuch es gleich nochmal.",
+  // Persona Embedded Mini App copy (verification.html)
+  verifyMiniAppLoading: "Verifizierung wird geöffnet…",
+  verifyMiniAppFinishing: "Gleich fertig. Ergebnis wird geprüft…",
+  verifyMiniAppError: "Verifizierung konnte nicht gestartet werden. Bitte versuch es erneut.",
+  verifyMiniAppCloseBtn: "Schließen",
   photoMatchMismatch:
     "⚠️ Dieses Foto passt nicht zu deinem Verifizierungs-Selfie. " +
     "Bitte lade ein klares Foto von dir hoch, möglichst bei ähnlichem Licht.",
@@ -1721,6 +1744,11 @@ const plTranslations: TranslationTable = {
     "Hm, trwa to dłużej niż zwykle. Kliknij przycisk poniżej, gdy mam sprawdzić ponownie.",
   verifyAutoPollPersonaFailed: "Weryfikacja nie przeszła po stronie Persona. Kliknij 🟢 Zweryfikuj teraz, aby spróbować ponownie.",
   verifyAutoPollInfraError: "Nie udało się połączyć z usługą weryfikacji. Spróbuj za chwilę.",
+  // Persona Embedded Mini App copy (verification.html)
+  verifyMiniAppLoading: "Otwieramy weryfikację…",
+  verifyMiniAppFinishing: "Już prawie. Sprawdzamy wynik…",
+  verifyMiniAppError: "Nie udało się uruchomić weryfikacji. Spróbuj ponownie.",
+  verifyMiniAppCloseBtn: "Zamknij",
   photoMatchMismatch:
     "⚠️ To zdjęcie nie pasuje do selfie z weryfikacji. " +
     "Prześlij wyraźne zdjęcie siebie, najlepiej w podobnym świetle.",

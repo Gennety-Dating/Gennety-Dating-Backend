@@ -248,6 +248,51 @@ export async function completeTelegramOnboardingGate(
   return (await res.json()) as TelegramOnboardingCompleteResponse;
 }
 
+// ---------------------------------------------------------------------------
+// Verification Mini App API (Phase 6.3 — Persona embedded flow)
+// ---------------------------------------------------------------------------
+
+export interface VerificationInit {
+  referenceId: string;
+  templateId: string;
+  /** Persona env id (`env_xxxxx`) — fully encodes sandbox vs production. */
+  environmentId: string;
+  language: "en" | "ru" | "uk" | "de" | "pl";
+}
+
+export type VerificationEventKind = "complete" | "cancel" | "error";
+
+export async function fetchVerificationInit(
+  initData: string,
+): Promise<VerificationInit> {
+  const res = await fetch(`${apiBase}/v1/verification/mini-app/init`, {
+    method: "GET",
+    headers: { Authorization: `tma ${initData}` },
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as VerificationInit;
+}
+
+export async function postVerificationEvent(
+  initData: string,
+  payload: {
+    kind: VerificationEventKind;
+    inquiryId?: string | null;
+    status?: string | null;
+    message?: string | null;
+  },
+): Promise<void> {
+  const res = await fetch(`${apiBase}/v1/verification/mini-app/event`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `tma ${initData}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await toError(res);
+}
+
 async function toError(res: Response): Promise<CalendarApiError> {
   let reason: string | undefined;
   try {

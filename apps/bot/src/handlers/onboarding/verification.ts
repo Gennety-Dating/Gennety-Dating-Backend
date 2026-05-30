@@ -22,12 +22,21 @@ export const VERIFY_CHECK_CALLBACK = "verify:check";
 /**
  * Send the Persona liveness CTA to the user at the end of onboarding.
  *
- * Three buttons:
- *   • Verify now → URL button opening the Persona hosted flow.
- *   • I've finished verification → callback button (`verify:check`) that pulls
- *     Persona directly when the hosted-flow deep link back to Telegram fails.
+ * Two buttons:
+ *   • Verify now → `web_app` button opening the Verification Mini App
+ *     (`verification.html`), which mounts Persona's Embedded SDK inline
+ *     inside the Telegram WebView — no redirect to withpersona.com,
+ *     no in-app browser frame. The Mini App POSTs back to
+ *     `/v1/verification/mini-app/event` on terminal SDK events, which
+ *     fires the same pull-fallback the old "I've finished" button used.
  *   • Skip for now → callback button (`verify:skip`) that drops the
  *     user's ELO score and activates them as `verificationStatus=unverified`.
+ *
+ * The legacy hosted-URL path is kept as a dev/fallback safety net when
+ * `WEBAPP_URL` isn't configured (local dev without a tunnel) — see below.
+ * `handleVerificationCheck` and the `verify:check` callback stay registered
+ * because the deep-link auto-poll (`?start=verify_done`) still routes
+ * through them as a webhook fallback.
  *
  * Returns true when the CTA was sent, false when the caller should fall
  * back to the normal main-menu flow (Persona disabled or misconfigured).
@@ -62,15 +71,9 @@ export async function sendVerificationCTABare(
   });
   if (!user) return false;
 
-  let url: string;
-  try {
-    url = buildPersonaHostedUrl(user.id);
-  } catch (err) {
-    console.error("[persona] CTA URL build failed:", err);
-    return false;
-  }
-
   // Mark pending so elsewhere in the bot we can surface "review in progress".
+  // Mirrors the same write the Mini App's /init endpoint does — leaving
+  // it here keeps the dev/fallback URL path consistent with prod.
   await prisma.user
     .update({
       where: { id: user.id },
@@ -78,15 +81,34 @@ export async function sendVerificationCTABare(
     })
     .catch(() => {});
 
-  // The deep link back from Persona starts the auto-poller, but Telegram /
-  // in-app browser handoff can fail. Keep the manual check button visible
-  // on the original CTA so users always have a recovery path.
-  const keyboard = new InlineKeyboard()
-    .url(t(lang, "verifyBtnGo"), url)
-    .row()
-    .text(t(lang, "verifyBtnCheck"), VERIFY_CHECK_CALLBACK)
-    .row()
-    .text(t(lang, "verifyBtnSkip"), VERIFY_SKIP_CALLBACK);
+  const keyboard = new InlineKeyboard();
+
+  // Prefer the embedded Mini App in production (no browser frame, native
+  // camera permissions inside Telegram). Falls back to the hosted-URL flow
+  // only when WEBAPP_URL isn't set up — local dev without a tunnel, where
+  // Telegram can't open the Mini App over `example.invalid`.
+  const miniAppHost = env.WEBAPP_URL;
+  const useMiniApp =
+    miniAppHost.startsWith("https://") &&
+    !miniAppHost.includes("example.invalid");
+
+  if (useMiniApp) {
+    const miniAppUrl = `${miniAppHost.replace(/\/+$/, "")}/verification.html?lang=${lang}`;
+    keyboard.webApp(t(lang, "verifyBtnGo"), miniAppUrl);
+  } else {
+    try {
+      const url = buildPersonaHostedUrl(user.id);
+      keyboard.url(t(lang, "verifyBtnGo"), url);
+      console.warn(
+        "[verification] WEBAPP_URL not configured — falling back to hosted Persona URL",
+      );
+    } catch (err) {
+      console.error("[persona] CTA URL build failed:", err);
+      return false;
+    }
+  }
+
+  keyboard.row().text(t(lang, "verifyBtnSkip"), VERIFY_SKIP_CALLBACK);
 
   await api.sendMessage(chatId, t(lang, "verifyPitch"), { reply_markup: keyboard });
   return true;

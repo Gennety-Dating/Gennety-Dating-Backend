@@ -18,6 +18,7 @@ import { createCalendarRouter } from "./routes/calendar.js";
 import { createFeedbackRouter } from "./routes/feedback.js";
 import { createLocationRouter } from "./routes/location.js";
 import { createTelegramOnboardingRouter } from "./routes/telegram-onboarding.js";
+import { createVerificationMiniAppRouter } from "./routes/verification-mini-app.js";
 
 /**
  * Public `/v1/*` HTTP API consumed by the Expo mobile app.
@@ -57,6 +58,7 @@ let calendarRouter: ReturnType<typeof createCalendarRouter> | null = null;
 let feedbackRouter: ReturnType<typeof createFeedbackRouter> | null = null;
 let locationRouter: ReturnType<typeof createLocationRouter> | null = null;
 let telegramOnboardingRouter: ReturnType<typeof createTelegramOnboardingRouter> | null = null;
+let verificationMiniAppRouter: ReturnType<typeof createVerificationMiniAppRouter> | null = null;
 app.use("/v1/webhooks/persona", (req, res, next) => {
   if (!injectedBotApi) {
     res.status(503).json({ error: "Persona webhook not ready" });
@@ -105,6 +107,22 @@ app.use("/v1/location", (req, res, next) => {
   }
   if (!locationRouter) locationRouter = createLocationRouter(injectedBotApi);
   locationRouter(req, res, next);
+});
+
+// Verification Mini App — Persona embedded flow inside the Telegram WebView
+// (no redirect to withpersona.com). Same TMA-auth boundary as
+// /v1/calendar/* /v1/location/* /v1/feedback/*. Mounted under
+// /v1/verification/mini-app to avoid colliding with the JWT-auth
+// /v1/me/verification/* mobile routes.
+app.use("/v1/verification/mini-app", (req, res, next) => {
+  if (!injectedBotApi) {
+    res.status(503).json({ error: "Verification mini-app endpoint not ready" });
+    return;
+  }
+  if (!verificationMiniAppRouter) {
+    verificationMiniAppRouter = createVerificationMiniAppRouter(injectedBotApi);
+  }
+  verificationMiniAppRouter(req, res, next);
 });
 
 // Full-screen Telegram onboarding Mini App. Same TMA auth boundary as
@@ -185,6 +203,7 @@ export function __setPersonaBotApiForTests(api: Api<RawApi> | null): void {
   feedbackRouter = null;
   locationRouter = null;
   telegramOnboardingRouter = null;
+  verificationMiniAppRouter = null;
 }
 
 /**
