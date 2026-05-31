@@ -16,7 +16,101 @@
       (dating-calendar.gennety.com) to be registered via BotFather /setdomain.
     -->
     <script src="https://cdn.withpersona.com/dist/persona-v5.1.5.js"></script>
-    <link rel="stylesheet" href="/src/verification.css" />
+    <!--
+      Inline CSS — same pattern as location.html. The earlier external
+      stylesheet variant (`<link rel="stylesheet" href="/src/verification.css">`)
+      served the Vite HMR wrapper, not raw CSS, and produced a black-screen
+      Mini App in dev. Inlining sidesteps all dev-mode quirks; prod is
+      unaffected because Vite ships the same HTML literally.
+    -->
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: var(--tg-theme-bg-color, #fff);
+        --secondary-bg: var(--tg-theme-secondary-bg-color, #f3f4f6);
+        --text: var(--tg-theme-text-color, #111);
+        --hint: var(--tg-theme-hint-color, #6b7280);
+        --primary: var(--tg-theme-button-color, #2481cc);
+        --primary-text: var(--tg-theme-button-text-color, #fff);
+        --success: #16a34a;
+        --error: #dc2626;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, system-ui, sans-serif;
+        overflow: hidden;
+      }
+      #root {
+        width: 100%;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .screen {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 24px;
+        gap: 16px;
+        text-align: center;
+      }
+      .screen-text {
+        font-size: 15px;
+        color: var(--hint);
+        margin: 0;
+        line-height: 1.4;
+        max-width: 320px;
+      }
+      .screen-title {
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--text);
+        margin: 0;
+        line-height: 1.3;
+      }
+      .persona-mount {
+        flex: 1 1 auto;
+        position: relative;
+        width: 100%;
+      }
+      .persona-mount iframe {
+        position: absolute;
+        inset: 0;
+        width: 100% !important;
+        height: 100% !important;
+        border: 0;
+      }
+      .spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid var(--secondary-bg);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .success-glyph {
+        font-size: 48px;
+        color: var(--success);
+        line-height: 1;
+      }
+      .error-glyph {
+        font-size: 48px;
+        color: var(--error);
+        line-height: 1;
+      }
+    </style>
   </head>
   <body>
     <div id="root">

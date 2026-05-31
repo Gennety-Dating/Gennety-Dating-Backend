@@ -115,7 +115,10 @@ const useMiniApp =
 
 let primaryButton;
 if (useMiniApp) {
-  const miniAppUrl = `${webappUrl.replace(/\/+$/, "")}/verification.html?lang=${lang}`;
+  // Append a cache-buster timestamp so Telegram WebView doesn't serve a
+  // previously-cached version when we've fixed something in dev.
+  const cacheBust = Date.now().toString(36);
+  const miniAppUrl = `${webappUrl.replace(/\/+$/, "")}/verification.html?lang=${lang}&v=${cacheBust}`;
   primaryButton = { text: btnLabel("verifyBtnGo", lang), web_app: { url: miniAppUrl } };
   console.log(`[dev-send-verification-cta] using web_app button: ${miniAppUrl}`);
 } else {

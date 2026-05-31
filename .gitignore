@@ -10,3 +10,4 @@ tmp/
 *.bak
 .env.local.bak*
 .env*.bak*
+.gstack/

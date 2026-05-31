@@ -64,7 +64,9 @@ interface PersonaClientOptions {
   frameAncestors?: string[];
   /** Where to render the iframe. Without it, Persona injects into <body>. */
   parent?: HTMLElement;
+  onLoad?: () => void;
   onReady?: () => void;
+  onEvent?: (name: string, meta?: unknown) => void;
   onComplete?: (event: PersonaCompleteEvent) => void;
   onCancel?: (event: { inquiryId?: string }) => void;
   onError?: (event: PersonaErrorEvent) => void;
@@ -303,10 +305,30 @@ async function bootstrap(
     return;
   }
 
+  // Lightweight console-only diagnostic logger. Useful when remote-
+  // debugging the Mini App in iOS Telegram WebView via Safari Web
+  // Inspector or Android Chrome via `chrome://inspect`. Avoid coupling
+  // diagnostics to the /event endpoint — sending every Persona lifecycle
+  // event to the server as a synthetic "error" floods bot logs and makes
+  // real failures hard to spot.
+  const debugLog = (stage: string, extra?: unknown): void => {
+    console.log("[verification]", stage, extra ?? "");
+  };
+
+  debugLog("init-ok", {
+    templateId: init.templateId.slice(0, 12) + "…",
+    environmentId: init.environmentId.slice(0, 12) + "…",
+    language: init.language,
+    hasPersonaGlobal: typeof window.Persona,
+    location: location.origin,
+    tgVersion: app.version ?? "unknown",
+    tgPlatform: app.platform ?? "unknown",
+  });
+
   if (!window.Persona) {
     // SDK script tag failed to load — same dead-screen risk; show the error
     // card with Close-button affordance.
-    console.error("[verification] window.Persona unavailable — CDN load failed");
+    debugLog("persona-global-missing");
     renderScreen(root, "error", lang);
     const button = app.MainButton;
     button.setText(tr(lang, "verifyMiniAppCloseBtn"));
@@ -315,32 +337,87 @@ async function bootstrap(
     return;
   }
 
-  // Mount-point swap: clear the loading shell and stamp a #persona-mount
-  // div so the SDK has a deterministic parent. Persona injects an iframe
-  // as a child of `parent`.
-  root.innerHTML = `<div class="persona-mount" id="persona-mount"></div>`;
-  const mount = document.getElementById("persona-mount") as HTMLElement;
+  // Persona SDK v5 on mobile injects an overlay and applies
+  // `body > *:not(#persona-widget-id) { display: none }` once `client.open()`
+  // fires. If we mount Persona inside `#root` (a `body > *` child) that
+  // selector also hides the Persona overlay itself. Letting Persona default
+  // to mounting at `document.body` keeps the overlay rule consistent.
+  //
+  // We keep the loading screen visible inside `#root` until `onReady`
+  // confirms the SDK actually mounted. On `onReady` we clear `#root` so
+  // only Persona's body-level overlay remains.
+  //
+  // Diagnostic message-bus listener so we can see Persona's postMessage
+  // traffic from inside the user's WebView. Forwarded server-side via
+  // debugLog so bot logs surface what the browser console shows.
+  window.addEventListener("message", (e) => {
+    if (typeof e.origin === "string" && e.origin.includes("persona")) {
+      debugLog("persona-postmessage", {
+        origin: e.origin,
+        data: typeof e.data === "object" ? Object.keys((e.data as object) ?? {}) : String(e.data),
+      });
+    }
+  });
+
+  // Also probe any iframe that Persona injects so we can see its src/load/error
+  // events server-side. We scan body and root for new iframes shortly after
+  // SDK construction.
+  setTimeout(() => {
+    const iframes = document.querySelectorAll("iframe");
+    debugLog("iframe-scan", {
+      count: iframes.length,
+      srcs: Array.from(iframes).map((f) => (f as HTMLIFrameElement).src.slice(0, 200)),
+    });
+  }, 1500);
 
   const deps = buildDeps(app, root, lang);
 
+  let readyFired = false;
+  const readyTimeout = window.setTimeout(() => {
+    if (readyFired) return;
+    debugLog("timeout-10s-no-onReady");
+    void handleError(
+      { message: "Persona SDK did not initialize within 10s" },
+      deps,
+    );
+  }, 10_000);
+
+  // No `parent`, no `frameAncestors` — defer to SDK defaults per Persona
+  // v5 troubleshooting guidance for WebView contexts.
+  debugLog("persona-client-construct-start");
   const client = new window.Persona.Client({
     templateId: init.templateId,
     environmentId: init.environmentId,
     referenceId: init.referenceId,
     language: init.language,
-    frameAncestors: [self.location.origin],
-    parent: mount,
-    onReady: () => client.open(),
+    onLoad: () => {
+      debugLog("persona-onLoad");
+    },
+    onReady: () => {
+      debugLog("persona-onReady");
+      readyFired = true;
+      window.clearTimeout(readyTimeout);
+      root.innerHTML = "";
+      client.open();
+    },
+    onEvent: (name: string, meta?: unknown) => {
+      debugLog("persona-onEvent", { name, meta });
+    },
     onComplete: (event) => {
+      window.clearTimeout(readyTimeout);
       void handleComplete(event, deps);
     },
     onCancel: () => {
+      window.clearTimeout(readyTimeout);
       void handleCancel(deps);
     },
     onError: (event) => {
+      window.clearTimeout(readyTimeout);
+      debugLog("persona-onError", event);
       void handleError(event, deps);
     },
   });
+  debugLog("persona-client-construct-done", { hasClient: !!client });
 }
 
 function buildDeps(
