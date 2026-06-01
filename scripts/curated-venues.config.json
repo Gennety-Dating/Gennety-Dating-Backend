@@ -1,0 +1,10 @@
+[
+  {
+    "universityDomain": "example.edu",
+    "lat": 50.4501,
+    "lng": 30.5234,
+    "radiusMeters": 4000,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum"],
+    "defaultPriority": 2
+  }
+]

@@ -20,6 +20,8 @@
     "dev:db:studio": "DATABASE_URL=postgresql://gennety:gennety@localhost:5434/gennety_dev pnpm --filter @gennety/db db:studio",
     "dev:align-email-bypass": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-align-email-bypass.mjs --apply",
     "dev:trigger-test-match": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-trigger-test-match.mjs --apply",
+    "seed-venues:pull": "pnpm --filter @gennety/bot exec tsx ../../scripts/seed-venues.mjs --pull",
+    "seed-venues:import": "pnpm --filter @gennety/bot exec tsx ../../scripts/seed-venues.mjs --import",
     "typecheck": "pnpm -r typecheck",
     "face-eval": "pnpm --filter @gennety/bot exec tsx scripts/face-eval.ts",
     "face-eval-user": "pnpm --filter @gennety/bot exec tsx scripts/face-eval-user.ts"

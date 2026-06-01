@@ -708,3 +708,49 @@ model NoMatchNotice {
   @@index([sentAt])
   @@map("no_match_notices")
 }
+
+/// Hand-curated first-date venues, scoped per university domain. This is the
+/// PRIMARY source for the concierge venue picker (PRODUCT_SPEC §3.7): Google
+/// Places is only consulted as a fallback when no curated venue is in range.
+/// The product's hyper-local rule (both matched users share `universityDomain`)
+/// keeps the geography — and therefore the curation effort — small.
+///
+/// Standalone model (no user relation): scoped by the `universityDomain` string
+/// the same way the matching pipeline filters candidates. Populated by
+/// `scripts/seed-venues.mjs` (Places-backed pull → manual review → import).
+model CuratedVenue {
+  id               String    @id @default(uuid()) @db.Uuid
+  universityDomain String    @map("university_domain")
+  name             String
+  address          String
+  lat              Float
+  lng              Float
+  /// Google Maps deep-link (always present for seeded venues; nullable for
+  /// hand-entered rows). Surfaced in the scheduled-date DM.
+  googleMapsUri    String?   @map("google_maps_uri")
+  /// Google Places resource id. Lets the re-validation cron re-fetch the exact
+  /// place (Place Details) rather than re-searching by name. Null for
+  /// hand-entered rows (which the cron skips).
+  placeId          String?   @map("place_id")
+  /// The venue's UTC offset in minutes (e.g. Kyiv = 180). Used with
+  /// `openingHours` to evaluate open-at-slot in local wall-clock time.
+  utcOffsetMinutes Int?      @map("utc_offset_minutes")
+  /// Places `regularOpeningHours` (`periods[]`), captured at seed + refreshed by
+  /// the re-validation cron. Null = unknown → treated as "open" (never filtered).
+  openingHours     Json?     @map("opening_hours")
+  /// One of VENUE_CATEGORY_WHITELIST (validated in app code, not a Prisma enum,
+  /// so the shared whitelist stays the single source of truth).
+  category         String
+  /// 1 = best first-date spot, 3 = acceptable. Lower wins ties in ranking.
+  priority         Int       @default(2)
+  vibeTags         String[]  @default([]) @map("vibe_tags")
+  active           Boolean   @default(true)
+  /// Set when the row was last confirmed live against Places (by the seeder
+  /// import, or the re-validation cron). Oldest-first is the cron's scan order.
+  lastVerifiedAt   DateTime? @map("last_verified_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([universityDomain, category, active])
+  @@map("curated_venues")
+}

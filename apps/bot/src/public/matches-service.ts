@@ -7,7 +7,7 @@ import {
   venueSearchRadiusMeters,
   type LatLng,
 } from "../services/geo.js";
-import { pickVenueAtMidpoint } from "../services/venue.js";
+import { resolveVenue } from "../services/curated-venue.js";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
 import { applyReportAction, type ReportTier } from "../services/moderation.js";
 import { sendPushToUser } from "../services/push.js";
@@ -405,6 +405,7 @@ async function tryFinalizeMatchVenue(matchId: string): Promise<void> {
       vibeLngA: true,
       vibeLatB: true,
       vibeLngB: true,
+      userA: { select: { universityDomain: true } },
     },
   });
   if (!match || match.status !== "negotiating_venue") return;
@@ -431,12 +432,17 @@ async function tryFinalizeMatchVenue(matchId: string): Promise<void> {
   const mid = midpoint(a, b);
   const radiusMeters = venueSearchRadiusMeters(haversineDistanceKm(a, b));
 
-  const venue = await pickVenueAtMidpoint({
-    lat: mid.lat,
-    lng: mid.lng,
+  // Curated-first: a hand-picked venue for this university wins; Places is the
+  // fallback when nothing curated is in commute range. See `resolveVenue`.
+  const venue = await resolveVenue({
+    universityDomain: match.userA.universityDomain,
+    midpoint: mid,
+    originA: a,
+    originB: b,
+    radiusMeters,
     category: merged.category as VenueCategory,
     keywords: merged.keywords,
-    radiusMeters,
+    agreedTime: match.agreedTime,
   });
 
   const scheduled = await prisma.match.update({
@@ -447,6 +453,8 @@ async function tryFinalizeMatchVenue(matchId: string): Promise<void> {
       venueAddress: venue.address,
       venueLat: mid.lat,
       venueLng: mid.lng,
+      // Parity with the bot path: curated venues always carry a Maps URI.
+      venueGoogleMapsUri: venue.googleMapsUri,
     },
     select: { userAId: true, userBId: true },
   });

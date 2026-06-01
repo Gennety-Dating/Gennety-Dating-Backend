@@ -324,6 +324,7 @@ Required/high-impact env keys:
   `MATCH_NUDGE_CRON_SCHEDULE`, `PRE_MATCH_ANNOUNCE_CRON_SCHEDULE`,
   `STATUS_TIMER_CRON_SCHEDULE`, `AUTO_UNSUSPEND_CRON_SCHEDULE`,
   `EMBEDDING_REFRESH_CRON_SCHEDULE`, `SELFIE_RETENTION_CRON_SCHEDULE`,
+  `VENUE_REVALIDATION_CRON_SCHEDULE`,
   `DATE_LIFECYCLE_TICK_MS`, `DISPATCH_DELAY_MS`
 
 Production safety checks:
@@ -424,6 +425,28 @@ Prisma P2022: The column `users.referral_source` does not exist in the current d
 
 If that appears after deploying code that references a new column, run
 `pnpm --filter @gennety/db db:push` on the droplet and restart PM2.
+
+## Curated Venue Seeding
+
+The concierge venue picker is curated-first (`curated_venues` table; Google
+Places is the fallback). After the `CuratedVenue` schema reaches a DB (via
+`db:push`), populate the base with the two-phase seeder. It needs `PLACES_API_KEY`
+in env and writes to whichever DB `DATABASE_URL` points at — run it with prod env
+to seed production.
+
+```sh
+# 1. Fill in scripts/curated-venues.config.json (university domain + centre lat/lng).
+# 2. Pull candidates from Google Places under the production quality gate:
+pnpm seed-venues:pull
+# 3. Hand-edit scripts/curated-venues.candidates.json:
+#    flip "approved": true on keepers, tweak "priority" (1 best … 3 ok) + "vibeTags".
+# 4. Dry-run, then apply:
+pnpm seed-venues:import
+pnpm seed-venues:import --apply
+```
+
+Re-running `--pull` overwrites the candidates file; `--import --apply` is
+idempotent (upsert on domain+name+address) so it's safe to re-run after edits.
 
 ## Caddy Or Domain Changes
 

@@ -15,6 +15,8 @@
  * Quality gate ([gateCandidates]):
  *   - `businessStatus === "OPERATIONAL"` (strict — `undefined` is rejected,
  *     unlike the legacy implementation which let it through)
+ *   - place type ∉ `BLOCKED_PLACE_TYPES` (no gas stations / hotels / shops —
+ *     applies in strict AND relaxed mode; the main `searchText` leak path)
  *   - `userRatingCount >= MIN_RATING_COUNT`
  *   - `rating >= MIN_RATING`
  *   - `priceLevel ∈ STUDENT_FRIENDLY_PRICES` for `restaurant`/`lounge`
@@ -67,8 +69,10 @@ export interface VenueClient {
 // Tunables
 // ---------------------------------------------------------------------------
 
-const MIN_RATING = 4.0;
-const MIN_RATING_COUNT = 30;
+// Exported so the re-validation cron applies the exact same quality floor the
+// gate uses, rather than duplicating the thresholds.
+export const MIN_RATING = 4.0;
+export const MIN_RATING_COUNT = 30;
 const MAX_RESULT_COUNT = 15;
 
 /**
@@ -91,6 +95,59 @@ const FOOD_CATEGORIES: ReadonlySet<VenueCategory> = new Set<VenueCategory>([
   "restaurant",
   "lounge",
 ]);
+
+/**
+ * Place types that must NEVER be proposed as a first-date venue, regardless
+ * of rating/reviews. `searchNearby` already constrains by `includedTypes`,
+ * but `searchText` (tier-3 fallback) does not — a high-rated petrol station
+ * with a coffee corner used to leak through and get pitched as a date spot.
+ *
+ * Deny-list (not allow-list) on purpose: Google's New Places taxonomy has
+ * hundreds of cuisine subtypes (`italian_restaurant`, `coffee_shop`, …) so a
+ * positive allow-list would false-reject genuine venues. The deny-list only
+ * needs to enumerate the obviously-wrong settings. A missing/empty `types`
+ * is treated as NOT blocked. Positive quality curation lives in the curated
+ * venue DB (separate work item).
+ */
+const BLOCKED_PLACE_TYPES: ReadonlySet<string> = new Set([
+  "gas_station",
+  "car_repair",
+  "car_dealer",
+  "car_wash",
+  "car_rental",
+  "auto_parts_store",
+  "lodging",
+  "hotel",
+  "motel",
+  "hostel",
+  "resort_hotel",
+  "bed_and_breakfast",
+  "supermarket",
+  "grocery_store",
+  "convenience_store",
+  "hospital",
+  "pharmacy",
+  "drugstore",
+  "doctor",
+  "dentist",
+  "bank",
+  "atm",
+  "gym",
+  "fitness_center",
+  "parking",
+  "storage",
+  "moving_company",
+  "hardware_store",
+  "home_improvement_store",
+  "warehouse_store",
+  "gas_station",
+]);
+
+/** True if the place advertises any clearly-non-date venue type. */
+function hasBlockedType(p: PlaceV1): boolean {
+  if (p.primaryType && BLOCKED_PLACE_TYPES.has(p.primaryType)) return true;
+  return (p.types ?? []).some((t) => BLOCKED_PLACE_TYPES.has(t));
+}
 
 /** Category → Places API (New) `includedTypes`. */
 const PLACES_TYPE_MAP: Record<VenueCategory, string[]> = {
@@ -160,7 +217,20 @@ export function localStubVenueClient(): VenueClient {
 // Places API (New) v1 client
 // ---------------------------------------------------------------------------
 
+/** One open/close window from Places `regularOpeningHours.periods[]`. */
+export interface OpeningHoursPeriod {
+  open?: { day?: number; hour?: number; minute?: number };
+  /** Absent for always-open / 24h venues. */
+  close?: { day?: number; hour?: number; minute?: number };
+}
+
+export interface RegularOpeningHours {
+  periods?: OpeningHoursPeriod[];
+  weekdayDescriptions?: string[];
+}
+
 interface PlaceV1 {
+  id?: string;
   displayName?: { text?: string; languageCode?: string };
   formattedAddress?: string;
   businessStatus?: string;
@@ -169,6 +239,10 @@ interface PlaceV1 {
   userRatingCount?: number;
   googleMapsUri?: string;
   location?: { latitude?: number; longitude?: number };
+  primaryType?: string;
+  types?: string[];
+  regularOpeningHours?: RegularOpeningHours;
+  utcOffsetMinutes?: number;
 }
 
 interface SearchNearbyResponse {
@@ -184,6 +258,11 @@ const FIELD_MASK = [
   "places.userRatingCount",
   "places.googleMapsUri",
   "places.location",
+  "places.primaryType",
+  "places.types",
+  "places.id",
+  "places.regularOpeningHours",
+  "places.utcOffsetMinutes",
 ].join(",");
 
 /** Internal: enriched candidate with computed score. */
@@ -236,12 +315,11 @@ export function createPlacesVenueClient(apiKey: string): VenueClient {
       const tier3Picked = pickBest(tier3, input, relaxedGate);
       if (tier3Picked) return placeToVenue(tier3Picked);
 
-      // Step 4 — give up: surface ANY operational result so the user
-      // gets *something*. Last guardrail before the local stub.
-      const anyOperational = tier3.find(
-        (p) => p.businessStatus === "OPERATIONAL" && p.displayName?.text,
-      );
-      if (anyOperational) return placeToVenue(anyOperational);
+      // No tier produced a place that clears the quality gate. We deliberately
+      // do NOT fall back to "any operational result" — that path used to pitch
+      // gas stations / convenience stores as date venues. Throwing here routes
+      // to the local stub (see `pickVenueAtMidpoint`), which is a safe, clearly
+      // generic placeholder rather than a real-but-wrong place.
       throw new Error("Places API returned no usable results");
     },
   };
@@ -258,6 +336,9 @@ export function gate(
 ): boolean {
   if (!p.displayName?.text) return false;
   if (p.businessStatus !== "OPERATIONAL") return false;
+  // Hard type deny-list applies in BOTH strict and relaxed mode — relaxing
+  // the price ceiling must never re-admit a gas station / hotel / etc.
+  if (hasBlockedType(p)) return false;
   if ((p.userRatingCount ?? 0) < MIN_RATING_COUNT) return false;
   if ((p.rating ?? 0) < MIN_RATING) return false;
   // Price gate only applies to food categories (parks/museums often
@@ -389,6 +470,59 @@ async function searchText(
   return json.places ?? [];
 }
 
+/** Liveness/quality snapshot of a single place, for the re-validation cron. */
+export interface PlaceDetails {
+  placeId: string;
+  businessStatus: string | null;
+  rating: number | null;
+  userRatingCount: number | null;
+  openingHours: RegularOpeningHours | null;
+  utcOffsetMinutes: number | null;
+}
+
+const PLACE_DETAILS_FIELD_MASK = [
+  "id",
+  "businessStatus",
+  "rating",
+  "userRatingCount",
+  "regularOpeningHours",
+  "utcOffsetMinutes",
+].join(",");
+
+/**
+ * Fetch the current state of a single place by its Places resource id
+ * (Place Details). Used by the re-validation cron to detect closures / rating
+ * drops and to refresh opening hours. Throws on a non-OK response so the caller
+ * can distinguish an infra failure (don't deactivate) from a real "closed".
+ */
+export async function fetchPlaceDetails(
+  apiKey: string,
+  placeId: string,
+): Promise<PlaceDetails> {
+  const res = await fetch(
+    `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
+    {
+      method: "GET",
+      headers: {
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": PLACE_DETAILS_FIELD_MASK,
+      },
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Places API (New) place details failed: ${res.status}`);
+  }
+  const p = (await res.json()) as PlaceV1;
+  return {
+    placeId: p.id ?? placeId,
+    businessStatus: p.businessStatus ?? null,
+    rating: p.rating ?? null,
+    userRatingCount: p.userRatingCount ?? null,
+    openingHours: p.regularOpeningHours ?? null,
+    utcOffsetMinutes: p.utcOffsetMinutes ?? null,
+  };
+}
+
 function haversineKm(
   lat1: number,
   lng1: number,
@@ -422,6 +556,66 @@ export async function pickVenueForMatch(
     console.warn("Venue pick failed, using stub:", err);
     return localStubVenueClient().pick(input);
   }
+}
+
+/**
+ * Plain, reviewable candidate shape for the curated-venue seeder
+ * (`scripts/seed-venues.mjs`). Carries the metadata an operator needs to
+ * eyeball a place before approving it into `curated_venues`.
+ */
+export interface VenueCandidate {
+  name: string;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  googleMapsUri: string | null;
+  placeId: string | null;
+  category: VenueCategory;
+  rating: number | null;
+  userRatingCount: number | null;
+  priceLevel: string | null;
+  primaryType: string | null;
+  utcOffsetMinutes: number | null;
+  openingHours: RegularOpeningHours | null;
+}
+
+/**
+ * Search + gate + rank candidates for seeding the curated venue base. Reuses
+ * the exact production quality gate (strict tier) and score, so the curated
+ * pool inherits the same bar that filters out gas stations / closed / low-rated
+ * places. Returns candidates sorted best-first; the seeder slices the top N.
+ *
+ * Unlike `pickVenueAtMidpoint` this does NOT fall back to text search or the
+ * stub — a seeder run that finds nothing for a (domain, category) should report
+ * zero candidates, not invent one.
+ */
+export async function searchVenueCandidates(
+  apiKey: string,
+  input: MidpointVenueInput,
+): Promise<VenueCandidate[]> {
+  const places = await searchNearby(apiKey, input);
+  return places
+    .filter((p) => gate(p, input.category, /* strict */ true))
+    .map((p) => ({
+      place: p,
+      s: score(p, { lat: input.lat, lng: input.lng }, input.radiusMeters),
+    }))
+    .sort((x, y) => y.s - x.s)
+    .map(({ place: p }) => ({
+      name: p.displayName?.text ?? "",
+      address: p.formattedAddress ?? "",
+      lat: p.location?.latitude ?? null,
+      lng: p.location?.longitude ?? null,
+      googleMapsUri: p.googleMapsUri ?? null,
+      placeId: p.id ?? null,
+      category: input.category,
+      rating: p.rating ?? null,
+      userRatingCount: p.userRatingCount ?? null,
+      priceLevel: p.priceLevel ?? null,
+      primaryType: p.primaryType ?? null,
+      utcOffsetMinutes: p.utcOffsetMinutes ?? null,
+      openingHours: p.regularOpeningHours ?? null,
+    }));
 }
 
 export async function pickVenueAtMidpoint(

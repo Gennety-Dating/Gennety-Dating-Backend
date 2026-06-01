@@ -291,6 +291,22 @@ consecutive-famine count; `dropDate` is truncated to the UTC day of the cron
 firing, and `(userId, dropDate)` is unique — both an idempotency guard and
 the data source for the dashboard's churn-warning trend.
 
+### `curated_venues`
+
+First-party, hand-curated first-date venues scoped by `universityDomain`. This
+is the **primary** source for the concierge venue picker; Google Places is the
+fallback (see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.7). Standalone model (no user
+relation) — the venue pool is now first-party data we own, not a per-request
+Places lookup. Columns: `name`, `address`, `lat`, `lng`, `googleMapsUri`,
+`category` (validated against the shared whitelist in app code, not a Prisma
+enum), `priority` (1 best … 3 acceptable), `vibeTags`, `active`,
+`lastVerifiedAt`, plus `placeId` (Places resource id for exact re-fetch),
+`utcOffsetMinutes` + `openingHours` (Places `regularOpeningHours`, for the
+open-at-slot check). Indexed by `(universityDomain, category, active)`. Read by
+`services/curated-venue.ts` (`resolveVenue`); populated out-of-band by
+`scripts/seed-venues.mjs` and kept fresh by the venue re-validation cron
+(`services/venue-revalidation.ts`).
+
 ## Cron & Workers (`apps/bot/src/index.ts`)
 
 All schedules are env-overridable (the canonical names are listed below).
@@ -308,6 +324,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `*/5 * * * *` | UTC | Embedding refresh (dirty-flag scan, ≤20 rows/tick) | `workers/embedding-refresh.ts` |
 | `0 * * * *` | UTC | Auto-unsuspend elapsed Tier-2 suspensions | `services/match-engine.ts` (`autoUnsuspendElapsed`) |
 | `30 3 * * *` | Europe/Kyiv | GDPR Article 9 selfie scrub (90 d post-`verifiedAt`) | `services/selfie-retention.ts` |
+| `0 4 * * *` | Europe/Kyiv | Curated venue re-validation (closure/rating sweep + hours refresh, ≤30 rows/tick) | `services/venue-revalidation.ts` |
 | `setInterval(2 min)` | — | Date lifecycle: ice-breakers (T-3 h), emergency window, T-1 h pre-date safety, T+24 h feedback, wingman | `services/date-lifecycle.ts` + `services/pre-date-safety.ts` |
 
 Quiet hours **23:00–09:00 Europe/Kyiv** are enforced inside `re-engagement`
@@ -395,7 +412,7 @@ currently bot-side only.
 | OpenAI | Onboarding / menu / Aether agents (tool-calling), embeddings (1536-dim), Whisper voice transcription, vision (Elo seed pass) |
 | Persona | Hosted KYC / liveness flow; HMAC-signed terminal inquiry webhooks |
 | AWS Rekognition | `CompareFaces` between Persona selfie and each profile photo |
-| Google Places (New) v1 | Concierge venue search at the great-circle midpoint via `places.googleapis.com/v1/places:searchNearby` (+ text fallback). Strict quality gate (operational + rating ≥ 4.0 + ≥ 30 reviews + student-friendly price tier for food) and weighted scoring on top of the raw API. |
+| Google Places (New) v1 | **Fallback** concierge venue search (primary is the first-party `curated_venues` base) at the great-circle midpoint via `places.googleapis.com/v1/places:searchNearby` (+ text fallback). Strict quality gate (operational + place-type deny-list + rating ≥ 4.0 + ≥ 30 reviews + student-friendly price tier for food) and weighted scoring on top of the raw API. Also used by `scripts/seed-venues.mjs` (via `searchVenueCandidates`) to source curated-base candidates under the same gate. |
 | Supabase | Postgres + pgvector primary store, Storage for selfies, mobile profile photos, and chat images |
 | Resend/email provider | Corporate-email OTP delivery |
 | Expo / APNs / FCM | Mobile push notifications |

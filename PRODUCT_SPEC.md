@@ -463,8 +463,33 @@ The same `sendVenuePostSaveAck` helper drives all three paths
 so the wording stays consistent regardless of which surface the user
 saved through.
 
-When all four pairs are present, the bot computes the great-circle midpoint
-(`services/geo.ts`) and queries the **Google Places API (New) v1**
+**Curated-first venue selection.** When all four pairs are present, the bot
+first consults the hand-curated venue base (`CuratedVenue`, scoped by the pair's
+shared `universityDomain`) via `services/curated-venue.ts`. Curated venues are
+operator-vetted first-date spots, so they are the PRIMARY source; Google Places
+is only the fallback when no curated venue is in commute range. Ranking is
+**fairness-aware** — it minimises `max(distA, distB)` (the worse of the two
+commutes) rather than distance to the geometric midpoint — weighted by a manual
+`priority` (1 best … 3 acceptable) and a small bonus when the venue's `vibeTags`
+match the merged keywords. A venue whose worse commute exceeds
+`CURATED_VENUE_MAX_COMMUTE_KM` (8 km) is discarded. Category selection mirrors
+`mergeParsed`: exact merged category → `cafe` default → any. The base is
+populated by `scripts/seed-venues.mjs` (Places-backed pull → manual review →
+import); it shares the exact production quality gate via `searchVenueCandidates`,
+so a curated spot can never be something the live gate would reject.
+
+A curated venue that is **closed at the agreed date/time** (per its stored
+Places `openingHours`, evaluated in the venue's local time via
+`utcOffsetMinutes`) is skipped at selection — missing hours data is treated as
+"open", never as a reason to exclude. The curated base is kept fresh by the
+daily **venue re-validation** cron (`services/venue-revalidation.ts`): it
+re-checks the oldest-verified active venues against Google Places by stored
+`placeId`, deactivates ones that closed or dropped below the rating/review
+floor, and refreshes opening hours. An infra failure never deactivates a venue.
+
+When no curated venue qualifies (no rows for the domain, or all out of range),
+the bot computes the great-circle midpoint (`services/geo.ts`) and queries the
+**Google Places API (New) v1**
 `places:searchNearby` endpoint at `places.googleapis.com/v1/...`
 (`services/venue.ts`). The legacy `maps.googleapis.com/maps/api/place/nearbysearch/json`
 path was retired 2026-05-10 — it returned long-closed places when
@@ -474,6 +499,12 @@ price tier" complaints.
 
 Quality gate (strict tier):
 - `businessStatus === "OPERATIONAL"` (strict — `undefined` is rejected)
+- place type ∉ a hard deny-list (`gas_station`, `lodging`/hotels,
+  `supermarket`/`convenience_store`, clinics, banks, gyms, car services,
+  etc.) — enforced in BOTH strict and relaxed tiers. `searchNearby` already
+  constrains by `includedTypes`, but the tier-3 `searchText` fallback does
+  not, so without this a high-rated petrol station with a coffee corner
+  used to leak through and get pitched as a date venue.
 - `userRatingCount >= 30`
 - `rating >= 4.0`
 - For `cafe`/`coffee_shop`/`restaurant`/`lounge`:

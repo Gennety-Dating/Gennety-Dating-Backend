@@ -12,6 +12,7 @@ import {
   createPlacesVenueClient,
   localStubVenueClient,
   pickVenueAtMidpoint,
+  searchVenueCandidates,
   gate,
   score,
   type MidpointVenueInput,
@@ -82,6 +83,26 @@ describe("gate (quality filter)", () => {
   it("rejects when displayName is missing (defensive — API shouldn't return this but guard anyway)", () => {
     expect(gate(place({ displayName: undefined }), "cafe", true)).toBe(false);
     expect(gate(place({ displayName: { text: "" } }), "cafe", true)).toBe(false);
+  });
+
+  it("rejects blocked place types (gas station, hotel, etc.) even with a great rating", () => {
+    // The reported "date at a gas station" bug: a high-rated petrol station
+    // with a coffee corner leaks through searchText (which doesn't constrain
+    // by includedTypes). The type deny-list catches it.
+    expect(
+      gate(place({ primaryType: "gas_station", rating: 4.8, userRatingCount: 5000 }), "cafe", true),
+    ).toBe(false);
+    expect(
+      gate(place({ types: ["convenience_store", "gas_station"], rating: 4.6 }), "cafe", false),
+    ).toBe(false);
+    expect(gate(place({ primaryType: "lodging" }), "restaurant", true)).toBe(false);
+  });
+
+  it("still accepts a genuine venue whose types are absent or category-appropriate", () => {
+    // Missing types must NOT be treated as blocked (deny-list semantics).
+    expect(gate(place({ primaryType: undefined, types: undefined }), "cafe", true)).toBe(true);
+    expect(gate(place({ primaryType: "coffee_shop", types: ["cafe"] }), "cafe", true)).toBe(true);
+    expect(gate(place({ primaryType: "italian_restaurant" }), "restaurant", true)).toBe(true);
   });
 });
 
@@ -237,6 +258,30 @@ describe("createPlacesVenueClient.pickAtMidpoint", () => {
       /no usable results/,
     );
   });
+
+  it("does NOT surface a blocked-type place from tier-3 — throws instead of returning a gas station", async () => {
+    // tier-3 searchText returns ONLY an operational, high-rated gas station.
+    // The old tier-4 "any operational" path would have returned it; now the
+    // gate's type deny-list rejects it and the picker throws → stub fallback.
+    responses = [
+      { places: [] }, // tier-1 searchNearby
+      {
+        places: [
+          place({
+            displayName: { text: "MEGA Petrol Station" },
+            primaryType: "gas_station",
+            types: ["gas_station", "convenience_store"],
+            rating: 4.7,
+            userRatingCount: 1200,
+          }),
+        ],
+      }, // tier-3 searchText
+    ];
+    const client = createPlacesVenueClient("test-key");
+    await expect(client.pickAtMidpoint!(midpointInput())).rejects.toThrow(
+      /no usable results/,
+    );
+  });
 });
 
 describe("pickVenueAtMidpoint (high-level wrapper)", () => {
@@ -260,5 +305,55 @@ describe("localStubVenueClient", () => {
     const client = localStubVenueClient();
     const venue = await client.pickAtMidpoint!(midpointInput());
     expect(venue.googleMapsUri).toBeNull();
+  });
+});
+
+describe("searchVenueCandidates (curated seeder)", () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function mockNearby(places: unknown[]) {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ places }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    ) as never;
+  }
+
+  it("returns only gated candidates, sorted best-first, with review metadata", async () => {
+    mockNearby([
+      place({ displayName: { text: "Mediocre" }, rating: 4.0, userRatingCount: 35 }),
+      place({ displayName: { text: "Gem" }, rating: 4.8, userRatingCount: 3000 }),
+      place({ displayName: { text: "Too few reviews" }, userRatingCount: 5 }), // gated out
+    ]);
+    const candidates = await searchVenueCandidates("test-key", midpointInput());
+    expect(candidates.map((c) => c.name)).toEqual(["Gem", "Mediocre"]);
+    expect(candidates[0]).toMatchObject({
+      category: "cafe",
+      rating: 4.8,
+      userRatingCount: 3000,
+      googleMapsUri: "https://maps.google.com/?cid=42",
+    });
+  });
+
+  it("excludes blocked-type places (the seeder must not curate a gas station)", async () => {
+    mockNearby([
+      place({
+        displayName: { text: "Petrol + Coffee" },
+        primaryType: "gas_station",
+        rating: 4.9,
+        userRatingCount: 5000,
+      }),
+      place({ displayName: { text: "Real Cafe" } }),
+    ]);
+    const candidates = await searchVenueCandidates("test-key", midpointInput());
+    expect(candidates.map((c) => c.name)).toEqual(["Real Cafe"]);
   });
 });

@@ -25,6 +25,7 @@ import { preMatchAnnounceTick } from "./workers/pre-match-announce.js";
 import { statusTimerTick } from "./workers/status-timer.js";
 import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
+import { venueRevalidationTick } from "./services/venue-revalidation.js";
 
 /* ── Process-level crash guard ─────────────────────────────── */
 process.on("uncaughtException", (err) => {
@@ -131,6 +132,14 @@ const EMBEDDING_REFRESH_CRON_SCHEDULE =
  */
 const SELFIE_RETENTION_CRON_SCHEDULE =
   process.env.SELFIE_RETENTION_CRON_SCHEDULE ?? "30 3 * * *";
+
+/**
+ * Curated-venue re-validation: re-check the oldest-verified active venues
+ * against Google Places, deactivating closures / rating drops and refreshing
+ * opening hours. Daily at 04:00 Europe/Kyiv — off-peak, after selfie-retention.
+ */
+const VENUE_REVALIDATION_CRON_SCHEDULE =
+  process.env.VENUE_REVALIDATION_CRON_SCHEDULE ?? "0 4 * * *";
 
 /**
  * Weekly batch: run the global greedy matching algorithm, then dispatch
@@ -379,6 +388,27 @@ bot.start({
     );
     console.log(
       `[cron] Selfie retention scheduled: "${SELFIE_RETENTION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+    );
+
+    // Curated venue re-validation — deactivate closed/degraded venues and
+    // refresh opening hours against Google Places.
+    cron.schedule(
+      VENUE_REVALIDATION_CRON_SCHEDULE,
+      () => {
+        void venueRevalidationTick()
+          .then((r) => {
+            if (r.scanned > 0) {
+              console.log(
+                `[venue-revalidation] scanned=${r.scanned} deactivated=${r.deactivated} refreshed=${r.refreshed} failed=${r.failed}`,
+              );
+            }
+          })
+          .catch((err) => console.error("[venue-revalidation] tick failed:", err));
+      },
+      { timezone: CRON_TIMEZONE },
+    );
+    console.log(
+      `[cron] Venue re-validation scheduled: "${VENUE_REVALIDATION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
     );
   },
 });

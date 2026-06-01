@@ -31,7 +31,8 @@ import {
   venueSearchRadiusMeters,
   type LatLng,
 } from "../../services/geo.js";
-import { pickVenueAtMidpoint, type Venue } from "../../services/venue.js";
+import { type Venue } from "../../services/venue.js";
+import { resolveVenue } from "../../services/curated-venue.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import { generateAndSaveWingmanHints } from "../../services/wingman-hint.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
@@ -320,7 +321,7 @@ export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<vo
       vibeLngB: true,
       parsedCategoryA: true,
       parsedCategoryB: true,
-      userA: { select: { telegramId: true, language: true } },
+      userA: { select: { telegramId: true, language: true, universityDomain: true } },
       userB: { select: { telegramId: true, language: true } },
     },
   });
@@ -373,12 +374,17 @@ export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<vo
   }
   await Promise.all(searchingSends);
 
-  const venue = await pickVenueAtMidpoint({
-    lat: mid.lat,
-    lng: mid.lng,
+  // Curated-first: a hand-picked venue for this university wins; Places is the
+  // fallback when nothing curated is in commute range. See `resolveVenue`.
+  const venue = await resolveVenue({
+    universityDomain: match.userA.universityDomain,
+    midpoint: mid,
+    originA: a,
+    originB: b,
+    radiusMeters,
     category: merged.category,
     keywords: merged.keywords,
-    radiusMeters,
+    agreedTime: match.agreedTime,
   });
 
   await prisma.match.update({
