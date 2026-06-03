@@ -28,6 +28,8 @@ interface Strings {
   btnBackToDates: string;
   btnClose: string;
   btnEdit: string;
+  btnRemind: string;
+  btnRemindArmed: string;
   errExpired: string;
   errMatchGone: string;
   errInvalidSlot: string;
@@ -46,6 +48,7 @@ interface Strings {
   legendPeer: string;
   legendAlternative: string;
   legendOverlap: string;
+  badgeNew: string;
   noContext: string;
   // Location Mini App (Phase 3.7 — concierge map picker)
   locTitle: string;
@@ -85,6 +88,8 @@ const dict: Record<Lang, Strings> = {
     btnBackToDates: "Back to dates",
     btnClose: "Close",
     btnEdit: "Change my picks",
+    btnRemind: "Remind me",
+    btnRemindArmed: "We'll remind",
     errExpired: "This calendar link expired. Please reopen it from the bot.",
     errMatchGone: "We couldn't find this match anymore. Please reopen the calendar from the bot.",
     errInvalidSlot: "That slot isn't available anymore. Pick another one.",
@@ -94,7 +99,7 @@ const dict: Record<Lang, Strings> = {
     errNetwork: "Network error. Check your connection and try again.",
     agreedHeader: "Locked in 🎉",
     agreedSubtitle: "Time agreed. Head back to the bot for the next steps.",
-    waitingHeader: "✅ Saved",
+    waitingHeader: "Saved",
     waitingSubtitle:
       "We'll ping the bot the moment your match replies. You can close this window — we'll let you know.",
     multiOverlapHeader: "You both have a few options",
@@ -104,6 +109,7 @@ const dict: Record<Lang, Strings> = {
     legendPeer: "Match",
     legendAlternative: "Other time",
     legendOverlap: "Both",
+    badgeNew: "NEW",
     noContext: "No match context — reopen this from the bot.",
     locTitle: "Where will you be coming from?",
     locSearchPlaceholder: "Metro, address, place…",
@@ -141,16 +147,18 @@ const dict: Record<Lang, Strings> = {
     btnBackToDates: "Назад к датам",
     btnClose: "Закрыть",
     btnEdit: "Изменить выбор",
+    btnRemind: "Напомнить",
+    btnRemindArmed: "Напомним",
     errExpired: "Ссылка на календарь устарела. Открой его заново из бота.",
-    errMatchGone: "Не нашли этот матч. Открой календарь заново из бота.",
+    errMatchGone: "Не нашли этот мэтч. Открой календарь заново из бота.",
     errInvalidSlot: "Этот слот больше недоступен. Выбери другой.",
-    errWrongState: "Этот матч сейчас не ждёт выбора времени.",
-    errNotParticipant: "Ты не участник этого матча.",
+    errWrongState: "Этот мэтч сейчас не ждёт выбора времени.",
+    errNotParticipant: "Ты не участник этого мэтча.",
     errGeneric: "Не удалось сохранить выбор. Попробуй ещё раз.",
     errNetwork: "Сетевая ошибка. Проверь соединение и попробуй ещё раз.",
     agreedHeader: "Готово 🎉",
     agreedSubtitle: "Время согласовано. Возвращайся в бота — следующий шаг там.",
-    waitingHeader: "✅ Сохранено",
+    waitingHeader: "Сохранено",
     waitingSubtitle:
       "Бот пришлёт сообщение, как только собеседник ответит. Можешь закрыть это окно — мы напомним.",
     multiOverlapHeader: "У вас обоих есть несколько вариантов",
@@ -160,7 +168,8 @@ const dict: Record<Lang, Strings> = {
     legendPeer: "Собеседник",
     legendAlternative: "Другое время",
     legendOverlap: "Совпало",
-    noContext: "Нет контекста матча — открой заново из бота.",
+    badgeNew: "NEW",
+    noContext: "Нет контекста мэтча — открой заново из бота.",
     locTitle: "Откуда поедешь на свидание?",
     locSearchPlaceholder: "Метро, адрес, заведение…",
     locEmptyHint: "Введи адрес или тапни по карте.",
@@ -197,16 +206,18 @@ const dict: Record<Lang, Strings> = {
     btnBackToDates: "Назад до дат",
     btnClose: "Закрити",
     btnEdit: "Змінити вибір",
+    btnRemind: "Нагадати",
+    btnRemindArmed: "Нагадаємо",
     errExpired: "Посилання на календар застаріло. Відкрий його знову з бота.",
-    errMatchGone: "Не знайшли цей матч. Відкрий календар знову з бота.",
+    errMatchGone: "Не знайшли цей метч. Відкрий календар знову з бота.",
     errInvalidSlot: "Цей слот уже недоступний. Обери інший.",
-    errWrongState: "Цей матч зараз не чекає вибору часу.",
-    errNotParticipant: "Ти не учасник цього матчу.",
+    errWrongState: "Цей метч зараз не чекає вибору часу.",
+    errNotParticipant: "Ти не учасник цього метчу.",
     errGeneric: "Не вдалося зберегти вибір. Спробуй ще раз.",
     errNetwork: "Мережева помилка. Перевір з'єднання й спробуй ще раз.",
     agreedHeader: "Готово 🎉",
     agreedSubtitle: "Час узгоджено. Повертайся в бота — далі вже там.",
-    waitingHeader: "✅ Збережено",
+    waitingHeader: "Збережено",
     waitingSubtitle:
       "Бот напише, щойно співрозмовник відповість. Можеш закрити це вікно — я нагадаю.",
     multiOverlapHeader: "У вас обох є кілька варіантів",
@@ -216,7 +227,8 @@ const dict: Record<Lang, Strings> = {
     legendPeer: "Співрозмовник",
     legendAlternative: "Інший час",
     legendOverlap: "Збіг",
-    noContext: "Немає контексту матчу — відкрий знову з бота.",
+    badgeNew: "NEW",
+    noContext: "Немає контексту метчу — відкрий знову з бота.",
     locTitle: "Звідки поїдеш на побачення?",
     locSearchPlaceholder: "Метро, адреса, заклад…",
     locEmptyHint: "Введи адресу або тапни по карті.",
@@ -253,6 +265,8 @@ const dict: Record<Lang, Strings> = {
     btnBackToDates: "Zurück zu Daten",
     btnClose: "Schließen",
     btnEdit: "Auswahl ändern",
+    btnRemind: "Erinnern",
+    btnRemindArmed: "Wir erinnern",
     errExpired: "Dieser Kalenderlink ist abgelaufen. Öffne ihn bitte erneut aus dem Bot.",
     errMatchGone: "Wir finden dieses Match nicht mehr. Öffne den Kalender bitte erneut aus dem Bot.",
     errInvalidSlot: "Dieser Slot ist nicht mehr verfügbar. Wähle einen anderen.",
@@ -272,6 +286,7 @@ const dict: Record<Lang, Strings> = {
     legendPeer: "Match",
     legendAlternative: "Andere Zeit",
     legendOverlap: "Beide",
+    badgeNew: "NEW",
     noContext: "Kein Match-Kontext - öffne das bitte erneut aus dem Bot.",
     locTitle: "Von wo kommst du zum Date?",
     locSearchPlaceholder: "Metro, Adresse, Ort...",
@@ -310,6 +325,8 @@ const dict: Record<Lang, Strings> = {
     btnBackToDates: "Wróć do dat",
     btnClose: "Zamknij",
     btnEdit: "Zmień wybór",
+    btnRemind: "Przypomnij",
+    btnRemindArmed: "Przypomnimy",
     errExpired: "Ten link do kalendarza wygasł. Otwórz go ponownie z bota.",
     errMatchGone: "Nie możemy już znaleźć tego dopasowania. Otwórz kalendarz ponownie z bota.",
     errInvalidSlot: "Ten slot nie jest już dostępny. Wybierz inny.",
@@ -329,6 +346,7 @@ const dict: Record<Lang, Strings> = {
     legendPeer: "Dopasowanie",
     legendAlternative: "Inny termin",
     legendOverlap: "Oboje",
+    badgeNew: "NEW",
     noContext: "Brak kontekstu dopasowania - otwórz to ponownie z bota.",
     locTitle: "Skąd będziesz jechać na randkę?",
     locSearchPlaceholder: "Metro, adres, miejsce...",
