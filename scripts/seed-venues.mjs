@@ -31,7 +31,7 @@
  * `--import` is a dry-run by default; pass `--apply` to write.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 
@@ -77,6 +77,12 @@ const DEFAULT_CATEGORIES = ["cafe", "coffee_shop", "restaurant", "park", "museum
 const DEFAULT_RADIUS_M = 4000;
 const PER_CATEGORY = Number(args.get("per-category") ?? "8");
 
+function resolveCliPath(name, fallback) {
+  const value = args.get(name);
+  if (!value) return fallback;
+  return isAbsolute(value) ? value : resolve(root, value);
+}
+
 function fail(msg) {
   console.error(`✗ ${msg}`);
   process.exit(1);
@@ -86,7 +92,7 @@ async function pull() {
   const apiKey = process.env.PLACES_API_KEY;
   if (!apiKey) fail("Missing PLACES_API_KEY in env.");
 
-  const configPath = args.get("config") ?? DEFAULT_CONFIG;
+  const configPath = resolveCliPath("config", DEFAULT_CONFIG);
   if (!existsSync(configPath)) {
     fail(
       `Config not found: ${configPath}\n  Create it from scripts/curated-venues.config.json (a committed example).`,
@@ -150,7 +156,7 @@ async function pull() {
     }
   }
 
-  const outPath = args.get("out") ?? DEFAULT_CANDIDATES;
+  const outPath = resolveCliPath("out", DEFAULT_CANDIDATES);
   writeFileSync(outPath, JSON.stringify(candidates, null, 2) + "\n", "utf8");
   console.log(
     `\n✓ Wrote ${candidates.length} candidate(s) to ${outPath}\n  Review, flip "approved": true on keepers, then: pnpm seed-venues:import --apply`,
@@ -158,7 +164,7 @@ async function pull() {
 }
 
 async function importVenues() {
-  const inPath = args.get("in") ?? DEFAULT_CANDIDATES;
+  const inPath = resolveCliPath("in", DEFAULT_CANDIDATES);
   if (!existsSync(inPath)) fail(`Candidates file not found: ${inPath} (run --pull first).`);
   const apply = args.get("apply") === "true";
 

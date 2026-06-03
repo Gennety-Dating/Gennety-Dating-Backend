@@ -9,8 +9,17 @@ function isEmailFormat(value: string): boolean {
 /** Check if the email belongs to an allowed university domain */
 export function isUniversityEmail(email: string): boolean {
   if (!isEmailFormat(email)) return false;
-  const lower = email.toLowerCase();
-  return ALLOWED_EMAIL_DOMAINS.some((domain) => lower.endsWith(domain));
+  const emailDomain = email.slice(email.indexOf("@") + 1).toLowerCase();
+  return ALLOWED_EMAIL_DOMAINS.some((allowedDomain) => {
+    const lowerAllowedDomain = allowedDomain.toLowerCase();
+    if (lowerAllowedDomain.startsWith(".")) {
+      return emailDomain.endsWith(lowerAllowedDomain);
+    }
+    return (
+      emailDomain === lowerAllowedDomain ||
+      emailDomain.endsWith(`.${lowerAllowedDomain}`)
+    );
+  });
 }
 
 /** Generate a cryptographically secure random numeric OTP of the given length */

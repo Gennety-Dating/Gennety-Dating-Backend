@@ -1,10 +1,130 @@
 [
   {
-    "universityDomain": "example.edu",
-    "lat": 50.4501,
-    "lng": 30.5234,
+    "universityDomain": "ukma.edu.ua",
+    "lat": 50.4653,
+    "lng": 30.5152,
+    "radiusMeters": 3000,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum", "lounge"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "ukma.edu.ua",
+    "lat": 50.4489,
+    "lng": 30.5133,
+    "radiusMeters": 3000,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "ukma.edu.ua",
+    "lat": 50.4598,
+    "lng": 30.5191,
+    "radiusMeters": 2500,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "knu.ua",
+    "lat": 50.4419,
+    "lng": 30.5117,
+    "radiusMeters": 3000,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "knu.ua",
+    "lat": 50.4489,
+    "lng": 30.5133,
+    "radiusMeters": 3000,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum", "lounge"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "knu.ua",
+    "lat": 50.4626,
+    "lng": 30.4828,
+    "radiusMeters": 3000,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "knu.ua",
+    "lat": 50.4653,
+    "lng": 30.5152,
+    "radiusMeters": 3000,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum", "lounge"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "kpi.ua",
+    "lat": 50.4494,
+    "lng": 30.4601,
+    "radiusMeters": 3500,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "kpi.ua",
+    "lat": 50.4489,
+    "lng": 30.5133,
+    "radiusMeters": 3000,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum", "lounge"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "kpi.ua",
+    "lat": 50.4653,
+    "lng": 30.5152,
+    "radiusMeters": 3000,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum", "lounge"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "kneu.edu.ua",
+    "lat": 50.4567,
+    "lng": 30.4576,
+    "radiusMeters": 3500,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "kneu.edu.ua",
+    "lat": 50.4494,
+    "lng": 30.4601,
+    "radiusMeters": 3500,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "kneu.edu.ua",
+    "lat": 50.4489,
+    "lng": 30.5133,
+    "radiusMeters": 3000,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum", "lounge"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "stud.nau.edu.ua",
+    "lat": 50.4409,
+    "lng": 30.4309,
     "radiusMeters": 4000,
     "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "stud.nau.edu.ua",
+    "lat": 50.4494,
+    "lng": 30.4601,
+    "radiusMeters": 3500,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum"],
+    "defaultPriority": 2
+  },
+  {
+    "universityDomain": "stud.nau.edu.ua",
+    "lat": 50.4489,
+    "lng": 30.5133,
+    "radiusMeters": 3000,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum", "lounge"],
     "defaultPriority": 2
   }
 ]

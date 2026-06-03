@@ -10,6 +10,8 @@ export const ALLOWED_EMAIL_DOMAINS = [
   ".ac.in",
   ".edu.ua",
   ".edu.ru",
+  "kpi.ua",
+  "knu.ua",
 ] as const;
 
 /** OTP validity window in milliseconds (10 minutes) */

@@ -19,6 +19,20 @@ describe("isUniversityEmail", () => {
     expect(isUniversityEmail("ivan@msu.edu.ru")).toBe(true);
   });
 
+  it("accepts Kyiv university emails", () => {
+    expect(isUniversityEmail("olena@kpi.ua")).toBe(true);
+    expect(isUniversityEmail("olena@faculty.kpi.ua")).toBe(true);
+    expect(isUniversityEmail("bohdan@knu.ua")).toBe(true);
+    expect(isUniversityEmail("ira@stud.nau.edu.ua")).toBe(true);
+    expect(isUniversityEmail("maria@ukma.edu.ua")).toBe(true);
+    expect(isUniversityEmail("taras@kneu.edu.ua")).toBe(true);
+  });
+
+  it("rejects lookalike bare domains", () => {
+    expect(isUniversityEmail("user@notkpi.ua")).toBe(false);
+    expect(isUniversityEmail("user@fakeknu.ua")).toBe(false);
+  });
+
   it("rejects non-university emails", () => {
     expect(isUniversityEmail("user@gmail.com")).toBe(false);
     expect(isUniversityEmail("user@yahoo.com")).toBe(false);
