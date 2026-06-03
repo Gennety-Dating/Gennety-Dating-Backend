@@ -21,4 +21,16 @@ describe("Mini App i18n", () => {
     expect(tr("de", "locTitle")).toContain("Date");
     expect(tr("pl", "locTitle")).toContain("randkę");
   });
+
+  it("has location quick-action strings for every supported language", () => {
+    for (const lang of languages) {
+      expect(tr(lang, "locShareCurrent").length).toBeGreaterThan(0);
+      expect(tr(lang, "locSharingCurrent").length).toBeGreaterThan(0);
+      expect(tr(lang, "locCurrentLocation").length).toBeGreaterThan(0);
+      expect(tr(lang, "locErrGeoDenied").length).toBeGreaterThan(0);
+      expect(tr(lang, "locErrGeoUnavailable").length).toBeGreaterThan(0);
+      expect(tr(lang, "locErrGeoTimeout").length).toBeGreaterThan(0);
+      expect(tr(lang, "locErrGeoUnsupported").length).toBeGreaterThan(0);
+    }
+  });
 });

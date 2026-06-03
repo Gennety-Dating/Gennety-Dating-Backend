@@ -16,6 +16,7 @@ import { pickLang, tr, type Lang } from "./i18n.js";
  *      don't have the user's prior coords yet at first open). Marker is
  *      dropped at the centre as a draggable starting point.
  *   3. User can:
+ *      - Tap "Share my location" → browser geolocation prompt → immediate save.
  *      - Type a query → debounced `GET /v1/location/search` → dropdown
  *        of up to 8 hits. Tap one → map jumps + marker drops there.
  *      - Tap on the map → marker drops at that point. No reverse
@@ -34,6 +35,11 @@ const DEFAULT_CENTER: [number, number] = [50.4501, 30.5234]; // Kyiv center
 const DEFAULT_ZOOM = 13;
 const SEARCH_DEBOUNCE_MS = 350;
 const MIN_QUERY_LEN = 2;
+const GEOLOCATION_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  timeout: 10_000,
+  maximumAge: 60_000,
+};
 
 const app = window.Telegram?.WebApp;
 app?.ready();
@@ -46,6 +52,7 @@ const lang: Lang = pickLang(params.get("lang"));
 const titleEl = document.getElementById("title");
 const searchEl = document.getElementById("search") as HTMLInputElement | null;
 const resultsEl = document.getElementById("results");
+const shareCurrentEl = document.getElementById("share-current") as HTMLButtonElement | null;
 const selectedEl = document.getElementById("selected");
 const emptyHintEl = document.getElementById("empty-hint");
 const noContextEl = document.getElementById("no-context");
@@ -60,6 +67,7 @@ let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
 if (titleEl) titleEl.textContent = tr(lang, "locTitle");
 if (searchEl) searchEl.placeholder = tr(lang, "locSearchPlaceholder");
+if (shareCurrentEl) shareCurrentEl.textContent = tr(lang, "locShareCurrent");
 if (emptyHintEl) emptyHintEl.textContent = tr(lang, "locEmptyHint");
 
 if (!matchId) {
@@ -67,6 +75,7 @@ if (!matchId) {
 } else {
   initMap();
   initSearch();
+  initShareCurrentLocation();
   if (app) {
     app.MainButton.setText(tr(lang, "locConfirm"));
     app.MainButton.onClick(handleConfirm);
@@ -219,6 +228,10 @@ function hideResults(): void {
   resultsEl?.classList.remove("visible");
 }
 
+function initShareCurrentLocation(): void {
+  shareCurrentEl?.addEventListener("click", handleShareCurrentLocation);
+}
+
 function pickHit(hit: LocationSearchHit): void {
   if (searchEl) searchEl.value = hit.name;
   hideResults();
@@ -240,17 +253,110 @@ async function handleConfirm(): Promise<void> {
     app.showAlert(tr(lang, "locErrInvalidCoords"));
     return;
   }
+  startSaving(false);
+  await saveLocation(selectedLat, selectedLng, selectedAddress);
+}
+
+function handleShareCurrentLocation(): void {
+  if (!app || confirming) return;
+  if (
+    typeof navigator === "undefined" ||
+    !navigator.geolocation ||
+    window.isSecureContext === false
+  ) {
+    app.showAlert(tr(lang, "locErrGeoUnsupported"));
+    return;
+  }
+
+  startSaving(true);
+  // Browser/Telegram WebView location permission must be requested from
+  // this user click; any denial or platform failure falls back to manual input.
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      void handleGeolocationSuccess(position);
+    },
+    (error) => {
+      handleGeolocationError(error);
+    },
+    GEOLOCATION_OPTIONS,
+  );
+}
+
+async function handleGeolocationSuccess(position: GeolocationPosition): Promise<void> {
+  const lat = position.coords.latitude;
+  const lng = position.coords.longitude;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    resetSaving();
+    app?.showAlert(tr(lang, "locErrInvalidCoords"));
+    return;
+  }
+
+  const label = tr(lang, "locCurrentLocation");
+  if (map && marker) {
+    map.setView([lat, lng], 15);
+    marker.setLatLng([lat, lng]);
+  }
+  setSelected(lat, lng, label);
+  await saveLocation(lat, lng, label);
+}
+
+function handleGeolocationError(error: GeolocationPositionError): void {
+  resetSaving();
+  app?.HapticFeedback?.notificationOccurred?.("warning");
+  app?.showAlert(geolocationErrorMessage(error));
+}
+
+function geolocationErrorMessage(error: GeolocationPositionError): string {
+  switch (error.code) {
+    case 1:
+      return tr(lang, "locErrGeoDenied");
+    case 2:
+      return tr(lang, "locErrGeoUnavailable");
+    case 3:
+      return tr(lang, "locErrGeoTimeout");
+    default:
+      return tr(lang, "locErrGeoUnavailable");
+  }
+}
+
+function startSaving(fromShareCurrent: boolean): void {
+  if (!app) return;
   confirming = true;
   app.MainButton.setText(tr(lang, "locConfirming"));
   app.MainButton.showProgress();
   app.MainButton.disable();
+  if (shareCurrentEl) {
+    shareCurrentEl.disabled = true;
+    shareCurrentEl.textContent = fromShareCurrent
+      ? tr(lang, "locSharingCurrent")
+      : tr(lang, "locShareCurrent");
+  }
+}
+
+function resetSaving(): void {
+  confirming = false;
+  app?.MainButton.hideProgress();
+  app?.MainButton.enable();
+  app?.MainButton.setText(tr(lang, "locConfirm"));
+  if (shareCurrentEl) {
+    shareCurrentEl.disabled = false;
+    shareCurrentEl.textContent = tr(lang, "locShareCurrent");
+  }
+}
+
+async function saveLocation(
+  lat: number,
+  lng: number,
+  address: string | null,
+): Promise<void> {
+  if (!app) return;
   try {
     await selectLocation(
       app.initData,
       matchId,
-      selectedLat,
-      selectedLng,
-      selectedAddress,
+      lat,
+      lng,
+      address,
     );
     app.HapticFeedback?.notificationOccurred?.("success");
     if (selectedEl) selectedEl.textContent = tr(lang, "locSaved");
@@ -258,10 +364,7 @@ async function handleConfirm(): Promise<void> {
     // closes itself — without it Telegram dismisses too fast on iOS.
     setTimeout(() => app.close(), 350);
   } catch (err) {
-    confirming = false;
-    app.MainButton.hideProgress();
-    app.MainButton.enable();
-    app.MainButton.setText(tr(lang, "locConfirm"));
+    resetSaving();
     const msg = err instanceof CalendarApiError ? errorMessage(err) : tr(lang, "errNetwork");
     app.showAlert(msg);
   }

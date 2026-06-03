@@ -67,6 +67,23 @@
       input.search:focus {
         border-color: var(--primary);
       }
+      button.share-current {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 8px;
+        padding: 12px 14px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--primary);
+        color: var(--primary-text);
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.share-current:disabled {
+        cursor: default;
+        opacity: 0.72;
+      }
       .results {
         position: absolute;
         top: calc(100% + 4px);
@@ -155,6 +172,9 @@
           />
           <div class="results" id="results"></div>
         </div>
+        <button type="button" class="share-current" id="share-current">
+          Share my location
+        </button>
         <p class="empty-hint" id="empty-hint">
           Type an address or tap on the map.
         </p>

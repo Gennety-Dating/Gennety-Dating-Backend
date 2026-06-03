@@ -439,8 +439,9 @@ Once `agreedTime` is locked, both users are asked for two things:
    keyboard was retired 2026-05-10 — it doesn't work on Telegram Desktop
    (no GPS) and only supports the user's *current* GPS, not "the metro
    I'll leave from" or "my friend's place tonight". The Mini App offers
-   three input modes: Places-backed autocomplete (type "Lukyanivska
-   metro" or "Khreshchatyk 14"), tap-on-map, and drag the marker.
+   four input modes: one-tap browser geolocation, Places-backed
+   autocomplete (type "Lukyanivska metro" or "Khreshchatyk 14"),
+   tap-on-map, and drag the marker.
    Stored in `vibeLat{A,B}` / `vibeLng{A,B}`; the human-readable label
    from autocomplete is stored in `vibeAddress{A,B}` (display only —
    the matching pipeline runs on lat/lng). Telegram users who share a

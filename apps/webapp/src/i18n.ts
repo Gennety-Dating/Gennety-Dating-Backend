@@ -56,10 +56,17 @@ interface Strings {
   locEmptyHint: string;
   locSelectedPrefix: string;
   locCustomPoint: string;
+  locShareCurrent: string;
+  locSharingCurrent: string;
+  locCurrentLocation: string;
   locConfirm: string;
   locConfirming: string;
   locSaved: string;
   locErrInvalidCoords: string;
+  locErrGeoDenied: string;
+  locErrGeoUnavailable: string;
+  locErrGeoTimeout: string;
+  locErrGeoUnsupported: string;
   // Verification Mini App (Phase 6.3 — Persona embedded flow)
   verifyMiniAppLoading: string;
   verifyMiniAppFinishing: string;
@@ -116,10 +123,17 @@ const dict: Record<Lang, Strings> = {
     locEmptyHint: "Type an address or tap on the map.",
     locSelectedPrefix: "Selected: ",
     locCustomPoint: "Custom point on map",
+    locShareCurrent: "Share my location",
+    locSharingCurrent: "Locating…",
+    locCurrentLocation: "My current location",
     locConfirm: "Confirm",
     locConfirming: "Saving…",
     locSaved: "✅ Saved. Heading back to the bot.",
     locErrInvalidCoords: "That location seems invalid — try again.",
+    locErrGeoDenied: "Location permission was denied. You can still type an address or tap the map.",
+    locErrGeoUnavailable: "Couldn't read your current location. Try typing an address or tapping the map.",
+    locErrGeoTimeout: "Location lookup timed out. Try again, or type an address.",
+    locErrGeoUnsupported: "Location sharing isn't available in this browser. You can still type an address or tap the map.",
     verifyMiniAppLoading: "Opening verification…",
     verifyMiniAppFinishing: "Almost done. Checking results…",
     verifyMiniAppError: "Couldn't start verification. Please try again.",
@@ -175,10 +189,17 @@ const dict: Record<Lang, Strings> = {
     locEmptyHint: "Введи адрес или тапни по карте.",
     locSelectedPrefix: "Выбрано: ",
     locCustomPoint: "Точка на карте",
+    locShareCurrent: "Поделиться геолокацией",
+    locSharingCurrent: "Ищем геолокацию…",
+    locCurrentLocation: "Моя текущая геолокация",
     locConfirm: "Подтвердить",
     locConfirming: "Сохраняем…",
     locSaved: "✅ Сохранено. Возвращайся в бота.",
     locErrInvalidCoords: "Странные координаты — попробуй ещё раз.",
+    locErrGeoDenied: "Доступ к геолокации отклонён. Можно ввести адрес или тапнуть по карте.",
+    locErrGeoUnavailable: "Не удалось получить текущую геолокацию. Введи адрес или тапни по карте.",
+    locErrGeoTimeout: "Поиск геолокации занял слишком много времени. Попробуй ещё раз или введи адрес.",
+    locErrGeoUnsupported: "Геолокация недоступна в этом браузере. Можно ввести адрес или тапнуть по карте.",
     verifyMiniAppLoading: "Открываем верификацию…",
     verifyMiniAppFinishing: "Готово. Проверяем результат…",
     verifyMiniAppError: "Не удалось запустить проверку. Попробуйте ещё раз.",
@@ -234,10 +255,17 @@ const dict: Record<Lang, Strings> = {
     locEmptyHint: "Введи адресу або тапни по карті.",
     locSelectedPrefix: "Обрано: ",
     locCustomPoint: "Точка на карті",
+    locShareCurrent: "Поділитися геолокацією",
+    locSharingCurrent: "Шукаємо геолокацію…",
+    locCurrentLocation: "Моя поточна геолокація",
     locConfirm: "Підтвердити",
     locConfirming: "Зберігаємо…",
     locSaved: "✅ Збережено. Повертайся в бота.",
     locErrInvalidCoords: "Дивні координати — спробуй ще раз.",
+    locErrGeoDenied: "Доступ до геолокації відхилено. Можна ввести адресу або тапнути по карті.",
+    locErrGeoUnavailable: "Не вдалося отримати поточну геолокацію. Введи адресу або тапни по карті.",
+    locErrGeoTimeout: "Пошук геолокації тривав занадто довго. Спробуй ще раз або введи адресу.",
+    locErrGeoUnsupported: "Геолокація недоступна в цьому браузері. Можна ввести адресу або тапнути по карті.",
     verifyMiniAppLoading: "Відкриваємо верифікацію…",
     verifyMiniAppFinishing: "Готово. Перевіряємо результат…",
     verifyMiniAppError: "Не вдалося запустити перевірку. Спробуйте ще раз.",
@@ -293,10 +321,17 @@ const dict: Record<Lang, Strings> = {
     locEmptyHint: "Gib eine Adresse ein oder tippe auf die Karte.",
     locSelectedPrefix: "Ausgewählt: ",
     locCustomPoint: "Eigener Punkt auf der Karte",
+    locShareCurrent: "Meinen Standort teilen",
+    locSharingCurrent: "Standort wird gesucht...",
+    locCurrentLocation: "Mein aktueller Standort",
     locConfirm: "Bestätigen",
     locConfirming: "Speichern...",
     locSaved: "Gespeichert. Zurück zum Bot.",
     locErrInvalidCoords: "Diese Position wirkt ungültig - versuch es erneut.",
+    locErrGeoDenied: "Standortzugriff wurde abgelehnt. Du kannst weiter eine Adresse eingeben oder auf die Karte tippen.",
+    locErrGeoUnavailable: "Dein aktueller Standort konnte nicht gelesen werden. Gib eine Adresse ein oder tippe auf die Karte.",
+    locErrGeoTimeout: "Standortsuche ist abgelaufen. Versuch es erneut oder gib eine Adresse ein.",
+    locErrGeoUnsupported: "Standortfreigabe ist in diesem Browser nicht verfügbar. Du kannst eine Adresse eingeben oder auf die Karte tippen.",
     verifyMiniAppLoading: "Verifizierung wird geöffnet...",
     verifyMiniAppFinishing: "Gleich fertig. Ergebnis wird geprüft...",
     verifyMiniAppError:
@@ -353,10 +388,17 @@ const dict: Record<Lang, Strings> = {
     locEmptyHint: "Wpisz adres albo kliknij na mapie.",
     locSelectedPrefix: "Wybrano: ",
     locCustomPoint: "Własny punkt na mapie",
+    locShareCurrent: "Udostępnij lokalizację",
+    locSharingCurrent: "Szukamy lokalizacji...",
+    locCurrentLocation: "Moja aktualna lokalizacja",
     locConfirm: "Potwierdź",
     locConfirming: "Zapisywanie...",
     locSaved: "Zapisano. Wróć do bota.",
     locErrInvalidCoords: "Ta lokalizacja wygląda nieprawidłowo - spróbuj ponownie.",
+    locErrGeoDenied: "Odmówiono dostępu do lokalizacji. Nadal możesz wpisać adres albo kliknąć mapę.",
+    locErrGeoUnavailable: "Nie udało się odczytać aktualnej lokalizacji. Wpisz adres albo kliknij mapę.",
+    locErrGeoTimeout: "Wyszukiwanie lokalizacji trwało zbyt długo. Spróbuj ponownie albo wpisz adres.",
+    locErrGeoUnsupported: "Udostępnianie lokalizacji nie jest dostępne w tej przeglądarce. Możesz wpisać adres albo kliknąć mapę.",
     verifyMiniAppLoading: "Otwieramy weryfikację...",
     verifyMiniAppFinishing: "Już prawie. Sprawdzamy wynik...",
     verifyMiniAppError:
