@@ -22,6 +22,7 @@ function makeBatchUser(overrides: Partial<BatchUser> & { id: string }): BatchUse
     major: "Computer Science",
     preference: "women",
     universityDomain: "stanford.edu",
+    homeCityKey: "ua:kyiv",
     height: 180,
     negativeConstraints: null,
     psychologicalSummary: "Extroverted, curious, analytical thinker.",
@@ -37,9 +38,27 @@ function makeBatchUser(overrides: Partial<BatchUser> & { id: string }): BatchUse
 // ---------------------------------------------------------------------------
 
 describe("areMutuallyCompatible", () => {
-  it("returns true for a compatible M-F pair at the same university", () => {
+  it("returns true for a compatible M-F pair in the same dating city", () => {
     const a = makeBatchUser({ id: "a", gender: "male", preference: "women" });
     const b = makeBatchUser({ id: "b", gender: "female", preference: "men" });
+    expect(areMutuallyCompatible(a, b)).toBe(true);
+  });
+
+  it("returns true for different universities in the same dating city", () => {
+    const a = makeBatchUser({
+      id: "a",
+      gender: "male",
+      preference: "women",
+      universityDomain: "stanford.edu",
+      homeCityKey: "ua:kyiv",
+    });
+    const b = makeBatchUser({
+      id: "b",
+      gender: "female",
+      preference: "men",
+      universityDomain: "mit.edu",
+      homeCityKey: "ua:kyiv",
+    });
     expect(areMutuallyCompatible(a, b)).toBe(true);
   });
 
@@ -49,9 +68,27 @@ describe("areMutuallyCompatible", () => {
     expect(areMutuallyCompatible(a, b)).toBe(true);
   });
 
-  it("returns false for different universities", () => {
-    const a = makeBatchUser({ id: "a", gender: "male", preference: "women", universityDomain: "stanford.edu" });
-    const b = makeBatchUser({ id: "b", gender: "female", preference: "men", universityDomain: "mit.edu" });
+  it("returns false for different dating cities even at the same university", () => {
+    const a = makeBatchUser({
+      id: "a",
+      gender: "male",
+      preference: "women",
+      universityDomain: "stanford.edu",
+      homeCityKey: "ua:kyiv",
+    });
+    const b = makeBatchUser({
+      id: "b",
+      gender: "female",
+      preference: "men",
+      universityDomain: "stanford.edu",
+      homeCityKey: "ua:lviv",
+    });
+    expect(areMutuallyCompatible(a, b)).toBe(false);
+  });
+
+  it("returns false when either user is missing a dating city", () => {
+    const a = makeBatchUser({ id: "a", gender: "male", preference: "women", homeCityKey: null });
+    const b = makeBatchUser({ id: "b", gender: "female", preference: "men" });
     expect(areMutuallyCompatible(a, b)).toBe(false);
   });
 

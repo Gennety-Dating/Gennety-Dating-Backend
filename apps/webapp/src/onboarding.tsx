@@ -6,10 +6,14 @@ import {
   completeTelegramOnboardingGate,
   fetchTelegramOnboardingState,
   requestTelegramOnboardingOtp,
+  resolveTelegramOnboardingCity,
+  searchTelegramOnboardingCities,
+  selectTelegramOnboardingCity,
   setTelegramOnboardingLanguage,
   verifyTelegramOnboardingOtp,
   CalendarApiError,
   type OnboardingLanguage,
+  type TelegramCityHit,
   type TelegramOnboardingState,
 } from "./api.js";
 import "./onboarding.css";
@@ -35,6 +39,7 @@ type Phase =
   | { kind: "language" }
   | { kind: "email" }
   | { kind: "otp"; email: string }
+  | { kind: "city" }
   | { kind: "loading" }
   | { kind: "done" };
 
@@ -75,6 +80,7 @@ function preVisualPhaseFromRemote(user: RemoteUser | null): Phase {
   if (!user.termsAccepted) return { kind: "consent" };
   if (!user.language) return { kind: "language" };
   if (!user.isEmailVerified) return { kind: "email" };
+  if (!user.homeLocation?.homeCityKey) return { kind: "city" };
   return { kind: "visual", index: 0 };
 }
 
@@ -83,6 +89,7 @@ function postVisualPhaseFromRemote(user: RemoteUser | null): Phase {
   if (!user.termsAccepted) return { kind: "consent" };
   if (!user.language) return { kind: "language" };
   if (!user.isEmailVerified) return { kind: "email" };
+  if (!user.homeLocation?.homeCityKey) return { kind: "city" };
   return { kind: "loading" };
 }
 
@@ -138,6 +145,7 @@ function App(): ReactElement {
       if (current.kind === "language") return { kind: "consent" };
       if (current.kind === "email") return { kind: "language" };
       if (current.kind === "otp") return { kind: "email" };
+      if (current.kind === "city") return { kind: "email" };
       return current;
     });
   }, [remoteUser]);
@@ -145,7 +153,10 @@ function App(): ReactElement {
   const canGoBack =
     phase.kind === "visual"
       ? phase.index > 0
-      : phase.kind === "language" || phase.kind === "email" || phase.kind === "otp";
+      : phase.kind === "language" ||
+        phase.kind === "email" ||
+        phase.kind === "otp" ||
+        phase.kind === "city";
 
   useEffect(() => {
     if (!app?.BackButton) return;
@@ -219,6 +230,9 @@ function App(): ReactElement {
       </Scene>
       <Scene active={phase.kind === "otp"}>
         {phase.kind === "otp" ? <OtpGate email={phase.email} onState={onState} /> : null}
+      </Scene>
+      <Scene active={phase.kind === "city"}>
+        <CityGate onState={onState} />
       </Scene>
       <Scene active={phase.kind === "loading"}>
         <HandoffLoading
@@ -708,6 +722,144 @@ function OtpGate(props: {
   );
 }
 
+function CityGate(props: { onState: (state: TelegramOnboardingState) => void }): ReactElement {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<TelegramCityHit[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!app?.initData) return;
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+    const timer = window.setTimeout(() => {
+      void searchTelegramOnboardingCities(app.initData, trimmed)
+        .then((hits) => {
+          setResults(hits);
+          setError(null);
+        })
+        .catch((err: unknown) => {
+          setError(errorCopy(err));
+          setResults([]);
+        })
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  async function choose(city: TelegramCityHit, allowWhileGeo = false): Promise<void> {
+    if (!app?.initData || busy || (geoBusy && !allowWhileGeo)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const state = await selectTelegramOnboardingCity(app.initData, city);
+      app.HapticFeedback?.notificationOccurred("success");
+      props.onState(state);
+    } catch (err) {
+      setError(errorCopy(err));
+      app.HapticFeedback?.notificationOccurred("error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function useCurrentLocation(): void {
+    if (!app?.initData || busy || geoBusy) return;
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.geolocation ||
+      window.isSecureContext === false
+    ) {
+      setError("Не получилось открыть геолокацию. Выбери город через поиск.");
+      return;
+    }
+
+    setGeoBusy(true);
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        void resolveAndChoose(position);
+      },
+      () => {
+        setGeoBusy(false);
+        setError("Геолокация недоступна. Выбери город через поиск.");
+        app?.HapticFeedback?.notificationOccurred("warning");
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 },
+    );
+  }
+
+  async function resolveAndChoose(position: GeolocationPosition): Promise<void> {
+    if (!app?.initData) return;
+    try {
+      const city = await resolveTelegramOnboardingCity(
+        app.initData,
+        position.coords.latitude,
+        position.coords.longitude,
+      );
+      setQuery(city.label);
+      await choose(city, true);
+    } catch (err) {
+      setError(errorCopy(err));
+      app.HapticFeedback?.notificationOccurred("error");
+    } finally {
+      setGeoBusy(false);
+    }
+  }
+
+  return (
+    <GateShell>
+      <h1>Город для мэтчей</h1>
+      <p>Выбери город, где ты сейчас готов ходить на свидания. Мы не сохраняем домашний адрес.</p>
+      {error ? <div className="gate-error">{error}</div> : null}
+      <div className="gate-stack">
+        <button className="choice-button" disabled={busy || geoBusy || !app?.initData} onClick={useCurrentLocation}>
+          <span>
+            <strong>{geoBusy ? "Определяю город..." : "Определить автоматически"}</strong>
+            <br />
+            <small>Используем геопозицию только для выбора города</small>
+          </span>
+          <span className="material-symbols-outlined">my_location</span>
+        </button>
+        <input
+          className="gate-input"
+          autoCapitalize="words"
+          autoComplete="address-level2"
+          placeholder="Kyiv, Lviv, Warsaw..."
+          value={query}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+        />
+        <div className="choice-row">
+          {results.map((city) => (
+            <button
+              key={`${city.homeCityKey}:${city.homePlaceId ?? city.label}`}
+              className="choice-button"
+              disabled={busy || geoBusy || !app?.initData}
+              onClick={() => void choose(city)}
+            >
+              <span>
+                <strong>{city.homeCity}</strong>
+                <br />
+                <small>{city.label}</small>
+              </span>
+              <span className="material-symbols-outlined">chevron_right</span>
+            </button>
+          ))}
+        </div>
+        {searching ? <div className="gate-meta">Ищу город...</div> : null}
+      </div>
+    </GateShell>
+  );
+}
+
 function HandoffLoading(props: {
   active: boolean;
   flowToken: string | null;
@@ -828,6 +980,8 @@ function errorCopy(err: unknown): string {
         return "Сначала выбери язык.";
       case "email-required":
         return "Сначала подтверди университетскую почту.";
+      case "location-required":
+        return "Сначала выбери город для мэтчей.";
       case "Invalid initData":
       case "Missing tma initData":
       case "Empty initData":

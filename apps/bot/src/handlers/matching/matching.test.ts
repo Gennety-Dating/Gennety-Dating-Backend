@@ -177,8 +177,9 @@ describe("match-engine: pure helpers", () => {
     expect(sql).toMatch(/\$2::vector/);
     expect(sql).toMatch(/\$3/);
     expect(sql).toMatch(/\$7/);
-    // Must enforce the hyper-local rule.
-    expect(sql).toMatch(/university_domain\s*=\s*\$3/);
+    // Must enforce the citywide local rule while keeping email domain as a trust gate.
+    expect(sql).toMatch(/u\.university_domain IS NOT NULL/);
+    expect(sql).toMatch(/p\.home_city_key\s*=\s*\$3/);
     // Must enforce the lifetime ban: any historical Match between the two
     // users excludes the candidate, regardless of terminal status.
     expect(sql).toMatch(/NOT EXISTS/);
@@ -224,6 +225,7 @@ function makeCandidate(overrides: Partial<RichCandidateRow> = {}): RichCandidate
     negativeConstraints: null,
     socialEnergy: "extrovert",
     eloScore: 500,
+    homeCityKey: "ua:kyiv",
     ...overrides,
   };
 }

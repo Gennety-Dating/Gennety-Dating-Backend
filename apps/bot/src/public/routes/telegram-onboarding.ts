@@ -13,6 +13,12 @@ import { createAndSendOtp, verifyOtp } from "../otp.js";
 import { otpRequestLimiter, otpVerifyLimiter } from "../rate-limit.js";
 import { runAgentTurn } from "../../services/onboarding-agent.js";
 import { onboardingActivityPatch } from "../../workers/re-engagement-schedule.js";
+import {
+  buildHomeCityKey,
+  saveHomeLocationForUser,
+  validateHomeLocationPayload,
+  type HomeLocationInput,
+} from "../home-location.js";
 
 const VALID_LANGUAGES = new Set<string>(SUPPORTED_LANGUAGES);
 const FLOW_TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -31,6 +37,15 @@ type MiniUser = {
   researchOptIn: boolean;
   isEmailVerified: boolean;
   messageHistory: unknown[];
+  profile: {
+    homeCity: string | null;
+    homeCountryCode: string | null;
+    homeCityKey: string | null;
+    homePlaceId: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    locationUpdatedAt: Date | null;
+  } | null;
 };
 
 export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
@@ -232,6 +247,94 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     },
   );
 
+  router.get("/city/search", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+
+    const user = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
+    const gate = ensureReadyForLocation(user);
+    if (gate) {
+      res.status(409).json({ error: gate });
+      return;
+    }
+
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    if (q.length < 2) {
+      res.json({ ok: true, results: [] });
+      return;
+    }
+
+    const results = await searchCities(q);
+    res.json({ ok: true, results });
+  });
+
+  router.post("/city/resolve", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+
+    const user = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
+    const gate = ensureReadyForLocation(user);
+    if (gate) {
+      res.status(409).json({ error: gate });
+      return;
+    }
+
+    const lat = typeof req.body?.latitude === "number" ? req.body.latitude : null;
+    const lng = typeof req.body?.longitude === "number" ? req.body.longitude : null;
+    if (
+      lat === null ||
+      lng === null ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lng) > 180
+    ) {
+      res.status(400).json({ error: "invalid-coordinates" });
+      return;
+    }
+
+    const city = await resolveCityFromCoordinates(lat, lng);
+    res.json({ ok: true, city });
+  });
+
+  router.post("/city/select", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+
+    const user = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
+    const gate = ensureReadyForLocation(user);
+    if (gate) {
+      res.status(409).json({ error: gate });
+      return;
+    }
+
+    const validation = validateHomeLocationPayload((req.body ?? {}) as Record<string, unknown>);
+    if (!validation.ok) {
+      res.status(400).json({ error: validation.error });
+      return;
+    }
+
+    await saveHomeLocationForUser(user.id, validation.data);
+    const updated = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      select: miniUserSelect,
+    });
+
+    logTelegramOnboarding("city-selected", updated, {
+      homeCityKey: validation.data.homeCityKey,
+    });
+    res.json(serializeState(updated));
+  });
+
   router.post("/complete", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
     if (!auth.ok) {
@@ -265,6 +368,10 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     }
     if (!user.isEmailVerified) {
       res.status(409).json({ error: "email-required" });
+      return;
+    }
+    if (!hasHomeLocation(user)) {
+      res.status(409).json({ error: "location-required" });
       return;
     }
 
@@ -310,6 +417,17 @@ const miniUserSelect = {
   researchOptIn: true,
   isEmailVerified: true,
   messageHistory: true,
+  profile: {
+    select: {
+      homeCity: true,
+      homeCountryCode: true,
+      homeCityKey: true,
+      homePlaceId: true,
+      latitude: true,
+      longitude: true,
+      locationUpdatedAt: true,
+    },
+  },
 } as const;
 
 function authenticate(req: Request): AuthOk | AuthErr {
@@ -370,6 +488,19 @@ function serializeState(user: MiniUser): TelegramOnboardingStateDto {
       language: user.language,
       email: user.email,
       isEmailVerified: user.isEmailVerified,
+      homeLocation: user.profile?.homeCityKey
+        ? {
+            homeCity: user.profile.homeCity,
+            homeCountryCode: user.profile.homeCountryCode,
+            homeCityKey: user.profile.homeCityKey,
+            homePlaceId: user.profile.homePlaceId,
+            latitude: user.profile.latitude,
+            longitude: user.profile.longitude,
+            locationUpdatedAt: user.profile.locationUpdatedAt
+              ? user.profile.locationUpdatedAt.toISOString()
+              : null,
+          }
+        : null,
       completed: user.onboardingStep === "completed",
     },
   };
@@ -385,6 +516,15 @@ interface TelegramOnboardingStateDto {
     language: Language | null;
     email: string | null;
     isEmailVerified: boolean;
+    homeLocation: {
+      homeCity: string | null;
+      homeCountryCode: string | null;
+      homeCityKey: string;
+      homePlaceId: string | null;
+      latitude: number | null;
+      longitude: number | null;
+      locationUpdatedAt: string | null;
+    } | null;
     completed: boolean;
   };
 }
@@ -402,6 +542,23 @@ function ensureReadyForEmail(user: MiniUser): "terms-required" | "language-requi
   return null;
 }
 
+function ensureReadyForLocation(
+  user: MiniUser,
+): "terms-required" | "language-required" | "email-required" | null {
+  const emailGate = ensureReadyForEmail(user);
+  if (emailGate) return emailGate;
+  if (!user.isEmailVerified) return "email-required";
+  return null;
+}
+
+function hasHomeLocation(user: MiniUser): boolean {
+  return Boolean(
+    user.profile?.homeCityKey &&
+      user.profile.latitude !== null &&
+      user.profile.longitude !== null,
+  );
+}
+
 function domainFromEmail(email: string): string {
   return email.slice(email.lastIndexOf("@") + 1).toLowerCase();
 }
@@ -410,6 +567,173 @@ function alreadyCompleteCopy(language: Language | null): string {
   if (language === "ru") return "Онбординг Gennety уже завершён.";
   if (language === "uk") return "Онбординг Gennety вже завершено.";
   return "Gennety onboarding is already complete.";
+}
+
+interface CitySearchHit extends HomeLocationInput {
+  label: string;
+}
+
+interface PlacesTextPlace {
+  id?: string;
+  displayName?: { text?: string };
+  formattedAddress?: string;
+  types?: string[];
+  location?: { latitude?: number; longitude?: number };
+  addressComponents?: Array<{
+    longText?: string;
+    shortText?: string;
+    types?: string[];
+  }>;
+}
+
+const FALLBACK_CITIES: CitySearchHit[] = [
+  cityHit("Kyiv", "UA", 50.4501, 30.5234, "fallback:ua:kyiv"),
+  cityHit("Lviv", "UA", 49.8397, 24.0297, "fallback:ua:lviv"),
+  cityHit("Warsaw", "PL", 52.2297, 21.0122, "fallback:pl:warsaw"),
+  cityHit("Berlin", "DE", 52.52, 13.405, "fallback:de:berlin"),
+];
+
+function cityHit(
+  city: string,
+  countryCode: string,
+  latitude: number,
+  longitude: number,
+  placeId: string | null,
+): CitySearchHit {
+  return {
+    label: `${city}, ${countryCode}`,
+    homeCity: city,
+    homeCountryCode: countryCode,
+    homeCityKey: buildHomeCityKey(city, countryCode),
+    homePlaceId: placeId,
+    latitude,
+    longitude,
+  };
+}
+
+async function searchCities(query: string): Promise<CitySearchHit[]> {
+  const apiKey = process.env.PLACES_API_KEY;
+  if (!apiKey) return fallbackCitySearch(query);
+
+  try {
+    const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask":
+          "places.id,places.displayName,places.formattedAddress,places.location,places.addressComponents,places.types",
+      },
+      body: JSON.stringify({
+        textQuery: query,
+        includedType: "locality",
+        maxResultCount: 8,
+      }),
+    });
+    if (!response.ok) return fallbackCitySearch(query);
+    const json = (await response.json()) as { places?: PlacesTextPlace[] };
+    const hits = (json.places ?? [])
+      .map(cityHitFromPlace)
+      .filter((hit): hit is CitySearchHit => hit !== null);
+    return hits.length ? hits : fallbackCitySearch(query);
+  } catch {
+    return fallbackCitySearch(query);
+  }
+}
+
+function fallbackCitySearch(query: string): CitySearchHit[] {
+  const lower = query.toLowerCase();
+  return FALLBACK_CITIES.filter((city) => city.homeCity.toLowerCase().includes(lower)).slice(0, 8);
+}
+
+function cityHitFromPlace(place: PlacesTextPlace): CitySearchHit | null {
+  const lat = place.location?.latitude;
+  const lng = place.location?.longitude;
+  if (lat == null || lng == null) return null;
+
+  const city =
+    component(place, "locality", "longText") ??
+    component(place, "administrative_area_level_1", "longText") ??
+    place.displayName?.text ??
+    "";
+  const countryCode = component(place, "country", "shortText");
+  if (!city || !countryCode) return null;
+  return {
+    ...cityHit(city, countryCode.toUpperCase(), lat, lng, place.id ?? null),
+    label: place.formattedAddress ?? `${city}, ${countryCode.toUpperCase()}`,
+  };
+}
+
+function component(
+  place: PlacesTextPlace,
+  type: string,
+  field: "longText" | "shortText",
+): string | null {
+  for (const item of place.addressComponents ?? []) {
+    if (item.types?.includes(type) && item[field]) return item[field]!;
+  }
+  return null;
+}
+
+interface GeocodeResult {
+  place_id?: string;
+  types?: string[];
+  formatted_address?: string;
+  geometry?: { location?: { lat?: number; lng?: number } };
+  address_components?: Array<{
+    long_name?: string;
+    short_name?: string;
+    types?: string[];
+  }>;
+}
+
+async function resolveCityFromCoordinates(lat: number, lng: number): Promise<CitySearchHit> {
+  const apiKey = process.env.PLACES_API_KEY;
+  if (!apiKey) return FALLBACK_CITIES[0]!;
+
+  try {
+    const params = new URLSearchParams({
+      latlng: `${lat},${lng}`,
+      key: apiKey,
+      result_type: "locality|administrative_area_level_1",
+    });
+    const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`);
+    if (!response.ok) return FALLBACK_CITIES[0]!;
+    const json = (await response.json()) as { results?: GeocodeResult[] };
+    for (const result of json.results ?? []) {
+      const hit = cityHitFromGeocode(result);
+      if (hit) return hit;
+    }
+    return FALLBACK_CITIES[0]!;
+  } catch {
+    return FALLBACK_CITIES[0]!;
+  }
+}
+
+function cityHitFromGeocode(result: GeocodeResult): CitySearchHit | null {
+  const city =
+    geocodeComponent(result, "locality", "long_name") ??
+    geocodeComponent(result, "administrative_area_level_1", "long_name") ??
+    "";
+  const countryCode = geocodeComponent(result, "country", "short_name");
+  const lat = result.geometry?.location?.lat;
+  const lng = result.geometry?.location?.lng;
+  if (!city || !countryCode || lat == null || lng == null) return null;
+  return {
+    ...cityHit(city, countryCode.toUpperCase(), lat, lng, result.place_id ?? null),
+    label: result.formatted_address ?? `${city}, ${countryCode.toUpperCase()}`,
+  };
+}
+
+function geocodeComponent(
+  result: GeocodeResult,
+  type: string,
+  field: "long_name" | "short_name",
+): string | null {
+  for (const item of result.address_components ?? []) {
+    if (item.types?.includes(type) && item[field]) return item[field]!;
+  }
+  return null;
 }
 
 function issueOnboardingFlowToken(telegramId: bigint): string {

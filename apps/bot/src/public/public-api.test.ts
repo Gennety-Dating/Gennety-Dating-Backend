@@ -97,6 +97,13 @@ type ProfileRow = {
   matchRadius: "campus_only" | "citywide";
   standbyCount?: number;
   lastMissedAt?: Date | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  locationUpdatedAt?: Date | null;
+  homeCity?: string | null;
+  homeCountryCode?: string | null;
+  homeCityKey?: string | null;
+  homePlaceId?: string | null;
 };
 
 type OtpRow = {
@@ -551,6 +558,13 @@ vi.mock("@gennety/db", async () => {
             matchRadius: create.matchRadius ?? "campus_only",
             standbyCount: create.standbyCount ?? 0,
             lastMissedAt: create.lastMissedAt ?? null,
+            latitude: create.latitude ?? null,
+            longitude: create.longitude ?? null,
+            locationUpdatedAt: create.locationUpdatedAt ?? null,
+            homeCity: create.homeCity ?? null,
+            homeCountryCode: create.homeCountryCode ?? null,
+            homeCityKey: create.homeCityKey ?? null,
+            homePlaceId: create.homePlaceId ?? null,
           };
           u.profile = row;
           return row;
@@ -1095,6 +1109,70 @@ describe("PATCH /v1/me/preferences", () => {
       .send({ matchRadius: "citywide" });
     expect(res.status).toBe(200);
     expect(res.body.profile.matchRadius).toBe("citywide");
+  });
+});
+
+describe("POST /v1/me/home-location", () => {
+  beforeEach(resetDb);
+
+  it("persists canonical dating city fields and coordinates", async () => {
+    const user = await seedUser({ profile: null });
+    const res = await request(app)
+      .post("/v1/me/home-location")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({
+        homeCity: "Kyiv",
+        homeCountryCode: "UA",
+        homeCityKey: "ua:kyiv",
+        homePlaceId: "places/kyiv",
+        latitude: 50.4501,
+        longitude: 30.5234,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.profile.homeCity).toBe("Kyiv");
+    expect(res.body.profile.homeCountryCode).toBe("UA");
+    expect(res.body.profile.homeCityKey).toBe("ua:kyiv");
+    expect(res.body.profile.homePlaceId).toBe("places/kyiv");
+    expect(res.body.profile.latitude).toBe(50.4501);
+    expect(res.body.profile.longitude).toBe(30.5234);
+
+    const stored = userById(user.id)!;
+    expect(stored.profile?.homeCityKey).toBe("ua:kyiv");
+    expect(stored.profile?.locationUpdatedAt).toBeInstanceOf(Date);
+  });
+
+  it("derives homeCityKey when the client omits it", async () => {
+    const user = await seedUser({ profile: null });
+    const res = await request(app)
+      .post("/v1/me/home-location")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({
+        homeCity: "Lviv",
+        homeCountryCode: "UA",
+        latitude: 49.8397,
+        longitude: 24.0297,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.profile.homeCityKey).toBe("ua:lviv");
+  });
+
+  it("rejects invalid lat/lng", async () => {
+    const user = await seedUser();
+    const res = await request(app)
+      .post("/v1/me/home-location")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({
+        homeCity: "Kyiv",
+        homeCountryCode: "UA",
+        homeCityKey: "ua:kyiv",
+        latitude: 91,
+        longitude: 30.5234,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Invalid latitude");
   });
 });
 

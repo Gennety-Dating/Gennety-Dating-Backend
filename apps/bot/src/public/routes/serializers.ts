@@ -36,6 +36,10 @@ export interface SerializedProfile {
   latitude: number | null;
   longitude: number | null;
   locationUpdatedAt: string | null;
+  homeCity: string | null;
+  homeCountryCode: string | null;
+  homeCityKey: string | null;
+  homePlaceId: string | null;
 }
 
 export function serializeUser(user: User): SerializedUser {
@@ -72,5 +76,9 @@ export function serializeProfile(profile: Profile): SerializedProfile {
     locationUpdatedAt: profile.locationUpdatedAt
       ? profile.locationUpdatedAt.toISOString()
       : null,
+    homeCity: profile.homeCity ?? null,
+    homeCountryCode: profile.homeCountryCode ?? null,
+    homeCityKey: profile.homeCityKey ?? null,
+    homePlaceId: profile.homePlaceId ?? null,
   };
 }

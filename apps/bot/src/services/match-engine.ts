@@ -7,7 +7,7 @@ import { prisma } from "@gennety/db";
  *
  * Strategy: **Hybrid SQL + Node.js re-ranking**.
  *   1. SQL pre-filter fetches a wide candidate pool (top N by embedding distance)
- *      with all hard constraints (university, gender, cooldown, no open matches).
+ *      with all hard constraints (dating city, gender, cooldown, no open matches).
  *   2. Node.js applies the full weighted formula and returns the top K.
  *
  * `V_league` (universal Elo distance) gates positive score *before* the
@@ -19,7 +19,8 @@ import { prisma } from "@gennety/db";
  *   2. Only users with an embedding and `preference`/`gender` set are eligible.
  *   3. Mutual gender compatibility: a's preference must include b's gender
  *      AND b's preference must include a's gender.
- *   4. Same university domain (hyper-local student focus, per PRODUCT_SPEC).
+ *   4. Same dating city (`Profile.homeCityKey`) while keeping verified
+ *      university/corporate email as a trust gate.
  *   5. Lifetime ban: exclude any pair that appears in ANY historical Match
  *      row — regardless of terminal status (proposed, negotiating, scheduled,
  *      accepted, cancelled, completed, expired). A user never sees the same
@@ -128,6 +129,7 @@ export interface RichCandidateRow extends CandidateRow {
   negativeConstraints: string | null;
   socialEnergy: string | null;
   eloScore: number;
+  homeCityKey: string | null;
 }
 
 /** Seeker profile data needed for scoring. */
@@ -178,6 +180,7 @@ export function buildCandidateSql(): string {
       p.psychological_summary AS "psychologicalSummary",
       p.negative_constraints  AS "negativeConstraints",
       p.elo_score             AS "eloScore",
+      p.home_city_key         AS "homeCityKey",
       (p.embedding <=> $2::vector) AS distance
     FROM users u
     JOIN profiles p ON p.user_id = u.id
@@ -185,7 +188,10 @@ export function buildCandidateSql(): string {
       AND u.status = 'active'
       AND u.onboarding_step = 'completed'
       AND u.verification_status NOT IN ('rejected', 'pending_review')
-      AND u.university_domain = $3
+      AND u.university_domain IS NOT NULL
+      AND p.home_city_key = $3
+      AND p.latitude IS NOT NULL
+      AND p.longitude IS NOT NULL
       AND p.embedding IS NOT NULL
       AND ($5 = '' OR u.gender::text = $5)
       AND (u.preference::text = 'both' OR u.preference::text = (
@@ -646,6 +652,9 @@ export async function findCandidatesFor(
           negativeConstraints: true,
           psychologicalSummary: true,
           eloScore: true,
+          homeCityKey: true,
+          latitude: true,
+          longitude: true,
         },
       },
     },
@@ -656,7 +665,10 @@ export async function findCandidatesFor(
     seeker.onboardingStep !== "completed" ||
     !seeker.gender ||
     !seeker.preference ||
-    !seeker.universityDomain
+    !seeker.universityDomain ||
+    !seeker.profile?.homeCityKey ||
+    seeker.profile.latitude === null ||
+    seeker.profile.longitude === null
   ) {
     return [];
   }
@@ -676,7 +688,7 @@ export async function findCandidatesFor(
     buildCandidateSql(),
     seekerUserId,
     embeddingLiteral,
-    seeker.universityDomain,
+    seeker.profile.homeCityKey,
     seeker.gender,
     genderFilter,
     cutoff,
@@ -783,6 +795,8 @@ export interface BatchUser {
   eloScore: number;
   /** Consecutive batches this user has been eligible but unpaired. */
   standbyCount: number;
+  /** Canonical dating city key used as the hard local matching boundary. */
+  homeCityKey: string | null;
 }
 
 /** A scored pair produced by the global scoring phase. */
@@ -809,7 +823,7 @@ export interface ScoredPair {
  */
 export function areMutuallyCompatible(a: BatchUser, b: BatchUser): boolean {
   if (!a.gender || !b.gender || !a.preference || !b.preference) return false;
-  if (a.universityDomain !== b.universityDomain) return false;
+  if (!a.homeCityKey || !b.homeCityKey || a.homeCityKey !== b.homeCityKey) return false;
 
   const aWantsB =
     a.preference === "both" ||
@@ -872,6 +886,7 @@ export function scorePair(
     negativeConstraints: b.negativeConstraints,
     socialEnergy: extractSocialEnergy(b.psychologicalSummary),
     eloScore: b.eloScore,
+    homeCityKey: b.homeCityKey,
   };
 
   const scored = scoreCandidate(seekerA, candidateB);
@@ -900,6 +915,7 @@ export function scorePair(
     negativeConstraints: a.negativeConstraints,
     socialEnergy: extractSocialEnergy(a.psychologicalSummary),
     eloScore: a.eloScore,
+    homeCityKey: a.homeCityKey,
   };
 
   const scoredReverse = scoreCandidate(seekerB, candidateA);
@@ -977,6 +993,9 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
       universityDomain: { not: null },
       profile: {
         lastMatchedAt: { lt: cutoff },
+        homeCityKey: { not: null },
+        latitude: { not: null },
+        longitude: { not: null },
       },
     },
     select: {
@@ -993,6 +1012,7 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
           psychologicalSummary: true,
           eloScore: true,
           standbyCount: true,
+          homeCityKey: true,
         },
       },
     },
@@ -1010,6 +1030,9 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
       universityDomain: { not: null },
       profile: {
         lastMatchedAt: null,
+        homeCityKey: { not: null },
+        latitude: { not: null },
+        longitude: { not: null },
       },
     },
     select: {
@@ -1026,6 +1049,7 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
           psychologicalSummary: true,
           eloScore: true,
           standbyCount: true,
+          homeCityKey: true,
         },
       },
     },
@@ -1069,6 +1093,7 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
       embeddingLiteral: embeddingMap.get(u.id) ?? null,
       eloScore: u.profile?.eloScore ?? 500,
       standbyCount: u.profile?.standbyCount ?? 0,
+      homeCityKey: u.profile?.homeCityKey ?? null,
     }));
 }
 

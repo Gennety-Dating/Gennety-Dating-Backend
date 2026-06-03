@@ -271,6 +271,13 @@ model Profile {
   /// Freshness marker for the home coordinates. The matching engine can
   /// fall back to `matchRadius`-only scoring when this is stale or null.
   locationUpdatedAt    DateTime?                 @map("location_updated_at")
+  /// Canonical dating city selected during onboarding. This is the hard
+  /// local matching boundary: users can match across university domains only
+  /// when they share the same `homeCityKey`.
+  homeCity             String?                   @map("home_city")
+  homeCountryCode      String?                   @map("home_country_code")
+  homeCityKey          String?                   @map("home_city_key")
+  homePlaceId          String?                   @map("home_place_id")
   /// Last time this profile was included in a `Match` row. Used by the
   /// match-engine tick to avoid re-pairing the same user within a cooldown.
   lastMatchedAt        DateTime?                 @map("last_matched_at")

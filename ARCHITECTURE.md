@@ -208,7 +208,7 @@ Columns (≈ 25):
 | Vector | `embedding` (`vector(1536)`), `embeddingDirty`, `embeddingDirtyAt` |
 | Elo | `eloScore` (default 500), `eloMatchesPlayed`, `eloSeededAt` |
 | Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
-| Geo / radius | `matchRadius` (`campus_only` / `citywide`), `latitude`, `longitude`, `locationUpdatedAt` |
+| Geo / radius | `matchRadius` (`campus_only` / `citywide`), `homeCity`, `homeCountryCode`, `homeCityKey`, `homePlaceId`, `latitude`, `longitude`, `locationUpdatedAt` |
 | Match priority | `lastMatchedAt`, `missedWeeks`, `standbyCount`, `lastMissedAt`, `silentIgnoreCount` |
 | Audit | `createdAt`, `updatedAt` |
 
@@ -293,9 +293,10 @@ the data source for the dashboard's churn-warning trend.
 
 ### `curated_venues`
 
-First-party, hand-curated first-date venues scoped by `universityDomain`. This
-is the **primary** source for the concierge venue picker; Google Places is the
-fallback (see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.7). Standalone model (no user
+First-party, hand-curated first-date venues currently scoped by
+`universityDomain`. This is the **primary** source for the concierge venue picker
+when a same-domain venue pool exists; Google Places is the fallback for
+cross-domain city matches (see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.7). Standalone model (no user
 relation) — the venue pool is now first-party data we own, not a per-request
 Places lookup. Columns: `name`, `address`, `lat`, `lng`, `googleMapsUri`,
 `category` (validated against the shared whitelist in app code, not a Prisma
@@ -313,7 +314,7 @@ All schedules are env-overridable (the canonical names are listed below).
 
 | Schedule (default) | TZ | Purpose | Module |
 |---|---|---|---|
-| `0 18 * * 4` (Thu 18:00) | Europe/Kyiv | **Weekly matching batch** — global greedy + dispatch | `services/match-engine.ts` → `services/dispatch-queue.ts` |
+| `0 18 * * 4` (Thu 18:00) | Europe/Kyiv | **Weekly matching batch** — same-city global greedy + dispatch | `services/match-engine.ts` → `services/dispatch-queue.ts` |
 | `15 18 * * 4` (Thu 18:15) | Europe/Kyiv | "No match this week" empathetic DM | `services/no-match-notifier.ts` |
 | `0 18 * * 3` (Wed 18:00) | Europe/Kyiv | Pre-match teaser (24 h ahead of batch) | `workers/pre-match-announce.ts` |
 | `*/15 * * * *` | UTC | 24 h TTL match expiry | `services/match-expiry.ts` + `services/expiry-notify.ts` |
@@ -339,12 +340,13 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | Method | Path | Purpose |
 |---|---|---|
 | GET  | `/v1/ping` | Liveness probe |
-| GET/POST | `/v1/telegram-onboarding/*` | Telegram full-screen Onboarding Mini App state/consent/language/email OTP/completion handoff. Authenticates with `Authorization: tma <initData>`; `/state` issues the short-lived visual-flow token required by `/complete`, which can dispatch the post-handoff bot DM. |
+| GET/POST | `/v1/telegram-onboarding/*` | Telegram full-screen Onboarding Mini App state/consent/language/email OTP/city/completion handoff. Authenticates with `Authorization: tma <initData>`; `/state` issues the short-lived visual-flow token required by `/complete`, which can dispatch the post-handoff bot DM only after a dating city is saved. |
 | POST | `/v1/auth/otp/request` | Send corp-email OTP (rate-limited) |
 | POST | `/v1/auth/otp/verify` | Verify OTP → mint access + refresh JWT |
 | POST | `/v1/auth/refresh` | Rotate refresh token |
 | GET / PATCH / DELETE | `/v1/me` | Read / patch / delete current user |
-| POST | `/v1/me/location` | Persist home-base lat/lng for Meet-Halfway |
+| POST | `/v1/me/home-location` | Persist canonical dating city (`homeCityKey`) + coordinates for match eligibility |
+| POST | `/v1/me/location` | Persist raw home-base lat/lng for Meet-Halfway; does not by itself unlock matching |
 | PATCH | `/v1/me/preferences` | `matchRadius`, gender preference |
 | POST | `/v1/me/push-token` | Register Expo / APNs / FCM token |
 | GET  | `/v1/me/photos` / POST / DELETE | Photo CRUD with face-match gate |

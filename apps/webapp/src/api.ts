@@ -143,8 +143,29 @@ export interface TelegramOnboardingState {
     language: OnboardingLanguage | null;
     email: string | null;
     isEmailVerified: boolean;
+    homeLocation: TelegramHomeLocation | null;
     completed: boolean;
   };
+}
+
+export interface TelegramHomeLocation {
+  homeCity: string | null;
+  homeCountryCode: string | null;
+  homeCityKey: string;
+  homePlaceId: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  locationUpdatedAt: string | null;
+}
+
+export interface TelegramCityHit {
+  label: string;
+  homeCity: string;
+  homeCountryCode: string;
+  homeCityKey: string;
+  homePlaceId: string | null;
+  latitude: number;
+  longitude: number;
 }
 
 export interface TelegramOnboardingCompleteResponse {
@@ -227,6 +248,61 @@ export async function verifyTelegramOnboardingOtp(
       Authorization: `tma ${initData}`,
     },
     body: JSON.stringify({ code }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as TelegramOnboardingState;
+}
+
+export async function searchTelegramOnboardingCities(
+  initData: string,
+  query: string,
+): Promise<TelegramCityHit[]> {
+  const params = new URLSearchParams({ q: query });
+  const res = await fetch(`${apiBase}/v1/telegram-onboarding/city/search?${params.toString()}`, {
+    method: "GET",
+    headers: { Authorization: `tma ${initData}` },
+  });
+  if (!res.ok) throw await toError(res);
+  const body = (await res.json()) as { ok: true; results: TelegramCityHit[] };
+  return body.results;
+}
+
+export async function resolveTelegramOnboardingCity(
+  initData: string,
+  latitude: number,
+  longitude: number,
+): Promise<TelegramCityHit> {
+  const res = await fetch(`${apiBase}/v1/telegram-onboarding/city/resolve`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `tma ${initData}`,
+    },
+    body: JSON.stringify({ latitude, longitude }),
+  });
+  if (!res.ok) throw await toError(res);
+  const body = (await res.json()) as { ok: true; city: TelegramCityHit };
+  return body.city;
+}
+
+export async function selectTelegramOnboardingCity(
+  initData: string,
+  city: TelegramCityHit,
+): Promise<TelegramOnboardingState> {
+  const res = await fetch(`${apiBase}/v1/telegram-onboarding/city/select`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `tma ${initData}`,
+    },
+    body: JSON.stringify({
+      homeCity: city.homeCity,
+      homeCountryCode: city.homeCountryCode,
+      homeCityKey: city.homeCityKey,
+      homePlaceId: city.homePlaceId,
+      latitude: city.latitude,
+      longitude: city.longitude,
+    }),
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as TelegramOnboardingState;

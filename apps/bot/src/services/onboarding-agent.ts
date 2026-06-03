@@ -468,6 +468,7 @@ interface PersistedOnboardingState {
     hobbies?: string[] | null;
     partnerPreferences?: string | null;
     photos?: string[] | null;
+    homeCityKey?: string | null;
   } | null;
 }
 
@@ -612,6 +613,7 @@ function buildCurrentSavedStateSnapshot(
   if (!user?.preference) missing.push("preference");
   if (!profile?.height) missing.push("height");
   if (!profile?.partnerPreferences) missing.push("partner_preferences");
+  if (!profile?.homeCityKey) missing.push("home_city");
   if (!contextDumpSaved) missing.push("context_dump");
   if (photos.length < MIN_PHOTOS) missing.push(`photos_${photos.length}/${MIN_PHOTOS}`);
 
@@ -622,6 +624,7 @@ function buildCurrentSavedStateSnapshot(
     `Email: ${emailVerified ? `verified:${user?.universityDomain ?? "domain_saved"}` : "missing"}`,
     `Profile basics: first_name=${status(user?.firstName)}, age=${user?.age ?? "missing"}, gender=${user?.gender ?? "missing"}, preference=${user?.preference ?? "missing"}`,
     `Extended profile: height=${profile?.height ?? "missing"}, ethnicity=${status(profile?.ethnicity)}, hobbies_count=${hobbies.length}, partner_preferences=${status(profile?.partnerPreferences)}`,
+    `Dating city: ${profile?.homeCityKey ? `saved:${profile.homeCityKey}` : "missing"}`,
     `Context dump: ${contextDumpSaved ? "saved" : "missing"}`,
     `Photos: ${photos.length}/${MIN_PHOTOS} required minimum`,
     `Missing next: ${missing.length ? missing.join(", ") : "none"}`,
@@ -1060,6 +1063,7 @@ async function execFinalizeOnboarding(
           hobbies: true,
           partnerPreferences: true,
           photos: true,
+          homeCityKey: true,
         },
       },
     },
@@ -1076,6 +1080,8 @@ async function execFinalizeOnboarding(
   // (including "no hobbies" / an empty list) is a valid answer.
   if (!user?.profile?.partnerPreferences)
     missing.push("partner_preferences");
+  if (!user?.profile?.homeCityKey)
+    missing.push("home_city");
   if (!contextDumpSaved)
     missing.push("context_dump (deep profile not yet saved)");
   if (!user?.profile?.photos?.length || user.profile.photos.length < MIN_PHOTOS)
@@ -1292,6 +1298,7 @@ export async function runAgentTurn(
           hobbies: true,
           partnerPreferences: true,
           photos: true,
+          homeCityKey: true,
         },
       },
     },

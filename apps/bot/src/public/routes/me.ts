@@ -33,6 +33,10 @@ import {
 import { buildInterviewState, loadStateContext } from "./onboarding-state.js";
 import { getBotApi } from "../server.js";
 import { profileMediaToJson } from "../../services/profile-media-json.js";
+import {
+  saveHomeLocationForUser,
+  validateHomeLocationPayload,
+} from "../home-location.js";
 
 export const meRouter: Router = Router();
 
@@ -345,6 +349,29 @@ meRouter.post("/location", async (req: Request, res: Response): Promise<void> =>
     create: { userId: req.userId!, latitude, longitude, locationUpdatedAt: now },
   });
 
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: req.userId! },
+  });
+
+  res.json({
+    user: serializeUser(user),
+    profile: serializeProfile(profile),
+  });
+});
+
+/**
+ * POST /v1/me/home-location — persist the canonical dating city selected
+ * during onboarding. Unlike raw `/location`, this fills `homeCityKey`, which
+ * is the hard citywide matching boundary.
+ */
+meRouter.post("/home-location", async (req: Request, res: Response): Promise<void> => {
+  const validation = validateHomeLocationPayload((req.body ?? {}) as Record<string, unknown>);
+  if (!validation.ok) {
+    res.status(400).json({ error: validation.error });
+    return;
+  }
+
+  const profile = await saveHomeLocationForUser(req.userId!, validation.data);
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: req.userId! },
   });

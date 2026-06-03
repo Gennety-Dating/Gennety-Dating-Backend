@@ -104,6 +104,12 @@ The agent calls tools in any order until *all* required data is collected:
 | `save_profile_data(...)` | Persist `firstName`, `age`, `gender`, `preference`, `height`, optional `ethnicity`, `hobbies`, `partnerPreferences` |
 | `finalize_onboarding()` | Activate the user (or hand off to verification CTA) |
 
+Before the Telegram Mini App hands off to the conversational bot, the user
+must also choose a **dating city** (`Profile.homeCityKey`). This is framed as
+"where you want to receive matches", not as a home address. Users can search
+for a city manually or let the Mini App resolve their browser geolocation to a
+city; raw coordinates alone do not satisfy the matching gate.
+
 Hard rules baked into the agent prompt:
 - Required fields (`firstName`, `age`, `gender`, `preference`,
   `partnerPreferences`) are NEVER skipped — keep asking until concrete.
@@ -248,8 +254,11 @@ first-class flows:
   `/v1/matches/:id/*`.
 - `/v1/me/push-token` registers Expo/APNs/FCM tokens; the bot dispatches
   push via `services/push.ts` for the same events that DM Telegram users.
-- `/v1/me/location` + `/v1/me/preferences` (`matchRadius` ∈ `campus_only` /
-  `citywide`) drive Meet-Halfway distance scoring.
+- `/v1/me/home-location` persists canonical dating city + coordinates for
+  match eligibility; `/v1/me/location` remains raw coordinate storage for
+  Meet-Halfway and does not by itself unlock matching.
+- `/v1/me/preferences` (`matchRadius` ∈ `campus_only` / `citywide`) stores
+  the user's future radius preference.
 
 ## Phase 3 — Matching Engine & Progressive Scheduling
 
@@ -285,11 +294,13 @@ Hard SQL filters (`buildCandidateSql`):
 1. `status = 'active'` and `onboardingStep = 'completed'`.
 2. Embedding present, `gender` and `preference` set.
 3. Mutual gender compatibility (a's preference includes b's gender AND vice versa).
-4. Same `universityDomain` (hyper-local rule).
-5. **Lifetime ban** — exclude any pair that EVER appeared in a `matches` row,
+4. Verified corporate/university email domain present.
+5. Same canonical dating city (`Profile.homeCityKey`) and saved city
+   coordinates. Different university domains can match inside the same city.
+6. **Lifetime ban** — exclude any pair that EVER appeared in a `matches` row,
    regardless of terminal status. Backed by the canonical-pair functional
    index. A user never sees the same partner twice.
-6. Cooldown — `Profile.lastMatchedAt < now − MATCH_COOLDOWN_MS (24 h)`.
+7. Cooldown — `Profile.lastMatchedAt < now − MATCH_COOLDOWN_MS (24 h)`.
 
 Score breakdown for every created pair is frozen into `match_score_logs`
 for the dashboard's algorithm-quality view.
@@ -465,10 +476,11 @@ so the wording stays consistent regardless of which surface the user
 saved through.
 
 **Curated-first venue selection.** When all four pairs are present, the bot
-first consults the hand-curated venue base (`CuratedVenue`, scoped by the pair's
-shared `universityDomain`) via `services/curated-venue.ts`. Curated venues are
-operator-vetted first-date spots, so they are the PRIMARY source; Google Places
-is only the fallback when no curated venue is in commute range. Ranking is
+first consults the hand-curated venue base (`CuratedVenue`, currently scoped by
+`universityDomain` when both sides share one) via `services/curated-venue.ts`.
+Curated venues are operator-vetted first-date spots, so they are the PRIMARY
+source when available; Google Places is the fallback for cross-domain city
+matches or when no curated venue is in commute range. Ranking is
 **fairness-aware** — it minimises `max(distA, distB)` (the worse of the two
 commutes) rather than distance to the geometric midpoint — weighted by a manual
 `priority` (1 best … 3 acceptable) and a small bonus when the venue's `vibeTags`

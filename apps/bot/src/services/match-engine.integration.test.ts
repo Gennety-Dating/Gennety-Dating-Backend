@@ -3,7 +3,8 @@
  *
  * These run against a REAL PostgreSQL + pgvector database (docker-compose.test.yml).
  * They validate that the SQL in `buildCandidateSql` correctly filters candidates
- * by university, gender preference, cooldown, and open-match exclusion.
+ * by dating city, student email trust gate, gender preference, cooldown, and
+ * open-match exclusion.
  *
  * Prerequisites:
  *   docker compose -f docker-compose.test.yml up -d
@@ -36,6 +37,7 @@ async function seedFullUser(opts: {
   gender?: "male" | "female";
   preference?: "men" | "women" | "both";
   universityDomain?: string;
+  homeCityKey?: string | null;
   embeddingVal?: number;
   lastMatchedAt?: Date | null;
   verificationStatus?:
@@ -59,6 +61,17 @@ async function seedFullUser(opts: {
   });
 
   await seedProfile({ userId: user.id });
+  await integrationPrisma.profile.update({
+    where: { userId: user.id },
+    data: {
+      homeCity: opts.homeCityKey === null ? null : "Kyiv",
+      homeCountryCode: opts.homeCityKey === null ? null : "UA",
+      homeCityKey: opts.homeCityKey === undefined ? "ua:kyiv" : opts.homeCityKey,
+      latitude: opts.homeCityKey === null ? null : 50.4501,
+      longitude: opts.homeCityKey === null ? null : 30.5234,
+      locationUpdatedAt: opts.homeCityKey === null ? null : new Date(),
+    },
+  });
 
   // Set the embedding via raw SQL (Prisma can't write Unsupported types directly)
   await integrationPrisma.$executeRawUnsafe(
@@ -81,7 +94,7 @@ async function seedFullUser(opts: {
 async function queryCandidates(
   seekerId: string,
   seekerEmbedding: string,
-  universityDomain: string,
+  homeCityKey: string,
   wantGender: string,
   cooldownDate: Date,
   limit = 20,
@@ -91,7 +104,7 @@ async function queryCandidates(
     sql,
     seekerId,
     seekerEmbedding,
-    universityDomain,
+    homeCityKey,
     "male", // seeker's own gender — used to derive what the candidate must prefer
     wantGender, // the gender filter the seeker wants ($5)
     cooldownDate,
@@ -119,7 +132,7 @@ describe("match-engine SQL (integration)", () => {
     await integrationPrisma.$disconnect();
   });
 
-  it("returns eligible candidates from the same university", async () => {
+  it("returns eligible candidates from the same dating city", async () => {
     const seeker = await seedFullUser({
       gender: "male",
       preference: "women",
@@ -134,7 +147,7 @@ describe("match-engine SQL (integration)", () => {
     const rows = await queryCandidates(
       seeker.id,
       fakeEmbedding(0.5),
-      "stanford.edu",
+      "ua:kyiv",
       "female",
       new Date(Date.now() - MATCH_COOLDOWN_MS),
     );
@@ -143,13 +156,13 @@ describe("match-engine SQL (integration)", () => {
     expect(rows[0]!.userId).toBe(candidate.id);
   });
 
-  it("excludes candidates from a different university", async () => {
+  it("allows candidates from a different university in the same dating city", async () => {
     const seeker = await seedFullUser({
       gender: "male",
       preference: "women",
       universityDomain: "stanford.edu",
     });
-    await seedFullUser({
+    const candidate = await seedFullUser({
       gender: "female",
       preference: "men",
       universityDomain: "mit.edu",
@@ -158,7 +171,56 @@ describe("match-engine SQL (integration)", () => {
     const rows = await queryCandidates(
       seeker.id,
       fakeEmbedding(0.5),
-      "stanford.edu",
+      "ua:kyiv",
+      "female",
+      new Date(Date.now() - MATCH_COOLDOWN_MS),
+    );
+
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.userId).toBe(candidate.id);
+  });
+
+  it("excludes candidates from a different dating city even at the same university", async () => {
+    const seeker = await seedFullUser({
+      gender: "male",
+      preference: "women",
+      universityDomain: "stanford.edu",
+      homeCityKey: "ua:kyiv",
+    });
+    await seedFullUser({
+      gender: "female",
+      preference: "men",
+      universityDomain: "stanford.edu",
+      homeCityKey: "ua:lviv",
+    });
+
+    const rows = await queryCandidates(
+      seeker.id,
+      fakeEmbedding(0.5),
+      "ua:kyiv",
+      "female",
+      new Date(Date.now() - MATCH_COOLDOWN_MS),
+    );
+
+    expect(rows.length).toBe(0);
+  });
+
+  it("excludes candidates missing a dating city", async () => {
+    const seeker = await seedFullUser({
+      gender: "male",
+      preference: "women",
+      homeCityKey: "ua:kyiv",
+    });
+    await seedFullUser({
+      gender: "female",
+      preference: "men",
+      homeCityKey: null,
+    });
+
+    const rows = await queryCandidates(
+      seeker.id,
+      fakeEmbedding(0.5),
+      "ua:kyiv",
       "female",
       new Date(Date.now() - MATCH_COOLDOWN_MS),
     );
@@ -180,7 +242,7 @@ describe("match-engine SQL (integration)", () => {
     const rows = await queryCandidates(
       seeker.id,
       fakeEmbedding(0.5),
-      "stanford.edu",
+      "ua:kyiv",
       "female",
       new Date(Date.now() - MATCH_COOLDOWN_MS),
     );
@@ -202,7 +264,7 @@ describe("match-engine SQL (integration)", () => {
     const rows = await queryCandidates(
       seeker.id,
       fakeEmbedding(0.5),
-      "stanford.edu",
+      "ua:kyiv",
       "female",
       new Date(Date.now() - MATCH_COOLDOWN_MS),
     );
@@ -232,7 +294,7 @@ describe("match-engine SQL (integration)", () => {
     const rows = await queryCandidates(
       seeker.id,
       fakeEmbedding(0.5),
-      "stanford.edu",
+      "ua:kyiv",
       "female",
       new Date(Date.now() - MATCH_COOLDOWN_MS),
     );
@@ -255,7 +317,7 @@ describe("match-engine SQL (integration)", () => {
     const rows = await queryCandidates(
       seeker.id,
       fakeEmbedding(0.5),
-      "stanford.edu",
+      "ua:kyiv",
       "female",
       new Date(Date.now() - MATCH_COOLDOWN_MS),
     );
@@ -278,7 +340,7 @@ describe("match-engine SQL (integration)", () => {
     const rows = await queryCandidates(
       seeker.id,
       fakeEmbedding(0.5),
-      "stanford.edu",
+      "ua:kyiv",
       "female",
       new Date(Date.now() - MATCH_COOLDOWN_MS),
     );
@@ -301,7 +363,7 @@ describe("match-engine SQL (integration)", () => {
     const rows = await queryCandidates(
       seeker.id,
       fakeEmbedding(0.5),
-      "stanford.edu",
+      "ua:kyiv",
       "female",
       new Date(Date.now() - MATCH_COOLDOWN_MS),
     );
@@ -322,7 +384,7 @@ describe("match-engine SQL (integration)", () => {
     const rows = await queryCandidates(
       seeker.id,
       fakeEmbedding(0.5),
-      "stanford.edu",
+      "ua:kyiv",
       "female",
       new Date(Date.now() - MATCH_COOLDOWN_MS),
     );
@@ -345,7 +407,7 @@ describe("match-engine SQL (integration)", () => {
     const rows = await queryCandidates(
       seeker.id,
       fakeEmbedding(0.5),
-      "stanford.edu",
+      "ua:kyiv",
       "female",
       new Date(Date.now() - MATCH_COOLDOWN_MS),
     );
@@ -366,7 +428,7 @@ describe("match-engine SQL (integration)", () => {
     const rows = await queryCandidates(
       seeker.id,
       fakeEmbedding(0.5),
-      "stanford.edu",
+      "ua:kyiv",
       "female",
       new Date(Date.now() - MATCH_COOLDOWN_MS),
     );
@@ -398,7 +460,7 @@ describe("match-engine SQL (integration)", () => {
     const rows = await queryCandidates(
       seeker.id,
       fakeEmbedding(0.5),
-      "stanford.edu",
+      "ua:kyiv",
       "female",
       new Date(Date.now() - MATCH_COOLDOWN_MS),
     );
@@ -431,7 +493,7 @@ describe("match-engine SQL (integration)", () => {
     const rows = await queryCandidates(
       seeker.id,
       fakeEmbedding(0.5),
-      "stanford.edu",
+      "ua:kyiv",
       "female",
       new Date(Date.now() - MATCH_COOLDOWN_MS),
     );
