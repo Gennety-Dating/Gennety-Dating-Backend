@@ -391,10 +391,10 @@ describe("recordPostDateFeedback (shared pipeline)", () => {
 describe("date-lifecycle tick", () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it("sends ice-breakers and emergency buttons for matches within 3h window", async () => {
+  it("sends ice-breakers and emergency buttons for matches within 5h window", async () => {
     const agreedTime = new Date("2026-04-10T19:00:00Z");
-    // now = 2h45m before the date → inside the 3h alert window
-    const now = new Date(agreedTime.getTime() - 2.75 * 60 * 60 * 1000);
+    // now = 4h45m before the date → inside the 5h alert window
+    const now = new Date(agreedTime.getTime() - 4.75 * 60 * 60 * 1000);
 
     mMatch.findMany
       .mockResolvedValueOnce([
@@ -405,7 +405,7 @@ describe("date-lifecycle tick", () => {
           userB: { id: "ub-1", telegramId: 1002n, language: "ru", firstName: "Boris" },
         },
       ])
-      // wingman query returns empty (T-1h hasn't fired)
+      // wingman query returns empty (T-1.5h hasn't fired)
       .mockResolvedValueOnce([])
       // feedback query returns empty
       .mockResolvedValueOnce([]);

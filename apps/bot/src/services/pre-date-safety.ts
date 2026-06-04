@@ -3,7 +3,7 @@ import { prisma } from "@gennety/db";
 import { t, escapeMd, type Language, PRE_DATE_SAFETY_HOURS } from "@gennety/shared";
 
 /**
- * Pre-date safety note — sent 1h before `agreedTime` to the female user
+ * Pre-date safety note — sent 1.5h before `agreedTime` to the female user
  * in a mutually confirmed pair (PRODUCT_SPEC §Phase 4).
  *
  * Triggers: `Match.status === "scheduled"` (both users accepted + time locked)

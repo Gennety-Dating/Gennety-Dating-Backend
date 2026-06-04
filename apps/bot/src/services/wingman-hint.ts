@@ -7,7 +7,7 @@ import { callOpenAIText } from "./openai.js";
  *
  * One short imperative sentence per user about the OTHER user, generated
  * at match-scheduling time and cached on the `Match` row. The reveal gate
- * (T-1h before `agreedTime`) lives in:
+ * (T-1.5h before `agreedTime`) lives in:
  *   - `date-lifecycle.runDateLifecycleTick` (push dispatch + Telegram DM)
  *   - `matches-service.getCurrentMatchForUser` (mobile API serializer)
  *

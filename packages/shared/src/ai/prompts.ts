@@ -280,7 +280,7 @@ Do NOT reveal private profile details. Keep some mystery.`;
 }
 
 // ---------------------------------------------------------------------------
-// #4 — generateIceBreakersPrompt (Phase 4, 3 hours before date)
+// #4 — generateIceBreakersPrompt (Phase 4, 5 hours before date)
 // ---------------------------------------------------------------------------
 
 export interface IceBreakersInput {
@@ -293,10 +293,10 @@ export interface IceBreakersInput {
 
 /**
  * System prompt for generating 3 personalized, non-cringy conversation
- * starters sent 3 hours before the date.
+ * starters sent 5 hours before the date.
  */
 export function generateIceBreakersPrompt(input: IceBreakersInput): string {
-  return `You help people start conversations. In 3 hours, **${input.userFirstName}** meets **${input.matchFirstName}** on a first date. Give them 3 natural conversation starters.
+  return `You help people start conversations. In 5 hours, **${input.userFirstName}** meets **${input.matchFirstName}** on a first date. Give them 3 natural conversation starters.
 
 ## Profiles
 - ${input.userFirstName}: ${input.userSummary ?? "(no profile summary available)"}
@@ -323,7 +323,7 @@ Tone: casual, natural. Like how friends actually talk. No formal phrasing in Rus
 }
 
 // ---------------------------------------------------------------------------
-// #4b — generateWingmanHintPrompt (Phase 4, 1 hour before date)
+// #4b — generateWingmanHintPrompt (Phase 4, 90 minutes before date)
 // ---------------------------------------------------------------------------
 
 export interface WingmanHintInput {
@@ -350,7 +350,7 @@ export interface WingmanHintInput {
  * between the two calls; the prompt itself is one-sided.
  */
 export function generateWingmanHintPrompt(input: WingmanHintInput): string {
-  return `You are the mutual friend who introduced ${input.viewerFirstName} and ${input.targetFirstName}. In 1 hour they meet for their first date. Give ${input.viewerFirstName} exactly ONE insider tip about ${input.targetFirstName} — the kind of thing a wingman whispers in the hallway right before the date.
+  return `You are the mutual friend who introduced ${input.viewerFirstName} and ${input.targetFirstName}. In 90 minutes they meet for their first date. Give ${input.viewerFirstName} exactly ONE insider tip about ${input.targetFirstName} — the kind of thing a wingman whispers in the hallway right before the date.
 
 ## Profiles (internal, do NOT quote verbatim)
 - ${input.targetFirstName} (the one the tip is about): ${input.targetSummary ?? "(no profile summary available)"}

@@ -50,7 +50,7 @@ export interface SerializedMatch {
   iceBreakers: string[];
   /**
    * Phase 4 "Wingman" — asymmetric insider tip for THIS user about the
-   * partner. `null` until T-1h before `agreedTime`, then the per-side
+   * partner. `null` until T-1.5h before `agreedTime`, then the per-side
    * string from the DB. Gated server-side so clients cannot peek early.
    */
   wingmanHint: string | null;
@@ -200,7 +200,7 @@ export async function getCurrentMatchForUser(
     match.parsedCategoryB ??
     null;
 
-  // Wingman hint is only revealed within T-1h of the agreed time. This is
+  // Wingman hint is only revealed within T-1.5h of the agreed time. This is
   // the single source of truth for the reveal gate — the column may already
   // contain the string well ahead of that window (generation happens at
   // `scheduled` transition), but clients see `null` until the gate opens.
@@ -459,7 +459,7 @@ async function tryFinalizeMatchVenue(matchId: string): Promise<void> {
     select: { userAId: true, userBId: true },
   });
 
-  // Pre-generate the asymmetric "Wingman" hints now so the T-1h lifecycle
+  // Pre-generate the asymmetric "Wingman" hints now so the T-1.5h lifecycle
   // tick has them cached. Fire-and-forget: a transient LLM outage here
   // doesn't block venue finalisation; the tick will retry via the same
   // idempotent service if either hint is still null at reveal time.

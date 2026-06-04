@@ -340,9 +340,9 @@ const translations = {
 
     // --- Phase 4: Date ---
     icebreakerIntro:
-      "Your date is in 3 hours! Some convo starters for you:\n\n",
+      "Your date is in 5 hours! Some convo starters for you:\n\n",
     wingmanHintIntro:
-      "👋 Insider tip — your date's in 1 hour:\n\n",
+      "👋 Insider tip — your date's in 90 minutes:\n\n",
     emergencyUnlocked:
       "Emergency cancel window is open.\n" +
       "If you really can't make it, tap below.\n" +
@@ -402,7 +402,7 @@ const translations = {
       "🚫 Your account has been frozen pending a safety review. " +
       "Our team will contact you via @gennetysupport if further action is needed.",
     safetyNoteFemale:
-      "Hey! Your Gennety date starts in an hour at **{location_name}**.\n\n" +
+      "Hey! Your Gennety date starts in 90 minutes at **{location_name}**.\n\n" +
       "We care about your safety, so while you're getting ready, a quick first-date checklist:\n\n" +
       "📍 **Stick to the plan.** We picked a safe public venue for you. Don't agree to move the meeting to a private location or go to someone's place.\n" +
       "🚗 **Transport.** Get there and back on your own — public transport, taxi, or walking works. Just don't get in a car with someone you barely know.\n" +
@@ -758,9 +758,9 @@ const translations = {
 
     // --- Phase 4: Date ---
     icebreakerIntro:
-      "Свидание через 3 часа! Вот темы для разговора:\n\n",
+      "Свидание через 5 часов! Вот темы для разговора:\n\n",
     wingmanHintIntro:
-      "👋 Маленькая подсказка — свидание через час:\n\n",
+      "👋 Маленькая подсказка — свидание через полтора часа:\n\n",
     emergencyUnlocked:
       "Окно экстренной отмены открыто.\n" +
       "Совсем не можешь прийти — жми кнопку ниже.\n" +
@@ -820,7 +820,7 @@ const translations = {
       "🚫 Твой аккаунт заморожен для проверки безопасности. " +
       "Команда свяжется через @gennetysupport, если потребуются дальнейшие действия.",
     safetyNoteFemale:
-      "Привет! Твое свидание от Gennety начнется уже через час в **{location_name}**.\n\n" +
+      "Привет! Твое свидание от Gennety начнется уже через полтора часа в **{location_name}**.\n\n" +
       "Мы заботимся о твоей безопасности, поэтому, пока ты собираешься, вот небольшая памятка для первой встречи:\n\n" +
       "📍 **Придерживайся плана.** Мы подобрали для вас безопасное публичное место. Не соглашайся переносить встречу в уединенную локацию или ехать в гости.\n" +
       "🚗 **Транспорт.** Добирайся до места и обратно самостоятельно любым удобным тебе способом (на общественном транспорте, такси или пешком). Главное — не садись в машину к малознакомому человеку.\n" +
@@ -1176,9 +1176,9 @@ const translations = {
 
     // --- Phase 4: Date ---
     icebreakerIntro:
-      "Побачення через 3 години! Ось теми для розмови:\n\n",
+      "Побачення через 5 годин! Ось теми для розмови:\n\n",
     wingmanHintIntro:
-      "👋 Маленька підказка — побачення через годину:\n\n",
+      "👋 Маленька підказка — побачення через півтори години:\n\n",
     emergencyUnlocked:
       "Вікно екстреного скасування відкрите.\n" +
       "Зовсім не можеш прийти — тисни кнопку нижче.\n" +
@@ -1238,7 +1238,7 @@ const translations = {
       "🚫 Твій акаунт заморожено для перевірки безпеки. " +
       "Команда зв'яжеться через @gennetysupport, якщо знадобляться подальші дії.",
     safetyNoteFemale:
-      "Привіт! Твоє побачення від Gennety почнеться вже за годину в **{location_name}**.\n\n" +
+      "Привіт! Твоє побачення від Gennety почнеться вже за півтори години в **{location_name}**.\n\n" +
       "Ми дбаємо про твою безпеку, тож поки ти збираєшся — невелика пам'ятка для першої зустрічі:\n\n" +
       "📍 **Дотримуйся плану.** Ми підібрали для вас безпечне публічне місце. Не погоджуйся переносити зустріч до усамітненої локації чи їхати в гості.\n" +
       "🚗 **Транспорт.** Добирайся туди і назад самостійно будь-яким зручним способом (громадським транспортом, таксі чи пішки). Головне — не сідай у машину до малознайомої людини.\n" +
@@ -1566,8 +1566,8 @@ const deTranslations: TranslationTable = {
   venueSafetyOverride: "Heads up - ich habe stattdessen ein öffentliches Cafe gewählt. Erste Dates bleiben bei uns öffentlich.",
   venueWaitingPeer: "Deins ist da ✅ Warten auf die andere Person...",
   venueSearching: "Suche den perfekten Spot zwischen euch beiden... 🔍",
-  icebreakerIntro: "Dein Date ist in 3 Stunden! Ein paar Gesprächsstarter für dich:\n\n",
-  wingmanHintIntro: "👋 Insider-Tipp - dein Date ist in 1 Stunde:\n\n",
+  icebreakerIntro: "Dein Date ist in 5 Stunden! Ein paar Gesprächsstarter für dich:\n\n",
+  wingmanHintIntro: "👋 Insider-Tipp - dein Date ist in 90 Minuten:\n\n",
   emergencyUnlocked:
     "Das Notfall-Storno-Fenster ist offen.\n" +
     "Wenn du wirklich nicht kannst, tippe unten.\n" +
@@ -1617,7 +1617,7 @@ const deTranslations: TranslationTable = {
     "🚫 Dein Account wurde für eine Sicherheitsprüfung eingefroren. " +
     "Unser Team meldet sich über @gennetysupport, falls weitere Schritte nötig sind.",
   safetyNoteFemale:
-    "Hey! Dein Gennety-Date startet in einer Stunde bei **{location_name}**.\n\n" +
+    "Hey! Dein Gennety-Date startet in 90 Minuten bei **{location_name}**.\n\n" +
     "Deine Sicherheit ist uns wichtig, deshalb eine kurze Checkliste für das erste Treffen:\n\n" +
     "📍 **Bleib beim Plan.** Wir haben einen sicheren öffentlichen Ort gewählt. Stimm keinem Wechsel an einen privaten Ort zu und geh nicht zu jemandem nach Hause.\n" +
     "🚗 **Transport.** Komm selbst hin und zurück - ÖPNV, Taxi oder zu Fuß. Steig nicht bei jemandem ins Auto, den du kaum kennst.\n" +
@@ -1935,8 +1935,8 @@ const plTranslations: TranslationTable = {
   venueSafetyOverride: "Heads up - wybraliśmy publiczną kawiarnię. Pierwsze randki trzymamy w publicznych miejscach.",
   venueWaitingPeer: "Twoje zapisane ✅ Czekamy na drugą osobę...",
   venueSearching: "Szukam idealnego miejsca między Wami... 🔍",
-  icebreakerIntro: "Twoja randka jest za 3 godziny! Kilka tematów na start:\n\n",
-  wingmanHintIntro: "👋 Wskazówka od środka - randka jest za godzinę:\n\n",
+  icebreakerIntro: "Twoja randka jest za 5 godzin! Kilka tematów na start:\n\n",
+  wingmanHintIntro: "👋 Wskazówka od środka - randka jest za 90 minut:\n\n",
   emergencyUnlocked:
     "Okno awaryjnego odwołania jest otwarte.\n" +
     "Jeśli naprawdę nie możesz przyjść, kliknij poniżej.\n" +
@@ -1986,7 +1986,7 @@ const plTranslations: TranslationTable = {
     "🚫 Twoje konto zostało zamrożone do przeglądu bezpieczeństwa. " +
     "Nasz zespół skontaktuje się przez @gennetysupport, jeśli będą potrzebne dalsze kroki.",
   safetyNoteFemale:
-    "Hej! Twoja randka od Gennety zaczyna się za godzinę w **{location_name}**.\n\n" +
+    "Hej! Twoja randka od Gennety zaczyna się za 90 minut w **{location_name}**.\n\n" +
     "Dbamy o Twoje bezpieczeństwo, więc krótka checklista przed pierwszym spotkaniem:\n\n" +
     "📍 **Trzymaj się planu.** Wybraliśmy bezpieczne publiczne miejsce. Nie zgadzaj się na przeniesienie spotkania do prywatnej lokalizacji ani na wizytę u kogoś.\n" +
     "🚗 **Transport.** Dojedź i wróć samodzielnie - komunikacją, taksówką albo pieszo. Nie wsiadaj do auta z osobą, której prawie nie znasz.\n" +

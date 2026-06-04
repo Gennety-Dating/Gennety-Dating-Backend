@@ -428,7 +428,7 @@ model Match {
 
   /// Phase 4: Date lifecycle
   icebreakersSentAt    DateTime? @map("icebreakers_sent_at")
-  /// Phase 4: Safety note sent to the female user 1h before `agreedTime`.
+  /// Phase 4: Safety note sent to the female user 1.5h before `agreedTime`.
   /// Idempotency marker — null = not yet sent, timestamp = sent.
   safetyNoteSentAt     DateTime? @map("safety_note_sent_at")
   emergencyCancelledBy String?   @map("emergency_cancelled_by") @db.Uuid
@@ -487,8 +487,8 @@ model Match {
 
   /// Phase 4 "Wingman": single asymmetric insider tip per side. Generated
   /// when the match flips to `scheduled` (venue locked) and revealed to
-  /// each side only within T-1h of `agreedTime` via the serializer gate.
-  /// `wingmanSentAt` is the T-1h push idempotency marker.
+  /// each side only within T-1.5h of `agreedTime` via the serializer gate.
+  /// `wingmanSentAt` is the T-1.5h push idempotency marker.
   wingmanHintA       String?   @map("wingman_hint_a")
   wingmanHintB       String?   @map("wingman_hint_b")
   wingmanSentAt      DateTime? @map("wingman_sent_at")

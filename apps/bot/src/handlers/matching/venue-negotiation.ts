@@ -399,7 +399,7 @@ export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<vo
     },
   });
 
-  // Pre-generate Wingman hints now so the T-1h lifecycle tick has them
+  // Pre-generate Wingman hints now so the T-1.5h lifecycle tick has them
   // cached. Fire-and-forget; idempotent regeneration at reveal time
   // handles any LLM outage that happens during this call.
   generateAndSaveWingmanHints(matchId).catch((err) => {

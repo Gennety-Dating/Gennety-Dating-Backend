@@ -559,10 +559,10 @@ columns on `matches`.
 | When | Action | Idempotency marker |
 |---|---|---|
 | Activation → `scheduled` | Generate **wingman hints** (one short imperative tip per side about the other) and persist on the row | `wingmanHintA/B` |
-| T − 3 h | Send personalised AI **ice-breakers** (3 starters per side, language-aware, fallback to static lists). Mobile gets the same content via `iceBreakersA/B`. | `icebreakersSentAt` |
-| T − 3 h | Open the **emergency window** — DM both sides with the cancel button (callback `emerg:start:{matchId}`) | shared with above |
-| T − 1 h | **Pre-date safety brief** to the female user (Telegram DM only — mobile gets push). Skipped when no female participant has a Telegram presence. | `safetyNoteSentAt` |
-| T − 1 h | **Wingman hint reveal push** — the asymmetric tip is unmasked at this gate (the mobile serializer enforces it independently) | `wingmanSentAt` |
+| T − 5 h | Send personalised AI **ice-breakers** (3 starters per side, language-aware, fallback to static lists). Mobile gets the same content via `iceBreakersA/B`. | `icebreakersSentAt` |
+| T − 5 h | Open the **emergency window** — DM both sides with the cancel button (callback `emerg:start:{matchId}`) | shared with above |
+| T − 1.5 h | **Pre-date safety brief** to the female user (Telegram DM only — mobile gets push). Skipped when no female participant has a Telegram presence. | `safetyNoteSentAt` |
+| T − 1.5 h | **Wingman hint reveal push** — the asymmetric tip is unmasked at this gate (the mobile serializer enforces it independently) | `wingmanSentAt` |
 | Date moment | (no automated action — users meet in person) | — |
 | T + 24 h | **Feedback prompt** to both sides; LLM parses positives/negatives and updates `negativeConstraints` accordingly | `feedbackPromptedAt` |
 

@@ -326,7 +326,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `0 * * * *` | UTC | Auto-unsuspend elapsed Tier-2 suspensions | `services/match-engine.ts` (`autoUnsuspendElapsed`) |
 | `30 3 * * *` | Europe/Kyiv | GDPR Article 9 selfie scrub (90 d post-`verifiedAt`) | `services/selfie-retention.ts` |
 | `0 4 * * *` | Europe/Kyiv | Curated venue re-validation (closure/rating sweep + hours refresh, ≤30 rows/tick) | `services/venue-revalidation.ts` |
-| `setInterval(2 min)` | — | Date lifecycle: ice-breakers (T-3 h), emergency window, T-1 h pre-date safety, T+24 h feedback, wingman | `services/date-lifecycle.ts` + `services/pre-date-safety.ts` |
+| `setInterval(2 min)` | — | Date lifecycle: ice-breakers (T-5 h), emergency window, T-1.5 h pre-date safety, T+24 h feedback, wingman | `services/date-lifecycle.ts` + `services/pre-date-safety.ts` |
 
 Quiet hours **23:00–09:00 Europe/Kyiv** are enforced inside `re-engagement`
 and `match-nudge` (not at the cron level — it would let scheduling drift),
@@ -364,7 +364,7 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | GET  | `/v1/matches/current` | Current active match (with serializer gates) |
 | POST | `/v1/matches/:id/decision` | Accept / decline (mirrors bot decision handler) |
 | POST | `/v1/matches/:id/vibe-location` | Submit concierge vibe + location pin |
-| POST | `/v1/matches/:id/safety-ack` | Acknowledge T-1 h safety brief |
+| POST | `/v1/matches/:id/safety-ack` | Acknowledge T-1.5 h safety brief |
 | POST | `/v1/matches/:id/report` | File post-match report (LLM-triaged) |
 | GET  | `/v1/countdown` | Status banner / next-batch countdown |
 | GET  | `/v1/calendar/state` | Calendar Mini App snapshot — slot allowlist, both sides' picks, agreed time (Telegram `initData` HMAC auth; polled by the Mini App for live peer visibility) |

@@ -8,7 +8,7 @@ import { applyEmergencyCancellationPeerBoost } from "../../utils/elo-calculator.
  * Emergency cancellation flow (PRODUCT_SPEC.md §Phase 4.2).
  *
  * Callback `emerg:start:{matchId}` — user taps the "Cancel date" button
- * that was sent by the date-lifecycle cron 3h before the date.
+ * that was sent by the date-lifecycle cron 5h before the date.
  *
  * The handler sets session state to `awaiting_emergency_reason` and waits
  * for a free-text message, which is then quoted *exactly as-is* to the other

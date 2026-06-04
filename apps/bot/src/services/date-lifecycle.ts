@@ -36,9 +36,9 @@ function buildFeedbackKeyboard(matchId: string, lang: Language): InlineKeyboard 
  * Date lifecycle cron — runs on a fixed interval (e.g. every 2 minutes).
  *
  * Three responsibilities (PRODUCT_SPEC.md §Phase 4):
- *   1. **Ice-breakers**: 3h before `agreedTime`, send AI-generated
+ *   1. **Ice-breakers**: 5h before `agreedTime`, send AI-generated
  *      conversation starters to both users.
- *   2. **Emergency window**: at the same 3h mark, notify both users
+ *   2. **Emergency window**: at the same 5h mark, notify both users
  *      the emergency cancellation button is now available.
  *   3. **Feedback prompt**: 24h after `agreedTime`, ask both users
  *      how the date went.
@@ -137,7 +137,7 @@ export async function runDateLifecycleTick(
     wingmen: 0,
   };
 
-  // 1 & 2. Ice-breakers + Emergency window — 3h before agreed_time
+  // 1 & 2. Ice-breakers + Emergency window — 5h before agreed_time
   const alertThreshold = new Date(now.getTime() + DATE_ALERT_HOURS * 60 * 60 * 1000);
 
   const upcomingDates = await prisma.match.findMany({
@@ -145,7 +145,7 @@ export async function runDateLifecycleTick(
       status: "scheduled",
       // M-14: gate on `gt: now` so a row whose date already passed (because
       // a previous tick crashed before stamping `icebreakersSentAt`) doesn't
-      // get a stale "your date is in 3h" message AFTER the date.
+      // get a stale "your date is in 5h" message AFTER the date.
       agreedTime: { gt: now, lte: alertThreshold },
       icebreakersSentAt: null,
     },
@@ -237,7 +237,7 @@ export async function runDateLifecycleTick(
     result.emergencies++;
   }
 
-  // 2b. Wingman hints — reveal window opens at T-1h.
+  // 2b. Wingman hints — reveal window opens at T-1.5h.
   //
   // Generation already happened at `scheduled` transition; we may still
   // call `generateAndSaveWingmanHints` here to cover backfill (matches
