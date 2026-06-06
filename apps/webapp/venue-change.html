@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Gennety · Change venue</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --hint: var(--tg-theme-hint-color, #6b7280);
+        --bg: var(--tg-theme-bg-color, #fff);
+        --secondary-bg: var(--tg-theme-secondary-bg-color, #f3f4f6);
+        --text: var(--tg-theme-text-color, #111);
+        --primary: var(--tg-theme-button-color, #2481cc);
+        --primary-text: var(--tg-theme-button-text-color, #fff);
+        --danger: #d7373f;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, system-ui, sans-serif;
+      }
+      .wrap {
+        max-width: 560px;
+        margin: 0 auto;
+        padding: 16px 16px 28px;
+      }
+      h1 {
+        font-size: 19px;
+        margin: 4px 0 12px;
+        font-weight: 700;
+      }
+      .hidden {
+        display: none !important;
+      }
+
+      /* Disclaimer */
+      .disclaimer-card {
+        background: var(--secondary-bg);
+        border-radius: 14px;
+        padding: 16px 16px 8px;
+      }
+      .disclaimer-card ul {
+        margin: 8px 0 0;
+        padding-left: 18px;
+      }
+      .disclaimer-card li {
+        margin: 0 0 12px;
+        line-height: 1.4;
+        font-size: 14px;
+      }
+      .primary-btn {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 16px;
+        padding: 14px;
+        border: 0;
+        border-radius: 12px;
+        background: var(--primary);
+        color: var(--primary-text);
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .primary-btn:disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
+
+      /* Catalog */
+      .lead {
+        font-size: 13px;
+        color: var(--hint);
+        margin: 0 0 14px;
+        line-height: 1.4;
+      }
+      .venue {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        padding: 12px;
+        border-radius: 12px;
+        background: var(--secondary-bg);
+        margin-bottom: 10px;
+        cursor: pointer;
+        border: 2px solid transparent;
+      }
+      .venue.selected {
+        border-color: var(--primary);
+      }
+      .venue .thumb {
+        width: 56px;
+        height: 56px;
+        border-radius: 10px;
+        flex: 0 0 auto;
+        background: var(--bg);
+        background-size: cover;
+        background-position: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 26px;
+      }
+      .venue .meta {
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+      .venue .name {
+        font-size: 15px;
+        font-weight: 600;
+        line-height: 1.25;
+      }
+      .venue .addr {
+        font-size: 12px;
+        color: var(--hint);
+        margin-top: 3px;
+        line-height: 1.3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .venue .dist {
+        font-size: 11px;
+        color: var(--hint);
+        margin-top: 4px;
+      }
+      .badge {
+        display: inline-block;
+        font-size: 11px;
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: var(--bg);
+        color: var(--hint);
+        margin-top: 4px;
+      }
+
+      /* Comment form */
+      .comment-venue {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0 0 4px;
+      }
+      .comment-addr {
+        font-size: 12px;
+        color: var(--hint);
+        margin: 0 0 14px;
+      }
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        min-height: 110px;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid var(--hint);
+        background: var(--secondary-bg);
+        color: var(--text);
+        font-size: 15px;
+        font-family: inherit;
+        resize: vertical;
+        outline: none;
+      }
+      textarea:focus {
+        border-color: var(--primary);
+      }
+      .counter {
+        font-size: 12px;
+        color: var(--hint);
+        margin-top: 6px;
+        text-align: right;
+      }
+      .back-link {
+        display: inline-block;
+        margin-top: 14px;
+        color: var(--primary);
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .state-msg {
+        font-size: 15px;
+        color: var(--hint);
+        line-height: 1.5;
+        padding: 24px 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <!-- Loading / ineligible / fallback -->
+      <div id="msg" class="state-msg hidden"></div>
+
+      <!-- Step 1: disclaimer -->
+      <section id="step-disclaimer" class="hidden">
+        <h1 id="disclaimer-title"></h1>
+        <div class="disclaimer-card">
+          <ul id="disclaimer-list"></ul>
+        </div>
+        <button id="disclaimer-continue" class="primary-btn" type="button"></button>
+      </section>
+
+      <!-- Step 2: catalog -->
+      <section id="step-catalog" class="hidden">
+        <h1 id="catalog-title"></h1>
+        <p class="lead" id="catalog-lead"></p>
+        <div id="catalog-list"></div>
+        <div id="catalog-empty" class="state-msg hidden"></div>
+      </section>
+
+      <!-- Step 3: comment -->
+      <section id="step-comment" class="hidden">
+        <h1 id="comment-title"></h1>
+        <p class="comment-venue" id="comment-venue"></p>
+        <p class="comment-addr" id="comment-addr"></p>
+        <textarea id="comment-input" maxlength="1000"></textarea>
+        <div class="counter" id="comment-counter"></div>
+        <span class="back-link" id="comment-back"></span>
+      </section>
+    </div>
+    <script type="module" src="/src/venue-change.ts"></script>
+  </body>
+</html>
