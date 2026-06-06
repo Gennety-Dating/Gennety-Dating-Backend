@@ -132,12 +132,15 @@ export async function selectLocation(
 
 export type OnboardingLanguage = "en" | "ru" | "uk" | "de" | "pl";
 export type TelegramOnboardingStep = "consent" | "language" | "conversational" | "completed";
+export type AiMemoryExportPreference = "undecided" | "accepted" | "declined";
 
 export interface TelegramOnboardingState {
   ok: true;
   flowToken: string;
   user: {
     onboardingStep: TelegramOnboardingStep;
+    aiMemoryExportPreference: AiMemoryExportPreference;
+    aiMemoryExportPreferenceAt: string | null;
     termsAccepted: boolean;
     researchOptIn: boolean;
     language: OnboardingLanguage | null;
@@ -303,6 +306,22 @@ export async function selectTelegramOnboardingCity(
       latitude: city.latitude,
       longitude: city.longitude,
     }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as TelegramOnboardingState;
+}
+
+export async function setTelegramOnboardingAiMemoryPreference(
+  initData: string,
+  preference: Exclude<AiMemoryExportPreference, "undecided">,
+): Promise<TelegramOnboardingState> {
+  const res = await fetch(`${apiBase}/v1/telegram-onboarding/ai-memory`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `tma ${initData}`,
+    },
+    body: JSON.stringify({ preference }),
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as TelegramOnboardingState;

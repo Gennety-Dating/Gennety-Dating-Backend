@@ -35,9 +35,12 @@ out of Telegram-only workers.
   not build chat interfaces between users. The only chats are user↔bot,
   user↔Aether concierge (mobile), and the structured pitch / scheduling /
   emergency flows.
-- **Deep Context over Questionnaires** — During onboarding the user pastes the
-  *Magic Prompt* into their personal LLM and returns the long psychological
-  analysis, which we parse into structured profile + embedding.
+- **Deep Context over Questionnaires** — At the end of the Telegram entry Mini
+  App the user chooses whether to enrich onboarding from ChatGPT, Claude,
+  Gemini, or another personal LLM. Accepted users paste the *Magic Prompt* and
+  return the long psychological analysis. Declined users continue without it;
+  the backend generates a deterministic fallback summary + embedding from
+  their ordinary onboarding answers.
 - **Identity-Verified by Default** — Liveness (Persona) + photo↔selfie
   face-match (AWS Rekognition) gate full match eligibility. Skipping is
   allowed but carries a real Elo penalty.
@@ -67,16 +70,18 @@ out of Telegram-only workers.
   `referral:<USER_ID>`), and shows the consent + ToS card.
 - Telegram `/start` now opens a full-screen Onboarding Mini App before the
   conversational agent takes over. The Mini App presents the visual intro,
-  legal consent, language, and corporate-email OTP gate, using Telegram
-  `initData` HMAC auth for all writes. If the user arrived through a verified
+  legal consent, language, corporate-email OTP gate, dating city, and final AI
+  memory export choice, using Telegram `initData` HMAC auth for all writes. If
+  the user arrived through a verified
   website handoff (`auth_<token>`; legacy `web_<token>` still accepted), the
   server-side `isEmailVerified` state skips the Email/OTP screens.
 - When the Mini App reaches its handoff step, it calls
   `/v1/telegram-onboarding/complete` with the visual-flow token issued by
   `/v1/telegram-onboarding/state`; the bot immediately resumes the chat through
   the existing onboarding agent. This does **not** mark onboarding complete by
-  itself — Magic Prompt context, required profile fields, photos, and
-  verification CTA still follow the normal product rules.
+  itself — required profile fields, photos, and verification CTA still follow
+  the normal product rules. Magic Prompt context is required only when
+  `aiMemoryExportPreference = accepted`.
 - The user MUST flip `termsAccepted` (legal click) and MAY opt into
   `researchOptIn` (analytics use of anonymised data, default false per GDPR
   norms).
@@ -100,7 +105,7 @@ The agent calls tools in any order until *all* required data is collected:
 | `resend_otp()` | Re-send to the email already on file |
 | `request_context_dump()` | Surface the *Magic Prompt* in a copy-block |
 | `save_context_dump(raw_dump)` | Stream-parse to `psychologicalSummary` and seed embedding |
-| `request_photos()` | Open photo upload (must follow `save_context_dump`) |
+| `request_photos()` | Open photo upload (must follow `save_context_dump` unless AI memory export was declined) |
 | `save_profile_data(...)` | Persist `firstName`, `age`, `gender`, `preference`, `height`, optional `ethnicity`, `hobbies`, `partnerPreferences` |
 | `finalize_onboarding()` | Activate the user (or hand off to verification CTA) |
 
@@ -109,6 +114,17 @@ must also choose a **dating city** (`Profile.homeCityKey`). This is framed as
 "where you want to receive matches", not as a home address. Users can search
 for a city manually or let the Mini App resolve their browser geolocation to a
 city; raw coordinates alone do not satisfy the matching gate.
+
+The final Mini App screen records `User.aiMemoryExportPreference` through
+`POST /v1/telegram-onboarding/ai-memory`:
+
+- `accepted` keeps the existing Magic Prompt flow and server-side ordering
+  guards (`save_context_dump` before photos/finalization).
+- `declined` suppresses the Magic Prompt for the current onboarding run,
+  permits photo collection directly after the ordinary profile fields, and
+  generates `Profile.psychologicalSummary` + embedding from those fields at
+  finalization.
+- `undecided` cannot pass `/v1/telegram-onboarding/complete`.
 
 Hard rules baked into the agent prompt:
 - Required fields (`firstName`, `age`, `gender`, `preference`,
@@ -121,8 +137,9 @@ Hard rules baked into the agent prompt:
   `MAX_PHOTOS`, but its static frame is still stored in `Profile.photos[]`
   and must pass the same single-face and face-match checks as a normal
   profile photo. Live Photos without a static frame are rejected.
-- `request_photos` MAY NOT be called in the same turn as
-  `request_context_dump` — wait for the dump to land first.
+- For accepted export, `request_photos` MAY NOT be called in the same turn as
+  `request_context_dump` — wait for the dump to land first. Declined export
+  skips both context-dump tools.
 - During the LLM dump *parsing* the bot streams an "internal monologue"
   via `sendMessageDraft` ("Analyzing your profile… Synthesising
   psychological traits…") to keep the user oriented.

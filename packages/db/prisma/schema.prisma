@@ -33,6 +33,12 @@ enum OnboardingStep {
   completed
 }
 
+enum AiMemoryExportPreference {
+  undecided
+  accepted
+  declined
+}
+
 enum Gender {
   male
   female
@@ -87,6 +93,11 @@ model User {
   language         Language?
   status           UserStatus        @default(onboarding)
   onboardingStep   OnboardingStep    @default(consent) @map("onboarding_step")
+  /// Whether the user wants to enrich onboarding with memory exported from
+  /// their existing AI assistant. `declined` skips the Magic Prompt for this
+  /// onboarding run and uses a deterministic fallback profile analysis.
+  aiMemoryExportPreference AiMemoryExportPreference @default(undecided) @map("ai_memory_export_preference")
+  aiMemoryExportPreferenceAt DateTime? @map("ai_memory_export_preference_at")
   hasConsented     Boolean           @default(false) @map("has_consented")
   consentedAt      DateTime?         @map("consented_at")
   /// Explicit Terms of Service acceptance from the Initialization & Consent

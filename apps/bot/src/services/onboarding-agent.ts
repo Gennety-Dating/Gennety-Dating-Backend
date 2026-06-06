@@ -12,7 +12,10 @@ import {
   magicContextPrompt,
 } from "@gennety/shared";
 import { env } from "../config.js";
-import { analyseAndSaveProfile } from "./profile-analysis.js";
+import {
+  analyseAndSaveProfile,
+  saveFallbackProfileAnalysis,
+} from "./profile-analysis.js";
 import { createAndSendOtp, verifyOtp as verifyStoredOtp } from "../public/otp.js";
 import {
   onboardingActivityPatch,
@@ -134,6 +137,7 @@ export interface AgentDeps {
   fetchFn?: typeof fetch;
   sendOtp?: (to: string, otp: string) => Promise<void>;
   analyseProfile?: typeof analyseAndSaveProfile;
+  saveFallbackProfile?: typeof saveFallbackProfileAnalysis;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,10 +153,17 @@ export interface AgentDeps {
  * separate `verifiedNote` told it to skip step 1, because the strict-rules
  * line carried much more weight than the trailing override.
  */
-function buildSystemPrompt(emailAlreadyVerified: boolean): string {
+function buildSystemPrompt(
+  emailAlreadyVerified: boolean,
+  aiMemoryExportDeclined: boolean,
+): string {
   const emailRule = emailAlreadyVerified
     ? "- Email verification has ALREADY been completed for this user before this conversation began. DO NOT ask the user for their email under ANY circumstances. DO NOT mention email verification. Skip step 1 of the Onboarding Flow entirely. Move directly to step 2 (profile basics)."
     : `- The user MUST provide a corporate university email (domains: ${ALLOWED_EMAIL_DOMAINS.join(", ")}). Do NOT skip email verification.`;
+
+  const aiMemoryRule = aiMemoryExportDeclined
+    ? "- The user explicitly declined AI memory export. Do NOT call request_context_dump or save_context_dump, and do NOT ask them to paste anything from another AI app. After profile fields are collected, move directly to request_photos. Context dump is NOT required for this user."
+    : "- The user accepted AI memory export. The Magic Prompt context dump is required before photo upload and finalization.";
 
   return `You are the onboarding assistant for Gennety Dating — an AI-first matchmaking service for university students.
 
@@ -160,6 +171,7 @@ Your mission: guide the user through the onboarding process via natural conversa
 
 ## Strict Rules
 ${emailRule}
+${aiMemoryRule}
 - Age MUST be between ${MIN_AGE} and ${MAX_AGE}. If the user gives an age outside this range, explain the restriction kindly.
 - NEVER create an in-app chat between users. This is a "Zero-Chat" philosophy app — we match people and schedule their first date, no messaging.
 - NEVER skip or shortcut any of the required information fields.
@@ -212,7 +224,7 @@ You MUST collect ALL of the following before finalizing:
 1. **Email verification**: Ask for university email → call send_otp_email → ask for OTP code → call verify_otp. If the user says the code didn't arrive, call resend_otp to re-send it (no need to ask for the email again).
 2. **Profile basics**: First name, age, gender, gender preference (who they are interested in — men, women, or both). ALWAYS ask these questions in the user's chosen language using native words ONLY — never use English terms like "male/female" or "men/women/both" in your message to the user. Map their natural-language answer internally to the tool enum values.
 3. **Extended profile**: Ethnicity/nationality (optional but encouraged; ask exactly once before the Magic Prompt if it was not already given, and accept skipping), height in cm, hobbies/interests (whatever the user shares — one, several, or "no hobbies" are ALL valid; never push for more), partner preferences (one short sentence is plenty)
-4. **Deep context extraction**: After collecting extended profile, call request_context_dump. The system will AUTOMATICALLY send the Magic Prompt to the user in a separate copyable block — you do NOT need to include or display the prompt yourself.
+4. **Deep context extraction**: ${aiMemoryExportDeclined ? "SKIP this entire step because the user declined AI memory export. Never mention or request the Magic Prompt." : "After collecting extended profile, call request_context_dump. The system will AUTOMATICALLY send the Magic Prompt to the user in a separate copyable block — you do NOT need to include or display the prompt yourself."}
 
    STRICT BOUNDARIES for the reply that accompanies request_context_dump:
    - Your ONLY job in that turn is the paste-it-back instruction. Tell the user to copy the prompt above and paste it into whatever AI chat they already use — ChatGPT, Claude, Gemini, Perplexity, Grok, DeepSeek, or any other LLM — and send the AI's full response back.
@@ -221,8 +233,8 @@ You MUST collect ALL of the following before finalizing:
    - Do NOT call request_photos in the same turn as request_context_dump under any circumstances. Wait for the user to actually paste back the analysis and for save_context_dump to succeed first.
 
    When the user pastes back a long psychological analysis, call save_context_dump with the full text. If the dump is too short or clearly not a real analysis, ask them to try again. Do NOT skip this step.
-5. **Photos**: Call request_photos — but ONLY after save_context_dump has been called and returned success. Never call request_photos in the same turn as request_context_dump. The user MUST send at least ${MIN_PHOTOS} photos — this is a hard minimum. Anything beyond ${MIN_PHOTOS} is PURELY OPTIONAL. Once ${MIN_PHOTOS} verified photos have arrived, DO NOT ask for another one. Briefly offer the option ("you can send one more if you want, or we can move on") and default to moving on. Never chain "one more, one more" requests.
-6. **Finalize**: Once ALL fields are collected, context dump saved, and at least ${MIN_PHOTOS} photos uploaded, call save_profile_data with all extracted data, then call finalize_onboarding.
+5. **Photos**: Call request_photos ${aiMemoryExportDeclined ? "after the ordinary profile fields are collected." : "but ONLY after save_context_dump has been called and returned success. Never call request_photos in the same turn as request_context_dump."} The user MUST send at least ${MIN_PHOTOS} photos — this is a hard minimum. Anything beyond ${MIN_PHOTOS} is PURELY OPTIONAL. Once ${MIN_PHOTOS} verified photos have arrived, DO NOT ask for another one. Briefly offer the option ("you can send one more if you want, or we can move on") and default to moving on. Never chain "one more, one more" requests.
+6. **Finalize**: Once ALL fields are collected, ${aiMemoryExportDeclined ? "AI memory export is marked declined," : "context dump is saved,"} and at least ${MIN_PHOTOS} photos uploaded, call save_profile_data with all extracted data, then call finalize_onboarding.
 
 ## CRITICAL: Answer Validation Rules
 
@@ -255,7 +267,7 @@ NEVER move to the next question or topic until the current one has a CONCRETE, S
 
 ### Tracking what you've collected:
 Before calling save_profile_data, mentally verify you have ALL of these with concrete values:
-- Email verified, First name, Age, Gender, Preference, Ethnicity/nationality asked once or already volunteered/skipped, Height, Hobbies (whatever the user gave — even an empty list is fine), Partner preferences (one sentence), Context dump saved (via save_context_dump), Photos (${MIN_PHOTOS}+)
+- Email verified, First name, Age, Gender, Preference, Ethnicity/nationality asked once or already volunteered/skipped, Height, Hobbies (whatever the user gave — even an empty list is fine), Partner preferences (one sentence), ${aiMemoryExportDeclined ? "AI memory export declined (no context dump needed)" : "Context dump saved (via save_context_dump)"}, Photos (${MIN_PHOTOS}+)
 
 If ANY required field is missing or vague, go back and collect it before saving.
 
@@ -462,6 +474,7 @@ interface PersistedOnboardingState {
   email?: string | null;
   universityDomain?: string | null;
   isEmailVerified?: boolean | null;
+  aiMemoryExportPreference?: "undecided" | "accepted" | "declined" | null;
   profile?: {
     ethnicity?: string | null;
     height?: number | null;
@@ -604,6 +617,7 @@ function buildCurrentSavedStateSnapshot(
   const hobbies = Array.isArray(profile?.hobbies) ? profile.hobbies : [];
   const photos = Array.isArray(profile?.photos) ? profile.photos : [];
   const emailVerified = Boolean(user?.isEmailVerified && user?.email);
+  const aiMemoryExportDeclined = user?.aiMemoryExportPreference === "declined";
 
   const missing: string[] = [];
   if (!emailVerified) missing.push("email_verification");
@@ -614,7 +628,7 @@ function buildCurrentSavedStateSnapshot(
   if (!profile?.height) missing.push("height");
   if (!profile?.partnerPreferences) missing.push("partner_preferences");
   if (!profile?.homeCityKey) missing.push("home_city");
-  if (!contextDumpSaved) missing.push("context_dump");
+  if (!contextDumpSaved && !aiMemoryExportDeclined) missing.push("context_dump");
   if (photos.length < MIN_PHOTOS) missing.push(`photos_${photos.length}/${MIN_PHOTOS}`);
 
   const lines = [
@@ -625,12 +639,19 @@ function buildCurrentSavedStateSnapshot(
     `Profile basics: first_name=${status(user?.firstName)}, age=${user?.age ?? "missing"}, gender=${user?.gender ?? "missing"}, preference=${user?.preference ?? "missing"}`,
     `Extended profile: height=${profile?.height ?? "missing"}, ethnicity=${status(profile?.ethnicity)}, hobbies_count=${hobbies.length}, partner_preferences=${status(profile?.partnerPreferences)}`,
     `Dating city: ${profile?.homeCityKey ? `saved:${profile.homeCityKey}` : "missing"}`,
-    `Context dump: ${contextDumpSaved ? "saved" : "missing"}`,
+    `AI memory export: ${user?.aiMemoryExportPreference ?? "undecided"}`,
+    `Context dump: ${contextDumpSaved ? "saved" : aiMemoryExportDeclined ? "skipped_by_user" : "missing"}`,
     `Photos: ${photos.length}/${MIN_PHOTOS} required minimum`,
     `Missing next: ${missing.length ? missing.join(", ") : "none"}`,
-    "Ethnicity is optional, but if it is missing you must ask it once before request_context_dump unless the chat already shows you asked or the user skipped it.",
-    "If Missing next is context_dump, call request_context_dump now instead of asking profile questions.",
-    "If Context dump is saved and Photos are missing, call request_photos. Finalize only after profile, context dump, and photos are complete.",
+    aiMemoryExportDeclined
+      ? "The user declined AI memory export. Never call request_context_dump or save_context_dump; proceed directly to photos once profile fields are complete."
+      : "Ethnicity is optional, but if it is missing you must ask it once before request_context_dump unless the chat already shows you asked or the user skipped it.",
+    aiMemoryExportDeclined
+      ? "If Photos are missing, call request_photos. Finalize after profile and photos are complete."
+      : "If Missing next is context_dump, call request_context_dump now instead of asking profile questions.",
+    aiMemoryExportDeclined
+      ? "A fallback psychological summary and embedding will be generated server-side during finalization."
+      : "If Context dump is saved and Photos are missing, call request_photos. Finalize only after profile, context dump, and photos are complete.",
   ];
 
   return { role: "system", content: lines.join("\n") };
@@ -925,6 +946,7 @@ async function execSaveProfileData(
       age: true,
       gender: true,
       preference: true,
+      aiMemoryExportPreference: true,
       profile: {
         select: {
           ethnicity: true,
@@ -1039,26 +1061,32 @@ async function execSaveProfileData(
       partner_preferences: true,
     },
     next_instruction:
-      "Do not ask for saved profile fields again. If context_dump is not saved, call request_context_dump now. If context_dump is saved, continue to photos/finalization as appropriate.",
+      user.aiMemoryExportPreference === "declined"
+        ? "Do not ask for saved profile fields again. AI memory export was declined, so call request_photos now and never request a context dump."
+        : "Do not ask for saved profile fields again. If context_dump is not saved, call request_context_dump now. If context_dump is saved, continue to photos/finalization as appropriate.",
   });
 }
 
 async function execFinalizeOnboarding(
   telegramId: bigint,
   contextDumpSaved: boolean,
+  deps: AgentDeps,
 ): Promise<string> {
   // Guard: verify all required profile data exists before finalizing
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: {
+      id: true,
       firstName: true,
       age: true,
       gender: true,
       preference: true,
       email: true,
       isEmailVerified: true,
+      aiMemoryExportPreference: true,
       profile: {
         select: {
+          ethnicity: true,
           height: true,
           hobbies: true,
           partnerPreferences: true,
@@ -1082,7 +1110,8 @@ async function execFinalizeOnboarding(
     missing.push("partner_preferences");
   if (!user?.profile?.homeCityKey)
     missing.push("home_city");
-  if (!contextDumpSaved)
+  const aiMemoryExportDeclined = user?.aiMemoryExportPreference === "declined";
+  if (!contextDumpSaved && !aiMemoryExportDeclined)
     missing.push("context_dump (deep profile not yet saved)");
   if (!user?.profile?.photos?.length || user.profile.photos.length < MIN_PHOTOS)
     missing.push(`photos (need at least ${MIN_PHOTOS})`);
@@ -1092,6 +1121,29 @@ async function execFinalizeOnboarding(
       success: false,
       error: `Cannot finalize — missing required data: ${missing.join(", ")}. Please collect these before calling finalize_onboarding.`,
     });
+  }
+
+  if (aiMemoryExportDeclined && user?.profile) {
+    const saveFallback = deps.saveFallbackProfile ?? saveFallbackProfileAnalysis;
+    try {
+      await saveFallback(user.id, {
+        firstName: user.firstName!,
+        age: user.age!,
+        gender: user.gender!,
+        preference: user.preference!,
+        height: user.profile.height!,
+        ethnicity: user.profile.ethnicity ?? null,
+        hobbies: user.profile.hobbies ?? [],
+        partnerPreferences: user.profile.partnerPreferences!,
+        homeCityKey: user.profile.homeCityKey!,
+      });
+    } catch (err) {
+      console.error("Fallback profile analysis failed:", err);
+      return JSON.stringify({
+        success: false,
+        error: "Could not build the fallback profile analysis. Please try finalizing again.",
+      });
+    }
   }
 
   // Gate activation on Persona liveness verification (Phase 6.3). The
@@ -1287,6 +1339,7 @@ export async function runAgentTurn(
       email: true,
       universityDomain: true,
       isEmailVerified: true,
+      aiMemoryExportPreference: true,
       firstName: true,
       age: true,
       gender: true,
@@ -1321,12 +1374,17 @@ export async function runAgentTurn(
     // email" mid-conversation when only a trailing override note told it to
     // skip step 1; now the conflicting rule simply isn't in the prompt.
     const emailAlreadyVerified = Boolean(user?.isEmailVerified && user?.email);
+    const aiMemoryExportDeclined = user?.aiMemoryExportPreference === "declined";
     const verifiedNote = emailAlreadyVerified
       ? `[VERIFIED EMAIL ON FILE: ${user!.email}] DO NOT ask the user for their email. DO NOT mention email verification. Skip step 1 of the onboarding flow entirely and move directly to profile basics (step 2). Briefly acknowledge in the user's language (e.g. "your @${user!.universityDomain ?? user!.email!.split("@")[1]} email is already verified"), then ask for first name + age. Do NOT add a ✅ or any "Complete"-style emoji to this acknowledgement.`
       : "";
     history.push({
       role: "system",
-      content: [buildSystemPrompt(emailAlreadyVerified), langNote, verifiedNote]
+      content: [
+        buildSystemPrompt(emailAlreadyVerified, aiMemoryExportDeclined),
+        langNote,
+        verifiedNote,
+      ]
         .filter(Boolean)
         .join("\n\n"),
     });
@@ -1414,7 +1472,14 @@ export async function runAgentTurn(
             result = await execResendOtp(telegramId, deps);
             break;
           case "request_context_dump":
-            if (shouldBlockContextDumpForEthnicity(user, history)) {
+            if (user?.aiMemoryExportPreference === "declined") {
+              result = JSON.stringify({
+                success: false,
+                error:
+                  "The user declined AI memory export. Do not show the Magic Prompt. " +
+                  "Continue with the remaining profile fields, then call request_photos.",
+              });
+            } else if (shouldBlockContextDumpForEthnicity(user, history)) {
               result = JSON.stringify({
                 success: false,
                 error:
@@ -1434,12 +1499,20 @@ export async function runAgentTurn(
             }
             break;
           case "save_context_dump":
-            result = await execSaveContextDump(
-              telegramId,
-              args as { raw_dump?: unknown },
-              deps,
-              userMessage,
-            );
+            if (user?.aiMemoryExportPreference === "declined") {
+              result = JSON.stringify({
+                success: false,
+                error:
+                  "The user declined AI memory export. Do not save or request a context dump; continue to photos.",
+              });
+            } else {
+              result = await execSaveContextDump(
+                telegramId,
+                args as { raw_dump?: unknown },
+                deps,
+                userMessage,
+              );
+            }
             break;
           case "request_photos": {
             // Defense-in-depth: the system prompt forbids calling request_photos
@@ -1448,7 +1521,10 @@ export async function runAgentTurn(
             // turn, which leaves the user stranded mid-step. Enforce the
             // ordering server-side by requiring a successful save_context_dump
             // tool result, not just any psychologicalSummary row.
-            if (!hasContextDumpSaved(history)) {
+            if (
+              user?.aiMemoryExportPreference !== "declined" &&
+              !hasContextDumpSaved(history)
+            ) {
               result = JSON.stringify({
                 success: false,
                 error:
@@ -1479,6 +1555,7 @@ export async function runAgentTurn(
             result = await execFinalizeOnboarding(
               telegramId,
               hasContextDumpSaved(history),
+              deps,
             );
             {
               const parsed = JSON.parse(result) as {

@@ -162,6 +162,18 @@ export interface EmbeddingClient {
   embed(input: string): Promise<number[]>;
 }
 
+export interface FallbackProfileAnalysisInput {
+  firstName: string;
+  age: number;
+  gender: string;
+  preference: string;
+  height: number;
+  ethnicity: string | null;
+  hobbies: string[];
+  partnerPreferences: string;
+  homeCityKey: string;
+}
+
 /**
  * Default OpenAI embedding client backed by the REST API. Uses `fetch`
  * directly so we don't pull in the `openai` package (see AGENTS.md — no
@@ -226,6 +238,45 @@ export async function saveProfileAnalysis(
       UPDATE profiles SET embedding = ${literal}::vector WHERE user_id = ${userId}::uuid
     `;
   }
+}
+
+export function buildFallbackProfileAnalysis(
+  input: FallbackProfileAnalysisInput,
+): string {
+  return [
+    "Profile source: onboarding answers (AI memory export declined)",
+    `Name: ${input.firstName}`,
+    `Age: ${input.age}`,
+    `Gender: ${input.gender}`,
+    `Dating preference: ${input.preference}`,
+    `Height: ${input.height} cm`,
+    `Ethnicity/nationality: ${input.ethnicity?.trim() || "not provided"}`,
+    `Hobbies/interests: ${input.hobbies.length ? input.hobbies.join(", ") : "none provided"}`,
+    `Partner preferences: ${input.partnerPreferences}`,
+    `Dating city: ${input.homeCityKey}`,
+  ].join("\n");
+}
+
+export async function saveFallbackProfileAnalysis(
+  userId: string,
+  input: FallbackProfileAnalysisInput,
+  client?: EmbeddingClient,
+): Promise<{ summary: string; embeddingSaved: boolean }> {
+  const summary = buildFallbackProfileAnalysis(input);
+  const embeddingClient =
+    client ?? (env.OPENAI_API_KEY ? createOpenAIEmbeddingClient(env.OPENAI_API_KEY) : null);
+
+  let embedding: number[] | null = null;
+  if (embeddingClient) {
+    try {
+      embedding = await embeddingClient.embed(summary);
+    } catch (err) {
+      console.warn("Fallback embedding generation failed, continuing without it:", err);
+    }
+  }
+
+  await saveProfileAnalysis(userId, summary, embedding);
+  return { summary, embeddingSaved: embedding !== null };
 }
 
 /**

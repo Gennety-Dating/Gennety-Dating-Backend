@@ -1,7 +1,11 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import type { Api, RawApi } from "grammy";
-import { prisma, type Language } from "@gennety/db";
+import {
+  prisma,
+  type AiMemoryExportPreference,
+  type Language,
+} from "@gennety/db";
 import {
   ALLOWED_EMAIL_DOMAINS,
   isUniversityEmail,
@@ -33,6 +37,8 @@ type MiniUser = {
   email: string | null;
   language: Language | null;
   onboardingStep: "consent" | "language" | "conversational" | "completed";
+  aiMemoryExportPreference: AiMemoryExportPreference;
+  aiMemoryExportPreferenceAt: Date | null;
   termsAccepted: boolean;
   researchOptIn: boolean;
   isEmailVerified: boolean;
@@ -335,6 +341,40 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     res.json(serializeState(updated));
   });
 
+  router.post("/ai-memory", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+
+    const user = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
+    const gate = ensureReadyForAiMemoryChoice(user);
+    if (gate) {
+      res.status(409).json({ error: gate });
+      return;
+    }
+
+    const preference = req.body?.preference;
+    if (preference !== "accepted" && preference !== "declined") {
+      res.status(400).json({ error: "invalid-ai-memory-preference" });
+      return;
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        aiMemoryExportPreference: preference,
+        aiMemoryExportPreferenceAt: new Date(),
+        ...onboardingActivityPatch(),
+      },
+      select: miniUserSelect,
+    });
+
+    logTelegramOnboarding("ai-memory-selected", updated, { preference });
+    res.json(serializeState(updated));
+  });
+
   router.post("/complete", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
     if (!auth.ok) {
@@ -374,6 +414,10 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
       res.status(409).json({ error: "location-required" });
       return;
     }
+    if (user.aiMemoryExportPreference === "undecided") {
+      res.status(409).json({ error: "ai-memory-preference-required" });
+      return;
+    }
 
     if (user.onboardingStep === "completed") {
       await api.sendMessage(Number(user.telegramId), alreadyCompleteCopy(user.language));
@@ -395,7 +439,10 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
           user.telegramId,
           "[User completed the full-screen Telegram Mini App entry flow. " +
             "Continue onboarding in chat from the next required field. " +
-            "Do not ask for email or OTP again because the email is already verified.]",
+            "Do not ask for email or OTP again because the email is already verified. " +
+            (user.aiMemoryExportPreference === "declined"
+              ? "The user declined AI memory export, so do not request the Magic Prompt/context dump. Continue with profile fields and photos.]"
+              : "The user accepted AI memory export, so request the Magic Prompt/context dump after profile fields are complete.]"),
         )
       ).reply;
 
@@ -413,6 +460,8 @@ const miniUserSelect = {
   email: true,
   language: true,
   onboardingStep: true,
+  aiMemoryExportPreference: true,
+  aiMemoryExportPreferenceAt: true,
   termsAccepted: true,
   researchOptIn: true,
   isEmailVerified: true,
@@ -483,6 +532,8 @@ function serializeState(user: MiniUser): TelegramOnboardingStateDto {
     flowToken: issueOnboardingFlowToken(user.telegramId),
     user: {
       onboardingStep: user.onboardingStep,
+      aiMemoryExportPreference: user.aiMemoryExportPreference,
+      aiMemoryExportPreferenceAt: user.aiMemoryExportPreferenceAt?.toISOString() ?? null,
       termsAccepted: user.termsAccepted,
       researchOptIn: user.researchOptIn,
       language: user.language,
@@ -511,6 +562,8 @@ interface TelegramOnboardingStateDto {
   flowToken: string;
   user: {
     onboardingStep: MiniUser["onboardingStep"];
+    aiMemoryExportPreference: MiniUser["aiMemoryExportPreference"];
+    aiMemoryExportPreferenceAt: string | null;
     termsAccepted: boolean;
     researchOptIn: boolean;
     language: Language | null;
@@ -548,6 +601,20 @@ function ensureReadyForLocation(
   const emailGate = ensureReadyForEmail(user);
   if (emailGate) return emailGate;
   if (!user.isEmailVerified) return "email-required";
+  return null;
+}
+
+function ensureReadyForAiMemoryChoice(
+  user: MiniUser,
+):
+  | "terms-required"
+  | "language-required"
+  | "email-required"
+  | "location-required"
+  | null {
+  const locationGate = ensureReadyForLocation(user);
+  if (locationGate) return locationGate;
+  if (!hasHomeLocation(user)) return "location-required";
   return null;
 }
 

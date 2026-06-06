@@ -81,6 +81,171 @@ button {
   pointer-events: auto;
 }
 
+.ai-memory-screen {
+  width: 100%;
+  max-width: 26.25rem;
+  height: 100%;
+  margin: 0 auto;
+  padding:
+    calc(4.5rem + env(safe-area-inset-top, 0))
+    max(1.25rem, env(safe-area-inset-right, 0))
+    calc(1.25rem + env(safe-area-inset-bottom, 0))
+    max(1.25rem, env(safe-area-inset-left, 0));
+  display: flex;
+  flex-direction: column;
+  background: #09090b;
+  color: #fff;
+}
+
+.ai-memory-content {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ai-memory-content h1 {
+  width: min(100%, 21.25rem);
+  margin: 0;
+  color: #fff;
+  text-align: center;
+  font-size: clamp(1.45rem, 3.5dvh, 1.625rem);
+  line-height: 1.18;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.ai-logo-fan {
+  position: relative;
+  width: min(100%, 21.25rem);
+  height: clamp(11rem, 31dvh, 15rem);
+  margin: auto 0;
+  flex: 0 0 auto;
+}
+
+.ai-logo-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.05)),
+    #09090b;
+  box-shadow: 0 15px 40px -5px rgba(0, 0, 0, 0.8);
+  transition:
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    z-index 0ms;
+}
+
+.ai-logo-card svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ai-logo-card-claude,
+.ai-logo-card-gemini {
+  width: 6.875rem;
+  height: 6.875rem;
+  padding: 1.25rem;
+  border-radius: 1.75rem;
+  z-index: 1;
+}
+
+.ai-logo-card-claude {
+  transform: translate(-136%, -38%) rotate(-15deg);
+}
+
+.ai-logo-card-gemini {
+  transform: translate(36%, -38%) rotate(15deg);
+}
+
+.ai-logo-card-openai {
+  width: 9rem;
+  height: 9rem;
+  padding: 1.75rem;
+  border-radius: 2rem;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+}
+
+.ai-logo-card-claude:hover {
+  z-index: 3;
+  transform: translate(-144%, -48%) rotate(-19deg);
+}
+
+.ai-logo-card-gemini:hover {
+  z-index: 3;
+  transform: translate(44%, -48%) rotate(19deg);
+}
+
+.ai-logo-card-openai:hover {
+  z-index: 3;
+  transform: translate(-50%, -50%) scale(1.04);
+}
+
+.ai-memory-error {
+  width: 100%;
+  margin: 0 0 0.75rem;
+}
+
+.ai-memory-actions {
+  width: 100%;
+  display: grid;
+  gap: 0.75rem;
+  flex: 0 0 auto;
+}
+
+.ai-memory-actions button {
+  width: 100%;
+  min-height: 3.5rem;
+  border-radius: 1rem;
+  font-size: 1.0625rem;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 0;
+  transition:
+    transform 150ms ease,
+    background 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
+.ai-memory-actions button:active {
+  transform: scale(0.97);
+}
+
+.ai-memory-actions button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.ai-memory-primary {
+  border: 0;
+  background: #fff;
+  color: #09090b;
+  box-shadow: 0 0 25px rgba(255, 255, 255, 0.15);
+}
+
+.ai-memory-primary:hover {
+  background: #e4e4e7;
+}
+
+.ai-memory-secondary {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.ai-memory-secondary:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
 .hook-main {
   width: 100%;
   max-width: 28rem;

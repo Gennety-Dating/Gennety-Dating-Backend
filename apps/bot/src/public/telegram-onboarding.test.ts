@@ -66,6 +66,8 @@ function miniUser(overrides: Record<string, unknown> = {}) {
     email: "alice@stanford.edu",
     language: "en",
     onboardingStep: "language",
+    aiMemoryExportPreference: "undecided",
+    aiMemoryExportPreferenceAt: null,
     termsAccepted: true,
     researchOptIn: false,
     isEmailVerified: true,
@@ -98,6 +100,23 @@ beforeEach(() => {
 });
 
 describe("Telegram onboarding city gate", () => {
+  it("returns AI memory preference in state", async () => {
+    userFindUnique.mockResolvedValue(
+      miniUser({
+        aiMemoryExportPreference: "accepted",
+        aiMemoryExportPreferenceAt: new Date("2026-06-06T10:00:00.000Z"),
+      }),
+    );
+
+    const res = await request(buildApp())
+      .get("/v1/telegram-onboarding/state")
+      .set("Authorization", `tma ${signInitData()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.aiMemoryExportPreference).toBe("accepted");
+    expect(res.body.user.aiMemoryExportPreferenceAt).toBe("2026-06-06T10:00:00.000Z");
+  });
+
   it("rejects complete handoff when home city is missing", async () => {
     const user = miniUser();
     userFindUnique.mockResolvedValue(user);
@@ -115,6 +134,34 @@ describe("Telegram onboarding city gate", () => {
 
     expect(res.status).toBe(409);
     expect(res.body.error).toBe("location-required");
+    expect(fakeApi.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("rejects complete handoff until AI memory preference is chosen", async () => {
+    const user = miniUser({
+      profile: {
+        homeCity: "Kyiv",
+        homeCountryCode: "UA",
+        homeCityKey: "ua:kyiv",
+        homePlaceId: null,
+        latitude: 50.4501,
+        longitude: 30.5234,
+        locationUpdatedAt: new Date(),
+      },
+    });
+    userFindUnique.mockResolvedValue(user);
+    const initData = signInitData();
+
+    const state = await request(buildApp())
+      .get("/v1/telegram-onboarding/state")
+      .set("Authorization", `tma ${initData}`);
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/complete")
+      .set("Authorization", `tma ${initData}`)
+      .send({ completedVisualIntro: true, flowToken: state.body.flowToken });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("ai-memory-preference-required");
     expect(fakeApi.sendMessage).not.toHaveBeenCalled();
   });
 
@@ -154,5 +201,84 @@ describe("Telegram onboarding city gate", () => {
     );
     expect(res.body.user.homeLocation.homeCityKey).toBe("ua:kyiv");
     expect(res.body.user.homeLocation.homeCity).toBe("Kyiv");
+  });
+
+  it.each(["accepted", "declined"] as const)(
+    "persists %s AI memory preference",
+    async (preference) => {
+      const profile = {
+        homeCity: "Kyiv",
+        homeCountryCode: "UA",
+        homeCityKey: "ua:kyiv",
+        homePlaceId: "places/kyiv",
+        latitude: 50.4501,
+        longitude: 30.5234,
+        locationUpdatedAt: new Date("2026-06-06T10:00:00.000Z"),
+      };
+      const user = miniUser({ profile });
+      userFindUnique.mockResolvedValue(user);
+      userUpdate.mockResolvedValue(
+        miniUser({
+          profile,
+          aiMemoryExportPreference: preference,
+          aiMemoryExportPreferenceAt: new Date("2026-06-06T10:05:00.000Z"),
+        }),
+      );
+
+      const res = await request(buildApp())
+        .post("/v1/telegram-onboarding/ai-memory")
+        .set("Authorization", `tma ${signInitData()}`)
+        .send({ preference });
+
+      expect(res.status).toBe(200);
+      expect(userUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: user.id },
+          data: expect.objectContaining({
+            aiMemoryExportPreference: preference,
+            aiMemoryExportPreferenceAt: expect.any(Date),
+          }),
+        }),
+      );
+      expect(res.body.user.aiMemoryExportPreference).toBe(preference);
+    },
+  );
+
+  it("rejects an invalid AI memory preference", async () => {
+    userFindUnique.mockResolvedValue(
+      miniUser({
+        profile: {
+          homeCity: "Kyiv",
+          homeCountryCode: "UA",
+          homeCityKey: "ua:kyiv",
+          homePlaceId: null,
+          latitude: 50.4501,
+          longitude: 30.5234,
+          locationUpdatedAt: new Date(),
+        },
+      }),
+    );
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/ai-memory")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ preference: "maybe" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid-ai-memory-preference");
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("requires all pre-handoff gates before AI memory selection", async () => {
+    userFindUnique.mockResolvedValue(miniUser({ profile: null }));
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/ai-memory")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ preference: "declined" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("location-required");
+    expect(userUpdate).not.toHaveBeenCalled();
   });
 });

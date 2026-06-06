@@ -38,6 +38,10 @@ vi.mock("./email.js", () => ({
 
 vi.mock("./profile-analysis.js", () => ({
   analyseAndSaveProfile: vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: false }),
+  saveFallbackProfileAnalysis: vi.fn().mockResolvedValue({
+    summary: "fallback",
+    embeddingSaved: false,
+  }),
 }));
 
 vi.mock("../public/otp.js", () => ({
@@ -570,6 +574,36 @@ describe("onboarding-agent", () => {
     expect(result.expectingPhoto).toBe(false);
   });
 
+  it("allows request_photos without a context dump when AI memory export was declined", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-1",
+      messageHistory: [],
+      language: "en",
+      aiMemoryExportPreference: "declined",
+      profile: {
+        ethnicity: null,
+        height: 165,
+        hobbies: ["tennis"],
+        partnerPreferences: "someone kind",
+        photos: [],
+        homeCityKey: "ua:kyiv",
+      },
+    });
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "call-1", name: "request_photos", args: {} }]),
+      )
+      .mockResolvedValueOnce(textResponse("Send me two photos."));
+
+    const result = await runAgentTurn(telegramId, "ready for photos", {
+      fetchFn: mockFetch,
+    });
+
+    expect(result.expectingPhoto).toBe(true);
+  });
+
   it("sets onboardingComplete=true when finalize_onboarding is called with complete data", async () => {
     // finalize_onboarding now checks DB for completeness — mock a complete profile
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
@@ -577,19 +611,24 @@ describe("onboarding-agent", () => {
         id: "uuid-1",
         messageHistory: contextDumpSavedHistory(),
         language: "en",
+        aiMemoryExportPreference: "accepted",
       })
       .mockResolvedValueOnce({
+        id: "uuid-1",
         firstName: "Alice",
         age: 21,
         gender: "female",
         preference: "men",
         email: "alice@stanford.edu",
         isEmailVerified: true,
+        aiMemoryExportPreference: "accepted",
         profile: {
+          ethnicity: null,
           height: 165,
           hobbies: ["tennis", "reading"],
           partnerPreferences: "someone kind and funny",
           photos: ["photo1", "photo2"],
+          homeCityKey: "ua:kyiv",
         },
       });
 
@@ -686,6 +725,67 @@ describe("onboarding-agent", () => {
     expect(toolContent.error).not.toContain("hobbies");
     expect(toolContent.error).toContain("partner_preferences");
     expect(toolContent.error).toContain("photos");
+  });
+
+  it("finalizes without context dump and saves fallback analysis when export was declined", async () => {
+    const saveFallbackProfile = vi.fn().mockResolvedValue({
+      summary: "fallback",
+      embeddingSaved: true,
+    });
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        messageHistory: [],
+        language: "en",
+        aiMemoryExportPreference: "declined",
+      })
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        firstName: "Alice",
+        age: 21,
+        gender: "female",
+        preference: "men",
+        email: "alice@stanford.edu",
+        isEmailVerified: true,
+        aiMemoryExportPreference: "declined",
+        profile: {
+          ethnicity: "Ukrainian",
+          height: 165,
+          hobbies: ["tennis", "reading"],
+          partnerPreferences: "someone kind and funny",
+          photos: ["photo1", "photo2"],
+          homeCityKey: "ua:kyiv",
+        },
+      });
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-1",
+      profile: null,
+    });
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "call-1", name: "finalize_onboarding", args: {} }]),
+      )
+      .mockResolvedValueOnce(textResponse("You're all set."));
+
+    const result = await runAgentTurn(telegramId, "finish", {
+      fetchFn: mockFetch,
+      saveFallbackProfile,
+    });
+
+    expect(result.onboardingComplete).toBe(true);
+    expect(saveFallbackProfile).toHaveBeenCalledWith("uuid-1", {
+      firstName: "Alice",
+      age: 21,
+      gender: "female",
+      preference: "men",
+      height: 165,
+      ethnicity: "Ukrainian",
+      hobbies: ["tennis", "reading"],
+      partnerPreferences: "someone kind and funny",
+      homeCityKey: "ua:kyiv",
+    });
   });
 
   it("handles verify_otp with correct code", async () => {
@@ -902,12 +1002,14 @@ describe("onboarding-agent", () => {
       age: 21,
       gender: "female",
       preference: "men",
+      aiMemoryExportPreference: "accepted",
       profile: {
         ethnicity: null,
         height: 165,
         hobbies: ["tennis"],
         partnerPreferences: "someone kind",
         photos: [],
+        homeCityKey: "ua:kyiv",
       },
     });
 

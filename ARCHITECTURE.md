@@ -178,6 +178,7 @@ when columns diverge, Prisma wins.
 | `MatchStatus` | `proposed`, `negotiating`, `negotiating_venue`, `scheduled`, `cancelled`, `completed`, `expired` |
 | `MatchEventActionType` | `PROPOSAL_SHOWN`, `ACCEPTED`, `DECLINED`, `DATE_COMPLETED`, `CHEMISTRY_POSITIVE`, `CHEMISTRY_NEGATIVE`, `EXPIRED_SILENT`, `EXPIRED_PEER_IGNORED` |
 | `MessageRole` | `user`, `assistant`, `system` |
+| `AiMemoryExportPreference` | `undecided`, `accepted`, `declined` |
 
 ### `users`
 
@@ -186,7 +187,7 @@ Columns (≈ 35; grouped by purpose):
 | Group | Columns |
 |---|---|
 | Identity | `id`, `telegramId` (unique BigInt — synthetic **negative** id for mobile-only users), `email`, `universityDomain`, `firstName`, `surname`, `age`, `gender`, `preference`, `major`, `language`, `platform` |
-| Lifecycle | `status` (`UserStatus`), `onboardingStep`, `hasConsented`, `consentedAt`, `termsAccepted`, `termsAcceptedAt`, `researchOptIn`, `createdAt`, `updatedAt` |
+| Lifecycle | `status` (`UserStatus`), `onboardingStep`, `aiMemoryExportPreference`, `aiMemoryExportPreferenceAt`, `hasConsented`, `consentedAt`, `termsAccepted`, `termsAcceptedAt`, `researchOptIn`, `createdAt`, `updatedAt` |
 | Email OTP | `emailOtp`, `emailOtpExpiresAt`, `isEmailVerified` |
 | Conversational state | `messageHistory` (`Json[]`), `lastMessageAt`, `lastPreMatchAnnounceAt` |
 | Re-engagement | `reEngagementStep` (0–5), `reEngagementNextAt` |
@@ -340,7 +341,7 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | Method | Path | Purpose |
 |---|---|---|
 | GET  | `/v1/ping` | Liveness probe |
-| GET/POST | `/v1/telegram-onboarding/*` | Telegram full-screen Onboarding Mini App state/consent/language/email OTP/city/completion handoff. Authenticates with `Authorization: tma <initData>`; `/state` issues the short-lived visual-flow token required by `/complete`, which can dispatch the post-handoff bot DM only after a dating city is saved. |
+| GET/POST | `/v1/telegram-onboarding/*` | Telegram full-screen Onboarding Mini App state/consent/language/email OTP/city/AI-memory choice/completion handoff. Authenticates with `Authorization: tma <initData>`; `POST /ai-memory` persists `accepted` or `declined`, `/state` returns it and issues the short-lived visual-flow token, and `/complete` dispatches the post-handoff bot DM only after city + AI-memory choice are saved. |
 | POST | `/v1/auth/otp/request` | Send corp-email OTP (rate-limited) |
 | POST | `/v1/auth/otp/verify` | Verify OTP → mint access + refresh JWT |
 | POST | `/v1/auth/refresh` | Rotate refresh token |
