@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Экран 3 — Date Picker • Выбери дату</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=SF+Pro+Display:wght@400;500;600&display=swap');
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+            background-color: #09090b; /* zinc-950 - глубокий черный */
+        }
+        
+        /* Базовая анимация карточек */
+        .date-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .date-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.5);
+        }
+        
+        .date-card:active {
+            transform: scale(0.98);
+        }
+
+        /* --- ПРЕМИАЛЬНЫЕ СОСТОЯНИЯ ВЫБОРА --- */
+
+        /* 1. Выбрано тобой (Белый, тусклый градиент) */
+        .state-you {
+            /* Усилили белый градиент для большей заметности */
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.08) 100%);
+            border: 1px solid transparent; /* Убрали рамку для более современного вида */
+            background-clip: padding-box; /* Исправляет артефакт пиксельной линии на краях */
+        }
+
+        /* 2. Выбрано Мэтчем (Лиловый) */
+        .state-match {
+            background: linear-gradient(90deg, rgba(172, 146, 220, 0.25) 0%, rgba(24, 24, 27, 0.6) 100%);
+            border: 1px solid transparent;
+            background-clip: padding-box; /* Исправляет артефакт пиксельной линии на краях */
+        }
+
+        /* 3. Выбрано обоими (Анимированный градиент Белый + Лиловый) */
+        .state-both {
+            position: relative;
+            background: rgba(24, 24, 27, 0.8);
+            border: 1px solid transparent;
+            background-clip: padding-box;
+        }
+        
+        /* Градиентная переливающаяся рамка */
+        .state-both::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1.5px; /* Толщина рамки */
+            /* Заменили серый на полупрозрачный белый */
+            background: linear-gradient(90deg, rgba(255,255,255,0.7), #ac92dc, rgba(255,255,255,0.7), #ac92dc);
+            background-size: 300% 100%;
+            animation: gradientBorder 3s linear infinite;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+
+        @keyframes gradientBorder {
+            0% { background-position: 0% 0%; }
+            100% { background-position: 100% 0%; }
+        }
+
+    </style>
+</head>
+<!-- Увеличили нижний отступ для плавающей кнопки -->
+<body class="text-white min-h-screen pb-32 relative">
+    
+    <div class="max-w-[420px] mx-auto px-5 pt-8">
+        
+        <!-- Заголовок -->
+        <div class="mb-6">
+            <h1 class="font-semibold text-[26px] tracking-tight">Pick a date</h1>
+        </div>
+        
+        <!-- Info Banner (Glassmorphism) -->
+        <div class="mb-6 bg-white/[0.03] border border-white/[0.08] backdrop-blur-md rounded-2xl p-4 shadow-lg">
+            <p class="text-[13px] leading-relaxed text-white/80 font-medium">
+                You have a different time selected. Tap your match's slot to agree, or send your time as a counter-proposal.You have a different time selected. Tap your match's slot to agree, or send your time as a counter-proposal.
+            </p>
+        </div>
+        
+        <!-- Color Legend -->
+        <div class="flex items-center gap-x-5 mb-7 text-[13px] pl-1 font-medium">
+            <div class="flex items-center gap-x-2.5">
+                <!-- Белый кружочек для You -->
+                <div class="w-2.5 h-2.5 rounded-full bg-white/90 shadow-[0_0_8px_rgba(255,255,255,0.5)]"></div>
+                <span class="text-white uppercase tracking-wide text-[11px]">You</span>
+            </div>
+            <div class="flex items-center gap-x-2.5">
+                <div class="w-2.5 h-2.5 rounded-full bg-[#ac92dc] shadow-[0_0_8px_rgba(172,146,220,0.5)]"></div>
+                <span class="text-white/60 uppercase tracking-wide text-[11px]">Match</span>
+            </div>
+            <div class="flex items-center gap-x-2.5">
+                <div class="flex -space-x-1">
+                    <!-- Белый кружочек в паре -->
+                    <div class="w-2.5 h-2.5 rounded-full bg-white/90"></div>
+                    <div class="w-2.5 h-2.5 rounded-full bg-[#ac92dc]"></div>
+                </div>
+                <span class="text-white/60 uppercase tracking-wide text-[11px]">Both</span>
+            </div>
+        </div>
+
+        <!-- Date List (Premium Horizontal Capsules) -->
+        <div class="flex flex-col space-y-3.5">
+            
+            <!-- Card 1: Обычная -->
+            <div onclick="selectDate(this, 'Вт, 2 июня')" 
+                 class="date-card bg-[#18181b] border border-white/[0.06] rounded-2xl p-4 pl-5 cursor-pointer flex items-center justify-between">
+                <div class="text-[15px] font-medium flex gap-1.5">
+                    <span class="text-white/40">вторник,</span> 
+                    <span class="text-white/90">2 июня</span>
+                </div>
+            </div>
+            
+            <!-- Card 2: Выбрано МЭТЧЕМ (Лиловый акцент) -->
+            <div onclick="selectDate(this, 'Ср, 3 июня')" 
+                 class="date-card state-match rounded-2xl p-4 pl-5 cursor-pointer flex items-center justify-between relative">
+                <div class="text-[15px] font-medium flex gap-1.5 z-10">
+                    <span class="text-white/90">среда,</span> 
+                    <span class="text-white font-bold">3 июня</span>
+                </div>
+                <!-- Добавили индикатор для мэтча, аналогичный тому, что у "You" -->
+                <div class="flex items-center gap-x-3 z-10">
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-[#ac92dc]">Match</span>
+                    <div class="w-2.5 h-2.5 rounded-full bg-[#ac92dc] shadow-[0_0_10px_rgba(172,146,220,0.8)]"></div>
+                </div>
+            </div>
+            
+            <!-- Card 3: Обычная -->
+            <div onclick="selectDate(this, 'Чт, 4 июня')" 
+                 class="date-card bg-[#18181b] border border-white/[0.06] rounded-2xl p-4 pl-5 cursor-pointer flex items-center justify-between">
+                <div class="text-[15px] font-medium flex gap-1.5">
+                    <span class="text-white/40">четверг,</span> 
+                    <span class="text-white/90">4 июня</span>
+                </div>
+            </div>
+            
+            <!-- Card 4: Выбрано ТОБОЙ (Белый акцент, усиленный) -->
+            <div onclick="selectDate(this, 'Пт, 5 июня')" 
+                 class="date-card state-you rounded-2xl p-4 pl-5 cursor-pointer flex items-center justify-between relative">
+                <div class="text-[15px] font-medium flex gap-1.5 z-10">
+                    <!-- Текст теперь белый -->
+                    <span class="text-white/90">пятница,</span> 
+                    <span class="text-white font-bold">5 июня</span>
+                </div>
+                <!-- Добавили аккуратный индикатор-точку прямо в карточку для наглядности -->
+                <div class="flex items-center gap-x-3 z-10">
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-white/70">You</span>
+                    <div class="w-2.5 h-2.5 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]"></div>
+                </div>
+            </div>
+
+            <!-- Card 5: ВЫБРАНО ОБОИМИ (Анимация рамки + Два статических цвета) -->
+            <div onclick="selectDate(this, 'Сб, 6 июня')" 
+                 class="date-card state-both rounded-2xl p-4 pl-5 cursor-pointer flex items-center justify-between shadow-[0_0_20px_rgba(172,146,220,0.15)]">
+                <div class="text-[15px] font-medium flex gap-1.5 z-10">
+                    <span class="text-white/70">суббота,</span> 
+                    <span class="text-white font-semibold">6 июня</span>
+                </div>
+                
+                <!-- Индикатор совпадения -->
+                <div class="flex items-center gap-x-3 z-10">
+                    <!-- Заменили Match на Both -->
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-white to-[#ac92dc]">other time</span>
+                    
+                    <div class="flex -space-x-1.5 items-center">
+                        <!-- Белая точка -->
+                        <div class="w-4 h-4 rounded-full bg-white/90 ring-2 ring-[#18181b] relative z-10"></div>
+                        <div class="w-4 h-4 rounded-full bg-[#ac92dc] ring-2 ring-[#18181b] relative z-0"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Card 6: Обычная -->
+            <div onclick="selectDate(this, 'Вс, 7 июня')" 
+                 class="date-card bg-[#18181b] border border-white/[0.06] rounded-2xl p-4 pl-5 cursor-pointer flex items-center justify-between">
+                <div class="text-[15px] font-medium flex gap-1.5">
+                    <span class="text-white/40">воскресенье,</span> 
+                    <span class="text-white/90">7 июня</span>
+                </div>
+            </div>
+            
+        </div>
+        
+    </div>
+
+    <!-- Всплывающая кнопка Confirm внизу -->
+    <div class="fixed bottom-0 left-0 w-full p-5 bg-gradient-to-t from-[#09090b] via-[#09090b]/90 to-transparent pointer-events-none z-20">
+        <div class="max-w-[420px] mx-auto pointer-events-auto">
+            <button onclick="confirmSelection()" class="w-full bg-white text-black font-bold text-[17px] py-4 rounded-2xl shadow-[0_0_25px_rgba(255,255,255,0.15)] hover:bg-gray-50 transition-all active:scale-95 flex items-center justify-center gap-2">
+                <span>suggest time</span>
+            </button>
+        </div>
+    </div>
+    
+    <script>
+        function selectDate(element, dateLabel) {
+            // Мягкий отклик при нажатии
+            element.style.transform = 'scale(0.97)';
+            setTimeout(() => { element.style.transform = ''; }, 150);
+            
+            console.log('Выбрана дата:', dateLabel);
+        }
+
+        function confirmSelection() {
+            console.log('Selection confirmed!');
+            // Здесь будет логика подтверждения
+        }
+    </script>
+</body>
+</html>

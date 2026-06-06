@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gennety — Saved</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            850: '#1f1f23', // Немного светлее для второстепенных элементов
+                            900: '#18181b',
+                            950: '#09090b' // Основной глубокий черный фон
+                        }
+                    },
+                    borderRadius: {
+                        '3xl': '1.5rem'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'SF Pro Display', 'system-ui', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'glow-white': '0 0 20px rgba(255, 255, 255, 0.15)',
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=SF+Pro+Display:wght@400;500;600;700&display=swap');
+        
+        body {
+            background-color: #09090b; /* gray-950 */
+        }
+
+        /* --- Кастомные анимации из дизайн-системы --- */
+        @keyframes pop {
+            0% { transform: scale(0.5); opacity: 0; }
+            70% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop {
+            animation: pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
+</head>
+<body class="text-gray-100 min-h-screen relative overflow-x-hidden font-sans">
+    
+    <!-- Основной контейнер. Убрал header, увеличил верхний отступ (pt-20), добавил justify-between для распределения контента и кнопок -->
+    <div class="max-w-[420px] mx-auto px-6 pt-24 pb-8 h-screen flex flex-col justify-between">
+        
+        <!-- Header удален по запросу -->
+
+        <!-- Main Content (Центральный блок) -->
+        <main class="flex-1 flex flex-col items-center text-center space-y-8">
+            <h2 class="text-xl font-bold tracking-tight text-white text-center">
+                Waiting for your match
+            </h2>
+
+            <div class="flex flex-col items-center space-y-6 pt-12">
+                <!-- Иконка с анимацией (Монохромная) -->
+                <!-- Заменили bg-indigo-500/20 на bg-white/10 и цвет иконки на белый -->
+                <div class="w-24 h-24 rounded-full bg-white/10 flex items-center justify-center animate-pop" style="animation-delay: 0.1s;">
+                    <i class="fa-solid fa-check text-5xl text-white"></i>
+                </div>
+                
+                <!-- Заголовок -->
+                <h3 class="text-3xl font-bold tracking-tight text-white animate-pop" style="animation-delay: 0.2s;">
+                    Saved
+                </h3>
+                
+                <!-- Описание -->
+                <p class="text-[15px] leading-relaxed text-gray-400 font-medium max-w-[280px] animate-pop" style="animation-delay: 0.3s;">
+                    We'll ping the bot the moment your match replies. You can close this window — we'll let you know.
+                </p>
+
+                <!-- Капсула с временем (Монохромная) -->
+                <div class="mt-6 inline-flex items-center px-6 py-3 rounded-full bg-[#18181b] animate-pop" style="animation-delay: 0.4s;">
+                    <span class="text-[15px] font-semibold text-white">
+                        четверг, 4 июня, 17:30
+                    </span>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer Buttons (Переработанная структура) -->
+        <div class="w-full flex flex-col gap-4">
+            
+            <!-- Кнопка Change my picks (Второстепенная - над главной) -->
+            <!-- Темный фон, светлый текст, без яркого акцента -->
+            <button class="w-full h-12 bg-gray-800 hover:bg-gray-700 text-white font-semibold text-[15px] rounded-xl border border-white/5 transition-all active:scale-95 flex items-center justify-center animate-pop" style="animation-delay: 0.5s;">
+                Change my picks
+            </button>
+            
+            <!-- Кнопка Close (Главная - в самом низу) -->
+            <!-- Белый фон, черный текст, яркое свечение -->
+            <button class="w-full h-12 bg-white text-black font-semibold text-[15px] rounded-xl shadow-glow-white hover:bg-gray-100 transition-all active:scale-95 flex items-center justify-center animate-pop" style="animation-delay: 0.6s;">
+                Close
+            </button>
+        </div>
+
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Экран 4 — Time Picker Premium</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=SF+Pro+Display:wght@400;500;600&display=swap');
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+            background-color: #09090b;
+        }
+        
+        .date-card {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .date-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.6);
+        }
+
+        /* Выбранное состояние: без обводок, без свечения, с математической компенсацией padding */
+        .date-card.selected {
+            background: linear-gradient(90deg, rgba(182, 154, 226, 0.35) 0%, rgba(182, 154, 226, 0.08) 100%) !important;
+            border: none !important; /* Полностью убираем рамку во избежание деформации граней на iOS */
+            padding: 21px 21px 21px 25px !important; /* Увеличиваем padding на 1px для компенсации отсутствующей рамки */
+            box-shadow: 
+                0 12px 30px -8px rgba(0, 0, 0, 0.6), 
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.15) !important; /* Только естественная темная тень объема и внутренний блик */
+        }
+    </style>
+</head>
+<body class="text-white min-h-screen pb-32">
+    
+    <div class="max-w-[420px] mx-auto px-5 pt-12">
+        
+        <!-- Полностью центрированный заголовок в одну строку и описание -->
+        <div class="mb-10 mt-6 text-center">
+            <h1 class="font-semibold text-[24px] sm:text-[26px] tracking-tight leading-tight mb-3 whitespace-nowrap overflow-hidden text-ellipsis">
+                You both have a few options
+            </h1>
+            <p class="text-[14px] text-white/50 font-medium px-4">
+                Pick the one that works best — this will lock in your date.
+            </p>
+        </div>
+
+        <!-- Список нейтральных слотов -->
+        <div id="slots-container" class="flex flex-col space-y-3.5">
+            
+            <!-- Слот 1 -->
+            <div onclick="selectSlot(this)" 
+                 class="date-card bg-[#18181b] border border-white/[0.06] rounded-[22px] p-5 pl-6 cursor-pointer flex items-center justify-between">
+                <div class="text-[16px] font-medium transition-colors duration-300">
+                    <span class="text-white/40 label-day">суббота, 6 июня,</span> 
+                    <span class="text-white/90 label-time">18:00</span>
+                </div>
+            </div>
+
+            <!-- Слот 2 (Пре-селект по умолчанию) -->
+            <div onclick="selectSlot(this)" 
+                 class="date-card selected bg-[#18181b] border border-white/[0.06] rounded-[22px] p-5 pl-6 cursor-pointer flex items-center justify-between">
+                <div class="text-[16px] font-medium transition-colors duration-300">
+                    <span class="text-white label-day">суббота, 6 июня,</span> 
+                    <span class="text-white font-semibold label-time">18:30</span>
+                </div>
+            </div>
+
+            <!-- Слот 3 -->
+            <div onclick="selectSlot(this)" 
+                 class="date-card bg-[#18181b] border border-white/[0.06] rounded-[22px] p-5 pl-6 cursor-pointer flex items-center justify-between">
+                <div class="text-[16px] font-medium transition-colors duration-300">
+                    <span class="text-white/40 label-day">суббота, 6 июня,</span> 
+                    <span class="text-white/90 label-time">19:00</span>
+                </div>
+            </div>
+
+            <!-- Слот 4 -->
+            <div onclick="selectSlot(this)" 
+                 class="date-card bg-[#18181b] border border-white/[0.06] rounded-[22px] p-5 pl-6 cursor-pointer flex items-center justify-between">
+                <div class="text-[16px] font-medium transition-colors duration-300">
+                    <span class="text-white/40 label-day">суббота, 6 июня,</span> 
+                    <span class="text-white/90 label-time">19:30</span>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <!-- Кнопка Confirm -->
+    <div class="fixed bottom-0 left-0 w-full p-6 bg-gradient-to-t from-[#09090b] via-[#09090b]/90 to-transparent z-20">
+        <div class="max-w-[420px] mx-auto">
+            <button class="w-full bg-white text-black font-bold text-[17px] py-4.5 h-[64px] rounded-[20px] shadow-[0_0_30px_rgba(255,255,255,0.1)] hover:bg-gray-100 transition-all active:scale-[0.97] flex items-center justify-center">
+                Confirm
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function selectSlot(clickedElement) {
+            // Мягкий тактильный фидбек при тапе
+            clickedElement.style.transform = 'scale(0.96)';
+            setTimeout(() => {
+                clickedElement.style.transform = '';
+            }, 100);
+
+            // Сбрасываем все карточки к нейтральному стилю
+            document.querySelectorAll('.date-card').forEach(card => {
+                card.classList.remove('selected');
+                
+                // Делаем текст неактивных карточек приглушенным
+                const daySpan = card.querySelector('.label-day');
+                const timeSpan = card.querySelector('.label-time');
+                if (daySpan && timeSpan) {
+                    daySpan.className = 'text-white/40 label-day';
+                    timeSpan.className = 'text-white/90 label-time';
+                }
+            });
+
+            // Выделяем выбранную карточку
+            clickedElement.classList.add('selected');
+            
+            // Делаем текст внутри выбранной карточки полностью белым и контрастным
+            const selectedDaySpan = clickedElement.querySelector('.label-day');
+            const selectedTimeSpan = clickedElement.querySelector('.label-time');
+            if (selectedDaySpan && selectedTimeSpan) {
+                selectedDaySpan.className = 'text-white label-day';
+                selectedTimeSpan.className = 'text-white font-semibold label-time';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+    <title>Gennety Scheduler - Success</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=SF+Pro+Display:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+            background-color: #09090b; /* глубокий черный как в Date Picker */
+            color: #ffffff;
+            -webkit-tap-highlight-color: transparent;
+            overflow-x: hidden;
+        }
+
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Базовая анимация карточек */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Конфетти */
+        .confetti {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            pointer-events: none;
+            z-index: 1;
+        }
+        @keyframes fall {
+            0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+        }
+
+        /* Анимация галочки */
+        .animate-check {
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            /* Увеличил длительность и задержку для более плавного и заметного эффекта */
+            animation: dash 1.2s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+            animation-delay: 0.3s;
+        }
+        @keyframes dash {
+            to { stroke-dashoffset: 0; }
+        }
+
+        /* Свечение центрального элемента с новым цветом */
+        .success-glow {
+            filter: drop-shadow(0 0 15px rgba(172, 146, 220, 0.4));
+        }
+
+        /* --- Новые анимации для кнопок --- */
+
+        /* Анимация покачивания колокольчика (Напомнить) */
+        @keyframes subtle-bell-shake {
+            0% { transform: rotate(0); }
+            15% { transform: rotate(10deg); }
+            30% { transform: rotate(-10deg); }
+            45% { transform: rotate(6deg); }
+            60% { transform: rotate(-6deg); }
+            75% { transform: rotate(3deg); }
+            100% { transform: rotate(0); }
+        }
+        .animate-bell-active {
+            animation: subtle-bell-shake 0.6s ease-in-out forwards;
+            /* Убрали изменение цвета на фиолетовый */
+        }
+        
+        /* Класс для "затухания" кнопки при нажатии */
+        .btn-dimmed {
+            opacity: 0.5; /* Делаем кнопку полупрозрачной */
+            transition: opacity 0.3s ease;
+        }
+
+    </style>
+</head>
+<body class="min-h-screen relative pb-32">
+    <!-- Confetti Container -->
+    <div class="fixed inset-0 pointer-events-none z-0" id="confetti-canvas"></div>
+
+    <!-- Мобильный контейнер -->
+    <div class="max-w-[420px] mx-auto w-full relative z-10 flex flex-col min-h-screen">
+
+        <!-- Main Content Canvas -->
+        <main class="flex-1 flex flex-col items-center justify-center px-5 pb-24">
+            
+            <!-- Celebration Hero -->
+            <div class="relative w-full flex flex-col items-center">
+                <div class="mb-12 mt-8 relative flex justify-center items-center">
+                    <!-- Animated Checkmark (просто белая галочка без круга и блюра) -->
+                    <svg fill="none" height="84" viewBox="0 0 24 24" width="84" xmlns="http://www.w3.org/2000/svg">
+                        <path class="animate-check" d="M5 13L9 17L19 7" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
+                    </svg>
+                </div>
+
+                <!-- Central Bento Date Block (Glassmorphism) -->
+                <div class="w-full glass-card rounded-2xl p-7 mb-6 flex flex-col items-center text-center transform transition-transform duration-500 hover:scale-[1.02]">
+                    <!-- Убран блок "Время согласовано" -->
+                    <h2 class="text-[26px] font-semibold text-white tracking-tight mb-1">Вт, 2 июня</h2>
+                    <div class="text-[48px] font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-[#ac92dc] leading-tight">
+                        18:00
+                    </div>
+                    
+                    <!-- Убрана кнопка "Добавить в календарь" -->
+                </div>
+
+                <!-- Subtitle -->
+                <p class="text-center text-white/60 text-[14px] leading-relaxed px-4">
+                    Время согласовано. Возвращайся в бота — следующий шаг там.
+                </p>
+            </div>
+
+            <!-- Visual Anchor Decoration (строгие и минималистичные кнопки) -->
+            <div class="mt-10 flex w-full">
+                <!-- Added ID 'remind-btn' and IDs for inner elements -->
+                <button id="remind-btn" class="flex-1 bg-white/[0.02] border border-white/[0.04] p-4 rounded-[20px] flex flex-col items-center justify-center gap-3 transition-colors active:bg-white/[0.06] overflow-hidden">
+                    <div class="w-11 h-11 rounded-full bg-[#18181b] flex items-center justify-center relative">
+                         <!-- Added ID 'remind-icon' -->
+                        <span id="remind-icon" class="material-symbols-outlined text-white/70 transition-colors duration-300" data-icon="notifications_active">notifications_active</span>
+                    </div>
+                    <!-- Added ID 'remind-text' -->
+                    <span id="remind-text" class="text-[13px] font-medium text-white/70 transition-colors duration-300">Напомнить</span>
+                </button>
+                
+                <!-- Убрана кнопка "Поделиться" -->
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Всплывающая кнопка (как в Date Picker) -->
+    <div class="fixed bottom-0 left-0 w-full p-5 bg-gradient-to-t from-[#09090b] via-[#09090b]/90 to-transparent pointer-events-none z-20">
+        <div class="max-w-[420px] mx-auto pointer-events-auto">
+            <button id="success-cta" class="w-full bg-white text-black font-bold text-[17px] py-4 rounded-2xl shadow-[0_0_25px_rgba(255,255,255,0.15)] hover:bg-gray-50 transition-all active:scale-95 flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined text-[20px]" data-icon="smart_toy">smart_toy</span>
+                <span>Вернуться в бот</span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Confetti Effect с адаптированными цветами
+        function createConfetti() {
+            const container = document.getElementById('confetti-canvas');
+            // Цвета конфетти гармонируют с новым дизайном
+            const colors = ['#ac92dc', '#ffffff', '#e2d5f8', '#18181b'];
+            
+            for (let i = 0; i < 40; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const left = Math.random() * 100 + 'vw';
+                const duration = Math.random() * 2 + 2 + 's';
+                const delay = Math.random() * 2 + 's';
+                const size = Math.random() * 6 + 4 + 'px';
+                
+                confetti.style.backgroundColor = color;
+                confetti.style.left = left;
+                confetti.style.width = size;
+                confetti.style.height = size;
+                
+                // Добавляем прозрачность для черных конфетти, чтобы не смотрелись грязно
+                if (color === '#18181b') {
+                    confetti.style.border = '1px solid rgba(255,255,255,0.1)';
+                }
+                
+                confetti.style.animation = `fall ${duration} linear ${delay} infinite`;
+                
+                container.appendChild(confetti);
+            }
+        }
+
+        // Haptic Feedback Simulation (Visual Shake/Glow)
+        const cta = document.getElementById('success-cta');
+        cta.addEventListener('click', () => {
+            cta.classList.add('scale-[0.97]');
+            setTimeout(() => {
+                cta.classList.remove('scale-[0.97]');
+                // Intent for redirect logic would go here
+            }, 150);
+        });
+
+        // --- Новая логика для кнопок "Напомнить" и "Поделиться" ---
+
+        const remindBtn = document.getElementById('remind-btn');
+        const remindIcon = document.getElementById('remind-icon');
+        const remindText = document.getElementById('remind-text');
+        let isReminded = false;
+
+        remindBtn.addEventListener('click', () => {
+            if (!isReminded) {
+                // Запускаем анимацию и меняем текст
+                remindIcon.classList.add('animate-bell-active');
+                remindText.textContent = 'Напомним';
+                // Убрали добавление класса цвета текста (text-active-purple)
+
+                // Добавляем эффект затухания на всю кнопку
+                remindBtn.classList.add('btn-dimmed');
+                
+                // Блокируем кнопку, чтобы не нажималась повторно
+                remindBtn.style.pointerEvents = 'none';
+                isReminded = true;
+
+                // Haptic feedback simulation
+                 if (navigator.vibrate) navigator.vibrate(50);
+            }
+        });
+
+        // Убрана логика для кнопки "Поделиться"
+
+        // Initialize atmospheric effects
+        window.addEventListener('load', () => {
+            createConfetti();
+            
+            // Subtle entry animations
+            document.querySelectorAll('.glass-card, p, .grid > div').forEach((el, index) => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(15px)';
+                el.style.transition = `all 0.5s cubic-bezier(0.23, 1, 0.32, 1) ${index * 0.1}s`;
+                
+                setTimeout(() => {
+                    el.style.opacity = '1';
+                    el.style.transform = 'translateY(0)';
+                }, 50);
+            });
+        });
+    </script>
+</body>
+</html>
