@@ -76,7 +76,9 @@ import { handleLanguageSelection } from "./language.js";
 import { handleConversational } from "./conversational.js";
 import {
   VERIFY_SKIP_CALLBACK,
+  VERIFY_SKIP_CONFIRM_CALLBACK,
   handleVerificationSkip,
+  handleVerificationSkipConfirm,
   sendVerificationCTABare,
 } from "./verification.js";
 import { runAgentTurn, injectSystemMessage } from "../../services/onboarding-agent.js";
@@ -1262,7 +1264,81 @@ describe("sendVerificationCTABare", () => {
 // Verification skip — idempotency
 // ---------------------------------------------------------------------------
 
-describe("handleVerificationSkip — idempotency", () => {
+describe("handleVerificationSkip — soft skip (voice nudge + fork)", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  function createSoftSkipCtx(fromId = 1001) {
+    const session: SessionData = { ...DEFAULT_SESSION };
+    return {
+      session,
+      from: { id: fromId },
+      chat: { id: fromId },
+      callbackQuery: { data: "verify:skip" },
+      reply: vi.fn().mockResolvedValue(undefined),
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      api: {
+        sendVoice: vi.fn().mockResolvedValue({ voice: { file_id: "vf-en" } }),
+        sendMessage: vi.fn().mockResolvedValue(undefined),
+      },
+    } as any;
+  }
+
+  it("plays a native voice note with the reconsider/skip-anyway fork and applies NO penalty", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uid-1",
+      verificationSkippedAt: null,
+    });
+
+    const ctx = createSoftSkipCtx();
+    await handleVerificationSkip(ctx);
+
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledTimes(1);
+    // Native voice message (not a file/document, not plain text).
+    expect(ctx.api.sendVoice).toHaveBeenCalledTimes(1);
+    const [, , voiceOpts] = ctx.api.sendVoice.mock.calls[0]!;
+    const keyboard = voiceOpts.reply_markup.inline_keyboard;
+    // Fork: row 0 = reconsider/verify, row 1 = "Skip anyway" confirm callback.
+    expect(keyboard[1]?.[0]?.callback_data).toBe(VERIFY_SKIP_CONFIRM_CALLBACK);
+    // No penalty, no activation — the soft skip only nudges.
+    expect(prisma.profile.updateMany).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(showMainMenu).not.toHaveBeenCalled();
+    expect(pinStatusBanner).not.toHaveBeenCalled();
+  });
+
+  it("plays a native voice note in every onboarding language (en/ru/uk/de/pl)", async () => {
+    for (const lang of ["en", "ru", "uk", "de", "pl"] as const) {
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        id: "uid-1",
+        verificationSkippedAt: null,
+      });
+      const ctx = createSoftSkipCtx();
+      ctx.session.language = lang;
+      await handleVerificationSkip(ctx);
+      // Voice (not text fallback) for all five — each has a bundled asset.
+      expect(ctx.api.sendVoice).toHaveBeenCalledTimes(1);
+      expect(ctx.api.sendMessage).not.toHaveBeenCalled();
+    }
+  });
+
+  it("already-skipped user: acks and does not re-play the nudge", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uid-1",
+      verificationSkippedAt: new Date("2026-05-08T20:00:00Z"),
+    });
+
+    const ctx = createSoftSkipCtx();
+    await handleVerificationSkip(ctx);
+
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect(ctx.api.sendVoice).not.toHaveBeenCalled();
+    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("handleVerificationSkipConfirm — idempotency", () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
@@ -1273,7 +1349,7 @@ describe("handleVerificationSkip — idempotency", () => {
       session,
       from: { id: fromId },
       chat: { id: fromId },
-      callbackQuery: { data: "verify:skip" },
+      callbackQuery: { data: "verify:skip:confirm" },
       reply: vi.fn().mockResolvedValue(undefined),
       answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
       api: {
@@ -1291,7 +1367,7 @@ describe("handleVerificationSkip — idempotency", () => {
     (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValueOnce({});
 
     const ctx = createSkipCtx();
-    await handleVerificationSkip(ctx);
+    await handleVerificationSkipConfirm(ctx);
 
     expect(ctx.answerCallbackQuery).toHaveBeenCalledTimes(1);
     expect(prisma.profile.updateMany).toHaveBeenCalledTimes(1);
@@ -1319,7 +1395,7 @@ describe("handleVerificationSkip — idempotency", () => {
     });
 
     const ctx = createSkipCtx();
-    await handleVerificationSkip(ctx);
+    await handleVerificationSkipConfirm(ctx);
 
     expect(ctx.answerCallbackQuery).toHaveBeenCalledTimes(1);
     // No DB writes — the user is already in the post-skip state.
@@ -1346,8 +1422,8 @@ describe("handleVerificationSkip — idempotency", () => {
 
     const ctx1 = createSkipCtx();
     const ctx2 = createSkipCtx();
-    await handleVerificationSkip(ctx1);
-    await handleVerificationSkip(ctx2);
+    await handleVerificationSkipConfirm(ctx1);
+    await handleVerificationSkipConfirm(ctx2);
 
     // Penalty applied once, menu rendered once, banner pinned once.
     expect(prisma.profile.updateMany).toHaveBeenCalledTimes(1);

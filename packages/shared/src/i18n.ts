@@ -94,6 +94,10 @@ const translations = {
     verifyBtnGo: "🟢 Verify now",
     verifyBtnCheck: "✅ I've finished verification",
     verifyBtnSkip: "⚪️ Skip for now",
+    verifySkipNudgeCaption:
+      "One sec — listen to this before you skip 👆",
+    verifyBtnReconsider: "🟢 OK, I'll verify",
+    verifyBtnSkipConfirm: "⚪️ Skip anyway",
     verifySkipped:
       "Skipped verification. You can run it later from the profile menu " +
       "to restore your ELO rating.",
@@ -515,6 +519,10 @@ const translations = {
     verifyBtnGo: "🟢 Пройти верификацию",
     verifyBtnCheck: "✅ Я прошёл проверку",
     verifyBtnSkip: "⚪️ Пропустить пока",
+    verifySkipNudgeCaption:
+      "Секунду — послушай это, прежде чем пропустить 👆",
+    verifyBtnReconsider: "🟢 Всё-таки пройти верификацию",
+    verifyBtnSkipConfirm: "⚪️ Всё равно пропустить",
     verifySkipped:
       "Верификация пропущена. Можешь пройти её позже из меню профиля, " +
       "чтобы вернуть ELO-рейтинг.",
@@ -933,6 +941,10 @@ const translations = {
     verifyBtnGo: "🟢 Пройти верифікацію",
     verifyBtnCheck: "✅ Я пройшов перевірку",
     verifyBtnSkip: "⚪️ Пропустити поки",
+    verifySkipNudgeCaption:
+      "Секунду — послухай це, перш ніж пропустити 👆",
+    verifyBtnReconsider: "🟢 Все ж таки пройти верифікацію",
+    verifyBtnSkipConfirm: "⚪️ Все одно пропустити",
     verifySkipped:
       "Верифікацію пропущено. Можеш пройти її пізніше з меню профілю, " +
       "щоб повернути ELO-рейтинг.",
@@ -1346,6 +1358,10 @@ const deTranslations: TranslationTable = {
   verifyBtnGo: "🟢 Jetzt verifizieren",
   verifyBtnCheck: "✅ Ich habe die Verifizierung abgeschlossen",
   verifyBtnSkip: "⚪️ Erstmal überspringen",
+  verifySkipNudgeCaption:
+    "Kurz — hör dir das an, bevor du überspringst 👆",
+  verifyBtnReconsider: "🟢 OK, ich verifiziere mich",
+  verifyBtnSkipConfirm: "⚪️ Trotzdem überspringen",
   verifySkipped:
     "Verifizierung übersprungen. Du kannst sie später im Profilmenü starten, " +
     "um dein ELO wiederherzustellen.",
@@ -1715,6 +1731,10 @@ const plTranslations: TranslationTable = {
   verifyBtnGo: "🟢 Zweryfikuj teraz",
   verifyBtnCheck: "✅ Zakończyłem/am weryfikację",
   verifyBtnSkip: "⚪️ Pomiń na razie",
+  verifySkipNudgeCaption:
+    "Chwila — posłuchaj tego, zanim pominiesz 👆",
+  verifyBtnReconsider: "🟢 Dobra, zweryfikuję się",
+  verifyBtnSkipConfirm: "⚪️ Pomiń mimo to",
   verifySkipped:
     "Weryfikacja pominięta. Możesz uruchomić ją później z menu profilu, " +
     "aby przywrócić swój ranking ELO.",

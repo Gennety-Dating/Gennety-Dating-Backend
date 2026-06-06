@@ -1,4 +1,5 @@
-import { InlineKeyboard, type Api } from "grammy";
+import { fileURLToPath } from "node:url";
+import { InlineKeyboard, InputFile, type Api } from "grammy";
 import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
@@ -10,8 +11,19 @@ import { pinStatusBanner } from "../../services/status-banner.js";
 import { UNVERIFIED_ELO_PENALTY } from "../../utils/elo-calculator.js";
 import type { BotContext } from "../../session.js";
 
-/** Callback data for the "Skip verification" button on the CTA card. */
+/**
+ * Callback data for the "Skip verification" button on the CTA card. This is now
+ * a *soft* skip: it does NOT apply the Elo penalty. Instead it plays a short
+ * personal voice nudge and offers a fork — reconsider (verify) or confirm the
+ * skip via {@link VERIFY_SKIP_CONFIRM_CALLBACK}.
+ */
 export const VERIFY_SKIP_CALLBACK = "verify:skip";
+/**
+ * Callback data for the "Skip anyway" button shown under the voice nudge. This
+ * is the hard skip that actually applies {@link UNVERIFIED_ELO_PENALTY} and
+ * activates the user as `unverified`.
+ */
+export const VERIFY_SKIP_CONFIRM_CALLBACK = "verify:skip:confirm";
 /**
  * Callback data for the "I'm done" button — pull-fallback when Persona's
  * webhook hasn't landed yet (or never will, e.g. local dev). See
@@ -82,11 +94,32 @@ export async function sendVerificationCTABare(
     .catch(() => {});
 
   const keyboard = new InlineKeyboard();
+  if (!appendVerifyNowButton(keyboard, lang, user.id, t(lang, "verifyBtnGo"))) {
+    return false;
+  }
+  keyboard.row().text(t(lang, "verifyBtnSkip"), VERIFY_SKIP_CALLBACK);
 
-  // Prefer the embedded Mini App in production (no browser frame, native
-  // camera permissions inside Telegram). Falls back to the hosted-URL flow
-  // only when WEBAPP_URL isn't set up — local dev without a tunnel, where
-  // Telegram can't open the Mini App over `example.invalid`.
+  await api.sendMessage(chatId, t(lang, "verifyPitch"), { reply_markup: keyboard });
+  return true;
+}
+
+/**
+ * Append the "Verify now" affordance to a keyboard: the embedded Verification
+ * Mini App in production (no browser frame, native camera permissions inside
+ * Telegram), or the hosted Persona URL as a dev/fallback when WEBAPP_URL isn't
+ * a real HTTPS host (local dev without a tunnel, where Telegram can't open the
+ * Mini App over `example.invalid`).
+ *
+ * Returns false when neither could be built (hosted-URL construction threw) so
+ * the caller can decide whether that is fatal (CTA aborts; the skip-nudge fork
+ * just drops the button and keeps the "Skip anyway" option).
+ */
+function appendVerifyNowButton(
+  keyboard: InlineKeyboard,
+  lang: Language,
+  userId: string,
+  label: string,
+): boolean {
   const miniAppHost = env.WEBAPP_URL;
   const useMiniApp =
     miniAppHost.startsWith("https://") &&
@@ -94,24 +127,86 @@ export async function sendVerificationCTABare(
 
   if (useMiniApp) {
     const miniAppUrl = `${miniAppHost.replace(/\/+$/, "")}/verification.html?lang=${lang}`;
-    keyboard.webApp(t(lang, "verifyBtnGo"), miniAppUrl);
-  } else {
+    keyboard.webApp(label, miniAppUrl);
+    return true;
+  }
+  try {
+    const url = buildPersonaHostedUrl(userId);
+    keyboard.url(label, url);
+    console.warn(
+      "[verification] WEBAPP_URL not configured — falling back to hosted Persona URL",
+    );
+    return true;
+  } catch (err) {
+    console.error("[persona] CTA URL build failed:", err);
+    return false;
+  }
+}
+
+/**
+ * Languages with a recorded skip-nudge voice asset. The onboarding Mini App
+ * language picker offers all five (en/ru/uk/de/pl), each with a dubbed voice
+ * note in `assets/verify-skip/<lang>.ogg`. A language outside this set (should
+ * never happen) falls back to the text caption.
+ */
+const SKIP_NUDGE_VOICE_LANGS = new Set<Language>([
+  "en",
+  "ru",
+  "uk",
+  "de",
+  "pl",
+]);
+
+/**
+ * In-memory cache of Telegram `file_id`s for the skip-nudge voice notes, keyed
+ * by language. The first send uploads the local OGG/Opus asset; Telegram
+ * returns a `file_id` we reuse for every subsequent send so we never re-upload.
+ * Process-local (resets on restart), which is fine — it self-heals on the next
+ * upload.
+ */
+const skipNudgeVoiceFileIds = new Map<Language, string>();
+
+/** Absolute path to the bundled OGG/Opus skip-nudge voice for a language. */
+function skipNudgeVoicePath(lang: Language): string {
+  return fileURLToPath(
+    new URL(`../../assets/verify-skip/${lang}.ogg`, import.meta.url),
+  );
+}
+
+/**
+ * Send the personal "please don't skip" voice note as a NATIVE Telegram voice
+ * message (`sendVoice` → OGG/Opus renders with a waveform + inline one-tap
+ * player, not a file attachment), with the reconsider/skip-anyway fork attached
+ * directly to it. Caches the resulting `file_id`. If the asset is missing or
+ * the send fails, falls back to a plain text message carrying the same fork so
+ * the user is never stranded without a way to proceed.
+ */
+async function sendSkipNudge(
+  api: Api,
+  chatId: number,
+  lang: Language,
+  keyboard: InlineKeyboard,
+): Promise<void> {
+  const caption = t(lang, "verifySkipNudgeCaption");
+  if (SKIP_NUDGE_VOICE_LANGS.has(lang)) {
     try {
-      const url = buildPersonaHostedUrl(user.id);
-      keyboard.url(t(lang, "verifyBtnGo"), url);
-      console.warn(
-        "[verification] WEBAPP_URL not configured — falling back to hosted Persona URL",
-      );
+      const cached = skipNudgeVoiceFileIds.get(lang);
+      const voice = cached ?? new InputFile(skipNudgeVoicePath(lang));
+      const msg = await api.sendVoice(chatId, voice, {
+        caption,
+        reply_markup: keyboard,
+      });
+      const fileId = msg.voice?.file_id;
+      if (fileId && !cached) skipNudgeVoiceFileIds.set(lang, fileId);
+      return;
     } catch (err) {
-      console.error("[persona] CTA URL build failed:", err);
-      return false;
+      // A stale cached file_id, a missing asset, or a transient Bot API error
+      // must never block the skip flow — fall through to the text fork.
+      skipNudgeVoiceFileIds.delete(lang);
+      console.error("[verification] skip-nudge voice failed:", err);
     }
   }
-
-  keyboard.row().text(t(lang, "verifyBtnSkip"), VERIFY_SKIP_CALLBACK);
-
-  await api.sendMessage(chatId, t(lang, "verifyPitch"), { reply_markup: keyboard });
-  return true;
+  await api.sendMessage(chatId, caption, { reply_markup: keyboard });
 }
 
 /**
@@ -162,9 +257,45 @@ export async function handleVerificationCheck(ctx: BotContext): Promise<void> {
 }
 
 /**
- * Handle the "Skip" button on the verification CTA. Drops the user's
- * starting Elo by `UNVERIFIED_ELO_PENALTY`, marks them activated but
- * unverified, and surfaces the main menu + status banner.
+ * Handle the "Skip" button on the verification CTA — the *soft* skip.
+ *
+ * Instead of immediately applying the Elo penalty, this plays a short personal
+ * voice note ("please don't skip — your rating will drop") as a native Telegram
+ * voice message and offers a fork: reconsider and verify, or
+ * {@link VERIFY_SKIP_CONFIRM_CALLBACK} ("Skip anyway") to actually commit the
+ * skip. The real penalty/activation lives in {@link handleVerificationSkipConfirm}.
+ *
+ * Idempotency: if the user has already committed a skip
+ * (`verificationSkippedAt` set), this acks the callback and returns without
+ * re-playing the nudge.
+ */
+export async function handleVerificationSkip(ctx: BotContext): Promise<void> {
+  await ctx.answerCallbackQuery();
+
+  const lang = ctx.session.language;
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(ctx.from!.id) },
+    select: { id: true, verificationSkippedAt: true },
+  });
+  if (!user) return;
+
+  // Already committed a skip — the nudge is moot, don't re-play it.
+  if (user.verificationSkippedAt) return;
+
+  const keyboard = new InlineKeyboard();
+  appendVerifyNowButton(keyboard, lang, user.id, t(lang, "verifyBtnReconsider"));
+  keyboard
+    .row()
+    .text(t(lang, "verifyBtnSkipConfirm"), VERIFY_SKIP_CONFIRM_CALLBACK);
+
+  await sendSkipNudge(ctx.api, ctx.chat!.id, lang, keyboard);
+}
+
+/**
+ * Handle "Skip anyway" — the *hard* skip confirmed after the voice nudge.
+ * Drops the user's starting Elo by `UNVERIFIED_ELO_PENALTY`, marks them
+ * activated but unverified, and surfaces the main menu + status banner.
  *
  * Strict idempotency: a second tap (or a Telegram callback retry) early-returns
  * after acking the callback. Without the gate the visible side-effects
@@ -174,7 +305,9 @@ export async function handleVerificationCheck(ctx: BotContext): Promise<void> {
  * still doubly safe via `verificationSkippedAt IS NULL` below, but the
  * gate here removes the duplicate render before that even matters.
  */
-export async function handleVerificationSkip(ctx: BotContext): Promise<void> {
+export async function handleVerificationSkipConfirm(
+  ctx: BotContext,
+): Promise<void> {
   await ctx.answerCallbackQuery();
 
   const telegramId = BigInt(ctx.from!.id);

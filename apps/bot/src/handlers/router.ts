@@ -8,8 +8,10 @@ import { handleConversational } from "./onboarding/conversational.js";
 import {
   VERIFY_CHECK_CALLBACK,
   VERIFY_SKIP_CALLBACK,
+  VERIFY_SKIP_CONFIRM_CALLBACK,
   handleVerificationCheck,
   handleVerificationSkip,
+  handleVerificationSkipConfirm,
 } from "./onboarding/verification.js";
 import { menuRouter } from "./menu/router.js";
 
@@ -43,6 +45,10 @@ router.use(async (ctx, next) => {
 router.use(async (ctx, next) => {
   if (ctx.callbackQuery?.data === VERIFY_SKIP_CALLBACK) {
     await handleVerificationSkip(ctx);
+    return;
+  }
+  if (ctx.callbackQuery?.data === VERIFY_SKIP_CONFIRM_CALLBACK) {
+    await handleVerificationSkipConfirm(ctx);
     return;
   }
   if (ctx.callbackQuery?.data === VERIFY_CHECK_CALLBACK) {

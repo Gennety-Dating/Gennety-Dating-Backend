@@ -88,8 +88,10 @@ out of Telegram-only workers.
 
 ### 1.2 Language (`onboardingStep = language`)
 
-- Three options: `English`, `Русский`, `Українська` → persists `User.language`
-  and `BotSession.language`.
+- Five options: `English`, `Русский`, `Українська`, `Deutsch`, `Polski` →
+  persists `User.language` and `BotSession.language`. (The shared i18n `Language`
+  type and the onboarding Mini App picker both carry all five; `en` is the
+  fallback.)
 - The conversational agent matches the user's language thereafter and is
   forbidden from injecting English enum words ("male/female/men/women") into
   non-English replies.
@@ -163,9 +165,18 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   `InlineKeyboardButton.url` opening the hosted flow at
   `buildPersonaHostedUrl(userId)`. Mobile (Expo) still uses the hosted
   URL via `/v1/me/verification/url` — it isn't a Telegram client.
-- **Skip for now** — flips `verificationSkippedAt`, drops
-  `Profile.eloScore` by `UNVERIFIED_ELO_PENALTY` (= 150 from a 500 default),
-  and activates the user as `unverified`. Reversible by later running Persona.
+- **Skip for now** — a *two-step soft skip*. The first tap does **not** apply
+  any penalty: the bot plays a short personal **voice note** (native Telegram
+  `sendVoice`, OGG/Opus, language-aware across all five onboarding languages
+  `en`/`ru`/`uk`/`de`/`pl`) explaining why skipping
+  hurts the user's rating, and offers a fork — **reconsider** (re-opens the
+  Verification Mini App / hosted flow) or **Skip anyway**. Only **Skip anyway**
+  flips `verificationSkippedAt`, drops `Profile.eloScore` by
+  `UNVERIFIED_ELO_PENALTY` (= 150 from a 500 default), and activates the user as
+  `unverified`. Reversible by later running Persona. The voice assets are
+  bundled in the bot (`apps/bot/src/assets/verify-skip/`) and sent with an
+  in-memory `file_id` cache; a missing asset or send failure degrades
+  gracefully to a text message carrying the same fork.
 
 When Persona sends a trusted terminal webhook that maps to passed liveness
 (`inquiry.approved` or the configured terminal equivalent), the verification
