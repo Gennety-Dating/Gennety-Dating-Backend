@@ -54,6 +54,17 @@ const mMatch = prisma.match as unknown as { findUnique: MockFn; update: MockFn }
 const mUser = prisma.user as unknown as { findUnique: MockFn };
 const mStartVenue = startVenueNegotiation as unknown as MockFn;
 
+function createApi() {
+  let nextMessageId = 500;
+  return {
+    sendMessage: vi.fn().mockImplementation(async () => ({
+      message_id: nextMessageId++,
+    })),
+    deleteMessage: vi.fn().mockResolvedValue(undefined),
+    editMessageText: vi.fn().mockResolvedValue(undefined),
+  } as any;
+}
+
 function createCtx(overrides: {
   session?: Partial<SessionData>;
   callbackData?: string;
@@ -75,9 +86,7 @@ function createCtx(overrides: {
       : undefined,
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
-    api: {
-      sendMessage: vi.fn().mockResolvedValue(undefined),
-    },
+    api: createApi(),
   } as any;
 }
 
@@ -147,11 +156,13 @@ describe("scheduler: startScheduling", () => {
   it("writes the proposed-time grid, clears any prior availability, pins iteration=3, and sends the calendar button to both Telegram users", async () => {
     mMatch.update.mockResolvedValue({});
     mMatch.findUnique.mockResolvedValueOnce({
+      calendarMessageIdA: null,
+      calendarMessageIdB: null,
       userA: { telegramId: 1001n, language: "en" },
       userB: { telegramId: 1002n, language: "ru" },
     });
 
-    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const api = createApi();
     await startScheduling(api, "match-1");
 
     const updateArg = mMatch.update.mock.calls[0]![0] as {
@@ -167,6 +178,14 @@ describe("scheduler: startScheduling", () => {
     expect(updateArg.data.availableTimesA).toEqual([]);
     expect(updateArg.data.availableTimesB).toEqual([]);
     expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    expect(mMatch.update).toHaveBeenCalledWith({
+      where: { id: "match-1" },
+      data: { calendarMessageIdA: 500 },
+    });
+    expect(mMatch.update).toHaveBeenCalledWith({
+      where: { id: "match-1" },
+      data: { calendarMessageIdB: 501 },
+    });
     // Per-user URL carries `&lang=` so the Mini App can render in their tongue.
     const sentUrls = api.sendMessage.mock.calls.map(
       (c: any[]) => (c[2] as { reply_markup: { inline_keyboard: any[][] } }).reply_markup.inline_keyboard[0][0].web_app.url,
@@ -225,6 +244,8 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     availableTimesA?: Date[];
     availableTimesB?: Date[];
     proposedTimes?: Date[];
+    calendarMessageIdA?: number | null;
+    calendarMessageIdB?: number | null;
   }) {
     mMatch.findUnique.mockResolvedValueOnce({
       id: "match-1",
@@ -234,6 +255,8 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
       proposedTimes: overrides.proposedTimes ?? [],
       availableTimesA: overrides.availableTimesA ?? [],
       availableTimesB: overrides.availableTimesB ?? [],
+      calendarMessageIdA: overrides.calendarMessageIdA ?? null,
+      calendarMessageIdB: overrides.calendarMessageIdB ?? null,
       userA: { telegramId: 1001n, language: "en" },
       userB: { telegramId: 1002n, language: "en" },
     });
@@ -245,7 +268,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
 
-    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const api = createApi();
     const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [
       "2026-09-09T19:00:00.000Z",
     ]);
@@ -265,10 +288,12 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
       proposedTimes: [early, middle, late],
       availableTimesA: [],
       availableTimesB: [middle, late],
+      calendarMessageIdA: 71,
+      calendarMessageIdB: 72,
     });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
 
-    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const api = createApi();
     const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [
       early.toISOString(),
       middle.toISOString(),
@@ -277,6 +302,8 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.agreedTime).toBe(middle.toISOString());
     expect(mStartVenue).toHaveBeenCalledTimes(1);
+    expect(api.deleteMessage).toHaveBeenCalledWith(1001, 71);
+    expect(api.deleteMessage).toHaveBeenCalledWith(1002, 72);
     const [, matchId, agreedTime] = mStartVenue.mock.calls[0]!;
     expect(matchId).toBe("match-1");
     expect((agreedTime as Date).getTime()).toBe(middle.getTime());
@@ -291,7 +318,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
 
-    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const api = createApi();
     const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [
       slot.toISOString(),
     ]);
@@ -318,7 +345,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
 
-    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const api = createApi();
     const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [
       a.toISOString(),
       b.toISOString(),
@@ -349,7 +376,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
 
-    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const api = createApi();
     const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [
       a.toISOString(),
     ]);
@@ -371,10 +398,11 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
       proposedTimes: [a, b, c],
       availableTimesA: [],
       availableTimesB: [c],
+      calendarMessageIdB: 72,
     });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
 
-    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const api = createApi();
     const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", [
       a.toISOString(),
       b.toISOString(),
@@ -382,9 +410,41 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
 
     expect(res.ok).toBe(true);
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.deleteMessage).toHaveBeenCalledWith(1002, 72);
     const targets = api.sendMessage.mock.calls.map((c: any[]) => c[0]).sort();
     expect(targets).toEqual([1002]);
     expect(api.sendMessage.mock.calls[0]![1]).toContain("suggested a different time");
+    expect(mMatch.update).toHaveBeenCalledWith({
+      where: { id: "match-1" },
+      data: { calendarMessageIdB: 500 },
+    });
+  });
+
+  it("edits the existing calendar card when Telegram refuses deletion", async () => {
+    const a = new Date("2026-05-01T19:00:00.000Z");
+    const b = new Date("2026-05-02T19:00:00.000Z");
+    mockMatchInState({
+      proposedTimes: [a, b],
+      availableTimesA: [],
+      availableTimesB: [b],
+      calendarMessageIdB: 72,
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+
+    const api = createApi();
+    api.deleteMessage.mockRejectedValueOnce(new Error("cannot delete"));
+
+    await processCalendarSlotsUpdate(api, 1001n, "match-1", [
+      a.toISOString(),
+    ]);
+
+    expect(api.editMessageText).toHaveBeenCalledWith(
+      1002,
+      72,
+      expect.stringContaining("suggested a different time"),
+      expect.objectContaining({ reply_markup: expect.any(Object) }),
+    );
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 
   it("does NOT re-DM the peer on a redundant re-save with the same set (idempotency)", async () => {
@@ -401,7 +461,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
 
-    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const api = createApi();
     await processCalendarSlotsUpdate(api, 1001n, "match-1", [
       a.toISOString(),
       b.toISOString(),
@@ -420,7 +480,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
 
-    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const api = createApi();
     await processCalendarSlotsUpdate(api, 1001n, "match-1", [
       slot1.toISOString(),
       slot2.toISOString(),
@@ -439,7 +499,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
 
-    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const api = createApi();
     await processCalendarSlotsUpdate(api, 1001n, "match-1", [
       a.toISOString(),
       b.toISOString(),
@@ -466,7 +526,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
       userB: { telegramId: 1002n, language: "en" },
     });
 
-    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
+    const api = createApi();
     const res = await processCalendarSlotsUpdate(api, 1001n, "match-1", []);
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.reason).toBe("wrong-state");

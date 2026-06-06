@@ -549,12 +549,19 @@ better UX than three separate retries.
   DMs: peer gets `matchSchedulePeerProposed` with the calendar button;
   actor gets `matchScheduleSavedConfirmation` so the chat shows a
   confirmation receipt the moment they close the Mini App.
+- **One live calendar card per side.** Telegram calendar prompts are
+  tracked in `Match.calendarMessageIdA/B`. A new peer proposal or
+  counter-proposal deletes and replaces that side's previous calendar
+  card; if Telegram refuses deletion, the bot edits the existing card
+  in place. Both cards are removed when a time is locked, so repeated
+  scheduling updates do not accumulate identical "Open Calendar"
+  messages in the chat.
 - **No-overlap-yet ping.** When both sides have submitted but no slot
-  is shared, the bot DMs both with `matchScheduleNoOverlapYet`. Gated
-  on the actor's set actually changing — re-saving the same set is a
-  no-op so toggling-and-saving doesn't spam the peer. Subsequent edits
-  also rely on the existing `match-nudge` cron (proposal-phase nudges
-  at ≥3 h / ≥10 h since dispatch).
+  is shared, the bot updates the peer's live calendar card with
+  `matchSchedulePeerSuggestedAlternative`. This is gated on the actor's
+  set actually changing — re-saving the same set is a no-op, so a
+  redundant Save cannot ping the peer again. Subsequent reminders also
+  rely on the existing scheduling-phase `match-nudge` cadence.
 - **Mini App view states.** The default picker is a two-step flow:
   `dates` first, then `times` for the selected date. After Save, the
   Mini App shows one of:

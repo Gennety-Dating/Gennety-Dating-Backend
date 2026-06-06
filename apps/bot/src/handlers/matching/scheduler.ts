@@ -129,6 +129,8 @@ export async function startScheduling(
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     select: {
+      calendarMessageIdA: true,
+      calendarMessageIdB: true,
       userA: { select: { telegramId: true, language: true } },
       userB: { select: { telegramId: true, language: true } },
     },
@@ -138,26 +140,114 @@ export async function startScheduling(
   const langA = (match.userA.language ?? "en") as Language;
   const langB = (match.userB.language ?? "en") as Language;
 
-  const sends: Array<Promise<unknown>> = [];
-  if (isTelegramTarget(match.userA.telegramId)) {
-    sends.push(
-      api.sendMessage(Number(match.userA.telegramId), t(langA, "matchScheduleIter3"), {
-        reply_markup: buildCalendarKeyboard(calendarUrl(matchId, langA), langA),
-      }),
-    );
-  }
-  if (isTelegramTarget(match.userB.telegramId)) {
-    sends.push(
-      api.sendMessage(Number(match.userB.telegramId), t(langB, "matchScheduleIter3"), {
-        reply_markup: buildCalendarKeyboard(calendarUrl(matchId, langB), langB),
-      }),
-    );
-  }
-  await Promise.all(sends);
+  await Promise.all([
+    replaceCalendarMessage(
+      api,
+      matchId,
+      "A",
+      match.userA.telegramId,
+      match.calendarMessageIdA,
+      t(langA, "matchScheduleIter3"),
+      langA,
+    ),
+    replaceCalendarMessage(
+      api,
+      matchId,
+      "B",
+      match.userB.telegramId,
+      match.calendarMessageIdB,
+      t(langB, "matchScheduleIter3"),
+      langB,
+    ),
+  ]);
 }
 
 function calendarUrl(matchId: string, lang: Language): string {
   return `${env.WEBAPP_URL}?match=${matchId}&lang=${lang}`;
+}
+
+type CalendarMessageSide = "A" | "B";
+
+function calendarMessageIdUpdate(side: CalendarMessageSide, messageId: number | null) {
+  return side === "A"
+    ? { calendarMessageIdA: messageId }
+    : { calendarMessageIdB: messageId };
+}
+
+function telegramErrorDescription(err: unknown): string {
+  if (typeof err !== "object" || err === null || !("description" in err)) return "";
+  const description = (err as { description?: unknown }).description;
+  return typeof description === "string" ? description.toLowerCase() : "";
+}
+
+function messageIsUnavailable(err: unknown): boolean {
+  const description = telegramErrorDescription(err);
+  return (
+    description.includes("message to delete not found") ||
+    description.includes("message to edit not found") ||
+    description.includes("message_id_invalid")
+  );
+}
+
+function messageIsNotModified(err: unknown): boolean {
+  return telegramErrorDescription(err).includes("message is not modified");
+}
+
+/**
+ * Keep one live calendar card per participant. Normally the old card is
+ * deleted before the replacement is sent. If Telegram no longer permits
+ * deletion, edit the existing card in place; if neither operation is allowed,
+ * leave the old usable card alone instead of adding more chat noise.
+ */
+async function replaceCalendarMessage(
+  api: Api<RawApi>,
+  matchId: string,
+  side: CalendarMessageSide,
+  telegramId: bigint,
+  previousMessageId: number | null,
+  text: string,
+  lang: Language,
+): Promise<void> {
+  if (!isTelegramTarget(telegramId)) return;
+
+  const chatId = Number(telegramId);
+  const options = {
+    reply_markup: buildCalendarKeyboard(calendarUrl(matchId, lang), lang),
+  };
+
+  if (previousMessageId !== null) {
+    try {
+      await api.deleteMessage(chatId, previousMessageId);
+    } catch (deleteErr) {
+      try {
+        await api.editMessageText(chatId, previousMessageId, text, options);
+        return;
+      } catch (editErr) {
+        if (messageIsNotModified(editErr)) return;
+        if (!messageIsUnavailable(deleteErr) && !messageIsUnavailable(editErr)) {
+          return;
+        }
+      }
+    }
+  }
+
+  const sent = await api.sendMessage(chatId, text, options);
+  await prisma.match.update({
+    where: { id: matchId },
+    data: calendarMessageIdUpdate(side, sent.message_id),
+  });
+}
+
+async function deleteCalendarMessages(
+  api: Api<RawApi>,
+  targets: ReadonlyArray<{ telegramId: bigint; messageId: number | null }>,
+): Promise<void> {
+  await Promise.all(
+    targets.map(async ({ telegramId, messageId }) => {
+      if (messageId === null || !isTelegramTarget(telegramId)) return;
+      await api.deleteMessage(Number(telegramId), messageId).catch(() => {});
+    }),
+  );
 }
 
 export type CalendarPickResult =
@@ -232,6 +322,8 @@ export async function processCalendarSlotsUpdate(
       proposedTimes: true,
       availableTimesA: true,
       availableTimesB: true,
+      calendarMessageIdA: true,
+      calendarMessageIdB: true,
       userA: { select: { telegramId: true, language: true } },
       userB: { select: { telegramId: true, language: true } },
     },
@@ -287,6 +379,16 @@ export async function processCalendarSlotsUpdate(
   if (intersection.length === 1) {
     const agreed = intersection[0]!;
     await startVenueNegotiation(api, match.id, agreed);
+    await deleteCalendarMessages(api, [
+      {
+        telegramId: match.userA.telegramId,
+        messageId: match.calendarMessageIdA,
+      },
+      {
+        telegramId: match.userB.telegramId,
+        messageId: match.calendarMessageIdB,
+      },
+    ]);
     return {
       ok: true,
       mySlots: dedupedSorted.map((d) => d.toISOString()),
@@ -325,11 +427,15 @@ export async function processCalendarSlotsUpdate(
     const sends: Array<Promise<unknown>> = [];
     if (isTelegramTarget(peerTelegramId)) {
       sends.push(
-        api
-          .sendMessage(Number(peerTelegramId), t(peerLang, "matchSchedulePeerProposed"), {
-            reply_markup: buildCalendarKeyboard(calendarUrl(matchId, peerLang), peerLang),
-          })
-          .catch(() => {}),
+        replaceCalendarMessage(
+          api,
+          matchId,
+          isA ? "B" : "A",
+          peerTelegramId,
+          isA ? match.calendarMessageIdB : match.calendarMessageIdA,
+          t(peerLang, "matchSchedulePeerProposed"),
+          peerLang,
+        ).catch(() => {}),
       );
     }
     if (isTelegramTarget(actorTelegramId)) {
@@ -357,11 +463,15 @@ export async function processCalendarSlotsUpdate(
     const sends: Array<Promise<unknown>> = [];
     if (isTelegramTarget(peerTelegramId)) {
       sends.push(
-        api
-          .sendMessage(Number(peerTelegramId), t(peerLang, "matchSchedulePeerSuggestedAlternative"), {
-            reply_markup: buildCalendarKeyboard(calendarUrl(matchId, peerLang), peerLang),
-          })
-          .catch(() => {}),
+        replaceCalendarMessage(
+          api,
+          matchId,
+          isA ? "B" : "A",
+          peerTelegramId,
+          isA ? match.calendarMessageIdB : match.calendarMessageIdA,
+          t(peerLang, "matchSchedulePeerSuggestedAlternative"),
+          peerLang,
+        ).catch(() => {}),
       );
     }
     await Promise.all(sends);

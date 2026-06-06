@@ -135,6 +135,8 @@ export async function startVenueNegotiation(
       status: "negotiating_venue",
       agreedTime,
       venuePromptAskedAt: new Date(),
+      calendarMessageIdA: null,
+      calendarMessageIdB: null,
     },
   });
 

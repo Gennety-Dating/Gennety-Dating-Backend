@@ -538,6 +538,12 @@ model Match {
   pitchMessageIdA Int? @map("pitch_message_id_a")
   pitchMessageIdB Int? @map("pitch_message_id_b")
 
+  /// Telegram `message_id` of the current Calendar Mini App card per side.
+  /// Scheduling status updates replace this card instead of stacking another
+  /// "Open Calendar" message in the chat. Cleared when a time is locked.
+  calendarMessageIdA Int? @map("calendar_message_id_a")
+  calendarMessageIdB Int? @map("calendar_message_id_b")
+
   /// Legacy nudge columns from the pre-C-6 era when proposal-phase and
   /// scheduling-phase nudges shared the same two slots. Kept nullable so old
   /// rows still parse — new code reads/writes the four phase-specific columns
