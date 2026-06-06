@@ -1,0 +1,363 @@
+import type { Api, RawApi } from "grammy";
+import { InlineKeyboard } from "grammy";
+import type { InlineKeyboardMarkup } from "grammy/types";
+import { prisma } from "@gennety/db";
+import { t, type Language } from "@gennety/shared";
+import { env } from "../../config.js";
+import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.js";
+import { startScheduling } from "./scheduler.js";
+import {
+  amountForScope,
+  type TicketScope,
+  type PaymentMode,
+  refundTicketPayment,
+} from "../../services/ticket-payment.js";
+import { emitTicketEvent } from "../../services/ticket-analytics.js";
+
+/**
+ * Date Ticket gate — the premium monetization step inserted between mutual
+ * accept and the Calendar Mini App when `TICKET_FEATURE_ENABLED=true`.
+ *
+ * Flow:
+ *   mutual accept ──▶ sendTicketOffer (DMs both the ticket Mini App button)
+ *   both pay      ──▶ completeTicketGateAndUnlockScheduling ──▶ startScheduling
+ *   partial lapse ──▶ refundAndFallbackToScheduling ──▶ startScheduling (free)
+ *
+ * The match stays in `negotiating` the whole time — `ticketStatus` is the
+ * sub-state machine. We never invent a new `MatchStatus` so the rest of the
+ * scheduling/venue/lifecycle code is untouched.
+ */
+
+type Side = "A" | "B";
+
+const PARTIAL_WINDOW_MS = Math.max(1, Math.round(env.TICKET_PAYMENT_WINDOW_HOURS * 3_600_000));
+
+interface TicketUser {
+  id: string;
+  telegramId: bigint;
+  language: string | null;
+  gender: "male" | "female" | null;
+  firstName: string | null;
+}
+
+interface TicketMatch {
+  id: string;
+  status: string;
+  ticketStatus: string;
+  ticketPriceCents: number;
+  ticketPaidA: Date | null;
+  ticketPaidB: Date | null;
+  paidForPartnerByA: boolean;
+  paidForPartnerByB: boolean;
+  ticketExpiresAt: Date | null;
+  userAId: string;
+  userBId: string;
+  userA: TicketUser;
+  userB: TicketUser;
+}
+
+const TICKET_SELECT = {
+  id: true,
+  status: true,
+  ticketStatus: true,
+  ticketPriceCents: true,
+  ticketPaidA: true,
+  ticketPaidB: true,
+  paidForPartnerByA: true,
+  paidForPartnerByB: true,
+  ticketExpiresAt: true,
+  userAId: true,
+  userBId: true,
+  userA: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true } },
+  userB: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true } },
+} as const;
+
+function loadTicketMatch(matchId: string): Promise<TicketMatch | null> {
+  return prisma.match.findUnique({ where: { id: matchId }, select: TICKET_SELECT });
+}
+
+function langOf(user: TicketUser): Language {
+  return (user.language ?? "en") as Language;
+}
+
+function sideForTelegramId(match: TicketMatch, telegramId: bigint): Side | null {
+  if (match.userA.telegramId === telegramId) return "A";
+  if (match.userB.telegramId === telegramId) return "B";
+  return null;
+}
+
+function selfUser(match: TicketMatch, side: Side): TicketUser {
+  return side === "A" ? match.userA : match.userB;
+}
+
+function peerUser(match: TicketMatch, side: Side): TicketUser {
+  return side === "A" ? match.userB : match.userA;
+}
+
+// ── Public state view (shared by the GET state route + tests) ───────────────
+
+export interface TicketStateView {
+  ticketStatus: string;
+  priceCents: number;
+  myGender: "male" | "female" | null;
+  mySide: Side;
+  iPaid: boolean;
+  partnerPaid: boolean;
+  partnerName: string | null;
+  /** True when the *partner* settled THIS user's ticket (pay-for-both). */
+  partnerPaidForMe: boolean;
+  bothPaid: boolean;
+  expiresAt: string | null;
+  paymentMode: PaymentMode;
+}
+
+export function buildTicketStateView(match: TicketMatch, side: Side): TicketStateView {
+  const me = selfUser(match, side);
+  const peer = peerUser(match, side);
+  const iPaid = (side === "A" ? match.ticketPaidA : match.ticketPaidB) !== null;
+  const partnerPaid = (side === "A" ? match.ticketPaidB : match.ticketPaidA) !== null;
+  // paidForPartnerByA means A paid for B. So the partner paid for ME when the
+  // PARTNER's "paid for partner" flag is set.
+  const partnerPaidForMe = side === "A" ? match.paidForPartnerByB : match.paidForPartnerByA;
+  return {
+    ticketStatus: match.ticketStatus,
+    priceCents: match.ticketPriceCents,
+    myGender: me.gender,
+    mySide: side,
+    iPaid,
+    partnerPaid,
+    partnerName: peer.firstName,
+    partnerPaidForMe,
+    bothPaid: iPaid && partnerPaid,
+    expiresAt: match.ticketExpiresAt ? match.ticketExpiresAt.toISOString() : null,
+    paymentMode: env.TICKET_PAYMENT_MODE,
+  };
+}
+
+// ── Read state (for GET /v1/matches/:id/ticket/state) ───────────────────────
+
+export type TicketStateResult =
+  | { ok: false; reason: "match-not-found" | "not-participant" }
+  | { ok: true; state: TicketStateView };
+
+export async function getTicketState(
+  telegramId: bigint,
+  matchId: string,
+): Promise<TicketStateResult> {
+  const match = await loadTicketMatch(matchId);
+  if (!match) return { ok: false, reason: "match-not-found" };
+  const side = sideForTelegramId(match, telegramId);
+  if (!side) return { ok: false, reason: "not-participant" };
+  return { ok: true, state: buildTicketStateView(match, side) };
+}
+
+// ── Offer (called from the mutual-accept handler) ───────────────────────────
+
+function ticketUrl(matchId: string, lang: Language): string {
+  return `${env.WEBAPP_URL}/ticket.html?match=${matchId}&lang=${lang}`;
+}
+
+function buildTicketKeyboard(matchId: string, lang: Language): InlineKeyboardMarkup {
+  const kb = new InlineKeyboard().webApp(t(lang, "ticketButton"), ticketUrl(matchId, lang));
+  return { inline_keyboard: kb.inline_keyboard };
+}
+
+/**
+ * Replace the immediate `startScheduling` handoff: arm the ticket gate and DM
+ * both Telegram-resident users the premium ticket Mini App button. The match
+ * stays `negotiating`; the Calendar is not sent until both tickets are paid.
+ */
+export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promise<void> {
+  const expiresAt = new Date(Date.now() + PARTIAL_WINDOW_MS);
+  await prisma.match.update({
+    where: { id: matchId },
+    data: {
+      ticketStatus: "pending",
+      ticketPriceCents: env.TICKET_PRICE_CENTS,
+      ticketExpiresAt: expiresAt,
+    },
+  });
+
+  const match = await loadTicketMatch(matchId);
+  if (!match) return;
+
+  emitTicketEvent("ticket_offer_sent", { matchId });
+
+  const sends: Array<Promise<unknown>> = [];
+  for (const user of [match.userA, match.userB]) {
+    if (!isTelegramTarget(user.telegramId)) continue;
+    const lang = langOf(user);
+    sends.push(
+      api.sendMessage(toTelegramChatId(user.telegramId), t(lang, "ticketCardCaption"), {
+        parse_mode: "Markdown",
+        reply_markup: buildTicketKeyboard(matchId, lang),
+      }),
+    );
+  }
+  await Promise.all(sends);
+}
+
+// ── Payment apply (called from POST confirm) ────────────────────────────────
+
+export type ApplyPaymentResult =
+  | { ok: false; reason: "match-not-found" | "not-participant" | "wrong-state" | "scope-not-allowed" }
+  | { ok: true; state: TicketStateView };
+
+/**
+ * Mark the acting side's ticket paid (idempotent + race-safe) and advance the
+ * gate. Scope `both` ($13.98) is male-only and also settles the partner's
+ * ticket. When both tickets end up paid, unlocks scheduling.
+ */
+export async function applyTicketPayment(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  matchId: string,
+  scope: TicketScope,
+): Promise<ApplyPaymentResult> {
+  const match = await loadTicketMatch(matchId);
+  if (!match) return { ok: false, reason: "match-not-found" };
+  const side = sideForTelegramId(match, telegramId);
+  if (!side) return { ok: false, reason: "not-participant" };
+
+  const me = selfUser(match, side);
+  if (scope === "both" && me.gender !== "male") {
+    return { ok: false, reason: "scope-not-allowed" };
+  }
+
+  const paidField = side === "A" ? "ticketPaidA" : "ticketPaidB";
+  const partnerPaidField = side === "A" ? "ticketPaidB" : "ticketPaidA";
+  const paidForPartnerField = side === "A" ? "paidForPartnerByA" : "paidForPartnerByB";
+  const now = new Date();
+
+  const myPaidAlready = (side === "A" ? match.ticketPaidA : match.ticketPaidB) !== null;
+  const partnerPaidAlready = (side === "A" ? match.ticketPaidB : match.ticketPaidA) !== null;
+
+  if (!myPaidAlready) {
+    // Atomic claim — only the caller that flips the still-null field wins, so a
+    // double-tap / retried confirm can't double-charge or double-advance. Same
+    // pattern as the accept-transition race guard in decision.ts.
+    const data: Record<string, unknown> = { [paidField]: now };
+    if (scope === "both") {
+      data[paidForPartnerField] = true;
+      if (!partnerPaidAlready) data[partnerPaidField] = now;
+    }
+    const claim = await prisma.match.updateMany({
+      where: { id: matchId, status: "negotiating", [paidField]: null },
+      data,
+    });
+    if (claim.count === 0) {
+      // Lost the race or wrong state. Re-read; if our side is now paid it was a
+      // concurrent duplicate — treat as success (idempotent).
+      const fresh = await loadTicketMatch(matchId);
+      if (!fresh) return { ok: false, reason: "match-not-found" };
+      const sidePaidNow = (side === "A" ? fresh.ticketPaidA : fresh.ticketPaidB) !== null;
+      if (!sidePaidNow) return { ok: false, reason: "wrong-state" };
+      return { ok: true, state: buildTicketStateView(fresh, side) };
+    }
+    emitTicketEvent("ticket_paid", { matchId, side, scope, amountCents: amountForScope(scope, match.ticketPriceCents) });
+
+    // Notify the partner that their ticket was covered (pay-for-both).
+    if (scope === "both") {
+      const peer = peerUser(match, side);
+      if (isTelegramTarget(peer.telegramId)) {
+        await api.sendMessage(
+          toTelegramChatId(peer.telegramId),
+          t(langOf(peer), "ticketPartnerPaidDm", { name: me.firstName ?? "Your match" }),
+        );
+      }
+    }
+  }
+
+  // Recompute terminal state from fresh data.
+  const after = await loadTicketMatch(matchId);
+  if (!after) return { ok: false, reason: "match-not-found" };
+  const bothPaid = after.ticketPaidA !== null && after.ticketPaidB !== null;
+
+  if (bothPaid && after.ticketStatus !== "completed") {
+    await completeTicketGateAndUnlockScheduling(api, matchId);
+  } else if (!bothPaid && after.ticketStatus === "pending") {
+    // First payment → partial; give the second side a fresh window.
+    await prisma.match.update({
+      where: { id: matchId },
+      data: { ticketStatus: "partial", ticketExpiresAt: new Date(Date.now() + PARTIAL_WINDOW_MS) },
+    });
+  }
+
+  const final = await loadTicketMatch(matchId);
+  if (!final) return { ok: false, reason: "match-not-found" };
+  return { ok: true, state: buildTicketStateView(final, side) };
+}
+
+// ── Completion + free-fallback (shared by confirm + cron) ───────────────────
+
+/**
+ * Both tickets paid: mark `completed`, clear the partial deadline, DM both a
+ * celebratory note, then hand off to the existing scheduler (which DMs the
+ * Calendar Mini App button). Idempotent — re-entry after `completed` is a
+ * no-op on the status flip; `startScheduling` itself is safe to re-run.
+ */
+export async function completeTicketGateAndUnlockScheduling(
+  api: Api<RawApi>,
+  matchId: string,
+): Promise<void> {
+  const flip = await prisma.match.updateMany({
+    where: { id: matchId, status: "negotiating", ticketStatus: { not: "completed" } },
+    data: { ticketStatus: "completed", ticketExpiresAt: null },
+  });
+  if (flip.count === 0) return; // already completed / wrong state
+
+  emitTicketEvent("ticket_both_paid", { matchId });
+
+  const match = await loadTicketMatch(matchId);
+  if (match) {
+    const dms: Array<Promise<unknown>> = [];
+    for (const user of [match.userA, match.userB]) {
+      if (!isTelegramTarget(user.telegramId)) continue;
+      dms.push(
+        api.sendMessage(toTelegramChatId(user.telegramId), t(langOf(user), "ticketBothSecuredDm")),
+      );
+    }
+    await Promise.all(dms);
+  }
+
+  await startScheduling(api, matchId);
+}
+
+/**
+ * A `partial` (or `pending`) ticket lapsed. Refund whoever paid (mock = no-op),
+ * mark the row terminal, DM the payer, then open the Calendar for FREE — an
+ * already-accepted match must never be killed by a payment stall.
+ */
+export async function refundAndFallbackToScheduling(
+  api: Api<RawApi>,
+  matchId: string,
+): Promise<void> {
+  const match = await loadTicketMatch(matchId);
+  if (!match) return;
+  if (match.status !== "negotiating") return;
+  if (match.ticketStatus === "completed" || match.ticketStatus === "refunded" || match.ticketStatus === "expired") {
+    return; // already terminal — idempotent
+  }
+
+  const paidSide: Side | null = match.ticketPaidA !== null ? "A" : match.ticketPaidB !== null ? "B" : null;
+  const terminal = paidSide ? "refunded" : "expired";
+
+  // Claim the terminal flip atomically so a double cron tick refunds once.
+  const flip = await prisma.match.updateMany({
+    where: { id: matchId, status: "negotiating", ticketStatus: { in: ["pending", "partial"] } },
+    data: { ticketStatus: terminal, ticketExpiresAt: null },
+  });
+  if (flip.count === 0) return;
+
+  if (paidSide) {
+    await refundTicketPayment({ matchId, amountCents: match.ticketPriceCents });
+    emitTicketEvent("ticket_refunded", { matchId, side: paidSide });
+    const payer = selfUser(match, paidSide);
+    if (isTelegramTarget(payer.telegramId)) {
+      await api.sendMessage(toTelegramChatId(payer.telegramId), t(langOf(payer), "ticketRefundedDm"));
+    }
+  }
+
+  // Open scheduling for free.
+  await startScheduling(api, matchId);
+}

@@ -1,0 +1,427 @@
+/* Date Ticket Mini App — dark premium theme, lavender accent (#B69AE5). */
+
+:root {
+  --accent: #b69ae5;
+  --accent-deep: #8e6fd6;
+  --bg: #120e1c;
+  --bg-soft: #1b1530;
+  --card: #211a3a;
+  --text: #f4ecff;
+  --text-dim: #b3a8cf;
+  --line: rgba(182, 154, 229, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(142, 111, 214, 0.35), transparent 60%),
+    radial-gradient(90% 60% at 50% 110%, rgba(182, 154, 229, 0.18), transparent 60%),
+    var(--bg);
+  min-height: 100vh;
+}
+
+.ticket-page {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+/* Full-screen web app: content scrolls, the action bar is pinned to the
+   bottom. `.has-bar` pages split into a flexing scroll area + footer. */
+.ticket-page.has-bar {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.ticket-scroll {
+  flex: 1;
+  width: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  /* Top padding clears the Telegram fullscreen controls / device notch. */
+  padding: calc(28px + env(safe-area-inset-top)) 20px 28px;
+}
+
+/* Our own buttons, fixed to the bottom of the screen (not Telegram's
+   MainButton). The gradient lets ticket art scroll softly underneath. */
+.action-bar {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 20px calc(16px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--bg) 62%, rgba(18, 14, 28, 0));
+}
+
+.btn-text {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  font-family: inherit;
+  padding: 6px;
+  cursor: pointer;
+}
+.btn-text:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Loading / error: simple centered column (no action bar). */
+.ticket-center {
+  justify-content: center;
+  text-align: center;
+  color: var(--text-dim);
+  padding: 28px 20px;
+}
+
+.ticket-error {
+  color: #ff9d9d;
+  max-width: 280px;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────── */
+.ticket-header {
+  text-align: center;
+  animation: rise 0.5s ease both;
+}
+.ticket-header h1 {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  letter-spacing: -0.01em;
+}
+.ticket-header p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1.45;
+  max-width: 320px;
+}
+
+/* ── The 3D ticket ────────────────────────────────────────────────────── */
+.ticket-stage {
+  perspective: 1100px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.ticket-card {
+  --rx: 0deg;
+  --ry: 0deg;
+  position: relative;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 22px;
+  background: linear-gradient(155deg, #2a2150 0%, #1c1636 55%, #251c44 100%);
+  border: 1px solid var(--line);
+  box-shadow:
+    0 24px 60px rgba(20, 10, 40, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transform: rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform 0.12s ease-out;
+  transform-style: preserve-3d;
+  overflow: hidden;
+  animation: ticket-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ticket-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    transparent 30%,
+    rgba(182, 154, 229, 0.22) 48%,
+    rgba(255, 255, 255, 0.12) 52%,
+    transparent 70%
+  );
+  transform: translateX(-30%);
+  animation: sheen 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.ticket-main {
+  padding: 26px 24px 22px;
+}
+.ticket-brand {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 26px;
+}
+.ticket-brand-mark {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  font-size: 14px;
+  color: var(--accent);
+}
+.ticket-brand-sub {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.ticket-names {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ticket-label {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.ticket-tagline {
+  font-size: 12px;
+  color: var(--text-dim);
+  letter-spacing: 0.02em;
+}
+
+/* Perforation + stub */
+.ticket-perf {
+  height: 0;
+  border-top: 2px dashed rgba(182, 154, 229, 0.35);
+  margin: 0 14px;
+  position: relative;
+}
+.ticket-perf::before,
+.ticket-perf::after {
+  content: "";
+  position: absolute;
+  top: -11px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg);
+}
+.ticket-perf::before {
+  left: -25px;
+}
+.ticket-perf::after {
+  right: -25px;
+}
+.ticket-stub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px 18px;
+}
+.ticket-stub-emoji {
+  font-size: 22px;
+}
+.ticket-stub-text {
+  font-family: "Space Grotesk", sans-serif;
+  letter-spacing: 0.18em;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.ticket-shadow {
+  width: 220px;
+  height: 26px;
+  margin-top: 18px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(142, 111, 214, 0.4), transparent);
+  filter: blur(6px);
+}
+
+/* ── Actions ──────────────────────────────────────────────────────────── */
+.btn-primary,
+.btn-secondary {
+  width: 100%;
+  border: none;
+  border-radius: 16px;
+  padding: 16px 18px;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.1s ease, filter 0.1s ease;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+  color: #1a0f2e;
+  box-shadow: 0 10px 26px rgba(142, 111, 214, 0.4);
+}
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+.btn-primary:active,
+.btn-secondary:active {
+  transform: scale(0.98);
+}
+.btn-primary:disabled {
+  filter: grayscale(0.3) brightness(0.8);
+  cursor: default;
+}
+
+.ticket-timer {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 15px;
+  margin: 0;
+}
+
+/* ── Mock payment ─────────────────────────────────────────────────────── */
+.mock-pay {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 24px 4px;
+  animation: rise 0.4s ease both;
+}
+.mock-badge {
+  display: inline-block;
+  background: rgba(182, 154, 229, 0.14);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  margin-bottom: 18px;
+}
+.mock-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 24px;
+  margin: 0 0 6px;
+}
+.mock-sub {
+  color: var(--text-dim);
+  margin: 0 0 22px;
+  font-size: 14px;
+}
+.mock-field {
+  display: block;
+  margin-bottom: 14px;
+}
+.mock-field-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.mock-field-row {
+  display: flex;
+  gap: 12px;
+}
+.mock-field-row .mock-field {
+  flex: 1;
+}
+.mock-input {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 15px 14px;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text);
+}
+.mock-card-brand {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+}
+/* ── Confetti + spinner ───────────────────────────────────────────────── */
+.confetti-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 50;
+}
+.spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid rgba(182, 154, 229, 0.25);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 14px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes sheen {
+  0%,
+  100% {
+    transform: translateX(-40%);
+  }
+  50% {
+    transform: translateX(40%);
+  }
+}
+@keyframes ticket-in {
+  from {
+    opacity: 0;
+    transform: rotateX(28deg) translateY(40px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: rotateX(var(--rx)) rotateY(var(--ry));
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticket-card,
+  .ticket-sheen,
+  .ticket-header,
+  .mock-pay {
+    animation: none;
+  }
+  .ticket-card {
+    transition: none;
+  }
+}
