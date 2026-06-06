@@ -62,8 +62,8 @@ function contextDumpInstruction(language: string | null | undefined): string {
         "тебе пару. Это AI Dating App, и его смысл в том, что он находит максимально " +
         "подходящего человека. Точно так же мы опрашиваем и всех остальных, чтобы " +
         "при встрече у тебя не оказалось неожиданных red-флагов.\n\n" +
-        "Если Telegram разобьёт ответ на несколько сообщений, вставляй все части " +
-        "подряд и нажми Done, когда закончишь."
+        "Если Telegram разобьёт ответ на несколько сообщений, отправь все части " +
+        "подряд — я автоматически начну обработку после короткой паузы."
       );
     case "uk":
       return (
@@ -73,8 +73,8 @@ function contextDumpInstruction(language: string | null | undefined): string {
         "тобі пару. Це AI Dating App, і його сенс у тому, що він знаходить максимально " +
         "підходящу людину. Так само ми опитуємо й усіх інших, щоб при зустрічі у тебе " +
         "не виявилось несподіваних red-флагів.\n\n" +
-        "Якщо Telegram розіб'є відповідь на кілька повідомлень, вставляй усі частини " +
-        "підряд і натисни Done, коли закінчиш."
+        "Якщо Telegram розіб'є відповідь на кілька повідомлень, надішли всі частини " +
+        "підряд — я автоматично почну обробку після короткої паузи."
       );
     case "de":
       return (
@@ -83,8 +83,8 @@ function contextDumpInstruction(language: string | null | undefined): string {
         "Das ist ein kurzer Blick auf dein psychologisches Profil und hilft mir, dich mit " +
         "jemandem wirklich Kompatiblem zu matchen. Genau das machen wir für alle, damit die " +
         "offensichtlichen Red Flags schon gefiltert sind, wenn ihr euch trefft.\n\n" +
-        "Falls Telegram die Antwort in mehrere Nachrichten aufteilt, füge alle Teile nacheinander ein " +
-        "und tippe Done, wenn du fertig bist."
+        "Falls Telegram die Antwort in mehrere Nachrichten aufteilt, sende alle Teile nacheinander. " +
+        "Nach einer kurzen Pause starte ich automatisch mit der Verarbeitung."
       );
     case "pl":
       return (
@@ -93,8 +93,8 @@ function contextDumpInstruction(language: string | null | undefined): string {
         "To szybki odczyt Twojego profilu psychologicznego, który pomaga dobrać Ci " +
         "naprawdę kompatybilną osobę. Robimy to samo dla wszystkich, więc oczywiste red flagi " +
         "są odfiltrowane jeszcze przed spotkaniem.\n\n" +
-        "Jeśli Telegram podzieli odpowiedź na kilka wiadomości, wklej wszystkie części po kolei " +
-        "i kliknij Done, gdy skończysz."
+        "Jeśli Telegram podzieli odpowiedź na kilka wiadomości, wyślij wszystkie części po kolei. " +
+        "Po krótkiej przerwie automatycznie zacznę je przetwarzać."
       );
     default:
       return (
@@ -104,8 +104,8 @@ function contextDumpInstruction(language: string | null | undefined): string {
         "someone genuinely compatible. That's the whole point of an AI Dating App — we " +
         "do the same for everyone, so when you meet your match the obvious red flags " +
         "are already filtered out.\n\n" +
-        "If Telegram splits the response into several messages, paste every part " +
-        "and tap Done when you're finished."
+        "If Telegram splits the response into several messages, send every part in order. " +
+        "I'll process them automatically after a short pause."
       );
   }
 }
@@ -228,7 +228,7 @@ You MUST collect ALL of the following before finalizing:
 
    STRICT BOUNDARIES for the reply that accompanies request_context_dump:
    - Your ONLY job in that turn is the paste-it-back instruction. Tell the user to copy the prompt above and paste it into whatever AI chat they already use — ChatGPT, Claude, Gemini, Perplexity, Grok, DeepSeek, or any other LLM — and send the AI's full response back.
-   - Mention that if the response is long and Telegram splits it into several messages, they should tap the "Done" button that will appear.
+   - Mention that if Telegram splits a long response into several messages, they should send every part in order; the bot will process them automatically after a short pause.
    - Do NOT mention photos. Do NOT mention "next step". Do NOT preview anything that comes after this. From the user's point of view, step 5 does not exist yet.
    - Do NOT call request_photos in the same turn as request_context_dump under any circumstances. Wait for the user to actually paste back the analysis and for save_context_dump to succeed first.
 

@@ -1,4 +1,4 @@
-import { InlineKeyboard, type Api } from "grammy";
+import type { Api } from "grammy";
 import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
 import type { SessionData } from "@gennety/shared";
@@ -30,8 +30,9 @@ import {
 } from "../../services/telegram-profile-media.js";
 import { profileMediaToJson } from "../../services/profile-media-json.js";
 
-/** Callback data for the "I've pasted everything" confirmation button */
+/** Backward compatibility for confirmation buttons sent before auto-flush. */
 const DUMP_DONE_CALLBACK = "dump:done";
+const CONTEXT_DUMP_DEBOUNCE_MS = 2_000;
 
 /**
  * Heuristic split between a real LLM dump and a clarifying question while
@@ -52,16 +53,17 @@ const SHORT_MESSAGE_THRESHOLD = 400;
  * When the agent has requested the context dump (awaitingContextDump = true),
  * incoming text is accumulated in contextDumpBuffer instead of being sent to
  * the agent immediately. This handles Telegram's automatic splitting of long
- * pastes (> 4096 chars) into multiple messages. The user taps "Done" to flush
- * the full buffer to the agent in one shot.
+ * pastes (> 4096 chars) into multiple messages. The full buffer is sent to the
+ * agent automatically after a short pause between incoming chunks.
  */
 export async function handleConversational(ctx: BotContext): Promise<void> {
   const telegramId = BigInt(ctx.from!.id);
 
-  // ---- "Done pasting" confirmation button ----
+  // ---- Legacy confirmation buttons already present in older chats ----
   if (ctx.callbackQuery?.data === DUMP_DONE_CALLBACK) {
     await ctx.answerCallbackQuery();
-    await handleDumpDone(ctx, telegramId);
+    cancelContextDumpFlush(ctx.chat?.id);
+    await flushContextDump(ctx, telegramId);
     return;
   }
 
@@ -138,8 +140,7 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
   // ---- Context dump buffering mode ----
   // When awaitingContextDump is true the Magic Prompt has already been shown.
   // Telegram may split a long paste into multiple messages, so we accumulate
-  // all chunks and only forward the full buffer to the agent when the user
-  // taps the "Done" button.
+  // all chunks and forward the full buffer after a short idle pause.
   //
   // Routing: a short message arriving while the buffer is still empty is
   // almost certainly a question ("why do I need to do this?"), not the LLM
@@ -239,7 +240,8 @@ async function handleContextDumpChunk(
     await ctx.reply(
       "That's more than I can store — let me work with what you've pasted so far.",
     );
-    await handleDumpDone(ctx, telegramId);
+    cancelContextDumpFlush(ctx.chat?.id);
+    await flushContextDump(ctx, telegramId);
     return;
   }
 
@@ -249,16 +251,11 @@ async function handleContextDumpChunk(
   const chunk = truncated ? text.slice(0, Math.max(0, room)) : text;
   ctx.session.contextDumpBuffer = current + separator + chunk;
 
-  // Only show the confirmation prompt on the first chunk (buffer was empty
-  // before we appended). For subsequent chunks just silently accumulate.
+  // Acknowledge only the first chunk. Subsequent parts silently extend the
+  // debounce window so Telegram-split responses arrive as one agent turn.
   if (separator === "") {
-    const doneKeyboard = new InlineKeyboard().text(
-      "Done, I've pasted everything ✅",
-      DUMP_DONE_CALLBACK,
-    );
     await ctx.reply(
-      "Got a piece ✅ — if there's more, keep pasting. Tap Done when you're finished.",
-      { reply_markup: doneKeyboard },
+      "Got it ✅ If Telegram split the response, send the remaining parts now — I'll process everything automatically.",
     );
   }
 
@@ -268,23 +265,64 @@ async function handleContextDumpChunk(
     await ctx.reply(
       "That's all I can store — processing what we have now.",
     );
-    await handleDumpDone(ctx, telegramId);
+    cancelContextDumpFlush(ctx.chat?.id);
+    await flushContextDump(ctx, telegramId);
+    return;
   }
+
+  scheduleContextDumpFlush(ctx, telegramId);
 }
 
 // ---------------------------------------------------------------------------
 // Context dump flush
 // ---------------------------------------------------------------------------
 
+interface ContextDumpAccumulator {
+  chatId: number;
+  telegramId: bigint;
+  api: Api;
+  timer: NodeJS.Timeout;
+}
+
+const contextDumpAccumulators = new Map<number, ContextDumpAccumulator>();
+
+function scheduleContextDumpFlush(ctx: BotContext, telegramId: bigint): void {
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+
+  cancelContextDumpFlush(chatId);
+  const acc: ContextDumpAccumulator = {
+    chatId,
+    telegramId,
+    api: ctx.api,
+    timer: setTimeout(() => {
+      if (contextDumpAccumulators.get(chatId) !== acc) return;
+      contextDumpAccumulators.delete(chatId);
+      dispatchToChat(chatId, () => flushPersistedContextDump(acc)).catch((err) =>
+        console.error("Context dump auto-flush failed:", err),
+      );
+    }, CONTEXT_DUMP_DEBOUNCE_MS),
+  };
+  contextDumpAccumulators.set(chatId, acc);
+}
+
+function cancelContextDumpFlush(chatId: number | undefined): void {
+  if (!chatId) return;
+  const acc = contextDumpAccumulators.get(chatId);
+  if (!acc) return;
+  clearTimeout(acc.timer);
+  contextDumpAccumulators.delete(chatId);
+}
+
 /**
- * Called when the user taps "Done, I've pasted everything ✅".
- * Flushes the accumulated contextDumpBuffer to the LLM agent as a single turn.
+ * Flush the current update's accumulated contextDumpBuffer as a single turn.
+ * Used for the size cap and backward-compatible clicks on old Done buttons.
  */
-async function handleDumpDone(ctx: BotContext, telegramId: bigint): Promise<void> {
+async function flushContextDump(ctx: BotContext, telegramId: bigint): Promise<void> {
   const buffer = ctx.session.contextDumpBuffer.trim();
 
   if (!buffer) {
-    await ctx.reply("Hmm, I don't have anything buffered yet. Paste your result first, then tap Done.");
+    await ctx.reply("Hmm, I don't have anything buffered yet. Paste the AI response first.");
     return;
   }
 
@@ -327,6 +365,78 @@ async function handleDumpDone(ctx: BotContext, telegramId: bigint): Promise<void
     }
     await showMainMenu(ctx);
     await pinStatusBanner(ctx.api, telegramId, ctx.session.language);
+  }
+}
+
+/**
+ * Auto-flush runs outside the Telegram update lifecycle, so it reloads and
+ * persists the Prisma-backed session instead of mutating a stale ctx.session.
+ */
+async function flushPersistedContextDump(
+  acc: ContextDumpAccumulator,
+): Promise<void> {
+  const key = acc.chatId.toString();
+
+  try {
+    const row = await prisma.botSession.findUnique({ where: { key } });
+    const session: SessionData = {
+      ...DEFAULT_SESSION,
+      ...((row?.data ?? {}) as Partial<SessionData>),
+    };
+    const buffer = session.contextDumpBuffer.trim();
+    if (!session.awaitingContextDump || !buffer) return;
+
+    session.awaitingContextDump = false;
+    session.contextDumpBuffer = "";
+
+    const result = await runAgentTurn(acc.telegramId, buffer);
+
+    if (result.contextDumpStarted) {
+      session.awaitingContextDump = true;
+      session.contextDumpBuffer = "";
+      session.expectingPhoto = false;
+    } else if (result.expectingPhoto) {
+      session.expectingPhoto = true;
+    }
+
+    if (result.onboardingComplete) {
+      markOnboardingComplete(session);
+    }
+
+    await prisma.botSession.upsert({
+      where: { key },
+      create: { key, data: session as unknown as object },
+      update: { data: session as unknown as object },
+    });
+
+    await replyText(acc.api, acc.chatId, result.reply);
+
+    if (result.onboardingComplete) {
+      const language = session.language;
+      if (result.verificationRequired) {
+        const { sendVerificationCTABare } = await import("./verification.js");
+        const sent = await sendVerificationCTABare(
+          acc.api,
+          acc.chatId,
+          acc.telegramId,
+          language,
+        );
+        if (sent) return;
+      }
+      const { sendMainMenu } = await import("../menu/main.js");
+      await sendMainMenu(acc.api, acc.chatId, language, acc.telegramId);
+      await pinStatusBanner(acc.api, acc.telegramId, language);
+    }
+  } catch (err) {
+    console.error("Context dump auto-flush failed:", err);
+    try {
+      await acc.api.sendMessage(
+        acc.chatId,
+        "I couldn't process that response. Please send it again.",
+      );
+    } catch {
+      // ignore
+    }
   }
 }
 

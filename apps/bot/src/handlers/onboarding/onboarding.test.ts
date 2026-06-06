@@ -546,29 +546,51 @@ describe("Context dump buffering (multi-chunk paste fix)", () => {
     );
   });
 
-  it("buffers the first long-paste chunk and shows the Done button", async () => {
-    // Real ChatGPT/Claude responses to the Magic Prompt run thousands of
-    // chars; > 400 routes to buffer mode (vs. the question fall-through).
-    const longPaste = "Here is your psychological analysis. ".repeat(20);
-    const ctx = createMockCtx({
-      session: {
-        onboardingStep: "conversational",
-        awaitingContextDump: true,
-        contextDumpBuffer: "",
-      },
-      messageText: longPaste,
-    });
+  it("buffers a long paste without a Done button and auto-flushes after a pause", async () => {
+    vi.useFakeTimers();
+    try {
+      const longPaste = "Here is your psychological analysis. ".repeat(20);
+      const ctx = createMockCtx({
+        session: {
+          onboardingStep: "conversational",
+          awaitingContextDump: true,
+          contextDumpBuffer: "",
+        },
+        messageText: longPaste,
+      });
 
-    await handleConversational(ctx);
+      await handleConversational(ctx);
 
-    // Should NOT have called the agent
-    expect(agentMock).not.toHaveBeenCalled();
-    // Buffer should now contain the chunk
-    expect(ctx.session.contextDumpBuffer).toBe(longPaste);
-    // Should have replied with the Done-button prompt
-    expect(ctx.reply).toHaveBeenCalledTimes(1);
-    const replyText = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(replyText).toContain("Done");
+      expect(agentMock).not.toHaveBeenCalled();
+      expect(ctx.session.contextDumpBuffer).toBe(longPaste);
+      expect(ctx.reply).toHaveBeenCalledWith(
+        expect.stringContaining("process everything automatically"),
+      );
+      expect(ctx.reply).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ reply_markup: expect.anything() }),
+      );
+
+      (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        data: ctx.session,
+      });
+      await vi.advanceTimersByTimeAsync(2_000);
+
+      expect(agentMock).toHaveBeenCalledWith(BigInt(12345), longPaste.trim());
+      expect(prisma.botSession.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: {
+            data: expect.objectContaining({
+              awaitingContextDump: false,
+              contextDumpBuffer: "",
+            }),
+          },
+        }),
+      );
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 
   it("short message while awaiting dump (empty buffer) is treated as a question, not a paste", async () => {
@@ -600,32 +622,53 @@ describe("Context dump buffering (multi-chunk paste fix)", () => {
     // subsequent paste still routes through the buffer.
     expect(ctx.session.contextDumpBuffer).toBe("");
     expect(ctx.session.awaitingContextDump).toBe(true);
-    // No "Done" button prompt was sent — only the agent's reply.
+    // No paste-buffer acknowledgment was sent — only the agent's reply.
     const replies = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls.map(
       (c) => c[0] as string,
     );
-    expect(replies.some((r) => r.includes("Done"))).toBe(false);
+    expect(replies.some((r) => r.includes("automatically"))).toBe(false);
   });
 
-  it("silently accumulates subsequent chunks without extra replies", async () => {
-    const ctx = createMockCtx({
-      session: {
-        onboardingStep: "conversational",
-        awaitingContextDump: true,
-        contextDumpBuffer: "First chunk",
-      },
-      messageText: " Second chunk",
-    });
+  it("silently accumulates subsequent chunks until the debounce expires", async () => {
+    vi.useFakeTimers();
+    try {
+      const firstChunk = "First analysis chunk. ".repeat(25);
+      const ctx = createMockCtx({
+        session: {
+          onboardingStep: "conversational",
+          awaitingContextDump: true,
+          contextDumpBuffer: "",
+        },
+        messageText: firstChunk,
+      });
 
-    await handleConversational(ctx);
+      await handleConversational(ctx);
+      await vi.advanceTimersByTimeAsync(1_000);
 
-    expect(agentMock).not.toHaveBeenCalled();
-    expect(ctx.session.contextDumpBuffer).toBe("First chunk\n Second chunk");
-    // No extra reply for subsequent chunks
-    expect(ctx.reply).not.toHaveBeenCalled();
+      ctx.message = { text: "Second chunk" };
+      await handleConversational(ctx);
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(agentMock).not.toHaveBeenCalled();
+      expect(ctx.session.contextDumpBuffer).toBe(`${firstChunk}\nSecond chunk`);
+      expect(ctx.reply).toHaveBeenCalledTimes(1);
+
+      (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        data: ctx.session,
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(agentMock).toHaveBeenCalledWith(
+        BigInt(12345),
+        `${firstChunk}\nSecond chunk`.trim(),
+      );
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 
-  it("flushes the full buffer to the agent on Done callback", async () => {
+  it("still accepts a legacy Done callback from an older chat message", async () => {
     const ctx = createMockCtx({
       session: {
         onboardingStep: "conversational",
@@ -648,7 +691,7 @@ describe("Context dump buffering (multi-chunk paste fix)", () => {
     expect(ctx.session.contextDumpBuffer).toBe("");
   });
 
-  it("handles Done tap with empty buffer gracefully", async () => {
+  it("handles a stale legacy Done callback with an empty buffer gracefully", async () => {
     const ctx = createMockCtx({
       session: {
         onboardingStep: "conversational",
@@ -662,10 +705,9 @@ describe("Context dump buffering (multi-chunk paste fix)", () => {
 
     // Agent should NOT be called with empty string
     expect(agentMock).not.toHaveBeenCalled();
-    // Should send a helpful nudge
     expect(ctx.reply).toHaveBeenCalledTimes(1);
     const msg = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(msg).toContain("Paste");
+    expect(msg).toContain("Paste the AI response");
   });
 
   it("truncates the incoming chunk when the buffer would overflow and auto-flushes", async () => {
@@ -712,32 +754,48 @@ describe("Context dump buffering (multi-chunk paste fix)", () => {
     expect(passedBuffer).not.toContain("extra paste");
   });
 
-  it("single-chunk dump completes normally if agent saves it on Done", async () => {
-    agentMock.mockResolvedValueOnce({
-      reply: "Got it, now send photos!",
-      expectingPhoto: true,
-      onboardingComplete: false,
-      contextPromptRequested: false,
-      contextDumpStarted: false,
-    });
+  it("single-chunk dump advances to photos after automatic processing", async () => {
+    vi.useFakeTimers();
+    try {
+      agentMock.mockResolvedValueOnce({
+        reply: "Got it, now send photos!",
+        expectingPhoto: true,
+        onboardingComplete: false,
+        contextPromptRequested: false,
+        contextDumpStarted: false,
+      });
 
-    const ctx = createMockCtx({
-      session: {
-        onboardingStep: "conversational",
-        awaitingContextDump: true,
-        contextDumpBuffer: "My full analysis from ChatGPT here...",
-      },
-      callbackData: "dump:done",
-    });
+      const fullDump = "My full analysis from ChatGPT. ".repeat(20);
+      const ctx = createMockCtx({
+        session: {
+          onboardingStep: "conversational",
+          awaitingContextDump: true,
+          contextDumpBuffer: "",
+        },
+        messageText: fullDump,
+      });
 
-    await handleConversational(ctx);
+      await handleConversational(ctx);
+      (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        data: ctx.session,
+      });
+      await vi.advanceTimersByTimeAsync(2_000);
 
-    expect(agentMock).toHaveBeenCalledWith(
-      BigInt(12345),
-      "My full analysis from ChatGPT here...",
-    );
-    expect(ctx.session.expectingPhoto).toBe(true);
-    expect(ctx.session.awaitingContextDump).toBe(false);
+      expect(agentMock).toHaveBeenCalledWith(BigInt(12345), fullDump.trim());
+      expect(prisma.botSession.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: {
+            data: expect.objectContaining({
+              awaitingContextDump: false,
+              expectingPhoto: true,
+            }),
+          },
+        }),
+      );
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 });
 

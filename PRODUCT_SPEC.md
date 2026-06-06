@@ -120,6 +120,8 @@ The final Mini App screen records `User.aiMemoryExportPreference` through
 
 - `accepted` keeps the existing Magic Prompt flow and server-side ordering
   guards (`save_context_dump` before photos/finalization).
+- Long AI responses split by Telegram are buffered and processed automatically
+  after a short idle pause; there is no separate paste-confirmation button.
 - `declined` suppresses the Magic Prompt for the current onboarding run,
   permits photo collection directly after the ordinary profile fields, and
   generates `Profile.psychologicalSummary` + embedding from those fields at
