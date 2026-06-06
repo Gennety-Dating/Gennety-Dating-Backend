@@ -29,6 +29,8 @@ import {
   type IncomingProfileMedia,
 } from "../../services/telegram-profile-media.js";
 import { profileMediaToJson } from "../../services/profile-media-json.js";
+import { runStatusSequence } from "../../services/ai-stream.js";
+import { profileAnalysisSteps } from "../../services/analysis-status.js";
 
 /** Backward compatibility for confirmation buttons sent before auto-flush. */
 const DUMP_DONE_CALLBACK = "dump:done";
@@ -200,6 +202,10 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     }
   }
 
+  if (result.contextDumpSaved && ctx.chat?.id !== undefined) {
+    await runStatusSequence(ctx.api, ctx.chat.id, profileAnalysisSteps(ctx.session.language));
+  }
+
   await sendAgentReply(ctx, result.reply);
 
   if (result.onboardingComplete) {
@@ -350,6 +356,10 @@ async function flushContextDump(ctx: BotContext, telegramId: bigint): Promise<vo
     ctx.session.pendingPhotoScores = [];
   }
 
+  if (result.contextDumpSaved && ctx.chat?.id !== undefined) {
+    await runStatusSequence(ctx.api, ctx.chat.id, profileAnalysisSteps(ctx.session.language));
+  }
+
   await sendAgentReply(ctx, result.reply);
 
   if (result.onboardingComplete) {
@@ -408,6 +418,10 @@ async function flushPersistedContextDump(
       create: { key, data: session as unknown as object },
       update: { data: session as unknown as object },
     });
+
+    if (result.contextDumpSaved) {
+      await runStatusSequence(acc.api, acc.chatId, profileAnalysisSteps(session.language));
+    }
 
     await replyText(acc.api, acc.chatId, result.reply);
 

@@ -76,6 +76,81 @@ export async function streamDrafts(
   await ctx.reply(finalText);
 }
 
+// ---------------------------------------------------------------------------
+// Self-replacing "live status" line
+// ---------------------------------------------------------------------------
+
+export interface StatusStep {
+  /** Status line shown to the user for this step. */
+  text: string;
+  /** How long this text stays on screen before the next transition (ms). */
+  holdMs: number;
+}
+
+export interface StatusSequenceOptions {
+  /** Injectable wait function — tests pass a no-op to avoid real timers. */
+  wait?: (ms: number) => Promise<void>;
+  /**
+   * When true (default) the status message is deleted after the final step so
+   * the caller can send the real result message in its place. When false, the
+   * final step's text is left on screen as a persistent line.
+   */
+  deleteAtEnd?: boolean;
+}
+
+/**
+ * Render a self-replacing "agent is working" status line: a single message
+ * that morphs through `steps` via `editMessageText`, each step held for its
+ * own `holdMs`, then deleted (or left in place).
+ *
+ * This gives the user the felt sense of an agent actively analysing without
+ * stacking a pile of messages or spamming a notification per step (only the
+ * first `sendMessage` notifies; subsequent edits are silent). Degrades
+ * silently if the chat rejects send/edit/delete (blocked bot, message too
+ * old, identical-text edit, etc.) — a cosmetic status must never break the
+ * real flow it decorates.
+ */
+export async function runStatusSequence(
+  api: Api<RawApi>,
+  chatId: number,
+  steps: readonly StatusStep[],
+  options: StatusSequenceOptions = {},
+): Promise<void> {
+  if (steps.length === 0) return;
+
+  const wait = options.wait ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+  const deleteAtEnd = options.deleteAtEnd ?? true;
+
+  let messageId: number;
+  try {
+    const sent = await api.sendMessage(chatId, steps[0]!.text);
+    messageId = sent.message_id;
+  } catch (err) {
+    console.warn("runStatusSequence: initial send failed, skipping status:", err);
+    return;
+  }
+
+  for (let i = 0; i < steps.length; i++) {
+    await wait(steps[i]!.holdMs);
+    const next = steps[i + 1];
+    if (!next) break;
+    try {
+      await api.editMessageText(chatId, messageId, next.text);
+    } catch {
+      // An identical-text edit or a transient Bot API error must not abort the
+      // remaining steps — keep morphing toward the final state.
+    }
+  }
+
+  if (deleteAtEnd) {
+    try {
+      await api.deleteMessage(chatId, messageId);
+    } catch {
+      // Best-effort cleanup; leaving the last line up is acceptable.
+    }
+  }
+}
+
 /** Derive a stable, non-zero int32 draft id from the chat id. */
 function generateDraftId(chatId: number): number {
   // 32-bit unsigned window, avoid 0 (Telegram requires non-zero).

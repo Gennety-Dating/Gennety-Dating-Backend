@@ -15,7 +15,7 @@ vi.mock("../config.js", () => ({
   },
 }));
 
-import { streamDrafts, streamDraftsToChat } from "./ai-stream.js";
+import { streamDrafts, streamDraftsToChat, runStatusSequence } from "./ai-stream.js";
 
 function createCtx(chatId: number = 42) {
   return {
@@ -149,5 +149,80 @@ describe("streamDraftsToChat", () => {
 
     expect(api.sendMessage).toHaveBeenCalledWith(1001, "Final", {});
     warnSpy.mockRestore();
+  });
+});
+
+describe("runStatusSequence", () => {
+  function createApi() {
+    return {
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 7 }),
+      editMessageText: vi.fn().mockResolvedValue(undefined),
+      deleteMessage: vi.fn().mockResolvedValue(undefined),
+    } as any;
+  }
+
+  const steps = [
+    { text: "Step 1", holdMs: 100 },
+    { text: "Step 2", holdMs: 200 },
+    { text: "Step 3", holdMs: 300 },
+  ];
+
+  it("does nothing when steps is empty", async () => {
+    const api = createApi();
+    await runStatusSequence(api, 5, [], { wait: noopWait() });
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("sends first step, edits through the rest, then deletes by default", async () => {
+    const api = createApi();
+    await runStatusSequence(api, 5, steps, { wait: noopWait() });
+
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage).toHaveBeenCalledWith(5, "Step 1");
+    expect(api.editMessageText).toHaveBeenCalledTimes(2);
+    expect(api.editMessageText).toHaveBeenNthCalledWith(1, 5, 7, "Step 2");
+    expect(api.editMessageText).toHaveBeenNthCalledWith(2, 5, 7, "Step 3");
+    expect(api.deleteMessage).toHaveBeenCalledWith(5, 7);
+  });
+
+  it("leaves the final line in place when deleteAtEnd is false", async () => {
+    const api = createApi();
+    await runStatusSequence(api, 5, steps, { wait: noopWait(), deleteAtEnd: false });
+
+    expect(api.editMessageText).toHaveBeenCalledTimes(2);
+    expect(api.deleteMessage).not.toHaveBeenCalled();
+  });
+
+  it("aborts cleanly when the initial send fails", async () => {
+    const api = createApi();
+    api.sendMessage.mockRejectedValueOnce(new Error("blocked"));
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await runStatusSequence(api, 5, steps, { wait: noopWait() });
+
+    expect(api.editMessageText).not.toHaveBeenCalled();
+    expect(api.deleteMessage).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it("keeps morphing when an intermediate edit throws", async () => {
+    const api = createApi();
+    api.editMessageText.mockRejectedValueOnce(new Error("message not modified"));
+
+    await runStatusSequence(api, 5, steps, { wait: noopWait() });
+
+    // Both edits attempted despite the first throwing; final delete still runs.
+    expect(api.editMessageText).toHaveBeenCalledTimes(2);
+    expect(api.deleteMessage).toHaveBeenCalledWith(5, 7);
+  });
+
+  it("holds each step for its own duration", async () => {
+    const api = createApi();
+    const waited: number[] = [];
+    const wait = async (ms: number) => {
+      waited.push(ms);
+    };
+    await runStatusSequence(api, 5, steps, { wait });
+    expect(waited).toEqual([100, 200, 300]);
   });
 });

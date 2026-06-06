@@ -10,6 +10,7 @@ import {
   SUMMARIZE_THRESHOLD,
   KEEP_RECENT_MESSAGES,
   magicContextPrompt,
+  PROFILER_ENTRY_DELAY_MS,
 } from "@gennety/shared";
 import { env } from "../config.js";
 import {
@@ -56,56 +57,53 @@ function contextDumpInstruction(language: string | null | undefined): string {
   switch (language) {
     case "ru":
       return (
-        "Скопируй промпт выше, вставь его в ChatGPT, Claude или любой другой AI-чат, " +
-        "а потом скинь мне полный ответ.\n\n" +
-        "Это простой анализ твоего психологического профиля — он помогает подобрать " +
-        "тебе пару. Это AI Dating App, и его смысл в том, что он находит максимально " +
-        "подходящего человека. Точно так же мы опрашиваем и всех остальных, чтобы " +
-        "при встрече у тебя не оказалось неожиданных red-флагов.\n\n" +
-        "Если Telegram разобьёт ответ на несколько сообщений, отправь все части " +
-        "подряд — я автоматически начну обработку после короткой паузы."
+        "Gennety анализирует ваши диалоги и на их основе подбирает идеальных " +
+        "кандидатов. Чем больше контекста вы даёте — от глобальных ценностей до " +
+        "мелких деталей, — тем точнее ИИ формирует ваш психологический профиль. " +
+        "Мы проводим такой же глубокий опрос для каждого пользователя, чтобы " +
+        "гарантировать максимальную совместимость пары.\n\n" +
+        "Скопируй промпт выше, вставь его в ChatGPT, Claude, Gemini или любой " +
+        "другой AI-чат, а потом скинь мне полный ответ."
       );
     case "uk":
       return (
-        "Скопіюй промпт вище, встав його в ChatGPT, Claude або будь-який інший AI-чат, " +
-        "а потім надішли мені повну відповідь.\n\n" +
-        "Це простий аналіз твого психологічного профілю — він допомагає підібрати " +
-        "тобі пару. Це AI Dating App, і його сенс у тому, що він знаходить максимально " +
-        "підходящу людину. Так само ми опитуємо й усіх інших, щоб при зустрічі у тебе " +
-        "не виявилось несподіваних red-флагів.\n\n" +
-        "Якщо Telegram розіб'є відповідь на кілька повідомлень, надішли всі частини " +
-        "підряд — я автоматично почну обробку після короткої паузи."
+        "Gennety аналізує ваші діалоги й на їх основі підбирає ідеальних " +
+        "кандидатів. Чим більше контексту ви даєте — від глобальних цінностей до " +
+        "дрібних деталей, — тим точніше ШІ формує ваш психологічний профіль. " +
+        "Ми проводимо таке саме глибоке опитування для кожного користувача, щоб " +
+        "гарантувати максимальну сумісність пари.\n\n" +
+        "Скопіюй промпт вище, встав його в ChatGPT, Claude, Gemini або будь-який " +
+        "інший AI-чат, а потім надішли мені повну відповідь."
       );
     case "de":
       return (
-        "Kopiere den Prompt oben, füge ihn in ChatGPT, Claude oder einen anderen AI-Chat ein " +
-        "und schick mir danach die vollständige Antwort.\n\n" +
-        "Das ist ein kurzer Blick auf dein psychologisches Profil und hilft mir, dich mit " +
-        "jemandem wirklich Kompatiblem zu matchen. Genau das machen wir für alle, damit die " +
-        "offensichtlichen Red Flags schon gefiltert sind, wenn ihr euch trefft.\n\n" +
-        "Falls Telegram die Antwort in mehrere Nachrichten aufteilt, sende alle Teile nacheinander. " +
-        "Nach einer kurzen Pause starte ich automatisch mit der Verarbeitung."
+        "Gennety analysiert deine Gespräche und schlägt auf dieser Grundlage ideale " +
+        "Kandidaten vor. Je mehr Kontext du gibst — von grundlegenden Werten bis zu " +
+        "kleinen Details —, desto genauer erstellt die KI dein psychologisches Profil. " +
+        "Wir führen für jeden Nutzer dieselbe tiefgehende Befragung durch, um maximale " +
+        "Kompatibilität des Paares zu gewährleisten.\n\n" +
+        "Kopiere den Prompt oben, füge ihn in ChatGPT, Claude, Gemini oder einen " +
+        "anderen AI-Chat ein und schick mir danach die vollständige Antwort."
       );
     case "pl":
       return (
-        "Skopiuj prompt powyżej, wklej go do ChatGPT, Claude albo innego czatu AI, " +
-        "a potem wyślij mi pełną odpowiedź.\n\n" +
-        "To szybki odczyt Twojego profilu psychologicznego, który pomaga dobrać Ci " +
-        "naprawdę kompatybilną osobę. Robimy to samo dla wszystkich, więc oczywiste red flagi " +
-        "są odfiltrowane jeszcze przed spotkaniem.\n\n" +
-        "Jeśli Telegram podzieli odpowiedź na kilka wiadomości, wyślij wszystkie części po kolei. " +
-        "Po krótkiej przerwie automatycznie zacznę je przetwarzać."
+        "Gennety analizuje Twoje rozmowy i na ich podstawie dobiera idealnych " +
+        "kandydatów. Im więcej kontekstu podasz — od fundamentalnych wartości po " +
+        "drobne szczegóły — tym dokładniej AI tworzy Twój profil psychologiczny. " +
+        "Przeprowadzamy taką samą pogłębioną ankietę dla każdego użytkownika, aby " +
+        "zapewnić maksymalne dopasowanie pary.\n\n" +
+        "Skopiuj prompt powyżej, wklej go do ChatGPT, Claude, Gemini albo innego " +
+        "czatu AI, a potem wyślij mi pełną odpowiedź."
       );
     default:
       return (
-        "Copy the prompt above, paste it into ChatGPT, Claude, or any AI chat you use, " +
-        "then send me the full response.\n\n" +
-        "It's a quick read on your psychological profile that helps me match you with " +
-        "someone genuinely compatible. That's the whole point of an AI Dating App — we " +
-        "do the same for everyone, so when you meet your match the obvious red flags " +
-        "are already filtered out.\n\n" +
-        "If Telegram splits the response into several messages, send every part in order. " +
-        "I'll process them automatically after a short pause."
+        "Gennety analyzes your conversations and selects potential dates based on " +
+        "the information gathered. It performs best when it has more knowledge about " +
+        "you and a diverse context of your life, capturing even the smallest details. " +
+        "This analysis of your psychological profile helps in finding the most " +
+        "suitable match for you. We interview all other users in exactly the same way.\n\n" +
+        "Copy the prompt above, paste it into ChatGPT, Claude, Gemini, or any other " +
+        "AI chat, and then send me the full response."
       );
   }
 }
@@ -130,6 +128,13 @@ export interface AgentTurnResult {
    * agent (Telegram splits long pastes into multiple messages).
    */
   contextDumpStarted: boolean;
+  /**
+   * When true, a context dump was parsed and saved in THIS turn. The handler
+   * uses it to play the "analysing your profile" status sequence before the
+   * follow-up reply (the photo request). Distinct from `contextDumpStarted`,
+   * which fires when the Magic Prompt is first shown.
+   */
+  contextDumpSaved: boolean;
 }
 
 /** Injectable dependencies for testing */
@@ -1158,14 +1163,29 @@ async function execFinalizeOnboarding(
       env.PERSONA_TEMPLATE_ID && env.PERSONA_ENVIRONMENT_ID && env.PERSONA_WEBHOOK_SECRET,
     );
 
-  await prisma.user.update({
+  const finalized = await prisma.user.update({
     where: { telegramId },
     data: {
       onboardingStep: "completed",
       ...(personaEnabled ? {} : { status: "active" }),
       ...reEngagementStopPatch,
     },
+    select: { id: true, profile: { select: { profilerStartedAt: true } } },
   });
+
+  // Arm the Profiler (PRODUCT_SPEC §Phase 1b): first question fires ~10 min
+  // after onboarding completes (the worker defers it out of local quiet
+  // hours). Idempotent — skip if already armed (re-finalize / resume).
+  if (finalized?.profile && !finalized.profile.profilerStartedAt) {
+    const now = new Date();
+    await prisma.profile.update({
+      where: { userId: finalized.id },
+      data: {
+        profilerStartedAt: now,
+        profilerNextAt: new Date(now.getTime() + PROFILER_ENTRY_DELAY_MS),
+      },
+    });
+  }
 
   return JSON.stringify({
     success: true,
@@ -1408,6 +1428,7 @@ export async function runAgentTurn(
   let verificationRequired = false;
   let contextPromptRequested = false;
   let contextDumpStarted = false;
+  let contextDumpSaved = false;
 
   // Loop: call OpenAI, handle tool_calls, repeat until we get a text reply
   const MAX_TOOL_ROUNDS = 8;
@@ -1589,6 +1610,7 @@ export async function runAgentTurn(
       });
 
       if (fnName === "save_context_dump" && toolResultSucceeded(result)) {
+        contextDumpSaved = true;
         history.push(contextDumpSavedSystemMessage());
       }
 
@@ -1644,6 +1666,7 @@ export async function runAgentTurn(
     verificationRequired,
     contextPromptRequested,
     contextDumpStarted,
+    contextDumpSaved,
   };
 }
 

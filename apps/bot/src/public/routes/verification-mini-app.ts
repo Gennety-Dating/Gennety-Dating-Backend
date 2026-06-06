@@ -6,6 +6,8 @@ import type { Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
 import { pullVerificationStatus } from "../../services/verification-pipeline.js";
+import { runStatusSequence } from "../../services/ai-stream.js";
+import { verifyAnalysisSteps } from "../../services/analysis-status.js";
 
 /**
  * Verification Mini App endpoints (Phase 6.3 — Persona embedded flow).
@@ -182,7 +184,7 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
 
       const user = await prisma.user.findUnique({
         where: { telegramId: BigInt(auth.user.id) },
-        select: { id: true, personaInquiryId: true },
+        select: { id: true, personaInquiryId: true, language: true },
       });
       if (!user) {
         res.status(404).json({ error: "user-not-found" });
@@ -237,6 +239,16 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
           err,
         });
       });
+
+      // Fire-and-forget a short, outcome-neutral "checking your photos" status
+      // the moment the selfie lands — covers the gap before the async pipeline
+      // delivers the real verified/rejected/review verdict. Deletes itself; the
+      // pipeline DM is the source of truth, so this only narrates the work.
+      void runStatusSequence(
+        api,
+        auth.user.id,
+        verifyAnalysisSteps((user.language ?? "en") as Language),
+      ).catch(() => {});
 
       res.status(200).json({ ok: true });
     },

@@ -9,6 +9,8 @@ import { pullVerificationStatus } from "../../services/verification-pipeline.js"
 import { showMainMenu } from "../menu/main.js";
 import { pinStatusBanner } from "../../services/status-banner.js";
 import { UNVERIFIED_ELO_PENALTY } from "../../utils/elo-calculator.js";
+import { runStatusSequence } from "../../services/ai-stream.js";
+import { skipAnalysisSteps } from "../../services/analysis-status.js";
 import type { BotContext } from "../../session.js";
 
 /**
@@ -337,6 +339,12 @@ export async function handleVerificationSkipConfirm(
       onboardingStep: "completed",
     },
   });
+
+  // Even when the user skips Persona, narrate the profile build so the app
+  // feels like it's working rather than going silent on activation.
+  if (ctx.chat?.id !== undefined) {
+    await runStatusSequence(ctx.api, ctx.chat.id, skipAnalysisSteps(lang));
+  }
 
   await ctx.reply(t(lang, "verifySkipped"));
   await showMainMenu(ctx);
