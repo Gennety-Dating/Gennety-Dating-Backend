@@ -68,7 +68,7 @@ const args = new Map(
 const force = args.get("force") === "true";
 const keepOpen = args.get("keep-open") === "true";
 const primaryTg = BigInt(args.get("primary-tg") ?? "782065541");
-const secondaryTg = BigInt(args.get("secondary-tg") ?? "1046214432");
+const secondaryTg = BigInt(args.get("secondary-tg") ?? "5986970093");
 
 // Two commute origins in central Kyiv ~1.5km apart (the venue picker
 // resolves a fair midpoint cafe between them).
@@ -140,7 +140,14 @@ async function loadUser(telegramId) {
       id: true, telegramId: true, firstName: true, status: true,
       onboardingStep: true, isEmailVerified: true, universityDomain: true,
       gender: true, preference: true, verificationStatus: true, language: true,
-      profile: { select: { photos: true } },
+      profile: {
+        select: {
+          photos: true,
+          homeCityKey: true,
+          latitude: true,
+          longitude: true,
+        },
+      },
     },
   });
 }
@@ -151,13 +158,24 @@ function assertReady(label, u) {
   if (u.onboardingStep !== "completed") throw new Error(`${label} onboardingStep=${u.onboardingStep}, expected completed.`);
   if (!u.isEmailVerified || !u.universityDomain) throw new Error(`${label} missing verified email/domain.`);
   if (!u.gender || !u.preference) throw new Error(`${label} missing gender/preference.`);
+  if (!u.profile?.homeCityKey || u.profile.latitude === null || u.profile.longitude === null) {
+    throw new Error(`${label} missing dating city/coordinates.`);
+  }
 }
 
 async function main() {
   if (process.env.BOT_USERNAME !== "gennetytestbot" && !force) {
     throw new Error("Refusing to run outside the dev bot. Expected BOT_USERNAME=gennetytestbot (pass --force to override).");
   }
+  if (!process.env.DATABASE_URL?.includes("localhost:5434/gennety_dev") && !force) {
+    throw new Error("Refusing to run outside the local localhost:5434/gennety_dev database.");
+  }
   if (!process.env.BOT_TOKEN) throw new Error("Missing BOT_TOKEN in local env.");
+  if (process.env.TICKET_FEATURE_ENABLED === "true") {
+    throw new Error(
+      "Set TICKET_FEATURE_ENABLED=false and restart the bot for this automated no-ticket flow. Test the ticket gate manually in its separate QA pass.",
+    );
+  }
 
   const db = await import("@gennety/db");
   prisma = db.prisma;
@@ -175,16 +193,18 @@ async function main() {
   const secondary = await loadUser(secondaryTg);
   assertReady("Primary (A)", primary);
   assertReady("Secondary (B)", secondary);
-  if (primary.universityDomain !== secondary.universityDomain) {
-    throw new Error(`Domains differ: ${primary.universityDomain} vs ${secondary.universityDomain}.`);
+  if (primary.profile.homeCityKey !== secondary.profile.homeCityKey) {
+    throw new Error(
+      `Dating cities differ: ${primary.profile.homeCityKey} vs ${secondary.profile.homeCityKey}.`,
+    );
   }
   const langA = primary.language ?? "en";
   const langB = secondary.language ?? "en";
 
   console.log(JSON.stringify({
     bot: process.env.BOT_USERNAME,
-    A: { tg: primary.telegramId.toString(), name: primary.firstName, gender: primary.gender, photos: primary.profile?.photos?.length ?? 0 },
-    B: { tg: secondary.telegramId.toString(), name: secondary.firstName, gender: secondary.gender, photos: secondary.profile?.photos?.length ?? 0 },
+    A: { tg: primary.telegramId.toString(), name: primary.firstName, gender: primary.gender, city: primary.profile.homeCityKey, photos: primary.profile.photos.length },
+    B: { tg: secondary.telegramId.toString(), name: secondary.firstName, gender: secondary.gender, city: secondary.profile.homeCityKey, photos: secondary.profile.photos.length },
   }, null, 2));
   if ((primary.profile?.photos?.length ?? 0) === 0 || (secondary.profile?.photos?.length ?? 0) === 0) {
     console.log("NOTE: one or both profiles have 0 photos — the pitch photo card is skipped (text-only pitch). All other stages run normally.");

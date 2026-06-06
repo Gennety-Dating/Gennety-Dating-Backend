@@ -33,11 +33,20 @@ function loadEnv(p, ov) {
 loadEnv(resolve(root, ".env.local"), true);
 loadEnv(resolve(root, ".env"), false);
 
-const IDS = { A: 782065541n, B: 1046214432n };
+const IDS = { A: 782065541n, B: 5986970093n };
 const OPEN = ["proposed", "negotiating", "negotiating_venue", "scheduled"];
 const POLL_MS = 8000;
 const MAX_RUNTIME_MS = 3 * 60 * 60 * 1000; // 3h safety stop
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+if (
+  process.env.BOT_USERNAME !== "gennetytestbot" ||
+  !process.env.DATABASE_URL?.includes("localhost:5434/gennety_dev")
+) {
+  throw new Error(
+    "Refusing to run: expected BOT_USERNAME=gennetytestbot and the local localhost:5434/gennety_dev database.",
+  );
+}
 
 function telegramApi(token) {
   const base = `https://api.telegram.org/bot${token}`;

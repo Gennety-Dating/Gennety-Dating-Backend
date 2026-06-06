@@ -13,7 +13,7 @@
  * Optional:
  *   --primary-tg=782065541 --secondary-tg=5986970093
  *   --replace-open     cancel current in-flight matches for either account
- *   --no-align-email   do not copy the primary verified domain to secondary
+ *   --align-email      legacy helper: copy the primary domain to secondary
  *   --force            allow non-DEP bot / compatibility override
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -67,7 +67,7 @@ if (args.has("help")) {
 const apply = args.get("apply") === "true";
 const force = args.get("force") === "true";
 const replaceOpen = args.get("replace-open") === "true";
-const alignEmail = args.get("align-email") !== "false" && args.get("no-align-email") !== "true";
+const alignEmail = args.get("align-email") === "true";
 const primaryTg = BigInt(args.get("primary-tg") ?? "782065541");
 const secondaryTg = BigInt(args.get("secondary-tg") ?? "5986970093");
 let prisma;
@@ -95,6 +95,13 @@ function assertReady(label, user) {
   }
   if (!user.isEmailVerified || !user.universityDomain) {
     throw new Error(`${label} must have verified email and universityDomain.`);
+  }
+  if (
+    !user.profile?.homeCityKey ||
+    user.profile.latitude === null ||
+    user.profile.longitude === null
+  ) {
+    throw new Error(`${label} must have a dating city and coordinates.`);
   }
   if (!user.gender || !user.preference) {
     throw new Error(`${label} must have gender and preference set.`);
@@ -163,6 +170,9 @@ async function loadUser(telegramId) {
           psychologicalSummary: true,
           embeddingDirty: true,
           eloScore: true,
+          homeCityKey: true,
+          latitude: true,
+          longitude: true,
         },
       },
     },
@@ -223,6 +233,11 @@ async function main() {
       "Refusing to run outside the DEP bot. Expected BOT_USERNAME=gennetytestbot; pass --force only if you are absolutely sure.",
     );
   }
+  if (!process.env.DATABASE_URL?.includes("localhost:5434/gennety_dev") && !force) {
+    throw new Error(
+      "Refusing to run outside the local localhost:5434/gennety_dev database.",
+    );
+  }
   if (!process.env.BOT_TOKEN) {
     throw new Error("Missing BOT_TOKEN in local env.");
   }
@@ -239,9 +254,9 @@ async function main() {
   assertReady("Primary", primary);
   assertReady("Secondary", secondary);
 
-  if (primary.universityDomain !== secondary.universityDomain) {
+  if (primary.profile.homeCityKey !== secondary.profile.homeCityKey) {
     throw new Error(
-      `University domains differ (${primary.universityDomain} vs ${secondary.universityDomain}). Run with email alignment or fix test data.`,
+      `Dating cities differ (${primary.profile.homeCityKey} vs ${secondary.profile.homeCityKey}).`,
     );
   }
 
@@ -278,6 +293,7 @@ async function main() {
       tg: primary.telegramId.toString(),
       email: maskEmail(primary.email),
       domain: primary.universityDomain,
+      city: primary.profile.homeCityKey,
       status: primary.status,
       verificationStatus: primary.verificationStatus,
     },
@@ -285,6 +301,7 @@ async function main() {
       tg: secondary.telegramId.toString(),
       email: maskEmail(secondary.email),
       domain: secondary.universityDomain,
+      city: secondary.profile.homeCityKey,
       status: secondary.status,
       verificationStatus: secondary.verificationStatus,
     },

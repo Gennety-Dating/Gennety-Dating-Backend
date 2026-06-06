@@ -12,8 +12,9 @@
  *   - bot_sessions row deleted (so stale `onboardingStep=completed` session
  *     state doesn't shadow the DB on first /start).
  *
- * Usage: pnpm dev:reset-onboarding [--apply]
- *        (dry-run by default; pass --apply to write)
+ * Usage:
+ *   pnpm dev:reset-onboarding        # dry-run
+ *   pnpm dev:reset-onboarding:apply  # write
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -36,7 +37,16 @@ loadEnv(resolve(root, ".env.local"), true);
 loadEnv(resolve(root, ".env"), false);
 
 const apply = process.argv.includes("--apply");
-const IDS = [782065541n, 1046214432n];
+const IDS = [782065541n, 5986970093n];
+
+if (
+  process.env.BOT_USERNAME !== "gennetytestbot" ||
+  !process.env.DATABASE_URL?.includes("localhost:5434/gennety_dev")
+) {
+  throw new Error(
+    "Refusing to run: expected BOT_USERNAME=gennetytestbot and the local localhost:5434/gennety_dev database.",
+  );
+}
 
 const { prisma } = await import("@gennety/db");
 

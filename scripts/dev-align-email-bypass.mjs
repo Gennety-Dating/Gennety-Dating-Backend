@@ -77,6 +77,11 @@ async function main() {
       "Refusing to run outside the DEP bot. Expected BOT_USERNAME=gennetytestbot; pass --force only if you are absolutely sure.",
     );
   }
+  if (!process.env.DATABASE_URL?.includes("localhost:5434/gennety_dev") && !force) {
+    throw new Error(
+      "Refusing to run outside the local localhost:5434/gennety_dev database.",
+    );
+  }
 
   ({ prisma } = await import("@gennety/db"));
 
