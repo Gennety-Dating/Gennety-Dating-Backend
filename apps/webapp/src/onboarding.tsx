@@ -30,7 +30,7 @@ const TRAP_BACKGROUND =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuDT22v5JOFjqN2g1VkI86PnzZJ_vTS3whfVoE4pTqZMVY_zqEjFKQf0fGlab3jjVTIxx1gKK5zx4u10XcEtFiFDqeEsGaLjoNTdZMWbR46RULeC47iOvuiqYHU8PJrKZ9kQVqufAHWY-pv_0RSTu1V7cSz_tLD89uoBf8RE9OxG9ZhXIGcEKvxkjcwB3oa3Kf9KjRlxyoUZcBMol4eX5hJ6Oh2_fhyciV6tYxlSEoexfNp4Pr7iGISmsLdSC0fp35_bW0OO_cj0xmGN";
 const VISUAL_LAST_INDEX = 2;
 const HOOK_AUTO_ADVANCE_MS = 2000;
-const DRUM_CYCLE_INTERVAL_MS = 1500;
+const DRUM_CYCLE_INTERVAL_MS = 2500;
 const PRIVACY_POLICY_URL = "https://gennety.com/privacy";
 
 type RemoteUser = TelegramOnboardingState["user"];
