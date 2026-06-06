@@ -289,6 +289,13 @@ export interface IceBreakersInput {
   userSummary: string | null;
   matchSummary: string | null;
   language: string;
+  /**
+   * Weighted Profiler answers from the MATCH (the partner) — the primary,
+   * highest-signal source for icebreakers (PRODUCT_SPEC §Phase 1b / §5.2).
+   * Null/empty falls back to the psychological summaries above. Each line is
+   * pre-tagged with a weight; emphasise higher-weight threads.
+   */
+  matchProfilerBlock?: string | null;
 }
 
 /**
@@ -296,12 +303,15 @@ export interface IceBreakersInput {
  * starters sent 5 hours before the date.
  */
 export function generateIceBreakersPrompt(input: IceBreakersInput): string {
+  const profilerSection = input.matchProfilerBlock
+    ? `\n## ${input.matchFirstName}'s own answers (PRIMARY source — build the starters from these; higher weight = more important)\n${input.matchProfilerBlock}\n`
+    : "";
   return `You help people start conversations. In 5 hours, **${input.userFirstName}** meets **${input.matchFirstName}** on a first date. Give them 3 natural conversation starters.
 
 ## Profiles
 - ${input.userFirstName}: ${input.userSummary ?? "(no profile summary available)"}
 - ${input.matchFirstName}: ${input.matchSummary ?? "(no profile summary available)"}
-
+${profilerSection}
 ## Your Task
 Generate exactly 3 conversation starters in **${input.language}**. Each must:
 1. Be a real question or topic — not a pickup line, not a compliment on looks.
@@ -336,6 +346,12 @@ export interface WingmanHintInput {
   /** Target's psychological summary — the source of the insider tip. */
   targetSummary: string | null;
   language: string;
+  /**
+   * Weighted Profiler answers from the TARGET — the primary, highest-signal
+   * source for the tip (PRODUCT_SPEC §Phase 1b). Null/empty falls back to the
+   * target's psychological summary.
+   */
+  targetProfilerBlock?: string | null;
 }
 
 /**
@@ -350,12 +366,15 @@ export interface WingmanHintInput {
  * between the two calls; the prompt itself is one-sided.
  */
 export function generateWingmanHintPrompt(input: WingmanHintInput): string {
+  const profilerSection = input.targetProfilerBlock
+    ? `\n## ${input.targetFirstName}'s own answers (PRIMARY source — base the tip on these; higher weight = more important)\n${input.targetProfilerBlock}\n`
+    : "";
   return `You are the mutual friend who introduced ${input.viewerFirstName} and ${input.targetFirstName}. In 90 minutes they meet for their first date. Give ${input.viewerFirstName} exactly ONE insider tip about ${input.targetFirstName} — the kind of thing a wingman whispers in the hallway right before the date.
 
 ## Profiles (internal, do NOT quote verbatim)
 - ${input.targetFirstName} (the one the tip is about): ${input.targetSummary ?? "(no profile summary available)"}
 - ${input.viewerFirstName} (the one receiving the tip): ${input.viewerSummary ?? "(no profile summary available)"}
-
+${profilerSection}
 ## Your Task
 Output ONE sentence in **${input.language}**. It must:
 1. Be phrased as an imperative ("Ask him about…", "Get her to tell you about…", "Bring up…").
@@ -375,6 +394,51 @@ Tone: casual, confidential, curious. Like a text from a friend right before the 
 
 ## Format
 Return the sentence only. No numbering, no quotes, no explanation.`;
+}
+
+// ---------------------------------------------------------------------------
+// #4c — generateDateHintsPrompt (Phase 1b / Phase 4 — source-masked planning)
+// ---------------------------------------------------------------------------
+
+export interface DateHintsInput {
+  /** Name of the user the hints are written for. */
+  viewerFirstName: string;
+  /**
+   * Weighted Profiler answers from the PARTNER — the source of the advice.
+   * The hints must never reveal that this is where they came from.
+   */
+  partnerProfilerBlock: string | null;
+  language: string;
+}
+
+/**
+ * System prompt for the §6 "hints": 2–3 concrete, source-masked date-planning
+ * tips derived from the partner's Profiler answers. The defining constraint is
+ * tone (PRODUCT_SPEC §6.3): direct, actionable, and phrased as Gennety's own
+ * light suggestion — NEVER "she said…" / "his profile shows…".
+ */
+export function generateDateHintsPrompt(input: DateHintsInput): string {
+  return `You are Gennety, a warm matchmaking concierge giving ${input.viewerFirstName} a couple of light, practical tips to plan a great first date.
+
+## What you know (INTERNAL — never reveal or attribute this)
+${input.partnerProfilerBlock ?? "(nothing specific — give safe, universally-good first-date advice)"}
+
+## Your Task
+Write 2–3 short planning tips in **${input.language}**. Each must:
+1. Be concrete and actionable ("pick somewhere cosy and quiet", "suggest a short walk").
+2. Be phrased as YOUR friendly suggestion — "trust us", "this tends to land well".
+3. NEVER reveal or hint that this comes from the other person's answers. Do NOT say "she/he prefers…", "their profile…", "they told us…".
+4. Higher-weight items matter more — let them drive the advice.
+
+Tone: warm, direct, confident. No formal phrasing in Russian/Ukrainian/German/Polish — use natural, native phrasing.
+
+## Never do these
+- Attributing anything to the partner ("she likes…", "he said…").
+- Vague filler ("just be yourself", "have fun").
+- More than 3 tips.
+
+## Format
+2–3 short bullet lines starting with "• ". No preamble, no closing.`;
 }
 
 // ---------------------------------------------------------------------------

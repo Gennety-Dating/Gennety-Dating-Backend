@@ -37,6 +37,23 @@ export async function pinStatusBanner(
 
   const chatId = Number(telegramId);
   try {
+    // Clear any stale pinned banners left over from a previous
+    // registration cycle. When a user's row is reset (dev DB reset, or
+    // account deletion + re-onboarding in prod) `statusMessageId` goes
+    // back to null, but the old pinned message physically remains in the
+    // Telegram chat — we no longer hold its id, so we can't unpin it by id.
+    // Without this, each re-registration stacks another pinned banner.
+    // In a 1:1 bot chat the only pins are our own banners, and the bot
+    // needs no admin rights to unpin in a private chat, so clearing all
+    // of them is safe. A failure here must never block pinning the fresh
+    // banner.
+    await api.unpinAllChatMessages(chatId).catch((err) => {
+      console.warn(
+        `[status-banner] unpinAll failed for ${telegramId}:`,
+        (err as Error).message,
+      );
+    });
+
     const msg = await api.sendMessage(chatId, text);
     await api.pinChatMessage(chatId, msg.message_id, {
       disable_notification: true,

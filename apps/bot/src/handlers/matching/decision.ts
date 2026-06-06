@@ -4,8 +4,10 @@ import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
 import { createMatchEvent } from "../../services/match-events.js";
 import { startScheduling } from "./scheduler.js";
+import { sendTicketOffer } from "./ticket-gate.js";
 import { updateEloScores } from "../../utils/elo-calculator.js";
 import { buildDeclineReasonKeyboard } from "./decline-feedback.js";
+import { syncTelegramUsername } from "../../utils/username.js";
 
 /**
  * Match decision handler — Accept / Decline.
@@ -141,6 +143,10 @@ export async function handleMatchDecision(ctx: BotContext): Promise<void> {
   if (ownPrior !== null) return;
 
   if (action === "accept") {
+    // Capture the public Telegram username on the path to every scheduled date,
+    // so the pre-date coordination offer can build a `t.me/<username>` link
+    // without a fresh /start. Best-effort, never blocks the decision.
+    void syncTelegramUsername(BigInt(ctx.from!.id), ctx.from?.username).catch(() => {});
     await handleAccept(ctx, match, side);
     return;
   }
@@ -286,7 +292,14 @@ async function handleAccept(
       t(peerLang, "matchBothAccepted"),
       ...(effectId ? [{ message_effect_id: effectId }] : []),
     );
-    await startScheduling(ctx.api, match.id);
+    // Date Ticket gate: when enabled, both users must pay (mock) for a ticket
+    // before scheduling unlocks. When disabled (default), hand off straight to
+    // the Calendar Mini App exactly as before. Telegram-only in v1.
+    if (env.TICKET_FEATURE_ENABLED) {
+      await sendTicketOffer(ctx.api, match.id);
+    } else {
+      await startScheduling(ctx.api, match.id);
+    }
     return;
   }
 

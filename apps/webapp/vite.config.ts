@@ -20,6 +20,8 @@ export default defineConfig({
         location: resolve(__dirname, "location.html"),
         onboarding: resolve(__dirname, "onboarding.html"),
         verification: resolve(__dirname, "verification.html"),
+        ticket: resolve(__dirname, "ticket.html"),
+        "venue-change": resolve(__dirname, "venue-change.html"),
       },
     },
   },

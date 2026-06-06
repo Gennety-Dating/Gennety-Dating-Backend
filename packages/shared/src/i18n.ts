@@ -313,6 +313,14 @@ const translations = {
     matchScheduleIter3:
       "Open the calendar, pick dates, then mark every time that works for you. Your match sees them live and can lock in the date with one tap.",
     matchScheduleBtnCalendar: "📅 Open Calendar",
+    // --- Date Ticket (premium post-accept gate) ---
+    ticketCardCaption:
+      "It's mutual 🔥\n\nOne last step before you plan: claim your *Date Ticket* — a curated, verified, zero-drama first date. Tap below to open it.",
+    ticketButton: "🎟️ Get your date ticket",
+    ticketBothSecuredDm: "Both tickets secured 🎟️✨ Your date is on — let's pick a time.",
+    ticketPartnerPaidDm: "{name} already covered your date ticket ❤️ You're all set — nothing to pay.",
+    ticketRefundedDm:
+      "Your match didn't grab their ticket in time, so we've refunded yours. No worries — we've opened scheduling for free. Let's find a time 📅",
     matchScheduleNoOverlap:
       "No overlap yet — next round.",
     matchScheduled: "Locked in! {venue} — see you there 🤝",
@@ -341,10 +349,53 @@ const translations = {
       "Heads up — picked a public café instead. We keep first dates in public spots.",
     venueWaitingPeer: "Got yours ✅ Waiting on the other person…",
     venueSearching: "Searching for the perfect spot between you two… 🔍",
+    venueSearchStep2: "📍 Comparing routes and travel time for you both…",
+    venueSearchStep3: "✨ Picking the best spot for your vibe…",
+    onbAnalyzeStep1: "🧠 Reading your context…",
+    onbAnalyzeStep2: "🧩 Extracting your key traits and values…",
+    onbAnalyzeStep3: "🧮 Building your psychological profile…",
+    verifyAnalyzeStep1: "🔍 Matching your selfie against your photos…",
+    verifyAnalyzeStep2: "🧬 Analyzing facial features…",
+    verifyAnalyzeStep3: "⏳ Finalizing the check…",
+    skipAnalyzeStep1: "✨ Got it. Finishing your profile…",
+    skipAnalyzeStep2: "🧮 Finalizing your psychological profile…",
+    skipAnalyzeStep3: "💞 Getting you ready for the weekly matching…",
+    profilerBatchSaving: "🧩 Adding your answers to your profile…",
+    profilerBatchSaved:
+      "✅ Updated your preference notes — I'll factor this into the next match.",
+
+    // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
+    venueChangeFemaleButton: "🔄 Change venue",
+    venueChangeFemaleHint:
+      "By the way — you have a one-time option to change this venue. " +
+      "Tap *Change venue* above to pick another spot nearby. Your match will " +
+      "have to confirm it, and you can only do this once.",
+    venueChangeMaleIntro: "Your match would like to change the venue.",
+    venueChangeMaleNewVenue: "New place: {venue}",
+    venueChangeMaleComment: "Their note:",
+    venueChangeMaleAsk:
+      "Accept the new place, or decline. Declining cancels the date.",
+    venueChangeBtnAccept: "✅ Accept new place",
+    venueChangeBtnDecline: "❌ Decline (cancel date)",
+    venueChangeDeclineConfirm:
+      "Are you sure? If you don't accept the proposed place, your date and match " +
+      "will be cancelled permanently — there's no undo.",
+    venueChangeBtnConfirmCancel: "Yes, cancel the match",
+    venueChangeBtnBack: "No, I changed my mind",
+    venueChangeAcceptedFemale: "Your match accepted the new place! 🎉 {venue}",
+    venueChangeAcceptedMaleAck: "Done — the venue is updated. {venue}",
+    venueChangeCancelledFemale:
+      "Your match didn't accept the new place, so the date was cancelled.",
+    venueChangeCancelledMale: "The date has been cancelled.",
+    venueChangeExpiredCancel:
+      "The window to confirm the new place ran out, so the date was cancelled.",
+    venueChangeAlreadyResolved: "This venue change has already been decided.",
 
     // --- Phase 4: Date ---
     icebreakerIntro:
       "Your date is in 5 hours! Some convo starters for you:\n\n",
+    dateHintsIntro: "\n\n💡 A couple of tips to plan it:\n",
+    profilerSkip: "Skip",
     wingmanHintIntro:
       "👋 Insider tip — your date's in 90 minutes:\n\n",
     emergencyUnlocked:
@@ -352,6 +403,12 @@ const translations = {
       "If you really can't make it, tap below.\n" +
       "*You'll need to write a reason — it gets forwarded to your match exactly as you write it.*",
     emergencyBtn: "🚨 Cancel Date",
+    emergencyConfirmPrompt:
+      "Are you sure you want to cancel this date?\n" +
+      "*This is final — once cancelled, the match can't be restored.*",
+    emergencyBtnConfirm: "Yes, cancel the date",
+    emergencyBtnBack: "No, keep the date",
+    emergencyAborted: "Okay — your date is still on. 👍",
     emergencyAskReason:
       "Write your reason. This goes to your match *word for word*.",
     emergencyConfirmed:
@@ -425,6 +482,47 @@ const translations = {
       "Sorry, I couldn't hear that clearly — could you type it instead?",
     voiceTooLong:
       "That voice note's a bit long for me. Keep it under 5 minutes, or just type it out.",
+
+    // --- Pre-date coordination (feature-flagged) ---
+    coordOfferIntro:
+      "Your date is in about an hour 🕐\n\n" +
+      "Want a way to find each other at the spot — flag a delay, or say where you're sitting? Pick one:",
+    coordOfferNoContactNote:
+      "Your date is in about an hour 🕐\n\n" +
+      "Heads up: your match has no public Telegram username, so direct contact isn't possible. You can still use a private anonymous chat through me:",
+    coordBtnShareSelf: "📲 Share my Telegram",
+    coordBtnRequestPartner: "🙋 Ask them for theirs",
+    coordBtnProxy: "🕶 Anonymous chat",
+    coordSharedToPartner:
+      "Your date shared their Telegram so you can find each other 💬\n\n" +
+      "{name}: {link}\n\nTap to say hi — see you there!",
+    coordRequestAck: "On it — I've asked them. I'll ping you the moment they say yes ✅",
+    coordPartnerAskApprove:
+      "Your date in ~1h would love a way to find you at the spot 💬\n\n" +
+      "Share your Telegram with {name}?",
+    coordPartnerBtnApprove: "✅ Share my Telegram",
+    coordPartnerBtnDecline: "Not now",
+    coordRevealToInitiator:
+      "{name} shared their Telegram so you can find each other 💬\n\n" +
+      "{link}\n\nTap to say hi — have a great date!",
+    coordPartnerDeclined:
+      "Your match would rather not share contacts right now — no worries. The anonymous chat opens ~30 min before, if you'd like to use that instead.",
+    coordProxyOpenedEnterPrompt:
+      "Your anonymous chat is open 🕶\n\n" +
+      "Messages go through me — no contacts shared. Use it to find each other or flag a delay. It closes a couple hours after the date.",
+    coordEnterBtn: "💬 Enter chat",
+    coordExitBtn: "❌ Leave chat",
+    coordReportBtn: "🚨 Report",
+    coordChatEntered:
+      "You're in the anonymous chat 🕶 Just type — I'll pass it along. Leave any time.",
+    coordChatExited: "Left the chat. Type /menu any time.",
+    coordProxyRelayPrefix: "💬 Your date: ",
+    coordProxyTextOnly: "Only text messages work in this chat — photos and voice notes aren't passed on.",
+    coordProxyClosed: "The anonymous chat has closed. Hope the date went well — I'll check in tomorrow ✨",
+    coordAlreadyChosen: "You've already picked a coordination option for this date.",
+    coordSharedAck: "Done — they can find you now 💬 Have a great date!",
+    coordProxyChosenAck:
+      "Got it 🕶 Your anonymous chat opens about 30 minutes before the date — I'll send you the button then.",
   },
   ru: {
     // --- Onboarding ---
@@ -745,6 +843,14 @@ const translations = {
     matchScheduleIter3:
       "Открой календарь, выбери даты и отметь все удобные варианты времени. Собеседник увидит их вживую и сможет одним тапом согласиться на ваше общее время.",
     matchScheduleBtnCalendar: "📅 Открыть календарь",
+    // --- Date Ticket (премиум-шаг после взаимного метча) ---
+    ticketCardCaption:
+      "Взаимно 🔥\n\nОстался один шаг перед планированием: получи свой *билет на свидание* — кураторское, проверенное свидание без лишней драмы. Нажми ниже, чтобы открыть.",
+    ticketButton: "🎟️ Получить билет на свидание",
+    ticketBothSecuredDm: "Оба билета у вас 🎟️✨ Свидание в силе — давай выберем время.",
+    ticketPartnerPaidDm: "{name} уже оплатил твой билет на свидание ❤️ Тебе ничего не нужно делать.",
+    ticketRefundedDm:
+      "Собеседник не успел взять свой билет, поэтому твой мы вернули. Ничего страшного — открыли планирование бесплатно. Давай найдём время 📅",
     matchScheduleNoOverlap: "Не совпало — попробуем ещё.",
     matchScheduled: "Готово! {venue} — до встречи 🤝",
     matchScheduledBtnOpenMaps: "📍 Открыть в картах",
@@ -763,10 +869,53 @@ const translations = {
       "Небольшое уточнение — заменил на публичное кафе. Первые свидания у нас в людных местах.",
     venueWaitingPeer: "Принял ✅ Ждём вторую сторону…",
     venueSearching: "Ищу место, удобное обоим… 🔍",
+    venueSearchStep2: "📍 Сверяю маршруты и время в пути для вас обоих…",
+    venueSearchStep3: "✨ Выбираю лучшее место под вашу атмосферу…",
+    onbAnalyzeStep1: "🧠 Читаю твой контекст…",
+    onbAnalyzeStep2: "🧩 Выделяю ключевые черты и ценности…",
+    onbAnalyzeStep3: "🧮 Собираю твой психологический профиль…",
+    verifyAnalyzeStep1: "🔍 Сверяю селфи с твоими фотографиями…",
+    verifyAnalyzeStep2: "🧬 Анализирую черты лица…",
+    verifyAnalyzeStep3: "⏳ Завершаю проверку…",
+    skipAnalyzeStep1: "✨ Принято. Завершаю сборку профиля…",
+    skipAnalyzeStep2: "🧮 Финализирую твой психологический профиль…",
+    skipAnalyzeStep3: "💞 Готовлю тебя к недельному подбору…",
+    profilerBatchSaving: "🧩 Добавляю твои ответы в профиль…",
+    profilerBatchSaved:
+      "✅ Обновил твою карточку предпочтений — учту это при следующем подборе.",
+
+    // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
+    venueChangeFemaleButton: "🔄 Сменить место",
+    venueChangeFemaleHint:
+      "Кстати — у тебя есть одноразовая возможность сменить это место. " +
+      "Нажми *Сменить место* выше, чтобы выбрать другое заведение поблизости. " +
+      "Партнёру нужно будет это подтвердить, и сделать так можно только один раз.",
+    venueChangeMaleIntro: "Твоя пара хочет изменить место встречи.",
+    venueChangeMaleNewVenue: "Новое место: {venue}",
+    venueChangeMaleComment: "Объяснение партнёрши:",
+    venueChangeMaleAsk:
+      "Подтверди новое место или откажись. Отказ отменяет свидание.",
+    venueChangeBtnAccept: "✅ Согласиться с новым местом",
+    venueChangeBtnDecline: "❌ Не соглашаться (отменить свидание)",
+    venueChangeDeclineConfirm:
+      "Точно? Если ты не согласишься на предложенное место, свидание и метч будут " +
+      "аннулированы навсегда — отменить это будет нельзя.",
+    venueChangeBtnConfirmCancel: "Да, аннулировать метч",
+    venueChangeBtnBack: "Нет, я передумал",
+    venueChangeAcceptedFemale: "Партнёр согласился на новое место! 🎉 {venue}",
+    venueChangeAcceptedMaleAck: "Готово — место обновлено. {venue}",
+    venueChangeCancelledFemale:
+      "Партнёр не согласился на новое место, поэтому свидание отменено.",
+    venueChangeCancelledMale: "Свидание отменено.",
+    venueChangeExpiredCancel:
+      "Время на подтверждение нового места истекло, поэтому свидание отменено.",
+    venueChangeAlreadyResolved: "Решение по смене места уже принято.",
 
     // --- Phase 4: Date ---
     icebreakerIntro:
       "Свидание через 5 часов! Вот темы для разговора:\n\n",
+    dateHintsIntro: "\n\n💡 Пара советов, как всё спланировать:\n",
+    profilerSkip: "Пропустить",
     wingmanHintIntro:
       "👋 Маленькая подсказка — свидание через полтора часа:\n\n",
     emergencyUnlocked:
@@ -774,6 +923,12 @@ const translations = {
       "Совсем не можешь прийти — жми кнопку ниже.\n" +
       "*Нужна причина — она уйдёт мэтчу ровно так, как ты её напишешь.*",
     emergencyBtn: "🚨 Отменить свидание",
+    emergencyConfirmPrompt:
+      "Точно отменить это свидание?\n" +
+      "*Это окончательно — после отмены вернуть мэтч уже нельзя.*",
+    emergencyBtnConfirm: "Да, отменить свидание",
+    emergencyBtnBack: "Нет, оставить свидание",
+    emergencyAborted: "Хорошо — свидание остаётся в силе. 👍",
     emergencyAskReason:
       "Напиши причину. Текст уйдёт мэтчу *как есть*.",
     emergencyConfirmed:
@@ -847,6 +1002,47 @@ const translations = {
       "Не расслышал — можешь написать текстом?",
     voiceTooLong:
       "Голосовое слишком длинное. До 5 минут — или просто напиши текстом.",
+
+    // --- Pre-date coordination (feature-flagged) ---
+    coordOfferIntro:
+      "Свидание примерно через час 🕐\n\n" +
+      "Хочешь способ найти друг друга на месте — предупредить об опоздании или сказать, где сидишь? Выбери:",
+    coordOfferNoContactNote:
+      "Свидание примерно через час 🕐\n\n" +
+      "Важно: у твоего мэтча нет публичного Telegram-юзернейма, поэтому обмен контактами невозможен. Но можно использовать анонимный чат через меня:",
+    coordBtnShareSelf: "📲 Поделиться своим Telegram",
+    coordBtnRequestPartner: "🙋 Попросить его контакт",
+    coordBtnProxy: "🕶 Анонимный чат",
+    coordSharedToPartner:
+      "Твой мэтч поделился своим Telegram, чтобы вы нашли друг друга 💬\n\n" +
+      "{name}: {link}\n\nНапиши пару слов — до встречи!",
+    coordRequestAck: "Готово — я спросил. Сообщу сразу, как только согласятся ✅",
+    coordPartnerAskApprove:
+      "Твоему свиданию через ~1ч пригодится способ найти тебя на месте 💬\n\n" +
+      "Поделиться своим Telegram с {name}?",
+    coordPartnerBtnApprove: "✅ Поделиться Telegram",
+    coordPartnerBtnDecline: "Не сейчас",
+    coordRevealToInitiator:
+      "{name} поделился своим Telegram, чтобы вы нашли друг друга 💬\n\n" +
+      "{link}\n\nНапиши пару слов — хорошего свидания!",
+    coordPartnerDeclined:
+      "Твой мэтч пока не хочет делиться контактами — это окей. За ~30 минут до встречи откроется анонимный чат, если захочешь.",
+    coordProxyOpenedEnterPrompt:
+      "Анонимный чат открыт 🕶\n\n" +
+      "Сообщения идут через меня — контакты не раскрываются. Используй его, чтобы найти друг друга или предупредить об опоздании. Закроется через пару часов после свидания.",
+    coordEnterBtn: "💬 Войти в чат",
+    coordExitBtn: "❌ Выйти из чата",
+    coordReportBtn: "🚨 Пожаловаться",
+    coordChatEntered:
+      "Ты в анонимном чате 🕶 Просто пиши — я передам. Выйти можно в любой момент.",
+    coordChatExited: "Вышел из чата. Напиши /menu в любой момент.",
+    coordProxyRelayPrefix: "💬 Твоё свидание: ",
+    coordProxyTextOnly: "В этом чате работают только текстовые сообщения — фото и голосовые не передаются.",
+    coordProxyClosed: "Анонимный чат закрылся. Надеюсь, свидание прошло отлично — загляну завтра ✨",
+    coordAlreadyChosen: "Ты уже выбрал способ координации для этого свидания.",
+    coordSharedAck: "Готово — теперь тебя смогут найти 💬 Хорошего свидания!",
+    coordProxyChosenAck:
+      "Принято 🕶 Анонимный чат откроется примерно за 30 минут до свидания — тогда пришлю кнопку.",
   },
   uk: {
     // --- Onboarding ---
@@ -1159,6 +1355,14 @@ const translations = {
     matchScheduleIter3:
       "Відкрий календар, обери дати й познач усі зручні варіанти часу. Співрозмовник побачить їх наживо й одним тапом погодиться на ваш спільний час.",
     matchScheduleBtnCalendar: "📅 Відкрити календар",
+    // --- Date Ticket (преміум-крок після взаємного метчу) ---
+    ticketCardCaption:
+      "Взаємно 🔥\n\nЗалишився один крок перед плануванням: отримай свій *квиток на побачення* — кураторське, перевірене побачення без зайвої драми. Натисни нижче, щоб відкрити.",
+    ticketButton: "🎟️ Отримати квиток на побачення",
+    ticketBothSecuredDm: "Обидва квитки у вас 🎟️✨ Побачення в силі — оберімо час.",
+    ticketPartnerPaidDm: "{name} вже сплатив твій квиток на побачення ❤️ Тобі нічого не потрібно робити.",
+    ticketRefundedDm:
+      "Співрозмовник не встиг узяти свій квиток, тож твій ми повернули. Нічого страшного — відкрили планування безкоштовно. Знайдімо час 📅",
     matchScheduleNoOverlap: "Не збіглося — спробуємо ще.",
     matchScheduled: "Готово! {venue} — до зустрічі 🤝",
     matchScheduledBtnOpenMaps: "📍 Відкрити в картах",
@@ -1185,10 +1389,53 @@ const translations = {
       "Невеличке уточнення — заміняю на публічне кафе. Перші побачення у нас у людних місцях.",
     venueWaitingPeer: "Прийняв ✅ Чекаємо на іншу сторону…",
     venueSearching: "Шукаю місце, зручне обом… 🔍",
+    venueSearchStep2: "📍 Звіряю маршрути та час у дорозі для вас обох…",
+    venueSearchStep3: "✨ Обираю найкраще місце під вашу атмосферу…",
+    onbAnalyzeStep1: "🧠 Читаю твій контекст…",
+    onbAnalyzeStep2: "🧩 Виділяю ключові риси та цінності…",
+    onbAnalyzeStep3: "🧮 Збираю твій психологічний профіль…",
+    verifyAnalyzeStep1: "🔍 Звіряю селфі з твоїми фотографіями…",
+    verifyAnalyzeStep2: "🧬 Аналізую риси обличчя…",
+    verifyAnalyzeStep3: "⏳ Завершую перевірку…",
+    skipAnalyzeStep1: "✨ Прийнято. Завершую збірку профілю…",
+    skipAnalyzeStep2: "🧮 Фіналізую твій психологічний профіль…",
+    skipAnalyzeStep3: "💞 Готую тебе до щотижневого підбору…",
+    profilerBatchSaving: "🧩 Додаю твої відповіді до профілю…",
+    profilerBatchSaved:
+      "✅ Оновив твою картку вподобань — врахую це під час наступного підбору.",
+
+    // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
+    venueChangeFemaleButton: "🔄 Змінити місце",
+    venueChangeFemaleHint:
+      "До речі — у тебе є одноразова можливість змінити це місце. " +
+      "Натисни *Змінити місце* вище, щоб обрати інший заклад поблизу. " +
+      "Парі потрібно буде це підтвердити, і зробити так можна лише один раз.",
+    venueChangeMaleIntro: "Твоя пара хоче змінити місце зустрічі.",
+    venueChangeMaleNewVenue: "Нове місце: {venue}",
+    venueChangeMaleComment: "Пояснення партнерки:",
+    venueChangeMaleAsk:
+      "Підтверди нове місце або відмов. Відмова скасовує побачення.",
+    venueChangeBtnAccept: "✅ Погодитися на нове місце",
+    venueChangeBtnDecline: "❌ Не погоджуватися (скасувати побачення)",
+    venueChangeDeclineConfirm:
+      "Точно? Якщо ти не погодишся на запропоноване місце, побачення та метч буде " +
+      "анульовано назавжди — скасувати це буде неможливо.",
+    venueChangeBtnConfirmCancel: "Так, анулювати метч",
+    venueChangeBtnBack: "Ні, я передумав",
+    venueChangeAcceptedFemale: "Партнер погодився на нове місце! 🎉 {venue}",
+    venueChangeAcceptedMaleAck: "Готово — місце оновлено. {venue}",
+    venueChangeCancelledFemale:
+      "Партнер не погодився на нове місце, тому побачення скасовано.",
+    venueChangeCancelledMale: "Побачення скасовано.",
+    venueChangeExpiredCancel:
+      "Час на підтвердження нового місця вичерпано, тому побачення скасовано.",
+    venueChangeAlreadyResolved: "Рішення щодо зміни місця вже прийнято.",
 
     // --- Phase 4: Date ---
     icebreakerIntro:
       "Побачення через 5 годин! Ось теми для розмови:\n\n",
+    dateHintsIntro: "\n\n💡 Кілька порад, як усе спланувати:\n",
+    profilerSkip: "Пропустити",
     wingmanHintIntro:
       "👋 Маленька підказка — побачення через півтори години:\n\n",
     emergencyUnlocked:
@@ -1196,6 +1443,12 @@ const translations = {
       "Зовсім не можеш прийти — тисни кнопку нижче.\n" +
       "*Потрібна причина — вона піде метчу саме так, як ти її напишеш.*",
     emergencyBtn: "🚨 Скасувати побачення",
+    emergencyConfirmPrompt:
+      "Точно скасувати це побачення?\n" +
+      "*Це остаточно — після скасування повернути метч уже не можна.*",
+    emergencyBtnConfirm: "Так, скасувати побачення",
+    emergencyBtnBack: "Ні, залишити побачення",
+    emergencyAborted: "Гаразд — побачення залишається в силі. 👍",
     emergencyAskReason:
       "Напиши причину. Текст піде метчу *як є*.",
     emergencyConfirmed:
@@ -1269,6 +1522,47 @@ const translations = {
       "Не розчув — можеш написати текстом?",
     voiceTooLong:
       "Голосове задовге. До 5 хвилин — або просто напиши текстом.",
+
+    // --- Pre-date coordination (feature-flagged) ---
+    coordOfferIntro:
+      "Побачення приблизно за годину 🕐\n\n" +
+      "Хочеш спосіб знайти одне одного на місці — попередити про запізнення чи сказати, де сидиш? Обери:",
+    coordOfferNoContactNote:
+      "Побачення приблизно за годину 🕐\n\n" +
+      "Важливо: у твого метчу немає публічного Telegram-юзернейму, тож обмін контактами неможливий. Але можна скористатись анонімним чатом через мене:",
+    coordBtnShareSelf: "📲 Поділитися своїм Telegram",
+    coordBtnRequestPartner: "🙋 Попросити його контакт",
+    coordBtnProxy: "🕶 Анонімний чат",
+    coordSharedToPartner:
+      "Твій метч поділився своїм Telegram, щоб ви знайшли одне одного 💬\n\n" +
+      "{name}: {link}\n\nНапиши пару слів — до зустрічі!",
+    coordRequestAck: "Готово — я запитав. Повідомлю одразу, щойно погодяться ✅",
+    coordPartnerAskApprove:
+      "Твоєму побаченню за ~1год знадобиться спосіб знайти тебе на місці 💬\n\n" +
+      "Поділитися своїм Telegram з {name}?",
+    coordPartnerBtnApprove: "✅ Поділитися Telegram",
+    coordPartnerBtnDecline: "Не зараз",
+    coordRevealToInitiator:
+      "{name} поділився своїм Telegram, щоб ви знайшли одне одного 💬\n\n" +
+      "{link}\n\nНапиши пару слів — гарного побачення!",
+    coordPartnerDeclined:
+      "Твій метч поки не хоче ділитися контактами — це окей. За ~30 хвилин до зустрічі відкриється анонімний чат, якщо захочеш.",
+    coordProxyOpenedEnterPrompt:
+      "Анонімний чат відкрито 🕶\n\n" +
+      "Повідомлення йдуть через мене — контакти не розкриваються. Користуйся, щоб знайти одне одного чи попередити про запізнення. Закриється за пару годин після побачення.",
+    coordEnterBtn: "💬 Увійти в чат",
+    coordExitBtn: "❌ Вийти з чату",
+    coordReportBtn: "🚨 Поскаржитися",
+    coordChatEntered:
+      "Ти в анонімному чаті 🕶 Просто пиши — я передам. Вийти можна будь-коли.",
+    coordChatExited: "Вийшов із чату. Напиши /menu будь-коли.",
+    coordProxyRelayPrefix: "💬 Твоє побачення: ",
+    coordProxyTextOnly: "У цьому чаті працюють лише текстові повідомлення — фото й голосові не передаються.",
+    coordProxyClosed: "Анонімний чат закрився. Сподіваюсь, побачення пройшло чудово — зазирну завтра ✨",
+    coordAlreadyChosen: "Ти вже обрав спосіб координації для цього побачення.",
+    coordSharedAck: "Готово — тепер тебе зможуть знайти 💬 Гарного побачення!",
+    coordProxyChosenAck:
+      "Прийнято 🕶 Анонімний чат відкриється приблизно за 30 хвилин до побачення — тоді надішлю кнопку.",
   },
 } as const;
 
@@ -1582,13 +1876,62 @@ const deTranslations: TranslationTable = {
   venueSafetyOverride: "Heads up - ich habe stattdessen ein öffentliches Cafe gewählt. Erste Dates bleiben bei uns öffentlich.",
   venueWaitingPeer: "Deins ist da ✅ Warten auf die andere Person...",
   venueSearching: "Suche den perfekten Spot zwischen euch beiden... 🔍",
+  venueSearchStep2: "📍 Ich vergleiche Routen und Fahrzeiten für euch beide…",
+  venueSearchStep3: "✨ Ich wähle den besten Ort für eure Stimmung…",
+  onbAnalyzeStep1: "🧠 Ich lese deinen Kontext…",
+  onbAnalyzeStep2: "🧩 Ich erfasse deine zentralen Eigenschaften und Werte…",
+  onbAnalyzeStep3: "🧮 Ich erstelle dein psychologisches Profil…",
+  verifyAnalyzeStep1: "🔍 Ich gleiche dein Selfie mit deinen Fotos ab…",
+  verifyAnalyzeStep2: "🧬 Ich analysiere die Gesichtsmerkmale…",
+  verifyAnalyzeStep3: "⏳ Ich schließe die Prüfung ab…",
+  skipAnalyzeStep1: "✨ Alles klar. Ich stelle dein Profil fertig…",
+  skipAnalyzeStep2: "🧮 Ich finalisiere dein psychologisches Profil…",
+  skipAnalyzeStep3: "💞 Ich bereite dich auf das wöchentliche Matching vor…",
+  profilerBatchSaving: "🧩 Ich füge deine Antworten deinem Profil hinzu…",
+  profilerBatchSaved:
+    "✅ Deine Präferenznotizen aktualisiert — ich berücksichtige das beim nächsten Match.",
+
+  // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
+  venueChangeFemaleButton: "🔄 Ort ändern",
+  venueChangeFemaleHint:
+    "Übrigens — du hast die einmalige Möglichkeit, diesen Ort zu ändern. " +
+    "Tippe oben auf *Ort ändern*, um einen anderen Ort in der Nähe zu wählen. " +
+    "Dein Match muss zustimmen, und du kannst das nur einmal tun.",
+  venueChangeMaleIntro: "Dein Match möchte den Ort ändern.",
+  venueChangeMaleNewVenue: "Neuer Ort: {venue}",
+  venueChangeMaleComment: "Ihre Notiz:",
+  venueChangeMaleAsk:
+    "Stimme dem neuen Ort zu oder lehne ab. Ablehnen sagt das Date ab.",
+  venueChangeBtnAccept: "✅ Neuen Ort akzeptieren",
+  venueChangeBtnDecline: "❌ Ablehnen (Date absagen)",
+  venueChangeDeclineConfirm:
+    "Bist du sicher? Wenn du den vorgeschlagenen Ort nicht akzeptierst, werden " +
+    "dein Date und dein Match endgültig abgesagt — das lässt sich nicht rückgängig machen.",
+  venueChangeBtnConfirmCancel: "Ja, Match absagen",
+  venueChangeBtnBack: "Nein, ich habe es mir anders überlegt",
+  venueChangeAcceptedFemale: "Dein Match hat den neuen Ort akzeptiert! 🎉 {venue}",
+  venueChangeAcceptedMaleAck: "Erledigt — der Ort wurde aktualisiert. {venue}",
+  venueChangeCancelledFemale:
+    "Dein Match hat den neuen Ort nicht akzeptiert, daher wurde das Date abgesagt.",
+  venueChangeCancelledMale: "Das Date wurde abgesagt.",
+  venueChangeExpiredCancel:
+    "Die Frist zur Bestätigung des neuen Ortes ist abgelaufen, daher wurde das Date abgesagt.",
+  venueChangeAlreadyResolved: "Über diese Ortsänderung wurde bereits entschieden.",
   icebreakerIntro: "Dein Date ist in 5 Stunden! Ein paar Gesprächsstarter für dich:\n\n",
   wingmanHintIntro: "👋 Insider-Tipp - dein Date ist in 90 Minuten:\n\n",
+  dateHintsIntro: "\n\n💡 Ein paar Tipps zum Planen:\n",
+  profilerSkip: "Überspringen",
   emergencyUnlocked:
     "Das Notfall-Storno-Fenster ist offen.\n" +
     "Wenn du wirklich nicht kannst, tippe unten.\n" +
     "*Du musst einen Grund schreiben - er wird exakt so an dein Match weitergeleitet.*",
   emergencyBtn: "🚨 Date absagen",
+  emergencyConfirmPrompt:
+    "Willst du dieses Date wirklich absagen?\n" +
+    "*Das ist endgültig — nach dem Absagen lässt sich das Match nicht wiederherstellen.*",
+  emergencyBtnConfirm: "Ja, Date absagen",
+  emergencyBtnBack: "Nein, Date behalten",
+  emergencyAborted: "Okay — dein Date bleibt bestehen. 👍",
   emergencyAskReason: "Schreib deinen Grund. Das geht *wortwörtlich* an dein Match.",
   emergencyConfirmed: "Date abgesagt. Deine Nachricht wurde weitergeleitet.",
   emergencyReceivedOther: "Dein Match hat das Date abgesagt. Das wurde geschrieben:\n\n\"{reason}\"",
@@ -1955,13 +2298,62 @@ const plTranslations: TranslationTable = {
   venueSafetyOverride: "Heads up - wybraliśmy publiczną kawiarnię. Pierwsze randki trzymamy w publicznych miejscach.",
   venueWaitingPeer: "Twoje zapisane ✅ Czekamy na drugą osobę...",
   venueSearching: "Szukam idealnego miejsca między Wami... 🔍",
+  venueSearchStep2: "📍 Porównuję trasy i czas dojazdu dla was obojga…",
+  venueSearchStep3: "✨ Wybieram najlepsze miejsce pod waszą atmosferę…",
+  onbAnalyzeStep1: "🧠 Czytam twój kontekst…",
+  onbAnalyzeStep2: "🧩 Wyodrębniam twoje kluczowe cechy i wartości…",
+  onbAnalyzeStep3: "🧮 Buduję twój profil psychologiczny…",
+  verifyAnalyzeStep1: "🔍 Porównuję selfie z twoimi zdjęciami…",
+  verifyAnalyzeStep2: "🧬 Analizuję rysy twarzy…",
+  verifyAnalyzeStep3: "⏳ Kończę weryfikację…",
+  skipAnalyzeStep1: "✨ Przyjąłem. Kończę twój profil…",
+  skipAnalyzeStep2: "🧮 Finalizuję twój profil psychologiczny…",
+  skipAnalyzeStep3: "💞 Przygotowuję cię do cotygodniowego doboru…",
+  profilerBatchSaving: "🧩 Dodaję twoje odpowiedzi do profilu…",
+  profilerBatchSaved:
+    "✅ Zaktualizowałem twoje notatki preferencji — uwzględnię to przy następnym doborze.",
+
+  // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
+  venueChangeFemaleButton: "🔄 Zmień miejsce",
+  venueChangeFemaleHint:
+    "À propos — masz jednorazową możliwość zmiany tego miejsca. " +
+    "Naciśnij *Zmień miejsce* powyżej, aby wybrać inny lokal w pobliżu. " +
+    "Twoja para będzie musiała to potwierdzić, a zrobić to możesz tylko raz.",
+  venueChangeMaleIntro: "Twoja para chce zmienić miejsce spotkania.",
+  venueChangeMaleNewVenue: "Nowe miejsce: {venue}",
+  venueChangeMaleComment: "Jej notatka:",
+  venueChangeMaleAsk:
+    "Zaakceptuj nowe miejsce albo odrzuć. Odrzucenie odwołuje randkę.",
+  venueChangeBtnAccept: "✅ Akceptuj nowe miejsce",
+  venueChangeBtnDecline: "❌ Odrzuć (odwołaj randkę)",
+  venueChangeDeclineConfirm:
+    "Na pewno? Jeśli nie zaakceptujesz proponowanego miejsca, Twoja randka i " +
+    "dopasowanie zostaną trwale odwołane — nie da się tego cofnąć.",
+  venueChangeBtnConfirmCancel: "Tak, odwołaj dopasowanie",
+  venueChangeBtnBack: "Nie, zmieniłem zdanie",
+  venueChangeAcceptedFemale: "Twoja para zaakceptowała nowe miejsce! 🎉 {venue}",
+  venueChangeAcceptedMaleAck: "Gotowe — miejsce zaktualizowane. {venue}",
+  venueChangeCancelledFemale:
+    "Twoja para nie zaakceptowała nowego miejsca, więc randka została odwołana.",
+  venueChangeCancelledMale: "Randka została odwołana.",
+  venueChangeExpiredCancel:
+    "Czas na potwierdzenie nowego miejsca minął, więc randka została odwołana.",
+  venueChangeAlreadyResolved: "Decyzja o zmianie miejsca została już podjęta.",
   icebreakerIntro: "Twoja randka jest za 5 godzin! Kilka tematów na start:\n\n",
   wingmanHintIntro: "👋 Wskazówka od środka - randka jest za 90 minut:\n\n",
+  dateHintsIntro: "\n\n💡 Kilka wskazówek, jak to zaplanować:\n",
+  profilerSkip: "Pomiń",
   emergencyUnlocked:
     "Okno awaryjnego odwołania jest otwarte.\n" +
     "Jeśli naprawdę nie możesz przyjść, kliknij poniżej.\n" +
     "*Musisz napisać powód - przekażemy go dopasowaniu dokładnie tak, jak go napiszesz.*",
   emergencyBtn: "🚨 Odwołaj randkę",
+  emergencyConfirmPrompt:
+    "Na pewno chcesz odwołać tę randkę?\n" +
+    "*To nieodwracalne — po odwołaniu nie da się przywrócić dopasowania.*",
+  emergencyBtnConfirm: "Tak, odwołaj randkę",
+  emergencyBtnBack: "Nie, zostaw randkę",
+  emergencyAborted: "Okej — Twoja randka jest aktualna. 👍",
   emergencyAskReason: "Napisz powód. To pójdzie do Twojego dopasowania *słowo w słowo*.",
   emergencyConfirmed: "Randka odwołana. Twoja wiadomość została przekazana.",
   emergencyReceivedOther: "Twoje dopasowanie odwołało randkę. Oto co napisali:\n\n\"{reason}\"",

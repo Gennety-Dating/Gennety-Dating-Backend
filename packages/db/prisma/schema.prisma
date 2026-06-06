@@ -79,9 +79,23 @@ enum MatchRadius {
   citywide
 }
 
+/// Priority bucket for a Profiler question. Drives both the order questions
+/// are asked in (high first) and the weight their answer carries when fueling
+/// icebreakers/hints (see `PROFILER_PRIORITY_WEIGHTS` in @gennety/shared).
+enum ProfilerPriority {
+  high
+  medium
+  low
+}
+
 model User {
   id               String            @id @default(uuid()) @db.Uuid
   telegramId       BigInt            @unique @map("telegram_id")
+  /// Public Telegram username (without @), captured opportunistically from
+  /// `ctx.from.username`. Used to build `t.me/<username>` deep links for the
+  /// pre-date coordination contact-exchange variants — Telegram never issues
+  /// a phone number to bots, so this is the only reliable contact handle.
+  telegramUsername String?           @map("telegram_username")
   email            String?           @unique
   universityDomain String?           @map("university_domain")
   firstName        String?           @map("first_name")
@@ -193,6 +207,7 @@ model User {
 
   profile Profile?
   sessions UserSession[]
+  profilerAnswers ProfilerAnswer[]
 
   matchesAsA Match[] @relation("MatchUserA")
   matchesAsB Match[] @relation("MatchUserB")
@@ -310,12 +325,69 @@ model Profile {
   /// `expireStaleMatches`. Forgive-once gate: first offense = warning only,
   /// from the second onwards Elo is decremented as if the user had declined.
   silentIgnoreCount    Int                       @default(0) @map("silent_ignore_count")
+  /// IANA timezone (e.g. "Europe/Kyiv") resolved from the user's dating city.
+  /// Drives the Profiler's morning/evening batch windows in the user's local
+  /// wall-clock time. Null → the scheduler falls back to Europe/Kyiv. Derived
+  /// at city-selection time via `cityKeyToTimeZone` in @gennety/shared.
+  timeZone             String?                   @map("time_zone")
+  /// Profiler (PRODUCT_SPEC §Phase 1b) scheduler state. The Profiler harvests
+  /// gender-specific Q&A in timed batches after onboarding to fuel icebreakers
+  /// and date-planning hints — it is NOT used by the matching algorithm.
+  ///   - `profilerStartedAt`: seed marker; null = the post-onboarding entry
+  ///     timer hasn't been armed yet (lazily seeded by the worker for legacy
+  ///     rows, precisely at finalize for new completions).
+  ///   - `profilerNextAt`: when the next batch's first question may be sent.
+  ///     Null while a batch is in flight (driven by replies) or when every
+  ///     question is answered.
+  ///   - `profilerActiveQuestionId`: the question currently awaiting a reply;
+  ///     null = not awaiting. Used by the answer/skip handler.
+  ///   - `profilerBatchRemaining`: questions left to send in the current batch
+  ///     before pausing to the next window.
+  profilerStartedAt        DateTime?             @map("profiler_started_at")
+  profilerNextAt           DateTime?             @map("profiler_next_at")
+  profilerActiveQuestionId String?               @map("profiler_active_question_id")
+  profilerBatchRemaining   Int                   @default(0) @map("profiler_batch_remaining")
   createdAt            DateTime                  @default(now()) @map("created_at")
   updatedAt            DateTime                  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([profilerNextAt])
   @@map("profiles")
+}
+
+/// One row per (user, Profiler question). The Profiler (PRODUCT_SPEC §Phase 1b)
+/// asks gender-specific questions in timed batches to fuel icebreakers and
+/// date-planning hints. Deliberately NOT an input to the matching algorithm.
+///
+/// A question is answered at most once per user lifetime (`@@unique`); a later
+/// drop cycle re-asks only still-unanswered questions. `skipped`/`skipReturned`
+/// implement the "a skipped question comes back once per cycle, then drops"
+/// rule; `cycleId` records the drop cycle the row was last touched in.
+model ProfilerAnswer {
+  id           String           @id @default(uuid()) @db.Uuid
+  userId       String           @map("user_id") @db.Uuid
+  /// Stable question identifier from the shared question bank (e.g. "f_date_spots").
+  questionId   String           @map("question_id")
+  priority     ProfilerPriority
+  /// Free-text answer. Null while the question is only skipped (not answered).
+  answerText   String?          @map("answer_text")
+  answeredAt   DateTime?        @map("answered_at")
+  /// True when the user tapped "Skip" instead of answering.
+  skipped      Boolean          @default(false)
+  /// True once a skipped question has been re-offered the one allowed time in
+  /// its cycle, so it isn't surfaced a third time until the next drop cycle.
+  skipReturned Boolean          @default(false) @map("skip_returned")
+  /// Drop cycle this row was last asked/answered in (ISO date of the drop).
+  cycleId      String           @map("cycle_id")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@index([userId])
+  @@map("profiler_answers")
 }
 
 enum MatchStatus {
@@ -504,6 +576,93 @@ model Match {
   wingmanHintB       String?   @map("wingman_hint_b")
   wingmanSentAt      DateTime? @map("wingman_sent_at")
 
+  /// Date Ticket monetization gate. Sits between mutual accept and the
+  /// Calendar Mini App when `TICKET_FEATURE_ENABLED=true`; entirely inert
+  /// when the flag is off (no offer is ever sent, columns keep defaults).
+  /// Payment is MOCKED in v1 — see `services/ticket-payment.ts`; the
+  /// `mock`/`stripe` switch is the single production toggle.
+  ///
+  /// `ticketStatus` lifecycle (string, validated in app code — not a Prisma
+  /// enum, so adding states later needs no migration):
+  ///   pending   — offer sent, neither side paid
+  ///   partial   — exactly one side paid; `ticketExpiresAt` is the second
+  ///               side's deadline
+  ///   completed — both sides paid; scheduling unlocked
+  ///   refunded  — `partial` lapsed; the paying side was refunded (mock) and
+  ///               scheduling was opened for free (an accepted match is never
+  ///               killed by a payment stall)
+  ///   expired   — offer lapsed with nobody paid; scheduling opened for free
+  ticketPriceCents  Int       @default(699) @map("ticket_price_cents")
+  ticketPaidA       DateTime? @map("ticket_paid_a")
+  ticketPaidB       DateTime? @map("ticket_paid_b")
+  /// Set when a male user pays the $13.98 "for both of us" option — records
+  /// which side settled the partner's ticket so the partner's Mini App shows
+  /// the "[Name] already paid your ticket ❤️" screen.
+  paidForPartnerByA Boolean   @default(false) @map("paid_for_partner_by_a")
+  paidForPartnerByB Boolean   @default(false) @map("paid_for_partner_by_b")
+  ticketStatus      String    @default("pending") @map("ticket_status")
+  /// Deadline for the second side to pay once the first has (the `partial`
+  /// window). Drives the Mini App countdown and the hourly ticket-expiry
+  /// cron's refund sweep. Null outside the `partial` state.
+  ticketExpiresAt   DateTime? @map("ticket_expires_at")
+
+  /// --- Pre-date coordination (feature-flagged, PRODUCT_SPEC §Phase 4) ---
+  /// String sub-state machine layered on top of a `scheduled` match — like
+  /// `ticketStatus`, deliberately not a Prisma enum so the scheduling/venue
+  /// lifecycle code is untouched. Inert when `COORDINATION_FEATURE_ENABLED`
+  /// is off. The female participant (or, in same-sex pairs, whoever taps
+  /// first) is offered three ways to find each other at the spot at T-60m.
+  coordOfferSentAt    DateTime? @map("coord_offer_sent_at")
+  /// User who actually picked a method (the offer's first tapper).
+  coordInitiatorId    String?   @map("coord_initiator_id") @db.Uuid
+  /// share_self (A) | request_partner (B) | proxy (C). Null = not chosen yet.
+  coordMethod         String?   @map("coord_method")
+  coordChosenAt       DateTime? @map("coord_chosen_at")
+  /// Variant B ONLY: null = awaiting partner, true = approved (contact
+  /// revealed), false = declined. Variant C opens unconditionally (no consent)
+  /// so an offline partner can never strand the initiator at T-30m.
+  coordPartnerConsent Boolean?  @map("coord_partner_consent")
+  /// Terminal stamp: contact revealed (A/B) or proxy method locked in (C).
+  coordResolvedAt     DateTime? @map("coord_resolved_at")
+  /// Variant C anonymous proxy window. Opened at T-30m by the coordination
+  /// cron, closed at agreed_time + PROXY_CLOSE_AFTER_HOURS.
+  proxyOpenedAt       DateTime? @map("proxy_opened_at")
+  proxyClosesAt       DateTime? @map("proxy_closes_at")
+  proxyClosedAt       DateTime? @map("proxy_closed_at")
+
+  /// --- Venue change (feature-flagged, female-exclusive one-shot) ---
+  /// String sub-state layered on a `scheduled` match — like `ticketStatus`
+  /// and `coordMethod`, deliberately NOT a MatchStatus enum value so the
+  /// scheduling/venue/lifecycle code that switches on `status` is untouched.
+  /// Inert when VENUE_CHANGE_FEATURE_ENABLED is off. Lifecycle:
+  ///   null / "none" — no change requested
+  ///   "proposed"    — female proposed a new venue, awaiting male decision
+  ///   "accepted"    — male accepted; the venueChange* fields below are now the
+  ///                   canonical venue (copied onto venueName/Address/... too)
+  ///   "rejected"    — male declined → match also flips status=cancelled
+  ///   "expired"     — TTL / T-DATE_ALERT_HOURS cutoff lapsed → match cancelled
+  venueChangeStatus     String?   @map("venue_change_status")
+  /// The female initiator. Stored (not just derived from gender) so the
+  /// one-shot rule survives reconnects and powers the audit trail.
+  venueChangeProposerId String?   @map("venue_change_proposer_id") @db.Uuid
+  /// One-shot guard: set the moment she submits. Non-null blocks re-propose.
+  venueChangeProposedAt DateTime? @map("venue_change_proposed_at")
+  /// Male decision deadline = min(now + VENUE_CHANGE_TTL_HOURS,
+  /// agreedTime - DATE_ALERT_HOURS). Drives the lifecycle expiry sweep.
+  venueChangeExpiresAt  DateTime? @map("venue_change_expires_at")
+  venueChangeResolvedAt DateTime? @map("venue_change_resolved_at")
+  /// Proposed replacement venue, captured verbatim from the catalog pick.
+  venueChangeName       String?   @map("venue_change_name")
+  venueChangeAddress    String?   @map("venue_change_address")
+  venueChangeLat        Float?    @map("venue_change_lat")
+  venueChangeLng        Float?    @map("venue_change_lng")
+  venueChangeMapsUri    String?   @map("venue_change_maps_uri")
+  venueChangePlaceId    String?   @map("venue_change_place_id")
+  /// Mandatory ≥10-char explanation, shown verbatim to the male as a
+  /// Telegram blockquote (no AI rewrite) — same one-shot, non-reply relay
+  /// carve-out as `emergencyReason`. Does NOT reopen user-to-user chat.
+  venueChangeComment    String?   @map("venue_change_comment")
+
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
 
@@ -513,10 +672,37 @@ model Match {
   events MatchEvent[]
   reports Report[]
   scoreLog MatchScoreLog?
+  proxyMessages ProxyMessage[]
 
   @@index([status, createdAt])
   @@index([userAId, userBId])
+  /// Drives the ticket-expiry cron's sweep for `partial`/`pending` rows
+  /// whose `ticketExpiresAt` has lapsed.
+  @@index([ticketStatus, ticketExpiresAt])
+  /// Drives the coordination cron's T-60m offer sweep.
+  @@index([status, coordOfferSentAt])
+  /// Drives the coordination cron's proxy open/close sweeps.
+  @@index([coordMethod, proxyClosedAt])
+  /// Drives the venue-change TTL/cutoff expiry sweep on the lifecycle tick.
+  @@index([venueChangeStatus, venueChangeExpiresAt])
   @@map("matches")
+}
+
+/// Append-only audit log of every message relayed through a Variant C
+/// anonymous proxy chat. Backs the moderation trail that justifies the
+/// time-boxed carve-out to the "NO IN-APP CHAT" product invariant — relayed
+/// content is fully logged and reportable. Cascades on Match deletion (GDPR).
+model ProxyMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  matchId   String   @map("match_id") @db.Uuid
+  senderId  String   @map("sender_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([matchId, createdAt])
+  @@map("proxy_messages")
 }
 
 /// Score breakdown frozen at match-creation time. One row per Match.
@@ -762,6 +948,12 @@ model CuratedVenue {
   /// 1 = best first-date spot, 3 = acceptable. Lower wins ties in ranking.
   priority         Int       @default(2)
   vibeTags         String[]  @default([]) @map("vibe_tags")
+  /// Operator-supplied venue photo URL (Supabase Storage or any hosted image),
+  /// filled by hand for venues we curate. Surfaced in the venue-change catalog
+  /// Mini App card. Null for seeded-but-not-yet-photographed rows; Places-
+  /// fallback catalog entries have no photo (the Mini App shows a category
+  /// placeholder). Not used by the auto-assign concierge picker.
+  photoUrl         String?   @map("photo_url")
   active           Boolean   @default(true)
   /// Set when the row was last confirmed live against Places (by the seeder
   /// import, or the re-validation cron). Oldest-first is the cron's scan order.

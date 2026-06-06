@@ -46,7 +46,16 @@ export type MatchFlowState =
   | "awaiting_venue_details"
   | "awaiting_emergency_reason"
   | "awaiting_feedback"
-  | "awaiting_report_details";
+  | "awaiting_report_details"
+  /**
+   * Active in the anonymous pre-date proxy chat (Variant C). Entered ONLY by
+   * tapping the "Enter chat" button the cron sends at T-30m, never implicitly —
+   * so normal bot use (/menu, settings, photos) is never hijacked into the
+   * relay. While in this state, plain-text messages are forwarded to the match;
+   * `activeMatchId` holds the proxy match. Reset to `idle` on "Leave chat" or
+   * when the relay leg detects the T+2h window has closed.
+   */
+  | "coordination_chat";
 
 /** Weekly matchmaking resolution used by the mobile countdown / standby UI. */
 export type WeeklyMatchStatus = "pending" | "matched" | "standby";

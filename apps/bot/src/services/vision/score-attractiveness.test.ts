@@ -156,6 +156,9 @@ describe("scoreAttractivenessFromBuffer", () => {
     expect(body.response_format).toEqual({ type: "json_object" });
     expect(body.messages[0].content).toMatch(/symmetry/i);
     expect(body.messages[0].content).toMatch(/SCUT-FBP5500/);
+    // Gender-calibrated grading: stricter on female faces, generous on male.
+    expect(body.messages[0].content).toMatch(/FEMALE faces: grade strictly/);
+    expect(body.messages[0].content).toMatch(/MALE faces: grade generously/);
     const imageUrl = body.messages[1].content[0].image_url.url;
     expect(imageUrl.startsWith("data:image/png;base64,")).toBe(true);
   });

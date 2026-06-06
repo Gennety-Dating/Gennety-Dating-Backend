@@ -158,6 +158,55 @@ export const env = {
   AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID ?? "",
   AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY ?? "",
 
+  // ── Date Ticket (premium post-accept screen + mock payment) ──
+  /// Master flag for the Date Ticket gate. When false (default), mutual
+  /// accept goes straight to the Calendar Mini App exactly as before — the
+  /// whole feature ships dark. When true, both users must pay (mock) for a
+  /// $6.99 ticket before scheduling unlocks. Telegram-only in v1 (the mobile
+  /// decision path still schedules directly).
+  TICKET_FEATURE_ENABLED: process.env.TICKET_FEATURE_ENABLED === "true",
+  /// Payment backend. `mock` (default) fully simulates Stripe with no
+  /// credentials — `services/ticket-payment.ts` mints a fake clientSecret and
+  /// trusts the client confirm. `stripe` is the production path (real
+  /// PaymentIntent + webhook), gated behind the `// TODO: Stripe Production
+  /// Mode` branches and not yet implemented.
+  TICKET_PAYMENT_MODE: (process.env.TICKET_PAYMENT_MODE ?? "mock") as "mock" | "stripe",
+  /// Per-ticket price in cents. Mirrored onto `Match.ticketPriceCents` at
+  /// offer time so an in-flight match keeps its quoted price even if this
+  /// changes mid-deploy.
+  TICKET_PRICE_CENTS: Number(process.env.TICKET_PRICE_CENTS ?? "699"),
+  /// How long the second side has to pay once the first has (the `partial`
+  /// window) before the ticket-expiry cron refunds the payer and opens the
+  /// Calendar for free. Fractional hours allowed for fast manual testing.
+  TICKET_PAYMENT_WINDOW_HOURS: Number(process.env.TICKET_PAYMENT_WINDOW_HOURS ?? "24"),
+  // TODO: Stripe Production Mode — populate from the Stripe dashboard and keep
+  // out of git (.env only). Switching to live payments is: set these +
+  // TICKET_PAYMENT_MODE=stripe + fill the `case "stripe"` branches in
+  // services/ticket-payment.ts + add the /v1/webhooks/stripe raw-body route.
+  //   STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY ?? "",
+  //   STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY ?? "",
+  //   STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+
+  // ── Pre-date coordination (T-60m contact-exchange / anonymous proxy) ──
+  /// Master flag for the pre-date coordination step. When false (default), no
+  /// coordination offer is ever sent and the proxy relay is inert — the whole
+  /// feature ships dark. When true, the female participant (or first tapper in
+  /// a same-sex pair) is offered, ~1h before the date, three ways to find each
+  /// other on-site: share my Telegram, request the partner's, or an anonymous
+  /// bot-relayed chat. Telegram-only in v1 (PRODUCT_SPEC.md §Phase 4).
+  COORDINATION_FEATURE_ENABLED: process.env.COORDINATION_FEATURE_ENABLED === "true",
+
+  // ── Venue change (female-exclusive one-shot venue swap) ──────
+  /// Master flag for the post-schedule "Change venue" step. When false
+  /// (default), the scheduled-date DM is identical for both sides and no
+  /// venue-change button/endpoints do anything — the feature ships dark.
+  /// When true, the female participant (or first tapper in a same-sex female
+  /// pair) gets a "Change venue" button on her scheduled-date card, can pick
+  /// an alternative within VENUE_CHANGE_RADIUS_KM of the original venue with a
+  /// mandatory comment, and the male accepts or declines (decline cancels the
+  /// match). Telegram-only in v1 (PRODUCT_SPEC.md §3.7).
+  VENUE_CHANGE_FEATURE_ENABLED: process.env.VENUE_CHANGE_FEATURE_ENABLED === "true",
+
   // ── Dev-only: skip corporate-email OTP for specific Telegram IDs ──
   /// Comma-separated list of Telegram IDs that get a synthetic verified email
   /// at /start time, so the agent skips the email step entirely. Lets the

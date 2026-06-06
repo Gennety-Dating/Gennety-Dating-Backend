@@ -49,6 +49,52 @@ Categories (must be one of the whitelist — `isValidVenueCategory` enforces):
 If the user didn't give domains, find the official student-email domains first
 (university IT pages) — the domain must match `ALLOWED_EMAIL_DOMAINS` shape.
 
+### 1a. Resolve & whitelist the student email domain  (DO THIS FIRST)
+
+There are **two different "domains"** and both matter:
+
+- **`User.universityDomain`** — set to the **exact text after `@`** in the
+  student's verified email (`onboarding-agent.ts`:
+  `email.slice(email.indexOf("@")+1)`, lowercased). This is the partition key for
+  matching AND for `curated_venues`. Curated venues MUST be seeded under this
+  exact string (including any subdomain).
+- **`ALLOWED_EMAIL_DOMAINS`** (`packages/shared/src/constants.ts`) — a list of
+  **suffixes**; a student can only verify if their email `endsWith` one of them
+  (`packages/shared/src/email.ts` `isAllowedEmail`). If the university's email
+  domain doesn't end with a listed suffix, **those students cannot register at
+  all** until you add it.
+
+Procedure per university:
+
+1. **Find the real student email domain.** Use `/browse`. Search engines often
+   captcha headless — go straight to authoritative sources instead:
+   - the university's own site → look for "Корпоративна пошта / Email / Webmail /
+     Office 365 / Google Workspace" links (the mail host reveals the domain),
+   - Wikipedia infobox "official website" (registrable domain ≈ email domain),
+   - confirm the exact mailbox form (e.g. `name@uni.edu` vs `name@student.uni.edu`)
+     from the IT/helpdesk page or a real student — subdomains change the
+     `universityDomain` string.
+2. **Check the suffix** against `ALLOWED_EMAIL_DOMAINS`.
+   - Ends with a listed suffix (e.g. `.edu`, `.ac.uk`, `.edu.ua`) → works as-is.
+   - Does NOT → add the domain (or its suffix) to `ALLOWED_EMAIL_DOMAINS` in
+     `packages/shared/src/constants.ts`, then rebuild + redeploy. `isAllowedEmail`
+     uses `endsWith`, so adding `"kpi.ua"` admits `@kpi.ua` and `@x.kpi.ua`.
+3. **Record the exact domain string** — you'll seed venues under it in Step 5/6
+   and pass it in the config in Step 2.
+
+> Worked example — Kyiv (researched 2026-06-01):
+> | University | Student email domain | Ends in allowed suffix? | Action |
+> |---|---|---|---|
+> | Kyiv-Mohyla (NaUKMA) | `ukma.edu.ua` | ✅ `.edu.ua` | works as-is |
+> | KNEU | `kneu.edu.ua` | ✅ `.edu.ua` | works as-is |
+> | National Aviation (NAU) | `nau.edu.ua` | ✅ `.edu.ua` | works as-is |
+> | Igor Sikorsky KPI | `kpi.ua` (corporate mail `@kpi.ua`) | ❌ | add `kpi.ua` to whitelist |
+> | Taras Shevchenko (KNU) | `knu.ua` / `univ.kiev.ua` | ❌ | confirm exact domain + add to whitelist |
+>
+> Takeaway: Ukrainian universities are split — many use `*.edu.ua` (fine), but
+> big ones like KPI/KNU use bare `.ua` domains that the current whitelist blocks.
+> Always verify; never assume the suffix.
+
 ---
 
 ## 2. Define anchor points

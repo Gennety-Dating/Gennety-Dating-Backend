@@ -1,11 +1,18 @@
 import { formatDate, formatSlot, formatTime, slotDayKey } from "./slots.js";
-import { savePickedSet, loadPickedSet, clearPicked } from "./device-storage.js";
+import {
+  savePickedSet,
+  loadPickedSet,
+  clearPicked,
+  savePeerSeen,
+  loadPeerSeen,
+} from "./device-storage.js";
 import {
   fetchCalendarState,
   postCalendarPicks,
   CalendarApiError,
   type CalendarState,
 } from "./api.js";
+import { pruneSlotsToProposedTimes } from "./calendar-selection.js";
 import { pickLang, tr, type Lang } from "./i18n.js";
 import { classifyDaySlots, classifySlot, type DayClass, type SlotClass } from "./state-render.js";
 
@@ -13,34 +20,72 @@ import { classifyDaySlots, classifySlot, type DayClass, type SlotClass } from ".
  * Calendar Mini App entry point.
  *
  * View states (PRODUCT_SPEC.md §3.6):
- *   - 'dates'        — first step: pick a calendar day
- *   - 'times'        — second step: mark exact time slots for that day
+ *   - 'dates'        — pick a calendar day; tap opens the time bottom sheet
  *   - 'agreed'       — server locked in a single slot, success card
  *   - 'multi-overlap'— post-save state when intersection > 1; user picks
  *                       the final one via radio buttons + Confirm
  *   - 'waiting'      — post-save state when actor saved first and peer
  *                       hasn't replied; success card + Close / Edit buttons
  *
- * Transitions:
- *   - On save → response decides next view (agreed / multi-overlap /
- *     waiting / back to date selection)
- *   - On poll → only `agreed` can override; other views persist
- *   - User taps Close / Edit / Confirm → handled inline
+ * Time picking happens in a native-feeling bottom sheet on top of the dates
+ * view rather than a separate screen — tapping a date slides up the slot
+ * list, tapping backdrop / Telegram BackButton collapses it back.
  *
- * Polling interval: 4s while document is visible. We don't poll while
- * saving (to avoid clobbering an in-flight edit).
+ * Polling: 4s while document is visible. State fingerprint guards against
+ * re-rendering when nothing material changed (keeps the sheet alive across
+ * polls).
  */
 
 const POLL_MS = 4000;
+const SHEET_ANIM_MS = 320;
 
 const app = window.Telegram?.WebApp;
 app?.ready();
 app?.expand();
 
+// Bot API 8.0+ — fullscreen mode removes the top sheet gap and lets the
+// design's hero/CTA composition breathe. Older clients silently skip.
+try {
+  if (app?.isVersionAtLeast?.("8.0") && !app.isFullscreen) {
+    app.requestFullscreen?.();
+  }
+  app?.setHeaderColor?.("#09090b");
+  app?.setBackgroundColor?.("#09090b");
+  app?.setBottomBarColor?.("#09090b");
+} catch {
+  // Best-effort cosmetic boot — never crash the app over chrome theming.
+}
+
+// In fullscreen mode Telegram floats the close × / menu ⋯ buttons over the
+// content, and `env(safe-area-inset-top)` does not include them. Pull the
+// real reserve from `contentSafeAreaInset` so the title doesn't slide under
+// the chrome. Sub to `contentSafeAreaChanged` because the value updates
+// when the user toggles fullscreen or the keyboard appears.
+applyContentInsets();
+try {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (app as any)?.onEvent?.("contentSafeAreaChanged", applyContentInsets);
+} catch {
+  // Older clients without the event — fallback CSS value still applies.
+}
+
+function applyContentInsets(): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const inset = (app as any)?.contentSafeAreaInset;
+  if (!inset) return;
+  if (typeof inset.top === "number" && inset.top > 0) {
+    document.documentElement.style.setProperty("--tg-content-top", `${inset.top}px`);
+  }
+  if (typeof inset.bottom === "number" && inset.bottom >= 0) {
+    document.documentElement.style.setProperty("--tg-content-bottom", `${inset.bottom}px`);
+  }
+}
+
 const params = new URLSearchParams(location.search);
 const matchId = app?.initDataUnsafe?.start_param ?? params.get("match") ?? "";
 const lang: Lang = pickLang(params.get("lang"));
 
+const pageEl = document.getElementById("page");
 const titleEl = document.getElementById("title");
 const bannerEl = document.getElementById("banner");
 const slotsEl = document.getElementById("slots");
@@ -49,8 +94,18 @@ const waitingEl = document.getElementById("waiting");
 const multiOverlapEl = document.getElementById("multi-overlap");
 const noContextEl = document.getElementById("no-context");
 const legendEl = document.getElementById("legend");
+const ctaBarEl = document.getElementById("cta-bar");
+const ctaBtnEl = document.getElementById("cta") as HTMLButtonElement | null;
+const ctaLabelEl = ctaBtnEl?.querySelector<HTMLSpanElement>(".label") ?? null;
+const confettiCanvasEl = document.getElementById("confetti-canvas");
+const sheetEl = document.getElementById("sheet");
+const sheetBackdropEl = document.getElementById("sheet-backdrop");
+const sheetTitleEl = document.getElementById("sheet-title");
+const sheetBodyEl = document.getElementById("sheet-body");
+const sheetCtaEl = document.getElementById("sheet-cta") as HTMLButtonElement | null;
+const sheetCtaLabelEl = sheetCtaEl?.querySelector<HTMLSpanElement>(".label") ?? null;
 
-type ViewState = "dates" | "times" | "agreed" | "multi-overlap" | "waiting";
+type ViewState = "dates" | "agreed" | "multi-overlap" | "waiting";
 
 interface DayGroup {
   key: string;
@@ -61,30 +116,99 @@ interface DayGroup {
 let view: ViewState = "dates";
 let proposedTimes: string[] = [];
 let peerSlots = new Set<string>();
+let peerSeen = new Set<string>();
 let confirmedMine = new Set<string>();
 let selected = new Set<string>();
 let agreedTime: string | null = null;
 let overlapCandidates: string[] = [];
 let multiOverlapChoice: string | null = null;
-let selectedDayKey: string | null = null;
+let sheetDayKey: string | null = null;
 let isFirstMover = true;
 let saving = false;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
+let sheetHideTimer: ReturnType<typeof setTimeout> | null = null;
 
 if (titleEl) titleEl.textContent = tr(lang, "titleDate");
 applyLegendCopy();
+ctaBtnEl?.addEventListener("click", handleAnyCtaClick);
+sheetCtaEl?.addEventListener("click", handleAnyCtaClick);
+sheetBackdropEl?.addEventListener("click", () => closeSheet(true));
+setupSheetDrag();
+// Telegram BackButton — collapses the sheet rather than killing the app.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (app as any)?.BackButton?.onClick?.(onBackButton);
+} catch {
+  // Older clients ignore.
+}
+
+// Swipe-down on the handle / header collapses the sheet. We intentionally
+// don't intercept touches over the scrollable body so the user can still
+// scroll the slot list — only the top drag-affordance area pulls down.
+function setupSheetDrag(): void {
+  if (!sheetEl) return;
+  const handle = sheetEl.querySelector<HTMLElement>(".sheet-handle");
+  const header = sheetEl.querySelector<HTMLElement>(".sheet-header");
+  const targets = [handle, header].filter((el): el is HTMLElement => el !== null);
+  if (targets.length === 0) return;
+
+  let startY = 0;
+  let deltaY = 0;
+  let dragging = false;
+
+  const onStart = (e: TouchEvent): void => {
+    if (!sheetEl.classList.contains("is-open")) return;
+    if (e.touches.length !== 1) return;
+    startY = e.touches[0]!.clientY;
+    deltaY = 0;
+    dragging = true;
+    sheetEl.style.transition = "none";
+    if (sheetBackdropEl) sheetBackdropEl.style.transition = "none";
+  };
+
+  const onMove = (e: TouchEvent): void => {
+    if (!dragging) return;
+    const y = e.touches[0]!.clientY;
+    deltaY = Math.max(0, y - startY);
+    sheetEl.style.transform = `translateY(${deltaY}px)`;
+    if (sheetBackdropEl) {
+      sheetBackdropEl.style.opacity = String(Math.max(0.15, 1 - deltaY / 400));
+    }
+  };
+
+  const onEnd = (): void => {
+    if (!dragging) return;
+    dragging = false;
+    sheetEl.style.transition = "";
+    if (sheetBackdropEl) sheetBackdropEl.style.transition = "";
+    if (deltaY > 80) {
+      // Past threshold — animate the rest of the way down.
+      sheetEl.style.transform = "";
+      if (sheetBackdropEl) sheetBackdropEl.style.opacity = "";
+      closeSheet(true);
+    } else {
+      // Snap back to fully open.
+      sheetEl.style.transform = "";
+      if (sheetBackdropEl) sheetBackdropEl.style.opacity = "";
+    }
+  };
+
+  for (const el of targets) {
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: true });
+    el.addEventListener("touchend", onEnd);
+    el.addEventListener("touchcancel", onEnd);
+  }
+}
 
 if (!matchId || !slotsEl) {
-  if (noContextEl) noContextEl.textContent = tr(lang, "noContext");
-  if (slotsEl) slotsEl.style.display = "none";
-} else {
-  if (noContextEl) noContextEl.style.display = "none";
-  void boot();
-  if (app) {
-    app.MainButton.setText(tr(lang, "btnSuggestTime"));
-    app.MainButton.hide();
-    app.MainButton.onClick(handleMainButton);
+  if (noContextEl) {
+    noContextEl.textContent = tr(lang, "noContext");
+    noContextEl.hidden = false;
   }
+  if (pageEl) pageEl.hidden = true;
+} else {
+  void boot();
 }
 
 async function boot(): Promise<void> {
@@ -102,6 +226,18 @@ async function boot(): Promise<void> {
     }
     return;
   }
+
+  // Seed the "peer-seen" snapshot. First-ever open snapshots whatever peer
+  // already has — nothing flashes NEW. From then on, NEW = peerSlots minus
+  // the snapshot, refreshed at every successful save.
+  const cachedSeen = await loadPeerSeen(matchId);
+  if (cachedSeen !== null) {
+    peerSeen = new Set(cachedSeen);
+  } else {
+    peerSeen = new Set(peerSlots);
+    void savePeerSeen(matchId, Array.from(peerSeen));
+  }
+
   if (agreedTime) view = "agreed";
   render();
   schedulePoll();
@@ -114,19 +250,27 @@ function applyState(state: CalendarState, firstLoad: boolean): void {
   confirmedMine = new Set(state.mySlots);
   agreedTime = state.agreedTime;
   isFirstMover = state.isFirstMover;
-  selected = pruneToProposedTimes(selected);
+  selected = pruneSlotsToProposedTimes(selected, proposedTimes);
 
-  // First load: if the user has nothing cached locally, mirror the
-  // server's view so toggles feel intuitive (re-tapping a slot
-  // un-selects it). If they had a cache we keep it — that's their
-  // unsaved draft from a previous session.
+  // First load with no draft: mirror server picks so re-tapping un-selects.
+  // Returning users with a draft keep their unsaved changes.
   if (firstLoad && selected.size === 0) {
     selected = new Set(confirmedMine);
   }
 }
 
 function render(): void {
-  hideAll();
+  hideStatics();
+
+  // Sheet lifecycle in one place: visible iff we're on dates AND a day is
+  // selected. Covers the post-save case where `view` stayed "dates" but
+  // `sheetDayKey` got cleared — without this the sheet (and its spinner)
+  // hung over the dates list.
+  const shouldShowSheet = view === "dates" && sheetDayKey !== null;
+  if (!shouldShowSheet) {
+    hideSheet(false);
+  }
+
   switch (view) {
     case "agreed":
       renderAgreed();
@@ -137,239 +281,566 @@ function render(): void {
     case "waiting":
       renderWaiting();
       break;
-    case "times":
-      renderTimes();
-      break;
     case "dates":
     default:
       renderDates();
+      if (sheetDayKey !== null) {
+        // Polling-triggered renders keep the sheet alive so the user
+        // doesn't get yanked back to the date list mid-pick.
+        const group = groupedByDay().find((g) => g.key === sheetDayKey);
+        if (!group) {
+          closeSheet(false);
+        } else {
+          buildSheetContent(group);
+          ensureSheetVisible();
+        }
+      }
   }
 }
 
-function hideAll(): void {
-  if (slotsEl) slotsEl.style.display = "none";
-  if (agreedEl) agreedEl.style.display = "none";
-  if (waitingEl) waitingEl.style.display = "none";
-  if (multiOverlapEl) multiOverlapEl.style.display = "none";
-  if (bannerEl) bannerEl.style.display = "none";
-  if (legendEl) legendEl.style.display = "none";
-  app?.MainButton.hide();
+function hideStatics(): void {
+  if (slotsEl) {
+    slotsEl.hidden = true;
+    slotsEl.innerHTML = "";
+  }
+  if (agreedEl) {
+    agreedEl.hidden = true;
+    agreedEl.innerHTML = "";
+    agreedEl.className = "";
+  }
+  if (waitingEl) {
+    waitingEl.hidden = true;
+    waitingEl.innerHTML = "";
+    waitingEl.className = "";
+  }
+  if (multiOverlapEl) {
+    multiOverlapEl.hidden = true;
+    multiOverlapEl.innerHTML = "";
+  }
+  if (bannerEl) {
+    bannerEl.hidden = true;
+    bannerEl.className = "";
+    bannerEl.textContent = "";
+  }
+  if (legendEl) legendEl.hidden = true;
+  if (titleEl) titleEl.hidden = false;
+  hideCta();
+  hideConfetti();
 }
+
+// ── CTA ────────────────────────────────────────────────────────
+
+function showCta(label: string, options: { disabled?: boolean } = {}): void {
+  if (!ctaBarEl || !ctaBtnEl) return;
+  ctaBarEl.hidden = false;
+  if (ctaLabelEl) ctaLabelEl.textContent = label;
+  ctaBtnEl.classList.remove("is-loading");
+  ctaBtnEl.disabled = options.disabled === true;
+}
+
+function hideCta(): void {
+  if (!ctaBarEl || !ctaBtnEl) return;
+  ctaBarEl.hidden = true;
+  ctaBtnEl.classList.remove("is-loading");
+  ctaBtnEl.disabled = false;
+}
+
+function setCtaLoading(label: string): void {
+  if (!ctaBarEl || !ctaBtnEl) return;
+  ctaBarEl.hidden = false;
+  if (ctaLabelEl) ctaLabelEl.textContent = label;
+  ctaBtnEl.classList.add("is-loading");
+  ctaBtnEl.disabled = true;
+}
+
+function handleAnyCtaClick(): void {
+  if (saving) return;
+  if (view === "multi-overlap") {
+    void handleConfirmOverlap();
+  } else if (view === "agreed") {
+    app?.close();
+  } else {
+    void handleSave();
+  }
+}
+
+function setSheetCtaState(dirty: boolean): void {
+  if (!sheetCtaEl || !sheetCtaLabelEl) return;
+  sheetCtaEl.classList.remove("is-loading");
+  sheetCtaEl.disabled = !dirty;
+  sheetCtaLabelEl.textContent = tr(lang, dirty ? saveButtonKey() : "btnSave");
+}
+
+function setSheetCtaLoading(label: string): void {
+  if (!sheetCtaEl || !sheetCtaLabelEl) return;
+  sheetCtaEl.classList.add("is-loading");
+  sheetCtaEl.disabled = true;
+  sheetCtaLabelEl.textContent = label;
+}
+
+function onBackButton(): void {
+  if (sheetDayKey !== null) closeSheet(true);
+}
+
+// ── Bottom sheet ───────────────────────────────────────────────
+
+function buildSheetContent(group: DayGroup): void {
+  if (sheetTitleEl) sheetTitleEl.textContent = formatDate(group.date, lang);
+  if (!sheetBodyEl) return;
+  sheetBodyEl.innerHTML = "";
+  for (const iso of group.isos) {
+    const btn = renderSlotShell(iso, "time");
+    const cls = classifySlot(iso, selected, peerSlots);
+    paintSlotState(btn, cls, null, formatTime(new Date(iso), lang), isNewPeerSlot(iso));
+    btn.addEventListener("click", () => onTapTime(iso));
+    sheetBodyEl.appendChild(btn);
+  }
+  setSheetCtaState(isDirty());
+}
+
+function openSheet(): void {
+  if (!sheetEl || !sheetBackdropEl) return;
+  if (sheetHideTimer !== null) {
+    clearTimeout(sheetHideTimer);
+    sheetHideTimer = null;
+  }
+  // Wipe any leftover inline drag styles from a previous interaction so
+  // the .is-open transition starts cleanly from translateY(100%).
+  sheetEl.style.transform = "";
+  sheetEl.style.transition = "";
+  sheetBackdropEl.style.opacity = "";
+  sheetBackdropEl.style.transition = "";
+  const wasHidden = sheetEl.hasAttribute("hidden");
+  sheetEl.removeAttribute("hidden");
+  sheetBackdropEl.removeAttribute("hidden");
+  if (wasHidden) {
+    // Force layout so the transition fires from translateY(100%).
+    void sheetEl.offsetHeight;
+    requestAnimationFrame(() => {
+      sheetEl.classList.add("is-open");
+      sheetBackdropEl.classList.add("is-open");
+    });
+  } else {
+    sheetEl.classList.add("is-open");
+    sheetBackdropEl.classList.add("is-open");
+  }
+  setSheetCtaState(isDirty());
+  hideCta();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (app as any)?.BackButton?.show?.();
+  } catch {
+    // ignored
+  }
+}
+
+function ensureSheetVisible(): void {
+  if (!sheetEl) return;
+  if (sheetEl.hasAttribute("hidden")) {
+    openSheet();
+  } else {
+    setSheetCtaState(isDirty());
+    hideCta();
+  }
+}
+
+function closeSheet(animate: boolean): void {
+  sheetDayKey = null;
+  if (!sheetEl || !sheetBackdropEl) {
+    updateCtaForPicker();
+    return;
+  }
+  sheetEl.classList.remove("is-open");
+  sheetBackdropEl.classList.remove("is-open");
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (app as any)?.BackButton?.hide?.();
+  } catch {
+    // ignored
+  }
+  if (sheetHideTimer !== null) {
+    clearTimeout(sheetHideTimer);
+    sheetHideTimer = null;
+  }
+  if (animate) {
+    sheetHideTimer = setTimeout(() => {
+      sheetEl.setAttribute("hidden", "");
+      sheetBackdropEl.setAttribute("hidden", "");
+      sheetHideTimer = null;
+    }, SHEET_ANIM_MS);
+  } else {
+    sheetEl.setAttribute("hidden", "");
+    sheetBackdropEl.setAttribute("hidden", "");
+  }
+  updateCtaForPicker();
+}
+
+function hideSheet(animate: boolean): void {
+  if (sheetDayKey === null && sheetEl?.hasAttribute("hidden")) return;
+  closeSheet(animate);
+}
+
+// ── Renderers ──────────────────────────────────────────────────
 
 function renderAgreed(): void {
   if (!agreedEl || !agreedTime) return;
-  if (titleEl) titleEl.textContent = tr(lang, "titleAgreed");
-  agreedEl.style.display = "block";
-  agreedEl.innerHTML = "";
-  const h = document.createElement("h2");
-  h.textContent = tr(lang, "agreedHeader");
-  const time = document.createElement("p");
-  time.className = "agreed-time";
-  time.textContent = formatSlot(new Date(agreedTime), lang);
-  const p = document.createElement("p");
-  p.textContent = tr(lang, "agreedSubtitle");
-  agreedEl.append(h, time, p);
+  if (titleEl) titleEl.hidden = true;
+  agreedEl.hidden = false;
+  agreedEl.classList.add("success-page");
+  agreedEl.innerHTML = `
+    <svg class="check-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 13L9 17L19 7" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    <div class="agreed-card">
+      <h2 class="agreed-date" data-role="date"></h2>
+      <p class="agreed-time" data-role="time"></p>
+    </div>
+    <p class="agreed-subtitle" data-role="subtitle"></p>
+    <button type="button" class="remind-chip" data-role="remind">
+      <span class="remind-chip-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </span>
+      <span class="remind-chip-label" data-role="remind-label"></span>
+    </button>
+  `;
+  const slot = new Date(agreedTime);
+  agreedEl.querySelector<HTMLElement>('[data-role="date"]')!.textContent =
+    formatDate(slot, lang);
+  agreedEl.querySelector<HTMLElement>('[data-role="time"]')!.textContent =
+    formatTime(slot, lang);
+  agreedEl.querySelector<HTMLElement>('[data-role="subtitle"]')!.textContent =
+    tr(lang, "agreedSubtitle");
+
+  const remindBtn = agreedEl.querySelector<HTMLButtonElement>('[data-role="remind"]')!;
+  const remindLabel = agreedEl.querySelector<HTMLElement>('[data-role="remind-label"]')!;
+  remindLabel.textContent = tr(lang, "btnRemind");
+  // Cosmetic only — date-lifecycle.ts already sends the T-3h ice-breaker
+  // + T-1h safety brief, so a real reminder schedule isn't needed.
+  remindBtn.addEventListener("click", () => {
+    if (remindBtn.classList.contains("is-armed")) return;
+    remindBtn.classList.add("is-armed");
+    remindLabel.textContent = tr(lang, "btnRemindArmed");
+    app?.HapticFeedback?.impactOccurred?.("light");
+  });
+
+  showCta(tr(lang, "btnClose"));
+  runConfetti();
 }
 
 function renderWaiting(): void {
   if (!waitingEl) return;
-  if (titleEl) titleEl.textContent = tr(lang, "titleWaiting");
-  waitingEl.style.display = "block";
-  waitingEl.innerHTML = "";
-  const h = document.createElement("h2");
-  h.textContent = tr(lang, "waitingHeader");
-  const p = document.createElement("p");
-  p.textContent = tr(lang, "waitingSubtitle");
-  // Show the user's confirmed picks below as a read-only summary so
-  // they can see what was saved.
-  const picksWrap = document.createElement("div");
-  picksWrap.className = "picks-summary";
+  if (titleEl) titleEl.hidden = true;
+  waitingEl.hidden = false;
+  waitingEl.classList.add("saved-page");
+  waitingEl.innerHTML = `
+    <div class="saved-hero">
+      <h2 class="saved-eyebrow" data-role="eyebrow"></h2>
+      <div class="saved-check">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M5 12.5L10 17L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </div>
+      <h3 class="saved-title" data-role="title"></h3>
+      <p class="saved-subtitle" data-role="subtitle"></p>
+      <div class="saved-picks" data-role="picks"></div>
+    </div>
+    <div class="saved-actions">
+      <div class="saved-actions-inner">
+        <button type="button" class="btn-secondary" data-role="edit"></button>
+        <button type="button" class="btn-primary" data-role="close">
+          <span class="label"></span>
+        </button>
+      </div>
+    </div>
+  `;
+
+  waitingEl.querySelector<HTMLElement>('[data-role="eyebrow"]')!.textContent =
+    tr(lang, "titleWaiting");
+  waitingEl.querySelector<HTMLElement>('[data-role="title"]')!.textContent =
+    tr(lang, "waitingHeader");
+  waitingEl.querySelector<HTMLElement>('[data-role="subtitle"]')!.textContent =
+    tr(lang, "waitingSubtitle");
+
+  const picksEl = waitingEl.querySelector<HTMLElement>('[data-role="picks"]')!;
   for (const iso of Array.from(confirmedMine).sort()) {
     const chip = document.createElement("span");
-    chip.className = "chip";
+    chip.className = "saved-pick-chip";
     chip.textContent = formatSlot(new Date(iso), lang);
-    picksWrap.appendChild(chip);
+    picksEl.appendChild(chip);
   }
-  const actions = document.createElement("div");
-  actions.className = "card-actions";
-  const close = document.createElement("button");
-  close.type = "button";
-  close.className = "btn-primary";
-  close.textContent = tr(lang, "btnClose");
-  close.addEventListener("click", () => app?.close());
-  const edit = document.createElement("button");
-  edit.type = "button";
-  edit.className = "btn-secondary";
-  edit.textContent = tr(lang, "btnEdit");
-  edit.addEventListener("click", () => {
+
+  const editBtn = waitingEl.querySelector<HTMLButtonElement>('[data-role="edit"]')!;
+  editBtn.textContent = tr(lang, "btnEdit");
+  editBtn.addEventListener("click", () => {
     view = "dates";
     render();
   });
-  actions.append(close, edit);
-  waitingEl.append(h, p, picksWrap, actions);
+
+  const closeBtn = waitingEl.querySelector<HTMLButtonElement>('[data-role="close"]')!;
+  closeBtn.querySelector<HTMLElement>(".label")!.textContent = tr(lang, "btnClose");
+  closeBtn.addEventListener("click", () => app?.close());
+
+  // The waiting screen ships its own bottom actions inline (matches the
+  // design's two-button column), so the sticky CTA stays hidden here.
+  hideCta();
 }
 
 function renderMultiOverlap(): void {
   if (!multiOverlapEl) return;
-  if (titleEl) titleEl.textContent = tr(lang, "titleConfirm");
-  multiOverlapEl.style.display = "block";
-  multiOverlapEl.innerHTML = "";
-  const h = document.createElement("h2");
-  h.textContent = tr(lang, "multiOverlapHeader");
-  const p = document.createElement("p");
-  p.textContent = tr(lang, "multiOverlapSubtitle");
-  const list = document.createElement("div");
-  list.className = "radio-list";
+  if (titleEl) titleEl.hidden = true;
+  multiOverlapEl.hidden = false;
+  multiOverlapEl.innerHTML = `
+    <div class="overlap-hero">
+      <h2 data-role="header"></h2>
+      <p data-role="subtitle"></p>
+    </div>
+    <div class="overlap-list" data-role="list"></div>
+  `;
+  multiOverlapEl.querySelector<HTMLElement>('[data-role="header"]')!.textContent =
+    tr(lang, "multiOverlapHeader");
+  multiOverlapEl.querySelector<HTMLElement>('[data-role="subtitle"]')!.textContent =
+    tr(lang, "multiOverlapSubtitle");
+
+  // Pre-select the first overlap candidate so the Confirm CTA is
+  // immediately actionable (matches screen_7 mockup).
+  if (multiOverlapChoice === null && overlapCandidates.length > 0) {
+    multiOverlapChoice = overlapCandidates[0]!;
+  }
+
+  const list = multiOverlapEl.querySelector<HTMLElement>('[data-role="list"]')!;
   for (const iso of overlapCandidates) {
-    const opt = document.createElement("label");
-    opt.className = "radio-option";
-    const input = document.createElement("input");
-    input.type = "radio";
-    input.name = "overlap";
-    input.value = iso;
-    input.checked = multiOverlapChoice === iso;
-    input.addEventListener("change", () => {
+    const card = document.createElement("div");
+    card.className = "overlap-card";
+    card.dataset.iso = iso;
+    if (iso === multiOverlapChoice) card.classList.add("is-selected");
+
+    const date = new Date(iso);
+    const text = document.createElement("div");
+    text.className = "overlap-text";
+    const dayEl = document.createElement("span");
+    dayEl.className = "overlap-day";
+    dayEl.textContent = `${formatDate(date, lang)},`;
+    const timeEl = document.createElement("span");
+    timeEl.className = "overlap-time";
+    timeEl.textContent = formatTime(date, lang);
+    text.append(dayEl, timeEl);
+    card.appendChild(text);
+
+    card.addEventListener("click", () => {
+      if (multiOverlapChoice === iso) return;
       multiOverlapChoice = iso;
-      app?.MainButton.enable();
-      app?.MainButton.show();
+      for (const el of list.querySelectorAll<HTMLElement>(".overlap-card")) {
+        el.classList.toggle("is-selected", el.dataset.iso === iso);
+      }
+      app?.HapticFeedback?.selectionChanged?.();
+      showCta(tr(lang, "btnConfirm"));
     });
-    const text = document.createElement("span");
-    text.textContent = formatSlot(new Date(iso), lang);
-    opt.append(input, text);
-    list.appendChild(opt);
+
+    list.appendChild(card);
   }
-  multiOverlapEl.append(h, p, list);
-  // Reuse MainButton as the Confirm CTA for native feel.
-  if (app) {
-    app.MainButton.setText(tr(lang, "btnConfirm"));
-    if (multiOverlapChoice) {
-      app.MainButton.enable();
-      app.MainButton.show();
-    } else {
-      app.MainButton.disable();
-      app.MainButton.show();
-    }
-  }
+
+  showCta(tr(lang, "btnConfirm"), { disabled: multiOverlapChoice === null });
 }
 
 function renderDates(): void {
   if (!slotsEl) return;
-  if (titleEl) titleEl.textContent = tr(lang, "titleDate");
-  if (bannerEl) {
-    updateNegotiationBanner();
+  if (titleEl) {
+    titleEl.hidden = false;
+    titleEl.textContent = tr(lang, "titleDate");
   }
-  if (legendEl) legendEl.style.display = "flex";
+  updateNegotiationBanner({ minimal: false });
+  if (legendEl) legendEl.hidden = false;
 
-  // Repaint the date list. The exact DateTime allowlist stays server-owned;
-  // this step only groups those slots into a calmer first choice.
-  slotsEl.style.display = "grid";
-  slotsEl.className = "slots date-grid";
+  slotsEl.hidden = false;
   slotsEl.innerHTML = "";
+
   for (const group of groupedByDay()) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "slot date-slot";
-    btn.dataset.day = group.key;
-    btn.textContent = formatDate(group.date, lang);
-    applySlotClass(btn, classifyDay(group));
-    btn.addEventListener("click", () => {
-      selectedDayKey = group.key;
-      view = "times";
-      app?.HapticFeedback?.selectionChanged?.();
-      render();
-    });
+    const btn = renderSlotShell(group.key, "day");
+    const dayClass = classifyDay(group);
+    paintSlotState(btn, dayClass, formatDateParts(group.date), null, dayHasNewPeer(group));
+    btn.addEventListener("click", () => onTapDate(group.key));
     slotsEl.appendChild(btn);
   }
-  updateMainButton();
+
+  updateCtaForPicker();
 }
 
-function renderTimes(): void {
-  if (!slotsEl) return;
-  const group = groupedByDay().find((g) => g.key === selectedDayKey);
-  if (!group) {
-    selectedDayKey = null;
-    view = "dates";
-    renderDates();
+function onTapDate(key: string): void {
+  const group = groupedByDay().find((g) => g.key === key);
+  if (!group) return;
+  sheetDayKey = key;
+  app?.HapticFeedback?.selectionChanged?.();
+  buildSheetContent(group);
+  openSheet();
+}
+
+function repaintDateStates(): void {
+  if (view !== "dates" || !slotsEl) return;
+  slotsEl.innerHTML = "";
+  for (const group of groupedByDay()) {
+    const btn = renderSlotShell(group.key, "day");
+    const dayClass = classifyDay(group);
+    paintSlotState(btn, dayClass, formatDateParts(group.date), null, dayHasNewPeer(group));
+    btn.addEventListener("click", () => onTapDate(group.key));
+    slotsEl.appendChild(btn);
+  }
+}
+
+// ── Slot DOM ───────────────────────────────────────────────────
+
+function renderSlotShell(key: string, kind: "day" | "time"): HTMLButtonElement {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "slot";
+  btn.dataset.kind = kind;
+  btn.dataset.key = key;
+  return btn;
+}
+
+interface DateParts {
+  weekday: string;
+  dayOfMonth: string;
+}
+
+function formatDateParts(date: Date): DateParts {
+  const locale = localeFor(lang);
+  const weekday = date.toLocaleDateString(locale, { weekday: "long" });
+  const dayOfMonth = date.toLocaleDateString(locale, { day: "numeric", month: "long" });
+  return { weekday: `${weekday},`, dayOfMonth };
+}
+
+function localeFor(l: Lang): string | undefined {
+  if (l === "ru") return "ru-RU";
+  if (l === "uk") return "uk-UA";
+  if (l === "de") return "de-DE";
+  if (l === "pl") return "pl-PL";
+  return undefined;
+}
+
+function paintSlotState(
+  btn: HTMLButtonElement,
+  cls: SlotClass | DayClass,
+  date: DateParts | null,
+  time: string | null,
+  isNew: boolean,
+): void {
+  btn.classList.remove("state-you", "state-match", "state-both");
+
+  const label = document.createElement("span");
+  if (time) {
+    label.className = "slot-time-label";
+    label.textContent = time;
+  } else if (date) {
+    label.className = "slot-label";
+    const weekday = document.createElement("span");
+    weekday.className = "slot-weekday";
+    weekday.textContent = date.weekday;
+    const day = document.createElement("span");
+    day.className = "slot-day";
+    day.textContent = date.dayOfMonth;
+    label.append(weekday, day);
+  }
+  btn.appendChild(label);
+
+  if (cls !== "empty") {
+    if (cls === "mine") {
+      btn.classList.add("state-you");
+      btn.appendChild(makeIndicator(tr(lang, "legendMine"), "single", "you"));
+    } else if (cls === "peer") {
+      btn.classList.add("state-match");
+      btn.appendChild(makeIndicator(tr(lang, "legendPeer"), "single", "match"));
+    } else if (cls === "overlap") {
+      btn.classList.add("state-both");
+      btn.appendChild(makeIndicator(tr(lang, "legendOverlap"), "pair"));
+    } else {
+      // mixed — same visual as overlap, but tagged "Other time"
+      btn.classList.add("state-both");
+      btn.appendChild(makeIndicator(tr(lang, "legendAlternative"), "pair"));
+    }
+  }
+
+  // Sticker NEW — direct child of the slot so it can sit absolutely on
+  // the top-right corner, not crowd the indicator row. Skip "mine" and
+  // "empty": only peer-side changes are "new" to this user.
+  if (isNew && cls !== "empty" && cls !== "mine") {
+    const sticker = document.createElement("span");
+    sticker.className = "badge-new";
+    sticker.textContent = tr(lang, "badgeNew");
+    btn.appendChild(sticker);
+  }
+}
+
+function makeIndicator(
+  label: string,
+  variant: "single" | "pair",
+  dot?: "you" | "match",
+): HTMLElement {
+  const wrap = document.createElement("span");
+  wrap.className = "slot-indicator";
+  const tag = document.createElement("span");
+  tag.className = "indicator-tag";
+  tag.textContent = label;
+  wrap.appendChild(tag);
+  if (variant === "single") {
+    const d = document.createElement("span");
+    d.className = "indicator-dot";
+    if (dot === "match") d.style.background = "var(--brand)";
+    wrap.appendChild(d);
+  } else {
+    const pair = document.createElement("span");
+    pair.className = "indicator-pair";
+    const a = document.createElement("span");
+    a.className = "indicator-pair-dot";
+    a.style.background = "rgba(255,255,255,0.9)";
+    const b = document.createElement("span");
+    b.className = "indicator-pair-dot";
+    b.style.background = "var(--brand)";
+    pair.append(a, b);
+    wrap.appendChild(pair);
+  }
+  return wrap;
+}
+
+// ── Banner ─────────────────────────────────────────────────────
+
+function updateNegotiationBanner(opts: { minimal: boolean }): void {
+  if (!bannerEl) return;
+
+  let copy: string | null = null;
+  if (peerSlots.size > 0 && selected.size > 0 && !hasSelectedPeerOverlap()) {
+    copy = tr(lang, "bannerProposingAlternative");
+  } else if (!isFirstMover && confirmedMine.size === 0) {
+    copy = tr(lang, "bannerPeerPicked");
+  }
+
+  if (!copy) {
+    bannerEl.hidden = true;
+    bannerEl.className = "";
+    bannerEl.textContent = "";
     return;
   }
-
-  if (titleEl) titleEl.textContent = tr(lang, "titleTime");
-  updateNegotiationBanner();
-  if (legendEl) legendEl.style.display = "flex";
-  slotsEl.style.display = "block";
-  slotsEl.className = "slots times";
-  slotsEl.innerHTML = "";
-
-  const header = document.createElement("div");
-  header.className = "time-header";
-  const back = document.createElement("button");
-  back.type = "button";
-  back.className = "back-date";
-  back.setAttribute("aria-label", tr(lang, "btnBackToDates"));
-  back.textContent = "‹";
-  back.addEventListener("click", () => {
-    selectedDayKey = null;
-    view = "dates";
-    app?.HapticFeedback?.selectionChanged?.();
-    render();
-  });
-  const dateLabel = document.createElement("div");
-  dateLabel.className = "time-header-title";
-  dateLabel.textContent = formatDate(group.date, lang);
-  header.append(back, dateLabel);
-
-  const list = document.createElement("div");
-  list.className = "time-list";
-  for (const iso of group.isos) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "slot time-slot";
-    btn.dataset.iso = iso;
-    btn.textContent = formatTime(new Date(iso), lang);
-    applySlotClass(btn, classifySlot(iso, selected, peerSlots));
-    btn.addEventListener("click", () => onTapTime(iso));
-    list.appendChild(btn);
-  }
-
-  slotsEl.append(header, list);
-  updateMainButton();
+  bannerEl.hidden = false;
+  bannerEl.className = opts.minimal ? "banner banner-minimal" : "banner";
+  bannerEl.textContent = copy;
 }
 
-function applySlotClass(btn: HTMLButtonElement, cls: DayClass | SlotClass): void {
-  btn.classList.remove("mine", "peer", "overlap", "mixed", "empty");
-  btn.classList.add(cls);
-  const existingTag = btn.querySelector(".tag");
-  if (existingTag) existingTag.remove();
-  if (cls === "peer" || cls === "overlap" || cls === "mixed") {
-    const tag = document.createElement("span");
-    tag.className = "tag";
-    tag.textContent =
-      cls === "overlap"
-        ? tr(lang, "legendOverlap")
-        : cls === "mixed"
-          ? tr(lang, "legendAlternative")
-          : tr(lang, "legendPeer");
-    btn.appendChild(tag);
-  }
-}
+// ── CTA on picker views ────────────────────────────────────────
 
-function onTapTime(iso: string): void {
-  if (selected.has(iso)) selected.delete(iso);
-  else selected.add(iso);
-  void savePickedSet(matchId, Array.from(selected));
-  app?.HapticFeedback?.selectionChanged?.();
-  renderTimes();
-}
-
-function updateMainButton(): void {
-  if (!app) return;
+function updateCtaForPicker(): void {
   if (saving) return;
-  if (isDirty()) {
-    app.MainButton.setText(tr(lang, saveButtonKey()));
-    app.MainButton.enable();
-    app.MainButton.show();
+  const dirty = isDirty();
+  if (sheetDayKey !== null) {
+    // Sheet owns the CTA while it's open — keep the sticky white button
+    // hidden so the two don't stack.
+    setSheetCtaState(dirty);
+    hideCta();
+  } else if (dirty) {
+    showCta(tr(lang, saveButtonKey()));
   } else {
-    app.MainButton.hide();
+    hideCta();
   }
 }
 
@@ -386,46 +857,38 @@ function hasSelectedPeerOverlap(): boolean {
   return false;
 }
 
-function updateNegotiationBanner(): void {
-  if (!bannerEl) return;
-
-  if (peerSlots.size > 0 && selected.size > 0 && !hasSelectedPeerOverlap()) {
-    bannerEl.style.display = "block";
-    bannerEl.textContent = tr(lang, "bannerProposingAlternative");
-    return;
-  }
-
-  if (!isFirstMover && confirmedMine.size === 0) {
-    bannerEl.style.display = "block";
-    bannerEl.textContent = tr(lang, "bannerPeerPicked");
-    return;
-  }
-
-  bannerEl.style.display = "none";
-  bannerEl.textContent = "";
-}
-
 function isDirty(): boolean {
   if (selected.size !== confirmedMine.size) return true;
   for (const iso of selected) if (!confirmedMine.has(iso)) return true;
   return false;
 }
 
-function handleMainButton(): void {
-  if (view === "multi-overlap") {
-    void handleConfirmOverlap();
-  } else {
-    void handleSave();
-  }
+function onTapTime(iso: string): void {
+  if (selected.has(iso)) selected.delete(iso);
+  else selected.add(iso);
+  void savePickedSet(matchId, Array.from(selected));
+  app?.HapticFeedback?.selectionChanged?.();
+  // Repaint the sheet so the tapped slot updates immediately, and the
+  // dates list behind the backdrop so its day-card state class follows
+  // the new selection.
+  const group = sheetDayKey
+    ? groupedByDay().find((g) => g.key === sheetDayKey)
+    : null;
+  if (group) buildSheetContent(group);
+  repaintDateStates();
+  updateCtaForPicker();
 }
+
+// ── Save / confirm ─────────────────────────────────────────────
 
 async function handleSave(): Promise<void> {
   if (!app || saving) return;
-  selected = pruneToProposedTimes(selected);
+  selected = pruneSlotsToProposedTimes(selected, proposedTimes);
+  void savePickedSet(matchId, Array.from(selected));
   saving = true;
-  app.MainButton.setText(tr(lang, "btnSaving"));
-  app.MainButton.showProgress();
-  app.MainButton.disable();
+  const loadingLabel = tr(lang, "btnSaving");
+  if (sheetDayKey !== null) setSheetCtaLoading(loadingLabel);
+  else setCtaLoading(loadingLabel);
 
   try {
     const res = await postCalendarPicks(app.initData, matchId, Array.from(selected));
@@ -434,7 +897,16 @@ async function handleSave(): Promise<void> {
     agreedTime = res.agreedTime;
     overlapCandidates = res.overlapCandidates ?? [];
     saving = false;
-    app.MainButton.hideProgress();
+    // Successful save = the user has "seen and responded to" everything the
+    // peer had at this point. Snapshot it so the next batch of peer changes
+    // is what gets NEW-badged on next open / next poll.
+    peerSeen = new Set(peerSlots);
+    void savePeerSeen(matchId, Array.from(peerSeen));
+    // Collapse the bottom sheet — the user committed their picks, so the
+    // post-save view (waiting / agreed / overlap / dates) should be fully
+    // visible. Polling-triggered renders still preserve the sheet because
+    // they go through a different code path.
+    sheetDayKey = null;
 
     if (agreedTime) {
       void clearPicked(matchId);
@@ -443,72 +915,58 @@ async function handleSave(): Promise<void> {
     } else if (overlapCandidates.length > 1) {
       multiOverlapChoice = null;
       view = "multi-overlap";
-    } else if (confirmedMine.size > 0 && peerSlots.size === 0) {
+    } else if (confirmedMine.size > 0) {
+      // Show the "Saved / waiting" confirmation on every successful save,
+      // not just for the first mover. The second mover deserves the same
+      // ack even though the peer already has picks recorded.
       app.HapticFeedback?.notificationOccurred?.("success");
       view = "waiting";
     } else {
-      // Both submitted but no overlap (or empty self-set after edit) —
-      // stay in the picker so user can keep adjusting.
       view = "dates";
     }
     render();
   } catch (err) {
     saving = false;
-    app.MainButton.hideProgress();
-    app.MainButton.enable();
     const msg = err instanceof CalendarApiError ? errorMessage(err) : tr(lang, "errNetwork");
     app.showAlert(msg);
-    updateMainButton();
+    updateCtaForPicker();
   }
-}
-
-function pruneToProposedTimes(values: ReadonlySet<string>): Set<string> {
-  if (values.size === 0) return new Set();
-  const allowed = new Set(proposedTimes);
-  const pruned = new Set<string>();
-  for (const iso of values) {
-    if (allowed.has(iso) && !Number.isNaN(new Date(iso).getTime())) {
-      pruned.add(iso);
-    }
-  }
-  return pruned;
 }
 
 async function handleConfirmOverlap(): Promise<void> {
   if (!app || saving || !multiOverlapChoice) return;
   saving = true;
-  app.MainButton.showProgress();
-  app.MainButton.disable();
+  setCtaLoading(tr(lang, "btnSaving"));
 
   try {
-    // Re-POST with just the chosen overlap. Server sees intersection=1
-    // and auto-locks — same code path as instant-agree.
     const res = await postCalendarPicks(app.initData, matchId, [multiOverlapChoice]);
     confirmedMine = new Set(res.mySlots);
     peerSlots = new Set(res.peerSlots);
     agreedTime = res.agreedTime;
     overlapCandidates = res.overlapCandidates ?? [];
     saving = false;
-    app.MainButton.hideProgress();
+    peerSeen = new Set(peerSlots);
+    void savePeerSeen(matchId, Array.from(peerSeen));
+    sheetDayKey = null;
 
     if (agreedTime) {
       void clearPicked(matchId);
       app.HapticFeedback?.notificationOccurred?.("success");
       view = "agreed";
     } else {
-      // Edge case: peer changed their picks between our save and confirm
-      // and the chosen slot is no longer overlapping. Fall back to dates.
+      // Edge: peer's set changed mid-confirm — drop back to picker.
       view = "dates";
     }
     render();
   } catch (err) {
     saving = false;
-    app.MainButton.hideProgress();
-    app.MainButton.enable();
     const msg = err instanceof CalendarApiError ? errorMessage(err) : tr(lang, "errNetwork");
     app.showAlert(msg);
+    showCta(tr(lang, "btnConfirm"), { disabled: multiOverlapChoice === null });
   }
 }
+
+// ── Polling ────────────────────────────────────────────────────
 
 function schedulePoll(): void {
   if (pollTimer !== null) clearTimeout(pollTimer);
@@ -522,25 +980,42 @@ async function poll(): Promise<void> {
     schedulePoll();
     return;
   }
-  // Don't disturb an in-flight multi-overlap confirm flow.
   if (view === "multi-overlap") {
     schedulePoll();
     return;
   }
   try {
     const state = await fetchCalendarState(app!.initData, matchId);
+    // Skip render unless server-side state actually changed — otherwise
+    // the waiting/agreed screens re-mount every 4s and their pop/check
+    // animations flash.
+    const before = stateFingerprint();
     applyState(state, /* firstLoad */ false);
-    // Polling can only PROMOTE the view to 'agreed' — it never demotes
-    // 'waiting' back to 'dates' because the user's UI choice (showing
-    // success) shouldn't flicker as peer's empty array stays empty.
+    const after = stateFingerprint();
+
+    if (before === after) {
+      schedulePoll();
+      return;
+    }
+
     if (agreedTime) {
       view = "agreed";
+    } else if (view === "waiting" && peerSlots.size > 0) {
+      // Peer joined while we were waiting; fall back to the picker so the
+      // user can see overlapped slots paint live.
+      view = "dates";
     }
     render();
   } catch {
-    // Swallow polling errors — the next save will surface a real one.
+    // Polling errors are swallowed; the next save will surface a real one.
   }
   schedulePoll();
+}
+
+function stateFingerprint(): string {
+  const peer = Array.from(peerSlots).sort().join(",");
+  const mine = Array.from(confirmedMine).sort().join(",");
+  return `${agreedTime ?? ""}|${peer}|${mine}|${isFirstMover}`;
 }
 
 function onVisibility(): void {
@@ -552,10 +1027,11 @@ function onVisibility(): void {
   }
 }
 
+// ── i18n helpers ───────────────────────────────────────────────
+
 function applyLegendCopy(): void {
   if (!legendEl) return;
-  const items = legendEl.querySelectorAll<HTMLElement>("[data-legend]");
-  for (const el of items) {
+  for (const el of legendEl.querySelectorAll<HTMLElement>("[data-legend]")) {
     const k = el.dataset.legend;
     if (k === "mine") el.textContent = tr(lang, "legendMine");
     else if (k === "peer") el.textContent = tr(lang, "legendPeer");
@@ -587,6 +1063,17 @@ function classifyDay(group: DayGroup): DayClass {
   return classifyDaySlots(group.isos, selected, peerSlots);
 }
 
+function isNewPeerSlot(iso: string): boolean {
+  return peerSlots.has(iso) && !peerSeen.has(iso);
+}
+
+function dayHasNewPeer(group: DayGroup): boolean {
+  for (const iso of group.isos) {
+    if (isNewPeerSlot(iso)) return true;
+  }
+  return false;
+}
+
 function errorMessage(err: CalendarApiError): string {
   switch (err.reason) {
     case "expired":
@@ -598,7 +1085,6 @@ function errorMessage(err: CalendarApiError): string {
     case "user-not-found":
       return tr(lang, "errMatchGone");
     case "invalid-slot":
-    case "invalid-iso":
       return tr(lang, "errInvalidSlot");
     case "wrong-state":
       return tr(lang, "errWrongState");
@@ -607,4 +1093,37 @@ function errorMessage(err: CalendarApiError): string {
     default:
       return `${tr(lang, "errGeneric")} (HTTP ${err.status})`;
   }
+}
+
+// ── Confetti (success only) ────────────────────────────────────
+
+function runConfetti(): void {
+  if (!confettiCanvasEl) return;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  confettiCanvasEl.hidden = false;
+  confettiCanvasEl.innerHTML = "";
+  const colors = ["#ac92dc", "#ffffff", "#e2d5f8", "#18181b"];
+  for (let i = 0; i < 40; i++) {
+    const piece = document.createElement("div");
+    piece.className = "confetti";
+    const color = colors[Math.floor(Math.random() * colors.length)]!;
+    const size = Math.random() * 6 + 4;
+    piece.style.backgroundColor = color;
+    piece.style.left = `${Math.random() * 100}vw`;
+    piece.style.width = `${size}px`;
+    piece.style.height = `${size}px`;
+    if (color === "#18181b") {
+      piece.style.border = "1px solid rgba(255,255,255,0.1)";
+    }
+    const duration = Math.random() * 2 + 2;
+    const delay = Math.random() * 1.5;
+    piece.style.animation = `fall ${duration}s linear ${delay}s infinite`;
+    confettiCanvasEl.appendChild(piece);
+  }
+}
+
+function hideConfetti(): void {
+  if (!confettiCanvasEl) return;
+  confettiCanvasEl.hidden = true;
+  confettiCanvasEl.innerHTML = "";
 }

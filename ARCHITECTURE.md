@@ -179,6 +179,7 @@ when columns diverge, Prisma wins.
 | `MatchEventActionType` | `PROPOSAL_SHOWN`, `ACCEPTED`, `DECLINED`, `DATE_COMPLETED`, `CHEMISTRY_POSITIVE`, `CHEMISTRY_NEGATIVE`, `EXPIRED_SILENT`, `EXPIRED_PEER_IGNORED` |
 | `MessageRole` | `user`, `assistant`, `system` |
 | `AiMemoryExportPreference` | `undecided`, `accepted`, `declined` |
+| `ProfilerPriority` | `high`, `medium`, `low` |
 
 ### `users`
 
@@ -186,7 +187,7 @@ Columns (≈ 35; grouped by purpose):
 
 | Group | Columns |
 |---|---|
-| Identity | `id`, `telegramId` (unique BigInt — synthetic **negative** id for mobile-only users), `email`, `universityDomain`, `firstName`, `surname`, `age`, `gender`, `preference`, `major`, `language`, `platform` |
+| Identity | `id`, `telegramId` (unique BigInt — synthetic **negative** id for mobile-only users), `telegramUsername` (public `@handle`, captured opportunistically for `t.me/` coordination links), `email`, `universityDomain`, `firstName`, `surname`, `age`, `gender`, `preference`, `major`, `language`, `platform` |
 | Lifecycle | `status` (`UserStatus`), `onboardingStep`, `aiMemoryExportPreference`, `aiMemoryExportPreferenceAt`, `hasConsented`, `consentedAt`, `termsAccepted`, `termsAcceptedAt`, `researchOptIn`, `createdAt`, `updatedAt` |
 | Email OTP | `emailOtp`, `emailOtpExpiresAt`, `isEmailVerified` |
 | Conversational state | `messageHistory` (`Json[]`), `lastMessageAt`, `lastPreMatchAnnounceAt` |
@@ -209,8 +210,9 @@ Columns (≈ 25):
 | Vector | `embedding` (`vector(1536)`), `embeddingDirty`, `embeddingDirtyAt` |
 | Elo | `eloScore` (default 500), `eloMatchesPlayed`, `eloSeededAt` |
 | Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
-| Geo / radius | `matchRadius` (`campus_only` / `citywide`), `homeCity`, `homeCountryCode`, `homeCityKey`, `homePlaceId`, `latitude`, `longitude`, `locationUpdatedAt` |
+| Geo / radius | `matchRadius` (`campus_only` / `citywide`), `homeCity`, `homeCountryCode`, `homeCityKey`, `homePlaceId`, `latitude`, `longitude`, `locationUpdatedAt`, `timeZone` (IANA, derived from the dating city; drives the Profiler's local-time batch windows) |
 | Match priority | `lastMatchedAt`, `missedWeeks`, `standbyCount`, `lastMissedAt`, `silentIgnoreCount` |
+| Profiler (Phase 1b) | `profilerStartedAt`, `profilerNextAt`, `profilerActiveQuestionId`, `profilerBatchRemaining` — scheduler state for the post-onboarding Q&A batches that fuel icebreakers/hints (see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §Phase 1b). Indexed `@@index([profilerNextAt])` for the worker sweep. |
 | Audit | `createdAt`, `updatedAt` |
 
 ### `matches`
@@ -227,8 +229,11 @@ Columns (≈ 40). Drives the entire matching → scheduling → date lifecycle. 
 | Concierge venue | `vibeTextA`, `vibeTextB`, `vibeLatA/LngA`, `vibeLatB/LngB`, `vibeAddressA/B` (Mini App map-picker label), `parsedCategoryA`, `parsedCategoryB`, `venueName`, `venueAddress`, `venueLat`, `venueLng`, `venueGoogleMapsUri`, `venuePromptAskedAt` |
 | Date lifecycle | `icebreakersSentAt`, `iceBreakersA`/`B` (`String[]`), `safetyNoteSentAt`, `safetyAckA`/`B`, `wingmanHintA`/`B`, `wingmanSentAt`, `emergencyCancelledBy`, `emergencyReason`, `feedbackByA`/`B`, `feedbackPromptedAt` |
 | Nudges | `nudge1SentAt`, `nudge2SentAt` (legacy), `proposalNudge1SentAt`, `proposalNudge2SentAt`, `schedNudge1SentAt`, `schedNudge2SentAt` |
+| Date Ticket (feature-flagged) | `ticketPriceCents`, `ticketPaidA/B`, `paidForPartnerByA/B`, `ticketStatus` (`pending`/`partial`/`completed`/`refunded`/`expired` — string, not a Prisma enum), `ticketExpiresAt`. Monetization sub-state machine that runs while `status = negotiating`; inert when `TICKET_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
+| Pre-date coordination (feature-flagged) | `coordOfferSentAt`, `coordInitiatorId`, `coordMethod` (`share_self`/`request_partner`/`proxy` — string, not a Prisma enum), `coordChosenAt`, `coordPartnerConsent` (Variant B only), `coordResolvedAt`, `proxyOpenedAt`, `proxyClosesAt`, `proxyClosedAt`. Sub-state machine running on a `scheduled` match; inert when `COORDINATION_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §Phase 4. |
+| Venue change (feature-flagged) | `venueChangeStatus` (`proposed`/`accepted`/`rejected`/`expired` — string, not a Prisma enum), `venueChangeProposerId`, `venueChangeProposedAt` (one-shot guard), `venueChangeExpiresAt`, `venueChangeResolvedAt`, `venueChangeName`/`Address`/`Lat`/`Lng`/`MapsUri`/`PlaceId` (proposed replacement), `venueChangeComment` (verbatim ≥10-char relay). Female-exclusive one-shot venue swap sub-state on a `scheduled` match; inert when `VENUE_CHANGE_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.7b. |
 
-Indexes: `(status, createdAt)`, `(userAId, userBId)`, plus the functional
+Indexes: `(status, createdAt)`, `(userAId, userBId)`, `(ticketStatus, ticketExpiresAt)` (ticket-expiry cron sweep), `(status, coordOfferSentAt)` (coordination offer sweep), `(coordMethod, proxyClosedAt)` (proxy open/close sweeps), `(venueChangeStatus, venueChangeExpiresAt)` (venue-change expiry sweep), plus the functional
 `matches_pair_canonical_idx` on `LEAST/GREATEST(user_a_id, user_b_id)` —
 created out-of-band by `ensureMatchPairIndex()` at boot — that backs the
 **lifetime ban** anti-join (a user never sees the same partner twice).
@@ -285,6 +290,28 @@ Aether concierge multimodal chat history (one row per turn, with optional
 short-lived signed URLs). Distinct from `users.messageHistory` which the
 legacy onboarding/menu agents still use.
 
+### `proxy_messages`
+
+Append-only audit log of every text message relayed through a Variant C
+pre-date **anonymous proxy chat** (`matchId`, `senderId`, `body`, `createdAt`;
+`onDelete: Cascade` from `matches`). Backs the moderation trail that justifies
+the time-boxed carve-out to the "NO IN-APP CHAT" invariant — relayed content is
+fully logged and each relayed message carries an in-line Report button. Written
+by `handlers/date/coordination.ts`; inert unless `COORDINATION_FEATURE_ENABLED`.
+
+### `profiler_answers`
+
+One row per (user, Profiler question) — `questionId`, `priority`
+(`ProfilerPriority`), `answerText`, `skipped`, `skipReturned`, `cycleId`;
+`@@unique([userId, questionId])`, `onDelete: Cascade` from `users`. Backs the
+Phase 1b Profiler (see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §Phase 1b): timed
+post-onboarding Q&A that is the **primary source** for icebreakers
+(`date-lifecycle.ts`) and wingman/date-planning hints (`wingman-hint.ts`).
+Deliberately NOT read by the matching engine. Written by
+`handlers/profiler/router.ts` + `services/profiler.ts`; scheduled by
+`workers/profiler.ts`. The question bank is first-party data in
+`packages/shared/profiler-questions.ts`.
+
 ### `no_match_notices`
 
 Audit row for the empathetic "no match this week" DM. `tier` is the
@@ -304,8 +331,11 @@ Places lookup. Columns: `name`, `address`, `lat`, `lng`, `googleMapsUri`,
 enum), `priority` (1 best … 3 acceptable), `vibeTags`, `active`,
 `lastVerifiedAt`, plus `placeId` (Places resource id for exact re-fetch),
 `utcOffsetMinutes` + `openingHours` (Places `regularOpeningHours`, for the
-open-at-slot check). Indexed by `(universityDomain, category, active)`. Read by
-`services/curated-venue.ts` (`resolveVenue`); populated out-of-band by
+open-at-slot check), and `photoUrl` (optional operator-supplied venue photo,
+surfaced in the venue-change catalog card; null for un-photographed rows).
+Indexed by `(universityDomain, category, active)`. Read by
+`services/curated-venue.ts` (`resolveVenue`) and `services/venue-change.ts`
+(the venue-change catalog); populated out-of-band by
 `scripts/seed-venues.mjs` and kept fresh by the venue re-validation cron
 (`services/venue-revalidation.ts`).
 
@@ -322,12 +352,14 @@ All schedules are env-overridable (the canonical names are listed below).
 | `*/5 * * * *` | UTC | Live "⏳ Xh left" countdown plate edits on the pitch DM | `workers/proposal-countdown.ts` |
 | `0 * * * *` | UTC | Match nudges — proposal (3 h / 10 h), scheduling (6 h / 12 h) | `workers/match-nudge.ts` |
 | `*/5 * * * *` | UTC | Onboarding re-engagement (5-step decay) | `workers/re-engagement.ts` |
+| `*/15 * * * *` | UTC | Profiler scheduler — lazy-seed + dispatch post-onboarding Q&A batches in local morning/evening windows | `workers/profiler.ts` → `services/profiler.ts` |
 | `* * * * *` | UTC | Pinned status banner (live discrete countdown) | `workers/status-timer.ts` |
 | `*/5 * * * *` | UTC | Embedding refresh (dirty-flag scan, ≤20 rows/tick) | `workers/embedding-refresh.ts` |
 | `0 * * * *` | UTC | Auto-unsuspend elapsed Tier-2 suspensions | `services/match-engine.ts` (`autoUnsuspendElapsed`) |
 | `30 3 * * *` | Europe/Kyiv | GDPR Article 9 selfie scrub (90 d post-`verifiedAt`) | `services/selfie-retention.ts` |
 | `0 4 * * *` | Europe/Kyiv | Curated venue re-validation (closure/rating sweep + hours refresh, ≤30 rows/tick) | `services/venue-revalidation.ts` |
-| `setInterval(2 min)` | — | Date lifecycle: ice-breakers (T-5 h), emergency window, T-1.5 h pre-date safety, T+24 h feedback, wingman | `services/date-lifecycle.ts` + `services/pre-date-safety.ts` |
+| `0 * * * *` (only when `TICKET_FEATURE_ENABLED`) | UTC | Date Ticket expiry: refund stalled `partial` payments and open the Calendar for free | `workers/ticket-expiry.ts` → `handlers/matching/ticket-gate.ts` |
+| `setInterval(2 min)` | — | Date lifecycle: **venue-change expiry sweep** (cancels a stalled `proposed` swap before ice-breakers — feature-flagged), ice-breakers (T-5 h), emergency window, T-1.5 h pre-date safety, T+24 h feedback, wingman; **pre-date coordination** (T-60 m offer, T-30 m proxy open, T+2 h proxy close — feature-flagged) | `services/date-lifecycle.ts` + `services/pre-date-safety.ts` + `services/coordination.ts` + `handlers/matching/venue-change.ts` |
 
 Quiet hours **23:00–09:00 Europe/Kyiv** are enforced inside `re-engagement`
 and `match-nudge` (not at the cron level — it would let scheduling drift),
@@ -367,12 +399,18 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | POST | `/v1/matches/:id/vibe-location` | Submit concierge vibe + location pin |
 | POST | `/v1/matches/:id/safety-ack` | Acknowledge T-1.5 h safety brief |
 | POST | `/v1/matches/:id/report` | File post-match report (LLM-triaged) |
+| GET  | `/v1/matches/:id/ticket/state` | Date Ticket Mini App screen state (status/price/gender/partner-paid/expiry). **Telegram `initData` HMAC auth** (not JWT) — mounted before the JWT `matches` router. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
+| POST | `/v1/matches/:id/ticket/intent` | Create a (mock) payment intent for a ticket purchase (`scope: self\|both`; `both` male-only). `initData` HMAC auth. |
+| POST | `/v1/matches/:id/ticket/confirm` | Confirm "payment" → mark paid (atomic/idempotent); unlocks scheduling when both paid. `initData` HMAC auth. |
 | GET  | `/v1/countdown` | Status banner / next-batch countdown |
 | GET  | `/v1/calendar/state` | Calendar Mini App snapshot — slot allowlist, both sides' picks, agreed time (Telegram `initData` HMAC auth; polled by the Mini App for live peer visibility) |
 | POST | `/v1/calendar/pick` | Calendar Mini App availability submission — accepts `pickedIsos: string[]` (legacy single `pickedIso` still tolerated). Response carries `agreedTime` (set on single-overlap auto-lock), `overlapCandidates: string[]` (set when intersection > 1, Mini App shows confirm card), `mySlots`, `peerSlots`, `bothPicked`. Telegram `initData` HMAC auth. |
 | GET  | `/v1/location/search` | Location Mini App autocomplete — proxies to Google Places (New) `searchText` so the API key stays server-side. `q` query is debounced client-side at 350ms; min length 2 chars. Optional `lat`/`lng` for location-bias. Telegram `initData` HMAC auth. |
 | POST | `/v1/location/select` | Location Mini App submission — body `{matchId, lat, lng, address?}`. Validates side + `negotiating_venue` state, writes `vibeLat/Lng/Address{A,B}`, then fires `tryFinalize` (fire-and-forget). Telegram `initData` HMAC auth. |
 | POST | `/v1/feedback/post-date` | Post-date Feedback Mini App submission (Telegram `initData` HMAC auth) |
+| GET  | `/v1/venue-change/state` | Venue Change Mini App bootstrap — eligibility (female-only, one-shot, T-5h cutoff), original venue, current sub-state. Telegram `initData` HMAC auth. |
+| GET  | `/v1/venue-change/catalog` | Venue Change alternatives within 3 km of the original venue (curated-first, Places fallback). Gated on the same female eligibility. Telegram `initData` HMAC auth. |
+| POST | `/v1/venue-change/propose` | Venue Change submission — body `{matchId, placeId?, name, address, lat, lng, mapsUri?, comment}`. Re-validates eligibility + comment ≥10 + within-radius, writes the `proposed` sub-state, DMs the male. Telegram `initData` HMAC auth. |
 | GET  | `/v1/verification/mini-app/init` | Verification Mini App SDK config — returns `{referenceId, templateId, environmentId, language, environment}` for the Persona Embedded SDK and flips `verificationStatus` to `pending`. 503 if Persona feature flag/ids missing, 409 if already verified. Telegram `initData` HMAC auth. |
 | POST | `/v1/verification/mini-app/event` | Verification Mini App terminal SDK callback — body `{kind: "complete"\|"cancel"\|"error", inquiryId?, status?, message?}`. `complete` writes `personaInquiryId` (CAS on null) and triggers `pullVerificationStatus` fire-and-forget; `cancel`/`error` are logged only. Does NOT write `verified`/`rejected` — the HMAC webhook is the only path that can. Telegram `initData` HMAC auth. |
 | POST | `/v1/webhooks/persona` | Persona inquiry webhook (HMAC of raw body, mounted **before** `express.json`) |

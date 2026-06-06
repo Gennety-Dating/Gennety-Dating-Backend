@@ -6,6 +6,12 @@ import { handleDeclineReasonCallback } from "./decline-feedback.js";
 import { handleSchedulePick, handleCalendarWebAppData } from "./scheduler.js";
 import { handleReportOpen, handleReportCategory, handleReportSkip, handleReportText } from "./report.js";
 import { handleVenueLocation, handleVenueVibe } from "./venue-negotiation.js";
+import {
+  handleVenueChangeAccept,
+  handleVenueChangeDecline,
+  handleVenueChangeBack,
+  handleVenueChangeConfirmCancel,
+} from "./venue-change.js";
 
 /**
  * Matching router — activates only for users who have already completed
@@ -42,6 +48,24 @@ matchingRouter.use(async (ctx, next) => {
   // Scheduling callbacks: iteration 1/2 slot picks
   if (data?.startsWith("sched:pick:")) {
     await handleSchedulePick(ctx);
+    return;
+  }
+
+  // Venue-change callbacks (the male accepts / declines the female's swap).
+  if (data?.startsWith("vchg:accept:")) {
+    await handleVenueChangeAccept(ctx);
+    return;
+  }
+  if (data?.startsWith("vchg:decline:")) {
+    await handleVenueChangeDecline(ctx);
+    return;
+  }
+  if (data?.startsWith("vchg:cancel_confirm:")) {
+    await handleVenueChangeConfirmCancel(ctx);
+    return;
+  }
+  if (data?.startsWith("vchg:cancel_back:")) {
+    await handleVenueChangeBack(ctx);
     return;
   }
 

@@ -6,6 +6,7 @@ import { start } from "./handlers/start.js";
 import { router } from "./handlers/router.js";
 import { matchingRouter } from "./handlers/matching/router.js";
 import { dateRouter } from "./handlers/date/router.js";
+import { profilerRouter } from "./handlers/profiler/router.js";
 import { voiceHandler } from "./handlers/voice.js";
 
 export function createBot(token: string): Bot<BotContext> {
@@ -27,6 +28,11 @@ export function createBot(token: string): Bot<BotContext> {
 
   // Date lifecycle flow — emergency cancellation & feedback (Phase 4)
   bot.use(dateRouter);
+
+  // Profiler — capture answers/skips to proactive Profiler questions (Phase 1b).
+  // After date flows (they win) but before the menu agent (so a pending
+  // question's answer isn't swallowed by free-text menu handling).
+  bot.use(profilerRouter);
 
   // FSM router — dispatches to onboarding step handlers + menu
   bot.use(router);

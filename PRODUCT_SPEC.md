@@ -34,7 +34,14 @@ out of Telegram-only workers.
 - **NO IN-APP CHAT** — Users NEVER message each other through our platform. Do
   not build chat interfaces between users. The only chats are user↔bot,
   user↔Aether concierge (mobile), and the structured pitch / scheduling /
-  emergency flows.
+  emergency flows. **Narrow exception (feature-flagged):** the Variant C
+  pre-date *anonymous proxy chat* (§Phase 4 — Pre-date coordination) relays
+  text between an already-matched, already-scheduled pair. It is deliberately
+  scoped so it does not reopen general user-to-user chat: post-match only,
+  time-boxed (opens T-30m, auto-closes T+2h), text-only (media rejected),
+  every message logged to `ProxyMessage`, an in-line Report button on each
+  relayed message, and off by default (`COORDINATION_FEATURE_ENABLED`). It
+  exists to solve "find each other at the venue", not conversation.
 - **Deep Context over Questionnaires** — At the end of the Telegram entry Mini
   App the user chooses whether to enrich onboarding from ChatGPT, Claude,
   Gemini, or another personal LLM. Accepted users paste the *Magic Prompt* and
@@ -144,9 +151,15 @@ Hard rules baked into the agent prompt:
 - For accepted export, `request_photos` MAY NOT be called in the same turn as
   `request_context_dump` — wait for the dump to land first. Declined export
   skips both context-dump tools.
-- During the LLM dump *parsing* the bot streams an "internal monologue"
-  via `sendMessageDraft` ("Analyzing your profile… Synthesising
-  psychological traits…") to keep the user oriented.
+- After a pasted AI memory dump is parsed and saved, the bot plays a
+  self-replacing "analysing" status line (one message edited in place through
+  a few steps, each held a beat, then deleted before the photo request) to
+  surface the psychological-summary + embedding work that just ran. The same
+  `runStatusSequence` primitive (`services/ai-stream.ts`,
+  `services/analysis-status.ts`) backs the equivalent "agent is working"
+  beats at verification submission, the verification soft-skip, each Profiler
+  batch boundary, and concierge venue selection. These are cosmetic pacing
+  only — they narrate real work and never gate the flow.
 
 ### 1.4 Identity verification (Phase 6.3 in code)
 
@@ -244,6 +257,46 @@ deferred to the next 13:00. Any user activity (consent click, language pick,
 agent reply, photo upload) resets the chain to step 0; finishing onboarding
 nulls `reEngagementNextAt` permanently.
 
+## Phase 1b — Profiler
+
+The **Profiler** (`workers/profiler.ts` + `services/profiler.ts`,
+`services/profiler-schedule.ts`) collects gender-specific Q&A *after*
+onboarding to fuel the §Phase 4 icebreakers and date-planning hints. It is
+**not** an input to the matching algorithm — purely fuel for icebreakers/hints.
+Telegram-only in v1.
+
+- **Entry.** The first question fires **~10 min after onboarding completes**
+  (`PROFILER_ENTRY_DELAY_MS`), armed at `finalize_onboarding`; the scheduler
+  defers it out of the user's local quiet hours. Existing/legacy users are
+  lazily seeded by the worker, their first batch landing at the next window.
+- **Batches.** Questions are sent in **batches of 3** (`PROFILER_BATCH_SIZE_NORMAL`).
+  Within a batch the next question is sent immediately on the previous answer;
+  between batches the Profiler pauses to the next **morning (09:00) / evening
+  (18:00) window in the user's local time** (`Profile.timeZone`, derived from
+  the dating city; `Europe/Kyiv` fallback). When the next weekly drop is within
+  **48 h** (`PROFILER_RUSH_WINDOW_HOURS`) it switches to **rush mode**: batches
+  shrink to **2** to fill the profile before the event.
+- **Skip.** Every question has a **Skip** button. A skipped question returns
+  **once** at the end of the current cycle; skipped twice in a cycle, it drops
+  until the next drop cycle. Answered questions are never re-asked.
+- **Cross-cycle persistence.** Unanswered questions carry into the next drop
+  cycle in priority order; the Profiler never resets. Completion is **silent**
+  (no "profile complete" ping). No progress indicator, no "why we ask" copy.
+- **Questions.** Women are asked from the "what you want in a partner/date"
+  angle (fuels the man's *hints*); men from the "who you are" angle (fuels the
+  woman's *icebreakers*). The bank lives in `packages/shared/profiler-questions.ts`.
+- **Storage.** One `ProfilerAnswer` row per (user, question): `priority`,
+  `answerText`, `skipped`, `skipReturned`, `cycleId`.
+- **Weighting.** Icebreaker/hint generation emphasises a partner's answers by
+  priority weight (`high 1.0 / medium 0.5 / low 0.2`,
+  `PROFILER_PRIORITY_WEIGHTS`). Profiler answers are the **primary** source;
+  generation falls back to `psychologicalSummary` when a user has no answers
+  (see §3.7 wingman and §Phase 4 icebreakers). The §6 "hints" are
+  **source-masked** date-planning tips — concrete advice phrased as Gennety's
+  own suggestion, never attributed to the partner's answers — bundled into the
+  T-5h icebreaker DM.
+- **Off switch.** `PROFILER_CRON_SCHEDULE` (default `*/15 * * * *`).
+
 ## Phase 2 — Main Menu & Persistent Surface
 
 ### 2.1 Telegram bot menu (`handlers/menu/main.ts`)
@@ -314,8 +367,31 @@ MatchScore = ((w₁·V_explicit) + (w₂·V_research)) · V_league − (w₃·V_
 
 - `V_explicit` (cosine similarity of the 1536-dim profile embedding), weight 0.80.
 - `V_research` (sociological heuristics: age, height, social energy, etc.), weight 0.20.
-- `V_league` — universal Elo-distance multiplier; same league = 1.0,
-  decays linearly past `LEAGUE_TOLERANCE = 150`, floors at `LEAGUE_FLOOR = 0.1`.
+- `V_league` — universal Elo-distance multiplier and the **primary
+  (assortative) match gate**. Elo is seeded from the AI vision attractiveness
+  pass (0..100 → Elo 200..800, 6 Elo per attractiveness point), so this is in
+  practice an *attractiveness-similarity* multiplier. Same league = 1.0,
+  decays linearly past `LEAGUE_TOLERANCE = 60`, floors at `LEAGUE_FLOOR = 0.05`.
+  Tightened 2026-06-06 so similar attractiveness decides *whether* a pair is
+  viable, while psychology (embedding/research) ranks pairs *within* a tier:
+  a ~10pt looks gap still gives 1.0, ~20pt → 0.70, ~30pt → 0.40, ~40pt → 0.10,
+  and a "90 vs 30" pairing floors at 0.05 (effectively never matched unless the
+  starvation bonus rescues a long-unpaired user). Example: an Elo gap of 180
+  (≈ a 30-attractiveness-point difference) yields `V_league ≈ 0.40`, so a pair
+  that is far apart on looks must have an exceptional psychological/embedding
+  fit to outrank a same-tier pair.
+  - **Male upward reach (hetero pairs only).** `V_league` is *asymmetric* for
+    M/F pairs (`pairLeagueScore`): when the woman out-scores the man, the gap
+    is discounted by `MALE_REACH_ELO` (env, default 36 Elo ≈ 6 attractiveness
+    points) before the decay — so a less-attractive man is paired with a
+    somewhat *more*-attractive woman without the league penalty crushing the
+    match. With the default reach a man matches at full strength (1.0) with
+    women from his level up to ~16 attractiveness points above him. Matching
+    "down" (man already more attractive) is unchanged, and same-gender /
+    unknown-gender pairs keep the symmetric `leagueScore(|Δ|)`. This stacks on
+    top of the gender-calibrated vision scoring (§1.4), so the reach is kept
+    deliberately small to avoid women systematically receiving visibly
+    less-attractive partners.
 - `V_penalty` — negative-constraint penalty (subtracted), weight 0.30.
 - `starvationBonus` — α=0.05 per missed weekly batch, capped at 0.25 (strictly
   below `V_penalty` so it never overrides a real negative-constraint hit).
@@ -395,9 +471,42 @@ Each cadence has its own pair of timestamp columns
 (`proposalNudge1/2SentAt`, `schedNudge1/2SentAt`) so a row that already got
 a proposal nudge cannot dead-letter the scheduling-phase cadence.
 
+### 3.5b Date Ticket Gate (feature-flagged monetization)
+
+An optional premium step sits between mutual accept and the Calendar. It is
+gated by `TICKET_FEATURE_ENABLED` (default **off** → the bot hands off straight
+to the Calendar exactly as documented in §3.6). Telegram-only in v1: the mobile
+mutual-accept path (`POST /v1/matches/:id/decision`) still schedules directly.
+
+When enabled, on mutual accept the bot DMs both users a premium **Date Ticket**
+card + a `web_app` button opening the Ticket Mini App
+(`apps/webapp/ticket.html`, React + pure-CSS 3D). Each ticket is **$6.99**.
+Payment is **mocked** in v1 (`TICKET_PAYMENT_MODE=mock`) — a fully simulated
+Stripe-style flow that updates the DB but moves no money; `mock`→`stripe` is the
+single production switch (`services/ticket-payment.ts`).
+
+- **Pricing.** Male users get "Pay for us both — $13.98" (settles BOTH tickets,
+  sets `paidForPartnerBy*`) plus "Pay only mine — $6.99". Female users get a
+  single "Pay my ticket — $6.99". The server re-validates that pay-for-both is
+  male-only.
+- **Hard gate.** The Calendar is not sent until *both* tickets are paid
+  (`ticketStatus = completed`), at which point `startScheduling` runs and both
+  users get a celebratory DM + the Calendar button.
+- **Partner-paid screen.** When a male covers both, the partner's Mini App shows
+  "[Name] already paid your ticket ❤️ — nothing to do" and a DM mirrors it.
+- **`ticketStatus` lifecycle.** `pending` → `partial` (one paid; `ticketExpiresAt`
+  is the second side's deadline) → `completed`; or `refunded`/`expired` on
+  timeout. **Refund/expiry policy:** the hourly `ticket-expiry` cron refunds a
+  stalled `partial` payment (mock = no-op) and **opens the Calendar for free** —
+  an already-accepted match is never killed by a payment stall.
+- **State machine.** The whole gate runs while `Match.status = negotiating`;
+  `ticketStatus` is a sub-state so the scheduling/venue/lifecycle code is
+  untouched. Blind-decision and all other invariants are unaffected.
+
 ### 3.6 Calendar Scheduling
 
-After mutual accept the bot DMs both users a button that opens the
+After mutual accept (or, when the Date Ticket gate of §3.5b is enabled, after
+both tickets are paid) the bot DMs both users a button that opens the
 **Calendar Mini App** (`apps/webapp`, Vite + Telegram Web Apps SDK). The
 legacy three-iteration flow (two rounds of "pick one of three slots"
 inline keyboards before falling back to the calendar) was removed
@@ -580,6 +689,51 @@ entities, so a bare ⏰ glyph reads as a regular emoji on iOS. Tapping
 opens the user's local-timezone add-to-calendar sheet via the
 entity's `unix_time`.
 
+### 3.7b Venue Change (feature-flagged, female-exclusive one-shot)
+
+An optional post-schedule step lets the **female** participant swap the
+auto-assigned venue once, before the date's critical zone. Gated by
+`VENUE_CHANGE_FEATURE_ENABLED` (default **off** → the scheduled-date DM is
+identical for both sides and nothing below fires). Telegram-only in v1.
+Implemented as a string sub-state (`Match.venueChangeStatus`) layered on a
+`scheduled` match — like the Date Ticket and Coordination gates, it adds no
+`MatchStatus` enum value, so the scheduling/venue/lifecycle code is untouched.
+
+- **Who & when.** Hetero pair → only the female's scheduled card carries a
+  "Change venue" `web_app` button + a one-line hint. Female–female pair →
+  both can, first-tap-wins (the one-shot guard blocks the second). Male–male
+  pair → unavailable (no female). The change may be **proposed** any time from
+  `scheduled` up to **T − `DATE_ALERT_HOURS` (T-5h)** — the moment ice-breakers
+  and the emergency window open. (The original design doc said "T-3h"; the code
+  cutoff is T-5h so a swap never lands after ice-breakers reference the old
+  venue.)
+- **Disclaimer + catalog.** The Venue Change Mini App
+  (`apps/webapp/venue-change.html`) opens on a mandatory disclaimer (one-time /
+  irreversible / partner can cancel the match / 3 km radius), then a catalog of
+  alternatives within **`VENUE_CHANGE_RADIUS_KM` (3 km)** of the original venue
+  center (`Match.venueLat/venueLng`, the fairness-balanced commute midpoint).
+  The catalog is **curated-first** (`CuratedVenue`, incl. an optional
+  operator-supplied `photoUrl`), Google Places fallback under the same quality
+  gate when nothing curated is in range.
+- **Mandatory comment.** Selecting a place requires a free-text explanation
+  (≥ `VENUE_CHANGE_MIN_COMMENT_LEN` = 10 chars). It is relayed **verbatim** to
+  the male as a Telegram blockquote — the same one-shot, non-reply relay
+  carve-out as the emergency reason (NO IN-APP CHAT is preserved: post-schedule,
+  single message, no reply channel, stored on the match).
+- **Male decision.** He gets the proposal + her comment with `[✅ Accept new
+  place]` / `[❌ Decline (cancel date)]`. Accept → the proposed venue is copied
+  onto the canonical `venue*` fields and both get an updated card. Decline →
+  a confirmation guard (`[Yes, cancel]` / `[No, go back]`) protects against an
+  accidental tap; confirming flips the **whole match to `cancelled`**.
+- **Cancellation semantics.** A male decline (or a TTL/cutoff lapse) carries
+  **no Elo penalty** for anyone (a logistics fallout, like an emergency
+  cancel); the female gets a small standby/priority comp boost for the next
+  batch.
+- **Timeout.** Deadline = `min(now + VENUE_CHANGE_TTL_HOURS (12h), agreedTime −
+  DATE_ALERT_HOURS)`. The date-lifecycle tick auto-cancels a still-`proposed`
+  swap at the deadline **before** the ice-breaker step, so a silent partner can
+  never strand a stale-venue date. Pricing: **free**.
+
 ## Phase 4 — Date Lifecycle
 
 Driven by `services/date-lifecycle.ts` + `services/pre-date-safety.ts`,
@@ -593,7 +747,10 @@ columns on `matches`.
 | T − 5 h | Open the **emergency window** — DM both sides with the cancel button (callback `emerg:start:{matchId}`) | shared with above |
 | T − 1.5 h | **Pre-date safety brief** to the female user (Telegram DM only — mobile gets push). Skipped when no female participant has a Telegram presence. | `safetyNoteSentAt` |
 | T − 1.5 h | **Wingman hint reveal push** — the asymmetric tip is unmasked at this gate (the mobile serializer enforces it independently) | `wingmanSentAt` |
+| T − 1 h | **Pre-date coordination offer** (feature-flagged) — DM the initiator the contact-exchange / anonymous-chat menu (see below) | `coordOfferSentAt` |
+| T − 30 min | **Anonymous proxy chat opens** (feature-flagged, Variant C only) — DM both the "Enter chat" button | `proxyOpenedAt` |
 | Date moment | (no automated action — users meet in person) | — |
+| T + 2 h | **Anonymous proxy chat auto-closes** (feature-flagged) | `proxyClosedAt` |
 | T + 24 h | **Feedback prompt** to both sides; LLM parses positives/negatives and updates `negativeConstraints` accordingly | `feedbackPromptedAt` |
 
 ### Post-date Feedback UX
@@ -620,11 +777,51 @@ something more than a tech ping:
   `recordPostDateFeedback` pipeline persists `Match.feedbackByA/B` and
   appends new negative constraints. Same pipeline as the form path.
 
+### Pre-date Coordination (feature-flagged)
+
+Gated by `COORDINATION_FEATURE_ENABLED` (default **off**). Solves the "find each
+other at the venue / signal a delay" gap. Telegram-only in v1 (offered only when
+both participants have a real `telegramId`). Driven by `services/coordination.ts`
+on the date-lifecycle tick; handlers in `handlers/date/coordination.ts`.
+
+- **Initiator (T-60m).** ~1h before the date the bot offers the **female**
+  participant three ways to coordinate. A same-sex pair with no female
+  participant is offered to both sides, and whoever taps first becomes the
+  initiator (first-tap-wins; the second tap gets an "already chosen" notice).
+  Idempotent via `Match.coordOfferSentAt`.
+- **Username-aware menu.** Contact exchange uses a `t.me/<username>` link
+  (Telegram gives bots no phone number, and `text_mention` to a stranger is
+  unreliable). The captured `User.telegramUsername` therefore gates which
+  options appear: **A** only if the initiator has a username, **B** only if the
+  partner has one, **C** always. If neither has a username the offer says
+  contact exchange isn't possible and only C is shown.
+- **Variant A — share my contact.** Initiator reveals her own Telegram; the
+  partner is DM'd her `t.me/` link. Single consent (her tap).
+- **Variant B — request partner's contact.** Bot asks the partner's consent
+  (`coordPartnerConsent`); on **approve** the initiator is DM'd the partner's
+  `t.me/` link, on **decline** she's told (and pointed at C). Only B asks for
+  partner consent.
+- **Variant C — anonymous proxy chat.** Opens **unconditionally** at T-30m
+  (no partner consent — an offline partner must never strand the initiator),
+  auto-closes at agreed time **+ 2h**. The cron DMs both an **Enter chat**
+  button; tapping it sets the `coordination_chat` session state (entry is
+  explicit, so normal bot use — `/menu`, settings, photos — is never hijacked
+  into the relay). While in the chat, plain text is relayed bot→partner; every
+  relayed message carries **Leave chat** + **Report** controls and is logged to
+  `ProxyMessage`. Media is rejected (text-only, closes the face/metadata-leak
+  bypass). The relay re-checks the window per message, so a stale session
+  self-heals after close. See the "NO IN-APP CHAT" carve-out in Core Principles.
+
 ### Emergency Protocol
 
 `handlers/date/emergency.ts`:
 
-- Tap → `awaiting_emergency_reason` session state.
+- Tap → an explicit **confirmation guard** (`[Yes, cancel the date]` /
+  `[No, keep the date]`, callbacks `emerg:confirm:*` / `emerg:abort:*`). The
+  cancellation is irreversible (the match can never be restored), so a stray
+  tap on the emergency button is a pure no-op until confirmed. Backing out
+  touches no state and leaves the date on.
+- Confirm → `awaiting_emergency_reason` session state.
 - The user MUST type a free-text explanation; the bot quotes the **exact
   text** to the other person as a Telegram blockquote (no AI rewrite, no
   stripping) and appends a short Gennety soft note. Match flips to

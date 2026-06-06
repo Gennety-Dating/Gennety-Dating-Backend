@@ -3,7 +3,11 @@ import {
   greedyPair,
   areMutuallyCompatible,
   scorePair,
+  leagueScore,
+  pairLeagueScore,
   starvationBonus,
+  LEAGUE_TOLERANCE,
+  LEAGUE_FLOOR,
   STARVATION_ALPHA,
   STARVATION_CAP,
   isUuid,
@@ -259,6 +263,107 @@ describe("scorePair", () => {
     const { score: scoreSmoker } = scorePair(a, bSmoker, 0.3);
 
     expect(scoreClean).toBeGreaterThan(scoreSmoker);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// leagueScore — attractiveness (Elo) is the primary assortative gate
+// ---------------------------------------------------------------------------
+
+describe("leagueScore", () => {
+  it("is a no-op (1.0) within LEAGUE_TOLERANCE", () => {
+    expect(leagueScore(0)).toBe(1.0);
+    expect(leagueScore(LEAGUE_TOLERANCE)).toBe(1.0);
+    expect(leagueScore(-LEAGUE_TOLERANCE)).toBe(1.0);
+  });
+
+  it("is symmetric in the sign of the gap", () => {
+    expect(leagueScore(200)).toBeCloseTo(leagueScore(-200), 10);
+  });
+
+  it("decays steeply past tolerance (6 Elo per attractiveness point)", () => {
+    // ~20 attractiveness-point gap (120 Elo) → 0.70
+    expect(leagueScore(120)).toBeCloseTo(0.7, 10);
+    // ~30 pts (180 Elo) → 0.40
+    expect(leagueScore(180)).toBeCloseTo(0.4, 10);
+  });
+
+  it("floors a far-out-of-league pair so it is effectively never matched", () => {
+    // "90 vs 30" ≈ 360 Elo gap → clamped at the floor.
+    expect(leagueScore(360)).toBe(LEAGUE_FLOOR);
+    expect(leagueScore(1000)).toBe(LEAGUE_FLOOR);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pairLeagueScore — asymmetric male upward reach for hetero pairs
+// ---------------------------------------------------------------------------
+
+describe("pairLeagueScore", () => {
+  const REACH = 36;
+
+  it("matches leagueScore for same-gender pairs (no reach)", () => {
+    expect(pairLeagueScore(500, "male", 700, "male", REACH)).toBe(leagueScore(200));
+    expect(pairLeagueScore(700, "female", 500, "female", REACH)).toBe(leagueScore(200));
+  });
+
+  it("matches leagueScore when gender is unknown on either side", () => {
+    expect(pairLeagueScore(500, null, 700, "female", REACH)).toBe(leagueScore(200));
+  });
+
+  it("forgives the reach allowance when the woman is more attractive", () => {
+    // Woman +120 Elo above man. Symmetric would be leagueScore(120)=0.70;
+    // with a 36-Elo reach the effective gap is 84 → higher multiplier.
+    const withReach = pairLeagueScore(440, "male", 560, "female", REACH);
+    expect(withReach).toBe(leagueScore(120 - REACH));
+    expect(withReach).toBeGreaterThan(leagueScore(120));
+  });
+
+  it("is direction-independent (A/B order does not matter)", () => {
+    expect(pairLeagueScore(440, "male", 560, "female", REACH)).toBe(
+      pairLeagueScore(560, "female", 440, "male", REACH),
+    );
+  });
+
+  it("lifts a woman up to reach+tolerance above the man to full strength", () => {
+    // tolerance 60 + reach 36 = 96 Elo of woman-advantage still scores 1.0.
+    expect(pairLeagueScore(500, "male", 596, "female", REACH)).toBe(1.0);
+    expect(pairLeagueScore(500, "male", 597, "female", REACH)).toBeLessThan(1.0);
+  });
+
+  it("does NOT help when the man is the more attractive one (matching down)", () => {
+    // Man +120 above woman — unchanged symmetric penalty.
+    expect(pairLeagueScore(560, "male", 440, "female", REACH)).toBe(leagueScore(120));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// scorePair — attractiveness gap dominates over psychology
+// ---------------------------------------------------------------------------
+
+describe("scorePair — attractiveness gate", () => {
+  it("crushes a far-out-of-league pair even with strong psychology", () => {
+    // Same strong embedding distance for both pairs; only Elo differs.
+    const a = makeBatchUser({ id: "a", gender: "male", preference: "women", eloScore: 740 });
+    const inLeague = makeBatchUser({
+      id: "b",
+      gender: "female",
+      preference: "men",
+      eloScore: 740,
+    });
+    const outOfLeague = makeBatchUser({
+      id: "c",
+      gender: "female",
+      preference: "men",
+      eloScore: 380, // ~"30" vs "90" → floored V_league
+    });
+
+    const { score: sameLeague } = scorePair(a, inLeague, 0.1);
+    const { score: crossLeague } = scorePair(a, outOfLeague, 0.1);
+
+    expect(sameLeague).toBeGreaterThan(crossLeague);
+    // The cross-league positive signal is reduced to roughly the floor share.
+    expect(crossLeague).toBeLessThan(sameLeague * 0.2);
   });
 });
 

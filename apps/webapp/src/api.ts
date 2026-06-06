@@ -388,6 +388,149 @@ export async function postVerificationEvent(
   if (!res.ok) throw await toError(res);
 }
 
+// ---------------------------------------------------------------------------
+// Date Ticket Mini App API (premium post-accept gate, mock payment)
+// ---------------------------------------------------------------------------
+
+export type TicketScope = "self" | "both";
+
+export interface TicketState {
+  ticketStatus: "pending" | "partial" | "completed" | "refunded" | "expired";
+  priceCents: number;
+  myGender: "male" | "female" | null;
+  mySide: "A" | "B";
+  iPaid: boolean;
+  partnerPaid: boolean;
+  partnerName: string | null;
+  partnerPaidForMe: boolean;
+  bothPaid: boolean;
+  expiresAt: string | null;
+  paymentMode: "mock" | "stripe";
+}
+
+export interface TicketIntent {
+  clientSecret: string;
+  amountCents: number;
+  mode: "mock" | "stripe";
+}
+
+const ticketBase = (matchId: string): string =>
+  `${apiBase}/v1/matches/${encodeURIComponent(matchId)}/ticket`;
+
+export async function fetchTicketState(
+  initData: string,
+  matchId: string,
+): Promise<TicketState> {
+  const res = await fetch(`${ticketBase(matchId)}/state`, {
+    method: "GET",
+    headers: { Authorization: `tma ${initData}` },
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as TicketState & { ok: true };
+}
+
+export async function createTicketIntent(
+  initData: string,
+  matchId: string,
+  scope: TicketScope,
+): Promise<TicketIntent> {
+  const res = await fetch(`${ticketBase(matchId)}/intent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
+    body: JSON.stringify({ scope }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as TicketIntent;
+}
+
+export async function confirmTicketPayment(
+  initData: string,
+  matchId: string,
+  scope: TicketScope,
+  clientSecret: string,
+): Promise<TicketState> {
+  const res = await fetch(`${ticketBase(matchId)}/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
+    body: JSON.stringify({ scope, clientSecret }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as TicketState & { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Venue change Mini App API (female-exclusive one-shot swap)
+// ---------------------------------------------------------------------------
+
+export interface VenueChangeState {
+  status: string;
+  eligible: boolean;
+  ineligibleReason: string | null;
+  minCommentLength: number;
+  original: { name: string | null; address: string | null; mapsUri: string | null } | null;
+}
+
+export interface VenueChangeCatalogItem {
+  source: "curated" | "places";
+  placeId: string | null;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  mapsUri: string | null;
+  category: string;
+  distanceKm: number;
+  photoUrl: string | null;
+}
+
+const venueChangeBase = `${apiBase}/v1/venue-change`;
+
+export async function fetchVenueChangeState(
+  initData: string,
+  matchId: string,
+): Promise<VenueChangeState> {
+  const res = await fetch(`${venueChangeBase}/state?match=${encodeURIComponent(matchId)}`, {
+    method: "GET",
+    headers: { Authorization: `tma ${initData}` },
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as VenueChangeState & { ok: true };
+}
+
+export async function fetchVenueChangeCatalog(
+  initData: string,
+  matchId: string,
+): Promise<VenueChangeCatalogItem[]> {
+  const res = await fetch(`${venueChangeBase}/catalog?match=${encodeURIComponent(matchId)}`, {
+    method: "GET",
+    headers: { Authorization: `tma ${initData}` },
+  });
+  if (!res.ok) throw await toError(res);
+  const body = (await res.json()) as { ok: true; venues: VenueChangeCatalogItem[] };
+  return body.venues;
+}
+
+export async function proposeVenueChange(
+  initData: string,
+  body: {
+    matchId: string;
+    placeId: string | null;
+    name: string;
+    address: string;
+    lat: number;
+    lng: number;
+    mapsUri: string | null;
+    comment: string;
+  },
+): Promise<void> {
+  const res = await fetch(`${venueChangeBase}/propose`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await toError(res);
+}
+
 async function toError(res: Response): Promise<CalendarApiError> {
   let reason: string | undefined;
   try {

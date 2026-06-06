@@ -13,6 +13,7 @@ import { computeDevBypassFields } from "./dev-bypass.js";
 import { startPoll } from "../services/verification-poller.js";
 import { pinStatusBanner } from "../services/status-banner.js";
 import { buildLanguageKeyboard } from "./language-keyboard.js";
+import { syncTelegramUsername } from "../utils/username.js";
 import {
   AUTH_REGISTRATION_START_PREFIX,
   consumeWebRegistrationLink,
@@ -250,6 +251,10 @@ start.command("start", async (ctx) => {
       });
     }
   }
+
+  // Opportunistically capture the public Telegram username for the pre-date
+  // coordination contact-exchange variants. Best-effort, never blocks /start.
+  void syncTelegramUsername(telegramId, ctx.from?.username).catch(() => {});
 
   // Sync session from DB
   ctx.session.onboardingStep = user.onboardingStep as typeof ctx.session.onboardingStep;

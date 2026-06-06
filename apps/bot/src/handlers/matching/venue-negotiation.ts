@@ -33,9 +33,16 @@ import {
 } from "../../services/geo.js";
 import { type Venue } from "../../services/venue.js";
 import { resolveVenue } from "../../services/curated-venue.js";
+import {
+  shouldOfferVenueChange,
+  buildVenueChangeButton,
+  sendVenueChangeHint,
+} from "./venue-change.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import { generateAndSaveWingmanHints } from "../../services/wingman-hint.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
+import { runStatusSequence } from "../../services/ai-stream.js";
+import { venueSearchSteps } from "../../services/analysis-status.js";
 
 /**
  * Build the reply keyboard that surfaces Telegram's `request_location`
@@ -321,8 +328,8 @@ export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<vo
       vibeLngB: true,
       parsedCategoryA: true,
       parsedCategoryB: true,
-      userA: { select: { telegramId: true, language: true, universityDomain: true } },
-      userB: { select: { telegramId: true, language: true } },
+      userA: { select: { telegramId: true, language: true, gender: true, universityDomain: true } },
+      userB: { select: { telegramId: true, language: true, gender: true } },
     },
   });
   if (!match) return;
@@ -357,26 +364,12 @@ export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<vo
   const langA = (match.userA.language ?? "en") as Language;
   const langB = (match.userB.language ?? "en") as Language;
 
-  const searchingSends: Array<Promise<unknown>> = [];
-  if (isTelegramTarget(match.userA.telegramId)) {
-    searchingSends.push(
-      api
-        .sendMessage(Number(match.userA.telegramId), t(langA, "venueSearching"))
-        .catch(() => undefined),
-    );
-  }
-  if (isTelegramTarget(match.userB.telegramId)) {
-    searchingSends.push(
-      api
-        .sendMessage(Number(match.userB.telegramId), t(langB, "venueSearching"))
-        .catch(() => undefined),
-    );
-  }
-  await Promise.all(searchingSends);
-
   // Curated-first: a hand-picked venue for this university wins; Places is the
   // fallback when nothing curated is in commute range. See `resolveVenue`.
-  const venue = await resolveVenue({
+  // Run the lookup concurrently with a self-replacing "picking the best spot"
+  // status so the real (often sub-second) lookup hides behind a considered ~5s
+  // cadence — a venue that pops instantly reads as "first result grabbed".
+  const venuePromise = resolveVenue({
     universityDomain: match.userA.universityDomain,
     midpoint: mid,
     originA: a,
@@ -386,6 +379,28 @@ export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<vo
     keywords: merged.keywords,
     agreedTime: match.agreedTime,
   });
+
+  const searchingRuns: Array<Promise<unknown>> = [];
+  if (isTelegramTarget(match.userA.telegramId)) {
+    searchingRuns.push(
+      runStatusSequence(
+        api,
+        Number(match.userA.telegramId),
+        venueSearchSteps(langA),
+      ).catch(() => undefined),
+    );
+  }
+  if (isTelegramTarget(match.userB.telegramId)) {
+    searchingRuns.push(
+      runStatusSequence(
+        api,
+        Number(match.userB.telegramId),
+        venueSearchSteps(langB),
+      ).catch(() => undefined),
+    );
+  }
+
+  const [venue] = await Promise.all([venuePromise, ...searchingRuns]);
 
   await prisma.match.update({
     where: { id: matchId },
@@ -421,6 +436,15 @@ export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<vo
   const mapsKeyboardA = buildScheduledMapsKeyboard(venue, langA);
   const mapsKeyboardB = buildScheduledMapsKeyboard(venue, langB);
 
+  // Female-exclusive one-shot "Change venue" button on her scheduled card
+  // (feature-flagged). Inert for the male / when the flag is off.
+  if (shouldOfferVenueChange(match.userA.gender)) {
+    mapsKeyboardA.inline_keyboard.push([buildVenueChangeButton(matchId, langA)]);
+  }
+  if (shouldOfferVenueChange(match.userB.gender)) {
+    mapsKeyboardB.inline_keyboard.push([buildVenueChangeButton(matchId, langB)]);
+  }
+
   const finalSends: Array<Promise<unknown>> = [];
   if (isTelegramTarget(match.userA.telegramId)) {
     finalSends.push(
@@ -439,6 +463,16 @@ export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<vo
     );
   }
   await Promise.all(finalSends);
+
+  // Follow-up hint DM explaining the one-shot venue-change right (after the card).
+  const hintSends: Array<Promise<unknown>> = [];
+  if (shouldOfferVenueChange(match.userA.gender)) {
+    hintSends.push(sendVenueChangeHint(api, match.userA.telegramId, langA));
+  }
+  if (shouldOfferVenueChange(match.userB.gender)) {
+    hintSends.push(sendVenueChangeHint(api, match.userB.telegramId, langB));
+  }
+  await Promise.all(hintSends);
 }
 
 /**

@@ -11,6 +11,7 @@ vi.mock("@gennety/db", () => ({
     user: { findUnique: vi.fn() },
     match: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn() },
     profile: { findUnique: vi.fn() },
+    profilerAnswer: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 
@@ -45,7 +46,12 @@ vi.mock("../../utils/elo-calculator.js", () => ({
 }));
 
 import { prisma } from "@gennety/db";
-import { handleEmergencyStart, handleEmergencyReason } from "./emergency.js";
+import {
+  handleEmergencyStart,
+  handleEmergencyConfirm,
+  handleEmergencyAbort,
+  handleEmergencyReason,
+} from "./emergency.js";
 import { applyEmergencyCancellationPeerBoost } from "../../utils/elo-calculator.js";
 import {
   handleFeedbackVoiceStart,
@@ -90,6 +96,7 @@ function createCtx(overrides: {
     reply: vi.fn().mockResolvedValue(undefined),
     replyWithChatAction: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+    editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
     api: {
       sendMessage: vi.fn().mockResolvedValue(undefined),
     },
@@ -123,16 +130,61 @@ describe("emergency cancellation", () => {
     mApplyEmergencyCancellationPeerBoost.mockResolvedValue(505);
   });
 
-  it("handleEmergencyStart sets session to awaiting_emergency_reason", async () => {
+  it("handleEmergencyStart shows a confirmation guard without touching session", async () => {
     mMatch.findUnique.mockResolvedValueOnce(matchRow());
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
 
     const ctx = createCtx({ callbackData: "emerg:start:match-1", fromId: 1001 });
     await handleEmergencyStart(ctx);
 
+    // Session is NOT yet armed — the cancellation is still uncommitted.
+    expect(ctx.session.matchFlow).toBe("idle");
+    expect(ctx.session.activeMatchId).toBeNull();
+
+    // A confirm/back keyboard is offered.
+    expect(ctx.reply).toHaveBeenCalled();
+    const [, options] = ctx.reply.mock.calls[0]!;
+    const keyboard = (options as { reply_markup: { inline_keyboard: Array<Array<{ callback_data: string }>> } })
+      .reply_markup.inline_keyboard;
+    const callbacks = keyboard.flat().map((b) => b.callback_data);
+    expect(callbacks).toContain("emerg:confirm:match-1");
+    expect(callbacks).toContain("emerg:abort:match-1");
+  });
+
+  it("handleEmergencyConfirm arms the reason flow", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(matchRow());
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+
+    const ctx = createCtx({ callbackData: "emerg:confirm:match-1", fromId: 1001 });
+    await handleEmergencyConfirm(ctx);
+
     expect(ctx.session.matchFlow).toBe("awaiting_emergency_reason");
     expect(ctx.session.activeMatchId).toBe("match-1");
+    expect(ctx.editMessageReplyMarkup).toHaveBeenCalled();
     expect(ctx.reply).toHaveBeenCalled();
+  });
+
+  it("handleEmergencyConfirm ignores a match that was cancelled meanwhile", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(matchRow({ status: "cancelled" }));
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+
+    const ctx = createCtx({ callbackData: "emerg:confirm:match-1", fromId: 1001 });
+    await handleEmergencyConfirm(ctx);
+
+    expect(ctx.session.matchFlow).toBe("idle");
+    expect(ctx.session.activeMatchId).toBeNull();
+  });
+
+  it("handleEmergencyAbort dismisses without arming the reason flow", async () => {
+    const ctx = createCtx({ callbackData: "emerg:abort:match-1", fromId: 1001 });
+    await handleEmergencyAbort(ctx);
+
+    expect(ctx.session.matchFlow).toBe("idle");
+    expect(ctx.session.activeMatchId).toBeNull();
+    expect(ctx.editMessageReplyMarkup).toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalled();
+    // No DB writes on a back-out.
+    expect(mMatch.update).not.toHaveBeenCalled();
   });
 
   it("handleEmergencyStart ignores non-scheduled matches", async () => {

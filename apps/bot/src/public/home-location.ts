@@ -1,4 +1,5 @@
 import { prisma, type Profile } from "@gennety/db";
+import { cityKeyToTimeZone } from "@gennety/shared";
 
 const MAX_CITY_LENGTH = 120;
 const MAX_COUNTRY_CODE_LENGTH = 8;
@@ -112,6 +113,9 @@ export async function saveHomeLocationForUser(
   input: HomeLocationInput,
 ): Promise<Profile> {
   const now = new Date();
+  // Derive the IANA timezone for the Profiler's local-time batch windows
+  // (PRODUCT_SPEC §Phase 1b). Falls back to Europe/Kyiv when unknown.
+  const timeZone = cityKeyToTimeZone(input.homeCityKey, input.homeCountryCode);
   return prisma.profile.upsert({
     where: { userId },
     update: {
@@ -122,6 +126,7 @@ export async function saveHomeLocationForUser(
       latitude: input.latitude,
       longitude: input.longitude,
       locationUpdatedAt: now,
+      timeZone,
     },
     create: {
       userId,
@@ -132,6 +137,7 @@ export async function saveHomeLocationForUser(
       latitude: input.latitude,
       longitude: input.longitude,
       locationUpdatedAt: now,
+      timeZone,
     },
   });
 }

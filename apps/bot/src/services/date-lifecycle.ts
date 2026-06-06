@@ -8,11 +8,15 @@ import {
   FEEDBACK_DELAY_HOURS,
   PRE_DATE_WINGMAN_HOURS,
   generateIceBreakersPrompt,
+  generateDateHintsPrompt,
+  formatProfilerAnswersBlock,
+  scoreProfilerAnswers,
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { callOpenAIText } from "./openai.js";
 import { generateAndSaveWingmanHints } from "./wingman-hint.js";
 import { sendPushToUser } from "./push.js";
+import { sweepExpiredVenueChanges } from "../handlers/matching/venue-change.js";
 
 /**
  * Build the post-date feedback DM keyboard: two stacked buttons, form first.
@@ -91,6 +95,7 @@ async function generatePersonalisedIceBreakers(
   matchFirstName: string,
   userSummary: string | null,
   matchSummary: string | null,
+  matchProfilerBlock: string | null,
   lang: Language,
 ): Promise<string[]> {
   const systemPrompt = generateIceBreakersPrompt({
@@ -98,6 +103,7 @@ async function generatePersonalisedIceBreakers(
     matchFirstName,
     userSummary,
     matchSummary,
+    matchProfilerBlock,
     language: lang,
   });
 
@@ -114,6 +120,33 @@ async function generatePersonalisedIceBreakers(
     .filter(Boolean);
 
   return lines.length >= 3 ? lines.slice(0, 3) : icebreakerTopicsFallback(lang);
+}
+
+/**
+ * §6 source-masked date-planning hints, derived from the PARTNER's Profiler
+ * answers. Returns "" when there's nothing to say or the LLM is unavailable —
+ * the icebreaker DM is sent either way, hints just get appended when present.
+ */
+async function generateDateHints(
+  viewerFirstName: string,
+  partnerProfilerBlock: string | null,
+  lang: Language,
+): Promise<string> {
+  if (!partnerProfilerBlock) return "";
+  const systemPrompt = generateDateHintsPrompt({
+    viewerFirstName,
+    partnerProfilerBlock,
+    language: lang,
+  });
+  const text = await callOpenAIText(systemPrompt, "Write the 2-3 planning tips now.", {
+    maxTokens: 200,
+  });
+  const lines = (text ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  return lines.join("\n");
 }
 
 export interface DateLifecycleResult {
@@ -136,6 +169,16 @@ export async function runDateLifecycleTick(
     feedbacks: 0,
     wingmen: 0,
   };
+
+  // 0. Venue change expiry — auto-cancel any stalled `proposed` swap whose
+  // deadline (TTL or the T-5h cutoff) has passed. Runs BEFORE the ice-breaker
+  // step below so a pending venue change never lets ice-breakers fire on a
+  // venue that's mid-change. Cheap no-op query when the feature is off
+  // (no `proposed` rows ever exist).
+  const venueChangesExpired = await sweepExpiredVenueChanges(api, now);
+  if (venueChangesExpired > 0) {
+    console.log(`[date-lifecycle] expired ${venueChangesExpired} stalled venue change(s)`);
+  }
 
   // 1 & 2. Ice-breakers + Emergency window — 5h before agreed_time
   const alertThreshold = new Date(now.getTime() + DATE_ALERT_HOURS * 60 * 60 * 1000);
@@ -161,10 +204,26 @@ export async function runDateLifecycleTick(
     const langA = (match.userA.language ?? "en") as Language;
     const langB = (match.userB.language ?? "en") as Language;
 
-    // Fetch profile summaries for personalised ice-breakers
-    const [profileA, profileB] = await Promise.all([
-      prisma.profile.findUnique({ where: { userId: match.userA.id }, select: { psychologicalSummary: true } }),
-      prisma.profile.findUnique({ where: { userId: match.userB.id }, select: { psychologicalSummary: true } }),
+    // Fetch profile summaries + Profiler answers for personalised content.
+    // Profiler answers are the PRIMARY source (PRODUCT_SPEC §Phase 1b); the
+    // psychological summary is the fallback the prompts use when they're empty.
+    const [profileA, profileB, answersA, answersB] = await Promise.all([
+      prisma.profile.findUnique({
+        where: { userId: match.userA.id },
+        select: { psychologicalSummary: true },
+      }),
+      prisma.profile.findUnique({
+        where: { userId: match.userB.id },
+        select: { psychologicalSummary: true },
+      }),
+      prisma.profilerAnswer.findMany({
+        where: { userId: match.userA.id },
+        select: { questionId: true, answerText: true },
+      }),
+      prisma.profilerAnswer.findMany({
+        where: { userId: match.userB.id },
+        select: { questionId: true, answerText: true },
+      }),
     ]);
 
     const nameA = match.userA.firstName ?? "User";
@@ -172,17 +231,29 @@ export async function runDateLifecycleTick(
     const summaryA = profileA?.psychologicalSummary ?? null;
     const summaryB = profileB?.psychologicalSummary ?? null;
 
-    // Generate personalised ice-breakers via LLM (falls back to static)
-    const [topicsForA, topicsForB] = await Promise.all([
-      generatePersonalisedIceBreakers(nameA, nameB, summaryA, summaryB, langA),
-      generatePersonalisedIceBreakers(nameB, nameA, summaryB, summaryA, langB),
+    const scoredA = scoreProfilerAnswers(answersA);
+    const scoredB = scoreProfilerAnswers(answersB);
+    // The block describing the PARTNER, rendered in the reader's language.
+    const partnerBlockForA = formatProfilerAnswersBlock(scoredB, langA);
+    const partnerBlockForB = formatProfilerAnswersBlock(scoredA, langB);
+
+    // Generate ice-breakers + §6 hints via LLM (both fall back gracefully).
+    const [topicsForA, topicsForB, hintsForA, hintsForB] = await Promise.all([
+      generatePersonalisedIceBreakers(nameA, nameB, summaryA, summaryB, partnerBlockForA, langA),
+      generatePersonalisedIceBreakers(nameB, nameA, summaryB, summaryA, partnerBlockForB, langB),
+      generateDateHints(nameA, partnerBlockForA, langA),
+      generateDateHints(nameB, partnerBlockForB, langB),
     ]);
 
     const topicsAFormatted = topicsForA.map((q, i) => `${i + 1}. ${q}`).join("\n");
     const topicsBFormatted = topicsForB.map((q, i) => `${i + 1}. ${q}`).join("\n");
 
-    const msgA = t(langA, "icebreakerIntro") + topicsAFormatted;
-    const msgB = t(langB, "icebreakerIntro") + topicsBFormatted;
+    const msgA =
+      t(langA, "icebreakerIntro") + topicsAFormatted +
+      (hintsForA ? t(langA, "dateHintsIntro") + hintsForA : "");
+    const msgB =
+      t(langB, "icebreakerIntro") + topicsBFormatted +
+      (hintsForB ? t(langB, "dateHintsIntro") + hintsForB : "");
 
     // Emergency cancellation button
     const emergKbA = new InlineKeyboard().text(t(langA, "emergencyBtn"), `emerg:start:${match.id}`);

@@ -62,18 +62,32 @@ export const SCORING_WEIGHTS = {
 // Elo league penalty
 // ---------------------------------------------------------------------------
 
-/** Elo gap below which the league multiplier is a no-op. */
-export const LEAGUE_TOLERANCE = 150;
+/**
+ * Elo gap below which the league multiplier is a no-op.
+ *
+ * The vision seed maps a 0..100 attractiveness score to Elo 200..800 (6 Elo
+ * per attractiveness point), so this tolerance is a free pass of only ~10
+ * attractiveness points. Tightened from 150 on 2026-06-06 to make
+ * similar-attractiveness the *primary* match gate (assortative matching):
+ * a big looks gap now crushes the positive signal, while psychology
+ * (embedding/research) still fully ranks pairs inside a tier.
+ */
+export const LEAGUE_TOLERANCE = 60;
 /** Decay slope per Elo point past `LEAGUE_TOLERANCE`. */
-export const LEAGUE_DECAY_PER_POINT = 0.002;
+export const LEAGUE_DECAY_PER_POINT = 0.005;
 /** Floor so an out-of-league candidate keeps a small positive weight. */
-export const LEAGUE_FLOOR = 0.1;
+export const LEAGUE_FLOOR = 0.05;
 
 /**
  * `V_league`: Elo-distance multiplier applied to (V_explicit + V_research)
  * BEFORE the penalty subtraction. Same league = 1.0, decays linearly past
  * `LEAGUE_TOLERANCE` and clamps at `LEAGUE_FLOOR` so a far-out-of-league pair
  * never goes negative purely from the league factor.
+ *
+ * With the tightened constants, attractiveness is the dominant ranking
+ * factor: a ~10pt gap still gives 1.0, ~20pt → 0.70, ~30pt → 0.40,
+ * ~40pt → 0.10, and a "90 vs 30" pairing floors at `LEAGUE_FLOOR` (0.05) —
+ * effectively never matched unless the starvation bonus rescues a stuck user.
  *
  * Defaults when either side has no rating yet (e.g. mid-onboarding edge):
  * returns 1.0 — let the embedding decide. The Elo seed lands during the
@@ -83,6 +97,59 @@ export function leagueScore(eloDelta: number): number {
   const delta = Math.abs(eloDelta);
   if (delta <= LEAGUE_TOLERANCE) return 1.0;
   return Math.max(LEAGUE_FLOOR, 1.0 - (delta - LEAGUE_TOLERANCE) * LEAGUE_DECAY_PER_POINT);
+}
+
+/**
+ * Male upward "reach" allowance, in Elo. For a hetero (M/F) pair, when the
+ * woman out-scores the man we discount the gap by this amount before the
+ * standard league decay — so a less-attractive man is matched with a somewhat
+ * MORE-attractive woman without the league penalty crushing the pair. Matching
+ * "down" (man already more attractive) is unaffected, and same-gender /
+ * unknown-gender pairs keep the symmetric `leagueScore`.
+ *
+ * Default 36 Elo ≈ 6 attractiveness points (6 Elo per vision point). Sourced
+ * from `MALE_REACH_ELO` env so ops can tune the lift in prod without a code
+ * deploy; read directly (not via `config.ts`) to keep this module's pure
+ * scoring functions importable in unit tests without env. Clamped ≥ 0 so a
+ * negative value can never silently penalise men reaching up.
+ *
+ * @see PRODUCT_SPEC.md — Phase 3 (Matching Engine), V_league multiplier
+ */
+export const MALE_REACH_ELO = Math.max(0, Number(process.env.MALE_REACH_ELO ?? "36"));
+
+/**
+ * Gender-aware league multiplier for a pair.
+ *
+ * Hetero pair, woman more attractive → man reaches up: discount the gap by
+ * `reachElo` (one-directional). Hetero pair, man more attractive, or any
+ * same-gender / unknown-gender pair → symmetric `leagueScore(|delta|)`.
+ *
+ * The result depends only on the two (elo, gender) tuples, not on which side
+ * is "A" vs "B", so `scorePair`'s two directions stay in agreement.
+ */
+export function pairLeagueScore(
+  aElo: number,
+  aGender: string | null,
+  bElo: number,
+  bGender: string | null,
+  reachElo: number = MALE_REACH_ELO,
+): number {
+  const isHetero =
+    (aGender === "male" && bGender === "female") ||
+    (aGender === "female" && bGender === "male");
+
+  if (!isHetero) return leagueScore(aElo - bElo);
+
+  const maleElo = aGender === "male" ? aElo : bElo;
+  const femaleElo = aGender === "female" ? aElo : bElo;
+  const womanAdvantage = femaleElo - maleElo; // positive = woman more attractive
+
+  if (womanAdvantage > 0) {
+    // Man reaching up — forgive `reachElo` of the gap before the decay.
+    return leagueScore(Math.max(0, womanAdvantage - reachElo));
+  }
+  // Man more attractive or equal — unchanged symmetric penalty.
+  return leagueScore(womanAdvantage);
 }
 
 // ---------------------------------------------------------------------------
@@ -586,7 +653,12 @@ export function scoreCandidate(
       major: candidate.major,
     },
   );
-  const vLeague = leagueScore(seeker.eloScore - candidate.eloScore);
+  const vLeague = pairLeagueScore(
+    seeker.eloScore,
+    seeker.gender,
+    candidate.eloScore,
+    candidate.gender,
+  );
   const vPenalty = penaltyScore(
     seeker.negativeConstraints,
     candidate.psychologicalSummary,

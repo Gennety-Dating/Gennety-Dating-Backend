@@ -20,6 +20,12 @@ function key(matchId: string): string {
   return `${NS}.match.${matchId}`;
 }
 
+// Snapshot of the peer's slot set at the user's last successful save.
+// Used to NEW-badge slots the peer has added since the user last "acted".
+function peerSeenKey(matchId: string): string {
+  return `${NS}.match.${matchId}.peer-seen`;
+}
+
 export async function savePickedSet(matchId: string, isos: string[]): Promise<void> {
   const value = JSON.stringify(isos);
   const ds = storage();
@@ -73,6 +79,56 @@ export async function loadPickedSet(matchId: string): Promise<string[] | null> {
     }
   }
   return normalizeIsoList([raw]);
+}
+
+export async function savePeerSeen(matchId: string, isos: string[]): Promise<void> {
+  const value = JSON.stringify(isos);
+  const ds = storage();
+  if (!ds) {
+    try {
+      window.localStorage.setItem(peerSeenKey(matchId), value);
+    } catch {
+      // ignore
+    }
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    ds.setItem(peerSeenKey(matchId), value, (err) => {
+      if (err) console.warn("DeviceStorage setItem failed:", err);
+      resolve();
+    });
+  });
+}
+
+export async function loadPeerSeen(matchId: string): Promise<string[] | null> {
+  const ds = storage();
+  const raw = ds
+    ? await new Promise<string | null>((resolve) => {
+        ds.getItem(peerSeenKey(matchId), (err, value) => {
+          if (err) {
+            console.warn("DeviceStorage getItem failed:", err);
+            resolve(null);
+            return;
+          }
+          resolve(value ?? null);
+        });
+      })
+    : (() => {
+        try {
+          return window.localStorage.getItem(peerSeenKey(matchId));
+        } catch {
+          return null;
+        }
+      })();
+
+  if (raw === null) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter((x): x is string => typeof x === "string");
+  } catch {
+    return null;
+  }
 }
 
 export async function clearPicked(matchId: string): Promise<void> {

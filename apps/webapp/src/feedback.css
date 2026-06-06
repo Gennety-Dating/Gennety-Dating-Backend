@@ -19,9 +19,10 @@
   --button-bg: var(--tg-theme-button-color, #2481cc);
   --button-text: var(--tg-theme-button-text-color, #ffffff);
 
-  /* Brand accent — soft warm gradient so the slider/active states feel romantic. */
-  --brand-from: #ff6b9d;
-  --brand-to: #ff8c42;
+  /* Brand accent — Gennety lilac (#B69AE2). Single hue for slider fill,
+   * active segment chip, and the chemistry value pill. */
+  --brand-from: #b69ae2;
+  --brand-to: #b69ae2;
   --brand: var(--brand-from);
   --danger: #d63b3b;
 
@@ -219,7 +220,7 @@ html, body {
 .segment[aria-selected="true"] {
   background: linear-gradient(135deg, var(--brand-from), var(--brand-to));
   color: #fff;
-  box-shadow: 0 2px 6px rgba(255, 107, 157, 0.35);
+  box-shadow: 0 2px 6px rgba(182, 154, 226, 0.35);
 }
 
 /* ── Textarea ────────────────────────────────────────────────── */
@@ -245,7 +246,7 @@ html, body {
 }
 .notes:focus {
   border-color: var(--brand-from);
-  box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.15);
+  box-shadow: 0 0 0 3px rgba(182, 154, 226, 0.18);
 }
 .notes-meta {
   display: flex;

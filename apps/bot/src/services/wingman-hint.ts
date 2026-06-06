@@ -1,5 +1,10 @@
 import { prisma } from "@gennety/db";
-import { generateWingmanHintPrompt, type Language } from "@gennety/shared";
+import {
+  generateWingmanHintPrompt,
+  formatProfilerAnswersBlock,
+  scoreProfilerAnswers,
+  type Language,
+} from "@gennety/shared";
 import { callOpenAIText } from "./openai.js";
 
 /**
@@ -48,6 +53,7 @@ async function generateOneHint(
   targetFirstName: string,
   viewerSummary: string | null,
   targetSummary: string | null,
+  targetProfilerBlock: string | null,
   language: Language,
 ): Promise<string> {
   const systemPrompt = generateWingmanHintPrompt({
@@ -55,6 +61,7 @@ async function generateOneHint(
     targetFirstName,
     viewerSummary,
     targetSummary,
+    targetProfilerBlock,
     language,
   });
   const text = await callOpenAIText(systemPrompt, "Write the wingman tip now.", {
@@ -91,6 +98,7 @@ export async function generateAndSaveWingmanHints(
           firstName: true,
           language: true,
           profile: { select: { psychologicalSummary: true } },
+          profilerAnswers: { select: { questionId: true, answerText: true } },
         },
       },
       userB: {
@@ -98,6 +106,7 @@ export async function generateAndSaveWingmanHints(
           firstName: true,
           language: true,
           profile: { select: { psychologicalSummary: true } },
+          profilerAnswers: { select: { questionId: true, answerText: true } },
         },
       },
     },
@@ -115,13 +124,32 @@ export async function generateAndSaveWingmanHints(
   const summaryA = match.userA.profile?.psychologicalSummary ?? null;
   const summaryB = match.userB.profile?.psychologicalSummary ?? null;
 
+  // PRIMARY source: each target's own Profiler answers, weighted and rendered
+  // in the viewer's language. Null → the prompt falls back to the summary.
+  const profilerA = scoreProfilerAnswers(match.userA.profilerAnswers ?? []);
+  const profilerB = scoreProfilerAnswers(match.userB.profilerAnswers ?? []);
+
   const [hintA, hintB] = await Promise.all([
     match.wingmanHintA
       ? Promise.resolve(match.wingmanHintA)
-      : generateOneHint(nameA, nameB, summaryA, summaryB, langA),
+      : generateOneHint(
+          nameA,
+          nameB,
+          summaryA,
+          summaryB,
+          formatProfilerAnswersBlock(profilerB, langA),
+          langA,
+        ),
     match.wingmanHintB
       ? Promise.resolve(match.wingmanHintB)
-      : generateOneHint(nameB, nameA, summaryB, summaryA, langB),
+      : generateOneHint(
+          nameB,
+          nameA,
+          summaryB,
+          summaryA,
+          formatProfilerAnswersBlock(profilerA, langB),
+          langB,
+        ),
   ]);
 
   await prisma.match.update({

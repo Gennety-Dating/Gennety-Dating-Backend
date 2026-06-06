@@ -16,14 +16,17 @@ import { expireStaleMatches } from "./services/match-expiry.js";
 import { sendExpiryNotifications } from "./services/expiry-notify.js";
 import { runDateLifecycleTick } from "./services/date-lifecycle.js";
 import { runPreDateSafetyTick } from "./services/pre-date-safety.js";
+import { runCoordinationTick } from "./services/coordination.js";
 import { startAdminServer } from "./admin/server.js";
 import { startPublicServer } from "./public/server.js";
 import { reEngagementTick } from "./workers/re-engagement.js";
+import { profilerTick } from "./workers/profiler.js";
 import { matchNudgeTick } from "./workers/match-nudge.js";
 import { proposalCountdownTick } from "./workers/proposal-countdown.js";
 import { preMatchAnnounceTick } from "./workers/pre-match-announce.js";
 import { statusTimerTick } from "./workers/status-timer.js";
 import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
+import { ticketExpiryTick } from "./workers/ticket-expiry.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
 import { venueRevalidationTick } from "./services/venue-revalidation.js";
 
@@ -142,6 +145,23 @@ const VENUE_REVALIDATION_CRON_SCHEDULE =
   process.env.VENUE_REVALIDATION_CRON_SCHEDULE ?? "0 4 * * *";
 
 /**
+ * Date Ticket expiry sweep. Refunds stalled `partial` ticket payments and
+ * opens the Calendar for free so an accepted match is never wedged behind a
+ * paywall. Hourly. No-op when TICKET_FEATURE_ENABLED is off (no ticket rows
+ * are ever in pending/partial).
+ */
+const TICKET_EXPIRY_CRON_SCHEDULE =
+  process.env.TICKET_EXPIRY_CRON_SCHEDULE ?? "0 * * * *";
+
+/**
+ * Profiler scheduler (Phase 1b). Every 15 min: lazy-seed never-armed users and
+ * dispatch due Profiler batches (morning/evening windows in the user's local
+ * time). Cheap when idle.
+ */
+const PROFILER_CRON_SCHEDULE =
+  process.env.PROFILER_CRON_SCHEDULE ?? "*/15 * * * *";
+
+/**
  * Weekly batch: run the global greedy matching algorithm, then dispatch
  * all pitches via the rate-limited queue.
  */
@@ -198,9 +218,10 @@ async function expiryJob(): Promise<void> {
 
 async function dateLifecycleTick(): Promise<void> {
   try {
-    const [lifecycle, safety] = await Promise.all([
+    const [lifecycle, safety, coordination] = await Promise.all([
       runDateLifecycleTick(bot.api),
       runPreDateSafetyTick(bot.api),
+      runCoordinationTick(bot.api),
     ]);
     if (
       lifecycle.icebreakers > 0 ||
@@ -210,6 +231,11 @@ async function dateLifecycleTick(): Promise<void> {
     ) {
       console.log(
         `[date-lifecycle] icebreakers=${lifecycle.icebreakers} emergencies=${lifecycle.emergencies} feedbacks=${lifecycle.feedbacks} safety=${safety.sent}`,
+      );
+    }
+    if (coordination.offers > 0 || coordination.opened > 0 || coordination.closed > 0) {
+      console.log(
+        `[coordination] offers=${coordination.offers} proxyOpened=${coordination.opened} proxyClosed=${coordination.closed}`,
       );
     }
   } catch (err) {
@@ -313,6 +339,18 @@ bot.start({
     });
     console.log(`[cron] Re-engagement scheduled: "${RE_ENGAGEMENT_CRON_SCHEDULE}"`);
 
+    // Profiler: post-onboarding Q&A batches that fuel icebreakers + hints.
+    cron.schedule(PROFILER_CRON_SCHEDULE, () => {
+      void profilerTick(bot.api).then((r) => {
+        if (r.seeded > 0 || r.dispatched > 0 || r.deferred > 0) {
+          console.log(
+            `[profiler] seeded=${r.seeded} dispatched=${r.dispatched} deferred=${r.deferred}`,
+          );
+        }
+      }).catch((err) => console.error("[profiler] tick failed:", err));
+    });
+    console.log(`[cron] Profiler scheduled: "${PROFILER_CRON_SCHEDULE}"`);
+
     // Match nudge: proposal (3h/10h) and scheduling (6h/12h) reminders.
     cron.schedule(MATCH_NUDGE_CRON_SCHEDULE, () => {
       void matchNudgeTick(bot.api).then((r) => {
@@ -322,6 +360,16 @@ bot.start({
       }).catch((err) => console.error("[match-nudge] tick failed:", err));
     });
     console.log(`[cron] Match nudge scheduled: "${MATCH_NUDGE_CRON_SCHEDULE}"`);
+
+    // Date Ticket expiry: refund stalled partial payments, open Calendar free.
+    if (env.TICKET_FEATURE_ENABLED) {
+      cron.schedule(TICKET_EXPIRY_CRON_SCHEDULE, () => {
+        void ticketExpiryTick(bot.api).then((r) => {
+          if (r.swept > 0) console.log(`[ticket-expiry] swept ${r.swept} stalled ticket gate(s)`);
+        }).catch((err) => console.error("[ticket-expiry] tick failed:", err));
+      });
+      console.log(`[cron] Ticket expiry scheduled: "${TICKET_EXPIRY_CRON_SCHEDULE}"`);
+    }
 
     // Pre-match announce: Wednesday teaser before Thursday batch.
     cron.schedule(PRE_MATCH_ANNOUNCE_CRON_SCHEDULE, () => {

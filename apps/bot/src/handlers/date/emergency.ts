@@ -1,4 +1,5 @@
 import { prisma } from "@gennety/db";
+import { InlineKeyboard } from "grammy";
 import { t, type Language } from "@gennety/shared";
 import type { MessageEntity } from "grammy/types";
 import type { BotContext } from "../../session.js";
@@ -8,12 +9,50 @@ import { applyEmergencyCancellationPeerBoost } from "../../utils/elo-calculator.
  * Emergency cancellation flow (PRODUCT_SPEC.md §Phase 4.2).
  *
  * Callback `emerg:start:{matchId}` — user taps the "Cancel date" button
- * that was sent by the date-lifecycle cron 5h before the date.
+ * that was sent by the date-lifecycle cron 5h before the date. Because the
+ * cancellation is irreversible (the match can never be restored), the bot
+ * first asks for an explicit confirmation:
+ *   - `emerg:confirm:{matchId}` → proceed to ask for the reason
+ *   - `emerg:abort:{matchId}`   → dismiss, the date stays on
  *
- * The handler sets session state to `awaiting_emergency_reason` and waits
- * for a free-text message, which is then quoted *exactly as-is* to the other
- * person with a short Gennety note below it.
+ * Once confirmed, the handler sets session state to `awaiting_emergency_reason`
+ * and waits for a free-text message, which is then quoted *exactly as-is* to
+ * the other person with a short Gennety note below it.
  */
+
+/**
+ * Shared guard: load a still-cancellable scheduled match for the tapping user.
+ * Returns the participant user id, or null when the action should be ignored.
+ */
+async function loadCancellableParticipant(
+  ctx: BotContext,
+  matchId: string,
+): Promise<string | null> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: {
+      id: true,
+      status: true,
+      userAId: true,
+      userBId: true,
+      emergencyCancelledBy: true,
+    },
+  });
+
+  // Only allow for scheduled matches that haven't been cancelled yet.
+  if (!match || match.status !== "scheduled" || match.emergencyCancelledBy) return null;
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(ctx.from!.id) },
+    select: { id: true },
+  });
+  if (!user) return null;
+
+  const isParticipant = user.id === match.userAId || user.id === match.userBId;
+  if (!isParticipant) return null;
+
+  return user.id;
+}
 
 interface EmergencyCancellationNotice {
   text: string;
@@ -34,7 +73,11 @@ export function buildEmergencyCancellationNotice(
   return { text, entities };
 }
 
-/** Step 1: User taps the emergency button → ask for reason. */
+/**
+ * Step 1: User taps the emergency button → ask for an explicit confirmation
+ * before doing anything irreversible. No session state is touched here, so a
+ * stray tap is a pure no-op until the user confirms.
+ */
 export async function handleEmergencyStart(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
   if (!data?.startsWith("emerg:start:")) return;
@@ -44,34 +87,53 @@ export async function handleEmergencyStart(ctx: BotContext): Promise<void> {
 
   await ctx.answerCallbackQuery();
 
-  const match = await prisma.match.findUnique({
-    where: { id: matchId },
-    select: {
-      id: true,
-      status: true,
-      userAId: true,
-      userBId: true,
-      emergencyCancelledBy: true,
-    },
+  const participantId = await loadCancellableParticipant(ctx, matchId);
+  if (!participantId) return;
+
+  const lang = ctx.session.language;
+  const keyboard = new InlineKeyboard()
+    .text(t(lang, "emergencyBtnConfirm"), `emerg:confirm:${matchId}`)
+    .row()
+    .text(t(lang, "emergencyBtnBack"), `emerg:abort:${matchId}`);
+
+  await ctx.reply(t(lang, "emergencyConfirmPrompt"), {
+    parse_mode: "Markdown",
+    reply_markup: keyboard,
   });
+}
 
-  // Only allow for scheduled matches that haven't been cancelled yet.
-  if (!match || match.status !== "scheduled" || match.emergencyCancelledBy) return;
+/** Step 1b: User confirmed the cancellation → ask for reason. */
+export async function handleEmergencyConfirm(ctx: BotContext): Promise<void> {
+  const data = ctx.callbackQuery?.data;
+  if (!data?.startsWith("emerg:confirm:")) return;
 
-  const user = await prisma.user.findUnique({
-    where: { telegramId: BigInt(ctx.from!.id) },
-    select: { id: true },
-  });
-  if (!user) return;
+  const matchId = data.slice("emerg:confirm:".length);
+  if (!matchId) return;
 
-  const isParticipant = user.id === match.userAId || user.id === match.userBId;
-  if (!isParticipant) return;
+  await ctx.answerCallbackQuery();
+
+  const participantId = await loadCancellableParticipant(ctx, matchId);
+  if (!participantId) return;
 
   ctx.session.matchFlow = "awaiting_emergency_reason";
   ctx.session.activeMatchId = matchId;
 
   const lang = ctx.session.language;
+  // Drop the confirm/back buttons so the prompt can't be tapped twice.
+  await ctx.editMessageReplyMarkup().catch(() => {});
   await ctx.reply(t(lang, "emergencyAskReason"), { parse_mode: "Markdown" });
+}
+
+/** Step 1b (alt): User backed out → dismiss, the date stays on. */
+export async function handleEmergencyAbort(ctx: BotContext): Promise<void> {
+  const data = ctx.callbackQuery?.data;
+  if (!data?.startsWith("emerg:abort:")) return;
+
+  await ctx.answerCallbackQuery();
+
+  const lang = ctx.session.language;
+  await ctx.editMessageReplyMarkup().catch(() => {});
+  await ctx.reply(t(lang, "emergencyAborted"));
 }
 
 /**

@@ -174,6 +174,8 @@ curl -s https://dating-api.gennety.com/v1/ping
 curl -sI https://dating-calendar.gennety.com
 curl -sI https://dating-calendar.gennety.com/onboarding.html
 curl -sI https://dating-calendar.gennety.com/verification.html
+curl -sI https://dating-calendar.gennety.com/ticket.html
+curl -sI https://dating-calendar.gennety.com/venue-change.html
 curl -sI https://api-admin.gennety.com
 ```
 
@@ -183,6 +185,8 @@ Expected smoke results:
 - `dating-calendar.gennety.com` returns HTTP `200`.
 - `dating-calendar.gennety.com/onboarding.html` returns HTTP `200`.
 - `dating-calendar.gennety.com/verification.html` returns HTTP `200`.
+- `dating-calendar.gennety.com/ticket.html` returns HTTP `200`.
+- `dating-calendar.gennety.com/venue-change.html` returns HTTP `200`.
 - `api-admin.gennety.com` returns HTTP `401` without bearer auth.
 
 ## Deploy Full Server Code
@@ -246,6 +250,8 @@ cd "/Users/pro/Desktop/Gennety Dating"
 curl -sI https://dating-calendar.gennety.com
 curl -sI https://dating-calendar.gennety.com/onboarding.html
 curl -sI https://dating-calendar.gennety.com/verification.html
+curl -sI https://dating-calendar.gennety.com/ticket.html
+curl -sI https://dating-calendar.gennety.com/venue-change.html
 ```
 
 The script builds `apps/webapp` with Vite and rsyncs:
@@ -257,8 +263,10 @@ apps/webapp/dist/ -> root@167.172.178.229:/var/www/dating-app/
 Vite is configured for multiple entries (`vite.config.ts`), so the same rsync
 deploys the Mini Apps together — `index.html` (calendar), `feedback.html`
 (post-date feedback), `location.html` (venue handoff), `onboarding.html`
-(full-screen Telegram onboarding), and `verification.html` (Persona
-Embedded SDK KYC flow). Caddy's `try_files {path} /index.html` resolves
+(full-screen Telegram onboarding), `verification.html` (Persona
+Embedded SDK KYC flow), `ticket.html` (Date Ticket, feature-flagged
+premium post-accept gate), and `venue-change.html` (feature-flagged
+female-exclusive venue swap). Caddy's `try_files {path} /index.html` resolves
 direct hits like `/feedback.html` and `/onboarding.html` before the SPA
 fallback.
 
@@ -317,15 +325,57 @@ Required/high-impact env keys:
   (default 0.85), `FACE_MATCH_THRESHOLD_REVIEW` (default 0.75),
   `FACE_MATCH_MIN_VERIFIED_PHOTOS` (default 1), `AWS_REGION`,
   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `ELO_VISION_SEED_ENABLED`
+- Matching: `MALE_REACH_ELO` (default `36` Elo ≈ 6 attractiveness points) —
+  one-directional "reach up" allowance that lets a less-attractive man match a
+  somewhat more-attractive woman without the `V_league` penalty (hetero pairs
+  only; matching down and same-gender pairs unaffected). Raise for a stronger
+  male lift, lower toward `0` to disable. No restart side effects beyond the
+  standard `pm2 restart`.
 - Venue picker: `PLACES_API_KEY`
+- Date Ticket (feature-flagged monetization): `TICKET_FEATURE_ENABLED`
+  (default `false` — leave off until launch), `TICKET_PAYMENT_MODE`
+  (`mock` default / `stripe`), `TICKET_PRICE_CENTS` (default `699`),
+  `TICKET_PAYMENT_WINDOW_HOURS` (default `24`). Going live with real
+  payments additionally needs `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`,
+  `STRIPE_WEBHOOK_SECRET` + `TICKET_PAYMENT_MODE=stripe` (see the
+  `// TODO: Stripe Production Mode` branches in
+  `services/ticket-payment.ts`). Requires `db:push` of the new `Match`
+  ticket columns first.
+- Pre-date coordination (feature-flagged): `COORDINATION_FEATURE_ENABLED`
+  (default `false` — leave off until launch). When on, the bot offers matched
+  users a way to find each other ~1h before the date (share Telegram, request
+  partner's, or an anonymous bot-relayed chat). Requires `db:push` of the new
+  `User.telegramUsername`, `Match.coord*`/`proxy*` columns, and the
+  `proxy_messages` table first. Runs on the existing date-lifecycle
+  `setInterval` — no new cron schedule. Variant C (anonymous proxy) is a
+  documented, narrow carve-out to the no-in-app-chat invariant
+  (PRODUCT_SPEC.md §Core Principles): post-match, time-boxed, text-only,
+  fully logged, with an in-line Report button.
+- Venue change (feature-flagged): `VENUE_CHANGE_FEATURE_ENABLED`
+  (default `false` — leave off until launch). When on, the female participant
+  gets a one-time "Change venue" button on her scheduled-date card to swap the
+  auto-assigned venue (within 3 km, mandatory comment); the male accepts or
+  declines (declining cancels the match). Telegram-only in v1. Requires
+  `db:push` of the new `Match.venueChange*` columns + `CuratedVenue.photoUrl`
+  first, and `venue-change.html` deployed with the Mini App bundle. Runs on the
+  existing date-lifecycle `setInterval` (a pre-ice-breaker expiry sweep) — no
+  new cron schedule. The mandatory comment is a narrow carve-out to the
+  no-in-app-chat invariant (PRODUCT_SPEC.md §3.7b): post-schedule, one-shot,
+  verbatim relay, no reply channel.
 - Optional cron overrides: `MATCH_CRON_SCHEDULE`, `CRON_TIMEZONE`,
   `EXPIRY_CRON_SCHEDULE`, `NO_MATCH_NOTICE_CRON_SCHEDULE`,
   `PROPOSAL_COUNTDOWN_CRON_SCHEDULE`, `RE_ENGAGEMENT_CRON_SCHEDULE`,
   `MATCH_NUDGE_CRON_SCHEDULE`, `PRE_MATCH_ANNOUNCE_CRON_SCHEDULE`,
   `STATUS_TIMER_CRON_SCHEDULE`, `AUTO_UNSUSPEND_CRON_SCHEDULE`,
   `EMBEDDING_REFRESH_CRON_SCHEDULE`, `SELFIE_RETENTION_CRON_SCHEDULE`,
-  `VENUE_REVALIDATION_CRON_SCHEDULE`,
-  `DATE_LIFECYCLE_TICK_MS`, `DISPATCH_DELAY_MS`
+  `VENUE_REVALIDATION_CRON_SCHEDULE`, `TICKET_EXPIRY_CRON_SCHEDULE`,
+  `PROFILER_CRON_SCHEDULE`, `DATE_LIFECYCLE_TICK_MS`, `DISPATCH_DELAY_MS`
+- Profiler (Phase 1b, always-on): post-onboarding Q&A batches that fuel
+  icebreakers + date-planning hints (NOT matching). No feature flag —
+  `PROFILER_CRON_SCHEDULE` (default `*/15 * * * *`) only tunes cadence; set it
+  far-future to effectively pause. Requires `db:push` of the new
+  `profiler_answers` table, `ProfilerPriority` enum, and the
+  `Profile.time_zone` / `profiler_*` columns first (additive, non-destructive).
 
 Production safety checks:
 
@@ -498,6 +548,8 @@ curl -s https://dating-api.gennety.com/v1/ping
 curl -sI https://dating-calendar.gennety.com
 curl -sI https://dating-calendar.gennety.com/onboarding.html
 curl -sI https://dating-calendar.gennety.com/verification.html
+curl -sI https://dating-calendar.gennety.com/ticket.html
+curl -sI https://dating-calendar.gennety.com/venue-change.html
 curl -sI https://api-admin.gennety.com
 ```
 
