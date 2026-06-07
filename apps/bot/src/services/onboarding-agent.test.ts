@@ -251,6 +251,7 @@ describe("onboarding-agent", () => {
       id: "uuid-1",
       messageHistory: contextDumpSavedHistory(),
       language: "en",
+      aiMemoryExportPreference: "accepted",
       email: "alice@stanford.edu",
       isEmailVerified: true,
       universityDomain: "stanford.edu",
@@ -260,10 +261,11 @@ describe("onboarding-agent", () => {
       preference: "men",
       profile: {
         height: 165,
-        ethnicity: null,
+        ethnicity: "Asian",
         hobbies: ["tennis"],
         partnerPreferences: "someone kind",
         photos: [],
+        homeCityKey: "ua:kyiv",
       },
     });
 
@@ -580,8 +582,14 @@ describe("onboarding-agent", () => {
       messageHistory: [],
       language: "en",
       aiMemoryExportPreference: "declined",
+      email: "alice@stanford.edu",
+      isEmailVerified: true,
+      firstName: "Alice",
+      age: 21,
+      gender: "female",
+      preference: "men",
       profile: {
-        ethnicity: null,
+        ethnicity: "Asian",
         height: 165,
         hobbies: ["tennis"],
         partnerPreferences: "someone kind",
@@ -602,6 +610,46 @@ describe("onboarding-agent", () => {
     });
 
     expect(result.expectingPhoto).toBe(true);
+  });
+
+  it("blocks request_photos after AI memory decline when required profile fields are missing", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-1",
+      messageHistory: [],
+      language: "en",
+      aiMemoryExportPreference: "declined",
+      email: "alice@stanford.edu",
+      isEmailVerified: true,
+      firstName: "Alice",
+      age: 21,
+      profile: {
+        ethnicity: null,
+        height: null,
+        hobbies: [],
+        partnerPreferences: null,
+        photos: [],
+        homeCityKey: "ua:kyiv",
+      },
+    });
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "call-1", name: "request_photos", args: {} }]),
+      )
+      .mockResolvedValueOnce(textResponse("I still need a couple of details first."));
+
+    const result = await runAgentTurn(telegramId, "photos?", { fetchFn: mockFetch });
+
+    expect(result.expectingPhoto).toBe(false);
+    const secondCallBody = JSON.parse(mockFetch.mock.calls[1][1].body);
+    const toolMessage = secondCallBody.messages.find(
+      (m: { role: string }) => m.role === "tool",
+    );
+    const toolContent = JSON.parse(toolMessage.content);
+    expect(toolContent.success).toBe(false);
+    expect(toolContent.error).toContain("gender");
+    expect(toolContent.error).toContain("ethnicity_question");
   });
 
   it("sets onboardingComplete=true when finalize_onboarding is called with complete data", async () => {
@@ -1069,10 +1117,14 @@ describe("onboarding-agent", () => {
         textResponse("Profile saved!"),
       );
 
-    const result = await runAgentTurn(telegramId, "here's my info", {
+    const result = await runAgentTurn(
+      telegramId,
+      "I'm Alice, 21, female, into men. I'm Asian, 165 cm, I like tennis and reading, and I want someone kind and funny.",
+      {
       fetchFn: mockFetch,
       analyseProfile: mockAnalyse,
-    });
+      },
+    );
 
     expect(result.reply).toBe("Profile saved!");
     expect(prisma.user.update).toHaveBeenCalledWith(
@@ -1128,7 +1180,11 @@ describe("onboarding-agent", () => {
       )
       .mockResolvedValueOnce(textResponse("Saved."));
 
-    await runAgentTurn(telegramId, "save it", { fetchFn: mockFetch });
+    await runAgentTurn(
+      telegramId,
+      "Меня зовут Алексей, мне 24. Я мужчина, ищу женщин. Рост 176 см, люблю готовку, хочу девушку, которая любит готовить.",
+      { fetchFn: mockFetch },
+    );
 
     expect(prisma.profile.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1146,7 +1202,11 @@ describe("onboarding-agent", () => {
     const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
     const priorHistory = [
       { role: "system", content: "system prompt..." },
-      { role: "user", content: "Меня зовут Руслан, мне 21. Рост — 180 см. Ищу девушку." },
+      {
+        role: "user",
+        content:
+          "Меня зовут Руслан, мне 21. Я мужчина, ищу женщин. Рост — 180 см. Хочу красивую и женственную девушку.",
+      },
       { role: "assistant", content: "Got it!" },
     ];
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
@@ -1166,7 +1226,7 @@ describe("onboarding-agent", () => {
               age: 21,
               gender: "male",
               preference: "women",
-              partner_preferences: "красивая, аккуратная и женственная",
+              partner_preferences: "женственную девушку",
               // height omitted — guard should fire
             },
           },
@@ -1194,13 +1254,95 @@ describe("onboarding-agent", () => {
     expect(toolContent.error).toContain("180");
   });
 
+  it("rejects hallucinated save_profile_data fields when the user only gave name and age", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        messageHistory: [],
+        language: "en",
+        aiMemoryExportPreference: "declined",
+        email: "alice@stanford.edu",
+        isEmailVerified: true,
+        profile: {
+          height: null,
+          hobbies: [],
+          partnerPreferences: null,
+          photos: [],
+          homeCityKey: "ua:kyiv",
+        },
+      })
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        firstName: null,
+        age: null,
+        gender: null,
+        preference: null,
+        aiMemoryExportPreference: "declined",
+        profile: {
+          ethnicity: null,
+          height: null,
+          hobbies: [],
+          partnerPreferences: null,
+        },
+      });
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          {
+            id: "call-1",
+            name: "save_profile_data",
+            args: {
+              first_name: "Enny",
+              age: 21,
+              gender: "female",
+              preference: "both",
+              height: 170,
+              partner_preferences: "missing",
+            },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("I still need your gender, preference, height, and what you're looking for."));
+
+    await runAgentTurn(telegramId, "So, my name is Enny and I am 21 years old.", {
+      fetchFn: mockFetch,
+    });
+
+    expect(prisma.user.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          gender: "female",
+          preference: "both",
+        }),
+      }),
+    );
+    expect(prisma.profile.upsert).not.toHaveBeenCalled();
+
+    const secondCallBody = JSON.parse(mockFetch.mock.calls[1][1].body);
+    const toolMessage = secondCallBody.messages.find(
+      (m: { role: string }) => m.role === "tool",
+    );
+    const toolContent = JSON.parse(toolMessage.content);
+    expect(toolContent.success).toBe(false);
+    expect(toolContent.error).toContain("gender");
+    expect(toolContent.error).toContain("preference");
+    expect(toolContent.error).toContain("height");
+    expect(toolContent.error).toContain("partner_preferences");
+  });
+
   it("save_profile_data succeeds when height is supplied even though it was also in history", async () => {
     // Negative control for the guard above: the LLM extracted height
     // correctly, so the save must proceed normally.
     const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
     const priorHistory = [
       { role: "system", content: "system prompt..." },
-      { role: "user", content: "Рост у меня 180 см." },
+      {
+        role: "user",
+        content:
+          "Меня зовут Руслан, мне 21. Я мужчина, ищу женщин. Рост у меня 180 см. Хочу красивую и женственную девушку.",
+      },
       { role: "assistant", content: "Noted." },
     ];
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
@@ -1226,17 +1368,21 @@ describe("onboarding-agent", () => {
               gender: "male",
               preference: "women",
               height: 180,
-              partner_preferences: "красивая и женственная",
+              partner_preferences: "женственную девушку",
             },
           },
         ]),
       )
       .mockResolvedValueOnce(textResponse("Saved."));
 
-    await runAgentTurn(telegramId, "save it", {
+    await runAgentTurn(
+      telegramId,
+      "Меня зовут Руслан, мне 21. Я мужчина, ищу женщин. Рост у меня 180 см. Хочу красивую и женственную девушку.",
+      {
       fetchFn: mockFetch,
       analyseProfile: mockAnalyse,
-    });
+      },
+    );
 
     expect(prisma.profile.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1277,10 +1423,14 @@ describe("onboarding-agent", () => {
       )
       .mockResolvedValueOnce(textResponse("Profile saved!"));
 
-    await runAgentTurn(telegramId, "here's my info", {
+    await runAgentTurn(
+      telegramId,
+      "I'm Alice, 21, female, into men. I'm 165 cm, I like tennis, and I want someone kind.",
+      {
       fetchFn: mockFetch,
       analyseProfile: mockAnalyse,
-    });
+      },
+    );
 
     expect(mockAnalyse).not.toHaveBeenCalled();
   });

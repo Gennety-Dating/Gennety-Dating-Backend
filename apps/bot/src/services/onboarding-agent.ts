@@ -899,6 +899,72 @@ function hasEthnicityPromptAlreadyHappened(history: ChatMessage[]): boolean {
   );
 }
 
+function userTextCorpus(history: ChatMessage[]): string {
+  return history
+    .filter((message) => message.role === "user" && typeof message.content === "string")
+    .map((message) => message.content)
+    .join("\n")
+    .toLowerCase();
+}
+
+function containsWord(corpus: string, value: string): boolean {
+  const escaped = value.trim().toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (!escaped) return false;
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}([^\\p{L}\\p{N}]|$)`, "u").test(corpus);
+}
+
+function hasGenderEvidence(gender: "male" | "female", history: ChatMessage[]): boolean {
+  const corpus = userTextCorpus(history);
+  const re =
+    gender === "male"
+      ? /\b(male|man|guy|boy)\b|мужчин|мужик|парень|хлопець|чоловік|mężczyzn|mann/i
+      : /\b(female|woman|girl)\b|женщин|девушк|девочка|дівчин|жінк|kobiet|frau/i;
+  return re.test(corpus);
+}
+
+function hasPreferenceEvidence(preference: "men" | "women" | "both", history: ChatMessage[]): boolean {
+  const corpus = userTextCorpus(history);
+  if (preference === "both") {
+    return (
+      /\b(both|men and women|women and men|boys and girls|girls and boys|any gender|all genders)\b/i.test(corpus) ||
+      /и мужчин и женщин|и женщин и мужчин|и парн|и девуш|обоих|будь-як|будь як|чоловіків і жінок|жінок і чоловіків/i.test(corpus)
+    );
+  }
+  return preference === "men"
+    ? /\b(men|man|guys|boys|male)\b|мужчин|парн|чоловік|хлопц|mężczyzn|männer/i.test(corpus)
+    : /\b(women|woman|girls|female)\b|женщин|девуш|дівчат|жінок|kobiet|frauen/i.test(corpus);
+}
+
+function isPlaceholderText(value: string | null | undefined): boolean {
+  if (!value) return true;
+  const normalized = value.trim().toLowerCase().replace(/[.\s_-]+/g, " ");
+  return new Set([
+    "missing",
+    "not specified",
+    "not provided",
+    "unknown",
+    "unspecified",
+    "n/a",
+    "na",
+    "none",
+    "null",
+    "не указано",
+    "не указан",
+    "неизвестно",
+    "нет данных",
+  ]).has(normalized);
+}
+
+function hasPartnerPreferenceEvidence(value: string, history: ChatMessage[]): boolean {
+  if (isPlaceholderText(value)) return false;
+  const corpus = userTextCorpus(history);
+  const words = value
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((word) => word.length >= 4);
+  return words.some((word) => corpus.includes(word));
+}
+
 function shouldBlockContextDumpForEthnicity(
   user: PersistedOnboardingState | null | undefined,
   history: ChatMessage[],
@@ -926,6 +992,67 @@ function normalizeOptionalEthnicity(value: string | null | undefined): string | 
     "null",
   ]);
   return placeholders.has(normalized) ? null : trimmed;
+}
+
+function ungroundedProfileFields(
+  args: Parameters<typeof execSaveProfileData>[1],
+  user: PersistedOnboardingState | null | undefined,
+  history: ChatMessage[],
+): string[] {
+  const missingEvidence: string[] = [];
+  const corpus = userTextCorpus(history);
+
+  if (args.first_name !== undefined && args.first_name.trim() !== user?.firstName) {
+    if (!containsWord(corpus, args.first_name)) missingEvidence.push("first_name");
+  }
+  if (args.age !== undefined && args.age !== user?.age) {
+    if (!containsWord(corpus, String(args.age))) missingEvidence.push("age");
+  }
+  if (args.gender !== undefined && args.gender !== user?.gender) {
+    if (!hasGenderEvidence(args.gender, history)) missingEvidence.push("gender");
+  }
+  if (args.preference !== undefined && args.preference !== user?.preference) {
+    if (!hasPreferenceEvidence(args.preference, history)) missingEvidence.push("preference");
+  }
+  if (args.height !== undefined && args.height !== user?.profile?.height) {
+    if (extractHeightFromHistory(history) !== args.height) missingEvidence.push("height");
+  }
+  if (
+    args.partner_preferences !== undefined &&
+    args.partner_preferences.trim() !== user?.profile?.partnerPreferences
+  ) {
+    if (!hasPartnerPreferenceEvidence(args.partner_preferences, history)) {
+      missingEvidence.push("partner_preferences");
+    }
+  }
+
+  return missingEvidence;
+}
+
+function missingBeforePhoto(
+  user: PersistedOnboardingState | null | undefined,
+  contextDumpSaved: boolean,
+  history: ChatMessage[],
+): string[] {
+  const missing: string[] = [];
+  const profile = user?.profile ?? null;
+  if (!user?.isEmailVerified || !user.email) missing.push("email_verification");
+  if (!user?.firstName) missing.push("first_name");
+  if (!user?.age) missing.push("age");
+  if (!user?.gender) missing.push("gender");
+  if (!user?.preference) missing.push("preference");
+  if (!profile?.height) missing.push("height");
+  if (!profile?.partnerPreferences || isPlaceholderText(profile.partnerPreferences)) {
+    missing.push("partner_preferences");
+  }
+  if (!profile?.homeCityKey) missing.push("home_city");
+  if (!profile?.ethnicity && !hasEthnicityPromptAlreadyHappened(history)) {
+    missing.push("ethnicity_question");
+  }
+  if (user?.aiMemoryExportPreference !== "declined" && !contextDumpSaved) {
+    missing.push("context_dump");
+  }
+  return missing;
 }
 
 async function execSaveProfileData(
@@ -987,6 +1114,16 @@ async function execSaveProfileData(
     return JSON.stringify({
       success: false,
       error: `Age must be between ${MIN_AGE} and ${MAX_AGE}.`,
+    });
+  }
+
+  const ungrounded = ungroundedProfileFields(args, user, history);
+  if (ungrounded.length > 0) {
+    return JSON.stringify({
+      success: false,
+      error:
+        `Cannot save profile data — these fields are not explicitly supported by the user's messages or existing DB state: ${ungrounded.join(", ")}. ` +
+        "Do not infer or fabricate gender, preference, height, or partner preferences from a name or vibe. Ask only for the missing fields in one short question.",
     });
   }
 
@@ -1429,6 +1566,7 @@ export async function runAgentTurn(
   let contextPromptRequested = false;
   let contextDumpStarted = false;
   let contextDumpSaved = false;
+  let profileDataSavedThisTurn = false;
 
   // Loop: call OpenAI, handle tool_calls, repeat until we get a text reply
   const MAX_TOOL_ROUNDS = 8;
@@ -1557,6 +1695,44 @@ export async function runAgentTurn(
               });
               break;
             }
+            const photoGateUser = profileDataSavedThisTurn
+              ? await prisma.user.findUnique({
+                  where: { telegramId },
+                  select: {
+                    firstName: true,
+                    age: true,
+                    gender: true,
+                    preference: true,
+                    email: true,
+                    isEmailVerified: true,
+                    aiMemoryExportPreference: true,
+                    profile: {
+                      select: {
+                        ethnicity: true,
+                        height: true,
+                        hobbies: true,
+                        partnerPreferences: true,
+                        photos: true,
+                        homeCityKey: true,
+                      },
+                    },
+                  },
+                })
+              : user;
+            const missingForPhotos = missingBeforePhoto(
+              photoGateUser,
+              hasContextDumpSaved(history),
+              history,
+            );
+            if (missingForPhotos.length > 0) {
+              result = JSON.stringify({
+                success: false,
+                error:
+                  `Cannot start photo upload yet — missing or unconfirmed onboarding fields: ${missingForPhotos.join(", ")}. ` +
+                  "Ask only for these fields now. If ethnicity_question is listed, ask one short optional ethnicity/nationality question and allow the user to skip.",
+              });
+              break;
+            }
             expectingPhoto = true;
             result = JSON.stringify({
               success: true,
@@ -1571,6 +1747,7 @@ export async function runAgentTurn(
               deps,
               history,
             );
+            if (toolResultSucceeded(result)) profileDataSavedThisTurn = true;
             break;
           case "finalize_onboarding":
             result = await execFinalizeOnboarding(
