@@ -14,6 +14,7 @@ import { startPoll } from "../services/verification-poller.js";
 import { pinStatusBanner } from "../services/status-banner.js";
 import { buildLanguageKeyboard } from "./language-keyboard.js";
 import { syncTelegramUsername } from "../utils/username.js";
+import { shouldUseOnboardingMiniApp } from "./onboarding-mini-app-gate.js";
 import {
   AUTH_REGISTRATION_START_PREFIX,
   consumeWebRegistrationLink,
@@ -162,14 +163,6 @@ async function sendOnboardingMiniAppPrompt(
   await ctx.reply(copy.message, { reply_markup: keyboard });
 }
 
-function shouldUseOnboardingMiniApp(user: User): boolean {
-  if (!env.WEBAPP_URL) return false;
-  if (user.onboardingStep === "completed" || user.onboardingStep === "conversational") {
-    return false;
-  }
-  return !user.termsAccepted || !user.language || !user.isEmailVerified;
-}
-
 start.command("start", async (ctx) => {
   const telegramId = BigInt(ctx.from!.id);
   const startPayload = ctx.match?.toString().trim() ?? "";
@@ -285,7 +278,18 @@ start.command("start", async (ctx) => {
     return;
   }
 
-  if (shouldUseOnboardingMiniApp(user)) {
+  const onboardingProfile = await prisma.profile.findUnique({
+    where: { userId: user.id },
+    select: { homeCityKey: true },
+  });
+
+  if (
+    shouldUseOnboardingMiniApp(
+      Boolean(env.WEBAPP_URL),
+      user,
+      Boolean(onboardingProfile?.homeCityKey),
+    )
+  ) {
     await sendOnboardingMiniAppPrompt(
       ctx,
       user,
