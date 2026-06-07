@@ -639,7 +639,7 @@ meRouter.post(
         );
         const result = await runAgentTurn(
           userMeta.telegramId,
-          `[Photo uploaded: total ${nextPhotos.length}/${MAX_PHOTOS}]`,
+          { kind: "photos_updated", count: nextPhotos.length },
         );
         const ctx = await loadStateContext(req.userId!);
         interviewState = buildInterviewState({ ...ctx, question: result.reply });

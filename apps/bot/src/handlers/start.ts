@@ -409,7 +409,7 @@ start.command("start", async (ctx) => {
     const { runAgentTurn } = await import("../services/onboarding-agent.js");
     const result = await runAgentTurn(
       telegramId,
-      "[User returned and pressed /start. Continue onboarding from where we left off.]",
+      { kind: "resume" },
     );
     await ctx.reply(result.reply, { parse_mode: "Markdown" });
     return;

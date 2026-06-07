@@ -1653,8 +1653,8 @@ describe("answer validation in system prompt", () => {
     expect(content).toContain("Руслан");
     // Concrete forbidden-follow-ups list — the heart of the fix
     expect(content).toContain("FORBIDDEN");
-    // Gendered-name inference (no "ты парень или девушка?" after Руслан/Анна)
-    expect(content).toMatch(/gendered|inferr?ed?/i);
+    // Gender must come from a direct answer, never from a gendered name.
+    expect(content).toContain("NEVER infer gender from a first name");
   });
 
   it("uses temperature 0.4 for deterministic data collection", async () => {

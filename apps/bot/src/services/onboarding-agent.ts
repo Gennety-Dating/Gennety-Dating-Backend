@@ -22,6 +22,13 @@ import {
   onboardingActivityPatch,
   reEngagementStopPatch,
 } from "../workers/re-engagement-schedule.js";
+import {
+  collectOnboardingInput,
+  markOnboardingField,
+  onboardingQuestionText,
+  type CollectorDeps,
+  type OnboardingInput,
+} from "./onboarding-collector.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -143,6 +150,152 @@ export interface AgentDeps {
   sendOtp?: (to: string, otp: string) => Promise<void>;
   analyseProfile?: typeof analyseAndSaveProfile;
   saveFallbackProfile?: typeof saveFallbackProfileAnalysis;
+  extractOnboardingFacts?: CollectorDeps["extractFacts"];
+}
+
+function normalizedOnboardingInput(input: string | OnboardingInput): OnboardingInput {
+  return typeof input === "string" ? { kind: "user_text", text: input } : input;
+}
+
+async function appendCollectorHistory(
+  telegramId: bigint,
+  input: OnboardingInput,
+  reply: string,
+  includeMagicPrompt: boolean,
+  onboardingComplete: boolean,
+): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { messageHistory: true, language: true },
+  });
+  const history = ((user?.messageHistory ?? []) as unknown[]).map(
+    (message) => message as ChatMessage,
+  );
+  if (input.kind === "user_text" || input.kind === "context_dump") {
+    history.push({ role: "user", content: input.text });
+  }
+  if (includeMagicPrompt) {
+    history.push({
+      role: "assistant",
+      content: magicContextPrompt(user?.language ?? "en"),
+    });
+  }
+  history.push({ role: "assistant", content: reply });
+  const now = new Date();
+  await prisma.user.update({
+    where: { telegramId },
+    data: {
+      messageHistory: history as unknown as Prisma.InputJsonValue[],
+      ...(onboardingComplete
+        ? { lastMessageAt: now, ...reEngagementStopPatch }
+        : onboardingActivityPatch(now)),
+    },
+  });
+}
+
+async function runCollectorTurn(
+  telegramId: bigint,
+  input: OnboardingInput,
+  deps: AgentDeps,
+): Promise<AgentTurnResult> {
+  let contextDumpSaved = false;
+  let snapshot;
+
+  if (input.kind === "context_dump") {
+    const saved = await execSaveContextDump(
+      telegramId,
+      {},
+      deps,
+      input.text,
+    );
+    const parsed = parseJsonObject(saved);
+    if (parsed?.success !== true) {
+      const fallback =
+        typeof parsed?.error === "string"
+          ? parsed.error
+          : "I couldn't process that AI context. Please send the full response again.";
+      await appendCollectorHistory(telegramId, input, fallback, false, false);
+      return {
+        reply: fallback,
+        expectingPhoto: false,
+        onboardingComplete: false,
+        verificationRequired: false,
+        contextPromptRequested: false,
+        contextDumpStarted: true,
+        contextDumpSaved: false,
+      };
+    }
+    contextDumpSaved = true;
+    snapshot = await markOnboardingField(telegramId, "context_dump");
+  } else {
+    snapshot = await collectOnboardingInput(telegramId, input, {
+      ...(deps.fetchFn ? { fetchFn: deps.fetchFn } : {}),
+      ...(deps.extractOnboardingFacts
+        ? { extractFacts: deps.extractOnboardingFacts }
+        : {}),
+    });
+    if (
+      input.kind === "photos_updated" &&
+      snapshot.completedFields.includes("photos")
+    ) {
+      snapshot = await markOnboardingField(telegramId, "photos");
+    }
+  }
+
+  let expectingPhoto = snapshot.currentQuestion === "photos";
+  let onboardingComplete = false;
+  let verificationRequired = false;
+  let contextPromptRequested = snapshot.currentQuestion === "context_dump";
+  let contextDumpStarted = contextPromptRequested;
+  let reply = onboardingQuestionText(
+    snapshot.language,
+    snapshot.currentQuestion,
+    snapshot.completedFields,
+  );
+
+  if (snapshot.currentQuestion === "complete") {
+    const finalized = await execFinalizeOnboarding(
+      telegramId,
+      snapshot.completedFields.includes("context_dump"),
+      deps,
+    );
+    const parsed = parseJsonObject(finalized);
+    if (parsed?.success === true) {
+      onboardingComplete = true;
+      verificationRequired = parsed.verificationRequired === true;
+      expectingPhoto = false;
+      contextPromptRequested = false;
+      contextDumpStarted = false;
+      reply = onboardingQuestionText(
+        snapshot.language,
+        "complete",
+        snapshot.completedFields,
+      );
+    } else {
+      reply =
+        typeof parsed?.error === "string"
+          ? parsed.error
+          : "I couldn't finish onboarding yet. Please try again.";
+    }
+  }
+
+  await appendCollectorHistory(
+    telegramId,
+    input,
+    reply,
+    contextPromptRequested,
+    onboardingComplete,
+  );
+
+  return {
+    reply,
+    expectingPhoto,
+    onboardingComplete,
+    verificationRequired,
+    contextPromptRequested,
+    contextDumpStarted,
+    contextDumpSaved,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -203,17 +356,17 @@ User's first reply after you ask for name + age:
 What you MUST extract from this single message:
 - first_name: Руслан
 - age: 21
-- gender: male — "Руслан" is an unambiguously male Russian first name. INFER from gendered first names (Александр, Анна, Виктория, Руслан, …); do NOT ask the user to repeat it.
+- gender: missing — a name is not evidence of gender. Ask the user directly.
 - preference: women — "ищу … девушку"
 - partner_preferences: "красивая, аккуратная, женственная"
 - hobbies: ["конный спорт"]
 - height: 180
 
-What you MUST do next: ONE short bubble acknowledging what you got, then ask only for what is genuinely missing (e.g. ethnicity/nationality if you still need it, or move directly to step 4 — request_context_dump). Do NOT issue a sequence of "а кого ты ищешь?", "а рост?", "а хобби?", "ещё хобби?", "а партнёр какой?". That sequence is the #1 reason users abandon onboarding.
+What you MUST do next: ONE short bubble acknowledging what you got, then ask only for what is genuinely missing (gender, then ethnicity/nationality if needed). Do NOT issue a sequence of questions for values already present. Repeating known questions is the #1 reason users abandon onboarding.
 
 ### FORBIDDEN follow-ups (these are bugs, not features)
 
-- After a clearly gendered first name → DO NOT ask "ты парень или девушка?" / "are you a guy or a girl?". Infer it from the name.
+- NEVER infer gender from a first name. Gender is accepted only from the user's direct answer.
 - If the user's gender answer is contradictory or joking (e.g. "I'm a guy and a girl at the same time"), do NOT guess. Ask one short clarification because the matching engine currently needs one of two profile values.
 - After "ищу девушку" / "ищу парня" / "ищу обоих" / "looking for a girl/guy/both" → DO NOT ask "кто тебе нравится?" again. Save the preference.
 - After ANY first hobby reply (one hobby, several, or "no hobbies") → DO NOT ask for another hobby. The first reply IS the answer.
@@ -263,7 +416,7 @@ NEVER move to the next question or topic until the current one has a CONCRETE, S
 ### Required data quality standards:
 - **First name**: An actual name (not "lol", "test", "x")
 - **Age**: A number between ${MIN_AGE} and ${MAX_AGE}
-- **Gender**: A clear answer identifying the user as a man or a woman (in their own language). If the user's first name is unambiguously gendered in their language (e.g. Александр/Руслан → male, Анна/Виктория → female, Михаил → male, Olga → female), INFER gender from the name and do NOT ask. Only ask when the name is gender-neutral or unknown to you. Internally map to the tool enum.
+- **Gender**: A clear, direct answer identifying the user as a man or a woman (in their own language). NEVER infer it from their name. Internally map the direct answer to the tool enum.
 - **Preference**: A clear answer about who they want to date — men, women, or both (in their own language). Internally map to the tool enum.
 - **Hobbies**: Whatever the user shares. One hobby is enough. "No hobbies" / "ничего особенного" is a valid answer — save it and move on. NEVER ask for additional hobbies after the first reply.
 - **Ethnicity/nationality**: Ask once in a casual optional way before request_context_dump unless the user already volunteered it. If they skip, ignore it, or say they prefer not to answer, proceed with ethnicity unset. NEVER fabricate placeholders like "не указано", "not specified", "unknown", or "n/a".
@@ -1483,15 +1636,21 @@ export async function summarizeHistory(
  */
 export async function runAgentTurn(
   telegramId: bigint,
-  userMessage: string,
+  input: string | OnboardingInput,
   deps: AgentDeps = {},
 ): Promise<AgentTurnResult> {
+  const onboardingInput = normalizedOnboardingInput(input);
+  const userMessage =
+    onboardingInput.kind === "user_text" || onboardingInput.kind === "context_dump"
+      ? onboardingInput.text
+      : "";
   const fetchFn = deps.fetchFn ?? fetch;
 
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: {
       messageHistory: true,
+      onboardingStep: true,
       language: true,
       email: true,
       universityDomain: true,
@@ -1513,6 +1672,15 @@ export async function runAgentTurn(
       },
     },
   });
+
+  if (
+    env.ONBOARDING_FACT_COLLECTOR_ENABLED &&
+    user?.onboardingStep === "conversational" &&
+    user.isEmailVerified &&
+    user.email
+  ) {
+    return runCollectorTurn(telegramId, onboardingInput, deps);
+  }
 
   // Rebuild messages array from stored history
   const history: ChatMessage[] = (

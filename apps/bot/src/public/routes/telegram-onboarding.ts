@@ -455,12 +455,7 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
       (
         await runAgentTurn(
           user.telegramId,
-          "[User completed the full-screen Telegram Mini App entry flow. " +
-            "Continue onboarding in chat from the next required field. " +
-            "Do not ask for email or OTP again because the email is already verified. " +
-            (user.aiMemoryExportPreference === "declined"
-              ? "The user declined AI memory export, so do not request the Magic Prompt/context dump. Continue with profile fields and photos.]"
-              : "The user accepted AI memory export, so request the Magic Prompt/context dump after profile fields are complete.]"),
+          { kind: "resume" },
         )
       ).reply;
 

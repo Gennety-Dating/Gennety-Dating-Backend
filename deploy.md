@@ -312,8 +312,9 @@ Required/high-impact env keys:
 - Database/storage: `DATABASE_URL`, `SUPABASE_URL`,
   `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_SELFIE_BUCKET`,
   `SUPABASE_PHOTO_BUCKET`, `SUPABASE_CHAT_BUCKET`
-- AI/email: `OPENAI_API_KEY`, `RESEND_API_KEY`, `SMTP_FROM`,
-  `OTP_LOG_TO_CONSOLE`
+- AI/email/onboarding: `OPENAI_API_KEY`, `RESEND_API_KEY`, `SMTP_FROM`,
+  `OTP_LOG_TO_CONSOLE`, `ONBOARDING_FACT_COLLECTOR_ENABLED` (default `false`;
+  enable only after schema push and backfill verification)
 - Admin API: `ADMIN_API_KEY`, `ADMIN_PORT`, `ADMIN_DASHBOARD_ORIGIN`
 - Public API: `JWT_SECRET`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`,
   `PUBLIC_PORT`, `PUBLIC_CORS_ORIGIN`
@@ -380,6 +381,12 @@ Required/high-impact env keys:
 Production safety checks:
 
 - `DEV_OTP_BYPASS_TELEGRAM_IDS` must be empty in production.
+- Keep `ONBOARDING_FACT_COLLECTOR_ENABLED=false` during the first production
+  deploy. Before enabling it: back up PostgreSQL, run
+  `pnpm --filter @gennety/db db:push`, run `pnpm onboarding:backfill` and
+  inspect aggregate counts, then run `pnpm onboarding:backfill:apply`.
+  Enable Development first and complete the two-account E2E. Production
+  rollback is the env flag; the additive `onboarding_progress` table may stay.
 - `OTP_LOG_TO_CONSOLE` must be `false` or unset in production.
 - `JWT_SECRET` must be set and at least 16 characters, otherwise the public API
   refuses to start.

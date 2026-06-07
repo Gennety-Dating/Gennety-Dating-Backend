@@ -169,8 +169,8 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     ctx.session.awaitingContextDump = true;
     ctx.session.contextDumpBuffer = "";
     ctx.session.expectingPhoto = false;
-  } else if (result.expectingPhoto) {
-    ctx.session.expectingPhoto = true;
+  } else {
+    ctx.session.expectingPhoto = result.expectingPhoto;
   }
 
   if (result.onboardingComplete) {
@@ -336,14 +336,16 @@ async function flushContextDump(ctx: BotContext, telegramId: bigint): Promise<vo
   ctx.session.awaitingContextDump = false;
   ctx.session.contextDumpBuffer = "";
 
-  const result = await withTyping(ctx, () => runAgentTurn(telegramId, buffer));
+  const result = await withTyping(ctx, () =>
+    runAgentTurn(telegramId, { kind: "context_dump", text: buffer }),
+  );
 
   if (result.contextDumpStarted) {
     ctx.session.awaitingContextDump = true;
     ctx.session.contextDumpBuffer = "";
     ctx.session.expectingPhoto = false;
-  } else if (result.expectingPhoto) {
-    ctx.session.expectingPhoto = true;
+  } else {
+    ctx.session.expectingPhoto = result.expectingPhoto;
   }
 
   if (result.onboardingComplete) {
@@ -399,14 +401,17 @@ async function flushPersistedContextDump(
     session.awaitingContextDump = false;
     session.contextDumpBuffer = "";
 
-    const result = await runAgentTurn(acc.telegramId, buffer);
+    const result = await runAgentTurn(acc.telegramId, {
+      kind: "context_dump",
+      text: buffer,
+    });
 
     if (result.contextDumpStarted) {
       session.awaitingContextDump = true;
       session.contextDumpBuffer = "";
       session.expectingPhoto = false;
-    } else if (result.expectingPhoto) {
-      session.expectingPhoto = true;
+    } else {
+      session.expectingPhoto = result.expectingPhoto;
     }
 
     if (result.onboardingComplete) {
@@ -713,7 +718,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
         );
         const result = await runAgentTurn(
           acc.telegramId,
-          "[Photos rejected by vision validation — no clear faces]",
+          { kind: "photos_updated" },
         );
         await replyText(acc.api, acc.chatId, result.reply);
         return;
@@ -728,7 +733,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
         );
         const result = await runAgentTurn(
           acc.telegramId,
-          `[Extra photos ignored — already at ${MAX_PHOTOS}/${MAX_PHOTOS}]`,
+          { kind: "photos_updated", count: MAX_PHOTOS },
         );
         await prisma.botSession.upsert({
           where: { key },
@@ -761,8 +766,9 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
 
     const result = await runAgentTurn(
       acc.telegramId,
-      `[Album uploaded: ${acc.validatedCount} verified photo(s), total ${count}/${MAX_PHOTOS}]`,
+      { kind: "photos_updated", count },
     );
+    session.expectingPhoto = result.expectingPhoto;
 
     if (result.onboardingComplete) {
       markOnboardingComplete(session);

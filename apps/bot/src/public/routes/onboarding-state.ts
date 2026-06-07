@@ -64,6 +64,7 @@ export interface StateContext {
   step: OnboardingStep;
   history: unknown[];
   photoCount: number;
+  currentQuestion?: string | null;
   question?: string | null;
   acknowledgement?: string | null;
 }
@@ -74,7 +75,7 @@ export function buildInterviewState(ctx: StateContext): InterviewStateDto {
   const expectingPhoto =
     ctx.step === "conversational" &&
     ctx.photoCount < MIN_PHOTOS &&
-    hasPhotoRequest(ctx.history);
+    (ctx.currentQuestion === "photos" || hasPhotoRequest(ctx.history));
 
   return {
     stepIndex: STEP_ORDER.indexOf(ctx.step),
@@ -90,7 +91,7 @@ export function buildInterviewState(ctx: StateContext): InterviewStateDto {
 }
 
 export async function loadStateContext(userId: string): Promise<StateContext> {
-  const [user, profile] = await Promise.all([
+  const [user, profile, progress] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: userId },
       select: {
@@ -104,10 +105,15 @@ export async function loadStateContext(userId: string): Promise<StateContext> {
       where: { userId },
       select: { photos: true },
     }),
+    prisma.onboardingProgress.findUnique({
+      where: { userId },
+      select: { currentQuestion: true },
+    }),
   ]);
   return {
     step: user.onboardingStep,
     history: (user.messageHistory ?? []) as unknown[],
     photoCount: profile?.photos?.length ?? 0,
+    currentQuestion: progress?.currentQuestion ?? null,
   };
 }

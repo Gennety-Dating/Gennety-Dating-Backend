@@ -33,6 +33,10 @@ export const env = {
   // Resend. Lets local dev work even with SMTP_PASS shared from prod (.env).
   OTP_LOG_TO_CONSOLE: process.env.OTP_LOG_TO_CONSOLE === "true",
   OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "",
+  /// Server-owned onboarding fact collector. Enable in Development first;
+  /// production can keep the legacy LLM-driven flow during staged rollout.
+  ONBOARDING_FACT_COLLECTOR_ENABLED:
+    process.env.ONBOARDING_FACT_COLLECTOR_ENABLED === "true",
   CUSTOM_EMOJI_LIKE_ID: process.env.CUSTOM_EMOJI_LIKE_ID ?? "",
   CUSTOM_EMOJI_DISLIKE_ID: process.env.CUSTOM_EMOJI_DISLIKE_ID ?? "",
   CUSTOM_EMOJI_MENU_ID: process.env.CUSTOM_EMOJI_MENU_ID ?? "",

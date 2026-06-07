@@ -206,6 +206,7 @@ model User {
   updatedAt        DateTime          @updatedAt @map("updated_at")
 
   profile Profile?
+  onboardingProgress OnboardingProgress?
   sessions UserSession[]
   profilerAnswers ProfilerAnswer[]
 
@@ -224,6 +225,23 @@ model User {
   @@index([status, reEngagementNextAt])
   @@index([status, suspendedUntil])
   @@map("users")
+}
+
+model OnboardingProgress {
+  userId           String    @id @map("user_id") @db.Uuid
+  completedFields  String[]  @default([]) @map("completed_fields")
+  skippedFields    String[]  @default([]) @map("skipped_fields")
+  askedFields      String[]  @default([]) @map("asked_fields")
+  currentQuestion  String?   @map("current_question")
+  collectorVersion Int       @default(1) @map("collector_version")
+  revision         Int       @default(0)
+  backfilledAt     DateTime? @map("backfilled_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("onboarding_progress")
 }
 
 model Profile {

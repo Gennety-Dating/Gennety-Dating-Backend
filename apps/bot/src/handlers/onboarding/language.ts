@@ -33,7 +33,7 @@ export async function handleLanguageSelection(ctx: BotContext): Promise<void> {
   // Kick off the conversational agent with an intro turn
   const result = await runAgentTurn(
     telegramId,
-    `[User selected language: ${lang}. Begin onboarding conversation.]`,
+    { kind: "resume" },
   );
 
   await ctx.reply(result.reply, { parse_mode: "Markdown" });

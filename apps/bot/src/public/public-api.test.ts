@@ -331,6 +331,10 @@ vi.mock("@gennety/db", async () => {
         }),
       },
 
+      onboardingProgress: {
+        findUnique: vi.fn().mockResolvedValue(null),
+      },
+
       // ----- emailOtp -----
       emailOtp: {
         create: vi.fn(async ({ data }: any) => {

@@ -73,7 +73,7 @@ graph TD
       PublicAPI["Public /v1/* API<br/>(Express :3101)"]
       AdminAPI["Admin /admin/* API<br/>(Express :3100)"]
       Crons["14× node-cron schedules<br/>+ date lifecycle interval"]
-      OnboAgent[Onboarding LLM agent<br/>tool-calling]
+      OnboAgent[Onboarding collector<br/>server state + LLM extractor]
       MenuAgent[Menu LLM agent]
       Aether[Aether concierge<br/>multimodal chat]
       Match[Match engine<br/>SQL+Node re-rank]
@@ -201,6 +201,23 @@ Columns (≈ 35; grouped by purpose):
 | Attribution | `referralSource` (`tg:start_param` / `mobile:utm=…` / `referral:USER_ID`) |
 
 Indexes: `(status, reEngagementNextAt)`, `(status, suspendedUntil)`.
+
+### `onboarding_progress` (1:1 with `users`)
+
+Server-owned traversal metadata for incomplete onboarding:
+
+| Column | Ownership |
+|---|---|
+| `completedFields`, `skippedFields`, `askedFields` | Collector state only; never copies personal answers |
+| `currentQuestion` | Deterministic next-question key used by Telegram and public/mobile API |
+| `collectorVersion`, `backfilledAt` | Rollout and lazy-backfill audit |
+| `revision` | Optimistic concurrency guard so simultaneous answers do not lose facts |
+
+Canonical answers remain in `users` and `profiles`. `messageHistory` is an
+interface/audit log, not a profile database. Only `user_text` may enter fact
+extraction; `resume`, `context_dump`, and `photos_updated` are typed synthetic
+events. Backfill reads canonical columns and raw user-authored messages, never
+AI summaries, assistant messages, or historical tool arguments.
 
 ### `profiles` (1:1 with `users`)
 
@@ -403,9 +420,9 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | GET  | `/v1/me/photos` / POST / DELETE | Photo CRUD with face-match gate |
 | GET  | `/v1/me/verification` | Read current verification state |
 | GET  | `/v1/me/verification/url` | Mint Persona hosted-flow URL |
-| GET  | `/v1/onboarding/interview` | Resume conversational onboarding |
-| POST | `/v1/onboarding/interview/answer` | Send next user turn to the onboarding agent |
-| POST | `/v1/onboarding/interview/voice` | Transcribe voice and send the turn to onboarding |
+| GET  | `/v1/onboarding/interview` | Resume server-owned conversational onboarding |
+| POST | `/v1/onboarding/interview/answer` | Send text to the shared onboarding collector |
+| POST | `/v1/onboarding/interview/voice` | Transcribe voice and send it to the same collector |
 | POST | `/v1/onboarding/consent` | Record ToS + research-opt-in |
 | POST | `/v1/assistant/ask` | Lightweight one-shot helper |
 | POST | `/v1/assistant/voice` | Transcribe voice and send the turn to the post-onboarding assistant |

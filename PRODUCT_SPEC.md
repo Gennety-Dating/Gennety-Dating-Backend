@@ -64,11 +64,12 @@ out of Telegram-only workers.
 
 ## Phase 1 — Onboarding
 
-> The legacy "strict linear FSM" sequence is **gone**. Onboarding is driven by
-> a tool-calling LLM agent (`apps/bot/src/services/onboarding-agent.ts` for
-> Telegram, `/v1/onboarding/interview*` for mobile). The agent harvests fields
-> in any order, never re-asks something already volunteered, and validates
-> answer quality before advancing.
+> The legacy "strict linear FSM" sequence is **gone**. After the email gate,
+> onboarding uses a server-owned fact collector shared by Telegram and
+> `/v1/onboarding/interview*`. The server persists every confirmed fact
+> immediately and deterministically chooses the next missing field. An LLM may
+> extract multiple explicitly stated facts from free text, but it does not own
+> progress, question order, photo gates, or finalization.
 
 ### 1.1 Initialization, Language & Consent (`onboardingStep = consent`)
 
@@ -86,7 +87,7 @@ out of Telegram-only workers.
 - When the Mini App reaches its handoff step, it calls
   `/v1/telegram-onboarding/complete` with the visual-flow token issued by
   `/v1/telegram-onboarding/state`; the bot immediately resumes the chat through
-  the existing onboarding agent. This does **not** mark onboarding complete by
+  the onboarding collector. This does **not** mark onboarding complete by
   itself — required profile fields, photos, and verification CTA still follow
   the normal product rules. Magic Prompt context is required only when
   `aiMemoryExportPreference = accepted`.
@@ -103,24 +104,30 @@ out of Telegram-only workers.
 - In the Telegram entry Mini App, language selection precedes legal consent so
   the consent screen is immediately understandable. Email and every later gate
   remain blocked until terms are accepted.
-- The conversational agent matches the user's language thereafter and is
+- Server-owned question templates match the user's language thereafter and are
   forbidden from injecting English enum words ("male/female/men/women") into
   non-English replies.
 
 ### 1.3 Conversational profile capture (`onboardingStep = conversational`)
 
-The agent calls tools in any order until *all* required data is collected:
+Email OTP remains handled by the onboarding agent. Once email is verified, the
+fact collector owns profile capture:
 
-| Tool | Effect |
+| Stage / action | Effect |
 |---|---|
 | `send_otp_email(email)` | Validate domain, mint OTP, send via email provider |
 | `verify_otp(code)` | Check the 6-digit code, flip `isEmailVerified` |
 | `resend_otp()` | Re-send to the email already on file |
-| `request_context_dump()` | Surface the *Magic Prompt* in a copy-block |
-| `save_context_dump(raw_dump)` | Stream-parse to `psychologicalSummary` and seed embedding |
-| `request_photos()` | Open photo upload (must follow `save_context_dump` unless AI memory export was declined) |
-| `save_profile_data(...)` | Persist `firstName`, `age`, `gender`, `preference`, `height`, optional `ethnicity`, `hobbies`, `partnerPreferences` |
-| `finalize_onboarding()` | Activate the user (or hand off to verification CTA) |
+| `extract + validate` | Require exact user-message evidence; validate age, height, enums, and placeholders |
+| `partial save` | Transactionally persist each accepted fact to `User` / `Profile` after every text or voice answer |
+| `advance` | Choose the first actually missing field from the canonical order |
+| `context gate` | Surface and save the Magic Prompt only when AI memory export was accepted |
+| `photo gate` | Preserve early photos but do not skip unfinished profile questions |
+| `finalize gate` | Activate only after required profile data, AI-memory branch, city, verified email, and minimum photos are complete |
+
+Canonical order: name + age → gender → preference → height → hobbies → partner
+requirements → optional nationality/ethnicity → AI memory → photos. Questions
+come from server templates for `en`, `ru`, `uk`, `de`, and `pl`.
 
 Before the Telegram Mini App hands off to the conversational bot, the user
 must also choose a **dating city** (`Profile.homeCityKey`). This is framed as
@@ -141,9 +148,17 @@ The final Mini App screen records `User.aiMemoryExportPreference` through
   finalization.
 - `undecided` cannot pass `/v1/telegram-onboarding/complete`.
 
-Hard rules baked into the agent prompt:
+Hard rules enforced by the collector:
 - Required fields (`firstName`, `age`, `gender`, `preference`,
   `partnerPreferences`) are NEVER skipped — keep asking until concrete.
+- Gender is accepted only from a direct answer and is never inferred from a
+  name.
+- Multiple explicit fields in one message are all saved. The last explicit
+  correction replaces the previous canonical value.
+- Real user text is distinct from `resume`, `context_dump`, and
+  `photos_updated`; synthetic events, assistant text, summaries, and tool
+  arguments are never mined as profile facts.
+- Nationality/ethnicity is asked at most once and may be explicitly skipped.
 - "No hobbies" / a single hobby is a valid answer; the agent must NOT chain
   "one more, one more" requests.
 - `MIN_PHOTOS` is a hard floor; anything beyond is purely optional.
@@ -152,9 +167,8 @@ Hard rules baked into the agent prompt:
   `MAX_PHOTOS`, but its static frame is still stored in `Profile.photos[]`
   and must pass the same single-face and face-match checks as a normal
   profile photo. Live Photos without a static frame are rejected.
-- For accepted export, `request_photos` MAY NOT be called in the same turn as
-  `request_context_dump` — wait for the dump to land first. Declined export
-  skips both context-dump tools.
+- For accepted export, photos MAY NOT start until the context dump is saved.
+  Declined export skips context collection and uses the fallback analysis.
 - After a pasted AI memory dump is parsed and saved, the bot plays a
   self-replacing "analysing" status line (one message edited in place through
   a few steps, each held a beat, then deleted before the photo request) to

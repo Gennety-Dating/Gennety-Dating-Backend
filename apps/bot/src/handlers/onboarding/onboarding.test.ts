@@ -313,7 +313,7 @@ describe("Language selection → conversational transition", () => {
 
     expect(runAgentTurn).toHaveBeenCalledWith(
       BigInt(12345),
-      expect.stringContaining("User selected language: en"),
+      { kind: "resume" },
     );
     // Agent reply is sent to user
     expect(ctx.reply).toHaveBeenCalledWith("Welcome to Gennety!", { parse_mode: "Markdown" });
@@ -578,7 +578,10 @@ describe("Context dump buffering (multi-chunk paste fix)", () => {
       });
       await vi.advanceTimersByTimeAsync(2_000);
 
-      expect(agentMock).toHaveBeenCalledWith(BigInt(12345), longPaste.trim());
+      expect(agentMock).toHaveBeenCalledWith(BigInt(12345), {
+        kind: "context_dump",
+        text: longPaste.trim(),
+      });
       expect(prisma.botSession.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           update: {
@@ -662,7 +665,10 @@ describe("Context dump buffering (multi-chunk paste fix)", () => {
 
       expect(agentMock).toHaveBeenCalledWith(
         BigInt(12345),
-        `${firstChunk}\nSecond chunk`.trim(),
+        {
+          kind: "context_dump",
+          text: `${firstChunk}\nSecond chunk`.trim(),
+        },
       );
     } finally {
       vi.clearAllTimers();
@@ -686,7 +692,10 @@ describe("Context dump buffering (multi-chunk paste fix)", () => {
     // Agent receives the full joined buffer
     expect(agentMock).toHaveBeenCalledWith(
       BigInt(12345),
-      "First chunk\nSecond chunk",
+      {
+        kind: "context_dump",
+        text: "First chunk\nSecond chunk",
+      },
     );
     // Buffering mode cleared
     expect(ctx.session.awaitingContextDump).toBe(false);
@@ -730,8 +739,12 @@ describe("Context dump buffering (multi-chunk paste fix)", () => {
     // Auto-flush fires immediately after truncation — agent receives the
     // filled buffer (length == cap), and post-flush session state is cleared.
     expect(agentMock).toHaveBeenCalledTimes(1);
-    const flushed = agentMock.mock.calls[0]?.[1] as string;
-    expect(flushed.length).toBe(MAX_DUMP_BUFFER_CHARS);
+    const flushed = agentMock.mock.calls[0]?.[1] as {
+      kind: string;
+      text: string;
+    };
+    expect(flushed.kind).toBe("context_dump");
+    expect(flushed.text.length).toBe(MAX_DUMP_BUFFER_CHARS);
     expect(ctx.session.awaitingContextDump).toBe(false);
     expect(ctx.session.contextDumpBuffer).toBe("");
   });
@@ -783,7 +796,10 @@ describe("Context dump buffering (multi-chunk paste fix)", () => {
       });
       await vi.advanceTimersByTimeAsync(2_000);
 
-      expect(agentMock).toHaveBeenCalledWith(BigInt(12345), fullDump.trim());
+      expect(agentMock).toHaveBeenCalledWith(BigInt(12345), {
+        kind: "context_dump",
+        text: fullDump.trim(),
+      });
       expect(prisma.botSession.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           update: {
@@ -1086,7 +1102,7 @@ describe("Album (media_group_id) photo coalescing", () => {
     expect(agentMock).toHaveBeenCalledTimes(1);
     expect(agentMock).toHaveBeenCalledWith(
       BigInt(99001),
-      expect.stringContaining("Album uploaded: 3 verified photo(s)"),
+      { kind: "photos_updated", count: 3 },
     );
 
     // Exactly ONE user-visible reply (on the api captured by the first frame)
@@ -1139,7 +1155,7 @@ describe("Album (media_group_id) photo coalescing", () => {
     expect(agentMock).toHaveBeenCalledTimes(1);
     expect(agentMock).toHaveBeenCalledWith(
       BigInt(99001),
-      expect.stringContaining("Album uploaded: 3 verified photo(s)"),
+      { kind: "photos_updated", count: 3 },
     );
   });
 
@@ -1180,7 +1196,7 @@ describe("Album (media_group_id) photo coalescing", () => {
     expect(agentMock).toHaveBeenCalledTimes(1);
     expect(agentMock).toHaveBeenCalledWith(
       BigInt(99001),
-      expect.stringContaining("Album uploaded: 3 verified photo(s)"),
+      { kind: "photos_updated", count: 3 },
     );
     expect(injectMock).toHaveBeenCalledWith(
       BigInt(99001),
