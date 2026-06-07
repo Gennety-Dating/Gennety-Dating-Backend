@@ -74,7 +74,14 @@ console.log(`Deleted ${delMatches.count} match(es).`);
 const delProfiles = await prisma.profile.deleteMany({ where: { userId: { in: userIds } } });
 console.log(`Deleted ${delProfiles.count} profile(s).`);
 
-// 3. Reset the user rows to a clean consent-step state.
+// 3. Delete server-owned collector progress so no completed/skipped fields
+// survive into the fresh run.
+const delProgress = await prisma.onboardingProgress.deleteMany({
+  where: { userId: { in: userIds } },
+});
+console.log(`Deleted ${delProgress.count} onboarding progress row(s).`);
+
+// 4. Reset the user rows to a clean consent-step state.
 for (const u of users) {
   await prisma.user.update({
     where: { id: u.id },
@@ -119,7 +126,7 @@ for (const u of users) {
   console.log(`Reset user tg=${u.telegramId.toString()} → onboarding/consent.`);
 }
 
-// 4. Drop bot_sessions (grammY key == chat id == telegramId for private chats).
+// 5. Drop bot_sessions (grammY key == chat id == telegramId for private chats).
 try {
   const keys = IDS.map((id) => id.toString());
   const delSessions = await prisma.botSession.deleteMany({ where: { key: { in: keys } } });
@@ -128,7 +135,7 @@ try {
   console.warn("bot_sessions cleanup skipped:", err instanceof Error ? err.message : err);
 }
 
-// 5. Clear any leftover mobile-side email OTPs for the addresses we'll reuse.
+// 6. Clear any leftover mobile-side email OTPs for the addresses we'll reuse.
 try {
   await prisma.emailOtp.deleteMany({ where: { email: { endsWith: "@ukma.edu.ua" } } });
 } catch { /* table optional */ }
