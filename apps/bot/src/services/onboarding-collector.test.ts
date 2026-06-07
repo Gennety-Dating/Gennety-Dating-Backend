@@ -4,6 +4,7 @@ import {
   deterministicCandidates,
   nextOnboardingQuestion,
   onboardingQuestionText,
+  onboardingValidationText,
   validateFactCandidate,
   type OnboardingField,
 } from "./onboarding-collector.js";
@@ -148,6 +149,14 @@ describe("onboarding collector routing", () => {
     expect(onboardingQuestionText("en", "first_name_age", ["age"])).toBe(
       "What should I call you?",
     );
+  });
+
+  it("explains out-of-range age instead of silently repeating the age question", () => {
+    expect(
+      onboardingValidationText("ru", [
+        { field: "age", reason: "age_out_of_range" },
+      ]),
+    ).toContain("18-35");
   });
 
   it.each(["en", "ru", "uk", "de", "pl"] as const)(

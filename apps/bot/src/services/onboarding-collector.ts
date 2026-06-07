@@ -1152,3 +1152,36 @@ export function onboardingQuestionText(
   }
   return QUESTIONS[language][question];
 }
+
+export function onboardingValidationText(
+  language: Language,
+  rejectedFields: readonly RejectedCandidate[],
+): string | null {
+  const age = rejectedFields.find(
+    (item) => item.field === "age" && item.reason === "age_out_of_range",
+  );
+  if (age) {
+    return {
+      en: `Right now Gennety is only available for people aged ${MIN_AGE}-${MAX_AGE}. Please enter an age in that range to continue testing.`,
+      ru: `Сейчас Gennety доступен только для возраста ${MIN_AGE}-${MAX_AGE}. Чтобы продолжить тест, укажи возраст в этом диапазоне.`,
+      uk: `Зараз Gennety доступний тільки для віку ${MIN_AGE}-${MAX_AGE}. Щоб продовжити тест, вкажи вік у цьому діапазоні.`,
+      de: `Gennety ist aktuell nur für Personen von ${MIN_AGE}-${MAX_AGE} verfügbar. Gib bitte ein Alter in diesem Bereich ein, um den Test fortzusetzen.`,
+      pl: `Gennety jest teraz dostępne tylko dla osób w wieku ${MIN_AGE}-${MAX_AGE}. Podaj wiek z tego zakresu, aby kontynuować test.`,
+    }[language];
+  }
+
+  const height = rejectedFields.find(
+    (item) => item.field === "height" && item.reason === "height_out_of_range",
+  );
+  if (height) {
+    return {
+      en: "That height looks outside the supported range. Please send a plausible height in cm, for example 180 cm.",
+      ru: "Этот рост выглядит вне допустимого диапазона. Напиши реалистичный рост в сантиметрах, например 180 см.",
+      uk: "Цей зріст виглядає поза допустимим діапазоном. Напиши реалістичний зріст у сантиметрах, наприклад 180 см.",
+      de: "Diese Größe liegt außerhalb des unterstützten Bereichs. Sende bitte eine realistische Größe in Zentimetern, zum Beispiel 180 cm.",
+      pl: "Ten wzrost wygląda poza obsługiwanym zakresem. Podaj realistyczny wzrost w centymetrach, na przykład 180 cm.",
+    }[language];
+  }
+
+  return null;
+}

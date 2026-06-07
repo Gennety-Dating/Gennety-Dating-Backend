@@ -26,6 +26,7 @@ import {
   collectOnboardingInput,
   markOnboardingField,
   onboardingQuestionText,
+  onboardingValidationText,
   type CollectorDeps,
   type OnboardingInput,
 } from "./onboarding-collector.js";
@@ -252,6 +253,9 @@ async function runCollectorTurn(
     snapshot.currentQuestion,
     snapshot.completedFields,
   );
+  reply =
+    onboardingValidationText(snapshot.language, snapshot.rejectedFields) ??
+    reply;
 
   if (snapshot.currentQuestion === "complete") {
     const finalized = await execFinalizeOnboarding(
