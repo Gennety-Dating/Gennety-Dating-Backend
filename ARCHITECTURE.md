@@ -72,7 +72,7 @@ graph TD
       Bot[grammY bot<br/>long-polling]
       PublicAPI["Public /v1/* API<br/>(Express :3101)"]
       AdminAPI["Admin /admin/* API<br/>(Express :3100)"]
-      Crons["11× node-cron schedules<br/>+ date lifecycle interval"]
+      Crons["14× node-cron schedules<br/>+ date lifecycle interval"]
       OnboAgent[Onboarding LLM agent<br/>tool-calling]
       MenuAgent[Menu LLM agent]
       Aether[Aether concierge<br/>multimodal chat]
@@ -150,8 +150,9 @@ A **single** Node.js process (`apps/bot`) hosts everything:
   Mini App POST. Refuses to start if `JWT_SECRET` is shorter than 16 chars.
 - **Admin Express server** on `ADMIN_PORT` (default `3100`). Started only
   when `ADMIN_API_KEY` is set. Bearer-auth + helmet + per-IP rate limit.
-- **Background jobs** — 11 `node-cron` schedules plus the date-lifecycle
-  interval (see *Cron & Workers* below).
+- **Background jobs** — 14 `node-cron` schedules (one, ticket-expiry, is only
+  registered when `TICKET_FEATURE_ENABLED`) plus the date-lifecycle interval
+  (see *Cron & Workers* below).
 
 Importing `./config.js` is the very first thing `index.ts` does — this
 ensures `.env.local` overrides `.env` *before* `@gennety/db` evaluates
@@ -168,11 +169,12 @@ when columns diverge, Prisma wins.
 | Enum | Values |
 |---|---|
 | `UserStatus` | `onboarding`, `active`, `paused`, `suspended`, `pending_investigation`, `banned` |
-| `Language` | `en`, `ru`, `uk` |
+| `Language` | `en`, `ru`, `uk`, `de`, `pl` |
 | `OnboardingStep` | `consent`, `language`, `conversational`, `completed` |
 | `Gender` | `male`, `female` |
 | `GenderPreference` | `men`, `women`, `both` |
 | `Platform` | `telegram`, `mobile`, `both` |
+| `WebRegistrationPurpose` | `join`, `login` |
 | `VerificationStatus` | `unverified`, `pending`, `pending_review`, `verified`, `rejected` |
 | `MatchRadius` | `campus_only`, `citywide` |
 | `MatchStatus` | `proposed`, `negotiating`, `negotiating_venue`, `scheduled`, `cancelled`, `completed`, `expired` |
@@ -268,6 +270,20 @@ Mobile-side OTP store. **Distinct from `users.emailOtp`**: keyed by `email`
 (not `userId`) because mobile users start the funnel before a `User` row
 exists. `code` is bcrypt-hashed; raw is only delivered via the email provider. Tracks
 `attempts` and `consumedAt` for replay protection.
+
+### `web_registration_links`
+
+Browser → Telegram pre-registration handoff. A user can verify their corporate
+email on the website *before* opening the bot; the verified state is carried
+into Telegram via a one-time deep link. Columns: `tokenHash` (unique SHA-256 of
+the raw token — only the hash is stored, the raw token rides the
+`/start auth_<token>` / legacy `web_<token>` deep link), `email`,
+`universityDomain`, `language`, `purpose` (`WebRegistrationPurpose` ∈
+`join`/`login`), `termsAccepted`/`termsAcceptedAt`, `researchOptIn`,
+`expiresAt`, `consumedAt`, `consumedTelegramId`. Written by
+`services/web-registration.ts` via the `/v1/web-registration/*` API; consuming
+the link in onboarding lets the Mini App skip the Email/OTP screens
+(`isEmailVerified` is pre-set). See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §1.1.
 
 ### `user_sessions`
 
@@ -377,6 +393,8 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | POST | `/v1/auth/otp/request` | Send corp-email OTP (rate-limited) |
 | POST | `/v1/auth/otp/verify` | Verify OTP → mint access + refresh JWT |
 | POST | `/v1/auth/refresh` | Rotate refresh token |
+| POST | `/v1/web-registration/otp/request` | Website pre-registration: send corp-email OTP before the user opens Telegram (rate-limited; no auth — pre-account) |
+| POST | `/v1/web-registration/complete` | Website pre-registration: verify OTP + ToS, mint a one-time `web_registration_links` token, return the `/start auth_<token>` deep link that carries verified state into the bot (rate-limited) |
 | GET / PATCH / DELETE | `/v1/me` | Read / patch / delete current user |
 | POST | `/v1/me/home-location` | Persist canonical dating city (`homeCityKey`) + coordinates for match eligibility |
 | POST | `/v1/me/location` | Persist raw home-base lat/lng for Meet-Halfway; does not by itself unlock matching |

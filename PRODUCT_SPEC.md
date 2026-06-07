@@ -906,7 +906,9 @@ every profile edit, slowly degrading match quality.
 
 ### Languages
 
-`en` / `ru` / `uk`. All user-facing strings live in
-`packages/shared/src/i18n.ts`. Onboarding/menu/Aether agents auto-detect
-the user's language and forbid English enum injection into non-English
-replies.
+`en` / `ru` / `uk` / `de` / `pl` (the `Language` enum and
+`SUPPORTED_LANGUAGES`; `en` is the fallback). User-facing strings live in
+`packages/shared/src/i18n.ts`, which aggregates `en`/`ru`/`uk` inline plus the
+`de`/`pl` blocks from their own modules. Onboarding/menu/Aether agents
+auto-detect the user's language and forbid English enum injection into
+non-English replies.
