@@ -1048,7 +1048,11 @@ button {
 }
 
 .gate-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
   color: #f4f4f5;
+  font: inherit;
   font-weight: 700;
   text-decoration: underline;
   text-decoration-color: rgba(168, 85, 247, 0.72);
@@ -1057,6 +1061,18 @@ button {
 
 .gate-link:active {
   color: #d8b4fe;
+}
+
+.gate-link:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.otp-actions {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  margin-top: 18px;
 }
 
 .otp-grid {

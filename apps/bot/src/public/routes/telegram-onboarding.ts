@@ -13,7 +13,12 @@ import {
 } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData, type TelegramInitDataUser } from "../init-data.js";
-import { createAndSendOtp, verifyOtp } from "../otp.js";
+import {
+  createAndSendOtp,
+  getOtpChallengeState,
+  verifyOtp,
+  type OtpChallengeState,
+} from "../otp.js";
 import { otpRequestLimiter, otpVerifyLimiter } from "../rate-limit.js";
 import { runAgentTurn } from "../../services/onboarding-agent.js";
 import { onboardingActivityPatch } from "../../workers/re-engagement-schedule.js";
@@ -66,7 +71,7 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
 
     const user = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
     logTelegramOnboarding("state", user, { source: sanitizedSource(req.query.source) });
-    res.json(serializeState(user));
+    res.json(await serializeState(user));
   });
 
   router.post("/consent", async (req: Request, res: Response): Promise<void> => {
@@ -102,7 +107,7 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     });
 
     logTelegramOnboarding("consent", user);
-    res.json(serializeState(user));
+    res.json(await serializeState(user));
   });
 
   router.post("/language", async (req: Request, res: Response): Promise<void> => {
@@ -135,7 +140,7 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     });
 
     logTelegramOnboarding("language", user);
-    res.json(serializeState(user));
+    res.json(await serializeState(user));
   });
 
   router.post(
@@ -178,6 +183,19 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
         return;
       }
 
+      const existingChallenge = await getOtpChallengeState(email);
+      if (
+        existingChallenge.status === "pending" &&
+        existingChallenge.resendAvailableAt &&
+        existingChallenge.resendAvailableAt > new Date()
+      ) {
+        res.status(429).json({
+          error: "otp-cooldown",
+          emailVerification: serializeOtpChallenge(existingChallenge),
+        });
+        return;
+      }
+
       await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -190,15 +208,20 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
         },
       });
 
+      let challenge: OtpChallengeState;
       try {
-        await createAndSendOtp(email);
+        challenge = await createAndSendOtp(email);
       } catch (err) {
         console.error("[telegram-onboarding] failed to send OTP:", err);
         res.status(502).json({ error: "otp-send-failed" });
         return;
       }
 
-      res.json({ ok: true, alreadyVerified: false });
+      res.json({
+        ok: true,
+        alreadyVerified: false,
+        emailVerification: serializeOtpChallenge(challenge),
+      });
     },
   );
 
@@ -249,7 +272,7 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
       });
 
       logTelegramOnboarding("email-verified", updated);
-      res.json(serializeState(updated));
+      res.json(await serializeState(updated));
     },
   );
 
@@ -338,7 +361,7 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     logTelegramOnboarding("city-selected", updated, {
       homeCityKey: validation.data.homeCityKey,
     });
-    res.json(serializeState(updated));
+    res.json(await serializeState(updated));
   });
 
   router.post("/ai-memory", async (req: Request, res: Response): Promise<void> => {
@@ -372,7 +395,7 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     });
 
     logTelegramOnboarding("ai-memory-selected", updated, { preference });
-    res.json(serializeState(updated));
+    res.json(await serializeState(updated));
   });
 
   router.post("/complete", async (req: Request, res: Response): Promise<void> => {
@@ -526,7 +549,11 @@ async function findOrCreateTelegramUser(
   });
 }
 
-function serializeState(user: MiniUser): TelegramOnboardingStateDto {
+async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDto> {
+  const emailVerification = user.isEmailVerified
+    ? serializeOtpChallenge(null)
+    : serializeOtpChallenge(await getOtpChallengeState(user.email));
+
   return {
     ok: true,
     flowToken: issueOnboardingFlowToken(user.telegramId),
@@ -539,6 +566,7 @@ function serializeState(user: MiniUser): TelegramOnboardingStateDto {
       language: user.language,
       email: user.email,
       isEmailVerified: user.isEmailVerified,
+      emailVerification,
       homeLocation: user.profile?.homeCityKey
         ? {
             homeCity: user.profile.homeCity,
@@ -569,6 +597,7 @@ interface TelegramOnboardingStateDto {
     language: Language | null;
     email: string | null;
     isEmailVerified: boolean;
+    emailVerification: SerializedOtpChallenge;
     homeLocation: {
       homeCity: string | null;
       homeCountryCode: string | null;
@@ -579,6 +608,22 @@ interface TelegramOnboardingStateDto {
       locationUpdatedAt: string | null;
     } | null;
     completed: boolean;
+  };
+}
+
+type SerializedOtpChallenge = {
+  status: OtpChallengeState["status"];
+  expiresAt: string | null;
+  resendAvailableAt: string | null;
+  attemptsRemaining: number;
+};
+
+function serializeOtpChallenge(challenge: OtpChallengeState | null): SerializedOtpChallenge {
+  return {
+    status: challenge?.status ?? "none",
+    expiresAt: challenge?.expiresAt?.toISOString() ?? null,
+    resendAvailableAt: challenge?.resendAvailableAt?.toISOString() ?? null,
+    attemptsRemaining: challenge?.attemptsRemaining ?? 0,
   };
 }
 

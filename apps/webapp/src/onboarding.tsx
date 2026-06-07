@@ -14,10 +14,16 @@ import {
   verifyTelegramOnboardingOtp,
   CalendarApiError,
   type AiMemoryExportPreference,
+  type EmailVerificationState,
   type OnboardingLanguage,
   type TelegramCityHit,
   type TelegramOnboardingState,
 } from "./api.js";
+import {
+  postVisualPhaseFromRemote,
+  preVisualPhaseFromRemote,
+  type OnboardingPhase,
+} from "./onboarding-route.js";
 import "./onboarding.css";
 
 const app = window.Telegram?.WebApp;
@@ -34,17 +40,6 @@ const DRUM_CYCLE_INTERVAL_MS = 2500;
 const PRIVACY_POLICY_URL = "https://gennety.com/privacy";
 
 type RemoteUser = TelegramOnboardingState["user"];
-type Phase =
-  | { kind: "visual"; index: number }
-  | { kind: "syncing" }
-  | { kind: "consent" }
-  | { kind: "language" }
-  | { kind: "email" }
-  | { kind: "otp"; email: string }
-  | { kind: "city" }
-  | { kind: "aiMemoryExport" }
-  | { kind: "loading" }
-  | { kind: "done" };
 
 interface StatCopy {
   value: string;
@@ -78,25 +73,6 @@ const LANGUAGE_OPTIONS: Array<{ value: OnboardingLanguage; label: string; sub: s
   { value: "pl", label: "Polski", sub: "Kontynuuj po polsku" },
 ];
 
-function preVisualPhaseFromRemote(user: RemoteUser | null): Phase {
-  if (!user) return { kind: "syncing" };
-  if (!user.termsAccepted) return { kind: "consent" };
-  if (!user.language) return { kind: "language" };
-  if (!user.isEmailVerified) return { kind: "email" };
-  if (!user.homeLocation?.homeCityKey) return { kind: "city" };
-  return { kind: "visual", index: 0 };
-}
-
-function postVisualPhaseFromRemote(user: RemoteUser | null): Phase {
-  if (!user) return { kind: "syncing" };
-  if (!user.termsAccepted) return { kind: "consent" };
-  if (!user.language) return { kind: "language" };
-  if (!user.isEmailVerified) return { kind: "email" };
-  if (!user.homeLocation?.homeCityKey) return { kind: "city" };
-  if (user.aiMemoryExportPreference === "undecided") return { kind: "aiMemoryExport" };
-  return { kind: "loading" };
-}
-
 function configureTelegramChrome(): void {
   app?.ready();
   app?.expand();
@@ -114,7 +90,7 @@ function configureTelegramChrome(): void {
 }
 
 function App(): ReactElement {
-  const [phase, setPhase] = useState<Phase>({ kind: "syncing" });
+  const [phase, setPhase] = useState<OnboardingPhase>({ kind: "syncing" });
   const [remoteUser, setRemoteUser] = useState<RemoteUser | null>(null);
   const [flowToken, setFlowToken] = useState<string | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
@@ -230,12 +206,35 @@ function App(): ReactElement {
       <Scene active={phase.kind === "email"}>
         <EmailGate
           defaultEmail={remoteUser?.email ?? ""}
-          onOtp={(email) => setPhase({ kind: "otp", email })}
+          onOtp={(email, emailVerification) =>
+            setPhase({
+              kind: "otp",
+              email,
+              expiresAt: emailVerification?.expiresAt ?? null,
+              resendAvailableAt: emailVerification?.resendAvailableAt ?? null,
+            })
+          }
           onState={onState}
         />
       </Scene>
       <Scene active={phase.kind === "otp"}>
-        {phase.kind === "otp" ? <OtpGate email={phase.email} onState={onState} /> : null}
+        {phase.kind === "otp" ? (
+          <OtpGate
+            email={phase.email}
+            expiresAt={phase.expiresAt}
+            resendAvailableAt={phase.resendAvailableAt}
+            onState={onState}
+            onChangeEmail={() => setPhase({ kind: "email" })}
+            onChallengeChanged={(emailVerification) =>
+              setPhase({
+                kind: "otp",
+                email: phase.email,
+                expiresAt: emailVerification.expiresAt,
+                resendAvailableAt: emailVerification.resendAvailableAt,
+              })
+            }
+          />
+        ) : null}
       </Scene>
       <Scene active={phase.kind === "city"}>
         <CityGate onState={onState} />
@@ -601,7 +600,7 @@ function LanguageGate(props: {
 
 function EmailGate(props: {
   defaultEmail: string;
-  onOtp: (email: string) => void;
+  onOtp: (email: string, emailVerification?: EmailVerificationState) => void;
   onState: (state: TelegramOnboardingState) => void;
 }): ReactElement {
   const [email, setEmail] = useState(props.defaultEmail);
@@ -620,7 +619,7 @@ function EmailGate(props: {
         props.onState(state);
         return;
       }
-      props.onOtp(email.trim().toLowerCase());
+      props.onOtp(email.trim().toLowerCase(), result.emailVerification);
     } catch (err) {
       setError(errorCopy(err));
       app.HapticFeedback?.notificationOccurred("error");
@@ -655,17 +654,31 @@ function EmailGate(props: {
 
 function OtpGate(props: {
   email: string;
+  expiresAt: string | null;
+  resendAvailableAt: string | null;
   onState: (state: TelegramOnboardingState) => void;
+  onChangeEmail: () => void;
+  onChallengeChanged: (state: EmailVerificationState) => void;
 }): ReactElement {
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [busy, setBusy] = useState(false);
+  const [resendBusy, setResendBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
   const refs = useRef<Array<HTMLInputElement | null>>([]);
   const code = digits.join("");
+  const resendAt = props.resendAvailableAt ? Date.parse(props.resendAvailableAt) : 0;
+  const resendSeconds = Math.max(0, Math.ceil((resendAt - now) / 1000));
 
   useEffect(() => {
     refs.current[0]?.focus();
   }, []);
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [resendSeconds]);
 
   function setAt(index: number, value: string): void {
     const clean = value.replace(/\D/g, "").slice(-1);
@@ -697,6 +710,25 @@ function OtpGate(props: {
       app.HapticFeedback?.notificationOccurred("error");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function resend(): Promise<void> {
+    if (!app?.initData || resendBusy || resendSeconds > 0) return;
+    setResendBusy(true);
+    setError(null);
+    try {
+      const result = await requestTelegramOnboardingOtp(app.initData, props.email);
+      if (result.emailVerification) props.onChallengeChanged(result.emailVerification);
+      setDigits(["", "", "", "", "", ""]);
+      setNow(Date.now());
+      refs.current[0]?.focus();
+      app.HapticFeedback?.notificationOccurred("success");
+    } catch (err) {
+      setError(errorCopy(err));
+      app.HapticFeedback?.notificationOccurred("error");
+    } finally {
+      setResendBusy(false);
     }
   }
 
@@ -733,6 +765,22 @@ function OtpGate(props: {
       <button className="gate-button" disabled={code.length !== 6 || busy || !app?.initData} onClick={() => void submit()}>
         {busy ? "Проверяю..." : "Подтвердить"}
       </button>
+      <div className="otp-actions">
+        <button
+          className="gate-link"
+          disabled={resendBusy || resendSeconds > 0 || !app?.initData}
+          onClick={() => void resend()}
+        >
+          {resendBusy
+            ? "Отправляю..."
+            : resendSeconds > 0
+              ? `Отправить снова через ${resendSeconds} сек.`
+              : "Отправить код снова"}
+        </button>
+        <button className="gate-link" disabled={busy || resendBusy} onClick={props.onChangeEmail}>
+          Изменить почту
+        </button>
+      </div>
     </GateShell>
   );
 }
@@ -1136,9 +1184,13 @@ function errorCopy(err: unknown): string {
       case "mismatch":
         return "Код не совпал. Проверь письмо и попробуй ещё раз.";
       case "expired":
-        return "Код истёк. Вернись назад и запроси новый.";
+        return "Код истёк. Запроси новый код ниже.";
       case "exhausted":
         return "Слишком много попыток. Запроси новый код.";
+      case "otp-cooldown":
+        return "Новый код уже отправлен. Подожди несколько секунд.";
+      case "otp-send-failed":
+        return "Не удалось отправить письмо. Попробуй ещё раз.";
       case "terms-required":
         return "Сначала нужно принять условия.";
       case "language-required":

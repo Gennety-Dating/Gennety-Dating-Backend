@@ -133,6 +133,14 @@ export async function selectLocation(
 export type OnboardingLanguage = "en" | "ru" | "uk" | "de" | "pl";
 export type TelegramOnboardingStep = "consent" | "language" | "conversational" | "completed";
 export type AiMemoryExportPreference = "undecided" | "accepted" | "declined";
+export type EmailVerificationStatus = "none" | "pending" | "expired" | "exhausted";
+
+export interface EmailVerificationState {
+  status: EmailVerificationStatus;
+  expiresAt: string | null;
+  resendAvailableAt: string | null;
+  attemptsRemaining: number;
+}
 
 export interface TelegramOnboardingState {
   ok: true;
@@ -146,6 +154,7 @@ export interface TelegramOnboardingState {
     language: OnboardingLanguage | null;
     email: string | null;
     isEmailVerified: boolean;
+    emailVerification: EmailVerificationState;
     homeLocation: TelegramHomeLocation | null;
     completed: boolean;
   };
@@ -227,7 +236,11 @@ export async function setTelegramOnboardingLanguage(
 export async function requestTelegramOnboardingOtp(
   initData: string,
   email: string,
-): Promise<{ ok: true; alreadyVerified: boolean }> {
+): Promise<{
+  ok: true;
+  alreadyVerified: boolean;
+  emailVerification?: EmailVerificationState;
+}> {
   const res = await fetch(`${apiBase}/v1/telegram-onboarding/email/request`, {
     method: "POST",
     headers: {
@@ -237,7 +250,11 @@ export async function requestTelegramOnboardingOtp(
     body: JSON.stringify({ email }),
   });
   if (!res.ok) throw await toError(res);
-  return (await res.json()) as { ok: true; alreadyVerified: boolean };
+  return (await res.json()) as {
+    ok: true;
+    alreadyVerified: boolean;
+    emailVerification?: EmailVerificationState;
+  };
 }
 
 export async function verifyTelegramOnboardingOtp(

@@ -18,6 +18,9 @@ const userFindUniqueOrThrow = vi.fn();
 const userCreate = vi.fn();
 const userUpdate = vi.fn();
 const profileUpsert = vi.fn();
+const createAndSendOtp = vi.fn();
+const getOtpChallengeState = vi.fn();
+const verifyOtp = vi.fn();
 
 vi.mock("@gennety/db", () => ({
   prisma: {
@@ -33,9 +36,10 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 
-vi.mock("../otp.js", () => ({
-  createAndSendOtp: vi.fn(),
-  verifyOtp: vi.fn(),
+vi.mock("./otp.js", () => ({
+  createAndSendOtp,
+  getOtpChallengeState,
+  verifyOtp,
 }));
 
 vi.mock("../../services/onboarding-agent.js", () => ({
@@ -96,6 +100,15 @@ beforeEach(() => {
   userCreate.mockReset();
   userUpdate.mockReset();
   profileUpsert.mockReset();
+  createAndSendOtp.mockReset();
+  getOtpChallengeState.mockReset();
+  verifyOtp.mockReset();
+  getOtpChallengeState.mockResolvedValue({
+    status: "none",
+    expiresAt: null,
+    resendAvailableAt: null,
+    attemptsRemaining: 5,
+  });
   fakeApi.sendMessage = vi.fn().mockResolvedValue(undefined);
 });
 
@@ -115,6 +128,76 @@ describe("Telegram onboarding city gate", () => {
     expect(res.status).toBe(200);
     expect(res.body.user.aiMemoryExportPreference).toBe("accepted");
     expect(res.body.user.aiMemoryExportPreferenceAt).toBe("2026-06-06T10:00:00.000Z");
+  });
+
+  it("returns an active email challenge so the Mini App can restore the OTP screen", async () => {
+    userFindUnique.mockResolvedValue(miniUser({ isEmailVerified: false }));
+    getOtpChallengeState.mockResolvedValue({
+      status: "pending",
+      expiresAt: new Date("2026-06-07T10:10:00.000Z"),
+      resendAvailableAt: new Date("2026-06-07T10:00:30.000Z"),
+      attemptsRemaining: 4,
+    });
+
+    const res = await request(buildApp())
+      .get("/v1/telegram-onboarding/state")
+      .set("Authorization", `tma ${signInitData()}`);
+
+    expect(res.status).toBe(200);
+    expect(getOtpChallengeState).toHaveBeenCalledWith("alice@stanford.edu");
+    expect(res.body.user.emailVerification).toEqual({
+      status: "pending",
+      expiresAt: "2026-06-07T10:10:00.000Z",
+      resendAvailableAt: "2026-06-07T10:00:30.000Z",
+      attemptsRemaining: 4,
+    });
+  });
+
+  it("returns challenge timing after sending an OTP", async () => {
+    const current = miniUser({ isEmailVerified: false, email: null });
+    userFindUnique.mockResolvedValueOnce(current).mockResolvedValueOnce(null);
+    userUpdate.mockResolvedValue(current);
+    createAndSendOtp.mockResolvedValue({
+      status: "pending",
+      expiresAt: new Date("2026-06-07T10:10:00.000Z"),
+      resendAvailableAt: new Date("2026-06-07T10:00:30.000Z"),
+      attemptsRemaining: 5,
+    });
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/email/request")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ email: "alice@stanford.edu" });
+
+    expect(res.status).toBe(200);
+    expect(createAndSendOtp).toHaveBeenCalledWith("alice@stanford.edu");
+    expect(res.body.emailVerification).toEqual({
+      status: "pending",
+      expiresAt: "2026-06-07T10:10:00.000Z",
+      resendAvailableAt: "2026-06-07T10:00:30.000Z",
+      attemptsRemaining: 5,
+    });
+  });
+
+  it("enforces the resend cooldown without creating another challenge", async () => {
+    const current = miniUser({ isEmailVerified: false });
+    userFindUnique.mockResolvedValueOnce(current).mockResolvedValueOnce(null);
+    getOtpChallengeState.mockResolvedValue({
+      status: "pending",
+      expiresAt: new Date(Date.now() + 10 * 60_000),
+      resendAvailableAt: new Date(Date.now() + 30_000),
+      attemptsRemaining: 5,
+    });
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/email/request")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ email: "alice@stanford.edu" });
+
+    expect(res.status).toBe(429);
+    expect(res.body.error).toBe("otp-cooldown");
+    expect(createAndSendOtp).not.toHaveBeenCalled();
+    expect(userUpdate).not.toHaveBeenCalled();
   });
 
   it("rejects complete handoff when home city is missing", async () => {
