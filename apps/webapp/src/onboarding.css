@@ -236,13 +236,13 @@ button {
 }
 
 .ai-memory-secondary {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: transparent;
+  border: 0;
+  background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.62);
 }
 
 .ai-memory-secondary:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.1);
   color: #fff;
 }
 
@@ -792,9 +792,9 @@ button {
   border-radius: 32px;
   position: relative;
   overflow: hidden;
-  background: rgba(10, 10, 10, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(24px);
 }
 
@@ -914,9 +914,9 @@ button {
   overflow-y: auto;
   border-radius: 32px;
   padding: 2rem;
-  background: rgba(10, 10, 10, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 0 48px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  background: rgba(20, 20, 22, 0.72);
+  border: 0;
+  box-shadow: 0 0 48px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(24px);
   scrollbar-width: none;
 }
@@ -950,21 +950,19 @@ button {
   width: 100%;
   min-height: 56px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 0;
   padding: 0 1rem;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
   color: #fff;
   outline: none;
   box-shadow: 0 0 0 0 rgba(168, 85, 247, 0);
   transition:
-    border-color 180ms ease,
     box-shadow 180ms ease,
     background 180ms ease;
 }
 
 .gate-input:focus {
-  border-color: rgba(168, 85, 247, 0.75);
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(168, 85, 247, 0.12);
   box-shadow: 0 0 32px rgba(168, 85, 247, 0.22);
 }
 
@@ -993,8 +991,8 @@ button {
 }
 
 .gate-secondary {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  border: 0;
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
@@ -1006,8 +1004,8 @@ button {
 .choice-button {
   min-height: 56px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
+  border: 0;
+  background: rgba(255, 255, 255, 0.06);
   color: #fff;
   text-align: left;
   padding: 0 1rem;
@@ -1015,15 +1013,13 @@ button {
   align-items: center;
   justify-content: space-between;
   transition:
-    border-color 180ms ease,
     transform 180ms ease,
     background 180ms ease;
 }
 
 .choice-button:hover,
 .choice-button.is-selected {
-  border-color: rgba(168, 85, 247, 0.65);
-  background: rgba(168, 85, 247, 0.13);
+  background: rgba(168, 85, 247, 0.2);
 }
 
 .choice-button:active {
@@ -1087,8 +1083,8 @@ button {
   aspect-ratio: 1;
   min-height: 46px;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
+  border: 0;
+  background: rgba(255, 255, 255, 0.06);
   color: #fff;
   text-align: center;
   font-size: 24px;
@@ -1097,15 +1093,13 @@ button {
   caret-color: #a855f7;
   box-shadow: 0 0 18px rgba(168, 85, 247, 0.1);
   transition:
-    border-color 160ms ease,
     box-shadow 160ms ease,
     background 160ms ease,
     transform 160ms ease;
 }
 
 .otp-box:focus {
-  border-color: rgba(168, 85, 247, 0.9);
-  background: rgba(168, 85, 247, 0.1);
+  background: rgba(168, 85, 247, 0.18);
   box-shadow: 0 0 32px rgba(168, 85, 247, 0.32), inset 0 0 16px rgba(255, 255, 255, 0.05);
   transform: translateY(-1px);
 }
