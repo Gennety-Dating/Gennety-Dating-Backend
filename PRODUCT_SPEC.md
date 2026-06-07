@@ -70,14 +70,15 @@ out of Telegram-only workers.
 > in any order, never re-asks something already volunteered, and validates
 > answer quality before advancing.
 
-### 1.1 Initialization & Consent (`onboardingStep = consent`)
+### 1.1 Initialization, Language & Consent (`onboardingStep = consent`)
 
-- `/start` (or first mobile launch) creates a `User` row, captures any deep
+- `/start` (or first mobile launch) creates a `User` row and captures any deep
   link as `referralSource` (`tg:<start_param>` / `mobile:utm=…` /
-  `referral:<USER_ID>`), and shows the consent + ToS card.
+  `referral:<USER_ID>`). The Telegram entry Mini App first asks for the
+  language, then renders the consent + ToS card in that selected language.
 - Telegram `/start` now opens a full-screen Onboarding Mini App before the
   conversational agent takes over. The Mini App presents the visual intro,
-  legal consent, language, corporate-email OTP gate, dating city, and final AI
+  language, legal consent, corporate-email OTP gate, dating city, and final AI
   memory export choice, using Telegram `initData` HMAC auth for all writes. If
   the user arrived through a verified
   website handoff (`auth_<token>`; legacy `web_<token>` still accepted), the
@@ -99,6 +100,9 @@ out of Telegram-only workers.
   persists `User.language` and `BotSession.language`. (The shared i18n `Language`
   type and the onboarding Mini App picker both carry all five; `en` is the
   fallback.)
+- In the Telegram entry Mini App, language selection precedes legal consent so
+  the consent screen is immediately understandable. Email and every later gate
+  remain blocked until terms are accepted.
 - The conversational agent matches the user's language thereafter and is
   forbidden from injecting English enum words ("male/female/men/women") into
   non-English replies.

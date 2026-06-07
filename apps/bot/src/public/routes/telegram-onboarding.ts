@@ -118,11 +118,6 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     }
 
     const current = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
-    if (!current.termsAccepted) {
-      res.status(409).json({ error: "terms-required" });
-      return;
-    }
-
     const language = typeof req.body?.language === "string" ? req.body.language : "";
     if (!VALID_LANGUAGES.has(language)) {
       res.status(400).json({ error: "invalid-language" });

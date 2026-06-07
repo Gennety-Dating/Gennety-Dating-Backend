@@ -21,8 +21,8 @@ export type OnboardingPhase =
 
 export function preVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPhase {
   if (!user) return { kind: "syncing" };
-  if (!user.termsAccepted) return { kind: "consent" };
   if (!user.language) return { kind: "language" };
+  if (!user.termsAccepted) return { kind: "consent" };
   const emailPhase = unresolvedEmailPhase(user);
   if (emailPhase) return emailPhase;
   if (!user.homeLocation?.homeCityKey) return { kind: "city" };
@@ -31,8 +31,8 @@ export function preVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPha
 
 export function postVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPhase {
   if (!user) return { kind: "syncing" };
-  if (!user.termsAccepted) return { kind: "consent" };
   if (!user.language) return { kind: "language" };
+  if (!user.termsAccepted) return { kind: "consent" };
   const emailPhase = unresolvedEmailPhase(user);
   if (emailPhase) return emailPhase;
   if (!user.homeLocation?.homeCityKey) return { kind: "city" };

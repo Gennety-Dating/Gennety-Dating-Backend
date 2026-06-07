@@ -27,6 +27,28 @@ function user(
 }
 
 describe("Telegram onboarding route restoration", () => {
+  it("shows language before consent for a new user", () => {
+    expect(
+      preVisualPhaseFromRemote(
+        user({
+          language: null,
+          termsAccepted: false,
+        }),
+      ),
+    ).toEqual({ kind: "language" });
+  });
+
+  it("shows translated consent after language is selected", () => {
+    expect(
+      preVisualPhaseFromRemote(
+        user({
+          language: "de",
+          termsAccepted: false,
+        }),
+      ),
+    ).toEqual({ kind: "consent" });
+  });
+
   it("restores the OTP screen for a pending challenge", () => {
     expect(
       preVisualPhaseFromRemote(

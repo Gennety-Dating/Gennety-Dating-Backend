@@ -123,11 +123,10 @@ function App(): ReactElement {
         return { kind: "visual", index: current.index - 1 };
       }
       if (current.kind === "visual" && current.index === 0) {
-        if (remoteUser && !remoteUser.isEmailVerified) return { kind: "email" };
-        return { kind: "language" };
+        return { kind: "city" };
       }
-      if (current.kind === "language") return { kind: "consent" };
-      if (current.kind === "email") return { kind: "language" };
+      if (current.kind === "consent") return { kind: "language" };
+      if (current.kind === "email") return { kind: "consent" };
       if (current.kind === "otp") return { kind: "email" };
       if (current.kind === "city") return { kind: "email" };
       if (current.kind === "aiMemoryExport") return { kind: "visual", index: VISUAL_LAST_INDEX };
@@ -138,7 +137,7 @@ function App(): ReactElement {
   const canGoBack =
     phase.kind === "visual"
       ? phase.index > 0
-      : phase.kind === "language" ||
+      : phase.kind === "consent" ||
         phase.kind === "email" ||
         phase.kind === "otp" ||
         phase.kind === "city" ||

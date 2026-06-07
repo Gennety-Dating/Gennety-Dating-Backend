@@ -113,6 +113,56 @@ beforeEach(() => {
 });
 
 describe("Telegram onboarding city gate", () => {
+  it("allows selecting a language before accepting terms", async () => {
+    const current = miniUser({
+      language: null,
+      termsAccepted: false,
+      onboardingStep: "consent",
+    });
+    userFindUnique.mockResolvedValue(current);
+    userUpdate.mockResolvedValue(
+      miniUser({
+        language: "de",
+        termsAccepted: false,
+        onboardingStep: "language",
+      }),
+    );
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/language")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ language: "de" });
+
+    expect(res.status).toBe(200);
+    expect(userUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: current.id },
+        data: expect.objectContaining({ language: "de" }),
+      }),
+    );
+    expect(res.body.user.language).toBe("de");
+    expect(res.body.user.termsAccepted).toBe(false);
+  });
+
+  it("still blocks email until terms are accepted", async () => {
+    userFindUnique.mockResolvedValue(
+      miniUser({
+        language: "de",
+        termsAccepted: false,
+        isEmailVerified: false,
+      }),
+    );
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/email/request")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ email: "alice@stanford.edu" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("terms-required");
+    expect(createAndSendOtp).not.toHaveBeenCalled();
+  });
+
   it("returns AI memory preference in state", async () => {
     userFindUnique.mockResolvedValue(
       miniUser({
