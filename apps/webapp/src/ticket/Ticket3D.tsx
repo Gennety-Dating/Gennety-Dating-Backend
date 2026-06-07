@@ -70,7 +70,7 @@ export function Ticket3D(props: {
         <div className="ticket-perf" aria-hidden="true" />
         <div className="ticket-stub">
           <span className="ticket-stub-emoji">🎟️</span>
-          <span className="ticket-stub-text">ADMIT&nbsp;2</span>
+          <span className="ticket-stub-text">{s.ticketStub}</span>
         </div>
       </div>
       <div className="ticket-shadow" aria-hidden="true" />

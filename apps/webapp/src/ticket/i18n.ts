@@ -37,6 +37,9 @@ export interface TicketStrings {
   loading: string;
   back: string;
   close: string;
+  youFallback: string;
+  matchFallback: string;
+  ticketStub: string;
 }
 
 const en: TicketStrings = {
@@ -70,6 +73,9 @@ const en: TicketStrings = {
   loading: "Loading your ticket…",
   back: "← Back",
   close: "Close",
+  youFallback: "You",
+  matchFallback: "Your match",
+  ticketStub: "ADMIT 2",
 };
 
 const ru: TicketStrings = {
@@ -103,6 +109,9 @@ const ru: TicketStrings = {
   loading: "Загружаем твой билет…",
   back: "← Назад",
   close: "Закрыть",
+  youFallback: "Ты",
+  matchFallback: "Твой мэтч",
+  ticketStub: "НА ДВОИХ",
 };
 
 const uk: TicketStrings = {
@@ -136,9 +145,84 @@ const uk: TicketStrings = {
   loading: "Завантажуємо твій квиток…",
   back: "← Назад",
   close: "Закрити",
+  youFallback: "Ти",
+  matchFallback: "Твій метч",
+  ticketStub: "НА ДВОХ",
 };
 
-const dict: Partial<Record<Lang, TicketStrings>> = { en, ru, uk };
+const de: TicketStrings = {
+  heading: "Es ist ein Match 🔥",
+  sub: "Sichere dein Date Ticket, um die Planung freizuschalten.",
+  ticketLabel: "KURATIERTES DATE TICKET",
+  ticketTagline: "Ein perfektes Match • Verifiziert • Kein Drama",
+  ticketHolders: "Für zwei",
+  payBoth: "Für uns beide zahlen — {amount}",
+  paySelf: "Nur meins zahlen — {amount}",
+  paySelfOnly: "Mein Ticket zahlen — {amount}",
+  mockBadge: "Testmodus — keine echte Abbuchung",
+  mockTitle: "Zahlung",
+  mockSub: "Zahle {amount}, um dein Date Ticket zu sichern.",
+  mockCardLabel: "Kartennummer",
+  mockExpLabel: "MM / JJ",
+  mockCvcLabel: "CVC",
+  mockPayNow: "Zahlung abschließen · {amount}",
+  processing: "Verarbeitung...",
+  successTitle: "Du bist dabei 🎟️",
+  successSub: "Beide Tickets sind gesichert. Jetzt wählt ihr euren Moment.",
+  goToScheduling: "Date planen",
+  waitingTitle: "Ticket gesichert 🎟️",
+  waitingSub: "Wir warten, bis dein Match das eigene Ticket sichert. Dann melden wir uns sofort.",
+  waitingTimer: "Noch {time}",
+  partnerPaidTitle: "{name} hat dein Ticket schon bezahlt ❤️",
+  partnerPaidSub: "Alles erledigt — du musst nichts zahlen. Plant jetzt euer Date.",
+  closedTitle: "Planung ist offen 📅",
+  closedSub: "Keine Zahlung nötig — findet einfach eine Zeit.",
+  errGeneric: "Etwas ist schiefgelaufen. Öffne dies erneut aus dem Bot.",
+  loading: "Dein Ticket wird geladen...",
+  back: "← Zurück",
+  close: "Schließen",
+  youFallback: "Du",
+  matchFallback: "Dein Match",
+  ticketStub: "FÜR 2",
+};
+
+const pl: TicketStrings = {
+  heading: "To dopasowanie 🔥",
+  sub: "Odbierz Date Ticket, aby odblokować planowanie.",
+  ticketLabel: "WYBRANY DATE TICKET",
+  ticketTagline: "Jedno idealne dopasowanie • Weryfikacja • Bez dramatu",
+  ticketHolders: "Dla dwojga",
+  payBoth: "Zapłać za nas oboje — {amount}",
+  paySelf: "Zapłać tylko za siebie — {amount}",
+  paySelfOnly: "Zapłać za swój bilet — {amount}",
+  mockBadge: "Tryb testowy — bez prawdziwej opłaty",
+  mockTitle: "Płatność",
+  mockSub: "Zapłać {amount}, aby zabezpieczyć Date Ticket.",
+  mockCardLabel: "Numer karty",
+  mockExpLabel: "MM / RR",
+  mockCvcLabel: "CVC",
+  mockPayNow: "Dokończ płatność · {amount}",
+  processing: "Przetwarzanie...",
+  successTitle: "Gotowe 🎟️",
+  successSub: "Oba bilety są zabezpieczone. Czas wybrać termin.",
+  goToScheduling: "Przejdź do planowania randki",
+  waitingTitle: "Bilet zabezpieczony 🎟️",
+  waitingSub: "Czekamy, aż Twoje dopasowanie odbierze swój. Od razu damy Ci znać.",
+  waitingTimer: "Pozostało {time}",
+  partnerPaidTitle: "{name} zapłacił już za Twój bilet ❤️",
+  partnerPaidSub: "Wszystko gotowe — nic nie musisz płacić. Zaplanujmy randkę.",
+  closedTitle: "Planowanie jest otwarte 📅",
+  closedSub: "Płatność nie jest potrzebna — znajdźmy termin.",
+  errGeneric: "Coś poszło nie tak. Otwórz to ponownie z bota.",
+  loading: "Ładujemy Twój bilet...",
+  back: "← Wstecz",
+  close: "Zamknij",
+  youFallback: "Ty",
+  matchFallback: "Twoje dopasowanie",
+  ticketStub: "DLA 2",
+};
+
+const dict: Record<Lang, TicketStrings> = { en, ru, uk, de, pl };
 
 export function pickLang(raw: string | null | undefined): Lang {
   if (raw === "ru" || raw === "uk" || raw === "de" || raw === "pl") return raw;

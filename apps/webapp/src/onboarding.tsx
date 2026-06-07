@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -24,6 +24,12 @@ import {
   preVisualPhaseFromRemote,
   type OnboardingPhase,
 } from "./onboarding-route.js";
+import { type Lang } from "./i18n.js";
+import {
+  initialOnboardingLanguage,
+  onboardingStrings,
+  type OnboardingStrings,
+} from "./onboarding-i18n.js";
 import "./onboarding.css";
 
 const app = window.Telegram?.WebApp;
@@ -48,23 +54,6 @@ interface StatCopy {
   labelSentence?: boolean;
 }
 
-const EXHAUSTION_LINES = [
-  "Он ухудшает вашу психику, настоящий рынок мяса",
-  "Бесконечный перебор людей, как в супермаркете, убивает эмпатию",
-  "Вы тратите недели на переписки, которые ни к чему не приводят",
-];
-
-const STAT_COPY: StatCopy[] = [
-  { value: "75", label: "часов" },
-  { value: "9500", label: "свайпов" },
-  {
-    value: "$200",
-    valueSmall: true,
-    label: "в виде внутриплатформенных покупок",
-    labelSentence: true,
-  },
-];
-
 const LANGUAGE_OPTIONS: Array<{ value: OnboardingLanguage; label: string; sub: string }> = [
   { value: "en", label: "English", sub: "Continue in English" },
   { value: "ru", label: "Русский", sub: "Продолжить на русском" },
@@ -72,6 +61,12 @@ const LANGUAGE_OPTIONS: Array<{ value: OnboardingLanguage; label: string; sub: s
   { value: "de", label: "Deutsch", sub: "Auf Deutsch fortfahren" },
   { value: "pl", label: "Polski", sub: "Kontynuuj po polsku" },
 ];
+
+const OnboardingI18nContext = createContext<OnboardingStrings>(onboardingStrings("en"));
+
+function useOnboardingStrings(): OnboardingStrings {
+  return useContext(OnboardingI18nContext);
+}
 
 function configureTelegramChrome(): void {
   app?.ready();
@@ -90,25 +85,34 @@ function configureTelegramChrome(): void {
 }
 
 function App(): ReactElement {
+  const [lang, setLang] = useState<Lang>(() =>
+    initialOnboardingLanguage(params.get("lang"), app?.initDataUnsafe?.user?.language_code),
+  );
   const [phase, setPhase] = useState<OnboardingPhase>({ kind: "syncing" });
   const [remoteUser, setRemoteUser] = useState<RemoteUser | null>(null);
   const [flowToken, setFlowToken] = useState<string | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
+  const strings = onboardingStrings(lang);
+
+  useEffect(() => {
+    document.documentElement?.setAttribute("lang", lang);
+  }, [lang]);
 
   useEffect(() => {
     configureTelegramChrome();
     if (!app?.initData) {
-      setBootError("Открой мини-приложение из чата с ботом, чтобы продолжить.");
+      setBootError(strings.errors["Missing tma initData"] ?? strings.genericError);
       return;
     }
     void fetchTelegramOnboardingState(app.initData, source)
       .then((state) => {
         setRemoteUser(state.user);
         setFlowToken(state.flowToken);
+        if (state.user.language) setLang(state.user.language);
         setPhase(preVisualPhaseFromRemote(state.user));
       })
       .catch((err: unknown) => {
-        setBootError(errorCopy(err));
+        setBootError(errorCopy(err, onboardingStrings(lang)));
         app?.HapticFeedback?.notificationOccurred("error");
       });
   }, []);
@@ -168,6 +172,7 @@ function App(): ReactElement {
     (state: TelegramOnboardingState) => {
       setRemoteUser(state.user);
       setFlowToken(state.flowToken);
+      if (state.user.language) setLang(state.user.language);
       routeFromRemote(state.user);
     },
     [routeFromRemote],
@@ -182,7 +187,8 @@ function App(): ReactElement {
   const chrome = canGoBack ? <TopChrome onBack={goBack} /> : null;
 
   return (
-    <div className="onboarding-shell bg-surface text-on-surface min-h-screen antialiased">
+    <OnboardingI18nContext.Provider value={strings}>
+      <div className="onboarding-shell bg-surface text-on-surface min-h-screen antialiased">
       {chrome}
       {bootError ? <div className="gate-meta" style={{ position: "fixed", top: 12, left: 20, right: 20, zIndex: 60 }}>{bootError}</div> : null}
       <Scene active={phase.kind === "visual" && phase.index === 0}>
@@ -258,7 +264,8 @@ function App(): ReactElement {
       <Scene active={phase.kind === "done"}>
         <DoneScene />
       </Scene>
-    </div>
+      </div>
+    </OnboardingI18nContext.Provider>
   );
 }
 
@@ -267,9 +274,10 @@ function Scene(props: { active: boolean; children: ReactNode }): ReactElement {
 }
 
 function TopChrome(props: { onBack: () => void }): ReactElement {
+  const s = useOnboardingStrings();
   return (
     <header className="top-app-bar bg-transparent text-zinc-100 font-inter text-sm tracking-widest uppercase docked full-width top-0 border-none flat no shadows">
-      <button aria-label="Go back" className="chrome-button flex items-center justify-center w-10 h-10 rounded-full hover:bg-surface-variant transition-colors group" onClick={props.onBack}>
+      <button aria-label={s.back} className="chrome-button flex items-center justify-center w-10 h-10 rounded-full hover:bg-surface-variant transition-colors group" onClick={props.onBack}>
         <span className="material-symbols-outlined text-zinc-100 group-hover:text-purple-400 transition-colors duration-300">arrow_back</span>
       </button>
       <div className="text-xl font-bold text-white tracking-tighter" />
@@ -279,6 +287,7 @@ function TopChrome(props: { onBack: () => void }): ReactElement {
 }
 
 function HookScene(props: { active: boolean; onNext: () => void }): ReactElement {
+  const s = useOnboardingStrings();
   useEffect(() => {
     if (!props.active) return;
     const timer = window.setTimeout(props.onNext, HOOK_AUTO_ADVANCE_MS);
@@ -291,7 +300,7 @@ function HookScene(props: { active: boolean; onNext: () => void }): ReactElement
         <div className="hook-glow w-64 h-64 bg-primary rounded-full blur-[100px]" />
       </div>
       <h1 className="hook-title font-headline-lg text-headline-lg text-primary text-center tracking-tight drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] relative z-10">
-        Сколько стоит найти отношения в 2026 году?
+        {s.hookTitle}
       </h1>
     </main>
   );
@@ -328,8 +337,9 @@ function ProfileCycleScene(props: {
   active: boolean;
   onNext: () => void;
 }): ReactElement {
-  const cycle = useTimedCycle(props.active, EXHAUSTION_LINES.length);
-  const copy = EXHAUSTION_LINES[cycle.index] ?? EXHAUSTION_LINES[0]!;
+  const s = useOnboardingStrings();
+  const cycle = useTimedCycle(props.active, s.exhaustionLines.length);
+  const copy = s.exhaustionLines[cycle.index] ?? s.exhaustionLines[0]!;
 
   return (
     <>
@@ -342,10 +352,10 @@ function ProfileCycleScene(props: {
               {copy}
             </p>
           </div>
-          <CycleDots total={EXHAUSTION_LINES.length} active={cycle.index} complete={cycle.canContinue} />
+          <CycleDots total={s.exhaustionLines.length} active={cycle.index} complete={cycle.canContinue} />
         </div>
       </main>
-      {cycle.canContinue ? <BottomCta onClick={props.onNext} label="Дальше" /> : null}
+      {cycle.canContinue ? <BottomCta onClick={props.onNext} label={s.next} /> : null}
     </>
   );
 }
@@ -354,8 +364,14 @@ function StatsCycleScene(props: {
   active: boolean;
   onNext: () => void;
 }): ReactElement {
-  const cycle = useTimedCycle(props.active, STAT_COPY.length);
-  const copy = STAT_COPY[cycle.index] ?? STAT_COPY[0]!;
+  const s = useOnboardingStrings();
+  const statCopy: StatCopy[] = [
+    { value: "75", label: s.statLabels[0] },
+    { value: "9500", label: s.statLabels[1] },
+    { value: "$200", valueSmall: true, label: s.statLabels[2], labelSentence: true },
+  ];
+  const cycle = useTimedCycle(props.active, statCopy.length);
+  const copy = statCopy[cycle.index] ?? statCopy[0]!;
 
   return (
     <div className="trap-body">
@@ -377,9 +393,9 @@ function StatsCycleScene(props: {
         </div>
       </main>
       <div className={`stats-dots-dock ${cycle.canContinue ? "with-cta" : ""}`}>
-        <CycleDots total={STAT_COPY.length} active={cycle.index} complete={cycle.canContinue} />
+        <CycleDots total={statCopy.length} active={cycle.index} complete={cycle.canContinue} />
       </div>
-      {cycle.canContinue ? <BottomCta onClick={props.onNext} label="Дальше" /> : null}
+      {cycle.canContinue ? <BottomCta onClick={props.onNext} label={s.next} /> : null}
     </div>
   );
 }
@@ -395,10 +411,11 @@ function CycleDots(props: { total: number; active: number; complete: boolean }):
 }
 
 function ProfileMockup(): ReactElement {
+  const s = useOnboardingStrings();
   return (
     <div className="profile-card relative w-64 aspect-[3/4] mb-12 -rotate-12 transition-transform duration-500 ease-out glow-lavender rounded-xl border border-white/10 bg-surface-container-high/40 backdrop-blur-md overflow-hidden shadow-2xl">
       <img
-        alt="High-end serious portrait of a young professional male in dramatic lighting against a dark background"
+        alt={s.profileAlt}
         className="profile-card-image w-full h-full object-cover opacity-80 mix-blend-luminosity"
         src={PROFILE_IMAGE}
       />
@@ -412,8 +429,8 @@ function ProfileMockup(): ReactElement {
       </div>
       <div className="profile-card-caption absolute bottom-4 left-4 right-4 flex justify-between items-end">
         <div>
-          <h2 className="font-title-lg text-title-lg text-white">Александр, 28</h2>
-          <p className="font-body-md text-body-md text-on-surface-variant">Founder Tech</p>
+          <h2 className="font-title-lg text-title-lg text-white">{s.profileName}</h2>
+          <p className="font-body-md text-body-md text-on-surface-variant">{s.profileRole}</p>
         </div>
       </div>
     </div>
@@ -502,6 +519,7 @@ function easeOutQuint(progress: number): number {
 }
 
 function ConsentGate(props: { onState: (state: TelegramOnboardingState) => void }): ReactElement {
+  const s = useOnboardingStrings();
   const [terms, setTerms] = useState(false);
   const [research, setResearch] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -516,7 +534,7 @@ function ConsentGate(props: { onState: (state: TelegramOnboardingState) => void 
       app.HapticFeedback?.notificationOccurred("success");
       props.onState(state);
     } catch (err) {
-      setError(errorCopy(err));
+      setError(errorCopy(err, s));
       app.HapticFeedback?.notificationOccurred("error");
     } finally {
       setBusy(false);
@@ -525,25 +543,25 @@ function ConsentGate(props: { onState: (state: TelegramOnboardingState) => void 
 
   return (
     <GateShell>
-      <h1>Сначала короткая формальность</h1>
-      <p>Gennety подбирает людей по глубокому контексту, поэтому нам нужно явное согласие перед продолжением.</p>
+      <h1>{s.consentTitle}</h1>
+      <p>{s.consentLead}</p>
       {error ? <div className="gate-error">{error}</div> : null}
       <label className="check-row">
         <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.currentTarget.checked)} />
         <span>
-          Я принимаю условия сервиса и{" "}
+          {s.consentTermsPrefix}{" "}
           <a className="gate-link" href={PRIVACY_POLICY_URL} rel="noreferrer" target="_blank">
-            политику приватности
+            {s.consentPrivacy}
           </a>
           .
         </span>
       </label>
       <label className="check-row">
         <input type="checkbox" checked={research} onChange={(event) => setResearch(event.currentTarget.checked)} />
-        <span>Можно использовать мои обезличенные данные для улучшения матчмейкинга.</span>
+        <span>{s.consentResearch}</span>
       </label>
       <button className="gate-button" disabled={!terms || busy || !app?.initData} onClick={() => void submit()}>
-        {busy ? "Сохраняю..." : "Продолжить"}
+        {busy ? s.saving : s.continue}
       </button>
     </GateShell>
   );
@@ -553,6 +571,7 @@ function LanguageGate(props: {
   selected: OnboardingLanguage | null;
   onState: (state: TelegramOnboardingState) => void;
 }): ReactElement {
+  const s = useOnboardingStrings();
   const [busy, setBusy] = useState<OnboardingLanguage | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -565,7 +584,7 @@ function LanguageGate(props: {
       app.HapticFeedback?.selectionChanged();
       props.onState(state);
     } catch (err) {
-      setError(errorCopy(err));
+      setError(errorCopy(err, s));
       app.HapticFeedback?.notificationOccurred("error");
     } finally {
       setBusy(null);
@@ -574,8 +593,8 @@ function LanguageGate(props: {
 
   return (
     <GateShell>
-      <h1>Выбери язык</h1>
-      <p>Дальше бот продолжит разговор на выбранном языке.</p>
+      <h1>{s.languageTitle}</h1>
+      <p>{s.languageLead}</p>
       {error ? <div className="gate-error">{error}</div> : null}
       <div className="choice-row">
         {LANGUAGE_OPTIONS.map((option) => (
@@ -588,7 +607,7 @@ function LanguageGate(props: {
             <span>
               <strong>{option.label}</strong>
               <br />
-              <small>{busy === option.value ? "Сохраняю..." : option.sub}</small>
+              <small>{busy === option.value ? s.saving : option.sub}</small>
             </span>
             <span className="material-symbols-outlined">chevron_right</span>
           </button>
@@ -603,6 +622,7 @@ function EmailGate(props: {
   onOtp: (email: string, emailVerification?: EmailVerificationState) => void;
   onState: (state: TelegramOnboardingState) => void;
 }): ReactElement {
+  const s = useOnboardingStrings();
   const [email, setEmail] = useState(props.defaultEmail);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -621,7 +641,7 @@ function EmailGate(props: {
       }
       props.onOtp(email.trim().toLowerCase(), result.emailVerification);
     } catch (err) {
-      setError(errorCopy(err));
+      setError(errorCopy(err, s));
       app.HapticFeedback?.notificationOccurred("error");
     } finally {
       setBusy(false);
@@ -630,8 +650,8 @@ function EmailGate(props: {
 
   return (
     <GateShell>
-      <h1>Университетская почта</h1>
-      <p>Это обязательный фильтр Gennety: пары подбираются внутри реального студенческого контекста.</p>
+      <h1>{s.emailTitle}</h1>
+      <p>{s.emailLead}</p>
       {error ? <div className="gate-error">{error}</div> : null}
       <div className="gate-stack">
         <input
@@ -644,10 +664,10 @@ function EmailGate(props: {
           onChange={(event) => setEmail(event.currentTarget.value)}
         />
         <button className="gate-button" disabled={!email.trim() || busy || !app?.initData} onClick={() => void submit()}>
-          {busy ? "Отправляю..." : "Получить код"}
+          {busy ? s.emailSending : s.emailSend}
         </button>
       </div>
-      <div className="gate-meta">Если ты уже подтвердил почту на сайте, этот экран будет пропущен.</div>
+      <div className="gate-meta">{s.emailMeta}</div>
     </GateShell>
   );
 }
@@ -660,6 +680,7 @@ function OtpGate(props: {
   onChangeEmail: () => void;
   onChallengeChanged: (state: EmailVerificationState) => void;
 }): ReactElement {
+  const s = useOnboardingStrings();
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [busy, setBusy] = useState(false);
   const [resendBusy, setResendBusy] = useState(false);
@@ -706,7 +727,7 @@ function OtpGate(props: {
       app.HapticFeedback?.notificationOccurred("success");
       props.onState(state);
     } catch (err) {
-      setError(errorCopy(err));
+      setError(errorCopy(err, s));
       app.HapticFeedback?.notificationOccurred("error");
     } finally {
       setBusy(false);
@@ -725,7 +746,7 @@ function OtpGate(props: {
       refs.current[0]?.focus();
       app.HapticFeedback?.notificationOccurred("success");
     } catch (err) {
-      setError(errorCopy(err));
+      setError(errorCopy(err, s));
       app.HapticFeedback?.notificationOccurred("error");
     } finally {
       setResendBusy(false);
@@ -734,8 +755,8 @@ function OtpGate(props: {
 
   return (
     <GateShell>
-      <h1>Код из письма</h1>
-      <p>Мы отправили 6-значный код на {props.email}. Он живёт недолго.</p>
+      <h1>{s.otpTitle}</h1>
+      <p>{s.otpLead(props.email)}</p>
       {error ? <div className="gate-error">{error}</div> : null}
       <div className="otp-grid">
         {digits.map((digit, index) => (
@@ -758,12 +779,12 @@ function OtpGate(props: {
               if (event.key === "Enter") void submit();
             }}
             maxLength={1}
-            aria-label={`OTP digit ${index + 1}`}
+            aria-label={s.otpDigit(index + 1)}
           />
         ))}
       </div>
       <button className="gate-button" disabled={code.length !== 6 || busy || !app?.initData} onClick={() => void submit()}>
-        {busy ? "Проверяю..." : "Подтвердить"}
+        {busy ? s.otpChecking : s.otpConfirm}
       </button>
       <div className="otp-actions">
         <button
@@ -772,13 +793,13 @@ function OtpGate(props: {
           onClick={() => void resend()}
         >
           {resendBusy
-            ? "Отправляю..."
+            ? s.otpResending
             : resendSeconds > 0
-              ? `Отправить снова через ${resendSeconds} сек.`
-              : "Отправить код снова"}
+              ? s.otpResendIn(resendSeconds)
+              : s.otpResend}
         </button>
         <button className="gate-link" disabled={busy || resendBusy} onClick={props.onChangeEmail}>
-          Изменить почту
+          {s.otpChangeEmail}
         </button>
       </div>
     </GateShell>
@@ -786,6 +807,7 @@ function OtpGate(props: {
 }
 
 function CityGate(props: { onState: (state: TelegramOnboardingState) => void }): ReactElement {
+  const s = useOnboardingStrings();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<TelegramCityHit[]>([]);
   const [busy, setBusy] = useState(false);
@@ -810,7 +832,7 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
           setError(null);
         })
         .catch((err: unknown) => {
-          setError(errorCopy(err));
+          setError(errorCopy(err, s));
           setResults([]);
         })
         .finally(() => setSearching(false));
@@ -827,7 +849,7 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
       app.HapticFeedback?.notificationOccurred("success");
       props.onState(state);
     } catch (err) {
-      setError(errorCopy(err));
+      setError(errorCopy(err, s));
       app.HapticFeedback?.notificationOccurred("error");
     } finally {
       setBusy(false);
@@ -841,7 +863,7 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
       !navigator.geolocation ||
       window.isSecureContext === false
     ) {
-      setError("Не получилось открыть геолокацию. Выбери город через поиск.");
+      setError(s.cityGeoUnavailable);
       return;
     }
 
@@ -853,7 +875,7 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
       },
       () => {
         setGeoBusy(false);
-        setError("Геолокация недоступна. Выбери город через поиск.");
+        setError(s.cityGeoDenied);
         app?.HapticFeedback?.notificationOccurred("warning");
       },
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 },
@@ -871,7 +893,7 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
       setQuery(city.label);
       await choose(city, true);
     } catch (err) {
-      setError(errorCopy(err));
+      setError(errorCopy(err, s));
       app.HapticFeedback?.notificationOccurred("error");
     } finally {
       setGeoBusy(false);
@@ -880,15 +902,15 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
 
   return (
     <GateShell>
-      <h1>Город для мэтчей</h1>
-      <p>Выбери город, где ты сейчас готов ходить на свидания. Мы не сохраняем домашний адрес.</p>
+      <h1>{s.cityTitle}</h1>
+      <p>{s.cityLead}</p>
       {error ? <div className="gate-error">{error}</div> : null}
       <div className="gate-stack">
         <button className="choice-button" disabled={busy || geoBusy || !app?.initData} onClick={useCurrentLocation}>
           <span>
-            <strong>{geoBusy ? "Определяю город..." : "Определить автоматически"}</strong>
+            <strong>{geoBusy ? s.cityDetecting : s.cityDetect}</strong>
             <br />
-            <small>Используем геопозицию только для выбора города</small>
+            <small>{s.cityGeoMeta}</small>
           </span>
           <span className="material-symbols-outlined">my_location</span>
         </button>
@@ -896,7 +918,7 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
           className="gate-input"
           autoCapitalize="words"
           autoComplete="address-level2"
-          placeholder="Kyiv, Lviv, Warsaw..."
+          placeholder={s.cityPlaceholder}
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
@@ -917,7 +939,7 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
             </button>
           ))}
         </div>
-        {searching ? <div className="gate-meta">Ищу город...</div> : null}
+        {searching ? <div className="gate-meta">{s.citySearching}</div> : null}
       </div>
     </GateShell>
   );
@@ -926,6 +948,7 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
 function AiMemoryExportGate(props: {
   onSaved: (state: TelegramOnboardingState) => void;
 }): ReactElement {
+  const s = useOnboardingStrings();
   const [busy, setBusy] = useState<Exclude<AiMemoryExportPreference, "undecided"> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -943,7 +966,7 @@ function AiMemoryExportGate(props: {
       app.HapticFeedback?.notificationOccurred("success");
       props.onSaved(state);
     } catch (err) {
-      setError(errorCopy(err));
+      setError(errorCopy(err, s));
       app.HapticFeedback?.notificationOccurred("error");
     } finally {
       setBusy(null);
@@ -954,11 +977,10 @@ function AiMemoryExportGate(props: {
     <main className="ai-memory-screen">
       <div className="ai-memory-content">
         <h1>
-          Would you like to export your memory from other AI apps to give your AI
-          matchmaker more context about you?
+          {s.aiMemoryTitle}
         </h1>
 
-        <div className="ai-logo-fan" aria-label="ChatGPT, Claude and Gemini">
+        <div className="ai-logo-fan" aria-label={s.aiMemoryAria}>
           <div className="ai-logo-card ai-logo-card-claude">
             <ClaudeLogo />
           </div>
@@ -979,14 +1001,14 @@ function AiMemoryExportGate(props: {
           disabled={busy !== null || !app?.initData}
           onClick={() => void choose("accepted")}
         >
-          {busy === "accepted" ? "Connecting..." : "Yes, connect"}
+          {busy === "accepted" ? s.aiMemoryAccepting : s.aiMemoryAccept}
         </button>
         <button
           className="ai-memory-secondary"
           disabled={busy !== null || !app?.initData}
           onClick={() => void choose("declined")}
         >
-          {busy === "declined" ? "Saving..." : "Later"}
+          {busy === "declined" ? s.aiMemorySaving : s.aiMemoryLater}
         </button>
       </div>
     </main>
@@ -1078,6 +1100,7 @@ function HandoffLoading(props: {
   flowToken: string | null;
   onDone: () => void;
 }): ReactElement {
+  const s = useOnboardingStrings();
   const [error, setError] = useState<string | null>(null);
   const [complete, setComplete] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -1091,7 +1114,7 @@ function HandoffLoading(props: {
     if (!props.active) return;
     if (!app?.initData) return;
     if (!props.flowToken) {
-      setError("Сессия Mini App не синхронизирована. Открой вход из чата ещё раз.");
+      setError(s.handoffMissingSession);
       return;
     }
     const delay = new Promise<void>((resolve) => window.setTimeout(resolve, 6000));
@@ -1099,7 +1122,7 @@ function HandoffLoading(props: {
     void Promise.all([delay, post])
       .then(([, result]) => {
         if (!result.botTookOver && !result.completed) {
-          setError("Бот пока не смог продолжить. Попробуй ещё раз.");
+          setError(s.handoffFailed);
           return;
         }
         setComplete(true);
@@ -1109,7 +1132,7 @@ function HandoffLoading(props: {
         }, 900);
       })
       .catch((err: unknown) => {
-        setError(errorCopy(err));
+        setError(errorCopy(err, s));
         app.HapticFeedback?.notificationOccurred("error");
       });
   }, [attempt, props.active, props.flowToken]);
@@ -1118,8 +1141,8 @@ function HandoffLoading(props: {
     <div className="orb-wrap">
       <div>
         <div className="loading-orb" />
-        <h1>{complete ? "Бот уже ждёт тебя" : "Передаю контекст боту"}</h1>
-        <p>{error ?? "Сейчас Gennety продолжит в чате, без лишних экранов."}</p>
+        <h1>{complete ? s.handoffReadyTitle : s.handoffTitle}</h1>
+        <p>{error ?? s.handoffLead}</p>
         {error ? (
           <button
             className="gate-button"
@@ -1129,7 +1152,7 @@ function HandoffLoading(props: {
               setAttempt((current) => current + 1);
             }}
           >
-            Попробовать ещё раз
+            {s.retry}
           </button>
         ) : null}
       </div>
@@ -1138,14 +1161,15 @@ function HandoffLoading(props: {
 }
 
 function DoneScene(): ReactElement {
+  const s = useOnboardingStrings();
   return (
     <div className="orb-wrap">
       <div>
         <div className="loading-orb" />
-        <h1>Готово</h1>
-        <p>Бот уже продолжил онбординг в чате. Закрой Mini App, когда будешь готов.</p>
+        <h1>{s.doneTitle}</h1>
+        <p>{s.doneLead}</p>
         <button className="gate-button done-close-button" onClick={() => app?.close()}>
-          Вернуться в чат
+          {s.backToChat}
         </button>
       </div>
     </div>
@@ -1153,12 +1177,13 @@ function DoneScene(): ReactElement {
 }
 
 function SyncingScene(): ReactElement {
+  const s = useOnboardingStrings();
   return (
     <div className="orb-wrap">
       <div>
         <div className="loading-orb syncing-orb" />
-        <h1>Синхронизирую</h1>
-        <p>Проверяю состояние онбординга перед следующим шагом.</p>
+        <h1>{s.syncingTitle}</h1>
+        <p>{s.syncingLead}</p>
       </div>
     </div>
   );
@@ -1173,45 +1198,12 @@ function GateShell(props: { children: ReactNode }): ReactElement {
   );
 }
 
-function errorCopy(err: unknown): string {
+function errorCopy(err: unknown, strings: OnboardingStrings): string {
   if (err instanceof CalendarApiError) {
-    switch (err.reason) {
-      case "Invalid university email":
-      case "invalid-email":
-        return "Нужна корпоративная или университетская почта.";
-      case "email-linked-to-other-account":
-        return "Эта почта уже привязана к другому Telegram аккаунту.";
-      case "mismatch":
-        return "Код не совпал. Проверь письмо и попробуй ещё раз.";
-      case "expired":
-        return "Код истёк. Запроси новый код ниже.";
-      case "exhausted":
-        return "Слишком много попыток. Запроси новый код.";
-      case "otp-cooldown":
-        return "Новый код уже отправлен. Подожди несколько секунд.";
-      case "otp-send-failed":
-        return "Не удалось отправить письмо. Попробуй ещё раз.";
-      case "terms-required":
-        return "Сначала нужно принять условия.";
-      case "language-required":
-        return "Сначала выбери язык.";
-      case "ai-memory-preference-required":
-        return "Сначала выбери, хочешь ли подключить память из AI-приложений.";
-      case "invalid-ai-memory-preference":
-        return "Не получилось сохранить выбор. Попробуй ещё раз.";
-      case "email-required":
-        return "Сначала подтверди университетскую почту.";
-      case "location-required":
-        return "Сначала выбери город для мэтчей.";
-      case "Invalid initData":
-      case "Missing tma initData":
-      case "Empty initData":
-        return "Открой мини-приложение из чата с ботом, чтобы продолжить.";
-      default:
-        return err.reason ?? err.message;
-    }
+    if (err.reason && strings.errors[err.reason]) return strings.errors[err.reason];
+    return err.reason ?? err.message;
   }
-  return err instanceof Error ? err.message : "Что-то пошло не так. Попробуй ещё раз.";
+  return err instanceof Error ? err.message : strings.genericError;
 }
 
 const root = document.getElementById("root");

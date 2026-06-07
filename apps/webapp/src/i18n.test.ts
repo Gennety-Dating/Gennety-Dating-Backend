@@ -31,6 +31,7 @@ describe("Mini App i18n", () => {
       expect(tr(lang, "locErrGeoUnavailable").length).toBeGreaterThan(0);
       expect(tr(lang, "locErrGeoTimeout").length).toBeGreaterThan(0);
       expect(tr(lang, "locErrGeoUnsupported").length).toBeGreaterThan(0);
+      expect(tr(lang, "locErrMapUnavailable").length).toBeGreaterThan(0);
     }
   });
 });

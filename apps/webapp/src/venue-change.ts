@@ -31,12 +31,13 @@ app?.expand();
 
 const params = new URLSearchParams(location.search);
 const matchId = app?.initDataUnsafe?.start_param ?? params.get("match") ?? "";
-const queryLang = params.get("lang") ?? "";
+const queryLang = params.get("lang") ?? app?.initDataUnsafe?.user?.language_code ?? "";
 const initData = app?.initData ?? "";
 
 type Lang = "en" | "ru" | "uk" | "de" | "pl";
 const SUPPORTED: ReadonlySet<Lang> = new Set(["en", "ru", "uk", "de", "pl"]);
 const lang: Lang = SUPPORTED.has(queryLang as Lang) ? (queryLang as Lang) : "en";
+document.documentElement?.setAttribute("lang", lang);
 
 interface Strings {
   disclaimerTitle: string;

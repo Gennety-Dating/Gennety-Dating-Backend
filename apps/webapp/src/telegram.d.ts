@@ -58,7 +58,7 @@ interface TelegramWebApp {
   /** Parsed init data. `start_param` is the value passed via the t.me link. */
   initDataUnsafe: {
     start_param?: string;
-    user?: { id: number; first_name: string };
+    user?: { id: number; first_name: string; language_code?: string };
   };
   /**
    * Telegram theme tokens. Keys are kebab-cased CSS variables on

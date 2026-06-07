@@ -83,7 +83,8 @@ function applyContentInsets(): void {
 
 const params = new URLSearchParams(location.search);
 const matchId = app?.initDataUnsafe?.start_param ?? params.get("match") ?? "";
-const lang: Lang = pickLang(params.get("lang"));
+const lang: Lang = pickLang(params.get("lang") ?? app?.initDataUnsafe?.user?.language_code);
+document.documentElement?.setAttribute("lang", lang);
 
 const pageEl = document.getElementById("page");
 const titleEl = document.getElementById("title");

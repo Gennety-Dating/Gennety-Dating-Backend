@@ -47,7 +47,8 @@ app?.expand();
 
 const params = new URLSearchParams(location.search);
 const matchId = app?.initDataUnsafe?.start_param ?? params.get("match") ?? "";
-const lang: Lang = pickLang(params.get("lang"));
+const lang: Lang = pickLang(params.get("lang") ?? app?.initDataUnsafe?.user?.language_code);
+document.documentElement?.setAttribute("lang", lang);
 
 const titleEl = document.getElementById("title");
 const searchEl = document.getElementById("search") as HTMLInputElement | null;
@@ -98,7 +99,7 @@ function initMap(): void {
   // If for any reason it didn't load (offline tunnel during dev), surface
   // a graceful error rather than crashing.
   if (!window.L) {
-    if (selectedEl) selectedEl.textContent = "Map library failed to load.";
+    if (selectedEl) selectedEl.textContent = tr(lang, "locErrMapUnavailable");
     return;
   }
 

@@ -67,6 +67,7 @@ interface Strings {
   locErrGeoUnavailable: string;
   locErrGeoTimeout: string;
   locErrGeoUnsupported: string;
+  locErrMapUnavailable: string;
   // Verification Mini App (Phase 6.3 — Persona embedded flow)
   verifyMiniAppLoading: string;
   verifyMiniAppFinishing: string;
@@ -134,6 +135,7 @@ const dict: Record<Lang, Strings> = {
     locErrGeoUnavailable: "Couldn't read your current location. Try typing an address or tapping the map.",
     locErrGeoTimeout: "Location lookup timed out. Try again, or type an address.",
     locErrGeoUnsupported: "Location sharing isn't available in this browser. You can still type an address or tap the map.",
+    locErrMapUnavailable: "The map couldn't load. Check your connection and try again.",
     verifyMiniAppLoading: "Opening verification…",
     verifyMiniAppFinishing: "Almost done. Checking results…",
     verifyMiniAppError: "Couldn't start verification. Please try again.",
@@ -200,6 +202,7 @@ const dict: Record<Lang, Strings> = {
     locErrGeoUnavailable: "Не удалось получить текущую геолокацию. Введи адрес или тапни по карте.",
     locErrGeoTimeout: "Поиск геолокации занял слишком много времени. Попробуй ещё раз или введи адрес.",
     locErrGeoUnsupported: "Геолокация недоступна в этом браузере. Можно ввести адрес или тапнуть по карте.",
+    locErrMapUnavailable: "Не удалось загрузить карту. Проверь соединение и попробуй ещё раз.",
     verifyMiniAppLoading: "Открываем верификацию…",
     verifyMiniAppFinishing: "Готово. Проверяем результат…",
     verifyMiniAppError: "Не удалось запустить проверку. Попробуйте ещё раз.",
@@ -266,6 +269,7 @@ const dict: Record<Lang, Strings> = {
     locErrGeoUnavailable: "Не вдалося отримати поточну геолокацію. Введи адресу або тапни по карті.",
     locErrGeoTimeout: "Пошук геолокації тривав занадто довго. Спробуй ще раз або введи адресу.",
     locErrGeoUnsupported: "Геолокація недоступна в цьому браузері. Можна ввести адресу або тапнути по карті.",
+    locErrMapUnavailable: "Не вдалося завантажити карту. Перевір з'єднання та спробуй ще раз.",
     verifyMiniAppLoading: "Відкриваємо верифікацію…",
     verifyMiniAppFinishing: "Готово. Перевіряємо результат…",
     verifyMiniAppError: "Не вдалося запустити перевірку. Спробуйте ще раз.",
@@ -332,6 +336,7 @@ const dict: Record<Lang, Strings> = {
     locErrGeoUnavailable: "Dein aktueller Standort konnte nicht gelesen werden. Gib eine Adresse ein oder tippe auf die Karte.",
     locErrGeoTimeout: "Standortsuche ist abgelaufen. Versuch es erneut oder gib eine Adresse ein.",
     locErrGeoUnsupported: "Standortfreigabe ist in diesem Browser nicht verfügbar. Du kannst eine Adresse eingeben oder auf die Karte tippen.",
+    locErrMapUnavailable: "Die Karte konnte nicht geladen werden. Prüfe deine Verbindung und versuch es erneut.",
     verifyMiniAppLoading: "Verifizierung wird geöffnet...",
     verifyMiniAppFinishing: "Gleich fertig. Ergebnis wird geprüft...",
     verifyMiniAppError:
@@ -399,6 +404,7 @@ const dict: Record<Lang, Strings> = {
     locErrGeoUnavailable: "Nie udało się odczytać aktualnej lokalizacji. Wpisz adres albo kliknij mapę.",
     locErrGeoTimeout: "Wyszukiwanie lokalizacji trwało zbyt długo. Spróbuj ponownie albo wpisz adres.",
     locErrGeoUnsupported: "Udostępnianie lokalizacji nie jest dostępne w tej przeglądarce. Możesz wpisać adres albo kliknąć mapę.",
+    locErrMapUnavailable: "Nie udało się załadować mapy. Sprawdź połączenie i spróbuj ponownie.",
     verifyMiniAppLoading: "Otwieramy weryfikację...",
     verifyMiniAppFinishing: "Już prawie. Sprawdzamy wynik...",
     verifyMiniAppError:

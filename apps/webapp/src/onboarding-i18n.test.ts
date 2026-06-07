@@ -1,0 +1,34 @@
+import { describe, expect, it } from "vitest";
+import { initialOnboardingLanguage, onboardingStrings } from "./onboarding-i18n.js";
+import type { Lang } from "./i18n.js";
+
+const languages: Lang[] = ["en", "ru", "uk", "de", "pl"];
+
+describe("onboarding i18n", () => {
+  it("prefers the URL language and falls back to Telegram language", () => {
+    expect(initialOnboardingLanguage("pl", "de")).toBe("pl");
+    expect(initialOnboardingLanguage(null, "de")).toBe("de");
+    expect(initialOnboardingLanguage(null, "fr")).toBe("en");
+  });
+
+  it("provides every dynamic onboarding label in all supported languages", () => {
+    for (const lang of languages) {
+      const s = onboardingStrings(lang);
+      expect(s.hookTitle.length).toBeGreaterThan(0);
+      expect(s.exhaustionLines).toHaveLength(3);
+      expect(s.statLabels).toHaveLength(3);
+      expect(s.consentTitle.length).toBeGreaterThan(0);
+      expect(s.emailTitle.length).toBeGreaterThan(0);
+      expect(s.otpLead("student@example.edu")).toContain("student@example.edu");
+      expect(s.cityTitle.length).toBeGreaterThan(0);
+      expect(s.aiMemoryTitle.length).toBeGreaterThan(0);
+      expect(s.doneTitle.length).toBeGreaterThan(0);
+      expect(s.errors["invalid-email"]?.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("does not fall back to English for German and Polish core copy", () => {
+    expect(onboardingStrings("de").consentTitle).not.toBe(onboardingStrings("en").consentTitle);
+    expect(onboardingStrings("pl").aiMemoryTitle).not.toBe(onboardingStrings("en").aiMemoryTitle);
+  });
+});

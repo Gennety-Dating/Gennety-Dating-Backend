@@ -143,6 +143,24 @@ function onboardingMiniAppCopy(
           : "Запустимо Gennety у повноекранному Mini App. Там буде короткий вхід, а потім я продовжу онбординг тут.",
     };
   }
+  if (lang === "de") {
+    return {
+      button: "Gennety öffnen",
+      message:
+        source === "web" || emailVerified
+          ? "Deine E-Mail ist bereits bestätigt. Öffne die Vollbild-Mini-App, um den Einstieg abzuschließen. Danach mache ich hier weiter."
+          : "Öffnen wir Gennety als Vollbild-Mini-App. Dort erledigst du den kurzen Einstieg, danach setze ich das Onboarding hier fort.",
+    };
+  }
+  if (lang === "pl") {
+    return {
+      button: "Otwórz Gennety",
+      message:
+        source === "web" || emailVerified
+          ? "Twój e-mail jest już potwierdzony. Otwórz pełnoekranową Mini App, aby dokończyć wejście, a potem będę kontynuować tutaj."
+          : "Otwórzmy Gennety w pełnoekranowej Mini App. Tam przejdziesz krótki proces wejścia, a potem będę kontynuować onboarding tutaj.",
+    };
+  }
   return {
     button: "Open Gennety",
     message:

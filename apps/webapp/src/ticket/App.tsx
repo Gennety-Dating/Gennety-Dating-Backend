@@ -24,8 +24,9 @@ import { PartialTimer } from "./PartialTimer.js";
 const app = window.Telegram?.WebApp;
 const params = new URLSearchParams(location.search);
 const matchId = params.get("match") ?? "";
-const lang = pickLang(params.get("lang") ?? app?.initDataUnsafe?.start_param ?? null);
+const lang = pickLang(params.get("lang") ?? app?.initDataUnsafe?.user?.language_code ?? null);
 const initData = app?.initData ?? "";
+document.documentElement?.setAttribute("lang", lang);
 
 type Phase =
   | { kind: "loading" }
@@ -48,7 +49,7 @@ function goToScheduling(): void {
 export function App(): ReactElement {
   const s = strings(lang);
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
-  const myName = app?.initDataUnsafe?.user?.first_name ?? "You";
+  const myName = app?.initDataUnsafe?.user?.first_name ?? s.youFallback;
 
   // Ref to the latest phase so imperative MainButton handlers read fresh values.
   const phaseRef = useRef<Phase>(phase);
@@ -213,7 +214,7 @@ function headerTitle(sc: TicketScreen, state: TicketState, s: TicketStrings): st
     case "success":
       return s.successTitle;
     case "partner-paid":
-      return fill(s.partnerPaidTitle, { name: state.partnerName ?? "Your match" });
+      return fill(s.partnerPaidTitle, { name: state.partnerName ?? s.matchFallback });
     case "closed":
       return s.closedTitle;
   }

@@ -25,11 +25,12 @@ app?.expand();
 
 const params = new URLSearchParams(location.search);
 const matchId = app?.initDataUnsafe?.start_param ?? params.get("match") ?? "";
-const queryLang = params.get("lang") ?? "";
+const queryLang = params.get("lang") ?? app?.initDataUnsafe?.user?.language_code ?? "";
 
 type Lang = "en" | "ru" | "uk" | "de" | "pl";
 const SUPPORTED_LANGS: ReadonlySet<Lang> = new Set(["en", "ru", "uk", "de", "pl"]);
 const lang: Lang = SUPPORTED_LANGS.has(queryLang as Lang) ? (queryLang as Lang) : "en";
+document.documentElement?.setAttribute("lang", lang);
 
 type SecondDate = "yes" | "maybe" | "no";
 

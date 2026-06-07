@@ -678,6 +678,8 @@ function domainFromEmail(email: string): string {
 function alreadyCompleteCopy(language: Language | null): string {
   if (language === "ru") return "Онбординг Gennety уже завершён.";
   if (language === "uk") return "Онбординг Gennety вже завершено.";
+  if (language === "de") return "Das Gennety-Onboarding ist bereits abgeschlossen.";
+  if (language === "pl") return "Onboarding Gennety jest już ukończony.";
   return "Gennety onboarding is already complete.";
 }
 

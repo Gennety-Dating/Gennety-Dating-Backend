@@ -238,7 +238,8 @@ function boot(): void {
   if (!root) return;
 
   const params = new URLSearchParams(location.search);
-  const lang: Lang = pickLang(params.get("lang"));
+  const lang: Lang = pickLang(params.get("lang") ?? app?.initDataUnsafe?.user?.language_code);
+  document.documentElement?.setAttribute("lang", lang);
 
   // Initial paint — verification.html ships the loading screen inline, but
   // we re-render so language picks land before the network call returns.
