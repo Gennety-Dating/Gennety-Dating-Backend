@@ -65,7 +65,7 @@ export function ticketBundleFor(
 
 /** Age boundaries */
 export const MIN_AGE = 18;
-export const MAX_AGE = 35;
+export const MAX_AGE = 55;
 
 /** Edit profile length limits */
 export const MAX_BIO_LENGTH = 500;

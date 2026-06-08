@@ -658,7 +658,7 @@ describe("Menu — Edit Search Preferences", () => {
   it("handleEditAgeRangeInput rejects range above MAX_AGE", async () => {
     const ctx = createMockCtx({
       session: { menuState: "edit_age_range" },
-      messageText: "20-40",
+      messageText: "20-60",
     });
     await handleEditAgeRangeInput(ctx);
     expect(prisma.profile.update).not.toHaveBeenCalled();

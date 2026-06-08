@@ -576,7 +576,7 @@ const TOOLS = [
         type: "object",
         properties: {
           first_name: { type: "string", description: "User's first name" },
-          age: { type: "integer", description: "User's age (18-35)" },
+          age: { type: "integer", description: `User's age (${MIN_AGE}-${MAX_AGE})` },
           gender: {
             type: "string",
             enum: ["male", "female"],
