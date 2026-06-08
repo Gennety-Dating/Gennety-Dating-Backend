@@ -21,6 +21,7 @@ export default defineConfig({
         onboarding: resolve(__dirname, "onboarding.html"),
         verification: resolve(__dirname, "verification.html"),
         ticket: resolve(__dirname, "ticket.html"),
+        tickets: resolve(__dirname, "tickets.html"),
         "venue-change": resolve(__dirname, "venue-change.html"),
       },
     },

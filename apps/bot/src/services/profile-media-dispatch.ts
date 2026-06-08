@@ -1,5 +1,5 @@
 import type { Api, RawApi } from "grammy";
-import type { InputMediaPhoto, MessageEntity } from "grammy/types";
+import type { InputMediaPhoto, InputMediaVideo, MessageEntity } from "grammy/types";
 import type { ProfileMedia } from "@gennety/shared";
 import { sendLivePhoto } from "./telegram-live-photo.js";
 
@@ -16,7 +16,7 @@ interface InputMediaLivePhoto {
   caption_entities?: MessageEntity[];
 }
 
-type InputProfileMedia = InputMediaPhoto | InputMediaLivePhoto;
+type InputProfileMedia = InputMediaPhoto | InputMediaVideo | InputMediaLivePhoto;
 
 export const MAX_TELEGRAM_MEDIA_GROUP_SIZE = 10;
 
@@ -42,6 +42,15 @@ function toInputMedia(item: ProfileMedia, caption: MediaCaption): InputProfileMe
       ...captionFields,
     };
   }
+  if (item.type === "video") {
+    // `thumbnail` only accepts a freshly-uploaded InputFile, not a stored
+    // file_id, so we let Telegram auto-generate the poster from the video.
+    return {
+      type: "video",
+      media: item.video,
+      ...captionFields,
+    };
+  }
   return {
     type: "photo",
     media: item.photo,
@@ -49,7 +58,22 @@ function toInputMedia(item: ProfileMedia, caption: MediaCaption): InputProfileMe
   };
 }
 
-function toStaticInputMedia(item: ProfileMedia, caption: MediaCaption): InputMediaPhoto {
+/**
+ * Static (live-photo-free) representation for a media group. Live photos and
+ * photos collapse to their static frame; videos stay videos (a media group may
+ * mix photos and videos).
+ */
+function toStaticInputMedia(
+  item: ProfileMedia,
+  caption: MediaCaption,
+): InputMediaPhoto | InputMediaVideo {
+  if (item.type === "video") {
+    return {
+      type: "video",
+      media: item.video,
+      ...captionOptions(caption),
+    };
+  }
   return {
     type: "photo",
     media: item.photo,
@@ -65,7 +89,12 @@ async function sendStaticFallback(
 ): Promise<void> {
   if (media.length === 0) return;
   if (media.length === 1) {
-    await api.sendPhoto(chatId, media[0]!.photo, captionOptions(caption));
+    const only = media[0]!;
+    if (only.type === "video") {
+      await api.sendVideo(chatId, only.video, captionOptions(caption));
+    } else {
+      await api.sendPhoto(chatId, only.photo, captionOptions(caption));
+    }
     return;
   }
   const fallbackMedia = media.map((item, index) =>
@@ -104,6 +133,11 @@ export async function sendProfileMediaCard(
         console.warn("sendLivePhoto failed, falling back to static photo:", err);
         await api.sendPhoto(chatId, item.photo, captionOptions(caption));
       }
+      return;
+    }
+
+    if (item.type === "video") {
+      await api.sendVideo(chatId, item.video, captionOptions(caption));
       return;
     }
 

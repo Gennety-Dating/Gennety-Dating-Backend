@@ -29,10 +29,14 @@ function buildMainMenuKeyboardFor(
     kb.text(pauseLabel, pauseAction);
   }
 
-  return kb
-    .text(t(lang, "menuSettings"), "menu:settings")
-    .row()
-    .text(t(lang, "menuHelp"), "menu:help");
+  kb.text(t(lang, "menuSettings"), "menu:settings").row();
+
+  // Ticket wallet entry — only when the Date Ticket feature is live.
+  if (env.TICKET_FEATURE_ENABLED) {
+    kb.text(t(lang, "menuMyTickets"), "menu:tickets").row();
+  }
+
+  return kb.text(t(lang, "menuHelp"), "menu:help");
 }
 
 /** Render the persistent main menu for a completed user. */

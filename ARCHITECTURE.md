@@ -199,6 +199,7 @@ Columns (≈ 35; grouped by purpose):
 | Push (mobile) | `pushToken`, `pushPlatform` |
 | Verification | `verificationStatus`, `personaInquiryId` (unique), `verifiedAt`, `verificationSkippedAt`, `verifiedSelfiePath`, `faceMatchScore`, `faceMatchedAt`, `selfiePath` (legacy) |
 | Attribution | `referralSource` (`tg:start_param` / `mobile:utm=…` / `referral:USER_ID`) |
+| Tickets (feature-flagged) | `ticketBalance` — materialized ticket-wallet balance; running sum of `TicketLedger.delta`. See `ticket_ledger`. |
 
 Indexes: `(status, reEngagementNextAt)`, `(status, suspendedUntil)`.
 
@@ -332,6 +333,17 @@ the time-boxed carve-out to the "NO IN-APP CHAT" invariant — relayed content i
 fully logged and each relayed message carries an in-line Report button. Written
 by `handlers/date/coordination.ts`; inert unless `COORDINATION_FEATURE_ENABLED`.
 
+### `ticket_ledger` (feature-flagged)
+
+Append-only audit of every ticket-wallet movement (`userId`, `delta`, `reason`
+∈ `photo_bonus`/`video_bonus`/`store_purchase`/`spend_match`/`refund`, optional
+`matchId`/`amountCents`/`bundleSize`, `createdAt`; `onDelete: Cascade` from
+`users`). The running sum of `delta` equals `User.ticketBalance`, which is
+materialized for fast reads; both are written in the same transaction by
+`services/ticket-wallet.ts`. One-time onboarding bonuses are idempotent via
+`Profile.photoBonusTicketAt` / `videoBonusTicketAt`. Indexed `(userId, createdAt)`.
+Inert unless `TICKET_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b.
+
 ### `profiler_answers`
 
 One row per (user, Profiler question) — `questionId`, `priority`
@@ -435,8 +447,12 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | POST | `/v1/matches/:id/safety-ack` | Acknowledge T-1.5 h safety brief |
 | POST | `/v1/matches/:id/report` | File post-match report (LLM-triaged) |
 | GET  | `/v1/matches/:id/ticket/state` | Date Ticket Mini App screen state (status/price/gender/partner-paid/expiry). **Telegram `initData` HMAC auth** (not JWT) — mounted before the JWT `matches` router. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
-| POST | `/v1/matches/:id/ticket/intent` | Create a (mock) payment intent for a ticket purchase (`scope: self\|both`; `both` male-only). `initData` HMAC auth. |
+| POST | `/v1/matches/:id/ticket/intent` | Create a (mock) payment intent for a ticket purchase (`scope: self\|both\|partner`; `both`/`partner` male-only). `initData` HMAC auth. |
 | POST | `/v1/matches/:id/ticket/confirm` | Confirm "payment" → mark paid (atomic/idempotent); unlocks scheduling when both paid. `initData` HMAC auth. |
+| POST | `/v1/matches/:id/ticket/use` | Spend ticket(s) from `User.ticketBalance` to settle the gate (`scope: self\|both\|partner`) instead of paying — atomic, guarded; 409 on insufficient balance. `initData` HMAC auth. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
+| GET  | `/v1/tickets/wallet` | Ticket store Mini App — current balance + per-ticket price. `initData` HMAC auth; feature-flagged (`TICKET_FEATURE_ENABLED`, else 404). |
+| POST | `/v1/tickets/store/intent` | Create a (mock) bundle payment intent (`count: 1\|3\|6`). `initData` HMAC auth. |
+| POST | `/v1/tickets/store/confirm` | Confirm bundle "payment" → credit `ticketBalance` (+`TicketLedger`). `initData` HMAC auth. |
 | GET  | `/v1/countdown` | Status banner / next-batch countdown |
 | GET  | `/v1/calendar/state` | Calendar Mini App snapshot — slot allowlist, both sides' picks, agreed time (Telegram `initData` HMAC auth; polled by the Mini App for live peer visibility) |
 | POST | `/v1/calendar/pick` | Calendar Mini App availability submission — accepts `pickedIsos: string[]` (legacy single `pickedIso` still tolerated). Response carries `agreedTime` (set on single-overlap auto-lock), `overlapCandidates: string[]` (set when intersection > 1, Mini App shows confirm card), `mySlots`, `peerSlots`, `bothPicked`. Telegram `initData` HMAC auth. |
@@ -472,8 +488,10 @@ Top-level routers: `audience`, `algorithm`, `gender`, `retention`, `dates`,
 Telegram-uploaded profile photos are **not** stored in Supabase by the bot
 — their static frames live as Telegram `file_id`s in `Profile.photos`.
 Richer Telegram display media lives additively in `Profile.profileMedia[]`:
-`{ type: "photo", photo }` or
-`{ type: "live_photo", photo, livePhoto, ...metadata }`. When
+`{ type: "photo", photo }`, `{ type: "live_photo", photo, livePhoto, ...metadata }`,
+or `{ type: "video", video, ...metadata }` (display-only — excluded from
+`photos[]` and from face-match, so the `photos[i] ↔ photoFaceScores[i]`
+invariant holds). When
 `profileMedia[]` is empty, renderers normalize legacy `photos[]` into photo
 items. Verification and face-match still read `photos[]` only, preserving the
 `photos[i] ↔ photoFaceScores[i]` invariant. The mobile app mirrors static

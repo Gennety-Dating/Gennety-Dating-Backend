@@ -1567,7 +1567,7 @@ describe("POST /v1/me/photos", () => {
       psychologicalSummary: null,
       ageRangeMin: null,
       ageRangeMax: null,
-      photos: ["a.jpg", "b.jpg", "c.jpg", "d.jpg"],
+      photos: ["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg", "f.jpg"],
       matchRadius: "campus_only",
     };
     const res = await request(app)
@@ -1576,7 +1576,7 @@ describe("POST /v1/me/photos", () => {
       .attach("photo", JPEG, { filename: "p.jpg", contentType: "image/jpeg" });
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/limit/i);
-    expect(res.body.max).toBe(4);
+    expect(res.body.max).toBe(6);
   });
 
   it("400 when vision says not a valid face", async () => {

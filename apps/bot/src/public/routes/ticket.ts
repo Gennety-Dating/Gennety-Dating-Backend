@@ -2,7 +2,11 @@ import { Router, type Request, type Response } from "express";
 import type { Api, RawApi } from "grammy";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
-import { getTicketState, applyTicketPayment } from "../../handlers/matching/ticket-gate.js";
+import {
+  getTicketState,
+  applyTicketPayment,
+  useTicketFromBalance,
+} from "../../handlers/matching/ticket-gate.js";
 import {
   createTicketIntent,
   verifyTicketPayment,
@@ -73,7 +77,7 @@ export function createTicketRouter(api: Api<RawApi>): Router {
       res.status(stateRes.reason === "not-participant" ? 403 : 404).json({ error: stateRes.reason });
       return;
     }
-    if (scope === "both" && stateRes.state.myGender !== "male") {
+    if ((scope === "both" || scope === "partner") && stateRes.state.myGender !== "male") {
       res.status(403).json({ error: "scope-not-allowed" });
       return;
     }
@@ -132,6 +136,41 @@ export function createTicketRouter(api: Api<RawApi>): Router {
     res.status(200).json({ ok: true, ...result.state });
   });
 
+  // Spend a ticket from the wallet instead of paying. No payment intent — the
+  // server re-validates balance + scope and consumes from `User.ticketBalance`.
+  router.post("/use", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+    const matchId = matchIdOf(req);
+    if (!matchId) {
+      res.status(404).json({ error: "match-not-found" });
+      return;
+    }
+    const scope = parseScope(req.body);
+    if (!scope) {
+      res.status(400).json({ error: "scope must be 'self', 'both' or 'partner'" });
+      return;
+    }
+
+    const result = await useTicketFromBalance(api, BigInt(auth.user.id), matchId, scope);
+    if (!result.ok) {
+      const status =
+        result.reason === "not-participant"
+          ? 403
+          : result.reason === "match-not-found"
+            ? 404
+            : result.reason === "insufficient-balance"
+              ? 409
+              : 400;
+      res.status(status).json({ error: result.reason });
+      return;
+    }
+    res.status(200).json({ ok: true, ...result.state });
+  });
+
   return router;
 }
 
@@ -143,7 +182,7 @@ function matchIdOf(req: Request): string | null {
 
 function parseScope(body: unknown): TicketScope | null {
   const scope = (body as { scope?: unknown })?.scope;
-  return scope === "self" || scope === "both" ? scope : null;
+  return scope === "self" || scope === "both" || scope === "partner" ? scope : null;
 }
 
 type AuthOk = { ok: true; user: { id: number } };

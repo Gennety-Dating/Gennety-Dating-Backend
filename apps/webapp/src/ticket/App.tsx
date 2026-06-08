@@ -4,6 +4,7 @@ import {
   fetchTicketState,
   createTicketIntent,
   confirmTicketPayment,
+  useTicketFromWallet,
   CalendarApiError,
   type TicketState,
   type TicketIntent,
@@ -13,8 +14,10 @@ import { pickLang, strings, fill, type TicketStrings } from "./i18n.js";
 import {
   deriveScreen,
   deriveOfferButtons,
+  deriveCoverPartnerButtons,
   formatUsd,
   type TicketScreen,
+  type OfferButton,
 } from "./ticket-state.js";
 import { Ticket3D } from "./Ticket3D.js";
 import { MockPayment } from "./MockPayment.js";
@@ -77,7 +80,9 @@ export function App(): ReactElement {
   // land without the user reopening the Mini App.
   const screen: TicketScreen | null = phase.kind === "view" ? deriveScreen(phase.state) : null;
   useEffect(() => {
-    if (screen !== "waiting") return;
+    // Poll while waiting on the partner (also on the male's "cover-partner"
+    // screen, where the partner may pay herself in the meantime).
+    if (screen !== "waiting" && screen !== "cover-partner") return;
     const id = setInterval(() => void load(), 4000);
     return () => clearInterval(id);
   }, [screen, load]);
@@ -94,6 +99,30 @@ export function App(): ReactElement {
       }
     },
     [s],
+  );
+
+  // Spend a wallet ticket (no payment screen) — settles the gate immediately.
+  const spendTicket = useCallback(
+    async (scope: TicketScope): Promise<void> => {
+      haptic("light");
+      try {
+        const next = await useTicketFromWallet(initData, matchId, scope);
+        haptic("success");
+        setPhase({ kind: "view", state: next });
+      } catch (err) {
+        haptic("error");
+        app?.showAlert(errorText(err, s));
+      }
+    },
+    [s],
+  );
+
+  const onOfferButton = useCallback(
+    (state: TicketState, b: OfferButton): void => {
+      if (b.action === "use") void spendTicket(b.scope);
+      else void startPayment(state, b.scope);
+    },
+    [spendTicket, startPayment],
   );
 
   const completePayment = useCallback(async (): Promise<void> => {
@@ -164,7 +193,11 @@ export function App(): ReactElement {
 
         <Ticket3D myName={myName} partnerName={state.partnerName} strings={s} />
 
-        {sc === "waiting" && (
+        {(sc === "offer" || sc === "cover-partner") && state.myBalance > 0 && (
+          <p className="ticket-balance-note">{fill(s.balanceNote, { n: String(state.myBalance) })}</p>
+        )}
+
+        {(sc === "waiting" || sc === "cover-partner") && (
           <PartialTimer expiresAt={state.expiresAt} template={s.waitingTimer} />
         )}
       </div>
@@ -173,14 +206,32 @@ export function App(): ReactElement {
         {sc === "offer" &&
           deriveOfferButtons(state).map((b) => (
             <button
-              key={b.scope}
+              key={`${b.action}:${b.scope}`}
               type="button"
               className={b.primary ? "btn-primary" : "btn-secondary"}
-              onClick={() => void startPayment(state, b.scope)}
+              onClick={() => onOfferButton(state, b)}
             >
-              {offerLabel(b.scope, b.amountCents, state, s)}
+              {offerLabel(b, state, s)}
             </button>
           ))}
+
+        {sc === "cover-partner" && (
+          <>
+            {deriveCoverPartnerButtons(state).map((b) => (
+              <button
+                key={`${b.action}:${b.scope}`}
+                type="button"
+                className={b.primary ? "btn-primary" : "btn-secondary"}
+                onClick={() => onOfferButton(state, b)}
+              >
+                {offerLabel(b, state, s)}
+              </button>
+            ))}
+            <button type="button" className="btn-text" onClick={() => app?.close()}>
+              {s.justWait}
+            </button>
+          </>
+        )}
 
         {(sc === "success" || sc === "partner-paid" || sc === "closed") && (
           <button type="button" className="btn-primary" onClick={goToScheduling}>
@@ -198,9 +249,15 @@ export function App(): ReactElement {
   );
 }
 
-function offerLabel(scope: TicketScope, amountCents: number, state: TicketState, s: TicketStrings): string {
-  const amount = formatUsd(amountCents);
-  if (scope === "both") return fill(s.payBoth, { amount });
+function offerLabel(b: OfferButton, state: TicketState, s: TicketStrings): string {
+  if (b.action === "use") {
+    if (b.scope === "both") return s.useBoth;
+    if (b.scope === "partner") return s.usePartner;
+    return s.useSelf;
+  }
+  const amount = formatUsd(b.amountCents);
+  if (b.scope === "both") return fill(s.payBoth, { amount });
+  if (b.scope === "partner") return fill(s.payPartner, { amount });
   // "self" wording differs for a single-option (female) vs the male's secondary.
   return state.myGender === "male" ? fill(s.paySelf, { amount }) : fill(s.paySelfOnly, { amount });
 }
@@ -209,6 +266,8 @@ function headerTitle(sc: TicketScreen, state: TicketState, s: TicketStrings): st
   switch (sc) {
     case "offer":
       return s.heading;
+    case "cover-partner":
+      return s.coverPartnerTitle;
     case "waiting":
       return s.waitingTitle;
     case "success":
@@ -224,6 +283,8 @@ function headerSub(sc: TicketScreen, state: TicketState, s: TicketStrings): stri
   switch (sc) {
     case "offer":
       return s.sub;
+    case "cover-partner":
+      return fill(s.coverPartnerSub, { name: state.partnerName ?? s.matchFallback });
     case "waiting":
       return s.waitingSub;
     case "success":

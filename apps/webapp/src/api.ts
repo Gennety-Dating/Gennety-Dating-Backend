@@ -409,7 +409,7 @@ export async function postVerificationEvent(
 // Date Ticket Mini App API (premium post-accept gate, mock payment)
 // ---------------------------------------------------------------------------
 
-export type TicketScope = "self" | "both";
+export type TicketScope = "self" | "both" | "partner";
 
 export interface TicketState {
   ticketStatus: "pending" | "partial" | "completed" | "refunded" | "expired";
@@ -423,6 +423,8 @@ export interface TicketState {
   bothPaid: boolean;
   expiresAt: string | null;
   paymentMode: "mock" | "stripe";
+  /** Actor's ticket-wallet balance — drives the "use a ticket" buttons. */
+  myBalance: number;
 }
 
 export interface TicketIntent {
@@ -473,6 +475,80 @@ export async function confirmTicketPayment(
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as TicketState & { ok: true };
+}
+
+/** Spend ticket(s) from the wallet to settle the gate (no payment). */
+export async function useTicketFromWallet(
+  initData: string,
+  matchId: string,
+  scope: TicketScope,
+): Promise<TicketState> {
+  const res = await fetch(`${ticketBase(matchId)}/use`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
+    body: JSON.stringify({ scope }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as TicketState & { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Ticket store / wallet Mini App API (pre-purchase bundles, mock payment)
+// ---------------------------------------------------------------------------
+
+export interface WalletState {
+  balance: number;
+  priceCents: number;
+}
+
+export interface StoreBundle {
+  count: number;
+  priceCents: number;
+}
+
+export interface StoreIntent {
+  clientSecret: string;
+  amountCents: number;
+  count: number;
+  mode: "mock" | "stripe";
+}
+
+const storeBase = `${apiBase}/v1/tickets`;
+
+export async function fetchWalletState(initData: string): Promise<WalletState> {
+  const res = await fetch(`${storeBase}/wallet`, {
+    method: "GET",
+    headers: { Authorization: `tma ${initData}` },
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as WalletState & { ok: true };
+}
+
+export async function createStoreIntent(
+  initData: string,
+  count: number,
+): Promise<StoreIntent> {
+  const res = await fetch(`${storeBase}/store/intent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
+    body: JSON.stringify({ count }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as StoreIntent;
+}
+
+export async function confirmStorePurchase(
+  initData: string,
+  count: number,
+  clientSecret: string,
+): Promise<WalletState> {
+  const res = await fetch(`${storeBase}/store/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
+    body: JSON.stringify({ count, clientSecret }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as WalletState & { ok: true };
 }
 
 // ---------------------------------------------------------------------------

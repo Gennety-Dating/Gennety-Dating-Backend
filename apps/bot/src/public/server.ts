@@ -20,6 +20,7 @@ import { createLocationRouter } from "./routes/location.js";
 import { createTelegramOnboardingRouter } from "./routes/telegram-onboarding.js";
 import { createVerificationMiniAppRouter } from "./routes/verification-mini-app.js";
 import { createTicketRouter } from "./routes/ticket.js";
+import { createTicketStoreRouter } from "./routes/tickets.js";
 import { createVenueChangeRouter } from "./routes/venue-change.js";
 
 /**
@@ -62,6 +63,7 @@ let locationRouter: ReturnType<typeof createLocationRouter> | null = null;
 let telegramOnboardingRouter: ReturnType<typeof createTelegramOnboardingRouter> | null = null;
 let verificationMiniAppRouter: ReturnType<typeof createVerificationMiniAppRouter> | null = null;
 let ticketRouter: ReturnType<typeof createTicketRouter> | null = null;
+let ticketStoreRouter: ReturnType<typeof createTicketStoreRouter> | null = null;
 let venueChangeRouter: ReturnType<typeof createVenueChangeRouter> | null = null;
 app.use("/v1/webhooks/persona", (req, res, next) => {
   if (!injectedBotApi) {
@@ -164,6 +166,17 @@ app.use("/v1/matches/:matchId/ticket", (req, res, next) => {
   }
   if (!ticketRouter) ticketRouter = createTicketRouter(injectedBotApi);
   ticketRouter(req, res, next);
+});
+
+// Ticket store / wallet Mini App — TMA-authed, feature-flagged. No bot api
+// needed (no DMs), so it doesn't depend on injectedBotApi.
+app.use("/v1/tickets", (req, res, next) => {
+  if (!env.TICKET_FEATURE_ENABLED) {
+    res.status(404).json({ error: "tickets-disabled" });
+    return;
+  }
+  if (!ticketStoreRouter) ticketStoreRouter = createTicketStoreRouter();
+  ticketStoreRouter(req, res, next);
 });
 
 // Liveness/readiness probe — unauthenticated, intentionally cheap.

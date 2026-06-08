@@ -5,12 +5,14 @@ import type { SessionData } from "@gennety/shared";
 import {
   MIN_PHOTOS,
   MAX_PHOTOS,
+  PHOTO_BONUS_TICKET_THRESHOLD,
   MAX_DUMP_BUFFER_CHARS,
   magicContextPrompt,
   DEFAULT_SESSION,
   normalizeProfileMedia,
   t,
   type ProfileMedia,
+  type ProfileVideoMedia,
 } from "@gennety/shared";
 import {
   runAgentTurn,
@@ -24,13 +26,21 @@ import { dispatchToChat } from "../../chat-queue.js";
 import { sendVerificationCTA } from "./verification.js";
 import {
   getMessageLivePhoto,
+  getMessageVideo,
   incomingLivePhotoMedia,
   incomingPhotoMedia,
+  incomingVideoMedia,
   type IncomingProfileMedia,
 } from "../../services/telegram-profile-media.js";
 import { profileMediaToJson } from "../../services/profile-media-json.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { profileAnalysisSteps } from "../../services/analysis-status.js";
+import { env } from "../../config.js";
+import {
+  grantPhotoBonusIfEligible,
+  grantVideoBonusIfEligible,
+} from "../../services/ticket-wallet.js";
+import { sendTicketRewardDM } from "../../services/ticket-reward.js";
 
 /** Backward compatibility for confirmation buttons sent before auto-flush. */
 const DUMP_DONE_CALLBACK = "dump:done";
@@ -88,6 +98,27 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
       extracted.media,
       ctx.message?.media_group_id,
     );
+    return;
+  }
+
+  // ---- Video message (display-only profile media; earns a ticket bonus) ----
+  const video = getMessageVideo(ctx.message);
+  if (video) {
+    if (ctx.session.awaitingContextDump) {
+      ctx.session.expectingPhoto = false;
+      await ctx.reply(contextDumpPhotoNudge(ctx.session.language));
+      return;
+    }
+    const extracted = incomingVideoMedia(video);
+    if (!extracted.ok) {
+      await ctx.reply(
+        extracted.reason === "too_long"
+          ? t(ctx.session.language, "videoTooLong")
+          : t(ctx.session.language, "videoTooLarge"),
+      );
+      return;
+    }
+    await handleProfileVideoMessage(ctx, telegramId, extracted.media);
     return;
   }
 
@@ -560,6 +591,80 @@ async function handleProfileMediaMessage(
 }
 
 /**
+ * Persist a profile video (display-only — no face validation, not counted
+ * toward MIN_PHOTOS) and grant the one-time "added a video" ticket bonus.
+ * The video is appended to `pendingProfileMedia` so a later photo upload's
+ * `persistPhotos` keeps it (the static-photo alignment with `photos[]` is
+ * preserved because video items are excluded from `staticPhotosFromProfileMedia`).
+ */
+async function handleProfileVideoMessage(
+  ctx: BotContext,
+  telegramId: bigint,
+  media: ProfileVideoMedia,
+): Promise<void> {
+  if (!ctx.chat) return;
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (!user) return;
+
+  ctx.session.pendingProfileMedia = [
+    ...normalizeProfileMedia(ctx.session.pendingProfileMedia, ctx.session.pendingPhotos),
+    media,
+  ];
+  await persistPhotos(
+    telegramId,
+    ctx.session.pendingPhotos,
+    ctx.session.pendingProfileMedia,
+  );
+
+  const res = await grantVideoBonusIfEligible(user.id);
+  if (res.granted) {
+    await sendTicketRewardDM(ctx.api, ctx.chat.id, ctx.session.language, "video", res.balance);
+  } else {
+    await ctx.reply(videoSavedAck(ctx.session.language));
+  }
+}
+
+/**
+ * Grant the one-time "4+ photos" ticket bonus if the persisted photo count now
+ * qualifies, and DM the celebratory reward. No-op when the feature flag is off
+ * or the bonus was already granted (idempotent in `ticket-wallet`).
+ */
+async function maybeGrantPhotoBonus(
+  api: Api,
+  chatId: number,
+  telegramId: bigint,
+  lang: SessionData["language"],
+): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (!user) return;
+  const res = await grantPhotoBonusIfEligible(user.id);
+  if (res.granted) {
+    await sendTicketRewardDM(api, chatId, lang, "photo", res.balance);
+  }
+}
+
+function videoSavedAck(language: SessionData["language"]): string {
+  switch (language) {
+    case "ru":
+      return "Видео добавлено в профиль ✅";
+    case "uk":
+      return "Відео додано до профілю ✅";
+    case "de":
+      return "Video zum Profil hinzugefügt ✅";
+    case "pl":
+      return "Wideo dodane do profilu ✅";
+    default:
+      return "Video added to your profile ✅";
+  }
+}
+
+/**
  * Handle one photo frame — either a single message or one frame of a
  * Telegram album. Validates + persists inline so session state stays
  * consistent under `sequentializeByChat`, then (re)arms the debounced
@@ -782,6 +887,9 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
 
     await replyText(acc.api, acc.chatId, result.reply);
 
+    // One-time "4+ photos" ticket bonus (idempotent, flag-gated).
+    await maybeGrantPhotoBonus(acc.api, acc.chatId, acc.telegramId, session.language);
+
     if (result.onboardingComplete) {
       // Re-fetch freshly to show the menu in the user's language
       const language = session.language;
@@ -832,7 +940,17 @@ function photoProgressMessage(count: number): string {
     const remaining = MIN_PHOTOS - count;
     return `Total verified: ${count}/${MIN_PHOTOS} minimum. Need ${remaining} more to hit the minimum — ask for ${remaining} more photo(s).`;
   }
-  return `Total verified: ${count}. Minimum of ${MIN_PHOTOS} is met. STOP asking for more photos. Briefly mention the user may send one more if they want, then default to moving on — do NOT chain repeated "one more" requests.`;
+
+  // Past the minimum: make ONE warm, optional offer — never chain "one more".
+  if (env.TICKET_FEATURE_ENABLED) {
+    if (count < PHOTO_BONUS_TICKET_THRESHOLD) {
+      const toBonus = PHOTO_BONUS_TICKET_THRESHOLD - count;
+      return `Total verified: ${count}. Minimum of ${MIN_PHOTOS} is met. Make ONE warm, low-pressure offer (don't repeat it on later batches): with ${toBonus} more photo(s) — ${PHOTO_BONUS_TICKET_THRESHOLD} total — they earn a FREE date ticket (each date costs 1 ticket, normally paid). They can also add a short profile VIDEO for another free ticket. Make clear it's optional — if they'd rather continue, move on. Do NOT chain repeated "one more" requests.`;
+    }
+    return `Total verified: ${count}. The ${PHOTO_BONUS_TICKET_THRESHOLD}+ photo ticket bonus is already earned. Briefly acknowledge, mention they may add up to ${MAX_PHOTOS} photos or a profile VIDEO (another free ticket) if they like, then default to moving on. Do NOT chain repeated "one more" requests.`;
+  }
+
+  return `Total verified: ${count}. Minimum of ${MIN_PHOTOS} is met. STOP asking for more photos. Briefly mention the user may send one more if they want (up to ${MAX_PHOTOS}), then default to moving on — do NOT chain repeated "one more" requests.`;
 }
 
 function markOnboardingComplete(session: SessionData): void {

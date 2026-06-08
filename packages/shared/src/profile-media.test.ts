@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeProfileMedia,
   profileLivePhotoMedia,
+  profileVideoMedia,
+  profileMediaHasVideo,
   staticPhotosFromProfileMedia,
 } from "./profile-media.js";
 
@@ -75,5 +77,37 @@ describe("profile media normalization", () => {
     ];
 
     expect(staticPhotosFromProfileMedia(media)).toEqual(["p1", "static_2"]);
+  });
+
+  it("keeps a video item alongside photos (static count still aligns)", () => {
+    const result = normalizeProfileMedia(
+      [
+        { type: "photo", photo: "p1" },
+        { type: "photo", photo: "p2" },
+        { type: "video", video: "vid_1", duration: 12 },
+      ],
+      ["p1", "p2"],
+    );
+    expect(result).toEqual([
+      { type: "photo", photo: "p1" },
+      { type: "photo", photo: "p2" },
+      { type: "video", video: "vid_1", duration: 12 },
+    ]);
+  });
+
+  it("excludes video from static verification photos (face-match invariant)", () => {
+    const media = [
+      { type: "photo" as const, photo: "p1" },
+      profileVideoMedia({ video: "vid_1" }),
+      profileLivePhotoMedia({ photo: "static_2", livePhoto: "live_2" }),
+    ];
+    expect(staticPhotosFromProfileMedia(media)).toEqual(["p1", "static_2"]);
+    expect(profileMediaHasVideo(media)).toBe(true);
+  });
+
+  it("rejects a video item without a file id", () => {
+    expect(
+      normalizeProfileMedia([{ type: "video", video: "" }], ["p1"]),
+    ).toEqual([{ type: "photo", photo: "p1" }]);
   });
 });

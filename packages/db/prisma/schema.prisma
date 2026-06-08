@@ -202,6 +202,14 @@ model User {
   /// — the analytics layer parses prefixes. Never overwritten after the
   /// initial write so growth attribution stays stable across re-onboarding.
   referralSource      String?        @map("referral_source")
+  /// Materialized ticket wallet balance (Date Ticket monetization, gated by
+  /// `TICKET_FEATURE_ENABLED`). A ticket is spent at the §3.5b date gate; it
+  /// is topped up by bundle purchases (the store Mini App) and one-time
+  /// onboarding bonuses (4+ profile photos, adding a profile video). This is
+  /// the materialized counter — every change is written atomically alongside a
+  /// `TicketLedger` audit row in the same transaction, so the ledger is the
+  /// append-only source of truth and this column is its running sum.
+  ticketBalance       Int            @default(0) @map("ticket_balance")
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
 
@@ -209,6 +217,7 @@ model User {
   onboardingProgress OnboardingProgress?
   sessions UserSession[]
   profilerAnswers ProfilerAnswer[]
+  ticketLedger TicketLedger[]
 
   matchesAsA Match[] @relation("MatchUserA")
   matchesAsB Match[] @relation("MatchUserB")
@@ -225,6 +234,39 @@ model User {
   @@index([status, reEngagementNextAt])
   @@index([status, suspendedUntil])
   @@map("users")
+}
+
+/// Append-only audit log of every ticket-wallet movement (Date Ticket
+/// monetization, gated by `TICKET_FEATURE_ENABLED`). The running sum of
+/// `delta` equals `User.ticketBalance`, which is materialized for fast reads;
+/// both are written in the same transaction by `services/ticket-wallet.ts`.
+///
+/// `reason` (string, validated in app code — not a Prisma enum):
+///   photo_bonus    — +1 one-time bonus for reaching 4+ profile photos
+///   video_bonus    — +1 one-time bonus for adding a profile video
+///   store_purchase — +N from a bundle purchase in the store Mini App
+///   spend_match    — -1 (or -2) consumed at the §3.5b date gate
+///   refund         — +N reversal (e.g. an expired/refunded match ticket)
+model TicketLedger {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  /// Signed change applied to the balance (+ grants/purchases, - spends).
+  delta       Int
+  reason      String
+  /// Set for `spend_match`/`refund` rows so a movement can be traced to the
+  /// match it paid for. Free-form (no FK) so deleting a match never breaks the
+  /// audit trail.
+  matchId     String?  @map("match_id") @db.Uuid
+  /// Money attached to a purchase row (cents) — null for free bonuses/spends.
+  amountCents Int?     @map("amount_cents")
+  /// Bundle size for `store_purchase` rows (1 / 3 / 6).
+  bundleSize  Int?     @map("bundle_size")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("ticket_ledger")
 }
 
 model OnboardingProgress {
@@ -365,6 +407,13 @@ model Profile {
   profilerNextAt           DateTime?             @map("profiler_next_at")
   profilerActiveQuestionId String?               @map("profiler_active_question_id")
   profilerBatchRemaining   Int                   @default(0) @map("profiler_batch_remaining")
+  /// One-time onboarding ticket-bonus idempotency markers (gated by
+  /// `TICKET_FEATURE_ENABLED`). Set the first time the profile reaches 4+
+  /// face-validated photos (`photoBonusTicketAt`) or gains a profile video
+  /// (`videoBonusTicketAt`). The grant is never re-issued, even if the user
+  /// later edits photos/video. See `services/ticket-wallet.ts`.
+  photoBonusTicketAt   DateTime?                 @map("photo_bonus_ticket_at")
+  videoBonusTicketAt   DateTime?                 @map("video_bonus_ticket_at")
   createdAt            DateTime                  @default(now()) @map("created_at")
   updatedAt            DateTime                  @updatedAt @map("updated_at")
 

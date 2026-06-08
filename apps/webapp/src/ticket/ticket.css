@@ -425,3 +425,12 @@ body {
     transition: none;
   }
 }
+
+/* Wallet balance hint shown under the ticket on the offer / cover-partner screens. */
+.ticket-balance-note {
+  margin: 14px auto 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tg-theme-hint-color, #8a8a8e);
+}

@@ -17,9 +17,11 @@ vi.mock("../config.js", () => ({ env: { BOT_TOKEN } }));
 
 const getTicketState = vi.fn();
 const applyTicketPayment = vi.fn();
+const useTicketFromBalance = vi.fn();
 vi.mock("../handlers/matching/ticket-gate.js", () => ({
   getTicketState: (...a: unknown[]) => getTicketState(...a),
   applyTicketPayment: (...a: unknown[]) => applyTicketPayment(...a),
+  useTicketFromBalance: (...a: unknown[]) => useTicketFromBalance(...a),
 }));
 
 const createTicketIntent = vi.fn();
@@ -65,11 +67,13 @@ const baseState = {
   bothPaid: false,
   expiresAt: null,
   paymentMode: "mock",
+  myBalance: 0,
 };
 
 beforeEach(() => {
   getTicketState.mockReset();
   applyTicketPayment.mockReset();
+  useTicketFromBalance.mockReset();
   createTicketIntent.mockReset();
   verifyTicketPayment.mockReset();
 });
@@ -201,5 +205,64 @@ describe("POST /v1/matches/:id/ticket/confirm", () => {
       .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
       .send({ scope: "self", clientSecret: "mock_pi_x" });
     expect(res.status).toBe(403);
+  });
+});
+
+describe("POST /v1/matches/:id/ticket/use", () => {
+  it("spends a wallet ticket and returns the new state", async () => {
+    useTicketFromBalance.mockResolvedValueOnce({
+      ok: true,
+      state: { ...baseState, iPaid: true, ticketStatus: "partial" },
+    });
+    const res = await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/ticket/use`)
+      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
+      .send({ scope: "self" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.iPaid).toBe(true);
+    expect(useTicketFromBalance).toHaveBeenCalledWith(
+      expect.anything(),
+      5986970093n,
+      VALID_UUID,
+      "self",
+    );
+  });
+
+  it("accepts scope 'partner' for the cover-your-date flow", async () => {
+    useTicketFromBalance.mockResolvedValueOnce({ ok: true, state: baseState });
+    const res = await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/ticket/use`)
+      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
+      .send({ scope: "partner" });
+    expect(res.status).toBe(200);
+    expect(useTicketFromBalance).toHaveBeenCalledWith(expect.anything(), 5986970093n, VALID_UUID, "partner");
+  });
+
+  it("maps insufficient-balance → 409", async () => {
+    useTicketFromBalance.mockResolvedValueOnce({ ok: false, reason: "insufficient-balance" });
+    const res = await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/ticket/use`)
+      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
+      .send({ scope: "self" });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("insufficient-balance");
+  });
+
+  it("rejects an unknown scope with 400", async () => {
+    const res = await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/ticket/use`)
+      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
+      .send({ scope: "nonsense" });
+    expect(res.status).toBe(400);
+    expect(useTicketFromBalance).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/ticket/use`)
+      .send({ scope: "self" });
+    expect(res.status).toBe(401);
+    expect(useTicketFromBalance).not.toHaveBeenCalled();
   });
 });

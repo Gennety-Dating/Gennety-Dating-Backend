@@ -24,6 +24,7 @@ import {
   handleDeleteAccountExecute,
 } from "./settings.js";
 import { handleHelp } from "./help.js";
+import { handleMyTickets } from "./tickets.js";
 import { runMenuAgentTurn } from "../../services/menu-agent.js";
 
 /**
@@ -168,6 +169,11 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       return;
     case "menu:settings:delete:yes":
       await handleDeleteAccountExecute(ctx);
+      return;
+
+    // My Tickets (wallet + store; only reachable when TICKET_FEATURE_ENABLED)
+    case "menu:tickets":
+      await handleMyTickets(ctx);
       return;
 
     // Help

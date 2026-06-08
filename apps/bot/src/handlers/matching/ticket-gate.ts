@@ -8,10 +8,12 @@ import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.
 import { startScheduling } from "./scheduler.js";
 import {
   amountForScope,
+  ticketsForScope,
   type TicketScope,
   type PaymentMode,
   refundTicketPayment,
 } from "../../services/ticket-payment.js";
+import { spendTickets, grantTickets } from "../../services/ticket-wallet.js";
 import { emitTicketEvent } from "../../services/ticket-analytics.js";
 
 /**
@@ -38,6 +40,7 @@ interface TicketUser {
   language: string | null;
   gender: "male" | "female" | null;
   firstName: string | null;
+  ticketBalance: number;
 }
 
 interface TicketMatch {
@@ -68,8 +71,8 @@ const TICKET_SELECT = {
   ticketExpiresAt: true,
   userAId: true,
   userBId: true,
-  userA: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true } },
-  userB: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true } },
+  userA: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true, ticketBalance: true } },
+  userB: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true, ticketBalance: true } },
 } as const;
 
 function loadTicketMatch(matchId: string): Promise<TicketMatch | null> {
@@ -109,6 +112,8 @@ export interface TicketStateView {
   bothPaid: boolean;
   expiresAt: string | null;
   paymentMode: PaymentMode;
+  /** The actor's current ticket-wallet balance (balance-aware gate buttons). */
+  myBalance: number;
 }
 
 export function buildTicketStateView(match: TicketMatch, side: Side): TicketStateView {
@@ -131,6 +136,7 @@ export function buildTicketStateView(match: TicketMatch, side: Side): TicketStat
     bothPaid: iPaid && partnerPaid,
     expiresAt: match.ticketExpiresAt ? match.ticketExpiresAt.toISOString() : null,
     paymentMode: env.TICKET_PAYMENT_MODE,
+    myBalance: me.ticketBalance,
   };
 }
 
@@ -200,28 +206,41 @@ export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promis
 // ── Payment apply (called from POST confirm) ────────────────────────────────
 
 export type ApplyPaymentResult =
-  | { ok: false; reason: "match-not-found" | "not-participant" | "wrong-state" | "scope-not-allowed" }
+  | {
+      ok: false;
+      reason:
+        | "match-not-found"
+        | "not-participant"
+        | "wrong-state"
+        | "scope-not-allowed"
+        | "insufficient-balance";
+    }
   | { ok: true; state: TicketStateView };
 
 /**
- * Mark the acting side's ticket paid (idempotent + race-safe) and advance the
- * gate. Scope `both` ($13.98) is male-only and also settles the partner's
- * ticket. When both tickets end up paid, unlocks scheduling.
+ * Settle one or two ticket slots on a match (idempotent + race-safe) and
+ * advance the gate. Shared by the money path (`applyTicketPayment`) and the
+ * wallet path (`useTicketFromBalance`); the balance spend itself is handled by
+ * the caller so this stays purely about the match state.
+ *
+ * `claimed` reports whether THIS call actually flipped a slot (vs an idempotent
+ * duplicate / lost race) so the wallet path knows whether to keep or refund the
+ * tickets it already spent.
  */
-export async function applyTicketPayment(
+async function settleTicket(
   api: Api<RawApi>,
   telegramId: bigint,
   matchId: string,
   scope: TicketScope,
-): Promise<ApplyPaymentResult> {
+): Promise<{ result: ApplyPaymentResult; claimed: boolean }> {
   const match = await loadTicketMatch(matchId);
-  if (!match) return { ok: false, reason: "match-not-found" };
+  if (!match) return { result: { ok: false, reason: "match-not-found" }, claimed: false };
   const side = sideForTelegramId(match, telegramId);
-  if (!side) return { ok: false, reason: "not-participant" };
+  if (!side) return { result: { ok: false, reason: "not-participant" }, claimed: false };
 
   const me = selfUser(match, side);
-  if (scope === "both" && me.gender !== "male") {
-    return { ok: false, reason: "scope-not-allowed" };
+  if ((scope === "both" || scope === "partner") && me.gender !== "male") {
+    return { result: { ok: false, reason: "scope-not-allowed" }, claimed: false };
   }
 
   const paidField = side === "A" ? "ticketPaidA" : "ticketPaidB";
@@ -232,7 +251,32 @@ export async function applyTicketPayment(
   const myPaidAlready = (side === "A" ? match.ticketPaidA : match.ticketPaidB) !== null;
   const partnerPaidAlready = (side === "A" ? match.ticketPaidB : match.ticketPaidA) !== null;
 
-  if (!myPaidAlready) {
+  let claimed = false;
+
+  if (scope === "partner") {
+    // Cover only the partner's slot — requires the actor to have already paid
+    // their own ticket. Atomic claim on the partner's still-null slot.
+    if (!myPaidAlready) {
+      return { result: { ok: false, reason: "wrong-state" }, claimed: false };
+    }
+    if (!partnerPaidAlready) {
+      const claim = await prisma.match.updateMany({
+        where: { id: matchId, status: "negotiating", [partnerPaidField]: null },
+        data: { [partnerPaidField]: now, [paidForPartnerField]: true },
+      });
+      claimed = claim.count > 0;
+      if (claimed) {
+        emitTicketEvent("ticket_paid", { matchId, side, scope, amountCents: amountForScope(scope, match.ticketPriceCents) });
+        const peer = peerUser(match, side);
+        if (isTelegramTarget(peer.telegramId)) {
+          await api.sendMessage(
+            toTelegramChatId(peer.telegramId),
+            t(langOf(peer), "ticketPartnerPaidDm", { name: me.firstName ?? "Your match" }),
+          );
+        }
+      }
+    }
+  } else if (!myPaidAlready) {
     // Atomic claim — only the caller that flips the still-null field wins, so a
     // double-tap / retried confirm can't double-charge or double-advance. Same
     // pattern as the accept-transition race guard in decision.ts.
@@ -249,11 +293,12 @@ export async function applyTicketPayment(
       // Lost the race or wrong state. Re-read; if our side is now paid it was a
       // concurrent duplicate — treat as success (idempotent).
       const fresh = await loadTicketMatch(matchId);
-      if (!fresh) return { ok: false, reason: "match-not-found" };
+      if (!fresh) return { result: { ok: false, reason: "match-not-found" }, claimed: false };
       const sidePaidNow = (side === "A" ? fresh.ticketPaidA : fresh.ticketPaidB) !== null;
-      if (!sidePaidNow) return { ok: false, reason: "wrong-state" };
-      return { ok: true, state: buildTicketStateView(fresh, side) };
+      if (!sidePaidNow) return { result: { ok: false, reason: "wrong-state" }, claimed: false };
+      return { result: { ok: true, state: buildTicketStateView(fresh, side) }, claimed: false };
     }
+    claimed = true;
     emitTicketEvent("ticket_paid", { matchId, side, scope, amountCents: amountForScope(scope, match.ticketPriceCents) });
 
     // Notify the partner that their ticket was covered (pay-for-both).
@@ -270,7 +315,7 @@ export async function applyTicketPayment(
 
   // Recompute terminal state from fresh data.
   const after = await loadTicketMatch(matchId);
-  if (!after) return { ok: false, reason: "match-not-found" };
+  if (!after) return { result: { ok: false, reason: "match-not-found" }, claimed };
   const bothPaid = after.ticketPaidA !== null && after.ticketPaidB !== null;
 
   if (bothPaid && after.ticketStatus !== "completed") {
@@ -284,8 +329,56 @@ export async function applyTicketPayment(
   }
 
   const final = await loadTicketMatch(matchId);
-  if (!final) return { ok: false, reason: "match-not-found" };
-  return { ok: true, state: buildTicketStateView(final, side) };
+  if (!final) return { result: { ok: false, reason: "match-not-found" }, claimed };
+  return { result: { ok: true, state: buildTicketStateView(final, side) }, claimed };
+}
+
+/**
+ * Money path: mark the acting side's ticket(s) paid. Scope `both` ($13.98) and
+ * `partner` are male-only; `both` also settles the partner's ticket.
+ */
+export async function applyTicketPayment(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  matchId: string,
+  scope: TicketScope,
+): Promise<ApplyPaymentResult> {
+  const { result } = await settleTicket(api, telegramId, matchId, scope);
+  return result;
+}
+
+/**
+ * Wallet path: spend ticket(s) from the actor's balance to settle the gate.
+ * The spend happens first (atomic, guarded against negatives); if the match
+ * claim then doesn't apply (lost race / already-paid duplicate) the tickets are
+ * refunded so the balance never leaks.
+ */
+export async function useTicketFromBalance(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  matchId: string,
+  scope: TicketScope,
+): Promise<ApplyPaymentResult> {
+  const match = await loadTicketMatch(matchId);
+  if (!match) return { ok: false, reason: "match-not-found" };
+  const side = sideForTelegramId(match, telegramId);
+  if (!side) return { ok: false, reason: "not-participant" };
+  const me = selfUser(match, side);
+  if ((scope === "both" || scope === "partner") && me.gender !== "male") {
+    return { ok: false, reason: "scope-not-allowed" };
+  }
+
+  const count = ticketsForScope(scope);
+  const spend = await spendTickets({ userId: me.id, count, reason: "spend_match", matchId });
+  if (!spend.ok) return { ok: false, reason: "insufficient-balance" };
+
+  const { result, claimed } = await settleTicket(api, telegramId, matchId, scope);
+  // Refund when the tickets were spent but no slot was actually claimed —
+  // either a hard failure or an idempotent duplicate that consumed nothing.
+  if (!result.ok || !claimed) {
+    await grantTickets({ userId: me.id, count, reason: "refund", matchId });
+  }
+  return result;
 }
 
 // ── Completion + free-fallback (shared by confirm + cron) ───────────────────

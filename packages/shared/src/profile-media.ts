@@ -16,7 +16,23 @@ export interface ProfileLivePhotoMedia {
   mimeType?: string;
 }
 
-export type ProfileMedia = ProfilePhotoMedia | ProfileLivePhotoMedia;
+export interface ProfileVideoMedia {
+  type: "video";
+  /** Telegram file_id of the video part. Display-only — NOT face-matched. */
+  video: string;
+  /** Optional poster/thumbnail file_id for the card. */
+  thumb?: string;
+  duration?: number;
+  width?: number;
+  height?: number;
+  fileSize?: number;
+  mimeType?: string;
+}
+
+export type ProfileMedia =
+  | ProfilePhotoMedia
+  | ProfileLivePhotoMedia
+  | ProfileVideoMedia;
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -59,8 +75,49 @@ export function profileLivePhotoMedia(args: {
   };
 }
 
+export function profileVideoMedia(args: {
+  video: string;
+  thumb?: string;
+  duration?: number;
+  width?: number;
+  height?: number;
+  fileSize?: number;
+  mimeType?: string;
+}): ProfileVideoMedia {
+  return {
+    type: "video",
+    video: args.video,
+    ...(args.thumb !== undefined ? { thumb: args.thumb } : {}),
+    ...(args.duration !== undefined ? { duration: args.duration } : {}),
+    ...(args.width !== undefined ? { width: args.width } : {}),
+    ...(args.height !== undefined ? { height: args.height } : {}),
+    ...(args.fileSize !== undefined ? { fileSize: args.fileSize } : {}),
+    ...(args.mimeType !== undefined ? { mimeType: args.mimeType } : {}),
+  };
+}
+
 export function parseProfileMediaItem(value: unknown): ProfileMedia | null {
   if (!isRecord(value)) return null;
+
+  // Video items carry no static `photo` — handle before the photo guard.
+  if (value.type === "video") {
+    const video = cleanString(value.video);
+    if (!video) return null;
+    const args: Parameters<typeof profileVideoMedia>[0] = { video };
+    const thumb = cleanString(value.thumb);
+    const duration = cleanNumber(value.duration);
+    const width = cleanNumber(value.width);
+    const height = cleanNumber(value.height);
+    const fileSize = cleanNumber(value.fileSize);
+    const mimeType = cleanString(value.mimeType);
+    if (thumb !== null) args.thumb = thumb;
+    if (duration !== undefined) args.duration = duration;
+    if (width !== undefined) args.width = width;
+    if (height !== undefined) args.height = height;
+    if (fileSize !== undefined) args.fileSize = fileSize;
+    if (mimeType !== null) args.mimeType = mimeType;
+    return profileVideoMedia(args);
+  }
 
   const photo = cleanString(value.photo);
   if (!photo) return null;
@@ -104,8 +161,15 @@ export function normalizeProfileMedia(
         .filter((item): item is ProfileMedia => item !== null)
     : [];
 
-  if (parsed.length > 0 && (photos.length === 0 || parsed.length === photos.length)) {
-    return parsed;
+  // Video items have no static photo, so align the structured array against
+  // `photos[]` by its STATIC-photo count (photo + live_photo), not its total
+  // length — otherwise a profile with a video would fail the guard and lose
+  // the video on the photos-only fallback.
+  if (parsed.length > 0) {
+    const staticCount = parsed.filter((m) => m.type !== "video").length;
+    if (photos.length === 0 || staticCount === photos.length) {
+      return parsed;
+    }
   }
 
   return photos
@@ -114,6 +178,18 @@ export function normalizeProfileMedia(
     .map(profilePhotoMedia);
 }
 
+/**
+ * Ordered static photos (the `photos[]` / `photoFaceScores[]` source). Video
+ * items have no static frame and are excluded, preserving the
+ * `photos[i] ↔ photoFaceScores[i]` face-match invariant.
+ */
 export function staticPhotosFromProfileMedia(media: readonly ProfileMedia[]): string[] {
-  return media.map((item) => item.photo);
+  return media
+    .filter((item): item is ProfilePhotoMedia | ProfileLivePhotoMedia => item.type !== "video")
+    .map((item) => item.photo);
+}
+
+/** True if the structured media array contains at least one video item. */
+export function profileMediaHasVideo(media: readonly ProfileMedia[]): boolean {
+  return media.some((item) => item.type === "video");
 }

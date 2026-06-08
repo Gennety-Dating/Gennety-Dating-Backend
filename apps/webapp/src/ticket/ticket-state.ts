@@ -7,8 +7,9 @@ import type { TicketState, TicketScope } from "../api.js";
  */
 
 export type TicketScreen =
-  | "offer" // nobody (relevant) paid yet — show pay buttons
-  | "waiting" // I paid, partner hasn't — countdown
+  | "offer" // my ticket isn't settled — show pay/use buttons
+  | "cover-partner" // I'm a male who paid mine; partner unpaid — optionally cover them
+  | "waiting" // I'm settled, partner hasn't — countdown
   | "success" // both paid (and I'm the one who acted) — confetti + scheduling
   | "partner-paid" // partner covered MY ticket (pay-for-both) — nothing to do
   | "closed"; // ticket refunded/expired — scheduling already opened free
@@ -19,32 +20,67 @@ export function deriveScreen(state: TicketState): TicketScreen {
   // covered user sees the dedicated "they paid for you ❤️" card.
   if (state.partnerPaidForMe) return "partner-paid";
   if (state.bothPaid) return "success";
-  if (state.iPaid) return "waiting";
+  if (state.iPaid) {
+    // A male who covered himself can still optionally cover his date instead of
+    // just waiting for her to pay; everyone else waits.
+    return state.myGender === "male" ? "cover-partner" : "waiting";
+  }
   return "offer";
 }
 
 export interface OfferButton {
+  /** "pay" = money (intent+confirm); "use" = spend from wallet balance. */
+  action: "pay" | "use";
   scope: TicketScope;
+  /** Charged amount for `pay` buttons (cents); 0 for `use`. */
   amountCents: number;
+  /** Tickets consumed for `use` buttons; 0 for `pay`. */
+  ticketCost: number;
   primary: boolean;
 }
 
+function pay(scope: TicketScope, amountCents: number, primary: boolean): OfferButton {
+  return { action: "pay", scope, amountCents, ticketCost: 0, primary };
+}
+function use(scope: TicketScope, ticketCost: number, primary: boolean): OfferButton {
+  return { action: "use", scope, amountCents: 0, ticketCost, primary };
+}
+
 /**
- * Offer buttons by gender:
- *   male   → "pay for both" ($13.98, primary) + "pay only mine" ($6.99)
- *   female → single "pay my ticket" ($6.99)
- * Unknown gender is treated as female (single self-pay) — never offer
- * pay-for-both without a confirmed male gender (the server enforces this too).
+ * Buttons for the initial "offer" screen (the actor's own ticket isn't settled
+ * yet), balance-aware:
+ *   female/unknown → use my ticket (if any) else pay my ticket
+ *   male, balance≥2 → use 2 tickets (both) + use 1 (self)
+ *   male, balance=1 → use 1 (self) + pay for both
+ *   male, balance=0 → pay for both + pay only mine
+ * Unknown gender is treated as female — never offer pay/use-for-both without a
+ * confirmed male gender (the server enforces this too).
  */
 export function deriveOfferButtons(state: TicketState): OfferButton[] {
-  const self: OfferButton = { scope: "self", amountCents: state.priceCents, primary: true };
+  const price = state.priceCents;
   if (state.myGender === "male") {
-    return [
-      { scope: "both", amountCents: state.priceCents * 2, primary: true },
-      { ...self, primary: false },
-    ];
+    if (state.myBalance >= 2) {
+      return [use("both", 2, true), use("self", 1, false)];
+    }
+    if (state.myBalance === 1) {
+      return [use("self", 1, true), pay("both", price * 2, false)];
+    }
+    return [pay("both", price * 2, true), pay("self", price, false)];
   }
-  return [self];
+  if (state.myBalance >= 1) return [use("self", 1, true)];
+  return [pay("self", price, true)];
+}
+
+/**
+ * Buttons for the "cover-partner" screen — a male who already settled his own
+ * ticket may optionally cover his date's ticket (with a wallet ticket or money)
+ * or just wait for her to pay herself.
+ */
+export function deriveCoverPartnerButtons(state: TicketState): OfferButton[] {
+  if (state.myBalance >= 1) {
+    return [use("partner", 1, true), pay("partner", state.priceCents, false)];
+  }
+  return [pay("partner", state.priceCents, true)];
 }
 
 export function formatUsd(cents: number): string {

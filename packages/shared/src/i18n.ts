@@ -64,6 +64,18 @@ const translations = {
       "Live Photos need to be 10 seconds or shorter. Send a shorter one or a regular photo.",
     livePhotoTooLarge:
       "Live Photos need to be 10 MB or smaller. Send a smaller one or a regular photo.",
+    videoTooLong:
+      "Profile videos need to be 60 seconds or shorter. Send a shorter clip.",
+    videoTooLarge:
+      "Profile videos need to be 50 MB or smaller. Send a smaller clip.",
+    ticketRewardPhoto:
+      "🎟️ Nice — you just earned a *free Date Ticket*!\n\nHere's the deal: every date you go on costs 1 ticket, and tickets normally cost money. Adding photos got you one on the house. Balance: *{balance}* 🎟️",
+    ticketRewardVideo:
+      "🎟️ A profile video — love it! That's another *free Date Ticket*.\n\nEach date costs 1 ticket (normally paid), so you're set for your next one. Balance: *{balance}* 🎟️",
+    menuMyTickets: "🎟️ My Tickets",
+    ticketWalletText:
+      "🎟️ *My Tickets*\n\nYou have *{balance}* ticket(s). Each date costs 1 ticket — buy more anytime.",
+    ticketWalletOpenStore: "🎟️ Buy tickets",
     photosEnough: "You can send more (up to {max}) or hit the button to continue.",
     photosDone: "Photos uploaded ✅",
     profileReview:
@@ -587,6 +599,18 @@ const translations = {
       "Live Photo должно быть не длиннее 10 секунд. Скинь короче или обычное фото.",
     livePhotoTooLarge:
       "Live Photo должно быть не больше 10 МБ. Скинь файл поменьше или обычное фото.",
+    videoTooLong:
+      "Видео для профиля должно быть не длиннее 60 секунд. Скинь покороче.",
+    videoTooLarge:
+      "Видео для профиля должно быть не больше 50 МБ. Скинь поменьше.",
+    ticketRewardPhoto:
+      "🎟️ Класс — ты только что получил *бесплатный билет на свидание*!\n\nКак это работает: каждое свидание стоит 1 билет, и обычно билеты платные. За добавленные фото — один в подарок. Баланс: *{balance}* 🎟️",
+    ticketRewardVideo:
+      "🎟️ Видео в профиле — супер! Вот ещё *бесплатный билет на свидание*.\n\nКаждое свидание стоит 1 билет (обычно платный), так что на следующее ты готов. Баланс: *{balance}* 🎟️",
+    menuMyTickets: "🎟️ Мои билеты",
+    ticketWalletText:
+      "🎟️ *Мои билеты*\n\nУ тебя *{balance}* билет(ов). Каждое свидание стоит 1 билет — докупить можно в любой момент.",
+    ticketWalletOpenStore: "🎟️ Купить билеты",
     photosEnough: "Можешь скинуть ещё (до {max}) или жми кнопку.",
     photosDone: "Фото загружены ✅",
     profileReview:
@@ -1107,6 +1131,18 @@ const translations = {
       "Live Photo має бути не довше 10 секунд. Надішли коротше або звичайне фото.",
     livePhotoTooLarge:
       "Live Photo має бути не більше 10 МБ. Надішли менший файл або звичайне фото.",
+    videoTooLong:
+      "Відео для профілю має бути не довше 60 секунд. Надішли коротше.",
+    videoTooLarge:
+      "Відео для профілю має бути не більше 50 МБ. Надішли менше.",
+    ticketRewardPhoto:
+      "🎟️ Клас — ти щойно отримав *безкоштовний квиток на побачення*!\n\nЯк це працює: кожне побачення коштує 1 квиток, і зазвичай квитки платні. За додані фото — один у подарунок. Баланс: *{balance}* 🎟️",
+    ticketRewardVideo:
+      "🎟️ Відео в профілі — супер! Ось ще *безкоштовний квиток на побачення*.\n\nКожне побачення коштує 1 квиток (зазвичай платний), тож на наступне ти готовий. Баланс: *{balance}* 🎟️",
+    menuMyTickets: "🎟️ Мої квитки",
+    ticketWalletText:
+      "🎟️ *Мої квитки*\n\nУ тебе *{balance}* квиток(ів). Кожне побачення коштує 1 квиток — докупити можна будь-коли.",
+    ticketWalletOpenStore: "🎟️ Купити квитки",
     photosEnough: "Можеш надіслати ще (до {max}) або тисни кнопку.",
     photosDone: "Фото завантажено ✅",
     profileReview:
@@ -1700,6 +1736,18 @@ const deTranslations: TranslationTable = {
   menuResume: "▶️ Matching fortsetzen",
   menuSettings: "⚙️ Einstellungen",
   menuHelp: "💬 Hilfe",
+  menuMyTickets: "🎟️ Meine Tickets",
+  videoTooLong:
+    "Profilvideos dürfen höchstens 60 Sekunden lang sein. Schick ein kürzeres.",
+  videoTooLarge:
+    "Profilvideos dürfen höchstens 50 MB groß sein. Schick ein kleineres.",
+  ticketRewardPhoto:
+    "🎟️ Stark — du hast gerade ein *kostenloses Date-Ticket* verdient!\n\nSo läuft's: Jedes Date kostet 1 Ticket, und Tickets kosten normalerweise Geld. Für deine Fotos gibt's eins gratis. Guthaben: *{balance}* 🎟️",
+  ticketRewardVideo:
+    "🎟️ Ein Profilvideo — top! Noch ein *kostenloses Date-Ticket* für dich.\n\nJedes Date kostet 1 Ticket (sonst kostenpflichtig). Guthaben: *{balance}* 🎟️",
+  ticketWalletText:
+    "🎟️ *Meine Tickets*\n\nDu hast *{balance}* Ticket(s). Jedes Date kostet 1 Ticket — jederzeit nachkaufbar.",
+  ticketWalletOpenStore: "🎟️ Tickets kaufen",
   menuBack: "⬅️ Zurück",
   myProfileBody:
     "*{firstName} {surname}*, {age}\n" +
@@ -2122,6 +2170,18 @@ const plTranslations: TranslationTable = {
   menuResume: "▶️ Wznów matching",
   menuSettings: "⚙️ Ustawienia",
   menuHelp: "💬 Pomoc",
+  menuMyTickets: "🎟️ Moje bilety",
+  videoTooLong:
+    "Wideo do profilu może mieć maksymalnie 60 sekund. Wyślij krótsze.",
+  videoTooLarge:
+    "Wideo do profilu może ważyć maksymalnie 50 MB. Wyślij mniejsze.",
+  ticketRewardPhoto:
+    "🎟️ Świetnie — właśnie zdobyłeś *darmowy bilet na randkę*!\n\nJak to działa: każda randka kosztuje 1 bilet, a bilety zwykle są płatne. Za dodane zdjęcia masz jeden gratis. Saldo: *{balance}* 🎟️",
+  ticketRewardVideo:
+    "🎟️ Wideo w profilu — super! Oto kolejny *darmowy bilet na randkę*.\n\nKażda randka kosztuje 1 bilet (zwykle płatny). Saldo: *{balance}* 🎟️",
+  ticketWalletText:
+    "🎟️ *Moje bilety*\n\nMasz *{balance}* bilet(ów). Każda randka kosztuje 1 bilet — dokupisz w każdej chwili.",
+  ticketWalletOpenStore: "🎟️ Kup bilety",
   menuBack: "⬅️ Wstecz",
   myProfileBody:
     "*{firstName} {surname}*, {age}\n" +

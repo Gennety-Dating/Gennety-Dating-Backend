@@ -53,6 +53,10 @@ export const env = {
   /// "your match accepted" sparkle and "tell us how it went" reaction read
   /// as distinct moments. Empty falls through to no effect.
   MESSAGE_EFFECT_FEEDBACK_ID: process.env.MESSAGE_EFFECT_FEEDBACK_ID ?? "",
+  /// Optional Bot API 7.6+ message effect played on the "you earned a free
+  /// Date Ticket" reward DM (4+ photos / added a profile video). Empty falls
+  /// through to no effect — the reward still sends, just without the animation.
+  MESSAGE_EFFECT_TICKET_ID: process.env.MESSAGE_EFFECT_TICKET_ID ?? "",
   WEBAPP_URL: process.env.WEBAPP_URL ?? "https://example.invalid/calendar",
   /// URL of the post-date Feedback Mini App bundle. When unset, derived from
   /// `WEBAPP_URL` by appending `/feedback.html` — Caddy serves both the

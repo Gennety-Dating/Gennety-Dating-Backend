@@ -15,6 +15,14 @@ export interface TicketStrings {
   payBoth: string;
   paySelf: string;
   paySelfOnly: string;
+  useSelf: string;
+  useBoth: string;
+  usePartner: string;
+  payPartner: string;
+  coverPartnerTitle: string;
+  coverPartnerSub: string;
+  justWait: string;
+  balanceNote: string;
   mockBadge: string;
   mockTitle: string;
   mockSub: string;
@@ -51,6 +59,14 @@ const en: TicketStrings = {
   payBoth: "Pay for us both — {amount}",
   paySelf: "Pay only mine — {amount}",
   paySelfOnly: "Pay my ticket — {amount}",
+  useSelf: "Use a ticket — for you 🎟️",
+  useBoth: "Use 2 tickets — you & your date 🎟️🎟️",
+  usePartner: "Use a ticket for your date 🎟️",
+  payPartner: "Pay for your date — {amount}",
+  coverPartnerTitle: "Cover your date? 🎟️",
+  coverPartnerSub: "Your ticket's set. Want to cover {name}'s too, or let them grab it?",
+  justWait: "I'll let them grab it",
+  balanceNote: "Your wallet: {n} 🎟️",
   mockBadge: "Test mode — no real charge",
   mockTitle: "Payment",
   mockSub: "Pay {amount} to secure your Date Ticket.",
@@ -87,6 +103,14 @@ const ru: TicketStrings = {
   payBoth: "Оплатить за нас обоих — {amount}",
   paySelf: "Оплатить только свой — {amount}",
   paySelfOnly: "Оплатить свой билет — {amount}",
+  useSelf: "Использовать билет — за себя 🎟️",
+  useBoth: "Использовать 2 билета — ты и пара 🎟️🎟️",
+  usePartner: "Использовать билет за пару 🎟️",
+  payPartner: "Оплатить за пару — {amount}",
+  coverPartnerTitle: "Оплатить за пару? 🎟️",
+  coverPartnerSub: "Твой билет уже есть. Оплатить и за {name} или пусть берёт сам(а)?",
+  justWait: "Пусть берёт сам(а)",
+  balanceNote: "Твой кошелёк: {n} 🎟️",
   mockBadge: "Тестовый режим — без реальной оплаты",
   mockTitle: "Оплата",
   mockSub: "Оплати {amount}, чтобы закрепить свой билет.",
@@ -123,6 +147,14 @@ const uk: TicketStrings = {
   payBoth: "Сплатити за нас обох — {amount}",
   paySelf: "Сплатити лише свій — {amount}",
   paySelfOnly: "Сплатити свій квиток — {amount}",
+  useSelf: "Використати квиток — за себе 🎟️",
+  useBoth: "Використати 2 квитки — ти і пара 🎟️🎟️",
+  usePartner: "Використати квиток за пару 🎟️",
+  payPartner: "Сплатити за пару — {amount}",
+  coverPartnerTitle: "Сплатити за пару? 🎟️",
+  coverPartnerSub: "Твій квиток уже є. Сплатити й за {name} чи нехай бере сам(а)?",
+  justWait: "Нехай бере сам(а)",
+  balanceNote: "Твій гаманець: {n} 🎟️",
   mockBadge: "Тестовий режим — без реальної оплати",
   mockTitle: "Оплата",
   mockSub: "Сплати {amount}, щоб закріпити свій квиток.",
@@ -159,6 +191,14 @@ const de: TicketStrings = {
   payBoth: "Für uns beide zahlen — {amount}",
   paySelf: "Nur meins zahlen — {amount}",
   paySelfOnly: "Mein Ticket zahlen — {amount}",
+  useSelf: "Ticket nutzen — für dich 🎟️",
+  useBoth: "2 Tickets nutzen — du & dein Date 🎟️🎟️",
+  usePartner: "Ticket für dein Date nutzen 🎟️",
+  payPartner: "Für dein Date zahlen — {amount}",
+  coverPartnerTitle: "Date übernehmen? 🎟️",
+  coverPartnerSub: "Dein Ticket steht. Auch {name} übernehmen oder selbst holen lassen?",
+  justWait: "Sollen sie selbst holen",
+  balanceNote: "Dein Guthaben: {n} 🎟️",
   mockBadge: "Testmodus — keine echte Abbuchung",
   mockTitle: "Zahlung",
   mockSub: "Zahle {amount}, um dein Date Ticket zu sichern.",
@@ -195,6 +235,14 @@ const pl: TicketStrings = {
   payBoth: "Zapłać za nas oboje — {amount}",
   paySelf: "Zapłać tylko za siebie — {amount}",
   paySelfOnly: "Zapłać za swój bilet — {amount}",
+  useSelf: "Użyj biletu — za siebie 🎟️",
+  useBoth: "Użyj 2 biletów — Ty i Twoja randka 🎟️🎟️",
+  usePartner: "Użyj biletu za swoją randkę 🎟️",
+  payPartner: "Zapłać za swoją randkę — {amount}",
+  coverPartnerTitle: "Pokryć randkę? 🎟️",
+  coverPartnerSub: "Twój bilet jest. Pokryć też {name} czy niech weźmie sam(a)?",
+  justWait: "Niech weźmie sam(a)",
+  balanceNote: "Twój portfel: {n} 🎟️",
   mockBadge: "Tryb testowy — bez prawdziwej opłaty",
   mockTitle: "Płatność",
   mockSub: "Zapłać {amount}, aby zabezpieczyć Date Ticket.",

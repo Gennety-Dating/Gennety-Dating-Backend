@@ -9,6 +9,19 @@ export function profileMediaToJson(
       return { type: "photo", photo: item.photo };
     }
 
+    if (item.type === "video") {
+      return {
+        type: "video",
+        video: item.video,
+        ...(item.thumb !== undefined ? { thumb: item.thumb } : {}),
+        ...(item.duration !== undefined ? { duration: item.duration } : {}),
+        ...(item.width !== undefined ? { width: item.width } : {}),
+        ...(item.height !== undefined ? { height: item.height } : {}),
+        ...(item.fileSize !== undefined ? { fileSize: item.fileSize } : {}),
+        ...(item.mimeType !== undefined ? { mimeType: item.mimeType } : {}),
+      };
+    }
+
     return {
       type: "live_photo",
       photo: item.photo,

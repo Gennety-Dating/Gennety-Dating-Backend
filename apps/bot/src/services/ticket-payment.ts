@@ -19,7 +19,15 @@ import { env } from "../config.js";
  * Every such spot is tagged `// TODO: Stripe Production Mode`.
  */
 
-export type TicketScope = "self" | "both";
+/**
+ * Which ticket(s) a single gate action settles:
+ *   self    — the actor's own ticket (1 ticket)
+ *   both    — the actor's + the partner's ticket in one action (2 tickets, male-only)
+ *   partner — only the partner's ticket, after the actor already covered their
+ *             own (1 ticket, male-only); lets a male with a single ticket use it
+ *             for himself and still pay for his date afterwards.
+ */
+export type TicketScope = "self" | "both" | "partner";
 export type PaymentMode = "mock" | "stripe";
 
 export interface CreatedIntent {
@@ -29,9 +37,14 @@ export interface CreatedIntent {
   mode: PaymentMode;
 }
 
+/** Number of tickets a scope settles (1 for self/partner, 2 for both). */
+export function ticketsForScope(scope: TicketScope): number {
+  return scope === "both" ? 2 : 1;
+}
+
 /** Cents charged for a given scope at a given per-ticket price. */
 export function amountForScope(scope: TicketScope, priceCents: number): number {
-  return scope === "both" ? priceCents * 2 : priceCents;
+  return priceCents * ticketsForScope(scope);
 }
 
 /**
@@ -92,6 +105,65 @@ export async function verifyTicketPayment(args: {
       // webhook (`payment_intent.succeeded`, HMAC-verified) is the only path
       // allowed to mark a ticket paid. This function should look up the
       // PaymentIntent and return ok only if status === "succeeded".
+      throw new Error("TICKET_PAYMENT_MODE=stripe not yet implemented");
+    default: {
+      const _exhaustive: never = mode;
+      throw new Error(`Unknown TICKET_PAYMENT_MODE: ${String(_exhaustive)}`);
+    }
+  }
+}
+
+export interface CreatedStoreIntent {
+  clientSecret: string;
+  amountCents: number;
+  count: number;
+  mode: PaymentMode;
+}
+
+/**
+ * Create a payment intent for a ticket-bundle purchase in the store Mini App
+ * (pre-purchase, not tied to a match). Same mock/stripe abstraction as the
+ * date-gate intent; the mock token is prefixed `mock_store_pi_` so the store
+ * confirm can't be satisfied by a date-gate token and vice versa.
+ */
+export async function createStoreIntent(args: {
+  userId: string;
+  count: number;
+  amountCents: number;
+}): Promise<CreatedStoreIntent> {
+  const mode = env.TICKET_PAYMENT_MODE;
+  switch (mode) {
+    case "mock":
+      return {
+        clientSecret: `mock_store_pi_${randomUUID()}`,
+        amountCents: args.amountCents,
+        count: args.count,
+        mode,
+      };
+    case "stripe":
+      // TODO: Stripe Production Mode — mirror createTicketIntent.
+      throw new Error("TICKET_PAYMENT_MODE=stripe not yet implemented");
+    default: {
+      const _exhaustive: never = mode;
+      throw new Error(`Unknown TICKET_PAYMENT_MODE: ${String(_exhaustive)}`);
+    }
+  }
+}
+
+/** Verify a store-purchase confirm token (mock = trust `mock_store_pi_*`). */
+export async function verifyStorePayment(args: {
+  clientSecret: string;
+}): Promise<{ ok: boolean }> {
+  const mode = env.TICKET_PAYMENT_MODE;
+  switch (mode) {
+    case "mock":
+      return {
+        ok:
+          typeof args.clientSecret === "string" &&
+          args.clientSecret.startsWith("mock_store_pi_"),
+      };
+    case "stripe":
+      // TODO: Stripe Production Mode — defer to the HMAC webhook.
       throw new Error("TICKET_PAYMENT_MODE=stripe not yet implemented");
     default: {
       const _exhaustive: never = mode;

@@ -161,12 +161,23 @@ Hard rules enforced by the collector:
 - Nationality/ethnicity is asked at most once and may be explicitly skipped.
 - "No hobbies" / a single hobby is a valid answer; the agent must NOT chain
   "one more, one more" requests.
-- `MIN_PHOTOS` is a hard floor; anything beyond is purely optional.
-- Profile media may be a mix of static photos and Telegram Live Photos.
-  A Live Photo counts as one profile media item toward `MIN_PHOTOS` /
-  `MAX_PHOTOS`, but its static frame is still stored in `Profile.photos[]`
-  and must pass the same single-face and face-match checks as a normal
-  profile photo. Live Photos without a static frame are rejected.
+- `MIN_PHOTOS` (2) is a hard floor; anything beyond up to `MAX_PHOTOS` (6) is
+  purely optional. Past the minimum the agent makes ONE warm, low-pressure
+  offer — it does NOT chain "one more" requests. When `TICKET_FEATURE_ENABLED`
+  that offer is framed as a reward: reaching `PHOTO_BONUS_TICKET_THRESHOLD` (4)
+  face-validated photos grants a free Date Ticket, and adding a profile video
+  grants another. Each bonus is one-time/idempotent (`Profile.photoBonusTicketAt`
+  / `videoBonusTicketAt`) and explains the mechanic in the reward DM (each date
+  costs 1 ticket; tickets normally cost money). See §3.5b.
+- Profile media may be a mix of static photos, Telegram Live Photos, and a
+  profile **video**. A Live Photo counts as one profile media item toward
+  `MIN_PHOTOS` / `MAX_PHOTOS`, but its static frame is still stored in
+  `Profile.photos[]` and must pass the same single-face and face-match checks
+  as a normal profile photo. Live Photos without a static frame are rejected.
+  A **video** (`ProfileMedia` `{ type: "video" }`) is display-only: it lives in
+  `Profile.profileMedia[]`, is NOT added to `photos[]`, is NOT face-matched, and
+  does NOT count toward `MIN_PHOTOS` — it preserves the `photos[i] ↔
+  photoFaceScores[i]` invariant. Videos over 60s / 50 MB are rejected.
 - For accepted export, photos MAY NOT start until the context dump is saved.
   Declined export skips context collection and uses the fallback analysis.
 - After a pasted AI memory dump is parsed and saved, the bot plays a
@@ -330,6 +341,9 @@ plain Unicode emoji.
 - **Pause Matching** — flips `User.status = paused`. The match engine ignores
   paused users; the status banner shows "paused".
 - **Settings** — change `language`.
+- **My Tickets** — (only when `TICKET_FEATURE_ENABLED`) shows the user's
+  `ticketBalance` and a `web_app` button into the ticket store Mini App
+  (`tickets.html`) to pre-purchase bundles ahead of any date. See §3.5b.
 - **Report / Help** — opens the support handle.
 
 A pinned **status banner** is created on activation
@@ -507,6 +521,23 @@ single production switch (`services/ticket-payment.ts`).
   sets `paidForPartnerBy*`) plus "Pay only mine — $6.99". Female users get a
   single "Pay my ticket — $6.99". The server re-validates that pay-for-both is
   male-only.
+- **Ticket wallet (pre-purchase + bonuses).** Users carry a `User.ticketBalance`
+  topped up by onboarding bonuses (§1.3: 4+ photos, adding a video) and by
+  bundle purchases in the store Mini App (`tickets.html`, opened from the
+  **My Tickets** menu): **1 / $7.00**, **3 / $16.47** ($5.49 ea), **6 / $26.94**
+  ($4.49 ea). Every balance change is written atomically with an append-only
+  `TicketLedger` audit row (`services/ticket-wallet.ts`). At the gate, a user
+  with tickets sees **"Use a ticket"** instead of paying:
+  - female / single-self → "Use my ticket" when `balance ≥ 1`;
+  - male with `balance ≥ 2` → "Use 2 tickets (you + your date)" or "Use 1 (self)";
+  - male with `balance = 1` → "Use 1 (self)" and may still **additionally** pay
+    or use a ticket for his date afterwards (the post-self "cover your date"
+    screen, scope `partner`).
+  Spends are atomic and guarded against going negative; a spend whose match-slot
+  claim doesn't apply is refunded to the ledger. New TMA endpoints:
+  `POST /v1/matches/:id/ticket/use` (gate spend) and `/v1/tickets/*`
+  (wallet + store). Store purchases and the gate share the mock/stripe
+  abstraction in `services/ticket-payment.ts`.
 - **Hard gate.** The Calendar is not sent until *both* tickets are paid
   (`ticketStatus = completed`), at which point `startScheduling` runs and both
   users get a celebratory DM + the Calendar button.

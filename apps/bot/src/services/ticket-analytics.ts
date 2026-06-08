@@ -24,7 +24,7 @@ export function emitTicketEvent(
   props: {
     matchId: string;
     side?: "A" | "B";
-    scope?: "self" | "both";
+    scope?: "self" | "both" | "partner";
     amountCents?: number;
   },
 ): void {

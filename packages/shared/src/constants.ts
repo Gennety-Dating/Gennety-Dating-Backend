@@ -22,11 +22,46 @@ export const OTP_LENGTH = 6;
 
 /** Min/max photos allowed during onboarding */
 export const MIN_PHOTOS = 2;
-export const MAX_PHOTOS = 4;
+export const MAX_PHOTOS = 6;
+
+/**
+ * Profile-photo count that earns the one-time onboarding ticket bonus
+ * (Date Ticket monetization, gated by `TICKET_FEATURE_ENABLED`). Reaching this
+ * many face-validated photos grants +1 free ticket. Kept below MAX_PHOTOS so
+ * users can still add more without affecting the (already-granted) bonus.
+ */
+export const PHOTO_BONUS_TICKET_THRESHOLD = 4;
 
 /** Telegram Live Photo profile-media limits (Bot API 10.0) */
 export const LIVE_PHOTO_MAX_DURATION_SECONDS = 10;
 export const LIVE_PHOTO_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+
+/** Profile video limits (display-only media; not face-matched). */
+export const PROFILE_VIDEO_MAX_DURATION_SECONDS = 60;
+export const PROFILE_VIDEO_MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+
+/**
+ * Ticket store bundles for the pre-purchase Mini App. `priceCents` is the
+ * TOTAL charged for the bundle; per-ticket price is `priceCents / count`.
+ * Payment is mocked in v1 (`TICKET_PAYMENT_MODE=mock`).
+ *   1 ticket  — $7.00  ($7.00/ea)
+ *   3 tickets — $16.47 ($5.49/ea)
+ *   6 tickets — $26.94 ($4.49/ea)
+ */
+export const TICKET_BUNDLES = [
+  { count: 1, priceCents: 700 },
+  { count: 3, priceCents: 1647 },
+  { count: 6, priceCents: 2694 },
+] as const;
+
+export type TicketBundleSize = (typeof TICKET_BUNDLES)[number]["count"];
+
+/** Look up a bundle by its ticket count; null for an unknown size. */
+export function ticketBundleFor(
+  count: number,
+): { count: number; priceCents: number } | null {
+  return TICKET_BUNDLES.find((b) => b.count === count) ?? null;
+}
 
 /** Age boundaries */
 export const MIN_AGE = 18;

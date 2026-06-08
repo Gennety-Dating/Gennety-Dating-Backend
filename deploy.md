@@ -175,6 +175,7 @@ curl -sI https://dating-calendar.gennety.com
 curl -sI https://dating-calendar.gennety.com/onboarding.html
 curl -sI https://dating-calendar.gennety.com/verification.html
 curl -sI https://dating-calendar.gennety.com/ticket.html
+curl -sI https://dating-calendar.gennety.com/tickets.html
 curl -sI https://dating-calendar.gennety.com/venue-change.html
 curl -sI https://api-admin.gennety.com
 ```
@@ -251,6 +252,7 @@ curl -sI https://dating-calendar.gennety.com
 curl -sI https://dating-calendar.gennety.com/onboarding.html
 curl -sI https://dating-calendar.gennety.com/verification.html
 curl -sI https://dating-calendar.gennety.com/ticket.html
+curl -sI https://dating-calendar.gennety.com/tickets.html
 curl -sI https://dating-calendar.gennety.com/venue-change.html
 ```
 
@@ -265,7 +267,8 @@ deploys the Mini Apps together — `index.html` (calendar), `feedback.html`
 (post-date feedback), `location.html` (venue handoff), `onboarding.html`
 (full-screen Telegram onboarding), `verification.html` (Persona
 Embedded SDK KYC flow), `ticket.html` (Date Ticket, feature-flagged
-premium post-accept gate), and `venue-change.html` (feature-flagged
+premium post-accept gate), `tickets.html` (ticket store / wallet,
+feature-flagged pre-purchase bundles), and `venue-change.html` (feature-flagged
 female-exclusive venue swap). Caddy's `try_files {path} /index.html` resolves
 direct hits like `/feedback.html` and `/onboarding.html` before the SPA
 fallback.
@@ -342,6 +345,15 @@ Required/high-impact env keys:
   `// TODO: Stripe Production Mode` branches in
   `services/ticket-payment.ts`). Requires `db:push` of the new `Match`
   ticket columns first.
+  - **Ticket wallet + store (same flag).** `TICKET_FEATURE_ENABLED` also turns
+    on the user ticket wallet: onboarding bonuses (4+ photos, profile video),
+    the **My Tickets** menu, the store Mini App (`tickets.html`, bundles
+    1/3/6), and the "Use a ticket" gate path. `MESSAGE_EFFECT_TICKET_ID`
+    (optional — Bot API 7.6 effect on the reward DM; empty = no effect).
+    Requires `db:push` of the new `User.ticket_balance`,
+    `Profile.photo_bonus_ticket_at` / `video_bonus_ticket_at` columns and the
+    new `ticket_ledger` table first, and `tickets.html` deployed with the Mini
+    App bundle.
 - Pre-date coordination (feature-flagged): `COORDINATION_FEATURE_ENABLED`
   (default `false` — leave off until launch). When on, the bot offers matched
   users a way to find each other ~1h before the date (share Telegram, request
@@ -556,6 +568,7 @@ curl -sI https://dating-calendar.gennety.com
 curl -sI https://dating-calendar.gennety.com/onboarding.html
 curl -sI https://dating-calendar.gennety.com/verification.html
 curl -sI https://dating-calendar.gennety.com/ticket.html
+curl -sI https://dating-calendar.gennety.com/tickets.html
 curl -sI https://dating-calendar.gennety.com/venue-change.html
 curl -sI https://api-admin.gennety.com
 ```
