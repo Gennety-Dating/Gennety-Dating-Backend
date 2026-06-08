@@ -40,9 +40,31 @@ const PROFILE_IMAGE =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuD3Em0JzID6Z04xJ5a_QgvVbiTzxx59H2rlwGXP_VgUkQuez8eozoM5bD2JZv_NRrpWKoAeWnFr6R3U7EljfXy4tqY2O2lRL0GL12uSBwF6aPEtFsCLDMcXqdnrEX8emReLN4LhoWKpOZNxYsOpOaiSwbm6nwi6lYlqaMdgoSZ7XuEEWkSZqb7GfDkjPzdYSTZEugO7zIXCb3HrGQX8McYpp05_emtAHX-_zqXRdCeCMVMxVAL_nJBpbxihO2fWaVWWmT7iK3XfH-t1";
 const TRAP_BACKGROUND =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuDT22v5JOFjqN2g1VkI86PnzZJ_vTS3whfVoE4pTqZMVY_zqEjFKQf0fGlab3jjVTIxx1gKK5zx4u10XcEtFiFDqeEsGaLjoNTdZMWbR46RULeC47iOvuiqYHU8PJrKZ9kQVqufAHWY-pv_0RSTu1V7cSz_tLD89uoBf8RE9OxG9ZhXIGcEKvxkjcwB3oa3Kf9KjRlxyoUZcBMol4eX5hJ6Oh2_fhyciV6tYxlSEoexfNp4Pr7iGISmsLdSC0fp35_bW0OO_cj0xmGN";
-const VISUAL_LAST_INDEX = 2;
-const HOOK_AUTO_ADVANCE_MS = 2000;
+const VISUAL_LAST_INDEX = 4;
 const DRUM_CYCLE_INTERVAL_MS = 2500;
+
+// Intro typewriter ("live human typing") timings. Tuned ~2.5x faster than the
+// original cinematic pacing while keeping the human cadence and beats.
+const INTRO_TYPE_CHAR_MS = 18; // base per-character speed (~30% slower than the fast pass)
+const INTRO_TYPE_JITTER_MS = 14; // random extra per character for an organic cadence
+const INTRO_PUNCT_PAUSE_MS = 73; // small beat after sentence punctuation
+const INTRO_LINE_HOLD_MS = 1440; // hold a completed line before it fades (+1s read buffer)
+const INTRO_LINE_FADE_MS = 200; // fade-out before the next line types in
+const INTRO_FINAL_HOLD_MS = 2040; // hold on the closing hook question (+1s read buffer)
+const INTRO_SKIP_HOLD_MS = 600; // hold on the final line when the user taps to skip
+// Per-part pre-type pauses, aligned 1:1 with each language's `introLines` shape.
+// These create the deliberate mid-sentence beats the copy is written around.
+const INTRO_PART_PAUSES_MS: number[][] = [
+  [0],
+  [0],
+  [0],
+  [0],
+  [0, 400, 600],
+  [0],
+  [0, 600],
+];
+// Pivot scene ("we built Gennety") — same typewriter, a short beat before the brand name.
+const PIVOT_PART_PAUSES_MS: number[][] = [[0], [0, 160]];
 const PRIVACY_POLICY_URL = "https://gennety.com/privacy";
 
 type RemoteUser = TelegramOnboardingState["user"];
@@ -191,13 +213,19 @@ function App(): ReactElement {
       {chrome}
       {bootError ? <div className="gate-meta" style={{ position: "fixed", top: 12, left: 20, right: 20, zIndex: 60 }}>{bootError}</div> : null}
       <Scene active={phase.kind === "visual" && phase.index === 0}>
-        <HookScene active={phase.kind === "visual" && phase.index === 0} onNext={nextVisualSilently} />
+        <IntroScene active={phase.kind === "visual" && phase.index === 0} onNext={nextVisualSilently} />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 1}>
         <StatsCycleScene active={phase.kind === "visual" && phase.index === 1} onNext={nextVisualWithHaptic} />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 2}>
         <ProfileCycleScene active={phase.kind === "visual" && phase.index === 2} onNext={nextVisualWithHaptic} />
+      </Scene>
+      <Scene active={phase.kind === "visual" && phase.index === 3}>
+        <PivotScene active={phase.kind === "visual" && phase.index === 3} onNext={nextVisualSilently} />
+      </Scene>
+      <Scene active={phase.kind === "visual" && phase.index === 4}>
+        <HowItWorksScene active={phase.kind === "visual" && phase.index === 4} onNext={nextVisualWithHaptic} />
       </Scene>
       <Scene active={phase.kind === "syncing"}>
         <SyncingScene />
@@ -285,27 +313,158 @@ function TopChrome(props: { onBack: () => void }): ReactElement {
   );
 }
 
-function HookScene(props: { active: boolean; onNext: () => void }): ReactElement {
-  const s = useOnboardingStrings();
+function useIntroStream(
+  active: boolean,
+  lines: string[][],
+  pauses: number[][],
+): { display: string; lineIndex: number; fading: boolean; done: boolean; skip: () => void } {
+  const [display, setDisplay] = useState("");
+  const [lineIndex, setLineIndex] = useState(0);
+  const [fading, setFading] = useState(false);
+  const [done, setDone] = useState(false);
+  const skipRef = useRef(false);
+
   useEffect(() => {
-    if (!props.active) return;
-    const timer = window.setTimeout(props.onNext, HOOK_AUTO_ADVANCE_MS);
-    return () => window.clearTimeout(timer);
-  }, [props.active, props.onNext]);
+    skipRef.current = false;
+    if (!active) {
+      setDisplay("");
+      setLineIndex(0);
+      setFading(false);
+      setDone(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timers = new Set<number>();
+    const wait = (ms: number) =>
+      new Promise<void>((resolve) => {
+        const timer = window.setTimeout(() => {
+          timers.delete(timer);
+          resolve();
+        }, ms);
+        timers.add(timer);
+      });
+    const lastIndex = lines.length - 1;
+    const stop = () => cancelled || skipRef.current;
+
+    async function run(): Promise<void> {
+      for (let li = 0; li <= lastIndex; li += 1) {
+        if (stop()) break;
+        setLineIndex(li);
+        setFading(false);
+        setDisplay("");
+        let current = "";
+        const parts = lines[li] ?? [];
+        for (let pi = 0; pi < parts.length; pi += 1) {
+          if (stop()) break;
+          const pause = pauses[li]?.[pi] ?? 0;
+          if (pause > 0) {
+            await wait(pause);
+            if (stop()) break;
+          }
+          for (const char of parts[pi] ?? "") {
+            if (stop()) break;
+            current += char;
+            setDisplay(current);
+            const punct = ",.!?".includes(char) ? INTRO_PUNCT_PAUSE_MS : 0;
+            await wait(INTRO_TYPE_CHAR_MS + Math.random() * INTRO_TYPE_JITTER_MS + punct);
+          }
+        }
+        if (stop()) break;
+        if (li < lastIndex) {
+          await wait(INTRO_LINE_HOLD_MS);
+          if (stop()) break;
+          setFading(true);
+          await wait(INTRO_LINE_FADE_MS);
+        } else {
+          await wait(INTRO_FINAL_HOLD_MS);
+        }
+      }
+
+      if (cancelled) return;
+      if (skipRef.current && lastIndex >= 0) {
+        setFading(false);
+        setLineIndex(lastIndex);
+        setDisplay((lines[lastIndex] ?? []).join(""));
+        await wait(INTRO_SKIP_HOLD_MS);
+        if (cancelled) return;
+      }
+      setDone(true);
+    }
+
+    void run();
+    return () => {
+      cancelled = true;
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [active, lines, pauses]);
+
+  const skip = useCallback(() => {
+    skipRef.current = true;
+  }, []);
+
+  return { display, lineIndex, fading, done, skip };
+}
+
+function IntroScene(props: { active: boolean; onNext: () => void }): ReactElement {
+  const s = useOnboardingStrings();
+  const { display, lineIndex, fading, done, skip } = useIntroStream(
+    props.active,
+    s.introLines,
+    INTRO_PART_PAUSES_MS,
+  );
+
+  useEffect(() => {
+    if (done) props.onNext();
+  }, [done, props.onNext]);
 
   return (
-    <main className="hook-main w-full max-w-md mx-auto h-[884px] flex flex-col items-center justify-center px-8 relative overflow-hidden">
+    <main className="hook-main intro-main" onClick={skip}>
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
         <div className="hook-glow w-64 h-64 bg-primary rounded-full blur-[100px]" />
       </div>
-      <h1 className="hook-title font-headline-lg text-headline-lg text-primary text-center tracking-tight drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] relative z-10">
-        {s.hookTitle}
-      </h1>
+      <p key={lineIndex} className={`hook-title intro-line ${fading ? "is-fading" : ""}`}>
+        <span className="intro-line-text">
+          {display}
+          <span className="intro-caret" aria-hidden="true" />
+        </span>
+      </p>
     </main>
   );
 }
 
-function useTimedCycle(active: boolean, length: number): { index: number; canContinue: boolean } {
+function PivotScene(props: { active: boolean; onNext: () => void }): ReactElement {
+  const s = useOnboardingStrings();
+  const { display, lineIndex, fading, done, skip } = useIntroStream(
+    props.active,
+    s.pivotLines,
+    PIVOT_PART_PAUSES_MS,
+  );
+
+  useEffect(() => {
+    if (done) props.onNext();
+  }, [done, props.onNext]);
+
+  return (
+    <main className="hook-main intro-main" onClick={skip}>
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+        <div className="hook-glow w-64 h-64 bg-primary rounded-full blur-[100px]" />
+      </div>
+      <p key={lineIndex} className={`hook-title intro-line ${fading ? "is-fading" : ""}`}>
+        <span className="intro-line-text">
+          {display}
+          <span className="intro-caret" aria-hidden="true" />
+        </span>
+      </p>
+    </main>
+  );
+}
+
+function useTimedCycle(
+  active: boolean,
+  length: number,
+  intervalMs: number = DRUM_CYCLE_INTERVAL_MS,
+): { index: number; canContinue: boolean } {
   const [index, setIndex] = useState(0);
   const [canContinue, setCanContinue] = useState(false);
 
@@ -324,10 +483,10 @@ function useTimedCycle(active: boolean, length: number): { index: number; canCon
         if (next === 0) setCanContinue(true);
         return next;
       });
-    }, DRUM_CYCLE_INTERVAL_MS);
+    }, intervalMs);
 
     return () => window.clearInterval(timer);
-  }, [active, length]);
+  }, [active, length, intervalMs]);
 
   return { index, canContinue };
 }
@@ -355,6 +514,80 @@ function ProfileCycleScene(props: {
         </div>
       </main>
       {cycle.canContinue ? <BottomCta onClick={props.onNext} label={s.next} /> : null}
+    </>
+  );
+}
+
+const HOWITWORKS_ICONS = ["person", "favorite", "local_cafe"];
+
+function HowItWorksScene(props: {
+  active: boolean;
+  onNext: () => void;
+}): ReactElement {
+  const s = useOnboardingStrings();
+  const total = s.howItWorksSteps.length;
+  const [index, setIndex] = useState(0);
+  const [completed, setCompleted] = useState(false);
+  const step = s.howItWorksSteps[index] ?? s.howItWorksSteps[0]!;
+  const icon = HOWITWORKS_ICONS[index] ?? HOWITWORKS_ICONS[0]!;
+
+  // Reset to the first step whenever the scene is left, so a back-navigation
+  // returns to a clean state.
+  useEffect(() => {
+    if (!props.active) {
+      setIndex(0);
+      setCompleted(false);
+    }
+  }, [props.active]);
+
+  // The forward affordance unlocks once the user has paged to the last step.
+  useEffect(() => {
+    if (props.active && index === total - 1) setCompleted(true);
+  }, [props.active, index, total]);
+
+  const handleStep = useCallback(() => {
+    app?.HapticFeedback?.selectionChanged();
+    setIndex((cur) => (cur + 1) % total);
+  }, [total]);
+
+  return (
+    <>
+      <main className="howitworks-main">
+        <div className="lavender-glow" />
+        <div key={index} className="howitworks-card">
+          <div className="howitworks-icon">
+            <span className="material-symbols-outlined" aria-hidden="true">
+              {icon}
+            </span>
+          </div>
+          <h2 className="howitworks-title">{step.title}</h2>
+          <p className="howitworks-body">{step.body}</p>
+        </div>
+      </main>
+      <div className="howitworks-dock">
+        <CycleDots total={total} active={index} complete={completed} />
+        <div className="howitworks-actions">
+          <button
+            type="button"
+            className={`pill-cta howitworks-next ${completed ? "is-compact" : ""}`}
+            onClick={handleStep}
+          >
+            {s.next}
+          </button>
+          {completed ? (
+            <button
+              type="button"
+              className="howitworks-forward"
+              onClick={props.onNext}
+              aria-label={s.continue}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                arrow_forward
+              </span>
+            </button>
+          ) : null}
+        </div>
+      </div>
     </>
   );
 }
@@ -390,6 +623,7 @@ function StatsCycleScene(props: {
             </div>
           </div>
         </div>
+        <p className="stat-footnote">{s.statFootnote}</p>
       </main>
       <div className={`stats-dots-dock ${cycle.canContinue ? "with-cta" : ""}`}>
         <CycleDots total={statCopy.length} active={cycle.index} complete={cycle.canContinue} />
@@ -453,7 +687,7 @@ function BottomCta(props: { onClick: () => void; label: string; disabled?: boole
   return (
     <div className="bottom-cta fixed bottom-0 w-full p-margin bg-gradient-to-t from-black via-black/80 to-transparent z-20 flex justify-center pb-xl">
       <button
-        className="pill-cta bg-primary text-on-primary font-label-md text-label-md uppercase tracking-wider px-12 py-4 rounded-full shadow-[0_0_20px_rgba(168,85,247,0.2)] hover:bg-secondary transition-all duration-300 transform hover:scale-105 active:scale-95 font-bold"
+        className="pill-cta bg-primary text-on-primary font-label-md text-label-md uppercase tracking-wider px-12 py-4 rounded-full shadow-[0_0_20px_rgba(182,154,229,0.2)] hover:bg-secondary transition-all duration-300 transform hover:scale-105 active:scale-95 font-bold"
         disabled={props.disabled}
         onClick={props.onClick}
       >
@@ -605,7 +839,6 @@ function LanguageGate(props: {
           >
             <span>
               <strong>{option.label}</strong>
-              <br />
               <small>{busy === option.value ? s.saving : option.sub}</small>
             </span>
             <span className="material-symbols-outlined">chevron_right</span>
@@ -908,7 +1141,6 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
         <button className="choice-button" disabled={busy || geoBusy || !app?.initData} onClick={useCurrentLocation}>
           <span>
             <strong>{geoBusy ? s.cityDetecting : s.cityDetect}</strong>
-            <br />
             <small>{s.cityGeoMeta}</small>
           </span>
           <span className="material-symbols-outlined">my_location</span>
@@ -931,7 +1163,6 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
             >
               <span>
                 <strong>{city.homeCity}</strong>
-                <br />
                 <small>{city.label}</small>
               </span>
               <span className="material-symbols-outlined">chevron_right</span>

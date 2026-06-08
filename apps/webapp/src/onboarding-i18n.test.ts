@@ -15,6 +15,21 @@ describe("onboarding i18n", () => {
     for (const lang of languages) {
       const s = onboardingStrings(lang);
       expect(s.hookTitle.length).toBeGreaterThan(0);
+      expect(s.introLines).toHaveLength(7);
+      for (const line of s.introLines) {
+        expect(line.length).toBeGreaterThan(0);
+        for (const part of line) expect(part.length).toBeGreaterThan(0);
+      }
+      expect(s.pivotLines).toHaveLength(2);
+      for (const line of s.pivotLines) {
+        expect(line.length).toBeGreaterThan(0);
+        for (const part of line) expect(part.length).toBeGreaterThan(0);
+      }
+      expect(s.howItWorksSteps).toHaveLength(3);
+      for (const step of s.howItWorksSteps) {
+        expect(step.title.length).toBeGreaterThan(0);
+        expect(step.body.length).toBeGreaterThan(0);
+      }
       expect(s.exhaustionLines).toHaveLength(3);
       expect(s.statLabels).toHaveLength(3);
       expect(s.consentTitle.length).toBeGreaterThan(0);

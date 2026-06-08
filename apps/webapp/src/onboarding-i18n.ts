@@ -4,8 +4,12 @@ export interface OnboardingStrings {
   back: string;
   next: string;
   hookTitle: string;
+  introLines: string[][];
   exhaustionLines: string[];
   statLabels: [string, string, string];
+  statFootnote: string;
+  pivotLines: string[][];
+  howItWorksSteps: Array<{ title: string; body: string }>;
   profileName: string;
   profileRole: string;
   profileAlt: string;
@@ -66,12 +70,41 @@ const en: OnboardingStrings = {
   back: "Go back",
   next: "Next",
   hookTitle: "What does it cost to find a relationship in 2026?",
+  introLines: [
+    ["Statistically, only 3% of people on modern dating apps ever make it to a date"],
+    ["We're all wrapped up in work, study, or ourselves"],
+    ["We don't meet on the street anymore"],
+    ["We've stopped seeing each other in person"],
+    [
+      "It's hard to see something beautiful in a person when all you have is their digital avatar",
+      " just like",
+      " millions of others",
+    ],
+    ["We need real, in-person meetings"],
+    ["But,", " what does it cost to find a relationship in 2026?"],
+  ],
   exhaustionLines: [
     "It wears down your mental health and turns dating into a meat market",
     "Endlessly browsing people like products kills empathy",
     "You spend weeks on chats that lead nowhere",
   ],
   statLabels: ["hours", "swipes", "in in-app purchases"],
+  statFootnote: "That's what the average user of modern dating apps spends to find a relationship.",
+  pivotLines: [["We see these problems."], ["So we built ", "Gennety."]],
+  howItWorksSteps: [
+    {
+      title: "Tell us about yourself — once",
+      body: "Import your AI's memory or answer a few questions. No endless forms.",
+    },
+    {
+      title: "Gennety finds the one",
+      body: "No feed, no swiping — our AI matchmaker picks a single person for you.",
+    },
+    {
+      title: "You meet in person",
+      body: "No texting. We handle the time and place — you just show up.",
+    },
+  ],
   profileName: "Alexander, 28",
   profileRole: "Tech founder",
   profileAlt: "Portrait of a young professional",
@@ -151,12 +184,41 @@ const ru: OnboardingStrings = {
   back: "Назад",
   next: "Дальше",
   hookTitle: "Сколько стоит найти отношения в 2026 году?",
+  introLines: [
+    ["Статистически только 3% людей, которые пользуются современными дейтинг-приложениями, доходят до свидания"],
+    ["Мы все зациклены на работе, учёбе или самих себе"],
+    ["Мы больше не знакомимся на улицах"],
+    ["Мы перестали видеться вживую"],
+    [
+      "Сложно разглядеть что-то прекрасное в человеке, когда перед тобой только его цифровой аватар",
+      " такой же",
+      " как и миллионы других",
+    ],
+    ["Нужны реальные встречи"],
+    ["Но,", " сколько же стоит найти отношения в 2026 году?"],
+  ],
   exhaustionLines: [
     "Он ухудшает твоё состояние и превращает знакомства в рынок людей",
     "Бесконечный перебор людей, как товаров, убивает эмпатию",
     "Ты тратишь недели на переписки, которые ни к чему не приводят",
   ],
   statLabels: ["часов", "свайпов", "на покупки внутри приложений"],
+  statFootnote: "Столько тратит средний пользователь современных приложений для знакомств, чтобы найти отношения.",
+  pivotLines: [["Мы видим эти проблемы."], ["Поэтому мы создали ", "Gennety."]],
+  howItWorksSteps: [
+    {
+      title: "Расскажи о себе — один раз",
+      body: "Импортируй память своего AI или ответь на пару вопросов. Никаких бесконечных анкет.",
+    },
+    {
+      title: "Gennety находит одного",
+      body: "Не лента и не свайпы — AI-сводник подбирает того самого.",
+    },
+    {
+      title: "Вы встречаетесь вживую",
+      body: "Без переписок. Время и место берём на себя — тебе остаётся прийти.",
+    },
+  ],
   profileName: "Александр, 28",
   profileRole: "Основатель tech-стартапа",
   profileAlt: "Портрет молодого профессионала",
@@ -235,12 +297,41 @@ const uk: OnboardingStrings = {
   back: "Назад",
   next: "Далі",
   hookTitle: "Скільки коштує знайти стосунки у 2026 році?",
+  introLines: [
+    ["Статистично лише 3% людей, які користуються сучасними дейтинг-застосунками, доходять до побачення"],
+    ["Ми всі зациклені на роботі, навчанні чи самих собі"],
+    ["Ми більше не знайомимось на вулицях"],
+    ["Ми перестали бачитися наживо"],
+    [
+      "Складно розгледіти щось прекрасне в людині, коли перед тобою лише її цифровий аватар",
+      " такий самий",
+      " як і мільйони інших",
+    ],
+    ["Потрібні справжні зустрічі"],
+    ["Але,", " скільки ж коштує знайти стосунки у 2026 році?"],
+  ],
   exhaustionLines: [
     "Він погіршує твій стан і перетворює знайомства на ринок людей",
     "Нескінченний перебір людей, наче товарів, убиває емпатію",
     "Ти витрачаєш тижні на листування, які ні до чого не ведуть",
   ],
   statLabels: ["годин", "свайпів", "на покупки в застосунках"],
+  statFootnote: "Стільки витрачає середній користувач сучасних застосунків для знайомств, щоб знайти стосунки.",
+  pivotLines: [["Ми бачимо ці проблеми."], ["Тому ми створили ", "Gennety."]],
+  howItWorksSteps: [
+    {
+      title: "Розкажи про себе — один раз",
+      body: "Імпортуй памʼять свого AI або дай відповідь на кілька запитань. Жодних безкінечних анкет.",
+    },
+    {
+      title: "Gennety знаходить одного",
+      body: "Не стрічка й не свайпи — AI-сват підбирає того самого.",
+    },
+    {
+      title: "Ви зустрічаєтесь наживо",
+      body: "Без листувань. Час і місце беремо на себе — тобі лишається прийти.",
+    },
+  ],
   profileName: "Олександр, 28",
   profileRole: "Засновник tech-стартапу",
   profileAlt: "Портрет молодого професіонала",
@@ -320,12 +411,41 @@ const de: OnboardingStrings = {
   back: "Zurück",
   next: "Weiter",
   hookTitle: "Was kostet es, 2026 eine Beziehung zu finden?",
+  introLines: [
+    ["Statistisch schaffen es nur 3% der Menschen in modernen Dating-Apps je zu einem Date"],
+    ["Wir sind alle mit Arbeit, Studium oder uns selbst beschäftigt"],
+    ["Wir lernen uns nicht mehr auf der Straße kennen"],
+    ["Wir sehen uns nicht mehr persönlich"],
+    [
+      "Es ist schwer, etwas Schönes in einem Menschen zu sehen, wenn vor dir nur sein digitaler Avatar ist",
+      " genauso einer",
+      " wie Millionen andere",
+    ],
+    ["Wir brauchen echte Begegnungen"],
+    ["Aber,", " was kostet es, 2026 eine Beziehung zu finden?"],
+  ],
   exhaustionLines: [
     "Es belastet deine Psyche und macht Dating zu einem Menschenmarkt",
     "Endloses Durchsuchen von Menschen wie Produkten zerstört Empathie",
     "Du verbringst Wochen mit Chats, die nirgendwohin führen",
   ],
   statLabels: ["Stunden", "Swipes", "für In-App-Käufe"],
+  statFootnote: "So viel gibt ein durchschnittlicher Nutzer moderner Dating-Apps aus, um eine Beziehung zu finden.",
+  pivotLines: [["Wir sehen diese Probleme."], ["Deshalb haben wir ", "Gennety gebaut."]],
+  howItWorksSteps: [
+    {
+      title: "Erzähl uns von dir — einmal",
+      body: "Importiere das Gedächtnis deiner KI oder beantworte ein paar Fragen. Keine endlosen Formulare.",
+    },
+    {
+      title: "Gennety findet die eine Person",
+      body: "Kein Feed, kein Swipen — unser KI-Matchmaker wählt genau eine Person für dich.",
+    },
+    {
+      title: "Ihr trefft euch persönlich",
+      body: "Kein Chatten. Zeit und Ort übernehmen wir — du musst nur kommen.",
+    },
+  ],
   profileName: "Alexander, 28",
   profileRole: "Tech-Gründer",
   profileAlt: "Porträt eines jungen Berufstätigen",
@@ -405,12 +525,41 @@ const pl: OnboardingStrings = {
   back: "Wstecz",
   next: "Dalej",
   hookTitle: "Ile kosztuje znalezienie związku w 2026 roku?",
+  introLines: [
+    ["Statystycznie tylko 3% osób w nowoczesnych aplikacjach randkowych dochodzi do randki"],
+    ["Wszyscy jesteśmy pochłonięci pracą, nauką albo sobą"],
+    ["Już nie poznajemy się na ulicy"],
+    ["Przestaliśmy widywać się na żywo"],
+    [
+      "Trudno dostrzec coś pięknego w człowieku, gdy masz przed sobą tylko jego cyfrowy awatar",
+      " taki sam",
+      " jak miliony innych",
+    ],
+    ["Potrzebujemy prawdziwych spotkań"],
+    ["Ale,", " ile kosztuje znalezienie związku w 2026 roku?"],
+  ],
   exhaustionLines: [
     "To obciąża psychikę i zmienia randkowanie w targ ludzi",
     "Niekończące się przeglądanie ludzi jak produktów zabija empatię",
     "Spędzasz tygodnie na rozmowach, które prowadzą donikąd",
   ],
   statLabels: ["godzin", "przesunięć", "na zakupy w aplikacjach"],
+  statFootnote: "Tyle wydaje przeciętny użytkownik nowoczesnych aplikacji randkowych, aby znaleźć związek.",
+  pivotLines: [["Widzimy te problemy."], ["Dlatego stworzyliśmy ", "Gennety."]],
+  howItWorksSteps: [
+    {
+      title: "Opowiedz o sobie — raz",
+      body: "Zaimportuj pamięć swojej AI albo odpowiedz na kilka pytań. Żadnych niekończących się ankiet.",
+    },
+    {
+      title: "Gennety znajduje jedną osobę",
+      body: "Bez kanału i bez przesuwania — nasz swat AI wybiera tę jedyną osobę.",
+    },
+    {
+      title: "Spotykacie się na żywo",
+      body: "Bez pisania. Czas i miejsce bierzemy na siebie — ty masz tylko przyjść.",
+    },
+  ],
   profileName: "Aleksander, 28",
   profileRole: "Założyciel startupu tech",
   profileAlt: "Portret młodego profesjonalisty",
