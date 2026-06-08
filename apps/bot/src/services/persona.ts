@@ -160,8 +160,9 @@ export function mapPersonaStatusToInternal(
 ): "verified" | "rejected" | "pending" {
   switch (status) {
     case "approved":
-    case "completed":
       return "verified";
+    case "completed":
+      return "pending";
     case "declined":
     case "failed":
     case "expired":

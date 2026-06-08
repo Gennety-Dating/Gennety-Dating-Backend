@@ -94,9 +94,8 @@ describe("verifyPersonaWebhookSignature", () => {
 });
 
 describe("mapPersonaStatusToInternal", () => {
-  it("treats approved/completed as verified", () => {
+  it("treats only approved as verified", () => {
     expect(mapPersonaStatusToInternal("approved")).toBe("verified");
-    expect(mapPersonaStatusToInternal("completed")).toBe("verified");
   });
 
   it("treats declined/failed/expired as rejected", () => {
@@ -108,6 +107,7 @@ describe("mapPersonaStatusToInternal", () => {
   it("treats in-progress states as pending", () => {
     expect(mapPersonaStatusToInternal("created")).toBe("pending");
     expect(mapPersonaStatusToInternal("pending")).toBe("pending");
+    expect(mapPersonaStatusToInternal("completed")).toBe("pending");
     expect(mapPersonaStatusToInternal("needs_review")).toBe("pending");
   });
 });

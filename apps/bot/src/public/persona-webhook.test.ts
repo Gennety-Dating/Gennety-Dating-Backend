@@ -152,7 +152,7 @@ describe("Persona webhook", () => {
     vi.clearAllMocks();
   });
 
-  it("schedules the face-match pipeline on completed inquiry (does not flip to verified yet)", async () => {
+  it("keeps completed-but-unapproved inquiries pending without running the pipeline", async () => {
     const ts = String(Math.floor(Date.now() / 1000));
     const body = makePayload("completed");
     const res = await request(buildApp())
@@ -165,19 +165,12 @@ describe("Persona webhook", () => {
     await flushImmediate();
 
     const u = store.get("user-1")!;
-    // The webhook only sets `pending` and persists the inquiry id — the
-    // pipeline owns the final `verified` / `pending_review` / `rejected`
-    // write.
     expect(u.verificationStatus).toBe("pending");
     expect(u.status).toBe("onboarding");
     expect(u.personaInquiryId).toBe("inq_abc");
     expect(u.verifiedAt).toBeNull();
 
-    expect(runPipeline).toHaveBeenCalledTimes(1);
-    expect(runPipeline).toHaveBeenCalledWith("user-1", "inq_abc", fakeApi);
-
-    // The webhook does NOT DM the user — the pipeline does, after the
-    // verification decision is final.
+    expect(runPipeline).not.toHaveBeenCalled();
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
@@ -202,7 +195,8 @@ describe("Persona webhook", () => {
 
     expect(res.status).toBe(200);
     await flushImmediate();
-    expect(runPipeline).toHaveBeenCalledWith("user-1", "inq_legacy", fakeApi);
+    expect(store.get("user-1")!.personaInquiryId).toBe("inq_legacy");
+    expect(runPipeline).not.toHaveBeenCalled();
   });
 
   it("also schedules the pipeline on inquiry.approved (auto-approve template)", async () => {
@@ -310,7 +304,7 @@ describe("Persona webhook", () => {
       store.get("user-1")!.status = blockedStatus;
       store.get("user-1")!.verificationStatus = "pending";
       const ts = String(Math.floor(Date.now() / 1000));
-      const body = makePayload("completed");
+      const body = makePayload("approved", "user-1", "inq_approved", "inquiry.approved");
       const res = await request(buildApp())
         .post("/v1/webhooks/persona")
         .set("content-type", "application/json")
