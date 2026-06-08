@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MAX_AGE, MIN_AGE } from "@gennety/shared";
 import {
   backfillCandidates,
   deterministicCandidates,
@@ -156,7 +157,7 @@ describe("onboarding collector routing", () => {
       onboardingValidationText("ru", [
         { field: "age", reason: "age_out_of_range" },
       ]),
-    ).toContain("18-35");
+    ).toContain(`${MIN_AGE}-${MAX_AGE}`);
   });
 
   it.each(["en", "ru", "uk", "de", "pl"] as const)(
@@ -167,4 +168,13 @@ describe("onboarding collector routing", () => {
       expect(onboardingQuestionText(language, "photos")).not.toHaveLength(0);
     },
   );
+
+  it("explains why the Magic Prompt is needed before asking for the AI response", () => {
+    const text = onboardingQuestionText("en", "context_dump");
+
+    expect(text).toContain("Why we do this");
+    expect(text).toContain("honest psychological profile");
+    expect(text).toContain("Every user goes through the same deep read");
+    expect(text).toContain("Telegram splits");
+  });
 });
