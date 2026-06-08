@@ -68,7 +68,12 @@ export const env = {
     `${process.env.WEBAPP_URL ?? "https://example.invalid/calendar"}/feedback.html`,
   ADMIN_API_KEY: process.env.ADMIN_API_KEY ?? "",
   ADMIN_PORT: Number(process.env.ADMIN_PORT ?? "3100"),
-  ADMIN_DASHBOARD_ORIGIN: process.env.ADMIN_DASHBOARD_ORIGIN ?? "*",
+  /// Allowed browser origin(s) for the admin analytics dashboard
+  /// (comma-separated). Defaults to empty — an unset/`*` value makes
+  /// `admin/server.ts` deny cross-origin requests rather than echo a
+  /// wildcard from an authenticated admin surface (audit M3). Set this to
+  /// the concrete dashboard origin in production.
+  ADMIN_DASHBOARD_ORIGIN: process.env.ADMIN_DASHBOARD_ORIGIN ?? "",
 
   // ── Public `/v1/*` API for the mobile app ─────────────────────
   JWT_SECRET: process.env.JWT_SECRET ?? "",

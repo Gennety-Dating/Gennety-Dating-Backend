@@ -1,5 +1,5 @@
 import { prisma } from "@gennety/db";
-import { t, type Language, type TranslationKey } from "@gennety/shared";
+import { t, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
 import { createMatchEvent } from "../../services/match-events.js";
@@ -8,6 +8,10 @@ import { sendTicketOffer } from "./ticket-gate.js";
 import { updateEloScores } from "../../utils/elo-calculator.js";
 import { buildDeclineReasonKeyboard } from "./decline-feedback.js";
 import { syncTelegramUsername } from "../../utils/username.js";
+import {
+  boostAcceptedSidePriority,
+  outcomeRevealKey,
+} from "../../services/match-decision-shared.js";
 
 /**
  * Match decision handler — Accept / Decline.
@@ -99,19 +103,6 @@ function peerTelegramIdOf(match: MatchView, side: Side): bigint {
 
 function peerPriorAccepted(match: MatchView, side: Side): boolean | null {
   return side === "A" ? match.acceptedByB : match.acceptedByA;
-}
-
-function outcomeRevealKey(
-  userAccepted: boolean,
-  peerAccepted: boolean,
-  acceptedSidePriorityBoosted: boolean,
-): TranslationKey {
-  if (userAccepted && !peerAccepted) {
-    return acceptedSidePriorityBoosted
-      ? "matchAcceptedPeerDeclinedPriority"
-      : "matchAcceptedPeerDeclined";
-  }
-  return peerAccepted ? "matchPeerWasAccepted" : "matchPeerWasDeclined";
 }
 
 export async function handleMatchDecision(ctx: BotContext): Promise<void> {
@@ -216,23 +207,6 @@ async function sendPeerOutcomeReveal(
     await ctx.api.sendMessage(Number(peerTelegramId), t(peerLang, key));
   } catch (err) {
     console.warn("[decision] peer outcome reveal failed:", (err as Error).message);
-  }
-}
-
-async function boostAcceptedSidePriority(userId: string): Promise<boolean> {
-  try {
-    await prisma.profile.updateMany({
-      where: { userId },
-      data: {
-        standbyCount: { increment: 1 },
-        missedWeeks: { increment: 1 },
-        lastMissedAt: new Date(),
-      },
-    });
-    return true;
-  } catch (err) {
-    console.warn("[decision] accepted-side priority boost failed:", (err as Error).message);
-    return false;
   }
 }
 

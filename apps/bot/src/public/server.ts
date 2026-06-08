@@ -42,6 +42,16 @@ export const app: ReturnType<typeof express> = express();
 app.set("trust proxy", 1);
 
 app.use(helmet());
+// Public API auth is header-based (Bearer JWT / Telegram `tma` initData),
+// never cookie-based, so a wildcard ACAO is not a credential-leak vector —
+// but it's still worth a nudge to scope it to the known Mini App + app
+// origins in production (audit M3).
+if (env.PUBLIC_CORS_ORIGIN === "*") {
+  console.warn(
+    "[public] PUBLIC_CORS_ORIGIN is '*' — any browser origin may call /v1/*. " +
+      "Set it to the Mini App / web origins in production.",
+  );
+}
 app.use(
   cors({
     origin: env.PUBLIC_CORS_ORIGIN === "*" ? "*" : env.PUBLIC_CORS_ORIGIN.split(","),

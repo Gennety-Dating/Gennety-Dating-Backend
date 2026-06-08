@@ -1,5 +1,9 @@
 import { env } from "../config.js";
 
+/** Hard timeout for the Resend REST call — Node `fetch` has none by default,
+ * so a stalled provider would hang the OTP request handler forever (audit M1). */
+const EMAIL_TIMEOUT_MS = 15_000;
+
 export async function sendOtpEmail(to: string, otp: string): Promise<void> {
   // Local dev: log the code instead of calling Resend. Triggers when no key
   // is configured, or when OTP_LOG_TO_CONSOLE=true is set explicitly (handy
@@ -23,6 +27,7 @@ export async function sendOtpEmail(to: string, otp: string): Promise<void> {
       text: `Your verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
       html: `<p>Your verification code is: <strong>${otp}</strong></p><p>This code expires in 10 minutes.</p>`,
     }),
+    signal: AbortSignal.timeout(EMAIL_TIMEOUT_MS),
   });
 
   if (!res.ok) {

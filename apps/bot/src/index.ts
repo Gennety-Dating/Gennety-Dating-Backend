@@ -29,6 +29,7 @@ import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
 import { ticketExpiryTick } from "./workers/ticket-expiry.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
 import { venueRevalidationTick } from "./services/venue-revalidation.js";
+import { guardedTick } from "./utils/guarded-tick.js";
 
 /* ── Process-level crash guard ─────────────────────────────── */
 process.on("uncaughtException", (err) => {
@@ -279,31 +280,33 @@ bot.start({
     startPublicServer(bot.api);
 
     // Weekly matching cron (global greedy + automated dispatch).
-    cron.schedule(MATCH_CRON_SCHEDULE, () => {
-      void weeklyMatchingJob();
-    }, { timezone: CRON_TIMEZONE });
+    // Every scheduled job below is wrapped in `guardedTick` (single-flight):
+    // node-cron / setInterval fire on a fixed cadence and do NOT wait for the
+    // previous run, so a tick that runs longer than its interval would
+    // otherwise overlap the next one and re-process the same rows (duplicate
+    // DMs / pushes — audit H2/M4). `guardedTick` skips a tick while the prior
+    // run is still in flight and centralises error logging.
+    cron.schedule(MATCH_CRON_SCHEDULE, guardedTick("weekly-matching", weeklyMatchingJob), {
+      timezone: CRON_TIMEZONE,
+    });
     console.log(`[cron] Weekly matching scheduled: "${MATCH_CRON_SCHEDULE}" (${CRON_TIMEZONE})`);
 
     // 24h TTL expiry cron.
-    cron.schedule(EXPIRY_CRON_SCHEDULE, () => {
-      void expiryJob();
-    });
+    cron.schedule(EXPIRY_CRON_SCHEDULE, guardedTick("match-expiry", expiryJob));
     console.log(`[cron] Match expiry scheduled: "${EXPIRY_CRON_SCHEDULE}"`);
 
     // Empathetic "no match this week" DM, 15 min after the Thursday batch.
     cron.schedule(
       NO_MATCH_NOTICE_CRON_SCHEDULE,
-      () => {
-        void sendNoMatchNotices(bot.api, new Date(), DISPATCH_DELAY_MS)
-          .then((r) => {
-            if (r.notified > 0 || r.failed > 0) {
-              console.log(
-                `[no-match-notice] notified=${r.notified} tier1=${r.tier1} tier2=${r.tier2} tier3plus=${r.tier3plus} skipped=${r.skipped} failed=${r.failed}`,
-              );
-            }
-          })
-          .catch((err) => console.error("[no-match-notice] tick failed:", err));
-      },
+      guardedTick("no-match-notice", () =>
+        sendNoMatchNotices(bot.api, new Date(), DISPATCH_DELAY_MS).then((r) => {
+          if (r.notified > 0 || r.failed > 0) {
+            console.log(
+              `[no-match-notice] notified=${r.notified} tier1=${r.tier1} tier2=${r.tier2} tier3plus=${r.tier3plus} skipped=${r.skipped} failed=${r.failed}`,
+            );
+          }
+        }),
+      ),
       { timezone: CRON_TIMEZONE },
     );
     console.log(
@@ -311,109 +314,129 @@ bot.start({
     );
 
     // Live "⏳ Xh left" countdown plate on proposal pitches.
-    cron.schedule(PROPOSAL_COUNTDOWN_CRON_SCHEDULE, () => {
-      void proposalCountdownTick(bot.api)
-        .then((r) => {
+    cron.schedule(
+      PROPOSAL_COUNTDOWN_CRON_SCHEDULE,
+      guardedTick("proposal-countdown", () =>
+        proposalCountdownTick(bot.api).then((r) => {
           if (r.edited > 0 || r.cleared > 0 || r.errors > 0) {
             console.log(
               `[proposal-countdown] scanned=${r.scanned} edited=${r.edited} skipped=${r.skippedSameText} cleared=${r.cleared} errors=${r.errors}`,
             );
           }
-        })
-        .catch((err) => console.error("[proposal-countdown] tick failed:", err));
-    });
+        }),
+      ),
+    );
     console.log(`[cron] Proposal countdown scheduled: "${PROPOSAL_COUNTDOWN_CRON_SCHEDULE}"`);
 
     // Date lifecycle (icebreakers, emergencies, feedback) — kept on setInterval.
     if (DATE_LIFECYCLE_TICK_MS > 0) {
-      setInterval(() => {
-        void dateLifecycleTick();
-      }, DATE_LIFECYCLE_TICK_MS);
+      setInterval(guardedTick("date-lifecycle", dateLifecycleTick), DATE_LIFECYCLE_TICK_MS);
     }
 
     // Re-engagement: remind users who dropped off onboarding (all steps).
-    cron.schedule(RE_ENGAGEMENT_CRON_SCHEDULE, () => {
-      void reEngagementTick(bot.api).then((n) => {
-        if (n > 0) console.log(`[re-engagement] ${n} user(s) re-engaged`);
-      }).catch((err) => console.error("[re-engagement] tick failed:", err));
-    });
+    cron.schedule(
+      RE_ENGAGEMENT_CRON_SCHEDULE,
+      guardedTick("re-engagement", () =>
+        reEngagementTick(bot.api).then((n) => {
+          if (n > 0) console.log(`[re-engagement] ${n} user(s) re-engaged`);
+        }),
+      ),
+    );
     console.log(`[cron] Re-engagement scheduled: "${RE_ENGAGEMENT_CRON_SCHEDULE}"`);
 
     // Profiler: post-onboarding Q&A batches that fuel icebreakers + hints.
-    cron.schedule(PROFILER_CRON_SCHEDULE, () => {
-      void profilerTick(bot.api).then((r) => {
-        if (r.seeded > 0 || r.dispatched > 0 || r.deferred > 0) {
-          console.log(
-            `[profiler] seeded=${r.seeded} dispatched=${r.dispatched} deferred=${r.deferred}`,
-          );
-        }
-      }).catch((err) => console.error("[profiler] tick failed:", err));
-    });
+    cron.schedule(
+      PROFILER_CRON_SCHEDULE,
+      guardedTick("profiler", () =>
+        profilerTick(bot.api).then((r) => {
+          if (r.seeded > 0 || r.dispatched > 0 || r.deferred > 0) {
+            console.log(
+              `[profiler] seeded=${r.seeded} dispatched=${r.dispatched} deferred=${r.deferred}`,
+            );
+          }
+        }),
+      ),
+    );
     console.log(`[cron] Profiler scheduled: "${PROFILER_CRON_SCHEDULE}"`);
 
     // Match nudge: proposal (3h/10h) and scheduling (6h/12h) reminders.
-    cron.schedule(MATCH_NUDGE_CRON_SCHEDULE, () => {
-      void matchNudgeTick(bot.api).then((r) => {
-        if (r.proposalNudges > 0 || r.schedNudges > 0) {
-          console.log(`[match-nudge] proposal=${r.proposalNudges} sched=${r.schedNudges}`);
-        }
-      }).catch((err) => console.error("[match-nudge] tick failed:", err));
-    });
+    cron.schedule(
+      MATCH_NUDGE_CRON_SCHEDULE,
+      guardedTick("match-nudge", () =>
+        matchNudgeTick(bot.api).then((r) => {
+          if (r.proposalNudges > 0 || r.schedNudges > 0) {
+            console.log(`[match-nudge] proposal=${r.proposalNudges} sched=${r.schedNudges}`);
+          }
+        }),
+      ),
+    );
     console.log(`[cron] Match nudge scheduled: "${MATCH_NUDGE_CRON_SCHEDULE}"`);
 
     // Date Ticket expiry: refund stalled partial payments, open Calendar free.
     if (env.TICKET_FEATURE_ENABLED) {
-      cron.schedule(TICKET_EXPIRY_CRON_SCHEDULE, () => {
-        void ticketExpiryTick(bot.api).then((r) => {
-          if (r.swept > 0) console.log(`[ticket-expiry] swept ${r.swept} stalled ticket gate(s)`);
-        }).catch((err) => console.error("[ticket-expiry] tick failed:", err));
-      });
+      cron.schedule(
+        TICKET_EXPIRY_CRON_SCHEDULE,
+        guardedTick("ticket-expiry", () =>
+          ticketExpiryTick(bot.api).then((r) => {
+            if (r.swept > 0) console.log(`[ticket-expiry] swept ${r.swept} stalled ticket gate(s)`);
+          }),
+        ),
+      );
       console.log(`[cron] Ticket expiry scheduled: "${TICKET_EXPIRY_CRON_SCHEDULE}"`);
     }
 
     // Pre-match announce: Wednesday teaser before Thursday batch.
-    cron.schedule(PRE_MATCH_ANNOUNCE_CRON_SCHEDULE, () => {
-      void preMatchAnnounceTick(bot.api).then((r) => {
-        if (r.announced > 0) console.log(`[pre-match-announce] ${r.announced} user(s) notified`);
-      }).catch((err) => console.error("[pre-match-announce] tick failed:", err));
-    }, { timezone: CRON_TIMEZONE });
+    cron.schedule(
+      PRE_MATCH_ANNOUNCE_CRON_SCHEDULE,
+      guardedTick("pre-match-announce", () =>
+        preMatchAnnounceTick(bot.api).then((r) => {
+          if (r.announced > 0) console.log(`[pre-match-announce] ${r.announced} user(s) notified`);
+        }),
+      ),
+      { timezone: CRON_TIMEZONE },
+    );
     console.log(`[cron] Pre-match announce scheduled: "${PRE_MATCH_ANNOUNCE_CRON_SCHEDULE}" (${CRON_TIMEZONE})`);
 
     // M-6: hourly auto-unsuspend. Lifts Tier 2 suspensions whose
     // `suspendedUntil` has elapsed without waiting for the weekly batch.
-    cron.schedule(AUTO_UNSUSPEND_CRON_SCHEDULE, () => {
-      void autoUnsuspendElapsed()
-        .then((n) => {
+    cron.schedule(
+      AUTO_UNSUSPEND_CRON_SCHEDULE,
+      guardedTick("auto-unsuspend", () =>
+        autoUnsuspendElapsed().then((n) => {
           if (n > 0) console.log(`[auto-unsuspend] reactivated ${n} user(s)`);
-        })
-        .catch((err) => console.error("[auto-unsuspend] tick failed:", err));
-    });
+        }),
+      ),
+    );
     console.log(`[cron] Auto-unsuspend scheduled: "${AUTO_UNSUSPEND_CRON_SCHEDULE}"`);
 
     // M-2: embedding refresh — picks up dirty profiles and recomputes.
-    cron.schedule(EMBEDDING_REFRESH_CRON_SCHEDULE, () => {
-      void embeddingRefreshTick()
-        .then((r) => {
+    cron.schedule(
+      EMBEDDING_REFRESH_CRON_SCHEDULE,
+      guardedTick("embedding-refresh", () =>
+        embeddingRefreshTick().then((r) => {
           if (r.scanned > 0) {
             console.log(
               `[embedding-refresh] scanned=${r.scanned} refreshed=${r.refreshed} failed=${r.failed}`,
             );
           }
-        })
-        .catch((err) => console.error("[embedding-refresh] tick failed:", err));
-    });
+        }),
+      ),
+    );
     console.log(`[cron] Embedding refresh scheduled: "${EMBEDDING_REFRESH_CRON_SCHEDULE}"`);
 
     // Pinned status banner — discrete countdown to next match dispatch.
-    cron.schedule(STATUS_TIMER_CRON_SCHEDULE, () => {
-      void statusTimerTick(bot.api).then((r) => {
-        if (r.edited > 0 || r.cleared > 0 || r.errors > 0) {
-          console.log(
-            `[status-timer] scanned=${r.scanned} edited=${r.edited} skipped=${r.skippedSameText} cleared=${r.cleared} errors=${r.errors}`,
-          );
-        }
-      }).catch((err) => console.error("[status-timer] tick failed:", err));
-    });
+    cron.schedule(
+      STATUS_TIMER_CRON_SCHEDULE,
+      guardedTick("status-timer", () =>
+        statusTimerTick(bot.api).then((r) => {
+          if (r.edited > 0 || r.cleared > 0 || r.errors > 0) {
+            console.log(
+              `[status-timer] scanned=${r.scanned} edited=${r.edited} skipped=${r.skippedSameText} cleared=${r.cleared} errors=${r.errors}`,
+            );
+          }
+        }),
+      ),
+    );
     console.log(`[cron] Status timer scheduled: "${STATUS_TIMER_CRON_SCHEDULE}"`);
 
     // GDPR Article 9: scrub Persona-captured selfies once they pass the
@@ -421,17 +444,15 @@ bot.start({
     // reference image is deleted.
     cron.schedule(
       SELFIE_RETENTION_CRON_SCHEDULE,
-      () => {
-        void runSelfieRetention()
-          .then((r) => {
-            if (r.scanned > 0 || r.errors > 0) {
-              console.log(
-                `[selfie-retention] scanned=${r.scanned} storage=${r.deletedFromStorage} db=${r.deletedFromDb} errors=${r.errors}`,
-              );
-            }
-          })
-          .catch((err) => console.error("[selfie-retention] tick failed:", err));
-      },
+      guardedTick("selfie-retention", () =>
+        runSelfieRetention().then((r) => {
+          if (r.scanned > 0 || r.errors > 0) {
+            console.log(
+              `[selfie-retention] scanned=${r.scanned} storage=${r.deletedFromStorage} db=${r.deletedFromDb} errors=${r.errors}`,
+            );
+          }
+        }),
+      ),
       { timezone: CRON_TIMEZONE },
     );
     console.log(
@@ -442,17 +463,15 @@ bot.start({
     // refresh opening hours against Google Places.
     cron.schedule(
       VENUE_REVALIDATION_CRON_SCHEDULE,
-      () => {
-        void venueRevalidationTick()
-          .then((r) => {
-            if (r.scanned > 0) {
-              console.log(
-                `[venue-revalidation] scanned=${r.scanned} deactivated=${r.deactivated} refreshed=${r.refreshed} failed=${r.failed}`,
-              );
-            }
-          })
-          .catch((err) => console.error("[venue-revalidation] tick failed:", err));
-      },
+      guardedTick("venue-revalidation", () =>
+        venueRevalidationTick().then((r) => {
+          if (r.scanned > 0) {
+            console.log(
+              `[venue-revalidation] scanned=${r.scanned} deactivated=${r.deactivated} refreshed=${r.refreshed} failed=${r.failed}`,
+            );
+          }
+        }),
+      ),
       { timezone: CRON_TIMEZONE },
     );
     console.log(

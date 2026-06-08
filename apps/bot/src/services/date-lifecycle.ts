@@ -201,6 +201,21 @@ export async function runDateLifecycleTick(
   });
 
   for (const match of upcomingDates) {
+    // H2: claim the idempotency marker atomically BEFORE doing any awaited
+    // side-effect. A row can only be claimed once (the `icebreakersSentAt:
+    // null` guard collapses concurrent claimers to a single winner), so even
+    // if two ticks overlap — or a future multi-process deploy runs the
+    // lifecycle on more than one node — the ice-breaker / emergency DMs are
+    // sent exactly once. The generated content (`iceBreakersA/B`) is persisted
+    // in a follow-up update once it's ready. Ice-breaker generation always
+    // produces output (graceful static fallback), so claiming up front never
+    // strands a match the way it would for the retry-capable wingman loop.
+    const claimed = await prisma.match.updateMany({
+      where: { id: match.id, icebreakersSentAt: null },
+      data: { icebreakersSentAt: now },
+    });
+    if (claimed.count === 0) continue;
+
     const langA = (match.userA.language ?? "en") as Language;
     const langB = (match.userB.language ?? "en") as Language;
 
@@ -293,12 +308,12 @@ export async function runDateLifecycleTick(
 
     await Promise.all(sends.filter((p): p is Promise<unknown> => p !== null));
 
-    // Stamp icebreakersSentAt unconditionally — see C-3 in the audit. We'd
-    // rather miss one send than duplicate-spam every 2 minutes.
+    // `icebreakersSentAt` was already stamped by the atomic claim above
+    // (H2); persist only the generated content here. We'd rather miss one
+    // send than duplicate-spam every 2 minutes (C-3 in the prior audit).
     await prisma.match.update({
       where: { id: match.id },
       data: {
-        icebreakersSentAt: now,
         iceBreakersA: topicsForA,
         iceBreakersB: topicsForB,
       },

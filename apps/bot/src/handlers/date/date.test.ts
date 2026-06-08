@@ -9,7 +9,7 @@ import { DEFAULT_SESSION } from "@gennety/shared";
 vi.mock("@gennety/db", () => ({
   prisma: {
     user: { findUnique: vi.fn() },
-    match: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn() },
+    match: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     profile: { findUnique: vi.fn() },
     profilerAnswer: { findMany: vi.fn().mockResolvedValue([]) },
   },
@@ -65,6 +65,7 @@ const mMatch = prisma.match as unknown as {
   findUnique: MockFn;
   findMany: MockFn;
   update: MockFn;
+  updateMany: MockFn;
 };
 const mUser = prisma.user as unknown as { findUnique: MockFn };
 const mProfile = prisma.profile as unknown as { findUnique: MockFn };
@@ -461,6 +462,8 @@ describe("date-lifecycle tick", () => {
       .mockResolvedValueOnce([])
       // feedback query returns empty
       .mockResolvedValueOnce([]);
+    // H2: the atomic claim stamps icebreakersSentAt; default it to a win.
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
     mMatch.update.mockResolvedValue({});
     // Profile lookups for personalised ice-breakers
     mProfile.findUnique.mockResolvedValue({ psychologicalSummary: null });
@@ -472,11 +475,19 @@ describe("date-lifecycle tick", () => {
     expect(result.emergencies).toBe(1);
     // 4 messages: icebreaker A, icebreaker B, emergency A, emergency B
     expect(api.sendMessage).toHaveBeenCalledTimes(4);
-    // Mark as sent (icebreakers + topic arrays — order-independent shape match)
+    // H2: icebreakersSentAt is stamped by the atomic claim (updateMany) guarded
+    // on the still-null marker, BEFORE any send.
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "match-1", icebreakersSentAt: null },
+        data: expect.objectContaining({ icebreakersSentAt: now }),
+      }),
+    );
+    // The generated topics are persisted in the follow-up update.
     expect(mMatch.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "match-1" },
-        data: expect.objectContaining({ icebreakersSentAt: now }),
+        data: expect.objectContaining({ iceBreakersA: expect.any(Array) }),
       }),
     );
   });
@@ -572,6 +583,7 @@ describe("date-lifecycle tick", () => {
       ])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
     mMatch.update.mockResolvedValue({});
     mProfile.findUnique.mockResolvedValue({ psychologicalSummary: null });
 
@@ -588,10 +600,11 @@ describe("date-lifecycle tick", () => {
     expect(result.icebreakers).toBe(1);
     // The other 3 sends still happen
     expect(api.sendMessage).toHaveBeenCalledTimes(4);
-    // CRITICAL: idempotency marker stamped despite the failure
-    expect(mMatch.update).toHaveBeenCalledWith(
+    // CRITICAL: idempotency marker stamped up front by the atomic claim (H2),
+    // so a failed send can't strand the match for a duplicate next tick.
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "match-1" },
+        where: { id: "match-1", icebreakersSentAt: null },
         data: expect.objectContaining({ icebreakersSentAt: now }),
       }),
     );
@@ -614,6 +627,7 @@ describe("date-lifecycle tick", () => {
       ])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
     mMatch.update.mockResolvedValue({});
     mProfile.findUnique.mockResolvedValue({ psychologicalSummary: null });
 

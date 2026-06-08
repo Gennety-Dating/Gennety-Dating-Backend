@@ -8,6 +8,7 @@ import {
   uploadChatImage,
   createChatImageSignedUrl,
 } from "../../services/storage.js";
+import { sniffImageMime } from "../../utils/image-sniff.js";
 
 /**
  * Aether Concierge — multimodal AI chat for the mobile app.
@@ -59,11 +60,15 @@ chatRouter.post(
       res.status(400).json({ error: "Missing image" });
       return;
     }
-    const mime = req.file.mimetype || "image/jpeg";
-    if (!mime.startsWith("image/")) {
-      res.status(400).json({ error: "File must be an image" });
+    // The client-supplied Content-Type is attacker-controlled, so sniff the
+    // actual magic bytes and reject anything that isn't a real raster image
+    // (audit M2). The sniffed MIME — not the header — is what we persist.
+    const sniffed = sniffImageMime(req.file.buffer);
+    if (!sniffed) {
+      res.status(400).json({ error: "File must be a valid image" });
       return;
     }
+    const mime = sniffed;
     try {
       const uploaded = await uploadChatImage(req.userId!, req.file.buffer, mime);
       const signedUrl = await createChatImageSignedUrl(uploaded.path, SIGNED_URL_TTL_S);

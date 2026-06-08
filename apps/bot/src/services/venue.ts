@@ -74,6 +74,10 @@ export interface VenueClient {
 export const MIN_RATING = 4.0;
 export const MIN_RATING_COUNT = 30;
 const MAX_RESULT_COUNT = 15;
+/** Hard timeout for Google Places (New) REST calls — Node `fetch` has none by
+ * default, so a stalled upstream would hang the date-lifecycle / location flow
+ * forever (audit M1). */
+const PLACES_TIMEOUT_MS = 15_000;
 
 /**
  * Price levels considered student-friendly. PRICE_LEVEL_FREE / _UNSPECIFIED
@@ -426,6 +430,7 @@ async function searchNearby(
       },
       rankPreference: "POPULARITY",
     }),
+    signal: AbortSignal.timeout(PLACES_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new Error(`Places API (New) searchNearby failed: ${res.status}`);
@@ -462,6 +467,7 @@ async function searchText(
       "X-Goog-FieldMask": FIELD_MASK,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(PLACES_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new Error(`Places API (New) searchText failed: ${res.status}`);
@@ -507,6 +513,7 @@ export async function fetchPlaceDetails(
         "X-Goog-Api-Key": apiKey,
         "X-Goog-FieldMask": PLACE_DETAILS_FIELD_MASK,
       },
+      signal: AbortSignal.timeout(PLACES_TIMEOUT_MS),
     },
   );
   if (!res.ok) {

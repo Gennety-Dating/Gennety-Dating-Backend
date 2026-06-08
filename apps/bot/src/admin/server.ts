@@ -85,9 +85,24 @@ export const app: ReturnType<typeof express> = express();
 app.set("trust proxy", 1);
 
 app.use(helmet());
+// M3: never echo a wildcard ACAO from an authenticated admin surface. An
+// unset (or explicit "*") origin denies cross-origin requests (`origin:
+// false` → no ACAO header) instead of opening the dashboard API to every
+// site. Production sets `ADMIN_DASHBOARD_ORIGIN` to the concrete dashboard
+// origin, so this only bites a misconfigured deploy.
+const adminCorsOrigin =
+  env.ADMIN_DASHBOARD_ORIGIN && env.ADMIN_DASHBOARD_ORIGIN !== "*"
+    ? env.ADMIN_DASHBOARD_ORIGIN.split(",")
+    : false;
+if (adminCorsOrigin === false) {
+  console.warn(
+    "[admin] ADMIN_DASHBOARD_ORIGIN is unset or '*' — cross-origin requests are denied. " +
+      "Set it to the dashboard origin to enable browser access.",
+  );
+}
 app.use(
   cors({
-    origin: env.ADMIN_DASHBOARD_ORIGIN === "*" ? "*" : env.ADMIN_DASHBOARD_ORIGIN.split(","),
+    origin: adminCorsOrigin,
     methods: ["GET", "PATCH", "OPTIONS"],
   }),
 );

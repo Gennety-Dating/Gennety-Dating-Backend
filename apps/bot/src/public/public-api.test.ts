@@ -584,6 +584,24 @@ vi.mock("@gennety/db", async () => {
           Object.assign(u.profile, data);
           return u.profile;
         }),
+        // Used by `boostAcceptedSidePriority` (accepted-side compensation) —
+        // handles `{ field: { increment } }` shapes that `applyData` skips.
+        updateMany: vi.fn(async ({ where, data }: any) => {
+          let count = 0;
+          for (const u of db.users.values()) {
+            if (!u.profile) continue;
+            if (where.userId !== undefined && u.profile.userId !== where.userId) continue;
+            for (const [k, v] of Object.entries(data)) {
+              if (v && typeof v === "object" && "increment" in (v as any)) {
+                (u.profile as any)[k] = ((u.profile as any)[k] ?? 0) + (v as any).increment;
+              } else {
+                (u.profile as any)[k] = v;
+              }
+            }
+            count++;
+          }
+          return { count };
+        }),
       },
   };
 
@@ -1779,14 +1797,11 @@ describe("/v1/matches/*", () => {
     expect(res.body).toBeNull();
   });
 
-  it("POST /:id/decision declines → cancels (and surfaces 404 since getCurrentMatchForUser returns null)", async () => {
-    // QUIRK: `applyMatchDecision` returns `getCurrentMatchForUser(userId)`
-    // after persisting the decline. That helper filters out `cancelled`
-    // matches, so it returns `null`, and the route handler maps `null` to
-    // 404. The side-effect (status flip) still happens — the mobile client
-    // in `gennety-mobile/src/api/matches.ts` papers over this by refetching
-    // /current on any non-2xx. Worth flagging: the route can't distinguish
-    // "you just declined" from "match not found."
+  it("POST /:id/decision FIRST decline keeps the row 'proposed' (blind invariant) and nudges the peer", async () => {
+    // H1: a single decline must NOT cancel the match — the peer's decision
+    // stays blind until they also decide (or the TTL expires). The peer gets
+    // a neutral "your match answered" nudge that reveals nothing.
+    const { sendPushToUser } = await import("../services/push.js");
     const alice = await seedUser({ firstName: "Alice" });
     const bob = await seedUser({ firstName: "Bob" });
     const match = await seedMatch(alice.id, bob.id, { status: "proposed" });
@@ -1794,8 +1809,9 @@ describe("/v1/matches/*", () => {
       .post(`/v1/matches/${match.id}/decision`)
       .set("Authorization", `Bearer ${signAccess(alice.id)}`)
       .send({ decision: "decline" });
-    expect(res.status).toBe(404);
-    expect(db.matches.get(match.id)?.status).toBe("cancelled");
+    // Row still open → getCurrentMatchForUser returns it → 200 (not 404).
+    expect(res.status).toBe(200);
+    expect(db.matches.get(match.id)?.status).toBe("proposed");
     expect(db.matches.get(match.id)?.acceptedByA).toBe(false);
     expect(db.matchEvents).toEqual(
       expect.arrayContaining([
@@ -1808,6 +1824,72 @@ describe("/v1/matches/*", () => {
         }),
       ]),
     );
+    // Blind nudge to the peer.
+    expect(sendPushToUser).toHaveBeenCalledWith(
+      bob.id,
+      expect.objectContaining({ data: expect.objectContaining({ type: "match.peer_decided" }) }),
+    );
+  });
+
+  it("POST /:id/decision SECOND decline (peer accepted) cancels + compensates the accepter", async () => {
+    // Mirrors the bot path: peer accepted first → this decline cancels, the
+    // accepter (peer) gets the standby/priority boost, and both are notified.
+    const alice = await seedUser({ firstName: "Alice" });
+    const bob = await seedUser({ firstName: "Bob" });
+    await (await import("@gennety/db")).prisma.profile.upsert({
+      where: { userId: bob.id },
+      create: { userId: bob.id },
+      update: {},
+    });
+    const match = await seedMatch(alice.id, bob.id, {
+      status: "proposed",
+      acceptedByB: true, // Bob accepted first
+    });
+    const res = await request(app)
+      .post(`/v1/matches/${match.id}/decision`)
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`)
+      .send({ decision: "decline" });
+    expect(res.status).toBe(404); // current match is now cancelled → null
+    expect(db.matches.get(match.id)?.status).toBe("cancelled");
+    expect(db.matches.get(match.id)?.acceptedByA).toBe(false);
+    // Bob (who accepted, then got declined on) is compensated.
+    expect(db.users.get(bob.id)?.profile?.standbyCount).toBe(1);
+  });
+
+  it("POST /:id/decision regression: accept after the peer declined via another surface cancels (no stuck 'proposed')", async () => {
+    // H1 cross-platform stuck state: peer declined first (row stays
+    // 'proposed', acceptedByB=false). The other user accepting via the mobile
+    // endpoint must resolve the match, not leave it wedged in 'proposed'.
+    const alice = await seedUser({ firstName: "Alice" });
+    const bob = await seedUser({ firstName: "Bob" });
+    const match = await seedMatch(alice.id, bob.id, {
+      status: "proposed",
+      acceptedByB: false, // Bob already declined (bot kept it 'proposed')
+    });
+    const res = await request(app)
+      .post(`/v1/matches/${match.id}/decision`)
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`)
+      .send({ decision: "accept" });
+    expect(res.status).toBe(404); // cancelled → no current match
+    expect(db.matches.get(match.id)?.status).toBe("cancelled");
+    expect(db.matches.get(match.id)?.acceptedByA).toBe(true);
+  });
+
+  it("POST /:id/decision ignores a double-tap from the same side", async () => {
+    const alice = await seedUser({ firstName: "Alice" });
+    const bob = await seedUser({ firstName: "Bob" });
+    const match = await seedMatch(alice.id, bob.id, {
+      status: "proposed",
+      acceptedByA: true, // Alice already accepted
+    });
+    const res = await request(app)
+      .post(`/v1/matches/${match.id}/decision`)
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`)
+      .send({ decision: "decline" });
+    // No-op: her decision was final; still her open proposed match → 200.
+    expect(res.status).toBe(200);
+    expect(db.matches.get(match.id)?.status).toBe("proposed");
+    expect(db.matches.get(match.id)?.acceptedByA).toBe(true);
   });
 
   it("POST /:id/decision with both accepts → negotiating + push to peer", async () => {

@@ -43,6 +43,8 @@ export async function sendLivePhoto(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    // Node `fetch` has no default timeout — bound the raw Bot API call (M1).
+    signal: AbortSignal.timeout(20_000),
   });
   const json = (await res.json().catch(() => null)) as {
     ok?: boolean;

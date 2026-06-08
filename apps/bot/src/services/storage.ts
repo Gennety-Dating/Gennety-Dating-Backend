@@ -10,6 +10,14 @@ import { env } from "../config.js";
  * `createSignedUrl` so we never leak raw object keys.
  */
 
+/**
+ * Hard timeout for every Supabase Storage REST call. Node's global `fetch`
+ * has no default timeout, so a stalled upstream would hang the request
+ * handler / cron tick forever (audit M1). 20s comfortably covers an 8MB
+ * photo upload while still failing fast on a dead connection.
+ */
+const STORAGE_TIMEOUT_MS = 20_000;
+
 interface UploadResult {
   path: string;
 }
@@ -40,6 +48,7 @@ export async function uploadSelfie(
       "x-upsert": "true",
     },
     body: new Uint8Array(buffer),
+    signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
   });
 
   if (!res.ok) {
@@ -64,6 +73,7 @@ export async function downloadSelfie(path: string): Promise<Buffer | null> {
   try {
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+      signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     const arrayBuf = await res.arrayBuffer();
@@ -111,6 +121,7 @@ export async function uploadProfilePhoto(
       "x-upsert": "true",
     },
     body: new Uint8Array(buffer),
+    signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
   });
 
   if (!res.ok) {
@@ -138,6 +149,7 @@ export async function downloadProfilePhoto(path: string): Promise<Buffer | null>
   try {
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+      signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     const arrayBuf = await res.arrayBuffer();
@@ -191,7 +203,7 @@ export async function downloadTelegramFile(
     const file = await api.getFile(fileId);
     if (!file.file_path) return null;
     const url = `https://api.telegram.org/file/bot${api.token}/${file.file_path}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS) });
     if (!res.ok) return null;
     return Buffer.from(await res.arrayBuffer());
   } catch (err) {
@@ -238,6 +250,7 @@ export async function uploadChatImage(
       "x-upsert": "true",
     },
     body: new Uint8Array(buffer),
+    signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
   });
 
   if (!res.ok) {
@@ -279,6 +292,7 @@ export async function deleteStorageObject(
       headers: {
         Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
       },
+      signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
     });
     return res.ok;
   } catch {
@@ -301,6 +315,7 @@ async function createSignedUrl(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ expiresIn: expiresInSeconds }),
+    signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
   });
   if (!res.ok) return null;
   const json = (await res.json()) as { signedURL?: string; signedUrl?: string };
