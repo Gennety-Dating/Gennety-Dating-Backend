@@ -155,7 +155,7 @@ describe("scheduler: startScheduling", () => {
 
   it("writes the proposed-time grid, clears any prior availability, pins iteration=3, and sends the calendar button to both Telegram users", async () => {
     mMatch.update.mockResolvedValue({});
-    mMatch.findUnique.mockResolvedValueOnce({
+    mMatch.findUnique.mockResolvedValue({
       calendarMessageIdA: null,
       calendarMessageIdB: null,
       userA: { telegramId: 1001n, language: "en" },
@@ -247,7 +247,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     calendarMessageIdA?: number | null;
     calendarMessageIdB?: number | null;
   }) {
-    mMatch.findUnique.mockResolvedValueOnce({
+    mMatch.findUnique.mockResolvedValue({
       id: "match-1",
       userAId: "uid-A",
       userBId: "uid-B",
@@ -307,6 +307,44 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     const [, matchId, agreedTime] = mStartVenue.mock.calls[0]!;
     expect(matchId).toBe("match-1");
     expect((agreedTime as Date).getTime()).toBe(middle.getTime());
+  });
+
+  it("uses the peer's post-write availability when both users save concurrently", async () => {
+    const slot = new Date("2026-05-01T19:00:00.000Z");
+    mockMatchInState({
+      proposedTimes: [slot],
+      availableTimesA: [],
+      availableTimesB: [],
+    });
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-1",
+      userAId: "uid-A",
+      userBId: "uid-B",
+      status: "negotiating",
+      proposedTimes: [slot],
+      availableTimesA: [],
+      availableTimesB: [],
+      calendarMessageIdA: null,
+      calendarMessageIdB: null,
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "en" },
+    });
+    mMatch.findUnique.mockResolvedValueOnce({
+      status: "negotiating",
+      availableTimesA: [slot],
+      availableTimesB: [slot],
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
+
+    const res = await processCalendarSlotsUpdate(
+      createApi(),
+      1001n,
+      "match-1",
+      [slot.toISOString()],
+    );
+
+    expect(res).toMatchObject({ ok: true, agreedTime: slot.toISOString() });
+    expect(mStartVenue).toHaveBeenCalledOnce();
   });
 
   it("on the actor's first non-empty submission, DMs the peer (calendar button) AND sends the actor a confirmation receipt", async () => {

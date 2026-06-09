@@ -465,6 +465,7 @@ describe("date-lifecycle tick", () => {
     // H2: the atomic claim stamps icebreakersSentAt; default it to a win.
     mMatch.updateMany.mockResolvedValue({ count: 1 });
     mMatch.update.mockResolvedValue({});
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
     // Profile lookups for personalised ice-breakers
     mProfile.findUnique.mockResolvedValue({ psychologicalSummary: null });
 
@@ -510,6 +511,7 @@ describe("date-lifecycle tick", () => {
         },
       ]);
     mMatch.update.mockResolvedValue({});
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
 
     const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
     const result = await runDateLifecycleTick(api, now);
@@ -534,9 +536,9 @@ describe("date-lifecycle tick", () => {
     expect(voiceBtn.callback_data).toBe("feedback:voice:match-2");
 
     // Transition to completed AND stamp feedbackPromptedAt (C-1 dedup marker).
-    expect(mMatch.update).toHaveBeenCalledWith(
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "match-2" },
+        where: expect.objectContaining({ id: "match-2", feedbackPromptedAt: null }),
         data: { status: "completed", feedbackPromptedAt: now },
       }),
     );

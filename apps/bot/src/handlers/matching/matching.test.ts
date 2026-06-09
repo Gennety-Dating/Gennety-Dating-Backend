@@ -752,6 +752,8 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
     ageB?: number | null;
     verificationA?: string;
     verificationB?: string;
+    pitchMessageIdA?: number | null;
+    pitchMessageIdB?: number | null;
   } = {}) {
     // `in` so explicit `null` overrides (age missing, synergy missing) win
     // over the defaults. Plain `??` coerces null back to the default.
@@ -766,6 +768,8 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
         "synergyReason",
         "Aligned values and complementary rhythms.",
       ),
+      pitchMessageIdA: pick<number | null>("pitchMessageIdA", null),
+      pitchMessageIdB: pick<number | null>("pitchMessageIdB", null),
       userA: {
         telegramId: 1001n,
         firstName: "Alice",
@@ -1089,6 +1093,35 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
 
     // No closing trust card on either chat.
     expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("persists a successful side immediately and skips it on retry", async () => {
+    mMatch.findUnique
+      .mockResolvedValueOnce(findUniquePayload())
+      .mockResolvedValueOnce(findUniquePayload({ pitchMessageIdA: 7001 }));
+    const api = makeApi();
+    const firstStream = vi.fn(async (_api: unknown, chatId: number): Promise<any> => {
+      if (chatId === 1002) throw new Error("temporary Telegram failure");
+      return { message_id: 7001 };
+    });
+
+    await expect(
+      sendMatchProposal(api, "match-photo-1", { streamImpl: firstStream }),
+    ).rejects.toThrow("Pitch delivery failed");
+    expect(mMatch.update).toHaveBeenCalledWith({
+      where: { id: "match-photo-1" },
+      data: { pitchMessageIdA: 7001 },
+    });
+
+    const retryStream = vi.fn().mockResolvedValue({ message_id: 7002 });
+    await sendMatchProposal(api, "match-photo-1", { streamImpl: retryStream });
+
+    expect(retryStream).toHaveBeenCalledOnce();
+    expect(retryStream.mock.calls[0]![1]).toBe(1002);
+    expect(mMatch.update).toHaveBeenCalledWith({
+      where: { id: "match-photo-1" },
+      data: { pitchMessageIdB: 7002 },
+    });
   });
 });
 
@@ -1524,8 +1557,10 @@ describe("venue negotiation finalization", () => {
     vi.clearAllMocks();
     mMatch.findUnique.mockReset();
     mMatch.update.mockReset();
+    mMatch.updateMany.mockReset();
     mPickVenueAtMidpoint.mockReset();
     mMatch.update.mockResolvedValue({ id: "match-venue-1" });
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
     mPickVenueAtMidpoint.mockResolvedValue({
       name: "Test Cafe",
       address: "123 Test St",
@@ -1553,8 +1588,9 @@ describe("venue negotiation finalization", () => {
 
     await tryFinalize(api, "match-venue-1");
 
-    expect(mMatch.update).toHaveBeenCalledWith(
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: { id: "match-venue-1", status: "negotiating_venue" },
         data: expect.objectContaining({
           status: "scheduled",
           venueLat: 50.45,
@@ -1629,6 +1665,34 @@ describe("venue negotiation finalization", () => {
     expect(opts.reply_markup?.inline_keyboard?.[0]?.[0]?.url).toBe(
       "https://maps.google.com/?q=Fallback%20Cafe%2C%20123%20Test%20St",
     );
+  });
+
+  it("does not send scheduled cards when another finalizer wins the status CAS", async () => {
+    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-venue-1",
+      status: "negotiating_venue",
+      agreedTime: new Date("2026-05-16T16:00:00.000Z"),
+      vibeTextA: "quiet cafe",
+      vibeTextB: "quiet cafe",
+      vibeLatA: 50.45,
+      vibeLngA: 30.52,
+      vibeLatB: 50.45,
+      vibeLngB: 30.52,
+      parsedCategoryA: null,
+      parsedCategoryB: null,
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "ru" },
+    });
+    const api = { sendMessage: vi.fn().mockResolvedValue({}) } as any;
+
+    await tryFinalize(api, "match-venue-1");
+
+    const scheduledCards = api.sendMessage.mock.calls.filter((call: unknown[]) => {
+      const opts = call[2] as { entities?: unknown[] } | undefined;
+      return Array.isArray(opts?.entities);
+    });
+    expect(scheduledCards).toHaveLength(0);
   });
 });
 

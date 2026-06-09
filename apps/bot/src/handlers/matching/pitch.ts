@@ -212,6 +212,8 @@ export async function sendMatchProposal(
       id: true,
       pitchForA: true,
       pitchForB: true,
+      pitchMessageIdA: true,
+      pitchMessageIdB: true,
       synergyScore: true,
       synergyReason: true,
       userA: {
@@ -374,34 +376,41 @@ export async function sendMatchProposal(
   // entirely when the partner isn't `verified` so unverified partners
   // get no negative signal.
   const sendA = (async () => {
-    if (!isTelegramTarget(match.userA.telegramId)) return undefined;
+    if (!isTelegramTarget(match.userA.telegramId) || match.pitchMessageIdA != null) {
+      return;
+    }
     const chatA = Number(match.userA.telegramId);
     await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
     const result = await stream(api, chatA, draftsA, { replyMarkup: kbA });
+    if (!result) throw new Error("Pitch stream returned no final message for side A");
+    await prisma.match.update({
+      where: { id: matchId },
+      data: { pitchMessageIdA: result.message_id },
+    });
     if (partnerBVerified) await sendVerifiedTrustCard(api, chatA, langA);
-    return result;
   })();
   const sendB = (async () => {
-    if (!isTelegramTarget(match.userB.telegramId)) return undefined;
+    if (!isTelegramTarget(match.userB.telegramId) || match.pitchMessageIdB != null) {
+      return;
+    }
     const chatB = Number(match.userB.telegramId);
     await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
     const result = await stream(api, chatB, draftsB, { replyMarkup: kbB });
-    if (partnerAVerified) await sendVerifiedTrustCard(api, chatB, langB);
-    return result;
-  })();
-  const [resA, resB] = await Promise.all([sendA, sendB]);
-
-  // Persist the visible message_id per side so the countdown worker can
-  // edit it later. Mobile-only sides have no Telegram message → leave NULL.
-  const pitchMessageIdA = resA?.message_id ?? null;
-  const pitchMessageIdB = resB?.message_id ?? null;
-  if (pitchMessageIdA != null || pitchMessageIdB != null) {
+    if (!result) throw new Error("Pitch stream returned no final message for side B");
     await prisma.match.update({
       where: { id: matchId },
-      data: {
-        ...(pitchMessageIdA != null ? { pitchMessageIdA } : {}),
-        ...(pitchMessageIdB != null ? { pitchMessageIdB } : {}),
-      },
+      data: { pitchMessageIdB: result.message_id },
     });
+    if (partnerAVerified) await sendVerifiedTrustCard(api, chatB, langB);
+  })();
+  const results = await Promise.allSettled([sendA, sendB]);
+  const failures = results.filter(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures.map((failure) => failure.reason),
+      `Pitch delivery failed for ${failures.length} side(s)`,
+    );
   }
 }

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const emailOtpCreate = vi.fn();
 const emailOtpDelete = vi.fn();
 const emailOtpFindFirst = vi.fn();
+const emailOtpUpdateMany = vi.fn();
 
 vi.mock("@gennety/db", () => ({
   prisma: {
@@ -10,7 +11,7 @@ vi.mock("@gennety/db", () => ({
       create: emailOtpCreate,
       delete: emailOtpDelete,
       findFirst: emailOtpFindFirst,
-      update: vi.fn(),
+      updateMany: emailOtpUpdateMany,
     },
   },
 }));
@@ -22,6 +23,7 @@ vi.mock("../services/email.js", () => ({
 const {
   createAndSendOtp,
   getOtpChallengeState,
+  verifyOtp,
   OTP_MAX_ATTEMPTS,
   OTP_RESEND_COOLDOWN_MS,
 } = await import("./otp.js");
@@ -30,6 +32,7 @@ beforeEach(() => {
   emailOtpCreate.mockReset();
   emailOtpDelete.mockReset();
   emailOtpFindFirst.mockReset();
+  emailOtpUpdateMany.mockReset();
 });
 
 describe("OTP challenge state", () => {
@@ -86,5 +89,52 @@ describe("OTP challenge state", () => {
       "provider unavailable",
     );
     expect(emailOtpDelete).toHaveBeenCalledWith({ where: { id: "otp-1" } });
+  });
+
+  it("allows only one concurrent verifier to consume a valid challenge", async () => {
+    const bcrypt = await import("bcryptjs");
+    const codeHash = await bcrypt.default.hash("123456", 4);
+    emailOtpFindFirst.mockResolvedValue({
+      id: "otp-1",
+      codeHash,
+      attempts: 0,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    emailOtpUpdateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+
+    await expect(verifyOtp("Alice@Stanford.edu", "123456")).resolves.toEqual({
+      ok: true,
+    });
+    await expect(verifyOtp("Alice@Stanford.edu", "123456")).resolves.toEqual({
+      ok: false,
+      reason: "no_request",
+    });
+  });
+
+  it("increments mismatch attempts with an unconsumed, unexpired CAS", async () => {
+    const bcrypt = await import("bcryptjs");
+    const codeHash = await bcrypt.default.hash("123456", 4);
+    emailOtpFindFirst.mockResolvedValue({
+      id: "otp-1",
+      codeHash,
+      attempts: 2,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    emailOtpUpdateMany.mockResolvedValue({ count: 1 });
+
+    await expect(verifyOtp("alice@stanford.edu", "000000")).resolves.toEqual({
+      ok: false,
+      reason: "mismatch",
+    });
+    expect(emailOtpUpdateMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        id: "otp-1",
+        consumedAt: null,
+        attempts: { lt: OTP_MAX_ATTEMPTS },
+      }),
+      data: { attempts: { increment: 1 } },
+    });
   });
 });

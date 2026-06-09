@@ -153,15 +153,12 @@ export async function sendNoMatchNotices(
     const body = t(lang, templateKeyForTier(tier), {});
 
     try {
-      await api.sendMessage(Number(u.telegramId), body, {
-        parse_mode: "Markdown",
-      });
-
-      // Persist BEFORE incrementing counters so a DB failure doesn't
-      // double-count. Unique constraint on (userId, dropDate) is the
-      // defence against concurrent fires.
       await prisma.noMatchNotice.create({
         data: { userId: u.id, tier, dropDate },
+      });
+
+      await api.sendMessage(Number(u.telegramId), body, {
+        parse_mode: "Markdown",
       });
 
       result.notified++;

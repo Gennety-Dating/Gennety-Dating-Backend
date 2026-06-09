@@ -3,6 +3,7 @@ import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
+import { locationSearchLimiter } from "../rate-limit.js";
 import {
   tryFinalize,
   sendVenuePostSaveAck,
@@ -43,7 +44,7 @@ interface PlaceSearchHit {
 export function createLocationRouter(api: Api<RawApi>): Router {
   const router = Router();
 
-  router.get("/search", async (req: Request, res: Response): Promise<void> => {
+  router.get("/search", locationSearchLimiter, async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
@@ -53,6 +54,10 @@ export function createLocationRouter(api: Api<RawApi>): Router {
     const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
     if (query.length < 2) {
       res.status(200).json({ ok: true, results: [] });
+      return;
+    }
+    if (query.length > 120) {
+      res.status(400).json({ error: "Query is too long" });
       return;
     }
     // Optional bias: if the Mini App passed a center it can ride the
@@ -243,6 +248,7 @@ async function searchText(
         "places.id,places.displayName,places.formattedAddress,places.location",
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) {
     throw new Error(`Places searchText failed: ${res.status}`);

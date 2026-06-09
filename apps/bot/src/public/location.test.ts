@@ -110,6 +110,15 @@ describe("GET /v1/location/search", () => {
     expect(res.body).toEqual({ ok: true, results: [] });
   });
 
+  it("rejects oversized Places queries", async () => {
+    const initData = signInitData(BOT_TOKEN);
+    const res = await request(buildApp())
+      .get(`/v1/location/search?q=${"x".repeat(121)}`)
+      .set("Authorization", `tma ${initData}`);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Query is too long");
+  });
+
   it("falls back to a deterministic stub when PLACES_API_KEY is unset", async () => {
     const initData = signInitData(BOT_TOKEN);
     const prevKey = process.env.PLACES_API_KEY;

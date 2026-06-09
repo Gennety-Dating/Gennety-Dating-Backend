@@ -47,7 +47,9 @@ describe("dispatchMatches", () => {
   it("continues on failure and reports errors", async () => {
     mSendPitch
       .mockResolvedValueOnce(undefined) // m1 OK
-      .mockRejectedValueOnce(new Error("Telegram 429")) // m2 fails
+      .mockRejectedValueOnce(new Error("Telegram 429"))
+      .mockRejectedValueOnce(new Error("Telegram 429"))
+      .mockRejectedValueOnce(new Error("Telegram 429")) // m2 exhausts retries
       .mockResolvedValueOnce(undefined); // m3 OK
 
     const result = await dispatchMatches({} as any, ["m1", "m2", "m3"], 0);
@@ -56,6 +58,18 @@ describe("dispatchMatches", () => {
     expect(result.failed).toBe(1);
     expect(result.errors[0]!.matchId).toBe("m2");
     expect(result.errors[0]!.error).toContain("429");
+  });
+
+  it("retries a transient partial delivery before stamping dispatchedAt", async () => {
+    mSendPitch
+      .mockRejectedValueOnce(new Error("temporary Telegram failure"))
+      .mockResolvedValueOnce(undefined);
+
+    const result = await dispatchMatches({} as any, ["m1"], 0);
+
+    expect(result).toMatchObject({ dispatched: 1, failed: 0 });
+    expect(mSendPitch).toHaveBeenCalledTimes(2);
+    expect(mMatchUpdate).toHaveBeenCalledOnce();
   });
 
   it("handles empty input gracefully", async () => {

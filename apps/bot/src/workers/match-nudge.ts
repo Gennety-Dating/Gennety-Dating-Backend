@@ -105,6 +105,21 @@ async function handleProposalNudges(
     const nudgeIndex = isNudge2Eligible ? 2 : isNudge1Eligible ? 1 : 0;
     if (nudgeIndex === 0) continue;
 
+    const claim = await prisma.match.updateMany({
+      where: {
+        id: match.id,
+        status: "proposed",
+        ...(nudgeIndex === 2
+          ? { proposalNudge2SentAt: null }
+          : { proposalNudge1SentAt: null }),
+      },
+      data:
+        nudgeIndex === 2
+          ? { proposalNudge2SentAt: now }
+          : { proposalNudge1SentAt: now },
+    });
+    if (claim.count === 0) continue;
+
     const targets: Array<{
       telegramId: bigint;
       language: string | null;
@@ -137,14 +152,6 @@ async function handleProposalNudges(
       }
     }
 
-    // Stamp whichever nudge we just sent on the proposal-phase column.
-    await prisma.match.update({
-      where: { id: match.id },
-      data:
-        nudgeIndex === 2
-          ? { proposalNudge2SentAt: now }
-          : { proposalNudge1SentAt: now },
-    });
   }
 
   return count;
@@ -303,6 +310,21 @@ async function handleSchedulingNudges(
     const nudgeIndex = isNudge2 ? 2 : isNudge1 ? 1 : 0;
     if (nudgeIndex === 0) continue;
 
+    const claim = await prisma.match.updateMany({
+      where: {
+        id: match.id,
+        status: "negotiating",
+        ...(nudgeIndex === 2
+          ? { schedNudge2SentAt: null }
+          : { schedNudge1SentAt: null }),
+      },
+      data:
+        nudgeIndex === 2
+          ? { schedNudge2SentAt: now }
+          : { schedNudge1SentAt: now },
+    });
+    if (claim.count === 0) continue;
+
     const targets = [
       ...(match.pickedTimeA == null && match.userA.telegramId > 0n ? [match.userA] : []),
       ...(match.pickedTimeB == null && match.userB.telegramId > 0n ? [match.userB] : []),
@@ -326,13 +348,6 @@ async function handleSchedulingNudges(
       }
     }
 
-    await prisma.match.update({
-      where: { id: match.id },
-      data:
-        nudgeIndex === 2
-          ? { schedNudge2SentAt: now }
-          : { schedNudge1SentAt: now },
-    });
   }
 
   return count;

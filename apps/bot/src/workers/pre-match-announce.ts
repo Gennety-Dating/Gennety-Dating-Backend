@@ -89,12 +89,20 @@ export async function preMatchAnnounceTick(
       const text = plannedKind === "matched"
         ? await generateAnnounce(user, fetchFn)
         : getStandbyFallback(user.language ?? "en");
+      const claim = await prisma.user.updateMany({
+        where: {
+          id: user.id,
+          status: "active",
+          OR: [
+            { lastPreMatchAnnounceAt: null },
+            { lastPreMatchAnnounceAt: { lt: cooldownCutoff } },
+          ],
+        },
+        data: { lastPreMatchAnnounceAt: now },
+      });
+      if (claim.count === 0) continue;
       await api.sendMessage(Number(user.telegramId), text, {
         parse_mode: "Markdown",
-      });
-      await prisma.user.update({
-        where: { telegramId: user.telegramId },
-        data: { lastPreMatchAnnounceAt: now },
       });
       announced++;
     } catch (err) {

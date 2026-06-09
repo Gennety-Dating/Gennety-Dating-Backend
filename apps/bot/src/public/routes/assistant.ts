@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
-import { voiceLimiter } from "../rate-limit.js";
+import { agentTextLimiter, voiceLimiter } from "../rate-limit.js";
 import { runMenuAgentTurn } from "../../services/menu-agent.js";
 import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
 
@@ -35,10 +35,14 @@ async function loadUserForAgent(userId: string) {
  * Gated on `onboardingStep === "completed"` so half-onboarded users keep
  * talking to the onboarding agent via /v1/onboarding/* instead.
  */
-assistantRouter.post("/ask", async (req: Request, res: Response): Promise<void> => {
+assistantRouter.post("/ask", agentTextLimiter, async (req: Request, res: Response): Promise<void> => {
   const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
   if (!text) {
     res.status(400).json({ error: "Missing text" });
+    return;
+  }
+  if (text.length > 4_000) {
+    res.status(400).json({ error: "Text is too long" });
     return;
   }
 

@@ -13,6 +13,7 @@ vi.mock("@gennety/db", () => ({
     match: {
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }));
@@ -21,10 +22,11 @@ import { prisma } from "@gennety/db";
 import { runPreDateSafetyTick } from "./pre-date-safety.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
-const mMatch = prisma.match as unknown as { findMany: MockFn; update: MockFn };
+const mMatch = prisma.match as unknown as { findMany: MockFn; update: MockFn; updateMany: MockFn };
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mMatch.updateMany.mockResolvedValue({ count: 1 });
 });
 afterEach(() => {
   vi.clearAllMocks();
@@ -53,9 +55,9 @@ describe("runPreDateSafetyTick (C-3 fanout fix)", () => {
 
     expect(result.sent).toBe(1);
     // CRITICAL: idempotency marker stamped despite one failed leg
-    expect(mMatch.update).toHaveBeenCalledWith(
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "match-fail" },
+        where: expect.objectContaining({ id: "match-fail", safetyNoteSentAt: null }),
         data: expect.objectContaining({ safetyNoteSentAt: expect.any(Date) }),
       }),
     );
@@ -98,9 +100,9 @@ describe("runPreDateSafetyTick (C-3 fanout fix)", () => {
     await runPreDateSafetyTick(api, new Date());
 
     expect(api.sendMessage).not.toHaveBeenCalled();
-    expect(mMatch.update).toHaveBeenCalledWith(
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "match-allmobile" },
+        where: expect.objectContaining({ id: "match-allmobile", safetyNoteSentAt: null }),
         data: expect.objectContaining({ safetyNoteSentAt: expect.any(Date) }),
       }),
     );

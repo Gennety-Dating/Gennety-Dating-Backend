@@ -5,6 +5,7 @@ vi.mock("@gennety/db", () => ({
     match: {
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }));
@@ -75,6 +76,7 @@ describe("matchNudgeTick", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (prisma.match.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
   });
 
   it("returns zeros during quiet hours without DB query", async () => {
@@ -100,7 +102,7 @@ describe("matchNudgeTick", () => {
     expect(api.sendMessage).toHaveBeenCalledWith(1, expect.any(String), expect.anything());
     expect(api.sendMessage).toHaveBeenCalledWith(2, expect.any(String), expect.anything());
     // stamps proposalNudge1SentAt (C-6 split column)
-    expect(prisma.match.update).toHaveBeenCalledWith(
+    expect(prisma.match.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { proposalNudge1SentAt: DAY_TIME } }),
     );
   });
@@ -138,7 +140,7 @@ describe("matchNudgeTick", () => {
 
     await matchNudgeTick(api, { fetchFn: mockFetch, now: DAY_TIME });
 
-    expect(prisma.match.update).toHaveBeenCalledWith(
+    expect(prisma.match.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { proposalNudge2SentAt: DAY_TIME } }),
     );
   });
@@ -163,7 +165,7 @@ describe("matchNudgeTick", () => {
 
     expect(result.schedNudges).toBe(2); // both Carol + Dan
     // Stamps schedNudge1SentAt — NOT proposalNudge*.
-    expect(prisma.match.update).toHaveBeenCalledWith(
+    expect(prisma.match.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { schedNudge1SentAt: DAY_TIME } }),
     );
   });
@@ -214,6 +216,19 @@ describe("matchNudgeTick", () => {
 
     // Failed sends don't increment the count, but we still stamped the match
     expect(result.proposalNudges).toBe(0);
-    expect(prisma.match.update).toHaveBeenCalled();
+    expect(prisma.match.updateMany).toHaveBeenCalled();
+  });
+
+  it("does not send when another worker already claimed the nudge", async () => {
+    (prisma.match.findMany as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([makeProposedMatch()])
+      .mockResolvedValueOnce([]);
+    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ count: 0 });
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { now: DAY_TIME });
+
+    expect(result.proposalNudges).toBe(0);
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 });

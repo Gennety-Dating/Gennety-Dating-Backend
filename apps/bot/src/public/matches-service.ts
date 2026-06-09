@@ -13,6 +13,7 @@ import { appendNegativeConstraint } from "../handlers/matching/negative-constrai
 import { applyReportAction, type ReportTier } from "../services/moderation.js";
 import { sendPushToUser } from "../services/push.js";
 import { generateAndSaveWingmanHints } from "../services/wingman-hint.js";
+import { runVenueFinalizationOnce } from "../services/venue-finalization-flight.js";
 import { createMatchEventBestEffort } from "../services/match-events.js";
 import { claimMatchDecision } from "../services/match-decision-claim.js";
 import { updateEloScores } from "../utils/elo-calculator.js";
@@ -551,9 +552,15 @@ export async function submitVibeLocation(
  * call repeatedly; no-op if pre-conditions aren't met.
  */
 async function tryFinalizeMatchVenue(matchId: string): Promise<void> {
+  return runVenueFinalizationOnce(matchId, () => finalizeMatchVenue(matchId));
+}
+
+async function finalizeMatchVenue(matchId: string): Promise<void> {
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     select: {
+      userAId: true,
+      userBId: true,
       status: true,
       agreedTime: true,
       vibeTextA: true,
@@ -602,8 +609,8 @@ async function tryFinalizeMatchVenue(matchId: string): Promise<void> {
     agreedTime: match.agreedTime,
   });
 
-  const scheduled = await prisma.match.update({
-    where: { id: matchId },
+  const committed = await prisma.match.updateMany({
+    where: { id: matchId, status: "negotiating_venue" },
     data: {
       status: "scheduled",
       venueName: venue.name,
@@ -613,8 +620,8 @@ async function tryFinalizeMatchVenue(matchId: string): Promise<void> {
       // Parity with the bot path: curated venues always carry a Maps URI.
       venueGoogleMapsUri: venue.googleMapsUri,
     },
-    select: { userAId: true, userBId: true },
   });
+  if (committed.count === 0) return;
 
   // Pre-generate the asymmetric "Wingman" hints now so the T-1.5h lifecycle
   // tick has them cached. Fire-and-forget: a transient LLM outage here
@@ -625,12 +632,12 @@ async function tryFinalizeMatchVenue(matchId: string): Promise<void> {
   });
 
   await Promise.all([
-    sendPushToUser(scheduled.userAId, {
+    sendPushToUser(match.userAId, {
       title: "Venue locked in",
       body: `${venue.name} — tap for details.`,
       data: { type: "match.scheduled", matchId },
     }),
-    sendPushToUser(scheduled.userBId, {
+    sendPushToUser(match.userBId, {
       title: "Venue locked in",
       body: `${venue.name} — tap for details.`,
       data: { type: "match.scheduled", matchId },

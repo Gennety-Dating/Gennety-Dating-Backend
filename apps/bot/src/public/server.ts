@@ -3,7 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import type { Api, RawApi } from "grammy";
 import { env } from "../config.js";
-import { globalLimiter } from "./rate-limit.js";
+import { globalLimiter, personaWebhookLimiter } from "./rate-limit.js";
 import { authRouter } from "./routes/auth.js";
 import { meRouter } from "./routes/me.js";
 import { onboardingRouter } from "./routes/onboarding.js";
@@ -75,7 +75,7 @@ let verificationMiniAppRouter: ReturnType<typeof createVerificationMiniAppRouter
 let ticketRouter: ReturnType<typeof createTicketRouter> | null = null;
 let ticketStoreRouter: ReturnType<typeof createTicketStoreRouter> | null = null;
 let venueChangeRouter: ReturnType<typeof createVenueChangeRouter> | null = null;
-app.use("/v1/webhooks/persona", (req, res, next) => {
+app.use("/v1/webhooks/persona", personaWebhookLimiter, (req, res, next) => {
   if (!injectedBotApi) {
     res.status(503).json({ error: "Persona webhook not ready" });
     return;

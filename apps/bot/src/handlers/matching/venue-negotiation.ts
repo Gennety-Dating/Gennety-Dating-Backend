@@ -40,6 +40,7 @@ import {
 } from "./venue-change.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import { generateAndSaveWingmanHints } from "../../services/wingman-hint.js";
+import { runVenueFinalizationOnce } from "../../services/venue-finalization-flight.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { venueSearchSteps } from "../../services/analysis-status.js";
@@ -316,6 +317,10 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
  * the midpoint → Places pipeline and finalise.
  */
 export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<void> {
+  return runVenueFinalizationOnce(matchId, () => finalizeVenue(api, matchId));
+}
+
+async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     select: {
@@ -404,8 +409,8 @@ export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<vo
 
   const [venue] = await Promise.all([venuePromise, ...searchingRuns]);
 
-  await prisma.match.update({
-    where: { id: matchId },
+  const committed = await prisma.match.updateMany({
+    where: { id: matchId, status: "negotiating_venue" },
     data: {
       status: "scheduled",
       venueName: venue.name,
@@ -415,6 +420,7 @@ export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<vo
       venueGoogleMapsUri: venue.googleMapsUri,
     },
   });
+  if (committed.count === 0) return;
 
   // Pre-generate Wingman hints now so the T-1.5h lifecycle tick has them
   // cached. Fire-and-forget; idempotent regeneration at reveal time

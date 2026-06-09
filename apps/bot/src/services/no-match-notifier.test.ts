@@ -161,9 +161,9 @@ describe("sendNoMatchNotices", () => {
     expect(result.failed).toBe(1);
     expect(result.errors[0]!.userId).toBe("u1");
     expect(result.errors[0]!.error).toMatch(/403/);
-    // The failed user must NOT have a notice row written (keeps idempotency
-    // honest — next cron tick will retry them).
-    expect(mNoticeCreate).toHaveBeenCalledTimes(1);
+    // Claims are persisted before the side effect so overlapping workers
+    // cannot both send the same weekly notice.
+    expect(mNoticeCreate).toHaveBeenCalledTimes(2);
     expect(mNoticeCreate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ userId: "u2" }) }),
     );

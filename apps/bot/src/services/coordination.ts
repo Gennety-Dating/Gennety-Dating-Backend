@@ -150,6 +150,12 @@ async function sendOffers(api: Api<RawApi>, now: Date, result: CoordinationResul
   });
 
   for (const match of matches) {
+    const claim = await prisma.match.updateMany({
+      where: { id: match.id, status: "scheduled", coordOfferSentAt: null },
+      data: { coordOfferSentAt: now },
+    });
+    if (claim.count === 0) continue;
+
     const recipients = resolveCoordRecipients(match.userA, match.userB);
     // Even when there's nothing to send (e.g. a mobile-only participant),
     // stamp the marker so the sweep doesn't re-scan this row every tick.
@@ -183,10 +189,6 @@ async function sendOffers(api: Api<RawApi>, now: Date, result: CoordinationResul
       result.offers++;
     }
 
-    await prisma.match.update({
-      where: { id: match.id },
-      data: { coordOfferSentAt: now },
-    });
   }
 }
 

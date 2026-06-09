@@ -1,5 +1,6 @@
 import rateLimit, { ipKeyGenerator, type Options } from "express-rate-limit";
 import type { Request } from "express";
+import { createHash } from "node:crypto";
 
 function make(opts: Partial<Options>) {
   return rateLimit({
@@ -44,6 +45,35 @@ export const voiceLimiter = make({
   windowMs: 3_600_000,
   limit: 30,
   keyGenerator: (req): string => `voice:${req.userId ?? ipKey(req)}`,
+});
+
+/** Text turns that invoke an LLM — 60/hour per authenticated user. */
+export const agentTextLimiter = make({
+  windowMs: 3_600_000,
+  limit: 60,
+  keyGenerator: (req): string => `agent-text:${req.userId ?? ipKey(req)}`,
+  message: { error: "Too many assistant requests, slow down for a bit." },
+});
+
+/** Places autocomplete — 60/hour per Telegram Mini App session. */
+export const locationSearchLimiter = make({
+  windowMs: 3_600_000,
+  limit: 60,
+  keyGenerator: (req): string => {
+    const auth = req.get("authorization") ?? "";
+    const sessionKey = auth
+      ? createHash("sha256").update(auth).digest("hex").slice(0, 24)
+      : ipKey(req);
+    return `location-search:${sessionKey}`;
+  },
+  message: { error: "Too many location searches, try again later." },
+});
+
+/** Persona webhook ingress — protects raw-body parsing before global limits. */
+export const personaWebhookLimiter = make({
+  windowMs: 60_000,
+  limit: 60,
+  keyGenerator: (req): string => `persona-webhook:${ipKey(req)}`,
 });
 
 /** Selfie submission — 5/day per user (falls back to IP). */

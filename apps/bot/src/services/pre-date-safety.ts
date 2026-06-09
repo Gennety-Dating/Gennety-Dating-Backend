@@ -40,6 +40,12 @@ export async function runPreDateSafetyTick(
   const result: PreDateSafetyResult = { sent: 0 };
 
   for (const match of upcoming) {
+    const claim = await prisma.match.updateMany({
+      where: { id: match.id, status: "scheduled", safetyNoteSentAt: null },
+      data: { safetyNoteSentAt: now },
+    });
+    if (claim.count === 0) continue;
+
     // Skip mobile-first synthetic users (telegramId <= 0n) — they get safety
     // briefs via push, not Telegram DM. Filtering at the recipient level
     // means an F-mobile + F-telegram pair still notifies the Telegram side.
@@ -48,10 +54,6 @@ export async function runPreDateSafetyTick(
     );
 
     if (recipients.length === 0) {
-      await prisma.match.update({
-        where: { id: match.id },
-        data: { safetyNoteSentAt: now },
-      });
       continue;
     }
 
@@ -76,15 +78,6 @@ export async function runPreDateSafetyTick(
           });
       }),
     );
-
-    // Stamp safetyNoteSentAt unconditionally — even if every leg failed.
-    // Otherwise the next tick re-fans the batch and survivors get duplicates.
-    // A persistent send failure is a per-user issue (bot blocked, etc.) not
-    // a reason to keep retrying the whole match.
-    await prisma.match.update({
-      where: { id: match.id },
-      data: { safetyNoteSentAt: now },
-    });
 
     result.sent++;
   }

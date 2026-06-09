@@ -354,8 +354,6 @@ export async function processCalendarSlotsUpdate(
 
   const actorPrev = isA ? match.availableTimesA : match.availableTimesB;
   const wasMineEmpty = actorPrev.length === 0;
-  const peerArr = isA ? match.availableTimesB : match.availableTimesA;
-
   await prisma.match.update({
     where: { id: match.id },
     data: isA
@@ -363,9 +361,22 @@ export async function processCalendarSlotsUpdate(
       : { availableTimesB: dedupedSorted },
   });
 
-  // Compute intersection from the just-written values + the peer's
-  // existing array. Prisma can't atomically compute it for us so we
-  // do it in Node.
+  // Re-read the peer side after our write. The initial row may be stale if
+  // both users saved concurrently; using it can miss a real overlap and
+  // leave the match stuck until somebody saves again.
+  const current = await prisma.match.findUnique({
+    where: { id: match.id },
+    select: {
+      status: true,
+      availableTimesA: true,
+      availableTimesB: true,
+    },
+  });
+  if (!current || current.status !== "negotiating") {
+    return { ok: false, reason: "wrong-state" };
+  }
+
+  const peerArr = isA ? current.availableTimesB : current.availableTimesA;
   const peerSet = new Set(peerArr.map((d) => d.getTime()));
   const intersection = dedupedSorted
     .filter((d) => peerSet.has(d.getTime()))

@@ -366,6 +366,20 @@ vi.mock("@gennety/db", async () => {
           if (data.consumedAt !== undefined) o.consumedAt = data.consumedAt;
           return o;
         }),
+        updateMany: vi.fn(async ({ where, data }: any) => {
+          const rows = db.otps.filter((o) => {
+            if (where.id !== undefined && o.id !== where.id) return false;
+            if (where.consumedAt === null && o.consumedAt !== null) return false;
+            if (where.attempts?.lt !== undefined && o.attempts >= where.attempts.lt) return false;
+            if (where.expiresAt?.gt !== undefined && o.expiresAt <= where.expiresAt.gt) return false;
+            return true;
+          });
+          for (const o of rows) {
+            if (data.attempts?.increment) o.attempts += data.attempts.increment;
+            if (data.consumedAt !== undefined) o.consumedAt = data.consumedAt;
+          }
+          return { count: rows.length };
+        }),
       },
 
       // ----- userSession -----
@@ -1791,6 +1805,16 @@ describe("/v1/onboarding/interview", () => {
     expect(res.status).toBe(200);
     expect(res.body.question).toBe("echo:Alice, 22");
   });
+
+  it("POST /answer rejects oversized LLM input", async () => {
+    const user = await seedUser({ onboardingStep: "conversational" });
+    const res = await request(app)
+      .post("/v1/onboarding/interview/answer")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ text: "x".repeat(4_001) });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Text is too long");
+  });
 });
 
 describe("/v1/assistant/ask", () => {
@@ -1813,6 +1837,16 @@ describe("/v1/assistant/ask", () => {
       .send({ text: "change my radius" });
     expect(res.status).toBe(200);
     expect(res.body.reply).toBe("menu:change my radius");
+  });
+
+  it("rejects oversized assistant input", async () => {
+    const user = await seedUser({ onboardingStep: "completed" });
+    const res = await request(app)
+      .post("/v1/assistant/ask")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ text: "x".repeat(4_001) });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Text is too long");
   });
 });
 

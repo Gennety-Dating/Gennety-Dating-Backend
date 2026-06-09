@@ -103,7 +103,7 @@ if (adminCorsOrigin === false) {
 app.use(
   cors({
     origin: adminCorsOrigin,
-    methods: ["GET", "PATCH", "OPTIONS"],
+    methods: ["GET", "POST", "PATCH", "OPTIONS"],
   }),
 );
 

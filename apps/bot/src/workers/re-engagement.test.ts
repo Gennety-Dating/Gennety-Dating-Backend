@@ -5,6 +5,7 @@ vi.mock("@gennety/db", () => ({
     user: {
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }));
@@ -55,6 +56,7 @@ describe("re-engagement worker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prisma.user.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
   });
 
   it("queries users with due reEngagementNextAt, not a staleness cutoff", async () => {
@@ -132,8 +134,8 @@ describe("re-engagement worker", () => {
       { parse_mode: "Markdown" },
     );
 
-    const updateArgs = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(updateArgs.where).toEqual({ telegramId: BigInt(111) });
+    const updateArgs = (prisma.user.updateMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(updateArgs.where).toEqual(expect.objectContaining({ telegramId: BigInt(111), reEngagementStep: 0 }));
     expect(updateArgs.data.reEngagementStep).toBe(1);
     expect(updateArgs.data.reEngagementNextAt).toBeInstanceOf(Date);
     // Next touch (step 2, +2h anchor) should be ~2h after DROPOFF_TIME (10:00 UTC).
@@ -161,7 +163,7 @@ describe("re-engagement worker", () => {
 
     await reEngagementTick(api, { fetchFn: mockFetch, now: DAY_TIME });
 
-    const updateArgs = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const updateArgs = (prisma.user.updateMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(updateArgs.data.reEngagementStep).toBe(MAX_RE_ENGAGEMENT_STEP);
     expect(updateArgs.data.reEngagementNextAt).toBeNull();
   });
@@ -186,7 +188,7 @@ describe("re-engagement worker", () => {
     const count = await reEngagementTick(api, { fetchFn: mockFetch, now: DAY_TIME });
 
     expect(count).toBe(0);
-    const updateArgs = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const updateArgs = (prisma.user.updateMany as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(updateArgs.data.reEngagementStep).toBe(1);
   });
 

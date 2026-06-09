@@ -5,6 +5,7 @@ vi.mock("@gennety/db", () => ({
     user: {
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }));
@@ -43,6 +44,7 @@ describe("preMatchAnnounceTick", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prisma.user.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
     (previewWeeklyBatch as ReturnType<typeof vi.fn>).mockResolvedValue({
       eligible: 2,
       pairs: 1,
@@ -88,7 +90,7 @@ describe("preMatchAnnounceTick", () => {
 
     expect(result.announced).toBe(2);
     expect(api.sendMessage).toHaveBeenCalledTimes(2);
-    expect(prisma.user.update).toHaveBeenCalledTimes(2);
+    expect(prisma.user.updateMany).toHaveBeenCalledTimes(2);
   });
 
   it("stamps lastPreMatchAnnounceAt after sending", async () => {
@@ -101,8 +103,8 @@ describe("preMatchAnnounceTick", () => {
 
     await preMatchAnnounceTick(api, { fetchFn: mockFetch, now: DAY_TIME });
 
-    expect(prisma.user.update).toHaveBeenCalledWith({
-      where: { telegramId: BigInt(1) },
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({ id: "u1", status: "active" }),
       data: { lastPreMatchAnnounceAt: DAY_TIME },
     });
   });

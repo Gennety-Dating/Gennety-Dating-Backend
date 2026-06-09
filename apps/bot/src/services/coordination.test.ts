@@ -12,7 +12,7 @@ vi.mock("../config.js", () => ({ env: mockEnv }));
 
 vi.mock("@gennety/db", () => ({
   prisma: {
-    match: { findMany: vi.fn(), update: vi.fn() },
+    match: { findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   },
 }));
 
@@ -25,7 +25,7 @@ import {
 } from "./coordination.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
-const mMatch = prisma.match as unknown as { findMany: MockFn; update: MockFn };
+const mMatch = prisma.match as unknown as { findMany: MockFn; update: MockFn; updateMany: MockFn };
 
 function makeApi() {
   return { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
@@ -51,6 +51,7 @@ beforeEach(() => {
   // Default: every phase query returns empty.
   mMatch.findMany.mockResolvedValue([]);
   mMatch.update.mockResolvedValue({});
+  mMatch.updateMany.mockResolvedValue({ count: 1 });
 });
 
 // ---------------------------------------------------------------------------
@@ -168,8 +169,8 @@ describe("runCoordinationTick — offer (T-60m)", () => {
     expect(res.offers).toBe(1);
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     expect(api.sendMessage).toHaveBeenCalledWith(1001, expect.any(String), expect.any(Object));
-    expect(mMatch.update).toHaveBeenCalledWith({
-      where: { id: "m1" },
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "m1", status: "scheduled", coordOfferSentAt: null },
       data: { coordOfferSentAt: NOW },
     });
   });
@@ -191,8 +192,8 @@ describe("runCoordinationTick — offer (T-60m)", () => {
 
     expect(res.offers).toBe(0);
     expect(api.sendMessage).not.toHaveBeenCalled();
-    expect(mMatch.update).toHaveBeenCalledWith({
-      where: { id: "m1" },
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "m1", status: "scheduled", coordOfferSentAt: null },
       data: { coordOfferSentAt: NOW },
     });
   });

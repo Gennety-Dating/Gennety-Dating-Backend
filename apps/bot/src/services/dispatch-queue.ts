@@ -41,6 +41,7 @@ export async function dispatchMatches(
   api: Api<RawApi>,
   matchIds: string[],
   delayMs: number = DEFAULT_DISPATCH_DELAY_MS,
+  maxAttempts: number = 3,
 ): Promise<DispatchResult> {
   let dispatched = 0;
   const errors: DispatchResult["errors"] = [];
@@ -48,7 +49,18 @@ export async function dispatchMatches(
   for (let i = 0; i < matchIds.length; i++) {
     const matchId = matchIds[i]!;
     try {
-      await sendMatchProposal(api, matchId);
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          await sendMatchProposal(api, matchId);
+          lastError = undefined;
+          break;
+        } catch (error) {
+          lastError = error;
+          if (attempt < maxAttempts) await delay(delayMs);
+        }
+      }
+      if (lastError !== undefined) throw lastError;
       await prisma.match.update({
         where: { id: matchId },
         data: { dispatchedAt: new Date() },

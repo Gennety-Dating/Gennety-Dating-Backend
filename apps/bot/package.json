@@ -13,7 +13,7 @@
     "re-engage": "tsx src/workers/run-re-engagement.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-rekognition": "^3.1039.0",
+    "@aws-sdk/client-rekognition": "^3.1064.0",
     "@gennety/db": "workspace:*",
     "@gennety/shared": "workspace:*",
     "bcryptjs": "^3.0.2",
@@ -21,7 +21,7 @@
     "dotenv": "^16.4.7",
     "expo-server-sdk": "^4.0.0",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.1.0",
+    "express-rate-limit": "^8.5.2",
     "grammy": "^1.35.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",

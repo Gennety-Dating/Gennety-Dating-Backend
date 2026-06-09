@@ -365,6 +365,12 @@ export async function runDateLifecycleTick(
     }
     if (!hintA || !hintB) continue; // nothing to deliver yet; retry next tick
 
+    const wingmanClaim = await prisma.match.updateMany({
+      where: { id: match.id, status: "scheduled", wingmanSentAt: null },
+      data: { wingmanSentAt: now },
+    });
+    if (wingmanClaim.count === 0) continue;
+
     const langA = (match.userA.language ?? "en") as Language;
     const langB = (match.userB.language ?? "en") as Language;
 
@@ -420,11 +426,6 @@ export async function runDateLifecycleTick(
 
     await Promise.all(deliveries);
 
-    await prisma.match.update({
-      where: { id: match.id },
-      data: { wingmanSentAt: now },
-    });
-
     result.wingmen++;
   }
 
@@ -448,6 +449,16 @@ export async function runDateLifecycleTick(
   });
 
   for (const match of pastDates) {
+    const feedbackClaim = await prisma.match.updateMany({
+      where: {
+        id: match.id,
+        status: { in: ["scheduled", "completed"] },
+        feedbackPromptedAt: null,
+      },
+      data: { status: "completed", feedbackPromptedAt: now },
+    });
+    if (feedbackClaim.count === 0) continue;
+
     const langA = (match.userA.language ?? "en") as Language;
     const langB = (match.userB.language ?? "en") as Language;
 
@@ -492,14 +503,6 @@ export async function runDateLifecycleTick(
     ];
 
     await Promise.all(feedbackSends.filter((p): p is Promise<unknown> => p !== null));
-
-    // Idempotency marker is set by C-1 patch (feedbackPromptedAt). Status
-    // transition to `completed` is kept here so the post-date timeline is
-    // accurate, but it's NO LONGER the dedup signal.
-    await prisma.match.update({
-      where: { id: match.id },
-      data: { status: "completed", feedbackPromptedAt: now },
-    });
 
     result.feedbacks++;
   }

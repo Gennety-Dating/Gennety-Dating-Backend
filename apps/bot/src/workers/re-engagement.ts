@@ -93,6 +93,29 @@ export async function reEngagementTick(
     const currentStep = user.reEngagementStep;
     const nextStep = currentStep + 1;
 
+    const anchor = user.lastMessageAt ?? now;
+    const following =
+      nextStep > MAX_RE_ENGAGEMENT_STEP
+        ? null
+        : computeNextTouch(nextStep + 1, anchor, now);
+
+    const claim = await prisma.user.updateMany({
+      where: {
+        telegramId: user.telegramId,
+        status: "onboarding",
+        onboardingStep: { not: "completed" },
+        reEngagementStep: currentStep,
+        reEngagementNextAt: { not: null, lte: now },
+      },
+      data: {
+        reEngagementStep: nextStep,
+        reEngagementNextAt: following,
+        // Intentionally NOT touching lastMessageAt — the bot's own sends are
+        // not user activity. Chain anchor stays at the original drop-off.
+      },
+    });
+    if (claim.count === 0) continue;
+
     try {
       const hookText = await generateHookMessage(
         { ...user, upcomingStep: nextStep },
@@ -108,25 +131,7 @@ export async function reEngagementTick(
         `Re-engagement send failed for ${user.telegramId}:`,
         (err as Error).message,
       );
-      // Advance step anyway so we don't re-hammer the same user every tick on a
-      // persistent Telegram error (e.g. bot blocked).
     }
-
-    const anchor = user.lastMessageAt ?? now;
-    const following =
-      nextStep > MAX_RE_ENGAGEMENT_STEP
-        ? null
-        : computeNextTouch(nextStep + 1, anchor, now);
-
-    await prisma.user.update({
-      where: { telegramId: user.telegramId },
-      data: {
-        reEngagementStep: nextStep,
-        reEngagementNextAt: following,
-        // Intentionally NOT touching lastMessageAt — the bot's own sends are
-        // not user activity. Chain anchor stays at the original drop-off.
-      },
-    });
   }
 
   return sent;

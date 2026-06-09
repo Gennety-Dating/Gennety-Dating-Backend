@@ -85,28 +85,40 @@ export type OtpVerifyResult =
  */
 export async function verifyOtp(email: string, code: string): Promise<OtpVerifyResult> {
   const normalised = email.toLowerCase();
+  const now = new Date();
   const latest = await prisma.emailOtp.findFirst({
     where: { email: normalised, consumedAt: null },
     orderBy: { createdAt: "desc" },
   });
 
   if (!latest) return { ok: false, reason: "no_request" };
-  if (latest.expiresAt < new Date()) return { ok: false, reason: "expired" };
+  if (latest.expiresAt < now) return { ok: false, reason: "expired" };
   if (latest.attempts >= OTP_MAX_ATTEMPTS) return { ok: false, reason: "exhausted" };
 
   const match = await bcrypt.compare(code, latest.codeHash);
   if (!match) {
-    await prisma.emailOtp.update({
-      where: { id: latest.id },
+    await prisma.emailOtp.updateMany({
+      where: {
+        id: latest.id,
+        consumedAt: null,
+        attempts: { lt: OTP_MAX_ATTEMPTS },
+        expiresAt: { gt: now },
+      },
       data: { attempts: { increment: 1 } },
     });
     return { ok: false, reason: "mismatch" };
   }
 
-  await prisma.emailOtp.update({
-    where: { id: latest.id },
-    data: { consumedAt: new Date() },
+  const consumed = await prisma.emailOtp.updateMany({
+    where: {
+      id: latest.id,
+      consumedAt: null,
+      attempts: { lt: OTP_MAX_ATTEMPTS },
+      expiresAt: { gt: now },
+    },
+    data: { consumedAt: now },
   });
+  if (consumed.count === 0) return { ok: false, reason: "no_request" };
   return { ok: true };
 }
 
