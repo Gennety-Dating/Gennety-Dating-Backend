@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { SessionData } from "@gennety/shared";
 import { DEFAULT_SESSION } from "@gennety/shared";
 
+const { mClaimMatchDecision } = vi.hoisted(() => ({
+  mClaimMatchDecision: vi.fn(),
+}));
+
 // ---------------------------------------------------------------------------
 // Mocks — prisma, config, and downstream services the matching flow touches.
 // Mirrors the pattern used by apps/bot/src/handlers/onboarding/onboarding.test.ts
@@ -46,6 +50,10 @@ vi.mock("../../config.js", () => ({
     MESSAGE_EFFECT_MATCH_ID: "5104841245755180586",
     WEBAPP_URL: "https://test.invalid/calendar",
   },
+}));
+
+vi.mock("../../services/match-decision-claim.js", () => ({
+  claimMatchDecision: (...args: unknown[]) => mClaimMatchDecision(...args),
 }));
 
 // Keep the scheduler handoff inert during decision tests — we assert the
@@ -1096,11 +1104,17 @@ describe("matching decision flow", () => {
     mMatchEvent.updateMany.mockResolvedValue({ count: 1 });
     mProfile.updateMany.mockResolvedValue({ count: 1 });
     mUser.findUnique.mockResolvedValue({ id: "uid-A" });
+    mClaimMatchDecision.mockResolvedValue({ claimed: false });
   });
 
   it("accept from userA sets acceptedByA=true and stays pending when B not yet accepted", async () => {
     mMatch.findUnique.mockResolvedValueOnce(matchRow());
-    mMatch.update.mockResolvedValueOnce({ id: "match-1", acceptedByA: true, acceptedByB: null });
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: true,
+      acceptedByB: null,
+    });
 
     const ctx = createCtx({
       session: { onboardingStep: "completed" },
@@ -1110,9 +1124,11 @@ describe("matching decision flow", () => {
 
     await handleMatchDecision(ctx);
 
-    expect(mMatch.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: "match-1" }, data: { acceptedByA: true } }),
-    );
+    expect(mClaimMatchDecision).toHaveBeenCalledWith({
+      matchId: "match-1",
+      side: "A",
+      decision: true,
+    });
     expect(mMatchEvent.create).toHaveBeenCalledWith({
       data: {
         matchId: "match-1",
@@ -1133,8 +1149,12 @@ describe("matching decision flow", () => {
     mMatch.findUnique.mockResolvedValueOnce(
       matchRow({ acceptedByA: true, acceptedByB: null }),
     );
-    mMatch.update
-      .mockResolvedValueOnce({ id: "match-1", acceptedByA: true, acceptedByB: true }); // set acceptedByB
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: true,
+      acceptedByB: true,
+    });
     mMatch.updateMany.mockResolvedValueOnce({ count: 1 }); // atomic status -> negotiating
 
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
@@ -1147,8 +1167,11 @@ describe("matching decision flow", () => {
 
     await handleMatchDecision(ctx);
 
-    const calls = mMatch.update.mock.calls.map((c) => c[0]);
-    expect(calls.some((c) => (c.data as { acceptedByB?: boolean }).acceptedByB === true)).toBe(true);
+    expect(mClaimMatchDecision).toHaveBeenCalledWith({
+      matchId: "match-1",
+      side: "B",
+      decision: true,
+    });
     expect(mMatchEvent.create).toHaveBeenCalledWith({
       data: {
         matchId: "match-1",
@@ -1174,6 +1197,12 @@ describe("matching decision flow", () => {
     // hits. Peer gets a generic "your match answered, your turn" DM
     // that gives away nothing about the actual answer.
     mMatch.findUnique.mockResolvedValueOnce(matchRow());
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: false,
+      acceptedByB: null,
+    });
 
     const ctx = createCtx({
       session: { onboardingStep: "completed" },
@@ -1184,12 +1213,11 @@ describe("matching decision flow", () => {
     await handleMatchDecision(ctx);
 
     // Status MUST stay 'proposed' — no `status: 'cancelled'` in the update.
-    expect(mMatch.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "match-1" },
-        data: { acceptedByA: false },
-      }),
-    );
+    expect(mClaimMatchDecision).toHaveBeenCalledWith({
+      matchId: "match-1",
+      side: "A",
+      decision: false,
+    });
     expect(mMatchEvent.create).toHaveBeenCalledWith({
       data: {
         matchId: "match-1",
@@ -1230,7 +1258,12 @@ describe("matching decision flow", () => {
     // Mirror of the decline-blind test for the accept path — the peer
     // must learn ONLY that the actor answered, not what they answered.
     mMatch.findUnique.mockResolvedValueOnce(matchRow());
-    mMatch.update.mockResolvedValueOnce({ id: "match-1", acceptedByA: true, acceptedByB: null });
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: true,
+      acceptedByB: null,
+    });
 
     const ctx = createCtx({
       session: { onboardingStep: "completed" },
@@ -1257,8 +1290,12 @@ describe("matching decision flow", () => {
     mMatch.findUnique.mockResolvedValueOnce(
       matchRow({ acceptedByA: false, acceptedByB: null }),
     );
-    mMatch.update
-      .mockResolvedValueOnce({ id: "match-1", acceptedByA: false, acceptedByB: true });
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: false,
+      acceptedByB: true,
+    });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
 
     const ctx = createCtx({
@@ -1309,6 +1346,12 @@ describe("matching decision flow", () => {
     mMatch.findUnique.mockResolvedValueOnce(
       matchRow({ acceptedByA: true, acceptedByB: null }),
     );
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: true,
+      acceptedByB: false,
+    });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
 
     const ctx = createCtx({
@@ -1319,9 +1362,10 @@ describe("matching decision flow", () => {
 
     await handleMatchDecision(ctx);
 
-    expect(mMatch.update).toHaveBeenCalledWith(
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { acceptedByB: false, status: "cancelled" },
+        where: { id: "match-1", status: "proposed" },
+        data: { status: "cancelled" },
       }),
     );
 
@@ -1352,6 +1396,12 @@ describe("matching decision flow", () => {
     mMatch.findUnique.mockResolvedValueOnce(
       matchRow({ acceptedByA: false, acceptedByB: null }),
     );
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: false,
+      acceptedByB: false,
+    });
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
 
     const ctx = createCtx({

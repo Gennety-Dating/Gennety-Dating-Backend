@@ -37,6 +37,66 @@ export interface CreatedIntent {
   mode: PaymentMode;
 }
 
+const MOCK_INTENT_TTL_MS = 15 * 60 * 1000;
+const MAX_MOCK_INTENTS = 10_000;
+
+type MockIntent =
+  | {
+      kind: "date";
+      payerId: string;
+      matchId: string;
+      scope: TicketScope;
+      amountCents: number;
+      expiresAt: number;
+    }
+  | {
+      kind: "store";
+      userId: string;
+      count: number;
+      amountCents: number;
+      expiresAt: number;
+    };
+
+type MockIntentInput =
+  | Omit<Extract<MockIntent, { kind: "date" }>, "expiresAt">
+  | Omit<Extract<MockIntent, { kind: "store" }>, "expiresAt">;
+
+const mockIntents = new Map<string, MockIntent>();
+
+function pruneMockIntents(now = Date.now()): void {
+  for (const [token, intent] of mockIntents) {
+    if (intent.expiresAt <= now) mockIntents.delete(token);
+  }
+  while (mockIntents.size >= MAX_MOCK_INTENTS) {
+    const oldest = mockIntents.keys().next().value as string | undefined;
+    if (!oldest) break;
+    mockIntents.delete(oldest);
+  }
+}
+
+function createMockIntent(intent: MockIntentInput): string {
+  pruneMockIntents();
+  const prefix = intent.kind === "store" ? "mock_store_pi_" : "mock_pi_";
+  const token = `${prefix}${randomUUID()}`;
+  mockIntents.set(token, { ...intent, expiresAt: Date.now() + MOCK_INTENT_TTL_MS } as MockIntent);
+  return token;
+}
+
+function consumeMockIntent(
+  clientSecret: string,
+  matches: (intent: MockIntent) => boolean,
+): boolean {
+  pruneMockIntents();
+  const intent = mockIntents.get(clientSecret);
+  if (!intent || !matches(intent)) return false;
+  mockIntents.delete(clientSecret);
+  return true;
+}
+
+export function resetMockPaymentIntentsForTests(): void {
+  mockIntents.clear();
+}
+
 /** Number of tickets a scope settles (1 for self/partner, 2 for both). */
 export function ticketsForScope(scope: TicketScope): number {
   return scope === "both" ? 2 : 1;
@@ -53,6 +113,7 @@ export function amountForScope(scope: TicketScope, priceCents: number): number {
  * PaymentIntent and return its `client_secret`.
  */
 export async function createTicketIntent(args: {
+  payerId: string;
   matchId: string;
   scope: TicketScope;
   amountCents: number;
@@ -61,9 +122,15 @@ export async function createTicketIntent(args: {
   switch (mode) {
     case "mock":
       // Fully simulated — the Mini App renders a fake Payment Element and the
-      // confirm endpoint trusts this token. No network call, no credentials.
+      // server later consumes this exact, context-bound token once.
       return {
-        clientSecret: `mock_pi_${randomUUID()}`,
+        clientSecret: createMockIntent({
+          kind: "date",
+          payerId: args.payerId,
+          matchId: args.matchId,
+          scope: args.scope,
+          amountCents: args.amountCents,
+        }),
         amountCents: args.amountCents,
         mode,
       };
@@ -88,18 +155,32 @@ export async function createTicketIntent(args: {
 /**
  * Verify that a confirm request corresponds to a real, succeeded payment.
  *
- * Mock mode: we trust any non-empty `mock_pi_*` token (the user "completed"
- * the fake form). Stripe mode: this must NOT be the trust boundary — the
- * source of truth is the `/v1/webhooks/stripe` event. The client confirm in
- * production becomes a poll for the webhook-written paid state.
+ * Mock mode: consume the exact server-issued intent for this payer and match.
+ * Stripe mode: this must NOT be the trust boundary — the source of truth is
+ * the `/v1/webhooks/stripe` event. The client confirm in production becomes a
+ * poll for the webhook-written paid state.
  */
 export async function verifyTicketPayment(args: {
   clientSecret: string;
+  payerId: string;
+  matchId: string;
+  scope: TicketScope;
+  amountCents: number;
 }): Promise<{ ok: boolean }> {
   const mode = env.TICKET_PAYMENT_MODE;
   switch (mode) {
     case "mock":
-      return { ok: typeof args.clientSecret === "string" && args.clientSecret.startsWith("mock_pi_") };
+      return {
+        ok: consumeMockIntent(
+          args.clientSecret,
+          (intent) =>
+            intent.kind === "date" &&
+            intent.payerId === args.payerId &&
+            intent.matchId === args.matchId &&
+            intent.scope === args.scope &&
+            intent.amountCents === args.amountCents,
+        ),
+      };
     case "stripe":
       // TODO: Stripe Production Mode — do NOT trust the client here. The
       // webhook (`payment_intent.succeeded`, HMAC-verified) is the only path
@@ -135,7 +216,12 @@ export async function createStoreIntent(args: {
   switch (mode) {
     case "mock":
       return {
-        clientSecret: `mock_store_pi_${randomUUID()}`,
+        clientSecret: createMockIntent({
+          kind: "store",
+          userId: args.userId,
+          count: args.count,
+          amountCents: args.amountCents,
+        }),
         amountCents: args.amountCents,
         count: args.count,
         mode,
@@ -150,17 +236,25 @@ export async function createStoreIntent(args: {
   }
 }
 
-/** Verify a store-purchase confirm token (mock = trust `mock_store_pi_*`). */
+/** Verify and consume a context-bound store-purchase intent. */
 export async function verifyStorePayment(args: {
   clientSecret: string;
+  userId: string;
+  count: number;
+  amountCents: number;
 }): Promise<{ ok: boolean }> {
   const mode = env.TICKET_PAYMENT_MODE;
   switch (mode) {
     case "mock":
       return {
-        ok:
-          typeof args.clientSecret === "string" &&
-          args.clientSecret.startsWith("mock_store_pi_"),
+        ok: consumeMockIntent(
+          args.clientSecret,
+          (intent) =>
+            intent.kind === "store" &&
+            intent.userId === args.userId &&
+            intent.count === args.count &&
+            intent.amountCents === args.amountCents,
+        ),
       };
     case "stripe":
       // TODO: Stripe Production Mode — defer to the HMAC webhook.

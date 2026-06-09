@@ -258,7 +258,13 @@ meRouter.delete(
       return;
     }
 
-    const selfiePath = user.selfiePath;
+    const selfiePaths = Array.from(
+      new Set(
+        [user.selfiePath, user.verifiedSelfiePath].filter(
+          (path): path is string => Boolean(path),
+        ),
+      ),
+    );
     const photoPaths = user.profile?.photos ?? [];
     const chatImagePaths = chatImages
       .map((row) => row.imageUrl)
@@ -279,7 +285,7 @@ meRouter.delete(
 
     // Best-effort storage cleanup — never fail the request on storage
     // errors because the DB state has already been committed.
-    if (selfiePath) {
+    for (const selfiePath of selfiePaths) {
       try {
         await deleteStorageObject(env.SUPABASE_SELFIE_BUCKET, selfiePath);
       } catch (err) {

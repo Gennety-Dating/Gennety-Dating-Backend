@@ -273,6 +273,23 @@ export async function createChatImageSignedUrl(
   return createSignedUrl(env.SUPABASE_CHAT_BUCKET, path, expiresInSeconds);
 }
 
+/** Download a private Aether attachment for server-side validation/copying. */
+export async function downloadChatImage(path: string): Promise<Buffer | null> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
+
+  const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_CHAT_BUCKET}/${path}`;
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+      signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Delete an object from a Supabase Storage bucket. Returns `true` on
  * successful delete, `false` otherwise (including "not configured" and

@@ -125,7 +125,12 @@ describe("POST /v1/matches/:id/ticket/intent", () => {
     expect(res.status).toBe(200);
     expect(res.body.clientSecret).toBe("mock_pi_x");
     expect(res.body.amountCents).toBe(699);
-    expect(createTicketIntent).toHaveBeenCalledWith({ matchId: VALID_UUID, scope: "self", amountCents: 699 });
+    expect(createTicketIntent).toHaveBeenCalledWith({
+      payerId: "5986970093",
+      matchId: VALID_UUID,
+      scope: "self",
+      amountCents: 699,
+    });
   });
 
   it("charges double for scope 'both' (male)", async () => {
@@ -136,7 +141,12 @@ describe("POST /v1/matches/:id/ticket/intent", () => {
       .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
       .send({ scope: "both" });
     expect(res.status).toBe(200);
-    expect(createTicketIntent).toHaveBeenCalledWith({ matchId: VALID_UUID, scope: "both", amountCents: 1398 });
+    expect(createTicketIntent).toHaveBeenCalledWith({
+      payerId: "5986970093",
+      matchId: VALID_UUID,
+      scope: "both",
+      amountCents: 1398,
+    });
   });
 
   it("rejects scope 'both' for a female user with 403", async () => {
@@ -161,6 +171,7 @@ describe("POST /v1/matches/:id/ticket/intent", () => {
 
 describe("POST /v1/matches/:id/ticket/confirm", () => {
   it("confirms and returns the new state on the happy path", async () => {
+    getTicketState.mockResolvedValueOnce({ ok: true, state: baseState });
     verifyTicketPayment.mockResolvedValueOnce({ ok: true });
     applyTicketPayment.mockResolvedValueOnce({
       ok: true,
@@ -173,10 +184,18 @@ describe("POST /v1/matches/:id/ticket/confirm", () => {
     expect(res.status).toBe(200);
     expect(res.body.iPaid).toBe(true);
     expect(res.body.ticketStatus).toBe("partial");
+    expect(verifyTicketPayment).toHaveBeenCalledWith({
+      clientSecret: "mock_pi_x",
+      payerId: "5986970093",
+      matchId: VALID_UUID,
+      scope: "self",
+      amountCents: 699,
+    });
     expect(applyTicketPayment).toHaveBeenCalledWith(fakeApi, 5986970093n, VALID_UUID, "self");
   });
 
   it("returns 400 when the payment can't be verified", async () => {
+    getTicketState.mockResolvedValueOnce({ ok: true, state: baseState });
     verifyTicketPayment.mockResolvedValueOnce({ ok: false });
     const res = await request(buildApp())
       .post(`/v1/matches/${VALID_UUID}/ticket/confirm`)
@@ -188,6 +207,7 @@ describe("POST /v1/matches/:id/ticket/confirm", () => {
   });
 
   it("maps a gate scope-not-allowed → 400", async () => {
+    getTicketState.mockResolvedValueOnce({ ok: true, state: baseState });
     verifyTicketPayment.mockResolvedValueOnce({ ok: true });
     applyTicketPayment.mockResolvedValueOnce({ ok: false, reason: "scope-not-allowed" });
     const res = await request(buildApp())
@@ -198,6 +218,7 @@ describe("POST /v1/matches/:id/ticket/confirm", () => {
   });
 
   it("maps not-participant → 403", async () => {
+    getTicketState.mockResolvedValueOnce({ ok: true, state: baseState });
     verifyTicketPayment.mockResolvedValueOnce({ ok: true });
     applyTicketPayment.mockResolvedValueOnce({ ok: false, reason: "not-participant" });
     const res = await request(buildApp())

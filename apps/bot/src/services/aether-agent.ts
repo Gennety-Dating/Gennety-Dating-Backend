@@ -1,7 +1,12 @@
-import { prisma, type Prisma } from "@gennety/db";
+import { prisma } from "@gennety/db";
 import { MAX_AGE, MAX_PHOTOS, MIN_AGE } from "@gennety/shared";
 import { env } from "../config.js";
 import { createChatImageSignedUrl } from "./storage.js";
+import {
+  applyAetherProfilePatch,
+  attachAetherProfilePhoto,
+  type AetherToolResult,
+} from "./aether-profile-tools.js";
 
 /**
  * Aether Concierge — multimodal AI chat agent backing `/v1/chat/message`.
@@ -308,15 +313,10 @@ async function callOpenAI(
   }
 }
 
-interface ToolResult {
-  ok: boolean;
-  detail?: string;
-}
-
 async function executeTool(
   userId: string,
   call: OpenAIToolCall,
-): Promise<ToolResult> {
+): Promise<AetherToolResult> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(call.function.arguments || "{}");
@@ -325,108 +325,10 @@ async function executeTool(
   }
 
   if (call.function.name === "update_profile") {
-    return executeUpdateProfile(userId, parsed);
+    return applyAetherProfilePatch(userId, parsed);
   }
   if (call.function.name === "attach_profile_photo") {
-    return executeAttachPhoto(userId, parsed);
+    return attachAetherProfilePhoto(userId, parsed);
   }
   return { ok: false, detail: `Unknown tool ${call.function.name}` };
-}
-
-async function executeUpdateProfile(
-  userId: string,
-  raw: unknown,
-): Promise<ToolResult> {
-  if (!raw || typeof raw !== "object") return { ok: false, detail: "Bad payload" };
-  const args = raw as Record<string, unknown>;
-
-  const profilePatch: Prisma.ProfileUncheckedUpdateInput = {};
-  const userPatch: Prisma.UserUncheckedUpdateInput = {};
-  let touchedEmbedding = false;
-
-  if (typeof args.age === "number" && Number.isInteger(args.age)) {
-    if (args.age < MIN_AGE || args.age > MAX_AGE) {
-      return { ok: false, detail: `Age must be ${MIN_AGE}-${MAX_AGE}` };
-    }
-    userPatch.age = args.age;
-  }
-  if (args.gender === "male" || args.gender === "female") {
-    userPatch.gender = args.gender;
-  }
-  if (args.preference === "men" || args.preference === "women" || args.preference === "both") {
-    userPatch.preference = args.preference;
-  }
-  if (typeof args.ethnicity === "string" && args.ethnicity.trim()) {
-    profilePatch.ethnicity = args.ethnicity.trim().slice(0, 64);
-  }
-  if (typeof args.height === "number" && Number.isInteger(args.height)) {
-    if (args.height < 120 || args.height > 230) {
-      return { ok: false, detail: "Height out of range" };
-    }
-    profilePatch.height = args.height;
-  }
-  if (Array.isArray(args.hobbies)) {
-    const hobbies = args.hobbies
-      .filter((h): h is string => typeof h === "string")
-      .map((h) => h.trim().slice(0, 48))
-      .filter((h) => h.length > 0)
-      .slice(0, 12);
-    if (hobbies.length > 0) {
-      profilePatch.hobbies = hobbies;
-      touchedEmbedding = true;
-    }
-  }
-  if (typeof args.partnerPreferences === "string" && args.partnerPreferences.trim()) {
-    profilePatch.partnerPreferences = args.partnerPreferences.trim().slice(0, 280);
-    touchedEmbedding = true;
-  }
-
-  if (touchedEmbedding) {
-    profilePatch.embeddingDirty = true;
-    profilePatch.embeddingDirtyAt = new Date();
-  }
-
-  if (Object.keys(userPatch).length > 0) {
-    await prisma.user.update({ where: { id: userId }, data: userPatch });
-  }
-  if (Object.keys(profilePatch).length > 0) {
-    await prisma.profile.upsert({
-      where: { userId },
-      update: profilePatch,
-      create: Object.assign({}, profilePatch, { userId }) as Prisma.ProfileUncheckedCreateInput,
-    });
-  }
-
-  return { ok: true };
-}
-
-async function executeAttachPhoto(
-  userId: string,
-  raw: unknown,
-): Promise<ToolResult> {
-  if (!raw || typeof raw !== "object") return { ok: false, detail: "Bad payload" };
-  const path = (raw as { imageUrl?: unknown }).imageUrl;
-  if (typeof path !== "string" || !path) {
-    return { ok: false, detail: "Missing imageUrl" };
-  }
-  if (!path.startsWith(`${userId}/`)) {
-    return { ok: false, detail: "Image not owned by user" };
-  }
-
-  const profile = await prisma.profile.findUnique({
-    where: { userId },
-    select: { photos: true },
-  });
-  const existing = profile?.photos ?? [];
-  if (existing.includes(path)) return { ok: true, detail: "Already attached" };
-  if (existing.length >= MAX_PHOTOS) {
-    return { ok: false, detail: `Max ${MAX_PHOTOS} photos` };
-  }
-  const next = [...existing, path];
-  await prisma.profile.upsert({
-    where: { userId },
-    update: { photos: next },
-    create: { userId, photos: next },
-  });
-  return { ok: true };
 }

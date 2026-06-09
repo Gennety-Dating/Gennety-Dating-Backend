@@ -259,7 +259,8 @@ stored in `Profile.photos[]`; the short video part is display-only for
 profile and match cards.
 
 The same pipeline runs again on every photo edit. The bot/mobile photo
-handlers fire `triggerVerificationRerun` after every add/delete/replace,
+handlers and Aether's `attach_profile_photo` tool fire
+`triggerVerificationRerun` after every add/delete/replace,
 which clears the `(personaInquiryId, faceMatchedAt)` idempotency marker,
 flips `verificationStatus` back to `pending`, and re-launches the
 pipeline against the new photo array. Persistence of `photoFaceScores`
@@ -364,7 +365,11 @@ first-class flows:
 - **Aether Concierge** (`/v1/chat/*`) — multimodal AI chat that gathers
   profile facts in the background via `update_profile` / `attach_profile_photo`
   tools. Distinct from the legacy onboarding-agent: persists each turn as a
-  `Message` row and supports image attachments.
+  `Message` row and supports image attachments. Post-onboarding fixed identity
+  fields such as age cannot be changed through the tool. Attaching a chat image
+  to the dating profile re-runs the same single-face, Persona face-match,
+  profile-bucket copy, metadata, and verification-rerun path as a normal
+  profile-photo upload.
 - Match decision, vibe-location, safety-ack, report endpoints under
   `/v1/matches/:id/*`.
 - `/v1/me/push-token` registers Expo/APNs/FCM tokens; the bot dispatches
@@ -515,7 +520,9 @@ card + a `web_app` button opening the Ticket Mini App
 (`apps/webapp/ticket.html`, React + pure-CSS 3D). Each ticket is **$6.99**.
 Payment is **mocked** in v1 (`TICKET_PAYMENT_MODE=mock`) — a fully simulated
 Stripe-style flow that updates the DB but moves no money; `mock`→`stripe` is the
-single production switch (`services/ticket-payment.ts`).
+single production switch (`services/ticket-payment.ts`). Mock payment intents
+are server-issued, expire after 15 minutes, are bound to the exact payer,
+match/bundle, scope, and amount, and can be consumed only once.
 
 - **Pricing.** Male users get "Pay for us both — $13.98" (settles BOTH tickets,
   sets `paidForPartnerBy*`) plus "Pay only mine — $6.99". Female users get a

@@ -84,16 +84,21 @@ export function createTicketStoreRouter(): Router {
         ? (req.body as { clientSecret: string }).clientSecret
         : "";
 
-    // TODO: Stripe Production Mode — in stripe mode this must defer to the
-    // HMAC-verified webhook, not the client. See services/ticket-payment.ts.
-    const verified = await verifyStorePayment({ clientSecret });
-    if (!verified.ok) {
-      res.status(400).json({ error: "payment-not-verified" });
-      return;
-    }
     const user = await resolveUser(auth.user.id);
     if (!user) {
       res.status(404).json({ error: "user-not-found" });
+      return;
+    }
+    // TODO: Stripe Production Mode — in stripe mode this must defer to the
+    // HMAC-verified webhook, not the client. See services/ticket-payment.ts.
+    const verified = await verifyStorePayment({
+      clientSecret,
+      userId: user.id,
+      count: bundle.count,
+      amountCents: bundle.priceCents,
+    });
+    if (!verified.ok) {
+      res.status(400).json({ error: "payment-not-verified" });
       return;
     }
 

@@ -83,7 +83,12 @@ export function createTicketRouter(api: Api<RawApi>): Router {
     }
 
     const amountCents = amountForScope(scope, stateRes.state.priceCents);
-    const intent = await createTicketIntent({ matchId, scope, amountCents });
+    const intent = await createTicketIntent({
+      payerId: String(auth.user.id),
+      matchId,
+      scope,
+      amountCents,
+    });
     emitTicketEvent("ticket_intent_created", { matchId, scope, amountCents });
     res.status(200).json({
       ok: true,
@@ -116,7 +121,20 @@ export function createTicketRouter(api: Api<RawApi>): Router {
 
     // TODO: Stripe Production Mode — in stripe mode this verify must defer to
     // the HMAC-verified webhook, not the client. See services/ticket-payment.ts.
-    const verified = await verifyTicketPayment({ clientSecret });
+    const stateRes = await getTicketState(BigInt(auth.user.id), matchId);
+    if (!stateRes.ok) {
+      const status = stateRes.reason === "not-participant" ? 403 : 404;
+      res.status(status).json({ error: stateRes.reason });
+      return;
+    }
+    const amountCents = amountForScope(scope, stateRes.state.priceCents);
+    const verified = await verifyTicketPayment({
+      clientSecret,
+      payerId: String(auth.user.id),
+      matchId,
+      scope,
+      amountCents,
+    });
     if (!verified.ok) {
       res.status(400).json({ error: "payment-not-verified" });
       return;

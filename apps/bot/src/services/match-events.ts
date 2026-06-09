@@ -57,6 +57,21 @@ export async function createMatchEvent(input: CreateMatchEventInput): Promise<vo
   });
 }
 
+export async function createMatchEventBestEffort(
+  input: CreateMatchEventInput,
+): Promise<void> {
+  try {
+    await createMatchEvent(input);
+  } catch (err) {
+    console.error("[match-events] audit write failed:", {
+      matchId: input.matchId,
+      actorId: input.actorId,
+      actionType: input.actionType,
+      err,
+    });
+  }
+}
+
 interface AttachDeclineReasonInput {
   matchId: string;
   actorId: string;

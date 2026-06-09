@@ -2,7 +2,7 @@ import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
-import { createMatchEvent } from "../../services/match-events.js";
+import { createMatchEventBestEffort } from "../../services/match-events.js";
 import { startScheduling } from "./scheduler.js";
 import { sendTicketOffer } from "./ticket-gate.js";
 import { updateEloScores } from "../../utils/elo-calculator.js";
@@ -12,6 +12,7 @@ import {
   boostAcceptedSidePriority,
   outcomeRevealKey,
 } from "../../services/match-decision-shared.js";
+import { claimMatchDecision } from "../../services/match-decision-claim.js";
 
 /**
  * Match decision handler — Accept / Decline.
@@ -101,10 +102,6 @@ function peerTelegramIdOf(match: MatchView, side: Side): bigint {
   return side === "A" ? match.userB.telegramId : match.userA.telegramId;
 }
 
-function peerPriorAccepted(match: MatchView, side: Side): boolean | null {
-  return side === "A" ? match.acceptedByB : match.acceptedByA;
-}
-
 export async function handleMatchDecision(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
   if (!data?.startsWith("match:")) return;
@@ -126,12 +123,6 @@ export async function handleMatchDecision(ctx: BotContext): Promise<void> {
 
   const side = await sideForCaller(ctx, match);
   if (!side) return;
-
-  // Reject double-tap from the same side: if this user already has a
-  // decision recorded, ignore the second click instead of overwriting it.
-  // Their decision was final the moment they first tapped.
-  const ownPrior = side === "A" ? match.acceptedByA : match.acceptedByB;
-  if (ownPrior !== null) return;
 
   if (action === "accept") {
     // Capture the public Telegram username on the path to every scheduled date,
@@ -218,14 +209,14 @@ async function handleAccept(
   const lang = ctx.session.language;
   const actorId = side === "A" ? match.userAId : match.userBId;
   const targetId = side === "A" ? match.userBId : match.userAId;
-  const peerPrior = peerPriorAccepted(match, side);
-
-  const updated = await prisma.match.update({
-    where: { id: match.id },
-    data: side === "A" ? { acceptedByA: true } : { acceptedByB: true },
-    select: { id: true, acceptedByA: true, acceptedByB: true },
+  const claimed = await claimMatchDecision({
+    matchId: match.id,
+    side,
+    decision: true,
   });
-  await createMatchEvent({
+  if (!claimed.claimed) return;
+  const peerPrior = side === "A" ? claimed.acceptedByB : claimed.acceptedByA;
+  await createMatchEventBestEffort({
     matchId: match.id,
     actorId,
     targetId,
@@ -236,7 +227,7 @@ async function handleAccept(
   const effectId = env.MESSAGE_EFFECT_MATCH_ID || undefined;
 
   // Mutual accept → flip to negotiating + scheduler handoff.
-  if (updated.acceptedByA === true && updated.acceptedByB === true) {
+  if (claimed.acceptedByA === true && claimed.acceptedByB === true) {
     // Atomic transition: only one concurrent caller wins the race.
     // The WHERE clause ensures only a match still in "proposed" state
     // can be flipped to "negotiating", preventing double startScheduling.
@@ -255,17 +246,6 @@ async function handleAccept(
     // status-transition race performs the update so the rating change
     // happens exactly once per match.
     await updateEloScores(match.userAId, match.userBId, true, true);
-    // Notify both users and kick off iteration 1.
-    await ctx.reply(t(lang, "matchBothAccepted"), {
-      ...(effectId ? { message_effect_id: effectId } : {}),
-    });
-    const peerTelegramId = peerTelegramIdOf(match, side);
-    const peerLang = peerLangOf(match, side);
-    await ctx.api.sendMessage(
-      Number(peerTelegramId),
-      t(peerLang, "matchBothAccepted"),
-      ...(effectId ? [{ message_effect_id: effectId }] : []),
-    );
     // Date Ticket gate: when enabled, both users must pay (mock) for a ticket
     // before scheduling unlocks. When disabled (default), hand off straight to
     // the Calendar Mini App exactly as before. Telegram-only in v1.
@@ -274,6 +254,18 @@ async function handleAccept(
     } else {
       await startScheduling(ctx.api, match.id);
     }
+    // Notifications are best-effort and happen after the scheduling state is
+    // established, so a blocked user cannot interrupt the core transition.
+    await Promise.allSettled([
+      ctx.reply(t(lang, "matchBothAccepted"), {
+        ...(effectId ? { message_effect_id: effectId } : {}),
+      }),
+      ctx.api.sendMessage(
+        Number(peerTelegramIdOf(match, side)),
+        t(peerLangOf(match, side), "matchBothAccepted"),
+        ...(effectId ? [{ message_effect_id: effectId }] : []),
+      ),
+    ]);
     return;
   }
 
@@ -316,29 +308,22 @@ async function handleDecline(
   const lang = ctx.session.language;
   const actorId = side === "A" ? match.userAId : match.userBId;
   const targetId = side === "A" ? match.userBId : match.userAId;
-  const peerPrior = peerPriorAccepted(match, side);
+  const claimed = await claimMatchDecision({
+    matchId: match.id,
+    side,
+    decision: false,
+  });
+  if (!claimed.claimed) return;
+  const peerPrior = side === "A" ? claimed.acceptedByB : claimed.acceptedByA;
 
-  // Two phases:
-  //   - First decider: write own `accepted{A|B} = false` but KEEP status
-  //     `proposed` so the peer's keyboard stays live.
-  //   - Second decider: write own decline AND flip status to `cancelled`
-  //     atomically. We need to know peer's decision to update Elo.
-  if (peerPrior === null) {
-    await prisma.match.update({
-      where: { id: match.id },
-      data: side === "A" ? { acceptedByA: false } : { acceptedByB: false },
-    });
-  } else {
-    await prisma.match.update({
-      where: { id: match.id },
-      data:
-        side === "A"
-          ? { acceptedByA: false, status: "cancelled" }
-          : { acceptedByB: false, status: "cancelled" },
+  if (peerPrior !== null) {
+    await prisma.match.updateMany({
+      where: { id: match.id, status: "proposed" },
+      data: { status: "cancelled" },
     });
   }
 
-  await createMatchEvent({
+  await createMatchEventBestEffort({
     matchId: match.id,
     actorId,
     targetId,

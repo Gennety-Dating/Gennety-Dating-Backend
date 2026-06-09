@@ -13,7 +13,8 @@ import { appendNegativeConstraint } from "../handlers/matching/negative-constrai
 import { applyReportAction, type ReportTier } from "../services/moderation.js";
 import { sendPushToUser } from "../services/push.js";
 import { generateAndSaveWingmanHints } from "../services/wingman-hint.js";
-import { createMatchEvent } from "../services/match-events.js";
+import { createMatchEventBestEffort } from "../services/match-events.js";
+import { claimMatchDecision } from "../services/match-decision-claim.js";
 import { updateEloScores } from "../utils/elo-calculator.js";
 import { startScheduling } from "../handlers/matching/scheduler.js";
 import { sendTicketOffer } from "../handlers/matching/ticket-gate.js";
@@ -344,37 +345,43 @@ export async function applyMatchDecision(
         : (null as unknown as MatchSide);
   if (!side) return null;
 
-  // Double-tap guard: a user's decision is final the moment they first make
-  // it. Re-submitting is an idempotent no-op (return the current match state).
-  const ownPrior = side === "A" ? match.acceptedByA : match.acceptedByB;
-  if (ownPrior !== null) return getCurrentMatchForUser(userId);
-
   const actorId = side === "A" ? match.userAId : match.userBId;
   const targetId = side === "A" ? match.userBId : match.userAId;
   const actor: ParticipantContact = side === "A" ? match.userA : match.userB;
   const peer: ParticipantContact = side === "A" ? match.userB : match.userA;
-  // The peer's verdict BEFORE this action: null = undecided (this user is the
-  // first decider), true/false = already committed (this user is second).
-  const peerPrior = side === "A" ? match.acceptedByB : match.acceptedByA;
+  const claimed = await claimMatchDecision({
+    matchId,
+    side,
+    decision: decision === "accept",
+  });
+  if (!claimed.claimed) return getCurrentMatchForUser(userId);
+  const peerPrior = side === "A" ? claimed.acceptedByB : claimed.acceptedByA;
 
   if (decision === "accept") {
-    const updated = await prisma.match.update({
-      where: { id: matchId },
-      data: side === "A" ? { acceptedByA: true } : { acceptedByB: true },
-      select: { acceptedByA: true, acceptedByB: true },
+    await createMatchEventBestEffort({
+      matchId,
+      actorId,
+      targetId,
+      actionType: "ACCEPTED",
     });
-    await createMatchEvent({ matchId, actorId, targetId, actionType: "ACCEPTED" });
 
     // Mutual accept → atomic flip to `negotiating` (one concurrent caller
     // wins the WHERE-guarded transition), then the same Elo + handoff the
     // Telegram decision path runs.
-    if (updated.acceptedByA === true && updated.acceptedByB === true) {
+    if (claimed.acceptedByA === true && claimed.acceptedByB === true) {
       const transitioned = await prisma.match.updateMany({
         where: { id: matchId, status: "proposed" },
         data: { status: "negotiating" },
       });
       if (transitioned.count > 0) {
         await updateEloScores(match.userAId, match.userBId, true, true);
+        // Establish the scheduling state before best-effort notifications.
+        // A blocked Telegram user must not strand an accepted match.
+        const api = getBotApi();
+        if (api) {
+          if (env.TICKET_FEATURE_ENABLED) await sendTicketOffer(api, matchId);
+          else await startScheduling(api, matchId);
+        }
         await notifyParticipant(actor, "matchBothAccepted", {
           type: "match.both_accepted",
           title: "It's a match",
@@ -385,14 +392,6 @@ export async function applyMatchDecision(
           title: "It's a match",
           matchId,
         });
-        // Date Ticket gate (when enabled) or straight to the Calendar —
-        // identical handoff to the bot path. Needs the bot Api (writes the
-        // calendar slot grid / sends the ticket card); skipped if unavailable.
-        const api = getBotApi();
-        if (api) {
-          if (env.TICKET_FEATURE_ENABLED) await sendTicketOffer(api, matchId);
-          else await startScheduling(api, matchId);
-        }
       }
       return getCurrentMatchForUser(userId);
     }
@@ -439,11 +438,12 @@ export async function applyMatchDecision(
   if (peerPrior === null) {
     // First decider declines: KEEP `proposed` so the peer's keyboard stays
     // live and they decide blind. Only record this side's verdict + nudge.
-    await prisma.match.update({
-      where: { id: matchId },
-      data: side === "A" ? { acceptedByA: false } : { acceptedByB: false },
+    await createMatchEventBestEffort({
+      matchId,
+      actorId,
+      targetId,
+      actionType: "DECLINED",
     });
-    await createMatchEvent({ matchId, actorId, targetId, actionType: "DECLINED" });
     await notifyParticipant(peer, "matchPeerDecided", {
       type: "match.peer_decided",
       title: "Gennety",
@@ -454,14 +454,16 @@ export async function applyMatchDecision(
 
   // Second decider declines → both decided. Cancel, update Elo, and (if the
   // peer had accepted) compensate them; reveal the outcome both ways.
-  await prisma.match.update({
-    where: { id: matchId },
-    data:
-      side === "A"
-        ? { acceptedByA: false, status: "cancelled" }
-        : { acceptedByB: false, status: "cancelled" },
+  await prisma.match.updateMany({
+    where: { id: matchId, status: "proposed" },
+    data: { status: "cancelled" },
   });
-  await createMatchEvent({ matchId, actorId, targetId, actionType: "DECLINED" });
+  await createMatchEventBestEffort({
+    matchId,
+    actorId,
+    targetId,
+    actionType: "DECLINED",
+  });
   await updateEloScores(
     match.userAId,
     match.userBId,

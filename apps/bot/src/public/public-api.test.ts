@@ -81,6 +81,7 @@ type UserRow = {
   pushPlatform: string | null;
   verificationStatus: "unverified" | "pending" | "verified" | "rejected";
   selfiePath: string | null;
+  verifiedSelfiePath: string | null;
   messageHistory: unknown[];
   profile?: ProfileRow | null;
 };
@@ -306,6 +307,7 @@ vi.mock("@gennety/db", async () => {
             pushPlatform: null,
             verificationStatus: "unverified",
             selfiePath: null,
+            verifiedSelfiePath: null,
             messageHistory: [],
             profile: null,
           };
@@ -447,7 +449,17 @@ vi.mock("@gennety/db", async () => {
             const userMatches =
               !where.OR ||
               where.OR.some((clause: any) => clause.userAId === m.userAId || clause.userBId === m.userBId);
-            return idMatches && statusMatches && userMatches;
+            const acceptedByAMatches =
+              where.acceptedByA === undefined || m.acceptedByA === where.acceptedByA;
+            const acceptedByBMatches =
+              where.acceptedByB === undefined || m.acceptedByB === where.acceptedByB;
+            return (
+              idMatches &&
+              statusMatches &&
+              userMatches &&
+              acceptedByAMatches &&
+              acceptedByBMatches
+            );
           });
           for (const m of list) Object.assign(m, applyData(data));
           return { count: list.length };
@@ -748,6 +760,7 @@ vi.mock("../services/storage.js", () => ({
   // before this is called; we still need it to exist on the mock so the
   // import resolves.
   downloadSelfie: vi.fn(async () => null),
+  downloadChatImage: vi.fn(async () => Buffer.from("chat-image")),
   downloadProfilePhoto: vi.fn(async () => Buffer.from("photo-bytes")),
   downloadProfileImage: vi.fn(async () => Buffer.from("photo-bytes")),
   downloadTelegramFile: vi.fn(async () => Buffer.from("photo-bytes")),
@@ -827,6 +840,7 @@ async function seedUser(overrides: Partial<UserRow> = {}): Promise<UserRow> {
     pushPlatform: null,
     verificationStatus: "unverified",
     selfiePath: null,
+    verifiedSelfiePath: null,
     messageHistory: overrides.messageHistory ?? [],
     profile: overrides.profile ?? null,
     ...overrides,
@@ -1437,6 +1451,23 @@ describe("DELETE /v1/me", () => {
     expect(deleteStorageObject).toHaveBeenCalledWith(
       "profile-photos",
       "u/p2.jpg",
+    );
+  });
+
+  it("cleans up the current Persona verification selfie path", async () => {
+    const { deleteStorageObject } = await import("../services/storage.js");
+    const user = await seedUser({
+      verifiedSelfiePath: "u/persona-selfie.jpg",
+    });
+
+    const res = await request(app)
+      .delete("/v1/me")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+    expect(res.status).toBe(204);
+    expect(deleteStorageObject).toHaveBeenCalledWith(
+      "selfies",
+      "u/persona-selfie.jpg",
     );
   });
 
