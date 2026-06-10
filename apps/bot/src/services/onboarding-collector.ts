@@ -376,11 +376,13 @@ function heightCandidate(text: string): FactCandidate | null {
 }
 
 function ageCandidate(text: string, question: OnboardingQuestion): FactCandidate | null {
+  // `(?<!\d)(\d{2})(?!\d)` keeps the two digits a standalone number so a
+  // height like "I'm 183cm" cannot be misread as age 18.
   const patterns = [
-    /(?:i am|i'm|im|aged)\s+(\d{2})(?:\s*(?:years? old))?/iu,
-    /(?:мне|мені)\s+(\d{2})(?:\s*(?:лет|год|года|років|роки))?/iu,
-    /(?:ich bin)\s+(\d{2})(?:\s*jahre)?/iu,
-    /(?:mam)\s+(\d{2})\s+lat/iu,
+    /(?:i am|i'm|im|aged)\s+(?<!\d)(\d{2})(?!\d)(?:\s*(?:years? old))?/iu,
+    /(?:мне|мені)\s+(?<!\d)(\d{2})(?!\d)(?:\s*(?:лет|год|года|років|роки))?/iu,
+    /(?:ich bin)\s+(?<!\d)(\d{2})(?!\d)(?:\s*jahre)?/iu,
+    /(?:mam)\s+(?<!\d)(\d{2})(?!\d)\s+lat/iu,
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);

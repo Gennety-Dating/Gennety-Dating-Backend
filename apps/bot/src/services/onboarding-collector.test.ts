@@ -45,6 +45,25 @@ describe("onboarding collector parsing", () => {
     });
   });
 
+  it("does not read an age out of a height like '183cm'", () => {
+    const candidates = deterministicCandidates("I'm 183cm", "height");
+    expect(candidates.some(({ field }) => field === "age")).toBe(false);
+    expect(candidates.find(({ field }) => field === "height")?.value).toBe(183);
+  });
+
+  it("still extracts a real two-digit age", () => {
+    expect(
+      deterministicCandidates("I'm 24", "first_name_age").find(
+        ({ field }) => field === "age",
+      )?.value,
+    ).toBe(24);
+    expect(
+      deterministicCandidates("мне 21 год", "first_name_age").find(
+        ({ field }) => field === "age",
+      )?.value,
+    ).toBe(21);
+  });
+
   it("never infers gender from a gendered name", () => {
     const candidates = deterministicCandidates(
       "Меня зовут Руслан, мне 21 год.",
