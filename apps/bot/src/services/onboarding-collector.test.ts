@@ -67,6 +67,39 @@ describe("onboarding collector parsing", () => {
     ).toEqual({ reason: "evidence_not_exact" });
   });
 
+  it("accepts evidence the extractor wrapped in quotation marks", () => {
+    // gpt-5.4-mini returns evidence as a quoted string ("\"I prefer women\"").
+    // The guard must strip the wrapping quotes so the LLM-extracted fact is
+    // not rejected and the question is not re-asked.
+    expect(
+      validateFactCandidate(
+        { field: "preference", evidence: '"I prefer women"', value: "women" },
+        "I prefer women",
+      ).candidate?.value,
+    ).toBe("women");
+    expect(
+      validateFactCandidate(
+        { field: "first_name", evidence: '"Max"', value: "Max" },
+        "Max, 24",
+      ).candidate?.value,
+    ).toBe("Max");
+    expect(
+      validateFactCandidate(
+        { field: "partner_preferences", evidence: "«someone kind»", value: "someone kind" },
+        "someone kind and funny",
+      ).candidate?.value,
+    ).toBe("someone kind");
+  });
+
+  it("still rejects quoted evidence absent from the user message", () => {
+    expect(
+      validateFactCandidate(
+        { field: "height", evidence: '"180 cm"', value: 180 },
+        "I am quite tall.",
+      ),
+    ).toEqual({ reason: "evidence_not_exact" });
+  });
+
   it("accepts a corrected explicit value as a new candidate", () => {
     expect(
       validateFactCandidate(

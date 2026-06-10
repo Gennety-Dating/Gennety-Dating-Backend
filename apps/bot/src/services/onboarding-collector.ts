@@ -202,9 +202,27 @@ function normalizedPlaceholder(value: string): boolean {
   return PLACEHOLDERS.has(normalizeText(value).toLowerCase().replace(/[.!?]+$/g, ""));
 }
 
+// Some extractor models (e.g. gpt-5.4-mini) wrap the `evidence` quote in
+// literal quotation marks ("\"I prefer women\""). The raw user message has no
+// such characters, so a strict substring check would reject every
+// LLM-extracted fact and silently degrade the collector to regex-only,
+// re-asking questions the user already answered. Strip wrapping quotes (ASCII
+// and smart/guillemet variants) before comparing, keeping the direct check
+// first so clean evidence is unaffected.
+const WRAPPING_QUOTES = /^[\s"'`«»„“”‚‘’]+|[\s"'`«»„“”‚‘’]+$/gu;
+
+function stripWrappingQuotes(value: string): string {
+  return value.replace(WRAPPING_QUOTES, "");
+}
+
 function exactEvidence(text: string, evidence: string): boolean {
-  const needle = normalizeText(evidence);
-  return needle.length > 0 && text.toLocaleLowerCase().includes(needle.toLocaleLowerCase());
+  const haystack = text.toLocaleLowerCase();
+  const direct = normalizeText(evidence);
+  if (direct.length > 0 && haystack.includes(direct.toLocaleLowerCase())) {
+    return true;
+  }
+  const unquoted = normalizeText(stripWrappingQuotes(evidence));
+  return unquoted.length > 0 && haystack.includes(unquoted.toLocaleLowerCase());
 }
 
 function uniqueFields(values: Iterable<OnboardingField>): OnboardingField[] {
