@@ -58,6 +58,30 @@ export interface FactCandidate {
   value: CandidateValue;
 }
 
+/**
+ * Per-message intent classification from the extractor. The server still owns
+ * progress; this only tells the collector whether the user actually answered,
+ * is correcting a previous value, or asked a clarifying question instead of
+ * answering (so we must not record their question as the answer).
+ */
+export type OnboardingIntent =
+  | "answer"
+  | "clarifying_question"
+  | "correction"
+  | "refusal";
+
+export const ONBOARDING_INTENTS = [
+  "answer",
+  "clarifying_question",
+  "correction",
+  "refusal",
+] as const;
+
+export interface ExtractionResult {
+  candidates: FactCandidate[];
+  intent: OnboardingIntent;
+}
+
 export interface RejectedCandidate {
   field: OnboardingField;
   reason: string;
@@ -73,6 +97,12 @@ export interface CollectorSnapshot {
   revision: number;
   acceptedFields: OnboardingField[];
   rejectedFields: RejectedCandidate[];
+  /**
+   * True when the user asked a clarifying question instead of answering. The
+   * collector recorded nothing and did not advance; the caller should answer
+   * briefly and re-pose the same question.
+   */
+  needsClarification: boolean;
 }
 
 export interface CollectorDeps {
@@ -80,7 +110,7 @@ export interface CollectorDeps {
     text: string,
     question: OnboardingQuestion,
     language: Language,
-  ) => Promise<FactCandidate[]>;
+  ) => Promise<ExtractionResult>;
   fetchFn?: typeof fetch;
 }
 
@@ -177,6 +207,29 @@ const SKIP_RE =
 
 const NO_HOBBIES_RE =
   /(?:no hobbies|don't have (?:any )?hobbies|do not have (?:any )?hobbies|нет хобби|немає хобі|не маю хобі|keine hobbies|mam żadnych hobby|nie mam hobby)/iu;
+
+// High-precision meta-question detector. Kept deliberately narrow so a real
+// free-text answer is never misread as a question: it fires on explicit
+// "what do you mean / why do you ask" phrasings, or a very short message that
+// is only a question mark. The LLM extractor's `intent` field is the primary
+// signal; this is the deterministic floor when the extractor is unavailable.
+const META_QUESTION_RE =
+  /(what (?:do|did) you mean|what does that mean|why (?:do|are) you (?:ask|asking)|can you explain|could you explain|not sure what you (?:mean|are asking)|что (?:ты |вы )?имеешь в виду|что (?:это )?значит|в смысле\?|зачем (?:тебе |вам )?(?:это|знать|спрашива)|не (?:совсем )?пон(?:ял|яла|имаю)|поясни|объясни|що (?:ти |ви )?маєш на увазі|що це означає|навіщо (?:тобі |вам )?(?:це|знати)|поясни|was meinst du|wie meinst du (?:das)?|warum fragst|kannst du das erklären|co masz na myśli|dlaczego pytasz|wyjaśnij)/iu;
+
+/**
+ * Whether a message is most likely a question/confusion aimed at the bot
+ * rather than an answer. Used to (a) stop the free-text fallback from saving a
+ * question as the answer and (b) route the turn to a clarification reply.
+ */
+export function isLikelyMetaQuestion(text: string): boolean {
+  const trimmed = normalizeText(text);
+  if (!trimmed) return false;
+  if (META_QUESTION_RE.test(trimmed)) return true;
+  // A short message ending in a question mark with no substantive content.
+  // Bounded to ≤6 words so a longer answer that happens to contain a "?" is
+  // not swallowed.
+  return /\?\s*$/.test(trimmed) && trimmed.split(/\s+/).length <= 6;
+}
 
 function asField(value: string): OnboardingField | null {
   return (ONBOARDING_FIELDS as readonly string[]).includes(value)
@@ -505,7 +558,14 @@ export function deterministicCandidates(
   const containsOtherExplicitField = candidates.some(
     (candidate) => candidate.field !== question,
   );
-  if (question === "hobbies" && !containsOtherExplicitField) {
+  // A free-text question/confusion ("what do you mean?") must NOT be captured
+  // as the answer. Guard the whole-message fallbacks for the free-text fields.
+  const freeTextLooksLikeQuestion = isLikelyMetaQuestion(trimmed);
+  if (
+    question === "hobbies" &&
+    !containsOtherExplicitField &&
+    !freeTextLooksLikeQuestion
+  ) {
     candidates.push({
       field: "hobbies",
       evidence: trimmed,
@@ -517,7 +577,11 @@ export function deterministicCandidates(
             .filter(Boolean),
     });
   }
-  if (question === "partner_preferences" && !containsOtherExplicitField) {
+  if (
+    question === "partner_preferences" &&
+    !containsOtherExplicitField &&
+    !freeTextLooksLikeQuestion
+  ) {
     candidates.push({
       field: "partner_preferences",
       evidence: trimmed,
@@ -527,7 +591,8 @@ export function deterministicCandidates(
   if (
     question === "ethnicity" &&
     !containsOtherExplicitField &&
-    !SKIP_RE.test(trimmed)
+    !SKIP_RE.test(trimmed) &&
+    !freeTextLooksLikeQuestion
   ) {
     candidates.push({ field: "ethnicity", evidence: trimmed, value: trimmed });
   }
@@ -542,6 +607,7 @@ function extractorSchema() {
       type: "object",
       additionalProperties: false,
       properties: {
+        intent: { type: "string", enum: [...ONBOARDING_INTENTS] },
         candidates: {
           type: "array",
           items: {
@@ -567,9 +633,17 @@ function extractorSchema() {
           },
         },
       },
-      required: ["candidates"],
+      required: ["intent", "candidates"],
     },
   };
+}
+
+const EMPTY_EXTRACTION: ExtractionResult = { candidates: [], intent: "answer" };
+
+function asIntent(value: string | undefined): OnboardingIntent {
+  return value && (ONBOARDING_INTENTS as readonly string[]).includes(value)
+    ? (value as OnboardingIntent)
+    : "answer";
 }
 
 async function extractWithOpenAI(
@@ -577,8 +651,8 @@ async function extractWithOpenAI(
   question: OnboardingQuestion,
   language: Language,
   fetchFn: typeof fetch,
-): Promise<FactCandidate[]> {
-  if (!env.OPENAI_API_KEY) return [];
+): Promise<ExtractionResult> {
+  if (!env.OPENAI_API_KEY) return EMPTY_EXTRACTION;
   const response = await fetchFn("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -591,7 +665,7 @@ async function extractWithOpenAI(
         {
           role: "system",
           content:
-            "Extract only facts explicitly stated by the user. Every candidate must include an exact contiguous quote from the user message as evidence. Never infer gender from a name. Return no candidate for guesses, placeholders, assistant text, or implied facts.",
+            "Extract every fact the user explicitly states, even if it does not match current_question. Every candidate must include an exact contiguous quote from the user message as evidence. Never infer gender from a name. Return no candidate for guesses, placeholders, assistant text, or implied facts. Also classify `intent`: 'answer' when they answered, 'correction' when they change a previously given value, 'clarifying_question' when they ask you a question or express confusion instead of answering, 'refusal' when they decline to answer.",
         },
         {
           role: "user",
@@ -609,15 +683,16 @@ async function extractWithOpenAI(
   });
   if (!response.ok) {
     console.warn("[onboarding-collector] extractor failed", response.status);
-    return [];
+    return EMPTY_EXTRACTION;
   }
   const body = (await response.json()) as {
     choices?: Array<{ message?: { content?: string | null } }>;
   };
   const content = body.choices?.[0]?.message?.content;
-  if (!content) return [];
+  if (!content) return EMPTY_EXTRACTION;
   try {
     const parsed = JSON.parse(content) as {
+      intent?: string;
       candidates?: Array<{
         field?: string;
         evidence?: string;
@@ -626,7 +701,7 @@ async function extractWithOpenAI(
         array_value?: string[] | null;
       }>;
     };
-    return (parsed.candidates ?? []).flatMap((candidate) => {
+    const candidates = (parsed.candidates ?? []).flatMap((candidate) => {
       const field = candidate.field ? asField(candidate.field) : null;
       if (!field || !candidate.evidence) return [];
       const value =
@@ -636,8 +711,9 @@ async function extractWithOpenAI(
       if (value === null || value === undefined) return [];
       return [{ field, evidence: candidate.evidence, value }];
     });
+    return { candidates, intent: asIntent(parsed.intent) };
   } catch {
-    return [];
+    return EMPTY_EXTRACTION;
   }
 }
 
@@ -937,19 +1013,40 @@ export async function collectOnboardingInput(
       deps.extractFacts ??
       ((text, question, language) =>
         extractWithOpenAI(text, question, language, deps.fetchFn ?? fetch));
-    let extracted: FactCandidate[] = [];
+    let extraction: ExtractionResult = EMPTY_EXTRACTION;
     try {
-      extracted = await extractor(input.text, current, languageOf(user));
+      extraction = await extractor(input.text, current, languageOf(user));
     } catch (error) {
       console.warn("[onboarding-collector] extractor error", error);
     }
 
+    // When the extractor itself flags a clarifying question it sometimes still
+    // echoes the question text back as a candidate. Those are suspect, so trust
+    // only the high-precision deterministic layer in that case — a genuine
+    // structured fact stated in the same message (e.g. "why height? I'm 183cm")
+    // is still captured deterministically.
+    const extractedCandidates =
+      extraction.intent === "clarifying_question" ? [] : extraction.candidates;
     const accepted: FactCandidate[] = [];
     const rejected: RejectedCandidate[] = [];
-    for (const candidate of mergeCandidates(deterministic, extracted)) {
+    for (const candidate of mergeCandidates(deterministic, extractedCandidates)) {
       const validated = validateFactCandidate(candidate, input.text);
       if (validated.candidate) accepted.push(validated.candidate);
       else rejected.push({ field: candidate.field, reason: validated.reason ?? "invalid" });
+    }
+
+    // Clarifying question: the user asked us something instead of answering.
+    // Record nothing and don't advance — the caller answers briefly and
+    // re-poses the same question. Conservative: only when no fact was
+    // extracted, so a real answer phrased with a "?" still saves. No revision
+    // bump, so a clarifying turn can't race the optimistic-concurrency guard.
+    if (
+      accepted.length === 0 &&
+      (extraction.intent === "clarifying_question" ||
+        isLikelyMetaQuestion(input.text))
+    ) {
+      logCollector(telegramId, [], rejected, current);
+      return refreshCollectorSnapshot(user.id, [], rejected, true);
     }
 
     if (current === "ethnicity") {
@@ -1041,6 +1138,7 @@ async function refreshCollectorSnapshot(
   userId: string,
   acceptedFields: OnboardingField[],
   rejectedFields: RejectedCandidate[],
+  needsClarification = false,
 ): Promise<CollectorSnapshot> {
   const user = (await prisma.user.findUniqueOrThrow({
     where: { id: userId },
@@ -1058,6 +1156,7 @@ async function refreshCollectorSnapshot(
     revision: user.onboardingProgress?.revision ?? 0,
     acceptedFields,
     rejectedFields,
+    needsClarification,
   };
 }
 

@@ -3,6 +3,7 @@ import { MAX_AGE, MIN_AGE } from "@gennety/shared";
 import {
   backfillCandidates,
   deterministicCandidates,
+  isLikelyMetaQuestion,
   nextOnboardingQuestion,
   onboardingQuestionText,
   onboardingValidationText,
@@ -133,6 +134,35 @@ describe("onboarding collector parsing", () => {
     expect(candidates).toEqual([
       expect.objectContaining({ field: "height", value: 181 }),
     ]);
+  });
+
+  it("does not capture a clarifying question as a free-text answer", () => {
+    expect(
+      deterministicCandidates("What do you mean by that?", "partner_preferences"),
+    ).toEqual([]);
+    expect(deterministicCandidates("в смысле?", "ethnicity")).toEqual([]);
+    expect(
+      deterministicCandidates("зачем тебе это знать?", "hobbies"),
+    ).toEqual([]);
+  });
+
+  it("still captures a genuine free-text answer", () => {
+    expect(valueFor("someone kind and funny", "partner_preferences", "partner_preferences")).toBe(
+      "someone kind and funny",
+    );
+    expect(valueFor("I play guitar and hike", "hobbies", "hobbies")).toEqual([
+      "I play guitar",
+      "hike",
+    ]);
+  });
+
+  it("flags meta-questions but not real answers", () => {
+    expect(isLikelyMetaQuestion("what do you mean?")).toBe(true);
+    expect(isLikelyMetaQuestion("men?")).toBe(true);
+    expect(isLikelyMetaQuestion("что ты имеешь в виду")).toBe(true);
+    expect(isLikelyMetaQuestion("I play guitar and hike")).toBe(false);
+    expect(isLikelyMetaQuestion("someone kind and funny")).toBe(false);
+    expect(isLikelyMetaQuestion("украинец")).toBe(false);
   });
 });
 

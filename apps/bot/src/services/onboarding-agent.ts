@@ -1,4 +1,4 @@
-import { prisma, Prisma } from "@gennety/db";
+import { prisma, Prisma, type Language } from "@gennety/db";
 import {
   isUniversityEmail,
   MIN_PHOTOS,
@@ -29,6 +29,7 @@ import {
   onboardingValidationText,
   type CollectorDeps,
   type OnboardingInput,
+  type OnboardingQuestion,
 } from "./onboarding-collector.js";
 
 // ---------------------------------------------------------------------------
@@ -194,6 +195,59 @@ async function appendCollectorHistory(
   });
 }
 
+/**
+ * Produce a short, warm clarification when the user asked a question instead
+ * of answering an onboarding question. The canonical onboarding question is
+ * re-posed by the caller, so this must NOT ask anything or restate it. Returns
+ * null on any failure (no key, API error) so the caller falls back to simply
+ * re-posing the question — never blocks the flow.
+ */
+async function generateClarificationReply(
+  language: Language,
+  question: OnboardingQuestion,
+  userText: string,
+  deps: AgentDeps,
+): Promise<string | null> {
+  if (!env.OPENAI_API_KEY) return null;
+  const fetchFn = deps.fetchFn ?? fetch;
+  const canonical = onboardingQuestionText(language, question);
+  try {
+    const res = await fetchFn("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-5.4-mini",
+        messages: [
+          {
+            role: "system",
+            content:
+              `You are Gennety's onboarding assistant for a student matchmaking service. ` +
+              `The user is being asked this onboarding question: "${canonical}". ` +
+              `Instead of answering, they replied with a question or confusion. ` +
+              `Reply in language "${language}" with a warm, concise 1–2 sentence clarification that helps them answer. ` +
+              `Do NOT ask a new question and do NOT restate the onboarding question — it is appended separately. Plain text, no markdown.`,
+          },
+          { role: "user", content: userText },
+        ],
+        temperature: 0.4,
+        max_completion_tokens: 200,
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string | null } }>;
+    };
+    const text = body.choices?.[0]?.message?.content?.trim();
+    return text && text.length > 0 ? text : null;
+  } catch {
+    return null;
+  }
+}
+
 async function runCollectorTurn(
   telegramId: bigint,
   input: OnboardingInput,
@@ -241,6 +295,34 @@ async function runCollectorTurn(
     ) {
       snapshot = await markOnboardingField(telegramId, "photos");
     }
+  }
+
+  // The user asked a clarifying question instead of answering. Nothing was
+  // recorded and the question did not advance — answer briefly (short LLM),
+  // then re-pose the exact same canonical question.
+  if (input.kind === "user_text" && snapshot.needsClarification) {
+    const question = onboardingQuestionText(
+      snapshot.language,
+      snapshot.currentQuestion,
+      snapshot.completedFields,
+    );
+    const clarification = await generateClarificationReply(
+      snapshot.language,
+      snapshot.currentQuestion,
+      input.text,
+      deps,
+    );
+    const reply = clarification ? `${clarification}\n\n${question}` : question;
+    await appendCollectorHistory(telegramId, input, reply, false, false);
+    return {
+      reply,
+      expectingPhoto: snapshot.currentQuestion === "photos",
+      onboardingComplete: false,
+      verificationRequired: false,
+      contextPromptRequested: false,
+      contextDumpStarted: false,
+      contextDumpSaved: false,
+    };
   }
 
   let expectingPhoto = snapshot.currentQuestion === "photos";
