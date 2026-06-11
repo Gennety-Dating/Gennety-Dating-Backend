@@ -33,6 +33,21 @@ vi.mock("../../services/vision/validate-face.js", () => ({
   validateSingleFace: vi.fn(),
 }));
 
+const ticketMocks = vi.hoisted(() => ({
+  grantPhotoBonusIfEligible: vi.fn(),
+  grantVideoBonusIfEligible: vi.fn(),
+  sendTicketRewardDM: vi.fn(),
+}));
+
+vi.mock("../../services/ticket-wallet.js", () => ({
+  grantPhotoBonusIfEligible: ticketMocks.grantPhotoBonusIfEligible,
+  grantVideoBonusIfEligible: ticketMocks.grantVideoBonusIfEligible,
+}));
+
+vi.mock("../../services/ticket-reward.js", () => ({
+  sendTicketRewardDM: ticketMocks.sendTicketRewardDM,
+}));
+
 // Mock the onboarding agent so language handler tests don't hit OpenAI
 vi.mock("../../services/onboarding-agent.js", () => ({
   runAgentTurn: vi.fn().mockResolvedValue({
@@ -43,6 +58,7 @@ vi.mock("../../services/onboarding-agent.js", () => ({
     contextDumpStarted: false,
   }),
   injectSystemMessage: vi.fn().mockResolvedValue(undefined),
+  recordOnboardingAssistantReply: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../menu/main.js", () => ({
@@ -67,13 +83,18 @@ vi.mock("../../config.js", () => ({
     PERSONA_HOSTED_URL_BASE: "https://withpersona.test/verify",
     BOT_USERNAME: "gennetytestbot",
     WEBAPP_URL: "https://test.invalid/calendar",
+    TICKET_FEATURE_ENABLED: true,
+    MESSAGE_EFFECT_TICKET_ID: "",
   },
 }));
 
 import { prisma } from "@gennety/db";
 import { handleConsent, sendConsentPrompt } from "./consent.js";
 import { handleLanguageSelection } from "./language.js";
-import { handleConversational } from "./conversational.js";
+import {
+  handleConversational,
+  ONBOARDING_PHOTOS_CONTINUE_CALLBACK,
+} from "./conversational.js";
 import {
   VERIFY_SKIP_CALLBACK,
   VERIFY_SKIP_CONFIRM_CALLBACK,
@@ -91,6 +112,14 @@ function createMockCtx(overrides: {
   callbackData?: string;
   messageText?: string;
   photo?: { file_id: string; file_unique_id: string };
+  video?: {
+    file_id: string;
+    file_unique_id: string;
+    duration?: number;
+    file_size?: number;
+    width?: number;
+    height?: number;
+  };
   livePhoto?: {
     file_id: string;
     file_unique_id: string;
@@ -108,7 +137,20 @@ function createMockCtx(overrides: {
     ...overrides.session,
   };
 
-  const message = overrides.livePhoto
+  const message = overrides.video
+    ? {
+        video: {
+          file_id: overrides.video.file_id,
+          file_unique_id: overrides.video.file_unique_id,
+          duration: overrides.video.duration ?? 20,
+          width: overrides.video.width ?? 720,
+          height: overrides.video.height ?? 1280,
+          ...(overrides.video.file_size !== undefined
+            ? { file_size: overrides.video.file_size }
+            : {}),
+        },
+      }
+    : overrides.livePhoto
     ? {
         live_photo: {
           file_id: overrides.livePhoto.file_id,
@@ -1032,13 +1074,22 @@ describe("Album (media_group_id) photo coalescing", () => {
       contextDumpStarted: false,
     });
     injectMock.mockResolvedValue(undefined);
+    ticketMocks.grantPhotoBonusIfEligible.mockResolvedValue({
+      granted: false,
+      balance: 0,
+    });
+    ticketMocks.grantVideoBonusIfEligible.mockResolvedValue({
+      granted: false,
+      balance: 0,
+    });
+    ticketMocks.sendTicketRewardDM.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("fires exactly ONE agent turn for a 3-photo album (not one per frame)", async () => {
+  it("renders one optional-stage prompt for a 3-photo album without an agent turn", async () => {
     const session: Partial<SessionData> = {
       onboardingStep: "conversational",
       expectingPhoto: true,
@@ -1098,20 +1149,22 @@ describe("Album (media_group_id) photo coalescing", () => {
     // Advance past debounce → flush runs
     await vi.advanceTimersByTimeAsync(800);
 
-    // Exactly ONE agent turn for the whole album
-    expect(agentMock).toHaveBeenCalledTimes(1);
-    expect(agentMock).toHaveBeenCalledWith(
-      BigInt(99001),
-      { kind: "photos_updated", count: 3 },
-    );
+    expect(agentMock).not.toHaveBeenCalled();
 
     // Exactly ONE user-visible reply (on the api captured by the first frame)
     expect(ctx1.api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(ctx1.api.sendMessage).toHaveBeenCalledWith(
+      99001,
+      expect.stringContaining("free Date Ticket"),
+      expect.objectContaining({
+        reply_markup: expect.any(Object),
+      }),
+    );
     expect(ctx2.api.sendMessage).not.toHaveBeenCalled();
     expect(ctx3.api.sendMessage).not.toHaveBeenCalled();
   });
 
-  it("coalesces standalone photo messages (no media_group_id) into ONE agent turn", async () => {
+  it("coalesces standalone photo messages into one deterministic prompt", async () => {
     // Simulates the real-world case where a Telegram client sends photos
     // as separate messages rather than as a media group — e.g. when the
     // user picks photos one-by-one. Without coalescing, each photo would
@@ -1151,12 +1204,7 @@ describe("Album (media_group_id) photo coalescing", () => {
 
     await vi.advanceTimersByTimeAsync(800);
 
-    // Exactly ONE agent turn for the whole burst — not three.
-    expect(agentMock).toHaveBeenCalledTimes(1);
-    expect(agentMock).toHaveBeenCalledWith(
-      BigInt(99001),
-      { kind: "photos_updated", count: 3 },
-    );
+    expect(agentMock).not.toHaveBeenCalled();
   });
 
   it("auto-accepts an unsolicited album and nudges the agent to call request_photos", async () => {
@@ -1202,6 +1250,270 @@ describe("Album (media_group_id) photo coalescing", () => {
       BigInt(99001),
       expect.stringContaining("BEFORE you called request_photos"),
     );
+  });
+
+  it("guides one-by-one uploads through 1, 2, 3, and 4 photos", async () => {
+    ticketMocks.grantPhotoBonusIfEligible
+      .mockResolvedValueOnce({ granted: false, balance: 0 })
+      .mockResolvedValueOnce({ granted: false, balance: 0 })
+      .mockResolvedValueOnce({ granted: false, balance: 0 })
+      .mockResolvedValueOnce({ granted: true, balance: 1 });
+    const shared: SessionData = {
+      ...DEFAULT_SESSION,
+      onboardingStep: "conversational",
+      expectingPhoto: true,
+      pendingPhotos: [],
+      pendingPhotoUniqueIds: [],
+    };
+
+    const first = createAlbumCtx({
+      photoFileId: "single_1",
+      photoUniqueId: "single_uid_1",
+      mediaGroupId: "",
+    });
+    delete first.message.media_group_id;
+    first.session = shared;
+    await handleConversational(first);
+
+    (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      key: "99001",
+      data: shared,
+    });
+    (prisma.botSession.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(first.api.sendMessage).toHaveBeenCalledWith(
+      99001,
+      expect.stringContaining("1/2"),
+    );
+
+    const second = createAlbumCtx({
+      photoFileId: "single_2",
+      photoUniqueId: "single_uid_2",
+      mediaGroupId: "",
+    });
+    delete second.message.media_group_id;
+    second.session = shared;
+    await handleConversational(second);
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(second.api.sendMessage).toHaveBeenCalledWith(
+      99001,
+      expect.stringContaining("free Date Ticket"),
+      expect.objectContaining({ reply_markup: expect.any(Object) }),
+    );
+    expect(shared.expectingPhoto).toBe(true);
+    expect(agentMock).not.toHaveBeenCalled();
+
+    const third = createAlbumCtx({
+      photoFileId: "single_3",
+      photoUniqueId: "single_uid_3",
+      mediaGroupId: "",
+    });
+    delete third.message.media_group_id;
+    third.session = shared;
+    await handleConversational(third);
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(third.api.sendMessage).toHaveBeenCalledWith(
+      99001,
+      expect.stringContaining("3/4"),
+      expect.objectContaining({ reply_markup: expect.any(Object) }),
+    );
+
+    const fourth = createAlbumCtx({
+      photoFileId: "single_4",
+      photoUniqueId: "single_uid_4",
+      mediaGroupId: "",
+    });
+    delete fourth.message.media_group_id;
+    fourth.session = shared;
+    await handleConversational(fourth);
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(ticketMocks.sendTicketRewardDM).toHaveBeenCalledWith(
+      fourth.api,
+      99001,
+      "en",
+      "photo",
+      1,
+    );
+    expect(fourth.api.sendMessage).toHaveBeenCalledWith(
+      99001,
+      expect.stringContaining("photo Date Ticket is secured"),
+      expect.objectContaining({ reply_markup: expect.any(Object) }),
+    );
+    expect(shared.pendingPhotos).toHaveLength(4);
+  });
+
+  it("explains that a repeated photo was not counted", async () => {
+    const shared: SessionData = {
+      ...DEFAULT_SESSION,
+      onboardingStep: "conversational",
+      expectingPhoto: true,
+      pendingPhotos: ["photo_1"],
+      pendingPhotoUniqueIds: ["photo_uid_1"],
+    };
+    const ctx = createAlbumCtx({
+      photoFileId: "photo_1",
+      photoUniqueId: "photo_uid_1",
+      mediaGroupId: "",
+    });
+    delete ctx.message.media_group_id;
+    ctx.session = shared;
+
+    await handleConversational(ctx);
+    (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      key: "99001",
+      data: shared,
+    });
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(visionMock).not.toHaveBeenCalled();
+    expect(ctx.api.sendMessage).toHaveBeenCalledWith(
+      99001,
+      expect.stringContaining("already in your profile"),
+      { parse_mode: "Markdown" },
+    );
+    expect(ctx.api.sendMessage).toHaveBeenCalledWith(
+      99001,
+      expect.stringContaining("1/2"),
+    );
+  });
+
+  it.each([4, 6])(
+    "keeps onboarding open after a %i-photo album and shows Continue",
+    async (photoCount) => {
+      const shared: SessionData = {
+        ...DEFAULT_SESSION,
+        onboardingStep: "conversational",
+        expectingPhoto: true,
+        pendingPhotos: [],
+        pendingPhotoUniqueIds: [],
+      };
+      let firstCtx: ReturnType<typeof createAlbumCtx> | null = null;
+
+      for (let i = 1; i <= photoCount; i++) {
+        const ctx = createAlbumCtx({
+          photoFileId: `batch_${photoCount}_${i}`,
+          photoUniqueId: `batch_uid_${photoCount}_${i}`,
+          mediaGroupId: `group_${photoCount}`,
+        });
+        ctx.session = shared;
+        firstCtx ??= ctx;
+        await handleConversational(ctx);
+      }
+
+      (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        key: "99001",
+        data: shared,
+      });
+      (prisma.botSession.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({});
+      await vi.advanceTimersByTimeAsync(800);
+
+      expect(firstCtx!.api.sendMessage).toHaveBeenCalledWith(
+        99001,
+        expect.stringContaining("profile video"),
+        expect.objectContaining({ reply_markup: expect.any(Object) }),
+      );
+      expect(shared.onboardingStep).toBe("conversational");
+      expect(shared.expectingPhoto).toBe(true);
+      expect(agentMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("accepts a profile video after the minimum and keeps Continue available", async () => {
+    ticketMocks.grantVideoBonusIfEligible.mockResolvedValue({
+      granted: true,
+      balance: 1,
+    });
+    const ctx = createMockCtx({
+      session: {
+        onboardingStep: "conversational",
+        expectingPhoto: true,
+        pendingPhotos: ["photo_1", "photo_2"],
+      },
+      video: {
+        file_id: "video_1",
+        file_unique_id: "video_uid_1",
+      },
+      fromId: 99001,
+    });
+
+    await handleConversational(ctx as any);
+
+    expect(ticketMocks.sendTicketRewardDM).toHaveBeenCalledWith(
+      ctx.api,
+      99001,
+      "en",
+      "video",
+      1,
+    );
+    expect(ctx.api.sendMessage).toHaveBeenCalledWith(
+      99001,
+      expect.stringContaining("video bonus is secured"),
+      expect.objectContaining({ reply_markup: expect.any(Object) }),
+    );
+    expect(ctx.session.onboardingStep).toBe("conversational");
+  });
+
+  it("replaces an existing profile video instead of appending another one", async () => {
+    const ctx = createMockCtx({
+      session: {
+        onboardingStep: "conversational",
+        expectingPhoto: true,
+        pendingPhotos: ["photo_1", "photo_2"],
+        pendingProfileMedia: [
+          { type: "photo", photo: "photo_1" },
+          { type: "photo", photo: "photo_2" },
+          { type: "video", video: "old_video", duration: 10 },
+        ],
+      },
+      video: {
+        file_id: "new_video",
+        file_unique_id: "new_video_uid",
+      },
+      fromId: 99001,
+    });
+
+    await handleConversational(ctx as any);
+
+    expect(
+      ctx.session.pendingProfileMedia.filter(
+        (item: { type: string }) => item.type === "video",
+      ),
+    ).toEqual([
+      expect.objectContaining({ type: "video", video: "new_video" }),
+    ]);
+  });
+
+  it("finalizes only after the user taps Continue", async () => {
+    agentMock.mockResolvedValueOnce({
+      reply: "Onboarding complete.",
+      expectingPhoto: false,
+      onboardingComplete: true,
+      verificationRequired: false,
+      contextPromptRequested: false,
+      contextDumpStarted: false,
+      contextDumpSaved: false,
+    });
+    const ctx = createMockCtx({
+      session: {
+        onboardingStep: "conversational",
+        expectingPhoto: true,
+        pendingPhotos: ["photo_1", "photo_2"],
+      },
+      callbackData: ONBOARDING_PHOTOS_CONTINUE_CALLBACK,
+      fromId: 99001,
+    });
+
+    await handleConversational(ctx as any);
+
+    expect(agentMock).toHaveBeenCalledWith(99001n, {
+      kind: "photos_continue",
+    });
+    expect(ctx.session.onboardingStep).toBe("completed");
+    expect(showMainMenu).toHaveBeenCalled();
   });
 });
 

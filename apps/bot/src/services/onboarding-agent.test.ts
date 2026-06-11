@@ -724,6 +724,58 @@ describe("onboarding-agent", () => {
     );
   });
 
+  it("finalizes the optional media stage directly without calling OpenAI", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        messageHistory: [],
+        onboardingStep: "conversational",
+        language: "en",
+        aiMemoryExportPreference: "accepted",
+        onboardingProgress: {
+          completedFields: ["context_dump", "photos"],
+        },
+      })
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        firstName: "Alice",
+        age: 21,
+        gender: "female",
+        preference: "men",
+        email: "alice@stanford.edu",
+        isEmailVerified: true,
+        aiMemoryExportPreference: "accepted",
+        profile: {
+          ethnicity: null,
+          height: 165,
+          hobbies: ["tennis"],
+          partnerPreferences: "someone kind",
+          photos: ["photo1", "photo2"],
+          homeCityKey: "ua:kyiv",
+        },
+      })
+      .mockResolvedValueOnce({
+        messageHistory: [],
+        language: "en",
+      });
+    const mockFetch = vi.fn();
+
+    const result = await runAgentTurn(
+      telegramId,
+      { kind: "photos_continue" },
+      { fetchFn: mockFetch },
+    );
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(result.onboardingComplete).toBe(true);
+    expect(result.expectingPhoto).toBe(false);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ onboardingStep: "completed" }),
+      }),
+    );
+  });
+
   it("finalize_onboarding rejects when required profile data is missing", async () => {
     // Mock: user has no profile data saved yet
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)

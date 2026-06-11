@@ -1,4 +1,4 @@
-import type { Api } from "grammy";
+import { InlineKeyboard, type Api } from "grammy";
 import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
 import type { SessionData } from "@gennety/shared";
@@ -10,6 +10,7 @@ import {
   magicContextPrompt,
   DEFAULT_SESSION,
   normalizeProfileMedia,
+  profileMediaHasVideo,
   t,
   type ProfileMedia,
   type ProfileVideoMedia,
@@ -17,6 +18,7 @@ import {
 import {
   runAgentTurn,
   injectSystemMessage,
+  recordOnboardingAssistantReply,
 } from "../../services/onboarding-agent.js";
 import { validateSingleFace } from "../../services/vision/validate-face.js";
 import { showMainMenu } from "../menu/main.js";
@@ -41,9 +43,15 @@ import {
   grantVideoBonusIfEligible,
 } from "../../services/ticket-wallet.js";
 import { sendTicketRewardDM } from "../../services/ticket-reward.js";
+import {
+  isPhotoStageContinueText,
+  onboardingPhotoStageText,
+} from "../../services/onboarding-photo-stage.js";
 
 /** Backward compatibility for confirmation buttons sent before auto-flush. */
 const DUMP_DONE_CALLBACK = "dump:done";
+export const ONBOARDING_PHOTOS_CONTINUE_CALLBACK =
+  "onboarding:photos:continue";
 const CONTEXT_DUMP_DEBOUNCE_MS = 2_000;
 
 /**
@@ -169,6 +177,46 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     await ctx.answerCallbackQuery();
   }
 
+  const photoStageActive =
+    ctx.session.expectingPhoto &&
+    ctx.session.pendingPhotos.length >= MIN_PHOTOS;
+  const continuePhotoStage =
+    ctx.callbackQuery?.data === ONBOARDING_PHOTOS_CONTINUE_CALLBACK ||
+    (photoStageActive &&
+      Boolean(ctx.message?.text) &&
+      isPhotoStageContinueText(text));
+
+  if (
+    ctx.callbackQuery?.data === ONBOARDING_PHOTOS_CONTINUE_CALLBACK &&
+    !photoStageActive
+  ) {
+    if (ctx.chat) {
+      await sendPhotoStagePrompt(
+        ctx.api,
+        ctx.chat.id,
+        telegramId,
+        ctx.session.language,
+        ctx.session.pendingPhotos.length,
+        sessionHasProfileVideo(ctx.session),
+      );
+    }
+    return;
+  }
+
+  if (photoStageActive && !continuePhotoStage) {
+    if (ctx.chat) {
+      await sendPhotoStagePrompt(
+        ctx.api,
+        ctx.chat.id,
+        telegramId,
+        ctx.session.language,
+        ctx.session.pendingPhotos.length,
+        sessionHasProfileVideo(ctx.session),
+      );
+    }
+    return;
+  }
+
   // ---- Context dump buffering mode ----
   // When awaitingContextDump is true the Magic Prompt has already been shown.
   // Substantial pasted responses are forwarded after a short idle pause.
@@ -192,7 +240,12 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
   }
 
   // ---- Normal conversational turn ----
-  const result = await withTyping(ctx, () => runAgentTurn(telegramId, text));
+  const result = await withTyping(ctx, () =>
+    runAgentTurn(
+      telegramId,
+      continuePhotoStage ? { kind: "photos_continue" } : text,
+    ),
+  );
 
   if (result.contextDumpStarted) {
     ctx.session.awaitingContextDump = true;
@@ -535,10 +588,10 @@ function contextDumpPhotoNudge(language: string): string {
  * Per-chat accumulator for incoming photos.
  *
  * All photos (album frames AND standalone photo messages) flow through this
- * batcher so we can fire exactly ONE agent turn per "burst" of uploads.
+ * batcher so we can send exactly ONE progress response per upload burst.
  * Why: vision validation takes several seconds per photo, and under
  * `sequentializeByChat` frames are processed serially. If we fired an
- * agent turn per frame, the user would see "got 1, need one more" long
+ * response per frame, the user would see "got 1, need one more" long
  * before the last frame finished processing — then a second "got all"
  * message seconds later. That's the classic "bot is confused" UX.
  *
@@ -566,6 +619,8 @@ interface PhotoBatchAccumulator {
   rejectedCount: number;
   /** How many frames were ignored because MAX_PHOTOS was already reached */
   extraIgnoredCount: number;
+  /** How many frames were already present in the current profile */
+  duplicateCount: number;
   /** True if any frame hit an infra error (getFile / OpenAI failure) */
   hadInfraError: boolean;
   /** True when the batch arrived before `request_photos` was called */
@@ -599,14 +654,19 @@ async function handleProfileVideoMessage(
   media: ProfileVideoMedia,
 ): Promise<void> {
   if (!ctx.chat) return;
+  const photoStageActive = ctx.session.expectingPhoto;
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: { id: true },
   });
   if (!user) return;
 
+  const existingMedia = normalizeProfileMedia(
+    ctx.session.pendingProfileMedia,
+    ctx.session.pendingPhotos,
+  );
   ctx.session.pendingProfileMedia = [
-    ...normalizeProfileMedia(ctx.session.pendingProfileMedia, ctx.session.pendingPhotos),
+    ...existingMedia.filter((item) => item.type !== "video"),
     media,
   ];
   await persistPhotos(
@@ -620,6 +680,17 @@ async function handleProfileVideoMessage(
     await sendTicketRewardDM(ctx.api, ctx.chat.id, ctx.session.language, "video", res.balance);
   } else {
     await ctx.reply(videoSavedAck(ctx.session.language));
+  }
+
+  if (photoStageActive) {
+    await sendPhotoStagePrompt(
+      ctx.api,
+      ctx.chat.id,
+      telegramId,
+      ctx.session.language,
+      ctx.session.pendingPhotos.length,
+      true,
+    );
   }
 }
 
@@ -664,7 +735,7 @@ function videoSavedAck(language: SessionData["language"]): string {
  * Handle one photo frame — either a single message or one frame of a
  * Telegram album. Validates + persists inline so session state stays
  * consistent under `sequentializeByChat`, then (re)arms the debounced
- * flush so the whole burst is acknowledged in ONE agent turn.
+ * flush so the whole burst is acknowledged in one progress response.
  */
 async function handlePhotoFrame(
   ctx: BotContext,
@@ -696,6 +767,7 @@ async function handlePhotoFrame(
       validatedCount: 0,
       rejectedCount: 0,
       extraIgnoredCount: 0,
+      duplicateCount: 0,
       hadInfraError: false,
       unsolicited: !ctx.session.expectingPhoto,
       timer: null,
@@ -716,7 +788,10 @@ async function handlePhotoFrame(
     const fileId = media.staticPhoto.file_id;
     const fileUniqueId = media.uniqueId;
 
-    if (ctx.session.pendingPhotoUniqueIds?.includes(fileUniqueId)) return;
+    if (ctx.session.pendingPhotoUniqueIds?.includes(fileUniqueId)) {
+      acc.duplicateCount++;
+      return;
+    }
 
     if (ctx.session.pendingPhotos.length >= MAX_PHOTOS) {
       acc.extraIgnoredCount++;
@@ -789,7 +864,7 @@ function schedulePhotoBatchFlush(chatId: number): NodeJS.Timeout {
 }
 
 /**
- * Fire exactly one agent turn for the completed photo batch. Runs inside
+ * Send exactly one response for the completed photo batch. Runs inside
  * `dispatchToChat` so it serializes with any concurrent Telegram updates
  * for the same chat (we cannot rely on the middleware's ctx.session here
  * because we're outside any update).
@@ -813,6 +888,22 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
         return;
       }
       if (acc.rejectedCount > 0) {
+        if (!acc.unsolicited) {
+          await replyText(
+            acc.api,
+            acc.chatId,
+            t(session.language, "photoRejected"),
+          );
+          await sendPhotoStagePrompt(
+            acc.api,
+            acc.chatId,
+            acc.telegramId,
+            session.language,
+            session.pendingPhotos.length,
+            sessionHasProfileVideo(session),
+          );
+          return;
+        }
         await injectSystemMessage(
           acc.telegramId,
           `Photo batch rejected: ${acc.rejectedCount} frame(s) had no clear single human face.`,
@@ -825,6 +916,23 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
         return;
       }
       if (acc.extraIgnoredCount > 0) {
+        if (!acc.unsolicited) {
+          session.expectingPhoto = true;
+          await prisma.botSession.upsert({
+            where: { key },
+            create: { key, data: session as unknown as object },
+            update: { data: session as unknown as object },
+          });
+          await sendPhotoStagePrompt(
+            acc.api,
+            acc.chatId,
+            acc.telegramId,
+            session.language,
+            session.pendingPhotos.length,
+            sessionHasProfileVideo(session),
+          );
+          return;
+        }
         // User sent extras on top of an already-complete set. Nudge the
         // agent to acknowledge and move on rather than asking for more.
         session.expectingPhoto = false;
@@ -844,11 +952,57 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
         await replyText(acc.api, acc.chatId, result.reply);
         return;
       }
-      // Nothing to report (all frames were duplicates). Silent no-op.
+      if (acc.duplicateCount > 0 && !acc.unsolicited) {
+        await replyText(
+          acc.api,
+          acc.chatId,
+          t(session.language, "photoDuplicate"),
+        );
+        await sendPhotoStagePrompt(
+          acc.api,
+          acc.chatId,
+          acc.telegramId,
+          session.language,
+          session.pendingPhotos.length,
+          sessionHasProfileVideo(session),
+        );
+      }
       return;
     }
 
     const count = session.pendingPhotos.length;
+    if (!acc.unsolicited) {
+      session.expectingPhoto = true;
+      await prisma.botSession.upsert({
+        where: { key },
+        create: { key, data: session as unknown as object },
+        update: { data: session as unknown as object },
+      });
+
+      if (acc.rejectedCount > 0) {
+        await replyText(
+          acc.api,
+          acc.chatId,
+          t(session.language, "photoRejected"),
+        );
+      }
+      await maybeGrantPhotoBonus(
+        acc.api,
+        acc.chatId,
+        acc.telegramId,
+        session.language,
+      );
+      await sendPhotoStagePrompt(
+        acc.api,
+        acc.chatId,
+        acc.telegramId,
+        session.language,
+        count,
+        sessionHasProfileVideo(session),
+      );
+      return;
+    }
+
     const unsolicitedNote = acc.unsolicited
       ? "User sent photos BEFORE you called request_photos. They were auto-accepted and validated. Call request_photos NOW to formalize the photo step, briefly acknowledge the upload, and continue. "
       : "";
@@ -947,6 +1101,40 @@ function photoProgressMessage(count: number): string {
   }
 
   return `Total verified: ${count}. Minimum of ${MIN_PHOTOS} is met. STOP asking for more photos. Briefly mention the user may send one more if they want (up to ${MAX_PHOTOS}), then default to moving on — do NOT chain repeated "one more" requests.`;
+}
+
+function sessionHasProfileVideo(session: SessionData): boolean {
+  return profileMediaHasVideo(
+    normalizeProfileMedia(session.pendingProfileMedia, session.pendingPhotos),
+  );
+}
+
+async function sendPhotoStagePrompt(
+  api: Api,
+  chatId: number,
+  telegramId: bigint,
+  language: SessionData["language"],
+  photoCount: number,
+  hasVideo: boolean,
+): Promise<void> {
+  const text = onboardingPhotoStageText({
+    language,
+    photoCount,
+    ticketFeatureEnabled: env.TICKET_FEATURE_ENABLED,
+    hasVideo,
+  });
+  await recordOnboardingAssistantReply(telegramId, text);
+
+  if (photoCount < MIN_PHOTOS) {
+    await api.sendMessage(chatId, text);
+    return;
+  }
+
+  const keyboard = new InlineKeyboard().text(
+    t(language, "btnContinuePhotos"),
+    ONBOARDING_PHOTOS_CONTINUE_CALLBACK,
+  );
+  await api.sendMessage(chatId, text, { reply_markup: keyboard });
 }
 
 function markOnboardingComplete(session: SessionData): void {

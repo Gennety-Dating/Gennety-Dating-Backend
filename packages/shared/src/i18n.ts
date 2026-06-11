@@ -43,6 +43,8 @@ const translations = {
     photoRejected:
       "I need a clear photo of just *you* — one person, face visible.\n\n" +
       "No memes, no landscapes, no group shots. Try another one.",
+    photoDuplicate:
+      "That photo is already in your profile, so I didn't count it twice.",
     photoVisionError:
       "Couldn't process that photo. Try sending it again in a sec.",
     livePhotoMissingStatic:
@@ -59,6 +61,32 @@ const translations = {
       "🎟️ Nice — you just earned a *free Date Ticket*!\n\nHere's the deal: every date you go on costs 1 ticket, and tickets normally cost money. Adding photos got you one on the house. Balance: *{balance}* 🎟️",
     ticketRewardVideo:
       "🎟️ A profile video — love it! That's another *free Date Ticket*.\n\nEach date costs 1 ticket (normally paid), so you're set for your next one. Balance: *{balance}* 🎟️",
+    onboardingPhotosNeedMore:
+      "Photo progress: {count}/{min}. Clear photos still needed: {remaining}.",
+    onboardingPhotosBonusOffer:
+      "Your required photos are ready ✅\n\nReach {threshold} photos ({remaining} remaining) to earn a free Date Ticket. You can also send one short profile video for another free ticket.\n\nBoth are optional — send more media now, or continue.",
+    onboardingPhotosBonusOfferAfterVideo:
+      "Your required photos are ready, and your video bonus is secured ✅\n\nReach {threshold} photos ({remaining} remaining) to earn a second free Date Ticket, or continue.",
+    onboardingPhotosBonusProgress:
+      "{count}/{threshold} photos ✅ One more unlocks a free Date Ticket. Send it now or continue.",
+    onboardingPhotosBonusProgressAfterVideo:
+      "{count}/{threshold} photos ✅ One more unlocks your second free Date Ticket. Send it now or continue.",
+    onboardingPhotosPhotoBonusEarned:
+      "{count} photos are ready, and your free photo Date Ticket is secured ✅\n\nYou may still add photos up to {max}, or send one short profile video for another free ticket. Otherwise, continue.",
+    onboardingPhotosBothBonusesEarned:
+      "{count} photos and your profile video are ready — both free Date Tickets are secured ✅\n\nYou may still add photos up to {max}, or continue.",
+    onboardingPhotosPhotoBonusEarnedMax:
+      "All {max} photos are ready, and your free photo Date Ticket is secured ✅\n\nYou may still send one short profile video for another free ticket, or continue.",
+    onboardingPhotosBothBonusesEarnedMax:
+      "All {max} photos and your profile video are ready — both free Date Tickets are secured ✅\n\nContinue when you're ready.",
+    onboardingPhotosOptional:
+      "Your required photos are ready ✅\n\nYou may add more photos up to {max}, send one short profile video, or continue.",
+    onboardingPhotosOptionalAfterVideo:
+      "Your required photos and profile video are ready ✅\n\nYou may add more photos up to {max}, or continue.",
+    onboardingPhotosOptionalMax:
+      "All {max} photos are ready ✅\n\nYou may send one short profile video, or continue.",
+    onboardingPhotosOptionalMaxAfterVideo:
+      "All {max} photos and your profile video are ready ✅\n\nContinue when you're ready.",
     menuMyTickets: "🎟️ My Tickets",
     ticketWalletText:
       "🎟️ *My Tickets*\n\nYou have *{balance}* ticket(s). Each date costs 1 ticket — buy more anytime.",
@@ -565,6 +593,8 @@ const translations = {
     photoRejected:
       "Нужно чёткое фото *только тебя* — одного человека, лицо видно.\n\n" +
       "Без мемов, пейзажей и групповых. Скинь другое.",
+    photoDuplicate:
+      "Это фото уже есть в профиле, поэтому второй раз я его не засчитал.",
     photoVisionError:
       "Не получилось обработать фото. Попробуй ещё раз через секунду.",
     livePhotoMissingStatic:
@@ -581,6 +611,32 @@ const translations = {
       "🎟️ Класс — ты только что получил *бесплатный билет на свидание*!\n\nКак это работает: каждое свидание стоит 1 билет, и обычно билеты платные. За добавленные фото — один в подарок. Баланс: *{balance}* 🎟️",
     ticketRewardVideo:
       "🎟️ Видео в профиле — супер! Вот ещё *бесплатный билет на свидание*.\n\nКаждое свидание стоит 1 билет (обычно платный), так что на следующее ты готов. Баланс: *{balance}* 🎟️",
+    onboardingPhotosNeedMore:
+      "Фото: {count}/{min}. Осталось загрузить ещё {remaining} чёткое фото до обязательного минимума.",
+    onboardingPhotosBonusOffer:
+      "Обязательные фото готовы ✅\n\nДоведи количество фото до {threshold} (осталось: {remaining}) и получишь бесплатный билет на свидание. Ещё один бесплатный билет можно получить за короткое видео для профиля.\n\nОба бонуса необязательны — можешь прислать медиа сейчас или продолжить.",
+    onboardingPhotosBonusOfferAfterVideo:
+      "Обязательные фото готовы, а билет за видео уже твой ✅\n\nДоведи количество фото до {threshold} (осталось: {remaining}) и получишь второй бесплатный билет. Или продолжай.",
+    onboardingPhotosBonusProgress:
+      "{count}/{threshold} фото ✅ Ещё одно откроет бесплатный билет на свидание. Пришли его сейчас или продолжай.",
+    onboardingPhotosBonusProgressAfterVideo:
+      "{count}/{threshold} фото ✅ Ещё одно откроет второй бесплатный билет. Пришли его сейчас или продолжай.",
+    onboardingPhotosPhotoBonusEarned:
+      "Готово {count} фото, и бесплатный билет за фотографии уже твой ✅\n\nМожно добавить фото до {max} или короткое видео за ещё один бесплатный билет. Либо продолжай.",
+    onboardingPhotosBothBonusesEarned:
+      "Готово {count} фото и видео — оба бесплатных билета уже твои ✅\n\nМожно добавить фото до {max} или продолжить.",
+    onboardingPhotosPhotoBonusEarnedMax:
+      "Все {max} фото готовы, и бесплатный билет за фотографии уже твой ✅\n\nМожно отправить короткое видео за ещё один бесплатный билет или продолжить.",
+    onboardingPhotosBothBonusesEarnedMax:
+      "Все {max} фото и видео готовы — оба бесплатных билета уже твои ✅\n\nПродолжай, когда будешь готов.",
+    onboardingPhotosOptional:
+      "Обязательные фото готовы ✅\n\nМожешь добавить ещё фото до {max}, отправить короткое видео для профиля или продолжить.",
+    onboardingPhotosOptionalAfterVideo:
+      "Обязательные фото и видео готовы ✅\n\nМожешь добавить ещё фото до {max} или продолжить.",
+    onboardingPhotosOptionalMax:
+      "Все {max} фото готовы ✅\n\nМожешь отправить короткое видео для профиля или продолжить.",
+    onboardingPhotosOptionalMaxAfterVideo:
+      "Все {max} фото и видео готовы ✅\n\nПродолжай, когда будешь готов.",
     menuMyTickets: "🎟️ Мои билеты",
     ticketWalletText:
       "🎟️ *Мои билеты*\n\nУ тебя *{balance}* билет(ов). Каждое свидание стоит 1 билет — докупить можно в любой момент.",
@@ -1084,6 +1140,8 @@ const translations = {
     photoRejected:
       "Потрібне чітке фото *тільки тебе* — одна людина, обличчя видно.\n\n" +
       "Без мемів, пейзажів та групових фото. Скинь інше.",
+    photoDuplicate:
+      "Це фото вже є в профілі, тому вдруге я його не зарахував.",
     photoVisionError:
       "Не вдалося обробити фото. Спробуй ще раз через секунду.",
     livePhotoMissingStatic:
@@ -1100,6 +1158,32 @@ const translations = {
       "🎟️ Клас — ти щойно отримав *безкоштовний квиток на побачення*!\n\nЯк це працює: кожне побачення коштує 1 квиток, і зазвичай квитки платні. За додані фото — один у подарунок. Баланс: *{balance}* 🎟️",
     ticketRewardVideo:
       "🎟️ Відео в профілі — супер! Ось ще *безкоштовний квиток на побачення*.\n\nКожне побачення коштує 1 квиток (зазвичай платний), тож на наступне ти готовий. Баланс: *{balance}* 🎟️",
+    onboardingPhotosNeedMore:
+      "Фото: {count}/{min}. Залишилося надіслати ще {remaining} чітке фото до обов'язкового мінімуму.",
+    onboardingPhotosBonusOffer:
+      "Обов'язкові фото готові ✅\n\nДоведи кількість фото до {threshold} (залишилося: {remaining}) й отримаєш безкоштовний квиток на побачення. Ще один безкоштовний квиток можна отримати за коротке відео для профілю.\n\nОбидва бонуси необов'язкові — можеш надіслати медіа зараз або продовжити.",
+    onboardingPhotosBonusOfferAfterVideo:
+      "Обов'язкові фото готові, а квиток за відео вже твій ✅\n\nДоведи кількість фото до {threshold} (залишилося: {remaining}) й отримаєш другий безкоштовний квиток. Або продовжуй.",
+    onboardingPhotosBonusProgress:
+      "{count}/{threshold} фото ✅ Ще одне відкриє безкоштовний квиток на побачення. Надішли його зараз або продовжуй.",
+    onboardingPhotosBonusProgressAfterVideo:
+      "{count}/{threshold} фото ✅ Ще одне відкриє другий безкоштовний квиток. Надішли його зараз або продовжуй.",
+    onboardingPhotosPhotoBonusEarned:
+      "Готово {count} фото, і безкоштовний квиток за фотографії вже твій ✅\n\nМожна додати фото до {max} або коротке відео за ще один безкоштовний квиток. Або продовжуй.",
+    onboardingPhotosBothBonusesEarned:
+      "Готово {count} фото й відео — обидва безкоштовні квитки вже твої ✅\n\nМожна додати фото до {max} або продовжити.",
+    onboardingPhotosPhotoBonusEarnedMax:
+      "Усі {max} фото готові, і безкоштовний квиток за фотографії вже твій ✅\n\nМожна надіслати коротке відео за ще один безкоштовний квиток або продовжити.",
+    onboardingPhotosBothBonusesEarnedMax:
+      "Усі {max} фото й відео готові — обидва безкоштовні квитки вже твої ✅\n\nПродовжуй, коли будеш готовий.",
+    onboardingPhotosOptional:
+      "Обов'язкові фото готові ✅\n\nМожеш додати ще фото до {max}, надіслати коротке відео для профілю або продовжити.",
+    onboardingPhotosOptionalAfterVideo:
+      "Обов'язкові фото й відео готові ✅\n\nМожеш додати ще фото до {max} або продовжити.",
+    onboardingPhotosOptionalMax:
+      "Усі {max} фото готові ✅\n\nМожеш надіслати коротке відео для профілю або продовжити.",
+    onboardingPhotosOptionalMaxAfterVideo:
+      "Усі {max} фото й відео готові ✅\n\nПродовжуй, коли будеш готовий.",
     menuMyTickets: "🎟️ Мої квитки",
     ticketWalletText:
       "🎟️ *Мої квитки*\n\nУ тебе *{balance}* квиток(ів). Кожне побачення коштує 1 квиток — докупити можна будь-коли.",
@@ -1609,6 +1693,8 @@ const deTranslations: TranslationTable = {
   photoRejected:
     "Ich brauche ein klares Foto nur von *dir* - eine Person, Gesicht sichtbar.\n\n" +
     "Keine Memes, Landschaften oder Gruppenfotos. Versuch ein anderes.",
+  photoDuplicate:
+    "Dieses Foto ist bereits in deinem Profil, deshalb wurde es nicht doppelt gezählt.",
   photoVisionError: "Konnte das Foto nicht verarbeiten. Sende es gleich nochmal.",
   photosEnough: "Du kannst mehr senden (bis {max}) oder auf den Button tippen, um weiterzumachen.",
   photosDone: "Fotos hochgeladen ✅",
@@ -1693,6 +1779,32 @@ const deTranslations: TranslationTable = {
     "🎟️ Stark — du hast gerade ein *kostenloses Date-Ticket* verdient!\n\nSo läuft's: Jedes Date kostet 1 Ticket, und Tickets kosten normalerweise Geld. Für deine Fotos gibt's eins gratis. Guthaben: *{balance}* 🎟️",
   ticketRewardVideo:
     "🎟️ Ein Profilvideo — top! Noch ein *kostenloses Date-Ticket* für dich.\n\nJedes Date kostet 1 Ticket (sonst kostenpflichtig). Guthaben: *{balance}* 🎟️",
+  onboardingPhotosNeedMore:
+    "Fotostand: {count}/{min}. Noch benötigte klare Fotos: {remaining}.",
+  onboardingPhotosBonusOffer:
+    "Die Pflichtfotos sind fertig ✅\n\nErreiche {threshold} Fotos (noch {remaining}), um ein kostenloses Date-Ticket zu bekommen. Für ein kurzes Profilvideo erhältst du ein weiteres kostenloses Ticket.\n\nBeide Boni sind optional — sende jetzt weitere Medien oder fahre fort.",
+  onboardingPhotosBonusOfferAfterVideo:
+    "Die Pflichtfotos sind fertig und dein Video-Bonus ist gesichert ✅\n\nErreiche {threshold} Fotos (noch {remaining}), um ein zweites kostenloses Date-Ticket zu bekommen, oder fahre fort.",
+  onboardingPhotosBonusProgress:
+    "{count}/{threshold} Fotos ✅ Noch ein Foto schaltet ein kostenloses Date-Ticket frei. Sende es jetzt oder fahre fort.",
+  onboardingPhotosBonusProgressAfterVideo:
+    "{count}/{threshold} Fotos ✅ Noch ein Foto schaltet dein zweites kostenloses Date-Ticket frei. Sende es jetzt oder fahre fort.",
+  onboardingPhotosPhotoBonusEarned:
+    "{count} Fotos sind fertig und dein kostenloses Foto-Date-Ticket ist gesichert ✅\n\nDu kannst noch Fotos bis maximal {max} oder ein kurzes Profilvideo für ein weiteres kostenloses Ticket senden. Sonst fahre fort.",
+  onboardingPhotosBothBonusesEarned:
+    "{count} Fotos und dein Profilvideo sind fertig — beide kostenlosen Date-Tickets sind gesichert ✅\n\nDu kannst noch Fotos bis maximal {max} senden oder fortfahren.",
+  onboardingPhotosPhotoBonusEarnedMax:
+    "Alle {max} Fotos sind fertig und dein kostenloses Foto-Date-Ticket ist gesichert ✅\n\nDu kannst noch ein kurzes Profilvideo für ein weiteres kostenloses Ticket senden oder fortfahren.",
+  onboardingPhotosBothBonusesEarnedMax:
+    "Alle {max} Fotos und dein Profilvideo sind fertig — beide kostenlosen Date-Tickets sind gesichert ✅\n\nFahre fort, wenn du bereit bist.",
+  onboardingPhotosOptional:
+    "Die Pflichtfotos sind fertig ✅\n\nDu kannst weitere Fotos bis maximal {max}, ein kurzes Profilvideo senden oder fortfahren.",
+  onboardingPhotosOptionalAfterVideo:
+    "Die Pflichtfotos und dein Profilvideo sind fertig ✅\n\nDu kannst weitere Fotos bis maximal {max} senden oder fortfahren.",
+  onboardingPhotosOptionalMax:
+    "Alle {max} Fotos sind fertig ✅\n\nDu kannst noch ein kurzes Profilvideo senden oder fortfahren.",
+  onboardingPhotosOptionalMaxAfterVideo:
+    "Alle {max} Fotos und dein Profilvideo sind fertig ✅\n\nFahre fort, wenn du bereit bist.",
   ticketWalletText:
     "🎟️ *Meine Tickets*\n\nDu hast *{balance}* Ticket(s). Jedes Date kostet 1 Ticket — jederzeit nachkaufbar.",
   ticketWalletOpenStore: "🎟️ Tickets kaufen",
@@ -2030,6 +2142,8 @@ const plTranslations: TranslationTable = {
   photoRejected:
     "Potrzebuję wyraźnego zdjęcia tylko *Ciebie* - jedna osoba, widoczna twarz.\n\n" +
     "Bez memów, krajobrazów i zdjęć grupowych. Spróbuj inne.",
+  photoDuplicate:
+    "To zdjęcie jest już w Twoim profilu, więc nie zostało policzone ponownie.",
   photoVisionError: "Nie udało się przetworzyć zdjęcia. Wyślij je za chwilę ponownie.",
   photosEnough: "Możesz wysłać więcej (do {max}) albo kliknąć przycisk, żeby iść dalej.",
   photosDone: "Zdjęcia przesłane ✅",
@@ -2114,6 +2228,32 @@ const plTranslations: TranslationTable = {
     "🎟️ Świetnie — właśnie zdobyłeś *darmowy bilet na randkę*!\n\nJak to działa: każda randka kosztuje 1 bilet, a bilety zwykle są płatne. Za dodane zdjęcia masz jeden gratis. Saldo: *{balance}* 🎟️",
   ticketRewardVideo:
     "🎟️ Wideo w profilu — super! Oto kolejny *darmowy bilet na randkę*.\n\nKażda randka kosztuje 1 bilet (zwykle płatny). Saldo: *{balance}* 🎟️",
+  onboardingPhotosNeedMore:
+    "Postęp zdjęć: {count}/{min}. Pozostało wyraźnych zdjęć: {remaining}.",
+  onboardingPhotosBonusOffer:
+    "Wymagane zdjęcia są gotowe ✅\n\nDodaj zdjęcia do {threshold} (pozostało: {remaining}), aby zdobyć darmowy bilet na randkę. Za krótkie wideo profilowe otrzymasz kolejny darmowy bilet.\n\nOba bonusy są opcjonalne — wyślij media teraz albo przejdź dalej.",
+  onboardingPhotosBonusOfferAfterVideo:
+    "Wymagane zdjęcia są gotowe, a bonus za wideo jest już zabezpieczony ✅\n\nDodaj zdjęcia do {threshold} (pozostało: {remaining}), aby zdobyć drugi darmowy bilet, albo przejdź dalej.",
+  onboardingPhotosBonusProgress:
+    "{count}/{threshold} zdjęć ✅ Jeszcze jedno odblokuje darmowy bilet na randkę. Wyślij je teraz albo przejdź dalej.",
+  onboardingPhotosBonusProgressAfterVideo:
+    "{count}/{threshold} zdjęć ✅ Jeszcze jedno odblokuje drugi darmowy bilet. Wyślij je teraz albo przejdź dalej.",
+  onboardingPhotosPhotoBonusEarned:
+    "Masz {count} zdjęć, a darmowy bilet za zdjęcia jest już zabezpieczony ✅\n\nMożesz dodać zdjęcia do {max} lub krótkie wideo profilowe za kolejny darmowy bilet. Albo przejdź dalej.",
+  onboardingPhotosBothBonusesEarned:
+    "Masz {count} zdjęć i wideo profilowe — oba darmowe bilety są zabezpieczone ✅\n\nMożesz dodać zdjęcia do {max} albo przejść dalej.",
+  onboardingPhotosPhotoBonusEarnedMax:
+    "Wszystkie {max} zdjęć są gotowe, a darmowy bilet za zdjęcia jest zabezpieczony ✅\n\nMożesz wysłać krótkie wideo profilowe za kolejny darmowy bilet albo przejść dalej.",
+  onboardingPhotosBothBonusesEarnedMax:
+    "Wszystkie {max} zdjęć i wideo profilowe są gotowe — oba darmowe bilety są zabezpieczone ✅\n\nPrzejdź dalej, gdy będziesz gotowy.",
+  onboardingPhotosOptional:
+    "Wymagane zdjęcia są gotowe ✅\n\nMożesz dodać więcej zdjęć do {max}, wysłać krótkie wideo profilowe albo przejść dalej.",
+  onboardingPhotosOptionalAfterVideo:
+    "Wymagane zdjęcia i wideo profilowe są gotowe ✅\n\nMożesz dodać więcej zdjęć do {max} albo przejść dalej.",
+  onboardingPhotosOptionalMax:
+    "Wszystkie {max} zdjęć są gotowe ✅\n\nMożesz wysłać krótkie wideo profilowe albo przejść dalej.",
+  onboardingPhotosOptionalMaxAfterVideo:
+    "Wszystkie {max} zdjęć i wideo profilowe są gotowe ✅\n\nPrzejdź dalej, gdy będziesz gotowy.",
   ticketWalletText:
     "🎟️ *Moje bilety*\n\nMasz *{balance}* bilet(ów). Każda randka kosztuje 1 bilet — dokupisz w każdej chwili.",
   ticketWalletOpenStore: "🎟️ Kup bilety",

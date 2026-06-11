@@ -162,12 +162,24 @@ Hard rules enforced by the collector:
 - "No hobbies" / a single hobby is a valid answer; the agent must NOT chain
   "one more, one more" requests.
 - `MIN_PHOTOS` (2) is a hard floor; anything beyond up to `MAX_PHOTOS` (6) is
-  purely optional. Past the minimum the agent makes ONE warm, low-pressure
-  offer — it does NOT chain "one more" requests. When `TICKET_FEATURE_ENABLED`
-  that offer is framed as a reward: reaching `PHOTO_BONUS_TICKET_THRESHOLD` (4)
-  face-validated photos grants a free Date Ticket, and adding a profile video
-  grants another. Each bonus is one-time/idempotent (`Profile.photoBonusTicketAt`
-  / `videoBonusTicketAt`) and explains the mechanic in the reward DM (each date
+  purely optional. In Telegram conversational onboarding, the media stage is
+  deterministic rather than LLM-owned:
+  before the minimum, the bot reports exactly how many valid photos are still
+  needed; once 2 photos are valid, it keeps the stage open and shows one
+  **Continue** action instead of finalizing automatically. The user may keep
+  sending photos one-by-one or as a Telegram album, send a short profile video,
+  tap Continue, or type a localized equivalent such as "done" / "дальше".
+  Albums and rapid standalone photos are coalesced into one progress response,
+  so a 4- or 6-photo burst does not produce one reply per frame. At 3 photos the
+  bot uses a short progress reminder rather than repeating the full pitch.
+  Duplicate photos are not counted and receive an explicit explanation.
+- When `TICKET_FEATURE_ENABLED`, the first post-minimum offer explains both
+  rewards: reaching `PHOTO_BONUS_TICKET_THRESHOLD` (4) face-validated photos
+  grants a free Date Ticket, and adding a profile video grants another. A batch
+  that already reaches 4+ photos receives the photo reward immediately, but the
+  media stage remains open so the user can still add the optional video. Each
+  bonus is one-time/idempotent (`Profile.photoBonusTicketAt` /
+  `videoBonusTicketAt`) and explains the mechanic in the reward DM (each date
   costs 1 ticket; tickets normally cost money). See §3.5b.
 - Profile media may be a mix of static photos, Telegram Live Photos, and a
   profile **video**. A Live Photo counts as one profile media item toward
@@ -177,7 +189,9 @@ Hard rules enforced by the collector:
   A **video** (`ProfileMedia` `{ type: "video" }`) is display-only: it lives in
   `Profile.profileMedia[]`, is NOT added to `photos[]`, is NOT face-matched, and
   does NOT count toward `MIN_PHOTOS` — it preserves the `photos[i] ↔
-  photoFaceScores[i]` invariant. Videos over 60s / 50 MB are rejected.
+  photoFaceScores[i]` invariant. Videos over 60s / 50 MB are rejected. A
+  profile has at most one standalone video; uploading another replaces the
+  previous video while the one-time ticket grant remains idempotent.
 - For accepted export, photos MAY NOT start until the context dump is saved.
   Declined export skips context collection and uses the fallback analysis.
 - After a pasted AI memory dump is parsed and saved, the bot plays a

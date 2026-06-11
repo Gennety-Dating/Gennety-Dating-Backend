@@ -141,6 +141,19 @@ async function appendCollectorHistory(
   });
 }
 
+export async function recordOnboardingAssistantReply(
+  telegramId: bigint,
+  reply: string,
+): Promise<void> {
+  await appendCollectorHistory(
+    telegramId,
+    { kind: "resume" },
+    reply,
+    false,
+    false,
+  );
+}
+
 /**
  * Produce a short, warm clarification when the user asked a question instead
  * of answering an onboarding question. The canonical onboarding question is
@@ -1674,6 +1687,8 @@ export async function runAgentTurn(
   const userMessage =
     onboardingInput.kind === "user_text" || onboardingInput.kind === "context_dump"
       ? onboardingInput.text
+      : onboardingInput.kind === "photos_continue"
+        ? "[The user chose Continue after the optional photo/video offer. Finalize onboarding now and do not ask for more media.]"
       : "";
   const fetchFn = deps.fetchFn ?? fetch;
 
@@ -1691,6 +1706,9 @@ export async function runAgentTurn(
       age: true,
       gender: true,
       preference: true,
+      onboardingProgress: {
+        select: { completedFields: true },
+      },
       profile: {
         select: {
           ethnicity: true,
@@ -1703,6 +1721,49 @@ export async function runAgentTurn(
       },
     },
   });
+
+  if (onboardingInput.kind === "photos_continue") {
+    const history = ((user?.messageHistory ?? []) as unknown[]).map(
+      (message) => message as ChatMessage,
+    );
+    const contextDumpSaved =
+      user?.aiMemoryExportPreference === "declined" ||
+      user?.onboardingProgress?.completedFields.includes("context_dump") ||
+      hasContextDumpSaved(history);
+    const finalized = await execFinalizeOnboarding(
+      telegramId,
+      contextDumpSaved,
+      deps,
+    );
+    const parsed = parseJsonObject(finalized);
+    const onboardingComplete = parsed?.success === true;
+    const verificationRequired = parsed?.verificationRequired === true;
+    const reply = onboardingComplete
+      ? onboardingQuestionText(
+          user?.language ?? "en",
+          "complete",
+        )
+      : typeof parsed?.error === "string"
+        ? parsed.error
+        : "I couldn't finish onboarding yet. Please try again.";
+
+    await appendCollectorHistory(
+      telegramId,
+      onboardingInput,
+      reply,
+      false,
+      onboardingComplete,
+    );
+    return {
+      reply,
+      expectingPhoto: !onboardingComplete,
+      onboardingComplete,
+      verificationRequired,
+      contextPromptRequested: false,
+      contextDumpStarted: false,
+      contextDumpSaved: false,
+    };
+  }
 
   if (
     env.ONBOARDING_FACT_COLLECTOR_ENABLED &&

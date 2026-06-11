@@ -53,7 +53,8 @@ export type OnboardingInput =
   | { kind: "user_text"; text: string }
   | { kind: "resume" }
   | { kind: "context_dump"; text: string }
-  | { kind: "photos_updated"; count?: number };
+  | { kind: "photos_updated"; count?: number }
+  | { kind: "photos_continue" };
 
 type CandidateValue = string | number | string[];
 
