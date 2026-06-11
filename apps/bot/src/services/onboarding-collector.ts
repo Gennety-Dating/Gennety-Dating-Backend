@@ -109,6 +109,12 @@ export interface CollectorSnapshot {
    * briefly and re-pose the same question.
    */
   needsClarification: boolean;
+  /**
+   * True when a real text answer produced no accepted fact and the question
+   * did not move — the caller should explain what kind of answer works
+   * instead of silently re-asking the same question verbatim.
+   */
+  unparsedAnswer: boolean;
 }
 
 export interface CollectorDeps {
@@ -209,7 +215,21 @@ const PLACEHOLDERS = new Set([
 ]);
 
 const SKIP_RE =
-  /^(?:skip|pass|prefer not|rather not|no answer|пропуст|не хочу отвечать|не хочу відповідати|без ответа|без відповіді|überspring|möchte ich nicht|pomiń|nie chcę odpowiadać)[\s.!?]*$/iu;
+  /^(?:skip|pass|prefer not|rather not|no answer|пропуст[\p{L}]*|не хочу отвечать|не хочу відповідати|без ответа|без відповіді|überspring[\p{L}]*|möchte ich nicht|pomi(?:ń|jam)|nie chcę odpowiadać)[\s.!?]*$/iu;
+
+// Bare one-word replies to the name+age question are usually the name itself
+// ("Максим"), but greetings and interjections must never be saved as a name.
+// Deliberately small — the LLM extractor remains the primary path for
+// anything ambiguous.
+const NOT_A_NAME = new Set([
+  "hi", "hello", "hey", "yo", "ok", "okay", "yes", "no", "thanks", "sure",
+  "привет", "здравствуй", "здравствуйте", "хай", "ку", "да", "нет", "ок",
+  "окей", "ага", "угу", "спасибо", "хорошо", "ладно",
+  "привіт", "вітаю", "так", "ні", "дякую", "добре", "гаразд",
+  "hallo", "servus", "moin", "ja", "nein", "danke", "gut",
+  "cześć", "hej", "siema", "tak", "nie", "dzięki", "dziękuję", "dobrze",
+  "start", "старт",
+]);
 
 const NO_HOBBIES_RE =
   /(?:no hobbies|don't have (?:any )?hobbies|do not have (?:any )?hobbies|нет хобби|немає хобі|не маю хобі|keine hobbies|mam żadnych hobby|nie mam hobby)/iu;
@@ -261,6 +281,13 @@ function normalizedPlaceholder(value: string): boolean {
   return PLACEHOLDERS.has(normalizeText(value).toLowerCase().replace(/[.!?]+$/g, ""));
 }
 
+// Lowercased, punctuation-stripped, whitespace-collapsed view of a message for
+// matching short categorical answers: "И тех, и тех." must compare equal to
+// "и тех и тех". Hyphens are kept (names like Анна-Мария).
+function matchableText(value: string): string {
+  return normalizeText(value.replace(/[.,!?;:…()[\]{}«»„“”"'`]+/gu, " ")).toLocaleLowerCase();
+}
+
 // Some extractor models (e.g. gpt-5.4-mini) wrap the `evidence` quote in
 // literal quotation marks ("\"I prefer women\""). The raw user message has no
 // such characters, so a strict substring check would reject every
@@ -275,13 +302,24 @@ function stripWrappingQuotes(value: string): string {
 }
 
 function exactEvidence(text: string, evidence: string): boolean {
-  const haystack = text.toLocaleLowerCase();
+  // Whitespace-normalize the haystack too — a double space in the user
+  // message must not reject otherwise-exact evidence.
+  const haystack = normalizeText(text).toLocaleLowerCase();
   const direct = normalizeText(evidence);
   if (direct.length > 0 && haystack.includes(direct.toLocaleLowerCase())) {
     return true;
   }
   const unquoted = normalizeText(stripWrappingQuotes(evidence));
-  return unquoted.length > 0 && haystack.includes(unquoted.toLocaleLowerCase());
+  if (unquoted.length > 0 && haystack.includes(unquoted.toLocaleLowerCase())) {
+    return true;
+  }
+  // Punctuation-insensitive tier: extractors quote "и тех и тех" for the
+  // message "И тех, и тех". The words must still appear contiguously and in
+  // order, so this stays an anti-hallucination check.
+  const matchableNeedle = matchableText(stripWrappingQuotes(evidence));
+  return (
+    matchableNeedle.length > 0 && matchableText(text).includes(matchableNeedle)
+  );
 }
 
 function uniqueFields(values: Iterable<OnboardingField>): OnboardingField[] {
@@ -454,7 +492,11 @@ function ageCandidate(text: string, question: OnboardingQuestion): FactCandidate
   return null;
 }
 
-function nameCandidate(text: string, question: OnboardingQuestion): FactCandidate | null {
+function nameCandidate(
+  text: string,
+  question: OnboardingQuestion,
+  completed?: ReadonlySet<OnboardingField>,
+): FactCandidate | null {
   const patterns = [
     /(?:my name is|call me)\s+([\p{L}'-]{2,40})/iu,
     /(?:меня зовут|мене звати)\s+([\p{L}'-]{2,40})/iu,
@@ -468,6 +510,18 @@ function nameCandidate(text: string, question: OnboardingQuestion): FactCandidat
   if (question === "first_name_age") {
     const match = text.match(/^\s*([\p{L}'-]{2,40})\s*(?:,|;|\s+\d{2}\b)/u);
     if (match) return { field: "first_name", evidence: match[1], value: match[1] };
+    // A bare one-word reply to the name+age question is the name itself —
+    // unless the name is already on file (a lone word is then more likely a
+    // stray remark than a rename) or the word is a greeting/interjection.
+    const bare = text.match(/^\s*([\p{L}'-]{2,40})[\s.!?]*$/u);
+    if (
+      bare &&
+      !completed?.has("first_name") &&
+      !NOT_A_NAME.has(bare[1].toLocaleLowerCase()) &&
+      !normalizedPlaceholder(bare[1])
+    ) {
+      return { field: "first_name", evidence: bare[1], value: bare[1] };
+    }
   }
   return null;
 }
@@ -486,10 +540,19 @@ function genderCandidate(text: string, question: OnboardingQuestion): FactCandid
     return { field: "gender", evidence: maleMatch[0], value: "male" };
   }
   if (question === "gender") {
-    if (/^(?:female|woman|girl|девушка|женщина|дівчина|жінка|kobieta|frau)$/iu.test(text.trim())) {
+    const bare = matchableText(text);
+    if (
+      /^(?:female|woman|girl|девушка|девочка|женщина|дівчина|жінка|kobieta|dziewczyna|frau|ж|f|w|k)$/iu.test(
+        bare,
+      )
+    ) {
       return { field: "gender", evidence: text.trim(), value: "female" };
     }
-    if (/^(?:male|man|guy|boy|парень|мужчина|хлопець|чоловік|mężczyzna|mann)$/iu.test(text.trim())) {
+    if (
+      /^(?:male|man|guy|boy|парень|мужчина|хлопець|чоловік|mężczyzna|chłopak|mann|м|m)$/iu.test(
+        bare,
+      )
+    ) {
       return { field: "gender", evidence: text.trim(), value: "male" };
     }
   }
@@ -500,28 +563,54 @@ function preferenceCandidate(
   text: string,
   question: OnboardingQuestion,
 ): FactCandidate | null {
-  const both = text.match(
-    /\b(?:both|men and women|women and men|all genders)\b|(?:и парни и девушки|и мужчины и женщины|і хлопці і дівчата|обоих|обох|mężczyźni i kobiety|männer und frauen)/iu,
+  // Matched against the punctuation-stripped view so "И тех, и тех." works.
+  // Cyrillic/Polish tokens use \p{L} lookarounds instead of \b (which only
+  // understands ASCII word characters), so short forms like "оба" cannot fire
+  // inside another word ("обаятельный").
+  const matchable = matchableText(text);
+  const both = matchable.match(
+    /\b(?:both|men and women|women and men|all genders)\b|(?<!\p{L})(?:и парни и девушки|и мужчины и женщины|і хлопці і дівчата|обоих|обох|mężczyźni i kobiety|männer und frauen)(?!\p{L})/iu,
   );
   if (both) return { field: "preference", evidence: both[0], value: "both" };
 
-  const men = text.match(
+  // Colloquial "both" forms that only make sense as a direct answer to the
+  // preference question ("и тех, и тех", "either", "оба") — scoped to the
+  // current question so they can never fire inside unrelated free text.
+  if (question === "preference") {
+    const colloquialBoth = matchable.match(
+      /\b(?:both of them|everyone|either|anyone|beide)\b|(?<!\p{L})(?:тех и тех|тих і тих|оба|обе|обеих|обоє|обидва|обидві|oboje|obie grupy)(?!\p{L})/iu,
+    );
+    if (colloquialBoth) {
+      return { field: "preference", evidence: colloquialBoth[0], value: "both" };
+    }
+  }
+
+  const men = matchable.match(
     /(?:looking for|interested in|like|date|ищу|нравятся|подобаються|шукаю|szukam|lubię|suche)\s+(?:a\s+)?(?:men|man|guys|boys|мужчин|мужчину|парней|парня|чоловіків|хлопців|mężczyzn|männer)/iu,
   );
   if (men) return { field: "preference", evidence: men[0], value: "men" };
 
-  const women = text.match(
+  const women = matchable.match(
     /(?:looking for|interested in|like|date|ищу|нравятся|подобаються|шукаю|szukam|lubię|suche)\s+(?:a\s+)?(?:women|woman|girls|girl|женщин|женщину|девушек|девушку|жінок|дівчат|kobiet|frauen)/iu,
   );
   if (women) return { field: "preference", evidence: women[0], value: "women" };
 
   if (question === "preference") {
-    const value = text.trim();
-    if (/^(?:men|guys|boys|мужчины|парни|чоловіки|хлопці|mężczyźni|männer)$/iu.test(value)) {
-      return { field: "preference", evidence: value, value: "men" };
+    // Bare-token answers include the declensions the question text itself
+    // offers ("парней, девушек или обоих?" → "парней").
+    if (
+      /^(?:men|guys|boys|мужчины|мужчин|парни|парней|парня|чоловіки|чоловіків|хлопці|хлопців|mężczyźni|mężczyzn|männer|männern)$/iu.test(
+        matchable,
+      )
+    ) {
+      return { field: "preference", evidence: text.trim(), value: "men" };
     }
-    if (/^(?:women|girls|женщины|девушки|жінки|дівчата|kobiety|frauen)$/iu.test(value)) {
-      return { field: "preference", evidence: value, value: "women" };
+    if (
+      /^(?:women|girls|женщины|женщин|девушки|девушек|девушку|жінки|жінок|дівчата|дівчат|kobiety|kobiet|frauen)$/iu.test(
+        matchable,
+      )
+    ) {
+      return { field: "preference", evidence: text.trim(), value: "women" };
     }
   }
   return null;
@@ -544,9 +633,10 @@ function aiMemoryCandidate(
 export function deterministicCandidates(
   text: string,
   question: OnboardingQuestion,
+  completed?: ReadonlySet<OnboardingField>,
 ): FactCandidate[] {
   const candidates = [
-    nameCandidate(text, question),
+    nameCandidate(text, question, completed),
     ageCandidate(text, question),
     genderCandidate(text, question),
     preferenceCandidate(text, question),
@@ -652,7 +742,17 @@ function asIntent(value: string | undefined): OnboardingIntent {
     : "answer";
 }
 
-async function extractWithOpenAI(
+// Canonical enum values per question, surfaced to the extractor so it can
+// normalize colloquial answers ("и тех, и тех" → "both") instead of refusing.
+const EXTRACTOR_ALLOWED_VALUES: Partial<
+  Record<OnboardingQuestion, readonly string[]>
+> = {
+  gender: ["male", "female"],
+  preference: ["men", "women", "both"],
+  ai_memory: ["accepted", "declined"],
+};
+
+export async function extractWithOpenAI(
   text: string,
   question: OnboardingQuestion,
   language: Language,
@@ -671,11 +771,17 @@ async function extractWithOpenAI(
         {
           role: "system",
           content:
-            "Extract every fact the user explicitly states, even if it does not match current_question. Every candidate must include an exact contiguous quote from the user message as evidence. Never infer gender from a name. Return no candidate for guesses, placeholders, assistant text, or implied facts. Also classify `intent`: 'answer' when they answered, 'correction' when they change a previously given value, 'clarifying_question' when they ask you a question or express confusion instead of answering, 'refusal' when they decline to answer.",
+            "Extract every fact the user explicitly states, even if it does not match current_question. The user may answer colloquially, in any language, or by pointing at the options offered in question_text (e.g. 'both of them', 'и тех, и тех'). When the meaning of their answer to current_question is clear in context, normalize it to the canonical value — for enum questions the value must be exactly one of allowed_values — and quote the user's answer phrase as evidence. Every candidate must include an exact contiguous quote from the user message as evidence. Normalizing a clearly stated answer is required; inventing a fact the user did not state is forbidden. Never infer gender from a name. Return no candidate for guesses, placeholders ('idk', 'не знаю'), ambiguous replies, or assistant text. Also classify `intent`: 'answer' when they answered, 'correction' when they change a previously given value, 'clarifying_question' when they ask you a question or express confusion instead of answering, 'refusal' when they decline to answer.",
         },
         {
           role: "user",
-          content: JSON.stringify({ language, current_question: question, message: text }),
+          content: JSON.stringify({
+            language,
+            current_question: question,
+            question_text: onboardingQuestionText(language, question),
+            allowed_values: EXTRACTOR_ALLOWED_VALUES[question] ?? null,
+            message: text,
+          }),
         },
       ],
       response_format: {
@@ -748,11 +854,15 @@ export function validateFactCandidate(
       return { candidate: { ...candidate, value } };
     }
     case "gender":
+      // A whole-message placeholder ("не знаю") must never be mapped to an
+      // enum value, even if an over-helpful extractor tries.
+      if (normalizedPlaceholder(text)) return { reason: "placeholder_answer" };
       if (candidate.value !== "male" && candidate.value !== "female") {
         return { reason: "invalid_gender" };
       }
       return { candidate };
     case "preference":
+      if (normalizedPlaceholder(text)) return { reason: "placeholder_answer" };
       if (
         candidate.value !== "men" &&
         candidate.value !== "women" &&
@@ -785,6 +895,7 @@ export function validateFactCandidate(
       return { candidate: { ...candidate, value } };
     }
     case "ai_memory":
+      if (normalizedPlaceholder(text)) return { reason: "placeholder_answer" };
       if (candidate.value !== "accepted" && candidate.value !== "declined") {
         return { reason: "invalid_ai_memory_preference" };
       }
@@ -900,7 +1011,7 @@ export function backfillCandidates(history: Prisma.JsonValue[]): {
       continue;
     }
 
-    for (const candidate of deterministicCandidates(text, inferredQuestion)) {
+    for (const candidate of deterministicCandidates(text, inferredQuestion, completed)) {
       const validated = validateFactCandidate(candidate, text);
       if (!validated.candidate) continue;
       candidates.set(validated.candidate.field, validated.candidate);
@@ -1014,7 +1125,11 @@ export async function collectOnboardingInput(
     const current =
       asQuestion(user.onboardingProgress?.currentQuestion ?? null) ??
       nextOnboardingQuestion(progress);
-    const deterministic = deterministicCandidates(input.text, current);
+    const deterministic = deterministicCandidates(
+      input.text,
+      current,
+      progress.completed,
+    );
     const extractor =
       deps.extractFacts ??
       ((text, question, language) =>
@@ -1099,7 +1214,16 @@ export async function collectOnboardingInput(
       });
       const acceptedFields = uniqueFields(accepted.map(({ field }) => field));
       logCollector(telegramId, acceptedFields, rejected, next);
-      return refreshCollectorSnapshot(user.id, acceptedFields, rejected);
+      // Nothing was saved and the question did not advance (an ethnicity skip
+      // advances `next`, so it is not flagged): the answer went unparsed.
+      const unparsedAnswer = acceptedFields.length === 0 && next === current;
+      return refreshCollectorSnapshot(
+        user.id,
+        acceptedFields,
+        rejected,
+        false,
+        unparsedAnswer,
+      );
     } catch (error) {
       if (error instanceof RevisionConflict && attempt < 2) continue;
       throw error;
@@ -1145,6 +1269,7 @@ async function refreshCollectorSnapshot(
   acceptedFields: OnboardingField[],
   rejectedFields: RejectedCandidate[],
   needsClarification = false,
+  unparsedAnswer = false,
 ): Promise<CollectorSnapshot> {
   const user = (await prisma.user.findUniqueOrThrow({
     where: { id: userId },
@@ -1163,6 +1288,7 @@ async function refreshCollectorSnapshot(
     acceptedFields,
     rejectedFields,
     needsClarification,
+    unparsedAnswer,
   };
 }
 
@@ -1294,4 +1420,119 @@ export function onboardingValidationText(
   }
 
   return null;
+}
+
+type NotUnderstoodHintKey =
+  | "name_age"
+  | "age_only"
+  | "name_only"
+  | Exclude<
+      OnboardingQuestion,
+      "first_name_age" | "context_dump" | "photos" | "complete"
+    >;
+
+const NOT_UNDERSTOOD_LEAD: Record<Language, string> = {
+  en: "Sorry, I didn't quite get that 🙂",
+  ru: "Я не совсем понял 🙂",
+  uk: "Я не зовсім зрозумів 🙂",
+  de: "Das habe ich nicht ganz verstanden 🙂",
+  pl: "Nie do końca zrozumiałem 🙂",
+};
+
+const NOT_UNDERSTOOD_HINTS: Record<
+  Language,
+  Record<NotUnderstoodHintKey, string>
+> = {
+  en: {
+    name_age: "You can answer like: “Alex, 21”.",
+    age_only: "Just send your age as a number, for example 21.",
+    name_only: "Just send your first name, for example Alex.",
+    gender: "“Man” or “woman” works — your own words are fine too.",
+    preference: "“Men”, “women”, or “both” works — your own words are fine too.",
+    height: "For example: 180 cm or 5'11\".",
+    hobbies: "Name one or two things you enjoy — “no hobbies” is fine too.",
+    partner_preferences: "One short sentence about what matters to you is enough.",
+    ethnicity: "A short answer is enough — or reply “skip”.",
+    ai_memory: "Please answer yes or no.",
+  },
+  ru: {
+    name_age: "Можно ответить так: «Максим, 21».",
+    age_only: "Просто напиши возраст числом, например 21.",
+    name_only: "Просто напиши своё имя, например Максим.",
+    gender: "Подойдёт «парень» или «девушка» — можно своими словами.",
+    preference: "Подойдёт «парней», «девушек» или «обоих» — можно своими словами.",
+    height: "Например: 180 см.",
+    hobbies: "Назови одно-два увлечения — «нет хобби» тоже подойдёт.",
+    partner_preferences: "Достаточно одного короткого предложения о том, что для тебя важно.",
+    ethnicity: "Достаточно короткого ответа — или напиши «пропустить».",
+    ai_memory: "Ответь, пожалуйста, «да» или «нет».",
+  },
+  uk: {
+    name_age: "Можна відповісти так: «Максим, 21».",
+    age_only: "Просто напиши вік числом, наприклад 21.",
+    name_only: "Просто напиши своє ім’я, наприклад Максим.",
+    gender: "Підійде «хлопець» або «дівчина» — можна своїми словами.",
+    preference: "Підійде «хлопців», «дівчат» або «обох» — можна своїми словами.",
+    height: "Наприклад: 180 см.",
+    hobbies: "Назви одне-два захоплення — «немає хобі» теж підійде.",
+    partner_preferences: "Достатньо одного короткого речення про те, що для тебе важливо.",
+    ethnicity: "Достатньо короткої відповіді — або напиши «пропустити».",
+    ai_memory: "Відповідай, будь ласка, «так» або «ні».",
+  },
+  de: {
+    name_age: "Du kannst zum Beispiel antworten: „Alex, 21“.",
+    age_only: "Schick einfach dein Alter als Zahl, zum Beispiel 21.",
+    name_only: "Schick einfach deinen Vornamen, zum Beispiel Alex.",
+    gender: "„Mann“ oder „Frau“ reicht — eigene Worte gehen auch.",
+    preference: "„Männer“, „Frauen“ oder „beide“ reicht — eigene Worte gehen auch.",
+    height: "Zum Beispiel: 180 cm.",
+    hobbies: "Nenn ein oder zwei Dinge, die du gern machst — „keine Hobbys“ geht auch.",
+    partner_preferences: "Ein kurzer Satz darüber, was dir wichtig ist, reicht.",
+    ethnicity: "Eine kurze Antwort reicht — oder schreib „überspringen“.",
+    ai_memory: "Antworte bitte mit Ja oder Nein.",
+  },
+  pl: {
+    name_age: "Możesz odpowiedzieć na przykład: „Alex, 21”.",
+    age_only: "Po prostu napisz swój wiek liczbą, na przykład 21.",
+    name_only: "Po prostu napisz swoje imię, na przykład Alex.",
+    gender: "Wystarczy „mężczyzna” lub „kobieta” — możesz też własnymi słowami.",
+    preference: "Wystarczy „mężczyźni”, „kobiety” lub „oboje” — możesz też własnymi słowami.",
+    height: "Na przykład: 180 cm.",
+    hobbies: "Wymień jedno lub dwa hobby — „nie mam hobby” też jest OK.",
+    partner_preferences: "Wystarczy jedno krótkie zdanie o tym, co jest dla Ciebie ważne.",
+    ethnicity: "Wystarczy krótka odpowiedź — możesz też napisać „pomiń”.",
+    ai_memory: "Odpowiedz proszę „tak” lub „nie”.",
+  },
+};
+
+/**
+ * Honest feedback when an answer could not be parsed: a short localized
+ * "didn't get that" plus a per-question example of what works. The caller
+ * appends the (partial-progress-aware) canonical question after it. Returns
+ * null for stages where free text is not the expected input.
+ */
+export function onboardingNotUnderstoodText(
+  language: Language,
+  question: OnboardingQuestion,
+  completedFields: readonly OnboardingField[] = [],
+): string | null {
+  if (
+    question === "context_dump" ||
+    question === "photos" ||
+    question === "complete"
+  ) {
+    return null;
+  }
+  let key: NotUnderstoodHintKey;
+  if (question === "first_name_age") {
+    const completed = new Set(completedFields);
+    key = completed.has("first_name")
+      ? "age_only"
+      : completed.has("age")
+        ? "name_only"
+        : "name_age";
+  } else {
+    key = question;
+  }
+  return `${NOT_UNDERSTOOD_LEAD[language]} ${NOT_UNDERSTOOD_HINTS[language][key]}`;
 }

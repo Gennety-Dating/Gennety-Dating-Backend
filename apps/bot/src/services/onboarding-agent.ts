@@ -26,9 +26,11 @@ import {
 import {
   collectOnboardingInput,
   markOnboardingField,
+  onboardingNotUnderstoodText,
   onboardingQuestionText,
   onboardingValidationText,
   type CollectorDeps,
+  type OnboardingField,
   type OnboardingInput,
   type OnboardingQuestion,
 } from "./onboarding-collector.js";
@@ -166,10 +168,11 @@ async function generateClarificationReply(
   question: OnboardingQuestion,
   userText: string,
   deps: AgentDeps,
+  completedFields: readonly OnboardingField[] = [],
 ): Promise<string | null> {
   if (!env.OPENAI_API_KEY) return null;
   const fetchFn = deps.fetchFn ?? fetch;
-  const canonical = onboardingQuestionText(language, question);
+  const canonical = onboardingQuestionText(language, question, completedFields);
   try {
     const res = await fetchFn("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -270,6 +273,7 @@ async function runCollectorTurn(
       snapshot.currentQuestion,
       input.text,
       deps,
+      snapshot.completedFields,
     );
     const reply = clarification ? `${clarification}\n\n${question}` : question;
     await appendCollectorHistory(telegramId, input, reply, false, false);
@@ -294,9 +298,22 @@ async function runCollectorTurn(
     snapshot.currentQuestion,
     snapshot.completedFields,
   );
-  reply =
-    onboardingValidationText(snapshot.language, snapshot.rejectedFields) ??
-    reply;
+  const validation = onboardingValidationText(
+    snapshot.language,
+    snapshot.rejectedFields,
+  );
+  if (validation) {
+    reply = validation;
+  } else if (input.kind === "user_text" && snapshot.unparsedAnswer) {
+    // The answer produced no fact and the question did not advance: explain
+    // what kind of answer works instead of silently re-asking verbatim.
+    const notUnderstood = onboardingNotUnderstoodText(
+      snapshot.language,
+      snapshot.currentQuestion,
+      snapshot.completedFields,
+    );
+    if (notUnderstood) reply = `${notUnderstood}\n\n${reply}`;
+  }
 
   if (snapshot.currentQuestion === "complete") {
     const finalized = await execFinalizeOnboarding(

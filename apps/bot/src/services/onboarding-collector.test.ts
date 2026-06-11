@@ -1,14 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   contextDumpInstruction,
   MAX_AGE,
   MIN_AGE,
 } from "@gennety/shared";
+
+vi.mock("../config.js", () => ({
+  env: { OPENAI_API_KEY: "test-key" },
+}));
+
 import {
   backfillCandidates,
   deterministicCandidates,
+  extractWithOpenAI,
   isLikelyMetaQuestion,
   nextOnboardingQuestion,
+  onboardingNotUnderstoodText,
   onboardingQuestionText,
   onboardingValidationText,
   validateFactCandidate,
@@ -168,6 +175,199 @@ describe("onboarding collector parsing", () => {
     expect(isLikelyMetaQuestion("someone kind and funny")).toBe(false);
     expect(isLikelyMetaQuestion("украинец")).toBe(false);
   });
+
+  it("captures a bare one-word name reply to the name+age question", () => {
+    expect(
+      deterministicCandidates("Максим", "first_name_age").find(
+        ({ field }) => field === "first_name",
+      )?.value,
+    ).toBe("Максим");
+    expect(
+      deterministicCandidates("Максим!", "first_name_age").find(
+        ({ field }) => field === "first_name",
+      )?.value,
+    ).toBe("Максим");
+  });
+
+  it("does not capture greetings or interjections as a bare name", () => {
+    for (const text of ["Привет", "hi", "ок", "Да.", "не знаю", "idk"]) {
+      expect(
+        deterministicCandidates(text, "first_name_age").some(
+          ({ field }) => field === "first_name",
+        ),
+      ).toBe(false);
+    }
+  });
+
+  it("does not re-capture a bare word as a name once the name is known", () => {
+    expect(
+      deterministicCandidates(
+        "двадцать",
+        "first_name_age",
+        new Set<OnboardingField>(["first_name"]),
+      ).some(({ field }) => field === "first_name"),
+    ).toBe(false);
+  });
+
+  it.each([
+    ["И тех, и тех", "both"],
+    ["і тих, і тих", "both"],
+    ["оба", "both"],
+    ["both of them", "both"],
+    ["Парней", "men"],
+    ["девушек.", "women"],
+    ["Mężczyzn", "men"],
+  ])("understands %s as a direct preference answer", (text, expected) => {
+    expect(
+      deterministicCandidates(text, "preference").find(
+        ({ field }) => field === "preference",
+      )?.value,
+    ).toBe(expected);
+  });
+
+  it("does not read colloquial both-forms outside the preference question", () => {
+    expect(
+      deterministicCandidates("either tall or kind", "partner_preferences").some(
+        ({ field }) => field === "preference",
+      ),
+    ).toBe(false);
+    expect(
+      deterministicCandidates("обаятельный и добрый", "partner_preferences").some(
+        ({ field }) => field === "preference",
+      ),
+    ).toBe(false);
+  });
+
+  it.each([
+    ["Девушка.", "female"],
+    ["ж", "female"],
+    ["М", "male"],
+    ["chłopak", "male"],
+  ])("understands %s as a direct gender answer", (text, expected) => {
+    expect(
+      deterministicCandidates(text, "gender").find(
+        ({ field }) => field === "gender",
+      )?.value,
+    ).toBe(expected);
+  });
+
+  it("accepts evidence that differs only by punctuation or extra spacing", () => {
+    expect(
+      validateFactCandidate(
+        { field: "preference", evidence: "и тех и тех", value: "both" },
+        "И тех, и тех",
+      ).candidate?.value,
+    ).toBe("both");
+    expect(
+      validateFactCandidate(
+        { field: "height", evidence: "180 cm", value: 180 },
+        "I am  180  cm tall",
+      ).candidate?.value,
+    ).toBe(180);
+  });
+
+  it("still rejects evidence whose words are not in the message", () => {
+    expect(
+      validateFactCandidate(
+        { field: "preference", evidence: "both of them", value: "both" },
+        "не знаю пока",
+      ),
+    ).toEqual({ reason: "evidence_not_exact" });
+  });
+
+  it("rejects an enum value mapped from a placeholder answer", () => {
+    expect(
+      validateFactCandidate(
+        { field: "preference", evidence: "не знаю", value: "both" },
+        "не знаю",
+      ),
+    ).toEqual({ reason: "placeholder_answer" });
+  });
+
+  it("treats inflected skip phrases as a skip, not an ethnicity answer", () => {
+    expect(deterministicCandidates("пропустить", "ethnicity")).toEqual([]);
+    expect(deterministicCandidates("überspringen", "ethnicity")).toEqual([]);
+    expect(deterministicCandidates("pomiń", "ethnicity")).toEqual([]);
+  });
+});
+
+describe("onboarding extractor request", () => {
+  it("sends the question text and allowed enum values to the extractor", async () => {
+    let requestBody: { messages: Array<{ content: string }> } | undefined;
+    const fetchFn = vi.fn(async (_url: unknown, init?: { body?: unknown }) => {
+      requestBody = JSON.parse(String(init?.body));
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({ intent: "answer", candidates: [] }),
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    });
+
+    await extractWithOpenAI(
+      "И тех, и тех",
+      "preference",
+      "ru",
+      fetchFn as unknown as typeof fetch,
+    );
+
+    const payload = JSON.parse(requestBody!.messages[1].content) as {
+      question_text: string;
+      allowed_values: string[];
+      message: string;
+    };
+    expect(payload.question_text).toContain("парней");
+    expect(payload.allowed_values).toEqual(["men", "women", "both"]);
+    expect(payload.message).toBe("И тех, и тех");
+  });
+});
+
+describe("not-understood feedback", () => {
+  it("asks only for the missing half of name+age", () => {
+    expect(
+      onboardingNotUnderstoodText("ru", "first_name_age", ["first_name"]),
+    ).toContain("возраст");
+    expect(
+      onboardingNotUnderstoodText("ru", "first_name_age", ["age"]),
+    ).toContain("имя");
+    expect(onboardingNotUnderstoodText("en", "first_name_age")).toContain(
+      "Alex, 21",
+    );
+  });
+
+  it("lists the preference options in the user's language", () => {
+    expect(onboardingNotUnderstoodText("ru", "preference")).toContain("обоих");
+  });
+
+  it("returns null for stages that do not expect free text", () => {
+    expect(onboardingNotUnderstoodText("en", "photos")).toBeNull();
+    expect(onboardingNotUnderstoodText("en", "context_dump")).toBeNull();
+    expect(onboardingNotUnderstoodText("en", "complete")).toBeNull();
+  });
+
+  it.each(["en", "ru", "uk", "de", "pl"] as const)(
+    "has a hint for every parseable question in %s",
+    (language) => {
+      for (const question of [
+        "first_name_age",
+        "gender",
+        "preference",
+        "height",
+        "hobbies",
+        "partner_preferences",
+        "ethnicity",
+        "ai_memory",
+      ] as const) {
+        expect(onboardingNotUnderstoodText(language, question)).toBeTruthy();
+      }
+    },
+  );
 });
 
 describe("onboarding collector routing", () => {
