@@ -1,14 +1,18 @@
-/* Date Ticket Mini App — dark premium theme, lavender accent (#B69AE5). */
+/* Date Ticket Mini App — "Premium Lavender Glass" design system.
+   Dark violet stage, lavender accent, borderless glass surfaces: depth comes
+   from layered fills, inset light, and shadow — never from outlines. */
 
 :root {
   --accent: #b69ae5;
   --accent-deep: #8e6fd6;
+  --accent-bright: #d4c0f4;
   --bg: #120e1c;
   --bg-soft: #1b1530;
-  --card: #211a3a;
   --text: #f4ecff;
   --text-dim: #b3a8cf;
-  --line: rgba(182, 154, 229, 0.18);
+  --glass: rgba(255, 255, 255, 0.07);
+  --glass-press: rgba(255, 255, 255, 0.12);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 * {
@@ -27,8 +31,8 @@ body {
 
 body {
   background:
-    radial-gradient(120% 80% at 50% -10%, rgba(142, 111, 214, 0.35), transparent 60%),
-    radial-gradient(90% 60% at 50% 110%, rgba(182, 154, 229, 0.18), transparent 60%),
+    radial-gradient(120% 80% at 50% -10%, rgba(142, 111, 214, 0.32), transparent 62%),
+    radial-gradient(90% 60% at 50% 110%, rgba(182, 154, 229, 0.16), transparent 60%),
     var(--bg);
   min-height: 100vh;
 }
@@ -58,9 +62,9 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 22px;
+  gap: 26px;
   /* Top padding clears the Telegram fullscreen controls / device notch. */
-  padding: calc(28px + env(safe-area-inset-top)) 20px 28px;
+  padding: calc(30px + env(safe-area-inset-top)) 22px 30px;
 }
 
 /* Our own buttons, fixed to the bottom of the screen (not Telegram's
@@ -70,8 +74,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px 20px calc(16px + env(safe-area-inset-bottom));
-  background: linear-gradient(to top, var(--bg) 62%, rgba(18, 14, 28, 0));
+  padding: 16px 22px calc(18px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--bg) 58%, rgba(18, 14, 28, 0));
 }
 
 .btn-text {
@@ -108,21 +112,22 @@ body {
 }
 .ticket-header h1 {
   font-family: "Space Grotesk", sans-serif;
-  font-size: 26px;
+  font-size: 27px;
   font-weight: 700;
-  margin: 0 0 6px;
-  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+  letter-spacing: -0.015em;
 }
 .ticket-header p {
-  margin: 0;
+  margin: 0 auto;
   color: var(--text-dim);
   font-size: 15px;
-  line-height: 1.45;
+  line-height: 1.5;
   max-width: 320px;
 }
 
 /* ── The 3D ticket ────────────────────────────────────────────────────── */
 .ticket-stage {
+  --sx: 0px;
   perspective: 1100px;
   width: 100%;
   display: flex;
@@ -131,43 +136,84 @@ body {
   padding: 8px 0;
 }
 
+/* Entrance + idle float live on the wrapper so they never fight the card's
+   rotation transform. */
+.ticket-float {
+  animation:
+    ticket-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) both,
+    ticket-float 7s ease-in-out 0.8s infinite;
+}
+
 .ticket-card {
   --rx: 0deg;
   --ry: 0deg;
+  --gx: 50%;
+  --gy: 46%;
+  --holo: 0px;
   position: relative;
   width: 300px;
   display: flex;
   flex-direction: column;
   border-radius: 22px;
-  background: linear-gradient(155deg, #2a2150 0%, #1c1636 55%, #251c44 100%);
-  border: 1px solid var(--line);
+  background:
+    radial-gradient(120% 90% at 20% 0%, rgba(182, 154, 229, 0.2), transparent 55%),
+    radial-gradient(110% 80% at 90% 100%, rgba(142, 111, 214, 0.18), transparent 60%),
+    linear-gradient(155deg, #2a2150 0%, #1c1636 55%, #251c44 100%);
   box-shadow:
-    0 24px 60px rgba(20, 10, 40, 0.65),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    0 28px 64px rgba(12, 6, 28, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.32);
   transform: rotateX(var(--rx)) rotateY(var(--ry));
-  transition: transform 0.12s ease-out;
   transform-style: preserve-3d;
   overflow: hidden;
-  animation: ticket-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.ticket-card:active {
+  cursor: grabbing;
 }
 
-.ticket-sheen {
+/* Specular highlight that tracks the rotation, like light on gloss. */
+.ticket-glare {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    120deg,
-    transparent 30%,
-    rgba(182, 154, 229, 0.22) 48%,
-    rgba(255, 255, 255, 0.12) 52%,
-    transparent 70%
+  z-index: 3;
+  background: radial-gradient(
+    58% 46% at var(--gx) var(--gy),
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.05) 46%,
+    transparent 72%
   );
-  transform: translateX(-30%);
-  animation: sheen 3.6s ease-in-out infinite;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+/* Iridescent foil film — its pastel band slides as the card turns. */
+.ticket-holo {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(
+    115deg,
+    rgba(255, 121, 198, 0.2) 0%,
+    rgba(189, 147, 249, 0.18) 24%,
+    rgba(139, 233, 253, 0.14) 46%,
+    rgba(149, 250, 173, 0.1) 64%,
+    rgba(255, 184, 108, 0.16) 86%
+  );
+  background-size: 220% 220%;
+  background-position: calc(50% + var(--holo)) 50%;
+  mix-blend-mode: overlay;
+  opacity: 0.55;
   pointer-events: none;
 }
 
 .ticket-main {
-  padding: 26px 24px 22px;
+  position: relative;
+  z-index: 1;
+  padding: 26px 24px 20px;
 }
 .ticket-brand {
   display: flex;
@@ -180,7 +226,10 @@ body {
   font-weight: 700;
   letter-spacing: 0.22em;
   font-size: 14px;
-  color: var(--accent);
+  background: linear-gradient(120deg, var(--accent-bright), var(--accent) 55%, var(--accent-deep));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 .ticket-brand-sub {
   font-size: 10px;
@@ -210,12 +259,32 @@ body {
   letter-spacing: 0.02em;
 }
 
+/* Printed issue details — serial number row under the tagline. */
+.ticket-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 18px;
+}
+.ticket-serial {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: rgba(244, 236, 255, 0.45);
+}
+.ticket-heart {
+  font-size: 12px;
+  color: var(--accent);
+  opacity: 0.7;
+}
+
 /* Perforation + stub */
 .ticket-perf {
   height: 0;
-  border-top: 2px dashed rgba(182, 154, 229, 0.35);
+  border-top: 2px dashed rgba(182, 154, 229, 0.3);
   margin: 0 14px;
   position: relative;
+  z-index: 1;
 }
 .ticket-perf::before,
 .ticket-perf::after {
@@ -226,6 +295,7 @@ body {
   height: 22px;
   border-radius: 50%;
   background: var(--bg);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 .ticket-perf::before {
   left: -25px;
@@ -234,28 +304,50 @@ body {
   right: -25px;
 }
 .ticket-stub {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 24px 18px;
+  gap: 16px;
+  padding: 16px 24px 18px;
 }
-.ticket-stub-emoji {
-  font-size: 22px;
+
+/* CSS barcode — seeded stripe widths come from Ticket3D as inline widths. */
+.ticket-barcode {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 26px;
+  opacity: 0.85;
 }
+.ticket-barcode span {
+  background: linear-gradient(to bottom, rgba(244, 236, 255, 0.9), rgba(244, 236, 255, 0.65));
+  border-radius: 0.5px;
+}
+
 .ticket-stub-text {
   font-family: "Space Grotesk", sans-serif;
   letter-spacing: 0.18em;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-dim);
+  text-align: right;
 }
 
+/* Floor shadow — drifts against the rotation (--sx set from JS). */
 .ticket-shadow {
-  width: 220px;
-  height: 26px;
-  margin-top: 18px;
+  width: 230px;
+  height: 28px;
+  margin-top: 20px;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(142, 111, 214, 0.4), transparent);
-  filter: blur(6px);
+  background: radial-gradient(
+    closest-side,
+    rgba(10, 4, 26, 0.85) 0%,
+    rgba(142, 111, 214, 0.28) 55%,
+    transparent
+  );
+  filter: blur(9px);
+  transform: translateX(var(--sx));
 }
 
 /* ── Actions ──────────────────────────────────────────────────────────── */
@@ -263,23 +355,30 @@ body {
 .btn-secondary {
   width: 100%;
   border: none;
-  border-radius: 16px;
-  padding: 16px 18px;
+  border-radius: 18px;
+  padding: 17px 20px;
   font-size: 16px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: transform 0.1s ease, filter 0.1s ease;
+  transition: transform 0.15s ease, filter 0.15s ease, background 0.15s ease;
 }
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 45%, var(--accent-deep) 100%);
   color: #1a0f2e;
-  box-shadow: 0 10px 26px rgba(142, 111, 214, 0.4);
+  box-shadow:
+    0 12px 30px rgba(142, 111, 214, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 .btn-secondary {
-  background: transparent;
+  background: var(--glass);
   color: var(--text);
-  border: 1px solid var(--line);
+  box-shadow: var(--glass-edge);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.btn-secondary:active {
+  background: var(--glass-press);
 }
 .btn-primary:active,
 .btn-secondary:active {
@@ -295,6 +394,20 @@ body {
   font-weight: 600;
   font-size: 15px;
   margin: 0;
+}
+
+/* Wallet balance — a soft glass pill chip under the ticket. */
+.ticket-balance-note {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 auto;
+  padding: 9px 18px;
+  border-radius: 999px;
+  background: var(--glass);
+  box-shadow: var(--glass-edge);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dim);
 }
 
 /* ── Mock payment ─────────────────────────────────────────────────────── */
@@ -343,10 +456,11 @@ body {
   flex: 1;
 }
 .mock-input {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 15px 14px;
+  background: var(--glass);
+  border: none;
+  border-radius: 14px;
+  box-shadow: var(--glass-edge);
+  padding: 16px 15px;
   font-size: 16px;
   letter-spacing: 0.04em;
   display: flex;
@@ -384,23 +498,23 @@ body {
     transform: rotate(360deg);
   }
 }
-@keyframes sheen {
-  0%,
-  100% {
-    transform: translateX(-40%);
-  }
-  50% {
-    transform: translateX(40%);
-  }
-}
 @keyframes ticket-in {
   from {
     opacity: 0;
-    transform: rotateX(28deg) translateY(40px) scale(0.92);
+    transform: translateY(44px) scale(0.92);
   }
   to {
     opacity: 1;
-    transform: rotateX(var(--rx)) rotateY(var(--ry));
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes ticket-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
   }
 }
 @keyframes rise {
@@ -415,22 +529,13 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ticket-card,
-  .ticket-sheen,
+  .ticket-float,
   .ticket-header,
   .mock-pay {
     animation: none;
   }
   .ticket-card {
-    transition: none;
+    cursor: default;
+    touch-action: auto;
   }
-}
-
-/* Wallet balance hint shown under the ticket on the offer / cover-partner screens. */
-.ticket-balance-note {
-  margin: 14px auto 0;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--tg-theme-hint-color, #8a8a8e);
 }

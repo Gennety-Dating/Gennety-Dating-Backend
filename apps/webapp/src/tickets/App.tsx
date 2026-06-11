@@ -155,12 +155,20 @@ export function App(): ReactElement {
               className={`store-bundle${b.bestValue ? " store-bundle-best" : ""}`}
               onClick={() => void startPurchase(phase.balance, b)}
             >
-              <span className="store-bundle-main">
-                {fill(s.buy, { count: String(b.count), amount: formatUsd(b.priceCents) })}
+              {b.bestValue && <span className="store-badge">{s.bestValue}</span>}
+              <span className="store-bundle-emblem" aria-hidden="true">
+                ×{b.count}
               </span>
-              <span className="store-bundle-per">
-                {fill(s.perTicket, { amount: formatUsd(b.perTicketCents) })}
-                {b.bestValue ? ` · ${s.bestValue}` : ""}
+              <span className="store-bundle-info">
+                <span className="store-bundle-main">
+                  {fill(s.buy, { count: String(b.count), amount: formatUsd(b.priceCents) })}
+                </span>
+                <span className="store-bundle-per">
+                  {fill(s.perTicket, { amount: formatUsd(b.perTicketCents) })}
+                </span>
+              </span>
+              <span className="store-bundle-chevron" aria-hidden="true">
+                ›
               </span>
             </button>
           ))}
