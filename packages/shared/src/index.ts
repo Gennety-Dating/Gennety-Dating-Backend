@@ -16,6 +16,7 @@ export type {
 export { cityKeyToTimeZone, isValidTimeZone, DEFAULT_TIME_ZONE } from "./timezone.js";
 export { t, escapeMd } from "./i18n.js";
 export type { TranslationKey } from "./i18n.js";
+export { contextDumpInstruction } from "./onboarding-copy.js";
 export {
   computeStatusSnapshot,
   formatStatusText,

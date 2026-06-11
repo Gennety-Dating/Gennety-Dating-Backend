@@ -34,19 +34,6 @@ const translations = {
     btnMen: "Men",
     btnWomen: "Women",
     btnBoth: "Both",
-    llmDumpIntro:
-      "Now for the fun part 🧠\n\n" +
-      "Copy this prompt, paste it into ChatGPT or Claude, " +
-      "and send me the full response.\n\n" +
-      "This lets our AI actually understand you — way deeper than any questionnaire.",
-    llmPrompt:
-      "Please analyze me as a potential romantic partner. Include:\n" +
-      "1. My core personality traits and values\n" +
-      "2. My communication style\n" +
-      "3. My interests and passions\n" +
-      "4. What kind of partner would complement me\n" +
-      "5. My potential deal-breakers in relationships\n\n" +
-      "Format your response as a detailed JSON with these keys: personality_traits, communication_style, interests, ideal_partner, dealbreakers, summary.",
     llmAnalysing1: "Reading your profile... 🧠",
     llmAnalysing2: "Pulling out personality traits...",
     llmAnalysing3: "Building your psychological fingerprint...",
@@ -569,19 +556,6 @@ const translations = {
     btnMen: "Мужчины",
     btnWomen: "Женщины",
     btnBoth: "Оба",
-    llmDumpIntro:
-      "Теперь самое интересное 🧠\n\n" +
-      "Скопируй промпт ниже, вставь в ChatGPT или Claude " +
-      "и скинь мне полный ответ.\n\n" +
-      "Так наш ИИ реально поймёт, кто ты — глубже любой анкеты.",
-    llmPrompt:
-      "Проанализируй меня как потенциального романтического партнёра. Включи:\n" +
-      "1. Мои ключевые черты характера и ценности\n" +
-      "2. Мой стиль общения\n" +
-      "3. Мои интересы и увлечения\n" +
-      "4. Какой партнёр мне подойдёт\n" +
-      "5. Мои возможные dealbreakers в отношениях\n\n" +
-      "Ответ в формате JSON с ключами: personality_traits, communication_style, interests, ideal_partner, dealbreakers, summary.",
     llmAnalysing1: "Читаю твой профиль... 🧠",
     llmAnalysing2: "Вытягиваю черты характера...",
     llmAnalysing3: "Собираю психологический портрет...",
@@ -1101,19 +1075,6 @@ const translations = {
     btnMen: "Чоловіки",
     btnWomen: "Жінки",
     btnBoth: "Обидва",
-    llmDumpIntro:
-      "Тепер найцікавіше 🧠\n\n" +
-      "Скопіюй промпт нижче, встав у ChatGPT або Claude " +
-      "і скинь мені повну відповідь.\n\n" +
-      "Так наш ШІ реально зрозуміє, хто ти — глибше за будь-яку анкету.",
-    llmPrompt:
-      "Проаналізуй мене як потенційного романтичного партнера. Включи:\n" +
-      "1. Мої ключові риси характеру та цінності\n" +
-      "2. Мій стиль спілкування\n" +
-      "3. Мої інтереси та захоплення\n" +
-      "4. Який партнер мені підійде\n" +
-      "5. Мої можливі dealbreakers у стосунках\n\n" +
-      "Відповідь у форматі JSON з ключами: personality_traits, communication_style, interests, ideal_partner, dealbreakers, summary.",
     llmAnalysing1: "Читаю твій профіль... 🧠",
     llmAnalysing2: "Витягую риси характеру...",
     llmAnalysing3: "Збираю психологічний портрет...",
@@ -1639,19 +1600,6 @@ const deTranslations: TranslationTable = {
   btnMen: "Männer",
   btnWomen: "Frauen",
   btnBoth: "Beides",
-  llmDumpIntro:
-    "Jetzt kommt der spannende Teil 🧠\n\n" +
-    "Kopiere diesen Prompt, füge ihn in ChatGPT oder Claude ein " +
-    "und sende mir die vollständige Antwort.\n\n" +
-    "So kann unsere AI dich wirklich verstehen - viel tiefer als ein Fragebogen.",
-  llmPrompt:
-    "Analysiere mich bitte als potenziellen romantischen Partner. Beziehe ein:\n" +
-    "1. Meine zentralen Persönlichkeitseigenschaften und Werte\n" +
-    "2. Meinen Kommunikationsstil\n" +
-    "3. Meine Interessen und Leidenschaften\n" +
-    "4. Welche Art Partner gut zu mir passen würde\n" +
-    "5. Mögliche Dealbreaker in Beziehungen\n\n" +
-    "Formatiere die Antwort als detailliertes JSON mit diesen Keys: personality_traits, communication_style, interests, ideal_partner, dealbreakers, summary.",
   llmAnalysing1: "Ich lese dein Profil... 🧠",
   llmAnalysing2: "Ich extrahiere Persönlichkeitsmerkmale...",
   llmAnalysing3: "Ich baue deinen psychologischen Fingerabdruck...",
@@ -2073,19 +2021,6 @@ const plTranslations: TranslationTable = {
   btnMen: "Mężczyźni",
   btnWomen: "Kobiety",
   btnBoth: "Obie opcje",
-  llmDumpIntro:
-    "Teraz ciekawa część 🧠\n\n" +
-    "Skopiuj ten prompt, wklej go do ChatGPT albo Claude " +
-    "i wyślij mi pełną odpowiedź.\n\n" +
-    "Dzięki temu nasza AI naprawdę Cię zrozumie - dużo głębiej niż zwykła ankieta.",
-  llmPrompt:
-    "Przeanalizuj mnie jako potencjalnego partnera romantycznego. Uwzględnij:\n" +
-    "1. Moje główne cechy osobowości i wartości\n" +
-    "2. Mój styl komunikacji\n" +
-    "3. Moje zainteresowania i pasje\n" +
-    "4. Jaki typ partnera naprawdę by mnie uzupełniał\n" +
-    "5. Potencjalne dealbreakery w relacjach\n\n" +
-    "Sformatuj odpowiedź jako szczegółowy JSON z tymi kluczami: personality_traits, communication_style, interests, ideal_partner, dealbreakers, summary.",
   llmAnalysing1: "Czytam Twój profil... 🧠",
   llmAnalysing2: "Wyciągam cechy osobowości...",
   llmAnalysing3: "Buduję Twój psychologiczny odcisk...",

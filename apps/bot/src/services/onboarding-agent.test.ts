@@ -50,6 +50,7 @@ vi.mock("../public/otp.js", () => ({
 }));
 
 import { prisma } from "@gennety/db";
+import { contextDumpInstruction } from "@gennety/shared";
 import { createAndSendOtp, verifyOtp } from "../public/otp.js";
 import { runAgentTurn, injectSystemMessage, truncateForApi, summarizeHistory } from "./onboarding-agent.js";
 import type { ChatMessage } from "./onboarding-agent.js";
@@ -331,7 +332,7 @@ describe("onboarding-agent", () => {
     expect(result.contextPromptRequested).toBe(true);
     expect(result.contextDumpStarted).toBe(true);
     expect(result.expectingPhoto).toBe(false);
-    expect(result.reply).toContain("Скопируй промпт выше");
+    expect(result.reply).toBe(contextDumpInstruction("ru"));
 
     const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
     const systemPrompt = requestBody.messages.find(
@@ -428,7 +429,7 @@ describe("onboarding-agent", () => {
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(result.contextPromptRequested).toBe(true);
-    expect(result.reply).toContain("Скопируй промпт выше");
+    expect(result.reply).toBe(contextDumpInstruction("ru"));
   });
 
   it("saves the user's latest pasted message as the dump, ignoring any LLM rephrasing in raw_dump", async () => {

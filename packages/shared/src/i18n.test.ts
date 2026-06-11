@@ -39,7 +39,7 @@ describe("t (translation)", () => {
       "welcome", "chooseLanguage", "philosophyPitch", "philosophyContinue",
       "askEmail", "invalidEmail", "otpSent", "otpInvalid", "otpExpired",
       "emailVerified", "askFirstName", "askSurname", "askAge", "invalidAge",
-      "llmDumpIntro", "llmPrompt", "llmDumpReceived",
+      "llmDumpReceived",
       "askPhotos", "photoReceived", "photosEnough", "photosDone",
       "profileReview", "profileConfirm", "profileEdit", "onboardingComplete",
       "btnLike", "btnDislike", "btnContinuePhotos",

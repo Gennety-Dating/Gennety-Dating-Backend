@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { MAX_AGE, MIN_AGE } from "@gennety/shared";
+import {
+  contextDumpInstruction,
+  MAX_AGE,
+  MIN_AGE,
+} from "@gennety/shared";
 import {
   backfillCandidates,
   deterministicCandidates,
@@ -260,10 +264,10 @@ describe("onboarding collector routing", () => {
   });
 
   it.each(["en", "ru", "uk", "de", "pl"] as const)(
-    "keeps the %s context prompt instruction free of transport-specific delivery guidance",
+    "uses the shared canonical context prompt instruction in %s",
     (language) => {
-      expect(onboardingQuestionText(language, "context_dump")).not.toContain(
-        "Telegram",
+      expect(onboardingQuestionText(language, "context_dump")).toBe(
+        contextDumpInstruction(language),
       );
     },
   );
