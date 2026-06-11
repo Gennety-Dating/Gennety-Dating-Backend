@@ -333,6 +333,12 @@ describe("onboarding-agent", () => {
     expect(result.expectingPhoto).toBe(false);
     expect(result.reply).toContain("Скопируй промпт выше");
 
+    const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const systemPrompt = requestBody.messages.find(
+      (message: { role: string }) => message.role === "system",
+    )?.content as string;
+    expect(systemPrompt).not.toContain("Telegram");
+
     const updateCalls = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls;
     const persistedHistory = updateCalls.at(-1)?.[0].data.messageHistory as Array<{
       role: string;

@@ -90,12 +90,11 @@ export interface SessionData {
   pendingReportCategory: string | null;
   /**
    * True after the Magic Prompt has been sent to the user.
-   * Incoming text messages are buffered into contextDumpBuffer instead of
-   * being forwarded directly to the LLM agent, because Telegram may split
-   * a long paste into multiple messages.
+   * A substantial pasted response is briefly buffered in contextDumpBuffer
+   * before being forwarded to the LLM agent.
    */
   awaitingContextDump: boolean;
-  /** Accumulated text chunks from the user's LLM context dump paste */
+  /** Buffered text from the user's LLM context dump paste */
   contextDumpBuffer: string;
 }
 

@@ -341,7 +341,7 @@ describe("Language selection → conversational transition", () => {
   });
 });
 
-describe("Context dump buffering (multi-chunk paste fix)", () => {
+describe("Context dump processing delay", () => {
   const agentMock = runAgentTurn as ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -566,7 +566,7 @@ describe("Context dump buffering (multi-chunk paste fix)", () => {
       expect(agentMock).not.toHaveBeenCalled();
       expect(ctx.session.contextDumpBuffer).toBe(longPaste);
       expect(ctx.reply).toHaveBeenCalledWith(
-        expect.stringContaining("process everything automatically"),
+        "Got it ✅ I'm processing your response now.",
       );
       expect(ctx.reply).not.toHaveBeenCalledWith(
         expect.any(String),
@@ -631,7 +631,7 @@ describe("Context dump buffering (multi-chunk paste fix)", () => {
     const replies = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls.map(
       (c) => c[0] as string,
     );
-    expect(replies.some((r) => r.includes("automatically"))).toBe(false);
+    expect(replies.some((r) => r.includes("processing your response"))).toBe(false);
   });
 
   it("silently accumulates subsequent chunks until the debounce expires", async () => {

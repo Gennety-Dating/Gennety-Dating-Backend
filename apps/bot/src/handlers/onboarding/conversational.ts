@@ -64,9 +64,8 @@ const SHORT_MESSAGE_THRESHOLD = 400;
  *
  * When the agent has requested the context dump (awaitingContextDump = true),
  * incoming text is accumulated in contextDumpBuffer instead of being sent to
- * the agent immediately. This handles Telegram's automatic splitting of long
- * pastes (> 4096 chars) into multiple messages. The full buffer is sent to the
- * agent automatically after a short pause between incoming chunks.
+ * the agent immediately. The pasted response is acknowledged, then the full
+ * buffer is sent to the agent automatically after a short processing delay.
  */
 export async function handleConversational(ctx: BotContext): Promise<void> {
   const telegramId = BigInt(ctx.from!.id);
@@ -172,8 +171,7 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
 
   // ---- Context dump buffering mode ----
   // When awaitingContextDump is true the Magic Prompt has already been shown.
-  // Telegram may split a long paste into multiple messages, so we accumulate
-  // all chunks and forward the full buffer after a short idle pause.
+  // Substantial pasted responses are forwarded after a short idle pause.
   //
   // Routing: a short message arriving while the buffer is still empty is
   // almost certainly a question ("why do I need to do this?"), not the LLM
@@ -288,12 +286,10 @@ async function handleContextDumpChunk(
   const chunk = truncated ? text.slice(0, Math.max(0, room)) : text;
   ctx.session.contextDumpBuffer = current + separator + chunk;
 
-  // Acknowledge only the first chunk. Subsequent parts silently extend the
-  // debounce window so Telegram-split responses arrive as one agent turn.
+  // Acknowledge receipt once. Additional text arriving before the flush
+  // silently extends the debounce window.
   if (separator === "") {
-    await ctx.reply(
-      "Got it ✅ If Telegram split the response, send the remaining parts now — I'll process everything automatically.",
-    );
+    await ctx.reply("Got it ✅ I'm processing your response now.");
   }
 
   // If this chunk filled the buffer, auto-flush so we don't silently drop

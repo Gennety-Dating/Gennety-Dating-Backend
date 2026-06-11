@@ -257,6 +257,14 @@ describe("onboarding collector routing", () => {
     expect(text).toContain("Why we do this");
     expect(text).toContain("honest psychological profile");
     expect(text).toContain("Every user goes through the same deep read");
-    expect(text).toContain("Telegram splits");
   });
+
+  it.each(["en", "ru", "uk", "de", "pl"] as const)(
+    "keeps the %s context prompt instruction free of transport-specific delivery guidance",
+    (language) => {
+      expect(onboardingQuestionText(language, "context_dump")).not.toContain(
+        "Telegram",
+      );
+    },
+  );
 });

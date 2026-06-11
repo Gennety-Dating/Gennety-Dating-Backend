@@ -133,8 +133,8 @@ export interface AgentTurnResult {
   contextPromptRequested: boolean;
   /**
    * When true, the handler must switch the session into context-dump-buffering
-   * mode so that subsequent messages are accumulated before being sent to the
-   * agent (Telegram splits long pastes into multiple messages).
+   * mode so that the pasted response can be acknowledged and then sent to the
+   * agent after a short processing delay.
    */
   contextDumpStarted: boolean;
   /**
@@ -472,7 +472,6 @@ You MUST collect ALL of the following before finalizing:
 
    STRICT BOUNDARIES for the reply that accompanies request_context_dump:
    - Your ONLY job in that turn is the paste-it-back instruction. Tell the user to copy the prompt above and paste it into whatever AI chat they already use — ChatGPT, Claude, Gemini, Perplexity, Grok, DeepSeek, or any other LLM — and send the AI's full response back.
-   - Mention that if Telegram splits a long response into several messages, they should send every part in order; the bot will process them automatically after a short pause.
    - Do NOT mention photos. Do NOT mention "next step". Do NOT preview anything that comes after this. From the user's point of view, step 5 does not exist yet.
    - Do NOT call request_photos in the same turn as request_context_dump under any circumstances. Wait for the user to actually paste back the analysis and for save_context_dump to succeed first.
 

@@ -156,10 +156,9 @@ export const PROFILER_PENALTY_COEFFICIENTS = {
 };
 
 /**
- * Max total characters the Magic-Prompt buffer will hold across a user's
- * multi-message paste. Telegram caps a single message at 4096 chars, so
- * ~8 full messages is plenty of headroom for any legitimate LLM dump. The
- * cap exists to bound session-row growth and stop abuse loops.
+ * Max total characters accepted for a Magic-Prompt response. The cap bounds
+ * session-row growth and stops abuse loops while leaving ample headroom for
+ * the structured profile payload.
  */
 export const MAX_DUMP_BUFFER_CHARS = 32_000;
 
