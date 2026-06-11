@@ -10,33 +10,53 @@ export function contextDumpInstruction(
   switch (language) {
     case "ru":
       return (
-        "Скопируй Magic Prompt выше и вставь его в ChatGPT, Claude, Gemini или другой AI-чат, которым ты уже пользуешься.\n\n" +
-        "Зачем это нужно: Gennety не свайпает людей наугад. Мы просим твой AI-чат собрать честный психологический профиль по тому, что он уже знает о тебе: ценности, стиль общения, интересы, паттерны и то, кто тебе реально подходит. Такой же глубокий разбор проходит каждый пользователь, поэтому матчинг сравнивает не анкеты из пары строк, а нормальный контекст.\n\n" +
-        "Когда AI вернёт ответ, пришли его сюда полностью."
+        "Gennety анализирует ваши диалоги и на их основе подбирает идеальных " +
+        "кандидатов. Чем больше контекста вы даёте — от глобальных ценностей до " +
+        "мелких деталей, — тем точнее ИИ формирует ваш психологический профиль. " +
+        "Мы проводим такой же глубокий опрос для каждого пользователя, чтобы " +
+        "гарантировать максимальную совместимость пары.\n\n" +
+        "Скопируй промпт выше, вставь его в ChatGPT, Claude, Gemini или любой " +
+        "другой AI-чат, а потом скинь мне полный ответ."
       );
     case "uk":
       return (
-        "Скопіюй Magic Prompt вище і встав його в ChatGPT, Claude, Gemini або інший AI-чат, яким ти вже користуєшся.\n\n" +
-        "Навіщо це потрібно: Gennety не свайпає людей навмання. Ми просимо твій AI-чат зібрати чесний психологічний профіль за тим, що він уже знає про тебе: цінності, стиль спілкування, інтереси, патерни й те, хто тобі справді підходить. Такий самий глибокий розбір проходить кожен користувач, тому матчинг порівнює не анкети з кількох рядків, а нормальний контекст.\n\n" +
-        "Коли AI поверне відповідь, надішли її сюди повністю."
+        "Gennety аналізує ваші діалоги й на їх основі підбирає ідеальних " +
+        "кандидатів. Чим більше контексту ви даєте — від глобальних цінностей до " +
+        "дрібних деталей, — тим точніше ШІ формує ваш психологічний профіль. " +
+        "Ми проводимо таке саме глибоке опитування для кожного користувача, щоб " +
+        "гарантувати максимальну сумісність пари.\n\n" +
+        "Скопіюй промпт вище, встав його в ChatGPT, Claude, Gemini або будь-який " +
+        "інший AI-чат, а потім надішли мені повну відповідь."
       );
     case "de":
       return (
-        "Kopiere den Magic Prompt oben und füge ihn in ChatGPT, Claude, Gemini oder einen anderen AI-Chat ein, den du bereits nutzt.\n\n" +
-        "Warum das wichtig ist: Gennety matcht Menschen nicht zufällig per Swipe. Wir bitten deinen AI-Chat, aus dem vorhandenen Kontext ein ehrliches psychologisches Profil zu erstellen: Werte, Kommunikationsstil, Interessen, Muster und wer wirklich zu dir passt. Alle Nutzer durchlaufen dieselbe tiefe Analyse, damit das Matching nicht nur kurze Fragebögen, sondern echten Kontext vergleicht.\n\n" +
-        "Wenn die AI antwortet, schick mir die vollständige Antwort hierher."
+        "Gennety analysiert deine Gespräche und schlägt auf dieser Grundlage ideale " +
+        "Kandidaten vor. Je mehr Kontext du gibst — von grundlegenden Werten bis zu " +
+        "kleinen Details —, desto genauer erstellt die KI dein psychologisches Profil. " +
+        "Wir führen für jeden Nutzer dieselbe tiefgehende Befragung durch, um maximale " +
+        "Kompatibilität des Paares zu gewährleisten.\n\n" +
+        "Kopiere den Prompt oben, füge ihn in ChatGPT, Claude, Gemini oder einen " +
+        "anderen AI-Chat ein und schick mir danach die vollständige Antwort."
       );
     case "pl":
       return (
-        "Skopiuj Magic Prompt powyżej i wklej go do ChatGPT, Claude, Gemini albo innego czatu AI, z którego już korzystasz.\n\n" +
-        "Po co to robimy: Gennety nie dobiera ludzi losowo przez swipe. Prosimy Twój czat AI, żeby z istniejącego kontekstu stworzył szczery profil psychologiczny: wartości, styl komunikacji, zainteresowania, wzorce i to, kto naprawdę do Ciebie pasuje. Każdy użytkownik przechodzi taką samą pogłębioną analizę, więc matching porównuje realny kontekst, a nie tylko krótką ankietę.\n\n" +
-        "Gdy AI zwróci odpowiedź, wyślij ją tutaj w całości."
+        "Gennety analizuje Twoje rozmowy i na ich podstawie dobiera idealnych " +
+        "kandydatów. Im więcej kontekstu podasz — od fundamentalnych wartości po " +
+        "drobne szczegóły — tym dokładniej AI tworzy Twój profil psychologiczny. " +
+        "Przeprowadzamy taką samą pogłębioną ankietę dla każdego użytkownika, aby " +
+        "zapewnić maksymalne dopasowanie pary.\n\n" +
+        "Skopiuj prompt powyżej, wklej go do ChatGPT, Claude, Gemini albo innego " +
+        "czatu AI, a potem wyślij mi pełną odpowiedź."
       );
     default:
       return (
-        "Copy the Magic Prompt above and paste it into ChatGPT, Claude, Gemini, or any other AI chat you already use.\n\n" +
-        "Why we do this: Gennety does not match people from a shallow swipe profile. We ask your AI chat to turn the context it already has about you into an honest psychological profile: values, communication style, interests, patterns, and the kind of person who would genuinely fit you. Every user goes through the same deep read, so matching compares real context rather than a few questionnaire lines.\n\n" +
-        "When the AI returns its answer, send the full response back here."
+        "Gennety analyzes your conversations and selects potential dates based on " +
+        "the information gathered. It performs best when it has more knowledge about " +
+        "you and a diverse context of your life, capturing even the smallest details. " +
+        "This analysis of your psychological profile helps in finding the most " +
+        "suitable match for you. We interview all other users in exactly the same way.\n\n" +
+        "Copy the prompt above, paste it into ChatGPT, Claude, Gemini, or any other " +
+        "AI chat, and then send me the full response."
       );
   }
 }

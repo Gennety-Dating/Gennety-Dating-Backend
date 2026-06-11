@@ -258,9 +258,9 @@ describe("onboarding collector routing", () => {
   it("explains why the Magic Prompt is needed before asking for the AI response", () => {
     const text = onboardingQuestionText("en", "context_dump");
 
-    expect(text).toContain("Why we do this");
-    expect(text).toContain("honest psychological profile");
-    expect(text).toContain("Every user goes through the same deep read");
+    expect(text).toContain("Gennety analyzes your conversations");
+    expect(text).toContain("psychological profile");
+    expect(text).toContain("We interview all other users in exactly the same way");
   });
 
   it.each(["en", "ru", "uk", "de", "pl"] as const)(
