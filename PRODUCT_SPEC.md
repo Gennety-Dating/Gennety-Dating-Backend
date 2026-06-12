@@ -172,7 +172,13 @@ Hard rules enforced by the collector:
   Albums and rapid standalone photos are coalesced into one progress response,
   so a 4- or 6-photo burst does not produce one reply per frame. At 3 photos the
   bot uses a short progress reminder rather than repeating the full pitch.
-  Duplicate photos are not counted and receive an explicit explanation.
+  Exact duplicates, resized/re-encoded copies, crops, screenshots, and lightly
+  edited copies are not counted and receive an explicit explanation. Every
+  accepted photo must contain exactly one clear person and match the same
+  identity as the Persona selfie when available, otherwise the first accepted
+  onboarding photo. Unsafe or explicit content is rejected before persistence.
+  With profile-media validation enabled, infrastructure failures never publish
+  unvalidated media unless the explicit emergency fail-open flag is enabled.
 - When `TICKET_FEATURE_ENABLED`, the first post-minimum offer explains both
   rewards: reaching `PHOTO_BONUS_TICKET_THRESHOLD` (4) face-validated photos
   grants a free Date Ticket, and adding a profile video grants another. A batch
@@ -186,12 +192,22 @@ Hard rules enforced by the collector:
   `MIN_PHOTOS` / `MAX_PHOTOS`, but its static frame is still stored in
   `Profile.photos[]` and must pass the same single-face and face-match checks
   as a normal profile photo. Live Photos without a static frame are rejected.
-  A **video** (`ProfileMedia` `{ type: "video" }`) is display-only: it lives in
-  `Profile.profileMedia[]`, is NOT added to `photos[]`, is NOT face-matched, and
-  does NOT count toward `MIN_PHOTOS` — it preserves the `photos[i] ↔
-  photoFaceScores[i]` invariant. Videos over 60s / 50 MB are rejected. A
-  profile has at most one standalone video; uploading another replaces the
-  previous video while the one-time ticket grant remains idempotent.
+  A **video** (`ProfileMedia` `{ type: "video" }`) remains display-only and is
+  NOT added to `photos[]` or counted toward `MIN_PHOTOS`, preserving the
+  `photos[i] ↔ photoFaceScores[i]` invariant. Before persistence, sampled
+  frames are independently moderated and compared with the Persona selfie or
+  first accepted profile photo. Friends, groups, parties, and scenery are
+  allowed: the owner does not need to dominate the clip or appear in 70% of
+  frames. Acceptance requires at least three matched frames across at least
+  two separated temporal clusters, a reliable matched face, and for videos
+  over 20 seconds matches in at least two temporal thirds. A brief owner cameo
+  in one moment, missing owner evidence, any confidently unsafe frame, or an
+  unsafe audio transcript is rejected. Videos over 60 seconds or 20 MB are
+  rejected because Telegram Bot API `getFile` cannot supply larger files for
+  validation. A rejected replacement never overwrites the existing valid
+  video and never grants the ticket bonus. Accepted video metadata stores only
+  validation version/time; extracted frames, audio, and transcripts are
+  temporary and never persisted.
 - For accepted export, photos MAY NOT start until the context dump is saved.
   Declined export skips context collection and uses the fallback analysis.
 - After a pasted AI memory dump is parsed and saved, the bot plays a

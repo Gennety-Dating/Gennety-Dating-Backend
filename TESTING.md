@@ -19,6 +19,7 @@
 | AWS Rekognition | `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
 | Google Places key | `PLACES_API_KEY` |
 | OpenAI key | `OPENAI_API_KEY` |
+| Media validation | `ffmpeg -version`, `ffprobe -version`; IAM allows `CompareFaces`, `DetectFaces`, `DetectModerationLabels`; validation flag on, fail-open off |
 | JWT secret ≥16 chars | `.env.local`: `JWT_SECRET` |
 | Tunnel running | `cloudflared tunnel --url http://localhost:5173`, URL → `WEBAPP_URL` |
 | DB reset | `pnpm dev:db:down && pnpm dev:db:up && pnpm dev:db:push` |
@@ -55,7 +56,8 @@ pnpm --filter @gennety/bot exec tsx scripts/dev/advance-match-clock.ts \
 | A2 | Tap consent → Onboarding Mini App opens | Full-screen Mini App: intro, ToS, language; **no** email/OTP screens (bypass) | `termsAccepted=true`, `consentedAt` set; `language` set | ☐ |
 | A3 | Tap "Continue" → returns to bot chat | Conversational agent greets in chosen language | `onboardingStep='conversational'`; agent does **not** call `send_otp_email` | ☐ |
 | A4 | Agent requests Magic Prompt → paste a real ChatGPT/Claude dump | "Internal monologue" streamed via `sendMessageDraft` while parsing | `Profile.psychologicalSummary` populated; `Profile.embedding` vector(1536) written | ☐ |
-| A5 | Agent requests photos → upload ≥ `MIN_PHOTOS` (mix static + 1 Live Photo) | Photos accepted; Live Photo counts as 1 item | `Profile.photos[]`, `Profile.profileMedia[]` populated; Live Photo has both static + livePhoto fields | ☐ |
+| A5 | Agent requests photos → upload ≥ `MIN_PHOTOS` (mix static + 1 Live Photo) | Different same-person photos accepted; exact/cropped copies, other people, multi-person shots, and unsafe photos rejected; Live Photo counts as 1 item | Approved media only in `Profile.photos[]` / `profileMedia[]`; scores aligned | ☐ |
+| A5v | Upload safe travel/group video with owner visible in separated moments, then try scenery-only, one-moment cameo, and unsafe QA clip | Sparse owner appearances pass; rejected replacements preserve the accepted video and grant no ticket | Accepted video has validation metadata; no frames/audio/transcript retained | ☐ |
 | A6 | Agent collects firstName / age / gender / preference / partnerPreferences | Agent never re-asks once given; no English enum injection in non-English replies | All fields persisted on `User` and `Profile` | ☐ |
 | A7 | `finalize_onboarding` → Verification CTA | Two buttons: "Verify now" / "Skip for now" | `onboardingStep='completed'` | ☐ |
 | A8 | Tap **Skip for now** | Activation; pinned status banner appears | `verificationSkippedAt` set; `Profile.eloScore=350` (500 − 150 penalty); `User.status='active'`; `statusMessageId` set | ☐ |
@@ -232,7 +234,7 @@ After Pass 1: `pnpm dev:db:down && pnpm dev:db:up && pnpm dev:db:push`, redo Pha
 | OpenAI (Whisper) | Voice OTP / dump / feedback transcribed | ☐ |
 | OpenAI (vision Elo seed) | `eloScore` updated post-verification when `ELO_VISION_SEED_ENABLED=true` | ☐ |
 | Persona | Hosted flow completes; webhook HMAC verified; idempotent | ☐ |
-| AWS Rekognition | `photoFaceScores[]` 1:1 with `photos[]`; thresholds 0.85/0.75 applied | ☐ |
+| AWS Rekognition | Admission uses `CompareFaces`, `DetectFaces`, and `DetectModerationLabels`; `photoFaceScores[]` remains 1:1 with `photos[]`; thresholds 0.85/0.75 applied | ☐ |
 | Google Places (New) v1 | Picked venue: `businessStatus=OPERATIONAL`, rating ≥4.0, ≥30 reviews, price tier ≤MODERATE for food | ☐ |
 | Resend | OTP email arrived at @GN01001's corp address | ☐ |
 | Supabase Storage | Selfie in `SUPABASE_SELFIE_BUCKET`; signed URLs work; 90-day retention scrub cron is scheduled | ☐ |

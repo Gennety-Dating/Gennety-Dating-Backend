@@ -26,6 +26,9 @@ import {
   type IncomingProfileMedia,
 } from "../../services/telegram-profile-media.js";
 import { profileMediaToJson } from "../../services/profile-media-json.js";
+import { env } from "../../config.js";
+import { validateUserProfilePhoto } from "../../services/profile-media-validation/profile-photo-validation.js";
+import type { MediaValidationReason } from "../../services/profile-media-validation/types.js";
 
 // ---------------------------------------------------------------------------
 // Edit profile main screen
@@ -337,27 +340,54 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
     return;
   }
 
-  // Same face validation as onboarding (PRODUCT_SPEC Phase 1 Step 7).
-  const result = await validateSingleFace(ctx, fileId);
-  if (!result.ok) {
-    await ctx.reply(t(lang, "photoVisionError"));
-    return;
-  }
-  if (!result.valid) {
-    await ctx.reply(t(lang, "photoRejected"), { parse_mode: "Markdown" });
-    return;
-  }
-
-  // Face-match gate: for verified users every new photo must depict the
-  // same person as the Persona-captured selfie. Fetch bytes from Telegram
-  // and run the gate; on mismatch we bail before adding to pending list.
   const telegramId = BigInt(ctx.from!.id);
   const userRow = await prisma.user.findUnique({
     where: { telegramId },
     select: { id: true },
   });
   let gateScore = 0;
-  if (userRow) {
+  if (env.PROFILE_MEDIA_VALIDATION_ENABLED) {
+    const photoBytes = await fetchTelegramFileBuffer(ctx.api, fileId);
+    if (!userRow || !photoBytes) {
+      await ctx.reply(t(lang, "photoVisionError"));
+      return;
+    }
+    const validation = await validateUserProfilePhoto({
+      userId: userRow.id,
+      candidate: photoBytes,
+      mime: "image/jpeg",
+      existingPhotoRefs: ctx.session.pendingPhotos,
+      api: ctx.api,
+    });
+    if (!validation.ok) {
+      if (
+        validation.reason !== "processing_unavailable" ||
+        !env.PROFILE_MEDIA_VALIDATION_FAIL_OPEN
+      ) {
+        await ctx.reply(photoValidationMessage(lang, validation.reason), {
+          parse_mode: "Markdown",
+        });
+        return;
+      }
+    } else {
+      gateScore = validation.value.identitySimilarity ?? 0;
+    }
+  } else {
+    // Legacy path retained behind the rollout flag.
+    const result = await validateSingleFace(ctx, fileId);
+    if (!result.ok) {
+      await ctx.reply(t(lang, "photoVisionError"));
+      return;
+    }
+    if (!result.valid) {
+      await ctx.reply(t(lang, "photoRejected"), { parse_mode: "Markdown" });
+      return;
+    }
+
+    if (!userRow) {
+      await ctx.reply(t(lang, "photoVisionError"));
+      return;
+    }
     const photoBytes = await fetchTelegramFileBuffer(ctx.api, fileId);
     if (photoBytes) {
       const gate = await gateProfilePhoto(userRow.id, photoBytes);
@@ -367,7 +397,7 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
       }
       gateScore = gate.score ?? 0;
     }
-    // photoBytes === null → fail open, no score available
+    // Legacy behavior remains fail-open until the unified flag is enabled.
   }
 
   ctx.session.pendingPhotos.push(fileId);
@@ -399,6 +429,32 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
       "menu:edit:photos:continue",
     );
     await ctx.reply(t(lang, "photosEnough", { max: MAX_PHOTOS }), { reply_markup: keyboard });
+  }
+}
+
+function photoValidationMessage(
+  language: Parameters<typeof t>[0],
+  reason: MediaValidationReason,
+): string {
+  switch (reason) {
+    case "invalid_media":
+      return t(language, "photoInvalidMedia");
+    case "duplicate_exact":
+      return t(language, "photoDuplicate");
+    case "duplicate_near":
+      return t(language, "photoDuplicateNear");
+    case "unsafe_content":
+      return t(language, "photoUnsafeContent");
+    case "multiple_faces_photo":
+      return t(language, "photoMultipleFaces");
+    case "identity_mismatch":
+      return t(language, "photoIdentityMismatch");
+    case "identity_uncertain":
+      return t(language, "photoIdentityUncertain");
+    case "no_face":
+      return t(language, "photoRejected");
+    default:
+      return t(language, "photoVisionError");
   }
 }
 

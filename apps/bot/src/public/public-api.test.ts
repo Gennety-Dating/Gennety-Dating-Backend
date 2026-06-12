@@ -54,6 +54,10 @@ vi.mock("../config.js", () => ({
     AWS_REGION: "eu-central-1",
     AWS_ACCESS_KEY_ID: "",
     AWS_SECRET_ACCESS_KEY: "",
+    PROFILE_MEDIA_VALIDATION_ENABLED: false,
+    PROFILE_MEDIA_VALIDATION_FAIL_OPEN: false,
+    PROFILE_VIDEO_MAX_ANALYSIS_FRAMES: 24,
+    PROFILE_VIDEO_VALIDATION_TIMEOUT_MS: 60_000,
   },
 }));
 
@@ -756,6 +760,18 @@ vi.mock("../services/whisper.js", () => ({
 vi.mock("../services/vision/validate-face.js", () => ({
   validateSingleFaceFromBuffer: vi.fn(async () => ({ ok: true, valid: true })),
 }));
+
+const profileMediaValidationMocks = vi.hoisted(() => ({
+  validateUserProfilePhoto: vi.fn(),
+}));
+
+vi.mock(
+  "../services/profile-media-validation/profile-photo-validation.js",
+  () => ({
+    validateUserProfilePhoto:
+      profileMediaValidationMocks.validateUserProfilePhoto,
+  }),
+);
 
 vi.mock("../services/storage.js", () => ({
   uploadSelfie: vi.fn(async (userId: string) => ({
@@ -1572,7 +1588,24 @@ describe("GET /v1/me/photos", () => {
 });
 
 describe("POST /v1/me/photos", () => {
-  beforeEach(resetDb);
+  beforeEach(async () => {
+    resetDb();
+    const { env } = await import("../config.js");
+    const mutableEnv = env as unknown as {
+      PROFILE_MEDIA_VALIDATION_ENABLED: boolean;
+      PROFILE_MEDIA_VALIDATION_FAIL_OPEN: boolean;
+    };
+    mutableEnv.PROFILE_MEDIA_VALIDATION_ENABLED = false;
+    mutableEnv.PROFILE_MEDIA_VALIDATION_FAIL_OPEN = false;
+    profileMediaValidationMocks.validateUserProfilePhoto.mockReset();
+    profileMediaValidationMocks.validateUserProfilePhoto.mockResolvedValue({
+      ok: true,
+      value: {
+        fingerprint: { sha256: "a", differenceHash: "0".repeat(16) },
+        identitySimilarity: 0.93,
+      },
+    });
+  });
 
   const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]); // any bytes will do
 
@@ -1672,6 +1705,31 @@ describe("POST /v1/me/photos", () => {
       .set("Authorization", `Bearer ${signAccess(user.id)}`)
       .attach("photo", JPEG, { filename: "p.jpg", contentType: "image/jpeg" });
     expect(res.status).toBe(502);
+  });
+
+  it("returns a stable identity_mismatch code from unified validation", async () => {
+    const { env } = await import("../config.js");
+    (
+      env as unknown as { PROFILE_MEDIA_VALIDATION_ENABLED: boolean }
+    ).PROFILE_MEDIA_VALIDATION_ENABLED = true;
+    profileMediaValidationMocks.validateUserProfilePhoto.mockResolvedValueOnce({
+      ok: false,
+      reason: "identity_mismatch",
+      retryable: false,
+    });
+    const { uploadProfilePhoto } = await import("../services/storage.js");
+    const user = await seedUser();
+    const res = await request(app)
+      .post("/v1/me/photos")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .attach("photo", JPEG, { filename: "p.jpg", contentType: "image/jpeg" });
+
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({
+      code: "identity_mismatch",
+      retryable: false,
+    });
+    expect(uploadProfilePhoto).not.toHaveBeenCalled();
   });
 });
 

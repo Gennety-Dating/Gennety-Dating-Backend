@@ -18,7 +18,7 @@ export interface ProfileLivePhotoMedia {
 
 export interface ProfileVideoMedia {
   type: "video";
-  /** Telegram file_id of the video part. Display-only — NOT face-matched. */
+  /** Telegram file_id of the validated video part. */
   video: string;
   /** Optional poster/thumbnail file_id for the card. */
   thumb?: string;
@@ -27,6 +27,8 @@ export interface ProfileVideoMedia {
   height?: number;
   fileSize?: number;
   mimeType?: string;
+  validationVersion?: number;
+  validatedAt?: string;
 }
 
 export type ProfileMedia =
@@ -83,6 +85,8 @@ export function profileVideoMedia(args: {
   height?: number;
   fileSize?: number;
   mimeType?: string;
+  validationVersion?: number;
+  validatedAt?: string;
 }): ProfileVideoMedia {
   return {
     type: "video",
@@ -93,6 +97,10 @@ export function profileVideoMedia(args: {
     ...(args.height !== undefined ? { height: args.height } : {}),
     ...(args.fileSize !== undefined ? { fileSize: args.fileSize } : {}),
     ...(args.mimeType !== undefined ? { mimeType: args.mimeType } : {}),
+    ...(args.validationVersion !== undefined
+      ? { validationVersion: args.validationVersion }
+      : {}),
+    ...(args.validatedAt !== undefined ? { validatedAt: args.validatedAt } : {}),
   };
 }
 
@@ -110,12 +118,18 @@ export function parseProfileMediaItem(value: unknown): ProfileMedia | null {
     const height = cleanNumber(value.height);
     const fileSize = cleanNumber(value.fileSize);
     const mimeType = cleanString(value.mimeType);
+    const validationVersion = cleanNumber(value.validationVersion);
+    const validatedAt = cleanString(value.validatedAt);
     if (thumb !== null) args.thumb = thumb;
     if (duration !== undefined) args.duration = duration;
     if (width !== undefined) args.width = width;
     if (height !== undefined) args.height = height;
     if (fileSize !== undefined) args.fileSize = fileSize;
     if (mimeType !== null) args.mimeType = mimeType;
+    if (validationVersion !== undefined) {
+      args.validationVersion = validationVersion;
+    }
+    if (validatedAt !== null) args.validatedAt = validatedAt;
     return profileVideoMedia(args);
   }
 

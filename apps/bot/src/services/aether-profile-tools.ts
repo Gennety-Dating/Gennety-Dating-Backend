@@ -16,6 +16,8 @@ import {
 } from "./storage.js";
 import { triggerVerificationRerun } from "./verification-pipeline.js";
 import { validateSingleFaceFromBuffer } from "./vision/validate-face.js";
+import { validateUserProfilePhoto } from "./profile-media-validation/profile-photo-validation.js";
+import type { MediaValidationReason } from "./profile-media-validation/types.js";
 
 export interface AetherToolResult {
   ok: boolean;
@@ -122,6 +124,12 @@ interface AetherPhotoDeps {
   downloadChatImage: (path: string) => Promise<Buffer | null>;
   validateSingleFace: typeof validateSingleFaceFromBuffer;
   gateProfilePhoto: typeof gateProfilePhoto;
+  validateProfilePhoto?: (input: {
+    userId: string;
+    candidate: Buffer;
+    mime: string;
+    existingPhotoRefs: readonly string[];
+  }) => ReturnType<typeof validateUserProfilePhoto>;
   findProfile: (userId: string) => Promise<{
     photos: string[];
     profileMedia: Prisma.JsonValue;
@@ -147,6 +155,10 @@ const photoDeps: AetherPhotoDeps = {
   downloadChatImage,
   validateSingleFace: validateSingleFaceFromBuffer,
   gateProfilePhoto,
+  validateProfilePhoto: async (input) => {
+    const { getBotApi } = await import("../public/server.js");
+    return validateUserProfilePhoto({ ...input, api: getBotApi() });
+  },
   findProfile: (userId) =>
     prisma.profile.findUnique({
       where: { userId },
@@ -192,21 +204,46 @@ export async function attachAetherProfilePhoto(
     : path.toLowerCase().endsWith(".webp")
       ? "image/webp"
       : "image/jpeg";
-  const vision = await deps.validateSingleFace(buffer, mime);
-  if (!vision.ok) return { ok: false, detail: "Vision service unavailable" };
-  if (!vision.valid) {
-    return { ok: false, detail: "Photo must contain exactly one clear face" };
-  }
-
-  const gate = await deps.gateProfilePhoto(userId, buffer);
-  if (gate.kind === "blocked") {
-    return { ok: false, detail: "Photo does not match verification selfie" };
-  }
 
   const profile = await deps.findProfile(userId);
   const existing = profile?.photos ?? [];
   if (existing.length >= MAX_PHOTOS) {
     return { ok: false, detail: `Max ${MAX_PHOTOS} photos` };
+  }
+
+  let gateScore = 0;
+  if (env.PROFILE_MEDIA_VALIDATION_ENABLED && deps.validateProfilePhoto) {
+    const validation = await deps.validateProfilePhoto({
+      userId,
+      candidate: buffer,
+      mime,
+      existingPhotoRefs: existing,
+    });
+    if (!validation.ok) {
+      if (
+        validation.reason !== "processing_unavailable" ||
+        !env.PROFILE_MEDIA_VALIDATION_FAIL_OPEN
+      ) {
+        return {
+          ok: false,
+          detail: aetherPhotoValidationDetail(validation.reason),
+        };
+      }
+    } else {
+      gateScore = validation.value.identitySimilarity ?? 0;
+    }
+  } else {
+    const vision = await deps.validateSingleFace(buffer, mime);
+    if (!vision.ok) return { ok: false, detail: "Vision service unavailable" };
+    if (!vision.valid) {
+      return { ok: false, detail: "Photo must contain exactly one clear face" };
+    }
+
+    const gate = await deps.gateProfilePhoto(userId, buffer);
+    if (gate.kind === "blocked") {
+      return { ok: false, detail: "Photo does not match verification selfie" };
+    }
+    gateScore = gate.score ?? 0;
   }
 
   const uploaded = await deps.uploadProfilePhoto(userId, buffer, mime);
@@ -219,7 +256,7 @@ export async function attachAetherProfilePhoto(
       userId,
       photos: [...existing, uploaded.path],
       profileMedia: profileMediaToJson([...media, profilePhotoMedia(uploaded.path)]),
-      photoFaceScores: [...scores, gate.score ?? 0],
+      photoFaceScores: [...scores, gateScore],
     });
   } catch (err) {
     await deps.deleteStorageObject(env.SUPABASE_PHOTO_BUCKET, uploaded.path).catch(() => false);
@@ -228,4 +265,26 @@ export async function attachAetherProfilePhoto(
 
   deps.queueVerificationRerun(userId);
   return { ok: true };
+}
+
+function aetherPhotoValidationDetail(reason: MediaValidationReason): string {
+  switch (reason) {
+    case "invalid_media":
+      return "Unsupported image file";
+    case "duplicate_exact":
+    case "duplicate_near":
+      return "Photo is already in the profile";
+    case "unsafe_content":
+      return "Photo cannot be published";
+    case "no_face":
+      return "Photo must contain one clear face";
+    case "multiple_faces_photo":
+      return "Photo must show only the user";
+    case "identity_mismatch":
+      return "Photo does not match the other profile photos";
+    case "identity_uncertain":
+      return "Face could not be matched reliably";
+    default:
+      return "Media validation is temporarily unavailable";
+  }
 }

@@ -1,4 +1,5 @@
 export type MediaValidationReason =
+  | "invalid_media"
   | "duplicate_exact"
   | "duplicate_near"
   | "unsafe_content"
@@ -9,8 +10,30 @@ export type MediaValidationReason =
   | "video_owner_missing"
   | "video_owner_too_brief"
   | "video_mostly_other_person"
+  | "video_identity_reference_missing"
+  | "video_too_long"
   | "video_too_large_to_check"
   | "processing_unavailable";
+
+export interface ValidatedPhoto {
+  fingerprint: {
+    sha256: string;
+    differenceHash: string;
+  };
+  identitySimilarity: number | null;
+}
+
+export interface VideoFrame {
+  buffer: Buffer;
+  timestampSeconds: number;
+}
+
+export interface VideoOwnerEvidence {
+  matchedFrameCount: number;
+  matchedClusterCount: number;
+  matchedTemporalThirds: number;
+  hasHighQualityMatch: boolean;
+}
 
 export type MediaValidationResult<T = undefined> =
   | {

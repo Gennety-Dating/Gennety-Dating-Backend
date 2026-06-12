@@ -38,15 +38,28 @@ const translations = {
     llmAnalysing2: "Pulling out personality traits...",
     llmAnalysing3: "Building your psychological fingerprint...",
     llmDumpReceived: "Profile ready ✨",
-    askPhotos: "Almost done! Send {min}–{max} photos of yourself. One at a time.",
+    askPhotos:
+      "Almost done! Send {min}–{max} different photos. Every photo must clearly show you, and explicit content isn't allowed. A profile video may include friends or scenery, but you must appear clearly in several moments.",
     photoReceived: "Photo {n}/{max} ✅",
     photoRejected:
       "I need a clear photo of just *you* — one person, face visible.\n\n" +
       "No memes, no landscapes, no group shots. Try another one.",
     photoDuplicate:
       "That photo is already in your profile, so I didn't count it twice.",
+    photoDuplicateNear:
+      "That looks like the same photo after cropping or editing. Send a genuinely different photo.",
+    photoUnsafeContent:
+      "That photo can't be published in a profile. Please choose a different, non-explicit photo.",
+    photoMultipleFaces:
+      "Profile photos need to show only you. Please choose a photo without other people.",
+    photoIdentityMismatch:
+      "The person in that photo doesn't match your other profile photos. All photos must show you.",
+    photoIdentityUncertain:
+      "I couldn't match that face reliably. Try a clearer photo with better light and a more visible face.",
     photoVisionError:
       "Couldn't process that photo. Try sending it again in a sec.",
+    photoInvalidMedia:
+      "That file isn't a supported photo. Send a JPEG, PNG, WebP, or HEIC image.",
     livePhotoMissingStatic:
       "That Live Photo is missing its still frame, so I can't verify it. Send it as a regular photo or choose another Live Photo.",
     livePhotoTooLong:
@@ -56,7 +69,21 @@ const translations = {
     videoTooLong:
       "Profile videos need to be 60 seconds or shorter. Send a shorter clip.",
     videoTooLarge:
-      "Profile videos need to be 50 MB or smaller. Send a smaller clip.",
+      "Profile videos need to be 20 MB or smaller so I can check them. Send a smaller clip.",
+    videoChecking:
+      "Checking the video for safety and making sure you appear in several moments...",
+    videoUnsafeContent:
+      "That video contains content that can't be published in a profile. Please choose a different clip.",
+    videoOwnerMissing:
+      "I couldn't find your face clearly enough in that video. Choose a clip where you appear visibly.",
+    videoOwnerTooBrief:
+      "Your face appears too briefly or only in one moment. Choose a clip where you appear clearly in several separate moments.",
+    videoMostlyOtherPerson:
+      "That video mainly presents someone else. Choose a clip where you appear clearly in several moments.",
+    videoNeedsPhotoFirst:
+      "Send at least one clear profile photo first, then I can verify that you appear in the video.",
+    videoProcessingUnavailable:
+      "I couldn't check that video right now. Your existing video was not changed. Please try again shortly.",
     ticketRewardPhoto:
       "🎟️ Nice — you just earned a *free Date Ticket*!\n\nHere's the deal: every date you go on costs 1 ticket, and tickets normally cost money. Adding photos got you one on the house. Balance: *{balance}* 🎟️",
     ticketRewardVideo:
@@ -588,15 +615,28 @@ const translations = {
     llmAnalysing2: "Вытягиваю черты характера...",
     llmAnalysing3: "Собираю психологический портрет...",
     llmDumpReceived: "Профиль готов ✨",
-    askPhotos: "Почти всё! Скинь {min}–{max} фото. По одному.",
+    askPhotos:
+      "Почти всё! Пришли {min}–{max} разных фото. На каждом должен быть хорошо виден ты, откровенный контент запрещён. В видео могут быть друзья или пейзажи, но ты должен хорошо появляться в нескольких моментах.",
     photoReceived: "Фото {n}/{max} ✅",
     photoRejected:
       "Нужно чёткое фото *только тебя* — одного человека, лицо видно.\n\n" +
       "Без мемов, пейзажей и групповых. Скинь другое.",
     photoDuplicate:
       "Это фото уже есть в профиле, поэтому второй раз я его не засчитал.",
+    photoDuplicateNear:
+      "Похоже, это то же фото после обрезки или обработки. Пришли действительно другой снимок.",
+    photoUnsafeContent:
+      "Это фото нельзя публиковать в профиле. Выбери другой снимок без откровенного контента.",
+    photoMultipleFaces:
+      "На фото для профиля должен быть только ты. Выбери снимок без других людей.",
+    photoIdentityMismatch:
+      "Человек на этом фото не совпадает с человеком на остальных фото профиля. На всех снимках должен быть ты.",
+    photoIdentityUncertain:
+      "Не получилось надёжно сопоставить лицо. Пришли более чёткое фото с хорошим освещением и хорошо видимым лицом.",
     photoVisionError:
       "Не получилось обработать фото. Попробуй ещё раз через секунду.",
+    photoInvalidMedia:
+      "Этот файл не является поддерживаемым фото. Пришли изображение JPEG, PNG, WebP или HEIC.",
     livePhotoMissingStatic:
       "В этом Live Photo нет статичного кадра, поэтому я не смогу его проверить. Скинь обычное фото или другое Live Photo.",
     livePhotoTooLong:
@@ -606,7 +646,21 @@ const translations = {
     videoTooLong:
       "Видео для профиля должно быть не длиннее 60 секунд. Скинь покороче.",
     videoTooLarge:
-      "Видео для профиля должно быть не больше 50 МБ. Скинь поменьше.",
+      "Видео для профиля должно быть не больше 20 МБ, чтобы я мог его проверить. Скинь поменьше.",
+    videoChecking:
+      "Проверяю безопасность видео и ищу твоё лицо в нескольких моментах...",
+    videoUnsafeContent:
+      "В этом видео есть контент, который нельзя публиковать в профиле. Выбери другой ролик.",
+    videoOwnerMissing:
+      "Не удалось достаточно чётко найти твоё лицо в видео. Выбери ролик, где тебя хорошо видно.",
+    videoOwnerTooBrief:
+      "Твоё лицо появляется слишком ненадолго или только в одном моменте. Выбери ролик, где тебя хорошо видно в нескольких отдельных сценах.",
+    videoMostlyOtherPerson:
+      "В этом видео главным образом показан другой человек. Выбери ролик, где тебя хорошо видно в нескольких моментах.",
+    videoNeedsPhotoFirst:
+      "Сначала пришли хотя бы одно чёткое фото для профиля. После этого я смогу проверить, что в видео именно ты.",
+    videoProcessingUnavailable:
+      "Сейчас не получилось проверить видео. Предыдущее видео не изменено. Попробуй ещё раз немного позже.",
     ticketRewardPhoto:
       "🎟️ Класс — ты только что получил *бесплатный билет на свидание*!\n\nКак это работает: каждое свидание стоит 1 билет, и обычно билеты платные. За добавленные фото — один в подарок. Баланс: *{balance}* 🎟️",
     ticketRewardVideo:
@@ -1135,15 +1189,28 @@ const translations = {
     llmAnalysing2: "Витягую риси характеру...",
     llmAnalysing3: "Збираю психологічний портрет...",
     llmDumpReceived: "Профіль готовий ✨",
-    askPhotos: "Майже все! Скинь {min}–{max} фото. По одному.",
+    askPhotos:
+      "Майже все! Надішли {min}–{max} різних фото. На кожному маєш бути добре видимий ти, відвертий контент заборонений. У відео можуть бути друзі або краєвиди, але ти маєш добре з'являтися в кількох моментах.",
     photoReceived: "Фото {n}/{max} ✅",
     photoRejected:
       "Потрібне чітке фото *тільки тебе* — одна людина, обличчя видно.\n\n" +
       "Без мемів, пейзажів та групових фото. Скинь інше.",
     photoDuplicate:
       "Це фото вже є в профілі, тому вдруге я його не зарахував.",
+    photoDuplicateNear:
+      "Схоже, це те саме фото після обрізання або обробки. Надішли справді інший знімок.",
+    photoUnsafeContent:
+      "Це фото не можна публікувати у профілі. Обери інший знімок без відвертого контенту.",
+    photoMultipleFaces:
+      "На фото для профілю маєш бути лише ти. Обери знімок без інших людей.",
+    photoIdentityMismatch:
+      "Людина на цьому фото не збігається з людиною на інших фото профілю. На всіх знімках маєш бути ти.",
+    photoIdentityUncertain:
+      "Не вдалося надійно зіставити обличчя. Надішли чіткіше фото з хорошим освітленням і добре видимим обличчям.",
     photoVisionError:
       "Не вдалося обробити фото. Спробуй ще раз через секунду.",
+    photoInvalidMedia:
+      "Цей файл не є підтримуваним фото. Надішли зображення JPEG, PNG, WebP або HEIC.",
     livePhotoMissingStatic:
       "У цьому Live Photo немає статичного кадру, тому я не зможу його перевірити. Надішли звичайне фото або інше Live Photo.",
     livePhotoTooLong:
@@ -1153,7 +1220,21 @@ const translations = {
     videoTooLong:
       "Відео для профілю має бути не довше 60 секунд. Надішли коротше.",
     videoTooLarge:
-      "Відео для профілю має бути не більше 50 МБ. Надішли менше.",
+      "Відео для профілю має бути не більше 20 МБ, щоб я міг його перевірити. Надішли менше.",
+    videoChecking:
+      "Перевіряю безпечність відео та шукаю твоє обличчя в кількох моментах...",
+    videoUnsafeContent:
+      "У цьому відео є контент, який не можна публікувати у профілі. Обери інший ролик.",
+    videoOwnerMissing:
+      "Не вдалося достатньо чітко знайти твоє обличчя у відео. Обери ролик, де тебе добре видно.",
+    videoOwnerTooBrief:
+      "Твоє обличчя з'являється надто ненадовго або лише в одному моменті. Обери ролик, де тебе добре видно в кількох окремих сценах.",
+    videoMostlyOtherPerson:
+      "У цьому відео переважно показана інша людина. Обери ролик, де тебе добре видно в кількох моментах.",
+    videoNeedsPhotoFirst:
+      "Спочатку надішли хоча б одне чітке фото для профілю. Після цього я зможу перевірити, що у відео саме ти.",
+    videoProcessingUnavailable:
+      "Зараз не вдалося перевірити відео. Попереднє відео не змінено. Спробуй ще раз трохи пізніше.",
     ticketRewardPhoto:
       "🎟️ Клас — ти щойно отримав *безкоштовний квиток на побачення*!\n\nЯк це працює: кожне побачення коштує 1 квиток, і зазвичай квитки платні. За додані фото — один у подарунок. Баланс: *{balance}* 🎟️",
     ticketRewardVideo:
@@ -1688,14 +1769,27 @@ const deTranslations: TranslationTable = {
   llmAnalysing2: "Ich extrahiere Persönlichkeitsmerkmale...",
   llmAnalysing3: "Ich baue deinen psychologischen Fingerabdruck...",
   llmDumpReceived: "Profil bereit ✨",
-  askPhotos: "Fast fertig! Sende {min}-{max} Fotos von dir. Eins nach dem anderen.",
+  askPhotos:
+    "Fast fertig! Sende {min}-{max} verschiedene Fotos. Auf jedem musst du klar zu sehen sein; explizite Inhalte sind nicht erlaubt. Ein Profilvideo darf Freunde oder Landschaften zeigen, aber du musst in mehreren Momenten klar erscheinen.",
   photoReceived: "Foto {n}/{max} ✅",
   photoRejected:
     "Ich brauche ein klares Foto nur von *dir* - eine Person, Gesicht sichtbar.\n\n" +
     "Keine Memes, Landschaften oder Gruppenfotos. Versuch ein anderes.",
   photoDuplicate:
     "Dieses Foto ist bereits in deinem Profil, deshalb wurde es nicht doppelt gezählt.",
+  photoDuplicateNear:
+    "Das sieht wie dasselbe Foto nach Zuschnitt oder Bearbeitung aus. Sende ein wirklich anderes Foto.",
+  photoUnsafeContent:
+    "Dieses Foto kann nicht im Profil veröffentlicht werden. Wähle bitte ein anderes, nicht explizites Foto.",
+  photoMultipleFaces:
+    "Profilfotos dürfen nur dich zeigen. Wähle bitte ein Foto ohne weitere Personen.",
+  photoIdentityMismatch:
+    "Die Person auf diesem Foto stimmt nicht mit deinen anderen Profilfotos überein. Alle Fotos müssen dich zeigen.",
+  photoIdentityUncertain:
+    "Das Gesicht konnte nicht zuverlässig zugeordnet werden. Sende ein klareres Foto mit gutem Licht und gut sichtbarem Gesicht.",
   photoVisionError: "Konnte das Foto nicht verarbeiten. Sende es gleich nochmal.",
+  photoInvalidMedia:
+    "Diese Datei ist kein unterstütztes Foto. Sende ein JPEG-, PNG-, WebP- oder HEIC-Bild.",
   photosEnough: "Du kannst mehr senden (bis {max}) oder auf den Button tippen, um weiterzumachen.",
   photosDone: "Fotos hochgeladen ✅",
   profileReview:
@@ -1774,7 +1868,21 @@ const deTranslations: TranslationTable = {
   videoTooLong:
     "Profilvideos dürfen höchstens 60 Sekunden lang sein. Schick ein kürzeres.",
   videoTooLarge:
-    "Profilvideos dürfen höchstens 50 MB groß sein. Schick ein kleineres.",
+    "Profilvideos dürfen höchstens 20 MB groß sein, damit ich sie prüfen kann. Schick ein kleineres.",
+  videoChecking:
+    "Ich prüfe das Video auf Sicherheit und suche dein Gesicht in mehreren Momenten...",
+  videoUnsafeContent:
+    "Dieses Video enthält Inhalte, die nicht im Profil veröffentlicht werden können. Wähle bitte einen anderen Clip.",
+  videoOwnerMissing:
+    "Ich konnte dein Gesicht im Video nicht deutlich genug finden. Wähle einen Clip, in dem du gut zu sehen bist.",
+  videoOwnerTooBrief:
+    "Dein Gesicht erscheint zu kurz oder nur in einem Moment. Wähle einen Clip, in dem du in mehreren getrennten Momenten klar zu sehen bist.",
+  videoMostlyOtherPerson:
+    "Dieses Video zeigt hauptsächlich eine andere Person. Wähle einen Clip, in dem du in mehreren Momenten klar zu sehen bist.",
+  videoNeedsPhotoFirst:
+    "Sende zuerst mindestens ein klares Profilfoto. Danach kann ich prüfen, ob du im Video zu sehen bist.",
+  videoProcessingUnavailable:
+    "Ich konnte das Video gerade nicht prüfen. Dein bisheriges Video wurde nicht geändert. Versuch es bitte gleich noch einmal.",
   ticketRewardPhoto:
     "🎟️ Stark — du hast gerade ein *kostenloses Date-Ticket* verdient!\n\nSo läuft's: Jedes Date kostet 1 Ticket, und Tickets kosten normalerweise Geld. Für deine Fotos gibt's eins gratis. Guthaben: *{balance}* 🎟️",
   ticketRewardVideo:
@@ -2137,14 +2245,27 @@ const plTranslations: TranslationTable = {
   llmAnalysing2: "Wyciągam cechy osobowości...",
   llmAnalysing3: "Buduję Twój psychologiczny odcisk...",
   llmDumpReceived: "Profil gotowy ✨",
-  askPhotos: "Prawie gotowe! Wyślij {min}-{max} zdjęć siebie. Po jednym.",
+  askPhotos:
+    "Prawie gotowe! Wyślij {min}-{max} różnych zdjęć. Na każdym musisz być wyraźnie widoczny; treści erotyczne są niedozwolone. Wideo profilowe może pokazywać znajomych lub krajobrazy, ale musisz pojawić się wyraźnie w kilku momentach.",
   photoReceived: "Zdjęcie {n}/{max} ✅",
   photoRejected:
     "Potrzebuję wyraźnego zdjęcia tylko *Ciebie* - jedna osoba, widoczna twarz.\n\n" +
     "Bez memów, krajobrazów i zdjęć grupowych. Spróbuj inne.",
   photoDuplicate:
     "To zdjęcie jest już w Twoim profilu, więc nie zostało policzone ponownie.",
+  photoDuplicateNear:
+    "To wygląda jak to samo zdjęcie po przycięciu lub edycji. Wyślij naprawdę inne zdjęcie.",
+  photoUnsafeContent:
+    "Tego zdjęcia nie można opublikować w profilu. Wybierz inne zdjęcie bez treści erotycznych.",
+  photoMultipleFaces:
+    "Zdjęcia profilowe muszą przedstawiać tylko Ciebie. Wybierz zdjęcie bez innych osób.",
+  photoIdentityMismatch:
+    "Osoba na tym zdjęciu nie pasuje do pozostałych zdjęć profilowych. Wszystkie zdjęcia muszą przedstawiać Ciebie.",
+  photoIdentityUncertain:
+    "Nie udało się wiarygodnie dopasować twarzy. Wyślij wyraźniejsze zdjęcie z lepszym światłem i dobrze widoczną twarzą.",
   photoVisionError: "Nie udało się przetworzyć zdjęcia. Wyślij je za chwilę ponownie.",
+  photoInvalidMedia:
+    "Ten plik nie jest obsługiwanym zdjęciem. Wyślij obraz JPEG, PNG, WebP lub HEIC.",
   photosEnough: "Możesz wysłać więcej (do {max}) albo kliknąć przycisk, żeby iść dalej.",
   photosDone: "Zdjęcia przesłane ✅",
   profileReview:
@@ -2223,7 +2344,21 @@ const plTranslations: TranslationTable = {
   videoTooLong:
     "Wideo do profilu może mieć maksymalnie 60 sekund. Wyślij krótsze.",
   videoTooLarge:
-    "Wideo do profilu może ważyć maksymalnie 50 MB. Wyślij mniejsze.",
+    "Wideo do profilu może ważyć maksymalnie 20 MB, żebym mógł je sprawdzić. Wyślij mniejsze.",
+  videoChecking:
+    "Sprawdzam bezpieczeństwo wideo i szukam Twojej twarzy w kilku momentach...",
+  videoUnsafeContent:
+    "To wideo zawiera treści, których nie można opublikować w profilu. Wybierz inny klip.",
+  videoOwnerMissing:
+    "Nie udało się wystarczająco wyraźnie znaleźć Twojej twarzy w wideo. Wybierz klip, na którym dobrze Cię widać.",
+  videoOwnerTooBrief:
+    "Twoja twarz pojawia się zbyt krótko albo tylko w jednym momencie. Wybierz klip, na którym dobrze Cię widać w kilku oddzielnych momentach.",
+  videoMostlyOtherPerson:
+    "To wideo pokazuje głównie inną osobę. Wybierz klip, na którym dobrze Cię widać w kilku momentach.",
+  videoNeedsPhotoFirst:
+    "Najpierw wyślij co najmniej jedno wyraźne zdjęcie profilowe. Potem sprawdzę, czy jesteś widoczny w wideo.",
+  videoProcessingUnavailable:
+    "Nie udało się teraz sprawdzić wideo. Poprzednie wideo nie zostało zmienione. Spróbuj ponownie za chwilę.",
   ticketRewardPhoto:
     "🎟️ Świetnie — właśnie zdobyłeś *darmowy bilet na randkę*!\n\nJak to działa: każda randka kosztuje 1 bilet, a bilety zwykle są płatne. Za dodane zdjęcia masz jeden gratis. Saldo: *{balance}* 🎟️",
   ticketRewardVideo:

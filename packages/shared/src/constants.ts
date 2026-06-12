@@ -36,9 +36,10 @@ export const PHOTO_BONUS_TICKET_THRESHOLD = 4;
 export const LIVE_PHOTO_MAX_DURATION_SECONDS = 10;
 export const LIVE_PHOTO_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
-/** Profile video limits (display-only media; not face-matched). */
+/** Profile video limits. The 20 MB ceiling matches Telegram Bot API getFile. */
 export const PROFILE_VIDEO_MAX_DURATION_SECONDS = 60;
-export const PROFILE_VIDEO_MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+export const PROFILE_VIDEO_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+export const PROFILE_MEDIA_VALIDATION_VERSION = 1;
 
 /**
  * Ticket store bundles for the pre-purchase Mini App. `priceCents` is the

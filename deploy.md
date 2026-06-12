@@ -159,6 +159,27 @@ pnpm test
 pnpm build
 ```
 
+Profile-media validation preflight:
+
+```sh
+ffmpeg -version
+ffprobe -version
+```
+
+On Ubuntu production, install the system dependency before enabling the flag:
+
+```sh
+apt-get update
+apt-get install -y ffmpeg
+```
+
+Keep `PROFILE_MEDIA_VALIDATION_ENABLED=false` through code deployment. Verify
+the three narrow Rekognition actions and run consenting/synthetic QA media,
+then set the flag to `true` and restart with
+`pm2 restart gennety-bot --update-env`. Emergency rollback is to set the flag
+back to `false`; do not set `PROFILE_MEDIA_VALIDATION_FAIL_OPEN=true` in
+production.
+
 For narrow code changes, file-scoped tests are acceptable before the full build:
 
 ```sh
@@ -329,6 +350,13 @@ Required/high-impact env keys:
   (default 0.85), `FACE_MATCH_THRESHOLD_REVIEW` (default 0.75),
   `FACE_MATCH_MIN_VERIFIED_PHOTOS` (default 1), `AWS_REGION`,
   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `ELO_VISION_SEED_ENABLED`
+- Profile media validation: `PROFILE_MEDIA_VALIDATION_ENABLED` (default
+  `false`), `PROFILE_MEDIA_VALIDATION_FAIL_OPEN` (must remain `false` in
+  production), `PROFILE_VIDEO_MAX_ANALYSIS_FRAMES` (default `24`), and
+  `PROFILE_VIDEO_VALIDATION_TIMEOUT_MS` (default `60000`). Requires local
+  `ffmpeg` + `ffprobe`, OpenAI, and an IAM policy containing exactly
+  `rekognition:CompareFaces`, `rekognition:DetectFaces`, and
+  `rekognition:DetectModerationLabels`. No new AWS access key is required.
 - Matching: `MALE_REACH_ELO` (default `36` Elo ≈ 6 attractiveness points) —
   one-directional "reach up" allowance that lets a less-attractive man match a
   somewhat more-attractive woman without the `V_league` penalty (hetero pairs

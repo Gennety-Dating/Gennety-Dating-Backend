@@ -39,6 +39,35 @@ describe("combineModerationResults", () => {
     ).toMatchObject({ kind: "review" });
   });
 
+  it("allows AWS-only lifestyle labels when OpenAI reports safe", () => {
+    expect(
+      combineModerationResults([
+        {
+          ok: true,
+          signals: [
+            {
+              provider: "aws",
+              category: "Swimwear or Underwear",
+              score: 0.91,
+              severity: "review",
+            },
+          ],
+        },
+        { ok: true, signals: [] },
+      ]),
+    ).toEqual({
+      kind: "safe",
+      signals: [
+        {
+          provider: "aws",
+          category: "Swimwear or Underwear",
+          score: 0.91,
+          severity: "review",
+        },
+      ],
+    });
+  });
+
   it("does not approve when a provider is unavailable", () => {
     expect(
       combineModerationResults([

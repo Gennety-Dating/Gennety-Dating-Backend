@@ -37,6 +37,7 @@ import {
   saveHomeLocationForUser,
   validateHomeLocationPayload,
 } from "../home-location.js";
+import { validateUserProfilePhoto } from "../../services/profile-media-validation/profile-photo-validation.js";
 
 export const meRouter: Router = Router();
 
@@ -550,27 +551,58 @@ meRouter.post(
       return;
     }
 
-    const vision = await validateSingleFaceFromBuffer(req.file.buffer, mime);
-    if (!vision.ok) {
-      res.status(502).json({ error: "Vision service unavailable, please retry" });
-      return;
-    }
-    if (!vision.valid) {
-      res.status(400).json({ error: "Photo must contain exactly one clear face" });
-      return;
-    }
-
-    // Face-match gate: for users who have already verified, every new photo
-    // must depict the same person as the Persona-captured selfie. Without
-    // this, a verified user could swap in someone else's photos. The gate
-    // is no-op for unverified users (no reference selfie yet).
-    const gate = await gateProfilePhoto(req.userId!, req.file.buffer);
-    if (gate.kind === "blocked") {
-      res.status(422).json({
-        error: "Photo doesn't match your verification selfie",
-        score: gate.score,
+    let gateScore: number | null = null;
+    if (env.PROFILE_MEDIA_VALIDATION_ENABLED) {
+      const validation = await validateUserProfilePhoto({
+        userId: req.userId!,
+        candidate: req.file.buffer,
+        mime,
+        existingPhotoRefs: existing,
+        api: getBotApi(),
       });
-      return;
+      if (!validation.ok) {
+        if (
+          validation.reason !== "processing_unavailable" ||
+          !env.PROFILE_MEDIA_VALIDATION_FAIL_OPEN
+        ) {
+          const status =
+            validation.reason === "processing_unavailable"
+              ? 503
+              : validation.reason === "invalid_media"
+                ? 400
+              : validation.reason.startsWith("duplicate_")
+                ? 409
+                : 422;
+          res.status(status).json({
+            error: photoValidationApiMessage(validation.reason),
+            code: validation.reason,
+            retryable: validation.retryable,
+          });
+          return;
+        }
+      } else {
+        gateScore = validation.value.identitySimilarity;
+      }
+    } else {
+      const vision = await validateSingleFaceFromBuffer(req.file.buffer, mime);
+      if (!vision.ok) {
+        res.status(502).json({ error: "Vision service unavailable, please retry" });
+        return;
+      }
+      if (!vision.valid) {
+        res.status(400).json({ error: "Photo must contain exactly one clear face" });
+        return;
+      }
+
+      const gate = await gateProfilePhoto(req.userId!, req.file.buffer);
+      if (gate.kind === "blocked") {
+        res.status(422).json({
+          error: "Photo doesn't match your verification selfie",
+          score: gate.score,
+        });
+        return;
+      }
+      gateScore = gate.score;
     }
 
     let uploadedPath: string;
@@ -598,7 +630,7 @@ meRouter.post(
     // rows from before this column existed). The 0 is a sentinel meaning
     // "score unknown"; admin rerun will refill it on next pipeline run.
     while (existingScores.length < existing.length) existingScores.push(0);
-    const nextScores = [...existingScores, gate.score ?? 0];
+    const nextScores = [...existingScores, gateScore ?? 0];
 
     await prisma.profile.upsert({
       where: { userId: req.userId! },
@@ -659,6 +691,29 @@ meRouter.post(
     res.status(201).json({ ...photosResponse, interviewState });
   },
 );
+
+function photoValidationApiMessage(reason: string): string {
+  switch (reason) {
+    case "invalid_media":
+      return "The uploaded file is not a supported image";
+    case "duplicate_exact":
+      return "This photo is already in the profile";
+    case "duplicate_near":
+      return "This appears to be the same photo after editing";
+    case "unsafe_content":
+      return "This photo cannot be published";
+    case "no_face":
+      return "No sufficiently clear face was found";
+    case "multiple_faces_photo":
+      return "A profile photo must contain only one person";
+    case "identity_mismatch":
+      return "The face does not match the other profile photos";
+    case "identity_uncertain":
+      return "The face could not be matched reliably";
+    default:
+      return "Media validation is temporarily unavailable";
+  }
+}
 
 /**
  * DELETE /v1/me/photos/:index — remove a photo by its position in the

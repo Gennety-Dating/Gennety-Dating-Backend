@@ -72,7 +72,13 @@ describe("compareFaces — rekognition provider", () => {
       SourceImageFace: { BoundingBox: {}, Confidence: 99 },
       FaceMatches: [
         { Similarity: 72.4, Face: {} },
-        { Similarity: 91.8, Face: {} },
+        {
+          Similarity: 91.8,
+          Face: {
+            Confidence: 98,
+            BoundingBox: { Left: 0.1, Top: 0.2, Width: 0.3, Height: 0.4 },
+          },
+        },
         { Similarity: 88.0, Face: {} },
       ],
       UnmatchedFaces: [],
@@ -87,6 +93,10 @@ describe("compareFaces — rekognition provider", () => {
     if (!result.ok) return;
     expect(result.faceFound).toBe(true);
     expect(result.similarity).toBeCloseTo(0.918, 3);
+    expect(result.matchedFace).toEqual({
+      confidence: 0.98,
+      boundingBox: { left: 0.1, top: 0.2, width: 0.3, height: 0.4 },
+    });
     expect(calls).toHaveLength(1);
     const input = calls[0]!.command.input;
     expect(input.SourceImage?.Bytes).toBe(REF);

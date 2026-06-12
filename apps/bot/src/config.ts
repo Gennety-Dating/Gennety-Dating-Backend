@@ -153,6 +153,25 @@ export const env = {
     1,
     Number(process.env.FACE_MATCH_MIN_VERIFIED_PHOTOS ?? "1"),
   ),
+  /// Unified photo/video validation. Keep false until ffmpeg and the required
+  /// Rekognition actions are available in the target environment.
+  PROFILE_MEDIA_VALIDATION_ENABLED:
+    process.env.PROFILE_MEDIA_VALIDATION_ENABLED === "true",
+  /// Emergency rollback only. Production should leave this false so media is
+  /// never published after a provider or local-processing failure.
+  PROFILE_MEDIA_VALIDATION_FAIL_OPEN:
+    process.env.PROFILE_MEDIA_VALIDATION_FAIL_OPEN === "true",
+  PROFILE_VIDEO_MAX_ANALYSIS_FRAMES: Math.max(
+    6,
+    Math.min(
+      24,
+      Number(process.env.PROFILE_VIDEO_MAX_ANALYSIS_FRAMES ?? "24"),
+    ),
+  ),
+  PROFILE_VIDEO_VALIDATION_TIMEOUT_MS: Math.max(
+    10_000,
+    Number(process.env.PROFILE_VIDEO_VALIDATION_TIMEOUT_MS ?? "60000"),
+  ),
 
   // ── Cold-start Elo seeding via vision (SCUT-FBP5500-style) ──
   /// Master flag for the AI vision pass that seeds `Profile.eloScore` on the

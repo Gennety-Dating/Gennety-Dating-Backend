@@ -33,6 +33,31 @@ vi.mock("../../services/vision/validate-face.js", () => ({
   validateSingleFace: vi.fn(),
 }));
 
+const mediaValidationMocks = vi.hoisted(() => ({
+  downloadTelegramFile: vi.fn(),
+  validatePhoto: vi.fn(),
+  validateVideo: vi.fn(),
+}));
+
+vi.mock("../../services/storage.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../services/storage.js")>()),
+  downloadTelegramFile: mediaValidationMocks.downloadTelegramFile,
+}));
+
+vi.mock(
+  "../../services/profile-media-validation/profile-photo-validation.js",
+  () => ({
+    validateUserProfilePhoto: mediaValidationMocks.validatePhoto,
+  }),
+);
+
+vi.mock(
+  "../../services/profile-media-validation/profile-video-validation.js",
+  () => ({
+    validateUserProfileVideo: mediaValidationMocks.validateVideo,
+  }),
+);
+
 const ticketMocks = vi.hoisted(() => ({
   grantPhotoBonusIfEligible: vi.fn(),
   grantVideoBonusIfEligible: vi.fn(),
@@ -85,6 +110,12 @@ vi.mock("../../config.js", () => ({
     WEBAPP_URL: "https://test.invalid/calendar",
     TICKET_FEATURE_ENABLED: true,
     MESSAGE_EFFECT_TICKET_ID: "",
+    PROFILE_MEDIA_VALIDATION_ENABLED: false,
+    PROFILE_MEDIA_VALIDATION_FAIL_OPEN: false,
+    PROFILE_VIDEO_MAX_ANALYSIS_FRAMES: 24,
+    PROFILE_VIDEO_VALIDATION_TIMEOUT_MS: 60_000,
+    FACE_MATCH_THRESHOLD_VERIFY: 0.85,
+    FACE_MATCH_THRESHOLD_REVIEW: 0.75,
   },
 }));
 
@@ -106,6 +137,12 @@ import { runAgentTurn, injectSystemMessage } from "../../services/onboarding-age
 import { validateSingleFace } from "../../services/vision/validate-face.js";
 import { showMainMenu } from "../menu/main.js";
 import { pinStatusBanner } from "../../services/status-banner.js";
+import { env } from "../../config.js";
+
+const mutableValidationEnv = env as unknown as {
+  PROFILE_MEDIA_VALIDATION_ENABLED: boolean;
+  PROFILE_MEDIA_VALIDATION_FAIL_OPEN: boolean;
+};
 
 function createMockCtx(overrides: {
   session?: Partial<SessionData>;
@@ -199,8 +236,9 @@ function createMockCtx(overrides: {
     api: {
       sendMessage: vi.fn().mockResolvedValue(undefined),
       sendChatAction: vi.fn().mockResolvedValue(undefined),
+      editMessageText: vi.fn().mockResolvedValue(undefined),
     },
-    reply: vi.fn().mockResolvedValue(undefined),
+    reply: vi.fn().mockResolvedValue({ message_id: 700 }),
     replyWithPhoto: vi.fn().mockResolvedValue(undefined),
     replyWithChatAction: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
@@ -1083,6 +1121,31 @@ describe("Album (media_group_id) photo coalescing", () => {
       balance: 0,
     });
     ticketMocks.sendTicketRewardDM.mockResolvedValue(undefined);
+    mutableValidationEnv.PROFILE_MEDIA_VALIDATION_ENABLED = false;
+    mutableValidationEnv.PROFILE_MEDIA_VALIDATION_FAIL_OPEN = false;
+    mediaValidationMocks.downloadTelegramFile.mockResolvedValue(
+      Buffer.from("media"),
+    );
+    mediaValidationMocks.validatePhoto.mockResolvedValue({
+      ok: true,
+      value: {
+        fingerprint: { sha256: "a", differenceHash: "0".repeat(16) },
+        identitySimilarity: 0.93,
+      },
+    });
+    mediaValidationMocks.validateVideo.mockResolvedValue({
+      ok: true,
+      value: {
+        evidence: {
+          matchedFrameCount: 3,
+          matchedClusterCount: 2,
+          matchedTemporalThirds: 2,
+          hasHighQualityMatch: true,
+        },
+        durationSeconds: 20,
+        sampledFrameCount: 12,
+      },
+    });
   });
 
   afterEach(() => {
@@ -1485,6 +1548,150 @@ describe("Album (media_group_id) photo coalescing", () => {
     ).toEqual([
       expect.objectContaining({ type: "video", video: "new_video" }),
     ]);
+  });
+
+  it("rejects a different person during onboarding before persisting the photo", async () => {
+    mutableValidationEnv.PROFILE_MEDIA_VALIDATION_ENABLED = true;
+    mediaValidationMocks.validatePhoto.mockResolvedValueOnce({
+      ok: false,
+      reason: "identity_mismatch",
+      retryable: false,
+    });
+    const ctx = createMockCtx({
+      session: {
+        onboardingStep: "conversational",
+        expectingPhoto: true,
+        pendingPhotos: ["photo_1"],
+        pendingPhotoUniqueIds: ["uid_1"],
+      },
+      photo: {
+        file_id: "photo_other_person",
+        file_unique_id: "uid_other_person",
+      },
+      fromId: 99001,
+    });
+
+    await handleConversational(ctx as any);
+    (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: ctx.session,
+    });
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(ctx.session.pendingPhotos).toEqual(["photo_1"]);
+    expect(prisma.profile.upsert).not.toHaveBeenCalled();
+    expect(ctx.api.sendMessage).toHaveBeenCalledWith(
+      99001,
+      expect.stringContaining("doesn't match"),
+      expect.anything(),
+    );
+  });
+
+  it("keeps the existing video when owner evidence is too brief", async () => {
+    mutableValidationEnv.PROFILE_MEDIA_VALIDATION_ENABLED = true;
+    mediaValidationMocks.validateVideo.mockResolvedValueOnce({
+      ok: false,
+      reason: "video_owner_too_brief",
+      retryable: false,
+    });
+    const oldVideo = { type: "video" as const, video: "old_video", duration: 10 };
+    const ctx = createMockCtx({
+      session: {
+        onboardingStep: "conversational",
+        expectingPhoto: true,
+        pendingPhotos: ["photo_1", "photo_2"],
+        pendingProfileMedia: [
+          { type: "photo", photo: "photo_1" },
+          { type: "photo", photo: "photo_2" },
+          oldVideo,
+        ],
+      },
+      video: {
+        file_id: "brief_video",
+        file_unique_id: "brief_video_uid",
+      },
+      fromId: 99001,
+    });
+
+    await handleConversational(ctx as any);
+
+    expect(ctx.session.pendingProfileMedia).toContainEqual(oldVideo);
+    expect(prisma.profile.upsert).not.toHaveBeenCalled();
+    expect(ticketMocks.grantVideoBonusIfEligible).not.toHaveBeenCalled();
+    expect(ctx.api.editMessageText).toHaveBeenCalledWith(
+      99001,
+      700,
+      expect.stringContaining("too briefly"),
+    );
+  });
+
+  it("asks for an identity photo before checking an early video", async () => {
+    mutableValidationEnv.PROFILE_MEDIA_VALIDATION_ENABLED = true;
+    mediaValidationMocks.validateVideo.mockResolvedValueOnce({
+      ok: false,
+      reason: "video_identity_reference_missing",
+      retryable: false,
+    });
+    const ctx = createMockCtx({
+      session: {
+        onboardingStep: "conversational",
+        expectingPhoto: true,
+        pendingPhotos: [],
+      },
+      video: {
+        file_id: "early_video",
+        file_unique_id: "early_video_uid",
+      },
+      fromId: 99001,
+    });
+
+    await handleConversational(ctx as any);
+
+    expect(prisma.profile.upsert).not.toHaveBeenCalled();
+    expect(ticketMocks.grantVideoBonusIfEligible).not.toHaveBeenCalled();
+    expect(ctx.api.editMessageText).toHaveBeenCalledWith(
+      99001,
+      700,
+      expect.stringContaining("profile photo first"),
+    );
+  });
+
+  it("persists and rewards a video only after validation succeeds", async () => {
+    mutableValidationEnv.PROFILE_MEDIA_VALIDATION_ENABLED = true;
+    ticketMocks.grantVideoBonusIfEligible.mockResolvedValueOnce({
+      granted: true,
+      balance: 2,
+    });
+    const ctx = createMockCtx({
+      session: {
+        onboardingStep: "conversational",
+        expectingPhoto: true,
+        pendingPhotos: ["photo_1", "photo_2"],
+      },
+      video: {
+        file_id: "validated_video",
+        file_unique_id: "validated_video_uid",
+      },
+      fromId: 99001,
+    });
+
+    await handleConversational(ctx as any);
+
+    expect(prisma.profile.upsert).toHaveBeenCalled();
+    expect(ctx.session.pendingProfileMedia).toContainEqual(
+      expect.objectContaining({
+        type: "video",
+        video: "validated_video",
+        validationVersion: 1,
+        validatedAt: expect.any(String),
+      }),
+    );
+    expect(ticketMocks.sendTicketRewardDM).toHaveBeenCalledWith(
+      ctx.api,
+      99001,
+      "en",
+      "video",
+      2,
+    );
   });
 
   it("finalizes only after the user taps Continue", async () => {

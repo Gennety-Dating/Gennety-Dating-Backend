@@ -65,7 +65,12 @@ the dev bot token.
 - Text and Whisper voice input.
 - Magic Prompt context ingestion, psychological summary, and embedding.
 - Deterministic fallback summary/embedding when AI memory export is declined.
-- Static photo and Telegram Live Photo upload, limits, and single-face checks.
+- Static photo and Telegram Live Photo upload with exact/perceptual duplicate,
+  unsafe-content, one-person, and same-identity checks across Telegram,
+  edit-profile, mobile API, and Aether attachment paths.
+- Profile-video validation with bounded `ffmpeg` samples, independent frame
+  and transcript moderation, and distributed owner evidence. Group/travel
+  video is allowed; scenery-only and one-moment owner cameos are rejected.
 - Persona embedded or hosted liveness flow.
 - AWS Rekognition comparison against every profile photo.
 - Verified, pending, pending-review, rejected, and soft-skip outcomes.

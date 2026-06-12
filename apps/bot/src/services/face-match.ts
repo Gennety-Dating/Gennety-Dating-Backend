@@ -55,7 +55,15 @@ import type {
  *   penalise users for our own outages.
  */
 export type FaceMatchResult =
-  | { ok: true; similarity: number; faceFound: boolean }
+  | {
+      ok: true;
+      similarity: number;
+      faceFound: boolean;
+      matchedFace?: {
+        confidence: number;
+        boundingBox: DetectedFace["boundingBox"];
+      };
+    }
   | { ok: false; error: "no_source_face" | "api" | "timeout" | "not_configured" };
 
 /**
@@ -184,15 +192,27 @@ export async function compareFaces(
     // pairing as the candidate's score. (Multiple faces in candidate ⇒ we
     // accept if ANY of them matches the source — matters for old group
     // photos where the user's face is one of several.)
-    const best = matches.reduce((acc, m) => {
-      const s = m.Similarity ?? 0;
-      return s > acc ? s : acc;
-    }, 0);
+    const best = matches.reduce((acc, match) => {
+      const similarity = match.Similarity ?? 0;
+      return similarity > (acc?.Similarity ?? -1) ? match : acc;
+    }, matches[0]!);
+    const bestBox = best.Face?.BoundingBox;
 
     return {
       ok: true,
-      similarity: best / 100,
+      similarity: (best.Similarity ?? 0) / 100,
       faceFound: true,
+      matchedFace: {
+        confidence: normalizePercent(best.Face?.Confidence),
+        boundingBox: bestBox
+          ? {
+              left: clampUnit(bestBox.Left),
+              top: clampUnit(bestBox.Top),
+              width: clampUnit(bestBox.Width),
+              height: clampUnit(bestBox.Height),
+            }
+          : null,
+      },
     };
   } catch (err) {
     const name = (err as { name?: string }).name;

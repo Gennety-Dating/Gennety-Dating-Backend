@@ -489,9 +489,13 @@ Telegram-uploaded profile photos are **not** stored in Supabase by the bot
 — their static frames live as Telegram `file_id`s in `Profile.photos`.
 Richer Telegram display media lives additively in `Profile.profileMedia[]`:
 `{ type: "photo", photo }`, `{ type: "live_photo", photo, livePhoto, ...metadata }`,
-or `{ type: "video", video, ...metadata }` (display-only — excluded from
-`photos[]` and from face-match, so the `photos[i] ↔ photoFaceScores[i]`
-invariant holds). When
+or `{ type: "video", video, ...metadata }`. Video remains display-only and is
+excluded from `photos[]`, but admission is validated before persistence:
+`ffprobe`/`ffmpeg` extract bounded temporary samples, AWS Rekognition performs
+face detection/comparison and image moderation, and OpenAI independently
+moderates sampled frames plus the Whisper transcript. Only validation version
+and timestamp are retained; temporary video, frames, audio, and transcripts
+are deleted. The `photos[i] ↔ photoFaceScores[i]` invariant still holds. When
 `profileMedia[]` is empty, renderers normalize legacy `photos[]` into photo
 items. Verification and face-match still read `photos[]` only, preserving the
 `photos[i] ↔ photoFaceScores[i]` invariant. The mobile app mirrors static
@@ -503,9 +507,9 @@ currently bot-side only.
 
 | Service | Role |
 |---|---|
-| OpenAI | Onboarding / menu / Aether agents (tool-calling), embeddings (1536-dim), Whisper voice transcription, vision (Elo seed pass) |
+| OpenAI | Onboarding / menu / Aether agents, embeddings, Whisper voice/video-audio transcription, image/text moderation, ambiguous duplicate classification, vision Elo seed |
 | Persona | Hosted KYC / liveness flow; HMAC-signed terminal inquiry webhooks |
-| AWS Rekognition | `CompareFaces` between Persona selfie and each profile photo |
+| AWS Rekognition | `CompareFaces`, `DetectFaces`, and `DetectModerationLabels` for profile photo/video admission and Persona verification |
 | Google Places (New) v1 | **Fallback** concierge venue search (primary is the first-party `curated_venues` base) at the great-circle midpoint via `places.googleapis.com/v1/places:searchNearby` (+ text fallback). Strict quality gate (operational + place-type deny-list + rating ≥ 4.0 + ≥ 30 reviews + student-friendly price tier for food) and weighted scoring on top of the raw API. Also used by `scripts/seed-venues.mjs` (via `searchVenueCandidates`) to source curated-base candidates under the same gate. |
 | Supabase | Postgres + pgvector primary store, Storage for selfies, mobile profile photos, and chat images |
 | Resend/email provider | Corporate-email OTP delivery |

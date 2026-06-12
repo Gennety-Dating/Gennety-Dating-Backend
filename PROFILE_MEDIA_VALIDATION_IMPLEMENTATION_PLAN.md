@@ -1,6 +1,7 @@
 # Profile Media Validation Implementation Plan
 
-> **Status:** APPROVED FOR IMPLEMENTATION, not implemented yet.
+> **Status:** IMPLEMENTED IN CODE, rollout blocked until ffmpeg is installed
+> and `rekognition:DetectModerationLabels` is granted. Feature flag remains off.
 > **Scope:** Telegram onboarding photos, Telegram Live Photos, Telegram profile
 > video, profile-photo editing, and mobile/public photo upload.
 > **Primary product rule:** every accepted photo must contain the same profile
