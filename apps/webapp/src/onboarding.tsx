@@ -30,6 +30,7 @@ import {
   onboardingStrings,
   type OnboardingStrings,
 } from "./onboarding-i18n.js";
+import { typewriterLineHoldMs } from "./onboarding-timing.js";
 import "./onboarding.css";
 
 const app = window.Telegram?.WebApp;
@@ -372,12 +373,12 @@ function useIntroStream(
         }
         if (stop()) break;
         if (li < lastIndex) {
-          await wait(INTRO_LINE_HOLD_MS);
+          await wait(typewriterLineHoldMs(parts, INTRO_LINE_HOLD_MS));
           if (stop()) break;
           setFading(true);
           await wait(INTRO_LINE_FADE_MS);
         } else {
-          await wait(INTRO_FINAL_HOLD_MS);
+          await wait(typewriterLineHoldMs(parts, INTRO_FINAL_HOLD_MS));
         }
       }
 
