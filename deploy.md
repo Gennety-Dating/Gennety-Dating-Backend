@@ -52,6 +52,31 @@ Production runtime versions verified on the droplet:
 - PM2 `6.0.14`
 - Caddy `2.6.2`
 
+## Required Production System Dependency
+
+Profile photo/video validation launches `ffmpeg` and `ffprobe` as operating
+system processes. They are not JavaScript packages, so `pnpm install` does not
+install them. The Ubuntu/Debian package named `ffmpeg` provides both commands.
+
+Install it once on the current droplet, and repeat this step for every
+replacement/rebuilt production host:
+
+```sh
+ssh root@167.172.178.229 '
+  if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
+  fi
+  ffmpeg -version | head -n 1
+  ffprobe -version | head -n 1
+'
+```
+
+The long local Homebrew build on Intel macOS is not the expected production
+path. Ubuntu normally installs a prebuilt `apt` package. Never set
+`PROFILE_MEDIA_VALIDATION_ENABLED=true` until both production version checks
+succeed.
+
 ## Credentials And Secrets
 
 Do not paste raw tokens, passwords, private keys, or database URLs into this
@@ -166,12 +191,9 @@ ffmpeg -version
 ffprobe -version
 ```
 
-On Ubuntu production, install the system dependency before enabling the flag:
-
-```sh
-apt-get update
-apt-get install -y ffmpeg
-```
+These local checks do not prove that the production droplet has the package.
+Run the server-side installation/check in **Required Production System
+Dependency** during the production rollout.
 
 Keep `PROFILE_MEDIA_VALIDATION_ENABLED=false` through code deployment. Verify
 the three narrow Rekognition actions and run consenting/synthetic QA media,
@@ -237,6 +259,16 @@ Then install, validate, and restart on the droplet:
 ```sh
 ssh root@167.172.178.229
 cd /opt/gennety
+
+# Required once per production host. Safe to keep in the deploy checklist:
+# installation is skipped when both commands already exist.
+if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
+fi
+ffmpeg -version | head -n 1
+ffprobe -version | head -n 1
+
 pnpm install --frozen-lockfile
 pnpm --filter @gennety/db db:generate
 pnpm build
