@@ -79,12 +79,12 @@ export function buildCoordOfferKeyboard(
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
   if (recipientHasUsername) {
-    kb.text(t(lang, "coordBtnShareSelf"), `coord:method:${matchId}:share_self`).row();
+    kb.text(t(lang, "coordBtnShareSelf"), `coord:m:${matchId}:share_self`).row();
   }
   if (partnerHasUsername) {
-    kb.text(t(lang, "coordBtnRequestPartner"), `coord:method:${matchId}:request_partner`).row();
+    kb.text(t(lang, "coordBtnRequestPartner"), `coord:m:${matchId}:request_partner`).row();
   }
-  kb.text(t(lang, "coordBtnProxy"), `coord:method:${matchId}:proxy`);
+  kb.text(t(lang, "coordBtnProxy"), `coord:m:${matchId}:proxy`);
   return kb;
 }
 

@@ -94,20 +94,32 @@ describe("buildCoordOfferKeyboard", () => {
   it("shows all three when both have usernames", () => {
     const cbs = flat(buildCoordOfferKeyboard("m1", "en", true, true));
     expect(cbs).toEqual([
-      "coord:method:m1:share_self",
-      "coord:method:m1:request_partner",
-      "coord:method:m1:proxy",
+      "coord:m:m1:share_self",
+      "coord:m:m1:request_partner",
+      "coord:m:m1:proxy",
     ]);
   });
 
   it("hides share_self when the recipient has no username", () => {
     const cbs = flat(buildCoordOfferKeyboard("m1", "en", false, true));
-    expect(cbs).toEqual(["coord:method:m1:request_partner", "coord:method:m1:proxy"]);
+    expect(cbs).toEqual(["coord:m:m1:request_partner", "coord:m:m1:proxy"]);
   });
 
   it("only proxy when neither has a username", () => {
     const cbs = flat(buildCoordOfferKeyboard("m1", "en", false, false));
-    expect(cbs).toEqual(["coord:method:m1:proxy"]);
+    expect(cbs).toEqual(["coord:m:m1:proxy"]);
+  });
+
+  it("keeps every callback_data within Telegram's 64-byte limit (real UUID matchId)", () => {
+    // Regression: `coord:method:<uuid>:request_partner` was 65 bytes (>64),
+    // so Telegram rejected the whole offer with BUTTON_DATA_INVALID whenever
+    // the partner had a username. Guard against any callback_data overflow.
+    const uuid = "8af1dc4a-6a6a-4fd2-81ba-33c0854b3b38"; // 36-char match id
+    const cbs = flat(buildCoordOfferKeyboard(uuid, "en", true, true));
+    expect(cbs).toHaveLength(3);
+    for (const cb of cbs) {
+      expect(Buffer.byteLength(cb, "utf8")).toBeLessThanOrEqual(64);
+    }
   });
 });
 

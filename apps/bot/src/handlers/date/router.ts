@@ -62,7 +62,7 @@ dateRouter.use(async (ctx, next) => {
 
   // Pre-date coordination callbacks (feature-flagged; inert rows never produce
   // these buttons, so no flag check is needed on the handler side).
-  if (data?.startsWith("coord:method:")) {
+  if (data?.startsWith("coord:m:")) {
     await handleCoordMethod(ctx);
     return;
   }

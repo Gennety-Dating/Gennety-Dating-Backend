@@ -115,7 +115,7 @@ describe("handleCoordMethod", () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
     mMatch.findUnique.mockResolvedValueOnce(coordMatch());
 
-    const ctx = createCtx({ callbackData: "coord:method:m1:share_self", fromId: 1001 });
+    const ctx = createCtx({ callbackData: "coord:m:m1:share_self", fromId: 1001 });
     await handleCoordMethod(ctx);
 
     expect(mMatch.update).toHaveBeenCalledWith(
@@ -135,7 +135,7 @@ describe("handleCoordMethod", () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
     mMatch.findUnique.mockResolvedValueOnce(coordMatch());
 
-    const ctx = createCtx({ callbackData: "coord:method:m1:request_partner", fromId: 1001 });
+    const ctx = createCtx({ callbackData: "coord:m:m1:request_partner", fromId: 1001 });
     await handleCoordMethod(ctx);
 
     expect(mMatch.update).toHaveBeenCalledWith(
@@ -153,7 +153,7 @@ describe("handleCoordMethod", () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
     mMatch.findUnique.mockResolvedValueOnce(coordMatch());
 
-    const ctx = createCtx({ callbackData: "coord:method:m1:proxy", fromId: 1001 });
+    const ctx = createCtx({ callbackData: "coord:m:m1:proxy", fromId: 1001 });
     await handleCoordMethod(ctx);
 
     expect(mMatch.update).toHaveBeenCalledWith(
@@ -169,7 +169,7 @@ describe("handleCoordMethod", () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" }); // Bob taps
     mMatch.findUnique.mockResolvedValueOnce(coordMatch());
 
-    const ctx = createCtx({ callbackData: "coord:method:m1:proxy", fromId: 1002 });
+    const ctx = createCtx({ callbackData: "coord:m:m1:proxy", fromId: 1002 });
     await handleCoordMethod(ctx);
 
     expect(mMatch.update).not.toHaveBeenCalled();
@@ -179,7 +179,7 @@ describe("handleCoordMethod", () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
     mMatch.findUnique.mockResolvedValueOnce(coordMatch({ coordMethod: "proxy", coordInitiatorId: "uid-A" }));
 
-    const ctx = createCtx({ callbackData: "coord:method:m1:share_self", fromId: 1001 });
+    const ctx = createCtx({ callbackData: "coord:m:m1:share_self", fromId: 1001 });
     await handleCoordMethod(ctx);
 
     expect(mMatch.update).not.toHaveBeenCalled();

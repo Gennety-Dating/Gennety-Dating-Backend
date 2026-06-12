@@ -14,7 +14,7 @@ import { InlineKeyboard } from "grammy";
  *
  * Routed inside `dateRouter` (runs before the menu LLM router, gates on
  * completed onboarding). Callback families:
- *   - `coord:method:{matchId}:{share_self|request_partner|proxy}` — initiator picks
+ *   - `coord:m:{matchId}:{share_self|request_partner|proxy}` — initiator picks
  *   - `coord:approve|decline:{matchId}` — partner consent (Variant B ONLY)
  *   - `coord:enter:{matchId}` — join the anonymous proxy chat (Variant C)
  *   - `coord:exit` — leave the proxy chat
@@ -113,13 +113,13 @@ async function dmCatch(
     );
 }
 
-/** `coord:method:{matchId}:{method}` — initiator picks a coordination option. */
+/** `coord:m:{matchId}:{method}` — initiator picks a coordination option. */
 export async function handleCoordMethod(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
-  if (!data?.startsWith("coord:method:")) return;
+  if (!data?.startsWith("coord:m:")) return;
   await ctx.answerCallbackQuery();
 
-  const parts = data.split(":"); // coord, method, {matchId}, {method}
+  const parts = data.split(":"); // coord, m, {matchId}, {method}
   const matchId = parts[2];
   const method = parts[3] as CoordMethod;
   if (!matchId || !["share_self", "request_partner", "proxy"].includes(method)) return;
