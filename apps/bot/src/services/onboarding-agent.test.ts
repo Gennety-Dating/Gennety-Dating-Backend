@@ -377,7 +377,7 @@ describe("onboarding-agent", () => {
         toolCallResponse([{ id: "call-ctx", name: "request_context_dump", args: {} }]),
       )
       .mockResolvedValueOnce(
-        textResponse("И ещё один необязательный момент: какая у тебя национальность или этнический бэкграунд? Можно пропустить."),
+        textResponse("И ещё один необязательный вопрос: как ты описываешь своё происхождение или национальность? Можно пропустить."),
       );
 
     const result = await runAgentTurn(telegramId, "готово, дай промпт", {
@@ -398,7 +398,7 @@ describe("onboarding-agent", () => {
       id: "uuid-1",
       messageHistory: [
         { role: "system", content: "system prompt..." },
-        { role: "assistant", content: "Какая у тебя национальность или этнический бэкграунд? Можно пропустить." },
+        { role: "assistant", content: "Как ты описываешь своё происхождение или национальность? Можно пропустить." },
         { role: "user", content: "пропустим" },
       ],
       language: "ru",

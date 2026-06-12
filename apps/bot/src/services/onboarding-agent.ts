@@ -1920,7 +1920,7 @@ export async function runAgentTurn(
                 success: false,
                 error:
                   "Before request_context_dump, ask the user ONE short optional ethnicity/nationality question in their language. " +
-                  "Example in Russian: \"И ещё один необязательный момент: какая у тебя национальность или этнический бэкграунд? Можно пропустить.\" " +
+                  "Example in Russian: \"И ещё один необязательный вопрос: как ты описываешь своё происхождение или национальность? Можно пропустить.\" " +
                   "Do not ask any other profile question in that message. If they skip, ignore it, or answer another field, you may proceed next time.",
               });
             } else {

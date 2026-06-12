@@ -455,6 +455,15 @@ describe("onboarding collector routing", () => {
     },
   );
 
+  it("uses natural Russian wording for the optional origin question", () => {
+    const text = onboardingQuestionText("ru", "ethnicity");
+
+    expect(text).toBe(
+      "Необязательно: как ты описываешь своё происхождение или национальность? Можно пропустить.",
+    );
+    expect(text).not.toContain("бэкграунд");
+  });
+
   it("explains why the Magic Prompt is needed before asking for the AI response", () => {
     const text = onboardingQuestionText("en", "context_dump");
 
