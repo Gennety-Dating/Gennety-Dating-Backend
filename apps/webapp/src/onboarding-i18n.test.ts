@@ -20,8 +20,18 @@ describe("onboarding i18n", () => {
         expect(line.length).toBeGreaterThan(0);
         for (const part of line) expect(part.length).toBeGreaterThan(0);
       }
+      expect(s.costLines).toHaveLength(2);
+      for (const line of s.costLines) {
+        expect(line.length).toBeGreaterThan(0);
+        for (const part of line) expect(part.length).toBeGreaterThan(0);
+      }
       expect(s.pivotLines).toHaveLength(2);
       for (const line of s.pivotLines) {
+        expect(line.length).toBeGreaterThan(0);
+        for (const part of line) expect(part.length).toBeGreaterThan(0);
+      }
+      expect(s.matchmakerLines).toHaveLength(1);
+      for (const line of s.matchmakerLines) {
         expect(line.length).toBeGreaterThan(0);
         for (const part of line) expect(part.length).toBeGreaterThan(0);
       }
@@ -30,6 +40,12 @@ describe("onboarding i18n", () => {
         expect(step.title.length).toBeGreaterThan(0);
         expect(step.body.length).toBeGreaterThan(0);
       }
+      expect(s.dateFlowSteps).toHaveLength(6);
+      for (const step of s.dateFlowSteps) {
+        expect(step.title.length).toBeGreaterThan(0);
+        expect(step.body.length).toBeGreaterThan(0);
+      }
+      expect(s.more.length).toBeGreaterThan(0);
       expect(s.exhaustionLines).toHaveLength(3);
       expect(s.statLabels).toHaveLength(3);
       expect(s.consentTitle.length).toBeGreaterThan(0);

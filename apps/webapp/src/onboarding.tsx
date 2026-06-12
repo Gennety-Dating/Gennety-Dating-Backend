@@ -20,10 +20,18 @@ import {
   type TelegramOnboardingState,
 } from "./api.js";
 import {
+  bootPhaseFromRemote,
   postVisualPhaseFromRemote,
   preVisualPhaseFromRemote,
+  VISUAL_DONE,
+  VISUAL_LAST_INDEX,
   type OnboardingPhase,
 } from "./onboarding-route.js";
+import {
+  clearOnboardingProgress,
+  loadOnboardingProgress,
+  saveOnboardingProgress,
+} from "./device-storage.js";
 import { type Lang } from "./i18n.js";
 import {
   initialOnboardingLanguage,
@@ -37,19 +45,39 @@ const app = window.Telegram?.WebApp;
 const params = new URLSearchParams(location.search);
 const source = params.get("source") ?? app?.initDataUnsafe?.start_param ?? null;
 
-const PROFILE_IMAGE =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuD3Em0JzID6Z04xJ5a_QgvVbiTzxx59H2rlwGXP_VgUkQuez8eozoM5bD2JZv_NRrpWKoAeWnFr6R3U7EljfXy4tqY2O2lRL0GL12uSBwF6aPEtFsCLDMcXqdnrEX8emReLN4LhoWKpOZNxYsOpOaiSwbm6nwi6lYlqaMdgoSZ7XuEEWkSZqb7GfDkjPzdYSTZEugO7zIXCb3HrGQX8McYpp05_emtAHX-_zqXRdCeCMVMxVAL_nJBpbxihO2fWaVWWmT7iK3XfH-t1";
 const TRAP_BACKGROUND =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuDT22v5JOFjqN2g1VkI86PnzZJ_vTS3whfVoE4pTqZMVY_zqEjFKQf0fGlab3jjVTIxx1gKK5zx4u10XcEtFiFDqeEsGaLjoNTdZMWbR46RULeC47iOvuiqYHU8PJrKZ9kQVqufAHWY-pv_0RSTu1V7cSz_tLD89uoBf8RE9OxG9ZhXIGcEKvxkjcwB3oa3Kf9KjRlxyoUZcBMol4eX5hJ6Oh2_fhyciV6tYxlSEoexfNp4Pr7iGISmsLdSC0fp35_bW0OO_cj0xmGN";
-const VISUAL_LAST_INDEX = 4;
-const DRUM_CYCLE_INTERVAL_MS = 2500;
+const DRUM_CYCLE_INTERVAL_MS = 2500; // Stats (screen 1) auto-cycle interval
+const PROFILE_CYCLE_INTERVAL_MS = 3000; // Profile (screen 2) text auto-cycle interval
+const PROFILE_SWIPE_INTERVAL_MS = 1000; // Profile (screen 2) Tinder-style card swipe cadence
+
+interface ProfileCardData {
+  name: string;
+  age: number;
+  photo: string;
+  distanceKm: number;
+  bio: string;
+  interests: string[];
+}
+
+// Demo Tinder-style cards for the Profile scene. Photos live in
+// `apps/webapp/public/profiles/` (drop 1.jpg..5.jpg in this order); a missing
+// file degrades gracefully to the dark card background.
+const PROFILE_CARDS: ProfileCardData[] = [
+  { name: "Sofia", age: 23, photo: "/profiles/1.jpg", distanceKm: 2, bio: "Psych student & serial cafe-hopper", interests: ["Coffee", "Road trips", "Photography", "Indie music"] },
+  { name: "Marco", age: 26, photo: "/profiles/2.jpg", distanceKm: 4, bio: "Gym in the morning, pasta at night", interests: ["Gym", "Travel", "Cooking", "Football"] },
+  { name: "Daniel", age: 21, photo: "/profiles/3.jpg", distanceKm: 1, bio: "CS major — I'll fix your wifi and your playlist", interests: ["Coding", "Gaming", "Lo-fi", "Coffee"] },
+  { name: "Lena", age: 24, photo: "/profiles/4.jpg", distanceKm: 6, bio: "Collecting passport stamps & neon nights", interests: ["Travel", "Fashion", "Dancing", "Sushi"] },
+  { name: "Mia", age: 25, photo: "/profiles/5.jpg", distanceKm: 3, bio: "Designer chasing golden hour", interests: ["Art", "Wine", "Yoga", "Sunsets"] },
+];
 
 // Intro typewriter ("live human typing") timings. Tuned ~2.5x faster than the
 // original cinematic pacing while keeping the human cadence and beats.
-const INTRO_TYPE_CHAR_MS = 18; // base per-character speed (~30% slower than the fast pass)
+const INTRO_TYPE_CHAR_MS = 26; // base per-character speed (~30 chars/sec with the jitter below)
 const INTRO_TYPE_JITTER_MS = 14; // random extra per character for an organic cadence
 const INTRO_PUNCT_PAUSE_MS = 73; // small beat after sentence punctuation
-const INTRO_LINE_HOLD_MS = 1440; // hold a completed line before it fades (+1s read buffer)
+const INTRO_LINE_HOLD_MS = 1500; // Intro (screen 0): hold a completed line before it fades
+const PIVOT_LINE_HOLD_MS = 1440; // Pivot (screen 3): unchanged between-line hold
 const INTRO_LINE_FADE_MS = 200; // fade-out before the next line types in
 const INTRO_FINAL_HOLD_MS = 2040; // hold on the closing hook question (+1s read buffer)
 const INTRO_SKIP_HOLD_MS = 600; // hold on the final line when the user taps to skip
@@ -60,12 +88,17 @@ const INTRO_PART_PAUSES_MS: number[][] = [
   [0],
   [0],
   [0],
-  [0, 400, 600],
+  [0, 800, 1200],
   [0],
-  [0, 600],
+  [0, 1200],
 ];
 // Pivot scene ("we built Gennety") — same typewriter, a short beat before the brand name.
 const PIVOT_PART_PAUSES_MS: number[][] = [[0], [0, 160]];
+// Cost scene (after the Stats metrics) — two short, conversational problem beats.
+const COST_PART_PAUSES_MS: number[][] = [[0], [0]];
+// Matchmaker scene (between Pivot and How-it-works) — two beats about the
+// always-on personal AI matchmaker.
+const MATCHMAKER_PART_PAUSES_MS: number[][] = [[0], [0]];
 const PRIVACY_POLICY_URL = "https://gennety.com/privacy";
 
 type RemoteUser = TelegramOnboardingState["user"];
@@ -128,17 +161,48 @@ function App(): ReactElement {
       return;
     }
     void fetchTelegramOnboardingState(app.initData, source)
-      .then((state) => {
+      .then(async (state) => {
+        // Resume the client-only visual animation where the user left off
+        // (server state is authoritative for everything up to the city gate).
+        // Loaded before the state setters so user + phase batch into one
+        // render — otherwise the syncing-fallback effect could briefly route
+        // the animation back to scene 0.
+        const storedProgress = await loadOnboardingProgress();
         setRemoteUser(state.user);
         setFlowToken(state.flowToken);
         if (state.user.language) setLang(state.user.language);
-        setPhase(preVisualPhaseFromRemote(state.user));
+        setPhase(bootPhaseFromRemote(state.user, storedProgress));
       })
       .catch((err: unknown) => {
         setBootError(errorCopy(err, onboardingStrings(lang)));
         app?.HapticFeedback?.notificationOccurred("error");
       });
   }, []);
+
+  // Log every screen transition so a re-entry resumes on the same scene.
+  // Visual scenes persist their index; finishing the animation persists the
+  // VISUAL_DONE sentinel; reaching any pre-animation gate clears the stored
+  // value (self-heals a stale value from a previous / reset onboarding run).
+  useEffect(() => {
+    if (phase.kind === "visual") {
+      void saveOnboardingProgress(phase.index);
+    } else if (
+      phase.kind === "detail" ||
+      phase.kind === "aiMemoryExport" ||
+      phase.kind === "loading" ||
+      phase.kind === "done"
+    ) {
+      void saveOnboardingProgress(VISUAL_DONE);
+    } else if (
+      phase.kind === "consent" ||
+      phase.kind === "language" ||
+      phase.kind === "email" ||
+      phase.kind === "otp" ||
+      phase.kind === "city"
+    ) {
+      void clearOnboardingProgress();
+    }
+  }, [phase]);
 
   const goBack = useCallback(() => {
     setPhase((current) => {
@@ -147,6 +211,12 @@ function App(): ReactElement {
       }
       if (current.kind === "visual" && current.index === 0) {
         return { kind: "city" };
+      }
+      if (current.kind === "detail" && current.index > 0) {
+        return { kind: "detail", index: current.index - 1 };
+      }
+      if (current.kind === "detail" && current.index === 0) {
+        return { kind: "visual", index: VISUAL_LAST_INDEX };
       }
       if (current.kind === "consent") return { kind: "language" };
       if (current.kind === "email") return { kind: "consent" };
@@ -159,12 +229,16 @@ function App(): ReactElement {
 
   const canGoBack =
     phase.kind === "visual"
-      ? phase.index > 0
+      ? // How-it-works (last visual scene) carries its own in-dock back arrow
+        // that pages its sub-steps, so the global top-left chrome arrow is
+        // suppressed there to keep the photo frame clean.
+        phase.index > 0 && phase.index !== VISUAL_LAST_INDEX
       : phase.kind === "consent" ||
         phase.kind === "email" ||
         phase.kind === "otp" ||
         phase.kind === "city" ||
-        phase.kind === "aiMemoryExport";
+        phase.kind === "aiMemoryExport" ||
+        phase.kind === "detail";
 
   useEffect(() => {
     if (!app?.BackButton) return;
@@ -220,13 +294,36 @@ function App(): ReactElement {
         <StatsCycleScene active={phase.kind === "visual" && phase.index === 1} onNext={nextVisualWithHaptic} />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 2}>
-        <ProfileCycleScene active={phase.kind === "visual" && phase.index === 2} onNext={nextVisualWithHaptic} />
+        <CostScene active={phase.kind === "visual" && phase.index === 2} onNext={nextVisualSilently} />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 3}>
-        <PivotScene active={phase.kind === "visual" && phase.index === 3} onNext={nextVisualSilently} />
+        <ProfileCycleScene active={phase.kind === "visual" && phase.index === 3} onNext={nextVisualWithHaptic} />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 4}>
-        <HowItWorksScene active={phase.kind === "visual" && phase.index === 4} onNext={nextVisualWithHaptic} />
+        <PivotScene active={phase.kind === "visual" && phase.index === 4} onNext={nextVisualSilently} />
+      </Scene>
+      <Scene active={phase.kind === "visual" && phase.index === 5}>
+        <MatchmakerScene active={phase.kind === "visual" && phase.index === 5} onNext={nextVisualSilently} />
+      </Scene>
+      <Scene active={phase.kind === "visual" && phase.index === 6}>
+        <HowItWorksScene
+          active={phase.kind === "visual" && phase.index === 6}
+          onMore={() => setPhase({ kind: "detail", index: 0 })}
+        />
+      </Scene>
+      <Scene active={phase.kind === "detail"}>
+        <DateFlowScene
+          index={phase.kind === "detail" ? phase.index : 0}
+          onBack={goBack}
+          onNext={() =>
+            setPhase((current) =>
+              current.kind === "detail"
+                ? { kind: "detail", index: current.index + 1 }
+                : current,
+            )
+          }
+          onDone={() => setPhase(postVisualPhaseFromRemote(remoteUser))}
+        />
       </Scene>
       <Scene active={phase.kind === "syncing"}>
         <SyncingScene />
@@ -318,6 +415,7 @@ function useIntroStream(
   active: boolean,
   lines: string[][],
   pauses: number[][],
+  lineHoldMs: number = INTRO_LINE_HOLD_MS,
 ): { display: string; lineIndex: number; fading: boolean; done: boolean; skip: () => void } {
   const [display, setDisplay] = useState("");
   const [lineIndex, setLineIndex] = useState(0);
@@ -373,7 +471,7 @@ function useIntroStream(
         }
         if (stop()) break;
         if (li < lastIndex) {
-          await wait(typewriterLineHoldMs(parts, INTRO_LINE_HOLD_MS));
+          await wait(typewriterLineHoldMs(parts, lineHoldMs));
           if (stop()) break;
           setFading(true);
           await wait(INTRO_LINE_FADE_MS);
@@ -398,7 +496,7 @@ function useIntroStream(
       cancelled = true;
       timers.forEach((timer) => window.clearTimeout(timer));
     };
-  }, [active, lines, pauses]);
+  }, [active, lines, pauses, lineHoldMs]);
 
   const skip = useCallback(() => {
     skipRef.current = true;
@@ -440,6 +538,61 @@ function PivotScene(props: { active: boolean; onNext: () => void }): ReactElemen
     props.active,
     s.pivotLines,
     PIVOT_PART_PAUSES_MS,
+    PIVOT_LINE_HOLD_MS,
+  );
+
+  useEffect(() => {
+    if (done) props.onNext();
+  }, [done, props.onNext]);
+
+  return (
+    <main className="hook-main intro-main" onClick={skip}>
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+        <div className="hook-glow w-64 h-64 bg-primary rounded-full blur-[100px]" />
+      </div>
+      <p key={lineIndex} className={`hook-title intro-line ${fading ? "is-fading" : ""}`}>
+        <span className="intro-line-text">
+          {display}
+          <span className="intro-caret" aria-hidden="true" />
+        </span>
+      </p>
+    </main>
+  );
+}
+
+function CostScene(props: { active: boolean; onNext: () => void }): ReactElement {
+  const s = useOnboardingStrings();
+  const { display, lineIndex, fading, done, skip } = useIntroStream(
+    props.active,
+    s.costLines,
+    COST_PART_PAUSES_MS,
+  );
+
+  useEffect(() => {
+    if (done) props.onNext();
+  }, [done, props.onNext]);
+
+  return (
+    <main className="hook-main intro-main" onClick={skip}>
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+        <div className="hook-glow w-64 h-64 bg-primary rounded-full blur-[100px]" />
+      </div>
+      <p key={lineIndex} className={`hook-title intro-line ${fading ? "is-fading" : ""}`}>
+        <span className="intro-line-text">
+          {display}
+          <span className="intro-caret" aria-hidden="true" />
+        </span>
+      </p>
+    </main>
+  );
+}
+
+function MatchmakerScene(props: { active: boolean; onNext: () => void }): ReactElement {
+  const s = useOnboardingStrings();
+  const { display, lineIndex, fading, done, skip } = useIntroStream(
+    props.active,
+    s.matchmakerLines,
+    MATCHMAKER_PART_PAUSES_MS,
   );
 
   useEffect(() => {
@@ -497,14 +650,14 @@ function ProfileCycleScene(props: {
   onNext: () => void;
 }): ReactElement {
   const s = useOnboardingStrings();
-  const cycle = useTimedCycle(props.active, s.exhaustionLines.length);
+  const cycle = useTimedCycle(props.active, s.exhaustionLines.length, PROFILE_CYCLE_INTERVAL_MS);
   const copy = s.exhaustionLines[cycle.index] ?? s.exhaustionLines[0]!;
 
   return (
     <>
       <main className="exhaustion-main">
         <div className="lavender-glow" />
-        <ProfileMockup />
+        <ProfileDeck active={props.active} />
         <div className="exhaustion-copy exhaustion-drum">
           <div key={copy} className="drum-window profile-drum-window">
             <p key={copy} className="copy-headline drum-copy-item">
@@ -519,74 +672,222 @@ function ProfileCycleScene(props: {
   );
 }
 
-const HOWITWORKS_ICONS = ["person", "favorite", "local_cafe"];
+// Per-step hero photos for the How-it-works screens. Files live in
+// `apps/webapp/public/how-it-works/` and ship to the Mini App root; a missing
+// file degrades gracefully to the dark photo frame.
+const HOWITWORKS_PHOTOS = [
+  "/how-it-works/1.jpg",
+  "/how-it-works/2.jpg",
+  "/how-it-works/3.jpg",
+];
+// Blurred photo backdrops for the six "Подробнее" date-flow screens. One photo
+// spans two consecutive slides (0-1, 2-3, 4-5) so the scene's white icon/copy
+// stays the focus; the blur + dark scrim live in `.dateflow-bg` (onboarding.css).
+// Files live in `apps/webapp/public/date-flow/`; a missing file degrades to the
+// plain dark background.
+const DATEFLOW_PHOTOS = [
+  "/date-flow/1.webp",
+  "/date-flow/2.jpg",
+  "/date-flow/3.webp",
+];
+// Abstract, frameless, white line-art icons for the six date-flow slides.
+// Each is a hand-built SVG (not a Material Symbols glyph) so individual parts
+// can carry a short thematic animation — played once on slide-enter (mobile,
+// no cursor) and replayed on hover (Telegram Desktop). Keyed CSS classes in
+// onboarding.css (`.dfi-*`) drive the motion; reduced-motion disables it.
+const DATEFLOW_SVGS: ReadonlyArray<() => ReactElement> = [
+  // 1. Agreement — two arrows converge on a shared node ("you both said yes").
+  () => (
+    <svg className="dfi-svg dfi-converge" viewBox="0 0 48 48" aria-hidden="true">
+      <g className="dfi-left">
+        <path d="M4 24h13" />
+        <path d="M12 18l6 6-6 6" />
+      </g>
+      <g className="dfi-right">
+        <path d="M44 24H31" />
+        <path d="M36 18l-6 6 6 6" />
+      </g>
+      <circle className="dfi-dot" cx="24" cy="24" r="2.6" />
+    </svg>
+  ),
+  // 2. Calendar — one cell highlights ("you pick when").
+  () => (
+    <svg className="dfi-svg dfi-calendar" viewBox="0 0 48 48" aria-hidden="true">
+      <rect x="8" y="11" width="32" height="29" rx="5" />
+      <path d="M8 19h32" />
+      <path d="M16 8v6" />
+      <path d="M32 8v6" />
+      <rect className="dfi-cell" x="20" y="25" width="9" height="8" rx="2.2" />
+    </svg>
+  ),
+  // 3. Compass — needle sweeps ("we pick where").
+  () => (
+    <svg className="dfi-svg dfi-compass" viewBox="0 0 48 48" aria-hidden="true">
+      <circle cx="24" cy="24" r="15" />
+      <path className="dfi-needle" d="M24 13l5 11-5 4-5-4z" />
+    </svg>
+  ),
+  // 4. Confirmed — checkmark draws in ("time and place are set").
+  () => (
+    <svg className="dfi-svg dfi-confirm" viewBox="0 0 48 48" aria-hidden="true">
+      <circle cx="24" cy="24" r="15" />
+      <path className="dfi-check" d="M16 24.5l5.5 5.5L33 19" />
+    </svg>
+  ),
+  // 5. Spark — sparkle twinkles ("just before you meet").
+  () => (
+    <svg className="dfi-svg dfi-spark" viewBox="0 0 48 48" aria-hidden="true">
+      <path
+        className="dfi-star4"
+        d="M24 8c1 10 2 11 12 16-10 5-11 6-12 16-1-10-2-11-12-16 10-5 11-6 12-16z"
+      />
+      <circle className="dfi-twinkle" cx="37" cy="12" r="2" />
+    </svg>
+  ),
+  // 6. Feedback — star pops inside a speech bubble ("tell us how it went").
+  () => (
+    <svg className="dfi-svg dfi-feedback" viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M10 14h28a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4H22l-7 6v-6h-5a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4z" />
+      <path
+        className="dfi-star5"
+        d="M24 19l1.8 3.7 4 .5-2.9 2.8.7 4-3.6-1.9-3.6 1.9.7-4-2.9-2.8 4-.5z"
+      />
+    </svg>
+  ),
+];
 
 function HowItWorksScene(props: {
   active: boolean;
-  onNext: () => void;
+  onMore: () => void;
 }): ReactElement {
   const s = useOnboardingStrings();
   const total = s.howItWorksSteps.length;
   const [index, setIndex] = useState(0);
-  const [completed, setCompleted] = useState(false);
   const step = s.howItWorksSteps[index] ?? s.howItWorksSteps[0]!;
-  const icon = HOWITWORKS_ICONS[index] ?? HOWITWORKS_ICONS[0]!;
+  const photo = HOWITWORKS_PHOTOS[index] ?? HOWITWORKS_PHOTOS[0]!;
+  const isLast = index === total - 1;
+  const hasBack = index > 0;
 
-  // Reset to the first step whenever the scene is left, so a back-navigation
-  // returns to a clean state.
+  // Reset to the first step whenever the scene is left, so a re-entry starts clean.
   useEffect(() => {
-    if (!props.active) {
-      setIndex(0);
-      setCompleted(false);
-    }
+    if (!props.active) setIndex(0);
   }, [props.active]);
-
-  // The forward affordance unlocks once the user has paged to the last step.
-  useEffect(() => {
-    if (props.active && index === total - 1) setCompleted(true);
-  }, [props.active, index, total]);
 
   const handleStep = useCallback(() => {
     app?.HapticFeedback?.selectionChanged();
-    setIndex((cur) => (cur + 1) % total);
+    setIndex((cur) => Math.min(total - 1, cur + 1));
   }, [total]);
+
+  const handleBack = useCallback(() => {
+    app?.HapticFeedback?.selectionChanged();
+    setIndex((cur) => Math.max(0, cur - 1));
+  }, []);
+
+  return (
+    <main className="howitworks-main has-photo">
+      <div className="howitworks-photo">
+        <img key={index} src={photo} alt="" />
+      </div>
+      <div className="howitworks-foot">
+        <div key={index} className="howitworks-foot-text">
+          <h2 className="howitworks-title">{step.title}</h2>
+          <p className="howitworks-body">{step.body}</p>
+        </div>
+        <CycleDots total={total} active={index} complete={isLast} />
+        <div className="howitworks-actions">
+          {hasBack ? (
+            <button
+              type="button"
+              className="howitworks-back"
+              onClick={handleBack}
+              aria-label={s.back}
+            >
+              <span className="material-symbols-outlined" aria-hidden="true">
+                arrow_back
+              </span>
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={`pill-cta howitworks-next ${hasBack ? "is-compact" : ""}`}
+            onClick={isLast ? props.onMore : handleStep}
+          >
+            {isLast ? s.more : s.next}
+          </button>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+// Optional "Подробнее" walkthrough reached only from the last how-it-works
+// screen. Driven by the phase index (not internal state) so the native Telegram
+// BackButton pages it identically to the in-content back arrow.
+function DateFlowScene(props: {
+  index: number;
+  onBack: () => void;
+  onNext: () => void;
+  onDone: () => void;
+}): ReactElement {
+  const s = useOnboardingStrings();
+  const total = s.dateFlowSteps.length;
+  const index = Math.max(0, Math.min(total - 1, props.index));
+  const step = s.dateFlowSteps[index] ?? s.dateFlowSteps[0]!;
+  const renderIcon = DATEFLOW_SVGS[index] ?? DATEFLOW_SVGS[0]!;
+  const isLast = index === total - 1;
+  const paragraphs = step.body.split("\n\n");
+  // One backdrop photo per two slides (0-1, 2-3, 4-5).
+  const photoIndex = Math.min(DATEFLOW_PHOTOS.length - 1, Math.floor(index / 2));
+  const photo = DATEFLOW_PHOTOS[photoIndex] ?? DATEFLOW_PHOTOS[0]!;
+
+  const handleForward = useCallback(() => {
+    app?.HapticFeedback?.selectionChanged();
+    if (isLast) props.onDone();
+    else props.onNext();
+  }, [isLast, props.onDone, props.onNext]);
+
+  const handleBack = useCallback(() => {
+    app?.HapticFeedback?.selectionChanged();
+    props.onBack();
+  }, [props.onBack]);
 
   return (
     <>
       <main className="howitworks-main">
+        <div className="dateflow-bg" aria-hidden="true">
+          <img key={photoIndex} src={photo} alt="" />
+        </div>
         <div className="lavender-glow" />
         <div key={index} className="howitworks-card">
-          <div className="howitworks-icon">
-            <span className="material-symbols-outlined" aria-hidden="true">
-              {icon}
-            </span>
-          </div>
+          <div className="howitworks-icon">{renderIcon()}</div>
           <h2 className="howitworks-title">{step.title}</h2>
-          <p className="howitworks-body">{step.body}</p>
+          {paragraphs.map((paragraph, i) => (
+            <p key={i} className="howitworks-body">
+              {paragraph}
+            </p>
+          ))}
         </div>
       </main>
       <div className="howitworks-dock">
-        <CycleDots total={total} active={index} complete={completed} />
+        <CycleDots total={total} active={index} complete={isLast} />
         <div className="howitworks-actions">
           <button
             type="button"
-            className={`pill-cta howitworks-next ${completed ? "is-compact" : ""}`}
-            onClick={handleStep}
+            className="howitworks-back"
+            onClick={handleBack}
+            aria-label={s.back}
           >
-            {s.next}
+            <span className="material-symbols-outlined" aria-hidden="true">
+              arrow_back
+            </span>
           </button>
-          {completed ? (
-            <button
-              type="button"
-              className="howitworks-forward"
-              onClick={props.onNext}
-              aria-label={s.continue}
-            >
-              <span className="material-symbols-outlined" aria-hidden="true">
-                arrow_forward
-              </span>
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="pill-cta howitworks-next is-compact"
+            onClick={handleForward}
+          >
+            {isLast ? s.continue : s.next}
+          </button>
         </div>
       </div>
     </>
@@ -644,27 +945,121 @@ function CycleDots(props: { total: number; active: number; complete: boolean }):
   );
 }
 
-function ProfileMockup(): ReactElement {
-  const s = useOnboardingStrings();
+function ProfileDeck(props: { active: boolean }): ReactElement {
+  const total = PROFILE_CARDS.length;
+  const [index, setIndex] = useState(0);
+  const [leaving, setLeaving] = useState(false);
+  const [dir, setDir] = useState<"left" | "right">("right");
+
+  useEffect(() => {
+    if (!props.active) {
+      setIndex(0);
+      setLeaving(false);
+      setDir("right");
+      return;
+    }
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    const timer = window.setInterval(() => {
+      if (reduce) {
+        setIndex((cur) => (cur + 1) % total);
+        setDir((cur) => (cur === "right" ? "left" : "right"));
+      } else {
+        setLeaving(true);
+      }
+    }, PROFILE_SWIPE_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [props.active, total]);
+
+  // Warm the image cache once so a freshly-mounted back card never flashes its
+  // dark placeholder before the photo paints.
+  useEffect(() => {
+    for (const card of PROFILE_CARDS) {
+      const img = new Image();
+      img.src = card.photo;
+    }
+  }, []);
+
+  const handleExitEnd = useCallback(() => {
+    setIndex((cur) => (cur + 1) % total);
+    setDir((cur) => (cur === "right" ? "left" : "right"));
+    setLeaving(false);
+  }, [total]);
+
+  const front = PROFILE_CARDS[index] ?? PROFILE_CARDS[0]!;
+  const back = PROFILE_CARDS[(index + 1) % total] ?? PROFILE_CARDS[0]!;
+
   return (
-    <div className="profile-card relative w-64 aspect-[3/4] mb-12 -rotate-12 transition-transform duration-500 ease-out glow-lavender rounded-xl border border-white/10 bg-surface-container-high/40 backdrop-blur-md overflow-hidden shadow-2xl">
-      <img
-        alt={s.profileAlt}
-        className="profile-card-image w-full h-full object-cover opacity-80 mix-blend-luminosity"
-        src={PROFILE_IMAGE}
+    <div className="swipe-deck">
+      {/* Keyed by profile index (not slot) so the back card's already-painted
+          element is reused as the next front — without this React remounts a
+          blank card on every advance and it flashes its dark placeholder. */}
+      <ProfileCard key={(index + 1) % total} data={back} variant="back" rising={leaving} />
+      <ProfileCard
+        key={index}
+        data={front}
+        variant="front"
+        leaving={leaving}
+        dir={dir}
+        onExitEnd={handleExitEnd}
       />
-      <div className="profile-card-gradient absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-      <div className="profile-card-actions absolute bottom-20 left-0 right-0 px-4 flex justify-between items-center z-30">
-        <MockAction icon="undo" tone="yellow" small />
-        <MockAction icon="close" tone="red" />
-        <MockAction icon="star" tone="blue" small />
-        <MockAction icon="favorite" tone="green" />
-        <MockAction icon="bolt" tone="purple" small />
-      </div>
-      <div className="profile-card-caption absolute bottom-4 left-4 right-4 flex justify-between items-end">
-        <div>
-          <h2 className="font-title-lg text-title-lg text-white">{s.profileName}</h2>
-          <p className="font-body-md text-body-md text-on-surface-variant">{s.profileRole}</p>
+    </div>
+  );
+}
+
+function ProfileCard(props: {
+  data: ProfileCardData;
+  variant: "front" | "back";
+  rising?: boolean;
+  leaving?: boolean;
+  dir?: "left" | "right";
+  onExitEnd?: () => void;
+}): ReactElement {
+  const { data } = props;
+  const className = [
+    "profile-card",
+    `is-${props.variant}`,
+    props.rising ? "is-rising" : "",
+    props.leaving ? `is-leaving-${props.dir}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <div
+      className={className}
+      onAnimationEnd={(event) => {
+        if (props.leaving && event.animationName.startsWith("swipeOut")) props.onExitEnd?.();
+      }}
+    >
+      <img className="profile-card-image" src={data.photo} alt="" />
+      <div className="profile-card-gradient" />
+      <div className="profile-card-foot">
+        <div className="profile-card-caption">
+          <h2 className="profile-card-name">
+            {data.name}
+            <span className="profile-card-age">{data.age}</span>
+            <span className="profile-card-verified material-symbols-outlined" aria-hidden="true">
+              verified
+            </span>
+          </h2>
+          <p className="profile-card-meta">
+            <span className="material-symbols-outlined" aria-hidden="true">
+              location_on
+            </span>
+            {data.distanceKm} km
+          </p>
+          <div className="profile-card-tags">
+            {data.interests.slice(0, 3).map((tag) => (
+              <span key={tag}>{tag}</span>
+            ))}
+          </div>
+        </div>
+        <div className="profile-card-actions">
+          <MockAction icon="undo" tone="yellow" small />
+          <MockAction icon="close" tone="red" />
+          <MockAction icon="star" tone="blue" small />
+          <MockAction icon="favorite" tone="green" />
+          <MockAction icon="bolt" tone="purple" small />
         </div>
       </div>
     </div>

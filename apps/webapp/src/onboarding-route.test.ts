@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { TelegramOnboardingState } from "./api.js";
-import { preVisualPhaseFromRemote } from "./onboarding-route.js";
+import {
+  bootPhaseFromRemote,
+  DATEFLOW_LAST_INDEX,
+  postVisualPhaseFromRemote,
+  preVisualPhaseFromRemote,
+  VISUAL_DONE,
+  VISUAL_LAST_INDEX,
+} from "./onboarding-route.js";
 
 function user(
   overrides: Partial<TelegramOnboardingState["user"]> = {},
@@ -86,4 +93,88 @@ describe("Telegram onboarding route restoration", () => {
       ).toEqual({ kind: "email" });
     },
   );
+});
+
+// A user who has cleared every server gate up to (and including) the city,
+// so the next phase is the client-only visual animation.
+function visualReadyUser(
+  overrides: Partial<TelegramOnboardingState["user"]> = {},
+): TelegramOnboardingState["user"] {
+  return user({
+    isEmailVerified: true,
+    homeLocation: {
+      homeCity: "Kyiv",
+      homeCountryCode: "UA",
+      homeCityKey: "kyiv-ua",
+      homePlaceId: null,
+      latitude: 50.45,
+      longitude: 30.52,
+      locationUpdatedAt: null,
+    },
+    ...overrides,
+  });
+}
+
+describe("bootPhaseFromRemote — visual animation resume", () => {
+  it("starts at scene 0 when there is no stored progress", () => {
+    expect(bootPhaseFromRemote(visualReadyUser(), null)).toEqual({
+      kind: "visual",
+      index: 0,
+    });
+  });
+
+  it("resumes at the stored scene index", () => {
+    expect(bootPhaseFromRemote(visualReadyUser(), 2)).toEqual({
+      kind: "visual",
+      index: 2,
+    });
+  });
+
+  it("clamps an out-of-range stored index to the last scene", () => {
+    expect(bootPhaseFromRemote(visualReadyUser(), VISUAL_LAST_INDEX + 0.4)).toEqual({
+      kind: "visual",
+      index: VISUAL_LAST_INDEX,
+    });
+    expect(bootPhaseFromRemote(visualReadyUser(), -3)).toEqual({
+      kind: "visual",
+      index: 0,
+    });
+  });
+
+  it("jumps to the AI-memory phase once the animation was completed (undecided)", () => {
+    expect(
+      bootPhaseFromRemote(
+        visualReadyUser({ aiMemoryExportPreference: "undecided" }),
+        VISUAL_DONE,
+      ),
+    ).toEqual({ kind: "aiMemoryExport" });
+  });
+
+  it("jumps to the loading phase once the animation was completed (decided)", () => {
+    expect(
+      bootPhaseFromRemote(
+        visualReadyUser({ aiMemoryExportPreference: "accepted" }),
+        VISUAL_DONE,
+      ),
+    ).toEqual({ kind: "loading" });
+  });
+
+  it("ignores stored progress when the server says the user is pre-animation", () => {
+    // Still on the email gate — a stale value must not skip ahead.
+    expect(
+      bootPhaseFromRemote(user({ isEmailVerified: false, homeLocation: null }), VISUAL_DONE),
+    ).toEqual({ kind: "email" });
+  });
+});
+
+describe("optional 'Подробнее' date-flow walkthrough", () => {
+  it("exposes the final date-flow screen index", () => {
+    expect(DATEFLOW_LAST_INDEX).toBe(5);
+  });
+
+  it("does not change post-visual routing (detail is entered only via the button)", () => {
+    expect(postVisualPhaseFromRemote(visualReadyUser())).toEqual({
+      kind: "aiMemoryExport",
+    });
+  });
 });

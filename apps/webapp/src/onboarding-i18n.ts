@@ -3,13 +3,17 @@ import { pickLang, type Lang } from "./i18n.js";
 export interface OnboardingStrings {
   back: string;
   next: string;
+  more: string;
   hookTitle: string;
   introLines: string[][];
+  costLines: string[][];
   exhaustionLines: string[];
   statLabels: [string, string, string];
   statFootnote: string;
   pivotLines: string[][];
+  matchmakerLines: string[][];
   howItWorksSteps: Array<{ title: string; body: string }>;
+  dateFlowSteps: Array<{ title: string; body: string }>;
   profileName: string;
   profileRole: string;
   profileAlt: string;
@@ -69,40 +73,70 @@ export interface OnboardingStrings {
 const en: OnboardingStrings = {
   back: "Go back",
   next: "Next",
+  more: "Learn more",
   hookTitle: "What does it cost to find a relationship in 2026?",
   introLines: [
     ["Statistically, only 3% of people on modern dating apps ever make it to a date"],
     ["We're all wrapped up in work, study, or ourselves"],
     ["We don't meet on the street anymore"],
     ["We've stopped seeing each other in person"],
-    [
-      "It's hard to see something beautiful in a person when all you have is their digital avatar",
-      " just like",
-      " millions of others",
-    ],
+    ["Behind millions of avatars it's hard to see the person"],
     ["We need real, in-person meetings"],
     ["But,", " what does it cost to find a relationship in 2026?"],
   ],
+  costLines: [
+    ["Modern dating apps eat up so much time on endless scrolling through profile after profile"],
+    ["We burn out before we ever find “our” person"],
+  ],
   exhaustionLines: [
-    "It wears down your mental health and turns dating into a meat market",
+    "It feels more like scrolling a TikTok feed",
     "Endlessly browsing people like products kills empathy",
     "You spend weeks on chats that lead nowhere",
   ],
   statLabels: ["hours", "swipes", "in in-app purchases"],
   statFootnote: "That's what the average user of modern dating apps spends to find a relationship.",
-  pivotLines: [["We see these problems."], ["So we built ", "Gennety."]],
+  pivotLines: [["We see these problems"], ["So we built ", "Gennety"]],
+  matchmakerLines: [
+    ["You get a personal AI matchmaker that works around the clock to find the person who perfectly fits you"],
+  ],
   howItWorksSteps: [
     {
-      title: "Tell us about yourself — once",
-      body: "Import your AI's memory or answer a few questions. No endless forms.",
+      title: "Quick start",
+      body: "Import your memory from ChatGPT or another AI chat and answer a few questions, so we understand who's right for you.",
     },
     {
-      title: "Gennety finds the one",
-      body: "No feed, no swiping — our AI matchmaker picks a single person for you.",
+      title: "We search 24/7",
+      body: "Your personal AI matchmaker works around the clock, reading thousands of profiles to pick the one person who truly fits.",
     },
     {
-      title: "You meet in person",
-      body: "No texting. We handle the time and place — you just show up.",
+      title: "Skip straight to the date",
+      body: "No chat, no texting in Gennety — you just choose who to go on dates with. Your personal AI agents agree on a time that works for you both and pick the place.",
+    },
+  ],
+  dateFlowSteps: [
+    {
+      title: "You both said yes",
+      body: "The moment you both agree, your personal AI agents take it from there. No 'so when are you free?' — there's nothing to text.",
+    },
+    {
+      title: "You pick when",
+      body: "In a shared calendar you each mark the evenings you're free and see the other's picks live. The first time that works for you both becomes the date. If there are several — you choose.",
+    },
+    {
+      title: "We pick where",
+      body: "You name the vibe — a quiet cafe, a park walk, a small museum — and where you'll set off from. Your AI concierge finds a real, vetted spot near you both.",
+    },
+    {
+      title: "Time and place are set",
+      body: "You both get a card: the place, the address, a maps link, and the exact date and time.\n\nYou can always clarify any details right in the chat — a simple text or a voice message. Your personal agent knows everything about your date, so it'll point you the right way if anything comes up.",
+    },
+    {
+      title: "Just before you meet",
+      body: "A few hours before the date we'll share a little about your partner's interests: a favourite film, actor, sport and other facts that make it easy to start talking. Plus a couple of conversation tips.\n\nWe'll also open an urgent-cancel button, in case you suddenly can't make it.",
+    },
+    {
+      title: "Then you tell us how it went",
+      body: "The next day we'll ask how it went. Your honest feedback quietly sharpens who we pick for you next.",
     },
   ],
   profileName: "Alexander, 28",
@@ -140,7 +174,7 @@ const en: OnboardingStrings = {
   citySearching: "Searching for a city...",
   cityGeoUnavailable: "We couldn't open location access. Choose a city using search.",
   cityGeoDenied: "Location isn't available. Choose a city using search.",
-  aiMemoryTitle: "Would you like to import memory from other AI apps to give your AI matchmaker more context about you?",
+  aiMemoryTitle: "Would you like to import memory from other AI apps to give your personal AI matchmaker more context about you?",
   aiMemoryAria: "ChatGPT, Claude and Gemini",
   aiMemoryAccept: "Yes, connect",
   aiMemoryAccepting: "Connecting...",
@@ -183,40 +217,70 @@ const ru: OnboardingStrings = {
   ...en,
   back: "Назад",
   next: "Дальше",
+  more: "Подробнее",
   hookTitle: "Сколько стоит найти отношения в 2026 году?",
   introLines: [
     ["Статистически только 3% людей, которые пользуются современными дейтинг-приложениями, доходят до свидания"],
     ["Мы все зациклены на работе, учёбе или самих себе"],
     ["Мы больше не знакомимся на улицах"],
     ["Мы перестали видеться вживую"],
-    [
-      "Сложно разглядеть что-то прекрасное в человеке, когда перед тобой только его цифровой аватар",
-      " такой же",
-      " как и миллионы других",
-    ],
+    ["За миллионами аватаров сложно разглядеть человека"],
     ["Нужны реальные встречи"],
     ["Но,", " сколько же стоит найти отношения в 2026 году?"],
   ],
   exhaustionLines: [
-    "Он ухудшает твоё состояние и превращает знакомства в рынок людей",
+    "Он больше похож на скроллинг ТикТок-ленты",
     "Бесконечный перебор людей, как товаров, убивает эмпатию",
     "Ты тратишь недели на переписки, которые ни к чему не приводят",
   ],
   statLabels: ["часов", "свайпов", "на покупки внутри приложений"],
   statFootnote: "Столько тратит средний пользователь современных приложений для знакомств, чтобы найти отношения.",
-  pivotLines: [["Мы видим эти проблемы."], ["Поэтому мы создали ", "Gennety."]],
+  costLines: [
+    ["Современные приложения для знакомств съедают кучу времени на бесконечный перебор анкет"],
+    ["Мы выгораем раньше, чем находим «своего» человека"],
+  ],
+  pivotLines: [["Мы видим эти проблемы"], ["Поэтому мы создали ", "Gennety"]],
+  matchmakerLines: [
+    ["У тебя будет личный AI-матчмейкер, который работает круглосуточно и находит идеально подходящую тебе пару"],
+  ],
   howItWorksSteps: [
     {
-      title: "Расскажи о себе — один раз",
-      body: "Импортируй память своего AI или ответь на пару вопросов. Никаких бесконечных анкет.",
+      title: "Быстрый вход",
+      body: "Импортируй память из ChatGPT или другого AI-чата и ответь на несколько вопросов, чтобы мы лучше понимали, какой человек тебе подойдёт.",
     },
     {
-      title: "Gennety находит одного",
-      body: "Не лента и не свайпы — AI-сводник подбирает того самого.",
+      title: "Мы ищем 24/7",
+      body: "Личный AI-матчмейкер работает круглосуточно и из тысяч профилей выбирает того, кто действительно подходит.",
     },
     {
-      title: "Вы встречаетесь вживую",
-      body: "Без переписок. Время и место берём на себя — тебе остаётся прийти.",
+      title: "Сразу к свиданию",
+      body: "В Gennety нет чата и переписок — ты только выбираешь, с кем ходить на свидания. А удобное вам обоим время и место согласуют ваши личные AI-агенты.",
+    },
+  ],
+  dateFlowSteps: [
+    {
+      title: "Вы оба сказали «да»",
+      body: "Как только оба согласились, дальше всё берут на себя ваши личные AI-агенты. Никаких «ну что, когда удобно?» — переписываться не нужно.",
+    },
+    {
+      title: "Ты выбираешь, когда",
+      body: "В общем календаре каждый отмечает свободные вечера и видит выбор другого вживую. Первое время, что подходит обоим, становится свиданием. Если их несколько — выбираешь ты.",
+    },
+    {
+      title: "Мы выбираем, где",
+      body: "Ты говоришь вайб — тихое кафе, прогулка в парке, маленький музей — и откуда поедешь. AI-консьерж находит реально проверенное место рядом с вами.",
+    },
+    {
+      title: "Место и время согласованы",
+      body: "Вы оба получаете карточку: место, адрес, ссылку на карту и точные дату и время.\n\nУ тебя всегда есть возможность уточнить детали прямо в чате простым сообщением или голосовым сообщением. Твой личный агент знает все детали твоей встречи, поэтому сориентирует если что.",
+    },
+    {
+      title: "Перед самой встречей",
+      body: "За несколько часов до свидания мы дадим краткую информацию об увлечениях партнёра: любимый фильм, актёр, вид спорта и другие факты, которые помогут легко начать диалог. Также ты получишь пару советов для общения.\n\nКроме того, откроется кнопка срочной отмены свидания — на случай, если ты вдруг не сможешь прийти.",
+    },
+    {
+      title: "А потом расскажешь, как прошло",
+      body: "На следующий день спросим, как всё прошло. Твой честный отзыв тихо улучшает то, кого мы подберём дальше.",
     },
   ],
   profileName: "Александр, 28",
@@ -253,7 +317,7 @@ const ru: OnboardingStrings = {
   citySearching: "Ищу город...",
   cityGeoUnavailable: "Не получилось открыть геолокацию. Выбери город через поиск.",
   cityGeoDenied: "Геолокация недоступна. Выбери город через поиск.",
-  aiMemoryTitle: "Хочешь импортировать память из других AI-приложений, чтобы дать AI-матчмейкеру больше контекста о тебе?",
+  aiMemoryTitle: "Хочешь импортировать память из других AI-приложений, чтобы дать личному AI-матчмейкеру больше контекста о тебе?",
   aiMemoryAria: "ChatGPT, Claude и Gemini",
   aiMemoryAccept: "Да, подключить",
   aiMemoryAccepting: "Подключаю...",
@@ -296,40 +360,70 @@ const uk: OnboardingStrings = {
   ...en,
   back: "Назад",
   next: "Далі",
+  more: "Детальніше",
   hookTitle: "Скільки коштує знайти стосунки у 2026 році?",
   introLines: [
     ["Статистично лише 3% людей, які користуються сучасними дейтинг-застосунками, доходять до побачення"],
     ["Ми всі зациклені на роботі, навчанні чи самих собі"],
     ["Ми більше не знайомимось на вулицях"],
     ["Ми перестали бачитися наживо"],
-    [
-      "Складно розгледіти щось прекрасне в людині, коли перед тобою лише її цифровий аватар",
-      " такий самий",
-      " як і мільйони інших",
-    ],
+    ["За мільйонами аватарів складно розгледіти людину"],
     ["Потрібні справжні зустрічі"],
     ["Але,", " скільки ж коштує знайти стосунки у 2026 році?"],
   ],
   exhaustionLines: [
-    "Він погіршує твій стан і перетворює знайомства на ринок людей",
+    "Він більше схожий на скролінг ТікТок-стрічки",
     "Нескінченний перебір людей, наче товарів, убиває емпатію",
     "Ти витрачаєш тижні на листування, які ні до чого не ведуть",
   ],
   statLabels: ["годин", "свайпів", "на покупки в застосунках"],
   statFootnote: "Стільки витрачає середній користувач сучасних застосунків для знайомств, щоб знайти стосунки.",
-  pivotLines: [["Ми бачимо ці проблеми."], ["Тому ми створили ", "Gennety."]],
+  costLines: [
+    ["Сучасні застосунки для знайомств зʼїдають купу часу на безкінечний перебір анкет"],
+    ["Ми вигораємо раніше, ніж знаходимо «свою» людину"],
+  ],
+  pivotLines: [["Ми бачимо ці проблеми"], ["Тому ми створили ", "Gennety"]],
+  matchmakerLines: [
+    ["У тебе буде особистий AI-матчмейкер, який працює цілодобово й знаходить ідеально підходящу тобі пару"],
+  ],
   howItWorksSteps: [
     {
-      title: "Розкажи про себе — один раз",
-      body: "Імпортуй памʼять свого AI або дай відповідь на кілька запитань. Жодних безкінечних анкет.",
+      title: "Швидкий вхід",
+      body: "Імпортуй памʼять з ChatGPT чи іншого AI-чату та дай відповідь на кілька запитань, щоб ми краще розуміли, яка людина тобі підійде.",
     },
     {
-      title: "Gennety знаходить одного",
-      body: "Не стрічка й не свайпи — AI-сват підбирає того самого.",
+      title: "Ми шукаємо 24/7",
+      body: "Особистий AI-матчмейкер працює цілодобово й з тисяч профілів обирає того, хто справді підходить.",
     },
     {
-      title: "Ви зустрічаєтесь наживо",
-      body: "Без листувань. Час і місце беремо на себе — тобі лишається прийти.",
+      title: "Одразу до побачення",
+      body: "У Gennety немає чату й листувань — ти лише обираєш, з ким ходити на побачення. А зручний для вас обох час і місце узгоджують ваші особисті AI-агенти.",
+    },
+  ],
+  dateFlowSteps: [
+    {
+      title: "Ви обоє сказали «так»",
+      body: "Щойно обоє погодились, далі все беруть на себе ваші особисті AI-агенти. Жодних «ну що, коли зручно?» — листуватися не треба.",
+    },
+    {
+      title: "Ти обираєш, коли",
+      body: "У спільному календарі кожен позначає вільні вечори й бачить вибір іншого вживу. Перший час, що підходить обом, стає побаченням. Якщо їх кілька — обираєш ти.",
+    },
+    {
+      title: "Ми обираємо, де",
+      body: "Ти кажеш вайб — тихе кафе, прогулянка в парку, маленький музей — і звідки поїдеш. AI-консьєрж знаходить реально перевірене місце поруч із вами.",
+    },
+    {
+      title: "Місце й час узгоджені",
+      body: "Ви обоє отримуєте картку: місце, адресу, посилання на карту й точні дату та час.\n\nУ тебе завжди є можливість уточнити деталі прямо в чаті — звичайним повідомленням або голосовим. Твій особистий агент знає всі деталі твоєї зустрічі, тож зорієнтує, якщо що.",
+    },
+    {
+      title: "Перед самою зустріччю",
+      body: "За кілька годин до побачення ми дамо коротку інформацію про захоплення партнера: улюблений фільм, актор, вид спорту та інші факти, які допоможуть легко почати діалог. Також ти отримаєш пару порад для спілкування.\n\nКрім того, відкриється кнопка термінового скасування побачення — на випадок, якщо ти раптом не зможеш прийти.",
+    },
+    {
+      title: "А потім розкажеш, як минуло",
+      body: "Наступного дня спитаємо, як усе минуло. Твій чесний відгук тихо покращує те, кого ми підберемо далі.",
     },
   ],
   profileName: "Олександр, 28",
@@ -366,7 +460,7 @@ const uk: OnboardingStrings = {
   citySearching: "Шукаю місто...",
   cityGeoUnavailable: "Не вдалося відкрити геолокацію. Обери місто через пошук.",
   cityGeoDenied: "Геолокація недоступна. Обери місто через пошук.",
-  aiMemoryTitle: "Хочеш імпортувати пам'ять з інших AI-застосунків, щоб дати AI-матчмейкеру більше контексту про тебе?",
+  aiMemoryTitle: "Хочеш імпортувати пам'ять з інших AI-застосунків, щоб дати особистому AI-матчмейкеру більше контексту про тебе?",
   aiMemoryAria: "ChatGPT, Claude і Gemini",
   aiMemoryAccept: "Так, підключити",
   aiMemoryAccepting: "Підключаю...",
@@ -410,40 +504,70 @@ const de: OnboardingStrings = {
   ...en,
   back: "Zurück",
   next: "Weiter",
+  more: "Mehr erfahren",
   hookTitle: "Was kostet es, 2026 eine Beziehung zu finden?",
   introLines: [
     ["Statistisch schaffen es nur 3% der Menschen in modernen Dating-Apps je zu einem Date"],
     ["Wir sind alle mit Arbeit, Studium oder uns selbst beschäftigt"],
     ["Wir lernen uns nicht mehr auf der Straße kennen"],
     ["Wir sehen uns nicht mehr persönlich"],
-    [
-      "Es ist schwer, etwas Schönes in einem Menschen zu sehen, wenn vor dir nur sein digitaler Avatar ist",
-      " genauso einer",
-      " wie Millionen andere",
-    ],
+    ["Hinter Millionen Avataren ist der Mensch kaum zu erkennen"],
     ["Wir brauchen echte Begegnungen"],
     ["Aber,", " was kostet es, 2026 eine Beziehung zu finden?"],
   ],
   exhaustionLines: [
-    "Es belastet deine Psyche und macht Dating zu einem Menschenmarkt",
+    "Es fühlt sich eher an wie das Scrollen durch einen TikTok-Feed",
     "Endloses Durchsuchen von Menschen wie Produkten zerstört Empathie",
     "Du verbringst Wochen mit Chats, die nirgendwohin führen",
   ],
   statLabels: ["Stunden", "Swipes", "für In-App-Käufe"],
   statFootnote: "So viel gibt ein durchschnittlicher Nutzer moderner Dating-Apps aus, um eine Beziehung zu finden.",
-  pivotLines: [["Wir sehen diese Probleme."], ["Deshalb haben wir ", "Gennety gebaut."]],
+  costLines: [
+    ["Moderne Dating-Apps fressen so viel Zeit mit endlosem Scrollen, Profil um Profil"],
+    ["Wir brennen aus, bevor wir „unseren“ Menschen finden"],
+  ],
+  pivotLines: [["Wir sehen diese Probleme"], ["Deshalb haben wir ", "Gennety gebaut"]],
+  matchmakerLines: [
+    ["Du bekommst einen persönlichen KI-Matchmaker, der rund um die Uhr die Person findet, die perfekt zu dir passt"],
+  ],
   howItWorksSteps: [
     {
-      title: "Erzähl uns von dir — einmal",
-      body: "Importiere das Gedächtnis deiner KI oder beantworte ein paar Fragen. Keine endlosen Formulare.",
+      title: "Schneller Einstieg",
+      body: "Importiere dein Gedächtnis aus ChatGPT oder einem anderen KI-Chat und beantworte ein paar Fragen, damit wir besser verstehen, wer zu dir passt.",
     },
     {
-      title: "Gennety findet die eine Person",
-      body: "Kein Feed, kein Swipen — unser KI-Matchmaker wählt genau eine Person für dich.",
+      title: "Wir suchen rund um die Uhr",
+      body: "Dein persönlicher KI-Matchmaker arbeitet rund um die Uhr und wählt aus Tausenden Profilen genau die Person, die wirklich passt.",
     },
     {
-      title: "Ihr trefft euch persönlich",
-      body: "Kein Chatten. Zeit und Ort übernehmen wir — du musst nur kommen.",
+      title: "Direkt zum Date",
+      body: "In Gennety gibt es keinen Chat und kein Schreiben — du wählst nur, mit wem du auf ein Date gehst. Eure persönlichen KI-Agenten stimmen eine für euch beide passende Zeit ab und suchen den Ort aus.",
+    },
+  ],
+  dateFlowSteps: [
+    {
+      title: "Ihr habt beide Ja gesagt",
+      body: "Sobald ihr beide zustimmt, übernehmen eure persönlichen KI-Agenten. Kein 'und, wann passt's?' — du musst nichts schreiben.",
+    },
+    {
+      title: "Du wählst, wann",
+      body: "In einem gemeinsamen Kalender markiert jeder die freien Abende und sieht die Auswahl des anderen live. Die erste Zeit, die euch beiden passt, wird zum Date. Gibt es mehrere — wählst du.",
+    },
+    {
+      title: "Wir wählen, wo",
+      body: "Du nennst die Stimmung — ruhiges Café, Spaziergang im Park, kleines Museum — und von wo du losfährst. Dein KI-Concierge findet einen echten, geprüften Ort in eurer Nähe.",
+    },
+    {
+      title: "Zeit und Ort stehen",
+      body: "Ihr bekommt beide eine Karte: Ort, Adresse, einen Karten-Link und das genaue Datum mit Uhrzeit.\n\nDu kannst Details jederzeit direkt im Chat klären — per einfacher Nachricht oder Sprachnachricht. Dein persönlicher Agent kennt alle Details eures Treffens und hilft dir weiter, falls etwas unklar ist.",
+    },
+    {
+      title: "Kurz vor dem Treffen",
+      body: "Ein paar Stunden vor dem Date geben wir dir ein paar Infos zu den Interessen deines Partners: Lieblingsfilm, Schauspieler, Sportart und andere Fakten, mit denen sich leicht ein Gespräch beginnen lässt. Dazu ein paar Tipps fürs Gespräch.\n\nAußerdem öffnet sich ein Button für die kurzfristige Absage — falls du doch nicht kommen kannst.",
+    },
+    {
+      title: "Danach erzählst du, wie es war",
+      body: "Am nächsten Tag fragen wir, wie es gelaufen ist. Dein ehrliches Feedback schärft leise, wen wir als Nächstes für dich auswählen.",
     },
   ],
   profileName: "Alexander, 28",
@@ -480,7 +604,7 @@ const de: OnboardingStrings = {
   citySearching: "Stadt wird gesucht...",
   cityGeoUnavailable: "Standortzugriff konnte nicht geöffnet werden. Wähle die Stadt über die Suche.",
   cityGeoDenied: "Standort ist nicht verfügbar. Wähle die Stadt über die Suche.",
-  aiMemoryTitle: "Möchtest du Erinnerungen aus anderen AI-Apps importieren, damit dein AI-Matchmaker mehr Kontext über dich hat?",
+  aiMemoryTitle: "Möchtest du Erinnerungen aus anderen KI-Apps importieren, damit dein persönlicher KI-Matchmaker mehr Kontext über dich hat?",
   aiMemoryAria: "ChatGPT, Claude und Gemini",
   aiMemoryAccept: "Ja, verbinden",
   aiMemoryAccepting: "Verbinden...",
@@ -524,40 +648,70 @@ const pl: OnboardingStrings = {
   ...en,
   back: "Wstecz",
   next: "Dalej",
+  more: "Więcej",
   hookTitle: "Ile kosztuje znalezienie związku w 2026 roku?",
   introLines: [
     ["Statystycznie tylko 3% osób w nowoczesnych aplikacjach randkowych dochodzi do randki"],
     ["Wszyscy jesteśmy pochłonięci pracą, nauką albo sobą"],
     ["Już nie poznajemy się na ulicy"],
     ["Przestaliśmy widywać się na żywo"],
-    [
-      "Trudno dostrzec coś pięknego w człowieku, gdy masz przed sobą tylko jego cyfrowy awatar",
-      " taki sam",
-      " jak miliony innych",
-    ],
+    ["Za milionami awatarów trudno dostrzec człowieka"],
     ["Potrzebujemy prawdziwych spotkań"],
     ["Ale,", " ile kosztuje znalezienie związku w 2026 roku?"],
   ],
   exhaustionLines: [
-    "To obciąża psychikę i zmienia randkowanie w targ ludzi",
+    "To bardziej przypomina przewijanie feedu TikToka",
     "Niekończące się przeglądanie ludzi jak produktów zabija empatię",
     "Spędzasz tygodnie na rozmowach, które prowadzą donikąd",
   ],
   statLabels: ["godzin", "przesunięć", "na zakupy w aplikacjach"],
   statFootnote: "Tyle wydaje przeciętny użytkownik nowoczesnych aplikacji randkowych, aby znaleźć związek.",
-  pivotLines: [["Widzimy te problemy."], ["Dlatego stworzyliśmy ", "Gennety."]],
+  costLines: [
+    ["Współczesne aplikacje randkowe pochłaniają mnóstwo czasu na bezustanne przewijanie profilu za profilem"],
+    ["Wypalamy się, zanim znajdziemy „swojego” człowieka"],
+  ],
+  pivotLines: [["Widzimy te problemy"], ["Dlatego stworzyliśmy ", "Gennety"]],
+  matchmakerLines: [
+    ["Dostajesz osobistego AI-matchmakera, który działa całą dobę i znajduje osobę idealnie do ciebie dopasowaną"],
+  ],
   howItWorksSteps: [
     {
-      title: "Opowiedz o sobie — raz",
-      body: "Zaimportuj pamięć swojej AI albo odpowiedz na kilka pytań. Żadnych niekończących się ankiet.",
+      title: "Szybki start",
+      body: "Zaimportuj pamięć z ChatGPT lub innego czatu AI i odpowiedz na kilka pytań, żebyśmy lepiej rozumieli, kto do ciebie pasuje.",
     },
     {
-      title: "Gennety znajduje jedną osobę",
-      body: "Bez kanału i bez przesuwania — nasz swat AI wybiera tę jedyną osobę.",
+      title: "Szukamy 24/7",
+      body: "Twój osobisty AI-matchmaker działa całą dobę i z tysięcy profili wybiera osobę, która naprawdę pasuje.",
     },
     {
-      title: "Spotykacie się na żywo",
-      body: "Bez pisania. Czas i miejsce bierzemy na siebie — ty masz tylko przyjść.",
+      title: "Od razu na randkę",
+      body: "W Gennety nie ma czatu ani pisania — wybierasz tylko, z kim chodzić na randki. A dogodny dla was obojga czas i miejsce ustalają wasi osobiści agenci AI.",
+    },
+  ],
+  dateFlowSteps: [
+    {
+      title: "Oboje powiedzieliście „tak”",
+      body: "Gdy tylko oboje się zgodzicie, dalej wszystkim zajmują się wasi osobiści agenci AI. Żadnego „no to kiedy ci pasuje?” — nie trzeba pisać.",
+    },
+    {
+      title: "Ty wybierasz, kiedy",
+      body: "We wspólnym kalendarzu każdy zaznacza wolne wieczory i na żywo widzi wybór drugiej osoby. Pierwszy termin, który pasuje wam obojgu, staje się randką. Jeśli jest ich kilka — wybierasz ty.",
+    },
+    {
+      title: "My wybieramy, gdzie",
+      body: "Mówisz, jaki klimat chcesz — cicha kawiarnia, spacer po parku, małe muzeum — i skąd wyruszysz. Twój konsjerż AI znajduje prawdziwe, sprawdzone miejsce blisko was.",
+    },
+    {
+      title: "Czas i miejsce ustalone",
+      body: "Oboje dostajecie kartę: miejsce, adres, link do mapy oraz dokładną datę i godzinę.\n\nZawsze możesz doprecyzować szczegóły bezpośrednio na czacie — zwykłą wiadomością lub głosową. Twój osobisty agent zna wszystkie szczegóły waszego spotkania, więc podpowie, gdyby co.",
+    },
+    {
+      title: "Tuż przed spotkaniem",
+      body: "Kilka godzin przed randką damy ci krótką informację o zainteresowaniach partnera: ulubiony film, aktor, sport i inne fakty, które pomogą łatwo zacząć rozmowę. A także parę wskazówek do rozmowy.\n\nOprócz tego pojawi się przycisk pilnego odwołania randki — na wypadek, gdybyś nagle nie mógł przyjść.",
+    },
+    {
+      title: "A potem opowiesz, jak poszło",
+      body: "Następnego dnia zapytamy, jak poszło. Twoja szczera opinia po cichu poprawia to, kogo dobierzemy dalej.",
     },
   ],
   profileName: "Aleksander, 28",
@@ -594,7 +748,7 @@ const pl: OnboardingStrings = {
   citySearching: "Szukanie miasta...",
   cityGeoUnavailable: "Nie udało się otworzyć lokalizacji. Wybierz miasto przez wyszukiwarkę.",
   cityGeoDenied: "Lokalizacja jest niedostępna. Wybierz miasto przez wyszukiwarkę.",
-  aiMemoryTitle: "Chcesz zaimportować pamięć z innych aplikacji AI, aby Twój AI-matchmaker miał więcej kontekstu o Tobie?",
+  aiMemoryTitle: "Chcesz zaimportować pamięć z innych aplikacji AI, aby Twój osobisty AI-matchmaker miał więcej kontekstu o Tobie?",
   aiMemoryAria: "ChatGPT, Claude i Gemini",
   aiMemoryAccept: "Tak, połącz",
   aiMemoryAccepting: "Łączenie...",

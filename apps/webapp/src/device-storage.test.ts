@@ -143,3 +143,82 @@ describe("device-storage (with Telegram DeviceStorage)", () => {
     );
   });
 });
+
+describe("onboarding visual progress (localStorage fallback)", () => {
+  beforeEach(() => {
+    (globalThis as any).window = {
+      Telegram: undefined,
+      localStorage: {
+        setItem: vi.fn(),
+        getItem: vi.fn(() => null),
+        removeItem: vi.fn(),
+      },
+    };
+  });
+
+  it("saveOnboardingProgress writes a floored integer string", async () => {
+    const mod = await importModule();
+    await mod.saveOnboardingProgress(3.9);
+    expect((globalThis as any).window.localStorage.setItem).toHaveBeenCalledWith(
+      "gennety.onboarding.visual",
+      "3",
+    );
+  });
+
+  it("loadOnboardingProgress parses the stored integer", async () => {
+    (globalThis as any).window.localStorage.getItem = vi.fn(() => "2");
+    const mod = await importModule();
+    expect(await mod.loadOnboardingProgress()).toBe(2);
+  });
+
+  it("loadOnboardingProgress returns null when unset", async () => {
+    const mod = await importModule();
+    expect(await mod.loadOnboardingProgress()).toBeNull();
+  });
+
+  it("loadOnboardingProgress returns null for a malformed value", async () => {
+    (globalThis as any).window.localStorage.getItem = vi.fn(() => "not-a-number");
+    const mod = await importModule();
+    expect(await mod.loadOnboardingProgress()).toBeNull();
+  });
+
+  it("clearOnboardingProgress removes the key", async () => {
+    const mod = await importModule();
+    await mod.clearOnboardingProgress();
+    expect((globalThis as any).window.localStorage.removeItem).toHaveBeenCalledWith(
+      "gennety.onboarding.visual",
+    );
+  });
+});
+
+describe("onboarding visual progress (DeviceStorage)", () => {
+  beforeEach(() => {
+    (globalThis as any).window = {
+      Telegram: {
+        WebApp: {
+          DeviceStorage: {
+            setItem: mockSetItem,
+            getItem: mockGetItem,
+            removeItem: mockRemoveItem,
+          },
+        },
+      },
+    };
+  });
+
+  it("saveOnboardingProgress writes via DeviceStorage.setItem", async () => {
+    const mod = await importModule();
+    await mod.saveOnboardingProgress(4);
+    expect(mockSetItem).toHaveBeenCalledWith(
+      "gennety.onboarding.visual",
+      "4",
+      expect.any(Function),
+    );
+  });
+
+  it("loadOnboardingProgress parses the integer from DeviceStorage", async () => {
+    mockGetItem.mockImplementation((_key, cb) => cb(null, "5"));
+    const mod = await importModule();
+    expect(await mod.loadOnboardingProgress()).toBe(5);
+  });
+});
