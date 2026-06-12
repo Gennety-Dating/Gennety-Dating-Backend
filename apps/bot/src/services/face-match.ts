@@ -1,10 +1,20 @@
 import {
   CompareFacesCommand,
+  DetectFacesCommand,
+  DetectModerationLabelsCommand,
   RekognitionClient,
   type CompareFacesCommandInput,
   type CompareFacesCommandOutput,
+  type DetectFacesCommandOutput,
+  type DetectModerationLabelsCommandOutput,
 } from "@aws-sdk/client-rekognition";
 import { env } from "../config.js";
+import type {
+  DetectedFace,
+  ModerationProviderResult,
+  ModerationSignal,
+  ProviderError,
+} from "./profile-media-validation/types.js";
 
 /**
  * Face-match service used by the Persona verification pipeline.
@@ -79,6 +89,13 @@ export interface CompareFacesOptions {
   client?: Pick<RekognitionClient, "send">;
   /** Override the env-configured provider. Used in tests. */
   provider?: "rekognition" | "disabled";
+}
+
+export interface RekognitionImageOptions {
+  timeoutMs?: number;
+  client?: Pick<RekognitionClient, "send">;
+  provider?: "rekognition" | "disabled";
+  moderationMinConfidence?: number;
 }
 
 let cachedClient: RekognitionClient | null = null;
@@ -186,6 +203,161 @@ export async function compareFaces(
   } finally {
     clearTimeout(timer);
   }
+}
+
+export type FaceDetectionResult =
+  | { ok: true; faces: DetectedFace[] }
+  | { ok: false; error: ProviderError };
+
+/**
+ * Detect every face in an image and return only the geometry/quality fields
+ * needed by profile-media validation. The provider-disabled branch is an
+ * explicit unavailable result: unlike legacy face comparison, content
+ * validation must not silently synthesize a successful production decision.
+ */
+export async function detectFaces(
+  image: Buffer,
+  options: RekognitionImageOptions = {},
+): Promise<FaceDetectionResult> {
+  const provider = options.provider ?? env.FACE_MATCH_PROVIDER;
+  if (provider === "disabled") {
+    return { ok: false, error: "not_configured" };
+  }
+
+  const client = options.client ?? getClient();
+  if (!client) return { ok: false, error: "not_configured" };
+
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const output = (await client.send(
+      new DetectFacesCommand({
+        Image: { Bytes: image },
+        Attributes: ["DEFAULT", "FACE_OCCLUDED"],
+      }),
+      { abortSignal: controller.signal },
+    )) as DetectFacesCommandOutput;
+
+    return {
+      ok: true,
+      faces: (output.FaceDetails ?? []).map((face) => ({
+        confidence: normalizePercent(face.Confidence),
+        boundingBox: face.BoundingBox
+          ? {
+              left: clampUnit(face.BoundingBox.Left),
+              top: clampUnit(face.BoundingBox.Top),
+              width: clampUnit(face.BoundingBox.Width),
+              height: clampUnit(face.BoundingBox.Height),
+            }
+          : null,
+        brightness: normalizePercentOrNull(face.Quality?.Brightness),
+        sharpness: normalizePercentOrNull(face.Quality?.Sharpness),
+        pitch: finiteOrNull(face.Pose?.Pitch),
+        roll: finiteOrNull(face.Pose?.Roll),
+        yaw: finiteOrNull(face.Pose?.Yaw),
+      })),
+    };
+  } catch (error) {
+    return { ok: false, error: imageProviderError(error) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Run AWS image moderation and translate AWS's hierarchical labels into the
+ * small provider-neutral policy surface used by photo/video validators.
+ */
+export async function detectModerationLabels(
+  image: Buffer,
+  options: RekognitionImageOptions = {},
+): Promise<ModerationProviderResult> {
+  const provider = options.provider ?? env.FACE_MATCH_PROVIDER;
+  if (provider === "disabled") {
+    return { ok: false, error: "not_configured" };
+  }
+
+  const client = options.client ?? getClient();
+  if (!client) return { ok: false, error: "not_configured" };
+
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const output = (await client.send(
+      new DetectModerationLabelsCommand({
+        Image: { Bytes: image },
+        MinConfidence: options.moderationMinConfidence ?? 50,
+      }),
+      { abortSignal: controller.signal },
+    )) as DetectModerationLabelsCommandOutput;
+
+    const signals: ModerationSignal[] = (output.ModerationLabels ?? [])
+      .filter((label) => typeof label.Name === "string" && label.Name.length > 0)
+      .map((label) => {
+        const category = label.Name!;
+        return {
+          provider: "aws" as const,
+          category,
+          score: normalizePercent(label.Confidence),
+          severity: awsModerationSeverity(category, label.ParentName),
+        };
+      });
+    return { ok: true, signals };
+  } catch (error) {
+    return { ok: false, error: imageProviderError(error) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function awsModerationSeverity(
+  category: string,
+  parent: string | undefined,
+): "block" | "review" {
+  const normalized = `${parent ?? ""} ${category}`.toLowerCase();
+  const hardBlockTerms = [
+    "explicit nudity",
+    "explicit sexual",
+    "sexual activity",
+    "graphic male nudity",
+    "graphic female nudity",
+    "illustrated explicit nudity",
+    "sexualized child",
+    "child sexual",
+    "graphic violence",
+    "self harm",
+  ];
+  return hardBlockTerms.some((term) => normalized.includes(term))
+    ? "block"
+    : "review";
+}
+
+function normalizePercent(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value / 100));
+}
+
+function normalizePercentOrNull(value: number | undefined): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return normalizePercent(value);
+}
+
+function clampUnit(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function finiteOrNull(value: number | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function imageProviderError(error: unknown): ProviderError {
+  const name = (error as { name?: string }).name;
+  return name === "AbortError" || name === "TimeoutError" ? "timeout" : "api";
 }
 
 /**
