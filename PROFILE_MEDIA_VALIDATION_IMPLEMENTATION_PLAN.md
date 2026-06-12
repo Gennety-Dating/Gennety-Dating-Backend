@@ -1,7 +1,7 @@
 # Profile Media Validation Implementation Plan
 
-> **Status:** IMPLEMENTED IN CODE, rollout blocked until ffmpeg is installed
-> and `rekognition:DetectModerationLabels` is granted. Feature flag remains off.
+> **Status:** IMPLEMENTED IN CODE. AWS IAM is verified; rollout remains blocked
+> until ffmpeg is installed and real-media QA passes. Feature flag remains off.
 > **Scope:** Telegram onboarding photos, Telegram Live Photos, Telegram profile
 > video, profile-photo editing, and mobile/public photo upload.
 > **Primary product rule:** every accepted photo must contain the same profile
@@ -607,9 +607,9 @@ replacement behavior, and ticket idempotency.
 
 ### Phase 7: AWS browser handoff and real-provider QA
 
-- Run the browser-agent IAM prompt from section 7.2.
-- Verify credentials are present without printing them.
-- Run redacted AWS smoke tests.
+- [x] Run the browser-agent IAM prompt from section 7.2.
+- [x] Verify credentials are present without printing them.
+- [x] Run a redacted `DetectModerationLabels` smoke test with a synthetic PNG.
 - Test with approved synthetic/consenting QA media only.
 - Calibrate face and moderation thresholds from false accept/reject evidence.
 
