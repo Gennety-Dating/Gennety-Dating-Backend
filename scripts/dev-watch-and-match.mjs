@@ -33,7 +33,7 @@ function loadEnv(p, ov) {
 loadEnv(resolve(root, ".env.local"), true);
 loadEnv(resolve(root, ".env"), false);
 
-const IDS = { A: 782065541n, B: 5986970093n };
+const IDS = { A: 782065541n, B: 7778727321n };
 const OPEN = ["proposed", "negotiating", "negotiating_venue", "scheduled"];
 const POLL_MS = 8000;
 const MAX_RUNTIME_MS = 3 * 60 * 60 * 1000; // 3h safety stop

@@ -22,7 +22,7 @@
  *   pnpm dev:e2e-full-flow
  *
  * Optional:
- *   --primary-tg=782065541 --secondary-tg=5986970093
+ *   --primary-tg=782065541 --secondary-tg=7778727321
  *   --keep-open        do NOT cancel existing in-flight matches first
  *   --force            bypass the gennetytestbot guard
  */
@@ -68,7 +68,7 @@ const args = new Map(
 const force = args.get("force") === "true";
 const keepOpen = args.get("keep-open") === "true";
 const primaryTg = BigInt(args.get("primary-tg") ?? "782065541");
-const secondaryTg = BigInt(args.get("secondary-tg") ?? "5986970093");
+const secondaryTg = BigInt(args.get("secondary-tg") ?? "7778727321");
 
 // Two commute origins in central Kyiv ~1.5km apart (the venue picker
 // resolves a fair midpoint cafe between them).

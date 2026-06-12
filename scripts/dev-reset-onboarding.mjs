@@ -37,7 +37,12 @@ loadEnv(resolve(root, ".env.local"), true);
 loadEnv(resolve(root, ".env"), false);
 
 const apply = process.argv.includes("--apply");
-const IDS = [782065541n, 5986970093n];
+// Default to the two canonical test accounts; `--tg=<id>` (repeatable)
+// narrows the reset to the specified account(s) only.
+const tgFilter = process.argv
+  .filter((a) => a.startsWith("--tg="))
+  .map((a) => BigInt(a.slice("--tg=".length)));
+const IDS = tgFilter.length > 0 ? tgFilter : [782065541n, 7778727321n];
 
 if (
   process.env.BOT_USERNAME !== "gennetytestbot" ||
@@ -140,5 +145,5 @@ try {
   await prisma.emailOtp.deleteMany({ where: { email: { endsWith: "@ukma.edu.ua" } } });
 } catch { /* table optional */ }
 
-console.log("\nReset complete. Both accounts can now /start a fresh onboarding.");
+console.log(`\nReset complete. ${IDS.length} account(s) can now /start a fresh onboarding.`);
 await prisma.$disconnect();

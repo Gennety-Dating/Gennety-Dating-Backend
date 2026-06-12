@@ -21,7 +21,7 @@
  * exercises the same downstream Mini App.
  *
  * Usage:
- *   pnpm tsx scripts/dev-send-verification-cta.mjs --tg=5986970093
+ *   pnpm tsx scripts/dev-send-verification-cta.mjs --tg=7778727321
  *
  * Optional:
  *   --lang=ru|en|uk|de|pl     override lang (default = user's DB language)

@@ -11,7 +11,7 @@
  *   pnpm dev:trigger-test-match
  *
  * Optional:
- *   --primary-tg=782065541 --secondary-tg=5986970093
+ *   --primary-tg=782065541 --secondary-tg=7778727321
  *   --replace-open     cancel current in-flight matches for either account
  *   --align-email      legacy helper: copy the primary domain to secondary
  *   --force            allow non-DEP bot / compatibility override
@@ -69,7 +69,7 @@ const force = args.get("force") === "true";
 const replaceOpen = args.get("replace-open") === "true";
 const alignEmail = args.get("align-email") === "true";
 const primaryTg = BigInt(args.get("primary-tg") ?? "782065541");
-const secondaryTg = BigInt(args.get("secondary-tg") ?? "5986970093");
+const secondaryTg = BigInt(args.get("secondary-tg") ?? "7778727321");
 let prisma;
 
 function maskEmail(email) {

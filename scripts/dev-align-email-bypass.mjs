@@ -11,7 +11,7 @@
  *   node scripts/dev-align-email-bypass.mjs --apply
  *
  * Optional:
- *   --primary-tg=782065541 --secondary-tg=5986970093 --force
+ *   --primary-tg=782065541 --secondary-tg=7778727321 --force
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -56,7 +56,7 @@ const args = new Map(
 const apply = args.get("apply") === "true";
 const force = args.get("force") === "true";
 const primaryTg = BigInt(args.get("primary-tg") ?? "782065541");
-const secondaryTg = BigInt(args.get("secondary-tg") ?? "5986970093");
+const secondaryTg = BigInt(args.get("secondary-tg") ?? "7778727321");
 let prisma;
 
 function maskEmail(email) {
