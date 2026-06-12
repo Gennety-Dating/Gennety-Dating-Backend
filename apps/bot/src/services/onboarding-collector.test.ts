@@ -459,7 +459,7 @@ describe("onboarding collector routing", () => {
     const text = onboardingQuestionText("ru", "ethnicity");
 
     expect(text).toBe(
-      "Необязательно: как ты описываешь своё происхождение или национальность? Можно пропустить.",
+      "Как ты описываешь своё происхождение или национальность? Можно пропустить",
     );
     expect(text).not.toContain("бэкграунд");
   });
