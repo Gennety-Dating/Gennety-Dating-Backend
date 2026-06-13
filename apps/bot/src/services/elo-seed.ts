@@ -9,6 +9,7 @@ import {
 } from "./vision/score-attractiveness.js";
 import { downloadProfileImage } from "./storage.js";
 import { UNVERIFIED_ELO_PENALTY } from "../utils/elo-calculator.js";
+import { sniffImageMime } from "../utils/image-sniff.js";
 
 /**
  * Cold-start Elo seeding from the AI vision pass.
@@ -46,7 +47,7 @@ export function mapScoreToElo(score: number): number {
 
 export type SeedEloResult =
   | { ok: true; elo: number; score: number }
-  | { ok: false; error: "download" | "vision" };
+  | { ok: false; error: "download" | "vision" | "photos_changed" };
 
 /**
  * Stored alongside `Profile.eloScore` for ops debugging. Schema column is
@@ -78,7 +79,7 @@ export interface SeedEloDeps {
     userId: string,
     eloScore: number,
     details: EloSeedDetails,
-  ) => Promise<void>;
+  ) => Promise<"persisted" | "already_seeded" | "photos_changed">;
 }
 
 /**
@@ -103,7 +104,11 @@ export async function seedEloFromVision(
   const images: AttractivenessImageInput[] = [];
   for (const buffer of buffers) {
     if (!buffer) return { ok: false, error: "download" };
-    images.push({ buffer, mime });
+    const detectedMime = sniffImageMime(buffer);
+    if (detectedMime === "image/heic") {
+      return { ok: false, error: "vision" };
+    }
+    images.push({ buffer, mime: detectedMime ?? mime });
   }
   const vision = await deps.scoreAttractiveness(images);
   if (!vision.ok) return { ok: false, error: "vision" };
@@ -145,7 +150,10 @@ export async function seedEloFromVision(
     })),
   };
 
-  await deps.persistSeed(userId, elo, details);
+  const persisted = await deps.persistSeed(userId, elo, details);
+  if (persisted === "photos_changed") {
+    return { ok: false, error: "photos_changed" };
+  }
   return { ok: true, elo, score };
 }
 
@@ -275,23 +283,46 @@ async function runVisionSeed(
     {
       downloadProfileImage: (path) => downloadProfileImage(path, api),
       scoreAttractiveness: (images) => scoreAttractivenessFromBuffers(images),
-      persistSeed: async (uid, eloScore, details) => {
-        const now = new Date();
-        const result = await prisma.profile.updateMany({
-          where: { userId: uid, eloSeededAt: null },
-          data: {
-            eloScore,
-            eloSeededAt: now,
-            eloSeedDetails: details as unknown as object,
-          },
-        });
-        if (result.count === 0) {
-          console.warn("[elo-seed] race avoided: user already seeded", { userId: uid });
-        }
-      },
+      persistSeed: (uid, eloScore, details) =>
+        persistVisionSeed(uid, photoPaths, eloScore, details),
     },
     mime,
   );
+}
+
+export async function persistVisionSeed(
+  userId: string,
+  photoPaths: readonly string[],
+  eloScore: number,
+  details: EloSeedDetails,
+): Promise<"persisted" | "already_seeded" | "photos_changed"> {
+  const now = new Date();
+  const result = await prisma.profile.updateMany({
+    where: {
+      userId,
+      eloSeededAt: null,
+      photos: { equals: [...photoPaths] },
+    },
+    data: {
+      eloScore,
+      eloSeededAt: now,
+      eloSeedDetails: details as unknown as object,
+    },
+  });
+  if (result.count > 0) return "persisted";
+
+  const current = await prisma.profile.findUnique({
+    where: { userId },
+    select: { eloSeededAt: true },
+  });
+  if (current?.eloSeededAt) {
+    console.warn("[elo-seed] race avoided: user already seeded", { userId });
+    return "already_seeded";
+  }
+  console.warn("[elo-seed] photos changed during scoring; seed discarded", {
+    userId,
+  });
+  return "photos_changed";
 }
 
 function mean(values: readonly number[]): number {

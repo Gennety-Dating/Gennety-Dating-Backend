@@ -567,6 +567,19 @@ describe("runFaceMatchVerification — Elo seeding hook", () => {
 
     expect(outcome.kind).toBe("verified");
   });
+
+  it("verification still succeeds when photos change during Elo scoring", async () => {
+    const h = makeHarness();
+    h.deps.seedEloFromVision = vi.fn(async () => ({
+      ok: false as const,
+      error: "photos_changed" as const,
+    }));
+
+    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+
+    expect(outcome.kind).toBe("verified");
+    expect(h.persisted[0]!.verificationStatus).toBe("verified");
+  });
 });
 
 describe("runFaceMatchVerification — persistence shape", () => {

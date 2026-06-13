@@ -15,6 +15,7 @@ vi.mock("@gennety/db", () => ({
 import { prisma } from "@gennety/db";
 import {
   mapScoreToElo,
+  persistVisionSeed,
   refundSkipPenalty,
   seedEloFromVision,
   type SeedEloDeps,
@@ -91,6 +92,7 @@ function makeDeps(overrides: Partial<SeedEloDeps> = {}): {
     ),
     persistSeed: vi.fn(async (userId, eloScore, details) => {
       writes.push({ userId, eloScore, details });
+      return "persisted" as const;
     }),
     ...overrides,
   };
@@ -174,6 +176,110 @@ describe("seedEloFromVision", () => {
 
     expect(result).toEqual({ ok: false, error: "vision" });
     expect(writes).toHaveLength(0);
+  });
+
+  it("uses the detected MIME for each downloaded photo", async () => {
+    const jpeg = Buffer.from([
+      0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ]);
+    const png = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0,
+    ]);
+    const { deps } = makeDeps({
+      downloadProfileImage: vi
+        .fn()
+        .mockResolvedValueOnce(jpeg)
+        .mockResolvedValueOnce(png),
+    });
+
+    await seedEloFromVision(USER_ID, PHOTO_PATHS, deps);
+
+    expect(deps.scoreAttractiveness).toHaveBeenCalledWith([
+      { buffer: jpeg, mime: "image/jpeg" },
+      { buffer: png, mime: "image/png" },
+    ]);
+  });
+
+  it("discards the seed when photos change while OpenAI is scoring", async () => {
+    const { deps, writes } = makeDeps({
+      persistSeed: vi.fn(async () => "photos_changed" as const),
+    });
+
+    const result = await seedEloFromVision(USER_ID, PHOTO_PATHS, deps);
+
+    expect(result).toEqual({ ok: false, error: "photos_changed" });
+    expect(writes).toHaveLength(0);
+  });
+});
+
+describe("persistVisionSeed", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("writes only when the current photos still equal the scored snapshot", async () => {
+    (prisma.profile.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 1,
+    });
+    const details = {
+      score: 70,
+      elo: 620,
+      model: "gpt-test",
+      breakdown: {
+        symmetry: 70,
+        eyeDistance: 70,
+        faceShape: 70,
+        featureRegularity: 70,
+      },
+      rationale: "mean",
+      seededAt: "2026-06-13T00:00:00.000Z",
+      aggregation: "arithmetic_mean" as const,
+      photoCount: 2,
+      photos: [],
+    };
+
+    const result = await persistVisionSeed(USER_ID, PHOTO_PATHS, 620, details);
+
+    expect(result).toBe("persisted");
+    expect(prisma.profile.updateMany).toHaveBeenCalledWith({
+      where: {
+        userId: USER_ID,
+        eloSeededAt: null,
+        photos: { equals: PHOTO_PATHS },
+      },
+      data: {
+        eloScore: 620,
+        eloSeededAt: expect.any(Date),
+        eloSeedDetails: details,
+      },
+    });
+  });
+
+  it("reports photos_changed when the snapshot CAS misses an unseeded row", async () => {
+    (prisma.profile.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({
+      count: 0,
+    });
+    (prisma.profile.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      eloSeededAt: null,
+    });
+    const details = {
+      score: 70,
+      elo: 620,
+      model: "gpt-test",
+      breakdown: {
+        symmetry: 70,
+        eyeDistance: 70,
+        faceShape: 70,
+        featureRegularity: 70,
+      },
+      rationale: "mean",
+      seededAt: "2026-06-13T00:00:00.000Z",
+      aggregation: "arithmetic_mean" as const,
+      photoCount: 2,
+      photos: [],
+    };
+
+    const result = await persistVisionSeed(USER_ID, PHOTO_PATHS, 620, details);
+
+    expect(result).toBe("photos_changed");
   });
 });
 
