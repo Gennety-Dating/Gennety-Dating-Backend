@@ -3,13 +3,13 @@ import { env } from "../../config.js";
 /**
  * Cold-start attractiveness scoring for the Elo seed.
  *
- * Sends a profile photo to OpenAI's vision-capable model with a SCUT-FBP5500-
- * style prompt asking for objective sub-scores (symmetry, eye distance, face
- * shape, feature regularity) and an aggregate 0..100 score. The aggregate is
- * mapped to the universal Elo range by `services/elo/seed-from-vision.ts`.
+ * Sends all profile photos to OpenAI's vision-capable model in one request
+ * with a SCUT-FBP5500-style prompt asking for independent per-photo sub-scores
+ * (symmetry, eye distance, face shape, feature regularity) and aggregate
+ * 0..100 scores. The caller averages those scores before mapping to Elo.
  *
  * @see PRODUCT_SPEC.md — Phase 3 (Matching Engine), V_league multiplier
- * @see https://platform.openai.com/docs/guides/vision
+ * @see https://developers.openai.com/api/docs/guides/images-vision
  *
  * The model is asked to return strict JSON (`response_format: json_object`),
  * so the parser is intentionally narrow: any deviation from the expected
@@ -31,32 +31,55 @@ export interface AttractivenessBreakdown {
   featureRegularity: number;
 }
 
+export interface AttractivenessAssessment {
+  /** Aggregate 0..100 score for one photo, clamped. */
+  score: number;
+  breakdown: AttractivenessBreakdown;
+  /** One-line model rationale, retained for ops debugging. */
+  rationale: string;
+}
+
 export type AttractivenessResult =
   | {
       ok: true;
-      /** Aggregate 0..100 score, clamped. */
-      score: number;
-      breakdown: AttractivenessBreakdown;
-      /** One-line model rationale, retained for ops debugging. */
-      rationale: string;
+      score: AttractivenessAssessment["score"];
+      breakdown: AttractivenessAssessment["breakdown"];
+      rationale: AttractivenessAssessment["rationale"];
       /** Vision model used — recorded so ops can correlate score drift with model upgrades. */
       model: string;
     }
   | { ok: false; error: "timeout" | "api" | "disabled" };
 
+export type AttractivenessBatchResult =
+  | {
+      ok: true;
+      assessments: AttractivenessAssessment[];
+      /** Vision model used — recorded so ops can correlate score drift with model upgrades. */
+      model: string;
+    }
+  | { ok: false; error: "timeout" | "api" | "disabled" };
+
+export interface AttractivenessImageInput {
+  buffer: Buffer;
+  mime: string;
+}
+
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const VISION_MODEL = "gpt-5.4-nano";
-const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_TIMEOUT_MS = 45_000;
 
 const SYSTEM_PROMPT = [
   "You are an objective face-analysis tool calibrated against the SCUT-FBP5500",
-  "facial-beauty benchmark. Given a single photo, score the visible face on",
-  "four orthogonal axes (each 0..100, where 50 is the population mean):",
+  "facial-beauty benchmark. You will receive multiple numbered profile photos",
+  "of the same verified person. Score EACH photo independently on four",
+  "orthogonal axes (each 0..100, where 50 is the population mean):",
   "  - symmetry: bilateral symmetry of facial landmarks",
   "  - eye_distance: inter-pupillary distance proportionality",
   "  - face_shape: overall face-shape balance (jaw / forehead / cheekbones)",
   "  - feature_regularity: regularity of individual features (nose, mouth, eyes)",
-  "Then output an `overall` aggregate 0..100 that summarises the four axes.",
+  "For each photo, output an `overall` aggregate 0..100 that summarises the",
+  "four axes. Do not compare photos with each other and do not produce a",
+  "combined score; the server calculates the arithmetic mean.",
   "",
   "GENDER-CALIBRATED GRADING. First silently determine the apparent gender of",
   "the face, then apply that gender's grading standard. Vision models tend to",
@@ -72,20 +95,28 @@ const SYSTEM_PROMPT = [
   "the calibration shifts where the center sits, it must not flatten everyone",
   "onto the same number. Judge each face only against its own gender.",
   "",
-  "Respond with strict JSON only — no prose, no markdown — using exactly these",
-  'keys: {"symmetry":N,"eye_distance":N,"face_shape":N,"feature_regularity":N,',
-  '"overall":N,"rationale":"<= 80 chars"}.',
+  "Respond with strict JSON only — no prose, no markdown — using exactly this",
+  'shape: {"photos":[{"index":1,"symmetry":N,"eye_distance":N,"face_shape":N,',
+  '"feature_regularity":N,"overall":N,"rationale":"<= 80 chars"}]}.',
+  "Return exactly one object per input photo, in input order, with consecutive",
+  "1-based indexes.",
   "The four axes are diagnostic; bake the gender calibration into `overall`.",
-  "If no clear single human face is visible, return overall=0 and rationale=\"no_face\".",
+  "If a photo has no clear single human face, return overall=0 and",
+  'rationale="no_face" for that photo.',
 ].join(" ");
 
 interface RawScore {
+  index: number;
   symmetry: number;
   eye_distance: number;
   face_shape: number;
   feature_regularity: number;
   overall: number;
   rationale: string;
+}
+
+interface RawBatchScore {
+  photos: RawScore[];
 }
 
 export interface ScoreOptions {
@@ -99,13 +130,39 @@ export async function scoreAttractivenessFromBuffer(
   mime: string,
   options: ScoreOptions = {},
 ): Promise<AttractivenessResult> {
+  const result = await scoreAttractivenessFromBuffers([{ buffer, mime }], options);
+  if (!result.ok) return result;
+
+  const assessment = result.assessments[0];
+  if (!assessment) return { ok: false, error: "api" };
+
+  return {
+    ok: true,
+    ...assessment,
+    model: result.model,
+  };
+}
+
+export async function scoreAttractivenessFromBuffers(
+  images: readonly AttractivenessImageInput[],
+  options: ScoreOptions = {},
+): Promise<AttractivenessBatchResult> {
   const apiKey = options.openaiApiKey ?? env.OPENAI_API_KEY;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const fetchFn = options.fetchFn ?? fetch;
 
   if (!apiKey) return { ok: false, error: "disabled" };
+  if (images.length === 0) return { ok: false, error: "api" };
 
-  const dataUrl = `data:${mime || "image/jpeg"};base64,${buffer.toString("base64")}`;
+  const content = images.flatMap((image, index) => [
+    { type: "text", text: `Photo ${index + 1}` },
+    {
+      type: "image_url",
+      image_url: {
+        url: `data:${image.mime || "image/jpeg"};base64,${image.buffer.toString("base64")}`,
+      },
+    },
+  ]);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -120,14 +177,14 @@ export async function scoreAttractivenessFromBuffer(
       signal: controller.signal,
       body: JSON.stringify({
         model: VISION_MODEL,
-        max_completion_tokens: 200,
+        max_completion_tokens: 1_000,
         temperature: 0,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           {
             role: "user",
-            content: [{ type: "image_url", image_url: { url: dataUrl } }],
+            content,
           },
         ],
       }),
@@ -140,25 +197,26 @@ export async function scoreAttractivenessFromBuffer(
     };
     const raw = json.choices?.[0]?.message?.content?.trim() ?? "";
 
-    let parsed: RawScore;
+    let parsed: RawBatchScore;
     try {
-      parsed = JSON.parse(raw) as RawScore;
+      parsed = JSON.parse(raw) as RawBatchScore;
     } catch {
       return { ok: false, error: "api" };
     }
 
-    if (!isCompleteRawScore(parsed)) return { ok: false, error: "api" };
+    if (
+      !Array.isArray(parsed.photos) ||
+      parsed.photos.length !== images.length ||
+      parsed.photos.some(
+        (photo, index) => !isCompleteRawScore(photo) || photo.index !== index + 1,
+      )
+    ) {
+      return { ok: false, error: "api" };
+    }
 
     return {
       ok: true,
-      score: clamp(parsed.overall, 0, 100),
-      breakdown: {
-        symmetry: clamp(parsed.symmetry, 0, 100),
-        eyeDistance: clamp(parsed.eye_distance, 0, 100),
-        faceShape: clamp(parsed.face_shape, 0, 100),
-        featureRegularity: clamp(parsed.feature_regularity, 0, 100),
-      },
-      rationale: String(parsed.rationale ?? "").slice(0, 200),
+      assessments: parsed.photos.map(normalizeAssessment),
       model: VISION_MODEL,
     };
   } catch (err) {
@@ -171,10 +229,24 @@ export async function scoreAttractivenessFromBuffer(
   }
 }
 
+function normalizeAssessment(parsed: RawScore): AttractivenessAssessment {
+  return {
+    score: clamp(parsed.overall, 0, 100),
+    breakdown: {
+      symmetry: clamp(parsed.symmetry, 0, 100),
+      eyeDistance: clamp(parsed.eye_distance, 0, 100),
+      faceShape: clamp(parsed.face_shape, 0, 100),
+      featureRegularity: clamp(parsed.feature_regularity, 0, 100),
+    },
+    rationale: String(parsed.rationale ?? "").slice(0, 200),
+  };
+}
+
 function isCompleteRawScore(value: unknown): value is RawScore {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
   return (
+    typeof v.index === "number" &&
     typeof v.symmetry === "number" &&
     typeof v.eye_distance === "number" &&
     typeof v.face_shape === "number" &&

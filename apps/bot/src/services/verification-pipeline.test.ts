@@ -478,7 +478,7 @@ describe("runFaceMatchVerification — DM behavior", () => {
 });
 
 describe("runFaceMatchVerification — Elo seeding hook", () => {
-  it("calls seedEloFromVision with the primary photo on the verified branch", async () => {
+  it("calls seedEloFromVision with all profile photos on the verified branch", async () => {
     const h = makeHarness();
     const seed = vi.fn(async () => ({ ok: true as const, elo: 650, score: 75 }));
     h.deps.seedEloFromVision = seed;
@@ -487,7 +487,7 @@ describe("runFaceMatchVerification — Elo seeding hook", () => {
 
     expect(outcome.kind).toBe("verified");
     expect(seed).toHaveBeenCalledTimes(1);
-    expect(seed).toHaveBeenCalledWith(USER_ID, PHOTO_PATH_A);
+    expect(seed).toHaveBeenCalledWith(USER_ID, [PHOTO_PATH_A, PHOTO_PATH_B]);
   });
 
   it("skips seeding when eloSeededAt is already set (admin rerun)", async () => {

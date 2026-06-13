@@ -270,7 +270,10 @@ is stricter and runs the pipeline only once Persona's REST status is
    can spot the offending photo):
    - `verified` — pass count ≥ `FACE_MATCH_MIN_VERIFIED_PHOTOS` (default 1)
      AND zero `fail` photos. Auto-activate if still onboarding; seed
-     `eloScore` via the cold-start AI vision pass.
+     `eloScore` via one cold-start AI vision request containing every profile
+     photo. The model returns an independent score for each photo; the server
+     uses their arithmetic mean for the 0..100 attractiveness score and stores
+     both the aggregate and per-photo audit details in `eloSeedDetails`.
    - `rejected` — at least one `fail` photo (a real, detected face that
      doesn't match the verified selfie — likely impostor / wrong-person).
      A pass quorum cannot rescue an impostor: any `fail` is a hard reject.

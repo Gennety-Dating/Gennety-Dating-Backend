@@ -119,13 +119,14 @@ export interface PipelineDeps {
    * Cold-start Elo seed via vision. Optional — when undefined (flag off in prod
    * or unset by tests) the pipeline skips seeding and the user keeps the
    * default Elo of 500. Only invoked on the `verified` branch and only when
-   * `profile.eloSeededAt` is null and at least one photo exists. Failures
+   * `profile.eloSeededAt` is null and at least one photo exists. All profile
+   * photos are passed together so the seed can use an arithmetic mean. Failures
    * are logged but never block verification — the user is already verified
    * and active by the time this runs.
    */
   seedEloFromVision?: (
     userId: string,
-    photoPath: string,
+    photoPaths: readonly string[],
   ) => Promise<SeedEloResult>;
   /**
    * DB shim so tests can hand in an in-memory store. Production uses the
@@ -491,9 +492,8 @@ export async function runFaceMatchVerification(
       user.profile.eloSeededAt === null &&
       photos.length > 0
     ) {
-      const primaryPhoto = photos[0]!;
       try {
-        const seed = await deps.seedEloFromVision(userId, primaryPhoto);
+        const seed = await deps.seedEloFromVision(userId, photos);
         if (!seed.ok) {
           console.warn(`${LOG_PREFIX} elo seed skipped`, { userId, reason: seed.error });
         }
@@ -656,8 +656,8 @@ export async function runFaceMatchVerificationDefault(
       // user keeps the schema-default Elo of 500.
       ...(env.ELO_VISION_SEED_ENABLED
         ? {
-            seedEloFromVision: (uid: string, p: string) =>
-              seedEloFromVisionDefault(uid, p, api),
+            seedEloFromVision: (uid: string, photos: readonly string[]) =>
+              seedEloFromVisionDefault(uid, photos, api),
           }
         : {}),
       notify: async (telegramId, message) => {

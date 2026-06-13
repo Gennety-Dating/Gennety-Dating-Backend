@@ -21,7 +21,7 @@ import {
   type SeedEloResult,
 } from "./elo-seed.js";
 import { UNVERIFIED_ELO_PENALTY } from "../utils/elo-calculator.js";
-import type { AttractivenessResult } from "./vision/score-attractiveness.js";
+import type { AttractivenessBatchResult } from "./vision/score-attractiveness.js";
 
 describe("mapScoreToElo", () => {
   it("maps 0 to ELO_SEED_MIN (200)", () => {
@@ -48,8 +48,11 @@ describe("mapScoreToElo", () => {
 });
 
 const USER_ID = "user-1";
-const PHOTO_PATH = "user-1/photo-a.jpg";
-const PHOTO_BUFFER = Buffer.from("photo-bytes");
+const PHOTO_PATHS = ["user-1/photo-a.jpg", "user-1/photo-b.jpg"];
+const PHOTO_BUFFERS: Record<string, Buffer> = {
+  [PHOTO_PATHS[0]!]: Buffer.from("photo-a-bytes"),
+  [PHOTO_PATHS[1]!]: Buffer.from("photo-b-bytes"),
+};
 
 function makeDeps(overrides: Partial<SeedEloDeps> = {}): {
   deps: SeedEloDeps;
@@ -57,13 +60,32 @@ function makeDeps(overrides: Partial<SeedEloDeps> = {}): {
 } {
   const writes: Array<{ userId: string; eloScore: number; details: unknown }> = [];
   const deps: SeedEloDeps = {
-    downloadProfileImage: vi.fn(async () => PHOTO_BUFFER),
+    downloadProfileImage: vi.fn(async (path) => PHOTO_BUFFERS[path] ?? null),
     scoreAttractiveness: vi.fn(
-      async (): Promise<AttractivenessResult> => ({
+      async (): Promise<AttractivenessBatchResult> => ({
         ok: true,
-        score: 75,
-        breakdown: { symmetry: 80, eyeDistance: 70, faceShape: 75, featureRegularity: 75 },
-        rationale: "balanced",
+        assessments: [
+          {
+            score: 60,
+            breakdown: {
+              symmetry: 70,
+              eyeDistance: 50,
+              faceShape: 60,
+              featureRegularity: 55,
+            },
+            rationale: "photo one",
+          },
+          {
+            score: 80,
+            breakdown: {
+              symmetry: 90,
+              eyeDistance: 70,
+              faceShape: 80,
+              featureRegularity: 75,
+            },
+            rationale: "photo two",
+          },
+        ],
         model: "gpt-test",
       }),
     ),
@@ -76,29 +98,48 @@ function makeDeps(overrides: Partial<SeedEloDeps> = {}): {
 }
 
 describe("seedEloFromVision", () => {
-  it("writes the mapped Elo and full breakdown on success", async () => {
+  it("writes Elo from the arithmetic mean and keeps per-photo audit details", async () => {
     const { deps, writes } = makeDeps();
-    const result = await seedEloFromVision(USER_ID, PHOTO_PATH, deps, "image/jpeg");
+    const result = await seedEloFromVision(USER_ID, PHOTO_PATHS, deps, "image/jpeg");
 
-    const expected: SeedEloResult = { ok: true, elo: mapScoreToElo(75), score: 75 };
+    const expected: SeedEloResult = { ok: true, elo: mapScoreToElo(70), score: 70 };
     expect(result).toEqual(expected);
 
     expect(writes).toHaveLength(1);
-    expect(writes[0]!.eloScore).toBe(mapScoreToElo(75));
+    expect(writes[0]!.eloScore).toBe(mapScoreToElo(70));
     expect(writes[0]!.details).toMatchObject({
-      score: 75,
-      elo: mapScoreToElo(75),
+      score: 70,
+      elo: mapScoreToElo(70),
       model: "gpt-test",
-      breakdown: { symmetry: 80 },
-      rationale: "balanced",
+      breakdown: {
+        symmetry: 80,
+        eyeDistance: 60,
+        faceShape: 70,
+        featureRegularity: 65,
+      },
+      rationale: "Arithmetic mean of 2 profile photo scores",
+      aggregation: "arithmetic_mean",
+      photoCount: 2,
+      photos: [
+        { index: 1, score: 60, rationale: "photo one" },
+        { index: 2, score: 80, rationale: "photo two" },
+      ],
     });
+    expect(deps.downloadProfileImage).toHaveBeenCalledTimes(2);
+    expect(deps.scoreAttractiveness).toHaveBeenCalledTimes(1);
+    expect(deps.scoreAttractiveness).toHaveBeenCalledWith([
+      { buffer: PHOTO_BUFFERS[PHOTO_PATHS[0]!], mime: "image/jpeg" },
+      { buffer: PHOTO_BUFFERS[PHOTO_PATHS[1]!], mime: "image/jpeg" },
+    ]);
   });
 
-  it("skips DB write and returns error=download when photo download fails", async () => {
+  it("skips DB write when any download fails instead of using a partial mean", async () => {
     const { deps, writes } = makeDeps({
-      downloadProfileImage: vi.fn(async () => null),
+      downloadProfileImage: vi.fn(async (path) =>
+        path === PHOTO_PATHS[1] ? null : PHOTO_BUFFERS[path] ?? null,
+      ),
     });
-    const result = await seedEloFromVision(USER_ID, PHOTO_PATH, deps, "image/jpeg");
+    const result = await seedEloFromVision(USER_ID, PHOTO_PATHS, deps, "image/jpeg");
 
     expect(result).toEqual({ ok: false, error: "download" });
     expect(writes).toHaveLength(0);
@@ -109,7 +150,7 @@ describe("seedEloFromVision", () => {
     const { deps, writes } = makeDeps({
       scoreAttractiveness: vi.fn(async () => ({ ok: false, error: "api" }) as const),
     });
-    const result = await seedEloFromVision(USER_ID, PHOTO_PATH, deps, "image/jpeg");
+    const result = await seedEloFromVision(USER_ID, PHOTO_PATHS, deps, "image/jpeg");
 
     expect(result).toEqual({ ok: false, error: "vision" });
     expect(writes).toHaveLength(0);
@@ -119,7 +160,7 @@ describe("seedEloFromVision", () => {
     const { deps, writes } = makeDeps({
       scoreAttractiveness: vi.fn(async () => ({ ok: false, error: "disabled" }) as const),
     });
-    const result = await seedEloFromVision(USER_ID, PHOTO_PATH, deps, "image/jpeg");
+    const result = await seedEloFromVision(USER_ID, PHOTO_PATHS, deps, "image/jpeg");
 
     expect(result).toEqual({ ok: false, error: "vision" });
     expect(writes).toHaveLength(0);
@@ -129,7 +170,7 @@ describe("seedEloFromVision", () => {
     const { deps, writes } = makeDeps({
       scoreAttractiveness: vi.fn(async () => ({ ok: false, error: "timeout" }) as const),
     });
-    const result = await seedEloFromVision(USER_ID, PHOTO_PATH, deps, "image/jpeg");
+    const result = await seedEloFromVision(USER_ID, PHOTO_PATHS, deps, "image/jpeg");
 
     expect(result).toEqual({ ok: false, error: "vision" });
     expect(writes).toHaveLength(0);

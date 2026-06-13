@@ -1,9 +1,11 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import {
-  scoreAttractivenessFromBuffer,
+  scoreAttractivenessFromBuffers,
+  type AttractivenessAssessment,
   type AttractivenessBreakdown,
-  type AttractivenessResult,
+  type AttractivenessBatchResult,
+  type AttractivenessImageInput,
 } from "./vision/score-attractiveness.js";
 import { downloadProfileImage } from "./storage.js";
 import { UNVERIFIED_ELO_PENALTY } from "../utils/elo-calculator.js";
@@ -13,8 +15,9 @@ import { UNVERIFIED_ELO_PENALTY } from "../utils/elo-calculator.js";
  *
  * Called by the verification pipeline on the `verified` branch — once Persona
  * has confirmed the user is a real person and their photos match the selfie,
- * we run a SCUT-FBP5500-style scoring pass on the primary photo and seed
- * `Profile.eloScore` so the matcher's `V_league` decay has signal from day one.
+ * we run a SCUT-FBP5500-style scoring pass on every profile photo in one
+ * request, average the independent scores, and seed `Profile.eloScore` so the
+ * matcher's `V_league` decay has signal from day one.
  *
  * Without this seed, every fresh user starts at 500 and the league multiplier
  * collapses to ~1 across the cohort — which is exactly the bug the user
@@ -56,6 +59,9 @@ export interface EloSeedDetails {
   breakdown: AttractivenessBreakdown;
   rationale: string;
   seededAt: string;
+  aggregation: "arithmetic_mean" | "none";
+  photoCount: number;
+  photos: Array<AttractivenessAssessment & { index: number }>;
 }
 
 export interface SeedEloDeps {
@@ -66,9 +72,8 @@ export interface SeedEloDeps {
    */
   downloadProfileImage: (pathOrFileId: string) => Promise<Buffer | null>;
   scoreAttractiveness: (
-    buffer: Buffer,
-    mime: string,
-  ) => Promise<AttractivenessResult>;
+    images: readonly AttractivenessImageInput[],
+  ) => Promise<AttractivenessBatchResult>;
   persistSeed: (
     userId: string,
     eloScore: number,
@@ -86,28 +91,62 @@ export interface SeedEloDeps {
  */
 export async function seedEloFromVision(
   userId: string,
-  photoPath: string,
+  photoPaths: readonly string[],
   deps: SeedEloDeps,
   mime: string = "image/jpeg",
 ): Promise<SeedEloResult> {
-  const buffer = await deps.downloadProfileImage(photoPath);
-  if (!buffer) return { ok: false, error: "download" };
+  if (photoPaths.length === 0) return { ok: false, error: "download" };
 
-  const vision = await deps.scoreAttractiveness(buffer, mime);
+  const buffers = await Promise.all(
+    photoPaths.map((photoPath) => deps.downloadProfileImage(photoPath)),
+  );
+  const images: AttractivenessImageInput[] = [];
+  for (const buffer of buffers) {
+    if (!buffer) return { ok: false, error: "download" };
+    images.push({ buffer, mime });
+  }
+  const vision = await deps.scoreAttractiveness(images);
   if (!vision.ok) return { ok: false, error: "vision" };
 
-  const elo = mapScoreToElo(vision.score);
+  if (vision.assessments.length !== photoPaths.length) {
+    return { ok: false, error: "vision" };
+  }
+
+  const score = mean(vision.assessments.map((assessment) => assessment.score));
+  const breakdown: AttractivenessBreakdown = {
+    symmetry: mean(
+      vision.assessments.map((assessment) => assessment.breakdown.symmetry),
+    ),
+    eyeDistance: mean(
+      vision.assessments.map((assessment) => assessment.breakdown.eyeDistance),
+    ),
+    faceShape: mean(
+      vision.assessments.map((assessment) => assessment.breakdown.faceShape),
+    ),
+    featureRegularity: mean(
+      vision.assessments.map(
+        (assessment) => assessment.breakdown.featureRegularity,
+      ),
+    ),
+  };
+  const elo = mapScoreToElo(score);
   const details: EloSeedDetails = {
-    score: vision.score,
+    score,
     elo,
     model: vision.model,
-    breakdown: vision.breakdown,
-    rationale: vision.rationale,
+    breakdown,
+    rationale: `Arithmetic mean of ${vision.assessments.length} profile photo scores`,
     seededAt: new Date().toISOString(),
+    aggregation: "arithmetic_mean",
+    photoCount: vision.assessments.length,
+    photos: vision.assessments.map((assessment, index) => ({
+      index: index + 1,
+      ...assessment,
+    })),
   };
 
   await deps.persistSeed(userId, elo, details);
-  return { ok: true, elo, score: vision.score };
+  return { ok: true, elo, score };
 }
 
 /**
@@ -178,6 +217,9 @@ export async function refundSkipPenalty(userId: string): Promise<SeedEloResult> 
             },
             rationale: reason,
             seededAt: now.toISOString(),
+            aggregation: "none",
+            photoCount: 0,
+            photos: [],
           } as unknown as object,
         },
       });
@@ -207,7 +249,7 @@ export async function refundSkipPenalty(userId: string): Promise<SeedEloResult> 
  */
 export async function seedEloFromVisionDefault(
   userId: string,
-  photoPath: string,
+  photoPaths: readonly string[],
   api: Api<RawApi>,
   mime: string = "image/jpeg",
 ): Promise<SeedEloResult> {
@@ -218,21 +260,21 @@ export async function seedEloFromVisionDefault(
   if (user?.verificationSkippedAt) {
     return refundSkipPenalty(userId);
   }
-  return runVisionSeed(userId, photoPath, api, mime);
+  return runVisionSeed(userId, photoPaths, api, mime);
 }
 
 async function runVisionSeed(
   userId: string,
-  photoPath: string,
+  photoPaths: readonly string[],
   api: Api<RawApi>,
   mime: string,
 ): Promise<SeedEloResult> {
   return seedEloFromVision(
     userId,
-    photoPath,
+    photoPaths,
     {
       downloadProfileImage: (path) => downloadProfileImage(path, api),
-      scoreAttractiveness: (buffer, m) => scoreAttractivenessFromBuffer(buffer, m),
+      scoreAttractiveness: (images) => scoreAttractivenessFromBuffers(images),
       persistSeed: async (uid, eloScore, details) => {
         const now = new Date();
         const result = await prisma.profile.updateMany({
@@ -250,4 +292,8 @@ async function runVisionSeed(
     },
     mime,
   );
+}
+
+function mean(values: readonly number[]): number {
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
