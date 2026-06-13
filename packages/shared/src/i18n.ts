@@ -401,15 +401,16 @@ const translations = {
     matchScheduleNoOverlapYet:
       "You both marked dates and times, but none overlap. Open the calendar and add a few more — we'll lock it in as soon as one slot matches:",
     venueConciergeIntro:
-      "Time's locked 🗓️ Last step — let's nail the place.\n\n" +
-      "Tell me the *vibe* (e.g. _quiet cafe_, _vegan spot_, _park walk_, _small museum_), " +
-      "then tap *Pick on map* below to choose where you'll be coming from " +
-      "(metro, address, friend's place — anything works).",
+      "Time's locked 🗓️ One thing before I find your spot.\n\n" +
+      "📍 *Mark where you'll be setting off from* for the date — your place, a metro station, a friend's flat, wherever you'll actually be leaving from.\n\n" +
+      "I'll use that point to find a comfortable meeting spot that's easy for *both* of you to reach, close to where you start out. Tap below to drop it on the map:",
     venueConciergeBtnLocation: "📍 Send my location",
     venueConciergeBtnMap: "🗺️ Pick on map",
+    venueLocationFirst:
+      "First things first — *mark where you'll be setting off from* 📍 Tap below to drop it on the map. I'll ask about the vibe right after.",
     venueVibeNoted: "Vibe noted ✅ Now pick where you'll be coming from:",
     venueLocationNoted:
-      "Location saved ✅ Now tell me the *vibe* — e.g. _quiet cafe_, _vegan brunch_, _park walk_.",
+      "Starting point saved ✅ Now — what *vibe* are you after? e.g. _quiet cafe_, _vegan brunch_, _park walk_, _small museum_.",
     venueSafetyOverride:
       "Heads up — picked a public café instead. We keep first dates in public spots.",
     venueWaitingPeer: "Got yours ✅ Waiting on the other person…",
@@ -987,14 +988,16 @@ const translations = {
     matchSchedulePickedPrefix: "Ты выбрал: ",
     matchScheduleWaitingPeer: "Ждём выбор второй стороны…",
     venueConciergeIntro:
-      "Время есть 🗓️ Последний шаг — выбираем место.\n\n" +
-      "Напиши *вайб* (например _тихое кафе_, _веган_, _прогулка в парке_, _маленький музей_), " +
-      "а потом нажми *Выбрать на карте* ниже — укажи метро, адрес или место друга, откуда поедешь.",
+      "Время выбрано 🗓️ Один момент перед тем, как подобрать место.\n\n" +
+      "📍 *Отметь, откуда ты будешь выезжать* на свидание — дом, станция метро, квартира друга, откуда тебе реально удобно стартовать.\n\n" +
+      "По этой точке я подберу удобное место встречи, до которого легко добраться вам *обоим*, недалеко от твоего старта. Нажми кнопку ниже и отметь точку на карте:",
     venueConciergeBtnLocation: "📍 Отправить геолокацию",
     venueConciergeBtnMap: "🗺️ Выбрать на карте",
+    venueLocationFirst:
+      "Сначала самое главное — *отметь, откуда ты будешь выезжать* 📍 Нажми кнопку ниже и поставь точку на карте. Про вайб спрошу сразу после.",
     venueVibeNoted: "Вайб записан ✅ Теперь укажи, откуда поедешь:",
     venueLocationNoted:
-      "Место сохранено ✅ Теперь напиши *вайб* — например _тихое кафе_, _веган-бранч_, _прогулка в парке_.",
+      "Точку выезда сохранил ✅ Теперь — какой *вайб* хочешь? Например: _тихое кафе_, _веган-завтрак_, _прогулка в парке_, _небольшой музей_.",
     venueSafetyOverride:
       "Небольшое уточнение — заменил на публичное кафе. Первые свидания у нас в людных местах.",
     venueWaitingPeer: "Принял ✅ Ждём вторую сторону…",
@@ -1572,14 +1575,16 @@ const translations = {
     matchScheduleNoOverlapYet:
       "Ви обидва позначили дати й час, але варіанти не збіглись. Відкрий календар і додай ще кілька слотів — щойно один збіжиться, я зафіксую дату:",
     venueConciergeIntro:
-      "Час зафіксовано 🗓️ Останній крок — обираємо місце.\n\n" +
-      "Напиши *вайб* (наприклад _тихе кафе_, _веган_, _прогулянка в парку_, _невеликий музей_), " +
-      "а потім натисни *Обрати на карті* — вкажи метро, адресу чи місце друга, звідки поїдеш.",
+      "Час зафіксовано 🗓️ Один момент, перш ніж підібрати місце.\n\n" +
+      "📍 *Познач, звідки ти будеш виїжджати* на побачення — дім, станція метро, квартира друга, звідки тобі реально зручно стартувати.\n\n" +
+      "За цією точкою я підберу зручне місце зустрічі, до якого легко дістатися вам *обом*, неподалік від твого старту. Натисни кнопку нижче й познач точку на карті:",
     venueConciergeBtnLocation: "📍 Надіслати геолокацію",
     venueConciergeBtnMap: "🗺️ Обрати на карті",
+    venueLocationFirst:
+      "Спершу головне — *познач, звідки ти будеш виїжджати* 📍 Натисни кнопку нижче й постав точку на карті. Про вайб запитаю одразу після.",
     venueVibeNoted: "Вайб записано ✅ Тепер вкажи, звідки поїдеш:",
     venueLocationNoted:
-      "Місце збережено ✅ Тепер напиши *вайб* — наприклад _тихе кафе_, _веган-бранч_, _прогулянка у парку_.",
+      "Точку виїзду збережено ✅ Тепер — який *вайб* хочеш? Наприклад: _тихе кафе_, _веган-сніданок_, _прогулянка в парку_, _невеликий музей_.",
     venueSafetyOverride:
       "Невеличке уточнення — заміняю на публічне кафе. Перші побачення у нас у людних місцях.",
     venueWaitingPeer: "Прийняв ✅ Чекаємо на іншу сторону…",
@@ -2124,15 +2129,16 @@ const deTranslations: TranslationTable = {
   matchScheduleNoOverlapYet:
     "Ihr habt beide Daten und Zeiten markiert, aber noch keine Überschneidung. Öffne den Kalender und füge ein paar Optionen hinzu - sobald ein Slot passt, fixieren wir es:",
   venueConciergeIntro:
-    "Zeit ist fix 🗓️ Letzter Schritt - der Ort.\n\n" +
-    "Sag mir den *Vibe* (z. B. _ruhiges Cafe_, _veganer Spot_, _Parkspaziergang_, _kleines Museum_), " +
-    "und tippe dann unten auf *Auf Karte wählen*, um auszuwählen, von wo du kommst " +
-    "(Metro, Adresse, bei Freunden - alles geht).",
+    "Zeit steht 🗓️ Eine Sache, bevor ich den Ort finde.\n\n" +
+    "📍 *Markiere, von wo du losfährst* zum Date - dein Zuhause, eine Metro-Station, die Wohnung einer Freundin, wo immer du tatsächlich startest.\n\n" +
+    "Anhand dieses Punkts finde ich einen angenehmen Treffpunkt, der für *euch beide* gut erreichbar ist, nah an deinem Start. Tippe unten, um ihn auf der Karte zu setzen:",
   venueConciergeBtnLocation: "📍 Standort senden",
   venueConciergeBtnMap: "🗺️ Auf Karte wählen",
+  venueLocationFirst:
+    "Zuerst das Wichtigste - *markiere, von wo du losfährst* 📍 Tippe unten, um den Punkt auf der Karte zu setzen. Nach dem Vibe frage ich gleich danach.",
   venueVibeNoted: "Vibe notiert ✅ Jetzt wähle, von wo du kommst:",
   venueLocationNoted:
-    "Standort gespeichert ✅ Sag mir jetzt den *Vibe* - z. B. _ruhiges Cafe_, _veganer Brunch_, _Parkspaziergang_.",
+    "Startpunkt gespeichert ✅ Jetzt - welchen *Vibe* willst du? z. B. _ruhiges Cafe_, _veganer Brunch_, _Parkspaziergang_, _kleines Museum_.",
   venueSafetyOverride: "Heads up - ich habe stattdessen ein öffentliches Cafe gewählt. Erste Dates bleiben bei uns öffentlich.",
   venueWaitingPeer: "Deins ist da ✅ Warten auf die andere Person...",
   venueSearching: "Suche den perfekten Spot zwischen euch beiden... 🔍",
@@ -2611,15 +2617,16 @@ const plTranslations: TranslationTable = {
   matchScheduleNoOverlapYet:
     "Oboje zaznaczyliście daty i godziny, ale jeszcze nic się nie pokrywa. Otwórz kalendarz i dodaj kilka opcji - ustalimy randkę, gdy tylko slot się zgodzi:",
   venueConciergeIntro:
-    "Termin ustalony 🗓️ Ostatni krok - miejsce.\n\n" +
-    "Powiedz mi, jaki *vibe* chcesz (np. _cicha kawiarnia_, _wegańskie miejsce_, _spacer po parku_, _małe muzeum_), " +
-    "a potem kliknij *Wybierz na mapie* poniżej, żeby wskazać, skąd będziesz jechać " +
-    "(metro, adres, dom znajomego - cokolwiek działa).",
+    "Termin ustalony 🗓️ Jedna rzecz, zanim znajdę miejsce.\n\n" +
+    "📍 *Zaznacz, skąd będziesz wyruszać* na randkę - twój dom, stacja metra, mieszkanie znajomego, skądkolwiek faktycznie ruszasz.\n\n" +
+    "Na podstawie tego punktu znajdę wygodne miejsce spotkania, łatwo dostępne dla *was obojga*, blisko twojego startu. Kliknij poniżej, aby zaznaczyć je na mapie:",
   venueConciergeBtnLocation: "📍 Wyślij lokalizację",
   venueConciergeBtnMap: "🗺️ Wybierz na mapie",
+  venueLocationFirst:
+    "Najpierw najważniejsze - *zaznacz, skąd będziesz wyruszać* 📍 Kliknij poniżej, aby zaznaczyć punkt na mapie. O vibe zapytam zaraz potem.",
   venueVibeNoted: "Vibe zapisany ✅ Teraz wybierz, skąd będziesz jechać:",
   venueLocationNoted:
-    "Lokalizacja zapisana ✅ Teraz powiedz mi *vibe* - np. _cicha kawiarnia_, _wegański brunch_, _spacer po parku_.",
+    "Punkt startowy zapisany ✅ Teraz - jaki *vibe* chcesz? np. _cicha kawiarnia_, _wegański brunch_, _spacer po parku_, _małe muzeum_.",
   venueSafetyOverride: "Heads up - wybraliśmy publiczną kawiarnię. Pierwsze randki trzymamy w publicznych miejscach.",
   venueWaitingPeer: "Twoje zapisane ✅ Czekamy na drugą osobę...",
   venueSearching: "Szukam idealnego miejsca między Wami... 🔍",

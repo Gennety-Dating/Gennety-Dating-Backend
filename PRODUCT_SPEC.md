@@ -699,35 +699,49 @@ better UX than three separate retries.
 
 ### 3.7 Concierge Venue Negotiation (`negotiating_venue`)
 
-Once `agreedTime` is locked, both users are asked for two things:
+Once `agreedTime` is locked, both users are asked for two things, **in
+order** — the Telegram opening prompt (`venueConciergeIntro`) asks **only**
+for the departure point so "what am I marking on the map?" is unambiguous;
+the vibe is a separate, later message requested only after the departure
+point is saved:
 
-1. A free-text **vibe** ("cafe / quiet / vegan / park walk / ..."), which
+1. A **departure (commute) origin** — asked **first**, on its own. The
+   prompt states plainly that the user marks *where they'll be setting off
+   from* for the date and *why* (so the concierge can pick a convenient
+   meeting spot easy for both to reach, near that point). Captured via the
+   Location Mini App (`apps/webapp/location.html`). The legacy
+   `request_location` reply keyboard was retired 2026-05-10 — it doesn't
+   work on Telegram Desktop (no GPS) and only supports the user's *current*
+   GPS, not "the metro I'll leave from" or "my friend's place tonight". The
+   Mini App offers four input modes: one-tap browser geolocation,
+   Places-backed autocomplete (type "Lukyanivska metro" or "Khreshchatyk
+   14"), tap-on-map, and drag the marker. Stored in `vibeLat{A,B}` /
+   `vibeLng{A,B}`; the human-readable label from autocomplete is stored in
+   `vibeAddress{A,B}` (display only — the matching pipeline runs on
+   lat/lng). Telegram users who share a raw location pin via the attach
+   menu still flow through the legacy `handleVenueLocation` path;
+   `vibeAddress*` stays null in that case.
+2. A free-text **vibe** ("cafe / quiet / vegan / park walk / ..."),
+   requested **only after** the departure point is on file, which
    `services/vibe-parser.ts` normalises to a strict whitelist
    (`cafe | restaurant | coffee_shop | park | museum | lounge`). Anything
    outside the whitelist is overridden and audited in `parsedCategoryA/B`.
-2. A **commute origin** — captured via the Location Mini App
-   (`apps/webapp/location.html`). The legacy `request_location` reply
-   keyboard was retired 2026-05-10 — it doesn't work on Telegram Desktop
-   (no GPS) and only supports the user's *current* GPS, not "the metro
-   I'll leave from" or "my friend's place tonight". The Mini App offers
-   four input modes: one-tap browser geolocation, Places-backed
-   autocomplete (type "Lukyanivska metro" or "Khreshchatyk 14"),
-   tap-on-map, and drag the marker.
-   Stored in `vibeLat{A,B}` / `vibeLng{A,B}`; the human-readable label
-   from autocomplete is stored in `vibeAddress{A,B}` (display only —
-   the matching pipeline runs on lat/lng). Telegram users who share a
-   raw location pin via the attach menu still flow through the legacy
-   `handleVenueLocation` path; `vibeAddress*` stays null in that case.
+   Free text that arrives **before** the departure pin is not banked as a
+   vibe: `handleVenueVibe` redirects it back to the map
+   (`venueLocationFirst`) so the location-first order holds.
 
-**Per-side "what's next" ACK.** Order doesn't matter — handlers are
-idempotent — but each save fires a side-aware nudge so a user doesn't
-sit there wondering if anything happened:
+**Per-side "what's next" ACK.** The underlying collector stays idempotent —
+either field can technically land first (e.g. a mobile submission, or a raw
+attach-menu pin) — but the Telegram *prompts* are sequenced, and each save
+fires a side-aware nudge so a user doesn't sit there wondering if anything
+happened:
+- location done, vibe not yet → "Starting point saved ✅ Now — what *vibe*
+  are you after? e.g. _quiet cafe_, _park walk_." (text-only, the Mini App
+  isn't relevant here). This is the normal next step after the departure pin.
 - vibe done, location not yet → "Vibe noted ✅ Now pick where you'll
   be coming from:" + 🗺️ Pick on map inline button (re-surfacing the
-  Mini App entry point in the chat).
-- location done, vibe not yet → "Location saved ✅ Now tell me the
-  *vibe* — e.g. _quiet cafe_, _park walk_." (text-only, the Mini App
-  isn't relevant here).
+  Mini App entry point in the chat). Defensive — the Telegram bot path no
+  longer reaches it, but a vibe-first mobile/legacy save still can.
 - both done → `venueWaitingPeer` ("Got yours, waiting on partner…").
 
 The same `sendVenuePostSaveAck` helper drives all three paths

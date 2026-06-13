@@ -2,15 +2,20 @@
  * Phase 3.4 — concierge venue negotiation.
  *
  * Once a match has an `agreedTime` locked in, we transition from
- * `negotiating` → `negotiating_venue` and ask both users to provide:
- *   1. a free-text "vibe" (cafe / vegan / park walk / …),
- *   2. a Telegram `message:location` pin of where they'll be commuting from.
+ * `negotiating` → `negotiating_venue` and ask both users, in order, for:
+ *   1. a departure point — the Mini App map pin / Telegram `message:location`
+ *      of where they'll be setting off from (asked first, on its own, so the
+ *      "what am I marking?" ambiguity is gone),
+ *   2. a free-text "vibe" (cafe / vegan / park walk / …), requested only
+ *      *after* the departure point is saved.
  *
- * Order doesn't matter — handlers are idempotent and we accumulate state
- * on the `matches` row. When both users have a full set of (vibeText,
- * lat, lng) the bot computes the great-circle midpoint, safety-parses
- * each vibe into a whitelisted Places category, queries Google Places,
- * and finalises the match to `scheduled`.
+ * The collector itself stays idempotent and accumulates state on the
+ * `matches` row, but the *prompts* are sequenced: free text that arrives
+ * before the location pin is redirected back to the map rather than banked
+ * as a vibe. When both users have a full set of (vibeText, lat, lng) the
+ * bot computes the great-circle midpoint, safety-parses each vibe into a
+ * whitelisted Places category, queries Google Places, and finalises the
+ * match to `scheduled`.
  *
  * The final `scheduled` confirmation + `date_time` MessageEntity is
  * emitted from `tryFinalize` below, so this module owns the entire
@@ -107,7 +112,10 @@ function buildVenueMapsUrl(venue: Venue): string {
 
 /**
  * Enter `negotiating_venue`: writes the agreed time, sets the status, and
- * DMs both users with the concierge prompt + a `request_location` keyboard.
+ * DMs both users the location-first concierge prompt (`venueConciergeIntro`)
+ * + the Mini App map button. The vibe is asked separately once the departure
+ * point is saved (see `sendVenuePostSaveAck`), so this opening message is
+ * scoped to a single, unambiguous ask: "mark where you'll set off from".
  *
  * Called from the scheduler the moment a time overlap is found.
  */
@@ -280,6 +288,30 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
   if (!resolved) return;
   const { matchId, side } = resolved;
 
+  const lang = ctx.session.language;
+
+  // Location-first ordering: we only ask for the *vibe* once the user has
+  // marked their departure point. If free text lands before that pin, the
+  // user is likely answering the wrong question (or never opened the map),
+  // so we redirect them back to the location step rather than silently
+  // banking the text as a vibe. The vibe prompt (`venueLocationNoted`) is
+  // emitted by `sendVenuePostSaveAck` right after the location saves.
+  const locState = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: { vibeLatA: true, vibeLngA: true, vibeLatB: true, vibeLngB: true },
+  });
+  const hasLocation =
+    side === "A"
+      ? locState?.vibeLatA != null && locState?.vibeLngA != null
+      : locState?.vibeLatB != null && locState?.vibeLngB != null;
+  if (!hasLocation) {
+    await ctx.reply(t(lang, "venueLocationFirst"), {
+      parse_mode: "Markdown",
+      reply_markup: buildLocationMapKeyboard(matchId, lang),
+    });
+    return;
+  }
+
   const parsed = await parseVibe(text);
 
   const data =
@@ -293,8 +325,6 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
           parsedCategoryB: parsed.category,
         };
   await prisma.match.update({ where: { id: matchId }, data });
-
-  const lang = ctx.session.language;
 
   // If safety layer overrode the user's request, let them know (softly).
   if (!parsed.safe) {
