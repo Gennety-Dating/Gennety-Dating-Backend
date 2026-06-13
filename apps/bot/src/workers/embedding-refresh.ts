@@ -17,9 +17,8 @@ import {
  *   1. Picks up dirty rows (oldest dirtyAt first, capped per tick).
  *   2. Composes a fresh embedding input from the current profile state.
  *   3. Calls the OpenAI embeddings endpoint.
- *   4. Writes the new vector + clears the dirty flag in one Prisma
- *      transaction so a concurrent dirty-bump after we finished generating
- *      doesn't get clobbered.
+ *   4. Writes the new vector + clears the dirty flag in one conditional SQL
+ *      statement so a concurrent dirty-bump after generation is not clobbered.
  *
  * The "concurrent re-dirty" guard works like this: we capture
  * `embeddingDirtyAt` at the start of the tick. The clear-flag write only
@@ -96,28 +95,21 @@ export async function embeddingRefreshTick(
       const vec = await client.embed(text.slice(0, 8000));
       const literal = toPgVectorLiteral(vec);
 
-      // Conditional clear: only flip embeddingDirty=false when the row's
-      // dirtyAt is unchanged — otherwise a write came in mid-generation
-      // and we'd be silencing an outdated state.
-      const result = await prisma.profile.updateMany({
-        where: {
-          id: row.id,
-          embeddingDirtyAt: row.embeddingDirtyAt,
-        },
-        data: {
-          embeddingDirty: false,
-        },
-      });
-      if (result.count > 0) {
-        // Vector write goes through raw SQL — Prisma flags `vector` Unsupported.
-        await prisma.$executeRaw`
-          UPDATE profiles SET embedding = ${literal}::vector WHERE id = ${row.id}::uuid
-        `;
+      // Vector + flag update is atomic. If the row was re-dirtied while the
+      // embedding request was in flight, the timestamp guard makes this a no-op.
+      const updated = await prisma.$executeRaw`
+        UPDATE profiles
+           SET embedding = ${literal}::vector,
+               embedding_dirty = false,
+               embedding_dirty_at = NULL
+         WHERE id = ${row.id}::uuid
+           AND embedding_dirty = true
+           AND embedding_dirty_at IS NOT DISTINCT FROM ${row.embeddingDirtyAt}
+      `;
+      if (updated > 0) {
         refreshed++;
       } else {
-        // Row was re-dirtied while we were generating. Skip the vector write
-        // so we don't persist stale text against a moved target. Next tick
-        // will pick it up fresh.
+        // Row was re-dirtied while we were generating. Next tick picks it up.
         console.log(
           `[embedding-refresh] skipped userId=${row.userId} — row re-dirtied during refresh`,
         );

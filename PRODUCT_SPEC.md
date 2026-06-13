@@ -1023,7 +1023,10 @@ Every code path that mutates `psychologicalSummary`, `partnerPreferences`,
 `negativeConstraints`, or `hobbies` flips `Profile.embeddingDirty = true`.
 The `embedding-refresh` cron (every 5 min, ≤20 rows/tick) recomputes via
 OpenAI and clears the flag. Pre-M-2 the embedding silently went stale on
-every profile edit, slowly degrading match quality.
+every profile edit, slowly degrading match quality. Initial embedding failures
+during either AI-memory analysis or fallback-profile finalization also leave
+the profile dirty, so the same worker retries them instead of silently
+excluding an otherwise-complete user from matching.
 
 ### GDPR
 

@@ -226,18 +226,34 @@ export async function saveProfileAnalysis(
   userId: string,
   rawSummary: string,
   embedding: number[] | null,
-): Promise<void> {
+): Promise<boolean> {
+  const embeddingDirtyAt = new Date();
   await prisma.profile.upsert({
     where: { userId },
-    create: { userId, psychologicalSummary: rawSummary },
-    update: { psychologicalSummary: rawSummary },
+    create: {
+      userId,
+      psychologicalSummary: rawSummary,
+      embeddingDirty: true,
+      embeddingDirtyAt,
+    },
+    update: {
+      psychologicalSummary: rawSummary,
+      embeddingDirty: true,
+      embeddingDirtyAt,
+    },
   });
-  if (embedding) {
-    const literal = toPgVectorLiteral(embedding);
-    await prisma.$executeRaw`
-      UPDATE profiles SET embedding = ${literal}::vector WHERE user_id = ${userId}::uuid
-    `;
-  }
+  if (!embedding) return false;
+
+  const literal = toPgVectorLiteral(embedding);
+  const updated = await prisma.$executeRaw`
+    UPDATE profiles
+       SET embedding = ${literal}::vector,
+           embedding_dirty = false,
+           embedding_dirty_at = NULL
+     WHERE user_id = ${userId}::uuid
+       AND embedding_dirty_at IS NOT DISTINCT FROM ${embeddingDirtyAt}
+  `;
+  return updated > 0;
 }
 
 export function buildFallbackProfileAnalysis(
@@ -275,8 +291,8 @@ export async function saveFallbackProfileAnalysis(
     }
   }
 
-  await saveProfileAnalysis(userId, summary, embedding);
-  return { summary, embeddingSaved: embedding !== null };
+  const embeddingSaved = await saveProfileAnalysis(userId, summary, embedding);
+  return { summary, embeddingSaved };
 }
 
 /**
@@ -317,6 +333,10 @@ export async function analyseAndSaveProfile(
     }
   }
 
-  await saveProfileAnalysis(userId, sanitisedSummary, embedding);
-  return { parsed, embeddingSaved: embedding !== null };
+  const embeddingSaved = await saveProfileAnalysis(
+    userId,
+    sanitisedSummary,
+    embedding,
+  );
+  return { parsed, embeddingSaved };
 }

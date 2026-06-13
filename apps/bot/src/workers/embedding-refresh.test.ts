@@ -44,26 +44,25 @@ vi.mock("@gennety/db", () => ({
           .slice(0, take ?? 50)
           .map((p) => ({ ...p }));
       }),
-      updateMany: vi.fn(
-        async ({
-          where,
-          data,
-        }: {
-          where: { id: string; embeddingDirtyAt: Date | null };
-          data: Partial<ProfileRow>;
-        }) => {
-          const row = profiles.get(where.id);
-          if (!row) return { count: 0 };
-          // Match on dirtyAt — concurrent re-dirty flips this and we no-op.
-          const target = where.embeddingDirtyAt?.getTime() ?? null;
-          const actual = row.embeddingDirtyAt?.getTime() ?? null;
-          if (target !== actual) return { count: 0 };
-          Object.assign(row, data);
-          return { count: 1 };
-        },
-      ),
     },
-    $executeRaw: vi.fn(async (..._args: unknown[]) => 1),
+    $executeRaw: vi.fn(
+      async (
+        _strings: TemplateStringsArray,
+        _literal: string,
+        id: string,
+        dirtyAt: Date | null,
+      ) => {
+        const row = profiles.get(id);
+        if (!row || !row.embeddingDirty) return 0;
+        const actual = row.embeddingDirtyAt?.getTime() ?? null;
+        const expected = dirtyAt?.getTime() ?? null;
+        if (actual !== expected) return 0;
+        row.embeddingDirty = false;
+        row.embeddingDirtyAt = null;
+        row.embedding = "vector";
+        return 1;
+      },
+    ),
   },
 }));
 
@@ -76,7 +75,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function seedDirty(id: string, dirtyAt: Date): ProfileRow {
+function seedDirty(id: string, dirtyAt: Date | null): ProfileRow {
   const row: ProfileRow = {
     id,
     userId: `user-${id}`,
@@ -150,5 +149,17 @@ describe("embeddingRefreshTick (M-2)", () => {
 
     expect(result.failed).toBe(1);
     expect(profiles.get("p3")!.embeddingDirty).toBe(true); // still dirty
+  });
+
+  it("repairs a legacy dirty row with no dirty timestamp", async () => {
+    seedDirty("p4", null);
+    const stubClient = {
+      embed: vi.fn().mockResolvedValue(new Array(1536).fill(0.2)),
+    };
+
+    const result = await embeddingRefreshTick({ client: stubClient });
+
+    expect(result.refreshed).toBe(1);
+    expect(profiles.get("p4")!.embeddingDirty).toBe(false);
   });
 });
