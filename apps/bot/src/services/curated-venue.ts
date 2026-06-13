@@ -19,6 +19,7 @@
 import { prisma } from "@gennety/db";
 import { haversineDistanceKm, type LatLng } from "./geo.js";
 import {
+  isBlockedVenueName,
   pickVenueAtMidpoint,
   type Venue,
   type RegularOpeningHours,
@@ -195,6 +196,7 @@ export function rankCuratedVenues(
   let bestScore = -Infinity;
 
   for (const row of candidates) {
+    if (isBlockedVenueName(row.name)) continue;
     if (!isVenueOpenAt(row.openingHours, row.utcOffsetMinutes, ctx.agreedTime)) continue;
     const venuePoint: LatLng = { lat: row.lat, lng: row.lng };
     const distA = haversineDistanceKm(ctx.originA, venuePoint);

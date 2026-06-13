@@ -387,6 +387,12 @@ Indexed by `(universityDomain, category, active)`. Read by
 `scripts/seed-venues.mjs` and kept fresh by the venue re-validation cron
 (`services/venue-revalidation.ts`).
 
+Operator-level brand exclusions are enforced in both curated ranking and the
+Google Places gate, preventing a deleted brand from returning through fallback
+search. Kyiv expansion data is maintained by stable Places ids in
+`scripts/curated-venues.kyiv.expansion.json` and reconciled into the approved
+catalog with `pnpm sync-venues:kyiv`.
+
 ## Cron & Workers (`apps/bot/src/index.ts`)
 
 All schedules are env-overridable (the canonical names are listed below).

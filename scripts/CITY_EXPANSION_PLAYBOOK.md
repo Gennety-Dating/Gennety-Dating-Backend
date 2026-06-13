@@ -209,13 +209,31 @@ re-validation cron and treated as always-open):
   "priority": 1, "vibeTags": ["cozy", "coffee"], "googleMapsUri": "https://..." }
 ```
 
+### Expanding an approved chain
+
+Approval is per physical Place, not per brand. Before adding more branches:
+
+1. Enumerate current branches from the brand's official location page and
+   Google Places text search.
+2. Resolve each branch to a distinct `placeId`.
+3. Apply the normal status, rating, review, price, hours, access, and
+   first-date-suitability checks independently.
+4. Do not inherit approval into temporarily closed, expensive, low-review,
+   office-access-only, or otherwise unsuitable branches.
+5. For Kyiv, record reviewed branches and rejected suggestions in
+   `scripts/curated-venues.kyiv.expansion.json`, then run
+   `pnpm sync-venues:kyiv --apply`.
+
+Operator-blocked brands must be removed from the approved source and blocked in
+the live Places gate so fallback search cannot reintroduce them.
+
 ---
 
 ## 6. Import
 
 ```sh
 pnpm seed-venues:import                 # dry-run: prints what WOULD be written
-pnpm seed-venues:import --apply         # writes (idempotent upsert on domain+name+address)
+pnpm seed-venues:import --apply         # writes (idempotent upsert on domain+Place id)
 # custom manual file:
 pnpm seed-venues:import --in=scripts/manual-venues.json --apply
 ```

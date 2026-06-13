@@ -765,6 +765,13 @@ populated by `scripts/seed-venues.mjs` (Places-backed pull → manual review →
 import); it shares the exact production quality gate via `searchVenueCandidates`,
 so a curated spot can never be something the live gate would reject.
 
+Operator-blocked brands are excluded at every venue boundary: curated ranking,
+candidate seeding/import, and live Google Places fallback. The Kyiv catalog
+currently blocks all Musafir locations. Kyiv's reviewed additions and explicit
+rejections are tracked by stable Google `placeId` in
+`scripts/curated-venues.kyiv.expansion.json`; `pnpm sync-venues:kyiv` refreshes
+their Places metadata before reconciling the replayable approved JSON.
+
 A curated venue that is **closed at the agreed date/time** (per its stored
 Places `openingHours`, evaluated in the venue's local time via
 `utcOffsetMinutes`) is skipped at selection — missing hours data is treated as

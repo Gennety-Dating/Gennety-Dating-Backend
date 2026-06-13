@@ -14,6 +14,7 @@ import {
   pickVenueAtMidpoint,
   searchVenueCandidates,
   gate,
+  isBlockedVenueName,
   score,
   type MidpointVenueInput,
 } from "./venue.js";
@@ -96,6 +97,18 @@ describe("gate (quality filter)", () => {
       gate(place({ types: ["convenience_store", "gas_station"], rating: 4.6 }), "cafe", false),
     ).toBe(false);
     expect(gate(place({ primaryType: "lodging" }), "restaurant", true)).toBe(false);
+  });
+
+  it("rejects operator-blocked venue brands in strict and relaxed search", () => {
+    expect(isBlockedVenueName("Musafir Podil")).toBe(true);
+    expect(isBlockedVenueName("Ресторан Мусафір")).toBe(true);
+    expect(isBlockedVenueName("Blur Coffee")).toBe(false);
+    expect(
+      gate(place({ displayName: { text: "Musafir" } }), "restaurant", true),
+    ).toBe(false);
+    expect(
+      gate(place({ displayName: { text: "Мусафір Осокорки" } }), "restaurant", false),
+    ).toBe(false);
   });
 
   it("still accepts a genuine venue whose types are absent or category-appropriate", () => {
@@ -355,5 +368,17 @@ describe("searchVenueCandidates (curated seeder)", () => {
     ]);
     const candidates = await searchVenueCandidates("test-key", midpointInput());
     expect(candidates.map((c) => c.name)).toEqual(["Real Cafe"]);
+  });
+
+  it("excludes operator-blocked brands from curated seeder candidates", async () => {
+    mockNearby([
+      place({ displayName: { text: "Musafir" } }),
+      place({ displayName: { text: "Passenger Gastro Bar" } }),
+    ]);
+    const candidates = await searchVenueCandidates(
+      "test-key",
+      midpointInput({ category: "restaurant" }),
+    );
+    expect(candidates.map((c) => c.name)).toEqual(["Passenger Gastro Bar"]);
   });
 });

@@ -586,7 +586,19 @@ pnpm seed-venues:import --apply
 ```
 
 Re-running `--pull` overwrites the candidates file; `--import --apply` is
-idempotent (upsert on domain+name+address) so it's safe to re-run after edits.
+idempotent (upsert on domain+Place id, with name/address fallback) so it's safe
+to re-run after edits.
+The import also deletes rows matching the operator brand blocklist.
+
+For the reviewed Kyiv expansion, refresh and validate the committed approved
+catalog before importing:
+
+```sh
+pnpm sync-venues:kyiv
+pnpm sync-venues:kyiv --apply
+pnpm sync-venues:kyiv --check
+pnpm seed-venues:import --in=scripts/curated-venues.kyiv.approved.json --apply
+```
 
 ## Caddy Or Domain Changes
 

@@ -18,7 +18,8 @@
  *
  *   3. pnpm seed-venues:import
  *      Upserts approved rows into `curated_venues` (idempotent on
- *      domain+name+address) and stamps `lastVerifiedAt = now()`.
+ *      domain+placeId, with domain+name+address fallback) and stamps
+ *      `lastVerifiedAt = now()`.
  *
  * Run against whichever DB your env points at: `.env.local` (dev) wins over
  * `.env` (prod) exactly like the rest of the toolchain. To seed PRODUCTION,
@@ -175,12 +176,33 @@ async function importVenues() {
   const { isValidVenueCategory } = await import(
     "../apps/bot/src/services/curated-venue.js"
   );
+  const { isBlockedVenueName } = await import(
+    "../apps/bot/src/services/venue.js"
+  );
 
-  const approved = rows.filter((r) => r.approved === true);
+  const approved = rows.filter(
+    (r) => r.approved === true && !isBlockedVenueName(r.name),
+  );
   console.log(`${approved.length}/${rows.length} approved.${apply ? "" : " (dry run — pass --apply to write)"}`);
 
   let created = 0;
   let updated = 0;
+  let deleted = 0;
+  if (apply) {
+    const existing = await prisma.curatedVenue.findMany({
+      select: { id: true, name: true },
+    });
+    const blockedIds = existing
+      .filter((row) => isBlockedVenueName(row.name))
+      .map((row) => row.id);
+    if (blockedIds.length > 0) {
+      const result = await prisma.curatedVenue.deleteMany({
+        where: { id: { in: blockedIds } },
+      });
+      deleted = result.count;
+    }
+  }
+
   for (const r of approved) {
     if (!r.universityDomain || !r.name || !r.address) {
       console.warn(`  ! skipping (missing domain/name/address): ${JSON.stringify(r).slice(0, 120)}`);
@@ -217,12 +239,15 @@ async function importVenues() {
       continue;
     }
 
-    // No unique index on (domain, name, address); dedupe via findFirst.
+    // Prefer the stable Places id so a Google rename/address normalization
+    // updates the existing row instead of creating a duplicate.
     const existing = await prisma.curatedVenue.findFirst({
       where: {
         universityDomain: data.universityDomain,
-        name: data.name,
-        address: data.address,
+        OR: [
+          ...(data.placeId ? [{ placeId: data.placeId }] : []),
+          { name: data.name, address: data.address },
+        ],
       },
       select: { id: true },
     });
@@ -236,7 +261,9 @@ async function importVenues() {
   }
 
   if (apply) {
-    console.log(`\n✓ Imported: ${created} created, ${updated} updated.`);
+    console.log(
+      `\n✓ Imported: ${created} created, ${updated} updated, ${deleted} blocked deleted.`,
+    );
     await prisma.$disconnect();
   }
 }

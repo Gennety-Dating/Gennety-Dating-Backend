@@ -139,6 +139,17 @@ describe("rankCuratedVenues", () => {
     );
     expect(best?.name).toBe("Open Cafe");
   });
+
+  it("skips an operator-blocked brand even when it would otherwise rank first", () => {
+    const best = rankCuratedVenues(
+      [
+        row({ name: "Musafir Podil", priority: 1 }),
+        row({ name: "Passenger Gastro Bar", priority: 2 }),
+      ],
+      baseCtx,
+    );
+    expect(best?.name).toBe("Passenger Gastro Bar");
+  });
 });
 
 describe("isVenueOpenAt", () => {

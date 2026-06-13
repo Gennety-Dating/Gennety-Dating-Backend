@@ -101,6 +101,20 @@ const FOOD_CATEGORIES: ReadonlySet<VenueCategory> = new Set<VenueCategory>([
 ]);
 
 /**
+ * Operator-level brand exclusions. These apply to curated rows, seeding, and
+ * live Places fallback so removing a brand from the static catalog cannot let
+ * it reappear through a later Google search.
+ */
+const BLOCKED_VENUE_NAME_FRAGMENTS = ["musafir", "мусафір", "мусафир"];
+
+export function isBlockedVenueName(name: string | null | undefined): boolean {
+  const normalized = name?.trim().toLocaleLowerCase() ?? "";
+  return BLOCKED_VENUE_NAME_FRAGMENTS.some((fragment) =>
+    normalized.includes(fragment),
+  );
+}
+
+/**
  * Place types that must NEVER be proposed as a first-date venue, regardless
  * of rating/reviews. `searchNearby` already constrains by `includedTypes`,
  * but `searchText` (tier-3 fallback) does not — a high-rated petrol station
@@ -339,6 +353,7 @@ export function gate(
   strict: boolean,
 ): boolean {
   if (!p.displayName?.text) return false;
+  if (isBlockedVenueName(p.displayName.text)) return false;
   if (p.businessStatus !== "OPERATIONAL") return false;
   // Hard type deny-list applies in BOTH strict and relaxed mode — relaxing
   // the price ceiling must never re-admit a gas station / hotel / etc.

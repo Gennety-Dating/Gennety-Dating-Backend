@@ -28,6 +28,7 @@
     "onboarding:backfill:apply": "pnpm --filter @gennety/bot exec tsx ../../scripts/backfill-onboarding-progress.mjs --apply",
     "seed-venues:pull": "pnpm --filter @gennety/bot exec tsx ../../scripts/seed-venues.mjs --pull",
     "seed-venues:import": "pnpm --filter @gennety/bot exec tsx ../../scripts/seed-venues.mjs --import",
+    "sync-venues:kyiv": "node scripts/sync-kyiv-venue-catalog.mjs",
     "typecheck": "pnpm -r typecheck",
     "face-eval": "pnpm --filter @gennety/bot exec tsx scripts/face-eval.ts",
     "face-eval-user": "pnpm --filter @gennety/bot exec tsx scripts/face-eval-user.ts"
