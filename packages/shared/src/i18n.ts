@@ -390,6 +390,14 @@ const translations = {
       "No overlap yet — next round.",
     matchScheduled: "Locked in! {venue} — see you there 🤝",
     matchScheduledBtnOpenMaps: "📍 Open in Maps",
+    matchScheduledBtnShare: "📤 Share this card",
+    dateCardTagline: "IT'S A DATE",
+    dateCardWhen: "WHEN",
+    dateCardWhere: "WHERE",
+    dateCardShareCaption:
+      "Share away — your match's face is hidden to protect their privacy 💞",
+    dateCardShareFailed:
+      "Couldn't prepare a shareable card right now — try again in a moment.",
     matchSchedulePickedPrefix: "You picked: ",
     matchScheduleWaitingPeer: "Waiting on the other person…",
     matchSchedulePeerProposed:
@@ -985,6 +993,14 @@ const translations = {
     matchScheduleNoOverlap: "Не совпало — попробуем ещё.",
     matchScheduled: "Готово! {venue} — до встречи 🤝",
     matchScheduledBtnOpenMaps: "📍 Открыть в картах",
+    matchScheduledBtnShare: "📤 Поделиться карточкой",
+    dateCardTagline: "У ВАС СВИДАНИЕ",
+    dateCardWhen: "КОГДА",
+    dateCardWhere: "ГДЕ",
+    dateCardShareCaption:
+      "Делитесь смело — лицо вашего мэтча скрыто, чтобы сохранить его приватность 💞",
+    dateCardShareFailed:
+      "Не получилось подготовить карточку для отправки — попробуйте через минуту.",
     matchSchedulePickedPrefix: "Ты выбрал: ",
     matchScheduleWaitingPeer: "Ждём выбор второй стороны…",
     venueConciergeIntro:
@@ -1564,6 +1580,14 @@ const translations = {
     matchScheduleNoOverlap: "Не збіглося — спробуємо ще.",
     matchScheduled: "Готово! {venue} — до зустрічі 🤝",
     matchScheduledBtnOpenMaps: "📍 Відкрити в картах",
+    matchScheduledBtnShare: "📤 Поділитися карткою",
+    dateCardTagline: "У ВАС ПОБАЧЕННЯ",
+    dateCardWhen: "КОЛИ",
+    dateCardWhere: "ДЕ",
+    dateCardShareCaption:
+      "Діліться сміливо — обличчя вашого метчу приховане, щоб зберегти його приватність 💞",
+    dateCardShareFailed:
+      "Не вдалося підготувати картку для надсилання — спробуйте за хвилину.",
     matchSchedulePickedPrefix: "Ти обрав: ",
     matchScheduleWaitingPeer: "Чекаємо на вибір іншої сторони…",
     matchSchedulePeerProposed:
@@ -2118,6 +2142,14 @@ const deTranslations: TranslationTable = {
   matchScheduleNoOverlap: "Noch keine Überschneidung - nächste Runde.",
   matchScheduled: "Fixiert! {venue} - bis dann 🤝",
   matchScheduledBtnOpenMaps: "📍 In Maps öffnen",
+  matchScheduledBtnShare: "📤 Karte teilen",
+  dateCardTagline: "ES IST EIN DATE",
+  dateCardWhen: "WANN",
+  dateCardWhere: "WO",
+  dateCardShareCaption:
+    "Teile sie ruhig — das Gesicht deines Matches ist zum Schutz seiner Privatsphäre verdeckt 💞",
+  dateCardShareFailed:
+    "Konnte gerade keine teilbare Karte erstellen — versuch es gleich noch einmal.",
   matchSchedulePickedPrefix: "Du hast gewählt: ",
   matchScheduleWaitingPeer: "Warten auf die andere Person...",
   matchSchedulePeerProposed:
@@ -2606,6 +2638,14 @@ const plTranslations: TranslationTable = {
   matchScheduleNoOverlap: "Jeszcze brak wspólnego terminu - kolejna runda.",
   matchScheduled: "Ustalone! {venue} - do zobaczenia 🤝",
   matchScheduledBtnOpenMaps: "📍 Otwórz w Mapach",
+  matchScheduledBtnShare: "📤 Udostępnij kartę",
+  dateCardTagline: "TO RANDKA",
+  dateCardWhen: "KIEDY",
+  dateCardWhere: "GDZIE",
+  dateCardShareCaption:
+    "Udostępniaj śmiało — twarz Twojego matcha jest zasłonięta dla ochrony jego prywatności 💞",
+  dateCardShareFailed:
+    "Nie udało się przygotować karty do udostępnienia — spróbuj za chwilę.",
   matchSchedulePickedPrefix: "Wybrałeś/wybrałaś: ",
   matchScheduleWaitingPeer: "Czekamy na drugą osobę...",
   matchSchedulePeerProposed:

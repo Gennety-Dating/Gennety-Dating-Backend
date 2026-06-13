@@ -23,8 +23,12 @@
  */
 
 import type { Api, RawApi } from "grammy";
-import { InlineKeyboard, Keyboard } from "grammy";
-import type { InlineKeyboardMarkup, ReplyKeyboardMarkup } from "grammy/types";
+import { InlineKeyboard, InputFile, Keyboard } from "grammy";
+import type {
+  InlineKeyboardMarkup,
+  MessageEntity,
+  ReplyKeyboardMarkup,
+} from "grammy/types";
 import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
@@ -49,6 +53,7 @@ import { runVenueFinalizationOnce } from "../../services/venue-finalization-flig
 import { isTelegramTarget } from "../../utils/telegram-target.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { venueSearchSteps } from "../../services/analysis-status.js";
+import { renderDateCard, buildShareButton } from "../../services/date-card/index.js";
 
 /**
  * Build the reply keyboard that surfaces Telegram's `request_location`
@@ -365,8 +370,25 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
       vibeLngB: true,
       parsedCategoryA: true,
       parsedCategoryB: true,
-      userA: { select: { telegramId: true, language: true, gender: true, universityDomain: true } },
-      userB: { select: { telegramId: true, language: true, gender: true } },
+      userA: {
+        select: {
+          telegramId: true,
+          language: true,
+          gender: true,
+          universityDomain: true,
+          firstName: true,
+          profile: { select: { photos: true } },
+        },
+      },
+      userB: {
+        select: {
+          telegramId: true,
+          language: true,
+          gender: true,
+          firstName: true,
+          profile: { select: { photos: true } },
+        },
+      },
     },
   });
   if (!match) return;
@@ -448,6 +470,9 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
       venueLat: mid.lat,
       venueLng: mid.lng,
       venueGoogleMapsUri: venue.googleMapsUri,
+      // Date-card imagery refs (feature-flagged render; harmless to store always).
+      venuePhotoUrl: venue.photoUrl ?? null,
+      venuePhotoName: venue.photoName ?? null,
     },
   });
   if (committed.count === 0) return;
@@ -483,24 +508,37 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
     mapsKeyboardB.inline_keyboard.push([buildVenueChangeButton(matchId, langB)]);
   }
 
-  const finalSends: Array<Promise<unknown>> = [];
-  if (isTelegramTarget(match.userA.telegramId)) {
-    finalSends.push(
-      api.sendMessage(Number(match.userA.telegramId), textA, {
-        entities: [entA],
-        reply_markup: mapsKeyboardA,
-      }),
-    );
-  }
-  if (isTelegramTarget(match.userB.telegramId)) {
-    finalSends.push(
-      api.sendMessage(Number(match.userB.telegramId), textB, {
-        entities: [entB],
-        reply_markup: mapsKeyboardB,
-      }),
-    );
-  }
-  await Promise.all(finalSends);
+  // Each side's scheduled confirmation. When the date-card feature is on we
+  // try to render a PNG card (the recipient sees their *partner*) and send it
+  // screenshot/forward-protected with a Share button; any render failure falls
+  // back to the plain-text card per-side, so one render hiccup never denies the
+  // other person their card and scheduling never wedges.
+  await Promise.all([
+    sendScheduledConfirmation(api, {
+      telegramId: match.userA.telegramId,
+      text: textA,
+      entity: entA,
+      keyboard: mapsKeyboardA,
+      language: langA,
+      matchId,
+      partnerFirstName: match.userB.firstName ?? "",
+      partnerPhotoRef: match.userB.profile?.photos?.[0] ?? null,
+      venue,
+      agreedTime: match.agreedTime,
+    }),
+    sendScheduledConfirmation(api, {
+      telegramId: match.userB.telegramId,
+      text: textB,
+      entity: entB,
+      keyboard: mapsKeyboardB,
+      language: langB,
+      matchId,
+      partnerFirstName: match.userA.firstName ?? "",
+      partnerPhotoRef: match.userA.profile?.photos?.[0] ?? null,
+      venue,
+      agreedTime: match.agreedTime,
+    }),
+  ]);
 
   // Follow-up hint DM explaining the one-shot venue-change right (after the card).
   const hintSends: Array<Promise<unknown>> = [];
@@ -511,6 +549,79 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
     hintSends.push(sendVenueChangeHint(api, match.userB.telegramId, langB));
   }
   await Promise.all(hintSends);
+}
+
+interface ScheduledConfirmationInput {
+  telegramId: bigint;
+  text: string;
+  entity: MessageEntity;
+  keyboard: InlineKeyboardMarkup;
+  language: Language;
+  matchId: string;
+  /** The partner the recipient is meeting (shown on the card). */
+  partnerFirstName: string;
+  partnerPhotoRef: string | null;
+  venue: Venue;
+  agreedTime: Date;
+}
+
+/**
+ * Send one side's `scheduled` confirmation. With `DATE_CARD_FEATURE_ENABLED`
+ * we render a PNG date card and send it screenshot/forward-protected with a
+ * Share button; the same `date_time`-entity caption + Maps/venue-change
+ * keyboard ride along so all native affordances survive. Any render or send
+ * failure degrades to the existing plain-text card so scheduling never wedges.
+ */
+async function sendScheduledConfirmation(
+  api: Api<RawApi>,
+  input: ScheduledConfirmationInput,
+): Promise<void> {
+  if (!isTelegramTarget(input.telegramId)) return;
+  const chatId = Number(input.telegramId);
+
+  if (env.DATE_CARD_FEATURE_ENABLED) {
+    const card = await renderDateCard(
+      {
+        partnerFirstName: input.partnerFirstName,
+        partnerPhotoRef: input.partnerPhotoRef,
+        venueName: input.venue.name,
+        venueAddress: input.venue.address,
+        venuePhotoUrl: input.venue.photoUrl ?? null,
+        venuePhotoName: input.venue.photoName ?? null,
+        agreedTime: input.agreedTime,
+        language: input.language,
+      },
+      { blur: false },
+      api,
+    );
+    if (card) {
+      const keyboard: InlineKeyboardMarkup = {
+        inline_keyboard: [
+          ...input.keyboard.inline_keyboard,
+          [buildShareButton(input.matchId, input.language)],
+        ],
+      };
+      try {
+        await api.sendPhoto(chatId, new InputFile(card, "date-card.png"), {
+          caption: input.text,
+          caption_entities: [input.entity],
+          reply_markup: keyboard,
+          protect_content: true,
+        });
+        return;
+      } catch (err) {
+        console.warn(
+          `[date-card] sendPhoto failed for ${chatId}, falling back to text:`,
+          err,
+        );
+      }
+    }
+  }
+
+  await api.sendMessage(chatId, input.text, {
+    entities: [input.entity],
+    reply_markup: input.keyboard,
+  });
 }
 
 /**

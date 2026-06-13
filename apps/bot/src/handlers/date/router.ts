@@ -14,6 +14,7 @@ import {
   handleCoordExit,
   handleProxyRelay,
 } from "./coordination.js";
+import { handleDateCardShare } from "./date-card.js";
 
 /**
  * Date-lifecycle router (Phase 4) — handles:
@@ -57,6 +58,12 @@ dateRouter.use(async (ctx, next) => {
   // Voice-feedback opt-in
   if (data?.startsWith("feedback:voice:")) {
     await handleFeedbackVoiceStart(ctx);
+    return;
+  }
+
+  // Share a (face-blurred) copy of the scheduled date card.
+  if (data?.startsWith("datecard:share:")) {
+    await handleDateCardShare(ctx);
     return;
   }
 

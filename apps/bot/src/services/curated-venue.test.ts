@@ -38,6 +38,7 @@ function row(overrides: Partial<CuratedVenueRow> = {}): CuratedVenueRow {
     vibeTags: [],
     utcOffsetMinutes: null,
     openingHours: null,
+    photoUrl: null,
     ...overrides,
   };
 }

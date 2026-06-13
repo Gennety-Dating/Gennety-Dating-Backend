@@ -16,6 +16,8 @@
     "@aws-sdk/client-rekognition": "^3.1064.0",
     "@gennety/db": "workspace:*",
     "@gennety/shared": "workspace:*",
+    "@napi-rs/canvas": "^1.0.0",
+    "@resvg/resvg-js": "^2.6.2",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.6",
     "dotenv": "^16.4.7",
@@ -29,6 +31,7 @@
     "node-cron": "^4.2.1",
     "nodemailer": "^8.0.5",
     "openai": "^4.104.0",
+    "satori": "^0.26.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

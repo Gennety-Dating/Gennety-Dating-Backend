@@ -831,6 +831,37 @@ entities, so a bare ⏰ glyph reads as a regular emoji on iOS. Tapping
 opens the user's local-timezone add-to-calendar sheet via the
 entity's `unix_time`.
 
+### 3.7a Date Card (feature-flagged shareable PNG)
+
+Gated by `DATE_CARD_FEATURE_ENABLED` (default **off** → the scheduled
+confirmation is the plain-text DM above). Telegram-only in v1. When on, each
+side's `scheduled` confirmation is a rendered **PNG date card** (the recipient
+sees their *partner*): a tilted venue photo, an overlapping polaroid of the
+partner, and the meeting details (localized date/time via the same
+`Europe/Kyiv` formatting, venue name + address). Rendered server-side with
+`satori` (→ SVG) + `@resvg/resvg-js` (→ PNG); the partner-face blur uses
+AWS Rekognition `DetectFaces` boxes + pixelation. Rendered text is emoji-free
+(the bundled Roboto fonts carry no color-emoji glyphs); emoji live only in the
+Telegram caption.
+
+- **Two renders, one layout.** The **private** card is sent with
+  `protect_content: true` (blocks forwarding / saving / download) and carries
+  the same `date_time`-entity caption + Maps / venue-change keyboard, plus a
+  **Share** button. Tapping Share re-renders the card with the partner's
+  **face blurred** and sends it *without* `protect_content`, so it can leave
+  the platform without exposing the partner's identity. (`protect_content`
+  does not block OS screenshots in a normal bot chat — only secret chats do —
+  so the blurred share copy is the actual privacy guarantee.)
+- **Privacy fail-safe.** A blur that cannot be produced never falls back to the
+  clear original; the share send is aborted and the user is told to retry.
+- **Venue photo.** Curated-first: an operator-owned `CuratedVenue.photoUrl`
+  (clean licensing) when present; otherwise the venue's Google Places **cover**
+  photo (credited on the card; Google's bytes are fetched at render time and
+  never persisted). No photo → a branded gradient backdrop.
+- **Never wedges.** Any render/send failure degrades per-side to the existing
+  plain-text scheduled card, so one side's hiccup never denies the other their
+  card and scheduling always completes.
+
 ### 3.7b Venue Change (feature-flagged, female-exclusive one-shot)
 
 An optional post-schedule step lets the **female** participant swap the

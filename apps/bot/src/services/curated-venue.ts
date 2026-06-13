@@ -65,6 +65,8 @@ export interface CuratedVenueRow {
   vibeTags: string[];
   utcOffsetMinutes: number | null;
   openingHours: RegularOpeningHours | null;
+  /** Optional operator-supplied venue photo (absolute URL), for the date card. */
+  photoUrl: string | null;
 }
 
 export interface ResolveVenueInput {
@@ -227,6 +229,8 @@ function rowToVenue(row: CuratedVenueRow): Venue {
     name: row.name,
     address: row.address,
     googleMapsUri: row.googleMapsUri,
+    photoUrl: row.photoUrl,
+    photoName: null,
   };
 }
 
@@ -253,6 +257,7 @@ export async function pickCuratedVenue(
       vibeTags: true,
       utcOffsetMinutes: true,
       openingHours: true,
+      photoUrl: true,
     },
   });
   if (rows.length === 0) return null;

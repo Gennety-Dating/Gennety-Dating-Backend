@@ -244,6 +244,16 @@ export const env = {
   /// match). Telegram-only in v1 (PRODUCT_SPEC.md §3.7).
   VENUE_CHANGE_FEATURE_ENABLED: process.env.VENUE_CHANGE_FEATURE_ENABLED === "true",
 
+  // ── Date card (shareable PNG for a fully scheduled date) ─────
+  /// Master flag for the date-card feature. When false (default), the
+  /// scheduled-date confirmation is the existing plain-text DM. When true, both
+  /// users get a rendered PNG "date card" (partner photo + venue photo +
+  /// meeting details) sent screenshot/forward-protected, with a Share button
+  /// that re-sends a copy with the partner's face blurred (PRODUCT_SPEC.md §3.7).
+  /// Telegram-only in v1. A render failure falls back to the text card so
+  /// scheduling never wedges.
+  DATE_CARD_FEATURE_ENABLED: process.env.DATE_CARD_FEATURE_ENABLED === "true",
+
   // ── Dev-only: skip corporate-email OTP for specific Telegram IDs ──
   /// Comma-separated list of Telegram IDs that get a synthetic verified email
   /// at /start time, so the agent skips the email step entirely. Lets the

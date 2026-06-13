@@ -574,6 +574,14 @@ model Match {
   /// Null on the legacy domain-based venue path (no Maps URI available
   /// there) and on local-stub fallbacks.
   venueGoogleMapsUri String? @map("venue_google_maps_uri")
+  /// Date-card venue imagery (feature-flagged, `DATE_CARD_FEATURE_ENABLED`).
+  /// `venuePhotoUrl` is an absolute, operator-owned URL from a curated venue
+  /// (clean licensing). `venuePhotoName` is a Google Places photo *resource
+  /// name* (`places/X/photos/Y`); the displayable media URL is rebuilt at card
+  /// render time with the server-side key (`buildPlacesPhotoUrl`) so Google's
+  /// raw bytes are never persisted (Places ToS). Both null until `scheduled`.
+  venuePhotoUrl      String? @map("venue_photo_url")
+  venuePhotoName     String? @map("venue_photo_name")
   /// Idempotency marker: when the concierge prompt was dispatched to both users.
   venuePromptAskedAt DateTime? @map("venue_prompt_asked_at")
 

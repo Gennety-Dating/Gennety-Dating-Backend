@@ -43,6 +43,18 @@ export interface Venue {
   address: string;
   /** Google Maps deep-link. Null when the picker fell back to the local stub. */
   googleMapsUri: string | null;
+  /**
+   * Absolute, operator-owned venue photo URL (curated venues only). Clean
+   * licensing — safe to composite into the shareable date card. Null otherwise.
+   */
+  photoUrl?: string | null;
+  /**
+   * Google Places photo *resource name* (e.g. `places/X/photos/Y`) for venues
+   * sourced from Places. The displayable media URL is built on demand with the
+   * server-side API key (`buildPlacesPhotoUrl`) — we never persist Google's raw
+   * bytes (Places ToS). Null for curated / stub venues.
+   */
+  photoName?: string | null;
 }
 
 /** Legacy (pre-concierge) input. Retained for tests + rollback path. */
@@ -261,6 +273,7 @@ interface PlaceV1 {
   types?: string[];
   regularOpeningHours?: RegularOpeningHours;
   utcOffsetMinutes?: number;
+  photos?: { name?: string }[];
 }
 
 interface SearchNearbyResponse {
@@ -281,6 +294,7 @@ const FIELD_MASK = [
   "places.id",
   "places.regularOpeningHours",
   "places.utcOffsetMinutes",
+  "places.photos",
 ].join(",");
 
 /** Internal: enriched candidate with computed score. */
@@ -420,7 +434,28 @@ function placeToVenue(p: PlaceV1): Venue {
     name: p.displayName?.text ?? "",
     address: p.formattedAddress ?? "",
     googleMapsUri: p.googleMapsUri ?? null,
+    photoUrl: null,
+    // Cover photo (first in the list is the highest-quality lead image).
+    photoName: p.photos?.[0]?.name ?? null,
   };
+}
+
+/**
+ * Build a displayable Places photo media URL from a stored photo resource name.
+ * The Places (New) media endpoint streams the image when given the resource
+ * name + an API key. We build this on demand at render time so the API key is
+ * never persisted alongside the match. Returns null when inputs are missing.
+ */
+export function buildPlacesPhotoUrl(
+  photoName: string | null | undefined,
+  apiKey: string | null | undefined,
+  maxWidthPx = 1200,
+): string | null {
+  if (!photoName || !apiKey) return null;
+  return (
+    `https://places.googleapis.com/v1/${photoName}/media` +
+    `?maxWidthPx=${maxWidthPx}&key=${encodeURIComponent(apiKey)}`
+  );
 }
 
 async function searchNearby(

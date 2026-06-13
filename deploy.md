@@ -446,6 +446,21 @@ Required/high-impact env keys:
   new cron schedule. The mandatory comment is a narrow carve-out to the
   no-in-app-chat invariant (PRODUCT_SPEC.md §3.7b): post-schedule, one-shot,
   verbatim relay, no reply channel.
+- Date card (feature-flagged): `DATE_CARD_FEATURE_ENABLED` (default `false` —
+  leave off until launch). When on, each side's `scheduled` confirmation is a
+  rendered PNG date card (partner photo + venue photo + details) sent
+  screenshot/forward-protected, with a Share button that re-sends a copy with
+  the partner's face blurred (PRODUCT_SPEC.md §3.7a). Telegram-only in v1.
+  Requires `db:push` of the new `Match.venuePhotoUrl` / `venuePhotoName`
+  columns first. No new system dependency: rendering uses `satori`,
+  `@resvg/resvg-js`, and `@napi-rs/canvas` (prebuilt binaries pulled by
+  `pnpm install --frozen-lockfile`, **not** ffmpeg/Chromium), and the bundled
+  Roboto TTFs in `apps/bot/src/assets/fonts/` ride the standard code rsync.
+  Venue photos come from `CuratedVenue.photoUrl` first, else the Google Places
+  cover photo (needs `PLACES_API_KEY`; fetched at render, credited on the card,
+  never persisted). Runs inline at venue finalization — no new cron. Any render
+  failure degrades to the existing plain-text scheduled DM, so the flag is safe
+  to toggle live with `pm2 restart gennety-bot --update-env`.
 - Optional cron overrides: `MATCH_CRON_SCHEDULE`, `CRON_TIMEZONE`,
   `EXPIRY_CRON_SCHEDULE`, `NO_MATCH_NOTICE_CRON_SCHEDULE`,
   `PROPOSAL_COUNTDOWN_CRON_SCHEDULE`, `RE_ENGAGEMENT_CRON_SCHEDULE`,
