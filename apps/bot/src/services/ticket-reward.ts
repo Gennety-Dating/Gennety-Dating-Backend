@@ -14,14 +14,16 @@ export async function sendTicketRewardDM(
   api: Api,
   chatId: number,
   lang: Language,
-  kind: "photo" | "video",
+  kind: "photo" | "video" | "verification",
   balance: number,
 ): Promise<void> {
-  const text = t(
-    lang,
-    kind === "photo" ? "ticketRewardPhoto" : "ticketRewardVideo",
-    { balance },
-  );
+  const key =
+    kind === "photo"
+      ? "ticketRewardPhoto"
+      : kind === "video"
+        ? "ticketRewardVideo"
+        : "ticketRewardVerification";
+  const text = t(lang, key, { balance });
   const effectId = env.MESSAGE_EFFECT_TICKET_ID;
   try {
     await api.sendMessage(chatId, text, {

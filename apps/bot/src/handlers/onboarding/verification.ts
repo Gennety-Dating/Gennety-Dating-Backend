@@ -44,7 +44,7 @@ export const VERIFY_CHECK_CALLBACK = "verify:check";
  *     `/v1/verification/mini-app/event` on terminal SDK events, which
  *     fires the same pull-fallback the old "I've finished" button used.
  *   • Skip for now → callback button (`verify:skip`) that drops the
- *     user's ELO score and activates them as `verificationStatus=unverified`.
+ *     user into the voice-nudge confirmation step without applying a penalty.
  *
  * The legacy hosted-URL path is kept as a dev/fallback safety net when
  * `WEBAPP_URL` isn't configured (local dev without a tunnel) — see below.
@@ -99,9 +99,20 @@ export async function sendVerificationCTABare(
   if (!appendVerifyNowButton(keyboard, lang, user.id, t(lang, "verifyBtnGo"))) {
     return false;
   }
+  keyboard.success();
   keyboard.row().text(t(lang, "verifyBtnSkip"), VERIFY_SKIP_CALLBACK);
 
-  await api.sendMessage(chatId, t(lang, "verifyPitch"), { reply_markup: keyboard });
+  const pitchKey = env.TICKET_FEATURE_ENABLED
+    ? "verifyPitchTicket"
+    : "verifyPitch";
+  await api.sendMessage(
+    chatId,
+    t(lang, pitchKey, { penalty: UNVERIFIED_ELO_PENALTY }),
+    {
+      parse_mode: "Markdown",
+      reply_markup: keyboard,
+    },
+  );
   return true;
 }
 
@@ -189,7 +200,12 @@ async function sendSkipNudge(
   lang: Language,
   keyboard: InlineKeyboard,
 ): Promise<void> {
-  const caption = t(lang, "verifySkipNudgeCaption");
+  const captionKey = env.TICKET_FEATURE_ENABLED
+    ? "verifySkipNudgeCaptionTicket"
+    : "verifySkipNudgeCaption";
+  const caption = t(lang, captionKey, {
+    penalty: UNVERIFIED_ELO_PENALTY,
+  });
   if (SKIP_NUDGE_VOICE_LANGS.has(lang)) {
     try {
       const cached = skipNudgeVoiceFileIds.get(lang);
@@ -286,10 +302,20 @@ export async function handleVerificationSkip(ctx: BotContext): Promise<void> {
   if (user.verificationSkippedAt) return;
 
   const keyboard = new InlineKeyboard();
-  appendVerifyNowButton(keyboard, lang, user.id, t(lang, "verifyBtnReconsider"));
+  const hasVerifyButton = appendVerifyNowButton(
+    keyboard,
+    lang,
+    user.id,
+    t(lang, "verifyBtnReconsider"),
+  );
+  if (hasVerifyButton) keyboard.success();
+  const skipConfirmKey = env.TICKET_FEATURE_ENABLED
+    ? "verifyBtnSkipConfirmTicket"
+    : "verifyBtnSkipConfirm";
   keyboard
     .row()
-    .text(t(lang, "verifyBtnSkipConfirm"), VERIFY_SKIP_CONFIRM_CALLBACK);
+    .text(t(lang, skipConfirmKey), VERIFY_SKIP_CONFIRM_CALLBACK)
+    .danger();
 
   await sendSkipNudge(ctx.api, ctx.chat!.id, lang, keyboard);
 }

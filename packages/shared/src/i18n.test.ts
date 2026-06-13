@@ -71,6 +71,10 @@ describe("t (translation)", () => {
       "chooseLanguage",
       "settingsLanguagePick",
       "verifyPitch",
+      "verifyPitchTicket",
+      "verifySkipNudgeCaptionTicket",
+      "verifyBtnSkipConfirmTicket",
+      "ticketRewardVerification",
       "feedbackThanks",
     ] as const;
 

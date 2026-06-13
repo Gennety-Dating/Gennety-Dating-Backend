@@ -88,6 +88,8 @@ const translations = {
       "🎟️ Nice — you just earned a *free Date Ticket*!\n\nHere's the deal: every date you go on costs 1 ticket, and tickets normally cost money. Adding photos got you one on the house. Balance: *{balance}* 🎟️",
     ticketRewardVideo:
       "🎟️ A profile video — love it! That's another *free Date Ticket*.\n\nEach date costs 1 ticket (normally paid), so you're set for your next one. Balance: *{balance}* 🎟️",
+    ticketRewardVerification:
+      "🎟️ Verification complete — your *free Date Ticket* is already in your wallet.\n\nIt covers one date. Balance: *{balance}* 🎟️",
     onboardingPhotosNeedMore:
       "Photo progress: {count}/{min}. Clear photos still needed: {remaining}.",
     onboardingPhotosBonusOffer:
@@ -145,13 +147,20 @@ const translations = {
       "Photos that don't match you will be rejected.\n\n" +
       "Skipping verification will significantly lower your starting ELO rating, " +
       "and the algorithm will surface fewer matches for you.",
+    verifyPitchTicket:
+      "Final step: confirm that this profile is really yours.\n\n" +
+      "We'll compare a verification selfie with your profile photos. Complete the check and get *1 free Date Ticket* for one date.\n\n" +
+      "If you skip, you give up the free ticket, lose {penalty} starting ELO points, and reduce your chances of receiving a strong match.",
     verifyBtnGo: "🟢 Verify now",
     verifyBtnCheck: "✅ I've finished verification",
     verifyBtnSkip: "⚪️ Skip for now",
     verifySkipNudgeCaption:
       "One sec — listen to this before you skip 👆",
+    verifySkipNudgeCaptionTicket:
+      "Before you give this up: skipping costs your free ticket, {penalty} ELO points, and some of your match priority. Listen first 👆",
     verifyBtnReconsider: "🟢 OK, I'll verify",
-    verifyBtnSkipConfirm: "⚪️ Skip anyway",
+    verifyBtnSkipConfirm: "🔴 Skip anyway",
+    verifyBtnSkipConfirmTicket: "🔴 Give up the bonus and skip",
     verifySkipped:
       "Skipped verification. You can run it later from the profile menu " +
       "to restore your ELO rating.",
@@ -665,6 +674,8 @@ const translations = {
       "🎟️ Класс — ты только что получил *бесплатный билет на свидание*!\n\nКак это работает: каждое свидание стоит 1 билет, и обычно билеты платные. За добавленные фото — один в подарок. Баланс: *{balance}* 🎟️",
     ticketRewardVideo:
       "🎟️ Видео в профиле — супер! Вот ещё *бесплатный билет на свидание*.\n\nКаждое свидание стоит 1 билет (обычно платный), так что на следующее ты готов. Баланс: *{balance}* 🎟️",
+    ticketRewardVerification:
+      "🎟️ Верификация пройдена — *бесплатный билет на свидание* уже на балансе.\n\nОн покрывает одну встречу. Баланс: *{balance}* 🎟️",
     onboardingPhotosNeedMore:
       "Фото: {count}/{min}. Осталось загрузить ещё {remaining} чёткое фото до обязательного минимума.",
     onboardingPhotosBonusOffer:
@@ -722,13 +733,20 @@ const translations = {
       "Фото, на которых не вы, будут отклонены.\n\n" +
       "Отказ от верификации значительно снизит ваш стартовый ELO-рейтинг, " +
       "и алгоритм будет предлагать вам меньше встреч.",
+    verifyPitchTicket:
+      "Финальный шаг — подтвердить, что профиль действительно твой.\n\n" +
+      "Мы сравним селфи с фотографиями профиля. Пройди проверку и получи *1 бесплатный билет на свидание*.\n\n" +
+      "Если пропустить, ты откажешься от билета, потеряешь {penalty} стартовых ELO-пунктов и снизишь свои шансы на подходящую встречу.",
     verifyBtnGo: "🟢 Пройти верификацию",
     verifyBtnCheck: "✅ Я прошёл проверку",
     verifyBtnSkip: "⚪️ Пропустить пока",
     verifySkipNudgeCaption:
       "Секунду — послушай это, прежде чем пропустить 👆",
+    verifySkipNudgeCaptionTicket:
+      "Прежде чем отказаться: пропуск лишит тебя бесплатного билета, {penalty} ELO-пунктов и части приоритета в подборе. Сначала послушай 👆",
     verifyBtnReconsider: "🟢 Всё-таки пройти верификацию",
-    verifyBtnSkipConfirm: "⚪️ Всё равно пропустить",
+    verifyBtnSkipConfirm: "🔴 Всё равно пропустить",
+    verifyBtnSkipConfirmTicket: "🔴 Отказаться от бонуса и пропустить",
     verifySkipped:
       "Верификация пропущена. Можешь пройти её позже из меню профиля, " +
       "чтобы вернуть ELO-рейтинг.",
@@ -1239,6 +1257,8 @@ const translations = {
       "🎟️ Клас — ти щойно отримав *безкоштовний квиток на побачення*!\n\nЯк це працює: кожне побачення коштує 1 квиток, і зазвичай квитки платні. За додані фото — один у подарунок. Баланс: *{balance}* 🎟️",
     ticketRewardVideo:
       "🎟️ Відео в профілі — супер! Ось ще *безкоштовний квиток на побачення*.\n\nКожне побачення коштує 1 квиток (зазвичай платний), тож на наступне ти готовий. Баланс: *{balance}* 🎟️",
+    ticketRewardVerification:
+      "🎟️ Верифікацію пройдено — *безкоштовний квиток на побачення* вже на балансі.\n\nВін покриває одну зустріч. Баланс: *{balance}* 🎟️",
     onboardingPhotosNeedMore:
       "Фото: {count}/{min}. Залишилося надіслати ще {remaining} чітке фото до обов'язкового мінімуму.",
     onboardingPhotosBonusOffer:
@@ -1296,13 +1316,20 @@ const translations = {
       "Фото, на яких не ти, буде відхилено.\n\n" +
       "Відмова від верифікації суттєво знизить твій стартовий ELO-рейтинг, " +
       "і алгоритм пропонуватиме тобі менше зустрічей.",
+    verifyPitchTicket:
+      "Фінальний крок — підтвердити, що профіль справді твій.\n\n" +
+      "Ми порівняємо селфі з фотографіями профілю. Пройди перевірку й отримай *1 безкоштовний квиток на побачення*.\n\n" +
+      "Якщо пропустити, ти відмовишся від квитка, втратиш {penalty} стартових ELO-пунктів і знизиш свої шанси на вдалу зустріч.",
     verifyBtnGo: "🟢 Пройти верифікацію",
     verifyBtnCheck: "✅ Я пройшов перевірку",
     verifyBtnSkip: "⚪️ Пропустити поки",
     verifySkipNudgeCaption:
       "Секунду — послухай це, перш ніж пропустити 👆",
+    verifySkipNudgeCaptionTicket:
+      "Перш ніж відмовитися: пропуск позбавить тебе безкоштовного квитка, {penalty} ELO-пунктів і частини пріоритету в підборі. Спочатку послухай 👆",
     verifyBtnReconsider: "🟢 Все ж таки пройти верифікацію",
-    verifyBtnSkipConfirm: "⚪️ Все одно пропустити",
+    verifyBtnSkipConfirm: "🔴 Все одно пропустити",
+    verifyBtnSkipConfirmTicket: "🔴 Відмовитися від бонусу й пропустити",
     verifySkipped:
       "Верифікацію пропущено. Можеш пройти її пізніше з меню профілю, " +
       "щоб повернути ELO-рейтинг.",
@@ -1813,13 +1840,20 @@ const deTranslations: TranslationTable = {
     "Fotos, die nicht zu dir passen, werden abgelehnt.\n\n" +
     "Wenn du die Verifizierung überspringst, sinkt dein Start-ELO deutlich " +
     "und der Algorithmus zeigt dir weniger Matches.",
+  verifyPitchTicket:
+    "Letzter Schritt: Bestätige, dass dieses Profil wirklich dir gehört.\n\n" +
+    "Wir vergleichen ein Verifizierungs-Selfie mit deinen Profilfotos. Schließe die Prüfung ab und erhalte *1 kostenloses Date-Ticket*.\n\n" +
+    "Wenn du überspringst, verzichtest du auf das Ticket, verlierst {penalty} Start-ELO-Punkte und senkst deine Chancen auf ein starkes Match.",
   verifyBtnGo: "🟢 Jetzt verifizieren",
   verifyBtnCheck: "✅ Ich habe die Verifizierung abgeschlossen",
   verifyBtnSkip: "⚪️ Erstmal überspringen",
   verifySkipNudgeCaption:
     "Kurz — hör dir das an, bevor du überspringst 👆",
+  verifySkipNudgeCaptionTicket:
+    "Bevor du verzichtest: Überspringen kostet dich das kostenlose Ticket, {penalty} ELO-Punkte und einen Teil deiner Match-Priorität. Hör erst kurz rein 👆",
   verifyBtnReconsider: "🟢 OK, ich verifiziere mich",
-  verifyBtnSkipConfirm: "⚪️ Trotzdem überspringen",
+  verifyBtnSkipConfirm: "🔴 Trotzdem überspringen",
+  verifyBtnSkipConfirmTicket: "🔴 Bonus aufgeben und überspringen",
   verifySkipped:
     "Verifizierung übersprungen. Du kannst sie später im Profilmenü starten, " +
     "um dein ELO wiederherzustellen.",
@@ -1887,6 +1921,8 @@ const deTranslations: TranslationTable = {
     "🎟️ Stark — du hast gerade ein *kostenloses Date-Ticket* verdient!\n\nSo läuft's: Jedes Date kostet 1 Ticket, und Tickets kosten normalerweise Geld. Für deine Fotos gibt's eins gratis. Guthaben: *{balance}* 🎟️",
   ticketRewardVideo:
     "🎟️ Ein Profilvideo — top! Noch ein *kostenloses Date-Ticket* für dich.\n\nJedes Date kostet 1 Ticket (sonst kostenpflichtig). Guthaben: *{balance}* 🎟️",
+  ticketRewardVerification:
+    "🎟️ Verifizierung abgeschlossen — dein *kostenloses Date-Ticket* ist schon im Guthaben.\n\nEs deckt ein Date ab. Guthaben: *{balance}* 🎟️",
   onboardingPhotosNeedMore:
     "Fotostand: {count}/{min}. Noch benötigte klare Fotos: {remaining}.",
   onboardingPhotosBonusOffer:
@@ -2289,13 +2325,20 @@ const plTranslations: TranslationTable = {
     "Zdjęcia, które nie pasują do Ciebie, zostaną odrzucone.\n\n" +
     "Pominięcie weryfikacji mocno obniży Twój startowy ranking ELO, " +
     "a algorytm będzie pokazywał Ci mniej dopasowań.",
+  verifyPitchTicket:
+    "Ostatni krok: potwierdź, że ten profil naprawdę należy do Ciebie.\n\n" +
+    "Porównamy selfie weryfikacyjne ze zdjęciami profilowymi. Ukończ sprawdzenie i odbierz *1 darmowy bilet na randkę*.\n\n" +
+    "Jeśli pominiesz, zrezygnujesz z biletu, stracisz {penalty} startowych punktów ELO i zmniejszysz szanse na dobre dopasowanie.",
   verifyBtnGo: "🟢 Zweryfikuj teraz",
   verifyBtnCheck: "✅ Zakończyłem/am weryfikację",
   verifyBtnSkip: "⚪️ Pomiń na razie",
   verifySkipNudgeCaption:
     "Chwila — posłuchaj tego, zanim pominiesz 👆",
+  verifySkipNudgeCaptionTicket:
+    "Zanim zrezygnujesz: pominięcie kosztuje darmowy bilet, {penalty} punktów ELO i część priorytetu dopasowań. Najpierw posłuchaj 👆",
   verifyBtnReconsider: "🟢 Dobra, zweryfikuję się",
-  verifyBtnSkipConfirm: "⚪️ Pomiń mimo to",
+  verifyBtnSkipConfirm: "🔴 Pomiń mimo to",
+  verifyBtnSkipConfirmTicket: "🔴 Zrezygnuj z bonusu i pomiń",
   verifySkipped:
     "Weryfikacja pominięta. Możesz uruchomić ją później z menu profilu, " +
     "aby przywrócić swój ranking ELO.",
@@ -2363,6 +2406,8 @@ const plTranslations: TranslationTable = {
     "🎟️ Świetnie — właśnie zdobyłeś *darmowy bilet na randkę*!\n\nJak to działa: każda randka kosztuje 1 bilet, a bilety zwykle są płatne. Za dodane zdjęcia masz jeden gratis. Saldo: *{balance}* 🎟️",
   ticketRewardVideo:
     "🎟️ Wideo w profilu — super! Oto kolejny *darmowy bilet na randkę*.\n\nKażda randka kosztuje 1 bilet (zwykle płatny). Saldo: *{balance}* 🎟️",
+  ticketRewardVerification:
+    "🎟️ Weryfikacja zakończona — *darmowy bilet na randkę* jest już na koncie.\n\nPokrywa jedną randkę. Saldo: *{balance}* 🎟️",
   onboardingPhotosNeedMore:
     "Postęp zdjęć: {count}/{min}. Pozostało wyraźnych zdjęć: {remaining}.",
   onboardingPhotosBonusOffer:

@@ -244,6 +244,7 @@ model User {
 /// `reason` (string, validated in app code — not a Prisma enum):
 ///   photo_bonus    — +1 one-time bonus for reaching 4+ profile photos
 ///   video_bonus    — +1 one-time bonus for adding a profile video
+///   verification_bonus — +1 one-time bonus for successful identity verification
 ///   store_purchase — +N from a bundle purchase in the store Mini App
 ///   spend_match    — -1 (or -2) consumed at the §3.5b date gate
 ///   refund         — +N reversal (e.g. an expired/refunded match ticket)

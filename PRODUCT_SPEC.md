@@ -236,7 +236,12 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   host (dev without a tunnel) the bot silently falls back to the legacy
   `InlineKeyboardButton.url` opening the hosted flow at
   `buildPersonaHostedUrl(userId)`. Mobile (Expo) still uses the hosted
-  URL via `/v1/me/verification/url` — it isn't a Telegram client.
+  URL via `/v1/me/verification/url` — it isn't a Telegram client. When
+  `TICKET_FEATURE_ENABLED`, the CTA also promises one free Date Ticket for a
+  successful final `verified` result. The verification pipeline credits it once
+  through `TicketLedger` (`reason = verification_bonus`), so webhook retries,
+  manual pulls, photo-triggered reruns, and later re-verification cannot
+  duplicate it. The reward DM confirms the new balance.
 - **Skip for now** — a *two-step soft skip*. The first tap does **not** apply
   any penalty: the bot plays a short personal **voice note** (native Telegram
   `sendVoice`, OGG/Opus, language-aware across all five onboarding languages
@@ -245,7 +250,11 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   Verification Mini App / hosted flow) or **Skip anyway**. Only **Skip anyway**
   flips `verificationSkippedAt`, drops `Profile.eloScore` by
   `UNVERIFIED_ELO_PENALTY` (= 150 from a 500 default), and activates the user as
-  `unverified`. Reversible by later running Persona. The voice assets are
+  `unverified`. With tickets enabled, the text also makes clear that skipping
+  forfeits the free verification ticket. Telegram's native inline-button styles
+  render the reconsider action as `success` (green) and the final skip action as
+  `danger` (red), with emoji labels retained for older clients. Reversible by
+  later running Persona. The voice assets are
   bundled in the bot (`apps/bot/src/assets/verify-skip/`) and sent with an
   in-memory `file_id` cache; a missing asset or send failure degrades
   gracefully to a text message carrying the same fork.
@@ -562,8 +571,9 @@ match/bundle, scope, and amount, and can be consumed only once.
   single "Pay my ticket — $6.99". The server re-validates that pay-for-both is
   male-only.
 - **Ticket wallet (pre-purchase + bonuses).** Users carry a `User.ticketBalance`
-  topped up by onboarding bonuses (§1.3: 4+ photos, adding a video) and by
-  bundle purchases in the store Mini App (`tickets.html`, opened from the
+  topped up by onboarding bonuses (§1.3: 4+ photos, adding a video;
+  §1.4: successful identity verification) and by bundle purchases in the store
+  Mini App (`tickets.html`, opened from the
   **My Tickets** menu): **1 / $7.00**, **3 / $16.47** ($5.49 ea), **6 / $26.94**
   ($4.49 ea). Every balance change is written atomically with an append-only
   `TicketLedger` audit row (`services/ticket-wallet.ts`). At the gate, a user
