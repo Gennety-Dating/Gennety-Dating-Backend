@@ -86,6 +86,7 @@ const {
   spendTickets,
   getBalance,
   grantVerificationBonusIfEligible,
+  grantWelcomeGiftIfEligible,
   grantPhotoBonusIfEligible,
   grantVideoBonusIfEligible,
 } = await import("./ticket-wallet.js");
@@ -165,6 +166,26 @@ describe("verification bonus", () => {
   it("is a no-op when the feature flag is off", async () => {
     flag.TICKET_FEATURE_ENABLED = false;
     const result = await grantVerificationBonusIfEligible("u1");
+    expect(result).toEqual({ granted: false, balance: 0 });
+    expect(db.ledger).toHaveLength(0);
+  });
+});
+
+describe("welcome gift", () => {
+  it("grants one ticket once and uses the ledger as the claim marker", async () => {
+    const first = await grantWelcomeGiftIfEligible("u1");
+    expect(first).toEqual({ granted: true, balance: 1 });
+
+    const second = await grantWelcomeGiftIfEligible("u1");
+    expect(second).toEqual({ granted: false, balance: 1 });
+    expect(db.ledger).toEqual([
+      expect.objectContaining({ userId: "u1", delta: 1, reason: "welcome_gift" }),
+    ]);
+  });
+
+  it("is a no-op when the feature flag is off", async () => {
+    flag.TICKET_FEATURE_ENABLED = false;
+    const result = await grantWelcomeGiftIfEligible("u1");
     expect(result).toEqual({ granted: false, balance: 0 });
     expect(db.ledger).toHaveLength(0);
   });

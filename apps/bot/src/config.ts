@@ -57,6 +57,11 @@ export const env = {
   /// Date Ticket" reward DM (4+ photos / added a profile video). Empty falls
   /// through to no effect — the reward still sends, just without the animation.
   MESSAGE_EFFECT_TICKET_ID: process.env.MESSAGE_EFFECT_TICKET_ID ?? "",
+  /// Optional Bot API 7.6+ message effect played on the welcome-gift DM (the
+  /// "your first ticket is on me" message sent as a pre-roll before a new
+  /// user's first match pitch). Operator picks a celebratory effect id (🎉/❤️).
+  /// Empty falls through to no effect — the gift DM still sends.
+  MESSAGE_EFFECT_GIFT_ID: process.env.MESSAGE_EFFECT_GIFT_ID ?? "",
   WEBAPP_URL: process.env.WEBAPP_URL ?? "https://example.invalid/calendar",
   /// URL of the post-date Feedback Mini App bundle. When unset, derived from
   /// `WEBAPP_URL` by appending `/feedback.html` — Caddy serves both the

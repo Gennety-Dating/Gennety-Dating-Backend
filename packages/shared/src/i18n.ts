@@ -90,6 +90,8 @@ const translations = {
       "🎟️ A profile video — love it! That's another *free Date Ticket*.\n\nEach date costs 1 ticket (normally paid), so you're set for your next one. Balance: *{balance}* 🎟️",
     ticketRewardVerification:
       "🎟️ Verification complete — your *free Date Ticket* is already in your wallet.\n\nIt covers one date. Balance: *{balance}* 🎟️",
+    welcomeGiftTicket:
+      "🎟 Your first ticket — on me, personally.\n\nEvery date here costs 1 ticket, normally ~$6.99\nThis one's free — let your first step be about the person, not the price\n\nIt's already in your wallet ❤️",
     onboardingPhotosNeedMore:
       "Photo progress: {count}/{min}. Clear photos still needed: {remaining}.",
     onboardingPhotosBonusOffer:
@@ -348,19 +350,19 @@ const translations = {
       "Hey 💫\n\n" +
       "This week our matchmaker couldn't find you a partner who actually meets our quality bar — " +
       "and we'd rather wait than pair you with someone who isn't worth your time.\n\n" +
-      "A few honest things to know:\n" +
+      "Where things stand:\n" +
       "• We're growing the community fast and refining the matchmaking algorithm every day.\n" +
       "• A truly fitting partner should arrive in one of the next drops.\n" +
-      "• Every date we set up is *fully on us* — coffee, dinner, the whole thing. ☕️🎬\n\n" +
+      "• Every week you wait bumps up your priority in the next drop.\n\n" +
       "See you next Thursday at 18:00 ✨",
     noMatchThisWeekTier2:
       "Hey 🌿\n\n" +
       "Second week running and our matchmaker still hasn't found anyone we'd be excited to introduce you to. " +
       "Thank you for your patience — it means a lot.\n\n" +
-      "What we want you to know:\n" +
+      "Where we are right now:\n" +
       "• We're actively bringing more students like you into the community and tuning the algorithm in your favour.\n" +
       "• A genuinely great partner should be just a few drops away.\n" +
-      "• When that date happens, it's *fully covered by us* — that doesn't change.\n\n" +
+      "• Your priority for the next drop is already raised for the wait.\n\n" +
       "See you next Thursday at 18:00 — we're working for you 🤍",
     noMatchThisWeekTier3:
       "Hey ✨\n\n" +
@@ -369,7 +371,7 @@ const translations = {
       "What's actually happening on our side:\n" +
       "• We're personally watching your queue and pushing the community to grow in your area.\n" +
       "• The right person will land in one of the coming drops — we won't stop until they do.\n" +
-      "• Your date — whenever it happens — is *fully on us*. That's our promise.\n\n" +
+      "• Every week you wait, we move you higher up the priority list for the next drop.\n\n" +
       "Thank you for trusting us. See you Thursday at 18:00 🤍",
     matchScheduleProposal:
       "How about one of these? Tap what works:",
@@ -676,6 +678,8 @@ const translations = {
       "🎟️ Видео в профиле — супер! Вот ещё *бесплатный билет на свидание*.\n\nКаждое свидание стоит 1 билет (обычно платный), так что на следующее ты готов. Баланс: *{balance}* 🎟️",
     ticketRewardVerification:
       "🎟️ Верификация пройдена — *бесплатный билет на свидание* уже на балансе.\n\nОн покрывает одну встречу. Баланс: *{balance}* 🎟️",
+    welcomeGiftTicket:
+      "🎟 Твой первый билет — от меня лично.\n\nКаждое свидание здесь стоит 1 билет, обычно ~$6.99\nЭтот — бесплатно: пусть первый шаг будет про человека, а не про цену\n\nБилет уже в твоём кошельке ❤️",
     onboardingPhotosNeedMore:
       "Фото: {count}/{min}. Осталось загрузить ещё {remaining} чёткое фото до обязательного минимума.",
     onboardingPhotosBonusOffer:
@@ -933,20 +937,20 @@ const translations = {
     noMatchThisWeekTier1:
       "Привет 💫\n\n" +
       "На этой неделе наш матчмейкер не нашёл для тебя пары, которая по-настоящему соответствовала бы нашему уровню качества — " +
-      "и мы не готовы пускать «лишь бы было».\n\n" +
-      "Несколько честных вещей:\n" +
-      "• Мы активно расширяем сообщество и каждый день улучшаем алгоритм подбора партнёра.\n" +
-      "• По-настоящему подходящий человек должен появиться в ближайшие дропы.\n" +
-      "• Каждое свидание — *полностью за наш счёт*: кофе, ужин, всё. ☕️🎬\n\n" +
+      "и мы не готовы предлагать «лишь бы было».\n\n" +
+      "Что сейчас происходит:\n" +
+      "• Мы активно расширяем сообщество и каждый день улучшаем алгоритм подбора.\n" +
+      "• По-настоящему подходящий человек должен появиться в одном из ближайших дропов.\n" +
+      "• Каждая неделя ожидания повышает твой приоритет в следующем дропе.\n\n" +
       "До следующего четверга в 18:00 ✨",
     noMatchThisWeekTier2:
       "Привет 🌿\n\n" +
       "Уже вторая неделя подряд, как наш матчмейкер не находит кого-то, кого мы были бы рады тебе показать. " +
       "Спасибо, что остаёшься с нами — это правда важно.\n\n" +
-      "Что мы хотим сказать честно:\n" +
+      "Где мы сейчас:\n" +
       "• Мы активно приводим новых студентов и настраиваем алгоритм под твои критерии.\n" +
       "• Действительно стоящий партнёр должен быть всего в нескольких дропах от тебя.\n" +
-      "• Когда свидание случится — оно *полностью за наш счёт*, это не меняется.\n\n" +
+      "• За ожидание твой приоритет в следующем дропе уже повышен.\n\n" +
       "До следующего четверга в 18:00 — мы работаем для тебя 🤍",
     noMatchThisWeekTier3:
       "Привет ✨\n\n" +
@@ -955,7 +959,7 @@ const translations = {
       "Что мы реально делаем:\n" +
       "• Лично следим за твоей очередью и подталкиваем рост сообщества в твоём районе.\n" +
       "• Тот самый человек обязательно появится в одном из ближайших дропов — мы не остановимся.\n" +
-      "• Твоё свидание — когда бы оно ни случилось — *полностью за нами*. Это наше обещание.\n\n" +
+      "• Каждую неделю ожидания мы поднимаем тебя выше в приоритете следующего дропа.\n\n" +
       "Спасибо, что доверяешь. До четверга в 18:00 🤍",
     matchSchedulePeerProposed:
       "Твой собеседник уже отметил даты и время в календаре. Открой его, чтобы согласиться или предложить своё:",
@@ -1259,6 +1263,8 @@ const translations = {
       "🎟️ Відео в профілі — супер! Ось ще *безкоштовний квиток на побачення*.\n\nКожне побачення коштує 1 квиток (зазвичай платний), тож на наступне ти готовий. Баланс: *{balance}* 🎟️",
     ticketRewardVerification:
       "🎟️ Верифікацію пройдено — *безкоштовний квиток на побачення* вже на балансі.\n\nВін покриває одну зустріч. Баланс: *{balance}* 🎟️",
+    welcomeGiftTicket:
+      "🎟 Твій перший квиток — від мене особисто.\n\nКожне побачення тут коштує 1 квиток, зазвичай ~$6.99\nЦе — безкоштовно: нехай перший крок буде про людину, а не про ціну\n\nКвиток уже у твоєму гаманці ❤️",
     onboardingPhotosNeedMore:
       "Фото: {count}/{min}. Залишилося надіслати ще {remaining} чітке фото до обов'язкового мінімуму.",
     onboardingPhotosBonusOffer:
@@ -1517,19 +1523,19 @@ const translations = {
       "Привіт 💫\n\n" +
       "Цього тижня наш матчмейкер не знайшов для тебе пари, яка справді відповідала б нашому рівню якості — " +
       "і ми не готові пропонувати «аби було».\n\n" +
-      "Кілька чесних речей:\n" +
+      "Що зараз відбувається:\n" +
       "• Ми активно розширюємо спільноту й щодня покращуємо алгоритм підбору партнера.\n" +
       "• По-справжньому відповідна людина має з'явитися в одному з найближчих дропів.\n" +
-      "• Кожне побачення — *повністю за наш кошт*: кава, вечеря, все. ☕️🎬\n\n" +
+      "• Кожен тиждень очікування підвищує твій пріоритет у наступному дропі.\n\n" +
       "До наступного четверга о 18:00 ✨",
     noMatchThisWeekTier2:
       "Привіт 🌿\n\n" +
       "Уже другий тиждень поспіль, як наш матчмейкер не знаходить когось, кого ми були б раді тобі показати. " +
       "Дякуємо, що лишаєшся з нами — це справді важливо.\n\n" +
-      "Що ми хочемо сказати чесно:\n" +
+      "Де ми зараз:\n" +
       "• Ми активно приводимо нових студентів і налаштовуємо алгоритм під твої критерії.\n" +
       "• Дійсно вартий партнер має бути всього за кілька дропів від тебе.\n" +
-      "• Коли побачення станеться — воно *повністю за наш кошт*, це не змінюється.\n\n" +
+      "• За очікування твій пріоритет у наступному дропі вже підвищено.\n\n" +
       "До наступного четверга о 18:00 — ми працюємо для тебе 🤍",
     noMatchThisWeekTier3:
       "Привіт ✨\n\n" +
@@ -1538,7 +1544,7 @@ const translations = {
       "Що ми насправді робимо:\n" +
       "• Особисто стежимо за твоєю чергою і підштовхуємо ріст спільноти у твоєму районі.\n" +
       "• Та сама людина обов'язково з'явиться в одному з найближчих дропів — ми не зупинимось.\n" +
-      "• Твоє побачення — коли б воно не сталося — *повністю за нами*. Це наша обіцянка.\n\n" +
+      "• Щотижня очікування ми піднімаємо тебе вище у пріоритеті наступного дропу.\n\n" +
       "Дякуємо, що довіряєш. До четверга о 18:00 🤍",
     matchScheduleProposal: "Як тобі ці варіанти? Тисни зручний:",
     matchScheduleIter3:
@@ -1923,6 +1929,8 @@ const deTranslations: TranslationTable = {
     "🎟️ Ein Profilvideo — top! Noch ein *kostenloses Date-Ticket* für dich.\n\nJedes Date kostet 1 Ticket (sonst kostenpflichtig). Guthaben: *{balance}* 🎟️",
   ticketRewardVerification:
     "🎟️ Verifizierung abgeschlossen — dein *kostenloses Date-Ticket* ist schon im Guthaben.\n\nEs deckt ein Date ab. Guthaben: *{balance}* 🎟️",
+  welcomeGiftTicket:
+    "🎟 Dein erstes Ticket — von mir persönlich.\n\nJedes Date hier kostet 1 Ticket, normalerweise ~$6,99\nDieses ist gratis — dein erster Schritt soll um den Menschen gehen, nicht um den Preis\n\nEs liegt schon in deinem Guthaben ❤️",
   onboardingPhotosNeedMore:
     "Fotostand: {count}/{min}. Noch benötigte klare Fotos: {remaining}.",
   onboardingPhotosBonusOffer:
@@ -2075,10 +2083,10 @@ const deTranslations: TranslationTable = {
     "Hey 💫\n\n" +
     "Diese Woche konnte unser Matchmaker niemanden finden, der wirklich unsere Qualitätslatte für dich erreicht - " +
     "und wir warten lieber, als dich mit jemandem zu matchen, der deine Zeit nicht wert ist.\n\n" +
-    "Ein paar ehrliche Punkte:\n" +
+    "Wie der Stand ist:\n" +
     "• Wir bauen die Community schnell aus und verbessern den Algorithmus jeden Tag.\n" +
     "• Ein wirklich passender Mensch sollte in einem der nächsten Drops auftauchen.\n" +
-    "• Jedes Date, das wir organisieren, geht *komplett auf uns* - Kaffee, Dinner, alles. ☕️🎬\n\n" +
+    "• Jede Woche Wartezeit erhöht deine Priorität im nächsten Drop.\n\n" +
     "Bis nächsten Donnerstag um 18:00 ✨",
   noMatchThisWeekTier2:
     "Hey 🌿\n\n" +
@@ -2087,7 +2095,7 @@ const deTranslations: TranslationTable = {
     "Was du wissen solltest:\n" +
     "• Wir bringen aktiv mehr passende Studierende in die Community und tunen den Algorithmus für dich.\n" +
     "• Ein wirklich guter Partner sollte nur ein paar Drops entfernt sein.\n" +
-    "• Wenn das Date passiert, ist es *komplett von uns gedeckt* - daran ändert sich nichts.\n\n" +
+    "• Deine Priorität für den nächsten Drop ist für die Wartezeit bereits erhöht.\n\n" +
     "Bis Donnerstag um 18:00 - wir arbeiten für dich 🤍",
   noMatchThisWeekTier3:
     "Hey ✨\n\n" +
@@ -2096,7 +2104,7 @@ const deTranslations: TranslationTable = {
     "Was bei uns gerade passiert:\n" +
     "• Wir beobachten deine Queue persönlich und pushen das Community-Wachstum in deiner Gegend.\n" +
     "• Die richtige Person kommt in einem der nächsten Drops - wir hören nicht auf, bis es klappt.\n" +
-    "• Dein Date ist *komplett auf uns*, sobald es passiert. Das ist unser Versprechen.\n\n" +
+    "• Jede Woche Wartezeit rücken wir dich in der Priorität für den nächsten Drop weiter nach oben.\n\n" +
     "Danke für dein Vertrauen. Bis Donnerstag um 18:00 🤍",
   matchScheduleProposal: "Wie wäre es mit einer dieser Zeiten? Tipp an, was passt:",
   matchScheduleIter3:
@@ -2408,6 +2416,8 @@ const plTranslations: TranslationTable = {
     "🎟️ Wideo w profilu — super! Oto kolejny *darmowy bilet na randkę*.\n\nKażda randka kosztuje 1 bilet (zwykle płatny). Saldo: *{balance}* 🎟️",
   ticketRewardVerification:
     "🎟️ Weryfikacja zakończona — *darmowy bilet na randkę* jest już na koncie.\n\nPokrywa jedną randkę. Saldo: *{balance}* 🎟️",
+  welcomeGiftTicket:
+    "🎟 Twój pierwszy bilet — ode mnie osobiście.\n\nKażda randka kosztuje tu 1 bilet, zwykle ~$6.99\nTen jest za darmo — niech pierwszy krok będzie o człowieku, a nie o cenie\n\nBilet jest już w Twoim portfelu ❤️",
   onboardingPhotosNeedMore:
     "Postęp zdjęć: {count}/{min}. Pozostało wyraźnych zdjęć: {remaining}.",
   onboardingPhotosBonusOffer:
@@ -2560,10 +2570,10 @@ const plTranslations: TranslationTable = {
     "Hej 💫\n\n" +
     "W tym tygodniu nasz matchmaker nie znalazł osoby, która naprawdę spełniałaby nasz próg jakości dla Ciebie - " +
     "wolimy poczekać niż łączyć Cię z kimś niewartym Twojego czasu.\n\n" +
-    "Kilka szczerych rzeczy:\n" +
+    "Jak teraz wygląda sytuacja:\n" +
     "• Szybko rozwijamy społeczność i codziennie dopracowujemy algorytm.\n" +
     "• Naprawdę pasująca osoba powinna pojawić się w jednym z kolejnych dropów.\n" +
-    "• Każda randka, którą organizujemy, jest *w pełni po naszej stronie* - kawa, kolacja, wszystko. ☕️🎬\n\n" +
+    "• Każdy tydzień oczekiwania podnosi Twój priorytet w kolejnym dropie.\n\n" +
     "Do zobaczenia w następny czwartek o 18:00 ✨",
   noMatchThisWeekTier2:
     "Hej 🌿\n\n" +
@@ -2572,7 +2582,7 @@ const plTranslations: TranslationTable = {
     "Co chcemy, żebyś wiedział(a):\n" +
     "• Aktywnie sprowadzamy więcej studentów podobnych do Ciebie i stroimy algorytm pod Twoją korzyść.\n" +
     "• Naprawdę świetna osoba powinna być już tylko kilka dropów stąd.\n" +
-    "• Gdy randka się wydarzy, jest *w pełni pokryta przez nas* - to się nie zmienia.\n\n" +
+    "• Twój priorytet w kolejnym dropie jest już podniesiony za czas oczekiwania.\n\n" +
     "Do czwartku o 18:00 - pracujemy dla Ciebie 🤍",
   noMatchThisWeekTier3:
     "Hej ✨\n\n" +
@@ -2581,7 +2591,7 @@ const plTranslations: TranslationTable = {
     "Co dzieje się po naszej stronie:\n" +
     "• Osobiście obserwujemy Twoją kolejkę i rozwijamy społeczność w Twojej okolicy.\n" +
     "• Właściwa osoba trafi do jednego z kolejnych dropów - nie przestaniemy, dopóki się nie uda.\n" +
-    "• Twoja randka, gdy już się wydarzy, jest *w pełni po naszej stronie*. To nasza obietnica.\n\n" +
+    "• Co tydzień oczekiwania podnosimy Cię wyżej w priorytecie kolejnego dropu.\n\n" +
     "Dzięki za zaufanie. Do czwartku o 18:00 🤍",
   matchScheduleProposal: "Co powiesz na jedną z tych opcji? Kliknij, co pasuje:",
   matchScheduleIter3:

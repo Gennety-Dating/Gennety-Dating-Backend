@@ -414,6 +414,17 @@ Required/high-impact env keys:
     `Profile.photo_bonus_ticket_at` / `video_bonus_ticket_at` columns and the
     new `ticket_ledger` table first, and `tickets.html` deployed with the Mini
     App bundle.
+  - **Welcome gift (same flag).** Every new user is gifted 1 free Date Ticket as
+    a pre-roll on their first match pitch — an optional founder **video note**
+    (кружок) + a gift DM. `MESSAGE_EFFECT_GIFT_ID` (optional — Bot API 7.6 effect
+    on the gift DM; empty = no effect; pick a celebratory id like 🎉/❤️). Video
+    assets are bundled at `apps/bot/src/assets/welcome-gift/<gender>-<lang>.mp4`
+    (square video-note MP4, ≤60s, e.g. `male-ru.mp4`, `female-en.mp4`); they
+    ride the standard code rsync, no ffmpeg needed (the bot just sends a ready
+    file). A missing asset for a (gender, language) pair degrades gracefully to
+    the gift DM only, so partial coverage is safe — drop in more MP4s over time.
+    Idempotent via a `welcome_gift` `ticket_ledger` row (no extra schema beyond
+    the wallet columns above).
 - Pre-date coordination (feature-flagged): `COORDINATION_FEATURE_ENABLED`
   (default `false` — leave off until launch). When on, the bot offers matched
   users a way to find each other ~1h before the date (share Telegram, request

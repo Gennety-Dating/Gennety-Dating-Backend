@@ -570,9 +570,24 @@ match/bundle, scope, and amount, and can be consumed only once.
   sets `paidForPartnerBy*`) plus "Pay only mine — $6.99". Female users get a
   single "Pay my ticket — $6.99". The server re-validates that pay-for-both is
   male-only.
+- **Welcome gift.** Every new user is gifted **one free Date Ticket** as a
+  personal "your first date is on me" gesture, delivered as a **pre-roll on
+  their first-ever match pitch** (`handlers/matching/pitch.ts` →
+  `services/welcome-gift.ts`): an optional gender-specific Telegram **video
+  note** (кружок, founder message) followed by the gift DM (the
+  `welcomeGiftTicket` copy, $6.99 value anchor + optional
+  `MESSAGE_EFFECT_GIFT_ID` effect). The `sendVideoNote` API carries no caption,
+  so the text is a separate message; a missing video asset degrades gracefully
+  to the DM only. The grant is one-time/idempotent — a `welcome_gift`
+  `TicketLedger` row is the claim marker, so the FIRST qualifying pitch becomes
+  the gift moment automatically (no separate "first match" detection) and
+  retries/subsequent pitches never re-gift. Telegram-only in v1 (the mobile
+  mutual-accept path bypasses the ticket gate) and inert unless
+  `TICKET_FEATURE_ENABLED`.
 - **Ticket wallet (pre-purchase + bonuses).** Users carry a `User.ticketBalance`
   topped up by onboarding bonuses (§1.3: 4+ photos, adding a video;
-  §1.4: successful identity verification) and by bundle purchases in the store
+  §1.4: successful identity verification), the welcome gift above, and by bundle
+  purchases in the store
   Mini App (`tickets.html`, opened from the
   **My Tickets** menu): **1 / $7.00**, **3 / $16.47** ($5.49 ea), **6 / $26.94**
   ($4.49 ea). Every balance change is written atomically with an append-only

@@ -24,6 +24,7 @@ export type TicketReason =
   | "photo_bonus"
   | "video_bonus"
   | "verification_bonus"
+  | "welcome_gift"
   | "store_purchase"
   | "spend_match"
   | "refund";
@@ -160,6 +161,63 @@ export async function grantVerificationBonusIfEligible(
           });
           await tx.ticketLedger.create({
             data: { userId, delta: 1, reason: "verification_bonus" },
+          });
+          return { granted: true, balance: user.ticketBalance };
+        },
+        { isolationLevel: "Serializable" },
+      );
+    } catch (error) {
+      if (!isSerializationConflict(error) || attempt === 2) throw error;
+    }
+  }
+
+  return { granted: false, balance: await getBalance(userId) };
+}
+
+/**
+ * Grant the one-time welcome gift — a single free Date Ticket handed to every
+ * new user as a personal "your first date is on me" gesture. Delivered as a
+ * pre-roll on the user's first-ever match pitch (see `services/welcome-gift.ts`
+ * + `handlers/matching/pitch.ts`).
+ *
+ * Same idempotency model as the verification bonus: the `welcome_gift` ledger
+ * row is the claim marker (no Prisma schema change), and Serializable isolation
+ * makes the existence check + wallet increment atomic. Because the grant is
+ * idempotent, the first qualifying pitch becomes the gift moment automatically
+ * — no separate "first match" detection is needed. Returns `granted:true` only
+ * on the call that actually credits the ticket, so the caller can gate the
+ * cosmetic video-note/DM pre-roll on it.
+ */
+export async function grantWelcomeGiftIfEligible(
+  userId: string,
+): Promise<BonusResult> {
+  if (!env.TICKET_FEATURE_ENABLED) {
+    return { granted: false, balance: await getBalance(userId) };
+  }
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const existing = await tx.ticketLedger.findFirst({
+            where: { userId, reason: "welcome_gift" },
+            select: { id: true },
+          });
+          if (existing) {
+            const user = await tx.user.findUnique({
+              where: { id: userId },
+              select: { ticketBalance: true },
+            });
+            return { granted: false, balance: user?.ticketBalance ?? 0 };
+          }
+
+          const user = await tx.user.update({
+            where: { id: userId },
+            data: { ticketBalance: { increment: 1 } },
+            select: { ticketBalance: true },
+          });
+          await tx.ticketLedger.create({
+            data: { userId, delta: 1, reason: "welcome_gift" },
           });
           return { granted: true, balance: user.ticketBalance };
         },

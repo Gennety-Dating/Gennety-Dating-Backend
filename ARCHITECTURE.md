@@ -336,14 +336,15 @@ by `handlers/date/coordination.ts`; inert unless `COORDINATION_FEATURE_ENABLED`.
 ### `ticket_ledger` (feature-flagged)
 
 Append-only audit of every ticket-wallet movement (`userId`, `delta`, `reason`
-∈ `photo_bonus`/`video_bonus`/`verification_bonus`/`store_purchase`/
-`spend_match`/`refund`, optional
+∈ `photo_bonus`/`video_bonus`/`verification_bonus`/`welcome_gift`/
+`store_purchase`/`spend_match`/`refund`, optional
 `matchId`/`amountCents`/`bundleSize`, `createdAt`; `onDelete: Cascade` from
 `users`). The running sum of `delta` equals `User.ticketBalance`, which is
 materialized for fast reads; both are written in the same transaction by
 `services/ticket-wallet.ts`. Photo/video onboarding bonuses are idempotent via
-`Profile.photoBonusTicketAt` / `videoBonusTicketAt`; the verification bonus uses
-a serializable ledger claim on `verification_bonus`. Indexed `(userId, createdAt)`.
+`Profile.photoBonusTicketAt` / `videoBonusTicketAt`; the verification bonus and
+the first-pitch welcome gift use a serializable ledger claim on
+`verification_bonus` / `welcome_gift`. Indexed `(userId, createdAt)`.
 Inert unless `TICKET_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b.
 
 ### `profiler_answers`

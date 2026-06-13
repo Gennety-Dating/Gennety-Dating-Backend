@@ -19,6 +19,11 @@ import {
   PROPOSAL_TTL_MS,
 } from "../../utils/countdown-plate.js";
 import { sendProfileMediaCard } from "../../services/profile-media-dispatch.js";
+import { grantWelcomeGiftIfEligible } from "../../services/ticket-wallet.js";
+import {
+  sendWelcomeGiftPreroll,
+  type WelcomeGiftGender,
+} from "../../services/welcome-gift.js";
 
 /**
  * Telegram media group caps at 10 items per request — we slice down to this
@@ -198,6 +203,30 @@ async function sendVerifiedTrustCard(
 }
 
 /**
+ * Welcome-gift pre-roll, fired on a user's first-ever match pitch. The grant is
+ * idempotent (a `welcome_gift` ledger row is the claim marker) and a no-op when
+ * `TICKET_FEATURE_ENABLED` is off, so the FIRST qualifying pitch becomes the
+ * gift moment automatically — no separate "first match" detection. The
+ * кружок/DM only fires when the grant actually credited the ticket
+ * (`granted === true`). Best-effort: a failure here is purely cosmetic and must
+ * never block pitch dispatch.
+ */
+async function deliverWelcomeGiftPreroll(
+  api: Api<RawApi>,
+  userId: string,
+  chatId: number,
+  lang: Language,
+  gender: WelcomeGiftGender | null,
+): Promise<void> {
+  try {
+    const { granted } = await grantWelcomeGiftIfEligible(userId);
+    if (granted) await sendWelcomeGiftPreroll(api, chatId, lang, gender);
+  } catch (err) {
+    console.warn("[pitch] welcome-gift pre-roll failed:", err);
+  }
+}
+
+/**
  * Push a match proposal to both users. Streams the pitch via drafts and
  * finalises with an inline keyboard on the last message.
  */
@@ -218,9 +247,11 @@ export async function sendMatchProposal(
       synergyReason: true,
       userA: {
         select: {
+          id: true,
           telegramId: true,
           firstName: true,
           age: true,
+          gender: true,
           language: true,
           verificationStatus: true,
           profile: {
@@ -230,9 +261,11 @@ export async function sendMatchProposal(
       },
       userB: {
         select: {
+          id: true,
           telegramId: true,
           firstName: true,
           age: true,
+          gender: true,
           language: true,
           verificationStatus: true,
           profile: {
@@ -380,6 +413,7 @@ export async function sendMatchProposal(
       return;
     }
     const chatA = Number(match.userA.telegramId);
+    await deliverWelcomeGiftPreroll(api, match.userA.id, chatA, langA, match.userA.gender);
     await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
     const result = await stream(api, chatA, draftsA, { replyMarkup: kbA });
     if (!result) throw new Error("Pitch stream returned no final message for side A");
@@ -394,6 +428,7 @@ export async function sendMatchProposal(
       return;
     }
     const chatB = Number(match.userB.telegramId);
+    await deliverWelcomeGiftPreroll(api, match.userB.id, chatB, langB, match.userB.gender);
     await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
     const result = await stream(api, chatB, draftsB, { replyMarkup: kbB });
     if (!result) throw new Error("Pitch stream returned no final message for side B");
