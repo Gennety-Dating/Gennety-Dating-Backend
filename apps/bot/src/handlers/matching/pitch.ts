@@ -168,10 +168,20 @@ async function sendPartnerMedia(
   if (media.length === 0) return;
   const { caption: text, entities } = caption;
   try {
-    await sendProfileMediaCard(api, chatId, media, {
-      ...(text ? { caption: text } : {}),
-      ...(text && entities?.length ? { caption_entities: entities } : {}),
-    });
+    await sendProfileMediaCard(
+      api,
+      chatId,
+      media,
+      {
+        ...(text ? { caption: text } : {}),
+        ...(text && entities?.length ? { caption_entities: entities } : {}),
+      },
+      // Protect the partner's photos: the pitch is the first place a user sees
+      // them, so block forward/save/download (screenshots can't be blocked in a
+      // normal bot chat — see PRODUCT_SPEC §3.7a). Privacy of the actual image
+      // off-platform stays guaranteed by the date-card blurred share copy.
+      { protect: true },
+    );
   } catch (err) {
     console.warn("sendPartnerMedia failed, skipping photo card:", err);
   }

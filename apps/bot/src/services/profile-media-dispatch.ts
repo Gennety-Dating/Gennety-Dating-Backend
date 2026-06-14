@@ -81,26 +81,39 @@ function toStaticInputMedia(
   };
 }
 
+/** Merge caption options with an optional `protect_content` flag. */
+function sendExtra(
+  caption: MediaCaption,
+  protect: boolean,
+): ReturnType<typeof captionOptions> & { protect_content?: boolean } {
+  return { ...captionOptions(caption), ...(protect ? { protect_content: true } : {}) };
+}
+
 async function sendStaticFallback(
   api: Api<RawApi>,
   chatId: number,
   media: readonly ProfileMedia[],
   caption: MediaCaption,
+  protect: boolean,
 ): Promise<void> {
   if (media.length === 0) return;
   if (media.length === 1) {
     const only = media[0]!;
     if (only.type === "video") {
-      await api.sendVideo(chatId, only.video, captionOptions(caption));
+      await api.sendVideo(chatId, only.video, sendExtra(caption, protect));
     } else {
-      await api.sendPhoto(chatId, only.photo, captionOptions(caption));
+      await api.sendPhoto(chatId, only.photo, sendExtra(caption, protect));
     }
     return;
   }
   const fallbackMedia = media.map((item, index) =>
     toStaticInputMedia(item, index === 0 ? caption : {}),
   );
-  await api.sendMediaGroup(chatId, fallbackMedia);
+  await api.sendMediaGroup(
+    chatId,
+    fallbackMedia,
+    protect ? { protect_content: true } : undefined,
+  );
 }
 
 /**
@@ -114,7 +127,9 @@ export async function sendProfileMediaCard(
   chatId: number,
   media: readonly ProfileMedia[],
   caption: MediaCaption = {},
+  options: { protect?: boolean } = {},
 ): Promise<void> {
+  const protect = options.protect ?? false;
   const slice = media.slice(0, MAX_TELEGRAM_MEDIA_GROUP_SIZE);
   if (slice.length === 0) return;
 
@@ -127,21 +142,21 @@ export async function sendProfileMediaCard(
           chatId,
           item.livePhoto,
           item.photo,
-          captionOptions(caption),
+          sendExtra(caption, protect),
         );
       } catch (err) {
         console.warn("sendLivePhoto failed, falling back to static photo:", err);
-        await api.sendPhoto(chatId, item.photo, captionOptions(caption));
+        await api.sendPhoto(chatId, item.photo, sendExtra(caption, protect));
       }
       return;
     }
 
     if (item.type === "video") {
-      await api.sendVideo(chatId, item.video, captionOptions(caption));
+      await api.sendVideo(chatId, item.video, sendExtra(caption, protect));
       return;
     }
 
-    await api.sendPhoto(chatId, item.photo, captionOptions(caption));
+    await api.sendPhoto(chatId, item.photo, sendExtra(caption, protect));
     return;
   }
 
@@ -150,10 +165,14 @@ export async function sendProfileMediaCard(
   );
 
   try {
-    await api.sendMediaGroup(chatId, inputMedia as unknown as InputMediaPhoto[]);
+    await api.sendMediaGroup(
+      chatId,
+      inputMedia as unknown as InputMediaPhoto[],
+      protect ? { protect_content: true } : undefined,
+    );
   } catch (err) {
     if (!slice.some((item) => item.type === "live_photo")) throw err;
     console.warn("sendMediaGroup with live photos failed, falling back to static photos:", err);
-    await sendStaticFallback(api, chatId, slice, caption);
+    await sendStaticFallback(api, chatId, slice, caption, protect);
   }
 }

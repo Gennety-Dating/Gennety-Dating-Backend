@@ -854,6 +854,13 @@ Telegram caption.
   so the blurred share copy is the actual privacy guarantee.)
 - **Privacy fail-safe.** A blur that cannot be produced never falls back to the
   clear original; the share send is aborted and the user is told to retry.
+- **Partner photos are forward/save-protected everywhere they appear with a
+  clear face.** Both the match-pitch photo card (§3.3, the first place a user
+  sees the partner) and the private date card are sent with `protect_content`,
+  so the partner's images can't be forwarded, saved, or downloaded out of the
+  chat. (OS screenshots still can't be blocked in a normal bot chat — that is a
+  Telegram platform limit, not a toggle — so the blurred share copy remains the
+  actual off-platform privacy guarantee.)
 - **Venue photo.** Curated-first: an operator-owned `CuratedVenue.photoUrl`
   (clean licensing) when present; otherwise the venue's Google Places **cover**
   photo (credited on the card; Google's bytes are fetched at render time and
