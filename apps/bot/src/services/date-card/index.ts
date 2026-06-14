@@ -7,6 +7,7 @@ import { Resvg } from "@resvg/resvg-js";
 import { t, type Language } from "@gennety/shared";
 import { downloadProfileImage } from "../storage.js";
 import { blurFacesInPhoto } from "./face-blur.js";
+import { toPngBuffer } from "./image.js";
 import { resolveVenuePhoto } from "./photo-source.js";
 import { buildCardElement, CARD_W, CARD_H, type CardNode } from "./template.js";
 
@@ -85,23 +86,30 @@ export async function renderDateCard(
   //    back to the clear original — abort the whole card instead.
   let partnerPhoto: Buffer | null = null;
   if (input.partnerPhotoRef) {
-    partnerPhoto = await downloadProfileImage(input.partnerPhotoRef, api);
-    if (partnerPhoto && opts.blur) {
-      partnerPhoto = await blurFacesInPhoto(partnerPhoto);
-      if (!partnerPhoto) return null;
+    const downloaded = await downloadProfileImage(input.partnerPhotoRef, api);
+    if (downloaded) {
+      // Normalize to real PNG so the data URI's `image/png` mime is honest
+      // (Telegram photos are JPEG). The blur path already re-encodes via canvas.
+      partnerPhoto = opts.blur
+        ? await blurFacesInPhoto(downloaded)
+        : await toPngBuffer(downloaded);
+      // Blur that can't be produced must never leak the clear original.
+      if (opts.blur && !partnerPhoto) return null;
     }
   }
 
-  // 2. Venue photo (best-effort; template falls back to a gradient).
-  const venuePhoto = await resolveVenuePhoto(input.venuePhotoUrl, input.venuePhotoName);
+  // 2. Venue photo (best-effort; template falls back to a gradient). Re-encode
+  //    to PNG for the same honest-mime reason (Places/curated photos are JPEG).
+  const venueRaw = await resolveVenuePhoto(input.venuePhotoUrl, input.venuePhotoName);
+  const venuePhoto = venueRaw ? await toPngBuffer(venueRaw.buffer) : null;
 
   // 3. Compose + rasterize.
   try {
     const element = buildCardElement({
       partnerName: input.partnerFirstName,
       partnerPhoto,
-      venuePhoto: venuePhoto?.buffer ?? null,
-      attribution: venuePhoto?.attribution ?? false,
+      venuePhoto,
+      attribution: venueRaw?.attribution ?? false,
       venueName: input.venueName,
       venueAddress: input.venueAddress,
       dateText: formatDateText(input.agreedTime, input.language),
