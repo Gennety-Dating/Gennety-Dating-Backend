@@ -1,4 +1,5 @@
 import { t, type Language } from "@gennety/shared";
+import { env } from "../config.js";
 import type { StatusStep } from "./ai-stream.js";
 
 /**
@@ -52,13 +53,52 @@ export function skipAnalysisSteps(lang: Language): StatusStep[] {
  * Shown while the concierge picks a venue. Step 1 reuses the existing
  * `venueSearching` copy. Runs concurrently with the real venue lookup so the
  * artificial cadence overlaps real work; deleted before the scheduled card.
+ *
+ * NB: the venue lookup is usually sub-second, so this remains a cosmetic stub
+ * (fixed duration). The genuinely slow step — the date-card PNG render — is
+ * covered separately by {@link dateCardSteps}, which is held until the real
+ * render resolves rather than running on a timer.
  */
 export function venueSearchSteps(lang: Language): StatusStep[] {
   return [
-    { text: t(lang, "venueSearching"), holdMs: 1200 },
-    { text: t(lang, "venueSearchStep2"), holdMs: 1200 },
-    { text: t(lang, "venueSearchStep3"), holdMs: 1100 },
+    { text: t(lang, "venueSearching"), holdMs: 1200, emojiId: aiEmoji("venue") },
+    { text: t(lang, "venueSearchStep2"), holdMs: 1200, emojiId: aiEmoji("route") },
+    { text: t(lang, "venueSearchStep3"), holdMs: 1100, emojiId: aiEmoji("sparkle") },
   ];
+}
+
+/**
+ * Shown while the shareable date-card PNG is rendered (download partner photo +
+ * Google Places venue photo + satori→resvg rasterize) — the one genuinely slow
+ * beat in finalization. Unlike the other builders this is NOT a stub: it is
+ * passed to `runStatusSequence` with `until: <render promise>`, so the last beat
+ * is held on screen until the PNG is actually ready, then torn down before the
+ * card is sent. Each beat leads with its own AIActions emoji (shine shimmer on
+ * the rich path), falling back to the plain glyph. Only runs when
+ * `DATE_CARD_FEATURE_ENABLED` (the only path with a real render wait).
+ */
+export function dateCardSteps(lang: Language): StatusStep[] {
+  return [
+    { text: t(lang, "dateCardStep1"), holdMs: 1500, emojiId: aiEmoji("confirm") },
+    { text: t(lang, "dateCardStep2"), holdMs: 2200, emojiId: aiEmoji("card") },
+    { text: t(lang, "dateCardStep3"), holdMs: 2600, emojiId: aiEmoji("sparkle") },
+  ];
+}
+
+/**
+ * Resolve a per-step AIActions custom-emoji id from config. Empty (unset) →
+ * undefined, so the step renders its plain leading glyph with no animation
+ * (current behaviour until ids are filled in). Only meaningful on the rich path.
+ */
+function aiEmoji(slot: "route" | "venue" | "confirm" | "card" | "sparkle"): string | undefined {
+  const id = {
+    route: env.CUSTOM_EMOJI_AI_ROUTE_ID,
+    venue: env.CUSTOM_EMOJI_AI_VENUE_ID,
+    confirm: env.CUSTOM_EMOJI_AI_CONFIRM_ID,
+    card: env.CUSTOM_EMOJI_AI_CARD_ID,
+    sparkle: env.CUSTOM_EMOJI_AI_SPARKLE_ID,
+  }[slot];
+  return id || undefined;
 }
 
 /**

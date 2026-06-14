@@ -54,11 +54,13 @@ out of Telegram-only workers.
 - **Progressive Logistics** — The AI auto-proposes timeslots first; if both
   rounds fail it hands off to the Calendar Mini App; venue is chosen by an
   AI concierge from each user's free-text *vibe* + commute pin.
-- **Native Telegram AI Experience** — Heavy use of Bot API 9.x:
+- **Native Telegram AI Experience** — Heavy use of Bot API 9.x/10.x:
   `sendMessageDraft` (streamed pitches), `icon_custom_emoji_id` (menu and
   match-decision affordances), `message_effect_id` (match confirmations),
   `date_time` MessageEntity (timezone-aware date confirmation), pinned status
-  banner (live discrete countdown).
+  banner (live discrete countdown), and — behind `RICH_THINKING_ENABLED` (Bot
+  API 10.1) — `sendRichMessageDraft` with `RichBlockThinking` (`<tg-thinking>`)
+  shimmer on the AI status/pitch "thinking" beats.
 - **Blind Decision Invariant** — A user must never learn their partner's
   Accept/Decline before committing to their own.
 
@@ -217,8 +219,24 @@ Hard rules enforced by the collector:
   `runStatusSequence` primitive (`services/ai-stream.ts`,
   `services/analysis-status.ts`) backs the equivalent "agent is working"
   beats at verification submission, the verification soft-skip, each Profiler
-  batch boundary, and concierge venue selection. These are cosmetic pacing
-  only — they narrate real work and never gate the flow.
+  batch boundary, concierge venue selection, and the date-card PNG render
+  (§3.7a). Most of these are cosmetic pacing only — fixed-duration stubs that
+  narrate real but usually sub-second work and never gate the flow. The
+  **date-card render is the exception**: it is the one genuinely slow beat, so
+  its status is passed a `until: <render promise>` and the last step is **held
+  on screen until the PNG is actually ready** (then torn down before the card is
+  sent), rather than running on a timer. When `RICH_THINKING_ENABLED` (Bot API
+  10.1, off by default) these beats — and the match-pitch "analysing" beat —
+  render as native `RichBlockThinking` shimmer via `sendRichMessageDraft`
+  (`<tg-thinking>`, `services/telegram-rich.ts`) instead of the edited status
+  line. Each beat is a short single-line label led by an animated Telegram AI
+  emoji (the recommended AIActions pack) rendered as `<tg-emoji>`, with the
+  step's plain glyph as the non-Premium / pre-10.1 fallback. A step may carry
+  its own AIActions id (`StatusStep.emojiId`, sourced from the optional
+  `CUSTOM_EMOJI_AI_*` env slots) so a multi-beat sequence shows a distinct icon
+  per step; resolution falls back to the shared `CUSTOM_EMOJI_THINKING_ID` then
+  the plain glyph. Any rich-API failure degrades to the classic
+  `sendMessageDraft`/`editMessageText` path, so the toggle is purely cosmetic.
 
 ### 1.4 Identity verification (Phase 6.3 in code)
 
@@ -497,8 +515,11 @@ for the dashboard's algorithm-quality view.
   rationale, in side-A's language.
 - Pitches are queued through `services/dispatch-queue.ts` (rate-limited,
   default 2 s between sends ≈ 30/min).
-- For Telegram users the pitch streams via `sendMessageDraft`; the
-  `pitchMessageId{A,B}` is captured.
+- For Telegram users the pitch streams via `sendMessageDraft` (or, behind
+  `RICH_THINKING_ENABLED`, `sendRichMessageDraft` with a `<tg-thinking>` shimmer
+  on the "analysing" beat); either way the final message is a plain text
+  `sendMessage` so the countdown worker's `editMessageText` keeps working, and
+  the `pitchMessageId{A,B}` is captured.
 - An explicit `matchDeadlineNotice` follows the headline: **24 h** to reply,
   decision is final once tapped.
 - Buttons: `[Accept]` / `[Decline]`.
@@ -843,6 +864,15 @@ partner, and the meeting details (localized date/time via the same
 AWS Rekognition `DetectFaces` boxes + pixelation. Rendered text is emoji-free
 (the bundled Roboto fonts carry no color-emoji glyphs); emoji live only in the
 Telegram caption.
+
+- **Live render progress.** The render (partner-photo download + Places venue
+  photo + rasterize) takes several seconds, so each side sees a per-side
+  "shine" status (`dateCardSteps`: confirming details → building the card →
+  final touches) while it runs. Unlike the other status beats this is **not** a
+  fixed-duration stub — it is held on screen until the PNG is actually ready,
+  then torn down before the card lands, so the chat never looks frozen. It is a
+  `RichBlockThinking` shimmer when `RICH_THINKING_ENABLED`, else the classic
+  edited status line; either way the render itself never depends on it (§1.3).
 
 - **Two renders, one layout.** The **private** card is sent with
   `protect_content: true` (blocks forwarding / saving / download) and carries

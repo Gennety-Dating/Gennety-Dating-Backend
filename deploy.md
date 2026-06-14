@@ -371,6 +371,32 @@ Required/high-impact env keys:
 - AI/email/onboarding: `OPENAI_API_KEY`, `RESEND_API_KEY`, `SMTP_FROM`,
   `OTP_LOG_TO_CONSOLE`, `ONBOARDING_FACT_COLLECTOR_ENABLED` (default `false`;
   enable only after schema push and backfill verification)
+- Rich thinking shimmer (feature-flagged, cosmetic): `RICH_THINKING_ENABLED`
+  (default `false`). When on, the AI status/thinking beats and the match-pitch
+  "analysing" beat render via Bot API 10.1 `sendRichMessageDraft` +
+  `<tg-thinking>` shimmer (`services/telegram-rich.ts`) instead of the classic
+  `sendMessageDraft`/`editMessageText` line. No schema or system dependency, no
+  new AWS/Google scope — it calls Telegram through grammY's existing transport.
+  Any rich-API error degrades to the classic path, so it is safe to toggle live
+  with `pm2 restart gennety-bot --update-env`. Requires the production bot's
+  Bot API server and the recipient's Telegram client to be on 10.1+ for the
+  shimmer to actually render (older targets fall back transparently).
+  `CUSTOM_EMOJI_THINKING_ID` (optional) — the animated Telegram AI emoji from
+  https://t.me/addemoji/AIActions that leads each thinking block (rendered as
+  `<tg-emoji>` inside `<tg-thinking>`). Get an id via
+  `getStickerSet(name="AIActions")` (the pack has 48 variants — pick one). Empty
+  falls back to the step's plain glyph with no animation.
+  `CUSTOM_EMOJI_AI_ROUTE_ID` / `CUSTOM_EMOJI_AI_VENUE_ID` /
+  `CUSTOM_EMOJI_AI_CONFIRM_ID` / `CUSTOM_EMOJI_AI_CARD_ID` /
+  `CUSTOM_EMOJI_AI_SPARKLE_ID` (all optional) — per-step AIActions ids so a
+  multi-beat sequence (venue search, date-card render) shows a distinct animated
+  icon per step instead of the single shared `CUSTOM_EMOJI_THINKING_ID`. Source
+  ids with `pnpm tsx apps/bot/scripts/dev/list-ai-emojis.ts` (prints the pack's
+  `custom_emoji_id`s). Each empty slot falls back to `CUSTOM_EMOJI_THINKING_ID`
+  then the plain glyph, so leaving them unset changes nothing. The date-card
+  render's "shine" progress (PRODUCT_SPEC.md §3.7a) uses these; it is held until
+  the PNG is ready rather than running on a timer, but is still purely cosmetic —
+  `RICH_THINKING_ENABLED=false` degrades it to the classic edited status line.
 - Admin API: `ADMIN_API_KEY`, `ADMIN_PORT`, `ADMIN_DASHBOARD_ORIGIN`
 - Public API: `JWT_SECRET`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`,
   `PUBLIC_PORT`, `PUBLIC_CORS_ORIGIN`

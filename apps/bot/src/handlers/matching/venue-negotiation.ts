@@ -52,7 +52,7 @@ import { generateAndSaveWingmanHints } from "../../services/wingman-hint.js";
 import { runVenueFinalizationOnce } from "../../services/venue-finalization-flight.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
-import { venueSearchSteps } from "../../services/analysis-status.js";
+import { venueSearchSteps, dateCardSteps } from "../../services/analysis-status.js";
 import { renderDateCard, buildShareButton } from "../../services/date-card/index.js";
 
 /**
@@ -580,7 +580,12 @@ async function sendScheduledConfirmation(
   const chatId = Number(input.telegramId);
 
   if (env.DATE_CARD_FEATURE_ENABLED) {
-    const card = await renderDateCard(
+    // The PNG render (partner-photo download + Places venue photo + satori→resvg
+    // rasterize) is the one genuinely slow beat in finalization. Kick it off as
+    // the real unit of work and broadcast a live "shine" status that is HELD
+    // until the render actually resolves, so the chat never looks frozen. The
+    // status is cosmetic — any failure inside it must not block the card.
+    const renderWork = renderDateCard(
       {
         partnerFirstName: input.partnerFirstName,
         partnerPhotoRef: input.partnerPhotoRef,
@@ -594,6 +599,12 @@ async function sendScheduledConfirmation(
       { blur: false },
       api,
     );
+
+    await runStatusSequence(api, chatId, dateCardSteps(input.language), {
+      until: renderWork,
+    }).catch(() => undefined);
+
+    const card = await renderWork;
     if (card) {
       const keyboard: InlineKeyboardMarkup = {
         inline_keyboard: [

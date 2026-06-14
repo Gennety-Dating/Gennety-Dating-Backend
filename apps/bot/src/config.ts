@@ -37,6 +37,34 @@ export const env = {
   /// production can keep the legacy LLM-driven flow during staged rollout.
   ONBOARDING_FACT_COLLECTOR_ENABLED:
     process.env.ONBOARDING_FACT_COLLECTOR_ENABLED === "true",
+  /// Telegram Bot API 10.1 "Rich Messages" (released 2026-06-11). When true,
+  /// the AI status/thinking sequences and the match-pitch stream render via
+  /// `sendRichMessageDraft` using `<tg-thinking>` shimmer blocks
+  /// (services/telegram-rich.ts). Any rich-API error degrades to the classic
+  /// `sendMessageDraft` / `editMessageText` path, so this is cosmetic-only and
+  /// safe to toggle live. Default off until prod bot + clients are on 10.1.
+  RICH_THINKING_ENABLED: process.env.RICH_THINKING_ENABLED === "true",
+  /// Custom emoji id that leads each rich "thinking" shimmer block — the
+  /// animated Telegram AI emoji recommended for `RichBlockThinking`
+  /// (https://t.me/addemoji/AIActions). Rendered as `<tg-emoji>` inside
+  /// `<tg-thinking>`, with the step's plain glyph (🧠/🔍/…) as the non-Premium /
+  /// pre-10.1 fallback. Empty → the plain glyph leads with no animation. Only
+  /// consulted when `RICH_THINKING_ENABLED`.
+  CUSTOM_EMOJI_THINKING_ID: process.env.CUSTOM_EMOJI_THINKING_ID ?? "",
+  /// Optional per-step AIActions emoji ids for the multi-beat "thinking"
+  /// sequences (https://t.me/addemoji/AIActions, 48 variants). Each leads one
+  /// progress step instead of the single shared `CUSTOM_EMOJI_THINKING_ID`, so a
+  /// sequence can show a distinct animated AI icon per beat (e.g. route → check →
+  /// card → sparkle for the date-card render). Resolution order per step is
+  /// `StatusStep.emojiId` → these slots → `CUSTOM_EMOJI_THINKING_ID` → plain
+  /// glyph. Empty (default) → the step's plain Unicode glyph leads, no animation,
+  /// so nothing breaks before ids are filled in. Source ids with the
+  /// `list-ai-emojis` dev script. Only consulted when `RICH_THINKING_ENABLED`.
+  CUSTOM_EMOJI_AI_ROUTE_ID: process.env.CUSTOM_EMOJI_AI_ROUTE_ID ?? "",
+  CUSTOM_EMOJI_AI_VENUE_ID: process.env.CUSTOM_EMOJI_AI_VENUE_ID ?? "",
+  CUSTOM_EMOJI_AI_CONFIRM_ID: process.env.CUSTOM_EMOJI_AI_CONFIRM_ID ?? "",
+  CUSTOM_EMOJI_AI_CARD_ID: process.env.CUSTOM_EMOJI_AI_CARD_ID ?? "",
+  CUSTOM_EMOJI_AI_SPARKLE_ID: process.env.CUSTOM_EMOJI_AI_SPARKLE_ID ?? "",
   CUSTOM_EMOJI_LIKE_ID: process.env.CUSTOM_EMOJI_LIKE_ID ?? "",
   CUSTOM_EMOJI_DISLIKE_ID: process.env.CUSTOM_EMOJI_DISLIKE_ID ?? "",
   CUSTOM_EMOJI_MENU_ID: process.env.CUSTOM_EMOJI_MENU_ID ?? "",
@@ -59,9 +87,10 @@ export const env = {
   MESSAGE_EFFECT_TICKET_ID: process.env.MESSAGE_EFFECT_TICKET_ID ?? "",
   /// Optional Bot API 7.6+ message effect played on the welcome-gift DM (the
   /// "your first ticket is on me" message sent as a pre-roll before a new
-  /// user's first match pitch). Operator picks a celebratory effect id (🎉/❤️).
-  /// Empty falls through to no effect — the gift DM still sends.
-  MESSAGE_EFFECT_GIFT_ID: process.env.MESSAGE_EFFECT_GIFT_ID ?? "",
+  /// user's first match pitch). Defaults to the 🎉 confetti effect; override
+  /// with another id (e.g. ❤️ `5159385139981059251`) or set empty to disable
+  /// (the gift DM still sends, just without the animation).
+  MESSAGE_EFFECT_GIFT_ID: process.env.MESSAGE_EFFECT_GIFT_ID ?? "5046509860389126442",
   WEBAPP_URL: process.env.WEBAPP_URL ?? "https://example.invalid/calendar",
   /// URL of the post-date Feedback Mini App bundle. When unset, derived from
   /// `WEBAPP_URL` by appending `/feedback.html` — Caddy serves both the
