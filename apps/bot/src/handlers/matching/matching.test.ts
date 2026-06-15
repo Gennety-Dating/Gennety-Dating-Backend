@@ -819,9 +819,13 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
         { type: "photo", media: "file-b-1", caption: "Bob, 24" },
         { type: "photo", media: "file-b-2" },
       ],
+      { protect_content: true },
     );
     expect(api.sendPhoto).toHaveBeenCalledTimes(1);
-    expect(api.sendPhoto).toHaveBeenCalledWith(1002, "file-a-1", { caption: "Alice, 22" });
+    expect(api.sendPhoto).toHaveBeenCalledWith(1002, "file-a-1", {
+      caption: "Alice, 22",
+      protect_content: true,
+    });
   });
 
   it("sends a single live profile media item with sendLivePhoto", async () => {
@@ -845,6 +849,7 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
 
     expect(api.sendLivePhoto).toHaveBeenCalledWith(1001, "bob_live_1", "bob_static_1", {
       caption: "Bob, 24",
+      protect_content: true,
     });
   });
 
@@ -978,6 +983,7 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
 
     expect(api.sendPhoto).toHaveBeenCalledWith(1001, "bob_static_1", {
       caption: "Bob, 24",
+      protect_content: true,
     });
     expect(stream).toHaveBeenCalledTimes(2);
   });
@@ -1002,10 +1008,15 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
 
     await sendMatchProposal(api, "match-photo-1", { streamImpl: stream });
 
-    expect(api.sendMediaGroup).toHaveBeenNthCalledWith(2, 1001, [
-      { type: "photo", media: "bob_static_1", caption: "Bob, 24" },
-      { type: "photo", media: "bob_static_2" },
-    ]);
+    expect(api.sendMediaGroup).toHaveBeenNthCalledWith(
+      2,
+      1001,
+      [
+        { type: "photo", media: "bob_static_1", caption: "Bob, 24" },
+        { type: "photo", media: "bob_static_2" },
+      ],
+      { protect_content: true },
+    );
     expect(stream).toHaveBeenCalledTimes(2);
   });
 
@@ -1073,7 +1084,7 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
 
     // Side B's partner (A) is unverified → no trust card, no badge for B.
     const mediaCallB = api.sendPhoto.mock.calls.find((c: unknown[]) => c[0] === 1002);
-    expect(mediaCallB![2]).toEqual({ caption: "Alice, 22" });
+    expect(mediaCallB![2]).toEqual({ caption: "Alice, 22", protect_content: true });
     const trustCallsB = api.sendMessage.mock.calls.filter((c: unknown[]) => c[0] === 1002);
     expect(trustCallsB).toHaveLength(0);
   });
