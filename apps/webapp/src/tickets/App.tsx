@@ -155,7 +155,11 @@ export function App(): ReactElement {
               className={`store-bundle${b.bestValue ? " store-bundle-best" : ""}`}
               onClick={() => void startPurchase(phase.balance, b)}
             >
-              {b.bestValue && <span className="store-badge">{s.bestValue}</span>}
+              {b.discountPct > 0 && (
+                <span className={`store-badge${b.bestValue ? " store-badge-best" : ""}`}>
+                  {fill(s.save, { pct: String(b.discountPct) })}
+                </span>
+              )}
               <span className="store-bundle-emblem" aria-hidden="true">
                 ×{b.count}
               </span>
@@ -165,6 +169,7 @@ export function App(): ReactElement {
                 </span>
                 <span className="store-bundle-per">
                   {fill(s.perTicket, { amount: formatUsd(b.perTicketCents) })}
+                  {b.bestValue && <span className="store-bundle-tag">{s.bestValue}</span>}
                 </span>
               </span>
               <span className="store-bundle-chevron" aria-hidden="true">

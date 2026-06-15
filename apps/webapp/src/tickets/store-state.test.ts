@@ -15,6 +15,15 @@ describe("storeBundles", () => {
     const bundles = storeBundles();
     expect(bundles.filter((b) => b.bestValue).map((b) => b.count)).toEqual([6]);
   });
+
+  it("derives the per-ticket saving vs singles (0 for the single bundle)", () => {
+    const bundles = storeBundles();
+    expect(bundles.map((b) => [b.count, b.discountPct])).toEqual([
+      [1, 0],
+      [3, 22],
+      [6, 36],
+    ]);
+  });
 });
 
 describe("formatUsd", () => {
