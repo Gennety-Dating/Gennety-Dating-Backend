@@ -52,6 +52,18 @@ interface TelegramHapticFeedback {
   selectionChanged(): void;
 }
 
+/**
+ * Safe-area inset reported by Telegram (Bot API 8.0+). `safeAreaInset` is the
+ * device inset (notch / rounded corners); `contentSafeAreaInset` is the extra
+ * reserve taken by Telegram's own chrome (close ×, menu ⋯) in fullscreen mode.
+ */
+interface TelegramSafeAreaInset {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
 interface TelegramWebApp {
   /** Raw init data — contains user, auth_date, hash, start_param, etc. */
   initData: string;
@@ -71,6 +83,17 @@ interface TelegramWebApp {
   version?: string;
   platform?: string;
   isFullscreen?: boolean;
+  /** Device safe-area inset (notch / rounded corners). */
+  safeAreaInset?: TelegramSafeAreaInset;
+  /**
+   * Content inset accounting for Telegram's own chrome (close ×, menu ⋯) in
+   * fullscreen mode. Not covered by `env(safe-area-inset-*)`.
+   */
+  contentSafeAreaInset?: TelegramSafeAreaInset;
+  /** Subscribe to a Web App event, e.g. `contentSafeAreaChanged`. */
+  onEvent?(event: string, handler: () => void): void;
+  /** Unsubscribe from a Web App event. */
+  offEvent?(event: string, handler: () => void): void;
   /**
    * DeviceStorage (Bot API 9.0) — per-user, per-bot persistent key/value.
    * Survives swipe-down dismissal of the Web App.
