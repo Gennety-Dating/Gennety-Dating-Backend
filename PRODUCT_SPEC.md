@@ -891,7 +891,14 @@ accents are vector shapes, not emoji); emoji live only in the Telegram caption.
   **face blurred** and sends it *without* `protect_content`, so it can leave
   the platform without exposing the partner's identity. (`protect_content`
   does not block OS screenshots in a normal bot chat — only secret chats do —
-  so the blurred share copy is the actual privacy guarantee.)
+  so the blurred share copy is the actual privacy guarantee.) The blur
+  re-render is slow too — it adds Rekognition `DetectFaces` + pixelation on top
+  of the same photo/venue/rasterize work — and the Share tap has no other
+  feedback, so it gets its own held "shine" status (`dateCardShareSteps`, a
+  star-led 5-beat sequence, uneven cadence) the instant Share is tapped. Like
+  the private render it is held `until` the blurred PNG is ready, then torn down
+  before the share copy is sent, so the user sees progress immediately instead
+  of re-tapping into stacked renders.
 - **Privacy fail-safe.** A blur that cannot be produced never falls back to the
   clear original; the share send is aborted and the user is told to retry.
 - **Partner photos are forward/save-protected everywhere they appear with a

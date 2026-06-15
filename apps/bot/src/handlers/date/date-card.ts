@@ -4,6 +4,8 @@ import { t, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
 import { renderDateCard } from "../../services/date-card/index.js";
+import { runStatusSequence } from "../../services/ai-stream.js";
+import { dateCardShareSteps } from "../../services/analysis-status.js";
 
 /**
  * `datecard:share:{matchId}` — the recipient asked for a shareable copy of
@@ -66,7 +68,13 @@ export async function handleDateCardShare(ctx: BotContext): Promise<void> {
 
   await ctx.answerCallbackQuery();
 
-  const card = await renderDateCard(
+  // The blur re-render (partner-photo download + Places venue photo + face
+  // detection + pixelation + satori→resvg rasterize) takes several seconds, and
+  // the Share tap has no other visible feedback. Kick the render off as the real
+  // unit of work and broadcast a live "shine" status that is HELD until it
+  // resolves, so the user sees progress immediately and isn't tempted to re-tap.
+  // The status is cosmetic — any failure inside it must not block the card.
+  const renderWork = renderDateCard(
     {
       partnerFirstName: partner.firstName ?? "",
       partnerPhotoRef: partner.profile?.photos?.[0] ?? null,
@@ -80,6 +88,12 @@ export async function handleDateCardShare(ctx: BotContext): Promise<void> {
     { blur: true },
     ctx.api,
   );
+
+  await runStatusSequence(ctx.api, ctx.from.id, dateCardShareSteps(lang as Language), {
+    until: renderWork,
+  }).catch(() => undefined);
+
+  const card = await renderWork;
 
   if (!card) {
     await ctx.reply(t(lang, "dateCardShareFailed"));

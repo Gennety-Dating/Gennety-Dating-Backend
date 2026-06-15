@@ -14,15 +14,21 @@ vi.mock("../../services/date-card/index.js", () => ({
   renderDateCard: vi.fn(),
 }));
 
+vi.mock("../../services/ai-stream.js", () => ({
+  runStatusSequence: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { prisma } from "@gennety/db";
 import { env } from "../../config.js";
 import { renderDateCard } from "../../services/date-card/index.js";
+import { runStatusSequence } from "../../services/ai-stream.js";
 import { handleDateCardShare } from "./date-card.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mUser = prisma.user as unknown as { findUnique: MockFn };
 const mMatch = prisma.match as unknown as { findUnique: MockFn };
 const mRender = renderDateCard as unknown as MockFn;
+const mStatus = runStatusSequence as unknown as MockFn;
 const mEnv = env as unknown as { DATE_CARD_FEATURE_ENABLED: boolean };
 
 function ctx(data = "datecard:share:m-1") {
@@ -54,6 +60,8 @@ beforeEach(() => {
   mUser.findUnique.mockReset();
   mMatch.findUnique.mockReset();
   mRender.mockReset();
+  mStatus.mockReset();
+  mStatus.mockResolvedValue(undefined);
   mEnv.DATE_CARD_FEATURE_ENABLED = true;
 });
 
@@ -72,6 +80,14 @@ describe("handleDateCardShare", () => {
     expect(opts).toEqual({ blur: true });
     expect(input.partnerFirstName).toBe("Bea");
     expect(input.partnerPhotoRef).toBe("fileB");
+
+    // A held progress status is shown immediately on the Share tap, wired to the
+    // real blur-render promise so it can't run away ahead of the work.
+    expect(mStatus).toHaveBeenCalledTimes(1);
+    const [, statusChatId, steps, statusOpts] = mStatus.mock.calls[0]!;
+    expect(statusChatId).toBe(1001);
+    expect(steps.length).toBe(5);
+    expect(statusOpts.until).toBeInstanceOf(Promise);
 
     expect(c.api.sendPhoto).toHaveBeenCalledTimes(1);
     const sendOpts = c.api.sendPhoto.mock.calls[0]![2];
@@ -97,6 +113,7 @@ describe("handleDateCardShare", () => {
     await handleDateCardShare(c);
     expect(mMatch.findUnique).not.toHaveBeenCalled();
     expect(mRender).not.toHaveBeenCalled();
+    expect(mStatus).not.toHaveBeenCalled();
     expect(c.api.sendPhoto).not.toHaveBeenCalled();
   });
 
@@ -106,6 +123,7 @@ describe("handleDateCardShare", () => {
     const c = ctx();
     await handleDateCardShare(c);
     expect(mRender).not.toHaveBeenCalled();
+    expect(mStatus).not.toHaveBeenCalled();
     expect(c.api.sendPhoto).not.toHaveBeenCalled();
   });
 });

@@ -86,6 +86,30 @@ export function dateCardSteps(lang: Language): StatusStep[] {
 }
 
 /**
+ * Shown while the **shareable** copy of the date card is re-rendered — the
+ * partner's face is blurred (AWS Rekognition `DetectFaces` → pixelation) before
+ * the card leaves the platform (PRODUCT_SPEC.md §3.7a). The Share tap has no
+ * other visible feedback, so without this the user sees nothing for several
+ * seconds and may re-tap, stacking renders; the status fires immediately and is
+ * held (`until: <render promise>`) until the blurred PNG is ready, then torn
+ * down before the card is sent.
+ *
+ * Every beat leads with the animated AIActions "sparkle"/stars glyph (rich path)
+ * — deliberately the moving-stars motif rather than the thinking cloud — with a
+ * star-family plain glyph as the classic-path fallback. Hold times are uneven on
+ * purpose so the cadence reads as work, not a mechanical loop.
+ */
+export function dateCardShareSteps(lang: Language): StatusStep[] {
+  return [
+    { text: t(lang, "dateCardShareStep1"), holdMs: 1300, emojiId: aiEmoji("sparkle") },
+    { text: t(lang, "dateCardShareStep2"), holdMs: 2100, emojiId: aiEmoji("sparkle") },
+    { text: t(lang, "dateCardShareStep3"), holdMs: 1600, emojiId: aiEmoji("sparkle") },
+    { text: t(lang, "dateCardShareStep4"), holdMs: 2400, emojiId: aiEmoji("sparkle") },
+    { text: t(lang, "dateCardShareStep5"), holdMs: 1900, emojiId: aiEmoji("sparkle") },
+  ];
+}
+
+/**
  * Resolve a per-step AIActions custom-emoji id from config. Empty (unset) →
  * undefined, so the step renders its plain leading glyph with no animation
  * (current behaviour until ids are filled in). Only meaningful on the rich path.
