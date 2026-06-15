@@ -55,7 +55,7 @@ pnpm --filter @gennety/bot exec tsx scripts/dev/advance-match-clock.ts \
 | A1 | `/start` cold | Consent card + ToS button | `User` row created; `email='dev+5986970093@gennety.dev'`; `isEmailVerified=true` | ☐ |
 | A2 | Tap consent → Onboarding Mini App opens | Full-screen Mini App: intro, ToS, language; **no** email/OTP screens (bypass) | `termsAccepted=true`, `consentedAt` set; `language` set | ☐ |
 | A3 | Tap "Continue" → returns to bot chat | Conversational agent greets in chosen language | `onboardingStep='conversational'`; agent does **not** call `send_otp_email` | ☐ |
-| A4 | Agent requests Magic Prompt → paste a real ChatGPT/Claude dump | "Internal monologue" streamed via `sendMessageDraft` while parsing | `Profile.psychologicalSummary` populated; `Profile.embedding` vector(1536) written | ☐ |
+| A4 | Agent requests Magic Prompt → paste a real ChatGPT/Claude dump | "Internal monologue" streamed via `sendMessageDraft` while parsing. With `RICH_THINKING_ENABLED`: native `<tg-thinking>` shimmer (`sendRichMessageDraft`) on a 10.1 client; on an old client/server it must silently degrade to the edited status line and never block the flow | `Profile.psychologicalSummary` populated; `Profile.embedding` vector(1536) written | ☐ |
 | A5 | Agent requests photos → upload ≥ `MIN_PHOTOS` (mix static + 1 Live Photo) | Different same-person photos accepted; exact/cropped copies, other people, multi-person shots, and unsafe photos rejected; Live Photo counts as 1 item | Approved media only in `Profile.photos[]` / `profileMedia[]`; scores aligned | ☐ |
 | A5v | Upload safe travel/group video with owner visible in separated moments, then try scenery-only, one-moment cameo, and unsafe QA clip | Sparse owner appearances pass; rejected replacements preserve the accepted video and grant no ticket | Accepted video has validation metadata; no frames/audio/transcript retained | ☐ |
 | A6 | Agent collects firstName / age / gender / preference / partnerPreferences | Agent never re-asks once given; no English enum injection in non-English replies | All fields persisted on `User` and `Profile` | ☐ |
@@ -91,7 +91,7 @@ pnpm --filter @gennety/bot exec tsx scripts/dev/advance-match-clock.ts \
 | # | Action | Expected | OK |
 |---|---|---|---|
 | D1 | Run `pnpm --filter @gennety/bot exec tsx scripts/dev/force-match-batch.ts` | Log: `eligible=2 pairs=1`; one `Match` row inserted with `status='proposed'`; `match_score_logs` row with breakdown | ☐ |
-| D2 | Both accounts receive streamed pitch DM | Pitch streamed via `sendMessageDraft`; Synergy score 70–99; deadline 24h; Accept/Decline buttons; **for @GN01001's partner card** (verified by partner), `CUSTOM_EMOJI_VERIFIED_ID` shown next to name in pitch caption | ☐ |
+| D2 | Both accounts receive streamed pitch DM | Pitch streamed via `sendMessageDraft` (with `RICH_THINKING_ENABLED`: `sendRichMessageDraft` + `<tg-thinking>` shimmer on the "analysing" beat, final still a plain text message); Synergy score 70–99; deadline 24h; Accept/Decline buttons survive the final send; D3 countdown plate still edits the final message; **for @GN01001's partner card** (verified by partner), `CUSTOM_EMOJI_VERIFIED_ID` shown next to name in pitch caption | ☐ |
 | D3 | Wait 5 min | `proposal-countdown` worker edits "⏳ 23h left" plate | ☐ |
 
 ### Phase E — Blind decision + Calendar (happy path)

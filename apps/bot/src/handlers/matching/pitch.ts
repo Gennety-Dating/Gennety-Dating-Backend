@@ -387,6 +387,10 @@ export async function sendMatchProposal(
     ...chunksB,
     finalB,
   ];
+  // `matchStreamStart` (the "analysing compatibility…" beat) sits right after
+  // the headline + deadline; on the rich path it renders as a <tg-thinking>
+  // shimmer. Same index for both sides since the preamble is identical.
+  const thinkingIndex = 2;
 
   const kbA = buildMatchKeyboard(matchId, langA);
   const kbB = buildMatchKeyboard(matchId, langB);
@@ -425,7 +429,7 @@ export async function sendMatchProposal(
     const chatA = Number(match.userA.telegramId);
     await deliverWelcomeGiftPreroll(api, match.userA.id, chatA, langA, match.userA.gender);
     await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
-    const result = await stream(api, chatA, draftsA, { replyMarkup: kbA });
+    const result = await stream(api, chatA, draftsA, { replyMarkup: kbA, thinkingIndex });
     if (!result) throw new Error("Pitch stream returned no final message for side A");
     await prisma.match.update({
       where: { id: matchId },
@@ -440,7 +444,7 @@ export async function sendMatchProposal(
     const chatB = Number(match.userB.telegramId);
     await deliverWelcomeGiftPreroll(api, match.userB.id, chatB, langB, match.userB.gender);
     await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
-    const result = await stream(api, chatB, draftsB, { replyMarkup: kbB });
+    const result = await stream(api, chatB, draftsB, { replyMarkup: kbB, thinkingIndex });
     if (!result) throw new Error("Pitch stream returned no final message for side B");
     await prisma.match.update({
       where: { id: matchId },
