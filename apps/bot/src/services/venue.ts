@@ -55,6 +55,17 @@ export interface Venue {
    * bytes (Places ToS). Null for curated / stub venues.
    */
   photoName?: string | null;
+  /**
+   * Descriptive facts used to GROUND the scheduled-card venue blurb
+   * (`services/venue-blurb.ts`). All optional / nullable — the blurb degrades to
+   * category + the match's vibe when they're absent (curated / stub venues).
+   * `editorialSummary` is Google's own short description; `primaryType` is the
+   * Places place-type (or the curated category). Never invented downstream.
+   */
+  editorialSummary?: string | null;
+  rating?: number | null;
+  userRatingCount?: number | null;
+  primaryType?: string | null;
 }
 
 /** Legacy (pre-concierge) input. Retained for tests + rollback path. */
@@ -274,6 +285,7 @@ interface PlaceV1 {
   regularOpeningHours?: RegularOpeningHours;
   utcOffsetMinutes?: number;
   photos?: { name?: string }[];
+  editorialSummary?: { text?: string; languageCode?: string };
 }
 
 interface SearchNearbyResponse {
@@ -295,6 +307,7 @@ const FIELD_MASK = [
   "places.regularOpeningHours",
   "places.utcOffsetMinutes",
   "places.photos",
+  "places.editorialSummary",
 ].join(",");
 
 /** Internal: enriched candidate with computed score. */
@@ -437,6 +450,11 @@ function placeToVenue(p: PlaceV1): Venue {
     photoUrl: null,
     // Cover photo (first in the list is the highest-quality lead image).
     photoName: p.photos?.[0]?.name ?? null,
+    // Grounding facts for the scheduled-card blurb (see `venue-blurb.ts`).
+    editorialSummary: p.editorialSummary?.text ?? null,
+    rating: p.rating ?? null,
+    userRatingCount: p.userRatingCount ?? null,
+    primaryType: p.primaryType ?? null,
   };
 }
 

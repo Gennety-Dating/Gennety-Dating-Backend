@@ -231,6 +231,13 @@ function rowToVenue(row: CuratedVenueRow): Venue {
     googleMapsUri: row.googleMapsUri,
     photoUrl: row.photoUrl,
     photoName: null,
+    // Curated rows carry no Places editorial summary / rating; expose the
+    // operator category so the blurb still has an honest grounding fact, and
+    // let it fall back to the match's requested vibe for the rest.
+    editorialSummary: null,
+    rating: null,
+    userRatingCount: null,
+    primaryType: row.category,
   };
 }
 

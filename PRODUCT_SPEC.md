@@ -842,9 +842,16 @@ Multi-step fallback so scheduling never wedges:
 
 Persisted columns on success: `venueName`, `venueAddress`, `venueLat`,
 `venueLng`, **`venueGoogleMapsUri`** (deep-link to the picked place).
-The final `scheduled` DM includes the `googleMapsUri` on a separate
-line — Telegram auto-linkifies it so users can tap to verify the
-venue exists, check hours, and pre-plan transit. The confirmation also wraps a localized date phrase
+The final `scheduled` DM is a compact, structured block — `📍 venue name`,
+the full address, then a short (1–2 line) **grounded venue blurb** describing
+what kind of place it is. The blurb is generated per-side in the user's
+language by `services/venue-blurb.ts` using ONLY real facts (Google's
+`editorialSummary`, rating, place category, and the vibe both users asked for)
+— never inventing specifics — and degrades to a generic per-language line if
+the model is unavailable, so finalization never blocks. The `googleMapsUri`
+is **no longer inlined in the body** (it would duplicate the affordance); it
+rides the "📍 Open in Maps" keyboard button only, so users still tap to verify
+the venue exists, check hours, and pre-plan transit. The confirmation also wraps a localized date phrase
 (`📅 Sat, 16 May, 19:00`, rendered in `Europe/Kyiv`) in a
 **`date_time` MessageEntity** so the whole phrase is a visibly
 unmistakable tap target — Telegram does not auto-style `date_time`

@@ -1630,6 +1630,42 @@ describe("venue negotiation finalization", () => {
     });
   });
 
+  it("structures the scheduled caption (name/address/blurb) and drops the inlined Maps URL", async () => {
+    mMatch.findUnique.mockResolvedValueOnce({
+      id: "match-venue-1",
+      status: "negotiating_venue",
+      agreedTime: new Date("2026-05-16T16:00:00.000Z"),
+      vibeTextA: "quiet cafe",
+      vibeTextB: "quiet cafe",
+      vibeLatA: 50.45,
+      vibeLngA: 30.52,
+      vibeLatB: 50.45,
+      vibeLngB: 30.52,
+      parsedCategoryA: null,
+      parsedCategoryB: null,
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "ru" },
+    });
+    const api = { sendMessage: vi.fn().mockResolvedValue({}) } as any;
+
+    await tryFinalize(api, "match-venue-1");
+
+    const callA = api.sendMessage.mock.calls.find((call: unknown[]) => {
+      const opts = call[2] as { entities?: unknown[] } | undefined;
+      return call[0] === 1001 && Array.isArray(opts?.entities);
+    })!;
+    const caption = callA[1] as string;
+
+    // Structured block: name + full address are present.
+    expect(caption).toContain("📍 Test Cafe");
+    expect(caption).toContain("123 Test St");
+    // The Maps URL is no longer duplicated in the body (it lives on the button).
+    expect(caption).not.toContain("http");
+    expect(caption).not.toContain("maps.google.com");
+    // The blurb line (fallback, since OPENAI_API_KEY is empty in tests) is there.
+    expect(caption).toContain("unhurried conversation");
+  });
+
   it("falls back to a Google Maps search URL when the venue has no Places deep-link", async () => {
     mPickVenueAtMidpoint.mockResolvedValueOnce({
       name: "Fallback Cafe",

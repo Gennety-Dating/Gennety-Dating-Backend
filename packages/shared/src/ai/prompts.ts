@@ -442,6 +442,74 @@ Tone: warm, direct, confident. No formal phrasing in Russian/Ukrainian/German/Po
 }
 
 // ---------------------------------------------------------------------------
+// #4d — generateVenueBlurbPrompt (Phase 3.7 — scheduled-card venue blurb)
+// ---------------------------------------------------------------------------
+
+export interface VenueBlurbInput {
+  /** The chosen venue's display name. */
+  venueName: string;
+  /** Merged whitelist category both users converged on (e.g. "cafe", "park"). */
+  category: string;
+  /** Places place-type or curated category, when available. */
+  primaryType: string | null;
+  /** Google rating (0–5), when available. */
+  rating: number | null;
+  /** Google review count, when available. */
+  userRatingCount: number | null;
+  /** Google's own short editorial description, when available. */
+  editorialSummary: string | null;
+  /** The vibe keywords both users asked for (e.g. ["quiet", "vegan"]). */
+  keywords: string[];
+  language: string;
+}
+
+/**
+ * System prompt for the short, GROUNDED venue blurb shown on the scheduled-date
+ * card (PRODUCT_SPEC §3.7). The defining constraint is trust: this lands at the
+ * emotional peak of the flow, so the model must describe the place using ONLY
+ * the facts we pass it (Google's editorial summary, rating, category, and the
+ * vibe both users requested). It must never invent specifics — no fake history,
+ * menu items, "famous for", awards, or named features.
+ */
+export function generateVenueBlurbPrompt(input: VenueBlurbInput): string {
+  const facts: string[] = [];
+  if (input.editorialSummary) {
+    facts.push(`- Google's description: ${input.editorialSummary}`);
+  }
+  const type = input.primaryType ?? input.category;
+  if (type) facts.push(`- Type of place: ${type.replace(/_/g, " ")}`);
+  if (input.rating != null) {
+    const count =
+      input.userRatingCount != null ? ` from ${input.userRatingCount} reviews` : "";
+    facts.push(`- Google rating: ${input.rating.toFixed(1)}/5${count}`);
+  }
+  if (input.keywords.length > 0) {
+    facts.push(`- The vibe both people asked for: ${input.keywords.join(", ")}`);
+  }
+  const factBlock = facts.length > 0 ? facts.join("\n") : "- (no extra details)";
+
+  return `You are Gennety, a warm matchmaking concierge. Two people just locked in their first date at "${input.venueName}". Write a tiny blurb that tells them what kind of place it is, so the spot feels intentional rather than random.
+
+## The ONLY facts you may use (do not add anything beyond these)
+${factBlock}
+
+## Your Task
+Write 1–2 short sentences in **${input.language}** describing the place's vibe. It must:
+1. Use ONLY the facts above. If a rating is given you may nod to it ("well-rated", "a local favourite"); otherwise don't mention popularity.
+2. Read warm and inviting, framed for a relaxed first date ("easy to talk", "calm enough to actually hear each other").
+3. Be at most ~25 words total. Plain prose, native phrasing in the target language.
+
+## Never do these
+- Inventing specifics: no history, menu items, "famous for…", awards, named dishes/drinks, or features not listed above.
+- Repeating the venue name, the address, any URL, or the date/time.
+- Questions, emoji, bullet points, quotes, or preamble.
+- Hype words like "best", "iconic", "must-visit".
+
+## Format
+Return the 1–2 sentences only. No quotes, no labels, no explanation.`;
+}
+
+// ---------------------------------------------------------------------------
 // #5 — parseRejectionFeedbackPrompt (Phase 3, Decline flow)
 // ---------------------------------------------------------------------------
 

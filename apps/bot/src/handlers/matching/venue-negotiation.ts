@@ -49,6 +49,7 @@ import {
 } from "./venue-change.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import { generateAndSaveWingmanHints } from "../../services/wingman-hint.js";
+import { generateVenueBlurb } from "../../services/venue-blurb.js";
 import { runVenueFinalizationOnce } from "../../services/venue-finalization-flight.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
@@ -484,16 +485,33 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
     console.warn(`[wingman] generation failed for match ${matchId}:`, err);
   });
 
-  // Append the Google Maps deep-link on a new line when available so
-  // the user can tap to verify the venue exists / pre-check hours and
-  // commute. Telegram auto-linkifies bare URLs in plain text — no
-  // parse_mode needed (and we want to avoid Markdown escaping issues
-  // around place names containing `*` / `_`).
-  const venueLabel = venue.googleMapsUri
-    ? `${venue.name} — ${venue.address}\n${venue.googleMapsUri}`
-    : `${venue.name} — ${venue.address}`;
-  const baseA = t(langA, "matchScheduled", { venue: venueLabel });
-  const baseB = t(langB, "matchScheduled", { venue: venueLabel });
+  // Grounded, per-language venue blurb (PRODUCT_SPEC §3.7): a short "what is
+  // this place" line built ONLY from real facts (Google editorial summary /
+  // rating / category + the vibe both asked for). It replaces the inlined Maps
+  // URL — the deep-link already rides the "Open in Maps" keyboard button below,
+  // so the body no longer duplicates it. Failsafe: each side degrades to a
+  // generic line, so a blurb hiccup never blocks scheduling.
+  const [blurbA, blurbB] = await Promise.all([
+    generateVenueBlurb({
+      venue,
+      category: merged.category,
+      keywords: merged.keywords,
+      language: langA,
+    }),
+    generateVenueBlurb({
+      venue,
+      category: merged.category,
+      keywords: merged.keywords,
+      language: langB,
+    }),
+  ]);
+
+  // Structured block: 📍 name / full address / blurb. The localized header and
+  // the trailing `date_time` entity (added by `buildDateTimeEntity`) wrap it.
+  const venueBlockA = `📍 ${venue.name}\n${venue.address}\n${blurbA}`;
+  const venueBlockB = `📍 ${venue.name}\n${venue.address}\n${blurbB}`;
+  const baseA = t(langA, "matchScheduled", { venue: venueBlockA });
+  const baseB = t(langB, "matchScheduled", { venue: venueBlockB });
   const { text: textA, entity: entA } = buildDateTimeEntity(baseA, match.agreedTime, langA);
   const { text: textB, entity: entB } = buildDateTimeEntity(baseB, match.agreedTime, langB);
   const mapsKeyboardA = buildScheduledMapsKeyboard(venue, langA);

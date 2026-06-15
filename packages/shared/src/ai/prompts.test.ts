@@ -8,6 +8,7 @@ import {
   venueSelectionPrompt,
   generateIceBreakersPrompt,
   generateWingmanHintPrompt,
+  generateVenueBlurbPrompt,
   parseRejectionFeedbackPrompt,
   parsePostDateFeedbackPrompt,
   parseReportTriagePrompt,
@@ -342,6 +343,55 @@ describe("generateWingmanHintPrompt", () => {
       targetSummary: null,
     });
     expect(result).toContain("(no profile summary available)");
+  });
+});
+
+describe("generateVenueBlurbPrompt", () => {
+  const base = {
+    venueName: "Kavovary on the Square",
+    category: "cafe",
+    primaryType: "coffee_shop",
+    rating: 4.6,
+    userRatingCount: 412,
+    editorialSummary: "Cosy specialty coffee bar with a quiet upstairs nook.",
+    keywords: ["quiet", "vegan"],
+    language: "en",
+  };
+
+  it("only feeds the provided facts and the venue name", () => {
+    const result = generateVenueBlurbPrompt(base);
+    expect(result).toContain("Kavovary on the Square");
+    expect(result).toContain("Cosy specialty coffee bar");
+    expect(result).toContain("4.6");
+    expect(result).toContain("from 412 reviews");
+    expect(result).toContain("quiet, vegan");
+    expect(result).toContain("coffee shop");
+  });
+
+  it("forbids inventing specifics and bans address/url/date echoes", () => {
+    const result = generateVenueBlurbPrompt(base);
+    expect(result).toMatch(/Inventing specifics/i);
+    expect(result).toMatch(/ONLY the facts/i);
+    expect(result).toMatch(/any URL/i);
+  });
+
+  it("injects the target language", () => {
+    expect(generateVenueBlurbPrompt({ ...base, language: "ru" })).toContain("**ru**");
+  });
+
+  it("falls back to the merged category and never fabricates a rating", () => {
+    const result = generateVenueBlurbPrompt({
+      ...base,
+      primaryType: null,
+      rating: null,
+      userRatingCount: null,
+      editorialSummary: null,
+      keywords: [],
+    });
+    // No Places type → grounds on the whitelist category instead.
+    expect(result).toContain("Type of place: cafe");
+    // With no rating, the prompt must not fabricate one.
+    expect(result).not.toContain("Google rating");
   });
 });
 
