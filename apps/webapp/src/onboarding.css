@@ -459,6 +459,18 @@ button {
   flex: 0 0 auto;
 }
 
+/* Single static neon backlight behind the deck. Kept on the container (not on
+   the cards) so swapping cards never stacks two glows into a brighter flash. */
+.swipe-deck::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 1rem;
+  box-shadow: 0 0 40px 10px rgba(182, 154, 229, 0.15);
+  pointer-events: none;
+  z-index: 0;
+}
+
 .profile-card {
   position: absolute;
   inset: 0;
@@ -466,9 +478,7 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
   background: #1a1a1a;
-  box-shadow:
-    0 25px 50px -12px rgba(0, 0, 0, 0.65),
-    0 0 40px 10px rgba(182, 154, 229, 0.15);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65);
   will-change: transform, opacity;
 }
 
@@ -1803,7 +1813,8 @@ button {
   font-size: 24px;
   font-weight: 700;
   outline: none;
-  caret-color: #B69AE5;
+  /* Hide the blinking caret; the active box is signalled by the focus tint below. */
+  caret-color: transparent;
   transition: background 160ms ease;
 }
 
