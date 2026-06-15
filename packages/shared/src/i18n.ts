@@ -394,6 +394,7 @@ const translations = {
     dateCardTagline: "IT'S A DATE",
     dateCardWhen: "WHEN",
     dateCardWhere: "WHERE",
+    dateCardSlogan: "Two strangers,\none good evening.",
     dateCardShareCaption:
       "Share away — your match's face is hidden to protect their privacy 💞",
     dateCardShareFailed:
@@ -1000,6 +1001,7 @@ const translations = {
     dateCardTagline: "У ВАС СВИДАНИЕ",
     dateCardWhen: "КОГДА",
     dateCardWhere: "ГДЕ",
+    dateCardSlogan: "Два незнакомца,\nодин хороший вечер.",
     dateCardShareCaption:
       "Делитесь смело — лицо вашего мэтча скрыто, чтобы сохранить его приватность 💞",
     dateCardShareFailed:
@@ -1590,6 +1592,7 @@ const translations = {
     dateCardTagline: "У ВАС ПОБАЧЕННЯ",
     dateCardWhen: "КОЛИ",
     dateCardWhere: "ДЕ",
+    dateCardSlogan: "Двоє незнайомців,\nодин гарний вечір.",
     dateCardShareCaption:
       "Діліться сміливо — обличчя вашого метчу приховане, щоб зберегти його приватність 💞",
     dateCardShareFailed:
@@ -2155,6 +2158,7 @@ const deTranslations: TranslationTable = {
   dateCardTagline: "ES IST EIN DATE",
   dateCardWhen: "WANN",
   dateCardWhere: "WO",
+  dateCardSlogan: "Zwei Fremde,\nein guter Abend.",
   dateCardShareCaption:
     "Teile sie ruhig — das Gesicht deines Matches ist zum Schutz seiner Privatsphäre verdeckt 💞",
   dateCardShareFailed:
@@ -2654,6 +2658,7 @@ const plTranslations: TranslationTable = {
   dateCardTagline: "TO RANDKA",
   dateCardWhen: "KIEDY",
   dateCardWhere: "GDZIE",
+  dateCardSlogan: "Dwoje obcych,\njeden dobry wieczór.",
   dateCardShareCaption:
     "Udostępniaj śmiało — twarz Twojego matcha jest zasłonięta dla ochrony jego prywatności 💞",
   dateCardShareFailed:

@@ -23,15 +23,6 @@ import { buildCardElement, CARD_W, CARD_H, type CardNode } from "./template.js";
  * fall back to the plain-text scheduled DM (scheduling must never wedge).
  */
 
-const RENDER_TZ = "Europe/Kyiv";
-const LOCALE_TAGS: Record<Language, string> = {
-  en: "en-GB",
-  ru: "ru-RU",
-  uk: "uk-UA",
-  de: "de-DE",
-  pl: "pl-PL",
-};
-
 export interface DateCardInput {
   /** The *partner* shown on this card (recipient sees the other person). */
   partnerFirstName: string;
@@ -63,18 +54,6 @@ function loadFonts(): SatoriFonts {
     { name: "Roboto", data: read("Roboto-Bold.ttf"), weight: 700, style: "normal" },
   ];
   return cachedFonts;
-}
-
-function formatDateText(when: Date, language: Language): string {
-  return new Intl.DateTimeFormat(LOCALE_TAGS[language], {
-    weekday: "short",
-    day: "numeric",
-    month: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: RENDER_TZ,
-  }).format(when);
 }
 
 export async function renderDateCard(
@@ -112,10 +91,9 @@ export async function renderDateCard(
       attribution: venueRaw?.attribution ?? false,
       venueName: input.venueName,
       venueAddress: input.venueAddress,
-      dateText: formatDateText(input.agreedTime, input.language),
+      slogan: t(input.language, "dateCardSlogan"),
       labels: {
         tagline: t(input.language, "dateCardTagline"),
-        when: t(input.language, "dateCardWhen"),
         where: t(input.language, "dateCardWhere"),
       },
     });

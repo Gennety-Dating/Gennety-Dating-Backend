@@ -47,10 +47,12 @@ export interface CardElementInput {
   attribution: boolean;
   venueName: string;
   venueAddress: string;
-  dateText: string;
+  /** Short, confident tagline shown where the redundant date used to sit. The
+   * concrete date/time lives only in the Telegram caption now, so the card
+   * stays a clean keepsake. Split on `\n` into stacked lines. */
+  slogan: string;
   labels: {
     tagline: string;
-    when: string;
     where: string;
   };
 }
@@ -221,11 +223,90 @@ function detailRow(label: string, value: string, sub?: string): CardNode {
   return el("div", { display: "flex", flexDirection: "column", marginBottom: "30px" }, lines);
 }
 
+/** A small ACCENT square rotated 45° — a crisp vector "spark" (no emoji font). */
+function sparkDiamond(size: number): CardNode {
+  return el("div", {
+    display: "flex",
+    width: `${size}px`,
+    height: `${size}px`,
+    backgroundColor: ACCENT,
+    transform: "rotate(45deg)",
+    borderRadius: "2px",
+  });
+}
+
+/** Short horizontal accent line that fades out at its right end. */
+function accentRule(): CardNode {
+  return el("div", {
+    display: "flex",
+    width: "132px",
+    height: "3px",
+    marginLeft: "16px",
+    borderRadius: "3px",
+    backgroundImage: `linear-gradient(90deg, ${ACCENT} 0%, rgba(255,91,110,0) 100%)`,
+  });
+}
+
+/**
+ * The confident slogan that replaces the old WHEN row. An editorial "kicker"
+ * (diamond + fading rule) sits above stacked slogan lines. All vector /
+ * typography — nothing depends on an emoji font, so it rasterizes identically
+ * everywhere.
+ */
+function sloganSection(slogan: string): CardNode {
+  const lines = slogan.split("\n").map((line, i) =>
+    el(
+      "div",
+      { display: "flex", marginTop: i === 0 ? "0px" : "4px" },
+      line,
+    ),
+  );
+  return el(
+    "div",
+    {
+      display: "flex",
+      flexDirection: "column",
+      marginBottom: "44px",
+    },
+    [
+      // Editorial kicker: diamond + fading rule.
+      el(
+        "div",
+        { display: "flex", alignItems: "center", marginBottom: "22px" },
+        [sparkDiamond(13), accentRule()],
+      ),
+      // Stacked slogan lines.
+      el(
+        "div",
+        {
+          display: "flex",
+          flexDirection: "column",
+          fontSize: "52px",
+          fontWeight: 700,
+          letterSpacing: "-0.5px",
+          lineHeight: 1.08,
+          color: INK,
+        },
+        lines,
+      ),
+    ],
+  );
+}
+
 function detailsSection(input: CardElementInput): CardNode {
-  return el("div", { display: "flex", flexDirection: "column", flexGrow: 1 }, [
-    detailRow(input.labels.when, input.dateText),
-    detailRow(input.labels.where, input.venueName, input.venueAddress),
-  ]);
+  return el(
+    "div",
+    {
+      display: "flex",
+      flexDirection: "column",
+      flexGrow: 1,
+      justifyContent: "center",
+    },
+    [
+      sloganSection(input.slogan),
+      detailRow(input.labels.where, input.venueName, input.venueAddress),
+    ],
+  );
 }
 
 function footer(input: CardElementInput): CardNode {

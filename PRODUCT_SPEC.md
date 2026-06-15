@@ -865,12 +865,15 @@ Gated by `DATE_CARD_FEATURE_ENABLED` (default **off** → the scheduled
 confirmation is the plain-text DM above). Telegram-only in v1. When on, each
 side's `scheduled` confirmation is a rendered **PNG date card** (the recipient
 sees their *partner*): a tilted venue photo, an overlapping polaroid of the
-partner, and the meeting details (localized date/time via the same
-`Europe/Kyiv` formatting, venue name + address). Rendered server-side with
-`satori` (→ SVG) + `@resvg/resvg-js` (→ PNG); the partner-face blur uses
-AWS Rekognition `DetectFaces` boxes + pixelation. Rendered text is emoji-free
-(the bundled Roboto fonts carry no color-emoji glyphs); emoji live only in the
-Telegram caption.
+partner, a short confident **slogan** under a vector "kicker" accent
+(`dateCardSlogan`, localized; e.g. "Two strangers, one good evening."), and the
+venue name + address. The card deliberately **omits the date/time** — the exact
+slot already lives in the Telegram caption right below, so repeating it on the
+card adds nothing and the freed space is spent on a cleaner keepsake. Rendered
+server-side with `satori` (→ SVG) + `@resvg/resvg-js` (→ PNG); the partner-face
+blur uses AWS Rekognition `DetectFaces` boxes + pixelation. Rendered text is
+emoji-free (the bundled Roboto fonts carry no color-emoji glyphs, so all card
+accents are vector shapes, not emoji); emoji live only in the Telegram caption.
 
 - **Live render progress.** The render (partner-photo download + Places venue
   photo + rasterize) takes several seconds, so each side sees a per-side
