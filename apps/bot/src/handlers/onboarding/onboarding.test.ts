@@ -167,6 +167,7 @@ function createMockCtx(overrides: {
     width?: number;
     height?: number;
   };
+  messageId?: number;
   fromId?: number;
 }) {
   const session: SessionData = {
@@ -176,6 +177,7 @@ function createMockCtx(overrides: {
 
   const message = overrides.video
     ? {
+        message_id: overrides.messageId ?? 111,
         video: {
           file_id: overrides.video.file_id,
           file_unique_id: overrides.video.file_unique_id,
@@ -189,6 +191,7 @@ function createMockCtx(overrides: {
       }
     : overrides.livePhoto
     ? {
+        message_id: overrides.messageId ?? 111,
         live_photo: {
           file_id: overrides.livePhoto.file_id,
           file_unique_id: overrides.livePhoto.file_unique_id,
@@ -214,6 +217,7 @@ function createMockCtx(overrides: {
       }
     : overrides.photo
     ? {
+        message_id: overrides.messageId ?? 111,
         photo: [
           {
             file_id: overrides.photo.file_id,
@@ -224,7 +228,7 @@ function createMockCtx(overrides: {
         ],
       }
     : overrides.messageText
-      ? { text: overrides.messageText }
+      ? { message_id: overrides.messageId ?? 111, text: overrides.messageText }
       : undefined;
 
   return {
@@ -237,6 +241,7 @@ function createMockCtx(overrides: {
       sendMessage: vi.fn().mockResolvedValue(undefined),
       sendChatAction: vi.fn().mockResolvedValue(undefined),
       editMessageText: vi.fn().mockResolvedValue(undefined),
+      setMessageReaction: vi.fn().mockResolvedValue(undefined),
     },
     reply: vi.fn().mockResolvedValue({ message_id: 700 }),
     replyWithPhoto: vi.fn().mockResolvedValue(undefined),
@@ -454,6 +459,33 @@ describe("Context dump processing delay", () => {
 
     expect(ctx.session.awaitingContextDump).toBe(true);
     expect(ctx.session.contextDumpBuffer).toBe("");
+  });
+
+  it("likes a user message when the collector accepted hobbies", async () => {
+    agentMock.mockResolvedValueOnce({
+      reply: "Nice, I saved that.",
+      expectingPhoto: false,
+      onboardingComplete: false,
+      contextPromptRequested: false,
+      contextDumpStarted: false,
+      contextDumpSaved: false,
+      acceptedOnboardingFields: ["hobbies"],
+    });
+
+    const ctx = createMockCtx({
+      session: { onboardingStep: "conversational" },
+      messageText: "I like climbing and jazz.",
+      messageId: 444,
+    });
+
+    await handleConversational(ctx);
+
+    expect(ctx.api.setMessageReaction).toHaveBeenCalledWith(
+      12345,
+      444,
+      [{ type: "emoji", emoji: "👍" }],
+      { is_big: false },
+    );
   });
 
   it("context dump mode wins if the agent also incorrectly signals expectingPhoto", async () => {
@@ -1064,6 +1096,7 @@ describe("Album (media_group_id) photo coalescing", () => {
     photoFileId: string;
     photoUniqueId: string;
     mediaGroupId: string;
+    messageId?: number;
     chatId?: number;
     fromId?: number;
   }) {
@@ -1075,6 +1108,7 @@ describe("Album (media_group_id) photo coalescing", () => {
       sendMessage: vi.fn().mockResolvedValue(undefined),
       getFile: vi.fn(),
       sendChatAction: vi.fn().mockResolvedValue(undefined),
+      setMessageReaction: vi.fn().mockResolvedValue(undefined),
     };
     return {
       session,
@@ -1082,6 +1116,7 @@ describe("Album (media_group_id) photo coalescing", () => {
       chat: { id: overrides.chatId ?? 99001 },
       api,
       message: {
+        message_id: overrides.messageId ?? 610,
         photo: [
           {
             file_id: overrides.photoFileId,
@@ -1225,6 +1260,45 @@ describe("Album (media_group_id) photo coalescing", () => {
     );
     expect(ctx2.api.sendMessage).not.toHaveBeenCalled();
     expect(ctx3.api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("reacts with fire only to the first valid profile photo", async () => {
+    const shared: SessionData = {
+      ...DEFAULT_SESSION,
+      onboardingStep: "conversational",
+      expectingPhoto: true,
+      pendingPhotos: [],
+      pendingPhotoUniqueIds: [],
+    };
+
+    const first = createAlbumCtx({
+      photoFileId: "first_photo",
+      photoUniqueId: "first_uid",
+      mediaGroupId: "",
+      messageId: 701,
+    });
+    delete first.message.media_group_id;
+    first.session = shared;
+    await handleConversational(first);
+
+    expect(first.api.setMessageReaction).toHaveBeenCalledWith(
+      99001,
+      701,
+      [{ type: "emoji", emoji: "🔥" }],
+      { is_big: false },
+    );
+
+    const second = createAlbumCtx({
+      photoFileId: "second_photo",
+      photoUniqueId: "second_uid",
+      mediaGroupId: "",
+      messageId: 702,
+    });
+    delete second.message.media_group_id;
+    second.session = shared;
+    await handleConversational(second);
+
+    expect(second.api.setMessageReaction).not.toHaveBeenCalled();
   });
 
   it("coalesces standalone photo messages into one deterministic prompt", async () => {

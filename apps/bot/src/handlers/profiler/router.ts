@@ -60,7 +60,12 @@ profilerRouter.use(async (ctx, next) => {
     });
     const activeQuestionId = user?.profile?.profilerActiveQuestionId;
     if (user && activeQuestionId) {
-      await recordProfilerAnswer(ctx.api, user.id, activeQuestionId, text);
+      await recordProfilerAnswer(ctx.api, user.id, activeQuestionId, text, {
+        reactionTarget: {
+          chatId: ctx.chat?.id,
+          messageId: ctx.message?.message_id,
+        },
+      });
       return;
     }
   }

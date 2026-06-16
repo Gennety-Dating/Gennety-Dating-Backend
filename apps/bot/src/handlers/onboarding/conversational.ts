@@ -52,6 +52,10 @@ import {
   isPhotoStageContinueText,
   onboardingPhotoStageText,
 } from "../../services/onboarding-photo-stage.js";
+import {
+  MESSAGE_REACTION,
+  reactToMessage,
+} from "../../services/message-reactions.js";
 
 /** Backward compatibility for confirmation buttons sent before auto-flush. */
 const DUMP_DONE_CALLBACK = "dump:done";
@@ -251,6 +255,17 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
       continuePhotoStage ? { kind: "photos_continue" } : text,
     ),
   );
+
+  if (
+    ctx.message?.text &&
+    result.acceptedOnboardingFields?.includes("hobbies")
+  ) {
+    await reactToMessage(
+      ctx.api,
+      { chatId: ctx.chat?.id, messageId: ctx.message.message_id },
+      MESSAGE_REACTION.like,
+    );
+  }
 
   if (result.contextDumpStarted) {
     ctx.session.awaitingContextDump = true;
@@ -981,6 +996,7 @@ async function handlePhotoFrame(
       return;
     }
 
+    const isFirstValidPhoto = ctx.session.pendingPhotos.length === 0;
     ctx.session.pendingPhotos.push(fileId);
     ctx.session.pendingProfileMedia = [
       ...normalizeProfileMedia(ctx.session.pendingProfileMedia, ctx.session.pendingPhotos.slice(0, -1)),
@@ -1003,6 +1019,13 @@ async function handlePhotoFrame(
       ctx.session.pendingProfileMedia,
       ctx.session.pendingPhotoScores,
     );
+    if (isFirstValidPhoto) {
+      await reactToMessage(
+        ctx.api,
+        { chatId, messageId: ctx.message?.message_id },
+        MESSAGE_REACTION.fire,
+      );
+    }
   } catch (err) {
     console.error("Photo frame handling failed:", err);
     acc.hadInfraError = true;

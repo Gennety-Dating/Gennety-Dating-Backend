@@ -14,6 +14,7 @@ import {
   recordProfilerAnswer,
   recordProfilerSkip,
   profilerCycleId,
+  shouldReactToProfilerAnswer,
 } from "./profiler.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
@@ -23,7 +24,8 @@ const mAnswerUpsert = (prisma.profilerAnswer as unknown as { upsert: MockFn }).u
 const mAnswerFind = (prisma.profilerAnswer as unknown as { findUnique: MockFn }).findUnique;
 
 const sendMessage = vi.fn().mockResolvedValue({});
-const fakeApi = { sendMessage } as never;
+const setMessageReaction = vi.fn().mockResolvedValue(true);
+const fakeApi = { sendMessage, setMessageReaction } as never;
 
 /** loadState shape: female user with the given answer rows. */
 function userState(answers: unknown[], batchRemaining = 0) {
@@ -50,6 +52,7 @@ beforeEach(() => {
   mAnswerUpsert.mockReset().mockResolvedValue({});
   mAnswerFind.mockReset();
   sendMessage.mockClear();
+  setMessageReaction.mockClear();
 });
 
 describe("startProfilerBatch", () => {
@@ -111,6 +114,31 @@ describe("recordProfilerAnswer", () => {
     const ok = await recordProfilerAnswer(fakeApi, "u1", "not_a_question", "hi");
     expect(ok).toBe(false);
     expect(mAnswerUpsert).not.toHaveBeenCalled();
+  });
+
+  it("likes only the selected later-batch Profiler answers", async () => {
+    expect(shouldReactToProfilerAnswer("f_date_spots")).toBe(false);
+    expect(shouldReactToProfilerAnswer("f_turnoffs")).toBe(true);
+    expect(shouldReactToProfilerAnswer("m_planner")).toBe(true);
+
+    mUserFind.mockResolvedValue(
+      userState(
+        [{ questionId: "m_planner", answerText: "planner", skipped: false, skipReturned: false, cycleId: "x" }],
+        0,
+      ),
+    );
+
+    const ok = await recordProfilerAnswer(fakeApi, "u1", "m_planner", "I plan ahead", {
+      reactionTarget: { chatId: 123, messageId: 456 },
+    });
+
+    expect(ok).toBe(true);
+    expect(setMessageReaction).toHaveBeenCalledWith(
+      123,
+      456,
+      [{ type: "emoji", emoji: "👍" }],
+      { is_big: false },
+    );
   });
 });
 

@@ -70,6 +70,8 @@ export interface AgentTurnResult {
   reply: string;
   expectingPhoto: boolean;
   onboardingComplete: boolean;
+  /** Server-confirmed onboarding fields saved during this turn. */
+  acceptedOnboardingFields?: OnboardingField[];
   /**
    * When true, onboarding data is saved but the user is NOT yet activated —
    * the bot must send the Sumsub verification CTA and wait for the webhook
@@ -237,6 +239,7 @@ async function runCollectorTurn(
         expectingPhoto: false,
         onboardingComplete: false,
         verificationRequired: false,
+        acceptedOnboardingFields: [],
         contextPromptRequested: false,
         contextDumpStarted: true,
         contextDumpSaved: false,
@@ -282,6 +285,7 @@ async function runCollectorTurn(
       expectingPhoto: snapshot.currentQuestion === "photos",
       onboardingComplete: false,
       verificationRequired: false,
+      acceptedOnboardingFields: [],
       contextPromptRequested: false,
       contextDumpStarted: false,
       contextDumpSaved: false,
@@ -354,6 +358,7 @@ async function runCollectorTurn(
     expectingPhoto,
     onboardingComplete,
     verificationRequired,
+    acceptedOnboardingFields: snapshot.acceptedFields,
     contextPromptRequested,
     contextDumpStarted,
     contextDumpSaved,

@@ -21,6 +21,11 @@ import {
   skipTransition,
   type ProfilerAnswerRow,
 } from "./profiler-schedule.js";
+import {
+  MESSAGE_REACTION,
+  reactToMessage,
+  type MessageReactionTarget,
+} from "./message-reactions.js";
 
 /**
  * Profiler orchestration (PRODUCT_SPEC §Phase 1b) — the IO layer over the pure
@@ -33,6 +38,11 @@ import {
  */
 
 export const PROFILER_SKIP_PREFIX = "profiler:skip:";
+const PROFILER_REACTION_QUESTION_IDS = new Set(["f_turnoffs", "m_planner"]);
+
+export function shouldReactToProfilerAnswer(questionId: string): boolean {
+  return PROFILER_REACTION_QUESTION_IDS.has(questionId);
+}
 
 /** Drop cycle id = ISO date (UTC day) of the next weekly batch. */
 export function profilerCycleId(now: Date): string {
@@ -228,12 +238,13 @@ export async function recordProfilerAnswer(
   userId: string,
   questionId: string,
   text: string,
-  now: Date = new Date(),
+  options: { now?: Date; reactionTarget?: MessageReactionTarget } = {},
 ): Promise<boolean> {
   const question = profilerQuestionById(questionId);
   if (!question) return false;
   const answerText = text.trim().slice(0, PROFILER_MAX_ANSWER_LEN);
   if (!answerText) return false;
+  const now = options.now ?? new Date();
   const cycleId = profilerCycleId(now);
 
   await prisma.profilerAnswer.upsert({
@@ -256,6 +267,10 @@ export async function recordProfilerAnswer(
       cycleId,
     },
   });
+
+  if (shouldReactToProfilerAnswer(questionId) && options.reactionTarget) {
+    await reactToMessage(api, options.reactionTarget, MESSAGE_REACTION.like);
+  }
 
   return advanceAfterReply(api, userId, now);
 }
