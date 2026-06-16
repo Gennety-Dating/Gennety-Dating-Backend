@@ -12,7 +12,7 @@ import {
   CalendarApiError,
   type CalendarState,
 } from "./api.js";
-import { pruneSlotsToProposedTimes } from "./calendar-selection.js";
+import { hasNewSlot, pruneSlotsToProposedTimes } from "./calendar-selection.js";
 import { pickLang, tr, type Lang } from "./i18n.js";
 import { classifyDaySlots, classifySlot, type DayClass, type SlotClass } from "./state-render.js";
 
@@ -365,11 +365,11 @@ function handleAnyCtaClick(): void {
   }
 }
 
-function setSheetCtaState(dirty: boolean): void {
+function setSheetCtaState(canSubmit: boolean): void {
   if (!sheetCtaEl || !sheetCtaLabelEl) return;
   sheetCtaEl.classList.remove("is-loading");
-  sheetCtaEl.disabled = !dirty;
-  sheetCtaLabelEl.textContent = tr(lang, dirty ? saveButtonKey() : "btnSave");
+  sheetCtaEl.disabled = !canSubmit;
+  sheetCtaLabelEl.textContent = tr(lang, canSubmit ? saveButtonKey() : "btnSave");
 }
 
 function setSheetCtaLoading(label: string): void {
@@ -396,7 +396,7 @@ function buildSheetContent(group: DayGroup): void {
     btn.addEventListener("click", () => onTapTime(iso));
     sheetBodyEl.appendChild(btn);
   }
-  setSheetCtaState(isDirty());
+  setSheetCtaState(canSubmitSelection());
 }
 
 function openSheet(): void {
@@ -425,7 +425,7 @@ function openSheet(): void {
     sheetEl.classList.add("is-open");
     sheetBackdropEl.classList.add("is-open");
   }
-  setSheetCtaState(isDirty());
+  setSheetCtaState(canSubmitSelection());
   hideCta();
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -440,7 +440,7 @@ function ensureSheetVisible(): void {
   if (sheetEl.hasAttribute("hidden")) {
     openSheet();
   } else {
-    setSheetCtaState(isDirty());
+    setSheetCtaState(canSubmitSelection());
     hideCta();
   }
 }
@@ -832,13 +832,13 @@ function updateNegotiationBanner(opts: { minimal: boolean }): void {
 
 function updateCtaForPicker(): void {
   if (saving) return;
-  const dirty = isDirty();
+  const canSubmit = canSubmitSelection();
   if (sheetDayKey !== null) {
     // Sheet owns the CTA while it's open — keep the sticky white button
     // hidden so the two don't stack.
-    setSheetCtaState(dirty);
+    setSheetCtaState(canSubmit);
     hideCta();
-  } else if (dirty) {
+  } else if (canSubmit) {
     showCta(tr(lang, saveButtonKey()));
   } else {
     hideCta();
@@ -864,6 +864,10 @@ function isDirty(): boolean {
   return false;
 }
 
+function canSubmitSelection(): boolean {
+  return isDirty() && hasNewSlot(selected, confirmedMine);
+}
+
 function onTapTime(iso: string): void {
   if (selected.has(iso)) selected.delete(iso);
   else selected.add(iso);
@@ -885,6 +889,10 @@ function onTapTime(iso: string): void {
 async function handleSave(): Promise<void> {
   if (!app || saving) return;
   selected = pruneSlotsToProposedTimes(selected, proposedTimes);
+  if (!canSubmitSelection()) {
+    updateCtaForPicker();
+    return;
+  }
   void savePickedSet(matchId, Array.from(selected));
   saving = true;
   const loadingLabel = tr(lang, "btnSaving");

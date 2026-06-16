@@ -24,3 +24,13 @@ export function pruneSlotsToProposedTimes(
   }
   return pruned;
 }
+
+export function hasNewSlot(
+  selected: Iterable<string>,
+  previous: ReadonlySet<string>,
+): boolean {
+  for (const iso of selected) {
+    if (!previous.has(iso)) return true;
+  }
+  return false;
+}
