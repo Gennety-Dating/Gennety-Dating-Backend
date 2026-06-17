@@ -42,22 +42,21 @@ const translations = {
       "Almost done! Send {min}–{max} different photos. Every photo must clearly show you, and explicit content isn't allowed. A profile video may include friends or scenery, but you must appear clearly in several moments.",
     photoReceived: "Photo {n}/{max} ✅",
     photoRejected:
-      "I need a clear photo of just *you* — one person, face visible.\n\n" +
-      "No memes, no landscapes, no group shots. Try another one.",
+      "Your face needs to be visible in the photo. Try another shot.",
     photoDuplicate:
-      "That photo is already in your profile, so I didn't count it twice.",
+      "This photo is already in your profile. Add a different shot — every photo must be unique.",
     photoDuplicateNear:
-      "That looks like the same photo after cropping or editing. Send a genuinely different photo.",
+      "This photo is already in your profile. Add a different shot — every photo must be unique.",
     photoUnsafeContent:
       "That photo can't be published in a profile. Please choose a different, non-explicit photo.",
     photoMultipleFaces:
-      "Profile photos need to show only you. Please choose a photo without other people.",
+      "Your face needs to be visible in the photo. Try another shot.",
     photoIdentityMismatch:
-      "The person in that photo doesn't match your other profile photos. All photos must show you.",
+      "All photos must belong to the same person. Make sure your face is in every shot.",
     photoIdentityUncertain:
       "I couldn't match that face reliably. Try a clearer photo with better light and a more visible face.",
     photoVisionError:
-      "Couldn't process that photo. Try sending it again in a sec.",
+      "Couldn't process the file. Try again.",
     photoInvalidMedia:
       "That file isn't a supported photo. Send a JPEG, PNG, WebP, or HEIC image.",
     livePhotoMissingStatic:
@@ -75,9 +74,11 @@ const translations = {
     videoUnsafeContent:
       "That video contains content that can't be published in a profile. Please choose a different clip.",
     videoOwnerMissing:
-      "I couldn't find your face clearly enough in that video. Choose a clip where you appear visibly.",
+      "Your face needs to be in frame for most of the video. Record a new video.",
     videoOwnerTooBrief:
       "Your face appears too briefly or only in one moment. Choose a clip where you appear clearly in several separate moments.",
+    videoIdentityMismatch:
+      "The video must belong to the same person as the photos in your profile.",
     videoMostlyOtherPerson:
       "That video mainly presents someone else. Choose a clip where you appear clearly in several moments.",
     videoNeedsPhotoFirst:
@@ -648,22 +649,21 @@ const translations = {
       "Почти всё! Пришли {min}–{max} разных фото. На каждом должен быть хорошо виден ты, откровенный контент запрещён. В видео могут быть друзья или пейзажи, но ты должен хорошо появляться в нескольких моментах.",
     photoReceived: "Фото {n}/{max} ✅",
     photoRejected:
-      "Нужно чёткое фото *только тебя* — одного человека, лицо видно.\n\n" +
-      "Без мемов, пейзажей и групповых. Скинь другое.",
+      "На фото должно быть видно твоё лицо. Попробуй другой снимок.",
     photoDuplicate:
-      "Это фото уже есть в профиле, поэтому второй раз я его не засчитал.",
+      "Это фото уже есть в профиле. Добавь другой снимок — все фотографии должны быть уникальными.",
     photoDuplicateNear:
-      "Похоже, это то же фото после обрезки или обработки. Пришли действительно другой снимок.",
+      "Это фото уже есть в профиле. Добавь другой снимок — все фотографии должны быть уникальными.",
     photoUnsafeContent:
       "Это фото нельзя публиковать в профиле. Выбери другой снимок без откровенного контента.",
     photoMultipleFaces:
-      "На фото для профиля должен быть только ты. Выбери снимок без других людей.",
+      "На фото должно быть видно твоё лицо. Попробуй другой снимок.",
     photoIdentityMismatch:
-      "Человек на этом фото не совпадает с человеком на остальных фото профиля. На всех снимках должен быть ты.",
+      "Все фото должны принадлежать одному человеку. Убедись, что твоё лицо есть на каждом снимке.",
     photoIdentityUncertain:
       "Не получилось надёжно сопоставить лицо. Пришли более чёткое фото с хорошим освещением и хорошо видимым лицом.",
     photoVisionError:
-      "Не получилось обработать фото. Попробуй ещё раз через секунду.",
+      "Не удалось обработать файл. Попробуй ещё раз.",
     photoInvalidMedia:
       "Этот файл не является поддерживаемым фото. Пришли изображение JPEG, PNG, WebP или HEIC.",
     livePhotoMissingStatic:
@@ -681,9 +681,11 @@ const translations = {
     videoUnsafeContent:
       "В этом видео есть контент, который нельзя публиковать в профиле. Выбери другой ролик.",
     videoOwnerMissing:
-      "Не удалось достаточно чётко найти твоё лицо в видео. Выбери ролик, где тебя хорошо видно.",
+      "В видео твоё лицо должно быть в кадре большую часть времени. Запиши новое видео.",
     videoOwnerTooBrief:
       "Твоё лицо появляется слишком ненадолго или только в одном моменте. Выбери ролик, где тебя хорошо видно в нескольких отдельных сценах.",
+    videoIdentityMismatch:
+      "Видео должно принадлежать тому же человеку, что и фото в профиле.",
     videoMostlyOtherPerson:
       "В этом видео главным образом показан другой человек. Выбери ролик, где тебя хорошо видно в нескольких моментах.",
     videoNeedsPhotoFirst:
@@ -1252,22 +1254,21 @@ const translations = {
       "Майже все! Надішли {min}–{max} різних фото. На кожному маєш бути добре видимий ти, відвертий контент заборонений. У відео можуть бути друзі або краєвиди, але ти маєш добре з'являтися в кількох моментах.",
     photoReceived: "Фото {n}/{max} ✅",
     photoRejected:
-      "Потрібне чітке фото *тільки тебе* — одна людина, обличчя видно.\n\n" +
-      "Без мемів, пейзажів та групових фото. Скинь інше.",
+      "На фото має бути видно твоє обличчя. Спробуй інший знімок.",
     photoDuplicate:
-      "Це фото вже є в профілі, тому вдруге я його не зарахував.",
+      "Це фото вже є в профілі. Додай інший знімок — усі фотографії мають бути унікальними.",
     photoDuplicateNear:
-      "Схоже, це те саме фото після обрізання або обробки. Надішли справді інший знімок.",
+      "Це фото вже є в профілі. Додай інший знімок — усі фотографії мають бути унікальними.",
     photoUnsafeContent:
       "Це фото не можна публікувати у профілі. Обери інший знімок без відвертого контенту.",
     photoMultipleFaces:
-      "На фото для профілю маєш бути лише ти. Обери знімок без інших людей.",
+      "На фото має бути видно твоє обличчя. Спробуй інший знімок.",
     photoIdentityMismatch:
-      "Людина на цьому фото не збігається з людиною на інших фото профілю. На всіх знімках маєш бути ти.",
+      "Усі фото мають належати одній людині. Переконайся, що твоє обличчя є на кожному знімку.",
     photoIdentityUncertain:
       "Не вдалося надійно зіставити обличчя. Надішли чіткіше фото з хорошим освітленням і добре видимим обличчям.",
     photoVisionError:
-      "Не вдалося обробити фото. Спробуй ще раз через секунду.",
+      "Не вдалося обробити файл. Спробуй ще раз.",
     photoInvalidMedia:
       "Цей файл не є підтримуваним фото. Надішли зображення JPEG, PNG, WebP або HEIC.",
     livePhotoMissingStatic:
@@ -1285,9 +1286,11 @@ const translations = {
     videoUnsafeContent:
       "У цьому відео є контент, який не можна публікувати у профілі. Обери інший ролик.",
     videoOwnerMissing:
-      "Не вдалося достатньо чітко знайти твоє обличчя у відео. Обери ролик, де тебе добре видно.",
+      "У відео твоє обличчя має бути в кадрі більшу частину часу. Запиши нове відео.",
     videoOwnerTooBrief:
       "Твоє обличчя з'являється надто ненадовго або лише в одному моменті. Обери ролик, де тебе добре видно в кількох окремих сценах.",
+    videoIdentityMismatch:
+      "Відео має належати тій самій людині, що й фото в профілі.",
     videoMostlyOtherPerson:
       "У цьому відео переважно показана інша людина. Обери ролик, де тебе добре видно в кількох моментах.",
     videoNeedsPhotoFirst:
@@ -1862,21 +1865,20 @@ const deTranslations: TranslationTable = {
     "Fast fertig! Sende {min}-{max} verschiedene Fotos. Auf jedem musst du klar zu sehen sein; explizite Inhalte sind nicht erlaubt. Ein Profilvideo darf Freunde oder Landschaften zeigen, aber du musst in mehreren Momenten klar erscheinen.",
   photoReceived: "Foto {n}/{max} ✅",
   photoRejected:
-    "Ich brauche ein klares Foto nur von *dir* - eine Person, Gesicht sichtbar.\n\n" +
-    "Keine Memes, Landschaften oder Gruppenfotos. Versuch ein anderes.",
+    "Dein Gesicht muss auf dem Foto sichtbar sein. Versuch ein anderes Bild.",
   photoDuplicate:
-    "Dieses Foto ist bereits in deinem Profil, deshalb wurde es nicht doppelt gezählt.",
+    "Dieses Foto ist bereits in deinem Profil. Füge ein anderes Bild hinzu - alle Fotos müssen eindeutig sein.",
   photoDuplicateNear:
-    "Das sieht wie dasselbe Foto nach Zuschnitt oder Bearbeitung aus. Sende ein wirklich anderes Foto.",
+    "Dieses Foto ist bereits in deinem Profil. Füge ein anderes Bild hinzu - alle Fotos müssen eindeutig sein.",
   photoUnsafeContent:
     "Dieses Foto kann nicht im Profil veröffentlicht werden. Wähle bitte ein anderes, nicht explizites Foto.",
   photoMultipleFaces:
-    "Profilfotos dürfen nur dich zeigen. Wähle bitte ein Foto ohne weitere Personen.",
+    "Dein Gesicht muss auf dem Foto sichtbar sein. Versuch ein anderes Bild.",
   photoIdentityMismatch:
-    "Die Person auf diesem Foto stimmt nicht mit deinen anderen Profilfotos überein. Alle Fotos müssen dich zeigen.",
+    "Alle Fotos müssen zur selben Person gehören. Stelle sicher, dass dein Gesicht auf jedem Bild zu sehen ist.",
   photoIdentityUncertain:
     "Das Gesicht konnte nicht zuverlässig zugeordnet werden. Sende ein klareres Foto mit gutem Licht und gut sichtbarem Gesicht.",
-  photoVisionError: "Konnte das Foto nicht verarbeiten. Sende es gleich nochmal.",
+  photoVisionError: "Die Datei konnte nicht verarbeitet werden. Versuch es erneut.",
   photoInvalidMedia:
     "Diese Datei ist kein unterstütztes Foto. Sende ein JPEG-, PNG-, WebP- oder HEIC-Bild.",
   photosEnough: "Du kannst mehr senden (bis {max}) oder auf den Button tippen, um weiterzumachen.",
@@ -1970,9 +1972,11 @@ const deTranslations: TranslationTable = {
   videoUnsafeContent:
     "Dieses Video enthält Inhalte, die nicht im Profil veröffentlicht werden können. Wähle bitte einen anderen Clip.",
   videoOwnerMissing:
-    "Ich konnte dein Gesicht im Video nicht deutlich genug finden. Wähle einen Clip, in dem du gut zu sehen bist.",
+    "Dein Gesicht muss die meiste Zeit im Video im Bild sein. Nimm ein neues Video auf.",
   videoOwnerTooBrief:
     "Dein Gesicht erscheint zu kurz oder nur in einem Moment. Wähle einen Clip, in dem du in mehreren getrennten Momenten klar zu sehen bist.",
+  videoIdentityMismatch:
+    "Das Video muss zur selben Person gehören wie die Fotos im Profil.",
   videoMostlyOtherPerson:
     "Dieses Video zeigt hauptsächlich eine andere Person. Wähle einen Clip, in dem du in mehreren Momenten klar zu sehen bist.",
   videoNeedsPhotoFirst:
@@ -2367,21 +2371,20 @@ const plTranslations: TranslationTable = {
     "Prawie gotowe! Wyślij {min}-{max} różnych zdjęć. Na każdym musisz być wyraźnie widoczny; treści erotyczne są niedozwolone. Wideo profilowe może pokazywać znajomych lub krajobrazy, ale musisz pojawić się wyraźnie w kilku momentach.",
   photoReceived: "Zdjęcie {n}/{max} ✅",
   photoRejected:
-    "Potrzebuję wyraźnego zdjęcia tylko *Ciebie* - jedna osoba, widoczna twarz.\n\n" +
-    "Bez memów, krajobrazów i zdjęć grupowych. Spróbuj inne.",
+    "Na zdjęciu musi być widoczna Twoja twarz. Spróbuj innego ujęcia.",
   photoDuplicate:
-    "To zdjęcie jest już w Twoim profilu, więc nie zostało policzone ponownie.",
+    "To zdjęcie jest już w Twoim profilu. Dodaj inne ujęcie - wszystkie zdjęcia muszą być unikalne.",
   photoDuplicateNear:
-    "To wygląda jak to samo zdjęcie po przycięciu lub edycji. Wyślij naprawdę inne zdjęcie.",
+    "To zdjęcie jest już w Twoim profilu. Dodaj inne ujęcie - wszystkie zdjęcia muszą być unikalne.",
   photoUnsafeContent:
     "Tego zdjęcia nie można opublikować w profilu. Wybierz inne zdjęcie bez treści erotycznych.",
   photoMultipleFaces:
-    "Zdjęcia profilowe muszą przedstawiać tylko Ciebie. Wybierz zdjęcie bez innych osób.",
+    "Na zdjęciu musi być widoczna Twoja twarz. Spróbuj innego ujęcia.",
   photoIdentityMismatch:
-    "Osoba na tym zdjęciu nie pasuje do pozostałych zdjęć profilowych. Wszystkie zdjęcia muszą przedstawiać Ciebie.",
+    "Wszystkie zdjęcia muszą należeć do jednej osoby. Upewnij się, że Twoja twarz jest na każdym ujęciu.",
   photoIdentityUncertain:
     "Nie udało się wiarygodnie dopasować twarzy. Wyślij wyraźniejsze zdjęcie z lepszym światłem i dobrze widoczną twarzą.",
-  photoVisionError: "Nie udało się przetworzyć zdjęcia. Wyślij je za chwilę ponownie.",
+  photoVisionError: "Nie udało się przetworzyć pliku. Spróbuj ponownie.",
   photoInvalidMedia:
     "Ten plik nie jest obsługiwanym zdjęciem. Wyślij obraz JPEG, PNG, WebP lub HEIC.",
   photosEnough: "Możesz wysłać więcej (do {max}) albo kliknąć przycisk, żeby iść dalej.",
@@ -2475,9 +2478,11 @@ const plTranslations: TranslationTable = {
   videoUnsafeContent:
     "To wideo zawiera treści, których nie można opublikować w profilu. Wybierz inny klip.",
   videoOwnerMissing:
-    "Nie udało się wystarczająco wyraźnie znaleźć Twojej twarzy w wideo. Wybierz klip, na którym dobrze Cię widać.",
+    "W wideo Twoja twarz musi być w kadrze przez większość czasu. Nagraj nowe wideo.",
   videoOwnerTooBrief:
     "Twoja twarz pojawia się zbyt krótko albo tylko w jednym momencie. Wybierz klip, na którym dobrze Cię widać w kilku oddzielnych momentach.",
+  videoIdentityMismatch:
+    "Wideo musi należeć do tej samej osoby co zdjęcia w profilu.",
   videoMostlyOtherPerson:
     "To wideo pokazuje głównie inną osobę. Wybierz klip, na którym dobrze Cię widać w kilku momentach.",
   videoNeedsPhotoFirst:

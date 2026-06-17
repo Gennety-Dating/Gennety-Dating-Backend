@@ -72,11 +72,13 @@ export interface SessionData {
   pendingProfileMedia: ProfileMedia[];
   /** file_unique_id of each pending photo, for dedupe when Telegram re-delivers album frames */
   pendingPhotoUniqueIds: string[];
+  /** Perceptual hashes for accepted pending photos, parallel to pendingPhotos when validation is enabled. */
+  pendingPhotoHashes: string[];
   /**
    * Face-match similarity score (0..1) for each pending photo, parallel to
    * `pendingPhotos`. Populated by the photo-upload gate (Step 4) when a
    * verified user adds a new photo. 0 = gate didn't run (user not verified
-   * yet, or fail-open through an infra outage). Persisted to
+   * yet, or the legacy gate was unavailable). Persisted to
    * `Profile.photoFaceScores` on commit.
    */
   pendingPhotoScores: number[];
@@ -105,6 +107,7 @@ export const DEFAULT_SESSION: SessionData = {
   pendingPhotos: [],
   pendingProfileMedia: [],
   pendingPhotoUniqueIds: [],
+  pendingPhotoHashes: [],
   pendingPhotoScores: [],
   menuState: "idle",
   matchFlow: "idle",

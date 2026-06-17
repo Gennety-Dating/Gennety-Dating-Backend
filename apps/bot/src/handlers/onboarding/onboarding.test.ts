@@ -581,7 +581,7 @@ describe("Context dump processing delay", () => {
       ]);
       expect(prisma.profile.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { userId: "uuid-live" },
+          where: { userId: expect.any(String) },
           create: expect.objectContaining({
             photos: ["live_static_1"],
             profileMedia: [
@@ -595,6 +595,12 @@ describe("Context dump processing delay", () => {
                 fileSize: 1024,
               },
             ],
+            acceptedPhotoCount: 1,
+            uploadedPhotoHashes: [],
+            referenceFaceEmbedding: expect.objectContaining({
+              kind: "reference_photo",
+              photoRef: "live_static_1",
+            }),
           }),
         }),
       );
@@ -1655,7 +1661,7 @@ describe("Album (media_group_id) photo coalescing", () => {
     expect(prisma.profile.upsert).not.toHaveBeenCalled();
     expect(ctx.api.sendMessage).toHaveBeenCalledWith(
       99001,
-      expect.stringContaining("doesn't match"),
+      expect.stringContaining("All photos must belong to the same person"),
       expect.anything(),
     );
   });

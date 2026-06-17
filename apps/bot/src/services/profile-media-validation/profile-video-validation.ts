@@ -1,6 +1,9 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import { env } from "../../config.js";
+import {
+  FACE_SIMILARITY_THRESHOLD,
+  VIDEO_SAMPLE_TARGET_FRAMES,
+} from "@gennety/shared";
 import {
   downloadProfilePhoto,
   downloadSelfie,
@@ -11,6 +14,7 @@ import {
   type ValidatedVideo,
 } from "./video-validation.js";
 import type { MediaValidationResult } from "./types.js";
+import { logMediaValidationRejection } from "./rejection-log.js";
 
 export interface ValidateUserProfileVideoInput {
   userId: string;
@@ -48,16 +52,24 @@ export async function validateUserProfileVideo(
   }
   if (!reference) return unavailable();
 
-  return validateProfileVideo(
+  const result = await validateProfileVideo(
     {
       video: input.video,
       identityReference: reference,
     },
     {
-      maximumFrames: env.PROFILE_VIDEO_MAX_ANALYSIS_FRAMES,
-      identityThreshold: env.FACE_MATCH_THRESHOLD_VERIFY,
+      maximumFrames: VIDEO_SAMPLE_TARGET_FRAMES,
+      identityThreshold: FACE_SIMILARITY_THRESHOLD,
     },
   );
+  if (!result.ok) {
+    await logMediaValidationRejection({
+      userId: input.userId,
+      mediaType: "video",
+      reason: result.reason,
+    });
+  }
+  return result;
 }
 
 function unavailable(): MediaValidationResult<ValidatedVideo> {

@@ -29,6 +29,8 @@ import { profileMediaToJson } from "../../services/profile-media-json.js";
 import { env } from "../../config.js";
 import { validateUserProfilePhoto } from "../../services/profile-media-validation/profile-photo-validation.js";
 import type { MediaValidationReason } from "../../services/profile-media-validation/types.js";
+import { logMediaValidationRejection } from "../../services/profile-media-validation/rejection-log.js";
+import { photoUploadStatePatch } from "../../services/profile-media-validation/photo-state.js";
 
 // ---------------------------------------------------------------------------
 // Edit profile main screen
@@ -263,10 +265,16 @@ export async function handleEditPhotosStart(ctx: BotContext): Promise<void> {
 
   const profile = await prisma.profile.findFirst({
     where: { user: { telegramId } },
-    select: { photos: true, profileMedia: true, photoFaceScores: true },
+    select: {
+      photos: true,
+      profileMedia: true,
+      photoFaceScores: true,
+      uploadedPhotoHashes: true,
+    },
   });
   const existing = profile?.photos ?? [];
   const existingScores = profile?.photoFaceScores ?? [];
+  const existingHashes = profile?.uploadedPhotoHashes ?? [];
   const existingMedia = normalizeProfileMedia(profile?.profileMedia ?? [], existing);
 
   ctx.session.menuState = "edit_photos";
@@ -276,6 +284,7 @@ export async function handleEditPhotosStart(ctx: BotContext): Promise<void> {
   // for newly-arriving photos starts fresh. The album-retry / double-delivery
   // dedupe path only matters within a single editing session.
   ctx.session.pendingPhotoUniqueIds = [];
+  ctx.session.pendingPhotoHashes = [...existingHashes];
   // Mirror existing scores 1:1 with the preloaded photos. If the existing
   // arrays drift (legacy rows from before the face-match column existed),
   // pad with 0 so the invariant `pendingPhotoScores.length === pendingPhotos.length`
@@ -328,9 +337,21 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
 
   const fileId = incoming.staticPhoto.file_id;
   const fileUniqueId = incoming.uniqueId;
+  const telegramId = BigInt(ctx.from!.id);
+  const userRow = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
 
   // Dedupe identical frames (album retries / double-delivery).
   if (ctx.session.pendingPhotoUniqueIds?.includes(fileUniqueId)) {
+    if (userRow) {
+      await logMediaValidationRejection({
+        userId: userRow.id,
+        mediaType: "photo",
+        reason: "duplicate_exact",
+      });
+    }
     return;
   }
 
@@ -340,12 +361,8 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
     return;
   }
 
-  const telegramId = BigInt(ctx.from!.id);
-  const userRow = await prisma.user.findUnique({
-    where: { telegramId },
-    select: { id: true },
-  });
   let gateScore = 0;
+  let photoHash: string | null = null;
   if (env.PROFILE_MEDIA_VALIDATION_ENABLED) {
     const photoBytes = await fetchTelegramFileBuffer(ctx.api, fileId);
     if (!userRow || !photoBytes) {
@@ -357,20 +374,17 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
       candidate: photoBytes,
       mime: "image/jpeg",
       existingPhotoRefs: ctx.session.pendingPhotos,
+      existingPhotoHashes: ctx.session.pendingPhotoHashes,
       api: ctx.api,
     });
     if (!validation.ok) {
-      if (
-        validation.reason !== "processing_unavailable" ||
-        !env.PROFILE_MEDIA_VALIDATION_FAIL_OPEN
-      ) {
-        await ctx.reply(photoValidationMessage(lang, validation.reason), {
-          parse_mode: "Markdown",
-        });
-        return;
-      }
+      await ctx.reply(photoValidationMessage(lang, validation.reason), {
+        parse_mode: "Markdown",
+      });
+      return;
     } else {
       gateScore = validation.value.identitySimilarity ?? 0;
+      photoHash = validation.value.fingerprint.differenceHash;
     }
   } else {
     // Legacy path retained behind the rollout flag.
@@ -397,7 +411,7 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
       }
       gateScore = gate.score ?? 0;
     }
-    // Legacy behavior remains fail-open until the unified flag is enabled.
+    // Legacy fallback only runs when unified media validation is explicitly disabled.
   }
 
   ctx.session.pendingPhotos.push(fileId);
@@ -408,6 +422,10 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
   ctx.session.pendingPhotoUniqueIds = [
     ...(ctx.session.pendingPhotoUniqueIds ?? []),
     fileUniqueId,
+  ];
+  ctx.session.pendingPhotoHashes = [
+    ...(ctx.session.pendingPhotoHashes ?? []),
+    ...(photoHash ? [photoHash] : []),
   ];
   ctx.session.pendingPhotoScores = [
     ...(ctx.session.pendingPhotoScores ?? []),
@@ -444,13 +462,12 @@ function photoValidationMessage(
     case "duplicate_near":
       return t(language, "photoDuplicateNear");
     case "unsafe_content":
-      return t(language, "photoUnsafeContent");
+      return t(language, "photoRejected");
     case "multiple_faces_photo":
-      return t(language, "photoMultipleFaces");
+      return t(language, "photoRejected");
     case "identity_mismatch":
-      return t(language, "photoIdentityMismatch");
     case "identity_uncertain":
-      return t(language, "photoIdentityUncertain");
+      return t(language, "photoIdentityMismatch");
     case "no_face":
       return t(language, "photoRejected");
     default:
@@ -464,7 +481,15 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
 
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { id: true },
+    select: {
+      id: true,
+      profile: {
+        select: {
+          referenceFaceEmbedding: true,
+          uploadedPhotoHashes: true,
+        },
+      },
+    },
   });
   if (!user) return;
 
@@ -480,6 +505,14 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
       ),
     ).fill(0),
   ].slice(0, ctx.session.pendingPhotos.length);
+  const photoState = photoUploadStatePatch({
+    photos: ctx.session.pendingPhotos,
+    uploadedPhotoHashes:
+      ctx.session.pendingPhotoHashes.length > 0
+        ? ctx.session.pendingPhotoHashes
+        : user.profile?.uploadedPhotoHashes ?? [],
+    referenceFaceEmbedding: user.profile?.referenceFaceEmbedding ?? null,
+  });
 
   await prisma.profile.update({
     where: { userId: user.id },
@@ -492,6 +525,7 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
         ),
       ),
       photoFaceScores: scores,
+      ...photoState,
     },
   });
 
@@ -509,6 +543,7 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
   ctx.session.pendingPhotos = [];
   ctx.session.pendingProfileMedia = [];
   ctx.session.pendingPhotoUniqueIds = [];
+  ctx.session.pendingPhotoHashes = [];
   ctx.session.pendingPhotoScores = [];
   ctx.session.menuState = "idle";
 

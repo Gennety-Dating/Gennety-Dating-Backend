@@ -1,5 +1,11 @@
 import { join } from "node:path";
-import { PROFILE_VIDEO_MAX_FILE_SIZE_BYTES } from "@gennety/shared";
+import {
+  FACE_SIMILARITY_THRESHOLD,
+  PROFILE_VIDEO_MAX_FILE_SIZE_BYTES,
+  VIDEO_FACE_PRESENCE_THRESHOLD,
+  VIDEO_IDENTITY_MATCH_THRESHOLD,
+  VIDEO_SAMPLE_TARGET_FRAMES,
+} from "@gennety/shared";
 import { env } from "../../config.js";
 import {
   compareFaces,
@@ -13,7 +19,6 @@ import { withTempMediaDirectory, writePrivateMediaFile } from "./temp-media.js";
 import { extractVideoAudio, extractVideoFrames } from "./video-frames.js";
 import { probeVideo, type VideoProbe } from "./video-probe.js";
 import type {
-  DetectedFace,
   MediaValidationResult,
   VideoFrame,
   VideoOwnerEvidence,
@@ -22,8 +27,6 @@ import type {
 const MAX_DURATION_SECONDS = 60;
 const MIN_MATCHED_FRAMES = 3;
 const MIN_MATCHED_CLUSTERS = 2;
-const MIN_FACE_AREA = 0.01;
-const MIN_FACE_SHARPNESS = 0.15;
 
 export interface ValidatedVideo {
   evidence: VideoOwnerEvidence;
@@ -105,7 +108,7 @@ export async function validateProfileVideo(
           videoPath,
           directory,
           probe.durationSeconds,
-          options.maximumFrames ?? env.PROFILE_VIDEO_MAX_ANALYSIS_FRAMES,
+          options.maximumFrames ?? VIDEO_SAMPLE_TARGET_FRAMES,
         );
       } catch {
         return unavailable();
@@ -113,8 +116,8 @@ export async function validateProfileVideo(
       if (expired()) return unavailable();
       if (frames.length === 0) return reject("video_owner_missing");
 
-      const frameSignals = await mapWithConcurrency(frames, 4, async (frame) =>
-        combineModerationResults(
+      for (const frame of frames) {
+        const frameSignal = combineModerationResults(
           await Promise.all([
             deps.moderateImageOpenAI(frame.buffer, "image/jpeg", {
               timeoutMs: Math.min(15_000, remaining()),
@@ -123,18 +126,12 @@ export async function validateProfileVideo(
               timeoutMs: Math.min(10_000, remaining()),
             }),
           ]),
-        ),
-      );
-      if (expired()) return unavailable();
-      if (
-        frameSignals.some(
-          (result) => result.kind === "blocked" || result.kind === "review",
-        )
-      ) {
-        return reject("unsafe_content");
-      }
-      if (frameSignals.some((result) => result.kind === "unavailable")) {
-        return unavailable();
+        );
+        if (expired()) return unavailable();
+        if (frameSignal.kind === "blocked" || frameSignal.kind === "review") {
+          return reject("unsafe_content");
+        }
+        if (frameSignal.kind === "unavailable") return unavailable();
       }
 
       if (probe.hasAudio) {
@@ -165,11 +162,12 @@ export async function validateProfileVideo(
       }
 
       const threshold =
-        options.identityThreshold ?? env.FACE_MATCH_THRESHOLD_VERIFY;
+        options.identityThreshold ?? FACE_SIMILARITY_THRESHOLD;
       const matched: Array<{
         timestampSeconds: number;
         highQuality: boolean;
       }> = [];
+      let faceDetectedFrameCount = 0;
 
       const frameIdentity = await mapWithConcurrency(frames, 4, async (frame) => {
         const faces = await deps.detectFaces(frame.buffer, {
@@ -178,6 +176,7 @@ export async function validateProfileVideo(
         if (!faces.ok || faces.faces.length === 0) {
           return { kind: faces.ok ? "no_face" as const : "unavailable" as const };
         }
+        faceDetectedFrameCount++;
         const comparison = await deps.compareFaces(
           input.identityReference,
           frame.buffer,
@@ -190,10 +189,7 @@ export async function validateProfileVideo(
         return {
           kind: "owner" as const,
           timestampSeconds: frame.timestampSeconds,
-          highQuality: isHighQualityMatchedFace(
-            comparison.matchedFace,
-            faces.faces,
-          ),
+          highQuality: true,
         };
       });
       if (expired()) return unavailable();
@@ -205,16 +201,20 @@ export async function validateProfileVideo(
         if (result.kind === "owner") matched.push(result);
       }
 
+      const facePresence = faceDetectedFrameCount / frames.length;
+      if (facePresence < VIDEO_FACE_PRESENCE_THRESHOLD) {
+        return reject("video_owner_missing");
+      }
+      const identityMatchRatio =
+        faceDetectedFrameCount === 0 ? 0 : matched.length / faceDetectedFrameCount;
+      if (identityMatchRatio < VIDEO_IDENTITY_MATCH_THRESHOLD) {
+        return reject("identity_mismatch");
+      }
+
       const evidence = buildOwnerEvidence(
         matched,
         probe.durationSeconds,
       );
-      if (evidence.matchedFrameCount === 0) {
-        return reject("video_owner_missing");
-      }
-      if (!ownerEvidencePasses(evidence, probe.durationSeconds)) {
-        return reject("video_owner_too_brief");
-      }
 
       return {
         ok: true,
@@ -281,56 +281,6 @@ export function ownerEvidencePasses(
   );
 }
 
-function isHighQualityMatchedFace(
-  matchedFace: {
-    confidence: number;
-    boundingBox: DetectedFace["boundingBox"];
-  } | undefined,
-  detectedFaces: readonly DetectedFace[],
-): boolean {
-  const matchedBox = matchedFace?.boundingBox;
-  if (!matchedFace || !matchedBox) return false;
-  const detected = detectedFaces
-    .filter((face) => face.boundingBox)
-    .map((face) => ({
-      face,
-      overlap: intersectionOverUnion(matchedBox, face.boundingBox!),
-    }))
-    .sort((a, b) => b.overlap - a.overlap)[0];
-  if (!detected || detected.overlap < 0.4) return false;
-
-  const area = matchedBox.width * matchedBox.height;
-  return (
-    matchedFace.confidence >= 0.9 &&
-    detected.face.confidence >= 0.9 &&
-    area >= MIN_FACE_AREA &&
-    (detected.face.sharpness === null ||
-      detected.face.sharpness >= MIN_FACE_SHARPNESS)
-  );
-}
-
-function intersectionOverUnion(
-  first: NonNullable<DetectedFace["boundingBox"]>,
-  second: NonNullable<DetectedFace["boundingBox"]>,
-): number {
-  const left = Math.max(first.left, second.left);
-  const top = Math.max(first.top, second.top);
-  const right = Math.min(
-    first.left + first.width,
-    second.left + second.width,
-  );
-  const bottom = Math.min(
-    first.top + first.height,
-    second.top + second.height,
-  );
-  const intersection = Math.max(0, right - left) * Math.max(0, bottom - top);
-  const union =
-    first.width * first.height +
-    second.width * second.height -
-    intersection;
-  return union > 0 ? intersection / union : 0;
-}
-
 async function mapWithConcurrency<T, R>(
   items: readonly T[],
   concurrency: number,
@@ -355,6 +305,7 @@ async function mapWithConcurrency<T, R>(
 
 function reject(
   reason:
+    | "identity_mismatch"
     | "unsafe_content"
     | "video_owner_missing"
     | "video_owner_too_brief"

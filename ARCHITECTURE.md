@@ -229,7 +229,7 @@ Columns (≈ 25):
 | Demographics | `userId` (unique), `ethnicity`, `height`, `hobbies` (`String[]`), `partnerPreferences`, `psychologicalSummary`, `negativeConstraints`, `ageRangeMin`, `ageRangeMax` |
 | Vector | `embedding` (`vector(1536)`), `embeddingDirty`, `embeddingDirtyAt` |
 | Elo | `eloScore` (default 500), seeded from the server-side mean of all per-photo vision scores; `eloMatchesPlayed`; `eloSeededAt`; auditable aggregate/per-photo output in `eloSeedDetails` |
-| Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
+| Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `referenceFaceEmbedding` (`Json?` upload-time identity-anchor metadata for the first accepted photo), `uploadedPhotoHashes` (`String[]` perceptual hashes for accepted static photos), `acceptedPhotoCount` (`Int`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
 | Geo / radius | `matchRadius` (`campus_only` / `citywide`), `homeCity`, `homeCountryCode`, `homeCityKey`, `homePlaceId`, `latitude`, `longitude`, `locationUpdatedAt`, `timeZone` (IANA, derived from the dating city; drives the Profiler's local-time batch windows) |
 | Match priority | `lastMatchedAt`, `missedWeeks`, `standbyCount`, `lastMissedAt`, `silentIgnoreCount` |
 | Profiler (Phase 1b) | `profilerStartedAt`, `profilerNextAt`, `profilerActiveQuestionId`, `profilerBatchRemaining` — scheduler state for the post-onboarding Q&A batches that fuel icebreakers/hints (see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §Phase 1b). Indexed `@@index([profilerNextAt])` for the worker sweep. |
@@ -332,6 +332,14 @@ pre-date **anonymous proxy chat** (`matchId`, `senderId`, `body`, `createdAt`;
 the time-boxed carve-out to the "NO IN-APP CHAT" invariant — relayed content is
 fully logged and each relayed message carries an in-line Report button. Written
 by `handlers/date/coordination.ts`; inert unless `COORDINATION_FEATURE_ENABLED`.
+
+### `media_validation_rejections`
+
+Append-only audit of upload-time profile-media rejections. Stores only
+`userId`, coarse `mediaType` (`photo`/`video`), `rejectionReason`, and
+`createdAt`; raw media, hashes, provider payloads, face crops, and biometric
+material are never persisted here. Written by the photo/video validation
+wrappers before a rejected asset can be committed to `profiles`.
 
 ### `ticket_ledger` (feature-flagged)
 
@@ -498,13 +506,17 @@ Telegram-uploaded profile photos are **not** stored in Supabase by the bot
 — their static frames live as Telegram `file_id`s in `Profile.photos`.
 Richer Telegram display media lives additively in `Profile.profileMedia[]`:
 `{ type: "photo", photo }`, `{ type: "live_photo", photo, livePhoto, ...metadata }`,
-or `{ type: "video", video, ...metadata }`. Video remains display-only and is
-excluded from `photos[]`, but admission is validated before persistence:
-`ffprobe`/`ffmpeg` extract bounded temporary samples, AWS Rekognition performs
-face detection/comparison and image moderation, and OpenAI independently
-moderates sampled frames plus the Whisper transcript. Only validation version
-and timestamp are retained; temporary video, frames, audio, and transcripts
-are deleted. The `photos[i] ↔ photoFaceScores[i]` invariant still holds. When
+or `{ type: "video", video, ...metadata }`. Static media admission stores
+`referenceFaceEmbedding` metadata for the first accepted photo,
+`uploadedPhotoHashes` for duplicate detection, and `acceptedPhotoCount`.
+Subsequent photos must contain any face matching that anchor; group photos are
+allowed when the owner is present. Video remains display-only and is excluded
+from `photos[]`, but admission is validated before persistence:
+`ffprobe`/`ffmpeg` extract 12 temporary samples, AWS Rekognition performs face
+detection/comparison and image moderation, and OpenAI independently moderates
+sampled frames plus the Whisper transcript. Only validation version and
+timestamp are retained; temporary video, frames, audio, and transcripts are
+deleted. The `photos[i] ↔ photoFaceScores[i]` invariant still holds. When
 `profileMedia[]` is empty, renderers normalize legacy `photos[]` into photo
 items. Verification and face-match still read `photos[]` only, preserving the
 `photos[i] ↔ photoFaceScores[i]` invariant. The mobile app mirrors static
@@ -516,7 +528,7 @@ currently bot-side only.
 
 | Service | Role |
 |---|---|
-| OpenAI | Onboarding / menu / Aether agents, embeddings, Whisper voice/video-audio transcription, image/text moderation, ambiguous duplicate classification, vision Elo seed |
+| OpenAI | Onboarding / menu / Aether agents, embeddings, Whisper voice/video-audio transcription, image/text moderation, vision Elo seed |
 | Persona | Hosted KYC / liveness flow; HMAC-signed terminal inquiry webhooks |
 | AWS Rekognition | `CompareFaces`, `DetectFaces`, and `DetectModerationLabels` for profile photo/video admission and Persona verification; `DetectFaces` boxes also drive the date-card share-copy face blur (§3.7a) |
 | Google Places (New) v1 | **Fallback** concierge venue search (primary is the first-party `curated_venues` base) at the great-circle midpoint via `places.googleapis.com/v1/places:searchNearby` (+ text fallback). Strict quality gate (operational + place-type deny-list + rating ≥ 4.0 + ≥ 30 reviews + student-friendly price tier for food) and weighted scoring on top of the raw API. Also used by `scripts/seed-venues.mjs` (via `searchVenueCandidates`) to source curated-base candidates under the same gate. The `places.photos` field + the Places **media** endpoint supply the date-card venue cover photo (fetched at render time, credited on the card, never persisted). |

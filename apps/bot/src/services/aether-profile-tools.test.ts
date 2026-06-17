@@ -88,10 +88,11 @@ describe("Aether profile tools", () => {
       candidate: Buffer.from("image"),
       mime: "image/jpeg",
       existingPhotoRefs: ["user-1/existing.jpg"],
+      existingPhotoHashes: [],
     });
     expect(result).toEqual({
       ok: false,
-      detail: "Photo does not match the other profile photos",
+      detail: "All photos must belong to the same person",
     });
   });
 });

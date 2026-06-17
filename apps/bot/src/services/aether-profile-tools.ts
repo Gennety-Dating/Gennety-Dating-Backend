@@ -18,6 +18,7 @@ import { triggerVerificationRerun } from "./verification-pipeline.js";
 import { validateSingleFaceFromBuffer } from "./vision/validate-face.js";
 import { validateUserProfilePhoto } from "./profile-media-validation/profile-photo-validation.js";
 import type { MediaValidationReason } from "./profile-media-validation/types.js";
+import { photoUploadStatePatch } from "./profile-media-validation/photo-state.js";
 
 export interface AetherToolResult {
   ok: boolean;
@@ -129,11 +130,14 @@ interface AetherPhotoDeps {
     candidate: Buffer;
     mime: string;
     existingPhotoRefs: readonly string[];
+    existingPhotoHashes?: readonly string[];
   }) => ReturnType<typeof validateUserProfilePhoto>;
   findProfile: (userId: string) => Promise<{
     photos: string[];
     profileMedia: Prisma.JsonValue;
     photoFaceScores: number[];
+    referenceFaceEmbedding?: Prisma.JsonValue | null;
+    uploadedPhotoHashes?: string[];
   } | null>;
   uploadProfilePhoto: typeof uploadProfilePhoto;
   upsertProfile: (args: {
@@ -141,6 +145,9 @@ interface AetherPhotoDeps {
     photos: string[];
     profileMedia: Prisma.InputJsonValue[];
     photoFaceScores: number[];
+    referenceFaceEmbedding?: Prisma.InputJsonValue;
+    uploadedPhotoHashes?: string[];
+    acceptedPhotoCount?: number;
   }) => Promise<unknown>;
   deleteStorageObject: typeof deleteStorageObject;
   queueVerificationRerun: (userId: string) => void;
@@ -162,14 +169,20 @@ const photoDeps: AetherPhotoDeps = {
   findProfile: (userId) =>
     prisma.profile.findUnique({
       where: { userId },
-      select: { photos: true, profileMedia: true, photoFaceScores: true },
+      select: {
+        photos: true,
+        profileMedia: true,
+        photoFaceScores: true,
+        referenceFaceEmbedding: true,
+        uploadedPhotoHashes: true,
+      },
     }),
   uploadProfilePhoto,
-  upsertProfile: ({ userId, photos, profileMedia, photoFaceScores }) =>
+  upsertProfile: ({ userId, photos, profileMedia, photoFaceScores, ...photoState }) =>
     prisma.profile.upsert({
       where: { userId },
-      update: { photos, profileMedia, photoFaceScores },
-      create: { userId, photos, profileMedia, photoFaceScores },
+      update: { photos, profileMedia, photoFaceScores, ...photoState },
+      create: { userId, photos, profileMedia, photoFaceScores, ...photoState },
     }),
   deleteStorageObject,
   queueVerificationRerun: (userId) => {
@@ -212,25 +225,23 @@ export async function attachAetherProfilePhoto(
   }
 
   let gateScore = 0;
+  let photoHash: string | null = null;
   if (env.PROFILE_MEDIA_VALIDATION_ENABLED && deps.validateProfilePhoto) {
     const validation = await deps.validateProfilePhoto({
       userId,
       candidate: buffer,
       mime,
       existingPhotoRefs: existing,
+      existingPhotoHashes: profile?.uploadedPhotoHashes ?? [],
     });
     if (!validation.ok) {
-      if (
-        validation.reason !== "processing_unavailable" ||
-        !env.PROFILE_MEDIA_VALIDATION_FAIL_OPEN
-      ) {
-        return {
-          ok: false,
-          detail: aetherPhotoValidationDetail(validation.reason),
-        };
-      }
+      return {
+        ok: false,
+        detail: aetherPhotoValidationDetail(validation.reason),
+      };
     } else {
       gateScore = validation.value.identitySimilarity ?? 0;
+      photoHash = validation.value.fingerprint.differenceHash;
     }
   } else {
     const vision = await deps.validateSingleFace(buffer, mime);
@@ -250,13 +261,24 @@ export async function attachAetherProfilePhoto(
   const media = normalizeProfileMedia(profile?.profileMedia ?? [], existing);
   const scores = [...(profile?.photoFaceScores ?? [])];
   while (scores.length < existing.length) scores.push(0);
+  const nextPhotos = [...existing, uploaded.path];
+  const nextHashes = [
+    ...(profile?.uploadedPhotoHashes ?? []),
+    ...(photoHash ? [photoHash] : []),
+  ];
+  const photoState = photoUploadStatePatch({
+    photos: nextPhotos,
+    uploadedPhotoHashes: nextHashes,
+    referenceFaceEmbedding: profile?.referenceFaceEmbedding ?? null,
+  });
 
   try {
     await deps.upsertProfile({
       userId,
-      photos: [...existing, uploaded.path],
+      photos: nextPhotos,
       profileMedia: profileMediaToJson([...media, profilePhotoMedia(uploaded.path)]),
       photoFaceScores: [...scores, gateScore],
+      ...photoState,
     });
   } catch (err) {
     await deps.deleteStorageObject(env.SUPABASE_PHOTO_BUCKET, uploaded.path).catch(() => false);
@@ -275,15 +297,14 @@ function aetherPhotoValidationDetail(reason: MediaValidationReason): string {
     case "duplicate_near":
       return "Photo is already in the profile";
     case "unsafe_content":
-      return "Photo cannot be published";
+      return "Photo must show the user's face";
     case "no_face":
-      return "Photo must contain one clear face";
+      return "Photo must show the user's face";
     case "multiple_faces_photo":
-      return "Photo must show only the user";
+      return "Photo must show the user's face";
     case "identity_mismatch":
-      return "Photo does not match the other profile photos";
     case "identity_uncertain":
-      return "Face could not be matched reliably";
+      return "All photos must belong to the same person";
     default:
       return "Media validation is temporarily unavailable";
   }

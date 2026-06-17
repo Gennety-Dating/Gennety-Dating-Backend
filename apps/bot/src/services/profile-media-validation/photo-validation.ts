@@ -1,14 +1,18 @@
 import {
+  DUPLICATE_HASH_DISTANCE,
+  FACE_SIMILARITY_THRESHOLD,
+} from "@gennety/shared";
+import {
   compareFaces,
   detectFaces,
   detectModerationLabels,
   type FaceDetectionResult,
   type FaceMatchResult,
 } from "../face-match.js";
-import { classifyDuplicatePairWithOpenAI } from "./duplicate-classifier.js";
 import {
   classifyDuplicate,
   fingerprintImage,
+  hammingDistance64,
   type ImageFingerprint,
 } from "./image-fingerprint.js";
 import { combineModerationResults } from "./moderation-policy.js";
@@ -23,12 +27,9 @@ import type {
   ValidatedPhoto,
 } from "./types.js";
 
-const IDENTITY_VERIFY_THRESHOLD = 0.85;
-const IDENTITY_REVIEW_THRESHOLD = 0.75;
 const MIN_FACE_CONFIDENCE = 0.9;
 const MIN_FACE_AREA = 0.015;
 const MIN_FACE_SHARPNESS = 0.15;
-const MIN_SECONDARY_FACE_AREA = 0.003;
 
 export interface ExistingPhotoForValidation {
   buffer: Buffer;
@@ -39,6 +40,7 @@ export interface PhotoValidationInput {
   candidate: Buffer;
   mime: string;
   existingPhotos?: readonly ExistingPhotoForValidation[];
+  existingPhotoHashes?: readonly string[];
   identityReference?: Buffer | null;
 }
 
@@ -50,7 +52,6 @@ export interface PhotoValidationOptions {
 
 export interface PhotoValidationDeps {
   fingerprintImage: typeof fingerprintImage;
-  classifyDuplicatePair: typeof classifyDuplicatePairWithOpenAI;
   normalizeImage: typeof normalizeProfileImage;
   moderateWithOpenAI: typeof moderateImageWithOpenAI;
   moderateWithAws: typeof detectModerationLabels;
@@ -60,7 +61,6 @@ export interface PhotoValidationDeps {
 
 const defaultDeps: PhotoValidationDeps = {
   fingerprintImage,
-  classifyDuplicatePair: classifyDuplicatePairWithOpenAI,
   normalizeImage: normalizeProfileImage,
   moderateWithOpenAI: moderateImageWithOpenAI,
   moderateWithAws: detectModerationLabels,
@@ -90,6 +90,19 @@ export async function validateProfilePhoto(
     return unavailable();
   }
 
+  for (const existingHash of input.existingPhotoHashes ?? []) {
+    if (!existingHash) continue;
+    let distance: number;
+    try {
+      distance = hammingDistance64(candidateFingerprint.differenceHash, existingHash);
+    } catch {
+      return unavailable();
+    }
+    if (distance <= DUPLICATE_HASH_DISTANCE) {
+      return reject("duplicate_near");
+    }
+  }
+
   for (const existing of input.existingPhotos ?? []) {
     let existingFingerprint: ImageFingerprint;
     try {
@@ -102,26 +115,16 @@ export async function validateProfilePhoto(
     const duplicate = classifyDuplicate(
       candidateFingerprint,
       existingFingerprint,
+      {
+        nearMax: DUPLICATE_HASH_DISTANCE,
+        ambiguousMax: DUPLICATE_HASH_DISTANCE,
+      },
     );
     if (duplicate.kind === "exact") {
       return reject("duplicate_exact");
     }
     if (duplicate.kind === "near") {
       return reject("duplicate_near");
-    }
-    if (duplicate.kind === "ambiguous") {
-      let normalizedExisting: Buffer;
-      try {
-        normalizedExisting = await deps.normalizeImage(existing.buffer);
-      } catch {
-        return unavailable();
-      }
-      const classified = await deps.classifyDuplicatePair(
-        normalizedExisting,
-        normalizedCandidate,
-      );
-      if (!classified.ok) return unavailable();
-      if (classified.duplicate) return reject("duplicate_near");
     }
   }
 
@@ -141,10 +144,7 @@ export async function validateProfilePhoto(
   );
   if (!faceDetection.ok) return unavailable();
 
-  const credibleFaces = faceDetection.faces.filter(isCrediblePhotoFace);
-  if (credibleFaces.length > 1) return reject("multiple_faces_photo");
-
-  const usableFaces = credibleFaces.filter(isUsablePhotoFace);
+  const usableFaces = faceDetection.faces.filter(isUsablePhotoFace);
   if (usableFaces.length === 0) return reject("no_face");
 
   const reference =
@@ -173,9 +173,9 @@ export async function validateProfilePhoto(
   if (!identity.faceFound) return reject("no_face");
 
   const verifyThreshold =
-    options.identityVerifyThreshold ?? IDENTITY_VERIFY_THRESHOLD;
+    options.identityVerifyThreshold ?? FACE_SIMILARITY_THRESHOLD;
   const reviewThreshold =
-    options.identityReviewThreshold ?? IDENTITY_REVIEW_THRESHOLD;
+    options.identityReviewThreshold ?? FACE_SIMILARITY_THRESHOLD;
   if (identity.similarity < reviewThreshold) {
     return reject("identity_mismatch");
   }
@@ -201,13 +201,6 @@ function isUsablePhotoFace(face: DetectedFace): boolean {
     area >= MIN_FACE_AREA &&
     (face.sharpness === null || face.sharpness >= MIN_FACE_SHARPNESS)
   );
-}
-
-function isCrediblePhotoFace(face: DetectedFace): boolean {
-  const area = face.boundingBox
-    ? face.boundingBox.width * face.boundingBox.height
-    : 0;
-  return face.confidence >= 0.85 && area >= MIN_SECONDARY_FACE_AREA;
 }
 
 function isSupportedImageMime(mime: string): boolean {

@@ -385,7 +385,7 @@ describe("Menu — Edit Profile", () => {
     expect(prisma.profile.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { userId: "uuid-user-1" },
-        data: {
+        data: expect.objectContaining({
           photos: ["file_1", "file_2", "file_3"],
           profileMedia: [
             { type: "photo", photo: "file_1" },
@@ -393,7 +393,13 @@ describe("Menu — Edit Profile", () => {
             { type: "photo", photo: "file_3" },
           ],
           photoFaceScores: [0, 0, 0],
-        },
+          acceptedPhotoCount: 3,
+          uploadedPhotoHashes: [],
+          referenceFaceEmbedding: expect.objectContaining({
+            kind: "reference_photo",
+            photoRef: "file_1",
+          }),
+        }),
       }),
     );
     expect(ctx.session.menuState).toBe("idle");

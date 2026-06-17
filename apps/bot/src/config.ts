@@ -187,12 +187,12 @@ export const env = {
     1,
     Number(process.env.FACE_MATCH_MIN_VERIFIED_PHOTOS ?? "1"),
   ),
-  /// Unified photo/video validation. Keep false until ffmpeg and the required
-  /// Rekognition actions are available in the target environment.
+  /// Unified photo/video validation. Strict upload-time validation is the
+  /// product default; set explicitly to "false" only for local emergency tests.
   PROFILE_MEDIA_VALIDATION_ENABLED:
-    process.env.PROFILE_MEDIA_VALIDATION_ENABLED === "true",
-  /// Emergency rollback only. Production should leave this false so media is
-  /// never published after a provider or local-processing failure.
+    process.env.PROFILE_MEDIA_VALIDATION_ENABLED !== "false",
+  /// Deprecated emergency rollback toggle. Upload handlers now fail closed and
+  /// never publish media after a provider or local-processing failure.
   PROFILE_MEDIA_VALIDATION_FAIL_OPEN:
     process.env.PROFILE_MEDIA_VALIDATION_FAIL_OPEN === "true",
   PROFILE_VIDEO_MAX_ANALYSIS_FRAMES: Math.max(

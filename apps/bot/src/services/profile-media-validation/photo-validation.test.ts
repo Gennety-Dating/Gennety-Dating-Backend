@@ -26,10 +26,6 @@ function deps(overrides: Partial<PhotoValidationDeps> = {}): PhotoValidationDeps
           : "ffffffffffffffff",
     })),
     normalizeImage: vi.fn(async (buffer: Buffer) => buffer),
-    classifyDuplicatePair: vi.fn(async () => ({
-      ok: true as const,
-      duplicate: false,
-    })),
     moderateWithOpenAI: vi.fn(async () => ({
       ok: true as const,
       signals: [],
@@ -118,34 +114,22 @@ describe("validateProfilePhoto", () => {
     expect(near).toMatchObject({ ok: false, reason: "duplicate_near" });
   });
 
-  it("uses the pairwise classifier only for ambiguous hashes", async () => {
-    const classifier = vi.fn(async () => ({
-      ok: true as const,
-      duplicate: true,
-    }));
+  it("uses the configured pHash distance for duplicate detection", async () => {
     const result = await validateProfilePhoto(
       {
         candidate: candidateJpeg,
         mime: "image/jpeg",
-        existingPhotos: [{ buffer: Buffer.from("existing") }],
+        existingPhotoHashes: ["0000000000000000"],
       },
       {
         deps: deps({
-          fingerprintImage: vi
-            .fn()
-            .mockResolvedValueOnce({
-              sha256: "candidate",
-              differenceHash: "00000000000001ff",
-            })
-            .mockResolvedValueOnce({
-              sha256: "existing",
-              differenceHash: "0000000000000000",
-            }),
-          classifyDuplicatePair: classifier,
+          fingerprintImage: vi.fn(async () => ({
+            sha256: "candidate",
+            differenceHash: "00000000000000ff",
+          })),
         }),
       },
     );
-    expect(classifier).toHaveBeenCalledOnce();
     expect(result).toMatchObject({ ok: false, reason: "duplicate_near" });
   });
 
@@ -188,7 +172,7 @@ describe("validateProfilePhoto", () => {
     });
   });
 
-  it("requires exactly one usable face", async () => {
+  it("requires at least one usable face and allows group photos", async () => {
     const none = await validateProfilePhoto(
       { candidate: candidateJpeg, mime: "image/jpeg" },
       {
@@ -213,13 +197,10 @@ describe("validateProfilePhoto", () => {
         }),
       },
     );
-    expect(group).toMatchObject({
-      ok: false,
-      reason: "multiple_faces_photo",
-    });
+    expect(group).toMatchObject({ ok: true });
   });
 
-  it("rejects a different person and asks for a clearer borderline photo", async () => {
+  it("rejects a different person and accepts matches at the configured threshold", async () => {
     const mismatch = await validateProfilePhoto(
       {
         candidate: candidateJpeg,
@@ -241,7 +222,7 @@ describe("validateProfilePhoto", () => {
       reason: "identity_mismatch",
     });
 
-    const uncertain = await validateProfilePhoto(
+    const match = await validateProfilePhoto(
       {
         candidate: candidateJpeg,
         mime: "image/jpeg",
@@ -257,10 +238,9 @@ describe("validateProfilePhoto", () => {
         }),
       },
     );
-    expect(uncertain).toEqual({
-      ok: false,
-      reason: "identity_uncertain",
-      retryable: true,
+    expect(match).toMatchObject({
+      ok: true,
+      value: { identitySimilarity: 0.8 },
     });
   });
 });

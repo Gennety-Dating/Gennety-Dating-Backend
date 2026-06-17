@@ -88,7 +88,7 @@ function deps(overrides: Partial<VideoValidationDeps> = {}): VideoValidationDeps
 }
 
 describe("video owner evidence", () => {
-  it("passes distributed appearances without requiring 70% frame coverage", () => {
+  it("tracks distributed owner evidence for diagnostics", () => {
     const evidence = buildOwnerEvidence(
       [
         { timestampSeconds: 3, highQuality: true },
@@ -160,7 +160,7 @@ describe("validateProfileVideo", () => {
     });
   });
 
-  it("does not treat a blurry matched face as reliable owner evidence", async () => {
+  it("rejects when too few face-bearing frames match the profile anchor", async () => {
     const result = await validateProfileVideo(
       {
         video: Buffer.from("video"),
@@ -168,33 +168,31 @@ describe("validateProfileVideo", () => {
       },
       {
         deps: deps({
-          detectFaces: vi.fn(async (frame: Buffer) => ({
+          detectFaces: vi.fn(async () => ({
             ok: true as const,
-            faces: isOwnerFrame(frame)
-              ? [
-                  {
-                    confidence: 0.99,
-                    boundingBox: {
-                      left: 0.2,
-                      top: 0.2,
-                      width: 0.3,
-                      height: 0.4,
-                    },
-                    brightness: 0.5,
-                    sharpness: 0.05,
-                    pitch: 0,
-                    roll: 0,
-                    yaw: 0,
-                  },
-                ]
-              : [],
+            faces: [
+              {
+                confidence: 0.99,
+                boundingBox: {
+                  left: 0.2,
+                  top: 0.2,
+                  width: 0.3,
+                  height: 0.4,
+                },
+                brightness: 0.5,
+                sharpness: 0.8,
+                pitch: 0,
+                roll: 0,
+                yaw: 0,
+              },
+            ],
           })),
         }),
       },
     );
     expect(result).toMatchObject({
       ok: false,
-      reason: "video_owner_too_brief",
+      reason: "identity_mismatch",
     });
   });
 

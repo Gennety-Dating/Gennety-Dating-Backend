@@ -26,6 +26,8 @@ import { downloadTelegramFile } from "../../services/storage.js";
 import { validateUserProfilePhoto } from "../../services/profile-media-validation/profile-photo-validation.js";
 import type { MediaValidationReason } from "../../services/profile-media-validation/types.js";
 import { validateUserProfileVideo } from "../../services/profile-media-validation/profile-video-validation.js";
+import { logMediaValidationRejection } from "../../services/profile-media-validation/rejection-log.js";
+import { photoUploadStatePatch } from "../../services/profile-media-validation/photo-state.js";
 import { showMainMenu } from "../menu/main.js";
 import { withTyping } from "../../utils/with-typing.js";
 import { pinStatusBanner } from "../../services/status-banner.js";
@@ -127,6 +129,13 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     }
     const extracted = incomingVideoMedia(video);
     if (!extracted.ok) {
+      void logTelegramMediaRejection(
+        telegramId,
+        "video",
+        extracted.reason === "too_long"
+          ? "video_too_long"
+          : "video_too_large_to_check",
+      );
       await ctx.reply(
         extracted.reason === "too_long"
           ? t(ctx.session.language, "videoTooLong")
@@ -282,6 +291,7 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     ctx.session.pendingPhotos = [];
     ctx.session.pendingProfileMedia = [];
     ctx.session.pendingPhotoUniqueIds = [];
+    ctx.session.pendingPhotoHashes = [];
     ctx.session.pendingPhotoScores = [];
   }
 
@@ -455,6 +465,7 @@ async function flushContextDump(ctx: BotContext, telegramId: bigint): Promise<vo
     ctx.session.pendingPhotos = [];
     ctx.session.pendingProfileMedia = [];
     ctx.session.pendingPhotoUniqueIds = [];
+    ctx.session.pendingPhotoHashes = [];
     ctx.session.pendingPhotoScores = [];
   }
 
@@ -714,27 +725,22 @@ async function handleProfileVideoMessage(
       api: ctx.api,
     });
     if (!validation.ok) {
-      if (
-        validation.reason !== "processing_unavailable" ||
-        !env.PROFILE_MEDIA_VALIDATION_FAIL_OPEN
-      ) {
-        await replaceVideoStatus(
-          ctx,
-          status.message_id,
-          videoValidationMessage(ctx.session.language, validation.reason),
+      await replaceVideoStatus(
+        ctx,
+        status.message_id,
+        videoValidationMessage(ctx.session.language, validation.reason),
+      );
+      if (photoStageActive) {
+        await sendPhotoStagePrompt(
+          ctx.api,
+          ctx.chat.id,
+          telegramId,
+          ctx.session.language,
+          ctx.session.pendingPhotos.length,
+          Boolean(existingVideo),
         );
-        if (photoStageActive) {
-          await sendPhotoStagePrompt(
-            ctx.api,
-            ctx.chat.id,
-            telegramId,
-            ctx.session.language,
-            ctx.session.pendingPhotos.length,
-            Boolean(existingVideo),
-          );
-        }
-        return;
       }
+      return;
     } else {
       acceptedMedia = {
         ...media,
@@ -804,6 +810,8 @@ function videoValidationMessage(
       return t(language, "videoOwnerMissing");
     case "video_owner_too_brief":
       return t(language, "videoOwnerTooBrief");
+    case "identity_mismatch":
+      return t(language, "videoIdentityMismatch");
     case "video_mostly_other_person":
       return t(language, "videoMostlyOtherPerson");
     case "video_identity_reference_missing":
@@ -911,8 +919,22 @@ async function handlePhotoFrame(
   try {
     const fileId = media.staticPhoto.file_id;
     const fileUniqueId = media.uniqueId;
+    const user = await prisma.user.findUnique({
+      where: { telegramId },
+      select: { id: true },
+    });
+    if (!user) {
+      acc.hadInfraError = true;
+      incrementRejectionReason(acc, "processing_unavailable");
+      return;
+    }
 
     if (ctx.session.pendingPhotoUniqueIds?.includes(fileUniqueId)) {
+      await logMediaValidationRejection({
+        userId: user.id,
+        mediaType: "photo",
+        reason: "duplicate_exact",
+      });
       acc.duplicateCount++;
       incrementRejectionReason(acc, "duplicate_exact");
       return;
@@ -928,13 +950,10 @@ async function handlePhotoFrame(
     // Without it the user sees nothing between their upload and the
     // debounced reply, and starts re-sending photos.
     let identityScore = 0;
+    let photoHash: string | null = null;
     if (env.PROFILE_MEDIA_VALIDATION_ENABLED) {
-      const user = await prisma.user.findUnique({
-        where: { telegramId },
-        select: { id: true },
-      });
       const photoBytes = await downloadTelegramFile(ctx.api, fileId);
-      if (!user || !photoBytes) {
+      if (!photoBytes) {
         acc.hadInfraError = true;
         incrementRejectionReason(acc, "processing_unavailable");
         return;
@@ -946,31 +965,26 @@ async function handlePhotoFrame(
           candidate: photoBytes,
           mime: "image/jpeg",
           existingPhotoRefs: ctx.session.pendingPhotos,
+          existingPhotoHashes: ctx.session.pendingPhotoHashes,
           api: ctx.api,
         }),
       );
       if (!validation.ok) {
+        incrementRejectionReason(acc, validation.reason);
         if (
-          validation.reason === "processing_unavailable" &&
-          env.PROFILE_MEDIA_VALIDATION_FAIL_OPEN
+          validation.reason === "duplicate_exact" ||
+          validation.reason === "duplicate_near"
         ) {
-          identityScore = 0;
+          acc.duplicateCount++;
+        } else if (validation.reason === "processing_unavailable") {
+          acc.hadInfraError = true;
         } else {
-          incrementRejectionReason(acc, validation.reason);
-          if (
-            validation.reason === "duplicate_exact" ||
-            validation.reason === "duplicate_near"
-          ) {
-            acc.duplicateCount++;
-          } else if (validation.reason === "processing_unavailable") {
-            acc.hadInfraError = true;
-          } else {
-            acc.rejectedCount++;
-          }
-          return;
+          acc.rejectedCount++;
         }
+        return;
       } else {
         identityScore = validation.value.identitySimilarity ?? 0;
+        photoHash = validation.value.fingerprint.differenceHash;
       }
     } else {
       const validation = await withTyping(ctx, () =>
@@ -1006,6 +1020,10 @@ async function handlePhotoFrame(
       ...(ctx.session.pendingPhotoUniqueIds ?? []),
       fileUniqueId,
     ];
+    ctx.session.pendingPhotoHashes = [
+      ...(ctx.session.pendingPhotoHashes ?? []),
+      ...(photoHash ? [photoHash] : []),
+    ];
     ctx.session.pendingPhotoScores = [
       ...(ctx.session.pendingPhotoScores ?? []),
       identityScore,
@@ -1018,6 +1036,7 @@ async function handlePhotoFrame(
       ctx.session.pendingPhotos,
       ctx.session.pendingProfileMedia,
       ctx.session.pendingPhotoScores,
+      ctx.session.pendingPhotoHashes,
     );
     if (isFirstValidPhoto) {
       await reactToMessage(
@@ -1067,10 +1086,21 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
     if (acc.validatedCount === 0) {
       // Every frame was rejected, errored, or was an extra past MAX.
       if (acc.hadInfraError) {
-        await acc.api.sendMessage(
+        await replyText(
+          acc.api,
           acc.chatId,
-          "Couldn't process those photos. Try sending them again.",
+          t(session.language, "photoVisionError"),
         );
+        if (!acc.unsolicited) {
+          await sendPhotoStagePrompt(
+            acc.api,
+            acc.chatId,
+            acc.telegramId,
+            session.language,
+            session.pendingPhotos.length,
+            sessionHasProfileVideo(session),
+          );
+        }
         return;
       }
       if (acc.rejectedCount > 0) {
@@ -1330,6 +1360,7 @@ function markOnboardingComplete(session: SessionData): void {
   session.pendingPhotos = [];
   session.pendingProfileMedia = [];
   session.pendingPhotoUniqueIds = [];
+  session.pendingPhotoHashes = [];
   session.pendingPhotoScores = [];
 }
 
@@ -1338,14 +1369,31 @@ async function persistPhotos(
   photos: string[],
   profileMedia: readonly ProfileMedia[] = [],
   photoFaceScores: readonly number[] = [],
+  uploadedPhotoHashes: readonly string[] = [],
 ): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { id: true },
+    select: {
+      id: true,
+      profile: {
+        select: {
+          referenceFaceEmbedding: true,
+          uploadedPhotoHashes: true,
+        },
+      },
+    },
   });
   if (!user) return;
   const normalizedMedia = normalizeProfileMedia(profileMedia, photos);
   const normalizedScores = photos.map((_, index) => photoFaceScores[index] ?? 0);
+  const photoState = photoUploadStatePatch({
+    photos,
+    uploadedPhotoHashes:
+      uploadedPhotoHashes.length > 0
+        ? uploadedPhotoHashes
+        : user.profile?.uploadedPhotoHashes ?? [],
+    referenceFaceEmbedding: user.profile?.referenceFaceEmbedding ?? null,
+  });
   await prisma.profile.upsert({
     where: { userId: user.id },
     create: {
@@ -1353,12 +1401,31 @@ async function persistPhotos(
       photos,
       profileMedia: profileMediaToJson(normalizedMedia),
       photoFaceScores: normalizedScores,
+      ...photoState,
     },
     update: {
       photos,
       profileMedia: profileMediaToJson(normalizedMedia),
       photoFaceScores: normalizedScores,
+      ...photoState,
     },
+  });
+}
+
+async function logTelegramMediaRejection(
+  telegramId: bigint,
+  mediaType: "photo" | "video",
+  reason: MediaValidationReason,
+): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (!user) return;
+  await logMediaValidationRejection({
+    userId: user.id,
+    mediaType,
+    reason,
   });
 }
 
@@ -1376,9 +1443,9 @@ function photoBatchRejectionText(
   const priority: Array<[MediaValidationReason, Parameters<typeof t>[1]]> = [
     ["invalid_media", "photoInvalidMedia"],
     ["identity_mismatch", "photoIdentityMismatch"],
-    ["identity_uncertain", "photoIdentityUncertain"],
-    ["unsafe_content", "photoUnsafeContent"],
-    ["multiple_faces_photo", "photoMultipleFaces"],
+    ["identity_uncertain", "photoIdentityMismatch"],
+    ["unsafe_content", "photoRejected"],
+    ["multiple_faces_photo", "photoRejected"],
     ["no_face", "photoRejected"],
     ["duplicate_near", "photoDuplicateNear"],
     ["duplicate_exact", "photoDuplicate"],

@@ -41,6 +41,13 @@ export const PROFILE_VIDEO_MAX_DURATION_SECONDS = 60;
 export const PROFILE_VIDEO_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
 export const PROFILE_MEDIA_VALIDATION_VERSION = 1;
 
+/** Profile media validation thresholds (upload-time gates). */
+export const FACE_SIMILARITY_THRESHOLD = 0.6;
+export const DUPLICATE_HASH_DISTANCE = 8;
+export const VIDEO_FACE_PRESENCE_THRESHOLD = 0.25;
+export const VIDEO_IDENTITY_MATCH_THRESHOLD = 0.5;
+export const VIDEO_SAMPLE_TARGET_FRAMES = 12;
+
 /**
  * Ticket store bundles for the pre-purchase Mini App. `priceCents` is the
  * TOTAL charged for the bundle; per-ticket price is `priceCents / count`.

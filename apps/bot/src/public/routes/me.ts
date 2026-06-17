@@ -38,6 +38,7 @@ import {
   validateHomeLocationPayload,
 } from "../home-location.js";
 import { validateUserProfilePhoto } from "../../services/profile-media-validation/profile-photo-validation.js";
+import { photoUploadStatePatch } from "../../services/profile-media-validation/photo-state.js";
 
 export const meRouter: Router = Router();
 
@@ -514,13 +515,13 @@ meRouter.get("/photos", async (req: Request, res: Response): Promise<void> => {
  * POST /v1/me/photos — upload a single profile photo.
  *
  * Order of gates is cheap-first: we reject obvious junk before spending
- * an OpenAI vision call or a Supabase round-trip.
+ * provider calls or a Supabase round-trip.
  *
  *   1. mime must be `image/*`  → 400
  *   2. existing count < MAX_PHOTOS → 409 (mobile should have hidden the
  *      add button, but belt + braces)
- *   3. single-face vision gate → 400 (not a real face) / 502 (api down)
- *   4. upload to Supabase Storage + append to `profile.photos`
+ *   3. strict media validation: safety, face presence, identity, duplicate hash
+ *   4. upload to Supabase Storage + append to `profile.photos` + media state
  *
  * Does NOT trigger embedding recomputation — that belongs to a worker.
  */
@@ -542,10 +543,16 @@ meRouter.post(
 
     const profile = await prisma.profile.findUnique({
       where: { userId: req.userId! },
-      select: { photos: true, profileMedia: true },
+      select: {
+        photos: true,
+        profileMedia: true,
+        referenceFaceEmbedding: true,
+        uploadedPhotoHashes: true,
+      },
     });
     const existing = profile?.photos ?? [];
     const existingMedia = normalizeProfileMedia(profile?.profileMedia ?? [], existing);
+    const existingHashes = profile?.uploadedPhotoHashes ?? [];
     if (existing.length >= MAX_PHOTOS) {
       res.status(409).json({ error: "Photo limit reached", max: MAX_PHOTOS });
       return;
@@ -558,30 +565,27 @@ meRouter.post(
         candidate: req.file.buffer,
         mime,
         existingPhotoRefs: existing,
+        existingPhotoHashes: existingHashes,
         api: getBotApi(),
       });
       if (!validation.ok) {
-        if (
-          validation.reason !== "processing_unavailable" ||
-          !env.PROFILE_MEDIA_VALIDATION_FAIL_OPEN
-        ) {
-          const status =
-            validation.reason === "processing_unavailable"
-              ? 503
-              : validation.reason === "invalid_media"
-                ? 400
+        const status =
+          validation.reason === "processing_unavailable"
+            ? 503
+            : validation.reason === "invalid_media"
+              ? 400
               : validation.reason.startsWith("duplicate_")
                 ? 409
                 : 422;
-          res.status(status).json({
-            error: photoValidationApiMessage(validation.reason),
-            code: validation.reason,
-            retryable: validation.retryable,
-          });
-          return;
-        }
+        res.status(status).json({
+          error: photoValidationApiMessage(validation.reason),
+          code: validation.reason,
+          retryable: validation.retryable,
+        });
+        return;
       } else {
         gateScore = validation.value.identitySimilarity;
+        existingHashes.push(validation.value.fingerprint.differenceHash);
       }
     } else {
       const vision = await validateSingleFaceFromBuffer(req.file.buffer, mime);
@@ -617,9 +621,14 @@ meRouter.post(
 
     const nextPhotos = [...existing, uploadedPath];
     const nextMedia = [...existingMedia, profilePhotoMedia(uploadedPath)];
+    const photoState = photoUploadStatePatch({
+      photos: nextPhotos,
+      uploadedPhotoHashes: existingHashes,
+      referenceFaceEmbedding: profile?.referenceFaceEmbedding ?? null,
+    });
     // Append the gate's per-photo score in lockstep with `photos[]` so the
     // admin dashboard can spot a specific weak photo. `null` (gate didn't
-    // run — e.g. unverified user, or fail-open) is preserved as such.
+    // run, e.g. unverified user) is preserved as such.
     const existingScores = await prisma.profile
       .findUnique({
         where: { userId: req.userId! },
@@ -638,12 +647,14 @@ meRouter.post(
         photos: nextPhotos,
         profileMedia: profileMediaToJson(nextMedia),
         photoFaceScores: nextScores,
+        ...photoState,
       },
       create: {
         userId: req.userId!,
         photos: nextPhotos,
         profileMedia: profileMediaToJson(nextMedia),
         photoFaceScores: nextScores,
+        ...photoState,
       },
     });
 
@@ -699,17 +710,16 @@ function photoValidationApiMessage(reason: string): string {
     case "duplicate_exact":
       return "This photo is already in the profile";
     case "duplicate_near":
-      return "This appears to be the same photo after editing";
+      return "This photo is already in the profile";
     case "unsafe_content":
-      return "This photo cannot be published";
+      return "Your face must be visible in the photo";
     case "no_face":
-      return "No sufficiently clear face was found";
+      return "Your face must be visible in the photo";
     case "multiple_faces_photo":
-      return "A profile photo must contain only one person";
+      return "Your face must be visible in the photo";
     case "identity_mismatch":
-      return "The face does not match the other profile photos";
     case "identity_uncertain":
-      return "The face could not be matched reliably";
+      return "All photos must belong to the same person";
     default:
       return "Media validation is temporarily unavailable";
   }
@@ -735,7 +745,15 @@ meRouter.delete(
       where: { id: req.userId! },
       select: {
         status: true,
-        profile: { select: { photos: true, profileMedia: true, photoFaceScores: true } },
+        profile: {
+          select: {
+            photos: true,
+            profileMedia: true,
+            photoFaceScores: true,
+            referenceFaceEmbedding: true,
+            uploadedPhotoHashes: true,
+          },
+        },
       },
     });
     const photos = user.profile?.photos ?? [];
@@ -766,6 +784,17 @@ meRouter.delete(
       scores.length === photos.length
         ? [...scores.slice(0, index), ...scores.slice(index + 1)]
         : []; // misaligned legacy row → reset; pipeline rerun refills
+    const hashes = user.profile?.uploadedPhotoHashes ?? [];
+    const nextHashes =
+      hashes.length === photos.length
+        ? [...hashes.slice(0, index), ...hashes.slice(index + 1)]
+        : [];
+    const photoState = photoUploadStatePatch({
+      photos: nextPhotos,
+      uploadedPhotoHashes: nextHashes,
+      referenceFaceEmbedding: user.profile?.referenceFaceEmbedding ?? null,
+      refreshReference: index === 0,
+    });
 
     await prisma.profile.update({
       where: { userId: req.userId! },
@@ -773,6 +802,7 @@ meRouter.delete(
         photos: nextPhotos,
         profileMedia: profileMediaToJson(nextMedia),
         photoFaceScores: nextScores,
+        ...photoState,
       },
     });
 
