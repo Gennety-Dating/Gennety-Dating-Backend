@@ -683,9 +683,7 @@ describe("Context dump processing delay", () => {
 
       expect(agentMock).not.toHaveBeenCalled();
       expect(ctx.session.contextDumpBuffer).toBe(longPaste);
-      expect(ctx.reply).toHaveBeenCalledWith(
-        "Got it ✅ I'm processing your response now.",
-      );
+      expect(ctx.reply).toHaveBeenCalledWith("Got it ✅ Processing now…");
       expect(ctx.reply).not.toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({ reply_markup: expect.anything() }),

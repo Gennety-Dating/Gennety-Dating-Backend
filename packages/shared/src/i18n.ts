@@ -23,6 +23,7 @@ const translations = {
     otpTooManyAttempts: "Too many tries. Enter your email again for a fresh code.",
     otpCooldown: "Hold on — wait a minute before requesting a new code.",
     emailVerified: "Email confirmed ✅",
+    contextDumpAck: "Got it ✅ Processing now…",
     askFirstName: "What's your name?",
     askSurname: "And your last name?",
     askAge: "How old are you?",
@@ -190,7 +191,7 @@ const translations = {
     verifyCheckInfraError:
       "Couldn't reach the verification service just now. Try again in a moment.",
     verifyOutcomeVerified:
-      "✅ Verification complete — your profile is live. I'll reach out when I find a match.",
+      "Verified ✅ Profile is live. I'll message you when I find a match.",
     verifyOutcomePendingReview:
       "🔍 We're double-checking your profile photos against your verification selfie. This usually takes a few hours — I'll message you the moment it's done.",
     verifyOutcomeRejected:
@@ -431,7 +432,7 @@ const translations = {
       "Starting point saved ✅ Now — what *vibe* are you after? e.g. _quiet cafe_, _vegan brunch_, _park walk_, _small museum_.",
     venueSafetyOverride:
       "Heads up — picked a public café instead. We keep first dates in public spots.",
-    venueWaitingPeer: "Got yours ✅ Waiting on the other person…",
+    venueWaitingPeer: "Got yours ✅ Waiting for them…",
     venueSearching: "🔍 Finding your spot…",
     venueSearchStep2: "📍 Comparing your routes…",
     venueSearchStep3: "✨ Matching your vibe…",
@@ -454,7 +455,7 @@ const translations = {
     skipAnalyzeStep3: "💞 Prepping you for matching…",
     profilerBatchSaving: "🧩 Saving your answers…",
     profilerBatchSaved:
-      "✅ Updated your preference notes — I'll factor this into the next match.",
+      "Preference card updated ✅ I'll use it for the next match.",
 
     // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
     venueChangeFemaleButton: "🔄 Change venue",
@@ -638,6 +639,7 @@ const translations = {
     otpTooManyAttempts: "Слишком много попыток. Введи почту заново — пришлём новый код.",
     otpCooldown: "Подожди минутку перед повторной отправкой.",
     emailVerified: "Почта подтверждена ✅",
+    contextDumpAck: "Принял ✅ Обрабатываю…",
     askFirstName: "Как тебя зовут?",
     askSurname: "Фамилия?",
     askAge: "Сколько тебе лет?",
@@ -805,7 +807,7 @@ const translations = {
     verifyCheckInfraError:
       "Не получилось достучаться до сервиса верификации. Попробуй ещё раз через минуту.",
     verifyOutcomeVerified:
-      "✅ Верификация пройдена — профиль активен. Напишу, как только найду подходящий метч.",
+      "Проверка пройдена ✅ Профиль активен. Напишу, когда найду метч.",
     verifyOutcomePendingReview:
       "🔍 Мы дополнительно проверяем фото профиля по селфи из верификации. Обычно это занимает несколько часов — я напишу, как только проверка завершится.",
     verifyOutcomeRejected:
@@ -1067,7 +1069,7 @@ const translations = {
     skipAnalyzeStep3: "💞 Готовлю к подбору…",
     profilerBatchSaving: "🧩 Сохраняю твои ответы…",
     profilerBatchSaved:
-      "✅ Обновил твою карточку предпочтений — учту это при следующем подборе.",
+      "Карточка обновлена ✅ Учту при следующем подборе.",
 
     // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
     venueChangeFemaleButton: "🔄 Сменить место",
@@ -1251,6 +1253,7 @@ const translations = {
     otpTooManyAttempts: "Забагато спроб. Введи пошту знову — надішлемо новий код.",
     otpCooldown: "Зачекай хвилинку перед повторним надсиланням.",
     emailVerified: "Пошту підтверджено ✅",
+    contextDumpAck: "Прийняв ✅ Обробляю…",
     askFirstName: "Як тебе звати?",
     askSurname: "Прізвище?",
     askAge: "Скільки тобі років?",
@@ -1418,7 +1421,7 @@ const translations = {
     verifyCheckInfraError:
       "Не вдалося достукатися до сервісу верифікації. Спробуй ще раз за хвилину.",
     verifyOutcomeVerified:
-      "✅ Верифікацію пройдено — профіль активний. Напишу, щойно знайду відповідний метч.",
+      "Перевірку пройдено ✅ Профіль активний. Напишу, коли знайду метч.",
     verifyOutcomePendingReview:
       "🔍 Ми додатково перевіряємо фото профілю за селфі з верифікації. Зазвичай це займає кілька годин — я напишу, щойно перевірка завершиться.",
     verifyOutcomeRejected:
@@ -1680,7 +1683,7 @@ const translations = {
     skipAnalyzeStep3: "💞 Готую до підбору…",
     profilerBatchSaving: "🧩 Зберігаю твої відповіді…",
     profilerBatchSaved:
-      "✅ Оновив твою картку вподобань — врахую це під час наступного підбору.",
+      "Картку оновлено ✅ Врахую під час наступного підбору.",
 
     // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
     venueChangeFemaleButton: "🔄 Змінити місце",
@@ -1870,6 +1873,7 @@ const deTranslations: TranslationTable = {
   otpTooManyAttempts: "Zu viele Versuche. Gib deine E-Mail erneut ein, damit wir einen neuen Code senden.",
   otpCooldown: "Warte kurz - bitte erst in einer Minute einen neuen Code anfordern.",
   emailVerified: "E-Mail bestätigt ✅",
+  contextDumpAck: "Verstanden ✅ Ich verarbeite es…",
   askFirstName: "Wie heißt du?",
   askSurname: "Und dein Nachname?",
   askAge: "Wie alt bist du?",
@@ -1967,7 +1971,7 @@ const deTranslations: TranslationTable = {
     "Wenn etwas falsch wirkt, tippe auf 🟢 Jetzt verifizieren, um es erneut zu versuchen.",
   verifyCheckInfraError: "Der Verifizierungsdienst ist gerade nicht erreichbar. Versuch es gleich nochmal.",
   verifyOutcomeVerified:
-    "✅ Verifizierung abgeschlossen - dein Profil ist live. Ich melde mich, sobald ich ein Match finde.",
+    "Verifiziert ✅ Dein Profil ist live. Ich melde mich, wenn ich ein Match finde.",
   verifyOutcomePendingReview:
     "🔍 Wir prüfen deine Profilfotos noch einmal gegen dein Verifizierungs-Selfie. Das dauert normalerweise ein paar Stunden - ich melde mich, sobald es erledigt ist.",
   verifyOutcomeRejected:
@@ -2236,7 +2240,7 @@ const deTranslations: TranslationTable = {
   venueLocationNoted:
     "Startpunkt gespeichert ✅ Jetzt - welchen *Vibe* willst du? z. B. _ruhiges Cafe_, _veganer Brunch_, _Parkspaziergang_, _kleines Museum_.",
   venueSafetyOverride: "Heads up - ich habe stattdessen ein öffentliches Cafe gewählt. Erste Dates bleiben bei uns öffentlich.",
-  venueWaitingPeer: "Deins ist da ✅ Warten auf die andere Person...",
+  venueWaitingPeer: "Deins ist da ✅ Wir warten auf sie...",
   venueSearching: "🔍 Suche euren Treffpunkt…",
   venueSearchStep2: "📍 Vergleiche eure Routen…",
   venueSearchStep3: "✨ Wähle nach eurer Stimmung…",
@@ -2259,7 +2263,7 @@ const deTranslations: TranslationTable = {
   skipAnalyzeStep3: "💞 Bereite dich aufs Matching vor…",
   profilerBatchSaving: "🧩 Speichere deine Antworten…",
   profilerBatchSaved:
-    "✅ Deine Präferenznotizen aktualisiert — ich berücksichtige das beim nächsten Match.",
+    "Präferenzkarte aktualisiert ✅ Ich nutze sie beim nächsten Match.",
 
   // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
   venueChangeFemaleButton: "🔄 Ort ändern",
@@ -2384,6 +2388,7 @@ const plTranslations: TranslationTable = {
   otpTooManyAttempts: "Za dużo prób. Wpisz e-mail ponownie, wyślemy nowy kod.",
   otpCooldown: "Poczekaj chwilę - nowy kod możesz zamówić za minutę.",
   emailVerified: "E-mail potwierdzony ✅",
+  contextDumpAck: "Przyjęte ✅ Przetwarzam…",
   askFirstName: "Jak masz na imię?",
   askSurname: "A nazwisko?",
   askAge: "Ile masz lat?",
@@ -2481,7 +2486,7 @@ const plTranslations: TranslationTable = {
     "Nadal nie widzę dwóch zdjęć tej samej osoby. Nic nie zostało jeszcze ustalone - wyślij kolejne wyraźne zdjęcie siebie.",
   verifyCheckInfraError: "Nie udało się teraz połączyć z usługą weryfikacji. Spróbuj za chwilę.",
   verifyOutcomeVerified:
-    "✅ Weryfikacja zakończona - Twój profil jest aktywny. Odezwę się, gdy znajdę dopasowanie.",
+    "Zweryfikowane ✅ Profil aktywny. Odezwę się, gdy znajdę dopasowanie.",
   verifyOutcomePendingReview:
     "🔍 Jeszcze raz sprawdzamy zdjęcia z profilu względem selfie z weryfikacji. Zwykle zajmuje to kilka godzin - napiszę, gdy będzie gotowe.",
   verifyOutcomeRejected:
@@ -2750,7 +2755,7 @@ const plTranslations: TranslationTable = {
   venueLocationNoted:
     "Punkt startowy zapisany ✅ Teraz - jaki *vibe* chcesz? np. _cicha kawiarnia_, _wegański brunch_, _spacer po parku_, _małe muzeum_.",
   venueSafetyOverride: "Heads up - wybraliśmy publiczną kawiarnię. Pierwsze randki trzymamy w publicznych miejscach.",
-  venueWaitingPeer: "Twoje zapisane ✅ Czekamy na drugą osobę...",
+  venueWaitingPeer: "Twoje zapisane ✅ Czekamy na nich...",
   venueSearching: "🔍 Szukam miejsca dla Was…",
   venueSearchStep2: "📍 Porównuję wasze trasy…",
   venueSearchStep3: "✨ Dobieram pod waszą atmosferę…",
@@ -2773,7 +2778,7 @@ const plTranslations: TranslationTable = {
   skipAnalyzeStep3: "💞 Przygotowuję cię do doboru…",
   profilerBatchSaving: "🧩 Zapisuję twoje odpowiedzi…",
   profilerBatchSaved:
-    "✅ Zaktualizowałem twoje notatki preferencji — uwzględnię to przy następnym doborze.",
+    "Karta preferencji zaktualizowana ✅ Uwzględnię ją przy następnym doborze.",
 
   // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
   venueChangeFemaleButton: "🔄 Zmień miejsce",

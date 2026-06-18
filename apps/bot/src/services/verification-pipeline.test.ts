@@ -139,7 +139,7 @@ describe("runFaceMatchVerification — happy path (quorum)", () => {
     expect(h.persisted[0]!.faceMatchScore).toBeCloseTo(0.92, 5);
 
     expect(h.notifications).toHaveLength(1);
-    expect(h.notifications[0]!.message).toContain("Verification complete");
+    expect(h.notifications[0]!.message).toContain("Verified");
     expect(h.activationSurfaces).toEqual([
       { userId: USER_ID, telegramId: 999_001n },
     ]);
@@ -511,7 +511,7 @@ describe("runFaceMatchVerification — DM behavior", () => {
 
     expect(outcome.kind).toBe("verified");
     expect(h.persisted[0]!.verificationStatus).toBe("verified");
-    expect(h.notifications[0]!.message).toContain("Verification complete");
+    expect(h.notifications[0]!.message).toContain("Verified");
   });
 
   it("swallows verification reward errors after a successful check", async () => {
@@ -524,7 +524,7 @@ describe("runFaceMatchVerification — DM behavior", () => {
 
     expect(outcome.kind).toBe("verified");
     expect(h.persisted[0]!.verificationStatus).toBe("verified");
-    expect(h.notifications[0]!.message).toContain("Verification complete");
+    expect(h.notifications[0]!.message).toContain("Verified");
     expect(h.activationSurfaces).toHaveLength(1);
   });
 });
@@ -605,7 +605,7 @@ describe("runFaceMatchVerification — Elo seeding hook", () => {
 
     expect(outcome.kind).toBe("verified");
     expect(h.persisted[0]!.verificationStatus).toBe("verified");
-    expect(h.notifications[0]!.message).toContain("Verification complete");
+    expect(h.notifications[0]!.message).toContain("Verified");
   });
 
   it("verification still succeeds when the seed returns { ok: false }", async () => {

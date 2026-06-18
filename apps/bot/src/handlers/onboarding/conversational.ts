@@ -376,7 +376,7 @@ async function handleContextDumpChunk(
   // Acknowledge receipt once. Additional text arriving before the flush
   // silently extends the debounce window.
   if (separator === "") {
-    await ctx.reply("Got it ✅ I'm processing your response now.");
+    await ctx.reply(t(ctx.session.language, "contextDumpAck"));
   }
 
   // If this chunk filled the buffer, auto-flush so we don't silently drop

@@ -575,7 +575,7 @@ export async function runFaceMatchVerification(
 function outcomeMessage(kind: "verified" | "pending_review" | "rejected"): string {
   switch (kind) {
     case "verified":
-      return "✅ Verification complete — your profile is live. I'll reach out when I find a match.";
+      return "Verified ✅ Profile is live. I'll message you when I find a match.";
     case "pending_review":
       return "🔍 We're double-checking your profile photos against your verification selfie. This usually takes a few hours — I'll message you the moment it's done.";
     case "rejected":
