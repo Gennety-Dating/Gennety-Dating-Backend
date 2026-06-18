@@ -529,7 +529,10 @@ for the dashboard's algorithm-quality view.
   (clamped to a motivating 70..99 range) + a 1–2 sentence positive
   rationale, in side-A's language.
 - Pitches are queued through `services/dispatch-queue.ts` (rate-limited,
-  default 2 s between sends ≈ 30/min).
+  default 2 s between sends ≈ 30/min). When a first-match welcome gift is
+  actually delivered, the queue sends those gift pre-rolls first, waits
+  `MATCH_PREROLL_DELAY_MS` (default 2 min), then reveals the match cards so the
+  gift effect and pitch stream do not visually stack.
 - For Telegram users the pitch streams via `sendMessageDraft` (or, behind
   `RICH_THINKING_ENABLED`, `sendRichMessageDraft` with a `<tg-thinking>` shimmer
   on the "analysing" beat); either way the final message is a plain text
@@ -607,14 +610,17 @@ match/bundle, scope, and amount, and can be consumed only once.
   single "Pay my ticket — $6.99". The server re-validates that pay-for-both is
   male-only.
 - **Welcome gift.** Every new user is gifted **one free Date Ticket** as a
-  personal "your first date is on me" gesture, delivered as a **pre-roll on
+  personal "your first date is on me" gesture, delivered as a **pre-roll before
   their first-ever match pitch** (`handlers/matching/pitch.ts` →
   `services/welcome-gift.ts`): an optional gender-specific Telegram **video
   note** (кружок, founder message) followed by the gift DM (the
   `welcomeGiftTicket` copy, $6.99 value anchor + optional
   `MESSAGE_EFFECT_GIFT_ID` effect). The `sendVideoNote` API carries no caption,
   so the text is a separate message; a missing video asset degrades gracefully
-  to the DM only. The grant is one-time/idempotent — a `welcome_gift`
+  to the DM only. The weekly dispatch queue intentionally waits before sending
+  the match card after a delivered gift so the confetti/effect moment stays
+  visually separate from the pitch stream. The grant is one-time/idempotent — a
+  `welcome_gift`
   `TicketLedger` row is the claim marker, so the FIRST qualifying pitch becomes
   the gift moment automatically (no separate "first match" detection) and
   retries/subsequent pitches never re-gift. Telegram-only in v1 (the mobile

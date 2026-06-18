@@ -33,7 +33,7 @@ vi.mock("../../services/welcome-gift.js", () => ({
   sendWelcomeGiftPreroll: mPreroll,
 }));
 
-const { sendMatchProposal } = await import("./pitch.js");
+const { sendMatchProposal, sendMatchWelcomeGiftPreroll } = await import("./pitch.js");
 
 function makeApi() {
   return {
@@ -128,5 +128,34 @@ describe("sendMatchProposal — welcome-gift pre-roll", () => {
     expect(mPreroll.mock.invocationCallOrder[0]).toBeLessThan(
       stream.mock.invocationCallOrder[0],
     );
+  });
+
+  it("can deliver the welcome gift as a standalone pre-roll", async () => {
+    mFindUnique.mockResolvedValue(payload());
+    mGrant.mockResolvedValue({ granted: true, balance: 1 });
+    const api = makeApi();
+
+    const result = await sendMatchWelcomeGiftPreroll(api, "match-1");
+
+    expect(result).toEqual({ sent: 2, sentA: true, sentB: true });
+    expect(mGrant).toHaveBeenCalledTimes(2);
+    expect(mPreroll).toHaveBeenCalledWith(api, 1001, "en", "female");
+    expect(mPreroll).toHaveBeenCalledWith(api, 1002, "en", "male");
+  });
+
+  it("skips inline welcome gift delivery after a staged pre-roll", async () => {
+    mFindUnique.mockResolvedValue(payload());
+    mGrant.mockResolvedValue({ granted: true, balance: 1 });
+    const api = makeApi();
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await sendMatchProposal(api, "match-1", {
+      streamImpl: stream,
+      skipWelcomeGiftPreroll: true,
+    });
+
+    expect(mGrant).not.toHaveBeenCalled();
+    expect(mPreroll).not.toHaveBeenCalled();
+    expect(stream).toHaveBeenCalledTimes(2);
   });
 });

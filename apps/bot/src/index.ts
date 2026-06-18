@@ -110,6 +110,8 @@ const STATUS_TIMER_CRON_SCHEDULE = process.env.STATUS_TIMER_CRON_SCHEDULE ?? "* 
 
 /** Dispatch delay between pitch sends (ms). Default: 2s = ~30/min. */
 const DISPATCH_DELAY_MS = Number(process.env.DISPATCH_DELAY_MS ?? 2000);
+/** Gap between first-match gift pre-roll and the match card reveal. */
+const MATCH_PREROLL_DELAY_MS = Number(process.env.MATCH_PREROLL_DELAY_MS ?? 2 * 60 * 1000);
 
 /**
  * M-6: hourly auto-unsuspend. The expiration check used to live ONLY inside
@@ -178,7 +180,13 @@ async function weeklyMatchingJob(): Promise<void> {
 
     if (result.matchIds.length > 0) {
       console.log(`[cron] Dispatching ${result.matchIds.length} pitches...`);
-      const dispatch = await dispatchMatches(bot.api, result.matchIds, DISPATCH_DELAY_MS);
+      const dispatch = await dispatchMatches(
+        bot.api,
+        result.matchIds,
+        DISPATCH_DELAY_MS,
+        3,
+        MATCH_PREROLL_DELAY_MS,
+      );
       console.log(
         `[cron] Dispatch complete: sent=${dispatch.dispatched} failed=${dispatch.failed}`,
       );

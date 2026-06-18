@@ -441,12 +441,14 @@ Required/high-impact env keys:
     new `ticket_ledger` table first, and `tickets.html` deployed with the Mini
     App bundle.
   - **Welcome gift (same flag).** Every new user is gifted 1 free Date Ticket as
-    a pre-roll on their first match pitch — an optional founder **video note**
-    (кружок) + a gift DM. `MESSAGE_EFFECT_GIFT_ID` (optional — Bot API 7.6 effect
-    on the gift DM; empty = no effect; pick a celebratory id like 🎉/❤️). Video
-    assets are bundled at `apps/bot/src/assets/welcome-gift/<gender>-<lang>.mp4`
-    (square video-note MP4, ≤60s, e.g. `male-ru.mp4`, `female-en.mp4`); they
-    ride the standard code rsync, no ffmpeg needed (the bot just sends a ready
+    a pre-roll before their first match pitch — an optional founder **video
+    note** (кружок) + a gift DM. `MATCH_PREROLL_DELAY_MS` controls the pause
+    between a delivered gift pre-roll and the match card reveal (default 2 min).
+    `MESSAGE_EFFECT_GIFT_ID` is optional — Bot API 7.6 effect on the gift DM;
+    empty = no effect; pick a celebratory id like 🎉/❤️. Video assets are bundled
+    at `apps/bot/src/assets/welcome-gift/<gender>-<lang>.mp4` (square video-note
+    MP4, ≤60s, e.g. `male-ru.mp4`, `female-en.mp4`); they ride the standard code
+    rsync, no ffmpeg needed (the bot just sends a ready
     file). A missing asset for a (gender, language) pair degrades gracefully to
     the gift DM only, so partial coverage is safe — drop in more MP4s over time.
     Idempotent via a `welcome_gift` `ticket_ledger` row (no extra schema beyond
@@ -494,7 +496,8 @@ Required/high-impact env keys:
   `STATUS_TIMER_CRON_SCHEDULE`, `AUTO_UNSUSPEND_CRON_SCHEDULE`,
   `EMBEDDING_REFRESH_CRON_SCHEDULE`, `SELFIE_RETENTION_CRON_SCHEDULE`,
   `VENUE_REVALIDATION_CRON_SCHEDULE`, `TICKET_EXPIRY_CRON_SCHEDULE`,
-  `PROFILER_CRON_SCHEDULE`, `DATE_LIFECYCLE_TICK_MS`, `DISPATCH_DELAY_MS`
+  `PROFILER_CRON_SCHEDULE`, `DATE_LIFECYCLE_TICK_MS`, `DISPATCH_DELAY_MS`,
+  `MATCH_PREROLL_DELAY_MS`
 - Profiler (Phase 1b, always-on): post-onboarding Q&A batches that fuel
   icebreakers + date-planning hints (NOT matching). No feature flag —
   `PROFILER_CRON_SCHEDULE` (default `*/15 * * * *`) only tunes cadence; set it

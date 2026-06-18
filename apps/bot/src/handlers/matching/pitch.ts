@@ -44,6 +44,12 @@ const MAX_MEDIA_GROUP_SIZE = 10;
 export interface SendMatchProposalOptions {
   /** Injected for tests — overrides `streamDraftsToChat`. */
   streamImpl?: typeof streamDraftsToChat;
+  /**
+   * The weekly dispatch queue can send the first-match gift as a separate
+   * pre-roll phase, then wait before showing the match card. In that case we
+   * skip the inline gift attempt here to avoid replaying the moment.
+   */
+  skipWelcomeGiftPreroll?: boolean | { A?: boolean; B?: boolean };
   /** Injected for tests — overrides `generatePitch`. */
   pitchImpl?: (args: {
     selfFirstName: string | null;
@@ -227,13 +233,99 @@ async function deliverWelcomeGiftPreroll(
   chatId: number,
   lang: Language,
   gender: WelcomeGiftGender | null,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const { granted } = await grantWelcomeGiftIfEligible(userId);
-    if (granted) await sendWelcomeGiftPreroll(api, chatId, lang, gender);
+    if (granted) {
+      await sendWelcomeGiftPreroll(api, chatId, lang, gender);
+      return true;
+    }
   } catch (err) {
     console.warn("[pitch] welcome-gift pre-roll failed:", err);
   }
+  return false;
+}
+
+export interface MatchWelcomeGiftPrerollResult {
+  sent: number;
+  sentA: boolean;
+  sentB: boolean;
+}
+
+function shouldSkipWelcomeGiftPreroll(
+  options: SendMatchProposalOptions,
+  side: "A" | "B",
+): boolean {
+  const skip = options.skipWelcomeGiftPreroll;
+  return skip === true || (typeof skip === "object" && skip[side] === true);
+}
+
+/**
+ * Send only the first-match welcome-gift pre-roll for a match. Used by the
+ * weekly dispatch queue to stage the gift moment before the match card reveal.
+ */
+export async function sendMatchWelcomeGiftPreroll(
+  api: Api<RawApi>,
+  matchId: string,
+): Promise<MatchWelcomeGiftPrerollResult> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: {
+      pitchMessageIdA: true,
+      pitchMessageIdB: true,
+      userA: {
+        select: {
+          id: true,
+          telegramId: true,
+          gender: true,
+          language: true,
+        },
+      },
+      userB: {
+        select: {
+          id: true,
+          telegramId: true,
+          gender: true,
+          language: true,
+        },
+      },
+    },
+  });
+  if (!match) return { sent: 0, sentA: false, sentB: false };
+
+  let sent = 0;
+  let sentA = false;
+  let sentB = false;
+  if (isTelegramTarget(match.userA.telegramId) && match.pitchMessageIdA == null) {
+    const langA: Language = match.userA.language ?? "en";
+    const didSend = await deliverWelcomeGiftPreroll(
+      api,
+      match.userA.id,
+      Number(match.userA.telegramId),
+      langA,
+      match.userA.gender,
+    );
+    if (didSend) {
+      sent++;
+      sentA = true;
+    }
+  }
+  if (isTelegramTarget(match.userB.telegramId) && match.pitchMessageIdB == null) {
+    const langB: Language = match.userB.language ?? "en";
+    const didSend = await deliverWelcomeGiftPreroll(
+      api,
+      match.userB.id,
+      Number(match.userB.telegramId),
+      langB,
+      match.userB.gender,
+    );
+    if (didSend) {
+      sent++;
+      sentB = true;
+    }
+  }
+
+  return { sent, sentA, sentB };
 }
 
 /**
@@ -427,7 +519,9 @@ export async function sendMatchProposal(
       return;
     }
     const chatA = Number(match.userA.telegramId);
-    await deliverWelcomeGiftPreroll(api, match.userA.id, chatA, langA, match.userA.gender);
+    if (!shouldSkipWelcomeGiftPreroll(options, "A")) {
+      await deliverWelcomeGiftPreroll(api, match.userA.id, chatA, langA, match.userA.gender);
+    }
     await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
     const result = await stream(api, chatA, draftsA, { replyMarkup: kbA, thinkingIndex });
     if (!result) throw new Error("Pitch stream returned no final message for side A");
@@ -442,7 +536,9 @@ export async function sendMatchProposal(
       return;
     }
     const chatB = Number(match.userB.telegramId);
-    await deliverWelcomeGiftPreroll(api, match.userB.id, chatB, langB, match.userB.gender);
+    if (!shouldSkipWelcomeGiftPreroll(options, "B")) {
+      await deliverWelcomeGiftPreroll(api, match.userB.id, chatB, langB, match.userB.gender);
+    }
     await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
     const result = await stream(api, chatB, draftsB, { replyMarkup: kbB, thinkingIndex });
     if (!result) throw new Error("Pitch stream returned no final message for side B");

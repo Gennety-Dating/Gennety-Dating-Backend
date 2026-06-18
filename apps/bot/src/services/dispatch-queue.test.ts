@@ -10,14 +10,23 @@ vi.mock("@gennety/db", () => ({
 
 vi.mock("../handlers/matching/pitch.js", () => ({
   sendMatchProposal: vi.fn().mockResolvedValue(undefined),
+  sendMatchWelcomeGiftPreroll: vi.fn().mockResolvedValue({
+    sent: 0,
+    sentA: false,
+    sentB: false,
+  }),
 }));
 
 import { prisma } from "@gennety/db";
-import { sendMatchProposal } from "../handlers/matching/pitch.js";
+import {
+  sendMatchProposal,
+  sendMatchWelcomeGiftPreroll,
+} from "../handlers/matching/pitch.js";
 import { dispatchMatches } from "./dispatch-queue.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mSendPitch = sendMatchProposal as unknown as MockFn;
+const mSendPreroll = sendMatchWelcomeGiftPreroll as unknown as MockFn;
 const mMatchUpdate = (prisma.match as unknown as { update: MockFn }).update;
 
 describe("dispatchMatches", () => {
@@ -77,5 +86,24 @@ describe("dispatchMatches", () => {
     expect(result.dispatched).toBe(0);
     expect(result.failed).toBe(0);
     expect(mSendPitch).not.toHaveBeenCalled();
+  });
+
+  it("sends first-match gift pre-rolls before pitching when configured", async () => {
+    mSendPreroll
+      .mockResolvedValueOnce({ sent: 1, sentA: true, sentB: false })
+      .mockResolvedValueOnce({ sent: 0, sentA: false, sentB: false });
+
+    const result = await dispatchMatches({} as any, ["m1", "m2"], 0, 3, 10);
+
+    expect(result).toMatchObject({ dispatched: 2, failed: 0 });
+    expect(mSendPreroll).toHaveBeenCalledWith({}, "m1");
+    expect(mSendPreroll).toHaveBeenCalledWith({}, "m2");
+    expect(mSendPreroll.mock.invocationCallOrder[1]).toBeLessThan(
+      mSendPitch.mock.invocationCallOrder[0],
+    );
+    expect(mSendPitch).toHaveBeenNthCalledWith(1, {}, "m1", {
+      skipWelcomeGiftPreroll: { A: true, B: false },
+    });
+    expect(mSendPitch).toHaveBeenNthCalledWith(2, {}, "m2", {});
   });
 });

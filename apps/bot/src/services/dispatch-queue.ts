@@ -1,6 +1,9 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import { sendMatchProposal } from "../handlers/matching/pitch.js";
+import {
+  sendMatchProposal,
+  sendMatchWelcomeGiftPreroll,
+} from "../handlers/matching/pitch.js";
 
 /**
  * Rate-limited dispatch queue for match pitches.
@@ -42,9 +45,39 @@ export async function dispatchMatches(
   matchIds: string[],
   delayMs: number = DEFAULT_DISPATCH_DELAY_MS,
   maxAttempts: number = 3,
+  prerollDelayMs: number = 0,
 ): Promise<DispatchResult> {
   let dispatched = 0;
   const errors: DispatchResult["errors"] = [];
+  const preRolledSides = new Map<string, { A?: boolean; B?: boolean }>();
+
+  if (prerollDelayMs > 0 && matchIds.length > 0) {
+    let prerollSent = 0;
+    for (let i = 0; i < matchIds.length; i++) {
+      const matchId = matchIds[i]!;
+      try {
+        const result = await sendMatchWelcomeGiftPreroll(api, matchId);
+        if (result.sent > 0) {
+          prerollSent += result.sent;
+          preRolledSides.set(matchId, { A: result.sentA, B: result.sentB });
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(
+          `[dispatch] welcome-gift pre-roll failed matchId=${matchId}: ${message}`,
+        );
+      }
+      if (i < matchIds.length - 1) {
+        await delay(delayMs);
+      }
+    }
+    if (prerollSent > 0) {
+      console.log(
+        `[dispatch] welcome-gift pre-roll sent=${prerollSent}; waiting ${prerollDelayMs}ms before pitches`,
+      );
+      await delay(prerollDelayMs);
+    }
+  }
 
   for (let i = 0; i < matchIds.length; i++) {
     const matchId = matchIds[i]!;
@@ -52,7 +85,12 @@ export async function dispatchMatches(
       let lastError: unknown;
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
-          await sendMatchProposal(api, matchId);
+          const preRolled = preRolledSides.get(matchId);
+          await sendMatchProposal(
+            api,
+            matchId,
+            preRolled ? { skipWelcomeGiftPreroll: preRolled } : {},
+          );
           lastError = undefined;
           break;
         } catch (error) {
