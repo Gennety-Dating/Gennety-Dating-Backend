@@ -95,4 +95,64 @@ describe("Aether profile tools", () => {
       detail: "All photos must belong to the same person",
     });
   });
+
+  it("routes a validated chat image through consensus before attaching it", async () => {
+    mutableValidationEnv.PROFILE_MEDIA_VALIDATION_ENABLED = true;
+    const commitProfilePhotoCandidate = vi.fn().mockResolvedValue({
+      status: "pending",
+      photos: [],
+      profileMedia: [],
+      uploadedPhotoHashes: [],
+      photoFaceScores: [],
+      pendingCandidates: [],
+      acceptedCount: 0,
+      pendingCount: 1,
+      rejectedCount: 0,
+      rejectedCandidates: [],
+    });
+    const upsertProfile = vi.fn();
+
+    const result = await attachAetherProfilePhoto(
+      "user-1",
+      { imageUrl: "user-1/chat.jpg" },
+      {
+        findOwnedMessageImage: vi.fn().mockResolvedValue({ imageUrl: "user-1/chat.jpg" }),
+        downloadChatImage: vi.fn().mockResolvedValue(Buffer.from("image")),
+        validateSingleFace: vi.fn(),
+        gateProfilePhoto: vi.fn(),
+        validateProfilePhoto: vi.fn().mockResolvedValue({
+          ok: true,
+          value: {
+            fingerprint: { sha256: "sha", differenceHash: "abc" },
+            identitySimilarity: null,
+          },
+        }),
+        findProfile: vi.fn().mockResolvedValue({
+          photos: [],
+          profileMedia: [],
+          photoFaceScores: [],
+          uploadedPhotoHashes: [],
+        }),
+        uploadProfilePhoto: vi.fn().mockResolvedValue({ path: "user-1/profile.jpg" }),
+        commitProfilePhotoCandidate,
+        upsertProfile,
+        deleteStorageObject: vi.fn(),
+        queueVerificationRerun: vi.fn(),
+      },
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      detail: expect.stringContaining("identity is not fixed yet"),
+    });
+    expect(commitProfilePhotoCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-1",
+        photoRef: "user-1/profile.jpg",
+        perceptualHash: "abc",
+        source: "aether",
+      }),
+    );
+    expect(upsertProfile).not.toHaveBeenCalled();
+  });
 });

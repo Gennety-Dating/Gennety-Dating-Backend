@@ -26,21 +26,51 @@ export function buildReferenceFaceEmbedding(
   };
 }
 
+export function referencePhotoRefFromAnchor(
+  value: Prisma.JsonValue | null | undefined,
+): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const photoRef = (value as Record<string, unknown>).photoRef;
+  return typeof photoRef === "string" && photoRef.length > 0 ? photoRef : null;
+}
+
 export function photoUploadStatePatch(args: {
   photos: readonly string[];
   uploadedPhotoHashes: readonly string[];
   referenceFaceEmbedding?: Prisma.JsonValue | null;
   refreshReference?: boolean;
+  confirmReference?: boolean;
+  referencePhotoRef?: string;
+  referencePerceptualHash?: string;
+  clearReference?: boolean;
+  skipReferenceCreation?: boolean;
 }): {
   uploadedPhotoHashes: string[];
   acceptedPhotoCount: number;
-  referenceFaceEmbedding?: Prisma.InputJsonValue;
+  referenceFaceEmbedding?: Prisma.InputJsonValue | typeof Prisma.DbNull;
 } {
   const uploadedPhotoHashes = [...args.uploadedPhotoHashes].filter(Boolean);
+  if (args.clearReference) {
+    return {
+      uploadedPhotoHashes,
+      acceptedPhotoCount: args.photos.length,
+      referenceFaceEmbedding: Prisma.DbNull,
+    };
+  }
+
   const shouldRefreshReference =
-    args.refreshReference || !args.referenceFaceEmbedding;
+    args.refreshReference ||
+    args.confirmReference ||
+    (!args.referenceFaceEmbedding && !args.skipReferenceCreation);
+  const referencePhotoRef = args.referencePhotoRef ?? args.photos[0];
+  const referenceHash =
+    args.referencePerceptualHash ??
+    (referencePhotoRef
+      ? uploadedPhotoHashes[args.photos.indexOf(referencePhotoRef)]
+      : undefined) ??
+    uploadedPhotoHashes[0];
   const nextReference = shouldRefreshReference
-    ? buildReferenceFaceEmbedding(args.photos[0], uploadedPhotoHashes[0])
+    ? buildReferenceFaceEmbedding(referencePhotoRef, referenceHash)
     : args.referenceFaceEmbedding;
 
   return {

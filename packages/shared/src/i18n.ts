@@ -55,6 +55,14 @@ const translations = {
       "All photos must belong to the same person. Make sure your face is in every shot.",
     photoIdentityUncertain:
       "I couldn't match that face reliably. Try a clearer photo with better light and a more visible face.",
+    photoConsensusPending:
+      "I haven't fixed the profile identity yet. Send one more different photo where the same person is visible.",
+    photoConsensusOutlierRejected:
+      "One pending photo showed a different person, so I left it out.",
+    photoConsensusConfirmed:
+      "Identity confirmed from matching photos ✅",
+    photoConsensusNoPairCap:
+      "I still don't see two photos of the same person. Nothing has been fixed yet — send another clear photo of you.",
     photoVisionError:
       "Couldn't process the file. Try again.",
     photoInvalidMedia:
@@ -678,6 +686,14 @@ const translations = {
       "Видео для профиля должно быть не больше 20 МБ, чтобы я мог его проверить. Скинь поменьше.",
     videoChecking:
       "Проверяю безопасность видео и ищу твоё лицо в нескольких моментах...",
+    photoConsensusPending:
+      "Я пока не зафиксировал личность в профиле. Пришли ещё одно другое фото, где виден тот же человек.",
+    photoConsensusOutlierRejected:
+      "Одно ожидающее фото было с другим человеком, поэтому я его не добавил.",
+    photoConsensusConfirmed:
+      "Личность подтверждена по совпадающим фото ✅",
+    photoConsensusNoPairCap:
+      "Я всё ещё не вижу двух фото одного человека. Пока ничего не зафиксировано — пришли ещё одно чёткое фото себя.",
     videoUnsafeContent:
       "В этом видео есть контент, который нельзя публиковать в профиле. Выбери другой ролик.",
     videoOwnerMissing:
@@ -1296,6 +1312,14 @@ const translations = {
     videoNeedsPhotoFirst:
       "Спочатку надішли хоча б одне чітке фото для профілю. Після цього я зможу перевірити, що у відео саме ти.",
     videoProcessingUnavailable:
+    photoConsensusPending:
+      "Я поки не зафіксував особу в профілі. Надішли ще одне інше фото, де видно ту саму людину.",
+    photoConsensusOutlierRejected:
+      "Одне очікуване фото було з іншою людиною, тому я його не додав.",
+    photoConsensusConfirmed:
+      "Особу підтверджено за збіжними фото ✅",
+    photoConsensusNoPairCap:
+      "Я досі не бачу двох фото однієї людини. Поки нічого не зафіксовано — надішли ще одне чітке фото себе.",
       "Зараз не вдалося перевірити відео. Попереднє відео не змінено. Спробуй ще раз трохи пізніше.",
     ticketRewardPhoto:
       "🎟️ Клас — ти щойно отримав *безкоштовний квиток на побачення*!\n\nЯк це працює: кожне побачення коштує 1 квиток, і зазвичай квитки платні. За додані фото — один у подарунок. Баланс: *{balance}* 🎟️",
@@ -1920,6 +1944,14 @@ const deTranslations: TranslationTable = {
   verifyBtnSkipConfirmTicket: "🔴 Bonus aufgeben und überspringen",
   verifySkipped:
     "Verifizierung übersprungen. Du kannst sie später im Profilmenü starten, " +
+  photoConsensusPending:
+    "Ich habe die Profilidentität noch nicht festgelegt. Sende ein weiteres anderes Foto, auf dem dieselbe Person zu sehen ist.",
+  photoConsensusOutlierRejected:
+    "Ein wartendes Foto zeigte eine andere Person, deshalb habe ich es nicht hinzugefügt.",
+  photoConsensusConfirmed:
+    "Identität durch übereinstimmende Fotos bestätigt ✅",
+  photoConsensusNoPairCap:
+    "Ich sehe immer noch keine zwei Fotos derselben Person. Es wurde noch nichts festgelegt - sende ein weiteres klares Foto von dir.",
     "um dein ELO wiederherzustellen.",
   verifyCheckPending:
     "🔍 Persona hat deine Verifizierung, verarbeitet sie aber noch. " +
@@ -2439,6 +2471,14 @@ const plTranslations: TranslationTable = {
   verifyCheckAlreadyDone:
     "Już przetworzone - powinna pojawić się wiadomość z wynikiem powyżej. " +
     "Jeśli coś wygląda źle, kliknij 🟢 Zweryfikuj teraz, aby spróbować ponownie.",
+  photoConsensusPending:
+    "Nie ustaliłem jeszcze tożsamości profilu. Wyślij jeszcze jedno inne zdjęcie, na którym widać tę samą osobę.",
+  photoConsensusOutlierRejected:
+    "Jedno oczekujące zdjęcie pokazywało inną osobę, więc go nie dodałem.",
+  photoConsensusConfirmed:
+    "Tożsamość potwierdzona przez pasujące zdjęcia ✅",
+  photoConsensusNoPairCap:
+    "Nadal nie widzę dwóch zdjęć tej samej osoby. Nic nie zostało jeszcze ustalone - wyślij kolejne wyraźne zdjęcie siebie.",
   verifyCheckInfraError: "Nie udało się teraz połączyć z usługą weryfikacji. Spróbuj za chwilę.",
   verifyOutcomeVerified:
     "✅ Weryfikacja zakończona - Twój profil jest aktywny. Odezwę się, gdy znajdę dopasowanie.",

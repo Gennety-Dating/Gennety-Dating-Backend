@@ -346,6 +346,10 @@ model Profile {
   /// Perceptual hashes for accepted static photos, in upload order. Used for
   /// cheap duplicate rejection before moderation/face provider calls.
   uploadedPhotoHashes  String[]                  @default([]) @map("uploaded_photo_hashes")
+  /// Static photos that passed per-photo safety/face/duplicate validation but
+  /// have not yet formed a 2+ photo identity-consensus cluster. These are not
+  /// rendered, counted toward MIN_PHOTOS, or used by matching/verification.
+  pendingPhotoCandidates Json[]                   @default([]) @map("pending_photo_candidates")
   /// Count of static photos accepted by upload-time validation. Videos are
   /// display-only and are not counted toward this value.
   acceptedPhotoCount   Int                       @default(0) @map("accepted_photo_count")

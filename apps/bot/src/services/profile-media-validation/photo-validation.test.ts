@@ -73,6 +73,24 @@ describe("validateProfilePhoto", () => {
     });
   });
 
+  it("uses existing photos only for duplicate checks without an explicit identity reference", async () => {
+    const testDeps = deps();
+    const result = await validateProfilePhoto(
+      {
+        candidate: candidateJpeg,
+        mime: "image/jpeg",
+        existingPhotos: [{ buffer: Buffer.from("existing") }],
+      },
+      { deps: testDeps },
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: { identitySimilarity: null },
+    });
+    expect(testDeps.compareFaces).not.toHaveBeenCalled();
+  });
+
   it("rejects exact and perceptual duplicates before provider calls", async () => {
     const exactDeps = deps({
       fingerprintImage: vi.fn(async () => ({

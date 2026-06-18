@@ -10,6 +10,8 @@ import {
   MAX_MAJOR_LENGTH,
   normalizeProfileMedia,
   profilePhotoMedia,
+  t,
+  type Language,
 } from "@gennety/shared";
 import { env } from "../../config.js";
 import { requireAuth } from "../auth-middleware.js";
@@ -38,6 +40,10 @@ import {
   validateHomeLocationPayload,
 } from "../home-location.js";
 import { validateUserProfilePhoto } from "../../services/profile-media-validation/profile-photo-validation.js";
+import {
+  commitProfilePhotoCandidate,
+  type PhotoConsensusCommitResult,
+} from "../../services/profile-media-validation/identity-consensus.js";
 import { photoUploadStatePatch } from "../../services/profile-media-validation/photo-state.js";
 
 export const meRouter: Router = Router();
@@ -497,6 +503,45 @@ async function buildPhotosResponse(
   return { photos: paths, signedUrls };
 }
 
+function serializePhotoConsensus(
+  consensus: PhotoConsensusCommitResult,
+  language: Language,
+): {
+  status: PhotoConsensusCommitResult["status"];
+  acceptedCount: number;
+  pendingCount: number;
+  rejectedCount: number;
+  message: string;
+} {
+  return {
+    status: consensus.status,
+    acceptedCount: consensus.acceptedCount,
+    pendingCount: consensus.pendingCount,
+    rejectedCount: consensus.rejectedCount,
+    message: photoConsensusApiMessage(consensus, language),
+  };
+}
+
+function photoConsensusApiMessage(
+  consensus: PhotoConsensusCommitResult,
+  language: Language,
+): string {
+  if (consensus.status === "pending") return t(language, "photoConsensusPending");
+  if (consensus.status === "capped") return t(language, "photoConsensusNoPairCap");
+  if (consensus.status === "confirmed") {
+    return [
+      t(language, "photoConsensusConfirmed"),
+      consensus.rejectedCount > 0 ? t(language, "photoConsensusOutlierRejected") : null,
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n\n");
+  }
+  return t(language, "photoReceived", {
+    n: consensus.acceptedCount,
+    max: MAX_PHOTOS,
+  });
+}
+
 /**
  * GET /v1/me/photos — returns the ordered list of profile photo paths
  * plus matching signed URLs (TTL 10 minutes). Paths are kept in the
@@ -559,6 +604,7 @@ meRouter.post(
     }
 
     let gateScore: number | null = null;
+    let photoHash: string | null = null;
     if (env.PROFILE_MEDIA_VALIDATION_ENABLED) {
       const validation = await validateUserProfilePhoto({
         userId: req.userId!,
@@ -585,7 +631,7 @@ meRouter.post(
         return;
       } else {
         gateScore = validation.value.identitySimilarity;
-        existingHashes.push(validation.value.fingerprint.differenceHash);
+        photoHash = validation.value.fingerprint.differenceHash;
       }
     } else {
       const vision = await validateSingleFaceFromBuffer(req.file.buffer, mime);
@@ -619,44 +665,60 @@ meRouter.post(
       return;
     }
 
-    const nextPhotos = [...existing, uploadedPath];
-    const nextMedia = [...existingMedia, profilePhotoMedia(uploadedPath)];
-    const photoState = photoUploadStatePatch({
-      photos: nextPhotos,
-      uploadedPhotoHashes: existingHashes,
-      referenceFaceEmbedding: profile?.referenceFaceEmbedding ?? null,
-    });
-    // Append the gate's per-photo score in lockstep with `photos[]` so the
-    // admin dashboard can spot a specific weak photo. `null` (gate didn't
-    // run, e.g. unverified user) is preserved as such.
-    const existingScores = await prisma.profile
-      .findUnique({
-        where: { userId: req.userId! },
-        select: { photoFaceScores: true },
-      })
-      .then((p) => p?.photoFaceScores ?? []);
-    // Pad existingScores with 0 if it's shorter than existing photos (legacy
-    // rows from before this column existed). The 0 is a sentinel meaning
-    // "score unknown"; admin rerun will refill it on next pipeline run.
-    while (existingScores.length < existing.length) existingScores.push(0);
-    const nextScores = [...existingScores, gateScore ?? 0];
-
-    await prisma.profile.upsert({
-      where: { userId: req.userId! },
-      update: {
-        photos: nextPhotos,
-        profileMedia: profileMediaToJson(nextMedia),
-        photoFaceScores: nextScores,
-        ...photoState,
-      },
-      create: {
+    let consensus: PhotoConsensusCommitResult | null = null;
+    let nextPhotos: string[];
+    if (env.PROFILE_MEDIA_VALIDATION_ENABLED) {
+      consensus = await commitProfilePhotoCandidate({
         userId: req.userId!,
-        photos: nextPhotos,
-        profileMedia: profileMediaToJson(nextMedia),
-        photoFaceScores: nextScores,
-        ...photoState,
-      },
-    });
+        photoRef: uploadedPath,
+        profileMedia: profilePhotoMedia(uploadedPath),
+        perceptualHash: photoHash,
+        faceScore: gateScore,
+        source: "mobile",
+        candidateBuffer: req.file.buffer,
+        api: getBotApi(),
+      });
+      nextPhotos = consensus.photos;
+    } else {
+      const nextMedia = [...existingMedia, profilePhotoMedia(uploadedPath)];
+      const photoState = photoUploadStatePatch({
+        photos: [...existing, uploadedPath],
+        uploadedPhotoHashes: existingHashes,
+        referenceFaceEmbedding: profile?.referenceFaceEmbedding ?? null,
+      });
+      // Append the gate's per-photo score in lockstep with `photos[]` so the
+      // admin dashboard can spot a specific weak photo. `null` (gate didn't
+      // run, e.g. unverified user) is preserved as such.
+      const existingScores = await prisma.profile
+        .findUnique({
+          where: { userId: req.userId! },
+          select: { photoFaceScores: true },
+        })
+        .then((p) => p?.photoFaceScores ?? []);
+      // Pad existingScores with 0 if it's shorter than existing photos (legacy
+      // rows from before this column existed). The 0 is a sentinel meaning
+      // "score unknown"; admin rerun will refill it on next pipeline run.
+      while (existingScores.length < existing.length) existingScores.push(0);
+      const nextScores = [...existingScores, gateScore ?? 0];
+      nextPhotos = [...existing, uploadedPath];
+
+      await prisma.profile.upsert({
+        where: { userId: req.userId! },
+        update: {
+          photos: nextPhotos,
+          profileMedia: profileMediaToJson(nextMedia),
+          photoFaceScores: nextScores,
+          ...photoState,
+        },
+        create: {
+          userId: req.userId!,
+          photos: nextPhotos,
+          profileMedia: profileMediaToJson(nextMedia),
+          photoFaceScores: nextScores,
+          ...photoState,
+        },
+      });
+    }
 
     // The single-photo gate above re-checked just THIS frame against the
     // verified selfie, but the verification status (`verified` /
@@ -667,7 +729,9 @@ meRouter.post(
     // change the verdict but mustn't leave the score map misaligned
     // either. Fire-and-forget the pipeline; idempotency markers are
     // cleared inside the helper.
-    queueVerificationRerun(req.userId!);
+    if (!consensus || consensus.status === "accepted" || consensus.status === "confirmed") {
+      queueVerificationRerun(req.userId!);
+    }
 
     const photosResponse = await buildPhotosResponse(nextPhotos);
 
@@ -676,7 +740,7 @@ meRouter.post(
     // Outside onboarding (profile editing) we skip the LLM round-trip.
     const userMeta = await prisma.user.findUniqueOrThrow({
       where: { id: req.userId! },
-      select: { telegramId: true, onboardingStep: true },
+      select: { telegramId: true, onboardingStep: true, language: true },
     });
 
     let interviewState = null;
@@ -684,7 +748,9 @@ meRouter.post(
       try {
         await injectSystemMessage(
           userMeta.telegramId,
-          `User uploaded 1 verified photo via mobile. Total uploaded: ${nextPhotos.length}/${MAX_PHOTOS}.`,
+          consensus && (consensus.status === "pending" || consensus.status === "capped")
+            ? `User uploaded 1 photo via mobile that passed safety/face checks, but no identity anchor is fixed yet. Accepted photos: ${nextPhotos.length}/${MAX_PHOTOS}; pending candidates: ${consensus.pendingCount}. Ask for another different photo of the same person.`
+            : `User uploaded 1 verified photo via mobile. Total uploaded: ${nextPhotos.length}/${MAX_PHOTOS}.`,
         );
         const result = await runAgentTurn(
           userMeta.telegramId,
@@ -699,7 +765,18 @@ meRouter.post(
       }
     }
 
-    res.status(201).json({ ...photosResponse, interviewState });
+    res.status(201).json({
+      ...photosResponse,
+      ...(consensus
+        ? {
+            photoConsensus: serializePhotoConsensus(
+              consensus,
+              userMeta.language ?? "en",
+            ),
+          }
+        : {}),
+      interviewState,
+    });
   },
 );
 
@@ -793,7 +870,8 @@ meRouter.delete(
       photos: nextPhotos,
       uploadedPhotoHashes: nextHashes,
       referenceFaceEmbedding: user.profile?.referenceFaceEmbedding ?? null,
-      refreshReference: index === 0,
+      refreshReference: nextPhotos.length > 0 && index === 0,
+      clearReference: nextPhotos.length === 0,
     });
 
     await prisma.profile.update({

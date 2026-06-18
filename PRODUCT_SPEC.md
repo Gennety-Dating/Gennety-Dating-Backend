@@ -175,15 +175,26 @@ Hard rules enforced by the collector:
   so a 4- or 6-photo burst does not produce one reply per frame. At 3 photos the
   bot uses a short progress reminder rather than repeating the full pitch.
   Exact duplicates, resized/re-encoded copies, crops, screenshots, and lightly
-  edited copies are not counted and receive an explicit explanation. The first
-  accepted photo creates the profile identity anchor; every later photo must
-  contain at least one detected face that matches that anchor at
-  `FACE_SIMILARITY_THRESHOLD` (0.60), so group photos are allowed when the
-  owner is visible. Duplicate detection uses stored perceptual hashes with
-  `DUPLICATE_HASH_DISTANCE` (8). Unsafe, explicit, no-face, wrong-identity,
-  duplicate, and technical-processing failures are rejected before persistence,
-  logged to `media_validation_rejections`, and keep the user in the same
-  retryable upload session.
+  edited copies are not counted and receive an explicit explanation. Before
+  Persona verification, a single uploaded photo is **not** trusted as the
+  identity anchor. Each static photo that passes safety, usable-face, and
+  duplicate checks enters a hidden `pendingPhotoCandidates[]` pool and is not
+  rendered or counted toward `MIN_PHOTOS` until at least two distinct pending
+  photos form a matching face cluster at `FACE_SIMILARITY_THRESHOLD` (0.60).
+  The largest matching cluster becomes the profile identity anchor; equal-size
+  clusters tie-break by the earliest uploaded photo. Cluster photos move into
+  `Profile.photos[]` / `profileMedia[]` / `photoFaceScores[]`, while pending
+  outliers are rejected as another person. After that, every later photo must
+  contain at least one detected face that matches the confirmed anchor; group
+  photos are allowed when the owner is visible. If the user already has
+  `verifiedSelfiePath`, upload-time identity comparison continues to use the
+  Persona selfie instead of consensus. Duplicate detection uses stored
+  perceptual hashes with `DUPLICATE_HASH_DISTANCE` (8), including hashes from
+  the hidden pending pool, so two copies of one image can never confirm
+  identity. Unsafe, explicit, no-face, wrong-identity, duplicate, and
+  technical-processing failures are rejected before accepted-profile
+  persistence, logged to `media_validation_rejections`, and keep the user in
+  the same retryable upload session.
 - When `TICKET_FEATURE_ENABLED`, the first post-minimum offer explains both
   rewards: reaching `PHOTO_BONUS_TICKET_THRESHOLD` (4) face-validated photos
   grants a free Date Ticket, and adding a profile video grants another. A batch

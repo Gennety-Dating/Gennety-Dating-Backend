@@ -229,7 +229,7 @@ Columns (≈ 25):
 | Demographics | `userId` (unique), `ethnicity`, `height`, `hobbies` (`String[]`), `partnerPreferences`, `psychologicalSummary`, `negativeConstraints`, `ageRangeMin`, `ageRangeMax` |
 | Vector | `embedding` (`vector(1536)`), `embeddingDirty`, `embeddingDirtyAt` |
 | Elo | `eloScore` (default 500), seeded from the server-side mean of all per-photo vision scores; `eloMatchesPlayed`; `eloSeededAt`; auditable aggregate/per-photo output in `eloSeedDetails` |
-| Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `referenceFaceEmbedding` (`Json?` upload-time identity-anchor metadata for the first accepted photo), `uploadedPhotoHashes` (`String[]` perceptual hashes for accepted static photos), `acceptedPhotoCount` (`Int`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
+| Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `referenceFaceEmbedding` (`Json?` upload-time identity-anchor metadata for the confirmed identity cluster), `uploadedPhotoHashes` (`String[]` perceptual hashes for accepted static photos), `pendingPhotoCandidates` (`Json[]` hidden unconfirmed consensus pool), `acceptedPhotoCount` (`Int`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
 | Geo / radius | `matchRadius` (`campus_only` / `citywide`), `homeCity`, `homeCountryCode`, `homeCityKey`, `homePlaceId`, `latitude`, `longitude`, `locationUpdatedAt`, `timeZone` (IANA, derived from the dating city; drives the Profiler's local-time batch windows) |
 | Match priority | `lastMatchedAt`, `missedWeeks`, `standbyCount`, `lastMissedAt`, `silentIgnoreCount` |
 | Profiler (Phase 1b) | `profilerStartedAt`, `profilerNextAt`, `profilerActiveQuestionId`, `profilerBatchRemaining` — scheduler state for the post-onboarding Q&A batches that fuel icebreakers/hints (see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §Phase 1b). Indexed `@@index([profilerNextAt])` for the worker sweep. |
@@ -507,11 +507,23 @@ Telegram-uploaded profile photos are **not** stored in Supabase by the bot
 Richer Telegram display media lives additively in `Profile.profileMedia[]`:
 `{ type: "photo", photo }`, `{ type: "live_photo", photo, livePhoto, ...metadata }`,
 or `{ type: "video", video, ...metadata }`. Static media admission stores
-`referenceFaceEmbedding` metadata for the first accepted photo,
-`uploadedPhotoHashes` for duplicate detection, and `acceptedPhotoCount`.
-Subsequent photos must contain any face matching that anchor; group photos are
-allowed when the owner is present. Video remains display-only and is excluded
-from `photos[]`, but admission is validated before persistence:
+`uploadedPhotoHashes` for duplicate detection and `acceptedPhotoCount`.
+For unverified users without a confirmed anchor, photos that pass per-photo
+safety/face/duplicate gates are stored only in hidden
+`Profile.pendingPhotoCandidates[]`; they are not rendered, not counted toward
+`MIN_PHOTOS`, and not used by verification/matching. Each new candidate is
+compared pairwise against the pending pool with Rekognition `CompareFaces`.
+When a connected cluster reaches 2+ distinct photos, the largest cluster wins
+(equal size tie-breaks by earliest upload), `referenceFaceEmbedding` is written
+from the earliest photo in that cluster, cluster photos move into `photos[]` /
+`profileMedia[]` / `photoFaceScores[]`, and pending outliers are rejected. Once
+`referenceFaceEmbedding` exists, subsequent photos must contain any face
+matching that anchor; group photos are allowed when the owner is present.
+Verified users bypass consensus and compare against `verifiedSelfiePath`.
+This schema is additive (`pending_photo_candidates`) and requires the standard
+Prisma `db:push` deploy step before code that selects the column starts.
+Video remains display-only and is excluded from `photos[]`, but admission is
+validated before persistence:
 `ffprobe`/`ffmpeg` extract 12 temporary samples, AWS Rekognition performs face
 detection/comparison and image moderation, and OpenAI independently moderates
 sampled frames plus the Whisper transcript. Only validation version and

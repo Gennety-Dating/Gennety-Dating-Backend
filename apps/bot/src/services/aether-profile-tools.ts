@@ -17,6 +17,10 @@ import {
 import { triggerVerificationRerun } from "./verification-pipeline.js";
 import { validateSingleFaceFromBuffer } from "./vision/validate-face.js";
 import { validateUserProfilePhoto } from "./profile-media-validation/profile-photo-validation.js";
+import {
+  commitProfilePhotoCandidate,
+  type PhotoConsensusCommitResult,
+} from "./profile-media-validation/identity-consensus.js";
 import type { MediaValidationReason } from "./profile-media-validation/types.js";
 import { photoUploadStatePatch } from "./profile-media-validation/photo-state.js";
 
@@ -140,12 +144,13 @@ interface AetherPhotoDeps {
     uploadedPhotoHashes?: string[];
   } | null>;
   uploadProfilePhoto: typeof uploadProfilePhoto;
+  commitProfilePhotoCandidate?: typeof commitProfilePhotoCandidate;
   upsertProfile: (args: {
     userId: string;
     photos: string[];
     profileMedia: Prisma.InputJsonValue[];
     photoFaceScores: number[];
-    referenceFaceEmbedding?: Prisma.InputJsonValue;
+    referenceFaceEmbedding?: Prisma.InputJsonValue | typeof Prisma.DbNull;
     uploadedPhotoHashes?: string[];
     acceptedPhotoCount?: number;
   }) => Promise<unknown>;
@@ -178,6 +183,7 @@ const photoDeps: AetherPhotoDeps = {
       },
     }),
   uploadProfilePhoto,
+  commitProfilePhotoCandidate,
   upsertProfile: ({ userId, photos, profileMedia, photoFaceScores, ...photoState }) =>
     prisma.profile.upsert({
       where: { userId },
@@ -258,6 +264,30 @@ export async function attachAetherProfilePhoto(
   }
 
   const uploaded = await deps.uploadProfilePhoto(userId, buffer, mime);
+  if (env.PROFILE_MEDIA_VALIDATION_ENABLED && deps.commitProfilePhotoCandidate) {
+    try {
+      const consensus = await deps.commitProfilePhotoCandidate({
+        userId,
+        photoRef: uploaded.path,
+        profileMedia: profilePhotoMedia(uploaded.path),
+        perceptualHash: photoHash,
+        faceScore: gateScore,
+        source: "aether",
+        candidateBuffer: buffer,
+      });
+      if (consensus.status === "accepted" || consensus.status === "confirmed") {
+        deps.queueVerificationRerun(userId);
+      }
+      return {
+        ok: true,
+        detail: aetherConsensusDetail(consensus),
+      };
+    } catch (err) {
+      await deps.deleteStorageObject(env.SUPABASE_PHOTO_BUCKET, uploaded.path).catch(() => false);
+      throw err;
+    }
+  }
+
   const media = normalizeProfileMedia(profile?.profileMedia ?? [], existing);
   const scores = [...(profile?.photoFaceScores ?? [])];
   while (scores.length < existing.length) scores.push(0);
@@ -308,4 +338,19 @@ function aetherPhotoValidationDetail(reason: MediaValidationReason): string {
     default:
       return "Media validation is temporarily unavailable";
   }
+}
+
+function aetherConsensusDetail(consensus: PhotoConsensusCommitResult): string {
+  if (consensus.status === "pending") {
+    return "Photo passed checks, but identity is not fixed yet. Send one more different photo of the same person.";
+  }
+  if (consensus.status === "capped") {
+    return "Photo passed checks, but no matching pair was found yet. Send another clear photo of the same person.";
+  }
+  if (consensus.status === "confirmed") {
+    return consensus.rejectedCount > 0
+      ? "Identity confirmed from matching photos; non-matching pending photos were rejected."
+      : "Identity confirmed from matching photos.";
+  }
+  return "Photo added to the profile";
 }

@@ -10,11 +10,15 @@ import {
   validateProfilePhoto,
   type ExistingPhotoForValidation,
 } from "./photo-validation.js";
+import {
+  parsePendingPhotoCandidates,
+} from "./identity-consensus.js";
 import type {
   MediaValidationResult,
   ValidatedPhoto,
 } from "./types.js";
 import { logMediaValidationRejection } from "./rejection-log.js";
+import { referencePhotoRefFromAnchor } from "./photo-state.js";
 
 export interface ValidateUserProfilePhotoInput {
   userId: string;
@@ -36,6 +40,8 @@ export async function validateUserProfilePhoto(
         select: {
           photos: true,
           uploadedPhotoHashes: true,
+          pendingPhotoCandidates: true,
+          referenceFaceEmbedding: true,
         },
       },
     },
@@ -48,14 +54,24 @@ export async function validateUserProfilePhoto(
     if (!identityReference) return unavailable();
   }
 
-  const existingHashes =
-    input.existingPhotoHashes ??
-    user.profile?.uploadedPhotoHashes ??
-    [];
+  const pendingCandidates = parsePendingPhotoCandidates(
+    user.profile?.pendingPhotoCandidates ?? [],
+  );
+  const baseExistingHashes =
+    input.existingPhotoHashes ?? user.profile?.uploadedPhotoHashes ?? [];
+  const pendingHashes = pendingCandidates
+    .map((candidate) => candidate.perceptualHash)
+    .filter((hash): hash is string => Boolean(hash));
+  const existingHashes = [...baseExistingHashes, ...pendingHashes];
   const existingPhotos: ExistingPhotoForValidation[] = [];
   const needsPhotoFallbackHashes = existingHashes.length === 0;
   const refsForDuplicateFallback = needsPhotoFallbackHashes
-    ? input.existingPhotoRefs
+    ? [
+        ...(input.existingPhotoRefs.length > 0
+          ? input.existingPhotoRefs
+          : (user.profile?.photos ?? [])),
+        ...pendingCandidates.map((candidate) => candidate.photoRef),
+      ]
     : [];
   for (const ref of refsForDuplicateFallback) {
     const buffer = await downloadExistingPhoto(ref, input.api);
@@ -63,10 +79,9 @@ export async function validateUserProfilePhoto(
     existingPhotos.push({ buffer });
   }
 
-  const referencePhotoRef =
-    !identityReference && input.existingPhotoRefs.length === 0
-      ? user.profile?.photos[0]
-      : input.existingPhotoRefs[0];
+  const referencePhotoRef = referencePhotoRefFromAnchor(
+    user.profile?.referenceFaceEmbedding ?? null,
+  );
   if (!identityReference && referencePhotoRef) {
     identityReference = await downloadExistingPhoto(referencePhotoRef, input.api);
     if (!identityReference) return unavailable();

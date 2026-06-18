@@ -99,6 +99,12 @@ type ProfileRow = {
   ageRangeMin: number | null;
   ageRangeMax: number | null;
   photos: string[];
+  profileMedia?: unknown[];
+  photoFaceScores?: number[];
+  referenceFaceEmbedding?: unknown;
+  uploadedPhotoHashes?: string[];
+  pendingPhotoCandidates?: unknown[];
+  acceptedPhotoCount?: number;
   matchRadius: "campus_only" | "citywide";
   standbyCount?: number;
   lastMissedAt?: Date | null;
@@ -589,6 +595,12 @@ vi.mock("@gennety/db", async () => {
             ageRangeMin: create.ageRangeMin ?? null,
             ageRangeMax: create.ageRangeMax ?? null,
             photos: create.photos ?? [],
+            profileMedia: create.profileMedia ?? [],
+            photoFaceScores: create.photoFaceScores ?? [],
+            referenceFaceEmbedding: create.referenceFaceEmbedding ?? null,
+            uploadedPhotoHashes: create.uploadedPhotoHashes ?? [],
+            pendingPhotoCandidates: create.pendingPhotoCandidates ?? [],
+            acceptedPhotoCount: create.acceptedPhotoCount ?? 0,
             matchRadius: create.matchRadius ?? "campus_only",
             standbyCount: create.standbyCount ?? 0,
             lastMissedAt: create.lastMissedAt ?? null,
@@ -737,6 +749,7 @@ vi.mock("../services/push.js", () => ({
 }));
 
 vi.mock("../services/onboarding-agent.js", () => ({
+  injectSystemMessage: vi.fn(async () => undefined),
   runAgentTurn: vi.fn(async (_tgId: bigint, text: string) => ({
     reply: `echo:${text}`,
     expectingPhoto: false,
@@ -1730,6 +1743,53 @@ describe("POST /v1/me/photos", () => {
       retryable: false,
     });
     expect(uploadProfilePhoto).not.toHaveBeenCalled();
+  });
+
+  it("keeps the first unverified photo pending and confirms on the second matching photo", async () => {
+    const { env } = await import("../config.js");
+    (
+      env as unknown as { PROFILE_MEDIA_VALIDATION_ENABLED: boolean }
+    ).PROFILE_MEDIA_VALIDATION_ENABLED = true;
+    const { uploadProfilePhoto } = await import("../services/storage.js");
+    const user = await seedUser({ onboardingStep: "conversational" });
+    vi.mocked(uploadProfilePhoto)
+      .mockResolvedValueOnce({ path: `${user.id}/one.jpg` })
+      .mockResolvedValueOnce({ path: `${user.id}/two.jpg` });
+
+    const first = await request(app)
+      .post("/v1/me/photos")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .attach("photo", JPEG, { filename: "one.jpg", contentType: "image/jpeg" });
+
+    expect(first.status).toBe(201);
+    expect(first.body.photos).toEqual([]);
+    expect(first.body.photoConsensus).toMatchObject({
+      status: "pending",
+      acceptedCount: 0,
+      pendingCount: 1,
+    });
+    expect(userById(user.id)?.profile?.photos).toEqual([]);
+    expect(userById(user.id)?.profile?.pendingPhotoCandidates).toHaveLength(1);
+
+    const second = await request(app)
+      .post("/v1/me/photos")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .attach("photo", JPEG, { filename: "two.jpg", contentType: "image/jpeg" });
+
+    expect(second.status).toBe(201);
+    expect(second.body.photos).toEqual([
+      `${user.id}/one.jpg`,
+      `${user.id}/two.jpg`,
+    ]);
+    expect(second.body.photoConsensus).toMatchObject({
+      status: "confirmed",
+      acceptedCount: 2,
+      pendingCount: 0,
+    });
+    expect(userById(user.id)?.profile?.pendingPhotoCandidates).toEqual([]);
+    expect(userById(user.id)?.profile?.referenceFaceEmbedding).toMatchObject({
+      photoRef: `${user.id}/one.jpg`,
+    });
   });
 });
 

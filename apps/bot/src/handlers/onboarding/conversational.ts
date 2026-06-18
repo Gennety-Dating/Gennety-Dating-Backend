@@ -24,6 +24,10 @@ import {
 import { validateSingleFace } from "../../services/vision/validate-face.js";
 import { downloadTelegramFile } from "../../services/storage.js";
 import { validateUserProfilePhoto } from "../../services/profile-media-validation/profile-photo-validation.js";
+import {
+  commitProfilePhotoCandidate,
+  type PhotoConsensusCommitResult,
+} from "../../services/profile-media-validation/identity-consensus.js";
 import type { MediaValidationReason } from "../../services/profile-media-validation/types.js";
 import { validateUserProfileVideo } from "../../services/profile-media-validation/profile-video-validation.js";
 import { logMediaValidationRejection } from "../../services/profile-media-validation/rejection-log.js";
@@ -652,6 +656,12 @@ interface PhotoBatchAccumulator {
   extraIgnoredCount: number;
   /** How many frames were already present in the current profile */
   duplicateCount: number;
+  /** Latest unverified-photo consensus status within this burst. */
+  consensusStatus: PhotoConsensusCommitResult["status"] | null;
+  /** How many candidate photos are waiting for a matching peer. */
+  consensusPendingCount: number;
+  /** How many pending outliers were rejected when a cluster formed. */
+  consensusRejectedCount: number;
   /** Structured rejection counts for the unified validation pipeline. */
   rejectionReasons: Partial<Record<MediaValidationReason, number>>;
   /** True if any frame hit an infra error (getFile / OpenAI failure) */
@@ -899,6 +909,9 @@ async function handlePhotoFrame(
       rejectedCount: 0,
       extraIgnoredCount: 0,
       duplicateCount: 0,
+      consensusStatus: null,
+      consensusPendingCount: 0,
+      consensusRejectedCount: 0,
       rejectionReasons: {},
       hadInfraError: false,
       unsolicited: !ctx.session.expectingPhoto,
@@ -986,6 +999,42 @@ async function handlePhotoFrame(
         identityScore = validation.value.identitySimilarity ?? 0;
         photoHash = validation.value.fingerprint.differenceHash;
       }
+
+      // Re-check room — another frame in the same batch may have filled
+      // us to MAX while this one's validation was in flight.
+      if (ctx.session.pendingPhotos.length >= MAX_PHOTOS) {
+        acc.extraIgnoredCount++;
+        return;
+      }
+
+      const acceptedBefore = ctx.session.pendingPhotos.length;
+      const consensus = await commitProfilePhotoCandidate({
+        userId: user.id,
+        photoRef: fileId,
+        profileMedia: media.profileMedia,
+        perceptualHash: photoHash,
+        faceScore: identityScore,
+        source: "telegram_onboarding",
+        candidateBuffer: photoBytes,
+        api: ctx.api,
+      });
+      syncSessionFromConsensus(ctx.session, consensus);
+      ctx.session.pendingPhotoUniqueIds = [
+        ...(ctx.session.pendingPhotoUniqueIds ?? []),
+        fileUniqueId,
+      ];
+      ctx.session.expectingPhoto = true;
+      acc.validatedCount++;
+      recordConsensusOutcome(acc, consensus);
+
+      if (acceptedBefore === 0 && consensus.photos.length > 0) {
+        await reactToMessage(
+          ctx.api,
+          { chatId, messageId: ctx.message?.message_id },
+          MESSAGE_REACTION.fire,
+        );
+      }
+      return;
     } else {
       const validation = await withTyping(ctx, () =>
         validateSingleFace(ctx, fileId),
@@ -1202,6 +1251,10 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
           photoBatchRejectionText(session.language, acc),
         );
       }
+      const consensusText = photoConsensusBatchText(session.language, acc);
+      if (consensusText) {
+        await replyText(acc.api, acc.chatId, consensusText);
+      }
       await maybeGrantPhotoBonus(
         acc.api,
         acc.chatId,
@@ -1225,7 +1278,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
     await injectSystemMessage(
       acc.telegramId,
       unsolicitedNote +
-        `User uploaded a batch of ${acc.validatedCount} verified photo(s). ${photoProgressMessage(count)}` +
+        `User uploaded a batch of ${acc.validatedCount} photo candidate(s). ${photoConsensusSystemNote(acc)} ${photoProgressMessage(count)}` +
         (acc.rejectedCount > 0
           ? ` ${acc.rejectedCount} frame(s) in the batch were rejected (no clear face).`
           : ""),
@@ -1299,6 +1352,54 @@ async function replyText(api: Api, chatId: number, text: string): Promise<void> 
   } catch {
     await api.sendMessage(chatId, text.replace(/[*_`[\]]/g, ""));
   }
+}
+
+function syncSessionFromConsensus(
+  session: SessionData,
+  consensus: PhotoConsensusCommitResult,
+): void {
+  session.pendingPhotos = [...consensus.photos];
+  session.pendingProfileMedia = [...consensus.profileMedia];
+  session.pendingPhotoHashes = [...consensus.uploadedPhotoHashes];
+  session.pendingPhotoScores = [...consensus.photoFaceScores];
+}
+
+function recordConsensusOutcome(
+  acc: PhotoBatchAccumulator,
+  consensus: PhotoConsensusCommitResult,
+): void {
+  acc.consensusStatus = consensus.status;
+  acc.consensusPendingCount = consensus.pendingCount;
+  acc.consensusRejectedCount += consensus.rejectedCount;
+}
+
+function photoConsensusBatchText(
+  language: SessionData["language"],
+  acc: PhotoBatchAccumulator,
+): string | null {
+  if (acc.consensusStatus === "pending") return t(language, "photoConsensusPending");
+  if (acc.consensusStatus === "capped") return t(language, "photoConsensusNoPairCap");
+  if (acc.consensusStatus === "confirmed") {
+    return [
+      t(language, "photoConsensusConfirmed"),
+      acc.consensusRejectedCount > 0
+        ? t(language, "photoConsensusOutlierRejected")
+        : null,
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n\n");
+  }
+  return null;
+}
+
+function photoConsensusSystemNote(acc: PhotoBatchAccumulator): string {
+  if (acc.consensusStatus === "pending" || acc.consensusStatus === "capped") {
+    return `No identity anchor is fixed yet; ${acc.consensusPendingCount} candidate photo(s) are pending until two different photos show the same person.`;
+  }
+  if (acc.consensusStatus === "confirmed") {
+    return `Identity consensus is confirmed; ${acc.consensusRejectedCount} pending outlier photo(s) were rejected.`;
+  }
+  return "";
 }
 
 function photoProgressMessage(count: number): string {

@@ -147,8 +147,7 @@ export async function validateProfilePhoto(
   const usableFaces = faceDetection.faces.filter(isUsablePhotoFace);
   if (usableFaces.length === 0) return reject("no_face");
 
-  const reference =
-    input.identityReference ?? input.existingPhotos?.[0]?.buffer ?? null;
+  const reference = input.identityReference ?? null;
   if (!reference) {
     return {
       ok: true,

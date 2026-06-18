@@ -28,6 +28,10 @@ import {
 import { profileMediaToJson } from "../../services/profile-media-json.js";
 import { env } from "../../config.js";
 import { validateUserProfilePhoto } from "../../services/profile-media-validation/profile-photo-validation.js";
+import {
+  commitProfilePhotoCandidate,
+  type PhotoConsensusCommitResult,
+} from "../../services/profile-media-validation/identity-consensus.js";
 import type { MediaValidationReason } from "../../services/profile-media-validation/types.js";
 import { logMediaValidationRejection } from "../../services/profile-media-validation/rejection-log.js";
 import { photoUploadStatePatch } from "../../services/profile-media-validation/photo-state.js";
@@ -386,6 +390,46 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
       gateScore = validation.value.identitySimilarity ?? 0;
       photoHash = validation.value.fingerprint.differenceHash;
     }
+
+    const consensus = await commitProfilePhotoCandidate({
+      userId: userRow.id,
+      photoRef: fileId,
+      profileMedia: incoming.profileMedia,
+      perceptualHash: photoHash,
+      faceScore: gateScore,
+      source: "telegram_edit",
+      candidateBuffer: photoBytes,
+      api: ctx.api,
+    });
+    syncEditSessionFromConsensus(ctx, consensus);
+    ctx.session.pendingPhotoUniqueIds = [
+      ...(ctx.session.pendingPhotoUniqueIds ?? []),
+      fileUniqueId,
+    ];
+
+    const consensusMessage = photoConsensusEditMessage(lang, consensus);
+    if (consensusMessage) await ctx.reply(consensusMessage);
+    const count = ctx.session.pendingPhotos.length;
+    if (
+      (consensus.status === "pending" || consensus.status === "capped") &&
+      count < MIN_PHOTOS
+    ) {
+      return;
+    }
+    if (count >= MAX_PHOTOS) {
+      await ctx.reply(t(lang, "photoReceived", { n: count, max: MAX_PHOTOS }));
+      await finishEditPhotos(ctx);
+      return;
+    }
+    await ctx.reply(t(lang, "photoReceived", { n: count, max: MAX_PHOTOS }));
+    if (count >= MIN_PHOTOS) {
+      const keyboard = new InlineKeyboard().text(
+        t(lang, "btnContinuePhotos"),
+        "menu:edit:photos:continue",
+      );
+      await ctx.reply(t(lang, "photosEnough", { max: MAX_PHOTOS }), { reply_markup: keyboard });
+    }
+    return;
   } else {
     // Legacy path retained behind the rollout flag.
     const result = await validateSingleFace(ctx, fileId);
@@ -473,6 +517,33 @@ function photoValidationMessage(
     default:
       return t(language, "photoVisionError");
   }
+}
+
+function syncEditSessionFromConsensus(
+  ctx: BotContext,
+  consensus: PhotoConsensusCommitResult,
+): void {
+  ctx.session.pendingPhotos = [...consensus.photos];
+  ctx.session.pendingProfileMedia = [...consensus.profileMedia];
+  ctx.session.pendingPhotoHashes = [...consensus.uploadedPhotoHashes];
+  ctx.session.pendingPhotoScores = [...consensus.photoFaceScores];
+}
+
+function photoConsensusEditMessage(
+  language: Parameters<typeof t>[0],
+  consensus: PhotoConsensusCommitResult,
+): string | null {
+  if (consensus.status === "pending") return t(language, "photoConsensusPending");
+  if (consensus.status === "capped") return t(language, "photoConsensusNoPairCap");
+  if (consensus.status === "confirmed") {
+    return [
+      t(language, "photoConsensusConfirmed"),
+      consensus.rejectedCount > 0 ? t(language, "photoConsensusOutlierRejected") : null,
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n\n");
+  }
+  return null;
 }
 
 async function finishEditPhotos(ctx: BotContext): Promise<void> {
