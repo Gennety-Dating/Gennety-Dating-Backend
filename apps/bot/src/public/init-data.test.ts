@@ -16,6 +16,7 @@ function buildInitData(
     authDate: number;
     queryId: string;
     badHash: boolean;
+    signature: string;
   }> = {},
 ): string {
   const authDate = overrides.authDate ?? Math.floor(Date.now() / 1000);
@@ -37,6 +38,7 @@ function buildInitData(
 
   const badHash = hash.startsWith("0") ? `1${hash.slice(1)}` : `0${hash.slice(1)}`;
   params.set("hash", overrides.badHash ? badHash : hash);
+  if (overrides.signature) params.set("signature", overrides.signature);
   return params.toString();
 }
 
@@ -50,6 +52,12 @@ describe("validateInitData", () => {
       expect(result.user.first_name).toBe("Test");
       expect(result.user.username).toBe("testuser");
     }
+  });
+
+  it("accepts Bot API 8.0+ initData with a separate Ed25519 signature field", () => {
+    const initData = buildInitData({ signature: "fake-ed25519-signature" });
+    const result = validateInitData(initData, BOT_TOKEN);
+    expect(result.valid).toBe(true);
   });
 
   it("rejects when the hash is tampered with", () => {

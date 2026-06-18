@@ -7,7 +7,7 @@ import crypto from "node:crypto";
  * (https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app):
  *
  *   1. Parse initData as URL-encoded key/value pairs.
- *   2. Extract `hash`.
+ *   2. Extract `hash` and remove Telegram's optional Ed25519 `signature`.
  *   3. Build the data-check-string: remaining pairs sorted alphabetically by
  *      key, joined by `\n` as `key=value`.
  *   4. `secret_key = HMAC-SHA256(key="WebAppData", message=BOT_TOKEN)`.
@@ -53,6 +53,7 @@ export function validateInitData(
   const hash = params.get("hash");
   if (!hash) return { valid: false, reason: "missing-hash" };
   params.delete("hash");
+  params.delete("signature");
 
   const authDateRaw = params.get("auth_date");
   if (!authDateRaw) return { valid: false, reason: "missing-auth-date" };
