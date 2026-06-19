@@ -148,7 +148,7 @@ function createCtx(overrides: {
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
     api: {
-      sendMessage: vi.fn().mockResolvedValue(undefined),
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 9001 }),
     },
   } as any;
 }
@@ -1183,9 +1183,15 @@ describe("matching decision flow", () => {
     });
     // No transition to `negotiating` yet.
     expect(mMatch.updateMany).not.toHaveBeenCalled();
-    expect(ctx.reply).toHaveBeenCalled();
-    // API 9.3: accept reply carries message_effect_id.
-    expect(ctx.reply).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ message_effect_id: "5104841245755180586" }));
+    expect(ctx.api.sendMessage).toHaveBeenCalledWith(
+      1001,
+      expect.stringMatching(/accepted/i),
+      expect.objectContaining({ message_effect_id: "5104841245755180586" }),
+    );
+    expect(mMatch.update).toHaveBeenCalledWith({
+      where: { id: "match-1" },
+      data: { calendarMessageIdA: 9001 },
+    });
     expect(startScheduling).not.toHaveBeenCalled();
   });
 
@@ -1231,8 +1237,7 @@ describe("matching decision flow", () => {
       }),
     );
     expect(startScheduling).toHaveBeenCalledWith(expect.anything(), "match-1");
-    // API 9.3: both-accepted reply carries message_effect_id.
-    expect(ctx.reply).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ message_effect_id: "5104841245755180586" }));
+    expect(ctx.reply).not.toHaveBeenCalled();
   });
 
   it("first decline keeps match in 'proposed' and sends BLIND nudge (no reveal)", async () => {
@@ -1317,7 +1322,9 @@ describe("matching decision flow", () => {
 
     await handleMatchDecision(ctx);
 
-    const peerCalls = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const peerCalls = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call) => call[0] === 1002,
+    );
     expect(peerCalls).toHaveLength(1);
     expect(peerCalls[0]![1]).toMatch(/your match has already given their answer/i);
     // Must not reveal the accept verdict.
@@ -1360,7 +1367,7 @@ describe("matching decision flow", () => {
 
     // Actor (B) gets two replies: matchAccepted + accepted-side support copy.
     const replyTexts = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
-    expect(replyTexts.some((s: string) => /waiting on the other person/i.test(s))).toBe(true);
+    expect(replyTexts.some((s: string) => /accepted/i.test(s))).toBe(true);
     expect(replyTexts.some((s: string) => /your match didn't agree to meet/i.test(s))).toBe(true);
     expect(replyTexts.some((s: string) => /boosted your priority for next Thursday/i.test(s))).toBe(true);
 

@@ -427,7 +427,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     expect(mStartVenue).toHaveBeenCalledTimes(1);
   });
 
-  it("when both sides have submitted but no shared slot exists, DMs only the peer with the counter-proposal prompt", async () => {
+  it("when both sides have submitted but no shared slot exists, edits the peer's calendar prompt", async () => {
     const a = new Date("2026-05-01T19:00:00.000Z");
     const b = new Date("2026-05-02T19:00:00.000Z");
     const c = new Date("2026-05-03T19:00:00.000Z");
@@ -447,18 +447,17 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     ]);
 
     expect(res.ok).toBe(true);
-    expect(api.sendMessage).toHaveBeenCalledTimes(1);
-    expect(api.deleteMessage).toHaveBeenCalledWith(1002, 72);
-    const targets = api.sendMessage.mock.calls.map((c: any[]) => c[0]).sort();
-    expect(targets).toEqual([1002]);
-    expect(api.sendMessage.mock.calls[0]![1]).toContain("suggested a different time");
-    expect(mMatch.update).toHaveBeenCalledWith({
-      where: { id: "match-1" },
-      data: { calendarMessageIdB: 500 },
-    });
+    expect(api.editMessageText).toHaveBeenCalledWith(
+      1002,
+      72,
+      expect.stringContaining("suggested a different time"),
+      expect.objectContaining({ reply_markup: expect.any(Object) }),
+    );
+    expect(api.deleteMessage).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 
-  it("edits the existing calendar card when Telegram refuses deletion", async () => {
+  it("sends a replacement calendar card when the stored message is gone", async () => {
     const a = new Date("2026-05-01T19:00:00.000Z");
     const b = new Date("2026-05-02T19:00:00.000Z");
     mockMatchInState({
@@ -470,19 +469,20 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     mUser.findUnique.mockResolvedValueOnce({ id: "uid-A", language: "en" });
 
     const api = createApi();
-    api.deleteMessage.mockRejectedValueOnce(new Error("cannot delete"));
+    api.editMessageText.mockRejectedValueOnce({
+      description: "Bad Request: message to edit not found",
+    });
 
     await processCalendarSlotsUpdate(api, 1001n, "match-1", [
       a.toISOString(),
     ]);
 
-    expect(api.editMessageText).toHaveBeenCalledWith(
-      1002,
-      72,
-      expect.stringContaining("suggested a different time"),
-      expect.objectContaining({ reply_markup: expect.any(Object) }),
-    );
-    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0]![0]).toBe(1002);
+    expect(mMatch.update).toHaveBeenCalledWith({
+      where: { id: "match-1" },
+      data: { calendarMessageIdB: 500 },
+    });
   });
 
   it("does NOT re-DM the peer on a redundant re-save with the same set (idempotency)", async () => {

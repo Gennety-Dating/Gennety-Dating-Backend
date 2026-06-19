@@ -596,9 +596,11 @@ gated by `TICKET_FEATURE_ENABLED` (default **off** → the bot hands off straigh
 to the Calendar exactly as documented in §3.6). Telegram-only in v1: the mobile
 mutual-accept path (`POST /v1/matches/:id/decision`) still schedules directly.
 
-When enabled, on mutual accept the bot DMs both users a premium **Date Ticket**
-card + a `web_app` button opening the Ticket Mini App
-(`apps/webapp/ticket.html`, React + pure-CSS 3D). Each ticket is **$6.99**.
+When enabled, mutual accept creates one live **post-accept status/CTA** per
+Telegram side (tracked in `Match.calendarMessageIdA/B`): accepted/waiting →
+premium **Date Ticket** card → Calendar. The ticket card carries a `web_app`
+button opening the Ticket Mini App (`apps/webapp/ticket.html`, React +
+pure-CSS 3D). Each ticket is **$6.99**.
 Payment is **mocked** in v1 (`TICKET_PAYMENT_MODE=mock`) — a fully simulated
 Stripe-style flow that updates the DB but moves no money; `mock`→`stripe` is the
 single production switch (`services/ticket-payment.ts`). Mock payment intents
@@ -609,6 +611,11 @@ match/bundle, scope, and amount, and can be consumed only once.
   sets `paidForPartnerBy*`) plus "Pay only mine — $6.99". Female users get a
   single "Pay my ticket — $6.99". The server re-validates that pay-for-both is
   male-only.
+- **Chat hygiene.** Ticket progress edits the same post-accept status message
+  instead of stacking `matchBothAccepted`, ticket CTA, self-paid, and
+  both-paid DMs. A first paid ticket turns the payer's block into a short
+  "ticket ready / waiting" state; once both tickets are settled the scheduler
+  edits the block into the Calendar CTA.
 - **Welcome gift.** Every new user is gifted **one free Date Ticket** as a
   personal "your first date is on me" gesture, delivered as a **pre-roll before
   their first-ever match pitch** (`handlers/matching/pitch.ts` →
@@ -646,10 +653,11 @@ match/bundle, scope, and amount, and can be consumed only once.
   (wallet + store). Store purchases and the gate share the mock/stripe
   abstraction in `services/ticket-payment.ts`.
 - **Hard gate.** The Calendar is not sent until *both* tickets are paid
-  (`ticketStatus = completed`), at which point `startScheduling` runs and both
-  users get a celebratory DM + the Calendar button.
+  (`ticketStatus = completed`), at which point `startScheduling` runs and the
+  live post-accept block becomes the Calendar button.
 - **Partner-paid screen.** When a male covers both, the partner's Mini App shows
-  "[Name] already paid your ticket ❤️ — nothing to do" and a DM mirrors it.
+  "[Name] already paid your ticket ❤️ — nothing to do"; Telegram chat stays on
+  the same live post-accept block.
 - **`ticketStatus` lifecycle.** `pending` → `partial` (one paid; `ticketExpiresAt`
   is the second side's deadline) → `completed`; or `refunded`/`expired` on
   timeout. **Refund/expiry policy:** the hourly `ticket-expiry` cron refunds a
@@ -705,13 +713,13 @@ better UX than three separate retries.
   DMs: peer gets `matchSchedulePeerProposed` with the calendar button;
   actor gets `matchScheduleSavedConfirmation` so the chat shows a
   confirmation receipt the moment they close the Mini App.
-- **One live calendar card per side.** Telegram calendar prompts are
-  tracked in `Match.calendarMessageIdA/B`. A new peer proposal or
-  counter-proposal deletes and replaces that side's previous calendar
-  card; if Telegram refuses deletion, the bot edits the existing card
-  in place. Both cards are removed when a time is locked, so repeated
-  scheduling updates do not accumulate identical "Open Calendar"
-  messages in the chat.
+- **One live post-accept card per side.** Telegram post-accept prompts are
+  tracked in `Match.calendarMessageIdA/B`. The same message can move from
+  accepted/waiting → Date Ticket → Calendar; new peer proposals and
+  counter-proposals edit it in place, falling back to a replacement only if
+  Telegram says the stored message is gone. Both cards are removed when a time
+  is locked, so repeated scheduling updates do not accumulate identical "Open
+  Calendar" messages in the chat.
 - **No-overlap-yet ping.** When both sides have submitted but no slot
   is shared, the bot updates the peer's live calendar card with
   `matchSchedulePeerSuggestedAlternative`. This is gated on the actor's

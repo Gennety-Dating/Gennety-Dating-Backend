@@ -7,6 +7,10 @@ import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
+import {
+  sendOrEditPostAcceptMessage,
+  type PostAcceptSide,
+} from "./post-accept-message.js";
 
 /**
  * Calendar-only scheduler.
@@ -166,43 +170,15 @@ function calendarUrl(matchId: string, lang: Language): string {
   return `${env.WEBAPP_URL}?match=${matchId}&lang=${lang}`;
 }
 
-type CalendarMessageSide = "A" | "B";
-
-function calendarMessageIdUpdate(side: CalendarMessageSide, messageId: number | null) {
-  return side === "A"
-    ? { calendarMessageIdA: messageId }
-    : { calendarMessageIdB: messageId };
-}
-
-function telegramErrorDescription(err: unknown): string {
-  if (typeof err !== "object" || err === null || !("description" in err)) return "";
-  const description = (err as { description?: unknown }).description;
-  return typeof description === "string" ? description.toLowerCase() : "";
-}
-
-function messageIsUnavailable(err: unknown): boolean {
-  const description = telegramErrorDescription(err);
-  return (
-    description.includes("message to delete not found") ||
-    description.includes("message to edit not found") ||
-    description.includes("message_id_invalid")
-  );
-}
-
-function messageIsNotModified(err: unknown): boolean {
-  return telegramErrorDescription(err).includes("message is not modified");
-}
-
 /**
- * Keep one live calendar card per participant. Normally the old card is
- * deleted before the replacement is sent. If Telegram no longer permits
- * deletion, edit the existing card in place; if neither operation is allowed,
- * leave the old usable card alone instead of adding more chat noise.
+ * Keep one live post-accept CTA card per participant. The same message can
+ * move from "accepted, waiting" → ticket gate → Calendar instead of stacking
+ * separate status DMs in the chat.
  */
 async function replaceCalendarMessage(
   api: Api<RawApi>,
   matchId: string,
-  side: CalendarMessageSide,
+  side: PostAcceptSide,
   telegramId: bigint,
   previousMessageId: number | null,
   text: string,
@@ -210,31 +186,18 @@ async function replaceCalendarMessage(
 ): Promise<void> {
   if (!isTelegramTarget(telegramId)) return;
 
-  const chatId = Number(telegramId);
   const options = {
     reply_markup: buildCalendarKeyboard(calendarUrl(matchId, lang), lang),
   };
 
-  if (previousMessageId !== null) {
-    try {
-      await api.deleteMessage(chatId, previousMessageId);
-    } catch (deleteErr) {
-      try {
-        await api.editMessageText(chatId, previousMessageId, text, options);
-        return;
-      } catch (editErr) {
-        if (messageIsNotModified(editErr)) return;
-        if (!messageIsUnavailable(deleteErr) && !messageIsUnavailable(editErr)) {
-          return;
-        }
-      }
-    }
-  }
-
-  const sent = await api.sendMessage(chatId, text, options);
-  await prisma.match.update({
-    where: { id: matchId },
-    data: calendarMessageIdUpdate(side, sent.message_id),
+  await sendOrEditPostAcceptMessage({
+    api,
+    matchId,
+    side,
+    telegramId,
+    previousMessageId,
+    text,
+    options,
   });
 }
 

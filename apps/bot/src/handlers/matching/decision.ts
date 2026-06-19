@@ -13,6 +13,7 @@ import {
   outcomeRevealKey,
 } from "../../services/match-decision-shared.js";
 import { claimMatchDecision } from "../../services/match-decision-claim.js";
+import { sendOrEditPostAcceptMessage } from "./post-accept-message.js";
 
 /**
  * Match decision handler — Accept / Decline.
@@ -59,6 +60,8 @@ interface MatchView {
   acceptedByA: boolean | null;
   acceptedByB: boolean | null;
   status: string;
+  calendarMessageIdA: number | null;
+  calendarMessageIdB: number | null;
   userA: { telegramId: bigint; language: string | null };
   userB: { telegramId: bigint; language: string | null };
 }
@@ -73,6 +76,8 @@ async function loadMatch(matchId: string): Promise<MatchView | null> {
       acceptedByA: true,
       acceptedByB: true,
       status: true,
+      calendarMessageIdA: true,
+      calendarMessageIdB: true,
       userA: { select: { telegramId: true, language: true } },
       userB: { select: { telegramId: true, language: true } },
     },
@@ -102,6 +107,16 @@ function peerTelegramIdOf(match: MatchView, side: Side): bigint {
   return side === "A" ? match.userB.telegramId : match.userA.telegramId;
 }
 
+function actorTelegramIdOf(match: MatchView, side: Side): bigint {
+  return side === "A" ? match.userA.telegramId : match.userB.telegramId;
+}
+
+function postAcceptMessageIdOf(match: MatchView, side: Side): number | null {
+  return side === "A"
+    ? match.calendarMessageIdA ?? null
+    : match.calendarMessageIdB ?? null;
+}
+
 export async function handleMatchDecision(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
   if (!data?.startsWith("match:")) return;
@@ -109,7 +124,12 @@ export async function handleMatchDecision(ctx: BotContext): Promise<void> {
   const [, action, matchId] = data.split(":");
   if (!matchId || (action !== "accept" && action !== "decline")) return;
 
-  await ctx.answerCallbackQuery();
+  await ctx.answerCallbackQuery({
+    text: t(
+      ctx.session.language,
+      action === "accept" ? "matchAcceptedToast" : "matchDecisionSavedToast",
+    ),
+  });
 
   const match = await loadMatch(matchId);
   if (!match) return;
@@ -236,10 +256,8 @@ async function handleAccept(
       data: { status: "negotiating" },
     });
     if (transitioned.count === 0) {
-      // The other caller already transitioned — just ack.
-      await ctx.reply(t(lang, "matchBothAccepted"), {
-        ...(effectId ? { message_effect_id: effectId } : {}),
-      });
+      // The other caller already transitioned and owns the ticket/calendar
+      // handoff. The callback toast above is enough here.
       return;
     }
     // Mutual accept → both gain Elo. Only the caller that wins the
@@ -254,18 +272,6 @@ async function handleAccept(
     } else {
       await startScheduling(ctx.api, match.id);
     }
-    // Notifications are best-effort and happen after the scheduling state is
-    // established, so a blocked user cannot interrupt the core transition.
-    await Promise.allSettled([
-      ctx.reply(t(lang, "matchBothAccepted"), {
-        ...(effectId ? { message_effect_id: effectId } : {}),
-      }),
-      ctx.api.sendMessage(
-        Number(peerTelegramIdOf(match, side)),
-        t(peerLangOf(match, side), "matchBothAccepted"),
-        ...(effectId ? [{ message_effect_id: effectId }] : []),
-      ),
-    ]);
     return;
   }
 
@@ -294,8 +300,16 @@ async function handleAccept(
 
   // Peer hasn't decided yet → first-decider path. Stay in `proposed`,
   // ack the actor, fire the blind nudge to the peer.
-  await ctx.reply(t(lang, "matchAccepted"), {
-    ...(effectId ? { message_effect_id: effectId } : {}),
+  await sendOrEditPostAcceptMessage({
+    api: ctx.api,
+    matchId: match.id,
+    side,
+    telegramId: actorTelegramIdOf(match, side),
+    previousMessageId: postAcceptMessageIdOf(match, side),
+    text: t(lang, "matchAccepted"),
+    options: {
+      ...(effectId ? { message_effect_id: effectId } : {}),
+    },
   });
   await sendPeerDecidedNudge(ctx, match, side);
 }

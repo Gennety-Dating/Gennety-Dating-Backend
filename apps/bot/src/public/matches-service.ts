@@ -163,11 +163,13 @@ async function notifyParticipant(
   user: ParticipantContact,
   key: TranslationKey,
   push: { type: string; title: string; matchId: string },
+  options: { telegram?: boolean } = {},
 ): Promise<void> {
   const lang = (user.language ?? "en") as Language;
   const text = t(lang, key);
   const api = getBotApi();
   if (
+    options.telegram !== false &&
     api &&
     user.telegramId > 0n &&
     (user.platform === "telegram" || user.platform === "both")
@@ -383,16 +385,27 @@ export async function applyMatchDecision(
           if (env.TICKET_FEATURE_ENABLED) await sendTicketOffer(api, matchId);
           else await startScheduling(api, matchId);
         }
-        await notifyParticipant(actor, "matchBothAccepted", {
-          type: "match.both_accepted",
-          title: "It's a match",
-          matchId,
-        });
-        await notifyParticipant(peer, "matchBothAccepted", {
-          type: "match.both_accepted",
-          title: "It's a match",
-          matchId,
-        });
+        const telegramHandledByCta = Boolean(api);
+        await notifyParticipant(
+          actor,
+          "matchBothAccepted",
+          {
+            type: "match.both_accepted",
+            title: "It's a match",
+            matchId,
+          },
+          { telegram: !telegramHandledByCta },
+        );
+        await notifyParticipant(
+          peer,
+          "matchBothAccepted",
+          {
+            type: "match.both_accepted",
+            title: "It's a match",
+            matchId,
+          },
+          { telegram: !telegramHandledByCta },
+        );
       }
       return getCurrentMatchForUser(userId);
     }

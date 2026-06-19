@@ -15,6 +15,10 @@ import {
 } from "../../services/ticket-payment.js";
 import { spendTickets, grantTickets } from "../../services/ticket-wallet.js";
 import { emitTicketEvent } from "../../services/ticket-analytics.js";
+import {
+  sendOrEditPostAcceptMessage,
+  type PostAcceptSide,
+} from "./post-accept-message.js";
 
 /**
  * Date Ticket gate — the premium monetization step inserted between mutual
@@ -53,6 +57,8 @@ interface TicketMatch {
   paidForPartnerByA: boolean;
   paidForPartnerByB: boolean;
   ticketExpiresAt: Date | null;
+  calendarMessageIdA: number | null;
+  calendarMessageIdB: number | null;
   userAId: string;
   userBId: string;
   userA: TicketUser;
@@ -69,6 +75,8 @@ const TICKET_SELECT = {
   paidForPartnerByA: true,
   paidForPartnerByB: true,
   ticketExpiresAt: true,
+  calendarMessageIdA: true,
+  calendarMessageIdB: true,
   userAId: true,
   userBId: true,
   userA: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true, ticketBalance: true } },
@@ -95,6 +103,10 @@ function selfUser(match: TicketMatch, side: Side): TicketUser {
 
 function peerUser(match: TicketMatch, side: Side): TicketUser {
   return side === "A" ? match.userB : match.userA;
+}
+
+function messageIdForSide(match: TicketMatch, side: PostAcceptSide): number | null {
+  return side === "A" ? match.calendarMessageIdA : match.calendarMessageIdB;
 }
 
 // ── Public state view (shared by the GET state route + tests) ───────────────
@@ -168,6 +180,34 @@ function buildTicketKeyboard(matchId: string, lang: Language): InlineKeyboardMar
   return { inline_keyboard: kb.inline_keyboard };
 }
 
+function buildTicketStatusKeyboard(matchId: string, lang: Language): InlineKeyboardMarkup {
+  const kb = new InlineKeyboard().webApp(t(lang, "ticketStatusButton"), ticketUrl(matchId, lang));
+  return { inline_keyboard: kb.inline_keyboard };
+}
+
+async function sendOrEditTicketStatus(
+  api: Api<RawApi>,
+  match: TicketMatch,
+  side: PostAcceptSide,
+  text: string,
+  replyMarkup: InlineKeyboardMarkup | null,
+): Promise<void> {
+  const user = side === "A" ? match.userA : match.userB;
+  if (!isTelegramTarget(user.telegramId)) return;
+  await sendOrEditPostAcceptMessage({
+    api,
+    matchId: match.id,
+    side,
+    telegramId: user.telegramId,
+    previousMessageId: messageIdForSide(match, side),
+    text,
+    options: {
+      parse_mode: "Markdown",
+      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+    },
+  });
+}
+
 /**
  * Replace the immediate `startScheduling` handoff: arm the ticket gate and DM
  * both Telegram-resident users the premium ticket Mini App button. The match
@@ -189,18 +229,22 @@ export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promis
 
   emitTicketEvent("ticket_offer_sent", { matchId });
 
-  const sends: Array<Promise<unknown>> = [];
-  for (const user of [match.userA, match.userB]) {
-    if (!isTelegramTarget(user.telegramId)) continue;
-    const lang = langOf(user);
-    sends.push(
-      api.sendMessage(toTelegramChatId(user.telegramId), t(lang, "ticketCardCaption"), {
-        parse_mode: "Markdown",
-        reply_markup: buildTicketKeyboard(matchId, lang),
-      }),
-    );
-  }
-  await Promise.all(sends);
+  await Promise.all([
+    sendOrEditTicketStatus(
+      api,
+      match,
+      "A",
+      t(langOf(match.userA), "ticketCardCaption"),
+      buildTicketKeyboard(matchId, langOf(match.userA)),
+    ),
+    sendOrEditTicketStatus(
+      api,
+      match,
+      "B",
+      t(langOf(match.userB), "ticketCardCaption"),
+      buildTicketKeyboard(matchId, langOf(match.userB)),
+    ),
+  ]);
 }
 
 // ── Payment apply (called from POST confirm) ────────────────────────────────
@@ -267,13 +311,6 @@ async function settleTicket(
       claimed = claim.count > 0;
       if (claimed) {
         emitTicketEvent("ticket_paid", { matchId, side, scope, amountCents: amountForScope(scope, match.ticketPriceCents) });
-        const peer = peerUser(match, side);
-        if (isTelegramTarget(peer.telegramId)) {
-          await api.sendMessage(
-            toTelegramChatId(peer.telegramId),
-            t(langOf(peer), "ticketPartnerPaidDm", { name: me.firstName ?? "Your match" }),
-          );
-        }
       }
     }
   } else if (!myPaidAlready) {
@@ -301,16 +338,6 @@ async function settleTicket(
     claimed = true;
     emitTicketEvent("ticket_paid", { matchId, side, scope, amountCents: amountForScope(scope, match.ticketPriceCents) });
 
-    // Notify the partner that their ticket was covered (pay-for-both).
-    if (scope === "both") {
-      const peer = peerUser(match, side);
-      if (isTelegramTarget(peer.telegramId)) {
-        await api.sendMessage(
-          toTelegramChatId(peer.telegramId),
-          t(langOf(peer), "ticketPartnerPaidDm", { name: me.firstName ?? "Your match" }),
-        );
-      }
-    }
   }
 
   // Recompute terminal state from fresh data.
@@ -330,6 +357,17 @@ async function settleTicket(
 
   const final = await loadTicketMatch(matchId);
   if (!final) return { result: { ok: false, reason: "match-not-found" }, claimed };
+  if (!bothPaid && claimed) {
+    const actor = selfUser(final, side);
+    const actorLang = langOf(actor);
+    await sendOrEditTicketStatus(
+      api,
+      final,
+      side,
+      t(actorLang, "ticketGateWaiting"),
+      buildTicketStatusKeyboard(matchId, actorLang),
+    );
+  }
   return { result: { ok: true, state: buildTicketStateView(final, side) }, claimed };
 }
 
@@ -384,10 +422,9 @@ export async function useTicketFromBalance(
 // ── Completion + free-fallback (shared by confirm + cron) ───────────────────
 
 /**
- * Both tickets paid: mark `completed`, clear the partial deadline, DM both a
- * celebratory note, then hand off to the existing scheduler (which DMs the
- * Calendar Mini App button). Idempotent — re-entry after `completed` is a
- * no-op on the status flip; `startScheduling` itself is safe to re-run.
+ * Both tickets paid: mark `completed`, clear the partial deadline, then hand
+ * off to the existing scheduler. The scheduler edits the same post-accept CTA
+ * into the Calendar button, instead of adding a separate "both tickets" DM.
  */
 export async function completeTicketGateAndUnlockScheduling(
   api: Api<RawApi>,
@@ -400,18 +437,6 @@ export async function completeTicketGateAndUnlockScheduling(
   if (flip.count === 0) return; // already completed / wrong state
 
   emitTicketEvent("ticket_both_paid", { matchId });
-
-  const match = await loadTicketMatch(matchId);
-  if (match) {
-    const dms: Array<Promise<unknown>> = [];
-    for (const user of [match.userA, match.userB]) {
-      if (!isTelegramTarget(user.telegramId)) continue;
-      dms.push(
-        api.sendMessage(toTelegramChatId(user.telegramId), t(langOf(user), "ticketBothSecuredDm")),
-      );
-    }
-    await Promise.all(dms);
-  }
 
   await startScheduling(api, matchId);
 }

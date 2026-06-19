@@ -296,7 +296,9 @@ const translations = {
     matchStreamStart: "✨ Why you two click…",
     matchBtnAccept: "✅ Accept",
     matchBtnDecline: "❌ Pass",
-    matchAccepted: "Nice! Waiting on the other person…",
+    matchAcceptedToast: "Accepted ✅",
+    matchDecisionSavedToast: "Saved ✅",
+    matchAccepted: "Accepted ✅ Waiting on them.",
     matchBothAccepted: "It's mutual 🔥 Let's find a time.",
     matchDeclined:
       "All good. What was the main reason you passed?\n\n" +
@@ -386,12 +388,14 @@ const translations = {
     matchScheduleProposal:
       "How about one of these? Tap what works:",
     matchScheduleIter3:
-      "Open the calendar, pick dates, then mark every time that works for you. Your match sees them live and can lock in the date with one tap.",
+      "It's mutual ✅ Open the calendar and mark every time that works.",
     matchScheduleBtnCalendar: "📅 Open Calendar",
     // --- Date Ticket (premium post-accept gate) ---
     ticketCardCaption:
-      "It's mutual 🔥\n\nOne last step before you plan: claim your *Date Ticket* — a curated, verified, zero-drama first date. Tap below to open it.",
+      "It's mutual 🔥 Get your *Date Ticket* to unlock planning.",
     ticketButton: "🎟️ Get your date ticket",
+    ticketStatusButton: "Open date",
+    ticketGateWaiting: "Ticket ready ✅ Waiting on them.",
     ticketBothSecuredDm: "Both tickets secured 🎟️✨ Your date is on — let's pick a time.",
     ticketPartnerPaidDm: "{name} already covered your date ticket ❤️ You're all set — nothing to pay.",
     ticketRefundedDm:
@@ -912,7 +916,9 @@ const translations = {
     matchStreamStart: "✨ Почему вы подходите…",
     matchBtnAccept: "✅ Принять",
     matchBtnDecline: "❌ Пас",
-    matchAccepted: "Круто! Ждём ответа второй стороны…",
+    matchAcceptedToast: "Принято ✅",
+    matchDecisionSavedToast: "Записал ✅",
+    matchAccepted: "Принято ✅ Ждём вторую сторону.",
     matchBothAccepted: "Взаимно 🔥 Найдём время.",
     matchDeclined:
       "Ок, всё нормально. Что стало главной причиной?\n\n" +
@@ -1009,12 +1015,14 @@ const translations = {
       "Вы оба отметили даты и время, но варианты не пересеклись. Открой календарь и допиши несколько слотов — как только один совпадёт, я зафиксирую дату:",
     matchScheduleProposal: "Как тебе эти варианты? Жми подходящий:",
     matchScheduleIter3:
-      "Открой календарь, выбери даты и отметь все удобные варианты времени. Собеседник увидит их вживую и сможет одним тапом согласиться на ваше общее время.",
+      "Взаимно ✅ Открой календарь и отметь удобное время.",
     matchScheduleBtnCalendar: "📅 Открыть календарь",
     // --- Date Ticket (премиум-шаг после взаимного метча) ---
     ticketCardCaption:
-      "Взаимно 🔥\n\nОстался один шаг перед планированием: получи свой *билет на свидание* — кураторское, проверенное свидание без лишней драмы. Нажми ниже, чтобы открыть.",
+      "Взаимно 🔥 Получи *билет на свидание*, чтобы открыть планирование.",
     ticketButton: "🎟️ Получить билет на свидание",
+    ticketStatusButton: "Открыть свидание",
+    ticketGateWaiting: "Билет готов ✅ Ждём вторую сторону.",
     ticketBothSecuredDm: "Оба билета у вас 🎟️✨ Свидание в силе — давай выберем время.",
     ticketPartnerPaidDm: "{name} уже оплатил твой билет на свидание ❤️ Тебе ничего не нужно делать.",
     ticketRefundedDm:
@@ -1526,7 +1534,9 @@ const translations = {
     matchStreamStart: "✨ Чому ви підходите…",
     matchBtnAccept: "✅ Прийняти",
     matchBtnDecline: "❌ Пас",
-    matchAccepted: "Круто! Чекаємо на відповідь іншої сторони…",
+    matchAcceptedToast: "Прийнято ✅",
+    matchDecisionSavedToast: "Записав ✅",
+    matchAccepted: "Прийнято ✅ Чекаємо на іншу сторону.",
     matchBothAccepted: "Взаємно 🔥 Знайдемо час.",
     matchDeclined:
       "Ок, усе нормально. Що стало головною причиною?\n\n" +
@@ -1615,12 +1625,14 @@ const translations = {
       "Дякуємо, що довіряєш. До четверга о 18:00 🤍",
     matchScheduleProposal: "Як тобі ці варіанти? Тисни зручний:",
     matchScheduleIter3:
-      "Відкрий календар, обери дати й познач усі зручні варіанти часу. Співрозмовник побачить їх наживо й одним тапом погодиться на ваш спільний час.",
+      "Взаємно ✅ Відкрий календар і познач зручний час.",
     matchScheduleBtnCalendar: "📅 Відкрити календар",
     // --- Date Ticket (преміум-крок після взаємного метчу) ---
     ticketCardCaption:
-      "Взаємно 🔥\n\nЗалишився один крок перед плануванням: отримай свій *квиток на побачення* — кураторське, перевірене побачення без зайвої драми. Натисни нижче, щоб відкрити.",
+      "Взаємно 🔥 Отримай *квиток на побачення*, щоб відкрити планування.",
     ticketButton: "🎟️ Отримати квиток на побачення",
+    ticketStatusButton: "Відкрити побачення",
+    ticketGateWaiting: "Квиток готовий ✅ Чекаємо на іншу сторону.",
     ticketBothSecuredDm: "Обидва квитки у вас 🎟️✨ Побачення в силі — оберімо час.",
     ticketPartnerPaidDm: "{name} вже сплатив твій квиток на побачення ❤️ Тобі нічого не потрібно робити.",
     ticketRefundedDm:
@@ -2118,7 +2130,9 @@ const deTranslations: TranslationTable = {
   matchStreamStart: "✨ Warum ihr zusammenpasst…",
   matchBtnAccept: "✅ Annehmen",
   matchBtnDecline: "❌ Passen",
-  matchAccepted: "Nice! Warten auf die andere Person...",
+  matchAcceptedToast: "Angenommen ✅",
+  matchDecisionSavedToast: "Gespeichert ✅",
+  matchAccepted: "Angenommen ✅ Warten auf die andere Person.",
   matchBothAccepted: "Beidseitig 🔥 Lass uns eine Zeit finden.",
   matchDeclined:
     "Alles gut. Was war der Hauptgrund, warum du gepasst hast?\n\n" +
@@ -2204,8 +2218,13 @@ const deTranslations: TranslationTable = {
     "Danke für dein Vertrauen. Bis Donnerstag um 18:00 🤍",
   matchScheduleProposal: "Wie wäre es mit einer dieser Zeiten? Tipp an, was passt:",
   matchScheduleIter3:
-    "Öffne den Kalender, wähle Daten und markiere alle Zeiten, die dir passen. Dein Match sieht sie live und kann das Date mit einem Tap fixieren.",
+    "Beidseitig ✅ Öffne den Kalender und markiere passende Zeiten.",
   matchScheduleBtnCalendar: "📅 Kalender öffnen",
+  ticketCardCaption:
+    "Beidseitig 🔥 Hol dir dein *Date-Ticket*, um die Planung zu öffnen.",
+  ticketButton: "🎟️ Date-Ticket holen",
+  ticketStatusButton: "Date öffnen",
+  ticketGateWaiting: "Ticket bereit ✅ Warten auf die andere Person.",
   matchScheduleNoOverlap: "Noch keine Überschneidung - nächste Runde.",
   matchScheduled: "Fixiert — bis dann 🤝\n\n{venue}",
   matchScheduledBtnOpenMaps: "📍 In Maps öffnen",
@@ -2633,7 +2652,9 @@ const plTranslations: TranslationTable = {
   matchStreamStart: "✨ Czemu do siebie pasujecie…",
   matchBtnAccept: "✅ Akceptuj",
   matchBtnDecline: "❌ Odpuść",
-  matchAccepted: "Nice! Czekamy na drugą osobę...",
+  matchAcceptedToast: "Przyjęte ✅",
+  matchDecisionSavedToast: "Zapisane ✅",
+  matchAccepted: "Przyjęte ✅ Czekamy na drugą osobę.",
   matchBothAccepted: "Wzajemne 🔥 Znajdźmy termin.",
   matchDeclined:
     "W porządku. Jaki był główny powód, że odpuściłeś/odpuściłaś?\n\n" +
@@ -2719,8 +2740,13 @@ const plTranslations: TranslationTable = {
     "Dzięki za zaufanie. Do czwartku o 18:00 🤍",
   matchScheduleProposal: "Co powiesz na jedną z tych opcji? Kliknij, co pasuje:",
   matchScheduleIter3:
-    "Otwórz kalendarz, wybierz daty i zaznacz wszystkie godziny, które Ci pasują. Twoje dopasowanie zobaczy je na żywo i może ustalić randkę jednym kliknięciem.",
+    "Wzajemnie ✅ Otwórz kalendarz i zaznacz pasujące godziny.",
   matchScheduleBtnCalendar: "📅 Otwórz kalendarz",
+  ticketCardCaption:
+    "Wzajemnie 🔥 Odbierz *bilet na randkę*, żeby otworzyć planowanie.",
+  ticketButton: "🎟️ Odbierz bilet na randkę",
+  ticketStatusButton: "Otwórz randkę",
+  ticketGateWaiting: "Bilet gotowy ✅ Czekamy na drugą osobę.",
   matchScheduleNoOverlap: "Jeszcze brak wspólnego terminu - kolejna runda.",
   matchScheduled: "Ustalone — do zobaczenia 🤝\n\n{venue}",
   matchScheduledBtnOpenMaps: "📍 Otwórz w Mapach",
