@@ -142,14 +142,23 @@ describe("emergency cancellation", () => {
     expect(ctx.session.matchFlow).toBe("idle");
     expect(ctx.session.activeMatchId).toBeNull();
 
-    // A confirm/back keyboard is offered.
+    // A styled guard is offered: the lower-risk "keep the date" path is
+    // visually first/green, and the irreversible path is red.
     expect(ctx.reply).toHaveBeenCalled();
     const [, options] = ctx.reply.mock.calls[0]!;
-    const keyboard = (options as { reply_markup: { inline_keyboard: Array<Array<{ callback_data: string }>> } })
+    const keyboard = (options as { reply_markup: { inline_keyboard: Array<Array<{ callback_data: string; style?: string }>> } })
       .reply_markup.inline_keyboard;
     const callbacks = keyboard.flat().map((b) => b.callback_data);
     expect(callbacks).toContain("emerg:confirm:match-1");
     expect(callbacks).toContain("emerg:abort:match-1");
+    expect(keyboard[0]?.[0]).toMatchObject({
+      callback_data: "emerg:abort:match-1",
+      style: "success",
+    });
+    expect(keyboard[1]?.[0]).toMatchObject({
+      callback_data: "emerg:confirm:match-1",
+      style: "danger",
+    });
   });
 
   it("handleEmergencyConfirm arms the reason flow", async () => {

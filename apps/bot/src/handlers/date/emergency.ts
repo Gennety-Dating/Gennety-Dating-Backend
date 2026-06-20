@@ -11,9 +11,9 @@ import { applyEmergencyCancellationPeerBoost } from "../../utils/elo-calculator.
  * Callback `emerg:start:{matchId}` — user taps the "Cancel date" button
  * that was sent by the date-lifecycle cron 5h before the date. Because the
  * cancellation is irreversible (the match can never be restored), the bot
- * first asks for an explicit confirmation:
- *   - `emerg:confirm:{matchId}` → proceed to ask for the reason
+ * first asks for an explicit confirmation with the lower-risk path first:
  *   - `emerg:abort:{matchId}`   → dismiss, the date stays on
+ *   - `emerg:confirm:{matchId}` → proceed to ask for the reason
  *
  * Once confirmed, the handler sets session state to `awaiting_emergency_reason`
  * and waits for a free-text message, which is then quoted *exactly as-is* to
@@ -92,9 +92,11 @@ export async function handleEmergencyStart(ctx: BotContext): Promise<void> {
 
   const lang = ctx.session.language;
   const keyboard = new InlineKeyboard()
-    .text(t(lang, "emergencyBtnConfirm"), `emerg:confirm:${matchId}`)
+    .text(t(lang, "emergencyBtnBack"), `emerg:abort:${matchId}`)
+    .success()
     .row()
-    .text(t(lang, "emergencyBtnBack"), `emerg:abort:${matchId}`);
+    .text(t(lang, "emergencyBtnConfirm"), `emerg:confirm:${matchId}`)
+    .danger();
 
   await ctx.reply(t(lang, "emergencyConfirmPrompt"), {
     parse_mode: "Markdown",

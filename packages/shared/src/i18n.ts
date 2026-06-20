@@ -501,10 +501,13 @@ const translations = {
       "*You'll need to write a reason — it gets forwarded to your match exactly as you write it.*",
     emergencyBtn: "🚨 Cancel Date",
     emergencyConfirmPrompt:
-      "Are you sure you want to cancel this date?\n" +
-      "*This is final — once cancelled, the match can't be restored.*",
-    emergencyBtnConfirm: "Yes, cancel the date",
-    emergencyBtnBack: "No, keep the date",
+      "Before you cancel, quick check.\n\n" +
+      "If this is nerves, being a little late, or uncertainty, keep the date. " +
+      "Your match has cleared time for you, and showing up still gives the evening a chance.\n\n" +
+      "*Cancel only if you truly can't make it; the match can't be restored.* " +
+      "If you continue, I'll ask for a reason and send it to your match word for word.",
+    emergencyBtnConfirm: "🔴 Yes, cancel the date",
+    emergencyBtnBack: "🟢 Keep the date",
     emergencyAborted: "Okay — your date is still on. 👍",
     emergencyAskReason:
       "Write your reason. This goes to your match *word for word*.",
@@ -1119,10 +1122,13 @@ const translations = {
       "*Нужна причина — она уйдёт мэтчу ровно так, как ты её напишешь.*",
     emergencyBtn: "🚨 Отменить свидание",
     emergencyConfirmPrompt:
-      "Точно отменить это свидание?\n" +
-      "*Это окончательно — после отмены вернуть мэтч уже нельзя.*",
-    emergencyBtnConfirm: "Да, отменить свидание",
-    emergencyBtnBack: "Нет, оставить свидание",
+      "Перед отменой — короткая проверка.\n\n" +
+      "Если это волнение, небольшое опоздание или сомнение, лучше оставь свидание. " +
+      "Мэтч уже выделил время для тебя, а личная встреча всё ещё может приятно удивить.\n\n" +
+      "*Отменяй только если точно не можешь прийти: вернуть мэтч после этого нельзя.* " +
+      "Если продолжишь, я попрошу причину и отправлю её мэтчу как есть.",
+    emergencyBtnConfirm: "🔴 Да, отменить свидание",
+    emergencyBtnBack: "🟢 Оставить свидание",
     emergencyAborted: "Хорошо — свидание остаётся в силе. 👍",
     emergencyAskReason:
       "Напиши причину. Текст уйдёт мэтчу *как есть*.",
@@ -1737,10 +1743,13 @@ const translations = {
       "*Потрібна причина — вона піде метчу саме так, як ти її напишеш.*",
     emergencyBtn: "🚨 Скасувати побачення",
     emergencyConfirmPrompt:
-      "Точно скасувати це побачення?\n" +
-      "*Це остаточно — після скасування повернути метч уже не можна.*",
-    emergencyBtnConfirm: "Так, скасувати побачення",
-    emergencyBtnBack: "Ні, залишити побачення",
+      "Перед скасуванням — коротка перевірка.\n\n" +
+      "Якщо це хвилювання, невелике запізнення або сумнів, краще залиш побачення. " +
+      "Метч уже виділив час для тебе, а жива зустріч ще може приємно здивувати.\n\n" +
+      "*Скасовуй лише якщо точно не можеш прийти: після цього метч не можна відновити.* " +
+      "Якщо продовжиш, я попрошу причину й надішлю її метчу як є.",
+    emergencyBtnConfirm: "🔴 Так, скасувати побачення",
+    emergencyBtnBack: "🟢 Залишити побачення",
     emergencyAborted: "Гаразд — побачення залишається в силі. 👍",
     emergencyAskReason:
       "Напиши причину. Текст піде метчу *як є*.",
@@ -2320,10 +2329,13 @@ const deTranslations: TranslationTable = {
     "*Du musst einen Grund schreiben - er wird exakt so an dein Match weitergeleitet.*",
   emergencyBtn: "🚨 Date absagen",
   emergencyConfirmPrompt:
-    "Willst du dieses Date wirklich absagen?\n" +
-    "*Das ist endgültig — nach dem Absagen lässt sich das Match nicht wiederherstellen.*",
-  emergencyBtnConfirm: "Ja, Date absagen",
-  emergencyBtnBack: "Nein, Date behalten",
+    "Bevor du absagst, kurzer Check.\n\n" +
+    "Wenn es Nervosität, eine kleine Verspätung oder Unsicherheit ist, behalte das Date. " +
+    "Dein Match hat sich Zeit für dich freigehalten, und in echt kann der Abend noch überraschen.\n\n" +
+    "*Sag nur ab, wenn du wirklich nicht kommen kannst; das Match lässt sich danach nicht wiederherstellen.* " +
+    "Wenn du weitermachst, frage ich nach einem Grund und leite ihn Wort für Wort weiter.",
+  emergencyBtnConfirm: "🔴 Ja, Date absagen",
+  emergencyBtnBack: "🟢 Date behalten",
   emergencyAborted: "Okay — dein Date bleibt bestehen. 👍",
   emergencyAskReason: "Schreib deinen Grund. Das geht *wortwörtlich* an dein Match.",
   emergencyConfirmed: "Date abgesagt. Deine Nachricht wurde weitergeleitet.",
@@ -2842,10 +2854,13 @@ const plTranslations: TranslationTable = {
     "*Musisz napisać powód - przekażemy go dopasowaniu dokładnie tak, jak go napiszesz.*",
   emergencyBtn: "🚨 Odwołaj randkę",
   emergencyConfirmPrompt:
-    "Na pewno chcesz odwołać tę randkę?\n" +
-    "*To nieodwracalne — po odwołaniu nie da się przywrócić dopasowania.*",
-  emergencyBtnConfirm: "Tak, odwołaj randkę",
-  emergencyBtnBack: "Nie, zostaw randkę",
+    "Zanim odwołasz, krótki check.\n\n" +
+    "Jeśli to stres, małe spóźnienie albo niepewność, zostaw randkę. " +
+    "Twoje dopasowanie zarezerwowało czas dla Ciebie, a spotkanie na żywo nadal może pozytywnie zaskoczyć.\n\n" +
+    "*Odwołuj tylko, jeśli naprawdę nie możesz przyjść; potem nie da się przywrócić dopasowania.* " +
+    "Jeśli przejdziesz dalej, poproszę o powód i przekażę go słowo w słowo.",
+  emergencyBtnConfirm: "🔴 Tak, odwołaj randkę",
+  emergencyBtnBack: "🟢 Zostaw randkę",
   emergencyAborted: "Okej — Twoja randka jest aktualna. 👍",
   emergencyAskReason: "Napisz powód. To pójdzie do Twojego dopasowania *słowo w słowo*.",
   emergencyConfirmed: "Randka odwołana. Twoja wiadomość została przekazana.",

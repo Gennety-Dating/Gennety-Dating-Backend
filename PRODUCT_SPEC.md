@@ -1072,11 +1072,14 @@ on the date-lifecycle tick; handlers in `handlers/date/coordination.ts`.
 
 `handlers/date/emergency.ts`:
 
-- Tap → an explicit **confirmation guard** (`[Yes, cancel the date]` /
-  `[No, keep the date]`, callbacks `emerg:confirm:*` / `emerg:abort:*`). The
-  cancellation is irreversible (the match can never be restored), so a stray
-  tap on the emergency button is a pure no-op until confirmed. Backing out
-  touches no state and leaves the date on.
+- Tap → an explicit **confirmation guard** that makes the lower-risk choice
+  visually easier: `[Keep the date]` first with native `success` styling, then
+  `[Yes, cancel the date]` with native `danger` styling (callbacks
+  `emerg:abort:*` / `emerg:confirm:*`). The copy briefly checks for nerves,
+  minor lateness, or uncertainty, reminds the user the match already cleared
+  time, and states that cancellation is irreversible (the match can never be
+  restored). A stray tap on the emergency button is a pure no-op until the red
+  path is confirmed. Backing out touches no state and leaves the date on.
 - Confirm → `awaiting_emergency_reason` session state.
 - The user MUST type a free-text explanation; the bot quotes the **exact
   text** to the other person as a Telegram blockquote (no AI rewrite, no
