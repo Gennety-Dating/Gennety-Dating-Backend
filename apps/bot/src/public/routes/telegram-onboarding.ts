@@ -692,6 +692,8 @@ interface PlacesTextPlace {
 
 const FALLBACK_CITIES: CitySearchHit[] = [
   cityHit("Kyiv", "UA", 50.4501, 30.5234, "fallback:ua:kyiv"),
+  cityHit("Kharkiv", "UA", 49.9935, 36.2304, "fallback:ua:kharkiv"),
+  cityHit("Odesa", "UA", 46.4846, 30.7233, "fallback:ua:odesa"),
   cityHit("Lviv", "UA", 49.8397, 24.0297, "fallback:ua:lviv"),
   cityHit("Warsaw", "PL", 52.2297, 21.0122, "fallback:pl:warsaw"),
   cityHit("Berlin", "DE", 52.52, 13.405, "fallback:de:berlin"),

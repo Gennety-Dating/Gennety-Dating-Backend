@@ -1,0 +1,47 @@
+[
+  {
+    "_anchor": "Historic center — Deribasivska / City Garden (ONU Mechnikov, ONEU, cafe heart)",
+    "universityDomain": "onu.edu.ua",
+    "lat": 46.4846,
+    "lng": 30.7416,
+    "radiusMeters": 2800,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum", "lounge"],
+    "defaultPriority": 2
+  },
+  {
+    "_anchor": "Cathedral Square / Soborna — Preobrazhenska cafe cluster",
+    "universityDomain": "onu.edu.ua",
+    "lat": 46.4793,
+    "lng": 30.7335,
+    "radiusMeters": 2500,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum"],
+    "defaultPriority": 2
+  },
+  {
+    "_anchor": "Frantsuzky Boulevard / Shevchenko Park (Odessa Polytechnic, ONMedU, leafy student area)",
+    "universityDomain": "onu.edu.ua",
+    "lat": 46.4530,
+    "lng": 30.7555,
+    "radiusMeters": 3000,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "lounge"],
+    "defaultPriority": 2
+  },
+  {
+    "_anchor": "Arkadia — beachfront lounges & summer date spots",
+    "universityDomain": "onu.edu.ua",
+    "lat": 46.4250,
+    "lng": 30.7660,
+    "radiusMeters": 3000,
+    "categories": ["cafe", "coffee_shop", "restaurant", "lounge", "park"],
+    "defaultPriority": 2
+  },
+  {
+    "_anchor": "Primorsky Boulevard / Sea Station / Lanzheron — Potemkin Stairs, sea-view, museums",
+    "universityDomain": "onu.edu.ua",
+    "lat": 46.4888,
+    "lng": 30.7468,
+    "radiusMeters": 2500,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum"],
+    "defaultPriority": 2
+  }
+]
