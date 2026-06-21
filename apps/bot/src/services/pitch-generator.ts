@@ -220,11 +220,10 @@ export async function generatePitch(
 }
 
 /**
- * Split a long pitch into 2–4 draft chunks for `sendMessageDraft` streaming.
+ * Split a long pitch into 2–4 chunks for bottom-of-chat edit streaming.
  *
  * We split on sentence boundaries and pad forward so each successive chunk
- * contains the previous text + the next sentence — this matches the
- * "growing draft" UX that `sendMessageDraft` produces on Telegram clients.
+ * contains the previous text + the next sentence.
  */
 export function splitPitchIntoDrafts(pitch: string): string[] {
   const sentences = pitch

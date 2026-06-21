@@ -1,5 +1,6 @@
 import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
+import type { InlineKeyboardButton, InlineKeyboardMarkup } from "grammy/types";
 import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
 import { createMatchEventBestEffort } from "../../services/match-events.js";
@@ -18,9 +19,16 @@ import { sendOrEditPostAcceptMessage } from "./post-accept-message.js";
 /**
  * Match decision handler — Accept / Decline.
  *
- * Callback data formats (produced by `buildMatchKeyboard`):
- *   - `match:accept:{matchId}`
- *   - `match:decline:{matchId}`
+ * Callback data formats:
+ *   - `match:accept:{matchId}`     — commits an Accept immediately (no guard).
+ *   - `match:decline:{matchId}`    — produced by `buildMatchKeyboard`; does NOT
+ *     commit. It opens a confirmation card (`promptDeclineConfirm`) because a
+ *     pass is irreversible (lifetime no-repeat — the pair is never shown again),
+ *     so an accidental tap must not throw the match away.
+ *   - `match:do:decline:{matchId}` — the confirmed Decline commit (the red
+ *     "Yes, pass" button on the confirmation card).
+ *   - `match:keep:{matchId}`       — backs out of the confirmation card; no
+ *     state change, the live pitch keyboard is still there to tap.
  *
  * Blind-decision invariant
  * ------------------------
@@ -117,12 +125,101 @@ function postAcceptMessageIdOf(match: MatchView, side: Side): number | null {
     : match.calendarMessageIdB ?? null;
 }
 
+/**
+ * Build the decline confirmation card's keyboard: a red "Yes, pass" commit
+ * over a neutral "Go back". Raw markup (not grammY's builder) so the Bot API
+ * 9.4 `style` field rides the confirm button, mirroring `buildMatchKeyboard`.
+ */
+function buildDeclineConfirmKeyboard(
+  matchId: string,
+  lang: Language,
+): InlineKeyboardMarkup {
+  const confirmBtn: InlineKeyboardButton.CallbackButton & Record<string, unknown> = {
+    text: t(lang, "matchBtnConfirmDecline"),
+    callback_data: `match:do:decline:${matchId}`,
+    style: "danger",
+    ...(env.CUSTOM_EMOJI_DECLINE_ID ? { icon_custom_emoji_id: env.CUSTOM_EMOJI_DECLINE_ID } : {}),
+  };
+
+  const backBtn: InlineKeyboardButton.CallbackButton = {
+    text: t(lang, "matchBtnKeepDeciding"),
+    callback_data: `match:keep:${matchId}`,
+  };
+
+  return {
+    inline_keyboard: [[confirmBtn as InlineKeyboardButton], [backBtn]],
+  };
+}
+
+/**
+ * First tap on the pitch's `[Pass]` button. Does NOT commit — surfaces an
+ * explicit confirmation card so an accidental tap can't irreversibly throw the
+ * match away. The blind-decision invariant is unaffected: the card reveals
+ * nothing about the partner's choice, and no state changes until the user
+ * confirms. The live pitch keyboard stays in place behind the card.
+ */
+export async function promptDeclineConfirm(ctx: BotContext): Promise<void> {
+  const data = ctx.callbackQuery?.data;
+  if (!data?.startsWith("match:decline:")) return;
+  const matchId = data.slice("match:decline:".length);
+  if (!matchId) return;
+
+  await ctx.answerCallbackQuery();
+
+  const match = await loadMatch(matchId);
+  // Only a still-live proposal can be passed on; a resolved/expired row no-ops.
+  if (!match || match.status !== "proposed") return;
+  const side = await sideForCaller(ctx, match);
+  if (!side) return;
+
+  const lang = ctx.session.language;
+  await ctx.reply(t(lang, "matchDeclineConfirmPrompt"), {
+    parse_mode: "Markdown",
+    reply_markup: buildDeclineConfirmKeyboard(matchId, lang),
+  });
+}
+
+/**
+ * User backed out of the decline confirmation card. No state changes; edit the
+ * card into a dismissed line so its button can't be tapped again. The original
+ * pitch keyboard is still live for a real Accept/Pass.
+ */
+export async function handleDeclineBack(ctx: BotContext): Promise<void> {
+  const data = ctx.callbackQuery?.data;
+  if (!data?.startsWith("match:keep:")) return;
+
+  await ctx.answerCallbackQuery();
+
+  const lang = ctx.session.language;
+  const dismissed = t(lang, "matchDeclineDismissed");
+  try {
+    await ctx.editMessageText(dismissed);
+  } catch {
+    await ctx.reply(dismissed).catch(() => {});
+  }
+}
+
 export async function handleMatchDecision(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
-  if (!data?.startsWith("match:")) return;
+  if (!data) return;
 
-  const [, action, matchId] = data.split(":");
-  if (!matchId || (action !== "accept" && action !== "decline")) return;
+  // Accept commits immediately; Decline only ever reaches here as the confirmed
+  // `match:do:decline:` commit (the bare `match:decline:` tap is intercepted by
+  // `promptDeclineConfirm`).
+  let action: "accept" | "decline";
+  let matchId: string;
+  let fromConfirmCard = false;
+  if (data.startsWith("match:accept:")) {
+    action = "accept";
+    matchId = data.slice("match:accept:".length);
+  } else if (data.startsWith("match:do:decline:")) {
+    action = "decline";
+    matchId = data.slice("match:do:decline:".length);
+    fromConfirmCard = true;
+  } else {
+    return;
+  }
+  if (!matchId) return;
 
   await ctx.answerCallbackQuery({
     text: t(
@@ -130,6 +227,13 @@ export async function handleMatchDecision(ctx: BotContext): Promise<void> {
       action === "accept" ? "matchAcceptedToast" : "matchDecisionSavedToast",
     ),
   });
+
+  // The confirmation card carries a single live button. Strip its keyboard the
+  // moment it's tapped so a double-tap can't re-enter the commit path (which is
+  // already idempotent, but this keeps the chat clean).
+  if (fromConfirmCard) {
+    await ctx.editMessageReplyMarkup().catch(() => {});
+  }
 
   const match = await loadMatch(matchId);
   if (!match) return;

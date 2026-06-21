@@ -1,7 +1,11 @@
 import { Composer } from "grammy";
 import { prisma } from "@gennety/db";
 import type { BotContext } from "../../session.js";
-import { handleMatchDecision } from "./decision.js";
+import {
+  handleMatchDecision,
+  promptDeclineConfirm,
+  handleDeclineBack,
+} from "./decision.js";
 import { handleDeclineReasonCallback } from "./decline-feedback.js";
 import { handleSchedulePick, handleCalendarWebAppData } from "./scheduler.js";
 import { handleReportOpen, handleReportCategory, handleReportSkip, handleReportText } from "./report.js";
@@ -39,9 +43,25 @@ matchingRouter.use(async (ctx, next) => {
     return;
   }
 
-  // Match callbacks: Accept / Decline
-  if (data?.startsWith("match:accept:") || data?.startsWith("match:decline:")) {
+  // Match Accept commits immediately.
+  if (data?.startsWith("match:accept:")) {
     await handleMatchDecision(ctx);
+    return;
+  }
+  // Match Pass is guarded — the first tap opens a confirmation card (a pass is
+  // irreversible: the pair is never shown again), it does NOT commit.
+  if (data?.startsWith("match:decline:")) {
+    await promptDeclineConfirm(ctx);
+    return;
+  }
+  // Confirmed Pass commit (red "Yes, pass" on the confirmation card).
+  if (data?.startsWith("match:do:decline:")) {
+    await handleMatchDecision(ctx);
+    return;
+  }
+  // Backed out of the Pass confirmation card — no state change.
+  if (data?.startsWith("match:keep:")) {
+    await handleDeclineBack(ctx);
     return;
   }
 
