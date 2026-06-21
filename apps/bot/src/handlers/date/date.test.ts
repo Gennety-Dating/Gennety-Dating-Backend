@@ -104,6 +104,20 @@ function createCtx(overrides: {
   } as any;
 }
 
+// Synchronous stub for the injectable ice-breaker chunk streamer: forwards the
+// FINAL chunk to `api.sendMessage` so the call-count / failure assertions hold,
+// without real waits. Returns the options object passed to
+// `runDateLifecycleTick`; inspect `.streamImpl.mock.calls`.
+function makeStreamOptions() {
+  const streamImpl = vi.fn(
+    async (a: { sendMessage: MockFn }, chatId: number, chunks: string[]) => {
+      await a.sendMessage(chatId, chunks[chunks.length - 1]);
+      return undefined;
+    },
+  );
+  return { streamImpl };
+}
+
 function matchRow(partial: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: "match-1",
@@ -479,12 +493,21 @@ describe("date-lifecycle tick", () => {
     mProfile.findUnique.mockResolvedValue({ psychologicalSummary: null });
 
     const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
-    const result = await runDateLifecycleTick(api, now);
+    const opts = makeStreamOptions();
+    const result = await runDateLifecycleTick(api, now, opts as never);
 
     expect(result.icebreakers).toBe(1);
     expect(result.emergencies).toBe(1);
-    // 4 messages: icebreaker A, icebreaker B, emergency A, emergency B
+    // 4 messages: icebreaker A (streamed final), icebreaker B, emergency A, emergency B
     expect(api.sendMessage).toHaveBeenCalledTimes(4);
+    // Ice-breakers are streamed: a "thinking" lead beat, then the full intro +
+    // numbered starters as the final chunk. Side A is langA ("en").
+    expect(opts.streamImpl).toHaveBeenCalledTimes(2);
+    const chunksA = opts.streamImpl.mock.calls[0]![2] as string[];
+    expect(chunksA.length).toBeGreaterThanOrEqual(2);
+    expect(chunksA[0]).toMatch(/Lining up/);
+    expect(chunksA[chunksA.length - 1]).toMatch(/Your date is in 5 hours/);
+    expect(chunksA[chunksA.length - 1]).toMatch(/1\./);
     // H2: icebreakersSentAt is stamped by the atomic claim (updateMany) guarded
     // on the still-null marker, BEFORE any send.
     expect(mMatch.updateMany).toHaveBeenCalledWith(
@@ -606,7 +629,7 @@ describe("date-lifecycle tick", () => {
         .mockResolvedValue(undefined),
     } as any;
 
-    const result = await runDateLifecycleTick(api, now);
+    const result = await runDateLifecycleTick(api, now, makeStreamOptions() as never);
 
     expect(result.icebreakers).toBe(1);
     // The other 3 sends still happen
@@ -643,7 +666,7 @@ describe("date-lifecycle tick", () => {
     mProfile.findUnique.mockResolvedValue({ psychologicalSummary: null });
 
     const api = { sendMessage: vi.fn().mockResolvedValue(undefined) } as any;
-    await runDateLifecycleTick(api, now);
+    await runDateLifecycleTick(api, now, makeStreamOptions() as never);
 
     // Only Alice (positive id) gets ice-breaker + emergency = 2 sends.
     expect(api.sendMessage).toHaveBeenCalledTimes(2);

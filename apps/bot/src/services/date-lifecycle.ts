@@ -14,6 +14,7 @@ import {
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { callOpenAIText } from "./openai.js";
+import { streamDraftsToChat } from "./ai-stream.js";
 import { generateAndSaveWingmanHints } from "./wingman-hint.js";
 import { sendPushToUser } from "./push.js";
 import { sweepExpiredVenueChanges } from "../handlers/matching/venue-change.js";
@@ -149,6 +150,44 @@ async function generateDateHints(
   return lines.join("\n");
 }
 
+/**
+ * Build the growing-prefix chunks for the live ice-breaker stream. The
+ * lead beat is the "thinking" line; then each conversation starter is revealed
+ * one at a time on top of the intro; the FINAL chunk (with the §6 planning
+ * hints appended, when present) is byte-for-byte the message we'd otherwise
+ * send in one shot — so only the *delivery* animates, the content is unchanged.
+ *
+ * `streamDraftsToChat` sends one real message and edits it through every chunk;
+ * the last entry is the persisted final text.
+ */
+export function buildIcebreakerDrafts(
+  streamStart: string,
+  intro: string,
+  topics: readonly string[],
+  hintsIntro: string,
+  hints: string,
+): string[] {
+  const stages: string[] = [];
+  let acc = intro;
+  topics.forEach((topic, i) => {
+    acc = `${acc}${i === 0 ? "" : "\n"}${i + 1}. ${topic}`;
+    stages.push(acc);
+  });
+  const lastStage = stages[stages.length - 1] ?? intro;
+  const chunks = [streamStart, ...stages];
+  if (hints) chunks.push(`${lastStage}${hintsIntro}${hints}`);
+  return chunks;
+}
+
+export interface DateLifecycleOptions {
+  /**
+   * Injectable chunk streamer — defaults to `streamDraftsToChat`. Tests pass a
+   * synchronous stub so the ice-breaker stream doesn't incur real waits. Mirrors
+   * the `streamImpl` seam in `handlers/matching/pitch.ts`.
+   */
+  streamImpl?: typeof streamDraftsToChat;
+}
+
 export interface DateLifecycleResult {
   icebreakers: number;
   emergencies: number;
@@ -162,7 +201,9 @@ export interface DateLifecycleResult {
 export async function runDateLifecycleTick(
   api: Api<RawApi>,
   now: Date = new Date(),
+  options: DateLifecycleOptions = {},
 ): Promise<DateLifecycleResult> {
+  const stream = options.streamImpl ?? streamDraftsToChat;
   const result: DateLifecycleResult = {
     icebreakers: 0,
     emergencies: 0,
@@ -260,53 +301,66 @@ export async function runDateLifecycleTick(
       generateDateHints(nameB, partnerBlockForB, langB),
     ]);
 
-    const topicsAFormatted = topicsForA.map((q, i) => `${i + 1}. ${q}`).join("\n");
-    const topicsBFormatted = topicsForB.map((q, i) => `${i + 1}. ${q}`).join("\n");
-
-    const msgA =
-      t(langA, "icebreakerIntro") + topicsAFormatted +
-      (hintsForA ? t(langA, "dateHintsIntro") + hintsForA : "");
-    const msgB =
-      t(langB, "icebreakerIntro") + topicsBFormatted +
-      (hintsForB ? t(langB, "dateHintsIntro") + hintsForB : "");
+    // Live ice-breaker stream per side: a "thinking" lead beat, then each
+    // starter revealed one at a time, then the full message (with planning
+    // hints) as the persisted send. The final chunk is byte-for-byte the old
+    // single-shot text — only the delivery now animates.
+    const draftsA = buildIcebreakerDrafts(
+      t(langA, "icebreakerStreamStart"),
+      t(langA, "icebreakerIntro"),
+      topicsForA,
+      t(langA, "dateHintsIntro"),
+      hintsForA,
+    );
+    const draftsB = buildIcebreakerDrafts(
+      t(langB, "icebreakerStreamStart"),
+      t(langB, "icebreakerIntro"),
+      topicsForB,
+      t(langB, "dateHintsIntro"),
+      hintsForB,
+    );
 
     // Emergency cancellation button
     const emergKbA = new InlineKeyboard().text(t(langA, "emergencyBtn"), `emerg:start:${match.id}`);
     const emergKbB = new InlineKeyboard().text(t(langB, "emergencyBtn"), `emerg:start:${match.id}`);
 
-    // Per-leg .catch + telegramId guard. Mobile-first synthetic users
-    // (telegramId <= 0n) get the Expo push path elsewhere; sending to a
-    // negative chat id throws "chat not found" and used to abort the entire
-    // for-loop, leaving icebreakersSentAt null and causing duplicate sends
-    // on the next 2-min tick.
-    const sendIfTelegram = (
+    // Per-side delivery: stream the ice-breakers, THEN drop the emergency-window
+    // message so its cancel button lands right after the starters stream in.
+    // Mobile-first synthetic users (telegramId <= 0n) get the Expo push path
+    // elsewhere; sending to a negative chat id throws "chat not found" and used
+    // to abort the whole for-loop, leaving icebreakersSentAt null and causing
+    // duplicate sends. Each leg is independently caught so one blocked user
+    // never strands the other (the marker is already claimed up front, H2).
+    const deliver = async (
       tgId: bigint,
-      text: string,
-      opts?: Parameters<typeof api.sendMessage>[2],
-    ): Promise<unknown> | null => {
-      if (tgId <= 0n) return null;
-      return api.sendMessage(Number(tgId), text, opts).catch((err: unknown) => {
+      drafts: string[],
+      emergencyText: string,
+      emergKb: InlineKeyboard,
+    ): Promise<void> => {
+      if (tgId <= 0n) return;
+      const chatId = Number(tgId);
+      try {
+        await stream(api, chatId, drafts, { thinkingIndex: 0 });
+      } catch (err) {
         console.warn(
-          `[date-lifecycle] icebreaker/emergency send failed for ${tgId}:`,
+          `[date-lifecycle] icebreaker stream failed for ${tgId}:`,
           err instanceof Error ? err.message : err,
         );
-      });
+      }
+      await api
+        .sendMessage(chatId, emergencyText, { reply_markup: emergKb, parse_mode: "Markdown" })
+        .catch((err: unknown) => {
+          console.warn(
+            `[date-lifecycle] emergency send failed for ${tgId}:`,
+            err instanceof Error ? err.message : err,
+          );
+        });
     };
 
-    const sends: Array<Promise<unknown> | null> = [
-      sendIfTelegram(match.userA.telegramId, msgA),
-      sendIfTelegram(match.userB.telegramId, msgB),
-      sendIfTelegram(match.userA.telegramId, t(langA, "emergencyUnlocked"), {
-        reply_markup: emergKbA,
-        parse_mode: "Markdown",
-      }),
-      sendIfTelegram(match.userB.telegramId, t(langB, "emergencyUnlocked"), {
-        reply_markup: emergKbB,
-        parse_mode: "Markdown",
-      }),
-    ];
-
-    await Promise.all(sends.filter((p): p is Promise<unknown> => p !== null));
+    await Promise.all([
+      deliver(match.userA.telegramId, draftsA, t(langA, "emergencyUnlocked"), emergKbA),
+      deliver(match.userB.telegramId, draftsB, t(langB, "emergencyUnlocked"), emergKbB),
+    ]);
 
     // `icebreakersSentAt` was already stamped by the atomic claim above
     // (H2); persist only the generated content here. We'd rather miss one

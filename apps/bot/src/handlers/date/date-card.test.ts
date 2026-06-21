@@ -86,7 +86,7 @@ describe("handleDateCardShare", () => {
     expect(mStatus).toHaveBeenCalledTimes(1);
     const [, statusChatId, steps, statusOpts] = mStatus.mock.calls[0]!;
     expect(statusChatId).toBe(1001);
-    expect(steps.length).toBe(5);
+    expect(steps.length).toBe(4);
     expect(statusOpts.until).toBeInstanceOf(Promise);
 
     expect(c.api.sendPhoto).toHaveBeenCalledTimes(1);

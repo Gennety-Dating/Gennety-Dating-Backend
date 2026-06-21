@@ -427,8 +427,9 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
   // Curated-first: a hand-picked venue for this university wins; Places is the
   // fallback when nothing curated is in commute range. See `resolveVenue`.
   // Run the lookup concurrently with a self-replacing "picking the best spot"
-  // status so the real (often sub-second) lookup hides behind a considered ~5s
-  // cadence — a venue that pops instantly reads as "first result grabbed".
+  // status. The first three beats always play out; the final "matching your
+  // vibe" beat is then held until the real lookup resolves, so a slow Places
+  // fallback has honest visible progress without shortening the opening cadence.
   const venuePromise = resolveVenue({
     universityDomain: match.userA.universityDomain,
     midpoint: mid,
@@ -447,6 +448,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
         api,
         Number(match.userA.telegramId),
         venueSearchSteps(langA),
+        { until: venuePromise, untilFromStepIndex: 3 },
       ).catch(() => undefined),
     );
   }
@@ -456,6 +458,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
         api,
         Number(match.userB.telegramId),
         venueSearchSteps(langB),
+        { until: venuePromise, untilFromStepIndex: 3 },
       ).catch(() => undefined),
     );
   }

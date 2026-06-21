@@ -1,21 +1,30 @@
 /**
  * Date-card layout, expressed as a plain satori element tree (no JSX, so the
- * bot's tsconfig needs no React/JSX support). The aesthetic is modern and
- * intentionally casual: a tilted venue photo with an overlapping polaroid of
- * the partner, loose label/value detail rows, and a quiet Gennety wordmark.
+ * bot's tsconfig needs no React/JSX support).
  *
- * NOTE: rendered text is kept emoji-free on purpose — the bundled Roboto fonts
- * have no color-emoji glyphs and satori would drop them. Emoji live only in the
+ * Aesthetic ("Partiful-glow", finalized 2026-06-20): a near-black card with
+ * soft lilac radial glows and faint film grain; a wide duotone venue photo as
+ * the hero; an overlapping tilted polaroid of the partner; a bold Archivo Black
+ * headline slogan whose last line is the lilac accent; a compact venue detail
+ * block. The "Gennety" wordmark sits top-left and the brand star logo sits
+ * top-right (slightly tilted, nudged toward the edge like the polaroid).
+ *
+ * NOTE: rendered text is kept emoji-free on purpose — the bundled fonts have no
+ * color-emoji glyphs and satori would drop them. Emoji live only in the
  * Telegram caption, not inside the PNG.
+ *
+ * Photo treatment (duotone of the venue, grain tile) is done upstream in
+ * `index.ts` with @napi-rs/canvas and passed in as ready PNG buffers; this file
+ * is pure layout.
  */
 
 export const CARD_W = 1080;
 export const CARD_H = 1350;
 
-const ACCENT = "#FF5B6E";
-const INK = "#2A2024";
-const MUTED = "#9B8E92";
-const PAPER = "#FFFFFF";
+const BG = "#030303";
+const LILAC = "#B69AE5";
+const INK = "#F2EFF7";
+const MUTED = "#8E8895";
 
 /** Minimal satori-compatible node (cast to satori's ReactNode at the call site). */
 export interface CardNode {
@@ -42,19 +51,18 @@ function dataUri(buffer: Buffer): string {
 
 export interface CardElementInput {
   partnerName: string;
+  /** Partner photo PNG (already blurred for the share copy). */
   partnerPhoto: Buffer | null;
+  /** Venue photo PNG, already duotone-treated and cover-fit upstream. */
   venuePhoto: Buffer | null;
-  attribution: boolean;
+  /** Film-grain overlay tile (full-card PNG). Optional. */
+  grain: Buffer | null;
+  /** Brand star logo PNG (already downscaled). Sits top-right. Optional. */
+  logo: Buffer | null;
   venueName: string;
   venueAddress: string;
-  /** Short, confident tagline shown where the redundant date used to sit. The
-   * concrete date/time lives only in the Telegram caption now, so the card
-   * stays a clean keepsake. Split on `\n` into stacked lines. */
+  /** Headline slogan; split on `\n` into stacked lines, last line accented. */
   slogan: string;
-  labels: {
-    tagline: string;
-    where: string;
-  };
 }
 
 export function buildCardElement(input: CardElementInput): CardNode {
@@ -65,47 +73,112 @@ export function buildCardElement(input: CardElementInput): CardNode {
       flexDirection: "column",
       width: `${CARD_W}px`,
       height: `${CARD_H}px`,
-      padding: "72px 64px",
-      backgroundColor: "#FBF6F2",
-      backgroundImage:
-        "linear-gradient(160deg, #FBF6F2 0%, #F8ECEF 55%, #F6E2E8 100%)",
+      padding: "70px 64px",
+      backgroundColor: BG,
       fontFamily: "Roboto",
       color: INK,
     },
-    [header(input.labels.tagline), venueSection(input), detailsSection(input), footer(input)],
+    [
+      // Soft lilac glow blobs (radial-gradient, no blur needed).
+      el("div", {
+        display: "flex",
+        position: "absolute",
+        top: "-160px",
+        right: "-120px",
+        width: "620px",
+        height: "620px",
+        borderRadius: "999px",
+        backgroundImage: `radial-gradient(closest-side, ${LILAC}55, rgba(182,154,229,0))`,
+      }),
+      el("div", {
+        display: "flex",
+        position: "absolute",
+        bottom: "-200px",
+        left: "-160px",
+        width: "680px",
+        height: "680px",
+        borderRadius: "999px",
+        backgroundImage: `radial-gradient(closest-side, #7C53C955, rgba(124,83,201,0))`,
+      }),
+      ...(input.grain
+        ? [
+            el(
+              "img",
+              {
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: `${CARD_W}px`,
+                height: `${CARD_H}px`,
+                opacity: 0.5,
+              },
+              undefined,
+              { src: dataUri(input.grain) },
+            ),
+          ]
+        : []),
+      header(),
+      heroSlogan(input.slogan),
+      venueSection(input),
+      el("div", { display: "flex", flexGrow: 1, minHeight: "0px" }),
+      detailsSection(input),
+      ...(input.logo
+        ? [
+            el(
+              "img",
+              {
+                position: "absolute",
+                top: "18px",
+                right: "14px",
+                width: "375px",
+                height: "362px",
+                transform: "rotate(10deg)",
+              },
+              undefined,
+              { src: dataUri(input.logo) },
+            ),
+          ]
+        : []),
+    ],
   );
 }
 
-function header(tagline: string): CardNode {
+function header(): CardNode {
   return el(
     "div",
     {
       display: "flex",
-      justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: "36px",
+      marginBottom: "34px",
     },
     [
       el(
         "div",
-        { display: "flex", fontSize: "40px", fontWeight: 700, letterSpacing: "1px", color: ACCENT },
+        { display: "flex", fontFamily: "Archivo Black", fontSize: "36px", color: INK },
         "Gennety",
       ),
-      el(
-        "div",
-        {
-          display: "flex",
-          padding: "10px 22px",
-          borderRadius: "999px",
-          backgroundColor: ACCENT,
-          color: PAPER,
-          fontSize: "22px",
-          fontWeight: 600,
-          letterSpacing: "3px",
-        },
-        tagline,
-      ),
     ],
+  );
+}
+
+/** Archivo Black headline; the final line is the lilac accent. */
+function heroSlogan(slogan: string): CardNode {
+  const raw = slogan.split("\n");
+  const lines = raw.map((line, i) =>
+    el("div", { display: "flex", color: i === raw.length - 1 ? LILAC : INK }, line),
+  );
+  return el(
+    "div",
+    {
+      display: "flex",
+      flexDirection: "column",
+      fontFamily: "Archivo Black",
+      fontSize: "78px",
+      lineHeight: 1.0,
+      letterSpacing: "-2px",
+      marginBottom: "10px",
+    },
+    lines,
   );
 }
 
@@ -114,217 +187,108 @@ function venueSection(input: CardElementInput): CardNode {
     ? el("img", { width: "100%", height: "100%", objectFit: "cover" }, undefined, {
         src: dataUri(input.venuePhoto),
       })
-    : el(
-        "div",
-        {
-          display: "flex",
-          width: "100%",
-          height: "100%",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundImage: "linear-gradient(135deg, #FF8DA1 0%, #FF5B6E 100%)",
-          color: PAPER,
-          fontSize: "180px",
-          fontWeight: 700,
-        },
-        (input.venueName[0] ?? "G").toUpperCase(),
-      );
+    : el("div", {
+        display: "flex",
+        width: "100%",
+        height: "100%",
+        backgroundImage: `linear-gradient(135deg, #3A2563, ${LILAC})`,
+      });
+
+  const partnerInner = input.partnerPhoto
+    ? el("img", { width: "300px", height: "360px", objectFit: "cover", borderRadius: "4px" }, undefined, {
+        src: dataUri(input.partnerPhoto),
+      })
+    : el("div", {
+        display: "flex",
+        width: "300px",
+        height: "360px",
+        borderRadius: "4px",
+        backgroundColor: "#1A1322",
+      });
 
   return el(
     "div",
-    { display: "flex", position: "relative", width: "100%", height: "640px", marginBottom: "60px" },
+    {
+      display: "flex",
+      position: "relative",
+      width: "100%",
+      height: "726px",
+      marginTop: "8px",
+      marginBottom: "8px",
+    },
     [
-      // Tilted venue photo card
+      // Glow behind the hero photo.
+      el("div", {
+        display: "flex",
+        position: "absolute",
+        left: "180px",
+        top: "90px",
+        width: "680px",
+        height: "470px",
+        borderRadius: "999px",
+        backgroundImage: `radial-gradient(closest-side, ${LILAC}66, rgba(182,154,229,0))`,
+      }),
+      // Hero venue photo — wide, shifted left, small gap from the headline, long.
       el(
         "div",
         {
           display: "flex",
-          width: "100%",
-          height: "560px",
-          borderRadius: "36px",
+          position: "absolute",
+          left: "-44px",
+          top: "22px",
+          width: "1000px",
+          height: "690px",
+          borderRadius: "30px",
           overflow: "hidden",
-          transform: "rotate(-2deg)",
-          boxShadow: "0 30px 60px rgba(80, 30, 45, 0.22)",
+          boxShadow: "0 34px 80px rgba(0,0,0,0.6)",
         },
         [venueImage],
       ),
-      // Overlapping partner polaroid
-      polaroid(input),
-    ],
-  );
-}
-
-function polaroid(input: CardElementInput): CardNode {
-  const inner = input.partnerPhoto
-    ? el("img", { width: "260px", height: "300px", objectFit: "cover", borderRadius: "6px" }, undefined, {
-        src: dataUri(input.partnerPhoto),
-      })
-    : el(
-        "div",
-        {
-          display: "flex",
-          width: "260px",
-          height: "300px",
-          borderRadius: "6px",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "#EFE3E6",
-          color: ACCENT,
-          fontSize: "120px",
-          fontWeight: 700,
-        },
-        (input.partnerName[0] ?? "?").toUpperCase(),
-      );
-
-  return el(
-    "div",
-    {
-      display: "flex",
-      flexDirection: "column",
-      position: "absolute",
-      right: "24px",
-      bottom: "0px",
-      padding: "18px 18px 14px 18px",
-      backgroundColor: PAPER,
-      borderRadius: "10px",
-      transform: "rotate(6deg)",
-      boxShadow: "0 24px 44px rgba(80, 30, 45, 0.28)",
-    },
-    [
-      inner,
-      el(
-        "div",
-        {
-          display: "flex",
-          justifyContent: "center",
-          marginTop: "14px",
-          fontSize: "30px",
-          fontWeight: 500,
-          color: INK,
-        },
-        input.partnerName,
-      ),
-    ],
-  );
-}
-
-function detailRow(label: string, value: string, sub?: string): CardNode {
-  const lines: (CardNode | string)[] = [
-    el(
-      "div",
-      { display: "flex", fontSize: "22px", fontWeight: 600, letterSpacing: "4px", color: ACCENT },
-      label,
-    ),
-    el("div", { display: "flex", marginTop: "6px", fontSize: "40px", fontWeight: 700, color: INK }, value),
-  ];
-  if (sub) {
-    lines.push(el("div", { display: "flex", marginTop: "4px", fontSize: "26px", color: MUTED }, sub));
-  }
-  return el("div", { display: "flex", flexDirection: "column", marginBottom: "30px" }, lines);
-}
-
-/** A small ACCENT square rotated 45° — a crisp vector "spark" (no emoji font). */
-function sparkDiamond(size: number): CardNode {
-  return el("div", {
-    display: "flex",
-    width: `${size}px`,
-    height: `${size}px`,
-    backgroundColor: ACCENT,
-    transform: "rotate(45deg)",
-    borderRadius: "2px",
-  });
-}
-
-/** Short horizontal accent line that fades out at its right end. */
-function accentRule(): CardNode {
-  return el("div", {
-    display: "flex",
-    width: "132px",
-    height: "3px",
-    marginLeft: "16px",
-    borderRadius: "3px",
-    backgroundImage: `linear-gradient(90deg, ${ACCENT} 0%, rgba(255,91,110,0) 100%)`,
-  });
-}
-
-/**
- * The confident slogan that replaces the old WHEN row. An editorial "kicker"
- * (diamond + fading rule) sits above stacked slogan lines. All vector /
- * typography — nothing depends on an emoji font, so it rasterizes identically
- * everywhere.
- */
-function sloganSection(slogan: string): CardNode {
-  const lines = slogan.split("\n").map((line, i) =>
-    el(
-      "div",
-      { display: "flex", marginTop: i === 0 ? "0px" : "4px" },
-      line,
-    ),
-  );
-  return el(
-    "div",
-    {
-      display: "flex",
-      flexDirection: "column",
-      marginBottom: "44px",
-    },
-    [
-      // Editorial kicker: diamond + fading rule.
-      el(
-        "div",
-        { display: "flex", alignItems: "center", marginBottom: "22px" },
-        [sparkDiamond(13), accentRule()],
-      ),
-      // Stacked slogan lines.
+      // Partner polaroid — lower-right, tilted, no caption text. Wide bottom
+      // frame margin for an authentic polaroid look.
       el(
         "div",
         {
           display: "flex",
           flexDirection: "column",
-          fontSize: "52px",
-          fontWeight: 700,
-          letterSpacing: "-0.5px",
-          lineHeight: 1.08,
-          color: INK,
+          position: "absolute",
+          right: "-26px",
+          bottom: "-36px",
+          padding: "16px 16px 72px 16px",
+          borderRadius: "10px",
+          backgroundColor: "#FFFFFF",
+          transform: "rotate(7deg)",
+          boxShadow: "0 26px 64px rgba(0,0,0,0.5)",
         },
-        lines,
+        [partnerInner],
       ),
     ],
   );
 }
 
 function detailsSection(input: CardElementInput): CardNode {
-  return el(
-    "div",
-    {
-      display: "flex",
-      flexDirection: "column",
-      flexGrow: 1,
-      justifyContent: "center",
-    },
-    [
-      sloganSection(input.slogan),
-      detailRow(input.labels.where, input.venueName, input.venueAddress),
-    ],
-  );
-}
+  const venueColumn = el("div", { display: "flex", flexDirection: "column" }, [
+    el(
+      "div",
+      { display: "flex", fontFamily: "Archivo Black", fontSize: "54px", color: INK },
+      input.venueName,
+    ),
+    el(
+      "div",
+      { display: "flex", marginTop: "6px", fontFamily: "Roboto", fontSize: "30px", color: MUTED },
+      input.venueAddress,
+    ),
+  ]);
 
-function footer(input: CardElementInput): CardNode {
-  const children: (CardNode | string)[] = [
-    el("div", { display: "flex", fontSize: "24px", color: MUTED }, "Made with Gennety"),
-  ];
-  if (input.attribution) {
-    children.push(el("div", { display: "flex", fontSize: "22px", color: MUTED }, "Photo · Google"));
-  }
+  const credit = el(
+    "div",
+    { display: "flex", fontFamily: "Roboto", fontSize: "22px", color: MUTED },
+    "made with Gennety",
+  );
+
   return el(
     "div",
-    {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      borderTop: "1px solid rgba(42, 32, 36, 0.12)",
-      paddingTop: "22px",
-    },
-    children,
+    { display: "flex", justifyContent: "space-between", alignItems: "flex-end" },
+    [venueColumn, el("div", { display: "flex", flexDirection: "column", alignItems: "flex-end" }, [credit])],
   );
 }
