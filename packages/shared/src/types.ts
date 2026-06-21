@@ -98,6 +98,12 @@ export interface SessionData {
   awaitingContextDump: boolean;
   /** Buffered text from the user's LLM context dump paste */
   contextDumpBuffer: string;
+  /**
+   * Count of profile-survey answers given during conversational onboarding.
+   * Drives the periodic "thinking" pause shown every few answers before the
+   * next question is generated (see conversational handler). Onboarding-scoped.
+   */
+  onboardingAnswerCount: number;
 }
 
 export const DEFAULT_SESSION: SessionData = {
@@ -115,4 +121,5 @@ export const DEFAULT_SESSION: SessionData = {
   pendingReportCategory: null,
   awaitingContextDump: false,
   contextDumpBuffer: "",
+  onboardingAnswerCount: 0,
 };

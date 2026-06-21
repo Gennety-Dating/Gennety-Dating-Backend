@@ -371,32 +371,32 @@ Required/high-impact env keys:
 - AI/email/onboarding: `OPENAI_API_KEY`, `RESEND_API_KEY`, `SMTP_FROM`,
   `OTP_LOG_TO_CONSOLE`, `ONBOARDING_FACT_COLLECTOR_ENABLED` (default `false`;
   enable only after schema push and backfill verification)
-- Rich thinking shimmer (feature-flagged, cosmetic): `RICH_THINKING_ENABLED`
-  (default `false`). When on, the AI status/thinking beats and the match-pitch
-  "analysing" beat render via Bot API 10.1 `sendRichMessageDraft` +
-  `<tg-thinking>` shimmer (`services/telegram-rich.ts`) instead of the classic
-  `sendMessageDraft`/`editMessageText` line. No schema or system dependency, no
-  new AWS/Google scope — it calls Telegram through grammY's existing transport.
-  Any rich-API error degrades to the classic path, so it is safe to toggle live
-  with `pm2 restart gennety-bot --update-env`. Requires the production bot's
-  Bot API server and the recipient's Telegram client to be on 10.1+ for the
-  shimmer to actually render (older targets fall back transparently).
-  `CUSTOM_EMOJI_THINKING_ID` (optional) — the animated Telegram AI emoji from
-  https://t.me/addemoji/AIActions that leads each thinking block (rendered as
-  `<tg-emoji>` inside `<tg-thinking>`). Get an id via
-  `getStickerSet(name="AIActions")` (the pack has 48 variants — pick one). Empty
-  falls back to the step's plain glyph with no animation.
-  `CUSTOM_EMOJI_AI_ROUTE_ID` / `CUSTOM_EMOJI_AI_VENUE_ID` /
-  `CUSTOM_EMOJI_AI_CONFIRM_ID` / `CUSTOM_EMOJI_AI_CARD_ID` /
-  `CUSTOM_EMOJI_AI_SPARKLE_ID` (all optional) — per-step AIActions ids so a
-  multi-beat sequence (venue search, date-card render) shows a distinct animated
-  icon per step instead of the single shared `CUSTOM_EMOJI_THINKING_ID`. Source
-  ids with `pnpm tsx apps/bot/scripts/dev/list-ai-emojis.ts` (prints the pack's
-  `custom_emoji_id`s). Each empty slot falls back to `CUSTOM_EMOJI_THINKING_ID`
-  then the plain glyph, so leaving them unset changes nothing. The date-card
-  render's "shine" progress (PRODUCT_SPEC.md §3.7a) uses these; it is held until
-  the PNG is ready rather than running on a timer, but is still purely cosmetic —
-  `RICH_THINKING_ENABLED=false` degrades it to the classic edited status line.
+  - **Vibe onboarding questions (no flag of their own).** The two §1.3 vibe
+    questions (`friday_vibe` / `vibe_focus`) and their matching signal live in
+    the collector, so they are active only when
+    `ONBOARDING_FACT_COLLECTOR_ENABLED=true`. Requires `db:push` of the new
+    `Profile.friday_vibe_text` / `vibe_focus_text` / `energy_axis` /
+    `orientation_axis` / `social_role` / `anchor_tags` / `vibe_extracted_at`
+    columns first (additive, non-destructive; missing columns → P2022
+    crash-loop). No new system dependency — extraction reuses `OPENAI_API_KEY`.
+    The matching weight re-split (`V_explicit` 0.65 / `V_research` 0.35) and the
+    new vibe quadrant factor are code-only and need no env; `V_league` (and
+    `MALE_REACH_ELO`) are unchanged.
+- Chat progress streams: no production env flag. Status, pitch, no-match, and
+  ice-breaker progress is delivered as one normal bottom-of-chat message edited
+  in place (`sendMessage` + `editMessageText`). Do not set or reintroduce a
+  `RICH_THINKING_ENABLED` live toggle: Telegram draft/rich-draft APIs are
+  treated by clients as generated AI replies and can reserve scroll space below
+  the preview. The rich `<tg-thinking>` helpers in `services/telegram-rich.ts`
+  are kept for explicit dev demos **and** the two product flows that
+  intentionally want the AI-compose look: the **Profiler in-batch** status +
+  question stream (PRODUCT_SPEC §Phase 1b), and the **periodic profile-survey
+  "thinking" pause** during conversational onboarding (one ~2.5 s shimmer beat
+  before every third question — PRODUCT_SPEC §1.3). Both call the helpers with
+  `rich: true`. No env toggle gates this — it is hard-coded per call site — and
+  it degrades to the classic edited stream if a client can't render rich drafts,
+  so there is nothing to configure at deploy time. The AI Actions `<tg-emoji>`
+  glyphs are the baked `AI_EMOJI` ids in `services/ai-emoji.ts` (no env).
 - Admin API: `ADMIN_API_KEY`, `ADMIN_PORT`, `ADMIN_DASHBOARD_ORIGIN`
 - Public API: `JWT_SECRET`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`,
   `PUBLIC_PORT`, `PUBLIC_CORS_ORIGIN`
@@ -453,6 +453,17 @@ Required/high-impact env keys:
     the gift DM only, so partial coverage is safe — drop in more MP4s over time.
     Idempotent via a `welcome_gift` `ticket_ledger` row (no extra schema beyond
     the wallet columns above).
+  - **Famine discount (same flag).** On the 2nd consecutive no-match week
+    (tier ≥ 2) the no-match DM grants a one-time **77% discount on a single
+    ticket**, valid 30 days, applied to the date gate's `self` scope and the
+    store's "1 ticket" bundle (`services/ticket-discount.ts`). Optional env
+    overrides `FAMINE_DISCOUNT_PCT` (default `77`) and `FAMINE_DISCOUNT_TTL_DAYS`
+    (default `30`). Requires `db:push` of the new
+    `User.ticket_discount_pct` / `ticket_discount_granted_at` /
+    `ticket_discount_expires_at` / `ticket_discount_consumed_at` columns first
+    (additive, non-destructive). No new system dependency; runs inside the
+    existing no-match cron + ticket Mini App routes. Inert unless
+    `TICKET_FEATURE_ENABLED`.
 - Pre-date coordination (feature-flagged): `COORDINATION_FEATURE_ENABLED`
   (default `false` — leave off until launch). When on, the bot offers matched
   users a way to find each other ~1h before the date (share Telegram, request
@@ -473,7 +484,11 @@ Required/high-impact env keys:
   existing date-lifecycle `setInterval` (a pre-ice-breaker expiry sweep) — no
   new cron schedule. The mandatory comment is a narrow carve-out to the
   no-in-app-chat invariant (PRODUCT_SPEC.md §3.7b): post-schedule, one-shot,
-  verbatim relay, no reply channel.
+  verbatim relay, no reply channel. The redesigned full-screen Mini App shows a
+  per-venue **detail page** (photo gallery + Maps link) before the comment;
+  Places venue photos are streamed through the server-side `GET
+  /v1/venue-change/photo` proxy, so they need `PLACES_API_KEY` (already required
+  for the venue picker) — no new env, schema, or system dependency.
 - Date card (feature-flagged): `DATE_CARD_FEATURE_ENABLED` (default `false` —
   leave off until launch). When on, each side's `scheduled` confirmation is a
   rendered PNG date card (partner photo + venue photo + details) sent
@@ -483,7 +498,8 @@ Required/high-impact env keys:
   columns first. No new system dependency: rendering uses `satori`,
   `@resvg/resvg-js`, and `@napi-rs/canvas` (prebuilt binaries pulled by
   `pnpm install --frozen-lockfile`, **not** ffmpeg/Chromium), and the bundled
-  Roboto TTFs in `apps/bot/src/assets/fonts/` ride the standard code rsync.
+  Roboto + Archivo Black TTFs in `apps/bot/src/assets/fonts/` ride the standard
+  code rsync.
   Venue photos come from `CuratedVenue.photoUrl` first, else the Google Places
   cover photo (needs `PLACES_API_KEY`; fetched at render, credited on the card,
   never persisted). Runs inline at venue finalization — no new cron. Any render

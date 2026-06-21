@@ -28,9 +28,21 @@ describe("isUniversityEmail", () => {
     expect(isUniversityEmail("taras@kneu.edu.ua")).toBe(true);
   });
 
+  it("accepts Kharkiv university emails", () => {
+    expect(isUniversityEmail("oleh@karazin.ua")).toBe(true);
+    expect(isUniversityEmail("oleh@student.karazin.ua")).toBe(true);
+    expect(isUniversityEmail("yulia@kpi.kharkov.ua")).toBe(true);
+    expect(isUniversityEmail("artem@nure.ua")).toBe(true);
+    expect(isUniversityEmail("kateryna@khai.edu")).toBe(true);
+    expect(isUniversityEmail("sofia@nlu.edu.ua")).toBe(true);
+    expect(isUniversityEmail("pavlo@knmu.edu.ua")).toBe(true);
+    expect(isUniversityEmail("daria@hneu.edu.ua")).toBe(true);
+  });
+
   it("rejects lookalike bare domains", () => {
     expect(isUniversityEmail("user@notkpi.ua")).toBe(false);
     expect(isUniversityEmail("user@fakeknu.ua")).toBe(false);
+    expect(isUniversityEmail("user@notkarazin.ua")).toBe(false);
   });
 
   it("rejects non-university emails", () => {

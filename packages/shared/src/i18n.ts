@@ -296,6 +296,14 @@ const translations = {
     matchStreamStart: "✨ Why you two click…",
     matchBtnAccept: "✅ Accept",
     matchBtnDecline: "❌ Pass",
+    matchDeclineConfirmPrompt:
+      "Pass on this match?\n\n" +
+      "This is final — you won't be matched with this person again. " +
+      "Tap to confirm, or go back.",
+    matchBtnConfirmDecline: "❌ Yes, pass",
+    matchBtnKeepDeciding: "← Go back",
+    matchDeclineDismissed:
+      "No rush — this match is still waiting for your answer. 💛",
     matchAcceptedToast: "Accepted ✅",
     matchDecisionSavedToast: "Saved ✅",
     matchAccepted: "Accepted ✅ Waiting on them.",
@@ -385,10 +393,13 @@ const translations = {
       "• The right person will land in one of the coming drops — we won't stop until they do.\n" +
       "• Every week you wait, we move you higher up the priority list for the next drop.\n\n" +
       "Thank you for trusting us. See you Thursday at 18:00 🤍",
+    noMatchDiscountOffer:
+      "🎟️ A small thank-you for your patience: your next first date is {pct}% off — one Date Ticket, almost on us. " +
+      "We'll apply the discount automatically the next time you get a match or open your tickets.",
     matchScheduleProposal:
       "How about one of these? Tap what works:",
     matchScheduleIter3:
-      "It's mutual ✅ Open the calendar and mark every time that works.",
+      "It's mutual 🔥 Open the calendar and mark every time that works.",
     matchScheduleBtnCalendar: "📅 Open Calendar",
     // --- Date Ticket (premium post-accept gate) ---
     ticketCardCaption:
@@ -405,10 +416,8 @@ const translations = {
     matchScheduled: "Locked in — see you there 🤝\n\n{venue}",
     matchScheduledBtnOpenMaps: "📍 Open in Maps",
     matchScheduledBtnShare: "📤 Share this card",
-    dateCardTagline: "IT'S A DATE",
     dateCardWhen: "WHEN",
-    dateCardWhere: "WHERE",
-    dateCardSlogan: "Two strangers,\none good evening.",
+    dateCardSlogan: "Error 404:\nChat not found.\nTry real life.",
     dateCardShareCaption:
       "Share away — your match's face is hidden to protect their privacy 💞",
     dateCardShareFailed:
@@ -445,21 +454,27 @@ const translations = {
     dateCardStep3: "✨ Adding the final touches…",
     dateCardShareStep1: "✨ Preparing your shareable card…",
     dateCardShareStep2: "💫 Blurring your match's face…",
-    dateCardShareStep3: "🌟 Protecting their privacy…",
-    dateCardShareStep4: "⭐ Polishing the photo…",
-    dateCardShareStep5: "🌠 Getting it ready to send…",
+    dateCardShareStep3: "⭐ Polishing the photo…",
+    dateCardShareStep4: "🌠 Almost ready…",
     onbAnalyzeStep1: "🧠 Reading your context…",
+    onbAnalyzeStep1b: "💭 Thinking…",
     onbAnalyzeStep2: "🧩 Extracting key traits…",
     onbAnalyzeStep3: "🧮 Building your profile…",
     verifyAnalyzeStep1: "🔍 Matching your selfie…",
     verifyAnalyzeStep2: "🧬 Reading facial features…",
     verifyAnalyzeStep3: "⏳ Finalizing the check…",
-    skipAnalyzeStep1: "✨ Finishing your profile…",
-    skipAnalyzeStep2: "🧮 Finalizing your profile…",
+    videoCheckStep1: "🎬 Looking through your video…",
+    videoCheckStep2: "🙂 Checking it's you…",
+    videoCheckStep3: "✨ Almost ready…",
+    skipAnalyzeStep1: "✨ Polishing your profile…",
+    skipAnalyzeStep2: "🧮 Tying it all together…",
     skipAnalyzeStep3: "💞 Prepping you for matching…",
+    profilerBatchThinking: "💭 Thinking…",
     profilerBatchSaving: "🧩 Saving your answers…",
     profilerBatchSaved:
       "Preference card updated ✅ I'll use it for the next match.",
+    profilerNextAck: "✍️ Got it…",
+    profilerNextFormulating: "💭 Thinking…",
 
     // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
     venueChangeFemaleButton: "🔄 Change venue",
@@ -491,6 +506,11 @@ const translations = {
     // --- Phase 4: Date ---
     icebreakerIntro:
       "Your date is in 5 hours! Some convo starters for you:\n\n",
+    // "Thinking" lead beat for the live ice-breaker / no-match streams.
+    // Product delivery uses bottom-of-chat message edits; rich drafts are
+    // explicit dev-only demos.
+    icebreakerStreamStart: "✨ Lining up a few things you two could talk about…",
+    noMatchStreamStart: "💫 Going over this week's matches for you…",
     dateHintsIntro: "\n\n💡 A couple of tips to plan it:\n",
     profilerSkip: "Skip",
     wingmanHintIntro:
@@ -679,6 +699,14 @@ const translations = {
       "Все фото должны принадлежать одному человеку. Убедись, что твоё лицо есть на каждом снимке.",
     photoIdentityUncertain:
       "Не получилось надёжно сопоставить лицо. Пришли более чёткое фото с хорошим освещением и хорошо видимым лицом.",
+    photoConsensusPending:
+      "Я пока не зафиксировал личность в профиле. Пришли ещё одно другое фото, где виден тот же человек.",
+    photoConsensusOutlierRejected:
+      "Одно ожидающее фото было с другим человеком, поэтому я его не добавил.",
+    photoConsensusConfirmed:
+      "Личность подтверждена по совпадающим фото ✅",
+    photoConsensusNoPairCap:
+      "Я всё ещё не вижу двух фото одного человека. Пока ничего не зафиксировано — пришли ещё одно чёткое фото себя.",
     photoVisionError:
       "Не удалось обработать файл. Попробуй ещё раз.",
     photoInvalidMedia:
@@ -695,14 +723,6 @@ const translations = {
       "Видео для профиля должно быть не больше 20 МБ, чтобы я мог его проверить. Скинь поменьше.",
     videoChecking:
       "Проверяю безопасность видео и ищу твоё лицо в нескольких моментах...",
-    photoConsensusPending:
-      "Я пока не зафиксировал личность в профиле. Пришли ещё одно другое фото, где виден тот же человек.",
-    photoConsensusOutlierRejected:
-      "Одно ожидающее фото было с другим человеком, поэтому я его не добавил.",
-    photoConsensusConfirmed:
-      "Личность подтверждена по совпадающим фото ✅",
-    photoConsensusNoPairCap:
-      "Я всё ещё не вижу двух фото одного человека. Пока ничего не зафиксировано — пришли ещё одно чёткое фото себя.",
     videoUnsafeContent:
       "В этом видео есть контент, который нельзя публиковать в профиле. Выбери другой ролик.",
     videoOwnerMissing:
@@ -919,6 +939,14 @@ const translations = {
     matchStreamStart: "✨ Почему вы подходите…",
     matchBtnAccept: "✅ Принять",
     matchBtnDecline: "❌ Пас",
+    matchDeclineConfirmPrompt:
+      "Точно пасуешь?\n\n" +
+      "Это решение окончательное — этого человека ты больше не увидишь. " +
+      "Нажми, чтобы подтвердить, или вернись назад.",
+    matchBtnConfirmDecline: "❌ Да, пас",
+    matchBtnKeepDeciding: "← Назад",
+    matchDeclineDismissed:
+      "Без спешки — этот мэтч всё ещё ждёт твоего ответа. 💛",
     matchAcceptedToast: "Принято ✅",
     matchDecisionSavedToast: "Записал ✅",
     matchAccepted: "Принято ✅ Ждём вторую сторону.",
@@ -1008,6 +1036,9 @@ const translations = {
       "• Тот самый человек обязательно появится в одном из ближайших дропов — мы не остановимся.\n" +
       "• Каждую неделю ожидания мы поднимаем тебя выше в приоритете следующего дропа.\n\n" +
       "Спасибо, что доверяешь. До четверга в 18:00 🤍",
+    noMatchDiscountOffer:
+      "🎟️ Небольшая благодарность за терпение: твоё следующее первое свидание — со скидкой {pct}% на один билет. " +
+      "Мы применим скидку автоматически, когда тебе выпадет пара или ты откроешь свои билеты.",
     matchSchedulePeerProposed:
       "Твой собеседник уже отметил даты и время в календаре. Открой его, чтобы согласиться или предложить своё:",
     matchSchedulePeerSuggestedAlternative:
@@ -1018,7 +1049,7 @@ const translations = {
       "Вы оба отметили даты и время, но варианты не пересеклись. Открой календарь и допиши несколько слотов — как только один совпадёт, я зафиксирую дату:",
     matchScheduleProposal: "Как тебе эти варианты? Жми подходящий:",
     matchScheduleIter3:
-      "Взаимно ✅ Открой календарь и отметь удобное время.",
+      "Взаимно 🔥 Открой календарь и отметь удобное время.",
     matchScheduleBtnCalendar: "📅 Открыть календарь",
     // --- Date Ticket (премиум-шаг после взаимного метча) ---
     ticketCardCaption:
@@ -1034,10 +1065,8 @@ const translations = {
     matchScheduled: "Готово — до встречи 🤝\n\n{venue}",
     matchScheduledBtnOpenMaps: "📍 Открыть в картах",
     matchScheduledBtnShare: "📤 Поделиться карточкой",
-    dateCardTagline: "У ВАС СВИДАНИЕ",
     dateCardWhen: "КОГДА",
-    dateCardWhere: "ГДЕ",
-    dateCardSlogan: "Два незнакомца,\nодин хороший вечер.",
+    dateCardSlogan: "Error 404:\nChat not found.\nTry real life.",
     dateCardShareCaption:
       "Делитесь смело — лицо вашего мэтча скрыто, чтобы сохранить его приватность 💞",
     dateCardShareFailed:
@@ -1066,21 +1095,27 @@ const translations = {
     dateCardStep3: "✨ Навожу красоту…",
     dateCardShareStep1: "✨ Готовлю карточку для отправки…",
     dateCardShareStep2: "💫 Размываю лицо мэтча…",
-    dateCardShareStep3: "🌟 Защищаю приватность…",
-    dateCardShareStep4: "⭐ Навожу красоту на фото…",
-    dateCardShareStep5: "🌠 Подготавливаю к отправке…",
+    dateCardShareStep3: "⭐ Навожу красоту на фото…",
+    dateCardShareStep4: "🌠 Почти готово…",
     onbAnalyzeStep1: "🧠 Читаю твой контекст…",
+    onbAnalyzeStep1b: "💭 Думаю…",
     onbAnalyzeStep2: "🧩 Выделяю ключевые черты…",
     onbAnalyzeStep3: "🧮 Собираю твой профиль…",
     verifyAnalyzeStep1: "🔍 Сверяю селфи с фото…",
     verifyAnalyzeStep2: "🧬 Анализирую черты лица…",
     verifyAnalyzeStep3: "⏳ Завершаю проверку…",
-    skipAnalyzeStep1: "✨ Завершаю профиль…",
-    skipAnalyzeStep2: "🧮 Финализирую профиль…",
+    videoCheckStep1: "🎬 Просматриваю твоё видео…",
+    videoCheckStep2: "🙂 Проверяю, что это ты…",
+    videoCheckStep3: "✨ Почти готово…",
+    skipAnalyzeStep1: "✨ Дорабатываю профиль…",
+    skipAnalyzeStep2: "🧮 Свожу всё воедино…",
     skipAnalyzeStep3: "💞 Готовлю к подбору…",
+    profilerBatchThinking: "💭 Думаю…",
     profilerBatchSaving: "🧩 Сохраняю твои ответы…",
     profilerBatchSaved:
       "Карточка обновлена ✅ Учту при следующем подборе.",
+    profilerNextAck: "✍️ Принято…",
+    profilerNextFormulating: "💭 Думаю…",
 
     // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
     venueChangeFemaleButton: "🔄 Сменить место",
@@ -1112,6 +1147,8 @@ const translations = {
     // --- Phase 4: Date ---
     icebreakerIntro:
       "Свидание через 5 часов! Вот темы для разговора:\n\n",
+    icebreakerStreamStart: "✨ Подбираю, о чём вам двоим поговорить…",
+    noMatchStreamStart: "💫 Просматриваю кандидатов этой недели для тебя…",
     dateHintsIntro: "\n\n💡 Пара советов, как всё спланировать:\n",
     profilerSkip: "Пропустить",
     wingmanHintIntro:
@@ -1300,6 +1337,14 @@ const translations = {
       "Усі фото мають належати одній людині. Переконайся, що твоє обличчя є на кожному знімку.",
     photoIdentityUncertain:
       "Не вдалося надійно зіставити обличчя. Надішли чіткіше фото з хорошим освітленням і добре видимим обличчям.",
+    photoConsensusPending:
+      "Я поки не зафіксував особу в профілі. Надішли ще одне інше фото, де видно ту саму людину.",
+    photoConsensusOutlierRejected:
+      "Одне очікуване фото було з іншою людиною, тому я його не додав.",
+    photoConsensusConfirmed:
+      "Особу підтверджено за збіжними фото ✅",
+    photoConsensusNoPairCap:
+      "Я досі не бачу двох фото однієї людини. Поки нічого не зафіксовано — надішли ще одне чітке фото себе.",
     photoVisionError:
       "Не вдалося обробити файл. Спробуй ще раз.",
     photoInvalidMedia:
@@ -1329,14 +1374,6 @@ const translations = {
     videoNeedsPhotoFirst:
       "Спочатку надішли хоча б одне чітке фото для профілю. Після цього я зможу перевірити, що у відео саме ти.",
     videoProcessingUnavailable:
-    photoConsensusPending:
-      "Я поки не зафіксував особу в профілі. Надішли ще одне інше фото, де видно ту саму людину.",
-    photoConsensusOutlierRejected:
-      "Одне очікуване фото було з іншою людиною, тому я його не додав.",
-    photoConsensusConfirmed:
-      "Особу підтверджено за збіжними фото ✅",
-    photoConsensusNoPairCap:
-      "Я досі не бачу двох фото однієї людини. Поки нічого не зафіксовано — надішли ще одне чітке фото себе.",
       "Зараз не вдалося перевірити відео. Попереднє відео не змінено. Спробуй ще раз трохи пізніше.",
     ticketRewardPhoto:
       "🎟️ Клас — ти щойно отримав *безкоштовний квиток на побачення*!\n\nЯк це працює: кожне побачення коштує 1 квиток, і зазвичай квитки платні. За додані фото — один у подарунок. Баланс: *{balance}* 🎟️",
@@ -1540,6 +1577,14 @@ const translations = {
     matchStreamStart: "✨ Чому ви підходите…",
     matchBtnAccept: "✅ Прийняти",
     matchBtnDecline: "❌ Пас",
+    matchDeclineConfirmPrompt:
+      "Точно пасуєш?\n\n" +
+      "Це рішення остаточне — цю людину ти більше не побачиш. " +
+      "Натисни, щоб підтвердити, або повернись назад.",
+    matchBtnConfirmDecline: "❌ Так, пас",
+    matchBtnKeepDeciding: "← Назад",
+    matchDeclineDismissed:
+      "Без поспіху — цей мэтч ще чекає на твою відповідь. 💛",
     matchAcceptedToast: "Прийнято ✅",
     matchDecisionSavedToast: "Записав ✅",
     matchAccepted: "Прийнято ✅ Чекаємо на іншу сторону.",
@@ -1629,9 +1674,12 @@ const translations = {
       "• Та сама людина обов'язково з'явиться в одному з найближчих дропів — ми не зупинимось.\n" +
       "• Щотижня очікування ми піднімаємо тебе вище у пріоритеті наступного дропу.\n\n" +
       "Дякуємо, що довіряєш. До четверга о 18:00 🤍",
+    noMatchDiscountOffer:
+      "🎟️ Невелика подяка за терпіння: твоє наступне перше побачення — зі знижкою {pct}% на один квиток. " +
+      "Ми застосуємо знижку автоматично, коли тобі випаде пара або ти відкриєш свої квитки.",
     matchScheduleProposal: "Як тобі ці варіанти? Тисни зручний:",
     matchScheduleIter3:
-      "Взаємно ✅ Відкрий календар і познач зручний час.",
+      "Взаємно 🔥 Відкрий календар і познач зручний час.",
     matchScheduleBtnCalendar: "📅 Відкрити календар",
     // --- Date Ticket (преміум-крок після взаємного метчу) ---
     ticketCardCaption:
@@ -1647,10 +1695,8 @@ const translations = {
     matchScheduled: "Готово — до зустрічі 🤝\n\n{venue}",
     matchScheduledBtnOpenMaps: "📍 Відкрити в картах",
     matchScheduledBtnShare: "📤 Поділитися карткою",
-    dateCardTagline: "У ВАС ПОБАЧЕННЯ",
     dateCardWhen: "КОЛИ",
-    dateCardWhere: "ДЕ",
-    dateCardSlogan: "Двоє незнайомців,\nодин гарний вечір.",
+    dateCardSlogan: "Error 404:\nChat not found.\nTry real life.",
     dateCardShareCaption:
       "Діліться сміливо — обличчя вашого метчу приховане, щоб зберегти його приватність 💞",
     dateCardShareFailed:
@@ -1687,21 +1733,27 @@ const translations = {
     dateCardStep3: "✨ Наводжу красу…",
     dateCardShareStep1: "✨ Готую картку для надсилання…",
     dateCardShareStep2: "💫 Розмиваю обличчя метчу…",
-    dateCardShareStep3: "🌟 Захищаю приватність…",
-    dateCardShareStep4: "⭐ Наводжу красу на фото…",
-    dateCardShareStep5: "🌠 Готую до надсилання…",
+    dateCardShareStep3: "⭐ Наводжу красу на фото…",
+    dateCardShareStep4: "🌠 Майже готово…",
     onbAnalyzeStep1: "🧠 Читаю твій контекст…",
+    onbAnalyzeStep1b: "💭 Думаю…",
     onbAnalyzeStep2: "🧩 Виділяю ключові риси…",
     onbAnalyzeStep3: "🧮 Збираю твій профіль…",
     verifyAnalyzeStep1: "🔍 Звіряю селфі з фото…",
     verifyAnalyzeStep2: "🧬 Аналізую риси обличчя…",
     verifyAnalyzeStep3: "⏳ Завершую перевірку…",
-    skipAnalyzeStep1: "✨ Завершую профіль…",
-    skipAnalyzeStep2: "🧮 Фіналізую профіль…",
+    videoCheckStep1: "🎬 Переглядаю твоє відео…",
+    videoCheckStep2: "🙂 Перевіряю, що це ти…",
+    videoCheckStep3: "✨ Майже готово…",
+    skipAnalyzeStep1: "✨ Допрацьовую профіль…",
+    skipAnalyzeStep2: "🧮 Зводжу все воєдино…",
     skipAnalyzeStep3: "💞 Готую до підбору…",
+    profilerBatchThinking: "💭 Думаю…",
     profilerBatchSaving: "🧩 Зберігаю твої відповіді…",
     profilerBatchSaved:
       "Картку оновлено ✅ Врахую під час наступного підбору.",
+    profilerNextAck: "✍️ Прийнято…",
+    profilerNextFormulating: "💭 Думаю…",
 
     // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
     venueChangeFemaleButton: "🔄 Змінити місце",
@@ -1733,6 +1785,8 @@ const translations = {
     // --- Phase 4: Date ---
     icebreakerIntro:
       "Побачення через 5 годин! Ось теми для розмови:\n\n",
+    icebreakerStreamStart: "✨ Добираю, про що вам двом поговорити…",
+    noMatchStreamStart: "💫 Переглядаю кандидатів цього тижня для тебе…",
     dateHintsIntro: "\n\n💡 Кілька порад, як усе спланувати:\n",
     profilerSkip: "Пропустити",
     wingmanHintIntro:
@@ -1927,6 +1981,14 @@ const deTranslations: TranslationTable = {
     "Alle Fotos müssen zur selben Person gehören. Stelle sicher, dass dein Gesicht auf jedem Bild zu sehen ist.",
   photoIdentityUncertain:
     "Das Gesicht konnte nicht zuverlässig zugeordnet werden. Sende ein klareres Foto mit gutem Licht und gut sichtbarem Gesicht.",
+  photoConsensusPending:
+    "Ich habe die Profilidentität noch nicht festgelegt. Sende ein weiteres anderes Foto, auf dem dieselbe Person zu sehen ist.",
+  photoConsensusOutlierRejected:
+    "Ein wartendes Foto zeigte eine andere Person, deshalb habe ich es nicht hinzugefügt.",
+  photoConsensusConfirmed:
+    "Identität durch übereinstimmende Fotos bestätigt ✅",
+  photoConsensusNoPairCap:
+    "Ich sehe immer noch keine zwei Fotos derselben Person. Es wurde noch nichts festgelegt - sende ein weiteres klares Foto von dir.",
   photoVisionError: "Die Datei konnte nicht verarbeitet werden. Versuch es erneut.",
   photoInvalidMedia:
     "Diese Datei ist kein unterstütztes Foto. Sende ein JPEG-, PNG-, WebP- oder HEIC-Bild.",
@@ -1969,14 +2031,6 @@ const deTranslations: TranslationTable = {
   verifyBtnSkipConfirmTicket: "🔴 Bonus aufgeben und überspringen",
   verifySkipped:
     "Verifizierung übersprungen. Du kannst sie später im Profilmenü starten, " +
-  photoConsensusPending:
-    "Ich habe die Profilidentität noch nicht festgelegt. Sende ein weiteres anderes Foto, auf dem dieselbe Person zu sehen ist.",
-  photoConsensusOutlierRejected:
-    "Ein wartendes Foto zeigte eine andere Person, deshalb habe ich es nicht hinzugefügt.",
-  photoConsensusConfirmed:
-    "Identität durch übereinstimmende Fotos bestätigt ✅",
-  photoConsensusNoPairCap:
-    "Ich sehe immer noch keine zwei Fotos derselben Person. Es wurde noch nichts festgelegt - sende ein weiteres klares Foto von dir.",
     "um dein ELO wiederherzustellen.",
   verifyCheckPending:
     "🔍 Persona hat deine Verifizierung, verarbeitet sie aber noch. " +
@@ -2139,6 +2193,14 @@ const deTranslations: TranslationTable = {
   matchStreamStart: "✨ Warum ihr zusammenpasst…",
   matchBtnAccept: "✅ Annehmen",
   matchBtnDecline: "❌ Passen",
+  matchDeclineConfirmPrompt:
+    "Dieses Match passen?\n\n" +
+    "Das ist endgültig — diese Person wird dir nicht noch einmal vorgeschlagen. " +
+    "Tippe zum Bestätigen oder geh zurück.",
+  matchBtnConfirmDecline: "❌ Ja, passen",
+  matchBtnKeepDeciding: "← Zurück",
+  matchDeclineDismissed:
+    "Kein Stress — dieses Match wartet noch auf deine Antwort. 💛",
   matchAcceptedToast: "Angenommen ✅",
   matchDecisionSavedToast: "Gespeichert ✅",
   matchAccepted: "Angenommen ✅ Warten auf die andere Person.",
@@ -2225,9 +2287,12 @@ const deTranslations: TranslationTable = {
     "• Die richtige Person kommt in einem der nächsten Drops - wir hören nicht auf, bis es klappt.\n" +
     "• Jede Woche Wartezeit rücken wir dich in der Priorität für den nächsten Drop weiter nach oben.\n\n" +
     "Danke für dein Vertrauen. Bis Donnerstag um 18:00 🤍",
+  noMatchDiscountOffer:
+    "🎟️ Ein kleines Dankeschön für deine Geduld: dein nächstes erstes Date gibt es mit {pct}% Rabatt auf ein Ticket. " +
+    "Wir ziehen den Rabatt automatisch ab, sobald du ein Match bekommst oder deine Tickets öffnest.",
   matchScheduleProposal: "Wie wäre es mit einer dieser Zeiten? Tipp an, was passt:",
   matchScheduleIter3:
-    "Beidseitig ✅ Öffne den Kalender und markiere passende Zeiten.",
+    "Beidseitig 🔥 Öffne den Kalender und markiere passende Zeiten.",
   matchScheduleBtnCalendar: "📅 Kalender öffnen",
   ticketCardCaption:
     "Beidseitig 🔥 Hol dir dein *Date-Ticket*, um die Planung zu öffnen.",
@@ -2238,10 +2303,8 @@ const deTranslations: TranslationTable = {
   matchScheduled: "Fixiert — bis dann 🤝\n\n{venue}",
   matchScheduledBtnOpenMaps: "📍 In Maps öffnen",
   matchScheduledBtnShare: "📤 Karte teilen",
-  dateCardTagline: "ES IST EIN DATE",
   dateCardWhen: "WANN",
-  dateCardWhere: "WO",
-  dateCardSlogan: "Zwei Fremde,\nein guter Abend.",
+  dateCardSlogan: "Error 404:\nChat not found.\nTry real life.",
   dateCardShareCaption:
     "Teile sie ruhig — das Gesicht deines Matches ist zum Schutz seiner Privatsphäre verdeckt 💞",
   dateCardShareFailed:
@@ -2277,21 +2340,27 @@ const deTranslations: TranslationTable = {
   dateCardStep3: "✨ Der letzte Schliff…",
   dateCardShareStep1: "✨ Bereite deine teilbare Karte vor…",
   dateCardShareStep2: "💫 Mache das Gesicht deines Matches unkenntlich…",
-  dateCardShareStep3: "🌟 Schütze die Privatsphäre…",
-  dateCardShareStep4: "⭐ Verfeinere das Foto…",
-  dateCardShareStep5: "🌠 Mache es versandbereit…",
+  dateCardShareStep3: "⭐ Verfeinere das Foto…",
+  dateCardShareStep4: "🌠 Fast fertig…",
   onbAnalyzeStep1: "🧠 Lese deinen Kontext…",
+  onbAnalyzeStep1b: "💭 Denke nach…",
   onbAnalyzeStep2: "🧩 Erfasse deine Kernzüge…",
   onbAnalyzeStep3: "🧮 Erstelle dein Profil…",
   verifyAnalyzeStep1: "🔍 Gleiche dein Selfie ab…",
   verifyAnalyzeStep2: "🧬 Lese Gesichtszüge…",
   verifyAnalyzeStep3: "⏳ Schließe die Prüfung ab…",
-  skipAnalyzeStep1: "✨ Stelle dein Profil fertig…",
-  skipAnalyzeStep2: "🧮 Finalisiere dein Profil…",
+  videoCheckStep1: "🎬 Ich sehe dein Video durch…",
+  videoCheckStep2: "🙂 Prüfe, ob du das bist…",
+  videoCheckStep3: "✨ Fast fertig…",
+  skipAnalyzeStep1: "✨ Verfeinere dein Profil…",
+  skipAnalyzeStep2: "🧮 Füge alles zusammen…",
   skipAnalyzeStep3: "💞 Bereite dich aufs Matching vor…",
+  profilerBatchThinking: "💭 Denke nach…",
   profilerBatchSaving: "🧩 Speichere deine Antworten…",
   profilerBatchSaved:
     "Präferenzkarte aktualisiert ✅ Ich nutze sie beim nächsten Match.",
+  profilerNextAck: "✍️ Notiert…",
+  profilerNextFormulating: "💭 Denke nach…",
 
   // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
   venueChangeFemaleButton: "🔄 Ort ändern",
@@ -2320,6 +2389,8 @@ const deTranslations: TranslationTable = {
     "Die Frist zur Bestätigung des neuen Ortes ist abgelaufen, daher wurde das Date abgesagt.",
   venueChangeAlreadyResolved: "Über diese Ortsänderung wurde bereits entschieden.",
   icebreakerIntro: "Dein Date ist in 5 Stunden! Ein paar Gesprächsstarter für dich:\n\n",
+  icebreakerStreamStart: "✨ Ich stelle ein paar Gesprächsthemen für euch zusammen…",
+  noMatchStreamStart: "💫 Ich gehe die Matches dieser Woche für dich durch…",
   wingmanHintIntro: "👋 Insider-Tipp - dein Date ist in 90 Minuten:\n\n",
   dateHintsIntro: "\n\n💡 Ein paar Tipps zum Planen:\n",
   profilerSkip: "Überspringen",
@@ -2452,6 +2523,14 @@ const plTranslations: TranslationTable = {
     "Wszystkie zdjęcia muszą należeć do jednej osoby. Upewnij się, że Twoja twarz jest na każdym ujęciu.",
   photoIdentityUncertain:
     "Nie udało się wiarygodnie dopasować twarzy. Wyślij wyraźniejsze zdjęcie z lepszym światłem i dobrze widoczną twarzą.",
+  photoConsensusPending:
+    "Nie ustaliłem jeszcze tożsamości profilu. Wyślij jeszcze jedno inne zdjęcie, na którym widać tę samą osobę.",
+  photoConsensusOutlierRejected:
+    "Jedno oczekujące zdjęcie pokazywało inną osobę, więc go nie dodałem.",
+  photoConsensusConfirmed:
+    "Tożsamość potwierdzona przez pasujące zdjęcia ✅",
+  photoConsensusNoPairCap:
+    "Nadal nie widzę dwóch zdjęć tej samej osoby. Nic nie zostało jeszcze ustalone - wyślij kolejne wyraźne zdjęcie siebie.",
   photoVisionError: "Nie udało się przetworzyć pliku. Spróbuj ponownie.",
   photoInvalidMedia:
     "Ten plik nie jest obsługiwanym zdjęciem. Wyślij obraz JPEG, PNG, WebP lub HEIC.",
@@ -2507,14 +2586,6 @@ const plTranslations: TranslationTable = {
   verifyCheckAlreadyDone:
     "Już przetworzone - powinna pojawić się wiadomość z wynikiem powyżej. " +
     "Jeśli coś wygląda źle, kliknij 🟢 Zweryfikuj teraz, aby spróbować ponownie.",
-  photoConsensusPending:
-    "Nie ustaliłem jeszcze tożsamości profilu. Wyślij jeszcze jedno inne zdjęcie, na którym widać tę samą osobę.",
-  photoConsensusOutlierRejected:
-    "Jedno oczekujące zdjęcie pokazywało inną osobę, więc go nie dodałem.",
-  photoConsensusConfirmed:
-    "Tożsamość potwierdzona przez pasujące zdjęcia ✅",
-  photoConsensusNoPairCap:
-    "Nadal nie widzę dwóch zdjęć tej samej osoby. Nic nie zostało jeszcze ustalone - wyślij kolejne wyraźne zdjęcie siebie.",
   verifyCheckInfraError: "Nie udało się teraz połączyć z usługą weryfikacji. Spróbuj za chwilę.",
   verifyOutcomeVerified:
     "Zweryfikowane ✅ Profil aktywny. Odezwę się, gdy znajdę dopasowanie.",
@@ -2664,6 +2735,14 @@ const plTranslations: TranslationTable = {
   matchStreamStart: "✨ Czemu do siebie pasujecie…",
   matchBtnAccept: "✅ Akceptuj",
   matchBtnDecline: "❌ Odpuść",
+  matchDeclineConfirmPrompt:
+    "Na pewno odpuszczasz?\n\n" +
+    "Ta decyzja jest ostateczna — tej osoby już więcej nie zobaczysz. " +
+    "Kliknij, aby potwierdzić, albo wróć.",
+  matchBtnConfirmDecline: "❌ Tak, odpuść",
+  matchBtnKeepDeciding: "← Wróć",
+  matchDeclineDismissed:
+    "Bez pośpiechu — to dopasowanie wciąż czeka na Twoją odpowiedź. 💛",
   matchAcceptedToast: "Przyjęte ✅",
   matchDecisionSavedToast: "Zapisane ✅",
   matchAccepted: "Przyjęte ✅ Czekamy na drugą osobę.",
@@ -2750,9 +2829,12 @@ const plTranslations: TranslationTable = {
     "• Właściwa osoba trafi do jednego z kolejnych dropów - nie przestaniemy, dopóki się nie uda.\n" +
     "• Co tydzień oczekiwania podnosimy Cię wyżej w priorytecie kolejnego dropu.\n\n" +
     "Dzięki za zaufanie. Do czwartku o 18:00 🤍",
+  noMatchDiscountOffer:
+    "🎟️ Małe podziękowanie za cierpliwość: Twoja następna pierwsza randka z rabatem {pct}% na jeden bilet. " +
+    "Zastosujemy rabat automatycznie, gdy trafi Ci się para lub otworzysz swoje bilety.",
   matchScheduleProposal: "Co powiesz na jedną z tych opcji? Kliknij, co pasuje:",
   matchScheduleIter3:
-    "Wzajemnie ✅ Otwórz kalendarz i zaznacz pasujące godziny.",
+    "Wzajemnie 🔥 Otwórz kalendarz i zaznacz pasujące godziny.",
   matchScheduleBtnCalendar: "📅 Otwórz kalendarz",
   ticketCardCaption:
     "Wzajemnie 🔥 Odbierz *bilet na randkę*, żeby otworzyć planowanie.",
@@ -2763,10 +2845,8 @@ const plTranslations: TranslationTable = {
   matchScheduled: "Ustalone — do zobaczenia 🤝\n\n{venue}",
   matchScheduledBtnOpenMaps: "📍 Otwórz w Mapach",
   matchScheduledBtnShare: "📤 Udostępnij kartę",
-  dateCardTagline: "TO RANDKA",
   dateCardWhen: "KIEDY",
-  dateCardWhere: "GDZIE",
-  dateCardSlogan: "Dwoje obcych,\njeden dobry wieczór.",
+  dateCardSlogan: "Error 404:\nChat not found.\nTry real life.",
   dateCardShareCaption:
     "Udostępniaj śmiało — twarz Twojego matcha jest zasłonięta dla ochrony jego prywatności 💞",
   dateCardShareFailed:
@@ -2802,21 +2882,27 @@ const plTranslations: TranslationTable = {
   dateCardStep3: "✨ Dodaję ostatnie szlify…",
   dateCardShareStep1: "✨ Przygotowuję kartę do udostępnienia…",
   dateCardShareStep2: "💫 Rozmywam twarz twojego matcha…",
-  dateCardShareStep3: "🌟 Chronię prywatność…",
-  dateCardShareStep4: "⭐ Dopracowuję zdjęcie…",
-  dateCardShareStep5: "🌠 Przygotowuję do wysłania…",
+  dateCardShareStep3: "⭐ Dopracowuję zdjęcie…",
+  dateCardShareStep4: "🌠 Prawie gotowe…",
   onbAnalyzeStep1: "🧠 Czytam twój kontekst…",
+  onbAnalyzeStep1b: "💭 Myślę…",
   onbAnalyzeStep2: "🧩 Wyodrębniam kluczowe cechy…",
   onbAnalyzeStep3: "🧮 Buduję twój profil…",
   verifyAnalyzeStep1: "🔍 Porównuję twoje selfie…",
   verifyAnalyzeStep2: "🧬 Analizuję rysy twarzy…",
   verifyAnalyzeStep3: "⏳ Kończę weryfikację…",
-  skipAnalyzeStep1: "✨ Kończę twój profil…",
-  skipAnalyzeStep2: "🧮 Finalizuję twój profil…",
+  videoCheckStep1: "🎬 Przeglądam twój film…",
+  videoCheckStep2: "🙂 Sprawdzam, czy to ty…",
+  videoCheckStep3: "✨ Prawie gotowe…",
+  skipAnalyzeStep1: "✨ Dopracowuję twój profil…",
+  skipAnalyzeStep2: "🧮 Składam wszystko w całość…",
   skipAnalyzeStep3: "💞 Przygotowuję cię do doboru…",
+  profilerBatchThinking: "💭 Myślę…",
   profilerBatchSaving: "🧩 Zapisuję twoje odpowiedzi…",
   profilerBatchSaved:
     "Karta preferencji zaktualizowana ✅ Uwzględnię ją przy następnym doborze.",
+  profilerNextAck: "✍️ Zapisane…",
+  profilerNextFormulating: "💭 Myślę…",
 
   // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
   venueChangeFemaleButton: "🔄 Zmień miejsce",
@@ -2845,6 +2931,8 @@ const plTranslations: TranslationTable = {
     "Czas na potwierdzenie nowego miejsca minął, więc randka została odwołana.",
   venueChangeAlreadyResolved: "Decyzja o zmianie miejsca została już podjęta.",
   icebreakerIntro: "Twoja randka jest za 5 godzin! Kilka tematów na start:\n\n",
+  icebreakerStreamStart: "✨ Dobieram kilka tematów do rozmowy dla was…",
+  noMatchStreamStart: "💫 Przeglądam dla ciebie tegotygodniowe dopasowania…",
   wingmanHintIntro: "👋 Wskazówka od środka - randka jest za 90 minut:\n\n",
   dateHintsIntro: "\n\n💡 Kilka wskazówek, jak to zaplanować:\n",
   profilerSkip: "Pomiń",

@@ -55,12 +55,13 @@ out of Telegram-only workers.
   rounds fail it hands off to the Calendar Mini App; venue is chosen by an
   AI concierge from each user's free-text *vibe* + commute pin.
 - **Native Telegram AI Experience** — Heavy use of Bot API 9.x/10.x:
-  `sendMessageDraft` (streamed pitches), `icon_custom_emoji_id` (menu and
-  match-decision affordances), `message_effect_id` (match confirmations),
-  `date_time` MessageEntity (timezone-aware date confirmation), pinned status
-  banner (live discrete countdown), and — behind `RICH_THINKING_ENABLED` (Bot
-  API 10.1) — `sendRichMessageDraft` with `RichBlockThinking` (`<tg-thinking>`)
-  shimmer on the AI status/pitch "thinking" beats.
+  bottom-of-chat `sendMessage` + `editMessageText` streams (status, pitch,
+  no-match, ice-breakers), `icon_custom_emoji_id` (menu and match-decision
+  affordances), `message_effect_id` (match confirmations), `date_time`
+  MessageEntity (timezone-aware date confirmation), and pinned status banner
+  (live discrete countdown). Product flows intentionally avoid Telegram draft
+  streams because clients treat them like generated AI replies and may reserve
+  scroll space for a follow-up answer.
 - **Blind Decision Invariant** — A user must never learn their partner's
   Accept/Decline before committing to their own.
 
@@ -128,8 +129,28 @@ fact collector owns profile capture:
 | `finalize gate` | Activate only after required profile data, AI-memory branch, city, verified email, and minimum photos are complete |
 
 Canonical order: name + age → gender → preference → height → hobbies → partner
-requirements → optional nationality/ethnicity → AI memory → photos. Questions
-come from server templates for `en`, `ru`, `uk`, `de`, and `pl`.
+requirements → optional nationality/ethnicity → **vibe (ideal Friday night →
+process-vs-who follow-up)** → AI memory → photos. Questions come from server
+templates for `en`, `ru`, `uk`, `de`, and `pl`.
+
+**Vibe questions (matching signal, asked of everyone).** Two short free-text
+questions sit right before the Magic Prompt step so *every* user — including
+those who decline AI-memory export — supplies real psychological signal, not
+just demographics:
+
+- `friday_vibe` — "describe your ideal Friday night, money/logistics no object,
+  honestly (not what sounds 'right')".
+- `vibe_focus` — "what matters most — the experience itself, or who's with you?".
+
+At `finalize_onboarding` one LLM pass (`services/vibe-axes.ts`) maps the two
+answers into structured columns: `Profile.energyAxis` (internal↔external
+"tempo"), `orientationAxis` (experience↔connection), `socialRole`
+(initiator/participant/observer — **stored, not scored in v1**), and
+`anchorTags[]`. The raw Friday text is folded into `psychologicalSummary` so it
+also feeds the embedding (`V_explicit`) and survives `embedding-refresh`.
+Extraction is best-effort: a failure never blocks finalize (matching simply
+skips the vibe factor). These answers replace the duplicated Profiler questions
+(§Phase 1b) and feed icebreakers. See §3.2 for how the axes are scored.
 
 Before the Telegram Mini App hands off to the conversational bot, the user
 must also choose a **dating city** (`Profile.homeCityKey`). This is framed as
@@ -234,24 +255,39 @@ Hard rules enforced by the collector:
   `runStatusSequence` primitive (`services/ai-stream.ts`,
   `services/analysis-status.ts`) backs the equivalent "agent is working"
   beats at verification submission, the verification soft-skip, each Profiler
-  batch boundary, concierge venue selection, and the date-card PNG render
-  (§3.7a). Most of these are cosmetic pacing only — fixed-duration stubs that
-  narrate real but usually sub-second work and never gate the flow. The
-  **date-card render is the exception**: it is the one genuinely slow beat, so
-  its status is passed a `until: <render promise>` and the last step is **held
-  on screen until the PNG is actually ready** (then torn down before the card is
-  sent), rather than running on a timer. When `RICH_THINKING_ENABLED` (Bot API
-  10.1, off by default) these beats — and the match-pitch "analysing" beat —
-  render as native `RichBlockThinking` shimmer via `sendRichMessageDraft`
-  (`<tg-thinking>`, `services/telegram-rich.ts`) instead of the edited status
-  line. Each beat is a short single-line label led by an animated Telegram AI
-  emoji (the recommended AIActions pack) rendered as `<tg-emoji>`, with the
-  step's plain glyph as the non-Premium / pre-10.1 fallback. A step may carry
-  its own AIActions id (`StatusStep.emojiId`, sourced from the optional
-  `CUSTOM_EMOJI_AI_*` env slots) so a multi-beat sequence shows a distinct icon
-  per step; resolution falls back to the shared `CUSTOM_EMOJI_THINKING_ID` then
-  the plain glyph. Any rich-API failure degrades to the classic
-  `sendMessageDraft`/`editMessageText` path, so the toggle is purely cosmetic.
+  batch boundary, every Profiler question's compose beat (§Phase 1b),
+  concierge venue selection, the profile-video upload check,
+  and the date-card PNG render (§3.7a). Most of these are cosmetic pacing only —
+  fixed-duration stubs that narrate real but usually sub-second work and never
+  gate the flow. Concierge venue selection is hybrid: the first three beats
+  always play out, then the final atmosphere beat tracks
+  `until: <venue promise>` and is held until the venue is ready. The
+  **date-card render** remains the genuinely slow render
+  wait: its status is passed a `until: <render promise>` and the last step is
+  **held on screen until the PNG is actually ready** (then torn down before the
+  card is sent), rather than running on a timer. The **profile-video upload
+  check** is the other genuinely-slow held wait: while it runs (frame sampling +
+  Rekognition face/identity + image/audio moderation + Whisper transcript) its
+  first two beats play as pacing and the final "last checks" beat tracks
+  `until: <validation promise>` **plus a short deliberate pad**, held until the
+  check settles and then torn down before the accept/reject verdict lands in its
+  place. These beats are ordinary bottom-of-chat messages edited in place; this
+  keeps Telegram from jumping the chat upward or reserving blank space for an
+  AI-style generated reply. Rich `<tg-thinking>` draft helpers are dev-demo-only
+  for these beats, **except two flows that deliberately opt into the native rich
+  `<tg-thinking>` shimmer + AI Actions `<tg-emoji>` draft path**: (1) the
+  Profiler in-batch flow (§Phase 1b), so the post-onboarding Q&A reads as an AI
+  composing each question for the user; and (2) the **periodic profile-survey
+  "thinking" pause** — during the conversational profile survey, every third
+  typed answer the bot holds one short "thinking" shimmer beat (~2.5 s, the
+  `think` AIActions glyph) *before* the next question is composed. The pause runs
+  strictly first: the "typing…" indicator and the next-question generation only
+  start after the shimmer is torn down, so the thinking beat is never preceded by
+  a typing indicator. Photo-stage continues, photo/video uploads, and
+  context-dump pastes do not count toward the cadence. Both flows accept the
+  rich-draft tradeoff (the client may treat it as a generated AI reply / reserve
+  scroll space) because the AI-compose feel is the goal there; both degrade to
+  the classic edited-message stream when a client can't render rich drafts.
 
 ### 1.4 Identity verification (Phase 6.3 in code)
 
@@ -375,8 +411,26 @@ Telegram-only in v1.
   defers it out of the user's local quiet hours. Existing/legacy users are
   lazily seeded by the worker, their first batch landing at the next window.
 - **Batches.** Questions are sent in **batches of 3** (`PROFILER_BATCH_SIZE_NORMAL`).
-  Within a batch the next question is sent immediately on the previous answer;
-  between batches the Profiler pauses to the next **morning (09:00) / evening
+  **Every** question — the first of a batch and every follow-up — is delivered
+  through the same **native Telegram AI-compose** path (Bot API 10.1 rich
+  messages, `streamComposedRich`), so the experience is uniform: one question is
+  never a plain dump while the next streams. Each question is **one** rich-message
+  draft (a single `draft_id`) carrying, in order: a `<tg-thinking>` **shimmer
+  status** whose leading glyph is an animated **AI Actions** `<tg-emoji>`, then
+  the question streamed in as growing rich-message drafts, then the question
+  persisted as a real message carrying the Skip button. Because it's a single
+  draft, the client reserves/collapses the "AI is composing" scroll space exactly
+  **once** per question — no mid-stream jump. The status beats differ only by
+  context: a **follow-up** (after an answer/skip) shows acknowledge → "thinking"
+  (`profilerNextQuestionSteps`, ~2.5s + ~4.5s); the **batch opener** (after a
+  long window pause, nothing to acknowledge) shows just "thinking"
+  (`profilerOpenQuestionSteps`). The between-batch confirmation ("Preference card
+  updated ✅") uses the same shimmer path. If a client can't render rich drafts
+  every path falls back to the classic edited-message stream. **This is the one
+  product flow that opts into the rich `<tg-thinking>` path** (elsewhere it is
+  dev-demo-only — see §1.3); it accepts that the client may reserve scroll space
+  under the draft, because the AI-compose feel is the goal here.
+  Between batches the Profiler pauses to the next **morning (09:00) / evening
   (18:00) window in the user's local time** (`Profile.timeZone`, derived from
   the dating city; `Europe/Kyiv` fallback). When the next weekly drop is within
   **48 h** (`PROFILER_RUSH_WINDOW_HOURS`) it switches to **rush mode**: batches
@@ -390,6 +444,11 @@ Telegram-only in v1.
 - **Questions.** Women are asked from the "what you want in a partner/date"
   angle (fuels the man's *hints*); men from the "who you are" angle (fuels the
   woman's *icebreakers*). The bank lives in `packages/shared/profiler-questions.ts`.
+  Questions the onboarding §1.3 vibe answers now cover were **removed** to avoid
+  duplication: `f_activity_pref` ("active vs calm" = the energy axis) and
+  `m_ideal_evening` (≈ the ideal-Friday question). The remaining bank is
+  icebreaker-only flavor that onboarding does not capture (chronotype, sport,
+  turn-offs, shared interests, media, surprises, communication style).
 - **Storage.** One `ProfilerAnswer` row per (user, question): `priority`,
   `answerText`, `skipped`, `skipReturned`, `cycleId`.
 - **Weighting.** Icebreaker/hint generation emphasises a partner's answers by
@@ -466,7 +525,15 @@ first-class flows:
 - **No-match notice** — Thursday 18:15 Kyiv (`NO_MATCH_NOTICE_CRON_SCHEDULE = "15 18 * * 4"`).
   An empathetic DM goes to every eligible-but-unpaired user. Tier escalates
   with consecutive famine count (1 / 2 / 3+); idempotent via
-  `NoMatchNotice@@unique([userId, dropDate])`.
+  `NoMatchNotice@@unique([userId, dropDate])`. The DM is delivered through the
+  live bottom-of-chat edit stream (`streamDraftsToChat`, the same primitive as
+  the match pitch), so it reads as personally composed rather than a mass-blast
+  template. It is a deliberately **short** 2-chunk stream — one "thinking" lead
+  beat (`noMatchStreamStart`) then the full message — so bad news is never
+  spelled out slowly. Telegram-only (mobile/Expo accounts are skipped here).
+  When `TICKET_FEATURE_ENABLED` and the famine streak reaches **tier ≥ 2**
+  (2nd consecutive week+), the same DM also grants and announces a one-time
+  **single-ticket discount** (see §3.5b — *Famine discount*).
 
 ### 3.2 Scoring (`services/match-engine.ts`)
 
@@ -477,8 +544,25 @@ MatchScore = ((w₁·V_explicit) + (w₂·V_research)) · V_league − (w₃·V_
                                                 + starvationBonus
 ```
 
-- `V_explicit` (cosine similarity of the 1536-dim profile embedding), weight 0.80.
-- `V_research` (sociological heuristics: age, height, social energy, etc.), weight 0.20.
+- `V_explicit` (cosine similarity of the 1536-dim profile embedding), weight
+  0.65 (lowered from 0.80 on 2026-06-21). The embedding now carries only
+  open-ended psychological prose: demographics (age/gender/height/city) that
+  duplicate `V_research`/hard filters were stripped from the declined-profile
+  fallback text, and the §1.3 vibe answers were folded in, so the embedding
+  finally has real signal for users who skip the Magic Prompt.
+- `V_research` (structured compatibility heuristics), weight 0.35 (raised from
+  0.20). Sub-factors (weighted, renormalised over whichever are present):
+  **vibe quadrant proximity** 0.40 (PRIMARY), age gradient 0.20, height norm
+  0.20, educational homogamy 0.20. The quadrant factor scores *proximity*
+  between the two users' `energyAxis`/`orientationAxis` (§1.3) — similar tempo
+  lands in the same/adjacent quadrant, a big tempo gap is penalised harder than
+  an orientation gap. This **replaces** the old keyword-scanned "social energy"
+  factor (which was phantom — it scanned `psychologicalSummary` for the English
+  words introvert/extrovert and almost never fired). `socialRole` complementarity
+  is intentionally NOT scored yet (Phase 2 — needs accept/decline data).
+- The explicit/research re-split is **inside** the positive bracket, so it does
+  not change `V_league`'s role: beauty still multiplies the whole bracket
+  identically. `V_league` is unchanged.
 - `V_league` — universal Elo-distance multiplier and the **primary
   (assortative) match gate**. Elo is seeded from the AI vision attractiveness
   pass (0..100 → Elo 200..800, 6 Elo per attractiveness point), so this is in
@@ -533,14 +617,22 @@ for the dashboard's algorithm-quality view.
   actually delivered, the queue sends those gift pre-rolls first, waits
   `MATCH_PREROLL_DELAY_MS` (default 2 min), then reveals the match cards so the
   gift effect and pitch stream do not visually stack.
-- For Telegram users the pitch streams via `sendMessageDraft` (or, behind
-  `RICH_THINKING_ENABLED`, `sendRichMessageDraft` with a `<tg-thinking>` shimmer
-  on the "analysing" beat); either way the final message is a plain text
-  `sendMessage` so the countdown worker's `editMessageText` keeps working, and
-  the `pitchMessageId{A,B}` is captured.
+- For Telegram users the pitch streams by sending one bottom-of-chat message and
+  editing it through the pitch chunks. The final edit carries the inline
+  Accept/Decline keyboard, so the countdown worker's `editMessageText` keeps
+  working against the same `pitchMessageId{A,B}`.
 - An explicit `matchDeadlineNotice` follows the headline: **24 h** to reply,
-  decision is final once tapped.
-- Buttons: `[Accept]` / `[Decline]`.
+  decision is final once committed.
+- Buttons: `[Accept]` / `[Decline]`. **Accept commits immediately.** **Decline
+  is guarded** — because a pass is irreversible (the lifetime-ban invariant of
+  §3.2 means the pair is never shown again), the first `[Decline]` tap does not
+  commit: the bot replies with a confirmation card (`matchDeclineConfirmPrompt`)
+  carrying `[❌ Yes, pass]` (`match:do:decline:` — the real commit, native
+  `danger` style) over `[← Go back]` (`match:keep:` — no state change, the live
+  pitch keyboard stays). The card reveals nothing about the partner's choice, so
+  the §3.4 blind-decision invariant is unaffected. Telegram-only; the mobile
+  `POST /v1/matches/:id/decision` path is unchanged (client-side confirmation is
+  the app's concern).
 - The `proposal-countdown` worker live-edits a "⏳ Xh left" plate every
   5 min — hourly during the first 23 h, then per-5-min during the final hour.
 
@@ -652,6 +744,20 @@ match/bundle, scope, and amount, and can be consumed only once.
   `POST /v1/matches/:id/ticket/use` (gate spend) and `/v1/tickets/*`
   (wallet + store). Store purchases and the gate share the mock/stripe
   abstraction in `services/ticket-payment.ts`.
+- **Famine discount (single ticket).** A one-time loyalty perk for a user the
+  weekly batch left unpaired for a **2nd consecutive week or more** (no-match
+  `tier ≥ FAMINE_DISCOUNT_MIN_TIER`). The §3.1 no-match DM grants and announces
+  a **`FAMINE_DISCOUNT_PCT` (77%) discount on one ticket**, valid
+  `FAMINE_DISCOUNT_TTL_DAYS` (30) days. It applies to a **single** ticket
+  purchase only — the date gate's `self` scope and the store's "1 ticket"
+  bundle — and is **consumed on the first such purchase** in either surface
+  (`services/ticket-discount.ts`; persisted on `User.ticketDiscount*`). The
+  Mini Apps render a "−77%" badge + the reduced price; `both`/`partner` scopes,
+  the 3/6 store bundles, and the free wallet "Use my ticket" path are
+  unaffected. The server always re-derives the charged price (the mock intent is
+  amount-bound, so a stale discount auto-fails verify) and consumes via a CAS so
+  a double-confirm redeems exactly once. Re-granted/refreshed each later famine
+  week until used. Inert unless `TICKET_FEATURE_ENABLED`; Telegram-only in v1.
 - **Hard gate.** The Calendar is not sent until *both* tickets are paid
   (`ticketStatus = completed`), at which point `startScheduling` runs and the
   live post-accept block becomes the Calendar button.
@@ -893,16 +999,24 @@ entity's `unix_time`.
 Gated by `DATE_CARD_FEATURE_ENABLED` (default **off** → the scheduled
 confirmation is the plain-text DM above). Telegram-only in v1. When on, each
 side's `scheduled` confirmation is a rendered **PNG date card** (the recipient
-sees their *partner*): a tilted venue photo, an overlapping polaroid of the
-partner, a short confident **slogan** under a vector "kicker" accent
-(`dateCardSlogan`, localized; e.g. "Two strangers, one good evening."), and the
-venue name + address. The card deliberately **omits the date/time** — the exact
-slot already lives in the Telegram caption right below, so repeating it on the
-card adds nothing and the freed space is spent on a cleaner keepsake. Rendered
-server-side with `satori` (→ SVG) + `@resvg/resvg-js` (→ PNG); the partner-face
-blur uses AWS Rekognition `DetectFaces` boxes + pixelation. Rendered text is
-emoji-free (the bundled Roboto fonts carry no color-emoji glyphs, so all card
-accents are vector shapes, not emoji); emoji live only in the Telegram caption.
+sees their *partner*). The look ("Partiful-glow", 2026-06-20) is a near-black
+card (`#030303`) with soft lilac (`#B69AE5`) radial glows and faint film grain:
+a wide **duotone**-treated venue photo as the hero (the stock Places/curated
+image is remapped into the brand palette so it reads as part of the card), an
+overlapping tilted **polaroid** of the partner, a bold Archivo Black headline
+**slogan** whose last line is the lilac accent (`dateCardSlogan`; the brand
+voice is intentionally a fixed English line —
+"Error 404: Chat not found. Try real life." — across all five locales), the
+"Gennety" wordmark top-left, and the venue name + address. The card
+deliberately **omits the
+date/time** — the exact slot already lives in the Telegram caption right below,
+so repeating it on the card adds nothing and the freed space is spent on a
+cleaner keepsake. Rendered server-side with `satori` (→ SVG) + `@resvg/resvg-js`
+(→ PNG), with `@napi-rs/canvas` doing the venue duotone and grain tile; the
+partner-face blur uses AWS Rekognition `DetectFaces` boxes + pixelation.
+Rendered text is emoji-free (the bundled Roboto + Archivo Black fonts carry no
+color-emoji glyphs, so all card accents are vector shapes, not emoji); emoji
+live only in the Telegram caption.
 
 - **Live render progress.** The render (partner-photo download + Places venue
   photo + rasterize) takes several seconds, so each side sees a per-side
@@ -910,8 +1024,7 @@ accents are vector shapes, not emoji); emoji live only in the Telegram caption.
   final touches) while it runs. Unlike the other status beats this is **not** a
   fixed-duration stub — it is held on screen until the PNG is actually ready,
   then torn down before the card lands, so the chat never looks frozen. It is a
-  `RichBlockThinking` shimmer when `RICH_THINKING_ENABLED`, else the classic
-  edited status line; either way the render itself never depends on it (§1.3).
+  normal edited status line; the render itself never depends on it (§1.3).
 
 - **Two renders, one layout.** The **private** card is sent with
   `protect_content: true` (blocks forwarding / saving / download) and carries
@@ -924,7 +1037,7 @@ accents are vector shapes, not emoji); emoji live only in the Telegram caption.
   re-render is slow too — it adds Rekognition `DetectFaces` + pixelation on top
   of the same photo/venue/rasterize work — and the Share tap has no other
   feedback, so it gets its own held "shine" status (`dateCardShareSteps`, a
-  star-led 5-beat sequence, uneven cadence) the instant Share is tapped. Like
+  star-led 4-beat sequence, uneven cadence) the instant Share is tapped. Like
   the private render it is held `until` the blurred PNG is ready, then torn down
   before the share copy is sent, so the user sees progress immediately instead
   of re-tapping into stacked renders.
@@ -963,16 +1076,25 @@ Implemented as a string sub-state (`Match.venueChangeStatus`) layered on a
   and the emergency window open. (The original design doc said "T-3h"; the code
   cutoff is T-5h so a swap never lands after ice-breakers reference the old
   venue.)
-- **Disclaimer + catalog.** The Venue Change Mini App
-  (`apps/webapp/venue-change.html`) opens on a mandatory disclaimer (one-time /
-  irreversible / partner can cancel the match / 3 km radius), then a catalog of
-  alternatives within **`VENUE_CHANGE_RADIUS_KM` (3 km)** of the original venue
-  center (`Match.venueLat/venueLng`, the fairness-balanced commute midpoint).
-  The catalog is **curated-first** (`CuratedVenue`, incl. an optional
-  operator-supplied `photoUrl`), Google Places fallback under the same quality
-  gate when nothing curated is in range.
-- **Mandatory comment.** Selecting a place requires a free-text explanation
-  (≥ `VENUE_CHANGE_MIN_COMMENT_LEN` = 10 chars). It is relayed **verbatim** to
+- **Disclaimer → catalog → detail → comment.** The Venue Change Mini App
+  (`apps/webapp/venue-change.html`) is a full-screen Telegram Web App in the
+  shared "Lavender Glass" design (matching the Ticket Mini Apps), and it walks
+  four steps. (1) A mandatory disclaimer (one-time / irreversible / partner can
+  cancel the match / 3 km radius). (2) A **catalog** of alternatives within
+  **`VENUE_CHANGE_RADIUS_KM` (3 km)** of the original venue center
+  (`Match.venueLat/venueLng`, the fairness-balanced commute midpoint), rendered
+  as cards with **real venue photos**. The catalog is **curated-first**
+  (`CuratedVenue`, incl. an optional operator-supplied `photoUrl`), Google
+  Places fallback under the same quality gate when nothing curated is in range.
+  (3) Tapping a card opens a **venue detail page** — a photo gallery, category /
+  distance / rating chips, a short blurb (`editorialSummary` for Places rows),
+  the address, and an "Open in Google Maps" link — with a single **"Propose this
+  place"** CTA. Only that CTA advances to (4) the comment step. Curated photos
+  are served from their operator URL; Places photos are streamed through a
+  server-side proxy (`GET /v1/venue-change/photo`) so the `PLACES_API_KEY` never
+  ships to the client.
+- **Mandatory comment.** Choosing **Propose this place** then requires a
+  free-text explanation (≥ `VENUE_CHANGE_MIN_COMMENT_LEN` = 10 chars). It is relayed **verbatim** to
   the male as a Telegram blockquote — the same one-shot, non-reply relay
   carve-out as the emergency reason (NO IN-APP CHAT is preserved: post-schedule,
   single message, no reply channel, stored on the match).
@@ -999,7 +1121,7 @@ columns on `matches`.
 | When | Action | Idempotency marker |
 |---|---|---|
 | Activation → `scheduled` | Generate **wingman hints** (one short imperative tip per side about the other) and persist on the row | `wingmanHintA/B` |
-| T − 5 h | Send personalised AI **ice-breakers** (3 starters per side, language-aware, fallback to static lists). Mobile gets the same content via `iceBreakersA/B`. | `icebreakersSentAt` |
+| T − 5 h | Send personalised AI **ice-breakers** (3 starters per side, language-aware, fallback to static lists). For Telegram users the DM is delivered through the live bottom-of-chat edit stream (`streamDraftsToChat`, same primitive as the pitch): a "thinking" lead beat (`icebreakerStreamStart`), each starter revealed one-by-one, then the full text + §6 planning hints as the final message — the emergency-window DM lands right after. Mobile gets the same content via `iceBreakersA/B` (no streaming). | `icebreakersSentAt` |
 | T − 5 h | Open the **emergency window** — DM both sides with the cancel button (callback `emerg:start:{matchId}`) | shared with above |
 | T − 1.5 h | **Pre-date safety brief** to the female user (Telegram DM only — mobile gets push). Skipped when no female participant has a Telegram presence. | `safetyNoteSentAt` |
 | T − 1.5 h | **Wingman hint reveal push** — the asymmetric tip is unmasked at this gate (the mobile serializer enforces it independently) | `wingmanSentAt` |

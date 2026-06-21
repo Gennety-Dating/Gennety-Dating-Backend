@@ -12,6 +12,12 @@ export const ALLOWED_EMAIL_DOMAINS = [
   ".edu.ru",
   "kpi.ua",
   "knu.ua",
+  // Kharkiv universities whose student/corporate mail domains do not end in an
+  // allowed suffix above. `isAllowedEmail` matches on `endsWith`, so each base
+  // domain also admits student subdomains (e.g. `@student.karazin.ua`).
+  "karazin.ua", // V. N. Karazin Kharkiv National University
+  "kpi.kharkov.ua", // NTU "Kharkiv Polytechnic Institute" (KhPI)
+  "nure.ua", // Kharkiv National University of Radio Electronics (NURE)
 ] as const;
 
 /** OTP validity window in milliseconds (10 minutes) */
@@ -70,6 +76,19 @@ export function ticketBundleFor(
 ): { count: number; priceCents: number } | null {
   return TICKET_BUNDLES.find((b) => b.count === count) ?? null;
 }
+
+/**
+ * "Famine" single-ticket discount (Date Ticket monetization, gated by
+ * `TICKET_FEATURE_ENABLED`). A one-time loyalty perk granted when a user is
+ * eligible-but-unpaired for a 2nd consecutive weekly batch (no-match tier >=
+ * `FAMINE_DISCOUNT_MIN_TIER`). It discounts a SINGLE ticket purchase — the date
+ * gate's `self` scope and the store's "1 ticket" bundle — by
+ * `FAMINE_DISCOUNT_PCT`%, valid `FAMINE_DISCOUNT_TTL_DAYS` days, consumed on the
+ * first such purchase. See PRODUCT_SPEC.md §3.5b.
+ */
+export const FAMINE_DISCOUNT_PCT = 77;
+export const FAMINE_DISCOUNT_TTL_DAYS = 30;
+export const FAMINE_DISCOUNT_MIN_TIER = 2;
 
 /** Age boundaries */
 export const MIN_AGE = 18;

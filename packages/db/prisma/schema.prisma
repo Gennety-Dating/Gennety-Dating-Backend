@@ -210,6 +210,18 @@ model User {
   /// `TicketLedger` audit row in the same transaction, so the ledger is the
   /// append-only source of truth and this column is its running sum.
   ticketBalance       Int            @default(0) @map("ticket_balance")
+  /// One-time "famine" single-ticket discount (Date Ticket monetization, gated
+  /// by `TICKET_FEATURE_ENABLED`). Granted when the user is eligible-but-unpaired
+  /// for a 2nd consecutive weekly batch (no-match tier >= 2). It discounts a
+  /// SINGLE ticket purchase — the date gate's `self` scope and the store's
+  /// "1 ticket" bundle — and is consumed on the first such purchase. See
+  /// PRODUCT_SPEC.md §3.5b and `services/ticket-discount.ts`.
+  /// Active ⇔ `ticketDiscountPct > 0 AND ticketDiscountConsumedAt IS NULL AND
+  /// ticketDiscountExpiresAt > now`. `0`/nulls = no active discount.
+  ticketDiscountPct        Int       @default(0) @map("ticket_discount_pct")
+  ticketDiscountGrantedAt  DateTime? @map("ticket_discount_granted_at")
+  ticketDiscountExpiresAt  DateTime? @map("ticket_discount_expires_at")
+  ticketDiscountConsumedAt DateTime? @map("ticket_discount_consumed_at")
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
 
@@ -430,6 +442,34 @@ model Profile {
   /// later edits photos/video. See `services/ticket-wallet.ts`.
   photoBonusTicketAt   DateTime?                 @map("photo_bonus_ticket_at")
   videoBonusTicketAt   DateTime?                 @map("video_bonus_ticket_at")
+  /// Vibe signal (PRODUCT_SPEC §1.3 / §3.2). Collected as two short free-text
+  /// onboarding answers right before the Magic Prompt step, asked of EVERY user
+  /// regardless of AI-memory export choice. The raw text feeds icebreakers and
+  /// is folded into `psychologicalSummary` so the embedding (V_explicit) carries
+  /// real psychological signal even when the Magic Prompt is declined.
+  ///   - `fridayVibeText`: "describe your ideal Friday night, honestly".
+  ///   - `vibeFocusText`: "what matters more — the process, or who's with you?".
+  fridayVibeText       String?                   @map("friday_vibe_text")
+  vibeFocusText        String?                   @map("vibe_focus_text")
+  /// Structured axes extracted from the two vibe answers at finalize, scored by
+  /// V_research (quadrant proximity). `[-1,+1]` continuous.
+  ///   - `energyAxis`: internal (-1) ↔ external (+1) energy — the "tempo" axis.
+  ///   - `orientationAxis`: experience (-1) ↔ connection (+1).
+  energyAxis           Float?                    @map("energy_axis")
+  orientationAxis      Float?                    @map("orientation_axis")
+  /// Social role inferred from the vibe answers: initiator | participant |
+  /// observer (whitelist-validated in app code, NOT a Prisma enum — mirrors
+  /// `CuratedVenue.category`). STORED but not yet scored: role-complementarity
+  /// matching (Phase 2) is deferred until there is accept/decline data to
+  /// validate it against. See PRODUCT_SPEC §3.2.
+  socialRole           String?                   @map("social_role")
+  /// Concrete "anchor" interests pulled from the vibe answers (food, music,
+  /// nature, ideas, humor, …). Icebreaker fuel + future shared-anchor scoring;
+  /// the embedding stays authoritative for anchor similarity in v1.
+  anchorTags           String[]                  @default([]) @map("anchor_tags")
+  /// Idempotency/audit marker: when the vibe-axis extraction last ran. Guards
+  /// the accepted-path summary append so finalize retries don't double-append.
+  vibeExtractedAt      DateTime?                 @map("vibe_extracted_at")
   createdAt            DateTime                  @default(now()) @map("created_at")
   updatedAt            DateTime                  @updatedAt @map("updated_at")
 

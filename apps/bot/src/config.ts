@@ -37,19 +37,12 @@ export const env = {
   /// production can keep the legacy LLM-driven flow during staged rollout.
   ONBOARDING_FACT_COLLECTOR_ENABLED:
     process.env.ONBOARDING_FACT_COLLECTOR_ENABLED === "true",
-  /// Telegram Bot API 10.1 "Rich Messages" (released 2026-06-11). When true,
-  /// the AI status/thinking sequences and the match-pitch stream render via
-  /// `sendRichMessageDraft` using `<tg-thinking>` shimmer blocks
-  /// (services/telegram-rich.ts). Any rich-API error degrades to the classic
-  /// `sendMessageDraft` / `editMessageText` path, so this is cosmetic-only and
-  /// safe to toggle live. Default off until prod bot + clients are on 10.1.
-  RICH_THINKING_ENABLED: process.env.RICH_THINKING_ENABLED === "true",
   /// Custom emoji id that leads each rich "thinking" shimmer block — the
   /// animated Telegram AI emoji recommended for `RichBlockThinking`
   /// (https://t.me/addemoji/AIActions). Rendered as `<tg-emoji>` inside
   /// `<tg-thinking>`, with the step's plain glyph (🧠/🔍/…) as the non-Premium /
   /// pre-10.1 fallback. Empty → the plain glyph leads with no animation. Only
-  /// consulted when `RICH_THINKING_ENABLED`.
+  /// consulted by explicit rich-draft demos.
   CUSTOM_EMOJI_THINKING_ID: process.env.CUSTOM_EMOJI_THINKING_ID ?? "",
   /// Optional per-step AIActions emoji ids for the multi-beat "thinking"
   /// sequences (https://t.me/addemoji/AIActions, 48 variants). Each leads one
@@ -59,7 +52,7 @@ export const env = {
   /// `StatusStep.emojiId` → these slots → `CUSTOM_EMOJI_THINKING_ID` → plain
   /// glyph. Empty (default) → the step's plain Unicode glyph leads, no animation,
   /// so nothing breaks before ids are filled in. Source ids with the
-  /// `list-ai-emojis` dev script. Only consulted when `RICH_THINKING_ENABLED`.
+  /// `list-ai-emojis` dev script. Only consulted by explicit rich-draft demos.
   CUSTOM_EMOJI_AI_ROUTE_ID: process.env.CUSTOM_EMOJI_AI_ROUTE_ID ?? "",
   CUSTOM_EMOJI_AI_VENUE_ID: process.env.CUSTOM_EMOJI_AI_VENUE_ID ?? "",
   CUSTOM_EMOJI_AI_CONFIRM_ID: process.env.CUSTOM_EMOJI_AI_CONFIRM_ID ?? "",
@@ -245,6 +238,14 @@ export const env = {
   /// window) before the ticket-expiry cron refunds the payer and opens the
   /// Calendar for free. Fractional hours allowed for fast manual testing.
   TICKET_PAYMENT_WINDOW_HOURS: Number(process.env.TICKET_PAYMENT_WINDOW_HOURS ?? "24"),
+  /// Famine single-ticket discount (PRODUCT_SPEC §3.5b). Granted on the 2nd
+  /// consecutive no-match week; discounts one ticket by this percent for this
+  /// many days. Literal defaults mirror `FAMINE_DISCOUNT_PCT` /
+  /// `FAMINE_DISCOUNT_TTL_DAYS` in `@gennety/shared` (config.ts deliberately has
+  /// no shared import — it loads first); env only overrides for ops tuning, like
+  /// `TICKET_PRICE_CENTS` above. Inert unless `TICKET_FEATURE_ENABLED`.
+  FAMINE_DISCOUNT_PCT: Number(process.env.FAMINE_DISCOUNT_PCT ?? "77"),
+  FAMINE_DISCOUNT_TTL_DAYS: Number(process.env.FAMINE_DISCOUNT_TTL_DAYS ?? "30"),
   // TODO: Stripe Production Mode — populate from the Stripe dashboard and keep
   // out of git (.env only). Switching to live payments is: set these +
   // TICKET_PAYMENT_MODE=stripe + fill the `case "stripe"` branches in
