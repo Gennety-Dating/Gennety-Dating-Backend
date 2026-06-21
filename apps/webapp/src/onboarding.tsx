@@ -179,6 +179,31 @@ function App(): ReactElement {
       });
   }, []);
 
+  // Keyboard-aware viewport. Telegram's WebView (notably iOS) floats the
+  // on-screen keyboard over the page without shrinking the layout viewport,
+  // so a vertically centered gate card — and the city search results below
+  // its input — end up hidden behind the keyboard. `visualViewport` reports
+  // the real visible height; we mirror the keyboard's height into the
+  // `--kb-height` custom property so the gates can shrink their centered area
+  // and scroll region to stay above it. No-ops on clients without
+  // `visualViewport`, where `--kb-height` stays 0 and layout is unchanged.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = document.documentElement;
+    const apply = (): void => {
+      const keyboard = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      root.style.setProperty("--kb-height", `${Math.round(keyboard)}px`);
+    };
+    apply();
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    return () => {
+      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("scroll", apply);
+    };
+  }, []);
+
   // Log every screen transition so a re-entry resumes on the same scene.
   // Visual scenes persist their index; finishing the animation persists the
   // VISUAL_DONE sentinel; reaching any pre-animation gate clears the stored
@@ -1442,6 +1467,7 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
   const [geoBusy, setGeoBusy] = useState(false);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!app?.initData) return;
@@ -1467,6 +1493,25 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
     }, 300);
     return () => window.clearTimeout(timer);
   }, [query]);
+
+  // Reveal the city list above the keyboard. Telegram's WebView overlays the
+  // keyboard without scrolling the focused field up, so when matches land we
+  // pull the input to the top of the (keyboard-bounded) scrollable card — the
+  // results then sit directly beneath it instead of below the fold. Only fires
+  // when the card actually overflows, so a no-keyboard / desktop layout that
+  // already shows everything is left untouched.
+  useEffect(() => {
+    if (results.length === 0) return;
+    const frame = window.requestAnimationFrame(() => {
+      const input = inputRef.current;
+      const card = input?.closest(".gate-card");
+      if (!input || !card) return;
+      if (card.scrollHeight > card.clientHeight + 4) {
+        input.scrollIntoView({ block: "start", behavior: "smooth" });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [results]);
 
   async function choose(city: TelegramCityHit, allowWhileGeo = false): Promise<void> {
     if (!app?.initData || busy || (geoBusy && !allowWhileGeo)) return;
@@ -1542,6 +1587,7 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
           <span className="material-symbols-outlined">my_location</span>
         </button>
         <input
+          ref={inputRef}
           className="gate-input"
           autoCapitalize="words"
           autoComplete="address-level2"

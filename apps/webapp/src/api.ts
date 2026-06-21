@@ -1,3 +1,8 @@
+// DEV-ONLY: bypass the ngrok free-tier browser-warning interstitial on Mini App
+// API calls (Telegram WebView UA gets HTML instead of JSON otherwise). Compiled
+// out of production builds. See dev-ngrok-fetch.ts.
+import "./dev-ngrok-fetch.js";
+
 /**
  * Tiny fetch wrapper for the Mini App → bot public API.
  *
@@ -425,6 +430,10 @@ export interface TicketState {
   paymentMode: "mock" | "stripe";
   /** Actor's ticket-wallet balance — drives the "use a ticket" buttons. */
   myBalance: number;
+  /** Active famine single-ticket discount percent (0 = none); `self` only. */
+  selfDiscountPct: number;
+  /** Charged price for the actor's OWN ticket after `selfDiscountPct`. */
+  selfPriceCents: number;
 }
 
 export interface TicketIntent {
@@ -499,6 +508,10 @@ export async function useTicketFromWallet(
 export interface WalletState {
   balance: number;
   priceCents: number;
+  /** Active famine single-ticket discount percent (0 = none); "1 ticket" only. */
+  discountPct: number;
+  /** ISO deadline of the active discount, or null. */
+  discountExpiresAt: string | null;
 }
 
 export interface StoreBundle {
@@ -574,9 +587,28 @@ export interface VenueChangeCatalogItem {
   category: string;
   distanceKm: number;
   photoUrl: string | null;
+  /** Google Places photo resource names → resolved via `venueChangePhotoUrl`. */
+  photoRefs: string[];
+  rating: number | null;
+  userRatingCount: number | null;
+  editorialSummary: string | null;
 }
 
 const venueChangeBase = `${apiBase}/v1/venue-change`;
+
+/**
+ * Build a server-proxied URL for a Google Places photo resource name. The proxy
+ * keeps `PLACES_API_KEY` server-side; `<img>` can't send headers, so initData
+ * rides the query string (HMAC-verified server-side, same as the tma header).
+ */
+export function venueChangePhotoUrl(
+  initData: string,
+  ref: string,
+  width = 1000,
+): string {
+  const p = new URLSearchParams({ ref, w: String(width), tma: initData });
+  return `${venueChangeBase}/photo?${p.toString()}`;
+}
 
 export async function fetchVenueChangeState(
   initData: string,

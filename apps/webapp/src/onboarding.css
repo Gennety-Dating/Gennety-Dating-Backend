@@ -1603,18 +1603,27 @@ button {
 .gate-main {
   width: 100%;
   max-width: 28rem;
-  height: 100%;
+  /* Shrink the centered area by the soft-keyboard height (`--kb-height`,
+     set from visualViewport in onboarding.tsx) so the card stays centered
+     in the space above the keyboard instead of sliding behind it. */
+  height: calc(100% - var(--kb-height, 0px));
   margin: 0 auto;
   padding: calc(5rem + env(safe-area-inset-top, 0)) 1.5rem calc(2rem + env(safe-area-inset-bottom, 0));
   display: flex;
   flex-direction: column;
   justify-content: center;
   position: relative;
+  transition: height 200ms ease;
 }
 
 .gate-card {
   width: 100%;
-  max-height: calc(100dvh - 7rem - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
+  /* Bound the scroll region to the visible viewport (above the keyboard) so a
+     long list — e.g. city search results — scrolls inside the card rather than
+     disappearing under the keyboard. */
+  max-height: calc(
+    100dvh - 7rem - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0) - var(--kb-height, 0px)
+  );
   overflow-y: auto;
   border-radius: 32px;
   padding: 2rem;

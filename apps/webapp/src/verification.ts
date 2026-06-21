@@ -125,9 +125,10 @@ export async function handleComplete(
     // the user doesn't get stuck on the success screen forever.
     console.warn("[verification] /event complete POST failed", err);
   }
-  // Brief delay so the success/finishing copy is visible before the WebView
-  // dismisses — without it iOS dismisses too fast for the user to perceive.
-  const delay = deps.closeDelayMs ?? 1500;
+  // Brief delay so the success checkmark animation can play out before the
+  // WebView dismisses — the disc-pop + tick-draw + halo settle in ~1s, so we
+  // hold a beat past that. Without it iOS dismisses too fast to perceive.
+  const delay = deps.closeDelayMs ?? 2200;
   setTimeout(() => deps.app.close(), delay);
 }
 
@@ -171,6 +172,35 @@ export async function handleError(
 
 type Screen = "loading" | "finishing" | "error" | "success" | "already-verified" | "unavailable";
 
+/**
+ * Animated success checkmark — the "all done" moment after Persona passes.
+ *
+ * Implemented as an inline animated SVG (no Lottie runtime, no CDN) so it can
+ * never fail to load inside the Telegram WebView the way an external player or
+ * JSON asset could, and adds zero bytes to the bundle. Visually it's the same
+ * "classic ✅" beat: a green disc pops in with a slight overshoot, a white tick
+ * strokes itself in, and a soft halo ring expands once and fades. The whole
+ * thing settles in ~1s and honours `prefers-reduced-motion`.
+ */
+function successCheckMarkup(): string {
+  return `
+    <div class="check-anim" aria-hidden="true">
+      <span class="check-anim__halo"></span>
+      <svg class="check-anim__svg" viewBox="0 0 56 56" role="img">
+        <circle class="check-anim__disc" cx="28" cy="28" r="26" />
+        <path class="check-anim__tick" d="M17 29 l7.5 7.5 L40 21" />
+      </svg>
+    </div>`;
+}
+
+function successScreen(lang: Lang, textKey: Parameters<typeof tr>[1]): string {
+  return `
+    <div class="screen">
+      ${successCheckMarkup()}
+      <p class="screen-text check-caption">${escapeHtml(tr(lang, textKey))}</p>
+    </div>`;
+}
+
 function renderScreen(root: HTMLElement, screen: Screen, lang: Lang): void {
   switch (screen) {
     case "loading":
@@ -181,18 +211,10 @@ function renderScreen(root: HTMLElement, screen: Screen, lang: Lang): void {
         </div>`;
       return;
     case "finishing":
-      root.innerHTML = `
-        <div class="screen">
-          <div class="success-glyph">✅</div>
-          <p class="screen-text">${escapeHtml(tr(lang, "verifyMiniAppFinishing"))}</p>
-        </div>`;
+      root.innerHTML = successScreen(lang, "verifyMiniAppFinishing");
       return;
     case "success":
-      root.innerHTML = `
-        <div class="screen">
-          <div class="success-glyph">✅</div>
-          <p class="screen-text">${escapeHtml(tr(lang, "verifyMiniAppFinishing"))}</p>
-        </div>`;
+      root.innerHTML = successScreen(lang, "verifyMiniAppFinishing");
       return;
     case "error":
       root.innerHTML = `
@@ -202,11 +224,7 @@ function renderScreen(root: HTMLElement, screen: Screen, lang: Lang): void {
         </div>`;
       return;
     case "already-verified":
-      root.innerHTML = `
-        <div class="screen">
-          <div class="success-glyph">✅</div>
-          <p class="screen-text">${escapeHtml(tr(lang, "verifyMiniAppAlreadyVerified"))}</p>
-        </div>`;
+      root.innerHTML = successScreen(lang, "verifyMiniAppAlreadyVerified");
       return;
     case "unavailable":
       root.innerHTML = `

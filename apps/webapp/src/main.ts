@@ -728,7 +728,7 @@ function paintSlotState(
   time: string | null,
   isNew: boolean,
 ): void {
-  btn.classList.remove("state-you", "state-match", "state-both");
+  btn.classList.remove("state-you", "state-match", "state-both", "has-topbar");
 
   const label = document.createElement("span");
   if (time) {
@@ -744,6 +744,38 @@ function paintSlotState(
     day.textContent = date.dayOfMonth;
     label.append(weekday, day);
   }
+
+  // "Other time" (same day, different slot) is the one status whose tag is
+  // long in every locale. Lift it into a top strip that continues the same
+  // gradient frame rather than letting it wrap and grow the body row. The
+  // NEW pill rides into that strip too, so it never collides with the lifted
+  // label; the body keeps only the pair dots. Every other state below keeps
+  // its plain row layout and its corner NEW sticker.
+  if (cls === "mixed") {
+    btn.classList.add("state-both", "has-topbar");
+
+    const topbar = document.createElement("span");
+    topbar.className = "slot-topbar";
+    const tag = document.createElement("span");
+    tag.className = "indicator-tag";
+    tag.textContent = tr(lang, "legendAlternative");
+    topbar.appendChild(tag);
+    if (isNew) {
+      const sticker = document.createElement("span");
+      sticker.className = "badge-new";
+      sticker.textContent = tr(lang, "badgeNew");
+      topbar.appendChild(sticker);
+    }
+    btn.appendChild(topbar);
+
+    const main = document.createElement("span");
+    main.className = "slot-main";
+    main.appendChild(label);
+    main.appendChild(makeIndicator("", "pair", undefined, /* showTag */ false));
+    btn.appendChild(main);
+    return;
+  }
+
   btn.appendChild(label);
 
   if (cls !== "empty") {
@@ -756,10 +788,6 @@ function paintSlotState(
     } else if (cls === "overlap") {
       btn.classList.add("state-both");
       btn.appendChild(makeIndicator(tr(lang, "legendOverlap"), "pair"));
-    } else {
-      // mixed — same visual as overlap, but tagged "Other time"
-      btn.classList.add("state-both");
-      btn.appendChild(makeIndicator(tr(lang, "legendAlternative"), "pair"));
     }
   }
 
@@ -778,13 +806,16 @@ function makeIndicator(
   label: string,
   variant: "single" | "pair",
   dot?: "you" | "match",
+  showTag = true,
 ): HTMLElement {
   const wrap = document.createElement("span");
   wrap.className = "slot-indicator";
-  const tag = document.createElement("span");
-  tag.className = "indicator-tag";
-  tag.textContent = label;
-  wrap.appendChild(tag);
+  if (showTag) {
+    const tag = document.createElement("span");
+    tag.className = "indicator-tag";
+    tag.textContent = label;
+    wrap.appendChild(tag);
+  }
   if (variant === "single") {
     const d = document.createElement("span");
     d.className = "indicator-dot";
@@ -795,7 +826,7 @@ function makeIndicator(
     pair.className = "indicator-pair";
     const a = document.createElement("span");
     a.className = "indicator-pair-dot";
-    a.style.background = "rgba(255,255,255,0.9)";
+    a.style.background = "#ffffff";
     const b = document.createElement("span");
     b.className = "indicator-pair-dot";
     b.style.background = "var(--brand)";

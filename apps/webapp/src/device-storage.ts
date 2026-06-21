@@ -13,8 +13,22 @@
 const NS = "gennety.calendar";
 
 function storage(): TelegramWebAppDeviceStorage | null {
-  return window.Telegram?.WebApp?.DeviceStorage ?? null;
+  const tg = window.Telegram?.WebApp;
+  if (!tg?.DeviceStorage) return null;
+  // DeviceStorage is Bot API 9.0. On older clients the namespace can be
+  // present but its callbacks never fire — which hangs any awaiting caller
+  // (e.g. the onboarding boot path stuck forever on "Synchronizing"). Gate on
+  // the reported client version and fall back to localStorage when unsupported.
+  if (typeof tg.isVersionAtLeast === "function" && !tg.isVersionAtLeast("9.0")) {
+    return null;
+  }
+  return tg.DeviceStorage;
 }
+
+// Belt-and-suspenders: even a client that reports >= 9.0 can fail to invoke a
+// DeviceStorage callback. Any awaited read on a boot/critical path must never
+// hang, so we race the callback against a short timeout.
+const DEVICE_STORAGE_TIMEOUT_MS = 2000;
 
 function key(matchId: string): string {
   return `${NS}.match.${matchId}`;
@@ -178,13 +192,24 @@ export async function loadOnboardingProgress(): Promise<number | null> {
   const ds = storage();
   const raw = ds
     ? await new Promise<string | null>((resolve) => {
+        let settled = false;
+        const finish = (value: string | null): void => {
+          if (settled) return;
+          settled = true;
+          resolve(value);
+        };
+        // A client that exposes DeviceStorage but never calls back must not
+        // hang the onboarding boot ("Synchronizing" forever). Fall back to
+        // "no stored progress" after a short wait — resume is a nice-to-have.
+        const timer = setTimeout(() => finish(null), DEVICE_STORAGE_TIMEOUT_MS);
         ds.getItem(ONBOARDING_VISUAL_KEY, (err, value) => {
+          clearTimeout(timer);
           if (err) {
             console.warn("DeviceStorage getItem failed:", err);
-            resolve(null);
+            finish(null);
             return;
           }
-          resolve(value ?? null);
+          finish(value ?? null);
         });
       })
     : (() => {

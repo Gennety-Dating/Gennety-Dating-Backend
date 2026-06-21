@@ -47,7 +47,11 @@ import {
 } from "../../services/telegram-profile-media.js";
 import { profileMediaToJson } from "../../services/profile-media-json.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
-import { profileAnalysisSteps } from "../../services/analysis-status.js";
+import {
+  onboardingThinkingSteps,
+  profileAnalysisSteps,
+  videoCheckSteps,
+} from "../../services/analysis-status.js";
 import { env } from "../../config.js";
 import {
   grantPhotoBonusIfEligible,
@@ -68,6 +72,23 @@ const DUMP_DONE_CALLBACK = "dump:done";
 export const ONBOARDING_PHOTOS_CONTINUE_CALLBACK =
   "onboarding:photos:continue";
 const CONTEXT_DUMP_DEBOUNCE_MS = 2_000;
+
+/**
+ * Cadence of the periodic "thinking" pause during the profile survey: a short
+ * thinking shimmer is held before composing every Nth question's reply.
+ */
+const ONBOARDING_THINKING_EVERY = 3;
+
+/**
+ * Deliberate pad held on the final "last checks" video-status beat AFTER the
+ * real validation has settled, so the thinking sequence never flashes away the
+ * instant a fast check returns. The video validation runs in parallel with the
+ * pacing beats; this only extends the held tail by a couple of seconds.
+ */
+const VIDEO_CHECK_STATUS_PAD_MS = 1_800;
+
+const delay = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Heuristic split between a real LLM dump and a clarifying question while
@@ -261,6 +282,31 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     }
   }
 
+  // ---- Periodic "thinking" pause during the profile survey ----
+  // Every ONBOARDING_THINKING_EVERY answered questions, hold a short "thinking"
+  // shimmer BEFORE the next question is composed. This must run before any
+  // typing indicator: the typing action only starts inside withTyping below,
+  // strictly after this status is torn down, and question generation does not
+  // start until the pause completes. Only real typed survey answers count —
+  // not photo-stage continues, photo uploads, or context-dump pastes.
+  const isSurveyAnswer =
+    Boolean(ctx.message?.text) &&
+    !continuePhotoStage &&
+    !ctx.session.expectingPhoto &&
+    !ctx.session.awaitingContextDump;
+  if (isSurveyAnswer) {
+    const answered = (ctx.session.onboardingAnswerCount ?? 0) + 1;
+    ctx.session.onboardingAnswerCount = answered;
+    if (answered % ONBOARDING_THINKING_EVERY === 0 && ctx.chat?.id !== undefined) {
+      await runStatusSequence(
+        ctx.api,
+        ctx.chat.id,
+        onboardingThinkingSteps(ctx.session.language),
+        { rich: true },
+      );
+    }
+  }
+
   // ---- Normal conversational turn ----
   const result = await withTyping(ctx, () =>
     runAgentTurn(
@@ -373,11 +419,10 @@ async function handleContextDumpChunk(
   const chunk = truncated ? text.slice(0, Math.max(0, room)) : text;
   ctx.session.contextDumpBuffer = current + separator + chunk;
 
-  // Acknowledge receipt once. Additional text arriving before the flush
-  // silently extends the debounce window.
-  if (separator === "") {
-    await ctx.reply(t(ctx.session.language, "contextDumpAck"));
-  }
+  // No "received" ack here — the paste is acknowledged by the analysing
+  // status sequence (profileAnalysisSteps) that plays after the debounce
+  // flush, so an extra "processing…" line would just be chat noise.
+  // Additional text arriving before the flush silently extends the debounce.
 
   // If this chunk filled the buffer, auto-flush so we don't silently drop
   // the rest of the user's paste into the void.
@@ -685,6 +730,15 @@ async function handleProfileMediaMessage(
 }
 
 /**
+ * Outcome of the parallel download+validation work covered by the video-check
+ * thinking shimmer. `unavailable` folds download failures and unexpected errors
+ * into the "processing unavailable" path.
+ */
+type VideoCheckOutcome =
+  | { kind: "unavailable" }
+  | { kind: "validated"; validation: Awaited<ReturnType<typeof validateUserProfileVideo>> };
+
+/**
  * Validate and persist a profile video (display-only, not counted toward
  * MIN_PHOTOS), then grant the one-time "added a video" ticket bonus.
  * The video is appended to `pendingProfileMedia` so a later photo upload's
@@ -717,28 +771,47 @@ async function handleProfileVideoMessage(
   let acceptedMedia = media;
   let statusAcknowledged = false;
   if (env.PROFILE_MEDIA_VALIDATION_ENABLED) {
-    const status = await ctx.reply(t(ctx.session.language, "videoChecking"));
-    const videoBytes = await downloadTelegramFile(ctx.api, media.video);
-    if (!videoBytes) {
-      await replaceVideoStatus(
-        ctx,
-        status.message_id,
-        t(ctx.session.language, "videoProcessingUnavailable"),
-      );
+    // Download + validate runs as one work-promise so the thinking shimmer can
+    // cover it; any download/processing failure collapses to "unavailable".
+    const work: Promise<VideoCheckOutcome> = (async () => {
+      try {
+        const videoBytes = await downloadTelegramFile(ctx.api, media.video);
+        if (!videoBytes) return { kind: "unavailable" as const };
+        const validation = await validateUserProfileVideo({
+          userId: user.id,
+          video: videoBytes,
+          profilePhotoRefs: ctx.session.pendingPhotos,
+          api: ctx.api,
+        });
+        return { kind: "validated" as const, validation };
+      } catch (err) {
+        console.warn("profile video validation failed:", err);
+        return { kind: "unavailable" as const };
+      }
+    })();
+
+    // Stream the "reviewing your video" thinking beats while `work` runs. The
+    // first two beats always play (untilFromStepIndex: 2); the final beat is
+    // held until validation settles plus a short deliberate pad, then the status
+    // is torn down before the verdict lands in its place.
+    await runStatusSequence(
+      ctx.api,
+      ctx.chat.id,
+      videoCheckSteps(ctx.session.language),
+      {
+        until: work.then(() => delay(VIDEO_CHECK_STATUS_PAD_MS)),
+        untilFromStepIndex: 2,
+      },
+    ).catch(() => undefined);
+
+    const outcome = await work;
+    if (outcome.kind === "unavailable") {
+      await ctx.reply(t(ctx.session.language, "videoProcessingUnavailable"));
       return;
     }
-
-    const validation = await validateUserProfileVideo({
-      userId: user.id,
-      video: videoBytes,
-      profilePhotoRefs: ctx.session.pendingPhotos,
-      api: ctx.api,
-    });
-    if (!validation.ok) {
-      await replaceVideoStatus(
-        ctx,
-        status.message_id,
-        videoValidationMessage(ctx.session.language, validation.reason),
+    if (!outcome.validation.ok) {
+      await ctx.reply(
+        videoValidationMessage(ctx.session.language, outcome.validation.reason),
       );
       if (photoStageActive) {
         await sendPhotoStagePrompt(
@@ -751,18 +824,13 @@ async function handleProfileVideoMessage(
         );
       }
       return;
-    } else {
-      acceptedMedia = {
-        ...media,
-        validationVersion: PROFILE_MEDIA_VALIDATION_VERSION,
-        validatedAt: new Date().toISOString(),
-      };
     }
-    await replaceVideoStatus(
-      ctx,
-      status.message_id,
-      videoSavedAck(ctx.session.language),
-    );
+    acceptedMedia = {
+      ...media,
+      validationVersion: PROFILE_MEDIA_VALIDATION_VERSION,
+      validatedAt: new Date().toISOString(),
+    };
+    await ctx.reply(videoSavedAck(ctx.session.language));
     statusAcknowledged = true;
   }
 
@@ -793,19 +861,6 @@ async function handleProfileVideoMessage(
       ctx.session.pendingPhotos.length,
       true,
     );
-  }
-}
-
-async function replaceVideoStatus(
-  ctx: BotContext,
-  messageId: number,
-  text: string,
-): Promise<void> {
-  if (!ctx.chat) return;
-  try {
-    await ctx.api.editMessageText(ctx.chat.id, messageId, text);
-  } catch {
-    await ctx.reply(text);
   }
 }
 

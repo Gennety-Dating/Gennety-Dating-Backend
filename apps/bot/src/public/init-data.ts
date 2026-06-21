@@ -7,7 +7,8 @@ import crypto from "node:crypto";
  * (https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app):
  *
  *   1. Parse initData as URL-encoded key/value pairs.
- *   2. Extract `hash` and remove Telegram's optional Ed25519 `signature`.
+ *   2. Extract `hash`. Telegram's Bot API 8.0+ `signature` field is accepted
+ *      both ways (some clients include it in the HMAC `hash`, some exclude it).
  *   3. Build the data-check-string: remaining pairs sorted alphabetically by
  *      key, joined by `\n` as `key=value`.
  *   4. `secret_key = HMAC-SHA256(key="WebAppData", message=BOT_TOKEN)`.
@@ -53,28 +54,44 @@ export function validateInitData(
   const hash = params.get("hash");
   if (!hash) return { valid: false, reason: "missing-hash" };
   params.delete("hash");
-  params.delete("signature");
 
   const authDateRaw = params.get("auth_date");
   if (!authDateRaw) return { valid: false, reason: "missing-auth-date" };
   const authDate = Number(authDateRaw);
   if (!Number.isFinite(authDate)) return { valid: false, reason: "missing-auth-date" };
 
-  // Build the data-check-string: alphabetically sorted `key=value` pairs.
-  const keys = [...params.keys()].sort();
-  const dataCheckString = keys.map((k) => `${k}=${params.get(k)}`).join("\n");
-
   const secretKey = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
-  const expectedHash = crypto
-    .createHmac("sha256", secretKey)
-    .update(dataCheckString)
-    .digest("hex");
 
-  // `timingSafeEqual` requires equal-length buffers; reject mismatched length
-  // up front rather than letting Node throw.
-  if (expectedHash.length !== hash.length) return { valid: false, reason: "bad-hash" };
-  const ok = crypto.timingSafeEqual(Buffer.from(expectedHash), Buffer.from(hash));
-  if (!ok) return { valid: false, reason: "bad-hash" };
+  // Build the data-check-string (alphabetically sorted `key=value` pairs) and
+  // HMAC it with the bot-token-derived secret key.
+  const hashFor = (source: URLSearchParams): string => {
+    const keys = [...source.keys()].sort();
+    const dataCheckString = keys.map((k) => `${k}=${source.get(k)}`).join("\n");
+    return crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
+  };
+
+  // Telegram clients disagree on whether the Bot API 8.0+ `signature` field
+  // participates in the legacy HMAC `hash`. The docs (and most JS validators)
+  // exclude it, but real iOS clients — verified on 9.6 against this bot — compute
+  // `hash` with `signature` *included* in the data-check-string. Accept either so
+  // every client authenticates; both candidates still require the bot token to
+  // forge, so this does not weaken the check.
+  const candidateHashes = [hashFor(params)];
+  if (params.has("signature")) {
+    const withoutSignature = new URLSearchParams(params);
+    withoutSignature.delete("signature");
+    candidateHashes.push(hashFor(withoutSignature));
+  }
+
+  // `timingSafeEqual` requires equal-length buffers; the length guard rejects a
+  // malformed/truncated hash up front rather than letting Node throw.
+  const expected = Buffer.from(hash);
+  const matches = candidateHashes.some(
+    (candidate) =>
+      candidate.length === hash.length &&
+      crypto.timingSafeEqual(Buffer.from(candidate), expected),
+  );
+  if (!matches) return { valid: false, reason: "bad-hash" };
 
   // Freshness check — guard against initData replay long after the user
   // closed the Mini App.

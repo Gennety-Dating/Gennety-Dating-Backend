@@ -126,7 +126,7 @@
         border-radius: 50%;
       }
       .legend-dot.dot-you {
-        background: rgba(255, 255, 255, 0.9);
+        background: #ffffff;
         box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
       }
       .legend-dot.dot-match {
@@ -134,8 +134,12 @@
         box-shadow: 0 0 8px var(--brand-glow);
       }
       .legend-pair { display: flex; }
-      .legend-pair .legend-dot { box-shadow: none; }
-      .legend-pair .legend-dot + .legend-dot { margin-left: -4px; }
+      /* Match the calendar section: the white "you" dot overlaps ON TOP of
+       * the lilac "match" dot, not the reverse. DOM order paints lilac last,
+       * so lift the white (first child) above it explicitly. */
+      .legend-pair .legend-dot { box-shadow: none; position: relative; }
+      .legend-pair .legend-dot:first-child { z-index: 1; }
+      .legend-pair .legend-dot + .legend-dot { margin-left: -4px; z-index: 0; }
       .legend-label {
         text-transform: uppercase;
         letter-spacing: 0.04em;
@@ -232,28 +236,24 @@
         z-index: 1;
       }
 
-      /* NEW sticker — peer added/changed since user's last save. Pasted
-       * on the slot's top-right corner like a sale chip, slightly tilted
-       * so it reads as "stuck on" rather than part of the row. */
+      /* NEW marker — peer added/changed a slot since the user's last save.
+       * A small, flat brand pill on the slot's top-right corner. Compact and
+       * untilted so it reads as a clean, modern tag rather than a sale sticker. */
       .badge-new {
         position: absolute;
-        top: -8px;
-        right: 14px;
+        top: -7px;
+        right: 10px;
         z-index: 2;
-        padding: 3px 10px;
+        padding: 2px 7px;
         border-radius: 999px;
-        background: linear-gradient(135deg, var(--brand), var(--brand-light));
+        background: var(--brand);
         color: #09090b;
-        font-size: 9px;
-        font-weight: 800;
-        letter-spacing: 0.12em;
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
         white-space: nowrap;
-        box-shadow:
-          0 4px 14px rgba(172, 146, 220, 0.5),
-          inset 0 1px 0 rgba(255, 255, 255, 0.35);
-        transform: rotate(-6deg);
-        transform-origin: 100% 50%;
+        box-shadow: 0 2px 8px rgba(172, 146, 220, 0.32);
         pointer-events: none;
       }
       .indicator-tag {
@@ -356,6 +356,51 @@
         -webkit-background-clip: text;
                 background-clip: text;
         color: transparent;
+      }
+
+      /* "Other time" card — when both sides picked the SAME day at DIFFERENT
+       * slots, the day card carries the «Другое время» / "Other time" status,
+       * a long two-word label in every locale. Modeled on the Antigravity
+       * composer field: a lighter rounded frame with the darker field inset
+       * and pushed DOWN, so the frame's taller top edge reads as a header
+       * "window" that holds the label (and the NEW pill). Replaces the earlier
+       * gradient-border treatment for this one state; every other card — incl.
+       * the «Совпало» overlap card — keeps its own shape and corner NEW. */
+      .slot.has-topbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        padding: 0;
+        background: #2b2733;
+        border-color: transparent;
+        box-shadow: 0 10px 26px -14px rgba(0, 0, 0, 0.7);
+      }
+      /* Drop the animated gradient border — the lighter frame stands in for it. */
+      .slot.has-topbar.state-both::before { content: none; }
+      .slot.has-topbar .slot-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 14px 8px 20px;
+      }
+      /* The darker inner field — inset on the sides and bottom, flush under the
+       * header so the lighter frame reads as one continuous window around it. */
+      .slot.has-topbar .slot-main {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 0 4px 4px;
+        padding: 14px 14px 14px 16px;
+        background: var(--surface);
+        border-radius: 13px;
+      }
+      /* NEW pill flows inline on the header's right edge (vs. corner sticker). */
+      .slot-topbar .badge-new {
+        position: static;
+        top: auto;
+        right: auto;
       }
 
       @keyframes gradient-border {
@@ -566,7 +611,11 @@
         display: flex;
         flex-direction: column;
         padding-top: 24px;
-        padding-bottom: 16px;
+        /* The fixed `.saved-actions` is a two-button column (~156px + safe),
+         * taller than the body's global 120px CTA reservation. Top it up here
+         * so the last saved-pick chip clears the "Change my picks" button
+         * instead of sliding under it. */
+        padding-bottom: 60px;
       }
       .saved-hero {
         display: flex;

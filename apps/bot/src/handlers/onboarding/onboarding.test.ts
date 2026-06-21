@@ -683,11 +683,10 @@ describe("Context dump processing delay", () => {
 
       expect(agentMock).not.toHaveBeenCalled();
       expect(ctx.session.contextDumpBuffer).toBe(longPaste);
-      expect(ctx.reply).toHaveBeenCalledWith("Got it ✅ Processing now…");
-      expect(ctx.reply).not.toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({ reply_markup: expect.anything() }),
-      );
+      // No "received" ack while buffering — the paste is acknowledged by the
+      // analysing status sequence that plays after the debounce flush, so an
+      // extra "processing…" line (or a Done button) would just be chat noise.
+      expect(ctx.reply).not.toHaveBeenCalled();
 
       (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         data: ctx.session,
@@ -772,7 +771,8 @@ describe("Context dump processing delay", () => {
 
       expect(agentMock).not.toHaveBeenCalled();
       expect(ctx.session.contextDumpBuffer).toBe(`${firstChunk}\nSecond chunk`);
-      expect(ctx.reply).toHaveBeenCalledTimes(1);
+      // Buffering is silent — no per-chunk ack (see handleContextDumpChunk).
+      expect(ctx.reply).not.toHaveBeenCalled();
 
       (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
         data: ctx.session,
@@ -1695,11 +1695,9 @@ describe("Album (media_group_id) photo coalescing", () => {
     expect(ctx.session.pendingProfileMedia).toContainEqual(oldVideo);
     expect(prisma.profile.upsert).not.toHaveBeenCalled();
     expect(ticketMocks.grantVideoBonusIfEligible).not.toHaveBeenCalled();
-    expect(ctx.api.editMessageText).toHaveBeenCalledWith(
-      99001,
-      700,
-      expect.stringContaining("too briefly"),
-    );
+    // The thinking-status sequence is torn down; the verdict lands as its own
+    // message instead of editing the old static "checking…" line in place.
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("too briefly"));
   });
 
   it("asks for an identity photo before checking an early video", async () => {
@@ -1726,9 +1724,7 @@ describe("Album (media_group_id) photo coalescing", () => {
 
     expect(prisma.profile.upsert).not.toHaveBeenCalled();
     expect(ticketMocks.grantVideoBonusIfEligible).not.toHaveBeenCalled();
-    expect(ctx.api.editMessageText).toHaveBeenCalledWith(
-      99001,
-      700,
+    expect(ctx.reply).toHaveBeenCalledWith(
       expect.stringContaining("profile photo first"),
     );
   });

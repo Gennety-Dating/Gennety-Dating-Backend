@@ -54,10 +54,29 @@ describe("validateInitData", () => {
     }
   });
 
-  it("accepts Bot API 8.0+ initData with a separate Ed25519 signature field", () => {
+  it("accepts Bot API 8.0+ initData with a separate Ed25519 signature field (hash excludes signature)", () => {
     const initData = buildInitData({ signature: "fake-ed25519-signature" });
     const result = validateInitData(initData, BOT_TOKEN);
     expect(result.valid).toBe(true);
+  });
+
+  it("accepts Bot API 8.0+ initData whose hash INCLUDES the signature field (real iOS 9.6 behavior)", () => {
+    // Real iOS clients compute `hash` over a data-check-string that includes the
+    // `signature` field. Build that variant by hand and assert it validates.
+    const params = new URLSearchParams();
+    params.set("auth_date", String(Math.floor(Date.now() / 1000)));
+    params.set("query_id", "AAH123abcDEF");
+    params.set("user", JSON.stringify({ id: 5986970093, first_name: "Test", username: "testuser" }));
+    params.set("signature", "real-ed25519-signature");
+    const sortedKeys = [...params.keys()].sort();
+    const dataCheckString = sortedKeys.map((k) => `${k}=${params.get(k)}`).join("\n");
+    const secretKey = crypto.createHmac("sha256", "WebAppData").update(BOT_TOKEN).digest();
+    const hash = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
+    params.set("hash", hash);
+
+    const result = validateInitData(params.toString(), BOT_TOKEN);
+    expect(result.valid).toBe(true);
+    if (result.valid) expect(result.user.id).toBe(5986970093);
   });
 
   it("rejects when the hash is tampered with", () => {
