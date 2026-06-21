@@ -77,6 +77,9 @@ vi.mock("@gennety/db", () => ({
       groupBy: vi.fn().mockResolvedValue([]),
       count: vi.fn().mockResolvedValue(0),
     },
+    message: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     noMatchNotice: {
       findMany: vi.fn().mockResolvedValue([]),
     },
@@ -97,7 +100,14 @@ vi.mock("../services/verification-pipeline.js", () => ({
   runFaceMatchVerificationDefault: runPipeline,
 }));
 
+vi.mock("../services/storage.js", () => ({
+  downloadProfileImage: vi.fn(),
+  downloadChatImage: vi.fn(),
+  downloadTelegramFile: vi.fn(),
+}));
+
 import { prisma } from "@gennety/db";
+import { downloadChatImage } from "../services/storage.js";
 import { app, setAdminBotApi } from "./server.js";
 
 const ENDPOINTS = [
@@ -109,6 +119,7 @@ const ENDPOINTS = [
   "/admin/reports",
   "/admin/users",
   `/admin/users/${MOCK_USER.id}`,
+  `/admin/users/${MOCK_USER.id}/conversation`,
 ];
 
 describe("Admin API auth", () => {
@@ -220,6 +231,150 @@ describe("GET /admin/users/:id", () => {
       .set(AUTH);
     expect(res.status).toBe(404);
     expect(res.body.error).toMatch(/not found/i);
+  });
+});
+
+describe("GET /admin/users/:id/conversation", () => {
+  it("returns 404 for unknown id", async () => {
+    const res = await request(app)
+      .get("/admin/users/00000000-0000-0000-0000-000000000099/conversation")
+      .set(AUTH);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/not found/i);
+  });
+
+  it("normalizes messageHistory + Aether rows and exposes a photo gallery", async () => {
+    const findUnique = (prisma.user as unknown as { findUnique: ReturnType<typeof vi.fn> })
+      .findUnique;
+    const messageFindMany = (
+      prisma.message as unknown as { findMany: ReturnType<typeof vi.fn> }
+    ).findMany;
+
+    findUnique.mockResolvedValueOnce({
+      firstName: "Alice",
+      surname: "Smith",
+      telegramId: 123456789n,
+      messageHistory: [
+        { role: "system", content: "You are a matchmaker bot" },
+        { role: "user", content: "Hi" },
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: [{ function: { name: "save_field", arguments: '{"firstName":"Alice"}' } }],
+        },
+        { role: "tool", content: "ok", tool_call_id: "t1" },
+      ],
+      profile: { photos: ["file_abc", "user-1/1.jpg"] },
+    });
+    messageFindMany.mockResolvedValueOnce([
+      {
+        id: "msg-1",
+        role: "user",
+        content: "look at this",
+        imageUrl: "user-1/2.jpg",
+        createdAt: new Date("2026-05-01T10:00:00Z"),
+      },
+      {
+        id: "msg-2",
+        role: "assistant",
+        content: "nice photo",
+        imageUrl: null,
+        createdAt: new Date("2026-05-01T10:01:00Z"),
+      },
+    ]);
+
+    const res = await request(app)
+      .get(`/admin/users/${MOCK_USER.id}/conversation`)
+      .set(AUTH);
+
+    expect(res.status).toBe(200);
+    expect(res.body.telegramId).toBe("123456789"); // BigInt → string
+    expect(res.body.displayName).toBe("Alice Smith");
+
+    const msgs = res.body.messages;
+    expect(msgs).toHaveLength(6); // 4 telegram + 2 aether
+
+    expect(msgs[0]).toMatchObject({ id: "mh-0", source: "telegram", role: "system", technical: true });
+    expect(msgs[1]).toMatchObject({
+      id: "mh-1",
+      source: "telegram",
+      role: "user",
+      text: "Hi",
+      technical: false,
+      createdAt: null,
+    });
+    expect(msgs[2]).toMatchObject({
+      role: "assistant",
+      technical: true, // null content → technical
+      toolCalls: [{ name: "save_field", arguments: '{"firstName":"Alice"}' }],
+    });
+    expect(msgs[2].text).toBeNull();
+    expect(msgs[3]).toMatchObject({ role: "tool", technical: true });
+
+    expect(msgs[4]).toMatchObject({
+      id: "msg-1",
+      source: "aether",
+      role: "user",
+      technical: false,
+      createdAt: "2026-05-01T10:00:00.000Z",
+      image: { type: "chat", ref: "user-1/2.jpg" },
+    });
+    expect(msgs[5]).toMatchObject({ id: "msg-2", source: "aether", role: "assistant" });
+    expect(msgs[5].image).toBeUndefined();
+
+    expect(res.body.photos).toEqual([
+      { type: "photo", ref: "file_abc" },
+      { type: "photo", ref: "user-1/1.jpg" },
+    ]);
+  });
+});
+
+describe("GET /admin/media", () => {
+  // NOTE: this block runs before the rerun-verification block, so the
+  // module-scoped botApi is still null here — required for the 503 case.
+  it("rejects requests without Authorization header", async () => {
+    const res = await request(app).get("/admin/media?type=chat&ref=user-1%2F1.jpg");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 for an unknown media type", async () => {
+    const res = await request(app).get("/admin/media?type=bogus&ref=user-1%2F1.jpg").set(AUTH);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for a traversal ref", async () => {
+    const res = await request(app)
+      .get(`/admin/media?type=chat&ref=${encodeURIComponent("../secret/x.jpg")}`)
+      .set(AUTH);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 503 for type=telegram when the bot api isn't registered", async () => {
+    const res = await request(app).get("/admin/media?type=telegram&ref=BAADfileid123").set(AUTH);
+    expect(res.status).toBe(503);
+  });
+
+  it("streams image bytes on success (chat)", async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    vi.mocked(downloadChatImage).mockResolvedValueOnce(png);
+
+    const res = await request(app)
+      .get(`/admin/media?type=chat&ref=${encodeURIComponent("user-1/1.jpg")}`)
+      .set(AUTH);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toContain("image/png");
+    expect(res.headers["cache-control"]).toContain("private");
+    expect(Buffer.isBuffer(res.body)).toBe(true);
+    expect((res.body as Buffer).equals(png)).toBe(true);
+  });
+
+  it("returns 404 when the image is missing/expired", async () => {
+    vi.mocked(downloadChatImage).mockResolvedValueOnce(null);
+    const res = await request(app)
+      .get(`/admin/media?type=chat&ref=${encodeURIComponent("user-1/missing.jpg")}`)
+      .set(AUTH);
+    expect(res.status).toBe(404);
   });
 });
 

@@ -24,7 +24,7 @@
  *   node scripts/dev-trigger-scheduling.mjs
  *
  * Optional:
- *   --primary-tg=782065541 --secondary-tg=7778727321
+ *   --primary-tg=782065541 --secondary-tg=5986970093
  *   --keep-open   do NOT cancel existing in-flight matches first
  *   --force       bypass the gennetytestbot / dev-DB guards
  *
@@ -73,7 +73,7 @@ const args = new Map(
 const force = args.get("force") === "true";
 const keepOpen = args.get("keep-open") === "true";
 const primaryTg = BigInt(args.get("primary-tg") ?? "782065541");
-const secondaryTg = BigInt(args.get("secondary-tg") ?? "7778727321");
+const secondaryTg = BigInt(args.get("secondary-tg") ?? "5986970093");
 
 let prisma;
 

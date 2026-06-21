@@ -1,0 +1,47 @@
+[
+  {
+    "_anchor": "Center — Sumska St / Svobody Sq cluster (Karazin, NURE, HNEU, KNMU, Shevchenko Garden)",
+    "universityDomain": "karazin.ua",
+    "lat": 50.0085,
+    "lng": 36.234,
+    "radiusMeters": 2600,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum", "lounge"],
+    "defaultPriority": 2
+  },
+  {
+    "_anchor": "Historic center south — Constitution Sq / metro Istorychnyi Muzei",
+    "universityDomain": "karazin.ua",
+    "lat": 49.9905,
+    "lng": 36.231,
+    "radiusMeters": 2400,
+    "categories": ["cafe", "coffee_shop", "restaurant", "museum", "lounge"],
+    "defaultPriority": 2
+  },
+  {
+    "_anchor": "KhPI / NLU — Pushkinska / Skovorody St, Architects' Garden",
+    "universityDomain": "karazin.ua",
+    "lat": 50.0035,
+    "lng": 36.247,
+    "radiusMeters": 2200,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park"],
+    "defaultPriority": 2
+  },
+  {
+    "_anchor": "Pavlove Pole — student-dorm district (23 Serpnia / Nauky Ave NW)",
+    "universityDomain": "karazin.ua",
+    "lat": 50.0348,
+    "lng": 36.2252,
+    "radiusMeters": 2600,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park"],
+    "defaultPriority": 2
+  },
+  {
+    "_anchor": "KhAI — National Aerospace University, north Shevchenkivskyi",
+    "universityDomain": "karazin.ua",
+    "lat": 50.0427,
+    "lng": 36.2847,
+    "radiusMeters": 3000,
+    "categories": ["cafe", "coffee_shop", "restaurant", "park"],
+    "defaultPriority": 2
+  }
+]

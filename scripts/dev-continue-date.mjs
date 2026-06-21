@@ -26,7 +26,7 @@
  * Usage:
  *   node scripts/dev-continue-date.mjs
  * Optional:
- *   --primary-tg=782065541 --secondary-tg=7778727321
+ *   --primary-tg=782065541 --secondary-tg=5986970093
  *   --force   bypass the gennetytestbot / dev-DB guards
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -66,7 +66,7 @@ const args = new Map(
 );
 const force = args.get("force") === "true";
 const primaryTg = BigInt(args.get("primary-tg") ?? "782065541");
-const secondaryTg = BigInt(args.get("secondary-tg") ?? "7778727321");
+const secondaryTg = BigInt(args.get("secondary-tg") ?? "5986970093");
 
 // Two commute origins in central Kyiv ~1.5km apart.
 const ORIGIN_A = { lat: 50.4501, lng: 30.5234 }; // Maidan

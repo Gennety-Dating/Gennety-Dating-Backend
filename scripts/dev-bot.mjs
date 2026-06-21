@@ -5,6 +5,7 @@
  * while modules load, earlier than config.ts can call dotenv.
  */
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -31,6 +32,35 @@ function loadEnv(path, override) {
 
 loadEnv(resolve(root, ".env.local"), true);
 loadEnv(resolve(root, ".env"), false);
+
+/**
+ * Refuse to start a second dev bot. Two instances long-poll the same
+ * BOT_TOKEN and fight over Telegram updates (409 Conflict), and whichever
+ * leftover process already owns PUBLIC_PORT keeps serving the Mini App API
+ * with its now-stale in-memory Prisma client — i.e. silent 500s on
+ * /v1/matches/:id/ticket/state and friends after a schema/`db:generate`
+ * change. Fail fast with a clear message instead of producing that mess.
+ */
+function isPortFree(port) {
+  return new Promise((res) => {
+    const tester = createServer()
+      .once("error", (err) => res(err.code !== "EADDRINUSE"))
+      .once("listening", () => tester.close(() => res(true)))
+      .listen(port, "127.0.0.1");
+  });
+}
+
+const publicPort = Number(process.env.PUBLIC_PORT ?? "3101");
+if (!(await isPortFree(publicPort))) {
+  console.error(
+    `\n✖ Port ${publicPort} is already in use — a dev bot is already running.\n` +
+      `  Starting a second one makes both bots fight over Telegram updates (409 Conflict)\n` +
+      `  and the stale instance keeps answering the Mini App API with an outdated Prisma\n` +
+      `  client (silent 500s). Stop the running one first:\n\n` +
+      `    pkill -f dev-bot.mjs ; pkill -f 'tsx watch src/index.ts'\n`,
+  );
+  process.exit(1);
+}
 
 const child = spawn("pnpm", ["--filter", "@gennety/bot", "dev"], {
   cwd: root,

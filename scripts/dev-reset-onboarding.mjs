@@ -42,7 +42,7 @@ const apply = process.argv.includes("--apply");
 const tgFilter = process.argv
   .filter((a) => a.startsWith("--tg="))
   .map((a) => BigInt(a.slice("--tg=".length)));
-const IDS = tgFilter.length > 0 ? tgFilter : [782065541n, 7778727321n];
+const IDS = tgFilter.length > 0 ? tgFilter : [782065541n, 5986970093n];
 
 if (
   process.env.BOT_USERNAME !== "gennetytestbot" ||

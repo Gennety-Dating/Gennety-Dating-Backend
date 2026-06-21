@@ -112,7 +112,7 @@ async function main(): Promise<void> {
   }
   await api.sendPhoto(args.chat, args.photo, photoOpts);
 
-  // 2) Stand-in pitch — the real flow streams AI text via sendMessageDraft,
+  // 2) Stand-in pitch — the real flow streams AI text by editing one message,
   //    but for this preview a single static line keeps the focus on the
   //    verified affordance.
   await api.sendMessage(

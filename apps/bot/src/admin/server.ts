@@ -7,6 +7,11 @@ import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { env } from "../config.js";
 import { runFaceMatchVerificationDefault } from "../services/verification-pipeline.js";
+import {
+  downloadProfileImage,
+  downloadChatImage,
+  downloadTelegramFile,
+} from "../services/storage.js";
 import { audienceRouter } from "./routes/audience.js";
 import { algorithmRouter } from "./routes/algorithm.js";
 import { genderRouter } from "./routes/gender.js";
@@ -113,13 +118,29 @@ app.use(express.json({ limit: "32kb" }));
 
 // M-7: per-IP rate limit. Even with a Bearer gate, an attacker without the
 // key can otherwise guess at any pace until they trip a network alarm.
+//
+// The image proxy (`GET /admin/media`) is exempted here and gets its own
+// higher-ceiling limiter below: a single conversation view can fan out to a
+// gallery of many images, which would otherwise instantly exhaust the 60/min
+// budget for the whole admin surface.
 const adminLimiter = rateLimit({
   windowMs: 60_000,
   limit: 60,
   standardHeaders: "draft-7",
   legacyHeaders: false,
+  skip: (req) => req.path === "/admin/media",
 });
 app.use(adminLimiter);
+
+// Dedicated, higher-ceiling limiter for the image proxy so a conversation
+// view's image gallery doesn't trip the global 60/min budget. Still per-IP,
+// still behind the Bearer gate (the route is registered after requireApiKey).
+const mediaLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 300,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+});
 
 app.use(requireApiKey);
 
@@ -558,6 +579,216 @@ app.get("/admin/users/:id", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("[admin] user detail error:", err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/users/:id/conversation — normalized, chronological transcript
+// merging BOTH conversation stores plus a profile-photo gallery.
+//   • User.messageHistory (Telegram onboarding/menu agents) — array order,
+//     no timestamps, no inline images.
+//   • Message rows (Aether mobile concierge) — real createdAt + imageUrl.
+// Images are returned as refs streamed through GET /admin/media; this endpoint
+// never downloads bytes itself.
+// ---------------------------------------------------------------------------
+type RawHistoryEntry = {
+  role?: string;
+  content?: unknown;
+  tool_calls?: Array<{ function?: { name?: string; arguments?: string } }>;
+};
+
+type NormalizedMessage = {
+  id: string;
+  source: "telegram" | "aether";
+  role: string;
+  text: string | null;
+  createdAt: string | null;
+  technical: boolean;
+  toolCalls?: Array<{ name: string; arguments: string }>;
+  image?: { type: "chat"; ref: string };
+};
+
+app.get("/admin/users/:id/conversation", async (req: Request, res: Response) => {
+  try {
+    const id = req.params["id"] as string;
+
+    const [user, aetherRows] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id },
+        select: {
+          firstName: true,
+          surname: true,
+          telegramId: true,
+          messageHistory: true,
+          profile: { select: { photos: true } },
+        },
+      }),
+      prisma.message.findMany({
+        where: { userId: id },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, role: true, content: true, imageUrl: true, createdAt: true },
+      }),
+    ]);
+
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const messages: NormalizedMessage[] = [];
+
+    // Store 1 — Telegram. Order is array order; mark system/tool/null-content
+    // turns as technical and surface tool-call names/arguments.
+    const history = Array.isArray(user.messageHistory)
+      ? (user.messageHistory as RawHistoryEntry[])
+      : [];
+    history.forEach((entry, idx) => {
+      const role = typeof entry?.role === "string" ? entry.role : "unknown";
+      const text = typeof entry?.content === "string" ? entry.content : null;
+      const toolCalls = Array.isArray(entry?.tool_calls)
+        ? entry.tool_calls
+            .map((tc) => ({
+              name: tc?.function?.name ?? "",
+              arguments: tc?.function?.arguments ?? "",
+            }))
+            .filter((tc) => tc.name || tc.arguments)
+        : undefined;
+      messages.push({
+        id: `mh-${idx}`,
+        source: "telegram",
+        role,
+        text,
+        createdAt: null,
+        technical: role === "system" || role === "tool" || text === null,
+        ...(toolCalls && toolCalls.length > 0 ? { toolCalls } : {}),
+      });
+    });
+
+    // Store 2 — Aether. We deliberately do NOT interleave with Store 1 by
+    // fabricating timestamps: a user is realistically one-or-the-other
+    // (mobile-only users carry a negative telegramId and no meaningful
+    // messageHistory). Emit the Telegram block (above) then the Aether block
+    // in createdAt order.
+    for (const row of aetherRows) {
+      messages.push({
+        id: row.id,
+        source: "aether",
+        role: row.role,
+        text: row.content,
+        createdAt: row.createdAt.toISOString(),
+        technical: row.role === "system",
+        ...(row.imageUrl ? { image: { type: "chat" as const, ref: row.imageUrl } } : {}),
+      });
+    }
+
+    const photos = (user.profile?.photos ?? []).map((ref) => ({
+      type: "photo" as const,
+      ref,
+    }));
+
+    const nameParts = [user.firstName, user.surname].filter(Boolean);
+    res.json({
+      userId: id,
+      telegramId: user.telegramId.toString(),
+      displayName: nameParts.length > 0 ? nameParts.join(" ") : null,
+      messages,
+      photos,
+    });
+  } catch (err) {
+    console.error("[admin] user conversation error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/media — authenticated image proxy. Streams private/Telegram
+// image bytes so the dashboard can render them (an `<img src>` can't carry the
+// Bearer header, and the key must never ride the query string). Behind the
+// global requireApiKey gate; uses the dedicated mediaLimiter so a conversation
+// view's gallery doesn't exhaust the 60/min admin budget.
+//   ?type=telegram&ref=<file_id>            → downloadTelegramFile
+//   ?type=photo&ref=<Profile.photos entry>  → downloadProfileImage (id OR path)
+//   ?type=chat&ref=<Message.imageUrl path>  → downloadChatImage
+// ---------------------------------------------------------------------------
+const MEDIA_TYPES = new Set(["telegram", "photo", "chat"]);
+// Telegram file_ids are slash-free base64-ish tokens; treat as opaque.
+const TELEGRAM_FILE_ID_RE = /^[A-Za-z0-9_-]+$/;
+// Supabase object paths are `{userId}/{ts}.{ext}` — restrict the charset and
+// reject `..` so a crafted ref can't traverse the bucket.
+const SUPABASE_PATH_RE = /^[A-Za-z0-9._\-/]+$/;
+
+function sniffImageContentType(buf: Buffer): string {
+  if (buf.length >= 4 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47)
+    return "image/png";
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf.length >= 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP")
+    return "image/webp";
+  if (buf.length >= 4 && buf.toString("ascii", 0, 4) === "GIF8") return "image/gif";
+  return "image/jpeg";
+}
+
+app.get("/admin/media", mediaLimiter, async (req: Request, res: Response) => {
+  try {
+    const type = String(req.query.type ?? "");
+    const ref = String(req.query.ref ?? "");
+
+    if (!MEDIA_TYPES.has(type)) {
+      res.status(400).json({ error: "Invalid media type" });
+      return;
+    }
+    if (!ref) {
+      res.status(400).json({ error: "Missing ref" });
+      return;
+    }
+
+    const isSupabasePath = ref.includes("/");
+    if (isSupabasePath) {
+      if (!SUPABASE_PATH_RE.test(ref) || ref.includes("..")) {
+        res.status(400).json({ error: "Invalid ref" });
+        return;
+      }
+    } else if (!TELEGRAM_FILE_ID_RE.test(ref)) {
+      res.status(400).json({ error: "Invalid ref" });
+      return;
+    }
+
+    let buf: Buffer | null = null;
+    if (type === "telegram") {
+      if (isSupabasePath) {
+        res.status(400).json({ error: "Invalid ref for telegram" });
+        return;
+      }
+      if (!botApi) {
+        res.status(503).json({ error: "Bot api not registered" });
+        return;
+      }
+      buf = await downloadTelegramFile(botApi, ref);
+    } else if (type === "photo") {
+      // A slash-free ref is a Telegram file_id → needs botApi; a path is
+      // Supabase → handled without it. downloadProfileImage branches on the
+      // ref shape itself and ignores `api` for Supabase paths.
+      if (!isSupabasePath && !botApi) {
+        res.status(503).json({ error: "Bot api not registered" });
+        return;
+      }
+      buf = await downloadProfileImage(ref, botApi as Api<RawApi>);
+    } else {
+      // type === "chat" — Supabase chat bucket, no botApi needed.
+      buf = await downloadChatImage(ref);
+    }
+
+    if (!buf) {
+      // Image expired (Telegram file_ids rotate) / missing — never 500-loop.
+      res.status(404).json({ error: "Image not found" });
+      return;
+    }
+
+    res.setHeader("Content-Type", sniffImageContentType(buf));
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.send(buf);
+  } catch (err) {
+    console.error("[admin] media proxy error:", err);
+    res.status(404).json({ error: "Image not found" });
   }
 });
 
