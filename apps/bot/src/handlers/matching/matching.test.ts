@@ -89,7 +89,11 @@ vi.mock("../../services/wingman-hint.js", () => ({
 }));
 
 import { prisma } from "@gennety/db";
-import { handleMatchDecision } from "./decision.js";
+import {
+  handleMatchDecision,
+  promptDeclineConfirm,
+  handleDeclineBack,
+} from "./decision.js";
 import { buildDeclineReasonKeyboard, handleDeclineReasonCallback } from "./decline-feedback.js";
 import { buildMatchKeyboard, sendMatchProposal } from "./pitch.js";
 import { appendNegativeConstraint, normalizeReason } from "./negative-constraints.js";
@@ -110,6 +114,7 @@ import {
   scoreCandidate,
   rankCandidates,
   extractSocialEnergy,
+  quadrantProximityScore,
   SCORING_WEIGHTS,
 } from "../../services/match-engine.js";
 import type { RichCandidateRow, SeekerProfile } from "../../services/match-engine.js";
@@ -147,6 +152,8 @@ function createCtx(overrides: {
     message: overrides.messageText ? { text: overrides.messageText } : undefined,
     reply: vi.fn().mockResolvedValue(undefined),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+    editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
+    editMessageText: vi.fn().mockResolvedValue(undefined),
     api: {
       sendMessage: vi.fn().mockResolvedValue({ message_id: 9001 }),
     },
@@ -213,7 +220,8 @@ function makeSeeker(overrides: Partial<SeekerProfile> = {}): SeekerProfile {
     height: 165,
     major: "computer science",
     negativeConstraints: null,
-    socialEnergy: "ambivert",
+    energyAxis: 0,
+    orientationAxis: 0,
     eloScore: 500,
     ...overrides,
   };
@@ -231,7 +239,8 @@ function makeCandidate(overrides: Partial<RichCandidateRow> = {}): RichCandidate
     major: "physics",
     psychologicalSummary: "Warm, curious, extroverted. Loves jazz and philosophy.",
     negativeConstraints: null,
-    socialEnergy: "extrovert",
+    energyAxis: 0.5,
+    orientationAxis: 0.5,
     eloScore: 500,
     homeCityKey: "ua:kyiv",
     ...overrides,
@@ -467,14 +476,45 @@ describe("resolveCluster", () => {
 });
 
 // ---------------------------------------------------------------------------
+// quadrantProximityScore (vibe)
+// ---------------------------------------------------------------------------
+
+describe("quadrantProximityScore", () => {
+  it("returns 1.0 for identical vibe points", () => {
+    expect(quadrantProximityScore(0.6, -0.3, 0.6, -0.3)).toBeCloseTo(1.0);
+  });
+
+  it("returns null when either side lacks an energy axis (factor skipped)", () => {
+    expect(quadrantProximityScore(null, 0.2, 0.5, 0.2)).toBeNull();
+    expect(quadrantProximityScore(0.5, 0.2, null, 0.2)).toBeNull();
+  });
+
+  it("penalises an energy (tempo) gap harder than an orientation gap", () => {
+    // Same orientation, opposite energy.
+    const energyGap = quadrantProximityScore(1, 0, -1, 0)!;
+    // Same energy, opposite orientation.
+    const orientationGap = quadrantProximityScore(0, 1, 0, -1)!;
+    expect(energyGap).toBeLessThan(orientationGap);
+  });
+
+  it("treats a missing orientation axis as the neutral midpoint", () => {
+    expect(quadrantProximityScore(0.5, null, 0.5, null)).toBeCloseTo(1.0);
+  });
+
+  it("floors at 0 for the opposite corner", () => {
+    expect(quadrantProximityScore(1, 1, -1, -1)).toBeCloseTo(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // researchScore (composite)
 // ---------------------------------------------------------------------------
 
 describe("researchScore", () => {
   it("taller male + 1yr older scores higher than shorter male (identical embeddings)", () => {
-    const seeker = { age: 22, gender: "female" as const, height: 165, socialEnergy: null, major: null };
-    const tallerOlder = { age: 23, gender: "male" as const, height: 175, socialEnergy: null, major: null };
-    const shorterSame = { age: 22, gender: "male" as const, height: 160, socialEnergy: null, major: null };
+    const seeker = { age: 22, gender: "female" as const, height: 165, energyAxis: null, orientationAxis: null, major: null };
+    const tallerOlder = { age: 23, gender: "male" as const, height: 175, energyAxis: null, orientationAxis: null, major: null };
+    const shorterSame = { age: 22, gender: "male" as const, height: 160, energyAxis: null, orientationAxis: null, major: null };
 
     const scoreTaller = researchScore(seeker, tallerOlder);
     const scoreShorter = researchScore(seeker, shorterSame);
@@ -482,7 +522,7 @@ describe("researchScore", () => {
   });
 
   it("same-major pair beats cross-cluster pair", () => {
-    const base = { age: null, gender: null, height: null, socialEnergy: null };
+    const base = { age: null, gender: null, height: null, energyAxis: null, orientationAxis: null };
     const sameMajor = researchScore(
       { ...base, major: "physics" },
       { ...base, major: "physics" },
@@ -494,18 +534,30 @@ describe("researchScore", () => {
     expect(sameMajor).toBeGreaterThan(crossCluster);
   });
 
-  it("boosts same social energy", () => {
-    const score = researchScore(
-      { age: null, gender: null, height: null, socialEnergy: "introvert", major: null },
-      { age: null, gender: null, height: null, socialEnergy: "introvert", major: null },
+  it("vibe quadrant proximity rewards similar tempo over a big energy gap", () => {
+    const base = { age: null, gender: null, height: null, major: null };
+    const similar = researchScore(
+      { ...base, energyAxis: 0.8, orientationAxis: 0.5 },
+      { ...base, energyAxis: 0.7, orientationAxis: 0.4 },
     );
-    expect(score).toBe(1.0);
+    const oppositeEnergy = researchScore(
+      { ...base, energyAxis: 0.8, orientationAxis: 0.5 },
+      { ...base, energyAxis: -0.8, orientationAxis: 0.5 },
+    );
+    expect(similar).toBeGreaterThan(oppositeEnergy);
+    // Identical vibe → quadrant factor is 1.0 and it's the only present factor.
+    expect(
+      researchScore(
+        { ...base, energyAxis: 0.5, orientationAxis: -0.5 },
+        { ...base, energyAxis: 0.5, orientationAxis: -0.5 },
+      ),
+    ).toBeCloseTo(1.0);
   });
 
   it("returns 0.5 (neutral) when no data available", () => {
     expect(researchScore(
-      { age: null, gender: null, height: null, socialEnergy: null, major: null },
-      { age: null, gender: null, height: null, socialEnergy: null, major: null },
+      { age: null, gender: null, height: null, energyAxis: null, orientationAxis: null, major: null },
+      { age: null, gender: null, height: null, energyAxis: null, orientationAxis: null, major: null },
     )).toBe(0.5);
   });
 });
@@ -541,10 +593,14 @@ describe("scoreCandidate — composite formula", () => {
   it("penalty can push score negative for heavily penalised candidates", () => {
     const seeker = makeSeeker({
       negativeConstraints: "- [dealbreaker] red flags [arrogant, dismissive]",
+      energyAxis: 1,
+      orientationAxis: 1,
     });
     const candidate = makeCandidate({
       distance: 1.8, // poor embedding
       psychologicalSummary: "Arrogant and dismissive know-it-all",
+      energyAxis: -1, // opposite tempo → weak vibe quadrant
+      orientationAxis: -1,
     });
 
     const result = scoreCandidate(seeker, candidate);
@@ -607,7 +663,7 @@ describe("rankCandidates", () => {
 });
 
 // ---------------------------------------------------------------------------
-// pitch-generator: fallback + draft splitter
+// pitch-generator: fallback + chunk splitter
 // ---------------------------------------------------------------------------
 
 describe("pitch-generator: fallback + splitter", () => {
@@ -649,9 +705,9 @@ describe("pitch-generator: fallback + splitter", () => {
     expect(splitPitchIntoDrafts("Just one sentence.")).toEqual(["Just one sentence."]);
   });
 
-  it("splitPitchIntoDrafts produces growing-prefix drafts for multiple sentences", () => {
-    const drafts = splitPitchIntoDrafts("First sentence. Second one! Third?");
-    expect(drafts).toEqual([
+  it("splitPitchIntoDrafts produces growing-prefix chunks for multiple sentences", () => {
+    const chunks = splitPitchIntoDrafts("First sentence. Second one! Third?");
+    expect(chunks).toEqual([
       "First sentence.",
       "First sentence. Second one!",
       "First sentence. Second one! Third?",
@@ -733,9 +789,6 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
       sendPhoto: vi.fn().mockResolvedValue({ message_id: 9001 }),
       sendMediaGroup: vi.fn().mockResolvedValue([{ message_id: 9001 }]),
       sendMessage: vi.fn().mockResolvedValue({ message_id: 9002 }),
-      raw: {
-        sendMessageDraft: vi.fn().mockResolvedValue(undefined),
-      },
     } as any;
   }
 
@@ -1255,7 +1308,7 @@ describe("matching decision flow", () => {
 
     const ctx = createCtx({
       session: { onboardingStep: "completed" },
-      callbackData: "match:decline:match-1",
+      callbackData: "match:do:decline:match-1",
       fromId: 1001,
     });
 
@@ -1407,7 +1460,7 @@ describe("matching decision flow", () => {
 
     const ctx = createCtx({
       session: { onboardingStep: "completed" },
-      callbackData: "match:decline:match-1",
+      callbackData: "match:do:decline:match-1",
       fromId: 1002,
     });
 
@@ -1457,7 +1510,7 @@ describe("matching decision flow", () => {
 
     const ctx = createCtx({
       session: { onboardingStep: "completed" },
-      callbackData: "match:decline:match-1",
+      callbackData: "match:do:decline:match-1",
       fromId: 1002,
     });
 
@@ -1471,6 +1524,66 @@ describe("matching decision flow", () => {
     expect(peerSends).toHaveLength(1);
     expect(peerSends[0]![1]).toMatch(/your match passed/i);
     expect(mProfile.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("tapping Pass opens a confirmation card and does NOT commit the decline", async () => {
+    // The bare `match:decline:` button is a guard, not a commit — a pass is
+    // irreversible (the pair is never shown again), so an accidental tap must
+    // surface an explicit confirmation card before anything is thrown away.
+    mMatch.findUnique.mockResolvedValueOnce(matchRow());
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:decline:match-1",
+      fromId: 1001,
+    });
+
+    await promptDeclineConfirm(ctx);
+
+    // Nothing committed: no decision claim, no event, no peer DM.
+    expect(mClaimMatchDecision).not.toHaveBeenCalled();
+    expect(mMatchEvent.create).not.toHaveBeenCalled();
+    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
+
+    // A confirmation card was shown carrying the confirmed-commit + back buttons.
+    const [, options] = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const buttons = (
+      options.reply_markup.inline_keyboard as Array<Array<{ callback_data?: string }>>
+    ).flat();
+    expect(buttons.map((b) => b.callback_data)).toEqual(
+      expect.arrayContaining(["match:do:decline:match-1", "match:keep:match-1"]),
+    );
+  });
+
+  it("Pass confirmation card is not shown once the match is already resolved", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(matchRow({ status: "cancelled" }));
+
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:decline:match-1",
+      fromId: 1001,
+    });
+
+    await promptDeclineConfirm(ctx);
+
+    expect(ctx.reply).not.toHaveBeenCalled();
+  });
+
+  it("backing out of the Pass confirmation leaves the match untouched", async () => {
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:keep:match-1",
+      fromId: 1001,
+    });
+
+    await handleDeclineBack(ctx);
+
+    // The card is edited into a dismissed line; no decision is committed.
+    expect(ctx.editMessageText).toHaveBeenCalled();
+    const dismissed = (ctx.editMessageText as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(dismissed).toMatch(/still waiting for your answer/i);
+    expect(mClaimMatchDecision).not.toHaveBeenCalled();
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
   });
 
   it("quick decline reason saves preset feedback without changing negative constraints", async () => {
@@ -1541,7 +1654,7 @@ describe("matching decision flow", () => {
 
     const ctx = createCtx({
       session: { onboardingStep: "completed" },
-      callbackData: "match:decline:match-1",
+      callbackData: "match:do:decline:match-1",
       fromId: 1001,
     });
 

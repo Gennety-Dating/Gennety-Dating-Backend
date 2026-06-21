@@ -2,11 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const profileUpsert = vi.fn();
 const executeRaw = vi.fn();
+const profileFindUnique = vi.fn();
+const profileUpdate = vi.fn();
 
 vi.mock("@gennety/db", () => ({
   prisma: {
     profile: {
       upsert: profileUpsert,
+      findUnique: profileFindUnique,
+      update: profileUpdate,
     },
     $executeRaw: executeRaw,
   },
@@ -26,12 +30,15 @@ const {
   analyseAndSaveProfile,
   saveFallbackProfileAnalysis,
   saveProfileAnalysis,
+  buildFallbackProfileAnalysis,
+  appendVibeToSummary,
 } = await import("./profile-analysis.js");
 
 beforeEach(() => {
   vi.clearAllMocks();
   profileUpsert.mockResolvedValue({});
   executeRaw.mockResolvedValue(1);
+  profileUpdate.mockResolvedValue({});
 });
 
 describe("profile analysis embedding retry", () => {
@@ -125,5 +132,67 @@ describe("profile analysis embedding retry", () => {
       }),
     });
     expect(executeRaw).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("buildFallbackProfileAnalysis — de-dup + vibe", () => {
+  const base = {
+    firstName: "Alice",
+    age: 21,
+    gender: "female",
+    preference: "men",
+    height: 165,
+    ethnicity: null,
+    hobbies: ["cooking", "hiking"],
+    partnerPreferences: "Someone kind and funny.",
+    homeCityKey: "ua:kyiv",
+  };
+
+  it("excludes demographics already scored elsewhere (age/gender/height/city/name)", () => {
+    const text = buildFallbackProfileAnalysis(base);
+    expect(text).not.toMatch(/Alice/);
+    expect(text).not.toMatch(/Age:/);
+    expect(text).not.toMatch(/Gender:/);
+    expect(text).not.toMatch(/Height:/);
+    expect(text).not.toMatch(/Dating city:/);
+    // Real open-ended signal is kept.
+    expect(text).toContain("cooking, hiking");
+    expect(text).toContain("Someone kind and funny.");
+  });
+
+  it("folds the vibe answers into the embedding text", () => {
+    const text = buildFallbackProfileAnalysis({
+      ...base,
+      fridayVibe: "quiet dinner then a film at home with one close friend",
+      vibeFocus: "who's with me",
+    });
+    expect(text).toContain("Ideal Friday night: quiet dinner");
+    expect(text).toContain("What matters most on a night out: who's with me");
+  });
+});
+
+describe("appendVibeToSummary", () => {
+  it("appends the vibe block and re-marks the embedding dirty", async () => {
+    profileFindUnique.mockResolvedValue({ psychologicalSummary: "Existing magic-prompt summary." });
+    await appendVibeToSummary("user-acc", "club night with friends", "the energy");
+    expect(profileUpdate).toHaveBeenCalledTimes(1);
+    const arg = profileUpdate.mock.calls[0]![0];
+    expect(arg.data.psychologicalSummary).toContain("Existing magic-prompt summary.");
+    expect(arg.data.psychologicalSummary).toContain("Ideal Friday night: club night with friends");
+    expect(arg.data.embeddingDirty).toBe(true);
+    expect(arg.data.embeddingDirtyAt).toBeInstanceOf(Date);
+  });
+
+  it("is idempotent when the block is already present", async () => {
+    const block = "Ideal Friday night: club night";
+    profileFindUnique.mockResolvedValue({ psychologicalSummary: `Summary.\n${block}` });
+    await appendVibeToSummary("user-acc", "club night", null);
+    expect(profileUpdate).not.toHaveBeenCalled();
+  });
+
+  it("no-ops when there is no vibe text", async () => {
+    await appendVibeToSummary("user-acc", "  ", null);
+    expect(profileFindUnique).not.toHaveBeenCalled();
+    expect(profileUpdate).not.toHaveBeenCalled();
   });
 });

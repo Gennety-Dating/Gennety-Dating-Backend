@@ -172,6 +172,12 @@ export interface FallbackProfileAnalysisInput {
   hobbies: string[];
   partnerPreferences: string;
   homeCityKey: string;
+  /**
+   * Vibe answers (PRODUCT_SPEC §1.3). Folded into the embedding text so a
+   * declined-Magic-Prompt profile still carries real psychological signal.
+   */
+  fridayVibe?: string | null;
+  vibeFocus?: string | null;
 }
 
 /**
@@ -256,21 +262,44 @@ export async function saveProfileAnalysis(
   return updated > 0;
 }
 
+/**
+ * Render the vibe answers into a compact natural-language block for the
+ * embedding. Returns "" when neither answer is present. Shared by the fallback
+ * builder and the accepted-path summary append so the wording stays identical.
+ */
+export function buildVibeBlock(
+  fridayVibe?: string | null,
+  vibeFocus?: string | null,
+): string {
+  const parts: string[] = [];
+  const friday = fridayVibe?.trim();
+  const focus = vibeFocus?.trim();
+  if (friday) parts.push(`Ideal Friday night: ${friday}`);
+  if (focus) parts.push(`What matters most on a night out: ${focus}`);
+  return parts.join("\n");
+}
+
+/**
+ * Build the embedding text for a profile that declined the Magic Prompt.
+ *
+ * Demographics (name, age, gender, preference, height, dating city) are
+ * DELIBERATELY excluded: they are already scored by `V_research` and the hard
+ * SQL filters, and as near-identical boilerplate they used to wash out the
+ * embedding's discriminative power (PRODUCT_SPEC §3.2). What remains is genuine
+ * open-ended signal — hobbies, partner preferences, ethnicity, and the vibe.
+ */
 export function buildFallbackProfileAnalysis(
   input: FallbackProfileAnalysisInput,
 ): string {
-  return [
+  const lines = [
     "Profile source: onboarding answers (AI memory export declined)",
-    `Name: ${input.firstName}`,
-    `Age: ${input.age}`,
-    `Gender: ${input.gender}`,
-    `Dating preference: ${input.preference}`,
-    `Height: ${input.height} cm`,
     `Ethnicity/nationality: ${input.ethnicity?.trim() || "not provided"}`,
     `Hobbies/interests: ${input.hobbies.length ? input.hobbies.join(", ") : "none provided"}`,
     `Partner preferences: ${input.partnerPreferences}`,
-    `Dating city: ${input.homeCityKey}`,
-  ].join("\n");
+  ];
+  const vibe = buildVibeBlock(input.fridayVibe, input.vibeFocus);
+  if (vibe) lines.push(vibe);
+  return lines.join("\n");
 }
 
 export async function saveFallbackProfileAnalysis(
@@ -339,4 +368,41 @@ export async function analyseAndSaveProfile(
     embedding,
   );
   return { parsed, embeddingSaved };
+}
+
+/**
+ * Accepted-Magic-Prompt path: append the vibe block to the existing
+ * `psychologicalSummary` and re-mark the embedding dirty so the
+ * `embedding-refresh` worker re-embeds with the vibe included. The declined
+ * path already bakes the vibe into the fallback summary, so this is only for
+ * profiles whose summary came from the Magic Prompt.
+ *
+ * Idempotent: a finalize retry that re-appends is a no-op because the block is
+ * already present. No-op when there is no vibe text or no profile.
+ */
+export async function appendVibeToSummary(
+  userId: string,
+  fridayVibe?: string | null,
+  vibeFocus?: string | null,
+): Promise<void> {
+  const block = buildVibeBlock(fridayVibe, vibeFocus);
+  if (!block) return;
+
+  const profile = await prisma.profile.findUnique({
+    where: { userId },
+    select: { psychologicalSummary: true },
+  });
+  if (!profile) return;
+
+  const summary = profile.psychologicalSummary ?? "";
+  if (summary.includes(block)) return; // already folded in
+
+  await prisma.profile.update({
+    where: { userId },
+    data: {
+      psychologicalSummary: summary ? `${summary}\n${block}` : block,
+      embeddingDirty: true,
+      embeddingDirtyAt: new Date(),
+    },
+  });
 }

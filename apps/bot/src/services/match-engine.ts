@@ -50,13 +50,72 @@ const CANDIDATE_POOL_SIZE = 20;
 // ---------------------------------------------------------------------------
 
 export const SCORING_WEIGHTS = {
-  /** Semantic embedding similarity (cosine). */
-  explicit: 0.80,
-  /** Sociological baseline heuristics (height, age, social energy). */
-  research: 0.20,
+  /**
+   * Semantic embedding similarity (cosine). Lowered 0.80 → 0.65 on 2026-06-21
+   * once `V_research` gained a reliable structured vibe signal (quadrant
+   * proximity) and the embedding was de-noised by stripping duplicated
+   * demographics out of the fallback summary (see `profile-analysis.ts`).
+   */
+  explicit: 0.65,
+  /**
+   * Structured compatibility heuristics: vibe quadrant proximity (the "tempo"
+   * axis), age gradient, height norm, educational homogamy. Raised 0.20 → 0.35
+   * because the bucket is no longer phantom — the keyword-scanned social-energy
+   * factor was replaced by the structured `energyAxis`/`orientationAxis` columns.
+   */
+  research: 0.35,
   /** Negative constraint penalty — subtracted from total. */
   penalty: 0.30,
 } as const;
+
+// ---------------------------------------------------------------------------
+// Vibe quadrant proximity (V_research sub-factor)
+// ---------------------------------------------------------------------------
+
+/**
+ * Weight of the energy axis relative to the orientation axis inside the vibe
+ * distance. Energy (internal↔external "tempo") is weighted heavier because a
+ * large tempo gap is the documented must-have friction point — one partner
+ * wants to keep going at 2am, the other is done by 23:00 (PRODUCT_SPEC §3.2).
+ */
+export const VIBE_ENERGY_WEIGHT = 0.7;
+export const VIBE_ORIENTATION_WEIGHT = 0.3;
+
+/** Clamp a raw axis value to the canonical [-1, 1] range. */
+function clampAxis(value: number): number {
+  return Math.max(-1, Math.min(1, value));
+}
+
+/**
+ * Vibe quadrant proximity → 0..1 over the two onboarding-derived axes
+ * (`energyAxis`, `orientationAxis`). 1 = same point, 0 = opposite corner.
+ *
+ * This is a *proximity* (similarity) signal, NOT complementarity: two people
+ * with a similar tempo land in the same/adjacent quadrant and score high; a big
+ * tempo gap (opposite energy) is heavily penalised. Role-complementarity within
+ * a shared quadrant (Phase 2) is deliberately NOT scored here yet — `socialRole`
+ * is stored but unused until there is accept/decline data to validate it.
+ *
+ * Returns `null` (factor skipped, weight renormalised away) when either side
+ * lacks an energy axis. A missing orientation axis is treated as the neutral
+ * midpoint (0) rather than dropping the whole factor.
+ */
+export function quadrantProximityScore(
+  aEnergy: number | null,
+  aOrientation: number | null,
+  bEnergy: number | null,
+  bOrientation: number | null,
+): number | null {
+  if (aEnergy == null || bEnergy == null) return null;
+  const dEnergy = Math.abs(clampAxis(aEnergy) - clampAxis(bEnergy)); // 0..2
+  const dOrient = Math.abs(
+    clampAxis(aOrientation ?? 0) - clampAxis(bOrientation ?? 0),
+  ); // 0..2
+  // Weighted Manhattan distance, max = 2 (both axes opposite).
+  const dist =
+    VIBE_ENERGY_WEIGHT * dEnergy + VIBE_ORIENTATION_WEIGHT * dOrient;
+  return Math.max(0, 1 - dist / 2);
+}
 
 // ---------------------------------------------------------------------------
 // Elo league penalty
@@ -194,7 +253,8 @@ export interface RichCandidateRow extends CandidateRow {
   major: string | null;
   psychologicalSummary: string | null;
   negativeConstraints: string | null;
-  socialEnergy: string | null;
+  energyAxis: number | null;
+  orientationAxis: number | null;
   eloScore: number;
   homeCityKey: string | null;
 }
@@ -206,7 +266,8 @@ export interface SeekerProfile {
   height: number | null;
   major: string | null;
   negativeConstraints: string | null;
-  socialEnergy: string | null;
+  energyAxis: number | null;
+  orientationAxis: number | null;
   eloScore: number;
 }
 
@@ -246,6 +307,8 @@ export function buildCandidateSql(): string {
       p.height                AS "height",
       p.psychological_summary AS "psychologicalSummary",
       p.negative_constraints  AS "negativeConstraints",
+      p.energy_axis           AS "energyAxis",
+      p.orientation_axis      AS "orientationAxis",
       p.elo_score             AS "eloScore",
       p.home_city_key         AS "homeCityKey",
       (p.embedding <=> $2::vector) AS distance
@@ -559,64 +622,82 @@ export function majorSimilarityScore(
 // ---------------------------------------------------------------------------
 
 /**
- * V_research: baseline sociological modifiers. Returns 0..1.
+ * Relative weights of the V_research sub-factors. The vibe quadrant carries the
+ * most weight because it is the highest-signal compatibility axis; the
+ * demographic factors share the rest. Weights only matter relative to each
+ * other — missing factors are dropped and the remainder is renormalised.
+ */
+export const RESEARCH_SUBWEIGHTS = {
+  quadrant: 0.40,
+  age: 0.20,
+  height: 0.20,
+  major: 0.20,
+} as const;
+
+/**
+ * V_research: structured compatibility modifiers. Returns 0..1.
  *
- * Sub-factors (equally weighted):
- *   1. Height norm: bonus if male is 5–12 cm taller; penalty if shorter.
+ * Sub-factors (weighted by `RESEARCH_SUBWEIGHTS`, renormalised over whichever
+ * are present):
+ *   1. Vibe quadrant proximity: similar tempo/orientation → high (PRIMARY).
  *   2. Age gradient: bonus for same-age / male 1–2yr older; penalty > 3yr gap.
- *   3. Social energy compatibility: same energy level gets a boost.
+ *   3. Height norm: bonus if male is 5–12 cm taller; penalty if shorter.
  *   4. Educational homogamy: same major / same cluster bonus.
+ *
+ * The old keyword-scanned "social energy" factor is gone — its signal now comes
+ * from the structured `energyAxis` inside the quadrant factor, scored once.
  */
 export function researchScore(
-  seeker: { age: number | null; gender: string | null; height: number | null; socialEnergy: string | null; major?: string | null },
-  candidate: { age: number | null; gender: string | null; height: number | null; socialEnergy: string | null; major?: string | null },
+  seeker: { age: number | null; gender: string | null; height: number | null; energyAxis: number | null; orientationAxis: number | null; major?: string | null },
+  candidate: { age: number | null; gender: string | null; height: number | null; energyAxis: number | null; orientationAxis: number | null; major?: string | null },
 ): number {
-  let total = 0;
-  let factors = 0;
+  let weighted = 0;
+  let weightSum = 0;
 
-  // 1. Height norm
-  if (seeker.height != null && candidate.height != null) {
-    factors++;
-    const seekerIsFemale = seeker.gender === "female";
-    const candidateIsMale = candidate.gender === "male";
-    if (seekerIsFemale && candidateIsMale) {
-      total += heightNormScore(candidate.height, seeker.height);
-    } else if (seeker.gender === "male" && candidate.gender === "female") {
-      total += heightNormScore(seeker.height, candidate.height);
-    } else {
-      // Same gender — height is neutral
-      total += 0.5;
-    }
+  // 1. Vibe quadrant proximity (PRIMARY). Skipped when axes are missing.
+  const quadrant = quadrantProximityScore(
+    seeker.energyAxis,
+    seeker.orientationAxis,
+    candidate.energyAxis,
+    candidate.orientationAxis,
+  );
+  if (quadrant != null) {
+    weighted += RESEARCH_SUBWEIGHTS.quadrant * quadrant;
+    weightSum += RESEARCH_SUBWEIGHTS.quadrant;
   }
 
   // 2. Age gradient
   if (seeker.age != null && candidate.age != null) {
-    factors++;
-    total += ageGradientScore(seeker.age, candidate.age, seeker.gender, candidate.gender);
+    weighted +=
+      RESEARCH_SUBWEIGHTS.age *
+      ageGradientScore(seeker.age, candidate.age, seeker.gender, candidate.gender);
+    weightSum += RESEARCH_SUBWEIGHTS.age;
   }
 
-  // 3. Social energy compatibility
-  if (seeker.socialEnergy && candidate.socialEnergy) {
-    factors++;
-    if (seeker.socialEnergy === candidate.socialEnergy) {
-      total += 1.0;
-    } else if (
-      seeker.socialEnergy === "ambivert" || candidate.socialEnergy === "ambivert"
-    ) {
-      total += 0.6; // Ambivert is moderately compatible with anyone
+  // 3. Height norm
+  if (seeker.height != null && candidate.height != null) {
+    let height: number;
+    if (seeker.gender === "female" && candidate.gender === "male") {
+      height = heightNormScore(candidate.height, seeker.height);
+    } else if (seeker.gender === "male" && candidate.gender === "female") {
+      height = heightNormScore(seeker.height, candidate.height);
     } else {
-      total += 0.2; // introvert-extrovert mismatch
+      height = 0.5; // Same gender — height is neutral
     }
+    weighted += RESEARCH_SUBWEIGHTS.height * height;
+    weightSum += RESEARCH_SUBWEIGHTS.height;
   }
 
   // 4. Educational homogamy
   if (seeker.major || candidate.major) {
-    factors++;
-    total += majorSimilarityScore(seeker.major ?? null, candidate.major ?? null);
+    weighted +=
+      RESEARCH_SUBWEIGHTS.major *
+      majorSimilarityScore(seeker.major ?? null, candidate.major ?? null);
+    weightSum += RESEARCH_SUBWEIGHTS.major;
   }
 
-  if (factors === 0) return 0.5; // Neutral when no data available
-  return total / factors;
+  if (weightSum === 0) return 0.5; // Neutral when no data available
+  return weighted / weightSum;
 }
 
 // ---------------------------------------------------------------------------
@@ -642,14 +723,16 @@ export function scoreCandidate(
       age: seeker.age,
       gender: seeker.gender,
       height: seeker.height,
-      socialEnergy: seeker.socialEnergy,
+      energyAxis: seeker.energyAxis,
+      orientationAxis: seeker.orientationAxis,
       major: seeker.major,
     },
     {
       age: candidate.age,
       gender: candidate.gender,
       height: candidate.height,
-      socialEnergy: extractSocialEnergy(candidate.psychologicalSummary),
+      energyAxis: candidate.energyAxis,
+      orientationAxis: candidate.orientationAxis,
       major: candidate.major,
     },
   );
@@ -722,7 +805,8 @@ export async function findCandidatesFor(
         select: {
           height: true,
           negativeConstraints: true,
-          psychologicalSummary: true,
+          energyAxis: true,
+          orientationAxis: true,
           eloScore: true,
           homeCityKey: true,
           latitude: true,
@@ -773,7 +857,8 @@ export async function findCandidatesFor(
     height: seeker.profile?.height ?? null,
     major: seeker.major ?? null,
     negativeConstraints: seeker.profile?.negativeConstraints ?? null,
-    socialEnergy: extractSocialEnergy(seeker.profile?.psychologicalSummary ?? null),
+    energyAxis: seeker.profile?.energyAxis ?? null,
+    orientationAxis: seeker.profile?.orientationAxis ?? null,
     eloScore: seeker.profile?.eloScore ?? 500,
   };
 
@@ -863,6 +948,8 @@ export interface BatchUser {
   height: number | null;
   negativeConstraints: string | null;
   psychologicalSummary: string | null;
+  energyAxis: number | null;
+  orientationAxis: number | null;
   embeddingLiteral: string | null;
   eloScore: number;
   /** Consecutive batches this user has been eligible but unpaired. */
@@ -941,7 +1028,8 @@ export function scorePair(
     height: a.height,
     major: a.major,
     negativeConstraints: a.negativeConstraints,
-    socialEnergy: extractSocialEnergy(a.psychologicalSummary),
+    energyAxis: a.energyAxis,
+    orientationAxis: a.orientationAxis,
     eloScore: a.eloScore,
   };
 
@@ -956,7 +1044,8 @@ export function scorePair(
     major: b.major,
     psychologicalSummary: b.psychologicalSummary,
     negativeConstraints: b.negativeConstraints,
-    socialEnergy: extractSocialEnergy(b.psychologicalSummary),
+    energyAxis: b.energyAxis,
+    orientationAxis: b.orientationAxis,
     eloScore: b.eloScore,
     homeCityKey: b.homeCityKey,
   };
@@ -970,7 +1059,8 @@ export function scorePair(
     height: b.height,
     major: b.major,
     negativeConstraints: b.negativeConstraints,
-    socialEnergy: extractSocialEnergy(b.psychologicalSummary),
+    energyAxis: b.energyAxis,
+    orientationAxis: b.orientationAxis,
     eloScore: b.eloScore,
   };
 
@@ -985,7 +1075,8 @@ export function scorePair(
     major: a.major,
     psychologicalSummary: a.psychologicalSummary,
     negativeConstraints: a.negativeConstraints,
-    socialEnergy: extractSocialEnergy(a.psychologicalSummary),
+    energyAxis: a.energyAxis,
+    orientationAxis: a.orientationAxis,
     eloScore: a.eloScore,
     homeCityKey: a.homeCityKey,
   };
@@ -1082,6 +1173,8 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
           height: true,
           negativeConstraints: true,
           psychologicalSummary: true,
+          energyAxis: true,
+          orientationAxis: true,
           eloScore: true,
           standbyCount: true,
           homeCityKey: true,
@@ -1119,6 +1212,8 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
           height: true,
           negativeConstraints: true,
           psychologicalSummary: true,
+          energyAxis: true,
+          orientationAxis: true,
           eloScore: true,
           standbyCount: true,
           homeCityKey: true,
@@ -1162,6 +1257,8 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
       height: u.profile?.height ?? null,
       negativeConstraints: u.profile?.negativeConstraints ?? null,
       psychologicalSummary: u.profile?.psychologicalSummary ?? null,
+      energyAxis: u.profile?.energyAxis ?? null,
+      orientationAxis: u.profile?.orientationAxis ?? null,
       embeddingLiteral: embeddingMap.get(u.id) ?? null,
       eloScore: u.profile?.eloScore ?? 500,
       standbyCount: u.profile?.standbyCount ?? 0,

@@ -16,8 +16,10 @@ import {
 import { env } from "../config.js";
 import {
   analyseAndSaveProfile,
+  appendVibeToSummary,
   saveFallbackProfileAnalysis,
 } from "./profile-analysis.js";
+import { extractVibeAxes, saveVibeAxes } from "./vibe-axes.js";
 import { createAndSendOtp, verifyOtp as verifyStoredOtp } from "../public/otp.js";
 import {
   onboardingActivityPatch,
@@ -103,6 +105,9 @@ export interface AgentDeps {
   analyseProfile?: typeof analyseAndSaveProfile;
   saveFallbackProfile?: typeof saveFallbackProfileAnalysis;
   extractOnboardingFacts?: CollectorDeps["extractFacts"];
+  extractVibeAxes?: typeof extractVibeAxes;
+  saveVibeAxes?: typeof saveVibeAxes;
+  appendVibeToSummary?: typeof appendVibeToSummary;
 }
 
 function normalizedOnboardingInput(input: string | OnboardingInput): OnboardingInput {
@@ -1444,6 +1449,7 @@ async function execFinalizeOnboarding(
       preference: true,
       email: true,
       isEmailVerified: true,
+      language: true,
       aiMemoryExportPreference: true,
       profile: {
         select: {
@@ -1451,6 +1457,8 @@ async function execFinalizeOnboarding(
           height: true,
           hobbies: true,
           partnerPreferences: true,
+          fridayVibeText: true,
+          vibeFocusText: true,
           photos: true,
           homeCityKey: true,
         },
@@ -1484,6 +1492,28 @@ async function execFinalizeOnboarding(
     });
   }
 
+  // Vibe signal (PRODUCT_SPEC §1.3 / §3.2). Map the two free-text answers into
+  // structured axes for the matching engine. Best-effort: a failure here never
+  // blocks finalize — the engine simply skips the quadrant factor when axes are
+  // null. Runs for accepted AND declined users.
+  const fridayVibe = user?.profile?.fridayVibeText ?? null;
+  const vibeFocus = user?.profile?.vibeFocusText ?? null;
+  if (user) {
+    const extractAxes = deps.extractVibeAxes ?? extractVibeAxes;
+    const persistAxes = deps.saveVibeAxes ?? saveVibeAxes;
+    try {
+      const axes = await extractAxes(
+        fridayVibe,
+        vibeFocus,
+        user.language ?? "en",
+        deps.fetchFn ? { fetchFn: deps.fetchFn } : {},
+      );
+      await persistAxes(user.id, axes);
+    } catch (err) {
+      console.warn("Vibe-axis extraction failed (non-blocking):", err);
+    }
+  }
+
   if (aiMemoryExportDeclined && user?.profile) {
     const saveFallback = deps.saveFallbackProfile ?? saveFallbackProfileAnalysis;
     try {
@@ -1497,6 +1527,8 @@ async function execFinalizeOnboarding(
         hobbies: user.profile.hobbies ?? [],
         partnerPreferences: user.profile.partnerPreferences!,
         homeCityKey: user.profile.homeCityKey!,
+        fridayVibe,
+        vibeFocus,
       });
     } catch (err) {
       console.error("Fallback profile analysis failed:", err);
@@ -1504,6 +1536,16 @@ async function execFinalizeOnboarding(
         success: false,
         error: "Could not build the fallback profile analysis. Please try finalizing again.",
       });
+    }
+  } else if (user?.profile) {
+    // Accepted Magic Prompt: the summary already exists (saved at context-dump
+    // time) without the vibe — fold it in and re-mark the embedding dirty so
+    // the refresh worker re-embeds with the vibe included. Best-effort.
+    const foldVibe = deps.appendVibeToSummary ?? appendVibeToSummary;
+    try {
+      await foldVibe(user.id, fridayVibe, vibeFocus);
+    } catch (err) {
+      console.warn("Vibe summary fold failed (non-blocking):", err);
     }
   }
 

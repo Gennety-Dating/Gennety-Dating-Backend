@@ -30,6 +30,8 @@ function makeBatchUser(overrides: Partial<BatchUser> & { id: string }): BatchUse
     height: 180,
     negativeConstraints: null,
     psychologicalSummary: "Extroverted, curious, analytical thinker.",
+    energyAxis: null,
+    orientationAxis: null,
     embeddingLiteral: null,
     eloScore: 500,
     standbyCount: 0,

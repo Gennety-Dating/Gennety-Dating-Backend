@@ -13,6 +13,14 @@ import { PROFILER_PRIORITY_WEIGHTS } from "./constants.js";
  * question's identity, ordering weight, and every translation stay cohesive
  * in one place. Generic UI strings (skip button, batch intro, hint/icebreaker
  * framing) remain in i18n.ts.
+ *
+ * De-duplication note (PRODUCT_SPEC §3.2): the "vibe" axis is now collected at
+ * onboarding via the two free-text questions (`friday_vibe` / `vibe_focus`),
+ * so the Profiler questions that duplicated it were removed — `f_activity_pref`
+ * ("active vs calm" = the energy axis) and `m_ideal_evening` (≈ the Friday
+ * question). The remaining bank is icebreaker-only flavor that onboarding does
+ * NOT capture (chronotype, sport, turn-offs, shared-interests, media, surprises,
+ * communication style).
  */
 
 export type ProfilerPriority = "high" | "medium" | "low";
@@ -106,18 +114,6 @@ const FEMALE_QUESTIONS: ProfilerQuestion[] = [
     },
   },
   {
-    id: "f_activity_pref",
-    gender: "female",
-    priority: "medium",
-    text: {
-      en: "How do you like to spend time — actively, or in a calm setting?",
-      ru: "Как ты предпочитаешь проводить время — активно или в спокойной обстановке?",
-      uk: "Як ти любиш проводити час — активно чи в спокійній обстановці?",
-      de: "Wie verbringst du deine Zeit lieber — aktiv oder in entspannter Atmosphäre?",
-      pl: "Jak wolisz spędzać czas — aktywnie czy w spokojnej atmosferze?",
-    },
-  },
-  {
     id: "f_media",
     gender: "female",
     priority: "low",
@@ -142,18 +138,6 @@ const MALE_QUESTIONS: ProfilerQuestion[] = [
       uk: "Про що ти міг би говорити годинами?",
       de: "Worüber könntest du stundenlang reden?",
       pl: "O czym mógłbyś mówić godzinami?",
-    },
-  },
-  {
-    id: "m_ideal_evening",
-    gender: "male",
-    priority: "high",
-    text: {
-      en: "What does your ideal evening with someone new look like?",
-      ru: "Как выглядит твой идеальный вечер с новым человеком?",
-      uk: "Який вигляд має твій ідеальний вечір з новою людиною?",
-      de: "Wie sieht dein idealer Abend mit einer neuen Person aus?",
-      pl: "Jak wygląda twój idealny wieczór z nową osobą?",
     },
   },
   {
@@ -186,8 +170,8 @@ const MALE_QUESTIONS: ProfilerQuestion[] = [
     priority: "medium",
     text: {
       en: "What surprises people about you once they get to know you?",
-      ru: "Что в тебе удивляет людей, когда узнают поближе?",
-      uk: "Що в тобі дивує людей, коли впізнають ближче?",
+      ru: "Что в тебе удивляет людей, когда они узнают тебя поближе?",
+      uk: "Що в тобі дивує людей, коли вони пізнають тебе ближче?",
       de: "Was überrascht Leute an dir, wenn sie dich näher kennenlernen?",
       pl: "Co zaskakuje ludzi w tobie, gdy poznają cię bliżej?",
     },

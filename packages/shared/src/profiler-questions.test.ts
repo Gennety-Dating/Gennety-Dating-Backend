@@ -12,8 +12,8 @@ describe("profilerQuestionBank", () => {
   it("returns priority-ordered, gender-specific banks", () => {
     const female = profilerQuestionBank("female");
     const male = profilerQuestionBank("male");
-    expect(female.length).toBe(8);
-    expect(male.length).toBe(6);
+    expect(female.length).toBe(7);
+    expect(male.length).toBe(5);
     // High-priority questions lead each bank.
     expect(female[0].priority).toBe("high");
     expect(male[0].priority).toBe("high");

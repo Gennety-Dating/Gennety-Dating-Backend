@@ -42,6 +42,12 @@ vi.mock("./profile-analysis.js", () => ({
     summary: "fallback",
     embeddingSaved: false,
   }),
+  appendVibeToSummary: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("./vibe-axes.js", () => ({
+  extractVibeAxes: vi.fn().mockResolvedValue(null),
+  saveVibeAxes: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../public/otp.js", () => ({
@@ -860,6 +866,8 @@ describe("onboarding-agent", () => {
           height: 165,
           hobbies: ["tennis", "reading"],
           partnerPreferences: "someone kind and funny",
+          fridayVibeText: "quiet dinner at home with one close friend",
+          vibeFocusText: "who's there",
           photos: ["photo1", "photo2"],
           homeCityKey: "ua:kyiv",
         },
@@ -892,6 +900,8 @@ describe("onboarding-agent", () => {
       hobbies: ["tennis", "reading"],
       partnerPreferences: "someone kind and funny",
       homeCityKey: "ua:kyiv",
+      fridayVibe: "quiet dinner at home with one close friend",
+      vibeFocus: "who's there",
     });
   });
 

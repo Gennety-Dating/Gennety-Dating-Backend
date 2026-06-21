@@ -26,6 +26,8 @@ export const ONBOARDING_FIELDS = [
   "hobbies",
   "partner_preferences",
   "ethnicity",
+  "friday_vibe",
+  "vibe_focus",
   "ai_memory",
   "context_dump",
   "photos",
@@ -41,6 +43,8 @@ export const ONBOARDING_QUESTIONS = [
   "hobbies",
   "partner_preferences",
   "ethnicity",
+  "friday_vibe",
+  "vibe_focus",
   "ai_memory",
   "context_dump",
   "photos",
@@ -141,6 +145,8 @@ interface CollectorUser {
     height: number | null;
     hobbies: string[];
     partnerPreferences: string | null;
+    fridayVibeText: string | null;
+    vibeFocusText: string | null;
     psychologicalSummary: string | null;
     photos: string[];
   } | null;
@@ -179,6 +185,8 @@ const USER_SELECT = {
       height: true,
       hobbies: true,
       partnerPreferences: true,
+      fridayVibeText: true,
+      vibeFocusText: true,
       psychologicalSummary: true,
       photos: true,
     },
@@ -353,6 +361,8 @@ function progressFromUser(user: CollectorUser): MutableProgress {
   }
   if (user.profile?.partnerPreferences) completed.add("partner_preferences");
   if (user.profile?.ethnicity) completed.add("ethnicity");
+  if (user.profile?.fridayVibeText) completed.add("friday_vibe");
+  if (user.profile?.vibeFocusText) completed.add("vibe_focus");
   if ((user.profile?.hobbies.length ?? 0) > 0) completed.add("hobbies");
   if (user.aiMemoryExportPreference !== "undecided") completed.add("ai_memory");
   if (
@@ -389,6 +399,10 @@ export function nextOnboardingQuestion(
   ) {
     return "ethnicity";
   }
+  // Vibe questions sit right before the Magic Prompt step so every user — even
+  // those who decline AI-memory export — supplies the signal (PRODUCT_SPEC §1.3).
+  if (!progress.completed.has("friday_vibe")) return "friday_vibe";
+  if (!progress.completed.has("vibe_focus")) return "vibe_focus";
   if (!progress.completed.has("ai_memory")) return "ai_memory";
   if (!progress.completed.has("context_dump")) return "context_dump";
   if (!progress.completed.has("photos")) return "photos";
@@ -418,6 +432,20 @@ function inferQuestionFromAssistant(text: string): OnboardingQuestion | null {
     )
   ) {
     return "ethnicity";
+  }
+  if (
+    /(friday night|пятниц|п'ятниц|freitagabend|piątkowy wieczór|piątkowy wieczor)/iu.test(
+      lower,
+    )
+  ) {
+    return "friday_vibe";
+  }
+  if (
+    /(experience itself|who's with you|сам процесс или кто|сам процес чи хто|erlebnis selbst|samo przeżycie czy)/iu.test(
+      lower,
+    )
+  ) {
+    return "vibe_focus";
   }
   if (
     /(looking for in a partner|what kind of (?:person|partner)|ideal partner|важно в партн|ищешь в партн|какого партн|шукаєш у партн|якого партн|partnerze|partnerin|partner wichtig)/iu.test(
@@ -685,6 +713,20 @@ export function deterministicCandidates(
     });
   }
   if (
+    question === "friday_vibe" &&
+    !containsOtherExplicitField &&
+    !freeTextLooksLikeQuestion
+  ) {
+    candidates.push({ field: "friday_vibe", evidence: trimmed, value: trimmed });
+  }
+  if (
+    question === "vibe_focus" &&
+    !containsOtherExplicitField &&
+    !freeTextLooksLikeQuestion
+  ) {
+    candidates.push({ field: "vibe_focus", evidence: trimmed, value: trimmed });
+  }
+  if (
     question === "ethnicity" &&
     !containsOtherExplicitField &&
     !SKIP_RE.test(trimmed) &&
@@ -886,7 +928,9 @@ export function validateFactCandidate(
       return { candidate: { ...candidate, value } };
     }
     case "partner_preferences":
-    case "ethnicity": {
+    case "ethnicity":
+    case "friday_vibe":
+    case "vibe_focus": {
       if (typeof candidate.value !== "string") return { reason: "invalid_type" };
       const value = normalizeText(candidate.value);
       if (normalizedPlaceholder(value) || value.length < 2 || value.length > 500) {
@@ -957,6 +1001,14 @@ function updatesForCandidates(
       case "ethnicity":
         profileCreate.ethnicity = candidate.value as string;
         profileUpdate.ethnicity = candidate.value as string;
+        break;
+      case "friday_vibe":
+        profileCreate.fridayVibeText = candidate.value as string;
+        profileUpdate.fridayVibeText = candidate.value as string;
+        break;
+      case "vibe_focus":
+        profileCreate.vibeFocusText = candidate.value as string;
+        profileUpdate.vibeFocusText = candidate.value as string;
         break;
       case "ai_memory":
         user.aiMemoryExportPreference = candidate.value as AiMemoryExportPreference;
@@ -1301,6 +1353,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     hobbies: "What do you enjoy doing? One hobby is enough, and “no hobbies” is a valid answer.",
     partner_preferences: "What matters most to you in a partner? One short sentence is enough.",
     ethnicity: "Optional: what is your nationality or ethnic background? You can skip this.",
+    friday_vibe: "Describe your ideal Friday night — money and logistics no object. Be honest, not what sounds “right”.",
+    vibe_focus: "And what matters most in that night — the experience itself, or who's with you?",
     ai_memory: "Would you like to import context from an AI chat? Answer yes or no.",
     context_dump: contextDumpInstruction("en"),
     photos: `Send at least ${MIN_PHOTOS} clear photos of yourself.`,
@@ -1314,6 +1368,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     hobbies: "Чем тебе нравится заниматься? Достаточно одного увлечения, а «нет хобби» тоже считается ответом.",
     partner_preferences: "Что для тебя важнее всего в партнёре? Достаточно одного короткого предложения.",
     ethnicity: "Как ты описываешь своё происхождение или национальность? Можно пропустить",
+    friday_vibe: "Опиши идеальный вечер пятницы — без ограничений по деньгам и логистике. Только честно, не как «правильно» звучит.",
+    vibe_focus: "А что в этом вечере главное — сам процесс или кто рядом?",
     ai_memory: "Хочешь импортировать контекст из AI-чата? Ответь да или нет.",
     context_dump: contextDumpInstruction("ru"),
     photos: `Пришли минимум ${MIN_PHOTOS} чёткие фотографии, где хорошо видно тебя.`,
@@ -1327,6 +1383,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     hobbies: "Чим тобі подобається займатися? Достатньо одного захоплення, а «немає хобі» теж є відповіддю.",
     partner_preferences: "Що для тебе найважливіше в партнері? Достатньо одного короткого речення.",
     ethnicity: "Необов’язково: яка в тебе національність або етнічне походження? Можна пропустити.",
+    friday_vibe: "Опиши ідеальний вечір п’ятниці — без обмежень щодо грошей і логістики. Тільки чесно, не як «правильно» звучить.",
+    vibe_focus: "А що в цьому вечорі головне — сам процес чи хто поруч?",
     ai_memory: "Хочеш імпортувати контекст з AI-чату? Відповідай так або ні.",
     context_dump: contextDumpInstruction("uk"),
     photos: `Надішли щонайменше ${MIN_PHOTOS} чіткі фотографії, де добре видно тебе.`,
@@ -1340,6 +1398,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     hobbies: "Was machst du gern? Ein Hobby reicht, und „keine Hobbys“ ist ebenfalls eine gültige Antwort.",
     partner_preferences: "Was ist dir bei einem Partner am wichtigsten? Ein kurzer Satz reicht.",
     ethnicity: "Optional: Welche Nationalität oder ethnische Herkunft hast du? Du kannst überspringen.",
+    friday_vibe: "Beschreib deinen idealen Freitagabend — ohne Geld- oder Logistikgrenzen. Sei ehrlich, nicht was „richtig“ klingt.",
+    vibe_focus: "Und was ist an diesem Abend am wichtigsten — das Erlebnis selbst oder wer dabei ist?",
     ai_memory: "Möchtest du Kontext aus einem AI-Chat importieren? Antworte mit Ja oder Nein.",
     context_dump: contextDumpInstruction("de"),
     photos: `Sende mindestens ${MIN_PHOTOS} klare Fotos von dir.`,
@@ -1353,6 +1413,8 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
     hobbies: "Co lubisz robić? Jedno hobby wystarczy, a „nie mam hobby” też jest poprawną odpowiedzią.",
     partner_preferences: "Co jest dla Ciebie najważniejsze u partnera? Wystarczy jedno krótkie zdanie.",
     ethnicity: "Opcjonalnie: jaka jest Twoja narodowość lub pochodzenie etniczne? Możesz pominąć.",
+    friday_vibe: "Opisz swój idealny piątkowy wieczór — bez ograniczeń finansowych i logistycznych. Szczerze, nie tak, jak „wypada”.",
+    vibe_focus: "A co w tym wieczorze jest najważniejsze — samo przeżycie czy to, kto jest obok?",
     ai_memory: "Chcesz zaimportować kontekst z czatu AI? Odpowiedz tak lub nie.",
     context_dump: contextDumpInstruction("pl"),
     photos: `Wyślij co najmniej ${MIN_PHOTOS} wyraźne zdjęcia, na których dobrze Cię widać.`,
@@ -1453,6 +1515,8 @@ const NOT_UNDERSTOOD_HINTS: Record<
     hobbies: "Name one or two things you enjoy — “no hobbies” is fine too.",
     partner_preferences: "One short sentence about what matters to you is enough.",
     ethnicity: "A short answer is enough — or reply “skip”.",
+    friday_vibe: "Tell me in a sentence or two how you'd actually spend it.",
+    vibe_focus: "Is it more about the experience itself, or who you're with?",
     ai_memory: "Please answer yes or no.",
   },
   ru: {
@@ -1465,6 +1529,8 @@ const NOT_UNDERSTOOD_HINTS: Record<
     hobbies: "Назови одно-два увлечения — «нет хобби» тоже подойдёт.",
     partner_preferences: "Достаточно одного короткого предложения о том, что для тебя важно.",
     ethnicity: "Достаточно короткого ответа — или напиши «пропустить».",
+    friday_vibe: "Опиши в паре предложений, как бы ты его реально провёл.",
+    vibe_focus: "Тебе важнее сам процесс или компания рядом?",
     ai_memory: "Ответь, пожалуйста, «да» или «нет».",
   },
   uk: {
@@ -1477,6 +1543,8 @@ const NOT_UNDERSTOOD_HINTS: Record<
     hobbies: "Назви одне-два захоплення — «немає хобі» теж підійде.",
     partner_preferences: "Достатньо одного короткого речення про те, що для тебе важливо.",
     ethnicity: "Достатньо короткої відповіді — або напиши «пропустити».",
+    friday_vibe: "Опиши в кількох реченнях, як би ти його реально провів.",
+    vibe_focus: "Тобі важливіший сам процес чи компанія поруч?",
     ai_memory: "Відповідай, будь ласка, «так» або «ні».",
   },
   de: {
@@ -1489,6 +1557,8 @@ const NOT_UNDERSTOOD_HINTS: Record<
     hobbies: "Nenn ein oder zwei Dinge, die du gern machst — „keine Hobbys“ geht auch.",
     partner_preferences: "Ein kurzer Satz darüber, was dir wichtig ist, reicht.",
     ethnicity: "Eine kurze Antwort reicht — oder schreib „überspringen“.",
+    friday_vibe: "Beschreib in ein, zwei Sätzen, wie du ihn wirklich verbringen würdest.",
+    vibe_focus: "Geht es dir mehr um das Erlebnis oder um die Leute dabei?",
     ai_memory: "Antworte bitte mit Ja oder Nein.",
   },
   pl: {
@@ -1501,6 +1571,8 @@ const NOT_UNDERSTOOD_HINTS: Record<
     hobbies: "Wymień jedno lub dwa hobby — „nie mam hobby” też jest OK.",
     partner_preferences: "Wystarczy jedno krótkie zdanie o tym, co jest dla Ciebie ważne.",
     ethnicity: "Wystarczy krótka odpowiedź — możesz też napisać „pomiń”.",
+    friday_vibe: "Opisz w jednym–dwóch zdaniach, jak naprawdę byś go spędził.",
+    vibe_focus: "Chodzi bardziej o samo przeżycie czy o to, z kim jesteś?",
     ai_memory: "Odpowiedz proszę „tak” lub „nie”.",
   },
 };

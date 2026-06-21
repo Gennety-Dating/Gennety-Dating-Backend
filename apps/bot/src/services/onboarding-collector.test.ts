@@ -429,6 +429,57 @@ describe("onboarding collector routing", () => {
     ).toBe("hobbies");
   });
 
+  it("asks the vibe questions after ethnicity and before the Magic Prompt", () => {
+    const completedThroughEthnicity = new Set<OnboardingField>([
+      "first_name",
+      "age",
+      "gender",
+      "preference",
+      "height",
+      "hobbies",
+      "partner_preferences",
+      "ethnicity",
+    ]);
+    expect(
+      nextOnboardingQuestion({
+        completed: completedThroughEthnicity,
+        skipped: new Set(),
+        asked: new Set(),
+      }),
+    ).toBe("friday_vibe");
+    expect(
+      nextOnboardingQuestion({
+        completed: new Set([...completedThroughEthnicity, "friday_vibe"]),
+        skipped: new Set(),
+        asked: new Set(),
+      }),
+    ).toBe("vibe_focus");
+    expect(
+      nextOnboardingQuestion({
+        completed: new Set([...completedThroughEthnicity, "friday_vibe", "vibe_focus"]),
+        skipped: new Set(),
+        asked: new Set(),
+      }),
+    ).toBe("ai_memory");
+  });
+
+  it("captures and validates free-text vibe answers", () => {
+    const friday = deterministicCandidates(
+      "a quiet dinner at home then a film with one close friend",
+      "friday_vibe",
+    ).find((c) => c.field === "friday_vibe");
+    expect(friday?.value).toBe("a quiet dinner at home then a film with one close friend");
+    expect(validateFactCandidate(friday!, "a quiet dinner at home then a film with one close friend").candidate?.field).toBe("friday_vibe");
+
+    const focus = deterministicCandidates("who's with me", "vibe_focus").find(
+      (c) => c.field === "vibe_focus",
+    );
+    expect(focus?.value).toBe("who's with me");
+
+    // A confused question is not banked as the answer.
+    expect(deterministicCandidates("what do you mean?", "friday_vibe")).toEqual([]);
+  });
+
   it("does not repeat the known half of the name and age question", () => {
     expect(onboardingQuestionText("ru", "first_name_age", ["first_name"])).toBe(
       "Сколько тебе лет?",
