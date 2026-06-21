@@ -48,10 +48,25 @@ export interface CatalogVenue {
   distanceKm: number;
   /** Operator-supplied photo for curated rows; null for Places fallbacks. */
   photoUrl: string | null;
+  /**
+   * Google Places photo *resource names* for the detail-page gallery (Places
+   * rows only; empty for curated). The Mini App resolves each to a displayable
+   * image through the server-side `/v1/venue-change/photo` proxy so the
+   * `PLACES_API_KEY` is never shipped to the client.
+   */
+  photoRefs: string[];
+  /** Places quality signals surfaced on the venue detail page (null for curated). */
+  rating: number | null;
+  userRatingCount: number | null;
+  /** Google's own short blurb about the place (Places rows only). */
+  editorialSummary: string | null;
 }
 
 /** Max alternatives returned to the Mini App — keeps the card list scannable. */
 export const VENUE_CHANGE_CATALOG_LIMIT = 12;
+
+/** Per-venue photo cap so the catalog payload stays small. */
+export const VENUE_CHANGE_PHOTOS_PER_VENUE = 6;
 
 /**
  * Categories the Places fallback sweeps when no curated venue is in range. A
@@ -225,6 +240,12 @@ export async function listCuratedVenuesNear(
       category: r.category,
       distanceKm: round1(distanceKm),
       photoUrl: r.photoUrl,
+      // Curated rows carry a single operator photo (above), no Places gallery
+      // and no public rating/blurb in our base.
+      photoRefs: [],
+      rating: null,
+      userRatingCount: null,
+      editorialSummary: null,
     });
   }
   out.sort((a, b) => a.distanceKm - b.distanceKm);
@@ -278,6 +299,10 @@ export async function listPlacesVenuesNear(
         category: c.category,
         distanceKm: round1(distanceKm),
         photoUrl: null,
+        photoRefs: c.photos.slice(0, VENUE_CHANGE_PHOTOS_PER_VENUE),
+        rating: c.rating,
+        userRatingCount: c.userRatingCount,
+        editorialSummary: c.editorialSummary,
       });
     }
   }

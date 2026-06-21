@@ -652,6 +652,14 @@ export interface VenueCandidate {
   primaryType: string | null;
   utcOffsetMinutes: number | null;
   openingHours: RegularOpeningHours | null;
+  /**
+   * Google Places photo *resource names* (`places/X/photos/Y`), best-first.
+   * Resolved to displayable media via `buildPlacesPhotoUrl` (key stays
+   * server-side). Used by the venue-change Mini App photo gallery.
+   */
+  photos: string[];
+  /** Google's own short description (`editorialSummary`); null when absent. */
+  editorialSummary: string | null;
 }
 
 /**
@@ -690,6 +698,10 @@ export async function searchVenueCandidates(
       primaryType: p.primaryType ?? null,
       utcOffsetMinutes: p.utcOffsetMinutes ?? null,
       openingHours: p.regularOpeningHours ?? null,
+      photos: (p.photos ?? [])
+        .map((ph) => ph.name)
+        .filter((name): name is string => typeof name === "string" && name.length > 0),
+      editorialSummary: p.editorialSummary?.text ?? null,
     }));
 }
 

@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import type { Api, RawApi } from "grammy";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
+import { buildPlacesPhotoUrl } from "../../services/venue.js";
 import {
   getVenueChangeState,
   getVenueChangeCatalog,
@@ -25,8 +26,71 @@ import {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * Google Places photo *resource name* shape (`places/<id>/photos/<id>`). We
+ * only ever proxy strings matching this so the endpoint can't be turned into an
+ * open fetch proxy for arbitrary Google URLs.
+ */
+const PHOTO_REF_REGEX = /^places\/[A-Za-z0-9_-]+\/photos\/[A-Za-z0-9_.-]+$/;
+
 export function createVenueChangeRouter(api: Api<RawApi>): Router {
   const router = Router();
+
+  // GET /photo?ref=<places photo resource name>&w=<px>&tma=<initData>
+  //
+  // Server-side image proxy for the detail-page gallery. `<img>` tags can't
+  // send an Authorization header, so initData rides the `tma` query param and
+  // is HMAC-verified exactly like the header path — only an authenticated
+  // Telegram user (of our bot) can pull venue photos, and the `PLACES_API_KEY`
+  // never leaves the server. Curated photos are absolute URLs the client loads
+  // directly, so only the Places fallback uses this.
+  router.get("/photo", async (req: Request, res: Response): Promise<void> => {
+    const initData = typeof req.query.tma === "string" ? req.query.tma : "";
+    if (!initData) {
+      res.status(401).json({ error: "Missing tma initData" });
+      return;
+    }
+    if (!validateInitData(initData, env.BOT_TOKEN).valid) {
+      res.status(401).json({ error: "Invalid initData" });
+      return;
+    }
+
+    const ref = typeof req.query.ref === "string" ? req.query.ref : "";
+    if (!PHOTO_REF_REGEX.test(ref)) {
+      res.status(400).json({ error: "bad-ref" });
+      return;
+    }
+
+    const apiKey = process.env.PLACES_API_KEY;
+    if (!apiKey) {
+      res.status(404).json({ error: "photos-unavailable" });
+      return;
+    }
+
+    const width = clampWidth(req.query.w);
+    const url = buildPlacesPhotoUrl(ref, apiKey, width);
+    if (!url) {
+      res.status(404).json({ error: "photos-unavailable" });
+      return;
+    }
+
+    try {
+      const upstream = await fetch(url);
+      if (!upstream.ok) {
+        res.status(502).json({ error: "upstream" });
+        return;
+      }
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      res.setHeader("Content-Type", upstream.headers.get("content-type") ?? "image/jpeg");
+      // Cache so the same image used as a list thumbnail and a detail hero
+      // isn't re-fetched from Google. Private — it's tied to the signed ref.
+      res.setHeader("Cache-Control", "private, max-age=86400");
+      res.status(200).send(buf);
+    } catch (err) {
+      console.warn("[venue-change] photo proxy failed:", err);
+      res.status(502).json({ error: "upstream" });
+    }
+  });
 
   router.get("/state", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
@@ -115,6 +179,13 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
 function matchIdOfQuery(req: Request): string | null {
   const raw = typeof req.query.match === "string" ? req.query.match : "";
   return UUID_REGEX.test(raw) ? raw : null;
+}
+
+/** Clamp a requested photo width to a sane range (thumb → hero). */
+function clampWidth(raw: unknown): number {
+  const n = typeof raw === "string" ? Number(raw) : NaN;
+  if (!Number.isFinite(n)) return 1000;
+  return Math.min(1600, Math.max(200, Math.round(n)));
 }
 
 function statusForReason(

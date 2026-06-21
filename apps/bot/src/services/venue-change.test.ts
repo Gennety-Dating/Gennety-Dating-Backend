@@ -170,6 +170,10 @@ describe("buildVenueChangeCatalog", () => {
       category: "cafe",
       distanceKm: 0.2,
       photoUrl: "https://img/c1.jpg",
+      photoRefs: [],
+      rating: null,
+      userRatingCount: null,
+      editorialSummary: null,
     },
   ];
   const places: CatalogVenue[] = [
@@ -184,6 +188,10 @@ describe("buildVenueChangeCatalog", () => {
       category: "cafe",
       distanceKm: 0.3,
       photoUrl: null,
+      photoRefs: ["places/p1/photos/x"],
+      rating: 4.5,
+      userRatingCount: 120,
+      editorialSummary: "A cosy spot.",
     },
   ];
 

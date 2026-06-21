@@ -1,38 +1,67 @@
 /**
- * Venue change Mini App entry point (PRODUCT_SPEC §3.7).
+ * Venue change Mini App (PRODUCT_SPEC §3.7b — female-exclusive one-shot swap).
  *
  * Opened from the female's scheduled-date DM via a `web_app` button →
- * `venue-change.html?match={id}&lang={en|ru|uk|de|pl}`.
+ * `venue-change.html?match={id}&lang={en|ru|uk|de|pl}`. Full-screen Telegram
+ * Web App, "Premium Lavender Glass" design (shared with the Ticket Mini Apps).
  *
- * Three steps:
+ * Flow:
  *   1. Disclaimer (mandatory, blocking) — one-time / irreversible / partner can
  *      cancel the match / 3 km radius. Single "I understand" button.
  *   2. Catalog — alternatives within 3 km of the original venue (curated-first,
- *      Places fallback). Tap a card → step 3.
- *   3. Comment — mandatory ≥N-char explanation; the MainButton ("Confirm")
- *      stays disabled until the threshold is met. On confirm we POST the pick +
+ *      Places fallback) as cards with **real venue photos**. Tap a card → 3.
+ *   3. Detail — photo gallery + info + Google Maps link + "Propose this place".
+ *      Only on "Propose" do we go to the reason step.
+ *   4. Reason — mandatory ≥N-char explanation. On send we POST the pick +
  *      comment; the bot relays it to the male, who accepts or declines.
  *
  * The comment draft is cached to DeviceStorage so a swipe-down dismiss doesn't
  * wipe what she typed (same pattern as the calendar / feedback apps).
  */
 
+import "./venue-change.css";
 import {
   fetchVenueChangeState,
   fetchVenueChangeCatalog,
   proposeVenueChange,
+  venueChangePhotoUrl,
   CalendarApiError,
+  type VenueChangeState,
   type VenueChangeCatalogItem,
 } from "./api.js";
+import { wireContentInsets } from "./telegram-insets.js";
 
 const app = window.Telegram?.WebApp;
 app?.ready();
 app?.expand();
 
+// Bot API 8.0+ — immersive fullscreen removes the top sheet gap so the design
+// composition fills the screen. Older clients silently fall through to expand().
+try {
+  if (app?.isVersionAtLeast?.("8.0") && !app.isFullscreen) {
+    app.requestFullscreen?.();
+  }
+  app?.setHeaderColor?.("#120E1C");
+  app?.setBackgroundColor?.("#120E1C");
+  app?.setBottomBarColor?.("#120E1C");
+} catch {
+  // Best-effort cosmetic boot — never crash over chrome theming.
+}
+// Reserve room for Telegram's floating close × / menu ⋯ in fullscreen.
+wireContentInsets(app);
+// We drive the flow with our own in-page buttons; make sure a stale MainButton
+// from a previous version can never linger.
+app?.MainButton?.hide?.();
+
 const params = new URLSearchParams(location.search);
 const matchId = app?.initDataUnsafe?.start_param ?? params.get("match") ?? "";
 const queryLang = params.get("lang") ?? app?.initDataUnsafe?.user?.language_code ?? "";
-const initData = app?.initData ?? "";
+// Telegram populates `app.initData` asynchronously (notably after a
+// `requestFullscreen()` boot on some clients), so the value at module load can
+// be empty — freezing it in a const then sends an empty `tma` header → 401
+// "Missing tma initData". Read it fresh at call time, exactly like the
+// calendar / onboarding Mini Apps do.
+const getInitData = (): string => app?.initData ?? "";
 
 type Lang = "en" | "ru" | "uk" | "de" | "pl";
 const SUPPORTED: ReadonlySet<Lang> = new Set(["en", "ru", "uk", "de", "pl"]);
@@ -41,14 +70,21 @@ document.documentElement?.setAttribute("lang", lang);
 
 interface Strings {
   disclaimerTitle: string;
+  disclaimerLead: string;
   disclaimerBullets: string[];
   disclaimerContinue: string;
   catalogTitle: string;
   catalogLead: string;
   catalogEmpty: string;
+  categoryLabels: Record<string, string>;
+  kmAway: (km: number) => string;
+  detailProposeBtn: string;
+  detailFallbackSummary: string;
+  openMaps: string;
+  back: string;
   commentTitle: string;
+  commentLead: string;
   commentPlaceholder: string;
-  commentBack: string;
   mainConfirm: string;
   mainSending: string;
   loading: string;
@@ -68,20 +104,34 @@ interface Strings {
 
 const T: Record<Lang, Strings> = {
   en: {
-    disclaimerTitle: "Before you change the venue",
+    disclaimerTitle: "Change the venue",
+    disclaimerLead: "A few things to know before you pick a new place.",
     disclaimerBullets: [
       "You can propose a different place only once. This can't be undone.",
       "Your match chooses: accept the new place, or cancel the date (cancelling ends the match forever).",
-      "You can only pick places within 3 km of the original venue, so the trip stays comfortable for both of you.",
+      "Only places within 3 km of the original venue, so the trip stays comfortable for both of you.",
     ],
     disclaimerContinue: "I understand, continue",
     catalogTitle: "Pick a new place",
-    catalogLead: "Spots within 3 km of your original venue.",
+    catalogLead: "Spots within 3 km of your original venue. Tap one to see more.",
     catalogEmpty: "No suitable places nearby right now. Your original venue stays as is.",
+    categoryLabels: {
+      cafe: "Cafe",
+      coffee_shop: "Coffee shop",
+      restaurant: "Restaurant",
+      park: "Park",
+      museum: "Museum",
+      lounge: "Lounge",
+    },
+    kmAway: (km) => `${km} km away`,
+    detailProposeBtn: "Propose this place",
+    detailFallbackSummary: "A relaxed spot for a first date.",
+    openMaps: "Open in Google Maps",
+    back: "Back",
     commentTitle: "Tell your match why",
+    commentLead: "Only your match sees this note.",
     commentPlaceholder:
       "Write why you'd like to change the place (e.g. it's cosier / closer for me / I want to try their desserts)",
-    commentBack: "← Back to places",
     mainConfirm: "Send to my match",
     mainSending: "Sending…",
     loading: "Loading…",
@@ -99,20 +149,34 @@ const T: Record<Lang, Strings> = {
     counter: (n, min) => (n < min ? `${n}/${min} — a little more` : `${n} characters`),
   },
   ru: {
-    disclaimerTitle: "Перед сменой места",
+    disclaimerTitle: "Смена места",
+    disclaimerLead: "Несколько важных моментов перед выбором нового места.",
     disclaimerBullets: [
       "Предложить другое место можно только один раз. Это нельзя отменить.",
       "Партнёр выбирает: согласиться на новое место или отменить свидание (отмена аннулирует метч навсегда).",
-      "Выбрать можно только места в радиусе 3 км от исходного, чтобы дорога осталась удобной для вас обоих.",
+      "Только места в радиусе 3 км от исходного, чтобы дорога осталась удобной для вас обоих.",
     ],
     disclaimerContinue: "Я понимаю, продолжить",
     catalogTitle: "Выберите новое место",
-    catalogLead: "Места в радиусе 3 км от исходного.",
+    catalogLead: "Места в радиусе 3 км от исходного. Нажмите, чтобы узнать больше.",
     catalogEmpty: "Подходящих мест рядом сейчас нет. Исходное место остаётся в силе.",
+    categoryLabels: {
+      cafe: "Кафе",
+      coffee_shop: "Кофейня",
+      restaurant: "Ресторан",
+      park: "Парк",
+      museum: "Музей",
+      lounge: "Лаундж",
+    },
+    kmAway: (km) => `${km} км`,
+    detailProposeBtn: "Предложить это место",
+    detailFallbackSummary: "Спокойное место для первого свидания.",
+    openMaps: "Открыть в Google Maps",
+    back: "Назад",
     commentTitle: "Объясните партнёру почему",
+    commentLead: "Эту записку увидит только ваш партнёр.",
     commentPlaceholder:
       "Напишите, почему хотите изменить место (например: там уютнее / мне ближе / хочу попробовать их десерты)",
-    commentBack: "← Назад к местам",
     mainConfirm: "Отправить партнёру",
     mainSending: "Отправляем…",
     loading: "Загрузка…",
@@ -130,20 +194,34 @@ const T: Record<Lang, Strings> = {
     counter: (n, min) => (n < min ? `${n}/${min} — ещё немного` : `${n} символов`),
   },
   uk: {
-    disclaimerTitle: "Перед зміною місця",
+    disclaimerTitle: "Зміна місця",
+    disclaimerLead: "Кілька важливих моментів перед вибором нового місця.",
     disclaimerBullets: [
       "Запропонувати інше місце можна лише один раз. Це не можна скасувати.",
       "Партнер обирає: погодитися на нове місце або скасувати побачення (скасування анулює метч назавжди).",
-      "Обрати можна лише місця в радіусі 3 км від початкового, щоб дорога залишалася зручною для вас обох.",
+      "Лише місця в радіусі 3 км від початкового, щоб дорога залишалася зручною для вас обох.",
     ],
     disclaimerContinue: "Я розумію, продовжити",
     catalogTitle: "Оберіть нове місце",
-    catalogLead: "Місця в радіусі 3 км від початкового.",
+    catalogLead: "Місця в радіусі 3 км від початкового. Натисніть, щоб дізнатися більше.",
     catalogEmpty: "Підходящих місць поруч зараз немає. Початкове місце залишається.",
+    categoryLabels: {
+      cafe: "Кафе",
+      coffee_shop: "Кав'ярня",
+      restaurant: "Ресторан",
+      park: "Парк",
+      museum: "Музей",
+      lounge: "Лаундж",
+    },
+    kmAway: (km) => `${km} км`,
+    detailProposeBtn: "Запропонувати це місце",
+    detailFallbackSummary: "Спокійне місце для першого побачення.",
+    openMaps: "Відкрити в Google Maps",
+    back: "Назад",
     commentTitle: "Поясніть партнеру чому",
+    commentLead: "Цю записку побачить лише ваш партнер.",
     commentPlaceholder:
       "Напишіть, чому хочете змінити місце (наприклад: там затишніше / мені ближче / хочу спробувати їхні десерти)",
-    commentBack: "← Назад до місць",
     mainConfirm: "Надіслати партнеру",
     mainSending: "Надсилаємо…",
     loading: "Завантаження…",
@@ -161,20 +239,34 @@ const T: Record<Lang, Strings> = {
     counter: (n, min) => (n < min ? `${n}/${min} — ще трохи` : `${n} символів`),
   },
   de: {
-    disclaimerTitle: "Bevor du den Ort änderst",
+    disclaimerTitle: "Ort ändern",
+    disclaimerLead: "Ein paar Dinge, die du vor der Wahl wissen solltest.",
     disclaimerBullets: [
       "Du kannst nur einmal einen anderen Ort vorschlagen. Das lässt sich nicht rückgängig machen.",
       "Dein Match entscheidet: den neuen Ort akzeptieren oder das Date absagen (Absagen beendet das Match für immer).",
-      "Du kannst nur Orte im Umkreis von 3 km des ursprünglichen Ortes wählen, damit der Weg für euch beide bequem bleibt.",
+      "Nur Orte im Umkreis von 3 km des ursprünglichen Ortes, damit der Weg für euch beide bequem bleibt.",
     ],
     disclaimerContinue: "Ich verstehe, weiter",
     catalogTitle: "Neuen Ort wählen",
-    catalogLead: "Orte im Umkreis von 3 km deines ursprünglichen Ortes.",
+    catalogLead: "Orte im Umkreis von 3 km. Tippe auf einen, um mehr zu sehen.",
     catalogEmpty: "Gerade keine passenden Orte in der Nähe. Dein ursprünglicher Ort bleibt bestehen.",
+    categoryLabels: {
+      cafe: "Café",
+      coffee_shop: "Coffee Shop",
+      restaurant: "Restaurant",
+      park: "Park",
+      museum: "Museum",
+      lounge: "Lounge",
+    },
+    kmAway: (km) => `${km} km entfernt`,
+    detailProposeBtn: "Diesen Ort vorschlagen",
+    detailFallbackSummary: "Ein entspannter Ort für ein erstes Date.",
+    openMaps: "In Google Maps öffnen",
+    back: "Zurück",
     commentTitle: "Sag deinem Match warum",
+    commentLead: "Nur dein Match sieht diese Notiz.",
     commentPlaceholder:
       "Schreibe, warum du den Ort ändern möchtest (z. B. gemütlicher / näher für mich / ich möchte ihre Desserts probieren)",
-    commentBack: "← Zurück zu den Orten",
     mainConfirm: "An mein Match senden",
     mainSending: "Senden…",
     loading: "Wird geladen…",
@@ -192,20 +284,34 @@ const T: Record<Lang, Strings> = {
     counter: (n, min) => (n < min ? `${n}/${min} — etwas mehr` : `${n} Zeichen`),
   },
   pl: {
-    disclaimerTitle: "Zanim zmienisz miejsce",
+    disclaimerTitle: "Zmiana miejsca",
+    disclaimerLead: "Kilka rzeczy, które warto wiedzieć przed wyborem.",
     disclaimerBullets: [
       "Inne miejsce możesz zaproponować tylko raz. Tego nie da się cofnąć.",
       "Twoja para wybiera: zaakceptować nowe miejsce albo odwołać randkę (odwołanie kończy dopasowanie na zawsze).",
-      "Możesz wybrać tylko miejsca w promieniu 3 km od pierwotnego, aby dojazd był wygodny dla was obojga.",
+      "Tylko miejsca w promieniu 3 km od pierwotnego, aby dojazd był wygodny dla was obojga.",
     ],
     disclaimerContinue: "Rozumiem, dalej",
     catalogTitle: "Wybierz nowe miejsce",
-    catalogLead: "Miejsca w promieniu 3 km od pierwotnego.",
+    catalogLead: "Miejsca w promieniu 3 km. Dotknij, aby zobaczyć więcej.",
     catalogEmpty: "Brak odpowiednich miejsc w pobliżu. Pierwotne miejsce pozostaje.",
+    categoryLabels: {
+      cafe: "Kawiarnia",
+      coffee_shop: "Kawiarnia",
+      restaurant: "Restauracja",
+      park: "Park",
+      museum: "Muzeum",
+      lounge: "Lounge",
+    },
+    kmAway: (km) => `${km} km stąd`,
+    detailProposeBtn: "Zaproponuj to miejsce",
+    detailFallbackSummary: "Spokojne miejsce na pierwszą randkę.",
+    openMaps: "Otwórz w Google Maps",
+    back: "Wstecz",
     commentTitle: "Wyjaśnij parze dlaczego",
+    commentLead: "Tę notatkę zobaczy tylko Twoja para.",
     commentPlaceholder:
       "Napisz, dlaczego chcesz zmienić miejsce (np. jest przytulniej / bliżej dla mnie / chcę spróbować ich deserów)",
-    commentBack: "← Wróć do miejsc",
     mainConfirm: "Wyślij do pary",
     mainSending: "Wysyłanie…",
     loading: "Ładowanie…",
@@ -233,6 +339,12 @@ const CATEGORY_EMOJI: Record<string, string> = {
   museum: "🏛️",
   lounge: "🍸",
 };
+function categoryGlyph(category: string): string {
+  return CATEGORY_EMOJI[category] ?? "📍";
+}
+function categoryLabel(category: string): string {
+  return s.categoryLabels[category] ?? category;
+}
 
 // ── DeviceStorage (comment draft) ──
 function ds(): TelegramWebAppDeviceStorage | null {
@@ -275,42 +387,142 @@ function clearKey(key: string): void {
 }
 const draftKey = `gennety.venue-change.${matchId}`;
 
-// ── DOM helpers ──
-function $(id: string): HTMLElement {
-  const el = document.getElementById(id);
-  if (!el) throw new Error(`missing #${id}`);
-  return el;
-}
-function showOnly(sectionId: string | null): void {
-  for (const id of ["msg", "step-disclaimer", "step-catalog", "step-comment"]) {
-    $(id).classList.toggle("hidden", id !== sectionId);
+function haptic(kind: "light" | "success" | "error" | "select"): void {
+  const hf = app?.HapticFeedback;
+  if (!hf) return;
+  try {
+    if (kind === "select") hf.selectionChanged();
+    else if (kind === "light") hf.impactOccurred("light");
+    else hf.notificationOccurred(kind === "success" ? "success" : "error");
+  } catch {
+    /* best-effort */
   }
 }
-function showMessage(text: string): void {
-  $("msg").textContent = text;
-  showOnly("msg");
-  app?.MainButton.hide();
+
+// ── Tiny DOM helper ──
+interface ElAttrs {
+  class?: string;
+  text?: string;
+  href?: string;
+  target?: string;
+  rel?: string;
+  type?: string;
+  placeholder?: string;
+  maxLength?: number;
+  disabled?: boolean;
+  ariaHidden?: boolean;
+  bg?: string | null;
+  onClick?: () => void;
+}
+function el(tag: string, attrs: ElAttrs = {}, children: Array<Node | string> = []): HTMLElement {
+  const node = document.createElement(tag);
+  if (attrs.class) node.className = attrs.class;
+  if (attrs.text != null) node.textContent = attrs.text;
+  if (attrs.href) (node as HTMLAnchorElement).href = attrs.href;
+  if (attrs.target) node.setAttribute("target", attrs.target);
+  if (attrs.rel) node.setAttribute("rel", attrs.rel);
+  if (attrs.type) node.setAttribute("type", attrs.type);
+  if (attrs.placeholder) (node as HTMLTextAreaElement).placeholder = attrs.placeholder;
+  if (attrs.maxLength != null) (node as HTMLTextAreaElement).maxLength = attrs.maxLength;
+  if (attrs.disabled != null) (node as HTMLButtonElement).disabled = attrs.disabled;
+  if (attrs.ariaHidden) node.setAttribute("aria-hidden", "true");
+  if (attrs.bg) node.style.backgroundImage = `url("${attrs.bg}")`;
+  if (attrs.onClick) node.addEventListener("click", attrs.onClick);
+  for (const c of children) node.append(c);
+  return node;
 }
 
-void main();
+const root = document.getElementById("root");
+function mount(node: Node): void {
+  if (root) root.replaceChildren(node);
+}
+
+/** Build a page: a flexing scroll area + an optional pinned bottom action bar. */
+function page(scroll: Array<Node>, bar?: Array<Node>): HTMLElement {
+  const children: Node[] = [el("div", { class: "vc-scroll" }, scroll)];
+  if (bar && bar.length) children.push(el("div", { class: "vc-bar" }, bar));
+  return el("div", { class: "vc-page" }, children);
+}
+
+// ── Native back button wiring ──
+let backHandler: (() => void) | null = null;
+function setBack(handler: (() => void) | null): void {
+  const bb = app?.BackButton;
+  if (!bb) return;
+  if (backHandler) bb.offClick(backHandler);
+  backHandler = handler;
+  if (handler) {
+    bb.onClick(handler);
+    bb.show();
+  } else {
+    bb.hide();
+  }
+}
+
+// ── Photo helpers ──
+function thumbUrl(v: VenueChangeCatalogItem): string | null {
+  if (v.photoUrl) return v.photoUrl;
+  if (v.photoRefs[0]) return venueChangePhotoUrl(getInitData(), v.photoRefs[0], 240);
+  return null;
+}
+function galleryUrls(v: VenueChangeCatalogItem): string[] {
+  if (v.photoUrl) return [v.photoUrl];
+  return v.photoRefs.map((ref) => venueChangePhotoUrl(getInitData(), ref, 1000));
+}
+function mapsHref(v: VenueChangeCatalogItem): string {
+  if (v.mapsUri && /^https?:\/\//i.test(v.mapsUri)) return v.mapsUri;
+  const q = [v.name, v.address].filter(Boolean).join(", ");
+  return `https://maps.google.com/?q=${encodeURIComponent(q)}`;
+}
+/**
+ * Open a link the Telegram-native way when possible. Returns true when handled
+ * (so the caller can `preventDefault`); false leaves the anchor's default
+ * `target=_blank` to do the work on clients without `openLink`.
+ */
+function openExternal(url: string): boolean {
+  const opener = (app as unknown as { openLink?: (u: string) => void } | undefined)?.openLink;
+  if (opener) {
+    opener(url);
+    return true;
+  }
+  return false;
+}
+
+// ── Centered states ──
+function showLoading(): void {
+  setBack(null);
+  mount(el("div", { class: "vc-page" }, [
+    el("div", { class: "vc-center" }, [el("div", { class: "spinner" }), el("p", { text: s.loading })]),
+  ]));
+}
+function showMessage(icon: string, text: string): void {
+  setBack(null);
+  mount(el("div", { class: "vc-page" }, [
+    el("div", { class: "vc-center" }, [
+      el("div", { class: "vc-state-icon", text: icon }),
+      el("p", { text }),
+    ]),
+  ]));
+}
+
+let stateView: VenueChangeState | null = null;
 
 async function main(): Promise<void> {
   if (!matchId) {
-    showMessage(s.fallbackNoMatch);
+    showMessage("🗺️", s.fallbackNoMatch);
     return;
   }
-  showMessage(s.loading);
+  showLoading();
 
-  let state;
   try {
-    state = await fetchVenueChangeState(initData, matchId);
+    stateView = await fetchVenueChangeState(getInitData(), matchId);
   } catch {
-    showMessage(s.errGeneric);
+    showMessage("⚠️", s.errGeneric);
     return;
   }
 
-  if (!state.eligible) {
-    showMessage(ineligibleMessage(state.ineligibleReason));
+  if (!stateView.eligible) {
+    showMessage("🔒", ineligibleMessage(stateView.ineligibleReason));
     return;
   }
 
@@ -335,131 +547,203 @@ function ineligibleMessage(reason: string | null): string {
 
 // ── Step 1: disclaimer ──
 function renderDisclaimer(): void {
-  $("disclaimer-title").textContent = s.disclaimerTitle;
-  const list = $("disclaimer-list");
-  list.innerHTML = "";
-  for (const bullet of s.disclaimerBullets) {
-    const li = document.createElement("li");
-    li.textContent = bullet;
-    list.appendChild(li);
-  }
-  const btn = $("disclaimer-continue") as HTMLButtonElement;
-  btn.textContent = s.disclaimerContinue;
-  btn.onclick = () => void loadCatalog();
-  showOnly("step-disclaimer");
-  app?.MainButton.hide();
+  setBack(null);
+  const header = el("div", { class: "vc-header" }, [
+    el("h1", { class: "vc-h1", text: s.disclaimerTitle }),
+    el("p", { class: "vc-lead", text: s.disclaimerLead }),
+  ]);
+  const rules = el(
+    "div",
+    { class: "vc-disclaimer" },
+    s.disclaimerBullets.map((b) =>
+      el("div", { class: "vc-rule" }, [
+        el("div", { class: "vc-rule-mark", text: "◆", ariaHidden: true }),
+        el("div", { class: "vc-rule-text", text: b }),
+      ]),
+    ),
+  );
+  const cont = el("button", { class: "btn-primary", type: "button", text: s.disclaimerContinue, onClick: () => {
+    haptic("light");
+    void loadCatalog();
+  } });
+  mount(page([header, rules], [cont]));
 }
 
 // ── Step 2: catalog ──
-const MIN_COMMENT_DEFAULT = 10;
-let minComment = MIN_COMMENT_DEFAULT;
+let catalog: VenueChangeCatalogItem[] = [];
 
 async function loadCatalog(): Promise<void> {
-  showMessage(s.loading);
-  let venues: VenueChangeCatalogItem[];
+  showLoading();
   try {
-    venues = await fetchVenueChangeCatalog(initData, matchId);
+    catalog = await fetchVenueChangeCatalog(getInitData(), matchId);
   } catch (err) {
-    showMessage(err instanceof CalendarApiError ? ineligibleMessage(err.reason ?? null) : s.errGeneric);
+    showMessage("⚠️", err instanceof CalendarApiError ? ineligibleMessage(err.reason ?? null) : s.errGeneric);
+    return;
+  }
+  renderCatalog();
+}
+
+function renderCatalog(): void {
+  setBack(() => renderDisclaimer());
+  const header = el("div", { class: "vc-header" }, [
+    el("h1", { class: "vc-h1", text: s.catalogTitle }),
+    el("p", { class: "vc-lead", text: s.catalogLead }),
+  ]);
+
+  if (catalog.length === 0) {
+    mount(page([header, el("p", { class: "vc-lead", text: s.catalogEmpty })]));
     return;
   }
 
-  $("catalog-title").textContent = s.catalogTitle;
-  $("catalog-lead").textContent = s.catalogLead;
-  const listEl = $("catalog-list");
-  const emptyEl = $("catalog-empty");
-  listEl.innerHTML = "";
+  const list = el("div", { class: "vc-list" }, catalog.map((v) => renderVenueCard(v)));
+  mount(page([header, list]));
+}
 
-  if (venues.length === 0) {
-    emptyEl.textContent = s.catalogEmpty;
-    emptyEl.classList.remove("hidden");
-  } else {
-    emptyEl.classList.add("hidden");
-    for (const v of venues) {
-      listEl.appendChild(renderVenueCard(v));
-    }
-  }
-  showOnly("step-catalog");
-  app?.MainButton.hide();
+function venueThumb(v: VenueChangeCatalogItem, className = "vc-thumb"): HTMLElement {
+  const url = thumbUrl(v);
+  return el("div", { class: className, bg: url }, url ? [] : [categoryGlyph(v.category)]);
 }
 
 function renderVenueCard(v: VenueChangeCatalogItem): HTMLElement {
-  const card = document.createElement("div");
-  card.className = "venue";
-
-  const thumb = document.createElement("div");
-  thumb.className = "thumb";
-  if (v.photoUrl) {
-    thumb.style.backgroundImage = `url("${v.photoUrl}")`;
-  } else {
-    thumb.textContent = CATEGORY_EMOJI[v.category] ?? "📍";
-  }
-
-  const meta = document.createElement("div");
-  meta.className = "meta";
-  const name = document.createElement("div");
-  name.className = "name";
-  name.textContent = v.name;
-  const addr = document.createElement("div");
-  addr.className = "addr";
-  addr.textContent = v.address;
-  const dist = document.createElement("div");
-  dist.className = "dist";
-  dist.textContent = `${v.distanceKm} km`;
-  meta.append(name, addr, dist);
-
-  card.append(thumb, meta);
-  card.onclick = () => renderComment(v);
-  return card;
+  const tags = el("div", { class: "vc-card-tags" }, [
+    el("span", { class: "vc-chip", text: s.kmAway(v.distanceKm) }),
+    ...ratingChip(v),
+  ]);
+  const meta = el("div", { class: "vc-card-meta" }, [
+    el("div", { class: "vc-card-name", text: v.name }),
+    el("div", { class: "vc-card-addr", text: v.address }),
+    tags,
+  ]);
+  return el("button", { class: "vc-card", type: "button", onClick: () => {
+    haptic("select");
+    renderDetail(v);
+  } }, [venueThumb(v), meta, el("span", { class: "vc-card-chevron", text: "›", ariaHidden: true })]);
 }
 
-// ── Step 3: comment ──
-// MainButton handlers must be de-registered before re-binding, otherwise
-// picking a second venue (after "back") would leave the first venue's submit
-// handler attached and fire a stale proposal. We track the live handler.
-let mainHandler: (() => void) | null = null;
+function ratingChip(v: VenueChangeCatalogItem): HTMLElement[] {
+  if (v.rating == null) return [];
+  const count = v.userRatingCount ? ` · ${v.userRatingCount}` : "";
+  return [
+    el("span", { class: "vc-chip" }, [
+      el("span", { class: "vc-chip-star", text: "★", ariaHidden: true }),
+      ` ${v.rating.toFixed(1)}${count}`,
+    ]),
+  ];
+}
 
+// ── Step 3: detail ──
+function renderDetail(v: VenueChangeCatalogItem): void {
+  setBack(() => renderCatalog());
+
+  const urls = galleryUrls(v);
+  const shots =
+    urls.length > 0
+      ? urls.map((u) => el("div", { class: `vc-shot${urls.length === 1 ? " is-single" : ""}`, bg: u }))
+      : [el("div", { class: "vc-shot is-single", text: categoryGlyph(v.category) })];
+  const gallery = el("div", { class: "vc-gallery" }, shots);
+
+  const nodes: Node[] = [gallery];
+
+  if (shots.length > 1) {
+    const dots = el(
+      "div",
+      { class: "vc-dots" },
+      shots.map((_, i) => el("div", { class: `vc-dot${i === 0 ? " is-active" : ""}` })),
+    );
+    nodes.push(dots);
+    gallery.addEventListener("scroll", () => {
+      const w = (gallery.firstElementChild as HTMLElement | null)?.offsetWidth ?? 1;
+      const idx = Math.round(gallery.scrollLeft / (w + 10));
+      const children = dots.children;
+      for (let i = 0; i < children.length; i++) {
+        children[i].classList.toggle("is-active", i === idx);
+      }
+    }, { passive: true });
+  }
+
+  nodes.push(el("div", { class: "vc-detail-name", text: v.name }));
+
+  const tags = el("div", { class: "vc-detail-tags" }, [
+    el("span", { class: "vc-chip", text: categoryLabel(v.category) }),
+    el("span", { class: "vc-chip", text: s.kmAway(v.distanceKm) }),
+    ...ratingChip(v),
+  ]);
+  nodes.push(tags);
+
+  nodes.push(el("p", { class: "vc-summary", text: v.editorialSummary || s.detailFallbackSummary }));
+
+  if (v.address) {
+    nodes.push(el("div", { class: "vc-info-row" }, [
+      el("span", { class: "vc-info-icon", text: "📍", ariaHidden: true }),
+      el("span", { class: "vc-info-text", text: v.address }),
+    ]));
+  }
+
+  const href = mapsHref(v);
+  const mapsRow = el("a", { class: "vc-info-row", href, target: "_blank", rel: "noopener" }, [
+    el("span", { class: "vc-info-icon", text: "🗺️", ariaHidden: true }),
+    el("span", { class: "vc-info-text", text: s.openMaps }),
+    el("span", { class: "vc-info-chevron", text: "›", ariaHidden: true }),
+  ]);
+  mapsRow.addEventListener("click", (e) => {
+    // Prefer Telegram's native opener inside the WebView; fall back to the
+    // anchor's default target=_blank on clients without `openLink`.
+    haptic("light");
+    if (openExternal(href)) e.preventDefault();
+  });
+  nodes.push(mapsRow);
+
+  const propose = el("button", { class: "btn-primary", type: "button", text: s.detailProposeBtn, onClick: () => {
+    haptic("light");
+    renderComment(v);
+  } });
+  const back = el("button", { class: "btn-secondary", type: "button", text: s.back, onClick: () => renderCatalog() });
+
+  mount(page([el("div", { class: "vc-detail" }, nodes)], [propose, back]));
+}
+
+// ── Step 4: reason ──
 function renderComment(venue: VenueChangeCatalogItem): void {
-  $("comment-title").textContent = s.commentTitle;
-  $("comment-venue").textContent = venue.name;
-  $("comment-addr").textContent = venue.address;
-
-  const input = $("comment-input") as HTMLTextAreaElement;
-  input.placeholder = s.commentPlaceholder;
-
-  const back = $("comment-back");
-  back.textContent = s.commentBack;
-  back.onclick = () => void loadCatalog();
-
-  const counter = $("comment-counter");
+  setBack(() => renderDetail(venue));
+  const minComment = stateView?.minCommentLength ?? 10;
   let submitting = false;
+
+  const header = el("div", { class: "vc-header" }, [
+    el("h1", { class: "vc-h1", text: s.commentTitle }),
+    el("p", { class: "vc-lead", text: s.commentLead }),
+  ]);
+
+  const chosen = el("div", { class: "vc-chosen" }, [
+    venueThumb(venue, "vc-thumb"),
+    el("div", { class: "vc-chosen-meta" }, [
+      el("div", { class: "vc-chosen-name", text: venue.name }),
+      el("div", { class: "vc-chosen-addr", text: venue.address }),
+    ]),
+  ]);
+
+  const input = el("textarea", { class: "vc-textarea", placeholder: s.commentPlaceholder, maxLength: 1000 }) as HTMLTextAreaElement;
+  const counter = el("div", { class: "vc-counter" });
+
+  const send = el("button", { class: "btn-primary", type: "button", text: s.mainConfirm, disabled: true }) as HTMLButtonElement;
+  const back = el("button", { class: "btn-secondary", type: "button", text: s.back, onClick: () => renderDetail(venue) });
 
   function sync(): void {
     const len = input.value.trim().length;
     counter.textContent = s.counter(len, minComment);
-    if (!app) return;
-    if (len >= minComment && !submitting) {
-      app.MainButton.setText(s.mainConfirm);
-      app.MainButton.show();
-      app.MainButton.enable();
-    } else if (!submitting) {
-      app.MainButton.hide();
-      app.MainButton.disable();
-    }
+    if (!submitting) send.disabled = len < minComment;
   }
 
-  input.oninput = () => {
+  input.addEventListener("input", () => {
     writeKey(draftKey, input.value);
     sync();
-  };
+  });
 
   void readKey(draftKey).then((draft) => {
     if (draft && !input.value) input.value = draft;
     sync();
   });
 
-  if (mainHandler) app?.MainButton.offClick(mainHandler);
-  const onMain = async (): Promise<void> => {
+  send.addEventListener("click", () => {
     if (submitting) return;
     const comment = input.value.trim();
     if (comment.length < minComment) {
@@ -467,35 +751,44 @@ function renderComment(venue: VenueChangeCatalogItem): void {
       return;
     }
     submitting = true;
-    app?.MainButton.showProgress(false);
-    app?.MainButton.setText(s.mainSending);
-    try {
-      await proposeVenueChange(initData, {
-        matchId,
-        placeId: venue.placeId,
-        name: venue.name,
-        address: venue.address,
-        lat: venue.lat,
-        lng: venue.lng,
-        mapsUri: venue.mapsUri,
-        comment,
-      });
-      clearKey(draftKey);
-      app?.MainButton.hideProgress();
-      app?.showAlert(s.successAlert, () => app?.close());
-    } catch (err) {
+    send.disabled = true;
+    send.replaceChildren(el("span", { class: "btn-spin", ariaHidden: true }), ` ${s.mainSending}`);
+    void submitProposal(venue, comment, () => {
       submitting = false;
-      app?.MainButton.hideProgress();
-      app?.showAlert(errorMessage(err));
+      send.textContent = s.mainConfirm;
       sync();
-    }
-  };
-  mainHandler = () => void onMain();
-  app?.MainButton.onClick(mainHandler);
+    });
+  });
 
-  showOnly("step-comment");
+  mount(page([header, chosen, input, counter], [send, back]));
   sync();
-  input.focus();
+  setTimeout(() => input.focus(), 50);
+}
+
+async function submitProposal(
+  venue: VenueChangeCatalogItem,
+  comment: string,
+  onError: () => void,
+): Promise<void> {
+  try {
+    await proposeVenueChange(getInitData(), {
+      matchId,
+      placeId: venue.placeId,
+      name: venue.name,
+      address: venue.address,
+      lat: venue.lat,
+      lng: venue.lng,
+      mapsUri: venue.mapsUri,
+      comment,
+    });
+    clearKey(draftKey);
+    haptic("success");
+    app?.showAlert(s.successAlert, () => app?.close());
+  } catch (err) {
+    haptic("error");
+    app?.showAlert(errorMessage(err));
+    onError();
+  }
 }
 
 function errorMessage(err: unknown): string {
@@ -513,3 +806,9 @@ function errorMessage(err: unknown): string {
       return s.errGeneric;
   }
 }
+
+// Entry point — invoked last, after every module-level binding above is
+// initialized. Calling main() before the `let stateView` / `let catalog`
+// declarations would assign into them while still in their temporal dead
+// zone (ReferenceError: Cannot access uninitialized variable).
+void main();

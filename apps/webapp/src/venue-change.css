@@ -1,0 +1,543 @@
+/* Venue Change Mini App — "Premium Lavender Glass" design system.
+   Shares the visual language of the Date Ticket / store Mini Apps: dark violet
+   stage, lavender accent, borderless glass surfaces (depth comes from layered
+   fills, inset light, and shadow — never from outlines). Full-screen web app. */
+
+:root {
+  --accent: #b69ae5;
+  --accent-deep: #8e6fd6;
+  --accent-bright: #d4c0f4;
+  --bg: #120e1c;
+  --bg-soft: #1b1530;
+  --text: #f4ecff;
+  --text-dim: #b3a8cf;
+  --text-faint: #8a7fa8;
+  --glass: rgba(255, 255, 255, 0.07);
+  --glass-press: rgba(255, 255, 255, 0.12);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --danger: #ff9d9d;
+  /* Telegram chrome inset (close ×, menu ⋯) in fullscreen — populated from
+     `Telegram.WebApp.contentSafeAreaInset` at boot (telegram-insets.ts). The
+     56px fallback covers older clients / the first paint. */
+  --tg-content-top: 56px;
+  --tg-content-bottom: 0px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* The whole app only ever scrolls vertically — clip any horizontal overflow
+     so the page can never rock side-to-side (the old comment-screen jitter). */
+  width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(142, 111, 214, 0.32), transparent 62%),
+    radial-gradient(90% 60% at 50% 110%, rgba(182, 154, 229, 0.16), transparent 60%),
+    var(--bg);
+  min-height: 100vh;
+}
+
+.vc-page {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+/* Scroll area — flexes, the action bar pins to the bottom. */
+.vc-scroll {
+  flex: 1;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: calc(26px + env(safe-area-inset-top) + var(--tg-content-top)) 20px 26px;
+}
+
+/* Centered states (loading / ineligible). */
+.vc-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 14px;
+  padding: 28px 28px calc(28px + env(safe-area-inset-bottom));
+  color: var(--text-dim);
+}
+.vc-center .vc-state-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  background: var(--glass);
+  box-shadow: var(--glass-edge);
+  font-size: 26px;
+}
+.vc-center p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  max-width: 300px;
+}
+
+.spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid rgba(182, 154, 229, 0.25);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+
+/* ── Headings ─────────────────────────────────────────────────────────── */
+.vc-header {
+  animation: rise 0.45s ease both;
+  margin-bottom: 18px;
+}
+.vc-h1 {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin: 0 0 6px;
+}
+.vc-lead {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── Disclaimer ───────────────────────────────────────────────────────── */
+.vc-disclaimer {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+  animation: rise 0.5s ease both;
+}
+.vc-rule {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+  padding: 15px 16px;
+  border-radius: 18px;
+  background: var(--glass);
+  box-shadow: var(--glass-edge);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.vc-rule-mark {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(182, 154, 229, 0.16);
+  color: var(--accent-bright);
+  font-size: 15px;
+}
+.vc-rule-text {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+/* ── Catalog ──────────────────────────────────────────────────────────── */
+.vc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: rise 0.5s ease both;
+}
+.vc-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 20px;
+  background: var(--glass);
+  box-shadow: var(--glass-edge);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--text);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.vc-card:active {
+  transform: scale(0.985);
+  background: var(--glass-press);
+}
+.vc-thumb {
+  flex: none;
+  width: 68px;
+  height: 68px;
+  border-radius: 15px;
+  background:
+    radial-gradient(120% 90% at 20% 0%, rgba(182, 154, 229, 0.28), transparent 60%),
+    linear-gradient(155deg, #2a2150, #1c1636);
+  background-size: cover;
+  background-position: center;
+  box-shadow: var(--glass-edge);
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  overflow: hidden;
+}
+.vc-card-meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.vc-card-name {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vc-card-addr {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vc-card-tags {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.vc-card-chevron {
+  flex: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--text-dim);
+  opacity: 0.55;
+}
+
+/* Inline meta chips (distance, rating, category). */
+.vc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(182, 154, 229, 0.13);
+  color: var(--accent-bright);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.vc-chip-star {
+  color: #ffce6b;
+}
+
+/* ── Detail ───────────────────────────────────────────────────────────── */
+.vc-detail {
+  animation: rise 0.4s ease both;
+}
+/* Photo gallery — full-bleed horizontal scroll-snap rail. */
+.vc-gallery {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -20px 4px;
+  padding: 0 20px;
+  scrollbar-width: none;
+}
+.vc-gallery::-webkit-scrollbar {
+  display: none;
+}
+.vc-shot {
+  flex: 0 0 auto;
+  scroll-snap-align: center;
+  width: min(78vw, 340px);
+  height: 220px;
+  border-radius: 22px;
+  background:
+    radial-gradient(120% 90% at 20% 0%, rgba(182, 154, 229, 0.22), transparent 58%),
+    linear-gradient(155deg, #2a2150 0%, #1c1636 60%, #251c44 100%);
+  background-size: cover;
+  background-position: center;
+  box-shadow:
+    0 18px 40px rgba(12, 6, 28, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  display: grid;
+  place-items: center;
+  font-size: 40px;
+  overflow: hidden;
+}
+.vc-shot.is-single {
+  width: 100%;
+}
+/* Soft dot indicator under the gallery. */
+.vc-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 10px 0 2px;
+}
+.vc-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(244, 236, 255, 0.25);
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.vc-dot.is-active {
+  background: var(--accent);
+  transform: scale(1.25);
+}
+
+.vc-detail-name {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 16px 0 10px;
+}
+.vc-detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.vc-summary {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0 0 16px;
+}
+/* Address + Maps — borderless glass rows. */
+.vc-info-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--glass);
+  box-shadow: var(--glass-edge);
+  margin-bottom: 10px;
+}
+.vc-info-icon {
+  flex: none;
+  font-size: 17px;
+  opacity: 0.85;
+}
+.vc-info-text {
+  min-width: 0;
+  flex: 1;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+a.vc-info-row {
+  text-decoration: none;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+a.vc-info-row:active {
+  background: var(--glass-press);
+}
+a.vc-info-row .vc-info-text {
+  color: var(--accent-bright);
+  font-weight: 600;
+}
+.vc-info-chevron {
+  flex: none;
+  color: var(--text-dim);
+  opacity: 0.6;
+  font-size: 19px;
+}
+
+/* ── Comment ──────────────────────────────────────────────────────────── */
+.vc-comment {
+  animation: rise 0.4s ease both;
+}
+/* Chosen-venue summary chip at the top of the reason screen. */
+.vc-chosen {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--glass);
+  box-shadow: var(--glass-edge);
+  margin-bottom: 18px;
+}
+.vc-chosen .vc-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 13px;
+  font-size: 20px;
+}
+.vc-chosen-meta {
+  min-width: 0;
+  flex: 1;
+}
+.vc-chosen-name {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vc-chosen-addr {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vc-textarea {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 130px;
+  padding: 15px;
+  border: none;
+  border-radius: 18px;
+  background: var(--glass);
+  box-shadow: var(--glass-edge);
+  color: var(--text);
+  font-size: 15px;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+}
+.vc-textarea::placeholder {
+  color: var(--text-faint);
+}
+.vc-counter {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: right;
+}
+
+/* ── Action bar (our own buttons, pinned bottom) ──────────────────────── */
+.vc-bar {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 20px calc(16px + env(safe-area-inset-bottom) + var(--tg-content-bottom));
+  background: linear-gradient(to top, var(--bg) 56%, rgba(18, 14, 28, 0));
+}
+.btn-primary,
+.btn-secondary {
+  width: 100%;
+  border: none;
+  border-radius: 18px;
+  padding: 16px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.15s ease, background 0.15s ease;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 45%, var(--accent-deep) 100%);
+  color: #1a0f2e;
+  box-shadow:
+    0 12px 30px rgba(142, 111, 214, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.btn-primary:disabled {
+  filter: grayscale(0.35) brightness(0.8);
+  cursor: default;
+}
+.btn-primary:not(:disabled):active {
+  transform: scale(0.98);
+}
+.btn-secondary {
+  background: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px;
+}
+.btn-secondary:active {
+  color: var(--text);
+}
+.btn-spin {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(26, 15, 46, 0.35);
+  border-top-color: #1a0f2e;
+  animation: spin 0.7s linear infinite;
+  vertical-align: -2px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-header,
+  .vc-disclaimer,
+  .vc-list,
+  .vc-detail,
+  .vc-comment {
+    animation: none;
+  }
+}

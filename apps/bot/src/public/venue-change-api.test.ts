@@ -33,8 +33,8 @@ function buildApp() {
   return app;
 }
 
-/** Build a valid `tma <initData>` header signed with BOT_TOKEN. */
-function tmaHeader(userId = 555): string {
+/** Build valid initData signed with BOT_TOKEN (raw query-string form). */
+function rawInitData(userId = 555): string {
   const params = new URLSearchParams();
   params.set("auth_date", String(Math.floor(Date.now() / 1000)));
   params.set("user", JSON.stringify({ id: userId, first_name: "Test" }));
@@ -45,7 +45,12 @@ function tmaHeader(userId = 555): string {
   const secret = createHmac("sha256", "WebAppData").update(BOT_TOKEN).digest();
   const hash = createHmac("sha256", secret).update(dataCheckString).digest("hex");
   params.set("hash", hash);
-  return `tma ${params.toString()}`;
+  return params.toString();
+}
+
+/** Build a valid `tma <initData>` header signed with BOT_TOKEN. */
+function tmaHeader(userId = 555): string {
+  return `tma ${rawInitData(userId)}`;
 }
 
 beforeEach(() => {
@@ -112,6 +117,28 @@ describe("GET /v1/venue-change/catalog", () => {
       .set("Authorization", tmaHeader());
     expect(res.status).toBe(200);
     expect(res.body.venues).toHaveLength(1);
+  });
+});
+
+describe("GET /v1/venue-change/photo", () => {
+  it("401 without initData", async () => {
+    const res = await request(buildApp()).get(`/v1/venue-change/photo?ref=places/x/photos/y`);
+    expect(res.status).toBe(401);
+  });
+
+  it("400 on a non-Places ref (no open proxy)", async () => {
+    const res = await request(buildApp())
+      .get(`/v1/venue-change/photo?ref=${encodeURIComponent("https://evil.example/img.jpg")}&tma=${encodeURIComponent(rawInitData())}`);
+    expect(res.status).toBe(400);
+  });
+
+  it("404 when PLACES_API_KEY is not configured", async () => {
+    const prev = process.env.PLACES_API_KEY;
+    delete process.env.PLACES_API_KEY;
+    const res = await request(buildApp())
+      .get(`/v1/venue-change/photo?ref=${encodeURIComponent("places/x/photos/y")}&tma=${encodeURIComponent(rawInitData())}`);
+    expect(res.status).toBe(404);
+    if (prev !== undefined) process.env.PLACES_API_KEY = prev;
   });
 });
 
