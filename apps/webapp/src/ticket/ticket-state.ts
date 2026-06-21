@@ -29,12 +29,18 @@ export function deriveScreen(state: TicketState): TicketScreen {
 }
 
 export interface OfferButton {
-  /** "pay" = money (intent+confirm); "use" = spend from wallet balance. */
-  action: "pay" | "use";
+  /**
+   * "pay" = money (intent+confirm); "use" = spend from wallet balance;
+   * "use-self-pay-partner" = spend 1 wallet ticket on the actor's own slot AND
+   * pay the single per-ticket price for the partner's slot, in one tap (the
+   * male, balance=1 "cover both" shortcut — strictly cheaper than paying the
+   * doubled `both` price when he already holds a ticket).
+   */
+  action: "pay" | "use" | "use-self-pay-partner";
   scope: TicketScope;
-  /** Charged amount for `pay` buttons (cents); 0 for `use`. */
+  /** Charged amount for `pay`/combo buttons (cents); 0 for plain `use`. */
   amountCents: number;
-  /** Tickets consumed for `use` buttons; 0 for `pay`. */
+  /** Tickets consumed for `use`/combo buttons; 0 for plain `pay`. */
   ticketCost: number;
   primary: boolean;
 }
@@ -45,30 +51,41 @@ function pay(scope: TicketScope, amountCents: number, primary: boolean): OfferBu
 function use(scope: TicketScope, ticketCost: number, primary: boolean): OfferButton {
   return { action: "use", scope, amountCents: 0, ticketCost, primary };
 }
+/**
+ * Male covering both with exactly one wallet ticket: the ticket pays his own
+ * slot and a single-price (`price`, not `price * 2`) money charge covers the
+ * partner's. So `ticketCost` is 1 AND `amountCents` is one ticket's price.
+ */
+function useSelfPayPartner(price: number, primary: boolean): OfferButton {
+  return { action: "use-self-pay-partner", scope: "both", amountCents: price, ticketCost: 1, primary };
+}
 
 /**
  * Buttons for the initial "offer" screen (the actor's own ticket isn't settled
  * yet), balance-aware:
  *   female/unknown → use my ticket (if any) else pay my ticket
  *   male, balance≥2 → use 2 tickets (both) + use 1 (self)
- *   male, balance=1 → use 1 (self) + pay for both
+ *   male, balance=1 → use 1 (self) + cover both (ticket for self + pay partner)
  *   male, balance=0 → pay for both + pay only mine
  * Unknown gender is treated as female — never offer pay/use-for-both without a
  * confirmed male gender (the server enforces this too).
  */
 export function deriveOfferButtons(state: TicketState): OfferButton[] {
   const price = state.priceCents;
+  // Famine discount applies to the actor's OWN ticket only (the `self` money
+  // button). `both`/`partner` and the wallet combo keep full per-ticket price.
+  const selfPrice = state.selfPriceCents;
   if (state.myGender === "male") {
     if (state.myBalance >= 2) {
       return [use("both", 2, true), use("self", 1, false)];
     }
     if (state.myBalance === 1) {
-      return [use("self", 1, true), pay("both", price * 2, false)];
+      return [use("self", 1, true), useSelfPayPartner(price, false)];
     }
-    return [pay("both", price * 2, true), pay("self", price, false)];
+    return [pay("both", price * 2, true), pay("self", selfPrice, false)];
   }
   if (state.myBalance >= 1) return [use("self", 1, true)];
-  return [pay("self", price, true)];
+  return [pay("self", selfPrice, true)];
 }
 
 /**

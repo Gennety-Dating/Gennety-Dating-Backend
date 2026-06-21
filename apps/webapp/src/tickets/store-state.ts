@@ -20,6 +20,13 @@ export interface StoreBundleView {
    * savings badge.
    */
   discountPct: number;
+  /**
+   * Active "famine" single-ticket discount percent applied to THIS bundle's
+   * price (only ever non-zero on the count=1 bundle). Drives the distinct
+   * loyalty badge + the reduced single price. Must stay in sync with
+   * `FAMINE_DISCOUNT_PCT` / the server's `discountedCents`.
+   */
+  famineDiscountPct: number;
 }
 
 const RAW_BUNDLES = [
@@ -28,7 +35,18 @@ const RAW_BUNDLES = [
   { count: 6, priceCents: 2694 },
 ] as const;
 
-export function storeBundles(): StoreBundleView[] {
+/** Mirror of the server's `discountedCents` (services/ticket-discount.ts). */
+function discounted(priceCents: number, pct: number): number {
+  const clamped = Math.min(100, Math.max(0, pct));
+  return Math.round((priceCents * (100 - clamped)) / 100);
+}
+
+/**
+ * Build the store bundle views. `famineDiscountPct > 0` discounts the "1 ticket"
+ * bundle only — the catalog best-value / savings math is computed on the
+ * undiscounted catalog prices so the famine deal can't mislabel the 6-pack.
+ */
+export function storeBundles(famineDiscountPct = 0): StoreBundleView[] {
   const withPer = RAW_BUNDLES.map((b) => ({
     ...b,
     perTicketCents: Math.round(b.priceCents / b.count),
@@ -36,14 +54,20 @@ export function storeBundles(): StoreBundleView[] {
   const cheapest = Math.min(...withPer.map((b) => b.perTicketCents));
   // Singles are the reference price the discount is measured against.
   const singlePerTicket = withPer.find((b) => b.count === 1)?.perTicketCents ?? cheapest;
-  return withPer.map((b) => ({
-    ...b,
-    bestValue: b.perTicketCents === cheapest,
-    discountPct:
-      singlePerTicket > 0
-        ? Math.round(((singlePerTicket - b.perTicketCents) / singlePerTicket) * 100)
-        : 0,
-  }));
+  return withPer.map((b) => {
+    const famine = b.count === 1 && famineDiscountPct > 0 ? famineDiscountPct : 0;
+    return {
+      count: b.count,
+      priceCents: famine ? discounted(b.priceCents, famine) : b.priceCents,
+      perTicketCents: famine ? discounted(b.perTicketCents, famine) : b.perTicketCents,
+      bestValue: b.perTicketCents === cheapest,
+      discountPct:
+        singlePerTicket > 0
+          ? Math.round(((singlePerTicket - b.perTicketCents) / singlePerTicket) * 100)
+          : 0,
+      famineDiscountPct: famine,
+    };
+  });
 }
 
 export function formatUsd(cents: number): string {

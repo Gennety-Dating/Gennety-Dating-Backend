@@ -46,15 +46,17 @@
 }
 
 /* Floating "Save N%" pill — the concrete per-ticket discount vs buying
-   singles. Subtle accent glass by default; the best-value card upgrades it to
-   the bright gradient below so the strongest deal still stands out. */
+   singles. Opaque dark-violet chip by default (the pill floats over the card's
+   top edge, so a translucent fill would let the card's edge highlight show
+   through); the best-value card upgrades it to the bright gradient below so the
+   strongest deal still stands out. */
 .store-badge {
   position: absolute;
   top: -11px;
   right: 16px;
   padding: 4px 11px;
   border-radius: 999px;
-  background: rgba(182, 154, 229, 0.22);
+  background: linear-gradient(135deg, #332a4d, #241c39);
   color: var(--accent-bright);
   font-size: 11px;
   font-weight: 700;
@@ -68,6 +70,23 @@
   background: linear-gradient(135deg, var(--accent-bright), var(--accent-deep));
   color: #1a0f2e;
   box-shadow: 0 6px 16px rgba(142, 111, 214, 0.4);
+}
+
+/* One-time "famine" loyalty discount on the single ticket — a warm rose pill so
+   it reads as a personal gift, distinct from the cool-violet per-bundle savings. */
+.store-badge-famine {
+  background: linear-gradient(135deg, #ff8a9b, #e2627d);
+  color: #2a0d16;
+  box-shadow: 0 6px 16px rgba(226, 98, 125, 0.42);
+}
+
+.store-bundle-famine {
+  background:
+    linear-gradient(135deg, rgba(255, 138, 155, 0.2), rgba(226, 98, 125, 0.08)),
+    var(--glass);
+  box-shadow:
+    0 12px 32px rgba(226, 98, 125, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 /* ×N count emblem — a soft glass square on the left. */

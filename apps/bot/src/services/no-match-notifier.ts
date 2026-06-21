@@ -1,6 +1,13 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import { t, type Language, type TranslationKey } from "@gennety/shared";
+import {
+  t,
+  type Language,
+  type TranslationKey,
+  FAMINE_DISCOUNT_MIN_TIER,
+} from "@gennety/shared";
+import { streamDraftsToChat } from "./ai-stream.js";
+import { grantFamineDiscountIfEligible } from "./ticket-discount.js";
 
 /**
  * Empathetic "no match this week" DM.
@@ -98,6 +105,9 @@ export async function sendNoMatchNotices(
   api: Api<RawApi>,
   now: Date = new Date(),
   delayMs: number = DEFAULT_NOTIFY_DELAY_MS,
+  // Injectable chunk streamer (mirrors the `streamImpl` seam in
+  // `handlers/matching/pitch.ts`) so tests can inject a synchronous stub.
+  streamImpl: typeof streamDraftsToChat = streamDraftsToChat,
 ): Promise<NoMatchNotifyResult> {
   const dropDate = getDropDate(now);
   const recentSince = new Date(now.getTime() - RECENT_MATCH_WINDOW_MS);
@@ -150,16 +160,35 @@ export async function sendNoMatchNotices(
 
     const tier = await computeTier(u.id, dropDate);
     const lang: Language = u.language ?? "en";
-    const body = t(lang, templateKeyForTier(tier), {});
+    let body = t(lang, templateKeyForTier(tier), {});
+
+    // 2nd consecutive famine week+ → grant the one-time single-ticket discount
+    // and tell them in the same DM. Inert unless TICKET_FEATURE_ENABLED (the
+    // grant self-gates), so the flag-off path keeps the plain tier template.
+    if (tier >= FAMINE_DISCOUNT_MIN_TIER) {
+      const grant = await grantFamineDiscountIfEligible(u.id);
+      if (grant.granted && grant.pct) {
+        body += `\n\n${t(lang, "noMatchDiscountOffer", { pct: grant.pct })}`;
+      }
+    }
 
     try {
       await prisma.noMatchNotice.create({
         data: { userId: u.id, tier, dropDate },
       });
 
-      await api.sendMessage(Number(u.telegramId), body, {
-        parse_mode: "Markdown",
-      });
+      // Deliberately SHORT stream (anti-drumroll): one "thinking" lead beat —
+      // "we really looked" — then the full empathetic body as the persisted
+      // send. We never spell out bad news slowly. The templates carry no
+      // Markdown (emoji + `•` bullets + newlines only), so the plain final
+      // `sendMessage` renders identically — `parse_mode` is intentionally
+      // dropped. `thinkingIndex: 0` is only used by explicit rich-draft demos.
+      await streamImpl(
+        api,
+        Number(u.telegramId),
+        [t(lang, "noMatchStreamStart"), body],
+        { thinkingIndex: 0 },
+      );
 
       result.notified++;
       if (tier === 1) result.tier1++;

@@ -23,6 +23,8 @@ function state(overrides: Partial<TicketState> = {}): TicketState {
     expiresAt: null,
     paymentMode: "mock",
     myBalance: 0,
+    selfDiscountPct: 0,
+    selfPriceCents: 699,
     ...overrides,
   };
 }
@@ -71,6 +73,28 @@ describe("deriveOfferButtons (balance 0 = money path)", () => {
   });
 });
 
+describe("deriveOfferButtons (famine single-ticket discount)", () => {
+  it("female self-pay uses the discounted selfPriceCents", () => {
+    const btns = deriveOfferButtons(
+      state({ myGender: "female", myBalance: 0, selfDiscountPct: 77, selfPriceCents: 161 }),
+    );
+    expect(btns).toEqual([{ action: "pay", scope: "self", amountCents: 161, ticketCost: 0, primary: true }]);
+  });
+  it("male: only the self button is discounted; pay-for-both stays full", () => {
+    const btns = deriveOfferButtons(
+      state({ myGender: "male", myBalance: 0, selfDiscountPct: 77, selfPriceCents: 161 }),
+    );
+    expect(btns[0]).toEqual({ action: "pay", scope: "both", amountCents: 1398, ticketCost: 0, primary: true });
+    expect(btns[1]).toEqual({ action: "pay", scope: "self", amountCents: 161, ticketCost: 0, primary: false });
+  });
+  it("wallet 'use' paths ignore the discount (using a ticket is free)", () => {
+    const btns = deriveOfferButtons(
+      state({ myGender: "female", myBalance: 1, selfDiscountPct: 77, selfPriceCents: 161 }),
+    );
+    expect(btns).toEqual([{ action: "use", scope: "self", amountCents: 0, ticketCost: 1, primary: true }]);
+  });
+});
+
 describe("deriveOfferButtons (balance-aware)", () => {
   it("female with a ticket uses it instead of paying", () => {
     const btns = deriveOfferButtons(state({ myGender: "female", myBalance: 1 }));
@@ -81,10 +105,18 @@ describe("deriveOfferButtons (balance-aware)", () => {
     expect(btns[0]).toEqual({ action: "use", scope: "both", amountCents: 0, ticketCost: 2, primary: true });
     expect(btns[1]).toEqual({ action: "use", scope: "self", amountCents: 0, ticketCost: 1, primary: false });
   });
-  it("male with 1 ticket uses it for self, can still pay for both", () => {
+  it("male with 1 ticket uses it for self, covers both via ticket + single price", () => {
     const btns = deriveOfferButtons(state({ myGender: "male", myBalance: 1 }));
     expect(btns[0]).toEqual({ action: "use", scope: "self", amountCents: 0, ticketCost: 1, primary: true });
-    expect(btns[1]).toEqual({ action: "pay", scope: "both", amountCents: 1398, ticketCost: 0, primary: false });
+    // Cover-both shortcut: 🎫 on his own slot + one ticket's price for the
+    // partner — never the doubled $13.98 when he already holds a ticket.
+    expect(btns[1]).toEqual({
+      action: "use-self-pay-partner",
+      scope: "both",
+      amountCents: 699,
+      ticketCost: 1,
+      primary: false,
+    });
   });
 });
 

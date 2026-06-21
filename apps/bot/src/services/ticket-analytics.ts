@@ -17,12 +17,18 @@ export type TicketAnalyticsEvent =
   | "ticket_intent_created"
   | "ticket_paid"
   | "ticket_both_paid"
-  | "ticket_refunded";
+  | "ticket_refunded"
+  // Famine single-ticket discount lifecycle (PRODUCT_SPEC §3.5b). Not tied to a
+  // match (the store path has none), so `matchId` is optional and `userId`
+  // identifies the subject instead.
+  | "famine_discount_granted"
+  | "famine_discount_redeemed";
 
 export function emitTicketEvent(
   event: TicketAnalyticsEvent,
   props: {
-    matchId: string;
+    matchId?: string;
+    userId?: string;
     side?: "A" | "B";
     scope?: "self" | "both" | "partner";
     amountCents?: number;

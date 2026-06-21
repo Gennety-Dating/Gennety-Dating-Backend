@@ -8,6 +8,7 @@ import { prisma } from "@gennety/db";
 import { normalizeProfileMedia, t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { streamDraftsToChat } from "../../services/ai-stream.js";
+import { AI_EMOJI } from "../../services/ai-emoji.js";
 import {
   generatePitch,
   splitPitchIntoDrafts,
@@ -34,7 +35,7 @@ const MAX_MEDIA_GROUP_SIZE = 10;
 /**
  * Pitch delivery — called by the match-engine tick after a `proposed` Match
  * row is created. Sends the personalized pitch + Accept/Decline keyboard to
- * both users via `sendMessageDraft` streaming.
+ * both users via one bottom-of-chat message edited through the stream chunks.
  *
  * The engine runs outside a grammY context, so we use `streamDraftsToChat`
  * with a raw `Api` instance. Idempotent: if the match already has pitches
@@ -329,8 +330,8 @@ export async function sendMatchWelcomeGiftPreroll(
 }
 
 /**
- * Push a match proposal to both users. Streams the pitch via drafts and
- * finalises with an inline keyboard on the last message.
+ * Push a match proposal to both users. Streams the pitch by editing one message
+ * and finalises with an inline keyboard on the last edit.
  */
 export async function sendMatchProposal(
   api: Api<RawApi>,
@@ -480,8 +481,8 @@ export async function sendMatchProposal(
     finalB,
   ];
   // `matchStreamStart` (the "analysing compatibility…" beat) sits right after
-  // the headline + deadline; on the rich path it renders as a <tg-thinking>
-  // shimmer. Same index for both sides since the preamble is identical.
+  // the headline + deadline. Same index for both sides since the preamble is
+  // identical; it is only used by explicit rich-draft demos.
   const thinkingIndex = 2;
 
   const kbA = buildMatchKeyboard(matchId, langA);
@@ -523,7 +524,11 @@ export async function sendMatchProposal(
       await deliverWelcomeGiftPreroll(api, match.userA.id, chatA, langA, match.userA.gender);
     }
     await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
-    const result = await stream(api, chatA, draftsA, { replyMarkup: kbA, thinkingIndex });
+    const result = await stream(api, chatA, draftsA, {
+      replyMarkup: kbA,
+      thinkingIndex,
+      thinkingEmojiId: AI_EMOJI.spark,
+    });
     if (!result) throw new Error("Pitch stream returned no final message for side A");
     await prisma.match.update({
       where: { id: matchId },
@@ -540,7 +545,11 @@ export async function sendMatchProposal(
       await deliverWelcomeGiftPreroll(api, match.userB.id, chatB, langB, match.userB.gender);
     }
     await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
-    const result = await stream(api, chatB, draftsB, { replyMarkup: kbB, thinkingIndex });
+    const result = await stream(api, chatB, draftsB, {
+      replyMarkup: kbB,
+      thinkingIndex,
+      thinkingEmojiId: AI_EMOJI.spark,
+    });
     if (!result) throw new Error("Pitch stream returned no final message for side B");
     await prisma.match.update({
       where: { id: matchId },

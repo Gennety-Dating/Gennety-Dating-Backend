@@ -13,7 +13,18 @@ import {
   amountForScope,
   type TicketScope,
 } from "../../services/ticket-payment.js";
+import type { TicketStateView } from "../../handlers/matching/ticket-gate.js";
 import { emitTicketEvent } from "../../services/ticket-analytics.js";
+
+/**
+ * Charged amount for a gate action. The `self` scope honours the famine
+ * single-ticket discount (`selfPriceCents` is pre-discounted by the gate state
+ * builder); `both`/`partner` always charge full per-ticket price × count.
+ */
+function priceForScope(scope: TicketScope, state: TicketStateView): number {
+  if (scope === "self") return state.selfPriceCents;
+  return amountForScope(scope, state.priceCents);
+}
 
 /** See routes/calendar.ts for why we pre-validate the UUID shape here. */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -82,7 +93,7 @@ export function createTicketRouter(api: Api<RawApi>): Router {
       return;
     }
 
-    const amountCents = amountForScope(scope, stateRes.state.priceCents);
+    const amountCents = priceForScope(scope, stateRes.state);
     const intent = await createTicketIntent({
       payerId: String(auth.user.id),
       matchId,
@@ -127,7 +138,7 @@ export function createTicketRouter(api: Api<RawApi>): Router {
       res.status(status).json({ error: stateRes.reason });
       return;
     }
-    const amountCents = amountForScope(scope, stateRes.state.priceCents);
+    const amountCents = priceForScope(scope, stateRes.state);
     const verified = await verifyTicketPayment({
       clientSecret,
       payerId: String(auth.user.id),

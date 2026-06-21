@@ -14,6 +14,11 @@ import {
   refundTicketPayment,
 } from "../../services/ticket-payment.js";
 import { spendTickets, grantTickets } from "../../services/ticket-wallet.js";
+import {
+  activeDiscountFromColumns,
+  consumeActiveDiscount,
+  discountedCents,
+} from "../../services/ticket-discount.js";
 import { emitTicketEvent } from "../../services/ticket-analytics.js";
 import {
   sendOrEditPostAcceptMessage,
@@ -45,6 +50,9 @@ interface TicketUser {
   gender: "male" | "female" | null;
   firstName: string | null;
   ticketBalance: number;
+  ticketDiscountPct: number;
+  ticketDiscountExpiresAt: Date | null;
+  ticketDiscountConsumedAt: Date | null;
 }
 
 interface TicketMatch {
@@ -79,8 +87,8 @@ const TICKET_SELECT = {
   calendarMessageIdB: true,
   userAId: true,
   userBId: true,
-  userA: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true, ticketBalance: true } },
-  userB: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true, ticketBalance: true } },
+  userA: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true } },
+  userB: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true } },
 } as const;
 
 function loadTicketMatch(matchId: string): Promise<TicketMatch | null> {
@@ -126,6 +134,14 @@ export interface TicketStateView {
   paymentMode: PaymentMode;
   /** The actor's current ticket-wallet balance (balance-aware gate buttons). */
   myBalance: number;
+  /**
+   * Active famine single-ticket discount percent (0 = none). Applies to the
+   * `self` scope only — the discounted price is `selfPriceCents`. `both`/
+   * `partner` always charge `priceCents` per ticket.
+   */
+  selfDiscountPct: number;
+  /** Charged price for the actor's OWN ticket, after `selfDiscountPct`. */
+  selfPriceCents: number;
 }
 
 export function buildTicketStateView(match: TicketMatch, side: Side): TicketStateView {
@@ -136,6 +152,15 @@ export function buildTicketStateView(match: TicketMatch, side: Side): TicketStat
   // paidForPartnerByA means A paid for B. So the partner paid for ME when the
   // PARTNER's "paid for partner" flag is set.
   const partnerPaidForMe = side === "A" ? match.paidForPartnerByB : match.paidForPartnerByA;
+  // Famine single-ticket discount on the actor's own ticket. Gated on the flag
+  // (the columns are inert when monetization is off).
+  const discount = env.TICKET_FEATURE_ENABLED
+    ? activeDiscountFromColumns({
+        ticketDiscountPct: me.ticketDiscountPct,
+        ticketDiscountExpiresAt: me.ticketDiscountExpiresAt,
+        ticketDiscountConsumedAt: me.ticketDiscountConsumedAt,
+      })
+    : null;
   return {
     ticketStatus: match.ticketStatus,
     priceCents: match.ticketPriceCents,
@@ -149,6 +174,10 @@ export function buildTicketStateView(match: TicketMatch, side: Side): TicketStat
     expiresAt: match.ticketExpiresAt ? match.ticketExpiresAt.toISOString() : null,
     paymentMode: env.TICKET_PAYMENT_MODE,
     myBalance: me.ticketBalance,
+    selfDiscountPct: discount?.pct ?? 0,
+    selfPriceCents: discount
+      ? discountedCents(match.ticketPriceCents, discount.pct)
+      : match.ticketPriceCents,
   };
 }
 
@@ -381,7 +410,23 @@ export async function applyTicketPayment(
   matchId: string,
   scope: TicketScope,
 ): Promise<ApplyPaymentResult> {
-  const { result } = await settleTicket(api, telegramId, matchId, scope);
+  const { result, claimed } = await settleTicket(api, telegramId, matchId, scope);
+  // A discounted `self` money purchase just settled — redeem the one-time famine
+  // discount. The route charged `selfPriceCents`; both branch on the same
+  // active-discount predicate, and the consume CAS is idempotent.
+  if (result.ok && claimed && scope === "self" && env.TICKET_FEATURE_ENABLED) {
+    const match = await loadTicketMatch(matchId);
+    const side = match ? sideForTelegramId(match, telegramId) : null;
+    if (match && side) {
+      const me = selfUser(match, side);
+      const active = activeDiscountFromColumns({
+        ticketDiscountPct: me.ticketDiscountPct,
+        ticketDiscountExpiresAt: me.ticketDiscountExpiresAt,
+        ticketDiscountConsumedAt: me.ticketDiscountConsumedAt,
+      });
+      if (active) await consumeActiveDiscount(me.id);
+    }
+  }
   return result;
 }
 

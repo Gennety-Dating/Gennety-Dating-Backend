@@ -15,6 +15,8 @@ export interface StoreStrings {
   bestValue: string;
   /** Per-ticket saving badge on multi-ticket bundles. `{pct}` = whole percent. */
   save: string;
+  /** Loyalty "famine" discount badge on the single ticket. `{pct}` = percent. */
+  famineSave: string;
   buy: string;
   successTitle: string;
   successSub: string;
@@ -35,6 +37,7 @@ const en: StoreStrings = {
   perTicket: "{amount} / ticket",
   bestValue: "Best value",
   save: "Save {pct}%",
+  famineSave: "−{pct}% for you",
   buy: "Buy {count} — {amount}",
   successTitle: "Tickets added 🎟️",
   successSub: "Your wallet now holds {n}. Use them when your next date is set.",
@@ -54,6 +57,7 @@ const ru: StoreStrings = {
   perTicket: "{amount} / билет",
   bestValue: "Выгоднее всего",
   save: "Скидка {pct}%",
+  famineSave: "−{pct}% для тебя",
   buy: "Купить {count} — {amount}",
   successTitle: "Билеты добавлены 🎟️",
   successSub: "Теперь в кошельке {n}. Используй их, когда назначишь свидание.",
@@ -73,6 +77,7 @@ const uk: StoreStrings = {
   perTicket: "{amount} / квиток",
   bestValue: "Найвигідніше",
   save: "Знижка {pct}%",
+  famineSave: "−{pct}% для тебе",
   buy: "Купити {count} — {amount}",
   successTitle: "Квитки додано 🎟️",
   successSub: "Тепер у гаманці {n}. Використай їх, коли призначиш побачення.",
@@ -92,6 +97,7 @@ const de: StoreStrings = {
   perTicket: "{amount} / Ticket",
   bestValue: "Bester Preis",
   save: "{pct}% sparen",
+  famineSave: "−{pct}% für dich",
   buy: "{count} kaufen — {amount}",
   successTitle: "Tickets hinzugefügt 🎟️",
   successSub: "Dein Guthaben beträgt jetzt {n}. Nutze sie für dein nächstes Date.",
@@ -111,6 +117,7 @@ const pl: StoreStrings = {
   perTicket: "{amount} / bilet",
   bestValue: "Najlepsza cena",
   save: "Oszczędź {pct}%",
+  famineSave: "−{pct}% dla Ciebie",
   buy: "Kup {count} — {amount}",
   successTitle: "Bilety dodane 🎟️",
   successSub: "W portfelu masz teraz {n}. Użyj ich, gdy ustalisz randkę.",

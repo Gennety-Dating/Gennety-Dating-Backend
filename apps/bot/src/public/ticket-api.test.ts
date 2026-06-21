@@ -68,6 +68,8 @@ const baseState = {
   expiresAt: null,
   paymentMode: "mock",
   myBalance: 0,
+  selfDiscountPct: 0,
+  selfPriceCents: 699,
 };
 
 beforeEach(() => {
@@ -147,6 +149,40 @@ describe("POST /v1/matches/:id/ticket/intent", () => {
       scope: "both",
       amountCents: 1398,
     });
+  });
+
+  it("uses the discounted selfPriceCents for a 'self' intent when a famine discount is active", async () => {
+    getTicketState.mockResolvedValueOnce({
+      ok: true,
+      state: { ...baseState, selfDiscountPct: 77, selfPriceCents: 161 },
+    });
+    createTicketIntent.mockResolvedValueOnce({ clientSecret: "mock_pi_d", amountCents: 161, mode: "mock" });
+    const res = await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/ticket/intent`)
+      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
+      .send({ scope: "self" });
+    expect(res.status).toBe(200);
+    expect(createTicketIntent).toHaveBeenCalledWith({
+      payerId: "5986970093",
+      matchId: VALID_UUID,
+      scope: "self",
+      amountCents: 161,
+    });
+  });
+
+  it("keeps full 'both' price even when the actor has a famine discount", async () => {
+    getTicketState.mockResolvedValueOnce({
+      ok: true,
+      state: { ...baseState, selfDiscountPct: 77, selfPriceCents: 161 },
+    });
+    createTicketIntent.mockResolvedValueOnce({ clientSecret: "mock_pi_b", amountCents: 1398, mode: "mock" });
+    await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/ticket/intent`)
+      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
+      .send({ scope: "both" });
+    expect(createTicketIntent).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "both", amountCents: 1398 }),
+    );
   });
 
   it("rejects scope 'both' for a female user with 403", async () => {

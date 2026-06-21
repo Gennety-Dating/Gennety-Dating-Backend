@@ -13,8 +13,11 @@ export interface TicketStrings {
   ticketTagline: string;
   ticketHolders: string;
   payBoth: string;
+  payBothWithTicket: string;
   paySelf: string;
   paySelfOnly: string;
+  /** Famine single-ticket discount badge on the self-pay button. `{pct}`. */
+  famineBadge: string;
   useSelf: string;
   useBoth: string;
   usePartner: string;
@@ -57,8 +60,10 @@ const en: TicketStrings = {
   ticketTagline: "One Perfect Match • Verified • Zero Drama",
   ticketHolders: "Admit two",
   payBoth: "Pay for us both — {amount}",
+  payBothWithTicket: "Pay for both 🎟️ + {amount}",
   paySelf: "Pay only mine — {amount}",
   paySelfOnly: "Pay my ticket — {amount}",
+  famineBadge: "−{pct}% for you",
   useSelf: "Use a ticket — for you 🎟️",
   useBoth: "Use 2 tickets — you & your date 🎟️🎟️",
   usePartner: "Use a ticket for your date 🎟️",
@@ -95,14 +100,16 @@ const en: TicketStrings = {
 };
 
 const ru: TicketStrings = {
-  heading: "Это метч 🔥",
+  heading: "Это match 🔥",
   sub: "Забери свой билет на свидание, чтобы открыть планирование.",
   ticketLabel: "КУРАТОРСКИЙ БИЛЕТ НА СВИДАНИЕ",
   ticketTagline: "Идеальный метч • Проверено • Без драмы",
   ticketHolders: "На двоих",
   payBoth: "Оплатить за нас обоих — {amount}",
+  payBothWithTicket: "Оплатить за двоих 🎟️ + {amount}",
   paySelf: "Оплатить только свой — {amount}",
   paySelfOnly: "Оплатить свой билет — {amount}",
+  famineBadge: "−{pct}% для тебя",
   useSelf: "Использовать билет — за себя 🎟️",
   useBoth: "Использовать 2 билета — ты и пара 🎟️🎟️",
   usePartner: "Использовать билет за пару 🎟️",
@@ -139,14 +146,16 @@ const ru: TicketStrings = {
 };
 
 const uk: TicketStrings = {
-  heading: "Це метч 🔥",
+  heading: "Це match 🔥",
   sub: "Забери свій квиток на побачення, щоб відкрити планування.",
   ticketLabel: "КУРАТОРСЬКИЙ КВИТОК НА ПОБАЧЕННЯ",
   ticketTagline: "Ідеальний метч • Перевірено • Без драми",
   ticketHolders: "На двох",
   payBoth: "Сплатити за нас обох — {amount}",
+  payBothWithTicket: "Сплатити за двох 🎟️ + {amount}",
   paySelf: "Сплатити лише свій — {amount}",
   paySelfOnly: "Сплатити свій квиток — {amount}",
+  famineBadge: "−{pct}% для тебе",
   useSelf: "Використати квиток — за себе 🎟️",
   useBoth: "Використати 2 квитки — ти і пара 🎟️🎟️",
   usePartner: "Використати квиток за пару 🎟️",
@@ -189,8 +198,10 @@ const de: TicketStrings = {
   ticketTagline: "Ein perfektes Match • Verifiziert • Kein Drama",
   ticketHolders: "Für zwei",
   payBoth: "Für uns beide zahlen — {amount}",
+  payBothWithTicket: "Für beide zahlen 🎟️ + {amount}",
   paySelf: "Nur meins zahlen — {amount}",
   paySelfOnly: "Mein Ticket zahlen — {amount}",
+  famineBadge: "−{pct}% für dich",
   useSelf: "Ticket nutzen — für dich 🎟️",
   useBoth: "2 Tickets nutzen — du & dein Date 🎟️🎟️",
   usePartner: "Ticket für dein Date nutzen 🎟️",
@@ -227,14 +238,16 @@ const de: TicketStrings = {
 };
 
 const pl: TicketStrings = {
-  heading: "To dopasowanie 🔥",
+  heading: "To match 🔥",
   sub: "Odbierz Date Ticket, aby odblokować planowanie.",
   ticketLabel: "WYBRANY DATE TICKET",
   ticketTagline: "Jedno idealne dopasowanie • Weryfikacja • Bez dramatu",
   ticketHolders: "Dla dwojga",
   payBoth: "Zapłać za nas oboje — {amount}",
+  payBothWithTicket: "Zapłać za oboje 🎟️ + {amount}",
   paySelf: "Zapłać tylko za siebie — {amount}",
   paySelfOnly: "Zapłać za swój bilet — {amount}",
+  famineBadge: "−{pct}% dla Ciebie",
   useSelf: "Użyj biletu — za siebie 🎟️",
   useBoth: "Użyj 2 biletów — Ty i Twoja randka 🎟️🎟️",
   usePartner: "Użyj biletu za swoją randkę 🎟️",

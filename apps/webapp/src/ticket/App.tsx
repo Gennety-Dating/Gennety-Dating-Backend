@@ -117,12 +117,36 @@ export function App(): ReactElement {
     [s],
   );
 
+  // Male "cover both" holding exactly one wallet ticket: spend it on his own
+  // slot, then open the single-price ($6.99) payment for the partner's slot —
+  // 🎫 + one ticket's money, never the doubled "pay for both". If the partner
+  // settled concurrently we just show the refreshed (cover-partner/success)
+  // screen instead of a redundant charge.
+  const useSelfThenPayPartner = useCallback(async (): Promise<void> => {
+    haptic("light");
+    try {
+      const next = await useTicketFromWallet(initData, matchId, "self");
+      if (!next.bothPaid && next.iPaid && !next.partnerPaid) {
+        const intent = await createTicketIntent(initData, matchId, "partner");
+        setPhase({ kind: "mock", state: next, scope: "partner", intent, processing: false });
+      } else {
+        haptic("success");
+        setPhase({ kind: "view", state: next });
+      }
+    } catch (err) {
+      haptic("error");
+      app?.showAlert(errorText(err, s));
+      void load();
+    }
+  }, [s, load]);
+
   const onOfferButton = useCallback(
     (state: TicketState, b: OfferButton): void => {
       if (b.action === "use") void spendTicket(b.scope);
+      else if (b.action === "use-self-pay-partner") void useSelfThenPayPartner();
       else void startPayment(state, b.scope);
     },
-    [spendTicket, startPayment],
+    [spendTicket, startPayment, useSelfThenPayPartner],
   );
 
   const completePayment = useCallback(async (): Promise<void> => {
@@ -204,16 +228,25 @@ export function App(): ReactElement {
 
       <footer className="action-bar">
         {sc === "offer" &&
-          deriveOfferButtons(state).map((b) => (
-            <button
-              key={`${b.action}:${b.scope}`}
-              type="button"
-              className={b.primary ? "btn-primary" : "btn-secondary"}
-              onClick={() => onOfferButton(state, b)}
-            >
-              {offerLabel(b, state, s)}
-            </button>
-          ))}
+          deriveOfferButtons(state).map((b) => {
+            const discounted =
+              b.action === "pay" && b.scope === "self" && state.selfDiscountPct > 0;
+            return (
+              <button
+                key={`${b.action}:${b.scope}`}
+                type="button"
+                className={`${b.primary ? "btn-primary" : "btn-secondary"}${discounted ? " btn-famine" : ""}`}
+                onClick={() => onOfferButton(state, b)}
+              >
+                {discounted && (
+                  <span className="ticket-famine-badge">
+                    {fill(s.famineBadge, { pct: String(state.selfDiscountPct) })}
+                  </span>
+                )}
+                {offerLabel(b, state, s)}
+              </button>
+            );
+          })}
 
         {sc === "cover-partner" && (
           <>
@@ -256,6 +289,7 @@ function offerLabel(b: OfferButton, state: TicketState, s: TicketStrings): strin
     return s.useSelf;
   }
   const amount = formatUsd(b.amountCents);
+  if (b.action === "use-self-pay-partner") return fill(s.payBothWithTicket, { amount });
   if (b.scope === "both") return fill(s.payBoth, { amount });
   if (b.scope === "partner") return fill(s.payPartner, { amount });
   // "self" wording differs for a single-option (female) vs the male's secondary.

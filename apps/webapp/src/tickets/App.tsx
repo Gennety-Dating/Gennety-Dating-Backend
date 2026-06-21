@@ -33,8 +33,15 @@ document.documentElement?.setAttribute("lang", lang);
 type Phase =
   | { kind: "loading" }
   | { kind: "error"; message: string }
-  | { kind: "view"; balance: number; justBought: number | null }
-  | { kind: "mock"; balance: number; bundle: StoreBundleView; intent: StoreIntent; processing: boolean };
+  | { kind: "view"; balance: number; justBought: number | null; discountPct: number }
+  | {
+      kind: "mock";
+      balance: number;
+      bundle: StoreBundleView;
+      intent: StoreIntent;
+      processing: boolean;
+      discountPct: number;
+    };
 
 function haptic(type: "light" | "success" | "error"): void {
   const h = app?.HapticFeedback;
@@ -52,7 +59,7 @@ export function App(): ReactElement {
   const load = useCallback(async (): Promise<void> => {
     try {
       const wallet = await fetchWalletState(initData);
-      setPhase({ kind: "view", balance: wallet.balance, justBought: null });
+      setPhase({ kind: "view", balance: wallet.balance, justBought: null, discountPct: wallet.discountPct });
     } catch (err) {
       setPhase({ kind: "error", message: errorText(err, s) });
     }
@@ -67,11 +74,11 @@ export function App(): ReactElement {
   }, [load, s.errGeneric]);
 
   const startPurchase = useCallback(
-    async (balance: number, bundle: StoreBundleView): Promise<void> => {
+    async (balance: number, discountPct: number, bundle: StoreBundleView): Promise<void> => {
       haptic("light");
       try {
         const intent = await createStoreIntent(initData, bundle.count);
-        setPhase({ kind: "mock", balance, bundle, intent, processing: false });
+        setPhase({ kind: "mock", balance, bundle, intent, processing: false, discountPct });
       } catch (err) {
         app?.showAlert(errorText(err, s));
       }
@@ -86,7 +93,7 @@ export function App(): ReactElement {
     try {
       const wallet = await confirmStorePurchase(initData, current.bundle.count, current.intent.clientSecret);
       haptic("success");
-      setPhase({ kind: "view", balance: wallet.balance, justBought: current.bundle.count });
+      setPhase({ kind: "view", balance: wallet.balance, justBought: current.bundle.count, discountPct: wallet.discountPct });
     } catch (err) {
       haptic("error");
       app?.showAlert(errorText(err, s));
@@ -120,7 +127,9 @@ export function App(): ReactElement {
             type="button"
             className="btn-text"
             disabled={phase.processing}
-            onClick={() => setPhase({ kind: "view", balance: phase.balance, justBought: null })}
+            onClick={() =>
+              setPhase({ kind: "view", balance: phase.balance, justBought: null, discountPct: phase.discountPct })
+            }
           >
             {s.back}
           </button>
@@ -148,17 +157,23 @@ export function App(): ReactElement {
         <p className="ticket-balance-note">{fill(s.balance, { n: String(phase.balance) })}</p>
 
         <div className="store-bundles">
-          {storeBundles().map((b) => (
+          {storeBundles(phase.discountPct).map((b) => (
             <button
               key={b.count}
               type="button"
-              className={`store-bundle${b.bestValue ? " store-bundle-best" : ""}`}
-              onClick={() => void startPurchase(phase.balance, b)}
+              className={`store-bundle${b.bestValue ? " store-bundle-best" : ""}${b.famineDiscountPct > 0 ? " store-bundle-famine" : ""}`}
+              onClick={() => void startPurchase(phase.balance, phase.discountPct, b)}
             >
-              {b.discountPct > 0 && (
-                <span className={`store-badge${b.bestValue ? " store-badge-best" : ""}`}>
-                  {fill(s.save, { pct: String(b.discountPct) })}
+              {b.famineDiscountPct > 0 ? (
+                <span className="store-badge store-badge-famine">
+                  {fill(s.famineSave, { pct: String(b.famineDiscountPct) })}
                 </span>
+              ) : (
+                b.discountPct > 0 && (
+                  <span className={`store-badge${b.bestValue ? " store-badge-best" : ""}`}>
+                    {fill(s.save, { pct: String(b.discountPct) })}
+                  </span>
+                )
               )}
               <span className="store-bundle-emblem" aria-hidden="true">
                 ×{b.count}
