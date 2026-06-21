@@ -1,5 +1,5 @@
 import type { Api, RawApi } from "grammy";
-import { InlineKeyboard } from "grammy";
+import type { InlineKeyboardMarkup } from "grammy/types";
 import { prisma } from "@gennety/db";
 import {
   t,
@@ -10,8 +10,12 @@ import {
   type ProfilerQuestion,
 } from "@gennety/shared";
 import { getNextBatchDate } from "./next-batch.js";
-import { runStatusSequence } from "./ai-stream.js";
-import { profilerBatchSteps } from "./analysis-status.js";
+import { runStatusSequence, streamComposedRich } from "./ai-stream.js";
+import {
+  profilerBatchSteps,
+  profilerNextQuestionSteps,
+  profilerOpenQuestionSteps,
+} from "./analysis-status.js";
 import {
   batchSizeFor,
   isRushMode,
@@ -96,25 +100,77 @@ async function loadState(userId: string): Promise<ProfilerUserState | null> {
   };
 }
 
-async function sendQuestion(
+/** Injectable delay — production omits it (real timers); tests pass a no-op. */
+type Wait = (ms: number) => Promise<void>;
+
+/** Raw Skip keyboard (matches how `pitch.ts` builds markup for the streamer). */
+function profilerSkipKeyboard(questionId: string, lang: Language): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [{ text: t(lang, "profilerSkip"), callback_data: `${PROFILER_SKIP_PREFIX}${questionId}` }],
+    ],
+  };
+}
+
+/**
+ * Cumulative typewriter reveal of a question: up to two partials (≈⅓, ≈⅔ of the
+ * words, suffixed "…") then the full text. Very short questions (<3 words) are
+ * sent in one go — a one-word partial reads worse than no reveal.
+ */
+function buildQuestionReveal(text: string): string[] {
+  const words = text.trim().split(/\s+/);
+  if (words.length < 3) return [text];
+  const cuts = [Math.ceil(words.length / 3), Math.ceil((2 * words.length) / 3)];
+  const chunks: string[] = [];
+  for (const cut of cuts) {
+    const partial = `${words.slice(0, cut).join(" ")} …`;
+    if (!chunks.includes(partial)) chunks.push(partial);
+  }
+  chunks.push(text);
+  return chunks;
+}
+
+/**
+ * Deliver one question through the **native Telegram AI compose** surface (Bot
+ * API 10.1 rich messages) — used for EVERY question so the experience is uniform
+ * (PRODUCT_SPEC §Phase 1b). A single rich-message draft carries:
+ *   1. the `<tg-thinking>` **shimmer** status (animated AI Actions `<tg-emoji>`
+ *      leading glyph) — `"advance"` shows acknowledge → "thinking"
+ *      (`profilerNextQuestionSteps`); `"open"` (a batch's first question, after a
+ *      window pause, nothing to acknowledge) shows just "thinking"
+ *      (`profilerOpenQuestionSteps`);
+ *   2. the question streamed in as growing rich-message drafts;
+ *   3. the final question persisted as a real message carrying the Skip keyboard.
+ *
+ * Everything shares ONE draft id (`streamComposedRich`), so the AI-answer scroll
+ * space is reserved/collapsed exactly once per question — no mid-stream jump from
+ * a separate status draft, and no question is delivered as a plain (non-streamed)
+ * message. Degrades to the classic edited-message stream when the client can't
+ * render rich drafts. Returns false on delivery failure so the caller can
+ * reschedule at the next window.
+ */
+async function sendQuestionStreamed(
   api: Api<RawApi>,
   telegramId: bigint,
   question: ProfilerQuestion,
   lang: Language,
+  mode: "open" | "advance",
+  wait?: Wait,
 ): Promise<boolean> {
   if (telegramId <= 0n) return false;
-  const keyboard = new InlineKeyboard().text(
-    t(lang, "profilerSkip"),
-    `${PROFILER_SKIP_PREFIX}${question.id}`,
-  );
+  const beats = mode === "advance" ? profilerNextQuestionSteps(lang) : profilerOpenQuestionSteps(lang);
   try {
-    await api.sendMessage(Number(telegramId), profilerQuestionText(question, lang), {
-      reply_markup: keyboard,
-    });
-    return true;
+    const message = await streamComposedRich(
+      api,
+      Number(telegramId),
+      beats,
+      buildQuestionReveal(profilerQuestionText(question, lang)),
+      { replyMarkup: profilerSkipKeyboard(question.id, lang), ...(wait ? { wait } : {}) },
+    );
+    return message !== undefined;
   } catch (err) {
     console.warn(
-      `[profiler] question send failed for ${telegramId}:`,
+      `[profiler] streamed question send failed for ${telegramId}:`,
       err instanceof Error ? err.message : err,
     );
     return false;
@@ -129,17 +185,21 @@ async function sendOneFromBatch(
   api: Api<RawApi>,
   state: ProfilerUserState,
   now: Date,
+  mode: "open" | "advance" = "open",
+  wait?: Wait,
 ): Promise<"sent" | "paused" | "done"> {
   const cycleId = profilerCycleId(now);
   if (state.profilerBatchRemaining <= 0) {
-    return pauseOrFinish(api, state, now, cycleId);
+    return pauseOrFinish(api, state, now, cycleId, wait);
   }
   const question = selectNextProfilerQuestion(state.gender, state.answers, cycleId);
   if (!question) {
     await finish(state.userId);
     return "done";
   }
-  const ok = await sendQuestion(api, state.telegramId, question, state.language);
+  // Every question — first of a batch ("open") or a follow-up ("advance") —
+  // goes through the same native AI-compose stream; only the status beats differ.
+  const ok = await sendQuestionStreamed(api, state.telegramId, question, state.language, mode, wait);
   if (!ok) {
     // Couldn't deliver (e.g. blocked) — retry at the next window rather than
     // burning the active slot. Leaves active=null so the worker re-picks it up.
@@ -168,6 +228,7 @@ async function pauseOrFinish(
   state: ProfilerUserState,
   now: Date,
   cycleId: string,
+  wait?: Wait,
 ): Promise<"paused" | "done"> {
   const pending = selectNextProfilerQuestion(state.gender, state.answers, cycleId);
   if (!pending) {
@@ -190,6 +251,8 @@ async function pauseOrFinish(
   if (state.telegramId > 0n) {
     await runStatusSequence(api, Number(state.telegramId), profilerBatchSteps(state.language), {
       deleteAtEnd: false,
+      rich: true,
+      ...(wait ? { wait } : {}),
     });
   }
   return "paused";
@@ -216,6 +279,7 @@ export async function startProfilerBatch(
   api: Api<RawApi>,
   userId: string,
   now: Date = new Date(),
+  wait?: Wait,
 ): Promise<"sent" | "paused" | "done"> {
   const state = await loadState(userId);
   if (!state) return "done";
@@ -225,7 +289,7 @@ export async function startProfilerBatch(
     where: { userId },
     data: { profilerBatchRemaining: state.profilerBatchRemaining, profilerNextAt: null },
   });
-  return sendOneFromBatch(api, state, now);
+  return sendOneFromBatch(api, state, now, "open", wait);
 }
 
 /**
@@ -238,7 +302,7 @@ export async function recordProfilerAnswer(
   userId: string,
   questionId: string,
   text: string,
-  options: { now?: Date; reactionTarget?: MessageReactionTarget } = {},
+  options: { now?: Date; reactionTarget?: MessageReactionTarget; wait?: Wait } = {},
 ): Promise<boolean> {
   const question = profilerQuestionById(questionId);
   if (!question) return false;
@@ -272,7 +336,7 @@ export async function recordProfilerAnswer(
     await reactToMessage(api, options.reactionTarget, MESSAGE_REACTION.like);
   }
 
-  return advanceAfterReply(api, userId, now);
+  return advanceAfterReply(api, userId, now, options.wait);
 }
 
 /**
@@ -283,10 +347,11 @@ export async function recordProfilerSkip(
   api: Api<RawApi>,
   userId: string,
   questionId: string,
-  now: Date = new Date(),
+  options: { now?: Date; wait?: Wait } = {},
 ): Promise<boolean> {
   const question = profilerQuestionById(questionId);
   if (!question) return false;
+  const now = options.now ?? new Date();
   const cycleId = profilerCycleId(now);
 
   const existing = await prisma.profilerAnswer.findUnique({
@@ -315,7 +380,7 @@ export async function recordProfilerSkip(
     update: { skipped, skipReturned, cycleId },
   });
 
-  return advanceAfterReply(api, userId, now);
+  return advanceAfterReply(api, userId, now, options.wait);
 }
 
 /** Clear the active question and send the next one (or pause/finish). */
@@ -323,10 +388,11 @@ async function advanceAfterReply(
   api: Api<RawApi>,
   userId: string,
   now: Date,
+  wait?: Wait,
 ): Promise<boolean> {
   // Re-read state AFTER the upsert so selection sees the just-recorded row.
   const state = await loadState(userId);
   if (!state) return false;
-  await sendOneFromBatch(api, state, now);
+  await sendOneFromBatch(api, state, now, "advance", wait);
   return true;
 }

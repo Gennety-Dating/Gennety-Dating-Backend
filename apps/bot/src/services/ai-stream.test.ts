@@ -12,7 +12,6 @@ vi.mock("../config.js", () => ({
     CUSTOM_EMOJI_LIKE_ID: "",
     CUSTOM_EMOJI_DISLIKE_ID: "",
     WEBAPP_URL: "https://test.invalid/calendar",
-    RICH_THINKING_ENABLED: false,
     CUSTOM_EMOJI_THINKING_ID: "",
   },
 }));
@@ -29,11 +28,12 @@ function createCtx(chatId: number = 42) {
   return {
     chat: { id: chatId },
     api: {
+      editMessageText: vi.fn().mockResolvedValue({ message_id: 7, chat: { id: chatId } }),
       raw: {
         sendMessageDraft: vi.fn().mockResolvedValue(undefined),
       },
     },
-    reply: vi.fn().mockResolvedValue(undefined),
+    reply: vi.fn().mockResolvedValue({ message_id: 7, chat: { id: chatId } }),
   } as any;
 }
 
@@ -49,75 +49,80 @@ describe("streamDrafts", () => {
     expect(ctx.reply).not.toHaveBeenCalled();
   });
 
-  it("sends single chunk as final reply without drafts", async () => {
+  it("sends single chunk as a final reply without drafts", async () => {
     const ctx = createCtx();
     await streamDrafts(ctx, ["Only message"], { wait: noopWait() });
     expect(ctx.api.raw.sendMessageDraft).not.toHaveBeenCalled();
     expect(ctx.reply).toHaveBeenCalledWith("Only message");
   });
 
-  it("streams drafts then sends final reply for multiple chunks", async () => {
+  it("streams multiple chunks by editing one bottom message", async () => {
     const ctx = createCtx();
     await streamDrafts(ctx, ["Draft 1", "Draft 2", "Final"], { wait: noopWait() });
 
-    expect(ctx.api.raw.sendMessageDraft).toHaveBeenCalledTimes(2);
-    expect(ctx.api.raw.sendMessageDraft).toHaveBeenCalledWith(
-      expect.objectContaining({ chat_id: 42, text: "Draft 1" }),
-    );
-    expect(ctx.api.raw.sendMessageDraft).toHaveBeenCalledWith(
-      expect.objectContaining({ chat_id: 42, text: "Draft 2" }),
-    );
-    expect(ctx.reply).toHaveBeenCalledWith("Final");
+    expect(ctx.api.raw.sendMessageDraft).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledTimes(1);
+    expect(ctx.reply).toHaveBeenCalledWith("Draft 1");
+    expect(ctx.api.editMessageText).toHaveBeenNthCalledWith(1, 42, 7, "Draft 2");
+    expect(ctx.api.editMessageText).toHaveBeenNthCalledWith(2, 42, 7, "Final");
   });
 
-  it("uses a consistent non-zero draft_id across calls", async () => {
+  it("keeps one message id across all stream edits", async () => {
     const ctx = createCtx();
     await streamDrafts(ctx, ["A", "B", "C"], { wait: noopWait() });
 
-    const ids = ctx.api.raw.sendMessageDraft.mock.calls.map(
-      (c: any[]) => c[0].draft_id,
-    );
-    expect(ids[0]).toBe(ids[1]);
-    expect(ids[0]).not.toBe(0);
+    expect(ctx.api.raw.sendMessageDraft).not.toHaveBeenCalled();
+    expect(ctx.api.editMessageText).toHaveBeenNthCalledWith(1, 42, 7, "B");
+    expect(ctx.api.editMessageText).toHaveBeenNthCalledWith(2, 42, 7, "C");
   });
 
-  it("degrades gracefully when sendMessageDraft throws", async () => {
+  it("falls back to a fresh final reply when the final edit throws", async () => {
     const ctx = createCtx();
-    ctx.api.raw.sendMessageDraft.mockRejectedValueOnce(new Error("not supported"));
+    ctx.api.editMessageText.mockRejectedValueOnce(new Error("edit failed"));
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     await streamDrafts(ctx, ["Draft", "Final"], { wait: noopWait() });
 
-    // Draft fails, final reply still sent
-    expect(ctx.reply).toHaveBeenCalledWith("Final");
+    expect(ctx.api.raw.sendMessageDraft).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenNthCalledWith(1, "Draft");
+    expect(ctx.reply).toHaveBeenNthCalledWith(2, "Final");
     warnSpy.mockRestore();
   });
 
   it("does nothing when chat id is undefined", async () => {
-    const ctx = { chat: undefined, api: { raw: { sendMessageDraft: vi.fn() } }, reply: vi.fn() } as any;
+    const ctx = {
+      chat: undefined,
+      api: { editMessageText: vi.fn(), raw: { sendMessageDraft: vi.fn() } },
+      reply: vi.fn(),
+    } as any;
     await streamDrafts(ctx, ["A", "B"], { wait: noopWait() });
     expect(ctx.api.raw.sendMessageDraft).not.toHaveBeenCalled();
+    expect(ctx.api.editMessageText).not.toHaveBeenCalled();
     expect(ctx.reply).not.toHaveBeenCalled();
   });
 });
 
 describe("streamDraftsToChat", () => {
-  it("streams drafts to a specific chat and sends final message", async () => {
+  it("streams chunks to a specific chat by editing one message", async () => {
     const api = {
       raw: { sendMessageDraft: vi.fn().mockResolvedValue(undefined) },
-      sendMessage: vi.fn().mockResolvedValue(undefined),
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 100, chat: { id: 1001 } }),
+      editMessageText: vi.fn().mockResolvedValue({ message_id: 100, chat: { id: 1001 } }),
     } as any;
 
     await streamDraftsToChat(api, 1001, ["D1", "D2", "Final"], { wait: noopWait() });
 
-    expect(api.raw.sendMessageDraft).toHaveBeenCalledTimes(2);
-    expect(api.sendMessage).toHaveBeenCalledWith(1001, "Final", {});
+    expect(api.raw.sendMessageDraft).not.toHaveBeenCalled();
+    expect(api.sendMessage).toHaveBeenCalledWith(1001, "D1");
+    expect(api.editMessageText).toHaveBeenNthCalledWith(1, 1001, 100, "D2", {});
+    expect(api.editMessageText).toHaveBeenNthCalledWith(2, 1001, 100, "Final", {});
   });
 
-  it("attaches replyMarkup and entities to the final message", async () => {
+  it("attaches replyMarkup and entities to the final edit", async () => {
     const api = {
       raw: { sendMessageDraft: vi.fn().mockResolvedValue(undefined) },
-      sendMessage: vi.fn().mockResolvedValue(undefined),
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 100, chat: { id: 1001 } }),
+      editMessageText: vi.fn().mockResolvedValue({ message_id: 100, chat: { id: 1001 } }),
     } as any;
     const markup = { inline_keyboard: [[{ text: "X", callback_data: "x" }]] };
     const entities = [{ type: "bold" as const, offset: 0, length: 5 }];
@@ -128,33 +133,39 @@ describe("streamDraftsToChat", () => {
       entities,
     });
 
-    expect(api.sendMessage).toHaveBeenCalledWith(1001, "Final", {
+    expect(api.raw.sendMessageDraft).not.toHaveBeenCalled();
+    expect(api.editMessageText).toHaveBeenCalledWith(1001, 100, "Final", {
       reply_markup: markup,
       entities,
     });
   });
 
-  it("handles single chunk — no drafts, only final message", async () => {
+  it("handles single chunk with one final message", async () => {
     const api = {
       raw: { sendMessageDraft: vi.fn() },
-      sendMessage: vi.fn().mockResolvedValue(undefined),
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 100, chat: { id: 1001 } }),
+      editMessageText: vi.fn(),
     } as any;
 
     await streamDraftsToChat(api, 1001, ["Only"], { wait: noopWait() });
 
     expect(api.raw.sendMessageDraft).not.toHaveBeenCalled();
     expect(api.sendMessage).toHaveBeenCalledWith(1001, "Only", {});
+    expect(api.editMessageText).not.toHaveBeenCalled();
   });
 
-  it("degrades gracefully when sendMessageDraft throws", async () => {
+  it("falls back to a fresh final message when the final edit throws", async () => {
     const api = {
-      raw: { sendMessageDraft: vi.fn().mockRejectedValue(new Error("boom")) },
-      sendMessage: vi.fn().mockResolvedValue(undefined),
+      raw: { sendMessageDraft: vi.fn() },
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 100, chat: { id: 1001 } }),
+      editMessageText: vi.fn().mockRejectedValue(new Error("boom")),
     } as any;
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     await streamDraftsToChat(api, 1001, ["D1", "Final"], { wait: noopWait() });
 
+    expect(api.raw.sendMessageDraft).not.toHaveBeenCalled();
+    expect(api.sendMessage).toHaveBeenNthCalledWith(1, 1001, "D1");
     expect(api.sendMessage).toHaveBeenCalledWith(1001, "Final", {});
     warnSpy.mockRestore();
   });
@@ -396,6 +407,31 @@ describe("runStatusSequence (until: tracked work)", () => {
     expect(api.deleteMessage).toHaveBeenCalledWith(5, 7);
   });
 
+  it("can defer tracked-work cut-short behavior until a later step", async () => {
+    const api = createApi();
+    const deferredSteps = [
+      { text: "Step 1", holdMs: 100 },
+      { text: "Step 2", holdMs: 200 },
+      { text: "Step 3", holdMs: 300 },
+      { text: "Ready when work is", holdMs: 0 },
+    ];
+    const waited: number[] = [];
+    const wait = async (ms: number) => {
+      waited.push(ms);
+    };
+
+    await runStatusSequence(api, 5, deferredSteps, {
+      wait,
+      until: Promise.resolve(),
+      untilFromStepIndex: 3,
+    });
+
+    expect(waited).toEqual([100, 200, 300, 0]);
+    expect(api.editMessageText).toHaveBeenCalledTimes(3);
+    expect(api.editMessageText).toHaveBeenNthCalledWith(3, 5, 7, "Ready when work is");
+    expect(api.deleteMessage).toHaveBeenCalledWith(5, 7);
+  });
+
   it("still tears down the status when the tracked work rejects", async () => {
     const api = createApi();
     let rejectWork!: (e: unknown) => void;
@@ -558,9 +594,10 @@ describe("streamDraftsToChat (rich pitch path)", () => {
     expect(res?.message_id).toBe(100);
   });
 
-  it("falls back to the classic sendMessageDraft stream when the first rich draft fails", async () => {
+  it("falls back to the bottom edit stream when the first rich draft fails", async () => {
     const api = {
-      sendMessage: vi.fn().mockResolvedValue({ message_id: 100 }),
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 100, chat: { id: 1001 } }),
+      editMessageText: vi.fn().mockResolvedValue({ message_id: 100, chat: { id: 1001 } }),
       raw: {
         sendRichMessageDraft: vi.fn().mockRejectedValue(new Error("rich unsupported")),
         sendMessageDraft: vi.fn().mockResolvedValue(undefined),
@@ -570,9 +607,10 @@ describe("streamDraftsToChat (rich pitch path)", () => {
 
     await streamDraftsToChat(api, 1001, ["D1", "D2", "FINAL"], { wait: noopWait(), rich: true });
 
-    // Classic draft stream took over (2 drafts) and sent the final message.
-    expect(api.raw.sendMessageDraft).toHaveBeenCalledTimes(2);
-    expect(api.sendMessage).toHaveBeenCalledWith(1001, "FINAL", {});
+    expect(api.raw.sendMessageDraft).not.toHaveBeenCalled();
+    expect(api.sendMessage).toHaveBeenCalledWith(1001, "D1");
+    expect(api.editMessageText).toHaveBeenNthCalledWith(1, 1001, 100, "D2", {});
+    expect(api.editMessageText).toHaveBeenNthCalledWith(2, 1001, 100, "FINAL", {});
     warnSpy.mockRestore();
   });
 });

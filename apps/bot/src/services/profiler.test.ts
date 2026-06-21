@@ -23,9 +23,31 @@ const mProfileUpdate = (prisma.profile as unknown as { update: MockFn }).update;
 const mAnswerUpsert = (prisma.profilerAnswer as unknown as { upsert: MockFn }).upsert;
 const mAnswerFind = (prisma.profilerAnswer as unknown as { findUnique: MockFn }).findUnique;
 
-const sendMessage = vi.fn().mockResolvedValue({});
+const sendMessage = vi.fn().mockResolvedValue({ message_id: 1, chat: { id: 1 } });
+const editMessageText = vi.fn().mockResolvedValue({});
+const deleteMessage = vi.fn().mockResolvedValue(true);
 const setMessageReaction = vi.fn().mockResolvedValue(true);
-const fakeApi = { sendMessage, setMessageReaction } as never;
+// Bot API 10.1 rich surface (api.raw.*) — the in-batch Profiler delivery uses
+// the native `<tg-thinking>` shimmer + rich-draft stream (`rich: true`).
+const sendRichMessageDraft = vi.fn().mockResolvedValue(true);
+const sendRichMessage = vi.fn().mockResolvedValue({ message_id: 1, chat: { id: 1 } });
+const fakeApi = {
+  sendMessage,
+  editMessageText,
+  deleteMessage,
+  setMessageReaction,
+  raw: { sendRichMessageDraft, sendRichMessage },
+} as never;
+
+/** No-op delay so the status holds + reveal steps don't run real timers. */
+const noWait = (_ms: number) => Promise.resolve();
+
+/** Every rich-draft HTML the bot streamed (status shimmer + question drafts). */
+function richHtmls(): string[] {
+  return sendRichMessageDraft.mock.calls.map(
+    (c) => ((c[0] as { rich_message?: { html?: string } })?.rich_message?.html ?? "") as string,
+  );
+}
 
 /** loadState shape: female user with the given answer rows. */
 function userState(answers: unknown[], batchRemaining = 0) {
@@ -52,21 +74,30 @@ beforeEach(() => {
   mAnswerUpsert.mockReset().mockResolvedValue({});
   mAnswerFind.mockReset();
   sendMessage.mockClear();
+  editMessageText.mockClear();
+  deleteMessage.mockClear();
   setMessageReaction.mockClear();
+  sendRichMessageDraft.mockClear();
+  sendRichMessage.mockClear();
 });
 
 describe("startProfilerBatch", () => {
   it("sends the first (highest-priority) question and marks it active", async () => {
     mUserFind.mockResolvedValue(userState([]));
-    const res = await startProfilerBatch(fakeApi, "u1", new Date("2026-06-10T07:00:00Z"));
+    const res = await startProfilerBatch(fakeApi, "u1", new Date("2026-06-10T07:00:00Z"), noWait);
 
     expect(res).toBe("sent");
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-    // First female question text.
-    expect(sendMessage.mock.calls[0]![1]).toMatch(/first date/i);
-    // Skip button carries the question id.
-    const kb = sendMessage.mock.calls[0]![2].reply_markup;
-    expect(JSON.stringify(kb)).toContain("profiler:skip:f_date_spots");
+    // The opener also streams (native compose) and is finalised via
+    // sendRichMessage carrying the Skip keyboard.
+    expect(sendRichMessage).toHaveBeenCalledTimes(1);
+    const params = sendRichMessage.mock.calls[0]![0] as {
+      rich_message?: { markdown?: string };
+      reply_markup?: unknown;
+    };
+    expect(params.rich_message?.markdown).toMatch(/first date/i);
+    expect(JSON.stringify(params.reply_markup)).toContain("profiler:skip:f_date_spots");
+    // Opener streams via the native compose path (a `<tg-thinking>` shimmer first).
+    expect(richHtmls().some((h) => /<tg-thinking>/.test(h))).toBe(true);
     expect(activeUpdate()?.profilerActiveQuestionId).toBe("f_date_spots");
   });
 
@@ -80,7 +111,7 @@ describe("startProfilerBatch", () => {
     }));
     mUserFind.mockResolvedValue(userState(allAnswered));
 
-    const res = await startProfilerBatch(fakeApi, "u1", new Date("2026-06-10T07:00:00Z"));
+    const res = await startProfilerBatch(fakeApi, "u1", new Date("2026-06-10T07:00:00Z"), noWait);
     expect(res).toBe("done");
     expect(sendMessage).not.toHaveBeenCalled();
     // Final update nulls the schedule.
@@ -91,9 +122,10 @@ describe("startProfilerBatch", () => {
 });
 
 describe("recordProfilerAnswer", () => {
-  it("upserts the answer then sends the next question (batch continues)", async () => {
+  it("upserts the answer then streams the next question (batch continues)", async () => {
     // After the upsert, loadState is re-read with remaining > 0 and the first
-    // question answered → next question should be sent immediately.
+    // question answered → next question is delivered via the thinking status +
+    // streamed reveal (the in-batch "advance" path).
     mUserFind.mockResolvedValue(
       userState(
         [{ questionId: "f_date_spots", answerText: "cafes", skipped: false, skipReturned: false, cycleId: "x" }],
@@ -101,12 +133,38 @@ describe("recordProfilerAnswer", () => {
       ),
     );
 
-    const ok = await recordProfilerAnswer(fakeApi, "u1", "f_date_spots", "rooftop cafes");
+    const ok = await recordProfilerAnswer(fakeApi, "u1", "f_date_spots", "rooftop cafes", {
+      wait: noWait,
+    });
     expect(ok).toBe(true);
     expect(mAnswerUpsert).toHaveBeenCalledTimes(1);
     expect(mAnswerUpsert.mock.calls[0]![0].create.answerText).toBe("rooftop cafes");
-    // Next question (f_comm_style) sent.
-    expect(sendMessage).toHaveBeenCalledTimes(1);
+
+    // The thinking status is a native `<tg-thinking>` shimmer; the ack beat
+    // carries the operator-chosen custom `<tg-emoji>` glyph.
+    const htmls = richHtmls();
+    expect(
+      htmls.some(
+        (h) =>
+          /<tg-thinking>/.test(h) &&
+          h.includes('emoji-id="5537203062138994712"') &&
+          /Got it/.test(h),
+      ),
+    ).toBe(true);
+    // The second beat is the "Thinking…" shimmer.
+    expect(htmls.some((h) => /<tg-thinking>/.test(h) && /Thinking/.test(h))).toBe(true);
+
+    // The next question (f_comm_style) is finalised via sendRichMessage (so the
+    // streaming draft resolves in place — no orphaned reserved space) carrying
+    // its Skip keyboard.
+    const finalSend = sendRichMessage.mock.calls.find((c) =>
+      JSON.stringify(c[0] ?? {}).includes("profiler:skip:f_comm_style"),
+    );
+    expect(finalSend).toBeDefined();
+    expect(
+      (finalSend![0] as { rich_message?: { markdown?: string } }).rich_message?.markdown,
+    ).toMatch(/chatting about everything/i);
+
     expect(activeUpdate()?.profilerActiveQuestionId).toBe("f_comm_style");
   });
 
@@ -130,6 +188,7 @@ describe("recordProfilerAnswer", () => {
 
     const ok = await recordProfilerAnswer(fakeApi, "u1", "m_planner", "I plan ahead", {
       reactionTarget: { chatId: 123, messageId: 456 },
+      wait: noWait,
     });
 
     expect(ok).toBe(true);
@@ -147,9 +206,29 @@ describe("recordProfilerSkip", () => {
     mAnswerFind.mockResolvedValue(null);
     mUserFind.mockResolvedValue(userState([], 0));
 
-    const ok = await recordProfilerSkip(fakeApi, "u1", "f_date_spots");
+    const ok = await recordProfilerSkip(fakeApi, "u1", "f_date_spots", { wait: noWait });
     expect(ok).toBe(true);
     const update = mAnswerUpsert.mock.calls[0]![0].update;
     expect(update).toEqual({ skipped: true, skipReturned: false, cycleId: expect.any(String) });
+  });
+
+  it("streams the next question when the batch continues after a skip", async () => {
+    mAnswerFind.mockResolvedValue(null);
+    mUserFind.mockResolvedValue(
+      userState(
+        [{ questionId: "f_date_spots", answerText: null, skipped: true, skipReturned: false, cycleId: "x" }],
+        2,
+      ),
+    );
+
+    const ok = await recordProfilerSkip(fakeApi, "u1", "f_date_spots", { wait: noWait });
+    expect(ok).toBe(true);
+    // Native shimmer status, then the next question finalised via sendRichMessage.
+    expect(richHtmls().some((h) => /<tg-thinking>/.test(h))).toBe(true);
+    const finalSend = sendRichMessage.mock.calls.find((c) =>
+      JSON.stringify(c[0] ?? {}).includes("profiler:skip:f_comm_style"),
+    );
+    expect(finalSend).toBeDefined();
+    expect(activeUpdate()?.profilerActiveQuestionId).toBe("f_comm_style");
   });
 });

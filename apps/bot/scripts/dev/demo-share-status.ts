@@ -3,14 +3,15 @@
  * you can see how the new `dateCardShareSteps` sequence looks (PRODUCT_SPEC.md
  * §3.7a). Sends two back-to-back runs for comparison:
  *   1. the classic edited-line path — leading STAR glyphs (✨💫🌟⭐🌠), the look
- *      you asked for and what users see when RICH_THINKING_ENABLED is off;
+ *      users now see in product flows;
  *   2. the Bot API 10.1 rich `<tg-thinking>` shimmer — which, with no
  *      CUSTOM_EMOJI_AI_SPARKLE_ID set, falls back to CUSTOM_EMOJI_THINKING_ID
  *      (the "cloud"), so you can see the current animated glyph and decide
  *      whether to source a real stars custom-emoji id.
  *
  * Only send methods are used (sendMessage / editMessageText / deleteMessage /
- * sendMessageDraft) — no DB, no long polling, safe alongside `pnpm dev:bot`.
+ * explicit rich draft for demo #2) — no DB, no long polling, safe alongside
+ * `pnpm dev:bot`.
  *
  * Refuses to run unless DEV_OTP_BYPASS_TELEGRAM_IDS is set (prod keeps it empty),
  * so it can never fire against the production bot's audience.
@@ -72,11 +73,11 @@ console.log(
 // 1) Classic edited-line path — leading star glyphs, final line kept on screen.
 await api.sendMessage(
   chatId,
-  "🧪 Демо 1/2 — статусы «Поделиться» (классическая строка, звёзды ✨). Смотри, как одна строка перебирает 5 статусов:",
+  "🧪 Демо 1/2 — статусы «Поделиться» (классическая строка, звёзды ✨). Смотри, как одна строка перебирает 4 статуса:",
 );
 await runStatusSequence(api, chatId, steps, { rich: false, deleteAtEnd: false, wait: slowWait });
 
-// 2) Rich <tg-thinking> shimmer — current dev env (no sparkle id → cloud glyph).
+// 2) Explicit rich <tg-thinking> shimmer — dev-only comparison path.
 await api.sendMessage(
   chatId,
   "🧪 Демо 2/2 — тот же набор в rich-шиммере (сейчас ведёт «облачко», т.к. " +
