@@ -602,6 +602,10 @@ const translations = {
       "Sorry, I couldn't hear that clearly — could you type it instead?",
     voiceTooLong:
       "That voice note's a bit long for me. Keep it under 5 minutes, or just type it out.",
+    rateLimitFloodNotice:
+      "Whoa, that's a lot of messages at once — give me a few seconds to catch up, then go again. 🙂",
+    rateLimitDailyBudgetNotice:
+      "You've been super active today 🙂 Let's pick this up again tomorrow — we've reached today's limit so I can keep things running smoothly for everyone.",
 
     // --- Pre-date coordination (feature-flagged) ---
     coordOfferIntro:
@@ -637,6 +641,7 @@ const translations = {
       "You're in the anonymous chat 🕶 Just type — I'll pass it along. Leave any time.",
     coordChatExited: "Left the chat. Type /menu any time.",
     coordProxyRelayPrefix: "💬 Your date: ",
+    coordProxyRelayNamedPrefix: "💬 {name}: ",
     coordProxyTextOnly: "Only text messages work in this chat — photos and voice notes aren't passed on.",
     coordProxyClosed: "The anonymous chat has closed. Hope the date went well — I'll check in tomorrow ✨",
     coordAlreadyChosen: "You've already picked a coordination option for this date.",
@@ -1240,6 +1245,10 @@ const translations = {
       "Не расслышал — можешь написать текстом?",
     voiceTooLong:
       "Голосовое слишком длинное. До 5 минут — или просто напиши текстом.",
+    rateLimitFloodNotice:
+      "Ого, как много сообщений сразу — дай пару секунд догнать, потом продолжим. 🙂",
+    rateLimitDailyBudgetNotice:
+      "Ты сегодня супер активн(а) 🙂 Давай продолжим завтра — на сегодня лимит исчерпан, чтобы всё работало стабильно для всех.",
 
     // --- Pre-date coordination (feature-flagged) ---
     coordOfferIntro:
@@ -1275,6 +1284,7 @@ const translations = {
       "Ты в анонимном чате 🕶 Просто пиши — я передам. Выйти можно в любой момент.",
     coordChatExited: "Вышел из чата. Напиши /menu в любой момент.",
     coordProxyRelayPrefix: "💬 Твоё свидание: ",
+    coordProxyRelayNamedPrefix: "💬 {name}: ",
     coordProxyTextOnly: "В этом чате работают только текстовые сообщения — фото и голосовые не передаются.",
     coordProxyClosed: "Анонимный чат закрылся. Надеюсь, свидание прошло отлично — загляну завтра ✨",
     coordAlreadyChosen: "Ты уже выбрал способ координации для этого свидания.",
@@ -1878,6 +1888,10 @@ const translations = {
       "Не розчув — можеш написати текстом?",
     voiceTooLong:
       "Голосове задовге. До 5 хвилин — або просто напиши текстом.",
+    rateLimitFloodNotice:
+      "Ого, як багато повідомлень одразу — дай кілька секунд наздогнати, потім продовжимо. 🙂",
+    rateLimitDailyBudgetNotice:
+      "Ти сьогодні дуже активний(на) 🙂 Продовжимо завтра — на сьогодні ліміт вичерпано, щоб усе працювало стабільно для всіх.",
 
     // --- Pre-date coordination (feature-flagged) ---
     coordOfferIntro:
@@ -1913,6 +1927,7 @@ const translations = {
       "Ти в анонімному чаті 🕶 Просто пиши — я передам. Вийти можна будь-коли.",
     coordChatExited: "Вийшов із чату. Напиши /menu будь-коли.",
     coordProxyRelayPrefix: "💬 Твоє побачення: ",
+    coordProxyRelayNamedPrefix: "💬 {name}: ",
     coordProxyTextOnly: "У цьому чаті працюють лише текстові повідомлення — фото й голосові не передаються.",
     coordProxyClosed: "Анонімний чат закрився. Сподіваюсь, побачення пройшло чудово — зазирну завтра ✨",
     coordAlreadyChosen: "Ти вже обрав спосіб координації для цього побачення.",
@@ -2466,6 +2481,10 @@ const deTranslations: TranslationTable = {
   statusProcessing: "✨ Analysiere den Campus... Schau später nochmal rein.",
   voiceTranscriptionFailed: "Ich konnte das nicht klar verstehen - kannst du es tippen?",
   voiceTooLong: "Die Sprachnachricht ist etwas lang. Maximal 5 Minuten - oder schreib es einfach.",
+  rateLimitFloodNotice:
+    "Wow, das sind viele Nachrichten auf einmal — gib mir ein paar Sekunden, dann geht's weiter. 🙂",
+  rateLimitDailyBudgetNotice:
+    "Du warst heute super aktiv 🙂 Lass uns morgen weitermachen — das heutige Limit ist erreicht, damit alles für alle rund läuft.",
 };
 
 const plTranslations: TranslationTable = {
@@ -3008,6 +3027,10 @@ const plTranslations: TranslationTable = {
   statusProcessing: "✨ Analizujemy kampus... Zajrzyj trochę później.",
   voiceTranscriptionFailed: "Nie usłyszałem/am wyraźnie - możesz napisać tekstem?",
   voiceTooLong: "Ta głosówka jest trochę długa. Do 5 minut albo po prostu napisz tekst.",
+  rateLimitFloodNotice:
+    "Oho, sporo wiadomości naraz — daj mi kilka sekund, potem ruszamy dalej. 🙂",
+  rateLimitDailyBudgetNotice:
+    "Dziś jesteś bardzo aktywny/a 🙂 Wróćmy do tego jutro — na dziś limit wyczerpany, żeby wszystko działało płynnie dla wszystkich.",
 };
 
 const translationsByLanguage: Record<Language, TranslationTable> = {

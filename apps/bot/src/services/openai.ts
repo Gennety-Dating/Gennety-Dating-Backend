@@ -1,4 +1,5 @@
 import { env } from "../config.js";
+import { openaiFetch } from "./openai-fetch.js";
 
 /**
  * Thin OpenAI chat-completions wrapper used by the AI prompt pipeline.
@@ -50,7 +51,7 @@ export async function callOpenAIJson<T>(
   const apiKey = env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
-  const fetchFn = options.fetchFn ?? fetch;
+  const fetchFn = options.fetchFn ?? openaiFetch;
   const model = options.model ?? MODEL;
   const maxTokens = options.maxTokens ?? MAX_TOKENS_JSON;
   const temperature = options.temperature ?? 0.3;
@@ -104,7 +105,7 @@ export async function callOpenAIText(
   const apiKey = env.OPENAI_API_KEY;
   if (!apiKey) return "";
 
-  const fetchFn = options.fetchFn ?? fetch;
+  const fetchFn = options.fetchFn ?? openaiFetch;
   const model = options.model ?? MODEL;
   const maxTokens = options.maxTokens ?? MAX_TOKENS_TEXT;
   const temperature = options.temperature ?? 0.7;

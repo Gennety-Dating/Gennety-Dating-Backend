@@ -1,6 +1,7 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { env } from "../config.js";
+import { openaiFetch } from "../services/openai-fetch.js";
 import { isQuietHours } from "./quiet-hours.js";
 
 /**
@@ -44,7 +45,7 @@ export async function matchNudgeTick(
   const now = options.now ?? new Date();
   if (isQuietHours(now)) return { proposalNudges: 0, schedNudges: 0 };
 
-  const fetchFn = options.fetchFn ?? fetch;
+  const fetchFn = options.fetchFn ?? openaiFetch;
   const batchSize = options.batchSize ?? 50;
 
   const [proposalNudges, schedNudges] = await Promise.all([

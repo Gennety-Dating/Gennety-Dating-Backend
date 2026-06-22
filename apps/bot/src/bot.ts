@@ -2,6 +2,7 @@ import { Bot } from "grammy";
 import type { BotContext } from "./session.js";
 import { sessionMiddleware } from "./session.js";
 import { sequentializeByChat } from "./chat-queue.js";
+import { botRateLimit } from "./bot-rate-limit.js";
 import { start } from "./handlers/start.js";
 import { router } from "./handlers/router.js";
 import { matchingRouter } from "./handlers/matching/router.js";
@@ -15,6 +16,11 @@ export function createBot(token: string): Bot<BotContext> {
   // Middleware chain
   bot.use(sequentializeByChat());
   bot.use(sessionMiddleware());
+
+  // Anti-spam guard — meters text/voice per user (flood + daily token budget)
+  // before any handler runs. Needs `ctx.session.language`; never throttles
+  // inline-button callbacks. See bot-rate-limit.ts.
+  bot.use(botRateLimit);
 
   // /start command — entry point & resume
   bot.use(start);

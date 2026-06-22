@@ -1,5 +1,6 @@
 import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
+import { openaiFetch } from "../openai-fetch.js";
 
 /**
  * Face-validation service for onboarding photo upload.
@@ -77,7 +78,7 @@ export async function validateSingleFaceFromBuffer(
 ): Promise<FaceValidationResult> {
   const apiKey = options.openaiApiKey ?? env.OPENAI_API_KEY;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const fetchFn = options.fetchFn ?? fetch;
+  const fetchFn = options.fetchFn ?? openaiFetch;
 
   // No key configured → fail open for local dev.
   if (!apiKey) return { ok: true, valid: true };
@@ -144,7 +145,7 @@ export async function validateSingleFace(
   const botToken = options.botToken ?? env.BOT_TOKEN;
   const apiKey = options.openaiApiKey ?? env.OPENAI_API_KEY;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const fetchFn = options.fetchFn ?? fetch;
+  const fetchFn = options.fetchFn ?? openaiFetch;
   const getFile = options.getFile ?? ((id: string) => ctx.api.getFile(id));
 
   // No key configured → fail open so local dev still works.

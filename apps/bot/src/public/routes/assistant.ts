@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
+import { usageGuard } from "../usage-middleware.js";
 import { agentTextLimiter, voiceLimiter } from "../rate-limit.js";
 import { runMenuAgentTurn } from "../../services/menu-agent.js";
 import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
@@ -9,6 +10,7 @@ import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
 export const assistantRouter: Router = Router();
 
 assistantRouter.use(requireAuth);
+assistantRouter.use(usageGuard);
 
 const upload = multer({
   storage: multer.memoryStorage(),

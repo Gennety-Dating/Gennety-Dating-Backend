@@ -1,4 +1,5 @@
 import { prisma } from "@gennety/db";
+import { openaiFetch } from "./openai-fetch.js";
 import { MAX_AGE, MAX_PHOTOS, MIN_AGE } from "@gennety/shared";
 import { env } from "../config.js";
 import { createChatImageSignedUrl } from "./storage.js";
@@ -173,7 +174,7 @@ async function runTurnInner(
   deps: AetherDeps,
 ): Promise<AetherTurnResult> {
   const { userId, text, imageUrl } = input;
-  const fetchFn = deps.fetchFn ?? fetch;
+  const fetchFn = deps.fetchFn ?? openaiFetch;
 
   await prisma.message.create({
     data: { userId, role: "user", content: text, imageUrl },

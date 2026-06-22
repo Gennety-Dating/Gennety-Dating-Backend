@@ -1,4 +1,5 @@
 import { prisma } from "@gennety/db";
+import { openaiFetch } from "./openai-fetch.js";
 import { parseLLMDumpPrompt } from "@gennety/shared";
 import { env } from "../config.js";
 import { callOpenAIJson } from "./openai.js";
@@ -190,7 +191,7 @@ const EMBEDDING_TIMEOUT_MS = 30_000;
 export function createOpenAIEmbeddingClient(apiKey: string): EmbeddingClient {
   return {
     async embed(input: string): Promise<number[]> {
-      const res = await fetch("https://api.openai.com/v1/embeddings", {
+      const res = await openaiFetch("https://api.openai.com/v1/embeddings", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

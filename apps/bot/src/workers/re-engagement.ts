@@ -1,6 +1,7 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { env } from "../config.js";
+import { openaiFetch } from "../services/openai-fetch.js";
 import {
   computeNextTouch,
   MAX_RE_ENGAGEMENT_STEP,
@@ -56,7 +57,7 @@ export async function reEngagementTick(
 ): Promise<number> {
   const now = options.now ?? new Date();
   const batchSize = options.batchSize ?? 50;
-  const fetchFn = options.fetchFn ?? fetch;
+  const fetchFn = options.fetchFn ?? openaiFetch;
 
   const dueUsers = await prisma.user.findMany({
     where: {

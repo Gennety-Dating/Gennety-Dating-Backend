@@ -1,4 +1,5 @@
 import { env } from "../../config.js";
+import { openaiFetch } from "../openai-fetch.js";
 
 /**
  * Cold-start attractiveness scoring for the Elo seed.
@@ -149,7 +150,7 @@ export async function scoreAttractivenessFromBuffers(
 ): Promise<AttractivenessBatchResult> {
   const apiKey = options.openaiApiKey ?? env.OPENAI_API_KEY;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const fetchFn = options.fetchFn ?? fetch;
+  const fetchFn = options.fetchFn ?? openaiFetch;
 
   if (!apiKey) return { ok: false, error: "disabled" };
   if (images.length === 0) return { ok: false, error: "api" };

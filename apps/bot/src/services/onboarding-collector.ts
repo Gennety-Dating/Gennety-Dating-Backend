@@ -6,6 +6,7 @@ import {
   Prisma,
   prisma,
 } from "@gennety/db";
+import { openaiFetch } from "./openai-fetch.js";
 import {
   contextDumpInstruction,
   MAX_AGE,
@@ -1185,7 +1186,7 @@ export async function collectOnboardingInput(
     const extractor =
       deps.extractFacts ??
       ((text, question, language) =>
-        extractWithOpenAI(text, question, language, deps.fetchFn ?? fetch));
+        extractWithOpenAI(text, question, language, deps.fetchFn ?? openaiFetch));
     let extraction: ExtractionResult = EMPTY_EXTRACTION;
     try {
       extraction = await extractor(input.text, current, languageOf(user));

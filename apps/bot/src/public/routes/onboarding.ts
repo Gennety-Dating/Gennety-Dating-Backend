@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
+import { usageGuard } from "../usage-middleware.js";
 import { agentTextLimiter, voiceLimiter } from "../rate-limit.js";
 import { runAgentTurn } from "../../services/onboarding-agent.js";
 import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
@@ -11,6 +12,7 @@ import { buildInterviewState, loadStateContext } from "./onboarding-state.js";
 export const onboardingRouter: Router = Router();
 
 onboardingRouter.use(requireAuth);
+onboardingRouter.use(usageGuard);
 
 const upload = multer({
   storage: multer.memoryStorage(),

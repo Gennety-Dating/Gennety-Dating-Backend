@@ -11,6 +11,7 @@
  */
 
 import { prisma, Prisma } from "@gennety/db";
+import { openaiFetch } from "./openai-fetch.js";
 import {
   MAX_BIO_LENGTH,
   MAX_MAJOR_LENGTH,
@@ -459,7 +460,7 @@ export async function runMenuAgentTurn(
   userMessage: string,
   deps: MenuAgentDeps = {},
 ): Promise<MenuAgentResult> {
-  const fetchFn = deps.fetchFn ?? fetch;
+  const fetchFn = deps.fetchFn ?? openaiFetch;
 
   // Build dynamic system prompt
   const systemPrompt = await buildSystemPrompt(telegramId);

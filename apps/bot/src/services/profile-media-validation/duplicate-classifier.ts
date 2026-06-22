@@ -1,4 +1,5 @@
 import { env } from "../../config.js";
+import { openaiFetch } from "../openai-fetch.js";
 import type { ProviderError } from "./types.js";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
@@ -33,7 +34,7 @@ export async function classifyDuplicatePairWithOpenAI(
   );
 
   try {
-    const response = await (options.fetchFn ?? fetch)(OPENAI_URL, {
+    const response = await (options.fetchFn ?? openaiFetch)(OPENAI_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,

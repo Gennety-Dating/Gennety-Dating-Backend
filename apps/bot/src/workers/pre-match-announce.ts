@@ -1,5 +1,6 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
+import { openaiFetch } from "../services/openai-fetch.js";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { previewWeeklyBatch } from "../services/match-engine.js";
@@ -40,7 +41,7 @@ export async function preMatchAnnounceTick(
   const now = options.now ?? new Date();
   if (isQuietHours(now)) return { announced: 0 };
 
-  const fetchFn = options.fetchFn ?? fetch;
+  const fetchFn = options.fetchFn ?? openaiFetch;
   const batchSize = options.batchSize ?? 100;
   const cooldownCutoff = new Date(now.getTime() - ANNOUNCE_COOLDOWN_MS);
   const plan = await previewWeeklyBatch();

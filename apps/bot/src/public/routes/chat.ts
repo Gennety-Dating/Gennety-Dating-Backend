@@ -2,6 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from "express"
 import multer, { MulterError } from "multer";
 import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
+import { usageGuard } from "../usage-middleware.js";
 import { chatMessageLimiter, chatUploadLimiter } from "../rate-limit.js";
 import { runAetherTurn } from "../../services/aether-agent.js";
 import {
@@ -25,6 +26,7 @@ import { sniffImageMime } from "../../utils/image-sniff.js";
 export const chatRouter: Router = Router();
 
 chatRouter.use(requireAuth);
+chatRouter.use(usageGuard);
 
 const CHAT_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 const CHAT_TEXT_MAX_LENGTH = 4_000;

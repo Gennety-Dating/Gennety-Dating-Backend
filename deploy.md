@@ -422,6 +422,22 @@ Required/high-impact env keys:
   male lift, lower toward `0` to disable. No restart side effects beyond the
   standard `pm2 restart`.
 - Venue picker: `PLACES_API_KEY`
+- Anti-spam / LLM token budget (always-on, in-memory; no schema, no new dep):
+  the Telegram bot meters text/voice per user (flood + daily token budget) in
+  `bot-rate-limit.ts`, and the JWT LLM routers (`/v1/chat`, `/v1/assistant`,
+  `/v1/onboarding`) gain `usageGuard`. Tokens are counted from the exact
+  `usage.total_tokens` OpenAI returns, attributed via an `AsyncLocalStorage`
+  context that `services/openai-fetch.ts` reads (call sites only swapped their
+  default `fetch` for `openaiFetch`). Env (all optional, safe defaults):
+  `BOT_RATE_LIMIT_ENABLED` (default `true`), `BOT_FLOOD_BURST_LIMIT` (`40`) /
+  `BOT_FLOOD_BURST_WINDOW_MS` (`60000`), `BOT_FLOOD_SUSTAINED_LIMIT` (`300`) /
+  `BOT_FLOOD_SUSTAINED_WINDOW_MS` (`3600000`), `LLM_TOKEN_BUDGET_ENABLED`
+  (default `true`), `LLM_USER_DAILY_TOKEN_BUDGET` (`180000`),
+  `LLM_GLOBAL_HOURLY_TOKEN_BUDGET` (`0` = global breaker off). Thresholds are
+  deliberately loose so normal fast use never trips them. Counters are in-memory
+  (single PM2 process) and reset on restart — no `db:push`, toggled live with
+  `pm2 restart gennety-bot --update-env`. Whisper (audio) stays under the
+  existing per-request voice limiter, not the token budget.
 - Date Ticket (feature-flagged monetization): `TICKET_FEATURE_ENABLED`
   (default `false` — leave off until launch), `TICKET_PAYMENT_MODE`
   (`mock` default / `stripe`), `TICKET_PRICE_CENTS` (default `699`),

@@ -284,6 +284,41 @@ export const env = {
   /// scheduling never wedges.
   DATE_CARD_FEATURE_ENABLED: process.env.DATE_CARD_FEATURE_ENABLED === "true",
 
+  // ── Anti-spam / LLM token-budget protection ──────────────────
+  /// Master flag for the per-user Telegram flood guard (Layer 1). When true
+  /// (default), text/voice messages are rate-limited per user with the loose
+  /// thresholds below — only a scripted flood trips them, never a human filling
+  /// the questionnaire. Inline-button taps are never throttled. Drops happen
+  /// before any LLM call or DB write, so this protects both OpenAI spend and
+  /// `messageHistory`/`Message` bloat. Set "false" to disable entirely.
+  BOT_RATE_LIMIT_ENABLED: process.env.BOT_RATE_LIMIT_ENABLED !== "false",
+  /// Burst flood window — messages allowed per `BOT_FLOOD_BURST_WINDOW_MS`
+  /// before drops kick in. 40/60s ≈ one message every 1.5s for a full minute,
+  /// far above human typing.
+  BOT_FLOOD_BURST_LIMIT: Number(process.env.BOT_FLOOD_BURST_LIMIT ?? "40"),
+  BOT_FLOOD_BURST_WINDOW_MS: Number(process.env.BOT_FLOOD_BURST_WINDOW_MS ?? "60000"),
+  /// Sustained flood window — messages allowed per
+  /// `BOT_FLOOD_SUSTAINED_WINDOW_MS` (catches a slow grind under the burst cap).
+  BOT_FLOOD_SUSTAINED_LIMIT: Number(process.env.BOT_FLOOD_SUSTAINED_LIMIT ?? "300"),
+  BOT_FLOOD_SUSTAINED_WINDOW_MS: Number(
+    process.env.BOT_FLOOD_SUSTAINED_WINDOW_MS ?? "3600000",
+  ),
+  /// Master flag for the per-user daily OpenAI token budget (Layer 2). When
+  /// true (default), a user over `LLM_USER_DAILY_TOKEN_BUDGET` tokens in the
+  /// rolling 24h window is gently told to come back tomorrow. Counted from the
+  /// exact `usage.total_tokens` OpenAI returns (services/openai-fetch.ts).
+  LLM_TOKEN_BUDGET_ENABLED: process.env.LLM_TOKEN_BUDGET_ENABLED !== "false",
+  /// Per-user token ceiling per 24h. ~3–6× a heavy legit day; only abuse hits it.
+  LLM_USER_DAILY_TOKEN_BUDGET: Number(
+    process.env.LLM_USER_DAILY_TOKEN_BUDGET ?? "180000",
+  ),
+  /// Process-wide hourly token ceiling (Layer 3 global breaker). 0 (default)
+  /// disables it; set a large value in prod as a coordinated-attack bill cap.
+  /// When exceeded, user-facing LLM turns are deferred at the entry middlewares.
+  LLM_GLOBAL_HOURLY_TOKEN_BUDGET: Number(
+    process.env.LLM_GLOBAL_HOURLY_TOKEN_BUDGET ?? "0",
+  ),
+
   // ── Dev-only: skip corporate-email OTP for specific Telegram IDs ──
   /// Comma-separated list of Telegram IDs that get a synthetic verified email
   /// at /start time, so the agent skips the email step entirely. Lets the

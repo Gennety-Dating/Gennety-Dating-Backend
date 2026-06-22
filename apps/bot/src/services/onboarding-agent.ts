@@ -1,4 +1,5 @@
 import { prisma, Prisma, type Language } from "@gennety/db";
+import { openaiFetch } from "./openai-fetch.js";
 import {
   isUniversityEmail,
   MIN_PHOTOS,
@@ -178,7 +179,7 @@ async function generateClarificationReply(
   completedFields: readonly OnboardingField[] = [],
 ): Promise<string | null> {
   if (!env.OPENAI_API_KEY) return null;
-  const fetchFn = deps.fetchFn ?? fetch;
+  const fetchFn = deps.fetchFn ?? openaiFetch;
   const canonical = onboardingQuestionText(language, question, completedFields);
   try {
     const res = await fetchFn("https://api.openai.com/v1/chat/completions", {
@@ -1754,7 +1755,7 @@ export async function runAgentTurn(
       : onboardingInput.kind === "photos_continue"
         ? "[The user chose Continue after the optional photo/video offer. Finalize onboarding now and do not ask for more media.]"
       : "";
-  const fetchFn = deps.fetchFn ?? fetch;
+  const fetchFn = deps.fetchFn ?? openaiFetch;
 
   const user = await prisma.user.findUnique({
     where: { telegramId },

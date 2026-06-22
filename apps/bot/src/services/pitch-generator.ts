@@ -1,4 +1,5 @@
 import { env } from "../config.js";
+import { openaiFetch } from "./openai-fetch.js";
 import type { Language } from "@gennety/shared";
 import {
   pitchAndSynergyPrompt,
@@ -92,7 +93,7 @@ export function createOpenAIPitchClient(apiKey: string): PitchClient {
         language: input.language,
       });
 
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      const res = await openaiFetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

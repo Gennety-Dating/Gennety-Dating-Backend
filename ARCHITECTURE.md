@@ -502,6 +502,32 @@ Conversation viewer (inline routes in `server.ts`, behind the global
 | GET | `/admin/users/:id/conversation` | Normalized, chronological transcript for one user, merging BOTH conversation stores — `User.messageHistory` (Telegram onboarding/menu agents, array order, no timestamps/images) then `Message` rows (Aether mobile concierge, real `createdAt` + `imageUrl`). `system`/`tool`/null-content turns are flagged `technical`; `tool_calls` are surfaced; `Profile.photos[]` ride along as a separate `photos[]` gallery (not interleaved). Image fields are refs streamed via `/admin/media`. Stringifies BigInt; 404 unknown user. |
 | GET | `/admin/media` | Authenticated image proxy that streams private/Telegram image bytes (`type ∈ {telegram, photo, chat}` → `downloadTelegramFile` / `downloadProfileImage` / `downloadChatImage` from `services/storage.ts`). The Bearer key is never accepted via query string; the dashboard fetches with the header and converts to a blob URL. Supabase `ref` shape is validated against path traversal; `503` when `botApi` is null and Telegram is needed; `404` (never 500) on a missing/expired image. Exempted from the global 60/min `adminLimiter` and given its own higher-ceiling `mediaLimiter` so a gallery doesn't exhaust the admin budget. |
 
+## Rate Limiting & Token Budget
+
+Two surfaces, one in-memory mechanism (`services/usage-limiter.ts`; single PM2
+process, so plain in-memory sliding windows — a restart only resets counters):
+
+- **Public `/v1/*` API** — `express-rate-limit` per-IP/per-user *request* caps
+  (`public/rate-limit.ts`), plus `public/usage-middleware.ts` (`usageGuard`)
+  mounted after `requireAuth` on the JWT LLM routers (`/v1/chat`,
+  `/v1/assistant`, `/v1/onboarding`) for the per-user daily *token* budget
+  (`429` over budget).
+- **Telegram bot** — `bot-rate-limit.ts`, registered after `sessionMiddleware`
+  in `bot.ts`. Meters only text/voice messages (inline-button callbacks are
+  never throttled); a scripted flood or an over-budget user is dropped **before**
+  any handler runs, so it protects both OpenAI spend and the
+  `messageHistory`/`Message` write path.
+
+Token accounting is attribution-by-context: entry points wrap downstream
+handling in `runWithUsage(key, …)` (`services/usage-context.ts`,
+`AsyncLocalStorage`; keys `tg:<id>` / `user:<id>`), and the `openaiFetch`
+wrapper (`services/openai-fetch.ts`) — a `fetch` drop-in at the scattered OpenAI
+call sites — reads the exact `usage.total_tokens` OpenAI returns and charges it
+to the ambient key plus a process-wide hourly breaker. Whisper audio is priced
+by duration (not tokens), so it stays under the per-request voice limiter only.
+All knobs are env-flagged (see deploy.md), ship on with loose thresholds tuned
+so normal fast use never trips them, and add no Prisma schema or dependency.
+
 ## Storage Buckets (Supabase)
 
 - `SUPABASE_SELFIE_BUCKET` — Persona-captured selfie used as the face-match
