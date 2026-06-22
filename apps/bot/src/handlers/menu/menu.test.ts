@@ -18,7 +18,9 @@ vi.mock("@gennety/db", () => ({
     },
     match: {
       findMany: vi.fn(),
+      update: vi.fn(),
     },
+    $transaction: vi.fn().mockResolvedValue(null),
   },
 }));
 
@@ -61,6 +63,8 @@ import {
   handleSettingsOpen,
   handleSettingsLanguageOpen,
   handleSettingsLanguageSet,
+  handleDeleteAccountStart,
+  handleFreezeAccount,
   handleDeleteAccountConfirm,
   handleDeleteAccountExecute,
 } from "./settings.js";
@@ -112,6 +116,7 @@ function createMockCtx(overrides: {
   return {
     session,
     from: { id: overrides.fromId ?? 12345 },
+    chat: { id: overrides.fromId ?? 12345 },
     callbackQuery,
     message,
     update: {
@@ -119,9 +124,12 @@ function createMockCtx(overrides: {
       ...(callbackQuery ? { callback_query: callbackQuery } : {}),
     },
     reply: vi.fn().mockResolvedValue(undefined),
+    editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
     api: {
       getFile: vi.fn(),
       sendMessage: vi.fn().mockResolvedValue(undefined),
+      sendVideoNote: vi.fn().mockResolvedValue(undefined),
+      unpinAllChatMessages: vi.fn().mockResolvedValue(undefined),
       token: "test",
     },
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
@@ -708,7 +716,12 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (prisma.user.delete as ReturnType<typeof vi.fn>).mockResolvedValue({});
-    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ status: "active" });
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-user-1",
+      status: "active",
+    });
+    (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
   });
 
   it("handleSettingsOpen shows a delete account button", async () => {
@@ -718,8 +731,56 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
     expect(JSON.stringify(markup)).toContain("menu:settings:delete");
   });
 
-  it("handleDeleteAccountConfirm shows confirmation prompt with Yes/Cancel", async () => {
+  it("handleDeleteAccountStart offers the freeze + delete fork", async () => {
     const ctx = createMockCtx({ callbackData: "menu:settings:delete" });
+    await handleDeleteAccountStart(ctx);
+    expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+    const markup = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
+    const serialized = JSON.stringify(markup);
+    expect(serialized).toContain("menu:settings:freeze");
+    expect(serialized).toContain("menu:settings:delete:proceed");
+    // Freeze is blue/primary, the delete path is red/danger.
+    expect(serialized).toContain("primary");
+    expect(serialized).toContain("danger");
+  });
+
+  it("handleFreezeAccount flips status to frozen and unpins the banner", async () => {
+    const ctx = createMockCtx({
+      callbackData: "menu:settings:freeze",
+      fromId: 12345,
+    });
+    await handleFreezeAccount(ctx);
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { telegramId: BigInt(12345) },
+      data: { status: "frozen" },
+    });
+    expect(prisma.user.delete).not.toHaveBeenCalled();
+    expect(ctx.api.unpinAllChatMessages).toHaveBeenCalled();
+  });
+
+  it("handleFreezeAccount cancels an in-flight match and notifies the partner", async () => {
+    (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: "match-1",
+        userAId: "uuid-user-1",
+        userBId: "uuid-partner",
+        userA: { telegramId: BigInt(12345), language: "en" },
+        userB: { telegramId: BigInt(67890), language: "en" },
+      },
+    ]);
+    (prisma.match.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    const ctx = createMockCtx({ callbackData: "menu:settings:freeze", fromId: 12345 });
+    await handleFreezeAccount(ctx);
+    expect(prisma.match.update).toHaveBeenCalledWith({
+      where: { id: "match-1" },
+      data: { status: "cancelled" },
+    });
+    // The partner (telegramId 67890) gets a neutral notice.
+    expect(ctx.api.sendMessage).toHaveBeenCalledWith(67890, expect.any(String));
+  });
+
+  it("handleDeleteAccountConfirm shows the final confirmation with one delete + two back-outs", async () => {
+    const ctx = createMockCtx({ callbackData: "menu:settings:delete:proceed" });
     await handleDeleteAccountConfirm(ctx);
     expect(ctx.answerCallbackQuery).toHaveBeenCalled();
     const body = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0];
@@ -774,18 +835,20 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
     // This test documents the schema-level contract: onDelete: Cascade
     // is set on Profile→User and Match→User relations. The actual DB
     // enforcement is tested via prisma db push; here we verify that the
-    // handler only needs a single prisma.user.delete call — no manual
-    // cleanup of profiles or matches.
+    // handler relies on a single prisma.user.delete to wipe profile + match
+    // rows. We DO query matches first — only to notify/comp any in-flight
+    // partner before the cascade removes those rows — but we never manually
+    // clean up profiles or matches.
     const deleteCall = prisma.user.delete as ReturnType<typeof vi.fn>;
     deleteCall.mockClear();
 
     const ctx = createMockCtx({ callbackData: "menu:settings:delete:yes" });
     await handleDeleteAccountExecute(ctx);
 
-    // Only user.delete should be called — cascade handles the rest.
+    // Only user.delete performs cleanup — cascade handles profiles + matches.
     expect(prisma.user.delete).toHaveBeenCalledTimes(1);
     expect(prisma.profile.update).not.toHaveBeenCalled();
     expect((prisma as any).profile.findUnique).not.toHaveBeenCalled();
-    expect((prisma as any).match.findMany).not.toHaveBeenCalled();
+    expect((prisma as any).match.update).not.toHaveBeenCalled();
   });
 });

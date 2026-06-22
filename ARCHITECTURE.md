@@ -168,7 +168,7 @@ when columns diverge, Prisma wins.
 
 | Enum | Values |
 |---|---|
-| `UserStatus` | `onboarding`, `active`, `paused`, `suspended`, `pending_investigation`, `banned` |
+| `UserStatus` | `onboarding`, `active`, `paused`, `frozen`, `suspended`, `pending_investigation`, `banned` (`frozen` = soft-delete: user chose "Freeze" instead of deleting; row/profile/embedding/verification kept, excluded from matching, silently reactivated to `active` on next `/start`) |
 | `Language` | `en`, `ru`, `uk`, `de`, `pl` |
 | `OnboardingStep` | `consent`, `language`, `conversational`, `completed` |
 | `Gender` | `male`, `female` |

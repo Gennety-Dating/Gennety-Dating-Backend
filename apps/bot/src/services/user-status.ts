@@ -2,6 +2,7 @@ export type MatchmakingStatus =
   | "onboarding"
   | "active"
   | "paused"
+  | "frozen"
   | "suspended"
   | "pending_investigation"
   | "banned";

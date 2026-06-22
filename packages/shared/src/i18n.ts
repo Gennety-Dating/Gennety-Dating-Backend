@@ -287,6 +287,27 @@ const translations = {
     deleteAccountDone:
       "Account deleted. All data wiped.\n" +
       "Want to come back? Just send /start.",
+    deleteFreezeIntro:
+      "Wait — before you delete everything 👀\n\n" +
+      "You don't have to lose it all. *Freeze* your account instead: your profile, " +
+      "photos and verification stay safe, you disappear from matching, and next time " +
+      "you just send /start to land right back in your ready profile — no re-onboarding.\n\n" +
+      "Still want to delete? That one's permanent.",
+    deleteFreezeBtn: "❄️ Freeze my account",
+    deleteProceedBtn: "Delete my account anyway",
+    freezeConfirmed:
+      "Done — your account is *frozen* ❄️\n\n" +
+      "You're hidden from matching and won't get pinged. " +
+      "Come back anytime with /start and everything's still here.",
+    freezeWelcomeBack:
+      "Welcome back! ❄️ → ☀️ Your account is *unfrozen* and live again. " +
+      "Here's your profile:",
+    deleteFinalYes: "Yes, I'm 100% sure",
+    deleteFinalNoSoft: "No",
+    deleteFinalNoHard: "Oh god, no",
+    freezePartnerNotice:
+      "Heads up — your match is no longer available, so this one won't go ahead. " +
+      "No worries: you'll get priority in the next batch 💛",
 
     // --- Matching ---
     matchHeadline: "💘 Found you a match!",
@@ -935,6 +956,27 @@ const translations = {
     deleteAccountDone:
       "Аккаунт удалён. Все данные стёрты.\n" +
       "Захочешь вернуться — отправь /start.",
+    deleteFreezeIntro:
+      "Подожди — прежде чем всё удалять 👀\n\n" +
+      "Необязательно терять всё. Лучше *заморозь* аккаунт: профиль, фото и верификация " +
+      "останутся, ты пропадёшь из подбора, а в следующий раз просто отправишь /start — и " +
+      "сразу попадёшь в свой готовый профиль, без повторного онбординга.\n\n" +
+      "Всё-таки удалить? Это уже навсегда.",
+    deleteFreezeBtn: "❄️ Заморозить аккаунт",
+    deleteProceedBtn: "Всё равно удалить аккаунт",
+    freezeConfirmed:
+      "Готово — аккаунт *заморожен* ❄️\n\n" +
+      "Тебя не видно в подборе и я не буду писать. " +
+      "Возвращайся когда угодно через /start — всё на месте.",
+    freezeWelcomeBack:
+      "С возвращением! ❄️ → ☀️ Аккаунт *разморожен* и снова в строю. " +
+      "Вот твой профиль:",
+    deleteFinalYes: "Да, я уверен на 100%",
+    deleteFinalNoSoft: "Нет",
+    deleteFinalNoHard: "О боже, нет",
+    freezePartnerNotice:
+      "Важное: твой мэтч больше недоступен, так что это свидание не состоится. " +
+      "Не переживай — в следующем подборе у тебя будет приоритет 💛",
 
     // --- Matching ---
     matchHeadline: "💘 Нашли тебе мэтч!",
@@ -1578,6 +1620,27 @@ const translations = {
     deleteAccountDone:
       "Акаунт видалено. Усі дані стерто.\n" +
       "Захочеш повернутись — надішли /start.",
+    deleteFreezeIntro:
+      "Зачекай — перш ніж усе видаляти 👀\n\n" +
+      "Необов'язково втрачати все. Краще *заморозь* акаунт: профіль, фото та верифікація " +
+      "залишаться, ти зникнеш із підбору, а наступного разу просто надішлеш /start — і " +
+      "одразу потрапиш у свій готовий профіль, без повторного онбордингу.\n\n" +
+      "Все-таки видалити? Це вже назавжди.",
+    deleteFreezeBtn: "❄️ Заморозити акаунт",
+    deleteProceedBtn: "Все одно видалити акаунт",
+    freezeConfirmed:
+      "Готово — акаунт *заморожено* ❄️\n\n" +
+      "Тебе не видно в підборі і я не писатиму. " +
+      "Повертайся будь-коли через /start — усе на місці.",
+    freezeWelcomeBack:
+      "З поверненням! ❄️ → ☀️ Акаунт *розморожено* і знову в строю. " +
+      "Ось твій профіль:",
+    deleteFinalYes: "Так, я впевнений на 100%",
+    deleteFinalNoSoft: "Ні",
+    deleteFinalNoHard: "О боже, ні",
+    freezePartnerNotice:
+      "Важливо: твій метч більше недоступний, тож це побачення не відбудеться. " +
+      "Не хвилюйся — у наступному підборі в тебе буде пріоритет 💛",
 
     // --- Matching ---
     matchHeadline: "💘 Знайшли тобі метч!",
@@ -2201,6 +2264,28 @@ const deTranslations: TranslationTable = {
   deleteAccountDone:
     "Account gelöscht. Alle Daten entfernt.\n" +
     "Wenn du zurückkommen willst, sende einfach /start.",
+  deleteFreezeIntro:
+    "Warte — bevor du alles löschst 👀\n\n" +
+    "Du musst nicht alles verlieren. *Friere* deinen Account lieber ein: Profil, Fotos " +
+    "und Verifizierung bleiben erhalten, du verschwindest aus dem Matching, und beim " +
+    "nächsten Mal sendest du einfach /start und landest direkt in deinem fertigen Profil " +
+    "— kein erneutes Onboarding.\n\n" +
+    "Trotzdem löschen? Das ist endgültig.",
+  deleteFreezeBtn: "❄️ Account einfrieren",
+  deleteProceedBtn: "Account trotzdem löschen",
+  freezeConfirmed:
+    "Erledigt — dein Account ist *eingefroren* ❄️\n\n" +
+    "Du bist im Matching nicht sichtbar und bekommst keine Nachrichten. " +
+    "Komm jederzeit mit /start zurück — alles ist noch da.",
+  freezeWelcomeBack:
+    "Willkommen zurück! ❄️ → ☀️ Dein Account ist *aufgetaut* und wieder aktiv. " +
+    "Hier ist dein Profil:",
+  deleteFinalYes: "Ja, ich bin mir zu 100% sicher",
+  deleteFinalNoSoft: "Nein",
+  deleteFinalNoHard: "Oh Gott, nein",
+  freezePartnerNotice:
+    "Kurze Info — dein Match ist nicht mehr verfügbar, dieses Date findet also nicht statt. " +
+    "Kein Stress: Beim nächsten Durchlauf hast du Priorität 💛",
   matchHeadline: "💘 Wir haben ein Match für dich!",
   matchDeadlineNotice:
     "Du hast 24h zum Antworten. " +
@@ -2747,6 +2832,27 @@ const plTranslations: TranslationTable = {
   deleteAccountDone:
     "Konto usunięte. Wszystkie dane wyczyszczone.\n" +
     "Chcesz wrócić? Po prostu wyślij /start.",
+  deleteFreezeIntro:
+    "Zaczekaj — zanim wszystko usuniesz 👀\n\n" +
+    "Nie musisz tracić wszystkiego. Lepiej *zamroź* konto: profil, zdjęcia i weryfikacja " +
+    "zostają, znikasz z dopasowywania, a następnym razem wystarczy wysłać /start, by wrócić " +
+    "prosto do swojego gotowego profilu — bez ponownego onboardingu.\n\n" +
+    "Nadal chcesz usunąć? Tego nie da się cofnąć.",
+  deleteFreezeBtn: "❄️ Zamroź konto",
+  deleteProceedBtn: "Mimo to usuń konto",
+  freezeConfirmed:
+    "Gotowe — Twoje konto jest *zamrożone* ❄️\n\n" +
+    "Nie widać Cię w dopasowywaniu i nie będę pisać. " +
+    "Wróć kiedy chcesz przez /start — wszystko czeka na swoim miejscu.",
+  freezeWelcomeBack:
+    "Witaj z powrotem! ❄️ → ☀️ Twoje konto jest *odmrożone* i znów aktywne. " +
+    "Oto Twój profil:",
+  deleteFinalYes: "Tak, jestem pewien na 100%",
+  deleteFinalNoSoft: "Nie",
+  deleteFinalNoHard: "O Boże, nie",
+  freezePartnerNotice:
+    "Ważne — Twoje dopasowanie nie jest już dostępne, więc ta randka się nie odbędzie. " +
+    "Spokojnie: w następnej turze masz priorytet 💛",
   matchHeadline: "💘 Znaleźliśmy dla Ciebie dopasowanie!",
   matchDeadlineNotice:
     "Masz 24h na odpowiedź. " +

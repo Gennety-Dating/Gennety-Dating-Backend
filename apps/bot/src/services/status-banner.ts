@@ -69,3 +69,28 @@ export async function pinStatusBanner(
     );
   }
 }
+
+/**
+ * Remove the pinned status banner and clear `statusMessageId`.
+ *
+ * Used when a user freezes their account: the banner counts down to the next
+ * batch, which is meaningless for a frozen (out-of-pool) user. Best-effort —
+ * a Bot API hiccup must never block the freeze. On the next /start reactivation
+ * `pinStatusBanner` posts a fresh one.
+ */
+export async function unpinStatusBanner(
+  api: Api<RawApi>,
+  telegramId: bigint,
+): Promise<void> {
+  if (telegramId <= 0n) return;
+  const chatId = Number(telegramId);
+  await api.unpinAllChatMessages(chatId).catch((err) => {
+    console.warn(
+      `[status-banner] unpin failed for ${telegramId}:`,
+      (err as Error).message,
+    );
+  });
+  await prisma.user
+    .update({ where: { telegramId }, data: { statusMessageId: null } })
+    .catch(() => {});
+}

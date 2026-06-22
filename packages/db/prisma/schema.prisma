@@ -13,6 +13,12 @@ enum UserStatus {
   onboarding
   active
   paused
+  // Soft-delete: set when a user chooses "Freeze" instead of deleting their
+  // account. The User/Profile/embedding/verification/coordinates are all kept;
+  // the user is excluded from matching (only `active` matches) and silently
+  // reactivated to `active` on their next /start. Distinct from `paused`, which
+  // is a deliberate in-menu toggle with a visible banner + manual Resume.
+  frozen
   suspended
   pending_investigation
   banned

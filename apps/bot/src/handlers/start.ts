@@ -288,6 +288,23 @@ start.command("start", async (ctx) => {
   // If user already completed onboarding, greet them and open the main menu.
   if (user.onboardingStep === "completed") {
     ctx.session.menuState = "idle";
+
+    // Soft-delete recovery: a `frozen` user chose "Freeze" instead of deleting.
+    // Silently reactivate them straight into their ready profile — no
+    // re-onboarding, no re-verification (PRODUCT_SPEC §Settings / freeze flow).
+    if (user.status === "frozen") {
+      await prisma.user.update({
+        where: { telegramId },
+        data: { status: "active" },
+      });
+      await ctx.reply(t(ctx.session.language, "freezeWelcomeBack"), {
+        parse_mode: "Markdown",
+      });
+      await showMainMenu(ctx);
+      await pinStatusBanner(ctx.api, telegramId, ctx.session.language);
+      return;
+    }
+
     await ctx.reply(t(ctx.session.language, "onboardingComplete"));
     await showMainMenu(ctx);
     if (user.status === "active") {

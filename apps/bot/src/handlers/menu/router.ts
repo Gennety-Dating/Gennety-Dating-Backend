@@ -20,6 +20,8 @@ import {
   handleSettingsLanguageOpen,
   handleSettingsLanguageSet,
   handleSettingsVerify,
+  handleDeleteAccountStart,
+  handleFreezeAccount,
   handleDeleteAccountConfirm,
   handleDeleteAccountExecute,
 } from "./settings.js";
@@ -165,6 +167,12 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       await handleSettingsVerify(ctx);
       return;
     case "menu:settings:delete":
+      await handleDeleteAccountStart(ctx);
+      return;
+    case "menu:settings:freeze":
+      await handleFreezeAccount(ctx);
+      return;
+    case "menu:settings:delete:proceed":
       await handleDeleteAccountConfirm(ctx);
       return;
     case "menu:settings:delete:yes":

@@ -5,6 +5,21 @@ import { t, type Language, DEFAULT_SESSION, SUPPORTED_LANGUAGES } from "@gennety
 import { showMainMenu } from "./main.js";
 import { sendVerificationCTABare } from "../onboarding/verification.js";
 import { buildLanguageKeyboard } from "../language-keyboard.js";
+import { sendDeleteFreezeVideoNote } from "../../services/delete-freeze-video.js";
+import { unpinStatusBanner } from "../../services/status-banner.js";
+import { applyEmergencyCancellationPeerBoost } from "../../utils/elo-calculator.js";
+
+/**
+ * Match statuses that are "in flight" — a live proposal, a scheduling handshake,
+ * or a booked date. Freezing (or deleting) a participant must cancel these so a
+ * partner is never left waiting on someone who has left.
+ */
+const IN_FLIGHT_MATCH_STATUSES = [
+  "proposed",
+  "negotiating",
+  "negotiating_venue",
+  "scheduled",
+] as const;
 
 const VALID_LANGUAGES = new Set<Language>(SUPPORTED_LANGUAGES);
 
@@ -140,15 +155,147 @@ export async function handleSettingsLanguageSet(ctx: BotContext): Promise<void> 
   await showMainMenu(ctx);
 }
 
-/** Show GDPR account deletion confirmation prompt. */
+/**
+ * Step 1 — user tapped "Delete Account".
+ *
+ * Before doing anything irreversible we offer the softer alternative: a founder
+ * video note (кружок) explains why freezing beats deleting, then a two-button
+ * fork — a red "delete anyway" and a blue "freeze" (with a snowflake) — so the
+ * destructive path is visually distinct from the safe one. No state is touched
+ * here; a stray tap is a pure no-op until the user picks a branch.
+ */
+export async function handleDeleteAccountStart(ctx: BotContext): Promise<void> {
+  await ctx.answerCallbackQuery();
+  const lang = ctx.session.language;
+
+  // Best-effort founder кружок — skipped gracefully when no asset exists for
+  // this language; the fork below is always sent regardless.
+  if (ctx.chat) {
+    await sendDeleteFreezeVideoNote(ctx.api, ctx.chat.id, lang);
+  }
+
+  const keyboard = new InlineKeyboard()
+    .text(t(lang, "deleteFreezeBtn"), "menu:settings:freeze")
+    .primary()
+    .row()
+    .text(t(lang, "deleteProceedBtn"), "menu:settings:delete:proceed")
+    .danger();
+
+  await ctx.reply(t(lang, "deleteFreezeIntro"), {
+    parse_mode: "Markdown",
+    reply_markup: keyboard,
+  });
+}
+
+/**
+ * Cancel every in-flight match a leaving user is part of, so no partner is
+ * stranded. Each cancelled partner gets a neutral notice (the blind-decision
+ * invariant doesn't apply — there's nothing to reveal) plus the same small
+ * priority/Elo comp used for emergency cancellations. Best-effort throughout;
+ * one failed DM must never block the freeze.
+ */
+async function cancelInFlightMatchesForLeavingUser(
+  ctx: BotContext,
+  userId: string,
+): Promise<void> {
+  const matches = await prisma.match.findMany({
+    where: {
+      status: { in: [...IN_FLIGHT_MATCH_STATUSES] },
+      OR: [{ userAId: userId }, { userBId: userId }],
+    },
+    select: {
+      id: true,
+      userAId: true,
+      userBId: true,
+      userA: { select: { telegramId: true, language: true } },
+      userB: { select: { telegramId: true, language: true } },
+    },
+  });
+
+  for (const match of matches) {
+    try {
+      await prisma.match.update({
+        where: { id: match.id },
+        data: { status: "cancelled" },
+      });
+    } catch (err) {
+      console.warn("[freeze] match cancel failed:", err);
+      continue;
+    }
+
+    const isA = match.userAId === userId;
+    const partnerId = isA ? match.userBId : match.userAId;
+    const partner = isA ? match.userB : match.userA;
+
+    await applyEmergencyCancellationPeerBoost(partnerId);
+
+    if (partner.telegramId > 0n) {
+      const partnerLang = (partner.language ?? "en") as Language;
+      await ctx.api
+        .sendMessage(Number(partner.telegramId), t(partnerLang, "freezePartnerNotice"))
+        .catch((err: unknown) => {
+          console.warn("[freeze] partner notice failed:", err);
+        });
+    }
+  }
+}
+
+/**
+ * Freeze branch — the soft-delete alternative.
+ *
+ * Keeps the User/Profile/embedding/verification/coordinates intact, cancels any
+ * in-flight matches, removes the pinned status banner, and flips the user to
+ * `frozen` so they leave the matching pool. On their next /start they are
+ * silently reactivated straight into their ready profile (see `handlers/start.ts`).
+ */
+export async function handleFreezeAccount(ctx: BotContext): Promise<void> {
+  await ctx.answerCallbackQuery();
+  const lang = ctx.session.language;
+  const telegramId = BigInt(ctx.from!.id);
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (!user) {
+    await showMainMenu(ctx);
+    return;
+  }
+
+  await cancelInFlightMatchesForLeavingUser(ctx, user.id);
+
+  await prisma.user.update({
+    where: { telegramId },
+    data: { status: "frozen" },
+  });
+
+  await unpinStatusBanner(ctx.api, telegramId);
+
+  // Drop the fork buttons so the screen can't be re-tapped.
+  await ctx.editMessageReplyMarkup().catch(() => {});
+
+  ctx.session.menuState = "idle";
+  await ctx.reply(t(lang, "freezeConfirmed"), { parse_mode: "Markdown" });
+}
+
+/**
+ * Step 2 — user chose to delete anyway. Final confirmation with the destructive
+ * option visually isolated: one red "Yes, I'm 100% sure" against two green
+ * back-out buttons, so an accidental delete takes deliberate effort.
+ */
 export async function handleDeleteAccountConfirm(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
   const lang = ctx.session.language;
 
   const keyboard = new InlineKeyboard()
-    .text(t(lang, "deleteAccountYes"), "menu:settings:delete:yes")
+    .text(t(lang, "deleteFinalNoSoft"), "menu:back")
+    .success()
     .row()
-    .text(t(lang, "deleteAccountNo"), "menu:back");
+    .text(t(lang, "deleteFinalNoHard"), "menu:back")
+    .success()
+    .row()
+    .text(t(lang, "deleteFinalYes"), "menu:settings:delete:yes")
+    .danger();
 
   await ctx.reply(t(lang, "deleteAccountConfirm"), {
     parse_mode: "Markdown",
@@ -169,6 +316,16 @@ export async function handleDeleteAccountExecute(ctx: BotContext): Promise<void>
   await ctx.answerCallbackQuery();
   const lang = ctx.session.language;
   const telegramId = BigInt(ctx.from!.id);
+
+  // Notify + comp any partner in an in-flight match before the cascade wipes the
+  // match rows, so a hard delete doesn't silently strand them either.
+  const leaving = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (leaving) {
+    await cancelInFlightMatchesForLeavingUser(ctx, leaving.id);
+  }
 
   await prisma.user.delete({ where: { telegramId } });
 

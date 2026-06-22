@@ -475,11 +475,36 @@ plain Unicode emoji.
   `email`, `universityDomain` are **fixed** post-onboarding.
 - **Pause Matching** — flips `User.status = paused`. The match engine ignores
   paused users; the status banner shows "paused".
-- **Settings** — change `language`.
+- **Settings** — change `language`; re-open verification when applicable; and
+  **Delete Account**, which now offers a softer alternative first (Telegram-only,
+  see below).
 - **My Tickets** — (only when `TICKET_FEATURE_ENABLED`) shows the user's
   `ticketBalance` and a `web_app` button into the ticket store Mini App
   (`tickets.html`) to pre-purchase bundles ahead of any date. See §3.5b.
 - **Report / Help** — opens the support handle.
+
+**Account deletion → Freeze fork (Telegram-only).** Tapping **Delete Account**
+no longer goes straight to a destructive confirm. The bot first plays a
+per-language founder **video note** (кружок) explaining why freezing beats
+deleting, then offers a two-button fork with native styles so the destructive
+path is visually distinct: a blue (`primary`) **❄️ Freeze account** over a red
+(`danger`) **Delete anyway**.
+- **Freeze** sets `User.status = frozen` — a soft-delete that keeps the User,
+  Profile, embedding, verification, photos, and coordinates intact, removes the
+  user from the matching pool (the engine matches only `active`), cancels any
+  in-flight matches (the partner gets a neutral notice + the small emergency-cancel
+  priority/Elo comp), and unpins the status banner. On the user's next `/start`
+  they are **silently reactivated** to `active` straight into their ready
+  profile — no re-onboarding, no re-verification, no re-embedding.
+- **Delete anyway** leads to a final confirmation that isolates the destructive
+  option: one red **Yes, I'm 100% sure** against two green back-out buttons. Only
+  the red path runs the existing GDPR hard delete (Prisma cascade). The hard
+  delete now also notifies/comps any in-flight partner before the cascade wipes
+  the match rows.
+- The кружок assets live at `apps/bot/src/assets/delete-freeze/<lang>.mp4`
+  (square, ≤60 s, same mechanics as the welcome-gift video note); a missing
+  language degrades gracefully to the text + buttons. Mobile keeps the plain
+  `DELETE /v1/me` hard delete (no freeze).
 
 A pinned **status banner** is created on activation
 (`services/status-banner.ts`) and live-edited every minute by the
