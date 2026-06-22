@@ -365,7 +365,9 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
   }
 
   if (result.contextDumpSaved && ctx.chat?.id !== undefined) {
-    await runStatusSequence(ctx.api, ctx.chat.id, profileAnalysisSteps(ctx.session.language));
+    await runStatusSequence(ctx.api, ctx.chat.id, profileAnalysisSteps(ctx.session.language), {
+      rich: true,
+    });
   }
 
   await sendAgentReply(ctx, result.reply);
@@ -519,7 +521,9 @@ async function flushContextDump(ctx: BotContext, telegramId: bigint): Promise<vo
   }
 
   if (result.contextDumpSaved && ctx.chat?.id !== undefined) {
-    await runStatusSequence(ctx.api, ctx.chat.id, profileAnalysisSteps(ctx.session.language));
+    await runStatusSequence(ctx.api, ctx.chat.id, profileAnalysisSteps(ctx.session.language), {
+      rich: true,
+    });
   }
 
   await sendAgentReply(ctx, result.reply);
@@ -585,7 +589,9 @@ async function flushPersistedContextDump(
     });
 
     if (result.contextDumpSaved) {
-      await runStatusSequence(acc.api, acc.chatId, profileAnalysisSteps(session.language));
+      await runStatusSequence(acc.api, acc.chatId, profileAnalysisSteps(session.language), {
+        rich: true,
+      });
     }
 
     await replyText(acc.api, acc.chatId, result.reply);
@@ -801,6 +807,7 @@ async function handleProfileVideoMessage(
       {
         until: work.then(() => delay(VIDEO_CHECK_STATUS_PAD_MS)),
         untilFromStepIndex: 2,
+        rich: true,
       },
     ).catch(() => undefined);
 

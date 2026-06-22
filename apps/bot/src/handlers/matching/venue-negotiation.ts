@@ -448,7 +448,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
         api,
         Number(match.userA.telegramId),
         venueSearchSteps(langA),
-        { until: venuePromise, untilFromStepIndex: 3 },
+        { until: venuePromise, untilFromStepIndex: 3, rich: true },
       ).catch(() => undefined),
     );
   }
@@ -458,7 +458,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
         api,
         Number(match.userB.telegramId),
         venueSearchSteps(langB),
-        { until: venuePromise, untilFromStepIndex: 3 },
+        { until: venuePromise, untilFromStepIndex: 3, rich: true },
       ).catch(() => undefined),
     );
   }
@@ -623,6 +623,7 @@ async function sendScheduledConfirmation(
 
     await runStatusSequence(api, chatId, dateCardSteps(input.language), {
       until: renderWork,
+      rich: true,
     }).catch(() => undefined);
 
     const card = await renderWork;

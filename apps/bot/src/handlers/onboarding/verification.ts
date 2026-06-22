@@ -369,7 +369,7 @@ export async function handleVerificationSkipConfirm(
   // Even when the user skips Persona, narrate the profile build so the app
   // feels like it's working rather than going silent on activation.
   if (ctx.chat?.id !== undefined) {
-    await runStatusSequence(ctx.api, ctx.chat.id, skipAnalysisSteps(lang));
+    await runStatusSequence(ctx.api, ctx.chat.id, skipAnalysisSteps(lang), { rich: true });
   }
 
   await ctx.reply(t(lang, "verifySkipped"));

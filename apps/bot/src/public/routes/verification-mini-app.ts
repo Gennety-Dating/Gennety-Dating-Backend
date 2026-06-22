@@ -248,6 +248,7 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
         api,
         auth.user.id,
         verifyAnalysisSteps((user.language ?? "en") as Language),
+        { rich: true },
       ).catch(() => {});
 
       res.status(200).json({ ok: true });

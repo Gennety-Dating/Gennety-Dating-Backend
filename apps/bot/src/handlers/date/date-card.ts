@@ -91,6 +91,7 @@ export async function handleDateCardShare(ctx: BotContext): Promise<void> {
 
   await runStatusSequence(ctx.api, ctx.from.id, dateCardShareSteps(lang as Language), {
     until: renderWork,
+    rich: true,
   }).catch(() => undefined);
 
   const card = await renderWork;

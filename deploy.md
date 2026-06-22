@@ -382,21 +382,28 @@ Required/high-impact env keys:
     The matching weight re-split (`V_explicit` 0.65 / `V_research` 0.35) and the
     new vibe quadrant factor are code-only and need no env; `V_league` (and
     `MALE_REACH_ELO`) are unchanged.
-- Chat progress streams: no production env flag. Status, pitch, no-match, and
-  ice-breaker progress is delivered as one normal bottom-of-chat message edited
-  in place (`sendMessage` + `editMessageText`). Do not set or reintroduce a
-  `RICH_THINKING_ENABLED` live toggle: Telegram draft/rich-draft APIs are
-  treated by clients as generated AI replies and can reserve scroll space below
-  the preview. The rich `<tg-thinking>` helpers in `services/telegram-rich.ts`
-  are kept for explicit dev demos **and** the two product flows that
-  intentionally want the AI-compose look: the **Profiler in-batch** status +
-  question stream (PRODUCT_SPEC §Phase 1b), and the **periodic profile-survey
-  "thinking" pause** during conversational onboarding (one ~2.5 s shimmer beat
-  before every third question — PRODUCT_SPEC §1.3). Both call the helpers with
-  `rich: true`. No env toggle gates this — it is hard-coded per call site — and
-  it degrades to the classic edited stream if a client can't render rich drafts,
-  so there is nothing to configure at deploy time. The AI Actions `<tg-emoji>`
-  glyphs are the baked `AI_EMOJI` ids in `services/ai-emoji.ts` (no env).
+- Chat progress streams: no production env flag. Do not set or reintroduce a
+  `RICH_THINKING_ENABLED` live toggle — the rich path is hard-coded per call site
+  (`rich: true`), never a global default, because Telegram draft/rich-draft APIs
+  are treated by clients as generated AI replies and can reserve scroll space
+  below the preview, and that tradeoff must be chosen deliberately per flow.
+  Two categories of stream exist:
+  - **Thinking-status beats** (`runStatusSequence`, the "agent is analysing /
+    working" lines): AI-memory analysis, Persona verify check, verification
+    soft-skip, profile-video upload check, concierge venue selection, date-card
+    render + share, plus the Profiler batch boundary, the Profiler in-batch
+    questions (PRODUCT_SPEC §Phase 1b), and the periodic profile-survey
+    "thinking" pause (PRODUCT_SPEC §1.3). These all call with `rich: true` so
+    they render as the native `<tg-thinking>` shimmer + AI Actions `<tg-emoji>`
+    draft, degrading to the classic `sendMessage` + `editMessageText` stream when
+    a client can't render rich drafts. No env toggle gates this — nothing to
+    configure at deploy time.
+  - **Content streams** (`streamDraftsToChat`): the match pitch, no-match notice,
+    and ice-breaker DMs stay on the classic bottom-of-chat edited message
+    (`sendMessage` + `editMessageText`) — the proposal-countdown worker
+    live-edits the pitch message, so it must remain a plain text message.
+  The AI Actions `<tg-emoji>` glyphs are the baked `AI_EMOJI` ids in
+  `services/ai-emoji.ts` (no env).
 - Admin API: `ADMIN_API_KEY`, `ADMIN_PORT`, `ADMIN_DASHBOARD_ORIGIN`
 - Public API: `JWT_SECRET`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`,
   `PUBLIC_PORT`, `PUBLIC_CORS_ORIGIN`

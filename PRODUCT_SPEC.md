@@ -271,23 +271,27 @@ Hard rules enforced by the collector:
   first two beats play as pacing and the final "last checks" beat tracks
   `until: <validation promise>` **plus a short deliberate pad**, held until the
   check settles and then torn down before the accept/reject verdict lands in its
-  place. These beats are ordinary bottom-of-chat messages edited in place; this
-  keeps Telegram from jumping the chat upward or reserving blank space for an
-  AI-style generated reply. Rich `<tg-thinking>` draft helpers are dev-demo-only
-  for these beats, **except two flows that deliberately opt into the native rich
-  `<tg-thinking>` shimmer + AI Actions `<tg-emoji>` draft path**: (1) the
-  Profiler in-batch flow (§Phase 1b), so the post-onboarding Q&A reads as an AI
-  composing each question for the user; and (2) the **periodic profile-survey
-  "thinking" pause** — during the conversational profile survey, every third
-  typed answer the bot holds one short "thinking" shimmer beat (~2.5 s, the
-  `think` AIActions glyph) *before* the next question is composed. The pause runs
-  strictly first: the "typing…" indicator and the next-question generation only
-  start after the shimmer is torn down, so the thinking beat is never preceded by
-  a typing indicator. Photo-stage continues, photo/video uploads, and
-  context-dump pastes do not count toward the cadence. Both flows accept the
-  rich-draft tradeoff (the client may treat it as a generated AI reply / reserve
-  scroll space) because the AI-compose feel is the goal there; both degrade to
-  the classic edited-message stream when a client can't render rich drafts.
+  place. All of these `runStatusSequence` "agent is working / analysing" beats
+  render through the native rich `<tg-thinking>` shimmer + AI Actions `<tg-emoji>`
+  draft path (each call site opts in with `rich: true`; there is **no** global
+  env toggle — see deploy.md), and degrade to the classic bottom-of-chat
+  edited-message stream when a client can't render rich drafts. The AI-compose
+  feel is the intended look for these status beats, so they accept the rich-draft
+  tradeoff (the client may treat it as a generated AI reply / reserve scroll
+  space). Two flows use the same rich path for streamed *questions*, not just a
+  status beat: (1) the Profiler in-batch flow (§Phase 1b), so the post-onboarding
+  Q&A reads as an AI composing each question for the user; and (2) the **periodic
+  profile-survey "thinking" pause** — during the conversational profile survey,
+  every third typed answer the bot holds one short "thinking" shimmer beat
+  (~2.5 s, the `think` AIActions glyph) *before* the next question is composed.
+  The pause runs strictly first: the "typing…" indicator and the next-question
+  generation only start after the shimmer is torn down, so the thinking beat is
+  never preceded by a typing indicator. Photo-stage continues, photo/video
+  uploads, and context-dump pastes do not count toward the cadence. The
+  *content* streams that are NOT thinking-status beats — the match pitch,
+  no-match notice, and ice-breaker DMs (`streamDraftsToChat`) — deliberately stay
+  on the classic edited-message stream (the proposal-countdown worker live-edits
+  the pitch message, so it must remain a plain text message).
 
 ### 1.4 Identity verification (Phase 6.3 in code)
 
@@ -426,10 +430,10 @@ Telegram-only in v1.
   long window pause, nothing to acknowledge) shows just "thinking"
   (`profilerOpenQuestionSteps`). The between-batch confirmation ("Preference card
   updated ✅") uses the same shimmer path. If a client can't render rich drafts
-  every path falls back to the classic edited-message stream. **This is the one
-  product flow that opts into the rich `<tg-thinking>` path** (elsewhere it is
-  dev-demo-only — see §1.3); it accepts that the client may reserve scroll space
-  under the draft, because the AI-compose feel is the goal here.
+  every path falls back to the classic edited-message stream. Like the
+  thinking-status beats in §1.3, this streamed-question flow opts into the rich
+  `<tg-thinking>` path; it accepts that the client may reserve scroll space under
+  the draft, because the AI-compose feel is the goal here.
   Between batches the Profiler pauses to the next **morning (09:00) / evening
   (18:00) window in the user's local time** (`Profile.timeZone`, derived from
   the dating city; `Europe/Kyiv` fallback). When the next weekly drop is within
