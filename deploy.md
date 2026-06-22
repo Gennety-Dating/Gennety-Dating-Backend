@@ -398,10 +398,14 @@ Required/high-impact env keys:
     draft, degrading to the classic `sendMessage` + `editMessageText` stream when
     a client can't render rich drafts. No env toggle gates this — nothing to
     configure at deploy time.
-  - **Content streams** (`streamDraftsToChat`): the match pitch, no-match notice,
-    and ice-breaker DMs stay on the classic bottom-of-chat edited message
-    (`sendMessage` + `editMessageText`) — the proposal-countdown worker
-    live-edits the pitch message, so it must remain a plain text message.
+  - **Content streams** (`streamDraftsToChat(..., { rich: true })` →
+    `streamRichDraftsToChat`): the match pitch, no-match notice, and ice-breaker
+    DMs also stream via the native rich AI-compose draft path (lead "thinking"
+    chunk = `<tg-thinking>` shimmer), but their **final persisted message is a
+    plain `sendMessage`, never a rich message** — it must stay a normal text
+    message, and the proposal-countdown worker live-edits the pitch's final
+    message via `editMessageText`. Same degrade-to-classic fallback. Also no env
+    toggle.
   The AI Actions `<tg-emoji>` glyphs are the baked `AI_EMOJI` ids in
   `services/ai-emoji.ts` (no env).
 - Admin API: `ADMIN_API_KEY`, `ADMIN_PORT`, `ADMIN_DASHBOARD_ORIGIN`

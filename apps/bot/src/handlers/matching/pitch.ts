@@ -482,7 +482,8 @@ export async function sendMatchProposal(
   ];
   // `matchStreamStart` (the "analysing compatibility…" beat) sits right after
   // the headline + deadline. Same index for both sides since the preamble is
-  // identical; it is only used by explicit rich-draft demos.
+  // identical; on the rich path (below) it renders as the `<tg-thinking>`
+  // shimmer beat of the AI-compose stream.
   const thinkingIndex = 2;
 
   const kbA = buildMatchKeyboard(matchId, langA);
@@ -526,6 +527,7 @@ export async function sendMatchProposal(
     await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
     const result = await stream(api, chatA, draftsA, {
       replyMarkup: kbA,
+      rich: true,
       thinkingIndex,
       thinkingEmojiId: AI_EMOJI.spark,
     });
@@ -547,6 +549,7 @@ export async function sendMatchProposal(
     await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
     const result = await stream(api, chatB, draftsB, {
       replyMarkup: kbB,
+      rich: true,
       thinkingIndex,
       thinkingEmojiId: AI_EMOJI.spark,
     });

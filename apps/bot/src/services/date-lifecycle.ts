@@ -15,6 +15,7 @@ import {
 import { env } from "../config.js";
 import { callOpenAIText } from "./openai.js";
 import { streamDraftsToChat } from "./ai-stream.js";
+import { AI_EMOJI } from "./ai-emoji.js";
 import { generateAndSaveWingmanHints } from "./wingman-hint.js";
 import { sendPushToUser } from "./push.js";
 import { sweepExpiredVenueChanges } from "../handlers/matching/venue-change.js";
@@ -340,7 +341,11 @@ export async function runDateLifecycleTick(
       if (tgId <= 0n) return;
       const chatId = Number(tgId);
       try {
-        await stream(api, chatId, drafts, { thinkingIndex: 0 });
+        await stream(api, chatId, drafts, {
+          rich: true,
+          thinkingIndex: 0,
+          thinkingEmojiId: AI_EMOJI.think,
+        });
       } catch (err) {
         console.warn(
           `[date-lifecycle] icebreaker stream failed for ${tgId}:`,

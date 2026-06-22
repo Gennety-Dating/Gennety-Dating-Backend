@@ -289,9 +289,14 @@ Hard rules enforced by the collector:
   never preceded by a typing indicator. Photo-stage continues, photo/video
   uploads, and context-dump pastes do not count toward the cadence. The
   *content* streams that are NOT thinking-status beats — the match pitch,
-  no-match notice, and ice-breaker DMs (`streamDraftsToChat`) — deliberately stay
-  on the classic edited-message stream (the proposal-countdown worker live-edits
-  the pitch message, so it must remain a plain text message).
+  no-match notice, and ice-breaker DMs (`streamDraftsToChat(..., { rich: true })`
+  → `streamRichDraftsToChat`) — also stream through the native rich AI-compose
+  draft path (their lead "thinking" chunk renders as a `<tg-thinking>` shimmer),
+  **but their final persisted message is sent as a plain `sendMessage`, not a
+  rich message**: it must stay a normal, non-self-deleting text message, and for
+  the pitch the proposal-countdown worker live-edits that final message via
+  `editMessageText`. They degrade to the classic edited-message stream when a
+  client can't render rich drafts.
 
 ### 1.4 Identity verification (Phase 6.3 in code)
 
@@ -555,11 +560,13 @@ first-class flows:
   An empathetic DM goes to every eligible-but-unpaired user. Tier escalates
   with consecutive famine count (1 / 2 / 3+); idempotent via
   `NoMatchNotice@@unique([userId, dropDate])`. The DM is delivered through the
-  live bottom-of-chat edit stream (`streamDraftsToChat`, the same primitive as
-  the match pitch), so it reads as personally composed rather than a mass-blast
-  template. It is a deliberately **short** 2-chunk stream — one "thinking" lead
-  beat (`noMatchStreamStart`) then the full message — so bad news is never
-  spelled out slowly. Telegram-only (mobile/Expo accounts are skipped here).
+  native rich AI-compose draft stream (`streamDraftsToChat(..., { rich: true })`,
+  the same primitive as the match pitch), so it reads as personally composed
+  rather than a mass-blast template. It is a deliberately **short** 2-chunk
+  stream — one "thinking" lead beat (`noMatchStreamStart`, a `<tg-thinking>`
+  shimmer) then the full message as the plain final `sendMessage` — so bad news
+  is never spelled out slowly. Degrades to the classic edited stream when a
+  client can't render rich drafts. Telegram-only (mobile/Expo accounts are skipped here).
   When `TICKET_FEATURE_ENABLED` and the famine streak reaches **tier ≥ 2**
   (2nd consecutive week+), the same DM also grants and announces a one-time
   **single-ticket discount** (see §3.5b — *Famine discount*).
@@ -646,10 +653,15 @@ for the dashboard's algorithm-quality view.
   actually delivered, the queue sends those gift pre-rolls first, waits
   `MATCH_PREROLL_DELAY_MS` (default 2 min), then reveals the match cards so the
   gift effect and pitch stream do not visually stack.
-- For Telegram users the pitch streams by sending one bottom-of-chat message and
-  editing it through the pitch chunks. The final edit carries the inline
-  Accept/Decline keyboard, so the countdown worker's `editMessageText` keeps
-  working against the same `pitchMessageId{A,B}`.
+- For Telegram users the pitch streams through the native rich AI-compose draft
+  path (`streamDraftsToChat(..., { rich: true })` → `streamRichDraftsToChat`):
+  the headline/deadline/pitch chunks render as growing rich-message drafts with a
+  `<tg-thinking>` shimmer beat (`matchStreamStart`), then the FINAL chunk is
+  persisted as a **plain `sendMessage`** carrying the inline Accept/Decline
+  keyboard — it stays a normal text message so the countdown worker's
+  `editMessageText` keeps working against the same `pitchMessageId{A,B}`.
+  Degrades to the classic edited-message stream when a client can't render rich
+  drafts.
 - An explicit `matchDeadlineNotice` follows the headline: **24 h** to reply,
   decision is final once committed.
 - Buttons: `[Accept]` / `[Decline]`. **Accept commits immediately.** **Decline
@@ -1150,7 +1162,7 @@ columns on `matches`.
 | When | Action | Idempotency marker |
 |---|---|---|
 | Activation → `scheduled` | Generate **wingman hints** (one short imperative tip per side about the other) and persist on the row | `wingmanHintA/B` |
-| T − 5 h | Send personalised AI **ice-breakers** (3 starters per side, language-aware, fallback to static lists). For Telegram users the DM is delivered through the live bottom-of-chat edit stream (`streamDraftsToChat`, same primitive as the pitch): a "thinking" lead beat (`icebreakerStreamStart`), each starter revealed one-by-one, then the full text + §6 planning hints as the final message — the emergency-window DM lands right after. Mobile gets the same content via `iceBreakersA/B` (no streaming). | `icebreakersSentAt` |
+| T − 5 h | Send personalised AI **ice-breakers** (3 starters per side, language-aware, fallback to static lists). For Telegram users the DM is delivered through the native rich AI-compose draft stream (`streamDraftsToChat(..., { rich: true })`, same primitive as the pitch): a "thinking" lead beat (`icebreakerStreamStart`, a `<tg-thinking>` shimmer), each starter revealed one-by-one as growing drafts, then the full text + §6 planning hints as the plain final `sendMessage` — the emergency-window DM lands right after. Degrades to the classic edited stream when a client can't render rich drafts. Mobile gets the same content via `iceBreakersA/B` (no streaming). | `icebreakersSentAt` |
 | T − 5 h | Open the **emergency window** — DM both sides with the cancel button (callback `emerg:start:{matchId}`) | shared with above |
 | T − 1.5 h | **Pre-date safety brief** to the female user (Telegram DM only — mobile gets push). Skipped when no female participant has a Telegram presence. | `safetyNoteSentAt` |
 | T − 1.5 h | **Wingman hint reveal push** — the asymmetric tip is unmasked at this gate (the mobile serializer enforces it independently) | `wingmanSentAt` |

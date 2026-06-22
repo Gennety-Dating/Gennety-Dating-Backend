@@ -7,6 +7,7 @@ import {
   FAMINE_DISCOUNT_MIN_TIER,
 } from "@gennety/shared";
 import { streamDraftsToChat } from "./ai-stream.js";
+import { AI_EMOJI } from "./ai-emoji.js";
 import { grantFamineDiscountIfEligible } from "./ticket-discount.js";
 
 /**
@@ -179,15 +180,18 @@ export async function sendNoMatchNotices(
 
       // Deliberately SHORT stream (anti-drumroll): one "thinking" lead beat —
       // "we really looked" — then the full empathetic body as the persisted
-      // send. We never spell out bad news slowly. The templates carry no
-      // Markdown (emoji + `•` bullets + newlines only), so the plain final
-      // `sendMessage` renders identically — `parse_mode` is intentionally
-      // dropped. `thinkingIndex: 0` is only used by explicit rich-draft demos.
+      // send. We never spell out bad news slowly. Streams via the native rich
+      // AI-compose path (`rich: true`): the lead beat (`thinkingIndex: 0`)
+      // renders as a `<tg-thinking>` shimmer, the body is the plain final
+      // `sendMessage`. The templates carry no Markdown (emoji + `•` bullets +
+      // newlines only), so the plain final send renders identically —
+      // `parse_mode` is intentionally dropped. Degrades to the classic edited
+      // stream on clients without rich-draft support.
       await streamImpl(
         api,
         Number(u.telegramId),
         [t(lang, "noMatchStreamStart"), body],
-        { thinkingIndex: 0 },
+        { rich: true, thinkingIndex: 0, thinkingEmojiId: AI_EMOJI.think },
       );
 
       result.notified++;
