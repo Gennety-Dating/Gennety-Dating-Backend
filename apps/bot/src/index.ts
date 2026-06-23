@@ -36,9 +36,17 @@ process.on("uncaughtException", (err) => {
   console.error("[FATAL] uncaughtException:", err);
   process.exit(1);
 });
+// Non-fatal by design: this is a single process serving every user, plus the
+// public/admin Express servers and all crons. A stray rejection from a
+// fire-and-forget path (a `void foo().catch()` whose catch itself threw, an
+// unawaited side effect) must NOT take the whole bot down for everyone and
+// trigger a PM2 crash-loop that re-delivers the same Telegram update on restart.
+// grammY handler errors are already contained by `bot.catch`, and every cron
+// tick is wrapped in try/catch, so a surviving unhandledRejection is logged
+// loudly and we keep serving. `uncaughtException` (above) stays fatal — a
+// synchronous throw that escaped every frame is a genuinely unknown state.
 process.on("unhandledRejection", (reason) => {
-  console.error("[FATAL] unhandledRejection:", reason);
-  process.exit(1);
+  console.error("[bot] unhandledRejection (non-fatal, continuing):", reason);
 });
 
 const bot = createBot(env.BOT_TOKEN);

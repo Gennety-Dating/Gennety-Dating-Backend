@@ -31,6 +31,27 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
+ * Start the 24h TTL clock for a match whose dispatch threw mid-way but where at
+ * least one side already received the pitch. Idempotent: only stamps a row that
+ * is still un-stamped (`dispatchedAt = null`) and has a recorded pitch
+ * (`pitchMessageIdA`/`B`). Without this, a one-sided delivery would leave
+ * `dispatchedAt` null and the row would never satisfy the expiry query
+ * (`dispatchedAt: { not: null, lt: cutoff }`), stranding it in `proposed`.
+ */
+async function stampDispatchedIfDelivered(matchId: string): Promise<void> {
+  const m = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: { dispatchedAt: true, pitchMessageIdA: true, pitchMessageIdB: true },
+  });
+  if (!m || m.dispatchedAt !== null) return;
+  if (m.pitchMessageIdA === null && m.pitchMessageIdB === null) return;
+  await prisma.match.updateMany({
+    where: { id: matchId, dispatchedAt: null },
+    data: { dispatchedAt: new Date() },
+  });
+}
+
+/**
  * Dispatch AI pitches for a list of match IDs, rate-limited.
  *
  * For each match:
@@ -109,6 +130,20 @@ export async function dispatchMatches(
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      // A throw here can still mean ONE side received the pitch (the other
+      // side's send failed every retry, e.g. that user blocked the bot).
+      // `sendMatchProposal` is per-side idempotent, so the delivered side is
+      // never re-DMed — but if we never stamp `dispatchedAt`, the 24h TTL
+      // expiry query (`dispatchedAt: { not: null }`) excludes this row forever
+      // and the match is stranded in `proposed`: it never expires, and the
+      // delivered side can accept into a dead end. Salvage by starting the TTL
+      // clock whenever at least one pitch is on record.
+      await stampDispatchedIfDelivered(matchId).catch((e) => {
+        console.warn(
+          `[dispatch] dispatchedAt salvage failed matchId=${matchId}:`,
+          e,
+        );
+      });
       errors.push({ matchId, error: message });
       console.error(
         `[dispatch] ${i + 1}/${matchIds.length} matchId=${matchId} FAILED: ${message}`,

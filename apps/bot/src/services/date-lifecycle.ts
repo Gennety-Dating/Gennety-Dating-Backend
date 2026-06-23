@@ -8,7 +8,6 @@ import {
   FEEDBACK_DELAY_HOURS,
   PRE_DATE_WINGMAN_HOURS,
   generateIceBreakersPrompt,
-  generateDateHintsPrompt,
   formatProfilerAnswersBlock,
   scoreProfilerAnswers,
 } from "@gennety/shared";
@@ -125,38 +124,11 @@ async function generatePersonalisedIceBreakers(
 }
 
 /**
- * §6 source-masked date-planning hints, derived from the PARTNER's Profiler
- * answers. Returns "" when there's nothing to say or the LLM is unavailable —
- * the icebreaker DM is sent either way, hints just get appended when present.
- */
-async function generateDateHints(
-  viewerFirstName: string,
-  partnerProfilerBlock: string | null,
-  lang: Language,
-): Promise<string> {
-  if (!partnerProfilerBlock) return "";
-  const systemPrompt = generateDateHintsPrompt({
-    viewerFirstName,
-    partnerProfilerBlock,
-    language: lang,
-  });
-  const text = await callOpenAIText(systemPrompt, "Write the 2-3 planning tips now.", {
-    maxTokens: 200,
-  });
-  const lines = (text ?? "")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .slice(0, 3);
-  return lines.join("\n");
-}
-
-/**
  * Build the growing-prefix chunks for the live ice-breaker stream. The
  * lead beat is the "thinking" line; then each conversation starter is revealed
- * one at a time on top of the intro; the FINAL chunk (with the §6 planning
- * hints appended, when present) is byte-for-byte the message we'd otherwise
- * send in one shot — so only the *delivery* animates, the content is unchanged.
+ * one at a time on top of the intro; the FINAL chunk is byte-for-byte the
+ * message we'd otherwise send in one shot — so only the *delivery* animates,
+ * the content is unchanged.
  *
  * `streamDraftsToChat` sends one real message and edits it through every chunk;
  * the last entry is the persisted final text.
@@ -165,8 +137,6 @@ export function buildIcebreakerDrafts(
   streamStart: string,
   intro: string,
   topics: readonly string[],
-  hintsIntro: string,
-  hints: string,
 ): string[] {
   const stages: string[] = [];
   let acc = intro;
@@ -174,10 +144,7 @@ export function buildIcebreakerDrafts(
     acc = `${acc}${i === 0 ? "" : "\n"}${i + 1}. ${topic}`;
     stages.push(acc);
   });
-  const lastStage = stages[stages.length - 1] ?? intro;
-  const chunks = [streamStart, ...stages];
-  if (hints) chunks.push(`${lastStage}${hintsIntro}${hints}`);
-  return chunks;
+  return [streamStart, ...stages];
 }
 
 export interface DateLifecycleOptions {
@@ -294,31 +261,25 @@ export async function runDateLifecycleTick(
     const partnerBlockForA = formatProfilerAnswersBlock(scoredB, langA);
     const partnerBlockForB = formatProfilerAnswersBlock(scoredA, langB);
 
-    // Generate ice-breakers + §6 hints via LLM (both fall back gracefully).
-    const [topicsForA, topicsForB, hintsForA, hintsForB] = await Promise.all([
+    // Generate ice-breakers via LLM (graceful static fallback when unavailable).
+    const [topicsForA, topicsForB] = await Promise.all([
       generatePersonalisedIceBreakers(nameA, nameB, summaryA, summaryB, partnerBlockForA, langA),
       generatePersonalisedIceBreakers(nameB, nameA, summaryB, summaryA, partnerBlockForB, langB),
-      generateDateHints(nameA, partnerBlockForA, langA),
-      generateDateHints(nameB, partnerBlockForB, langB),
     ]);
 
     // Live ice-breaker stream per side: a "thinking" lead beat, then each
-    // starter revealed one at a time, then the full message (with planning
-    // hints) as the persisted send. The final chunk is byte-for-byte the old
-    // single-shot text — only the delivery now animates.
+    // starter revealed one at a time, then the full set of starters as the
+    // persisted send. The final chunk is byte-for-byte the old single-shot
+    // text — only the delivery now animates.
     const draftsA = buildIcebreakerDrafts(
       t(langA, "icebreakerStreamStart"),
       t(langA, "icebreakerIntro"),
       topicsForA,
-      t(langA, "dateHintsIntro"),
-      hintsForA,
     );
     const draftsB = buildIcebreakerDrafts(
       t(langB, "icebreakerStreamStart"),
       t(langB, "icebreakerIntro"),
       topicsForB,
-      t(langB, "dateHintsIntro"),
-      hintsForB,
     );
 
     // Emergency cancellation button
