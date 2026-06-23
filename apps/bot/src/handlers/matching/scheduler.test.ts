@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { SessionData } from "@gennety/shared";
-import { DEFAULT_SESSION } from "@gennety/shared";
+import { DEFAULT_SESSION, t } from "@gennety/shared";
 
 vi.mock("@gennety/db", () => ({
   prisma: {
@@ -192,6 +192,23 @@ describe("scheduler: startScheduling", () => {
     ) as string[];
     expect(sentUrls.some((u) => u.includes("lang=en"))).toBe(true);
     expect(sentUrls.some((u) => u.includes("lang=ru"))).toBe(true);
+  });
+
+  it("afterTicketGate uses the plain Calendar caption (no duplicate of the ticket celebration)", async () => {
+    mMatch.update.mockResolvedValue({});
+    mMatch.findUnique.mockResolvedValue({
+      calendarMessageIdA: null,
+      calendarMessageIdB: null,
+      userA: { telegramId: 1001n, language: "en" },
+      userB: { telegramId: 1002n, language: "en" },
+    });
+
+    const api = createApi();
+    await startScheduling(api, "match-1", { afterTicketGate: true });
+
+    const sentTexts: string[] = api.sendMessage.mock.calls.map((c: any[]) => c[1] as string);
+    expect(sentTexts.every((txt: string) => txt === t("en", "matchScheduleAfterTicket"))).toBe(true);
+    expect(sentTexts.some((txt: string) => txt === t("en", "matchScheduleIter3"))).toBe(false);
   });
 });
 

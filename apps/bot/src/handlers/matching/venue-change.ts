@@ -303,6 +303,41 @@ export interface ProposeVenueChangeInput {
   comment: string;
 }
 
+/** Catalog loader signature — injectable so tests need no DB / Places network. */
+type LoadVenueChangeCatalog = (args: {
+  universityDomain: string | null;
+  center: { lat: number; lng: number };
+  agreedTime: Date;
+}) => Promise<CatalogVenue[]>;
+
+export interface ProposeVenueChangeOptions {
+  now?: Date;
+  loadCatalog?: LoadVenueChangeCatalog;
+}
+
+/**
+ * Resolve a client-submitted pick to a real catalog row. Prefers an exact
+ * Places/curated `placeId` match; falls back to a ~55 m coordinate match for
+ * curated rows without a `placeId` (or older Mini App bundles that didn't echo
+ * one back). The CALLER must use the returned row's own name/address/mapsUri —
+ * never the client's — so a spoofed label or phishing maps link can't ride along.
+ */
+function resolveCatalogPick(
+  catalog: CatalogVenue[],
+  input: ProposeVenueChangeInput,
+): CatalogVenue | null {
+  if (input.placeId) {
+    const byId = catalog.find((v) => v.placeId != null && v.placeId === input.placeId);
+    if (byId) return byId;
+  }
+  const EPS = 0.0005; // ≈ 55 m
+  return (
+    catalog.find(
+      (v) => Math.abs(v.lat - input.lat) < EPS && Math.abs(v.lng - input.lng) < EPS,
+    ) ?? null
+  );
+}
+
 export type ProposeVenueChangeResult =
   | {
       ok: false;
@@ -328,8 +363,10 @@ export async function proposeVenueChange(
   telegramId: bigint,
   matchId: string,
   input: ProposeVenueChangeInput,
-  now: Date = new Date(),
+  options: ProposeVenueChangeOptions = {},
 ): Promise<ProposeVenueChangeResult> {
+  const now = options.now ?? new Date();
+  const loadCatalog = options.loadCatalog ?? buildVenueChangeCatalog;
   const match = await loadMatch(matchId);
   if (!match) return { ok: false, reason: "match-not-found" };
   const callerId = userIdForTelegram(match, telegramId);
@@ -373,6 +410,20 @@ export async function proposeVenueChange(
 
   const agreedTime = match.agreedTime;
   if (!agreedTime) return { ok: false, reason: "wrong-state" };
+
+  // Re-derive the venue from the server-built catalog — never trust the
+  // client's name/address/mapsUri/placeId. Without this a proposer could relay
+  // an arbitrary venue label or a phishing maps link to the partner and have it
+  // persisted as the canonical venue on accept. Same stance as
+  // `/v1/calendar/pick` validating submitted slots against `proposedTimes`.
+  const catalog = await loadCatalog({
+    universityDomain: match.userA.universityDomain,
+    center,
+    agreedTime,
+  });
+  const resolved = resolveCatalogPick(catalog, input);
+  if (!resolved) return { ok: false, reason: "invalid-venue" };
+
   const deadline = venueChangeDeadline(now, agreedTime);
 
   // Atomic one-shot claim: only the first proposal on a `scheduled` match with
@@ -389,12 +440,12 @@ export async function proposeVenueChange(
       venueChangeProposerId: callerId,
       venueChangeProposedAt: now,
       venueChangeExpiresAt: deadline,
-      venueChangeName: input.name.trim().slice(0, 256),
-      venueChangeAddress: input.address.trim().slice(0, 256),
-      venueChangeLat: input.lat,
-      venueChangeLng: input.lng,
-      venueChangeMapsUri: input.mapsUri,
-      venueChangePlaceId: input.placeId,
+      venueChangeName: resolved.name.slice(0, 256),
+      venueChangeAddress: resolved.address.slice(0, 256),
+      venueChangeLat: resolved.lat,
+      venueChangeLng: resolved.lng,
+      venueChangeMapsUri: resolved.mapsUri,
+      venueChangePlaceId: resolved.placeId,
       venueChangeComment: comment.slice(0, VENUE_CHANGE_MAX_COMMENT_LEN),
     },
   });
@@ -407,7 +458,7 @@ export async function proposeVenueChange(
     const lang = langOf(male.language);
     const notice = buildVenueChangeProposalNotice(
       lang,
-      venueLabel(input.name.trim(), input.address.trim(), input.mapsUri),
+      venueLabel(resolved.name, resolved.address, resolved.mapsUri),
       comment.slice(0, VENUE_CHANGE_MAX_COMMENT_LEN),
     );
     await api
@@ -458,8 +509,10 @@ function buildDecisionKeyboard(matchId: string, lang: Language): InlineKeyboardM
 function buildCancelConfirmKeyboard(matchId: string, lang: Language): InlineKeyboardMarkup {
   const kb = new InlineKeyboard()
     .text(t(lang, "venueChangeBtnConfirmCancel"), `vchg:cancel_confirm:${matchId}`)
+    .danger()
     .row()
-    .text(t(lang, "venueChangeBtnBack"), `vchg:cancel_back:${matchId}`);
+    .text(t(lang, "venueChangeBtnBack"), `vchg:cancel_back:${matchId}`)
+    .success();
   return { inline_keyboard: kb.inline_keyboard };
 }
 

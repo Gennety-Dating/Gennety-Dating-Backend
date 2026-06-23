@@ -4,7 +4,7 @@ import { t } from "@gennety/shared";
 vi.mock("@gennety/db", () => ({
   prisma: {
     user: { findUnique: vi.fn() },
-    match: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+    match: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   },
 }));
 
@@ -41,6 +41,7 @@ const mMatch = prisma.match as unknown as {
   findUnique: MockFn;
   findFirst: MockFn;
   update: MockFn;
+  updateMany: MockFn;
 };
 const mUser = prisma.user as unknown as { findUnique: MockFn };
 const mParseVibe = parseVibe as unknown as MockFn;
@@ -56,6 +57,7 @@ beforeEach(() => {
   mMatch.findUnique.mockReset();
   mMatch.findFirst.mockReset();
   mMatch.update.mockReset().mockResolvedValue(undefined);
+  mMatch.updateMany.mockReset().mockResolvedValue({ count: 1 });
   mUser.findUnique.mockReset();
   mParseVibe.mockReset().mockResolvedValue({ category: "cafe", keywords: [], safe: true });
   mFinalize.mockReset().mockResolvedValue(undefined);
@@ -73,10 +75,12 @@ describe("startVenueNegotiation — location-first intro", () => {
     const api = createApi();
     await startVenueNegotiation(api, "m1", new Date("2026-06-20T16:00:00Z"));
 
-    // Transitions to negotiating_venue and clears stale calendar cards.
-    expect(mMatch.update).toHaveBeenCalledTimes(1);
-    expect(mMatch.update.mock.calls[0]![0].data).toMatchObject({
-      status: "negotiating_venue",
+    // Atomic claim transitions to negotiating_venue and clears stale calendar
+    // cards (updateMany-with-count guard so concurrent picks fire prompts once).
+    expect(mMatch.updateMany).toHaveBeenCalledTimes(1);
+    expect(mMatch.updateMany.mock.calls[0]![0]).toMatchObject({
+      where: { status: "negotiating" },
+      data: { status: "negotiating_venue" },
     });
 
     expect(api.sendMessage).toHaveBeenCalledTimes(2);

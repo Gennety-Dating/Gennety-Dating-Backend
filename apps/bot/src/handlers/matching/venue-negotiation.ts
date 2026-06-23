@@ -130,22 +130,15 @@ export async function startVenueNegotiation(
   matchId: string,
   agreedTime: Date,
 ): Promise<void> {
-  const match = await prisma.match.findUnique({
-    where: { id: matchId },
-    select: {
-      id: true,
-      status: true,
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
-    },
-  });
-  if (!match) return;
-
-  // Idempotency: if something already advanced the match, bail.
-  if (match.status !== "negotiating") return;
-
-  await prisma.match.update({
-    where: { id: matchId },
+  // Atomic claim: only the first caller flips `negotiating → negotiating_venue`.
+  // Two concurrent calendar picks can each independently compute the same single
+  // overlap (`processCalendarSlotsUpdate`) and both call this in the same tick;
+  // the loser updates 0 rows and bails, so the concierge prompts are sent
+  // exactly once. Same updateMany-with-count guard used in decision.ts /
+  // match-expiry.ts — a non-atomic findUnique-then-update would double-DM both
+  // users and clobber `agreedTime` / `calendarMessageId*`.
+  const claim = await prisma.match.updateMany({
+    where: { id: matchId, status: "negotiating" },
     data: {
       status: "negotiating_venue",
       agreedTime,
@@ -154,6 +147,17 @@ export async function startVenueNegotiation(
       calendarMessageIdB: null,
     },
   });
+  if (claim.count === 0) return;
+
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: {
+      id: true,
+      userA: { select: { telegramId: true, language: true } },
+      userB: { select: { telegramId: true, language: true } },
+    },
+  });
+  if (!match) return;
 
   const langA = (match.userA.language ?? "en") as Language;
   const langB = (match.userB.language ?? "en") as Language;

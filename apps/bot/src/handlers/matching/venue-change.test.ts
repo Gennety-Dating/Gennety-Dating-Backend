@@ -106,12 +106,32 @@ describe("proposeVenueChange", () => {
     comment: "It is much cozier and closer for me",
   };
 
+  /** Server-built catalog entry the pick resolves to (by placeId). */
+  const catalogEntry = {
+    source: "places" as const,
+    placeId: "p1",
+    name: "New Cafe",
+    address: "New St",
+    lat: 50.451,
+    lng: 30.521,
+    mapsUri: "https://maps.google.com/new",
+    category: "cafe",
+    distanceKm: 0.1,
+    photoUrl: null,
+    photoRefs: [],
+    rating: 4.5,
+    userRatingCount: 120,
+    editorialSummary: null,
+  };
+  // Injected catalog loader so the test needs no DB / Places network.
+  const loadCatalog = async () => [catalogEntry];
+
   it("claims the one-shot and DMs the male the proposal", async () => {
     mMatch.findUnique.mockResolvedValue(fakeMatch());
     mMatch.updateMany.mockResolvedValue({ count: 1 });
     const api = fakeApi();
 
-    const res = await proposeVenueChange(api as never, 100n, "m1", pick);
+    const res = await proposeVenueChange(api as never, 100n, "m1", pick, { loadCatalog });
     expect(res).toEqual({ ok: true });
 
     const update = mMatch.updateMany.mock.calls[0][0];
@@ -130,16 +150,53 @@ describe("proposeVenueChange", () => {
     expect(flat).toContain("vchg:decline:m1");
   });
 
+  it("persists the catalog's fields, never the client's spoofed name / maps link", async () => {
+    mMatch.findUnique.mockResolvedValue(fakeMatch());
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
+    const api = fakeApi();
+
+    // Client lies about the venue label + ships a phishing maps link, but keeps
+    // a real catalog placeId + coords. The server must ignore the spoofed fields.
+    const spoofed = {
+      ...pick,
+      name: "Come to my place 😈",
+      address: "123 Private Rd",
+      mapsUri: "https://evil.example/phish",
+    };
+    const res = await proposeVenueChange(api as never, 100n, "m1", spoofed, { loadCatalog });
+    expect(res).toEqual({ ok: true });
+
+    const update = mMatch.updateMany.mock.calls[0][0];
+    expect(update.data).toMatchObject({
+      venueChangeName: "New Cafe",
+      venueChangeAddress: "New St",
+      venueChangeMapsUri: "https://maps.google.com/new",
+    });
+    // The relayed DM must carry the catalog label/link, not the phishing one.
+    const dmText = api.sendMessage.mock.calls[0][1] as string;
+    expect(dmText).not.toContain("evil.example");
+    expect(dmText).toContain("New Cafe");
+  });
+
+  it("rejects a pick that is not in the catalog (no matching id / coords)", async () => {
+    mMatch.findUnique.mockResolvedValue(fakeMatch());
+    const res = await proposeVenueChange(fakeApi() as never, 100n, "m1", pick, {
+      loadCatalog: async () => [],
+    });
+    expect(res).toEqual({ ok: false, reason: "invalid-venue" });
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+  });
+
   it("rejects the male side (not the female initiator)", async () => {
     mMatch.findUnique.mockResolvedValue(fakeMatch());
-    const res = await proposeVenueChange(fakeApi() as never, 200n, "m1", pick);
+    const res = await proposeVenueChange(fakeApi() as never, 200n, "m1", pick, { loadCatalog });
     expect(res).toEqual({ ok: false, reason: "not-female-initiator" });
     expect(mMatch.updateMany).not.toHaveBeenCalled();
   });
 
   it("rejects a too-short comment", async () => {
     mMatch.findUnique.mockResolvedValue(fakeMatch());
-    const res = await proposeVenueChange(fakeApi() as never, 100n, "m1", { ...pick, comment: "short" });
+    const res = await proposeVenueChange(fakeApi() as never, 100n, "m1", { ...pick, comment: "short" }, { loadCatalog });
     expect(res).toEqual({ ok: false, reason: "comment-too-short" });
     expect(mMatch.updateMany).not.toHaveBeenCalled();
   });
@@ -150,14 +207,14 @@ describe("proposeVenueChange", () => {
       ...pick,
       lat: 50.6,
       lng: 30.9,
-    });
+    }, { loadCatalog });
     expect(res).toEqual({ ok: false, reason: "out-of-range" });
   });
 
   it("rejects when already used (lost the atomic claim)", async () => {
     mMatch.findUnique.mockResolvedValue(fakeMatch());
     mMatch.updateMany.mockResolvedValue({ count: 0 });
-    const res = await proposeVenueChange(fakeApi() as never, 100n, "m1", pick);
+    const res = await proposeVenueChange(fakeApi() as never, 100n, "m1", pick, { loadCatalog });
     expect(res).toEqual({ ok: false, reason: "race-lost" });
   });
 });

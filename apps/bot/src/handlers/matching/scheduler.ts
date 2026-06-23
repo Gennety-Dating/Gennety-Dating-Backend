@@ -109,12 +109,24 @@ export function buildCalendarKeyboard(
  * Begin scheduling for a match that has just entered `negotiating`.
  * Generates the slot allowlist once per match (so both users see the
  * same grid) and DMs the calendar button to whichever side is
- * Telegram-resident.
+ * Telegram-resident. The Calendar card is a SEPARATE message from the
+ * persistent ticket card (when the Date Ticket gate is on) — it follows it
+ * rather than replacing it, so the ticket entry stays re-openable
+ * (PRODUCT_SPEC §3.5b / §3.6).
  */
 export async function startScheduling(
   api: Api<RawApi>,
   matchId: string,
+  opts?: { afterTicketGate?: boolean },
 ): Promise<void> {
+  // When the Calendar follows the persistent ticket card (ticket gate on), the
+  // ticket card already celebrated the match — so the Calendar card uses a
+  // plain "now pick your time" caption instead of repeating "It's mutual 🔥".
+  // The no-ticket flow (Calendar is the first/only post-accept message) keeps
+  // the celebratory caption. PRODUCT_SPEC §3.5b.
+  const captionKey = opts?.afterTicketGate
+    ? "matchScheduleAfterTicket"
+    : "matchScheduleIter3";
   const slots = generateProposalSlots();
   await prisma.match.update({
     where: { id: matchId },
@@ -151,7 +163,7 @@ export async function startScheduling(
       "A",
       match.userA.telegramId,
       match.calendarMessageIdA,
-      t(langA, "matchScheduleIter3"),
+      t(langA, captionKey),
       langA,
     ),
     replaceCalendarMessage(
@@ -160,7 +172,7 @@ export async function startScheduling(
       "B",
       match.userB.telegramId,
       match.calendarMessageIdB,
-      t(langB, "matchScheduleIter3"),
+      t(langB, captionKey),
       langB,
     ),
   ]);
