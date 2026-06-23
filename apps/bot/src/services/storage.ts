@@ -23,6 +23,40 @@ interface UploadResult {
 }
 
 /**
+ * Image MIME types we accept for stored media. Because every member is plain
+ * ASCII, this set is also our guarantee that whatever `normalizeImageMime`
+ * returns is a valid HTTP header value (a Latin-1 ByteString).
+ */
+const ALLOWED_IMAGE_MIME = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "image/gif",
+]);
+
+/**
+ * Normalize a caller/upstream-supplied MIME into a known, ASCII-safe image
+ * content-type. Strips parameters (`image/jpeg; charset=binary` → `image/jpeg`),
+ * lower-cases, maps the `image/jpg` alias to `image/jpeg`, and falls back to
+ * `image/jpeg` for anything unrecognized.
+ *
+ * Critically, this stops a non-Latin1 upstream value from reaching an outgoing
+ * HTTP header. Persona's signed-S3 selfie download has been observed returning
+ * a `content-type` carrying a non-ASCII char (`→`, U+2192); reusing it verbatim
+ * as the Supabase upload `Content-Type` made undici throw `Cannot convert
+ * argument to a ByteString`, so the selfie never persisted — verification still
+ * completed but `verifiedSelfiePath` was left null with no stored reference.
+ */
+export function normalizeImageMime(raw: string | null | undefined): string {
+  if (!raw) return "image/jpeg";
+  const base = raw.split(";", 1)[0]!.trim().toLowerCase();
+  if (base === "image/jpg") return "image/jpeg";
+  return ALLOWED_IMAGE_MIME.has(base) ? base : "image/jpeg";
+}
+
+/**
  * Upload a selfie buffer to Supabase Storage. Returns the storage path
  * (`{userId}/{timestamp}.{ext}`). Throws when Supabase is not configured
  * or the upload fails — caller decides how to translate that into HTTP.
@@ -36,7 +70,8 @@ export async function uploadSelfie(
     throw new Error("Supabase Storage not configured");
   }
 
-  const ext = mime.includes("png") ? "png" : "jpg";
+  const safeMime = normalizeImageMime(mime);
+  const ext = safeMime === "image/png" ? "png" : "jpg";
   const path = `${userId}/${Date.now()}.${ext}`;
 
   const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_SELFIE_BUCKET}/${path}`;
@@ -44,7 +79,7 @@ export async function uploadSelfie(
     method: "POST",
     headers: {
       Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-      "Content-Type": mime || "application/octet-stream",
+      "Content-Type": safeMime,
       "x-upsert": "true",
     },
     body: new Uint8Array(buffer),
@@ -109,7 +144,8 @@ export async function uploadProfilePhoto(
     throw new Error("Supabase Storage not configured");
   }
 
-  const ext = mime.includes("png") ? "png" : "jpg";
+  const safeMime = normalizeImageMime(mime);
+  const ext = safeMime === "image/png" ? "png" : "jpg";
   const path = `${userId}/${Date.now()}.${ext}`;
 
   const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_PHOTO_BUCKET}/${path}`;
@@ -117,7 +153,7 @@ export async function uploadProfilePhoto(
     method: "POST",
     headers: {
       Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-      "Content-Type": mime || "application/octet-stream",
+      "Content-Type": safeMime,
       "x-upsert": "true",
     },
     body: new Uint8Array(buffer),
@@ -238,7 +274,9 @@ export async function uploadChatImage(
     throw new Error("Supabase Storage not configured");
   }
 
-  const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpg";
+  const safeMime = normalizeImageMime(mime);
+  const ext =
+    safeMime === "image/png" ? "png" : safeMime === "image/webp" ? "webp" : "jpg";
   const path = `${userId}/${Date.now()}.${ext}`;
 
   const url = `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_CHAT_BUCKET}/${path}`;
@@ -246,7 +284,7 @@ export async function uploadChatImage(
     method: "POST",
     headers: {
       Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-      "Content-Type": mime || "application/octet-stream",
+      "Content-Type": safeMime,
       "x-upsert": "true",
     },
     body: new Uint8Array(buffer),

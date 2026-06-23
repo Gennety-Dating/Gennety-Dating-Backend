@@ -13,7 +13,8 @@ vi.mock("../config.js", () => ({
   },
 }));
 
-const { downloadProfileImage, downloadTelegramFile } = await import("./storage.js");
+const { downloadProfileImage, downloadTelegramFile, uploadSelfie, normalizeImageMime } =
+  await import("./storage.js");
 
 const TG_TOKEN = "999:fake-bot-token";
 const TG_FILE_ID = "AgACAgIAAxkBAAIClGn6b1_fakeTelegramFileId";
@@ -151,5 +152,59 @@ describe("downloadTelegramFile — direct entry point", () => {
     const buf = await downloadTelegramFile(api, TG_FILE_ID);
 
     expect(buf).toBeNull();
+  });
+});
+
+describe("normalizeImageMime — Content-Type safety", () => {
+  it("passes through known image MIME types", () => {
+    expect(normalizeImageMime("image/jpeg")).toBe("image/jpeg");
+    expect(normalizeImageMime("image/png")).toBe("image/png");
+    expect(normalizeImageMime("image/webp")).toBe("image/webp");
+  });
+
+  it("strips parameters and lower-cases", () => {
+    expect(normalizeImageMime("IMAGE/PNG")).toBe("image/png");
+    expect(normalizeImageMime("image/jpeg; charset=binary")).toBe("image/jpeg");
+  });
+
+  it("maps the image/jpg alias to image/jpeg", () => {
+    expect(normalizeImageMime("image/jpg")).toBe("image/jpeg");
+  });
+
+  it("falls back to image/jpeg for empty / unknown values", () => {
+    expect(normalizeImageMime(null)).toBe("image/jpeg");
+    expect(normalizeImageMime("")).toBe("image/jpeg");
+    expect(normalizeImageMime("application/octet-stream")).toBe("image/jpeg");
+  });
+
+  it("neutralizes a non-Latin1 upstream content-type (the Persona '→' bug)", () => {
+    // Mirrors a Persona selfie download whose content-type carried U+2192 (→),
+    // which undici rejected as an outgoing header value.
+    const poisoned = "application/octet-stream; persona-note=download→selfie";
+    const result = normalizeImageMime(poisoned);
+    expect(result).toBe("image/jpeg");
+    // The result must be a valid HTTP header value (Latin-1 ByteString).
+    expect([...result].every((ch) => ch.charCodeAt(0) <= 255)).toBe(true);
+  });
+});
+
+describe("uploadSelfie — Content-Type is always ByteString-safe", () => {
+  it("normalizes a '→'-bearing source MIME so the upload header never throws", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true });
+
+    const result = await uploadSelfie(
+      "user-uuid-123",
+      Buffer.from([0xff, 0xd8, 0xff]),
+      "garbage→content-type-that-undici-would-reject",
+    );
+
+    expect(result.path).toMatch(/^user-uuid-123\/\d+\.jpg$/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    const headers = init.headers as Record<string, string>;
+    expect(headers["Content-Type"]).toBe("image/jpeg");
+    expect(
+      [...headers["Content-Type"]!].every((ch) => ch.charCodeAt(0) <= 255),
+    ).toBe(true);
   });
 });
