@@ -8,7 +8,12 @@
  */
 
 import { prisma } from "@gennety/db";
+import { env } from "../config.js";
 import { formatNextBatchDate } from "./next-batch.js";
+import {
+  buildProductPlaybook,
+  type PlaybookFeatures,
+} from "./product-playbook.js";
 
 // ---------------------------------------------------------------------------
 // Base Persona (static)
@@ -17,10 +22,10 @@ import { formatNextBatchDate } from "./next-batch.js";
 const BASE_PERSONA = `You are the Gennety Dating assistant — a warm, casual AI concierge for university students who have completed onboarding.
 
 ## Your Role
-- Answer questions about how Gennety works, when matches arrive, profile editing, and the dating process.
+- Answer questions about how Gennety works, when matches arrive, profile editing, and the whole dating process — accurately, using the Product Playbook and the user's live context below.
 - Execute profile edits when the user asks (via tool calls).
 - Be honest about what you can and can't do.
-- NEVER create chat between users. NEVER help users contact their match directly.
+- You do NOT relay messages between users yourself and you do NOT hand out a partner's private contact directly. But when the product offers a sanctioned way to coordinate (see the Playbook), guide the user to it — don't pretend it doesn't exist.
 
 ## Conversation Style
 - Talk like a cool older friend — casual, warm, not cringe. Short sentences.
@@ -28,6 +33,15 @@ const BASE_PERSONA = `You are the Gennety Dating assistant — a warm, casual AI
 - Match the user's language. For Russian use informal "ты"; do the same casual, native tone for Ukrainian, German, and Polish.
 - One idea per message. Don't stack multiple questions.
 - No corporate speak, no fake enthusiasm.`;
+
+/** Read the live feature flags the playbook + context rendering depend on. */
+function playbookFeatures(): PlaybookFeatures {
+  return {
+    coordination: env.COORDINATION_FEATURE_ENABLED === true,
+    venueChange: env.VENUE_CHANGE_FEATURE_ENABLED === true,
+    tickets: env.TICKET_FEATURE_ENABLED === true,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Knowledge Base Fetcher
@@ -77,6 +91,8 @@ interface UserContext {
   language: string;
   matchSummary: string;
   nextBatchDate: string;
+  /** Comma list of enabled optional features, e.g. "coordination, tickets". */
+  enabledFeatures: string;
   /**
    * Non-empty when the user recently declined a match and has not yet given
    * a reason. The agent is expected to steer the conversation toward
@@ -88,7 +104,181 @@ interface UserContext {
 /** How far back to look for an un-explained decline (24 hours). */
 const PENDING_REJECTION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/** Minutes before `agreedTime` the anonymous coordination chat opens (T-30m). */
+const PROXY_OPEN_LEAD_MS = 30 * 60 * 1000;
+
+/**
+ * Flattened view of the user's single live match, side-resolved so `partner`
+ * is always the OTHER person. Fields beyond `status` are best-effort — older
+ * call sites / tests may not populate them, so every consumer guards for null.
+ */
+export interface ActiveMatchView {
+  status: string;
+  agreedTime: Date | null;
+  venueName: string | null;
+  venueAddress: string | null;
+  venueGoogleMapsUri: string | null;
+  ticketStatus: string | null;
+  coordOfferSentAt: Date | null;
+  proxyOpenedAt: Date | null;
+  proxyClosesAt: Date | null;
+  proxyClosedAt: Date | null;
+  venueChangeStatus: string | null;
+  partnerFirstName: string | null;
+}
+
+/** Compact local clock label ("19:00"). */
+function formatClock(date: Date, locale: string): string {
+  return date.toLocaleTimeString(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+/** Full local date+time label ("Saturday, May 16, 19:00"). */
+function formatWhen(date: Date, locale: string): string {
+  return date.toLocaleString(locale, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+/** Human "time until" the date, e.g. "in ~4h", "in ~2 days", "~10 min ago". */
+function humanizeUntil(target: Date, now: Date): string {
+  const ms = target.getTime() - now.getTime();
+  const future = ms >= 0;
+  const absMin = Math.round(Math.abs(ms) / 60000);
+  let phrase: string;
+  if (absMin < 90) phrase = `${absMin} min`;
+  else if (absMin < 48 * 60) phrase = `${Math.round(absMin / 60)}h`;
+  else phrase = `${Math.round(absMin / (60 * 24))} days`;
+  return future ? `in ~${phrase}` : `~${phrase} ago`;
+}
+
+/**
+ * Render the live match into a multi-line context block the agent can reason
+ * from. Flag-aware: coordination / ticket / venue-change lines only appear
+ * when the corresponding feature is on. Leading phrases ("No active match.",
+ * "Has a pending match proposal", "Date scheduled:") are kept stable because
+ * other surfaces and tests key off them.
+ */
+export function describeActiveMatch(
+  match: ActiveMatchView | null,
+  now: Date,
+  locale: string,
+  features: PlaybookFeatures,
+): string {
+  if (!match) return "No active match. Waiting for the next weekly batch.";
+
+  const partner = match.partnerFirstName ?? "their match";
+  const lines: string[] = [];
+
+  if (match.status === "proposed") {
+    lines.push("Has a pending match proposal — waiting for accept/decline.");
+    lines.push(`Partner: ${partner}. Has 24h from the proposal to decide; decision is blind and final.`);
+    return lines.join("\n");
+  }
+
+  if (match.status === "negotiating") {
+    lines.push("Match accepted by both sides — currently scheduling the date.");
+    lines.push(`Partner: ${partner}. Both are marking availability in the Calendar Mini App.`);
+    if (features.tickets && match.ticketStatus && match.ticketStatus !== "completed") {
+      lines.push(`Date Ticket gate: ${match.ticketStatus} (Calendar unlocks once both tickets are settled).`);
+    }
+    return lines.join("\n");
+  }
+
+  if (match.status === "negotiating_venue") {
+    lines.push("Match accepted — now choosing the meeting place.");
+    lines.push(`Partner: ${partner}. Each submits a departure point (map) then a short vibe; the concierge then picks the venue.`);
+    return lines.join("\n");
+  }
+
+  if (match.status === "scheduled") {
+    const when = match.agreedTime ? formatWhen(match.agreedTime, locale) : "TBD";
+    const venue = match.venueName ?? "TBD";
+    lines.push(`Date scheduled: ${when} at ${venue}.`);
+    lines.push(`Partner: ${partner}.`);
+    if (match.agreedTime) {
+      lines.push(`Time until the date: ${humanizeUntil(match.agreedTime, now)}.`);
+    }
+    if (match.venueAddress) lines.push(`Venue address: ${match.venueAddress}.`);
+    if (match.venueGoogleMapsUri) {
+      lines.push(`Venue map link exists (the "Open in Maps" button on their date card).`);
+    }
+
+    // Find-each-other status — the most-asked scheduled-stage question.
+    if (features.coordination) {
+      let coord: string;
+      const proxyOpenNow =
+        match.proxyOpenedAt != null &&
+        match.proxyClosedAt == null &&
+        match.proxyClosesAt != null &&
+        match.proxyClosesAt.getTime() > now.getTime();
+      if (proxyOpenNow) {
+        coord = `the anonymous coordination chat is OPEN NOW (closes ${formatClock(
+          match.proxyClosesAt!,
+          locale,
+        )}) — tell them to tap "Enter chat" to coordinate the exact spot.`;
+      } else if (match.proxyClosedAt != null) {
+        coord = `the coordination chat has closed.`;
+      } else if (match.coordOfferSentAt != null) {
+        coord = `the coordination offer was already sent (~1h before); the anonymous "Enter chat" opens ~30 min before the date.`;
+      } else if (match.agreedTime != null) {
+        const opensAt = new Date(match.agreedTime.getTime() - PROXY_OPEN_LEAD_MS);
+        coord = `coordination opens automatically before the date — a contact-share option ~1h before, and an anonymous "Enter chat" button ~30 min before (around ${formatClock(
+          opensAt,
+          locale,
+        )}).`;
+      } else {
+        coord = `coordination tools open automatically shortly before the date.`;
+      }
+      lines.push(`Find-each-other: ${coord}`);
+    } else {
+      lines.push(
+        `Find-each-other: have them go to the venue pin ("Open in Maps") at the agreed time and look inside — it's a small, easy-to-find spot.`,
+      );
+    }
+
+    if (features.venueChange && match.venueChangeStatus) {
+      lines.push(`Venue change: status "${match.venueChangeStatus}".`);
+    }
+    return lines.join("\n");
+  }
+
+  return "No active match.";
+}
+
+/** Build the side-resolved view + select shape used to load the live match. */
+const MATCH_CONTEXT_SELECT = {
+  status: true,
+  agreedTime: true,
+  venueName: true,
+  venueAddress: true,
+  venueGoogleMapsUri: true,
+  ticketStatus: true,
+  coordOfferSentAt: true,
+  proxyOpenedAt: true,
+  proxyClosesAt: true,
+  proxyClosedAt: true,
+  venueChangeStatus: true,
+} as const;
+
+/** Live match statuses the concierge should be aware of. */
+const ACTIVE_MATCH_STATUSES = [
+  "proposed",
+  "negotiating",
+  "negotiating_venue",
+  "scheduled",
+] as const;
+
 async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
+  const statusFilter = { status: { in: [...ACTIVE_MATCH_STATUSES] } };
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: {
@@ -98,45 +288,39 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
       status: true,
       language: true,
       matchesAsA: {
-        where: { status: { in: ["proposed", "negotiating", "scheduled"] } },
+        where: statusFilter,
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { status: true, agreedTime: true, venueName: true },
+        select: {
+          ...MATCH_CONTEXT_SELECT,
+          userB: { select: { firstName: true } },
+        },
       },
       matchesAsB: {
-        where: { status: { in: ["proposed", "negotiating", "scheduled"] } },
+        where: statusFilter,
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { status: true, agreedTime: true, venueName: true },
+        select: {
+          ...MATCH_CONTEXT_SELECT,
+          userA: { select: { firstName: true } },
+        },
       },
     },
   });
 
-  const activeMatch = user?.matchesAsA[0] ?? user?.matchesAsB[0] ?? null;
+  const asA = user?.matchesAsA?.[0] ?? null;
+  const asB = user?.matchesAsB?.[0] ?? null;
+  const raw = asA ?? asB;
 
-  let matchSummary: string;
-  if (!activeMatch) {
-    matchSummary = "No active match. Waiting for the next weekly batch.";
-  } else if (activeMatch.status === "proposed") {
-    matchSummary = "Has a pending match proposal — waiting for accept/decline.";
-  } else if (activeMatch.status === "negotiating") {
-    matchSummary = "Match accepted by both sides — currently scheduling the date.";
-  } else if (activeMatch.status === "scheduled") {
-    const when = activeMatch.agreedTime
-      ? activeMatch.agreedTime.toLocaleString("en-US", {
-          weekday: "long",
-          month: "long",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        })
-      : "TBD";
-    const venue = activeMatch.venueName ?? "TBD";
-    matchSummary = `Date scheduled: ${when} at ${venue}.`;
-  } else {
-    matchSummary = "No active match.";
-  }
+  const features = playbookFeatures();
+  const enabledFeatures =
+    [
+      features.coordination ? "coordination" : null,
+      features.venueChange ? "venue change" : null,
+      features.tickets ? "tickets" : null,
+    ]
+      .filter(Boolean)
+      .join(", ") || "none";
 
   const locale =
     user?.language === "ru"
@@ -148,6 +332,29 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
           : user?.language === "pl"
             ? "pl-PL"
             : "en-US";
+
+  const activeMatch: ActiveMatchView | null = raw
+    ? {
+        status: raw.status,
+        agreedTime: raw.agreedTime ?? null,
+        venueName: raw.venueName ?? null,
+        venueAddress: raw.venueAddress ?? null,
+        venueGoogleMapsUri: raw.venueGoogleMapsUri ?? null,
+        ticketStatus: raw.ticketStatus ?? null,
+        coordOfferSentAt: raw.coordOfferSentAt ?? null,
+        proxyOpenedAt: raw.proxyOpenedAt ?? null,
+        proxyClosesAt: raw.proxyClosesAt ?? null,
+        proxyClosedAt: raw.proxyClosedAt ?? null,
+        venueChangeStatus: raw.venueChangeStatus ?? null,
+        partnerFirstName:
+          (asA
+            ? (asA as { userB?: { firstName: string | null } }).userB?.firstName
+            : (asB as { userA?: { firstName: string | null } }).userA?.firstName) ??
+          null,
+      }
+    : null;
+
+  const matchSummary = describeActiveMatch(activeMatch, new Date(), locale, features);
 
   let pendingRejectionHint = "";
   if (user?.id) {
@@ -176,6 +383,7 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
     language: user?.language ?? "en",
     matchSummary,
     nextBatchDate: formatNextBatchDate(new Date(), undefined, locale),
+    enabledFeatures,
     pendingRejectionHint,
   };
 }
@@ -189,14 +397,17 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
  *
  * Structure:
  *   [Base Persona]
- *   [--- Knowledge Base ---]
- *   [--- User Context ---]
+ *   [--- Product Playbook (code-owned, flag-aware) ---]
+ *   [--- Operator Knowledge Base (DB, optional) ---]
+ *   [--- Current User Context (live, side-resolved match) ---]
  */
 export async function buildSystemPrompt(telegramId: bigint): Promise<string> {
   const [knowledge, userCtx] = await Promise.all([
     fetchKnowledgeBase(),
     fetchUserContext(telegramId),
   ]);
+
+  const playbook = buildProductPlaybook(playbookFeatures());
 
   const pendingSection = userCtx.pendingRejectionHint
     ? `\n\n## Pending Rejection Follow-up
@@ -208,15 +419,24 @@ The user recently declined match \`${userCtx.pendingRejectionHint}\` and has not
 - University: ${userCtx.university}
 - Account status: ${userCtx.status}
 - Preferred language: ${userCtx.language}
-- Match status: ${userCtx.matchSummary}
 - Next match batch: ${userCtx.nextBatchDate}
+- Optional features enabled: ${userCtx.enabledFeatures}
+
+### Live match status
+${userCtx.matchSummary}
 
 Respond in the user's preferred language (${userCtx.language}) unless they switch.${pendingSection}`;
 
+  // The code-owned playbook is the primary product knowledge; the DB table is
+  // optional operator-curated extras, appended only when non-empty.
+  const knowledgeSection = knowledge.trim()
+    ? `\n\n## Operator Knowledge Base (extra notes)\n${knowledge}`
+    : "";
+
   return `${BASE_PERSONA}
 
-## Product Knowledge Base
-${knowledge}
+## Product Playbook
+${playbook}${knowledgeSection}
 
 ${userSection}`;
 }

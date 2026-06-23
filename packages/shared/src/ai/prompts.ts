@@ -304,32 +304,36 @@ export interface IceBreakersInput {
  */
 export function generateIceBreakersPrompt(input: IceBreakersInput): string {
   const profilerSection = input.matchProfilerBlock
-    ? `\n## ${input.matchFirstName}'s own answers (PRIMARY source — build the starters from these; higher weight = more important)\n${input.matchProfilerBlock}\n`
+    ? `\n## What ${input.matchFirstName} is into (PRIMARY source — build the starters around THEIR world; higher weight = more important)\n${input.matchProfilerBlock}\n`
     : "";
-  return `You help people start conversations. In 5 hours, **${input.userFirstName}** meets **${input.matchFirstName}** on a first date. Give them 3 natural conversation starters.
+  return `Two students meet for a first date in 5 hours: **${input.userFirstName}** and **${input.matchFirstName}**. Give ${input.userFirstName} 3 easy things to open with — texts a real young person would actually send.
 
-## Profiles
-- ${input.userFirstName}: ${input.userSummary ?? "(no profile summary available)"}
-- ${input.matchFirstName}: ${input.matchSummary ?? "(no profile summary available)"}
+## About ${input.matchFirstName} (the person ${input.userFirstName} is meeting — anchor the starters here)
+${input.matchSummary ?? "(no profile summary available)"}
+## About ${input.userFirstName} (only for light common ground — never force it)
+${input.userSummary ?? "(no profile summary available)"}
 ${profilerSection}
 ## Your Task
 Generate exactly 3 conversation starters in **${input.language}**. Each must:
-1. Be a real question or topic — not a pickup line, not a compliment on looks.
-2. Connect to something from BOTH profiles (shared interest, complementary trait, interesting contrast).
-3. Be open-ended — invite a real answer, not yes/no.
-4. Sound like something a friend would suggest, not a dating article.
+1. Be SHORT — one sentence, ~12 words max. A message you'd actually text, not an essay.
+2. Be built around ONE concrete thing from ${input.matchFirstName}'s world — a hobby, a taste, a small story. One topic per starter.
+3. Be everyday and young: music, series/films, food, travel, weekend plans, pets, hot takes. Name specific things when you can ("what are you listening to lately?", "seen anything good recently?").
+4. Be light but open — easy to answer, not yes/no, not heavy.
 
-Tone: casual, natural. Like how friends actually talk. No formal phrasing in Russian/Ukrainian/German/Polish.
+Tone: how friends actually text. Informal in Russian/Ukrainian/German/Polish — never formal or bookish.
 
 ## Format
 3 numbered lines. No preamble, no closing.
 
 ## NEVER do these
-- "So, what do you do?" — too basic
-- "You must be [trait]..." — presumptuous
-- physical appearance comments
-- Sexual or overly intimate topics
-- Forced puns`;
+- Abstract or philosophical framings ("the main difference between art and science", "balance between technical precision and emotional expression"). Keep it down to earth.
+- "Compare my X to your Y" mash-ups that fuse both profiles into one question. One simple topic per starter.
+- Two-clause, multi-part questions. One ask.
+- "So, what do you do?" — too flat.
+- "You must be [trait]..." — presumptuous.
+- physical appearance comments.
+- Sexual or overly intimate topics.
+- Forced puns.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -397,52 +401,7 @@ Return the sentence only. No numbering, no quotes, no explanation.`;
 }
 
 // ---------------------------------------------------------------------------
-// #4c — generateDateHintsPrompt (Phase 1b / Phase 4 — source-masked planning)
-// ---------------------------------------------------------------------------
-
-export interface DateHintsInput {
-  /** Name of the user the hints are written for. */
-  viewerFirstName: string;
-  /**
-   * Weighted Profiler answers from the PARTNER — the source of the advice.
-   * The hints must never reveal that this is where they came from.
-   */
-  partnerProfilerBlock: string | null;
-  language: string;
-}
-
-/**
- * System prompt for the §6 "hints": 2–3 concrete, source-masked date-planning
- * tips derived from the partner's Profiler answers. The defining constraint is
- * tone (PRODUCT_SPEC §6.3): direct, actionable, and phrased as Gennety's own
- * light suggestion — NEVER "she said…" / "his profile shows…".
- */
-export function generateDateHintsPrompt(input: DateHintsInput): string {
-  return `You are Gennety, a warm matchmaking concierge giving ${input.viewerFirstName} a couple of light, practical tips to plan a great first date.
-
-## What you know (INTERNAL — never reveal or attribute this)
-${input.partnerProfilerBlock ?? "(nothing specific — give safe, universally-good first-date advice)"}
-
-## Your Task
-Write 2–3 short planning tips in **${input.language}**. Each must:
-1. Be concrete and actionable ("pick somewhere cosy and quiet", "suggest a short walk").
-2. Be phrased as YOUR friendly suggestion — "trust us", "this tends to land well".
-3. NEVER reveal or hint that this comes from the other person's answers. Do NOT say "she/he prefers…", "their profile…", "they told us…".
-4. Higher-weight items matter more — let them drive the advice.
-
-Tone: warm, direct, confident. No formal phrasing in Russian/Ukrainian/German/Polish — use natural, native phrasing.
-
-## Never do these
-- Attributing anything to the partner ("she likes…", "he said…").
-- Vague filler ("just be yourself", "have fun").
-- More than 3 tips.
-
-## Format
-2–3 short bullet lines starting with "• ". No preamble, no closing.`;
-}
-
-// ---------------------------------------------------------------------------
-// #4d — generateVenueBlurbPrompt (Phase 3.7 — scheduled-card venue blurb)
+// #4c — generateVenueBlurbPrompt (Phase 3.7 — scheduled-card venue blurb)
 // ---------------------------------------------------------------------------
 
 export interface VenueBlurbInput {

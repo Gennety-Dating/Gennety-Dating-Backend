@@ -31,7 +31,10 @@ import {
   buildSystemPrompt,
   fetchKnowledgeBase,
   clearKnowledgeCache,
+  describeActiveMatch,
+  type ActiveMatchView,
 } from "./prompt-builder.js";
+import type { PlaybookFeatures } from "./product-playbook.js";
 
 const mockKnowledge = prisma.systemKnowledge.findMany as ReturnType<typeof vi.fn>;
 const mockUserFind = prisma.user.findUnique as ReturnType<typeof vi.fn>;
@@ -160,6 +163,23 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("The Library Cafe");
   });
 
+  it("includes the code-owned product playbook with the find-each-other section", async () => {
+    mockKnowledge.mockResolvedValue([]);
+    mockUserFind.mockResolvedValue({
+      firstName: "Eve",
+      universityDomain: "kcl.ac.uk",
+      status: "active",
+      language: "en",
+      matchesAsA: [],
+      matchesAsB: [],
+    });
+
+    const prompt = await buildSystemPrompt(BigInt(33333));
+    expect(prompt).toContain("## Product Playbook");
+    expect(prompt).toContain("How to find each other at the venue");
+    expect(prompt).toContain("Optional features enabled: none");
+  });
+
   it("responds in user's language", async () => {
     mockKnowledge.mockResolvedValue([]);
 
@@ -210,5 +230,89 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("Pending Rejection Follow-up");
     expect(prompt).toContain("match-1");
     expect(prompt).toContain("voice note transcript");
+  });
+});
+
+describe("describeActiveMatch", () => {
+  const NOW = new Date("2026-06-23T12:00:00Z");
+  const FEATURES_OFF: PlaybookFeatures = {
+    coordination: false,
+    venueChange: false,
+    tickets: false,
+  };
+  const FEATURES_ON: PlaybookFeatures = {
+    coordination: true,
+    venueChange: true,
+    tickets: true,
+  };
+
+  function scheduled(overrides: Partial<ActiveMatchView> = {}): ActiveMatchView {
+    return {
+      status: "scheduled",
+      agreedTime: new Date("2026-06-23T16:00:00Z"), // +4h from NOW
+      venueName: "Kaffa",
+      venueAddress: "Velyka Vasylkivska 12",
+      venueGoogleMapsUri: "https://maps.google.com/?cid=1",
+      ticketStatus: "completed",
+      coordOfferSentAt: null,
+      proxyOpenedAt: null,
+      proxyClosesAt: null,
+      proxyClosedAt: null,
+      venueChangeStatus: null,
+      partnerFirstName: "Sasha",
+      ...overrides,
+    };
+  }
+
+  it("returns the waiting line for no active match", () => {
+    expect(describeActiveMatch(null, NOW, "en-US", FEATURES_OFF)).toContain(
+      "No active match",
+    );
+  });
+
+  it("surfaces partner name, venue and time-until for a scheduled date", () => {
+    const text = describeActiveMatch(scheduled(), NOW, "en-US", FEATURES_OFF);
+    expect(text).toContain("Date scheduled");
+    expect(text).toContain("Kaffa".slice(0, 4)); // venue name present
+    expect(text).toContain("Partner: Sasha");
+    expect(text).toContain("Time until the date: in ~4h");
+    expect(text).toContain("Velyka Vasylkivska 12");
+  });
+
+  it("falls back to the venue pin for find-each-other when coordination is OFF", () => {
+    const text = describeActiveMatch(scheduled(), NOW, "en-US", FEATURES_OFF);
+    expect(text).toContain("Find-each-other: have them go to the venue pin");
+    expect(text).not.toContain("Enter chat");
+  });
+
+  it("reports the proxy chat as open NOW when the window is live", () => {
+    const text = describeActiveMatch(
+      scheduled({
+        proxyOpenedAt: new Date("2026-06-23T11:50:00Z"),
+        proxyClosesAt: new Date("2026-06-23T18:00:00Z"),
+      }),
+      NOW,
+      "en-US",
+      FEATURES_ON,
+    );
+    expect(text).toContain("OPEN NOW");
+    expect(text).toContain("Enter chat");
+  });
+
+  it("announces when the proxy chat will open before the date", () => {
+    const text = describeActiveMatch(scheduled(), NOW, "en-US", FEATURES_ON);
+    expect(text).toContain("Find-each-other:");
+    expect(text).toContain("30 min before");
+  });
+
+  it("describes the venue-selection sub-stage", () => {
+    const text = describeActiveMatch(
+      scheduled({ status: "negotiating_venue", agreedTime: null, venueName: null }),
+      NOW,
+      "en-US",
+      FEATURES_OFF,
+    );
+    expect(text).toContain("choosing the meeting place");
+    expect(text).toContain("Partner: Sasha");
   });
 });

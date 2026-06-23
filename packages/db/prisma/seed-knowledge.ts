@@ -31,7 +31,7 @@ Users should keep their profile active and updated to maximize match quality.`,
     priority: 2,
     content: `Core identity data (Name, Age, University/Email) is FIXED after onboarding and cannot be changed.
 Users CAN edit: bio/psychological summary, major, age range preferences, visual preferences, and photos.
-Minimum 2 photos required at all times. Maximum 4 photos.
+Minimum 2 photos required at all times. Maximum 6 photos.
 Bio length is capped at 500 characters.
 Encourage users to keep their profile fresh — updated photos and preferences improve match quality.`,
   },
@@ -40,9 +40,9 @@ Encourage users to keep their profile fresh — updated photos and preferences i
     title: "Emergency Protocol & Date Lifecycle",
     category: "rules",
     priority: 3,
-    content: `3 hours before a scheduled date, the emergency cancellation window unlocks.
+    content: `5 hours before a scheduled date, the emergency cancellation window unlocks.
 To cancel, the user MUST provide a written explanation. The bot forwards the EXACT text to the other person — no filtering, no AI rewriting.
-Ice-breaker conversation starters are sent 3 hours before the date to both users.
+Ice-breaker conversation starters are sent 5 hours before the date to both users.
 The day after a date, the bot asks both users for feedback to improve future matching.
 Cancelling too frequently may affect future match quality.`,
   },
