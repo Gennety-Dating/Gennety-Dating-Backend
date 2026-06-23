@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  buildOwnerEvidence,
-  ownerEvidencePasses,
   validateProfileVideo,
   type VideoValidationDeps,
 } from "./video-validation.js";
@@ -11,10 +9,6 @@ const frames: VideoFrame[] = Array.from({ length: 12 }, (_, index) => ({
   buffer: Buffer.from(`frame-${index}`),
   timestampSeconds: index * 3,
 }));
-
-function isOwnerFrame(frame: Buffer): boolean {
-  return ["frame-1", "frame-5", "frame-9"].includes(frame.toString());
-}
 
 function deps(overrides: Partial<VideoValidationDeps> = {}): VideoValidationDeps {
   return {
@@ -37,44 +31,6 @@ function deps(overrides: Partial<VideoValidationDeps> = {}): VideoValidationDeps
       ok: true as const,
       signals: [],
     })),
-    detectFaces: vi.fn(async (frame: Buffer) => ({
-      ok: true as const,
-      faces: isOwnerFrame(frame)
-        ? [
-            {
-              confidence: 0.99,
-              boundingBox: { left: 0.2, top: 0.2, width: 0.3, height: 0.4 },
-              brightness: 0.5,
-              sharpness: 0.8,
-              pitch: 0,
-              roll: 0,
-              yaw: 0,
-            },
-          ]
-        : [],
-    })),
-    compareFaces: vi.fn(async (_reference: Buffer, frame: Buffer) =>
-      isOwnerFrame(frame)
-        ? {
-            ok: true as const,
-            faceFound: true,
-            similarity: 0.95,
-            matchedFace: {
-              confidence: 0.99,
-              boundingBox: {
-                left: 0.2,
-                top: 0.2,
-                width: 0.3,
-                height: 0.4,
-              },
-            },
-          }
-        : {
-            ok: true as const,
-            faceFound: true,
-            similarity: 0.1,
-          },
-    ),
     transcribeAudio: vi.fn(async () => ({
       ok: true as const,
       text: "",
@@ -87,121 +43,23 @@ function deps(overrides: Partial<VideoValidationDeps> = {}): VideoValidationDeps
   };
 }
 
-describe("video owner evidence", () => {
-  it("tracks distributed owner evidence for diagnostics", () => {
-    const evidence = buildOwnerEvidence(
-      [
-        { timestampSeconds: 3, highQuality: true },
-        { timestampSeconds: 15, highQuality: true },
-        { timestampSeconds: 27, highQuality: true },
-      ],
-      36,
-    );
-    expect(evidence).toEqual({
-      matchedFrameCount: 3,
-      matchedClusterCount: 3,
-      matchedTemporalThirds: 3,
-      hasHighQualityMatch: true,
-    });
-    expect(ownerEvidencePasses(evidence, 36)).toBe(true);
-  });
-
-  it("rejects a brief owner cameo confined to one moment", () => {
-    const evidence = buildOwnerEvidence(
-      [
-        { timestampSeconds: 1, highQuality: true },
-        { timestampSeconds: 1.4, highQuality: true },
-        { timestampSeconds: 1.8, highQuality: true },
-      ],
-      30,
-    );
-    expect(ownerEvidencePasses(evidence, 30)).toBe(false);
-  });
-});
-
 describe("validateProfileVideo", () => {
-  it("accepts a safe travel/group-style video with sparse owner frames", async () => {
+  it("accepts a safe video regardless of whether the owner appears", async () => {
+    // No identity gate anymore: a safe friends/scenery/party clip is fine even
+    // if the profile owner is never on screen.
     const result = await validateProfileVideo(
-      {
-        video: Buffer.from("video"),
-        identityReference: Buffer.from("owner"),
-      },
+      { video: Buffer.from("video") },
       { deps: deps() },
     );
     expect(result).toMatchObject({
       ok: true,
-      value: {
-        evidence: {
-          matchedFrameCount: 3,
-          matchedClusterCount: 3,
-        },
-      },
-    });
-  });
-
-  it("rejects scenery-only video", async () => {
-    const result = await validateProfileVideo(
-      {
-        video: Buffer.from("video"),
-        identityReference: Buffer.from("owner"),
-      },
-      {
-        deps: deps({
-          detectFaces: vi.fn(async () => ({
-            ok: true as const,
-            faces: [],
-          })),
-        }),
-      },
-    );
-    expect(result).toMatchObject({
-      ok: false,
-      reason: "video_owner_missing",
-    });
-  });
-
-  it("rejects when too few face-bearing frames match the profile anchor", async () => {
-    const result = await validateProfileVideo(
-      {
-        video: Buffer.from("video"),
-        identityReference: Buffer.from("owner"),
-      },
-      {
-        deps: deps({
-          detectFaces: vi.fn(async () => ({
-            ok: true as const,
-            faces: [
-              {
-                confidence: 0.99,
-                boundingBox: {
-                  left: 0.2,
-                  top: 0.2,
-                  width: 0.3,
-                  height: 0.4,
-                },
-                brightness: 0.5,
-                sharpness: 0.8,
-                pitch: 0,
-                roll: 0,
-                yaw: 0,
-              },
-            ],
-          })),
-        }),
-      },
-    );
-    expect(result).toMatchObject({
-      ok: false,
-      reason: "identity_mismatch",
+      value: { sampledFrameCount: 12, durationSeconds: 36 },
     });
   });
 
   it("rejects any unsafe sampled frame", async () => {
     const result = await validateProfileVideo(
-      {
-        video: Buffer.from("video"),
-        identityReference: Buffer.from("owner"),
-      },
+      { video: Buffer.from("video") },
       {
         deps: deps({
           moderateImageAws: vi.fn(async (frame: Buffer) => ({
@@ -229,10 +87,7 @@ describe("validateProfileVideo", () => {
       text: "unsafe transcript",
     }));
     const result = await validateProfileVideo(
-      {
-        video: Buffer.from("video"),
-        identityReference: Buffer.from("owner"),
-      },
+      { video: Buffer.from("video") },
       {
         deps: deps({
           probe: vi.fn(async () => ({
@@ -263,10 +118,7 @@ describe("validateProfileVideo", () => {
 
   it("fails closed on a provider outage", async () => {
     const result = await validateProfileVideo(
-      {
-        video: Buffer.from("video"),
-        identityReference: Buffer.from("owner"),
-      },
+      { video: Buffer.from("video") },
       {
         deps: deps({
           moderateImageOpenAI: vi.fn(async () => ({

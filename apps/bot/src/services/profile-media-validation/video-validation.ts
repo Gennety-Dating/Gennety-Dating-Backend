@@ -1,42 +1,27 @@
 import { join } from "node:path";
 import {
-  FACE_SIMILARITY_THRESHOLD,
   PROFILE_VIDEO_MAX_FILE_SIZE_BYTES,
-  VIDEO_FACE_PRESENCE_THRESHOLD,
-  VIDEO_IDENTITY_MATCH_THRESHOLD,
   VIDEO_SAMPLE_TARGET_FRAMES,
 } from "@gennety/shared";
 import { env } from "../../config.js";
-import {
-  compareFaces,
-  detectFaces,
-  detectModerationLabels,
-} from "../face-match.js";
+import { detectModerationLabels } from "../face-match.js";
 import { transcribeVideoAudio } from "./audio-transcription.js";
 import { combineModerationResults } from "./moderation-policy.js";
 import { moderateImageWithOpenAI, moderateTextWithOpenAI } from "./openai-moderation.js";
 import { withTempMediaDirectory, writePrivateMediaFile } from "./temp-media.js";
 import { extractVideoAudio, extractVideoFrames } from "./video-frames.js";
 import { probeVideo, type VideoProbe } from "./video-probe.js";
-import type {
-  MediaValidationResult,
-  VideoFrame,
-  VideoOwnerEvidence,
-} from "./types.js";
+import type { MediaValidationResult, VideoFrame } from "./types.js";
 
 const MAX_DURATION_SECONDS = 60;
-const MIN_MATCHED_FRAMES = 3;
-const MIN_MATCHED_CLUSTERS = 2;
 
 export interface ValidatedVideo {
-  evidence: VideoOwnerEvidence;
   durationSeconds: number;
   sampledFrameCount: number;
 }
 
 export interface VideoValidationInput {
   video: Buffer;
-  identityReference: Buffer;
 }
 
 export interface VideoValidationDeps {
@@ -47,8 +32,6 @@ export interface VideoValidationDeps {
   extractAudio: typeof extractVideoAudio;
   moderateImageOpenAI: typeof moderateImageWithOpenAI;
   moderateImageAws: typeof detectModerationLabels;
-  detectFaces: typeof detectFaces;
-  compareFaces: typeof compareFaces;
   transcribeAudio: typeof transcribeVideoAudio;
   moderateText: typeof moderateTextWithOpenAI;
 }
@@ -61,21 +44,30 @@ const defaultDeps: VideoValidationDeps = {
   extractAudio: extractVideoAudio,
   moderateImageOpenAI: moderateImageWithOpenAI,
   moderateImageAws: detectModerationLabels,
-  detectFaces,
-  compareFaces,
   transcribeAudio: transcribeVideoAudio,
   moderateText: moderateTextWithOpenAI,
 };
 
+/**
+ * Validate a profile video for *safety only*.
+ *
+ * The profile video is display-only (never counted toward MIN_PHOTOS, never
+ * used by matching or face-match verification), so it does NOT carry an
+ * identity gate: we used to require the owner's face in a share of sampled
+ * frames and to match a profile anchor, but that reused the brittle
+ * cross-image CompareFaces path and bounced plenty of legitimate
+ * friends/scenery/party videos. We keep the strict NSFW / violence checks the
+ * product cares about — every sampled frame is moderated (OpenAI + AWS) and the
+ * audio transcript is moderated — and accept anything that is safe.
+ */
 export async function validateProfileVideo(
   input: VideoValidationInput,
   options: {
     deps?: VideoValidationDeps;
     maximumFrames?: number;
-    identityThreshold?: number;
   } = {},
 ): Promise<MediaValidationResult<ValidatedVideo>> {
-  if (input.video.byteLength === 0 || input.identityReference.byteLength === 0) {
+  if (input.video.byteLength === 0) {
     return unavailable();
   }
   if (input.video.byteLength > PROFILE_VIDEO_MAX_FILE_SIZE_BYTES) {
@@ -114,7 +106,10 @@ export async function validateProfileVideo(
         return unavailable();
       }
       if (expired()) return unavailable();
-      if (frames.length === 0) return reject("video_owner_missing");
+      // No frames sampled = we never actually inspected the video for unsafe
+      // content. Fail closed to a retryable "unavailable" rather than accept
+      // an unmoderated video.
+      if (frames.length === 0) return unavailable();
 
       for (const frame of frames) {
         const frameSignal = combineModerationResults(
@@ -161,65 +156,9 @@ export async function validateProfileVideo(
         }
       }
 
-      const threshold =
-        options.identityThreshold ?? FACE_SIMILARITY_THRESHOLD;
-      const matched: Array<{
-        timestampSeconds: number;
-        highQuality: boolean;
-      }> = [];
-      let faceDetectedFrameCount = 0;
-
-      const frameIdentity = await mapWithConcurrency(frames, 4, async (frame) => {
-        const faces = await deps.detectFaces(frame.buffer, {
-          timeoutMs: Math.min(10_000, remaining()),
-        });
-        if (!faces.ok || faces.faces.length === 0) {
-          return { kind: faces.ok ? "no_face" as const : "unavailable" as const };
-        }
-        faceDetectedFrameCount++;
-        const comparison = await deps.compareFaces(
-          input.identityReference,
-          frame.buffer,
-          { timeoutMs: Math.min(10_000, remaining()) },
-        );
-        if (!comparison.ok) return { kind: "unavailable" as const };
-        if (!comparison.faceFound || comparison.similarity < threshold) {
-          return { kind: "not_owner" as const };
-        }
-        return {
-          kind: "owner" as const,
-          timestampSeconds: frame.timestampSeconds,
-          highQuality: true,
-        };
-      });
-      if (expired()) return unavailable();
-
-      if (frameIdentity.some((result) => result.kind === "unavailable")) {
-        return unavailable();
-      }
-      for (const result of frameIdentity) {
-        if (result.kind === "owner") matched.push(result);
-      }
-
-      const facePresence = faceDetectedFrameCount / frames.length;
-      if (facePresence < VIDEO_FACE_PRESENCE_THRESHOLD) {
-        return reject("video_owner_missing");
-      }
-      const identityMatchRatio =
-        faceDetectedFrameCount === 0 ? 0 : matched.length / faceDetectedFrameCount;
-      if (identityMatchRatio < VIDEO_IDENTITY_MATCH_THRESHOLD) {
-        return reject("identity_mismatch");
-      }
-
-      const evidence = buildOwnerEvidence(
-        matched,
-        probe.durationSeconds,
-      );
-
       return {
         ok: true,
         value: {
-          evidence,
           durationSeconds: probe.durationSeconds,
           sampledFrameCount: frames.length,
         },
@@ -230,87 +169,8 @@ export async function validateProfileVideo(
   }
 }
 
-export function buildOwnerEvidence(
-  matches: readonly {
-    timestampSeconds: number;
-    highQuality: boolean;
-  }[],
-  durationSeconds: number,
-): VideoOwnerEvidence {
-  const sorted = [...matches].sort(
-    (a, b) => a.timestampSeconds - b.timestampSeconds,
-  );
-  const separation = Math.max(2, durationSeconds * 0.2);
-  let clusters = 0;
-  let lastClusterStart = Number.NEGATIVE_INFINITY;
-  const thirds = new Set<number>();
-
-  for (const match of sorted) {
-    if (match.timestampSeconds - lastClusterStart >= separation) {
-      clusters++;
-      lastClusterStart = match.timestampSeconds;
-    }
-    thirds.add(
-      Math.min(
-        2,
-        Math.max(
-          0,
-          Math.floor((match.timestampSeconds / durationSeconds) * 3),
-        ),
-      ),
-    );
-  }
-
-  return {
-    matchedFrameCount: sorted.length,
-    matchedClusterCount: clusters,
-    matchedTemporalThirds: thirds.size,
-    hasHighQualityMatch: sorted.some((match) => match.highQuality),
-  };
-}
-
-export function ownerEvidencePasses(
-  evidence: VideoOwnerEvidence,
-  durationSeconds: number,
-): boolean {
-  return (
-    evidence.matchedFrameCount >= MIN_MATCHED_FRAMES &&
-    evidence.matchedClusterCount >= MIN_MATCHED_CLUSTERS &&
-    evidence.hasHighQualityMatch &&
-    (durationSeconds <= 20 || evidence.matchedTemporalThirds >= 2)
-  );
-}
-
-async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  operation: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-  await Promise.all(
-    Array.from(
-      { length: Math.min(concurrency, items.length) },
-      async () => {
-        while (true) {
-          const index = nextIndex++;
-          if (index >= items.length) return;
-          results[index] = await operation(items[index]!);
-        }
-      },
-    ),
-  );
-  return results;
-}
-
 function reject(
-  reason:
-    | "identity_mismatch"
-    | "unsafe_content"
-    | "video_owner_missing"
-    | "video_owner_too_brief"
-    | "video_too_long"
-    | "video_too_large_to_check",
+  reason: "unsafe_content" | "video_too_long" | "video_too_large_to_check",
 ): MediaValidationResult<ValidatedVideo> {
   return { ok: false, reason, retryable: false };
 }

@@ -2,15 +2,12 @@ import type { Api, RawApi } from "grammy";
 import { Prisma, prisma } from "@gennety/db";
 import {
   FACE_SIMILARITY_THRESHOLD,
-  MAX_PHOTOS,
   normalizeProfileMedia,
   profilePhotoMedia,
   type ProfileMedia,
 } from "@gennety/shared";
-import { compareFaces, type FaceMatchResult } from "../face-match.js";
-import { downloadProfilePhoto, downloadTelegramFile } from "../storage.js";
+import type { FaceMatchResult } from "../face-match.js";
 import { profileMediaToJson } from "../profile-media-json.js";
-import { logMediaValidationRejection } from "./rejection-log.js";
 import { photoUploadStatePatch } from "./photo-state.js";
 
 const PENDING_PHOTO_CANDIDATE_VERSION = 1;
@@ -195,9 +192,6 @@ export async function commitProfilePhotoCandidate(
   const photoFaceScores = [...(profile?.photoFaceScores ?? [])];
   while (photoFaceScores.length < photos.length) photoFaceScores.push(0);
 
-  const pendingCandidates = parsePendingPhotoCandidates(
-    profile?.pendingPhotoCandidates ?? [],
-  );
   const candidate: PendingPhotoCandidate = {
     version: PENDING_PHOTO_CANDIDATE_VERSION,
     photoRef: input.photoRef,
@@ -208,115 +202,32 @@ export async function commitProfilePhotoCandidate(
     source: input.source,
   };
 
-  const hasTrustedReference = Boolean(
-    user.verifiedSelfiePath || profile?.referenceFaceEmbedding,
-  );
-  if (hasTrustedReference) {
-    const nextPhotos = [...photos, candidate.photoRef];
-    const nextMedia = [...profileMedia, candidate.profileMedia];
-    const nextHashes = [
-      ...uploadedPhotoHashes,
-      ...(candidate.perceptualHash ? [candidate.perceptualHash] : []),
-    ];
-    const nextScores = [...photoFaceScores, candidate.faceScore];
-    const photoState = photoUploadStatePatch({
-      photos: nextPhotos,
-      uploadedPhotoHashes: nextHashes,
-      referenceFaceEmbedding: profile?.referenceFaceEmbedding ?? null,
-    });
-    await upsertPhotoState(input.userId, {
-      photos: nextPhotos,
-      profileMedia: nextMedia,
-      photoFaceScores: nextScores,
-      uploadedPhotoHashes: nextHashes,
-      pendingPhotoCandidates: [],
-      photoState,
-    });
-    return {
-      status: "accepted",
-      photos: nextPhotos,
-      profileMedia: nextMedia,
-      uploadedPhotoHashes: nextHashes,
-      photoFaceScores: nextScores,
-      pendingCandidates: [],
-      acceptedCount: nextPhotos.length,
-      pendingCount: 0,
-      rejectedCount: pendingCandidates.length,
-      rejectedCandidates: pendingCandidates,
-    };
-  }
-
-  const candidates = [...pendingCandidates, candidate].sort(
-    compareCandidatesByUploadOrder,
-  );
-  const candidateBuffers = new Map<string, Buffer>();
-  if (input.candidateBuffer) candidateBuffers.set(input.photoRef, input.candidateBuffer);
-
-  const evaluation = await evaluatePhotoCandidateConsensus(candidates, {
-    getPhotoBuffer: async (candidateForBuffer) => {
-      const cached = candidateBuffers.get(candidateForBuffer.photoRef);
-      if (cached) return cached;
-      return downloadCandidatePhoto(candidateForBuffer.photoRef, input.api);
-    },
-    compareFaces,
-  });
-
-  if (!evaluation.winner) {
-    const capped = candidates.slice(-MAX_PHOTOS);
-    const dropped = candidates.slice(0, Math.max(0, candidates.length - MAX_PHOTOS));
-    await upsertPhotoState(input.userId, {
-      photos,
-      profileMedia,
-      photoFaceScores,
-      uploadedPhotoHashes,
-      pendingPhotoCandidates: capped,
-      photoState: photoUploadStatePatch({
-        photos,
-        uploadedPhotoHashes,
-        referenceFaceEmbedding: profile?.referenceFaceEmbedding ?? null,
-        skipReferenceCreation: true,
-      }),
-    });
-    return {
-      status: dropped.length > 0 ? "capped" : "pending",
-      photos,
-      profileMedia,
-      uploadedPhotoHashes,
-      photoFaceScores,
-      pendingCandidates: capped,
-      acceptedCount: photos.length,
-      pendingCount: capped.length,
-      rejectedCount: 0,
-      rejectedCandidates: [],
-    };
-  }
-
-  const confirmed = evaluation.winner;
-  const rejected = evaluation.rejected;
-  const nextPhotos = [...photos, ...confirmed.map((item) => item.photoRef)];
-  const nextMedia = [...profileMedia, ...confirmed.map((item) => item.profileMedia)];
+  // Every candidate that reaches here already passed per-photo validation
+  // (safe content + not a duplicate + a usable face, and — when the user is
+  // Persona-verified — a match against the verified selfie). We accept it
+  // immediately.
+  //
+  // There is intentionally NO pre-verification cross-photo "is this the same
+  // person" gate anymore. The old consensus pool held the first photos hidden
+  // until two of them clustered, which stranded honest users whose genuine
+  // same-person photos scored below the CompareFaces threshold (different
+  // angle / light / time). The real identity guarantee lives in Persona
+  // verification, which re-checks every photo against the selfie. We also never
+  // derive a self-photo identity anchor here (`skipReferenceCreation: true`),
+  // so a later photo is never gated against an earlier upload.
+  const nextPhotos = [...photos, candidate.photoRef];
+  const nextMedia = [...profileMedia, candidate.profileMedia];
   const nextHashes = [
     ...uploadedPhotoHashes,
-    ...confirmed
-      .map((item) => item.perceptualHash)
-      .filter((hash): hash is string => Boolean(hash)),
+    ...(candidate.perceptualHash ? [candidate.perceptualHash] : []),
   ];
-  const nextScores = [
-    ...photoFaceScores,
-    ...confirmed.map((item) => item.faceScore),
-  ];
-  const referenceCandidate = confirmed[0]!;
+  const nextScores = [...photoFaceScores, candidate.faceScore];
   const photoState = photoUploadStatePatch({
     photos: nextPhotos,
     uploadedPhotoHashes: nextHashes,
     referenceFaceEmbedding: profile?.referenceFaceEmbedding ?? null,
-    confirmReference: true,
-    referencePhotoRef: referenceCandidate.photoRef,
-    ...(referenceCandidate.perceptualHash
-      ? { referencePerceptualHash: referenceCandidate.perceptualHash }
-      : {}),
+    skipReferenceCreation: true,
   });
-
   await upsertPhotoState(input.userId, {
     photos: nextPhotos,
     profileMedia: nextMedia,
@@ -325,19 +236,8 @@ export async function commitProfilePhotoCandidate(
     pendingPhotoCandidates: [],
     photoState,
   });
-
-  await Promise.all(
-    rejected.map(() =>
-      logMediaValidationRejection({
-        userId: input.userId,
-        mediaType: "photo",
-        reason: "identity_mismatch",
-      }),
-    ),
-  );
-
   return {
-    status: "confirmed",
+    status: "accepted",
     photos: nextPhotos,
     profileMedia: nextMedia,
     uploadedPhotoHashes: nextHashes,
@@ -345,8 +245,8 @@ export async function commitProfilePhotoCandidate(
     pendingCandidates: [],
     acceptedCount: nextPhotos.length,
     pendingCount: 0,
-    rejectedCount: rejected.length,
-    rejectedCandidates: rejected,
+    rejectedCount: 0,
+    rejectedCandidates: [],
   };
 }
 
@@ -387,15 +287,6 @@ async function upsertPhotoState(
       ...input.photoState,
     },
   });
-}
-
-async function downloadCandidatePhoto(
-  ref: string,
-  api: Api<RawApi> | null | undefined,
-): Promise<Buffer | null> {
-  if (ref.includes("/")) return downloadProfilePhoto(ref);
-  if (!api) return null;
-  return downloadTelegramFile(api, ref);
 }
 
 function parsePendingPhotoCandidate(value: unknown): PendingPhotoCandidate | null {

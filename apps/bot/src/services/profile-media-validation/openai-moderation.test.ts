@@ -106,7 +106,11 @@ describe("OpenAI moderation", () => {
     });
   });
 
-  it("treats an unknown flagged category as review", async () => {
+  it("ignores a flagged result whose categories we do not gate on", async () => {
+    // We deliberately do NOT escalate a bare `flagged: true` with only
+    // unmapped categories into a review signal — that catch-all was a real
+    // false-positive source on ordinary media. Only explicitly mapped
+    // block/review categories produce a signal.
     const fetchFn = vi.fn().mockResolvedValue(
       response({
         flagged: true,
@@ -119,14 +123,7 @@ describe("OpenAI moderation", () => {
       await moderateTextWithOpenAI("text", { fetchFn }),
     ).toEqual({
       ok: true,
-      signals: [
-        {
-          provider: "openai",
-          category: "other_flagged",
-          score: 1,
-          severity: "review",
-        },
-      ],
+      signals: [],
     });
   });
 

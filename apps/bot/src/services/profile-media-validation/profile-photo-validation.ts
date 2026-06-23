@@ -18,7 +18,6 @@ import type {
   ValidatedPhoto,
 } from "./types.js";
 import { logMediaValidationRejection } from "./rejection-log.js";
-import { referencePhotoRefFromAnchor } from "./photo-state.js";
 
 export interface ValidateUserProfilePhotoInput {
   userId: string;
@@ -41,13 +40,19 @@ export async function validateUserProfilePhoto(
           photos: true,
           uploadedPhotoHashes: true,
           pendingPhotoCandidates: true,
-          referenceFaceEmbedding: true,
         },
       },
     },
   });
   if (!user) return unavailable();
 
+  // Identity is enforced ONLY against the Persona-captured selfie (our ground
+  // truth). Before verification we deliberately do NOT compare an uploaded
+  // photo to any self-uploaded "anchor": cross-photo CompareFaces was
+  // brittle (same person scoring below threshold on a different angle / light)
+  // and stranded honest users with zero accepted photos. Persona verification
+  // is the real identity gate; an unverified user already carries the Elo
+  // penalty and is re-checked against the selfie on every later photo edit.
   let identityReference: Buffer | null = null;
   if (user.verifiedSelfiePath) {
     identityReference = await downloadSelfie(user.verifiedSelfiePath);
@@ -77,14 +82,6 @@ export async function validateUserProfilePhoto(
     const buffer = await downloadExistingPhoto(ref, input.api);
     if (!buffer) return unavailable();
     existingPhotos.push({ buffer });
-  }
-
-  const referencePhotoRef = referencePhotoRefFromAnchor(
-    user.profile?.referenceFaceEmbedding ?? null,
-  );
-  if (!identityReference && referencePhotoRef) {
-    identityReference = await downloadExistingPhoto(referencePhotoRef, input.api);
-    if (!identityReference) return unavailable();
   }
 
   const result = await validateProfilePhoto(

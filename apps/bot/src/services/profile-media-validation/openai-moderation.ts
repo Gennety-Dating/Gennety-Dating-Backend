@@ -143,15 +143,12 @@ async function callModeration(
       });
     }
 
-    if (result.flagged && signals.length === 0) {
-      signals.push({
-        provider: "openai",
-        category: "other_flagged",
-        score: 1,
-        severity: "review",
-      });
-    }
-
+    // NB: we intentionally do NOT escalate a bare `result.flagged` with no
+    // mapped category into a review signal. The omni-moderation model flags
+    // images for many soft categories we don't gate on (and sometimes
+    // borderline-false on ordinary photos); turning that catch-all into a hard
+    // reject was a real false-positive source on normal profile photos. Only
+    // the explicitly-mapped block/review categories above can reject media.
     return { ok: true, signals };
   } catch (error) {
     return {

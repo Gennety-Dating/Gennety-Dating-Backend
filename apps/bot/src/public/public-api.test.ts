@@ -1745,7 +1745,7 @@ describe("POST /v1/me/photos", () => {
     expect(uploadProfilePhoto).not.toHaveBeenCalled();
   });
 
-  it("keeps the first unverified photo pending and confirms on the second matching photo", async () => {
+  it("accepts each unverified photo immediately (no pre-verification identity gate)", async () => {
     const { env } = await import("../config.js");
     (
       env as unknown as { PROFILE_MEDIA_VALIDATION_ENABLED: boolean }
@@ -1762,14 +1762,14 @@ describe("POST /v1/me/photos", () => {
       .attach("photo", JPEG, { filename: "one.jpg", contentType: "image/jpeg" });
 
     expect(first.status).toBe(201);
-    expect(first.body.photos).toEqual([]);
+    expect(first.body.photos).toEqual([`${user.id}/one.jpg`]);
     expect(first.body.photoConsensus).toMatchObject({
-      status: "pending",
-      acceptedCount: 0,
-      pendingCount: 1,
+      status: "accepted",
+      acceptedCount: 1,
+      pendingCount: 0,
     });
-    expect(userById(user.id)?.profile?.photos).toEqual([]);
-    expect(userById(user.id)?.profile?.pendingPhotoCandidates).toHaveLength(1);
+    expect(userById(user.id)?.profile?.photos).toEqual([`${user.id}/one.jpg`]);
+    expect(userById(user.id)?.profile?.pendingPhotoCandidates ?? []).toEqual([]);
 
     const second = await request(app)
       .post("/v1/me/photos")
@@ -1782,14 +1782,13 @@ describe("POST /v1/me/photos", () => {
       `${user.id}/two.jpg`,
     ]);
     expect(second.body.photoConsensus).toMatchObject({
-      status: "confirmed",
+      status: "accepted",
       acceptedCount: 2,
       pendingCount: 0,
     });
-    expect(userById(user.id)?.profile?.pendingPhotoCandidates).toEqual([]);
-    expect(userById(user.id)?.profile?.referenceFaceEmbedding).toMatchObject({
-      photoRef: `${user.id}/one.jpg`,
-    });
+    expect(userById(user.id)?.profile?.pendingPhotoCandidates ?? []).toEqual([]);
+    // No self-photo identity anchor is created before Persona verification.
+    expect(userById(user.id)?.profile?.referenceFaceEmbedding ?? null).toBeNull();
   });
 });
 

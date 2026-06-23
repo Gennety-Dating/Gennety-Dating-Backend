@@ -27,7 +27,12 @@ import type {
   ValidatedPhoto,
 } from "./types.js";
 
-const MIN_FACE_CONFIDENCE = 0.9;
+// Deliberately lenient: a profile photo only needs to *contain a usable
+// human face*, not a perfectly frontal studio shot. Rekognition drops detection
+// confidence on angled / partially-turned faces, so a 0.90 floor was rejecting
+// plenty of normal photos ("face clearly visible but bounced"). 0.75 keeps out
+// non-faces / heavy occlusion while letting ordinary casual selfies through.
+const MIN_FACE_CONFIDENCE = 0.75;
 const MIN_FACE_AREA = 0.015;
 const MIN_FACE_SHARPNESS = 0.15;
 
