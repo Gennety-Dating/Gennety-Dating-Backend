@@ -229,7 +229,7 @@ Columns (≈ 25):
 | Demographics | `userId` (unique), `ethnicity`, `height`, `hobbies` (`String[]`), `partnerPreferences`, `psychologicalSummary`, `negativeConstraints`, `ageRangeMin`, `ageRangeMax` |
 | Vector | `embedding` (`vector(1536)`), `embeddingDirty`, `embeddingDirtyAt` |
 | Elo | `eloScore` (default 500), seeded from the server-side mean of all per-photo vision scores; `eloMatchesPlayed`; `eloSeededAt`; auditable aggregate/per-photo output in `eloSeedDetails` |
-| Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `referenceFaceEmbedding` (`Json?` upload-time identity-anchor metadata for the confirmed identity cluster), `uploadedPhotoHashes` (`String[]` perceptual hashes for accepted static photos), `pendingPhotoCandidates` (`Json[]` hidden unconfirmed consensus pool), `acceptedPhotoCount` (`Int`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
+| Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `referenceFaceEmbedding` (`Json?` legacy self-photo identity-anchor metadata — retained, no longer written by the upload flow since identity moved to Persona-only, 2026-06-23), `uploadedPhotoHashes` (`String[]` perceptual hashes for accepted static photos, dup detection), `pendingPhotoCandidates` (`Json[]` legacy consensus pool — retained, no longer written), `acceptedPhotoCount` (`Int`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
 | Geo / radius | `matchRadius` (`campus_only` / `citywide`), `homeCity`, `homeCountryCode`, `homeCityKey`, `homePlaceId`, `latitude`, `longitude`, `locationUpdatedAt`, `timeZone` (IANA, derived from the dating city; drives the Profiler's local-time batch windows) |
 | Match priority | `lastMatchedAt`, `missedWeeks`, `standbyCount`, `lastMissedAt`, `silentIgnoreCount` |
 | Profiler (Phase 1b) | `profilerStartedAt`, `profilerNextAt`, `profilerActiveQuestionId`, `profilerBatchRemaining` — scheduler state for the post-onboarding Q&A batches that fuel icebreakers/hints (see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §Phase 1b). Indexed `@@index([profilerNextAt])` for the worker sweep. |
@@ -363,7 +363,7 @@ One row per (user, Profiler question) — `questionId`, `priority`
 `@@unique([userId, questionId])`, `onDelete: Cascade` from `users`. Backs the
 Phase 1b Profiler (see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §Phase 1b): timed
 post-onboarding Q&A that is the **primary source** for icebreakers
-(`date-lifecycle.ts`) and wingman/date-planning hints (`wingman-hint.ts`).
+(`date-lifecycle.ts`) and wingman hints (`wingman-hint.ts`).
 Deliberately NOT read by the matching engine. Written by
 `handlers/profiler/router.ts` + `services/profiler.ts`; scheduled by
 `workers/profiler.ts`. The question bank is first-party data in
@@ -544,25 +544,23 @@ Richer Telegram display media lives additively in `Profile.profileMedia[]`:
 `{ type: "photo", photo }`, `{ type: "live_photo", photo, livePhoto, ...metadata }`,
 or `{ type: "video", video, ...metadata }`. Static media admission stores
 `uploadedPhotoHashes` for duplicate detection and `acceptedPhotoCount`.
-For unverified users without a confirmed anchor, photos that pass per-photo
-safety/face/duplicate gates are stored only in hidden
-`Profile.pendingPhotoCandidates[]`; they are not rendered, not counted toward
-`MIN_PHOTOS`, and not used by verification/matching. Each new candidate is
-compared pairwise against the pending pool with Rekognition `CompareFaces`.
-When a connected cluster reaches 2+ distinct photos, the largest cluster wins
-(equal size tie-breaks by earliest upload), `referenceFaceEmbedding` is written
-from the earliest photo in that cluster, cluster photos move into `photos[]` /
-`profileMedia[]` / `photoFaceScores[]`, and pending outliers are rejected. Once
-`referenceFaceEmbedding` exists, subsequent photos must contain any face
-matching that anchor; group photos are allowed when the owner is present.
-Verified users bypass consensus and compare against `verifiedSelfiePath`.
-This schema is additive (`pending_photo_candidates`) and requires the standard
-Prisma `db:push` deploy step before code that selects the column starts.
-Video remains display-only and is excluded from `photos[]`, but admission is
-validated before persistence:
-`ffprobe`/`ffmpeg` extract 12 temporary samples, AWS Rekognition performs face
-detection/comparison and image moderation, and OpenAI independently moderates
-sampled frames plus the Whisper transcript. Only validation version and
+**Identity is enforced only by Persona verification, not at upload time
+(simplified 2026-06-23).** A static photo that passes per-photo safety,
+usable-face (Rekognition confidence ≥ 0.75), and duplicate gates is accepted
+and counted toward `MIN_PHOTOS` immediately. There is no pre-verification
+cross-photo "same person" clustering and no self-photo identity anchor: the
+former hidden `Profile.pendingPhotoCandidates[]` consensus pool (held the first
+photos invisible until two clustered with `CompareFaces`) and the
+`referenceFaceEmbedding` self-anchor were removed from the upload flow because
+they stranded legitimate users whose genuine same-person photos scored just
+below threshold. Those columns are retained (no longer written by uploads) and
+no schema change is required. Once a user is Persona-verified, the upload gate
+compares each new photo against `verifiedSelfiePath`, and the verification
+pipeline re-runs on every photo edit — the real identity gate. Video remains
+display-only and is excluded from `photos[]`; admission is validated for
+**safety only** (no identity/face-presence gate): `ffprobe`/`ffmpeg` extract 12
+temporary samples, AWS Rekognition + OpenAI moderate each frame, and OpenAI
+moderates the Whisper audio transcript. Only validation version and
 timestamp are retained; temporary video, frames, audio, and transcripts are
 deleted. The `photos[i] ↔ photoFaceScores[i]` invariant still holds. When
 `profileMedia[]` is empty, renderers normalize legacy `photos[]` into photo

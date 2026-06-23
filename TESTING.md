@@ -52,7 +52,7 @@ pnpm --filter @gennety/bot exec tsx scripts/dev/advance-match-clock.ts \
 
 | # | Action | Expected | DB / log evidence | OK |
 |---|---|---|---|---|
-| A1 | `/start` cold | Consent card + ToS button | `User` row created; `email='dev+5986970093@gennety.dev'`; `isEmailVerified=true` | ☐ |
+| A1 | `/start` cold | Consent card + ToS button | `User` row created; `email='dating@gennety.com'`; `isEmailVerified=true` | ☐ |
 | A2 | Tap consent → Onboarding Mini App opens | Full-screen Mini App: intro, ToS, language; **no** email/OTP screens (bypass) | `termsAccepted=true`, `consentedAt` set; `language` set | ☐ |
 | A3 | Tap "Continue" → returns to bot chat | Conversational agent greets in chosen language | `onboardingStep='conversational'`; agent does **not** call `send_otp_email` | ☐ |
 | A4 | Agent requests Magic Prompt → paste a real ChatGPT/Claude dump | "Internal monologue" streamed via `sendMessageDraft` while parsing. With `RICH_THINKING_ENABLED`: native `<tg-thinking>` shimmer (`sendRichMessageDraft`) on a 10.1 client; on an old client/server it must silently degrade to the edited status line and never block the flow | `Profile.psychologicalSummary` populated; `Profile.embedding` vector(1536) written | ☐ |

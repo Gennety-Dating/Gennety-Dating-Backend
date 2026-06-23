@@ -195,27 +195,30 @@ Hard rules enforced by the collector:
   Albums and rapid standalone photos are coalesced into one progress response,
   so a 4- or 6-photo burst does not produce one reply per frame. At 3 photos the
   bot uses a short progress reminder rather than repeating the full pitch.
-  Exact duplicates, resized/re-encoded copies, crops, screenshots, and lightly
-  edited copies are not counted and receive an explicit explanation. Before
-  Persona verification, a single uploaded photo is **not** trusted as the
-  identity anchor. Each static photo that passes safety, usable-face, and
-  duplicate checks enters a hidden `pendingPhotoCandidates[]` pool and is not
-  rendered or counted toward `MIN_PHOTOS` until at least two distinct pending
-  photos form a matching face cluster at `FACE_SIMILARITY_THRESHOLD` (0.60).
-  The largest matching cluster becomes the profile identity anchor; equal-size
-  clusters tie-break by the earliest uploaded photo. Cluster photos move into
-  `Profile.photos[]` / `profileMedia[]` / `photoFaceScores[]`, while pending
-  outliers are rejected as another person. After that, every later photo must
-  contain at least one detected face that matches the confirmed anchor; group
-  photos are allowed when the owner is visible. If the user already has
-  `verifiedSelfiePath`, upload-time identity comparison continues to use the
-  Persona selfie instead of consensus. Duplicate detection uses stored
-  perceptual hashes with `DUPLICATE_HASH_DISTANCE` (8), including hashes from
-  the hidden pending pool, so two copies of one image can never confirm
-  identity. Unsafe, explicit, no-face, wrong-identity, duplicate, and
-  technical-processing failures are rejected before accepted-profile
-  persistence, logged to `media_validation_rejections`, and keep the user in
-  the same retryable upload session.
+  Exact duplicates (same Telegram `file_unique_id` within a batch) and
+  re-encoded / cropped copies (perceptual `differenceHash` within
+  `DUPLICATE_HASH_DISTANCE` (8) of any accepted hash) are not counted and
+  receive an explicit explanation. **Identity is enforced only by Persona
+  verification, not by an upload-time gate before it (simplified 2026-06-23).**
+  Before the user has a `verifiedSelfiePath`, each static photo that passes
+  safety, usable-face presence (Rekognition face confidence ≥ 0.75, lenient by
+  design — angled / partially-turned faces are normal), and the duplicate
+  checks is accepted and counted toward `MIN_PHOTOS` **immediately**: there is
+  no cross-photo "same person" clustering and no self-photo identity anchor.
+  (The earlier hidden `pendingPhotoCandidates[]` consensus pool — which held the
+  first photos invisible until two of them clustered at
+  `FACE_SIMILARITY_THRESHOLD` — was removed because it stranded legitimate users
+  whose genuine same-person photos scored just below the CompareFaces
+  threshold, leaving them with zero accepted photos and no way to finish
+  onboarding. `pendingPhotoCandidates` / `referenceFaceEmbedding` columns are
+  retained but no longer written by the upload flow.) Once the user is
+  Persona-verified, every uploaded or edited photo is compared against the
+  verified selfie — the real identity gate — and the verification pipeline
+  re-runs on every photo edit (§1.4), so a wrong-person photo on a verified
+  profile is caught there. Unsafe, no-face, duplicate, and technical-processing
+  failures are rejected before accepted-profile persistence, logged to
+  `media_validation_rejections`, and keep the user in the same retryable upload
+  session.
 - When `TICKET_FEATURE_ENABLED`, the first post-minimum offer explains both
   rewards: reaching `PHOTO_BONUS_TICKET_THRESHOLD` (4) face-validated photos
   grants a free Date Ticket, and adding a profile video grants another. A batch
@@ -227,20 +230,20 @@ Hard rules enforced by the collector:
 - Profile media may be a mix of static photos, Telegram Live Photos, and a
   profile **video**. A Live Photo counts as one profile media item toward
   `MIN_PHOTOS` / `MAX_PHOTOS`, but its static frame is still stored in
-  `Profile.photos[]` and must pass the same face-presence, identity, safety,
-  and duplicate checks as a normal profile photo. Live Photos without a static
-  frame are rejected.
+  `Profile.photos[]` and must pass the same safety, usable-face, and duplicate
+  checks as a normal profile photo (identity only against the Persona selfie,
+  once verified). Live Photos without a static frame are rejected.
   A **video** (`ProfileMedia` `{ type: "video" }`) remains display-only and is
   NOT added to `photos[]` or counted toward `MIN_PHOTOS`, preserving the
-  `photos[i] ↔ photoFaceScores[i]` invariant. Before persistence,
-  `VIDEO_SAMPLE_TARGET_FRAMES` (12) frames are sampled evenly, independently
-  moderated, and compared with the profile identity anchor. Friends, groups,
-  parties, and scenery are allowed, but faces must be present in at least
-  `VIDEO_FACE_PRESENCE_THRESHOLD` (25%) of sampled frames and the profile
-  owner must match in at least `VIDEO_IDENTITY_MATCH_THRESHOLD` (50%) of
-  frames where any face is detected. Missing owner evidence, insufficient face
-  presence, an identity mismatch, any confidently unsafe frame, or an unsafe
-  audio transcript is rejected. Videos over 60 seconds or 20 MB are rejected
+  `photos[i] ↔ photoFaceScores[i]` invariant. The video is validated for
+  **safety only** (simplified 2026-06-23 — it carries no identity gate, since
+  it is display-only and the old face-presence / owner-match checks reused the
+  same brittle CompareFaces path and bounced legitimate friends / scenery /
+  party clips). Before persistence, `VIDEO_SAMPLE_TARGET_FRAMES` (12) frames are
+  sampled evenly and independently moderated (OpenAI + AWS), and the audio
+  transcript is moderated; any confidently unsafe frame or an unsafe audio
+  transcript is rejected. Friends, groups, parties, and scenery are allowed,
+  and the owner need not appear. Videos over 60 seconds or 20 MB are rejected
   because Telegram Bot API `getFile` cannot supply larger files for
   validation. A rejected replacement never overwrites the existing valid video
   and never grants the ticket bonus. Accepted video metadata stores only
@@ -411,7 +414,7 @@ nulls `reEngagementNextAt` permanently.
 
 The **Profiler** (`workers/profiler.ts` + `services/profiler.ts`,
 `services/profiler-schedule.ts`) collects gender-specific Q&A *after*
-onboarding to fuel the §Phase 4 icebreakers and date-planning hints. It is
+onboarding to fuel the §Phase 4 icebreakers and wingman hints. It is
 **not** an input to the matching algorithm — purely fuel for icebreakers/hints.
 Telegram-only in v1.
 
@@ -460,14 +463,11 @@ Telegram-only in v1.
   turn-offs, shared interests, media, surprises, communication style).
 - **Storage.** One `ProfilerAnswer` row per (user, question): `priority`,
   `answerText`, `skipped`, `skipReturned`, `cycleId`.
-- **Weighting.** Icebreaker/hint generation emphasises a partner's answers by
-  priority weight (`high 1.0 / medium 0.5 / low 0.2`,
+- **Weighting.** Icebreaker/wingman-hint generation emphasises a partner's
+  answers by priority weight (`high 1.0 / medium 0.5 / low 0.2`,
   `PROFILER_PRIORITY_WEIGHTS`). Profiler answers are the **primary** source;
   generation falls back to `psychologicalSummary` when a user has no answers
-  (see §3.7 wingman and §Phase 4 icebreakers). The §6 "hints" are
-  **source-masked** date-planning tips — concrete advice phrased as Gennety's
-  own suggestion, never attributed to the partner's answers — bundled into the
-  T-5h icebreaker DM.
+  (see §3.7 wingman and §Phase 4 icebreakers).
 - **Off switch.** `PROFILER_CRON_SCHEDULE` (default `*/15 * * * *`).
 
 ## Phase 2 — Main Menu & Persistent Surface
@@ -744,11 +744,20 @@ match/bundle, scope, and amount, and can be consumed only once.
   sets `paidForPartnerBy*`) plus "Pay only mine — $6.99". Female users get a
   single "Pay my ticket — $6.99". The server re-validates that pay-for-both is
   male-only.
-- **Chat hygiene.** Ticket progress edits the same post-accept status message
-  instead of stacking `matchBothAccepted`, ticket CTA, self-paid, and
-  both-paid DMs. A first paid ticket turns the payer's block into a short
-  "ticket ready / waiting" state; once both tickets are settled the scheduler
-  edits the block into the Calendar CTA.
+- **Persistent ticket card + Calendar follows.** The ticket card is a
+  **standalone, re-openable** message sent once per side and **never edited or
+  deleted** — it is intentionally NOT tracked in `calendarMessageId*`. Tapping
+  it always opens the Mini App, which re-derives the live state (offer →
+  pay/use; or the "your match paid ❤️" surprise; or both-secured). Ticket
+  progress (first paid, both paid) is reflected **inside the Mini App**, not by
+  rewriting the chat card. Once both tickets settle, the Calendar arrives as a
+  **separate** message that *follows* the ticket card (`startScheduling` sends a
+  fresh `calendarMessageId*` card), and the scheduling/venue/time-lock flows
+  only ever touch that Calendar card — so the ticket entry survives to the end
+  of the flow and the covered woman can always reopen it for the surprise. This
+  is a deliberate, scoped exception to the one-live-post-accept-card rule
+  (§3.6): the ticket card and the Calendar card are two distinct, coexisting
+  buttons.
 - **Welcome gift.** Every new user is gifted **one free Date Ticket** as a
   personal "your first date is on me" gesture, delivered as a **pre-roll before
   their first-ever match pitch** (`handlers/matching/pitch.ts` →
@@ -800,11 +809,19 @@ match/bundle, scope, and amount, and can be consumed only once.
   a double-confirm redeems exactly once. Re-granted/refreshed each later famine
   week until used. Inert unless `TICKET_FEATURE_ENABLED`; Telegram-only in v1.
 - **Hard gate.** The Calendar is not sent until *both* tickets are paid
-  (`ticketStatus = completed`), at which point `startScheduling` runs and the
-  live post-accept block becomes the Calendar button.
-- **Partner-paid screen.** When a male covers both, the partner's Mini App shows
-  "[Name] already paid your ticket ❤️ — nothing to do"; Telegram chat stays on
-  the same live post-accept block.
+  (`ticketStatus = completed`), at which point `startScheduling` runs and sends
+  the Calendar as a **separate** message that follows each side's persistent
+  ticket card (it does not replace it).
+- **Partner-paid surprise screen.** When a male covers both, the gate completes
+  for both. Because the ticket card is a standalone, never-edited message (see
+  *Persistent ticket card* above), the covered partner's "buy ticket" entry
+  simply stays in chat — no spoiler — so she opens the Mini App still braced to
+  pay and instead lands on a dedicated, softly-animated **"{name} already paid
+  your ticket ❤️"** reveal (`partner-paid` screen, `PartnerPaidCard`, Lavender
+  Glass: glowing covered ticket with a ❤ "PAID" seal, drifting hearts, minimal
+  copy), whose single CTA continues her to the Calendar. The ticket card stays
+  re-openable (every open re-derives the right screen) for both sides until the
+  date is fully scheduled; the Calendar simply follows it as its own button.
 - **`ticketStatus` lifecycle.** `pending` → `partial` (one paid; `ticketExpiresAt`
   is the second side's deadline) → `completed`; or `refunded`/`expired` on
   timeout. **Refund/expiry policy:** the hourly `ticket-expiry` cron refunds a
@@ -1143,7 +1160,10 @@ Implemented as a string sub-state (`Match.venueChangeStatus`) layered on a
   place]` / `[❌ Decline (cancel date)]`. Accept → the proposed venue is copied
   onto the canonical `venue*` fields and both get an updated card. Decline →
   a confirmation guard (`[Yes, cancel]` / `[No, go back]`) protects against an
-  accidental tap; confirming flips the **whole match to `cancelled`**.
+  accidental tap; confirming flips the **whole match to `cancelled`**. As with
+  the emergency-cancel guard, the destructive `[Yes, cancel]` carries native
+  `danger` (red) styling and the safe `[No, go back]` native `success` (green)
+  styling, so the irreversible option reads as distinct at a glance.
 - **Cancellation semantics.** A male decline (or a TTL/cutoff lapse) carries
   **no Elo penalty** for anyone (a logistics fallout, like an emergency
   cancel); the female gets a small standby/priority comp boost for the next
@@ -1162,7 +1182,7 @@ columns on `matches`.
 | When | Action | Idempotency marker |
 |---|---|---|
 | Activation → `scheduled` | Generate **wingman hints** (one short imperative tip per side about the other) and persist on the row | `wingmanHintA/B` |
-| T − 5 h | Send personalised AI **ice-breakers** (3 starters per side, language-aware, fallback to static lists). For Telegram users the DM is delivered through the native rich AI-compose draft stream (`streamDraftsToChat(..., { rich: true })`, same primitive as the pitch): a "thinking" lead beat (`icebreakerStreamStart`, a `<tg-thinking>` shimmer), each starter revealed one-by-one as growing drafts, then the full text + §6 planning hints as the plain final `sendMessage` — the emergency-window DM lands right after. Degrades to the classic edited stream when a client can't render rich drafts. Mobile gets the same content via `iceBreakersA/B` (no streaming). | `icebreakersSentAt` |
+| T − 5 h | Send personalised AI **ice-breakers** (3 starters per side, language-aware, fallback to static lists). For Telegram users the DM is delivered through the native rich AI-compose draft stream (`streamDraftsToChat(..., { rich: true })`, same primitive as the pitch): a "thinking" lead beat (`icebreakerStreamStart`, a `<tg-thinking>` shimmer), each starter revealed one-by-one as growing drafts, then the full set of starters as the plain final `sendMessage` — the emergency-window DM lands right after. Degrades to the classic edited stream when a client can't render rich drafts. Mobile gets the same content via `iceBreakersA/B` (no streaming). | `icebreakersSentAt` |
 | T − 5 h | Open the **emergency window** — DM both sides with the cancel button (callback `emerg:start:{matchId}`) | shared with above |
 | T − 1.5 h | **Pre-date safety brief** to the female user (Telegram DM only — mobile gets push). Skipped when no female participant has a Telegram presence. | `safetyNoteSentAt` |
 | T − 1.5 h | **Wingman hint reveal push** — the asymmetric tip is unmasked at this gate (the mobile serializer enforces it independently) | `wingmanSentAt` |
