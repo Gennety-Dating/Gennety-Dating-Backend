@@ -20,6 +20,8 @@ export interface OnboardingStrings {
   consentTitle: string;
   consentLead: string;
   consentTermsPrefix: string;
+  consentTerms: string;
+  consentAnd: string;
   consentPrivacy: string;
   consentResearch: string;
   continue: string;
@@ -144,7 +146,9 @@ const en: OnboardingStrings = {
   profileAlt: "Portrait of a young professional",
   consentTitle: "One quick formality",
   consentLead: "Gennety matches people using deep context, so we need your explicit consent before continuing.",
-  consentTermsPrefix: "I accept the service terms and",
+  consentTermsPrefix: "I accept the",
+  consentTerms: "terms of service",
+  consentAnd: "and",
   consentPrivacy: "privacy policy",
   consentResearch: "My anonymized data may be used to improve matchmaking.",
   continue: "Continue",
@@ -288,8 +292,10 @@ const ru: OnboardingStrings = {
   profileAlt: "Портрет молодого профессионала",
   consentTitle: "Сначала короткая формальность",
   consentLead: "Gennety подбирает людей по глубокому контексту, поэтому нам нужно явное согласие перед продолжением.",
-  consentTermsPrefix: "Я принимаю условия сервиса и",
-  consentPrivacy: "политику приватности",
+  consentTermsPrefix: "Я принимаю",
+  consentTerms: "условия использования",
+  consentAnd: "и",
+  consentPrivacy: "политику конфиденциальности",
   consentResearch: "Можно использовать мои обезличенные данные для улучшения матчмейкинга.",
   continue: "Продолжить",
   saving: "Сохраняю...",
@@ -431,8 +437,10 @@ const uk: OnboardingStrings = {
   profileAlt: "Портрет молодого професіонала",
   consentTitle: "Спочатку коротка формальність",
   consentLead: "Gennety підбирає людей за глибоким контекстом, тому нам потрібна твоя явна згода.",
-  consentTermsPrefix: "Я приймаю умови сервісу та",
-  consentPrivacy: "політику приватності",
+  consentTermsPrefix: "Я приймаю",
+  consentTerms: "умови використання",
+  consentAnd: "та",
+  consentPrivacy: "політику конфіденційності",
   consentResearch: "Можна використовувати мої знеособлені дані для покращення матчмейкінгу.",
   continue: "Продовжити",
   saving: "Зберігаю...",
@@ -575,7 +583,9 @@ const de: OnboardingStrings = {
   profileAlt: "Porträt eines jungen Berufstätigen",
   consentTitle: "Eine kurze Formalität",
   consentLead: "Gennety matcht Menschen anhand von tiefem Kontext. Deshalb brauchen wir vorab deine ausdrückliche Zustimmung.",
-  consentTermsPrefix: "Ich akzeptiere die Nutzungsbedingungen und die",
+  consentTermsPrefix: "Ich akzeptiere die",
+  consentTerms: "Nutzungsbedingungen",
+  consentAnd: "und die",
   consentPrivacy: "Datenschutzerklärung",
   consentResearch: "Meine anonymisierten Daten dürfen zur Verbesserung des Matchmakings verwendet werden.",
   continue: "Weiter",
@@ -719,7 +729,9 @@ const pl: OnboardingStrings = {
   profileAlt: "Portret młodego profesjonalisty",
   consentTitle: "Krótka formalność",
   consentLead: "Gennety dobiera ludzi na podstawie głębokiego kontekstu, dlatego potrzebujemy Twojej wyraźnej zgody.",
-  consentTermsPrefix: "Akceptuję warunki usługi i",
+  consentTermsPrefix: "Akceptuję",
+  consentTerms: "warunki usługi",
+  consentAnd: "i",
   consentPrivacy: "politykę prywatności",
   consentResearch: "Moje zanonimizowane dane mogą służyć do ulepszania matchmakingu.",
   continue: "Dalej",

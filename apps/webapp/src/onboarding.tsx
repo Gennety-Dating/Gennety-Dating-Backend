@@ -100,6 +100,7 @@ const COST_PART_PAUSES_MS: number[][] = [[0], [0]];
 // always-on personal AI matchmaker.
 const MATCHMAKER_PART_PAUSES_MS: number[][] = [[0], [0]];
 const PRIVACY_POLICY_URL = "https://gennety.com/privacy";
+const TERMS_OF_SERVICE_URL = "https://gennety.com/terms";
 
 type RemoteUser = TelegramOnboardingState["user"];
 
@@ -1204,6 +1205,10 @@ function ConsentGate(props: { onState: (state: TelegramOnboardingState) => void 
         <input type="checkbox" checked={terms} onChange={(event) => setTerms(event.currentTarget.checked)} />
         <span>
           {s.consentTermsPrefix}{" "}
+          <a className="gate-link" href={TERMS_OF_SERVICE_URL} rel="noreferrer" target="_blank">
+            {s.consentTerms}
+          </a>{" "}
+          {s.consentAnd}{" "}
           <a className="gate-link" href={PRIVACY_POLICY_URL} rel="noreferrer" target="_blank">
             {s.consentPrivacy}
           </a>
@@ -1312,9 +1317,18 @@ function EmailGate(props: {
           inputMode="email"
           autoCapitalize="none"
           autoComplete="email"
+          enterKeyHint="send"
           placeholder="name@university.edu"
           value={email}
           onChange={(event) => setEmail(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            // Enter on the soft/hardware keyboard fires the same path as the
+            // "Next" button, so the user never has to scroll down to tap it.
+            if (event.key === "Enter" && email.trim() && !busy && app?.initData) {
+              event.preventDefault();
+              void submit();
+            }
+          }}
         />
         <button className="gate-button" disabled={!email.trim() || busy || !app?.initData} onClick={() => void submit()}>
           {busy ? s.emailSending : s.emailSend}

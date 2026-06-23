@@ -6,16 +6,15 @@ import { onboardingActivityPatch } from "../../workers/re-engagement-schedule.js
 import { buildLanguageKeyboard } from "../language-keyboard.js";
 
 const PRIVACY_POLICY_URL = "https://gennety.com/privacy";
+const TERMS_OF_SERVICE_URL = "https://gennety.com/terms";
 
-/** Send the consent prompt with a policy link and "I Agree" button. */
+/** Send the consent prompt with policy links and "I Agree" button. */
 export async function sendConsentPrompt(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
 
   const keyboard = new InlineKeyboard()
-    .url(
-      "Privacy Policy",
-      PRIVACY_POLICY_URL,
-    )
+    .url(t(lang, "consentTermsButton"), TERMS_OF_SERVICE_URL)
+    .url(t(lang, "consentPrivacyButton"), PRIVACY_POLICY_URL)
     .row()
     .text(t(lang, "consentAgree"), "consent:agree");
 

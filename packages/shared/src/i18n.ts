@@ -5,8 +5,10 @@ const translations = {
     // --- Onboarding ---
     consentMessage:
       "Welcome to Gennety Dating!\n\n" +
-      "Before we begin, please review our Privacy Policy and agree to our data retention terms.",
+      "Before we begin, please review our Terms of Service and Privacy Policy and agree to our data retention terms.",
     consentAgree: "I Agree",
+    consentPrivacyButton: "Privacy Policy",
+    consentTermsButton: "Terms of Service",
     welcome: "Gennety Dating 👀\nAI matchmaking built for students.",
     chooseLanguage: "Pick your language:",
     philosophyPitch:
@@ -421,6 +423,8 @@ const translations = {
       "How about one of these? Tap what works:",
     matchScheduleIter3:
       "It's mutual 🔥 Open the calendar and mark every time that works.",
+    matchScheduleAfterTicket:
+      "📅 Now pick your time — open the calendar and mark every slot that works.",
     matchScheduleBtnCalendar: "📅 Open Calendar",
     // --- Date Ticket (premium post-accept gate) ---
     ticketCardCaption:
@@ -532,7 +536,6 @@ const translations = {
     // explicit dev-only demos.
     icebreakerStreamStart: "✨ Lining up a few things you two could talk about…",
     noMatchStreamStart: "💫 Going over this week's matches for you…",
-    dateHintsIntro: "\n\n💡 A couple of tips to plan it:\n",
     profilerSkip: "Skip",
     wingmanHintIntro:
       "👋 Insider tip — your date's in 90 minutes:\n\n",
@@ -674,8 +677,10 @@ const translations = {
     // --- Onboarding ---
     consentMessage:
       "Добро пожаловать в Gennety Dating!\n\n" +
-      "Перед началом ознакомьтесь с нашей Политикой конфиденциальности и примите условия хранения данных.",
+      "Перед началом ознакомьтесь с нашими Условиями использования и Политикой конфиденциальности и примите условия хранения данных.",
     consentAgree: "Согласен",
+    consentPrivacyButton: "Политика конфиденциальности",
+    consentTermsButton: "Условия использования",
     welcome: "Gennety Dating 👀\nAI-мэтчмейкинг для студентов.",
     chooseLanguage: "Выбери язык:",
     philosophyPitch:
@@ -1097,6 +1102,8 @@ const translations = {
     matchScheduleProposal: "Как тебе эти варианты? Жми подходящий:",
     matchScheduleIter3:
       "Взаимно 🔥 Открой календарь и отметь удобное время.",
+    matchScheduleAfterTicket:
+      "📅 Теперь выбери время — открой календарь и отметь все удобные слоты.",
     matchScheduleBtnCalendar: "📅 Открыть календарь",
     // --- Date Ticket (премиум-шаг после взаимного метча) ---
     ticketCardCaption:
@@ -1196,7 +1203,6 @@ const translations = {
       "Свидание через 5 часов! Вот темы для разговора:\n\n",
     icebreakerStreamStart: "✨ Подбираю, о чём вам двоим поговорить…",
     noMatchStreamStart: "💫 Просматриваю кандидатов этой недели для тебя…",
-    dateHintsIntro: "\n\n💡 Пара советов, как всё спланировать:\n",
     profilerSkip: "Пропустить",
     wingmanHintIntro:
       "👋 Маленькая подсказка — свидание через полтора часа:\n\n",
@@ -1338,8 +1344,10 @@ const translations = {
     // --- Onboarding ---
     consentMessage:
       "Ласкаво просимо до Gennety Dating!\n\n" +
-      "Перш ніж почати, ознайомтеся з нашою Політикою конфіденційності та прийміть умови зберігання даних.",
+      "Перш ніж почати, ознайомтеся з нашими Умовами використання та Політикою конфіденційності та прийміть умови зберігання даних.",
     consentAgree: "Згоден",
+    consentPrivacyButton: "Політика конфіденційності",
+    consentTermsButton: "Умови використання",
     welcome: "Gennety Dating 👀\nAI-метчмейкінг для студентів.",
     chooseLanguage: "Обери мову:",
     philosophyPitch:
@@ -1753,6 +1761,8 @@ const translations = {
     matchScheduleProposal: "Як тобі ці варіанти? Тисни зручний:",
     matchScheduleIter3:
       "Взаємно 🔥 Відкрий календар і познач зручний час.",
+    matchScheduleAfterTicket:
+      "📅 Тепер обери час — відкрий календар і познач усі зручні слоти.",
     matchScheduleBtnCalendar: "📅 Відкрити календар",
     // --- Date Ticket (преміум-крок після взаємного метчу) ---
     ticketCardCaption:
@@ -1860,7 +1870,6 @@ const translations = {
       "Побачення через 5 годин! Ось теми для розмови:\n\n",
     icebreakerStreamStart: "✨ Добираю, про що вам двом поговорити…",
     noMatchStreamStart: "💫 Переглядаю кандидатів цього тижня для тебе…",
-    dateHintsIntro: "\n\n💡 Кілька порад, як усе спланувати:\n",
     profilerSkip: "Пропустити",
     wingmanHintIntro:
       "👋 Маленька підказка — побачення через півтори години:\n\n",
@@ -2008,8 +2017,10 @@ const deTranslations: TranslationTable = {
   ...translations.en,
   consentMessage:
     "Willkommen bei Gennety Dating!\n\n" +
-    "Bevor wir anfangen, lies bitte unsere Datenschutzerklärung und stimme den Bedingungen zur Datenspeicherung zu.",
+    "Bevor wir anfangen, lies bitte unsere Nutzungsbedingungen und Datenschutzerklärung und stimme den Bedingungen zur Datenspeicherung zu.",
   consentAgree: "Ich stimme zu",
+  consentPrivacyButton: "Datenschutzerklärung",
+  consentTermsButton: "Nutzungsbedingungen",
   welcome: "Gennety Dating 👀\nAI-Matchmaking für Studierende.",
   chooseLanguage: "Wähle deine Sprache:",
   philosophyPitch:
@@ -2393,6 +2404,8 @@ const deTranslations: TranslationTable = {
   matchScheduleProposal: "Wie wäre es mit einer dieser Zeiten? Tipp an, was passt:",
   matchScheduleIter3:
     "Beidseitig 🔥 Öffne den Kalender und markiere passende Zeiten.",
+  matchScheduleAfterTicket:
+    "📅 Jetzt eure Zeit — öffne den Kalender und markiere alle passenden Slots.",
   matchScheduleBtnCalendar: "📅 Kalender öffnen",
   ticketCardCaption:
     "Beidseitig 🔥 Hol dir dein *Date-Ticket*, um die Planung zu öffnen.",
@@ -2492,7 +2505,6 @@ const deTranslations: TranslationTable = {
   icebreakerStreamStart: "✨ Ich stelle ein paar Gesprächsthemen für euch zusammen…",
   noMatchStreamStart: "💫 Ich gehe die Matches dieser Woche für dich durch…",
   wingmanHintIntro: "👋 Insider-Tipp - dein Date ist in 90 Minuten:\n\n",
-  dateHintsIntro: "\n\n💡 Ein paar Tipps zum Planen:\n",
   profilerSkip: "Überspringen",
   emergencyUnlocked:
     "Das Notfall-Storno-Fenster ist offen.\n" +
@@ -2576,8 +2588,10 @@ const plTranslations: TranslationTable = {
   ...translations.en,
   consentMessage:
     "Witamy w Gennety Dating!\n\n" +
-    "Zanim zaczniemy, przeczytaj Politykę prywatności i zaakceptuj warunki przechowywania danych.",
+    "Zanim zaczniemy, przeczytaj Warunki usługi i Politykę prywatności oraz zaakceptuj warunki przechowywania danych.",
   consentAgree: "Akceptuję",
+  consentPrivacyButton: "Polityka prywatności",
+  consentTermsButton: "Warunki usługi",
   welcome: "Gennety Dating 👀\nAI matchmaking dla studentów.",
   chooseLanguage: "Wybierz język:",
   philosophyPitch:
@@ -2960,6 +2974,8 @@ const plTranslations: TranslationTable = {
   matchScheduleProposal: "Co powiesz na jedną z tych opcji? Kliknij, co pasuje:",
   matchScheduleIter3:
     "Wzajemnie 🔥 Otwórz kalendarz i zaznacz pasujące godziny.",
+  matchScheduleAfterTicket:
+    "📅 Teraz wybierz czas — otwórz kalendarz i zaznacz wszystkie pasujące terminy.",
   matchScheduleBtnCalendar: "📅 Otwórz kalendarz",
   ticketCardCaption:
     "Wzajemnie 🔥 Odbierz *bilet na randkę*, żeby otworzyć planowanie.",
@@ -3059,7 +3075,6 @@ const plTranslations: TranslationTable = {
   icebreakerStreamStart: "✨ Dobieram kilka tematów do rozmowy dla was…",
   noMatchStreamStart: "💫 Przeglądam dla ciebie tegotygodniowe dopasowania…",
   wingmanHintIntro: "👋 Wskazówka od środka - randka jest za 90 minut:\n\n",
-  dateHintsIntro: "\n\n💡 Kilka wskazówek, jak to zaplanować:\n",
   profilerSkip: "Pomiń",
   emergencyUnlocked:
     "Okno awaryjnego odwołania jest otwarte.\n" +

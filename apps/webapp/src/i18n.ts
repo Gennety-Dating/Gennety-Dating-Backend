@@ -248,7 +248,7 @@ const dict: Record<Lang, Strings> = {
     multiOverlapSubtitle: "Обери один — це й зафіксує ваше побачення.",
     emptyHint: "Познач будь-який зручний слот.",
     legendMine: "Ти",
-    legendPeer: "Співрозмовник",
+    legendPeer: "Твій match",
     legendAlternative: "Інший час",
     legendOverlap: "Збіг",
     badgeNew: "NEW",
