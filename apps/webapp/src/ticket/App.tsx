@@ -23,6 +23,7 @@ import { Ticket3D } from "./Ticket3D.js";
 import { MockPayment } from "./MockPayment.js";
 import { Confetti } from "./Confetti.js";
 import { PartialTimer } from "./PartialTimer.js";
+import { PartnerPaidCard } from "./PartnerPaidCard.js";
 
 const app = window.Telegram?.WebApp;
 const params = new URLSearchParams(location.search);
@@ -210,19 +211,25 @@ export function App(): ReactElement {
     <div className="ticket-page has-bar">
       {sc === "success" && <Confetti />}
       <div className="ticket-scroll">
-        <header className="ticket-header">
-          <h1>{headerTitle(sc, state, s)}</h1>
-          <p>{headerSub(sc, state, s)}</p>
-        </header>
+        {sc === "partner-paid" ? (
+          <PartnerPaidCard partnerName={state.partnerName ?? s.matchFallback} strings={s} />
+        ) : (
+          <>
+            <header className="ticket-header">
+              <h1>{headerTitle(sc, state, s)}</h1>
+              <p>{headerSub(sc, state, s)}</p>
+            </header>
 
-        <Ticket3D myName={myName} partnerName={state.partnerName} strings={s} />
+            <Ticket3D myName={myName} partnerName={state.partnerName} strings={s} />
 
-        {(sc === "offer" || sc === "cover-partner") && state.myBalance > 0 && (
-          <p className="ticket-balance-note">{fill(s.balanceNote, { n: String(state.myBalance) })}</p>
-        )}
+            {(sc === "offer" || sc === "cover-partner") && state.myBalance > 0 && (
+              <p className="ticket-balance-note">{fill(s.balanceNote, { n: String(state.myBalance) })}</p>
+            )}
 
-        {(sc === "waiting" || sc === "cover-partner") && (
-          <PartialTimer expiresAt={state.expiresAt} template={s.waitingTimer} />
+            {(sc === "waiting" || sc === "cover-partner") && (
+              <PartialTimer expiresAt={state.expiresAt} template={s.waitingTimer} />
+            )}
+          </>
         )}
       </div>
 

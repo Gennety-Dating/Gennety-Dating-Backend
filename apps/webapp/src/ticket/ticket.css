@@ -397,6 +397,209 @@ body {
   cursor: default;
 }
 
+/* ── Partner-paid surprise screen (PRODUCT_SPEC §3.5b) ─────────────────── */
+.pp-wrap {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  position: relative;
+  padding: 24px 26px 8px;
+  overflow: hidden;
+}
+
+.pp-hearts {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.pp-heart {
+  position: absolute;
+  bottom: -24px;
+  color: var(--accent);
+  opacity: 0;
+  animation-name: pp-heart-rise;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+  text-shadow: 0 0 12px rgba(182, 154, 229, 0.5);
+}
+
+.pp-hero {
+  position: relative;
+  margin-bottom: 30px;
+  animation: pp-pop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+
+/* Float wrapper bobs the ticket + its corner stamp as one unit; it does NOT
+   clip, so the stamp can hang over the edge. */
+.pp-ticket-float {
+  position: relative;
+  animation: pp-float 4.2s ease-in-out infinite;
+}
+
+.pp-ticket {
+  position: relative;
+  width: 208px;
+  height: 128px;
+  border-radius: 18px;
+  display: flex;
+  overflow: hidden;
+  /* Premium violet stock — layered glows + a diagonal gradient give it real
+     depth instead of reading as a flat dark rectangle. */
+  background:
+    radial-gradient(130% 100% at 16% 0%, rgba(212, 192, 244, 0.24), transparent 56%),
+    radial-gradient(130% 110% at 96% 100%, rgba(142, 111, 214, 0.28), transparent 60%),
+    linear-gradient(150deg, #2c2358 0%, #1d1740 52%, #241b46 100%);
+  box-shadow:
+    0 24px 56px rgba(18, 9, 40, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.34);
+}
+/* Corner notches punched at the tear line (clipped to half-circles by the
+   ticket's overflow) — the single detail that makes the eye read "ticket". */
+.pp-ticket::before,
+.pp-ticket::after {
+  content: "";
+  position: absolute;
+  right: 56px;
+  width: 16px;
+  height: 16px;
+  margin-right: -8px;
+  border-radius: 50%;
+  background: var(--bg);
+  z-index: 3;
+}
+.pp-ticket::before {
+  top: -8px;
+  box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.45);
+}
+.pp-ticket::after {
+  bottom: -8px;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.45);
+}
+
+.pp-ticket-main {
+  position: relative;
+  flex: 1;
+  display: grid;
+  place-items: center;
+}
+/* Soft glow plate so the logo sits in light, not on a flat panel. */
+.pp-ticket-main::before {
+  content: "";
+  position: absolute;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(182, 154, 229, 0.4), transparent 72%);
+  filter: blur(5px);
+}
+.pp-logo {
+  position: relative;
+  width: 92px;
+  height: auto;
+  filter: drop-shadow(0 5px 16px rgba(182, 154, 229, 0.6));
+  animation: pp-logo-pulse 3s ease-in-out infinite;
+}
+
+/* The torn-off stub: slightly tinted panel + dashed tear edge + a 3-dot
+   perforation column, so it reads as a real ticket end rather than a stray
+   line on a black card. */
+.pp-ticket-stub {
+  position: relative;
+  width: 56px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
+}
+.pp-ticket-stub::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  border-left: 2px dashed rgba(212, 192, 244, 0.42);
+}
+.pp-stub-dots {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(212, 192, 244, 0.55);
+  box-shadow:
+    0 -10px 0 rgba(212, 192, 244, 0.55),
+    0 10px 0 rgba(212, 192, 244, 0.55);
+}
+
+.pp-shine {
+  position: absolute;
+  top: -40%;
+  left: -60%;
+  width: 56%;
+  height: 180%;
+  z-index: 2;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.34), transparent);
+  transform: skewX(-18deg);
+  animation: pp-shine 3.6s ease-in-out infinite;
+}
+
+/* "Paid" foil seal — pinned to the top-left corner, tilted as if stuck on the
+   very edge of the ticket. Lives outside .pp-ticket's clip so it can overhang;
+   the drop shadow lifts it off the corner like a real sticker. */
+.pp-stamp {
+  position: absolute;
+  top: -11px;
+  left: -12px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px 6px 10px;
+  border-radius: 11px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #2a1840;
+  background: linear-gradient(135deg, #f3ecff 0%, var(--accent-bright) 50%, var(--accent) 100%);
+  box-shadow:
+    0 9px 18px rgba(16, 8, 36, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -1px 0 rgba(142, 111, 214, 0.55);
+  transform: rotate(-9deg);
+  transform-origin: top left;
+  animation: pp-stamp-in 0.55s 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.5) both;
+}
+.pp-stamp-tick {
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--accent-deep);
+}
+
+.pp-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  margin: 0 0 10px;
+  max-width: 320px;
+  animation: rise 0.5s 0.15s ease both;
+}
+.pp-sub {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1.5;
+  max-width: 280px;
+  animation: rise 0.5s 0.28s ease both;
+}
+
 /* Self-pay button carrying the one-time famine discount — relative so the badge
    pins to its top-right corner. */
 .btn-famine {
@@ -556,6 +759,71 @@ body {
   }
 }
 
+/* Partner-paid surprise screen motion */
+@keyframes pp-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes pp-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+}
+@keyframes pp-logo-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+@keyframes pp-shine {
+  0% {
+    left: -60%;
+  }
+  60%,
+  100% {
+    left: 130%;
+  }
+}
+@keyframes pp-stamp-in {
+  from {
+    opacity: 0;
+    transform: rotate(-9deg) scale(1.7);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-9deg) scale(1);
+  }
+}
+@keyframes pp-heart-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(0) translateX(0) scale(0.8);
+  }
+  15% {
+    opacity: 0.8;
+  }
+  70% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-340px) translateX(14px) scale(1.1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ticket-float,
   .ticket-header,
@@ -565,5 +833,17 @@ body {
   .ticket-card {
     cursor: default;
     touch-action: auto;
+  }
+  .pp-hero,
+  .pp-ticket-float,
+  .pp-logo,
+  .pp-shine,
+  .pp-stamp,
+  .pp-title,
+  .pp-sub {
+    animation: none;
+  }
+  .pp-heart {
+    display: none;
   }
 }

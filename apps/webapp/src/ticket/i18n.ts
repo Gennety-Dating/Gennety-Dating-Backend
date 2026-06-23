@@ -42,6 +42,8 @@ export interface TicketStrings {
   waitingTimer: string;
   partnerPaidTitle: string;
   partnerPaidSub: string;
+  /** Tiny "PAID" seal on the covered-ticket hero (partner-paid screen). */
+  partnerPaidStamp: string;
   closedTitle: string;
   closedSub: string;
   errGeneric: string;
@@ -87,7 +89,8 @@ const en: TicketStrings = {
   waitingSub: "Waiting on your match to grab theirs. We'll ping you the second they do.",
   waitingTimer: "They have {time} left",
   partnerPaidTitle: "{name} already paid your ticket ❤️",
-  partnerPaidSub: "You're all set — nothing to pay. Let's plan the date.",
+  partnerPaidSub: "Nothing to pay — it's already covered.",
+  partnerPaidStamp: "Paid",
   closedTitle: "Scheduling's open 📅",
   closedSub: "No payment needed — let's just find a time.",
   errGeneric: "Something went wrong. Reopen this from the bot.",
@@ -133,7 +136,8 @@ const ru: TicketStrings = {
   waitingSub: "Ждём, пока собеседник возьмёт свой. Напишем сразу, как это случится.",
   waitingTimer: "У него осталось {time}",
   partnerPaidTitle: "{name} уже оплатил твой билет ❤️",
-  partnerPaidSub: "Тебе ничего не нужно делать. Давай спланируем свидание.",
+  partnerPaidSub: "Платить не нужно — всё уже оплачено.",
+  partnerPaidStamp: "Оплачено",
   closedTitle: "Планирование открыто 📅",
   closedSub: "Оплата не нужна — просто найдём время.",
   errGeneric: "Что-то пошло не так. Открой заново из бота.",
@@ -179,7 +183,8 @@ const uk: TicketStrings = {
   waitingSub: "Чекаємо, поки співрозмовник візьме свій. Напишемо щойно це станеться.",
   waitingTimer: "У нього лишилося {time}",
   partnerPaidTitle: "{name} вже сплатив твій квиток ❤️",
-  partnerPaidSub: "Тобі нічого не потрібно робити. Сплануймо побачення.",
+  partnerPaidSub: "Платити не потрібно — усе вже сплачено.",
+  partnerPaidStamp: "Сплачено",
   closedTitle: "Планування відкрито 📅",
   closedSub: "Оплата не потрібна — просто знайдемо час.",
   errGeneric: "Щось пішло не так. Відкрий знову з бота.",
@@ -225,7 +230,8 @@ const de: TicketStrings = {
   waitingSub: "Wir warten, bis dein Match das eigene Ticket sichert. Dann melden wir uns sofort.",
   waitingTimer: "Noch {time}",
   partnerPaidTitle: "{name} hat dein Ticket schon bezahlt ❤️",
-  partnerPaidSub: "Alles erledigt — du musst nichts zahlen. Plant jetzt euer Date.",
+  partnerPaidSub: "Nichts zu zahlen — schon erledigt.",
+  partnerPaidStamp: "Bezahlt",
   closedTitle: "Planung ist offen 📅",
   closedSub: "Keine Zahlung nötig — findet einfach eine Zeit.",
   errGeneric: "Etwas ist schiefgelaufen. Öffne dies erneut aus dem Bot.",
@@ -271,7 +277,8 @@ const pl: TicketStrings = {
   waitingSub: "Czekamy, aż Twoje dopasowanie odbierze swój. Od razu damy Ci znać.",
   waitingTimer: "Pozostało {time}",
   partnerPaidTitle: "{name} zapłacił już za Twój bilet ❤️",
-  partnerPaidSub: "Wszystko gotowe — nic nie musisz płacić. Zaplanujmy randkę.",
+  partnerPaidSub: "Nic nie płacisz — już opłacone.",
+  partnerPaidStamp: "Opłacone",
   closedTitle: "Planowanie jest otwarte 📅",
   closedSub: "Płatność nie jest potrzebna — znajdźmy termin.",
   errGeneric: "Coś poszło nie tak. Otwórz to ponownie z bota.",

@@ -20,10 +20,6 @@ import {
   discountedCents,
 } from "../../services/ticket-discount.js";
 import { emitTicketEvent } from "../../services/ticket-analytics.js";
-import {
-  sendOrEditPostAcceptMessage,
-  type PostAcceptSide,
-} from "./post-accept-message.js";
 
 /**
  * Date Ticket gate — the premium monetization step inserted between mutual
@@ -111,10 +107,6 @@ function selfUser(match: TicketMatch, side: Side): TicketUser {
 
 function peerUser(match: TicketMatch, side: Side): TicketUser {
   return side === "A" ? match.userB : match.userA;
-}
-
-function messageIdForSide(match: TicketMatch, side: PostAcceptSide): number | null {
-  return side === "A" ? match.calendarMessageIdA : match.calendarMessageIdB;
 }
 
 // ── Public state view (shared by the GET state route + tests) ───────────────
@@ -209,38 +201,19 @@ function buildTicketKeyboard(matchId: string, lang: Language): InlineKeyboardMar
   return { inline_keyboard: kb.inline_keyboard };
 }
 
-function buildTicketStatusKeyboard(matchId: string, lang: Language): InlineKeyboardMarkup {
-  const kb = new InlineKeyboard().webApp(t(lang, "ticketStatusButton"), ticketUrl(matchId, lang));
-  return { inline_keyboard: kb.inline_keyboard };
-}
-
-async function sendOrEditTicketStatus(
-  api: Api<RawApi>,
-  match: TicketMatch,
-  side: PostAcceptSide,
-  text: string,
-  replyMarkup: InlineKeyboardMarkup | null,
-): Promise<void> {
-  const user = side === "A" ? match.userA : match.userB;
-  if (!isTelegramTarget(user.telegramId)) return;
-  await sendOrEditPostAcceptMessage({
-    api,
-    matchId: match.id,
-    side,
-    telegramId: user.telegramId,
-    previousMessageId: messageIdForSide(match, side),
-    text,
-    options: {
-      parse_mode: "Markdown",
-      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
-    },
-  });
-}
-
 /**
  * Replace the immediate `startScheduling` handoff: arm the ticket gate and DM
  * both Telegram-resident users the premium ticket Mini App button. The match
  * stays `negotiating`; the Calendar is not sent until both tickets are paid.
+ *
+ * The ticket card is a PERSISTENT, re-openable entry — sent once as a
+ * standalone message and never edited or deleted. Tapping it always opens the
+ * Mini App, which re-derives the live state (offer / "your match paid ❤️"
+ * surprise / both secured). It is deliberately NOT stored in
+ * `calendarMessageId*` (that tracks the separate Calendar card), so the
+ * scheduling / venue / time-lock flows never touch it: the Calendar arrives as
+ * a SEPARATE message that *follows* the ticket card, and the woman can always
+ * reopen the ticket card to discover her match covered her. PRODUCT_SPEC §3.5b.
  */
 export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promise<void> {
   const expiresAt = new Date(Date.now() + PARTIAL_WINDOW_MS);
@@ -258,22 +231,21 @@ export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promis
 
   emitTicketEvent("ticket_offer_sent", { matchId });
 
-  await Promise.all([
-    sendOrEditTicketStatus(
-      api,
-      match,
-      "A",
-      t(langOf(match.userA), "ticketCardCaption"),
-      buildTicketKeyboard(matchId, langOf(match.userA)),
-    ),
-    sendOrEditTicketStatus(
-      api,
-      match,
-      "B",
-      t(langOf(match.userB), "ticketCardCaption"),
-      buildTicketKeyboard(matchId, langOf(match.userB)),
-    ),
-  ]);
+  const sends: Array<Promise<unknown>> = [];
+  for (const user of [match.userA, match.userB]) {
+    if (!isTelegramTarget(user.telegramId)) continue;
+    sends.push(
+      api.sendMessage(
+        toTelegramChatId(user.telegramId),
+        t(langOf(user), "ticketCardCaption"),
+        {
+          parse_mode: "Markdown",
+          reply_markup: buildTicketKeyboard(matchId, langOf(user)),
+        },
+      ),
+    );
+  }
+  await Promise.all(sends);
 }
 
 // ── Payment apply (called from POST confirm) ────────────────────────────────
@@ -296,24 +268,26 @@ export type ApplyPaymentResult =
  * wallet path (`useTicketFromBalance`); the balance spend itself is handled by
  * the caller so this stays purely about the match state.
  *
- * `claimed` reports whether THIS call actually flipped a slot (vs an idempotent
- * duplicate / lost race) so the wallet path knows whether to keep or refund the
- * tickets it already spent.
+ * `claimedCount` reports how many ticket slots THIS call actually flipped (0 on
+ * an idempotent duplicate / lost race, 1 for self/partner, up to 2 for "both")
+ * so the wallet path can refund any surplus it spent — e.g. a "both" spend where
+ * the partner had already paid only settles one slot, so the extra ticket is
+ * returned instead of silently burned.
  */
 async function settleTicket(
   api: Api<RawApi>,
   telegramId: bigint,
   matchId: string,
   scope: TicketScope,
-): Promise<{ result: ApplyPaymentResult; claimed: boolean }> {
+): Promise<{ result: ApplyPaymentResult; claimedCount: number }> {
   const match = await loadTicketMatch(matchId);
-  if (!match) return { result: { ok: false, reason: "match-not-found" }, claimed: false };
+  if (!match) return { result: { ok: false, reason: "match-not-found" }, claimedCount: 0 };
   const side = sideForTelegramId(match, telegramId);
-  if (!side) return { result: { ok: false, reason: "not-participant" }, claimed: false };
+  if (!side) return { result: { ok: false, reason: "not-participant" }, claimedCount: 0 };
 
   const me = selfUser(match, side);
   if ((scope === "both" || scope === "partner") && me.gender !== "male") {
-    return { result: { ok: false, reason: "scope-not-allowed" }, claimed: false };
+    return { result: { ok: false, reason: "scope-not-allowed" }, claimedCount: 0 };
   }
 
   const paidField = side === "A" ? "ticketPaidA" : "ticketPaidB";
@@ -324,21 +298,21 @@ async function settleTicket(
   const myPaidAlready = (side === "A" ? match.ticketPaidA : match.ticketPaidB) !== null;
   const partnerPaidAlready = (side === "A" ? match.ticketPaidB : match.ticketPaidA) !== null;
 
-  let claimed = false;
+  let claimedCount = 0;
 
   if (scope === "partner") {
     // Cover only the partner's slot — requires the actor to have already paid
     // their own ticket. Atomic claim on the partner's still-null slot.
     if (!myPaidAlready) {
-      return { result: { ok: false, reason: "wrong-state" }, claimed: false };
+      return { result: { ok: false, reason: "wrong-state" }, claimedCount: 0 };
     }
     if (!partnerPaidAlready) {
       const claim = await prisma.match.updateMany({
         where: { id: matchId, status: "negotiating", [partnerPaidField]: null },
         data: { [partnerPaidField]: now, [paidForPartnerField]: true },
       });
-      claimed = claim.count > 0;
-      if (claimed) {
+      claimedCount = claim.count > 0 ? 1 : 0;
+      if (claimedCount > 0) {
         emitTicketEvent("ticket_paid", { matchId, side, scope, amountCents: amountForScope(scope, match.ticketPriceCents) });
       }
     }
@@ -346,10 +320,16 @@ async function settleTicket(
     // Atomic claim — only the caller that flips the still-null field wins, so a
     // double-tap / retried confirm can't double-charge or double-advance. Same
     // pattern as the accept-transition race guard in decision.ts.
+    //
+    // Only cover the partner's slot when "both" is requested AND she hasn't
+    // already paid. Marking `paidForPartner` / claiming her slot when she's
+    // already paid would burn a wallet ticket with no refund and wrongly fire
+    // her "your match paid ❤️" surprise.
+    const coverPartner = scope === "both" && !partnerPaidAlready;
     const data: Record<string, unknown> = { [paidField]: now };
-    if (scope === "both") {
+    if (coverPartner) {
       data[paidForPartnerField] = true;
-      if (!partnerPaidAlready) data[partnerPaidField] = now;
+      data[partnerPaidField] = now;
     }
     const claim = await prisma.match.updateMany({
       where: { id: matchId, status: "negotiating", [paidField]: null },
@@ -359,19 +339,19 @@ async function settleTicket(
       // Lost the race or wrong state. Re-read; if our side is now paid it was a
       // concurrent duplicate — treat as success (idempotent).
       const fresh = await loadTicketMatch(matchId);
-      if (!fresh) return { result: { ok: false, reason: "match-not-found" }, claimed: false };
+      if (!fresh) return { result: { ok: false, reason: "match-not-found" }, claimedCount: 0 };
       const sidePaidNow = (side === "A" ? fresh.ticketPaidA : fresh.ticketPaidB) !== null;
-      if (!sidePaidNow) return { result: { ok: false, reason: "wrong-state" }, claimed: false };
-      return { result: { ok: true, state: buildTicketStateView(fresh, side) }, claimed: false };
+      if (!sidePaidNow) return { result: { ok: false, reason: "wrong-state" }, claimedCount: 0 };
+      return { result: { ok: true, state: buildTicketStateView(fresh, side) }, claimedCount: 0 };
     }
-    claimed = true;
+    claimedCount = coverPartner ? 2 : 1;
     emitTicketEvent("ticket_paid", { matchId, side, scope, amountCents: amountForScope(scope, match.ticketPriceCents) });
 
   }
 
   // Recompute terminal state from fresh data.
   const after = await loadTicketMatch(matchId);
-  if (!after) return { result: { ok: false, reason: "match-not-found" }, claimed };
+  if (!after) return { result: { ok: false, reason: "match-not-found" }, claimedCount };
   const bothPaid = after.ticketPaidA !== null && after.ticketPaidB !== null;
 
   if (bothPaid && after.ticketStatus !== "completed") {
@@ -384,20 +364,12 @@ async function settleTicket(
     });
   }
 
+  // The ticket card is permanent + untracked; the Mini App shows the live
+  // "waiting / both secured / surprise" state, so there is no in-chat card to
+  // edit here. The Calendar follows as its own message via startScheduling.
   const final = await loadTicketMatch(matchId);
-  if (!final) return { result: { ok: false, reason: "match-not-found" }, claimed };
-  if (!bothPaid && claimed) {
-    const actor = selfUser(final, side);
-    const actorLang = langOf(actor);
-    await sendOrEditTicketStatus(
-      api,
-      final,
-      side,
-      t(actorLang, "ticketGateWaiting"),
-      buildTicketStatusKeyboard(matchId, actorLang),
-    );
-  }
-  return { result: { ok: true, state: buildTicketStateView(final, side) }, claimed };
+  if (!final) return { result: { ok: false, reason: "match-not-found" }, claimedCount };
+  return { result: { ok: true, state: buildTicketStateView(final, side) }, claimedCount };
 }
 
 /**
@@ -410,11 +382,11 @@ export async function applyTicketPayment(
   matchId: string,
   scope: TicketScope,
 ): Promise<ApplyPaymentResult> {
-  const { result, claimed } = await settleTicket(api, telegramId, matchId, scope);
+  const { result, claimedCount } = await settleTicket(api, telegramId, matchId, scope);
   // A discounted `self` money purchase just settled — redeem the one-time famine
   // discount. The route charged `selfPriceCents`; both branch on the same
   // active-discount predicate, and the consume CAS is idempotent.
-  if (result.ok && claimed && scope === "self" && env.TICKET_FEATURE_ENABLED) {
+  if (result.ok && claimedCount > 0 && scope === "self" && env.TICKET_FEATURE_ENABLED) {
     const match = await loadTicketMatch(matchId);
     const side = match ? sideForTelegramId(match, telegramId) : null;
     if (match && side) {
@@ -455,11 +427,14 @@ export async function useTicketFromBalance(
   const spend = await spendTickets({ userId: me.id, count, reason: "spend_match", matchId });
   if (!spend.ok) return { ok: false, reason: "insufficient-balance" };
 
-  const { result, claimed } = await settleTicket(api, telegramId, matchId, scope);
-  // Refund when the tickets were spent but no slot was actually claimed —
-  // either a hard failure or an idempotent duplicate that consumed nothing.
-  if (!result.ok || !claimed) {
-    await grantTickets({ userId: me.id, count, reason: "refund", matchId });
+  const { result, claimedCount } = await settleTicket(api, telegramId, matchId, scope);
+  // Refund the surplus = tickets spent minus slots actually settled. A hard
+  // failure / idempotent duplicate settles 0 (full refund); a "both"/"use 2"
+  // spend that only settled one slot because the partner had already paid
+  // refunds the extra one, so a wallet ticket is never silently burned.
+  const refundCount = Math.max(0, count - claimedCount);
+  if (refundCount > 0) {
+    await grantTickets({ userId: me.id, count: refundCount, reason: "refund", matchId });
   }
   return result;
 }
@@ -483,7 +458,13 @@ export async function completeTicketGateAndUnlockScheduling(
 
   emitTicketEvent("ticket_both_paid", { matchId });
 
-  await startScheduling(api, matchId);
+  // The persistent ticket card stays in chat untouched; the Calendar is sent as
+  // a SEPARATE message that follows it (calendarMessageId* starts null here, so
+  // startScheduling sends fresh Calendar cards). The covered woman can still
+  // reopen the ticket card for the "your match paid ❤️" surprise. `afterTicketGate`
+  // makes the Calendar card use a plain caption so it doesn't repeat the ticket
+  // card's "It's mutual 🔥" celebration. §3.5b.
+  await startScheduling(api, matchId, { afterTicketGate: true });
 }
 
 /**
@@ -521,6 +502,7 @@ export async function refundAndFallbackToScheduling(
     }
   }
 
-  // Open scheduling for free.
-  await startScheduling(api, matchId);
+  // Open scheduling for free. The persistent ticket card is still above, so the
+  // Calendar follows it with the plain (non-duplicating) caption.
+  await startScheduling(api, matchId, { afterTicketGate: true });
 }
