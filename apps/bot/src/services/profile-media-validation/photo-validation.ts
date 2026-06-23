@@ -28,13 +28,17 @@ import type {
 } from "./types.js";
 
 // Deliberately lenient: a profile photo only needs to *contain a usable
-// human face*, not a perfectly frontal studio shot. Rekognition drops detection
-// confidence on angled / partially-turned faces, so a 0.90 floor was rejecting
-// plenty of normal photos ("face clearly visible but bounced"). 0.75 keeps out
-// non-faces / heavy occlusion while letting ordinary casual selfies through.
+// human face*, not a perfectly frontal studio shot. We gate on just two things:
+//   - confidence ≥ 0.75 — Rekognition is sure it's a face (it drops on angled
+//     shots, so the old 0.90 floor bounced plenty of normal photos);
+//   - area ≥ 1.5% — the face is a meaningful part of the frame, not a speck.
+// We intentionally do NOT gate on Rekognition's `Sharpness` quality metric:
+// it's an image-quality score (not a face-presence signal), it reads low for
+// many perfectly usable phone photos (a clearly-detected angled selfie scored
+// 0.058), and gating on it silently rejected legitimate users. Softness only
+// hurts the uploader's own appeal; Persona verification remains the identity gate.
 const MIN_FACE_CONFIDENCE = 0.75;
 const MIN_FACE_AREA = 0.015;
-const MIN_FACE_SHARPNESS = 0.15;
 
 export interface ExistingPhotoForValidation {
   buffer: Buffer;
@@ -200,11 +204,7 @@ function isUsablePhotoFace(face: DetectedFace): boolean {
   const area = face.boundingBox
     ? face.boundingBox.width * face.boundingBox.height
     : 0;
-  return (
-    face.confidence >= MIN_FACE_CONFIDENCE &&
-    area >= MIN_FACE_AREA &&
-    (face.sharpness === null || face.sharpness >= MIN_FACE_SHARPNESS)
-  );
+  return face.confidence >= MIN_FACE_CONFIDENCE && area >= MIN_FACE_AREA;
 }
 
 function isSupportedImageMime(mime: string): boolean {
