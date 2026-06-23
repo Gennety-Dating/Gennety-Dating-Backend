@@ -308,12 +308,43 @@ describe("handleProxyRelay", () => {
     expect(mProxy.create).toHaveBeenCalledWith({
       data: { matchId: "m1", senderId: "uid-A", body: "I'm at the back table" },
     });
-    // Partner (Bob, 1002) gets the relayed message with Leave+Report controls.
+    // Partner (Bob, 1002) gets the relayed message with Leave+Report controls,
+    // attributed to the SENDER's first name (Alice) — not the impersonal
+    // "Your date:" — since the recipient already knows them by name + photo.
     const call = ctx.api.sendMessage.mock.calls[0];
     expect(call[0]).toBe(1002);
-    expect(call[1]).toContain("I'm at the back table");
+    expect(call[1]).toBe("💬 Alice: I'm at the back table");
+    expect(call[1]).not.toContain("Your date");
     const cbs = call[2].reply_markup.inline_keyboard.flat().map((b: any) => b.callback_data);
     expect(cbs).toEqual(["coord:exit", "report:open:m1"]);
+  });
+
+  it("falls back to the generic prefix when the sender has no first name", async () => {
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+    mMatch.findUnique.mockResolvedValueOnce(
+      coordMatch({
+        coordMethod: "proxy",
+        proxyOpenedAt: new Date("2026-06-04T12:00:00Z"),
+        proxyClosesAt: new Date("2030-01-01T00:00:00Z"),
+        userA: coordUser({
+          id: "uid-A",
+          gender: "female",
+          telegramId: 1001n,
+          telegramUsername: "alice",
+          firstName: null,
+        }),
+      }),
+    );
+
+    const ctx = createCtx({
+      messageText: "hey",
+      session: { matchFlow: "coordination_chat", activeMatchId: "m1" },
+      fromId: 1001,
+    });
+    await handleProxyRelay(ctx);
+
+    const call = ctx.api.sendMessage.mock.calls[0];
+    expect(call[1]).toBe("💬 Your date: hey");
   });
 
   it("rejects media (no text) without relaying or leaving the chat", async () => {

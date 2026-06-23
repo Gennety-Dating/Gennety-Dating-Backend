@@ -351,6 +351,7 @@ export async function handleProxyRelay(ctx: BotContext): Promise<void> {
     return;
   }
 
+  const sender = callerId === match.userA.id ? match.userA : match.userB;
   const partner = callerId === match.userA.id ? match.userB : match.userA;
   const clamped = body.slice(0, PROXY_MAX_MESSAGE_LEN);
 
@@ -359,10 +360,20 @@ export async function handleProxyRelay(ctx: BotContext): Promise<void> {
   });
 
   const partnerLang = langOf(partner);
+  // By this point the recipient already knows this person by name + photo from
+  // the pitch and scheduling, so attribute the relayed line to the sender's
+  // first name ("💬 Alena: hi") rather than the impersonal "💬 Your date:". Fall
+  // back to the generic prefix only if a name is somehow missing (firstName is a
+  // required onboarding field, so this is defensive). The message is sent as
+  // plain text (no parse_mode), so the name needs no Markdown escaping.
+  const senderName = sender.firstName?.trim();
+  const prefix = senderName
+    ? t(partnerLang, "coordProxyRelayNamedPrefix", { name: senderName })
+    : t(partnerLang, "coordProxyRelayPrefix");
   await dmCatch(
     ctx,
     partner.telegramId,
-    `${t(partnerLang, "coordProxyRelayPrefix")}${clamped}`,
+    `${prefix}${clamped}`,
     { reply_markup: buildChatControlsKeyboard(matchId, partnerLang) },
   );
 }
