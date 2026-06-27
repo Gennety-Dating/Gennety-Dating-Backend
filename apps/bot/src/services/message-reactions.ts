@@ -6,6 +6,7 @@ export type EmojiReaction = Extract<ReactionType, { type: "emoji" }>["emoji"];
 export const MESSAGE_REACTION = {
   like: "👍",
   fire: "🔥",
+  heart: "❤",
 } as const satisfies Record<string, EmojiReaction>;
 
 export interface MessageReactionTarget {

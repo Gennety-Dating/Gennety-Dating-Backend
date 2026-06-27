@@ -326,6 +326,20 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     );
   }
 
+  // The closing vibe question ("the experience itself, or who's with you?") is
+  // the most personal onboarding answer — always warm-react to it, regardless
+  // of what the user actually answered.
+  if (
+    ctx.message?.text &&
+    result.acceptedOnboardingFields?.includes("vibe_focus")
+  ) {
+    await reactToMessage(
+      ctx.api,
+      { chatId: ctx.chat?.id, messageId: ctx.message.message_id },
+      MESSAGE_REACTION.heart,
+    );
+  }
+
   if (result.contextDumpStarted) {
     ctx.session.awaitingContextDump = true;
     ctx.session.contextDumpBuffer = "";
