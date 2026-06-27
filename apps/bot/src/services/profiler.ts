@@ -1,6 +1,6 @@
 import type { Api, RawApi } from "grammy";
 import type { InlineKeyboardMarkup } from "grammy/types";
-import { prisma } from "@gennety/db";
+import { prisma, type MatchStatus } from "@gennety/db";
 import {
   t,
   type Language,
@@ -43,6 +43,38 @@ import {
 
 export const PROFILER_SKIP_PREFIX = "profiler:skip:";
 const PROFILER_REACTION_QUESTION_IDS = new Set(["f_turnoffs", "m_planner"]);
+
+/**
+ * Match statuses that represent an **in-progress date negotiation** — the pitch
+ * decision (`proposed`), calendar scheduling (`negotiating`), and venue
+ * selection (`negotiating_venue`). While the user is in any of these, the
+ * Profiler stays silent so its icebreaker questions never land mid-planning
+ * (PRODUCT_SPEC §Phase 1b). `scheduled` is intentionally **excluded**: once the
+ * date is locked in, the wait before it is a fine moment to gather icebreaker
+ * fuel. Terminal states (cancelled/completed/expired) never block.
+ */
+export const PROFILER_BLOCKING_MATCH_STATUSES: readonly MatchStatus[] = [
+  "proposed",
+  "negotiating",
+  "negotiating_venue",
+];
+
+/**
+ * True when the user is mid date-negotiation (see
+ * `PROFILER_BLOCKING_MATCH_STATUSES`), as either side of the pair — the signal
+ * the scheduler/advance paths use to hold Profiler questions until the user is
+ * idle again or simply waiting on a `scheduled` date.
+ */
+export async function hasActiveDatePlanning(userId: string): Promise<boolean> {
+  const match = await prisma.match.findFirst({
+    where: {
+      status: { in: [...PROFILER_BLOCKING_MATCH_STATUSES] },
+      OR: [{ userAId: userId }, { userBId: userId }],
+    },
+    select: { id: true },
+  });
+  return match !== null;
+}
 
 export function shouldReactToProfilerAnswer(questionId: string): boolean {
   return PROFILER_REACTION_QUESTION_IDS.has(questionId);
@@ -393,6 +425,20 @@ async function advanceAfterReply(
   // Re-read state AFTER the upsert so selection sees the just-recorded row.
   const state = await loadState(userId);
   if (!state) return false;
+  // If a date negotiation started while this batch was mid-flight, don't fire
+  // the next question into the planning flow — the answer just given is saved,
+  // and the rest of the batch pauses to the next local window.
+  if (await hasActiveDatePlanning(userId)) {
+    await prisma.profile.update({
+      where: { userId },
+      data: {
+        profilerActiveQuestionId: null,
+        profilerBatchRemaining: 0,
+        profilerNextAt: nextWindowAt(now, resolveZone(state.timeZone)),
+      },
+    });
+    return true;
+  }
   await sendOneFromBatch(api, state, now, "advance", wait);
   return true;
 }

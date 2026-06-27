@@ -447,6 +447,19 @@ Telegram-only in v1.
   the dating city; `Europe/Kyiv` fallback). When the next weekly drop is within
   **48 h** (`PROFILER_RUSH_WINDOW_HOURS`) it switches to **rush mode**: batches
   shrink to **2** to fill the profile before the event.
+- **Date-negotiation gate.** The Profiler stays **silent while the user is
+  mid date-planning** so its icebreaker questions never interrupt the flow they
+  are meant to fuel. A due batch is held (deferred to the user's next local
+  window) whenever the user is on either side of a match in an in-progress
+  negotiation — `proposed` (pitch decision), `negotiating` (calendar
+  scheduling), or `negotiating_venue` (venue selection)
+  (`PROFILER_BLOCKING_MATCH_STATUSES` / `hasActiveDatePlanning`). `scheduled` is
+  intentionally **not** a blocking state: once the date is locked in, the wait
+  before it is a fine moment to gather icebreaker fuel. The gate also applies
+  mid-batch — if a negotiation starts while a batch is in flight, the answer in
+  hand is saved but the remaining questions pause to the next window. So the
+  questions only ever land when the user is idle-and-waiting or simply waiting
+  on a `scheduled` date, never during the pitch/scheduling/venue steps.
 - **Skip.** Every question has a **Skip** button. A skipped question returns
   **once** at the end of the current cycle; skipped twice in a cycle, it drops
   until the next drop cycle. Answered questions are never re-asked.

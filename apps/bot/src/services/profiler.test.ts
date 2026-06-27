@@ -5,6 +5,7 @@ vi.mock("@gennety/db", () => ({
     user: { findUnique: vi.fn() },
     profile: { update: vi.fn().mockResolvedValue({}) },
     profilerAnswer: { upsert: vi.fn().mockResolvedValue({}), findUnique: vi.fn() },
+    match: { findFirst: vi.fn().mockResolvedValue(null) },
   },
 }));
 
@@ -22,6 +23,7 @@ const mUserFind = (prisma.user as unknown as { findUnique: MockFn }).findUnique;
 const mProfileUpdate = (prisma.profile as unknown as { update: MockFn }).update;
 const mAnswerUpsert = (prisma.profilerAnswer as unknown as { upsert: MockFn }).upsert;
 const mAnswerFind = (prisma.profilerAnswer as unknown as { findUnique: MockFn }).findUnique;
+const mMatchFind = (prisma.match as unknown as { findFirst: MockFn }).findFirst;
 
 const sendMessage = vi.fn().mockResolvedValue({ message_id: 1, chat: { id: 1 } });
 const editMessageText = vi.fn().mockResolvedValue({});
@@ -73,6 +75,7 @@ beforeEach(() => {
   mProfileUpdate.mockReset().mockResolvedValue({});
   mAnswerUpsert.mockReset().mockResolvedValue({});
   mAnswerFind.mockReset();
+  mMatchFind.mockReset().mockResolvedValue(null);
   sendMessage.mockClear();
   editMessageText.mockClear();
   deleteMessage.mockClear();
@@ -172,6 +175,34 @@ describe("recordProfilerAnswer", () => {
     const ok = await recordProfilerAnswer(fakeApi, "u1", "not_a_question", "hi");
     expect(ok).toBe(false);
     expect(mAnswerUpsert).not.toHaveBeenCalled();
+  });
+
+  it("saves the answer but does not send the next question while a date is being negotiated", async () => {
+    // A match entered an in-progress negotiation (proposed/negotiating/
+    // negotiating_venue) while this batch was mid-flight — the answer persists,
+    // but the rest of the batch must NOT fire into the planning flow.
+    mMatchFind.mockResolvedValue({ id: "m1" });
+    mUserFind.mockResolvedValue(
+      userState(
+        [{ questionId: "f_date_spots", answerText: "cafes", skipped: false, skipReturned: false, cycleId: "x" }],
+        2,
+      ),
+    );
+
+    const ok = await recordProfilerAnswer(fakeApi, "u1", "f_date_spots", "rooftop cafes", {
+      wait: noWait,
+    });
+
+    expect(ok).toBe(true);
+    // The given answer is still recorded.
+    expect(mAnswerUpsert).toHaveBeenCalledTimes(1);
+    // No next question is streamed/finalised.
+    expect(sendRichMessage).not.toHaveBeenCalled();
+    // The batch is paused: active question cleared, remaining zeroed, rescheduled.
+    const pause = mProfileUpdate.mock.calls.map((c) => c[0].data as Record<string, unknown>).at(-1)!;
+    expect(pause.profilerActiveQuestionId).toBeNull();
+    expect(pause.profilerBatchRemaining).toBe(0);
+    expect(pause.profilerNextAt).toBeInstanceOf(Date);
   });
 
   it("likes only the selected later-batch Profiler answers", async () => {

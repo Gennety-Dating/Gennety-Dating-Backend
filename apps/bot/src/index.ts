@@ -367,9 +367,9 @@ bot.start({
       PROFILER_CRON_SCHEDULE,
       guardedTick("profiler", () =>
         profilerTick(bot.api).then((r) => {
-          if (r.seeded > 0 || r.dispatched > 0 || r.deferred > 0) {
+          if (r.seeded > 0 || r.dispatched > 0 || r.deferred > 0 || r.blocked > 0) {
             console.log(
-              `[profiler] seeded=${r.seeded} dispatched=${r.dispatched} deferred=${r.deferred}`,
+              `[profiler] seeded=${r.seeded} dispatched=${r.dispatched} deferred=${r.deferred} blocked=${r.blocked}`,
             );
           }
         }),

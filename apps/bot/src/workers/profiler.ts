@@ -6,7 +6,7 @@ import {
   nextWindowAt,
   resolveZone,
 } from "../services/profiler-schedule.js";
-import { startProfilerBatch } from "../services/profiler.js";
+import { hasActiveDatePlanning, startProfilerBatch } from "../services/profiler.js";
 
 /**
  * Profiler scheduler tick (PRODUCT_SPEC §Phase 1b). Runs on a cron (default
@@ -16,7 +16,8 @@ import { startProfilerBatch } from "../services/profiler.js";
  *      Telegram users that don't have it yet (legacy rows / paths that bypass
  *      the finalize hook). First question lands at the next daily window.
  *   2. **Dispatch** — start a batch for every user whose `profilerNextAt` is
- *      due, deferring out of the user's local quiet hours.
+ *      due, deferring out of the user's local quiet hours and while the user is
+ *      mid date-negotiation (pitch decision / scheduling / venue selection).
  *
  * Telegram-only in v1 (mobile-first users carry a negative `telegramId`).
  */
@@ -28,13 +29,15 @@ export interface ProfilerTickResult {
   seeded: number;
   dispatched: number;
   deferred: number;
+  /** Due users held back because they're mid date-negotiation (not `scheduled`). */
+  blocked: number;
 }
 
 export async function profilerTick(
   api: Api<RawApi>,
   now: Date = new Date(),
 ): Promise<ProfilerTickResult> {
-  const result: ProfilerTickResult = { seeded: 0, dispatched: 0, deferred: 0 };
+  const result: ProfilerTickResult = { seeded: 0, dispatched: 0, deferred: 0, blocked: 0 };
 
   // 1. Lazy seed — never-armed users. First batch at the next window (we don't
   // blast existing users immediately). New completions get the precise
@@ -89,6 +92,18 @@ export async function profilerTick(
         data: { profilerNextAt: nextWindowAt(now, resolveZone(p.timeZone)) },
       });
       result.deferred++;
+      continue;
+    }
+    // Don't interrupt an in-progress date negotiation (pitch decision, calendar
+    // scheduling, or venue selection) with icebreaker questions — defer to the
+    // next local window. A `scheduled` match does NOT block: that waiting window
+    // is a fine moment to ask (PRODUCT_SPEC §Phase 1b).
+    if (await hasActiveDatePlanning(p.userId)) {
+      await prisma.profile.update({
+        where: { userId: p.userId },
+        data: { profilerNextAt: nextWindowAt(now, resolveZone(p.timeZone)) },
+      });
+      result.blocked++;
       continue;
     }
     try {
