@@ -6,6 +6,7 @@ dist/
 .DS_Store
 .turbo/
 .claude/
+.agents/
 tmp/
 *.bak
 .env.local.bak*

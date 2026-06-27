@@ -166,29 +166,33 @@ docs are affected, say `Docs unaffected` in the final response or PR notes.
 
 ## Post-Implementation Git Workflow
 
-After meaningful implementation of a new feature, bugfix, UX/API/schema/deploy
-change, preserve rollbackable history by completing the Git handoff before
-finishing:
+**Standing rule (single-branch journal — see CLAUDE.md): commit and push after
+EVERY change, no matter how small, before ending your turn.** This is durable,
+pre-authorized — do not ask first. Work directly on `main`; never create
+branches. The GitHub remote is a transparent, rollback-able log of each step, so
+the working tree must not accumulate mixed, hard-to-attribute changes between
+sessions.
+
+After any turn that edits/adds/deletes files, complete the Git handoff:
 
 1. Run the relevant tests, typecheck, or build for the change. Use narrow
    verification while iterating and broaden when risk justifies it.
 2. Complete the Documentation Impact Check above, and update Obsidian when the
    change warrants a session, changelog, or ADR note.
 3. Check `git status` and `git diff` before staging.
-4. Stage only changes that belong to the current task. Never stage `.env`,
-   secrets, raw logs, build artifacts, `node_modules`, or unrelated dirty
-   changes from the user.
+4. Stage the changes for the work just done. Never stage `.env`, secrets, raw
+   logs, build artifacts, `node_modules`, or local tooling (`.claude/`,
+   `.agents/`, `.gstack/` are gitignored).
 5. Commit with a clear, scoped message.
-6. Push to the current upstream branch. If no upstream is configured, use
-   `git push -u origin HEAD`.
+6. `git push origin HEAD` (i.e. to `origin/main`).
 
-Do not create an automatic commit or push after pure analysis, review,
-planning, or an answer that made no implementation changes. If relevant tests,
-typecheck, or build fail, stop before committing unless the user explicitly
-asks to preserve the failing state. If the worktree contains unrelated user
-changes, leave them untouched and tell the user what was left out. If push is
-blocked by authorization, a protected branch, missing remote/upstream, or a
-conflict/non-fast-forward, stop and report the exact cause.
+A turn that changed **no** files (pure analysis, a question, a read-only answer)
+has nothing to record — do not create an empty commit. Roll back with
+`git revert` (or `git reset` for unpushed work). If relevant tests/typecheck/
+build fail, still commit to keep the journal current but call out the failing
+state in the commit/PR notes (the user has opted into this) unless told
+otherwise. If push is blocked by authorization, a protected branch, or a
+non-fast-forward, stop and report the exact cause.
 
 ## Deployment
 
