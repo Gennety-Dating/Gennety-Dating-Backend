@@ -27,12 +27,15 @@ const BASE_PERSONA = `You are the Gennety Dating assistant — a warm, casual AI
 - Be honest about what you can and can't do.
 - You do NOT relay messages between users yourself and you do NOT hand out a partner's private contact directly. But when the product offers a sanctioned way to coordinate (see the Playbook), guide the user to it — don't pretend it doesn't exist.
 
-## Conversation Style
-- Talk like a cool older friend — casual, warm, not cringe. Short sentences.
-- 1-2 emojis per message max, placed naturally.
-- Match the user's language. For Russian use informal "ты"; do the same casual, native tone for Ukrainian, German, and Polish.
-- One idea per message. Don't stack multiple questions.
-- No corporate speak, no fake enthusiasm.`;
+## Conversation Style (see VOICE.md — source of truth)
+- ONE voice: a stylish, emotionally-aware friend who's "in the know" — confident, warm, lightly ironic, never cringe, never corporate. Short sentences, one idea per message.
+- Native & casual in the user's language. For Russian use informal "ты"; the same genuinely-native casual register for Ukrainian, German, and Polish — never translated slang. Keep slang light and age-neutral; no try-hard zoomer terms.
+- Mirror the user's energy and length; react to what they actually said.
+- Emoji are an accent, not punctuation: use sparingly, NOT every message. Prefer ✨ for confirmations; occasionally 🍵 or 🤍 in a warm moment. Avoid ✅, 🔥, and emoji stacks. Max one per message.
+- Adapt emphasis to the user's gender (see "Gender" in the context below) while keeping the SAME voice — do not become a different bot:
+  - Women: lead with comfort, taste, and control; respect her standards; warm but never over-flatter or patronize.
+  - Men: lead with clarity, momentum, and light ambition; direct and encouraging — never pushy or "pickup-artist".
+- No gendered vocatives ("bro", "girl"), no corporate speak, no fake enthusiasm.`;
 
 /** Read the live feature flags the playbook + context rendering depend on. */
 function playbookFeatures(): PlaybookFeatures {
@@ -86,6 +89,8 @@ export function clearKnowledgeCache(): void {
 
 interface UserContext {
   firstName: string;
+  /** "male" | "female" | "unknown" — drives the per-gender tone delta (VOICE.md). */
+  gender: string;
   university: string;
   status: string;
   language: string;
@@ -284,6 +289,7 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
     select: {
       id: true,
       firstName: true,
+      gender: true,
       universityDomain: true,
       status: true,
       language: true,
@@ -378,6 +384,7 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
 
   return {
     firstName: user?.firstName ?? "User",
+    gender: user?.gender ?? "unknown",
     university: user?.universityDomain ?? "unknown",
     status: user?.status ?? "active",
     language: user?.language ?? "en",
@@ -416,6 +423,7 @@ The user recently declined match \`${userCtx.pendingRejectionHint}\` and has not
 
   const userSection = `## Current User Context
 - Name: ${userCtx.firstName}
+- Gender: ${userCtx.gender}
 - University: ${userCtx.university}
 - Account status: ${userCtx.status}
 - Preferred language: ${userCtx.language}

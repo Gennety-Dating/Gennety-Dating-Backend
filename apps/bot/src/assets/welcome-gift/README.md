@@ -13,6 +13,21 @@ Drop square Telegram **video-note** MP4s here, named `<gender>-<lang>.mp4`:
 
 Examples: `male-ru.mp4`, `female-en.mp4`.
 
+### Fallback chain & per-language notes
+
+The sender resolves the note in this order — first hit wins:
+
+1. `<gender>-<lang>.mp4` — gender + language specific.
+2. `<lang>.mp4` — one note per language, shown to both genders.
+3. `default.mp4` — global fallback for every otherwise-uncovered pair.
+
+A more specific file always overrides a broader one; identical files share one
+uploaded Telegram `file_id`.
+
+**Currently shipped** (founder note, dubbed per language): `en.mp4`, `de.mp4`,
+`pl.mp4`, and `default.mp4` (Russian — also serves `ru` and `uk`, since neither
+has its own file). Same format rules below.
+
 ## Format
 
 - Square aspect ratio (video notes are circular in Telegram).

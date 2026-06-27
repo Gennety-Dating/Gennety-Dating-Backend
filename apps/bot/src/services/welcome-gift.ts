@@ -32,18 +32,35 @@ export type WelcomeGiftGender = "male" | "female";
  */
 const videoNoteFileIds = new Map<string, string>();
 
-/** Absolute path to the bundled welcome video note for a (gender, language). */
-function welcomeGiftVideoPath(gender: WelcomeGiftGender, lang: Language): string {
-  return fileURLToPath(
-    new URL(`../assets/welcome-gift/${gender}-${lang}.mp4`, import.meta.url),
-  );
+/**
+ * Resolve the bundled welcome video note for a (gender, language). Tries, in
+ * order: a gender+language-specific `<gender>-<lang>.mp4`, a per-language
+ * `<lang>.mp4` (same note for both genders of that language), then a single
+ * global `default.mp4` (shown to every otherwise-uncovered pair — e.g. `uk`
+ * falls back to whatever `default.mp4` holds). Returns the absolute path plus a
+ * cache key (the asset basename) so identical assets share one uploaded
+ * `file_id`, or `null` when nothing is on disk.
+ */
+function resolveWelcomeGiftVideo(
+  gender: WelcomeGiftGender,
+  lang: Language,
+): { path: string; key: string } | null {
+  const candidates = [`${gender}-${lang}.mp4`, `${lang}.mp4`, "default.mp4"];
+  for (const name of candidates) {
+    const path = fileURLToPath(
+      new URL(`../assets/welcome-gift/${name}`, import.meta.url),
+    );
+    if (existsSync(path)) return { path, key: name };
+  }
+  return null;
 }
 
 /**
  * Send the optional founder video note. Uses the `file_id` cache, falls back to
  * uploading the bundled asset, and is a clean no-op when no asset is recorded
- * for the pair (the matrix lights up automatically as operators drop new MP4s
- * into `assets/welcome-gift/`). Never throws.
+ * for the pair AND no global `default.mp4` exists (the matrix lights up
+ * automatically as operators drop new MP4s into `assets/welcome-gift/`, and a
+ * lone `default.mp4` plays for every pair). Never throws.
  */
 async function sendWelcomeVideoNote(
   api: Api,
@@ -51,22 +68,20 @@ async function sendWelcomeVideoNote(
   lang: Language,
   gender: WelcomeGiftGender,
 ): Promise<void> {
-  const key = `${gender}-${lang}`;
+  let cacheKey: string | null = null;
   try {
-    const cached = videoNoteFileIds.get(key);
-    let videoNote: string | InputFile | null = cached ?? null;
-    if (!videoNote) {
-      const path = welcomeGiftVideoPath(gender, lang);
-      if (!existsSync(path)) return; // no recorded video note for this pair — skip
-      videoNote = new InputFile(path);
-    }
+    const asset = resolveWelcomeGiftVideo(gender, lang);
+    if (!asset) return; // no specific note and no global default — skip
+    cacheKey = asset.key;
+    const cached = videoNoteFileIds.get(asset.key);
+    const videoNote: string | InputFile = cached ?? new InputFile(asset.path);
     const msg = await api.sendVideoNote(chatId, videoNote);
     const fileId = msg.video_note?.file_id;
-    if (fileId && !cached) videoNoteFileIds.set(key, fileId);
+    if (fileId && !cached) videoNoteFileIds.set(asset.key, fileId);
   } catch (err) {
     // A stale cached file_id or a transient Bot API error must never block the
     // gift DM — drop the cache entry and fall through to the text-only path.
-    videoNoteFileIds.delete(key);
+    if (cacheKey) videoNoteFileIds.delete(cacheKey);
     console.error("[welcome-gift] video note failed:", err);
   }
 }

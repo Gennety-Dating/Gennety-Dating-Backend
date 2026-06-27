@@ -24,8 +24,8 @@ const translations = {
     otpExpired: "Code expired. Enter your email again:",
     otpTooManyAttempts: "Too many tries. Enter your email again for a fresh code.",
     otpCooldown: "Hold on — wait a minute before requesting a new code.",
-    emailVerified: "Email confirmed ✅",
-    contextDumpAck: "Got it ✅ Processing now…",
+    emailVerified: "Email confirmed ✨",
+    contextDumpAck: "Got it ✨ Processing now…",
     askFirstName: "What's your name?",
     askSurname: "And your last name?",
     askAge: "How old are you?",
@@ -43,7 +43,7 @@ const translations = {
     llmDumpReceived: "Profile ready ✨",
     askPhotos:
       "Almost done! Send {min}–{max} different photos. Every photo must clearly show you, and explicit content isn't allowed. A profile video may include friends or scenery, but you must appear clearly in several moments.",
-    photoReceived: "Photo {n}/{max} ✅",
+    photoReceived: "Photo {n}/{max} ✨",
     photoRejected:
       "Your face needs to be visible in the photo. Try another shot.",
     photoDuplicate:
@@ -63,7 +63,7 @@ const translations = {
     photoConsensusOutlierRejected:
       "One pending photo showed a different person, so I left it out.",
     photoConsensusConfirmed:
-      "Identity confirmed from matching photos ✅",
+      "Identity confirmed from matching photos ✨",
     photoConsensusNoPairCap:
       "I still don't see two photos of the same person. Nothing has been fixed yet — send another clear photo of you.",
     photoVisionError:
@@ -107,42 +107,42 @@ const translations = {
     onboardingPhotosNeedMore:
       "Photo progress: {count}/{min}. Clear photos still needed: {remaining}.",
     onboardingPhotosBonusOffer:
-      "Your required photos are ready ✅\n\nReach {threshold} photos ({remaining} remaining) to earn a free Date Ticket. You can also send one short profile video for another free ticket.\n\nBoth are optional — send more media now, or continue.",
+      "Your required photos are ready ✨\n\nReach {threshold} photos ({remaining} remaining) to earn a free Date Ticket. You can also send one short profile video for another free ticket.\n\nBoth are optional — send more media now, or continue.",
     onboardingPhotosBonusOfferAfterVideo:
-      "Your required photos are ready, and your video bonus is secured ✅\n\nReach {threshold} photos ({remaining} remaining) to earn a second free Date Ticket, or continue.",
+      "Your required photos are ready, and your video bonus is secured ✨\n\nReach {threshold} photos ({remaining} remaining) to earn a second free Date Ticket, or continue.",
     onboardingPhotosBonusProgress:
-      "{count}/{threshold} photos ✅ One more unlocks a free Date Ticket. Send it now or continue.",
+      "{count}/{threshold} photos ✨ One more unlocks a free Date Ticket. Send it now or continue.",
     onboardingPhotosBonusProgressAfterVideo:
-      "{count}/{threshold} photos ✅ One more unlocks your second free Date Ticket. Send it now or continue.",
+      "{count}/{threshold} photos ✨ One more unlocks your second free Date Ticket. Send it now or continue.",
     onboardingPhotosPhotoBonusEarned:
-      "{count} photos are ready, and your free photo Date Ticket is secured ✅\n\nYou may still add photos up to {max}, or send one short profile video for another free ticket. Otherwise, continue.",
+      "{count} photos are ready, and your free photo Date Ticket is secured ✨\n\nYou may still add photos up to {max}, or send one short profile video for another free ticket. Otherwise, continue.",
     onboardingPhotosBothBonusesEarned:
-      "{count} photos and your profile video are ready — both free Date Tickets are secured ✅\n\nYou may still add photos up to {max}, or continue.",
+      "{count} photos and your profile video are ready — both free Date Tickets are secured ✨\n\nYou may still add photos up to {max}, or continue.",
     onboardingPhotosPhotoBonusEarnedMax:
-      "All {max} photos are ready, and your free photo Date Ticket is secured ✅\n\nYou may still send one short profile video for another free ticket, or continue.",
+      "All {max} photos are ready, and your free photo Date Ticket is secured ✨\n\nYou may still send one short profile video for another free ticket, or continue.",
     onboardingPhotosBothBonusesEarnedMax:
-      "All {max} photos and your profile video are ready — both free Date Tickets are secured ✅\n\nContinue when you're ready.",
+      "All {max} photos and your profile video are ready — both free Date Tickets are secured ✨\n\nContinue when you're ready.",
     onboardingPhotosOptional:
-      "Your required photos are ready ✅\n\nYou may add more photos up to {max}, send one short profile video, or continue.",
+      "Your required photos are ready ✨\n\nYou may add more photos up to {max}, send one short profile video, or continue.",
     onboardingPhotosOptionalAfterVideo:
-      "Your required photos and profile video are ready ✅\n\nYou may add more photos up to {max}, or continue.",
+      "Your required photos and profile video are ready ✨\n\nYou may add more photos up to {max}, or continue.",
     onboardingPhotosOptionalMax:
-      "All {max} photos are ready ✅\n\nYou may send one short profile video, or continue.",
+      "All {max} photos are ready ✨\n\nYou may send one short profile video, or continue.",
     onboardingPhotosOptionalMaxAfterVideo:
-      "All {max} photos and your profile video are ready ✅\n\nContinue when you're ready.",
+      "All {max} photos and your profile video are ready ✨\n\nContinue when you're ready.",
     menuMyTickets: "🎟️ My Tickets",
     ticketWalletText:
       "🎟️ *My Tickets*\n\nYou have *{balance}* ticket(s). Each date costs 1 ticket — buy more anytime.",
     ticketWalletOpenStore: "🎟️ Buy tickets",
     photosEnough: "You can send more (up to {max}) or hit the button to continue.",
-    photosDone: "Photos uploaded ✅",
+    photosDone: "Photos uploaded ✨",
     profileReview:
       "Here's your profile:\n\n" +
       "*{firstName} {surname}*, {age}\n" +
       "🎓 {university}\n\n" +
       "{summary}\n\n" +
       "Look good?",
-    profileConfirm: "Looks good ✅",
+    profileConfirm: "Looks good ✨",
     profileEdit: "Change something",
     onboardingComplete:
       "You're in! 🎉\n\n" +
@@ -166,7 +166,7 @@ const translations = {
       "We'll compare a verification selfie with your profile photos. Complete the check and get *1 free Date Ticket* for one date.\n\n" +
       "If you skip, you give up the free ticket, lose {penalty} starting ELO points, and reduce your chances of receiving a strong match.",
     verifyBtnGo: "🟢 Verify now",
-    verifyBtnCheck: "✅ I've finished verification",
+    verifyBtnCheck: "✨ I've finished verification",
     verifyBtnSkip: "⚪️ Skip for now",
     verifySkipNudgeCaption:
       "One sec — listen to this before you skip 👆",
@@ -193,7 +193,7 @@ const translations = {
     verifyCheckInfraError:
       "Couldn't reach the verification service just now. Try again in a moment.",
     verifyOutcomeVerified:
-      "Verified ✅ Profile is live. I'll message you when I find a match.",
+      "Verified ✨ Profile is live. I'll message you when I find a match.",
     verifyOutcomePendingReview:
       "🔍 We're double-checking your profile photos against your verification selfie. This usually takes a few hours — I'll message you the moment it's done.",
     verifyOutcomeRejected:
@@ -248,18 +248,18 @@ const translations = {
     editProfilePhotosBtn: "📸 Re-upload Photos",
     editBioPrompt: "Send your new bio (max 500 chars):",
     editBioTooLong: "Too long — keep it under 500.",
-    editBioSaved: "Bio updated ✅",
+    editBioSaved: "Bio updated ✨",
     editMajorPrompt: "What's your major? (max 100 chars):",
     editMajorTooLong: "Too long — keep it under 100.",
-    editMajorSaved: "Major updated ✅",
+    editMajorSaved: "Major updated ✨",
     editPrefsTitle: "🔍 *Search Prefs*\n\nWhat do you want to change?",
     editPrefsAgeBtn: "🎂 Age Range",
     editPrefsBack: "⬅️ Back to Edit",
     editAgeRangePrompt: "What age range? (e.g. 20-28)\nMin: {min}, Max: {max}.",
     editAgeRangeInvalid: "Didn't get that. Two numbers like 20-28 (range {min}–{max}).",
-    editAgeRangeSaved: "Age range updated ✅",
+    editAgeRangeSaved: "Age range updated ✨",
     editProfilePhotosStart: "Send new photos ({min}–{max}). One at a time.",
-    editProfilePhotosSaved: "Photos updated ✅",
+    editProfilePhotosSaved: "Photos updated ✨",
 
     // --- Pause / Resume ---
     pauseConfirmed: "Matching paused ⏸\nNo new matches until you resume.",
@@ -269,9 +269,9 @@ const translations = {
     settingsTitle: "⚙️ Settings",
     settingsLanguage: "🌐 Language",
     settingsLanguagePick: "Pick a language:",
-    settingsLanguageSaved: "Language updated ✅",
+    settingsLanguageSaved: "Language updated ✨",
     settingsVerify: "🛡 Verify your account",
-    settingsVerifyNotNeeded: "You're already verified ✅",
+    settingsVerifyNotNeeded: "You're already verified ✨",
     settingsVerifyUnavailable:
       "Verification is temporarily unavailable. Please try again later.",
     helpBody:
@@ -317,7 +317,7 @@ const translations = {
       "You've got 24h to reply. " +
       "Once you tap — *the decision is final*. No take-backs.",
     matchStreamStart: "✨ Why you two click…",
-    matchBtnAccept: "✅ Accept",
+    matchBtnAccept: "✨ Accept",
     matchBtnDecline: "❌ Pass",
     matchDeclineConfirmPrompt:
       "Pass on this match?\n\n" +
@@ -327,10 +327,10 @@ const translations = {
     matchBtnKeepDeciding: "← Go back",
     matchDeclineDismissed:
       "No rush — this match is still waiting for your answer. 💛",
-    matchAcceptedToast: "Accepted ✅",
-    matchDecisionSavedToast: "Saved ✅",
-    matchAccepted: "Accepted ✅ Waiting on them.",
-    matchBothAccepted: "It's mutual 🔥 Let's find a time.",
+    matchAcceptedToast: "Accepted ✨",
+    matchDecisionSavedToast: "Saved ✨",
+    matchAccepted: "Accepted ✨ Waiting on them.",
+    matchBothAccepted: "It's mutual 🤍 Let's find a time.",
     matchDeclined:
       "All good. What was the main reason you passed?\n\n" +
       "Pick one below, or send a short text or voice note. The AI will analyze it and use it for the next drop.\n\n" +
@@ -422,16 +422,16 @@ const translations = {
     matchScheduleProposal:
       "How about one of these? Tap what works:",
     matchScheduleIter3:
-      "It's mutual 🔥 Open the calendar and mark every time that works.",
+      "It's mutual 🤍 Open the calendar and mark every time that works.",
     matchScheduleAfterTicket:
       "📅 Now pick your time — open the calendar and mark every slot that works.",
     matchScheduleBtnCalendar: "📅 Open Calendar",
     // --- Date Ticket (premium post-accept gate) ---
     ticketCardCaption:
-      "It's mutual 🔥 Get your *Date Ticket* to unlock planning.",
+      "It's mutual 🤍 Get your *Date Ticket* to unlock planning.",
     ticketButton: "🎟️ Get your date ticket",
     ticketStatusButton: "Open date",
-    ticketGateWaiting: "Ticket ready ✅ Waiting on them.",
+    ticketGateWaiting: "Ticket ready ✨ Waiting on them.",
     ticketBothSecuredDm: "Both tickets secured 🎟️✨ Your date is on — let's pick a time.",
     ticketPartnerPaidDm: "{name} already covered your date ticket ❤️ You're all set — nothing to pay.",
     ticketRefundedDm:
@@ -454,7 +454,7 @@ const translations = {
     matchSchedulePeerSuggestedAlternative:
       "Your match suggested a different time. Check their answer: you can agree with it or suggest your own.",
     matchScheduleSavedConfirmation:
-      "✅ Saved your dates and times. We pinged your match — I'll let you know the moment they reply.",
+      "✨ Saved your dates and times. We pinged your match — I'll let you know the moment they reply.",
     matchScheduleNoOverlapYet:
       "You both marked dates and times, but none overlap. Open the calendar and add a few more — we'll lock it in as soon as one slot matches:",
     venueConciergeIntro:
@@ -465,12 +465,12 @@ const translations = {
     venueConciergeBtnMap: "🗺️ Pick on map",
     venueLocationFirst:
       "First things first — *mark where you'll be setting off from* 📍 Tap below to drop it on the map. I'll ask about the vibe right after.",
-    venueVibeNoted: "Vibe noted ✅ Now pick where you'll be coming from:",
+    venueVibeNoted: "Vibe noted ✨ Now pick where you'll be coming from:",
     venueLocationNoted:
-      "Starting point saved ✅ Now — what *vibe* are you after? e.g. _quiet cafe_, _vegan brunch_, _park walk_, _small museum_.",
+      "Starting point saved ✨ Now — what *vibe* are you after? e.g. _quiet cafe_, _vegan brunch_, _park walk_, _small museum_.",
     venueSafetyOverride:
       "Heads up — picked a public café instead. We keep first dates in public spots.",
-    venueWaitingPeer: "Got yours ✅ Waiting for them…",
+    venueWaitingPeer: "Got yours ✨ Waiting for them…",
     venueSearching: "🔍 Finding your spot…",
     venueSearchStep2: "📍 Comparing your routes…",
     venueSearchStep3: "✨ Matching your vibe…",
@@ -497,7 +497,7 @@ const translations = {
     profilerBatchThinking: "💭 Thinking…",
     profilerBatchSaving: "🧩 Saving your answers…",
     profilerBatchSaved:
-      "Preference card updated ✅ I'll use it for the next match.",
+      "Preference card updated ✨ I'll use it for the next match.",
     profilerNextAck: "✍️ Got it…",
     profilerNextFormulating: "💭 Thinking…",
 
@@ -512,7 +512,7 @@ const translations = {
     venueChangeMaleComment: "Their note:",
     venueChangeMaleAsk:
       "Accept the new place, or decline. Declining cancels the date.",
-    venueChangeBtnAccept: "✅ Accept new place",
+    venueChangeBtnAccept: "✨ Accept new place",
     venueChangeBtnDecline: "❌ Decline (cancel date)",
     venueChangeDeclineConfirm:
       "Are you sure? If you don't accept the proposed place, your date and match " +
@@ -618,7 +618,7 @@ const translations = {
     // --- Pinned status banner (live discrete timer) ---
     statusDaysHours: "⏳ Next match in {d}d {h}h",
     statusHoursMinutes: "⏳ Matches drop in {h}h {m}m",
-    statusMinutes: "🔥 Almost ready! Matches drop in {m}m",
+    statusMinutes: "✨ Almost ready! Matches drop in {m}m",
     statusProcessing: "✨ Analyzing campus… Check back shortly.",
 
     // --- Voice notes ---
@@ -644,11 +644,11 @@ const translations = {
     coordSharedToPartner:
       "Your date shared their Telegram so you can find each other 💬\n\n" +
       "{name}: {link}\n\nTap to say hi — see you there!",
-    coordRequestAck: "On it — I've asked them. I'll ping you the moment they say yes ✅",
+    coordRequestAck: "On it — I've asked them. I'll ping you the moment they say yes ✨",
     coordPartnerAskApprove:
       "Your date in ~1h would love a way to find you at the spot 💬\n\n" +
       "Share your Telegram with {name}?",
-    coordPartnerBtnApprove: "✅ Share my Telegram",
+    coordPartnerBtnApprove: "✨ Share my Telegram",
     coordPartnerBtnDecline: "Not now",
     coordRevealToInitiator:
       "{name} shared their Telegram so you can find each other 💬\n\n" +
@@ -696,8 +696,8 @@ const translations = {
     otpExpired: "Код протух. Введи почту заново:",
     otpTooManyAttempts: "Слишком много попыток. Введи почту заново — пришлём новый код.",
     otpCooldown: "Подожди минутку перед повторной отправкой.",
-    emailVerified: "Почта подтверждена ✅",
-    contextDumpAck: "Принял ✅ Обрабатываю…",
+    emailVerified: "Почта подтверждена ✨",
+    contextDumpAck: "Принял ✨ Обрабатываю…",
     askFirstName: "Как тебя зовут?",
     askSurname: "Фамилия?",
     askAge: "Сколько тебе лет?",
@@ -715,7 +715,7 @@ const translations = {
     llmDumpReceived: "Профиль готов ✨",
     askPhotos:
       "Почти всё! Пришли {min}–{max} разных фото. На каждом должен быть хорошо виден ты, откровенный контент запрещён. В видео могут быть друзья или пейзажи, но ты должен хорошо появляться в нескольких моментах.",
-    photoReceived: "Фото {n}/{max} ✅",
+    photoReceived: "Фото {n}/{max} ✨",
     photoRejected:
       "На фото должно быть видно твоё лицо. Попробуй другой снимок.",
     photoDuplicate:
@@ -735,7 +735,7 @@ const translations = {
     photoConsensusOutlierRejected:
       "Одно ожидающее фото было с другим человеком, поэтому я его не добавил.",
     photoConsensusConfirmed:
-      "Личность подтверждена по совпадающим фото ✅",
+      "Личность подтверждена по совпадающим фото ✨",
     photoConsensusNoPairCap:
       "Я всё ещё не вижу двух фото одного человека. Пока ничего не зафиксировано — пришли ещё одно чёткое фото себя.",
     photoVisionError:
@@ -779,42 +779,42 @@ const translations = {
     onboardingPhotosNeedMore:
       "Фото: {count}/{min}. Осталось загрузить ещё {remaining} чёткое фото до обязательного минимума.",
     onboardingPhotosBonusOffer:
-      "Обязательные фото готовы ✅\n\nДоведи количество фото до {threshold} (осталось: {remaining}) и получишь бесплатный билет на свидание. Ещё один бесплатный билет можно получить за короткое видео для профиля.\n\nОба бонуса необязательны — можешь прислать медиа сейчас или продолжить.",
+      "Обязательные фото готовы ✨\n\nДоведи количество фото до {threshold} (осталось: {remaining}) и получишь бесплатный билет на свидание. Ещё один бесплатный билет можно получить за короткое видео для профиля.\n\nОба бонуса необязательны — можешь прислать медиа сейчас или продолжить.",
     onboardingPhotosBonusOfferAfterVideo:
-      "Обязательные фото готовы, а билет за видео уже твой ✅\n\nДоведи количество фото до {threshold} (осталось: {remaining}) и получишь второй бесплатный билет. Или продолжай.",
+      "Обязательные фото готовы, а билет за видео уже твой ✨\n\nДоведи количество фото до {threshold} (осталось: {remaining}) и получишь второй бесплатный билет. Или продолжай.",
     onboardingPhotosBonusProgress:
-      "{count}/{threshold} фото ✅ Ещё одно откроет бесплатный билет на свидание. Пришли его сейчас или продолжай.",
+      "{count}/{threshold} фото ✨ Ещё одно откроет бесплатный билет на свидание. Пришли его сейчас или продолжай.",
     onboardingPhotosBonusProgressAfterVideo:
-      "{count}/{threshold} фото ✅ Ещё одно откроет второй бесплатный билет. Пришли его сейчас или продолжай.",
+      "{count}/{threshold} фото ✨ Ещё одно откроет второй бесплатный билет. Пришли его сейчас или продолжай.",
     onboardingPhotosPhotoBonusEarned:
-      "Готово {count} фото, и бесплатный билет за фотографии уже твой ✅\n\nМожно добавить фото до {max} или короткое видео за ещё один бесплатный билет. Либо продолжай.",
+      "Готово {count} фото, и бесплатный билет за фотографии уже твой ✨\n\nМожно добавить фото до {max} или короткое видео за ещё один бесплатный билет. Либо продолжай.",
     onboardingPhotosBothBonusesEarned:
-      "Готово {count} фото и видео — оба бесплатных билета уже твои ✅\n\nМожно добавить фото до {max} или продолжить.",
+      "Готово {count} фото и видео — оба бесплатных билета уже твои ✨\n\nМожно добавить фото до {max} или продолжить.",
     onboardingPhotosPhotoBonusEarnedMax:
-      "Все {max} фото готовы, и бесплатный билет за фотографии уже твой ✅\n\nМожно отправить короткое видео за ещё один бесплатный билет или продолжить.",
+      "Все {max} фото готовы, и бесплатный билет за фотографии уже твой ✨\n\nМожно отправить короткое видео за ещё один бесплатный билет или продолжить.",
     onboardingPhotosBothBonusesEarnedMax:
-      "Все {max} фото и видео готовы — оба бесплатных билета уже твои ✅\n\nПродолжай, когда будешь готов.",
+      "Все {max} фото и видео готовы — оба бесплатных билета уже твои ✨\n\nПродолжай, когда будешь готов.",
     onboardingPhotosOptional:
-      "Обязательные фото готовы ✅\n\nМожешь добавить ещё фото до {max}, отправить короткое видео для профиля или продолжить.",
+      "Обязательные фото готовы ✨\n\nМожешь добавить ещё фото до {max}, отправить короткое видео для профиля или продолжить.",
     onboardingPhotosOptionalAfterVideo:
-      "Обязательные фото и видео готовы ✅\n\nМожешь добавить ещё фото до {max} или продолжить.",
+      "Обязательные фото и видео готовы ✨\n\nМожешь добавить ещё фото до {max} или продолжить.",
     onboardingPhotosOptionalMax:
-      "Все {max} фото готовы ✅\n\nМожешь отправить короткое видео для профиля или продолжить.",
+      "Все {max} фото готовы ✨\n\nМожешь отправить короткое видео для профиля или продолжить.",
     onboardingPhotosOptionalMaxAfterVideo:
-      "Все {max} фото и видео готовы ✅\n\nПродолжай, когда будешь готов.",
+      "Все {max} фото и видео готовы ✨\n\nПродолжай, когда будешь готов.",
     menuMyTickets: "🎟️ Мои билеты",
     ticketWalletText:
       "🎟️ *Мои билеты*\n\nУ тебя *{balance}* билет(ов). Каждое свидание стоит 1 билет — докупить можно в любой момент.",
     ticketWalletOpenStore: "🎟️ Купить билеты",
     photosEnough: "Можешь скинуть ещё (до {max}) или жми кнопку.",
-    photosDone: "Фото загружены ✅",
+    photosDone: "Фото загружены ✨",
     profileReview:
       "Вот твой профиль:\n\n" +
       "*{firstName} {surname}*, {age}\n" +
       "🎓 {university}\n\n" +
       "{summary}\n\n" +
       "Всё ок?",
-    profileConfirm: "Всё ок ✅",
+    profileConfirm: "Всё ок ✨",
     profileEdit: "Поменять",
     onboardingComplete:
       "Ты в деле! 🎉\n\n" +
@@ -838,7 +838,7 @@ const translations = {
       "Мы сравним селфи с фотографиями профиля. Пройди проверку и получи *1 бесплатный билет на свидание*.\n\n" +
       "Если пропустить, ты откажешься от билета, потеряешь {penalty} стартовых ELO-пунктов и снизишь свои шансы на подходящую встречу.",
     verifyBtnGo: "🟢 Пройти верификацию",
-    verifyBtnCheck: "✅ Я прошёл проверку",
+    verifyBtnCheck: "✨ Я прошёл проверку",
     verifyBtnSkip: "⚪️ Пропустить пока",
     verifySkipNudgeCaption:
       "Секунду — послушай это, прежде чем пропустить 👆",
@@ -865,7 +865,7 @@ const translations = {
     verifyCheckInfraError:
       "Не получилось достучаться до сервиса верификации. Попробуй ещё раз через минуту.",
     verifyOutcomeVerified:
-      "Проверка пройдена ✅ Профиль активен. Напишу, когда найду метч.",
+      "Проверка пройдена ✨ Профиль активен. Напишу, когда найду метч.",
     verifyOutcomePendingReview:
       "🔍 Мы дополнительно проверяем фото профиля по селфи из верификации. Обычно это занимает несколько часов — я напишу, как только проверка завершится.",
     verifyOutcomeRejected:
@@ -920,18 +920,18 @@ const translations = {
     editProfilePhotosBtn: "📸 Обновить фото",
     editBioPrompt: "Скинь новое описание (до 500 символов):",
     editBioTooLong: "Слишком длинно — уложись в 500.",
-    editBioSaved: "Bio обновлён ✅",
+    editBioSaved: "Bio обновлён ✨",
     editMajorPrompt: "Какая у тебя специальность? (до 100 символов):",
     editMajorTooLong: "Слишком длинно — уложись в 100.",
-    editMajorSaved: "Специальность обновлена ✅",
+    editMajorSaved: "Специальность обновлена ✨",
     editPrefsTitle: "🔍 *Параметры поиска*\n\nЧто меняем?",
     editPrefsAgeBtn: "🎂 Возраст",
     editPrefsBack: "⬅️ К редактированию",
     editAgeRangePrompt: "Какой возраст? (напр. 20-28)\nМин: {min}, Макс: {max}.",
     editAgeRangeInvalid: "Не понял. Два числа через дефис, напр. 20-28 (от {min} до {max}).",
-    editAgeRangeSaved: "Диапазон обновлён ✅",
+    editAgeRangeSaved: "Диапазон обновлён ✨",
     editProfilePhotosStart: "Скинь новые фото ({min}–{max}). По одному.",
-    editProfilePhotosSaved: "Фото обновлены ✅",
+    editProfilePhotosSaved: "Фото обновлены ✨",
 
     // --- Pause / Resume ---
     pauseConfirmed: "Поиск на паузе ⏸\nНовых мэтчей не будет, пока не включишь.",
@@ -941,9 +941,9 @@ const translations = {
     settingsTitle: "⚙️ Настройки",
     settingsLanguage: "🌐 Язык",
     settingsLanguagePick: "Выбери язык:",
-    settingsLanguageSaved: "Язык обновлён ✅",
+    settingsLanguageSaved: "Язык обновлён ✨",
     settingsVerify: "🛡 Пройти верификацию",
-    settingsVerifyNotNeeded: "Ты уже верифицирован ✅",
+    settingsVerifyNotNeeded: "Ты уже верифицирован ✨",
     settingsVerifyUnavailable:
       "Верификация временно недоступна. Попробуй позже.",
     helpBody:
@@ -989,7 +989,7 @@ const translations = {
       "У тебя 24 часа на ответ. " +
       "Как только нажмёшь — *решение окончательное*. Изменить нельзя.",
     matchStreamStart: "✨ Почему вы подходите…",
-    matchBtnAccept: "✅ Принять",
+    matchBtnAccept: "✨ Принять",
     matchBtnDecline: "❌ Пас",
     matchDeclineConfirmPrompt:
       "Точно пасуешь?\n\n" +
@@ -999,10 +999,10 @@ const translations = {
     matchBtnKeepDeciding: "← Назад",
     matchDeclineDismissed:
       "Без спешки — этот мэтч всё ещё ждёт твоего ответа. 💛",
-    matchAcceptedToast: "Принято ✅",
-    matchDecisionSavedToast: "Записал ✅",
-    matchAccepted: "Принято ✅ Ждём вторую сторону.",
-    matchBothAccepted: "Взаимно 🔥 Найдём время.",
+    matchAcceptedToast: "Принято ✨",
+    matchDecisionSavedToast: "Записал ✨",
+    matchAccepted: "Принято ✨ Ждём вторую сторону.",
+    matchBothAccepted: "Взаимно 🤍 Найдём время.",
     matchDeclined:
       "Ок, всё нормально. Что стало главной причиной?\n\n" +
       "Выбери вариант ниже или отправь короткий текст/голосовое. ИИ разберёт фидбэк и учтёт его в следующем дропе.\n\n" +
@@ -1096,21 +1096,21 @@ const translations = {
     matchSchedulePeerSuggestedAlternative:
       "Твой собеседник предложил другое время. Проверь его ответ: ты можешь согласиться с предложением или предложить свой вариант.",
     matchScheduleSavedConfirmation:
-      "✅ Сохранил твои даты и время. Пингнул собеседника — напишу, как только он(а) ответит.",
+      "✨ Сохранил твои даты и время. Пингнул собеседника — напишу, как только он(а) ответит.",
     matchScheduleNoOverlapYet:
       "Вы оба отметили даты и время, но варианты не пересеклись. Открой календарь и допиши несколько слотов — как только один совпадёт, я зафиксирую дату:",
     matchScheduleProposal: "Как тебе эти варианты? Жми подходящий:",
     matchScheduleIter3:
-      "Взаимно 🔥 Открой календарь и отметь удобное время.",
+      "Взаимно 🤍 Открой календарь и отметь удобное время.",
     matchScheduleAfterTicket:
       "📅 Теперь выбери время — открой календарь и отметь все удобные слоты.",
     matchScheduleBtnCalendar: "📅 Открыть календарь",
     // --- Date Ticket (премиум-шаг после взаимного метча) ---
     ticketCardCaption:
-      "Взаимно 🔥 Получи *билет на свидание*, чтобы открыть планирование.",
+      "Взаимно 🤍 Получи *билет на свидание*, чтобы открыть планирование.",
     ticketButton: "🎟️ Получить билет на свидание",
     ticketStatusButton: "Открыть свидание",
-    ticketGateWaiting: "Билет готов ✅ Ждём вторую сторону.",
+    ticketGateWaiting: "Билет готов ✨ Ждём вторую сторону.",
     ticketBothSecuredDm: "Оба билета у вас 🎟️✨ Свидание в силе — давай выберем время.",
     ticketPartnerPaidDm: "{name} уже оплатил твой билет на свидание ❤️ Тебе ничего не нужно делать.",
     ticketRefundedDm:
@@ -1135,12 +1135,12 @@ const translations = {
     venueConciergeBtnMap: "🗺️ Выбрать на карте",
     venueLocationFirst:
       "Сначала самое главное — *отметь, откуда ты будешь выезжать* 📍 Нажми кнопку ниже и поставь точку на карте. Про вайб спрошу сразу после.",
-    venueVibeNoted: "Вайб записан ✅ Теперь укажи, откуда поедешь:",
+    venueVibeNoted: "Вайб записан ✨ Теперь укажи, откуда поедешь:",
     venueLocationNoted:
-      "Точку выезда сохранил ✅ Теперь — какой *вайб* хочешь? Например: _тихое кафе_, _веган-завтрак_, _прогулка в парке_, _небольшой музей_.",
+      "Точку выезда сохранил ✨ Теперь — какой *вайб* хочешь? Например: _тихое кафе_, _веган-завтрак_, _прогулка в парке_, _небольшой музей_.",
     venueSafetyOverride:
       "Небольшое уточнение — заменил на публичное кафе. Первые свидания у нас в людных местах.",
-    venueWaitingPeer: "Принял ✅ Ждём вторую сторону…",
+    venueWaitingPeer: "Принял ✨ Ждём вторую сторону…",
     venueSearching: "🔍 Ищу удобное место…",
     venueSearchStep2: "📍 Сверяю ваши маршруты…",
     venueSearchStep3: "✨ Подбираю по атмосфере…",
@@ -1167,7 +1167,7 @@ const translations = {
     profilerBatchThinking: "💭 Думаю…",
     profilerBatchSaving: "🧩 Сохраняю твои ответы…",
     profilerBatchSaved:
-      "Карточка обновлена ✅ Учту при следующем подборе.",
+      "Карточка обновлена ✨ Учту при следующем подборе.",
     profilerNextAck: "✍️ Принято…",
     profilerNextFormulating: "💭 Думаю…",
 
@@ -1182,7 +1182,7 @@ const translations = {
     venueChangeMaleComment: "Объяснение партнёрши:",
     venueChangeMaleAsk:
       "Подтверди новое место или откажись. Отказ отменяет свидание.",
-    venueChangeBtnAccept: "✅ Согласиться с новым местом",
+    venueChangeBtnAccept: "✨ Согласиться с новым местом",
     venueChangeBtnDecline: "❌ Не соглашаться (отменить свидание)",
     venueChangeDeclineConfirm:
       "Точно? Если ты не согласишься на предложенное место, свидание и метч будут " +
@@ -1285,7 +1285,7 @@ const translations = {
     // --- Pinned status banner (live discrete timer) ---
     statusDaysHours: "⏳ Следующий мэтч через {d}д {h}ч",
     statusHoursMinutes: "⏳ Мэтчи прилетят через {h}ч {m}мин",
-    statusMinutes: "🔥 Почти готово! Мэтчи прилетят через {m} мин",
+    statusMinutes: "✨ Почти готово! Мэтчи прилетят через {m} мин",
     statusProcessing: "✨ Сканируем кампус… Загляни чуть позже.",
 
     // --- Voice notes ---
@@ -1311,11 +1311,11 @@ const translations = {
     coordSharedToPartner:
       "Твой мэтч поделился своим Telegram, чтобы вы нашли друг друга 💬\n\n" +
       "{name}: {link}\n\nНапиши пару слов — до встречи!",
-    coordRequestAck: "Готово — я спросил. Сообщу сразу, как только согласятся ✅",
+    coordRequestAck: "Готово — я спросил. Сообщу сразу, как только согласятся ✨",
     coordPartnerAskApprove:
       "Твоему свиданию через ~1ч пригодится способ найти тебя на месте 💬\n\n" +
       "Поделиться своим Telegram с {name}?",
-    coordPartnerBtnApprove: "✅ Поделиться Telegram",
+    coordPartnerBtnApprove: "✨ Поделиться Telegram",
     coordPartnerBtnDecline: "Не сейчас",
     coordRevealToInitiator:
       "{name} поделился своим Telegram, чтобы вы нашли друг друга 💬\n\n" +
@@ -1363,8 +1363,8 @@ const translations = {
     otpExpired: "Код протермінувався. Введи пошту знову:",
     otpTooManyAttempts: "Забагато спроб. Введи пошту знову — надішлемо новий код.",
     otpCooldown: "Зачекай хвилинку перед повторним надсиланням.",
-    emailVerified: "Пошту підтверджено ✅",
-    contextDumpAck: "Прийняв ✅ Обробляю…",
+    emailVerified: "Пошту підтверджено ✨",
+    contextDumpAck: "Прийняв ✨ Обробляю…",
     askFirstName: "Як тебе звати?",
     askSurname: "Прізвище?",
     askAge: "Скільки тобі років?",
@@ -1382,7 +1382,7 @@ const translations = {
     llmDumpReceived: "Профіль готовий ✨",
     askPhotos:
       "Майже все! Надішли {min}–{max} різних фото. На кожному маєш бути добре видимий ти, відвертий контент заборонений. У відео можуть бути друзі або краєвиди, але ти маєш добре з'являтися в кількох моментах.",
-    photoReceived: "Фото {n}/{max} ✅",
+    photoReceived: "Фото {n}/{max} ✨",
     photoRejected:
       "На фото має бути видно твоє обличчя. Спробуй інший знімок.",
     photoDuplicate:
@@ -1402,7 +1402,7 @@ const translations = {
     photoConsensusOutlierRejected:
       "Одне очікуване фото було з іншою людиною, тому я його не додав.",
     photoConsensusConfirmed:
-      "Особу підтверджено за збіжними фото ✅",
+      "Особу підтверджено за збіжними фото ✨",
     photoConsensusNoPairCap:
       "Я досі не бачу двох фото однієї людини. Поки нічого не зафіксовано — надішли ще одне чітке фото себе.",
     photoVisionError:
@@ -1446,42 +1446,42 @@ const translations = {
     onboardingPhotosNeedMore:
       "Фото: {count}/{min}. Залишилося надіслати ще {remaining} чітке фото до обов'язкового мінімуму.",
     onboardingPhotosBonusOffer:
-      "Обов'язкові фото готові ✅\n\nДоведи кількість фото до {threshold} (залишилося: {remaining}) й отримаєш безкоштовний квиток на побачення. Ще один безкоштовний квиток можна отримати за коротке відео для профілю.\n\nОбидва бонуси необов'язкові — можеш надіслати медіа зараз або продовжити.",
+      "Обов'язкові фото готові ✨\n\nДоведи кількість фото до {threshold} (залишилося: {remaining}) й отримаєш безкоштовний квиток на побачення. Ще один безкоштовний квиток можна отримати за коротке відео для профілю.\n\nОбидва бонуси необов'язкові — можеш надіслати медіа зараз або продовжити.",
     onboardingPhotosBonusOfferAfterVideo:
-      "Обов'язкові фото готові, а квиток за відео вже твій ✅\n\nДоведи кількість фото до {threshold} (залишилося: {remaining}) й отримаєш другий безкоштовний квиток. Або продовжуй.",
+      "Обов'язкові фото готові, а квиток за відео вже твій ✨\n\nДоведи кількість фото до {threshold} (залишилося: {remaining}) й отримаєш другий безкоштовний квиток. Або продовжуй.",
     onboardingPhotosBonusProgress:
-      "{count}/{threshold} фото ✅ Ще одне відкриє безкоштовний квиток на побачення. Надішли його зараз або продовжуй.",
+      "{count}/{threshold} фото ✨ Ще одне відкриє безкоштовний квиток на побачення. Надішли його зараз або продовжуй.",
     onboardingPhotosBonusProgressAfterVideo:
-      "{count}/{threshold} фото ✅ Ще одне відкриє другий безкоштовний квиток. Надішли його зараз або продовжуй.",
+      "{count}/{threshold} фото ✨ Ще одне відкриє другий безкоштовний квиток. Надішли його зараз або продовжуй.",
     onboardingPhotosPhotoBonusEarned:
-      "Готово {count} фото, і безкоштовний квиток за фотографії вже твій ✅\n\nМожна додати фото до {max} або коротке відео за ще один безкоштовний квиток. Або продовжуй.",
+      "Готово {count} фото, і безкоштовний квиток за фотографії вже твій ✨\n\nМожна додати фото до {max} або коротке відео за ще один безкоштовний квиток. Або продовжуй.",
     onboardingPhotosBothBonusesEarned:
-      "Готово {count} фото й відео — обидва безкоштовні квитки вже твої ✅\n\nМожна додати фото до {max} або продовжити.",
+      "Готово {count} фото й відео — обидва безкоштовні квитки вже твої ✨\n\nМожна додати фото до {max} або продовжити.",
     onboardingPhotosPhotoBonusEarnedMax:
-      "Усі {max} фото готові, і безкоштовний квиток за фотографії вже твій ✅\n\nМожна надіслати коротке відео за ще один безкоштовний квиток або продовжити.",
+      "Усі {max} фото готові, і безкоштовний квиток за фотографії вже твій ✨\n\nМожна надіслати коротке відео за ще один безкоштовний квиток або продовжити.",
     onboardingPhotosBothBonusesEarnedMax:
-      "Усі {max} фото й відео готові — обидва безкоштовні квитки вже твої ✅\n\nПродовжуй, коли будеш готовий.",
+      "Усі {max} фото й відео готові — обидва безкоштовні квитки вже твої ✨\n\nПродовжуй, коли будеш готовий.",
     onboardingPhotosOptional:
-      "Обов'язкові фото готові ✅\n\nМожеш додати ще фото до {max}, надіслати коротке відео для профілю або продовжити.",
+      "Обов'язкові фото готові ✨\n\nМожеш додати ще фото до {max}, надіслати коротке відео для профілю або продовжити.",
     onboardingPhotosOptionalAfterVideo:
-      "Обов'язкові фото й відео готові ✅\n\nМожеш додати ще фото до {max} або продовжити.",
+      "Обов'язкові фото й відео готові ✨\n\nМожеш додати ще фото до {max} або продовжити.",
     onboardingPhotosOptionalMax:
-      "Усі {max} фото готові ✅\n\nМожеш надіслати коротке відео для профілю або продовжити.",
+      "Усі {max} фото готові ✨\n\nМожеш надіслати коротке відео для профілю або продовжити.",
     onboardingPhotosOptionalMaxAfterVideo:
-      "Усі {max} фото й відео готові ✅\n\nПродовжуй, коли будеш готовий.",
+      "Усі {max} фото й відео готові ✨\n\nПродовжуй, коли будеш готовий.",
     menuMyTickets: "🎟️ Мої квитки",
     ticketWalletText:
       "🎟️ *Мої квитки*\n\nУ тебе *{balance}* квиток(ів). Кожне побачення коштує 1 квиток — докупити можна будь-коли.",
     ticketWalletOpenStore: "🎟️ Купити квитки",
     photosEnough: "Можеш надіслати ще (до {max}) або тисни кнопку.",
-    photosDone: "Фото завантажено ✅",
+    photosDone: "Фото завантажено ✨",
     profileReview:
       "Ось твій профіль:\n\n" +
       "*{firstName} {surname}*, {age}\n" +
       "🎓 {university}\n\n" +
       "{summary}\n\n" +
       "Все ок?",
-    profileConfirm: "Все ок ✅",
+    profileConfirm: "Все ок ✨",
     profileEdit: "Змінити",
     onboardingComplete:
       "Ти в грі! 🎉\n\n" +
@@ -1505,7 +1505,7 @@ const translations = {
       "Ми порівняємо селфі з фотографіями профілю. Пройди перевірку й отримай *1 безкоштовний квиток на побачення*.\n\n" +
       "Якщо пропустити, ти відмовишся від квитка, втратиш {penalty} стартових ELO-пунктів і знизиш свої шанси на вдалу зустріч.",
     verifyBtnGo: "🟢 Пройти верифікацію",
-    verifyBtnCheck: "✅ Я пройшов перевірку",
+    verifyBtnCheck: "✨ Я пройшов перевірку",
     verifyBtnSkip: "⚪️ Пропустити поки",
     verifySkipNudgeCaption:
       "Секунду — послухай це, перш ніж пропустити 👆",
@@ -1532,7 +1532,7 @@ const translations = {
     verifyCheckInfraError:
       "Не вдалося достукатися до сервісу верифікації. Спробуй ще раз за хвилину.",
     verifyOutcomeVerified:
-      "Перевірку пройдено ✅ Профіль активний. Напишу, коли знайду метч.",
+      "Перевірку пройдено ✨ Профіль активний. Напишу, коли знайду метч.",
     verifyOutcomePendingReview:
       "🔍 Ми додатково перевіряємо фото профілю за селфі з верифікації. Зазвичай це займає кілька годин — я напишу, щойно перевірка завершиться.",
     verifyOutcomeRejected:
@@ -1587,18 +1587,18 @@ const translations = {
     editProfilePhotosBtn: "📸 Оновити фото",
     editBioPrompt: "Скинь новий опис (до 500 символів):",
     editBioTooLong: "Задовге — вклади в 500.",
-    editBioSaved: "Опис оновлено ✅",
+    editBioSaved: "Опис оновлено ✨",
     editMajorPrompt: "Яка в тебе спеціальність? (до 100 символів):",
     editMajorTooLong: "Задовге — вклади в 100.",
-    editMajorSaved: "Спеціальність оновлено ✅",
+    editMajorSaved: "Спеціальність оновлено ✨",
     editPrefsTitle: "🔍 *Параметри пошуку*\n\nЩо міняємо?",
     editPrefsAgeBtn: "🎂 Вік",
     editPrefsBack: "⬅️ До редагування",
     editAgeRangePrompt: "Який вік? (напр. 20-28)\nМін: {min}, Макс: {max}.",
     editAgeRangeInvalid: "Не зрозумів. Два числа через дефіс, напр. 20-28 (від {min} до {max}).",
-    editAgeRangeSaved: "Діапазон оновлено ✅",
+    editAgeRangeSaved: "Діапазон оновлено ✨",
     editProfilePhotosStart: "Скинь нові фото ({min}–{max}). По одному.",
-    editProfilePhotosSaved: "Фото оновлено ✅",
+    editProfilePhotosSaved: "Фото оновлено ✨",
 
     // --- Pause / Resume ---
     pauseConfirmed: "Пошук на паузі ⏸\nНових метчів не буде, поки не ввімкнеш.",
@@ -1608,9 +1608,9 @@ const translations = {
     settingsTitle: "⚙️ Налаштування",
     settingsLanguage: "🌐 Мова",
     settingsLanguagePick: "Обери мову:",
-    settingsLanguageSaved: "Мову оновлено ✅",
+    settingsLanguageSaved: "Мову оновлено ✨",
     settingsVerify: "🛡 Пройти верифікацію",
-    settingsVerifyNotNeeded: "Ти вже верифікований ✅",
+    settingsVerifyNotNeeded: "Ти вже верифікований ✨",
     settingsVerifyUnavailable:
       "Верифікація тимчасово недоступна. Спробуй пізніше.",
     helpBody:
@@ -1656,7 +1656,7 @@ const translations = {
       "У тебе 24 години на відповідь. " +
       "Щойно натиснеш — *рішення остаточне*. Змінити не можна.",
     matchStreamStart: "✨ Чому ви підходите…",
-    matchBtnAccept: "✅ Прийняти",
+    matchBtnAccept: "✨ Прийняти",
     matchBtnDecline: "❌ Пас",
     matchDeclineConfirmPrompt:
       "Точно пасуєш?\n\n" +
@@ -1666,10 +1666,10 @@ const translations = {
     matchBtnKeepDeciding: "← Назад",
     matchDeclineDismissed:
       "Без поспіху — цей мэтч ще чекає на твою відповідь. 💛",
-    matchAcceptedToast: "Прийнято ✅",
-    matchDecisionSavedToast: "Записав ✅",
-    matchAccepted: "Прийнято ✅ Чекаємо на іншу сторону.",
-    matchBothAccepted: "Взаємно 🔥 Знайдемо час.",
+    matchAcceptedToast: "Прийнято ✨",
+    matchDecisionSavedToast: "Записав ✨",
+    matchAccepted: "Прийнято ✨ Чекаємо на іншу сторону.",
+    matchBothAccepted: "Взаємно 🤍 Знайдемо час.",
     matchDeclined:
       "Ок, усе нормально. Що стало головною причиною?\n\n" +
       "Обери варіант нижче або надішли короткий текст/голосове. ШІ проаналізує фідбек і врахує його в наступному дропі.\n\n" +
@@ -1760,16 +1760,16 @@ const translations = {
       "Ми застосуємо знижку автоматично, коли тобі випаде пара або ти відкриєш свої квитки.",
     matchScheduleProposal: "Як тобі ці варіанти? Тисни зручний:",
     matchScheduleIter3:
-      "Взаємно 🔥 Відкрий календар і познач зручний час.",
+      "Взаємно 🤍 Відкрий календар і познач зручний час.",
     matchScheduleAfterTicket:
       "📅 Тепер обери час — відкрий календар і познач усі зручні слоти.",
     matchScheduleBtnCalendar: "📅 Відкрити календар",
     // --- Date Ticket (преміум-крок після взаємного метчу) ---
     ticketCardCaption:
-      "Взаємно 🔥 Отримай *квиток на побачення*, щоб відкрити планування.",
+      "Взаємно 🤍 Отримай *квиток на побачення*, щоб відкрити планування.",
     ticketButton: "🎟️ Отримати квиток на побачення",
     ticketStatusButton: "Відкрити побачення",
-    ticketGateWaiting: "Квиток готовий ✅ Чекаємо на іншу сторону.",
+    ticketGateWaiting: "Квиток готовий ✨ Чекаємо на іншу сторону.",
     ticketBothSecuredDm: "Обидва квитки у вас 🎟️✨ Побачення в силі — оберімо час.",
     ticketPartnerPaidDm: "{name} вже сплатив твій квиток на побачення ❤️ Тобі нічого не потрібно робити.",
     ticketRefundedDm:
@@ -1791,7 +1791,7 @@ const translations = {
     matchSchedulePeerSuggestedAlternative:
       "Співрозмовник запропонував інший час. Перевір відповідь: можеш погодитись із пропозицією або запропонувати свій варіант.",
     matchScheduleSavedConfirmation:
-      "✅ Зберіг твої дати й час. Пінганув співрозмовника — напишу, щойно він(вона) відповість.",
+      "✨ Зберіг твої дати й час. Пінганув співрозмовника — напишу, щойно він(вона) відповість.",
     matchScheduleNoOverlapYet:
       "Ви обидва позначили дати й час, але варіанти не збіглись. Відкрий календар і додай ще кілька слотів — щойно один збіжиться, я зафіксую дату:",
     venueConciergeIntro:
@@ -1802,12 +1802,12 @@ const translations = {
     venueConciergeBtnMap: "🗺️ Обрати на карті",
     venueLocationFirst:
       "Спершу головне — *познач, звідки ти будеш виїжджати* 📍 Натисни кнопку нижче й постав точку на карті. Про вайб запитаю одразу після.",
-    venueVibeNoted: "Вайб записано ✅ Тепер вкажи, звідки поїдеш:",
+    venueVibeNoted: "Вайб записано ✨ Тепер вкажи, звідки поїдеш:",
     venueLocationNoted:
-      "Точку виїзду збережено ✅ Тепер — який *вайб* хочеш? Наприклад: _тихе кафе_, _веган-сніданок_, _прогулянка в парку_, _невеликий музей_.",
+      "Точку виїзду збережено ✨ Тепер — який *вайб* хочеш? Наприклад: _тихе кафе_, _веган-сніданок_, _прогулянка в парку_, _невеликий музей_.",
     venueSafetyOverride:
       "Невеличке уточнення — заміняю на публічне кафе. Перші побачення у нас у людних місцях.",
-    venueWaitingPeer: "Прийняв ✅ Чекаємо на іншу сторону…",
+    venueWaitingPeer: "Прийняв ✨ Чекаємо на іншу сторону…",
     venueSearching: "🔍 Шукаю зручне місце…",
     venueSearchStep2: "📍 Звіряю ваші маршрути…",
     venueSearchStep3: "✨ Підбираю за атмосферою…",
@@ -1834,7 +1834,7 @@ const translations = {
     profilerBatchThinking: "💭 Думаю…",
     profilerBatchSaving: "🧩 Зберігаю твої відповіді…",
     profilerBatchSaved:
-      "Картку оновлено ✅ Врахую під час наступного підбору.",
+      "Картку оновлено ✨ Врахую під час наступного підбору.",
     profilerNextAck: "✍️ Прийнято…",
     profilerNextFormulating: "💭 Думаю…",
 
@@ -1849,7 +1849,7 @@ const translations = {
     venueChangeMaleComment: "Пояснення партнерки:",
     venueChangeMaleAsk:
       "Підтверди нове місце або відмов. Відмова скасовує побачення.",
-    venueChangeBtnAccept: "✅ Погодитися на нове місце",
+    venueChangeBtnAccept: "✨ Погодитися на нове місце",
     venueChangeBtnDecline: "❌ Не погоджуватися (скасувати побачення)",
     venueChangeDeclineConfirm:
       "Точно? Якщо ти не погодишся на запропоноване місце, побачення та метч буде " +
@@ -1952,7 +1952,7 @@ const translations = {
     // --- Pinned status banner (live discrete timer) ---
     statusDaysHours: "⏳ Наступний метч через {d}д {h}г",
     statusHoursMinutes: "⏳ Метчі прилетять через {h}г {m}хв",
-    statusMinutes: "🔥 Майже готово! Метчі прилетять за {m} хв",
+    statusMinutes: "✨ Майже готово! Метчі прилетять за {m} хв",
     statusProcessing: "✨ Скануємо кампус… Зазирни трохи згодом.",
 
     // --- Voice notes ---
@@ -1978,11 +1978,11 @@ const translations = {
     coordSharedToPartner:
       "Твій метч поділився своїм Telegram, щоб ви знайшли одне одного 💬\n\n" +
       "{name}: {link}\n\nНапиши пару слів — до зустрічі!",
-    coordRequestAck: "Готово — я запитав. Повідомлю одразу, щойно погодяться ✅",
+    coordRequestAck: "Готово — я запитав. Повідомлю одразу, щойно погодяться ✨",
     coordPartnerAskApprove:
       "Твоєму побаченню за ~1год знадобиться спосіб знайти тебе на місці 💬\n\n" +
       "Поділитися своїм Telegram з {name}?",
-    coordPartnerBtnApprove: "✅ Поділитися Telegram",
+    coordPartnerBtnApprove: "✨ Поділитися Telegram",
     coordPartnerBtnDecline: "Не зараз",
     coordRevealToInitiator:
       "{name} поділився своїм Telegram, щоб ви знайшли одне одного 💬\n\n" +
@@ -2036,8 +2036,8 @@ const deTranslations: TranslationTable = {
   otpExpired: "Der Code ist abgelaufen. Gib deine E-Mail erneut ein:",
   otpTooManyAttempts: "Zu viele Versuche. Gib deine E-Mail erneut ein, damit wir einen neuen Code senden.",
   otpCooldown: "Warte kurz - bitte erst in einer Minute einen neuen Code anfordern.",
-  emailVerified: "E-Mail bestätigt ✅",
-  contextDumpAck: "Verstanden ✅ Ich verarbeite es…",
+  emailVerified: "E-Mail bestätigt ✨",
+  contextDumpAck: "Verstanden ✨ Ich verarbeite es…",
   askFirstName: "Wie heißt du?",
   askSurname: "Und dein Nachname?",
   askAge: "Wie alt bist du?",
@@ -2055,7 +2055,7 @@ const deTranslations: TranslationTable = {
   llmDumpReceived: "Profil bereit ✨",
   askPhotos:
     "Fast fertig! Sende {min}-{max} verschiedene Fotos. Auf jedem musst du klar zu sehen sein; explizite Inhalte sind nicht erlaubt. Ein Profilvideo darf Freunde oder Landschaften zeigen, aber du musst in mehreren Momenten klar erscheinen.",
-  photoReceived: "Foto {n}/{max} ✅",
+  photoReceived: "Foto {n}/{max} ✨",
   photoRejected:
     "Dein Gesicht muss auf dem Foto sichtbar sein. Versuch ein anderes Bild.",
   photoDuplicate:
@@ -2075,21 +2075,21 @@ const deTranslations: TranslationTable = {
   photoConsensusOutlierRejected:
     "Ein wartendes Foto zeigte eine andere Person, deshalb habe ich es nicht hinzugefügt.",
   photoConsensusConfirmed:
-    "Identität durch übereinstimmende Fotos bestätigt ✅",
+    "Identität durch übereinstimmende Fotos bestätigt ✨",
   photoConsensusNoPairCap:
     "Ich sehe immer noch keine zwei Fotos derselben Person. Es wurde noch nichts festgelegt - sende ein weiteres klares Foto von dir.",
   photoVisionError: "Die Datei konnte nicht verarbeitet werden. Versuch es erneut.",
   photoInvalidMedia:
     "Diese Datei ist kein unterstütztes Foto. Sende ein JPEG-, PNG-, WebP- oder HEIC-Bild.",
   photosEnough: "Du kannst mehr senden (bis {max}) oder auf den Button tippen, um weiterzumachen.",
-  photosDone: "Fotos hochgeladen ✅",
+  photosDone: "Fotos hochgeladen ✨",
   profileReview:
     "Hier ist dein Profil:\n\n" +
     "*{firstName} {surname}*, {age}\n" +
     "🎓 {university}\n\n" +
     "{summary}\n\n" +
     "Passt das?",
-  profileConfirm: "Passt ✅",
+  profileConfirm: "Passt ✨",
   profileEdit: "Etwas ändern",
   onboardingComplete:
     "Du bist drin! 🎉\n\n" +
@@ -2109,7 +2109,7 @@ const deTranslations: TranslationTable = {
     "Wir vergleichen ein Verifizierungs-Selfie mit deinen Profilfotos. Schließe die Prüfung ab und erhalte *1 kostenloses Date-Ticket*.\n\n" +
     "Wenn du überspringst, verzichtest du auf das Ticket, verlierst {penalty} Start-ELO-Punkte und senkst deine Chancen auf ein starkes Match.",
   verifyBtnGo: "🟢 Jetzt verifizieren",
-  verifyBtnCheck: "✅ Ich habe die Verifizierung abgeschlossen",
+  verifyBtnCheck: "✨ Ich habe die Verifizierung abgeschlossen",
   verifyBtnSkip: "⚪️ Erstmal überspringen",
   verifySkipNudgeCaption:
     "Kurz — hör dir das an, bevor du überspringst 👆",
@@ -2135,7 +2135,7 @@ const deTranslations: TranslationTable = {
     "Wenn etwas falsch wirkt, tippe auf 🟢 Jetzt verifizieren, um es erneut zu versuchen.",
   verifyCheckInfraError: "Der Verifizierungsdienst ist gerade nicht erreichbar. Versuch es gleich nochmal.",
   verifyOutcomeVerified:
-    "Verifiziert ✅ Dein Profil ist live. Ich melde mich, wenn ich ein Match finde.",
+    "Verifiziert ✨ Dein Profil ist live. Ich melde mich, wenn ich ein Match finde.",
   verifyOutcomePendingReview:
     "🔍 Wir prüfen deine Profilfotos noch einmal gegen dein Verifizierungs-Selfie. Das dauert normalerweise ein paar Stunden - ich melde mich, sobald es erledigt ist.",
   verifyOutcomeRejected:
@@ -2194,29 +2194,29 @@ const deTranslations: TranslationTable = {
   onboardingPhotosNeedMore:
     "Fotostand: {count}/{min}. Noch benötigte klare Fotos: {remaining}.",
   onboardingPhotosBonusOffer:
-    "Die Pflichtfotos sind fertig ✅\n\nErreiche {threshold} Fotos (noch {remaining}), um ein kostenloses Date-Ticket zu bekommen. Für ein kurzes Profilvideo erhältst du ein weiteres kostenloses Ticket.\n\nBeide Boni sind optional — sende jetzt weitere Medien oder fahre fort.",
+    "Die Pflichtfotos sind fertig ✨\n\nErreiche {threshold} Fotos (noch {remaining}), um ein kostenloses Date-Ticket zu bekommen. Für ein kurzes Profilvideo erhältst du ein weiteres kostenloses Ticket.\n\nBeide Boni sind optional — sende jetzt weitere Medien oder fahre fort.",
   onboardingPhotosBonusOfferAfterVideo:
-    "Die Pflichtfotos sind fertig und dein Video-Bonus ist gesichert ✅\n\nErreiche {threshold} Fotos (noch {remaining}), um ein zweites kostenloses Date-Ticket zu bekommen, oder fahre fort.",
+    "Die Pflichtfotos sind fertig und dein Video-Bonus ist gesichert ✨\n\nErreiche {threshold} Fotos (noch {remaining}), um ein zweites kostenloses Date-Ticket zu bekommen, oder fahre fort.",
   onboardingPhotosBonusProgress:
-    "{count}/{threshold} Fotos ✅ Noch ein Foto schaltet ein kostenloses Date-Ticket frei. Sende es jetzt oder fahre fort.",
+    "{count}/{threshold} Fotos ✨ Noch ein Foto schaltet ein kostenloses Date-Ticket frei. Sende es jetzt oder fahre fort.",
   onboardingPhotosBonusProgressAfterVideo:
-    "{count}/{threshold} Fotos ✅ Noch ein Foto schaltet dein zweites kostenloses Date-Ticket frei. Sende es jetzt oder fahre fort.",
+    "{count}/{threshold} Fotos ✨ Noch ein Foto schaltet dein zweites kostenloses Date-Ticket frei. Sende es jetzt oder fahre fort.",
   onboardingPhotosPhotoBonusEarned:
-    "{count} Fotos sind fertig und dein kostenloses Foto-Date-Ticket ist gesichert ✅\n\nDu kannst noch Fotos bis maximal {max} oder ein kurzes Profilvideo für ein weiteres kostenloses Ticket senden. Sonst fahre fort.",
+    "{count} Fotos sind fertig und dein kostenloses Foto-Date-Ticket ist gesichert ✨\n\nDu kannst noch Fotos bis maximal {max} oder ein kurzes Profilvideo für ein weiteres kostenloses Ticket senden. Sonst fahre fort.",
   onboardingPhotosBothBonusesEarned:
-    "{count} Fotos und dein Profilvideo sind fertig — beide kostenlosen Date-Tickets sind gesichert ✅\n\nDu kannst noch Fotos bis maximal {max} senden oder fortfahren.",
+    "{count} Fotos und dein Profilvideo sind fertig — beide kostenlosen Date-Tickets sind gesichert ✨\n\nDu kannst noch Fotos bis maximal {max} senden oder fortfahren.",
   onboardingPhotosPhotoBonusEarnedMax:
-    "Alle {max} Fotos sind fertig und dein kostenloses Foto-Date-Ticket ist gesichert ✅\n\nDu kannst noch ein kurzes Profilvideo für ein weiteres kostenloses Ticket senden oder fortfahren.",
+    "Alle {max} Fotos sind fertig und dein kostenloses Foto-Date-Ticket ist gesichert ✨\n\nDu kannst noch ein kurzes Profilvideo für ein weiteres kostenloses Ticket senden oder fortfahren.",
   onboardingPhotosBothBonusesEarnedMax:
-    "Alle {max} Fotos und dein Profilvideo sind fertig — beide kostenlosen Date-Tickets sind gesichert ✅\n\nFahre fort, wenn du bereit bist.",
+    "Alle {max} Fotos und dein Profilvideo sind fertig — beide kostenlosen Date-Tickets sind gesichert ✨\n\nFahre fort, wenn du bereit bist.",
   onboardingPhotosOptional:
-    "Die Pflichtfotos sind fertig ✅\n\nDu kannst weitere Fotos bis maximal {max}, ein kurzes Profilvideo senden oder fortfahren.",
+    "Die Pflichtfotos sind fertig ✨\n\nDu kannst weitere Fotos bis maximal {max}, ein kurzes Profilvideo senden oder fortfahren.",
   onboardingPhotosOptionalAfterVideo:
-    "Die Pflichtfotos und dein Profilvideo sind fertig ✅\n\nDu kannst weitere Fotos bis maximal {max} senden oder fortfahren.",
+    "Die Pflichtfotos und dein Profilvideo sind fertig ✨\n\nDu kannst weitere Fotos bis maximal {max} senden oder fortfahren.",
   onboardingPhotosOptionalMax:
-    "Alle {max} Fotos sind fertig ✅\n\nDu kannst noch ein kurzes Profilvideo senden oder fortfahren.",
+    "Alle {max} Fotos sind fertig ✨\n\nDu kannst noch ein kurzes Profilvideo senden oder fortfahren.",
   onboardingPhotosOptionalMaxAfterVideo:
-    "Alle {max} Fotos und dein Profilvideo sind fertig ✅\n\nFahre fort, wenn du bereit bist.",
+    "Alle {max} Fotos und dein Profilvideo sind fertig ✨\n\nFahre fort, wenn du bereit bist.",
   ticketWalletText:
     "🎟️ *Meine Tickets*\n\nDu hast *{balance}* Ticket(s). Jedes Date kostet 1 Ticket — jederzeit nachkaufbar.",
   ticketWalletOpenStore: "🎟️ Tickets kaufen",
@@ -2239,26 +2239,26 @@ const deTranslations: TranslationTable = {
   editProfilePhotosBtn: "📸 Fotos neu hochladen",
   editBioPrompt: "Sende deine neue Bio (max. 500 Zeichen):",
   editBioTooLong: "Zu lang - bleib unter 500 Zeichen.",
-  editBioSaved: "Bio aktualisiert ✅",
+  editBioSaved: "Bio aktualisiert ✨",
   editMajorPrompt: "Was studierst du? (max. 100 Zeichen):",
   editMajorTooLong: "Zu lang - bleib unter 100 Zeichen.",
-  editMajorSaved: "Studienfach aktualisiert ✅",
+  editMajorSaved: "Studienfach aktualisiert ✨",
   editPrefsTitle: "🔍 *Suchpräferenzen*\n\nWas möchtest du ändern?",
   editPrefsAgeBtn: "🎂 Altersbereich",
   editPrefsBack: "⬅️ Zurück zu Bearbeiten",
   editAgeRangePrompt: "Welcher Altersbereich? (z. B. 20-28)\nMin: {min}, Max: {max}.",
   editAgeRangeInvalid: "Das habe ich nicht verstanden. Zwei Zahlen wie 20-28 (Bereich {min}-{max}).",
-  editAgeRangeSaved: "Altersbereich aktualisiert ✅",
+  editAgeRangeSaved: "Altersbereich aktualisiert ✨",
   editProfilePhotosStart: "Sende neue Fotos ({min}-{max}). Eins nach dem anderen.",
-  editProfilePhotosSaved: "Fotos aktualisiert ✅",
+  editProfilePhotosSaved: "Fotos aktualisiert ✨",
   pauseConfirmed: "Matching pausiert ⏸\nKeine neuen Matches, bis du fortsetzt.",
   resumeConfirmed: "Matching läuft wieder ▶️\nUnsere AI ist dran.",
   settingsTitle: "⚙️ Einstellungen",
   settingsLanguage: "🌐 Sprache",
   settingsLanguagePick: "Wähle eine Sprache:",
-  settingsLanguageSaved: "Sprache aktualisiert ✅",
+  settingsLanguageSaved: "Sprache aktualisiert ✨",
   settingsVerify: "🛡 Account verifizieren",
-  settingsVerifyNotNeeded: "Du bist schon verifiziert ✅",
+  settingsVerifyNotNeeded: "Du bist schon verifiziert ✨",
   settingsVerifyUnavailable: "Verifizierung ist vorübergehend nicht verfügbar. Versuch es später erneut.",
   helpBody:
     "*Brauchst du Hilfe?* 💬\n\n" +
@@ -2302,7 +2302,7 @@ const deTranslations: TranslationTable = {
     "Du hast 24h zum Antworten. " +
     "Sobald du tippst, ist *die Entscheidung final*. Kein Zurück.",
   matchStreamStart: "✨ Warum ihr zusammenpasst…",
-  matchBtnAccept: "✅ Annehmen",
+  matchBtnAccept: "✨ Annehmen",
   matchBtnDecline: "❌ Passen",
   matchDeclineConfirmPrompt:
     "Dieses Match passen?\n\n" +
@@ -2312,10 +2312,10 @@ const deTranslations: TranslationTable = {
   matchBtnKeepDeciding: "← Zurück",
   matchDeclineDismissed:
     "Kein Stress — dieses Match wartet noch auf deine Antwort. 💛",
-  matchAcceptedToast: "Angenommen ✅",
-  matchDecisionSavedToast: "Gespeichert ✅",
-  matchAccepted: "Angenommen ✅ Warten auf die andere Person.",
-  matchBothAccepted: "Beidseitig 🔥 Lass uns eine Zeit finden.",
+  matchAcceptedToast: "Angenommen ✨",
+  matchDecisionSavedToast: "Gespeichert ✨",
+  matchAccepted: "Angenommen ✨ Warten auf die andere Person.",
+  matchBothAccepted: "Beidseitig 🤍 Lass uns eine Zeit finden.",
   matchDeclined:
     "Alles gut. Was war der Hauptgrund, warum du gepasst hast?\n\n" +
     "Wähle unten etwas aus oder schick einen kurzen Text bzw. eine Sprachnachricht. Die AI analysiert das für den nächsten Drop.\n\n" +
@@ -2403,15 +2403,15 @@ const deTranslations: TranslationTable = {
     "Wir ziehen den Rabatt automatisch ab, sobald du ein Match bekommst oder deine Tickets öffnest.",
   matchScheduleProposal: "Wie wäre es mit einer dieser Zeiten? Tipp an, was passt:",
   matchScheduleIter3:
-    "Beidseitig 🔥 Öffne den Kalender und markiere passende Zeiten.",
+    "Beidseitig 🤍 Öffne den Kalender und markiere passende Zeiten.",
   matchScheduleAfterTicket:
     "📅 Jetzt eure Zeit — öffne den Kalender und markiere alle passenden Slots.",
   matchScheduleBtnCalendar: "📅 Kalender öffnen",
   ticketCardCaption:
-    "Beidseitig 🔥 Hol dir dein *Date-Ticket*, um die Planung zu öffnen.",
+    "Beidseitig 🤍 Hol dir dein *Date-Ticket*, um die Planung zu öffnen.",
   ticketButton: "🎟️ Date-Ticket holen",
   ticketStatusButton: "Date öffnen",
-  ticketGateWaiting: "Ticket bereit ✅ Warten auf die andere Person.",
+  ticketGateWaiting: "Ticket bereit ✨ Warten auf die andere Person.",
   matchScheduleNoOverlap: "Noch keine Überschneidung - nächste Runde.",
   matchScheduled: "Fixiert — bis dann 🤝\n\n{venue}",
   matchScheduledBtnOpenMaps: "📍 In Maps öffnen",
@@ -2429,7 +2429,7 @@ const deTranslations: TranslationTable = {
   matchSchedulePeerSuggestedAlternative:
     "Dein Match hat eine andere Zeit vorgeschlagen. Schau dir die Antwort an: du kannst zustimmen oder selbst etwas vorschlagen.",
   matchScheduleSavedConfirmation:
-    "✅ Deine Daten und Zeiten sind gespeichert. Wir haben dein Match gepingt - ich sage Bescheid, sobald eine Antwort kommt.",
+    "✨ Deine Daten und Zeiten sind gespeichert. Wir haben dein Match gepingt - ich sage Bescheid, sobald eine Antwort kommt.",
   matchScheduleNoOverlapYet:
     "Ihr habt beide Daten und Zeiten markiert, aber noch keine Überschneidung. Öffne den Kalender und füge ein paar Optionen hinzu - sobald ein Slot passt, fixieren wir es:",
   venueConciergeIntro:
@@ -2440,11 +2440,11 @@ const deTranslations: TranslationTable = {
   venueConciergeBtnMap: "🗺️ Auf Karte wählen",
   venueLocationFirst:
     "Zuerst das Wichtigste - *markiere, von wo du losfährst* 📍 Tippe unten, um den Punkt auf der Karte zu setzen. Nach dem Vibe frage ich gleich danach.",
-  venueVibeNoted: "Vibe notiert ✅ Jetzt wähle, von wo du kommst:",
+  venueVibeNoted: "Vibe notiert ✨ Jetzt wähle, von wo du kommst:",
   venueLocationNoted:
-    "Startpunkt gespeichert ✅ Jetzt - welchen *Vibe* willst du? z. B. _ruhiges Cafe_, _veganer Brunch_, _Parkspaziergang_, _kleines Museum_.",
+    "Startpunkt gespeichert ✨ Jetzt - welchen *Vibe* willst du? z. B. _ruhiges Cafe_, _veganer Brunch_, _Parkspaziergang_, _kleines Museum_.",
   venueSafetyOverride: "Heads up - ich habe stattdessen ein öffentliches Cafe gewählt. Erste Dates bleiben bei uns öffentlich.",
-  venueWaitingPeer: "Deins ist da ✅ Wir warten auf sie...",
+  venueWaitingPeer: "Deins ist da ✨ Wir warten auf sie...",
   venueSearching: "🔍 Suche euren Treffpunkt…",
   venueSearchStep2: "📍 Vergleiche eure Routen…",
   venueSearchStep3: "✨ Wähle nach eurer Stimmung…",
@@ -2471,7 +2471,7 @@ const deTranslations: TranslationTable = {
   profilerBatchThinking: "💭 Denke nach…",
   profilerBatchSaving: "🧩 Speichere deine Antworten…",
   profilerBatchSaved:
-    "Präferenzkarte aktualisiert ✅ Ich nutze sie beim nächsten Match.",
+    "Präferenzkarte aktualisiert ✨ Ich nutze sie beim nächsten Match.",
   profilerNextAck: "✍️ Notiert…",
   profilerNextFormulating: "💭 Denke nach…",
 
@@ -2486,7 +2486,7 @@ const deTranslations: TranslationTable = {
   venueChangeMaleComment: "Ihre Notiz:",
   venueChangeMaleAsk:
     "Stimme dem neuen Ort zu oder lehne ab. Ablehnen sagt das Date ab.",
-  venueChangeBtnAccept: "✅ Neuen Ort akzeptieren",
+  venueChangeBtnAccept: "✨ Neuen Ort akzeptieren",
   venueChangeBtnDecline: "❌ Ablehnen (Date absagen)",
   venueChangeDeclineConfirm:
     "Bist du sicher? Wenn du den vorgeschlagenen Ort nicht akzeptierst, werden " +
@@ -2574,7 +2574,7 @@ const deTranslations: TranslationTable = {
     "Hab einen schönen Abend ✨",
   statusDaysHours: "⏳ Nächstes Match in {d}T {h}Std",
   statusHoursMinutes: "⏳ Matches droppen in {h}Std {m}Min",
-  statusMinutes: "🔥 Fast bereit! Matches droppen in {m} Min",
+  statusMinutes: "✨ Fast bereit! Matches droppen in {m} Min",
   statusProcessing: "✨ Analysiere den Campus... Schau später nochmal rein.",
   voiceTranscriptionFailed: "Ich konnte das nicht klar verstehen - kannst du es tippen?",
   voiceTooLong: "Die Sprachnachricht ist etwas lang. Maximal 5 Minuten - oder schreib es einfach.",
@@ -2607,8 +2607,8 @@ const plTranslations: TranslationTable = {
   otpExpired: "Kod wygasł. Wpisz e-mail jeszcze raz:",
   otpTooManyAttempts: "Za dużo prób. Wpisz e-mail ponownie, wyślemy nowy kod.",
   otpCooldown: "Poczekaj chwilę - nowy kod możesz zamówić za minutę.",
-  emailVerified: "E-mail potwierdzony ✅",
-  contextDumpAck: "Przyjęte ✅ Przetwarzam…",
+  emailVerified: "E-mail potwierdzony ✨",
+  contextDumpAck: "Przyjęte ✨ Przetwarzam…",
   askFirstName: "Jak masz na imię?",
   askSurname: "A nazwisko?",
   askAge: "Ile masz lat?",
@@ -2626,7 +2626,7 @@ const plTranslations: TranslationTable = {
   llmDumpReceived: "Profil gotowy ✨",
   askPhotos:
     "Prawie gotowe! Wyślij {min}-{max} różnych zdjęć. Na każdym musisz być wyraźnie widoczny; treści erotyczne są niedozwolone. Wideo profilowe może pokazywać znajomych lub krajobrazy, ale musisz pojawić się wyraźnie w kilku momentach.",
-  photoReceived: "Zdjęcie {n}/{max} ✅",
+  photoReceived: "Zdjęcie {n}/{max} ✨",
   photoRejected:
     "Na zdjęciu musi być widoczna Twoja twarz. Spróbuj innego ujęcia.",
   photoDuplicate:
@@ -2646,21 +2646,21 @@ const plTranslations: TranslationTable = {
   photoConsensusOutlierRejected:
     "Jedno oczekujące zdjęcie pokazywało inną osobę, więc go nie dodałem.",
   photoConsensusConfirmed:
-    "Tożsamość potwierdzona przez pasujące zdjęcia ✅",
+    "Tożsamość potwierdzona przez pasujące zdjęcia ✨",
   photoConsensusNoPairCap:
     "Nadal nie widzę dwóch zdjęć tej samej osoby. Nic nie zostało jeszcze ustalone - wyślij kolejne wyraźne zdjęcie siebie.",
   photoVisionError: "Nie udało się przetworzyć pliku. Spróbuj ponownie.",
   photoInvalidMedia:
     "Ten plik nie jest obsługiwanym zdjęciem. Wyślij obraz JPEG, PNG, WebP lub HEIC.",
   photosEnough: "Możesz wysłać więcej (do {max}) albo kliknąć przycisk, żeby iść dalej.",
-  photosDone: "Zdjęcia przesłane ✅",
+  photosDone: "Zdjęcia przesłane ✨",
   profileReview:
     "Oto Twój profil:\n\n" +
     "*{firstName} {surname}*, {age}\n" +
     "🎓 {university}\n\n" +
     "{summary}\n\n" +
     "Wygląda dobrze?",
-  profileConfirm: "Wygląda dobrze ✅",
+  profileConfirm: "Wygląda dobrze ✨",
   profileEdit: "Zmień coś",
   onboardingComplete:
     "Jesteś w środku! 🎉\n\n" +
@@ -2680,7 +2680,7 @@ const plTranslations: TranslationTable = {
     "Porównamy selfie weryfikacyjne ze zdjęciami profilowymi. Ukończ sprawdzenie i odbierz *1 darmowy bilet na randkę*.\n\n" +
     "Jeśli pominiesz, zrezygnujesz z biletu, stracisz {penalty} startowych punktów ELO i zmniejszysz szanse na dobre dopasowanie.",
   verifyBtnGo: "🟢 Zweryfikuj teraz",
-  verifyBtnCheck: "✅ Zakończyłem/am weryfikację",
+  verifyBtnCheck: "✨ Zakończyłem/am weryfikację",
   verifyBtnSkip: "⚪️ Pomiń na razie",
   verifySkipNudgeCaption:
     "Chwila — posłuchaj tego, zanim pominiesz 👆",
@@ -2706,7 +2706,7 @@ const plTranslations: TranslationTable = {
     "Jeśli coś wygląda źle, kliknij 🟢 Zweryfikuj teraz, aby spróbować ponownie.",
   verifyCheckInfraError: "Nie udało się teraz połączyć z usługą weryfikacji. Spróbuj za chwilę.",
   verifyOutcomeVerified:
-    "Zweryfikowane ✅ Profil aktywny. Odezwę się, gdy znajdę dopasowanie.",
+    "Zweryfikowane ✨ Profil aktywny. Odezwę się, gdy znajdę dopasowanie.",
   verifyOutcomePendingReview:
     "🔍 Jeszcze raz sprawdzamy zdjęcia z profilu względem selfie z weryfikacji. Zwykle zajmuje to kilka godzin - napiszę, gdy będzie gotowe.",
   verifyOutcomeRejected:
@@ -2765,29 +2765,29 @@ const plTranslations: TranslationTable = {
   onboardingPhotosNeedMore:
     "Postęp zdjęć: {count}/{min}. Pozostało wyraźnych zdjęć: {remaining}.",
   onboardingPhotosBonusOffer:
-    "Wymagane zdjęcia są gotowe ✅\n\nDodaj zdjęcia do {threshold} (pozostało: {remaining}), aby zdobyć darmowy bilet na randkę. Za krótkie wideo profilowe otrzymasz kolejny darmowy bilet.\n\nOba bonusy są opcjonalne — wyślij media teraz albo przejdź dalej.",
+    "Wymagane zdjęcia są gotowe ✨\n\nDodaj zdjęcia do {threshold} (pozostało: {remaining}), aby zdobyć darmowy bilet na randkę. Za krótkie wideo profilowe otrzymasz kolejny darmowy bilet.\n\nOba bonusy są opcjonalne — wyślij media teraz albo przejdź dalej.",
   onboardingPhotosBonusOfferAfterVideo:
-    "Wymagane zdjęcia są gotowe, a bonus za wideo jest już zabezpieczony ✅\n\nDodaj zdjęcia do {threshold} (pozostało: {remaining}), aby zdobyć drugi darmowy bilet, albo przejdź dalej.",
+    "Wymagane zdjęcia są gotowe, a bonus za wideo jest już zabezpieczony ✨\n\nDodaj zdjęcia do {threshold} (pozostało: {remaining}), aby zdobyć drugi darmowy bilet, albo przejdź dalej.",
   onboardingPhotosBonusProgress:
-    "{count}/{threshold} zdjęć ✅ Jeszcze jedno odblokuje darmowy bilet na randkę. Wyślij je teraz albo przejdź dalej.",
+    "{count}/{threshold} zdjęć ✨ Jeszcze jedno odblokuje darmowy bilet na randkę. Wyślij je teraz albo przejdź dalej.",
   onboardingPhotosBonusProgressAfterVideo:
-    "{count}/{threshold} zdjęć ✅ Jeszcze jedno odblokuje drugi darmowy bilet. Wyślij je teraz albo przejdź dalej.",
+    "{count}/{threshold} zdjęć ✨ Jeszcze jedno odblokuje drugi darmowy bilet. Wyślij je teraz albo przejdź dalej.",
   onboardingPhotosPhotoBonusEarned:
-    "Masz {count} zdjęć, a darmowy bilet za zdjęcia jest już zabezpieczony ✅\n\nMożesz dodać zdjęcia do {max} lub krótkie wideo profilowe za kolejny darmowy bilet. Albo przejdź dalej.",
+    "Masz {count} zdjęć, a darmowy bilet za zdjęcia jest już zabezpieczony ✨\n\nMożesz dodać zdjęcia do {max} lub krótkie wideo profilowe za kolejny darmowy bilet. Albo przejdź dalej.",
   onboardingPhotosBothBonusesEarned:
-    "Masz {count} zdjęć i wideo profilowe — oba darmowe bilety są zabezpieczone ✅\n\nMożesz dodać zdjęcia do {max} albo przejść dalej.",
+    "Masz {count} zdjęć i wideo profilowe — oba darmowe bilety są zabezpieczone ✨\n\nMożesz dodać zdjęcia do {max} albo przejść dalej.",
   onboardingPhotosPhotoBonusEarnedMax:
-    "Wszystkie {max} zdjęć są gotowe, a darmowy bilet za zdjęcia jest zabezpieczony ✅\n\nMożesz wysłać krótkie wideo profilowe za kolejny darmowy bilet albo przejść dalej.",
+    "Wszystkie {max} zdjęć są gotowe, a darmowy bilet za zdjęcia jest zabezpieczony ✨\n\nMożesz wysłać krótkie wideo profilowe za kolejny darmowy bilet albo przejść dalej.",
   onboardingPhotosBothBonusesEarnedMax:
-    "Wszystkie {max} zdjęć i wideo profilowe są gotowe — oba darmowe bilety są zabezpieczone ✅\n\nPrzejdź dalej, gdy będziesz gotowy.",
+    "Wszystkie {max} zdjęć i wideo profilowe są gotowe — oba darmowe bilety są zabezpieczone ✨\n\nPrzejdź dalej, gdy będziesz gotowy.",
   onboardingPhotosOptional:
-    "Wymagane zdjęcia są gotowe ✅\n\nMożesz dodać więcej zdjęć do {max}, wysłać krótkie wideo profilowe albo przejść dalej.",
+    "Wymagane zdjęcia są gotowe ✨\n\nMożesz dodać więcej zdjęć do {max}, wysłać krótkie wideo profilowe albo przejść dalej.",
   onboardingPhotosOptionalAfterVideo:
-    "Wymagane zdjęcia i wideo profilowe są gotowe ✅\n\nMożesz dodać więcej zdjęć do {max} albo przejść dalej.",
+    "Wymagane zdjęcia i wideo profilowe są gotowe ✨\n\nMożesz dodać więcej zdjęć do {max} albo przejść dalej.",
   onboardingPhotosOptionalMax:
-    "Wszystkie {max} zdjęć są gotowe ✅\n\nMożesz wysłać krótkie wideo profilowe albo przejść dalej.",
+    "Wszystkie {max} zdjęć są gotowe ✨\n\nMożesz wysłać krótkie wideo profilowe albo przejść dalej.",
   onboardingPhotosOptionalMaxAfterVideo:
-    "Wszystkie {max} zdjęć i wideo profilowe są gotowe ✅\n\nPrzejdź dalej, gdy będziesz gotowy.",
+    "Wszystkie {max} zdjęć i wideo profilowe są gotowe ✨\n\nPrzejdź dalej, gdy będziesz gotowy.",
   ticketWalletText:
     "🎟️ *Moje bilety*\n\nMasz *{balance}* bilet(ów). Każda randka kosztuje 1 bilet — dokupisz w każdej chwili.",
   ticketWalletOpenStore: "🎟️ Kup bilety",
@@ -2810,26 +2810,26 @@ const plTranslations: TranslationTable = {
   editProfilePhotosBtn: "📸 Prześlij zdjęcia ponownie",
   editBioPrompt: "Wyślij nowe bio (maks. 500 znaków):",
   editBioTooLong: "Za długie - zmieść się w 500 znakach.",
-  editBioSaved: "Bio zaktualizowane ✅",
+  editBioSaved: "Bio zaktualizowane ✨",
   editMajorPrompt: "Jaki masz kierunek? (maks. 100 znaków):",
   editMajorTooLong: "Za długie - zmieść się w 100 znakach.",
-  editMajorSaved: "Kierunek zaktualizowany ✅",
+  editMajorSaved: "Kierunek zaktualizowany ✨",
   editPrefsTitle: "🔍 *Preferencje wyszukiwania*\n\nCo chcesz zmienić?",
   editPrefsAgeBtn: "🎂 Zakres wieku",
   editPrefsBack: "⬅️ Wróć do edycji",
   editAgeRangePrompt: "Jaki zakres wieku? (np. 20-28)\nMin: {min}, Max: {max}.",
   editAgeRangeInvalid: "Nie łapię. Podaj dwie liczby, np. 20-28 (zakres {min}-{max}).",
-  editAgeRangeSaved: "Zakres wieku zaktualizowany ✅",
+  editAgeRangeSaved: "Zakres wieku zaktualizowany ✨",
   editProfilePhotosStart: "Wyślij nowe zdjęcia ({min}-{max}). Po jednym.",
-  editProfilePhotosSaved: "Zdjęcia zaktualizowane ✅",
+  editProfilePhotosSaved: "Zdjęcia zaktualizowane ✨",
   pauseConfirmed: "Matching wstrzymany ⏸\nNie będzie nowych dopasowań, dopóki go nie wznowisz.",
   resumeConfirmed: "Matching znowu działa ▶️\nNasza AI już pracuje.",
   settingsTitle: "⚙️ Ustawienia",
   settingsLanguage: "🌐 Język",
   settingsLanguagePick: "Wybierz język:",
-  settingsLanguageSaved: "Język zaktualizowany ✅",
+  settingsLanguageSaved: "Język zaktualizowany ✨",
   settingsVerify: "🛡 Zweryfikuj konto",
-  settingsVerifyNotNeeded: "Masz już weryfikację ✅",
+  settingsVerifyNotNeeded: "Masz już weryfikację ✨",
   settingsVerifyUnavailable: "Weryfikacja jest tymczasowo niedostępna. Spróbuj później.",
   helpBody:
     "*Potrzebujesz pomocy?* 💬\n\n" +
@@ -2872,7 +2872,7 @@ const plTranslations: TranslationTable = {
     "Masz 24h na odpowiedź. " +
     "Gdy klikniesz, *decyzja jest ostateczna*. Bez cofania.",
   matchStreamStart: "✨ Czemu do siebie pasujecie…",
-  matchBtnAccept: "✅ Akceptuj",
+  matchBtnAccept: "✨ Akceptuj",
   matchBtnDecline: "❌ Odpuść",
   matchDeclineConfirmPrompt:
     "Na pewno odpuszczasz?\n\n" +
@@ -2882,10 +2882,10 @@ const plTranslations: TranslationTable = {
   matchBtnKeepDeciding: "← Wróć",
   matchDeclineDismissed:
     "Bez pośpiechu — to dopasowanie wciąż czeka na Twoją odpowiedź. 💛",
-  matchAcceptedToast: "Przyjęte ✅",
-  matchDecisionSavedToast: "Zapisane ✅",
-  matchAccepted: "Przyjęte ✅ Czekamy na drugą osobę.",
-  matchBothAccepted: "Wzajemne 🔥 Znajdźmy termin.",
+  matchAcceptedToast: "Przyjęte ✨",
+  matchDecisionSavedToast: "Zapisane ✨",
+  matchAccepted: "Przyjęte ✨ Czekamy na drugą osobę.",
+  matchBothAccepted: "Wzajemne 🤍 Znajdźmy termin.",
   matchDeclined:
     "W porządku. Jaki był główny powód, że odpuściłeś/odpuściłaś?\n\n" +
     "Wybierz poniżej albo wyślij krótki tekst lub wiadomość głosową. AI przeanalizuje to dla kolejnego dropu.\n\n" +
@@ -2973,15 +2973,15 @@ const plTranslations: TranslationTable = {
     "Zastosujemy rabat automatycznie, gdy trafi Ci się para lub otworzysz swoje bilety.",
   matchScheduleProposal: "Co powiesz na jedną z tych opcji? Kliknij, co pasuje:",
   matchScheduleIter3:
-    "Wzajemnie 🔥 Otwórz kalendarz i zaznacz pasujące godziny.",
+    "Wzajemnie ✨ Otwórz kalendarz i zaznacz pasujące godziny.",
   matchScheduleAfterTicket:
     "📅 Teraz wybierz czas — otwórz kalendarz i zaznacz wszystkie pasujące terminy.",
   matchScheduleBtnCalendar: "📅 Otwórz kalendarz",
   ticketCardCaption:
-    "Wzajemnie 🔥 Odbierz *bilet na randkę*, żeby otworzyć planowanie.",
+    "Wzajemnie ✨ Odbierz *bilet na randkę*, żeby otworzyć planowanie.",
   ticketButton: "🎟️ Odbierz bilet na randkę",
   ticketStatusButton: "Otwórz randkę",
-  ticketGateWaiting: "Bilet gotowy ✅ Czekamy na drugą osobę.",
+  ticketGateWaiting: "Bilet gotowy ✨ Czekamy na drugą osobę.",
   matchScheduleNoOverlap: "Jeszcze brak wspólnego terminu - kolejna runda.",
   matchScheduled: "Ustalone — do zobaczenia 🤝\n\n{venue}",
   matchScheduledBtnOpenMaps: "📍 Otwórz w Mapach",
@@ -2999,7 +2999,7 @@ const plTranslations: TranslationTable = {
   matchSchedulePeerSuggestedAlternative:
     "Twoje dopasowanie zaproponowało inny termin. Sprawdź odpowiedź: możesz się zgodzić albo zaproponować swój.",
   matchScheduleSavedConfirmation:
-    "✅ Zapisaliśmy Twoje daty i godziny. Daliśmy znać dopasowaniu - odezwę się, gdy odpowiedzą.",
+    "✨ Zapisaliśmy Twoje daty i godziny. Daliśmy znać dopasowaniu - odezwę się, gdy odpowiedzą.",
   matchScheduleNoOverlapYet:
     "Oboje zaznaczyliście daty i godziny, ale jeszcze nic się nie pokrywa. Otwórz kalendarz i dodaj kilka opcji - ustalimy randkę, gdy tylko slot się zgodzi:",
   venueConciergeIntro:
@@ -3010,11 +3010,11 @@ const plTranslations: TranslationTable = {
   venueConciergeBtnMap: "🗺️ Wybierz na mapie",
   venueLocationFirst:
     "Najpierw najważniejsze - *zaznacz, skąd będziesz wyruszać* 📍 Kliknij poniżej, aby zaznaczyć punkt na mapie. O vibe zapytam zaraz potem.",
-  venueVibeNoted: "Vibe zapisany ✅ Teraz wybierz, skąd będziesz jechać:",
+  venueVibeNoted: "Vibe zapisany ✨ Teraz wybierz, skąd będziesz jechać:",
   venueLocationNoted:
-    "Punkt startowy zapisany ✅ Teraz - jaki *vibe* chcesz? np. _cicha kawiarnia_, _wegański brunch_, _spacer po parku_, _małe muzeum_.",
+    "Punkt startowy zapisany ✨ Teraz - jaki *vibe* chcesz? np. _cicha kawiarnia_, _wegański brunch_, _spacer po parku_, _małe muzeum_.",
   venueSafetyOverride: "Heads up - wybraliśmy publiczną kawiarnię. Pierwsze randki trzymamy w publicznych miejscach.",
-  venueWaitingPeer: "Twoje zapisane ✅ Czekamy na nich...",
+  venueWaitingPeer: "Twoje zapisane ✨ Czekamy na nich...",
   venueSearching: "🔍 Szukam miejsca dla Was…",
   venueSearchStep2: "📍 Porównuję wasze trasy…",
   venueSearchStep3: "✨ Dobieram pod waszą atmosferę…",
@@ -3041,7 +3041,7 @@ const plTranslations: TranslationTable = {
   profilerBatchThinking: "💭 Myślę…",
   profilerBatchSaving: "🧩 Zapisuję twoje odpowiedzi…",
   profilerBatchSaved:
-    "Karta preferencji zaktualizowana ✅ Uwzględnię ją przy następnym doborze.",
+    "Karta preferencji zaktualizowana ✨ Uwzględnię ją przy następnym doborze.",
   profilerNextAck: "✍️ Zapisane…",
   profilerNextFormulating: "💭 Myślę…",
 
@@ -3056,7 +3056,7 @@ const plTranslations: TranslationTable = {
   venueChangeMaleComment: "Jej notatka:",
   venueChangeMaleAsk:
     "Zaakceptuj nowe miejsce albo odrzuć. Odrzucenie odwołuje randkę.",
-  venueChangeBtnAccept: "✅ Akceptuj nowe miejsce",
+  venueChangeBtnAccept: "✨ Akceptuj nowe miejsce",
   venueChangeBtnDecline: "❌ Odrzuć (odwołaj randkę)",
   venueChangeDeclineConfirm:
     "Na pewno? Jeśli nie zaakceptujesz proponowanego miejsca, Twoja randka i " +
@@ -3144,7 +3144,7 @@ const plTranslations: TranslationTable = {
     "Dobrego wieczoru ✨",
   statusDaysHours: "⏳ Następne dopasowanie za {d}d {h}h",
   statusHoursMinutes: "⏳ Dopasowania wlecą za {h}h {m}min",
-  statusMinutes: "🔥 Prawie gotowe! Dopasowania wlecą za {m} min",
+  statusMinutes: "✨ Prawie gotowe! Dopasowania wlecą za {m} min",
   statusProcessing: "✨ Analizujemy kampus... Zajrzyj trochę później.",
   voiceTranscriptionFailed: "Nie usłyszałem/am wyraźnie - możesz napisać tekstem?",
   voiceTooLong: "Ta głosówka jest trochę długa. Do 5 minut albo po prostu napisz tekst.",
