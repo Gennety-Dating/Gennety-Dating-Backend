@@ -10,18 +10,25 @@ import { menuToggleStateFor, type MenuToggleState } from "../../services/user-st
 export function buildMainMenuKeyboard(
   ctx: BotContext,
   status: MenuToggleState,
+  videoReward = false,
 ): InlineKeyboard {
-  return buildMainMenuKeyboardFor(ctx.session.language, status);
+  return buildMainMenuKeyboardFor(ctx.session.language, status, videoReward);
 }
 
 function buildMainMenuKeyboardFor(
   lang: Language,
   status: MenuToggleState,
+  videoReward: boolean,
 ): InlineKeyboard {
   const kb = new InlineKeyboard()
     .text(t(lang, "menuMyProfile"), "menu:profile")
     .text(t(lang, "menuEdit"), "menu:edit")
     .row();
+
+  // Always-visible profile-video entry; a 🎁 marker signals an unclaimed free
+  // Date Ticket (when tickets are live and the bonus hasn't been earned yet).
+  const videoLabel = t(lang, "menuVideo") + (videoReward ? " 🎁" : "");
+  kb.text(videoLabel, "menu:video").row();
 
   if (status !== "locked") {
     const pauseLabel = status === "paused" ? t(lang, "menuResume") : t(lang, "menuPause");
@@ -46,11 +53,12 @@ export async function showMainMenu(ctx: BotContext): Promise<void> {
 
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { status: true },
+    select: { status: true, profile: { select: { videoBonusTicketAt: true } } },
   });
   const status = menuToggleStateFor(user?.status);
+  const videoReward = videoRewardAvailable(user?.profile?.videoBonusTicketAt ?? null);
 
-  const { text, options } = buildMainMenuPayload(lang, status);
+  const { text, options } = buildMainMenuPayload(lang, status, videoReward);
   await ctx.reply(text, options);
 }
 
@@ -66,17 +74,24 @@ export async function sendMainMenu(
 ): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { status: true },
+    select: { status: true, profile: { select: { videoBonusTicketAt: true } } },
   });
   const status = menuToggleStateFor(user?.status);
+  const videoReward = videoRewardAvailable(user?.profile?.videoBonusTicketAt ?? null);
 
-  const { text, options } = buildMainMenuPayload(lang, status);
+  const { text, options } = buildMainMenuPayload(lang, status, videoReward);
   await api.sendMessage(chatId, text, options);
+}
+
+/** True when a profile video earns a free Date Ticket (feature on, not yet claimed). */
+function videoRewardAvailable(videoBonusTicketAt: Date | null): boolean {
+  return env.TICKET_FEATURE_ENABLED && !videoBonusTicketAt;
 }
 
 function buildMainMenuPayload(
   lang: Language,
   status: MenuToggleState,
+  videoReward: boolean,
 ): { text: string; options: Record<string, unknown> } {
   const menuEmojiId = env.CUSTOM_EMOJI_MENU_ID;
 
@@ -103,7 +118,7 @@ function buildMainMenuPayload(
       text: plainText,
       options: {
         entities,
-        reply_markup: buildMainMenuKeyboardFor(lang, status),
+        reply_markup: buildMainMenuKeyboardFor(lang, status, videoReward),
       },
     };
   }
@@ -112,7 +127,7 @@ function buildMainMenuPayload(
     text: t(lang, "menuTitle"),
     options: {
       parse_mode: "Markdown",
-      reply_markup: buildMainMenuKeyboardFor(lang, status),
+      reply_markup: buildMainMenuKeyboardFor(lang, status, videoReward),
     },
   };
 }

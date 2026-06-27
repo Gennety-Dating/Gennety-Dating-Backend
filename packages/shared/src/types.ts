@@ -26,6 +26,7 @@ export type MenuState =
   | "idle"
   | "settings_lang"
   | "edit_photos"
+  | "edit_video"
   | "edit_bio"
   | "edit_major"
   | "edit_age_range";

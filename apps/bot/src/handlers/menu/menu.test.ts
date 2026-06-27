@@ -55,6 +55,25 @@ vi.mock("../../services/verification-pipeline.js", () => ({
   triggerVerificationRerun: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../../services/profile-video.js", () => ({
+  prepareProfileVideo: vi.fn().mockResolvedValue({
+    kind: "accepted",
+    media: { type: "video", video: "vid-new" },
+    statusAcknowledged: false,
+  }),
+  videoSavedAck: vi.fn().mockReturnValue("Video added ✅"),
+}));
+
+vi.mock("../../services/ticket-wallet.js", () => ({
+  getBalance: vi.fn().mockResolvedValue(0),
+  grantVideoBonusIfEligible: vi.fn().mockResolvedValue({ granted: false, balance: 0 }),
+  grantPhotoBonusIfEligible: vi.fn().mockResolvedValue({ granted: false, balance: 0 }),
+}));
+
+vi.mock("../../services/ticket-reward.js", () => ({
+  sendTicketRewardDM: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { prisma } from "@gennety/db";
 import { showMainMenu, buildMainMenuKeyboard } from "./main.js";
 import { handleMyProfile } from "./my-profile.js";
@@ -81,6 +100,13 @@ import {
   handleEditPhotosStart,
   handleEditPhotosUpload,
 } from "./edit-profile.js";
+import {
+  handleEditVideoStart,
+  handleEditVideoUpload,
+  handleEditVideoRemove,
+} from "./video.js";
+import { prepareProfileVideo } from "../../services/profile-video.js";
+import { grantVideoBonusIfEligible } from "../../services/ticket-wallet.js";
 import { isPinnedMessageServiceUpdate, menuRouter } from "./router.js";
 import { validateSingleFace } from "../../services/vision/validate-face.js";
 import {
@@ -850,5 +876,125 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
     expect(prisma.profile.update).not.toHaveBeenCalled();
     expect((prisma as any).profile.findUnique).not.toHaveBeenCalled();
     expect((prisma as any).match.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("Menu — Profile Video", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "active",
+      profile: { videoBonusTicketAt: null },
+    });
+    (prisma.profile.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      photos: ["p1", "p2"],
+      profileMedia: [],
+      videoBonusTicketAt: null,
+    });
+    (prepareProfileVideo as ReturnType<typeof vi.fn>).mockResolvedValue({
+      kind: "accepted",
+      media: { type: "video", video: "vid-new" },
+      statusAcknowledged: false,
+    });
+    (grantVideoBonusIfEligible as ReturnType<typeof vi.fn>).mockResolvedValue({
+      granted: false,
+      balance: 0,
+    });
+  });
+
+  it("main keyboard always shows the profile-video button", () => {
+    const ctx = createMockCtx({});
+    const kb = buildMainMenuKeyboard(ctx, "active");
+    expect(JSON.stringify(kb.inline_keyboard)).toContain("menu:video");
+  });
+
+  it("main keyboard adds the gift marker only when the video reward is available", () => {
+    const ctx = createMockCtx({});
+    const withReward = JSON.stringify(buildMainMenuKeyboard(ctx, "active", true).inline_keyboard);
+    const noReward = JSON.stringify(buildMainMenuKeyboard(ctx, "active", false).inline_keyboard);
+    expect(withReward).toContain("🎁");
+    expect(noReward).not.toContain("🎁");
+  });
+
+  it("handleEditVideoStart enters edit_video and offers Remove when a video exists", async () => {
+    (prisma.profile.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      photos: ["p1", "p2"],
+      profileMedia: [
+        { type: "photo", photo: "p1" },
+        { type: "photo", photo: "p2" },
+        { type: "video", video: "vid-old" },
+      ],
+      videoBonusTicketAt: null,
+    });
+    const ctx = createMockCtx({ callbackData: "menu:video" });
+    await handleEditVideoStart(ctx);
+    expect(ctx.session.menuState).toBe("edit_video");
+    const markup = JSON.stringify((ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]);
+    expect(markup).toContain("menu:video:remove");
+  });
+
+  it("handleEditVideoStart hides Remove when no video exists", async () => {
+    const ctx = createMockCtx({ callbackData: "menu:video" });
+    await handleEditVideoStart(ctx);
+    expect(ctx.session.menuState).toBe("edit_video");
+    const markup = JSON.stringify((ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]);
+    expect(markup).not.toContain("menu:video:remove");
+  });
+
+  it("handleEditVideoUpload validates, persists the video, grants the bonus, and resets state", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-user-1",
+      profile: { photos: ["p1", "p2"], profileMedia: [] },
+    });
+    const ctx = createMockCtx({
+      session: { menuState: "edit_video" },
+      message: {
+        video: {
+          file_id: "vid-new",
+          file_unique_id: "u-new",
+          duration: 10,
+          width: 320,
+          height: 240,
+        },
+      },
+    });
+    await handleEditVideoUpload(ctx);
+
+    expect(prepareProfileVideo).toHaveBeenCalledTimes(1);
+    const updateArg = (prisma.profile.update as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(JSON.stringify(updateArg.data.profileMedia)).toContain("vid-new");
+    expect(grantVideoBonusIfEligible).toHaveBeenCalledWith("uuid-user-1");
+    expect(ctx.session.menuState).toBe("idle");
+  });
+
+  it("handleEditVideoUpload re-prompts (no persist) when the message isn't a video", async () => {
+    const ctx = createMockCtx({
+      session: { menuState: "edit_video" },
+      messageText: "not a video",
+    });
+    await handleEditVideoUpload(ctx);
+    expect(prepareProfileVideo).not.toHaveBeenCalled();
+    expect(prisma.profile.update).not.toHaveBeenCalled();
+    expect(ctx.session.menuState).toBe("edit_video");
+  });
+
+  it("handleEditVideoRemove clears the video from profileMedia and resets state", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-user-1",
+      profile: {
+        photos: ["p1", "p2"],
+        profileMedia: [
+          { type: "photo", photo: "p1" },
+          { type: "photo", photo: "p2" },
+          { type: "video", video: "vid-old" },
+        ],
+      },
+    });
+    const ctx = createMockCtx({ callbackData: "menu:video:remove" });
+    await handleEditVideoRemove(ctx);
+
+    const updateArg = (prisma.profile.update as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(JSON.stringify(updateArg.data.profileMedia)).not.toContain("vid-old");
+    expect(ctx.session.menuState).toBe("idle");
   });
 });

@@ -6,7 +6,6 @@ import {
   MIN_PHOTOS,
   MAX_PHOTOS,
   PHOTO_BONUS_TICKET_THRESHOLD,
-  PROFILE_MEDIA_VALIDATION_VERSION,
   MAX_DUMP_BUFFER_CHARS,
   magicContextPrompt,
   DEFAULT_SESSION,
@@ -29,8 +28,11 @@ import {
   type PhotoConsensusCommitResult,
 } from "../../services/profile-media-validation/identity-consensus.js";
 import type { MediaValidationReason } from "../../services/profile-media-validation/types.js";
-import { validateUserProfileVideo } from "../../services/profile-media-validation/profile-video-validation.js";
 import { logMediaValidationRejection } from "../../services/profile-media-validation/rejection-log.js";
+import {
+  prepareProfileVideo,
+  videoSavedAck,
+} from "../../services/profile-video.js";
 import { photoUploadStatePatch } from "../../services/profile-media-validation/photo-state.js";
 import { showMainMenu } from "../menu/main.js";
 import { withTyping } from "../../utils/with-typing.js";
@@ -50,7 +52,6 @@ import { runStatusSequence } from "../../services/ai-stream.js";
 import {
   onboardingThinkingSteps,
   profileAnalysisSteps,
-  videoCheckSteps,
 } from "../../services/analysis-status.js";
 import { env } from "../../config.js";
 import {
@@ -79,16 +80,6 @@ const CONTEXT_DUMP_DEBOUNCE_MS = 2_000;
  */
 const ONBOARDING_THINKING_EVERY = 3;
 
-/**
- * Deliberate pad held on the final "last checks" video-status beat AFTER the
- * real validation has settled, so the thinking sequence never flashes away the
- * instant a fast check returns. The video validation runs in parallel with the
- * pacing beats; this only extends the held tail by a couple of seconds.
- */
-const VIDEO_CHECK_STATUS_PAD_MS = 1_800;
-
-const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Heuristic split between a real LLM dump and a clarifying question while
@@ -750,15 +741,6 @@ async function handleProfileMediaMessage(
 }
 
 /**
- * Outcome of the parallel download+validation work covered by the video-check
- * thinking shimmer. `unavailable` folds download failures and unexpected errors
- * into the "processing unavailable" path.
- */
-type VideoCheckOutcome =
-  | { kind: "unavailable" }
-  | { kind: "validated"; validation: Awaited<ReturnType<typeof validateUserProfileVideo>> };
-
-/**
  * Validate and persist a profile video (display-only, not counted toward
  * MIN_PHOTOS), then grant the one-time "added a video" ticket bonus.
  * The video is appended to `pendingProfileMedia` so a later photo upload's
@@ -788,76 +770,32 @@ async function handleProfileVideoMessage(
     return;
   }
 
-  let acceptedMedia = media;
-  let statusAcknowledged = false;
-  if (env.PROFILE_MEDIA_VALIDATION_ENABLED) {
-    // Download + validate runs as one work-promise so the thinking shimmer can
-    // cover it; any download/processing failure collapses to "unavailable".
-    const work: Promise<VideoCheckOutcome> = (async () => {
-      try {
-        const videoBytes = await downloadTelegramFile(ctx.api, media.video);
-        if (!videoBytes) return { kind: "unavailable" as const };
-        const validation = await validateUserProfileVideo({
-          userId: user.id,
-          video: videoBytes,
-          profilePhotoRefs: ctx.session.pendingPhotos,
-          api: ctx.api,
-        });
-        return { kind: "validated" as const, validation };
-      } catch (err) {
-        console.warn("profile video validation failed:", err);
-        return { kind: "unavailable" as const };
-      }
-    })();
-
-    // Stream the "reviewing your video" thinking beats while `work` runs. The
-    // first two beats always play (untilFromStepIndex: 2); the final beat is
-    // held until validation settles plus a short deliberate pad, then the status
-    // is torn down before the verdict lands in its place.
-    await runStatusSequence(
-      ctx.api,
-      ctx.chat.id,
-      videoCheckSteps(ctx.session.language),
-      {
-        until: work.then(() => delay(VIDEO_CHECK_STATUS_PAD_MS)),
-        untilFromStepIndex: 2,
-        rich: true,
-      },
-    ).catch(() => undefined);
-
-    const outcome = await work;
-    if (outcome.kind === "unavailable") {
-      await ctx.reply(t(ctx.session.language, "videoProcessingUnavailable"));
-      return;
-    }
-    if (!outcome.validation.ok) {
-      await ctx.reply(
-        videoValidationMessage(ctx.session.language, outcome.validation.reason),
+  const prepared = await prepareProfileVideo({
+    api: ctx.api,
+    chatId: ctx.chat.id,
+    userId: user.id,
+    language: ctx.session.language,
+    media,
+    profilePhotoRefs: ctx.session.pendingPhotos,
+    reply: (text) => ctx.reply(text),
+  });
+  if (prepared.kind === "rejected") {
+    if (photoStageActive) {
+      await sendPhotoStagePrompt(
+        ctx.api,
+        ctx.chat.id,
+        telegramId,
+        ctx.session.language,
+        ctx.session.pendingPhotos.length,
+        Boolean(existingVideo),
       );
-      if (photoStageActive) {
-        await sendPhotoStagePrompt(
-          ctx.api,
-          ctx.chat.id,
-          telegramId,
-          ctx.session.language,
-          ctx.session.pendingPhotos.length,
-          Boolean(existingVideo),
-        );
-      }
-      return;
     }
-    acceptedMedia = {
-      ...media,
-      validationVersion: PROFILE_MEDIA_VALIDATION_VERSION,
-      validatedAt: new Date().toISOString(),
-    };
-    await ctx.reply(videoSavedAck(ctx.session.language));
-    statusAcknowledged = true;
+    return;
   }
 
   ctx.session.pendingProfileMedia = [
     ...existingMedia.filter((item) => item.type !== "video"),
-    acceptedMedia,
+    prepared.media,
   ];
   await persistPhotos(
     telegramId,
@@ -869,7 +807,7 @@ async function handleProfileVideoMessage(
   const res = await grantVideoBonusIfEligible(user.id);
   if (res.granted) {
     await sendTicketRewardDM(ctx.api, ctx.chat.id, ctx.session.language, "video", res.balance);
-  } else if (!statusAcknowledged) {
+  } else {
     await ctx.reply(videoSavedAck(ctx.session.language));
   }
 
@@ -882,32 +820,6 @@ async function handleProfileVideoMessage(
       ctx.session.pendingPhotos.length,
       true,
     );
-  }
-}
-
-function videoValidationMessage(
-  language: SessionData["language"],
-  reason: MediaValidationReason,
-): string {
-  switch (reason) {
-    case "unsafe_content":
-      return t(language, "videoUnsafeContent");
-    case "video_owner_missing":
-      return t(language, "videoOwnerMissing");
-    case "video_owner_too_brief":
-      return t(language, "videoOwnerTooBrief");
-    case "identity_mismatch":
-      return t(language, "videoIdentityMismatch");
-    case "video_mostly_other_person":
-      return t(language, "videoMostlyOtherPerson");
-    case "video_identity_reference_missing":
-      return t(language, "videoNeedsPhotoFirst");
-    case "video_too_large_to_check":
-      return t(language, "videoTooLarge");
-    case "video_too_long":
-      return t(language, "videoTooLong");
-    default:
-      return t(language, "videoProcessingUnavailable");
   }
 }
 
@@ -930,21 +842,6 @@ async function maybeGrantPhotoBonus(
   const res = await grantPhotoBonusIfEligible(user.id);
   if (res.granted) {
     await sendTicketRewardDM(api, chatId, lang, "photo", res.balance);
-  }
-}
-
-function videoSavedAck(language: SessionData["language"]): string {
-  switch (language) {
-    case "ru":
-      return "Видео добавлено в профиль ✅";
-    case "uk":
-      return "Відео додано до профілю ✅";
-    case "de":
-      return "Video zum Profil hinzugefügt ✅";
-    case "pl":
-      return "Wideo dodane do profilu ✅";
-    default:
-      return "Video added to your profile ✅";
   }
 }
 

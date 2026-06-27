@@ -1,8 +1,9 @@
 import { InlineKeyboard, InputMediaBuilder } from "grammy";
 import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
-import { normalizeProfileMedia, t, escapeMd } from "@gennety/shared";
+import { normalizeProfileMedia, profileMediaHasVideo, t, escapeMd } from "@gennety/shared";
 import { sendProfileMediaCard } from "../../services/profile-media-dispatch.js";
+import { env } from "../../config.js";
 
 /** Shared profile rendering logic. */
 async function renderMyProfile(ctx: BotContext): Promise<void> {
@@ -21,7 +22,7 @@ async function renderMyProfile(ctx: BotContext): Promise<void> {
   const rawSummary =
     user.profile?.psychologicalSummary?.trim() || t(lang, "myProfileNoBio");
 
-  const body = t(lang, "myProfileBody", {
+  let body = t(lang, "myProfileBody", {
     firstName: escapeMd(user.firstName ?? "—"),
     surname: escapeMd(user.surname ?? "—"),
     age: user.age ?? 0,
@@ -34,7 +35,17 @@ async function renderMyProfile(ctx: BotContext): Promise<void> {
   const photos = user.profile?.photos ?? [];
   const media = normalizeProfileMedia(user.profile?.profileMedia ?? [], photos);
   const hasLivePhoto = media.some((item) => item.type === "live_photo");
-  if (hasLivePhoto && ctx.chat) {
+  const hasVideo = profileMediaHasVideo(media);
+
+  // Nudge users with no profile video toward the always-visible menu entry, and
+  // surface the free-ticket hook while the bonus is still claimable.
+  if (!hasVideo) {
+    const rewardAvailable =
+      env.TICKET_FEATURE_ENABLED && !user.profile?.videoBonusTicketAt;
+    body += `\n\n${t(lang, rewardAvailable ? "myProfileAddVideoHintReward" : "myProfileAddVideoHint")}`;
+  }
+
+  if ((hasLivePhoto || hasVideo) && ctx.chat) {
     try {
       await sendProfileMediaCard(ctx.api, ctx.chat.id, media);
     } catch {

@@ -492,9 +492,20 @@ when `CUSTOM_EMOJI_MENU_ID` is set. **Bot API limitation:** inline keyboard
 button labels CANNOT carry `custom_emoji` entities — buttons fall back to
 plain Unicode emoji.
 
-- **My Profile** — generated bio + photos.
+- **My Profile** — generated bio + photos (and the profile video, when present).
+  When no video is set, a one-line hint points to the Profile Video entry.
 - **Edit Profile** — non-identity fields only. `firstName`, `age`,
   `email`, `universityDomain` are **fixed** post-onboarding.
+- **Profile Video** — an **always-visible** main-menu entry to add, replace, or
+  remove the optional display-only profile **video** *after* onboarding (the same
+  upload + safety-only validation as the §1.3 media stage, via the shared
+  `services/profile-video.ts`). The video is never added to `photos[]` and never
+  triggers a verification rerun, so the `photos[i] ↔ photoFaceScores[i]`
+  invariant is untouched. When `TICKET_FEATURE_ENABLED` and the one-time video
+  bonus is unclaimed, the button shows a 🎁 marker and the screen promises a free
+  Date Ticket; the bonus is granted idempotently via `Profile.videoBonusTicketAt`
+  (same claim as onboarding, so it pays at most once across both surfaces).
+  Removing the video does not reverse an already-granted bonus.
 - **Pause Matching** — flips `User.status = paused`. The match engine ignores
   paused users; the status banner shows "paused".
 - **Settings** — change `language`; re-open verification when applicable; and

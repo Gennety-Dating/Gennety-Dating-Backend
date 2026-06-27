@@ -260,6 +260,19 @@ const translations = {
     editAgeRangeSaved: "Age range updated ✨",
     editProfilePhotosStart: "Send new photos ({min}–{max}). One at a time.",
     editProfilePhotosSaved: "Photos updated ✨",
+    menuVideo: "🎬 Profile Video",
+    editVideoPrompt:
+      "🎬 Send a short profile video (up to {sec}s, max {mb} MB). Friends, scenery, or a party clip are all fine — it just makes your profile feel alive.",
+    editVideoRewardLine: "🎁 Add one now and earn a free Date Ticket.",
+    editVideoHasOne:
+      "You already have a profile video. Send a new one to replace it, or remove it below.",
+    editVideoRemoveBtn: "🗑 Remove video",
+    editVideoRemoved: "Profile video removed.",
+    editVideoNotAVideo: "Please send a *video* (up to {sec}s, max {mb} MB).",
+    myProfileAddVideoHint:
+      "🎬 Tip: add a short profile video from the menu — it makes your profile stand out.",
+    myProfileAddVideoHintReward:
+      "🎬 Tip: add a short profile video from the menu and earn a free Date Ticket 🎁.",
 
     // --- Pause / Resume ---
     pauseConfirmed: "Matching paused ⏸\nNo new matches until you resume.",
@@ -932,6 +945,19 @@ const translations = {
     editAgeRangeSaved: "Диапазон обновлён ✨",
     editProfilePhotosStart: "Скинь новые фото ({min}–{max}). По одному.",
     editProfilePhotosSaved: "Фото обновлены ✨",
+    menuVideo: "🎬 Видео профиля",
+    editVideoPrompt:
+      "🎬 Пришли короткое видео для профиля (до {sec} сек, не больше {mb} МБ). Друзья, пейзаж или клип с вечеринки — всё подойдёт, видео оживляет анкету.",
+    editVideoRewardLine: "🎁 Добавь видео сейчас и получи бесплатный билет на свидание.",
+    editVideoHasOne:
+      "У тебя уже есть видео в профиле. Пришли новое, чтобы заменить, или удали его кнопкой ниже.",
+    editVideoRemoveBtn: "🗑 Удалить видео",
+    editVideoRemoved: "Видео из профиля удалено.",
+    editVideoNotAVideo: "Пришли, пожалуйста, *видео* (до {sec} сек, не больше {mb} МБ).",
+    myProfileAddVideoHint:
+      "🎬 Совет: добавь короткое видео в профиль через меню — так анкета заметнее.",
+    myProfileAddVideoHintReward:
+      "🎬 Совет: добавь короткое видео в профиль через меню и получи бесплатный билет 🎁.",
 
     // --- Pause / Resume ---
     pauseConfirmed: "Поиск на паузе ⏸\nНовых мэтчей не будет, пока не включишь.",
@@ -1599,6 +1625,19 @@ const translations = {
     editAgeRangeSaved: "Діапазон оновлено ✨",
     editProfilePhotosStart: "Скинь нові фото ({min}–{max}). По одному.",
     editProfilePhotosSaved: "Фото оновлено ✨",
+    menuVideo: "🎬 Відео профілю",
+    editVideoPrompt:
+      "🎬 Надішли коротке відео для профілю (до {sec} сек, не більше {mb} МБ). Друзі, краєвид чи кліп з вечірки — усе підійде, відео оживляє анкету.",
+    editVideoRewardLine: "🎁 Додай відео зараз і отримай безкоштовний квиток на побачення.",
+    editVideoHasOne:
+      "У тебе вже є відео в профілі. Надішли нове, щоб замінити, або видали його кнопкою нижче.",
+    editVideoRemoveBtn: "🗑 Видалити відео",
+    editVideoRemoved: "Відео з профілю видалено.",
+    editVideoNotAVideo: "Надішли, будь ласка, *відео* (до {sec} сек, не більше {mb} МБ).",
+    myProfileAddVideoHint:
+      "🎬 Порада: додай коротке відео в профіль через меню — так анкета помітніша.",
+    myProfileAddVideoHintReward:
+      "🎬 Порада: додай коротке відео в профіль через меню та отримай безкоштовний квиток 🎁.",
 
     // --- Pause / Resume ---
     pauseConfirmed: "Пошук на паузі ⏸\nНових метчів не буде, поки не ввімкнеш.",
@@ -2251,6 +2290,19 @@ const deTranslations: TranslationTable = {
   editAgeRangeSaved: "Altersbereich aktualisiert ✨",
   editProfilePhotosStart: "Sende neue Fotos ({min}-{max}). Eins nach dem anderen.",
   editProfilePhotosSaved: "Fotos aktualisiert ✨",
+  menuVideo: "🎬 Profilvideo",
+  editVideoPrompt:
+    "🎬 Sende ein kurzes Profilvideo (bis {sec} Sek., max. {mb} MB). Freunde, Landschaft oder ein Party-Clip sind völlig okay — es macht dein Profil lebendiger.",
+  editVideoRewardLine: "🎁 Füge jetzt eins hinzu und sichere dir ein kostenloses Date-Ticket.",
+  editVideoHasOne:
+    "Du hast bereits ein Profilvideo. Sende ein neues, um es zu ersetzen, oder entferne es unten.",
+  editVideoRemoveBtn: "🗑 Video entfernen",
+  editVideoRemoved: "Profilvideo entfernt.",
+  editVideoNotAVideo: "Bitte sende ein *Video* (bis {sec} Sek., max. {mb} MB).",
+  myProfileAddVideoHint:
+    "🎬 Tipp: Füge über das Menü ein kurzes Profilvideo hinzu — so fällt dein Profil mehr auf.",
+  myProfileAddVideoHintReward:
+    "🎬 Tipp: Füge über das Menü ein kurzes Profilvideo hinzu und sichere dir ein kostenloses Ticket 🎁.",
   pauseConfirmed: "Matching pausiert ⏸\nKeine neuen Matches, bis du fortsetzt.",
   resumeConfirmed: "Matching läuft wieder ▶️\nUnsere AI ist dran.",
   settingsTitle: "⚙️ Einstellungen",
@@ -2822,6 +2874,19 @@ const plTranslations: TranslationTable = {
   editAgeRangeSaved: "Zakres wieku zaktualizowany ✨",
   editProfilePhotosStart: "Wyślij nowe zdjęcia ({min}-{max}). Po jednym.",
   editProfilePhotosSaved: "Zdjęcia zaktualizowane ✨",
+  menuVideo: "🎬 Wideo profilu",
+  editVideoPrompt:
+    "🎬 Wyślij krótkie wideo do profilu (do {sec} s, maks. {mb} MB). Znajomi, krajobraz czy klip z imprezy — wszystko pasuje, wideo ożywia profil.",
+  editVideoRewardLine: "🎁 Dodaj je teraz i zdobądź darmowy bilet na randkę.",
+  editVideoHasOne:
+    "Masz już wideo w profilu. Wyślij nowe, aby je zastąpić, albo usuń je przyciskiem poniżej.",
+  editVideoRemoveBtn: "🗑 Usuń wideo",
+  editVideoRemoved: "Wideo z profilu usunięte.",
+  editVideoNotAVideo: "Wyślij proszę *wideo* (do {sec} s, maks. {mb} MB).",
+  myProfileAddVideoHint:
+    "🎬 Wskazówka: dodaj krótkie wideo do profilu z menu — dzięki temu profil bardziej się wyróżnia.",
+  myProfileAddVideoHintReward:
+    "🎬 Wskazówka: dodaj krótkie wideo do profilu z menu i zdobądź darmowy bilet 🎁.",
   pauseConfirmed: "Matching wstrzymany ⏸\nNie będzie nowych dopasowań, dopóki go nie wznowisz.",
   resumeConfirmed: "Matching znowu działa ▶️\nNasza AI już pracuje.",
   settingsTitle: "⚙️ Ustawienia",

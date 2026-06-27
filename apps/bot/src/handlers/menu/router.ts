@@ -14,6 +14,11 @@ import {
   handleEditPhotosStart,
   handleEditPhotosUpload,
 } from "./edit-profile.js";
+import {
+  handleEditVideoStart,
+  handleEditVideoUpload,
+  handleEditVideoRemove,
+} from "./video.js";
 import { handlePause, handleResume } from "./pause.js";
 import {
   handleSettingsOpen,
@@ -59,6 +64,20 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     ctx.session.pendingProfileMedia = [];
     ctx.session.pendingPhotoUniqueIds = [];
     ctx.session.pendingPhotoScores = [];
+  }
+
+  // Edit video: consumes a raw video message; Remove/Back are callbacks.
+  if (ctx.session.menuState === "edit_video") {
+    if (!data) {
+      await handleEditVideoUpload(ctx);
+      return;
+    }
+    if (data === "menu:video:remove") {
+      await handleEditVideoRemove(ctx);
+      return;
+    }
+    // Any other menu action mid-flow → reset state and fall through.
+    ctx.session.menuState = "idle";
   }
 
   // Edit bio: consumes raw text messages.
@@ -146,6 +165,14 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       return;
     case "menu:edit:photos":
       await handleEditPhotosStart(ctx);
+      return;
+
+    // Profile video (main-menu entry + stale Remove fallback)
+    case "menu:video":
+      await handleEditVideoStart(ctx);
+      return;
+    case "menu:video:remove":
+      await handleEditVideoRemove(ctx);
       return;
 
     // Pause / Resume
