@@ -4,6 +4,7 @@ export type MediaValidationReason =
   | "duplicate_near"
   | "unsafe_content"
   | "no_face"
+  | "face_obscured"
   | "multiple_faces_photo"
   | "identity_mismatch"
   | "identity_uncertain"
@@ -59,6 +60,11 @@ export interface BoundingBox {
   height: number;
 }
 
+export interface FaceAttribute {
+  value: boolean;
+  confidence: number;
+}
+
 export interface DetectedFace {
   confidence: number;
   boundingBox: BoundingBox | null;
@@ -67,6 +73,10 @@ export interface DetectedFace {
   pitch: number | null;
   roll: number | null;
   yaw: number | null;
+  /** AWS `Sunglasses` attribute — dark glasses hiding the eyes. */
+  sunglasses: FaceAttribute | null;
+  /** AWS `FaceOccluded` attribute — a mask / hand / covering over the face. */
+  occluded: FaceAttribute | null;
 }
 
 export interface ModerationSignal {

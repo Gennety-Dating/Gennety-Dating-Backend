@@ -23,7 +23,10 @@ describe("OpenAI moderation", () => {
     vi.restoreAllMocks();
   });
 
-  it("sends an image as a base64 data URL and returns block signals", async () => {
+  it("sends an image as a base64 data URL and does NOT block the coarse `sexual` category", async () => {
+    // Revealing-but-legal dating photos (swimwear, lingerie, bare torso) get
+    // flagged `sexual` by omni-moderation. For images that must NOT hard-block:
+    // the explicit-nudity line is drawn by AWS Rekognition, not this boolean.
     const fetchFn = vi.fn().mockResolvedValue(
       response({
         flagged: true,
@@ -38,22 +41,38 @@ describe("OpenAI moderation", () => {
       { fetchFn },
     );
 
-    expect(result).toEqual({
-      ok: true,
-      signals: [
-        {
-          provider: "openai",
-          category: "sexual",
-          score: 0.94,
-          severity: "block",
-        },
-      ],
-    });
+    expect(result).toEqual({ ok: true, signals: [] });
     const body = JSON.parse(fetchFn.mock.calls[0]![1].body as string);
     expect(body.model).toBe("omni-moderation-latest");
     expect(body.input[0].image_url.url).toMatch(
       /^data:image\/jpeg;base64,/,
     );
+  });
+
+  it("still hard-blocks `sexual/minors` on an image (CSAM)", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      response({
+        flagged: true,
+        categories: { "sexual/minors": true, sexual: true },
+        category_scores: { "sexual/minors": 0.97, sexual: 0.9 },
+      }),
+    );
+
+    expect(
+      await moderateImageWithOpenAI(Buffer.from("x"), "image/jpeg", {
+        fetchFn,
+      }),
+    ).toEqual({
+      ok: true,
+      signals: [
+        {
+          provider: "openai",
+          category: "sexual/minors",
+          score: 0.97,
+          severity: "block",
+        },
+      ],
+    });
   });
 
   it("returns review for non-graphic violence", async () => {

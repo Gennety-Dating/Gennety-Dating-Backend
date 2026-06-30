@@ -13,6 +13,8 @@ const clearFace: DetectedFace = {
   pitch: 0,
   roll: 0,
   yaw: 0,
+  sunglasses: null,
+  occluded: null,
 };
 const candidateJpeg = Buffer.from([0xff, 0xd8, 0xff, 0x01]);
 
@@ -216,6 +218,123 @@ describe("validateProfilePhoto", () => {
       },
     );
     expect(group).toMatchObject({ ok: true });
+  });
+
+  it("accepts an angled face detected below the old 0.75 confidence floor", async () => {
+    // Regression for the founder's "stuck at 1/2 photos" report: a real profile
+    // photo whose face Rekognition detects at 0.61 confidence must be accepted
+    // (old floor 0.75 bounced it as no_face). Identity is Persona's job, not
+    // this presence floor.
+    const angled: DetectedFace = {
+      ...clearFace,
+      confidence: 0.61,
+      boundingBox: { left: 0.3, top: 0.2, width: 0.12, height: 0.12 },
+      yaw: 28,
+    };
+    const result = await validateProfilePhoto(
+      { candidate: candidateJpeg, mime: "image/jpeg" },
+      {
+        deps: deps({
+          detectFaces: vi.fn(async () => ({
+            ok: true as const,
+            faces: [angled],
+          })),
+        }),
+      },
+    );
+    expect(result).toMatchObject({ ok: true });
+  });
+
+  it("rejects a face that is too small or too low-confidence to be usable", async () => {
+    const speck: DetectedFace = {
+      ...clearFace,
+      confidence: 0.4,
+      boundingBox: { left: 0.4, top: 0.4, width: 0.05, height: 0.05 },
+    };
+    const result = await validateProfilePhoto(
+      { candidate: candidateJpeg, mime: "image/jpeg" },
+      {
+        deps: deps({
+          detectFaces: vi.fn(async () => ({
+            ok: true as const,
+            faces: [speck],
+          })),
+        }),
+      },
+    );
+    expect(result).toMatchObject({ ok: false, reason: "no_face" });
+  });
+
+  it("rejects sunglasses and a face covering, but allows clear glasses and noisy occlusion", async () => {
+    const obscured = async (face: DetectedFace) =>
+      validateProfilePhoto(
+        { candidate: candidateJpeg, mime: "image/jpeg" },
+        {
+          deps: deps({
+            detectFaces: vi.fn(async () => ({
+              ok: true as const,
+              faces: [face],
+            })),
+          }),
+        },
+      );
+
+    // Dark glasses hiding the eyes -> reject.
+    expect(
+      await obscured({
+        ...clearFace,
+        sunglasses: { value: true, confidence: 0.99 },
+      }),
+    ).toMatchObject({ ok: false, reason: "face_obscured" });
+
+    // A mask / covering at high confidence -> reject.
+    expect(
+      await obscured({
+        ...clearFace,
+        occluded: { value: true, confidence: 1 },
+      }),
+    ).toMatchObject({ ok: false, reason: "face_obscured" });
+
+    // Clear prescription glasses report Sunglasses=false -> pass.
+    expect(
+      await obscured({
+        ...clearFace,
+        sunglasses: { value: false, confidence: 1 },
+      }),
+    ).toMatchObject({ ok: true });
+
+    // Noisy FaceOccluded below the 0.99 floor (clear faces scored up to 0.93 in
+    // calibration) -> pass, so the gate doesn't bounce ordinary photos.
+    expect(
+      await obscured({
+        ...clearFace,
+        occluded: { value: true, confidence: 0.93 },
+      }),
+    ).toMatchObject({ ok: true });
+  });
+
+  it("checks obstruction only on the largest (subject) face, not a bystander", async () => {
+    const subject = {
+      ...clearFace,
+      boundingBox: { left: 0.3, top: 0.2, width: 0.4, height: 0.5 },
+    };
+    const bystanderInSunglasses: DetectedFace = {
+      ...clearFace,
+      boundingBox: { left: 0.02, top: 0.02, width: 0.06, height: 0.06 },
+      sunglasses: { value: true, confidence: 0.99 },
+    };
+    const result = await validateProfilePhoto(
+      { candidate: candidateJpeg, mime: "image/jpeg" },
+      {
+        deps: deps({
+          detectFaces: vi.fn(async () => ({
+            ok: true as const,
+            faces: [bystanderInSunglasses, subject],
+          })),
+        }),
+      },
+    );
+    expect(result).toMatchObject({ ok: true });
   });
 
   it("rejects a different person and accepts matches at the configured threshold", async () => {

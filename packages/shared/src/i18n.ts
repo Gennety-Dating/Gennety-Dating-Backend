@@ -52,6 +52,8 @@ const translations = {
       "This photo is already in your profile. Add a different shot — every photo must be unique.",
     photoUnsafeContent:
       "That photo can't be published in a profile. Please choose a different, non-explicit photo.",
+    photoFaceObscured:
+      "Your face is hard to make out. Take off sunglasses or a face covering and send a clearer shot.",
     photoMultipleFaces:
       "Your face needs to be visible in the photo. Try another shot.",
     photoIdentityMismatch:
@@ -737,6 +739,8 @@ const translations = {
       "Это фото уже есть в профиле. Добавь другой снимок — все фотографии должны быть уникальными.",
     photoUnsafeContent:
       "Это фото нельзя публиковать в профиле. Выбери другой снимок без откровенного контента.",
+    photoFaceObscured:
+      "Лицо плохо видно. Сними тёмные очки или маску и пришли более чёткий снимок.",
     photoMultipleFaces:
       "На фото должно быть видно твоё лицо. Попробуй другой снимок.",
     photoIdentityMismatch:
@@ -1417,6 +1421,8 @@ const translations = {
       "Це фото вже є в профілі. Додай інший знімок — усі фотографії мають бути унікальними.",
     photoUnsafeContent:
       "Це фото не можна публікувати у профілі. Обери інший знімок без відвертого контенту.",
+    photoFaceObscured:
+      "Обличчя погано видно. Зніми темні окуляри або маску й надішли чіткіший знімок.",
     photoMultipleFaces:
       "На фото має бути видно твоє обличчя. Спробуй інший знімок.",
     photoIdentityMismatch:
@@ -2103,6 +2109,8 @@ const deTranslations: TranslationTable = {
     "Dieses Foto ist bereits in deinem Profil. Füge ein anderes Bild hinzu - alle Fotos müssen eindeutig sein.",
   photoUnsafeContent:
     "Dieses Foto kann nicht im Profil veröffentlicht werden. Wähle bitte ein anderes, nicht explizites Foto.",
+  photoFaceObscured:
+    "Dein Gesicht ist schlecht zu erkennen. Nimm Sonnenbrille oder Maske ab und sende ein klareres Foto.",
   photoMultipleFaces:
     "Dein Gesicht muss auf dem Foto sichtbar sein. Versuch ein anderes Bild.",
   photoIdentityMismatch:
@@ -2687,6 +2695,8 @@ const plTranslations: TranslationTable = {
     "To zdjęcie jest już w Twoim profilu. Dodaj inne ujęcie - wszystkie zdjęcia muszą być unikalne.",
   photoUnsafeContent:
     "Tego zdjęcia nie można opublikować w profilu. Wybierz inne zdjęcie bez treści erotycznych.",
+  photoFaceObscured:
+    "Twarz jest słabo widoczna. Zdejmij okulary przeciwsłoneczne lub maskę i wyślij wyraźniejsze zdjęcie.",
   photoMultipleFaces:
     "Na zdjęciu musi być widoczna Twoja twarz. Spróbuj innego ujęcia.",
   photoIdentityMismatch:

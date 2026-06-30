@@ -201,8 +201,15 @@ Hard rules enforced by the collector:
   receive an explicit explanation. **Identity is enforced only by Persona
   verification, not by an upload-time gate before it (simplified 2026-06-23).**
   Before the user has a `verifiedSelfiePath`, each static photo that passes
-  safety, usable-face presence (Rekognition face confidence ≥ 0.75, lenient by
-  design — angled / partially-turned faces are normal), and the duplicate
+  safety, usable-face presence (Rekognition face confidence ≥ 0.55 and face
+  area ≥ 0.8% of the frame, lenient by design — angled / partially-turned /
+  full-body shots are normal; lowered from 0.75/1.5% after a calibration run
+  found legit photos bounced as `no_face`), a light **obstruction** check on
+  the largest face (reject `face_obscured` only on dark `Sunglasses` ≥ 0.90 or a
+  `FaceOccluded` mask/covering ≥ 0.99 — clear prescription glasses and noisy
+  sub-0.99 occlusion pass; pose / lighting / sharpness are deliberately NOT
+  gated since extreme turned-away / dark / blurred / cropped shots already fail
+  the presence floor), and the duplicate
   checks is accepted and counted toward `MIN_PHOTOS` **immediately**: there is
   no cross-photo "same person" clustering and no self-photo identity anchor.
   (The earlier hidden `pendingPhotoCandidates[]` consensus pool — which held the

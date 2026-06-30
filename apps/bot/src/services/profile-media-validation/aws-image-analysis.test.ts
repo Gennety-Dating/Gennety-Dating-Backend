@@ -61,6 +61,38 @@ describe("AWS profile-media image analysis", () => {
           pitch: 1,
           roll: 2,
           yaw: 3,
+          sunglasses: null,
+          occluded: null,
+        },
+      ],
+    });
+  });
+
+  it("maps the Sunglasses and FaceOccluded attributes", async () => {
+    const client = {
+      send: vi.fn().mockResolvedValue({
+        FaceDetails: [
+          {
+            Confidence: 99,
+            BoundingBox: { Left: 0.1, Top: 0.2, Width: 0.3, Height: 0.4 },
+            Sunglasses: { Value: true, Confidence: 99 },
+            FaceOccluded: { Value: true, Confidence: 100 },
+          },
+        ],
+      }),
+    };
+
+    const result = await detectFaces(Buffer.from("image"), {
+      provider: "rekognition",
+      client: client as never,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      faces: [
+        {
+          sunglasses: { value: true, confidence: 0.99 },
+          occluded: { value: true, confidence: 1 },
         },
       ],
     });
@@ -106,6 +138,74 @@ describe("AWS profile-media image analysis", () => {
           category: "Female Swimwear Or Underwear",
           score: 0.88,
           severity: "review",
+        },
+      ],
+    });
+  });
+
+  it("allows revealing-but-non-explicit labels (no substring false-block)", async () => {
+    // Regression: the old `includes("explicit nudity")` test matched the
+    // SOFTEST AWS label, "Non-Explicit Nudity", and hard-blocked acceptable
+    // revealing photos. Exact matching keeps these as review (which the policy
+    // does not reject) while still blocking a truly explicit leaf.
+    const client = {
+      send: vi.fn().mockResolvedValue({
+        ModerationLabels: [
+          {
+            Name: "Non-Explicit Nudity",
+            ParentName: "Non-Explicit Nudity of Intimate parts and Kissing",
+            Confidence: 93,
+          },
+          {
+            Name: "Partially Exposed Female Breast",
+            ParentName: "Non-Explicit Nudity",
+            Confidence: 95,
+          },
+          {
+            Name: "Partially Exposed Buttocks",
+            ParentName: "Non-Explicit Nudity",
+            Confidence: 98,
+          },
+          {
+            Name: "Exposed Female Nipple",
+            ParentName: "Explicit Nudity",
+            Confidence: 96,
+          },
+        ],
+      }),
+    };
+
+    const result = await detectModerationLabels(Buffer.from("image"), {
+      provider: "rekognition",
+      client: client as never,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      signals: [
+        {
+          provider: "aws",
+          category: "Non-Explicit Nudity",
+          score: 0.93,
+          severity: "review",
+        },
+        {
+          provider: "aws",
+          category: "Partially Exposed Female Breast",
+          score: 0.95,
+          severity: "review",
+        },
+        {
+          provider: "aws",
+          category: "Partially Exposed Buttocks",
+          score: 0.98,
+          severity: "review",
+        },
+        {
+          provider: "aws",
+          category: "Exposed Female Nipple",
+          score: 0.96,
+          severity: "block",
         },
       ],
     });

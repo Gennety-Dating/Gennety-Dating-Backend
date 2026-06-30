@@ -29,16 +29,34 @@ import type {
 
 // Deliberately lenient: a profile photo only needs to *contain a usable
 // human face*, not a perfectly frontal studio shot. We gate on just two things:
-//   - confidence ≥ 0.75 — Rekognition is sure it's a face (it drops on angled
-//     shots, so the old 0.90 floor bounced plenty of normal photos);
-//   - area ≥ 1.5% — the face is a meaningful part of the frame, not a speck.
-// We intentionally do NOT gate on Rekognition's `Sharpness` quality metric:
-// it's an image-quality score (not a face-presence signal), it reads low for
-// many perfectly usable phone photos (a clearly-detected angled selfie scored
-// 0.058), and gating on it silently rejected legitimate users. Softness only
-// hurts the uploader's own appeal; Persona verification remains the identity gate.
-const MIN_FACE_CONFIDENCE = 0.75;
-const MIN_FACE_AREA = 0.015;
+//   - confidence ≥ 0.55 — Rekognition is reasonably sure it's a face. The floor
+//     was lowered from 0.75 after a calibration run found a real profile photo
+//     detected at 0.61 being bounced as `no_face` (the founder's "stuck at
+//     1/2 photos" complaint); 0.75 still over-rejected angled / lower-light
+//     shots, so identity is left to Persona, not this presence floor.
+//   - area ≥ 0.8% — the face is a real part of the frame, not a speck. Lowered
+//     from 1.5% so full-body / further-back shots are not bounced.
+// We intentionally do NOT gate on Rekognition's `Sharpness` quality metric or
+// its noisy `FaceOccluded` signal (the calibration run saw FaceOccluded fire at
+// 0.93 on a perfectly clear face): both read false on many usable phone photos
+// and gating on them silently rejected legitimate users. Softness only hurts the
+// uploader's own appeal; Persona verification remains the identity gate.
+const MIN_FACE_CONFIDENCE = 0.55;
+const MIN_FACE_AREA = 0.008;
+
+// The face must also be *recognizable*. We reject only two clearly-detectable
+// obstructions, tuned against a calibration run so ordinary photos pass:
+//   - sunglasses ≥ 0.90 — dark glasses hiding the eyes (clear prescription
+//     glasses report `Sunglasses=false`, so they pass);
+//   - a face covering ≥ 0.99 — a mask / scarf over the face. The floor is high
+//     on purpose: AWS `FaceOccluded` fired falsely up to 0.93 on perfectly
+//     clear faces in calibration, while real masks/coverings read 1.00, so 0.99
+//     catches the real cases without bouncing clear photos.
+// Everything else about pose / lighting / sharpness is left lenient — extreme
+// "turned away / too dark / blurred / face cropped out" shots already fail the
+// face-presence gate above (Rekognition returns no face or a sub-floor one).
+const MIN_SUNGLASSES_CONFIDENCE = 0.9;
+const MIN_FACE_OCCLUSION_CONFIDENCE = 0.99;
 
 export interface ExistingPhotoForValidation {
   buffer: Buffer;
@@ -156,6 +174,13 @@ export async function validateProfilePhoto(
   const usableFaces = faceDetection.faces.filter(isUsablePhotoFace);
   if (usableFaces.length === 0) return reject("no_face");
 
+  // Check obstruction only on the most prominent (largest) face — the subject
+  // of a selfie — so a background bystander's sunglasses never bounce a photo.
+  const primaryFace = usableFaces.reduce((largest, face) =>
+    faceArea(face) > faceArea(largest) ? face : largest,
+  );
+  if (isFaceObscured(primaryFace)) return reject("face_obscured");
+
   const reference = input.identityReference ?? null;
   if (!reference) {
     return {
@@ -200,11 +225,30 @@ export async function validateProfilePhoto(
   };
 }
 
-function isUsablePhotoFace(face: DetectedFace): boolean {
-  const area = face.boundingBox
+function faceArea(face: DetectedFace): number {
+  return face.boundingBox
     ? face.boundingBox.width * face.boundingBox.height
     : 0;
-  return face.confidence >= MIN_FACE_CONFIDENCE && area >= MIN_FACE_AREA;
+}
+
+function isUsablePhotoFace(face: DetectedFace): boolean {
+  return face.confidence >= MIN_FACE_CONFIDENCE && faceArea(face) >= MIN_FACE_AREA;
+}
+
+function isFaceObscured(face: DetectedFace): boolean {
+  if (
+    face.sunglasses?.value &&
+    face.sunglasses.confidence >= MIN_SUNGLASSES_CONFIDENCE
+  ) {
+    return true;
+  }
+  if (
+    face.occluded?.value &&
+    face.occluded.confidence >= MIN_FACE_OCCLUSION_CONFIDENCE
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function isSupportedImageMime(mime: string): boolean {
@@ -218,6 +262,7 @@ function reject(
     | "duplicate_near"
     | "unsafe_content"
     | "no_face"
+    | "face_obscured"
     | "multiple_faces_photo"
     | "identity_mismatch"
     | "identity_uncertain",

@@ -789,7 +789,9 @@ function photoValidationApiMessage(reason: string): string {
     case "duplicate_near":
       return "This photo is already in the profile";
     case "unsafe_content":
-      return "Your face must be visible in the photo";
+      return "That photo can't be published in a profile. Choose a different, non-explicit photo";
+    case "face_obscured":
+      return "Your face is hard to make out — take off sunglasses or a face covering";
     case "no_face":
       return "Your face must be visible in the photo";
     case "multiple_faces_photo":

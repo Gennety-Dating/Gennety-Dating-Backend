@@ -11,6 +11,7 @@ import {
 import { env } from "../config.js";
 import type {
   DetectedFace,
+  FaceAttribute,
   ModerationProviderResult,
   ModerationSignal,
   ProviderError,
@@ -255,7 +256,7 @@ export async function detectFaces(
     const output = (await client.send(
       new DetectFacesCommand({
         Image: { Bytes: image },
-        Attributes: ["DEFAULT", "FACE_OCCLUDED"],
+        Attributes: ["DEFAULT", "FACE_OCCLUDED", "SUNGLASSES"],
       }),
       { abortSignal: controller.signal },
     )) as DetectFacesCommandOutput;
@@ -277,6 +278,8 @@ export async function detectFaces(
         pitch: finiteOrNull(face.Pose?.Pitch),
         roll: finiteOrNull(face.Pose?.Roll),
         yaw: finiteOrNull(face.Pose?.Yaw),
+        sunglasses: faceAttribute(face.Sunglasses),
+        occluded: faceAttribute(face.FaceOccluded),
       })),
     };
   } catch (error) {
@@ -334,24 +337,51 @@ export async function detectModerationLabels(
   }
 }
 
+// Hard-block ONLY genuinely explicit material: exposed genitalia, exposed
+// female breast/nipple, anus, explicit sexual activity, graphic violence,
+// self-harm, and any CSAM. Everything softer — `Non-Explicit Nudity`,
+// `Partially Exposed Female Breast/Buttocks`, `Swimwear or Underwear`,
+// `Suggestive`, `Revealing Clothes` — is allowed for the adult-audience
+// product and only ever surfaces as a "review" signal, which the moderation
+// policy does NOT hard-reject (see combineModerationResults).
+//
+// Matching is EXACT (case-insensitive) on the AWS leaf label, never a
+// substring. The previous `includes("explicit nudity")` test wrongly matched
+// AWS's softest label, `Non-Explicit Nudity`, and hard-blocked perfectly
+// acceptable revealing photos (the calibration run showed swimwear / partially
+// exposed shots rejected with the misleading "face not visible" copy). Parents
+// `Explicit` / `Explicit Nudity` are also treated as block as a
+// forward-compatible safety net — they never equal the `Non-Explicit …`
+// parents under exact comparison.
+const EXPLICIT_BLOCK_LABELS = new Set([
+  "exposed male genitalia",
+  "exposed female genitalia",
+  "exposed female nipple",
+  "exposed anus",
+  "explicit nudity",
+  "explicit sexual activity",
+  "sexual activity",
+  "illustrated explicit nudity",
+  "sex toy",
+  "graphic male nudity",
+  "graphic female nudity",
+  "graphic violence",
+  "self harm",
+  "self-harm",
+  // CSAM — always blocked regardless of product policy.
+  "sexualized minor",
+  "minor sexual activity",
+  "child sexual abuse material",
+]);
+const EXPLICIT_BLOCK_PARENTS = new Set(["explicit", "explicit nudity"]);
+
 function awsModerationSeverity(
   category: string,
   parent: string | undefined,
 ): "block" | "review" {
-  const normalized = `${parent ?? ""} ${category}`.toLowerCase();
-  const hardBlockTerms = [
-    "explicit nudity",
-    "explicit sexual",
-    "sexual activity",
-    "graphic male nudity",
-    "graphic female nudity",
-    "illustrated explicit nudity",
-    "sexualized child",
-    "child sexual",
-    "graphic violence",
-    "self harm",
-  ];
-  return hardBlockTerms.some((term) => normalized.includes(term))
+  const leaf = category.trim().toLowerCase();
+  const par = (parent ?? "").trim().toLowerCase();
+  return EXPLICIT_BLOCK_LABELS.has(leaf) || EXPLICIT_BLOCK_PARENTS.has(par)
     ? "block"
     : "review";
 }
@@ -364,6 +394,20 @@ function normalizePercent(value: number | undefined): number {
 function normalizePercentOrNull(value: number | undefined): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   return normalizePercent(value);
+}
+
+/**
+ * Normalize an AWS boolean face attribute (`Sunglasses`, `FaceOccluded`) into
+ * our `{ value, confidence }` shape, with confidence in `[0, 1]`. Returns null
+ * when the attribute is absent (e.g. provider didn't return it).
+ */
+function faceAttribute(
+  attr:
+    | { Value?: boolean | undefined; Confidence?: number | undefined }
+    | undefined,
+): FaceAttribute | null {
+  if (!attr || typeof attr.Value !== "boolean") return null;
+  return { value: attr.Value, confidence: normalizePercent(attr.Confidence) };
 }
 
 function clampUnit(value: number | undefined): number {

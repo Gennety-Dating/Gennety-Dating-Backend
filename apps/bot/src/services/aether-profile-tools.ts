@@ -327,7 +327,9 @@ function aetherPhotoValidationDetail(reason: MediaValidationReason): string {
     case "duplicate_near":
       return "Photo is already in the profile";
     case "unsafe_content":
-      return "Photo must show the user's face";
+      return "Photo can't be published — choose a different, non-explicit photo";
+    case "face_obscured":
+      return "Face is obscured by sunglasses or a covering — ask for a clearer photo";
     case "no_face":
       return "Photo must show the user's face";
     case "multiple_faces_photo":

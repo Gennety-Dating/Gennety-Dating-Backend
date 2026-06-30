@@ -9,8 +9,14 @@ const MODERATION_ENDPOINT = "https://api.openai.com/v1/moderations";
 const MODERATION_MODEL = "omni-moderation-latest";
 const DEFAULT_TIMEOUT_MS = 15_000;
 
+// The coarse `sexual` boolean is intentionally NOT a hard block for images:
+// omni-moderation flags ordinary revealing dating photos (swimwear, lingerie,
+// bare torso, cleavage) as `sexual`, which was a real false-positive source for
+// the adult-audience product. The precise explicit-nudity line (exposed
+// genitalia / female breast) is drawn by AWS Rekognition's granular taxonomy in
+// `awsModerationSeverity`. `sexual/minors` stays an absolute block (CSAM).
 const IMAGE_BLOCK_CATEGORIES = new Set([
-  "sexual",
+  "sexual/minors",
   "self-harm",
   "violence/graphic",
 ]);

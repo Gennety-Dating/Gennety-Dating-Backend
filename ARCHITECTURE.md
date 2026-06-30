@@ -546,7 +546,8 @@ or `{ type: "video", video, ...metadata }`. Static media admission stores
 `uploadedPhotoHashes` for duplicate detection and `acceptedPhotoCount`.
 **Identity is enforced only by Persona verification, not at upload time
 (simplified 2026-06-23).** A static photo that passes per-photo safety,
-usable-face (Rekognition confidence ≥ 0.75), and duplicate gates is accepted
+usable-face (Rekognition confidence ≥ 0.55, area ≥ 0.8%; plus a light
+`face_obscured` reject on dark sunglasses ≥ 0.90 / mask-occlusion ≥ 0.99), and duplicate gates is accepted
 and counted toward `MIN_PHOTOS` immediately. There is no pre-verification
 cross-photo "same person" clustering and no self-photo identity anchor: the
 former hidden `Profile.pendingPhotoCandidates[]` consensus pool (held the first

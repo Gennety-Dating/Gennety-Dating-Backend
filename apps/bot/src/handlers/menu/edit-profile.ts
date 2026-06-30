@@ -506,7 +506,9 @@ function photoValidationMessage(
     case "duplicate_near":
       return t(language, "photoDuplicateNear");
     case "unsafe_content":
-      return t(language, "photoRejected");
+      return t(language, "photoUnsafeContent");
+    case "face_obscured":
+      return t(language, "photoFaceObscured");
     case "multiple_faces_photo":
       return t(language, "photoRejected");
     case "identity_mismatch":
