@@ -25,11 +25,6 @@ function buildMainMenuKeyboardFor(
     .text(t(lang, "menuEdit"), "menu:edit")
     .row();
 
-  // Always-visible profile-video entry; a 🎁 marker signals an unclaimed free
-  // Date Ticket (when tickets are live and the bonus hasn't been earned yet).
-  const videoLabel = t(lang, "menuVideo") + (videoReward ? " 🎁" : "");
-  kb.text(videoLabel, "menu:video").row();
-
   if (status !== "locked") {
     const pauseLabel = status === "paused" ? t(lang, "menuResume") : t(lang, "menuPause");
     const pauseAction = status === "paused" ? "menu:resume" : "menu:pause";
@@ -37,6 +32,12 @@ function buildMainMenuKeyboardFor(
   }
 
   kb.text(t(lang, "menuSettings"), "menu:settings").row();
+
+  // First of the single-button rows: always-visible profile-video entry; a 🎁
+  // marker signals an unclaimed free Date Ticket (when tickets are live and the
+  // bonus hasn't been earned yet).
+  const videoLabel = t(lang, "menuVideo") + (videoReward ? " 🎁" : "");
+  kb.text(videoLabel, "menu:video").row();
 
   // Ticket wallet entry — only when the Date Ticket feature is live.
   if (env.TICKET_FEATURE_ENABLED) {
