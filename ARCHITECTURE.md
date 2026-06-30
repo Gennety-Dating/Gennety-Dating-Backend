@@ -226,7 +226,7 @@ Columns (≈ 25):
 
 | Group | Columns |
 |---|---|
-| Demographics | `userId` (unique), `ethnicity`, `height`, `hobbies` (`String[]`), `partnerPreferences`, `psychologicalSummary`, `negativeConstraints`, `ageRangeMin`, `ageRangeMax` |
+| Demographics | `userId` (unique), `ethnicity`, `height`, `hobbies` (`String[]`), `partnerPreferences`, `psychologicalSummary`, `negativeConstraints`, `ageRangeMin`, `ageRangeMax` (stated preferred-**partner** age band, user-editable post-onboarding; read by the match engine as the soft `V_agePref` multiplier — see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.2) |
 | Vector | `embedding` (`vector(1536)`), `embeddingDirty`, `embeddingDirtyAt` |
 | Elo | `eloScore` (default 500), seeded from the server-side mean of all per-photo vision scores; `eloMatchesPlayed`; `eloSeededAt`; auditable aggregate/per-photo output in `eloSeedDetails` |
 | Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `referenceFaceEmbedding` (`Json?` legacy self-photo identity-anchor metadata — retained, no longer written by the upload flow since identity moved to Persona-only, 2026-06-23), `uploadedPhotoHashes` (`String[]` perceptual hashes for accepted static photos, dup detection), `pendingPhotoCandidates` (`Json[]` legacy consensus pool — retained, no longer written), `acceptedPhotoCount` (`Int`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
@@ -262,7 +262,9 @@ created out-of-band by `ensureMatchPairIndex()` at boot — that backs the
 ### `match_score_logs` (1:1 with `matches`)
 
 Frozen score breakdown captured at match creation — `scoreExplicit`,
-`scoreResearch`, `scoreLeague`, `scorePenalty`, `scoreTotal`,
+`scoreResearch`, `scoreLeague`, `scorePenalty`, **`scoreAgePref`** (stated
+preferred-partner age-band multiplier; defaults to `1` so rows logged before the
+factor existed read as neutral), `scoreTotal`,
 `embeddingDistance`, `starvationBonus`. Powers
 `/admin/analytics/algorithm` so component weights can be A/B-tuned without
 scanning the hot `matches` table.

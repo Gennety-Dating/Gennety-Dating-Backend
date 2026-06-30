@@ -865,6 +865,11 @@ model MatchScoreLog {
   scoreLeague       Float    @map("score_league")
   /// Negative-constraint penalty in [0..1] (higher = worse).
   scorePenalty      Float    @map("score_penalty")
+  /// Stated age-range preference multiplier in [floor..1] (1 = candidate in the
+  /// seeker's preferred partner age band, or no band set). Multiplies the
+  /// positive bracket alongside `scoreLeague`. Defaults to 1 so historical rows
+  /// logged before this factor existed read as neutral.
+  scoreAgePref      Float    @default(1) @map("score_age_pref")
   /// Final composite (after weights + starvation bonus).
   scoreTotal        Float    @map("score_total")
   /// Pairwise embedding L2 distance, kept for debugging / re-ranking.

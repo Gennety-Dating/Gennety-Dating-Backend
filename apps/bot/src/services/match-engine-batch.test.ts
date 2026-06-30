@@ -35,6 +35,8 @@ function makeBatchUser(overrides: Partial<BatchUser> & { id: string }): BatchUse
     embeddingLiteral: null,
     eloScore: 500,
     standbyCount: 0,
+    ageRangeMin: null,
+    ageRangeMax: null,
     ...overrides,
   };
 }

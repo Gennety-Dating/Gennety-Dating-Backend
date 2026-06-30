@@ -612,7 +612,7 @@ first-class flows:
 Hybrid SQL + Node.js re-rank.
 
 ```
-MatchScore = ((w₁·V_explicit) + (w₂·V_research)) · V_league − (w₃·V_penalty)
+MatchScore = ((w₁·V_explicit) + (w₂·V_research)) · V_league · V_agePref − (w₃·V_penalty)
                                                 + starvationBonus
 ```
 
@@ -660,6 +660,22 @@ MatchScore = ((w₁·V_explicit) + (w₂·V_research)) · V_league − (w₃·V_
     top of the gender-calibrated vision scoring (§1.4), so the reach is kept
     deliberately small to avoid women systematically receiving visibly
     less-attractive partners.
+- `V_agePref` — **stated preferred-partner age-band** multiplier
+  (`ageRangePreferenceScore`, `Profile.ageRangeMin/Max`). Applied to the
+  positive bracket alongside `V_league`. It is a **soft preference, not a hard
+  filter**: a candidate whose *actual* age is inside the seeker's stated band
+  scores `1.0` (neutral); outside, the bracket is damped by
+  `1 − yearsOutside·AGE_RANGE_PREF_DECAY_PER_YEAR` (default 0.1/yr), floored at
+  `AGE_RANGE_PREF_FLOOR` (default 0.6) so a far-out-of-band partner is dampened
+  but never excluded — an exceptional embedding/league fit can still surface
+  them, and a thin city pool is never starved. Symmetric: `scorePair` evaluates
+  each side's band against the other's age and averages. **Neutral (1.0) when
+  the user never set a band** — the band is not collected at onboarding, so the
+  common path is unchanged; only users who explicitly edit the range opt into
+  the dampening. Distinct from the `V_research` *age gradient* (which scores the
+  closeness of the two real ages); both can apply at once. Tunable via env
+  (`AGE_RANGE_PREF_FLOOR` / `AGE_RANGE_PREF_DECAY_PER_YEAR`); set the floor to
+  `1.0` to disable.
 - `V_penalty` — negative-constraint penalty (subtracted), weight 0.30.
 - `starvationBonus` — α=0.05 per missed weekly batch, capped at 0.25 (strictly
   below `V_penalty` so it never overrides a real negative-constraint hit).

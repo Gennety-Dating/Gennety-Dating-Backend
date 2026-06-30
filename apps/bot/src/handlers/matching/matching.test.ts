@@ -109,6 +109,7 @@ import {
   researchScore,
   heightNormScore,
   ageGradientScore,
+  ageRangePreferenceScore,
   majorSimilarityScore,
   resolveCluster,
   scoreCandidate,
@@ -223,6 +224,8 @@ function makeSeeker(overrides: Partial<SeekerProfile> = {}): SeekerProfile {
     energyAxis: 0,
     orientationAxis: 0,
     eloScore: 500,
+    ageRangeMin: null,
+    ageRangeMax: null,
     ...overrides,
   };
 }
@@ -431,6 +434,48 @@ describe("ageGradientScore", () => {
 });
 
 // ---------------------------------------------------------------------------
+// ageRangePreferenceScore
+// ---------------------------------------------------------------------------
+
+describe("ageRangePreferenceScore", () => {
+  it("is neutral (1.0) when no band is set", () => {
+    expect(ageRangePreferenceScore(null, null, 30)).toBe(1.0);
+  });
+
+  it("is neutral (1.0) when the candidate age is unknown", () => {
+    expect(ageRangePreferenceScore(20, 28, null)).toBe(1.0);
+  });
+
+  it("returns 1.0 for a candidate inside the band (inclusive)", () => {
+    expect(ageRangePreferenceScore(20, 28, 24)).toBe(1.0);
+    expect(ageRangePreferenceScore(20, 28, 20)).toBe(1.0);
+    expect(ageRangePreferenceScore(20, 28, 28)).toBe(1.0);
+  });
+
+  it("decays linearly per year outside the band", () => {
+    // Default decay 0.1/yr, floor 0.6.
+    expect(ageRangePreferenceScore(20, 28, 29)).toBeCloseTo(0.9, 5); // 1 over
+    expect(ageRangePreferenceScore(20, 28, 30)).toBeCloseTo(0.8, 5); // 2 over
+    expect(ageRangePreferenceScore(20, 28, 18)).toBeCloseTo(0.8, 5); // 2 under
+  });
+
+  it("floors a far-out-of-band candidate (never excluded)", () => {
+    expect(ageRangePreferenceScore(20, 28, 45)).toBe(0.6); // 17 over → floor
+    expect(ageRangePreferenceScore(20, 28, 5)).toBe(0.6); // 15 under → floor
+  });
+
+  it("honours a one-sided band (only a minimum)", () => {
+    expect(ageRangePreferenceScore(25, null, 40)).toBe(1.0); // no upper bound
+    expect(ageRangePreferenceScore(25, null, 23)).toBeCloseTo(0.8, 5); // 2 under
+  });
+
+  it("respects custom floor / decay overrides", () => {
+    expect(ageRangePreferenceScore(20, 28, 40, 0.2, 0.05)).toBeCloseTo(0.4, 5); // 12 over, decay 0.05 → 0.4, floor 0.2 not hit
+    expect(ageRangePreferenceScore(20, 28, 60, 0.2, 0.05)).toBe(0.2); // far → floor
+  });
+});
+
+// ---------------------------------------------------------------------------
 // majorSimilarityScore + resolveCluster
 // ---------------------------------------------------------------------------
 
@@ -607,12 +652,37 @@ describe("scoreCandidate — composite formula", () => {
     expect(result.score).toBeLessThan(0);
   });
 
-  it("breakdown contains all four sub-scores", () => {
+  it("breakdown contains all sub-scores", () => {
     const result = scoreCandidate(makeSeeker(), makeCandidate());
     expect(result.breakdown).toHaveProperty("explicit");
     expect(result.breakdown).toHaveProperty("research");
     expect(result.breakdown).toHaveProperty("league");
     expect(result.breakdown).toHaveProperty("penalty");
+    expect(result.breakdown).toHaveProperty("agePref");
+  });
+
+  it("dampens (but never excludes) a candidate outside the stated age band", () => {
+    // Candidate age 23 (from makeCandidate). Seeker A states 20-28 (in band);
+    // seeker B states 18-21 (candidate is 2 years over → 0.8 multiplier).
+    const inBand = makeSeeker({ ageRangeMin: 20, ageRangeMax: 28 });
+    const outOfBand = makeSeeker({ ageRangeMin: 18, ageRangeMax: 21 });
+
+    const scoreIn = scoreCandidate(inBand, makeCandidate());
+    const scoreOut = scoreCandidate(outOfBand, makeCandidate());
+
+    expect(scoreIn.breakdown.agePref).toBe(1.0);
+    expect(scoreOut.breakdown.agePref).toBeCloseTo(0.8, 5);
+    // Same candidate, so the only difference is the age-band multiplier on the
+    // positive bracket — out-of-band must rank strictly lower but stay viable.
+    expect(scoreOut.score).toBeLessThan(scoreIn.score);
+    expect(scoreOut.score).toBeGreaterThan(0);
+  });
+
+  it("leaves matching unchanged for users who never set a band", () => {
+    // No band → agePref neutral, so the composite equals the pre-feature score.
+    const seeker = makeSeeker({ ageRangeMin: null, ageRangeMax: null });
+    const result = scoreCandidate(seeker, makeCandidate());
+    expect(result.breakdown.agePref).toBe(1.0);
   });
 });
 

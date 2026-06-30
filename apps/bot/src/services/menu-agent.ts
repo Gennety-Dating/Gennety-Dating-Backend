@@ -100,17 +100,17 @@ const TOOLS = [
     function: {
       name: "update_age_range",
       description:
-        "Update the user's preferred partner age range for matching.",
+        "Update the user's preferred PARTNER age range for matching (the age band of people they want to be matched with — NOT the user's own age, which is fixed after onboarding).",
       parameters: {
         type: "object",
         properties: {
           min_age: {
             type: "integer",
-            description: `Minimum preferred age (${MIN_AGE}-${MAX_AGE})`,
+            description: `Minimum preferred partner age (${MIN_AGE}-${MAX_AGE})`,
           },
           max_age: {
             type: "integer",
-            description: `Maximum preferred age (${MIN_AGE}-${MAX_AGE})`,
+            description: `Maximum preferred partner age (${MIN_AGE}-${MAX_AGE})`,
           },
         },
         required: ["min_age", "max_age"],

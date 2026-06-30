@@ -212,6 +212,70 @@ export function pairLeagueScore(
 }
 
 // ---------------------------------------------------------------------------
+// Stated age-range preference (V_agePref multiplier)
+// ---------------------------------------------------------------------------
+
+/**
+ * Floor of the age-range preference multiplier. A candidate fully outside the
+ * seeker's stated band never drops the positive bracket below this fraction —
+ * the band is a *soft* preference, not a hard filter, so an exceptional
+ * embedding/league fit can still surface an out-of-band partner (and a thin
+ * city pool is never starved). Sourced from `AGE_RANGE_PREF_FLOOR` env so ops
+ * can tune it without a deploy; read directly (not via `config.ts`) to keep the
+ * scoring functions importable in unit tests without env. Clamped to [0, 1].
+ */
+export const AGE_RANGE_PREF_FLOOR = Math.min(
+  1,
+  Math.max(0, Number(process.env.AGE_RANGE_PREF_FLOOR ?? "0.6")),
+);
+/**
+ * Per-year decay of the age-range preference multiplier for each year the
+ * candidate's age falls outside the seeker's stated band, until it reaches
+ * `AGE_RANGE_PREF_FLOOR`. Default 0.1 → a near-miss (1 yr out) is barely
+ * dampened (0.9), a 4+ yr miss floors. Sourced from `AGE_RANGE_PREF_DECAY_PER_YEAR`
+ * env; clamped ≥ 0.
+ */
+export const AGE_RANGE_PREF_DECAY_PER_YEAR = Math.max(
+  0,
+  Number(process.env.AGE_RANGE_PREF_DECAY_PER_YEAR ?? "0.1"),
+);
+
+/**
+ * `V_agePref`: how well a candidate's *actual* age satisfies the seeker's
+ * stated **preferred-partner age band** (`Profile.ageRangeMin/Max`). Returns a
+ * multiplier in `[floor, 1]` applied to the positive bracket alongside
+ * `V_league`.
+ *
+ * - No band set (`min` and `max` both null) → 1.0 (neutral; most users never
+ *   set one, so this is the common path and preserves prior behaviour).
+ * - Unknown candidate age → 1.0 (no data, don't penalise).
+ * - Candidate age inside `[min, max]` (inclusive) → 1.0.
+ * - Outside → linear decay `1 - yearsOutside * decayPerYear`, floored at
+ *   `floor`. A one-sided band (only `min` or only `max`) is honoured by treating
+ *   the missing bound as ±∞.
+ *
+ * Deliberately distinct from `ageGradientScore` (which scores the *closeness of
+ * the two real ages*): this scores whether the candidate falls in the band the
+ * seeker explicitly asked for. Both can apply at once.
+ */
+export function ageRangePreferenceScore(
+  rangeMin: number | null,
+  rangeMax: number | null,
+  candidateAge: number | null,
+  floor: number = AGE_RANGE_PREF_FLOOR,
+  decayPerYear: number = AGE_RANGE_PREF_DECAY_PER_YEAR,
+): number {
+  if (rangeMin == null && rangeMax == null) return 1.0;
+  if (candidateAge == null) return 1.0;
+  const lo = rangeMin ?? -Infinity;
+  const hi = rangeMax ?? Infinity;
+  if (candidateAge >= lo && candidateAge <= hi) return 1.0;
+  const yearsOutside =
+    candidateAge < lo ? lo - candidateAge : candidateAge - hi;
+  return Math.max(floor, 1.0 - yearsOutside * decayPerYear);
+}
+
+// ---------------------------------------------------------------------------
 // Starvation priority — per-missed-week score bonus for unpaired users
 // ---------------------------------------------------------------------------
 
@@ -269,6 +333,10 @@ export interface SeekerProfile {
   energyAxis: number | null;
   orientationAxis: number | null;
   eloScore: number;
+  /** Stated preferred-partner age band (`Profile.ageRangeMin/Max`); null when
+   *  the user never set one. Drives the `V_agePref` multiplier. */
+  ageRangeMin: number | null;
+  ageRangeMax: number | null;
 }
 
 export interface ScoredCandidate {
@@ -281,6 +349,8 @@ export interface ScoredCandidate {
     research: number;
     league: number;
     penalty: number;
+    /** Stated age-range preference multiplier (`V_agePref`), 1 = neutral. */
+    agePref: number;
   };
 }
 
@@ -746,8 +816,16 @@ export function scoreCandidate(
     seeker.negativeConstraints,
     candidate.psychologicalSummary,
   );
+  const vAgePref = ageRangePreferenceScore(
+    seeker.ageRangeMin,
+    seeker.ageRangeMax,
+    candidate.age,
+  );
 
-  const positive = (weights.explicit * vExplicit + weights.research * vResearch) * vLeague;
+  const positive =
+    (weights.explicit * vExplicit + weights.research * vResearch) *
+    vLeague *
+    vAgePref;
   const score = positive - weights.penalty * vPenalty;
 
   return {
@@ -760,6 +838,7 @@ export function scoreCandidate(
       research: vResearch,
       league: vLeague,
       penalty: vPenalty,
+      agePref: vAgePref,
     },
   };
 }
@@ -811,6 +890,8 @@ export async function findCandidatesFor(
           homeCityKey: true,
           latitude: true,
           longitude: true,
+          ageRangeMin: true,
+          ageRangeMax: true,
         },
       },
     },
@@ -860,6 +941,8 @@ export async function findCandidatesFor(
     energyAxis: seeker.profile?.energyAxis ?? null,
     orientationAxis: seeker.profile?.orientationAxis ?? null,
     eloScore: seeker.profile?.eloScore ?? 500,
+    ageRangeMin: seeker.profile?.ageRangeMin ?? null,
+    ageRangeMax: seeker.profile?.ageRangeMax ?? null,
   };
 
   return rankCandidates(seekerProfile, pool, limit);
@@ -897,7 +980,8 @@ export async function createProposedMatch(
       const scoreTotal =
         (SCORING_WEIGHTS.explicit * breakdown.explicit +
           SCORING_WEIGHTS.research * breakdown.research) *
-          breakdown.league -
+          breakdown.league *
+          breakdown.agePref -
         SCORING_WEIGHTS.penalty * breakdown.penalty +
         breakdown.starvationBonus;
       await tx.matchScoreLog.create({
@@ -907,6 +991,7 @@ export async function createProposedMatch(
           scoreResearch: breakdown.research,
           scoreLeague: breakdown.league,
           scorePenalty: breakdown.penalty,
+          scoreAgePref: breakdown.agePref,
           scoreTotal,
           embeddingDistance: breakdown.embeddingDistance,
           starvationBonus: breakdown.starvationBonus,
@@ -956,6 +1041,10 @@ export interface BatchUser {
   standbyCount: number;
   /** Canonical dating city key used as the hard local matching boundary. */
   homeCityKey: string | null;
+  /** Stated preferred-partner age band (`Profile.ageRangeMin/Max`); null when
+   *  unset. Feeds the `V_agePref` multiplier in both scoring directions. */
+  ageRangeMin: number | null;
+  ageRangeMax: number | null;
 }
 
 /** A scored pair produced by the global scoring phase. */
@@ -971,6 +1060,7 @@ export interface ScoredPair {
     research: number;
     league: number;
     penalty: number;
+    agePref: number;
     embeddingDistance: number;
     starvationBonus: number;
   };
@@ -1012,6 +1102,7 @@ export interface PairScoreResult {
     research: number;
     league: number;
     penalty: number;
+    agePref: number;
     embeddingDistance: number;
     starvationBonus: number;
   };
@@ -1031,6 +1122,8 @@ export function scorePair(
     energyAxis: a.energyAxis,
     orientationAxis: a.orientationAxis,
     eloScore: a.eloScore,
+    ageRangeMin: a.ageRangeMin,
+    ageRangeMax: a.ageRangeMax,
   };
 
   const candidateB: RichCandidateRow = {
@@ -1062,6 +1155,8 @@ export function scorePair(
     energyAxis: b.energyAxis,
     orientationAxis: b.orientationAxis,
     eloScore: b.eloScore,
+    ageRangeMin: b.ageRangeMin,
+    ageRangeMax: b.ageRangeMax,
   };
 
   const candidateA: RichCandidateRow = {
@@ -1095,6 +1190,7 @@ export function scorePair(
       research: (scored.breakdown.research + scoredReverse.breakdown.research) / 2,
       league: (scored.breakdown.league + scoredReverse.breakdown.league) / 2,
       penalty: (scored.breakdown.penalty + scoredReverse.breakdown.penalty) / 2,
+      agePref: (scored.breakdown.agePref + scoredReverse.breakdown.agePref) / 2,
       embeddingDistance,
       starvationBonus: bonus,
     },
@@ -1178,6 +1274,8 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
           eloScore: true,
           standbyCount: true,
           homeCityKey: true,
+          ageRangeMin: true,
+          ageRangeMax: true,
         },
       },
     },
@@ -1217,6 +1315,8 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
           eloScore: true,
           standbyCount: true,
           homeCityKey: true,
+          ageRangeMin: true,
+          ageRangeMax: true,
         },
       },
     },
@@ -1263,6 +1363,8 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
       eloScore: u.profile?.eloScore ?? 500,
       standbyCount: u.profile?.standbyCount ?? 0,
       homeCityKey: u.profile?.homeCityKey ?? null,
+      ageRangeMin: u.profile?.ageRangeMin ?? null,
+      ageRangeMax: u.profile?.ageRangeMax ?? null,
     }));
 }
 

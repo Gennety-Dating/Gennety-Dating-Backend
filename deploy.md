@@ -432,6 +432,18 @@ Required/high-impact env keys:
   only; matching down and same-gender pairs unaffected). Raise for a stronger
   male lift, lower toward `0` to disable. No restart side effects beyond the
   standard `pm2 restart`.
+- Matching — stated age-band preference: `AGE_RANGE_PREF_FLOOR` (default `0.6`)
+  and `AGE_RANGE_PREF_DECAY_PER_YEAR` (default `0.1`). The soft `V_agePref`
+  multiplier dampens (never excludes) a candidate whose actual age is outside
+  the seeker's stated preferred-**partner** age band (`Profile.ageRangeMin/Max`,
+  edited via the **Search Prefs → Partner age range** menu / the menu-agent
+  `update_age_range` tool / mobile `PATCH /v1/me`). Neutral (1.0) for users who
+  never set a band, so it's inert for most users. Set
+  `AGE_RANGE_PREF_FLOOR=1.0` to disable entirely; lower the floor / raise the
+  decay for a stronger preference. **Requires `db:push` of the additive
+  `match_score_logs.score_age_pref` column first** (non-destructive, defaults to
+  `1`). No new system dependency; toggled live with `pm2 restart gennety-bot
+  --update-env`.
 - Venue picker: `PLACES_API_KEY`
 - Anti-spam / LLM token budget (always-on, in-memory; no schema, no new dep):
   the Telegram bot meters text/voice per user (flood + daily token budget) in
