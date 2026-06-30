@@ -136,7 +136,7 @@ describe("formatStatusText", () => {
     expect(text).toBe("⏳ Matches drop in 5h 30m");
   });
 
-  it("renders minutes with fire emoji in English", () => {
+  it("renders minutes with the almost-ready emoji in English", () => {
     const text = formatStatusText(
       {
         now: minusMinutes(NEXT_MATCH_UTC, 40),
@@ -144,7 +144,7 @@ describe("formatStatusText", () => {
       },
       "en",
     );
-    expect(text).toBe("🔥 Almost ready! Matches drop in 40m");
+    expect(text).toBe("✨ Almost ready! Matches drop in 40m");
   });
 
   it("renders processing", () => {
