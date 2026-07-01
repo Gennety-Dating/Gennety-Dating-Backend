@@ -122,8 +122,8 @@ describe("grant/spend", () => {
 });
 
 describe("photo bonus", () => {
-  it("grants once at 4+ photos and is idempotent", async () => {
-    db.profile.photos = ["a", "b", "c", "d"];
+  it("grants once at 6+ photos and is idempotent", async () => {
+    db.profile.photos = ["a", "b", "c", "d", "e", "f"];
     const first = await grantPhotoBonusIfEligible("u1");
     expect(first).toEqual({ granted: true, balance: 1 });
     const second = await grantPhotoBonusIfEligible("u1");
@@ -132,7 +132,7 @@ describe("photo bonus", () => {
   });
 
   it("does not grant below the threshold", async () => {
-    db.profile.photos = ["a", "b", "c"];
+    db.profile.photos = ["a", "b", "c", "d", "e"];
     const res = await grantPhotoBonusIfEligible("u1");
     expect(res.granted).toBe(false);
     expect(await getBalance("u1")).toBe(0);
@@ -140,7 +140,7 @@ describe("photo bonus", () => {
 
   it("is a no-op when the feature flag is off", async () => {
     flag.TICKET_FEATURE_ENABLED = false;
-    db.profile.photos = ["a", "b", "c", "d"];
+    db.profile.photos = ["a", "b", "c", "d", "e", "f"];
     const res = await grantPhotoBonusIfEligible("u1");
     expect(res.granted).toBe(false);
     expect(db.profile.photoBonusTicketAt).toBeNull();

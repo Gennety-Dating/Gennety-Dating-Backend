@@ -5,7 +5,7 @@ import {
 } from "./onboarding-photo-stage.js";
 
 describe("onboardingPhotoStageText", () => {
-  it("asks only for the missing minimum before two photos", () => {
+  it("asks only for the missing minimum before the minimum photos", () => {
     expect(
       onboardingPhotoStageText({
         language: "en",
@@ -13,18 +13,18 @@ describe("onboardingPhotoStageText", () => {
         ticketFeatureEnabled: true,
         hasVideo: false,
       }),
-    ).toContain("1/2");
+    ).toContain("1/4");
   });
 
   it("offers both ticket paths after the minimum", () => {
     const text = onboardingPhotoStageText({
       language: "en",
-      photoCount: 2,
+      photoCount: 4,
       ticketFeatureEnabled: true,
       hasVideo: false,
     });
 
-    expect(text).toContain("4 photos");
+    expect(text).toContain("6 photos");
     expect(text).toContain("profile video");
     expect(text).toContain("optional");
   });
@@ -32,7 +32,7 @@ describe("onboardingPhotoStageText", () => {
   it("does not re-offer the video ticket after a video was added", () => {
     const text = onboardingPhotoStageText({
       language: "en",
-      photoCount: 3,
+      photoCount: 5,
       ticketFeatureEnabled: true,
       hasVideo: true,
     });
@@ -57,7 +57,7 @@ describe("onboardingPhotoStageText", () => {
   it("uses a non-monetized optional-media message when tickets are disabled", () => {
     const text = onboardingPhotoStageText({
       language: "en",
-      photoCount: 2,
+      photoCount: 4,
       ticketFeatureEnabled: false,
       hasVideo: false,
     });

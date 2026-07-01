@@ -688,7 +688,7 @@ describe("onboarding-agent", () => {
           height: 165,
           hobbies: ["tennis", "reading"],
           partnerPreferences: "someone kind and funny",
-          photos: ["photo1", "photo2"],
+          photos: ["photo1", "photo2", "photo3", "photo4"],
           homeCityKey: "ua:kyiv",
         },
       });
@@ -756,7 +756,7 @@ describe("onboarding-agent", () => {
           height: 165,
           hobbies: ["tennis"],
           partnerPreferences: "someone kind",
-          photos: ["photo1", "photo2"],
+          photos: ["photo1", "photo2", "photo3", "photo4"],
           homeCityKey: "ua:kyiv",
         },
       })
@@ -868,7 +868,7 @@ describe("onboarding-agent", () => {
           partnerPreferences: "someone kind and funny",
           fridayVibeText: "quiet dinner at home with one close friend",
           vibeFocusText: "who's there",
-          photos: ["photo1", "photo2"],
+          photos: ["photo1", "photo2", "photo3", "photo4"],
           homeCityKey: "ua:kyiv",
         },
       });

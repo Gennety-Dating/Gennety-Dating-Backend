@@ -824,7 +824,7 @@ async function handleProfileVideoMessage(
 }
 
 /**
- * Grant the one-time "4+ photos" ticket bonus if the persisted photo count now
+ * Grant the one-time "PHOTO_BONUS_TICKET_THRESHOLD+ photos" ticket bonus if the persisted photo count now
  * qualifies, and DM the celebratory reward. No-op when the feature flag is off
  * or the bonus was already granted (idempotent in `ticket-wallet`).
  */

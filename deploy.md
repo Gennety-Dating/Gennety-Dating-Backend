@@ -471,7 +471,7 @@ Required/high-impact env keys:
   `services/ticket-payment.ts`). Requires `db:push` of the new `Match`
   ticket columns first.
   - **Ticket wallet + store (same flag).** `TICKET_FEATURE_ENABLED` also turns
-    on the user ticket wallet: onboarding bonuses (4+ photos, profile video),
+    on the user ticket wallet: onboarding bonuses (6+ photos, profile video),
     the **My Tickets** menu, the store Mini App (`tickets.html`, bundles
     1/3/6), and the "Use a ticket" gate path. `MESSAGE_EFFECT_TICKET_ID`
     (optional — Bot API 7.6 effect on the reward DM; empty = no effect).

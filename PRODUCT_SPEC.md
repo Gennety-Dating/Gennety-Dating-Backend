@@ -184,16 +184,16 @@ Hard rules enforced by the collector:
 - Nationality/ethnicity is asked at most once and may be explicitly skipped.
 - "No hobbies" / a single hobby is a valid answer; the agent must NOT chain
   "one more, one more" requests.
-- `MIN_PHOTOS` (2) is a hard floor; anything beyond up to `MAX_PHOTOS` (6) is
+- `MIN_PHOTOS` (4) is a hard floor; anything beyond up to `MAX_PHOTOS` (6) is
   purely optional. In Telegram conversational onboarding, the media stage is
   deterministic rather than LLM-owned:
   before the minimum, the bot reports exactly how many valid photos are still
-  needed; once 2 photos are valid, it keeps the stage open and shows one
+  needed; once 4 photos are valid, it keeps the stage open and shows one
   **Continue** action instead of finalizing automatically. The user may keep
   sending photos one-by-one or as a Telegram album, send a short profile video,
   tap Continue, or type a localized equivalent such as "done" / "дальше".
   Albums and rapid standalone photos are coalesced into one progress response,
-  so a 4- or 6-photo burst does not produce one reply per frame. At 3 photos the
+  so a 4- or 6-photo burst does not produce one reply per frame. At 5 photos the
   bot uses a short progress reminder rather than repeating the full pitch.
   Exact duplicates (same Telegram `file_unique_id` within a batch) and
   re-encoded / cropped copies (perceptual `differenceHash` within
@@ -227,9 +227,9 @@ Hard rules enforced by the collector:
   `media_validation_rejections`, and keep the user in the same retryable upload
   session.
 - When `TICKET_FEATURE_ENABLED`, the first post-minimum offer explains both
-  rewards: reaching `PHOTO_BONUS_TICKET_THRESHOLD` (4) face-validated photos
+  rewards: reaching `PHOTO_BONUS_TICKET_THRESHOLD` (6) face-validated photos
   grants a free Date Ticket, and adding a profile video grants another. A batch
-  that already reaches 4+ photos receives the photo reward immediately, but the
+  that already reaches 6+ photos receives the photo reward immediately, but the
   media stage remains open so the user can still add the optional video. Each
   bonus is one-time/idempotent (`Profile.photoBonusTicketAt` /
   `videoBonusTicketAt`) and explains the mechanic in the reward DM (each date
@@ -828,7 +828,7 @@ match/bundle, scope, and amount, and can be consumed only once.
   mutual-accept path bypasses the ticket gate) and inert unless
   `TICKET_FEATURE_ENABLED`.
 - **Ticket wallet (pre-purchase + bonuses).** Users carry a `User.ticketBalance`
-  topped up by onboarding bonuses (§1.3: 4+ photos, adding a video;
+  topped up by onboarding bonuses (§1.3: 6+ photos, adding a video;
   §1.4: successful identity verification), the welcome gift above, and by bundle
   purchases in the store
   Mini App (`tickets.html`, opened from the

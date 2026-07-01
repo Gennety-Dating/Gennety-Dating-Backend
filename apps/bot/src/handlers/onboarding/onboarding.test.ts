@@ -1191,7 +1191,7 @@ describe("Album (media_group_id) photo coalescing", () => {
     vi.useRealTimers();
   });
 
-  it("renders one optional-stage prompt for a 3-photo album without an agent turn", async () => {
+  it("renders one optional-stage prompt for a 4-photo album without an agent turn", async () => {
     const session: Partial<SessionData> = {
       onboardingStep: "conversational",
       expectingPhoto: true,
@@ -1230,16 +1230,26 @@ describe("Album (media_group_id) photo coalescing", () => {
     ctx3.session = shared;
     await handleConversational(ctx3);
 
+    // Frame 4 — reaches the minimum so the optional ticket-offer stage renders
+    const ctx4 = createAlbumCtx({
+      photoFileId: "file_4",
+      photoUniqueId: "uid_4",
+      mediaGroupId: "group_A",
+    });
+    ctx4.session = shared;
+    await handleConversational(ctx4);
+
     // Before debounce fires: no agent turn, no user-visible reply
     expect(agentMock).not.toHaveBeenCalled();
     expect(ctx1.api.sendMessage).not.toHaveBeenCalled();
     expect(ctx2.api.sendMessage).not.toHaveBeenCalled();
     expect(ctx3.api.sendMessage).not.toHaveBeenCalled();
+    expect(ctx4.api.sendMessage).not.toHaveBeenCalled();
 
-    // All three photos validated + persisted inline
-    expect(visionMock).toHaveBeenCalledTimes(3);
-    expect(shared.pendingPhotos).toEqual(["file_1", "file_2", "file_3"]);
-    expect(shared.pendingPhotoUniqueIds).toEqual(["uid_1", "uid_2", "uid_3"]);
+    // All four photos validated + persisted inline
+    expect(visionMock).toHaveBeenCalledTimes(4);
+    expect(shared.pendingPhotos).toEqual(["file_1", "file_2", "file_3", "file_4"]);
+    expect(shared.pendingPhotoUniqueIds).toEqual(["uid_1", "uid_2", "uid_3", "uid_4"]);
 
     // Seed the DB read that the flush does to rebuild session state
     (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -1264,6 +1274,7 @@ describe("Album (media_group_id) photo coalescing", () => {
     );
     expect(ctx2.api.sendMessage).not.toHaveBeenCalled();
     expect(ctx3.api.sendMessage).not.toHaveBeenCalled();
+    expect(ctx4.api.sendMessage).not.toHaveBeenCalled();
   });
 
   it("reacts with fire only to the first valid profile photo", async () => {
@@ -1393,8 +1404,11 @@ describe("Album (media_group_id) photo coalescing", () => {
     );
   });
 
-  it("guides one-by-one uploads through 1, 2, 3, and 4 photos", async () => {
+  it("guides one-by-one uploads through the minimum (4) up to the bonus (6)", async () => {
+    // First 5 photos: no bonus yet; the 6th (PHOTO_BONUS_TICKET_THRESHOLD) grants it.
     ticketMocks.grantPhotoBonusIfEligible
+      .mockResolvedValueOnce({ granted: false, balance: 0 })
+      .mockResolvedValueOnce({ granted: false, balance: 0 })
       .mockResolvedValueOnce({ granted: false, balance: 0 })
       .mockResolvedValueOnce({ granted: false, balance: 0 })
       .mockResolvedValueOnce({ granted: false, balance: 0 })
@@ -1405,6 +1419,19 @@ describe("Album (media_group_id) photo coalescing", () => {
       expectingPhoto: true,
       pendingPhotos: [],
       pendingPhotoUniqueIds: [],
+    };
+
+    const uploadPhoto = async (n: number) => {
+      const ctx = createAlbumCtx({
+        photoFileId: `single_${n}`,
+        photoUniqueId: `single_uid_${n}`,
+        mediaGroupId: "",
+      });
+      delete ctx.message.media_group_id;
+      ctx.session = shared;
+      await handleConversational(ctx);
+      await vi.advanceTimersByTimeAsync(800);
+      return ctx;
     };
 
     const first = createAlbumCtx({
@@ -1423,22 +1450,18 @@ describe("Album (media_group_id) photo coalescing", () => {
     (prisma.botSession.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({});
     await vi.advanceTimersByTimeAsync(800);
 
+    // Below the minimum: bare progress, no Continue button, no ticket copy yet.
     expect(first.api.sendMessage).toHaveBeenCalledWith(
       99001,
-      expect.stringContaining("1/2"),
+      expect.stringContaining("1/4"),
     );
 
-    const second = createAlbumCtx({
-      photoFileId: "single_2",
-      photoUniqueId: "single_uid_2",
-      mediaGroupId: "",
-    });
-    delete second.message.media_group_id;
-    second.session = shared;
-    await handleConversational(second);
-    await vi.advanceTimersByTimeAsync(800);
+    await uploadPhoto(2);
+    await uploadPhoto(3);
 
-    expect(second.api.sendMessage).toHaveBeenCalledWith(
+    // Minimum reached at 4 photos: the initial free-ticket offer + Continue.
+    const fourth = await uploadPhoto(4);
+    expect(fourth.api.sendMessage).toHaveBeenCalledWith(
       99001,
       expect.stringContaining("free Date Ticket"),
       expect.objectContaining({ reply_markup: expect.any(Object) }),
@@ -1446,45 +1469,29 @@ describe("Album (media_group_id) photo coalescing", () => {
     expect(shared.expectingPhoto).toBe(true);
     expect(agentMock).not.toHaveBeenCalled();
 
-    const third = createAlbumCtx({
-      photoFileId: "single_3",
-      photoUniqueId: "single_uid_3",
-      mediaGroupId: "",
-    });
-    delete third.message.media_group_id;
-    third.session = shared;
-    await handleConversational(third);
-    await vi.advanceTimersByTimeAsync(800);
-
-    expect(third.api.sendMessage).toHaveBeenCalledWith(
+    // One below the bonus threshold: progress toward 6.
+    const fifth = await uploadPhoto(5);
+    expect(fifth.api.sendMessage).toHaveBeenCalledWith(
       99001,
-      expect.stringContaining("3/4"),
+      expect.stringContaining("5/6"),
       expect.objectContaining({ reply_markup: expect.any(Object) }),
     );
 
-    const fourth = createAlbumCtx({
-      photoFileId: "single_4",
-      photoUniqueId: "single_uid_4",
-      mediaGroupId: "",
-    });
-    delete fourth.message.media_group_id;
-    fourth.session = shared;
-    await handleConversational(fourth);
-    await vi.advanceTimersByTimeAsync(800);
-
+    // Bonus threshold (6) reached: grant + celebratory copy.
+    const sixth = await uploadPhoto(6);
     expect(ticketMocks.sendTicketRewardDM).toHaveBeenCalledWith(
-      fourth.api,
+      sixth.api,
       99001,
       "en",
       "photo",
       1,
     );
-    expect(fourth.api.sendMessage).toHaveBeenCalledWith(
+    expect(sixth.api.sendMessage).toHaveBeenCalledWith(
       99001,
       expect.stringContaining("photo Date Ticket is secured"),
       expect.objectContaining({ reply_markup: expect.any(Object) }),
     );
-    expect(shared.pendingPhotos).toHaveLength(4);
+    expect(shared.pendingPhotos).toHaveLength(6);
   });
 
   it("explains that a repeated photo was not counted", async () => {
@@ -1518,7 +1525,7 @@ describe("Album (media_group_id) photo coalescing", () => {
     );
     expect(ctx.api.sendMessage).toHaveBeenCalledWith(
       99001,
-      expect.stringContaining("1/2"),
+      expect.stringContaining("1/4"),
     );
   });
 
@@ -1572,7 +1579,7 @@ describe("Album (media_group_id) photo coalescing", () => {
       session: {
         onboardingStep: "conversational",
         expectingPhoto: true,
-        pendingPhotos: ["photo_1", "photo_2"],
+        pendingPhotos: ["photo_1", "photo_2", "photo_3", "photo_4"],
       },
       video: {
         file_id: "video_1",
@@ -1782,7 +1789,7 @@ describe("Album (media_group_id) photo coalescing", () => {
       session: {
         onboardingStep: "conversational",
         expectingPhoto: true,
-        pendingPhotos: ["photo_1", "photo_2"],
+        pendingPhotos: ["photo_1", "photo_2", "photo_3", "photo_4"],
       },
       callbackData: ONBOARDING_PHOTOS_CONTINUE_CALLBACK,
       fromId: 99001,

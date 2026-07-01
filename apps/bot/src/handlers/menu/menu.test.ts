@@ -408,7 +408,7 @@ describe("Menu — Edit Profile", () => {
     const ctx = createMockCtx({
       session: {
         menuState: "edit_photos",
-        pendingPhotos: ["file_1", "file_2", "file_3"],
+        pendingPhotos: ["file_1", "file_2", "file_3", "file_4"],
       },
       callbackData: "menu:edit:photos:continue",
     });
@@ -420,14 +420,15 @@ describe("Menu — Edit Profile", () => {
       expect.objectContaining({
         where: { userId: "uuid-user-1" },
         data: expect.objectContaining({
-          photos: ["file_1", "file_2", "file_3"],
+          photos: ["file_1", "file_2", "file_3", "file_4"],
           profileMedia: [
             { type: "photo", photo: "file_1" },
             { type: "photo", photo: "file_2" },
             { type: "photo", photo: "file_3" },
+            { type: "photo", photo: "file_4" },
           ],
-          photoFaceScores: [0, 0, 0],
-          acceptedPhotoCount: 3,
+          photoFaceScores: [0, 0, 0, 0],
+          acceptedPhotoCount: 4,
           uploadedPhotoHashes: [],
           referenceFaceEmbedding: expect.objectContaining({
             kind: "reference_photo",

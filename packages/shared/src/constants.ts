@@ -27,16 +27,17 @@ export const OTP_TTL_MS = 10 * 60 * 1000;
 export const OTP_LENGTH = 6;
 
 /** Min/max photos allowed during onboarding */
-export const MIN_PHOTOS = 2;
+export const MIN_PHOTOS = 4;
 export const MAX_PHOTOS = 6;
 
 /**
  * Profile-photo count that earns the one-time onboarding ticket bonus
  * (Date Ticket monetization, gated by `TICKET_FEATURE_ENABLED`). Reaching this
- * many face-validated photos grants +1 free ticket. Kept below MAX_PHOTOS so
- * users can still add more without affecting the (already-granted) bonus.
+ * many face-validated photos grants +1 free ticket. Currently equal to
+ * MAX_PHOTOS, so the bonus is earned only by uploading the full allowance;
+ * keep it ≤ MAX_PHOTOS.
  */
-export const PHOTO_BONUS_TICKET_THRESHOLD = 4;
+export const PHOTO_BONUS_TICKET_THRESHOLD = 6;
 
 /** Telegram Live Photo profile-media limits (Bot API 10.0) */
 export const LIVE_PHOTO_MAX_DURATION_SECONDS = 10;

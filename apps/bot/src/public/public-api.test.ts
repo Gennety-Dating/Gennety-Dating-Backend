@@ -1820,13 +1820,24 @@ describe("DELETE /v1/me/photos/:index", () => {
   });
 
   it("removes the photo at the given index", async () => {
-    const user = await seedWithPhotos(["a.jpg", "b.jpg", "c.jpg"]);
+    const user = await seedWithPhotos([
+      "a.jpg",
+      "b.jpg",
+      "c.jpg",
+      "d.jpg",
+      "e.jpg",
+    ]);
     const res = await request(app)
       .delete("/v1/me/photos/1")
       .set("Authorization", `Bearer ${signAccess(user.id)}`);
     expect(res.status).toBe(200);
-    expect(res.body.photos).toEqual(["a.jpg", "c.jpg"]);
-    expect(userById(user.id)?.profile?.photos).toEqual(["a.jpg", "c.jpg"]);
+    expect(res.body.photos).toEqual(["a.jpg", "c.jpg", "d.jpg", "e.jpg"]);
+    expect(userById(user.id)?.profile?.photos).toEqual([
+      "a.jpg",
+      "c.jpg",
+      "d.jpg",
+      "e.jpg",
+    ]);
   });
 
   it("404 on out-of-range index", async () => {
@@ -1843,7 +1854,7 @@ describe("DELETE /v1/me/photos/:index", () => {
       .delete("/v1/me/photos/0")
       .set("Authorization", `Bearer ${signAccess(user.id)}`);
     expect(res.status).toBe(409);
-    expect(res.body.min).toBe(2);
+    expect(res.body.min).toBe(4);
     // Profile untouched
     expect(userById(user.id)?.profile?.photos).toEqual(["a.jpg", "b.jpg"]);
   });
