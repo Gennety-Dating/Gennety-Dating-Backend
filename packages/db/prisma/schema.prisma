@@ -743,6 +743,15 @@ model Match {
   /// the "[Name] already paid your ticket ❤️" screen.
   paidForPartnerByA Boolean   @default(false) @map("paid_for_partner_by_a")
   paidForPartnerByB Boolean   @default(false) @map("paid_for_partner_by_b")
+  /// Read-receipt for the goodwill "he covered her ticket" gesture (§3.5b).
+  /// `partnerPaidSeenAt` is stamped the first time the covered partner actually
+  /// learns of it — either by opening the ticket-card reveal or by receiving the
+  /// completion nudge — and gates the one-time "she saw it ❤️" DM back to the
+  /// payer so it fires once. `partnerPaidNudgedAt` marks that the fallback nudge
+  /// DM was sent to the covered partner (she never opened the card before the
+  /// gate completed), so the nudge can't double-fire.
+  partnerPaidSeenAt   DateTime? @map("partner_paid_seen_at")
+  partnerPaidNudgedAt DateTime? @map("partner_paid_nudged_at")
   ticketStatus      String    @default("pending") @map("ticket_status")
   /// Deadline for the second side to pay once the first has (the `partial`
   /// window). Drives the Mini App countdown and the hourly ticket-expiry

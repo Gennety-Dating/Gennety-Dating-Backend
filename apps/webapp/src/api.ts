@@ -425,6 +425,9 @@ export interface TicketState {
   partnerPaid: boolean;
   partnerName: string | null;
   partnerPaidForMe: boolean;
+  /** True when I (the male) covered the partner's ticket — drives the "you
+   * covered {name}'s ticket 💛" success copy (goodwill gesture, §3.5b). */
+  iCoveredPartner: boolean;
   bothPaid: boolean;
   expiresAt: string | null;
   paymentMode: "mock" | "stripe";

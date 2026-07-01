@@ -874,6 +874,23 @@ match/bundle, scope, and amount, and can be consumed only once.
   copy), whose single CTA continues her to the Calendar. The ticket card stays
   re-openable (every open re-derives the right screen) for both sides until the
   date is fully scheduled; the Calendar simply follows it as its own button.
+- **Goodwill cover read-receipt (his dopamine loop).** So the man's gesture is
+  not a silent settle, covering the partner drives a three-beat loop
+  (`ticket-gate.ts`): (1) the instant he covers her — via pay/use `both` or
+  `partner` — he gets a confirmation DM (`ticketCoveredHerConfirm`, with the
+  `MESSAGE_EFFECT_TICKET_ID` heart when set) and his own Mini App success screen
+  celebrates it (`iCoveredPartner` → *"you covered {name}'s ticket 💛"*) instead
+  of the neutral both-secured copy; (2) the read-receipt — the first time she
+  actually sees the reveal (her `GET /ticket/state` returning `partnerPaidForMe`)
+  stamps `Match.partnerPaidSeenAt` once (CAS) and DMs him
+  `ticketPartnerSawItDm` (*"{name} saw that you covered her ticket ❤️"*), his
+  "she was notified" proof; (3) the guaranteed fallback — because she may never
+  reopen the ticket card before the Calendar arrives, gate completion sends her a
+  warm `ticketPartnerPaidDm` nudge (with a button back to the ticket card) and
+  stamps `Match.partnerPaidNudgedAt`, so the notification always lands. The nudge
+  deliberately does NOT stamp `partnerPaidSeenAt`, keeping his read-receipt honest
+  (it still waits for a genuine open — e.g. tapping the nudge button). All three
+  are idempotent and best-effort (a DM failure never blocks settlement).
 - **`ticketStatus` lifecycle.** `pending` → `partial` (one paid; `ticketExpiresAt`
   is the second side's deadline) → `completed`; or `refunded`/`expired` on
   timeout. **Refund/expiry policy:** the hourly `ticket-expiry` cron refunds a

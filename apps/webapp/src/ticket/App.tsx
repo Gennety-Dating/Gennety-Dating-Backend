@@ -312,7 +312,7 @@ function headerTitle(sc: TicketScreen, state: TicketState, s: TicketStrings): st
     case "waiting":
       return s.waitingTitle;
     case "success":
-      return s.successTitle;
+      return state.iCoveredPartner ? s.coveredHerTitle : s.successTitle;
     case "partner-paid":
       return fill(s.partnerPaidTitle, { name: state.partnerName ?? s.matchFallback });
     case "closed":
@@ -329,7 +329,9 @@ function headerSub(sc: TicketScreen, state: TicketState, s: TicketStrings): stri
     case "waiting":
       return s.waitingSub;
     case "success":
-      return s.successSub;
+      return state.iCoveredPartner
+        ? fill(s.coveredHerSub, { name: state.partnerName ?? s.matchFallback })
+        : s.successSub;
     case "partner-paid":
       return s.partnerPaidSub;
     case "closed":

@@ -34,6 +34,7 @@ import {
   sendTicketOffer,
   applyTicketPayment,
   useTicketFromBalance,
+  notePartnerPaidSeen,
 } from "./ticket-gate.js";
 import { startScheduling } from "./scheduler.js";
 import { spendTickets, grantTickets } from "../../services/ticket-wallet.js";
@@ -66,6 +67,8 @@ function matchRow(overrides: Record<string, unknown> = {}) {
     ticketPaidB: null,
     paidForPartnerByA: false,
     paidForPartnerByB: false,
+    partnerPaidSeenAt: null,
+    partnerPaidNudgedAt: null,
     ticketExpiresAt: null,
     calendarMessageIdA: null,
     calendarMessageIdB: null,
@@ -142,21 +145,30 @@ describe("ticket gate post-accept status message", () => {
     expect(api.sendMessage).not.toHaveBeenCalled();
   });
 
-  it("pay-for-both settles both tickets and hands off to scheduling without an extra DM", async () => {
+  it("pay-for-both confirms the gesture to him (takt 1) and nudges her since she hadn't opened", async () => {
+    const paid = new Date("2026-06-19T10:00:00Z");
     mMatch.findUnique
+      // settle load (nothing paid yet)
       .mockResolvedValueOnce(matchRow())
+      // recompute `after` (both now paid, he covered her)
       .mockResolvedValueOnce(
-        matchRow({
-          ticketPaidA: new Date("2026-06-19T10:00:00Z"),
-          ticketPaidB: new Date("2026-06-19T10:00:00Z"),
-          paidForPartnerByA: true,
-        }),
+        matchRow({ ticketPaidA: paid, ticketPaidB: paid, paidForPartnerByA: true }),
       )
+      // completion `done` load — she never opened, so seen/nudged are null
       .mockResolvedValueOnce(
         matchRow({
           ticketStatus: "completed",
-          ticketPaidA: new Date("2026-06-19T10:00:00Z"),
-          ticketPaidB: new Date("2026-06-19T10:00:00Z"),
+          ticketPaidA: paid,
+          ticketPaidB: paid,
+          paidForPartnerByA: true,
+        }),
+      )
+      // final load
+      .mockResolvedValueOnce(
+        matchRow({
+          ticketStatus: "completed",
+          ticketPaidA: paid,
+          ticketPaidB: paid,
           paidForPartnerByA: true,
         }),
       );
@@ -165,16 +177,104 @@ describe("ticket gate post-accept status message", () => {
     const result = await applyTicketPayment(api, 1001n, "match-1", "both");
 
     expect(result.ok).toBe(true);
-    // The persistent ticket cards are left untouched; the Calendar follows via
-    // startScheduling as a SEPARATE message, so the covered woman can still
-    // reopen her ticket card for the surprise. PRODUCT_SPEC §3.5b.
-    expect(api.sendMessage).not.toHaveBeenCalled();
+    // The persistent ticket cards are still never EDITED; the Calendar follows
+    // as a SEPARATE message. But the goodwill cover now produces two DMs
+    // (PRODUCT_SPEC §3.5b read-receipt): takt-1 confirmation to him + the
+    // guaranteed "he covered your ticket ❤️" nudge to her (she hadn't opened).
     expect(api.editMessageText).not.toHaveBeenCalled();
+    const texts = api.sendMessage.mock.calls.map((c: unknown[]) => c[1]);
+    expect(texts).toContain(t("en", "ticketCoveredHerConfirm", { name: "Bea" }));
+    expect(texts).toContain(t("en", "ticketPartnerPaidDm", { name: "Alex" }));
     // afterTicketGate → Calendar card uses the plain caption (no duplicate of the
     // ticket card's "It's mutual 🔥" celebration).
     expect(mStartScheduling).toHaveBeenCalledWith(api, "match-1", {
       afterTicketGate: true,
     });
+  });
+
+  it("does not nudge her at completion if she already opened the reveal (seen stamped)", async () => {
+    const paid = new Date("2026-06-19T10:00:00Z");
+    mMatch.findUnique
+      .mockResolvedValueOnce(matchRow())
+      .mockResolvedValueOnce(
+        matchRow({ ticketPaidA: paid, ticketPaidB: paid, paidForPartnerByA: true }),
+      )
+      // `done` load — she already opened, so partnerPaidSeenAt is set
+      .mockResolvedValueOnce(
+        matchRow({
+          ticketStatus: "completed",
+          ticketPaidA: paid,
+          ticketPaidB: paid,
+          paidForPartnerByA: true,
+          partnerPaidSeenAt: paid,
+        }),
+      )
+      .mockResolvedValueOnce(
+        matchRow({
+          ticketStatus: "completed",
+          ticketPaidA: paid,
+          ticketPaidB: paid,
+          paidForPartnerByA: true,
+          partnerPaidSeenAt: paid,
+        }),
+      );
+    const api = createApi();
+
+    await applyTicketPayment(api, 1001n, "match-1", "both");
+
+    const texts = api.sendMessage.mock.calls.map((c: unknown[]) => c[1]);
+    // Takt-1 still confirms to him, but no duplicate nudge to her.
+    expect(texts).toContain(t("en", "ticketCoveredHerConfirm", { name: "Bea" }));
+    expect(texts).not.toContain(t("en", "ticketPartnerPaidDm", { name: "Alex" }));
+  });
+});
+
+describe("notePartnerPaidSeen — goodwill read-receipt (takt 2)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mMatch.findUnique.mockReset();
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it("stamps seen once and DMs the payer that she saw his gesture", async () => {
+    // Side B (Bea) was covered by side A (Alex); she opens her reveal.
+    mMatch.findUnique
+      .mockResolvedValueOnce(matchRow({ paidForPartnerByA: true }))
+      .mockResolvedValueOnce(matchRow({ paidForPartnerByA: true }));
+    const api = createApi();
+
+    await notePartnerPaidSeen(api, 1002n, "match-1");
+
+    // CAS stamp on partnerPaidSeenAt: null.
+    const seenClaim = mMatch.updateMany.mock.calls.find(
+      (c) => "partnerPaidSeenAt" in (c[0] as { data: Record<string, unknown> }).data,
+    );
+    expect(seenClaim).toBeTruthy();
+    // Payer (Alex, 1001) is told SHE (Bea) saw it.
+    const texts = api.sendMessage.mock.calls.map((c: unknown[]) => c[1]);
+    expect(texts).toContain(t("en", "ticketPartnerSawItDm", { name: "Bea" }));
+  });
+
+  it("is a no-op when the viewer was not covered", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(matchRow()); // nobody covered
+    const api = createApi();
+
+    await notePartnerPaidSeen(api, 1002n, "match-1");
+
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not re-DM when the receipt was already stamped", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ paidForPartnerByA: true, partnerPaidSeenAt: new Date() }),
+    );
+    const api = createApi();
+
+    await notePartnerPaidSeen(api, 1002n, "match-1");
+
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 });
 

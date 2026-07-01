@@ -19,6 +19,7 @@ function state(overrides: Partial<TicketState> = {}): TicketState {
     partnerPaid: false,
     partnerName: "Sam",
     partnerPaidForMe: false,
+    iCoveredPartner: false,
     bothPaid: false,
     expiresAt: null,
     paymentMode: "mock",

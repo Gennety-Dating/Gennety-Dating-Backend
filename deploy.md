@@ -469,7 +469,12 @@ Required/high-impact env keys:
   `STRIPE_WEBHOOK_SECRET` + `TICKET_PAYMENT_MODE=stripe` (see the
   `// TODO: Stripe Production Mode` branches in
   `services/ticket-payment.ts`). Requires `db:push` of the new `Match`
-  ticket columns first.
+  ticket columns first — including the additive `partner_paid_seen_at` /
+  `partner_paid_nudged_at` columns backing the §3.5b goodwill-cover read-receipt
+  (the payer's "she saw it ❤️" DM + the guaranteed completion nudge). The
+  read-receipt DMs reuse the existing `MESSAGE_EFFECT_TICKET_ID` heart on the
+  payer's confirmation; no new env. Redeploy the Mini App bundle (`ticket.html`)
+  so his success screen shows the "you covered {name}'s ticket 💛" copy.
   - **Ticket wallet + store (same flag).** `TICKET_FEATURE_ENABLED` also turns
     on the user ticket wallet: onboarding bonuses (6+ photos, profile video),
     the **My Tickets** menu, the store Mini App (`tickets.html`, bundles

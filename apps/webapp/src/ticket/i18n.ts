@@ -36,6 +36,9 @@ export interface TicketStrings {
   processing: string;
   successTitle: string;
   successSub: string;
+  /** Success screen when HE covered HER ticket — the goodwill gesture (§3.5b). */
+  coveredHerTitle: string;
+  coveredHerSub: string;
   goToScheduling: string;
   waitingTitle: string;
   waitingSub: string;
@@ -84,6 +87,8 @@ const en: TicketStrings = {
   processing: "Processing…",
   successTitle: "You're in 🎟️",
   successSub: "Both tickets are secured. Time to pick your moment.",
+  coveredHerTitle: "Classy move 💛",
+  coveredHerSub: "You covered {name}'s ticket — we've let her know. Now just pick your moment.",
   goToScheduling: "Go to date planning",
   waitingTitle: "Ticket secured 🎟️",
   waitingSub: "Waiting on your match to grab theirs. We'll ping you the second they do.",
@@ -131,6 +136,8 @@ const ru: TicketStrings = {
   processing: "Обработка…",
   successTitle: "Готово 🎟️",
   successSub: "Оба билета у вас. Время выбрать момент.",
+  coveredHerTitle: "Красиво 💛",
+  coveredHerSub: "Ты оплатил билет за {name} — мы дали ей знать. Осталось выбрать момент.",
   goToScheduling: "Перейти к планированию даты",
   waitingTitle: "Билет закреплён 🎟️",
   waitingSub: "Ждём, пока собеседник возьмёт свой. Напишем сразу, как это случится.",
@@ -178,6 +185,8 @@ const uk: TicketStrings = {
   processing: "Обробка…",
   successTitle: "Готово 🎟️",
   successSub: "Обидва квитки у вас. Час обрати момент.",
+  coveredHerTitle: "Красиво 💛",
+  coveredHerSub: "Ти оплатив квиток за {name} — ми дали їй знати. Лишилось обрати момент.",
   goToScheduling: "Перейти до планування побачення",
   waitingTitle: "Квиток закріплено 🎟️",
   waitingSub: "Чекаємо, поки співрозмовник візьме свій. Напишемо щойно це станеться.",
@@ -225,6 +234,8 @@ const de: TicketStrings = {
   processing: "Verarbeitung...",
   successTitle: "Du bist dabei 🎟️",
   successSub: "Beide Tickets sind gesichert. Jetzt wählt ihr euren Moment.",
+  coveredHerTitle: "Starke Geste 💛",
+  coveredHerSub: "Du hast {name}s Ticket übernommen — sie weiß Bescheid. Jetzt nur noch euren Moment wählen.",
   goToScheduling: "Date planen",
   waitingTitle: "Ticket gesichert 🎟️",
   waitingSub: "Wir warten, bis dein Match das eigene Ticket sichert. Dann melden wir uns sofort.",
@@ -272,6 +283,8 @@ const pl: TicketStrings = {
   processing: "Przetwarzanie...",
   successTitle: "Gotowe 🎟️",
   successSub: "Oba bilety są zabezpieczone. Czas wybrać termin.",
+  coveredHerTitle: "Klasa 💛",
+  coveredHerSub: "Opłaciłeś bilet za {name} — daliśmy jej znać. Teraz wybierz termin.",
   goToScheduling: "Przejdź do planowania randki",
   waitingTitle: "Bilet zabezpieczony 🎟️",
   waitingSub: "Czekamy, aż Twoje dopasowanie odbierze swój. Od razu damy Ci znać.",

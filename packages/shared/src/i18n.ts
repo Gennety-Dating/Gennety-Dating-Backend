@@ -461,6 +461,11 @@ const translations = {
     ticketGateWaiting: "Ticket ready ✨ Waiting on them.",
     ticketBothSecuredDm: "Both tickets secured 🎟️✨ Your date is on — let's pick a time.",
     ticketPartnerPaidDm: "{name} already covered your date ticket ❤️ You're all set — nothing to pay.",
+    // Goodwill "he covered her ticket" read-receipt (§3.5b): confirm his gesture
+    // landed (takt 1), then let him know once she's actually seen it (takt 2).
+    ticketCoveredHerConfirm:
+      "💛 Done — you covered {name}'s ticket. The moment she sees it, I'll let you know.",
+    ticketPartnerSawItDm: "❤️ {name} saw that you covered her ticket.",
     ticketRefundedDm:
       "Your match didn't grab their ticket in time, so we've refunded yours. No worries — we've opened scheduling for free. Let's find a time 📅",
     matchScheduleNoOverlap:
@@ -1167,6 +1172,9 @@ const translations = {
     ticketGateWaiting: "Билет готов ✨ Ждём вторую сторону.",
     ticketBothSecuredDm: "Оба билета у вас 🎟️✨ Свидание в силе — давай выберем время.",
     ticketPartnerPaidDm: "{name} уже оплатил твой билет на свидание ❤️ Тебе ничего не нужно делать.",
+    ticketCoveredHerConfirm:
+      "💛 Готово — ты оплатил билет за {name}. Как только она это увидит, я дам тебе знать.",
+    ticketPartnerSawItDm: "❤️ {name} увидела, что ты оплатил её билет.",
     ticketRefundedDm:
       "Собеседник не успел взять свой билет, поэтому твой мы вернули. Ничего страшного — открыли планирование бесплатно. Давай найдём время 📅",
     matchScheduleNoOverlap: "Не совпало — попробуем ещё.",
@@ -1853,6 +1861,9 @@ const translations = {
     ticketGateWaiting: "Квиток готовий ✨ Чекаємо на іншу сторону.",
     ticketBothSecuredDm: "Обидва квитки у вас 🎟️✨ Побачення в силі — оберімо час.",
     ticketPartnerPaidDm: "{name} вже сплатив твій квиток на побачення ❤️ Тобі нічого не потрібно робити.",
+    ticketCoveredHerConfirm:
+      "💛 Готово — ти оплатив квиток за {name}. Щойно вона це побачить, я дам тобі знати.",
+    ticketPartnerSawItDm: "❤️ {name} побачила, що ти оплатив її квиток.",
     ticketRefundedDm:
       "Співрозмовник не встиг узяти свій квиток, тож твій ми повернули. Нічого страшного — відкрили планування безкоштовно. Знайдімо час 📅",
     matchScheduleNoOverlap: "Не збіглося — спробуємо ще.",

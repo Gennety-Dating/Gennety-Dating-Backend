@@ -60,6 +60,8 @@ interface TicketMatch {
   ticketPaidB: Date | null;
   paidForPartnerByA: boolean;
   paidForPartnerByB: boolean;
+  partnerPaidSeenAt: Date | null;
+  partnerPaidNudgedAt: Date | null;
   ticketExpiresAt: Date | null;
   calendarMessageIdA: number | null;
   calendarMessageIdB: number | null;
@@ -78,6 +80,8 @@ const TICKET_SELECT = {
   ticketPaidB: true,
   paidForPartnerByA: true,
   paidForPartnerByB: true,
+  partnerPaidSeenAt: true,
+  partnerPaidNudgedAt: true,
   ticketExpiresAt: true,
   calendarMessageIdA: true,
   calendarMessageIdB: true,
@@ -121,6 +125,9 @@ export interface TicketStateView {
   partnerName: string | null;
   /** True when the *partner* settled THIS user's ticket (pay-for-both). */
   partnerPaidForMe: boolean;
+  /** True when THIS user (the male) settled the partner's ticket — drives his
+   * "you covered {name}'s ticket 💛" success screen instead of a neutral one. */
+  iCoveredPartner: boolean;
   bothPaid: boolean;
   expiresAt: string | null;
   paymentMode: PaymentMode;
@@ -144,6 +151,8 @@ export function buildTicketStateView(match: TicketMatch, side: Side): TicketStat
   // paidForPartnerByA means A paid for B. So the partner paid for ME when the
   // PARTNER's "paid for partner" flag is set.
   const partnerPaidForMe = side === "A" ? match.paidForPartnerByB : match.paidForPartnerByA;
+  // I covered the partner when MY "paid for partner" flag is set.
+  const iCoveredPartner = side === "A" ? match.paidForPartnerByA : match.paidForPartnerByB;
   // Famine single-ticket discount on the actor's own ticket. Gated on the flag
   // (the columns are inert when monetization is off).
   const discount = env.TICKET_FEATURE_ENABLED
@@ -162,6 +171,7 @@ export function buildTicketStateView(match: TicketMatch, side: Side): TicketStat
     partnerPaid,
     partnerName: peer.firstName,
     partnerPaidForMe,
+    iCoveredPartner,
     bothPaid: iPaid && partnerPaid,
     expiresAt: match.ticketExpiresAt ? match.ticketExpiresAt.toISOString() : null,
     paymentMode: env.TICKET_PAYMENT_MODE,
@@ -188,6 +198,59 @@ export async function getTicketState(
   const side = sideForTelegramId(match, telegramId);
   if (!side) return { ok: false, reason: "not-participant" };
   return { ok: true, state: buildTicketStateView(match, side) };
+}
+
+/**
+ * Fire the one-time "she saw it ❤️" read-receipt back to the payer. Shared by
+ * the view path (`notePartnerPaidSeen` — she opened the reveal) and the
+ * completion fallback (`ticketPartnerPaidDm` nudge — she was DM'd instead). The
+ * CAS on `partnerPaidSeenAt: null` makes it fire exactly once regardless of
+ * which path (or a racing Mini App poll) gets there first. `coveredSide` is the
+ * side of the covered partner; the payer is the other side.
+ */
+async function markPartnerPaidSeenAndNotify(
+  api: Api<RawApi>,
+  matchId: string,
+  coveredSide: Side,
+): Promise<void> {
+  const claim = await prisma.match.updateMany({
+    where: { id: matchId, partnerPaidSeenAt: null },
+    data: { partnerPaidSeenAt: new Date() },
+  });
+  if (claim.count === 0) return; // already receipted — idempotent
+  const match = await loadTicketMatch(matchId);
+  if (!match) return;
+  const covered = selfUser(match, coveredSide);
+  const payer = peerUser(match, coveredSide);
+  if (!isTelegramTarget(payer.telegramId)) return;
+  await api
+    .sendMessage(
+      toTelegramChatId(payer.telegramId),
+      t(langOf(payer), "ticketPartnerSawItDm", { name: covered.firstName ?? "" }),
+    )
+    .catch(() => {});
+}
+
+/**
+ * Read-receipt trigger for the goodwill cover (§3.5b takt 2). Call this when the
+ * covered partner opens her ticket-card reveal: if she was in fact covered and
+ * hasn't been receipted yet, it stamps `partnerPaidSeenAt` and DMs the payer
+ * once that she's seen his gesture. No-op for the payer's own views or an
+ * uncovered match. Best-effort — it must never block or fail the state read.
+ */
+export async function notePartnerPaidSeen(
+  api: Api<RawApi>,
+  viewerTelegramId: bigint,
+  matchId: string,
+): Promise<void> {
+  const match = await loadTicketMatch(matchId);
+  if (!match) return;
+  const side = sideForTelegramId(match, viewerTelegramId);
+  if (!side) return;
+  const partnerPaidForMe = side === "A" ? match.paidForPartnerByB : match.paidForPartnerByA;
+  if (!partnerPaidForMe) return; // viewer wasn't covered — nothing to receipt
+  if (match.partnerPaidSeenAt !== null) return; // already seen — fast path
+  await markPartnerPaidSeenAndNotify(api, matchId, side);
 }
 
 // ── Offer (called from the mutual-accept handler) ───────────────────────────
@@ -349,6 +412,25 @@ async function settleTicket(
 
   }
 
+  // Takt 1 — the payer just covered the partner's slot (the goodwill gesture):
+  // confirm to HIM that it landed, so his attentiveness gets an immediate
+  // acknowledgement instead of a silent settle. `partner` scope always covers
+  // her; `both` covers her only when this call actually claimed 2 slots (she
+  // hadn't already paid — otherwise `claimedCount` is 1 and it was just his own).
+  const coveredPartnerNow =
+    (scope === "partner" && claimedCount > 0) || (scope === "both" && claimedCount === 2);
+  if (coveredPartnerNow && isTelegramTarget(me.telegramId)) {
+    const peer = peerUser(match, side);
+    const effectId = env.MESSAGE_EFFECT_TICKET_ID;
+    await api
+      .sendMessage(
+        toTelegramChatId(me.telegramId),
+        t(langOf(me), "ticketCoveredHerConfirm", { name: peer.firstName ?? "" }),
+        effectId ? { message_effect_id: effectId } : {},
+      )
+      .catch(() => {});
+  }
+
   // Recompute terminal state from fresh data.
   const after = await loadTicketMatch(matchId);
   if (!after) return { result: { ok: false, reason: "match-not-found" }, claimedCount };
@@ -457,6 +539,41 @@ export async function completeTicketGateAndUnlockScheduling(
   if (flip.count === 0) return; // already completed / wrong state
 
   emitTicketEvent("ticket_both_paid", { matchId });
+
+  // Goodwill cover fallback (§3.5b): if the male covered the partner's ticket
+  // but she never opened the reveal before the gate completed, she'd otherwise
+  // learn nothing (she may go straight to the Calendar). Send her the warm
+  // "he covered your ticket ❤️" DM — the reveal delivered as a message, with a
+  // button back to the ticket card — so the notification is guaranteed. We do
+  // NOT stamp `partnerPaidSeenAt` here: his "she saw it" payoff still waits for a
+  // genuine open (she can tap the button), keeping that read-receipt honest.
+  const done = await loadTicketMatch(matchId);
+  if (done) {
+    const coveredSide: Side | null = done.paidForPartnerByA
+      ? "B"
+      : done.paidForPartnerByB
+        ? "A"
+        : null;
+    if (coveredSide && done.partnerPaidSeenAt === null && done.partnerPaidNudgedAt === null) {
+      const claim = await prisma.match.updateMany({
+        where: { id: matchId, partnerPaidNudgedAt: null },
+        data: { partnerPaidNudgedAt: new Date() },
+      });
+      if (claim.count > 0) {
+        const covered = selfUser(done, coveredSide);
+        const payer = peerUser(done, coveredSide);
+        if (isTelegramTarget(covered.telegramId)) {
+          await api
+            .sendMessage(
+              toTelegramChatId(covered.telegramId),
+              t(langOf(covered), "ticketPartnerPaidDm", { name: payer.firstName ?? "" }),
+              { reply_markup: buildTicketKeyboard(matchId, langOf(covered)) },
+            )
+            .catch(() => {});
+        }
+      }
+    }
+  }
 
   // The persistent ticket card stays in chat untouched; the Calendar is sent as
   // a SEPARATE message that follows it (calendarMessageId* starts null here, so

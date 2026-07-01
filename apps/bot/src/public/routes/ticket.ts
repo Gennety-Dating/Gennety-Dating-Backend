@@ -6,6 +6,7 @@ import {
   getTicketState,
   applyTicketPayment,
   useTicketFromBalance,
+  notePartnerPaidSeen,
 } from "../../handlers/matching/ticket-gate.js";
 import {
   createTicketIntent,
@@ -61,6 +62,12 @@ export function createTicketRouter(api: Api<RawApi>): Router {
     if (!result.ok) {
       res.status(result.reason === "not-participant" ? 403 : 404).json({ error: result.reason });
       return;
+    }
+    // Read-receipt for the goodwill cover (§3.5b takt 2): the covered partner
+    // just opened her reveal → let the payer know once she's seen his gesture.
+    // Fire-and-forget so a DM hiccup never delays or fails the screen read.
+    if (result.state.partnerPaidForMe) {
+      void notePartnerPaidSeen(api, BigInt(auth.user.id), matchId).catch(() => {});
     }
     res.status(200).json({ ok: true, ...result.state });
   });

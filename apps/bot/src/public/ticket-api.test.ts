@@ -18,10 +18,12 @@ vi.mock("../config.js", () => ({ env: { BOT_TOKEN } }));
 const getTicketState = vi.fn();
 const applyTicketPayment = vi.fn();
 const useTicketFromBalance = vi.fn();
+const notePartnerPaidSeen = vi.fn().mockResolvedValue(undefined);
 vi.mock("../handlers/matching/ticket-gate.js", () => ({
   getTicketState: (...a: unknown[]) => getTicketState(...a),
   applyTicketPayment: (...a: unknown[]) => applyTicketPayment(...a),
   useTicketFromBalance: (...a: unknown[]) => useTicketFromBalance(...a),
+  notePartnerPaidSeen: (...a: unknown[]) => notePartnerPaidSeen(...a),
 }));
 
 const createTicketIntent = vi.fn();
@@ -76,6 +78,8 @@ beforeEach(() => {
   getTicketState.mockReset();
   applyTicketPayment.mockReset();
   useTicketFromBalance.mockReset();
+  notePartnerPaidSeen.mockReset();
+  notePartnerPaidSeen.mockResolvedValue(undefined);
   createTicketIntent.mockReset();
   verifyTicketPayment.mockReset();
 });
@@ -91,6 +95,22 @@ describe("GET /v1/matches/:id/ticket/state", () => {
     expect(res.body.ticketStatus).toBe("pending");
     expect(res.body.partnerName).toBe("Sam");
     expect(getTicketState).toHaveBeenCalledWith(5986970093n, VALID_UUID);
+    // An uncovered viewer must not trigger the read-receipt (§3.5b takt 2).
+    expect(notePartnerPaidSeen).not.toHaveBeenCalled();
+  });
+
+  it("fires the goodwill read-receipt when the covered partner opens her reveal", async () => {
+    getTicketState.mockResolvedValueOnce({
+      ok: true,
+      state: { ...baseState, myGender: "female", partnerPaidForMe: true },
+    });
+    const res = await request(buildApp())
+      .get(`/v1/matches/${VALID_UUID}/ticket/state`)
+      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`);
+    expect(res.status).toBe(200);
+    // Her view of the "he covered you ❤️" screen is the seen-signal that lets
+    // the payer know she saw his gesture — fired with the bot Api + her id.
+    expect(notePartnerPaidSeen).toHaveBeenCalledWith(fakeApi, 5986970093n, VALID_UUID);
   });
 
   it("returns 401 without auth", async () => {
