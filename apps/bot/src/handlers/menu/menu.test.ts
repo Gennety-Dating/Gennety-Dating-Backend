@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { SessionData } from "@gennety/shared";
-import { DEFAULT_SESSION } from "@gennety/shared";
+import { DEFAULT_SESSION, MIN_PHOTOS, MAX_PHOTOS } from "@gennety/shared";
 
 // Mock prisma before importing handlers.
 vi.mock("@gennety/db", () => ({
@@ -99,6 +99,8 @@ import {
   handleEditAgeRangeInput,
   handleEditPhotosStart,
   handleEditPhotosUpload,
+  handleEditPhotosAdd,
+  handleEditPhotosDelete,
 } from "./edit-profile.js";
 import {
   handleEditVideoStart,
@@ -544,6 +546,104 @@ describe("Menu — Edit Profile", () => {
         }),
       }),
     );
+  });
+
+  it("handleEditPhotosStart renders the manager with delete/add/done controls", async () => {
+    (prisma.profile.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      photos: ["file_1", "file_2", "file_3"],
+      profileMedia: [],
+      photoFaceScores: [0.1, 0.2, 0.3],
+      uploadedPhotoHashes: [],
+    });
+    const ctx = createMockCtx({ callbackData: "menu:edit:photos" });
+    await handleEditPhotosStart(ctx);
+
+    expect(ctx.session.menuState).toBe("edit_photos");
+    expect(ctx.session.pendingPhotos).toEqual(["file_1", "file_2", "file_3"]);
+    // The last reply is the control message; it carries one delete button per
+    // photo plus add + done.
+    const replyCalls = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls;
+    const markup = replyCalls[replyCalls.length - 1][1].reply_markup;
+    const serialized = JSON.stringify(markup);
+    expect(serialized).toContain("menu:edit:photos:del:0");
+    expect(serialized).toContain("menu:edit:photos:del:2");
+    expect(serialized).toContain("menu:edit:photos:add");
+    expect(serialized).toContain("menu:edit:photos:continue");
+  });
+
+  it("handleEditPhotosDelete removes one photo and persists aligned arrays", async () => {
+    // Start above the MIN_PHOTOS floor (MAX in both repos) so the delete is
+    // allowed regardless of whether MIN is 2 (beta) or 4 (prod).
+    const photos = Array.from({ length: MAX_PHOTOS }, (_, i) => `p${i}`);
+    const scores = photos.map((_, i) => (i + 1) / 10);
+    const media = photos.map((photo) => ({ type: "photo" as const, photo }));
+    const expectedPhotos = photos.filter((_, i) => i !== 1);
+    const expectedScores = scores.filter((_, i) => i !== 1);
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        pendingPhotos: [...photos],
+        pendingProfileMedia: media.map((m) => ({ ...m })),
+        pendingPhotoScores: [...scores],
+      },
+      callbackData: "menu:edit:photos:del:1",
+    });
+
+    await handleEditPhotosDelete(ctx);
+
+    // photos[i] ↔ photoFaceScores[i] alignment preserved after the splice.
+    expect(ctx.session.pendingPhotos).toEqual(expectedPhotos);
+    expect(ctx.session.pendingPhotoScores).toEqual(expectedScores);
+    expect(ctx.session.pendingProfileMedia).toEqual(
+      expectedPhotos.map((photo) => ({ type: "photo", photo })),
+    );
+    // Persisted immediately so the consensus upload path can't resurrect it.
+    expect(prisma.profile.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: "uuid-user-1" },
+        data: expect.objectContaining({
+          photos: expectedPhotos,
+          photoFaceScores: expectedScores,
+        }),
+      }),
+    );
+  });
+
+  it("handleEditPhotosDelete is blocked at the MIN_PHOTOS floor", async () => {
+    const photos = Array.from({ length: MIN_PHOTOS }, (_, i) => `p${i}`);
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        pendingPhotos: [...photos],
+        pendingProfileMedia: photos.map((photo) => ({ type: "photo", photo })),
+        pendingPhotoScores: photos.map(() => 0.1),
+      },
+      callbackData: "menu:edit:photos:del:0",
+    });
+
+    await handleEditPhotosDelete(ctx);
+
+    expect(ctx.session.pendingPhotos).toEqual(photos);
+    expect(prisma.profile.update).not.toHaveBeenCalled();
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ show_alert: true }),
+    );
+  });
+
+  it("handleEditPhotosAdd re-opens the upload prompt and stays in edit_photos", async () => {
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        pendingPhotos: Array.from({ length: MIN_PHOTOS }, (_, i) => `p${i}`),
+      },
+      callbackData: "menu:edit:photos:add",
+    });
+
+    await handleEditPhotosAdd(ctx);
+
+    expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalled();
+    expect(ctx.session.menuState).toBe("edit_photos");
   });
 });
 

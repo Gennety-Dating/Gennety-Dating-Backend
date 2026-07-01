@@ -1,4 +1,4 @@
-import { InlineKeyboard } from "grammy";
+import { InlineKeyboard, InputMediaBuilder } from "grammy";
 import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
 import {
@@ -298,14 +298,152 @@ export async function handleEditPhotosStart(ctx: BotContext): Promise<void> {
     ...Array(Math.max(0, existing.length - existingScores.length)).fill(0),
   ];
 
+  await renderPhotoManager(ctx);
+}
+
+/**
+ * Render the photo-manager screen: the current album followed by a control
+ * message with a 🗑 button per photo, an ➕ add button (hidden at MAX), and a
+ * ✅ done button.
+ *
+ * The previous control message's keyboard is stripped first (tracked via
+ * `session.photoManagerMsgId`) so a stale 🗑 button from an earlier render can
+ * never target the wrong index after the set changed.
+ *
+ * `showAlbum` re-sends the album (used on entry and after a delete, to reflect
+ * the new set); on a fresh upload it's skipped — the user's own photo message
+ * is already visible, so only the controls are refreshed to reduce chat noise.
+ */
+async function renderPhotoManager(
+  ctx: BotContext,
+  opts: { showAlbum?: boolean } = {},
+): Promise<void> {
+  const { showAlbum = true } = opts;
+  const lang = ctx.session.language;
+  const photos = ctx.session.pendingPhotos;
+
+  // Strip the previous manager keyboard so its now-stale delete buttons can't
+  // fire against a changed photo array.
+  if (ctx.session.photoManagerMsgId != null && ctx.chat) {
+    try {
+      await ctx.api.editMessageReplyMarkup(
+        ctx.chat.id,
+        ctx.session.photoManagerMsgId,
+      );
+    } catch {
+      // Message already gone or has no keyboard — nothing to strip.
+    }
+    ctx.session.photoManagerMsgId = null;
+  }
+
+  if (showAlbum && ctx.chat && photos.length > 0) {
+    try {
+      if (photos.length === 1) {
+        await ctx.replyWithPhoto(photos[0]!);
+      } else {
+        await ctx.replyWithMediaGroup(
+          photos.slice(0, 10).map((id) => InputMediaBuilder.photo(id)),
+        );
+      }
+    } catch {
+      // Stale file_ids — skip the album and still show the controls.
+    }
+  }
+
+  const keyboard = new InlineKeyboard();
+  photos.forEach((_, i) => {
+    keyboard.text(
+      t(lang, "photoManagerDeleteBtn", { n: i + 1 }),
+      `menu:edit:photos:del:${i}`,
+    );
+    if ((i + 1) % 3 === 0) keyboard.row();
+  });
+  keyboard.row();
+  if (photos.length < MAX_PHOTOS) {
+    keyboard.text(t(lang, "photoManagerAddBtn"), "menu:edit:photos:add").row();
+  }
+  keyboard.text(t(lang, "photoManagerDoneBtn"), "menu:edit:photos:continue");
+
+  const msg = await ctx.reply(
+    t(lang, "photoManagerTitle", { min: MIN_PHOTOS, max: MAX_PHOTOS }),
+    { reply_markup: keyboard },
+  );
+  ctx.session.photoManagerMsgId = msg?.message_id ?? null;
+}
+
+/**
+ * Re-open the upload sub-mode from the manager's ➕ button. Stays in
+ * `edit_photos`, so the next photo message flows to `handleEditPhotosUpload`.
+ */
+export async function handleEditPhotosAdd(ctx: BotContext): Promise<void> {
+  await ctx.answerCallbackQuery();
+  const lang = ctx.session.language;
+  if (ctx.session.pendingPhotos.length >= MAX_PHOTOS) {
+    await ctx.reply(t(lang, "photoReceived", { n: MAX_PHOTOS, max: MAX_PHOTOS }));
+    return;
+  }
   await ctx.reply(
     t(lang, "editProfilePhotosStart", { min: MIN_PHOTOS, max: MAX_PHOTOS }),
   );
 }
 
 /**
+ * Delete one photo from the manager (`menu:edit:photos:del:<index>`).
+ *
+ * Splices the index out of the three index-aligned arrays (`pendingPhotos`,
+ * `pendingProfileMedia`, `pendingPhotoScores`) so the `photos[i] ↔
+ * photoFaceScores[i]` invariant holds. `pendingPhotoHashes` (a best-effort
+ * dedupe set, not 1:1 with photos) and `pendingPhotoUniqueIds` (within-session
+ * dedupe) are intentionally left untouched — at worst re-uploading the exact
+ * deleted photo in the same session is blocked as a near-duplicate.
+ *
+ * The reduced set is persisted immediately so it stays consistent with the
+ * consensus upload path (`commitProfilePhotoCandidate` reads `photos` from the
+ * DB); otherwise a later add would resurrect the deleted photo. Verification is
+ * NOT rerun here — that fires once on Done via `finishEditPhotos`.
+ */
+export async function handleEditPhotosDelete(ctx: BotContext): Promise<void> {
+  const lang = ctx.session.language;
+  const data = ctx.callbackQuery?.data ?? "";
+  const idx = Number.parseInt(
+    data.slice("menu:edit:photos:del:".length),
+    10,
+  );
+  if (
+    !Number.isInteger(idx) ||
+    idx < 0 ||
+    idx >= ctx.session.pendingPhotos.length
+  ) {
+    await ctx.answerCallbackQuery();
+    return;
+  }
+  if (ctx.session.pendingPhotos.length <= MIN_PHOTOS) {
+    await ctx.answerCallbackQuery({
+      text: t(lang, "photoManagerMinReached", { min: MIN_PHOTOS }),
+      show_alert: true,
+    });
+    return;
+  }
+  await ctx.answerCallbackQuery({ text: t(lang, "photoManagerDeleted") });
+
+  const media = normalizeProfileMedia(
+    ctx.session.pendingProfileMedia,
+    ctx.session.pendingPhotos,
+  );
+  media.splice(idx, 1);
+  ctx.session.pendingProfileMedia = media;
+  if (idx < ctx.session.pendingPhotoScores.length) {
+    ctx.session.pendingPhotoScores.splice(idx, 1);
+  }
+  ctx.session.pendingPhotos.splice(idx, 1);
+
+  await persistPendingPhotos(ctx);
+  await renderPhotoManager(ctx);
+}
+
+/**
  * Collect incoming photos while `menuState === "edit_photos"`.
- * Auto-finishes at MAX_PHOTOS; otherwise offers a Continue button once MIN_PHOTOS is reached.
+ * Refreshes the photo manager after each accepted photo; commits on ✅ Done.
  */
 export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
@@ -416,19 +554,8 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
     ) {
       return;
     }
-    if (count >= MAX_PHOTOS) {
-      await ctx.reply(t(lang, "photoReceived", { n: count, max: MAX_PHOTOS }));
-      await finishEditPhotos(ctx);
-      return;
-    }
     await ctx.reply(t(lang, "photoReceived", { n: count, max: MAX_PHOTOS }));
-    if (count >= MIN_PHOTOS) {
-      const keyboard = new InlineKeyboard().text(
-        t(lang, "btnContinuePhotos"),
-        "menu:edit:photos:continue",
-      );
-      await ctx.reply(t(lang, "photosEnough", { max: MAX_PHOTOS }), { reply_markup: keyboard });
-    }
+    await renderPhotoManager(ctx, { showAlbum: false });
     return;
   } else {
     // Legacy path retained behind the rollout flag.
@@ -476,22 +603,8 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
     gateScore,
   ];
   const count = ctx.session.pendingPhotos.length;
-
-  if (count >= MAX_PHOTOS) {
-    await ctx.reply(t(lang, "photoReceived", { n: count, max: MAX_PHOTOS }));
-    await finishEditPhotos(ctx);
-    return;
-  }
-
   await ctx.reply(t(lang, "photoReceived", { n: count, max: MAX_PHOTOS }));
-
-  if (count >= MIN_PHOTOS) {
-    const keyboard = new InlineKeyboard().text(
-      t(lang, "btnContinuePhotos"),
-      "menu:edit:photos:continue",
-    );
-    await ctx.reply(t(lang, "photosEnough", { max: MAX_PHOTOS }), { reply_markup: keyboard });
-  }
+  await renderPhotoManager(ctx, { showAlbum: false });
 }
 
 function photoValidationMessage(
@@ -548,10 +661,15 @@ function photoConsensusEditMessage(
   return null;
 }
 
-async function finishEditPhotos(ctx: BotContext): Promise<void> {
-  const lang = ctx.session.language;
+/**
+ * Persist the current pending photo set (photos + structured media + scores +
+ * hash/reference state) to the profile. Shared by the manager's delete path
+ * (immediate persist, so the consensus upload path never resurrects a deleted
+ * photo) and by `finishEditPhotos`. Returns the user id, or null if unknown.
+ * Does NOT rerun verification or reset the session — callers decide that.
+ */
+async function persistPendingPhotos(ctx: BotContext): Promise<string | null> {
   const telegramId = BigInt(ctx.from!.id);
-
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: {
@@ -564,11 +682,11 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
       },
     },
   });
-  if (!user) return;
+  if (!user) return null;
 
-  // Pad scores to match photos length defensively (in case the session
-  // started before the field existed, or the user re-uploaded photos
-  // without the gate populating a score for each).
+  // Pad/truncate scores to match photos length defensively (in case the session
+  // started before the field existed, or the user re-uploaded photos without
+  // the gate populating a score for each).
   const scores = [
     ...(ctx.session.pendingPhotoScores ?? []),
     ...Array(
@@ -601,6 +719,14 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
       ...photoState,
     },
   });
+  return user.id;
+}
+
+async function finishEditPhotos(ctx: BotContext): Promise<void> {
+  const lang = ctx.session.language;
+
+  const userId = await persistPendingPhotos(ctx);
+  if (!userId) return;
 
   // Re-run face-match verification against the new photo set. The
   // per-frame `gateProfilePhoto` above blocked obviously-wrong photos
@@ -609,7 +735,7 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
   // rejected user who replaced their bad photos must be re-evaluated,
   // and the persisted `photoFaceScores` must stay aligned with `photos`.
   // Fire-and-forget; pipeline errors land in the bot logs.
-  void triggerVerificationRerun(user.id, ctx.api).catch((err) => {
+  void triggerVerificationRerun(userId, ctx.api).catch((err) => {
     console.error("[edit-profile] verification rerun failed:", err);
   });
 
@@ -618,6 +744,7 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
   ctx.session.pendingPhotoUniqueIds = [];
   ctx.session.pendingPhotoHashes = [];
   ctx.session.pendingPhotoScores = [];
+  ctx.session.photoManagerMsgId = null;
   ctx.session.menuState = "idle";
 
   await ctx.reply(t(lang, "editProfilePhotosSaved"));

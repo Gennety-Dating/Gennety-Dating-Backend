@@ -13,6 +13,8 @@ import {
   handleEditAgeRangeInput,
   handleEditPhotosStart,
   handleEditPhotosUpload,
+  handleEditPhotosAdd,
+  handleEditPhotosDelete,
 } from "./edit-profile.js";
 import {
   handleEditVideoStart,
@@ -58,12 +60,21 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       await handleEditPhotosUpload(ctx);
       return;
     }
+    if (data === "menu:edit:photos:add") {
+      await handleEditPhotosAdd(ctx);
+      return;
+    }
+    if (data.startsWith("menu:edit:photos:del:")) {
+      await handleEditPhotosDelete(ctx);
+      return;
+    }
     // If the user taps another menu action mid-upload, fall through and reset state.
     ctx.session.menuState = "idle";
     ctx.session.pendingPhotos = [];
     ctx.session.pendingProfileMedia = [];
     ctx.session.pendingPhotoUniqueIds = [];
     ctx.session.pendingPhotoScores = [];
+    ctx.session.photoManagerMsgId = null;
   }
 
   // Edit video: consumes a raw video message; Remove/Back are callbacks.

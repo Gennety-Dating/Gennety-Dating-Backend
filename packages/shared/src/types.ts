@@ -85,6 +85,13 @@ export interface SessionData {
   pendingPhotoScores: number[];
   /** Sub-state for the post-onboarding main menu flows */
   menuState: MenuState;
+  /**
+   * Telegram message id of the live photo-manager control message (the row of
+   * 🗑/➕/✅ buttons) shown while `menuState === "edit_photos"`. Tracked so each
+   * re-render can strip the previous message's keyboard first, preventing a
+   * stale button from deleting the wrong index. Null when no manager is open.
+   */
+  photoManagerMsgId: number | null;
   /** Sub-state for the matching / scheduling flow (Phase 3) */
   matchFlow: MatchFlowState;
   /** Match id currently awaiting this user's text input (rejection reason / calendar) */
@@ -117,6 +124,7 @@ export const DEFAULT_SESSION: SessionData = {
   pendingPhotoHashes: [],
   pendingPhotoScores: [],
   menuState: "idle",
+  photoManagerMsgId: null,
   matchFlow: "idle",
   activeMatchId: null,
   pendingReportCategory: null,
