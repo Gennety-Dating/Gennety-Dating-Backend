@@ -132,6 +132,8 @@ export interface PitchAndSynergyInput {
   otherFirstName: string | null;
   selfSummary: string | null;
   otherSummary: string | null;
+  /** The match's free-text occupation ("what they do"), when set. */
+  otherOccupation?: string | null;
   language: string;
 }
 
@@ -160,7 +162,9 @@ export function pitchAndSynergyPrompt(input: PitchAndSynergyInput): string {
 - Match: ${input.otherFirstName ?? "Someone"}
 - Reader's bio: ${input.selfSummary ?? "(no bio)"}
 - Match's bio: ${input.otherSummary ?? "(no bio)"}
+- Match's occupation (what they do): ${input.otherOccupation?.trim() || "(not specified)"}
 - Output language: ${input.language}
+- You MAY naturally reference the match's occupation in the pitch when it's a genuine compatibility hook, but only if it's provided above — never invent one.
 
 ## Output Requirements
 You MUST respond with a single JSON object — no markdown, no commentary, no fences. Schema:

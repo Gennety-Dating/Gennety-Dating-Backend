@@ -20,9 +20,11 @@ function buildMainMenuKeyboardFor(
   status: MenuToggleState,
   videoReward: boolean,
 ): InlineKeyboard {
+  // My Profile is now a single combined view+edit screen (the old separate
+  // "Edit Profile" button was merged in — `menu:edit` still routes there for
+  // any stale keyboards).
   const kb = new InlineKeyboard()
     .text(t(lang, "menuMyProfile"), "menu:profile")
-    .text(t(lang, "menuEdit"), "menu:edit")
     .row();
 
   if (status !== "locked") {

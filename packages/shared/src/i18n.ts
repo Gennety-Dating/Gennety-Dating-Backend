@@ -232,10 +232,13 @@ const translations = {
     // --- My Profile ---
     myProfileBody:
       "*{firstName} {surname}*, {age}\n" +
+      "{occupationLine}" +
       "🎓 {university}\n" +
       "🌐 {language}\n\n" +
       "{summary}",
     myProfileNoBio: "_No bio yet._",
+    myProfilePreviewHeader: "This is how your match sees you 👇",
+    myProfileEditLabel: "✏️ What to change:",
 
     // --- Edit Profile ---
     editProfileBody:
@@ -244,17 +247,19 @@ const translations = {
       "• *Age:* {age}\n" +
       "• *University:* {university}\n\n" +
       "You can edit:",
-    editBioBtn: "📝 Bio",
-    editPrefsBtn: "🔍 Search Prefs",
-    editMajorBtn: "🎓 Major",
-    editProfilePhotosBtn: "📸 Manage Photos",
-    editBioPrompt: "Send your new bio (max 500 chars):",
+    editBioBtn: "📝 About me",
+    editPrefsBtn: "💘 Who I want",
+    editMajorBtn: "💼 What I do",
+    editProfilePhotosBtn: "📸 My photos",
+    editBioPrompt:
+      "Write a few lines about yourself (max 500 chars).\n👀 Your match reads this before the date.",
     editBioTooLong: "Too long — keep it under 500.",
-    editBioSaved: "Bio updated ✨",
-    editMajorPrompt: "What's your major? (max 100 chars):",
+    editBioSaved: "About me updated ✨",
+    editMajorPrompt:
+      "What do you do? (job / studies / field, max 100 chars)\n👀 Shown to your match.",
     editMajorTooLong: "Too long — keep it under 100.",
-    editMajorSaved: "Major updated ✨",
-    editPrefsTitle: "🔍 *Search Prefs*\n\nWhat do you want to change?",
+    editMajorSaved: "Saved ✨",
+    editPrefsTitle: "💘 *Who I want*\n\n👀 Affects who you get matched with. What to change?",
     editPrefsAgeBtn: "🎂 Partner age range",
     editPrefsBack: "⬅️ Back to Edit",
     editAgeRangePrompt: "What partner age range are you looking for? (e.g. 20-28)\nMin: {min}, Max: {max}.",
@@ -926,10 +931,13 @@ const translations = {
     // --- My Profile ---
     myProfileBody:
       "*{firstName} {surname}*, {age}\n" +
+      "{occupationLine}" +
       "🎓 {university}\n" +
       "🌐 {language}\n\n" +
       "{summary}",
     myProfileNoBio: "_Описания пока нет._",
+    myProfilePreviewHeader: "Так тебя видит пара 👇",
+    myProfileEditLabel: "✏️ Что поменять:",
 
     // --- Edit Profile ---
     editProfileBody:
@@ -938,17 +946,19 @@ const translations = {
       "• *Возраст:* {age}\n" +
       "• *Универ:* {university}\n\n" +
       "Можно поменять:",
-    editBioBtn: "📝 Bio",
-    editPrefsBtn: "🔍 Параметры поиска",
-    editMajorBtn: "🎓 Специальность",
-    editProfilePhotosBtn: "📸 Управлять фото",
-    editBioPrompt: "Скинь новое описание (до 500 символов):",
+    editBioBtn: "📝 О себе",
+    editPrefsBtn: "💘 Кого ищу",
+    editMajorBtn: "💼 Чем занимаешься",
+    editProfilePhotosBtn: "📸 Мои фото",
+    editBioPrompt:
+      "Напиши пару строк о себе (до 500 символов).\n👀 Это читает твоя пара перед свиданием.",
     editBioTooLong: "Слишком длинно — уложись в 500.",
-    editBioSaved: "Bio обновлён ✨",
-    editMajorPrompt: "Какая у тебя специальность? (до 100 символов):",
+    editBioSaved: "«О себе» обновлено ✨",
+    editMajorPrompt:
+      "Чем занимаешься? (работа / учёба / сфера, до 100 символов)\n👀 Видно твоей паре.",
     editMajorTooLong: "Слишком длинно — уложись в 100.",
-    editMajorSaved: "Специальность обновлена ✨",
-    editPrefsTitle: "🔍 *Параметры поиска*\n\nЧто меняем?",
+    editMajorSaved: "Сохранено ✨",
+    editPrefsTitle: "💘 *Кого ищу*\n\n👀 Влияет на то, кто тебе попадётся. Что меняем?",
     editPrefsAgeBtn: "🎂 Возраст партнёра",
     editPrefsBack: "⬅️ К редактированию",
     editAgeRangePrompt: "В каком возрастном диапазоне искать тебе пару? (напр. 20-28)\nМин: {min}, Макс: {max}.",
@@ -1615,10 +1625,13 @@ const translations = {
     // --- My Profile ---
     myProfileBody:
       "*{firstName} {surname}*, {age}\n" +
+      "{occupationLine}" +
       "🎓 {university}\n" +
       "🌐 {language}\n\n" +
       "{summary}",
     myProfileNoBio: "_Опису ще немає._",
+    myProfilePreviewHeader: "Так тебе бачить пара 👇",
+    myProfileEditLabel: "✏️ Що змінити:",
 
     // --- Edit Profile ---
     editProfileBody:
@@ -1627,17 +1640,19 @@ const translations = {
       "• *Вік:* {age}\n" +
       "• *Універ:* {university}\n\n" +
       "Можна змінити:",
-    editBioBtn: "📝 Bio",
-    editPrefsBtn: "🔍 Параметри пошуку",
-    editMajorBtn: "🎓 Спеціальність",
-    editProfilePhotosBtn: "📸 Керувати фото",
-    editBioPrompt: "Скинь новий опис (до 500 символів):",
+    editBioBtn: "📝 Про себе",
+    editPrefsBtn: "💘 Кого шукаю",
+    editMajorBtn: "💼 Чим займаєшся",
+    editProfilePhotosBtn: "📸 Мої фото",
+    editBioPrompt:
+      "Напиши кілька рядків про себе (до 500 символів).\n👀 Це читає твоя пара перед побаченням.",
     editBioTooLong: "Задовге — вклади в 500.",
-    editBioSaved: "Опис оновлено ✨",
-    editMajorPrompt: "Яка в тебе спеціальність? (до 100 символів):",
+    editBioSaved: "«Про себе» оновлено ✨",
+    editMajorPrompt:
+      "Чим займаєшся? (робота / навчання / сфера, до 100 символів)\n👀 Видно твоїй парі.",
     editMajorTooLong: "Задовге — вклади в 100.",
-    editMajorSaved: "Спеціальність оновлено ✨",
-    editPrefsTitle: "🔍 *Параметри пошуку*\n\nЩо міняємо?",
+    editMajorSaved: "Збережено ✨",
+    editPrefsTitle: "💘 *Кого шукаю*\n\n👀 Впливає на те, хто тобі трапиться. Що міняємо?",
     editPrefsAgeBtn: "🎂 Вік партнера",
     editPrefsBack: "⬅️ До редагування",
     editAgeRangePrompt: "У якому віковому діапазоні шукати тобі пару? (напр. 20-28)\nМін: {min}, Макс: {max}.",
@@ -2291,27 +2306,32 @@ const deTranslations: TranslationTable = {
   menuBack: "⬅️ Zurück",
   myProfileBody:
     "*{firstName} {surname}*, {age}\n" +
+    "{occupationLine}" +
     "🎓 {university}\n" +
     "🌐 {language}\n\n" +
     "{summary}",
   myProfileNoBio: "_Noch keine Bio._",
+  myProfilePreviewHeader: "So sieht dich dein Match 👇",
+  myProfileEditLabel: "✏️ Was ändern:",
   editProfileBody:
     "Das ist fest gespeichert:\n\n" +
     "• *Name:* {firstName} {surname}\n" +
     "• *Alter:* {age}\n" +
     "• *Universität:* {university}\n\n" +
     "Du kannst bearbeiten:",
-  editBioBtn: "📝 Bio",
-  editPrefsBtn: "🔍 Suchpräferenzen",
-  editMajorBtn: "🎓 Studienfach",
-  editProfilePhotosBtn: "📸 Fotos verwalten",
-  editBioPrompt: "Sende deine neue Bio (max. 500 Zeichen):",
+  editBioBtn: "📝 Über mich",
+  editPrefsBtn: "💘 Wen ich suche",
+  editMajorBtn: "💼 Was ich mache",
+  editProfilePhotosBtn: "📸 Meine Fotos",
+  editBioPrompt:
+    "Schreib ein paar Zeilen über dich (max. 500 Zeichen).\n👀 Dein Match liest das vor dem Date.",
   editBioTooLong: "Zu lang - bleib unter 500 Zeichen.",
-  editBioSaved: "Bio aktualisiert ✨",
-  editMajorPrompt: "Was studierst du? (max. 100 Zeichen):",
+  editBioSaved: "„Über mich“ aktualisiert ✨",
+  editMajorPrompt:
+    "Was machst du? (Job / Studium / Bereich, max. 100 Zeichen)\n👀 Für dein Match sichtbar.",
   editMajorTooLong: "Zu lang - bleib unter 100 Zeichen.",
-  editMajorSaved: "Studienfach aktualisiert ✨",
-  editPrefsTitle: "🔍 *Suchpräferenzen*\n\nWas möchtest du ändern?",
+  editMajorSaved: "Gespeichert ✨",
+  editPrefsTitle: "💘 *Wen ich suche*\n\n👀 Beeinflusst, wer dir vorgeschlagen wird. Was ändern?",
   editPrefsAgeBtn: "🎂 Partner-Alter",
   editPrefsBack: "⬅️ Zurück zu Bearbeiten",
   editAgeRangePrompt: "In welcher Altersspanne sollen wir nach einem Partner für dich suchen? (z. B. 20-28)\nMin: {min}, Max: {max}.",
@@ -2884,27 +2904,32 @@ const plTranslations: TranslationTable = {
   menuBack: "⬅️ Wstecz",
   myProfileBody:
     "*{firstName} {surname}*, {age}\n" +
+    "{occupationLine}" +
     "🎓 {university}\n" +
     "🌐 {language}\n\n" +
     "{summary}",
   myProfileNoBio: "_Brak bio._",
+  myProfilePreviewHeader: "Tak widzi Cię Twoja para 👇",
+  myProfileEditLabel: "✏️ Co zmienić:",
   editProfileBody:
     "Te dane są zablokowane:\n\n" +
     "• *Imię i nazwisko:* {firstName} {surname}\n" +
     "• *Wiek:* {age}\n" +
     "• *Uniwersytet:* {university}\n\n" +
     "Możesz edytować:",
-  editBioBtn: "📝 Bio",
-  editPrefsBtn: "🔍 Preferencje",
-  editMajorBtn: "🎓 Kierunek",
-  editProfilePhotosBtn: "📸 Zarządzaj zdjęciami",
-  editBioPrompt: "Wyślij nowe bio (maks. 500 znaków):",
+  editBioBtn: "📝 O mnie",
+  editPrefsBtn: "💘 Kogo szukam",
+  editMajorBtn: "💼 Czym się zajmujesz",
+  editProfilePhotosBtn: "📸 Moje zdjęcia",
+  editBioPrompt:
+    "Napisz kilka słów o sobie (maks. 500 znaków).\n👀 Twoja para czyta to przed randką.",
   editBioTooLong: "Za długie - zmieść się w 500 znakach.",
-  editBioSaved: "Bio zaktualizowane ✨",
-  editMajorPrompt: "Jaki masz kierunek? (maks. 100 znaków):",
+  editBioSaved: "„O mnie” zaktualizowane ✨",
+  editMajorPrompt:
+    "Czym się zajmujesz? (praca / studia / branża, maks. 100 znaków)\n👀 Widoczne dla Twojej pary.",
   editMajorTooLong: "Za długie - zmieść się w 100 znakach.",
-  editMajorSaved: "Kierunek zaktualizowany ✨",
-  editPrefsTitle: "🔍 *Preferencje wyszukiwania*\n\nCo chcesz zmienić?",
+  editMajorSaved: "Zapisano ✨",
+  editPrefsTitle: "💘 *Kogo szukam*\n\n👀 Wpływa na to, kto Ci się trafi. Co zmienić?",
   editPrefsAgeBtn: "🎂 Wiek partnera",
   editPrefsBack: "⬅️ Wróć do edycji",
   editAgeRangePrompt: "W jakim przedziale wiekowym mamy szukać dla Ciebie partnera? (np. 20-28)\nMin: {min}, Max: {max}.",

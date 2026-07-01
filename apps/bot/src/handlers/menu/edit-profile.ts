@@ -3,7 +3,6 @@ import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
 import {
   t,
-  escapeMd,
   MIN_PHOTOS,
   MAX_PHOTOS,
   MIN_AGE,
@@ -19,6 +18,7 @@ import {
 } from "../../services/face-match-gate.js";
 import { triggerVerificationRerun } from "../../services/verification-pipeline.js";
 import { showMainMenu } from "./main.js";
+import { showMyProfile } from "./my-profile.js";
 import {
   getMessageLivePhoto,
   incomingLivePhotoMedia,
@@ -37,69 +37,30 @@ import { logMediaValidationRejection } from "../../services/profile-media-valida
 import { photoUploadStatePatch } from "../../services/profile-media-validation/photo-state.js";
 
 // ---------------------------------------------------------------------------
-// Edit profile main screen
+// Edit profile entry — merged into the combined My Profile screen
 // ---------------------------------------------------------------------------
+//
+// The standalone "Edit Profile" card was removed: viewing and editing a dating
+// profile is one screen. `renderMyProfile` (my-profile.ts) now renders the
+// profile-as-a-match-sees-it plus the outcome-named edit buttons. These entry
+// points stay for backwards-compat (the `/edit` command and any stale
+// `menu:edit` keyboards) and delegate to that combined screen.
 
 /**
- * Render the Edit Profile card (shared logic for callback and command entry).
- */
-async function renderEditProfile(ctx: BotContext): Promise<void> {
-  const lang = ctx.session.language;
-  const telegramId = BigInt(ctx.from!.id);
-
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    select: {
-      firstName: true,
-      surname: true,
-      age: true,
-      universityDomain: true,
-    },
-  });
-  if (!user) {
-    await ctx.reply(t(lang, "myProfileNoBio"));
-    return;
-  }
-
-  const body = t(lang, "editProfileBody", {
-    firstName: escapeMd(user.firstName ?? "—"),
-    surname: escapeMd(user.surname ?? "—"),
-    age: user.age ?? 0,
-    university: escapeMd(user.universityDomain ?? "—"),
-  });
-
-  const keyboard = new InlineKeyboard()
-    .text(t(lang, "editBioBtn"), "menu:edit:bio")
-    .row()
-    .text(t(lang, "editPrefsBtn"), "menu:edit:prefs")
-    .row()
-    .text(t(lang, "editMajorBtn"), "menu:edit:major")
-    .row()
-    .text(t(lang, "editProfilePhotosBtn"), "menu:edit:photos")
-    .row()
-    .text(t(lang, "menuBack"), "menu:back");
-
-  try {
-    await ctx.reply(body, { parse_mode: "Markdown", reply_markup: keyboard });
-  } catch {
-    await ctx.reply(body.replace(/[\\*_`\[]/g, ""), { reply_markup: keyboard });
-  }
-}
-
-/**
- * Show the expanded Edit Profile card (callback entry — via inline button).
+ * Open the combined profile+edit screen (callback entry — stale `menu:edit`).
  *
- * Per PRODUCT_SPEC Phase 2: "Core identity data (Name, Age, University) are FIXED."
- * Editable: Bio, Search Preferences, Major, Photos.
+ * Fixed identity data (Name, Age, University) stays read-only; editable via the
+ * on-profile buttons: About me (bio), Who I want (prefs), What I do
+ * (occupation), My photos.
  */
 export async function handleEditOpen(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
-  await renderEditProfile(ctx);
+  await showMyProfile(ctx);
 }
 
-/** Show the Edit Profile card (command entry — via /edit). */
+/** Open the combined profile+edit screen (command entry — via /edit). */
 export async function showEditProfileMenu(ctx: BotContext): Promise<void> {
-  await renderEditProfile(ctx);
+  await showMyProfile(ctx);
 }
 
 // ---------------------------------------------------------------------------

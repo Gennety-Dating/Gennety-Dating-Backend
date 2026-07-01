@@ -125,7 +125,7 @@ export function buildProductPlaybook(features: PlaybookFeatures): string {
 - They can Report the partner anytime post-match; reports are triaged for safety. Reassure that safety issues are taken seriously and reviewed by a human.`);
 
   sections.push(`## Account controls & hard boundaries
-- Menu: My Profile, Edit Profile (bio / major / preferences / photos — name, age, email, university are fixed), Pause Matching, Settings (language, re-verify, Delete/Freeze)${
+- Menu: My Profile (combined view+edit — About me / Who I want / What I do (occupation) / My photos; name, age, email, university are fixed), Pause Matching, Settings (language, re-verify, Delete/Freeze)${
     features.tickets ? `, My Tickets` : ""
   }, Report/Help.
 - Freeze = a soft pause that keeps everything (profile, photos, verification) and reactivates on the next /start. Delete = a permanent GDPR wipe. If someone wants to leave, offer Freeze first.

@@ -261,11 +261,31 @@ describe("Menu — My Profile", () => {
     const ctx = createMockCtx({ callbackData: "menu:profile" });
     await handleMyProfile(ctx);
     expect(ctx.answerCallbackQuery).toHaveBeenCalled();
-    const body = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    // calls[0] is the "how your match sees you" header; the body + edit
+    // controls land in the following reply.
+    const body = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[1][0];
     expect(body).toContain("Alice Smith");
     expect(body).toContain("21");
     expect(body).toContain("stanford.edu");
     expect(body).toContain("Curious introvert");
+    // Combined view+edit: outcome-named edit actions ride on the profile.
+    const markup = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[1][1].reply_markup;
+    const serialized = JSON.stringify(markup);
+    expect(serialized).toContain("menu:edit:bio");
+    expect(serialized).toContain("menu:edit:prefs");
+    expect(serialized).toContain("menu:edit:major");
+    expect(serialized).toContain("menu:edit:photos");
+  });
+
+  it("renders occupation on its own line when set", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...mockUser,
+      major: "Veterinarian",
+    });
+    const ctx = createMockCtx({ callbackData: "menu:profile" });
+    await handleMyProfile(ctx);
+    const body = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[1][0];
+    expect(body).toContain("💼 Veterinarian");
   });
 
   it("falls back to no-bio copy when summary is missing", async () => {
@@ -275,7 +295,7 @@ describe("Menu — My Profile", () => {
     });
     const ctx = createMockCtx({ callbackData: "menu:profile" });
     await handleMyProfile(ctx);
-    const body = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const body = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[1][0];
     expect(body).toContain("No bio yet");
   });
 });
@@ -380,13 +400,15 @@ describe("Menu — Edit Profile", () => {
   it("handleEditOpen shows fixed fields and all editable actions", async () => {
     const ctx = createMockCtx({ callbackData: "menu:edit" });
     await handleEditOpen(ctx);
-    const body = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    // menu:edit now delegates to the combined My Profile screen: calls[0] is
+    // the header, calls[1] carries the body + edit controls.
+    const body = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[1][0];
     // Fixed fields are rendered read-only
     expect(body).toContain("Alice Smith");
     expect(body).toContain("21");
     expect(body).toContain("stanford.edu");
     // All editable actions present
-    const markup = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
+    const markup = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[1][1].reply_markup;
     const serialized = JSON.stringify(markup);
     expect(serialized).toContain("menu:edit:bio");
     expect(serialized).toContain("menu:edit:prefs");

@@ -57,6 +57,7 @@ export interface SendMatchProposalOptions {
     otherFirstName: string | null;
     selfSummary: string | null;
     otherSummary: string | null;
+    otherOccupation?: string | null;
     language: Language;
   }) => Promise<PitchResult>;
 }
@@ -353,6 +354,7 @@ export async function sendMatchProposal(
           id: true,
           telegramId: true,
           firstName: true,
+          major: true,
           age: true,
           gender: true,
           language: true,
@@ -367,6 +369,7 @@ export async function sendMatchProposal(
           id: true,
           telegramId: true,
           firstName: true,
+          major: true,
           age: true,
           gender: true,
           language: true,
@@ -402,6 +405,7 @@ export async function sendMatchProposal(
       otherFirstName: match.userB.firstName,
       selfSummary: match.userA.profile?.psychologicalSummary ?? null,
       otherSummary: match.userB.profile?.psychologicalSummary ?? null,
+      otherOccupation: match.userB.major,
       language: langA,
     });
     pitchForA = resultA.pitch;
@@ -415,6 +419,7 @@ export async function sendMatchProposal(
       otherFirstName: match.userA.firstName,
       selfSummary: match.userB.profile?.psychologicalSummary ?? null,
       otherSummary: match.userA.profile?.psychologicalSummary ?? null,
+      otherOccupation: match.userA.major,
       language: langB,
     });
     pitchForB = resultB.pitch;

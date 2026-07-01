@@ -5,7 +5,12 @@ import { normalizeProfileMedia, profileMediaHasVideo, t, escapeMd } from "@genne
 import { sendProfileMediaCard } from "../../services/profile-media-dispatch.js";
 import { env } from "../../config.js";
 
-/** Shared profile rendering logic. */
+/**
+ * Combined view + edit profile screen. Renders the profile the way a match
+ * sees it (header + photos + details), then attaches the outcome-named edit
+ * actions right below it — so there's no separate "Edit Profile" fork and the
+ * buttons read as tasks ("About me", "Who I want") rather than DB fields.
+ */
 async function renderMyProfile(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
   const telegramId = BigInt(ctx.from!.id);
@@ -19,13 +24,22 @@ async function renderMyProfile(ctx: BotContext): Promise<void> {
     return;
   }
 
+  // Framing line: this screen is the profile AS A MATCH SEES IT.
+  await ctx.reply(t(lang, "myProfilePreviewHeader"));
+
   const rawSummary =
     user.profile?.psychologicalSummary?.trim() || t(lang, "myProfileNoBio");
+
+  // Occupation is stored in the legacy `major` column (reframed as "what you
+  // do"); it rides its own line only when set, so an empty field adds no
+  // clutter. The line is data, not a label, so it needs no i18n.
+  const occupationLine = user.major ? `💼 ${escapeMd(user.major)}\n` : "";
 
   let body = t(lang, "myProfileBody", {
     firstName: escapeMd(user.firstName ?? "—"),
     surname: escapeMd(user.surname ?? "—"),
     age: user.age ?? 0,
+    occupationLine,
     university: escapeMd(user.universityDomain ?? "—"),
     language: (user.language ?? lang).toUpperCase(),
     summary: escapeMd(rawSummary),
@@ -67,7 +81,16 @@ async function renderMyProfile(ctx: BotContext): Promise<void> {
     }
   }
 
-  const keyboard = new InlineKeyboard().text(t(lang, "menuBack"), "menu:back");
+  // Outcome-named edit actions live right on the profile (view + edit merged).
+  body += `\n\n${t(lang, "myProfileEditLabel")}`;
+  const keyboard = new InlineKeyboard()
+    .text(t(lang, "editBioBtn"), "menu:edit:bio")
+    .text(t(lang, "editPrefsBtn"), "menu:edit:prefs")
+    .row()
+    .text(t(lang, "editMajorBtn"), "menu:edit:major")
+    .text(t(lang, "editProfilePhotosBtn"), "menu:edit:photos")
+    .row()
+    .text(t(lang, "menuBack"), "menu:back");
 
   try {
     await ctx.reply(body, { parse_mode: "Markdown", reply_markup: keyboard });

@@ -31,6 +31,8 @@ export interface PitchInput {
   otherFirstName: string | null;
   selfSummary: string | null;
   otherSummary: string | null;
+  /** The match's free-text occupation ("what they do"), when set. */
+  otherOccupation?: string | null;
   language: Language;
 }
 
@@ -90,6 +92,7 @@ export function createOpenAIPitchClient(apiKey: string): PitchClient {
         otherFirstName: input.otherFirstName,
         selfSummary: input.selfSummary,
         otherSummary: input.otherSummary,
+        otherOccupation: input.otherOccupation ?? null,
         language: input.language,
       });
 
