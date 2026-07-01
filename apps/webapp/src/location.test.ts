@@ -62,6 +62,18 @@ class FakeElement {
   contains(target: unknown): boolean {
     return target === this;
   }
+
+  querySelector(): FakeElement | null {
+    // The location app only reaches for the `.cta-text` span inside #confirm;
+    // returning null is fine — the code guards every ctaTextEl access.
+    return null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+
+  readonly attributes = new Map<string, string>();
 }
 
 class FakeDocument {
@@ -69,12 +81,11 @@ class FakeDocument {
 
   constructor() {
     for (const id of [
-      "app",
-      "title",
       "search",
       "results",
       "share-current",
-      "empty-hint",
+      "confirm",
+      "addr-label",
       "selected",
       "no-context",
     ]) {
@@ -169,27 +180,30 @@ async function loadLocationApp(options: {
     },
   };
   const fakeMap = {
+    touchZoomRotate: { disableRotation: vi.fn() },
     on: vi.fn(),
-    setView: vi.fn(),
-    invalidateSize: vi.fn(),
+    getCenter: vi.fn(() => ({ lng: 30.5234, lat: 50.4501 })),
+    jumpTo: vi.fn(),
+    setCenter: vi.fn(),
+    resize: vi.fn(),
+    remove: vi.fn(),
   };
-  const fakeMarker = {
-    addTo: vi.fn(() => fakeMarker),
-    on: vi.fn(),
-    setLatLng: vi.fn(),
-  };
-  const leaflet = {
-    map: vi.fn(() => fakeMap),
-    tileLayer: vi.fn(() => ({ addTo: vi.fn() })),
-    marker: vi.fn(() => fakeMarker),
-  };
+  // `new window.maplibregl.Map(opts)` — a constructor returning an object hands
+  // back that object, so the fake map instance is returned from `new`. Uses a
+  // real class (not an arrow) so it's actually constructable.
+  class FakeMaplibreMap {
+    constructor() {
+      return fakeMap;
+    }
+  }
+  const maplibregl = { Map: FakeMaplibreMap };
 
   vi.stubGlobal("document", document);
   vi.stubGlobal("Node", FakeElement);
   vi.stubGlobal("location", { search: `?match=${MATCH_ID}&lang=en` });
   vi.stubGlobal("window", {
     Telegram: { WebApp: app },
-    L: leaflet,
+    maplibregl,
     isSecureContext: options.isSecureContext ?? true,
   });
   vi.stubGlobal("navigator", {
@@ -202,7 +216,6 @@ async function loadLocationApp(options: {
     app,
     document,
     fakeMap,
-    fakeMarker,
     mainButton,
     shareButton: document.getElementById("share-current")!,
   };
@@ -228,7 +241,7 @@ describe("Location Mini App geolocation quick-action", () => {
         callbacks.options = options;
       }),
     } as unknown as Geolocation;
-    const { app, fakeMap, fakeMarker, shareButton } = await loadLocationApp({
+    const { app, fakeMap, shareButton } = await loadLocationApp({
       geolocation,
     });
 
@@ -241,13 +254,17 @@ describe("Location Mini App geolocation quick-action", () => {
       maximumAge: 60_000,
     });
     expect(shareButton.disabled).toBe(true);
-    expect(shareButton.textContent).toBe("Locating…");
+    expect(shareButton.classList.contains("loading")).toBe(true);
 
     callbacks.success?.(makePosition(50.46, 30.51));
     await flushPromises();
 
-    expect(fakeMap.setView).toHaveBeenCalledWith([50.46, 30.51], 15);
-    expect(fakeMarker.setLatLng).toHaveBeenCalledWith([50.46, 30.51]);
+    // Center-pin picker: recenter under the fixed pin via MapLibre jumpTo.
+    // MapLibre uses [lng, lat] order (GeoJSON), the opposite of Leaflet.
+    expect(fakeMap.jumpTo).toHaveBeenCalledWith({
+      center: [30.51, 50.46],
+      zoom: 16,
+    });
     expect(selectLocationMock).toHaveBeenCalledWith(
       "init-data",
       MATCH_ID,
@@ -267,7 +284,7 @@ describe("Location Mini App geolocation quick-action", () => {
         callbacks.error = error;
       }),
     } as unknown as Geolocation;
-    const { app, mainButton, shareButton } = await loadLocationApp({ geolocation });
+    const { app, shareButton } = await loadLocationApp({ geolocation });
 
     shareButton.click();
     callbacks.error?.(makeGeoError(1));
@@ -277,8 +294,7 @@ describe("Location Mini App geolocation quick-action", () => {
       "Location permission was denied. You can still type an address or tap the map.",
     );
     expect(shareButton.disabled).toBe(false);
-    expect(shareButton.textContent).toBe("Share my location");
-    expect(mainButton.enable).toHaveBeenCalled();
+    expect(shareButton.classList.contains("loading")).toBe(false);
   });
 
   it.each([

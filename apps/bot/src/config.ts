@@ -284,6 +284,13 @@ export const env = {
   /// scheduling never wedges.
   DATE_CARD_FEATURE_ENABLED: process.env.DATE_CARD_FEATURE_ENABLED === "true",
 
+  /// Dev-only preview switch. When true, the `/previewlocation` bot command is
+  /// live: it DMs the sender the venue location-picker Mini App button pointed
+  /// at a throwaway match id, purely to eyeball the Location Mini App inside
+  /// Telegram without driving a real match to `negotiating_venue`. Default off
+  /// so it stays dark in production; enable only for a design-review session.
+  DEV_MINIAPP_PREVIEW_ENABLED: process.env.DEV_MINIAPP_PREVIEW_ENABLED === "true",
+
   // ── Anti-spam / LLM token-budget protection ──────────────────
   /// Master flag for the per-user Telegram flood guard (Layer 1). When true
   /// (default), text/voice messages are rate-limited per user with the loose

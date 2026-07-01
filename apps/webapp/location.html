@@ -2,187 +2,91 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>Gennety Location</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link
       rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin=""
+      href="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.css"
+      integrity="sha384-Nq6PQ+9vJPvw7U/VfDELyrWoGQMsy0gi6QShhaSrGzkpF5KkM40csg2leky+YMTd"
+      crossorigin="anonymous"
     />
     <script
-      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-      crossorigin=""
+      src="https://unpkg.com/maplibre-gl@5.6.1/dist/maplibre-gl.js"
+      integrity="sha384-/L1njH4bbgNt9Uk3HwJ272N9fxJzRBQCxhtwGkZiqgl+Nxpq2ETUNZhNMNV1RgyW"
+      crossorigin="anonymous"
     ></script>
-    <style>
-      :root {
-        color-scheme: light dark;
-        --hint: var(--tg-theme-hint-color, #6b7280);
-        --bg: var(--tg-theme-bg-color, #fff);
-        --secondary-bg: var(--tg-theme-secondary-bg-color, #f3f4f6);
-        --text: var(--tg-theme-text-color, #111);
-        --primary: var(--tg-theme-button-color, #2481cc);
-        --primary-text: var(--tg-theme-button-text-color, #fff);
-      }
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        background: var(--bg);
-        color: var(--text);
-        font-family: -apple-system, system-ui, sans-serif;
-        overflow: hidden;
-      }
-      #app {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-      }
-      header {
-        padding: 12px 16px 8px;
-        flex: 0 0 auto;
-      }
-      h1 {
-        font-size: 16px;
-        margin: 0 0 8px;
-        font-weight: 600;
-      }
-      .search-wrap {
-        position: relative;
-      }
-      input.search {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 12px 14px;
-        border-radius: 10px;
-        border: 1px solid var(--hint);
-        background: var(--secondary-bg);
-        color: var(--text);
-        font-size: 15px;
-        outline: none;
-      }
-      input.search:focus {
-        border-color: var(--primary);
-      }
-      button.share-current {
-        width: 100%;
-        box-sizing: border-box;
-        margin-top: 8px;
-        padding: 12px 14px;
-        border: 0;
-        border-radius: 10px;
-        background: var(--primary);
-        color: var(--primary-text);
-        font-size: 15px;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      button.share-current:disabled {
-        cursor: default;
-        opacity: 0.72;
-      }
-      .results {
-        position: absolute;
-        top: calc(100% + 4px);
-        left: 0;
-        right: 0;
-        z-index: 1000;
-        background: var(--bg);
-        border: 1px solid var(--hint);
-        border-radius: 10px;
-        max-height: 280px;
-        overflow-y: auto;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
-        display: none;
-      }
-      .results.visible {
-        display: block;
-      }
-      .result {
-        padding: 10px 14px;
-        cursor: pointer;
-        border-bottom: 1px solid var(--secondary-bg);
-      }
-      .result:last-child {
-        border-bottom: none;
-      }
-      .result:hover,
-      .result:active {
-        background: var(--secondary-bg);
-      }
-      .result .primary {
-        font-size: 14px;
-        font-weight: 500;
-        line-height: 1.3;
-      }
-      .result .secondary {
-        font-size: 12px;
-        color: var(--hint);
-        margin-top: 2px;
-        line-height: 1.3;
-      }
-      #map {
-        flex: 1 1 auto;
-        width: 100%;
-        z-index: 1;
-      }
-      footer {
-        flex: 0 0 auto;
-        padding: 12px 16px;
-        background: var(--bg);
-        border-top: 1px solid var(--secondary-bg);
-      }
-      .selected {
-        font-size: 13px;
-        color: var(--hint);
-        line-height: 1.4;
-        min-height: 18px;
-      }
-      .selected strong {
-        color: var(--text);
-        font-weight: 500;
-      }
-      #no-context {
-        padding: 20px 16px;
-        color: var(--hint);
-        font-size: 14px;
-      }
-      .empty-hint {
-        font-size: 12px;
-        color: var(--hint);
-        margin-top: 8px;
-        line-height: 1.4;
-      }
-    </style>
   </head>
   <body>
-    <div id="app">
-      <header>
-        <h1 id="title"></h1>
-        <div class="search-wrap">
-          <input
-            type="text"
-            class="search"
-            id="search"
-            placeholder=""
-            autocomplete="off"
-          />
-          <div class="results" id="results"></div>
-        </div>
-        <button type="button" class="share-current" id="share-current">
-        </button>
-        <p class="empty-hint" id="empty-hint">
-        </p>
-      </header>
-      <div id="map"></div>
-      <footer>
-        <p class="selected" id="selected">&nbsp;</p>
-      </footer>
+    <!-- Full-bleed map backdrop -->
+    <div id="map"></div>
+    <div id="scrim"></div>
+
+    <!-- Center-pin picker: the map moves under a fixed pin -->
+    <div id="pin-shadow"></div>
+    <svg id="pin" width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7z"
+        fill="#b69ae5"
+        stroke="#d4c0f4"
+        stroke-width="1.2"
+      />
+      <circle cx="12" cy="9" r="2.6" fill="#120e1c" />
+    </svg>
+
+    <!-- TOP island: search + floating results dropdown -->
+    <div class="layer top">
+      <div class="island search-wrap">
+        <span class="icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+        </span>
+        <input type="text" class="search" id="search" placeholder="" autocomplete="off" />
+      </div>
+      <div class="island results" id="results"></div>
     </div>
-    <p id="no-context" style="display: none"></p>
+
+    <!-- BOTTOM island: address readout + "use my location" + confirm CTA -->
+    <div class="layer bottom">
+      <div class="island confirm-island">
+        <div class="addr-row">
+          <span class="pin-ico" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z" />
+              <circle cx="12" cy="10" r="2.4" />
+            </svg>
+          </span>
+          <div class="txt">
+            <div class="label" id="addr-label"></div>
+            <div class="value" id="selected">&nbsp;</div>
+          </div>
+        </div>
+        <!-- Secondary text action: use the device's current position -->
+        <button type="button" class="loc-btn" id="share-current">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3.2" />
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+          </svg>
+          <span class="loc-btn-text"></span>
+        </button>
+        <button type="button" class="cta" id="confirm">
+          <span class="cta-text"></span>
+          <span class="spinner" aria-hidden="true"></span>
+          <svg class="arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- No-context fallback (opened without a match id) -->
+    <div id="no-context" style="display: none"></div>
+
     <script type="module" src="/src/location.ts"></script>
   </body>
 </html>

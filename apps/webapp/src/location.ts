@@ -1,3 +1,4 @@
+import "./location.css";
 import {
   searchLocations,
   selectLocation,
@@ -5,34 +6,44 @@ import {
   type LocationSearchHit,
 } from "./api.js";
 import { pickLang, tr, type Lang } from "./i18n.js";
+import { wireContentInsets } from "./telegram-insets.js";
 
 /**
  * Location Mini App entry point (Phase 3.7 — concierge venue, map picker).
  *
- * UX:
- *   1. User opens via the bot's `web_app` inline button. URL carries
- *      `?match=<id>&lang=<en|ru|uk|de|pl>` (start_param fallback for inline mode).
- *   2. Map (Leaflet + OSM tiles) opens centred on Kyiv (default city — we
- *      don't have the user's prior coords yet at first open). Marker is
- *      dropped at the centre as a draggable starting point.
- *   3. User can:
- *      - Tap "Share my location" → browser geolocation prompt → immediate save.
- *      - Type a query → debounced `GET /v1/location/search` → dropdown
- *        of up to 8 hits. Tap one → map jumps + marker drops there.
- *      - Tap on the map → marker drops at that point. No reverse
- *        geocode — we just label it "Custom point".
- *      - Drag the marker → updates lat/lng silently.
- *   4. The Telegram MainButton ("Confirm") POSTs `lat/lng + address` to
- *      `/v1/location/select`, which writes vibeLat/Lng/Address on the
- *      match and triggers `tryFinalize`. App closes on success.
+ * Full-screen "Premium Lavender Glass" web app (shared visual language with the
+ * venue-change / ticket Mini Apps): the dark map is a full-bleed backdrop and
+ * the controls float over it as weightless liquid-glass islands. There is no
+ * chrome header or footer divider — the old sandwich layout was retired.
  *
- * No reverse-geocode on free-form taps to keep this v1 narrow — we don't
- * need a separate Geocoding API enabled, and the venue searcher works
- * off lat/lng anyway.
+ * UX:
+ *   1. Opened via the bot's `web_app` inline button. URL carries
+ *      `?match=<id>&lang=<en|ru|uk|de|pl>` (start_param fallback for inline mode).
+ *   2. A dark map (Leaflet + CARTO dark tiles) opens centred on Kyiv (default
+ *      city — no prior coords at first open). A **fixed centre pin** marks the
+ *      selected point; the map moves under it (easier one-handed than dragging a
+ *      marker), so whatever sits under the pin is the departure point.
+ *   3. The user can:
+ *      - Tap the 📍 FAB → browser geolocation prompt → immediate save.
+ *      - Type a query → debounced `GET /v1/location/search` → floating glass
+ *        dropdown of up to 8 hits. Tap one → map recentres under the pin.
+ *      - Pan the map → the point under the pin becomes a "custom point".
+ *   4. The in-page **Confirm** island POSTs `lat/lng + address` to
+ *      `/v1/location/select`, which writes vibeLat/Lng/Address on the match and
+ *      triggers `tryFinalize`. App closes on success. (We drive Confirm with our
+ *      own glass button, not the opaque native MainButton — same choice as
+ *      venue-change — so the floating-glass composition stays intact.)
+ *
+ * No reverse-geocode on free-form pans to keep this v1 narrow — we don't need a
+ * separate Geocoding API enabled, and the venue searcher works off lat/lng.
  */
 
-const DEFAULT_CENTER: [number, number] = [50.4501, 30.5234]; // Kyiv center
-const DEFAULT_ZOOM = 13;
+const DEFAULT_CENTER: [number, number] = [50.4501, 30.5234]; // Kyiv center [lat, lng]
+const DEFAULT_ZOOM = 14;
+const PICK_ZOOM = 16;
+// OpenFreeMap vector "dark" basemap — modern, minimal, keyless (attribution is
+// added automatically by MapLibre). Style JSON is MapLibre spec v8.
+const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/dark";
 const SEARCH_DEBOUNCE_MS = 350;
 const MIN_QUERY_LEN = 2;
 const GEOLOCATION_OPTIONS: PositionOptions = {
@@ -45,31 +56,51 @@ const app = window.Telegram?.WebApp;
 app?.ready();
 app?.expand();
 
+// Bot API 8.0+ — immersive fullscreen so the map fills the screen edge-to-edge.
+// Older clients silently fall through to expand().
+try {
+  if (app?.isVersionAtLeast?.("8.0") && !app.isFullscreen) {
+    app.requestFullscreen?.();
+  }
+  app?.setHeaderColor?.("#120E1C");
+  app?.setBackgroundColor?.("#120E1C");
+  app?.setBottomBarColor?.("#120E1C");
+} catch {
+  // Best-effort cosmetic boot — never crash over chrome theming.
+}
+// Reserve room for Telegram's floating close × / menu ⋯ in fullscreen.
+wireContentInsets(app);
+// We drive Confirm with our own in-page glass button; make sure a stale
+// MainButton from a previous version can never linger over the composition.
+app?.MainButton?.hide?.();
+
 const params = new URLSearchParams(location.search);
 const matchId = app?.initDataUnsafe?.start_param ?? params.get("match") ?? "";
 const lang: Lang = pickLang(params.get("lang") ?? app?.initDataUnsafe?.user?.language_code);
 document.documentElement?.setAttribute("lang", lang);
 
-const titleEl = document.getElementById("title");
 const searchEl = document.getElementById("search") as HTMLInputElement | null;
 const resultsEl = document.getElementById("results");
 const shareCurrentEl = document.getElementById("share-current") as HTMLButtonElement | null;
+const confirmEl = document.getElementById("confirm") as HTMLButtonElement | null;
+const ctaTextEl = confirmEl?.querySelector(".cta-text") ?? null;
+const shareTextEl = shareCurrentEl?.querySelector(".loc-btn-text") ?? null;
+const addrLabelEl = document.getElementById("addr-label");
 const selectedEl = document.getElementById("selected");
-const emptyHintEl = document.getElementById("empty-hint");
 const noContextEl = document.getElementById("no-context");
 
-let map: L.Map | null = null;
-let marker: L.Marker | null = null;
+let map: maplibregl.Map | null = null;
 let selectedLat: number = DEFAULT_CENTER[0];
 let selectedLng: number = DEFAULT_CENTER[1];
 let selectedAddress: string | null = null;
 let confirming = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
-if (titleEl) titleEl.textContent = tr(lang, "locTitle");
 if (searchEl) searchEl.placeholder = tr(lang, "locSearchPlaceholder");
-if (shareCurrentEl) shareCurrentEl.textContent = tr(lang, "locShareCurrent");
-if (emptyHintEl) emptyHintEl.textContent = tr(lang, "locEmptyHint");
+if (shareTextEl) shareTextEl.textContent = tr(lang, "locShareCurrent");
+if (shareCurrentEl) shareCurrentEl.setAttribute("aria-label", tr(lang, "locShareCurrent"));
+if (addrLabelEl) addrLabelEl.textContent = tr(lang, "locSelectedPrefix").replace(/[:：]\s*$/, "");
+if (ctaTextEl) ctaTextEl.textContent = tr(lang, "locConfirm");
 
 if (!matchId) {
   showNoContext();
@@ -77,63 +108,71 @@ if (!matchId) {
   initMap();
   initSearch();
   initShareCurrentLocation();
-  if (app) {
-    app.MainButton.setText(tr(lang, "locConfirm"));
-    app.MainButton.onClick(handleConfirm);
-    app.MainButton.show();
-    app.MainButton.enable();
-  }
+  confirmEl?.addEventListener("click", () => {
+    void handleConfirm();
+  });
 }
 
 function showNoContext(): void {
   if (noContextEl) {
-    noContextEl.style.display = "block";
+    noContextEl.style.display = "flex";
     noContextEl.textContent = tr(lang, "noContext");
   }
-  const appEl = document.getElementById("app");
-  if (appEl) appEl.style.display = "none";
 }
 
 function initMap(): void {
-  // Leaflet is loaded from a `<script>` tag in location.html — global `L`.
-  // If for any reason it didn't load (offline tunnel during dev), surface
-  // a graceful error rather than crashing.
-  if (!window.L) {
+  // MapLibre GL is loaded from a `<script>` tag in location.html — global
+  // `maplibregl`. If for any reason it didn't load (offline tunnel during dev),
+  // surface a graceful message rather than crashing.
+  if (!window.maplibregl) {
     if (selectedEl) selectedEl.textContent = tr(lang, "locErrMapUnavailable");
     return;
   }
 
-  map = window.L.map("map", {
-    center: DEFAULT_CENTER,
-    zoom: DEFAULT_ZOOM,
-    zoomControl: true,
-    attributionControl: true,
-  });
-  window.L
-    .tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap",
-      maxZoom: 19,
-    })
-    .addTo(map);
+  // MapLibre's constructor THROWS when WebGL is unavailable. Isolate it so a
+  // GL failure only costs the map preview — search, "use my location", and
+  // Confirm must still work (they operate on lat/lng, not the canvas).
+  try {
+    // NOTE: MapLibre coordinates are [lng, lat] (GeoJSON order) — the opposite
+    // of Leaflet's [lat, lng]. Everything below flips accordingly.
+    map = new window.maplibregl.Map({
+      container: "map",
+      style: MAP_STYLE_URL,
+      center: [DEFAULT_CENTER[1], DEFAULT_CENTER[0]],
+      zoom: DEFAULT_ZOOM,
+      attributionControl: true,
+      // Flat picker: no rotation/pitch so "the point under the pin" stays literal.
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false,
+    });
+    map.touchZoomRotate?.disableRotation?.();
 
-  marker = window.L
-    .marker(DEFAULT_CENTER, { draggable: true, autoPan: true })
-    .addTo(map);
+    // The point under the fixed centre pin is the selection. Any manual pan
+    // makes it a "custom point"; programmatic recentres (search / geolocation)
+    // override the label right after, so a labelled pick never flickers.
+    map.on("moveend", () => {
+      if (!map) return;
+      const c = map.getCenter();
+      setSelected(c.lat, c.lng, null);
+    });
 
-  marker.on("dragend", (e) => {
-    const ll = e.target.getLatLng();
-    setSelected(ll.lat, ll.lng, null);
-  });
+    setSelected(DEFAULT_CENTER[0], DEFAULT_CENTER[1], null);
+    // The container is a fixed full-bleed div present at construction, but
+    // resize once after layout settles in case first paint reported 0 height.
+    setTimeout(() => map?.resize(), 50);
+  } catch {
+    map = null;
+    if (selectedEl) selectedEl.textContent = tr(lang, "locErrMapUnavailable");
+  }
+}
 
-  map.on("click", (e) => {
-    if (!marker) return;
-    marker.setLatLng(e.latlng);
-    setSelected(e.latlng.lat, e.latlng.lng, null);
-  });
-
-  setSelected(DEFAULT_CENTER[0], DEFAULT_CENTER[1], null);
-  // Ensure tiles render correctly inside flexbox after layout settles.
-  setTimeout(() => map?.invalidateSize(), 50);
+/** Recentre the map under the pin and label the point in one step. */
+function recenter(lat: number, lng: number, address: string | null): void {
+  // jumpTo is instant and fires `moveend` synchronously (setting a null "custom
+  // point"); we then override with the real label below. MapLibre is [lng, lat].
+  map?.jumpTo({ center: [lng, lat], zoom: PICK_ZOOM });
+  setSelected(lat, lng, address);
 }
 
 function setSelected(lat: number, lng: number, address: string | null): void {
@@ -145,19 +184,7 @@ function setSelected(lat: number, lng: number, address: string | null): void {
 
 function renderSelectedLine(): void {
   if (!selectedEl) return;
-  const labelHtml = selectedAddress
-    ? `<strong>${escapeHtml(selectedAddress)}</strong>`
-    : `${escapeHtml(tr(lang, "locCustomPoint"))} <span>(${selectedLat.toFixed(4)}, ${selectedLng.toFixed(4)})</span>`;
-  selectedEl.innerHTML = `${escapeHtml(tr(lang, "locSelectedPrefix"))}${labelHtml}`;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+  selectedEl.textContent = selectedAddress ?? tr(lang, "locCustomPoint");
 }
 
 function initSearch(): void {
@@ -188,14 +215,14 @@ function initSearch(): void {
 async function runSearch(query: string): Promise<void> {
   if (!app) return;
   try {
-    // Bias the search by current map center so "metro" disambiguates
-    // to the user's city, not a global hit.
+    // Bias the search by the current pin position so "metro" disambiguates to
+    // the user's city, not a global hit.
     const center = map ? { lat: selectedLat, lng: selectedLng } : null;
     const hits = await searchLocations(app.initData, query, center);
     renderResults(hits);
   } catch {
-    // Soft-fail — searching is supplemental; the user can still tap
-    // on the map. Don't surface a modal alert that would feel intrusive.
+    // Soft-fail — searching is supplemental; the user can still pan the map.
+    // Don't surface a modal alert that would feel intrusive.
     hideResults();
   }
 }
@@ -236,15 +263,11 @@ function initShareCurrentLocation(): void {
 function pickHit(hit: LocationSearchHit): void {
   if (searchEl) searchEl.value = hit.name;
   hideResults();
-  if (map && marker) {
-    map.setView([hit.lat, hit.lng], 15);
-    marker.setLatLng([hit.lat, hit.lng]);
-  }
-  // Compose a human label combining name + short address. The address
-  // is often the full street + city; combining gives the bot's
-  // confirmation message a stable "[Name], [Address]" shape.
+  // Compose a human label combining name + short address. The address is often
+  // the full street + city; combining gives the bot's confirmation message a
+  // stable "[Name], [Address]" shape.
   const label = hit.address ? `${hit.name}, ${hit.address}` : hit.name;
-  setSelected(hit.lat, hit.lng, label);
+  recenter(hit.lat, hit.lng, label);
   app?.HapticFeedback?.selectionChanged?.();
 }
 
@@ -270,8 +293,8 @@ function handleShareCurrentLocation(): void {
   }
 
   startSaving(true);
-  // Browser/Telegram WebView location permission must be requested from
-  // this user click; any denial or platform failure falls back to manual input.
+  // Browser/Telegram WebView location permission must be requested from this
+  // user click; any denial or platform failure falls back to manual input.
   navigator.geolocation.getCurrentPosition(
     (position) => {
       void handleGeolocationSuccess(position);
@@ -293,11 +316,7 @@ async function handleGeolocationSuccess(position: GeolocationPosition): Promise<
   }
 
   const label = tr(lang, "locCurrentLocation");
-  if (map && marker) {
-    map.setView([lat, lng], 15);
-    marker.setLatLng([lat, lng]);
-  }
-  setSelected(lat, lng, label);
+  recenter(lat, lng, label);
   await saveLocation(lat, lng, label);
 }
 
@@ -321,27 +340,28 @@ function geolocationErrorMessage(error: GeolocationPositionError): string {
 }
 
 function startSaving(fromShareCurrent: boolean): void {
-  if (!app) return;
   confirming = true;
-  app.MainButton.setText(tr(lang, "locConfirming"));
-  app.MainButton.showProgress();
-  app.MainButton.disable();
+  if (confirmEl) {
+    confirmEl.disabled = true;
+    confirmEl.classList.add("saving");
+  }
+  if (ctaTextEl) ctaTextEl.textContent = tr(lang, "locConfirming");
   if (shareCurrentEl) {
     shareCurrentEl.disabled = true;
-    shareCurrentEl.textContent = fromShareCurrent
-      ? tr(lang, "locSharingCurrent")
-      : tr(lang, "locShareCurrent");
+    if (fromShareCurrent) shareCurrentEl.classList.add("loading");
   }
 }
 
 function resetSaving(): void {
   confirming = false;
-  app?.MainButton.hideProgress();
-  app?.MainButton.enable();
-  app?.MainButton.setText(tr(lang, "locConfirm"));
+  if (confirmEl) {
+    confirmEl.disabled = false;
+    confirmEl.classList.remove("saving");
+  }
+  if (ctaTextEl) ctaTextEl.textContent = tr(lang, "locConfirm");
   if (shareCurrentEl) {
     shareCurrentEl.disabled = false;
-    shareCurrentEl.textContent = tr(lang, "locShareCurrent");
+    shareCurrentEl.classList.remove("loading");
   }
 }
 
@@ -352,17 +372,11 @@ async function saveLocation(
 ): Promise<void> {
   if (!app) return;
   try {
-    await selectLocation(
-      app.initData,
-      matchId,
-      lat,
-      lng,
-      address,
-    );
+    await selectLocation(app.initData, matchId, lat, lng, address);
     app.HapticFeedback?.notificationOccurred?.("success");
     if (selectedEl) selectedEl.textContent = tr(lang, "locSaved");
-    // Brief flash so the user perceives the success before the app
-    // closes itself — without it Telegram dismisses too fast on iOS.
+    // Brief flash so the user perceives the success before the app closes
+    // itself — without it Telegram dismisses too fast on iOS.
     setTimeout(() => app.close(), 350);
   } catch (err) {
     resetSaving();

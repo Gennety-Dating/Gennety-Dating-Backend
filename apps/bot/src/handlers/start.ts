@@ -475,4 +475,21 @@ start.command("settings", async (ctx) => {
   await showSettingsMenu(ctx);
 });
 
+// /previewlocation — dev-only design preview of the Location Mini App.
+// Opens the venue departure-point picker (location.html) against a throwaway
+// match id so the screen can be eyeballed inside Telegram without driving a
+// real match to `negotiating_venue`. Gated by DEV_MINIAPP_PREVIEW_ENABLED so it
+// stays dark unless explicitly turned on. Search is live; the "Confirm" tap
+// fails softly (match-not-found) — this is for looking, not saving.
+start.command("previewlocation", async (ctx) => {
+  if (!env.DEV_MINIAPP_PREVIEW_ENABLED) return;
+  const lang = ctx.session.language;
+  const { buildLocationMapKeyboard } = await import("./matching/venue-negotiation.js");
+  const demoMatchId = "00000000-0000-4000-8000-000000000000";
+  await ctx.reply(
+    "🗺️ Preview: departure-point picker (dev). Search is live; Confirm will fail softly on the demo match.",
+    { reply_markup: buildLocationMapKeyboard(demoMatchId, lang) },
+  );
+});
+
 export { start };
