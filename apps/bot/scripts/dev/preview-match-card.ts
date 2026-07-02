@@ -19,6 +19,7 @@ import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   renderMatchCard,
+  renderMatchCardSet,
   MATCH_CARD_VARIANTS,
   type MatchCardTexts,
   type MatchCardVariant,
@@ -41,9 +42,10 @@ const outDir = resolve(args["out"] ?? "tmp/match-cards");
 mkdirSync(outDir, { recursive: true });
 
 // Short person-first copy: describe the person and their vibe, never "your
-// date with…" framing.
+// date with…" framing. Empty eyebrow → the panel opens with the wine accent
+// bar instead of words.
 const shortTexts: MatchCardTexts = {
-  eyebrow: "Кажется, вы совпадёте",
+  eyebrow: "",
   name: args["name"] ?? "Марк, 20",
   tagline: args["tagline"] ?? "Тёплый, ироничный и очень лёгкий в общении.",
   paragraphs: [
@@ -70,9 +72,28 @@ const variants: MatchCardVariant[] = args["variant"]
 
 for (const variant of variants) {
   const started = Date.now();
+  if (variant === "paper") {
+    // Paper ships as a SET: lead card (2 photos + text) then photo-only cards.
+    const cards = await renderMatchCardSet({
+      photos,
+      texts: shortTexts,
+      seed: args["seed"] ?? "preview",
+    });
+    if (!cards) {
+      console.error("✗ paper: set render returned null");
+      continue;
+    }
+    cards.forEach((png, i) => {
+      const file = resolve(outDir, `match-card-paper-${i + 1}.png`);
+      writeFileSync(file, png);
+      console.log(`✓ paper #${i + 1} → ${file} (${png.length} bytes)`);
+    });
+    console.log(`  paper set: ${cards.length} card(s), ${Date.now() - started}ms total`);
+    continue;
+  }
   const png = await renderMatchCard({
     photos,
-    texts: variant === "paper" ? shortTexts : classicTexts,
+    texts: classicTexts,
     seed: args["seed"] ?? "preview",
     variant,
   });

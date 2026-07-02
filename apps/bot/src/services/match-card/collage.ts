@@ -216,20 +216,52 @@ async function loadButterfly(): Promise<Image | null> {
   return cachedButterfly;
 }
 
-/** Rasterized brand butterfly as a standalone PNG (for satori headers). */
-export async function butterflyPng(width: number, tint?: string): Promise<Buffer | null> {
+export interface ButterflyMark {
+  png: Buffer;
+  width: number;
+  height: number;
+}
+
+/**
+ * Rasterized brand butterfly as a standalone PNG for satori headers/pills.
+ * The SVG canvas is square with transparent margins, so the raster is
+ * alpha-trimmed and returned WITH its real dimensions — callers must derive
+ * the display box from `width/height` or the mark renders squished.
+ */
+export async function butterflyPng(width: number, tint?: string): Promise<ButterflyMark | null> {
   const img = await loadButterfly();
   if (!img) return null;
-  const h = Math.round((img.height / img.width) * width);
-  const canvas = createCanvas(width, h) as Canvas;
+  const size = Math.max(64, Math.round(width));
+  const canvas = createCanvas(size, size) as Canvas;
   const ctx = canvas.getContext("2d");
-  ctx.drawImage(img, 0, 0, width, h);
+  ctx.drawImage(img, 0, 0, size, size);
   if (tint) {
     ctx.globalCompositeOperation = "source-in";
     ctx.fillStyle = tint;
-    ctx.fillRect(0, 0, width, h);
+    ctx.fillRect(0, 0, size, size);
   }
-  return canvas.toBuffer("image/png");
+  // Alpha-trim to the visible glyph.
+  const data = ctx.getImageData(0, 0, size, size).data;
+  let minX = size;
+  let minY = size;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (data[(y * size + x) * 4 + 3]! > 8) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < 0) return null;
+  const bw = maxX - minX + 1;
+  const bh = maxY - minY + 1;
+  const trimmed = createCanvas(bw, bh) as Canvas;
+  trimmed.getContext("2d").drawImage(canvas, minX, minY, bw, bh, 0, 0, bw, bh);
+  return { png: trimmed.toBuffer("image/png"), width: bw, height: bh };
 }
 
 /* ------------------------------------------------------------------ */

@@ -14,11 +14,15 @@ import { fileURLToPath } from "node:url";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import { grainPng, toPngBuffer } from "../date-card/image.js";
-import { buildCollageLayer, butterflyPng, CARD_W, CARD_H } from "./collage.js";
+import { buildCollageLayer, butterflyPng, CARD_W, CARD_H, type ButterflyMark } from "./collage.js";
 import {
   buildMatchCardElement,
   collageSpecFor,
+  paperGalleryCard,
+  paperGallerySpec,
+  paperLeadSpec,
   GRAPHITE,
+  type CardNode,
   type MatchCardTexts,
   type MatchCardVariant,
 } from "./template.js";
@@ -61,15 +65,30 @@ function grainTile(): Buffer {
   return cachedGrain;
 }
 
-const headerButterflyCache = new Map<string, Buffer | null>();
-async function headerButterfly(variant: MatchCardVariant): Promise<Buffer | null> {
+const headerButterflyCache = new Map<string, ButterflyMark | null>();
+async function headerButterfly(variant: MatchCardVariant): Promise<ButterflyMark | null> {
   // Dark variants carry a soft-white mark; paper keeps the brand gradient.
   const tint = variant === "paper" ? undefined : "#F5F5F5";
   const key = tint ?? "brand";
   if (!headerButterflyCache.has(key)) {
-    headerButterflyCache.set(key, await butterflyPng(108, tint));
+    headerButterflyCache.set(key, await butterflyPng(160, tint));
   }
   return headerButterflyCache.get(key) ?? null;
+}
+
+async function rasterize(element: CardNode): Promise<Buffer> {
+  const svg = await satori(element as unknown as Parameters<typeof satori>[0], {
+    width: CARD_W,
+    height: CARD_H,
+    fonts: loadFonts(),
+  });
+  const png = new Resvg(svg, {
+    fitTo: { mode: "width", value: CARD_W },
+    background: GRAPHITE,
+  })
+    .render()
+    .asPng();
+  return Buffer.from(png);
 }
 
 export async function renderMatchCard(input: MatchCardInput): Promise<Buffer | null> {
@@ -87,21 +106,50 @@ export async function renderMatchCard(input: MatchCardInput): Promise<Buffer | n
       grain: grainTile(),
       butterfly: await headerButterfly(input.variant),
     });
-
-    const svg = await satori(element as unknown as Parameters<typeof satori>[0], {
-      width: CARD_W,
-      height: CARD_H,
-      fonts: loadFonts(),
-    });
-    const png = new Resvg(svg, {
-      fitTo: { mode: "width", value: CARD_W },
-      background: GRAPHITE,
-    })
-      .render()
-      .asPng();
-    return Buffer.from(png);
+    return await rasterize(element);
   } catch (err) {
     console.warn("[match-card] render failed:", err);
+    return null;
+  }
+}
+
+/**
+ * The paper design as a card SET: photos are split into pairs (an odd count
+ * leaves the final card solo). Card 1 carries the text panel over its two
+ * photos; every following card is photos-only with the brand pill, so the
+ * person — not the copy — is the focus.
+ *
+ * Returns `null` (never throws) when nothing could be rendered, so callers
+ * fall back to the plain photo media-group.
+ */
+export async function renderMatchCardSet(
+  input: Omit<MatchCardInput, "variant">,
+): Promise<Buffer[] | null> {
+  try {
+    const photos = (await Promise.all(input.photos.map((p) => toPngBuffer(p)))).filter(
+      (p): p is Buffer => p !== null,
+    );
+    if (photos.length === 0) return null;
+
+    const chunks: Buffer[][] = [];
+    for (let i = 0; i < photos.length; i += 2) chunks.push(photos.slice(i, i + 2));
+
+    const butterfly = await headerButterfly("paper");
+    const grain = grainTile();
+    const cards: Buffer[] = [];
+    for (const [i, chunk] of chunks.entries()) {
+      const spec = i === 0 ? paperLeadSpec(chunk.length) : paperGallerySpec(chunk.length);
+      const collage = await buildCollageLayer(chunk, spec, `${input.seed}#${i}`);
+      const layers = { collage, grain, butterfly };
+      const element =
+        i === 0
+          ? buildMatchCardElement("paper", input.texts, layers)
+          : paperGalleryCard(input.texts, layers);
+      cards.push(await rasterize(element));
+    }
+    return cards;
+  } catch (err) {
+    console.warn("[match-card] set render failed:", err);
     return null;
   }
 }

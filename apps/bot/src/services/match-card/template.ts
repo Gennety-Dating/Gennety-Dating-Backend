@@ -10,7 +10,7 @@
  * bundled); body is Roboto. Card text stays emoji-free — the bundled fonts
  * have no color-emoji glyphs and satori would drop them.
  */
-import { CARD_W, CARD_H, type CollageSpec } from "./collage.js";
+import { CARD_W, CARD_H, type ButterflyMark, type CollageSpec } from "./collage.js";
 
 export const GRAPHITE = "#111111";
 export const WINE = "#8B253B";
@@ -62,8 +62,18 @@ export interface CardLayers {
   collage: Buffer;
   /** Film-grain overlay tile. Optional. */
   grain: Buffer | null;
-  /** Small butterfly mark for the wordmark row. Optional. */
-  butterfly: Buffer | null;
+  /** Alpha-trimmed butterfly mark (real aspect ratio) for wordmark rows. Optional. */
+  butterfly: ButterflyMark | null;
+}
+
+/** Butterfly <img> sized by display height, preserving the mark's real ratio. */
+function butterflyImg(mark: ButterflyMark, displayH: number): CardNode {
+  const w = Math.round((mark.width / mark.height) * displayH);
+  return el("img", { width: `${w}px`, height: `${displayH}px` }, undefined, {
+    src: dataUri(mark.png),
+    width: w,
+    height: displayH,
+  });
 }
 
 function fullBleed(buffer: Buffer): CardNode {
@@ -77,15 +87,7 @@ function fullBleed(buffer: Buffer): CardNode {
 
 function wordmark(layers: CardLayers, texts: MatchCardTexts, ink: string, pos: Record<string, unknown>): CardNode {
   const children: (CardNode | string)[] = [];
-  if (layers.butterfly) {
-    children.push(
-      el("img", { width: "54px", height: "44px" }, undefined, {
-        src: dataUri(layers.butterfly),
-        width: 54,
-        height: 44,
-      }),
-    );
-  }
+  if (layers.butterfly) children.push(butterflyImg(layers.butterfly, 38));
   children.push(
     el(
       "div",
@@ -107,20 +109,31 @@ interface TextBlockStyle {
 }
 
 function textBlock(texts: MatchCardTexts, s: TextBlockStyle): CardNode[] {
-  const nodes: CardNode[] = [
-    el(
-      "div",
-      {
+  // No eyebrow copy → a short wine accent bar keeps the top of the panel
+  // composed without extra words.
+  const lead = texts.eyebrow
+    ? el(
+        "div",
+        {
+          display: "flex",
+          fontFamily: "Roboto",
+          fontWeight: 700,
+          fontSize: "23px",
+          letterSpacing: "4px",
+          textTransform: "uppercase",
+          color: s.eyebrowColor,
+        },
+        texts.eyebrow,
+      )
+    : el("div", {
         display: "flex",
-        fontFamily: "Roboto",
-        fontWeight: 700,
-        fontSize: "23px",
-        letterSpacing: "4px",
-        textTransform: "uppercase",
-        color: s.eyebrowColor,
-      },
-      texts.eyebrow,
-    ),
+        width: "68px",
+        height: "8px",
+        borderRadius: "4px",
+        backgroundColor: s.eyebrowColor,
+      });
+  const nodes: CardNode[] = [
+    lead,
     el(
       "div",
       {
@@ -171,25 +184,17 @@ function textBlock(texts: MatchCardTexts, s: TextBlockStyle): CardNode[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Variant: paper — soft-white zine collage, clean white text panel    */
+/* Variant: paper — photo-first torn collage, sent as a SET of cards.  */
+/* Card 1 (lead): two photos + the opaque rounded text panel.          */
+/* Cards 2+ (gallery): photos only, small brand pill, no copy.         */
 /* ------------------------------------------------------------------ */
 
-function paperCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
-  // Brand signature inside the panel (photos now own every card edge, so the
-  // wordmark moves off the photos onto the paper).
-  const signature = el(
+function brandSignature(layers: CardLayers, texts: MatchCardTexts): CardNode {
+  return el(
     "div",
     { display: "flex", alignItems: "center", gap: "10px", marginTop: "30px", alignSelf: "flex-end" },
     [
-      ...(layers.butterfly
-        ? [
-            el("img", { width: "38px", height: "31px" }, undefined, {
-              src: dataUri(layers.butterfly),
-              width: 38,
-              height: 31,
-            }),
-          ]
-        : []),
+      ...(layers.butterfly ? [butterflyImg(layers.butterfly, 26)] : []),
       el(
         "div",
         { display: "flex", fontFamily: "Unbounded", fontSize: "21px", fontWeight: 700, color: WINE },
@@ -197,6 +202,9 @@ function paperCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
       ),
     ],
   );
+}
+
+function paperCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
   return el(
     "div",
     { display: "flex", width: `${CARD_W}px`, height: `${CARD_H}px`, backgroundColor: SOFT },
@@ -208,13 +216,13 @@ function paperCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
           display: "flex",
           flexDirection: "column",
           position: "absolute",
-          left: "90px",
-          top: "430px",
-          width: "540px",
-          padding: "46px 48px 40px 48px",
-          backgroundColor: "rgba(255,255,255,0.96)",
+          left: "70px",
+          top: "470px",
+          width: "500px",
+          padding: "44px 46px 38px 46px",
+          backgroundColor: "#FFFFFF",
           borderRadius: "28px",
-          boxShadow: "0 24px 60px rgba(17,17,17,0.24)",
+          boxShadow: "0 24px 60px rgba(17,17,17,0.26)",
         },
         [
           ...textBlock(texts, {
@@ -222,16 +230,111 @@ function paperCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
             nameColor: GRAPHITE,
             taglineColor: GRAPHITE,
             bodyColor: BODY_INK,
-            nameSize: 56,
-            bodySize: 25,
-            width: 444,
+            nameSize: 54,
+            bodySize: 24,
+            width: 408,
           }),
-          signature,
+          brandSignature(layers, texts),
         ],
       ),
       ...(layers.grain ? [fullBleed(layers.grain)] : []),
     ],
   );
+}
+
+/** Photos-only follow-up card: full-bleed collage + a small brand pill. */
+export function paperGalleryCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
+  return el(
+    "div",
+    { display: "flex", width: `${CARD_W}px`, height: `${CARD_H}px`, backgroundColor: SOFT },
+    [
+      fullBleed(layers.collage),
+      el(
+        "div",
+        {
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          position: "absolute",
+          right: "44px",
+          bottom: "44px",
+          padding: "12px 22px",
+          backgroundColor: "#FFFFFF",
+          borderRadius: "999px",
+          boxShadow: "0 12px 32px rgba(17,17,17,0.28)",
+        },
+        [
+          ...(layers.butterfly ? [butterflyImg(layers.butterfly, 24)] : []),
+          el(
+            "div",
+            { display: "flex", fontFamily: "Unbounded", fontSize: "19px", fontWeight: 700, color: WINE },
+            texts.wordmark,
+          ),
+        ],
+      ),
+      ...(layers.grain ? [fullBleed(layers.grain)] : []),
+    ],
+  );
+}
+
+/** Lead-card collage: one or two near-full-bleed torn photos around the panel. */
+export function paperLeadSpec(photoCount: number): CollageSpec {
+  const base = { cutout: { paper: "#FFFFFF", border: 15, tearAmp: 11, focusY: 0.24 } };
+  if (photoCount <= 1) {
+    return {
+      ...base,
+      slots: [{ cx: 620, cy: 675, w: 940, h: 1360, angle: -2 }],
+      dots: [{ x: 46, y: 290, cols: 3, rows: 6, r: 5, gap: 22, color: WINE, alpha: 0.45 }],
+      butterflies: [
+        { cx: 1000, cy: 140, size: 110, angle: -14, alpha: 1, above: true },
+        { cx: 120, cy: 1270, size: 64, angle: 18, alpha: 0.85, tint: "#FFFFFF", above: true },
+      ],
+    };
+  }
+  return {
+    ...base,
+    slots: [
+      { cx: 620, cy: 320, w: 1010, h: 650, angle: -3, focusY: 0.4 },
+      { cx: 640, cy: 1040, w: 1010, h: 640, angle: 2.5, focusY: 0.34 },
+    ],
+    dots: [
+      { x: 700, y: 664, cols: 8, rows: 3, r: 5, gap: 24, color: WINE, alpha: 0.5 },
+      { x: 42, y: 1050, cols: 3, rows: 5, r: 5, gap: 22, color: GRAPHITE, alpha: 0.32 },
+    ],
+    butterflies: [
+      { cx: 156, cy: 66, size: 104, angle: -14, alpha: 1, above: true },
+      { cx: 1002, cy: 1298, size: 64, angle: 18, alpha: 0.85, tint: "#FFFFFF", above: true },
+      { cx: 46, cy: 700, size: 54, angle: -20, alpha: 0.5, tint: WINE },
+    ],
+  };
+}
+
+/** Gallery-card collage: photos own the whole frame. */
+export function paperGallerySpec(photoCount: number): CollageSpec {
+  const base = { cutout: { paper: "#FFFFFF", border: 15, tearAmp: 11, focusY: 0.24 } };
+  if (photoCount <= 1) {
+    return {
+      ...base,
+      slots: [{ cx: 540, cy: 675, w: 1110, h: 1400, angle: -1.5 }],
+      dots: [],
+      butterflies: [
+        { cx: 990, cy: 120, size: 96, angle: -14, alpha: 1, above: true },
+        { cx: 80, cy: 1240, size: 64, angle: 18, alpha: 0.85, tint: "#FFFFFF", above: true },
+      ],
+    };
+  }
+  return {
+    ...base,
+    slots: [
+      { cx: 505, cy: 350, w: 1070, h: 705, angle: -2.5, focusY: 0.3 },
+      { cx: 575, cy: 1030, w: 1070, h: 685, angle: 3, focusY: 0.4 },
+    ],
+    dots: [{ x: 40, y: 726, cols: 4, rows: 3, r: 5, gap: 24, color: WINE, alpha: 0.45 }],
+    butterflies: [
+      { cx: 1008, cy: 96, size: 92, angle: -14, alpha: 1, above: true },
+      { cx: 72, cy: 1312, size: 60, angle: 18, alpha: 0.85, tint: "#FFFFFF", above: true },
+    ],
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -331,26 +434,7 @@ function wineCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
 export function collageSpecFor(variant: MatchCardVariant): CollageSpec {
   switch (variant) {
     case "paper":
-      // Photos own the card (near full-bleed torn cutouts, thin paper seams);
-      // the small rounded panel and the stickers sit on top of them.
-      return {
-        cutout: { paper: "#FFFFFF", border: 15, tearAmp: 11, focusY: 0.24 },
-        slots: [
-          { cx: 262, cy: 245, w: 570, h: 545, angle: -4 },
-          { cx: 836, cy: 305, w: 530, h: 670, angle: 3 },
-          { cx: 245, cy: 1082, w: 530, h: 570, angle: 3.5 },
-          { cx: 818, cy: 1078, w: 560, h: 630, angle: -3 },
-        ],
-        dots: [
-          { x: 620, y: 672, cols: 8, rows: 3, r: 5, gap: 24, color: WINE, alpha: 0.5 },
-          { x: 66, y: 560, cols: 3, rows: 4, r: 5, gap: 22, color: GRAPHITE, alpha: 0.3 },
-        ],
-        butterflies: [
-          { cx: 992, cy: 138, size: 118, angle: -14, alpha: 1, above: true },
-          { cx: 60, cy: 470, size: 68, angle: 16, alpha: 0.9, above: true },
-          { cx: 1016, cy: 872, size: 62, angle: 18, alpha: 0.85, tint: "#FFFFFF", above: true },
-        ],
-      };
+      return paperLeadSpec(2);
     case "graphite":
       return {
         cutout: { paper: "#FFFFFF", border: 16, tearAmp: 11, focusY: 0.24, shadow: "rgba(0,0,0,0.55)" },
