@@ -242,38 +242,16 @@ function paperCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
   );
 }
 
-/** Photos-only follow-up card: full-bleed collage + a small brand pill. */
-export function paperGalleryCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
+/**
+ * Photos-only follow-up card. Deliberately unbranded: the person owns the
+ * frame — only the butterfly accents baked into the collage remain (the
+ * wordmark lives on the lead card's panel only).
+ */
+export function paperGalleryCard(_texts: MatchCardTexts, layers: CardLayers): CardNode {
   return el(
     "div",
     { display: "flex", width: `${CARD_W}px`, height: `${CARD_H}px`, backgroundColor: SOFT },
-    [
-      fullBleed(layers.collage),
-      el(
-        "div",
-        {
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-          position: "absolute",
-          right: "44px",
-          bottom: "44px",
-          padding: "12px 22px",
-          backgroundColor: "#FFFFFF",
-          borderRadius: "999px",
-          boxShadow: "0 12px 32px rgba(17,17,17,0.28)",
-        },
-        [
-          ...(layers.butterfly ? [butterflyImg(layers.butterfly, 24)] : []),
-          el(
-            "div",
-            { display: "flex", fontFamily: "Unbounded", fontSize: "19px", fontWeight: 700, color: WINE },
-            texts.wordmark,
-          ),
-        ],
-      ),
-      ...(layers.grain ? [fullBleed(layers.grain)] : []),
-    ],
+    [fullBleed(layers.collage), ...(layers.grain ? [fullBleed(layers.grain)] : [])],
   );
 }
 

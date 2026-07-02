@@ -700,6 +700,17 @@ for the dashboard's algorithm-quality view.
 - The orchestrator generates a personalised pitch + **Synergy Score**
   (clamped to a motivating 70..99 range) + a 1–2 sentence positive
   rationale, in side-A's language.
+- **Match card set (feature-flagged, `MATCH_CARD_FEATURE_ENABLED`, default
+  off).** When on, the partner photo media-group that leads the pitch is
+  replaced by a rendered collage **card set** (`services/match-card`,
+  satori/resvg/canvas — same stack as §3.7a): card 1 is the partner photo with
+  an opaque rounded panel (name/age, one vibe line + one short paragraph from a
+  dedicated compact copy pass — NOT the streamed pitch), each following card is
+  one nearly full-bleed torn-collage photo; branding beyond the first card is
+  limited to butterfly accents. Sent as one protected album with the same
+  name/age/✓ caption; collage jitter is seeded by match id + side. Any copy /
+  render / send failure falls back to the plain protected media group, so
+  pitch dispatch never wedges. Telegram-only.
 - Pitches are queued through `services/dispatch-queue.ts` (rate-limited,
   default 2 s between sends ≈ 30/min). When a first-match welcome gift is
   actually delivered, the queue sends those gift pre-rolls first, waits

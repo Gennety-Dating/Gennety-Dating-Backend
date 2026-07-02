@@ -20,6 +20,7 @@ import {
   PROPOSAL_TTL_MS,
 } from "../../utils/countdown-plate.js";
 import { sendProfileMediaCard } from "../../services/profile-media-dispatch.js";
+import { sendPartnerMatchCards } from "../../services/match-card/send.js";
 import { grantWelcomeGiftIfEligible } from "../../services/ticket-wallet.js";
 import {
   sendWelcomeGiftPreroll,
@@ -529,7 +530,18 @@ export async function sendMatchProposal(
     if (!shouldSkipWelcomeGiftPreroll(options, "A")) {
       await deliverWelcomeGiftPreroll(api, match.userA.id, chatA, langA, match.userA.gender);
     }
-    await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
+    // Collage card set first (feature-flagged); `false` → classic photo album.
+    const cardsSentA = await sendPartnerMatchCards(api, chatA, {
+      matchId,
+      side: "A",
+      partnerFirstName: match.userB.firstName,
+      partnerAge: match.userB.age,
+      partnerSummary: match.userB.profile?.psychologicalSummary ?? null,
+      photos: photosForA,
+      language: langA,
+      caption: captionForA,
+    });
+    if (!cardsSentA) await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
     const result = await stream(api, chatA, draftsA, {
       replyMarkup: kbA,
       rich: true,
@@ -551,7 +563,17 @@ export async function sendMatchProposal(
     if (!shouldSkipWelcomeGiftPreroll(options, "B")) {
       await deliverWelcomeGiftPreroll(api, match.userB.id, chatB, langB, match.userB.gender);
     }
-    await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
+    const cardsSentB = await sendPartnerMatchCards(api, chatB, {
+      matchId,
+      side: "B",
+      partnerFirstName: match.userA.firstName,
+      partnerAge: match.userA.age,
+      partnerSummary: match.userA.profile?.psychologicalSummary ?? null,
+      photos: photosForB,
+      language: langB,
+      caption: captionForB,
+    });
+    if (!cardsSentB) await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
     const result = await stream(api, chatB, draftsB, {
       replyMarkup: kbB,
       rich: true,

@@ -549,6 +549,15 @@ Required/high-impact env keys:
   never persisted). Runs inline at venue finalization — no new cron. Any render
   failure degrades to the existing plain-text scheduled DM, so the flag is safe
   to toggle live with `pm2 restart gennety-bot --update-env`.
+- Match card (feature-flagged): `MATCH_CARD_FEATURE_ENABLED` (default `false`).
+  When on, the match-pitch photo album is replaced by the rendered collage
+  card set (card 1 = photo + name/vibe panel, following cards = one full-bleed
+  photo each; PRODUCT_SPEC.md §3.3). Uses the same satori/resvg/canvas stack
+  and bundled fonts as the date card plus `apps/bot/src/assets/brand/butterfly-logo.svg`
+  and the Unbounded woffs in `assets/fonts/` (all ride the code rsync), and one
+  extra OpenAI call per side for the short card copy. Any copy/render/send
+  failure falls back to the plain protected media group, so the flag is safe to
+  toggle live with `pm2 restart gennety-bot --update-env`. No schema change.
 - Optional cron overrides: `MATCH_CRON_SCHEDULE`, `CRON_TIMEZONE`,
   `EXPIRY_CRON_SCHEDULE`, `NO_MATCH_NOTICE_CRON_SCHEDULE`,
   `PROPOSAL_COUNTDOWN_CRON_SCHEDULE`, `RE_ENGAGEMENT_CRON_SCHEDULE`,

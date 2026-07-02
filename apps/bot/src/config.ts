@@ -284,6 +284,14 @@ export const env = {
   /// scheduling never wedges.
   DATE_CARD_FEATURE_ENABLED: process.env.DATE_CARD_FEATURE_ENABLED === "true",
 
+  // ── Match card (collage PNG set replacing the pitch photo album) ─────
+  /// When true, the match-pitch photo album is replaced by the rendered
+  /// collage card set (services/match-card): card 1 = photo + name/vibe panel,
+  /// following cards = one full-bleed photo each. Any copy/render/send failure
+  /// falls back to the plain protected media group, so pitch dispatch never
+  /// wedges. Default off; flip on for the dev bot first.
+  MATCH_CARD_FEATURE_ENABLED: process.env.MATCH_CARD_FEATURE_ENABLED === "true",
+
   /// Dev-only preview switch. When true, the `/previewlocation` bot command is
   /// live: it DMs the sender the venue location-picker Mini App button pointed
   /// at a throwaway match id, purely to eyeball the Location Mini App inside
