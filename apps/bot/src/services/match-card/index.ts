@@ -114,10 +114,10 @@ export async function renderMatchCard(input: MatchCardInput): Promise<Buffer | n
 }
 
 /**
- * The paper design as a card SET: photos are split into pairs (an odd count
- * leaves the final card solo). Card 1 carries the text panel over its two
- * photos; every following card is photos-only with the brand pill, so the
- * person — not the copy — is the focus.
+ * The paper design as a card SET, one photo per card. Card 1 carries the
+ * text panel over its (nearly full-bleed) photo; every following card is
+ * photos-only with the brand pill, so the person — not the copy — is the
+ * focus.
  *
  * Returns `null` (never throws) when nothing could be rendered, so callers
  * fall back to the plain photo media-group.
@@ -131,8 +131,11 @@ export async function renderMatchCardSet(
     );
     if (photos.length === 0) return null;
 
-    const chunks: Buffer[][] = [];
-    for (let i = 0; i < photos.length; i += 2) chunks.push(photos.slice(i, i + 2));
+    // One photo per card: the card is 4:5 — the native profile-photo ratio —
+    // so pairing two portraits in one frame would crop ~half of each away
+    // (faces lose their emotions). A single photo fills the card nearly
+    // uncropped, and a Telegram album swipes through the set naturally.
+    const chunks: Buffer[][] = photos.map((p) => [p]);
 
     const butterfly = await headerButterfly("paper");
     const grain = grainTile();

@@ -283,11 +283,12 @@ export function paperLeadSpec(photoCount: number): CollageSpec {
   if (photoCount <= 1) {
     return {
       ...base,
-      slots: [{ cx: 620, cy: 675, w: 940, h: 1360, angle: -2 }],
+      // Photo shifted right so the face clears the text panel on the left.
+      slots: [{ cx: 700, cy: 675, w: 940, h: 1360, angle: -2 }],
       dots: [{ x: 46, y: 290, cols: 3, rows: 6, r: 5, gap: 22, color: WINE, alpha: 0.45 }],
       butterflies: [
-        { cx: 1000, cy: 140, size: 110, angle: -14, alpha: 1, above: true },
-        { cx: 120, cy: 1270, size: 64, angle: 18, alpha: 0.85, tint: "#FFFFFF", above: true },
+        { cx: 1004, cy: 140, size: 110, angle: -14, alpha: 1, above: true },
+        { cx: 150, cy: 1280, size: 64, angle: 18, alpha: 0.85, tint: "#FFFFFF", above: true },
       ],
     };
   }
