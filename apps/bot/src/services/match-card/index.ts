@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import { grainPng, toPngBuffer } from "../date-card/image.js";
-import { buildCollageLayer, buildPopoutLayer, butterflyPng, CARD_W, CARD_H } from "./collage.js";
+import { buildCollageLayer, butterflyPng, CARD_W, CARD_H } from "./collage.js";
 import {
   buildMatchCardElement,
   collageSpecFor,
@@ -33,11 +33,6 @@ export interface MatchCardInput {
   /** Seeds tear jitter etc. Use the match id so retries and the A/B copies match. */
   seed: string;
   variant: MatchCardVariant;
-  /**
-   * Depth-pop effect (mosaic): background-removed alpha PNG of the photo at
-   * `slotIndex`, drawn above the text panel with that slot's transform.
-   */
-  cutout?: { png: Buffer; slotIndex: number };
 }
 
 type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
@@ -86,14 +81,11 @@ export async function renderMatchCard(input: MatchCardInput): Promise<Buffer | n
     );
     if (photos.length === 0) return null;
 
-    const spec = collageSpecFor(input.variant);
-    const collage = await buildCollageLayer(photos, spec, input.seed);
-    const popoutSlot = input.cutout ? spec.slots[input.cutout.slotIndex] : undefined;
+    const collage = await buildCollageLayer(photos, collageSpecFor(input.variant), input.seed);
     const element = buildMatchCardElement(input.variant, input.texts, {
       collage,
       grain: grainTile(),
       butterfly: await headerButterfly(input.variant),
-      popout: popoutSlot && input.cutout ? await buildPopoutLayer(input.cutout.png, popoutSlot) : null,
     });
 
     const svg = await satori(element as unknown as Parameters<typeof satori>[0], {

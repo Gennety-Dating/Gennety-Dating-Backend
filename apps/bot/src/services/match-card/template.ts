@@ -18,9 +18,9 @@ export const SOFT = "#F5F5F5";
 const BODY_INK = "#3B3538";
 const BODY_SOFT = "#CFC7CA";
 
-export type MatchCardVariant = "paper" | "graphite" | "wine" | "mosaic";
+export type MatchCardVariant = "paper" | "graphite" | "wine";
 
-export const MATCH_CARD_VARIANTS: readonly MatchCardVariant[] = ["paper", "graphite", "wine", "mosaic"];
+export const MATCH_CARD_VARIANTS: readonly MatchCardVariant[] = ["paper", "graphite", "wine"];
 
 export interface MatchCardTexts {
   /** Small caps lead-in, e.g. «Твоё свидание с». */
@@ -64,8 +64,6 @@ export interface CardLayers {
   grain: Buffer | null;
   /** Small butterfly mark for the wordmark row. Optional. */
   butterfly: Buffer | null;
-  /** Depth-pop person cutout layer, stacked above the text panel. Optional. */
-  popout?: Buffer | null;
 }
 
 function fullBleed(buffer: Buffer): CardNode {
@@ -106,7 +104,6 @@ interface TextBlockStyle {
   nameSize: number;
   bodySize: number;
   width: number;
-  taglineSize?: number;
 }
 
 function textBlock(texts: MatchCardTexts, s: TextBlockStyle): CardNode[] {
@@ -143,7 +140,7 @@ function textBlock(texts: MatchCardTexts, s: TextBlockStyle): CardNode[] {
         display: "flex",
         fontFamily: "Roboto",
         fontWeight: 700,
-        fontSize: `${s.taglineSize ?? 30}px`,
+        fontSize: "30px",
         lineHeight: 1.3,
         color: s.taglineColor,
         marginTop: "26px",
@@ -304,49 +301,6 @@ function wineCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
 }
 
 /* ------------------------------------------------------------------ */
-/* Variant: mosaic — Ditto-style: photos edge to edge, small rounded   */
-/* panel, person cutout popping over it (depth effect)                 */
-/* ------------------------------------------------------------------ */
-
-function mosaicCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
-  return el(
-    "div",
-    { display: "flex", width: `${CARD_W}px`, height: `${CARD_H}px`, backgroundColor: SOFT },
-    [
-      fullBleed(layers.collage),
-      el(
-        "div",
-        {
-          display: "flex",
-          flexDirection: "column",
-          position: "absolute",
-          left: "90px",
-          top: "390px",
-          width: "570px",
-          padding: "46px 48px 50px 48px",
-          backgroundColor: "rgba(255,255,255,0.95)",
-          borderRadius: "28px",
-          boxShadow: "0 20px 50px rgba(17,17,17,0.30)",
-        },
-        textBlock(texts, {
-          eyebrowColor: WINE,
-          nameColor: GRAPHITE,
-          taglineColor: GRAPHITE,
-          bodyColor: BODY_INK,
-          nameSize: 58,
-          bodySize: 25,
-          taglineSize: 28,
-          width: 452,
-        }),
-      ),
-      ...(layers.popout ? [fullBleed(layers.popout)] : []),
-      wordmark(layers, texts, SOFT, { top: "40px", right: "52px" }),
-      ...(layers.grain ? [fullBleed(layers.grain)] : []),
-    ],
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /* Collage specs per variant                                           */
 /* ------------------------------------------------------------------ */
 
@@ -408,40 +362,6 @@ export function collageSpecFor(variant: MatchCardVariant): CollageSpec {
         ],
         panel: { x: 100, y: 400, w: 880, h: 640, paper: "#FDFCFB", tearAmp: 16 },
       };
-    case "mosaic":
-      return {
-        cutout: { paper: "#FFFFFF", border: 0, tearAmp: 0, focusY: 0.24, shadow: "rgba(17,17,17,0.22)" },
-        slots: [
-          // Photos tile the whole card edge to edge; the last slot is the hero
-          // the popout cutout is aligned with. The hero starts right of the
-          // panel so the cutout only leans over its edge instead of covering
-          // the copy.
-          { cx: 272, cy: 235, w: 550, h: 486, angle: 0, straight: true, border: 0 },
-          {
-            cx: 812, cy: 218, w: 545, h: 452, angle: 0, straight: true, border: 0,
-            tint: { shadow: "#2A0713", high: "#E8C9CF", mix: 0.32 },
-          },
-          {
-            cx: 280, cy: 700, w: 560, h: 500, angle: 0, straight: true, border: 0,
-            tint: { shadow: "#3A2410", high: "#FFE8C9", mix: 0.2 },
-          },
-          {
-            cx: 280, cy: 1150, w: 560, h: 430, angle: 0, straight: true, border: 0,
-            tint: { shadow: "#101C3A", high: "#D6E2F5", mix: 0.3 },
-          },
-          { cx: 800, cy: 890, w: 560, h: 920, angle: 0, straight: true, border: 0, focusY: 0.3 },
-        ],
-        dots: [],
-        butterflies: [
-          { cx: 940, cy: 402, size: 92, angle: -12, alpha: 0.95, above: true },
-          { cx: 48, cy: 985, size: 64, angle: 16, alpha: 0.7, tint: SOFT, above: true },
-        ],
-        flares: [
-          { cx: 545, cy: 465, r: 240, color: "#FFD9E4", alpha: 0.32 },
-          { cx: 150, cy: 945, r: 210, color: "#FFE3B3", alpha: 0.26 },
-          { cx: 880, cy: 1235, r: 270, color: "#F5C9D4", alpha: 0.22 },
-        ],
-      };
   }
 }
 
@@ -457,7 +377,5 @@ export function buildMatchCardElement(
       return graphiteCard(texts, layers);
     case "wine":
       return wineCard(texts, layers);
-    case "mosaic":
-      return mosaicCard(texts, layers);
   }
 }
