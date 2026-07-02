@@ -124,6 +124,8 @@ export interface PhotoSlot {
   border?: number;
   /** Per-slot vertical focus for the cover crop (0 = top of the photo). */
   focusY?: number;
+  /** Soft color wash pulled over the tile (use with border 0 only). */
+  tint?: { shadow: string; high: string; mix: number };
 }
 
 interface CutoutStyle {
@@ -132,6 +134,33 @@ interface CutoutStyle {
   tearAmp: number;
   shadow: string;
   focusY: number;
+}
+
+/** Soft duotone wash blended over a tile so mosaic photos read as one warm set. */
+function applyTint(
+  ctx: SKRSContext2D,
+  w: number,
+  h: number,
+  tint: { shadow: string; high: string; mix: number },
+): void {
+  const data = ctx.getImageData(0, 0, w, h);
+  const px = data.data;
+  const [sr, sg, sb] = hexRgb(tint.shadow);
+  const [hr, hg, hb] = hexRgb(tint.high);
+  const mix = tint.mix;
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] === 0) continue;
+    const lum = (0.299 * px[i]! + 0.587 * px[i + 1]! + 0.114 * px[i + 2]!) / 255;
+    px[i] = px[i]! * (1 - mix) + (sr + (hr - sr) * lum) * mix;
+    px[i + 1] = px[i + 1]! * (1 - mix) + (sg + (hg - sg) * lum) * mix;
+    px[i + 2] = px[i + 2]! * (1 - mix) + (sb + (hb - sb) * lum) * mix;
+  }
+  ctx.putImageData(data, 0, 0);
+}
+
+function hexRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
 /** Render one photo cutout (paper backing + inset photo) on its own canvas. */
@@ -246,6 +275,15 @@ export interface PaperPanel {
   tearAmp?: number;
 }
 
+/** Soft light blob blended over the photos (lens-flare / film-light wash). */
+export interface Flare {
+  cx: number;
+  cy: number;
+  r: number;
+  color: string;
+  alpha: number;
+}
+
 export interface CollageSpec {
   slots: PhotoSlot[];
   dots: DotPatch[];
@@ -253,6 +291,7 @@ export interface CollageSpec {
   cutout: Partial<CutoutStyle>;
   /** Drawn AFTER photos so the sheet overlaps their edges; text goes on top in satori. */
   panel?: PaperPanel;
+  flares?: Flare[];
 }
 
 /**
@@ -325,6 +364,7 @@ export async function buildCollageLayer(
       },
       rnd,
     );
+    if (slot.tint) applyTint(cutout.getContext("2d"), slot.w, slot.h, slot.tint);
     ctx.save();
     ctx.translate(slot.cx, slot.cy);
     ctx.rotate((slot.angle * Math.PI) / 180);
@@ -334,6 +374,19 @@ export async function buildCollageLayer(
     ctx.drawImage(cutout, -slot.w / 2, -slot.h / 2);
     ctx.restore();
   });
+
+  for (const f of spec.flares ?? []) {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = f.alpha;
+    const grad = ctx.createRadialGradient(f.cx, f.cy, 0, f.cx, f.cy, f.r);
+    const [r, g, b] = hexRgb(f.color);
+    grad.addColorStop(0, `rgba(${r},${g},${b},1)`);
+    grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(f.cx - f.r, f.cy - f.r, f.r * 2, f.r * 2);
+    ctx.restore();
+  }
 
   if (spec.panel) {
     const p = spec.panel;
@@ -352,4 +405,29 @@ export async function buildCollageLayer(
   for (const acc of spec.butterflies) if (acc.above) stampButterfly(acc);
 
   return canvas.toBuffer("image/png");
+}
+
+/**
+ * Depth-pop layer: the person cutout (background-removed alpha PNG of the SAME
+ * source photo as `slot`) drawn with the slot's exact cover transform, on a
+ * transparent full-card canvas. Stacked ABOVE the text panel in the template,
+ * it makes the person "lean out" of their photo over the panel — where the
+ * panel does not overlap the photo, the pixels coincide with the base layer,
+ * so only the overlap reads as 3D.
+ *
+ * Meant for straight border-0 slots (the mosaic hero). Returns null on decode
+ * failure so callers simply skip the effect.
+ */
+export async function buildPopoutLayer(cutout: Buffer, slot: PhotoSlot): Promise<Buffer | null> {
+  try {
+    const img = await loadImage(cutout);
+    const canvas = createCanvas(CARD_W, CARD_H) as Canvas;
+    const ctx = canvas.getContext("2d");
+    ctx.translate(slot.cx, slot.cy);
+    ctx.rotate((slot.angle * Math.PI) / 180);
+    coverDraw(ctx, img, -slot.w / 2, -slot.h / 2, slot.w, slot.h, slot.focusY ?? 0.24);
+    return canvas.toBuffer("image/png");
+  } catch {
+    return null;
+  }
 }
