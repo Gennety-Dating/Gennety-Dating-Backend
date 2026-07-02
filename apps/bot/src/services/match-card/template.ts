@@ -175,35 +175,59 @@ function textBlock(texts: MatchCardTexts, s: TextBlockStyle): CardNode[] {
 /* ------------------------------------------------------------------ */
 
 function paperCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
+  // Brand signature inside the panel (photos now own every card edge, so the
+  // wordmark moves off the photos onto the paper).
+  const signature = el(
+    "div",
+    { display: "flex", alignItems: "center", gap: "10px", marginTop: "30px", alignSelf: "flex-end" },
+    [
+      ...(layers.butterfly
+        ? [
+            el("img", { width: "38px", height: "31px" }, undefined, {
+              src: dataUri(layers.butterfly),
+              width: 38,
+              height: 31,
+            }),
+          ]
+        : []),
+      el(
+        "div",
+        { display: "flex", fontFamily: "Unbounded", fontSize: "21px", fontWeight: 700, color: WINE },
+        texts.wordmark,
+      ),
+    ],
+  );
   return el(
     "div",
     { display: "flex", width: `${CARD_W}px`, height: `${CARD_H}px`, backgroundColor: SOFT },
     [
       fullBleed(layers.collage),
-      wordmark(layers, texts, GRAPHITE, { top: "44px", right: "56px" }),
       el(
         "div",
         {
           display: "flex",
           flexDirection: "column",
           position: "absolute",
-          left: "80px",
-          top: "340px",
-          width: "600px",
-          padding: "52px 54px 56px 54px",
-          backgroundColor: "#FFFFFF",
-          borderRadius: "6px",
-          boxShadow: "0 24px 60px rgba(17,17,17,0.20)",
+          left: "90px",
+          top: "430px",
+          width: "540px",
+          padding: "46px 48px 40px 48px",
+          backgroundColor: "rgba(255,255,255,0.96)",
+          borderRadius: "28px",
+          boxShadow: "0 24px 60px rgba(17,17,17,0.24)",
         },
-        textBlock(texts, {
-          eyebrowColor: WINE,
-          nameColor: GRAPHITE,
-          taglineColor: GRAPHITE,
-          bodyColor: BODY_INK,
-          nameSize: 66,
-          bodySize: 26,
-          width: 492,
-        }),
+        [
+          ...textBlock(texts, {
+            eyebrowColor: WINE,
+            nameColor: GRAPHITE,
+            taglineColor: GRAPHITE,
+            bodyColor: BODY_INK,
+            nameSize: 56,
+            bodySize: 25,
+            width: 444,
+          }),
+          signature,
+        ],
       ),
       ...(layers.grain ? [fullBleed(layers.grain)] : []),
     ],
@@ -307,23 +331,24 @@ function wineCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
 export function collageSpecFor(variant: MatchCardVariant): CollageSpec {
   switch (variant) {
     case "paper":
+      // Photos own the card (near full-bleed torn cutouts, thin paper seams);
+      // the small rounded panel and the stickers sit on top of them.
       return {
         cutout: { paper: "#FFFFFF", border: 15, tearAmp: 11, focusY: 0.24 },
         slots: [
-          { cx: 250, cy: 165, w: 500, h: 400, angle: -4.5 },
-          { cx: 880, cy: 470, w: 400, h: 600, angle: 3 },
-          { cx: 205, cy: 1140, w: 440, h: 420, angle: 4 },
-          { cx: 815, cy: 1160, w: 500, h: 390, angle: -3 },
+          { cx: 262, cy: 245, w: 570, h: 545, angle: -4 },
+          { cx: 836, cy: 305, w: 530, h: 670, angle: 3 },
+          { cx: 245, cy: 1082, w: 530, h: 570, angle: 3.5 },
+          { cx: 818, cy: 1078, w: 560, h: 630, angle: -3 },
         ],
         dots: [
-          { x: 580, y: 90, cols: 7, rows: 4, r: 5, gap: 24, color: WINE, alpha: 0.5 },
-          { x: 60, y: 890, cols: 4, rows: 6, r: 5, gap: 24, color: GRAPHITE, alpha: 0.35 },
-          { x: 850, y: 830, cols: 6, rows: 3, r: 5, gap: 24, color: WINE, alpha: 0.45 },
+          { x: 620, y: 672, cols: 8, rows: 3, r: 5, gap: 24, color: WINE, alpha: 0.5 },
+          { x: 66, y: 560, cols: 3, rows: 4, r: 5, gap: 22, color: GRAPHITE, alpha: 0.3 },
         ],
         butterflies: [
-          { cx: 742, cy: 302, size: 128, angle: -14, alpha: 1, above: true },
-          { cx: 64, cy: 306, size: 72, angle: 16, alpha: 0.9, above: true },
-          { cx: 545, cy: 242, size: 56, angle: -20, alpha: 0.35, tint: WINE },
+          { cx: 992, cy: 138, size: 118, angle: -14, alpha: 1, above: true },
+          { cx: 60, cy: 470, size: 68, angle: 16, alpha: 0.9, above: true },
+          { cx: 1016, cy: 872, size: 62, angle: 18, alpha: 0.85, tint: "#FFFFFF", above: true },
         ],
       };
     case "graphite":

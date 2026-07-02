@@ -40,12 +40,23 @@ const photos = args["photos"]!.split(",").map((p) => readFileSync(resolve(p.trim
 const outDir = resolve(args["out"] ?? "tmp/match-cards");
 mkdirSync(outDir, { recursive: true });
 
-const texts: MatchCardTexts = {
+// Short person-first copy: describe the person and their vibe, never "your
+// date with…" framing.
+const shortTexts: MatchCardTexts = {
+  eyebrow: "Кажется, вы совпадёте",
+  name: args["name"] ?? "Марк, 20",
+  tagline: args["tagline"] ?? "Тёплый, ироничный и очень лёгкий в общении.",
+  paragraphs: [
+    "Живой ум, слабость к вечерам с хорошим кино и умение делать так, чтобы рядом было спокойно. Настоящий, немного смешной и надёжный — из тех, с кем время летит.",
+  ],
+  wordmark: "Gennety",
+};
+
+// Longer classic copy still drives the graphite/wine alternates.
+const classicTexts: MatchCardTexts = {
   eyebrow: "Твоё свидание с",
-  name: args["name"] ?? "Марком",
-  tagline:
-    args["tagline"] ??
-    "Марк, 20 — именно то свидание, которое ты искала.",
+  name: "Марком",
+  tagline: "Марк, 20 — именно то свидание, которое ты искала.",
   paragraphs: [
     "У него живой ум, слабость к вечерам с хорошим фильмом и редкое умение делать так, чтобы рядом было легко. Марк сочетает тепло с иронией: сегодня зовёт гулять по набережной, а завтра — на турнир по настолкам.",
     "Он внимательный без наигранности, знает, чего хочет, и приносит с собой хорошее настроение. Если ищешь кого-то настоящего, немного смешного и надёжного — это твой человек.",
@@ -61,7 +72,7 @@ for (const variant of variants) {
   const started = Date.now();
   const png = await renderMatchCard({
     photos,
-    texts,
+    texts: variant === "paper" ? shortTexts : classicTexts,
     seed: args["seed"] ?? "preview",
     variant,
   });
