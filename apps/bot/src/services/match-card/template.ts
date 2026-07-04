@@ -106,6 +106,7 @@ interface TextBlockStyle {
   nameSize: number;
   bodySize: number;
   width: number;
+  taglineSize?: number;
 }
 
 function textBlock(texts: MatchCardTexts, s: TextBlockStyle): CardNode[] {
@@ -153,7 +154,7 @@ function textBlock(texts: MatchCardTexts, s: TextBlockStyle): CardNode[] {
         display: "flex",
         fontFamily: "Roboto",
         fontWeight: 700,
-        fontSize: "30px",
+        fontSize: `${s.taglineSize ?? 30}px`,
         lineHeight: 1.3,
         color: s.taglineColor,
         marginTop: "26px",
@@ -184,15 +185,18 @@ function textBlock(texts: MatchCardTexts, s: TextBlockStyle): CardNode[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Variant: paper — photo-first torn collage, sent as a SET of cards.  */
-/* Card 1 (lead): two photos + the opaque rounded text panel.          */
-/* Cards 2+ (gallery): photos only, small brand pill, no copy.         */
+/* Variant: paper — torn polaroid collage, sent as a SET of cards.     */
+/* Every card carries TWO tilted photos at (near-)native aspect — no   */
+/* harsh crops. An odd photo count leaves the final card with ONE      */
+/* photo, and that card takes the text panel (it has the room); an     */
+/* even count puts the panel on the first card. The panel never sits   */
+/* on a person: photos are laid out to keep faces clear of it.         */
 /* ------------------------------------------------------------------ */
 
 function brandSignature(layers: CardLayers, texts: MatchCardTexts): CardNode {
   return el(
     "div",
-    { display: "flex", alignItems: "center", gap: "10px", marginTop: "30px", alignSelf: "flex-end" },
+    { display: "flex", alignItems: "center", gap: "10px", marginTop: "26px", alignSelf: "flex-end" },
     [
       ...(layers.butterfly ? [butterflyImg(layers.butterfly, 26)] : []),
       el(
@@ -204,114 +208,151 @@ function brandSignature(layers: CardLayers, texts: MatchCardTexts): CardNode {
   );
 }
 
-function paperCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
+interface PanelGeom {
+  left: number;
+  top: number;
+  width: number;
+  padding: string;
+  nameSize: number;
+  bodySize: number;
+  textWidth: number;
+}
+
+function paperPanel(texts: MatchCardTexts, layers: CardLayers, geom: PanelGeom): CardNode {
+  return el(
+    "div",
+    {
+      display: "flex",
+      flexDirection: "column",
+      position: "absolute",
+      left: `${geom.left}px`,
+      top: `${geom.top}px`,
+      width: `${geom.width}px`,
+      padding: geom.padding,
+      backgroundColor: "#FFFFFF",
+      borderRadius: "28px",
+      boxShadow: "0 24px 60px rgba(17,17,17,0.26)",
+    },
+    [
+      ...textBlock(texts, {
+        eyebrowColor: WINE,
+        nameColor: GRAPHITE,
+        taglineColor: GRAPHITE,
+        bodyColor: BODY_INK,
+        nameSize: geom.nameSize,
+        bodySize: geom.bodySize,
+        taglineSize: 26,
+        width: geom.textWidth,
+      }),
+      brandSignature(layers, texts),
+    ],
+  );
+}
+
+/** Two tilted polaroids per card; `withPanel` compacts them to clear the panel. */
+export function paperDuoCard(
+  texts: MatchCardTexts,
+  layers: CardLayers,
+  withPanel: boolean,
+): CardNode {
   return el(
     "div",
     { display: "flex", width: `${CARD_W}px`, height: `${CARD_H}px`, backgroundColor: SOFT },
     [
       fullBleed(layers.collage),
-      el(
-        "div",
-        {
-          display: "flex",
-          flexDirection: "column",
-          position: "absolute",
-          left: "70px",
-          top: "470px",
-          width: "500px",
-          padding: "44px 46px 38px 46px",
-          backgroundColor: "#FFFFFF",
-          borderRadius: "28px",
-          boxShadow: "0 24px 60px rgba(17,17,17,0.26)",
-        },
-        [
-          ...textBlock(texts, {
-            eyebrowColor: WINE,
-            nameColor: GRAPHITE,
-            taglineColor: GRAPHITE,
-            bodyColor: BODY_INK,
-            nameSize: 54,
-            bodySize: 24,
-            width: 408,
-          }),
-          brandSignature(layers, texts),
-        ],
-      ),
+      ...(withPanel
+        ? [
+            paperPanel(texts, layers, {
+              left: 60,
+              top: 780,
+              width: 480,
+              padding: "38px 42px 34px 42px",
+              nameSize: 46,
+              bodySize: 23,
+              textWidth: 396,
+            }),
+          ]
+        : []),
+      ...(layers.grain ? [fullBleed(layers.grain)] : []),
+    ],
+  );
+}
+
+/** Final odd card: one tilted photo on top, the text panel standing below it. */
+export function paperSoloCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
+  return el(
+    "div",
+    { display: "flex", width: `${CARD_W}px`, height: `${CARD_H}px`, backgroundColor: SOFT },
+    [
+      fullBleed(layers.collage),
+      paperPanel(texts, layers, {
+        left: 90,
+        top: 985,
+        width: 900,
+        padding: "40px 46px 34px 46px",
+        nameSize: 50,
+        bodySize: 24,
+        textWidth: 808,
+      }),
       ...(layers.grain ? [fullBleed(layers.grain)] : []),
     ],
   );
 }
 
 /**
- * Photos-only follow-up card. Deliberately unbranded: the person owns the
- * frame — only the butterfly accents baked into the collage remain (the
- * wordmark lives on the lead card's panel only).
+ * Two-photo collage: staggered diagonal polaroids at near-native 4:5 aspect
+ * (no harsh crops), tilted a few degrees. The `withPanel` variant compacts
+ * both photos upward/rightward so the bottom-left panel never covers a face.
  */
-export function paperGalleryCard(_texts: MatchCardTexts, layers: CardLayers): CardNode {
-  return el(
-    "div",
-    { display: "flex", width: `${CARD_W}px`, height: `${CARD_H}px`, backgroundColor: SOFT },
-    [fullBleed(layers.collage), ...(layers.grain ? [fullBleed(layers.grain)] : [])],
-  );
-}
-
-/** Lead-card collage: one or two near-full-bleed torn photos around the panel. */
-export function paperLeadSpec(photoCount: number): CollageSpec {
+export function paperDuoSpec(withPanel: boolean): CollageSpec {
   const base = { cutout: { paper: "#FFFFFF", border: 15, tearAmp: 11, focusY: 0.24 } };
-  if (photoCount <= 1) {
+  if (withPanel) {
     return {
       ...base,
-      // Photo shifted right so the face clears the text panel on the left.
-      slots: [{ cx: 700, cy: 675, w: 940, h: 1360, angle: -2 }],
-      dots: [{ x: 46, y: 290, cols: 3, rows: 6, r: 5, gap: 22, color: WINE, alpha: 0.45 }],
+      slots: [
+        { cx: 330, cy: 375, w: 580, h: 720, angle: -4.5 },
+        { cx: 765, cy: 865, w: 580, h: 720, angle: 3.5 },
+      ],
+      dots: [
+        { x: 800, y: 120, cols: 5, rows: 4, r: 5, gap: 24, color: WINE, alpha: 0.45 },
+        { x: 930, y: 1290, cols: 4, rows: 2, r: 5, gap: 24, color: GRAPHITE, alpha: 0.3 },
+      ],
       butterflies: [
-        { cx: 1004, cy: 140, size: 110, angle: -14, alpha: 1, above: true },
-        { cx: 150, cy: 1280, size: 64, angle: 18, alpha: 0.85, tint: "#FFFFFF", above: true },
+        { cx: 985, cy: 235, size: 96, angle: -14, alpha: 1 },
+        { cx: 1006, cy: 545, size: 58, angle: 18, alpha: 0.85, tint: "#FFFFFF", above: true },
       ],
     };
   }
   return {
     ...base,
     slots: [
-      { cx: 620, cy: 320, w: 1010, h: 650, angle: -3, focusY: 0.4 },
-      { cx: 640, cy: 1040, w: 1010, h: 640, angle: 2.5, focusY: 0.34 },
+      { cx: 350, cy: 420, w: 640, h: 800, angle: -5 },
+      { cx: 730, cy: 930, w: 640, h: 800, angle: 4 },
     ],
     dots: [
-      { x: 700, y: 664, cols: 8, rows: 3, r: 5, gap: 24, color: WINE, alpha: 0.5 },
-      { x: 42, y: 1050, cols: 3, rows: 5, r: 5, gap: 22, color: GRAPHITE, alpha: 0.32 },
+      { x: 830, y: 120, cols: 5, rows: 4, r: 5, gap: 24, color: WINE, alpha: 0.45 },
+      { x: 90, y: 1120, cols: 4, rows: 4, r: 5, gap: 24, color: GRAPHITE, alpha: 0.3 },
     ],
     butterflies: [
-      { cx: 156, cy: 66, size: 104, angle: -14, alpha: 1, above: true },
-      { cx: 1002, cy: 1298, size: 64, angle: 18, alpha: 0.85, tint: "#FFFFFF", above: true },
-      { cx: 46, cy: 700, size: 54, angle: -20, alpha: 0.5, tint: WINE },
+      { cx: 955, cy: 295, size: 96, angle: -14, alpha: 1 },
+      { cx: 150, cy: 1005, size: 62, angle: 16, alpha: 0.6, tint: WINE },
+      { cx: 82, cy: 782, size: 54, angle: -18, alpha: 0.7, tint: "#FFFFFF", above: true },
     ],
   };
 }
 
-/** Gallery-card collage: photos own the whole frame. */
-export function paperGallerySpec(photoCount: number): CollageSpec {
-  const base = { cutout: { paper: "#FFFFFF", border: 15, tearAmp: 11, focusY: 0.24 } };
-  if (photoCount <= 1) {
-    return {
-      ...base,
-      slots: [{ cx: 540, cy: 675, w: 1110, h: 1400, angle: -1.5 }],
-      dots: [],
-      butterflies: [
-        { cx: 990, cy: 120, size: 96, angle: -14, alpha: 1, above: true },
-        { cx: 80, cy: 1240, size: 64, angle: 18, alpha: 0.85, tint: "#FFFFFF", above: true },
-      ],
-    };
-  }
+/** Single-photo collage for the odd final card: photo on top, panel space below. */
+export function paperSoloSpec(): CollageSpec {
   return {
-    ...base,
-    slots: [
-      { cx: 505, cy: 350, w: 1070, h: 705, angle: -2.5, focusY: 0.3 },
-      { cx: 575, cy: 1030, w: 1070, h: 685, angle: 3, focusY: 0.4 },
+    cutout: { paper: "#FFFFFF", border: 15, tearAmp: 11, focusY: 0.24 },
+    slots: [{ cx: 555, cy: 480, w: 750, h: 940, angle: -3 }],
+    dots: [
+      { x: 66, y: 210, cols: 3, rows: 5, r: 5, gap: 24, color: WINE, alpha: 0.45 },
+      { x: 964, y: 700, cols: 3, rows: 4, r: 5, gap: 24, color: GRAPHITE, alpha: 0.3 },
     ],
-    dots: [{ x: 40, y: 726, cols: 4, rows: 3, r: 5, gap: 24, color: WINE, alpha: 0.45 }],
     butterflies: [
-      { cx: 1008, cy: 96, size: 92, angle: -14, alpha: 1, above: true },
-      { cx: 72, cy: 1312, size: 60, angle: 18, alpha: 0.85, tint: "#FFFFFF", above: true },
+      { cx: 1002, cy: 130, size: 100, angle: -14, alpha: 1 },
+      { cx: 238, cy: 905, size: 58, angle: 18, alpha: 0.8, tint: "#FFFFFF", above: true },
     ],
   };
 }
@@ -413,7 +454,7 @@ function wineCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
 export function collageSpecFor(variant: MatchCardVariant): CollageSpec {
   switch (variant) {
     case "paper":
-      return paperLeadSpec(2);
+      return paperSoloSpec();
     case "graphite":
       return {
         cutout: { paper: "#FFFFFF", border: 16, tearAmp: 11, focusY: 0.24, shadow: "rgba(0,0,0,0.55)" },
@@ -460,7 +501,7 @@ export function buildMatchCardElement(
 ): CardNode {
   switch (variant) {
     case "paper":
-      return paperCard(texts, layers);
+      return paperSoloCard(texts, layers);
     case "graphite":
       return graphiteCard(texts, layers);
     case "wine":

@@ -18,9 +18,10 @@ import { buildCollageLayer, butterflyPng, CARD_W, CARD_H, type ButterflyMark } f
 import {
   buildMatchCardElement,
   collageSpecFor,
-  paperGalleryCard,
-  paperGallerySpec,
-  paperLeadSpec,
+  paperDuoCard,
+  paperDuoSpec,
+  paperSoloCard,
+  paperSoloSpec,
   GRAPHITE,
   type CardNode,
   type MatchCardTexts,
@@ -114,10 +115,12 @@ export async function renderMatchCard(input: MatchCardInput): Promise<Buffer | n
 }
 
 /**
- * The paper design as a card SET, one photo per card. Card 1 carries the
- * text panel over its (nearly full-bleed) photo; every following card is
- * photos-only with the brand pill, so the person — not the copy — is the
- * focus.
+ * The paper design as a card SET: TWO tilted near-native-aspect photos per
+ * card (no harsh crops). Text placement follows the photo count:
+ *   - odd count  → the final card holds the leftover single photo AND the
+ *     text panel (it has the room; the other cards stay clean);
+ *   - even count → the first card carries the panel alongside its two photos.
+ * The panel never covers a person — layouts keep faces clear of it.
  *
  * Returns `null` (never throws) when nothing could be rendered, so callers
  * fall back to the plain photo media-group.
@@ -131,23 +134,23 @@ export async function renderMatchCardSet(
     );
     if (photos.length === 0) return null;
 
-    // One photo per card: the card is 4:5 — the native profile-photo ratio —
-    // so pairing two portraits in one frame would crop ~half of each away
-    // (faces lose their emotions). A single photo fills the card nearly
-    // uncropped, and a Telegram album swipes through the set naturally.
-    const chunks: Buffer[][] = photos.map((p) => [p]);
+    const chunks: Buffer[][] = [];
+    for (let i = 0; i < photos.length; i += 2) chunks.push(photos.slice(i, i + 2));
+    const lastIsSolo = chunks[chunks.length - 1]!.length === 1;
+    const textCardIndex = lastIsSolo ? chunks.length - 1 : 0;
 
     const butterfly = await headerButterfly("paper");
     const grain = grainTile();
     const cards: Buffer[] = [];
     for (const [i, chunk] of chunks.entries()) {
-      const spec = i === 0 ? paperLeadSpec(chunk.length) : paperGallerySpec(chunk.length);
+      const withPanel = i === textCardIndex;
+      const spec = chunk.length === 1 ? paperSoloSpec() : paperDuoSpec(withPanel);
       const collage = await buildCollageLayer(chunk, spec, `${input.seed}#${i}`);
       const layers = { collage, grain, butterfly };
       const element =
-        i === 0
-          ? buildMatchCardElement("paper", input.texts, layers)
-          : paperGalleryCard(input.texts, layers);
+        chunk.length === 1
+          ? paperSoloCard(input.texts, layers)
+          : paperDuoCard(input.texts, layers, withPanel);
       cards.push(await rasterize(element));
     }
     return cards;
