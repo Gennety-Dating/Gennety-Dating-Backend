@@ -1195,21 +1195,30 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
     // caption on the first item only.
     expect(mediaA[1]).toEqual({ type: "photo", media: "file-b-2" });
 
-    // Closing trust card is the last sendMessage to side A's chat, with
-    // a blockquote entity covering the entire body.
-    const trustCalls = api.sendMessage.mock.calls.filter((c: unknown[]) => c[0] === 1001);
+    // Trust card to side A's chat with a blockquote entity covering the
+    // entire body (the conversational decision question follows it, so
+    // filter by the entity rather than counting all sendMessage calls).
+    const messagesA = api.sendMessage.mock.calls.filter((c: unknown[]) => c[0] === 1001);
+    const trustCalls = messagesA.filter(
+      (c: unknown[]) => (c[2] as { entities?: unknown[] } | undefined)?.entities,
+    );
     expect(trustCalls).toHaveLength(1);
     const [, body, opts] = trustCalls[0]!;
     expect(body).toContain("face-match");
     expect((opts as { entities: unknown[] }).entities).toEqual([
       { type: "blockquote", offset: 0, length: (body as string).length },
     ]);
+    // The conversational closer lands after the trust card.
+    const questionA = messagesA[messagesA.length - 1]!;
+    expect(questionA[1]).toContain("go on a date");
 
-    // Side B's partner (A) is unverified → no trust card, no badge for B.
+    // Side B's partner (A) is unverified → no trust card, no badge for B —
+    // only the decision question reaches B's chat.
     const mediaCallB = api.sendPhoto.mock.calls.find((c: unknown[]) => c[0] === 1002);
     expect(mediaCallB![2]).toEqual({ caption: "Alice, 22", protect_content: true });
-    const trustCallsB = api.sendMessage.mock.calls.filter((c: unknown[]) => c[0] === 1002);
-    expect(trustCallsB).toHaveLength(0);
+    const messagesB = api.sendMessage.mock.calls.filter((c: unknown[]) => c[0] === 1002);
+    expect(messagesB).toHaveLength(1);
+    expect(messagesB[0]![1]).toContain("go on a date");
   });
 
   it("omits the verified badge and trust card when the partner is unverified", async () => {
@@ -1225,8 +1234,14 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
     expect(mediaA[0]!.caption).toBe("Bob, 24");
     expect(mediaA[0]!.caption_entities).toBeUndefined();
 
-    // No closing trust card on either chat.
-    expect(api.sendMessage).not.toHaveBeenCalled();
+    // No closing trust card on either chat — the only plain message per side
+    // is the conversational decision question (no blockquote entities).
+    const plainMessages = api.sendMessage.mock.calls;
+    expect(plainMessages).toHaveLength(2);
+    for (const call of plainMessages) {
+      expect(call[1]).toContain("go on a date");
+      expect((call[2] as { entities?: unknown[] } | undefined)?.entities).toBeUndefined();
+    }
   });
 
   it("persists a successful side immediately and skips it on retry", async () => {

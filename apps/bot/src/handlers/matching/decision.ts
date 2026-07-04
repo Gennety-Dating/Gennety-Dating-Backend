@@ -130,7 +130,7 @@ function postAcceptMessageIdOf(match: MatchView, side: Side): number | null {
  * over a neutral "Go back". Raw markup (not grammY's builder) so the Bot API
  * 9.4 `style` field rides the confirm button, mirroring `buildMatchKeyboard`.
  */
-function buildDeclineConfirmKeyboard(
+export function buildDeclineConfirmKeyboard(
   matchId: string,
   lang: Language,
 ): InlineKeyboardMarkup {

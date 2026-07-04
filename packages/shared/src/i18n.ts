@@ -352,6 +352,14 @@ const translations = {
       "Tap to confirm, or go back.",
     matchBtnConfirmDecline: "❌ Yes, pass",
     matchBtnKeepDeciding: "← Go back",
+    matchDecisionQuestionM:
+      "So — want to go on a date with him? 😊 Just answer me right here in words, or tap a button above.",
+    matchDecisionQuestionF:
+      "So — want to go on a date with her? 😊 Just answer me right here in words, or tap a button above.",
+    matchTextYesConfirm: "Love that ✨ Confirm below — and I'll take care of the rest:",
+    matchBtnConfirmGo: "💫 Yes, I'm going",
+    matchTextUnsure:
+      "No rush — when you know, just tell me “yes” or “no”, or use the buttons under the proposal.",
     matchDeclineDismissed:
       "No rush — this match is still waiting for your answer. 💛",
     matchAcceptedToast: "Accepted ✨",
@@ -1056,6 +1064,14 @@ const translations = {
       "Нажми, чтобы подтвердить, или вернись назад.",
     matchBtnConfirmDecline: "❌ Да, пас",
     matchBtnKeepDeciding: "← Назад",
+    matchDecisionQuestionM:
+      "Ну что — хочешь пойти с ним на свидание? 😊 Можешь просто ответить мне словами прямо здесь — или нажми кнопку выше.",
+    matchDecisionQuestionF:
+      "Ну что — хочешь пойти с ней на свидание? 😊 Можешь просто ответить мне словами прямо здесь — или нажми кнопку выше.",
+    matchTextYesConfirm: "Отлично ✨ Подтверди — и дальше всё сделаю я:",
+    matchBtnConfirmGo: "💫 Да, иду на свидание",
+    matchTextUnsure:
+      "Не спеши — когда решишь, просто напиши мне «да» или «нет», или нажми кнопку под предложением.",
     matchDeclineDismissed:
       "Без спешки — этот мэтч всё ещё ждёт твоего ответа. 💛",
     matchAcceptedToast: "Принято ✨",
@@ -1753,6 +1769,14 @@ const translations = {
       "Натисни, щоб підтвердити, або повернись назад.",
     matchBtnConfirmDecline: "❌ Так, пас",
     matchBtnKeepDeciding: "← Назад",
+    matchDecisionQuestionM:
+      "Ну що — хочеш піти з ним на побачення? 😊 Можеш просто відповісти мені словами прямо тут — або натисни кнопку вище.",
+    matchDecisionQuestionF:
+      "Ну що — хочеш піти з нею на побачення? 😊 Можеш просто відповісти мені словами прямо тут — або натисни кнопку вище.",
+    matchTextYesConfirm: "Чудово ✨ Підтверди — і далі все зроблю я:",
+    matchBtnConfirmGo: "💫 Так, іду на побачення",
+    matchTextUnsure:
+      "Не поспішай — коли вирішиш, просто напиши мені «так» або «ні», або натисни кнопку під пропозицією.",
     matchDeclineDismissed:
       "Без поспіху — цей мэтч ще чекає на твою відповідь. 💛",
     matchAcceptedToast: "Прийнято ✨",
@@ -2429,6 +2453,14 @@ const deTranslations: TranslationTable = {
     "Tippe zum Bestätigen oder geh zurück.",
   matchBtnConfirmDecline: "❌ Ja, passen",
   matchBtnKeepDeciding: "← Zurück",
+  matchDecisionQuestionM:
+    "Und — willst du mit ihm auf ein Date gehen? 😊 Antworte mir einfach hier in Worten oder tippe oben auf einen Button.",
+  matchDecisionQuestionF:
+    "Und — willst du mit ihr auf ein Date gehen? 😊 Antworte mir einfach hier in Worten oder tippe oben auf einen Button.",
+  matchTextYesConfirm: "Stark ✨ Bestätige unten — den Rest übernehme ich:",
+  matchBtnConfirmGo: "💫 Ja, ich gehe hin",
+  matchTextUnsure:
+    "Kein Stress — sag mir einfach „ja“ oder „nein“, wenn du so weit bist, oder nutz die Buttons unter dem Vorschlag.",
   matchDeclineDismissed:
     "Kein Stress — dieses Match wartet noch auf deine Antwort. 💛",
   matchAcceptedToast: "Angenommen ✨",
@@ -3026,6 +3058,14 @@ const plTranslations: TranslationTable = {
     "Kliknij, aby potwierdzić, albo wróć.",
   matchBtnConfirmDecline: "❌ Tak, odpuść",
   matchBtnKeepDeciding: "← Wróć",
+  matchDecisionQuestionM:
+    "No i jak — chcesz iść z nim na randkę? 😊 Po prostu odpowiedz mi tutaj słowami albo kliknij przycisk powyżej.",
+  matchDecisionQuestionF:
+    "No i jak — chcesz iść z nią na randkę? 😊 Po prostu odpowiedz mi tutaj słowami albo kliknij przycisk powyżej.",
+  matchTextYesConfirm: "Świetnie ✨ Potwierdź poniżej — resztą zajmę się ja:",
+  matchBtnConfirmGo: "💫 Tak, idę na randkę",
+  matchTextUnsure:
+    "Bez pośpiechu — gdy zdecydujesz, napisz mi po prostu „tak” albo „nie”, albo użyj przycisków pod propozycją.",
   matchDeclineDismissed:
     "Bez pośpiechu — to dopasowanie wciąż czeka na Twoją odpowiedź. 💛",
   matchAcceptedToast: "Przyjęte ✨",

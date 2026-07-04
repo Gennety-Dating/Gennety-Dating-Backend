@@ -731,6 +731,17 @@ for the dashboard's algorithm-quality view.
   drafts.
 - An explicit `matchDeadlineNotice` follows the headline: **24 h** to reply,
   decision is final once committed.
+- **Conversational closer.** After the pitch (and trust card) the bot asks a
+  natural question in the recipient's locale — "So — want to go on a date with
+  him/her?" (`matchDecisionQuestionM/F`, gendered by the partner). The user may
+  answer in plain words: `handlers/matching/decision-text.ts` classifies the
+  reply (keyword fast-path across all five locales, small LLM fallback;
+  unrelated messages fall through to the menu agent) and surfaces the matching
+  **mechanical confirmation** — yes-intent → a confirm card whose button is the
+  same `match:accept` commit; no-intent → the standard decline confirmation
+  card; unsure → a no-rush nudge. Text alone NEVER commits a decision, replies
+  are static copy, so the §3.4 blind-decision invariant is untouched.
+  Telegram-only.
 - Buttons: `[Accept]` / `[Decline]`. **Accept commits immediately.** **Decline
   is guarded** — because a pass is irreversible (the lifetime-ban invariant of
   §3.2 means the pair is never shown again), the first `[Decline]` tap does not

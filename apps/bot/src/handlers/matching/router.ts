@@ -6,6 +6,7 @@ import {
   promptDeclineConfirm,
   handleDeclineBack,
 } from "./decision.js";
+import { handleProposalTextReply } from "./decision-text.js";
 import { handleDeclineReasonCallback } from "./decline-feedback.js";
 import { handleSchedulePick, handleCalendarWebAppData } from "./scheduler.js";
 import { handleReportOpen, handleReportCategory, handleReportSkip, handleReportText } from "./report.js";
@@ -154,6 +155,13 @@ matchingRouter.use(async (ctx, next) => {
   ) {
     await handleReportText(ctx);
     return;
+  }
+
+  // Conversational proposal reply: plain text while a pitch awaits this
+  // user's decision → classify yes/no/unsure and surface the mechanical
+  // confirmation card. Unrelated messages fall through to the menu agent.
+  if (ctx.message?.text && !ctx.callbackQuery) {
+    if (await handleProposalTextReply(ctx)) return;
   }
 
   await next();

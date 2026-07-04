@@ -197,6 +197,28 @@ async function sendPartnerMedia(
 }
 
 /**
+ * The conversational closer after the pitch (and trust card): a natural
+ * "so — want to go on a date with him/her?" line inviting a plain-text
+ * answer. The reply is classified by `decision-text.ts` and always funnels
+ * into a mechanical button confirmation, so text alone never commits.
+ * Best-effort: a send failure never blocks pitch dispatch (the pitch
+ * keyboard already carries the decision).
+ */
+async function sendDecisionQuestion(
+  api: Api<RawApi>,
+  chatId: number,
+  lang: Language,
+  partnerGender: string | null,
+): Promise<void> {
+  const key = partnerGender === "female" ? "matchDecisionQuestionF" : "matchDecisionQuestionM";
+  try {
+    await api.sendMessage(chatId, t(lang, key));
+  } catch (err) {
+    console.warn("sendDecisionQuestion failed, skipping:", err);
+  }
+}
+
+/**
  * Send the closing trust card — a blockquote-formatted note from the
  * Gennety team explaining that the partner has cleared face-match
  * verification. Only emitted when `partner.verificationStatus` is
@@ -554,6 +576,7 @@ export async function sendMatchProposal(
       data: { pitchMessageIdA: result.message_id },
     });
     if (partnerBVerified) await sendVerifiedTrustCard(api, chatA, langA);
+    await sendDecisionQuestion(api, chatA, langA, match.userB.gender);
   })();
   const sendB = (async () => {
     if (!isTelegramTarget(match.userB.telegramId) || match.pitchMessageIdB != null) {
@@ -586,6 +609,7 @@ export async function sendMatchProposal(
       data: { pitchMessageIdB: result.message_id },
     });
     if (partnerAVerified) await sendVerifiedTrustCard(api, chatB, langB);
+    await sendDecisionQuestion(api, chatB, langB, match.userA.gender);
   })();
   const results = await Promise.allSettled([sendA, sendB]);
   const failures = results.filter(
