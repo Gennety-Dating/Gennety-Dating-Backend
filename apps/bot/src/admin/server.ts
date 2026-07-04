@@ -18,6 +18,7 @@ import { genderRouter } from "./routes/gender.js";
 import { retentionRouter } from "./routes/retention.js";
 import { datesRouter } from "./routes/dates.js";
 import { verificationRouter } from "./routes/verification.js";
+import { citiesRouter } from "./routes/cities.js";
 
 // ---------------------------------------------------------------------------
 // Auth middleware — Bearer token matching ADMIN_API_KEY (timing-safe)
@@ -152,6 +153,7 @@ app.use(genderRouter);
 app.use(retentionRouter);
 app.use(datesRouter);
 app.use(verificationRouter);
+app.use(citiesRouter);
 
 type AdminProfileSnapshot = {
   height: number | null;

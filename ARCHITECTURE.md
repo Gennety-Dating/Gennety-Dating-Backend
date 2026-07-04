@@ -494,7 +494,18 @@ Mounted by `apps/bot/src/admin/server.ts`. Bearer-auth via `ADMIN_API_KEY`
 internal analytics dashboard.
 
 Top-level routers: `audience`, `algorithm`, `gender`, `retention`, `dates`,
-`verification` (incl. a "rerun face-match pipeline" admin button).
+`verification` (incl. a "rerun face-match pipeline" admin button), `cities`.
+
+`GET /admin/analytics/cities` returns the male/female split **per city**
+(`routes/cities.ts`, cached 10 min). Per-user city attribution follows two
+rules: a user who has been on a date is placed by the **departure point** they
+marked heading out (`Match.vibeLat/Lng{A,B}`, newest pin), snapped to the
+nearest known **city centroid**; everyone else is placed by their **matching
+city** (`Profile.homeCityKey`). Centroids are derived from the user base itself
+(one per `homeCityKey`, using `haversineDistanceKm` from `services/geo.ts`), so
+there is no external geocoder call and no schema change. The pure
+attribution/aggregation lives in the exported, unit-tested
+`computeCityDistribution()`.
 
 Conversation viewer (inline routes in `server.ts`, behind the global
 `requireApiKey` gate):
