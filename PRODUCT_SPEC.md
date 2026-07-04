@@ -250,9 +250,13 @@ Hard rules enforced by the collector:
   sampled evenly and independently moderated (OpenAI + AWS), and the audio
   transcript is moderated; any confidently unsafe frame or an unsafe audio
   transcript is rejected. Friends, groups, parties, and scenery are allowed,
-  and the owner need not appear. Videos over 60 seconds or 20 MB are rejected
-  because Telegram Bot API `getFile` cannot supply larger files for
-  validation. A rejected replacement never overwrites the existing valid video
+  and the owner need not appear. Videos over 60 seconds or 100 MB are rejected.
+  The video is display-only (stored + re-sent by Telegram `file_id`), so the
+  size ceiling is a product choice rather than a hard platform cap — but note
+  that when `PROFILE_MEDIA_VALIDATION_ENABLED` is on the safety check downloads
+  the clip via Bot API `getFile`, and the standard cloud Bot API cannot supply
+  files over 20 MB, so 20–100 MB videos can only be safety-validated behind a
+  self-hosted Telegram Bot API server. A rejected replacement never overwrites the existing valid video
   and never grants the ticket bonus. Accepted video metadata stores only
   validation version/time; extracted frames, audio, and transcripts are
   temporary and never persisted.

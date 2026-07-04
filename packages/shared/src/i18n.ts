@@ -81,7 +81,7 @@ const translations = {
     videoTooLong:
       "Profile videos need to be 60 seconds or shorter. Send a shorter clip.",
     videoTooLarge:
-      "Profile videos need to be 20 MB or smaller so I can check them. Send a smaller clip.",
+      "Profile videos need to be {mb} MB or smaller. Send a smaller clip.",
     videoChecking:
       "Checking the video for safety and making sure you appear in several moments...",
     videoUnsafeContent:
@@ -785,7 +785,7 @@ const translations = {
     videoTooLong:
       "Видео для профиля должно быть не длиннее 60 секунд. Скинь покороче.",
     videoTooLarge:
-      "Видео для профиля должно быть не больше 20 МБ, чтобы я мог его проверить. Скинь поменьше.",
+      "Видео для профиля должно быть не больше {mb} МБ. Скинь поменьше.",
     videoChecking:
       "Проверяю безопасность видео и ищу твоё лицо в нескольких моментах...",
     videoUnsafeContent:
@@ -1482,7 +1482,7 @@ const translations = {
     videoTooLong:
       "Відео для профілю має бути не довше 60 секунд. Надішли коротше.",
     videoTooLarge:
-      "Відео для профілю має бути не більше 20 МБ, щоб я міг його перевірити. Надішли менше.",
+      "Відео для профілю має бути не більше {mb} МБ. Надішли менше.",
     videoChecking:
       "Перевіряю безпечність відео та шукаю твоє обличчя в кількох моментах...",
     videoUnsafeContent:
@@ -2260,7 +2260,7 @@ const deTranslations: TranslationTable = {
   videoTooLong:
     "Profilvideos dürfen höchstens 60 Sekunden lang sein. Schick ein kürzeres.",
   videoTooLarge:
-    "Profilvideos dürfen höchstens 20 MB groß sein, damit ich sie prüfen kann. Schick ein kleineres.",
+    "Profilvideos dürfen höchstens {mb} MB groß sein. Schick ein kleineres.",
   videoChecking:
     "Ich prüfe das Video auf Sicherheit und suche dein Gesicht in mehreren Momenten...",
   videoUnsafeContent:
@@ -2858,7 +2858,7 @@ const plTranslations: TranslationTable = {
   videoTooLong:
     "Wideo do profilu może mieć maksymalnie 60 sekund. Wyślij krótsze.",
   videoTooLarge:
-    "Wideo do profilu może ważyć maksymalnie 20 MB, żebym mógł je sprawdzić. Wyślij mniejsze.",
+    "Wideo do profilu może ważyć maksymalnie {mb} MB. Wyślij mniejsze.",
   videoChecking:
     "Sprawdzam bezpieczeństwo wideo i szukam Twojej twarzy w kilku momentach...",
   videoUnsafeContent:

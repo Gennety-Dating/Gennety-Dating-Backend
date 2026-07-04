@@ -6,6 +6,7 @@ import {
   MIN_PHOTOS,
   MAX_PHOTOS,
   PHOTO_BONUS_TICKET_THRESHOLD,
+  PROFILE_VIDEO_MAX_FILE_SIZE_BYTES,
   MAX_DUMP_BUFFER_CHARS,
   magicContextPrompt,
   DEFAULT_SESSION,
@@ -155,7 +156,9 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
       await ctx.reply(
         extracted.reason === "too_long"
           ? t(ctx.session.language, "videoTooLong")
-          : t(ctx.session.language, "videoTooLarge"),
+          : t(ctx.session.language, "videoTooLarge", {
+              mb: Math.round(PROFILE_VIDEO_MAX_FILE_SIZE_BYTES / (1024 * 1024)),
+            }),
       );
       return;
     }

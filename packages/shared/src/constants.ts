@@ -43,9 +43,24 @@ export const PHOTO_BONUS_TICKET_THRESHOLD = 6;
 export const LIVE_PHOTO_MAX_DURATION_SECONDS = 10;
 export const LIVE_PHOTO_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
-/** Profile video limits. The 20 MB ceiling matches Telegram Bot API getFile. */
+/**
+ * Profile video limits.
+ *
+ * The video is display-only: the bot stores its Telegram `file_id` and
+ * re-sends it, so accepting and showing a large video has NO bot-side size cap
+ * (Telegram hosts the file). The size ceiling only matters for the *safety
+ * validation* path (`PROFILE_MEDIA_VALIDATION_ENABLED`), which downloads the
+ * video via Bot API `getFile` — and the standard cloud Bot API `getFile`
+ * refuses files over 20 MB.
+ *
+ * Raised to 100 MB (from 20 MB) because validation is currently off, so nothing
+ * downloads the file. IMPORTANT: if `PROFILE_MEDIA_VALIDATION_ENABLED` is turned
+ * on, videos between 20 MB and this ceiling will fail the `getFile` download
+ * (rejected as "processing unavailable") unless the bot is pointed at a
+ * self-hosted Telegram Bot API server, which raises the `getFile` limit to ~2 GB.
+ */
 export const PROFILE_VIDEO_MAX_DURATION_SECONDS = 60;
-export const PROFILE_VIDEO_MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+export const PROFILE_VIDEO_MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 export const PROFILE_MEDIA_VALIDATION_VERSION = 1;
 
 /** Profile media validation thresholds (upload-time gates). */

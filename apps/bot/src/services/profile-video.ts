@@ -1,6 +1,7 @@
 import type { Api } from "grammy";
 import {
   PROFILE_MEDIA_VALIDATION_VERSION,
+  PROFILE_VIDEO_MAX_FILE_SIZE_BYTES,
   t,
   type Language,
   type ProfileVideoMedia,
@@ -62,7 +63,9 @@ export function videoValidationMessage(
     case "video_identity_reference_missing":
       return t(language, "videoNeedsPhotoFirst");
     case "video_too_large_to_check":
-      return t(language, "videoTooLarge");
+      return t(language, "videoTooLarge", {
+        mb: Math.round(PROFILE_VIDEO_MAX_FILE_SIZE_BYTES / (1024 * 1024)),
+      });
     case "video_too_long":
       return t(language, "videoTooLong");
     default:

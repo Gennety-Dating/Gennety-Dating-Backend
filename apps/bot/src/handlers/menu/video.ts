@@ -112,7 +112,9 @@ export async function handleEditVideoUpload(ctx: BotContext): Promise<void> {
       reason: extracted.reason === "too_long" ? "video_too_long" : "video_too_large_to_check",
     });
     await ctx.reply(
-      extracted.reason === "too_long" ? t(lang, "videoTooLong") : t(lang, "videoTooLarge"),
+      extracted.reason === "too_long"
+        ? t(lang, "videoTooLong")
+        : t(lang, "videoTooLarge", { mb: VIDEO_MAX_MB }),
     );
     return;
   }
