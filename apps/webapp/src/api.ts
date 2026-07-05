@@ -437,6 +437,22 @@ export interface TicketState {
   selfDiscountPct: number;
   /** Charged price for the actor's OWN ticket after `selfDiscountPct`. */
   selfPriceCents: number;
+  /** Relative proxy path to my first profile photo (null if none). Load via
+   *  `ticketPhotoSrc()`, which appends auth + the API base. */
+  myPhotoUrl: string | null;
+  /** Relative proxy path to the partner's first profile photo (null if none). */
+  partnerPhotoUrl: string | null;
+}
+
+/**
+ * Build a loadable `<img>` src from a ticket photo proxy path. Appends the
+ * Mini App `initData` as `?a=` (the photo endpoint can't read an Authorization
+ * header from an image request) and prefixes the API base. Returns null when
+ * there is no photo so callers can fall back to a monogram.
+ */
+export function ticketPhotoSrc(relPath: string | null, initData: string): string | null {
+  if (!relPath) return null;
+  return `${apiBase}${relPath}?a=${encodeURIComponent(initData)}`;
 }
 
 export interface TicketIntent {

@@ -5,6 +5,7 @@ import {
   createTicketIntent,
   confirmTicketPayment,
   useTicketFromWallet,
+  ticketPhotoSrc,
   CalendarApiError,
   type TicketState,
   type TicketIntent,
@@ -24,6 +25,7 @@ import { MockPayment } from "./MockPayment.js";
 import { Confetti } from "./Confetti.js";
 import { PartialTimer } from "./PartialTimer.js";
 import { PartnerPaidCard } from "./PartnerPaidCard.js";
+import { Avatar } from "./Avatar.js";
 
 const app = window.Telegram?.WebApp;
 const params = new URLSearchParams(location.search);
@@ -206,19 +208,37 @@ export function App(): ReactElement {
 
   const state = phase.state;
   const sc = deriveScreen(state);
+  const myPhotoSrc = ticketPhotoSrc(state.myPhotoUrl, initData);
+  const partnerPhotoSrc = ticketPhotoSrc(state.partnerPhotoUrl, initData);
 
   return (
     <div className="ticket-page has-bar">
       {sc === "success" && <Confetti />}
       <div className="ticket-scroll">
         {sc === "partner-paid" ? (
-          <PartnerPaidCard partnerName={state.partnerName ?? s.matchFallback} strings={s} />
+          <PartnerPaidCard
+            partnerName={state.partnerName ?? s.matchFallback}
+            partnerPhotoUrl={partnerPhotoSrc}
+            strings={s}
+          />
         ) : (
           <>
             <header className="ticket-header">
               <h1>{headerTitle(sc, state, s)}</h1>
               <p>{headerSub(sc, state, s)}</p>
             </header>
+
+            {sc === "success" && state.iCoveredPartner && (
+              <div className="tkt-covered-hero">
+                <Avatar
+                  src={partnerPhotoSrc}
+                  name={state.partnerName}
+                  size={132}
+                  badge="❤️"
+                  className="tkt-avatar-hero"
+                />
+              </div>
+            )}
 
             <Ticket3D myName={myName} partnerName={state.partnerName} strings={s} />
 
@@ -242,9 +262,20 @@ export function App(): ReactElement {
               <button
                 key={`${b.action}:${b.scope}`}
                 type="button"
-                className={`${b.primary ? "btn-primary" : "btn-secondary"}${discounted ? " btn-famine" : ""}`}
+                className={`${b.primary ? "btn-primary" : "btn-secondary"}${discounted ? " btn-famine" : ""}${b.scope === "both" ? " btn-with-avatars" : ""}`}
                 onClick={() => onOfferButton(state, b)}
               >
+                {b.scope === "both" && (
+                  <span className="btn-avatars" aria-hidden="true">
+                    <Avatar src={myPhotoSrc} name={myName} size={26} />
+                    <Avatar
+                      src={partnerPhotoSrc}
+                      name={state.partnerName}
+                      size={26}
+                      className="tkt-avatar-overlap"
+                    />
+                  </span>
+                )}
                 {discounted && (
                   <span className="ticket-famine-badge">
                     {fill(s.famineBadge, { pct: String(state.selfDiscountPct) })}

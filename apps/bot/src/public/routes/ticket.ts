@@ -4,10 +4,12 @@ import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
 import {
   getTicketState,
+  getTicketPhoto,
   applyTicketPayment,
   useTicketFromBalance,
   notePartnerPaidSeen,
 } from "../../handlers/matching/ticket-gate.js";
+import { downloadProfileImage } from "../../services/storage.js";
 import {
   createTicketIntent,
   verifyTicketPayment,
@@ -70,6 +72,41 @@ export function createTicketRouter(api: Api<RawApi>): Router {
       void notePartnerPaidSeen(api, BigInt(auth.user.id), matchId).catch(() => {});
     }
     res.status(200).json({ ok: true, ...result.state });
+  });
+
+  // Stream a participant's first profile photo for the Mini App avatars. Auth
+  // via `?a=<initData>` (see authenticate). `side` = self | partner, resolved
+  // relative to the authenticated caller so no one can enumerate others' photos.
+  router.get("/photo/:side", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+    const matchId = matchIdOf(req);
+    if (!matchId) {
+      res.status(404).json({ error: "match-not-found" });
+      return;
+    }
+    const rawSide = (req.params as { side?: string }).side;
+    const which = rawSide === "self" || rawSide === "partner" ? rawSide : null;
+    if (!which) {
+      res.status(400).json({ error: "side must be 'self' or 'partner'" });
+      return;
+    }
+    const photo = await getTicketPhoto(BigInt(auth.user.id), matchId, which);
+    if (!photo.ok) {
+      res.status(photo.reason === "not-participant" ? 403 : 404).json({ error: photo.reason });
+      return;
+    }
+    const bytes = await downloadProfileImage(photo.ref, api);
+    if (!bytes) {
+      res.status(404).json({ error: "photo-unavailable" });
+      return;
+    }
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.status(200).end(bytes);
   });
 
   router.post("/intent", async (req: Request, res: Response): Promise<void> => {
@@ -225,7 +262,14 @@ type AuthOk = { ok: true; user: { id: number } };
 type AuthErr = { ok: false; body: { error: string; reason?: string } };
 
 function authenticate(req: Request): AuthOk | AuthErr {
-  const authHeader = req.header("authorization") ?? req.header("Authorization");
+  let authHeader = req.header("authorization") ?? req.header("Authorization");
+  // `<img>` tags can't set an Authorization header, so the photo route passes
+  // initData via the `?a=` query param instead. validateInitData still enforces
+  // the HMAC signature, so this is no weaker than the header path.
+  if (!authHeader) {
+    const q = (req.query as { a?: unknown }).a;
+    if (typeof q === "string" && q.length > 0) authHeader = `tma ${q}`;
+  }
   if (!authHeader?.startsWith("tma ")) {
     return { ok: false, body: { error: "Missing tma initData" } };
   }

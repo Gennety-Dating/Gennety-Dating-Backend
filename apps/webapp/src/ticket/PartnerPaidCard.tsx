@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import { fill, type TicketStrings } from "./i18n.js";
+import { Avatar } from "./Avatar.js";
 import logoUrl from "./gennety-logo.png";
 
 /**
@@ -25,9 +26,11 @@ const HEARTS: ReadonlyArray<{ left: string; delay: string; dur: string; size: st
 
 export function PartnerPaidCard({
   partnerName,
+  partnerPhotoUrl,
   strings,
 }: {
   partnerName: string;
+  partnerPhotoUrl: string | null;
   strings: TicketStrings;
 }): ReactElement {
   const s = strings;
@@ -51,6 +54,15 @@ export function PartnerPaidCard({
       </div>
 
       <div className="pp-hero">
+        <div className="pp-payer">
+          <Avatar
+            src={partnerPhotoUrl}
+            name={partnerName}
+            size={124}
+            badge="🎩"
+            className="tkt-avatar-hero pp-payer-avatar"
+          />
+        </div>
         {/* The float wrapper bobs the whole ticket *and* the corner stamp
             together; the inner .pp-ticket clips the shine + notches, while the
             stamp lives outside that clip so it can straddle the edge. */}

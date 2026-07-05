@@ -49,6 +49,9 @@ interface TicketUser {
   ticketDiscountPct: number;
   ticketDiscountExpiresAt: Date | null;
   ticketDiscountConsumedAt: Date | null;
+  /** Ordered static profile photos (Telegram file_id / Supabase path). Used to
+   *  surface the first photo as an avatar in the ticket Mini App. */
+  profile: { photos: string[] } | null;
 }
 
 interface TicketMatch {
@@ -87,12 +90,18 @@ const TICKET_SELECT = {
   calendarMessageIdB: true,
   userAId: true,
   userBId: true,
-  userA: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true } },
-  userB: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true } },
+  userA: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, profile: { select: { photos: true } } } },
+  userB: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, profile: { select: { photos: true } } } },
 } as const;
 
 function loadTicketMatch(matchId: string): Promise<TicketMatch | null> {
   return prisma.match.findUnique({ where: { id: matchId }, select: TICKET_SELECT });
+}
+
+/** First usable static profile photo ref (Telegram file_id / Supabase path), or null. */
+function firstPhotoRef(user: TicketUser): string | null {
+  const ref = user.profile?.photos?.[0];
+  return typeof ref === "string" && ref.length > 0 ? ref : null;
 }
 
 function langOf(user: TicketUser): Language {
@@ -141,6 +150,11 @@ export interface TicketStateView {
   selfDiscountPct: number;
   /** Charged price for the actor's OWN ticket, after `selfDiscountPct`. */
   selfPriceCents: number;
+  /** Relative proxy path to the actor's own first profile photo (null if none).
+   *  The Mini App loads it via `<img>` after appending `?a=<initData>`. */
+  myPhotoUrl: string | null;
+  /** Relative proxy path to the partner's first profile photo (null if none). */
+  partnerPhotoUrl: string | null;
 }
 
 export function buildTicketStateView(match: TicketMatch, side: Side): TicketStateView {
@@ -180,6 +194,8 @@ export function buildTicketStateView(match: TicketMatch, side: Side): TicketStat
     selfPriceCents: discount
       ? discountedCents(match.ticketPriceCents, discount.pct)
       : match.ticketPriceCents,
+    myPhotoUrl: firstPhotoRef(me) ? `/v1/matches/${match.id}/ticket/photo/self` : null,
+    partnerPhotoUrl: firstPhotoRef(peer) ? `/v1/matches/${match.id}/ticket/photo/partner` : null,
   };
 }
 
@@ -198,6 +214,33 @@ export async function getTicketState(
   const side = sideForTelegramId(match, telegramId);
   if (!side) return { ok: false, reason: "not-participant" };
   return { ok: true, state: buildTicketStateView(match, side) };
+}
+
+// ── Photo ref (for GET /v1/matches/:id/ticket/photo/:side) ──────────────────
+
+export type TicketPhotoResult =
+  | { ok: false; reason: "match-not-found" | "not-participant" | "no-photo" }
+  | { ok: true; ref: string };
+
+/**
+ * Resolve the first profile-photo ref for `self` (the requester) or `partner`
+ * (the other side), gated on participation. The HTTP route streams the bytes
+ * via `downloadProfileImage`; participation is re-checked here so a caller can
+ * never fetch a photo from a match they aren't in.
+ */
+export async function getTicketPhoto(
+  telegramId: bigint,
+  matchId: string,
+  which: "self" | "partner",
+): Promise<TicketPhotoResult> {
+  const match = await loadTicketMatch(matchId);
+  if (!match) return { ok: false, reason: "match-not-found" };
+  const side = sideForTelegramId(match, telegramId);
+  if (!side) return { ok: false, reason: "not-participant" };
+  const target = which === "self" ? selfUser(match, side) : peerUser(match, side);
+  const ref = firstPhotoRef(target);
+  if (!ref) return { ok: false, reason: "no-photo" };
+  return { ok: true, ref };
 }
 
 /**

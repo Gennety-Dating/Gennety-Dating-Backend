@@ -72,6 +72,8 @@ const baseState = {
   myBalance: 0,
   selfDiscountPct: 0,
   selfPriceCents: 699,
+  myPhotoUrl: null,
+  partnerPhotoUrl: null,
 };
 
 beforeEach(() => {

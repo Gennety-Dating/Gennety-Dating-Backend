@@ -26,6 +26,8 @@ function state(overrides: Partial<TicketState> = {}): TicketState {
     myBalance: 0,
     selfDiscountPct: 0,
     selfPriceCents: 699,
+    myPhotoUrl: null,
+    partnerPhotoUrl: null,
     ...overrides,
   };
 }
