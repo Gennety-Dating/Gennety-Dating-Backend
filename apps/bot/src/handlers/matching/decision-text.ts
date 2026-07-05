@@ -156,17 +156,29 @@ export async function handleProposalTextReply(ctx: BotContext): Promise<boolean>
     (await classifyViaLlm(text));
 
   const lang = ctx.session.language;
+  // The confirm card replies to the user's own words — the button visually
+  // "flows out" of their answer instead of appearing as a detached message.
+  const replyTo = ctx.message?.message_id
+    ? {
+        reply_parameters: {
+          message_id: ctx.message.message_id,
+          allow_sending_without_reply: true,
+        },
+      }
+    : {};
   switch (intent) {
     case "yes":
       await ctx.reply(t(lang, "matchTextYesConfirm"), {
         reply_markup: buildGoConfirmKeyboard(match.id, lang),
+        ...replyTo,
       });
       return true;
     case "no":
-      // Same guarded confirmation card as the keyboard's Pass button.
+      // Same guarded confirmation card as the classic decline path.
       await ctx.reply(t(lang, "matchDeclineConfirmPrompt"), {
         parse_mode: "Markdown",
         reply_markup: buildDeclineConfirmKeyboard(match.id, lang),
+        ...replyTo,
       });
       return true;
     case "unsure":

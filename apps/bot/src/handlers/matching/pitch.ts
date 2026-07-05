@@ -64,44 +64,27 @@ export interface SendMatchProposalOptions {
 }
 
 /**
- * Build the Accept/Decline inline keyboard for a given match.
+ * Build the pitch message's inline keyboard.
  *
- * Uses Telegram Bot API 9.4 button styles:
- *   - Accept → `style: "success"` (native green) + optional custom emoji
- *   - Decline → `style: "danger"` (native red) + optional custom emoji
- *
- * Returns a raw `InlineKeyboardMarkup` because grammY's builder types may
- * not yet expose the `style` / `icon_custom_emoji_id` fields.
+ * Deliberately carries NO Accept/Decline buttons (design decision
+ * 2026-07-05): the decision is conversational — the closing question invites
+ * a plain-text answer, and the styled confirmation button surfaces only
+ * AFTER an affirmative/negative reply (`decision-text.ts`). A permanent
+ * Accept button next to a text-first flow read as a double action. Only the
+ * Report affordance stays on the pitch itself; the `match:accept:` /
+ * `match:decline:` callback handlers remain live for confirm cards and for
+ * legacy in-flight pitches sent before this change.
  */
 export function buildMatchKeyboard(
   matchId: string,
   lang: Language,
 ): InlineKeyboardMarkup {
-  const acceptBtn: InlineKeyboardButton.CallbackButton & Record<string, unknown> = {
-    text: t(lang, "matchBtnAccept"),
-    callback_data: `match:accept:${matchId}`,
-    style: "success",
-    ...(env.CUSTOM_EMOJI_ACCEPT_ID ? { icon_custom_emoji_id: env.CUSTOM_EMOJI_ACCEPT_ID } : {}),
-  };
-
-  const declineBtn: InlineKeyboardButton.CallbackButton & Record<string, unknown> = {
-    text: t(lang, "matchBtnDecline"),
-    callback_data: `match:decline:${matchId}`,
-    style: "danger",
-    ...(env.CUSTOM_EMOJI_DECLINE_ID ? { icon_custom_emoji_id: env.CUSTOM_EMOJI_DECLINE_ID } : {}),
-  };
-
   const reportBtn: InlineKeyboardButton.CallbackButton = {
     text: t(lang, "reportBtn"),
     callback_data: `report:open:${matchId}`,
   };
 
-  return {
-    inline_keyboard: [
-      [acceptBtn as InlineKeyboardButton, declineBtn as InlineKeyboardButton],
-      [reportBtn],
-    ],
-  };
+  return { inline_keyboard: [[reportBtn]] };
 }
 
 /** Static fallback glyph rendered before the localised "Verified" label

@@ -789,33 +789,21 @@ describe("pitch-generator: fallback + splitter", () => {
 // buildMatchKeyboard: API 9.4 styled buttons
 // ---------------------------------------------------------------------------
 
-describe("buildMatchKeyboard (API 9.4 styled buttons)", () => {
-  it("returns InlineKeyboardMarkup with Accept/Decline row + Report row", () => {
+describe("buildMatchKeyboard (conversational decision — Report only)", () => {
+  it("carries NO Accept/Decline buttons — the decision is text-first", () => {
     const kb = buildMatchKeyboard("match-42", "en");
-    expect(kb.inline_keyboard).toHaveLength(2);
-    expect(kb.inline_keyboard[0]).toHaveLength(2);
-    expect(kb.inline_keyboard[1]).toHaveLength(1);
+    expect(kb.inline_keyboard).toHaveLength(1);
+    expect(kb.inline_keyboard[0]).toHaveLength(1);
+    const callbacks = kb.inline_keyboard
+      .flat()
+      .map((b) => (b as unknown as Record<string, unknown>).callback_data);
+    expect(callbacks).not.toContain("match:accept:match-42");
+    expect(callbacks).not.toContain("match:decline:match-42");
   });
 
-  it("Accept button has style='success' and icon_custom_emoji_id when configured", () => {
+  it("keeps the Report affordance with report:open callback", () => {
     const kb = buildMatchKeyboard("match-42", "en");
-    const acceptBtn = kb.inline_keyboard[0]![0] as unknown as Record<string, unknown>;
-    expect(acceptBtn.callback_data).toBe("match:accept:match-42");
-    expect(acceptBtn.style).toBe("success");
-    expect(acceptBtn.icon_custom_emoji_id).toBe("test-accept-emoji-id");
-  });
-
-  it("Decline button has style='danger' and icon_custom_emoji_id when configured", () => {
-    const kb = buildMatchKeyboard("match-42", "en");
-    const declineBtn = kb.inline_keyboard[0]![1] as unknown as Record<string, unknown>;
-    expect(declineBtn.callback_data).toBe("match:decline:match-42");
-    expect(declineBtn.style).toBe("danger");
-    expect(declineBtn.icon_custom_emoji_id).toBe("test-decline-emoji-id");
-  });
-
-  it("Report button lives on the second row with report:open callback", () => {
-    const kb = buildMatchKeyboard("match-42", "en");
-    const reportBtn = kb.inline_keyboard[1]![0] as unknown as Record<string, unknown>;
+    const reportBtn = kb.inline_keyboard[0]![0] as unknown as Record<string, unknown>;
     expect(reportBtn.callback_data).toBe("report:open:match-42");
   });
 });

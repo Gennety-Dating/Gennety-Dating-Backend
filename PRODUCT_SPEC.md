@@ -731,27 +731,31 @@ for the dashboard's algorithm-quality view.
   drafts.
 - An explicit `matchDeadlineNotice` follows the headline: **24 h** to reply,
   decision is final once committed.
-- **Conversational closer.** After the pitch (and trust card) the bot asks a
+- **Conversational decision (no Accept button, 2026-07-05).** The pitch
+  message itself carries only the `[Report]` affordance — there is NO permanent
+  Accept/Decline keyboard. After the pitch (and trust card) the bot asks a
   natural question in the recipient's locale — "So — want to go on a date with
-  him/her?" (`matchDecisionQuestionM/F`, gendered by the partner). The user may
-  answer in plain words: `handlers/matching/decision-text.ts` classifies the
-  reply (keyword fast-path across all five locales, small LLM fallback;
-  unrelated messages fall through to the menu agent) and surfaces the matching
-  **mechanical confirmation** — yes-intent → a confirm card whose button is the
-  same `match:accept` commit; no-intent → the standard decline confirmation
-  card; unsure → a no-rush nudge. Text alone NEVER commits a decision, replies
-  are static copy, so the §3.4 blind-decision invariant is untouched.
-  Telegram-only.
-- Buttons: `[Accept]` / `[Decline]`. **Accept commits immediately.** **Decline
-  is guarded** — because a pass is irreversible (the lifetime-ban invariant of
-  §3.2 means the pair is never shown again), the first `[Decline]` tap does not
-  commit: the bot replies with a confirmation card (`matchDeclineConfirmPrompt`)
-  carrying `[❌ Yes, pass]` (`match:do:decline:` — the real commit, native
-  `danger` style) over `[← Go back]` (`match:keep:` — no state change, the live
-  pitch keyboard stays). The card reveals nothing about the partner's choice, so
-  the §3.4 blind-decision invariant is unaffected. Telegram-only; the mobile
-  `POST /v1/matches/:id/decision` path is unchanged (client-side confirmation is
-  the app's concern).
+  him/her?" (`matchDecisionQuestionM/F`, gendered by the partner) — and the
+  user answers in their own words. `handlers/matching/decision-text.ts`
+  classifies the reply (keyword fast-path across all five locales, small LLM
+  fallback; unrelated messages fall through to the menu agent; active
+  matchFlow/menuState sub-flows are never hijacked) and the styled
+  confirmation button "flows out" of the answer as a reply to the user's own
+  message:
+  - yes-intent → confirm card with the native-`success` `[💫 Yes, I'm going]`
+    button (`match:accept:` — the commit) over `[← Go back]`;
+  - no-intent → the guarded decline confirmation card
+    (`matchDeclineConfirmPrompt`, `[❌ Yes, pass]` `match:do:decline:` native
+    `danger` over `[← Go back]` `match:keep:`) — a pass stays irreversible
+    (lifetime-ban invariant §3.2), so it always needs the explicit red tap;
+  - unsure → a no-rush nudge, no state change.
+  Text alone NEVER commits a decision — the commit is always a button tap on
+  the surfaced card. Replies are static copy revealing nothing about the
+  partner's choice, so the §3.4 blind-decision invariant is untouched. The
+  `match:accept:` / `match:decline:` callback handlers stay live for legacy
+  in-flight pitches dispatched before this change. Telegram-only; the mobile
+  `POST /v1/matches/:id/decision` path is unchanged (client-side confirmation
+  is the app's concern).
 - The `proposal-countdown` worker live-edits a "⏳ Xh left" plate every
   5 min — hourly during the first 23 h, then per-5-min during the final hour.
 
