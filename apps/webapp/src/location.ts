@@ -203,6 +203,18 @@ function initMap(): void {
   // Isolate init so a map failure only costs the preview — search, "use my
   // location", and Confirm must still work (they operate on lat/lng).
   try {
+    // This WebView leaves the `inset:0` map container at 0 height (verified on
+    // device: #map=375x0), so Leaflet would build a 0-tile grid and show
+    // nothing. Force an explicit pixel size from the real window dimensions
+    // before init, and keep it in sync as the fullscreen viewport settles.
+    const mapEl = document.getElementById("map");
+    const sizeMapContainer = (): void => {
+      if (!mapEl || typeof window.innerWidth !== "number") return;
+      mapEl.style.width = `${window.innerWidth}px`;
+      mapEl.style.height = `${window.innerHeight}px`;
+    };
+    sizeMapContainer();
+
     // Leaflet coordinates are [lat, lng] — the same order as DEFAULT_CENTER.
     map = window.L.map("map", {
       center: DEFAULT_CENTER,
@@ -233,7 +245,10 @@ function initMap(): void {
     // grid from the container size, so measuring only once at init would request
     // ZERO tiles and stay blank forever. Recompute on every viewport change plus
     // a few staggered ticks so tiles load as soon as the size is real.
-    const kickResize = (): void => map?.invalidateSize();
+    const kickResize = (): void => {
+      sizeMapContainer();
+      map?.invalidateSize();
+    };
     if (typeof window.addEventListener === "function") {
       window.addEventListener("resize", kickResize);
     }
