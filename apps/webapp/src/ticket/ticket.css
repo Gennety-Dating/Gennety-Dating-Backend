@@ -857,7 +857,7 @@ body {
   flex: none;
   border-radius: 50%;
   background: var(--glass);
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 2px 6px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 .tkt-avatar-img {
   width: 100%;
@@ -883,7 +883,7 @@ body {
   pointer-events: none;
 }
 .tkt-avatar-overlap {
-  margin-left: -12px;
+  margin-left: 4px;
 }
 
 /* Two overlapping avatars leading the "pay for both" button */
@@ -900,8 +900,7 @@ body {
 
 /* Large hero avatar — covered-her success + partner-paid payer */
 .tkt-avatar-hero {
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), 0 0 0 4px rgba(255, 255, 255, 0.9),
-    0 0 0 8px rgba(182, 154, 229, 0.25);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
 }
 .tkt-avatar-hero .tkt-avatar-mono {
   font-size: 3rem;
