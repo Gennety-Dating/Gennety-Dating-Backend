@@ -246,6 +246,7 @@ async function main() {
   prisma = db.prisma;
   const { createProposedMatch } = await import("../apps/bot/src/services/match-engine.js");
   const { dispatchMatches } = await import("../apps/bot/src/services/dispatch-queue.js");
+  const { createBot } = await import("../apps/bot/src/bot.js");
 
   let primary = await loadUser(primaryTg);
   let secondary = await loadUser(secondaryTg);
@@ -325,12 +326,16 @@ async function main() {
     explicit: 0.88,
     research: 0.78,
     league: 1,
+    agePref: 1,
     penalty: 0,
     embeddingDistance: 0.24,
     starvationBonus: 0,
   });
 
-  const api = createTelegramApi(process.env.BOT_TOKEN);
+  // Use the real grammy Api (bot.api), not the minimal fetch shim: the pitch
+  // flow needs getFile + InputFile media groups + editMessageText, which the
+  // shim can't do (photo card would fail with "Wrong file identifier").
+  const api = createBot(process.env.BOT_TOKEN).api;
   const dispatch = await dispatchMatches(api, [match.id], 0);
   if (dispatch.failed > 0) {
     throw new Error(`Match created (${match.id}) but dispatch failed: ${JSON.stringify(dispatch.errors)}`);

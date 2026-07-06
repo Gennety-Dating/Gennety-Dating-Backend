@@ -2,14 +2,15 @@
 /**
  * Dev-only helper (local DEP bot only).
  *
- * Gives the two synthetic ticket-demo profiles a real first photo so the ticket
- * Mini App avatars render. For each account it sends a portrait to that chat to
- * mint a bot-owned Telegram `file_id`, deletes the message (keeps the chat
- * clean), and stores the file_id as `Profile.photos[0]`. The ticket photo proxy
- * resolves it via getFile.
+ * Sets the profile photos for the two ticket-demo accounts so the pitch card
+ * and the ticket Mini App avatars render. For each photo it uploads to Telegram
+ * (mints a bot-owned file_id), deletes the message (keeps the chat clean), and
+ * stores the file_ids as `Profile.photos`. Accepts local file paths (multipart
+ * upload) or http(s) URLs; the FIRST photo is used as the ticket avatar.
  *
  * Usage:
- *   pnpm --filter @gennety/bot exec tsx ../../scripts/dev-seed-ticket-photos.mjs --apply
+ *   pnpm --filter @gennety/bot exec tsx ../../scripts/dev-seed-ticket-photos.mjs --apply \
+ *     --man-photos="/path/a.png,/path/b.png" --woman-photos="/path/c.png,/path/d.png"
  * Optional:
  *   --man-tg=782065541 --woman-tg=5986970093 --force
  */
@@ -38,8 +39,8 @@ loadEnvFile(resolve(root, ".env"), false);
 
 const argv = new Map(
   process.argv.slice(2).filter((a) => a.startsWith("--")).map((a) => {
-    const [k, v = "true"] = a.slice(2).split("=");
-    return [k, v];
+    const eq = a.indexOf("=");
+    return eq === -1 ? [a.slice(2), "true"] : [a.slice(2, eq), a.slice(eq + 1)];
   }),
 );
 const apply = argv.get("apply") === "true";
@@ -47,12 +48,16 @@ const force = argv.get("force") === "true";
 const manTg = argv.get("man-tg") ?? "782065541";
 const womanTg = argv.get("woman-tg") ?? "5986970093";
 
-// Stable, public, appropriately-gendered portraits (Unsplash, 512²).
-const MAN_PHOTO = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=512&h=512&fit=crop";
-const WOMAN_PHOTO = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=512&h=512&fit=crop";
+const MAN_DEFAULT = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=512&h=512&fit=crop";
+const WOMAN_DEFAULT = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=512&h=512&fit=crop";
 
-async function tg(method, payload) {
-  const res = await fetch(`https://api.telegram.org/bot${process.env.BOT_TOKEN}/${method}`, {
+const manPhotos = (argv.get("man-photos") ?? MAN_DEFAULT).split(",").map((s) => s.trim()).filter(Boolean);
+const womanPhotos = (argv.get("woman-photos") ?? WOMAN_DEFAULT).split(",").map((s) => s.trim()).filter(Boolean);
+
+const API = () => `https://api.telegram.org/bot${process.env.BOT_TOKEN}`;
+
+async function tgJson(method, payload) {
+  const res = await fetch(`${API()}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -60,6 +65,32 @@ async function tg(method, payload) {
   const json = await res.json().catch(() => null);
   if (!res.ok || !json?.ok) throw new Error(`Telegram ${method} failed: ${json?.description ?? res.status}`);
   return json.result;
+}
+
+async function tgForm(method, form) {
+  const res = await fetch(`${API()}/${method}`, { method: "POST", body: form });
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json?.ok) throw new Error(`Telegram ${method} failed: ${json?.description ?? res.status}`);
+  return json.result;
+}
+
+/** Upload one photo (local path or URL) → return its largest file_id. */
+async function uploadPhoto(chatId, ref) {
+  let msg;
+  if (/^https?:\/\//.test(ref)) {
+    msg = await tgJson("sendPhoto", { chat_id: chatId, photo: ref });
+  } else {
+    if (!existsSync(ref)) throw new Error(`File not found: ${ref}`);
+    const buf = readFileSync(ref);
+    const form = new FormData();
+    form.append("chat_id", String(chatId));
+    form.append("photo", new Blob([buf]), "photo.jpg");
+    msg = await tgForm("sendPhoto", form);
+  }
+  const sizes = msg.photo ?? [];
+  const fileId = sizes.length ? sizes[sizes.length - 1].file_id : null;
+  if (msg.message_id) await tgJson("deleteMessage", { chat_id: chatId, message_id: msg.message_id }).catch(() => {});
+  return fileId;
 }
 
 async function main() {
@@ -74,8 +105,8 @@ async function main() {
   const { prisma } = await import("@gennety/db");
 
   const targets = [
-    { role: "MAN", tg: manTg, url: MAN_PHOTO },
-    { role: "WOMAN", tg: womanTg, url: WOMAN_PHOTO },
+    { role: "MAN", tg: manTg, photos: manPhotos },
+    { role: "WOMAN", tg: womanTg, photos: womanPhotos },
   ];
 
   for (const t of targets) {
@@ -84,17 +115,16 @@ async function main() {
       select: { id: true, firstName: true },
     });
     if (!user) { console.log(`⚠ ${t.role} tg=${t.tg} not found — skip.`); continue; }
-    if (!apply) { console.log(`[dry-run] would set photo for ${t.role} (${user.firstName}) from ${t.url}`); continue; }
+    if (!apply) { console.log(`[dry-run] ${t.role} (${user.firstName}) ← ${t.photos.length} photo(s):`, t.photos); continue; }
 
-    const msg = await tg("sendPhoto", { chat_id: t.tg, photo: t.url });
-    const sizes = msg.photo ?? [];
-    const fileId = sizes.length ? sizes[sizes.length - 1].file_id : null;
-    if (!fileId) throw new Error(`No file_id returned for ${t.role}`);
-    // Keep the chat clean — the file_id stays valid after deletion.
-    await tg("deleteMessage", { chat_id: t.tg, message_id: msg.message_id }).catch(() => {});
-
-    await prisma.profile.update({ where: { userId: user.id }, data: { photos: [fileId] } });
-    console.log(`✔ ${t.role} (${user.firstName}) photo set → file_id ${fileId.slice(0, 18)}…`);
+    const fileIds = [];
+    for (const ref of t.photos) {
+      const id = await uploadPhoto(t.tg, ref);
+      if (id) fileIds.push(id);
+    }
+    if (!fileIds.length) throw new Error(`No file_ids minted for ${t.role}`);
+    await prisma.profile.update({ where: { userId: user.id }, data: { photos: fileIds } });
+    console.log(`✔ ${t.role} (${user.firstName}) ← ${fileIds.length} photo(s); avatar=${fileIds[0].slice(0, 16)}…`);
   }
 
   await prisma.$disconnect();

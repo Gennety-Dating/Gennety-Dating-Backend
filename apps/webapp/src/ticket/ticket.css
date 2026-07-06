@@ -864,6 +864,9 @@ body {
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
+  /* Portrait photos put the face in the upper third — bias the circular crop
+     up so avatars frame the face, not the torso. */
+  object-position: center 30%;
   display: block;
 }
 .tkt-avatar-mono {

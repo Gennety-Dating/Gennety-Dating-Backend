@@ -49,9 +49,10 @@ const argv = new Map(
 );
 const apply = argv.get("apply") === "true";
 const force = argv.get("force") === "true";
+const seedOnly = argv.get("seed-only") === "true";
 const manTg = BigInt(argv.get("man-tg") ?? "782065541");
 const womanTg = BigInt(argv.get("woman-tg") ?? "5986970093");
-const lang = argv.get("lang") ?? "ru";
+const lang = argv.get("lang") ?? "en";
 
 async function main() {
   if (process.env.BOT_USERNAME !== "gennetytestbot" && !force) {
@@ -85,10 +86,10 @@ async function main() {
   const now = new Date();
 
   const people = [
-    { tg: manTg, role: "MAN (buyer)", firstName: "Артём", gender: "male", preference: "women", age: 28,
-      summary: "Заботливый, берёт инициативу на себя. Любит уютные кофейни и долгие разговоры." },
-    { tg: womanTg, role: "WOMAN (recipient)", firstName: "Марина", gender: "female", preference: "men", age: 26,
-      summary: "Тёплая, ценит внимание и жесты. Обожает книги и вечерний Киев." },
+    { tg: manTg, role: "MAN (buyer)", firstName: "Adrian", gender: "male", preference: "women", age: 28,
+      summary: "Warm and takes the lead. Loves cosy cafés, film photography and long, unhurried conversations." },
+    { tg: womanTg, role: "WOMAN (recipient)", firstName: "Sofia", gender: "female", preference: "men", age: 25,
+      summary: "Easy-going and expressive; values attention and small gestures. Into books, vintage cars and golden-hour walks." },
   ];
 
   const ids = {};
@@ -118,6 +119,12 @@ async function main() {
   }
 
   if (!apply) { console.log("\n[dry-run] no match created. Re-run with --apply."); await prisma.$disconnect(); return; }
+
+  if (seedOnly) {
+    console.log("\n[seed-only] profiles seeded (no match). Set photos, then run dev-trigger-test-match for the real pitch.");
+    await prisma.$disconnect();
+    return;
+  }
 
   const manId = ids["MAN (buyer)"];
   const womanId = ids["WOMAN (recipient)"];
