@@ -84,6 +84,42 @@ app.use("/v1/webhooks/persona", personaWebhookLimiter, (req, res, next) => {
   personaRouter(req, res, next);
 });
 
+// Public map-tile proxy for the location Mini App. Some client networks can't
+// reach the tile CDN directly (regional CDN blocks), so the bot fetches tiles
+// server-side and streams them — the phone only ever talks to our own origin,
+// which it already reaches to load the Mini App. Tiles are public + immutable →
+// no auth, aggressive cache. Mounted before express.json + the global limiter
+// because one map view fetches ~15 tiles at once.
+const TILE_SUBDOMAINS = ["a", "b", "c", "d"] as const;
+app.get("/v1/maptiles/:z/:x/:y", async (req, res) => {
+  const z = Number(req.params.z);
+  const x = Number(req.params.x);
+  const y = Number(req.params.y);
+  const valid =
+    Number.isInteger(z) && Number.isInteger(x) && Number.isInteger(y) &&
+    z >= 0 && z <= 22 && x >= 0 && y >= 0 && x < 2 ** z && y < 2 ** z;
+  if (!valid) {
+    res.status(400).end();
+    return;
+  }
+  const sub = TILE_SUBDOMAINS[(x + y) % TILE_SUBDOMAINS.length];
+  const upstream = `https://${sub}.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png`;
+  try {
+    const upstreamRes = await fetch(upstream, { signal: AbortSignal.timeout(8000) });
+    if (!upstreamRes.ok) {
+      res.status(502).end();
+      return;
+    }
+    const buf = Buffer.from(await upstreamRes.arrayBuffer());
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    res.status(200).end(buf);
+  } catch {
+    res.status(502).end();
+  }
+});
+
 app.use(express.json({ limit: "512kb" }));
 app.use(globalLimiter);
 

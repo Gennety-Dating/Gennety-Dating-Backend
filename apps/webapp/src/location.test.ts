@@ -5,6 +5,7 @@ const { selectLocationMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("./api.js", () => ({
+  apiBase: "",
   searchLocations: vi.fn(),
   selectLocation: selectLocationMock,
   CalendarApiError: class CalendarApiError extends Error {

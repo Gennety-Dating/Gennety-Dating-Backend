@@ -1,5 +1,6 @@
 import "./location.css";
 import {
+  apiBase,
   searchLocations,
   selectLocation,
   CalendarApiError,
@@ -44,7 +45,10 @@ const PICK_ZOOM = 16;
 // CARTO "dark_all" raster basemap — keyless, minimal, on a fast global CDN.
 // Raster tiles are plain images (no WebGL, no vector glyphs/sprites), so the
 // picker loads light and renders reliably inside the Telegram WebView.
-const MAP_TILES_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+// Tiles come through the bot's own /v1/maptiles proxy (see public/server.ts):
+// the phone only talks to our origin, so it works even where the CARTO CDN is
+// unreachable directly. The proxy fetches CARTO dark_all server-side.
+const MAP_TILES_URL = `${apiBase}/v1/maptiles/{z}/{x}/{y}`;
 const MAP_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 const SEARCH_DEBOUNCE_MS = 350;
@@ -168,7 +172,6 @@ function initMap(): void {
     // watermark shows — only the required OSM/CARTO credit remains.
     map.attributionControl?.setPrefix?.(false);
     window.L.tileLayer(MAP_TILES_URL, {
-      subdomains: "abcd",
       attribution: MAP_ATTRIBUTION,
       maxZoom: 20,
     }).addTo(map);
