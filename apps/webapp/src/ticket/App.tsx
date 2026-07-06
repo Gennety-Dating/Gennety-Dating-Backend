@@ -52,6 +52,45 @@ function goToScheduling(): void {
   location.href = `index.html?match=${encodeURIComponent(matchId)}&lang=${lang}`;
 }
 
+// The profile photos stream through the bot's image proxy (getFile → Telegram),
+// so the first fetch can take a couple of seconds. Preload the photos the
+// about-to-render screen needs BEFORE leaving the spinner, so the avatars are
+// already there instead of popping in after the screen appears.
+const PRELOAD_TIMEOUT_MS = 6000;
+
+function preloadImage(url: string): Promise<void> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve();
+    img.onerror = () => resolve(); // never block the screen on a broken image
+    img.src = url;
+  });
+}
+
+function screenPhotoSrcs(state: TicketState): string[] {
+  const mine = ticketPhotoSrc(state.myPhotoUrl, initData);
+  const partner = ticketPhotoSrc(state.partnerPhotoUrl, initData);
+  const sc = deriveScreen(state);
+  const urls: Array<string | null> = [];
+  if (sc === "partner-paid") urls.push(partner); // his photo on her reveal card
+  else if (sc === "success" && state.iCoveredPartner) urls.push(partner); // her photo
+  else if ((sc === "offer" || sc === "cover-partner") && state.myGender === "male") {
+    urls.push(mine, partner); // pay-for-both button avatars
+  }
+  return urls.filter((u): u is string => Boolean(u));
+}
+
+async function preloadScreenPhotos(state: TicketState): Promise<void> {
+  const urls = screenPhotoSrcs(state);
+  if (urls.length === 0) return;
+  // Bounded wait: photos usually finish well within the timeout; a slow network
+  // still reveals the screen rather than hanging on the spinner forever.
+  await Promise.race([
+    Promise.all(urls.map(preloadImage)),
+    new Promise<void>((resolve) => setTimeout(resolve, PRELOAD_TIMEOUT_MS)),
+  ]);
+}
+
 export function App(): ReactElement {
   const s = strings(lang);
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
@@ -64,6 +103,9 @@ export function App(): ReactElement {
   const load = useCallback(async (): Promise<void> => {
     try {
       const state = await fetchTicketState(initData, matchId);
+      // Wait for the screen's photos before leaving the spinner (cached on
+      // subsequent polls, so this is instant after the first load).
+      await preloadScreenPhotos(state);
       setPhase({ kind: "view", state });
     } catch (err) {
       setPhase({ kind: "error", message: errorText(err, s) });
@@ -266,11 +308,11 @@ export function App(): ReactElement {
               >
                 {b.scope === "both" && (
                   <span className="btn-avatars" aria-hidden="true">
-                    <Avatar src={myPhotoSrc} name={myName} size={36} />
+                    <Avatar src={myPhotoSrc} name={myName} size={44} />
                     <Avatar
                       src={partnerPhotoSrc}
                       name={state.partnerName}
-                      size={36}
+                      size={44}
                       className="tkt-avatar-overlap"
                     />
                   </span>

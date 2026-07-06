@@ -895,6 +895,11 @@ body {
   display: inline-flex;
   align-items: center;
   margin-right: 10px;
+  /* Bigger avatars without growing the button: negative block margins keep them
+     out of the button's height calculation; nudge the cluster slightly left. */
+  margin-top: -8px;
+  margin-bottom: -8px;
+  margin-left: -8px;
 }
 .btn-with-avatars {
   display: inline-flex;
@@ -930,7 +935,7 @@ body {
   top: -40px;
   left: 50%;
   right: auto;
-  transform: translateX(-46%) rotate(-10deg);
+  transform: translateX(-36%) rotate(-10deg);
   font-size: 3.1rem;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
 }
