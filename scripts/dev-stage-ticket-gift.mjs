@@ -66,6 +66,7 @@ async function main() {
   const { prisma } = await import("@gennety/db");
   const { createProposedMatch } = await import("../apps/bot/src/services/match-engine.js");
   const { sendTicketOffer } = await import("../apps/bot/src/handlers/matching/ticket-gate.js");
+  const { DEFAULT_SESSION } = await import("@gennety/shared");
 
   // Minimal Bot-API shim (only sendMessage is exercised by sendTicketOffer).
   const api = {
@@ -115,7 +116,19 @@ async function main() {
       update: { ...CITY, psychologicalSummary: p.summary },
       create: { userId: user.id, ...CITY, psychologicalSummary: p.summary, photos: [] },
     });
-    console.log(`✔ seeded ${p.role}: ${user.firstName} (${user.gender}) tg=${user.telegramId} id=${user.id}`);
+    // Keep the Telegram bot session language in sync with the profile language.
+    // The Accept/confirm flow reads ctx.session.language (not user.language), so
+    // a stale session locale (e.g. the account's Telegram client language) would
+    // render the pitch confirmation in the wrong language. Seed both consistently.
+    const key = String(p.tg);
+    const existing = await prisma.botSession.findUnique({ where: { key } });
+    const sessionData = { ...DEFAULT_SESSION, ...(existing?.data ?? {}), language: lang };
+    await prisma.botSession.upsert({
+      where: { key },
+      update: { data: sessionData },
+      create: { key, data: sessionData },
+    });
+    console.log(`✔ seeded ${p.role}: ${user.firstName} (${user.gender}) tg=${user.telegramId} id=${user.id} [session lang=${lang}]`);
   }
 
   if (!apply) { console.log("\n[dry-run] no match created. Re-run with --apply."); await prisma.$disconnect(); return; }

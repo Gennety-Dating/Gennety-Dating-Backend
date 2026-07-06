@@ -68,7 +68,9 @@ export const env = {
   /// `verified`. Empty value falls back to a static `✓` glyph (no entity).
   /// Picked from a public Telegram emoji pack — operator selects the visual.
   CUSTOM_EMOJI_VERIFIED_ID: process.env.CUSTOM_EMOJI_VERIFIED_ID ?? "",
-  MESSAGE_EFFECT_MATCH_ID: process.env.MESSAGE_EFFECT_MATCH_ID ?? "5104841245755180586",
+  /// Empty by default → no floating-hearts animation on match-accept messages.
+  /// Set a Telegram effect id via env to re-enable.
+  MESSAGE_EFFECT_MATCH_ID: process.env.MESSAGE_EFFECT_MATCH_ID ?? "",
   /// Optional Bot API 7.6+ message effect attached to the post-date feedback
   /// DM. Uses a different effect id from `MESSAGE_EFFECT_MATCH_ID` so the
   /// "your match accepted" sparkle and "tell us how it went" reaction read

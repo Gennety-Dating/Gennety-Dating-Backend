@@ -234,7 +234,6 @@ export function App(): ReactElement {
                   src={partnerPhotoSrc}
                   name={state.partnerName}
                   size={132}
-                  badge="❤️"
                   className="tkt-avatar-hero"
                 />
               </div>
@@ -267,11 +266,11 @@ export function App(): ReactElement {
               >
                 {b.scope === "both" && (
                   <span className="btn-avatars" aria-hidden="true">
-                    <Avatar src={myPhotoSrc} name={myName} size={26} />
+                    <Avatar src={myPhotoSrc} name={myName} size={36} />
                     <Avatar
                       src={partnerPhotoSrc}
                       name={state.partnerName}
-                      size={26}
+                      size={36}
                       className="tkt-avatar-overlap"
                     />
                   </span>
