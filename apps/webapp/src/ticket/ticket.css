@@ -921,13 +921,13 @@ body {
   justify-content: center;
   margin-bottom: 16px;
 }
-/* Top hat sits ON his head — raised, centred (nudged slightly right), tilted,
-   with its brim overlapping the top of the photo. */
+/* Top hat rests just above his head — raised clear of the photo so it barely
+   (ideally doesn't) overlap the face, centred and lightly tilted. */
 .pp-payer-avatar .tkt-avatar-badge {
-  top: -20px;
+  top: -40px;
   left: 50%;
   right: auto;
-  transform: translateX(-42%) rotate(-12deg);
-  font-size: 3.2rem;
+  transform: translateX(-46%) rotate(-10deg);
+  font-size: 3.1rem;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
 }
