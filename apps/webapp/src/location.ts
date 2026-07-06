@@ -111,9 +111,31 @@ if (!matchId) {
   initMap();
   initSearch();
   initShareCurrentLocation();
+  initKeyboardPin();
   confirmEl?.addEventListener("click", () => {
     void handleConfirm();
   });
+}
+
+/**
+ * Keep the bottom bar (address readout + Confirm) pinned to the layout-viewport
+ * bottom when the on-screen keyboard opens, instead of letting it ride up with
+ * the shrinking visual viewport and cover the search-results list. iOS reports
+ * the keyboard as a smaller `visualViewport`; we translate the bar down by that
+ * delta so it stays put (tucked under the keyboard while typing, back in place
+ * once it closes).
+ */
+function initKeyboardPin(): void {
+  const vv = window.visualViewport;
+  if (!vv || typeof document.querySelector !== "function") return;
+  const bottom = document.querySelector<HTMLElement>(".layer.bottom");
+  if (!bottom) return;
+  const apply = (): void => {
+    const keyboard = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    bottom.style.transform = keyboard > 40 ? `translateY(${keyboard}px)` : "";
+  };
+  vv.addEventListener("resize", apply);
+  vv.addEventListener("scroll", apply);
 }
 
 function showNoContext(): void {
@@ -161,9 +183,21 @@ function initMap(): void {
     });
 
     setSelected(DEFAULT_CENTER[0], DEFAULT_CENTER[1], null);
-    // The container is a fixed full-bleed div present at construction, but
-    // recompute once after layout settles in case first paint reported 0 height.
-    setTimeout(() => map?.invalidateSize(), 50);
+    // Telegram opens this in immersive fullscreen, so the viewport (and the map
+    // container) settles a few hundred ms AFTER init. Leaflet builds its tile
+    // grid from the container size, so measuring only once at init would request
+    // ZERO tiles and stay blank forever. Recompute on every viewport change plus
+    // a few staggered ticks so tiles load as soon as the size is real.
+    const kickResize = (): void => map?.invalidateSize();
+    if (typeof window.addEventListener === "function") {
+      window.addEventListener("resize", kickResize);
+    }
+    const tgEvents = app as unknown as
+      | { onEvent?: (event: string, cb: () => void) => void }
+      | undefined;
+    tgEvents?.onEvent?.("viewportChanged", kickResize);
+    tgEvents?.onEvent?.("fullscreenChanged", kickResize);
+    for (const ms of [120, 400, 800, 1500]) setTimeout(kickResize, ms);
   } catch {
     map = null;
     if (selectedEl) selectedEl.textContent = tr(lang, "locErrMapUnavailable");

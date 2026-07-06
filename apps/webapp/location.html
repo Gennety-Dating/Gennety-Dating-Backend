@@ -7,6 +7,15 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <title>Gennety Location</title>
+    <!-- Paint the dark backdrop on the very first frame so the Mini App doesn't
+         flash a white/unstyled screen before the bundled CSS loads. -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #120e1c;
+      }
+    </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link
       rel="stylesheet"
