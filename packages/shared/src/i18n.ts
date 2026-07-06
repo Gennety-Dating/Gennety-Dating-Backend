@@ -465,6 +465,7 @@ const translations = {
     ticketCardCaption:
       "It's mutual 🤍 Get your *Date Ticket* to unlock planning.",
     ticketButton: "🎟️ Get your date ticket",
+    ticketViewButton: "🎟️ View your date ticket",
     ticketStatusButton: "Open date",
     ticketGateWaiting: "Ticket ready ✨ Waiting on them.",
     ticketBothSecuredDm: "Both tickets secured 🎟️✨ Your date is on — let's pick a time.",
@@ -1184,6 +1185,7 @@ const translations = {
     ticketCardCaption:
       "Взаимно 🤍 Получи *билет на свидание*, чтобы открыть планирование.",
     ticketButton: "🎟️ Получить билет на свидание",
+    ticketViewButton: "🎟️ Посмотреть свой билет на свидание",
     ticketStatusButton: "Открыть свидание",
     ticketGateWaiting: "Билет готов ✨ Ждём вторую сторону.",
     ticketBothSecuredDm: "Оба билета у вас 🎟️✨ Свидание в силе — давай выберем время.",
@@ -1881,6 +1883,7 @@ const translations = {
     ticketCardCaption:
       "Взаємно 🤍 Отримай *квиток на побачення*, щоб відкрити планування.",
     ticketButton: "🎟️ Отримати квиток на побачення",
+    ticketViewButton: "🎟️ Переглянути свій квиток на побачення",
     ticketStatusButton: "Відкрити побачення",
     ticketGateWaiting: "Квиток готовий ✨ Чекаємо на іншу сторону.",
     ticketBothSecuredDm: "Обидва квитки у вас 🎟️✨ Побачення в силі — оберімо час.",
@@ -2561,6 +2564,7 @@ const deTranslations: TranslationTable = {
   ticketCardCaption:
     "Beidseitig 🤍 Hol dir dein *Date-Ticket*, um die Planung zu öffnen.",
   ticketButton: "🎟️ Date-Ticket holen",
+  ticketViewButton: "🎟️ Dein Date-Ticket ansehen",
   ticketStatusButton: "Date öffnen",
   ticketGateWaiting: "Ticket bereit ✨ Warten auf die andere Person.",
   matchScheduleNoOverlap: "Noch keine Überschneidung - nächste Runde.",
@@ -3166,6 +3170,7 @@ const plTranslations: TranslationTable = {
   ticketCardCaption:
     "Wzajemnie ✨ Odbierz *bilet na randkę*, żeby otworzyć planowanie.",
   ticketButton: "🎟️ Odbierz bilet na randkę",
+  ticketViewButton: "🎟️ Zobacz swój bilet na randkę",
   ticketStatusButton: "Otwórz randkę",
   ticketGateWaiting: "Bilet gotowy ✨ Czekamy na drugą osobę.",
   matchScheduleNoOverlap: "Jeszcze brak wspólnego terminu - kolejna runda.",

@@ -883,7 +883,8 @@ body {
   pointer-events: none;
 }
 .tkt-avatar-overlap {
-  margin-left: 4px;
+  margin-left: -8px;
+  z-index: 1;
 }
 
 /* Two overlapping avatars leading the "pay for both" button */
@@ -919,4 +920,14 @@ body {
   display: flex;
   justify-content: center;
   margin-bottom: 16px;
+}
+/* Top hat sits ON his head — raised, centred (nudged slightly right), tilted,
+   with its brim overlapping the top of the photo. */
+.pp-payer-avatar .tkt-avatar-badge {
+  top: -20px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-42%) rotate(-12deg);
+  font-size: 3.2rem;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
 }

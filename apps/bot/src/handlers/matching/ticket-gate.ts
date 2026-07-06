@@ -302,8 +302,12 @@ function ticketUrl(matchId: string, lang: Language): string {
   return `${env.WEBAPP_URL}/ticket.html?match=${matchId}&lang=${lang}`;
 }
 
-function buildTicketKeyboard(matchId: string, lang: Language): InlineKeyboardMarkup {
-  const kb = new InlineKeyboard().webApp(t(lang, "ticketButton"), ticketUrl(matchId, lang));
+function buildTicketKeyboard(
+  matchId: string,
+  lang: Language,
+  labelKey: "ticketButton" | "ticketViewButton" = "ticketButton",
+): InlineKeyboardMarkup {
+  const kb = new InlineKeyboard().webApp(t(lang, labelKey), ticketUrl(matchId, lang));
   return { inline_keyboard: kb.inline_keyboard };
 }
 
@@ -610,7 +614,8 @@ export async function completeTicketGateAndUnlockScheduling(
             .sendMessage(
               toTelegramChatId(covered.telegramId),
               t(langOf(covered), "ticketPartnerPaidDm", { name: payer.firstName ?? "" }),
-              { reply_markup: buildTicketKeyboard(matchId, langOf(covered)) },
+              // She was already covered — the button is "view your ticket", not "get".
+              { reply_markup: buildTicketKeyboard(matchId, langOf(covered), "ticketViewButton") },
             )
             .catch(() => {});
         }
