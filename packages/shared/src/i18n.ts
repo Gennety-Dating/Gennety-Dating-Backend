@@ -480,6 +480,8 @@ const translations = {
     matchScheduleNoOverlap:
       "No overlap yet — next round.",
     matchScheduled: "Locked in — see you there 🤝\n\n{venue}",
+    matchScheduledNoReservation:
+      "💡 We don't reserve a table, so try to arrive on time. If it's full, don't worry — wait a couple of minutes or pick a cozy spot nearby.",
     matchScheduledBtnOpenMaps: "📍 Open in Maps",
     matchScheduledBtnShare: "📤 Share this card",
     dateCardWhen: "WHEN",
@@ -651,6 +653,7 @@ const translations = {
       "Hey! Your Gennety date starts in 90 minutes at **{location_name}**.\n\n" +
       "We care about your safety, so while you're getting ready, a quick first-date checklist:\n\n" +
       "📍 **Stick to the plan.** We picked a safe public venue for you. Don't agree to move the meeting to a private location or go to someone's place.\n" +
+      "🍽️ **If it's busy.** The spot might be full — that's normal. Suggest waiting a bit or a public place nearby; don't feel pressured to move somewhere private.\n" +
       "🚗 **Transport.** Get there and back on your own — public transport, taxi, or walking works. Just don't get in a car with someone you barely know.\n" +
       "📱 **Tell someone close.** Forward the meeting details to a friend or family, and if possible share your live location for the evening.\n" +
       "☕ **Stay aware.** Try not to leave your belongings or drink unattended.\n" +
@@ -1197,6 +1200,8 @@ const translations = {
       "Собеседник не успел взять свой билет, поэтому твой мы вернули. Ничего страшного — открыли планирование бесплатно. Давай найдём время 📅",
     matchScheduleNoOverlap: "Не совпало — попробуем ещё.",
     matchScheduled: "Готово — до встречи 🤝\n\n{venue}",
+    matchScheduledNoReservation:
+      "💡 Столик мы не бронируем, так что постарайся прийти вовремя. Если будет занято — не переживай: подожди пару минут или выбери уютное место поблизости.",
     matchScheduledBtnOpenMaps: "📍 Открыть в картах",
     matchScheduledBtnShare: "📤 Поделиться карточкой",
     dateCardWhen: "КОГДА",
@@ -1357,6 +1362,7 @@ const translations = {
       "Привет! Твое свидание от Gennety начнется уже через полтора часа в **{location_name}**.\n\n" +
       "Мы заботимся о твоей безопасности, поэтому, пока ты собираешься, вот небольшая памятка для первой встречи:\n\n" +
       "📍 **Придерживайся плана.** Мы подобрали для вас безопасное публичное место. Не соглашайся переносить встречу в уединенную локацию или ехать в гости.\n" +
+      "🍽️ **Если занято.** Место может оказаться полным — это нормально. Предложи немного подождать или публичное место рядом; не поддавайся, если зовут в уединённое место.\n" +
       "🚗 **Транспорт.** Добирайся до места и обратно самостоятельно любым удобным тебе способом (на общественном транспорте, такси или пешком). Главное — не садись в машину к малознакомому человеку.\n" +
       "📱 **Предупреди близких.** Перешли подруге или кому-то из близких детали этой встречи и, по возможности, расшарь свою геопозицию на вечер.\n" +
       "☕ **Контроль.** Старайся не оставлять свои вещи и напиток без присмотра.\n" +
@@ -1895,6 +1901,8 @@ const translations = {
       "Співрозмовник не встиг узяти свій квиток, тож твій ми повернули. Нічого страшного — відкрили планування безкоштовно. Знайдімо час 📅",
     matchScheduleNoOverlap: "Не збіглося — спробуємо ще.",
     matchScheduled: "Готово — до зустрічі 🤝\n\n{venue}",
+    matchScheduledNoReservation:
+      "💡 Столик ми не бронюємо, тож постарайся прийти вчасно. Якщо буде зайнято — не хвилюйся: зачекай кілька хвилин або обери затишне місце поблизу.",
     matchScheduledBtnOpenMaps: "📍 Відкрити в картах",
     matchScheduledBtnShare: "📤 Поділитися карткою",
     dateCardWhen: "КОЛИ",
@@ -2063,6 +2071,7 @@ const translations = {
       "Привіт! Твоє побачення від Gennety почнеться вже за півтори години в **{location_name}**.\n\n" +
       "Ми дбаємо про твою безпеку, тож поки ти збираєшся — невелика пам'ятка для першої зустрічі:\n\n" +
       "📍 **Дотримуйся плану.** Ми підібрали для вас безпечне публічне місце. Не погоджуйся переносити зустріч до усамітненої локації чи їхати в гості.\n" +
+      "🍽️ **Якщо зайнято.** Місце може бути заповнене — це нормально. Запропонуй трохи зачекати або публічне місце поруч; не піддавайся, якщо кличуть кудись усамітнене.\n" +
       "🚗 **Транспорт.** Добирайся туди і назад самостійно будь-яким зручним способом (громадським транспортом, таксі чи пішки). Головне — не сідай у машину до малознайомої людини.\n" +
       "📱 **Попередь близьких.** Перешли подрузі або комусь із близьких деталі цієї зустрічі і, якщо є можливість, поділися геолокацією на вечір.\n" +
       "☕ **Контроль.** Намагайся не залишати речі й напій без нагляду.\n" +
@@ -2569,6 +2578,8 @@ const deTranslations: TranslationTable = {
   ticketGateWaiting: "Ticket bereit ✨ Warten auf die andere Person.",
   matchScheduleNoOverlap: "Noch keine Überschneidung - nächste Runde.",
   matchScheduled: "Fixiert — bis dann 🤝\n\n{venue}",
+  matchScheduledNoReservation:
+    "💡 Wir reservieren keinen Tisch, versuch also pünktlich zu sein. Wenn es voll ist, kein Stress - warte ein paar Minuten oder such dir einen gemütlichen Platz in der Nähe.",
   matchScheduledBtnOpenMaps: "📍 In Maps öffnen",
   matchScheduledBtnShare: "📤 Karte teilen",
   dateCardWhen: "WANN",
@@ -2722,6 +2733,7 @@ const deTranslations: TranslationTable = {
     "Hey! Dein Gennety-Date startet in 90 Minuten bei **{location_name}**.\n\n" +
     "Deine Sicherheit ist uns wichtig, deshalb eine kurze Checkliste für das erste Treffen:\n\n" +
     "📍 **Bleib beim Plan.** Wir haben einen sicheren öffentlichen Ort gewählt. Stimm keinem Wechsel an einen privaten Ort zu und geh nicht zu jemandem nach Hause.\n" +
+    "🍽️ **Wenn es voll ist.** Der Ort kann voll sein - das ist normal. Schlag vor, kurz zu warten, oder einen öffentlichen Ort in der Nähe; lass dich nicht an einen privaten Ort drängen.\n" +
     "🚗 **Transport.** Komm selbst hin und zurück - ÖPNV, Taxi oder zu Fuß. Steig nicht bei jemandem ins Auto, den du kaum kennst.\n" +
     "📱 **Sag jemandem Bescheid.** Schick die Treffdetails an eine Freundin, einen Freund oder Familie und teile wenn möglich deinen Live-Standort.\n" +
     "☕ **Bleib aufmerksam.** Lass Sachen und Getränk möglichst nicht unbeaufsichtigt.\n" +
@@ -3175,6 +3187,8 @@ const plTranslations: TranslationTable = {
   ticketGateWaiting: "Bilet gotowy ✨ Czekamy na drugą osobę.",
   matchScheduleNoOverlap: "Jeszcze brak wspólnego terminu - kolejna runda.",
   matchScheduled: "Ustalone — do zobaczenia 🤝\n\n{venue}",
+  matchScheduledNoReservation:
+    "💡 Nie rezerwujemy stolika, więc postaraj się przyjść na czas. Jeśli będzie zajęte - spokojnie: poczekaj kilka minut albo wybierz przytulne miejsce w pobliżu.",
   matchScheduledBtnOpenMaps: "📍 Otwórz w Mapach",
   matchScheduledBtnShare: "📤 Udostępnij kartę",
   dateCardWhen: "KIEDY",
@@ -3328,6 +3342,7 @@ const plTranslations: TranslationTable = {
     "Hej! Twoja randka od Gennety zaczyna się za 90 minut w **{location_name}**.\n\n" +
     "Dbamy o Twoje bezpieczeństwo, więc krótka checklista przed pierwszym spotkaniem:\n\n" +
     "📍 **Trzymaj się planu.** Wybraliśmy bezpieczne publiczne miejsce. Nie zgadzaj się na przeniesienie spotkania do prywatnej lokalizacji ani na wizytę u kogoś.\n" +
+    "🍽️ **Jeśli jest zajęte.** Miejsce może być pełne - to normalne. Zaproponuj chwilę poczekać albo publiczne miejsce w pobliżu; nie daj się namówić na prywatne miejsce.\n" +
     "🚗 **Transport.** Dojedź i wróć samodzielnie - komunikacją, taksówką albo pieszo. Nie wsiadaj do auta z osobą, której prawie nie znasz.\n" +
     "📱 **Powiedz bliskim.** Prześlij szczegóły spotkania znajomej osobie albo rodzinie i jeśli możesz, udostępnij lokalizację na wieczór.\n" +
     "☕ **Uważaj.** Staraj się nie zostawiać rzeczy ani napoju bez opieki.\n" +

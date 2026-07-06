@@ -515,8 +515,19 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
 
   // Structured block: 📍 name / full address / blurb. The localized header and
   // the trailing `date_time` entity (added by `buildDateTimeEntity`) wrap it.
-  const venueBlockA = `📍 ${venue.name}\n${venue.address}\n${blurbA}`;
-  const venueBlockB = `📍 ${venue.name}\n${venue.address}\n${blurbB}`;
+  let venueBlockA = `📍 ${venue.name}\n${venue.address}\n${blurbA}`;
+  let venueBlockB = `📍 ${venue.name}\n${venue.address}\n${blurbB}`;
+
+  // Expectation-setter: we never book a table, so at a busy slot a *seated* spot
+  // can be full on arrival. Warn both sides once, on the card that names the
+  // venue, and tell them how to handle it (arrive on time; if full, wait or pick
+  // somewhere nearby). Skipped for park/museum, where "no table" is a non-issue
+  // — mirrors the venue price-gate's park/museum carve-out (`venue.ts`). Plain
+  // text: the scheduled card is sent without `parse_mode`, so no Markdown here.
+  if (merged.category !== "park" && merged.category !== "museum") {
+    venueBlockA += `\n\n${t(langA, "matchScheduledNoReservation")}`;
+    venueBlockB += `\n\n${t(langB, "matchScheduledNoReservation")}`;
+  }
   const baseA = t(langA, "matchScheduled", { venue: venueBlockA });
   const baseB = t(langB, "matchScheduled", { venue: venueBlockB });
   const { text: textA, entity: entA } = buildDateTimeEntity(baseA, match.agreedTime, langA);

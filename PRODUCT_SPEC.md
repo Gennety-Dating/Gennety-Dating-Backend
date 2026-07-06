@@ -1143,7 +1143,14 @@ language by `services/venue-blurb.ts` using ONLY real facts (Google's
 the model is unavailable, so finalization never blocks. The `googleMapsUri`
 is **no longer inlined in the body** (it would duplicate the affordance); it
 rides the "📍 Open in Maps" keyboard button only, so users still tap to verify
-the venue exists, check hours, and pre-plan transit. The confirmation also wraps a localized date phrase
+the venue exists, check hours, and pre-plan transit. For **seated** categories
+(`cafe`/`coffee_shop`/`restaurant`/`lounge`, not `park`/`museum`) the block also
+carries a one-line **no-reservation expectation-setter** (`matchScheduledNoReservation`):
+we never book a table, so it tells both sides to arrive on time and, if the spot
+is full, to wait a moment or pick somewhere nearby (plain text — the card is sent
+without `parse_mode`). The parallel safety reinforcement rides the female-only
+T-1.5h pre-date safety brief (`safetyNoteFemale` gains an "if it's busy, don't be
+pressured to move somewhere private" bullet). The confirmation also wraps a localized date phrase
 (`📅 Sat, 16 May, 19:00`, rendered in `Europe/Kyiv`) in a
 **`date_time` MessageEntity** so the whole phrase is a visibly
 unmistakable tap target — Telegram does not auto-style `date_time`
