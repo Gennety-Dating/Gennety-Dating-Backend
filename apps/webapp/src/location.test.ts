@@ -180,30 +180,26 @@ async function loadLocationApp(options: {
     },
   };
   const fakeMap = {
-    touchZoomRotate: { disableRotation: vi.fn() },
+    attributionControl: { setPrefix: vi.fn() },
     on: vi.fn(),
     getCenter: vi.fn(() => ({ lng: 30.5234, lat: 50.4501 })),
-    jumpTo: vi.fn(),
-    setCenter: vi.fn(),
-    resize: vi.fn(),
+    setView: vi.fn(),
+    invalidateSize: vi.fn(),
     remove: vi.fn(),
   };
-  // `new window.maplibregl.Map(opts)` — a constructor returning an object hands
-  // back that object, so the fake map instance is returned from `new`. Uses a
-  // real class (not an arrow) so it's actually constructable.
-  class FakeMaplibreMap {
-    constructor() {
-      return fakeMap;
-    }
-  }
-  const maplibregl = { Map: FakeMaplibreMap };
+  // Leaflet's `L.map(el, opts)` returns the map instance; `L.tileLayer(url, opts)`
+  // returns a layer with `.addTo(map)`.
+  const L = {
+    map: vi.fn(() => fakeMap),
+    tileLayer: vi.fn(() => ({ addTo: vi.fn(() => fakeMap) })),
+  };
 
   vi.stubGlobal("document", document);
   vi.stubGlobal("Node", FakeElement);
   vi.stubGlobal("location", { search: `?match=${MATCH_ID}&lang=en` });
   vi.stubGlobal("window", {
     Telegram: { WebApp: app },
-    maplibregl,
+    L,
     isSecureContext: options.isSecureContext ?? true,
   });
   vi.stubGlobal("navigator", {
@@ -259,11 +255,10 @@ describe("Location Mini App geolocation quick-action", () => {
     callbacks.success?.(makePosition(50.46, 30.51));
     await flushPromises();
 
-    // Center-pin picker: recenter under the fixed pin via MapLibre jumpTo.
-    // MapLibre uses [lng, lat] order (GeoJSON), the opposite of Leaflet.
-    expect(fakeMap.jumpTo).toHaveBeenCalledWith({
-      center: [30.51, 50.46],
-      zoom: 16,
+    // Center-pin picker: recenter under the fixed pin via Leaflet setView.
+    // Leaflet uses [lat, lng] order.
+    expect(fakeMap.setView).toHaveBeenCalledWith([50.46, 30.51], 16, {
+      animate: false,
     });
     expect(selectLocationMock).toHaveBeenCalledWith(
       "init-data",

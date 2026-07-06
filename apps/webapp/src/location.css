@@ -314,23 +314,22 @@ button.cta.saving .arrow {
   background: var(--bg);
 }
 
-/* --- MapLibre GL: kill the canvas focus ring and fit the required
-   attribution to the dark theme --- */
-.maplibregl-canvas:focus {
+/* --- Leaflet: dark container (Leaflet defaults to light grey while tiles
+   paint) + soften the required attribution to the dark theme. The "Leaflet"
+   prefix is stripped in JS, so only the OSM/CARTO credit remains — no
+   library watermark. --- */
+.leaflet-container {
+  background: var(--bg) !important;
   outline: none;
+  font-family: inherit;
 }
-.maplibregl-ctrl-attrib {
+.leaflet-control-attribution {
   background: rgba(18, 14, 28, 0.5) !important;
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
-.maplibregl-ctrl-attrib,
-.maplibregl-ctrl-attrib a {
+.leaflet-control-attribution,
+.leaflet-control-attribution a {
   color: var(--text-faint) !important;
   font-size: 10px;
-}
-/* MapLibre stamps a compact ⓘ toggle bottom-right — soften it so it doesn't
-   read as an interactive control competing with the FAB. */
-.maplibregl-ctrl-attrib-button {
-  opacity: 0.5;
 }

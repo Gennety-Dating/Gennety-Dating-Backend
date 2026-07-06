@@ -41,9 +41,12 @@ import { wireContentInsets } from "./telegram-insets.js";
 const DEFAULT_CENTER: [number, number] = [50.4501, 30.5234]; // Kyiv center [lat, lng]
 const DEFAULT_ZOOM = 14;
 const PICK_ZOOM = 16;
-// OpenFreeMap vector "dark" basemap — modern, minimal, keyless (attribution is
-// added automatically by MapLibre). Style JSON is MapLibre spec v8.
-const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/dark";
+// CARTO "dark_all" raster basemap — keyless, minimal, on a fast global CDN.
+// Raster tiles are plain images (no WebGL, no vector glyphs/sprites), so the
+// picker loads light and renders reliably inside the Telegram WebView.
+const MAP_TILES_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const MAP_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 const SEARCH_DEBOUNCE_MS = 350;
 const MIN_QUERY_LEN = 2;
 const GEOLOCATION_OPTIONS: PositionOptions = {
@@ -89,7 +92,7 @@ const addrLabelEl = document.getElementById("addr-label");
 const selectedEl = document.getElementById("selected");
 const noContextEl = document.getElementById("no-context");
 
-let map: maplibregl.Map | null = null;
+let map: L.Map | null = null;
 let selectedLat: number = DEFAULT_CENTER[0];
 let selectedLng: number = DEFAULT_CENTER[1];
 let selectedAddress: string | null = null;
@@ -121,32 +124,32 @@ function showNoContext(): void {
 }
 
 function initMap(): void {
-  // MapLibre GL is loaded from a `<script>` tag in location.html — global
-  // `maplibregl`. If for any reason it didn't load (offline tunnel during dev),
-  // surface a graceful message rather than crashing.
-  if (!window.maplibregl) {
+  // Leaflet is loaded from a `<script>` tag in location.html — global `L`. If
+  // for any reason it didn't load (offline tunnel during dev), surface a
+  // graceful message rather than crashing.
+  if (!window.L) {
     if (selectedEl) selectedEl.textContent = tr(lang, "locErrMapUnavailable");
     return;
   }
 
-  // MapLibre's constructor THROWS when WebGL is unavailable. Isolate it so a
-  // GL failure only costs the map preview — search, "use my location", and
-  // Confirm must still work (they operate on lat/lng, not the canvas).
+  // Isolate init so a map failure only costs the preview — search, "use my
+  // location", and Confirm must still work (they operate on lat/lng).
   try {
-    // NOTE: MapLibre coordinates are [lng, lat] (GeoJSON order) — the opposite
-    // of Leaflet's [lat, lng]. Everything below flips accordingly.
-    map = new window.maplibregl.Map({
-      container: "map",
-      style: MAP_STYLE_URL,
-      center: [DEFAULT_CENTER[1], DEFAULT_CENTER[0]],
+    // Leaflet coordinates are [lat, lng] — the same order as DEFAULT_CENTER.
+    map = window.L.map("map", {
+      center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
+      zoomControl: false,
       attributionControl: true,
-      // Flat picker: no rotation/pitch so "the point under the pin" stays literal.
-      dragRotate: false,
-      pitchWithRotate: false,
-      touchPitch: false,
     });
-    map.touchZoomRotate?.disableRotation?.();
+    // Drop Leaflet's "Leaflet" prefix from the attribution so no library
+    // watermark shows — only the required OSM/CARTO credit remains.
+    map.attributionControl?.setPrefix?.(false);
+    window.L.tileLayer(MAP_TILES_URL, {
+      subdomains: "abcd",
+      attribution: MAP_ATTRIBUTION,
+      maxZoom: 20,
+    }).addTo(map);
 
     // The point under the fixed centre pin is the selection. Any manual pan
     // makes it a "custom point"; programmatic recentres (search / geolocation)
@@ -159,8 +162,8 @@ function initMap(): void {
 
     setSelected(DEFAULT_CENTER[0], DEFAULT_CENTER[1], null);
     // The container is a fixed full-bleed div present at construction, but
-    // resize once after layout settles in case first paint reported 0 height.
-    setTimeout(() => map?.resize(), 50);
+    // recompute once after layout settles in case first paint reported 0 height.
+    setTimeout(() => map?.invalidateSize(), 50);
   } catch {
     map = null;
     if (selectedEl) selectedEl.textContent = tr(lang, "locErrMapUnavailable");
@@ -169,9 +172,10 @@ function initMap(): void {
 
 /** Recentre the map under the pin and label the point in one step. */
 function recenter(lat: number, lng: number, address: string | null): void {
-  // jumpTo is instant and fires `moveend` synchronously (setting a null "custom
-  // point"); we then override with the real label below. MapLibre is [lng, lat].
-  map?.jumpTo({ center: [lng, lat], zoom: PICK_ZOOM });
+  // setView (no animation) is instant and fires `moveend` synchronously
+  // (setting a null "custom point"); we then override with the real label
+  // below. Leaflet is [lat, lng].
+  map?.setView([lat, lng], PICK_ZOOM, { animate: false });
   setSelected(lat, lng, address);
 }
 
