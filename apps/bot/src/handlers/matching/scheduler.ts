@@ -240,6 +240,7 @@ async function replaceCalendarMessage(
   previousMessageId: number | null,
   text: string,
   lang: Language,
+  resend = false,
 ): Promise<void> {
   if (!isTelegramTarget(telegramId)) return;
 
@@ -255,6 +256,7 @@ async function replaceCalendarMessage(
     previousMessageId,
     text,
     options,
+    forceResend: resend,
   });
 }
 
@@ -466,6 +468,7 @@ export async function processCalendarSlotsUpdate(
           isA ? match.calendarMessageIdB : match.calendarMessageIdA,
           t(peerLang, "matchSchedulePeerProposed"),
           peerLang,
+          true, // delete old card + send fresh so the peer is actually notified
         ).catch(() => {}),
       );
     }
@@ -502,6 +505,7 @@ export async function processCalendarSlotsUpdate(
           isA ? match.calendarMessageIdB : match.calendarMessageIdA,
           t(peerLang, "matchSchedulePeerSuggestedAlternative"),
           peerLang,
+          true, // delete old card + send fresh so the peer is actually notified
         ).catch(() => {}),
       );
     }

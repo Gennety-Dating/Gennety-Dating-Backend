@@ -444,7 +444,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     expect(mStartVenue).toHaveBeenCalledTimes(1);
   });
 
-  it("when both sides have submitted but no shared slot exists, edits the peer's calendar prompt", async () => {
+  it("when both sides have submitted but no shared slot exists, deletes the peer's stale card and sends a fresh one", async () => {
     const a = new Date("2026-05-01T19:00:00.000Z");
     const b = new Date("2026-05-02T19:00:00.000Z");
     const c = new Date("2026-05-03T19:00:00.000Z");
@@ -464,14 +464,15 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     ]);
 
     expect(res.ok).toBe(true);
-    expect(api.editMessageText).toHaveBeenCalledWith(
+    // Delete the stale card + send a fresh, notifying message (not a silent edit)
+    // so the peer sees "your partner changed the time" as the newest chat message.
+    expect(api.deleteMessage).toHaveBeenCalledWith(1002, 72);
+    expect(api.sendMessage).toHaveBeenCalledWith(
       1002,
-      72,
       expect.stringContaining("suggested a different time"),
       expect.objectContaining({ reply_markup: expect.any(Object) }),
     );
-    expect(api.deleteMessage).not.toHaveBeenCalled();
-    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(api.editMessageText).not.toHaveBeenCalled();
   });
 
   it("sends a replacement calendar card when the stored message is gone", async () => {

@@ -53,6 +53,13 @@ export async function sendOrEditPostAcceptMessage(args: {
   previousMessageId: number | null;
   text: string;
   options?: PostAcceptMessageOptions;
+  /**
+   * When true, delete the previous card and send a brand-new one instead of a
+   * silent in-place edit — so a context change (e.g. the partner picked a
+   * different time) surfaces as a fresh, notifying message at the bottom of the
+   * chat rather than a quiet edit the user never sees.
+   */
+  forceResend?: boolean;
 }): Promise<number | null> {
   const {
     api,
@@ -62,11 +69,26 @@ export async function sendOrEditPostAcceptMessage(args: {
     previousMessageId,
     text,
     options = {},
+    forceResend = false,
   } = args;
   if (!isTelegramTarget(telegramId)) return previousMessageId;
 
   const chatId = toTelegramChatId(telegramId);
   const { message_effect_id: _messageEffectId, ...editOptions } = options;
+
+  if (forceResend) {
+    // Delete the stale card (best-effort — it may be gone/too old) and send a
+    // fresh one so the recipient is notified and it lands as the latest message.
+    if (previousMessageId !== null) {
+      await api.deleteMessage(chatId, previousMessageId).catch(() => {});
+    }
+    const sent = await api.sendMessage(chatId, text, options);
+    await prisma.match.update({
+      where: { id: matchId },
+      data: postAcceptMessageIdUpdate(side, sent.message_id),
+    });
+    return sent.message_id;
+  }
 
   if (previousMessageId !== null) {
     try {
