@@ -5,7 +5,7 @@ import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.js";
-import { startScheduling } from "./scheduler.js";
+import { startScheduling, sendCalendarCard } from "./scheduler.js";
 import {
   amountForScope,
   ticketsForScope,
@@ -265,13 +265,21 @@ async function markPartnerPaidSeenAndNotify(
   if (!match) return;
   const covered = selfUser(match, coveredSide);
   const payer = peerUser(match, coveredSide);
-  if (!isTelegramTarget(payer.telegramId)) return;
-  await api
-    .sendMessage(
-      toTelegramChatId(payer.telegramId),
-      t(langOf(payer), "ticketPartnerSawItDm", { name: covered.firstName ?? "" }),
-    )
-    .catch(() => {});
+  if (isTelegramTarget(payer.telegramId)) {
+    await api
+      .sendMessage(
+        toTelegramChatId(payer.telegramId),
+        t(langOf(payer), "ticketPartnerSawItDm", { name: covered.firstName ?? "" }),
+      )
+      .catch(() => {});
+  }
+
+  // She's now seen the reveal → deliver her deferred Calendar so she can pick a
+  // time. `completeTicketGateAndUnlockScheduling` withheld it (skipSide) until
+  // this moment; the CAS above guarantees this runs exactly once.
+  if (match.ticketStatus === "completed") {
+    await sendCalendarCard(api, matchId, coveredSide).catch(() => {});
+  }
 }
 
 /**
@@ -595,41 +603,51 @@ export async function completeTicketGateAndUnlockScheduling(
   // NOT stamp `partnerPaidSeenAt` here: his "she saw it" payoff still waits for a
   // genuine open (she can tap the button), keeping that read-receipt honest.
   const done = await loadTicketMatch(matchId);
-  if (done) {
-    const coveredSide: Side | null = done.paidForPartnerByA
+  const coveredSide: Side | null = done
+    ? done.paidForPartnerByA
       ? "B"
       : done.paidForPartnerByB
         ? "A"
-        : null;
-    if (coveredSide && done.partnerPaidSeenAt === null && done.partnerPaidNudgedAt === null) {
-      const claim = await prisma.match.updateMany({
-        where: { id: matchId, partnerPaidNudgedAt: null },
-        data: { partnerPaidNudgedAt: new Date() },
-      });
-      if (claim.count > 0) {
-        const covered = selfUser(done, coveredSide);
-        const payer = peerUser(done, coveredSide);
-        if (isTelegramTarget(covered.telegramId)) {
-          await api
-            .sendMessage(
-              toTelegramChatId(covered.telegramId),
-              t(langOf(covered), "ticketPartnerPaidDm", { name: payer.firstName ?? "" }),
-              // She was already covered — the button is "view your ticket", not "get".
-              { reply_markup: buildTicketKeyboard(matchId, langOf(covered), "ticketViewButton") },
-            )
-            .catch(() => {});
-        }
+        : null
+    : null;
+  // When he covered HER ticket, hold her Calendar back until she opens the
+  // "he paid your ticket ❤️" reveal — she should feel the surprise before we
+  // ask her to pick a time. Her card is delivered from `markPartnerPaidSeenAndNotify`
+  // when she opens; the payer's Calendar still goes out now. If she raced ahead
+  // and already saw it, don't defer.
+  const deferHerCalendar = coveredSide !== null && done?.partnerPaidSeenAt == null;
+
+  if (done && coveredSide && done.partnerPaidSeenAt === null && done.partnerPaidNudgedAt === null) {
+    const claim = await prisma.match.updateMany({
+      where: { id: matchId, partnerPaidNudgedAt: null },
+      data: { partnerPaidNudgedAt: new Date() },
+    });
+    if (claim.count > 0) {
+      const covered = selfUser(done, coveredSide);
+      const payer = peerUser(done, coveredSide);
+      if (isTelegramTarget(covered.telegramId)) {
+        await api
+          .sendMessage(
+            toTelegramChatId(covered.telegramId),
+            t(langOf(covered), "ticketPartnerPaidDm", { name: payer.firstName ?? "" }),
+            // She was already covered — the button is "view your ticket", not "get".
+            { reply_markup: buildTicketKeyboard(matchId, langOf(covered), "ticketViewButton") },
+          )
+          .catch(() => {});
       }
     }
   }
 
   // The persistent ticket card stays in chat untouched; the Calendar is sent as
   // a SEPARATE message that follows it (calendarMessageId* starts null here, so
-  // startScheduling sends fresh Calendar cards). The covered woman can still
-  // reopen the ticket card for the "your match paid ❤️" surprise. `afterTicketGate`
-  // makes the Calendar card use a plain caption so it doesn't repeat the ticket
-  // card's "It's mutual 🔥" celebration. §3.5b.
-  await startScheduling(api, matchId, { afterTicketGate: true });
+  // startScheduling sends fresh Calendar cards). `afterTicketGate` makes the
+  // Calendar card use a plain caption so it doesn't repeat the ticket card's
+  // "It's mutual 🔥" celebration. When he covered her, HER card is skipped here
+  // and delivered once she opens the reveal (see above). §3.5b.
+  await startScheduling(api, matchId, {
+    afterTicketGate: true,
+    ...(deferHerCalendar && coveredSide ? { skipSide: coveredSide } : {}),
+  });
 }
 
 /**

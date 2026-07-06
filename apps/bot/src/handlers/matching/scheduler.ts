@@ -117,7 +117,7 @@ export function buildCalendarKeyboard(
 export async function startScheduling(
   api: Api<RawApi>,
   matchId: string,
-  opts?: { afterTicketGate?: boolean },
+  opts?: { afterTicketGate?: boolean; skipSide?: "A" | "B" },
 ): Promise<void> {
   // When the Calendar follows the persistent ticket card (ticket gate on), the
   // ticket card already celebrated the match — so the Calendar card uses a
@@ -156,26 +156,71 @@ export async function startScheduling(
   const langA = (match.userA.language ?? "en") as Language;
   const langB = (match.userB.language ?? "en") as Language;
 
-  await Promise.all([
-    replaceCalendarMessage(
-      api,
-      matchId,
-      "A",
-      match.userA.telegramId,
-      match.calendarMessageIdA,
-      t(langA, captionKey),
-      langA,
-    ),
-    replaceCalendarMessage(
-      api,
-      matchId,
-      "B",
-      match.userB.telegramId,
-      match.calendarMessageIdB,
-      t(langB, captionKey),
-      langB,
-    ),
-  ]);
+  const sends: Array<Promise<unknown>> = [];
+  if (opts?.skipSide !== "A") {
+    sends.push(
+      replaceCalendarMessage(
+        api,
+        matchId,
+        "A",
+        match.userA.telegramId,
+        match.calendarMessageIdA,
+        t(langA, captionKey),
+        langA,
+      ),
+    );
+  }
+  if (opts?.skipSide !== "B") {
+    sends.push(
+      replaceCalendarMessage(
+        api,
+        matchId,
+        "B",
+        match.userB.telegramId,
+        match.calendarMessageIdB,
+        t(langB, captionKey),
+        langB,
+      ),
+    );
+  }
+  await Promise.all(sends);
+}
+
+/**
+ * Deliver (or refresh) the Calendar card for a SINGLE side. Used to hand the
+ * covered partner her Calendar only after she's opened the "he paid your ticket
+ * ❤️" reveal — `completeTicketGateAndUnlockScheduling` withholds her card via
+ * `skipSide` and this delivers it later. The slot grid is already set by
+ * `startScheduling`, so this only sends the card and never resets
+ * `proposedTimes` / `availableTimes*` (the payer may have already picked times).
+ */
+export async function sendCalendarCard(
+  api: Api<RawApi>,
+  matchId: string,
+  side: "A" | "B",
+): Promise<void> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: {
+      calendarMessageIdA: true,
+      calendarMessageIdB: true,
+      userA: { select: { telegramId: true, language: true } },
+      userB: { select: { telegramId: true, language: true } },
+    },
+  });
+  if (!match) return;
+  const user = side === "A" ? match.userA : match.userB;
+  const existingMsgId = side === "A" ? match.calendarMessageIdA : match.calendarMessageIdB;
+  const lang = (user.language ?? "en") as Language;
+  await replaceCalendarMessage(
+    api,
+    matchId,
+    side,
+    user.telegramId,
+    existingMsgId,
+    t(lang, "matchScheduleAfterTicket"),
+    lang,
+  );
 }
 
 function calendarUrl(matchId: string, lang: Language): string {

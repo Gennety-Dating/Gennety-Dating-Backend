@@ -21,6 +21,7 @@ vi.mock("../../config.js", () => ({
 
 vi.mock("./scheduler.js", () => ({
   startScheduling: vi.fn().mockResolvedValue(undefined),
+  sendCalendarCard: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../../services/ticket-wallet.js", () => ({
@@ -36,7 +37,7 @@ import {
   useTicketFromBalance,
   notePartnerPaidSeen,
 } from "./ticket-gate.js";
-import { startScheduling } from "./scheduler.js";
+import { startScheduling, sendCalendarCard } from "./scheduler.js";
 import { spendTickets, grantTickets } from "../../services/ticket-wallet.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
@@ -46,6 +47,7 @@ const mMatch = prisma.match as unknown as {
   updateMany: MockFn;
 };
 const mStartScheduling = startScheduling as unknown as MockFn;
+const mSendCalendarCard = sendCalendarCard as unknown as MockFn;
 
 function createApi() {
   let nextMessageId = 500;
@@ -189,6 +191,8 @@ describe("ticket gate post-accept status message", () => {
     // ticket card's "It's mutual 🔥" celebration).
     expect(mStartScheduling).toHaveBeenCalledWith(api, "match-1", {
       afterTicketGate: true,
+      // Her Calendar is withheld until she opens the reveal (covered side = B).
+      skipSide: "B",
     });
   });
 
@@ -253,6 +257,25 @@ describe("notePartnerPaidSeen — goodwill read-receipt (takt 2)", () => {
     // Payer (Alex, 1001) is told SHE (Bea) saw it.
     const texts = api.sendMessage.mock.calls.map((c: unknown[]) => c[1]);
     expect(texts).toContain(t("en", "ticketPartnerSawItDm", { name: "Bea" }));
+  });
+
+  it("delivers her deferred Calendar once she opens the reveal (gate completed)", async () => {
+    // Gate already completed via pay-for-both; her Calendar was withheld (skipSide).
+    const covered = matchRow({
+      ticketStatus: "completed",
+      ticketPaidA: new Date(),
+      ticketPaidB: new Date(),
+      paidForPartnerByA: true,
+    });
+    mMatch.findUnique
+      .mockResolvedValueOnce(covered) // notePartnerPaidSeen participation load
+      .mockResolvedValueOnce(covered); // markPartnerPaidSeenAndNotify load
+    const api = createApi();
+
+    await notePartnerPaidSeen(api, 1002n, "match-1");
+
+    // She (side B) now receives her Calendar card.
+    expect(mSendCalendarCard).toHaveBeenCalledWith(api, "match-1", "B");
   });
 
   it("is a no-op when the viewer was not covered", async () => {
