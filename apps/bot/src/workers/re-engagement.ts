@@ -1,7 +1,9 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
+import type { Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { openaiFetch } from "../services/openai-fetch.js";
+import { sendVerificationReminder } from "../handlers/onboarding/verification.js";
 import {
   computeNextTouch,
   MAX_RE_ENGAGEMENT_STEP,
@@ -132,6 +134,68 @@ export async function reEngagementTick(
         `Re-engagement send failed for ${user.telegramId}:`,
         (err as Error).message,
       );
+    }
+  }
+
+  // Registration v2 (mandatory liveness): a user who finalized onboarding but
+  // hasn't passed Persona sits at status='onboarding', onboardingStep='completed'
+  // — outside the main chain above (which stops at 'completed'). Nudge them
+  // through the same decaying cadence until the pipeline activates them or the
+  // chain exhausts. `pending_review` and `rejected` are deliberately excluded:
+  // those users already did their part (or got the rejection guidance) and must
+  // not be nagged to "verify".
+  if (env.MANDATORY_VERIFICATION_ENABLED) {
+    const stalled = await prisma.user.findMany({
+      where: {
+        status: "onboarding",
+        onboardingStep: "completed",
+        verificationStatus: { in: ["pending", "unverified"] },
+        reEngagementNextAt: { not: null, lte: now },
+        telegramId: { gt: 0n },
+      },
+      select: {
+        id: true,
+        telegramId: true,
+        language: true,
+        reEngagementStep: true,
+      },
+      take: batchSize,
+    });
+
+    for (const user of stalled) {
+      const currentStep = user.reEngagementStep;
+      const nextStep = currentStep + 1;
+      const following =
+        nextStep > MAX_RE_ENGAGEMENT_STEP
+          ? null
+          : computeNextTouch(nextStep + 1, now, now);
+
+      const claim = await prisma.user.updateMany({
+        where: {
+          telegramId: user.telegramId,
+          status: "onboarding",
+          onboardingStep: "completed",
+          reEngagementStep: currentStep,
+          reEngagementNextAt: { not: null, lte: now },
+        },
+        data: { reEngagementStep: nextStep, reEngagementNextAt: following },
+      });
+      if (claim.count === 0) continue;
+
+      try {
+        await sendVerificationReminder(
+          api as unknown as Api,
+          Number(user.telegramId),
+          (user.language ?? "en") as Language,
+          user.id,
+        );
+        sent++;
+      } catch (err) {
+        console.warn(
+          `Verification-stall nudge failed for ${user.telegramId}:`,
+          (err as Error).message,
+        );
+      }
     }
   }
 

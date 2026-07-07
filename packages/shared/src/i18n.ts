@@ -167,6 +167,19 @@ const translations = {
       "Final step: confirm that this profile is really yours.\n\n" +
       "We'll compare a verification selfie with your profile photos. Complete the check and get *1 free Date Ticket* for one date.\n\n" +
       "If you skip, you give up the free ticket, lose {penalty} starting ELO points, and reduce your chances of receiving a strong match.",
+    verifyPitchMandatory:
+      "Final step. We confirm every member is a real person.\n\n" +
+      "We'll compare the selfie captured during verification with every photo in your profile — " +
+      "photos that don't match you will be rejected.\n\n" +
+      "Verification is required: matching starts right after you pass it.",
+    verifyPitchMandatoryTicket:
+      "Final step: confirm this profile is really yours.\n\n" +
+      "We'll compare a verification selfie with your profile photos, and you'll get *1 free Date Ticket* for passing.\n\n" +
+      "Verification is required: matching starts right after you pass it.",
+    verifyMandatoryNotice:
+      "Verification is now required for all new profiles — matching starts right after you pass it. It takes about a minute:",
+    verifyReminderNudge:
+      "Your profile is ready — verification is the only step left. It takes about a minute, and matching starts right after:",
     verifyBtnGo: "🟢 Verify now",
     verifyBtnCheck: "✨ I've finished verification",
     verifyBtnSkip: "⚪️ Skip for now",
@@ -883,6 +896,19 @@ const translations = {
       "Финальный шаг — подтвердить, что профиль действительно твой.\n\n" +
       "Мы сравним селфи с фотографиями профиля. Пройди проверку и получи *1 бесплатный билет на свидание*.\n\n" +
       "Если пропустить, ты откажешься от билета, потеряешь {penalty} стартовых ELO-пунктов и снизишь свои шансы на подходящую встречу.",
+    verifyPitchMandatory:
+      "Финальный шаг. Мы подтверждаем, что каждый участник — реальный человек.\n\n" +
+      "Селфи, сделанное во время верификации, мы сравним с каждой фотографией в твоём профиле — " +
+      "фото, на которых не ты, будут отклонены.\n\n" +
+      "Верификация обязательна: подбор пар начнётся сразу после её прохождения.",
+    verifyPitchMandatoryTicket:
+      "Финальный шаг — подтвердить, что профиль действительно твой.\n\n" +
+      "Мы сравним верификационное селфи с фотографиями профиля, а за прохождение ты получишь *1 бесплатный билет на свидание*.\n\n" +
+      "Верификация обязательна: подбор пар начнётся сразу после её прохождения.",
+    verifyMandatoryNotice:
+      "Верификация теперь обязательна для всех новых профилей — подбор пар начнётся сразу после её прохождения. Это займёт около минуты:",
+    verifyReminderNudge:
+      "Твой профиль готов — остался только шаг верификации. Это займёт около минуты, и подбор пар начнётся сразу после:",
     verifyBtnGo: "🟢 Пройти верификацию",
     verifyBtnCheck: "✨ Я прошёл проверку",
     verifyBtnSkip: "⚪️ Пропустить пока",
@@ -1592,6 +1618,19 @@ const translations = {
       "Фінальний крок — підтвердити, що профіль справді твій.\n\n" +
       "Ми порівняємо селфі з фотографіями профілю. Пройди перевірку й отримай *1 безкоштовний квиток на побачення*.\n\n" +
       "Якщо пропустити, ти відмовишся від квитка, втратиш {penalty} стартових ELO-пунктів і знизиш свої шанси на вдалу зустріч.",
+    verifyPitchMandatory:
+      "Фінальний крок. Ми підтверджуємо, що кожен учасник — реальна людина.\n\n" +
+      "Селфі, зроблене під час верифікації, ми порівняємо з кожним фото у твоєму профілі — " +
+      "фото, на яких не ти, буде відхилено.\n\n" +
+      "Верифікація обов'язкова: підбір пар почнеться одразу після її проходження.",
+    verifyPitchMandatoryTicket:
+      "Фінальний крок — підтвердити, що профіль справді твій.\n\n" +
+      "Ми порівняємо верифікаційне селфі з фотографіями профілю, а за проходження ти отримаєш *1 безкоштовний квиток на побачення*.\n\n" +
+      "Верифікація обов'язкова: підбір пар почнеться одразу після її проходження.",
+    verifyMandatoryNotice:
+      "Верифікація тепер обов'язкова для всіх нових профілів — підбір пар почнеться одразу після її проходження. Це займе близько хвилини:",
+    verifyReminderNudge:
+      "Твій профіль готовий — залишився тільки крок верифікації. Це займе близько хвилини, і підбір пар почнеться одразу після:",
     verifyBtnGo: "🟢 Пройти верифікацію",
     verifyBtnCheck: "✨ Я пройшов перевірку",
     verifyBtnSkip: "⚪️ Пропустити поки",
@@ -2238,6 +2277,19 @@ const deTranslations: TranslationTable = {
     "Letzter Schritt: Bestätige, dass dieses Profil wirklich dir gehört.\n\n" +
     "Wir vergleichen ein Verifizierungs-Selfie mit deinen Profilfotos. Schließe die Prüfung ab und erhalte *1 kostenloses Date-Ticket*.\n\n" +
     "Wenn du überspringst, verzichtest du auf das Ticket, verlierst {penalty} Start-ELO-Punkte und senkst deine Chancen auf ein starkes Match.",
+  verifyPitchMandatory:
+    "Letzter Schritt. Wir bestätigen, dass jedes Mitglied eine echte Person ist.\n\n" +
+    "Wir vergleichen das Selfie aus der Verifizierung mit jedem Foto in deinem Profil — " +
+    "Fotos, die nicht zu dir passen, werden abgelehnt.\n\n" +
+    "Die Verifizierung ist verpflichtend: das Matching startet direkt nach dem Bestehen.",
+  verifyPitchMandatoryTicket:
+    "Letzter Schritt: Bestätige, dass dieses Profil wirklich dir gehört.\n\n" +
+    "Wir vergleichen ein Verifizierungs-Selfie mit deinen Profilfotos — und fürs Bestehen bekommst du *1 kostenloses Date-Ticket*.\n\n" +
+    "Die Verifizierung ist verpflichtend: das Matching startet direkt nach dem Bestehen.",
+  verifyMandatoryNotice:
+    "Die Verifizierung ist jetzt für alle neuen Profile verpflichtend — das Matching startet direkt nach dem Bestehen. Dauert etwa eine Minute:",
+  verifyReminderNudge:
+    "Dein Profil ist fertig — es fehlt nur noch die Verifizierung. Sie dauert etwa eine Minute, und das Matching startet direkt danach:",
   verifyBtnGo: "🟢 Jetzt verifizieren",
   verifyBtnCheck: "✨ Ich habe die Verifizierung abgeschlossen",
   verifyBtnSkip: "⚪️ Erstmal überspringen",
@@ -2848,6 +2900,19 @@ const plTranslations: TranslationTable = {
     "Ostatni krok: potwierdź, że ten profil naprawdę należy do Ciebie.\n\n" +
     "Porównamy selfie weryfikacyjne ze zdjęciami profilowymi. Ukończ sprawdzenie i odbierz *1 darmowy bilet na randkę*.\n\n" +
     "Jeśli pominiesz, zrezygnujesz z biletu, stracisz {penalty} startowych punktów ELO i zmniejszysz szanse na dobre dopasowanie.",
+  verifyPitchMandatory:
+    "Ostatni krok. Potwierdzamy, że każdy uczestnik to prawdziwa osoba.\n\n" +
+    "Porównamy selfie z weryfikacji z każdym zdjęciem w Twoim profilu — " +
+    "zdjęcia, które nie pasują do Ciebie, zostaną odrzucone.\n\n" +
+    "Weryfikacja jest obowiązkowa: dobieranie par zacznie się zaraz po jej zaliczeniu.",
+  verifyPitchMandatoryTicket:
+    "Ostatni krok: potwierdź, że ten profil naprawdę należy do Ciebie.\n\n" +
+    "Porównamy selfie weryfikacyjne ze zdjęciami profilowymi, a za zaliczenie otrzymasz *1 darmowy bilet na randkę*.\n\n" +
+    "Weryfikacja jest obowiązkowa: dobieranie par zacznie się zaraz po jej zaliczeniu.",
+  verifyMandatoryNotice:
+    "Weryfikacja jest teraz obowiązkowa dla wszystkich nowych profili — dobieranie par zacznie się zaraz po jej zaliczeniu. Zajmie to około minuty:",
+  verifyReminderNudge:
+    "Twój profil jest gotowy — został tylko krok weryfikacji. Zajmie to około minuty, a dobieranie par zacznie się zaraz potem:",
   verifyBtnGo: "🟢 Zweryfikuj teraz",
   verifyBtnCheck: "✨ Zakończyłem/am weryfikację",
   verifyBtnSkip: "⚪️ Pomiń na razie",

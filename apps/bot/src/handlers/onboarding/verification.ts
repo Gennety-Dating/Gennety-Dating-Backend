@@ -11,6 +11,7 @@ import { pinStatusBanner } from "../../services/status-banner.js";
 import { UNVERIFIED_ELO_PENALTY } from "../../utils/elo-calculator.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { skipAnalysisSteps } from "../../services/analysis-status.js";
+import { computeNextTouch } from "../../workers/re-engagement-schedule.js";
 import type { BotContext } from "../../session.js";
 
 /**
@@ -88,10 +89,20 @@ export async function sendVerificationCTABare(
   // Mark pending so elsewhere in the bot we can surface "review in progress".
   // Mirrors the same write the Mini App's /init endpoint does — leaving
   // it here keeps the dev/fallback URL path consistent with prod.
+  // Registration v2 (mandatory liveness): re-arm the re-engagement chain at the
+  // CTA so a user who stalls here (onboardingStep=completed, still not active)
+  // gets the verification-stall nudges — the main onboarding chain stops at
+  // `completed` and would otherwise never touch them again.
+  const now = new Date();
   await prisma.user
     .update({
       where: { id: user.id },
-      data: { verificationStatus: "pending" },
+      data: {
+        verificationStatus: "pending",
+        ...(env.MANDATORY_VERIFICATION_ENABLED
+          ? { reEngagementStep: 0, reEngagementNextAt: computeNextTouch(1, now, now) }
+          : {}),
+      },
     })
     .catch(() => {});
 
@@ -100,11 +111,20 @@ export async function sendVerificationCTABare(
     return false;
   }
   keyboard.success();
-  keyboard.row().text(t(lang, "verifyBtnSkip"), VERIFY_SKIP_CALLBACK);
+  // Registration v2 (mandatory liveness): no Skip affordance — verification is
+  // the only path to activation. The soft-skip flow survives solely for legacy
+  // CTA messages sent before the flag flip (see the skip handlers below).
+  if (!env.MANDATORY_VERIFICATION_ENABLED) {
+    keyboard.row().text(t(lang, "verifyBtnSkip"), VERIFY_SKIP_CALLBACK);
+  }
 
-  const pitchKey = env.TICKET_FEATURE_ENABLED
-    ? "verifyPitchTicket"
-    : "verifyPitch";
+  const pitchKey = env.MANDATORY_VERIFICATION_ENABLED
+    ? env.TICKET_FEATURE_ENABLED
+      ? "verifyPitchMandatoryTicket"
+      : "verifyPitchMandatory"
+    : env.TICKET_FEATURE_ENABLED
+      ? "verifyPitchTicket"
+      : "verifyPitch";
   await api.sendMessage(
     chatId,
     t(lang, pitchKey, { penalty: UNVERIFIED_ELO_PENALTY }),
@@ -275,6 +295,44 @@ export async function handleVerificationCheck(ctx: BotContext): Promise<void> {
 }
 
 /**
+ * Registration v2 (mandatory liveness): tell the user verification is now
+ * required and re-offer the Verify button. Used when a legacy Skip / Skip-anyway
+ * callback fires after `MANDATORY_VERIFICATION_ENABLED` was flipped on.
+ */
+async function sendMandatoryVerifyNotice(
+  api: Api,
+  chatId: number,
+  lang: Language,
+  userId: string,
+): Promise<void> {
+  const keyboard = new InlineKeyboard();
+  const hasButton = appendVerifyNowButton(keyboard, lang, userId, t(lang, "verifyBtnGo"));
+  if (hasButton) keyboard.success();
+  await api.sendMessage(chatId, t(lang, "verifyMandatoryNotice"), {
+    ...(hasButton ? { reply_markup: keyboard } : {}),
+  });
+}
+
+/**
+ * Registration v2 (mandatory liveness): the verification-stall re-engagement
+ * touch — the profile is done, only Persona remains. Sent by the re-engagement
+ * worker on the standard decaying cadence (see `runReEngagementSweep`).
+ */
+export async function sendVerificationReminder(
+  api: Api,
+  chatId: number,
+  lang: Language,
+  userId: string,
+): Promise<void> {
+  const keyboard = new InlineKeyboard();
+  const hasButton = appendVerifyNowButton(keyboard, lang, userId, t(lang, "verifyBtnGo"));
+  if (hasButton) keyboard.success();
+  await api.sendMessage(chatId, t(lang, "verifyReminderNudge"), {
+    ...(hasButton ? { reply_markup: keyboard } : {}),
+  });
+}
+
+/**
  * Handle the "Skip" button on the verification CTA — the *soft* skip.
  *
  * Instead of immediately applying the Elo penalty, this plays a short personal
@@ -300,6 +358,14 @@ export async function handleVerificationSkip(ctx: BotContext): Promise<void> {
 
   // Already committed a skip — the nudge is moot, don't re-play it.
   if (user.verificationSkippedAt) return;
+
+  // Registration v2 (mandatory liveness): a Skip tap on a legacy CTA message
+  // (sent before the flag flip) no longer opens the soft-skip fork — explain
+  // the new rule and re-offer the Verify button so the user is never stranded.
+  if (env.MANDATORY_VERIFICATION_ENABLED) {
+    await sendMandatoryVerifyNotice(ctx.api, ctx.chat!.id, lang, user.id);
+    return;
+  }
 
   const keyboard = new InlineKeyboard();
   const hasVerifyButton = appendVerifyNowButton(
@@ -350,6 +416,13 @@ export async function handleVerificationSkipConfirm(
   // Idempotency: skip already applied. Acking the callback above is enough —
   // do NOT re-send menu / banner / "skipped" text on the second hit.
   if (user.verificationSkippedAt) return;
+
+  // Registration v2 (mandatory liveness): a stale "Skip anyway" button from a
+  // pre-flip nudge message must not activate an unverified user.
+  if (env.MANDATORY_VERIFICATION_ENABLED) {
+    await sendMandatoryVerifyNotice(ctx.api, ctx.chat!.id, lang, user.id);
+    return;
+  }
 
   await prisma.profile.updateMany({
     where: { userId: user.id },

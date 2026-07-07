@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("@gennety/db", () => ({
   prisma: {
@@ -8,6 +8,13 @@ vi.mock("@gennety/db", () => ({
       updateMany: vi.fn(),
     },
   },
+}));
+
+const { sendVerificationReminderMock } = vi.hoisted(() => ({
+  sendVerificationReminderMock: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../handlers/onboarding/verification.js", () => ({
+  sendVerificationReminder: sendVerificationReminderMock,
 }));
 
 vi.mock("../config.js", () => ({
@@ -264,5 +271,84 @@ describe("getFallbackMessage", () => {
   it("supports German and Polish", () => {
     expect(getFallbackMessage("Max", "de", 1)).toContain("Profil");
     expect(getFallbackMessage("Ania", "pl", 1)).toContain("profil");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Registration v2 — verification-stall nudges (MANDATORY_VERIFICATION_ENABLED)
+// ---------------------------------------------------------------------------
+
+describe("verification-stall nudges (Registration v2)", () => {
+  const cfgPromise = import("../config.js") as unknown as Promise<{
+    env: Record<string, unknown>;
+  }>;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prisma.user.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+    (await cfgPromise).env.MANDATORY_VERIFICATION_ENABLED = true;
+  });
+  afterEach(async () => {
+    (await cfgPromise).env.MANDATORY_VERIFICATION_ENABLED = false;
+  });
+
+  it("nudges a user stalled at the verification CTA and advances the chain", async () => {
+    (prisma.user.findMany as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([]) // main onboarding chain: nothing due
+      .mockResolvedValueOnce([
+        { id: "uid-1", telegramId: 42n, language: "ru", reEngagementStep: 0 },
+      ]);
+
+    const api = createMockApi();
+    const count = await reEngagementTick(api, { now: DAY_TIME });
+
+    expect(count).toBe(1);
+    expect(sendVerificationReminderMock).toHaveBeenCalledWith(
+      expect.anything(),
+      42,
+      "ru",
+      "uid-1",
+    );
+    // The stalled sweep targets completed-but-unactivated users only.
+    const sweep = (prisma.user.findMany as ReturnType<typeof vi.fn>).mock.calls[1]![0];
+    expect(sweep.where.onboardingStep).toBe("completed");
+    expect(sweep.where.status).toBe("onboarding");
+    expect(sweep.where.verificationStatus).toEqual({ in: ["pending", "unverified"] });
+    // CAS claim advances the chain with the standard decaying cadence.
+    const claim = (prisma.user.updateMany as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0];
+    expect(claim.data.reEngagementStep).toBe(1);
+    expect(claim.data.reEngagementNextAt).toBeInstanceOf(Date);
+  });
+
+  it("exhausts the chain after the final step (next-at nulled)", async () => {
+    (prisma.user.findMany as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: "uid-1",
+          telegramId: 42n,
+          language: "en",
+          reEngagementStep: MAX_RE_ENGAGEMENT_STEP,
+        },
+      ]);
+
+    const api = createMockApi();
+    await reEngagementTick(api, { now: DAY_TIME });
+
+    const claim = (prisma.user.updateMany as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0];
+    expect(claim.data.reEngagementStep).toBe(MAX_RE_ENGAGEMENT_STEP + 1);
+    expect(claim.data.reEngagementNextAt).toBeNull();
+  });
+
+  it("does nothing while the flag is off", async () => {
+    (await cfgPromise).env.MANDATORY_VERIFICATION_ENABLED = false;
+    (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+
+    const api = createMockApi();
+    await reEngagementTick(api, { now: DAY_TIME });
+
+    expect(prisma.user.findMany).toHaveBeenCalledTimes(1);
+    expect(sendVerificationReminderMock).not.toHaveBeenCalled();
   });
 });

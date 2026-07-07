@@ -2057,3 +2057,110 @@ describe("handleVerificationSkipConfirm — idempotency", () => {
     expect(ctx2.reply).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Registration v2 — mandatory liveness (MANDATORY_VERIFICATION_ENABLED)
+// ---------------------------------------------------------------------------
+
+describe("mandatory verification (Registration v2)", () => {
+  const cfgPromise = import("../../config.js") as unknown as Promise<{
+    env: Record<string, unknown>;
+  }>;
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    (await cfgPromise).env.MANDATORY_VERIFICATION_ENABLED = true;
+  });
+  afterEach(async () => {
+    (await cfgPromise).env.MANDATORY_VERIFICATION_ENABLED = false;
+  });
+
+  function createSkipCtx(callback: string, fromId = 1001) {
+    const session: SessionData = { ...DEFAULT_SESSION };
+    return {
+      session,
+      from: { id: fromId },
+      chat: { id: fromId },
+      callbackQuery: { data: callback },
+      reply: vi.fn().mockResolvedValue(undefined),
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      api: {
+        sendVoice: vi.fn().mockResolvedValue({ voice: { file_id: "vf-en" } }),
+        sendMessage: vi.fn().mockResolvedValue(undefined),
+      },
+    } as any;
+  }
+
+  it("CTA carries only the Verify button (no Skip) and the mandatory pitch", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "user-uuid",
+    });
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    const api = { sendMessage: vi.fn().mockResolvedValue(undefined) };
+
+    const sent = await sendVerificationCTABare(api as any, 12345, 12345n, "en");
+
+    expect(sent).toBe(true);
+    const [, text, options] = api.sendMessage.mock.calls[0]!;
+    const keyboard = options.reply_markup.inline_keyboard;
+    expect(keyboard).toHaveLength(1);
+    expect(keyboard[0]?.[0]?.web_app?.url).toContain("verification.html");
+    expect(text).toContain("Verification is required");
+    // Re-arm the re-engagement chain so a stall at this CTA still gets nudges.
+    const updateArg = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(updateArg.data.verificationStatus).toBe("pending");
+    expect(updateArg.data.reEngagementStep).toBe(0);
+    expect(updateArg.data.reEngagementNextAt).toBeInstanceOf(Date);
+  });
+
+  it("legacy Skip tap: no voice fork — mandatory notice + Verify button instead", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uid-1",
+      verificationSkippedAt: null,
+    });
+
+    const ctx = createSkipCtx("verify:skip");
+    await handleVerificationSkip(ctx);
+
+    expect(ctx.api.sendVoice).not.toHaveBeenCalled();
+    expect(ctx.api.sendMessage).toHaveBeenCalledTimes(1);
+    const [, text, options] = ctx.api.sendMessage.mock.calls[0]!;
+    expect(text).toContain("required");
+    expect(options.reply_markup.inline_keyboard[0]?.[0]?.web_app?.url).toContain(
+      "verification.html",
+    );
+    expect(prisma.profile.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("stale 'Skip anyway' tap: refuses — no penalty, no unverified activation", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uid-1",
+      verificationSkippedAt: null,
+    });
+
+    const ctx = createSkipCtx("verify:skip:confirm");
+    await handleVerificationSkipConfirm(ctx);
+
+    expect(prisma.profile.updateMany).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(showMainMenu).not.toHaveBeenCalled();
+    expect(pinStatusBanner).not.toHaveBeenCalled();
+    expect(ctx.api.sendMessage).toHaveBeenCalledTimes(1);
+    const [, text] = ctx.api.sendMessage.mock.calls[0]!;
+    expect(text).toContain("required");
+  });
+
+  it("already-skipped legacy user stays grandfathered (ack only, no notice)", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uid-1",
+      verificationSkippedAt: new Date("2026-05-08T20:00:00Z"),
+    });
+
+    const ctx = createSkipCtx("verify:skip:confirm");
+    await handleVerificationSkipConfirm(ctx);
+
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
+    expect(prisma.profile.updateMany).not.toHaveBeenCalled();
+  });
+});

@@ -42,6 +42,13 @@ export const env = {
   /// registration path and the bot ignores `message.contact` shares, exactly
   /// as before. Ship dark; flip at launch together with the fork Mini App.
   PHONE_AUTH_ENABLED: process.env.PHONE_AUTH_ENABLED === "true",
+  /// Registration v2: mandatory Persona liveness. On → the verification CTA
+  /// carries no Skip button and the legacy soft-skip callbacks refuse with a
+  /// "verification is required" notice, so activation happens ONLY through the
+  /// pipeline's `verified` outcome. Existing active users are grandfathered
+  /// (the pool gate is untouched); this governs new activations only.
+  MANDATORY_VERIFICATION_ENABLED:
+    process.env.MANDATORY_VERIFICATION_ENABLED === "true",
   /// Custom emoji id that leads each rich "thinking" shimmer block — the
   /// animated Telegram AI emoji recommended for `RichBlockThinking`
   /// (https://t.me/addemoji/AIActions). Rendered as `<tg-emoji>` inside
