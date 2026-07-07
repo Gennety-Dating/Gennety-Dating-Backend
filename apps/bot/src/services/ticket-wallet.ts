@@ -1,6 +1,7 @@
 import { prisma } from "@gennety/db";
 import {
   PHOTO_BONUS_TICKET_THRESHOLD,
+  STUDENT_BONUS_TICKETS,
   normalizeProfileMedia,
   profileMediaHasVideo,
 } from "@gennety/shared";
@@ -24,6 +25,7 @@ export type TicketReason =
   | "photo_bonus"
   | "video_bonus"
   | "verification_bonus"
+  | "student_bonus"
   | "welcome_gift"
   | "store_purchase"
   | "spend_match"
@@ -161,6 +163,61 @@ export async function grantVerificationBonusIfEligible(
           });
           await tx.ticketLedger.create({
             data: { userId, delta: 1, reason: "verification_bonus" },
+          });
+          return { granted: true, balance: user.ticketBalance };
+        },
+        { isolationLevel: "Serializable" },
+      );
+    } catch (error) {
+      if (!isSerializationConflict(error) || attempt === 2) throw error;
+    }
+  }
+
+  return { granted: false, balance: await getBalance(userId) };
+}
+
+/**
+ * Registration v2 student loyalty: grant the one-time student bonus
+ * (`STUDENT_BONUS_TICKETS` free Date Tickets) when a university email is
+ * verified. The student track's welcome perk — the general/phone track gets
+ * none — so registering with a university email is materially rewarded.
+ *
+ * Same idempotency model as the verification bonus: the `student_bonus`
+ * ledger row is the claim marker and Serializable isolation makes the
+ * existence check + wallet increment atomic, so the four email-verify call
+ * sites (Mini App OTP, agent verify_otp, web handoff, mobile OTP) can all
+ * fire it blindly and the wallet is credited exactly once.
+ */
+export async function grantStudentBonusIfEligible(
+  userId: string,
+): Promise<BonusResult> {
+  if (!env.TICKET_FEATURE_ENABLED) {
+    return { granted: false, balance: await getBalance(userId) };
+  }
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const existing = await tx.ticketLedger.findFirst({
+            where: { userId, reason: "student_bonus" },
+            select: { id: true },
+          });
+          if (existing) {
+            const user = await tx.user.findUnique({
+              where: { id: userId },
+              select: { ticketBalance: true },
+            });
+            return { granted: false, balance: user?.ticketBalance ?? 0 };
+          }
+
+          const user = await tx.user.update({
+            where: { id: userId },
+            data: { ticketBalance: { increment: STUDENT_BONUS_TICKETS } },
+            select: { ticketBalance: true },
+          });
+          await tx.ticketLedger.create({
+            data: { userId, delta: STUDENT_BONUS_TICKETS, reason: "student_bonus" },
           });
           return { granted: true, balance: user.ticketBalance };
         },

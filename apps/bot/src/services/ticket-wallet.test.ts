@@ -86,6 +86,7 @@ const {
   spendTickets,
   getBalance,
   grantVerificationBonusIfEligible,
+  grantStudentBonusIfEligible,
   grantWelcomeGiftIfEligible,
   grantPhotoBonusIfEligible,
   grantVideoBonusIfEligible,
@@ -166,6 +167,37 @@ describe("verification bonus", () => {
   it("is a no-op when the feature flag is off", async () => {
     flag.TICKET_FEATURE_ENABLED = false;
     const result = await grantVerificationBonusIfEligible("u1");
+    expect(result).toEqual({ granted: false, balance: 0 });
+    expect(db.ledger).toHaveLength(0);
+  });
+});
+
+describe("student bonus (Registration v2)", () => {
+  it("grants 2 tickets once and uses the ledger as the claim marker", async () => {
+    const first = await grantStudentBonusIfEligible("u1");
+    expect(first).toEqual({ granted: true, balance: 2 });
+
+    // All four email-verify call sites can fire blindly — only one credits.
+    const second = await grantStudentBonusIfEligible("u1");
+    expect(second).toEqual({ granted: false, balance: 2 });
+    expect(db.ledger).toEqual([
+      expect.objectContaining({
+        userId: "u1",
+        delta: 2,
+        reason: "student_bonus",
+      }),
+    ]);
+  });
+
+  it("stacks with the verification bonus (separate claims)", async () => {
+    await grantStudentBonusIfEligible("u1");
+    const verification = await grantVerificationBonusIfEligible("u1");
+    expect(verification).toEqual({ granted: true, balance: 3 });
+  });
+
+  it("is a no-op when the feature flag is off", async () => {
+    flag.TICKET_FEATURE_ENABLED = false;
+    const result = await grantStudentBonusIfEligible("u1");
     expect(result).toEqual({ granted: false, balance: 0 });
     expect(db.ledger).toHaveLength(0);
   });

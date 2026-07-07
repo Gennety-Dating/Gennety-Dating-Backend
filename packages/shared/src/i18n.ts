@@ -104,6 +104,8 @@ const translations = {
       "🎟️ A profile video — love it! That's another *free Date Ticket*.\n\nEach date costs 1 ticket (normally paid), so you're set for your next one. Balance: *{balance}* 🎟️",
     ticketRewardVerification:
       "🎟️ Verification complete — your *free Date Ticket* is already in your wallet.\n\nIt covers one date. Balance: *{balance}* 🎟️",
+    ticketRewardStudent:
+      "🎓 University email verified — student perk unlocked: *2 free Date Tickets* are in your wallet.\n\nEach date costs 1 ticket, so your first two dates are covered. Balance: *{balance}* 🎟️",
     welcomeGiftTicket:
       "🎟 Your first ticket — on me, personally.\n\nEvery date here costs 1 ticket, normally ~$6.99\nThis one's free — let your first step be about the person, not the price\n\nIt's already in your wallet ❤️",
     onboardingPhotosNeedMore:
@@ -833,6 +835,8 @@ const translations = {
       "🎟️ Видео в профиле — супер! Вот ещё *бесплатный билет на свидание*.\n\nКаждое свидание стоит 1 билет (обычно платный), так что на следующее ты готов. Баланс: *{balance}* 🎟️",
     ticketRewardVerification:
       "🎟️ Верификация пройдена — *бесплатный билет на свидание* уже на балансе.\n\nОн покрывает одну встречу. Баланс: *{balance}* 🎟️",
+    ticketRewardStudent:
+      "🎓 Университетская почта подтверждена — студенческий бонус: *2 бесплатных билета на свидания* уже на балансе.\n\nКаждое свидание стоит 1 билет, так что первые две встречи за наш счёт. Баланс: *{balance}* 🎟️",
     welcomeGiftTicket:
       "🎟 Твой первый билет — от меня лично.\n\nКаждое свидание здесь стоит 1 билет, обычно ~$6.99\nЭтот — бесплатно: пусть первый шаг будет про человека, а не про цену\n\nБилет уже в твоём кошельке ❤️",
     onboardingPhotosNeedMore:
@@ -1555,6 +1559,8 @@ const translations = {
       "🎟️ Відео в профілі — супер! Ось ще *безкоштовний квиток на побачення*.\n\nКожне побачення коштує 1 квиток (зазвичай платний), тож на наступне ти готовий. Баланс: *{balance}* 🎟️",
     ticketRewardVerification:
       "🎟️ Верифікацію пройдено — *безкоштовний квиток на побачення* вже на балансі.\n\nВін покриває одну зустріч. Баланс: *{balance}* 🎟️",
+    ticketRewardStudent:
+      "🎓 Університетську пошту підтверджено — студентський бонус: *2 безкоштовні квитки на побачення* вже на балансі.\n\nКожне побачення коштує 1 квиток, тож перші дві зустрічі за наш рахунок. Баланс: *{balance}* 🎟️",
     welcomeGiftTicket:
       "🎟 Твій перший квиток — від мене особисто.\n\nКожне побачення тут коштує 1 квиток, зазвичай ~$6.99\nЦе — безкоштовно: нехай перший крок буде про людину, а не про ціну\n\nКвиток уже у твоєму гаманці ❤️",
     onboardingPhotosNeedMore:
@@ -2371,6 +2377,8 @@ const deTranslations: TranslationTable = {
     "🎟️ Ein Profilvideo — top! Noch ein *kostenloses Date-Ticket* für dich.\n\nJedes Date kostet 1 Ticket (sonst kostenpflichtig). Guthaben: *{balance}* 🎟️",
   ticketRewardVerification:
     "🎟️ Verifizierung abgeschlossen — dein *kostenloses Date-Ticket* ist schon im Guthaben.\n\nEs deckt ein Date ab. Guthaben: *{balance}* 🎟️",
+  ticketRewardStudent:
+    "🎓 Universitäts-E-Mail bestätigt — Studi-Bonus freigeschaltet: *2 kostenlose Date-Tickets* sind in deinem Guthaben.\n\nJedes Date kostet 1 Ticket — deine ersten zwei Dates gehen auf uns. Guthaben: *{balance}* 🎟️",
   welcomeGiftTicket:
     "🎟 Dein erstes Ticket — von mir persönlich.\n\nJedes Date hier kostet 1 Ticket, normalerweise ~$6,99\nDieses ist gratis — dein erster Schritt soll um den Menschen gehen, nicht um den Preis\n\nEs liegt schon in deinem Guthaben ❤️",
   onboardingPhotosNeedMore:
@@ -2994,6 +3002,8 @@ const plTranslations: TranslationTable = {
     "🎟️ Wideo w profilu — super! Oto kolejny *darmowy bilet na randkę*.\n\nKażda randka kosztuje 1 bilet (zwykle płatny). Saldo: *{balance}* 🎟️",
   ticketRewardVerification:
     "🎟️ Weryfikacja zakończona — *darmowy bilet na randkę* jest już na koncie.\n\nPokrywa jedną randkę. Saldo: *{balance}* 🎟️",
+  ticketRewardStudent:
+    "🎓 E-mail uczelniany potwierdzony — bonus studencki: *2 darmowe bilety na randki* są już w Twoim portfelu.\n\nKażda randka kosztuje 1 bilet, więc pierwsze dwie randki są na nasz koszt. Saldo: *{balance}* 🎟️",
   welcomeGiftTicket:
     "🎟 Twój pierwszy bilet — ode mnie osobiście.\n\nKażda randka kosztuje tu 1 bilet, zwykle ~$6.99\nTen jest za darmo — niech pierwszy krok będzie o człowieku, a nie o cenie\n\nBilet jest już w Twoim portfelu ❤️",
   onboardingPhotosNeedMore:

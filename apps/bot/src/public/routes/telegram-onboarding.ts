@@ -10,6 +10,7 @@ import {
   ALLOWED_EMAIL_DOMAINS,
   isUniversityEmail,
   SUPPORTED_LANGUAGES,
+  t,
 } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData, type TelegramInitDataUser } from "../init-data.js";
@@ -21,6 +22,7 @@ import {
 } from "../otp.js";
 import { otpRequestLimiter, otpVerifyLimiter } from "../rate-limit.js";
 import { runAgentTurn } from "../../services/onboarding-agent.js";
+import { grantStudentBonusIfEligible } from "../../services/ticket-wallet.js";
 import { onboardingActivityPatch } from "../../workers/re-engagement-schedule.js";
 import {
   buildHomeCityKey,
@@ -312,6 +314,23 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
         },
         select: miniUserSelect,
       });
+
+      // Registration v2 student loyalty: +2 free Date Tickets, exactly once
+      // (idempotent ledger claim; no-op while TICKET_FEATURE_ENABLED is off).
+      // Fire-and-forget with the celebratory DM — a wallet hiccup must never
+      // block the OTP response.
+      void grantStudentBonusIfEligible(updated.id)
+        .then(async (reward) => {
+          if (!reward.granted || !updated.language) return;
+          await api.sendMessage(
+            Number(updated.telegramId),
+            t(updated.language, "ticketRewardStudent", { balance: reward.balance }),
+            { parse_mode: "Markdown" },
+          );
+        })
+        .catch((err) => {
+          console.warn("[student-bonus] grant/DM failed:", (err as Error).message);
+        });
 
       logTelegramOnboarding("email-verified", updated);
       res.json(await serializeState(updated));

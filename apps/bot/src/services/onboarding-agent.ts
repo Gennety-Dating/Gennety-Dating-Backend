@@ -1,5 +1,6 @@
 import { prisma, Prisma, type Language } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
+import { grantStudentBonusIfEligible } from "./ticket-wallet.js";
 import {
   isUniversityEmail,
   MIN_PHOTOS,
@@ -1040,7 +1041,7 @@ async function execVerifyOtp(
     });
   }
 
-  await prisma.user.update({
+  const verified = await prisma.user.update({
     where: { telegramId },
     // Registration v2: a verified university email IS the student track.
     data: {
@@ -1049,7 +1050,17 @@ async function execVerifyOtp(
       isEmailVerified: true,
       registrationTrack: "student",
     },
+    select: { id: true },
   });
+
+  // Registration v2 student loyalty: +2 tickets, exactly once (idempotent
+  // ledger claim; no-op while tickets are off). Silent here — the agent's own
+  // reply acknowledges the verification; the wallet reflects the bonus.
+  if (verified?.id) {
+    void grantStudentBonusIfEligible(verified.id).catch((err) => {
+      console.warn("[student-bonus] agent grant failed:", (err as Error).message);
+    });
+  }
 
   return JSON.stringify({
     success: true,

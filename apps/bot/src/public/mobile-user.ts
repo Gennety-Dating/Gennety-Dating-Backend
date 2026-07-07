@@ -1,5 +1,6 @@
 import { randomInt } from "node:crypto";
 import { Prisma, prisma, type User } from "@gennety/db";
+import { grantStudentBonusIfEligible } from "../services/ticket-wallet.js";
 
 /**
  * Extract the domain portion of an email (everything after `@`, lowercased).
@@ -38,11 +39,15 @@ export async function findOrCreateMobileUser(email: string): Promise<User> {
   const existing = await prisma.user.findUnique({ where: { email: normalisedEmail } });
   if (existing) {
     if (existing.isEmailVerified) return existing;
-    return prisma.user.update({
+    const updated = await prisma.user.update({
       where: { id: existing.id },
       // Registration v2: a verified university email IS the student track.
       data: { isEmailVerified: true, registrationTrack: "student" },
     });
+    // Student loyalty: +2 tickets, exactly once (idempotent; no-op while
+    // tickets are off). Silent — mobile has no Telegram DM surface.
+    void grantStudentBonusIfEligible(updated.id).catch(() => {});
+    return updated;
   }
 
   const universityDomain = extractDomain(normalisedEmail);

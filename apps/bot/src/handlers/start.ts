@@ -10,6 +10,7 @@ import { showMyProfile } from "./menu/my-profile.js";
 import { showSettingsMenu } from "./menu/settings.js";
 import { sendConsentPrompt } from "./onboarding/consent.js";
 import { computeDevBypassFields } from "./dev-bypass.js";
+import { grantStudentBonusIfEligible } from "../services/ticket-wallet.js";
 import { startPoll } from "../services/verification-poller.js";
 import { pinStatusBanner } from "../services/status-banner.js";
 import { buildLanguageKeyboard } from "./language-keyboard.js";
@@ -218,6 +219,22 @@ start.command("start", async (ctx) => {
     }
 
     user = result.user;
+
+    // Registration v2 student loyalty: the web handoff arrives with a verified
+    // university email → +2 tickets, exactly once (idempotent ledger claim;
+    // no-op while tickets are off). Fire-and-forget with the celebratory DM.
+    const handoffUser = result.user;
+    void grantStudentBonusIfEligible(handoffUser.id)
+      .then(async (reward) => {
+        if (!reward.granted) return;
+        const lang = (handoffUser.language ?? "en") as Language;
+        await ctx.reply(t(lang, "ticketRewardStudent", { balance: reward.balance }), {
+          parse_mode: "Markdown",
+        });
+      })
+      .catch((err) => {
+        console.warn("[student-bonus] handoff grant/DM failed:", (err as Error).message);
+      });
   } else {
     // Upsert user — create if new, load existing state if returning
     user = await prisma.user.findUnique({ where: { telegramId } });

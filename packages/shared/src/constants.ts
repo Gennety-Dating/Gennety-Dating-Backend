@@ -39,6 +39,14 @@ export const MAX_PHOTOS = 6;
  */
 export const PHOTO_BONUS_TICKET_THRESHOLD = 6;
 
+/**
+ * Registration v2 student loyalty: free Date Tickets granted once when a
+ * university email is verified (the student track's welcome perk — the
+ * general/phone track gets none). Gated by `TICKET_FEATURE_ENABLED`;
+ * idempotent via the `student_bonus` TicketLedger claim.
+ */
+export const STUDENT_BONUS_TICKETS = 2;
+
 /** Telegram Live Photo profile-media limits (Bot API 10.0) */
 export const LIVE_PHOTO_MAX_DURATION_SECONDS = 10;
 export const LIVE_PHOTO_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
