@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import request from "supertest";
 import { createHmac } from "node:crypto";
@@ -51,6 +51,11 @@ vi.mock("../../workers/re-engagement-schedule.js", () => ({
 }));
 
 const { createTelegramOnboardingRouter } = await import("./routes/telegram-onboarding.js");
+// The config mock above exposes a mutable env object; the Registration v2
+// fork tests flip the phone rail on/off through it.
+const mutableEnv = (await import("../config.js")).env as unknown as {
+  PHONE_AUTH_ENABLED?: boolean;
+};
 
 const fakeApi = {
   sendMessage: vi.fn().mockResolvedValue(undefined),
@@ -413,5 +418,131 @@ describe("Telegram onboarding city gate", () => {
     expect(res.status).toBe(409);
     expect(res.body.error).toBe("location-required");
     expect(userUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("Registration v2 sign-up fork", () => {
+  beforeEach(() => {
+    mutableEnv.PHONE_AUTH_ENABLED = true;
+  });
+  afterEach(() => {
+    mutableEnv.PHONE_AUTH_ENABLED = false;
+  });
+
+  it("404s /track while the phone rail is off (legacy behavior untouched)", async () => {
+    mutableEnv.PHONE_AUTH_ENABLED = false;
+    userFindUnique.mockResolvedValue(miniUser());
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/track")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ track: "general" });
+
+    expect(res.status).toBe(404);
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown track value", async () => {
+    userFindUnique.mockResolvedValue(miniUser());
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/track")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ track: "vip" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid-track");
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("persists the chosen track and mirrors it (plus the flag) in state", async () => {
+    const current = miniUser({ isEmailVerified: false });
+    userFindUnique.mockResolvedValue(current);
+    userUpdate.mockResolvedValue(
+      miniUser({ isEmailVerified: false, registrationTrack: "general" }),
+    );
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/track")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ track: "general" });
+
+    expect(res.status).toBe(200);
+    expect(userUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: current.id },
+        data: expect.objectContaining({ registrationTrack: "general" }),
+      }),
+    );
+    expect(res.body.user.registrationTrack).toBe("general");
+    expect(res.body.user.phoneAuthEnabled).toBe(true);
+  });
+
+  it("gates /complete on phone for the general track", async () => {
+    const user = miniUser({
+      isEmailVerified: false,
+      registrationTrack: "general",
+      phone: null,
+      phoneVerifiedAt: null,
+    });
+    userFindUnique.mockResolvedValue(user);
+    const initData = signInitData();
+
+    const state = await request(buildApp())
+      .get("/v1/telegram-onboarding/state")
+      .set("Authorization", `tma ${initData}`);
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/complete")
+      .set("Authorization", `tma ${initData}`)
+      .send({ completedVisualIntro: true, flowToken: state.body.flowToken });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("phone-required");
+  });
+
+  it("keeps the email gate for the student track even when a phone is on file", async () => {
+    const user = miniUser({
+      isEmailVerified: false,
+      registrationTrack: "student",
+      phone: "+15551234567",
+      phoneVerifiedAt: new Date(),
+    });
+    userFindUnique.mockResolvedValue(user);
+    const initData = signInitData();
+
+    const state = await request(buildApp())
+      .get("/v1/telegram-onboarding/state")
+      .set("Authorization", `tma ${initData}`);
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/complete")
+      .set("Authorization", `tma ${initData}`)
+      .send({ completedVisualIntro: true, flowToken: state.body.flowToken });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("email-required");
+  });
+
+  it("lets a phone-verified general user pass the contact gate", async () => {
+    const user = miniUser({
+      isEmailVerified: false,
+      registrationTrack: "general",
+      phone: "+15551234567",
+      phoneVerifiedAt: new Date(),
+      profile: null,
+    });
+    userFindUnique.mockResolvedValue(user);
+    const initData = signInitData();
+
+    const state = await request(buildApp())
+      .get("/v1/telegram-onboarding/state")
+      .set("Authorization", `tma ${initData}`);
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/complete")
+      .set("Authorization", `tma ${initData}`)
+      .send({ completedVisualIntro: true, flowToken: state.body.flowToken });
+
+    // Contact gate passes; the next unmet gate is the home city.
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("location-required");
   });
 });

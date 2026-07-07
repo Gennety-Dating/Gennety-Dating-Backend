@@ -11,11 +11,13 @@ import {
   selectTelegramOnboardingCity,
   setTelegramOnboardingAiMemoryPreference,
   setTelegramOnboardingLanguage,
+  setTelegramOnboardingTrack,
   verifyTelegramOnboardingOtp,
   CalendarApiError,
   type AiMemoryExportPreference,
   type EmailVerificationState,
   type OnboardingLanguage,
+  type RegistrationTrack,
   type TelegramCityHit,
   type TelegramOnboardingState,
 } from "./api.js";
@@ -222,8 +224,10 @@ function App(): ReactElement {
     } else if (
       phase.kind === "consent" ||
       phase.kind === "language" ||
+      phase.kind === "path" ||
       phase.kind === "email" ||
       phase.kind === "otp" ||
+      phase.kind === "phone" ||
       phase.kind === "city"
     ) {
       void clearOnboardingProgress();
@@ -245,9 +249,19 @@ function App(): ReactElement {
         return { kind: "visual", index: VISUAL_LAST_INDEX };
       }
       if (current.kind === "consent") return { kind: "language" };
-      if (current.kind === "email") return { kind: "consent" };
+      // Registration v2: with the fork live, contact gates back out to the
+      // path chooser; without it (legacy) email backs out to consent as before.
+      if (current.kind === "path") return { kind: "consent" };
+      if (current.kind === "email") {
+        return remoteUser?.phoneAuthEnabled ? { kind: "path" } : { kind: "consent" };
+      }
       if (current.kind === "otp") return { kind: "email" };
-      if (current.kind === "city") return { kind: "email" };
+      if (current.kind === "phone") return { kind: "path" };
+      if (current.kind === "city") {
+        return remoteUser?.phoneAuthEnabled && remoteUser?.registrationTrack === "general"
+          ? { kind: "phone" }
+          : { kind: "email" };
+      }
       if (current.kind === "aiMemoryExport") return { kind: "visual", index: VISUAL_LAST_INDEX };
       return current;
     });
@@ -260,8 +274,10 @@ function App(): ReactElement {
         // suppressed there to keep the photo frame clean.
         phase.index > 0 && phase.index !== VISUAL_LAST_INDEX
       : phase.kind === "consent" ||
+        phase.kind === "path" ||
         phase.kind === "email" ||
         phase.kind === "otp" ||
+        phase.kind === "phone" ||
         phase.kind === "city" ||
         phase.kind === "aiMemoryExport" ||
         phase.kind === "detail";
@@ -359,6 +375,12 @@ function App(): ReactElement {
       </Scene>
       <Scene active={phase.kind === "language"}>
         <LanguageGate onState={onState} selected={remoteUser?.language ?? null} />
+      </Scene>
+      <Scene active={phase.kind === "path"}>
+        <PathGate onState={onState} selected={remoteUser?.registrationTrack ?? null} />
+      </Scene>
+      <Scene active={phase.kind === "phone"}>
+        <PhoneGate onState={onState} />
       </Scene>
       <Scene active={phase.kind === "email"}>
         <EmailGate
@@ -1271,6 +1293,122 @@ function LanguageGate(props: {
           </button>
         ))}
       </div>
+    </GateShell>
+  );
+}
+
+function PathGate(props: {
+  selected: RegistrationTrack | null;
+  onState: (state: TelegramOnboardingState) => void;
+}): ReactElement {
+  const s = useOnboardingStrings();
+  const [busy, setBusy] = useState<RegistrationTrack | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const options: Array<{ value: RegistrationTrack; label: string; sub: string }> = [
+    { value: "student", label: s.pathStudentTitle, sub: s.pathStudentSub },
+    { value: "general", label: s.pathGeneralTitle, sub: s.pathGeneralSub },
+  ];
+
+  async function choose(track: RegistrationTrack): Promise<void> {
+    if (!app?.initData || busy) return;
+    setBusy(track);
+    setError(null);
+    try {
+      const state = await setTelegramOnboardingTrack(app.initData, track);
+      app.HapticFeedback?.selectionChanged();
+      props.onState(state);
+    } catch (err) {
+      setError(errorCopy(err, s));
+      app.HapticFeedback?.notificationOccurred("error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <GateShell>
+      <h1>{s.pathTitle}</h1>
+      <p>{s.pathLead}</p>
+      {error ? <div className="gate-error">{error}</div> : null}
+      <div className="choice-row">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            className={`choice-button ${props.selected === option.value ? "is-selected" : ""}`}
+            disabled={busy !== null || !app?.initData}
+            onClick={() => void choose(option.value)}
+          >
+            <span>
+              <strong>{option.label}</strong>
+              <small>{busy === option.value ? s.saving : option.sub}</small>
+            </span>
+            <span className="material-symbols-outlined">chevron_right</span>
+          </button>
+        ))}
+      </div>
+    </GateShell>
+  );
+}
+
+function PhoneGate(props: {
+  onState: (state: TelegramOnboardingState) => void;
+}): ReactElement {
+  const s = useOnboardingStrings();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const initData = app?.initData;
+  const requestContact = app?.requestContact;
+
+  function share(): void {
+    if (!requestContact || !initData || busy) return;
+    setBusy(true);
+    setError(null);
+    requestContact((shared) => {
+      if (!shared) {
+        setBusy(false);
+        return;
+      }
+      // Telegram delivers the number to the BOT as a trusted message.contact
+      // (never to JS). Poll /state until the bot records phoneVerifiedAt.
+      void (async () => {
+        try {
+          for (let attempt = 0; attempt < 24; attempt++) {
+            const state = await fetchTelegramOnboardingState(initData, source);
+            if (state.user.isPhoneVerified) {
+              app?.HapticFeedback?.notificationOccurred("success");
+              props.onState(state);
+              return;
+            }
+            await new Promise((resolve) => window.setTimeout(resolve, 1000));
+          }
+          setError(s.phoneTimeout);
+          app?.HapticFeedback?.notificationOccurred("error");
+        } catch (err) {
+          setError(errorCopy(err, s));
+          app?.HapticFeedback?.notificationOccurred("error");
+        } finally {
+          setBusy(false);
+        }
+      })();
+    });
+  }
+
+  return (
+    <GateShell>
+      <h1>{s.phoneTitle}</h1>
+      <p>{s.phoneLead}</p>
+      {error ? <div className="gate-error">{error}</div> : null}
+      <div className="gate-stack">
+        <button
+          className="gate-button"
+          disabled={busy || !requestContact || !initData}
+          onClick={share}
+        >
+          {busy ? s.phoneSharing : s.phoneShare}
+        </button>
+      </div>
+      <div className="gate-meta">{s.phoneMeta}</div>
     </GateShell>
   );
 }

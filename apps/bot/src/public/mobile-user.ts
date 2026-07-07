@@ -40,7 +40,8 @@ export async function findOrCreateMobileUser(email: string): Promise<User> {
     if (existing.isEmailVerified) return existing;
     return prisma.user.update({
       where: { id: existing.id },
-      data: { isEmailVerified: true },
+      // Registration v2: a verified university email IS the student track.
+      data: { isEmailVerified: true, registrationTrack: "student" },
     });
   }
 
@@ -57,6 +58,7 @@ export async function findOrCreateMobileUser(email: string): Promise<User> {
           status: "onboarding",
           onboardingStep: "consent",
           isEmailVerified: true,
+          registrationTrack: "student",
         },
       });
     } catch (err: unknown) {

@@ -160,10 +160,18 @@ export interface TelegramOnboardingState {
     email: string | null;
     isEmailVerified: boolean;
     emailVerification: EmailVerificationState;
+    // Registration v2 (sign-up fork). `phoneAuthEnabled` mirrors the server
+    // flag so the fork renders only when the phone rail is live.
+    isPhoneVerified: boolean;
+    phone: string | null;
+    registrationTrack: RegistrationTrack | null;
+    phoneAuthEnabled: boolean;
     homeLocation: TelegramHomeLocation | null;
     completed: boolean;
   };
 }
+
+export type RegistrationTrack = "student" | "general";
 
 export interface TelegramHomeLocation {
   homeCity: string | null;
@@ -217,6 +225,22 @@ export async function acceptTelegramOnboardingConsent(
       Authorization: `tma ${initData}`,
     },
     body: JSON.stringify({ termsAccepted: true, researchOptIn }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as TelegramOnboardingState;
+}
+
+export async function setTelegramOnboardingTrack(
+  initData: string,
+  track: RegistrationTrack,
+): Promise<TelegramOnboardingState> {
+  const res = await fetch(`${apiBase}/v1/telegram-onboarding/track`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `tma ${initData}`,
+    },
+    body: JSON.stringify({ track }),
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as TelegramOnboardingState;

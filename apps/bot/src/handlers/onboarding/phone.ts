@@ -39,9 +39,22 @@ export async function handlePhoneContact(ctx: BotContext): Promise<void> {
 
   const telegramId = BigInt(fromId);
   try {
+    // Stamp the general track only when no track is chosen yet (covers the
+    // reply-keyboard fallback that bypasses the Mini App fork). A student-track
+    // user sharing their contact must NOT be silently switched off the email
+    // gate — the /complete contact gate reads the track, not the phone.
+    const existing = await prisma.user.findUnique({
+      where: { telegramId },
+      select: { registrationTrack: true },
+    });
     await prisma.user.update({
       where: { telegramId },
-      data: { phone, phoneVerifiedAt: new Date(), ...onboardingActivityPatch() },
+      data: {
+        phone,
+        phoneVerifiedAt: new Date(),
+        ...(existing?.registrationTrack ? {} : { registrationTrack: "general" }),
+        ...onboardingActivityPatch(),
+      },
     });
   } catch (err) {
     // `User.phone` is @unique — P2002 means this number is already linked to a

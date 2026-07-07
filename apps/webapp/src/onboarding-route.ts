@@ -24,6 +24,11 @@ export type OnboardingPhase =
   | { kind: "syncing" }
   | { kind: "consent" }
   | { kind: "language" }
+  // Registration v2 sign-up fork: choose the student (university email) or
+  // general (phone) track. Rendered only when the server says the phone rail
+  // is live (`phoneAuthEnabled`); otherwise the email gate follows consent
+  // directly, exactly as before the fork existed.
+  | { kind: "path" }
   | { kind: "email" }
   | {
       kind: "otp";
@@ -31,6 +36,7 @@ export type OnboardingPhase =
       expiresAt: string | null;
       resendAvailableAt: string | null;
     }
+  | { kind: "phone" }
   | { kind: "city" }
   | { kind: "aiMemoryExport" }
   | { kind: "loading" }
@@ -40,8 +46,8 @@ export function preVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPha
   if (!user) return { kind: "syncing" };
   if (!user.language) return { kind: "language" };
   if (!user.termsAccepted) return { kind: "consent" };
-  const emailPhase = unresolvedEmailPhase(user);
-  if (emailPhase) return emailPhase;
+  const contactPhase = unresolvedContactPhase(user);
+  if (contactPhase) return contactPhase;
   if (!user.homeLocation?.homeCityKey) return { kind: "city" };
   return { kind: "visual", index: 0 };
 }
@@ -50,8 +56,8 @@ export function postVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPh
   if (!user) return { kind: "syncing" };
   if (!user.language) return { kind: "language" };
   if (!user.termsAccepted) return { kind: "consent" };
-  const emailPhase = unresolvedEmailPhase(user);
-  if (emailPhase) return emailPhase;
+  const contactPhase = unresolvedContactPhase(user);
+  if (contactPhase) return contactPhase;
   if (!user.homeLocation?.homeCityKey) return { kind: "city" };
   if (user.aiMemoryExportPreference === "undecided") return { kind: "aiMemoryExport" };
   return { kind: "loading" };
@@ -84,6 +90,21 @@ export function bootPhaseFromRemote(
   if (storedProgress >= VISUAL_DONE) return postVisualPhaseFromRemote(user);
   const index = Math.max(0, Math.min(VISUAL_LAST_INDEX, Math.floor(storedProgress)));
   return { kind: "visual", index };
+}
+
+/**
+ * Registration v2 contact resolution. Either verified rail satisfies the
+ * contact stage (an email-verified handoff user never sees the fork). With
+ * the phone rail off (`phoneAuthEnabled=false`) this is exactly the legacy
+ * email resolution. Otherwise the chosen track picks the gate, and no track
+ * yet → the fork screen.
+ */
+function unresolvedContactPhase(user: RemoteUser): OnboardingPhase | null {
+  if (user.isEmailVerified || user.isPhoneVerified) return null;
+  if (!user.phoneAuthEnabled) return unresolvedEmailPhase(user);
+  if (user.registrationTrack === "student") return unresolvedEmailPhase(user);
+  if (user.registrationTrack === "general") return { kind: "phone" };
+  return { kind: "path" };
 }
 
 function unresolvedEmailPhase(user: RemoteUser): OnboardingPhase | null {

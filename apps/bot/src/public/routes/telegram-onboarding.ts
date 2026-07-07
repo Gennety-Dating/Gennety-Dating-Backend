@@ -141,6 +141,48 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     res.json(await serializeState(user));
   });
 
+  // Registration v2: persist the sign-up fork choice. Re-choosing is allowed
+  // while onboarding is incomplete (the user can go back from either gate);
+  // the /complete contact gate reads the FINAL track, so switching mid-way
+  // can never bypass verification.
+  router.post("/track", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+    if (!env.PHONE_AUTH_ENABLED) {
+      res.status(404).json({ error: "phone-auth-disabled" });
+      return;
+    }
+
+    const track = req.body?.track;
+    if (track !== "student" && track !== "general") {
+      res.status(400).json({ error: "invalid-track" });
+      return;
+    }
+
+    const current = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
+    const gate = ensureReadyForEmail(current);
+    if (gate) {
+      res.status(409).json({ error: gate });
+      return;
+    }
+    if (current.onboardingStep === "completed") {
+      res.status(409).json({ error: "already-complete" });
+      return;
+    }
+
+    const user = await prisma.user.update({
+      where: { id: current.id },
+      data: { registrationTrack: track, ...onboardingActivityPatch() },
+      select: miniUserSelect,
+    });
+
+    logTelegramOnboarding("track", user, { track });
+    res.json(await serializeState(user));
+  });
+
   router.post(
     "/email/request",
     otpRequestLimiter,
@@ -263,6 +305,8 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
           isEmailVerified: true,
           emailOtp: null,
           emailOtpExpiresAt: null,
+          // Registration v2: a verified university email IS the student track.
+          registrationTrack: "student",
           onboardingStep: nextPreHandoffStep(user),
           ...onboardingActivityPatch(),
         },
@@ -427,8 +471,9 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
       res.status(409).json({ error: "language-required" });
       return;
     }
-    if (!user.isEmailVerified) {
-      res.status(409).json({ error: "email-required" });
+    const contactGate = unresolvedContactGate(user);
+    if (contactGate) {
+      res.status(409).json({ error: contactGate });
       return;
     }
     if (!hasHomeLocation(user)) {
@@ -566,6 +611,7 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
       isPhoneVerified: user.phoneVerifiedAt != null,
       phone: user.phone,
       registrationTrack: user.registrationTrack,
+      phoneAuthEnabled: env.PHONE_AUTH_ENABLED,
       homeLocation: user.profile?.homeCityKey
         ? {
             homeCity: user.profile.homeCity,
@@ -602,6 +648,9 @@ interface TelegramOnboardingStateDto {
     isPhoneVerified: boolean;
     phone: string | null;
     registrationTrack: string | null;
+    /// Server flag mirror: the Mini App renders the sign-up fork only when
+    /// the phone rail is actually live (env-controlled, no rebuild needed).
+    phoneAuthEnabled: boolean;
     homeLocation: {
       homeCity: string | null;
       homeCountryCode: string | null;
@@ -644,13 +693,26 @@ function ensureReadyForEmail(user: MiniUser): "terms-required" | "language-requi
   return null;
 }
 
+/**
+ * Registration v2: the contact gate is track-aware. The general track must
+ * verify a phone (Telegram one-tap `message.contact`); the student track —
+ * and legacy null-track users — must verify a university email. With
+ * PHONE_AUTH_ENABLED off the email rule applies unconditionally (pre-fork
+ * behavior). Switching tracks re-points the requirement, never waives it.
+ */
+function unresolvedContactGate(user: MiniUser): "email-required" | "phone-required" | null {
+  if (env.PHONE_AUTH_ENABLED && user.registrationTrack === "general") {
+    return user.phoneVerifiedAt ? null : "phone-required";
+  }
+  return user.isEmailVerified ? null : "email-required";
+}
+
 function ensureReadyForLocation(
   user: MiniUser,
-): "terms-required" | "language-required" | "email-required" | null {
+): "terms-required" | "language-required" | "email-required" | "phone-required" | null {
   const emailGate = ensureReadyForEmail(user);
   if (emailGate) return emailGate;
-  if (!user.isEmailVerified) return "email-required";
-  return null;
+  return unresolvedContactGate(user);
 }
 
 function ensureReadyForAiMemoryChoice(
@@ -659,6 +721,7 @@ function ensureReadyForAiMemoryChoice(
   | "terms-required"
   | "language-required"
   | "email-required"
+  | "phone-required"
   | "location-required"
   | null {
   const locationGate = ensureReadyForLocation(user);

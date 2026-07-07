@@ -27,6 +27,11 @@ function user(
       resendAvailableAt: null,
       attemptsRemaining: 5,
     },
+    // Registration v2 defaults: phone rail off → the legacy email-only flow.
+    isPhoneVerified: false,
+    phone: null,
+    registrationTrack: null,
+    phoneAuthEnabled: false,
     homeLocation: null,
     completed: false,
     ...overrides,
@@ -164,6 +169,46 @@ describe("bootPhaseFromRemote — visual animation resume", () => {
     expect(
       bootPhaseFromRemote(user({ isEmailVerified: false, homeLocation: null }), VISUAL_DONE),
     ).toEqual({ kind: "email" });
+  });
+});
+
+describe("Registration v2 sign-up fork (phoneAuthEnabled)", () => {
+  it("keeps the legacy email flow when the phone rail is off", () => {
+    expect(preVisualPhaseFromRemote(user({ phoneAuthEnabled: false }))).toEqual({
+      kind: "email",
+    });
+  });
+
+  it("shows the path chooser when the rail is on and no track is chosen", () => {
+    expect(preVisualPhaseFromRemote(user({ phoneAuthEnabled: true }))).toEqual({
+      kind: "path",
+    });
+  });
+
+  it("routes the student track to the email gate", () => {
+    expect(
+      preVisualPhaseFromRemote(user({ phoneAuthEnabled: true, registrationTrack: "student" })),
+    ).toEqual({ kind: "email" });
+  });
+
+  it("routes the general track to the phone gate", () => {
+    expect(
+      preVisualPhaseFromRemote(user({ phoneAuthEnabled: true, registrationTrack: "general" })),
+    ).toEqual({ kind: "phone" });
+  });
+
+  it("skips the fork entirely for an email-verified handoff user", () => {
+    expect(
+      preVisualPhaseFromRemote(user({ phoneAuthEnabled: true, isEmailVerified: true })),
+    ).toEqual({ kind: "city" });
+  });
+
+  it("passes the contact stage once the phone is verified", () => {
+    expect(
+      preVisualPhaseFromRemote(
+        user({ phoneAuthEnabled: true, registrationTrack: "general", isPhoneVerified: true }),
+      ),
+    ).toEqual({ kind: "city" });
   });
 });
 

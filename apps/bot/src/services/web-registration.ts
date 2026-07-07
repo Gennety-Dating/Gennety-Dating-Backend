@@ -110,6 +110,8 @@ function webPatchFor(
     isEmailVerified: true,
     emailOtp: null,
     emailOtpExpiresAt: null,
+    // Registration v2: a verified university email IS the student track.
+    registrationTrack: "student",
     onboardingStep: stepAfterWebLink(existing?.onboardingStep),
     ...(existing?.referralSource ? {} : { referralSource: `web:${link.purpose}` }),
   };

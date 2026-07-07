@@ -28,6 +28,19 @@ export interface OnboardingStrings {
   saving: string;
   languageTitle: string;
   languageLead: string;
+  // Registration v2 sign-up fork + phone gate (general track).
+  pathTitle: string;
+  pathLead: string;
+  pathStudentTitle: string;
+  pathStudentSub: string;
+  pathGeneralTitle: string;
+  pathGeneralSub: string;
+  phoneTitle: string;
+  phoneLead: string;
+  phoneShare: string;
+  phoneSharing: string;
+  phoneMeta: string;
+  phoneTimeout: string;
   emailTitle: string;
   emailLead: string;
   emailSend: string;
@@ -155,6 +168,18 @@ const en: OnboardingStrings = {
   saving: "Saving...",
   languageTitle: "Choose your language",
   languageLead: "The bot and every Mini App will continue in the selected language.",
+  pathTitle: "How will you sign up?",
+  pathLead: "Pick the path that fits you — students get perks.",
+  pathStudentTitle: "With university email",
+  pathStudentSub: "Confirms you're part of the student community — and unlocks student perks.",
+  pathGeneralTitle: "With phone number",
+  pathGeneralSub: "One tap via Telegram. No SMS code.",
+  phoneTitle: "Your phone number",
+  phoneLead: "Verify in one tap — Telegram shares your number with us. No SMS code.",
+  phoneShare: "Continue with my number",
+  phoneSharing: "Confirming…",
+  phoneMeta: "We use your number only to confirm you're a real person.",
+  phoneTimeout: "Couldn't confirm your number. Please try again.",
   emailTitle: "University email",
   emailLead: "This is a required Gennety filter: matches stay within a real student context.",
   emailSend: "Get code",
@@ -301,6 +326,18 @@ const ru: OnboardingStrings = {
   saving: "Сохраняю...",
   languageTitle: "Выбери язык",
   languageLead: "Бот и все Mini App продолжат работу на выбранном языке.",
+  pathTitle: "Как зарегистрируемся?",
+  pathLead: "Выбери свой способ — студентам достаются бонусы.",
+  pathStudentTitle: "По университетской почте",
+  pathStudentSub: "Подтверждает, что ты из студенческого сообщества, — и открывает студенческие бонусы.",
+  pathGeneralTitle: "По номеру телефона",
+  pathGeneralSub: "В один тап через Telegram. Без SMS-кода.",
+  phoneTitle: "Твой номер телефона",
+  phoneLead: "Подтверди в один тап — Telegram передаст нам твой номер. Без SMS-кода.",
+  phoneShare: "Продолжить с моим номером",
+  phoneSharing: "Подтверждаю…",
+  phoneMeta: "Номер нужен только чтобы подтвердить, что ты реальный человек.",
+  phoneTimeout: "Не удалось подтвердить номер. Попробуй ещё раз.",
   emailTitle: "Университетская почта",
   emailLead: "Это обязательный фильтр Gennety: пары подбираются внутри реального студенческого контекста.",
   emailSend: "Получить код",
@@ -446,6 +483,18 @@ const uk: OnboardingStrings = {
   saving: "Зберігаю...",
   languageTitle: "Обери мову",
   languageLead: "Бот і всі Mini App продовжать роботу обраною мовою.",
+  pathTitle: "Як реєструємось?",
+  pathLead: "Обери свій спосіб — студентам дістаються бонуси.",
+  pathStudentTitle: "За університетською поштою",
+  pathStudentSub: "Підтверджує, що ти зі студентської спільноти, — і відкриває студентські бонуси.",
+  pathGeneralTitle: "За номером телефону",
+  pathGeneralSub: "В один тап через Telegram. Без SMS-коду.",
+  phoneTitle: "Твій номер телефону",
+  phoneLead: "Підтверди в один тап — Telegram передасть нам твій номер. Без SMS-коду.",
+  phoneShare: "Продовжити з моїм номером",
+  phoneSharing: "Підтверджую…",
+  phoneMeta: "Номер потрібен лише щоб підтвердити, що ти реальна людина.",
+  phoneTimeout: "Не вдалося підтвердити номер. Спробуй ще раз.",
   emailTitle: "Університетська пошта",
   emailLead: "Це обов'язковий фільтр Gennety: пари підбираються в реальному студентському контексті.",
   emailSend: "Отримати код",
@@ -592,6 +641,18 @@ const de: OnboardingStrings = {
   saving: "Speichern...",
   languageTitle: "Wähle deine Sprache",
   languageLead: "Der Bot und alle Mini Apps werden in der gewählten Sprache fortfahren.",
+  pathTitle: "Wie möchtest du dich anmelden?",
+  pathLead: "Wähl deinen Weg — Studierende bekommen Extras.",
+  pathStudentTitle: "Mit Universitäts-E-Mail",
+  pathStudentSub: "Bestätigt, dass du zur Studierenden-Community gehörst — und schaltet Studi-Extras frei.",
+  pathGeneralTitle: "Mit Telefonnummer",
+  pathGeneralSub: "Ein Tipp über Telegram. Kein SMS-Code.",
+  phoneTitle: "Deine Telefonnummer",
+  phoneLead: "Mit einem Tipp bestätigen — Telegram teilt uns deine Nummer. Kein SMS-Code.",
+  phoneShare: "Mit meiner Nummer fortfahren",
+  phoneSharing: "Bestätige…",
+  phoneMeta: "Wir nutzen deine Nummer nur, um zu bestätigen, dass du echt bist.",
+  phoneTimeout: "Nummer konnte nicht bestätigt werden. Bitte versuche es erneut.",
   emailTitle: "Universitäts-E-Mail",
   emailLead: "Das ist ein Pflichtfilter von Gennety: Matches bleiben in einem echten studentischen Umfeld.",
   emailSend: "Code erhalten",
@@ -738,6 +799,18 @@ const pl: OnboardingStrings = {
   saving: "Zapisywanie...",
   languageTitle: "Wybierz język",
   languageLead: "Bot i wszystkie Mini App będą działać w wybranym języku.",
+  pathTitle: "Jak chcesz się zarejestrować?",
+  pathLead: "Wybierz swoją ścieżkę — studenci dostają bonusy.",
+  pathStudentTitle: "Przez e-mail uczelniany",
+  pathStudentSub: "Potwierdza, że należysz do społeczności studenckiej — i odblokowuje studenckie bonusy.",
+  pathGeneralTitle: "Przez numer telefonu",
+  pathGeneralSub: "Jednym dotknięciem przez Telegram. Bez kodu SMS.",
+  phoneTitle: "Twój numer telefonu",
+  phoneLead: "Potwierdź jednym dotknięciem — Telegram udostępni nam Twój numer. Bez kodu SMS.",
+  phoneShare: "Kontynuuj z moim numerem",
+  phoneSharing: "Potwierdzam…",
+  phoneMeta: "Numer służy tylko do potwierdzenia, że jesteś prawdziwą osobą.",
+  phoneTimeout: "Nie udało się potwierdzić numeru. Spróbuj ponownie.",
   emailTitle: "E-mail uczelniany",
   emailLead: "To obowiązkowy filtr Gennety: dopasowania pozostają w prawdziwym środowisku studenckim.",
   emailSend: "Pobierz kod",
