@@ -293,6 +293,10 @@ export async function grantWelcomeGiftIfEligible(
  * hasn't been granted before. Idempotent via the `photoBonusTicketAt` CAS:
  * concurrent callers race to flip the timestamp, and only the winner credits a
  * ticket.
+ *
+ * The CAS claim and the wallet credit run in ONE transaction (audit L1) so a
+ * crash between them can't leave the marker set with no ticket granted — which
+ * would permanently forfeit the bonus, since the flipped marker blocks any retry.
  */
 export async function grantPhotoBonusIfEligible(userId: string): Promise<BonusResult> {
   if (!env.TICKET_FEATURE_ENABLED) return { granted: false, balance: await getBalance(userId) };
@@ -308,21 +312,32 @@ export async function grantPhotoBonusIfEligible(userId: string): Promise<BonusRe
     return { granted: false, balance: await getBalance(userId) };
   }
 
-  const claim = await prisma.profile.updateMany({
-    where: { userId, photoBonusTicketAt: null },
-    data: { photoBonusTicketAt: new Date() },
+  return prisma.$transaction(async (tx) => {
+    const claim = await tx.profile.updateMany({
+      where: { userId, photoBonusTicketAt: null },
+      data: { photoBonusTicketAt: new Date() },
+    });
+    if (claim.count === 0) {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { ticketBalance: true },
+      });
+      return { granted: false, balance: user?.ticketBalance ?? 0 };
+    }
+    const user = await tx.user.update({
+      where: { id: userId },
+      data: { ticketBalance: { increment: 1 } },
+      select: { ticketBalance: true },
+    });
+    await tx.ticketLedger.create({ data: { userId, delta: 1, reason: "photo_bonus" } });
+    return { granted: true, balance: user.ticketBalance };
   });
-  if (claim.count === 0) {
-    return { granted: false, balance: await getBalance(userId) };
-  }
-
-  const balance = await grantTickets({ userId, count: 1, reason: "photo_bonus" });
-  return { granted: true, balance };
 }
 
 /**
  * Grant the one-time "added a profile video" ticket bonus. Idempotent via the
- * `videoBonusTicketAt` CAS.
+ * `videoBonusTicketAt` CAS. Claim + credit run in one transaction (audit L1),
+ * same as the photo bonus above, so a mid-grant crash can't forfeit the ticket.
  */
 export async function grantVideoBonusIfEligible(userId: string): Promise<BonusResult> {
   if (!env.TICKET_FEATURE_ENABLED) return { granted: false, balance: await getBalance(userId) };
@@ -339,14 +354,24 @@ export async function grantVideoBonusIfEligible(userId: string): Promise<BonusRe
     return { granted: false, balance: await getBalance(userId) };
   }
 
-  const claim = await prisma.profile.updateMany({
-    where: { userId, videoBonusTicketAt: null },
-    data: { videoBonusTicketAt: new Date() },
+  return prisma.$transaction(async (tx) => {
+    const claim = await tx.profile.updateMany({
+      where: { userId, videoBonusTicketAt: null },
+      data: { videoBonusTicketAt: new Date() },
+    });
+    if (claim.count === 0) {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { ticketBalance: true },
+      });
+      return { granted: false, balance: user?.ticketBalance ?? 0 };
+    }
+    const user = await tx.user.update({
+      where: { id: userId },
+      data: { ticketBalance: { increment: 1 } },
+      select: { ticketBalance: true },
+    });
+    await tx.ticketLedger.create({ data: { userId, delta: 1, reason: "video_bonus" } });
+    return { granted: true, balance: user.ticketBalance };
   });
-  if (claim.count === 0) {
-    return { granted: false, balance: await getBalance(userId) };
-  }
-
-  const balance = await grantTickets({ userId, count: 1, reason: "video_bonus" });
-  return { granted: true, balance };
 }

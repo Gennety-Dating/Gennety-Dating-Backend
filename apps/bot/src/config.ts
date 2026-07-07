@@ -121,7 +121,13 @@ export const env = {
   JWT_ACCESS_TTL: process.env.JWT_ACCESS_TTL ?? "15m",
   JWT_REFRESH_TTL: process.env.JWT_REFRESH_TTL ?? "30d",
   PUBLIC_PORT: Number(process.env.PUBLIC_PORT ?? "3101"),
-  PUBLIC_CORS_ORIGIN: process.env.PUBLIC_CORS_ORIGIN ?? "*",
+  /// Allowed browser origin(s) for the public `/v1/*` API (comma-separated).
+  /// Empty (default) → cross-origin browser requests are DENIED (audit L3),
+  /// mirroring the admin surface, instead of echoing a wildcard. An explicit
+  /// `*` still works but logs a warning. Native mobile clients send no `Origin`
+  /// header and are unaffected either way. In production set this to the concrete
+  /// browser origins: the Mini App host (WEBAPP_URL) plus any web signup site.
+  PUBLIC_CORS_ORIGIN: process.env.PUBLIC_CORS_ORIGIN ?? "",
   /// Expo Push Service access token (https://expo.dev/accounts/…/settings/access-tokens).
   /// Optional — unset disables push dispatch.
   EXPO_ACCESS_TOKEN: process.env.EXPO_ACCESS_TOKEN ?? "",

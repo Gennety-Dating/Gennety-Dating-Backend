@@ -42,19 +42,31 @@ export const app: ReturnType<typeof express> = express();
 app.set("trust proxy", 1);
 
 app.use(helmet());
-// Public API auth is header-based (Bearer JWT / Telegram `tma` initData),
-// never cookie-based, so a wildcard ACAO is not a credential-leak vector —
-// but it's still worth a nudge to scope it to the known Mini App + app
-// origins in production (audit M3).
+// Public API auth is header-based (Bearer JWT / Telegram `tma` initData), never
+// cookie-based, so a wildcard ACAO is not a credential-leak vector — but an
+// unset origin now DENIES cross-origin browser requests (audit L3, mirroring the
+// admin surface) instead of silently wildcarding, and an explicit `*` warns.
+// Native mobile clients send no `Origin` header, so CORS never applies to them
+// regardless of this setting.
+let publicCorsOrigin: string | string[] | boolean;
 if (env.PUBLIC_CORS_ORIGIN === "*") {
+  publicCorsOrigin = "*";
   console.warn(
     "[public] PUBLIC_CORS_ORIGIN is '*' — any browser origin may call /v1/*. " +
-      "Set it to the Mini App / web origins in production.",
+      "Set it to the concrete Mini App / web signup origins in production.",
+  );
+} else if (env.PUBLIC_CORS_ORIGIN) {
+  publicCorsOrigin = env.PUBLIC_CORS_ORIGIN.split(",");
+} else {
+  publicCorsOrigin = false;
+  console.warn(
+    "[public] PUBLIC_CORS_ORIGIN is unset — cross-origin browser requests are denied. " +
+      "Set it to the Mini App / web signup origins to enable browser access.",
   );
 }
 app.use(
   cors({
-    origin: env.PUBLIC_CORS_ORIGIN === "*" ? "*" : env.PUBLIC_CORS_ORIGIN.split(","),
+    origin: publicCorsOrigin,
     methods: ["GET", "POST", "PATCH", "OPTIONS"],
   }),
 );

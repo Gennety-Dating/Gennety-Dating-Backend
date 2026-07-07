@@ -29,11 +29,20 @@ export const otpRequestLimiter = make({
   message: { error: "Too many OTP requests, try again later." },
 });
 
-/** OTP verify — 10/hour per email. */
+/**
+ * OTP verify — 10/hour per (email + IP).
+ *
+ * Keyed on IP as well as email (audit M1) so a third party who knows a victim's
+ * email can't burn the victim's verify budget from an unrelated IP and lock them
+ * out of onboarding / login. Guessing the code itself is separately bounded by
+ * the per-OTP `attempts` cap (max 5, enforced in `otp.ts`), so adding the IP
+ * dimension does not weaken brute-force protection — it only stops the lockout.
+ */
 export const otpVerifyLimiter = make({
   windowMs: 3_600_000,
   limit: 10,
-  keyGenerator: (req): string => `otp-vrf:${(req.body?.email ?? "").toString().toLowerCase()}`,
+  keyGenerator: (req): string =>
+    `otp-vrf:${(req.body?.email ?? "").toString().toLowerCase()}:${ipKey(req)}`,
   message: { error: "Too many verification attempts." },
 });
 

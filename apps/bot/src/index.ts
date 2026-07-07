@@ -51,7 +51,30 @@ process.on("unhandledRejection", (reason) => {
 
 const bot = createBot(env.BOT_TOKEN);
 
-const DATE_LIFECYCLE_TICK_MS = Number(process.env.DATE_LIFECYCLE_TICK_MS ?? 2 * 60 * 1000);
+const DEFAULT_DATE_LIFECYCLE_TICK_MS = 2 * 60 * 1000;
+/**
+ * Parse the date-lifecycle interval defensively (audit M2). A non-numeric
+ * override (e.g. `DATE_LIFECYCLE_TICK_MS=2m` — an easy mistake since every other
+ * schedule in this file is a cron string) would otherwise become `NaN`, and
+ * `NaN > 0` is false — silently disabling the ENTIRE date lifecycle
+ * (ice-breakers, emergency window, T-1.5h safety brief, feedback, coordination,
+ * venue-change expiry) with no signal. Fall back to the default and warn loudly
+ * instead. An explicit `0` still disables it (kept as the intentional off switch).
+ */
+function resolveDateLifecycleTickMs(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === "") return DEFAULT_DATE_LIFECYCLE_TICK_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    console.warn(
+      `[config] DATE_LIFECYCLE_TICK_MS="${raw}" is not a non-negative number — ` +
+        `falling back to ${DEFAULT_DATE_LIFECYCLE_TICK_MS}ms so the date lifecycle ` +
+        `still runs. Use a millisecond integer (or 0 to disable).`,
+    );
+    return DEFAULT_DATE_LIFECYCLE_TICK_MS;
+  }
+  return parsed;
+}
+const DATE_LIFECYCLE_TICK_MS = resolveDateLifecycleTickMs(process.env.DATE_LIFECYCLE_TICK_MS);
 
 /**
  * Weekly matching cron schedule. Default: Thursday at 18:00 Europe/Kyiv.

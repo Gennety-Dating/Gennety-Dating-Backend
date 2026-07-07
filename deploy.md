@@ -410,7 +410,11 @@ Required/high-impact env keys:
   `services/ai-emoji.ts` (no env).
 - Admin API: `ADMIN_API_KEY`, `ADMIN_PORT`, `ADMIN_DASHBOARD_ORIGIN`
 - Public API: `JWT_SECRET`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL`,
-  `PUBLIC_PORT`, `PUBLIC_CORS_ORIGIN`
+  `PUBLIC_PORT`, `PUBLIC_CORS_ORIGIN` (comma-separated browser origins allowed to
+  call `/v1/*`; empty now **denies** cross-origin instead of wildcarding — native
+  mobile clients send no `Origin` header and are unaffected. Prefer listing the
+  concrete browser origins — the Mini App host `https://dating-calendar.gennety.com`
+  plus any web signup site — over `*`, which still works but logs a warning.)
 - Push: `EXPO_ACCESS_TOKEN`
 - Persona: `ENABLE_PERSONA_VERIFICATION`, `PERSONA_TEMPLATE_ID`,
   `PERSONA_ENVIRONMENT_ID`, `PERSONA_API_KEY`,

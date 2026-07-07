@@ -22,12 +22,41 @@ export async function createAndSendOtp(
   email: string,
   send: (email: string, code: string) => Promise<void> = sendOtpEmail,
 ): Promise<OtpChallengeState> {
+  const normalisedEmail = email.toLowerCase();
+
+  // Per-email resend cooldown, enforced server-side and independent of the
+  // per-IP request limiter (audit L2), so an IP-rotating attacker can't
+  // email-bomb a victim's inbox — at most one send per `OTP_RESEND_COOLDOWN_MS`
+  // per address, regardless of source IP. A resend inside the window returns the
+  // existing live challenge WITHOUT minting/sending a new code, matching the
+  // resend timer the UI already surfaces. Only a live, unconsumed, non-exhausted
+  // challenge suppresses a resend; an expired/exhausted one falls through so the
+  // user can always get a fresh code.
+  const existing = await prisma.emailOtp.findFirst({
+    where: { email: normalisedEmail, consumedAt: null },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true, expiresAt: true, attempts: true },
+  });
+  if (
+    existing &&
+    existing.expiresAt > new Date() &&
+    existing.attempts < OTP_MAX_ATTEMPTS &&
+    Date.now() - existing.createdAt.getTime() < OTP_RESEND_COOLDOWN_MS
+  ) {
+    return {
+      status: "pending",
+      expiresAt: existing.expiresAt,
+      resendAvailableAt: new Date(existing.createdAt.getTime() + OTP_RESEND_COOLDOWN_MS),
+      attemptsRemaining: Math.max(0, OTP_MAX_ATTEMPTS - existing.attempts),
+    };
+  }
+
   const code = generateOtp(OTP_LENGTH);
   const codeHash = await bcrypt.hash(code, 10);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
   const challenge = await prisma.emailOtp.create({
-    data: { email: email.toLowerCase(), codeHash, expiresAt },
+    data: { email: normalisedEmail, codeHash, expiresAt },
   });
 
   try {
