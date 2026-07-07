@@ -1131,7 +1131,7 @@ function BottomCta(props: { onClick: () => void; label: string; disabled?: boole
   return (
     <div className="bottom-cta fixed bottom-0 w-full p-margin bg-gradient-to-t from-black via-black/80 to-transparent z-20 flex justify-center pb-xl">
       <button
-        className="pill-cta bg-primary text-on-primary font-label-md text-label-md uppercase tracking-wider px-12 py-4 rounded-full shadow-[0_0_20px_rgba(182,154,229,0.2)] hover:bg-secondary transition-all duration-300 transform hover:scale-105 active:scale-95 font-bold"
+        className="pill-cta font-label-md text-label-md uppercase tracking-wider px-12 py-4 rounded-full transition-all duration-300 transform hover:scale-105 active:scale-95 font-bold"
         disabled={props.disabled}
         onClick={props.onClick}
       >
