@@ -1305,8 +1305,13 @@ function PathGate(props: {
   const [busy, setBusy] = useState<RegistrationTrack | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const options: Array<{ value: RegistrationTrack; label: string; sub: string }> = [
-    { value: "student", label: s.pathStudentTitle, sub: s.pathStudentSub },
+  const options: Array<{
+    value: RegistrationTrack;
+    label: string;
+    sub: string;
+    badge?: string;
+  }> = [
+    { value: "student", label: s.pathStudentTitle, sub: s.pathStudentSub, badge: s.pathStudentBadge },
     { value: "general", label: s.pathGeneralTitle, sub: s.pathGeneralSub },
   ];
 
@@ -1335,11 +1340,12 @@ function PathGate(props: {
         {options.map((option) => (
           <button
             key={option.value}
-            className={`choice-button ${props.selected === option.value ? "is-selected" : ""}`}
+            className={`choice-button ${option.badge ? "is-priority" : ""} ${props.selected === option.value ? "is-selected" : ""}`}
             disabled={busy !== null || !app?.initData}
             onClick={() => void choose(option.value)}
           >
             <span>
+              {option.badge ? <span className="choice-badge">{option.badge}</span> : null}
               <strong>{option.label}</strong>
               <small>{busy === option.value ? s.saving : option.sub}</small>
             </span>
