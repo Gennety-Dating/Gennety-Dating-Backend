@@ -31,7 +31,7 @@ audienceRouter.get(
   "/admin/analytics/audience",
   async (_req: Request, res: Response) => {
     try {
-      const data = await getOrCompute("audience:v1", 600, async () => {
+      const data = await getOrCompute("audience:v2", 600, async () => {
         // Single broad query — joins we'd otherwise issue separately.
         // 50k users × ~2KB each is ~100MB; if this grows we'll move to
         // raw aggregation SQL. For now the explicit dashboard scan is
@@ -41,6 +41,8 @@ audienceRouter.get(
             age: true,
             major: true,
             status: true,
+            registrationTrack: true,
+            isEmailVerified: true,
             profile: {
               select: {
                 ethnicity: true,
@@ -79,6 +81,15 @@ audienceRouter.get(
         const communicationStyle = Object.fromEntries(
           COMMUNICATION_STYLE_VALUES.map((k) => [k, 0]),
         ) as Record<string, number>;
+        // Registration v2 sign-up tracks. `legacy_student` = registered before
+        // the fork existed (null track) but email-verified — students in
+        // practice; `unknown` = null track and no verified email (mid-flight).
+        const registrationTracks = {
+          student: 0,
+          general: 0,
+          legacy_student: 0,
+          unknown: 0,
+        };
         // Match radius
         const matchRadius = { campus_only: 0, citywide: 0, unknown: 0 };
         // Geo feasibility
@@ -87,6 +98,10 @@ audienceRouter.get(
         for (const u of users) {
           ageBuckets[ageBucket(u.age)]++;
           majorClusters[majorCluster(u.major)]++;
+          if (u.registrationTrack === "student") registrationTracks.student++;
+          else if (u.registrationTrack === "general") registrationTracks.general++;
+          else if (u.isEmailVerified) registrationTracks.legacy_student++;
+          else registrationTracks.unknown++;
 
           const p = u.profile;
           if (p) {
@@ -141,6 +156,7 @@ audienceRouter.get(
           communicationStyle: COMMUNICATION_STYLE_VALUES.map((v) => ({
             value: v, count: communicationStyle[v] ?? 0,
           })),
+          registrationTracks,
           matchRadius,
           geo: {
             known: geoKnown,

@@ -133,11 +133,17 @@ Always preserve these unless the user explicitly asks to redesign the product
 and confirms the tradeoff:
 
 - No user-to-user in-app chat.
-- Corporate/university email verification stays mandatory.
+- Contact verification stays mandatory and track-aware (Registration v2):
+  university-email OTP for the student track, trusted Telegram-contact phone
+  for the general track; matching admits the union of the two rails. Never
+  waive the gate or let one track bypass the other's rail.
 - Onboarding steps and required data are not skipped.
 - Blind decision invariant: users do not learn the partner's decision before
   making their own.
-- Persona/face-match verification and unverified Elo penalty stay meaningful.
+- Persona/face-match verification stays meaningful: mandatory (no skip, no
+  unverified activation) when `MANDATORY_VERIFICATION_ENABLED` is on; the
+  legacy soft-skip + unverified Elo penalty applies only while it is off /
+  for grandfathered pre-flip users.
 - Scheduled-date confirmations use Telegram `date_time` entity where applicable.
 - Telegram Bot API calls should go through grammY abstractions unless the API
   surface is not typed yet; raw Bot API usage must be isolated and justified.

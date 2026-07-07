@@ -156,7 +156,7 @@ describe("formatStatusText", () => {
       },
       "en",
     );
-    expect(text).toBe("✨ Analyzing campus… Check back shortly.");
+    expect(text).toBe("✨ Analyzing your city… Check back shortly.");
   });
 
   it("renders Russian d/h", () => {

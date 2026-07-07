@@ -9,7 +9,7 @@ const translations = {
     consentAgree: "I Agree",
     consentPrivacyButton: "Privacy Policy",
     consentTermsButton: "Terms of Service",
-    welcome: "Gennety Dating 👀\nAI matchmaking built for students.",
+    welcome: "Gennety Dating 👀\nAI matchmaking for real dates.",
     chooseLanguage: "Pick your language:",
     philosophyPitch:
       "Gennety runs on one idea: *Zero Chat*.\n\n" +
@@ -248,7 +248,7 @@ const translations = {
     myProfileBody:
       "*{firstName} {surname}*, {age}\n" +
       "{occupationLine}" +
-      "🎓 {university}\n" +
+      "{universityLine}" +
       "🌐 {language}\n\n" +
       "{summary}",
     myProfileNoBio: "_No bio yet._",
@@ -453,7 +453,7 @@ const translations = {
       "Second week running and our matchmaker still hasn't found anyone we'd be excited to introduce you to. " +
       "Thank you for your patience — it means a lot.\n\n" +
       "Where we are right now:\n" +
-      "• We're actively bringing more students like you into the community and tuning the algorithm in your favour.\n" +
+      "• We're actively bringing more people like you into the community and tuning the algorithm in your favour.\n" +
       "• A genuinely great partner should be just a few drops away.\n" +
       "• Your priority for the next drop is already raised for the wait.\n\n" +
       "See you next Thursday at 18:00 — we're working for you 🤍",
@@ -678,7 +678,7 @@ const translations = {
     statusDaysHours: "⏳ Next match in {d}d {h}h",
     statusHoursMinutes: "⏳ Matches drop in {h}h {m}m",
     statusMinutes: "✨ Almost ready! Matches drop in {m}m",
-    statusProcessing: "✨ Analyzing campus… Check back shortly.",
+    statusProcessing: "✨ Analyzing your city… Check back shortly.",
 
     // --- Voice notes ---
     voiceTranscriptionFailed:
@@ -740,7 +740,7 @@ const translations = {
     consentAgree: "Согласен",
     consentPrivacyButton: "Политика конфиденциальности",
     consentTermsButton: "Условия использования",
-    welcome: "Gennety Dating 👀\nAI-мэтчмейкинг для студентов.",
+    welcome: "Gennety Dating 👀\nAI-мэтчмейкинг для настоящих свиданий.",
     chooseLanguage: "Выбери язык:",
     philosophyPitch:
       "Gennety работает по одному принципу: *Zero Chat*.\n\n" +
@@ -979,7 +979,7 @@ const translations = {
     myProfileBody:
       "*{firstName} {surname}*, {age}\n" +
       "{occupationLine}" +
-      "🎓 {university}\n" +
+      "{universityLine}" +
       "🌐 {language}\n\n" +
       "{summary}",
     myProfileNoBio: "_Описания пока нет._",
@@ -1184,7 +1184,7 @@ const translations = {
       "Уже вторая неделя подряд, как наш матчмейкер не находит кого-то, кого мы были бы рады тебе показать. " +
       "Спасибо, что остаёшься с нами — это правда важно.\n\n" +
       "Где мы сейчас:\n" +
-      "• Мы активно приводим новых студентов и настраиваем алгоритм под твои критерии.\n" +
+      "• Мы активно приводим новых людей и настраиваем алгоритм под твои критерии.\n" +
       "• Действительно стоящий партнёр должен быть всего в нескольких дропах от тебя.\n" +
       "• За ожидание твой приоритет в следующем дропе уже повышен.\n\n" +
       "До следующего четверга в 18:00 — мы работаем для тебя 🤍",
@@ -1402,7 +1402,7 @@ const translations = {
     statusDaysHours: "⏳ Следующий мэтч через {d}д {h}ч",
     statusHoursMinutes: "⏳ Мэтчи прилетят через {h}ч {m}мин",
     statusMinutes: "✨ Почти готово! Мэтчи прилетят через {m} мин",
-    statusProcessing: "✨ Сканируем кампус… Загляни чуть позже.",
+    statusProcessing: "✨ Сканируем твой город… Загляни чуть позже.",
 
     // --- Voice notes ---
     voiceTranscriptionFailed:
@@ -1464,7 +1464,7 @@ const translations = {
     consentAgree: "Згоден",
     consentPrivacyButton: "Політика конфіденційності",
     consentTermsButton: "Умови використання",
-    welcome: "Gennety Dating 👀\nAI-метчмейкінг для студентів.",
+    welcome: "Gennety Dating 👀\nAI-метчмейкінг для справжніх побачень.",
     chooseLanguage: "Обери мову:",
     philosophyPitch:
       "Gennety працює за одним принципом: *Zero Chat*.\n\n" +
@@ -1703,7 +1703,7 @@ const translations = {
     myProfileBody:
       "*{firstName} {surname}*, {age}\n" +
       "{occupationLine}" +
-      "🎓 {university}\n" +
+      "{universityLine}" +
       "🌐 {language}\n\n" +
       "{summary}",
     myProfileNoBio: "_Опису ще немає._",
@@ -1908,7 +1908,7 @@ const translations = {
       "Уже другий тиждень поспіль, як наш матчмейкер не знаходить когось, кого ми були б раді тобі показати. " +
       "Дякуємо, що лишаєшся з нами — це справді важливо.\n\n" +
       "Де ми зараз:\n" +
-      "• Ми активно приводимо нових студентів і налаштовуємо алгоритм під твої критерії.\n" +
+      "• Ми активно приводимо нових людей і налаштовуємо алгоритм під твої критерії.\n" +
       "• Дійсно вартий партнер має бути всього за кілька дропів від тебе.\n" +
       "• За очікування твій пріоритет у наступному дропі вже підвищено.\n\n" +
       "До наступного четверга о 18:00 — ми працюємо для тебе 🤍",
@@ -2126,7 +2126,7 @@ const translations = {
     statusDaysHours: "⏳ Наступний метч через {d}д {h}г",
     statusHoursMinutes: "⏳ Метчі прилетять через {h}г {m}хв",
     statusMinutes: "✨ Майже готово! Метчі прилетять за {m} хв",
-    statusProcessing: "✨ Скануємо кампус… Зазирни трохи згодом.",
+    statusProcessing: "✨ Скануємо твоє місто… Зазирни трохи згодом.",
 
     // --- Voice notes ---
     voiceTranscriptionFailed:
@@ -2194,7 +2194,7 @@ const deTranslations: TranslationTable = {
   consentAgree: "Ich stimme zu",
   consentPrivacyButton: "Datenschutzerklärung",
   consentTermsButton: "Nutzungsbedingungen",
-  welcome: "Gennety Dating 👀\nAI-Matchmaking für Studierende.",
+  welcome: "Gennety Dating 👀\nAI-Matchmaking für echte Dates.",
   chooseLanguage: "Wähle deine Sprache:",
   philosophyPitch:
     "Gennety basiert auf einer Idee: *Zero Chat*.\n\n" +
@@ -2414,7 +2414,7 @@ const deTranslations: TranslationTable = {
   myProfileBody:
     "*{firstName} {surname}*, {age}\n" +
     "{occupationLine}" +
-    "🎓 {university}\n" +
+    "{universityLine}" +
     "🌐 {language}\n\n" +
     "{summary}",
   myProfileNoBio: "_Noch keine Bio._",
@@ -2608,7 +2608,7 @@ const deTranslations: TranslationTable = {
     "Zweite Woche in Folge und unser Matchmaker hat noch niemanden gefunden, den wir dir wirklich gern vorstellen würden. " +
     "Danke für deine Geduld - das bedeutet uns viel.\n\n" +
     "Was du wissen solltest:\n" +
-    "• Wir bringen aktiv mehr passende Studierende in die Community und tunen den Algorithmus für dich.\n" +
+    "• Wir bringen aktiv mehr passende Menschen in die Community und tunen den Algorithmus für dich.\n" +
     "• Ein wirklich guter Partner sollte nur ein paar Drops entfernt sein.\n" +
     "• Deine Priorität für den nächsten Drop ist für die Wartezeit bereits erhöht.\n\n" +
     "Bis Donnerstag um 18:00 - wir arbeiten für dich 🤍",
@@ -2802,7 +2802,7 @@ const deTranslations: TranslationTable = {
   statusDaysHours: "⏳ Nächstes Match in {d}T {h}Std",
   statusHoursMinutes: "⏳ Matches droppen in {h}Std {m}Min",
   statusMinutes: "✨ Fast bereit! Matches droppen in {m} Min",
-  statusProcessing: "✨ Analysiere den Campus... Schau später nochmal rein.",
+  statusProcessing: "✨ Analysiere deine Stadt... Schau später nochmal rein.",
   voiceTranscriptionFailed: "Ich konnte das nicht klar verstehen - kannst du es tippen?",
   voiceTooLong: "Die Sprachnachricht ist etwas lang. Maximal 5 Minuten - oder schreib es einfach.",
   rateLimitFloodNotice:
@@ -2819,7 +2819,7 @@ const plTranslations: TranslationTable = {
   consentAgree: "Akceptuję",
   consentPrivacyButton: "Polityka prywatności",
   consentTermsButton: "Warunki usługi",
-  welcome: "Gennety Dating 👀\nAI matchmaking dla studentów.",
+  welcome: "Gennety Dating 👀\nAI matchmaking dla prawdziwych randek.",
   chooseLanguage: "Wybierz język:",
   philosophyPitch:
     "Gennety działa według jednej zasady: *Zero Chat*.\n\n" +
@@ -3039,7 +3039,7 @@ const plTranslations: TranslationTable = {
   myProfileBody:
     "*{firstName} {surname}*, {age}\n" +
     "{occupationLine}" +
-    "🎓 {university}\n" +
+    "{universityLine}" +
     "🌐 {language}\n\n" +
     "{summary}",
   myProfileNoBio: "_Brak bio._",
@@ -3232,7 +3232,7 @@ const plTranslations: TranslationTable = {
     "Drugi tydzień z rzędu nasz matchmaker nadal nie znalazł osoby, którą naprawdę chcielibyśmy Ci przedstawić. " +
     "Dzięki za cierpliwość - to dla nas ważne.\n\n" +
     "Co chcemy, żebyś wiedział(a):\n" +
-    "• Aktywnie sprowadzamy więcej studentów podobnych do Ciebie i stroimy algorytm pod Twoją korzyść.\n" +
+    "• Aktywnie sprowadzamy więcej osób podobnych do Ciebie i stroimy algorytm pod Twoją korzyść.\n" +
     "• Naprawdę świetna osoba powinna być już tylko kilka dropów stąd.\n" +
     "• Twój priorytet w kolejnym dropie jest już podniesiony za czas oczekiwania.\n\n" +
     "Do czwartku o 18:00 - pracujemy dla Ciebie 🤍",
@@ -3426,7 +3426,7 @@ const plTranslations: TranslationTable = {
   statusDaysHours: "⏳ Następne dopasowanie za {d}d {h}h",
   statusHoursMinutes: "⏳ Dopasowania wlecą za {h}h {m}min",
   statusMinutes: "✨ Prawie gotowe! Dopasowania wlecą za {m} min",
-  statusProcessing: "✨ Analizujemy kampus... Zajrzyj trochę później.",
+  statusProcessing: "✨ Analizujemy Twoje miasto... Zajrzyj trochę później.",
   voiceTranscriptionFailed: "Nie usłyszałem/am wyraźnie - możesz napisać tekstem?",
   voiceTooLong: "Ta głosówka jest trochę długa. Do 5 minut albo po prostu napisz tekst.",
   rateLimitFloodNotice:

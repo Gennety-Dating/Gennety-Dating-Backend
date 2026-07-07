@@ -35,12 +35,18 @@ async function renderMyProfile(ctx: BotContext): Promise<void> {
   // clutter. The line is data, not a label, so it needs no i18n.
   const occupationLine = user.major ? `💼 ${escapeMd(user.major)}\n` : "";
 
+  // Registration v2: the 🎓 line is student-track flavor — a general (phone)
+  // user has no universityDomain and gets no line instead of "🎓 —".
+  const universityLine = user.universityDomain
+    ? `🎓 ${escapeMd(user.universityDomain)}\n`
+    : "";
+
   let body = t(lang, "myProfileBody", {
     firstName: escapeMd(user.firstName ?? "—"),
     surname: escapeMd(user.surname ?? "—"),
     age: user.age ?? 0,
     occupationLine,
-    university: escapeMd(user.universityDomain ?? "—"),
+    universityLine,
     language: (user.language ?? lang).toUpperCase(),
     summary: escapeMd(rawSummary),
   });

@@ -426,6 +426,21 @@ Required/high-impact env keys:
   `ffmpeg` + `ffprobe`, OpenAI, and an IAM policy containing exactly
   `rekognition:CompareFaces`, `rekognition:DetectFaces`, and
   `rekognition:DetectModerationLabels`. No new AWS access key is required.
+- Registration v2 (feature-flagged, ship dark — flip both at launch):
+  `PHONE_AUTH_ENABLED` (default `false`) turns on the sign-up fork + the
+  general-track phone rail (Mini App PathGate/PhoneGate, `POST
+  /v1/telegram-onboarding/track`, the trusted `message.contact` handler);
+  `MANDATORY_VERIFICATION_ENABLED` (default `false`) removes the verification
+  Skip button, refuses legacy skip callbacks, and adds the verification-stall
+  re-engagement sweep. **Requires `db:push` of the additive `users.phone`
+  (unique) / `phone_verified_at` / `registration_track` columns first**
+  (non-destructive; deploy code + push schema BEFORE flipping either flag —
+  the new columns are read unconditionally by matching and `/state`). Also
+  redeploy the Mini App bundle (`onboarding.html`) so the fork screens exist.
+  The student ticket bonus (+2 at uni-email verification, `student_bonus`
+  ledger reason) rides `TICKET_FEATURE_ENABLED` — no flag of its own, no
+  schema beyond the wallet tables. Rollback: flip the flag(s) back — the
+  email-only flow returns exactly as before; the additive columns may stay.
 - Matching: `MALE_REACH_ELO` (default `36` Elo ≈ 6 attractiveness points) —
   one-directional "reach up" allowance that lets a less-attractive man match a
   somewhat more-attractive woman without the `V_league` penalty (hetero pairs

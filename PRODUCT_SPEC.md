@@ -11,8 +11,11 @@
 
 ## Project Overview
 
-Gennety Dating is an AI-first romantic matchmaking service targeting university
-students. It diverges from traditional dating apps by relying on deep context
+Gennety Dating is an AI-first romantic matchmaking service. It launched for
+university students and (Registration v2, 2026-07) opens to a general adult
+audience while keeping a first-class student community: students register
+with a university email (and get loyalty perks), everyone else with a phone
+number. It diverges from traditional dating apps by relying on deep context
 extracted from each user's personal LLM (ChatGPT, Claude, etc.) and completely
 eliminating user-to-user text communication before the first date. The system
 acts as the matchmaker: it finds the match, pitches it, and negotiates the
@@ -28,9 +31,17 @@ out of Telegram-only workers.
 
 ## Core Principles (Strict Rules)
 
-- **Hyper-Local Student Focus (Corporate Email)** — Users MUST register and
-  verify a valid university email domain (whitelist in `ALLOWED_EMAIL_DOMAINS`,
-  e.g. `.edu`, `.ac.uk`).
+- **Dual-Track Verified Registration (Registration v2)** — Every user MUST
+  verify a contact rail at sign-up. The fork (gated by `PHONE_AUTH_ENABLED`;
+  off → legacy email-only flow) offers two tracks recorded in
+  `User.registrationTrack`: **student** — university email OTP (whitelist in
+  `ALLOWED_EMAIL_DOMAINS`, e.g. `.edu`, `.ac.uk`), rewarded with
+  `STUDENT_BONUS_TICKETS` (2) free Date Tickets; **general** — phone via
+  Telegram one-tap `requestContact` (the bot receives a trusted
+  `message.contact`; `User.phone` is `@unique` — one account per number).
+  Matching admits the union (verified email OR verified phone); the student
+  community keeps its flavor via educational homogamy, shared-domain curated
+  venues, and the 🎓 profile line.
 - **NO IN-APP CHAT** — Users NEVER message each other through our platform. Do
   not build chat interfaces between users. The only chats are user↔bot,
   user↔Aether concierge (mobile), and the structured pitch / scheduling /
@@ -48,9 +59,13 @@ out of Telegram-only workers.
   return the long psychological analysis. Declined users continue without it;
   the backend generates a deterministic fallback summary + embedding from
   their ordinary onboarding answers.
-- **Identity-Verified by Default** — Liveness (Persona) + photo↔selfie
-  face-match (AWS Rekognition) gate full match eligibility. Skipping is
-  allowed but carries a real Elo penalty.
+- **Identity-Verified, Mandatory at Launch** — Liveness (Persona) +
+  photo↔selfie face-match (AWS Rekognition) gate full match eligibility. With
+  `MANDATORY_VERIFICATION_ENABLED` on (Registration v2), the CTA has no Skip
+  button and activation happens ONLY through the pipeline's `verified`
+  outcome; legacy skip callbacks refuse politely and pre-flip skippers are
+  grandfathered with their `UNVERIFIED_ELO_PENALTY`. With the flag off, the
+  legacy two-step soft skip + Elo penalty applies (see §1.4).
 - **Progressive Logistics** — The AI auto-proposes timeslots first; if both
   rounds fail it hands off to the Calendar Mini App; venue is chosen by an
   AI concierge from each user's free-text *vibe* + commute pin.
@@ -82,11 +97,16 @@ out of Telegram-only workers.
   language, then renders the consent + ToS card in that selected language.
 - Telegram `/start` now opens a full-screen Onboarding Mini App before the
   conversational agent takes over. The Mini App presents the visual intro,
-  language, legal consent, corporate-email OTP gate, dating city, and final AI
-  memory export choice, using Telegram `initData` HMAC auth for all writes. If
+  language, legal consent, the **sign-up fork** (when `PHONE_AUTH_ENABLED`,
+  mirrored to the client as `phoneAuthEnabled` in `/state`): student →
+  corporate-email OTP gate; general → phone one-tap gate (PhoneGate polls
+  `/state` until the bot records the trusted `message.contact`); then dating
+  city and the final AI memory export choice, using Telegram `initData` HMAC
+  auth for all writes (`POST /track` persists the re-choosable fork pick). If
   the user arrived through a verified
   website handoff (`auth_<token>`; legacy `web_<token>` still accepted), the
-  server-side `isEmailVerified` state skips the Email/OTP screens.
+  server-side `isEmailVerified` state skips the fork and Email/OTP screens
+  (the handoff stamps `registrationTrack=student`).
 - When the Mini App reaches its handoff step, it calls
   `/v1/telegram-onboarding/complete` with the visual-flow token issued by
   `/v1/telegram-onboarding/state`; the bot immediately resumes the chat through
@@ -126,7 +146,7 @@ fact collector owns profile capture:
 | `advance` | Choose the first actually missing field from the canonical order |
 | `context gate` | Surface and save the Magic Prompt only when AI memory export was accepted |
 | `photo gate` | Preserve early photos but do not skip unfinished profile questions |
-| `finalize gate` | Activate only after required profile data, AI-memory branch, city, verified email, and minimum photos are complete |
+| `finalize gate` | Activate only after required profile data, AI-memory branch, city, a verified contact rail (email or phone, per track), and minimum photos are complete |
 
 Canonical order: name + age → gender → preference → height → hobbies → partner
 requirements → optional nationality/ethnicity → **vibe (ideal Friday night →
@@ -334,7 +354,12 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   through `TicketLedger` (`reason = verification_bonus`), so webhook retries,
   manual pulls, photo-triggered reruns, and later re-verification cannot
   duplicate it. The reward DM confirms the new balance.
-- **Skip for now** — a *two-step soft skip*. The first tap does **not** apply
+- **Skip for now** — *(legacy path — hidden when
+  `MANDATORY_VERIFICATION_ENABLED` is on: the CTA then carries only the Verify
+  button with the `verifyPitchMandatory[Ticket]` copy, and taps on pre-flip
+  Skip / Skip-anyway buttons refuse with `verifyMandatoryNotice` + a fresh
+  Verify button — no penalty, no unverified activation; already-skipped users
+  stay grandfathered.)* A *two-step soft skip*. The first tap does **not** apply
   any penalty: the bot plays a short personal **voice note** (native Telegram
   `sendVoice`, OGG/Opus, language-aware across all five onboarding languages
   `en`/`ru`/`uk`/`de`/`pl`) explaining why skipping
@@ -420,6 +445,16 @@ day-of+1 19:00, day-of+2 14:00 (Kyiv). Quiet hours **23:00–09:00 Kyiv** are
 deferred to the next 13:00. Any user activity (consent click, language pick,
 agent reply, photo upload) resets the chain to step 0; finishing onboarding
 nulls `reEngagementNextAt` permanently.
+
+**Verification-stall nudges (Registration v2).** With
+`MANDATORY_VERIFICATION_ENABLED` on, a user who finalized onboarding but
+hasn't passed Persona (`status='onboarding'`, `onboardingStep='completed'`,
+`verificationStatus ∈ {pending, unverified}`) would otherwise fall outside the
+chain above. The verification CTA re-arms the chain, and the same worker runs
+a second sweep that sends the localized `verifyReminderNudge` (with the Verify
+button) on the same decaying cadence until the pipeline activates the user or
+the chain exhausts. `pending_review`/`rejected` users are deliberately NOT
+nudged — they already did their part (or got rejection guidance).
 
 ## Phase 1b — Profiler
 
@@ -688,7 +723,9 @@ Hard SQL filters (`buildCandidateSql`):
 1. `status = 'active'` and `onboardingStep = 'completed'`.
 2. Embedding present, `gender` and `preference` set.
 3. Mutual gender compatibility (a's preference includes b's gender AND vice versa).
-4. Verified corporate/university email domain present.
+4. Verified contact rail present — `is_email_verified OR phone_verified_at
+   IS NOT NULL` (Registration v2 union; legacy users are all
+   email-verified, so this is a strict superset of the old email rule).
 5. Same canonical dating city (`Profile.homeCityKey`) and saved city
    coordinates. Different university domains can match inside the same city.
 6. **Lifetime ban** — exclude any pair that EVER appeared in a `matches` row,
@@ -859,7 +896,11 @@ match/bundle, scope, and amount, and can be consumed only once.
   `TICKET_FEATURE_ENABLED`.
 - **Ticket wallet (pre-purchase + bonuses).** Users carry a `User.ticketBalance`
   topped up by onboarding bonuses (§1.3: 6+ photos, adding a video;
-  §1.4: successful identity verification), the welcome gift above, and by bundle
+  §1.4: successful identity verification; Registration v2: the one-time
+  **student bonus** — `STUDENT_BONUS_TICKETS` (2) tickets granted at
+  university-email verification via the idempotent `student_bonus` ledger
+  claim, announced with the `ticketRewardStudent` DM — the student track's
+  welcome perk; the general/phone track gets none), the welcome gift above, and by bundle
   purchases in the store
   Mini App (`tickets.html`, opened from the
   **My Tickets** menu): **1 / $7.00**, **3 / $16.47** ($5.49 ea), **6 / $26.94**

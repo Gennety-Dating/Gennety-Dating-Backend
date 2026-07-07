@@ -192,6 +192,7 @@ Columns (≈ 35; grouped by purpose):
 | Identity | `id`, `telegramId` (unique BigInt — synthetic **negative** id for mobile-only users), `telegramUsername` (public `@handle`, captured opportunistically for `t.me/` coordination links), `email`, `universityDomain`, `firstName`, `surname`, `age`, `gender`, `preference`, `major`, `language`, `platform` |
 | Lifecycle | `status` (`UserStatus`), `onboardingStep`, `aiMemoryExportPreference`, `aiMemoryExportPreferenceAt`, `hasConsented`, `consentedAt`, `termsAccepted`, `termsAcceptedAt`, `researchOptIn`, `createdAt`, `updatedAt` |
 | Email OTP | `emailOtp`, `emailOtpExpiresAt`, `isEmailVerified` |
+| Registration v2 | `phone` (unique E.164, written only from a trusted Telegram `message.contact`), `phoneVerifiedAt` (the general-track contact gate), `registrationTrack` (`student`/`general`, null = pre-fork legacy). Matching admits `isEmailVerified OR phoneVerifiedAt` (union rail). |
 | Conversational state | `messageHistory` (`Json[]`), `lastMessageAt`, `lastPreMatchAnnounceAt` |
 | Re-engagement | `reEngagementStep` (0–5), `reEngagementNextAt` |
 | Trust & safety | `strikes`, `suspendedUntil` |
@@ -347,15 +348,16 @@ wrappers before a rejected asset can be committed to `profiles`.
 ### `ticket_ledger` (feature-flagged)
 
 Append-only audit of every ticket-wallet movement (`userId`, `delta`, `reason`
-∈ `photo_bonus`/`video_bonus`/`verification_bonus`/`welcome_gift`/
+∈ `photo_bonus`/`video_bonus`/`verification_bonus`/`student_bonus`/`welcome_gift`/
 `store_purchase`/`spend_match`/`refund`, optional
 `matchId`/`amountCents`/`bundleSize`, `createdAt`; `onDelete: Cascade` from
 `users`). The running sum of `delta` equals `User.ticketBalance`, which is
 materialized for fast reads; both are written in the same transaction by
 `services/ticket-wallet.ts`. Photo/video onboarding bonuses are idempotent via
-`Profile.photoBonusTicketAt` / `videoBonusTicketAt`; the verification bonus and
-the first-pitch welcome gift use a serializable ledger claim on
-`verification_bonus` / `welcome_gift`. Indexed `(userId, createdAt)`.
+`Profile.photoBonusTicketAt` / `videoBonusTicketAt`; the verification bonus,
+the first-pitch welcome gift, and the Registration v2 student bonus (+2 at
+university-email verification) use a serializable ledger claim on
+`verification_bonus` / `welcome_gift` / `student_bonus`. Indexed `(userId, createdAt)`.
 Inert unless `TICKET_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b.
 
 ### `profiler_answers`
@@ -438,7 +440,7 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | Method | Path | Purpose |
 |---|---|---|
 | GET  | `/v1/ping` | Liveness probe |
-| GET/POST | `/v1/telegram-onboarding/*` | Telegram full-screen Onboarding Mini App state/consent/language/email OTP/city/AI-memory choice/completion handoff. Authenticates with `Authorization: tma <initData>`; `POST /ai-memory` persists `accepted` or `declined`, `/state` returns it and issues the short-lived visual-flow token, and `/complete` dispatches the post-handoff bot DM only after city + AI-memory choice are saved. |
+| GET/POST | `/v1/telegram-onboarding/*` | Telegram full-screen Onboarding Mini App state/consent/language/**sign-up fork (`POST /track`, Registration v2)**/email OTP/**phone gate**/city/AI-memory choice/completion handoff. Authenticates with `Authorization: tma <initData>`; `/state` mirrors `phoneAuthEnabled` + `isPhoneVerified`/`phone`/`registrationTrack`, `POST /track` persists the re-choosable fork pick (404 while `PHONE_AUTH_ENABLED` is off), and `/complete` runs the track-aware contact gate (`email-required` \| `phone-required`) before city + AI-memory checks. |
 | POST | `/v1/auth/otp/request` | Send corp-email OTP (rate-limited) |
 | POST | `/v1/auth/otp/verify` | Verify OTP → mint access + refresh JWT |
 | POST | `/v1/auth/refresh` | Rotate refresh token |

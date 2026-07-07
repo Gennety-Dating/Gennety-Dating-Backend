@@ -1,7 +1,10 @@
 # Registration v2 — Dual-Track Auth + Mandatory Liveness (Production Plan)
 
-> Status: **PLAN — approved scope pending final user sign-off on the decision
-> points below.** Authored 2026-07-07. Implementation happens in THIS repo
+> Status: **IMPLEMENTED through Phase 5 (2026-07-07)** — phone rail (ca9a0ac),
+> sign-up fork (0ac8f15), mandatory liveness (a7f49be), matching union gate
+> (756e776), student bonus (dd6c391), copy/admin/docs (this commit). D1–D4
+> resolved per the inline recommendations. Remaining: Phase 6 (dev-bot E2E walk
+> of both tracks, deploy + staged flag flip). Authored 2026-07-07. Implementation happens in THIS repo
 > (prod); beta stays phone-only per BETA.md.
 
 ## Product decision (from the founder)
