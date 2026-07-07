@@ -201,16 +201,21 @@ button {
 }
 
 .ai-memory-actions button {
+  position: relative;
   width: 100%;
   min-height: 3.5rem;
-  border-radius: 1rem;
+  border-radius: 999px;
   font-size: 1.0625rem;
   line-height: 1.2;
   font-weight: 700;
   letter-spacing: 0;
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
   transition:
     transform 150ms ease,
     background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
     color 180ms ease,
     opacity 180ms ease;
 }
@@ -225,24 +230,41 @@ button {
 }
 
 .ai-memory-primary {
-  border: 0;
-  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background:
+    radial-gradient(130% 85% at 50% -20%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.62));
   color: #09090b;
-  box-shadow: 0 0 25px rgba(255, 255, 255, 0.15);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -8px 14px rgba(255, 255, 255, 0.3),
+    0 10px 30px rgba(0, 0, 0, 0.45),
+    0 0 30px rgba(255, 255, 255, 0.18);
 }
 
 .ai-memory-primary:hover {
-  background: #e4e4e7;
+  background:
+    radial-gradient(130% 85% at 50% -20%, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.72));
 }
 
 .ai-memory-secondary {
-  border: 0;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    radial-gradient(130% 90% at 50% -20%, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  color: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.28),
+    0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .ai-memory-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.28);
+  background:
+    radial-gradient(130% 90% at 50% -20%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06));
   color: #fff;
 }
 
