@@ -983,11 +983,12 @@ better UX than three separate retries.
 
 - **Server-side slot grid.** When the match enters `negotiating` the
   bot writes **6 consecutive dates** (next 6 days starting tomorrow)
-  with **5 time slots per date** into `Match.proposedTimes`: 17:30,
-  18:00, 18:30, 19:00, 19:30 local. Both users see the same exact
+  with **6 time slots per date** into `Match.proposedTimes`: 17:00,
+  17:30, 18:00, 18:30, 19:00, 19:30 local. Both users see the same exact
   DateTime allowlist; the public API rejects any submission whose ISO
   isn't on it. Pre-2026-05-10 the grid was 12 slots with Sun/Mon
-  pre-skipped; pre-2026-05-11 it was 6 dates at only 18:00. The current
+  pre-skipped; pre-2026-05-11 it was 6 dates at only 18:00; the earliest
+  slot was 17:30 until 2026-07-07. The current
   shape keeps the first choice compact while avoiding a single fixed
   dinner time.
 - **Multi-pick with live peer visibility.** Each user marks any subset

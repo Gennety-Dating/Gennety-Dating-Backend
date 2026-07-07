@@ -78,10 +78,10 @@ async function main(): Promise<void> {
     process.exit(5);
   }
 
-  const day0 = days[0]!; // [17:30, 18:00, 18:30, 19:00, 19:30]
+  const day0 = days[0]!; // [17:00, 17:30, 18:00, 18:30, 19:00, 19:30]
   const day1 = days[1]!;
-  const aPicks = [day0[1]!]; //           A: day0 18:00
-  const bPicks = [day0[3]!, day1[1]!]; // B: day0 19:00 (mixed), day1 18:00 (peer-only)
+  const aPicks = [day0[2]!]; //           A: day0 18:00
+  const bPicks = [day0[4]!, day1[2]!]; // B: day0 19:00 (mixed), day1 18:00 (peer-only)
 
   await prisma.match.update({
     where: { id: matchId },

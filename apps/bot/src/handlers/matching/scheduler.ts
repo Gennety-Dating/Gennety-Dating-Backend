@@ -36,6 +36,7 @@ import {
 export const CALENDAR_DAY_COUNT = 6;
 
 export const CALENDAR_TIME_SLOTS: ReadonlyArray<{ hour: number; minute: number }> = [
+  { hour: 17, minute: 0 },
   { hour: 17, minute: 30 },
   { hour: 18, minute: 0 },
   { hour: 18, minute: 30 },
@@ -47,8 +48,8 @@ export const CALENDAR_SLOT_COUNT = CALENDAR_DAY_COUNT * CALENDAR_TIME_SLOTS.leng
 
 /**
  * Generate the calendar grid: the next `dayCount` consecutive days starting
- * tomorrow, with five exact time options per day (17:30, 18:00, 18:30,
- * 19:00, 19:30 local). No weekday filter — past UX feedback was that
+ * tomorrow, with six exact time options per day (17:00, 17:30, 18:00,
+ * 18:30, 19:00, 19:30 local). No weekday filter — past UX feedback was that
  * skipping Sun/Mon pruned dates users actually preferred (e.g. Sunday
  * brunches, Monday holidays). 6 days is "next week's worth of options";
  * the Mini App groups the exact DateTime allowlist into date → time steps.

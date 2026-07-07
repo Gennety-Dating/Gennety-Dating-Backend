@@ -91,11 +91,12 @@ function createCtx(overrides: {
 }
 
 describe("scheduler: pure slot helpers", () => {
-  it("generateProposalSlots returns 6 consecutive days with 5 time choices per day", () => {
+  it("generateProposalSlots returns 6 consecutive days with 6 time choices per day", () => {
     const slots = generateProposalSlots(new Date("2026-04-09T12:00:00Z"));
     expect(slots.length).toBe(CALENDAR_SLOT_COUNT);
     expect(CALENDAR_DAY_COUNT).toBe(6);
     expect(CALENDAR_TIME_SLOTS).toEqual([
+      { hour: 17, minute: 0 },
       { hour: 17, minute: 30 },
       { hour: 18, minute: 0 },
       { hour: 18, minute: 30 },

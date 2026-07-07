@@ -62,7 +62,7 @@ export function buildProductPlaybook(features: PlaybookFeatures): string {
       ? `\n- First, the Date Ticket step appears (see the Date Tickets section below); the Calendar opens once both tickets are settled.`
       : ""
   }
-- Both get a Calendar Mini App button. Inside, each marks every slot they're free on a shared 6-day grid (17:30–19:30 local).
+- Both get a Calendar Mini App button. Inside, each marks every slot they're free on a shared 6-day grid (17:00–19:30 local).
 - Both see each other's marks live. The instant there is exactly one shared slot it auto-locks; if several overlap, the responder taps one to confirm.
 - They never message about timing — they just tap availability and the date locks itself.`);
 
