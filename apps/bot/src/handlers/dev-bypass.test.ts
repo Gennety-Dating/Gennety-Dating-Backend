@@ -16,6 +16,7 @@ describe("computeDevBypassFields", () => {
       email: `dev+5986970093@${DEV_BYPASS_EMAIL_DOMAIN}`,
       universityDomain: DEV_BYPASS_EMAIL_DOMAIN,
       isEmailVerified: true,
+      registrationTrack: "student",
     });
   });
 

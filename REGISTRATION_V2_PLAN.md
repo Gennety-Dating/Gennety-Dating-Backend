@@ -167,6 +167,38 @@ the email gate.
 
 **Total: ≈ 8.5–11.5 focused days.**
 
+## Phase 6 — manual E2E checklist + rollout order (2026-07-07)
+
+Everything automatable is done: full workspace suite green (bot 1506 / webapp
+108 / shared 139), integration matrix green on the docker test DB, full build
+green, dev-bypass stamps `registrationTrack=student`. What remains needs real
+Telegram accounts on the dev bot (`@gennetytestbot` + ngrok for the Mini App):
+
+1. **Student track**: /start → fork shows both cards (with
+   `PHONE_AUTH_ENABLED=true` in `.env.local`) → pick "university email" →
+   OTP → city → …handoff. Expect: `registrationTrack=student`, +2 tickets DM
+   (`TICKET_FEATURE_ENABLED=true`), My Tickets balance 2.
+2. **General track**: second account → pick "phone" → one-tap share → PhoneGate
+   auto-advances → city → …handoff. Expect: `phone`+`phoneVerifiedAt` set,
+   track=general, NO student bonus, My Profile shows no 🎓 line.
+3. **Mandatory liveness** (`MANDATORY_VERIFICATION_ENABLED=true`): CTA has no
+   Skip; complete Persona sandbox → auto-activate; check the stalled account
+   gets `verifyReminderNudge` after ~15 min idle.
+4. **Track switch**: on the fork pick phone, go back, pick email — /complete
+   must demand the CURRENT track's rail.
+5. **Matching smoke**: seed a student+general pair in one city → run the batch
+   → pair matches (union rail).
+
+Rollout order (deploy.md has the full entry):
+1. Deploy code + `db:push` (additive `users.phone`/`phone_verified_at`/
+   `registration_track`) + Mini App bundle — flags still off → zero behavior
+   change.
+2. Flip `PHONE_AUTH_ENABLED=true` + `MANDATORY_VERIFICATION_ENABLED=true`
+   (+ `TICKET_FEATURE_ENABLED` when monetization launches) → restart.
+3. Watch: activation funnel (verification-stall cohort), pending_review
+   backlog, `/admin/analytics/audience` registrationTracks split.
+Rollback = flip flags back; columns stay.
+
 ## Decision points (recommendations inline — confirm before Phase 2)
 
 - **D1. Legacy users.** Recommend **grandfather**: existing active users

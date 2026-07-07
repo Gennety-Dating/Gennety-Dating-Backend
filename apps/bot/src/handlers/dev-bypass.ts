@@ -21,6 +21,10 @@ export interface BypassFields {
   email: string;
   universityDomain: string;
   isEmailVerified: true;
+  /// Registration v2: a synthesised verified email IS the student track —
+  /// keeps bypassed dev accounts consistent with the real verify sites, so
+  /// the fork Mini App and track-aware gates treat them like real students.
+  registrationTrack: "student";
 }
 
 /**
@@ -39,5 +43,6 @@ export function computeDevBypassFields(
     email: `dev+${telegramId.toString()}@${DEV_BYPASS_EMAIL_DOMAIN}`,
     universityDomain: DEV_BYPASS_EMAIL_DOMAIN,
     isEmailVerified: true,
+    registrationTrack: "student",
   };
 }
