@@ -103,7 +103,11 @@ app.get("/v1/maptiles/:z/:x/:y", async (req, res) => {
     return;
   }
   const sub = TILE_SUBDOMAINS[(x + y) % TILE_SUBDOMAINS.length];
-  const upstream = `https://${sub}.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png`;
+  // `dark_nolabels` = the dark basemap without any place labels. CARTO bakes
+  // labels into the raster in the LOCAL language (Ukrainian for Kyiv), and there
+  // is no English raster variant, so we drop labels rather than show the wrong
+  // language. (English street labels would need a keyed provider / vector tiles.)
+  const upstream = `https://${sub}.basemaps.cartocdn.com/dark_nolabels/${z}/${x}/${y}.png`;
   try {
     const upstreamRes = await fetch(upstream, { signal: AbortSignal.timeout(8000) });
     if (!upstreamRes.ok) {

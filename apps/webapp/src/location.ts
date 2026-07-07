@@ -116,51 +116,9 @@ if (!matchId) {
   initSearch();
   initShareCurrentLocation();
   initKeyboardPin();
-  if (params.get("debug") === "1") initMapDebug();
   confirmEl?.addEventListener("click", () => {
     void handleConfirm();
   });
-}
-
-/**
- * On-screen diagnostic (only when the URL has `?debug=1`). Surfaces what the
- * device actually sees — which build is running, whether Leaflet loaded, the map
- * container size, and whether a proxied tile fetch/render succeeds — so a single
- * screenshot from the phone pins down a "blank map" we can't reproduce on desktop.
- */
-function initMapDebug(): void {
-  if (typeof document.createElement !== "function" || !document.body) return;
-  const box = document.createElement("div");
-  box.style.cssText =
-    "position:fixed;top:64px;left:8px;right:8px;z-index:99999;background:rgba(0,0,0,.86);" +
-    "color:#7CFC00;font:11px/1.45 ui-monospace,Menlo,monospace;padding:8px 10px;" +
-    "border-radius:10px;white-space:pre-wrap;word-break:break-all;pointer-events:none;";
-  document.body.appendChild(box);
-  const lines: string[] = [];
-  const put = (s: string): void => {
-    lines.push(s);
-    box.textContent = lines.join("\n");
-  };
-  put("BUILD: maptiles-proxy");
-  put("L=" + typeof window.L);
-  const mapEl = document.getElementById("map");
-  put("#map=" + (mapEl ? `${mapEl.offsetWidth}x${mapEl.offsetHeight}` : "null"));
-  put("apiBase=" + JSON.stringify(apiBase));
-  const testUrl = `${apiBase}/v1/maptiles/14/9580/5525`;
-  put("GET " + testUrl);
-  fetch(testUrl)
-    .then((r) => put(`tile ${r.status} ${r.headers.get("content-type") ?? "?"}`))
-    .catch((e) => put("tile ERR " + (e instanceof Error ? e.message : String(e))));
-  const check = (): void => {
-    const tiles = document.querySelectorAll<HTMLImageElement>("img.leaflet-tile");
-    let rendered = 0;
-    tiles.forEach((t) => {
-      if (t.complete && t.naturalWidth > 0) rendered++;
-    });
-    put(`leaflet tiles=${tiles.length} rendered=${rendered}`);
-  };
-  setTimeout(check, 1500);
-  setTimeout(check, 4000);
 }
 
 /**
