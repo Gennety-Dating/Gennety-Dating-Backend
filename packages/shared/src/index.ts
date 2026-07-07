@@ -55,6 +55,7 @@ export type {
   ProfileVideoMedia,
 } from "./profile-media.js";
 export { isUniversityEmail, generateOtp } from "./email.js";
+export { isE164, normalizePhoneE164 } from "./phone.js";
 export {
   MAGIC_CONTEXT_PROMPT,
   magicContextPrompt,

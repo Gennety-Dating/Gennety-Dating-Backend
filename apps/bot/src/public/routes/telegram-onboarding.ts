@@ -47,6 +47,9 @@ type MiniUser = {
   termsAccepted: boolean;
   researchOptIn: boolean;
   isEmailVerified: boolean;
+  phone: string | null;
+  phoneVerifiedAt: Date | null;
+  registrationTrack: string | null;
   messageHistory: unknown[];
   profile: {
     homeCity: string | null;
@@ -478,6 +481,9 @@ const miniUserSelect = {
   termsAccepted: true,
   researchOptIn: true,
   isEmailVerified: true,
+  phone: true,
+  phoneVerifiedAt: true,
+  registrationTrack: true,
   messageHistory: true,
   profile: {
     select: {
@@ -557,6 +563,9 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
       email: user.email,
       isEmailVerified: user.isEmailVerified,
       emailVerification,
+      isPhoneVerified: user.phoneVerifiedAt != null,
+      phone: user.phone,
+      registrationTrack: user.registrationTrack,
       homeLocation: user.profile?.homeCityKey
         ? {
             homeCity: user.profile.homeCity,
@@ -588,6 +597,11 @@ interface TelegramOnboardingStateDto {
     email: string | null;
     isEmailVerified: boolean;
     emailVerification: SerializedOtpChallenge;
+    // Registration v2 (general track). Inert until the fork ships: legacy
+    // clients ignore the extra fields.
+    isPhoneVerified: boolean;
+    phone: string | null;
+    registrationTrack: string | null;
     homeLocation: {
       homeCity: string | null;
       homeCountryCode: string | null;

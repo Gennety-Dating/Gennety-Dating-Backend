@@ -5,6 +5,8 @@ import { prisma } from "@gennety/db";
 import { handleConsent } from "./onboarding/consent.js";
 import { handleLanguageSelection } from "./onboarding/language.js";
 import { handleConversational } from "./onboarding/conversational.js";
+import { handlePhoneContact } from "./onboarding/phone.js";
+import { env } from "../config.js";
 import {
   VERIFY_CHECK_CALLBACK,
   VERIFY_SKIP_CALLBACK,
@@ -74,6 +76,20 @@ router.use(async (ctx, next) => {
   }
 
   await next();
+});
+
+// Registration v2 (general track): phone verification via Telegram contact
+// share. A trusted `message.contact` (the user's OWN number) is intercepted
+// here, before the step switch, so it isn't treated as onboarding text input.
+// The handler does not call next(), so it stops propagation. With
+// PHONE_AUTH_ENABLED off the update falls through untouched (pre-fork
+// behavior). See handlers/onboarding/phone.ts.
+router.on("message:contact", async (ctx, next) => {
+  if (!env.PHONE_AUTH_ENABLED) {
+    await next();
+    return;
+  }
+  await handlePhoneContact(ctx);
 });
 
 router.on(["message", "callback_query:data"], async (ctx) => {

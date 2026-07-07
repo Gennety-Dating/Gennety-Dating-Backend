@@ -138,6 +138,18 @@ model User {
   /// user arrives with their email already verified (e.g. mobile-first
   /// user later opens the Telegram bot, or restarts onboarding mid-flow).
   isEmailVerified  Boolean           @default(false) @map("is_email_verified")
+  /// Registration v2 (general track): phone captured via the Telegram Mini App
+  /// one-tap `requestContact`. The bot receives a trusted `message.contact`
+  /// (contact.user_id == from.id); client JS never sees the number. E.164.
+  /// `@unique` = one account per number (curbs duplicate accounts).
+  phone            String?           @unique
+  /// Set when a trusted Telegram contact for THIS user is received. Phone
+  /// equivalent of `isEmailVerified`; the general-track contact gate.
+  phoneVerifiedAt  DateTime?         @map("phone_verified_at")
+  /// Registration v2 track chosen at the sign-up fork: "student" (university
+  /// email OTP) or "general" (phone). Null for users registered before the
+  /// fork existed (legacy = student in practice: they all verified email).
+  registrationTrack String?          @map("registration_track")
   messageHistory   Json[]            @default([]) @map("message_history")
   lastMessageAt    DateTime?         @map("last_message_at")
   /// Last time the "your match is coming tomorrow" pre-batch teaser was sent.

@@ -37,6 +37,11 @@ export const env = {
   /// production can keep the legacy LLM-driven flow during staged rollout.
   ONBOARDING_FACT_COLLECTOR_ENABLED:
     process.env.ONBOARDING_FACT_COLLECTOR_ENABLED === "true",
+  /// Registration v2: the sign-up fork + phone (Telegram one-tap) rail for the
+  /// general track. Off (default) → the university-email gate is the only
+  /// registration path and the bot ignores `message.contact` shares, exactly
+  /// as before. Ship dark; flip at launch together with the fork Mini App.
+  PHONE_AUTH_ENABLED: process.env.PHONE_AUTH_ENABLED === "true",
   /// Custom emoji id that leads each rich "thinking" shimmer block — the
   /// animated Telegram AI emoji recommended for `RichBlockThinking`
   /// (https://t.me/addemoji/AIActions). Rendered as `<tg-emoji>` inside
