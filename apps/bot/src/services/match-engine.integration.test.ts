@@ -46,6 +46,9 @@ async function seedFullUser(opts: {
     | "pending_review"
     | "verified"
     | "rejected";
+  // Registration v2 contact rails (default: email-verified legacy user).
+  isEmailVerified?: boolean;
+  phoneVerifiedAt?: Date | null;
 }) {
   const user = await seedUser({
     gender: opts.gender ?? "male",
@@ -57,6 +60,12 @@ async function seedFullUser(opts: {
     // `verificationStatus: undefined` is a type error. Only forward when set.
     ...(opts.verificationStatus !== undefined
       ? { verificationStatus: opts.verificationStatus }
+      : {}),
+    ...(opts.isEmailVerified !== undefined
+      ? { isEmailVerified: opts.isEmailVerified }
+      : {}),
+    ...(opts.phoneVerifiedAt !== undefined
+      ? { phoneVerifiedAt: opts.phoneVerifiedAt }
       : {}),
   });
 
@@ -154,6 +163,57 @@ describe("match-engine SQL (integration)", () => {
 
     expect(rows.length).toBe(1);
     expect(rows[0]!.userId).toBe(candidate.id);
+  });
+
+  it("admits a phone-only (general track) candidate — union contact rail", async () => {
+    const seeker = await seedFullUser({
+      gender: "male",
+      preference: "women",
+      embeddingVal: 0.5,
+    });
+    const phoneOnly = await seedFullUser({
+      gender: "female",
+      preference: "men",
+      isEmailVerified: false,
+      phoneVerifiedAt: new Date(),
+      embeddingVal: 0.6,
+    });
+
+    const rows = await queryCandidates(
+      seeker.id,
+      fakeEmbedding(0.5),
+      "ua:kyiv",
+      "female",
+      new Date(Date.now() - MATCH_COOLDOWN_MS),
+    );
+
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.userId).toBe(phoneOnly.id);
+  });
+
+  it("excludes a candidate with neither verified rail (no email, no phone)", async () => {
+    const seeker = await seedFullUser({
+      gender: "male",
+      preference: "women",
+      embeddingVal: 0.5,
+    });
+    await seedFullUser({
+      gender: "female",
+      preference: "men",
+      isEmailVerified: false,
+      phoneVerifiedAt: null,
+      embeddingVal: 0.6,
+    });
+
+    const rows = await queryCandidates(
+      seeker.id,
+      fakeEmbedding(0.5),
+      "ua:kyiv",
+      "female",
+      new Date(Date.now() - MATCH_COOLDOWN_MS),
+    );
+
+    expect(rows.length).toBe(0);
   });
 
   it("allows candidates from a different university in the same dating city", async () => {

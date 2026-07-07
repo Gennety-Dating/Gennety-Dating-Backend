@@ -72,6 +72,11 @@ interface SeedUserOpts {
     | "pending_review"
     | "verified"
     | "rejected";
+  /// Registration v2 contact rails. Email defaults to verified (the pre-fork
+  /// invariant: every completed user had a verified university email); pass
+  /// `false` + `phoneVerifiedAt` to seed a general-track (phone-only) user.
+  isEmailVerified?: boolean;
+  phoneVerifiedAt?: Date | null;
 }
 
 export async function seedUser(opts: SeedUserOpts = {}) {
@@ -88,6 +93,8 @@ export async function seedUser(opts: SeedUserOpts = {}) {
       status: opts.status ?? "active",
       onboardingStep: opts.onboardingStep ?? "completed",
       verificationStatus: opts.verificationStatus ?? "unverified",
+      isEmailVerified: opts.isEmailVerified ?? true,
+      phoneVerifiedAt: opts.phoneVerifiedAt ?? null,
       language: "en",
     },
   });

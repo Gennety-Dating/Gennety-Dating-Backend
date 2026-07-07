@@ -19,8 +19,11 @@ import { prisma } from "@gennety/db";
  *   2. Only users with an embedding and `preference`/`gender` set are eligible.
  *   3. Mutual gender compatibility: a's preference must include b's gender
  *      AND b's preference must include a's gender.
- *   4. Same dating city (`Profile.homeCityKey`) while keeping verified
- *      university/corporate email as a trust gate.
+ *   4. Same dating city (`Profile.homeCityKey`) while keeping a verified
+ *      contact rail as the trust gate — a verified university/corporate
+ *      email OR a verified phone (Registration v2 general track). Legacy
+ *      users are all email-verified, so the union is a strict superset of
+ *      the old email-only rule.
  *   5. Lifetime ban: exclude any pair that appears in ANY historical Match
  *      row — regardless of terminal status (proposed, negotiating, scheduled,
  *      accepted, cancelled, completed, expired). A user never sees the same
@@ -388,7 +391,7 @@ export function buildCandidateSql(): string {
       AND u.status = 'active'
       AND u.onboarding_step = 'completed'
       AND u.verification_status NOT IN ('rejected', 'pending_review')
-      AND u.university_domain IS NOT NULL
+      AND (u.is_email_verified OR u.phone_verified_at IS NOT NULL)
       AND p.home_city_key = $3
       AND p.latitude IS NOT NULL
       AND p.longitude IS NOT NULL
@@ -878,6 +881,8 @@ export async function findCandidatesFor(
       major: true,
       preference: true,
       universityDomain: true,
+      isEmailVerified: true,
+      phoneVerifiedAt: true,
       status: true,
       onboardingStep: true,
       profile: {
@@ -902,7 +907,8 @@ export async function findCandidatesFor(
     seeker.onboardingStep !== "completed" ||
     !seeker.gender ||
     !seeker.preference ||
-    !seeker.universityDomain ||
+    // Registration v2 union contact rail: verified email OR verified phone.
+    (!seeker.isEmailVerified && !seeker.phoneVerifiedAt) ||
     !seeker.profile?.homeCityKey ||
     seeker.profile.latitude === null ||
     seeker.profile.longitude === null
@@ -1249,7 +1255,8 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
       verificationStatus: { notIn: ["rejected", "pending_review"] },
       gender: { not: null },
       preference: { not: null },
-      universityDomain: { not: null },
+      // Registration v2 union contact rail: verified email OR verified phone.
+      OR: [{ isEmailVerified: true }, { phoneVerifiedAt: { not: null } }],
       profile: {
         lastMatchedAt: { lt: cutoff },
         homeCityKey: { not: null },
@@ -1290,7 +1297,8 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
       verificationStatus: { notIn: ["rejected", "pending_review"] },
       gender: { not: null },
       preference: { not: null },
-      universityDomain: { not: null },
+      // Registration v2 union contact rail: verified email OR verified phone.
+      OR: [{ isEmailVerified: true }, { phoneVerifiedAt: { not: null } }],
       profile: {
         lastMatchedAt: null,
         homeCityKey: { not: null },

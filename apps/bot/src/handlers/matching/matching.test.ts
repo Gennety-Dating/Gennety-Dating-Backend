@@ -193,8 +193,9 @@ describe("match-engine: pure helpers", () => {
     expect(sql).toMatch(/\$2::vector/);
     expect(sql).toMatch(/\$3/);
     expect(sql).toMatch(/\$7/);
-    // Must enforce the citywide local rule while keeping email domain as a trust gate.
-    expect(sql).toMatch(/u\.university_domain IS NOT NULL/);
+    // Must enforce the citywide local rule while keeping the Registration v2
+    // union contact rail (verified email OR verified phone) as the trust gate.
+    expect(sql).toMatch(/u\.is_email_verified OR u\.phone_verified_at IS NOT NULL/);
     expect(sql).toMatch(/p\.home_city_key\s*=\s*\$3/);
     // Must enforce the lifetime ban: any historical Match between the two
     // users excludes the candidate, regardless of terminal status.
