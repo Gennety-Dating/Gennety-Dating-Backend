@@ -1245,9 +1245,11 @@ button {
   display: grid;
   place-items: center;
   color: #f4f4f5;
+  /* No backdrop-filter here: the button sits over the solid-black dock (nothing
+     to blur), and backdrop-filter + border-radius renders a hairline seam on
+     WebKit/iOS (dark edge on top, light edge on the bottom). Dropping it keeps
+     the exact look over the dark dock and removes the seam. */
   background: radial-gradient(140% 125% at 50% 0%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.05) 72%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
-  backdrop-filter: blur(16px) saturate(140%);
   box-shadow:
     inset 0 1px 2px rgba(255, 255, 255, 0.28),
     0 6px 18px rgba(0, 0, 0, 0.3);
