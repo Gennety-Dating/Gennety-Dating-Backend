@@ -350,14 +350,19 @@ wrappers before a rejected asset can be committed to `profiles`.
 Append-only audit of every ticket-wallet movement (`userId`, `delta`, `reason`
 ∈ `photo_bonus`/`video_bonus`/`verification_bonus`/`student_bonus`/`welcome_gift`/
 `store_purchase`/`spend_match`/`refund`, optional
-`matchId`/`amountCents`/`bundleSize`, `createdAt`; `onDelete: Cascade` from
-`users`). The running sum of `delta` equals `User.ticketBalance`, which is
-materialized for fast reads; both are written in the same transaction by
-`services/ticket-wallet.ts`. Photo/video onboarding bonuses are idempotent via
-`Profile.photoBonusTicketAt` / `videoBonusTicketAt`; the verification bonus,
-the first-pitch welcome gift, and the Registration v2 student bonus (+2 at
-university-email verification) use a serializable ledger claim on
-`verification_bonus` / `welcome_gift` / `student_bonus`. Indexed `(userId, createdAt)`.
+`matchId`/`amountCents`/`bundleSize`/`externalPaymentId`, `createdAt`;
+`onDelete: Cascade` from `users`). The running sum of `delta` equals
+`User.ticketBalance`, which is materialized for fast reads; both are written in
+the same transaction by `services/ticket-wallet.ts`. Photo/video onboarding
+bonuses are idempotent via `Profile.photoBonusTicketAt` / `videoBonusTicketAt`;
+the verification bonus, the first-pitch welcome gift, and the Registration v2
+student bonus (+2 at university-email verification) use a serializable ledger
+claim on `verification_bonus` / `welcome_gift` / `student_bonus`.
+**`externalPaymentId`** is the unique provider charge id (Telegram Stars
+`telegram_payment_charge_id`) set on a paid **store** top-up — its unique
+constraint makes a redelivered `successful_payment` roll back the duplicate
+credit (exactly-once); the date gate needs no such column because it settles via
+an atomic slot CAS. Indexed `(userId, createdAt)`.
 Inert unless `TICKET_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b.
 
 ### `profiler_answers`
@@ -468,13 +473,15 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | POST | `/v1/matches/:id/vibe-location` | Submit concierge vibe + location pin |
 | POST | `/v1/matches/:id/safety-ack` | Acknowledge T-1.5 h safety brief |
 | POST | `/v1/matches/:id/report` | File post-match report (LLM-triaged) |
-| GET  | `/v1/matches/:id/ticket/state` | Date Ticket Mini App screen state (status/price/gender/partner-paid/expiry, plus `selfDiscountPct`/`selfPriceCents` for the famine single-ticket discount on the `self` scope). **Telegram `initData` HMAC auth** (not JWT) — mounted before the JWT `matches` router. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
-| POST | `/v1/matches/:id/ticket/intent` | Create a (mock) payment intent for a ticket purchase (`scope: self\|both\|partner`; `both`/`partner` male-only). `initData` HMAC auth. |
-| POST | `/v1/matches/:id/ticket/confirm` | Confirm "payment" → mark paid (atomic/idempotent); unlocks scheduling when both paid. `initData` HMAC auth. |
+| GET  | `/v1/matches/:id/ticket/state` | Date Ticket Mini App screen state (status/price/gender/partner-paid/expiry, plus `selfDiscountPct`/`selfPriceCents` for the famine single-ticket discount on the `self` scope, plus `starsEnabled` + per-scope `stars` when `TICKET_STARS_ENABLED`). **Telegram `initData` HMAC auth** (not JWT) — mounted before the JWT `matches` router. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
+| POST | `/v1/matches/:id/ticket/stars-invoice` | Mint a Telegram Stars (XTR) `createInvoiceLink` for the date gate (`scope: self\|both\|partner`; payload `gate:<id>:<scope>`), opened via `WebApp.openInvoice`; settled by the `successful_payment` handler. 404 when `TICKET_STARS_ENABLED` is off. `initData` HMAC auth. |
+| POST | `/v1/matches/:id/ticket/intent` | Create a (mock) payment intent for a ticket purchase (`scope: self\|both\|partner`; `both`/`partner` male-only). **404 (PAY-1) while `TICKET_STARS_ENABLED` is on** — Stars is the sole purchase rail. `initData` HMAC auth. |
+| POST | `/v1/matches/:id/ticket/confirm` | Confirm "payment" → mark paid (atomic/idempotent); unlocks scheduling when both paid. **404 (PAY-1) while `TICKET_STARS_ENABLED` is on.** `initData` HMAC auth. |
 | POST | `/v1/matches/:id/ticket/use` | Spend ticket(s) from `User.ticketBalance` to settle the gate (`scope: self\|both\|partner`) instead of paying — atomic, guarded; 409 on insufficient balance. `initData` HMAC auth. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
-| GET  | `/v1/tickets/wallet` | Ticket store Mini App — current balance + per-ticket price + active famine discount (`discountPct`/`discountExpiresAt`, applies to the "1 ticket" bundle). `initData` HMAC auth; feature-flagged (`TICKET_FEATURE_ENABLED`, else 404). |
-| POST | `/v1/tickets/store/intent` | Create a (mock) bundle payment intent (`count: 1\|3\|6`). `initData` HMAC auth. |
-| POST | `/v1/tickets/store/confirm` | Confirm bundle "payment" → credit `ticketBalance` (+`TicketLedger`). `initData` HMAC auth. |
+| GET  | `/v1/tickets/wallet` | Ticket store Mini App — current balance + per-ticket price + active famine discount (`discountPct`/`discountExpiresAt`, applies to the "1 ticket" bundle), plus `starsEnabled` + `bundleStars` when `TICKET_STARS_ENABLED`. `initData` HMAC auth; feature-flagged (`TICKET_FEATURE_ENABLED`, else 404). |
+| POST | `/v1/tickets/store/stars-invoice` | Mint a Telegram Stars (XTR) `createInvoiceLink` for a store bundle (`count: 1\|3\|6`; payload `store:<count>`), opened via `WebApp.openInvoice`; wallet credited by the `successful_payment` handler (exactly-once via `externalPaymentId`). 404 when `TICKET_STARS_ENABLED` is off. `initData` HMAC auth. |
+| POST | `/v1/tickets/store/intent` | Create a (mock) bundle payment intent (`count: 1\|3\|6`). **404 (PAY-1) while `TICKET_STARS_ENABLED` is on.** `initData` HMAC auth. |
+| POST | `/v1/tickets/store/confirm` | Confirm bundle "payment" → credit `ticketBalance` (+`TicketLedger`). **404 (PAY-1) while `TICKET_STARS_ENABLED` is on.** `initData` HMAC auth. |
 | GET  | `/v1/countdown` | Status banner / next-batch countdown |
 | GET  | `/v1/calendar/state` | Calendar Mini App snapshot — slot allowlist, both sides' picks, agreed time (Telegram `initData` HMAC auth; polled by the Mini App for live peer visibility) |
 | POST | `/v1/calendar/pick` | Calendar Mini App availability submission — accepts `pickedIsos: string[]` (legacy single `pickedIso` still tolerated). Response carries `agreedTime` (set on single-overlap auto-lock), `overlapCandidates: string[]` (set when intersection > 1, Mini App shows confirm card), `mySlots`, `peerSlots`, `bothPicked`. Telegram `initData` HMAC auth. |

@@ -483,8 +483,28 @@ Required/high-impact env keys:
 - Date Ticket (feature-flagged monetization): `TICKET_FEATURE_ENABLED`
   (default `false` — leave off until launch), `TICKET_PAYMENT_MODE`
   (`mock` default / `stripe`), `TICKET_PRICE_CENTS` (default `699`),
-  `TICKET_PAYMENT_WINDOW_HOURS` (default `24`). Going live with real
-  payments additionally needs `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`,
+  `TICKET_PAYMENT_WINDOW_HOURS` (default `24`).
+  - **Real payments = Telegram Stars (XTR), the production rail.**
+    `TICKET_STARS_ENABLED` (default `false`) makes the date gate **and** the
+    store pay natively in Telegram Stars via `WebApp.openInvoice` +
+    `pre_checkout_query` + `successful_payment` (`handlers/payments.ts`). Needs
+    **no** merchant account / provider token (empty provider token +
+    `currency: "XTR"`); Stars→TON withdrawal is a Telegram-side setting.
+    `TICKET_BUNDLE_STARS` (default `1:350,3:830,6:1350`, `<count>:<stars>` pairs)
+    sets the per-bundle Star price; the gate derives its per-scope price from the
+    1-ticket entry (self/partner 1×, both 2×). **Requires `db:push` of the
+    additive unique `ticket_ledger.external_payment_id` column first** (the
+    Telegram charge id — exactly-once store credit; non-destructive). When Stars
+    is on, the mock `/{ticket,tickets/store}/{intent,confirm}` routes 404 (PAY-1)
+    so Stars is the sole purchase rail; the free wallet "Use a ticket" path is
+    unaffected. Redeploy the Mini App bundle (`ticket.html` + `tickets.html`) so
+    the ⭐-priced `openInvoice` buttons ship. Rollback: flip
+    `TICKET_STARS_ENABLED` back to `false` — the mock returns exactly as before;
+    the additive column may stay. Star prices are env-tunable at launch without
+    a code change. The famine single-ticket discount is USD-only and is inert on
+    Stars purchases.
+  - Going live with **Stripe** instead (alternate path) additionally needs
+    `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`,
   `STRIPE_WEBHOOK_SECRET` + `TICKET_PAYMENT_MODE=stripe` (see the
   `// TODO: Stripe Production Mode` branches in
   `services/ticket-payment.ts`). Requires `db:push` of the new `Match`

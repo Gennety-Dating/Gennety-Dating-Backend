@@ -852,12 +852,29 @@ When enabled, mutual accept creates one live **post-accept status/CTA** per
 Telegram side (tracked in `Match.calendarMessageIdA/B`): accepted/waiting →
 premium **Date Ticket** card → Calendar. The ticket card carries a `web_app`
 button opening the Ticket Mini App (`apps/webapp/ticket.html`, React +
-pure-CSS 3D). Each ticket is **$6.99**.
-Payment is **mocked** in v1 (`TICKET_PAYMENT_MODE=mock`) — a fully simulated
-Stripe-style flow that updates the DB but moves no money; `mock`→`stripe` is the
-single production switch (`services/ticket-payment.ts`). Mock payment intents
-are server-issued, expire after 15 minutes, are bound to the exact payer,
-match/bundle, scope, and amount, and can be consumed only once.
+pure-CSS 3D). Each ticket is **$6.99** (mock) or **350 ⭐** (Telegram Stars).
+**Payment (production): Telegram Stars (XTR).** With `TICKET_STARS_ENABLED` the
+date gate and the store both pay natively in Telegram Stars — the Mini App opens
+a server-issued invoice link (`createInvoiceLink`, empty provider token,
+`currency: "XTR"`; no merchant account needed) via `WebApp.openInvoice`, and the
+bot's `successful_payment` handler (`handlers/payments.ts`) is the trust boundary
+that settles: `store:<count>` credits the wallet (exactly-once via the unique
+`TicketLedger.externalPaymentId` = `telegram_payment_charge_id`), and
+`gate:<matchId>:<scope>` settles the ticket slot(s) via `applyStarsTicketPayment`
+(the atomic slot CAS makes redelivery a no-op, so it needs no charge-id column).
+`pre_checkout_query` re-validates payload + Star amount within Telegram's 10 s
+window. The famine single-ticket discount is **USD-only** and never applies to a
+Stars purchase. Star prices are env-tunable (`TICKET_BUNDLE_STARS`, default
+`1:350,3:830,6:1350`; the gate derives its per-scope price from the 1-ticket
+entry — self/partner 1×, both 2×).
+**Payment (fallback): mock.** When `TICKET_STARS_ENABLED` is off, the legacy
+mock (`TICKET_PAYMENT_MODE=mock`) fully simulates a Stripe-style flow that
+updates the DB but moves no money; `mock`→`stripe` remains the alternate
+production switch (`services/ticket-payment.ts`). Mock payment intents are
+server-issued, expire after 15 minutes, are bound to the exact payer,
+match/bundle, scope, and amount, and can be consumed only once. While Stars is
+on, the mock `intent`/`confirm` routes 404 (PAY-1 guard) so Stars is the sole
+purchase rail; the free wallet "Use a ticket" path is unaffected.
 
 - **Pricing.** Male users get "Pay for us both — $13.98" (settles BOTH tickets,
   sets `paidForPartnerBy*`) plus "Pay only mine — $6.99". Female users get a

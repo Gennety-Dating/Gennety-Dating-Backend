@@ -1,6 +1,9 @@
 # Telegram Stars Monetization — Port from Beta to Prod
 
-> Status: **IN PROGRESS (2026-07-07).** Real Telegram Stars (XTR) replace the
+> Status: **IMPLEMENTED (2026-07-07)** — Phases A–E done; all tests green
+> (bot 1517 / webapp 108 / shared 146), full typecheck green. Behind
+> `TICKET_STARS_ENABLED` (dark by default). Remaining: Phase F (dev-bot live
+> Stars test) + staged flag flip at launch. Real Telegram Stars (XTR) replace the
 > mock USD/Stripe stub as the production payment rail. This is a reverse port
 > (beta → prod): Stars were authored in the beta clone and are live there; prod
 > diverged in the ticket zone (student_bonus, goodwill-cover read-receipt), so
