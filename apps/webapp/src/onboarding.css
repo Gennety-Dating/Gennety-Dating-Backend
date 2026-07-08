@@ -1688,10 +1688,11 @@ button {
 .gate-card h1 {
   margin: 0 0 1rem;
   color: #fff;
-  font-size: 30px;
-  line-height: 36px;
+  font-size: clamp(24px, 7vw, 30px);
+  line-height: 1.2;
   font-weight: 700;
   letter-spacing: 0;
+  overflow-wrap: break-word;
 }
 
 .gate-card p {
@@ -1809,42 +1810,33 @@ button {
   transform: scale(0.98);
 }
 
-/* Recommended (student) path — a lakonik lavender-glass emphasis that pulls
-   the eye toward the university-email option, with a small eyebrow badge. */
+/* Recommended (student) path — borderless lavender glow that quietly lifts the
+   university-email option off the surface, with a small uppercase eyebrow. */
 .choice-badge {
-  display: inline-flex;
-  align-items: center;
+  display: inline-block;
   margin-bottom: 6px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  border: 1px solid rgba(182, 154, 229, 0.4);
-  background: rgba(182, 154, 229, 0.2);
-  color: #dccbf5;
-  font-size: 10.5px;
-  font-weight: 700;
+  color: #b69ae5;
+  font-size: 10px;
+  font-weight: 600;
   line-height: 1;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
 .choice-button.is-priority {
-  border-color: rgba(182, 154, 229, 0.45);
-  background:
-    radial-gradient(130% 130% at 50% -20%, rgba(182, 154, 229, 0.26), rgba(182, 154, 229, 0) 62%),
-    linear-gradient(180deg, rgba(182, 154, 229, 0.15), rgba(182, 154, 229, 0.06));
+  background: linear-gradient(180deg, rgba(182, 154, 229, 0.13), rgba(182, 154, 229, 0.05));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 8px 26px rgba(182, 154, 229, 0.2),
-    0 0 22px rgba(182, 154, 229, 0.16);
+    0 10px 32px -12px rgba(182, 154, 229, 0.6),
+    0 0 16px -4px rgba(182, 154, 229, 0.3);
 }
 
 .choice-button.is-priority:hover,
 .choice-button.is-priority.is-selected {
-  border-color: rgba(182, 154, 229, 0.65);
-  background:
-    radial-gradient(130% 130% at 50% -20%, rgba(182, 154, 229, 0.36), rgba(182, 154, 229, 0) 62%),
-    linear-gradient(180deg, rgba(182, 154, 229, 0.24), rgba(182, 154, 229, 0.1));
+  background: linear-gradient(180deg, rgba(182, 154, 229, 0.2), rgba(182, 154, 229, 0.08));
+  box-shadow:
+    0 12px 38px -12px rgba(182, 154, 229, 0.75),
+    0 0 20px -4px rgba(182, 154, 229, 0.42);
 }
 
 .check-row {
