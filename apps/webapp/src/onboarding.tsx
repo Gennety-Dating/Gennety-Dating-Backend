@@ -1309,9 +1309,9 @@ function PathGate(props: {
     value: RegistrationTrack;
     label: string;
     sub: string;
-    badge?: string;
+    recommended?: boolean;
   }> = [
-    { value: "student", label: s.pathStudentTitle, sub: s.pathStudentSub, badge: s.pathStudentBadge },
+    { value: "student", label: s.pathStudentTitle, sub: s.pathStudentSub, recommended: true },
     { value: "general", label: s.pathGeneralTitle, sub: s.pathGeneralSub },
   ];
 
@@ -1340,12 +1340,11 @@ function PathGate(props: {
         {options.map((option) => (
           <button
             key={option.value}
-            className={`choice-button ${option.badge ? "is-priority" : ""} ${props.selected === option.value ? "is-selected" : ""}`}
+            className={`choice-button ${option.recommended ? "is-priority" : ""} ${props.selected === option.value ? "is-selected" : ""}`}
             disabled={busy !== null || !app?.initData}
             onClick={() => void choose(option.value)}
           >
             <span>
-              {option.badge ? <span className="choice-badge">{option.badge}</span> : null}
               <strong>{option.label}</strong>
               <small>{busy === option.value ? s.saving : option.sub}</small>
             </span>

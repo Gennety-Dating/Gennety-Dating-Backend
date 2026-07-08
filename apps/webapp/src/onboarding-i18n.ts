@@ -33,7 +33,6 @@ export interface OnboardingStrings {
   pathLead: string;
   pathStudentTitle: string;
   pathStudentSub: string;
-  pathStudentBadge: string;
   pathGeneralTitle: string;
   pathGeneralSub: string;
   phoneTitle: string;
@@ -173,7 +172,6 @@ const en: OnboardingStrings = {
   pathLead: "Pick the path that fits you — students get perks.",
   pathStudentTitle: "With university email",
   pathStudentSub: "For students — unlocks perks.",
-  pathStudentBadge: "Recommended",
   pathGeneralTitle: "With phone number",
   pathGeneralSub: "One tap via Telegram. No SMS code.",
   phoneTitle: "Your phone number",
@@ -332,7 +330,6 @@ const ru: OnboardingStrings = {
   pathLead: "Выбери свой способ — студентам достаются бонусы.",
   pathStudentTitle: "По университетской почте",
   pathStudentSub: "Для студентов — открывает бонусы.",
-  pathStudentBadge: "Recommended",
   pathGeneralTitle: "По номеру телефона",
   pathGeneralSub: "В один тап через Telegram. Без SMS-кода.",
   phoneTitle: "Твой номер телефона",
@@ -490,7 +487,6 @@ const uk: OnboardingStrings = {
   pathLead: "Обери свій спосіб — студентам дістаються бонуси.",
   pathStudentTitle: "За університетською поштою",
   pathStudentSub: "Для студентів — відкриває бонуси.",
-  pathStudentBadge: "Recommended",
   pathGeneralTitle: "За номером телефону",
   pathGeneralSub: "В один тап через Telegram. Без SMS-коду.",
   phoneTitle: "Твій номер телефону",
@@ -649,7 +645,6 @@ const de: OnboardingStrings = {
   pathLead: "Wähl deinen Weg — Studierende bekommen Extras.",
   pathStudentTitle: "Mit Universitäts-E-Mail",
   pathStudentSub: "Für Studierende — schaltet Extras frei.",
-  pathStudentBadge: "Recommended",
   pathGeneralTitle: "Mit Telefonnummer",
   pathGeneralSub: "Ein Tipp über Telegram. Kein SMS-Code.",
   phoneTitle: "Deine Telefonnummer",
@@ -808,7 +803,6 @@ const pl: OnboardingStrings = {
   pathLead: "Wybierz swoją ścieżkę — studenci dostają bonusy.",
   pathStudentTitle: "Przez e-mail uczelniany",
   pathStudentSub: "Dla studentów — odblokowuje bonusy.",
-  pathStudentBadge: "Recommended",
   pathGeneralTitle: "Przez numer telefonu",
   pathGeneralSub: "Jednym dotknięciem przez Telegram. Bez kodu SMS.",
   phoneTitle: "Twój numer telefonu",

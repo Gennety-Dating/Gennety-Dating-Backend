@@ -1810,28 +1810,8 @@ button {
 }
 
 /* Recommended (student) path — flat card with an even lavender glow around the
-   whole edge, plus a small badge riding the top edge of the button. */
-.choice-badge {
-  position: absolute;
-  top: -9px;
-  right: 16px;
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: #b69ae5;
-  color: #150f1f;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  box-shadow: 0 3px 10px rgba(182, 154, 229, 0.4);
-}
-
+   whole edge to nudge the university-email option. */
 .choice-button.is-priority {
-  position: relative;
   background: linear-gradient(180deg, rgba(182, 154, 229, 0.12), rgba(182, 154, 229, 0.05));
   box-shadow:
     0 0 24px rgba(182, 154, 229, 0.4),
