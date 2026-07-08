@@ -293,6 +293,12 @@ model TicketLedger {
   amountCents Int?     @map("amount_cents")
   /// Bundle size for `store_purchase` rows (1 / 3 / 6).
   bundleSize  Int?     @map("bundle_size")
+  /// Unique provider charge id (Telegram Stars `telegram_payment_charge_id`)
+  /// set on a paid `store_purchase` top-up. Its unique constraint makes a
+  /// redelivered `successful_payment` roll back the duplicate credit
+  /// (exactly-once). Null for free bonuses, spends, refunds, and the date gate
+  /// (which settles via an atomic slot CAS, needing no charge-id dedupe).
+  externalPaymentId String? @unique @map("external_payment_id")
   createdAt   DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -1,0 +1,70 @@
+/**
+ * Telegram Stars (XTR) ticket-store helpers.
+ *
+ * Stars top up the Date Ticket wallet: a store bundle (1/3/6 tickets) is sold
+ * via a native Telegram Star invoice. The invoice's `payload` is the only thing
+ * that survives the round-trip into the `pre_checkout_query` and
+ * `successful_payment` updates, so it carries the bundle size. These are pure
+ * encode/decode helpers (no env, no Telegram) so the trust-boundary handlers can
+ * be unit-tested; the Star price per bundle lives in config (env-overridable).
+ */
+
+/** Invoice `payload` prefix that marks a ticket-store Star purchase. */
+export const STORE_INVOICE_PREFIX = "store:";
+
+/** Build the invoice payload for a store bundle of `count` tickets. */
+export function buildStoreInvoicePayload(count: number): string {
+  return `${STORE_INVOICE_PREFIX}${count}`;
+}
+
+/**
+ * Parse a store invoice payload back into the bundle size. Returns null for any
+ * non-store, malformed, or non-positive-integer payload — so an unrelated
+ * invoice (or a tampered payload) never credits tickets.
+ */
+export function parseStoreInvoicePayload(
+  payload: string | null | undefined,
+): number | null {
+  if (!payload || !payload.startsWith(STORE_INVOICE_PREFIX)) return null;
+  const raw = payload.slice(STORE_INVOICE_PREFIX.length);
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/**
+ * Date-gate (§3.5b) Star payment payload. Unlike the store (which credits the
+ * wallet), a gate Star payment settles ticket slot(s) on a specific match, so
+ * the payload carries both the match id and the scope (`self`/`both`/`partner`).
+ * Format: `gate:<matchId>:<scope>`.
+ */
+export const GATE_INVOICE_PREFIX = "gate:";
+
+/** The three gate scopes a Star invoice can settle (mirror of `TicketScope`). */
+export type GateInvoiceScope = "self" | "both" | "partner";
+
+const GATE_PAYLOAD_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Build the invoice payload for a date-gate Star payment. */
+export function buildGateInvoicePayload(matchId: string, scope: GateInvoiceScope): string {
+  return `${GATE_INVOICE_PREFIX}${matchId}:${scope}`;
+}
+
+/**
+ * Parse a date-gate invoice payload back into `{ matchId, scope }`. Returns null
+ * for any non-gate, malformed, bad-UUID, or unknown-scope payload — so a foreign
+ * or tampered invoice never settles a ticket. The match-participant + male-only
+ * checks remain the trust boundary in `applyTicketPayment`.
+ */
+export function parseGateInvoicePayload(
+  payload: string | null | undefined,
+): { matchId: string; scope: GateInvoiceScope } | null {
+  if (!payload || !payload.startsWith(GATE_INVOICE_PREFIX)) return null;
+  const rest = payload.slice(GATE_INVOICE_PREFIX.length);
+  const sep = rest.lastIndexOf(":");
+  if (sep <= 0) return null;
+  const matchId = rest.slice(0, sep);
+  const scope = rest.slice(sep + 1);
+  if (!GATE_PAYLOAD_UUID.test(matchId)) return null;
+  if (scope !== "self" && scope !== "both" && scope !== "partner") return null;
+  return { matchId, scope };
+}

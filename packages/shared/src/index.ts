@@ -57,6 +57,15 @@ export type {
 export { isUniversityEmail, generateOtp } from "./email.js";
 export { isE164, normalizePhoneE164 } from "./phone.js";
 export {
+  STORE_INVOICE_PREFIX,
+  buildStoreInvoicePayload,
+  parseStoreInvoicePayload,
+  GATE_INVOICE_PREFIX,
+  buildGateInvoicePayload,
+  parseGateInvoicePayload,
+  type GateInvoiceScope,
+} from "./stars.js";
+export {
   MAGIC_CONTEXT_PROMPT,
   magicContextPrompt,
   parseLLMDumpPrompt,

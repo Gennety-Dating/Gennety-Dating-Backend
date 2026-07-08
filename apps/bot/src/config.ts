@@ -266,6 +266,22 @@ export const env = {
   /// `TICKET_PRICE_CENTS` above. Inert unless `TICKET_FEATURE_ENABLED`.
   FAMINE_DISCOUNT_PCT: Number(process.env.FAMINE_DISCOUNT_PCT ?? "77"),
   FAMINE_DISCOUNT_TTL_DAYS: Number(process.env.FAMINE_DISCOUNT_TTL_DAYS ?? "30"),
+  /// Telegram Stars (XTR) — the REAL production payment rail for Date Tickets.
+  /// When false (default) the store + date gate keep the mock/stripe flow; when
+  /// true, "My Tickets" shows native in-chat Star invoice buttons (1/3/6
+  /// bundles) that credit the wallet on `successful_payment`, and the §3.5b date
+  /// gate pays natively via `WebApp.openInvoice`. Stars is the primary rail —
+  /// the mock survives only as the `TICKET_STARS_ENABLED=false` fallback (the
+  /// PAY-1 guard 404s the mock intent/confirm routes while Stars is on). Only
+  /// meaningful with `TICKET_FEATURE_ENABLED`. Needs no merchant account /
+  /// provider token (empty provider token + `currency: "XTR"`).
+  TICKET_STARS_ENABLED: process.env.TICKET_STARS_ENABLED === "true",
+  /// Star price (XTR) per store bundle, as `<count>:<stars>` pairs. Default
+  /// `1:350,3:830,6:1350` (~350⭐/ticket ≈ $5–7, matching the $6.99 anchor, with
+  /// the same bundle discount as the USD bundles). The date gate derives its
+  /// per-scope price from the 1-ticket entry (self/partner = 1×, both = 2×).
+  /// Override e.g. `TICKET_BUNDLE_STARS=1:250,3:590,6:960`.
+  TICKET_BUNDLE_STARS: parseStarBundles(process.env.TICKET_BUNDLE_STARS),
   // TODO: Stripe Production Mode — populate from the Stripe dashboard and keep
   // out of git (.env only). Switching to live payments is: set these +
   // TICKET_PAYMENT_MODE=stripe + fill the `case "stripe"` branches in
@@ -363,6 +379,26 @@ export const env = {
   /// `.env.local`. The bot logs a loud warning at startup if non-empty.
   DEV_OTP_BYPASS_TELEGRAM_IDS: parseTelegramIdSet(process.env.DEV_OTP_BYPASS_TELEGRAM_IDS),
 } as const;
+
+/**
+ * Parse `TICKET_BUNDLE_STARS` ("<count>:<stars>,…") into a count→Stars map.
+ * Falls back to the default (1→350, 3→830, 6→1350) when unset or fully invalid;
+ * invalid individual pairs are skipped. Star amounts are whole XTR (not cents).
+ */
+function parseStarBundles(raw: string | undefined): Readonly<Record<number, number>> {
+  const fallback: Record<number, number> = { 1: 350, 3: 830, 6: 1350 };
+  if (!raw) return fallback;
+  const out: Record<number, number> = {};
+  for (const pair of raw.split(",")) {
+    const [c, s] = pair.split(":");
+    const count = Number((c ?? "").trim());
+    const stars = Number((s ?? "").trim());
+    if (Number.isInteger(count) && count > 0 && Number.isInteger(stars) && stars > 0) {
+      out[count] = stars;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : fallback;
+}
 
 function parseTelegramIdSet(raw: string | undefined): ReadonlySet<bigint> {
   if (!raw) return new Set();
