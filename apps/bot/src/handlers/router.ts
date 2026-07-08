@@ -16,8 +16,17 @@ import {
   handleVerificationSkipConfirm,
 } from "./onboarding/verification.js";
 import { menuRouter } from "./menu/router.js";
+import { handlePreCheckout, handleSuccessfulPayment } from "./payments.js";
 
 const router = new Composer<BotContext>();
+
+// Telegram Stars (XTR) ticket payments (store top-up + §3.5b date gate). The
+// `pre_checkout_query` must be answered within 10s, and `successful_payment` is
+// the trust boundary that credits/settles. Registered at the very top so they
+// fire regardless of onboarding step or session state. Inert unless
+// `TICKET_STARS_ENABLED` (the handlers re-check the flag + payload).
+router.on("pre_checkout_query", handlePreCheckout);
+router.on("message:successful_payment", handleSuccessfulPayment);
 
 router.use(async (ctx, next) => {
   if (!ctx.from?.id) {

@@ -540,6 +540,25 @@ export async function applyTicketPayment(
 }
 
 /**
+ * Telegram Stars path: settle the gate after Telegram confirms a Star payment
+ * (the `successful_payment` update is the trust boundary, same role as the mock
+ * `applyTicketPayment`). Identical settlement to `applyTicketPayment` — so it
+ * inherits the §3.5b goodwill-cover confirm DM baked into `settleTicket` — MINUS
+ * the famine single-ticket discount consume: that discount is USD-only and never
+ * applies to a Stars purchase, so a Stars `self` payment must not burn it. Scope
+ * `both`/`partner` male-only is enforced inside `settleTicket`.
+ */
+export async function applyStarsTicketPayment(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  matchId: string,
+  scope: TicketScope,
+): Promise<ApplyPaymentResult> {
+  const { result } = await settleTicket(api, telegramId, matchId, scope);
+  return result;
+}
+
+/**
  * Wallet path: spend ticket(s) from the actor's balance to settle the gate.
  * The spend happens first (atomic, guarded against negatives); if the match
  * claim then doesn't apply (lost race / already-paid duplicate) the tickets are

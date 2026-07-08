@@ -108,6 +108,9 @@ const translations = {
       "🎓 University email verified — student perk unlocked: *2 free Date Tickets* are in your wallet.\n\nEach date costs 1 ticket, so your first two dates are covered. Balance: *{balance}* 🎟️",
     welcomeGiftTicket:
       "🎟 Your first ticket — on me, personally.\n\nEvery date here costs 1 ticket, normally ~$6.99\nThis one's free — let your first step be about the person, not the price\n\nIt's already in your wallet ❤️",
+    ticketStorePurchased:
+      "✨ Payment received — *{count}* ticket(s) added!\n\nBalance: *{balance}* 🎟️",
+    ticketStoreCheckoutError: "Couldn't confirm that payment. Please try again.",
     onboardingPhotosNeedMore:
       "Photo progress: {count}/{min}. Clear photos still needed: {remaining}.",
     onboardingPhotosBonusOffer:
@@ -839,6 +842,9 @@ const translations = {
       "🎓 Университетская почта подтверждена — студенческий бонус: *2 бесплатных билета на свидания* уже на балансе.\n\nКаждое свидание стоит 1 билет, так что первые две встречи за наш счёт. Баланс: *{balance}* 🎟️",
     welcomeGiftTicket:
       "🎟 Твой первый билет — от меня лично.\n\nКаждое свидание здесь стоит 1 билет, обычно ~$6.99\nЭтот — бесплатно: пусть первый шаг будет про человека, а не про цену\n\nБилет уже в твоём кошельке ❤️",
+    ticketStorePurchased:
+      "✨ Оплата прошла — добавлено *{count}* 🎟️!\n\nБаланс: *{balance}* 🎟️",
+    ticketStoreCheckoutError: "Не удалось подтвердить оплату. Попробуй ещё раз.",
     onboardingPhotosNeedMore:
       "Фото: {count}/{min}. Осталось загрузить ещё {remaining} чёткое фото до обязательного минимума.",
     onboardingPhotosBonusOffer:
@@ -1563,6 +1569,9 @@ const translations = {
       "🎓 Університетську пошту підтверджено — студентський бонус: *2 безкоштовні квитки на побачення* вже на балансі.\n\nКожне побачення коштує 1 квиток, тож перші дві зустрічі за наш рахунок. Баланс: *{balance}* 🎟️",
     welcomeGiftTicket:
       "🎟 Твій перший квиток — від мене особисто.\n\nКожне побачення тут коштує 1 квиток, зазвичай ~$6.99\nЦе — безкоштовно: нехай перший крок буде про людину, а не про ціну\n\nКвиток уже у твоєму гаманці ❤️",
+    ticketStorePurchased:
+      "✨ Оплату отримано — додано *{count}* 🎟️!\n\nБаланс: *{balance}* 🎟️",
+    ticketStoreCheckoutError: "Не вдалося підтвердити оплату. Спробуй ще раз.",
     onboardingPhotosNeedMore:
       "Фото: {count}/{min}. Залишилося надіслати ще {remaining} чітке фото до обов'язкового мінімуму.",
     onboardingPhotosBonusOffer:
@@ -2381,6 +2390,9 @@ const deTranslations: TranslationTable = {
     "🎓 Universitäts-E-Mail bestätigt — Studi-Bonus freigeschaltet: *2 kostenlose Date-Tickets* sind in deinem Guthaben.\n\nJedes Date kostet 1 Ticket — deine ersten zwei Dates gehen auf uns. Guthaben: *{balance}* 🎟️",
   welcomeGiftTicket:
     "🎟 Dein erstes Ticket — von mir persönlich.\n\nJedes Date hier kostet 1 Ticket, normalerweise ~$6,99\nDieses ist gratis — dein erster Schritt soll um den Menschen gehen, nicht um den Preis\n\nEs liegt schon in deinem Guthaben ❤️",
+  ticketStorePurchased:
+    "✨ Zahlung erhalten — *{count}* Ticket(s) hinzugefügt!\n\nGuthaben: *{balance}* 🎟️",
+  ticketStoreCheckoutError: "Zahlung konnte nicht bestätigt werden. Bitte versuch es erneut.",
   onboardingPhotosNeedMore:
     "Fotostand: {count}/{min}. Noch benötigte klare Fotos: {remaining}.",
   onboardingPhotosBonusOffer:
@@ -3006,6 +3018,9 @@ const plTranslations: TranslationTable = {
     "🎓 E-mail uczelniany potwierdzony — bonus studencki: *2 darmowe bilety na randki* są już w Twoim portfelu.\n\nKażda randka kosztuje 1 bilet, więc pierwsze dwie randki są na nasz koszt. Saldo: *{balance}* 🎟️",
   welcomeGiftTicket:
     "🎟 Twój pierwszy bilet — ode mnie osobiście.\n\nKażda randka kosztuje tu 1 bilet, zwykle ~$6.99\nTen jest za darmo — niech pierwszy krok będzie o człowieku, a nie o cenie\n\nBilet jest już w Twoim portfelu ❤️",
+  ticketStorePurchased:
+    "✨ Płatność otrzymana — dodano *{count}* 🎟️!\n\nSaldo: *{balance}* 🎟️",
+  ticketStoreCheckoutError: "Nie udało się potwierdzić płatności. Spróbuj ponownie.",
   onboardingPhotosNeedMore:
     "Postęp zdjęć: {count}/{min}. Pozostało wyraźnych zdjęć: {remaining}.",
   onboardingPhotosBonusOffer:

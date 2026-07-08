@@ -108,6 +108,18 @@ export function amountForScope(scope: TicketScope, priceCents: number): number {
 }
 
 /**
+ * Telegram Stars (XTR) charged for a date-gate scope. The per-ticket Star
+ * price is the 1-ticket store bundle entry (`TICKET_BUNDLE_STARS[1]`), so the
+ * gate and the store stay in sync; `both` costs 2×. Used by the native
+ * `WebApp.openInvoice` gate path (`POST /stars-invoice`) and re-validated in
+ * the `pre_checkout_query` handler. Only meaningful when `TICKET_STARS_ENABLED`.
+ */
+export function gateStarsForScope(scope: TicketScope): number {
+  const perTicket = env.TICKET_BUNDLE_STARS[1] ?? 0;
+  return perTicket * ticketsForScope(scope);
+}
+
+/**
  * Create a payment intent for one ticket purchase. In mock mode this is a
  * synthetic id; no money moves. In stripe mode this will create a real
  * PaymentIntent and return its `client_secret`.

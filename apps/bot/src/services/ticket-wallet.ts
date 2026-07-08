@@ -50,8 +50,18 @@ export async function grantTickets(args: {
   matchId?: string;
   amountCents?: number;
   bundleSize?: number;
+  /**
+   * Provider charge id for a paid top-up (Telegram Stars
+   * `telegram_payment_charge_id`). When set it is written to the unique
+   * `TicketLedger.externalPaymentId`, so a redelivered `successful_payment`
+   * makes the ledger insert throw P2002 and the whole credit transaction rolls
+   * back. Callers that need exactly-once semantics catch that via
+   * `isUniqueViolation`. Omitted for free bonuses/spends/refunds and the mock
+   * fallback.
+   */
+  externalPaymentId?: string;
 }): Promise<number> {
-  const { userId, count, reason, matchId, amountCents, bundleSize } = args;
+  const { userId, count, reason, matchId, amountCents, bundleSize, externalPaymentId } = args;
   if (count <= 0) return getBalance(userId);
 
   const [updated] = await prisma.$transaction([
@@ -68,10 +78,26 @@ export async function grantTickets(args: {
         matchId: matchId ?? null,
         amountCents: amountCents ?? null,
         bundleSize: bundleSize ?? null,
+        externalPaymentId: externalPaymentId ?? null,
       },
     }),
   ]);
   return updated.ticketBalance;
+}
+
+/**
+ * Prisma P2002 = unique-constraint violation. Used by paid-top-up callers to
+ * detect a redelivered `successful_payment` (the duplicate charge id hits the
+ * unique `TicketLedger.externalPaymentId`) and treat it as an idempotent no-op
+ * rather than a hard failure.
+ */
+export function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "P2002"
+  );
 }
 
 /**
