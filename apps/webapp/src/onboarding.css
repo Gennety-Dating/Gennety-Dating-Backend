@@ -1240,30 +1240,27 @@ button {
   width: 3.5rem;
   height: 3.5rem;
   min-height: 3.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 0;
   border-radius: 9999px;
   display: grid;
   place-items: center;
   color: #f4f4f5;
-  /* No backdrop-filter here: the button sits over the solid-black dock (nothing
-     to blur), and backdrop-filter + border-radius renders a hairline seam on
-     WebKit/iOS (dark edge on top, light edge on the bottom). Dropping it keeps
-     the exact look over the dark dock and removes the seam. */
-  background: radial-gradient(140% 125% at 50% 0%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.05) 72%);
-  box-shadow:
-    inset 0 1px 2px rgba(255, 255, 255, 0.28),
-    0 6px 18px rgba(0, 0, 0, 0.3);
+  /* No border, no backdrop-filter, no directional inset shadows: those are what
+     draw a top/bottom hairline (dark edge on top, white edge on the bottom) on a
+     small translucent circle, esp. on WebKit/iOS. The look is carried by a
+     centre-out symmetric sheen that fades to a uniform rim, so the perimeter has
+     no lighter/darker edge to seam. */
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.075) 68%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
   animation: howForwardIn 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
   transition:
     transform 200ms ease,
     background 200ms ease,
-    border-color 200ms ease,
     box-shadow 200ms ease;
 }
 
 .howitworks-back:hover {
-  border-color: rgba(255, 255, 255, 0.3);
-  background: radial-gradient(140% 125% at 50% 0%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.08) 72%);
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.11) 68%);
 }
 
 .howitworks-back:active {
