@@ -1809,21 +1809,39 @@ button {
   transform: scale(0.98);
 }
 
-/* Recommended (student) path — flat card with an even lavender glow around the
-   whole edge to nudge the university-email option. */
+/* Recommended (student) path — filled accent card with a light sheen down each
+   side edge and a soft accent glow, so the university-email option reads as the
+   primary choice. */
 .choice-button.is-priority {
-  background: linear-gradient(180deg, rgba(182, 154, 229, 0.12), rgba(182, 154, 229, 0.05));
+  color: #1c1330;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 15%, rgba(255, 255, 255, 0) 85%, rgba(255, 255, 255, 0.24)),
+    linear-gradient(160deg, #c6abf0 0%, #a988df 55%, #9b78d6 100%);
   box-shadow:
-    0 0 24px rgba(182, 154, 229, 0.4),
-    0 0 8px rgba(182, 154, 229, 0.25);
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -2px 6px rgba(76, 48, 120, 0.28),
+    0 10px 26px -8px rgba(155, 120, 214, 0.7),
+    0 2px 8px rgba(182, 154, 229, 0.4);
+}
+
+.choice-button.is-priority small {
+  opacity: 0.8;
+}
+
+.choice-button.is-priority .material-symbols-outlined {
+  opacity: 0.55;
 }
 
 .choice-button.is-priority:hover,
 .choice-button.is-priority.is-selected {
-  background: linear-gradient(180deg, rgba(182, 154, 229, 0.2), rgba(182, 154, 229, 0.08));
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0) 15%, rgba(255, 255, 255, 0) 85%, rgba(255, 255, 255, 0.3)),
+    linear-gradient(160deg, #cbb2f2 0%, #b093e3 55%, #a281da 100%);
   box-shadow:
-    0 0 30px rgba(182, 154, 229, 0.55),
-    0 0 10px rgba(182, 154, 229, 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 6px rgba(76, 48, 120, 0.28),
+    0 12px 30px -8px rgba(155, 120, 214, 0.8),
+    0 2px 10px rgba(182, 154, 229, 0.5);
 }
 
 .check-row {
