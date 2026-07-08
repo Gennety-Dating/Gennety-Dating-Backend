@@ -63,14 +63,25 @@ interface ProfileCardData {
 }
 
 // Demo Tinder-style cards for the Profile scene. Photos live in
-// `apps/webapp/public/profiles/` (drop 1.jpg..5.jpg in this order); a missing
+// `apps/webapp/public/profiles/` (1.jpg..9.jpg, in this order); a missing
 // file degrades gracefully to the dark card background.
+//
+// Card order is deliberately gender-interleaved as (male, male, female) ×3.
+// The deck swipes each card the opposite direction of the last (see
+// `ProfileDeck`), so a strictly alternating M/F order would lock every man to
+// one direction and every woman to the other. Grouping the men in pairs keeps
+// each gender to a run of at most two in a row (holds cyclically as the deck
+// loops) and spreads both genders across left and right swipes.
 const PROFILE_CARDS: ProfileCardData[] = [
-  { name: "Sofia", age: 23, photo: "/profiles/1.jpg", distanceKm: 2, bio: "Psych student & serial cafe-hopper", interests: ["Coffee", "Road trips", "Photography", "Indie music"] },
-  { name: "Marco", age: 26, photo: "/profiles/2.jpg", distanceKm: 4, bio: "Gym in the morning, pasta at night", interests: ["Gym", "Travel", "Cooking", "Football"] },
-  { name: "Daniel", age: 21, photo: "/profiles/3.jpg", distanceKm: 1, bio: "CS major — I'll fix your wifi and your playlist", interests: ["Coding", "Gaming", "Lo-fi", "Coffee"] },
-  { name: "Lena", age: 24, photo: "/profiles/4.jpg", distanceKm: 6, bio: "Collecting passport stamps & neon nights", interests: ["Travel", "Fashion", "Dancing", "Sushi"] },
-  { name: "Mia", age: 25, photo: "/profiles/5.jpg", distanceKm: 3, bio: "Designer chasing golden hour", interests: ["Art", "Wine", "Yoga", "Sunsets"] },
+  { name: "Leo", age: 24, photo: "/profiles/1.jpg", distanceKm: 3, bio: "Night-owl builder running on energy drinks", interests: ["Coding", "Gaming", "Techno", "eSports"] },
+  { name: "Max", age: 22, photo: "/profiles/2.jpg", distanceKm: 2, bio: "Vinyl crates and midnight drives", interests: ["Indie music", "Vinyl", "Skating", "Film"] },
+  { name: "Alina", age: 23, photo: "/profiles/3.jpg", distanceKm: 4, bio: "Pilates in the a.m., wine in the p.m.", interests: ["Pilates", "Fashion", "Travel", "Wine"] },
+  { name: "Daniel", age: 25, photo: "/profiles/4.jpg", distanceKm: 1, bio: "Gym rat who actually cooks", interests: ["Gym", "Cooking", "Football", "Beaches"] },
+  { name: "Tom", age: 27, photo: "/profiles/5.jpg", distanceKm: 6, bio: "Weekends on the water, always", interests: ["Fishing", "Boating", "BBQ", "Road trips"] },
+  { name: "Mia", age: 21, photo: "/profiles/6.jpg", distanceKm: 3, bio: "Golden-hour chaser & playlist maker", interests: ["Photography", "Coffee", "Indie music", "Sunsets"] },
+  { name: "Chris", age: 28, photo: "/profiles/7.jpg", distanceKm: 5, bio: "Low-key nights and good coffee", interests: ["Coffee", "Cinema", "Cooking", "Vinyl"] },
+  { name: "Sasha", age: 20, photo: "/profiles/8.jpg", distanceKm: 2, bio: "Hoodie weather and lo-fi beats", interests: ["Lo-fi", "Streetwear", "Skating", "Gaming"] },
+  { name: "Lena", age: 24, photo: "/profiles/9.jpg", distanceKm: 4, bio: "Loud laughs and cozy sweaters", interests: ["Dancing", "Baking", "Travel", "Dogs"] },
 ];
 
 // Intro typewriter ("live human typing") timings. Tuned ~2.5x faster than the
