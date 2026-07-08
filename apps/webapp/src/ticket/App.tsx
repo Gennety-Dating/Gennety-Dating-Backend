@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import {
   fetchTicketState,
   createTicketIntent,
+  createTicketStarsInvoice,
   confirmTicketPayment,
   useTicketFromWallet,
   ticketPhotoSrc,
@@ -17,6 +18,8 @@ import {
   deriveOfferButtons,
   deriveCoverPartnerButtons,
   formatUsd,
+  formatStars,
+  starsForButton,
   type TicketScreen,
   type OfferButton,
 } from "./ticket-state.js";
@@ -146,6 +149,35 @@ export function App(): ReactElement {
     [s],
   );
 
+  // Native Telegram Stars payment for the gate. Opens the invoice; the bot
+  // settles the gate on successful_payment, so we just re-fetch state on "paid".
+  const startStarsPayment = useCallback(
+    async (scope: TicketScope): Promise<void> => {
+      haptic("light");
+      const open = app?.openInvoice;
+      if (!open || !app) {
+        app?.showAlert(s.errGeneric);
+        return;
+      }
+      try {
+        const { link } = await createTicketStarsInvoice(initData, matchId, scope);
+        open.call(app, link, (status) => {
+          if (status === "paid") {
+            haptic("success");
+            void load();
+          } else if (status === "failed") {
+            haptic("error");
+            app?.showAlert(s.errGeneric);
+          }
+          // "cancelled" / "pending" → leave the screen as-is.
+        });
+      } catch (err) {
+        app?.showAlert(errorText(err, s));
+      }
+    },
+    [s, load],
+  );
+
   // Spend a wallet ticket (no payment screen) — settles the gate immediately.
   const spendTicket = useCallback(
     async (scope: TicketScope): Promise<void> => {
@@ -172,8 +204,15 @@ export function App(): ReactElement {
     try {
       const next = await useTicketFromWallet(initData, matchId, "self");
       if (!next.bothPaid && next.iPaid && !next.partnerPaid) {
-        const intent = await createTicketIntent(initData, matchId, "partner");
-        setPhase({ kind: "mock", state: next, scope: "partner", intent, processing: false });
+        // Self covered with a wallet ticket; now pay one ticket's price for the
+        // partner — natively in Stars when enabled, else the mock USD screen.
+        if (next.starsEnabled) {
+          setPhase({ kind: "view", state: next });
+          void startStarsPayment("partner");
+        } else {
+          const intent = await createTicketIntent(initData, matchId, "partner");
+          setPhase({ kind: "mock", state: next, scope: "partner", intent, processing: false });
+        }
       } else {
         haptic("success");
         setPhase({ kind: "view", state: next });
@@ -183,15 +222,16 @@ export function App(): ReactElement {
       app?.showAlert(errorText(err, s));
       void load();
     }
-  }, [s, load]);
+  }, [s, load, startStarsPayment]);
 
   const onOfferButton = useCallback(
     (state: TicketState, b: OfferButton): void => {
       if (b.action === "use") void spendTicket(b.scope);
       else if (b.action === "use-self-pay-partner") void useSelfThenPayPartner();
+      else if (state.starsEnabled) void startStarsPayment(b.scope);
       else void startPayment(state, b.scope);
     },
-    [spendTicket, startPayment, useSelfThenPayPartner],
+    [spendTicket, startPayment, startStarsPayment, useSelfThenPayPartner],
   );
 
   const completePayment = useCallback(async (): Promise<void> => {
@@ -298,7 +338,10 @@ export function App(): ReactElement {
         {sc === "offer" &&
           deriveOfferButtons(state).map((b) => {
             const discounted =
-              b.action === "pay" && b.scope === "self" && state.selfDiscountPct > 0;
+              !state.starsEnabled &&
+              b.action === "pay" &&
+              b.scope === "self" &&
+              state.selfDiscountPct > 0;
             return (
               <button
                 key={`${b.action}:${b.scope}`}
@@ -367,7 +410,10 @@ function offerLabel(b: OfferButton, state: TicketState, s: TicketStrings): strin
     if (b.scope === "partner") return s.usePartner;
     return s.useSelf;
   }
-  const amount = formatUsd(b.amountCents);
+  const amount =
+    state.starsEnabled && state.stars
+      ? formatStars(starsForButton(b, state.stars))
+      : formatUsd(b.amountCents);
   if (b.action === "use-self-pay-partner") return fill(s.payBothWithTicket, { amount });
   if (b.scope === "both") return fill(s.payBoth, { amount });
   if (b.scope === "partner") return fill(s.payPartner, { amount });

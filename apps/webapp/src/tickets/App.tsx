@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import {
   fetchWalletState,
   createStoreIntent,
+  createStoreStarsInvoice,
   confirmStorePurchase,
   CalendarApiError,
   type StoreIntent,
@@ -13,7 +14,14 @@ import {
   fill,
   type StoreStrings,
 } from "./i18n.js";
-import { storeBundles, formatUsd, type StoreBundleView } from "./store-state.js";
+import {
+  storeBundles,
+  storeBundlesStars,
+  formatUsd,
+  formatStars,
+  type StoreBundleView,
+  type StoreStarsBundleView,
+} from "./store-state.js";
 import {
   pickLang as pickTicketLang,
   strings as ticketStrings,
@@ -33,7 +41,14 @@ document.documentElement?.setAttribute("lang", lang);
 type Phase =
   | { kind: "loading" }
   | { kind: "error"; message: string }
-  | { kind: "view"; balance: number; justBought: number | null; discountPct: number }
+  | {
+      kind: "view";
+      balance: number;
+      justBought: number | null;
+      discountPct: number;
+      starsEnabled: boolean;
+      bundleStars: Record<string, number> | null;
+    }
   | {
       kind: "mock";
       balance: number;
@@ -59,7 +74,14 @@ export function App(): ReactElement {
   const load = useCallback(async (): Promise<void> => {
     try {
       const wallet = await fetchWalletState(initData);
-      setPhase({ kind: "view", balance: wallet.balance, justBought: null, discountPct: wallet.discountPct });
+      setPhase({
+        kind: "view",
+        balance: wallet.balance,
+        justBought: null,
+        discountPct: wallet.discountPct,
+        starsEnabled: Boolean(wallet.starsEnabled),
+        bundleStars: wallet.bundleStars ?? null,
+      });
     } catch (err) {
       setPhase({ kind: "error", message: errorText(err, s) });
     }
@@ -86,6 +108,47 @@ export function App(): ReactElement {
     [s],
   );
 
+  // Native Telegram Stars purchase from inside the store. Opens the invoice; the
+  // bot credits the wallet on successful_payment (exactly `count`), so the
+  // optimistic balance is also the accurate one.
+  const startStarsPurchase = useCallback(
+    async (
+      balance: number,
+      bundleStars: Record<string, number> | null,
+      bundle: StoreStarsBundleView,
+    ): Promise<void> => {
+      haptic("light");
+      const open = app?.openInvoice;
+      if (!open || !app) {
+        app?.showAlert(s.errGeneric);
+        return;
+      }
+      try {
+        const { link } = await createStoreStarsInvoice(initData, bundle.count);
+        open.call(app, link, (status) => {
+          if (status === "paid") {
+            haptic("success");
+            setPhase({
+              kind: "view",
+              balance: balance + bundle.count,
+              justBought: bundle.count,
+              discountPct: 0,
+              starsEnabled: true,
+              bundleStars,
+            });
+          } else if (status === "failed") {
+            haptic("error");
+            app?.showAlert(s.errGeneric);
+          }
+          // "cancelled" / "pending" → leave the store screen as-is.
+        });
+      } catch (err) {
+        app?.showAlert(errorText(err, s));
+      }
+    },
+    [s],
+  );
+
   const completePurchase = useCallback(async (): Promise<void> => {
     setPhase((p) => (p.kind === "mock" ? { ...p, processing: true } : p));
     const current = phaseRef.current;
@@ -93,7 +156,14 @@ export function App(): ReactElement {
     try {
       const wallet = await confirmStorePurchase(initData, current.bundle.count, current.intent.clientSecret);
       haptic("success");
-      setPhase({ kind: "view", balance: wallet.balance, justBought: current.bundle.count, discountPct: wallet.discountPct });
+      setPhase({
+        kind: "view",
+        balance: wallet.balance,
+        justBought: current.bundle.count,
+        discountPct: wallet.discountPct,
+        starsEnabled: Boolean(wallet.starsEnabled),
+        bundleStars: wallet.bundleStars ?? null,
+      });
     } catch (err) {
       haptic("error");
       app?.showAlert(errorText(err, s));
@@ -128,7 +198,14 @@ export function App(): ReactElement {
             className="btn-text"
             disabled={phase.processing}
             onClick={() =>
-              setPhase({ kind: "view", balance: phase.balance, justBought: null, discountPct: phase.discountPct })
+              setPhase({
+                kind: "view",
+                balance: phase.balance,
+                justBought: null,
+                discountPct: phase.discountPct,
+                starsEnabled: false,
+                bundleStars: null,
+              })
             }
           >
             {s.back}
@@ -157,7 +234,37 @@ export function App(): ReactElement {
         <p className="ticket-balance-note">{fill(s.balance, { n: String(phase.balance) })}</p>
 
         <div className="store-bundles">
-          {storeBundles(phase.discountPct).map((b) => (
+          {phase.starsEnabled && phase.bundleStars
+            ? storeBundlesStars(phase.bundleStars).map((b) => (
+                <button
+                  key={b.count}
+                  type="button"
+                  className={`store-bundle${b.bestValue ? " store-bundle-best" : ""}`}
+                  onClick={() => void startStarsPurchase(phase.balance, phase.bundleStars, b)}
+                >
+                  {b.discountPct > 0 && (
+                    <span className={`store-badge${b.bestValue ? " store-badge-best" : ""}`}>
+                      {fill(s.save, { pct: String(b.discountPct) })}
+                    </span>
+                  )}
+                  <span className="store-bundle-emblem" aria-hidden="true">
+                    ×{b.count}
+                  </span>
+                  <span className="store-bundle-info">
+                    <span className="store-bundle-main">
+                      {fill(s.buy, { count: String(b.count), amount: formatStars(b.stars) })}
+                    </span>
+                    <span className="store-bundle-per">
+                      {fill(s.perTicket, { amount: formatStars(b.perTicketStars) })}
+                      {b.bestValue && <span className="store-bundle-tag">{s.bestValue}</span>}
+                    </span>
+                  </span>
+                  <span className="store-bundle-chevron" aria-hidden="true">
+                    ›
+                  </span>
+                </button>
+              ))
+            : storeBundles(phase.discountPct).map((b) => (
             <button
               key={b.count}
               type="button"

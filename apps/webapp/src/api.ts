@@ -466,6 +466,11 @@ export interface TicketState {
   myPhotoUrl: string | null;
   /** Relative proxy path to the partner's first profile photo (null if none). */
   partnerPhotoUrl: string | null;
+  /** When true, the gate pay buttons are priced + paid in Telegram Stars via
+   *  `openInvoice` (the mock USD intent/confirm path is disabled server-side). */
+  starsEnabled?: boolean;
+  /** Per-scope Star (XTR) prices when `starsEnabled` (null otherwise). */
+  stars?: { self: number; both: number; partner: number } | null;
 }
 
 /**
@@ -544,6 +549,26 @@ export async function useTicketFromWallet(
   return (await res.json()) as TicketState & { ok: true };
 }
 
+/**
+ * Create a Telegram Stars (XTR) invoice link for a date-gate payment. The Mini
+ * App opens the returned link with `WebApp.openInvoice()`; the gate is settled
+ * server-side by the bot's `successful_payment` handler. Replaces the mock USD
+ * intent/confirm flow when Stars is enabled.
+ */
+export async function createTicketStarsInvoice(
+  initData: string,
+  matchId: string,
+  scope: TicketScope,
+): Promise<{ link: string; stars: number }> {
+  const res = await fetch(`${ticketBase(matchId)}/stars-invoice`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
+    body: JSON.stringify({ scope }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as { link: string; stars: number };
+}
+
 // ---------------------------------------------------------------------------
 // Ticket store / wallet Mini App API (pre-purchase bundles, mock payment)
 // ---------------------------------------------------------------------------
@@ -555,6 +580,12 @@ export interface WalletState {
   discountPct: number;
   /** ISO deadline of the active discount, or null. */
   discountExpiresAt: string | null;
+  /** When true, the store sells bundles for Telegram Stars via `openInvoice`
+   *  (the mock USD intent/confirm path is disabled server-side). */
+  starsEnabled?: boolean;
+  /** Star (XTR) price per bundle count (`{ "1": 350, "3": 830, "6": 1350 }`)
+   *  when `starsEnabled`; null otherwise. */
+  bundleStars?: Record<string, number> | null;
 }
 
 export interface StoreBundle {
@@ -605,6 +636,24 @@ export async function confirmStorePurchase(
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as WalletState & { ok: true };
+}
+
+/**
+ * Create a Telegram Stars (XTR) invoice link for a store bundle. The Mini App
+ * opens the returned link with `WebApp.openInvoice()`; the wallet is credited
+ * server-side by the bot's `successful_payment` handler.
+ */
+export async function createStoreStarsInvoice(
+  initData: string,
+  count: number,
+): Promise<{ link: string; stars: number }> {
+  const res = await fetch(`${storeBase}/store/stars-invoice`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
+    body: JSON.stringify({ count }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as { link: string; stars: number };
 }
 
 // ---------------------------------------------------------------------------

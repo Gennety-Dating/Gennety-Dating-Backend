@@ -125,6 +125,17 @@ interface TelegramWebApp {
    * phone verification (Registration v2).
    */
   requestContact?(callback?: (shared: boolean) => void): void;
+  /**
+   * Open a Telegram invoice link (Bot API 6.1+) — used for native Telegram
+   * Stars (XTR) payments inside the Mini App. `url` comes from the server's
+   * `createInvoiceLink`. The callback fires with the terminal status; the wallet
+   * / date-gate itself is settled server-side by the bot's `successful_payment`
+   * handler.
+   */
+  openInvoice?(
+    url: string,
+    callback?: (status: "paid" | "cancelled" | "failed" | "pending") => void,
+  ): void;
 }
 
 interface Window {

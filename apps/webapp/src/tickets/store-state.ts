@@ -73,3 +73,46 @@ export function storeBundles(famineDiscountPct = 0): StoreBundleView[] {
 export function formatUsd(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
+
+export interface StoreStarsBundleView {
+  count: number;
+  /** Total Stars (XTR) for the bundle. */
+  stars: number;
+  /** Per-ticket Stars (rounded, for display). */
+  perTicketStars: number;
+  /** True for the lowest per-ticket Star price. */
+  bestValue: boolean;
+  /** Whole-percent saving on per-ticket Stars vs the single bundle. */
+  discountPct: number;
+}
+
+/**
+ * Build the store bundle views priced in Telegram Stars from the server's
+ * `bundleStars` map (`{ "1": 350, "3": 830, "6": 1350 }`). Mirrors the USD
+ * `storeBundles` discount/best-value math, but on Star prices. Only the bundle
+ * sizes present in the map are shown. The famine discount is USD-only, so it
+ * never applies here.
+ */
+export function storeBundlesStars(
+  bundleStars: Record<string, number> | null | undefined,
+): StoreStarsBundleView[] {
+  if (!bundleStars) return [];
+  const items = [1, 3, 6]
+    .map((count) => ({ count, stars: bundleStars[String(count)] }))
+    .filter((b): b is { count: number; stars: number } => typeof b.stars === "number" && b.stars > 0)
+    .map((b) => ({ ...b, perTicketStars: b.stars / b.count }));
+  if (items.length === 0) return [];
+  const cheapest = Math.min(...items.map((b) => b.perTicketStars));
+  const single = items.find((b) => b.count === 1)?.perTicketStars ?? cheapest;
+  return items.map((b) => ({
+    count: b.count,
+    stars: b.stars,
+    perTicketStars: Math.round(b.perTicketStars),
+    bestValue: b.perTicketStars === cheapest,
+    discountPct: single > 0 ? Math.round(((single - b.perTicketStars) / single) * 100) : 0,
+  }));
+}
+
+export function formatStars(stars: number): string {
+  return `⭐${stars}`;
+}

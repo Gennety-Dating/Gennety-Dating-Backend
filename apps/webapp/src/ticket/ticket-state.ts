@@ -104,6 +104,24 @@ export function formatUsd(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+/** Star price label, e.g. `350 ⭐`. */
+export function formatStars(stars: number): string {
+  return `${stars} ⭐`;
+}
+
+/**
+ * Star price for an offer button. The `use-self-pay-partner` combo charges one
+ * ticket's Stars (the partner's slot), so it maps to the `partner` price; every
+ * other paid scope maps to its own price.
+ */
+export function starsForButton(
+  b: OfferButton,
+  stars: { self: number; both: number; partner: number },
+): number {
+  if (b.action === "use-self-pay-partner") return stars.partner;
+  return stars[b.scope];
+}
+
 /** Whole milliseconds remaining until `expiresAt`, clamped at 0. */
 export function msUntil(expiresAt: string | null, now: number = Date.now()): number {
   if (!expiresAt) return 0;
