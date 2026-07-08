@@ -58,15 +58,33 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
     }
   }
 
-  const lang = (ctx.session.language ?? "en") as Language;
   try {
-    await ctx.answerPreCheckoutQuery(
-      ok,
-      ok ? undefined : { error_message: t(lang, "ticketStoreCheckoutError") },
-    );
+    if (ok) {
+      // Common path — approve fast, no DB/session work (a `pre_checkout_query`
+      // has no chat, so `ctx.session` is unavailable here; this handler runs
+      // before the session middleware by design).
+      await ctx.answerPreCheckoutQuery(true, undefined);
+    } else {
+      // Rare decline path (tampered/stale payload) — localize the message from
+      // the payer's stored language, best-effort.
+      const lang = await langForTelegramId(ctx.from?.id);
+      await ctx.answerPreCheckoutQuery(false, {
+        error_message: t(lang, "ticketStoreCheckoutError"),
+      });
+    }
   } catch {
     // The 10s answer window may have elapsed; nothing else we can do.
   }
+}
+
+/** Best-effort stored language for a Telegram id (defaults to `en`). Used only
+ *  off the hot path (the pre-checkout decline message). */
+async function langForTelegramId(telegramId: number | undefined): Promise<Language> {
+  if (telegramId == null) return "en";
+  const user = await prisma.user
+    .findUnique({ where: { telegramId: BigInt(telegramId) }, select: { language: true } })
+    .catch(() => null);
+  return (user?.language ?? "en") as Language;
 }
 
 /** Credit the wallet / settle the gate once Telegram confirms Stars moved. */
@@ -121,7 +139,7 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
     throw err;
   }
 
-  const lang = (user.language ?? ctx.session.language ?? "en") as Language;
+  const lang = (user.language ?? "en") as Language;
   const text = t(lang, "ticketStorePurchased", { count, balance });
   try {
     await ctx.reply(text, { parse_mode: "Markdown" });

@@ -4,6 +4,7 @@ import { sessionMiddleware } from "./session.js";
 import { sequentializeByChat } from "./chat-queue.js";
 import { botRateLimit } from "./bot-rate-limit.js";
 import { start } from "./handlers/start.js";
+import { handlePreCheckout, handleSuccessfulPayment } from "./handlers/payments.js";
 import { router } from "./handlers/router.js";
 import { matchingRouter } from "./handlers/matching/router.js";
 import { dateRouter } from "./handlers/date/router.js";
@@ -15,6 +16,16 @@ export function createBot(token: string): Bot<BotContext> {
 
   // Middleware chain
   bot.use(sequentializeByChat());
+
+  // Telegram Stars (XTR) payments — registered BEFORE session + rate-limit so
+  // the chat-less `pre_checkout_query` never hits the session middleware (which
+  // throws "session key is undefined" for an update with no chat) and so the
+  // pre-checkout is answered inside Telegram's 10s window ahead of any heavy
+  // middleware. Both handlers are self-contained (no `ctx.session`), settle via
+  // `successful_payment` (the trust boundary), and terminate the update.
+  bot.on("pre_checkout_query", handlePreCheckout);
+  bot.on("message:successful_payment", handleSuccessfulPayment);
+
   bot.use(sessionMiddleware());
 
   // Anti-spam guard — meters text/voice per user (flood + daily token budget)

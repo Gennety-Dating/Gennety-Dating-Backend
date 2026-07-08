@@ -71,6 +71,23 @@ describe("handlePreCheckout", () => {
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(true, undefined);
   });
 
+  it("approves without touching ctx.session (chat-less pre_checkout_query)", async () => {
+    // Regression: a `pre_checkout_query` has no chat, so grammY's session getter
+    // throws on access. The handler runs BEFORE the session middleware and must
+    // never read `ctx.session`, or the pre-checkout is never answered and
+    // Telegram silently cancels the payment.
+    const answerPreCheckoutQuery = vi.fn().mockResolvedValue(true);
+    const ctx = {
+      preCheckoutQuery: { invoice_payload: "store:1", currency: "XTR", total_amount: 350 },
+      answerPreCheckoutQuery,
+      get session(): never {
+        throw new Error("Cannot access session data: session key is undefined");
+      },
+    } as unknown as Parameters<typeof handlePreCheckout>[0];
+    await expect(handlePreCheckout(ctx)).resolves.toBeUndefined();
+    expect(answerPreCheckoutQuery).toHaveBeenCalledWith(true, undefined);
+  });
+
   it("declines when the Star amount doesn't match the bundle", async () => {
     const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
       invoice_payload: "store:3",
