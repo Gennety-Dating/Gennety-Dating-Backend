@@ -1755,16 +1755,14 @@ button {
 
 .choice-row {
   display: grid;
-  gap: 10px;
+  gap: 16px;
 }
 
 .choice-button {
   min-height: 56px;
   border-radius: 18px;
   border: 1px solid transparent;
-  background:
-    radial-gradient(130% 120% at 50% -20%, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 60%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035));
+  background: rgba(255, 255, 255, 0.06);
   color: #fff;
   text-align: left;
   padding: 12px 1rem;
@@ -1772,12 +1770,6 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  backdrop-filter: blur(20px) saturate(150%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -3px 8px rgba(0, 0, 0, 0.22),
-    0 8px 24px rgba(0, 0, 0, 0.3);
   transition:
     transform 180ms ease,
     background 180ms ease,
@@ -1810,51 +1802,48 @@ button {
 
 .choice-button:hover,
 .choice-button.is-selected {
-  background:
-    radial-gradient(130% 120% at 50% -20%, rgba(182, 154, 229, 0.28), rgba(182, 154, 229, 0) 60%),
-    linear-gradient(180deg, rgba(182, 154, 229, 0.18), rgba(182, 154, 229, 0.07));
+  background: rgba(182, 154, 229, 0.2);
 }
 
 .choice-button:active {
   transform: scale(0.98);
 }
 
-/* Recommended (student) path — lavender-tinted liquid glass with a soft
-   borderless glow that lifts the university-email option, plus a small
-   uppercase eyebrow. */
+/* Recommended (student) path — flat card with an even lavender glow around the
+   whole edge, plus a small badge riding the top edge of the button. */
 .choice-badge {
-  display: inline-block;
-  margin-bottom: 6px;
-  color: #d3c2f0;
+  position: absolute;
+  top: -9px;
+  left: 16px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #b69ae5;
+  color: #150f1f;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1;
-  letter-spacing: 0.13em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
+  box-shadow: 0 3px 10px rgba(182, 154, 229, 0.4);
 }
 
 .choice-button.is-priority {
-  background:
-    radial-gradient(130% 130% at 50% -20%, rgba(182, 154, 229, 0.34), rgba(182, 154, 229, 0) 62%),
-    linear-gradient(180deg, rgba(182, 154, 229, 0.18), rgba(182, 154, 229, 0.07));
+  position: relative;
+  background: linear-gradient(180deg, rgba(182, 154, 229, 0.12), rgba(182, 154, 229, 0.05));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    inset 0 -3px 8px rgba(0, 0, 0, 0.18),
-    0 10px 30px -12px rgba(182, 154, 229, 0.6),
-    0 0 16px -4px rgba(182, 154, 229, 0.3);
+    0 0 24px rgba(182, 154, 229, 0.4),
+    0 0 8px rgba(182, 154, 229, 0.25);
 }
 
 .choice-button.is-priority:hover,
 .choice-button.is-priority.is-selected {
-  background:
-    radial-gradient(130% 130% at 50% -20%, rgba(182, 154, 229, 0.44), rgba(182, 154, 229, 0) 62%),
-    linear-gradient(180deg, rgba(182, 154, 229, 0.24), rgba(182, 154, 229, 0.1));
+  background: linear-gradient(180deg, rgba(182, 154, 229, 0.2), rgba(182, 154, 229, 0.08));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.34),
-    inset 0 -3px 8px rgba(0, 0, 0, 0.18),
-    0 12px 36px -12px rgba(182, 154, 229, 0.75),
-    0 0 20px -4px rgba(182, 154, 229, 0.42);
+    0 0 30px rgba(182, 154, 229, 0.55),
+    0 0 10px rgba(182, 154, 229, 0.35);
 }
 
 .check-row {
