@@ -1,5 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import type { Api, RawApi } from "grammy";
+import { prisma } from "@gennety/db";
+import { t, buildGateInvoicePayload, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
 import {
@@ -14,10 +16,25 @@ import {
   createTicketIntent,
   verifyTicketPayment,
   amountForScope,
+  gateStarsForScope,
   type TicketScope,
 } from "../../services/ticket-payment.js";
 import type { TicketStateView } from "../../handlers/matching/ticket-gate.js";
 import { emitTicketEvent } from "../../services/ticket-analytics.js";
+
+/**
+ * Per-scope Star (XTR) prices surfaced to the gate Mini App so it can render
+ * "Pay … ⭐N" buttons (mirrors the wallet route's `starsEnabled`/`bundleStars`).
+ * Null when Stars is off (the Mini App then falls back to the mock USD buttons).
+ */
+function gateStarsView(): { self: number; both: number; partner: number } | null {
+  if (!env.TICKET_STARS_ENABLED) return null;
+  return {
+    self: gateStarsForScope("self"),
+    both: gateStarsForScope("both"),
+    partner: gateStarsForScope("partner"),
+  };
+}
 
 /**
  * Charged amount for a gate action. The `self` scope honours the famine
@@ -71,7 +88,86 @@ export function createTicketRouter(api: Api<RawApi>): Router {
     if (result.state.partnerPaidForMe) {
       void notePartnerPaidSeen(api, BigInt(auth.user.id), matchId).catch(() => {});
     }
-    res.status(200).json({ ok: true, ...result.state });
+    // When Stars is on, the gate Mini App renders Star-priced pay buttons and
+    // pays natively via WebApp.openInvoice (see POST /stars-invoice).
+    res.status(200).json({
+      ok: true,
+      ...result.state,
+      starsEnabled: env.TICKET_STARS_ENABLED,
+      stars: gateStarsView(),
+    });
+  });
+
+  // Native Telegram Stars (XTR) payment for the §3.5b date gate. Returns a
+  // Telegram invoice link the Mini App opens with WebApp.openInvoice(); the gate
+  // is settled by the bot's successful_payment handler (handlers/payments.ts),
+  // keyed on the `gate:<matchId>:<scope>` payload. The mock intent/confirm path
+  // stays for TICKET_STARS_ENABLED=false.
+  router.post("/stars-invoice", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+    if (!env.TICKET_STARS_ENABLED) {
+      res.status(404).json({ error: "stars-not-enabled" });
+      return;
+    }
+    const matchId = matchIdOf(req);
+    if (!matchId) {
+      res.status(404).json({ error: "match-not-found" });
+      return;
+    }
+    const scope = parseScope(req.body);
+    if (!scope) {
+      res.status(400).json({ error: "scope must be 'self', 'both' or 'partner'" });
+      return;
+    }
+
+    // Re-validate participation + male-only scope before issuing the invoice.
+    const stateRes = await getTicketState(BigInt(auth.user.id), matchId);
+    if (!stateRes.ok) {
+      res.status(stateRes.reason === "not-participant" ? 403 : 404).json({ error: stateRes.reason });
+      return;
+    }
+    if ((scope === "both" || scope === "partner") && stateRes.state.myGender !== "male") {
+      res.status(403).json({ error: "scope-not-allowed" });
+      return;
+    }
+
+    const stars = gateStarsForScope(scope);
+    if (stars <= 0) {
+      res.status(400).json({ error: "stars-not-priced" });
+      return;
+    }
+
+    const { getBotApi } = await import("../server.js");
+    const botApi = getBotApi();
+    if (!botApi) {
+      res.status(503).json({ error: "bot-unavailable" });
+      return;
+    }
+    const user = await prisma.user.findUnique({
+      where: { telegramId: BigInt(auth.user.id) },
+      select: { language: true },
+    });
+    const lang = (user?.language ?? "en") as Language;
+    const count = scope === "both" ? 2 : 1;
+    try {
+      const link = await botApi.createInvoiceLink(
+        t(lang, "ticketStoreInvoiceTitle"),
+        t(lang, "ticketGateInvoiceDesc", { count }),
+        buildGateInvoicePayload(matchId, scope),
+        "", // provider_token — empty for Telegram Stars (XTR)
+        "XTR",
+        [{ label: t(lang, "ticketStoreInvoiceLabel", { count }), amount: stars }],
+      );
+      emitTicketEvent("ticket_intent_created", { matchId, scope, amountCents: stars });
+      res.status(200).json({ ok: true, link, stars });
+    } catch (err) {
+      console.error("[ticket] createInvoiceLink (stars gate) failed:", err);
+      res.status(502).json({ error: "invoice-failed" });
+    }
   });
 
   // Stream a participant's first profile photo for the Mini App avatars. Auth
@@ -113,6 +209,16 @@ export function createTicketRouter(api: Api<RawApi>): Router {
     const auth = authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
+      return;
+    }
+    // PAY-1: when Stars is the live rail, the simulated mock intent/confirm must
+    // NOT settle anything — Stars (/stars-invoice + successful_payment) is the
+    // sole purchase path. Otherwise any Mini App user could mint a free ticket
+    // via the mock flow. The mock survives only as the TICKET_STARS_ENABLED=false
+    // fallback. The wallet /use path stays open (spending earned tickets is not a
+    // purchase).
+    if (env.TICKET_STARS_ENABLED) {
+      res.status(404).json({ error: "stars-mode" });
       return;
     }
     const matchId = matchIdOf(req);
@@ -157,6 +263,11 @@ export function createTicketRouter(api: Api<RawApi>): Router {
     const auth = authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
+      return;
+    }
+    // PAY-1: Stars is the sole purchase rail when enabled — see /intent above.
+    if (env.TICKET_STARS_ENABLED) {
+      res.status(404).json({ error: "stars-mode" });
       return;
     }
     const matchId = matchIdOf(req);

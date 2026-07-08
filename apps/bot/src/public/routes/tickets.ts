@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
-import { ticketBundleFor } from "@gennety/shared";
+import { ticketBundleFor, buildStoreInvoicePayload, t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
 import {
@@ -47,13 +47,73 @@ export function createTicketStoreRouter(): Router {
       priceCents: env.TICKET_PRICE_CENTS,
       discountPct: discount?.pct ?? 0,
       discountExpiresAt: discount?.expiresAt.toISOString() ?? null,
+      // When Stars is the store currency, the Mini App renders Star prices and
+      // pays natively via WebApp.openInvoice (see /store/stars-invoice). The
+      // famine discount is USD-only and never applies to a Stars purchase.
+      starsEnabled: env.TICKET_STARS_ENABLED,
+      bundleStars: env.TICKET_STARS_ENABLED ? env.TICKET_BUNDLE_STARS : null,
     });
+  });
+
+  // Native Telegram Stars (XTR) purchase from inside the store Mini App. Returns
+  // a Telegram invoice link; the Mini App opens it with WebApp.openInvoice(). The
+  // wallet is credited by the bot's successful_payment handler
+  // (handlers/payments.ts), keyed on the `store:<count>` payload — the same path
+  // as any Stars invoice. No mock intent/confirm in this mode.
+  router.post("/store/stars-invoice", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+    if (!env.TICKET_STARS_ENABLED) {
+      res.status(404).json({ error: "stars-not-enabled" });
+      return;
+    }
+    const bundle = parseBundle(req.body);
+    const stars = bundle ? env.TICKET_BUNDLE_STARS[bundle.count] : undefined;
+    if (!bundle || !stars) {
+      res.status(400).json({ error: "unknown-bundle" });
+      return;
+    }
+    const user = await resolveUser(auth.user.id);
+    if (!user) {
+      res.status(404).json({ error: "user-not-found" });
+      return;
+    }
+    const { getBotApi } = await import("../server.js");
+    const api = getBotApi();
+    if (!api) {
+      res.status(503).json({ error: "bot-unavailable" });
+      return;
+    }
+    const lang = (user.language ?? "en") as Language;
+    try {
+      const link = await api.createInvoiceLink(
+        t(lang, "ticketStoreInvoiceTitle"),
+        t(lang, "ticketStoreInvoiceDesc", { count: bundle.count }),
+        buildStoreInvoicePayload(bundle.count),
+        "", // provider_token — empty for Telegram Stars (XTR)
+        "XTR",
+        [{ label: t(lang, "ticketStoreInvoiceLabel", { count: bundle.count }), amount: stars }],
+      );
+      res.status(200).json({ ok: true, link, stars });
+    } catch (err) {
+      console.error("[tickets] createInvoiceLink (stars) failed:", err);
+      res.status(502).json({ error: "invoice-failed" });
+    }
   });
 
   router.post("/store/intent", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
+      return;
+    }
+    // PAY-1: Stars is the sole top-up rail when enabled — the mock intent/confirm
+    // must not mint free tickets. Mock survives only as the fallback.
+    if (env.TICKET_STARS_ENABLED) {
+      res.status(404).json({ error: "stars-mode" });
       return;
     }
     const bundle = parseBundle(req.body);
@@ -87,6 +147,11 @@ export function createTicketStoreRouter(): Router {
     const auth = authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
+      return;
+    }
+    // PAY-1: Stars is the sole top-up rail when enabled — see /store/intent.
+    if (env.TICKET_STARS_ENABLED) {
+      res.status(404).json({ error: "stars-mode" });
       return;
     }
     const bundle = parseBundle(req.body);
@@ -171,13 +236,13 @@ async function effectiveBundlePrice(
 
 async function resolveUser(
   telegramId: number,
-): Promise<{ id: string; ticketBalance: number } | null> {
+): Promise<{ id: string; ticketBalance: number; language: string | null } | null> {
   const user = await prisma.user.findUnique({
     where: { telegramId: BigInt(telegramId) },
-    select: { id: true, ticketBalance: true },
+    select: { id: true, ticketBalance: true, language: true },
   });
   if (!user) return null;
-  return { id: user.id, ticketBalance: user.ticketBalance };
+  return { id: user.id, ticketBalance: user.ticketBalance, language: user.language };
 }
 
 type AuthOk = { ok: true; user: { id: number } };

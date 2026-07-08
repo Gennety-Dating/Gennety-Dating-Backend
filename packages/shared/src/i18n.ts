@@ -111,6 +111,12 @@ const translations = {
     ticketStorePurchased:
       "✨ Payment received — *{count}* ticket(s) added!\n\nBalance: *{balance}* 🎟️",
     ticketStoreCheckoutError: "Couldn't confirm that payment. Please try again.",
+    ticketStoreInvoiceTitle: "Gennety Date Tickets",
+    ticketStoreInvoiceDesc:
+      "{count} Date Ticket(s) added to your wallet. Each ticket covers one date.",
+    ticketGateInvoiceDesc:
+      "Securing your date — {count} Date Ticket(s). Each ticket covers one person.",
+    ticketStoreInvoiceLabel: "{count} Date Ticket(s)",
     onboardingPhotosNeedMore:
       "Photo progress: {count}/{min}. Clear photos still needed: {remaining}.",
     onboardingPhotosBonusOffer:
@@ -845,6 +851,12 @@ const translations = {
     ticketStorePurchased:
       "✨ Оплата прошла — добавлено *{count}* 🎟️!\n\nБаланс: *{balance}* 🎟️",
     ticketStoreCheckoutError: "Не удалось подтвердить оплату. Попробуй ещё раз.",
+    ticketStoreInvoiceTitle: "Билеты Gennety",
+    ticketStoreInvoiceDesc:
+      "Пополнение кошелька: {count} 🎟️. Каждый билет покрывает одно свидание.",
+    ticketGateInvoiceDesc:
+      "Оплата вашего свидания — {count} билет(а/ов). Один билет — на одного человека.",
+    ticketStoreInvoiceLabel: "Билеты Gennety × {count}",
     onboardingPhotosNeedMore:
       "Фото: {count}/{min}. Осталось загрузить ещё {remaining} чёткое фото до обязательного минимума.",
     onboardingPhotosBonusOffer:
@@ -1572,6 +1584,12 @@ const translations = {
     ticketStorePurchased:
       "✨ Оплату отримано — додано *{count}* 🎟️!\n\nБаланс: *{balance}* 🎟️",
     ticketStoreCheckoutError: "Не вдалося підтвердити оплату. Спробуй ще раз.",
+    ticketStoreInvoiceTitle: "Квитки Gennety",
+    ticketStoreInvoiceDesc:
+      "Поповнення гаманця: {count} 🎟️. Кожен квиток покриває одне побачення.",
+    ticketGateInvoiceDesc:
+      "Оплата вашого побачення — {count} квиток(ів). Один квиток — на одну людину.",
+    ticketStoreInvoiceLabel: "Квитки Gennety × {count}",
     onboardingPhotosNeedMore:
       "Фото: {count}/{min}. Залишилося надіслати ще {remaining} чітке фото до обов'язкового мінімуму.",
     onboardingPhotosBonusOffer:
@@ -2393,6 +2411,12 @@ const deTranslations: TranslationTable = {
   ticketStorePurchased:
     "✨ Zahlung erhalten — *{count}* Ticket(s) hinzugefügt!\n\nGuthaben: *{balance}* 🎟️",
   ticketStoreCheckoutError: "Zahlung konnte nicht bestätigt werden. Bitte versuch es erneut.",
+  ticketStoreInvoiceTitle: "Gennety Date-Tickets",
+  ticketStoreInvoiceDesc:
+    "{count} Date-Ticket(s) für deine Wallet. Jedes Ticket deckt ein Date ab.",
+  ticketGateInvoiceDesc:
+    "Dein Date wird gesichert — {count} Date-Ticket(s). Ein Ticket pro Person.",
+  ticketStoreInvoiceLabel: "{count} Date-Ticket(s)",
   onboardingPhotosNeedMore:
     "Fotostand: {count}/{min}. Noch benötigte klare Fotos: {remaining}.",
   onboardingPhotosBonusOffer:
@@ -3021,6 +3045,12 @@ const plTranslations: TranslationTable = {
   ticketStorePurchased:
     "✨ Płatność otrzymana — dodano *{count}* 🎟️!\n\nSaldo: *{balance}* 🎟️",
   ticketStoreCheckoutError: "Nie udało się potwierdzić płatności. Spróbuj ponownie.",
+  ticketStoreInvoiceTitle: "Bilety Gennety",
+  ticketStoreInvoiceDesc:
+    "{count} bilet(ów) dodanych do portfela. Każdy bilet pokrywa jedną randkę.",
+  ticketGateInvoiceDesc:
+    "Zabezpieczenie randki — {count} bilet(y/ów). Jeden bilet na jedną osobę.",
+  ticketStoreInvoiceLabel: "Bilety Gennety × {count}",
   onboardingPhotosNeedMore:
     "Postęp zdjęć: {count}/{min}. Pozostało wyraźnych zdjęć: {remaining}.",
   onboardingPhotosBonusOffer:
