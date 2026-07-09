@@ -115,31 +115,30 @@ if (!matchId) {
   initMap();
   initSearch();
   initShareCurrentLocation();
-  initKeyboardPin();
+  initKeyboardBottomBar();
   confirmEl?.addEventListener("click", () => {
     void handleConfirm();
   });
 }
 
 /**
- * Keep the bottom bar (address readout + Confirm) pinned to the layout-viewport
- * bottom when the on-screen keyboard opens, instead of letting it ride up with
- * the shrinking visual viewport and cover the search-results list. iOS reports
- * the keyboard as a smaller `visualViewport`; we translate the bar down by that
- * delta so it stays put (tucked under the keyboard while typing, back in place
- * once it closes).
+ * Keep the bottom island (address readout + "use my location" + Confirm) out of
+ * the way while the user is typing a search query. When the search field is
+ * focused the on-screen keyboard is up, and in the Telegram WebView a fixed
+ * bottom bar rides up to sit just above the keyboard — covering the results list
+ * and leaving no room for it. Measuring the keyboard is unreliable here (the
+ * WebView shrinks `window.innerHeight` alongside `visualViewport`, so the delta
+ * reads ~0 and a translate-down never fires), so instead we simply tuck the
+ * whole bottom island off-screen on focus and slide it back on blur. Confirm /
+ * geolocation aren't needed mid-search, so hiding them frees the full space
+ * between the search box and the keyboard for the dropdown.
  */
-function initKeyboardPin(): void {
-  const vv = window.visualViewport;
-  if (!vv || typeof document.querySelector !== "function") return;
+function initKeyboardBottomBar(): void {
+  if (!searchEl || typeof document.querySelector !== "function") return;
   const bottom = document.querySelector<HTMLElement>(".layer.bottom");
   if (!bottom) return;
-  const apply = (): void => {
-    const keyboard = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-    bottom.style.transform = keyboard > 40 ? `translateY(${keyboard}px)` : "";
-  };
-  vv.addEventListener("resize", apply);
-  vv.addEventListener("scroll", apply);
+  searchEl.addEventListener("focus", () => bottom.classList.add("kb-open"));
+  searchEl.addEventListener("blur", () => bottom.classList.remove("kb-open"));
 }
 
 function showNoContext(): void {
@@ -319,6 +318,9 @@ function initShareCurrentLocation(): void {
 function pickHit(hit: LocationSearchHit): void {
   if (searchEl) searchEl.value = hit.name;
   hideResults();
+  // Dismiss the keyboard so the bottom island (Confirm) slides back in and the
+  // map/pin is visible again now that a place has been chosen.
+  searchEl?.blur();
   // Compose a human label combining name + short address. The address is often
   // the full street + city; combining gives the bot's confirmation message a
   // stable "[Name], [Address]" shape.

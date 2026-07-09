@@ -96,6 +96,18 @@ body {
 }
 .layer.bottom {
   bottom: calc(var(--tg-content-bottom) + env(safe-area-inset-bottom, 0px) + 18px);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+/* While the search field is focused the on-screen keyboard is up; in the
+   Telegram WebView a fixed bottom bar would ride up to just above the keyboard
+   and cover the results list. Tuck it off-screen while typing (Confirm /
+   geolocation aren't needed until a place is picked) so the dropdown gets the
+   full space between the search box and the keyboard. Toggled from location.ts
+   on search focus/blur. */
+.layer.bottom.kb-open {
+  transform: translateY(160%);
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* --- Search island --- */
