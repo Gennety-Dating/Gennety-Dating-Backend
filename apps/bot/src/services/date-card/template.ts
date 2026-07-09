@@ -143,7 +143,7 @@ export function buildCardElement(input: CardElementInput): CardNode {
  * height is derived from the mark's real aspect ratio so it never squishes.
  */
 function logoImg(logo: LogoMark): CardNode {
-  const displayW = 360;
+  const displayW = 300;
   const displayH = Math.round(displayW * (logo.height / logo.width));
   return el(
     "img",
