@@ -128,8 +128,8 @@ function logoImg(logo: LogoMark): CardNode {
     "img",
     {
       position: "absolute",
-      top: "90px",
-      right: "14px",
+      top: "68px",
+      right: "40px",
       width: `${displayW}px`,
       height: `${displayH}px`,
       transform: "rotate(13deg)",
