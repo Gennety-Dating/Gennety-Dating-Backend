@@ -2,11 +2,12 @@
  * Date-card layout, expressed as a plain satori element tree (no JSX, so the
  * bot's tsconfig needs no React/JSX support).
  *
- * Aesthetic ("Partiful-glow", finalized 2026-06-20): a near-black card with
- * soft lilac radial glows and faint film grain; a wide duotone venue photo as
- * the hero; an overlapping tilted polaroid of the partner; a bold Archivo Black
- * headline slogan whose last line is the lilac accent; a compact venue detail
- * block. The "Gennety" wordmark sits top-left and the brand star logo sits
+ * Aesthetic ("Partiful-glow", finalized 2026-06-20; recolored to the burgundy /
+ * black / white design system 2026-07-09): a near-black card with soft burgundy
+ * radial glows and faint film grain; a wide duotone venue photo as the hero; an
+ * overlapping tilted polaroid of the partner; a bold Archivo Black headline
+ * slogan whose last line is the burgundy accent; a compact venue detail block.
+ * The "Gennety" wordmark sits top-left and the brand butterfly logo sits
  * top-right (slightly tilted, nudged toward the edge like the polaroid).
  *
  * NOTE: rendered text is kept emoji-free on purpose — the bundled fonts have no
@@ -22,7 +23,7 @@ export const CARD_W = 1080;
 export const CARD_H = 1350;
 
 const BG = "#030303";
-const LILAC = "#B69AE5";
+const BURGUNDY = "#8B253B";
 const INK = "#F2EFF7";
 const MUTED = "#8E8895";
 
@@ -34,6 +35,16 @@ export interface CardNode {
     children?: (CardNode | string)[] | CardNode | string;
     [key: string]: unknown;
   };
+}
+
+/**
+ * Rasterized brand mark (butterfly) with its real, alpha-trimmed pixel size, so
+ * the layout can derive a non-squished display box from `width/height`.
+ */
+export interface LogoMark {
+  png: Buffer;
+  width: number;
+  height: number;
 }
 
 function el(
@@ -57,8 +68,8 @@ export interface CardElementInput {
   venuePhoto: Buffer | null;
   /** Film-grain overlay tile (full-card PNG). Optional. */
   grain: Buffer | null;
-  /** Brand star logo PNG (already downscaled). Sits top-right. Optional. */
-  logo: Buffer | null;
+  /** Brand butterfly mark (rasterized, alpha-trimmed). Sits top-right. Optional. */
+  logo: LogoMark | null;
   venueName: string;
   venueAddress: string;
   /** Headline slogan; split on `\n` into stacked lines, last line accented. */
@@ -79,7 +90,7 @@ export function buildCardElement(input: CardElementInput): CardNode {
       color: INK,
     },
     [
-      // Soft lilac glow blobs (radial-gradient, no blur needed).
+      // Soft burgundy glow blobs (radial-gradient, no blur needed).
       el("div", {
         display: "flex",
         position: "absolute",
@@ -88,7 +99,7 @@ export function buildCardElement(input: CardElementInput): CardNode {
         width: "620px",
         height: "620px",
         borderRadius: "999px",
-        backgroundImage: `radial-gradient(closest-side, ${LILAC}55, rgba(182,154,229,0))`,
+        backgroundImage: `radial-gradient(closest-side, ${BURGUNDY}55, rgba(139,37,59,0))`,
       }),
       el("div", {
         display: "flex",
@@ -98,7 +109,7 @@ export function buildCardElement(input: CardElementInput): CardNode {
         width: "680px",
         height: "680px",
         borderRadius: "999px",
-        backgroundImage: `radial-gradient(closest-side, #7C53C955, rgba(124,83,201,0))`,
+        backgroundImage: `radial-gradient(closest-side, #5E152655, rgba(94,21,38,0))`,
       }),
       ...(input.grain
         ? [
@@ -122,24 +133,30 @@ export function buildCardElement(input: CardElementInput): CardNode {
       venueSection(input),
       el("div", { display: "flex", flexGrow: 1, minHeight: "0px" }),
       detailsSection(input),
-      ...(input.logo
-        ? [
-            el(
-              "img",
-              {
-                position: "absolute",
-                top: "18px",
-                right: "14px",
-                width: "375px",
-                height: "362px",
-                transform: "rotate(10deg)",
-              },
-              undefined,
-              { src: dataUri(input.logo) },
-            ),
-          ]
-        : []),
+      ...(input.logo ? [logoImg(input.logo)] : []),
     ],
+  );
+}
+
+/**
+ * Brand butterfly mark, top-right and slightly tilted. Width is fixed and the
+ * height is derived from the mark's real aspect ratio so it never squishes.
+ */
+function logoImg(logo: LogoMark): CardNode {
+  const displayW = 360;
+  const displayH = Math.round(displayW * (logo.height / logo.width));
+  return el(
+    "img",
+    {
+      position: "absolute",
+      top: "18px",
+      right: "14px",
+      width: `${displayW}px`,
+      height: `${displayH}px`,
+      transform: "rotate(10deg)",
+    },
+    undefined,
+    { src: dataUri(logo.png) },
   );
 }
 
@@ -161,11 +178,11 @@ function header(): CardNode {
   );
 }
 
-/** Archivo Black headline; the final line is the lilac accent. */
+/** Archivo Black headline; the final line is the burgundy accent. */
 function heroSlogan(slogan: string): CardNode {
   const raw = slogan.split("\n");
   const lines = raw.map((line, i) =>
-    el("div", { display: "flex", color: i === raw.length - 1 ? LILAC : INK }, line),
+    el("div", { display: "flex", color: i === raw.length - 1 ? BURGUNDY : INK }, line),
   );
   return el(
     "div",
@@ -191,7 +208,7 @@ function venueSection(input: CardElementInput): CardNode {
         display: "flex",
         width: "100%",
         height: "100%",
-        backgroundImage: `linear-gradient(135deg, #3A2563, ${LILAC})`,
+        backgroundImage: `linear-gradient(135deg, #3A0E1C, ${BURGUNDY})`,
       });
 
   const partnerInner = input.partnerPhoto
@@ -203,7 +220,7 @@ function venueSection(input: CardElementInput): CardNode {
         width: "300px",
         height: "360px",
         borderRadius: "4px",
-        backgroundColor: "#1A1322",
+        backgroundColor: "#1A0A0F",
       });
 
   return el(
@@ -226,7 +243,7 @@ function venueSection(input: CardElementInput): CardNode {
         width: "680px",
         height: "470px",
         borderRadius: "999px",
-        backgroundImage: `radial-gradient(closest-side, ${LILAC}66, rgba(182,154,229,0))`,
+        backgroundImage: `radial-gradient(closest-side, ${BURGUNDY}66, rgba(139,37,59,0))`,
       }),
       // Hero venue photo — wide, shifted left, small gap from the headline, long.
       el(

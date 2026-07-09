@@ -1222,15 +1222,17 @@ entity's `unix_time`.
 Gated by `DATE_CARD_FEATURE_ENABLED` (default **off** → the scheduled
 confirmation is the plain-text DM above). Telegram-only in v1. When on, each
 side's `scheduled` confirmation is a rendered **PNG date card** (the recipient
-sees their *partner*). The look ("Partiful-glow", 2026-06-20) is a near-black
-card (`#030303`) with soft lilac (`#B69AE5`) radial glows and faint film grain:
+sees their *partner*). The look ("Partiful-glow", 2026-06-20; recolored to the
+burgundy / black / white design system 2026-07-09) is a near-black
+card (`#030303`) with soft burgundy (`#8B253B`) radial glows and faint film grain:
 a wide **duotone**-treated venue photo as the hero (the stock Places/curated
-image is remapped into the brand palette so it reads as part of the card), an
+image is remapped into the burgundy brand palette so it reads as part of the card), an
 overlapping tilted **polaroid** of the partner, a bold Archivo Black headline
-**slogan** whose last line is the lilac accent (`dateCardSlogan`; the brand
+**slogan** whose last line is the burgundy accent (`dateCardSlogan`; the brand
 voice is intentionally a fixed English line —
 "Error 404: Chat not found. Try real life." — across all five locales), the
-"Gennety" wordmark top-left, and the venue name + address. The card
+"Gennety" wordmark top-left, the brand **butterfly** logo (`butterfly-logo.svg`,
+shared with the match card) tilted top-right, and the venue name + address. The card
 deliberately **omits the
 date/time** — the exact slot already lives in the Telegram caption right below,
 so repeating it on the card adds nothing and the freed space is spent on a

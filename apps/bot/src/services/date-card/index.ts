@@ -6,8 +6,9 @@ import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import { t, type Language } from "@gennety/shared";
 import { downloadProfileImage } from "../storage.js";
+import { butterflyPng, type ButterflyMark } from "../match-card/collage.js";
 import { blurFacesInPhoto } from "./face-blur.js";
-import { toPngBuffer, duotonePng, grainPng, resizePng } from "./image.js";
+import { toPngBuffer, duotonePng, grainPng } from "./image.js";
 import { resolveVenuePhoto } from "./photo-source.js";
 import { buildCardElement, CARD_W, CARD_H, type CardNode } from "./template.js";
 
@@ -67,16 +68,15 @@ function grainTile(): Buffer {
   return cachedGrain;
 }
 
-/** Brand star logo, downscaled once and reused for every render. */
-let cachedLogo: Buffer | null | undefined;
-async function loadLogo(): Promise<Buffer | null> {
+/**
+ * Brand butterfly mark, rasterized once and reused for every render. The
+ * burgundy radial gradient is baked into `butterfly-logo.svg`, so no tint is
+ * applied here. Shared with the match-card renderer.
+ */
+let cachedLogo: ButterflyMark | null | undefined;
+async function loadLogo(): Promise<ButterflyMark | null> {
   if (cachedLogo !== undefined) return cachedLogo;
-  try {
-    const raw = readFileSync(fileURLToPath(new URL("../../assets/brand/gennety-logo.png", import.meta.url)));
-    cachedLogo = (await resizePng(raw, 800)) ?? (await toPngBuffer(raw));
-  } catch {
-    cachedLogo = null;
-  }
+  cachedLogo = await butterflyPng(600);
   return cachedLogo;
 }
 
@@ -108,7 +108,7 @@ export async function renderDateCard(
   let venuePhoto: Buffer | null = null;
   if (venueRaw) {
     venuePhoto =
-      (await duotonePng(venueRaw.buffer, "#160A28", "#F0E8FF", 1000, 690, 0.7)) ??
+      (await duotonePng(venueRaw.buffer, "#1C0710", "#F7E7EB", 1000, 690, 0.7)) ??
       (await toPngBuffer(venueRaw.buffer));
   }
 

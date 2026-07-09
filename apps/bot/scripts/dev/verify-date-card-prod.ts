@@ -14,7 +14,8 @@ import { Api, InputFile } from "grammy";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import { t, type Language } from "@gennety/shared";
-import { duotonePng, grainPng, toPngBuffer, resizePng } from "../../src/services/date-card/image.js";
+import { duotonePng, grainPng, toPngBuffer } from "../../src/services/date-card/image.js";
+import { butterflyPng } from "../../src/services/match-card/collage.js";
 import { buildCardElement, CARD_W, CARD_H } from "../../src/services/date-card/template.js";
 
 const repoRoot = resolve(import.meta.dirname, "../../../..");
@@ -44,10 +45,9 @@ async function main(): Promise<void> {
     fetchBuf("https://picsum.photos/id/431/1000/720"),
   ]);
   const partnerPhoto = partnerRaw ? await toPngBuffer(partnerRaw) : null;
-  const venuePhoto = venueRaw ? await duotonePng(venueRaw, "#160A28", "#F0E8FF", 1000, 690, 0.7) : null;
+  const venuePhoto = venueRaw ? await duotonePng(venueRaw, "#1C0710", "#F7E7EB", 1000, 690, 0.7) : null;
 
-  const logoRaw = readFileSync(fileURLToPath(new URL("../../src/assets/brand/gennety-logo.png", import.meta.url)));
-  const logo = (await resizePng(logoRaw, 800)) ?? (await toPngBuffer(logoRaw));
+  const logo = await butterflyPng(600);
 
   const archivo = fontFile("ArchivoBlack-Regular.ttf");
   const element = buildCardElement({
@@ -81,7 +81,7 @@ async function main(): Promise<void> {
   const token = process.env["BOT_TOKEN"];
   if (arg("chat") !== "skip" && token && Number.isFinite(chat) && chat) {
     await new Api(token).sendPhoto(chat, new InputFile(png, "prod-card.png"), {
-      caption: "✅ Прод-рендер (template.ts + duotone/grain + i18n-слоган). Это финал в коде.",
+      caption: "✅ Карточка свидания — новая палитра (бордовый #8B253B + логотип-бабочка). Прод-рендер из кода.",
     });
     console.log(`[verify] sent prod render to chat=${chat}`);
   }
