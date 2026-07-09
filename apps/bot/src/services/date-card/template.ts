@@ -3,8 +3,8 @@
  * bot's tsconfig needs no React/JSX support).
  *
  * Aesthetic ("Partiful-glow", finalized 2026-06-20; recolored to the burgundy /
- * black / white design system 2026-07-09): a near-black card with soft burgundy
- * radial glows and faint film grain; a wide duotone venue photo as the hero; an
+ * black / white design system 2026-07-09): a near-black card with a soft
+ * burgundy glow behind the hero photo and faint film grain; a wide duotone venue photo as the hero; an
  * overlapping tilted polaroid of the partner; a bold Archivo Black headline
  * slogan whose last line is the burgundy accent; a compact venue detail block.
  * The "Gennety" wordmark sits top-left and the brand butterfly logo sits
@@ -90,27 +90,6 @@ export function buildCardElement(input: CardElementInput): CardNode {
       color: INK,
     },
     [
-      // Soft burgundy glow blobs (radial-gradient, no blur needed).
-      el("div", {
-        display: "flex",
-        position: "absolute",
-        top: "-160px",
-        right: "-120px",
-        width: "620px",
-        height: "620px",
-        borderRadius: "999px",
-        backgroundImage: `radial-gradient(closest-side, ${BURGUNDY}55, rgba(139,37,59,0))`,
-      }),
-      el("div", {
-        display: "flex",
-        position: "absolute",
-        bottom: "-200px",
-        left: "-160px",
-        width: "680px",
-        height: "680px",
-        borderRadius: "999px",
-        backgroundImage: `radial-gradient(closest-side, #5E152655, rgba(94,21,38,0))`,
-      }),
       ...(input.grain
         ? [
             el(
@@ -149,11 +128,11 @@ function logoImg(logo: LogoMark): CardNode {
     "img",
     {
       position: "absolute",
-      top: "18px",
+      top: "36px",
       right: "14px",
       width: `${displayW}px`,
       height: `${displayH}px`,
-      transform: "rotate(10deg)",
+      transform: "rotate(13deg)",
     },
     undefined,
     { src: dataUri(logo.png) },
