@@ -3,8 +3,9 @@
  * bot's tsconfig needs no React/JSX support).
  *
  * Aesthetic ("Partiful-glow", finalized 2026-06-20; recolored to the burgundy /
- * black / white design system 2026-07-09): a near-black card with a soft
- * burgundy glow behind the hero photo and faint film grain; a wide duotone venue photo as the hero; an
+ * black / white design system 2026-07-09): a near-black card with two faint
+ * burgundy corner discs, a soft burgundy glow behind the hero photo, and faint
+ * film grain; a wide duotone venue photo as the hero; an
  * overlapping tilted polaroid of the partner; a bold Archivo Black headline
  * slogan whose last line is the burgundy accent; a compact venue detail block.
  * The "Gennety" wordmark sits top-left and the brand butterfly logo sits
@@ -90,6 +91,28 @@ export function buildCardElement(input: CardElementInput): CardNode {
       color: INK,
     },
     [
+      // Faint burgundy corner discs — solid even fill (no radial falloff, so no
+      // "hole" in the middle). Same size/position as the old glow blobs.
+      el("div", {
+        display: "flex",
+        position: "absolute",
+        top: "-160px",
+        right: "-120px",
+        width: "620px",
+        height: "620px",
+        borderRadius: "999px",
+        backgroundColor: "rgba(139,37,59,0.33)",
+      }),
+      el("div", {
+        display: "flex",
+        position: "absolute",
+        bottom: "-200px",
+        left: "-160px",
+        width: "680px",
+        height: "680px",
+        borderRadius: "999px",
+        backgroundColor: "rgba(139,37,59,0.33)",
+      }),
       ...(input.grain
         ? [
             el(

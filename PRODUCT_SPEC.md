@@ -1224,7 +1224,7 @@ confirmation is the plain-text DM above). Telegram-only in v1. When on, each
 side's `scheduled` confirmation is a rendered **PNG date card** (the recipient
 sees their *partner*). The look ("Partiful-glow", 2026-06-20; recolored to the
 burgundy / black / white design system 2026-07-09) is a near-black
-card (`#030303`) with a soft burgundy (`#8B253B`) glow behind the hero photo and faint film grain:
+card (`#030303`) with two faint burgundy (`#8B253B`) corner discs, a soft glow behind the hero photo, and faint film grain:
 a wide **duotone**-treated venue photo as the hero (the stock Places/curated
 image is remapped into the burgundy brand palette so it reads as part of the card), an
 overlapping tilted **polaroid** of the partner, a bold Archivo Black headline
