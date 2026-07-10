@@ -1320,10 +1320,33 @@ function LanguageGate(props: {
   );
 }
 
-const THEME_OPTIONS: { value: OnboardingTheme; icon: string }[] = [
-  { value: "dark", icon: "dark_mode" },
-  { value: "light", icon: "light_mode" },
-];
+/* Hand-drawn, on-brand glyphs for the theme picker (burgundy via currentColor). */
+const MoonGlyph = (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M21 12.9A8.5 8.5 0 1 1 11.1 3a6.6 6.6 0 0 0 9.9 9.9z" />
+  </svg>
+);
+const SunGlyph = (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="4.1" fill="currentColor" stroke="none" />
+    <path d="M12 2.4v2.3M12 19.3v2.3M4.3 4.3l1.6 1.6M18.1 18.1l1.6 1.6M2.4 12h2.3M19.3 12h2.3M4.3 19.7l1.6-1.6M18.1 5.9l1.6-1.6" />
+  </svg>
+);
+const CheckGlyph = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M5 12.5l4.5 4.5L19 7" />
+  </svg>
+);
+
+const THEME_VALUES: readonly OnboardingTheme[] = ["dark", "light"];
 
 function ThemeGate(props: {
   selected: OnboardingTheme;
@@ -1357,31 +1380,26 @@ function ThemeGate(props: {
       <h1>{s.themeTitle}</h1>
       <p>{s.themeLead}</p>
       {error ? <div className="gate-error">{error}</div> : null}
-      <div className="theme-choice-row">
-        {THEME_OPTIONS.map((option) => {
-          const label = option.value === "dark" ? s.themeDark : s.themeLight;
+      <div className="theme-tile-row">
+        {THEME_VALUES.map((value) => {
+          const label = value === "dark" ? s.themeDark : s.themeLight;
           return (
             <button
-              key={option.value}
+              key={value}
               type="button"
-              className={`theme-choice theme-choice--${option.value} ${
-                props.selected === option.value ? "is-selected" : ""
-              }`}
+              className={`theme-tile theme-tile--${value} ${props.selected === value ? "is-selected" : ""}`}
               disabled={busy !== null || !app?.initData}
-              onClick={() => void choose(option.value)}
+              onClick={() => void choose(value)}
               aria-label={label}
+              aria-pressed={props.selected === value}
             >
-              <span className="theme-choice__preview" aria-hidden="true">
-                <span className="theme-choice__disc" />
-                <span className="theme-choice__bar theme-choice__bar--title" />
-                <span className="theme-choice__bar" />
-                <span className="theme-choice__bar theme-choice__bar--short" />
-                <span className="theme-choice__accent" />
+              <span className="theme-tile__check" aria-hidden="true">
+                {CheckGlyph}
               </span>
-              <span className="theme-choice__label">
-                <span className="material-symbols-outlined">{option.icon}</span>
-                <strong>{busy === option.value ? s.saving : label}</strong>
+              <span className="theme-tile__glyph" aria-hidden="true">
+                {value === "dark" ? MoonGlyph : SunGlyph}
               </span>
+              <span className="theme-tile__name">{busy === value ? s.saving : label}</span>
             </button>
           );
         })}

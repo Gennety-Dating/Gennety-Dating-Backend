@@ -2125,119 +2125,103 @@ button {
   }
 }
 
-/* ── Theme picker (onboarding step right after the city gate) ──────────── */
-.theme-choice-row {
+/* ── Theme picker (onboarding step right after the city gate) ──────────────
+   Each tile is a real swatch of the theme it selects — its bg + text are pinned
+   to that theme so both previews read regardless of the active one. The glyph,
+   selected ring, and check are the burgundy brand accent. */
+.theme-tile-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
-}
-
-.theme-choice {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px 12px 14px;
-  border-radius: 22px;
-  border: 1.5px solid var(--border);
-  background: var(--fill);
-  color: var(--text);
-  transition:
-    transform 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease;
-}
-
-.theme-choice:active {
-  transform: scale(0.98);
-}
-
-.theme-choice.is-selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.theme-choice:disabled {
-  opacity: 0.6;
-}
-
-/* Preview swatch — colors are hardcoded per option so each tile always shows
-   its own theme regardless of the currently active theme. */
-.theme-choice__preview {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  height: 118px;
-  padding: 14px;
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.14);
-}
-
-.theme-choice--dark .theme-choice__preview {
-  background: #030303;
-}
-
-.theme-choice--light .theme-choice__preview {
-  background: #f5f5f5;
-}
-
-.theme-choice__disc {
-  position: absolute;
-  top: -22px;
-  right: -22px;
-  width: 66px;
-  height: 66px;
-  border-radius: 999px;
-  background: rgba(139, 37, 59, 0.5);
-}
-
-.theme-choice__bar {
-  height: 9px;
-  width: 78%;
-  border-radius: 5px;
-}
-
-.theme-choice__bar--title {
-  height: 13px;
-  width: 62%;
-}
-
-.theme-choice__bar--short {
-  width: 45%;
-}
-
-.theme-choice--dark .theme-choice__bar {
-  background: #e9e6e5;
-}
-
-.theme-choice--light .theme-choice__bar {
-  background: #1d1d1d;
-}
-
-.theme-choice__accent {
   margin-top: 4px;
-  height: 11px;
-  width: 40%;
-  border-radius: 6px;
-  background: #8b253b;
 }
 
-.theme-choice__label {
+.theme-tile {
+  position: relative;
+  aspect-ratio: 3 / 4;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 16px;
+  border-radius: 26px;
+  border: 1.5px solid var(--border);
+  overflow: hidden;
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms ease,
+    box-shadow 220ms ease;
+}
+
+.theme-tile--dark {
+  background: #030303;
+  color: #e9e6e5;
+}
+
+.theme-tile--light {
+  background: #f5f5f5;
+  color: #1d1d1d;
+}
+
+.theme-tile:active {
+  transform: scale(0.97);
+}
+
+.theme-tile:disabled {
+  opacity: 0.65;
+}
+
+.theme-tile.is-selected {
+  border-color: #8b253b;
+  box-shadow:
+    0 0 0 3px rgba(139, 37, 59, 0.28),
+    0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+.theme-tile__glyph {
+  width: 46px;
+  height: 46px;
+  color: #8b253b;
+}
+
+.theme-tile__glyph svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.theme-tile__name {
   font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
 }
 
-.theme-choice__label .material-symbols-outlined {
-  font-size: 20px;
-  opacity: 0.85;
+.theme-tile__check {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #8b253b;
+  color: #fff;
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 180ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.theme-choice__label strong {
-  font-weight: 700;
+.theme-tile__check svg {
+  width: 13px;
+  height: 13px;
+}
+
+.theme-tile.is-selected .theme-tile__check {
+  opacity: 1;
+  transform: scale(1);
 }
 
 /* ── Light-theme overrides ─────────────────────────────────────────────────
