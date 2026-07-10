@@ -70,8 +70,11 @@ body::before {
   min-height: 100dvh;
   max-width: 460px;
   margin: 0 auto;
+  /* Always clear Telegram's floating back / ⋯ controls: at least 54px reserve
+     even if the content-safe-area event never fires, more when it reports a
+     real inset. */
   padding:
-    calc(var(--tg-content-top, 0px) + var(--space-xl))
+    calc(max(var(--tg-content-top, 0px), 54px) + var(--space-lg))
     var(--space-lg)
     calc(var(--tg-content-bottom, 0px) + 128px);
   display: flex;
@@ -149,7 +152,7 @@ body::before {
 }
 .slider-track {
   position: relative;
-  height: 40px;
+  height: 38px;
   border-radius: var(--radius-pill);
   background: var(--fill);
   box-shadow:
@@ -174,8 +177,10 @@ body::before {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 30px;
-  height: 30px;
+  /* Deliberately larger than the 38px track so the knob overhangs the rail
+     (no gap between the circle and the line ends). */
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: none;
   background: linear-gradient(160deg, #ffffff, #efedf1);
@@ -246,7 +251,36 @@ body::before {
     inset 0 1px 3px rgba(0, 0, 0, 0.22),
     inset 0 0 0 1px var(--glass-border);
 }
+
+/* Sliding burgundy indicator — glides between options for a smooth switch.
+   `--seg-index` (0/1/2, set in JS) drives the position; width is one third of
+   the inner track (5px padding ×2 + two 4px gaps = 18px reserved). */
+.seg-indicator {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 5px;
+  width: calc((100% - 18px) / 3);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(160deg, var(--accent-bright), var(--accent));
+  box-shadow:
+    0 6px 16px rgba(139, 37, 59, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transform: translateX(calc(var(--seg-index, 0) * (100% + 4px)));
+  transition:
+    transform 340ms cubic-bezier(0.34, 1.28, 0.5, 1),
+    opacity 200ms ease;
+  opacity: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.segmented.is-selected .seg-indicator {
+  opacity: 1;
+}
+
 .segment {
+  position: relative;
+  z-index: 1;
   appearance: none;
   border: none;
   background: transparent;
@@ -258,20 +292,14 @@ body::before {
   border-radius: var(--radius-pill);
   cursor: pointer;
   transition:
-    background 160ms ease,
-    color 160ms ease,
-    transform 120ms ease,
-    box-shadow 160ms ease;
+    color 200ms ease,
+    transform 120ms ease;
 }
 .segment:active {
   transform: scale(0.97);
 }
 .segment[aria-selected="true"] {
-  background: linear-gradient(160deg, var(--accent-bright), var(--accent));
   color: #fff;
-  box-shadow:
-    0 6px 16px rgba(139, 37, 59, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 /* ── Textarea ──────────────────────────────────────────────────── */

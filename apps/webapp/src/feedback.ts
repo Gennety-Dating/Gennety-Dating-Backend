@@ -445,9 +445,18 @@ async function main(): Promise<void> {
   }
 
   function renderSegmented(): void {
-    for (const btn of segmentBtns) {
+    let idx = -1;
+    segmentBtns.forEach((btn, i) => {
       const on = btn.dataset.value === state.wantsSecondDate;
       btn.setAttribute("aria-selected", on ? "true" : "false");
+      if (on) idx = i;
+    });
+    // Drive the sliding indicator; hide it until a real choice is made.
+    if (idx >= 0) {
+      $segmented.style.setProperty("--seg-index", String(idx));
+      $segmented.classList.add("is-selected");
+    } else {
+      $segmented.classList.remove("is-selected");
     }
   }
 
