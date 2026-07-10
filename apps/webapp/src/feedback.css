@@ -70,11 +70,11 @@ body::before {
   min-height: 100dvh;
   max-width: 460px;
   margin: 0 auto;
-  /* Always clear Telegram's floating back / ⋯ controls: at least 54px reserve
-     even if the content-safe-area event never fires, more when it reports a
-     real inset. */
+  /* Clear Telegram's floating back / ⋯ controls with room to spare: a generous
+     90px floor (even if the content-safe-area event never fires) plus breathing
+     room, more when a real inset is reported. */
   padding:
-    calc(max(var(--tg-content-top, 0px), 54px) + var(--space-lg))
+    calc(max(var(--tg-content-top, 0px), 90px) + var(--space-lg))
     var(--space-lg)
     calc(var(--tg-content-bottom, 0px) + 128px);
   display: flex;
