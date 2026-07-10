@@ -32,6 +32,14 @@
   --accent-bright: #b6304f;
   --accent-soft: rgba(139, 37, 59, 0.18);
 
+  /* Subtle fills for inputs / choice rows, and the glass card surface. */
+  --fill: rgba(255, 255, 255, 0.06);
+  --fill-strong: rgba(255, 255, 255, 0.1);
+  --surface-glass: rgba(20, 20, 22, 0.72);
+  /* Solid primary CTA — inverts against the page so it always reads. */
+  --btn-primary-bg: #ffffff;
+  --btn-primary-fg: #0a0a0a;
+
   --shadow: rgba(0, 0, 0, 0.5);
   --shadow-strong: rgba(0, 0, 0, 0.65);
   --overlay: rgba(0, 0, 0, 0.6);
@@ -57,6 +65,12 @@
   --accent: #8b253b;
   --accent-bright: #b6304f;
   --accent-soft: rgba(139, 37, 59, 0.12);
+
+  --fill: rgba(0, 0, 0, 0.05);
+  --fill-strong: rgba(0, 0, 0, 0.08);
+  --surface-glass: rgba(255, 255, 255, 0.72);
+  --btn-primary-bg: #1d1d1d;
+  --btn-primary-fg: #ffffff;
 
   --shadow: rgba(0, 0, 0, 0.18);
   --shadow-strong: rgba(0, 0, 0, 0.28);
