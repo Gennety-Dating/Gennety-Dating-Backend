@@ -196,8 +196,10 @@ function successCheckMarkup(): string {
 function successScreen(lang: Lang, textKey: Parameters<typeof tr>[1]): string {
   return `
     <div class="screen">
-      ${successCheckMarkup()}
-      <p class="screen-text check-caption">${escapeHtml(tr(lang, textKey))}</p>
+      <div class="screen__panel">
+        ${successCheckMarkup()}
+        <p class="screen-text check-caption">${escapeHtml(tr(lang, textKey))}</p>
+      </div>
     </div>`;
 }
 
@@ -206,8 +208,10 @@ function renderScreen(root: HTMLElement, screen: Screen, lang: Lang): void {
     case "loading":
       root.innerHTML = `
         <div class="screen">
-          <div class="spinner" aria-hidden="true"></div>
-          <p class="screen-text">${escapeHtml(tr(lang, "verifyMiniAppLoading"))}</p>
+          <div class="screen__panel">
+            <div class="spinner" aria-hidden="true"></div>
+            <p class="screen-text">${escapeHtml(tr(lang, "verifyMiniAppLoading"))}</p>
+          </div>
         </div>`;
       return;
     case "finishing":
@@ -219,8 +223,10 @@ function renderScreen(root: HTMLElement, screen: Screen, lang: Lang): void {
     case "error":
       root.innerHTML = `
         <div class="screen">
-          <div class="error-glyph">⚠️</div>
-          <p class="screen-title">${escapeHtml(tr(lang, "verifyMiniAppError"))}</p>
+          <div class="screen__panel">
+            <div class="error-glyph">⚠️</div>
+            <p class="screen-title">${escapeHtml(tr(lang, "verifyMiniAppError"))}</p>
+          </div>
         </div>`;
       return;
     case "already-verified":
@@ -229,7 +235,9 @@ function renderScreen(root: HTMLElement, screen: Screen, lang: Lang): void {
     case "unavailable":
       root.innerHTML = `
         <div class="screen">
-          <p class="screen-text">${escapeHtml(tr(lang, "verifyMiniAppNotConfigured"))}</p>
+          <div class="screen__panel">
+            <p class="screen-text">${escapeHtml(tr(lang, "verifyMiniAppNotConfigured"))}</p>
+          </div>
         </div>`;
       return;
   }
@@ -273,11 +281,36 @@ function boot(): void {
   app.ready();
   app.expand();
   // Bot API 8.0+ — immersive fullscreen for KYC capture. Older clients
-  // gracefully fall through to expanded-but-not-fullscreen.
+  // gracefully fall through to expanded-but-not-fullscreen. Paint Telegram's
+  // chrome to match the active theme so it doesn't flash the wrong color.
+  const bootTheme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  const chromeColor = bootTheme === "light" ? "#f5f5f5" : "#030303";
   try {
     app.requestFullscreen?.();
+    app.setHeaderColor?.(chromeColor);
+    app.setBackgroundColor?.(chromeColor);
+    app.setBottomBarColor?.(chromeColor);
   } catch (err) {
-    console.warn("[verification] requestFullscreen failed (non-fatal)", err);
+    console.warn("[verification] fullscreen/chrome setup failed (non-fatal)", err);
+  }
+
+  // Dev-only screen preview: `?screen=loading|success|error|unavailable|...`
+  // renders that state and skips Persona init, so every themed status screen
+  // can be reviewed without a live Persona session. Inert in production builds.
+  if (import.meta.env.DEV) {
+    const forced = params.get("screen");
+    const allowed: Screen[] = [
+      "loading",
+      "finishing",
+      "success",
+      "error",
+      "unavailable",
+      "already-verified",
+    ];
+    if (forced && (allowed as string[]).includes(forced)) {
+      renderScreen(root, forced as Screen, lang);
+      return;
+    }
   }
   // Catch accidental swipe-down dismissals during selfie capture.
   try {
