@@ -1,28 +1,27 @@
 /*
  * Post-date feedback Mini App styles.
  *
- * Theme strategy: every visible color is wired to a `--tg-theme-*-color`
- * variable Telegram injects on the html element so the form blends into
- * both light and dark Telegram automatically. We layer on a brand accent
- * (`--brand`) for the slider fill and the active segment chip so the form
- * still feels like Gennety inside the native chrome.
+ * Theme strategy: consumes the shared Gennety theme tokens (theme.css) so the
+ * form follows the app-wide picked light/dark theme (set pre-paint by the boot
+ * snippet + `?theme=`), consistent with the other Mini Apps. The brand accent
+ * is the unified burgundy for the slider fill, active segment, and value pill.
  */
 
+@import "./theme.css";
+
 :root {
-  color-scheme: light dark;
+  /* Local aliases mapped onto the shared semantic tokens. --bg / --text come
+     straight from theme.css and adapt to the active theme. */
+  --bg-secondary: var(--surface);
+  --hint: var(--text-muted);
+  --link: var(--accent);
+  --button-bg: var(--accent);
+  --button-text: var(--on-accent);
 
-  --bg: var(--tg-theme-bg-color, #ffffff);
-  --bg-secondary: var(--tg-theme-secondary-bg-color, #f4f5f7);
-  --text: var(--tg-theme-text-color, #111111);
-  --hint: var(--tg-theme-hint-color, #9aa0a6);
-  --link: var(--tg-theme-link-color, #2481cc);
-  --button-bg: var(--tg-theme-button-color, #2481cc);
-  --button-text: var(--tg-theme-button-text-color, #ffffff);
-
-  /* Brand accent — Gennety lilac (#B69AE2). Single hue for slider fill,
+  /* Brand accent — unified burgundy (#8B253B). Single hue for slider fill,
    * active segment chip, and the chemistry value pill. */
-  --brand-from: #b69ae2;
-  --brand-to: #b69ae2;
+  --brand-from: var(--accent);
+  --brand-to: var(--accent);
   --brand: var(--brand-from);
   --danger: #d63b3b;
 
@@ -220,7 +219,7 @@ html, body {
 .segment[aria-selected="true"] {
   background: linear-gradient(135deg, var(--brand-from), var(--brand-to));
   color: #fff;
-  box-shadow: 0 2px 6px rgba(182, 154, 226, 0.35);
+  box-shadow: 0 2px 6px rgba(139, 37, 59, 0.35);
 }
 
 /* ── Textarea ────────────────────────────────────────────────── */
@@ -246,7 +245,7 @@ html, body {
 }
 .notes:focus {
   border-color: var(--brand-from);
-  box-shadow: 0 0 0 3px rgba(182, 154, 226, 0.18);
+  box-shadow: 0 0 0 3px rgba(139, 37, 59, 0.18);
 }
 .notes-meta {
   display: flex;

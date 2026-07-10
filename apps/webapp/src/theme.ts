@@ -17,8 +17,12 @@ export type Theme = "light" | "dark";
 export const DEFAULT_THEME: Theme = "dark";
 export const THEME_STORAGE_KEY = "gennety-theme";
 
-/** The exact inline snippet each *.html must run in <head> before first paint. */
-export const THEME_BOOT_SNIPPET = `(function(){try{var t=localStorage.getItem('${THEME_STORAGE_KEY}');document.documentElement.dataset.theme=(t==='light'||t==='dark')?t:'${DEFAULT_THEME}';}catch(e){document.documentElement.dataset.theme='${DEFAULT_THEME}';}})();`;
+/**
+ * The exact inline snippet each *.html must run in <head> before first paint.
+ * A `?theme=light|dark` query param overrides (and persists) the cached choice
+ * — used to deep-link a specific theme (and to preview both in QA).
+ */
+export const THEME_BOOT_SNIPPET = `(function(){try{var q=new URLSearchParams(location.search).get('theme');if(q==='light'||q==='dark'){try{localStorage.setItem('${THEME_STORAGE_KEY}',q);}catch(e){}}var t=(q==='light'||q==='dark')?q:localStorage.getItem('${THEME_STORAGE_KEY}');document.documentElement.dataset.theme=(t==='light'||t==='dark')?t:'${DEFAULT_THEME}';}catch(e){document.documentElement.dataset.theme='${DEFAULT_THEME}';}})();`;
 
 function isTheme(v: unknown): v is Theme {
   return v === "light" || v === "dark";
