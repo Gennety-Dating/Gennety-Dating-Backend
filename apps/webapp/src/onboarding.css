@@ -1349,21 +1349,40 @@ button {
   height: 0.45rem;
   border-radius: 9999px;
   background: var(--border-strong);
-  box-shadow: 0 0 0 rgba(139, 37, 59, 0);
+  box-shadow: none;
   transition:
     width 260ms ease,
-    background 260ms ease,
-    box-shadow 260ms ease;
+    background 260ms ease;
 }
 
+/* Active dot is a neutral, theme-aware grey/white (NOT the burgundy accent) —
+   it reads as a slightly brighter, elongated pill of the same dot family. The
+   always-dark explainer screens override these to white just below. */
 .cycle-dots span.is-active {
   width: 1.35rem;
-  background: var(--accent);
-  box-shadow: 0 0 18px rgba(139, 37, 59, 0.36);
+  background: var(--text-muted);
+  box-shadow: none;
 }
 
 .cycle-dots.is-complete span.is-active {
-  background: var(--accent);
+  background: var(--text);
+}
+
+/* The how-it-works & date-flow explainer screens sit on an always-dark photo
+   backdrop in BOTH themes, so their dots stay a semi-transparent white
+   regardless of theme (the theme-aware neutrals above would vanish on the dark
+   photo, and the accent burgundy is what we're removing). Placed after the
+   general rules so source order wins the specificity ties. */
+.howitworks-foot .cycle-dots span,
+.howitworks-dock .cycle-dots span {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.howitworks-foot .cycle-dots span.is-active,
+.howitworks-dock .cycle-dots span.is-active,
+.howitworks-foot .cycle-dots.is-complete span.is-active,
+.howitworks-dock .cycle-dots.is-complete span.is-active {
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .stats-dots-dock {
