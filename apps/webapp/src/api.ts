@@ -136,6 +136,7 @@ export async function selectLocation(
 // ---------------------------------------------------------------------------
 
 export type OnboardingLanguage = "en" | "ru" | "uk" | "de" | "pl";
+export type OnboardingTheme = "light" | "dark";
 export type TelegramOnboardingStep = "consent" | "language" | "conversational" | "completed";
 export type AiMemoryExportPreference = "undecided" | "accepted" | "declined";
 export type EmailVerificationStatus = "none" | "pending" | "expired" | "exhausted";
@@ -157,6 +158,8 @@ export interface TelegramOnboardingState {
     termsAccepted: boolean;
     researchOptIn: boolean;
     language: OnboardingLanguage | null;
+    theme: OnboardingTheme;
+    themeChosen: boolean;
     email: string | null;
     isEmailVerified: boolean;
     emailVerification: EmailVerificationState;
@@ -257,6 +260,22 @@ export async function setTelegramOnboardingLanguage(
       Authorization: `tma ${initData}`,
     },
     body: JSON.stringify({ language }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as TelegramOnboardingState;
+}
+
+export async function setTelegramOnboardingTheme(
+  initData: string,
+  theme: OnboardingTheme,
+): Promise<TelegramOnboardingState> {
+  const res = await fetch(`${apiBase}/v1/telegram-onboarding/theme`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `tma ${initData}`,
+    },
+    body: JSON.stringify({ theme }),
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as TelegramOnboardingState;

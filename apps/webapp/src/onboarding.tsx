@@ -11,16 +11,19 @@ import {
   selectTelegramOnboardingCity,
   setTelegramOnboardingAiMemoryPreference,
   setTelegramOnboardingLanguage,
+  setTelegramOnboardingTheme,
   setTelegramOnboardingTrack,
   verifyTelegramOnboardingOtp,
   CalendarApiError,
   type AiMemoryExportPreference,
   type EmailVerificationState,
   type OnboardingLanguage,
+  type OnboardingTheme,
   type RegistrationTrack,
   type TelegramCityHit,
   type TelegramOnboardingState,
 } from "./api.js";
+import { reconcileTheme, setTheme } from "./theme.js";
 import {
   bootPhaseFromRemote,
   postVisualPhaseFromRemote,
@@ -41,6 +44,7 @@ import {
   type OnboardingStrings,
 } from "./onboarding-i18n.js";
 import { typewriterLineHoldMs } from "./onboarding-timing.js";
+import "./theme.css";
 import "./onboarding.css";
 
 const app = window.Telegram?.WebApp;
@@ -182,6 +186,7 @@ function App(): ReactElement {
         // render — otherwise the syncing-fallback effect could briefly route
         // the animation back to scene 0.
         const storedProgress = await loadOnboardingProgress();
+        reconcileTheme(state.user.theme);
         setRemoteUser(state.user);
         setFlowToken(state.flowToken);
         if (state.user.language) setLang(state.user.language);
@@ -239,7 +244,8 @@ function App(): ReactElement {
       phase.kind === "email" ||
       phase.kind === "otp" ||
       phase.kind === "phone" ||
-      phase.kind === "city"
+      phase.kind === "city" ||
+      phase.kind === "theme"
     ) {
       void clearOnboardingProgress();
     }
@@ -251,8 +257,9 @@ function App(): ReactElement {
         return { kind: "visual", index: current.index - 1 };
       }
       if (current.kind === "visual" && current.index === 0) {
-        return { kind: "city" };
+        return { kind: "theme" };
       }
+      if (current.kind === "theme") return { kind: "city" };
       if (current.kind === "detail" && current.index > 0) {
         return { kind: "detail", index: current.index - 1 };
       }
@@ -290,6 +297,7 @@ function App(): ReactElement {
         phase.kind === "otp" ||
         phase.kind === "phone" ||
         phase.kind === "city" ||
+        phase.kind === "theme" ||
         phase.kind === "aiMemoryExport" ||
         phase.kind === "detail";
 
@@ -319,6 +327,7 @@ function App(): ReactElement {
 
   const onState = useCallback(
     (state: TelegramOnboardingState) => {
+      reconcileTheme(state.user.theme);
       setRemoteUser(state.user);
       setFlowToken(state.flowToken);
       if (state.user.language) setLang(state.user.language);
@@ -428,6 +437,9 @@ function App(): ReactElement {
       </Scene>
       <Scene active={phase.kind === "city"}>
         <CityGate onState={onState} />
+      </Scene>
+      <Scene active={phase.kind === "theme"}>
+        <ThemeGate selected={remoteUser?.theme ?? "dark"} onState={onState} />
       </Scene>
       <Scene active={phase.kind === "aiMemoryExport"}>
         <AiMemoryExportGate
@@ -1303,6 +1315,76 @@ function LanguageGate(props: {
             <span className="material-symbols-outlined">chevron_right</span>
           </button>
         ))}
+      </div>
+    </GateShell>
+  );
+}
+
+const THEME_OPTIONS: { value: OnboardingTheme; icon: string }[] = [
+  { value: "dark", icon: "dark_mode" },
+  { value: "light", icon: "light_mode" },
+];
+
+function ThemeGate(props: {
+  selected: OnboardingTheme;
+  onState: (state: TelegramOnboardingState) => void;
+}): ReactElement {
+  const s = useOnboardingStrings();
+  const [busy, setBusy] = useState<OnboardingTheme | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function choose(theme: OnboardingTheme): Promise<void> {
+    if (!app?.initData || busy) return;
+    setBusy(theme);
+    setError(null);
+    // Optimistic: apply instantly so the choice — and the visual intro that
+    // follows — render in the picked theme without waiting on the round-trip.
+    setTheme(theme);
+    try {
+      const state = await setTelegramOnboardingTheme(app.initData, theme);
+      app.HapticFeedback?.selectionChanged();
+      props.onState(state);
+    } catch (err) {
+      setError(errorCopy(err, s));
+      app.HapticFeedback?.notificationOccurred("error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <GateShell>
+      <h1>{s.themeTitle}</h1>
+      <p>{s.themeLead}</p>
+      {error ? <div className="gate-error">{error}</div> : null}
+      <div className="theme-choice-row">
+        {THEME_OPTIONS.map((option) => {
+          const label = option.value === "dark" ? s.themeDark : s.themeLight;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={`theme-choice theme-choice--${option.value} ${
+                props.selected === option.value ? "is-selected" : ""
+              }`}
+              disabled={busy !== null || !app?.initData}
+              onClick={() => void choose(option.value)}
+              aria-label={label}
+            >
+              <span className="theme-choice__preview" aria-hidden="true">
+                <span className="theme-choice__disc" />
+                <span className="theme-choice__bar theme-choice__bar--title" />
+                <span className="theme-choice__bar" />
+                <span className="theme-choice__bar theme-choice__bar--short" />
+                <span className="theme-choice__accent" />
+              </span>
+              <span className="theme-choice__label">
+                <span className="material-symbols-outlined">{option.icon}</span>
+                <strong>{busy === option.value ? s.saving : label}</strong>
+              </span>
+            </button>
+          );
+        })}
       </div>
     </GateShell>
   );

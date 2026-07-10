@@ -70,6 +70,10 @@ export interface OnboardingStrings {
   aiMemoryAccepting: string;
   aiMemoryLater: string;
   aiMemorySaving: string;
+  themeTitle: string;
+  themeLead: string;
+  themeDark: string;
+  themeLight: string;
   handoffMissingSession: string;
   handoffFailed: string;
   handoffReadyTitle: string;
@@ -209,6 +213,10 @@ const en: OnboardingStrings = {
   aiMemoryAccepting: "Connecting...",
   aiMemoryLater: "Later",
   aiMemorySaving: "Saving...",
+  themeTitle: "Choose your look",
+  themeLead: "Pick a theme for the app. You can change it anytime in Settings.",
+  themeDark: "Dark",
+  themeLight: "Light",
   handoffMissingSession: "The Mini App session is not synchronized. Open it from the chat again.",
   handoffFailed: "The bot couldn't continue yet. Try again.",
   handoffReadyTitle: "The bot is waiting for you",
@@ -366,6 +374,10 @@ const ru: OnboardingStrings = {
   aiMemoryAccepting: "Подключаю...",
   aiMemoryLater: "Позже",
   aiMemorySaving: "Сохраняю...",
+  themeTitle: "Выбери оформление",
+  themeLead: "Выбери тему приложения. Поменять можно в любой момент в настройках.",
+  themeDark: "Тёмная",
+  themeLight: "Светлая",
   handoffMissingSession: "Сессия Mini App не синхронизирована. Открой вход из чата ещё раз.",
   handoffFailed: "Бот пока не смог продолжить. Попробуй ещё раз.",
   handoffReadyTitle: "Бот уже ждёт тебя",
@@ -523,6 +535,10 @@ const uk: OnboardingStrings = {
   aiMemoryAccepting: "Підключаю...",
   aiMemoryLater: "Пізніше",
   aiMemorySaving: "Зберігаю...",
+  themeTitle: "Обери вигляд",
+  themeLead: "Обери тему застосунку. Змінити можна будь-коли в налаштуваннях.",
+  themeDark: "Темна",
+  themeLight: "Світла",
   handoffMissingSession: "Сесію Mini App не синхронізовано. Відкрий вхід із чату ще раз.",
   handoffFailed: "Бот поки не зміг продовжити. Спробуй ще раз.",
   handoffReadyTitle: "Бот уже чекає на тебе",
@@ -681,6 +697,10 @@ const de: OnboardingStrings = {
   aiMemoryAccepting: "Verbinden...",
   aiMemoryLater: "Später",
   aiMemorySaving: "Speichern...",
+  themeTitle: "Wähle dein Design",
+  themeLead: "Wähle ein Theme für die App. Du kannst es jederzeit in den Einstellungen ändern.",
+  themeDark: "Dunkel",
+  themeLight: "Hell",
   handoffMissingSession: "Die Mini-App-Sitzung ist nicht synchronisiert. Öffne sie erneut aus dem Chat.",
   handoffFailed: "Der Bot konnte noch nicht fortfahren. Versuch es erneut.",
   handoffReadyTitle: "Der Bot wartet auf dich",
@@ -839,6 +859,10 @@ const pl: OnboardingStrings = {
   aiMemoryAccepting: "Łączenie...",
   aiMemoryLater: "Później",
   aiMemorySaving: "Zapisywanie...",
+  themeTitle: "Wybierz wygląd",
+  themeLead: "Wybierz motyw aplikacji. Możesz go zmienić w każdej chwili w ustawieniach.",
+  themeDark: "Ciemny",
+  themeLight: "Jasny",
   handoffMissingSession: "Sesja Mini App nie jest zsynchronizowana. Otwórz ją ponownie z czatu.",
   handoffFailed: "Bot nie mógł jeszcze kontynuować. Spróbuj ponownie.",
   handoffReadyTitle: "Bot już na Ciebie czeka",

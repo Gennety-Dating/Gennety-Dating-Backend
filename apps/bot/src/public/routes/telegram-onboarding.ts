@@ -45,6 +45,7 @@ type MiniUser = {
   email: string | null;
   language: Language | null;
   theme: Theme;
+  themeChosenAt: Date | null;
   onboardingStep: "consent" | "language" | "conversational" | "completed";
   aiMemoryExportPreference: AiMemoryExportPreference;
   aiMemoryExportPreferenceAt: Date | null;
@@ -461,6 +462,37 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     res.json(await serializeState(updated));
   });
 
+  // Theme picker (onboarding step after the city gate; also reused by the
+  // Settings "Change theme" flow). Records the explicit choice + stamps
+  // `themeChosenAt` so the onboarding picker shows exactly once.
+  router.post("/theme", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+
+    const theme = req.body?.theme;
+    if (theme !== "light" && theme !== "dark") {
+      res.status(400).json({ error: "invalid-theme" });
+      return;
+    }
+
+    const user = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        theme,
+        themeChosenAt: new Date(),
+        ...onboardingActivityPatch(),
+      },
+      select: miniUserSelect,
+    });
+
+    logTelegramOnboarding("theme-selected", updated, { theme });
+    res.json(await serializeState(updated));
+  });
+
   router.post("/complete", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
     if (!auth.ok) {
@@ -542,6 +574,7 @@ const miniUserSelect = {
   email: true,
   language: true,
   theme: true,
+  themeChosenAt: true,
   onboardingStep: true,
   aiMemoryExportPreference: true,
   aiMemoryExportPreferenceAt: true,
@@ -628,6 +661,7 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
       researchOptIn: user.researchOptIn,
       language: user.language,
       theme: user.theme,
+      themeChosen: user.themeChosenAt != null,
       email: user.email,
       isEmailVerified: user.isEmailVerified,
       emailVerification,
@@ -664,6 +698,8 @@ interface TelegramOnboardingStateDto {
     researchOptIn: boolean;
     language: Language | null;
     theme: Theme;
+    /** True once the user has explicitly picked a theme (onboarding/Settings). */
+    themeChosen: boolean;
     email: string | null;
     isEmailVerified: boolean;
     emailVerification: SerializedOtpChallenge;

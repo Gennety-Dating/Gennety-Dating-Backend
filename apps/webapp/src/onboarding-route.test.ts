@@ -19,6 +19,11 @@ function user(
     termsAccepted: true,
     researchOptIn: false,
     language: "en",
+    // Default fixtures treat the theme as already picked so pre-existing
+    // post-city routing tests are unaffected; theme-gate routing is covered
+    // by its own cases below.
+    theme: "dark",
+    themeChosen: true,
     email: "alice@stanford.edu",
     isEmailVerified: false,
     emailVerification: {
@@ -119,6 +124,33 @@ function visualReadyUser(
     ...overrides,
   });
 }
+
+describe("theme picker routing (after the city gate)", () => {
+  it("shows the theme picker after the city gate when not yet chosen (pre-visual)", () => {
+    expect(preVisualPhaseFromRemote(visualReadyUser({ themeChosen: false }))).toEqual({
+      kind: "theme",
+    });
+  });
+
+  it("proceeds to the visual intro once the theme is chosen", () => {
+    expect(preVisualPhaseFromRemote(visualReadyUser({ themeChosen: true }))).toEqual({
+      kind: "visual",
+      index: 0,
+    });
+  });
+
+  it("still gates on the theme picker post-visual before AI-memory", () => {
+    expect(postVisualPhaseFromRemote(visualReadyUser({ themeChosen: false }))).toEqual({
+      kind: "theme",
+    });
+  });
+
+  it("ignores stored visual progress until a theme is chosen", () => {
+    expect(bootPhaseFromRemote(visualReadyUser({ themeChosen: false }), 2)).toEqual({
+      kind: "theme",
+    });
+  });
+});
 
 describe("bootPhaseFromRemote — visual animation resume", () => {
   it("starts at scene 0 when there is no stored progress", () => {

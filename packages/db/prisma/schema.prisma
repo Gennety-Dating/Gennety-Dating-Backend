@@ -121,6 +121,10 @@ model User {
   /// User-selected app color theme (Mini Apps + rendered cards). Defaults to
   /// `dark` (brand default); chosen in onboarding and changeable in Settings.
   theme            Theme             @default(dark)
+  /// Set the first time the user explicitly picks a theme (onboarding theme
+  /// screen or Settings). Distinguishes an explicit choice from the `dark`
+  /// default, so the onboarding theme picker is shown exactly once.
+  themeChosenAt    DateTime?         @map("theme_chosen_at")
   status           UserStatus        @default(onboarding)
   onboardingStep   OnboardingStep    @default(consent) @map("onboarding_step")
   /// Whether the user wants to enrich onboarding with memory exported from

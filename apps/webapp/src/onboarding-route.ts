@@ -38,6 +38,9 @@ export type OnboardingPhase =
     }
   | { kind: "phone" }
   | { kind: "city" }
+  // App color theme picker — shown once, right after the city gate (before the
+  // visual animation, so the animation itself plays in the chosen theme).
+  | { kind: "theme" }
   | { kind: "aiMemoryExport" }
   | { kind: "loading" }
   | { kind: "done" };
@@ -49,6 +52,7 @@ export function preVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPha
   const contactPhase = unresolvedContactPhase(user);
   if (contactPhase) return contactPhase;
   if (!user.homeLocation?.homeCityKey) return { kind: "city" };
+  if (!user.themeChosen) return { kind: "theme" };
   return { kind: "visual", index: 0 };
 }
 
@@ -59,6 +63,7 @@ export function postVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPh
   const contactPhase = unresolvedContactPhase(user);
   if (contactPhase) return contactPhase;
   if (!user.homeLocation?.homeCityKey) return { kind: "city" };
+  if (!user.themeChosen) return { kind: "theme" };
   if (user.aiMemoryExportPreference === "undecided") return { kind: "aiMemoryExport" };
   return { kind: "loading" };
 }
