@@ -1,0 +1,64 @@
+/**
+ * Shared theme tokens for every Gennety Mini App.
+ *
+ * The active theme is selected by a `data-theme="light" | "dark"` attribute on
+ * <html> (set pre-paint by the inline boot snippet in each *.html, then kept in
+ * sync by `theme.ts`). All per-app CSS should consume these semantic variables
+ * instead of hardcoded colors so a single attribute flip re-themes the app.
+ *
+ * `dark` is the brand default. The burgundy accent (#8B253B) is shared across
+ * both themes.
+ */
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #030303;
+  --bg-elevated: #0e0e0e;
+  --surface: #161616;
+  --surface-2: #202020;
+  --surface-inset: rgba(255, 255, 255, 0.04);
+
+  --text: #e9e6e5;
+  --text-muted: #8e8895;
+  --text-faint: #6a656b;
+  --on-accent: #ffffff;
+
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  --accent: #8b253b;
+  --accent-bright: #b6304f;
+  --accent-soft: rgba(139, 37, 59, 0.18);
+
+  --shadow: rgba(0, 0, 0, 0.5);
+  --shadow-strong: rgba(0, 0, 0, 0.65);
+  --overlay: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f5f5f5;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #ececec;
+  --surface-inset: rgba(0, 0, 0, 0.03);
+
+  --text: #1d1d1d;
+  --text-muted: #6b6670;
+  --text-faint: #9a949c;
+  --on-accent: #ffffff;
+
+  --border: rgba(0, 0, 0, 0.12);
+  --border-strong: rgba(0, 0, 0, 0.2);
+
+  --accent: #8b253b;
+  --accent-bright: #b6304f;
+  --accent-soft: rgba(139, 37, 59, 0.12);
+
+  --shadow: rgba(0, 0, 0, 0.18);
+  --shadow-strong: rgba(0, 0, 0, 0.28);
+  --overlay: rgba(0, 0, 0, 0.45);
+}

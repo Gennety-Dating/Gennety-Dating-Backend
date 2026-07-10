@@ -32,6 +32,13 @@ enum Language {
   pl
 }
 
+/// User-selected app color theme, applied across the Mini Apps and the
+/// server-rendered match / date cards. `dark` is the brand default.
+enum Theme {
+  light
+  dark
+}
+
 enum OnboardingStep {
   consent
   language
@@ -111,6 +118,9 @@ model User {
   preference       GenderPreference?
   major            String?
   language         Language?
+  /// User-selected app color theme (Mini Apps + rendered cards). Defaults to
+  /// `dark` (brand default); chosen in onboarding and changeable in Settings.
+  theme            Theme             @default(dark)
   status           UserStatus        @default(onboarding)
   onboardingStep   OnboardingStep    @default(consent) @map("onboarding_step")
   /// Whether the user wants to enrich onboarding with memory exported from

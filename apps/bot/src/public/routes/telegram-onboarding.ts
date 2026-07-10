@@ -5,6 +5,7 @@ import {
   prisma,
   type AiMemoryExportPreference,
   type Language,
+  type Theme,
 } from "@gennety/db";
 import {
   ALLOWED_EMAIL_DOMAINS,
@@ -43,6 +44,7 @@ type MiniUser = {
   telegramId: bigint;
   email: string | null;
   language: Language | null;
+  theme: Theme;
   onboardingStep: "consent" | "language" | "conversational" | "completed";
   aiMemoryExportPreference: AiMemoryExportPreference;
   aiMemoryExportPreferenceAt: Date | null;
@@ -539,6 +541,7 @@ const miniUserSelect = {
   telegramId: true,
   email: true,
   language: true,
+  theme: true,
   onboardingStep: true,
   aiMemoryExportPreference: true,
   aiMemoryExportPreferenceAt: true,
@@ -624,6 +627,7 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
       termsAccepted: user.termsAccepted,
       researchOptIn: user.researchOptIn,
       language: user.language,
+      theme: user.theme,
       email: user.email,
       isEmailVerified: user.isEmailVerified,
       emailVerification,
@@ -659,6 +663,7 @@ interface TelegramOnboardingStateDto {
     termsAccepted: boolean;
     researchOptIn: boolean;
     language: Language | null;
+    theme: Theme;
     email: string | null;
     isEmailVerified: boolean;
     emailVerification: SerializedOtpChallenge;
