@@ -19,9 +19,29 @@
  * wipe what the user typed (mirrors the calendar pattern).
  */
 
+import { wireContentInsets } from "./telegram-insets.js";
+
 const app = window.Telegram?.WebApp;
 app?.ready();
 app?.expand();
+
+// Full-screen immersive web app (Bot API 8.0+). Older clients fall back to
+// expand(). Paint Telegram's chrome to match the active theme so the header /
+// background / bottom bar never flash the wrong color around the glass.
+const bootTheme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+const chromeColor = bootTheme === "light" ? "#f5f5f5" : "#030303";
+try {
+  if (app?.isVersionAtLeast?.("8.0") && !app.isFullscreen) app.requestFullscreen?.();
+  app?.setHeaderColor?.(chromeColor);
+  app?.setBackgroundColor?.(chromeColor);
+  app?.setBottomBarColor?.(chromeColor);
+} catch {
+  // Best-effort cosmetic boot — never crash over chrome theming.
+}
+// Reserve room for Telegram's floating close × / menu ⋯ in fullscreen mode.
+wireContentInsets(app);
+// Retire the native MainButton — submit is an in-page glass button.
+app?.MainButton?.hide?.();
 
 const params = new URLSearchParams(location.search);
 const matchId = app?.initDataUnsafe?.start_param ?? params.get("match") ?? "";
@@ -437,15 +457,13 @@ async function main(): Promise<void> {
     $counter.classList.toggle("is-near-cap", len > 540);
   }
 
-  function syncMainButton(): void {
-    if (!app) return;
-    if (state.touched) {
-      app.MainButton.show();
-      app.MainButton.enable();
-    } else {
-      app.MainButton.hide();
-      app.MainButton.disable();
-    }
+  const $submitBar = document.getElementById("submit-bar") as HTMLDivElement;
+  const $submitBtn = document.getElementById("submit-btn") as HTMLButtonElement;
+
+  function syncSubmit(): void {
+    // Enabled once the user has actually engaged (a default 5/10 isn't shippable
+    // by accident); locked while a send is in flight.
+    $submitBtn.disabled = !state.touched || submitting;
   }
 
   // ── Slider interaction (custom — native range input doesn't theme well)
@@ -459,7 +477,7 @@ async function main(): Promise<void> {
       state.touched = true;
       renderSlider();
       persist();
-      syncMainButton();
+      syncSubmit();
       window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
     }
   }
@@ -505,7 +523,7 @@ async function main(): Promise<void> {
       state.touched = true;
       renderSlider();
       persist();
-      syncMainButton();
+      syncSubmit();
       window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
     }
   });
@@ -520,7 +538,7 @@ async function main(): Promise<void> {
       state.touched = true;
       renderSegmented();
       persist();
-      syncMainButton();
+      syncSubmit();
       window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("light");
     });
   }
@@ -548,18 +566,16 @@ async function main(): Promise<void> {
 
   // ── MainButton wiring
 
-  if (app) {
-    app.MainButton.setText(strings.mainBtnIdle);
-    app.MainButton.disable();
-    app.MainButton.hide();
-    app.MainButton.onClick(handleSubmit);
-  }
+  // Wire the in-page glass submit button (native MainButton stays retired).
+  $submitBtn.textContent = strings.mainBtnIdle;
+  $submitBtn.addEventListener("click", () => void handleSubmit());
+  $submitBar.hidden = false;
 
   // Initial paint.
   renderSlider();
   renderSegmented();
   renderCounter();
-  syncMainButton();
+  syncSubmit();
 
   async function handleSubmit(): Promise<void> {
     if (!app || submitting || !state.touched) return;
@@ -581,9 +597,9 @@ async function main(): Promise<void> {
     }
 
     submitting = true;
-    app.MainButton.setText(strings.mainBtnSending);
-    app.MainButton.showProgress();
-    app.MainButton.disable();
+    $submitBtn.textContent = strings.mainBtnSending;
+    $submitBtn.classList.add("is-sending");
+    $submitBtn.disabled = true;
 
     const err = await submitFeedback(app.initData, {
       matchId,
@@ -595,9 +611,9 @@ async function main(): Promise<void> {
 
     if (err) {
       submitting = false;
-      app.MainButton.hideProgress();
-      app.MainButton.enable();
-      app.MainButton.setText(strings.mainBtnIdle);
+      $submitBtn.classList.remove("is-sending");
+      $submitBtn.textContent = strings.mainBtnIdle;
+      syncSubmit();
       app.HapticFeedback?.notificationOccurred("error");
       app.showAlert(alertFor(err));
       return;
