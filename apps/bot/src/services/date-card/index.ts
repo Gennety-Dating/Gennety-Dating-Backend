@@ -8,9 +8,9 @@ import { t, type Language } from "@gennety/shared";
 import { downloadProfileImage } from "../storage.js";
 import { butterflyPng, type ButterflyMark } from "../match-card/collage.js";
 import { blurFacesInPhoto } from "./face-blur.js";
-import { toPngBuffer, duotonePng, grainPng, wordmarkPng } from "./image.js";
+import { toPngBuffer, duotonePng, grainPng } from "./image.js";
 import { resolveVenuePhoto } from "./photo-source.js";
-import { buildCardElement, inkColor, CARD_W, CARD_H, type CardNode, type CardTheme } from "./template.js";
+import { buildCardElement, CARD_W, CARD_H, type CardNode, type CardTheme } from "./template.js";
 
 /**
  * Date-card renderer (PRODUCT_SPEC.md §3.7). Produces a shareable PNG for a
@@ -70,17 +70,6 @@ function grainTile(): Buffer {
   return cachedGrain;
 }
 
-/** The brand wordmark source (black glyph on white), read once and tinted per theme. */
-let cachedWordmarkSource: Buffer | null = null;
-function wordmarkSource(): Buffer {
-  if (!cachedWordmarkSource) {
-    cachedWordmarkSource = readFileSync(
-      fileURLToPath(new URL("../../assets/brand/gennety-wordmark.png", import.meta.url)),
-    );
-  }
-  return cachedWordmarkSource;
-}
-
 /**
  * Brand butterfly mark, rasterized once and reused for every render. The
  * burgundy radial gradient is baked into `butterfly-logo.svg`, so no tint is
@@ -127,9 +116,6 @@ export async function renderDateCard(
 
   // Brand logo (best-effort; absent → no logo, never blocks the render).
   const logo = await loadLogo();
-  // Brand wordmark for the header, tinted to the theme ink (best-effort; the
-  // template falls back to the Archivo Black wordmark if this is null).
-  const wordmark = await wordmarkPng(wordmarkSource(), inkColor(input.theme));
 
   // 3. Compose + rasterize.
   try {
@@ -144,7 +130,6 @@ export async function renderDateCard(
       venueAddress: input.venueAddress,
       slogan: t(input.language, "dateCardSlogan"),
       theme: input.theme,
-      wordmark,
     });
 
     const svg = await satori(element as unknown as Parameters<typeof satori>[0], {
