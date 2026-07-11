@@ -3,19 +3,19 @@
    stage, lavender accent, borderless glass surfaces (depth comes from layered
    fills, inset light, and shadow — never from outlines). Full-screen web app. */
 
+@import "./theme.css";
+
 :root {
-  --accent: #b69ae5;
-  --accent-deep: #8e6fd6;
-  --accent-bright: #d4c0f4;
-  --bg: #120e1c;
-  --bg-soft: #1b1530;
-  --text: #f4ecff;
-  --text-dim: #b3a8cf;
-  --text-faint: #8a7fa8;
-  --glass: rgba(255, 255, 255, 0.07);
-  --glass-press: rgba(255, 255, 255, 0.12);
-  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  --danger: #ff9d9d;
+  /* Local aliases onto the shared theme tokens (theme.css). --accent /
+     --accent-bright / --bg / --text / --text-faint come from theme.css and
+     adapt to the active theme; venue-change keeps its own glass naming. */
+  --accent-deep: #6d1c2e;
+  --bg-soft: var(--surface);
+  --text-dim: var(--text-muted);
+  --glass: var(--glass-bg);
+  --glass-press: var(--fill-strong);
+  --glass-edge: inset 0 1px 0 var(--glass-highlight);
+  --danger: #e0566e;
   /* Telegram chrome inset (close ×, menu ⋯) in fullscreen — populated from
      `Telegram.WebApp.contentSafeAreaInset` at boot (telegram-insets.ts). The
      56px fallback covers older clients / the first paint. */
@@ -43,10 +43,17 @@ body {
 
 body {
   background:
-    radial-gradient(120% 80% at 50% -10%, rgba(142, 111, 214, 0.32), transparent 62%),
-    radial-gradient(90% 60% at 50% 110%, rgba(182, 154, 229, 0.16), transparent 60%),
+    radial-gradient(120% 80% at 50% -10%, rgba(139, 37, 59, 0.3), transparent 62%),
+    radial-gradient(90% 60% at 50% 110%, rgba(139, 37, 59, 0.15), transparent 60%),
     var(--bg);
   min-height: 100vh;
+}
+/* Soften the burgundy ambience on the cream page. */
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(139, 37, 59, 0.14), transparent 62%),
+    radial-gradient(90% 60% at 50% 110%, rgba(139, 37, 59, 0.07), transparent 60%),
+    var(--bg);
 }
 
 .vc-page {
@@ -104,7 +111,7 @@ body {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  border: 3px solid rgba(182, 154, 229, 0.25);
+  border: 3px solid rgba(139, 37, 59, 0.25);
   border-top-color: var(--accent);
   animation: spin 0.8s linear infinite;
 }
@@ -154,7 +161,7 @@ body {
   border-radius: 10px;
   display: grid;
   place-items: center;
-  background: rgba(182, 154, 229, 0.16);
+  background: var(--accent-soft);
   color: var(--accent-bright);
   font-size: 15px;
 }
@@ -199,8 +206,8 @@ body {
   height: 68px;
   border-radius: 15px;
   background:
-    radial-gradient(120% 90% at 20% 0%, rgba(182, 154, 229, 0.28), transparent 60%),
-    linear-gradient(155deg, #2a2150, #1c1636);
+    radial-gradient(120% 90% at 20% 0%, rgba(139, 37, 59, 0.28), transparent 60%),
+    linear-gradient(155deg, var(--surface-2), var(--surface));
   background-size: cover;
   background-position: center;
   box-shadow: var(--glass-edge);
@@ -256,7 +263,7 @@ body {
   gap: 4px;
   padding: 3px 9px;
   border-radius: 999px;
-  background: rgba(182, 154, 229, 0.13);
+  background: var(--accent-soft);
   color: var(--accent-bright);
   font-size: 11.5px;
   font-weight: 600;
@@ -292,13 +299,13 @@ body {
   height: 220px;
   border-radius: 22px;
   background:
-    radial-gradient(120% 90% at 20% 0%, rgba(182, 154, 229, 0.22), transparent 58%),
-    linear-gradient(155deg, #2a2150 0%, #1c1636 60%, #251c44 100%);
+    radial-gradient(120% 90% at 20% 0%, rgba(139, 37, 59, 0.22), transparent 58%),
+    linear-gradient(155deg, var(--surface-2) 0%, var(--surface) 60%, var(--surface-2) 100%);
   background-size: cover;
   background-position: center;
   box-shadow:
-    0 18px 40px rgba(12, 6, 28, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    var(--glass-shadow),
+    inset 0 1px 0 var(--glass-highlight);
   display: grid;
   place-items: center;
   font-size: 40px;
@@ -479,9 +486,9 @@ a.vc-info-row .vc-info-text {
 }
 .btn-primary {
   background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 45%, var(--accent-deep) 100%);
-  color: #1a0f2e;
+  color: #fff;
   box-shadow:
-    0 12px 30px rgba(142, 111, 214, 0.35),
+    0 12px 30px rgba(139, 37, 59, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 .btn-primary:disabled {
@@ -506,8 +513,8 @@ a.vc-info-row .vc-info-text {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 2px solid rgba(26, 15, 46, 0.35);
-  border-top-color: #1a0f2e;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
   animation: spin 0.7s linear infinite;
   vertical-align: -2px;
 }

@@ -37,13 +37,15 @@ app?.expand();
 
 // Bot API 8.0+ — immersive fullscreen removes the top sheet gap so the design
 // composition fills the screen. Older clients silently fall through to expand().
+const chromeColor =
+  document.documentElement.dataset.theme === "light" ? "#f5f5f5" : "#030303";
 try {
   if (app?.isVersionAtLeast?.("8.0") && !app.isFullscreen) {
     app.requestFullscreen?.();
   }
-  app?.setHeaderColor?.("#120E1C");
-  app?.setBackgroundColor?.("#120E1C");
-  app?.setBottomBarColor?.("#120E1C");
+  app?.setHeaderColor?.(chromeColor);
+  app?.setBackgroundColor?.(chromeColor);
+  app?.setBottomBarColor?.(chromeColor);
 } catch {
   // Best-effort cosmetic boot — never crash over chrome theming.
 }
@@ -56,6 +58,10 @@ app?.MainButton?.hide?.();
 const params = new URLSearchParams(location.search);
 const matchId = app?.initDataUnsafe?.start_param ?? params.get("match") ?? "";
 const queryLang = params.get("lang") ?? app?.initDataUnsafe?.user?.language_code ?? "";
+// Dev-only visual preview: `?preview` skips the eligibility/catalog fetches and
+// walks disclaimer → catalog → detail → comment with mock venues, so the
+// theming is reviewable without an eligible scheduled match. Inert in prod.
+const previewMode = import.meta.env.DEV && params.get("preview") !== null;
 // Telegram populates `app.initData` asynchronously (notably after a
 // `requestFullscreen()` boot on some clients), so the value at module load can
 // be empty — freezing it in a const then sends an empty `tma` header → 401
@@ -507,12 +513,58 @@ function showMessage(icon: string, text: string): void {
 
 let stateView: VenueChangeState | null = null;
 
+// Mock catalog for the dev `?preview` walkthrough (photoUrl null → the themed
+// gradient placeholders show, which is what we're reviewing).
+function mockCatalog(): VenueChangeCatalogItem[] {
+  const mk = (
+    name: string,
+    address: string,
+    category: string,
+    distanceKm: number,
+    rating: number,
+    count: number,
+    summary: string,
+  ): VenueChangeCatalogItem => ({
+    source: "curated",
+    placeId: null,
+    name,
+    address,
+    lat: 0,
+    lng: 0,
+    mapsUri: null,
+    category,
+    distanceKm,
+    photoUrl: null,
+    photoRefs: [],
+    rating,
+    userRatingCount: count,
+    editorialSummary: summary,
+  });
+  return [
+    mk("Кофейня «Молоко»", "ул. Крещатик, 14", "cafe", 0.4, 4.7, 320, "Уютная спешелти-кофейня с видом на бульвар."),
+    mk("Bar Chill", "ул. Лютеранская, 3", "lounge", 0.9, 4.5, 210, "Тихий коктейльный бар с мягким светом."),
+    mk("Парк «Владимирская горка»", "Владимирский спуск", "park", 1.3, 4.8, 540, "Панорама Днепра и тенистые аллеи."),
+  ];
+}
+
 async function main(): Promise<void> {
   if (!matchId) {
     showMessage("🗺️", s.fallbackNoMatch);
     return;
   }
   showLoading();
+
+  if (previewMode) {
+    stateView = {
+      status: "scheduled",
+      eligible: true,
+      ineligibleReason: null,
+      minCommentLength: 10,
+      original: { name: "Кафе «Старое место»", address: "ул. Прорезная, 8", mapsUri: null },
+    };
+    renderDisclaimer();
+    return;
+  }
 
   try {
     stateView = await fetchVenueChangeState(getInitData(), matchId);
@@ -574,6 +626,11 @@ let catalog: VenueChangeCatalogItem[] = [];
 
 async function loadCatalog(): Promise<void> {
   showLoading();
+  if (previewMode) {
+    catalog = mockCatalog();
+    renderCatalog();
+    return;
+  }
   try {
     catalog = await fetchVenueChangeCatalog(getInitData(), matchId);
   } catch (err) {
