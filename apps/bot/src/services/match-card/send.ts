@@ -19,7 +19,7 @@ import type { Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { downloadProfileImage } from "../storage.js";
 import { generateMatchCardTexts } from "./copy.js";
-import { renderMatchCardSet } from "./index.js";
+import { renderMatchCardSet, type MatchCardTheme } from "./index.js";
 
 /** Telegram albums cap at 10; profiles cap at MAX_PHOTOS (6) anyway. */
 const MAX_CARD_PHOTOS = 6;
@@ -34,6 +34,8 @@ export interface PartnerMatchCardsInput {
   /** Partner's static profile photos (Telegram file_id / Supabase path). */
   photos: readonly string[];
   language: Language;
+  /** Recipient's chosen theme — renders the paper set light or dark. */
+  theme: MatchCardTheme;
   /** Album caption (name/age + verified affordance), shown on the first card. */
   caption: { caption: string; entities?: MessageEntity[] };
 }
@@ -63,6 +65,7 @@ export async function sendPartnerMatchCards(
       photos,
       texts,
       seed: `${input.matchId}:${input.side}`,
+      theme: input.theme,
     });
     if (!cards || cards.length === 0) return false;
 

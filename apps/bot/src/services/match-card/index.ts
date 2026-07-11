@@ -22,13 +22,15 @@ import {
   paperDuoSpec,
   paperSoloCard,
   paperSoloSpec,
+  paperPalette,
   GRAPHITE,
   type CardNode,
   type MatchCardTexts,
   type MatchCardVariant,
+  type MatchCardTheme,
 } from "./template.js";
 
-export type { MatchCardTexts, MatchCardVariant };
+export type { MatchCardTexts, MatchCardVariant, MatchCardTheme };
 export { MATCH_CARD_VARIANTS } from "./template.js";
 
 export interface MatchCardInput {
@@ -77,7 +79,7 @@ async function headerButterfly(variant: MatchCardVariant): Promise<ButterflyMark
   return headerButterflyCache.get(key) ?? null;
 }
 
-async function rasterize(element: CardNode): Promise<Buffer> {
+async function rasterize(element: CardNode, bg: string = GRAPHITE): Promise<Buffer> {
   const svg = await satori(element as unknown as Parameters<typeof satori>[0], {
     width: CARD_W,
     height: CARD_H,
@@ -85,7 +87,7 @@ async function rasterize(element: CardNode): Promise<Buffer> {
   });
   const png = new Resvg(svg, {
     fitTo: { mode: "width", value: CARD_W },
-    background: GRAPHITE,
+    background: bg,
   })
     .render()
     .asPng();
@@ -126,7 +128,7 @@ export async function renderMatchCard(input: MatchCardInput): Promise<Buffer | n
  * fall back to the plain photo media-group.
  */
 export async function renderMatchCardSet(
-  input: Omit<MatchCardInput, "variant">,
+  input: Omit<MatchCardInput, "variant"> & { theme: MatchCardTheme },
 ): Promise<Buffer[] | null> {
   try {
     const photos = (await Promise.all(input.photos.map((p) => toPngBuffer(p)))).filter(
@@ -134,6 +136,7 @@ export async function renderMatchCardSet(
     );
     if (photos.length === 0) return null;
 
+    const pal = paperPalette(input.theme);
     const chunks: Buffer[][] = [];
     for (let i = 0; i < photos.length; i += 2) chunks.push(photos.slice(i, i + 2));
     const lastIsSolo = chunks[chunks.length - 1]!.length === 1;
@@ -144,14 +147,15 @@ export async function renderMatchCardSet(
     const cards: Buffer[] = [];
     for (const [i, chunk] of chunks.entries()) {
       const withPanel = i === textCardIndex;
-      const spec = chunk.length === 1 ? paperSoloSpec() : paperDuoSpec(withPanel);
+      const spec =
+        chunk.length === 1 ? paperSoloSpec(pal.dotNeutral) : paperDuoSpec(withPanel, pal.dotNeutral);
       const collage = await buildCollageLayer(chunk, spec, `${input.seed}#${i}`);
       const layers = { collage, grain, butterfly };
       const element =
         chunk.length === 1
-          ? paperSoloCard(input.texts, layers)
-          : paperDuoCard(input.texts, layers, withPanel);
-      cards.push(await rasterize(element));
+          ? paperSoloCard(input.texts, layers, pal)
+          : paperDuoCard(input.texts, layers, withPanel, pal);
+      cards.push(await rasterize(element, pal.cardBg));
     }
     return cards;
   } catch (err) {

@@ -18,6 +18,29 @@ export const SOFT = "#F5F5F5";
 const BODY_INK = "#3B3538";
 const BODY_SOFT = "#CFC7CA";
 
+export type MatchCardTheme = "light" | "dark";
+
+interface PaperPalette {
+  cardBg: string;
+  panelBg: string;
+  /** Name + tagline ink. */
+  name: string;
+  body: string;
+  /** The neutral halftone-dot cluster (dark on the light card, light on dark). */
+  dotNeutral: string;
+}
+
+/**
+ * The paper card set is a light "torn polaroid" design; this maps it onto the
+ * recipient's theme (the burgundy accent, the white photo frames and the wine
+ * dots stay — only the card/panel surfaces + text ink flip).
+ */
+export function paperPalette(theme: MatchCardTheme): PaperPalette {
+  return theme === "dark"
+    ? { cardBg: "#0A0A0A", panelBg: "#17171A", name: "#F2EFF7", body: BODY_SOFT, dotNeutral: SOFT }
+    : { cardBg: SOFT, panelBg: "#FFFFFF", name: GRAPHITE, body: BODY_INK, dotNeutral: GRAPHITE };
+}
+
 export type MatchCardVariant = "paper" | "graphite" | "wine";
 
 export const MATCH_CARD_VARIANTS: readonly MatchCardVariant[] = ["paper", "graphite", "wine"];
@@ -218,7 +241,12 @@ interface PanelGeom {
   textWidth: number;
 }
 
-function paperPanel(texts: MatchCardTexts, layers: CardLayers, geom: PanelGeom): CardNode {
+function paperPanel(
+  texts: MatchCardTexts,
+  layers: CardLayers,
+  geom: PanelGeom,
+  pal: PaperPalette,
+): CardNode {
   return el(
     "div",
     {
@@ -229,16 +257,16 @@ function paperPanel(texts: MatchCardTexts, layers: CardLayers, geom: PanelGeom):
       top: `${geom.top}px`,
       width: `${geom.width}px`,
       padding: geom.padding,
-      backgroundColor: "#FFFFFF",
+      backgroundColor: pal.panelBg,
       borderRadius: "28px",
-      boxShadow: "0 24px 60px rgba(17,17,17,0.26)",
+      boxShadow: "0 24px 60px rgba(0,0,0,0.34)",
     },
     [
       ...textBlock(texts, {
         eyebrowColor: WINE,
-        nameColor: GRAPHITE,
-        taglineColor: GRAPHITE,
-        bodyColor: BODY_INK,
+        nameColor: pal.name,
+        taglineColor: pal.name,
+        bodyColor: pal.body,
         nameSize: geom.nameSize,
         bodySize: geom.bodySize,
         taglineSize: 26,
@@ -254,23 +282,29 @@ export function paperDuoCard(
   texts: MatchCardTexts,
   layers: CardLayers,
   withPanel: boolean,
+  pal: PaperPalette,
 ): CardNode {
   return el(
     "div",
-    { display: "flex", width: `${CARD_W}px`, height: `${CARD_H}px`, backgroundColor: SOFT },
+    { display: "flex", width: `${CARD_W}px`, height: `${CARD_H}px`, backgroundColor: pal.cardBg },
     [
       fullBleed(layers.collage),
       ...(withPanel
         ? [
-            paperPanel(texts, layers, {
-              left: 60,
-              top: 780,
-              width: 480,
-              padding: "38px 42px 34px 42px",
-              nameSize: 46,
-              bodySize: 23,
-              textWidth: 396,
-            }),
+            paperPanel(
+              texts,
+              layers,
+              {
+                left: 60,
+                top: 780,
+                width: 480,
+                padding: "38px 42px 34px 42px",
+                nameSize: 46,
+                bodySize: 23,
+                textWidth: 396,
+              },
+              pal,
+            ),
           ]
         : []),
       ...(layers.grain ? [fullBleed(layers.grain)] : []),
@@ -279,21 +313,30 @@ export function paperDuoCard(
 }
 
 /** Final odd card: one tilted photo on top, the text panel standing below it. */
-export function paperSoloCard(texts: MatchCardTexts, layers: CardLayers): CardNode {
+export function paperSoloCard(
+  texts: MatchCardTexts,
+  layers: CardLayers,
+  pal: PaperPalette,
+): CardNode {
   return el(
     "div",
-    { display: "flex", width: `${CARD_W}px`, height: `${CARD_H}px`, backgroundColor: SOFT },
+    { display: "flex", width: `${CARD_W}px`, height: `${CARD_H}px`, backgroundColor: pal.cardBg },
     [
       fullBleed(layers.collage),
-      paperPanel(texts, layers, {
-        left: 90,
-        top: 985,
-        width: 900,
-        padding: "40px 46px 34px 46px",
-        nameSize: 50,
-        bodySize: 24,
-        textWidth: 808,
-      }),
+      paperPanel(
+        texts,
+        layers,
+        {
+          left: 90,
+          top: 985,
+          width: 900,
+          padding: "40px 46px 34px 46px",
+          nameSize: 50,
+          bodySize: 24,
+          textWidth: 808,
+        },
+        pal,
+      ),
       ...(layers.grain ? [fullBleed(layers.grain)] : []),
     ],
   );
@@ -304,7 +347,7 @@ export function paperSoloCard(texts: MatchCardTexts, layers: CardLayers): CardNo
  * (no harsh crops), tilted a few degrees. The `withPanel` variant compacts
  * both photos upward/rightward so the bottom-left panel never covers a face.
  */
-export function paperDuoSpec(withPanel: boolean): CollageSpec {
+export function paperDuoSpec(withPanel: boolean, dotNeutral: string = GRAPHITE): CollageSpec {
   const base = { cutout: { paper: "#FFFFFF", border: 15, tearAmp: 11, focusY: 0.24 } };
   if (withPanel) {
     return {
@@ -315,7 +358,7 @@ export function paperDuoSpec(withPanel: boolean): CollageSpec {
       ],
       dots: [
         { x: 800, y: 120, cols: 5, rows: 4, r: 5, gap: 24, color: WINE, alpha: 0.45 },
-        { x: 930, y: 1290, cols: 4, rows: 2, r: 5, gap: 24, color: GRAPHITE, alpha: 0.3 },
+        { x: 930, y: 1290, cols: 4, rows: 2, r: 5, gap: 24, color: dotNeutral, alpha: 0.3 },
       ],
       butterflies: [
         { cx: 985, cy: 235, size: 96, angle: -14, alpha: 1 },
@@ -331,7 +374,7 @@ export function paperDuoSpec(withPanel: boolean): CollageSpec {
     ],
     dots: [
       { x: 830, y: 120, cols: 5, rows: 4, r: 5, gap: 24, color: WINE, alpha: 0.45 },
-      { x: 90, y: 1120, cols: 4, rows: 4, r: 5, gap: 24, color: GRAPHITE, alpha: 0.3 },
+      { x: 90, y: 1120, cols: 4, rows: 4, r: 5, gap: 24, color: dotNeutral, alpha: 0.3 },
     ],
     butterflies: [
       { cx: 955, cy: 295, size: 96, angle: -14, alpha: 1 },
@@ -342,13 +385,13 @@ export function paperDuoSpec(withPanel: boolean): CollageSpec {
 }
 
 /** Single-photo collage for the odd final card: photo on top, panel space below. */
-export function paperSoloSpec(): CollageSpec {
+export function paperSoloSpec(dotNeutral: string = GRAPHITE): CollageSpec {
   return {
     cutout: { paper: "#FFFFFF", border: 15, tearAmp: 11, focusY: 0.24 },
     slots: [{ cx: 555, cy: 480, w: 750, h: 940, angle: -3 }],
     dots: [
       { x: 66, y: 210, cols: 3, rows: 5, r: 5, gap: 24, color: WINE, alpha: 0.45 },
-      { x: 964, y: 700, cols: 3, rows: 4, r: 5, gap: 24, color: GRAPHITE, alpha: 0.3 },
+      { x: 964, y: 700, cols: 3, rows: 4, r: 5, gap: 24, color: dotNeutral, alpha: 0.3 },
     ],
     butterflies: [
       { cx: 1002, cy: 130, size: 100, angle: -14, alpha: 1 },
@@ -501,7 +544,7 @@ export function buildMatchCardElement(
 ): CardNode {
   switch (variant) {
     case "paper":
-      return paperSoloCard(texts, layers);
+      return paperSoloCard(texts, layers, paperPalette("light"));
     case "graphite":
       return graphiteCard(texts, layers);
     case "wine":

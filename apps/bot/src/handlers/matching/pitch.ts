@@ -364,6 +364,7 @@ export async function sendMatchProposal(
           age: true,
           gender: true,
           language: true,
+          theme: true,
           verificationStatus: true,
           profile: {
             select: { psychologicalSummary: true, photos: true, profileMedia: true },
@@ -379,6 +380,7 @@ export async function sendMatchProposal(
           age: true,
           gender: true,
           language: true,
+          theme: true,
           verificationStatus: true,
           profile: {
             select: { psychologicalSummary: true, photos: true, profileMedia: true },
@@ -394,6 +396,9 @@ export async function sendMatchProposal(
 
   const langA: Language = match.userA.language ?? "en";
   const langB: Language = match.userB.language ?? "en";
+  // Each recipient's pitch card renders in their chosen theme.
+  const themeA = match.userA.theme === "light" ? "light" : "dark";
+  const themeB = match.userB.theme === "light" ? "light" : "dark";
 
   // Reuse stored pitches on retry; otherwise generate + persist. The synergy
   // score + reason are pair-level (one row, one number) — we take them from
@@ -544,6 +549,7 @@ export async function sendMatchProposal(
       partnerSummary: match.userB.profile?.psychologicalSummary ?? null,
       photos: photosForA,
       language: langA,
+      theme: themeA,
       caption: captionForA,
     });
     if (!cardsSentA) await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
@@ -577,6 +583,7 @@ export async function sendMatchProposal(
       partnerSummary: match.userA.profile?.psychologicalSummary ?? null,
       photos: photosForB,
       language: langB,
+      theme: themeB,
       caption: captionForB,
     });
     if (!cardsSentB) await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
