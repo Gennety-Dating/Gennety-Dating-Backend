@@ -7,25 +7,39 @@
     <script>(function(){try{var q=new URLSearchParams(location.search).get("theme");if(q==="light"||q==="dark"){try{localStorage.setItem("gennety-theme",q);}catch(e){}}var t=(q==="light"||q==="dark")?q:localStorage.getItem("gennety-theme");document.documentElement.dataset.theme=(t==="light"||t==="dark")?t:"dark";}catch(e){document.documentElement.dataset.theme="dark";}})();</script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-      /* Design tokens — sourced from apps/webapp/design-handoff/ mockups. */
-      :root {
+      /* Design tokens — self-contained (both themes) so the inline styles never
+       * flash before a JS-imported sheet loads. Mirrors the shared theme.css +
+       * Liquid Glass values. "You/mine" is a theme-flipping neutral; the peer
+       * ("match") accent is the unified burgundy. */
+      :root,
+      :root[data-theme="dark"] {
         color-scheme: dark;
-        --bg: #09090b;
-        --surface: #18181b;
-        --surface-2: #1f1f23;
-        --text: #ffffff;
-        --text-60: rgba(255, 255, 255, 0.6);
-        --text-70: rgba(255, 255, 255, 0.7);
-        --text-40: rgba(255, 255, 255, 0.4);
-        --text-90: rgba(255, 255, 255, 0.9);
-        --border: rgba(255, 255, 255, 0.06);
+        --bg: #030303;
+        --surface: #161616;
+        --surface-2: #202020;
+        --surface-3: #2a2a2e;
+        --card-frame: #26232e;
+        --text: #e9e6e5;
+        --text-90: rgba(233, 230, 229, 0.92);
+        --text-70: rgba(233, 230, 229, 0.7);
+        --text-60: rgba(233, 230, 229, 0.6);
+        --text-40: rgba(233, 230, 229, 0.42);
+        --border: rgba(255, 255, 255, 0.1);
         --border-2: rgba(255, 255, 255, 0.08);
-        --brand: #ac92dc;
-        --brand-light: #cdb7e9;
-        --brand-glow: rgba(172, 146, 220, 0.4);
+        --fill: rgba(255, 255, 255, 0.05);
+        --fill-strong: rgba(255, 255, 255, 0.1);
+        --glass-bg: rgba(255, 255, 255, 0.03);
+        --brand: #8b253b;
+        --brand-light: #d16b80;
+        --brand-glow: rgba(139, 37, 59, 0.5);
         --cta-bg: #ffffff;
-        --cta-fg: #09090b;
+        --cta-fg: #0a0a0a;
         --cta-glow: rgba(255, 255, 255, 0.15);
+        --cta-hover: #f0f0f0;
+        --self: #ffffff;
+        --self-glow: rgba(255, 255, 255, 0.7);
+        --self-fill-strong: rgba(255, 255, 255, 0.25);
+        --self-fill-soft: rgba(255, 255, 255, 0.08);
         --font-stack: -apple-system, BlinkMacSystemFont, "SF Pro Display",
           "Inter", system-ui, sans-serif;
         --safe-top: env(safe-area-inset-top, 0px);
@@ -36,6 +50,34 @@
          * and a brief flash before the first `contentSafeAreaChanged`. */
         --tg-content-top: 56px;
         --tg-content-bottom: 0px;
+      }
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --bg: #f5f5f5;
+        --surface: #ffffff;
+        --surface-2: #ececec;
+        --surface-3: #e2e2e2;
+        --card-frame: #e7e5eb;
+        --text: #1d1d1d;
+        --text-90: rgba(29, 29, 29, 0.92);
+        --text-70: rgba(29, 29, 29, 0.66);
+        --text-60: rgba(29, 29, 29, 0.56);
+        --text-40: rgba(29, 29, 29, 0.4);
+        --border: rgba(0, 0, 0, 0.12);
+        --border-2: rgba(0, 0, 0, 0.08);
+        --fill: rgba(0, 0, 0, 0.05);
+        --fill-strong: rgba(0, 0, 0, 0.09);
+        --glass-bg: rgba(0, 0, 0, 0.03);
+        --brand-light: #8b253b;
+        --brand-glow: rgba(139, 37, 59, 0.35);
+        --cta-bg: #1d1d1d;
+        --cta-fg: #ffffff;
+        --cta-glow: rgba(0, 0, 0, 0.14);
+        --cta-hover: #2c2c2c;
+        --self: #1d1d1d;
+        --self-glow: rgba(0, 0, 0, 0.35);
+        --self-fill-strong: rgba(0, 0, 0, 0.14);
+        --self-fill-soft: rgba(0, 0, 0, 0.05);
       }
 
       * { box-sizing: border-box; }
@@ -82,7 +124,7 @@
         margin: 0 0 24px;
         padding: 16px;
         border-radius: 16px;
-        background: rgba(255, 255, 255, 0.03);
+        background: var(--glass-bg);
         border: 1px solid var(--border-2);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
@@ -90,7 +132,7 @@
         font-size: 13px;
         line-height: 1.5;
         font-weight: 500;
-        color: rgba(255, 255, 255, 0.8);
+        color: var(--text-90);
       }
 
       /* In the time picker the banner is minimalist (no border, no bg). */
@@ -127,8 +169,8 @@
         border-radius: 50%;
       }
       .legend-dot.dot-you {
-        background: #ffffff;
-        box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+        background: var(--self);
+        box-shadow: 0 0 8px var(--self-glow);
       }
       .legend-dot.dot-match {
         background: var(--brand);
@@ -166,13 +208,13 @@
         align-items: center;
         justify-content: center;
         border-radius: 50%;
-        background: rgba(255, 255, 255, 0.05);
+        background: var(--fill);
         border: 1px solid var(--border-2);
         color: var(--text-90);
         cursor: pointer;
         transition: background 160ms ease, transform 100ms ease;
       }
-      .back-button:hover { background: rgba(255, 255, 255, 0.1); }
+      .back-button:hover { background: var(--fill-strong); }
       .back-button:active { transform: scale(0.95); }
       .back-button svg { width: 14px; height: 14px; display: block; }
       .date-header-title {
@@ -248,13 +290,13 @@
         padding: 2px 7px;
         border-radius: 999px;
         background: var(--brand);
-        color: #09090b;
+        color: #fff;
         font-size: 8px;
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         white-space: nowrap;
-        box-shadow: 0 2px 8px rgba(172, 146, 220, 0.32);
+        box-shadow: 0 2px 8px rgba(139, 37, 59, 0.32);
         pointer-events: none;
       }
       .indicator-tag {
@@ -282,12 +324,12 @@
       .indicator-pair-dot + .indicator-pair-dot { margin-left: -6px; z-index: 0; }
       .indicator-pair-dot:first-child { z-index: 1; }
 
-      /* State: mine (white) */
+      /* State: mine (theme-flipping neutral) */
       .slot.state-you {
         background: linear-gradient(
           90deg,
-          rgba(255, 255, 255, 0.25) 0%,
-          rgba(255, 255, 255, 0.08) 100%
+          var(--self-fill-strong) 0%,
+          var(--self-fill-soft) 100%
         );
         border-color: transparent;
         background-clip: padding-box;
@@ -298,16 +340,16 @@
       .slot.state-you .slot-time-label { font-weight: 600; color: var(--text); }
       .slot.state-you .indicator-tag { color: var(--text-70); }
       .slot.state-you .indicator-dot {
-        background: #ffffff;
-        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        background: var(--self);
+        box-shadow: 0 0 10px var(--self-glow);
       }
 
-      /* State: peer (lilac) */
+      /* State: peer (burgundy) */
       .slot.state-match {
         background: linear-gradient(
           90deg,
-          rgba(172, 146, 220, 0.25) 0%,
-          rgba(24, 24, 27, 0.6) 100%
+          rgba(139, 37, 59, 0.28) 0%,
+          var(--surface) 100%
         );
         border-color: transparent;
         background-clip: padding-box;
@@ -318,15 +360,15 @@
       .slot.state-match .indicator-tag { color: var(--brand-light); }
       .slot.state-match .indicator-dot {
         background: var(--brand);
-        box-shadow: 0 0 10px rgba(172, 146, 220, 0.8);
+        box-shadow: 0 0 10px rgba(139, 37, 59, 0.7);
       }
 
       /* State: both (animated gradient border) */
       .slot.state-both {
-        background: rgba(24, 24, 27, 0.8);
+        background: var(--surface);
         border-color: transparent;
         background-clip: padding-box;
-        box-shadow: 0 0 20px rgba(172, 146, 220, 0.15);
+        box-shadow: 0 0 20px rgba(139, 37, 59, 0.15);
       }
       .slot.state-both::before {
         content: "";
@@ -336,9 +378,9 @@
         padding: 1.5px;
         background: linear-gradient(
           90deg,
-          rgba(255, 255, 255, 0.7),
+          var(--self),
           var(--brand),
-          rgba(255, 255, 255, 0.7),
+          var(--self),
           var(--brand)
         );
         background-size: 300% 100%;
@@ -353,7 +395,7 @@
       .slot.state-both .slot-label .slot-day { font-weight: 600; color: var(--text); }
       .slot.state-both .slot-time-label { font-weight: 600; color: var(--text); }
       .slot.state-both .indicator-tag {
-        background: linear-gradient(90deg, #ffffff, var(--brand));
+        background: linear-gradient(90deg, var(--self), var(--brand));
         -webkit-background-clip: text;
                 background-clip: text;
         color: transparent;
@@ -372,7 +414,7 @@
         align-items: stretch;
         gap: 0;
         padding: 0;
-        background: #2b2733;
+        background: var(--card-frame);
         border-color: transparent;
         box-shadow: 0 10px 26px -14px rgba(0, 0, 0, 0.7);
       }
@@ -420,7 +462,7 @@
         background: linear-gradient(
           to top,
           var(--bg) 0%,
-          rgba(9, 9, 11, 0.9) 60%,
+          var(--bg) 60%,
           transparent 100%
         );
         z-index: 20;
@@ -450,7 +492,7 @@
         justify-content: center;
         gap: 8px;
       }
-      .btn-primary:hover { background: #f5f5f5; }
+      .btn-primary:hover { background: var(--cta-hover); }
       .btn-primary:active { transform: scale(0.96); }
       .btn-primary:disabled {
         opacity: 0.5;
@@ -463,7 +505,7 @@
         width: 18px;
         height: 18px;
         border-radius: 50%;
-        border: 2px solid rgba(0, 0, 0, 0.18);
+        border: 2px solid rgba(128, 128, 128, 0.3);
         border-top-color: var(--cta-fg);
         animation: spin 800ms linear infinite;
       }
@@ -473,9 +515,9 @@
         appearance: none;
         width: 100%;
         height: 48px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--border);
         border-radius: 12px;
-        background: #27272a;
+        background: var(--surface-2);
         color: var(--text);
         font: inherit;
         font-size: 15px;
@@ -486,7 +528,7 @@
         align-items: center;
         justify-content: center;
       }
-      .btn-secondary:hover { background: #3f3f46; }
+      .btn-secondary:hover { background: var(--surface-3); }
       .btn-secondary:active { transform: scale(0.95); }
 
       /* ── Agreed (success) view ───────────────────────────────── */
@@ -513,7 +555,7 @@
 
       .agreed-card {
         width: 100%;
-        background: rgba(255, 255, 255, 0.03);
+        background: var(--glass-bg);
         border: 1px solid var(--border-2);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
@@ -535,7 +577,7 @@
         font-size: 48px;
         font-weight: 700;
         line-height: 1.05;
-        background: linear-gradient(90deg, #ffffff, var(--brand));
+        background: linear-gradient(90deg, var(--self), var(--brand));
         -webkit-background-clip: text;
                 background-clip: text;
         color: transparent;
@@ -556,8 +598,8 @@
         font: inherit;
         color: inherit;
         cursor: pointer;
-        background: rgba(255, 255, 255, 0.02);
-        border: 1px solid rgba(255, 255, 255, 0.04);
+        background: var(--glass-bg);
+        border: 1px solid var(--border-2);
         border-radius: 20px;
         padding: 16px;
         display: flex;
@@ -570,8 +612,8 @@
         transition: background 160ms ease, opacity 240ms ease;
         overflow: hidden;
       }
-      .remind-chip:hover { background: rgba(255, 255, 255, 0.04); }
-      .remind-chip:active { background: rgba(255, 255, 255, 0.06); }
+      .remind-chip:hover { background: var(--fill); }
+      .remind-chip:active { background: var(--fill-strong); }
       .remind-chip-icon {
         width: 44px;
         height: 44px;
@@ -636,7 +678,7 @@
         width: 96px;
         height: 96px;
         border-radius: 50%;
-        background: rgba(255, 255, 255, 0.1);
+        background: var(--fill-strong);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -645,7 +687,7 @@
         animation-delay: 0.1s;
         opacity: 0;
       }
-      .saved-check svg { width: 48px; height: 48px; color: #ffffff; }
+      .saved-check svg { width: 48px; height: 48px; color: var(--text); }
       .saved-title {
         font-size: 30px;
         font-weight: 700;
@@ -696,7 +738,7 @@
         background: linear-gradient(
           to top,
           var(--bg) 0%,
-          rgba(9, 9, 11, 0.9) 60%,
+          var(--bg) 60%,
           transparent 100%
         );
         z-index: 30;
@@ -767,7 +809,7 @@
         width: 40px;
         height: 4px;
         border-radius: 2px;
-        background: rgba(255, 255, 255, 0.18);
+        background: var(--text-40);
         margin: 0 auto 14px;
         flex: 0 0 auto;
       }
@@ -836,7 +878,7 @@
       }
       .overlap-hero p {
         font-size: 14px;
-        color: rgba(255, 255, 255, 0.5);
+        color: var(--text-60);
         font-weight: 500;
         line-height: 1.5;
         margin: 0;
@@ -851,7 +893,7 @@
        * whole row is the affordance (screen_7_final_time_picker_choice). */
       .overlap-card {
         background: var(--surface);
-        border: 1px solid rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--border);
         border-radius: 22px;
         padding: 20px 20px 20px 24px;
         cursor: pointer;
@@ -879,8 +921,8 @@
       .overlap-card.is-selected {
         background: linear-gradient(
           90deg,
-          rgba(172, 146, 220, 0.35) 0%,
-          rgba(172, 146, 220, 0.08) 100%
+          rgba(139, 37, 59, 0.35) 0%,
+          rgba(139, 37, 59, 0.08) 100%
         );
         border: none;
         padding: 21px 21px 21px 25px;
@@ -896,11 +938,11 @@
         gap: 6px;
       }
       .overlap-day {
-        color: rgba(255, 255, 255, 0.4);
+        color: var(--text-40);
         transition: color 0.3s ease;
       }
       .overlap-time {
-        color: rgba(255, 255, 255, 0.9);
+        color: var(--text-90);
         transition: color 0.3s ease, font-weight 0.3s ease;
       }
       .overlap-card.is-selected .overlap-day { color: var(--text); }

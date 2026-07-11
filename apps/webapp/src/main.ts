@@ -49,9 +49,11 @@ try {
   if (app?.isVersionAtLeast?.("8.0") && !app.isFullscreen) {
     app.requestFullscreen?.();
   }
-  app?.setHeaderColor?.("#09090b");
-  app?.setBackgroundColor?.("#09090b");
-  app?.setBottomBarColor?.("#09090b");
+  const chromeColor =
+    document.documentElement.dataset.theme === "light" ? "#f5f5f5" : "#030303";
+  app?.setHeaderColor?.(chromeColor);
+  app?.setBackgroundColor?.(chromeColor);
+  app?.setBottomBarColor?.(chromeColor);
 } catch {
   // Best-effort cosmetic boot — never crash the app over chrome theming.
 }
