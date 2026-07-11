@@ -17,10 +17,13 @@ if (tg?.isVersionAtLeast?.("8.0")) {
 // Reserve room for Telegram's floating close × / menu ⋯ in fullscreen so the
 // store header / bundle badges don't slide under the chrome (--tg-content-top).
 wireContentInsets(tg);
-// Lock the chrome to the dark premium theme (matches the Date Ticket Mini App).
-tg?.setHeaderColor?.("#120E1C");
-tg?.setBackgroundColor?.("#120E1C");
-tg?.setBottomBarColor?.("#120E1C");
+// Paint Telegram's chrome to match the active app theme (set pre-paint by the
+// boot snippet).
+const chromeColor =
+  document.documentElement.dataset.theme === "light" ? "#f5f5f5" : "#030303";
+tg?.setHeaderColor?.(chromeColor);
+tg?.setBackgroundColor?.(chromeColor);
+tg?.setBottomBarColor?.(chromeColor);
 
 const root = document.getElementById("root");
 if (root) createRoot(root).render(<App />);

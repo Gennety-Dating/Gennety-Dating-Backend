@@ -19,11 +19,14 @@ if (tg?.isVersionAtLeast?.("8.0")) {
 // Fullscreen floats Telegram's close × / menu ⋯ over the page; reserve room
 // for them so the header doesn't slide under the chrome (--tg-content-top).
 wireContentInsets(tg);
-// Lock the chrome to the dark premium theme regardless of the user's Telegram
-// theme — the ticket is a branded moment, not a themed form.
-tg?.setHeaderColor?.("#120E1C");
-tg?.setBackgroundColor?.("#120E1C");
-tg?.setBottomBarColor?.("#120E1C");
+// Paint Telegram's chrome to match the active app theme (set pre-paint by the
+// boot snippet) so it doesn't flash the wrong color around the page. The 3D
+// ticket itself stays a dark premium object regardless (see ticket.css).
+const chromeColor =
+  document.documentElement.dataset.theme === "light" ? "#f5f5f5" : "#030303";
+tg?.setHeaderColor?.(chromeColor);
+tg?.setBackgroundColor?.(chromeColor);
+tg?.setBottomBarColor?.(chromeColor);
 
 const root = document.getElementById("root");
 if (root) createRoot(root).render(<App />);

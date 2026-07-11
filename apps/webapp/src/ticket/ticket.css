@@ -2,17 +2,19 @@
    Dark violet stage, lavender accent, borderless glass surfaces: depth comes
    from layered fills, inset light, and shadow — never from outlines. */
 
+@import "../theme.css";
+
 :root {
-  --accent: #b69ae5;
-  --accent-deep: #8e6fd6;
-  --accent-bright: #d4c0f4;
-  --bg: #120e1c;
-  --bg-soft: #1b1530;
-  --text: #f4ecff;
-  --text-dim: #b3a8cf;
-  --glass: rgba(255, 255, 255, 0.07);
-  --glass-press: rgba(255, 255, 255, 0.12);
-  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  /* Local aliases onto the shared theme tokens (theme.css). --accent /
+     --accent-bright / --bg / --text come from theme.css and adapt to the active
+     theme; the ticket keeps its own glass naming. The 3D ticket card itself
+     stays a dark premium object in both themes (hardcoded burgundy below). */
+  --accent-deep: #6d1c2e;
+  --bg-soft: var(--surface);
+  --text-dim: var(--text-muted);
+  --glass: var(--glass-bg);
+  --glass-press: var(--fill-strong);
+  --glass-edge: inset 0 1px 0 var(--glass-highlight);
   /* Telegram chrome inset (close ×, menu ⋯) in fullscreen mode — populated
      from `Telegram.WebApp.contentSafeAreaInset` at boot (see telegram-insets.ts).
      `env(safe-area-inset-top)` does NOT cover Telegram's floating controls, so
@@ -38,10 +40,17 @@ body {
 
 body {
   background:
-    radial-gradient(120% 80% at 50% -10%, rgba(142, 111, 214, 0.32), transparent 62%),
-    radial-gradient(90% 60% at 50% 110%, rgba(182, 154, 229, 0.16), transparent 60%),
+    radial-gradient(120% 80% at 50% -10%, rgba(139, 37, 59, 0.3), transparent 62%),
+    radial-gradient(90% 60% at 50% 110%, rgba(139, 37, 59, 0.15), transparent 60%),
     var(--bg);
   min-height: 100vh;
+}
+/* Soften the burgundy ambience on the cream page. */
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(139, 37, 59, 0.14), transparent 62%),
+    radial-gradient(90% 60% at 50% 110%, rgba(139, 37, 59, 0.07), transparent 60%),
+    var(--bg);
 }
 
 .ticket-page {
@@ -83,7 +92,7 @@ body {
   flex-direction: column;
   gap: 10px;
   padding: 16px 22px calc(18px + env(safe-area-inset-bottom) + var(--tg-content-bottom));
-  background: linear-gradient(to top, var(--bg) 58%, rgba(18, 14, 28, 0));
+  background: linear-gradient(to top, var(--bg) 58%, transparent);
 }
 
 .btn-text {
@@ -109,7 +118,7 @@ body {
 }
 
 .ticket-error {
-  color: #ff9d9d;
+  color: #e0566e;
   max-width: 280px;
 }
 
@@ -163,12 +172,16 @@ body {
   display: flex;
   flex-direction: column;
   border-radius: 22px;
+  /* The ticket stays a dark premium object in both themes — a burgundy-black
+     "stock" so it reads like a physical ticket on the (light or dark) page.
+     Inner text is pinned light regardless of the page theme (below). */
+  color: #f2ecf4;
   background:
-    radial-gradient(120% 90% at 20% 0%, rgba(182, 154, 229, 0.2), transparent 55%),
-    radial-gradient(110% 80% at 90% 100%, rgba(142, 111, 214, 0.18), transparent 60%),
-    linear-gradient(155deg, #2a2150 0%, #1c1636 55%, #251c44 100%);
+    radial-gradient(120% 90% at 20% 0%, rgba(182, 48, 79, 0.22), transparent 55%),
+    radial-gradient(110% 80% at 90% 100%, rgba(139, 37, 59, 0.2), transparent 60%),
+    linear-gradient(155deg, #3a1622 0%, #190a10 55%, #2b1019 100%);
   box-shadow:
-    0 28px 64px rgba(12, 6, 28, 0.7),
+    0 28px 64px rgba(0, 0, 0, 0.7),
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
     inset 0 -1px 0 rgba(0, 0, 0, 0.32);
   transform: rotateX(var(--rx)) rotateY(var(--ry));
@@ -181,6 +194,13 @@ body {
 }
 .ticket-card:active {
   cursor: grabbing;
+}
+/* Muted text inside the (always-dark) ticket stays light in both themes —
+   the shared --text-dim would flip dark on the light page and vanish. */
+.ticket-card .ticket-brand-sub,
+.ticket-card .ticket-tagline,
+.ticket-card .ticket-stub-text {
+  color: rgba(255, 255, 255, 0.62);
 }
 
 /* Specular highlight that tracks the rotation, like light on gloss. */
@@ -278,7 +298,7 @@ body {
   font-family: "Space Grotesk", sans-serif;
   font-size: 11px;
   letter-spacing: 0.16em;
-  color: rgba(244, 236, 255, 0.45);
+  color: rgba(255, 255, 255, 0.42);
 }
 .ticket-heart {
   font-size: 12px;
@@ -289,7 +309,7 @@ body {
 /* Perforation + stub */
 .ticket-perf {
   height: 0;
-  border-top: 2px dashed rgba(182, 154, 229, 0.3);
+  border-top: 2px dashed rgba(255, 255, 255, 0.25);
   margin: 0 14px;
   position: relative;
   z-index: 1;
@@ -330,7 +350,7 @@ body {
   opacity: 0.85;
 }
 .ticket-barcode span {
-  background: linear-gradient(to bottom, rgba(244, 236, 255, 0.9), rgba(244, 236, 255, 0.65));
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.62));
   border-radius: 0.5px;
 }
 
@@ -350,8 +370,8 @@ body {
   border-radius: 50%;
   background: radial-gradient(
     closest-side,
-    rgba(10, 4, 26, 0.85) 0%,
-    rgba(142, 111, 214, 0.28) 55%,
+    rgba(0, 0, 0, 0.8) 0%,
+    rgba(139, 37, 59, 0.28) 55%,
     transparent
   );
   filter: blur(9px);
@@ -373,9 +393,9 @@ body {
 }
 .btn-primary {
   background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 45%, var(--accent-deep) 100%);
-  color: #1a0f2e;
+  color: #fff;
   box-shadow:
-    0 12px 30px rgba(142, 111, 214, 0.35),
+    0 12px 30px rgba(139, 37, 59, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 .btn-secondary {
@@ -426,7 +446,7 @@ body {
   animation-timing-function: ease-in;
   animation-iteration-count: infinite;
   will-change: transform, opacity;
-  text-shadow: 0 0 12px rgba(182, 154, 229, 0.5);
+  text-shadow: 0 0 12px rgba(139, 37, 59, 0.5);
 }
 
 .pp-hero {
@@ -452,9 +472,9 @@ body {
   /* Premium violet stock — layered glows + a diagonal gradient give it real
      depth instead of reading as a flat dark rectangle. */
   background:
-    radial-gradient(130% 100% at 16% 0%, rgba(212, 192, 244, 0.24), transparent 56%),
-    radial-gradient(130% 110% at 96% 100%, rgba(142, 111, 214, 0.28), transparent 60%),
-    linear-gradient(150deg, #2c2358 0%, #1d1740 52%, #241b46 100%);
+    radial-gradient(130% 100% at 16% 0%, rgba(182, 48, 79, 0.24), transparent 56%),
+    radial-gradient(130% 110% at 96% 100%, rgba(139, 37, 59, 0.28), transparent 60%),
+    linear-gradient(150deg, #3a1622 0%, #190a10 52%, #2b1019 100%);
   box-shadow:
     0 24px 56px rgba(18, 9, 40, 0.62),
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
@@ -497,14 +517,14 @@ body {
   width: 104px;
   height: 104px;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(182, 154, 229, 0.4), transparent 72%);
+  background: radial-gradient(closest-side, rgba(182, 48, 79, 0.42), transparent 72%);
   filter: blur(5px);
 }
 .pp-logo {
   position: relative;
   width: 92px;
   height: auto;
-  filter: drop-shadow(0 5px 16px rgba(182, 154, 229, 0.6));
+  filter: drop-shadow(0 5px 16px rgba(182, 48, 79, 0.6));
   animation: pp-logo-pulse 3s ease-in-out infinite;
 }
 
@@ -524,16 +544,16 @@ body {
   left: 0;
   top: 12px;
   bottom: 12px;
-  border-left: 2px dashed rgba(212, 192, 244, 0.42);
+  border-left: 2px dashed rgba(255, 255, 255, 0.35);
 }
 .pp-stub-dots {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: rgba(212, 192, 244, 0.55);
+  background: rgba(255, 255, 255, 0.5);
   box-shadow:
-    0 -10px 0 rgba(212, 192, 244, 0.55),
-    0 10px 0 rgba(212, 192, 244, 0.55);
+    0 -10px 0 rgba(255, 255, 255, 0.5),
+    0 10px 0 rgba(255, 255, 255, 0.5);
 }
 
 .pp-shine {
@@ -565,12 +585,12 @@ body {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #2a1840;
-  background: linear-gradient(135deg, #f3ecff 0%, var(--accent-bright) 50%, var(--accent) 100%);
+  color: #6d1c2e;
+  background: linear-gradient(135deg, #ffffff 0%, #f4d9e0 58%, #e6b3c1 100%);
   box-shadow:
-    0 9px 18px rgba(16, 8, 36, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.75),
-    inset 0 -1px 0 rgba(142, 111, 214, 0.55);
+    0 9px 18px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(139, 37, 59, 0.4);
   transform: rotate(-9deg);
   transform-origin: top left;
   animation: pp-stamp-in 0.55s 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.5) both;
@@ -651,7 +671,7 @@ body {
 }
 .mock-badge {
   display: inline-block;
-  background: rgba(182, 154, 229, 0.14);
+  background: var(--accent-soft);
   color: var(--accent);
   font-size: 12px;
   font-weight: 600;
@@ -718,7 +738,7 @@ body {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  border: 3px solid rgba(182, 154, 229, 0.25);
+  border: 3px solid rgba(139, 37, 59, 0.25);
   border-top-color: var(--accent);
   animation: spin 0.8s linear infinite;
   margin-bottom: 14px;
