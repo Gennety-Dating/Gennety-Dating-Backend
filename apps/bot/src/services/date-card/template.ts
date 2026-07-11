@@ -20,8 +20,13 @@
  * is pure layout.
  */
 
+import type { Wordmark } from "./image.js";
+
 export const CARD_W = 1080;
 export const CARD_H = 1350;
+
+/** Header wordmark display height (px on the 1080-wide card). */
+const HEADER_MARK_H = 46;
 
 const BURGUNDY = "#8B253B";
 
@@ -38,6 +43,11 @@ function palette(theme: CardTheme): Palette {
   return theme === "light"
     ? { bg: "#F5F5F5", ink: "#1D1D1D", muted: "#6B6670" }
     : { bg: "#030303", ink: "#F2EFF7", muted: "#8E8895" };
+}
+
+/** The header wordmark is tinted to this ink (light on dark, dark on light). */
+export function inkColor(theme: CardTheme): string {
+  return palette(theme).ink;
 }
 
 /** Minimal satori-compatible node (cast to satori's ReactNode at the call site). */
@@ -89,6 +99,8 @@ export interface CardElementInput {
   slogan: string;
   /** Recipient's chosen theme — drives the light/dark chrome palette. */
   theme: CardTheme;
+  /** Brand wordmark, pre-tinted to the theme ink. Falls back to text if null. */
+  wordmark: Wordmark | null;
 }
 
 export function buildCardElement(input: CardElementInput): CardNode {
@@ -123,7 +135,7 @@ export function buildCardElement(input: CardElementInput): CardNode {
             ),
           ]
         : []),
-      header(p),
+      header(p, input.wordmark),
       heroSlogan(input.slogan, p),
       venueSection(input),
       el("div", { display: "flex", flexGrow: 1, minHeight: "0px" }),
@@ -155,7 +167,23 @@ function logoImg(logo: LogoMark): CardNode {
   );
 }
 
-function header(p: Palette): CardNode {
+function header(p: Palette, wordmark: Wordmark | null): CardNode {
+  const mark = wordmark
+    ? el(
+        "img",
+        {
+          height: `${HEADER_MARK_H}px`,
+          width: `${Math.round(HEADER_MARK_H * (wordmark.width / wordmark.height))}px`,
+        },
+        undefined,
+        { src: dataUri(wordmark.png) },
+      )
+    : // Fallback to the Archivo Black wordmark if the logo asset fails to load.
+      el(
+        "div",
+        { display: "flex", fontFamily: "Archivo Black", fontSize: "36px", color: p.ink },
+        "Gennety",
+      );
   return el(
     "div",
     {
@@ -163,13 +191,7 @@ function header(p: Palette): CardNode {
       alignItems: "center",
       marginBottom: "34px",
     },
-    [
-      el(
-        "div",
-        { display: "flex", fontFamily: "Archivo Black", fontSize: "36px", color: p.ink },
-        "Gennety",
-      ),
-    ],
+    [mark],
   );
 }
 

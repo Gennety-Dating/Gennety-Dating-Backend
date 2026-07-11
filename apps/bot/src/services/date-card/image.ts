@@ -127,3 +127,67 @@ export function grainPng(w: number, h: number, alpha: number): Buffer {
   ctx.putImageData(data, 0, 0);
   return canvas.toBuffer("image/png");
 }
+
+export interface Wordmark {
+  png: Buffer;
+  width: number;
+  height: number;
+}
+
+/**
+ * Turn the brand wordmark PNG (black glyph on a white background) into a
+ * transparent, ink-tinted, alpha-trimmed mark for the card header. Alpha is
+ * derived from the source's darkness (black → opaque, white → transparent) so
+ * the anti-aliased edges survive; RGB is set to `inkHex` so the same source
+ * works on either theme (dark ink on the cream card, light ink on the black).
+ * Returned WITH real trimmed dimensions — callers derive the display box.
+ */
+export async function wordmarkPng(
+  source: Buffer,
+  inkHex: string,
+  targetW = 900,
+): Promise<Wordmark | null> {
+  try {
+    const img = await loadImage(source);
+    const w = Math.max(200, Math.round(targetW));
+    const h = Math.round(w * (img.height / img.width));
+    const canvas = createCanvas(w, h) as Canvas;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, w, h);
+    const [r, g, b] = hexRgb(inkHex);
+    const id = ctx.getImageData(0, 0, w, h);
+    const d = id.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const lum = d[i]! * 0.299 + d[i + 1]! * 0.587 + d[i + 2]! * 0.114;
+      d[i] = r;
+      d[i + 1] = g;
+      d[i + 2] = b;
+      d[i + 3] = Math.round(((255 - lum) * d[i + 3]!) / 255);
+    }
+    ctx.putImageData(id, 0, 0);
+    // Alpha-trim to the visible glyph (same as the butterfly mark).
+    let minX = w;
+    let minY = h;
+    let maxX = -1;
+    let maxY = -1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (d[(y * w + x) * 4 + 3]! > 8) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX < 0) return null;
+    const bw = maxX - minX + 1;
+    const bh = maxY - minY + 1;
+    const trimmed = createCanvas(bw, bh) as Canvas;
+    trimmed.getContext("2d").drawImage(canvas, minX, minY, bw, bh, 0, 0, bw, bh);
+    return { png: trimmed.toBuffer("image/png"), width: bw, height: bh };
+  } catch (err) {
+    console.warn("[date-card] wordmark tint failed:", err);
+    return null;
+  }
+}
