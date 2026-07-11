@@ -6,24 +6,21 @@
    with a solid-tint fallback for WebViews that lack backdrop-filter. */
 
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import "./theme.css";
 
 :root {
-  --accent: #b69ae5;
-  --accent-deep: #8e6fd6;
-  --accent-bright: #d4c0f4;
-  --bg: #120e1c;
-  --bg-soft: #1b1530;
-  --text: #f4ecff;
-  --text-dim: #b3a8cf;
-  --text-faint: #8a7fa8;
-  --danger: #ff9d9d;
-  /* Glass tint sits over live map tiles, so it is darker/denser than the
-     venue-change surfaces (which float over a static gradient). */
-  --glass: rgba(27, 21, 48, 0.55);
-  --glass-solid: rgba(27, 21, 48, 0.92);
-  --glass-inner: rgba(255, 255, 255, 0.06);
-  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  --shadow-float: 0 8px 32px rgba(0, 0, 0, 0.35);
+  /* Local aliases onto the shared theme tokens (theme.css). --accent /
+     --accent-bright / --bg / --text / --text-faint come straight from theme.css
+     and adapt to the active theme; the map picker keeps its own glass naming. */
+  --accent-deep: #6d1c2e;
+  --bg-soft: var(--surface);
+  --text-dim: var(--text-muted);
+  --danger: #e0566e;
+  --glass: var(--surface-glass);
+  --glass-solid: var(--surface-2);
+  --glass-inner: var(--fill);
+  --glass-edge: inset 0 1px 0 var(--glass-highlight);
+  --shadow-float: var(--glass-shadow);
   /* Telegram fullscreen chrome inset (close ×, menu ⋯) — populated from
      contentSafeAreaInset at boot (telegram-insets.ts). 56px fallback covers
      older clients / first paint. */
@@ -63,8 +60,22 @@ body {
   z-index: 2;
   pointer-events: none;
   background:
-    radial-gradient(120% 42% at 50% 0%, rgba(18, 14, 28, 0.6), transparent 46%),
-    radial-gradient(120% 34% at 50% 100%, rgba(18, 14, 28, 0.82), transparent 52%);
+    radial-gradient(120% 42% at 50% 0%, rgba(0, 0, 0, 0.55), transparent 46%),
+    radial-gradient(120% 34% at 50% 100%, rgba(0, 0, 0, 0.8), transparent 52%);
+}
+/* Light theme: the tile pane is inverted to a light map (below), so dim the
+   edges toward the cream page instead of black. */
+:root[data-theme="light"] #scrim {
+  background:
+    radial-gradient(120% 42% at 50% 0%, rgba(245, 245, 245, 0.62), transparent 46%),
+    radial-gradient(120% 34% at 50% 100%, rgba(245, 245, 245, 0.86), transparent 52%);
+}
+/* Recolor the CARTO dark raster tiles into a light basemap for the light theme
+   (the tiles are server-proxied dark_all, so we can't switch providers here).
+   Only the tile pane is filtered — the pin, markers and controls are separate
+   panes, so they stay correct. */
+:root[data-theme="light"] .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.98);
 }
 
 /* --- Liquid-glass island primitive --- */
@@ -154,13 +165,13 @@ input.search::placeholder {
 .result {
   padding: 12px 16px;
   cursor: pointer;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--glass-border);
 }
 .result:last-child {
   border-bottom: none;
 }
 .result:active {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--fill-strong);
 }
 .result .primary {
   font-size: 14px;
@@ -217,14 +228,14 @@ input.search::placeholder {
   font-weight: 500;
   font-size: 14px;
   color: var(--accent-bright);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--fill);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
 }
 .loc-btn:active {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--fill-strong);
 }
 .loc-btn:disabled {
   cursor: default;
@@ -282,7 +293,7 @@ button.cta {
   justify-content: center;
   gap: 8px;
   background: linear-gradient(180deg, var(--accent) 0%, var(--accent-deep) 100%);
-  box-shadow: 0 6px 20px rgba(142, 111, 214, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 6px 20px rgba(139, 37, 59, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 button.cta:disabled {
   cursor: default;
@@ -336,7 +347,7 @@ button.cta.saving .arrow {
   font-family: inherit;
 }
 .leaflet-control-attribution {
-  background: rgba(18, 14, 28, 0.5) !important;
+  background: var(--surface-glass) !important;
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }

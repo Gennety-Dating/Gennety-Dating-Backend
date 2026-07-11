@@ -65,13 +65,15 @@ app?.expand();
 
 // Bot API 8.0+ — immersive fullscreen so the map fills the screen edge-to-edge.
 // Older clients silently fall through to expand().
+const chromeColor =
+  document.documentElement.dataset.theme === "light" ? "#f5f5f5" : "#030303";
 try {
   if (app?.isVersionAtLeast?.("8.0") && !app.isFullscreen) {
     app.requestFullscreen?.();
   }
-  app?.setHeaderColor?.("#120E1C");
-  app?.setBackgroundColor?.("#120E1C");
-  app?.setBottomBarColor?.("#120E1C");
+  app?.setHeaderColor?.(chromeColor);
+  app?.setBackgroundColor?.(chromeColor);
+  app?.setBottomBarColor?.(chromeColor);
 } catch {
   // Best-effort cosmetic boot — never crash over chrome theming.
 }
