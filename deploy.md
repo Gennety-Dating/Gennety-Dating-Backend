@@ -430,6 +430,15 @@ Required/high-impact env keys:
   `ffmpeg` + `ffprobe`, OpenAI, and an IAM policy containing exactly
   `rekognition:CompareFaces`, `rekognition:DetectFaces`, and
   `rekognition:DetectModerationLabels`. No new AWS access key is required.
+- App-wide theme (light/dark, **always-on — no feature flag**): users pick a
+  theme in onboarding (after the city gate; default `dark`) or change it later
+  via Settings → Change theme. Every Mini App renders it (shared `theme.css`
+  tokens + a pre-paint boot snippet in each `*.html`, which also honors a
+  `?theme=` deep-link) and both server PNG cards (date + match) render in the
+  recipient's `User.theme`. **Requires `db:push` of the additive `users.theme`
+  (enum `Theme`, default `dark`) / `theme_chosen_at` columns first** (additive,
+  non-destructive), and redeploy the Mini App bundle so all screens ship the
+  theme system. No new env, no new system dependency.
 - Registration v2 (feature-flagged, ship dark — flip both at launch):
   `PHONE_AUTH_ENABLED` (default `false`) turns on the sign-up fork + the
   general-track phone rail (Mini App PathGate/PhoneGate, `POST

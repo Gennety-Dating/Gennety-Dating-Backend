@@ -171,6 +171,7 @@ when columns diverge, Prisma wins.
 | `UserStatus` | `onboarding`, `active`, `paused`, `frozen`, `suspended`, `pending_investigation`, `banned` (`frozen` = soft-delete: user chose "Freeze" instead of deleting; row/profile/embedding/verification kept, excluded from matching, silently reactivated to `active` on next `/start`) |
 | `Language` | `en`, `ru`, `uk`, `de`, `pl` |
 | `OnboardingStep` | `consent`, `language`, `conversational`, `completed` |
+| `Theme` | `light`, `dark` (app-wide UI theme; `dark` is the brand default) |
 | `Gender` | `male`, `female` |
 | `GenderPreference` | `men`, `women`, `both` |
 | `Platform` | `telegram`, `mobile`, `both` |
@@ -191,6 +192,7 @@ Columns (≈ 35; grouped by purpose):
 |---|---|
 | Identity | `id`, `telegramId` (unique BigInt — synthetic **negative** id for mobile-only users), `telegramUsername` (public `@handle`, captured opportunistically for `t.me/` coordination links), `email`, `universityDomain`, `firstName`, `surname`, `age`, `gender`, `preference`, `major`, `language`, `platform` |
 | Lifecycle | `status` (`UserStatus`), `onboardingStep`, `aiMemoryExportPreference`, `aiMemoryExportPreferenceAt`, `hasConsented`, `consentedAt`, `termsAccepted`, `termsAcceptedAt`, `researchOptIn`, `createdAt`, `updatedAt` |
+| UI theme | `theme` (`Theme`, default `dark`) — the recipient's chosen app-wide light/dark theme, honored by every Mini App (via the shared `theme.css` tokens) and both server-rendered PNG cards; `themeChosenAt` marks the explicit pick so the onboarding theme step shows once. |
 | Email OTP | `emailOtp`, `emailOtpExpiresAt`, `isEmailVerified` |
 | Registration v2 | `phone` (unique E.164, written only from a trusted Telegram `message.contact`), `phoneVerifiedAt` (the general-track contact gate), `registrationTrack` (`student`/`general`, null = pre-fork legacy). Matching admits `isEmailVerified OR phoneVerifiedAt` (union rail). |
 | Conversational state | `messageHistory` (`Json[]`), `lastMessageAt`, `lastPreMatchAnnounceAt` |
@@ -445,7 +447,7 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | Method | Path | Purpose |
 |---|---|---|
 | GET  | `/v1/ping` | Liveness probe |
-| GET/POST | `/v1/telegram-onboarding/*` | Telegram full-screen Onboarding Mini App state/consent/language/**sign-up fork (`POST /track`, Registration v2)**/email OTP/**phone gate**/city/AI-memory choice/completion handoff. Authenticates with `Authorization: tma <initData>`; `/state` mirrors `phoneAuthEnabled` + `isPhoneVerified`/`phone`/`registrationTrack`, `POST /track` persists the re-choosable fork pick (404 while `PHONE_AUTH_ENABLED` is off), and `/complete` runs the track-aware contact gate (`email-required` \| `phone-required`) before city + AI-memory checks. |
+| GET/POST | `/v1/telegram-onboarding/*` | Telegram full-screen Onboarding Mini App state/consent/language/**sign-up fork (`POST /track`, Registration v2)**/email OTP/**phone gate**/city/AI-memory choice/completion handoff. Authenticates with `Authorization: tma <initData>`; `/state` mirrors `phoneAuthEnabled` + `isPhoneVerified`/`phone`/`registrationTrack`, `POST /track` persists the re-choosable fork pick (404 while `PHONE_AUTH_ENABLED` is off), and `/complete` runs the track-aware contact gate (`email-required` \| `phone-required`) before city + AI-memory checks. `/state` also returns `theme` + `themeChosen`, and `POST /theme` records the light/dark pick (`theme` + `themeChosenAt`) — reused by the bot's Settings "Change theme" flow. |
 | POST | `/v1/auth/otp/request` | Send corp-email OTP (rate-limited) |
 | POST | `/v1/auth/otp/verify` | Verify OTP → mint access + refresh JWT |
 | POST | `/v1/auth/refresh` | Rotate refresh token |

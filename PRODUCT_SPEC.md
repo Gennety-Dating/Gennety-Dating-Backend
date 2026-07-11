@@ -101,8 +101,10 @@ out of Telegram-only workers.
   mirrored to the client as `phoneAuthEnabled` in `/state`): student →
   corporate-email OTP gate; general → phone one-tap gate (PhoneGate polls
   `/state` until the bot records the trusted `message.contact`); then dating
-  city and the final AI memory export choice, using Telegram `initData` HMAC
-  auth for all writes (`POST /track` persists the re-choosable fork pick). If
+  city, a **light/dark theme picker** (right after the city gate, before the
+  visual intro; default `dark`, changeable later in Settings — `POST /theme`
+  records it), and the final AI memory export choice, using Telegram `initData`
+  HMAC auth for all writes (`POST /track` persists the re-choosable fork pick). If
   the user arrived through a verified
   website handoff (`auth_<token>`; legacy `web_<token>` still accepted), the
   server-side `isEmailVerified` state skips the fork and Email/OTP screens
@@ -548,7 +550,9 @@ Layout: the two **paired** rows come first — **My Profile · Edit Profile**, t
   `email`, `universityDomain` are **fixed** post-onboarding.
 - **Pause Matching** — flips `User.status = paused`. The match engine ignores
   paused users; the status banner shows "paused".
-- **Settings** — change `language`; re-open verification when applicable; and
+- **Settings** — change `language`; **change theme** (a light/dark inline
+  toggle mirroring the language flow — persists `User.theme`, which every Mini
+  App and both PNG cards honor); re-open verification when applicable; and
   **Delete Account**, which now offers a softer alternative first (Telegram-only,
   see below).
 - **Profile Video** — the first single-button row: an **always-visible**
@@ -748,7 +752,10 @@ for the dashboard's algorithm-quality view.
   an opaque rounded panel (name/age, one vibe line + one short paragraph from a
   dedicated compact copy pass — NOT the streamed pitch), each following card is
   one nearly full-bleed torn-collage photo; branding beyond the first card is
-  limited to butterfly accents. Sent as one protected album with the same
+  limited to butterfly accents. The "paper" set renders in the **recipient's
+  `User.theme`** (light cream / dark near-black card + panel; the burgundy
+  accent, white photo frames and wine halftone dots are theme-agnostic). Sent
+  as one protected album with the same
   name/age/✓ caption; collage jitter is seeded by match id + side. Any copy /
   render / send failure falls back to the plain protected media group, so
   pitch dispatch never wedges. Telegram-only.
@@ -1223,8 +1230,12 @@ Gated by `DATE_CARD_FEATURE_ENABLED` (default **off** → the scheduled
 confirmation is the plain-text DM above). Telegram-only in v1. When on, each
 side's `scheduled` confirmation is a rendered **PNG date card** (the recipient
 sees their *partner*). The look ("Partiful-glow", 2026-06-20; recolored to the
-burgundy / black / white design system 2026-07-09) is a near-black
-card (`#030303`) with two faint burgundy (`#8B253B`) corner discs, a soft glow behind the hero photo, and faint film grain:
+burgundy / black / white design system 2026-07-09; **theme-aware 2026-07-11**)
+renders in the **recipient's `User.theme`** — dark (near-black `#030303`,
+light ink) or light (cream `#F5F5F5`, dark ink) — with the burgundy (`#8B253B`)
+accent, a soft burgundy glow behind the hero photo, and faint film grain on the
+dark card only (skipped on the light one). (The two burgundy corner discs were
+removed.) It carries
 a wide **duotone**-treated venue photo as the hero (the stock Places/curated
 image is remapped into the burgundy brand palette so it reads as part of the card), an
 overlapping tilted **polaroid** of the partner, a bold Archivo Black headline
