@@ -92,7 +92,9 @@ body {
   flex-direction: column;
   gap: 10px;
   padding: 16px 22px calc(18px + env(safe-area-inset-bottom) + var(--tg-content-bottom));
-  background: linear-gradient(to top, var(--bg) 58%, transparent);
+  /* No shared bar behind the buttons — each button floats on its own (the
+     primary carries its burgundy fill, the secondary its glass). */
+  background: transparent;
 }
 
 .btn-text {
@@ -186,6 +188,19 @@ body {
     inset 0 -1px 0 rgba(0, 0, 0, 0.32);
   transform: rotateX(var(--rx)) rotateY(var(--ry));
   transform-style: preserve-3d;
+  /* Punch REAL notch holes at the tear line so the page shows through them
+     (a genuine cutout, not a filled circle). --perf-y is the exact tear-line Y,
+     set from Ticket3D.tsx; the two radial masks are composited so the union of
+     the two half-circles becomes transparent. */
+  --perf-y: 72%;
+  -webkit-mask:
+    radial-gradient(circle 11px at 0% var(--perf-y), transparent 10px, #000 11px),
+    radial-gradient(circle 11px at 100% var(--perf-y), transparent 10px, #000 11px);
+  -webkit-mask-composite: source-in;
+  mask:
+    radial-gradient(circle 11px at 0% var(--perf-y), transparent 10px, #000 11px),
+    radial-gradient(circle 11px at 100% var(--perf-y), transparent 10px, #000 11px);
+  mask-composite: intersect;
   overflow: hidden;
   cursor: grab;
   touch-action: none;
@@ -314,19 +329,11 @@ body {
   position: relative;
   z-index: 1;
 }
+/* The old filled-circle notches are retired — the card mask above cuts real
+   holes at the tear line, so the page shows through for real. */
 .ticket-perf::before,
 .ticket-perf::after {
-  content: "";
-  position: absolute;
-  top: -11px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  /* Punch the tear-line notches with a fixed dark recess (NOT the page bg) so
-     they read as empty cutouts in both themes — the ticket is always dark, and
-     the page bg would paint a bright circle on the light theme. */
-  background: #0a0509;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  display: none;
 }
 .ticket-perf::before {
   left: -25px;
@@ -472,6 +479,16 @@ body {
   border-radius: 18px;
   display: flex;
   overflow: hidden;
+  /* Real notch holes on the top & bottom edges (fixed positions) so the page
+     shows through — matches the main ticket. */
+  -webkit-mask:
+    radial-gradient(circle 8px at 73% 0%, transparent 7px, #000 8px),
+    radial-gradient(circle 8px at 73% 100%, transparent 7px, #000 8px);
+  -webkit-mask-composite: source-in;
+  mask:
+    radial-gradient(circle 8px at 73% 0%, transparent 7px, #000 8px),
+    radial-gradient(circle 8px at 73% 100%, transparent 7px, #000 8px);
+  mask-composite: intersect;
   /* Premium violet stock — layered glows + a diagonal gradient give it real
      depth instead of reading as a flat dark rectangle. */
   background:
@@ -486,18 +503,11 @@ body {
 }
 /* Corner notches punched at the tear line (clipped to half-circles by the
    ticket's overflow) — the single detail that makes the eye read "ticket". */
+/* Retired — the .pp-ticket mask below cuts real holes so the page shows
+   through (see the main ticket's .ticket-perf note). */
 .pp-ticket::before,
 .pp-ticket::after {
-  content: "";
-  position: absolute;
-  right: 56px;
-  width: 16px;
-  height: 16px;
-  margin-right: -8px;
-  border-radius: 50%;
-  /* Same fixed dark recess as the main ticket's notches (see .ticket-perf). */
-  background: #0a0509;
-  z-index: 3;
+  display: none;
 }
 .pp-ticket::before {
   top: -8px;

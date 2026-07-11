@@ -33,6 +33,23 @@ export function Ticket3D(props: {
 }): ReactElement {
   const stageRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const perfRef = useRef<HTMLDivElement>(null);
+
+  // Expose the tear-line Y to CSS so the card can punch *real* notch holes
+  // there (a mask that lets the page show through), rather than faking them
+  // with filled circles. Recomputed on any layout change (name length, etc.).
+  useEffect(() => {
+    const card = cardRef.current;
+    const perf = perfRef.current;
+    if (!card || !perf) return;
+    const sync = (): void => {
+      card.style.setProperty("--perf-y", `${perf.offsetTop}px`);
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(card);
+    return () => ro.disconnect();
+  }, []);
 
   const holders = props.partnerName ? `${props.myName} & ${props.partnerName}` : props.myName;
 
@@ -173,7 +190,7 @@ export function Ticket3D(props: {
               </span>
             </div>
           </div>
-          <div className="ticket-perf" aria-hidden="true" />
+          <div className="ticket-perf" aria-hidden="true" ref={perfRef} />
           <div className="ticket-stub">
             <div className="ticket-barcode" aria-hidden="true">
               {bars.map((w, i) => (
