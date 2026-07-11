@@ -10,7 +10,7 @@ import { butterflyPng, type ButterflyMark } from "../match-card/collage.js";
 import { blurFacesInPhoto } from "./face-blur.js";
 import { toPngBuffer, duotonePng, grainPng } from "./image.js";
 import { resolveVenuePhoto } from "./photo-source.js";
-import { buildCardElement, CARD_W, CARD_H, type CardNode } from "./template.js";
+import { buildCardElement, CARD_W, CARD_H, type CardNode, type CardTheme } from "./template.js";
 
 /**
  * Date-card renderer (PRODUCT_SPEC.md §3.7). Produces a shareable PNG for a
@@ -35,6 +35,8 @@ export interface DateCardInput {
   venuePhotoName: string | null;
   agreedTime: Date;
   language: Language;
+  /** Recipient's chosen theme — drives the card's light/dark chrome. */
+  theme: CardTheme;
 }
 
 export interface RenderDateCardOptions {
@@ -121,11 +123,13 @@ export async function renderDateCard(
       partnerName: input.partnerFirstName,
       partnerPhoto,
       venuePhoto,
-      grain: grainTile(),
+      // The dark film grain would dirty the cream light card — skip it there.
+      grain: input.theme === "light" ? null : grainTile(),
       logo,
       venueName: input.venueName,
       venueAddress: input.venueAddress,
       slogan: t(input.language, "dateCardSlogan"),
+      theme: input.theme,
     });
 
     const svg = await satori(element as unknown as Parameters<typeof satori>[0], {
@@ -148,4 +152,4 @@ export function buildShareButton(matchId: string, language: Language): InlineKey
   return { text: t(language, "matchScheduledBtnShare"), callback_data: `datecard:share:${matchId}` };
 }
 
-export type { CardNode };
+export type { CardNode, CardTheme };

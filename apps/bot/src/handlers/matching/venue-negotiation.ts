@@ -54,7 +54,7 @@ import { runVenueFinalizationOnce } from "../../services/venue-finalization-flig
 import { isTelegramTarget } from "../../utils/telegram-target.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { venueSearchSteps, dateCardSteps } from "../../services/analysis-status.js";
-import { renderDateCard, buildShareButton } from "../../services/date-card/index.js";
+import { renderDateCard, buildShareButton, type CardTheme } from "../../services/date-card/index.js";
 
 /**
  * Build the reply keyboard that surfaces Telegram's `request_location`
@@ -379,6 +379,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
         select: {
           telegramId: true,
           language: true,
+          theme: true,
           gender: true,
           universityDomain: true,
           firstName: true,
@@ -389,6 +390,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
         select: {
           telegramId: true,
           language: true,
+          theme: true,
           gender: true,
           firstName: true,
           profile: { select: { photos: true } },
@@ -427,6 +429,9 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
 
   const langA = (match.userA.language ?? "en") as Language;
   const langB = (match.userB.language ?? "en") as Language;
+  // Each side's date card renders in that recipient's chosen theme.
+  const themeA: CardTheme = match.userA.theme === "light" ? "light" : "dark";
+  const themeB: CardTheme = match.userB.theme === "light" ? "light" : "dark";
 
   // Curated-first: a hand-picked venue for this university wins; Places is the
   // fallback when nothing curated is in commute range. See `resolveVenue`.
@@ -556,6 +561,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
       entity: entA,
       keyboard: mapsKeyboardA,
       language: langA,
+      theme: themeA,
       matchId,
       partnerFirstName: match.userB.firstName ?? "",
       partnerPhotoRef: match.userB.profile?.photos?.[0] ?? null,
@@ -568,6 +574,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
       entity: entB,
       keyboard: mapsKeyboardB,
       language: langB,
+      theme: themeB,
       matchId,
       partnerFirstName: match.userA.firstName ?? "",
       partnerPhotoRef: match.userA.profile?.photos?.[0] ?? null,
@@ -593,6 +600,8 @@ interface ScheduledConfirmationInput {
   entity: MessageEntity;
   keyboard: InlineKeyboardMarkup;
   language: Language;
+  /** Recipient's chosen theme — drives the card's light/dark chrome. */
+  theme: CardTheme;
   matchId: string;
   /** The partner the recipient is meeting (shown on the card). */
   partnerFirstName: string;
@@ -631,6 +640,7 @@ async function sendScheduledConfirmation(
         venuePhotoName: input.venue.photoName ?? null,
         agreedTime: input.agreedTime,
         language: input.language,
+        theme: input.theme,
       },
       { blur: false },
       api,

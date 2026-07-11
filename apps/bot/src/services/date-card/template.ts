@@ -23,10 +23,22 @@
 export const CARD_W = 1080;
 export const CARD_H = 1350;
 
-const BG = "#030303";
 const BURGUNDY = "#8B253B";
-const INK = "#F2EFF7";
-const MUTED = "#8E8895";
+
+export type CardTheme = "light" | "dark";
+
+interface Palette {
+  bg: string;
+  ink: string;
+  muted: string;
+}
+
+/** Card chrome colors per theme (the burgundy accent + photos are theme-agnostic). */
+function palette(theme: CardTheme): Palette {
+  return theme === "light"
+    ? { bg: "#F5F5F5", ink: "#1D1D1D", muted: "#6B6670" }
+    : { bg: "#030303", ink: "#F2EFF7", muted: "#8E8895" };
+}
 
 /** Minimal satori-compatible node (cast to satori's ReactNode at the call site). */
 export interface CardNode {
@@ -75,9 +87,12 @@ export interface CardElementInput {
   venueAddress: string;
   /** Headline slogan; split on `\n` into stacked lines, last line accented. */
   slogan: string;
+  /** Recipient's chosen theme — drives the light/dark chrome palette. */
+  theme: CardTheme;
 }
 
 export function buildCardElement(input: CardElementInput): CardNode {
+  const p = palette(input.theme);
   return el(
     "div",
     {
@@ -86,33 +101,11 @@ export function buildCardElement(input: CardElementInput): CardNode {
       width: `${CARD_W}px`,
       height: `${CARD_H}px`,
       padding: "70px 64px",
-      backgroundColor: BG,
+      backgroundColor: p.bg,
       fontFamily: "Roboto",
-      color: INK,
+      color: p.ink,
     },
     [
-      // Faint burgundy corner discs — solid even fill (no radial falloff, so no
-      // "hole" in the middle). Same size/position as the old glow blobs.
-      el("div", {
-        display: "flex",
-        position: "absolute",
-        top: "-160px",
-        right: "-120px",
-        width: "620px",
-        height: "620px",
-        borderRadius: "999px",
-        backgroundColor: "rgba(139,37,59,0.33)",
-      }),
-      el("div", {
-        display: "flex",
-        position: "absolute",
-        bottom: "-200px",
-        left: "-160px",
-        width: "680px",
-        height: "680px",
-        borderRadius: "999px",
-        backgroundColor: "rgba(139,37,59,0.33)",
-      }),
       ...(input.grain
         ? [
             el(
@@ -130,11 +123,11 @@ export function buildCardElement(input: CardElementInput): CardNode {
             ),
           ]
         : []),
-      header(),
-      heroSlogan(input.slogan),
+      header(p),
+      heroSlogan(input.slogan, p),
       venueSection(input),
       el("div", { display: "flex", flexGrow: 1, minHeight: "0px" }),
-      detailsSection(input),
+      detailsSection(input, p),
       ...(input.logo ? [logoImg(input.logo)] : []),
     ],
   );
@@ -162,7 +155,7 @@ function logoImg(logo: LogoMark): CardNode {
   );
 }
 
-function header(): CardNode {
+function header(p: Palette): CardNode {
   return el(
     "div",
     {
@@ -173,7 +166,7 @@ function header(): CardNode {
     [
       el(
         "div",
-        { display: "flex", fontFamily: "Archivo Black", fontSize: "36px", color: INK },
+        { display: "flex", fontFamily: "Archivo Black", fontSize: "36px", color: p.ink },
         "Gennety",
       ),
     ],
@@ -181,10 +174,10 @@ function header(): CardNode {
 }
 
 /** Archivo Black headline; the final line is the burgundy accent. */
-function heroSlogan(slogan: string): CardNode {
+function heroSlogan(slogan: string, p: Palette): CardNode {
   const raw = slogan.split("\n");
   const lines = raw.map((line, i) =>
-    el("div", { display: "flex", color: i === raw.length - 1 ? BURGUNDY : INK }, line),
+    el("div", { display: "flex", color: i === raw.length - 1 ? BURGUNDY : p.ink }, line),
   );
   return el(
     "div",
@@ -285,23 +278,23 @@ function venueSection(input: CardElementInput): CardNode {
   );
 }
 
-function detailsSection(input: CardElementInput): CardNode {
+function detailsSection(input: CardElementInput, p: Palette): CardNode {
   const venueColumn = el("div", { display: "flex", flexDirection: "column" }, [
     el(
       "div",
-      { display: "flex", fontFamily: "Archivo Black", fontSize: "54px", color: INK },
+      { display: "flex", fontFamily: "Archivo Black", fontSize: "54px", color: p.ink },
       input.venueName,
     ),
     el(
       "div",
-      { display: "flex", marginTop: "6px", fontFamily: "Roboto", fontSize: "30px", color: MUTED },
+      { display: "flex", marginTop: "6px", fontFamily: "Roboto", fontSize: "30px", color: p.muted },
       input.venueAddress,
     ),
   ]);
 
   const credit = el(
     "div",
-    { display: "flex", fontFamily: "Roboto", fontSize: "22px", color: MUTED },
+    { display: "flex", fontFamily: "Roboto", fontSize: "22px", color: p.muted },
     "made with Gennety",
   );
 

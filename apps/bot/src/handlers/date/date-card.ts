@@ -33,7 +33,7 @@ export async function handleDateCardShare(ctx: BotContext): Promise<void> {
 
   const caller = await prisma.user.findUnique({
     where: { telegramId: BigInt(ctx.from.id) },
-    select: { id: true },
+    select: { id: true, theme: true },
   });
   if (!caller) {
     await ctx.answerCallbackQuery();
@@ -84,6 +84,7 @@ export async function handleDateCardShare(ctx: BotContext): Promise<void> {
       venuePhotoName: match.venuePhotoName,
       agreedTime: match.agreedTime,
       language: lang as Language,
+      theme: caller.theme === "light" ? "light" : "dark",
     },
     { blur: true },
     ctx.api,

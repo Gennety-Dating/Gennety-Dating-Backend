@@ -15,9 +15,9 @@ const api = {} as never;
 describe("renderDateCard", () => {
   // Satori parses the bundled TTFs on first render, which is slow under
   // full-suite load — give the smoke render a generous timeout.
-  it(
-    "renders a valid PNG (with Cyrillic) when photos are absent",
-    async () => {
+  it.each(["dark", "light"] as const)(
+    "renders a valid PNG (with Cyrillic) in the %s theme when photos are absent",
+    async (theme) => {
       const png = await renderDateCard(
         {
           partnerFirstName: "Анна",
@@ -28,6 +28,7 @@ describe("renderDateCard", () => {
           venuePhotoName: null,
           agreedTime: new Date("2026-05-16T16:00:00Z"),
           language: "uk",
+          theme,
         },
         { blur: false },
         api,
