@@ -19,13 +19,19 @@ export async function handleMyTickets(ctx: BotContext): Promise<void> {
 
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { id: true },
+    select: { id: true, theme: true },
   });
   const balance = user ? await getBalance(user.id) : 0;
+  const theme = user?.theme ?? "dark";
 
   const keyboard = new InlineKeyboard();
   if (env.WEBAPP_URL.startsWith("https://")) {
-    keyboard.webApp(t(lang, "ticketWalletOpenStore"), `${env.WEBAPP_URL}/tickets.html?lang=${lang}`).row();
+    keyboard
+      .webApp(
+        t(lang, "ticketWalletOpenStore"),
+        `${env.WEBAPP_URL}/tickets.html?lang=${lang}&theme=${theme}`,
+      )
+      .row();
   }
   keyboard.text(t(lang, "menuBack"), "menu:back");
 

@@ -82,6 +82,8 @@ import {
   handleSettingsOpen,
   handleSettingsLanguageOpen,
   handleSettingsLanguageSet,
+  handleSettingsThemeOpen,
+  handleSettingsThemeSet,
   handleDeleteAccountStart,
   handleFreezeAccount,
   handleDeleteAccountConfirm,
@@ -385,6 +387,53 @@ describe("Menu — Settings (language change)", () => {
     });
     await handleSettingsLanguageSet(ctx);
     expect(ctx.session.language).toBe("en");
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("Menu — Settings (theme change)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ status: "active" });
+  });
+
+  it("handleSettingsOpen shows the theme entry", async () => {
+    const ctx = createMockCtx({ callbackData: "menu:settings" });
+    await handleSettingsOpen(ctx);
+    const markup = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
+    expect(JSON.stringify(markup)).toContain("menu:settings:theme");
+  });
+
+  it("handleSettingsThemeOpen sets menuState=settings_theme + shows both themes", async () => {
+    const ctx = createMockCtx({ callbackData: "menu:settings:theme" });
+    await handleSettingsThemeOpen(ctx);
+    expect(ctx.session.menuState).toBe("settings_theme");
+    const markup = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
+    expect(JSON.stringify(markup)).toContain("menu:theme:dark");
+    expect(JSON.stringify(markup)).toContain("menu:theme:light");
+  });
+
+  it("handleSettingsThemeSet persists light and resets menuState", async () => {
+    const ctx = createMockCtx({
+      session: { menuState: "settings_theme", language: "en" },
+      callbackData: "menu:theme:light",
+    });
+    await handleSettingsThemeSet(ctx);
+    expect(ctx.session.menuState).toBe("idle");
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ theme: "light" }),
+      }),
+    );
+  });
+
+  it("handleSettingsThemeSet ignores invalid themes", async () => {
+    const ctx = createMockCtx({
+      session: { menuState: "settings_theme", language: "en" },
+      callbackData: "menu:theme:sepia",
+    });
+    await handleSettingsThemeSet(ctx);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 });

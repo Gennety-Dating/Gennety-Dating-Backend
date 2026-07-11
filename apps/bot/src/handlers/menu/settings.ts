@@ -1,6 +1,6 @@
 import { InlineKeyboard } from "grammy";
 import type { BotContext } from "../../session.js";
-import { prisma } from "@gennety/db";
+import { prisma, type Theme } from "@gennety/db";
 import { t, type Language, DEFAULT_SESSION, SUPPORTED_LANGUAGES } from "@gennety/shared";
 import { showMainMenu } from "./main.js";
 import { sendVerificationCTABare } from "../onboarding/verification.js";
@@ -22,6 +22,7 @@ const IN_FLIGHT_MATCH_STATUSES = [
 ] as const;
 
 const VALID_LANGUAGES = new Set<Language>(SUPPORTED_LANGUAGES);
+const VALID_THEMES = new Set<Theme>(["light", "dark"]);
 
 /**
  * Verification statuses for which the "Verify now" button should appear in
@@ -58,6 +59,8 @@ async function renderSettings(ctx: BotContext): Promise<void> {
   }
   keyboard
     .text(t(lang, "settingsLanguage"), "menu:settings:lang")
+    .row()
+    .text(t(lang, "settingsTheme"), "menu:settings:theme")
     .row()
     .text(t(lang, "settingsDeleteAccount"), "menu:settings:delete")
     .row()
@@ -152,6 +155,48 @@ export async function handleSettingsLanguageSet(ctx: BotContext): Promise<void> 
   });
 
   await ctx.reply(t(newLang, "settingsLanguageSaved"));
+  await showMainMenu(ctx);
+}
+
+/**
+ * Show the light/dark theme picker. Mirrors the language flow: a small inline
+ * choice that updates `User.theme` server-side. The picked theme rides the
+ * `&theme=` query param the bot appends to every Mini App launch URL (and the
+ * server-rendered cards read `User.theme` directly), so the choice propagates
+ * everywhere without a separate Mini App.
+ */
+export async function handleSettingsThemeOpen(ctx: BotContext): Promise<void> {
+  await ctx.answerCallbackQuery();
+  ctx.session.menuState = "settings_theme";
+
+  const lang = ctx.session.language;
+  const keyboard = new InlineKeyboard()
+    .text(t(lang, "themeDarkOption"), "menu:theme:dark")
+    .text(t(lang, "themeLightOption"), "menu:theme:light")
+    .row()
+    .text(t(lang, "menuBack"), "menu:back");
+
+  await ctx.reply(t(lang, "settingsThemePick"), { reply_markup: keyboard });
+}
+
+/** Persist the new theme choice and return to the main menu. */
+export async function handleSettingsThemeSet(ctx: BotContext): Promise<void> {
+  const data = ctx.callbackQuery?.data;
+  if (!data?.startsWith("menu:theme:")) return;
+
+  const newTheme = data.slice("menu:theme:".length) as Theme;
+  if (!VALID_THEMES.has(newTheme)) return;
+
+  await ctx.answerCallbackQuery();
+  ctx.session.menuState = "idle";
+
+  await prisma.user.update({
+    where: { telegramId: BigInt(ctx.from!.id) },
+    data: { theme: newTheme, themeChosenAt: new Date() },
+  });
+
+  const lang = ctx.session.language;
+  await ctx.reply(t(lang, "settingsThemeSaved"));
   await showMainMenu(ctx);
 }
 

@@ -25,6 +25,7 @@ export type GenderPreference = "men" | "women" | "both";
 export type MenuState =
   | "idle"
   | "settings_lang"
+  | "settings_theme"
   | "edit_photos"
   | "edit_video"
   | "edit_bio"

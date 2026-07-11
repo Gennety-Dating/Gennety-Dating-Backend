@@ -26,6 +26,8 @@ import {
   handleSettingsOpen,
   handleSettingsLanguageOpen,
   handleSettingsLanguageSet,
+  handleSettingsThemeOpen,
+  handleSettingsThemeSet,
   handleSettingsVerify,
   handleDeleteAccountStart,
   handleFreezeAccount,
@@ -201,6 +203,9 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     case "menu:settings:lang":
       await handleSettingsLanguageOpen(ctx);
       return;
+    case "menu:settings:theme":
+      await handleSettingsThemeOpen(ctx);
+      return;
     case "menu:settings:verify":
       await handleSettingsVerify(ctx);
       return;
@@ -230,6 +235,10 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     default:
       if (data.startsWith("menu:lang:")) {
         await handleSettingsLanguageSet(ctx);
+        return;
+      }
+      if (data.startsWith("menu:theme:")) {
+        await handleSettingsThemeSet(ctx);
         return;
       }
   }
