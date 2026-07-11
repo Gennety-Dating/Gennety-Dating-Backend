@@ -492,7 +492,7 @@ function renderAgreed(): void {
   agreedEl.classList.add("success-page");
   agreedEl.innerHTML = `
     <svg class="check-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M5 13L9 17L19 7" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M5 13L9 17L19 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
     <div class="agreed-card">
       <h2 class="agreed-date" data-role="date"></h2>
@@ -828,7 +828,7 @@ function makeIndicator(
     pair.className = "indicator-pair";
     const a = document.createElement("span");
     a.className = "indicator-pair-dot";
-    a.style.background = "#ffffff";
+    a.style.background = "var(--self)";
     const b = document.createElement("span");
     b.className = "indicator-pair-dot";
     b.style.background = "var(--brand)";
@@ -1144,7 +1144,7 @@ function runConfetti(): void {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   confettiCanvasEl.hidden = false;
   confettiCanvasEl.innerHTML = "";
-  const colors = ["#ac92dc", "#ffffff", "#e2d5f8", "#18181b"];
+  const colors = ["#8b253b", "#b6304f", "#d16b80", "#f0c96b"];
   for (let i = 0; i < 40; i++) {
     const piece = document.createElement("div");
     piece.className = "confetti";
@@ -1154,9 +1154,6 @@ function runConfetti(): void {
     piece.style.left = `${Math.random() * 100}vw`;
     piece.style.width = `${size}px`;
     piece.style.height = `${size}px`;
-    if (color === "#18181b") {
-      piece.style.border = "1px solid rgba(255,255,255,0.1)";
-    }
     const duration = Math.random() * 2 + 2;
     const delay = Math.random() * 1.5;
     piece.style.animation = `fall ${duration}s linear ${delay}s infinite`;
