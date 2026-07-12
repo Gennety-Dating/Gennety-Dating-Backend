@@ -98,7 +98,21 @@ body {
   place-items: center;
   background: var(--glass);
   box-shadow: var(--glass-edge);
-  font-size: 26px;
+  color: var(--accent-bright);
+}
+.vc-state-glyph {
+  width: 26px;
+  height: 26px;
+}
+.vc-thumb-icon {
+  width: 26px;
+  height: 26px;
+  color: var(--text-faint);
+}
+.vc-shot-icon {
+  width: 40px;
+  height: 40px;
+  color: var(--text-faint);
 }
 .vc-center p {
   margin: 0;
@@ -255,8 +269,8 @@ body {
 }
 .vc-card-chevron {
   flex: none;
-  font-size: 22px;
-  line-height: 1;
+  width: 16px;
+  height: 16px;
   color: var(--text-dim);
   opacity: 0.55;
 }
@@ -273,6 +287,10 @@ body {
   font-size: 11.5px;
   font-weight: 600;
   white-space: nowrap;
+}
+.vc-chip-icon {
+  width: 13px;
+  height: 13px;
 }
 .vc-chip-star {
   color: #ffce6b;
@@ -370,8 +388,9 @@ body {
 }
 .vc-info-icon {
   flex: none;
-  font-size: 17px;
-  opacity: 0.85;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
 }
 .vc-info-text {
   min-width: 0;
@@ -395,12 +414,25 @@ a.vc-info-row .vc-info-text {
 }
 .vc-info-chevron {
   flex: none;
+  width: 16px;
+  height: 16px;
   color: var(--text-dim);
   opacity: 0.6;
-  font-size: 19px;
 }
 
-/* ── Hearts (the board's whole language) ─────────────────────────────── */
+/* ── Authored icons (icons.ts) — never platform emoji ────────────────── */
+.icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: block;
+  color: inherit;
+  /* Vectors stay crisp under any scale/animation — the reason the emoji heart
+     went soft along its bottom edge on the web. */
+  vector-effect: non-scaling-stroke;
+}
+
+/* ── The mark button (vector heart) ──────────────────────────────────── */
 .vc-heart {
   flex: none;
   width: 46px;
@@ -413,67 +445,139 @@ a.vc-info-row .vc-info-text {
   box-shadow: var(--glass-edge);
   cursor: pointer;
   font-family: inherit;
-  transition: transform 0.15s ease, background 0.2s ease, box-shadow 0.2s ease;
-  position: relative;
+  color: var(--text-faint);
+  /* The pop animation scales the button; let the glow escape its box. */
+  overflow: visible;
+  transition: transform 0.15s ease, background 0.2s ease, box-shadow 0.2s ease,
+    color 0.2s ease;
 }
 .vc-heart:active {
   transform: scale(0.9);
 }
-.vc-heart-glyph {
-  font-size: 21px;
-  line-height: 1;
-  color: var(--text-faint);
-  transition: color 0.2s ease, transform 0.2s ease;
+.vc-heart-icon {
+  width: 22px;
+  height: 22px;
 }
 .vc-heart.is-mine {
   background: var(--accent-soft);
+  color: var(--accent-bright);
   box-shadow:
     var(--glass-edge),
-    0 6px 18px rgba(139, 37, 59, 0.3);
+    0 6px 18px rgba(139, 37, 59, 0.28);
 }
-.vc-heart.is-mine .vc-heart-glyph {
-  color: var(--accent-bright);
-  animation: heart-pop 0.35s cubic-bezier(0.2, 1.6, 0.4, 1) both;
-}
-/* The partner's heart — a small warm dot on the corner of the button. */
-.vc-heart.is-theirs::after {
-  content: "";
-  position: absolute;
-  top: -3px;
-  right: -3px;
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-bright), var(--accent));
-  box-shadow: 0 0 0 2.5px var(--bg), 0 0 10px rgba(182, 48, 79, 0.7);
-  animation: peer-pulse 1.8s ease-in-out infinite;
+.vc-heart.is-mine .vc-heart-icon {
+  animation: heart-pop 0.34s cubic-bezier(0.2, 1.6, 0.4, 1) both;
 }
 
-/* Both hearted → the whole card glows. */
-.vc-card.is-match {
-  position: relative;
+/* ── Framed cards: the partner touched this, and we say so ───────────── */
+/* A lighter frame wraps the card on the top/left/right and opens a band along
+   the bottom that carries the caption — the Calendar's "window" idiom for
+   peer-touched slots, so the two Mini Apps speak the same visual language. */
+.vc-frame {
+  border-radius: 24px;
+  padding: 4px 4px 0;
+  background: var(--fill);
+  box-shadow: var(--glass-edge);
+  animation: rise 0.4s ease both;
+}
+.vc-frame.is-peer {
+  background: linear-gradient(180deg, rgba(139, 37, 59, 0.22), rgba(139, 37, 59, 0.1));
+}
+.vc-frame.is-match {
+  background: linear-gradient(180deg, rgba(182, 48, 79, 0.4), rgba(139, 37, 59, 0.22));
   box-shadow:
     var(--glass-edge),
-    0 0 0 1.5px rgba(182, 48, 79, 0.55),
-    0 10px 34px rgba(139, 37, 59, 0.35);
-  animation: match-glow 2.2s ease-in-out infinite;
+    0 12px 34px rgba(139, 37, 59, 0.32);
 }
-.vc-match-ribbon {
-  position: absolute;
-  top: -9px;
-  left: 16px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent-bright), var(--accent));
+/* The inner card sits flush inside the frame — its own rounding tightens so the
+   frame reads as one continuous window rather than two stacked cards. */
+.vc-frame > .vc-card {
+  border-radius: 20px;
+  background: var(--surface);
+}
+:root[data-theme="light"] .vc-frame > .vc-card {
+  background: var(--bg-elevated);
+}
+
+/* The caption band — the whole point of the frame. */
+.vc-cap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px 10px;
+  min-height: 34px;
+}
+.vc-cap-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--text-muted);
+}
+.vc-cap-icon.is-peer,
+.vc-cap-icon.is-mine {
+  color: var(--accent-bright);
+}
+.vc-frame.is-match .vc-cap-icon {
   color: #fff;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  box-shadow: 0 4px 14px rgba(139, 37, 59, 0.45);
 }
-.vc-chip.is-peer {
-  background: linear-gradient(135deg, rgba(182, 48, 79, 0.28), rgba(139, 37, 59, 0.2));
+.vc-cap-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vc-frame.is-match .vc-cap-text {
+  color: #fff;
+}
+/* NEW pill — the partner marked this since I last looked. */
+.vc-badge-new {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.vc-frame.is-match .vc-badge-new {
+  background: #fff;
+  color: var(--accent);
+}
+
+/* ── Contextual banner ───────────────────────────────────────────────── */
+.vc-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 16px;
+  background: var(--glass);
+  box-shadow: var(--glass-edge);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+  animation: rise 0.4s ease both;
+}
+.vc-banner-icon {
+  width: 17px;
+  height: 17px;
+  color: var(--text-muted);
+}
+.vc-banner-icon.is-peer {
+  color: var(--accent-bright);
+}
+.vc-banner.is-match {
+  background: linear-gradient(135deg, rgba(182, 48, 79, 0.3), rgba(139, 37, 59, 0.16));
+  color: var(--text);
+}
+.vc-banner.is-match .vc-banner-icon {
   color: var(--accent-bright);
 }
 
@@ -505,11 +609,17 @@ a.vc-info-row .vc-info-text {
 }
 .vc-agreed-badge {
   position: absolute;
-  top: 8px;
-  right: 12px;
-  font-size: 22px;
-  filter: drop-shadow(0 2px 8px rgba(139, 37, 59, 0.6));
+  top: 10px;
+  right: 14px;
+  width: 24px;
+  height: 24px;
+  color: var(--accent-bright);
+  filter: drop-shadow(0 2px 8px rgba(139, 37, 59, 0.5));
   animation: peer-pulse 2s ease-in-out infinite;
+}
+.vc-agreed-badge .icon {
+  width: 24px;
+  height: 24px;
 }
 
 .vc-note {
@@ -540,14 +650,17 @@ a.vc-info-row .vc-info-text {
   place-items: center;
   margin-bottom: 18px;
 }
+.vc-settled-check .icon {
+  width: 34px;
+  height: 34px;
+  stroke-width: 2;
+}
 .vc-settled-check {
   width: 76px;
   height: 76px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 34px;
-  font-weight: 700;
   color: #fff;
   background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 55%, var(--accent-deep) 100%);
   box-shadow:
@@ -561,8 +674,13 @@ a.vc-info-row .vc-info-text {
 }
 
 /* Her express lane — a distinct warm glass button under the primary CTA. */
-.btn-express {
+.btn-express,
+.btn-glass {
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
   border: none;
   border-radius: 18px;
   padding: 15px 20px;
@@ -570,13 +688,46 @@ a.vc-info-row .vc-info-text {
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  color: var(--accent-bright);
-  background: var(--accent-soft);
   box-shadow: var(--glass-edge);
   transition: transform 0.15s ease, background 0.15s ease;
 }
-.btn-express:active {
+.btn-express {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+}
+/* Neutral glass action (offer to partner, open maps) — borderless, quiet. */
+.btn-glass {
+  color: var(--text);
+  background: var(--glass);
+}
+.btn-express:active,
+.btn-glass:active {
   transform: scale(0.98);
+}
+
+/* Icons inside buttons ride the label's color and sit on its baseline. */
+.btn-icon {
+  width: 18px;
+  height: 18px;
+}
+.btn-star {
+  width: 15px;
+  height: 15px;
+  margin-left: -3px;
+  opacity: 0.9;
+}
+/* The primary CTA is a flex row once it carries an icon. */
+.btn-primary:has(.btn-icon) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+.btn-secondary:has(.btn-icon) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 /* ── Action bar (our own buttons, pinned bottom) ──────────────────────── */
@@ -702,7 +853,12 @@ a.vc-info-row .vc-info-text {
   .vc-heart.is-mine .vc-heart-glyph,
   .vc-heart.is-theirs::after,
   .vc-agreed-badge,
-  .vc-settled-check {
+  .vc-settled-check .icon {
+  width: 34px;
+  height: 34px;
+  stroke-width: 2;
+}
+.vc-settled-check {
     animation: none;
   }
 }

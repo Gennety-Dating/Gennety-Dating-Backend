@@ -7,18 +7,25 @@
  *
  * Flow (no disclaimers — straight into the board):
  *   1. Board — the current venue pinned on top ("picked for you", the eternal
- *      default), then the 3 km catalog as glass cards. Each side hearts the
- *      places they'd like; the partner's hearts land live (~4 s polling).
- *      A single overlap agrees instantly; several at once ask the actor to
- *      pick one (overlap sheet).
- *   2. Detail — gallery + chips + Maps link; heart CTA, and (for her) the
- *      express "change right now — N⭐" unilateral swap.
+ *      default), then the 3 km catalog. Marking a place is LOCAL and free: the
+ *      partner sees nothing and no venue can be agreed until the explicit
+ *      Suggest/Confirm CTA is tapped, so a stray tap is never a decision. The
+ *      CTA's label switches to "Confirm this place" the moment a mark of mine
+ *      overlaps one of theirs — that tap is the one that agrees. Cards the
+ *      partner (or both of us) marked are wrapped in a framed "window" whose
+ *      bottom band spells out what happened in words, rather than leaving a
+ *      lone glyph to carry the meaning. Peer marks land live (~4 s polling).
+ *   2. Detail — gallery + chips + Maps link; mark/unmark, and (for her) the
+ *      express unilateral swap (its own Stars invoice = its own confirmation).
  *   3. Agreed — the payment screen per the payer matrix: his pay(/decline)
- *      fork, her pay-self / offer-him fork, or the priceless "agreed ✨" wait.
+ *      fork, her pay-self / offer-him fork, or the priceless "agreed" wait.
  *      Payments open a native Stars invoice (WebApp.openInvoice).
  *   4. Settled — the new venue is locked; the board closes for this date.
  * A lapse (unpaid agreement) closes the board too — the original venue simply
  * stands. Nothing here can ever cancel the match.
+ *
+ * Every glyph on screen is an authored vector from `icons.ts` — no platform
+ * emoji, which would render as Apple art on iOS and blur when animated.
  */
 
 import "./venue-change.css";
@@ -35,6 +42,7 @@ import {
   type VenueBoardState,
   type VenueChangeCatalogItem,
 } from "./api.js";
+import { icon, categoryIcon, type IconName } from "./icons.js";
 import { wireContentInsets } from "./telegram-insets.js";
 
 const app = window.Telegram?.WebApp;
@@ -82,8 +90,20 @@ interface Strings {
   boardTitle: string;
   boardLead: string;
   currentBadge: string;
-  matchBadge: string;
-  peerLikedChip: string;
+  /** Captions on the framed peer/match/mine cards — they say what happened. */
+  capPeer: (name: string) => string;
+  capBoth: string;
+  capMine: string;
+  badgeNew: string;
+  /** Contextual banner above the list — explains the current situation. */
+  bannerPeerPicked: (name: string) => string;
+  bannerMatch: string;
+  bannerSuggest: string;
+  /** Bottom CTA — appears only when there is something to submit. */
+  ctaSuggest: string;
+  ctaConfirm: string;
+  ctaSaving: string;
+  confirmHint: string;
   catalogEmpty: string;
   categoryLabels: Record<string, string>;
   kmAway: (km: number) => string;
@@ -121,10 +141,19 @@ interface Strings {
 const T: Record<Lang, Strings> = {
   en: {
     boardTitle: "Your date spot",
-    boardLead: "Heart the places you like — when your hearts meet, the venue changes.",
+    boardLead: "Mark the places you'd like. Your match sees them — and nothing changes until you confirm.",
     currentBadge: "Picked for you",
-    matchBadge: "It's a match!",
-    peerLikedChip: "Their ❤",
+    capPeer: (name) => `${name} marked this place`,
+    capBoth: "You both marked this one",
+    capMine: "You marked this",
+    badgeNew: "New",
+    bannerPeerPicked: (name) => `${name} marked the places below. Mark the ones you like too.`,
+    bannerMatch: "You agree on a place — confirm to make it your date spot.",
+    bannerSuggest: "Your match will see your marks. Agree on one and the venue changes.",
+    ctaSuggest: "Suggest these places",
+    ctaConfirm: "Confirm this place",
+    ctaSaving: "Saving…",
+    confirmHint: "Nothing changes until you confirm.",
     catalogEmpty: "No suitable places nearby right now. Your venue stays as is.",
     categoryLabels: {
       cafe: "Cafe",
@@ -138,23 +167,23 @@ const T: Record<Lang, Strings> = {
     detailFallbackSummary: "A relaxed spot for a first date.",
     openMaps: "Open in Google Maps",
     back: "Back",
-    heartAdd: "❤ Suggest together",
-    heartRemove: "Remove my heart",
-    expressBtn: (stars) => `⚡ Change right now — ${stars} ⭐`,
+    heartAdd: "Suggest together",
+    heartRemove: "Remove my mark",
+    expressBtn: (stars) => `Change right now — ${stars}`,
     expressHint: "Your match will get an updated date card.",
     overlapTitle: "Your hearts met!",
     overlapLead: "You matched on several places — pick the one.",
     agreedTitle: "You agreed on a new spot",
-    agreedWaitNote: "Agreed ✨ One last touch and your date cards update.",
+    agreedWaitNote: "Agreed. One last touch and your date cards update.",
     agreedDeclinedNote: "The venue stays as planned for now.",
-    payBtn: (stars) => `⭐ Lock it in — ${stars}`,
-    paySelfBtn: (stars) => `⭐ Lock it in myself — ${stars}`,
-    offerBtn: "Ask them to lock it in 💌",
-    offerSentNote: "Your ask is on its way 💌 You can still lock it in yourself anytime.",
+    payBtn: (stars) => `Lock it in — ${stars}`,
+    paySelfBtn: (stars) => `Lock it in myself — ${stars}`,
+    offerBtn: "Ask them to lock it in",
+    offerSentNote: "Your ask is on its way. You can still lock it in yourself anytime.",
     declineBtn: "Not this time",
     finalizing: "Locking in your new spot…",
     settledTitle: "New spot locked in!",
-    settledPeerPaid: "Your match locked it in for you ❤️",
+    settledPeerPaid: "Your match locked it in for you",
     settledNote: "Your date cards are updated. See you there!",
     closedChanged: "The venue for this date was already changed.",
     closedCutoff: "It's too close to the date to change the venue now.",
@@ -167,10 +196,19 @@ const T: Record<Lang, Strings> = {
   },
   ru: {
     boardTitle: "Место свидания",
-    boardLead: "Отмечайте сердечками места, которые нравятся, — совпадение меняет место.",
+    boardLead: "Отметьте места, которые нравятся. Партнёр их увидит — пока вы не подтвердите, ничего не меняется.",
     currentBadge: "Выбрано для вас",
-    matchBadge: "Совпадение!",
-    peerLikedChip: "❤ пары",
+    capPeer: (name) => `Выбор ${name}`,
+    capBoth: "Вы оба отметили это место",
+    capMine: "Вы отметили",
+    badgeNew: "Новое",
+    bannerPeerPicked: (name) => `${name} присматривает места ниже. Отметьте те, что нравятся и вам.`,
+    bannerMatch: "Вы сошлись на месте — подтвердите, чтобы закрепить его.",
+    bannerSuggest: "Партнёр увидит ваши отметки. Совпадёте — место сменится.",
+    ctaSuggest: "Предложить эти места",
+    ctaConfirm: "Подтвердить это место",
+    ctaSaving: "Сохраняем…",
+    confirmHint: "Пока не подтвердите — ничего не меняется.",
     catalogEmpty: "Подходящих мест рядом сейчас нет. Ваше место остаётся в силе.",
     categoryLabels: {
       cafe: "Кафе",
@@ -184,23 +222,23 @@ const T: Record<Lang, Strings> = {
     detailFallbackSummary: "Спокойное место для первого свидания.",
     openMaps: "Открыть в Google Maps",
     back: "Назад",
-    heartAdd: "❤ Предложить вместе",
-    heartRemove: "Убрать сердечко",
-    expressBtn: (stars) => `⚡ Поменять сразу — ${stars} ⭐`,
+    heartAdd: "Предложить вместе",
+    heartRemove: "Убрать отметку",
+    expressBtn: (stars) => `Поменять сразу — ${stars}`,
     expressHint: "Партнёр получит обновлённую карточку свидания.",
     overlapTitle: "Ваши сердечки совпали!",
     overlapLead: "Вы совпали в нескольких местах — выберите одно.",
     agreedTitle: "Вы сошлись на новом месте",
-    agreedWaitNote: "Согласовано ✨ Последний штрих — и карточки свидания обновятся.",
+    agreedWaitNote: "Согласовано. Последний штрих — и карточки свидания обновятся.",
     agreedDeclinedNote: "Место пока остаётся прежним.",
-    payBtn: (stars) => `⭐ Закрепить — ${stars}`,
-    paySelfBtn: (stars) => `⭐ Закрепить самой — ${stars}`,
-    offerBtn: "Предложить закрепить партнёру 💌",
-    offerSentNote: "Предложение отправлено 💌 Закрепить самой можно в любой момент.",
+    payBtn: (stars) => `Закрепить — ${stars}`,
+    paySelfBtn: (stars) => `Закрепить самой — ${stars}`,
+    offerBtn: "Предложить закрепить партнёру",
+    offerSentNote: "Предложение отправлено. Закрепить самой можно в любой момент.",
     declineBtn: "Не в этот раз",
     finalizing: "Закрепляем новое место…",
     settledTitle: "Новое место закреплено!",
-    settledPeerPaid: "Партнёр закрепил его для вас ❤️",
+    settledPeerPaid: "Партнёр закрепил его для вас",
     settledNote: "Карточки свидания обновлены. До встречи!",
     closedChanged: "Место для этого свидания уже меняли.",
     closedCutoff: "Слишком близко к свиданию, чтобы менять место.",
@@ -213,10 +251,19 @@ const T: Record<Lang, Strings> = {
   },
   uk: {
     boardTitle: "Місце побачення",
-    boardLead: "Позначайте серденьками місця, які подобаються, — збіг змінює місце.",
+    boardLead: "Позначте місця, які подобаються. Партнер їх побачить — доки не підтвердите, нічого не змінюється.",
     currentBadge: "Обрано для вас",
-    matchBadge: "Збіг!",
-    peerLikedChip: "❤ пари",
+    capPeer: (name) => `Вибір ${name}`,
+    capBoth: "Ви обоє позначили це місце",
+    capMine: "Ви позначили",
+    badgeNew: "Нове",
+    bannerPeerPicked: (name) => `${name} придивляється до місць нижче. Позначте ті, що подобаються й вам.`,
+    bannerMatch: "Ви зійшлися на місці — підтвердіть, щоб закріпити його.",
+    bannerSuggest: "Партнер побачить ваші позначки. Збіжаться — місце зміниться.",
+    ctaSuggest: "Запропонувати ці місця",
+    ctaConfirm: "Підтвердити це місце",
+    ctaSaving: "Зберігаємо…",
+    confirmHint: "Доки не підтвердите — нічого не змінюється.",
     catalogEmpty: "Підходящих місць поруч зараз немає. Ваше місце залишається.",
     categoryLabels: {
       cafe: "Кафе",
@@ -230,23 +277,23 @@ const T: Record<Lang, Strings> = {
     detailFallbackSummary: "Спокійне місце для першого побачення.",
     openMaps: "Відкрити в Google Maps",
     back: "Назад",
-    heartAdd: "❤ Запропонувати разом",
-    heartRemove: "Прибрати серденько",
-    expressBtn: (stars) => `⚡ Змінити одразу — ${stars} ⭐`,
+    heartAdd: "Запропонувати разом",
+    heartRemove: "Прибрати позначку",
+    expressBtn: (stars) => `Змінити одразу — ${stars}`,
     expressHint: "Партнер отримає оновлену картку побачення.",
     overlapTitle: "Ваші серденька збіглися!",
     overlapLead: "Ви збіглися в кількох місцях — оберіть одне.",
     agreedTitle: "Ви зійшлися на новому місці",
-    agreedWaitNote: "Погоджено ✨ Останній штрих — і картки побачення оновляться.",
+    agreedWaitNote: "Погоджено. Останній штрих — і картки побачення оновляться.",
     agreedDeclinedNote: "Місце поки залишається тим самим.",
-    payBtn: (stars) => `⭐ Закріпити — ${stars}`,
-    paySelfBtn: (stars) => `⭐ Закріпити самій — ${stars}`,
-    offerBtn: "Запропонувати закріпити партнеру 💌",
-    offerSentNote: "Пропозицію надіслано 💌 Закріпити самій можна будь-коли.",
+    payBtn: (stars) => `Закріпити — ${stars}`,
+    paySelfBtn: (stars) => `Закріпити самій — ${stars}`,
+    offerBtn: "Запропонувати закріпити партнеру",
+    offerSentNote: "Пропозицію надіслано. Закріпити самій можна будь-коли.",
     declineBtn: "Не цього разу",
     finalizing: "Закріплюємо нове місце…",
     settledTitle: "Нове місце закріплено!",
-    settledPeerPaid: "Партнер закріпив його для вас ❤️",
+    settledPeerPaid: "Партнер закріпив його для вас",
     settledNote: "Картки побачення оновлено. До зустрічі!",
     closedChanged: "Місце для цього побачення вже змінювали.",
     closedCutoff: "Занадто близько до побачення, щоб змінювати місце.",
@@ -259,10 +306,19 @@ const T: Record<Lang, Strings> = {
   },
   de: {
     boardTitle: "Euer Date-Ort",
-    boardLead: "Markiere Orte mit Herzen — treffen sich eure Herzen, wechselt der Ort.",
+    boardLead: "Markiere Orte, die dir gefallen. Dein Match sieht sie — bis du bestätigst, ändert sich nichts.",
     currentBadge: "Für euch gewählt",
-    matchBadge: "Match!",
-    peerLikedChip: "❤ Match",
+    capPeer: (name) => `${name}s Wahl`,
+    capBoth: "Ihr habt beide diesen Ort markiert",
+    capMine: "Von dir markiert",
+    badgeNew: "Neu",
+    bannerPeerPicked: (name) => `${name} schaut sich die Orte unten an. Markiere die, die dir auch gefallen.`,
+    bannerMatch: "Ihr seid euch einig — bestätige, um den Ort zu übernehmen.",
+    bannerSuggest: "Dein Match sieht deine Markierungen. Stimmt ihr überein, wechselt der Ort.",
+    ctaSuggest: "Diese Orte vorschlagen",
+    ctaConfirm: "Diesen Ort bestätigen",
+    ctaSaving: "Wird gespeichert…",
+    confirmHint: "Bis zur Bestätigung ändert sich nichts.",
     catalogEmpty: "Gerade keine passenden Orte in der Nähe. Euer Ort bleibt bestehen.",
     categoryLabels: {
       cafe: "Café",
@@ -276,23 +332,23 @@ const T: Record<Lang, Strings> = {
     detailFallbackSummary: "Ein entspannter Ort für ein erstes Date.",
     openMaps: "In Google Maps öffnen",
     back: "Zurück",
-    heartAdd: "❤ Gemeinsam vorschlagen",
-    heartRemove: "Herz entfernen",
-    expressBtn: (stars) => `⚡ Sofort ändern — ${stars} ⭐`,
+    heartAdd: "Gemeinsam vorschlagen",
+    heartRemove: "Markierung entfernen",
+    expressBtn: (stars) => `Sofort ändern — ${stars}`,
     expressHint: "Dein Match bekommt eine aktualisierte Date-Karte.",
     overlapTitle: "Eure Herzen haben sich getroffen!",
     overlapLead: "Ihr habt mehrere Orte gemeinsam — wählt einen aus.",
     agreedTitle: "Ihr habt euch auf einen neuen Ort geeinigt",
-    agreedWaitNote: "Vereinbart ✨ Ein letzter Schritt — dann werden eure Karten aktualisiert.",
+    agreedWaitNote: "Vereinbart. Ein letzter Schritt — dann werden eure Karten aktualisiert.",
     agreedDeclinedNote: "Der Ort bleibt vorerst wie geplant.",
-    payBtn: (stars) => `⭐ Sichern — ${stars}`,
-    paySelfBtn: (stars) => `⭐ Selbst sichern — ${stars}`,
-    offerBtn: "Deinem Match das Sichern anbieten 💌",
-    offerSentNote: "Anfrage unterwegs 💌 Du kannst jederzeit selbst sichern.",
+    payBtn: (stars) => `Sichern — ${stars}`,
+    paySelfBtn: (stars) => `Selbst sichern — ${stars}`,
+    offerBtn: "Deinem Match das Sichern anbieten",
+    offerSentNote: "Anfrage unterwegs. Du kannst jederzeit selbst sichern.",
     declineBtn: "Nicht diesmal",
     finalizing: "Neuer Ort wird gesichert…",
     settledTitle: "Neuer Ort gesichert!",
-    settledPeerPaid: "Dein Match hat ihn für dich gesichert ❤️",
+    settledPeerPaid: "Dein Match hat ihn für dich gesichert",
     settledNote: "Eure Date-Karten sind aktualisiert. Bis dann!",
     closedChanged: "Der Ort für dieses Date wurde bereits geändert.",
     closedCutoff: "Zu kurz vor dem Date, um den Ort zu ändern.",
@@ -305,10 +361,19 @@ const T: Record<Lang, Strings> = {
   },
   pl: {
     boardTitle: "Miejsce randki",
-    boardLead: "Zaznaczaj serduszkami miejsca, które Ci się podobają — zbieżność zmienia miejsce.",
+    boardLead: "Zaznacz miejsca, które Ci się podobają. Twoja para je zobaczy — dopóki nie potwierdzisz, nic się nie zmienia.",
     currentBadge: "Wybrane dla was",
-    matchBadge: "Zbieżność!",
-    peerLikedChip: "❤ pary",
+    capPeer: (name) => `Wybór ${name}`,
+    capBoth: "Oboje zaznaczyliście to miejsce",
+    capMine: "Zaznaczone przez Ciebie",
+    badgeNew: "Nowe",
+    bannerPeerPicked: (name) => `${name} przygląda się miejscom poniżej. Zaznacz te, które podobają się też Tobie.`,
+    bannerMatch: "Zgadzacie się co do miejsca — potwierdź, aby je ustawić.",
+    bannerSuggest: "Twoja para zobaczy Twoje zaznaczenia. Zgodzicie się — miejsce się zmieni.",
+    ctaSuggest: "Zaproponuj te miejsca",
+    ctaConfirm: "Potwierdź to miejsce",
+    ctaSaving: "Zapisywanie…",
+    confirmHint: "Dopóki nie potwierdzisz, nic się nie zmienia.",
     catalogEmpty: "Brak odpowiednich miejsc w pobliżu. Wasze miejsce pozostaje.",
     categoryLabels: {
       cafe: "Kawiarnia",
@@ -322,23 +387,23 @@ const T: Record<Lang, Strings> = {
     detailFallbackSummary: "Spokojne miejsce na pierwszą randkę.",
     openMaps: "Otwórz w Google Maps",
     back: "Wstecz",
-    heartAdd: "❤ Zaproponuj razem",
-    heartRemove: "Usuń serduszko",
-    expressBtn: (stars) => `⚡ Zmień od razu — ${stars} ⭐`,
+    heartAdd: "Zaproponuj razem",
+    heartRemove: "Usuń zaznaczenie",
+    expressBtn: (stars) => `Zmień od razu — ${stars}`,
     expressHint: "Twoja para dostanie zaktualizowaną kartę randki.",
     overlapTitle: "Wasze serduszka się spotkały!",
     overlapLead: "Zgadzacie się w kilku miejscach — wybierz jedno.",
     agreedTitle: "Zgodziliście się na nowe miejsce",
-    agreedWaitNote: "Uzgodnione ✨ Ostatni krok — i wasze karty się zaktualizują.",
+    agreedWaitNote: "Uzgodnione. Ostatni krok — i wasze karty się zaktualizują.",
     agreedDeclinedNote: "Miejsce na razie zostaje bez zmian.",
-    payBtn: (stars) => `⭐ Zatwierdź — ${stars}`,
-    paySelfBtn: (stars) => `⭐ Zatwierdź samodzielnie — ${stars}`,
-    offerBtn: "Zaproponuj parze zatwierdzenie 💌",
-    offerSentNote: "Propozycja wysłana 💌 Możesz zatwierdzić samodzielnie w każdej chwili.",
+    payBtn: (stars) => `Zatwierdź — ${stars}`,
+    paySelfBtn: (stars) => `Zatwierdź samodzielnie — ${stars}`,
+    offerBtn: "Zaproponuj parze zatwierdzenie",
+    offerSentNote: "Propozycja wysłana. Możesz zatwierdzić samodzielnie w każdej chwili.",
     declineBtn: "Nie tym razem",
     finalizing: "Zatwierdzamy nowe miejsce…",
     settledTitle: "Nowe miejsce zatwierdzone!",
-    settledPeerPaid: "Twoja para zatwierdziła je dla Ciebie ❤️",
+    settledPeerPaid: "Twoja para zatwierdziła je dla Ciebie",
     settledNote: "Karty randki zaktualizowane. Do zobaczenia!",
     closedChanged: "Miejsce tej randki było już zmieniane.",
     closedCutoff: "Zbyt blisko randki, aby zmieniać miejsce.",
@@ -352,17 +417,6 @@ const T: Record<Lang, Strings> = {
 };
 const s = T[lang];
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  cafe: "☕",
-  coffee_shop: "☕",
-  restaurant: "🍽️",
-  park: "🌳",
-  museum: "🏛️",
-  lounge: "🍸",
-};
-function categoryGlyph(category: string): string {
-  return CATEGORY_EMOJI[category] ?? "📍";
-}
 function categoryLabel(category: string): string {
   return s.categoryLabels[category] ?? category;
 }
@@ -471,10 +525,10 @@ function showLoading(text = s.loading): void {
     ]),
   );
 }
-function showMessage(icon: string, text: string, sub?: string): void {
+function showMessage(mark: IconName, text: string, sub?: string): void {
   setBack(null);
   const nodes: Node[] = [
-    el("div", { class: "vc-state-icon", text: icon }),
+    el("div", { class: "vc-state-icon" }, [icon(mark, "icon vc-state-glyph")]),
     el("p", { text }),
   ];
   if (sub) nodes.push(el("p", { class: "vc-note", text: sub }));
@@ -487,12 +541,35 @@ function showMessage(icon: string, text: string, sub?: string): void {
 
 let boardState: VenueBoardState | null = null;
 let catalog: VenueChangeCatalogItem[] = [];
-let myLikes = new Set<string>();
+/**
+ * Two-tier selection, exactly like the Calendar Mini App: `confirmed` is what
+ * the server has for me, `selection` is what I'm marking right now. Marks are
+ * LOCAL and free — nothing reaches the partner (and nothing can agree on a
+ * venue) until the explicit Confirm/Suggest CTA is tapped. A stray tap is
+ * therefore never a decision, it's just a mark you can tap off again.
+ */
+let confirmed = new Set<string>();
+let selection = new Set<string>();
+/** Peer keys already seen — anything new since then gets the NEW badge. */
+let peerSeen = new Set<string>();
 /** Which screen is showing — polling only live-updates the board itself. */
 let screen: "board" | "detail" | "overlap" | "agreed" | "other" = "other";
 let pollTimer: number | null = null;
 /** Suppresses poll re-routing while a payment / request is in flight. */
 let busy = false;
+let saving = false;
+
+function isDirty(): boolean {
+  if (selection.size !== confirmed.size) return true;
+  for (const k of selection) if (!confirmed.has(k)) return true;
+  return false;
+}
+
+/** Keys I've marked that the partner already marked → confirming AGREES. */
+function selectedOverlap(): string[] {
+  const peer = new Set(boardState?.peerLikes ?? []);
+  return [...selection].filter((k) => peer.has(k));
+}
 
 function catalogByKey(key: string): VenueChangeCatalogItem | null {
   return catalog.find((v) => keyOf(v) === key) ?? null;
@@ -574,7 +651,7 @@ function route(): void {
         : st.closedReason === "past-cutoff"
           ? s.closedCutoff
           : s.closedGeneric;
-    showMessage("📍", msg, st.original.name ?? undefined);
+    showMessage("pin", msg, st.original.name ?? undefined);
     return;
   }
   renderBoard();
@@ -582,7 +659,7 @@ function route(): void {
 
 async function main(): Promise<void> {
   if (!matchId && !previewMode) {
-    showMessage("🗺️", s.fallbackNoMatch);
+    showMessage("map", s.fallbackNoMatch);
     return;
   }
   showLoading();
@@ -590,7 +667,9 @@ async function main(): Promise<void> {
   if (previewMode) {
     boardState = mockState();
     catalog = mockCatalog();
-    myLikes = new Set(boardState.myLikes);
+    confirmed = new Set(boardState.myLikes);
+    selection = new Set(boardState.myLikes);
+    peerSeen = new Set();
     route();
     return;
   }
@@ -601,10 +680,14 @@ async function main(): Promise<void> {
       catalog = await fetchVenueChangeCatalog(getInitData(), matchId);
     }
   } catch (err) {
-    showMessage("⚠️", errorMessage(err));
+    showMessage("pin", errorMessage(err));
     return;
   }
-  myLikes = new Set(boardState.myLikes);
+  confirmed = new Set(boardState.myLikes);
+  selection = new Set(boardState.myLikes);
+  // First open snapshots nothing: every mark the partner already has is NEW to
+  // me, which is exactly what I want to see on the very first visit.
+  peerSeen = new Set();
   startPolling();
   route();
 }
@@ -636,22 +719,81 @@ function renderBoard(preserveScroll = false): void {
   ]);
 
   const nodes: Node[] = [header, current];
+
+  // Contextual banner — says what's going on and what a tap will do, so the
+  // board never relies on the marks alone to carry meaning.
+  const banner = boardBanner(st);
+  if (banner) nodes.push(banner);
+
   if (catalog.length === 0) {
     nodes.push(el("p", { class: "vc-lead", text: s.catalogEmpty }));
   } else {
     nodes.push(el("div", { class: "vc-list" }, catalog.map((v) => renderVenueCard(v))));
   }
 
-  mount(page(nodes));
+  mount(page(nodes, ctaBar()));
   if (preserveScroll && prevScroll) {
     const scroller = document.querySelector(".vc-scroll");
     if (scroller) scroller.scrollTop = prevScroll;
   }
 }
 
+function boardBanner(st: VenueBoardState): HTMLElement | null {
+  if (selectedOverlap().length > 0) {
+    return el("div", { class: "vc-banner is-match" }, [
+      icon("spark", "icon vc-banner-icon"),
+      el("span", { text: s.bannerMatch }),
+    ]);
+  }
+  if (st.peerLikes.length > 0 && selection.size === 0) {
+    return el("div", { class: "vc-banner" }, [
+      icon("heart-filled", "icon vc-banner-icon is-peer"),
+      el("span", { text: s.bannerPeerPicked(st.partnerName) }),
+    ]);
+  }
+  if (selection.size > 0) {
+    return el("div", { class: "vc-banner" }, [
+      icon("heart", "icon vc-banner-icon"),
+      el("span", { text: s.bannerSuggest }),
+    ]);
+  }
+  return null;
+}
+
+/**
+ * A button carrying an authored mark. `stars` appends our own star glyph after
+ * the label — never the platform ⭐, which renders as Apple/Google art.
+ */
+function iconBtn(
+  cls: string,
+  mark: IconName,
+  label: string,
+  onClick: () => void,
+  withStar = false,
+): HTMLElement {
+  const kids: Node[] = [icon(mark, "icon btn-icon"), el("span", { text: label })];
+  if (withStar) kids.push(icon("star", "icon btn-icon btn-star"));
+  return el("button", { class: cls, type: "button", onClick }, kids);
+}
+
+/** Bottom CTA — only exists when there's something to submit. */
+function ctaBar(): Node[] {
+  if (!isDirty()) return [];
+  const agreeing = selectedOverlap().length > 0;
+  const btn = el("button", {
+    class: "btn-primary",
+    type: "button",
+    text: saving ? s.ctaSaving : agreeing ? s.ctaConfirm : s.ctaSuggest,
+    disabled: saving,
+    onClick: () => void submitSelection(),
+  });
+  return [btn, el("p", { class: "vc-note vc-note-center", text: s.confirmHint })];
+}
+
+/** The mark button — an authored vector heart (never a platform emoji). */
 function heartButton(v: VenueChangeCatalogItem): HTMLElement {
   const key = keyOf(v);
-  const mine = myLikes.has(key);
+  const mine = selection.has(key);
   const theirs = boardState?.peerLikes.includes(key) ?? false;
   const cls = `vc-heart${mine ? " is-mine" : ""}${theirs ? " is-theirs" : ""}`;
   return el(
@@ -661,28 +803,39 @@ function heartButton(v: VenueChangeCatalogItem): HTMLElement {
       type: "button",
       onClick: (e) => {
         e.stopPropagation();
-        void toggleLike(v);
+        toggleMark(v);
       },
     },
-    [el("span", { class: "vc-heart-glyph", text: mine ? "❤" : "♡", ariaHidden: true })],
+    [icon(mine ? "heart-filled" : "heart", "icon vc-heart-icon")],
   );
 }
 
+/**
+ * One venue row. A plain candidate is a bare borderless card; a card the
+ * partner (or both of you) marked is wrapped in a lighter frame whose bottom
+ * band carries a caption naming exactly what happened — the same "window"
+ * idiom the Calendar uses for peer-touched slots.
+ */
 function renderVenueCard(v: VenueChangeCatalogItem): HTMLElement {
   const key = keyOf(v);
   const theirs = boardState?.peerLikes.includes(key) ?? false;
-  const both = theirs && myLikes.has(key);
+  const mine = selection.has(key);
+  const both = theirs && mine;
 
   const chips: Node[] = [
-    el("span", { class: "vc-chip", text: `${categoryGlyph(v.category)} ${s.kmAway(v.distanceKm)}` }),
+    el("span", { class: "vc-chip" }, [
+      categoryIcon(v.category, "icon vc-chip-icon"),
+      el("span", { text: s.kmAway(v.distanceKm) }),
+    ]),
   ];
   if (v.rating != null) {
-    chips.push(el("span", { class: "vc-chip" }, [
-      el("span", { class: "vc-chip-star", text: "★", ariaHidden: true }),
-      ` ${v.rating.toFixed(1)}`,
-    ]));
+    chips.push(
+      el("span", { class: "vc-chip" }, [
+        icon("star", "icon vc-chip-icon vc-chip-star"),
+        el("span", { text: v.rating.toFixed(1) }),
+      ]),
+    );
   }
-  if (theirs && !both) chips.push(el("span", { class: "vc-chip is-peer", text: s.peerLikedChip }));
 
   const meta = el("div", { class: "vc-card-meta" }, [
     el("div", { class: "vc-card-name", text: v.name }),
@@ -690,55 +843,90 @@ function renderVenueCard(v: VenueChangeCatalogItem): HTMLElement {
     el("div", { class: "vc-card-tags" }, chips),
   ]);
 
-  const cardChildren: Node[] = [venueThumb(v), meta, heartButton(v)];
   const card = el(
     "div",
     {
-      class: `vc-card${both ? " is-match" : ""}`,
+      class: `vc-card${both ? " is-match" : ""}${theirs && !both ? " is-peer" : ""}`,
       onClick: () => {
         haptic("select");
         renderDetail(v);
       },
     },
-    cardChildren,
+    [venueThumb(v), meta, heartButton(v)],
   );
-  if (both) card.prepend(el("div", { class: "vc-match-ribbon", text: s.matchBadge }));
-  return card;
+
+  // Bare card — nothing to explain.
+  if (!theirs && !mine) return card;
+
+  const isNew = theirs && !peerSeen.has(key);
+  const captionText = both ? s.capBoth : theirs ? s.capPeer(boardState?.partnerName ?? "") : s.capMine;
+  const captionKids: Node[] = [
+    both
+      ? icon("spark", "icon vc-cap-icon")
+      : theirs
+        ? icon("heart-filled", "icon vc-cap-icon is-peer")
+        : icon("heart-filled", "icon vc-cap-icon is-mine"),
+    el("span", { class: "vc-cap-text", text: captionText }),
+  ];
+  if (isNew) captionKids.push(el("span", { class: "vc-badge-new", text: s.badgeNew }));
+
+  const frameCls = `vc-frame${both ? " is-match" : theirs ? " is-peer" : " is-mine"}`;
+  return el("div", { class: frameCls }, [card, el("div", { class: "vc-cap" }, captionKids)]);
 }
 
 function venueThumb(v: VenueChangeCatalogItem, className = "vc-thumb"): HTMLElement {
   const url = thumbUrl(v);
-  return el("div", { class: className, bg: url }, url ? [] : [categoryGlyph(v.category)]);
+  return el("div", { class: className, bg: url }, url ? [] : [categoryIcon(v.category, "icon vc-thumb-icon")]);
 }
 
-async function toggleLike(v: VenueChangeCatalogItem): Promise<void> {
+/**
+ * Mark / unmark — purely local. No network, no partner visibility, no
+ * agreement: those all wait for the explicit CTA, so an accidental tap costs
+ * nothing and is undone by tapping again.
+ */
+function toggleMark(v: VenueChangeCatalogItem): void {
   const key = keyOf(v);
-  const wasLiked = myLikes.has(key);
-  if (wasLiked) myLikes.delete(key);
-  else myLikes.add(key);
-  haptic(wasLiked ? "light" : "success");
+  if (selection.has(key)) selection.delete(key);
+  else selection.add(key);
+  haptic("select");
   if (screen === "board") renderBoard(true);
+}
 
-  if (previewMode) return;
+/** Submit the marks (Suggest) — or, when they overlap the partner's, agree. */
+async function submitSelection(): Promise<void> {
+  if (previewMode || saving) return;
+  saving = true;
   busy = true;
+  if (screen === "board") renderBoard(true);
   try {
-    const res = await submitVenueLikes(getInitData(), matchId, [...myLikes]);
+    const res = await submitVenueLikes(getInitData(), matchId, [...selection]);
+    confirmed = new Set(selection);
     if (res.agreed) {
       boardState = await fetchVenueBoardState(getInitData(), matchId);
       haptic("success");
+      saving = false;
+      busy = false;
       route();
-    } else if (res.overlapCandidates.length > 1) {
-      renderOverlapSheet(res.overlapCandidates);
+      return;
     }
+    if (res.overlapCandidates.length > 1) {
+      saving = false;
+      busy = false;
+      renderOverlapSheet(res.overlapCandidates);
+      return;
+    }
+    boardState = await fetchVenueBoardState(getInitData(), matchId);
+    peerSeen = new Set(boardState.peerLikes);
+    haptic("success");
+    saving = false;
+    busy = false;
+    route();
   } catch (err) {
-    // Revert the optimistic flip and surface the reason.
-    if (wasLiked) myLikes.add(key);
-    else myLikes.delete(key);
-    if (screen === "board") renderBoard(true);
+    saving = false;
+    busy = false;
     haptic("error");
     app?.showAlert(errorMessage(err));
-  } finally {
-    busy = false;
+    if (screen === "board") renderBoard(true);
   }
 }
 
@@ -756,7 +944,7 @@ function renderDetail(v: VenueChangeCatalogItem): void {
   const shots =
     urls.length > 0
       ? urls.map((u) => el("div", { class: `vc-shot${urls.length === 1 ? " is-single" : ""}`, bg: u }))
-      : [el("div", { class: "vc-shot is-single", text: categoryGlyph(v.category) })];
+      : [el("div", { class: "vc-shot is-single" }, [categoryIcon(v.category, "icon vc-shot-icon")])];
   const gallery = el("div", { class: "vc-gallery" }, shots);
 
   const nodes: Node[] = [gallery];
@@ -800,16 +988,16 @@ function renderDetail(v: VenueChangeCatalogItem): void {
 
   if (v.address) {
     nodes.push(el("div", { class: "vc-info-row" }, [
-      el("span", { class: "vc-info-icon", text: "📍", ariaHidden: true }),
+      icon("pin", "icon vc-info-icon"),
       el("span", { class: "vc-info-text", text: v.address }),
     ]));
   }
 
   const href = mapsHref(v.name, v.address, v.mapsUri);
   const mapsRow = el("a", { class: "vc-info-row", href, target: "_blank", rel: "noopener" }, [
-    el("span", { class: "vc-info-icon", text: "🗺️", ariaHidden: true }),
+    icon("map", "icon vc-info-icon"),
     el("span", { class: "vc-info-text", text: s.openMaps }),
-    el("span", { class: "vc-info-chevron", text: "›", ariaHidden: true }),
+    icon("chevron", "icon vc-info-chevron"),
   ]);
   mapsRow.addEventListener("click", (e) => {
     haptic("light");
@@ -818,31 +1006,27 @@ function renderDetail(v: VenueChangeCatalogItem): void {
   nodes.push(mapsRow);
 
   const bar: Node[] = [];
-  const mine = myLikes.has(keyOf(v));
+  const mine = selection.has(keyOf(v));
+  // Marking is local and reversible; the board's Confirm CTA is the only thing
+  // that reaches the partner, so this button can never commit a venue by itself.
   bar.push(
-    el("button", {
-      class: mine ? "btn-secondary" : "btn-primary",
-      type: "button",
-      text: mine ? s.heartRemove : s.heartAdd,
-      onClick: () => {
-        void toggleLike(v).then(() => {
-          if (screen === "detail") renderDetail(v);
-        });
+    iconBtn(
+      mine ? "btn-secondary" : "btn-primary",
+      mine ? "heart-filled" : "heart",
+      mine ? s.heartRemove : s.heartAdd,
+      () => {
+        toggleMark(v);
+        if (screen === "detail") renderDetail(v);
       },
-    }),
+    ),
   );
   if (boardState?.expressAvailable && boardState.priceStars != null) {
     const price = boardState.priceStars;
     bar.push(
-      el("button", {
-        class: "btn-express",
-        type: "button",
-        text: s.expressBtn(price),
-        onClick: () => {
-          haptic("light");
-          void startExpress(v);
-        },
-      }),
+      iconBtn("btn-express", "bolt", s.expressBtn(price), () => {
+        haptic("light");
+        void startExpress(v);
+      }, true),
     );
     bar.push(el("p", { class: "vc-note", text: s.expressHint }));
   }
@@ -882,7 +1066,7 @@ function renderOverlapSheet(keys: string[]): void {
             el("div", { class: "vc-card-name", text: v.name }),
             el("div", { class: "vc-card-addr", text: v.address }),
           ]),
-          el("span", { class: "vc-card-chevron", text: "›", ariaHidden: true }),
+          icon("chevron", "icon vc-card-chevron"),
         ],
       ),
     );
@@ -919,11 +1103,11 @@ function renderAgreed(st: VenueBoardState): void {
   const venue = catalogByKey(agreed.key);
   const hero = venue
     ? venueThumb(venue, "vc-agreed-photo")
-    : el("div", { class: "vc-agreed-photo", text: "📍" });
+    : el("div", { class: "vc-agreed-photo" }, [icon("pin", "icon vc-shot-icon")]);
 
   const card = el("div", { class: "vc-agreed glass-in" }, [
     hero,
-    el("div", { class: "vc-agreed-badge", text: "✨" }),
+    el("div", { class: "vc-agreed-badge" }, [icon("spark", "icon")]),
     el("div", { class: "vc-current-name", text: agreed.name }),
     el("div", { class: "vc-current-addr", text: agreed.address }),
   ]);
@@ -941,12 +1125,7 @@ function renderAgreed(st: VenueBoardState): void {
     case "pay_or_decline":
       if (price != null) {
         bar.push(
-          el("button", {
-            class: "btn-primary",
-            type: "button",
-            text: s.payBtn(price),
-            onClick: () => void payAgreed(),
-          }),
+          iconBtn("btn-primary", "check", s.payBtn(price), () => void payAgreed(), true),
         );
       }
       if (st.myAction === "pay_or_decline") {
@@ -963,23 +1142,11 @@ function renderAgreed(st: VenueBoardState): void {
     case "pay_or_offer":
       if (price != null) {
         bar.push(
-          el("button", {
-            class: "btn-primary",
-            type: "button",
-            text: s.paySelfBtn(price),
-            onClick: () => void payAgreed(),
-          }),
+          iconBtn("btn-primary", "check", s.paySelfBtn(price), () => void payAgreed(), true),
         );
       }
       if (st.canOfferPartner) {
-        bar.push(
-          el("button", {
-            class: "btn-secondary",
-            type: "button",
-            text: s.offerBtn,
-            onClick: () => void offerPay(),
-          }),
-        );
+        bar.push(iconBtn("btn-glass", "letter", s.offerBtn, () => void offerPay()));
       } else if (st.offerSent) {
         nodes.push(el("p", { class: "vc-note vc-note-center", text: s.offerSentNote }));
       }
@@ -1114,7 +1281,7 @@ function renderSettled(st: VenueBoardState): void {
 
   const nodes: Node[] = [
     el("div", { class: "vc-settled-burst", ariaHidden: true }, [
-      el("div", { class: "vc-settled-check", text: "✓" }),
+      el("div", { class: "vc-settled-check" }, [icon("check", "icon")]),
     ]),
     el("h1", { class: "vc-h1 vc-h1-center", text: s.settledTitle }),
   ];
@@ -1130,13 +1297,8 @@ function renderSettled(st: VenueBoardState): void {
   nodes.push(el("p", { class: "vc-note vc-note-center", text: s.settledNote }));
 
   const href = mapsHref(settled.name, settled.address, settled.mapsUri);
-  const maps = el("button", {
-    class: "btn-secondary",
-    type: "button",
-    text: s.openMaps,
-    onClick: () => {
-      if (!openExternal(href)) window.open(href, "_blank");
-    },
+  const maps = iconBtn("btn-glass", "map", s.openMaps, () => {
+    if (!openExternal(href)) window.open(href, "_blank");
   });
   mount(page([el("div", { class: "vc-settled" }, nodes)], [maps]));
 }
@@ -1185,6 +1347,7 @@ function mockState(): VenueBoardState {
     open: true,
     closedReason: null,
     original: { name: "Кафе «Старое место»", address: "ул. Прорезная, 8", mapsUri: null },
+    partnerName: "Sofia",
     myLikes: ["p1"],
     peerLikes: ["p2"],
     agreed: null,

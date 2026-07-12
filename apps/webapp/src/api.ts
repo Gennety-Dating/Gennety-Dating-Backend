@@ -685,6 +685,8 @@ export interface VenueBoardState {
   open: boolean;
   closedReason: string | null;
   original: { name: string | null; address: string | null; mapsUri: string | null };
+  /** Partner's first name — board captions name who picked what. */
+  partnerName: string;
   myLikes: string[];
   peerLikes: string[];
   agreed: {

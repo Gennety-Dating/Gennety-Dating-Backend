@@ -293,6 +293,8 @@ export interface VenueBoardStateView {
   open: boolean; // board interactions (likes/confirm/express) allowed
   closedReason: VenueChangeIneligibleReason | null;
   original: { name: string | null; address: string | null; mapsUri: string | null };
+  /** The partner's first name — the board captions name who picked what. */
+  partnerName: string;
   myLikes: string[];
   peerLikes: string[];
   /** Agreed venue — null while none, and hidden from the partner during an express mint. */
@@ -392,6 +394,7 @@ function buildBoardState(match: VcMatch, side: Side, now: Date): VenueBoardState
       address: match.venueAddress,
       mapsUri: match.venueGoogleMapsUri,
     },
+    partnerName: userOfSide(match, otherSide(side)).firstName ?? "",
     myLikes,
     peerLikes,
     agreed: agreedVisible
