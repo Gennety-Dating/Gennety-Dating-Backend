@@ -1294,62 +1294,83 @@ live only in the Telegram caption.
   plain-text scheduled card, so one side's hiccup never denies the other their
   card and scheduling always completes.
 
-### 3.7b Venue Change (feature-flagged, female-exclusive one-shot)
+### 3.7b Venue Change v2 (feature-flagged, paid multiplayer board)
 
-An optional post-schedule step lets the **female** participant swap the
-auto-assigned venue once, before the date's critical zone. Gated by
-`VENUE_CHANGE_FEATURE_ENABLED` (default **off** → the scheduled-date DM is
-identical for both sides and nothing below fires). Telegram-only in v1.
-Implemented as a string sub-state (`Match.venueChangeStatus`) layered on a
-`scheduled` match — like the Date Ticket and Coordination gates, it adds no
-`MatchStatus` enum value, so the scheduling/venue/lifecycle code is untouched.
+An optional post-schedule step lets the pair swap the auto-assigned venue via
+a **shared likes board** — the couple's first joint activity before the date.
+Gated by `VENUE_CHANGE_FEATURE_ENABLED` (default **off** → the scheduled-date
+DM carries no venue-change button and nothing below fires). Telegram-only.
+Implemented as a string sub-state (`Match.venueChangeStatus`: null → `liking` →
+`agreed` → `settled` | `lapsed`) layered on a `scheduled` match — like the Date
+Ticket and Coordination gates, it adds no `MatchStatus` enum value. The v1
+propose/veto flow (female-exclusive, mandatory comment, decline-cancels-match)
+was replaced wholesale in 2026-07 before ever launching; design doc:
+`VENUE_CHANGE_PRODUCT_SPEC.md`.
 
-- **Who & when.** Hetero pair → only the female's scheduled card carries a
-  "Change venue" `web_app` button + a one-line hint. Female–female pair →
-  both can, first-tap-wins (the one-shot guard blocks the second). Male–male
-  pair → unavailable (no female). The change may be **proposed** any time from
-  `scheduled` up to **T − `DATE_ALERT_HOURS` (T-5h)** — the moment ice-breakers
-  and the emergency window open. (The original design doc said "T-3h"; the code
-  cutoff is T-5h so a swap never lands after ice-breakers reference the old
-  venue.)
-- **Disclaimer → catalog → detail → comment.** The Venue Change Mini App
-  (`apps/webapp/venue-change.html`) is a full-screen Telegram Web App in the
-  shared "Lavender Glass" design (matching the Ticket Mini Apps), and it walks
-  four steps. (1) A mandatory disclaimer (one-time / irreversible / partner can
-  cancel the match / 3 km radius). (2) A **catalog** of alternatives within
-  **`VENUE_CHANGE_RADIUS_KM` (3 km)** of the original venue center
-  (`Match.venueLat/venueLng`, the fairness-balanced commute midpoint), rendered
-  as cards with **real venue photos**. The catalog is **curated-first**
-  (`CuratedVenue`, incl. an optional operator-supplied `photoUrl`), Google
-  Places fallback under the same quality gate when nothing curated is in range.
-  (3) Tapping a card opens a **venue detail page** — a photo gallery, category /
-  distance / rating chips, a short blurb (`editorialSummary` for Places rows),
-  the address, and an "Open in Google Maps" link — with a single **"Propose this
-  place"** CTA. Only that CTA advances to (4) the comment step. Curated photos
-  are served from their operator URL; Places photos are streamed through a
-  server-side proxy (`GET /v1/venue-change/photo`) so the `PLACES_API_KEY` never
-  ships to the client.
-- **Mandatory comment.** Choosing **Propose this place** then requires a
-  free-text explanation (≥ `VENUE_CHANGE_MIN_COMMENT_LEN` = 10 chars). It is relayed **verbatim** to
-  the male as a Telegram blockquote — the same one-shot, non-reply relay
-  carve-out as the emergency reason (NO IN-APP CHAT is preserved: post-schedule,
-  single message, no reply channel, stored on the match).
-- **Male decision.** He gets the proposal + her comment with `[✅ Accept new
-  place]` / `[❌ Decline (cancel date)]`. Accept → the proposed venue is copied
-  onto the canonical `venue*` fields and both get an updated card. Decline →
-  a confirmation guard (`[Yes, cancel]` / `[No, go back]`) protects against an
-  accidental tap; confirming flips the **whole match to `cancelled`**. As with
-  the emergency-cancel guard, the destructive `[Yes, cancel]` carries native
-  `danger` (red) styling and the safe `[No, go back]` native `success` (green)
-  styling, so the irreversible option reads as distinct at a glance.
-- **Cancellation semantics.** A male decline (or a TTL/cutoff lapse) carries
-  **no Elo penalty** for anyone (a logistics fallout, like an emergency
-  cancel); the female gets a small standby/priority comp boost for the next
-  batch.
-- **Timeout.** Deadline = `min(now + VENUE_CHANGE_TTL_HOURS (12h), agreedTime −
-  DATE_ALERT_HOURS)`. The date-lifecycle tick auto-cancels a still-`proposed`
-  swap at the deadline **before** the ice-breaker step, so a silent partner can
-  never strand a stale-venue date. Pricing: **free**.
+- **Entry — no disclaimers.** BOTH sides' scheduled cards carry a passive
+  "📍 Change venue" `web_app` button (no proactive "does the venue suit you?"
+  question, no hint DM). The board is open from `scheduled` up to
+  **T − `DATE_ALERT_HOURS` (T-5h)** — the ice-breaker / emergency cutoff.
+- **The board (calendar mechanics, verbatim).** The Mini App
+  (`apps/webapp/venue-change.html`, Liquid Glass tokens) opens straight into
+  the catalog: the **current venue pinned on top** ("Picked for you" — the
+  eternal default that stands whenever nothing settles), then alternatives
+  within **`VENUE_CHANGE_RADIUS_KM` (3 km)** of the original venue center,
+  **curated-first** with the Places fallback under the production quality gate.
+  Each side hearts any number of places (full-set submissions, server-resolved
+  against the catalog — client venue data is never trusted); the partner's
+  hearts land live (~4 s polling). The FIRST like of a session claims the
+  **initiator** (`venueChangeProposerId`) and sends the partner one
+  positively-framed, liker-gendered board-invite DM (guarded per recipient).
+  **Agreement**: tapping a venue the partner already liked — or a single like
+  overlap — agrees instantly; several simultaneous overlaps return an
+  `overlapCandidates` list and the actor picks one (initiator-offers /
+  responder-decides, exactly like the Calendar §3.6). No free text anywhere —
+  no comment channel, so NO IN-APP CHAT needs no carve-out here.
+- **Payment (150⭐, `VENUE_CHANGE_STARS`).** A settled change costs one flat
+  Telegram Stars price; browsing/liking/agreeing are free and no one pays
+  before an agreement, so **no refund path is needed** (the only refund is the
+  parallel-pay race below). Payer matrix — **hetero: the man pays, whoever
+  initiated**; same-sex: the initiator pays. The finalizer (whoever completed
+  the agreement, definitionally the first to see the final screen) resolves it:
+  - *he initiated* → he pays "no questions": invoice right in his Mini App if
+    he finalized, else a pay-prompt DM with the invoice link;
+  - *she initiated, he finalized* → his in-app fork `[⭐ Lock it in]` /
+    `[Not this time]`;
+  - *she initiated, she finalized* → her fork `[Lock it in myself — ⭐]` /
+    `[Ask him to lock it in 💌]`. The offer sends him the **wish card** — the
+    date-card layout re-rendered with HER polaroid over the new venue's duotone
+    hero (`services/venue-wish-card.ts`, headline "Her pick. Your move.",
+    protected; text fallback so the offer never wedges) with pay/decline
+    buttons. One offer per session.
+  - His "not this time" (wish card button or Mini App fork) is **single and
+    final**: it permanently hides her offer option and DMs her a soft pay-self
+    nudge that never mentions a refusal. **Her pay-self path stays active in
+    parallel the whole time** — both invoices can be open; the settle CAS makes
+    the first payment win and `refundStarPayment` returns the Stars of a lost
+    race. `pre_checkout_query` re-validates amount + that the swap is still
+    `agreed`, so stale (reusable) invoice links are declined before any Stars
+    move. She never sees a price anywhere in the shared flow — the reveal
+    ("{name} covered the venue change ❤️") is part of the product.
+  - **Express (hers alone, hetero).** On any venue's detail page the female
+    gets "⚡ Change right now — 150⭐": a unilateral swap with no agreement.
+    The mint stamps the pick (`venueChangeExpressAt`), stays **invisible to the
+    partner until paid**, and an abandoned mint quietly reverts to the open
+    board after ~30 min. On payment the partner gets the positive-frame
+    surprise card ("she picked a cozier spot ✨"). In same-sex pairs express is
+    available to either side (the veto asymmetry is hetero-only).
+- **Settle.** `successful_payment` is the trust boundary: a status CAS flips
+  `agreed → settled`, copies the venueChange\* snapshot onto the canonical
+  `venue*` fields (incl. `venuePhotoUrl/Name` so a re-rendered date card shows
+  the new venue), and both sides get updated venue cards with the `date_time`
+  entity + Maps button — plus the payer-gendered reveal / express surprise.
+  One settled change per date: the board then closes (read-only).
+- **Lapse — the match is NEVER cancelled.** An `agreed` swap unpaid by
+  `min(agreedAt + VENUE_CHANGE_TTL_HOURS (12h), T − DATE_ALERT_HOURS)` lapses
+  on the date-lifecycle tick (before ice-breakers): the original venue stands,
+  both get a neutral notice, and the board closes. No Elo, no priority comp —
+  nothing was lost. The v1 "decline = cancel the match" branch is gone
+  entirely, and with it the v1 disclaimer.
 
 ## Phase 4 — Date Lifecycle
 

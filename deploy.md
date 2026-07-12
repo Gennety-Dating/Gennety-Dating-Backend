@@ -566,21 +566,30 @@ Required/high-impact env keys:
   documented, narrow carve-out to the no-in-app-chat invariant
   (PRODUCT_SPEC.md §Core Principles): post-match, time-boxed, text-only,
   fully logged, with an in-line Report button.
-- Venue change (feature-flagged): `VENUE_CHANGE_FEATURE_ENABLED`
-  (default `false` — leave off until launch). When on, the female participant
-  gets a one-time "Change venue" button on her scheduled-date card to swap the
-  auto-assigned venue (within 3 km, mandatory comment); the male accepts or
-  declines (declining cancels the match). Telegram-only in v1. Requires
-  `db:push` of the new `Match.venueChange*` columns + `CuratedVenue.photoUrl`
-  first, and `venue-change.html` deployed with the Mini App bundle. Runs on the
-  existing date-lifecycle `setInterval` (a pre-ice-breaker expiry sweep) — no
-  new cron schedule. The mandatory comment is a narrow carve-out to the
-  no-in-app-chat invariant (PRODUCT_SPEC.md §3.7b): post-schedule, one-shot,
-  verbatim relay, no reply channel. The redesigned full-screen Mini App shows a
-  per-venue **detail page** (photo gallery + Maps link) before the comment;
-  Places venue photos are streamed through the server-side `GET
-  /v1/venue-change/photo` proxy, so they need `PLACES_API_KEY` (already required
-  for the venue picker) — no new env, schema, or system dependency.
+- Venue change v2 (feature-flagged, paid): `VENUE_CHANGE_FEATURE_ENABLED`
+  (default `false` — leave off until launch) + `VENUE_CHANGE_STARS` (default
+  `150`, the flat Telegram Stars price of one settled change). When on, BOTH
+  sides' scheduled cards carry a "Change venue" button into the shared likes
+  board (3 km catalog, hearts with ~4 s live sync, overlap = agreement —
+  calendar mechanics); a settled change costs `VENUE_CHANGE_STARS` paid
+  natively in Stars (hetero: the man pays + the female-only express unilateral
+  swap; same-sex: the initiator). Decline/lapse NEVER cancels the match — the
+  original venue stands. No free text anywhere (the v1 mandatory-comment
+  carve-out is gone). Telegram-only. **Requires `db:push` of the additive v2
+  `Match` columns first** (`venue_likes_a/b`, `venue_change_photo_url/name`,
+  `venue_change_paid_by_id/paid_at`, `venue_change_pay_declined_at`,
+  `venue_change_offer_pay_sent_at`, `venue_change_ping_sent_to_a/b_at`,
+  `venue_change_express_at` — non-destructive), and redeploy the Mini App
+  bundle (`venue-change.html`, fully reworked board UI). Payments ride the
+  Stars rails (`venue:<matchId>:<mode>` payload in `handlers/payments.ts`; no
+  merchant account — same XTR mechanics as tickets, independent of
+  `TICKET_STARS_ENABLED`); a lost parallel-pay race is auto-refunded via
+  `refundStarPayment`. The wish-card PNG reuses the date-card satori stack +
+  bundled fonts (no new system dependency); Places venue photos stream through
+  `GET /v1/venue-change/photo`, so `PLACES_API_KEY` is needed (already required
+  for the venue picker). Runs on the existing date-lifecycle `setInterval`
+  (lapse/express-revert sweep) — no new cron schedule. Rollback: flip the flag
+  off; the additive columns may stay.
 - Date card (feature-flagged): `DATE_CARD_FEATURE_ENABLED` (default `false` —
   leave off until launch). When on, each side's `scheduled` confirmation is a
   rendered PNG date card (partner photo + venue photo + details) sent
