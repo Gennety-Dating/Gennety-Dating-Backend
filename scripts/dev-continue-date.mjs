@@ -27,6 +27,9 @@
  *   node scripts/dev-continue-date.mjs
  * Optional:
  *   --primary-tg=782065541 --secondary-tg=5986970093
+ *   --stop-at=scheduled   stop after stage 3 (skip the lifecycle ticks). Use
+ *                         this to walk the venue-change board (§3.7b) by hand —
+ *                         its window closes at T-5h, which stage 4 jumps past.
  *   --force   bypass the gennetytestbot / dev-DB guards
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -67,6 +70,10 @@ const args = new Map(
 const force = args.get("force") === "true";
 const primaryTg = BigInt(args.get("primary-tg") ?? "782065541");
 const secondaryTg = BigInt(args.get("secondary-tg") ?? "5986970093");
+// `--stop-at=scheduled` halts after stage 3, leaving the match freshly
+// `scheduled`. Needed to walk the venue-change board by hand: its window closes
+// at T-5h, and the stage-4 ticks jump `now` straight past that cutoff.
+const stopAtScheduled = args.get("stop-at") === "scheduled";
 
 // Two commute origins in central Kyiv ~1.5km apart.
 const ORIGIN_A = { lat: 50.4501, lng: 30.5234 }; // Maidan
@@ -213,14 +220,17 @@ async function main() {
 
   // ── 3. negotiating_venue → scheduled (auto vibe + commute) ────────────
   if (row.status === "negotiating_venue") {
-    step("3", "Venue: vibe + commute origin both sides → real Places venue → scheduled");
-    await handleVenueVibe(makeCtx(api, aTg, aLang, { messageText: "quiet cozy cafe" }));
-    await sleep(800);
+    // Location BEFORE vibe: `handleVenueVibe` bounces free text that arrives
+    // before the departure pin (the location-first rule, PRODUCT_SPEC §3.7), so
+    // a vibe sent first is never banked and `tryFinalize` never fires.
+    step("3", "Venue: commute origin + vibe both sides → real Places venue → scheduled");
     await handleVenueLocation(makeCtx(api, aTg, aLang, { location: { latitude: ORIGIN_A.lat, longitude: ORIGIN_A.lng } }));
-    await sleep(1000);
-    await handleVenueVibe(makeCtx(api, bTg, bLang, { messageText: "chill coffee place" }));
     await sleep(800);
+    await handleVenueVibe(makeCtx(api, aTg, aLang, { messageText: "quiet cozy cafe" }));
+    await sleep(1000);
     await handleVenueLocation(makeCtx(api, bTg, bLang, { location: { latitude: ORIGIN_B.lat, longitude: ORIGIN_B.lng } }));
+    await sleep(800);
+    await handleVenueVibe(makeCtx(api, bTg, bLang, { messageText: "chill coffee place" }));
     await sleep(2500);
     row = await prisma.match.findUnique({ where: { id: matchId }, select: { status: true, agreedTime: true, venueName: true, venueAddress: true } });
     console.log(`venue: ${row.venueName ?? "?"} — ${row.venueAddress ?? "?"}`);
@@ -231,6 +241,18 @@ async function main() {
     return;
   }
   const agreedTime = row.agreedTime;
+
+  if (stopAtScheduled) {
+    step("DONE", "Stopped at `scheduled` (lifecycle ticks skipped)");
+    console.log(JSON.stringify({
+      matchId,
+      status: row.status,
+      agreedTime: agreedTime.toISOString(),
+      venue: row.venueName ?? null,
+      venueAddress: row.venueAddress ?? null,
+    }, null, 2));
+    return;
+  }
 
   // ── 4. Lifecycle ticks with crafted `now` (current-constant offsets) ──
   step("4", "Date-lifecycle ticks (accompanying messages)");
