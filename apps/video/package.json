@@ -1,0 +1,33 @@
+{
+  "name": "@gennety/video",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "remotion bundle",
+    "compositions": "remotion compositions",
+    "dev": "remotion studio",
+    "lint": "eslint src",
+    "render": "remotion render GennetyVideo out/gennety-video.mp4",
+    "typecheck": "tsc --noEmit",
+    "upgrade": "remotion upgrade",
+    "versions": "remotion versions"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.489",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.489",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "4.0.489",
+    "@types/react": "19.2.7",
+    "@types/web": "0.0.166",
+    "eslint": "9.19.0",
+    "typescript": "5.7.3"
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}

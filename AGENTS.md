@@ -34,6 +34,9 @@ When prose and code disagree:
 - **Bot / backend process**: Node.js 20+, TypeScript, grammY, Express.
 - **Telegram Mini App**: Vite + TypeScript using Telegram WebApp globals. It is
   currently a small vanilla TS app, not a React app.
+- **Video workspace**: Remotion + React in `apps/video` for local Studio preview
+  and programmatic video rendering. It is not part of the production bot or
+  Mini App runtime.
 - **Mobile surface**: public `/v1/*` API plus `mobile-handoff/` components. A
   full `apps/mobile` workspace is not present in this repo yet.
 - **Database**: PostgreSQL + pgvector through Prisma (`packages/db`).
@@ -52,6 +55,8 @@ Use official Telegram docs when changing Bot API or Mini App behavior:
 - Install: `pnpm install`
 - Dev bot: `pnpm dev:bot`
 - Dev Mini App: `pnpm dev:webapp`
+- Dev video Studio: `pnpm dev:video`
+- Render video: `pnpm render:video`
 - Build all: `pnpm build`
 - Lint all: `pnpm lint`
 - Test all: `pnpm test`
@@ -77,6 +82,7 @@ Prefer file-scoped or package-scoped verification while iterating:
 /
 ├── apps/
 │   ├── bot/          # grammY bot, Express public/admin APIs, workers
+│   ├── video/        # Remotion Studio, compositions, and local renders
 │   └── webapp/       # Vite Telegram Calendar Mini App
 ├── mobile-handoff/   # Expo handoff components, not a workspace app
 ├── packages/

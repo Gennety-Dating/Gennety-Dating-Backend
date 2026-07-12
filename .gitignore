@@ -1,5 +1,7 @@
 node_modules/
 dist/
+out/
+apps/video/build/
 .env
 .env.local
 *.log

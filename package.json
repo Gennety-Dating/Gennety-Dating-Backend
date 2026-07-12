@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev:bot": "node scripts/dev-bot.mjs",
+    "dev:video": "pnpm --filter @gennety/video dev",
     "dev:webapp": "pnpm --filter @gennety/webapp dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
@@ -31,7 +32,8 @@
     "sync-venues:kyiv": "node scripts/sync-kyiv-venue-catalog.mjs",
     "typecheck": "pnpm -r typecheck",
     "face-eval": "pnpm --filter @gennety/bot exec tsx scripts/face-eval.ts",
-    "face-eval-user": "pnpm --filter @gennety/bot exec tsx scripts/face-eval-user.ts"
+    "face-eval-user": "pnpm --filter @gennety/bot exec tsx scripts/face-eval-user.ts",
+    "render:video": "pnpm --filter @gennety/video render"
   },
   "engines": {
     "node": ">=20.0.0"
