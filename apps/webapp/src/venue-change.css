@@ -987,13 +987,20 @@ a.vc-info-row .vc-info-text {
 }
 
 /* ── Agreed / settled screens ────────────────────────────────────────── */
+/* Borderless by design — the photo is the frame. Tappable: it opens the place. */
 .vc-agreed {
   position: relative;
   padding: 18px;
   border-radius: 24px;
   background: var(--surface);
-  box-shadow: var(--glass-edge), inset 0 0 0 1.5px var(--peer);
+  box-shadow: var(--glass-edge);
   text-align: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.vc-agreed:active {
+  transform: scale(0.985);
+  background: var(--surface-2);
 }
 .vc-agreed-photo {
   width: 100%;
@@ -1007,20 +1014,6 @@ a.vc-info-row .vc-info-text {
   font-size: 40px;
   margin-bottom: 14px;
   overflow: hidden;
-}
-.vc-agreed-badge {
-  position: absolute;
-  top: 10px;
-  right: 14px;
-  width: 24px;
-  height: 24px;
-  color: var(--accent-bright);
-  filter: drop-shadow(0 2px 8px rgba(139, 37, 59, 0.5));
-  animation: peer-pulse 2s ease-in-out infinite;
-}
-.vc-agreed-badge .icon {
-  width: 24px;
-  height: 24px;
 }
 
 .vc-note {
@@ -1437,13 +1430,19 @@ a.vc-info-row .vc-info-text {
   box-shadow: 0 18px 46px -18px var(--self-glow);
   animation: mark-in 0.6s cubic-bezier(0.2, 1.5, 0.4, 1) both;
 }
-/* "Agreed" = the shared, paid-ahead moment → burgundy, and it alone glows. */
+/* "Agreed" — our own mark, so it needs no badge to sit in: the paired sparkle
+   stands bare, larger and heavier, and carries the burgundy itself. */
 .vc-ok-mark.is-agreed {
-  color: #fff;
-  background: linear-gradient(140deg, var(--accent-bright) 0%, var(--accent) 75%, var(--accent-deep) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 20px 50px -16px rgba(182, 48, 79, 0.9);
+  width: auto;
+  height: auto;
+  color: var(--accent-bright);
+  background: none;
+  box-shadow: none;
+  filter: drop-shadow(0 10px 26px rgba(182, 48, 79, 0.55));
+}
+.vc-ok-mark.is-agreed .vc-ok-glyph {
+  width: 104px;
+  height: 104px;
 }
 .vc-ok-glyph {
   width: 40px;
@@ -1462,13 +1461,27 @@ a.vc-info-row .vc-info-text {
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
   text-align: left;
   margin-top: 22px;
   padding: 14px 18px;
   border-radius: 18px;
-  background: var(--glass);
+  background: var(--surface);
   box-shadow: var(--glass-edge);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
   animation: rise 0.5s ease 0.26s both;
+}
+.vc-ok-venue:active {
+  transform: scale(0.985);
+  background: var(--surface-2);
+}
+.vc-ok-venue-chevron {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--text-dim);
+  opacity: 0.6;
 }
 .vc-ok-venue-icon {
   flex: none;
@@ -1591,7 +1604,6 @@ a.vc-info-row .vc-info-text {
   .vc-card.is-match,
   .vc-heart.is-mine .vc-heart-glyph,
   .vc-heart.is-theirs::after,
-  .vc-agreed-badge,
   .vc-settled-check .icon {
   width: 34px;
   height: 34px;

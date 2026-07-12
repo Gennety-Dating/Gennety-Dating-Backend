@@ -1235,6 +1235,116 @@ function renderDetail(v: VenueChangeCatalogItem): void {
 }
 
 // ---------------------------------------------------------------------------
+// Venue preview — "let me just double-check this place"
+// ---------------------------------------------------------------------------
+
+/** Snapshot every screen can name a venue with, catalog entry or not. */
+interface VenueRef {
+  key: string | null;
+  name: string;
+  address: string;
+  mapsUri: string | null;
+}
+
+/**
+ * The catalog is only fetched on the open board; the agreed/kept screens want it
+ * too (to show photos for the place they name), so pull it lazily. Best-effort:
+ * a preview without photos is still a useful preview.
+ */
+async function ensureCatalog(): Promise<void> {
+  if (catalog.length > 0 || previewMode || !matchId) return;
+  try {
+    catalog = await fetchVenueChangeCatalog(getInitData(), matchId);
+  } catch {
+    /* no photos then — the preview falls back to the bare snapshot */
+  }
+}
+
+/**
+ * Read-only look at a venue: the gallery and facts of the detail page, with no
+ * actions. Reached by tapping the venue named on the agreed / success / kept
+ * screens, so a user can double-check the place and come straight back.
+ */
+function renderVenuePreview(ref: VenueRef, back: () => void): void {
+  screen = "other";
+  setBack(back);
+
+  const item = ref.key ? catalogByKey(ref.key) : null;
+  const nodes: Node[] = [];
+
+  if (item) {
+    const urls = galleryUrls(item);
+    const shots =
+      urls.length > 0
+        ? urls.map((u) =>
+            el("div", { class: `vc-shot${urls.length === 1 ? " is-single" : ""}`, bg: u }),
+          )
+        : [el("div", { class: "vc-shot is-single" }, [categoryIcon(item.category, "icon vc-shot-icon")])];
+    nodes.push(el("div", { class: "vc-gallery" }, shots));
+  }
+
+  nodes.push(el("div", { class: "vc-detail-name", text: ref.name }));
+
+  if (item) {
+    nodes.push(
+      el("div", { class: "vc-detail-tags" }, [
+        el("span", { class: "vc-chip", text: categoryLabel(item.category) }),
+        el("span", { class: "vc-chip", text: s.kmAway(item.distanceKm) }),
+        ...(item.rating != null
+          ? [
+              el("span", { class: "vc-chip" }, [
+                icon("star", "icon vc-chip-icon vc-chip-star"),
+                el("span", { text: item.rating.toFixed(1) }),
+              ]),
+            ]
+          : []),
+      ]),
+    );
+    nodes.push(
+      el("p", { class: "vc-summary", text: item.editorialSummary || s.detailFallbackSummary }),
+    );
+  }
+
+  if (ref.address) {
+    nodes.push(
+      el("div", { class: "vc-info-row" }, [
+        icon("pin", "icon vc-info-icon"),
+        el("span", { class: "vc-info-text", text: ref.address }),
+      ]),
+    );
+  }
+
+  const href = mapsHref(ref.name, ref.address, ref.mapsUri);
+  const mapsRow = el("a", { class: "vc-info-row", href, target: "_blank", rel: "noopener" }, [
+    icon("map", "icon vc-info-icon"),
+    el("span", { class: "vc-info-text", text: s.openMaps }),
+    icon("chevron", "icon vc-info-chevron"),
+  ]);
+  mapsRow.addEventListener("click", (e) => {
+    haptic("light");
+    if (openExternal(href)) e.preventDefault();
+  });
+  nodes.push(mapsRow);
+
+  const backBtn = el("button", {
+    class: "btn-primary",
+    type: "button",
+    text: s.back,
+    onClick: () => {
+      haptic("light");
+      back();
+    },
+  });
+  mount(page([el("div", { class: "vc-detail" }, nodes)], [backBtn]));
+}
+
+/** Open the preview for `ref`, pulling the catalog first so photos show. */
+function openVenuePreview(ref: VenueRef, back: () => void): void {
+  haptic("select");
+  void ensureCatalog().then(() => renderVenuePreview(ref, back));
+}
+
+// ---------------------------------------------------------------------------
 // Overlap sheet (>1 simultaneous matches — the actor picks one)
 // ---------------------------------------------------------------------------
 
@@ -1327,17 +1437,33 @@ function renderSuccess(kind: "suggested" | "agreed" | "kept"): void {
     el("p", { class: "vc-lead vc-ok-sub", text: sub }),
   ];
 
-  // Name the place, so the success reads as something concrete.
+  // Name the place — and let them tap through to it. Confirming a venue you
+  // have only seen as a line of text is a leap of faith; this is the way to
+  // double-check the place and come straight back.
   const venue = agreed ? st?.agreed : kept ? st?.original : null;
   if (venue?.name) {
+    const ref: VenueRef = {
+      key: agreed ? (st?.agreed?.key ?? null) : null,
+      name: venue.name,
+      address: venue.address ?? "",
+      mapsUri: venue.mapsUri ?? null,
+    };
     nodes.push(
-      el("div", { class: "vc-ok-venue" }, [
-        icon("pin", "icon vc-ok-venue-icon"),
-        el("div", { class: "vc-ok-venue-meta" }, [
-          el("div", { class: "vc-current-name", text: venue.name }),
-          el("div", { class: "vc-current-addr", text: venue.address ?? "" }),
-        ]),
-      ]),
+      el(
+        "div",
+        {
+          class: "vc-ok-venue",
+          onClick: () => openVenuePreview(ref, () => renderSuccess(kind)),
+        },
+        [
+          icon("pin", "icon vc-ok-venue-icon"),
+          el("div", { class: "vc-ok-venue-meta" }, [
+            el("div", { class: "vc-current-name", text: venue.name }),
+            el("div", { class: "vc-current-addr", text: venue.address ?? "" }),
+          ]),
+          icon("chevron", "icon vc-ok-venue-chevron"),
+        ],
+      ),
     );
   }
 
@@ -1370,12 +1496,24 @@ function renderAgreed(st: VenueBoardState): void {
     ? venueThumb(venue, "vc-agreed-photo")
     : el("div", { class: "vc-agreed-photo" }, [icon("pin", "icon vc-shot-icon")]);
 
-  const card = el("div", { class: "vc-agreed glass-in" }, [
-    hero,
-    el("div", { class: "vc-agreed-badge" }, [icon("spark", "icon")]),
-    el("div", { class: "vc-current-name", text: agreed.name }),
-    el("div", { class: "vc-current-addr", text: agreed.address }),
-  ]);
+  // Borderless and unbadged — the photo carries it. Tapping opens the place, so
+  // you can double-check what you are about to pay for and come back.
+  const card = el(
+    "div",
+    {
+      class: "vc-agreed glass-in",
+      onClick: () =>
+        openVenuePreview(
+          { key: agreed.key, name: agreed.name, address: agreed.address, mapsUri: agreed.mapsUri },
+          () => renderAgreed(st),
+        ),
+    },
+    [
+      hero,
+      el("div", { class: "vc-current-name", text: agreed.name }),
+      el("div", { class: "vc-current-addr", text: agreed.address }),
+    ],
+  );
 
   const header = el("div", { class: "vc-header" }, [
     el("h1", { class: "vc-h1", text: s.agreedTitle }),
