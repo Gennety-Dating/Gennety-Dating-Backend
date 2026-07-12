@@ -4,20 +4,20 @@ import {
   VENUE_CHANGE_TTL_HOURS,
 } from "@gennety/shared";
 import {
-  evaluateVenueChangeEligibility,
+  evaluateVenueBoardEligibility,
   venueChangeCutoff,
   venueChangeDeadline,
   buildVenueChangeCatalog,
   isWithinRadius,
   type CatalogVenue,
-  type VenueChangeEligibilityInput,
+  type VenueBoardEligibilityInput,
 } from "./venue-change.js";
 
 const HOUR = 60 * 60 * 1000;
 
 function baseInput(
-  over: Partial<VenueChangeEligibilityInput> = {},
-): VenueChangeEligibilityInput {
+  over: Partial<VenueBoardEligibilityInput> = {},
+): VenueBoardEligibilityInput {
   const now = new Date("2026-06-10T08:00:00Z");
   return {
     featureEnabled: true,
@@ -25,69 +25,57 @@ function baseInput(
     callerUserId: "a",
     userAId: "a",
     userBId: "b",
-    genderA: "female",
-    genderB: "male",
     // 10h ahead → well before the T-5h cutoff
     agreedTime: new Date(now.getTime() + 10 * HOUR),
     venueLat: 50.45,
     venueLng: 30.52,
-    venueChangeProposedAt: null,
+    venueChangeStatus: null,
     now,
     ...over,
   };
 }
 
-describe("evaluateVenueChangeEligibility", () => {
-  it("allows the female participant before the cutoff", () => {
-    expect(evaluateVenueChangeEligibility(baseInput())).toEqual({ ok: true, side: "A" });
+describe("evaluateVenueBoardEligibility (v2 — both sides)", () => {
+  it("allows either participant before the cutoff", () => {
+    expect(evaluateVenueBoardEligibility(baseInput())).toEqual({ ok: true, side: "A" });
+    expect(evaluateVenueBoardEligibility(baseInput({ callerUserId: "b" }))).toEqual({
+      ok: true,
+      side: "B",
+    });
   });
 
   it("blocks when the feature flag is off", () => {
-    expect(evaluateVenueChangeEligibility(baseInput({ featureEnabled: false }))).toEqual({
+    expect(evaluateVenueBoardEligibility(baseInput({ featureEnabled: false }))).toEqual({
       ok: false,
       reason: "feature-disabled",
     });
   });
 
   it("blocks a non-participant", () => {
-    expect(evaluateVenueChangeEligibility(baseInput({ callerUserId: "z" }))).toEqual({
+    expect(evaluateVenueBoardEligibility(baseInput({ callerUserId: "z" }))).toEqual({
       ok: false,
       reason: "not-participant",
     });
   });
 
-  it("blocks the male side in a hetero pair", () => {
-    expect(
-      evaluateVenueChangeEligibility(baseInput({ callerUserId: "b" })),
-    ).toEqual({ ok: false, reason: "not-female-initiator" });
+  it("stays interactive through liking and agreed sub-states", () => {
+    expect(evaluateVenueBoardEligibility(baseInput({ venueChangeStatus: "liking" })).ok).toBe(true);
+    expect(evaluateVenueBoardEligibility(baseInput({ venueChangeStatus: "agreed" })).ok).toBe(true);
   });
 
-  it("makes the feature unavailable to a male–male pair", () => {
-    const mm = baseInput({ genderA: "male", genderB: "male" });
-    expect(evaluateVenueChangeEligibility({ ...mm, callerUserId: "a" }).ok).toBe(false);
-    expect(evaluateVenueChangeEligibility({ ...mm, callerUserId: "b" }).ok).toBe(false);
-  });
-
-  it("allows either side in a female–female pair (first-tap-wins via one-shot guard)", () => {
-    const ff = baseInput({ genderA: "female", genderB: "female" });
-    expect(evaluateVenueChangeEligibility({ ...ff, callerUserId: "a" })).toEqual({
-      ok: true,
-      side: "A",
+  it("closes for good once settled or lapsed (one settled change per date)", () => {
+    expect(evaluateVenueBoardEligibility(baseInput({ venueChangeStatus: "settled" }))).toEqual({
+      ok: false,
+      reason: "already-changed",
     });
-    expect(evaluateVenueChangeEligibility({ ...ff, callerUserId: "b" })).toEqual({
-      ok: true,
-      side: "B",
+    expect(evaluateVenueBoardEligibility(baseInput({ venueChangeStatus: "lapsed" }))).toEqual({
+      ok: false,
+      reason: "already-changed",
     });
-  });
-
-  it("blocks once a change has already been proposed (one-shot)", () => {
-    expect(
-      evaluateVenueChangeEligibility(baseInput({ venueChangeProposedAt: new Date() })),
-    ).toEqual({ ok: false, reason: "already-used" });
   });
 
   it("blocks when the match is not scheduled", () => {
-    expect(evaluateVenueChangeEligibility(baseInput({ status: "negotiating" }))).toEqual({
+    expect(evaluateVenueBoardEligibility(baseInput({ status: "negotiating" }))).toEqual({
       ok: false,
       reason: "wrong-state",
     });
@@ -95,7 +83,7 @@ describe("evaluateVenueChangeEligibility", () => {
 
   it("blocks when there is no original venue center", () => {
     expect(
-      evaluateVenueChangeEligibility(baseInput({ venueLat: null, venueLng: null })),
+      evaluateVenueBoardEligibility(baseInput({ venueLat: null, venueLng: null })),
     ).toEqual({ ok: false, reason: "no-venue" });
   });
 
@@ -103,16 +91,16 @@ describe("evaluateVenueChangeEligibility", () => {
     const now = new Date("2026-06-10T08:00:00Z");
     // date only 4h away → now is past agreedTime - DATE_ALERT_HOURS(5h)
     const input = baseInput({ now, agreedTime: new Date(now.getTime() + 4 * HOUR) });
-    expect(evaluateVenueChangeEligibility(input)).toEqual({
+    expect(evaluateVenueBoardEligibility(input)).toEqual({
       ok: false,
       reason: "past-cutoff",
     });
   });
 
-  it("allows exactly at the cutoff minus a moment, blocks at the cutoff", () => {
+  it("blocks exactly at the cutoff", () => {
     const now = new Date("2026-06-10T08:00:00Z");
     const agreedTime = new Date(now.getTime() + DATE_ALERT_HOURS * HOUR); // cutoff == now
-    expect(evaluateVenueChangeEligibility(baseInput({ now, agreedTime })).ok).toBe(false);
+    expect(evaluateVenueBoardEligibility(baseInput({ now, agreedTime })).ok).toBe(false);
   });
 });
 

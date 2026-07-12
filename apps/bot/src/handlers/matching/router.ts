@@ -11,12 +11,7 @@ import { handleDeclineReasonCallback } from "./decline-feedback.js";
 import { handleSchedulePick, handleCalendarWebAppData } from "./scheduler.js";
 import { handleReportOpen, handleReportCategory, handleReportSkip, handleReportText } from "./report.js";
 import { handleVenueLocation, handleVenueVibe } from "./venue-negotiation.js";
-import {
-  handleVenueChangeAccept,
-  handleVenueChangeDecline,
-  handleVenueChangeBack,
-  handleVenueChangeConfirmCancel,
-} from "./venue-change.js";
+import { handleVenuePayDecline } from "./venue-change.js";
 
 /**
  * Matching router — activates only for users who have already completed
@@ -72,21 +67,10 @@ matchingRouter.use(async (ctx, next) => {
     return;
   }
 
-  // Venue-change callbacks (the male accepts / declines the female's swap).
-  if (data?.startsWith("vchg:accept:")) {
-    await handleVenueChangeAccept(ctx);
-    return;
-  }
-  if (data?.startsWith("vchg:decline:")) {
-    await handleVenueChangeDecline(ctx);
-    return;
-  }
-  if (data?.startsWith("vchg:cancel_confirm:")) {
-    await handleVenueChangeConfirmCancel(ctx);
-    return;
-  }
-  if (data?.startsWith("vchg:cancel_back:")) {
-    await handleVenueChangeBack(ctx);
+  // Venue-change v2: his single, final "not this time" on covering the change
+  // (wish-card inline button). Payment itself rides Stars invoice links.
+  if (data?.startsWith("vchg:paydecline:")) {
+    await handleVenuePayDecline(ctx);
     return;
   }
 

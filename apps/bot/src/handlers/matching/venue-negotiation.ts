@@ -42,11 +42,7 @@ import {
 } from "../../services/geo.js";
 import { type Venue } from "../../services/venue.js";
 import { resolveVenue } from "../../services/curated-venue.js";
-import {
-  shouldOfferVenueChange,
-  buildVenueChangeButton,
-  sendVenueChangeHint,
-} from "./venue-change.js";
+import { shouldOfferVenueChange, buildVenueChangeButton } from "./venue-change.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import { generateAndSaveWingmanHints } from "../../services/wingman-hint.js";
 import { generateVenueBlurb } from "../../services/venue-blurb.js";
@@ -540,12 +536,10 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
   const mapsKeyboardA = buildScheduledMapsKeyboard(venue, langA);
   const mapsKeyboardB = buildScheduledMapsKeyboard(venue, langB);
 
-  // Female-exclusive one-shot "Change venue" button on her scheduled card
-  // (feature-flagged). Inert for the male / when the flag is off.
-  if (shouldOfferVenueChange(match.userA.gender)) {
+  // Venue-change v2 board button on BOTH scheduled cards (feature-flagged) —
+  // a passive affordance; no proactive "does the venue suit you?" question.
+  if (shouldOfferVenueChange()) {
     mapsKeyboardA.inline_keyboard.push([buildVenueChangeButton(matchId, langA)]);
-  }
-  if (shouldOfferVenueChange(match.userB.gender)) {
     mapsKeyboardB.inline_keyboard.push([buildVenueChangeButton(matchId, langB)]);
   }
 
@@ -583,15 +577,6 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
     }),
   ]);
 
-  // Follow-up hint DM explaining the one-shot venue-change right (after the card).
-  const hintSends: Array<Promise<unknown>> = [];
-  if (shouldOfferVenueChange(match.userA.gender)) {
-    hintSends.push(sendVenueChangeHint(api, match.userA.telegramId, langA));
-  }
-  if (shouldOfferVenueChange(match.userB.gender)) {
-    hintSends.push(sendVenueChangeHint(api, match.userB.telegramId, langB));
-  }
-  await Promise.all(hintSends);
 }
 
 interface ScheduledConfirmationInput {

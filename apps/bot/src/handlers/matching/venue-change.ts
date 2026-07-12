@@ -1,53 +1,55 @@
 /**
- * Venue change gate (PRODUCT_SPEC §3.7 — female-exclusive one-shot swap).
+ * Venue change v2 — paid multiplayer venue board (PRODUCT_SPEC §3.7b).
  *
- * After a match reaches `scheduled` with an auto-assigned venue, the female
- * participant may (once, before the T-5h critical zone) propose an alternative
- * within `VENUE_CHANGE_RADIUS_KM` of the original venue, with a mandatory
- * comment. The male then accepts (venue updates) or declines (match cancels).
+ * Both participants of a `scheduled` match share one likes board: a catalog of
+ * alternatives within 3 km of the assigned venue where each side hearts the
+ * places they'd prefer. Agreement is reached exactly like the calendar —
+ * tapping a venue the partner already liked, or a single like-overlap,
+ * auto-agrees; multiple simultaneous overlaps ask the actor to pick one. A
+ * settled change costs `VENUE_CHANGE_STARS` (Telegram Stars); the payer matrix:
+ *   • hetero pair — the MAN pays, whoever initiated. If she initiated, he gets
+ *     a pay/decline fork; his "not this time" is single and final. She can
+ *     always pay in parallel (first successful payment wins the settle CAS),
+ *     and may send him a one-time "wish card" asking him to cover it.
+ *   • same-sex pair — the session initiator (first like) pays.
+ *   • express — the female's unilateral instant swap (no agreement): she mints
+ *     an invoice for any catalog venue; the partner learns only from the
+ *     updated card after payment. An abandoned express mint quietly reverts.
+ * Decline/lapse NEVER cancels the match — the original venue simply stands.
  *
  * Like the Date Ticket and Coordination features, this is a string sub-state
- * (`Match.venueChangeStatus`) layered on top of `status = scheduled` — we never
- * add a `MatchStatus` enum value, so the scheduling/venue/lifecycle code that
- * switches on `status` is untouched. Inert when `VENUE_CHANGE_FEATURE_ENABLED`
- * is off.
- *
- * Split of responsibilities:
- *   - `getVenueChangeState` / `proposeVenueChange` back the Mini App API route.
- *   - `handleVenueChange{Accept,Decline,ConfirmCancel,Back}` are the bot
- *     callbacks the male taps.
- *   - `buildVenueChangeButton` / `sendVenueChangeHint` decorate the female's
- *     scheduled-date DM (called from `tryFinalize`).
- *   - `sweepExpiredVenueChanges` auto-cancels a stalled proposal before the
- *     date-lifecycle ice-breaker step runs on a stale venue.
+ * (`Match.venueChangeStatus`: null → liking → agreed → settled | lapsed)
+ * layered on `status = scheduled`. Inert when VENUE_CHANGE_FEATURE_ENABLED is
+ * off. No free text anywhere — the board carries no comment channel, so the
+ * NO-IN-APP-CHAT invariant needs no carve-out here.
  */
 
 import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
-import type {
-  InlineKeyboardButton,
-  InlineKeyboardMarkup,
-  MessageEntity,
-} from "grammy/types";
+import type { InlineKeyboardButton, InlineKeyboardMarkup } from "grammy/types";
 import { prisma } from "@gennety/db";
+import type { Prisma } from "@gennety/db";
 import {
   t,
   type Language,
-  VENUE_CHANGE_MIN_COMMENT_LEN,
-  VENUE_CHANGE_MAX_COMMENT_LEN,
+  buildVenueInvoicePayload,
+  type VenueInvoiceMode,
 } from "@gennety/shared";
 import { env } from "../../config.js";
 import type { BotContext } from "../../session.js";
 import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import {
-  evaluateVenueChangeEligibility,
+  evaluateVenueBoardEligibility,
   venueChangeDeadline,
-  isWithinRadius,
+  venueChangeCutoff,
   buildVenueChangeCatalog,
   type CatalogVenue,
   type VenueChangeIneligibleReason,
 } from "../../services/venue-change.js";
+
+/** How long an abandoned express mint holds the board before quietly reverting. */
+const EXPRESS_HOLD_MINUTES = 30;
 
 // ---------------------------------------------------------------------------
 // Match loading
@@ -66,17 +68,39 @@ const VC_SELECT = {
   venueChangeProposerId: true,
   venueChangeProposedAt: true,
   venueChangeExpiresAt: true,
+  venueChangeResolvedAt: true,
   venueChangeName: true,
   venueChangeAddress: true,
   venueChangeLat: true,
   venueChangeLng: true,
   venueChangeMapsUri: true,
   venueChangePlaceId: true,
-  venueChangeComment: true,
+  venueChangePhotoUrl: true,
+  venueChangePhotoName: true,
+  venueChangePaidById: true,
+  venueChangePaidAt: true,
+  venueChangePayDeclinedAt: true,
+  venueChangeOfferPaySentAt: true,
+  venueChangePingSentToAAt: true,
+  venueChangePingSentToBAt: true,
+  venueChangeExpressAt: true,
+  venueLikesA: true,
+  venueLikesB: true,
   userAId: true,
   userBId: true,
-  userA: { select: { id: true, telegramId: true, language: true, gender: true, universityDomain: true } },
-  userB: { select: { id: true, telegramId: true, language: true, gender: true } },
+  userA: {
+    select: {
+      id: true,
+      telegramId: true,
+      language: true,
+      gender: true,
+      firstName: true,
+      universityDomain: true,
+    },
+  },
+  userB: {
+    select: { id: true, telegramId: true, language: true, gender: true, firstName: true },
+  },
 } as const;
 
 type VcMatch = NonNullable<Awaited<ReturnType<typeof loadMatch>>>;
@@ -89,51 +113,136 @@ function langOf(lang: string | null): Language {
   return (lang ?? "en") as Language;
 }
 
+type Side = "A" | "B";
+
+function sideOfUser(match: VcMatch, telegramId: bigint): Side | null {
+  if (match.userA.telegramId === telegramId) return "A";
+  if (match.userB.telegramId === telegramId) return "B";
+  return null;
+}
+
+function userOfSide(match: VcMatch, side: Side) {
+  return side === "A" ? match.userA : match.userB;
+}
+
+function otherSide(side: Side): Side {
+  return side === "A" ? "B" : "A";
+}
+
+/** Exactly one male + one female → the hetero payer matrix applies. */
+function isHeteroPair(match: VcMatch): boolean {
+  const genders = [match.userA.gender, match.userB.gender];
+  return genders.includes("male") && genders.includes("female");
+}
+
+/**
+ * Who pays for a settled change. Hetero → the male, whoever initiated;
+ * same-sex/unknown → the session initiator (first like / express minter).
+ */
+function payerSide(match: VcMatch): Side | null {
+  if (isHeteroPair(match)) return match.userA.gender === "male" ? "A" : "B";
+  if (match.venueChangeProposerId === match.userA.id) return "A";
+  if (match.venueChangeProposerId === match.userB.id) return "B";
+  return null;
+}
+
+/** Whether this caller may use the express unilateral swap. */
+function expressAllowed(match: VcMatch, side: Side): boolean {
+  if (isHeteroPair(match)) return userOfSide(match, side).gender === "female";
+  return true; // same-sex/unknown: either side (the veto asymmetry is hetero-only)
+}
+
 // ---------------------------------------------------------------------------
-// Female scheduled-DM decoration (called from tryFinalize)
+// Like snapshots (Json[] on the match row)
 // ---------------------------------------------------------------------------
 
-/** Whether this side may be offered the one-shot venue change on their card. */
-export function shouldOfferVenueChange(gender: string | null): boolean {
-  return env.VENUE_CHANGE_FEATURE_ENABLED && gender === "female";
+/** Server-resolved venue snapshot stored per like and for the agreed venue. */
+export interface VenueLikeSnapshot {
+  key: string;
+  placeId: string | null;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  mapsUri: string | null;
+  category: string;
+  photoUrl: string | null;
+  photoRef: string | null;
+}
+
+export function venueKeyOf(v: {
+  placeId: string | null;
+  name: string;
+  address: string;
+}): string {
+  return v.placeId ?? `${v.name}|${v.address}`;
+}
+
+function toSnapshot(v: CatalogVenue): VenueLikeSnapshot {
+  return {
+    key: venueKeyOf(v),
+    placeId: v.placeId,
+    name: v.name,
+    address: v.address,
+    lat: v.lat,
+    lng: v.lng,
+    mapsUri: v.mapsUri,
+    category: v.category,
+    photoUrl: v.photoUrl,
+    photoRef: v.photoRefs[0] ?? null,
+  };
+}
+
+function parseLikes(raw: Prisma.JsonValue[]): VenueLikeSnapshot[] {
+  const out: VenueLikeSnapshot[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const o = item as Record<string, unknown>;
+    if (typeof o.key !== "string" || typeof o.name !== "string") continue;
+    out.push({
+      key: o.key,
+      placeId: typeof o.placeId === "string" ? o.placeId : null,
+      name: o.name,
+      address: typeof o.address === "string" ? o.address : "",
+      lat: typeof o.lat === "number" ? o.lat : 0,
+      lng: typeof o.lng === "number" ? o.lng : 0,
+      mapsUri: typeof o.mapsUri === "string" ? o.mapsUri : null,
+      category: typeof o.category === "string" ? o.category : "cafe",
+      photoUrl: typeof o.photoUrl === "string" ? o.photoUrl : null,
+      photoRef: typeof o.photoRef === "string" ? o.photoRef : null,
+    });
+  }
+  return out;
+}
+
+function likesOfSide(match: VcMatch, side: Side): VenueLikeSnapshot[] {
+  return parseLikes(side === "A" ? match.venueLikesA : match.venueLikesB);
+}
+
+// ---------------------------------------------------------------------------
+// Scheduled-card decoration (called from tryFinalize)
+// ---------------------------------------------------------------------------
+
+/** v2: the board is offered to BOTH sides whenever the feature is on. */
+export function shouldOfferVenueChange(): boolean {
+  return env.VENUE_CHANGE_FEATURE_ENABLED;
 }
 
 function venueChangeUrl(matchId: string, lang: Language): string {
   return `${env.WEBAPP_URL}/venue-change.html?match=${matchId}&lang=${lang}`;
 }
 
-/** The `web_app` button appended to the female's scheduled-date card. */
+/** The `web_app` button appended to each side's scheduled-date card. */
 export function buildVenueChangeButton(
   matchId: string,
   lang: Language,
 ): InlineKeyboardButton.WebAppButton {
-  return { text: t(lang, "venueChangeFemaleButton"), web_app: { url: venueChangeUrl(matchId, lang) } };
-}
-
-/** One-line follow-up DM explaining the one-shot right (sent after her card). */
-export async function sendVenueChangeHint(
-  api: Api<RawApi>,
-  telegramId: bigint,
-  lang: Language,
-): Promise<void> {
-  if (!isTelegramTarget(telegramId)) return;
-  await api
-    .sendMessage(toTelegramChatId(telegramId), t(lang, "venueChangeFemaleHint"), {
-      parse_mode: "Markdown",
-    })
-    .catch((err) => {
-      console.warn(`[venue-change] hint send failed for ${telegramId}:`, err);
-    });
+  return { text: t(lang, "venueChangeButton"), web_app: { url: venueChangeUrl(matchId, lang) } };
 }
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
-
-function originCenter(match: VcMatch): { lat: number; lng: number } | null {
-  if (match.venueLat == null || match.venueLng == null) return null;
-  return { lat: match.venueLat, lng: match.venueLng };
-}
 
 function venueMapsUrl(name: string, address: string, mapsUri: string | null): string {
   if (mapsUri && /^https?:\/\//i.test(mapsUri)) return mapsUri;
@@ -141,102 +250,179 @@ function venueMapsUrl(name: string, address: string, mapsUri: string | null): st
   return `https://maps.google.com/?q=${encodeURIComponent(query)}`;
 }
 
-/** Multi-line venue label used in DMs (name — address \n mapsUri). */
-function venueLabel(name: string, address: string, mapsUri: string | null): string {
-  const head = `${name} — ${address}`;
-  return mapsUri ? `${head}\n${mapsUri}` : head;
-}
-
-function mapsKeyboard(name: string, address: string, mapsUri: string | null, lang: Language): InlineKeyboardMarkup {
-  const kb = new InlineKeyboard().url(
-    t(lang, "matchScheduledBtnOpenMaps"),
-    venueMapsUrl(name, address, mapsUri),
-  );
-  return { inline_keyboard: kb.inline_keyboard };
+function venueLabel(name: string, address: string): string {
+  return address ? `${name} — ${address}` : name;
 }
 
 /**
- * Compensating standby/priority boost for the female after a venue change is
- * cancelled or lapses — she lost a real, accepted date through no matching
- * fault (decision C4). Mirrors `boostAcceptedSidePriority` in decision.ts; no
- * Elo penalty is applied to anyone.
+ * Mint a Telegram Stars invoice link for this match's venue change. One flat
+ * price for every path; the payload mode is informative (settle re-derives
+ * express-ness from the row), but pre-checkout validates the amount.
  */
-async function boostFemalePriority(userId: string): Promise<void> {
-  try {
-    await prisma.profile.updateMany({
-      where: { userId },
-      data: {
-        standbyCount: { increment: 1 },
-        missedWeeks: { increment: 1 },
-        lastMissedAt: new Date(),
-      },
-    });
-  } catch (err) {
-    console.warn("[venue-change] female priority boost failed:", (err as Error).message);
-  }
+export async function createVenueInvoiceLink(
+  api: Api<RawApi>,
+  lang: Language,
+  matchId: string,
+  mode: VenueInvoiceMode,
+  venueName: string,
+): Promise<string> {
+  return api.createInvoiceLink(
+    t(lang, "venueInvoiceTitle"),
+    t(lang, "venueInvoiceDesc", { venue: venueName }),
+    buildVenueInvoicePayload(matchId, mode),
+    "", // provider_token — empty for Telegram Stars (XTR)
+    "XTR",
+    [{ label: t(lang, "venueInvoiceLabel"), amount: env.VENUE_CHANGE_STARS }],
+  );
 }
 
 // ---------------------------------------------------------------------------
-// State (GET /v1/venue-change/state)
+// Board state (GET /v1/venue-change/state)
 // ---------------------------------------------------------------------------
 
-export interface VenueChangeStateView {
-  status: string; // venueChangeStatus ?? "none"
-  eligible: boolean;
-  ineligibleReason: VenueChangeIneligibleReason | null;
-  minCommentLength: number;
-  original: { name: string | null; address: string | null; mapsUri: string | null } | null;
+/** What the caller may do about payment right now (drives the Mini App UI). */
+export type VenuePayAction =
+  | "pay" // caller is the payer; no decline option (they initiated / same-sex initiator)
+  | "pay_or_decline" // hetero male payer when SHE initiated — his fork
+  | "pay_or_offer" // hetero female initiator — pay self / offer him
+  | "wait" // agreed, caller has no payment role (and sees no price)
+  | null;
+
+export interface VenueBoardStateView {
+  status: string; // none | liking | agreed | settled | lapsed
+  open: boolean; // board interactions (likes/confirm/express) allowed
+  closedReason: VenueChangeIneligibleReason | null;
+  original: { name: string | null; address: string | null; mapsUri: string | null };
+  myLikes: string[];
+  peerLikes: string[];
+  /** Agreed venue — null while none, and hidden from the partner during an express mint. */
+  agreed: {
+    key: string;
+    name: string;
+    address: string;
+    mapsUri: string | null;
+    expiresAt: string | null;
+  } | null;
+  myAction: VenuePayAction;
+  /** Stars price — ONLY set when the caller has a paying action (incl. express). */
+  priceStars: number | null;
+  canOfferPartner: boolean;
+  offerSent: boolean;
+  payDeclined: boolean;
+  expressAvailable: boolean;
+  /** Set when status = settled: the new canonical venue + whether the peer paid. */
+  settled: { name: string; address: string; mapsUri: string | null; peerPaid: boolean } | null;
 }
 
-export type VenueChangeStateResult =
+export type VenueBoardStateResult =
   | { ok: false; reason: "match-not-found" | "not-participant" }
-  | { ok: true; state: VenueChangeStateView };
+  | { ok: true; state: VenueBoardStateView };
 
-export async function getVenueChangeState(
+export async function getVenueBoardState(
   telegramId: bigint,
   matchId: string,
   now: Date = new Date(),
-): Promise<VenueChangeStateResult> {
+): Promise<VenueBoardStateResult> {
   const match = await loadMatch(matchId);
   if (!match) return { ok: false, reason: "match-not-found" };
-  const callerId = userIdForTelegram(match, telegramId);
-  if (!callerId) return { ok: false, reason: "not-participant" };
+  const side = sideOfUser(match, telegramId);
+  if (!side) return { ok: false, reason: "not-participant" };
+  return { ok: true, state: buildBoardState(match, side, now) };
+}
 
-  const eligibility = evaluateVenueChangeEligibility({
+function buildBoardState(match: VcMatch, side: Side, now: Date): VenueBoardStateView {
+  const me = userOfSide(match, side);
+  const eligibility = evaluateVenueBoardEligibility({
     featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
     status: match.status,
-    callerUserId: callerId,
+    callerUserId: me.id,
     userAId: match.userAId,
     userBId: match.userBId,
-    genderA: match.userA.gender,
-    genderB: match.userB.gender,
     agreedTime: match.agreedTime,
     venueLat: match.venueLat,
     venueLng: match.venueLng,
-    venueChangeProposedAt: match.venueChangeProposedAt,
+    venueChangeStatus: match.venueChangeStatus,
     now,
   });
 
-  return {
-    ok: true,
-    state: {
-      status: match.venueChangeStatus ?? "none",
-      eligible: eligibility.ok,
-      ineligibleReason: eligibility.ok ? null : eligibility.reason,
-      minCommentLength: VENUE_CHANGE_MIN_COMMENT_LEN,
-      original: {
-        name: match.venueName,
-        address: match.venueAddress,
-        mapsUri: match.venueGoogleMapsUri,
-      },
-    },
-  };
-}
+  const status = match.venueChangeStatus ?? "none";
+  const myLikes = likesOfSide(match, side).map((l) => l.key);
+  const peerLikes = likesOfSide(match, otherSide(side)).map((l) => l.key);
 
-function userIdForTelegram(match: VcMatch, telegramId: bigint): string | null {
-  if (match.userA.telegramId === telegramId) return match.userA.id;
-  if (match.userB.telegramId === telegramId) return match.userB.id;
-  return null;
+  // Express-pending agreements are invisible to the partner (silent until paid).
+  const expressPending = status === "agreed" && match.venueChangeExpressAt != null;
+  const iAmExpressMinter = expressPending && match.venueChangeProposerId === me.id;
+  const agreedVisible = status === "agreed" && (!expressPending || iAmExpressMinter);
+
+  const payer = payerSide(match);
+  const hetero = isHeteroPair(match);
+  const initiatorIsFemale =
+    hetero &&
+    ((match.venueChangeProposerId === match.userA.id && match.userA.gender === "female") ||
+      (match.venueChangeProposerId === match.userB.id && match.userB.gender === "female"));
+
+  let myAction: VenuePayAction = null;
+  let canOfferPartner = false;
+  if (agreedVisible) {
+    if (iAmExpressMinter) {
+      myAction = "pay"; // finish (or abandon — it quietly reverts)
+    } else if (payer === side) {
+      myAction = hetero && initiatorIsFemale ? "pay_or_decline" : "pay";
+      if (match.venueChangePayDeclinedAt) myAction = null; // he already declined
+    } else if (hetero && me.gender === "female" && initiatorIsFemale) {
+      myAction = "pay_or_offer";
+      canOfferPartner =
+        !match.venueChangeOfferPaySentAt && !match.venueChangePayDeclinedAt;
+    } else {
+      myAction = "wait";
+    }
+  }
+
+  const expressAvailable =
+    eligibility.ok && (status === "none" || status === "liking") && expressAllowed(match, side);
+
+  const paying = myAction === "pay" || myAction === "pay_or_decline" || myAction === "pay_or_offer";
+
+  return {
+    status,
+    open: eligibility.ok && (status === "none" || status === "liking"),
+    closedReason: eligibility.ok ? null : eligibility.reason,
+    original: {
+      name: match.venueName,
+      address: match.venueAddress,
+      mapsUri: match.venueGoogleMapsUri,
+    },
+    myLikes,
+    peerLikes,
+    agreed: agreedVisible
+      ? {
+          key: venueKeyOf({
+            placeId: match.venueChangePlaceId,
+            name: match.venueChangeName ?? "",
+            address: match.venueChangeAddress ?? "",
+          }),
+          name: match.venueChangeName ?? "",
+          address: match.venueChangeAddress ?? "",
+          mapsUri: match.venueChangeMapsUri,
+          expiresAt: match.venueChangeExpiresAt?.toISOString() ?? null,
+        }
+      : null,
+    myAction,
+    priceStars: paying || expressAvailable ? env.VENUE_CHANGE_STARS : null,
+    canOfferPartner,
+    offerSent: match.venueChangeOfferPaySentAt != null,
+    payDeclined: match.venueChangePayDeclinedAt != null,
+    expressAvailable,
+    settled:
+      status === "settled"
+        ? {
+            name: match.venueName ?? "",
+            address: match.venueAddress ?? "",
+            mapsUri: match.venueGoogleMapsUri,
+            peerPaid: match.venueChangePaidById != null && match.venueChangePaidById !== me.id,
+          }
+        : null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -247,62 +433,6 @@ export type VenueChangeCatalogResult =
   | { ok: false; reason: "match-not-found" | "not-participant" | VenueChangeIneligibleReason }
   | { ok: true; venues: CatalogVenue[] };
 
-/**
- * Load the match, gate on eligibility (only the eligible female sees the
- * catalog), and build the 3 km curated-first / Places-fallback list centered on
- * the original venue.
- */
-export async function getVenueChangeCatalog(
-  telegramId: bigint,
-  matchId: string,
-  now: Date = new Date(),
-): Promise<VenueChangeCatalogResult> {
-  const match = await loadMatch(matchId);
-  if (!match) return { ok: false, reason: "match-not-found" };
-  const callerId = userIdForTelegram(match, telegramId);
-  if (!callerId) return { ok: false, reason: "not-participant" };
-
-  const eligibility = evaluateVenueChangeEligibility({
-    featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
-    status: match.status,
-    callerUserId: callerId,
-    userAId: match.userAId,
-    userBId: match.userBId,
-    genderA: match.userA.gender,
-    genderB: match.userB.gender,
-    agreedTime: match.agreedTime,
-    venueLat: match.venueLat,
-    venueLng: match.venueLng,
-    venueChangeProposedAt: match.venueChangeProposedAt,
-    now,
-  });
-  if (!eligibility.ok) return { ok: false, reason: eligibility.reason };
-
-  const center = originCenter(match);
-  if (!center || !match.agreedTime) return { ok: false, reason: "no-venue" };
-
-  const venues = await buildVenueChangeCatalog({
-    universityDomain: match.userA.universityDomain,
-    center,
-    agreedTime: match.agreedTime,
-  });
-  return { ok: true, venues };
-}
-
-// ---------------------------------------------------------------------------
-// Propose (POST /v1/venue-change/propose)
-// ---------------------------------------------------------------------------
-
-export interface ProposeVenueChangeInput {
-  placeId: string | null;
-  name: string;
-  address: string;
-  lat: number;
-  lng: number;
-  mapsUri: string | null;
-  comment: string;
-}
-
 /** Catalog loader signature — injectable so tests need no DB / Places network. */
 type LoadVenueChangeCatalog = (args: {
   universityDomain: string | null;
@@ -310,421 +440,757 @@ type LoadVenueChangeCatalog = (args: {
   agreedTime: Date;
 }) => Promise<CatalogVenue[]>;
 
-export interface ProposeVenueChangeOptions {
+export async function getVenueChangeCatalog(
+  telegramId: bigint,
+  matchId: string,
+  now: Date = new Date(),
+  loadCatalog: LoadVenueChangeCatalog = buildVenueChangeCatalog,
+): Promise<VenueChangeCatalogResult> {
+  const match = await loadMatch(matchId);
+  if (!match) return { ok: false, reason: "match-not-found" };
+  const side = sideOfUser(match, telegramId);
+  if (!side) return { ok: false, reason: "not-participant" };
+
+  const eligibility = evaluateVenueBoardEligibility({
+    featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
+    status: match.status,
+    callerUserId: userOfSide(match, side).id,
+    userAId: match.userAId,
+    userBId: match.userBId,
+    agreedTime: match.agreedTime,
+    venueLat: match.venueLat,
+    venueLng: match.venueLng,
+    venueChangeStatus: match.venueChangeStatus,
+    now,
+  });
+  if (!eligibility.ok) return { ok: false, reason: eligibility.reason };
+  if (match.venueLat == null || match.venueLng == null || !match.agreedTime) {
+    return { ok: false, reason: "no-venue" };
+  }
+
+  const venues = await loadCatalog({
+    universityDomain: match.userA.universityDomain,
+    center: { lat: match.venueLat, lng: match.venueLng },
+    agreedTime: match.agreedTime,
+  });
+  return { ok: true, venues };
+}
+
+// ---------------------------------------------------------------------------
+// Likes (POST /v1/venue-change/like) — full-set submission, calendar-style
+// ---------------------------------------------------------------------------
+
+export interface SubmitLikesOptions {
   now?: Date;
   loadCatalog?: LoadVenueChangeCatalog;
 }
 
-/**
- * Resolve a client-submitted pick to a real catalog row. Prefers an exact
- * Places/curated `placeId` match; falls back to a ~55 m coordinate match for
- * curated rows without a `placeId` (or older Mini App bundles that didn't echo
- * one back). The CALLER must use the returned row's own name/address/mapsUri —
- * never the client's — so a spoofed label or phishing maps link can't ride along.
- */
-function resolveCatalogPick(
-  catalog: CatalogVenue[],
-  input: ProposeVenueChangeInput,
-): CatalogVenue | null {
-  if (input.placeId) {
-    const byId = catalog.find((v) => v.placeId != null && v.placeId === input.placeId);
-    if (byId) return byId;
-  }
-  const EPS = 0.0005; // ≈ 55 m
-  return (
-    catalog.find(
-      (v) => Math.abs(v.lat - input.lat) < EPS && Math.abs(v.lng - input.lng) < EPS,
-    ) ?? null
-  );
-}
-
-export type ProposeVenueChangeResult =
+export type SubmitLikesResult =
   | {
       ok: false;
       reason:
         | "match-not-found"
         | "not-participant"
         | VenueChangeIneligibleReason
-        | "comment-too-short"
-        | "out-of-range"
-        | "invalid-venue"
-        | "race-lost";
+        | "invalid-venue";
     }
-  | { ok: true };
+  | { ok: true; agreed: boolean; overlapCandidates: string[] };
 
 /**
- * Female proposes a replacement venue. Re-validates eligibility, comment
- * length, and that the pick is within range of the ORIGINAL venue (never
- * trusts the client's coords blindly — same stance as `/v1/calendar/pick`).
- * On success: writes the `proposed` sub-state + deadline and DMs the male.
+ * Replace the caller's like set (calendar `pick` semantics). Every key is
+ * re-resolved against the server-built catalog — the client's own venue data is
+ * never trusted. A single overlap with the peer auto-agrees; multiple overlaps
+ * are returned for the actor to confirm one.
  */
-export async function proposeVenueChange(
+export async function submitVenueLikes(
   api: Api<RawApi>,
   telegramId: bigint,
   matchId: string,
-  input: ProposeVenueChangeInput,
-  options: ProposeVenueChangeOptions = {},
-): Promise<ProposeVenueChangeResult> {
+  keys: string[],
+  options: SubmitLikesOptions = {},
+): Promise<SubmitLikesResult> {
   const now = options.now ?? new Date();
   const loadCatalog = options.loadCatalog ?? buildVenueChangeCatalog;
+
   const match = await loadMatch(matchId);
   if (!match) return { ok: false, reason: "match-not-found" };
-  const callerId = userIdForTelegram(match, telegramId);
-  if (!callerId) return { ok: false, reason: "not-participant" };
+  const side = sideOfUser(match, telegramId);
+  if (!side) return { ok: false, reason: "not-participant" };
+  const me = userOfSide(match, side);
 
-  const eligibility = evaluateVenueChangeEligibility({
+  const eligibility = evaluateVenueBoardEligibility({
     featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
     status: match.status,
-    callerUserId: callerId,
+    callerUserId: me.id,
     userAId: match.userAId,
     userBId: match.userBId,
-    genderA: match.userA.gender,
-    genderB: match.userB.gender,
     agreedTime: match.agreedTime,
     venueLat: match.venueLat,
     venueLng: match.venueLng,
-    venueChangeProposedAt: match.venueChangeProposedAt,
+    venueChangeStatus: match.venueChangeStatus,
     now,
   });
   if (!eligibility.ok) return { ok: false, reason: eligibility.reason };
-
-  const comment = input.comment.trim();
-  if (comment.length < VENUE_CHANGE_MIN_COMMENT_LEN) {
-    return { ok: false, reason: "comment-too-short" };
+  // Likes are only writable while the session is open (an `agreed` state —
+  // incl. a hidden express mint — freezes the board until it settles/reverts).
+  if (match.venueChangeStatus != null && match.venueChangeStatus !== "liking") {
+    return { ok: false, reason: "wrong-state" };
   }
-  if (
-    !Number.isFinite(input.lat) ||
-    !Number.isFinite(input.lng) ||
-    Math.abs(input.lat) > 90 ||
-    Math.abs(input.lng) > 180 ||
-    !input.name.trim()
-  ) {
-    return { ok: false, reason: "invalid-venue" };
+  if (match.venueLat == null || match.venueLng == null || !match.agreedTime) {
+    return { ok: false, reason: "no-venue" };
   }
 
-  const center = originCenter(match);
-  if (!center) return { ok: false, reason: "no-venue" };
-  if (!isWithinRadius(center, { lat: input.lat, lng: input.lng })) {
-    return { ok: false, reason: "out-of-range" };
-  }
-
-  const agreedTime = match.agreedTime;
-  if (!agreedTime) return { ok: false, reason: "wrong-state" };
-
-  // Re-derive the venue from the server-built catalog — never trust the
-  // client's name/address/mapsUri/placeId. Without this a proposer could relay
-  // an arbitrary venue label or a phishing maps link to the partner and have it
-  // persisted as the canonical venue on accept. Same stance as
-  // `/v1/calendar/pick` validating submitted slots against `proposedTimes`.
+  // Resolve every submitted key against the server catalog.
   const catalog = await loadCatalog({
     universityDomain: match.userA.universityDomain,
-    center,
-    agreedTime,
+    center: { lat: match.venueLat, lng: match.venueLng },
+    agreedTime: match.agreedTime,
   });
-  const resolved = resolveCatalogPick(catalog, input);
-  if (!resolved) return { ok: false, reason: "invalid-venue" };
+  const byKey = new Map(catalog.map((v) => [venueKeyOf(v), v]));
+  const snapshots: VenueLikeSnapshot[] = [];
+  for (const key of [...new Set(keys)]) {
+    const venue = byKey.get(key);
+    if (!venue) return { ok: false, reason: "invalid-venue" };
+    snapshots.push(toSnapshot(venue));
+  }
 
-  const deadline = venueChangeDeadline(now, agreedTime);
+  const hadLikes = likesOfSide(match, side).length > 0;
+  const likesColumn = side === "A" ? "venueLikesA" : "venueLikesB";
 
-  // Atomic one-shot claim: only the first proposal on a `scheduled` match with
-  // a null `venueChangeProposedAt` wins. A concurrent second tap (or the F–F
-  // peer racing) loses and is rejected.
-  const claim = await prisma.match.updateMany({
+  // Guarded write: only while the session is still open (a concurrent
+  // agreement/express mint wins and this submission is rejected).
+  const written = await prisma.match.updateMany({
     where: {
       id: matchId,
       status: "scheduled",
-      venueChangeProposedAt: null,
+      OR: [{ venueChangeStatus: null }, { venueChangeStatus: "liking" }],
     },
     data: {
-      venueChangeStatus: "proposed",
-      venueChangeProposerId: callerId,
-      venueChangeProposedAt: now,
-      venueChangeExpiresAt: deadline,
-      venueChangeName: resolved.name.slice(0, 256),
-      venueChangeAddress: resolved.address.slice(0, 256),
-      venueChangeLat: resolved.lat,
-      venueChangeLng: resolved.lng,
-      venueChangeMapsUri: resolved.mapsUri,
-      venueChangePlaceId: resolved.placeId,
-      venueChangeComment: comment.slice(0, VENUE_CHANGE_MAX_COMMENT_LEN),
+      [likesColumn]: snapshots as unknown as Prisma.InputJsonValue[],
+      venueChangeStatus: snapshots.length > 0 ? "liking" : match.venueChangeStatus,
     },
   });
-  if (claim.count === 0) return { ok: false, reason: "race-lost" };
+  if (written.count === 0) return { ok: false, reason: "wrong-state" };
 
-  // DM the male (the non-proposer participant) the proposal + her comment.
-  const proposerSide = match.userA.id === callerId ? "A" : "B";
-  const male = proposerSide === "A" ? match.userB : match.userA;
-  if (isTelegramTarget(male.telegramId)) {
-    const lang = langOf(male.language);
-    const notice = buildVenueChangeProposalNotice(
-      lang,
-      venueLabel(resolved.name, resolved.address, resolved.mapsUri),
-      comment.slice(0, VENUE_CHANGE_MAX_COMMENT_LEN),
-    );
-    await api
-      .sendMessage(toTelegramChatId(male.telegramId), notice.text, {
-        entities: notice.entities,
-        reply_markup: buildDecisionKeyboard(matchId, lang),
-      })
-      .catch((err) => {
-        console.warn(`[venue-change] proposal DM failed for ${male.telegramId}:`, err);
-      });
+  // Initiator claim — first like of the session wins (CAS on the null stamp).
+  if (snapshots.length > 0) {
+    await prisma.match.updateMany({
+      where: { id: matchId, venueChangeProposedAt: null },
+      data: { venueChangeProposerId: me.id, venueChangeProposedAt: now },
+    });
   }
 
+  // One-time board-invite ping to the partner on the caller's FIRST likes.
+  if (!hadLikes && snapshots.length > 0) {
+    await sendBoardPing(api, match, side).catch((err) => {
+      console.warn("[venue-change] board ping failed:", err);
+    });
+  }
+
+  // Overlap → agreement, exactly like the calendar.
+  const peerKeys = new Set(likesOfSide(match, otherSide(side)).map((l) => l.key));
+  const overlap = snapshots.filter((s) => peerKeys.has(s.key));
+  if (overlap.length === 1) {
+    const agreed = await reachAgreement(api, matchId, me.id, overlap[0], now);
+    return { ok: true, agreed, overlapCandidates: [] };
+  }
+  return { ok: true, agreed: false, overlapCandidates: overlap.map((s) => s.key) };
+}
+
+/** First-like DM to the partner, framed positively and gendered by the liker. */
+async function sendBoardPing(api: Api<RawApi>, match: VcMatch, likerSide: Side): Promise<void> {
+  const liker = userOfSide(match, likerSide);
+  const recipient = userOfSide(match, otherSide(likerSide));
+  if (!isTelegramTarget(recipient.telegramId)) return;
+
+  const guard = likerSide === "A" ? "venueChangePingSentToBAt" : "venueChangePingSentToAAt";
+  const claim = await prisma.match.updateMany({
+    where: { id: match.id, [guard]: null },
+    data: { [guard]: new Date() },
+  });
+  if (claim.count === 0) return;
+
+  const lang = langOf(recipient.language);
+  const key = liker.gender === "female" ? "venueBoardPingFromF" : "venueBoardPingFromM";
+  const kb = new InlineKeyboard().webApp(
+    t(lang, "venueBoardPingBtn"),
+    venueChangeUrl(match.id, lang),
+  );
+  await api.sendMessage(
+    toTelegramChatId(recipient.telegramId),
+    t(lang, key, { name: liker.firstName ?? "" }),
+    { reply_markup: kb },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Agreement (single overlap / POST /v1/venue-change/confirm)
+// ---------------------------------------------------------------------------
+
+export type ConfirmVenueResult =
+  | {
+      ok: false;
+      reason:
+        | "match-not-found"
+        | "not-participant"
+        | VenueChangeIneligibleReason
+        | "not-overlapping";
+    }
+  | { ok: true };
+
+/** Resolve a multi-overlap: the actor picks one venue both sides liked. */
+export async function confirmVenueAgreement(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  matchId: string,
+  key: string,
+  now: Date = new Date(),
+): Promise<ConfirmVenueResult> {
+  const match = await loadMatch(matchId);
+  if (!match) return { ok: false, reason: "match-not-found" };
+  const side = sideOfUser(match, telegramId);
+  if (!side) return { ok: false, reason: "not-participant" };
+  const me = userOfSide(match, side);
+
+  const eligibility = evaluateVenueBoardEligibility({
+    featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
+    status: match.status,
+    callerUserId: me.id,
+    userAId: match.userAId,
+    userBId: match.userBId,
+    agreedTime: match.agreedTime,
+    venueLat: match.venueLat,
+    venueLng: match.venueLng,
+    venueChangeStatus: match.venueChangeStatus,
+    now,
+  });
+  if (!eligibility.ok) return { ok: false, reason: eligibility.reason };
+  if (match.venueChangeStatus !== "liking") return { ok: false, reason: "wrong-state" };
+
+  const mine = likesOfSide(match, side).find((l) => l.key === key);
+  const theirs = likesOfSide(match, otherSide(side)).find((l) => l.key === key);
+  if (!mine || !theirs) return { ok: false, reason: "not-overlapping" };
+
+  await reachAgreement(api, matchId, me.id, mine, now);
   return { ok: true };
 }
 
 /**
- * Build the male's proposal message: intro + new venue + her comment as a
- * verbatim Telegram blockquote (no AI rewrite) + the ask. Mirrors the
- * emergency-reason relay carve-out — a one-shot, non-reply relay, NOT a chat.
+ * Lock the agreed venue (CAS liking → agreed) and route the payment per the
+ * matrix. Returns false when a concurrent agreement/settle won the race.
  */
-export function buildVenueChangeProposalNotice(
-  lang: Language,
-  venueLabelText: string,
-  comment: string,
-): { text: string; entities: MessageEntity[] } {
-  const intro = t(lang, "venueChangeMaleIntro");
-  const venueLine = t(lang, "venueChangeMaleNewVenue", { venue: venueLabelText });
-  const commentIntro = t(lang, "venueChangeMaleComment");
-  const ask = t(lang, "venueChangeMaleAsk");
+async function reachAgreement(
+  api: Api<RawApi>,
+  matchId: string,
+  finalizerUserId: string,
+  venue: VenueLikeSnapshot,
+  now: Date,
+): Promise<boolean> {
+  const fresh = await loadMatch(matchId);
+  if (!fresh || !fresh.agreedTime) return false;
+  const deadline = venueChangeDeadline(now, fresh.agreedTime);
 
-  const beforeComment = `${intro}\n\n${venueLine}\n\n${commentIntro}\n\n`;
-  const text = `${beforeComment}${comment}\n\n${ask}`;
-  const entities: MessageEntity[] =
-    comment.length > 0
-      ? [{ type: "blockquote", offset: beforeComment.length, length: comment.length }]
-      : [];
-  return { text, entities };
-}
+  const claim = await prisma.match.updateMany({
+    where: { id: matchId, status: "scheduled", venueChangeStatus: "liking" },
+    data: {
+      venueChangeStatus: "agreed",
+      venueChangeName: venue.name.slice(0, 256),
+      venueChangeAddress: venue.address.slice(0, 256),
+      venueChangeLat: venue.lat,
+      venueChangeLng: venue.lng,
+      venueChangeMapsUri: venue.mapsUri,
+      venueChangePlaceId: venue.placeId,
+      venueChangePhotoUrl: venue.photoUrl,
+      venueChangePhotoName: venue.photoRef,
+      venueChangeExpiresAt: deadline,
+      venueChangeExpressAt: null,
+    },
+  });
+  if (claim.count === 0) return false;
 
-function buildDecisionKeyboard(matchId: string, lang: Language): InlineKeyboardMarkup {
-  const kb = new InlineKeyboard()
-    .text(t(lang, "venueChangeBtnAccept"), `vchg:accept:${matchId}`)
-    .row()
-    .text(t(lang, "venueChangeBtnDecline"), `vchg:decline:${matchId}`);
-  return { inline_keyboard: kb.inline_keyboard };
-}
+  console.info(`[venue-change] agreement match=${matchId} venue="${venue.name}"`);
 
-function buildCancelConfirmKeyboard(matchId: string, lang: Language): InlineKeyboardMarkup {
-  const kb = new InlineKeyboard()
-    .text(t(lang, "venueChangeBtnConfirmCancel"), `vchg:cancel_confirm:${matchId}`)
-    .danger()
-    .row()
-    .text(t(lang, "venueChangeBtnBack"), `vchg:cancel_back:${matchId}`)
-    .success();
-  return { inline_keyboard: kb.inline_keyboard };
+  // Payment routing: DM the payer an invoice ONLY when they weren't the
+  // finalizer AND no in-app fork covers them —
+  //   • hetero, initiator = male, finalizer = female → DM him (he pays, no fork);
+  //   • same-sex, finalizer ≠ initiator → DM the initiator;
+  //   • hetero, initiator = female → NO DM: he either finalized (his in-app
+  //     fork) or she did (her pay/offer fork decides what he sees).
+  const payer = payerSide(fresh);
+  if (!payer) return true;
+  const payerUser = userOfSide(fresh, payer);
+  const initiatorId = fresh.venueChangeProposerId;
+  const payerInitiated = initiatorId === payerUser.id;
+  if (payerUser.id !== finalizerUserId && payerInitiated && isTelegramTarget(payerUser.telegramId)) {
+    const lang = langOf(payerUser.language);
+    try {
+      const link = await createVenueInvoiceLink(api, lang, matchId, "agreed", venue.name);
+      const kb = new InlineKeyboard().url(
+        t(lang, "venuePayBtn", { stars: env.VENUE_CHANGE_STARS }),
+        link,
+      );
+      await api.sendMessage(
+        toTelegramChatId(payerUser.telegramId),
+        t(lang, "venuePayPromptDm", { venue: venueLabel(venue.name, venue.address) }),
+        { reply_markup: kb },
+      );
+    } catch (err) {
+      console.warn("[venue-change] pay-prompt DM failed:", err);
+    }
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------------------
-// Bot callbacks (the male taps)
+// Express mint (her unilateral instant swap)
 // ---------------------------------------------------------------------------
 
-/** Resolve the acting user + match for a `vchg:*` callback, or null to ignore. */
-async function resolveCallback(
-  ctx: BotContext,
-  prefix: string,
-): Promise<{ match: VcMatch; matchId: string; userId: string } | null> {
-  const data = ctx.callbackQuery?.data;
-  if (!data?.startsWith(prefix)) return null;
-  const matchId = data.slice(prefix.length);
-  if (!matchId) return null;
+export type ExpressMintResult =
+  | {
+      ok: false;
+      reason:
+        | "match-not-found"
+        | "not-participant"
+        | VenueChangeIneligibleReason
+        | "invalid-venue"
+        | "not-allowed";
+    }
+  | { ok: true; venueName: string };
 
-  await ctx.answerCallbackQuery().catch(() => undefined);
+/**
+ * Stamp an express pick onto the row (status → agreed + expressAt) so the
+ * subsequent Stars payment can settle it. Hidden from the partner until paid;
+ * an unpaid mint quietly reverts after EXPRESS_HOLD_MINUTES (see the sweep).
+ */
+export async function mintExpressChange(
+  telegramId: bigint,
+  matchId: string,
+  key: string,
+  options: SubmitLikesOptions = {},
+): Promise<ExpressMintResult> {
+  const now = options.now ?? new Date();
+  const loadCatalog = options.loadCatalog ?? buildVenueChangeCatalog;
 
   const match = await loadMatch(matchId);
-  if (!match) return null;
-  const userId = ctx.from ? userIdForTelegram(match, BigInt(ctx.from.id)) : null;
-  if (!userId) return null;
-  // The proposer (female) never acts on her own proposal.
-  if (userId === match.venueChangeProposerId) return null;
-  return { match, matchId, userId };
-}
+  if (!match) return { ok: false, reason: "match-not-found" };
+  const side = sideOfUser(match, telegramId);
+  if (!side) return { ok: false, reason: "not-participant" };
+  const me = userOfSide(match, side);
 
-export async function handleVenueChangeAccept(ctx: BotContext): Promise<void> {
-  const resolved = await resolveCallback(ctx, "vchg:accept:");
-  if (!resolved) return;
-  const { match, matchId } = resolved;
-  const lang = ctx.session.language;
-
-  if (match.venueChangeStatus !== "proposed") {
-    await ctx.answerCallbackQuery({ text: t(lang, "venueChangeAlreadyResolved") }).catch(() => undefined);
-    return;
+  const eligibility = evaluateVenueBoardEligibility({
+    featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
+    status: match.status,
+    callerUserId: me.id,
+    userAId: match.userAId,
+    userBId: match.userBId,
+    agreedTime: match.agreedTime,
+    venueLat: match.venueLat,
+    venueLng: match.venueLng,
+    venueChangeStatus: match.venueChangeStatus,
+    now,
+  });
+  if (!eligibility.ok) return { ok: false, reason: eligibility.reason };
+  if (!expressAllowed(match, side)) return { ok: false, reason: "not-allowed" };
+  if (match.venueLat == null || match.venueLng == null || !match.agreedTime) {
+    return { ok: false, reason: "no-venue" };
   }
 
-  // Atomic accept: copy the proposed venue onto the canonical venue fields.
+  const catalog = await loadCatalog({
+    universityDomain: match.userA.universityDomain,
+    center: { lat: match.venueLat, lng: match.venueLng },
+    agreedTime: match.agreedTime,
+  });
+  const venue = catalog.find((v) => venueKeyOf(v) === key);
+  if (!venue) return { ok: false, reason: "invalid-venue" };
+  const snapshot = toSnapshot(venue);
+
+  const holdUntil = new Date(
+    Math.min(
+      now.getTime() + EXPRESS_HOLD_MINUTES * 60 * 1000,
+      venueChangeCutoff(match.agreedTime).getTime(),
+    ),
+  );
+
   const claim = await prisma.match.updateMany({
-    where: { id: matchId, status: "scheduled", venueChangeStatus: "proposed" },
+    where: {
+      id: matchId,
+      status: "scheduled",
+      OR: [{ venueChangeStatus: null }, { venueChangeStatus: "liking" }],
+    },
     data: {
-      venueChangeStatus: "accepted",
+      venueChangeStatus: "agreed",
+      venueChangeProposerId: me.id,
+      venueChangeProposedAt: match.venueChangeProposedAt ?? now,
+      venueChangeName: snapshot.name.slice(0, 256),
+      venueChangeAddress: snapshot.address.slice(0, 256),
+      venueChangeLat: snapshot.lat,
+      venueChangeLng: snapshot.lng,
+      venueChangeMapsUri: snapshot.mapsUri,
+      venueChangePlaceId: snapshot.placeId,
+      venueChangePhotoUrl: snapshot.photoUrl,
+      venueChangePhotoName: snapshot.photoRef,
+      venueChangeExpiresAt: holdUntil,
+      venueChangeExpressAt: now,
+    },
+  });
+  if (claim.count === 0) return { ok: false, reason: "wrong-state" };
+
+  console.info(`[venue-change] express mint match=${matchId} venue="${snapshot.name}"`);
+  return { ok: true, venueName: snapshot.name };
+}
+
+// ---------------------------------------------------------------------------
+// Offer-partner-pay (her wish card) + his final decline
+// ---------------------------------------------------------------------------
+
+export type OfferPayResult =
+  | {
+      ok: false;
+      reason:
+        | "match-not-found"
+        | "not-participant"
+        | "wrong-state"
+        | "not-allowed"
+        | "already-offered"
+        | "pay-declined";
+    }
+  | { ok: true };
+
+/**
+ * She (hetero female initiator) asks him to cover the change: sends the wish
+ * card to his chat with pay/decline buttons. One-shot per session.
+ */
+export async function offerPartnerPay(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  matchId: string,
+): Promise<OfferPayResult> {
+  const match = await loadMatch(matchId);
+  if (!match) return { ok: false, reason: "match-not-found" };
+  const side = sideOfUser(match, telegramId);
+  if (!side) return { ok: false, reason: "not-participant" };
+  const me = userOfSide(match, side);
+
+  if (match.venueChangeStatus !== "agreed" || match.venueChangeExpressAt) {
+    return { ok: false, reason: "wrong-state" };
+  }
+  const eligible =
+    isHeteroPair(match) && me.gender === "female" && match.venueChangeProposerId === me.id;
+  if (!eligible) return { ok: false, reason: "not-allowed" };
+  if (match.venueChangePayDeclinedAt) return { ok: false, reason: "pay-declined" };
+
+  const claim = await prisma.match.updateMany({
+    where: { id: matchId, venueChangeStatus: "agreed", venueChangeOfferPaySentAt: null },
+    data: { venueChangeOfferPaySentAt: new Date() },
+  });
+  if (claim.count === 0) return { ok: false, reason: "already-offered" };
+
+  const him = userOfSide(match, otherSide(side));
+  if (isTelegramTarget(him.telegramId)) {
+    await sendWishCard(api, match, me.firstName ?? "", him).catch((err) => {
+      console.warn("[venue-change] wish card send failed:", err);
+    });
+  }
+  return { ok: true };
+}
+
+/**
+ * The wish card: her ask that he covers the venue change. PNG render lands in
+ * a follow-up stage; the text card below is the permanent graceful fallback.
+ */
+async function sendWishCard(
+  api: Api<RawApi>,
+  match: VcMatch,
+  herName: string,
+  him: { telegramId: bigint; language: string | null },
+): Promise<void> {
+  const lang = langOf(him.language);
+  const venueName = match.venueChangeName ?? "";
+  const label = venueLabel(venueName, match.venueChangeAddress ?? "");
+  const link = await createVenueInvoiceLink(api, lang, match.id, "agreed", venueName);
+  const kb = new InlineKeyboard()
+    .url(t(lang, "venueWishPayBtn", { stars: env.VENUE_CHANGE_STARS }), link)
+    .row()
+    .text(t(lang, "venueWishDeclineBtn"), `vchg:paydecline:${match.id}`);
+
+  const { renderVenueWishCard } = await import("../../services/venue-wish-card.js");
+  const png = await renderVenueWishCard(match.id).catch(() => null);
+  const caption = t(lang, "venueWishText", { name: herName, venue: label });
+  if (png) {
+    const { InputFile } = await import("grammy");
+    await api.sendPhoto(toTelegramChatId(him.telegramId), new InputFile(png, "venue-wish.png"), {
+      caption,
+      reply_markup: kb,
+      protect_content: true,
+    });
+  } else {
+    await api.sendMessage(toTelegramChatId(him.telegramId), caption, { reply_markup: kb });
+  }
+}
+
+/**
+ * His single, final "not this time" — from the wish card's inline button or
+ * the Mini App fork. Never cancels anything; she keeps her pay-self path and
+ * gets a soft nudge (with no mention of a refusal).
+ */
+export async function declineVenuePay(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  matchId: string,
+): Promise<{ ok: boolean }> {
+  const match = await loadMatch(matchId);
+  if (!match) return { ok: false };
+  const side = sideOfUser(match, telegramId);
+  if (!side) return { ok: false };
+  const me = userOfSide(match, side);
+
+  if (match.venueChangeStatus !== "agreed" || match.venueChangeExpressAt) return { ok: false };
+  if (payerSide(match) !== side) return { ok: false };
+
+  const claim = await prisma.match.updateMany({
+    where: { id: matchId, venueChangeStatus: "agreed", venueChangePayDeclinedAt: null },
+    data: { venueChangePayDeclinedAt: new Date() },
+  });
+  if (claim.count === 0) return { ok: false };
+
+  console.info(`[venue-change] pay declined match=${matchId} by user=${me.id}`);
+
+  // Soft pay-self nudge to her — venue + a direct invoice link, no refusal talk.
+  const her = userOfSide(match, otherSide(side));
+  if (isTelegramTarget(her.telegramId)) {
+    const lang = langOf(her.language);
+    const venueName = match.venueChangeName ?? "";
+    try {
+      const link = await createVenueInvoiceLink(api, lang, matchId, "agreed", venueName);
+      const kb = new InlineKeyboard().url(
+        t(lang, "venuePaySelfBtn", { stars: env.VENUE_CHANGE_STARS }),
+        link,
+      );
+      await api.sendMessage(
+        toTelegramChatId(her.telegramId),
+        t(lang, "venuePaySelfDm", {
+          venue: venueLabel(venueName, match.venueChangeAddress ?? ""),
+        }),
+        { reply_markup: kb },
+      );
+    } catch (err) {
+      console.warn("[venue-change] pay-self DM failed:", err);
+    }
+  }
+  return { ok: true };
+}
+
+/** Bot callback for the wish card's `[Not this time]` button. */
+export async function handleVenuePayDecline(ctx: BotContext): Promise<void> {
+  const data = ctx.callbackQuery?.data;
+  if (!data?.startsWith("vchg:paydecline:")) return;
+  const matchId = data.slice("vchg:paydecline:".length);
+  await ctx.answerCallbackQuery().catch(() => undefined);
+  if (!matchId || !ctx.from) return;
+
+  const result = await declineVenuePay(ctx.api, BigInt(ctx.from.id), matchId);
+  if (result.ok) {
+    await ctx.reply(t(ctx.session.language, "venuePayDeclineAck")).catch(() => undefined);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Settle (successful_payment trust boundary)
+// ---------------------------------------------------------------------------
+
+/**
+ * Telegram confirmed the Stars moved — settle the venue change: copy the
+ * agreed venue onto the canonical venue* fields and notify both sides. The
+ * status CAS makes a redelivered payment a no-op; a payment that LOSES the CAS
+ * (parallel-pay race — both invoices were open) is refunded.
+ */
+export async function settleVenuePayment(
+  api: Api<RawApi>,
+  payerTelegramId: bigint,
+  matchId: string,
+  telegramChargeId: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const match = await loadMatch(matchId);
+  if (!match) return { ok: false, reason: "match-not-found" };
+  const side = sideOfUser(match, payerTelegramId);
+  if (!side) return { ok: false, reason: "not-participant" };
+  const payer = userOfSide(match, side);
+
+  const wasExpress = match.venueChangeExpressAt != null;
+  const claim = await prisma.match.updateMany({
+    where: { id: matchId, status: "scheduled", venueChangeStatus: "agreed" },
+    data: {
+      venueChangeStatus: "settled",
       venueChangeResolvedAt: new Date(),
       venueChangeExpiresAt: null,
+      venueChangePaidById: payer.id,
+      venueChangePaidAt: new Date(),
       venueName: match.venueChangeName,
       venueAddress: match.venueChangeAddress,
       venueLat: match.venueChangeLat,
       venueLng: match.venueChangeLng,
       venueGoogleMapsUri: match.venueChangeMapsUri,
+      venuePhotoUrl: match.venueChangePhotoUrl,
+      venuePhotoName: match.venueChangePhotoName,
     },
   });
   if (claim.count === 0) {
-    await ctx.answerCallbackQuery({ text: t(lang, "venueChangeAlreadyResolved") }).catch(() => undefined);
-    return;
+    // Redelivery of an already-settled payment is a no-op; a genuinely lost
+    // parallel-pay race must give the Stars back.
+    if (match.venueChangePaidById && match.venueChangePaidById !== payer.id) {
+      console.warn(
+        `[venue-change] parallel-pay race lost match=${matchId} — refunding ${telegramChargeId}`,
+      );
+      await api
+        .refundStarPayment(Number(payerTelegramId), telegramChargeId)
+        .catch((err) => console.error("[venue-change] refund failed:", err));
+    }
+    return { ok: false, reason: "not-agreed" };
   }
 
-  const name = match.venueChangeName ?? "";
-  const address = match.venueChangeAddress ?? "";
+  console.info(
+    `[venue-change] settled match=${matchId} payer=${payer.id} express=${wasExpress} ` +
+      `charge=${telegramChargeId}`,
+  );
+
+  const venueName = match.venueChangeName ?? "";
+  const venueAddress = match.venueChangeAddress ?? "";
   const mapsUri = match.venueChangeMapsUri;
-  const label = venueLabel(name, address, mapsUri);
+  const label = venueLabel(venueName, venueAddress);
   const agreedTime = match.agreedTime ?? new Date();
+  const peer = userOfSide(match, otherSide(side));
 
-  // DM the female: accepted.
-  const proposer = match.userA.id === match.venueChangeProposerId ? match.userA : match.userB;
-  if (isTelegramTarget(proposer.telegramId)) {
-    await sendVenueCard(ctx.api, proposer.telegramId, langOf(proposer.language), "venueChangeAcceptedFemale", label, agreedTime, name, address, mapsUri);
+  // Payer: plain updated card.
+  await sendUpdatedVenueCard(api, payer, "venueSettledCard", { venue: label }, agreedTime, venueName, venueAddress, mapsUri);
+
+  // Peer: express → the positive-frame surprise; board → updated card that
+  // reveals who covered it (gendered by the payer).
+  if (isTelegramTarget(peer.telegramId)) {
+    const peerKey = wasExpress
+      ? payer.gender === "male"
+        ? "venueExpressPartnerFromM"
+        : "venueExpressPartnerFromF"
+      : payer.gender === "male"
+        ? "venueSettledPaidByM"
+        : "venueSettledPaidByF";
+    await sendUpdatedVenueCard(
+      api,
+      peer,
+      peerKey,
+      { name: payer.firstName ?? "", venue: label },
+      agreedTime,
+      venueName,
+      venueAddress,
+      mapsUri,
+    );
   }
-  // Ack the male with the updated card.
-  await sendVenueCard(ctx.api, BigInt(ctx.from!.id), lang, "venueChangeAcceptedMaleAck", label, agreedTime, name, address, mapsUri);
+  return { ok: true };
 }
 
-export async function handleVenueChangeDecline(ctx: BotContext): Promise<void> {
-  const resolved = await resolveCallback(ctx, "vchg:decline:");
-  if (!resolved) return;
-  const { match, matchId } = resolved;
-  const lang = ctx.session.language;
-  if (match.venueChangeStatus !== "proposed") {
-    await ctx.answerCallbackQuery({ text: t(lang, "venueChangeAlreadyResolved") }).catch(() => undefined);
-    return;
-  }
-  // Just surface the confirmation guard — no state change yet.
-  await ctx.reply(t(lang, "venueChangeDeclineConfirm"), {
-    reply_markup: buildCancelConfirmKeyboard(matchId, lang),
-  });
-}
+type SettleCardKey =
+  | "venueSettledCard"
+  | "venueSettledPaidByM"
+  | "venueSettledPaidByF"
+  | "venueExpressPartnerFromM"
+  | "venueExpressPartnerFromF";
 
-export async function handleVenueChangeBack(ctx: BotContext): Promise<void> {
-  const resolved = await resolveCallback(ctx, "vchg:cancel_back:");
-  if (!resolved) return;
-  const { match, matchId } = resolved;
-  const lang = ctx.session.language;
-  if (match.venueChangeStatus !== "proposed") {
-    await ctx.answerCallbackQuery({ text: t(lang, "venueChangeAlreadyResolved") }).catch(() => undefined);
-    return;
-  }
-  // Re-offer the accept/decline choice.
-  await ctx.reply(t(lang, "venueChangeMaleAsk"), {
-    reply_markup: buildDecisionKeyboard(matchId, lang),
-  });
-}
-
-export async function handleVenueChangeConfirmCancel(ctx: BotContext): Promise<void> {
-  const resolved = await resolveCallback(ctx, "vchg:cancel_confirm:");
-  if (!resolved) return;
-  const { match, matchId } = resolved;
-  const lang = ctx.session.language;
-
-  if (match.venueChangeStatus !== "proposed") {
-    await ctx.answerCallbackQuery({ text: t(lang, "venueChangeAlreadyResolved") }).catch(() => undefined);
-    return;
-  }
-
-  // Atomic cancel: flip the whole match to cancelled.
-  const claim = await prisma.match.updateMany({
-    where: { id: matchId, status: "scheduled", venueChangeStatus: "proposed" },
-    data: {
-      status: "cancelled",
-      venueChangeStatus: "rejected",
-      venueChangeResolvedAt: new Date(),
-      venueChangeExpiresAt: null,
-    },
-  });
-  if (claim.count === 0) {
-    await ctx.answerCallbackQuery({ text: t(lang, "venueChangeAlreadyResolved") }).catch(() => undefined);
-    return;
-  }
-
-  // C4: no Elo penalty on the male; the female gets a comp/standby boost.
-  if (match.venueChangeProposerId) await boostFemalePriority(match.venueChangeProposerId);
-
-  const proposer = match.userA.id === match.venueChangeProposerId ? match.userA : match.userB;
-  if (isTelegramTarget(proposer.telegramId)) {
-    await ctx.api
-      .sendMessage(toTelegramChatId(proposer.telegramId), t(langOf(proposer.language), "venueChangeCancelledFemale"))
-      .catch(() => undefined);
-  }
-  await ctx.reply(t(lang, "venueChangeCancelledMale"));
-}
-
-async function sendVenueCard(
+async function sendUpdatedVenueCard(
   api: Api<RawApi>,
-  telegramId: bigint,
-  lang: Language,
-  key: "venueChangeAcceptedFemale" | "venueChangeAcceptedMaleAck",
-  label: string,
+  user: { telegramId: bigint; language: string | null },
+  key: SettleCardKey,
+  vars: Record<string, string>,
   agreedTime: Date,
   name: string,
   address: string,
   mapsUri: string | null,
 ): Promise<void> {
-  const base = t(lang, key, { venue: label });
+  if (!isTelegramTarget(user.telegramId)) return;
+  const lang = langOf(user.language);
+  const base = t(lang, key, vars);
   const { text, entity } = buildDateTimeEntity(base, agreedTime, lang);
+  const kb = new InlineKeyboard().url(
+    t(lang, "matchScheduledBtnOpenMaps"),
+    venueMapsUrl(name, address, mapsUri),
+  );
   await api
-    .sendMessage(toTelegramChatId(telegramId), text, {
+    .sendMessage(toTelegramChatId(user.telegramId), text, {
       entities: [entity],
-      reply_markup: mapsKeyboard(name, address, mapsUri, lang),
+      reply_markup: kb,
     })
     .catch((err) => {
-      console.warn(`[venue-change] card send failed for ${telegramId}:`, err);
+      console.warn(`[venue-change] updated card send failed for ${user.telegramId}:`, err);
     });
 }
 
 // ---------------------------------------------------------------------------
-// Expiry sweep (called from the date-lifecycle tick, BEFORE ice-breakers)
+// Expiry sweep (date-lifecycle tick, BEFORE ice-breakers)
 // ---------------------------------------------------------------------------
 
 /**
- * Auto-cancel any `proposed` venue change whose deadline has passed (TTL or the
- * T-5h cutoff). Returns the number of matches cancelled. Must run before the
- * ice-breaker step so a stalled proposal never lets ice-breakers fire on a
- * venue that's mid-change.
+ * Resolve overdue `agreed` states. An unpaid BOARD agreement lapses — the
+ * original venue stands, both sides get a neutral notice, and the board closes
+ * for this date. An abandoned EXPRESS mint quietly reverts to the open board
+ * (no DMs — the partner never knew, and she simply changed her mind). The
+ * match itself is never touched.
  */
 export async function sweepExpiredVenueChanges(
   api: Api<RawApi>,
   now: Date = new Date(),
 ): Promise<number> {
-  // Fully inert (no query) when the feature is off — no `proposed` rows can
-  // exist, and skipping the query keeps the date-lifecycle tick untouched.
   if (!env.VENUE_CHANGE_FEATURE_ENABLED) return 0;
 
   const due = await prisma.match.findMany({
-    where: {
-      venueChangeStatus: "proposed",
-      venueChangeExpiresAt: { lte: now },
-    },
+    where: { venueChangeStatus: "agreed", venueChangeExpiresAt: { lte: now } },
     select: VC_SELECT,
   });
 
-  let cancelled = 0;
+  let resolved = 0;
   for (const match of due) {
+    if (match.venueChangeExpressAt) {
+      // Express revert: back to the open board, wipe the hidden pick.
+      const hasLikes =
+        parseLikes(match.venueLikesA).length > 0 || parseLikes(match.venueLikesB).length > 0;
+      const claim = await prisma.match.updateMany({
+        where: { id: match.id, venueChangeStatus: "agreed", venueChangeExpressAt: { not: null } },
+        data: {
+          venueChangeStatus: hasLikes ? "liking" : null,
+          venueChangeName: null,
+          venueChangeAddress: null,
+          venueChangeLat: null,
+          venueChangeLng: null,
+          venueChangeMapsUri: null,
+          venueChangePlaceId: null,
+          venueChangePhotoUrl: null,
+          venueChangePhotoName: null,
+          venueChangeExpiresAt: null,
+          venueChangeExpressAt: null,
+        },
+      });
+      if (claim.count > 0) resolved += 1;
+      continue;
+    }
+
     const claim = await prisma.match.updateMany({
-      where: { id: match.id, status: "scheduled", venueChangeStatus: "proposed" },
+      where: { id: match.id, venueChangeStatus: "agreed", venueChangeExpressAt: null },
       data: {
-        status: "cancelled",
-        venueChangeStatus: "expired",
+        venueChangeStatus: "lapsed",
         venueChangeResolvedAt: now,
         venueChangeExpiresAt: null,
       },
     });
     if (claim.count === 0) continue;
-    cancelled += 1;
+    resolved += 1;
 
-    if (match.venueChangeProposerId) await boostFemalePriority(match.venueChangeProposerId);
-
+    const original = match.venueName ?? "";
     for (const user of [match.userA, match.userB]) {
       if (!isTelegramTarget(user.telegramId)) continue;
       await api
-        .sendMessage(toTelegramChatId(user.telegramId), t(langOf(user.language), "venueChangeExpiredCancel"))
+        .sendMessage(
+          toTelegramChatId(user.telegramId),
+          t(langOf(user.language), "venueLapsedDm", { venue: original }),
+        )
         .catch(() => undefined);
     }
   }
-  return cancelled;
+  return resolved;
 }

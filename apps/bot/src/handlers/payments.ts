@@ -5,6 +5,7 @@ import {
   type Language,
   parseStoreInvoicePayload,
   parseGateInvoicePayload,
+  parseVenueInvoicePayload,
   ticketBundleFor,
 } from "@gennety/shared";
 import { env } from "../config.js";
@@ -14,11 +15,13 @@ import { gateStarsForScope } from "../services/ticket-payment.js";
 /**
  * Telegram Stars (XTR) payment handlers.
  *
- * Two Star surfaces share these trusted handlers, distinguished by the invoice
- * payload that survives the round-trip:
+ * Three Star surfaces share these trusted handlers, distinguished by the
+ * invoice payload that survives the round-trip:
  *   • `store:<count>` — ticket-store top-up; credits the wallet.
  *   • `gate:<matchId>:<scope>` — §3.5b date-gate direct pay; settles ticket
  *     slot(s) on the match (the native replacement for the mock USD pay path).
+ *   • `venue:<matchId>:<mode>` — §3.7b venue-change board/express payment;
+ *     settles the venue swap.
  *
  * Telegram drives two trusted updates for each:
  *   • `pre_checkout_query` — re-validate the payload + Star amount and approve
@@ -29,7 +32,7 @@ import { gateStarsForScope } from "../services/ticket-payment.js";
  * Registered at the top of the router so they fire regardless of onboarding step.
  */
 
-/** Approve/decline a pre-checkout for a ticket Star purchase (store or gate). */
+/** Approve/decline a pre-checkout for a Star purchase (store, gate, or venue). */
 export async function handlePreCheckout(ctx: BotContext): Promise<void> {
   const query = ctx.preCheckoutQuery;
   if (!query) return;
@@ -37,6 +40,7 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
   let ok = false;
   // Store top-up — payload `store:<count>`.
   const count = parseStoreInvoicePayload(query.invoice_payload);
+  const venue = count == null ? parseVenueInvoicePayload(query.invoice_payload) : null;
   if (count != null) {
     const expectedStars = env.TICKET_BUNDLE_STARS[count];
     ok =
@@ -44,6 +48,20 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
       expectedStars != null &&
       query.currency === "XTR" &&
       query.total_amount === expectedStars;
+  } else if (venue != null) {
+    // Venue change — payload `venue:<matchId>:<mode>`. Invoice links are
+    // reusable, so beyond the amount we also confirm the swap is still
+    // awaiting payment: a stale link (already settled / lapsed / reverted
+    // express) is declined here, BEFORE any Stars move.
+    if (query.currency === "XTR" && query.total_amount === env.VENUE_CHANGE_STARS) {
+      const match = await prisma.match
+        .findUnique({
+          where: { id: venue.matchId },
+          select: { venueChangeStatus: true, status: true },
+        })
+        .catch(() => null);
+      ok = match?.status === "scheduled" && match.venueChangeStatus === "agreed";
+    }
   } else {
     // Date gate — payload `gate:<matchId>:<scope>`. The participant + male-only
     // checks were enforced at invoice creation and re-enforced at settle time;
@@ -94,8 +112,13 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
 
   const count = parseStoreInvoicePayload(payment.invoice_payload);
   if (count == null || ticketBundleFor(count) == null) {
-    // Not a store bundle — try the §3.5b date gate before giving up so a foreign
-    // payload still credits nothing.
+    // Not a store bundle — try the §3.7b venue change, then the §3.5b date
+    // gate, before giving up so a foreign payload still credits nothing.
+    const venue = parseVenueInvoicePayload(payment.invoice_payload);
+    if (venue != null) {
+      await handleVenueSuccessfulPayment(ctx, venue.matchId, payment);
+      return;
+    }
     await handleGateSuccessfulPayment(ctx, payment);
     return;
   }
@@ -145,6 +168,42 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
     await ctx.reply(text, { parse_mode: "Markdown" });
   } catch {
     await ctx.reply(text.replace(/[*_`[\]]/g, "")).catch(() => {});
+  }
+}
+
+/**
+ * §3.7b venue-change Star payment (payload `venue:<matchId>:<mode>`). Telegram
+ * has confirmed the Stars moved, so this settles the venue swap: the handler's
+ * status CAS makes a redelivered payment a no-op, and a genuinely lost
+ * parallel-pay race (both her and his invoices were open) is refunded inside
+ * `settleVenuePayment`. All settle-time DMs (updated cards, reveal, express
+ * surprise) live in the venue-change module.
+ */
+async function handleVenueSuccessfulPayment(
+  ctx: BotContext,
+  matchId: string,
+  payment: { total_amount: number; telegram_payment_charge_id: string },
+): Promise<void> {
+  const telegramId = BigInt(ctx.from!.id);
+  console.info(
+    `[stars] venue-change payment user=${telegramId} match=${matchId} ` +
+      `stars=${payment.total_amount} charge=${payment.telegram_payment_charge_id}`,
+  );
+
+  // Dynamic import keeps the venue board's module graph out of this handler's
+  // static graph (mirrors the gate import below).
+  const { settleVenuePayment } = await import("./matching/venue-change.js");
+  const result = await settleVenuePayment(
+    ctx.api,
+    telegramId,
+    matchId,
+    payment.telegram_payment_charge_id,
+  );
+  if (!result.ok) {
+    console.error(
+      `[stars] venue-change settle failed user=${telegramId} match=${matchId} ` +
+        `reason=${result.reason}`,
+    );
   }
 }
 

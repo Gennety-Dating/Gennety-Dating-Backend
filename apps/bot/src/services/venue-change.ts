@@ -83,44 +83,39 @@ const FALLBACK_CATEGORIES: VenueCategory[] = ["cafe", "restaurant", "park"];
 export type VenueChangeIneligibleReason =
   | "feature-disabled"
   | "not-participant"
-  | "not-female-initiator"
   | "wrong-state"
   | "past-cutoff"
-  | "already-used"
+  | "already-changed"
   | "no-venue";
 
-export interface VenueChangeEligibilityInput {
+export interface VenueBoardEligibilityInput {
   featureEnabled: boolean;
   status: string;
   callerUserId: string;
   userAId: string;
   userBId: string;
-  genderA: string | null;
-  genderB: string | null;
   agreedTime: Date | null;
   venueLat: number | null;
   venueLng: number | null;
-  /** Non-null once a change has already been proposed (one-shot guard). */
-  venueChangeProposedAt: Date | null;
+  /** Current v2 sub-state: null | liking | agreed | settled | lapsed. */
+  venueChangeStatus: string | null;
   now: Date;
 }
 
-export type VenueChangeEligibility =
+export type VenueBoardEligibility =
   | { ok: true; side: "A" | "B" }
   | { ok: false; reason: VenueChangeIneligibleReason };
 
 /**
- * Decide whether `callerUserId` may propose a venue change right now.
- *
- * Female-exclusive (decision C3): the caller's own gender must be `female`.
- * In a hetero pair this naturally restricts it to the woman; in a female–
- * female pair both pass here and the one-shot `venueChangeProposedAt` guard
- * makes it first-tap-wins; a male–male pair has no female caller, so the
- * feature is simply unavailable.
+ * Decide whether `callerUserId` may interact with the venue board right now
+ * (v2 — both participants may). "Interact" = view/like/confirm; the payment
+ * actions layer their own payer checks on top. A `settled`/`lapsed` session
+ * closes the board for good (one settled change per date; a lapse also ends
+ * it — the original venue stands).
  */
-export function evaluateVenueChangeEligibility(
-  input: VenueChangeEligibilityInput,
-): VenueChangeEligibility {
+export function evaluateVenueBoardEligibility(
+  input: VenueBoardEligibilityInput,
+): VenueBoardEligibility {
   if (!input.featureEnabled) return { ok: false, reason: "feature-disabled" };
 
   const isA = input.callerUserId === input.userAId;
@@ -129,12 +124,9 @@ export function evaluateVenueChangeEligibility(
 
   if (input.status !== "scheduled") return { ok: false, reason: "wrong-state" };
 
-  const callerGender = isA ? input.genderA : input.genderB;
-  if (callerGender !== "female") {
-    return { ok: false, reason: "not-female-initiator" };
+  if (input.venueChangeStatus === "settled" || input.venueChangeStatus === "lapsed") {
+    return { ok: false, reason: "already-changed" };
   }
-
-  if (input.venueChangeProposedAt) return { ok: false, reason: "already-used" };
 
   if (input.venueLat == null || input.venueLng == null) {
     return { ok: false, reason: "no-venue" };

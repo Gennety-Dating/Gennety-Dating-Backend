@@ -573,32 +573,34 @@ const translations = {
     profilerNextAck: "✍️ Got it…",
     profilerNextFormulating: "💭 Thinking…",
 
-    // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
-    venueChangeFemaleButton: "🔄 Change venue",
-    venueChangeFemaleHint:
-      "By the way — you have a one-time option to change this venue. " +
-      "Tap *Change venue* above to pick another spot nearby. Your match will " +
-      "have to confirm it, and you can only do this once.",
-    venueChangeMaleIntro: "Your match would like to change the venue.",
-    venueChangeMaleNewVenue: "New place: {venue}",
-    venueChangeMaleComment: "Their note:",
-    venueChangeMaleAsk:
-      "Accept the new place, or decline. Declining cancels the date.",
-    venueChangeBtnAccept: "✨ Accept new place",
-    venueChangeBtnDecline: "❌ Decline (cancel date)",
-    venueChangeDeclineConfirm:
-      "Are you sure? If you don't accept the proposed place, your date and match " +
-      "will be cancelled permanently — there's no undo.",
-    venueChangeBtnConfirmCancel: "Yes, cancel the match",
-    venueChangeBtnBack: "No, I changed my mind",
-    venueChangeAcceptedFemale: "Your match accepted the new place! 🎉 {venue}",
-    venueChangeAcceptedMaleAck: "Done — the venue is updated. {venue}",
-    venueChangeCancelledFemale:
-      "Your match didn't accept the new place, so the date was cancelled.",
-    venueChangeCancelledMale: "The date has been cancelled.",
-    venueChangeExpiredCancel:
-      "The window to confirm the new place ran out, so the date was cancelled.",
-    venueChangeAlreadyResolved: "This venue change has already been decided.",
+    // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
+    venueChangeButton: "📍 Change venue",
+    venueBoardPingFromF: "{name} is eyeing a cozier spot for your date 👀",
+    venueBoardPingFromM: "{name} suggests a look at a couple of other spots for your date 👀",
+    venueBoardPingBtn: "Take a look",
+    venuePayPromptDm:
+      "You two picked a new place for your date together!\n📍 {venue}\n" +
+      "Lock it in — and we'll update your date cards.",
+    venuePayBtn: "⭐ Lock it in — {stars}",
+    venueWishText:
+      "{name} found a place she loves for your date ✨\n📍 {venue}\n" +
+      "She'd be happy if you locked it in.",
+    venueWishPayBtn: "💫 Lock it in — {stars} ⭐",
+    venueWishDeclineBtn: "Not this time",
+    venuePayDeclineAck:
+      "Got it — the venue stays as planned for now. If it changes, you'll get an updated card.",
+    venuePaySelfDm:
+      "You two agreed on a new place!\n📍 {venue}\nLock it in — and we'll update your date cards ✨",
+    venuePaySelfBtn: "⭐ Lock it in — {stars}",
+    venueSettledCard: "Done — your date has a new home! 📍 {venue}",
+    venueSettledPaidByM: "{name} covered the venue change ❤️ Your date now happens at 📍 {venue}",
+    venueSettledPaidByF: "{name} covered the venue change ❤️ Your date now happens at 📍 {venue}",
+    venueExpressPartnerFromF: "{name} picked a cozier spot for your date ✨ New place: 📍 {venue}",
+    venueExpressPartnerFromM: "{name} picked a new spot for your date ✨ New place: 📍 {venue}",
+    venueLapsedDm: "The venue change wasn't locked in — you're meeting at {venue}, as planned 👌",
+    venueInvoiceTitle: "Venue change",
+    venueInvoiceDesc: "New date venue: {venue}",
+    venueInvoiceLabel: "Venue change",
 
     // --- Phase 4: Date ---
     icebreakerIntro:
@@ -1314,32 +1316,34 @@ const translations = {
     profilerNextAck: "✍️ Принято…",
     profilerNextFormulating: "💭 Думаю…",
 
-    // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
-    venueChangeFemaleButton: "🔄 Сменить место",
-    venueChangeFemaleHint:
-      "Кстати — у тебя есть одноразовая возможность сменить это место. " +
-      "Нажми *Сменить место* выше, чтобы выбрать другое заведение поблизости. " +
-      "Партнёру нужно будет это подтвердить, и сделать так можно только один раз.",
-    venueChangeMaleIntro: "Твоя пара хочет изменить место встречи.",
-    venueChangeMaleNewVenue: "Новое место: {venue}",
-    venueChangeMaleComment: "Объяснение партнёрши:",
-    venueChangeMaleAsk:
-      "Подтверди новое место или откажись. Отказ отменяет свидание.",
-    venueChangeBtnAccept: "✨ Согласиться с новым местом",
-    venueChangeBtnDecline: "❌ Не соглашаться (отменить свидание)",
-    venueChangeDeclineConfirm:
-      "Точно? Если ты не согласишься на предложенное место, свидание и метч будут " +
-      "аннулированы навсегда — отменить это будет нельзя.",
-    venueChangeBtnConfirmCancel: "Да, аннулировать метч",
-    venueChangeBtnBack: "Нет, я передумал",
-    venueChangeAcceptedFemale: "Партнёр согласился на новое место! 🎉 {venue}",
-    venueChangeAcceptedMaleAck: "Готово — место обновлено. {venue}",
-    venueChangeCancelledFemale:
-      "Партнёр не согласился на новое место, поэтому свидание отменено.",
-    venueChangeCancelledMale: "Свидание отменено.",
-    venueChangeExpiredCancel:
-      "Время на подтверждение нового места истекло, поэтому свидание отменено.",
-    venueChangeAlreadyResolved: "Решение по смене места уже принято.",
+    // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
+    venueChangeButton: "📍 Сменить место",
+    venueBoardPingFromF: "{name} присматривает местечко поуютнее для вашего свидания 👀",
+    venueBoardPingFromM: "{name} предлагает взглянуть на пару других мест для вашего свидания 👀",
+    venueBoardPingBtn: "Взглянуть",
+    venuePayPromptDm:
+      "Вы вместе выбрали новое место для свидания!\n📍 {venue}\n" +
+      "Закрепи его — и мы обновим ваши карточки.",
+    venuePayBtn: "⭐ Закрепить — {stars}",
+    venueWishText:
+      "{name} нашла место, которое ей очень нравится ✨\n📍 {venue}\n" +
+      "Ей будет приятно, если закрепишь его ты.",
+    venueWishPayBtn: "💫 Закрепить — {stars} ⭐",
+    venueWishDeclineBtn: "Не в этот раз",
+    venuePayDeclineAck:
+      "Понял — место пока остаётся прежним. Если оно изменится, придёт обновлённая карточка.",
+    venuePaySelfDm:
+      "Вы сошлись на новом месте!\n📍 {venue}\nЗакрепи его — и мы обновим ваши карточки ✨",
+    venuePaySelfBtn: "⭐ Закрепить — {stars}",
+    venueSettledCard: "Готово — у вашего свидания новое место! 📍 {venue}",
+    venueSettledPaidByM: "{name} оплатил смену места ❤️ Ваше свидание теперь в 📍 {venue}",
+    venueSettledPaidByF: "{name} оплатила смену места ❤️ Ваше свидание теперь в 📍 {venue}",
+    venueExpressPartnerFromF: "{name} выбрала для вас место поуютнее ✨ Новое место: 📍 {venue}",
+    venueExpressPartnerFromM: "{name} выбрал для вас новое место ✨ Новое место: 📍 {venue}",
+    venueLapsedDm: "Смена места не была закреплена — встречаетесь в {venue}, как и планировали 👌",
+    venueInvoiceTitle: "Смена места свидания",
+    venueInvoiceDesc: "Новое место свидания: {venue}",
+    venueInvoiceLabel: "Смена места",
 
     // --- Phase 4: Date ---
     icebreakerIntro:
@@ -2052,32 +2056,34 @@ const translations = {
     profilerNextAck: "✍️ Прийнято…",
     profilerNextFormulating: "💭 Думаю…",
 
-    // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
-    venueChangeFemaleButton: "🔄 Змінити місце",
-    venueChangeFemaleHint:
-      "До речі — у тебе є одноразова можливість змінити це місце. " +
-      "Натисни *Змінити місце* вище, щоб обрати інший заклад поблизу. " +
-      "Парі потрібно буде це підтвердити, і зробити так можна лише один раз.",
-    venueChangeMaleIntro: "Твоя пара хоче змінити місце зустрічі.",
-    venueChangeMaleNewVenue: "Нове місце: {venue}",
-    venueChangeMaleComment: "Пояснення партнерки:",
-    venueChangeMaleAsk:
-      "Підтверди нове місце або відмов. Відмова скасовує побачення.",
-    venueChangeBtnAccept: "✨ Погодитися на нове місце",
-    venueChangeBtnDecline: "❌ Не погоджуватися (скасувати побачення)",
-    venueChangeDeclineConfirm:
-      "Точно? Якщо ти не погодишся на запропоноване місце, побачення та метч буде " +
-      "анульовано назавжди — скасувати це буде неможливо.",
-    venueChangeBtnConfirmCancel: "Так, анулювати метч",
-    venueChangeBtnBack: "Ні, я передумав",
-    venueChangeAcceptedFemale: "Партнер погодився на нове місце! 🎉 {venue}",
-    venueChangeAcceptedMaleAck: "Готово — місце оновлено. {venue}",
-    venueChangeCancelledFemale:
-      "Партнер не погодився на нове місце, тому побачення скасовано.",
-    venueChangeCancelledMale: "Побачення скасовано.",
-    venueChangeExpiredCancel:
-      "Час на підтвердження нового місця вичерпано, тому побачення скасовано.",
-    venueChangeAlreadyResolved: "Рішення щодо зміни місця вже прийнято.",
+    // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
+    venueChangeButton: "📍 Змінити місце",
+    venueBoardPingFromF: "{name} придивляється до затишнішого місця для вашого побачення 👀",
+    venueBoardPingFromM: "{name} пропонує поглянути на кілька інших місць для вашого побачення 👀",
+    venueBoardPingBtn: "Поглянути",
+    venuePayPromptDm:
+      "Ви разом обрали нове місце для побачення!\n📍 {venue}\n" +
+      "Закріпи його — і ми оновимо ваші картки.",
+    venuePayBtn: "⭐ Закріпити — {stars}",
+    venueWishText:
+      "{name} знайшла місце, яке їй дуже подобається ✨\n📍 {venue}\n" +
+      "Їй буде приємно, якщо закріпиш його ти.",
+    venueWishPayBtn: "💫 Закріпити — {stars} ⭐",
+    venueWishDeclineBtn: "Не цього разу",
+    venuePayDeclineAck:
+      "Зрозумів — місце поки лишається тим самим. Якщо воно зміниться, прийде оновлена картка.",
+    venuePaySelfDm:
+      "Ви зійшлися на новому місці!\n📍 {venue}\nЗакріпи його — і ми оновимо ваші картки ✨",
+    venuePaySelfBtn: "⭐ Закріпити — {stars}",
+    venueSettledCard: "Готово — у вашого побачення нове місце! 📍 {venue}",
+    venueSettledPaidByM: "{name} оплатив зміну місця ❤️ Ваше побачення тепер у 📍 {venue}",
+    venueSettledPaidByF: "{name} оплатила зміну місця ❤️ Ваше побачення тепер у 📍 {venue}",
+    venueExpressPartnerFromF: "{name} обрала для вас затишніше місце ✨ Нове місце: 📍 {venue}",
+    venueExpressPartnerFromM: "{name} обрав для вас нове місце ✨ Нове місце: 📍 {venue}",
+    venueLapsedDm: "Зміну місця не закріплено — зустрічаєтесь у {venue}, як і планували 👌",
+    venueInvoiceTitle: "Зміна місця побачення",
+    venueInvoiceDesc: "Нове місце побачення: {venue}",
+    venueInvoiceLabel: "Зміна місця",
 
     // --- Phase 4: Date ---
     icebreakerIntro:
@@ -2757,32 +2763,34 @@ const deTranslations: TranslationTable = {
   profilerNextAck: "✍️ Notiert…",
   profilerNextFormulating: "💭 Denke nach…",
 
-  // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
-  venueChangeFemaleButton: "🔄 Ort ändern",
-  venueChangeFemaleHint:
-    "Übrigens — du hast die einmalige Möglichkeit, diesen Ort zu ändern. " +
-    "Tippe oben auf *Ort ändern*, um einen anderen Ort in der Nähe zu wählen. " +
-    "Dein Match muss zustimmen, und du kannst das nur einmal tun.",
-  venueChangeMaleIntro: "Dein Match möchte den Ort ändern.",
-  venueChangeMaleNewVenue: "Neuer Ort: {venue}",
-  venueChangeMaleComment: "Ihre Notiz:",
-  venueChangeMaleAsk:
-    "Stimme dem neuen Ort zu oder lehne ab. Ablehnen sagt das Date ab.",
-  venueChangeBtnAccept: "✨ Neuen Ort akzeptieren",
-  venueChangeBtnDecline: "❌ Ablehnen (Date absagen)",
-  venueChangeDeclineConfirm:
-    "Bist du sicher? Wenn du den vorgeschlagenen Ort nicht akzeptierst, werden " +
-    "dein Date und dein Match endgültig abgesagt — das lässt sich nicht rückgängig machen.",
-  venueChangeBtnConfirmCancel: "Ja, Match absagen",
-  venueChangeBtnBack: "Nein, ich habe es mir anders überlegt",
-  venueChangeAcceptedFemale: "Dein Match hat den neuen Ort akzeptiert! 🎉 {venue}",
-  venueChangeAcceptedMaleAck: "Erledigt — der Ort wurde aktualisiert. {venue}",
-  venueChangeCancelledFemale:
-    "Dein Match hat den neuen Ort nicht akzeptiert, daher wurde das Date abgesagt.",
-  venueChangeCancelledMale: "Das Date wurde abgesagt.",
-  venueChangeExpiredCancel:
-    "Die Frist zur Bestätigung des neuen Ortes ist abgelaufen, daher wurde das Date abgesagt.",
-  venueChangeAlreadyResolved: "Über diese Ortsänderung wurde bereits entschieden.",
+  // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
+  venueChangeButton: "📍 Ort ändern",
+  venueBoardPingFromF: "{name} schaut sich nach einem gemütlicheren Ort für euer Date um 👀",
+  venueBoardPingFromM: "{name} schlägt vor, ein paar andere Orte für euer Date anzusehen 👀",
+  venueBoardPingBtn: "Ansehen",
+  venuePayPromptDm:
+    "Ihr habt zusammen einen neuen Ort für euer Date gewählt!\n📍 {venue}\n" +
+    "Sichere ihn — und wir aktualisieren eure Karten.",
+  venuePayBtn: "⭐ Sichern — {stars}",
+  venueWishText:
+    "{name} hat einen Ort gefunden, der ihr sehr gefällt ✨\n📍 {venue}\n" +
+    "Sie würde sich freuen, wenn du ihn sicherst.",
+  venueWishPayBtn: "💫 Sichern — {stars} ⭐",
+  venueWishDeclineBtn: "Nicht diesmal",
+  venuePayDeclineAck:
+    "Verstanden — der Ort bleibt vorerst wie geplant. Falls er sich ändert, bekommst du eine neue Karte.",
+  venuePaySelfDm:
+    "Ihr habt euch auf einen neuen Ort geeinigt!\n📍 {venue}\nSichere ihn — und wir aktualisieren eure Karten ✨",
+  venuePaySelfBtn: "⭐ Sichern — {stars}",
+  venueSettledCard: "Erledigt — euer Date hat einen neuen Ort! 📍 {venue}",
+  venueSettledPaidByM: "{name} hat die Ortsänderung übernommen ❤️ Euer Date findet jetzt statt in 📍 {venue}",
+  venueSettledPaidByF: "{name} hat die Ortsänderung übernommen ❤️ Euer Date findet jetzt statt in 📍 {venue}",
+  venueExpressPartnerFromF: "{name} hat einen gemütlicheren Ort für euer Date gewählt ✨ Neuer Ort: 📍 {venue}",
+  venueExpressPartnerFromM: "{name} hat einen neuen Ort für euer Date gewählt ✨ Neuer Ort: 📍 {venue}",
+  venueLapsedDm: "Die Ortsänderung wurde nicht gesichert — ihr trefft euch wie geplant in {venue} 👌",
+  venueInvoiceTitle: "Ortsänderung",
+  venueInvoiceDesc: "Neuer Date-Ort: {venue}",
+  venueInvoiceLabel: "Ortsänderung",
   icebreakerIntro: "Dein Date ist in 5 Stunden! Ein paar Gesprächsstarter für dich:\n\n",
   icebreakerStreamStart: "✨ Ich stelle ein paar Gesprächsthemen für euch zusammen…",
   noMatchStreamStart: "💫 Ich gehe die Matches dieser Woche für dich durch…",
@@ -3395,32 +3403,34 @@ const plTranslations: TranslationTable = {
   profilerNextAck: "✍️ Zapisane…",
   profilerNextFormulating: "💭 Myślę…",
 
-  // --- Phase 3.7: Venue change (female-exclusive one-shot) ---
-  venueChangeFemaleButton: "🔄 Zmień miejsce",
-  venueChangeFemaleHint:
-    "À propos — masz jednorazową możliwość zmiany tego miejsca. " +
-    "Naciśnij *Zmień miejsce* powyżej, aby wybrać inny lokal w pobliżu. " +
-    "Twoja para będzie musiała to potwierdzić, a zrobić to możesz tylko raz.",
-  venueChangeMaleIntro: "Twoja para chce zmienić miejsce spotkania.",
-  venueChangeMaleNewVenue: "Nowe miejsce: {venue}",
-  venueChangeMaleComment: "Jej notatka:",
-  venueChangeMaleAsk:
-    "Zaakceptuj nowe miejsce albo odrzuć. Odrzucenie odwołuje randkę.",
-  venueChangeBtnAccept: "✨ Akceptuj nowe miejsce",
-  venueChangeBtnDecline: "❌ Odrzuć (odwołaj randkę)",
-  venueChangeDeclineConfirm:
-    "Na pewno? Jeśli nie zaakceptujesz proponowanego miejsca, Twoja randka i " +
-    "dopasowanie zostaną trwale odwołane — nie da się tego cofnąć.",
-  venueChangeBtnConfirmCancel: "Tak, odwołaj dopasowanie",
-  venueChangeBtnBack: "Nie, zmieniłem zdanie",
-  venueChangeAcceptedFemale: "Twoja para zaakceptowała nowe miejsce! 🎉 {venue}",
-  venueChangeAcceptedMaleAck: "Gotowe — miejsce zaktualizowane. {venue}",
-  venueChangeCancelledFemale:
-    "Twoja para nie zaakceptowała nowego miejsca, więc randka została odwołana.",
-  venueChangeCancelledMale: "Randka została odwołana.",
-  venueChangeExpiredCancel:
-    "Czas na potwierdzenie nowego miejsca minął, więc randka została odwołana.",
-  venueChangeAlreadyResolved: "Decyzja o zmianie miejsca została już podjęta.",
+  // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
+  venueChangeButton: "📍 Zmień miejsce",
+  venueBoardPingFromF: "{name} rozgląda się za przytulniejszym miejscem na waszą randkę 👀",
+  venueBoardPingFromM: "{name} proponuje spojrzeć na kilka innych miejsc na waszą randkę 👀",
+  venueBoardPingBtn: "Zobacz",
+  venuePayPromptDm:
+    "Razem wybraliście nowe miejsce na randkę!\n📍 {venue}\n" +
+    "Zatwierdź je — a my zaktualizujemy wasze karty.",
+  venuePayBtn: "⭐ Zatwierdź — {stars}",
+  venueWishText:
+    "{name} znalazła miejsce, które bardzo jej się podoba ✨\n📍 {venue}\n" +
+    "Będzie jej miło, jeśli to Ty je zatwierdzisz.",
+  venueWishPayBtn: "💫 Zatwierdź — {stars} ⭐",
+  venueWishDeclineBtn: "Nie tym razem",
+  venuePayDeclineAck:
+    "Rozumiem — miejsce na razie zostaje bez zmian. Jeśli się zmieni, dostaniesz nową kartę.",
+  venuePaySelfDm:
+    "Zgodziliście się na nowe miejsce!\n📍 {venue}\nZatwierdź je — a my zaktualizujemy wasze karty ✨",
+  venuePaySelfBtn: "⭐ Zatwierdź — {stars}",
+  venueSettledCard: "Gotowe — wasza randka ma nowe miejsce! 📍 {venue}",
+  venueSettledPaidByM: "{name} opłacił zmianę miejsca ❤️ Wasza randka odbędzie się w 📍 {venue}",
+  venueSettledPaidByF: "{name} opłaciła zmianę miejsca ❤️ Wasza randka odbędzie się w 📍 {venue}",
+  venueExpressPartnerFromF: "{name} wybrała dla was przytulniejsze miejsce ✨ Nowe miejsce: 📍 {venue}",
+  venueExpressPartnerFromM: "{name} wybrał dla was nowe miejsce ✨ Nowe miejsce: 📍 {venue}",
+  venueLapsedDm: "Zmiana miejsca nie została zatwierdzona — spotykacie się w {venue}, jak planowano 👌",
+  venueInvoiceTitle: "Zmiana miejsca randki",
+  venueInvoiceDesc: "Nowe miejsce randki: {venue}",
+  venueInvoiceLabel: "Zmiana miejsca",
   icebreakerIntro: "Twoja randka jest za 5 godzin! Kilka tematów na start:\n\n",
   icebreakerStreamStart: "✨ Dobieram kilka tematów do rozmowy dla was…",
   noMatchStreamStart: "💫 Przeglądam dla ciebie tegotygodniowe dopasowania…",

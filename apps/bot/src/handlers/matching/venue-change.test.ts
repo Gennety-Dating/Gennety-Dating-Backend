@@ -1,6 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { SessionData } from "@gennety/shared";
-import { DEFAULT_SESSION } from "@gennety/shared";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -9,22 +7,30 @@ import { DEFAULT_SESSION } from "@gennety/shared";
 vi.mock("@gennety/db", () => ({
   prisma: {
     match: { findUnique: vi.fn(), updateMany: vi.fn(), findMany: vi.fn() },
-    profile: { updateMany: vi.fn() },
   },
 }));
 
 vi.mock("../../config.js", () => ({
-  env: { VENUE_CHANGE_FEATURE_ENABLED: true, WEBAPP_URL: "https://app.test" },
+  env: {
+    VENUE_CHANGE_FEATURE_ENABLED: true,
+    VENUE_CHANGE_STARS: 150,
+    WEBAPP_URL: "https://app.test",
+  },
 }));
 
 import { prisma } from "@gennety/db";
 import {
-  proposeVenueChange,
-  handleVenueChangeAccept,
-  handleVenueChangeConfirmCancel,
+  submitVenueLikes,
+  confirmVenueAgreement,
+  getVenueBoardState,
+  offerPartnerPay,
+  declineVenuePay,
+  settleVenuePayment,
   sweepExpiredVenueChanges,
-  buildVenueChangeProposalNotice,
+  mintExpressChange,
+  venueKeyOf,
 } from "./venue-change.js";
+import type { CatalogVenue } from "../../services/venue-change.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as {
@@ -32,10 +38,47 @@ const mMatch = prisma.match as unknown as {
   updateMany: MockFn;
   findMany: MockFn;
 };
-const mProfile = prisma.profile as unknown as { updateMany: MockFn };
 
 const HOUR = 60 * 60 * 1000;
 const FAR_AGREED = new Date(Date.now() + 24 * HOUR);
+
+function catalogVenue(placeId: string, name: string): CatalogVenue {
+  return {
+    source: "places",
+    placeId,
+    name,
+    address: `${name} St`,
+    lat: 50.451,
+    lng: 30.521,
+    mapsUri: `https://maps.google.com/${placeId}`,
+    category: "cafe",
+    distanceKm: 0.3,
+    photoUrl: null,
+    photoRefs: [`places/${placeId}/photos/x`],
+    rating: 4.5,
+    userRatingCount: 100,
+    editorialSummary: null,
+  };
+}
+
+const CATALOG = [catalogVenue("p1", "New Cafe"), catalogVenue("p2", "Park Spot")];
+const loadCatalog = async () => CATALOG;
+
+function likeOf(placeId: string, name: string) {
+  const v = catalogVenue(placeId, name);
+  return {
+    key: venueKeyOf(v),
+    placeId: v.placeId,
+    name: v.name,
+    address: v.address,
+    lat: v.lat,
+    lng: v.lng,
+    mapsUri: v.mapsUri,
+    category: v.category,
+    photoUrl: null,
+    photoRef: v.photoRefs[0],
+  };
+}
 
 /** Female = userA (telegram 100), Male = userB (telegram 200). */
 function fakeMatch(over: Record<string, unknown> = {}) {
@@ -52,282 +95,464 @@ function fakeMatch(over: Record<string, unknown> = {}) {
     venueChangeProposerId: null,
     venueChangeProposedAt: null,
     venueChangeExpiresAt: null,
+    venueChangeResolvedAt: null,
     venueChangeName: null,
     venueChangeAddress: null,
     venueChangeLat: null,
     venueChangeLng: null,
     venueChangeMapsUri: null,
     venueChangePlaceId: null,
-    venueChangeComment: null,
+    venueChangePhotoUrl: null,
+    venueChangePhotoName: null,
+    venueChangePaidById: null,
+    venueChangePaidAt: null,
+    venueChangePayDeclinedAt: null,
+    venueChangeOfferPaySentAt: null,
+    venueChangePingSentToAAt: null,
+    venueChangePingSentToBAt: null,
+    venueChangeExpressAt: null,
+    venueLikesA: [] as unknown[],
+    venueLikesB: [] as unknown[],
     userAId: "a",
     userBId: "b",
-    userA: { id: "a", telegramId: 100n, language: "en", gender: "female", universityDomain: "kyiv.edu" },
-    userB: { id: "b", telegramId: 200n, language: "en", gender: "male" },
+    userA: {
+      id: "a",
+      telegramId: 100n,
+      language: "en",
+      gender: "female",
+      firstName: "Alina",
+      universityDomain: "kyiv.edu",
+    },
+    userB: { id: "b", telegramId: 200n, language: "en", gender: "male", firstName: "Max" },
     ...over,
   };
 }
 
-function fakeApi() {
-  return { sendMessage: vi.fn().mockResolvedValue(undefined) };
+/** Agreed-state row: she initiated, "New Cafe" agreed, payment pending. */
+function agreedMatch(over: Record<string, unknown> = {}) {
+  return fakeMatch({
+    venueChangeStatus: "agreed",
+    venueChangeProposerId: "a",
+    venueChangeProposedAt: new Date(),
+    venueChangeExpiresAt: new Date(Date.now() + 12 * HOUR),
+    venueChangeName: "New Cafe",
+    venueChangeAddress: "New Cafe St",
+    venueChangeLat: 50.451,
+    venueChangeLng: 30.521,
+    venueChangeMapsUri: "https://maps.google.com/p1",
+    venueChangePlaceId: "p1",
+    venueChangePhotoName: "places/p1/photos/x",
+    ...over,
+  });
 }
 
-function createCtx(over: { callbackData?: string; fromId?: number } = {}) {
-  const session: SessionData = { ...DEFAULT_SESSION, language: "en" };
+function fakeApi() {
   return {
-    session,
-    from: { id: over.fromId ?? 200 },
-    callbackQuery: over.callbackData ? { data: over.callbackData } : undefined,
-    api: fakeApi(),
-    answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
-    reply: vi.fn().mockResolvedValue(undefined),
+    sendMessage: vi.fn().mockResolvedValue(undefined),
+    sendPhoto: vi.fn().mockResolvedValue(undefined),
+    createInvoiceLink: vi.fn().mockResolvedValue("https://t.me/invoice/test"),
+    refundStarPayment: vi.fn().mockResolvedValue(true),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
+}
+
+/** updateMany calls whose data matched a predicate. */
+function updateCalls(pred: (data: Record<string, unknown>) => boolean) {
+  return mMatch.updateMany.mock.calls.filter((c) => pred(c[0]?.data ?? {}));
 }
 
 beforeEach(() => {
   mMatch.findUnique.mockReset();
   mMatch.updateMany.mockReset();
   mMatch.findMany.mockReset();
-  mProfile.updateMany.mockReset();
+  mMatch.updateMany.mockResolvedValue({ count: 1 });
 });
 
 // ---------------------------------------------------------------------------
-// proposeVenueChange
+// submitVenueLikes
 // ---------------------------------------------------------------------------
 
-describe("proposeVenueChange", () => {
-  const pick = {
-    placeId: "p1",
-    name: "New Cafe",
-    address: "New St",
-    lat: 50.451,
-    lng: 30.521,
-    mapsUri: "https://maps.google.com/new",
-    comment: "It is much cozier and closer for me",
-  };
-
-  /** Server-built catalog entry the pick resolves to (by placeId). */
-  const catalogEntry = {
-    source: "places" as const,
-    placeId: "p1",
-    name: "New Cafe",
-    address: "New St",
-    lat: 50.451,
-    lng: 30.521,
-    mapsUri: "https://maps.google.com/new",
-    category: "cafe",
-    distanceKm: 0.1,
-    photoUrl: null,
-    photoRefs: [],
-    rating: 4.5,
-    userRatingCount: 120,
-    editorialSummary: null,
-  };
-  // Injected catalog loader so the test needs no DB / Places network.
-  const loadCatalog = async () => [catalogEntry];
-
-  it("claims the one-shot and DMs the male the proposal", async () => {
-    mMatch.findUnique.mockResolvedValue(fakeMatch());
-    mMatch.updateMany.mockResolvedValue({ count: 1 });
+describe("submitVenueLikes", () => {
+  it("stores resolved likes, claims the initiator, and pings the partner once", async () => {
     const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(fakeMatch());
 
-    const res = await proposeVenueChange(api as never, 100n, "m1", pick, { loadCatalog });
-    expect(res).toEqual({ ok: true });
+    const res = await submitVenueLikes(api, 100n, "m1", ["p1"], { loadCatalog });
+    expect(res).toEqual({ ok: true, agreed: false, overlapCandidates: [] });
 
-    const update = mMatch.updateMany.mock.calls[0][0];
-    expect(update.where).toMatchObject({ status: "scheduled", venueChangeProposedAt: null });
-    expect(update.data).toMatchObject({
-      venueChangeStatus: "proposed",
-      venueChangeProposerId: "a",
-      venueChangeName: "New Cafe",
-    });
-    // DM goes to the male (telegram 200) with accept/decline buttons.
-    expect(api.sendMessage).toHaveBeenCalledOnce();
+    // Likes written with server-resolved snapshots (never client data).
+    const likeWrites = updateCalls((d) => Array.isArray(d.venueLikesA));
+    expect(likeWrites.length).toBe(1);
+    const snapshots = likeWrites[0][0].data.venueLikesA as Array<{ key: string; name: string }>;
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0]).toMatchObject({ key: "p1", name: "New Cafe" });
+
+    // Initiator claim CAS on the null stamp.
+    expect(updateCalls((d) => d.venueChangeProposerId === "a").length).toBe(1);
+
+    // First like → one board-invite ping to the male (guarded per recipient).
+    expect(updateCalls((d) => d.venueChangePingSentToBAt != null).length).toBe(1);
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
     expect(api.sendMessage.mock.calls[0][0]).toBe(200);
-    const markup = api.sendMessage.mock.calls[0][2].reply_markup;
-    const flat = JSON.stringify(markup.inline_keyboard);
-    expect(flat).toContain("vchg:accept:m1");
-    expect(flat).toContain("vchg:decline:m1");
   });
 
-  it("persists the catalog's fields, never the client's spoofed name / maps link", async () => {
+  it("rejects a key that is not in the server catalog", async () => {
     mMatch.findUnique.mockResolvedValue(fakeMatch());
-    mMatch.updateMany.mockResolvedValue({ count: 1 });
-    const api = fakeApi();
-
-    // Client lies about the venue label + ships a phishing maps link, but keeps
-    // a real catalog placeId + coords. The server must ignore the spoofed fields.
-    const spoofed = {
-      ...pick,
-      name: "Come to my place 😈",
-      address: "123 Private Rd",
-      mapsUri: "https://evil.example/phish",
-    };
-    const res = await proposeVenueChange(api as never, 100n, "m1", spoofed, { loadCatalog });
-    expect(res).toEqual({ ok: true });
-
-    const update = mMatch.updateMany.mock.calls[0][0];
-    expect(update.data).toMatchObject({
-      venueChangeName: "New Cafe",
-      venueChangeAddress: "New St",
-      venueChangeMapsUri: "https://maps.google.com/new",
-    });
-    // The relayed DM must carry the catalog label/link, not the phishing one.
-    const dmText = api.sendMessage.mock.calls[0][1] as string;
-    expect(dmText).not.toContain("evil.example");
-    expect(dmText).toContain("New Cafe");
-  });
-
-  it("rejects a pick that is not in the catalog (no matching id / coords)", async () => {
-    mMatch.findUnique.mockResolvedValue(fakeMatch());
-    const res = await proposeVenueChange(fakeApi() as never, 100n, "m1", pick, {
-      loadCatalog: async () => [],
-    });
+    const res = await submitVenueLikes(fakeApi(), 100n, "m1", ["evil"], { loadCatalog });
     expect(res).toEqual({ ok: false, reason: "invalid-venue" });
     expect(mMatch.updateMany).not.toHaveBeenCalled();
   });
 
-  it("rejects the male side (not the female initiator)", async () => {
-    mMatch.findUnique.mockResolvedValue(fakeMatch());
-    const res = await proposeVenueChange(fakeApi() as never, 200n, "m1", pick, { loadCatalog });
-    expect(res).toEqual({ ok: false, reason: "not-female-initiator" });
-    expect(mMatch.updateMany).not.toHaveBeenCalled();
+  it("single overlap auto-agrees; the male initiator gets the pay-prompt DM", async () => {
+    const api = fakeApi();
+    // He liked p1 first (initiator = male); she now hearts p1 → agreement.
+    // (She already has an unrelated like, so no first-like ping fires here.)
+    const row = fakeMatch({
+      venueChangeStatus: "liking",
+      venueChangeProposerId: "b",
+      venueChangeProposedAt: new Date(),
+      venueChangePingSentToAAt: new Date(),
+      venueChangePingSentToBAt: new Date(),
+      venueLikesA: [likeOf("p2", "Park Spot")],
+      venueLikesB: [likeOf("p1", "New Cafe")],
+    });
+    mMatch.findUnique.mockResolvedValue(row);
+
+    const res = await submitVenueLikes(api, 100n, "m1", ["p1"], { loadCatalog });
+    expect(res).toEqual({ ok: true, agreed: true, overlapCandidates: [] });
+
+    const agree = updateCalls((d) => d.venueChangeStatus === "agreed");
+    expect(agree.length).toBe(1);
+    expect(agree[0][0].data).toMatchObject({ venueChangeName: "New Cafe" });
+
+    // Payer (he, the initiator) wasn't the finalizer → invoice DM to him.
+    expect(api.createInvoiceLink).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0][0]).toBe(200);
   });
 
-  it("rejects a too-short comment", async () => {
-    mMatch.findUnique.mockResolvedValue(fakeMatch());
-    const res = await proposeVenueChange(fakeApi() as never, 100n, "m1", { ...pick, comment: "short" }, { loadCatalog });
-    expect(res).toEqual({ ok: false, reason: "comment-too-short" });
-    expect(mMatch.updateMany).not.toHaveBeenCalled();
-  });
-
-  it("rejects a pick outside the 3 km radius", async () => {
-    mMatch.findUnique.mockResolvedValue(fakeMatch());
-    const res = await proposeVenueChange(fakeApi() as never, 100n, "m1", {
-      ...pick,
-      lat: 50.6,
-      lng: 30.9,
-    }, { loadCatalog });
-    expect(res).toEqual({ ok: false, reason: "out-of-range" });
-  });
-
-  it("rejects when already used (lost the atomic claim)", async () => {
-    mMatch.findUnique.mockResolvedValue(fakeMatch());
-    mMatch.updateMany.mockResolvedValue({ count: 0 });
-    const res = await proposeVenueChange(fakeApi() as never, 100n, "m1", pick, { loadCatalog });
-    expect(res).toEqual({ ok: false, reason: "race-lost" });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// handleVenueChangeAccept
-// ---------------------------------------------------------------------------
-
-describe("handleVenueChangeAccept", () => {
-  it("copies the proposed venue onto the canonical fields and DMs both", async () => {
-    const proposed = fakeMatch({
-      venueChangeStatus: "proposed",
+  it("she initiated + he finalizes → agreement with NO DM (his in-app fork)", async () => {
+    const api = fakeApi();
+    const row = fakeMatch({
+      venueChangeStatus: "liking",
       venueChangeProposerId: "a",
+      venueChangeProposedAt: new Date(),
+      venueChangePingSentToAAt: new Date(),
+      venueChangePingSentToBAt: new Date(),
+      venueLikesA: [likeOf("p1", "New Cafe")],
+      venueLikesB: [likeOf("p2", "Park Spot")],
+    });
+    mMatch.findUnique.mockResolvedValue(row);
+
+    const res = await submitVenueLikes(api, 200n, "m1", ["p1"], { loadCatalog });
+    expect(res).toEqual({ ok: true, agreed: true, overlapCandidates: [] });
+    expect(updateCalls((d) => d.venueChangeStatus === "agreed").length).toBe(1);
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(api.createInvoiceLink).not.toHaveBeenCalled();
+  });
+
+  it("multiple overlaps do NOT auto-agree — the actor picks one", async () => {
+    const api = fakeApi();
+    const row = fakeMatch({
+      venueChangeStatus: "liking",
+      venueChangeProposerId: "b",
+      venueChangeProposedAt: new Date(),
+      venueChangePingSentToAAt: new Date(),
+      venueChangePingSentToBAt: new Date(),
+      venueLikesB: [likeOf("p1", "New Cafe"), likeOf("p2", "Park Spot")],
+    });
+    mMatch.findUnique.mockResolvedValue(row);
+
+    const res = await submitVenueLikes(api, 100n, "m1", ["p1", "p2"], { loadCatalog });
+    expect(res).toEqual({ ok: true, agreed: false, overlapCandidates: ["p1", "p2"] });
+    expect(updateCalls((d) => d.venueChangeStatus === "agreed").length).toBe(0);
+  });
+
+  it("refuses while a (possibly hidden express) agreement is pending", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangeExpressAt: new Date() }));
+    const res = await submitVenueLikes(fakeApi(), 200n, "m1", ["p1"], { loadCatalog });
+    expect(res).toEqual({ ok: false, reason: "wrong-state" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// confirmVenueAgreement
+// ---------------------------------------------------------------------------
+
+describe("confirmVenueAgreement", () => {
+  it("agrees on a venue both sides liked", async () => {
+    const row = fakeMatch({
+      venueChangeStatus: "liking",
+      venueChangeProposerId: "a",
+      venueChangeProposedAt: new Date(),
+      venueLikesA: [likeOf("p1", "New Cafe"), likeOf("p2", "Park Spot")],
+      venueLikesB: [likeOf("p1", "New Cafe"), likeOf("p2", "Park Spot")],
+    });
+    mMatch.findUnique.mockResolvedValue(row);
+
+    const res = await confirmVenueAgreement(fakeApi(), 100n, "m1", "p2");
+    expect(res).toEqual({ ok: true });
+    const agree = updateCalls((d) => d.venueChangeStatus === "agreed");
+    expect(agree.length).toBe(1);
+    expect(agree[0][0].data).toMatchObject({ venueChangeName: "Park Spot" });
+  });
+
+  it("rejects a venue only one side liked", async () => {
+    const row = fakeMatch({
+      venueChangeStatus: "liking",
+      venueChangeProposerId: "a",
+      venueChangeProposedAt: new Date(),
+      venueLikesA: [likeOf("p1", "New Cafe")],
+      venueLikesB: [],
+    });
+    mMatch.findUnique.mockResolvedValue(row);
+    const res = await confirmVenueAgreement(fakeApi(), 100n, "m1", "p1");
+    expect(res).toEqual({ ok: false, reason: "not-overlapping" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Board state (payment matrix views)
+// ---------------------------------------------------------------------------
+
+describe("getVenueBoardState", () => {
+  it("her fork: she initiated → pay_or_offer with price", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+    const res = await getVenueBoardState(100n, "m1");
+    if (!res.ok) throw new Error("expected ok");
+    expect(res.state.myAction).toBe("pay_or_offer");
+    expect(res.state.priceStars).toBe(150);
+    expect(res.state.canOfferPartner).toBe(true);
+    expect(res.state.agreed?.name).toBe("New Cafe");
+  });
+
+  it("his fork: she initiated → pay_or_decline for the male payer", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+    const res = await getVenueBoardState(200n, "m1");
+    if (!res.ok) throw new Error("expected ok");
+    expect(res.state.myAction).toBe("pay_or_decline");
+    expect(res.state.priceStars).toBe(150);
+  });
+
+  it("he initiated → he pays without a decline fork; she waits with NO price", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangeProposerId: "b" }));
+    const him = await getVenueBoardState(200n, "m1");
+    const her = await getVenueBoardState(100n, "m1");
+    if (!him.ok || !her.ok) throw new Error("expected ok");
+    expect(him.state.myAction).toBe("pay");
+    expect(her.state.myAction).toBe("wait");
+    expect(her.state.priceStars).toBeNull();
+  });
+
+  it("an express mint is invisible to the partner", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangeExpressAt: new Date() }));
+    const him = await getVenueBoardState(200n, "m1");
+    const her = await getVenueBoardState(100n, "m1");
+    if (!him.ok || !her.ok) throw new Error("expected ok");
+    expect(him.state.agreed).toBeNull();
+    expect(him.state.myAction).toBeNull();
+    expect(her.state.agreed?.name).toBe("New Cafe");
+    expect(her.state.myAction).toBe("pay");
+  });
+
+  it("his decline hides her offer option and his own actions", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangePayDeclinedAt: new Date() }));
+    const her = await getVenueBoardState(100n, "m1");
+    const him = await getVenueBoardState(200n, "m1");
+    if (!her.ok || !him.ok) throw new Error("expected ok");
+    expect(her.state.canOfferPartner).toBe(false);
+    expect(her.state.myAction).toBe("pay_or_offer"); // pay-self path stays
+    expect(him.state.myAction).toBeNull();
+  });
+
+  it("express is offered to her (hetero) while the board is open", async () => {
+    mMatch.findUnique.mockResolvedValue(fakeMatch());
+    const her = await getVenueBoardState(100n, "m1");
+    const him = await getVenueBoardState(200n, "m1");
+    if (!her.ok || !him.ok) throw new Error("expected ok");
+    expect(her.state.expressAvailable).toBe(true);
+    expect(him.state.expressAvailable).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Offer-partner-pay + his final decline
+// ---------------------------------------------------------------------------
+
+describe("offerPartnerPay / declineVenuePay", () => {
+  it("sends the wish card to him exactly once", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+
+    const res = await offerPartnerPay(api, 100n, "m1");
+    expect(res).toEqual({ ok: true });
+    expect(updateCalls((d) => d.venueChangeOfferPaySentAt != null).length).toBe(1);
+    expect(api.createInvoiceLink).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0][0]).toBe(200);
+    expect(String(api.sendMessage.mock.calls[0][1])).toContain("Alina");
+  });
+
+  it("refuses the offer from the male / after his decline / when already sent", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+    expect((await offerPartnerPay(fakeApi(), 200n, "m1")).ok).toBe(false);
+
+    mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangePayDeclinedAt: new Date() }));
+    expect(await offerPartnerPay(fakeApi(), 100n, "m1")).toEqual({
+      ok: false,
+      reason: "pay-declined",
+    });
+
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+    mMatch.updateMany.mockResolvedValue({ count: 0 }); // guard already stamped
+    expect(await offerPartnerPay(fakeApi(), 100n, "m1")).toEqual({
+      ok: false,
+      reason: "already-offered",
+    });
+  });
+
+  it("his decline stamps once and sends her the soft pay-self DM (no refusal talk)", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+
+    const res = await declineVenuePay(api, 200n, "m1");
+    expect(res.ok).toBe(true);
+    expect(updateCalls((d) => d.venueChangePayDeclinedAt != null).length).toBe(1);
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0][0]).toBe(100);
+    expect(String(api.sendMessage.mock.calls[0][1]).toLowerCase()).not.toContain("declin");
+  });
+
+  it("only the payer may decline; express/settled states refuse", async () => {
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+    expect((await declineVenuePay(fakeApi(), 100n, "m1")).ok).toBe(false);
+
+    mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangeExpressAt: new Date() }));
+    expect((await declineVenuePay(fakeApi(), 200n, "m1")).ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Express mint
+// ---------------------------------------------------------------------------
+
+describe("mintExpressChange", () => {
+  it("stamps the express pick for the female (hetero)", async () => {
+    mMatch.findUnique.mockResolvedValue(fakeMatch());
+    const res = await mintExpressChange(100n, "m1", "p1", { loadCatalog });
+    expect(res).toEqual({ ok: true, venueName: "New Cafe" });
+    const mint = updateCalls((d) => d.venueChangeExpressAt != null);
+    expect(mint.length).toBe(1);
+    expect(mint[0][0].data).toMatchObject({
+      venueChangeStatus: "agreed",
       venueChangeName: "New Cafe",
-      venueChangeAddress: "New St",
-      venueChangeLat: 50.451,
-      venueChangeLng: 30.521,
-      venueChangeMapsUri: "https://maps.google.com/new",
+      venueChangeProposerId: "a",
     });
-    mMatch.findUnique.mockResolvedValue(proposed);
-    mMatch.updateMany.mockResolvedValue({ count: 1 });
+  });
 
-    const ctx = createCtx({ callbackData: "vchg:accept:m1", fromId: 200 });
-    await handleVenueChangeAccept(ctx);
+  it("refuses the male in a hetero pair", async () => {
+    mMatch.findUnique.mockResolvedValue(fakeMatch());
+    const res = await mintExpressChange(200n, "m1", "p1", { loadCatalog });
+    expect(res).toEqual({ ok: false, reason: "not-allowed" });
+  });
+});
 
-    const update = mMatch.updateMany.mock.calls[0][0];
-    expect(update.data).toMatchObject({
-      venueChangeStatus: "accepted",
+// ---------------------------------------------------------------------------
+// Settle (successful_payment)
+// ---------------------------------------------------------------------------
+
+describe("settleVenuePayment", () => {
+  it("copies the agreed venue onto the canonical fields and notifies both", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-1");
+    expect(res).toEqual({ ok: true });
+
+    const settle = updateCalls((d) => d.venueChangeStatus === "settled");
+    expect(settle.length).toBe(1);
+    expect(settle[0][0].data).toMatchObject({
       venueName: "New Cafe",
-      venueGoogleMapsUri: "https://maps.google.com/new",
+      venuePhotoName: "places/p1/photos/x",
+      venueChangePaidById: "b",
     });
-    // female (100) + male actor (200) both get an updated card.
-    const targets = ctx.api.sendMessage.mock.calls.map((c: unknown[]) => c[0]);
-    expect(targets).toContain(100);
-    expect(targets).toContain(200);
+
+    // Payer card + her reveal ("{name} covered it ❤️") card.
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    const chats = api.sendMessage.mock.calls.map((c: unknown[]) => c[0]);
+    expect(chats).toContain(200);
+    expect(chats).toContain(100);
+    const herText = String(
+      api.sendMessage.mock.calls.find((c: unknown[]) => c[0] === 100)?.[1] ?? "",
+    );
+    expect(herText).toContain("Max");
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
   });
 
-  it("no-ops with an 'already decided' toast when not proposed", async () => {
-    mMatch.findUnique.mockResolvedValue(fakeMatch({ venueChangeStatus: "accepted", venueChangeProposerId: "a" }));
-    const ctx = createCtx({ callbackData: "vchg:accept:m1", fromId: 200 });
-    await handleVenueChangeAccept(ctx);
-    expect(mMatch.updateMany).not.toHaveBeenCalled();
-    expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+  it("express settle sends the partner the positive-frame surprise card", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangeExpressAt: new Date() }));
+
+    const res = await settleVenuePayment(api, 100n, "m1", "charge-2");
+    expect(res).toEqual({ ok: true });
+    const hisText = String(
+      api.sendMessage.mock.calls.find((c: unknown[]) => c[0] === 200)?.[1] ?? "",
+    );
+    expect(hisText).toContain("Alina");
+    expect(hisText).toContain("New Cafe");
+  });
+
+  it("refunds a payment that lost the parallel-pay race", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangePaidById: "a" }));
+    mMatch.updateMany.mockResolvedValue({ count: 0 });
+
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-3");
+    expect(res.ok).toBe(false);
+    expect(api.refundStarPayment).toHaveBeenCalledWith(200, "charge-3");
+  });
+
+  it("treats a redelivered payment from the same payer as a no-op (no refund)", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangePaidById: "b" }));
+    mMatch.updateMany.mockResolvedValue({ count: 0 });
+
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-4");
+    expect(res.ok).toBe(false);
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
   });
 });
 
 // ---------------------------------------------------------------------------
-// handleVenueChangeConfirmCancel
-// ---------------------------------------------------------------------------
-
-describe("handleVenueChangeConfirmCancel", () => {
-  it("cancels the match, boosts the female, and notifies both", async () => {
-    mMatch.findUnique.mockResolvedValue(
-      fakeMatch({ venueChangeStatus: "proposed", venueChangeProposerId: "a" }),
-    );
-    mMatch.updateMany.mockResolvedValue({ count: 1 });
-    mProfile.updateMany.mockResolvedValue({ count: 1 });
-
-    const ctx = createCtx({ callbackData: "vchg:cancel_confirm:m1", fromId: 200 });
-    await handleVenueChangeConfirmCancel(ctx);
-
-    const update = mMatch.updateMany.mock.calls[0][0];
-    expect(update.data).toMatchObject({ status: "cancelled", venueChangeStatus: "rejected" });
-    // C4: female (proposer "a") gets a standby/priority comp boost, no Elo penalty.
-    expect(mProfile.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { userId: "a" } }),
-    );
-    expect(ctx.api.sendMessage.mock.calls[0][0]).toBe(100); // female notified
-    expect(ctx.reply).toHaveBeenCalled(); // male acked
-  });
-});
-
-// ---------------------------------------------------------------------------
-// sweepExpiredVenueChanges
+// Expiry sweep
 // ---------------------------------------------------------------------------
 
 describe("sweepExpiredVenueChanges", () => {
-  it("cancels a stalled proposal, boosts the female, DMs both", async () => {
-    mMatch.findMany.mockResolvedValue([
-      fakeMatch({ venueChangeStatus: "proposed", venueChangeProposerId: "a" }),
-    ]);
-    mMatch.updateMany.mockResolvedValue({ count: 1 });
-    mProfile.updateMany.mockResolvedValue({ count: 1 });
+  it("lapses an unpaid board agreement with a neutral notice to both (match untouched)", async () => {
     const api = fakeApi();
+    mMatch.findMany.mockResolvedValue([agreedMatch()]);
 
-    const cancelled = await sweepExpiredVenueChanges(api as never, new Date());
-    expect(cancelled).toBe(1);
-    expect(mMatch.updateMany.mock.calls[0][0].data).toMatchObject({
-      status: "cancelled",
-      venueChangeStatus: "expired",
-    });
-    expect(mProfile.updateMany).toHaveBeenCalled();
-    expect(api.sendMessage).toHaveBeenCalledTimes(2); // both sides
+    const n = await sweepExpiredVenueChanges(api, new Date());
+    expect(n).toBe(1);
+
+    const lapse = updateCalls((d) => d.venueChangeStatus === "lapsed");
+    expect(lapse.length).toBe(1);
+    // The match status is never part of the write — no cancellation, ever.
+    expect(lapse[0][0].data.status).toBeUndefined();
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
   });
 
-  it("returns 0 when nothing is due", async () => {
-    mMatch.findMany.mockResolvedValue([]);
-    const cancelled = await sweepExpiredVenueChanges(fakeApi() as never, new Date());
-    expect(cancelled).toBe(0);
-  });
-});
+  it("quietly reverts an abandoned express mint (no DMs, board reopens)", async () => {
+    const api = fakeApi();
+    mMatch.findMany.mockResolvedValue([
+      agreedMatch({ venueChangeExpressAt: new Date(), venueLikesA: [likeOf("p2", "Park Spot")] }),
+    ]);
 
-// ---------------------------------------------------------------------------
-// buildVenueChangeProposalNotice
-// ---------------------------------------------------------------------------
-
-describe("buildVenueChangeProposalNotice", () => {
-  it("wraps the comment verbatim in a blockquote at the right offset", () => {
-    const comment = "Cozier and closer to my metro";
-    const notice = buildVenueChangeProposalNotice("en", "New Cafe — New St", comment);
-    expect(notice.entities).toHaveLength(1);
-    const ent = notice.entities[0];
-    expect(ent.type).toBe("blockquote");
-    expect(notice.text.slice(ent.offset, ent.offset + ent.length)).toBe(comment);
+    const n = await sweepExpiredVenueChanges(api, new Date());
+    expect(n).toBe(1);
+    const revert = updateCalls((d) => d.venueChangeStatus === "liking");
+    expect(revert.length).toBe(1);
+    expect(revert[0][0].data).toMatchObject({ venueChangeName: null, venueChangeExpressAt: null });
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 });
