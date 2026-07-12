@@ -104,6 +104,13 @@ interface Strings {
   ctaConfirm: string;
   ctaSaving: string;
   confirmHint: string;
+  /** Success screens — every confirmation lands on one. */
+  okSuggestTitle: string;
+  okSuggestSub: (name: string) => string;
+  okAgreedTitle: string;
+  okAgreedSub: string;
+  okDone: string;
+  okContinue: string;
   catalogEmpty: string;
   categoryLabels: Record<string, string>;
   kmAway: (km: number) => string;
@@ -154,6 +161,12 @@ const T: Record<Lang, Strings> = {
     ctaConfirm: "Confirm this place",
     ctaSaving: "Saving…",
     confirmHint: "Nothing changes until you confirm.",
+    okSuggestTitle: "Sent to your match",
+    okSuggestSub: (name) => `${name} will see the places you marked. Agree on one and your date moves there.`,
+    okAgreedTitle: "You picked it together",
+    okAgreedSub: "One last step and this becomes your date spot.",
+    okDone: "Back to places",
+    okContinue: "Continue",
     catalogEmpty: "No suitable places nearby right now. Your venue stays as is.",
     categoryLabels: {
       cafe: "Cafe",
@@ -209,6 +222,12 @@ const T: Record<Lang, Strings> = {
     ctaConfirm: "Подтвердить это место",
     ctaSaving: "Сохраняем…",
     confirmHint: "Пока не подтвердите — ничего не меняется.",
+    okSuggestTitle: "Отправлено партнёру",
+    okSuggestSub: (name) => `${name} увидит отмеченные вами места. Совпадёте — свидание переедет туда.`,
+    okAgreedTitle: "Вы выбрали его вместе",
+    okAgreedSub: "Остался один шаг — и это место станет вашим.",
+    okDone: "К местам",
+    okContinue: "Продолжить",
     catalogEmpty: "Подходящих мест рядом сейчас нет. Ваше место остаётся в силе.",
     categoryLabels: {
       cafe: "Кафе",
@@ -264,6 +283,12 @@ const T: Record<Lang, Strings> = {
     ctaConfirm: "Підтвердити це місце",
     ctaSaving: "Зберігаємо…",
     confirmHint: "Доки не підтвердите — нічого не змінюється.",
+    okSuggestTitle: "Надіслано партнеру",
+    okSuggestSub: (name) => `${name} побачить позначені вами місця. Збіжаться — побачення переїде туди.`,
+    okAgreedTitle: "Ви обрали його разом",
+    okAgreedSub: "Лишився один крок — і це місце стане вашим.",
+    okDone: "До місць",
+    okContinue: "Продовжити",
     catalogEmpty: "Підходящих місць поруч зараз немає. Ваше місце залишається.",
     categoryLabels: {
       cafe: "Кафе",
@@ -319,6 +344,12 @@ const T: Record<Lang, Strings> = {
     ctaConfirm: "Diesen Ort bestätigen",
     ctaSaving: "Wird gespeichert…",
     confirmHint: "Bis zur Bestätigung ändert sich nichts.",
+    okSuggestTitle: "An dein Match gesendet",
+    okSuggestSub: (name) => `${name} sieht die markierten Orte. Stimmt ihr überein, zieht euer Date dorthin.`,
+    okAgreedTitle: "Ihr habt ihn gemeinsam gewählt",
+    okAgreedSub: "Ein letzter Schritt — dann ist es euer Date-Ort.",
+    okDone: "Zu den Orten",
+    okContinue: "Weiter",
     catalogEmpty: "Gerade keine passenden Orte in der Nähe. Euer Ort bleibt bestehen.",
     categoryLabels: {
       cafe: "Café",
@@ -374,6 +405,12 @@ const T: Record<Lang, Strings> = {
     ctaConfirm: "Potwierdź to miejsce",
     ctaSaving: "Zapisywanie…",
     confirmHint: "Dopóki nie potwierdzisz, nic się nie zmienia.",
+    okSuggestTitle: "Wysłano do pary",
+    okSuggestSub: (name) => `${name} zobaczy zaznaczone miejsca. Zgodzicie się — randka przeniesie się tam.`,
+    okAgreedTitle: "Wybraliście je razem",
+    okAgreedSub: "Jeszcze jeden krok — i to będzie wasze miejsce.",
+    okDone: "Do miejsc",
+    okContinue: "Dalej",
     catalogEmpty: "Brak odpowiednich miejsc w pobliżu. Wasze miejsce pozostaje.",
     categoryLabels: {
       cafe: "Kawiarnia",
@@ -553,7 +590,7 @@ let selection = new Set<string>();
 /** Peer keys already seen — anything new since then gets the NEW badge. */
 let peerSeen = new Set<string>();
 /** Which screen is showing — polling only live-updates the board itself. */
-let screen: "board" | "detail" | "overlap" | "agreed" | "other" = "other";
+let screen: "board" | "detail" | "overlap" | "agreed" | "success" | "other" = "other";
 let pollTimer: number | null = null;
 /** Suppresses poll re-routing while a payment / request is in flight. */
 let busy = false;
@@ -588,6 +625,8 @@ function startPolling(): void {
         const prev = boardState;
         boardState = fresh;
         if (!prev) return;
+        // A success screen is the user's moment — never route out from under it.
+        if (screen === "success") return;
         // Status flips (agreement, settle, lapse, his decline) re-route.
         if (fresh.status !== prev.status || fresh.myAction !== prev.myAction) {
           route();
@@ -712,6 +751,7 @@ interface CardRefs {
   cap: HTMLElement;
 }
 const cardRefs = new Map<string, CardRefs>();
+let pageEl: HTMLElement | null = null;
 let bannerEl: HTMLElement | null = null;
 let barEl: HTMLElement | null = null;
 let ctaBtn: HTMLButtonElement | null = null;
@@ -753,12 +793,15 @@ function renderBoard(): void {
     type: "button",
     onClick: () => void submitSelection(),
   }) as HTMLButtonElement;
-  barEl = el("div", { class: "vc-bar is-hidden" }, [
+  // Floating, not a flex child: an in-flow bar would reserve a dead strip at
+  // the bottom of the board even while there is nothing to submit.
+  barEl = el("div", { class: "vc-bar vc-bar-float is-hidden" }, [
     ctaBtn,
     el("p", { class: "vc-note vc-note-center", text: s.confirmHint }),
   ]);
 
-  mount(el("div", { class: "vc-page" }, [el("div", { class: "vc-scroll" }, nodes), barEl]));
+  pageEl = el("div", { class: "vc-page" }, [el("div", { class: "vc-scroll" }, nodes), barEl]);
+  mount(pageEl);
   syncBoardChrome();
 }
 
@@ -793,6 +836,8 @@ function syncBoardChrome(): void {
   if (barEl && ctaBtn) {
     const dirty = isDirty();
     barEl.classList.toggle("is-hidden", !dirty);
+    // Only open room for the bar once it actually exists on screen.
+    pageEl?.classList.toggle("has-cta", dirty);
     if (dirty) {
       const agreeing = selectedOverlap().length > 0;
       ctaBtn.textContent = saving ? s.ctaSaving : agreeing ? s.ctaConfirm : s.ctaSuggest;
@@ -974,7 +1019,7 @@ async function submitSelection(): Promise<void> {
       haptic("success");
       saving = false;
       busy = false;
-      route();
+      renderSuccess("agreed");
       return;
     }
     if (res.overlapCandidates.length > 1) {
@@ -990,12 +1035,7 @@ async function submitSelection(): Promise<void> {
     haptic("success");
     saving = false;
     busy = false;
-    if (screen === "board") {
-      for (const key of cardRefs.keys()) patchCard(key);
-      syncBoardChrome();
-    } else {
-      route();
-    }
+    renderSuccess("suggested");
   } catch (err) {
     saving = false;
     busy = false;
@@ -1159,7 +1199,10 @@ async function confirmOverlap(v: VenueChangeCatalogItem): Promise<void> {
   try {
     await confirmVenueChoice(getInitData(), matchId, keyOf(v));
     boardState = await fetchVenueBoardState(getInitData(), matchId);
-    route();
+    busy = false;
+    haptic("success");
+    renderSuccess("agreed");
+    return;
   } catch (err) {
     haptic("error");
     app?.showAlert(errorMessage(err));
@@ -1167,6 +1210,65 @@ async function confirmOverlap(v: VenueChangeCatalogItem): Promise<void> {
   } finally {
     busy = false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Success — every confirmation lands here first
+// ---------------------------------------------------------------------------
+
+/**
+ * The moment right after a confirm. `suggested` = my marks just went to the
+ * partner; `agreed` = we landed on the same place and it can now be locked in.
+ * Deliberately a screen of its own: confirming is the one committing act on the
+ * board, so it should feel like it landed rather than silently redraw a list.
+ */
+function renderSuccess(kind: "suggested" | "agreed"): void {
+  screen = "success";
+  setBack(null);
+  const st = boardState;
+  const agreed = kind === "agreed";
+
+  const medallion = el("div", { class: `vc-ok-mark${agreed ? " is-agreed" : ""}` }, [
+    icon(agreed ? "spark" : "check", "icon vc-ok-glyph"),
+  ]);
+
+  const nodes: Node[] = [
+    el("div", { class: "vc-ok-halo" }, [medallion]),
+    el("h1", {
+      class: "vc-h1 vc-h1-center vc-ok-title",
+      text: agreed ? s.okAgreedTitle : s.okSuggestTitle,
+    }),
+    el("p", {
+      class: "vc-lead vc-ok-sub",
+      text: agreed ? s.okAgreedSub : s.okSuggestSub(st?.partnerName ?? ""),
+    }),
+  ];
+
+  // Name the place, so the success reads as something concrete.
+  if (agreed && st?.agreed) {
+    nodes.push(
+      el("div", { class: "vc-ok-venue" }, [
+        icon("pin", "icon vc-ok-venue-icon"),
+        el("div", { class: "vc-ok-venue-meta" }, [
+          el("div", { class: "vc-current-name", text: st.agreed.name }),
+          el("div", { class: "vc-current-addr", text: st.agreed.address }),
+        ]),
+      ]),
+    );
+  }
+
+  const cta = el("button", {
+    class: "btn-primary",
+    type: "button",
+    text: agreed ? s.okContinue : s.okDone,
+    onClick: () => {
+      haptic("light");
+      if (agreed) route();
+      else renderBoard();
+    },
+  });
+
+  mount(page([el("div", { class: "vc-ok" }, nodes)], [cta]));
 }
 
 // ---------------------------------------------------------------------------

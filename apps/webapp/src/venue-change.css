@@ -836,6 +836,21 @@ a.vc-info-row .vc-info-text {
   opacity: 0;
   pointer-events: none;
 }
+/* …and it FLOATS over the scroll area rather than sitting in the flex flow, so
+   an empty board reserves no dead strip along the bottom. Room for it is only
+   opened (as scroll padding) once there is actually something to confirm. */
+.vc-bar-float {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+.vc-scroll {
+  transition: padding-bottom 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.vc-page.has-cta .vc-scroll {
+  padding-bottom: 150px;
+}
 .btn-primary,
 .btn-secondary {
   width: 100%;
@@ -848,16 +863,48 @@ a.vc-info-row .vc-info-text {
   cursor: pointer;
   transition: transform 0.15s ease, filter 0.15s ease, background 0.15s ease;
 }
+/* The one button we want tapped: larger, brighter, lifted off the page with a
+   warm burgundy bloom and a slow specular sweep. */
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 45%, var(--accent-deep) 100%);
+  position: relative;
+  overflow: hidden;
+  padding: 18px 22px;
+  border-radius: 20px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  background: linear-gradient(135deg, #f0637d 0%, var(--accent-bright) 38%, var(--accent) 82%, var(--accent-deep) 100%);
   color: #fff;
   box-shadow:
-    0 12px 30px rgba(139, 37, 59, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    0 16px 38px rgba(182, 48, 79, 0.45),
+    0 2px 10px rgba(139, 37, 59, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+/* Specular sweep — a single slow highlight, not a disco. */
+.btn-primary::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgba(255, 255, 255, 0.32),
+    transparent
+  );
+  transform: skewX(-18deg);
+  animation: sheen 3.6s ease-in-out infinite;
+  pointer-events: none;
 }
 .btn-primary:disabled {
   filter: grayscale(0.35) brightness(0.8);
   cursor: default;
+}
+.btn-primary:disabled::after {
+  animation: none;
+  opacity: 0;
 }
 .btn-primary:not(:disabled):active {
   transform: scale(0.98);
@@ -881,6 +928,96 @@ a.vc-info-row .vc-info-text {
   border-top-color: #fff;
   animation: spin 0.7s linear infinite;
   vertical-align: -2px;
+}
+
+/* ── Success screen ──────────────────────────────────────────────────── */
+.vc-ok {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding-top: 10vh;
+}
+/* Halo — a soft ring that breathes out once behind the medallion. */
+.vc-ok-halo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin-bottom: 26px;
+}
+.vc-ok-halo::before,
+.vc-ok-halo::after {
+  content: "";
+  position: absolute;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent-bright);
+  opacity: 0;
+  animation: halo 2.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  pointer-events: none;
+}
+.vc-ok-halo::after {
+  animation-delay: 0.9s;
+}
+.vc-ok-mark {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(140deg, var(--self-fill-strong), var(--fill));
+  box-shadow:
+    var(--glass-edge),
+    0 16px 44px rgba(0, 0, 0, 0.35);
+  animation: mark-in 0.6s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+:root[data-theme="light"] .vc-ok-mark {
+  color: var(--text);
+}
+/* Agreed = the two-colour state, the only one that glows. */
+.vc-ok-mark.is-agreed {
+  color: #fff;
+  background: linear-gradient(140deg, #f0637d 0%, var(--accent-bright) 45%, var(--accent) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 18px 48px rgba(182, 48, 79, 0.5);
+}
+.vc-ok-glyph {
+  width: 40px;
+  height: 40px;
+  stroke-width: 2.2;
+  animation: glyph-in 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) 0.14s both;
+}
+.vc-ok-title {
+  animation: rise 0.5s ease 0.1s both;
+}
+.vc-ok-sub {
+  max-width: 300px;
+  animation: rise 0.5s ease 0.18s both;
+}
+.vc-ok-venue {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  margin-top: 22px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background: var(--glass);
+  box-shadow: var(--glass-edge);
+  animation: rise 0.5s ease 0.26s both;
+}
+.vc-ok-venue-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--accent-bright);
+}
+.vc-ok-venue-meta {
+  min-width: 0;
 }
 
 .hidden {
@@ -911,6 +1048,47 @@ a.vc-info-row .vc-info-text {
   }
   100% {
     transform: scale(1);
+  }
+}
+@keyframes sheen {
+  0%,
+  62% {
+    left: -40%;
+  }
+  92%,
+  100% {
+    left: 130%;
+  }
+}
+@keyframes mark-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes glyph-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) rotate(-12deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+@keyframes halo {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.86);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
   }
 }
 @keyframes pill-in {

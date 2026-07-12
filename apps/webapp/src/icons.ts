@@ -100,9 +100,17 @@ const ICONS: Record<IconName, { d: string[]; solid?: boolean }> = {
     d: ["M12 3.6l2.5 5.1 5.6.8-4 3.9 1 5.6-5.1-2.7-5 2.7 1-5.6-4.1-3.9 5.6-.8L12 3.6Z"],
     solid: true,
   },
-  // Four-point sparkle — the "agreed" accent.
+  /**
+   * The paired-sparkle mark — our "we agree / it's a match" symbol. Drawn with
+   * deliberately FAT lobes (the control points sit well off the axis) so the
+   * silhouette survives on a photo, a burgundy fill or a white button alike; a
+   * thin four-point star disappears against busy backgrounds.
+   */
   spark: {
-    d: ["M12 3.2c.6 3.7 1.9 5 5.6 5.6-3.7.6-5 1.9-5.6 5.6-.6-3.7-1.9-5-5.6-5.6 3.7-.6 5-1.9 5.6-5.6Z", "M18.4 15.2c.3 1.8.9 2.4 2.8 2.8-1.9.3-2.5.9-2.8 2.8-.3-1.9-.9-2.5-2.8-2.8 1.9-.4 2.5-1 2.8-2.8Z"],
+    d: [
+      "M12 2.6c1 4 2 5 6 6-4 1-5 2-6 6-1-4-2-5-6-6 4-1 5-2 6-6Z",
+      "M18.6 14.8c.5 2 1 2.5 3 3-2 .5-2.5 1-3 3-.5-2-1-2.5-3-3 2-.5 2.5-1 3-3Z",
+    ],
     solid: true,
   },
   bolt: {
