@@ -762,7 +762,6 @@ a.vc-info-row .vc-info-text {
   text-align: center;
 }
 
-/* Her express lane — a distinct warm glass button under the primary CTA. */
 .btn-express,
 .btn-glass {
   width: 100%;
@@ -771,23 +770,67 @@ a.vc-info-row .vc-info-text {
   justify-content: center;
   gap: 9px;
   border: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+/* THE HERO — "change it right now": the one paid, one-tap action on the board,
+   so it is the brightest thing on screen. Biggest, warmest gradient, deepest
+   bloom, and the only button carrying the shimmer — nothing competes with it. */
+.btn-express {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  padding: 19px 22px;
+  font-size: 17.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+  background: linear-gradient(
+    135deg,
+    #ff7f94 0%,
+    #f0637d 26%,
+    var(--accent-bright) 62%,
+    var(--accent) 100%
+  );
+  box-shadow:
+    0 18px 44px rgba(240, 99, 125, 0.48),
+    0 3px 12px rgba(139, 37, 59, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+/* Specular sweep — one slow highlight, not a disco. */
+.btn-express::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.42), transparent);
+  transform: skewX(-18deg);
+  animation: sheen 3.4s ease-in-out infinite;
+  pointer-events: none;
+}
+/* Its marks sit a touch larger — the bolt and the price are the point. */
+.btn-express .btn-icon {
+  width: 20px;
+  height: 20px;
+}
+.btn-express .btn-star {
+  width: 17px;
+  height: 17px;
+}
+
+/* Neutral glass action (offer to partner, open maps) — quiet by design. */
+.btn-glass {
   border-radius: 18px;
   padding: 15px 20px;
   font-size: 15px;
   font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  box-shadow: var(--glass-edge);
-  transition: transform 0.15s ease, background 0.15s ease;
-}
-.btn-express {
-  color: var(--accent-bright);
-  background: var(--accent-soft);
-}
-/* Neutral glass action (offer to partner, open maps) — borderless, quiet. */
-.btn-glass {
   color: var(--text);
   background: var(--glass);
+  box-shadow: var(--glass-edge);
 }
 .btn-express:active,
 .btn-glass:active {
@@ -863,48 +906,24 @@ a.vc-info-row .vc-info-text {
   cursor: pointer;
   transition: transform 0.15s ease, filter 0.15s ease, background 0.15s ease;
 }
-/* The one button we want tapped: larger, brighter, lifted off the page with a
-   warm burgundy bloom and a slow specular sweep. */
+/* Rank 2 — the collaborative actions (suggest / confirm / continue). Bright and
+   inviting, lifted off the page, but calm: no sweep. The hero sweep belongs to
+   the instant-change button below, so the two never compete. */
 .btn-primary {
-  position: relative;
-  overflow: hidden;
-  padding: 18px 22px;
+  padding: 17px 22px;
   border-radius: 20px;
-  font-size: 17px;
+  font-size: 16.5px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  background: linear-gradient(135deg, #f0637d 0%, var(--accent-bright) 38%, var(--accent) 82%, var(--accent-deep) 100%);
+  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 58%, var(--accent-deep) 100%);
   color: #fff;
   box-shadow:
-    0 16px 38px rgba(182, 48, 79, 0.45),
-    0 2px 10px rgba(139, 37, 59, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
-}
-/* Specular sweep — a single slow highlight, not a disco. */
-.btn-primary::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 35%;
-  background: linear-gradient(
-    100deg,
-    transparent,
-    rgba(255, 255, 255, 0.32),
-    transparent
-  );
-  transform: skewX(-18deg);
-  animation: sheen 3.6s ease-in-out infinite;
-  pointer-events: none;
+    0 13px 32px rgba(139, 37, 59, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
 }
 .btn-primary:disabled {
   filter: grayscale(0.35) brightness(0.8);
   cursor: default;
-}
-.btn-primary:disabled::after {
-  animation: none;
-  opacity: 0;
 }
 .btn-primary:not(:disabled):active {
   transform: scale(0.98);
