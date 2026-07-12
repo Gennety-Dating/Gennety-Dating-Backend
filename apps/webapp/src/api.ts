@@ -679,12 +679,28 @@ export async function createStoreStarsInvoice(
 // Venue change Mini App API (female-exclusive one-shot swap)
 // ---------------------------------------------------------------------------
 
-export interface VenueChangeState {
-  status: string;
-  eligible: boolean;
-  ineligibleReason: string | null;
-  minCommentLength: number;
-  original: { name: string | null; address: string | null; mapsUri: string | null } | null;
+/** Board snapshot for the v2 multiplayer venue-change Mini App. */
+export interface VenueBoardState {
+  status: string; // none | liking | agreed | settled | lapsed
+  open: boolean;
+  closedReason: string | null;
+  original: { name: string | null; address: string | null; mapsUri: string | null };
+  myLikes: string[];
+  peerLikes: string[];
+  agreed: {
+    key: string;
+    name: string;
+    address: string;
+    mapsUri: string | null;
+    expiresAt: string | null;
+  } | null;
+  myAction: "pay" | "pay_or_decline" | "pay_or_offer" | "wait" | null;
+  priceStars: number | null;
+  canOfferPartner: boolean;
+  offerSent: boolean;
+  payDeclined: boolean;
+  expressAvailable: boolean;
+  settled: { name: string; address: string; mapsUri: string | null; peerPaid: boolean } | null;
 }
 
 export interface VenueChangeCatalogItem {
@@ -721,16 +737,16 @@ export function venueChangePhotoUrl(
   return `${venueChangeBase}/photo?${p.toString()}`;
 }
 
-export async function fetchVenueChangeState(
+export async function fetchVenueBoardState(
   initData: string,
   matchId: string,
-): Promise<VenueChangeState> {
+): Promise<VenueBoardState> {
   const res = await fetch(`${venueChangeBase}/state?match=${encodeURIComponent(matchId)}`, {
     method: "GET",
     headers: { Authorization: `tma ${initData}` },
   });
   if (!res.ok) throw await toError(res);
-  return (await res.json()) as VenueChangeState & { ok: true };
+  return (await res.json()) as VenueBoardState & { ok: true };
 }
 
 export async function fetchVenueChangeCatalog(
@@ -746,25 +762,63 @@ export async function fetchVenueChangeCatalog(
   return body.venues;
 }
 
-export async function proposeVenueChange(
+async function venuePost(
   initData: string,
-  body: {
-    matchId: string;
-    placeId: string | null;
-    name: string;
-    address: string;
-    lat: number;
-    lng: number;
-    mapsUri: string | null;
-    comment: string;
-  },
-): Promise<void> {
-  const res = await fetch(`${venueChangeBase}/propose`, {
+  path: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const res = await fetch(`${venueChangeBase}/${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw await toError(res);
+  return (await res.json()) as Record<string, unknown>;
+}
+
+/** Full like-set submission (calendar `pick` semantics). */
+export async function submitVenueLikes(
+  initData: string,
+  matchId: string,
+  keys: string[],
+): Promise<{ agreed: boolean; overlapCandidates: string[] }> {
+  const body = await venuePost(initData, "like", { matchId, keys });
+  return {
+    agreed: body.agreed === true,
+    overlapCandidates: Array.isArray(body.overlapCandidates)
+      ? (body.overlapCandidates as string[])
+      : [],
+  };
+}
+
+/** Resolve a multi-overlap by picking one venue both sides liked. */
+export async function confirmVenueChoice(
+  initData: string,
+  matchId: string,
+  key: string,
+): Promise<void> {
+  await venuePost(initData, "confirm", { matchId, key });
+}
+
+/** Her one-shot "offer him to pay" (sends the wish card to his chat). */
+export async function offerVenuePay(initData: string, matchId: string): Promise<void> {
+  await venuePost(initData, "offer-pay", { matchId });
+}
+
+/** His single, final "not this time" from the Mini App fork. */
+export async function declineVenuePayApi(initData: string, matchId: string): Promise<void> {
+  await venuePost(initData, "pay-decline", { matchId });
+}
+
+/** Mint the Stars invoice link (agreed payment or her express swap). */
+export async function venueStarsInvoice(
+  initData: string,
+  matchId: string,
+  mode: "agreed" | "express",
+  key?: string,
+): Promise<{ link: string; stars: number }> {
+  const body = await venuePost(initData, "stars-invoice", { matchId, mode, key });
+  return { link: String(body.link), stars: Number(body.stars) };
 }
 
 async function toError(res: Response): Promise<CalendarApiError> {

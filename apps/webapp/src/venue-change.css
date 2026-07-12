@@ -135,40 +135,45 @@ body {
   line-height: 1.5;
 }
 
-/* ── Disclaimer ───────────────────────────────────────────────────────── */
-.vc-disclaimer {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 4px;
-  animation: rise 0.5s ease both;
-}
-.vc-rule {
-  display: flex;
-  gap: 13px;
-  align-items: flex-start;
-  padding: 15px 16px;
-  border-radius: 18px;
+/* ── Current venue (the eternal default, pinned on top) ──────────────── */
+.vc-current {
+  position: relative;
+  padding: 16px 18px;
+  border-radius: 20px;
   background: var(--glass);
-  box-shadow: var(--glass-edge);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--glass-edge), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  margin-bottom: 18px;
 }
-.vc-rule-mark {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
+.vc-current-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent-bright);
-  font-size: 15px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 9px;
 }
-.vc-rule-text {
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--text);
+.vc-current-name {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.vc-current-addr {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 3px;
+}
+
+/* Entry motion for glass panels. */
+.glass-in {
+  animation: rise 0.45s ease both;
 }
 
 /* ── Catalog ──────────────────────────────────────────────────────────── */
@@ -395,72 +400,183 @@ a.vc-info-row .vc-info-text {
   font-size: 19px;
 }
 
-/* ── Comment ──────────────────────────────────────────────────────────── */
-.vc-comment {
-  animation: rise 0.4s ease both;
-}
-/* Chosen-venue summary chip at the top of the reason screen. */
-.vc-chosen {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  padding: 12px;
-  border-radius: 18px;
-  background: var(--glass);
+/* ── Hearts (the board's whole language) ─────────────────────────────── */
+.vc-heart {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border: none;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  background: var(--fill);
   box-shadow: var(--glass-edge);
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.15s ease, background 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+}
+.vc-heart:active {
+  transform: scale(0.9);
+}
+.vc-heart-glyph {
+  font-size: 21px;
+  line-height: 1;
+  color: var(--text-faint);
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+.vc-heart.is-mine {
+  background: var(--accent-soft);
+  box-shadow:
+    var(--glass-edge),
+    0 6px 18px rgba(139, 37, 59, 0.3);
+}
+.vc-heart.is-mine .vc-heart-glyph {
+  color: var(--accent-bright);
+  animation: heart-pop 0.35s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+/* The partner's heart — a small warm dot on the corner of the button. */
+.vc-heart.is-theirs::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent));
+  box-shadow: 0 0 0 2.5px var(--bg), 0 0 10px rgba(182, 48, 79, 0.7);
+  animation: peer-pulse 1.8s ease-in-out infinite;
+}
+
+/* Both hearted → the whole card glows. */
+.vc-card.is-match {
+  position: relative;
+  box-shadow:
+    var(--glass-edge),
+    0 0 0 1.5px rgba(182, 48, 79, 0.55),
+    0 10px 34px rgba(139, 37, 59, 0.35);
+  animation: match-glow 2.2s ease-in-out infinite;
+}
+.vc-match-ribbon {
+  position: absolute;
+  top: -9px;
+  left: 16px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent-bright), var(--accent));
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 14px rgba(139, 37, 59, 0.45);
+}
+.vc-chip.is-peer {
+  background: linear-gradient(135deg, rgba(182, 48, 79, 0.28), rgba(139, 37, 59, 0.2));
+  color: var(--accent-bright);
+}
+
+/* ── Agreed / settled screens ────────────────────────────────────────── */
+.vc-agreed {
+  position: relative;
+  padding: 18px;
+  border-radius: 24px;
+  background: var(--glass);
+  box-shadow: var(--glass-edge), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  text-align: center;
+}
+.vc-agreed-photo {
+  width: 100%;
+  height: 190px;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 90% at 20% 0%, rgba(139, 37, 59, 0.28), transparent 60%),
+    linear-gradient(155deg, var(--surface-2), var(--surface));
+  background-size: cover;
+  background-position: center;
+  display: grid;
+  place-items: center;
+  font-size: 40px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.vc-agreed-badge {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 22px;
+  filter: drop-shadow(0 2px 8px rgba(139, 37, 59, 0.6));
+  animation: peer-pulse 2s ease-in-out infinite;
+}
+
+.vc-note {
+  margin: 10px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.vc-note-center {
+  text-align: center;
+  margin-top: 16px;
+}
+.vc-note-love {
+  color: var(--accent-bright);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.vc-settled {
+  padding-top: 8vh;
+  animation: rise 0.5s ease both;
+}
+.vc-h1-center {
+  text-align: center;
+}
+.vc-settled-burst {
+  display: grid;
+  place-items: center;
   margin-bottom: 18px;
 }
-.vc-chosen .vc-thumb {
-  width: 52px;
-  height: 52px;
-  border-radius: 13px;
-  font-size: 20px;
+.vc-settled-check {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 34px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 55%, var(--accent-deep) 100%);
+  box-shadow:
+    0 14px 40px rgba(139, 37, 59, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  animation: heart-pop 0.55s cubic-bezier(0.2, 1.6, 0.4, 1) both;
 }
-.vc-chosen-meta {
-  min-width: 0;
-  flex: 1;
+.vc-settled .vc-current {
+  margin-top: 18px;
+  text-align: center;
 }
-.vc-chosen-name {
-  font-family: "Space Grotesk", "Inter", sans-serif;
-  font-size: 15px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.vc-chosen-addr {
-  font-size: 12px;
-  color: var(--text-dim);
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.vc-textarea {
+
+/* Her express lane — a distinct warm glass button under the primary CTA. */
+.btn-express {
   width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  min-height: 130px;
-  padding: 15px;
   border: none;
   border-radius: 18px;
-  background: var(--glass);
-  box-shadow: var(--glass-edge);
-  color: var(--text);
+  padding: 15px 20px;
   font-size: 15px;
+  font-weight: 600;
   font-family: inherit;
-  line-height: 1.5;
-  resize: none;
-  outline: none;
+  cursor: pointer;
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+  box-shadow: var(--glass-edge);
+  transition: transform 0.15s ease, background 0.15s ease;
 }
-.vc-textarea::placeholder {
-  color: var(--text-faint);
-}
-.vc-counter {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--text-faint);
-  text-align: right;
+.btn-express:active {
+  transform: scale(0.98);
 }
 
 /* ── Action bar (our own buttons, pinned bottom) ──────────────────────── */
@@ -538,13 +654,55 @@ a.vc-info-row .vc-info-text {
     transform: translateY(0);
   }
 }
+@keyframes heart-pop {
+  0% {
+    transform: scale(0.4);
+  }
+  60% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes peer-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 0.85;
+  }
+}
+@keyframes match-glow {
+  0%,
+  100% {
+    box-shadow:
+      var(--glass-edge),
+      0 0 0 1.5px rgba(182, 48, 79, 0.55),
+      0 10px 34px rgba(139, 37, 59, 0.35);
+  }
+  50% {
+    box-shadow:
+      var(--glass-edge),
+      0 0 0 1.5px rgba(182, 48, 79, 0.85),
+      0 10px 44px rgba(139, 37, 59, 0.55);
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .vc-header,
-  .vc-disclaimer,
   .vc-list,
   .vc-detail,
-  .vc-comment {
+  .vc-settled,
+  .glass-in,
+  .vc-card.is-match,
+  .vc-heart.is-mine .vc-heart-glyph,
+  .vc-heart.is-theirs::after,
+  .vc-agreed-badge,
+  .vc-settled-check {
     animation: none;
   }
 }

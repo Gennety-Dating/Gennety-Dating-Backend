@@ -1,32 +1,38 @@
 /**
- * Venue change Mini App (PRODUCT_SPEC §3.7b — female-exclusive one-shot swap).
+ * Venue change v2 Mini App (PRODUCT_SPEC §3.7b — paid multiplayer board).
  *
- * Opened from the female's scheduled-date DM via a `web_app` button →
+ * Opened from either side's scheduled-date DM via a `web_app` button →
  * `venue-change.html?match={id}&lang={en|ru|uk|de|pl}`. Full-screen Telegram
- * Web App, "Premium Lavender Glass" design (shared with the Ticket Mini Apps).
+ * Web App on the shared Liquid Glass tokens (theme.css), brand burgundy accent.
  *
- * Flow:
- *   1. Disclaimer (mandatory, blocking) — one-time / irreversible / partner can
- *      cancel the match / 3 km radius. Single "I understand" button.
- *   2. Catalog — alternatives within 3 km of the original venue (curated-first,
- *      Places fallback) as cards with **real venue photos**. Tap a card → 3.
- *   3. Detail — photo gallery + info + Google Maps link + "Propose this place".
- *      Only on "Propose" do we go to the reason step.
- *   4. Reason — mandatory ≥N-char explanation. On send we POST the pick +
- *      comment; the bot relays it to the male, who accepts or declines.
- *
- * The comment draft is cached to DeviceStorage so a swipe-down dismiss doesn't
- * wipe what she typed (same pattern as the calendar / feedback apps).
+ * Flow (no disclaimers — straight into the board):
+ *   1. Board — the current venue pinned on top ("picked for you", the eternal
+ *      default), then the 3 km catalog as glass cards. Each side hearts the
+ *      places they'd like; the partner's hearts land live (~4 s polling).
+ *      A single overlap agrees instantly; several at once ask the actor to
+ *      pick one (overlap sheet).
+ *   2. Detail — gallery + chips + Maps link; heart CTA, and (for her) the
+ *      express "change right now — N⭐" unilateral swap.
+ *   3. Agreed — the payment screen per the payer matrix: his pay(/decline)
+ *      fork, her pay-self / offer-him fork, or the priceless "agreed ✨" wait.
+ *      Payments open a native Stars invoice (WebApp.openInvoice).
+ *   4. Settled — the new venue is locked; the board closes for this date.
+ * A lapse (unpaid agreement) closes the board too — the original venue simply
+ * stands. Nothing here can ever cancel the match.
  */
 
 import "./venue-change.css";
 import {
-  fetchVenueChangeState,
+  fetchVenueBoardState,
   fetchVenueChangeCatalog,
-  proposeVenueChange,
+  submitVenueLikes,
+  confirmVenueChoice,
+  offerVenuePay,
+  declineVenuePayApi,
+  venueStarsInvoice,
   venueChangePhotoUrl,
   CalendarApiError,
-  type VenueChangeState,
+  type VenueBoardState,
   type VenueChangeCatalogItem,
 } from "./api.js";
 import { wireContentInsets } from "./telegram-insets.js";
@@ -51,22 +57,16 @@ try {
 }
 // Reserve room for Telegram's floating close × / menu ⋯ in fullscreen.
 wireContentInsets(app);
-// We drive the flow with our own in-page buttons; make sure a stale MainButton
-// from a previous version can never linger.
 app?.MainButton?.hide?.();
 
 const params = new URLSearchParams(location.search);
 const matchId = app?.initDataUnsafe?.start_param ?? params.get("match") ?? "";
 const queryLang = params.get("lang") ?? app?.initDataUnsafe?.user?.language_code ?? "";
-// Dev-only visual preview: `?preview` skips the eligibility/catalog fetches and
-// walks disclaimer → catalog → detail → comment with mock venues, so the
-// theming is reviewable without an eligible scheduled match. Inert in prod.
+// Dev-only visual preview: `?preview` walks the board/detail/pay screens with
+// mock data so the theming is reviewable without an eligible match. Inert in prod.
 const previewMode = import.meta.env.DEV && params.get("preview") !== null;
-// Telegram populates `app.initData` asynchronously (notably after a
-// `requestFullscreen()` boot on some clients), so the value at module load can
-// be empty — freezing it in a const then sends an empty `tma` header → 401
-// "Missing tma initData". Read it fresh at call time, exactly like the
-// calendar / onboarding Mini Apps do.
+// Telegram populates `app.initData` asynchronously on some clients — read it
+// fresh at call time (see the calendar Mini App for the war story).
 const getInitData = (): string => app?.initData ?? "";
 
 type Lang = "en" | "ru" | "uk" | "de" | "pl";
@@ -74,53 +74,58 @@ const SUPPORTED: ReadonlySet<Lang> = new Set(["en", "ru", "uk", "de", "pl"]);
 const lang: Lang = SUPPORTED.has(queryLang as Lang) ? (queryLang as Lang) : "en";
 document.documentElement?.setAttribute("lang", lang);
 
+// ---------------------------------------------------------------------------
+// Strings
+// ---------------------------------------------------------------------------
+
 interface Strings {
-  disclaimerTitle: string;
-  disclaimerLead: string;
-  disclaimerBullets: string[];
-  disclaimerContinue: string;
-  catalogTitle: string;
-  catalogLead: string;
+  boardTitle: string;
+  boardLead: string;
+  currentBadge: string;
+  matchBadge: string;
+  peerLikedChip: string;
   catalogEmpty: string;
   categoryLabels: Record<string, string>;
   kmAway: (km: number) => string;
-  detailProposeBtn: string;
   detailFallbackSummary: string;
   openMaps: string;
   back: string;
-  commentTitle: string;
-  commentLead: string;
-  commentPlaceholder: string;
-  mainConfirm: string;
-  mainSending: string;
+  heartAdd: string;
+  heartRemove: string;
+  expressBtn: (stars: number) => string;
+  expressHint: string;
+  overlapTitle: string;
+  overlapLead: string;
+  agreedTitle: string;
+  agreedWaitNote: string;
+  agreedDeclinedNote: string;
+  payBtn: (stars: number) => string;
+  paySelfBtn: (stars: number) => string;
+  offerBtn: string;
+  offerSentNote: string;
+  declineBtn: string;
+  finalizing: string;
+  settledTitle: string;
+  settledPeerPaid: string;
+  settledNote: string;
+  closedChanged: string;
+  closedCutoff: string;
+  closedGeneric: string;
   loading: string;
   fallbackNoMatch: string;
-  ineligibleGeneric: string;
-  ineligibleNotFemale: string;
-  ineligiblePastCutoff: string;
-  ineligibleAlreadyUsed: string;
-  ineligibleDisabled: string;
-  successAlert: string;
-  errTooShort: string;
-  errRange: string;
   errGeneric: string;
   errNetwork: string;
-  counter: (n: number, min: number) => string;
+  payFailed: string;
 }
 
 const T: Record<Lang, Strings> = {
   en: {
-    disclaimerTitle: "Change the venue",
-    disclaimerLead: "A few things to know before you pick a new place.",
-    disclaimerBullets: [
-      "You can propose a different place only once. This can't be undone.",
-      "Your match chooses: accept the new place, or cancel the date (cancelling ends the match forever).",
-      "Only places within 3 km of the original venue, so the trip stays comfortable for both of you.",
-    ],
-    disclaimerContinue: "I understand, continue",
-    catalogTitle: "Pick a new place",
-    catalogLead: "Spots within 3 km of your original venue. Tap one to see more.",
-    catalogEmpty: "No suitable places nearby right now. Your original venue stays as is.",
+    boardTitle: "Your date spot",
+    boardLead: "Heart the places you like — when your hearts meet, the venue changes.",
+    currentBadge: "Picked for you",
+    matchBadge: "It's a match!",
+    peerLikedChip: "Their ❤",
+    catalogEmpty: "No suitable places nearby right now. Your venue stays as is.",
     categoryLabels: {
       cafe: "Cafe",
       coffee_shop: "Coffee shop",
@@ -129,43 +134,44 @@ const T: Record<Lang, Strings> = {
       museum: "Museum",
       lounge: "Lounge",
     },
-    kmAway: (km) => `${km} km away`,
-    detailProposeBtn: "Propose this place",
+    kmAway: (km) => `${km} km`,
     detailFallbackSummary: "A relaxed spot for a first date.",
     openMaps: "Open in Google Maps",
     back: "Back",
-    commentTitle: "Tell your match why",
-    commentLead: "Only your match sees this note.",
-    commentPlaceholder:
-      "Write why you'd like to change the place (e.g. it's cosier / closer for me / I want to try their desserts)",
-    mainConfirm: "Send to my match",
-    mainSending: "Sending…",
+    heartAdd: "❤ Suggest together",
+    heartRemove: "Remove my heart",
+    expressBtn: (stars) => `⚡ Change right now — ${stars} ⭐`,
+    expressHint: "Your match will get an updated date card.",
+    overlapTitle: "Your hearts met!",
+    overlapLead: "You matched on several places — pick the one.",
+    agreedTitle: "You agreed on a new spot",
+    agreedWaitNote: "Agreed ✨ One last touch and your date cards update.",
+    agreedDeclinedNote: "The venue stays as planned for now.",
+    payBtn: (stars) => `⭐ Lock it in — ${stars}`,
+    paySelfBtn: (stars) => `⭐ Lock it in myself — ${stars}`,
+    offerBtn: "Ask them to lock it in 💌",
+    offerSentNote: "Your ask is on its way 💌 You can still lock it in yourself anytime.",
+    declineBtn: "Not this time",
+    finalizing: "Locking in your new spot…",
+    settledTitle: "New spot locked in!",
+    settledPeerPaid: "Your match locked it in for you ❤️",
+    settledNote: "Your date cards are updated. See you there!",
+    closedChanged: "The venue for this date was already changed.",
+    closedCutoff: "It's too close to the date to change the venue now.",
+    closedGeneric: "Changing the venue isn't available for this date.",
     loading: "Loading…",
     fallbackNoMatch: "Open this from your scheduled-date message in the bot.",
-    ineligibleGeneric: "Changing the venue isn't available for this date.",
-    ineligibleNotFemale: "Only your match can change this venue.",
-    ineligiblePastCutoff: "It's too close to the date to change the venue now.",
-    ineligibleAlreadyUsed: "You've already used your one venue change for this date.",
-    ineligibleDisabled: "Changing the venue isn't available right now.",
-    successAlert: "Sent! Your match will accept the new place or keep the date as is.",
-    errTooShort: "Please write at least a short note for your match.",
-    errRange: "That place is too far from the original venue. Pick one closer.",
-    errGeneric: "Couldn't send your request. Try again.",
+    errGeneric: "Something went wrong. Try again.",
     errNetwork: "Network error. Check your connection and try again.",
-    counter: (n, min) => (n < min ? `${n}/${min} — a little more` : `${n} characters`),
+    payFailed: "The payment didn't go through. Nothing was charged — try again.",
   },
   ru: {
-    disclaimerTitle: "Смена места",
-    disclaimerLead: "Несколько важных моментов перед выбором нового места.",
-    disclaimerBullets: [
-      "Предложить другое место можно только один раз. Это нельзя отменить.",
-      "Партнёр выбирает: согласиться на новое место или отменить свидание (отмена аннулирует метч навсегда).",
-      "Только места в радиусе 3 км от исходного, чтобы дорога осталась удобной для вас обоих.",
-    ],
-    disclaimerContinue: "Я понимаю, продолжить",
-    catalogTitle: "Выберите новое место",
-    catalogLead: "Места в радиусе 3 км от исходного. Нажмите, чтобы узнать больше.",
-    catalogEmpty: "Подходящих мест рядом сейчас нет. Исходное место остаётся в силе.",
+    boardTitle: "Место свидания",
+    boardLead: "Отмечайте сердечками места, которые нравятся, — совпадение меняет место.",
+    currentBadge: "Выбрано для вас",
+    matchBadge: "Совпадение!",
+    peerLikedChip: "❤ пары",
+    catalogEmpty: "Подходящих мест рядом сейчас нет. Ваше место остаётся в силе.",
     categoryLabels: {
       cafe: "Кафе",
       coffee_shop: "Кофейня",
@@ -175,42 +181,43 @@ const T: Record<Lang, Strings> = {
       lounge: "Лаундж",
     },
     kmAway: (km) => `${km} км`,
-    detailProposeBtn: "Предложить это место",
     detailFallbackSummary: "Спокойное место для первого свидания.",
     openMaps: "Открыть в Google Maps",
     back: "Назад",
-    commentTitle: "Объясните партнёру почему",
-    commentLead: "Эту записку увидит только ваш партнёр.",
-    commentPlaceholder:
-      "Напишите, почему хотите изменить место (например: там уютнее / мне ближе / хочу попробовать их десерты)",
-    mainConfirm: "Отправить партнёру",
-    mainSending: "Отправляем…",
+    heartAdd: "❤ Предложить вместе",
+    heartRemove: "Убрать сердечко",
+    expressBtn: (stars) => `⚡ Поменять сразу — ${stars} ⭐`,
+    expressHint: "Партнёр получит обновлённую карточку свидания.",
+    overlapTitle: "Ваши сердечки совпали!",
+    overlapLead: "Вы совпали в нескольких местах — выберите одно.",
+    agreedTitle: "Вы сошлись на новом месте",
+    agreedWaitNote: "Согласовано ✨ Последний штрих — и карточки свидания обновятся.",
+    agreedDeclinedNote: "Место пока остаётся прежним.",
+    payBtn: (stars) => `⭐ Закрепить — ${stars}`,
+    paySelfBtn: (stars) => `⭐ Закрепить самой — ${stars}`,
+    offerBtn: "Предложить закрепить партнёру 💌",
+    offerSentNote: "Предложение отправлено 💌 Закрепить самой можно в любой момент.",
+    declineBtn: "Не в этот раз",
+    finalizing: "Закрепляем новое место…",
+    settledTitle: "Новое место закреплено!",
+    settledPeerPaid: "Партнёр закрепил его для вас ❤️",
+    settledNote: "Карточки свидания обновлены. До встречи!",
+    closedChanged: "Место для этого свидания уже меняли.",
+    closedCutoff: "Слишком близко к свиданию, чтобы менять место.",
+    closedGeneric: "Смена места недоступна для этого свидания.",
     loading: "Загрузка…",
     fallbackNoMatch: "Откройте это из сообщения о свидании в боте.",
-    ineligibleGeneric: "Смена места недоступна для этого свидания.",
-    ineligibleNotFemale: "Сменить это место может только ваш партнёр.",
-    ineligiblePastCutoff: "Слишком близко к свиданию, чтобы менять место.",
-    ineligibleAlreadyUsed: "Вы уже использовали свою единственную смену места.",
-    ineligibleDisabled: "Смена места сейчас недоступна.",
-    successAlert: "Отправлено! Партнёр согласится на новое место или оставит свидание как есть.",
-    errTooShort: "Напишите хотя бы короткое пояснение для партнёра.",
-    errRange: "Это место слишком далеко от исходного. Выберите ближе.",
-    errGeneric: "Не удалось отправить запрос. Попробуйте снова.",
+    errGeneric: "Что-то пошло не так. Попробуйте снова.",
     errNetwork: "Ошибка сети. Проверьте соединение и попробуйте снова.",
-    counter: (n, min) => (n < min ? `${n}/${min} — ещё немного` : `${n} символов`),
+    payFailed: "Оплата не прошла. Ничего не списано — попробуйте ещё раз.",
   },
   uk: {
-    disclaimerTitle: "Зміна місця",
-    disclaimerLead: "Кілька важливих моментів перед вибором нового місця.",
-    disclaimerBullets: [
-      "Запропонувати інше місце можна лише один раз. Це не можна скасувати.",
-      "Партнер обирає: погодитися на нове місце або скасувати побачення (скасування анулює метч назавжди).",
-      "Лише місця в радіусі 3 км від початкового, щоб дорога залишалася зручною для вас обох.",
-    ],
-    disclaimerContinue: "Я розумію, продовжити",
-    catalogTitle: "Оберіть нове місце",
-    catalogLead: "Місця в радіусі 3 км від початкового. Натисніть, щоб дізнатися більше.",
-    catalogEmpty: "Підходящих місць поруч зараз немає. Початкове місце залишається.",
+    boardTitle: "Місце побачення",
+    boardLead: "Позначайте серденьками місця, які подобаються, — збіг змінює місце.",
+    currentBadge: "Обрано для вас",
+    matchBadge: "Збіг!",
+    peerLikedChip: "❤ пари",
+    catalogEmpty: "Підходящих місць поруч зараз немає. Ваше місце залишається.",
     categoryLabels: {
       cafe: "Кафе",
       coffee_shop: "Кав'ярня",
@@ -220,42 +227,43 @@ const T: Record<Lang, Strings> = {
       lounge: "Лаундж",
     },
     kmAway: (km) => `${km} км`,
-    detailProposeBtn: "Запропонувати це місце",
     detailFallbackSummary: "Спокійне місце для першого побачення.",
     openMaps: "Відкрити в Google Maps",
     back: "Назад",
-    commentTitle: "Поясніть партнеру чому",
-    commentLead: "Цю записку побачить лише ваш партнер.",
-    commentPlaceholder:
-      "Напишіть, чому хочете змінити місце (наприклад: там затишніше / мені ближче / хочу спробувати їхні десерти)",
-    mainConfirm: "Надіслати партнеру",
-    mainSending: "Надсилаємо…",
+    heartAdd: "❤ Запропонувати разом",
+    heartRemove: "Прибрати серденько",
+    expressBtn: (stars) => `⚡ Змінити одразу — ${stars} ⭐`,
+    expressHint: "Партнер отримає оновлену картку побачення.",
+    overlapTitle: "Ваші серденька збіглися!",
+    overlapLead: "Ви збіглися в кількох місцях — оберіть одне.",
+    agreedTitle: "Ви зійшлися на новому місці",
+    agreedWaitNote: "Погоджено ✨ Останній штрих — і картки побачення оновляться.",
+    agreedDeclinedNote: "Місце поки залишається тим самим.",
+    payBtn: (stars) => `⭐ Закріпити — ${stars}`,
+    paySelfBtn: (stars) => `⭐ Закріпити самій — ${stars}`,
+    offerBtn: "Запропонувати закріпити партнеру 💌",
+    offerSentNote: "Пропозицію надіслано 💌 Закріпити самій можна будь-коли.",
+    declineBtn: "Не цього разу",
+    finalizing: "Закріплюємо нове місце…",
+    settledTitle: "Нове місце закріплено!",
+    settledPeerPaid: "Партнер закріпив його для вас ❤️",
+    settledNote: "Картки побачення оновлено. До зустрічі!",
+    closedChanged: "Місце для цього побачення вже змінювали.",
+    closedCutoff: "Занадто близько до побачення, щоб змінювати місце.",
+    closedGeneric: "Зміна місця недоступна для цього побачення.",
     loading: "Завантаження…",
     fallbackNoMatch: "Відкрийте це з повідомлення про побачення в боті.",
-    ineligibleGeneric: "Зміна місця недоступна для цього побачення.",
-    ineligibleNotFemale: "Змінити це місце може лише ваш партнер.",
-    ineligiblePastCutoff: "Занадто близько до побачення, щоб змінювати місце.",
-    ineligibleAlreadyUsed: "Ви вже використали свою єдину зміну місця.",
-    ineligibleDisabled: "Зміна місця зараз недоступна.",
-    successAlert: "Надіслано! Партнер погодиться на нове місце або залишить побачення як є.",
-    errTooShort: "Напишіть хоча б коротке пояснення для партнера.",
-    errRange: "Це місце надто далеко від початкового. Оберіть ближче.",
-    errGeneric: "Не вдалося надіслати запит. Спробуйте ще раз.",
+    errGeneric: "Щось пішло не так. Спробуйте ще раз.",
     errNetwork: "Помилка мережі. Перевірте з'єднання та спробуйте ще раз.",
-    counter: (n, min) => (n < min ? `${n}/${min} — ще трохи` : `${n} символів`),
+    payFailed: "Оплата не пройшла. Нічого не списано — спробуйте ще раз.",
   },
   de: {
-    disclaimerTitle: "Ort ändern",
-    disclaimerLead: "Ein paar Dinge, die du vor der Wahl wissen solltest.",
-    disclaimerBullets: [
-      "Du kannst nur einmal einen anderen Ort vorschlagen. Das lässt sich nicht rückgängig machen.",
-      "Dein Match entscheidet: den neuen Ort akzeptieren oder das Date absagen (Absagen beendet das Match für immer).",
-      "Nur Orte im Umkreis von 3 km des ursprünglichen Ortes, damit der Weg für euch beide bequem bleibt.",
-    ],
-    disclaimerContinue: "Ich verstehe, weiter",
-    catalogTitle: "Neuen Ort wählen",
-    catalogLead: "Orte im Umkreis von 3 km. Tippe auf einen, um mehr zu sehen.",
-    catalogEmpty: "Gerade keine passenden Orte in der Nähe. Dein ursprünglicher Ort bleibt bestehen.",
+    boardTitle: "Euer Date-Ort",
+    boardLead: "Markiere Orte mit Herzen — treffen sich eure Herzen, wechselt der Ort.",
+    currentBadge: "Für euch gewählt",
+    matchBadge: "Match!",
+    peerLikedChip: "❤ Match",
+    catalogEmpty: "Gerade keine passenden Orte in der Nähe. Euer Ort bleibt bestehen.",
     categoryLabels: {
       cafe: "Café",
       coffee_shop: "Coffee Shop",
@@ -264,43 +272,44 @@ const T: Record<Lang, Strings> = {
       museum: "Museum",
       lounge: "Lounge",
     },
-    kmAway: (km) => `${km} km entfernt`,
-    detailProposeBtn: "Diesen Ort vorschlagen",
+    kmAway: (km) => `${km} km`,
     detailFallbackSummary: "Ein entspannter Ort für ein erstes Date.",
     openMaps: "In Google Maps öffnen",
     back: "Zurück",
-    commentTitle: "Sag deinem Match warum",
-    commentLead: "Nur dein Match sieht diese Notiz.",
-    commentPlaceholder:
-      "Schreibe, warum du den Ort ändern möchtest (z. B. gemütlicher / näher für mich / ich möchte ihre Desserts probieren)",
-    mainConfirm: "An mein Match senden",
-    mainSending: "Senden…",
+    heartAdd: "❤ Gemeinsam vorschlagen",
+    heartRemove: "Herz entfernen",
+    expressBtn: (stars) => `⚡ Sofort ändern — ${stars} ⭐`,
+    expressHint: "Dein Match bekommt eine aktualisierte Date-Karte.",
+    overlapTitle: "Eure Herzen haben sich getroffen!",
+    overlapLead: "Ihr habt mehrere Orte gemeinsam — wählt einen aus.",
+    agreedTitle: "Ihr habt euch auf einen neuen Ort geeinigt",
+    agreedWaitNote: "Vereinbart ✨ Ein letzter Schritt — dann werden eure Karten aktualisiert.",
+    agreedDeclinedNote: "Der Ort bleibt vorerst wie geplant.",
+    payBtn: (stars) => `⭐ Sichern — ${stars}`,
+    paySelfBtn: (stars) => `⭐ Selbst sichern — ${stars}`,
+    offerBtn: "Deinem Match das Sichern anbieten 💌",
+    offerSentNote: "Anfrage unterwegs 💌 Du kannst jederzeit selbst sichern.",
+    declineBtn: "Nicht diesmal",
+    finalizing: "Neuer Ort wird gesichert…",
+    settledTitle: "Neuer Ort gesichert!",
+    settledPeerPaid: "Dein Match hat ihn für dich gesichert ❤️",
+    settledNote: "Eure Date-Karten sind aktualisiert. Bis dann!",
+    closedChanged: "Der Ort für dieses Date wurde bereits geändert.",
+    closedCutoff: "Zu kurz vor dem Date, um den Ort zu ändern.",
+    closedGeneric: "Das Ändern des Ortes ist für dieses Date nicht verfügbar.",
     loading: "Wird geladen…",
     fallbackNoMatch: "Öffne dies über deine Date-Nachricht im Bot.",
-    ineligibleGeneric: "Das Ändern des Ortes ist für dieses Date nicht verfügbar.",
-    ineligibleNotFemale: "Nur dein Match kann diesen Ort ändern.",
-    ineligiblePastCutoff: "Es ist zu kurz vor dem Date, um den Ort jetzt zu ändern.",
-    ineligibleAlreadyUsed: "Du hast deine eine Ortsänderung für dieses Date bereits genutzt.",
-    ineligibleDisabled: "Das Ändern des Ortes ist gerade nicht verfügbar.",
-    successAlert: "Gesendet! Dein Match akzeptiert den neuen Ort oder behält das Date bei.",
-    errTooShort: "Bitte schreibe deinem Match wenigstens eine kurze Notiz.",
-    errRange: "Dieser Ort ist zu weit vom ursprünglichen entfernt. Wähle einen näheren.",
-    errGeneric: "Anfrage konnte nicht gesendet werden. Versuch es erneut.",
+    errGeneric: "Etwas ist schiefgelaufen. Versuch es erneut.",
     errNetwork: "Netzwerkfehler. Prüfe deine Verbindung und versuch es erneut.",
-    counter: (n, min) => (n < min ? `${n}/${min} — etwas mehr` : `${n} Zeichen`),
+    payFailed: "Die Zahlung ging nicht durch. Nichts wurde abgebucht — versuch es erneut.",
   },
   pl: {
-    disclaimerTitle: "Zmiana miejsca",
-    disclaimerLead: "Kilka rzeczy, które warto wiedzieć przed wyborem.",
-    disclaimerBullets: [
-      "Inne miejsce możesz zaproponować tylko raz. Tego nie da się cofnąć.",
-      "Twoja para wybiera: zaakceptować nowe miejsce albo odwołać randkę (odwołanie kończy dopasowanie na zawsze).",
-      "Tylko miejsca w promieniu 3 km od pierwotnego, aby dojazd był wygodny dla was obojga.",
-    ],
-    disclaimerContinue: "Rozumiem, dalej",
-    catalogTitle: "Wybierz nowe miejsce",
-    catalogLead: "Miejsca w promieniu 3 km. Dotknij, aby zobaczyć więcej.",
-    catalogEmpty: "Brak odpowiednich miejsc w pobliżu. Pierwotne miejsce pozostaje.",
+    boardTitle: "Miejsce randki",
+    boardLead: "Zaznaczaj serduszkami miejsca, które Ci się podobają — zbieżność zmienia miejsce.",
+    currentBadge: "Wybrane dla was",
+    matchBadge: "Zbieżność!",
+    peerLikedChip: "❤ pary",
+    catalogEmpty: "Brak odpowiednich miejsc w pobliżu. Wasze miejsce pozostaje.",
     categoryLabels: {
       cafe: "Kawiarnia",
       coffee_shop: "Kawiarnia",
@@ -309,30 +318,36 @@ const T: Record<Lang, Strings> = {
       museum: "Muzeum",
       lounge: "Lounge",
     },
-    kmAway: (km) => `${km} km stąd`,
-    detailProposeBtn: "Zaproponuj to miejsce",
+    kmAway: (km) => `${km} km`,
     detailFallbackSummary: "Spokojne miejsce na pierwszą randkę.",
     openMaps: "Otwórz w Google Maps",
     back: "Wstecz",
-    commentTitle: "Wyjaśnij parze dlaczego",
-    commentLead: "Tę notatkę zobaczy tylko Twoja para.",
-    commentPlaceholder:
-      "Napisz, dlaczego chcesz zmienić miejsce (np. jest przytulniej / bliżej dla mnie / chcę spróbować ich deserów)",
-    mainConfirm: "Wyślij do pary",
-    mainSending: "Wysyłanie…",
+    heartAdd: "❤ Zaproponuj razem",
+    heartRemove: "Usuń serduszko",
+    expressBtn: (stars) => `⚡ Zmień od razu — ${stars} ⭐`,
+    expressHint: "Twoja para dostanie zaktualizowaną kartę randki.",
+    overlapTitle: "Wasze serduszka się spotkały!",
+    overlapLead: "Zgadzacie się w kilku miejscach — wybierz jedno.",
+    agreedTitle: "Zgodziliście się na nowe miejsce",
+    agreedWaitNote: "Uzgodnione ✨ Ostatni krok — i wasze karty się zaktualizują.",
+    agreedDeclinedNote: "Miejsce na razie zostaje bez zmian.",
+    payBtn: (stars) => `⭐ Zatwierdź — ${stars}`,
+    paySelfBtn: (stars) => `⭐ Zatwierdź samodzielnie — ${stars}`,
+    offerBtn: "Zaproponuj parze zatwierdzenie 💌",
+    offerSentNote: "Propozycja wysłana 💌 Możesz zatwierdzić samodzielnie w każdej chwili.",
+    declineBtn: "Nie tym razem",
+    finalizing: "Zatwierdzamy nowe miejsce…",
+    settledTitle: "Nowe miejsce zatwierdzone!",
+    settledPeerPaid: "Twoja para zatwierdziła je dla Ciebie ❤️",
+    settledNote: "Karty randki zaktualizowane. Do zobaczenia!",
+    closedChanged: "Miejsce tej randki było już zmieniane.",
+    closedCutoff: "Zbyt blisko randki, aby zmieniać miejsce.",
+    closedGeneric: "Zmiana miejsca jest niedostępna dla tej randki.",
     loading: "Ładowanie…",
     fallbackNoMatch: "Otwórz to z wiadomości o randce w bocie.",
-    ineligibleGeneric: "Zmiana miejsca jest niedostępna dla tej randki.",
-    ineligibleNotFemale: "Tylko Twoja para może zmienić to miejsce.",
-    ineligiblePastCutoff: "Zbyt blisko randki, aby teraz zmieniać miejsce.",
-    ineligibleAlreadyUsed: "Wykorzystałeś już swoją jedną zmianę miejsca.",
-    ineligibleDisabled: "Zmiana miejsca jest teraz niedostępna.",
-    successAlert: "Wysłano! Twoja para zaakceptuje nowe miejsce lub zostawi randkę bez zmian.",
-    errTooShort: "Napisz parze chociaż krótką notatkę.",
-    errRange: "To miejsce jest zbyt daleko od pierwotnego. Wybierz bliższe.",
-    errGeneric: "Nie udało się wysłać prośby. Spróbuj ponownie.",
+    errGeneric: "Coś poszło nie tak. Spróbuj ponownie.",
     errNetwork: "Błąd sieci. Sprawdź połączenie i spróbuj ponownie.",
-    counter: (n, min) => (n < min ? `${n}/${min} — jeszcze trochę` : `${n} znaków`),
+    payFailed: "Płatność nie przeszła. Nic nie pobrano — spróbuj ponownie.",
   },
 };
 const s = T[lang];
@@ -352,47 +367,6 @@ function categoryLabel(category: string): string {
   return s.categoryLabels[category] ?? category;
 }
 
-// ── DeviceStorage (comment draft) ──
-function ds(): TelegramWebAppDeviceStorage | null {
-  return window.Telegram?.WebApp?.DeviceStorage ?? null;
-}
-function readKey(key: string): Promise<string | null> {
-  const store = ds();
-  if (!store) {
-    try {
-      return Promise.resolve(window.localStorage.getItem(key));
-    } catch {
-      return Promise.resolve(null);
-    }
-  }
-  return new Promise((resolve) => store.getItem(key, (_e, v) => resolve(v ?? null)));
-}
-function writeKey(key: string, value: string): void {
-  const store = ds();
-  if (!store) {
-    try {
-      window.localStorage.setItem(key, value);
-    } catch {
-      /* ignore */
-    }
-    return;
-  }
-  store.setItem(key, value, () => undefined);
-}
-function clearKey(key: string): void {
-  const store = ds();
-  if (!store) {
-    try {
-      window.localStorage.removeItem(key);
-    } catch {
-      /* ignore */
-    }
-    return;
-  }
-  store.removeItem(key, () => undefined);
-}
-const draftKey = `gennety.venue-change.${matchId}`;
-
 function haptic(kind: "light" | "success" | "error" | "select"): void {
   const hf = app?.HapticFeedback;
   if (!hf) return;
@@ -405,7 +379,10 @@ function haptic(kind: "light" | "success" | "error" | "select"): void {
   }
 }
 
-// ── Tiny DOM helper ──
+// ---------------------------------------------------------------------------
+// Tiny DOM helpers
+// ---------------------------------------------------------------------------
+
 interface ElAttrs {
   class?: string;
   text?: string;
@@ -413,12 +390,10 @@ interface ElAttrs {
   target?: string;
   rel?: string;
   type?: string;
-  placeholder?: string;
-  maxLength?: number;
   disabled?: boolean;
   ariaHidden?: boolean;
   bg?: string | null;
-  onClick?: () => void;
+  onClick?: (e: Event) => void;
 }
 function el(tag: string, attrs: ElAttrs = {}, children: Array<Node | string> = []): HTMLElement {
   const node = document.createElement(tag);
@@ -428,8 +403,6 @@ function el(tag: string, attrs: ElAttrs = {}, children: Array<Node | string> = [
   if (attrs.target) node.setAttribute("target", attrs.target);
   if (attrs.rel) node.setAttribute("rel", attrs.rel);
   if (attrs.type) node.setAttribute("type", attrs.type);
-  if (attrs.placeholder) (node as HTMLTextAreaElement).placeholder = attrs.placeholder;
-  if (attrs.maxLength != null) (node as HTMLTextAreaElement).maxLength = attrs.maxLength;
   if (attrs.disabled != null) (node as HTMLButtonElement).disabled = attrs.disabled;
   if (attrs.ariaHidden) node.setAttribute("aria-hidden", "true");
   if (attrs.bg) node.style.backgroundImage = `url("${attrs.bg}")`;
@@ -475,16 +448,11 @@ function galleryUrls(v: VenueChangeCatalogItem): string[] {
   if (v.photoUrl) return [v.photoUrl];
   return v.photoRefs.map((ref) => venueChangePhotoUrl(getInitData(), ref, 1000));
 }
-function mapsHref(v: VenueChangeCatalogItem): string {
-  if (v.mapsUri && /^https?:\/\//i.test(v.mapsUri)) return v.mapsUri;
-  const q = [v.name, v.address].filter(Boolean).join(", ");
+function mapsHref(name: string, address: string, mapsUri: string | null): string {
+  if (mapsUri && /^https?:\/\//i.test(mapsUri)) return mapsUri;
+  const q = [name, address].filter(Boolean).join(", ");
   return `https://maps.google.com/?q=${encodeURIComponent(q)}`;
 }
-/**
- * Open a link the Telegram-native way when possible. Returns true when handled
- * (so the caller can `preventDefault`); false leaves the anchor's default
- * `target=_blank` to do the work on clients without `openLink`.
- */
 function openExternal(url: string): boolean {
   const opener = (app as unknown as { openLink?: (u: string) => void } | undefined)?.openLink;
   if (opener) {
@@ -495,165 +463,247 @@ function openExternal(url: string): boolean {
 }
 
 // ── Centered states ──
-function showLoading(): void {
+function showLoading(text = s.loading): void {
   setBack(null);
-  mount(el("div", { class: "vc-page" }, [
-    el("div", { class: "vc-center" }, [el("div", { class: "spinner" }), el("p", { text: s.loading })]),
-  ]));
-}
-function showMessage(icon: string, text: string): void {
-  setBack(null);
-  mount(el("div", { class: "vc-page" }, [
-    el("div", { class: "vc-center" }, [
-      el("div", { class: "vc-state-icon", text: icon }),
-      el("p", { text }),
+  mount(
+    el("div", { class: "vc-page" }, [
+      el("div", { class: "vc-center" }, [el("div", { class: "spinner" }), el("p", { text })]),
     ]),
-  ]));
+  );
+}
+function showMessage(icon: string, text: string, sub?: string): void {
+  setBack(null);
+  const nodes: Node[] = [
+    el("div", { class: "vc-state-icon", text: icon }),
+    el("p", { text }),
+  ];
+  if (sub) nodes.push(el("p", { class: "vc-note", text: sub }));
+  mount(el("div", { class: "vc-page" }, [el("div", { class: "vc-center" }, nodes)]));
 }
 
-let stateView: VenueChangeState | null = null;
+// ---------------------------------------------------------------------------
+// App state + polling
+// ---------------------------------------------------------------------------
 
-// Mock catalog for the dev `?preview` walkthrough (photoUrl null → the themed
-// gradient placeholders show, which is what we're reviewing).
-function mockCatalog(): VenueChangeCatalogItem[] {
-  const mk = (
-    name: string,
-    address: string,
-    category: string,
-    distanceKm: number,
-    rating: number,
-    count: number,
-    summary: string,
-  ): VenueChangeCatalogItem => ({
-    source: "curated",
-    placeId: null,
-    name,
-    address,
-    lat: 0,
-    lng: 0,
-    mapsUri: null,
-    category,
-    distanceKm,
-    photoUrl: null,
-    photoRefs: [],
-    rating,
-    userRatingCount: count,
-    editorialSummary: summary,
-  });
-  return [
-    mk("Кофейня «Молоко»", "ул. Крещатик, 14", "cafe", 0.4, 4.7, 320, "Уютная спешелти-кофейня с видом на бульвар."),
-    mk("Bar Chill", "ул. Лютеранская, 3", "lounge", 0.9, 4.5, 210, "Тихий коктейльный бар с мягким светом."),
-    mk("Парк «Владимирская горка»", "Владимирский спуск", "park", 1.3, 4.8, 540, "Панорама Днепра и тенистые аллеи."),
-  ];
+let boardState: VenueBoardState | null = null;
+let catalog: VenueChangeCatalogItem[] = [];
+let myLikes = new Set<string>();
+/** Which screen is showing — polling only live-updates the board itself. */
+let screen: "board" | "detail" | "overlap" | "agreed" | "other" = "other";
+let pollTimer: number | null = null;
+/** Suppresses poll re-routing while a payment / request is in flight. */
+let busy = false;
+
+function catalogByKey(key: string): VenueChangeCatalogItem | null {
+  return catalog.find((v) => keyOf(v) === key) ?? null;
+}
+function keyOf(v: VenueChangeCatalogItem): string {
+  return v.placeId ?? `${v.name}|${v.address}`;
+}
+
+function startPolling(): void {
+  if (pollTimer != null || previewMode) return;
+  pollTimer = window.setInterval(() => {
+    void (async () => {
+      if (busy) return;
+      try {
+        const fresh = await fetchVenueBoardState(getInitData(), matchId);
+        const prev = boardState;
+        boardState = fresh;
+        if (!prev) return;
+        // Status flips (agreement, settle, lapse, his decline) re-route.
+        if (fresh.status !== prev.status || fresh.myAction !== prev.myAction) {
+          route();
+          return;
+        }
+        // On the live board, only the partner's hearts change under us.
+        if (screen === "board" && fresh.peerLikes.join() !== prev.peerLikes.join()) {
+          renderBoard(true);
+        }
+      } catch {
+        /* transient poll failure — next tick retries */
+      }
+    })();
+  }, 4000);
+}
+function stopPolling(): void {
+  if (pollTimer != null) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+function errorMessage(err: unknown): string {
+  if (!(err instanceof CalendarApiError)) return s.errNetwork;
+  switch (err.reason) {
+    case "already-changed":
+      return s.closedChanged;
+    case "past-cutoff":
+      return s.closedCutoff;
+    default:
+      return s.errGeneric;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Routing
+// ---------------------------------------------------------------------------
+
+function route(): void {
+  const st = boardState;
+  if (!st) return;
+  if (st.settled) {
+    stopPolling();
+    renderSettled(st);
+    return;
+  }
+  if (st.status === "agreed" && st.agreed) {
+    renderAgreed(st);
+    return;
+  }
+  if (st.status === "agreed" && !st.agreed) {
+    // Hidden express mint on the partner's side — hold on the (frozen) board.
+    renderBoard();
+    return;
+  }
+  if (!st.open) {
+    stopPolling();
+    const msg =
+      st.closedReason === "already-changed" || st.status === "lapsed"
+        ? s.closedChanged
+        : st.closedReason === "past-cutoff"
+          ? s.closedCutoff
+          : s.closedGeneric;
+    showMessage("📍", msg, st.original.name ?? undefined);
+    return;
+  }
+  renderBoard();
 }
 
 async function main(): Promise<void> {
-  if (!matchId) {
+  if (!matchId && !previewMode) {
     showMessage("🗺️", s.fallbackNoMatch);
     return;
   }
   showLoading();
 
   if (previewMode) {
-    stateView = {
-      status: "scheduled",
-      eligible: true,
-      ineligibleReason: null,
-      minCommentLength: 10,
-      original: { name: "Кафе «Старое место»", address: "ул. Прорезная, 8", mapsUri: null },
-    };
-    renderDisclaimer();
-    return;
-  }
-
-  try {
-    stateView = await fetchVenueChangeState(getInitData(), matchId);
-  } catch {
-    showMessage("⚠️", s.errGeneric);
-    return;
-  }
-
-  if (!stateView.eligible) {
-    showMessage("🔒", ineligibleMessage(stateView.ineligibleReason));
-    return;
-  }
-
-  renderDisclaimer();
-}
-
-function ineligibleMessage(reason: string | null): string {
-  switch (reason) {
-    case "not-female-initiator":
-    case "not-participant":
-      return s.ineligibleNotFemale;
-    case "past-cutoff":
-      return s.ineligiblePastCutoff;
-    case "already-used":
-      return s.ineligibleAlreadyUsed;
-    case "feature-disabled":
-      return s.ineligibleDisabled;
-    default:
-      return s.ineligibleGeneric;
-  }
-}
-
-// ── Step 1: disclaimer ──
-function renderDisclaimer(): void {
-  setBack(null);
-  const header = el("div", { class: "vc-header" }, [
-    el("h1", { class: "vc-h1", text: s.disclaimerTitle }),
-    el("p", { class: "vc-lead", text: s.disclaimerLead }),
-  ]);
-  const rules = el(
-    "div",
-    { class: "vc-disclaimer" },
-    s.disclaimerBullets.map((b) =>
-      el("div", { class: "vc-rule" }, [
-        el("div", { class: "vc-rule-mark", text: "◆", ariaHidden: true }),
-        el("div", { class: "vc-rule-text", text: b }),
-      ]),
-    ),
-  );
-  const cont = el("button", { class: "btn-primary", type: "button", text: s.disclaimerContinue, onClick: () => {
-    haptic("light");
-    void loadCatalog();
-  } });
-  mount(page([header, rules], [cont]));
-}
-
-// ── Step 2: catalog ──
-let catalog: VenueChangeCatalogItem[] = [];
-
-async function loadCatalog(): Promise<void> {
-  showLoading();
-  if (previewMode) {
+    boardState = mockState();
     catalog = mockCatalog();
-    renderCatalog();
+    myLikes = new Set(boardState.myLikes);
+    route();
     return;
   }
+
   try {
-    catalog = await fetchVenueChangeCatalog(getInitData(), matchId);
+    boardState = await fetchVenueBoardState(getInitData(), matchId);
+    if (boardState.open) {
+      catalog = await fetchVenueChangeCatalog(getInitData(), matchId);
+    }
   } catch (err) {
-    showMessage("⚠️", err instanceof CalendarApiError ? ineligibleMessage(err.reason ?? null) : s.errGeneric);
+    showMessage("⚠️", errorMessage(err));
     return;
   }
-  renderCatalog();
+  myLikes = new Set(boardState.myLikes);
+  startPolling();
+  route();
 }
 
-function renderCatalog(): void {
-  setBack(() => renderDisclaimer());
+// ---------------------------------------------------------------------------
+// Board
+// ---------------------------------------------------------------------------
+
+function renderBoard(preserveScroll = false): void {
+  screen = "board";
+  setBack(null);
+  const st = boardState;
+  if (!st) return;
+
+  const prevScroll = preserveScroll
+    ? (document.querySelector(".vc-scroll")?.scrollTop ?? 0)
+    : 0;
+
   const header = el("div", { class: "vc-header" }, [
-    el("h1", { class: "vc-h1", text: s.catalogTitle }),
-    el("p", { class: "vc-lead", text: s.catalogLead }),
+    el("h1", { class: "vc-h1", text: s.boardTitle }),
+    el("p", { class: "vc-lead", text: s.boardLead }),
   ]);
 
+  // The current venue — the eternal default, pinned on top.
+  const current = el("div", { class: "vc-current glass-in" }, [
+    el("div", { class: "vc-current-badge", text: s.currentBadge }),
+    el("div", { class: "vc-current-name", text: st.original.name ?? "" }),
+    el("div", { class: "vc-current-addr", text: st.original.address ?? "" }),
+  ]);
+
+  const nodes: Node[] = [header, current];
   if (catalog.length === 0) {
-    mount(page([header, el("p", { class: "vc-lead", text: s.catalogEmpty })]));
-    return;
+    nodes.push(el("p", { class: "vc-lead", text: s.catalogEmpty }));
+  } else {
+    nodes.push(el("div", { class: "vc-list" }, catalog.map((v) => renderVenueCard(v))));
   }
 
-  const list = el("div", { class: "vc-list" }, catalog.map((v) => renderVenueCard(v)));
-  mount(page([header, list]));
+  mount(page(nodes));
+  if (preserveScroll && prevScroll) {
+    const scroller = document.querySelector(".vc-scroll");
+    if (scroller) scroller.scrollTop = prevScroll;
+  }
+}
+
+function heartButton(v: VenueChangeCatalogItem): HTMLElement {
+  const key = keyOf(v);
+  const mine = myLikes.has(key);
+  const theirs = boardState?.peerLikes.includes(key) ?? false;
+  const cls = `vc-heart${mine ? " is-mine" : ""}${theirs ? " is-theirs" : ""}`;
+  return el(
+    "button",
+    {
+      class: cls,
+      type: "button",
+      onClick: (e) => {
+        e.stopPropagation();
+        void toggleLike(v);
+      },
+    },
+    [el("span", { class: "vc-heart-glyph", text: mine ? "❤" : "♡", ariaHidden: true })],
+  );
+}
+
+function renderVenueCard(v: VenueChangeCatalogItem): HTMLElement {
+  const key = keyOf(v);
+  const theirs = boardState?.peerLikes.includes(key) ?? false;
+  const both = theirs && myLikes.has(key);
+
+  const chips: Node[] = [
+    el("span", { class: "vc-chip", text: `${categoryGlyph(v.category)} ${s.kmAway(v.distanceKm)}` }),
+  ];
+  if (v.rating != null) {
+    chips.push(el("span", { class: "vc-chip" }, [
+      el("span", { class: "vc-chip-star", text: "★", ariaHidden: true }),
+      ` ${v.rating.toFixed(1)}`,
+    ]));
+  }
+  if (theirs && !both) chips.push(el("span", { class: "vc-chip is-peer", text: s.peerLikedChip }));
+
+  const meta = el("div", { class: "vc-card-meta" }, [
+    el("div", { class: "vc-card-name", text: v.name }),
+    el("div", { class: "vc-card-addr", text: v.address }),
+    el("div", { class: "vc-card-tags" }, chips),
+  ]);
+
+  const cardChildren: Node[] = [venueThumb(v), meta, heartButton(v)];
+  const card = el(
+    "div",
+    {
+      class: `vc-card${both ? " is-match" : ""}`,
+      onClick: () => {
+        haptic("select");
+        renderDetail(v);
+      },
+    },
+    cardChildren,
+  );
+  if (both) card.prepend(el("div", { class: "vc-match-ribbon", text: s.matchBadge }));
+  return card;
 }
 
 function venueThumb(v: VenueChangeCatalogItem, className = "vc-thumb"): HTMLElement {
@@ -661,36 +711,46 @@ function venueThumb(v: VenueChangeCatalogItem, className = "vc-thumb"): HTMLElem
   return el("div", { class: className, bg: url }, url ? [] : [categoryGlyph(v.category)]);
 }
 
-function renderVenueCard(v: VenueChangeCatalogItem): HTMLElement {
-  const tags = el("div", { class: "vc-card-tags" }, [
-    el("span", { class: "vc-chip", text: s.kmAway(v.distanceKm) }),
-    ...ratingChip(v),
-  ]);
-  const meta = el("div", { class: "vc-card-meta" }, [
-    el("div", { class: "vc-card-name", text: v.name }),
-    el("div", { class: "vc-card-addr", text: v.address }),
-    tags,
-  ]);
-  return el("button", { class: "vc-card", type: "button", onClick: () => {
-    haptic("select");
-    renderDetail(v);
-  } }, [venueThumb(v), meta, el("span", { class: "vc-card-chevron", text: "›", ariaHidden: true })]);
+async function toggleLike(v: VenueChangeCatalogItem): Promise<void> {
+  const key = keyOf(v);
+  const wasLiked = myLikes.has(key);
+  if (wasLiked) myLikes.delete(key);
+  else myLikes.add(key);
+  haptic(wasLiked ? "light" : "success");
+  if (screen === "board") renderBoard(true);
+
+  if (previewMode) return;
+  busy = true;
+  try {
+    const res = await submitVenueLikes(getInitData(), matchId, [...myLikes]);
+    if (res.agreed) {
+      boardState = await fetchVenueBoardState(getInitData(), matchId);
+      haptic("success");
+      route();
+    } else if (res.overlapCandidates.length > 1) {
+      renderOverlapSheet(res.overlapCandidates);
+    }
+  } catch (err) {
+    // Revert the optimistic flip and surface the reason.
+    if (wasLiked) myLikes.add(key);
+    else myLikes.delete(key);
+    if (screen === "board") renderBoard(true);
+    haptic("error");
+    app?.showAlert(errorMessage(err));
+  } finally {
+    busy = false;
+  }
 }
 
-function ratingChip(v: VenueChangeCatalogItem): HTMLElement[] {
-  if (v.rating == null) return [];
-  const count = v.userRatingCount ? ` · ${v.userRatingCount}` : "";
-  return [
-    el("span", { class: "vc-chip" }, [
-      el("span", { class: "vc-chip-star", text: "★", ariaHidden: true }),
-      ` ${v.rating.toFixed(1)}${count}`,
-    ]),
-  ];
-}
+// ---------------------------------------------------------------------------
+// Detail
+// ---------------------------------------------------------------------------
 
-// ── Step 3: detail ──
 function renderDetail(v: VenueChangeCatalogItem): void {
-  setBack(() => renderCatalog());
+  screen = "detail";
+  setBack(() => {
+    renderBoard();
+  });
 
   const urls = galleryUrls(v);
   const shots =
@@ -708,14 +768,18 @@ function renderDetail(v: VenueChangeCatalogItem): void {
       shots.map((_, i) => el("div", { class: `vc-dot${i === 0 ? " is-active" : ""}` })),
     );
     nodes.push(dots);
-    gallery.addEventListener("scroll", () => {
-      const w = (gallery.firstElementChild as HTMLElement | null)?.offsetWidth ?? 1;
-      const idx = Math.round(gallery.scrollLeft / (w + 10));
-      const children = dots.children;
-      for (let i = 0; i < children.length; i++) {
-        children[i].classList.toggle("is-active", i === idx);
-      }
-    }, { passive: true });
+    gallery.addEventListener(
+      "scroll",
+      () => {
+        const w = (gallery.firstElementChild as HTMLElement | null)?.offsetWidth ?? 1;
+        const idx = Math.round(gallery.scrollLeft / (w + 10));
+        const children = dots.children;
+        for (let i = 0; i < children.length; i++) {
+          children[i].classList.toggle("is-active", i === idx);
+        }
+      },
+      { passive: true },
+    );
   }
 
   nodes.push(el("div", { class: "vc-detail-name", text: v.name }));
@@ -723,7 +787,12 @@ function renderDetail(v: VenueChangeCatalogItem): void {
   const tags = el("div", { class: "vc-detail-tags" }, [
     el("span", { class: "vc-chip", text: categoryLabel(v.category) }),
     el("span", { class: "vc-chip", text: s.kmAway(v.distanceKm) }),
-    ...ratingChip(v),
+    ...(v.rating != null
+      ? [el("span", { class: "vc-chip" }, [
+          el("span", { class: "vc-chip-star", text: "★", ariaHidden: true }),
+          ` ${v.rating.toFixed(1)}${v.userRatingCount ? ` · ${v.userRatingCount}` : ""}`,
+        ])]
+      : []),
   ]);
   nodes.push(tags);
 
@@ -736,136 +805,419 @@ function renderDetail(v: VenueChangeCatalogItem): void {
     ]));
   }
 
-  const href = mapsHref(v);
+  const href = mapsHref(v.name, v.address, v.mapsUri);
   const mapsRow = el("a", { class: "vc-info-row", href, target: "_blank", rel: "noopener" }, [
     el("span", { class: "vc-info-icon", text: "🗺️", ariaHidden: true }),
     el("span", { class: "vc-info-text", text: s.openMaps }),
     el("span", { class: "vc-info-chevron", text: "›", ariaHidden: true }),
   ]);
   mapsRow.addEventListener("click", (e) => {
-    // Prefer Telegram's native opener inside the WebView; fall back to the
-    // anchor's default target=_blank on clients without `openLink`.
     haptic("light");
     if (openExternal(href)) e.preventDefault();
   });
   nodes.push(mapsRow);
 
-  const propose = el("button", { class: "btn-primary", type: "button", text: s.detailProposeBtn, onClick: () => {
-    haptic("light");
-    renderComment(v);
-  } });
-  const back = el("button", { class: "btn-secondary", type: "button", text: s.back, onClick: () => renderCatalog() });
-
-  mount(page([el("div", { class: "vc-detail" }, nodes)], [propose, back]));
-}
-
-// ── Step 4: reason ──
-function renderComment(venue: VenueChangeCatalogItem): void {
-  setBack(() => renderDetail(venue));
-  const minComment = stateView?.minCommentLength ?? 10;
-  let submitting = false;
-
-  const header = el("div", { class: "vc-header" }, [
-    el("h1", { class: "vc-h1", text: s.commentTitle }),
-    el("p", { class: "vc-lead", text: s.commentLead }),
-  ]);
-
-  const chosen = el("div", { class: "vc-chosen" }, [
-    venueThumb(venue, "vc-thumb"),
-    el("div", { class: "vc-chosen-meta" }, [
-      el("div", { class: "vc-chosen-name", text: venue.name }),
-      el("div", { class: "vc-chosen-addr", text: venue.address }),
-    ]),
-  ]);
-
-  const input = el("textarea", { class: "vc-textarea", placeholder: s.commentPlaceholder, maxLength: 1000 }) as HTMLTextAreaElement;
-  const counter = el("div", { class: "vc-counter" });
-
-  const send = el("button", { class: "btn-primary", type: "button", text: s.mainConfirm, disabled: true }) as HTMLButtonElement;
-  const back = el("button", { class: "btn-secondary", type: "button", text: s.back, onClick: () => renderDetail(venue) });
-
-  function sync(): void {
-    const len = input.value.trim().length;
-    counter.textContent = s.counter(len, minComment);
-    if (!submitting) send.disabled = len < minComment;
+  const bar: Node[] = [];
+  const mine = myLikes.has(keyOf(v));
+  bar.push(
+    el("button", {
+      class: mine ? "btn-secondary" : "btn-primary",
+      type: "button",
+      text: mine ? s.heartRemove : s.heartAdd,
+      onClick: () => {
+        void toggleLike(v).then(() => {
+          if (screen === "detail") renderDetail(v);
+        });
+      },
+    }),
+  );
+  if (boardState?.expressAvailable && boardState.priceStars != null) {
+    const price = boardState.priceStars;
+    bar.push(
+      el("button", {
+        class: "btn-express",
+        type: "button",
+        text: s.expressBtn(price),
+        onClick: () => {
+          haptic("light");
+          void startExpress(v);
+        },
+      }),
+    );
+    bar.push(el("p", { class: "vc-note", text: s.expressHint }));
   }
 
-  input.addEventListener("input", () => {
-    writeKey(draftKey, input.value);
-    sync();
-  });
-
-  void readKey(draftKey).then((draft) => {
-    if (draft && !input.value) input.value = draft;
-    sync();
-  });
-
-  send.addEventListener("click", () => {
-    if (submitting) return;
-    const comment = input.value.trim();
-    if (comment.length < minComment) {
-      app?.showAlert(s.errTooShort);
-      return;
-    }
-    submitting = true;
-    send.disabled = true;
-    send.replaceChildren(el("span", { class: "btn-spin", ariaHidden: true }), ` ${s.mainSending}`);
-    void submitProposal(venue, comment, () => {
-      submitting = false;
-      send.textContent = s.mainConfirm;
-      sync();
-    });
-  });
-
-  mount(page([header, chosen, input, counter], [send, back]));
-  sync();
-  setTimeout(() => input.focus(), 50);
+  mount(page([el("div", { class: "vc-detail" }, nodes)], bar));
 }
 
-async function submitProposal(
-  venue: VenueChangeCatalogItem,
-  comment: string,
-  onError: () => void,
-): Promise<void> {
+// ---------------------------------------------------------------------------
+// Overlap sheet (>1 simultaneous matches — the actor picks one)
+// ---------------------------------------------------------------------------
+
+function renderOverlapSheet(keys: string[]): void {
+  screen = "overlap";
+  setBack(() => {
+    renderBoard();
+  });
+  const header = el("div", { class: "vc-header" }, [
+    el("h1", { class: "vc-h1", text: s.overlapTitle }),
+    el("p", { class: "vc-lead", text: s.overlapLead }),
+  ]);
+  const cards = keys
+    .map((k) => catalogByKey(k))
+    .filter((v): v is VenueChangeCatalogItem => v != null)
+    .map((v) =>
+      el(
+        "div",
+        {
+          class: "vc-card is-match",
+          onClick: () => {
+            haptic("success");
+            void confirmOverlap(v);
+          },
+        },
+        [
+          venueThumb(v),
+          el("div", { class: "vc-card-meta" }, [
+            el("div", { class: "vc-card-name", text: v.name }),
+            el("div", { class: "vc-card-addr", text: v.address }),
+          ]),
+          el("span", { class: "vc-card-chevron", text: "›", ariaHidden: true }),
+        ],
+      ),
+    );
+  mount(page([header, el("div", { class: "vc-list" }, cards)]));
+}
+
+async function confirmOverlap(v: VenueChangeCatalogItem): Promise<void> {
+  if (previewMode) return;
+  busy = true;
+  showLoading();
   try {
-    await proposeVenueChange(getInitData(), {
-      matchId,
-      placeId: venue.placeId,
-      name: venue.name,
-      address: venue.address,
-      lat: venue.lat,
-      lng: venue.lng,
-      mapsUri: venue.mapsUri,
-      comment,
-    });
-    clearKey(draftKey);
-    haptic("success");
-    app?.showAlert(s.successAlert, () => app?.close());
+    await confirmVenueChoice(getInitData(), matchId, keyOf(v));
+    boardState = await fetchVenueBoardState(getInitData(), matchId);
+    route();
   } catch (err) {
     haptic("error");
     app?.showAlert(errorMessage(err));
-    onError();
+    renderBoard();
+  } finally {
+    busy = false;
   }
 }
 
-function errorMessage(err: unknown): string {
-  if (!(err instanceof CalendarApiError)) return s.errNetwork;
-  switch (err.reason) {
-    case "comment-too-short":
-      return s.errTooShort;
-    case "out-of-range":
-      return s.errRange;
-    case "already-used":
-      return s.ineligibleAlreadyUsed;
-    case "past-cutoff":
-      return s.ineligiblePastCutoff;
+// ---------------------------------------------------------------------------
+// Agreed (payment matrix screens)
+// ---------------------------------------------------------------------------
+
+function renderAgreed(st: VenueBoardState): void {
+  screen = "agreed";
+  setBack(null);
+  const agreed = st.agreed;
+  if (!agreed) return;
+
+  const venue = catalogByKey(agreed.key);
+  const hero = venue
+    ? venueThumb(venue, "vc-agreed-photo")
+    : el("div", { class: "vc-agreed-photo", text: "📍" });
+
+  const card = el("div", { class: "vc-agreed glass-in" }, [
+    hero,
+    el("div", { class: "vc-agreed-badge", text: "✨" }),
+    el("div", { class: "vc-current-name", text: agreed.name }),
+    el("div", { class: "vc-current-addr", text: agreed.address }),
+  ]);
+
+  const header = el("div", { class: "vc-header" }, [
+    el("h1", { class: "vc-h1", text: s.agreedTitle }),
+  ]);
+
+  const nodes: Node[] = [header, card];
+  const bar: Node[] = [];
+  const price = st.priceStars;
+
+  switch (st.myAction) {
+    case "pay":
+    case "pay_or_decline":
+      if (price != null) {
+        bar.push(
+          el("button", {
+            class: "btn-primary",
+            type: "button",
+            text: s.payBtn(price),
+            onClick: () => void payAgreed(),
+          }),
+        );
+      }
+      if (st.myAction === "pay_or_decline") {
+        bar.push(
+          el("button", {
+            class: "btn-secondary",
+            type: "button",
+            text: s.declineBtn,
+            onClick: () => void declinePay(),
+          }),
+        );
+      }
+      break;
+    case "pay_or_offer":
+      if (price != null) {
+        bar.push(
+          el("button", {
+            class: "btn-primary",
+            type: "button",
+            text: s.paySelfBtn(price),
+            onClick: () => void payAgreed(),
+          }),
+        );
+      }
+      if (st.canOfferPartner) {
+        bar.push(
+          el("button", {
+            class: "btn-secondary",
+            type: "button",
+            text: s.offerBtn,
+            onClick: () => void offerPay(),
+          }),
+        );
+      } else if (st.offerSent) {
+        nodes.push(el("p", { class: "vc-note vc-note-center", text: s.offerSentNote }));
+      }
+      break;
+    case "wait":
+      nodes.push(el("p", { class: "vc-note vc-note-center", text: s.agreedWaitNote }));
+      break;
     default:
-      return s.errGeneric;
+      // His post-decline view — neutral, decision is out of his hands now.
+      nodes.push(el("p", { class: "vc-note vc-note-center", text: s.agreedDeclinedNote }));
+      break;
   }
+
+  mount(page(nodes, bar));
+}
+
+async function payAgreed(): Promise<void> {
+  if (previewMode) return;
+  haptic("light");
+  busy = true;
+  try {
+    const { link } = await venueStarsInvoice(getInitData(), matchId, "agreed");
+    openInvoiceAndFinalize(link);
+  } catch (err) {
+    busy = false;
+    haptic("error");
+    app?.showAlert(errorMessage(err));
+  }
+}
+
+async function startExpress(v: VenueChangeCatalogItem): Promise<void> {
+  if (previewMode) return;
+  busy = true;
+  try {
+    const { link } = await venueStarsInvoice(getInitData(), matchId, "express", keyOf(v));
+    openInvoiceAndFinalize(link);
+  } catch (err) {
+    busy = false;
+    haptic("error");
+    app?.showAlert(errorMessage(err));
+  }
+}
+
+/**
+ * Open the native Stars sheet; on `paid`, hold a "locking in…" spinner while
+ * the bot's successful_payment settle lands, then show the settled screen.
+ */
+function openInvoiceAndFinalize(link: string): void {
+  const open = app?.openInvoice;
+  if (!open) {
+    busy = false;
+    // Ancient client without openInvoice — the link still works as a URL.
+    if (!openExternal(link)) window.open(link, "_blank");
+    return;
+  }
+  open.call(app, link, (status) => {
+    if (status === "paid") {
+      haptic("success");
+      showLoading(s.finalizing);
+      void pollUntilSettled();
+    } else {
+      busy = false;
+      if (status === "failed") {
+        haptic("error");
+        app?.showAlert(s.payFailed);
+      }
+      // cancelled/pending — back to wherever we were.
+      route();
+    }
+  });
+}
+
+async function pollUntilSettled(attempt = 0): Promise<void> {
+  try {
+    boardState = await fetchVenueBoardState(getInitData(), matchId);
+    if (boardState.settled) {
+      busy = false;
+      route();
+      return;
+    }
+  } catch {
+    /* retry below */
+  }
+  if (attempt >= 15) {
+    // The settle DM will still land in chat; don't strand the user here.
+    busy = false;
+    route();
+    return;
+  }
+  window.setTimeout(() => void pollUntilSettled(attempt + 1), 1200);
+}
+
+async function declinePay(): Promise<void> {
+  if (previewMode) return;
+  busy = true;
+  showLoading();
+  try {
+    await declineVenuePayApi(getInitData(), matchId);
+    boardState = await fetchVenueBoardState(getInitData(), matchId);
+  } catch {
+    /* state refetch below still routes correctly */
+  }
+  busy = false;
+  haptic("light");
+  route();
+}
+
+async function offerPay(): Promise<void> {
+  if (previewMode) return;
+  busy = true;
+  try {
+    await offerVenuePay(getInitData(), matchId);
+    boardState = await fetchVenueBoardState(getInitData(), matchId);
+    haptic("success");
+  } catch (err) {
+    haptic("error");
+    app?.showAlert(errorMessage(err));
+  }
+  busy = false;
+  route();
+}
+
+// ---------------------------------------------------------------------------
+// Settled
+// ---------------------------------------------------------------------------
+
+function renderSettled(st: VenueBoardState): void {
+  screen = "other";
+  setBack(null);
+  const settled = st.settled;
+  if (!settled) return;
+
+  const nodes: Node[] = [
+    el("div", { class: "vc-settled-burst", ariaHidden: true }, [
+      el("div", { class: "vc-settled-check", text: "✓" }),
+    ]),
+    el("h1", { class: "vc-h1 vc-h1-center", text: s.settledTitle }),
+  ];
+  if (settled.peerPaid) {
+    nodes.push(el("p", { class: "vc-note vc-note-center vc-note-love", text: s.settledPeerPaid }));
+  }
+  nodes.push(
+    el("div", { class: "vc-current glass-in" }, [
+      el("div", { class: "vc-current-name", text: settled.name }),
+      el("div", { class: "vc-current-addr", text: settled.address }),
+    ]),
+  );
+  nodes.push(el("p", { class: "vc-note vc-note-center", text: s.settledNote }));
+
+  const href = mapsHref(settled.name, settled.address, settled.mapsUri);
+  const maps = el("button", {
+    class: "btn-secondary",
+    type: "button",
+    text: s.openMaps,
+    onClick: () => {
+      if (!openExternal(href)) window.open(href, "_blank");
+    },
+  });
+  mount(page([el("div", { class: "vc-settled" }, nodes)], [maps]));
+}
+
+// ---------------------------------------------------------------------------
+// Dev preview mocks
+// ---------------------------------------------------------------------------
+
+function mockCatalog(): VenueChangeCatalogItem[] {
+  const mk = (
+    placeId: string,
+    name: string,
+    address: string,
+    category: string,
+    distanceKm: number,
+    rating: number,
+    count: number,
+    summary: string,
+  ): VenueChangeCatalogItem => ({
+    source: "curated",
+    placeId,
+    name,
+    address,
+    lat: 0,
+    lng: 0,
+    mapsUri: null,
+    category,
+    distanceKm,
+    photoUrl: null,
+    photoRefs: [],
+    rating,
+    userRatingCount: count,
+    editorialSummary: summary,
+  });
+  return [
+    mk("p1", "Кофейня «Молоко»", "ул. Крещатик, 14", "cafe", 0.4, 4.7, 320, "Уютная спешелти-кофейня с видом на бульвар."),
+    mk("p2", "Bar Chill", "ул. Лютеранская, 3", "lounge", 0.9, 4.5, 210, "Тихий коктейльный бар с мягким светом."),
+    mk("p3", "Парк «Владимирская горка»", "Владимирский спуск", "park", 1.3, 4.8, 540, "Панорама Днепра и тенистые аллеи."),
+  ];
+}
+
+function mockState(): VenueBoardState {
+  const view = params.get("preview") ?? "board";
+  const base: VenueBoardState = {
+    status: "liking",
+    open: true,
+    closedReason: null,
+    original: { name: "Кафе «Старое место»", address: "ул. Прорезная, 8", mapsUri: null },
+    myLikes: ["p1"],
+    peerLikes: ["p2"],
+    agreed: null,
+    myAction: null,
+    priceStars: 150,
+    canOfferPartner: false,
+    offerSent: false,
+    payDeclined: false,
+    expressAvailable: true,
+    settled: null,
+  };
+  if (view === "agreed") {
+    return {
+      ...base,
+      status: "agreed",
+      open: false,
+      agreed: { key: "p1", name: "Кофейня «Молоко»", address: "ул. Крещатик, 14", mapsUri: null, expiresAt: null },
+      myAction: (params.get("action") as VenueBoardState["myAction"]) ?? "pay_or_offer",
+      canOfferPartner: true,
+      expressAvailable: false,
+    };
+  }
+  if (view === "settled") {
+    return {
+      ...base,
+      status: "settled",
+      open: false,
+      settled: { name: "Кофейня «Молоко»", address: "ул. Крещатик, 14", mapsUri: null, peerPaid: true },
+    };
+  }
+  return base;
 }
 
 // Entry point — invoked last, after every module-level binding above is
-// initialized. Calling main() before the `let stateView` / `let catalog`
-// declarations would assign into them while still in their temporal dead
-// zone (ReferenceError: Cannot access uninitialized variable).
+// initialized (calling earlier would hit the temporal dead zone).
 void main();
