@@ -36,6 +36,7 @@ import {
   confirmVenueChoice,
   offerVenuePay,
   declineVenuePayApi,
+  keepOriginalVenue,
   venueStarsInvoice,
   venueChangePhotoUrl,
   CalendarApiError,
@@ -103,7 +104,11 @@ interface Strings {
   ctaSuggest: string;
   ctaConfirm: string;
   ctaSaving: string;
+  ctaWithdraw: string;
   confirmHint: string;
+  /** The way back to the venue the concierge assigned. */
+  keepOriginal: string;
+  keepOriginalAgreed: string;
   /** Success screens — every confirmation lands on one. */
   okSuggestTitle: string;
   okSuggestSub: (name: string) => string;
@@ -160,6 +165,9 @@ const T: Record<Lang, Strings> = {
     ctaSuggest: "Suggest these places",
     ctaConfirm: "Confirm this place",
     ctaSaving: "Saving…",
+    ctaWithdraw: "Withdraw my marks",
+    keepOriginal: "Keep this place",
+    keepOriginalAgreed: "Keep the original place",
     confirmHint: "Nothing changes until you confirm.",
     okSuggestTitle: "Sent to your match",
     okSuggestSub: (name) => `${name} will see the places you marked. Agree on one and your date moves there.`,
@@ -221,6 +229,9 @@ const T: Record<Lang, Strings> = {
     ctaSuggest: "Предложить эти места",
     ctaConfirm: "Подтвердить это место",
     ctaSaving: "Сохраняем…",
+    ctaWithdraw: "Убрать мои отметки",
+    keepOriginal: "Остаёмся здесь",
+    keepOriginalAgreed: "Оставить исходное место",
     confirmHint: "Пока не подтвердите — ничего не меняется.",
     okSuggestTitle: "Отправлено партнёру",
     okSuggestSub: (name) => `${name} увидит отмеченные вами места. Совпадёте — свидание переедет туда.`,
@@ -282,6 +293,9 @@ const T: Record<Lang, Strings> = {
     ctaSuggest: "Запропонувати ці місця",
     ctaConfirm: "Підтвердити це місце",
     ctaSaving: "Зберігаємо…",
+    ctaWithdraw: "Прибрати мої позначки",
+    keepOriginal: "Залишаємось тут",
+    keepOriginalAgreed: "Залишити початкове місце",
     confirmHint: "Доки не підтвердите — нічого не змінюється.",
     okSuggestTitle: "Надіслано партнеру",
     okSuggestSub: (name) => `${name} побачить позначені вами місця. Збіжаться — побачення переїде туди.`,
@@ -343,6 +357,9 @@ const T: Record<Lang, Strings> = {
     ctaSuggest: "Diese Orte vorschlagen",
     ctaConfirm: "Diesen Ort bestätigen",
     ctaSaving: "Wird gespeichert…",
+    ctaWithdraw: "Markierungen zurücknehmen",
+    keepOriginal: "Hier bleiben",
+    keepOriginalAgreed: "Beim ursprünglichen Ort bleiben",
     confirmHint: "Bis zur Bestätigung ändert sich nichts.",
     okSuggestTitle: "An dein Match gesendet",
     okSuggestSub: (name) => `${name} sieht die markierten Orte. Stimmt ihr überein, zieht euer Date dorthin.`,
@@ -404,6 +421,9 @@ const T: Record<Lang, Strings> = {
     ctaSuggest: "Zaproponuj te miejsca",
     ctaConfirm: "Potwierdź to miejsce",
     ctaSaving: "Zapisywanie…",
+    ctaWithdraw: "Wycofaj zaznaczenia",
+    keepOriginal: "Zostajemy tutaj",
+    keepOriginalAgreed: "Zostaw pierwotne miejsce",
     confirmHint: "Dopóki nie potwierdzisz, nic się nie zmienia.",
     okSuggestTitle: "Wysłano do pary",
     okSuggestSub: (name) => `${name} zobaczy zaznaczone miejsca. Zgodzicie się — randka przeniesie się tam.`,
@@ -755,6 +775,7 @@ let pageEl: HTMLElement | null = null;
 let bannerEl: HTMLElement | null = null;
 let barEl: HTMLElement | null = null;
 let ctaBtn: HTMLButtonElement | null = null;
+let keepBtn: HTMLElement | null = null;
 
 function renderBoard(): void {
   screen = "board";
@@ -768,11 +789,19 @@ function renderBoard(): void {
     el("p", { class: "vc-lead", text: s.boardLead }),
   ]);
 
-  // The current venue — the eternal default, pinned on top.
+  // The current venue — the eternal default, pinned on top. Once I have marks
+  // in play it also carries the way back: "actually, let's just stay here".
+  keepBtn = el("button", {
+    class: "vc-keep",
+    type: "button",
+    text: s.keepOriginal,
+    onClick: () => void keepOriginal(),
+  });
   const current = el("div", { class: "vc-current glass-in" }, [
     el("div", { class: "vc-current-badge", text: s.currentBadge }),
     el("div", { class: "vc-current-name", text: st.original.name ?? "" }),
     el("div", { class: "vc-current-addr", text: st.original.address ?? "" }),
+    keepBtn,
   ]);
 
   // Contextual banner — says what's going on and what the next tap will do, so
@@ -840,9 +869,22 @@ function syncBoardChrome(): void {
     pageEl?.classList.toggle("has-cta", dirty);
     if (dirty) {
       const agreeing = selectedOverlap().length > 0;
-      ctaBtn.textContent = saving ? s.ctaSaving : agreeing ? s.ctaConfirm : s.ctaSuggest;
+      const withdrawing = selection.size === 0 && confirmed.size > 0;
+      ctaBtn.textContent = saving
+        ? s.ctaSaving
+        : withdrawing
+          ? s.ctaWithdraw
+          : agreeing
+            ? s.ctaConfirm
+            : s.ctaSuggest;
       ctaBtn.disabled = saving;
     }
+  }
+
+  // The way back only matters once something is actually in play.
+  if (keepBtn) {
+    const inPlay = selection.size > 0 || confirmed.size > 0 || st.peerLikes.length > 0;
+    keepBtn.classList.toggle("is-hidden", !inPlay);
   }
 }
 
@@ -1003,6 +1045,33 @@ function toggleMark(v: VenueChangeCatalogItem): void {
     patchCard(key);
     syncBoardChrome();
   }
+}
+
+/**
+ * "Stay where we were." Clears my marks (and calls off an agreement if one was
+ * reached), so the venue the concierge picked simply stands. The way back from
+ * a half-finished change — without it the only exit was to let an unwanted
+ * agreement rot until the 12h lapse.
+ */
+async function keepOriginal(): Promise<void> {
+  if (previewMode || saving) return;
+  saving = true;
+  busy = true;
+  syncBoardChrome();
+  try {
+    await keepOriginalVenue(getInitData(), matchId);
+    boardState = await fetchVenueBoardState(getInitData(), matchId);
+    selection = new Set(boardState.myLikes);
+    confirmed = new Set(boardState.myLikes);
+    peerSeen = new Set(boardState.peerLikes);
+    haptic("success");
+  } catch (err) {
+    haptic("error");
+    app?.showAlert(errorMessage(err));
+  }
+  saving = false;
+  busy = false;
+  renderBoard();
 }
 
 /** Submit the marks (Suggest) — or, when they overlap the partner's, agree. */
@@ -1340,6 +1409,17 @@ function renderAgreed(st: VenueBoardState): void {
       nodes.push(el("p", { class: "vc-note vc-note-center", text: s.agreedDeclinedNote }));
       break;
   }
+
+  // The way back: call the agreement off and keep the assigned venue. Available
+  // to either side, because nobody has paid and nothing was lost.
+  bar.push(
+    el("button", {
+      class: "btn-quiet",
+      type: "button",
+      text: s.keepOriginalAgreed,
+      onClick: () => void keepOriginal(),
+    }),
+  );
 
   mount(page(nodes, bar));
 }

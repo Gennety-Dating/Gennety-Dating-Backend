@@ -807,6 +807,11 @@ export async function offerVenuePay(initData: string, matchId: string): Promise<
   await venuePost(initData, "offer-pay", { matchId });
 }
 
+/** Stay at the assigned venue: withdraw my marks, call off any agreement. */
+export async function keepOriginalVenue(initData: string, matchId: string): Promise<void> {
+  await venuePost(initData, "keep-original", { matchId });
+}
+
 /** His single, final "not this time" from the Mini App fork. */
 export async function declineVenuePayApi(initData: string, matchId: string): Promise<void> {
   await venuePost(initData, "pay-decline", { matchId });

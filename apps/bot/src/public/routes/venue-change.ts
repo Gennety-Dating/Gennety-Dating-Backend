@@ -12,6 +12,7 @@ import {
   confirmVenueAgreement,
   offerPartnerPay,
   declineVenuePay,
+  keepOriginalVenue,
   mintExpressChange,
   createVenueInvoiceLink,
 } from "../../handlers/matching/venue-change.js";
@@ -207,6 +208,27 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       return;
     }
     const result = await offerPartnerPay(api, BigInt(auth.user.id), matchId);
+    if (!result.ok) {
+      res.status(statusForReason(result.reason)).json({ error: result.reason });
+      return;
+    }
+    res.status(200).json({ ok: true });
+  });
+
+  // "Stay where we were" — withdraw my marks, and call off an agreement if one
+  // was reached. The explicit way back to the originally assigned venue.
+  router.post("/keep-original", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+    const matchId = matchIdOfBody(req.body as Record<string, unknown> | undefined);
+    if (!matchId) {
+      res.status(404).json({ error: "match-not-found" });
+      return;
+    }
+    const result = await keepOriginalVenue(api, BigInt(auth.user.id), matchId);
     if (!result.ok) {
       res.status(statusForReason(result.reason)).json({ error: result.reason });
       return;

@@ -822,6 +822,45 @@ a.vc-info-row .vc-info-text {
   height: 17px;
 }
 
+/* Tertiary, unobtrusive action — the way back. Present, never loud. */
+.btn-quiet {
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 10px;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.btn-quiet:active {
+  color: var(--text);
+}
+
+/* "Keep this place" on the pinned current venue — the way back on the board. */
+.vc-keep {
+  margin-top: 12px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 12px;
+  background: var(--fill);
+  box-shadow: var(--glass-edge);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.25s ease, transform 0.25s ease, background 0.15s ease;
+}
+.vc-keep:active {
+  background: var(--fill-strong);
+}
+.vc-keep.is-hidden {
+  display: none;
+}
+
 /* Neutral glass action (offer to partner, open maps) — quiet by design. */
 .btn-glass {
   border-radius: 18px;
@@ -964,21 +1003,6 @@ a.vc-info-row .vc-info-text {
   place-items: center;
   margin-bottom: 26px;
 }
-.vc-ok-halo::before,
-.vc-ok-halo::after {
-  content: "";
-  position: absolute;
-  width: 92px;
-  height: 92px;
-  border-radius: 50%;
-  border: 1.5px solid var(--accent-bright);
-  opacity: 0;
-  animation: halo 2.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
-  pointer-events: none;
-}
-.vc-ok-halo::after {
-  animation-delay: 0.9s;
-}
 .vc-ok-mark {
   position: relative;
   width: 92px;
@@ -1097,17 +1121,6 @@ a.vc-info-row .vc-info-text {
   100% {
     opacity: 1;
     transform: scale(1) rotate(0);
-  }
-}
-@keyframes halo {
-  0% {
-    opacity: 0.55;
-    transform: scale(0.86);
-  }
-  70%,
-  100% {
-    opacity: 0;
-    transform: scale(1.5);
   }
 }
 @keyframes pill-in {

@@ -843,6 +843,120 @@ export async function mintExpressChange(
 }
 
 // ---------------------------------------------------------------------------
+// Keep the original venue (the way back)
+// ---------------------------------------------------------------------------
+
+export type KeepOriginalResult =
+  | {
+      ok: false;
+      reason: "match-not-found" | "not-participant" | VenueChangeIneligibleReason;
+    }
+  | { ok: true };
+
+/**
+ * "Actually, let's just stay where we were." The explicit way back, at any
+ * point before a change is paid for:
+ *   - while marking/suggesting — withdraws MY marks (the partner's stay, so
+ *     they can keep browsing; the board simply has nothing from me anymore);
+ *   - after an agreement — calls the agreement off, so nobody is left waiting
+ *     on a payment neither side wants. The original venue was never touched,
+ *     so there is nothing to restore: dropping the agreement IS the way back.
+ *
+ * Without this the only route back was to let an unwanted agreement rot until
+ * the 12h/T-5h lapse. The partner's own marks, and the sticky offer/decline
+ * stamps that protect them from being re-nagged, are deliberately left intact.
+ */
+export async function keepOriginalVenue(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  matchId: string,
+  now: Date = new Date(),
+): Promise<KeepOriginalResult> {
+  const match = await loadMatch(matchId);
+  if (!match) return { ok: false, reason: "match-not-found" };
+  const side = sideOfUser(match, telegramId);
+  if (!side) return { ok: false, reason: "not-participant" };
+  const me = userOfSide(match, side);
+
+  const eligibility = evaluateVenueBoardEligibility({
+    featureEnabled: env.VENUE_CHANGE_FEATURE_ENABLED,
+    status: match.status,
+    callerUserId: me.id,
+    userAId: match.userAId,
+    userBId: match.userBId,
+    agreedTime: match.agreedTime,
+    venueLat: match.venueLat,
+    venueLng: match.venueLng,
+    venueChangeStatus: match.venueChangeStatus,
+    now,
+  });
+  if (!eligibility.ok) return { ok: false, reason: eligibility.reason };
+
+  const wasAgreed = match.venueChangeStatus === "agreed";
+  const wasExpress = match.venueChangeExpressAt != null;
+  const peerHasLikes = likesOfSide(match, otherSide(side)).length > 0;
+  const likesColumn = side === "A" ? "venueLikesA" : "venueLikesB";
+
+  // The session stays open while the PARTNER still has marks on the board;
+  // once neither of us has any, it closes back to a pristine "no session".
+  const nextStatus = peerHasLikes ? "liking" : null;
+
+  const data: Prisma.MatchUpdateInput = {
+    [likesColumn]: [] as unknown as Prisma.InputJsonValue[],
+    venueChangeStatus: nextStatus,
+    venueChangeName: null,
+    venueChangeAddress: null,
+    venueChangeLat: null,
+    venueChangeLng: null,
+    venueChangeMapsUri: null,
+    venueChangePlaceId: null,
+    venueChangePhotoUrl: null,
+    venueChangePhotoName: null,
+    venueChangeExpiresAt: null,
+    venueChangeExpressAt: null,
+  };
+  if (nextStatus === null) {
+    // Nobody is marking anything anymore — retire the whole session, so a later
+    // change starts clean (including who initiates and who gets the ping).
+    data.venueChangeProposerId = null;
+    data.venueChangeProposedAt = null;
+    data.venueChangePingSentToAAt = null;
+    data.venueChangePingSentToBAt = null;
+    data.venueChangeOfferPaySentAt = null;
+    data.venueChangePayDeclinedAt = null;
+  }
+
+  const claim = await prisma.match.updateMany({
+    where: {
+      id: matchId,
+      status: "scheduled",
+      venueChangeStatus: match.venueChangeStatus,
+    },
+    data: data as Prisma.MatchUpdateManyMutationInput,
+  });
+  if (claim.count === 0) return { ok: false, reason: "wrong-state" };
+
+  console.info(
+    `[venue-change] keep-original match=${matchId} by=${me.id} wasAgreed=${wasAgreed}`,
+  );
+
+  // Only tell the partner when there was something for them to be waiting on.
+  // An express mint was never visible to them, so cancelling it stays silent.
+  if (wasAgreed && !wasExpress) {
+    const peer = userOfSide(match, otherSide(side));
+    if (isTelegramTarget(peer.telegramId)) {
+      await api
+        .sendMessage(
+          toTelegramChatId(peer.telegramId),
+          t(langOf(peer.language), "venueKeepOriginalDm", { venue: match.venueName ?? "" }),
+        )
+        .catch(() => undefined);
+    }
+  }
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
 // Offer-partner-pay (her wish card) + his final decline
 // ---------------------------------------------------------------------------
 

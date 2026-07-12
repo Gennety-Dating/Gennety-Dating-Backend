@@ -34,6 +34,7 @@ import {
   settleVenuePayment,
   sweepExpiredVenueChanges,
   mintExpressChange,
+  keepOriginalVenue,
   venueKeyOf,
 } from "./venue-change.js";
 import type { CatalogVenue } from "../../services/venue-change.js";
@@ -435,6 +436,73 @@ describe("offerPartnerPay / declineVenuePay", () => {
 
     mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangeExpressAt: new Date() }));
     expect((await declineVenuePay(fakeApi(), 200n, "m1")).ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Keep the original venue (the way back)
+// ---------------------------------------------------------------------------
+
+describe("keepOriginalVenue", () => {
+  it("calls off an agreement, clears my marks, and tells the partner", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(
+      agreedMatch({ venueLikesA: [likeOf("p1", "New Cafe")], venueLikesB: [likeOf("p1", "New Cafe")] }),
+    );
+
+    const res = await keepOriginalVenue(api, 100n, "m1");
+    expect(res).toEqual({ ok: true });
+
+    const back = updateCalls((d) => "venueLikesA" in d);
+    expect(back.length).toBe(1);
+    const data = back[0][0].data;
+    // Agreement dropped, my marks gone, the partner's kept → session stays open.
+    expect(data).toMatchObject({
+      venueChangeStatus: "liking",
+      venueChangeName: null,
+      venueChangeExpressAt: null,
+    });
+    expect(data.venueLikesA).toEqual([]);
+    // The match itself is never touched.
+    expect(data.status).toBeUndefined();
+
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0][0]).toBe(200);
+  });
+
+  it("retires the whole session when neither side has marks left", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(
+      fakeMatch({
+        venueChangeStatus: "liking",
+        venueChangeProposerId: "a",
+        venueChangeProposedAt: new Date(),
+        venueLikesA: [likeOf("p1", "New Cafe")],
+      }),
+    );
+
+    const res = await keepOriginalVenue(api, 100n, "m1");
+    expect(res).toEqual({ ok: true });
+    const data = updateCalls((d) => "venueLikesA" in d)[0][0].data;
+    expect(data).toMatchObject({
+      venueChangeStatus: null,
+      venueChangeProposerId: null,
+      venueChangePayDeclinedAt: null,
+    });
+    // Nothing was pending for the partner, so they are not pinged.
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("stays silent when calling off her own hidden express mint", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(
+      agreedMatch({ venueChangeExpressAt: new Date(), venueLikesB: [likeOf("p2", "Park Spot")] }),
+    );
+
+    const res = await keepOriginalVenue(api, 100n, "m1");
+    expect(res).toEqual({ ok: true });
+    // He never knew about it — no notice.
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 });
 

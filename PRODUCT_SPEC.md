@@ -1365,6 +1365,18 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   the new venue), and both sides get updated venue cards with the `date_time`
   entity + Maps button — plus the payer-gendered reveal / express surprise.
   One settled change per date: the board then closes (read-only).
+- **The way back (`keep-original`).** At any point before a change is paid for,
+  either side can say "actually, let's just stay where we were": it withdraws
+  that user's marks and, if an agreement was already reached, calls the
+  agreement off (the partner gets a neutral `venueKeepOriginalDm`; a cancelled
+  *express* mint stays silent, since they never saw it). The original venue was
+  never touched, so dropping the change IS the restore. The session stays open
+  while the partner still has marks; once neither side has any it retires
+  completely. The sticky offer/decline stamps are deliberately NOT reset while a
+  session lives, so the way back can't be used to re-nag him with a fresh wish
+  card. Surfaced as "Keep this place" on the pinned current venue and as a quiet
+  action on the agreed/payment screen — without it, the only exit from an
+  unwanted agreement was to let it rot until the lapse below.
 - **Lapse — the match is NEVER cancelled.** An `agreed` swap unpaid by
   `min(agreedAt + VENUE_CHANGE_TTL_HOURS (12h), T − DATE_ALERT_HOURS)` lapses
   on the date-lifecycle tick (before ice-breakers): the original venue stands,
