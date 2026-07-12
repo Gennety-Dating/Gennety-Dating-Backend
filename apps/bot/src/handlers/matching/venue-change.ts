@@ -83,6 +83,8 @@ const VC_SELECT = {
   venueChangeOfferPaySentAt: true,
   venueChangePingSentToAAt: true,
   venueChangePingSentToBAt: true,
+  venueChangePingMsgIdA: true,
+  venueChangePingMsgIdB: true,
   venueChangeExpressAt: true,
   venueLikesA: true,
   venueLikesB: true,
@@ -557,7 +559,6 @@ export async function submitVenueLikes(
     snapshots.push(toSnapshot(venue));
   }
 
-  const hadLikes = likesOfSide(match, side).length > 0;
   const likesColumn = side === "A" ? "venueLikesA" : "venueLikesB";
 
   // Guarded write: only while the session is still open (a concurrent
@@ -583,13 +584,6 @@ export async function submitVenueLikes(
     });
   }
 
-  // One-time board-invite ping to the partner on the caller's FIRST likes.
-  if (!hadLikes && snapshots.length > 0) {
-    await sendBoardPing(api, match, side).catch((err) => {
-      console.warn("[venue-change] board ping failed:", err);
-    });
-  }
-
   // Overlap → agreement, exactly like the calendar.
   const peerKeys = new Set(likesOfSide(match, otherSide(side)).map((l) => l.key));
   const overlap = snapshots.filter((s) => peerKeys.has(s.key));
@@ -597,21 +591,42 @@ export async function submitVenueLikes(
     const agreed = await reachAgreement(api, matchId, me.id, overlap[0], now);
     return { ok: true, agreed, overlapCandidates: [] };
   }
+
+  // No agreement yet → keep the partner's single board-invite current: delete
+  // the previous one and post a fresh one, so they always have exactly ONE
+  // nudge and it is the latest message in the chat. (Skipped above when the
+  // submission agreed — an agreement speaks for itself, and `reachAgreement`
+  // retires the stale invites.)
+  if (snapshots.length > 0) {
+    await refreshBoardPing(api, match, side).catch((err) => {
+      console.warn("[venue-change] board ping failed:", err);
+    });
+  }
   return { ok: true, agreed: false, overlapCandidates: overlap.map((s) => s.key) };
 }
 
-/** First-like DM to the partner, framed positively and gendered by the liker. */
-async function sendBoardPing(api: Api<RawApi>, match: VcMatch, likerSide: Side): Promise<void> {
+/**
+ * Tell the partner the board moved — but keep exactly ONE such message in their
+ * chat, and keep it last. While a pair is making up their minds they submit
+ * several times, and a fresh ping per submission buried the chat in
+ * near-identical notices. So each new submission deletes the previous invite and
+ * posts a new one: the partner always has one, current, bottom-of-chat nudge.
+ */
+async function refreshBoardPing(api: Api<RawApi>, match: VcMatch, likerSide: Side): Promise<void> {
   const liker = userOfSide(match, likerSide);
   const recipient = userOfSide(match, otherSide(likerSide));
   if (!isTelegramTarget(recipient.telegramId)) return;
 
-  const guard = likerSide === "A" ? "venueChangePingSentToBAt" : "venueChangePingSentToAAt";
-  const claim = await prisma.match.updateMany({
-    where: { id: match.id, [guard]: null },
-    data: { [guard]: new Date() },
-  });
-  if (claim.count === 0) return;
+  const chatId = toTelegramChatId(recipient.telegramId);
+  const prevId =
+    likerSide === "A" ? match.venueChangePingMsgIdB : match.venueChangePingMsgIdA;
+
+  // Drop the stale invite first, so the new one lands as the latest message
+  // rather than stacking under it. A message the user already deleted (or one
+  // older than Telegram's 48h delete window) simply fails — harmless.
+  if (prevId != null) {
+    await api.deleteMessage(chatId, prevId).catch(() => undefined);
+  }
 
   const lang = langOf(recipient.language);
   const key = liker.gender === "female" ? "venueBoardPingFromF" : "venueBoardPingFromM";
@@ -619,11 +634,41 @@ async function sendBoardPing(api: Api<RawApi>, match: VcMatch, likerSide: Side):
     t(lang, "venueBoardPingBtn"),
     venueChangeUrl(match.id, lang),
   );
-  await api.sendMessage(
-    toTelegramChatId(recipient.telegramId),
-    t(lang, key, { name: liker.firstName ?? "" }),
-    { reply_markup: kb },
-  );
+  const sent = await api
+    .sendMessage(chatId, t(lang, key, { name: liker.firstName ?? "" }), { reply_markup: kb })
+    .catch((err) => {
+      console.warn("[venue-change] board ping send failed:", err);
+      return null;
+    });
+  if (!sent) return;
+
+  const stampCol = likerSide === "A" ? "venueChangePingSentToBAt" : "venueChangePingSentToAAt";
+  const msgCol = likerSide === "A" ? "venueChangePingMsgIdB" : "venueChangePingMsgIdA";
+  await prisma.match
+    .update({
+      where: { id: match.id },
+      data: { [stampCol]: new Date(), [msgCol]: sent.message_id },
+    })
+    .catch(() => undefined);
+}
+
+/** Delete both sides' board-invite messages and forget their ids. */
+async function retireBoardPings(api: Api<RawApi>, match: VcMatch): Promise<void> {
+  const targets: Array<[bigint, number | null]> = [
+    [match.userA.telegramId, match.venueChangePingMsgIdA],
+    [match.userB.telegramId, match.venueChangePingMsgIdB],
+  ];
+  for (const [telegramId, msgId] of targets) {
+    if (msgId == null || !isTelegramTarget(telegramId)) continue;
+    await api.deleteMessage(toTelegramChatId(telegramId), msgId).catch(() => undefined);
+  }
+  if (match.venueChangePingMsgIdA == null && match.venueChangePingMsgIdB == null) return;
+  await prisma.match
+    .update({
+      where: { id: match.id },
+      data: { venueChangePingMsgIdA: null, venueChangePingMsgIdB: null },
+    })
+    .catch(() => undefined);
 }
 
 // ---------------------------------------------------------------------------
@@ -712,6 +757,10 @@ async function reachAgreement(
   if (claim.count === 0) return false;
 
   console.info(`[venue-change] agreement match=${matchId} venue="${venue.name}"`);
+
+  // The board invites are stale the moment you agree — leaving them in the chat
+  // next to a payment prompt would just be confusing.
+  await retireBoardPings(api, fresh).catch(() => undefined);
 
   // Payment routing: DM the payer an invoice ONLY when they weren't the
   // finalizer AND no in-app fork covers them —
@@ -922,6 +971,8 @@ export async function keepOriginalVenue(
     data.venueChangeProposedAt = null;
     data.venueChangePingSentToAAt = null;
     data.venueChangePingSentToBAt = null;
+    data.venueChangePingMsgIdA = null;
+    data.venueChangePingMsgIdB = null;
     data.venueChangeOfferPaySentAt = null;
     data.venueChangePayDeclinedAt = null;
   }

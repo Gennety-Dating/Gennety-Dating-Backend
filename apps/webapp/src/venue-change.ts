@@ -114,6 +114,8 @@ interface Strings {
   okSuggestSub: (name: string) => string;
   okAgreedTitle: string;
   okAgreedSub: string;
+  okKeptTitle: string;
+  okKeptSub: string;
   okDone: string;
   okContinue: string;
   catalogEmpty: string;
@@ -173,6 +175,8 @@ const T: Record<Lang, Strings> = {
     okSuggestSub: (name) => `${name} will see the places you marked. Agree on one and your date moves there.`,
     okAgreedTitle: "You picked it together",
     okAgreedSub: "One last step and this becomes your date spot.",
+    okKeptTitle: "Staying where you were",
+    okKeptSub: "Your date keeps the place we picked for you. Nothing changed.",
     okDone: "Back to places",
     okContinue: "Continue",
     catalogEmpty: "No suitable places nearby right now. Your venue stays as is.",
@@ -237,6 +241,8 @@ const T: Record<Lang, Strings> = {
     okSuggestSub: (name) => `${name} увидит отмеченные вами места. Совпадёте — свидание переедет туда.`,
     okAgreedTitle: "Вы выбрали его вместе",
     okAgreedSub: "Остался один шаг — и это место станет вашим.",
+    okKeptTitle: "Остаётесь на прежнем месте",
+    okKeptSub: "Свидание проходит там, где мы для вас выбрали. Ничего не изменилось.",
     okDone: "К местам",
     okContinue: "Продолжить",
     catalogEmpty: "Подходящих мест рядом сейчас нет. Ваше место остаётся в силе.",
@@ -301,6 +307,8 @@ const T: Record<Lang, Strings> = {
     okSuggestSub: (name) => `${name} побачить позначені вами місця. Збіжаться — побачення переїде туди.`,
     okAgreedTitle: "Ви обрали його разом",
     okAgreedSub: "Лишився один крок — і це місце стане вашим.",
+    okKeptTitle: "Залишаєтесь на попередньому місці",
+    okKeptSub: "Побачення відбудеться там, де ми для вас обрали. Нічого не змінилося.",
     okDone: "До місць",
     okContinue: "Продовжити",
     catalogEmpty: "Підходящих місць поруч зараз немає. Ваше місце залишається.",
@@ -365,6 +373,8 @@ const T: Record<Lang, Strings> = {
     okSuggestSub: (name) => `${name} sieht die markierten Orte. Stimmt ihr überein, zieht euer Date dorthin.`,
     okAgreedTitle: "Ihr habt ihn gemeinsam gewählt",
     okAgreedSub: "Ein letzter Schritt — dann ist es euer Date-Ort.",
+    okKeptTitle: "Ihr bleibt, wo ihr wart",
+    okKeptSub: "Euer Date bleibt an dem Ort, den wir für euch gewählt haben. Nichts hat sich geändert.",
     okDone: "Zu den Orten",
     okContinue: "Weiter",
     catalogEmpty: "Gerade keine passenden Orte in der Nähe. Euer Ort bleibt bestehen.",
@@ -429,6 +439,8 @@ const T: Record<Lang, Strings> = {
     okSuggestSub: (name) => `${name} zobaczy zaznaczone miejsca. Zgodzicie się — randka przeniesie się tam.`,
     okAgreedTitle: "Wybraliście je razem",
     okAgreedSub: "Jeszcze jeden krok — i to będzie wasze miejsce.",
+    okKeptTitle: "Zostajecie w tym samym miejscu",
+    okKeptSub: "Randka odbędzie się tam, gdzie wybraliśmy dla was. Nic się nie zmieniło.",
     okDone: "Do miejsc",
     okContinue: "Dalej",
     catalogEmpty: "Brak odpowiednich miejsc w pobliżu. Wasze miejsce pozostaje.",
@@ -881,11 +893,7 @@ function syncBoardChrome(): void {
     }
   }
 
-  // The way back only matters once something is actually in play.
-  if (keepBtn) {
-    const inPlay = selection.size > 0 || confirmed.size > 0 || st.peerLikes.length > 0;
-    keepBtn.classList.toggle("is-hidden", !inPlay);
-  }
+
 }
 
 /** Repaint ONE card's marked state — the only thing a tap changes. */
@@ -1065,6 +1073,10 @@ async function keepOriginal(): Promise<void> {
     confirmed = new Set(boardState.myLikes);
     peerSeen = new Set(boardState.peerLikes);
     haptic("success");
+    saving = false;
+    busy = false;
+    renderSuccess("kept");
+    return;
   } catch (err) {
     haptic("error");
     app?.showAlert(errorMessage(err));
@@ -1291,36 +1303,39 @@ async function confirmOverlap(v: VenueChangeCatalogItem): Promise<void> {
  * Deliberately a screen of its own: confirming is the one committing act on the
  * board, so it should feel like it landed rather than silently redraw a list.
  */
-function renderSuccess(kind: "suggested" | "agreed"): void {
+function renderSuccess(kind: "suggested" | "agreed" | "kept"): void {
   screen = "success";
   setBack(null);
   const st = boardState;
   const agreed = kind === "agreed";
+  const kept = kind === "kept";
 
   const medallion = el("div", { class: `vc-ok-mark${agreed ? " is-agreed" : ""}` }, [
-    icon(agreed ? "spark" : "check", "icon vc-ok-glyph"),
+    icon(agreed ? "spark" : kept ? "pin" : "check", "icon vc-ok-glyph"),
   ]);
+
+  const title = agreed ? s.okAgreedTitle : kept ? s.okKeptTitle : s.okSuggestTitle;
+  const sub = agreed
+    ? s.okAgreedSub
+    : kept
+      ? s.okKeptSub
+      : s.okSuggestSub(st?.partnerName ?? "");
 
   const nodes: Node[] = [
     el("div", { class: "vc-ok-halo" }, [medallion]),
-    el("h1", {
-      class: "vc-h1 vc-h1-center vc-ok-title",
-      text: agreed ? s.okAgreedTitle : s.okSuggestTitle,
-    }),
-    el("p", {
-      class: "vc-lead vc-ok-sub",
-      text: agreed ? s.okAgreedSub : s.okSuggestSub(st?.partnerName ?? ""),
-    }),
+    el("h1", { class: "vc-h1 vc-h1-center vc-ok-title", text: title }),
+    el("p", { class: "vc-lead vc-ok-sub", text: sub }),
   ];
 
   // Name the place, so the success reads as something concrete.
-  if (agreed && st?.agreed) {
+  const venue = agreed ? st?.agreed : kept ? st?.original : null;
+  if (venue?.name) {
     nodes.push(
       el("div", { class: "vc-ok-venue" }, [
         icon("pin", "icon vc-ok-venue-icon"),
         el("div", { class: "vc-ok-venue-meta" }, [
-          el("div", { class: "vc-current-name", text: st.agreed.name }),
-          el("div", { class: "vc-current-addr", text: st.agreed.address }),
+          el("div", { class: "vc-current-name", text: venue.name }),
+          el("div", { class: "vc-current-addr", text: venue.address ?? "" }),
         ]),
       ]),
     );

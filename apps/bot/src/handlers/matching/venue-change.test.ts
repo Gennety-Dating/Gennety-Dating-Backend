@@ -6,7 +6,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@gennety/db", () => ({
   prisma: {
-    match: { findUnique: vi.fn(), updateMany: vi.fn(), findMany: vi.fn() },
+    match: {
+      findUnique: vi.fn(),
+      updateMany: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+    },
   },
 }));
 
@@ -44,7 +49,9 @@ const mMatch = prisma.match as unknown as {
   findUnique: MockFn;
   updateMany: MockFn;
   findMany: MockFn;
+  update: MockFn;
 };
+const mUpdate = mMatch.update;
 
 const HOUR = 60 * 60 * 1000;
 const FAR_AGREED = new Date(Date.now() + 24 * HOUR);
@@ -155,7 +162,8 @@ function agreedMatch(over: Record<string, unknown> = {}) {
 
 function fakeApi() {
   return {
-    sendMessage: vi.fn().mockResolvedValue(undefined),
+    sendMessage: vi.fn().mockResolvedValue({ message_id: 555 }),
+    deleteMessage: vi.fn().mockResolvedValue(true),
     sendPhoto: vi.fn().mockResolvedValue(undefined),
     createInvoiceLink: vi.fn().mockResolvedValue("https://t.me/invoice/test"),
     refundStarPayment: vi.fn().mockResolvedValue(true),
@@ -172,7 +180,9 @@ beforeEach(() => {
   mMatch.findUnique.mockReset();
   mMatch.updateMany.mockReset();
   mMatch.findMany.mockReset();
+  mMatch.update.mockReset();
   mMatch.updateMany.mockResolvedValue({ count: 1 });
+  mMatch.update.mockResolvedValue({});
 });
 
 // ---------------------------------------------------------------------------
@@ -197,8 +207,9 @@ describe("submitVenueLikes", () => {
     // Initiator claim CAS on the null stamp.
     expect(updateCalls((d) => d.venueChangeProposerId === "a").length).toBe(1);
 
-    // First like → one board-invite ping to the male (guarded per recipient).
-    expect(updateCalls((d) => d.venueChangePingSentToBAt != null).length).toBe(1);
+    // Board-invite ping to the male, and its message id is remembered so the
+    // next submission can replace it rather than stack a second one.
+    expect(mUpdate.mock.calls.some((c) => c[0]?.data?.venueChangePingMsgIdB === 555)).toBe(true);
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     expect(api.sendMessage.mock.calls[0][0]).toBe(200);
   });

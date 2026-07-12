@@ -617,14 +617,25 @@ a.vc-info-row .vc-info-text {
 .vc-banner-icon.is-self {
   color: var(--self);
 }
-/* The one banner that matters: you agree. It alone wears the accent. */
+/* The one banner that matters: you agree. It alone wears the accent — and it
+   carries the paired-sparkle mark at full size, since this is the moment the
+   whole board exists for. */
 .vc-banner.is-match {
+  gap: 13px;
+  padding: 15px 16px;
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 12px 30px -14px rgba(139, 37, 59, 0.8);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 14px 34px -14px rgba(139, 37, 59, 0.9);
+  animation: match-in 0.45s cubic-bezier(0.2, 1.3, 0.4, 1) both;
 }
 .vc-banner.is-match .vc-banner-icon {
+  width: 30px;
+  height: 30px;
   color: #fff;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+  animation: spark-in 0.55s cubic-bezier(0.2, 1.6, 0.4, 1) 0.08s both;
 }
 
 /* ── Detail ───────────────────────────────────────────────────────────── */
@@ -1523,6 +1534,26 @@ a.vc-info-row .vc-info-text {
   0% {
     opacity: 0;
     transform: scale(0.4) rotate(-12deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+@keyframes match-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes spark-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.35) rotate(-25deg);
   }
   100% {
     opacity: 1;

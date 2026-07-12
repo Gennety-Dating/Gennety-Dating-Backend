@@ -872,9 +872,15 @@ model Match {
   venueChangePayDeclinedAt DateTime? @map("venue_change_pay_declined_at")
   /// Wish-card guard: set once when she offers him to pay (no duplicate cards).
   venueChangeOfferPaySentAt DateTime? @map("venue_change_offer_pay_sent_at")
-  /// First-like ping guards — at most one board-invite DM per recipient side.
+  /// Board-invite DM per recipient side: when it was last (re)sent, and the id
+  /// of the message currently living in their chat. There is only ever ONE such
+  /// message per side — a fresh submission deletes the previous one and posts a
+  /// new one, so the invite is always the latest message rather than a pile of
+  /// near-identical pings while the pair is still making up their minds.
   venueChangePingSentToAAt DateTime? @map("venue_change_ping_sent_to_a_at")
   venueChangePingSentToBAt DateTime? @map("venue_change_ping_sent_to_b_at")
+  venueChangePingMsgIdA    Int?      @map("venue_change_ping_msg_id_a")
+  venueChangePingMsgIdB    Int?      @map("venue_change_ping_msg_id_b")
   /// Non-null marks the current `agreed` state as an EXPRESS mint (her
   /// unilateral silent swap): hidden from the partner until settled, and a
   /// lapse stays silent for the partner (they never knew).
