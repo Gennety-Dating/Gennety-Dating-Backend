@@ -16,11 +16,32 @@
   --glass-press: var(--fill-strong);
   --glass-edge: inset 0 1px 0 var(--glass-highlight);
   --danger: #e0566e;
+
+  /* Two-party colour language, shared with the Calendar Mini App: MY marks are
+     neutral/white, the PARTNER's are brand burgundy, and a place we both marked
+     carries both colours. Identity is never carried by tone alone. */
+  --self: #ffffff;
+  --self-glow: rgba(255, 255, 255, 0.55);
+  --self-fill: rgba(255, 255, 255, 0.1);
+  --self-fill-strong: rgba(255, 255, 255, 0.2);
+  --peer: var(--accent-bright);
+  --peer-fill: rgba(139, 37, 59, 0.16);
+  --peer-fill-strong: rgba(139, 37, 59, 0.32);
+
   /* Telegram chrome inset (close ×, menu ⋯) in fullscreen — populated from
      `Telegram.WebApp.contentSafeAreaInset` at boot (telegram-insets.ts). The
      56px fallback covers older clients / the first paint. */
   --tg-content-top: 56px;
   --tg-content-bottom: 0px;
+}
+/* On the cream page the "neutral" side flips to ink so it still reads. */
+:root[data-theme="light"] {
+  --self: #1d1d1d;
+  --self-glow: rgba(0, 0, 0, 0.3);
+  --self-fill: rgba(0, 0, 0, 0.06);
+  --self-fill-strong: rgba(0, 0, 0, 0.13);
+  --peer-fill: rgba(139, 37, 59, 0.1);
+  --peer-fill-strong: rgba(139, 37, 59, 0.2);
 }
 
 * {
@@ -458,66 +479,123 @@ a.vc-info-row .vc-info-text {
   width: 22px;
   height: 22px;
 }
+/* My mark is neutral/white — never the partner's burgundy. */
 .vc-heart.is-mine {
-  background: var(--accent-soft);
-  color: var(--accent-bright);
+  background: var(--self-fill-strong);
+  color: var(--self);
   box-shadow:
     var(--glass-edge),
-    0 6px 18px rgba(139, 37, 59, 0.28);
+    0 6px 18px rgba(0, 0, 0, 0.28);
 }
 .vc-heart.is-mine .vc-heart-icon {
   animation: heart-pop 0.34s cubic-bezier(0.2, 1.6, 0.4, 1) both;
 }
+/* Their mark rides the corner of the same button, in burgundy. */
+.vc-heart.is-theirs::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2.5px var(--bg), 0 0 10px rgba(182, 48, 79, 0.65);
+  animation: pill-in 0.3s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+.vc-heart {
+  position: relative;
+}
 
-/* ── Framed cards: the partner touched this, and we say so ───────────── */
-/* A lighter frame wraps the card on the top/left/right and opens a band along
-   the bottom that carries the caption — the Calendar's "window" idiom for
-   peer-touched slots, so the two Mini Apps speak the same visual language. */
+/* ── Framed cards: who marked this, said in words and in colour ──────── */
+/* A frame wraps the card on the top/left/right and opens a band along the
+   bottom for the caption — the Calendar's "window" idiom. The frame is ALWAYS
+   in the DOM: bare cards simply keep it transparent and the band collapsed, so
+   marking a place expands it smoothly instead of re-rendering the list. */
 .vc-frame {
   border-radius: 24px;
+  padding: 0;
+  background: transparent;
+  transition:
+    background 0.35s ease,
+    padding 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s ease;
+}
+.vc-frame.is-marked {
   padding: 4px 4px 0;
-  background: var(--fill);
   box-shadow: var(--glass-edge);
-  animation: rise 0.4s ease both;
 }
+/* MINE — neutral/white. */
+.vc-frame.is-mine {
+  background: linear-gradient(180deg, var(--self-fill-strong), var(--self-fill));
+}
+/* THEIRS — brand burgundy. */
 .vc-frame.is-peer {
-  background: linear-gradient(180deg, rgba(139, 37, 59, 0.22), rgba(139, 37, 59, 0.1));
+  background: linear-gradient(180deg, var(--peer-fill-strong), var(--peer-fill));
 }
+/* BOTH — the two colours meet; the only state that glows. */
 .vc-frame.is-match {
-  background: linear-gradient(180deg, rgba(182, 48, 79, 0.4), rgba(139, 37, 59, 0.22));
+  background: linear-gradient(115deg, var(--self-fill-strong) 0%, var(--peer-fill-strong) 55%, var(--accent) 130%);
   box-shadow:
     var(--glass-edge),
-    0 12px 34px rgba(139, 37, 59, 0.32);
+    0 12px 34px rgba(139, 37, 59, 0.3);
 }
-/* The inner card sits flush inside the frame — its own rounding tightens so the
-   frame reads as one continuous window rather than two stacked cards. */
+
+/* The inner card — flush inside the frame so the two read as one window. */
 .vc-frame > .vc-card {
+  transition: border-radius 0.35s ease, background 0.35s ease;
+}
+.vc-frame.is-marked > .vc-card {
   border-radius: 20px;
   background: var(--surface);
 }
-:root[data-theme="light"] .vc-frame > .vc-card {
+:root[data-theme="light"] .vc-frame.is-marked > .vc-card {
   background: var(--bg-elevated);
 }
 
-/* The caption band — the whole point of the frame. */
+/* The caption band — collapsed to nothing until the card is marked. */
 .vc-cap {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
+  padding: 0 14px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    max-height 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.28s ease,
+    padding 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.vc-frame.is-marked .vc-cap {
+  max-height: 42px;
+  opacity: 1;
   padding: 9px 14px 10px;
-  min-height: 34px;
 }
-.vc-cap-icon {
-  width: 15px;
-  height: 15px;
-  color: var(--text-muted);
+
+/* Identity dots — white = me, burgundy = them, paired = both. */
+.vc-cap-dots {
+  display: flex;
+  align-items: center;
+  flex: none;
 }
-.vc-cap-icon.is-peer,
-.vc-cap-icon.is-mine {
-  color: var(--accent-bright);
+.vc-cap-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
 }
-.vc-frame.is-match .vc-cap-icon {
-  color: #fff;
+.vc-cap-dot.is-self {
+  background: var(--self);
+  box-shadow: 0 0 9px var(--self-glow);
+}
+.vc-cap-dot.is-peer {
+  background: var(--accent);
+  box-shadow: 0 0 9px rgba(139, 37, 59, 0.75);
+}
+/* Overlapping pair, like the Calendar's overlap indicator. */
+.vc-cap-dot + .vc-cap-dot {
+  margin-left: -4px;
+  outline: 2px solid var(--surface);
 }
 .vc-cap-text {
   flex: 1;
@@ -544,6 +622,7 @@ a.vc-info-row .vc-info-text {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
+  animation: pill-in 0.3s cubic-bezier(0.2, 1.6, 0.4, 1) both;
 }
 .vc-frame.is-match .vc-badge-new {
   background: #fff;
@@ -573,8 +652,18 @@ a.vc-info-row .vc-info-text {
 .vc-banner-icon.is-peer {
   color: var(--accent-bright);
 }
+.vc-banner-icon.is-self {
+  color: var(--self);
+}
+/* Cross-fade the banner copy when the situation changes (no re-render flash). */
+.vc-banner.is-swapping {
+  opacity: 0.35;
+}
+.vc-banner {
+  transition: opacity 0.22s ease, background 0.3s ease;
+}
 .vc-banner.is-match {
-  background: linear-gradient(135deg, rgba(182, 48, 79, 0.3), rgba(139, 37, 59, 0.16));
+  background: linear-gradient(115deg, var(--self-fill-strong), var(--peer-fill-strong));
   color: var(--text);
 }
 .vc-banner.is-match .vc-banner-icon {
@@ -738,6 +827,14 @@ a.vc-info-row .vc-info-text {
   gap: 8px;
   padding: 14px 20px calc(16px + env(safe-area-inset-bottom) + var(--tg-content-bottom));
   background: linear-gradient(to top, var(--bg) 56%, rgba(18, 14, 28, 0));
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease;
+}
+/* The board's CTA lives in the DOM permanently and slides out of view when
+   there's nothing to submit — so marking a place never re-lays out the page. */
+.vc-bar.is-hidden {
+  transform: translateY(115%);
+  opacity: 0;
+  pointer-events: none;
 }
 .btn-primary,
 .btn-secondary {
@@ -816,6 +913,16 @@ a.vc-info-row .vc-info-text {
     transform: scale(1);
   }
 }
+@keyframes pill-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
 @keyframes peer-pulse {
   0%,
   100% {
@@ -825,21 +932,6 @@ a.vc-info-row .vc-info-text {
   50% {
     transform: scale(1.18);
     opacity: 0.85;
-  }
-}
-@keyframes match-glow {
-  0%,
-  100% {
-    box-shadow:
-      var(--glass-edge),
-      0 0 0 1.5px rgba(182, 48, 79, 0.55),
-      0 10px 34px rgba(139, 37, 59, 0.35);
-  }
-  50% {
-    box-shadow:
-      var(--glass-edge),
-      0 0 0 1.5px rgba(182, 48, 79, 0.85),
-      0 10px 44px rgba(139, 37, 59, 0.55);
   }
 }
 

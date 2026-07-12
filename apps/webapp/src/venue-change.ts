@@ -593,9 +593,13 @@ function startPolling(): void {
           route();
           return;
         }
-        // On the live board, only the partner's hearts change under us.
+        // On the live board only the partner's marks move under us — patch the
+        // cards that actually changed rather than rebuilding the list (which
+        // would replay every entry animation and read as a flash).
         if (screen === "board" && fresh.peerLikes.join() !== prev.peerLikes.join()) {
-          renderBoard(true);
+          const changed = new Set([...fresh.peerLikes, ...prev.peerLikes]);
+          for (const key of changed) patchCard(key);
+          syncBoardChrome();
         }
       } catch {
         /* transient poll failure — next tick retries */
@@ -696,15 +700,28 @@ async function main(): Promise<void> {
 // Board
 // ---------------------------------------------------------------------------
 
-function renderBoard(preserveScroll = false): void {
+/**
+ * Live handles into the mounted board. Marking a place must NOT re-render the
+ * page: a full re-mount replays every entry animation and reads as a flash.
+ * Instead the board is built once and every later change is a surgical class /
+ * text swap on these nodes, so the CSS transitions do the work smoothly.
+ */
+interface CardRefs {
+  frame: HTMLElement;
+  heart: HTMLElement;
+  cap: HTMLElement;
+}
+const cardRefs = new Map<string, CardRefs>();
+let bannerEl: HTMLElement | null = null;
+let barEl: HTMLElement | null = null;
+let ctaBtn: HTMLButtonElement | null = null;
+
+function renderBoard(): void {
   screen = "board";
   setBack(null);
   const st = boardState;
   if (!st) return;
-
-  const prevScroll = preserveScroll
-    ? (document.querySelector(".vc-scroll")?.scrollTop ?? 0)
-    : 0;
+  cardRefs.clear();
 
   const header = el("div", { class: "vc-header" }, [
     el("h1", { class: "vc-h1", text: s.boardTitle }),
@@ -718,51 +735,117 @@ function renderBoard(preserveScroll = false): void {
     el("div", { class: "vc-current-addr", text: st.original.address ?? "" }),
   ]);
 
-  const nodes: Node[] = [header, current];
+  // Contextual banner — says what's going on and what the next tap will do, so
+  // the board never leans on the marks alone to carry meaning.
+  bannerEl = el("div", { class: "vc-banner" });
 
-  // Contextual banner — says what's going on and what a tap will do, so the
-  // board never relies on the marks alone to carry meaning.
-  const banner = boardBanner(st);
-  if (banner) nodes.push(banner);
-
+  const nodes: Node[] = [header, current, bannerEl];
   if (catalog.length === 0) {
     nodes.push(el("p", { class: "vc-lead", text: s.catalogEmpty }));
   } else {
     nodes.push(el("div", { class: "vc-list" }, catalog.map((v) => renderVenueCard(v))));
   }
 
-  mount(page(nodes, ctaBar()));
-  if (preserveScroll && prevScroll) {
-    const scroller = document.querySelector(".vc-scroll");
-    if (scroller) scroller.scrollTop = prevScroll;
+  // The CTA bar lives in the DOM permanently and slides in/out — creating and
+  // destroying it per tap is what made the layout jump.
+  ctaBtn = el("button", {
+    class: "btn-primary",
+    type: "button",
+    onClick: () => void submitSelection(),
+  }) as HTMLButtonElement;
+  barEl = el("div", { class: "vc-bar is-hidden" }, [
+    ctaBtn,
+    el("p", { class: "vc-note vc-note-center", text: s.confirmHint }),
+  ]);
+
+  mount(el("div", { class: "vc-page" }, [el("div", { class: "vc-scroll" }, nodes), barEl]));
+  syncBoardChrome();
+}
+
+/** Repaint the banner + CTA from the current selection, in place. */
+function syncBoardChrome(): void {
+  const st = boardState;
+  if (!st) return;
+
+  if (bannerEl) {
+    const agreeing = selectedOverlap().length > 0;
+    let mark: IconName = "heart";
+    let markCls = "icon vc-banner-icon";
+    let copy = "";
+    if (agreeing) {
+      mark = "spark";
+      copy = s.bannerMatch;
+    } else if (st.peerLikes.length > 0 && selection.size === 0) {
+      mark = "heart-filled";
+      markCls += " is-peer";
+      copy = s.bannerPeerPicked(st.partnerName);
+    } else if (selection.size > 0) {
+      markCls += " is-self";
+      copy = s.bannerSuggest;
+    }
+    bannerEl.classList.toggle("is-match", agreeing);
+    bannerEl.hidden = copy === "";
+    if (copy) {
+      bannerEl.replaceChildren(icon(mark, markCls), el("span", { text: copy }));
+    }
+  }
+
+  if (barEl && ctaBtn) {
+    const dirty = isDirty();
+    barEl.classList.toggle("is-hidden", !dirty);
+    if (dirty) {
+      const agreeing = selectedOverlap().length > 0;
+      ctaBtn.textContent = saving ? s.ctaSaving : agreeing ? s.ctaConfirm : s.ctaSuggest;
+      ctaBtn.disabled = saving;
+    }
   }
 }
 
-function boardBanner(st: VenueBoardState): HTMLElement | null {
-  if (selectedOverlap().length > 0) {
-    return el("div", { class: "vc-banner is-match" }, [
-      icon("spark", "icon vc-banner-icon"),
-      el("span", { text: s.bannerMatch }),
-    ]);
+/** Repaint ONE card's marked state — the only thing a tap changes. */
+function patchCard(key: string): void {
+  const refs = cardRefs.get(key);
+  if (!refs) return;
+  const mine = selection.has(key);
+  const theirs = boardState?.peerLikes.includes(key) ?? false;
+  const both = mine && theirs;
+
+  refs.frame.className =
+    "vc-frame" +
+    (mine || theirs ? " is-marked" : "") +
+    (both ? " is-match" : theirs ? " is-peer" : mine ? " is-mine" : "");
+
+  refs.heart.className = `vc-heart${mine ? " is-mine" : ""}${theirs ? " is-theirs" : ""}`;
+  refs.heart.replaceChildren(icon(mine ? "heart-filled" : "heart", "icon vc-heart-icon"));
+
+  refs.cap.replaceChildren(...captionKids(key, mine, theirs));
+}
+
+/** Caption content: identity dots (white = me, burgundy = them) + the words. */
+function captionKids(key: string, mine: boolean, theirs: boolean): Node[] {
+  if (!mine && !theirs) return [];
+  const dots: Node[] = [];
+  if (mine) dots.push(el("span", { class: "vc-cap-dot is-self" }));
+  if (theirs) dots.push(el("span", { class: "vc-cap-dot is-peer" }));
+
+  const text = mine && theirs
+    ? s.capBoth
+    : theirs
+      ? s.capPeer(boardState?.partnerName ?? "")
+      : s.capMine;
+
+  const kids: Node[] = [
+    el("span", { class: "vc-cap-dots" }, dots),
+    el("span", { class: "vc-cap-text", text }),
+  ];
+  if (theirs && !peerSeen.has(key)) {
+    kids.push(el("span", { class: "vc-badge-new", text: s.badgeNew }));
   }
-  if (st.peerLikes.length > 0 && selection.size === 0) {
-    return el("div", { class: "vc-banner" }, [
-      icon("heart-filled", "icon vc-banner-icon is-peer"),
-      el("span", { text: s.bannerPeerPicked(st.partnerName) }),
-    ]);
-  }
-  if (selection.size > 0) {
-    return el("div", { class: "vc-banner" }, [
-      icon("heart", "icon vc-banner-icon"),
-      el("span", { text: s.bannerSuggest }),
-    ]);
-  }
-  return null;
+  return kids;
 }
 
 /**
- * A button carrying an authored mark. `stars` appends our own star glyph after
- * the label — never the platform ⭐, which renders as Apple/Google art.
+ * A button carrying an authored mark. `withStar` appends our own star glyph —
+ * never the platform ⭐, which renders as Apple/Google art.
  */
 function iconBtn(
   cls: string,
@@ -776,30 +859,15 @@ function iconBtn(
   return el("button", { class: cls, type: "button", onClick }, kids);
 }
 
-/** Bottom CTA — only exists when there's something to submit. */
-function ctaBar(): Node[] {
-  if (!isDirty()) return [];
-  const agreeing = selectedOverlap().length > 0;
-  const btn = el("button", {
-    class: "btn-primary",
-    type: "button",
-    text: saving ? s.ctaSaving : agreeing ? s.ctaConfirm : s.ctaSuggest,
-    disabled: saving,
-    onClick: () => void submitSelection(),
-  });
-  return [btn, el("p", { class: "vc-note vc-note-center", text: s.confirmHint })];
-}
-
 /** The mark button — an authored vector heart (never a platform emoji). */
 function heartButton(v: VenueChangeCatalogItem): HTMLElement {
   const key = keyOf(v);
   const mine = selection.has(key);
   const theirs = boardState?.peerLikes.includes(key) ?? false;
-  const cls = `vc-heart${mine ? " is-mine" : ""}${theirs ? " is-theirs" : ""}`;
   return el(
     "button",
     {
-      class: cls,
+      class: `vc-heart${mine ? " is-mine" : ""}${theirs ? " is-theirs" : ""}`,
       type: "button",
       onClick: (e) => {
         e.stopPropagation();
@@ -811,16 +879,15 @@ function heartButton(v: VenueChangeCatalogItem): HTMLElement {
 }
 
 /**
- * One venue row. A plain candidate is a bare borderless card; a card the
- * partner (or both of you) marked is wrapped in a lighter frame whose bottom
- * band carries a caption naming exactly what happened — the same "window"
- * idiom the Calendar uses for peer-touched slots.
+ * One venue row. The frame + caption band are ALWAYS in the DOM — bare cards
+ * simply keep the frame transparent and the band collapsed — so marking a place
+ * expands them through a CSS transition instead of rebuilding the list.
  */
 function renderVenueCard(v: VenueChangeCatalogItem): HTMLElement {
   const key = keyOf(v);
-  const theirs = boardState?.peerLikes.includes(key) ?? false;
   const mine = selection.has(key);
-  const both = theirs && mine;
+  const theirs = boardState?.peerLikes.includes(key) ?? false;
+  const both = mine && theirs;
 
   const chips: Node[] = [
     el("span", { class: "vc-chip" }, [
@@ -843,35 +910,33 @@ function renderVenueCard(v: VenueChangeCatalogItem): HTMLElement {
     el("div", { class: "vc-card-tags" }, chips),
   ]);
 
+  const heart = heartButton(v);
   const card = el(
     "div",
     {
-      class: `vc-card${both ? " is-match" : ""}${theirs && !both ? " is-peer" : ""}`,
+      class: "vc-card",
       onClick: () => {
         haptic("select");
         renderDetail(v);
       },
     },
-    [venueThumb(v), meta, heartButton(v)],
+    [venueThumb(v), meta, heart],
   );
 
-  // Bare card — nothing to explain.
-  if (!theirs && !mine) return card;
+  const cap = el("div", { class: "vc-cap" }, captionKids(key, mine, theirs));
+  const frame = el(
+    "div",
+    {
+      class:
+        "vc-frame" +
+        (mine || theirs ? " is-marked" : "") +
+        (both ? " is-match" : theirs ? " is-peer" : mine ? " is-mine" : ""),
+    },
+    [card, cap],
+  );
 
-  const isNew = theirs && !peerSeen.has(key);
-  const captionText = both ? s.capBoth : theirs ? s.capPeer(boardState?.partnerName ?? "") : s.capMine;
-  const captionKids: Node[] = [
-    both
-      ? icon("spark", "icon vc-cap-icon")
-      : theirs
-        ? icon("heart-filled", "icon vc-cap-icon is-peer")
-        : icon("heart-filled", "icon vc-cap-icon is-mine"),
-    el("span", { class: "vc-cap-text", text: captionText }),
-  ];
-  if (isNew) captionKids.push(el("span", { class: "vc-badge-new", text: s.badgeNew }));
-
-  const frameCls = `vc-frame${both ? " is-match" : theirs ? " is-peer" : " is-mine"}`;
-  return el("div", { class: frameCls }, [card, el("div", { class: "vc-cap" }, captionKids)]);
+  cardRefs.set(key, { frame, heart, cap });
+  return frame;
 }
 
 function venueThumb(v: VenueChangeCatalogItem, className = "vc-thumb"): HTMLElement {
@@ -889,7 +954,10 @@ function toggleMark(v: VenueChangeCatalogItem): void {
   if (selection.has(key)) selection.delete(key);
   else selection.add(key);
   haptic("select");
-  if (screen === "board") renderBoard(true);
+  if (screen === "board") {
+    patchCard(key);
+    syncBoardChrome();
+  }
 }
 
 /** Submit the marks (Suggest) — or, when they overlap the partner's, agree. */
@@ -897,7 +965,7 @@ async function submitSelection(): Promise<void> {
   if (previewMode || saving) return;
   saving = true;
   busy = true;
-  if (screen === "board") renderBoard(true);
+  syncBoardChrome();
   try {
     const res = await submitVenueLikes(getInitData(), matchId, [...selection]);
     confirmed = new Set(selection);
@@ -916,17 +984,24 @@ async function submitSelection(): Promise<void> {
       return;
     }
     boardState = await fetchVenueBoardState(getInitData(), matchId);
+    // My marks are now on the server, so the partner's are no longer "new" news
+    // to me — and the CTA retires until I change something again.
     peerSeen = new Set(boardState.peerLikes);
     haptic("success");
     saving = false;
     busy = false;
-    route();
+    if (screen === "board") {
+      for (const key of cardRefs.keys()) patchCard(key);
+      syncBoardChrome();
+    } else {
+      route();
+    }
   } catch (err) {
     saving = false;
     busy = false;
     haptic("error");
     app?.showAlert(errorMessage(err));
-    if (screen === "board") renderBoard(true);
+    syncBoardChrome();
   }
 }
 
@@ -1006,20 +1081,24 @@ function renderDetail(v: VenueChangeCatalogItem): void {
   nodes.push(mapsRow);
 
   const bar: Node[] = [];
-  const mine = selection.has(keyOf(v));
   // Marking is local and reversible; the board's Confirm CTA is the only thing
   // that reaches the partner, so this button can never commit a venue by itself.
-  bar.push(
-    iconBtn(
-      mine ? "btn-secondary" : "btn-primary",
-      mine ? "heart-filled" : "heart",
-      mine ? s.heartRemove : s.heartAdd,
-      () => {
-        toggleMark(v);
-        if (screen === "detail") renderDetail(v);
-      },
-    ),
-  );
+  // It repaints itself in place — re-rendering the page would flash the screen.
+  const markBtn = el("button", { class: "btn-primary", type: "button" });
+  const paintMarkBtn = (): void => {
+    const mine = selection.has(keyOf(v));
+    markBtn.className = mine ? "btn-secondary" : "btn-primary";
+    markBtn.replaceChildren(
+      icon(mine ? "heart-filled" : "heart", "icon btn-icon"),
+      el("span", { text: mine ? s.heartRemove : s.heartAdd }),
+    );
+  };
+  markBtn.addEventListener("click", () => {
+    toggleMark(v);
+    paintMarkBtn();
+  });
+  paintMarkBtn();
+  bar.push(markBtn);
   if (boardState?.expressAvailable && boardState.priceStars != null) {
     const price = boardState.priceStars;
     bar.push(
