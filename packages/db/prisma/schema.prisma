@@ -814,38 +814,71 @@ model Match {
   proxyClosesAt       DateTime? @map("proxy_closes_at")
   proxyClosedAt       DateTime? @map("proxy_closed_at")
 
-  /// --- Venue change (feature-flagged, female-exclusive one-shot) ---
+  /// --- Venue change v2 (feature-flagged, paid multiplayer board) ---
   /// String sub-state layered on a `scheduled` match — like `ticketStatus`
   /// and `coordMethod`, deliberately NOT a MatchStatus enum value so the
   /// scheduling/venue/lifecycle code that switches on `status` is untouched.
-  /// Inert when VENUE_CHANGE_FEATURE_ENABLED is off. Lifecycle:
-  ///   null / "none" — no change requested
-  ///   "proposed"    — female proposed a new venue, awaiting male decision
-  ///   "accepted"    — male accepted; the venueChange* fields below are now the
-  ///                   canonical venue (copied onto venueName/Address/... too)
-  ///   "rejected"    — male declined → match also flips status=cancelled
-  ///   "expired"     — TTL / T-DATE_ALERT_HOURS cutoff lapsed → match cancelled
+  /// Inert when VENUE_CHANGE_FEATURE_ENABLED is off. v2 lifecycle
+  /// (PRODUCT_SPEC §3.7b — the v1 propose/veto values are retired; the
+  /// feature never launched, so no in-flight v1 rows exist):
+  ///   null      — no session (nobody liked anything yet)
+  ///   "liking"  — board session open; likes exist, no agreement yet
+  ///   "agreed"  — a venue is agreed (board overlap or express mint),
+  ///               awaiting the VENUE_CHANGE_STARS payment; the venueChange*
+  ///               fields below hold the agreed venue
+  ///   "settled" — paid; venueChange* copied onto the canonical venue* fields
+  ///   "lapsed"  — payment deadline passed unpaid → original venue stands
+  ///               (the match is NEVER cancelled by a venue change)
   venueChangeStatus     String?   @map("venue_change_status")
-  /// The female initiator. Stored (not just derived from gender) so the
-  /// one-shot rule survives reconnects and powers the audit trail.
+  /// v2: the session INITIATOR — whoever placed the session's first like (or
+  /// minted the express invoice). Drives the payer matrix: hetero → the male
+  /// pays regardless; same-sex → the initiator pays.
   venueChangeProposerId String?   @map("venue_change_proposer_id") @db.Uuid
-  /// One-shot guard: set the moment she submits. Non-null blocks re-propose.
+  /// v2: session-open stamp (first like / express mint). CAS guard for the
+  /// initiator claim.
   venueChangeProposedAt DateTime? @map("venue_change_proposed_at")
-  /// Male decision deadline = min(now + VENUE_CHANGE_TTL_HOURS,
-  /// agreedTime - DATE_ALERT_HOURS). Drives the lifecycle expiry sweep.
+  /// Payment deadline for an `agreed` venue = min(agreedAt +
+  /// VENUE_CHANGE_TTL_HOURS, agreedTime - DATE_ALERT_HOURS). Drives the
+  /// lifecycle lapse sweep.
   venueChangeExpiresAt  DateTime? @map("venue_change_expires_at")
   venueChangeResolvedAt DateTime? @map("venue_change_resolved_at")
-  /// Proposed replacement venue, captured verbatim from the catalog pick.
+  /// Agreed replacement venue (server-resolved catalog snapshot — never the
+  /// client's own strings).
   venueChangeName       String?   @map("venue_change_name")
   venueChangeAddress    String?   @map("venue_change_address")
   venueChangeLat        Float?    @map("venue_change_lat")
   venueChangeLng        Float?    @map("venue_change_lng")
   venueChangeMapsUri    String?   @map("venue_change_maps_uri")
   venueChangePlaceId    String?   @map("venue_change_place_id")
-  /// Mandatory ≥10-char explanation, shown verbatim to the male as a
-  /// Telegram blockquote (no AI rewrite) — same one-shot, non-reply relay
-  /// carve-out as `emergencyReason`. Does NOT reopen user-to-user chat.
+  /// Legacy v1 column (the mandatory-comment relay) — retained, never written
+  /// by v2 (the board has no free text at all).
   venueChangeComment    String?   @map("venue_change_comment")
+  /// v2 board likes, one Json[] per side. Each entry is a server-resolved
+  /// venue snapshot: { key, placeId, name, address, lat, lng, mapsUri,
+  /// category, photoUrl, photoRef }. `key` = placeId ?? "name|address".
+  venueLikesA           Json[]    @map("venue_likes_a")
+  venueLikesB           Json[]    @map("venue_likes_b")
+  /// Agreed-venue photo refs (curated absolute URL / Places photo resource
+  /// name), copied onto venuePhotoUrl/venuePhotoName at settle so the updated
+  /// date card renders the NEW venue's photo.
+  venueChangePhotoUrl   String?   @map("venue_change_photo_url")
+  venueChangePhotoName  String?   @map("venue_change_photo_name")
+  /// Who actually paid the Stars and when (settle stamp).
+  venueChangePaidById   String?   @map("venue_change_paid_by_id") @db.Uuid
+  venueChangePaidAt     DateTime? @map("venue_change_paid_at")
+  /// The male's single, final "not this time" on paying (his finalizer fork
+  /// or the wish card). Non-null permanently hides her "offer him to pay"
+  /// option for this session.
+  venueChangePayDeclinedAt DateTime? @map("venue_change_pay_declined_at")
+  /// Wish-card guard: set once when she offers him to pay (no duplicate cards).
+  venueChangeOfferPaySentAt DateTime? @map("venue_change_offer_pay_sent_at")
+  /// First-like ping guards — at most one board-invite DM per recipient side.
+  venueChangePingSentToAAt DateTime? @map("venue_change_ping_sent_to_a_at")
+  venueChangePingSentToBAt DateTime? @map("venue_change_ping_sent_to_b_at")
+  /// Non-null marks the current `agreed` state as an EXPRESS mint (her
+  /// unilateral silent swap): hidden from the partner until settled, and a
+  /// lapse stays silent for the partner (they never knew).
+  venueChangeExpressAt  DateTime? @map("venue_change_express_at")
 
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")

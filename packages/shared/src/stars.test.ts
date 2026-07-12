@@ -5,6 +5,8 @@ import {
   parseStoreInvoicePayload,
   buildGateInvoicePayload,
   parseGateInvoicePayload,
+  buildVenueInvoicePayload,
+  parseVenueInvoicePayload,
 } from "./stars.js";
 
 const UUID = "22222222-2222-4222-8222-222222222222";
@@ -61,5 +63,37 @@ describe("gate invoice payload", () => {
   it("does not cross-parse with the store helper", () => {
     expect(parseStoreInvoicePayload(buildGateInvoicePayload(UUID, "self"))).toBeNull();
     expect(parseGateInvoicePayload(buildStoreInvoicePayload(3))).toBeNull();
+  });
+});
+
+describe("venue-change invoice payload", () => {
+  it("builds a payload for a match + mode", () => {
+    expect(buildVenueInvoicePayload(UUID, "agreed")).toBe(`venue:${UUID}:agreed`);
+  });
+
+  it("round-trips build → parse for both modes", () => {
+    for (const mode of ["agreed", "express"] as const) {
+      expect(parseVenueInvoicePayload(buildVenueInvoicePayload(UUID, mode))).toEqual({
+        matchId: UUID,
+        mode,
+      });
+    }
+  });
+
+  it("returns null for non-venue, bad-UUID, or unknown-mode payloads", () => {
+    expect(parseVenueInvoicePayload("")).toBeNull();
+    expect(parseVenueInvoicePayload(null)).toBeNull();
+    expect(parseVenueInvoicePayload(undefined)).toBeNull();
+    expect(parseVenueInvoicePayload(`gate:${UUID}:self`)).toBeNull();
+    expect(parseVenueInvoicePayload("venue:")).toBeNull();
+    expect(parseVenueInvoicePayload(`venue:${UUID}`)).toBeNull(); // no mode
+    expect(parseVenueInvoicePayload(`venue:${UUID}:free`)).toBeNull(); // bad mode
+    expect(parseVenueInvoicePayload("venue:not-a-uuid:agreed")).toBeNull();
+  });
+
+  it("does not cross-parse with the store/gate helpers", () => {
+    expect(parseStoreInvoicePayload(buildVenueInvoicePayload(UUID, "agreed"))).toBeNull();
+    expect(parseGateInvoicePayload(buildVenueInvoicePayload(UUID, "agreed"))).toBeNull();
+    expect(parseVenueInvoicePayload(buildGateInvoicePayload(UUID, "self"))).toBeNull();
   });
 });

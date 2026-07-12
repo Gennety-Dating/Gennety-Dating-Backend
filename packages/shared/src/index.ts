@@ -64,6 +64,10 @@ export {
   buildGateInvoicePayload,
   parseGateInvoicePayload,
   type GateInvoiceScope,
+  VENUE_INVOICE_PREFIX,
+  buildVenueInvoicePayload,
+  parseVenueInvoicePayload,
+  type VenueInvoiceMode,
 } from "./stars.js";
 export {
   MAGIC_CONTEXT_PROMPT,

@@ -68,3 +68,42 @@ export function parseGateInvoicePayload(
   if (scope !== "self" && scope !== "both" && scope !== "partner") return null;
   return { matchId, scope };
 }
+
+/**
+ * Venue-change (§3.7b v2) Star payment payload. One flat 150⭐ price (env
+ * `VENUE_CHANGE_STARS`) settles the venue swap on a specific match. Two modes:
+ *   • `agreed`  — pays for the venue both sides converged on via the board
+ *     (the venueChange* fields already hold the agreed venue).
+ *   • `express` — the female's unilateral instant swap; the express pick was
+ *     stamped onto the venueChange* fields when the invoice was minted.
+ * Format: `venue:<matchId>:<mode>`.
+ */
+export const VENUE_INVOICE_PREFIX = "venue:";
+
+/** The two venue-change Star payment modes. */
+export type VenueInvoiceMode = "agreed" | "express";
+
+/** Build the invoice payload for a venue-change Star payment. */
+export function buildVenueInvoicePayload(matchId: string, mode: VenueInvoiceMode): string {
+  return `${VENUE_INVOICE_PREFIX}${matchId}:${mode}`;
+}
+
+/**
+ * Parse a venue-change invoice payload back into `{ matchId, mode }`. Returns
+ * null for any non-venue, malformed, bad-UUID, or unknown-mode payload — so a
+ * foreign or tampered invoice never swaps a venue. Participant/payer checks
+ * remain the trust boundary in the settle handler.
+ */
+export function parseVenueInvoicePayload(
+  payload: string | null | undefined,
+): { matchId: string; mode: VenueInvoiceMode } | null {
+  if (!payload || !payload.startsWith(VENUE_INVOICE_PREFIX)) return null;
+  const rest = payload.slice(VENUE_INVOICE_PREFIX.length);
+  const sep = rest.lastIndexOf(":");
+  if (sep <= 0) return null;
+  const matchId = rest.slice(0, sep);
+  const mode = rest.slice(sep + 1);
+  if (!GATE_PAYLOAD_UUID.test(matchId)) return null;
+  if (mode !== "agreed" && mode !== "express") return null;
+  return { matchId, mode };
+}

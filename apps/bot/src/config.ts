@@ -299,16 +299,20 @@ export const env = {
   /// bot-relayed chat. Telegram-only in v1 (PRODUCT_SPEC.md §Phase 4).
   COORDINATION_FEATURE_ENABLED: process.env.COORDINATION_FEATURE_ENABLED === "true",
 
-  // ── Venue change (female-exclusive one-shot venue swap) ──────
-  /// Master flag for the post-schedule "Change venue" step. When false
-  /// (default), the scheduled-date DM is identical for both sides and no
-  /// venue-change button/endpoints do anything — the feature ships dark.
-  /// When true, the female participant (or first tapper in a same-sex female
-  /// pair) gets a "Change venue" button on her scheduled-date card, can pick
-  /// an alternative within VENUE_CHANGE_RADIUS_KM of the original venue with a
-  /// mandatory comment, and the male accepts or declines (decline cancels the
-  /// match). Telegram-only in v1 (PRODUCT_SPEC.md §3.7).
+  // ── Venue change v2 (paid multiplayer venue picking) ─────────
+  /// Master flag for the post-schedule "Change venue" board. When false
+  /// (default), the scheduled-date DM carries no venue-change button and the
+  /// endpoints refuse — the feature ships dark. When true, BOTH sides'
+  /// scheduled cards carry a "Change venue" web_app button into the shared
+  /// likes board (calendar mechanics: multi-pick hearts, live peer visibility,
+  /// overlap = agreement). A settled change costs VENUE_CHANGE_STARS; hetero
+  /// pairs — the man pays (plus the female-only express unilateral swap),
+  /// same-sex — the initiator pays. Decline/lapse never cancels the match —
+  /// the original venue simply stands. Telegram-only (PRODUCT_SPEC.md §3.7b).
   VENUE_CHANGE_FEATURE_ENABLED: process.env.VENUE_CHANGE_FEATURE_ENABLED === "true",
+  /// Telegram Stars (XTR) price of one settled venue change — one flat price
+  /// for every path (agreed board pick, express). Env-tunable at launch.
+  VENUE_CHANGE_STARS: Number(process.env.VENUE_CHANGE_STARS ?? "150"),
 
   // ── Date card (shareable PNG for a fully scheduled date) ─────
   /// Master flag for the date-card feature. When false (default), the
