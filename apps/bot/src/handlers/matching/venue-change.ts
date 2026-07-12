@@ -914,7 +914,7 @@ async function sendWishCard(
     .text(t(lang, "venueWishDeclineBtn"), `vchg:paydecline:${match.id}`);
 
   const { renderVenueWishCard } = await import("../../services/venue-wish-card.js");
-  const png = await renderVenueWishCard(match.id).catch(() => null);
+  const png = await renderVenueWishCard(api, match.id).catch(() => null);
   const caption = t(lang, "venueWishText", { name: herName, venue: label });
   if (png) {
     const { InputFile } = await import("grammy");

@@ -37,6 +37,11 @@ export interface DateCardInput {
   language: Language;
   /** Recipient's chosen theme — drives the card's light/dark chrome. */
   theme: CardTheme;
+  /**
+   * Headline override. The date card uses the brand `dateCardSlogan` line;
+   * the venue-change wish card reuses this exact layout with its own line.
+   */
+  slogan?: string;
 }
 
 export interface RenderDateCardOptions {
@@ -128,7 +133,7 @@ export async function renderDateCard(
       logo,
       venueName: input.venueName,
       venueAddress: input.venueAddress,
-      slogan: t(input.language, "dateCardSlogan"),
+      slogan: input.slogan ?? t(input.language, "dateCardSlogan"),
       theme: input.theme,
     });
 

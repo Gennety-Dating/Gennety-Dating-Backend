@@ -18,6 +18,12 @@ vi.mock("../../config.js", () => ({
   },
 }));
 
+// The PNG render has its own module; here we exercise the text fallback so the
+// unit test stays fast and deterministic (no satori raster in this suite).
+vi.mock("../../services/venue-wish-card.js", () => ({
+  renderVenueWishCard: vi.fn().mockResolvedValue(null),
+}));
+
 import { prisma } from "@gennety/db";
 import {
   submitVenueLikes,
