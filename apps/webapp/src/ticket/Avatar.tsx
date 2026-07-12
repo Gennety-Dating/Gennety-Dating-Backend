@@ -1,10 +1,10 @@
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 /**
  * Circular profile avatar for the ticket Mini App. Renders the photo when a
  * `src` is available, otherwise a monogram (first letter of `name`) so the UI
- * never shows a broken image. An optional `badge` emoji (❤️ / 🎩) floats over
- * the top-right corner.
+ * never shows a broken image. An optional `badge` — an authored vector mark
+ * from `marks.tsx`, never a platform emoji — floats over the top-right corner.
  */
 export function Avatar({
   src,
@@ -16,7 +16,7 @@ export function Avatar({
   src: string | null;
   name?: string | null;
   size?: number;
-  badge?: string;
+  badge?: ReactNode;
   className?: string;
 }): ReactElement {
   const initial = (name?.trim()?.[0] ?? "★").toUpperCase();

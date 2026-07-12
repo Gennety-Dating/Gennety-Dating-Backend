@@ -32,6 +32,23 @@
   --accent-bright: #b6304f;
   --accent-soft: rgba(139, 37, 59, 0.18);
 
+  /* ── Colour = meaning (shared with the Calendar Mini App) ──────────────
+     Structure is NEUTRAL; colour is spent only on the two people and the one
+     action. Grey carries every surface, chip and quiet control; WHITE means
+     "you" and the primary action; BURGUNDY means "your partner" and the one
+     paid moment. Tinting surfaces burgundy is what made the paid screens read
+     as mush — depth comes from elevation (bg → surface → frame), never tint. */
+  --self: #ffffff;
+  --self-glow: rgba(255, 255, 255, 0.5);
+  --self-fill: rgba(255, 255, 255, 0.1);
+  --self-fill-strong: rgba(255, 255, 255, 0.2);
+  --peer: var(--accent-bright);
+  --peer-fill: rgba(139, 37, 59, 0.16);
+  --peer-fill-strong: rgba(139, 37, 59, 0.3);
+  /* The lifted frame behind a card that someone has touched — a neutral step
+     UP from the card, so "marked" reads as elevation, not as a wash. */
+  --card-frame: #262628;
+
   /* Subtle fills for inputs / choice rows, and the glass card surface. */
   --fill: rgba(255, 255, 255, 0.06);
   --fill-strong: rgba(255, 255, 255, 0.1);
@@ -76,6 +93,18 @@
   --accent: #8b253b;
   --accent-bright: #b6304f;
   --accent-soft: rgba(139, 37, 59, 0.12);
+
+  /* Same language on the cream page: "you" flips to ink so it still reads as
+     the high-contrast side, the partner stays burgundy, the frame steps DOWN
+     in lightness (a card is white, so its frame must be darker to lift it). */
+  --self: #1d1d1d;
+  --self-glow: rgba(0, 0, 0, 0.28);
+  --self-fill: rgba(0, 0, 0, 0.06);
+  --self-fill-strong: rgba(0, 0, 0, 0.13);
+  --peer: var(--accent);
+  --peer-fill: rgba(139, 37, 59, 0.1);
+  --peer-fill-strong: rgba(139, 37, 59, 0.2);
+  --card-frame: #e4e2e2;
 
   --fill: rgba(0, 0, 0, 0.05);
   --fill-strong: rgba(0, 0, 0, 0.08);

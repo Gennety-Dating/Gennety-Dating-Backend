@@ -38,19 +38,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* A flat, neutral stage. Burgundy is reserved for the ticket object itself and
+   the one action we want tapped — washing the page in it is what made the
+   screens read as mush. */
 body {
-  background:
-    radial-gradient(120% 80% at 50% -10%, rgba(139, 37, 59, 0.3), transparent 62%),
-    radial-gradient(90% 60% at 50% 110%, rgba(139, 37, 59, 0.15), transparent 60%),
-    var(--bg);
   min-height: 100vh;
-}
-/* Soften the burgundy ambience on the cream page. */
-:root[data-theme="light"] body {
-  background:
-    radial-gradient(120% 80% at 50% -10%, rgba(139, 37, 59, 0.14), transparent 62%),
-    radial-gradient(90% 60% at 50% 110%, rgba(139, 37, 59, 0.07), transparent 60%),
-    var(--bg);
 }
 
 .ticket-page {
@@ -389,6 +381,10 @@ body {
 }
 
 /* ── Actions ──────────────────────────────────────────────────────────── */
+/* One ladder, shared with the venue board: BURGUNDY hero (the action we want
+   tapped — covering you both) → WHITE primary (the ordinary commit) → grey
+   glass (alternatives) → ghost text. Exactly one loud button per screen. */
+.btn-hero,
 .btn-primary,
 .btn-secondary {
   width: 100%;
@@ -401,30 +397,77 @@ body {
   cursor: pointer;
   transition: transform 0.15s ease, filter 0.15s ease, background 0.15s ease;
 }
-.btn-primary {
-  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 45%, var(--accent-deep) 100%);
+
+/* HERO — the gentleman's move (pay/use for you both), and the paid moment. The
+   only burgundy button, and the only one that shimmers. */
+.btn-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  padding: 19px 20px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: #fff;
+  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 70%, var(--accent-deep) 100%);
   box-shadow:
-    0 12px 30px rgba(139, 37, 59, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    0 16px 40px -14px rgba(182, 48, 79, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
+.btn-hero::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transform: skewX(-18deg);
+  animation: sheen 3.4s ease-in-out infinite;
+  pointer-events: none;
+}
+.btn-hero:disabled::after {
+  animation: none;
+  opacity: 0;
+}
+
+/* PRIMARY — solid white (ink on cream). Highest contrast on the grey stage. */
+.btn-primary {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  font-weight: 700;
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.9);
+}
+
+/* SECONDARY — the alternative. Grey, quiet, still obviously tappable. */
 .btn-secondary {
-  background: var(--glass);
+  background: var(--fill);
   color: var(--text);
   box-shadow: var(--glass-edge);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
 }
 .btn-secondary:active {
   background: var(--glass-press);
 }
+.btn-hero:active,
 .btn-primary:active,
 .btn-secondary:active {
   transform: scale(0.98);
 }
+.btn-hero:disabled,
 .btn-primary:disabled {
-  filter: grayscale(0.3) brightness(0.8);
+  filter: brightness(0.75);
   cursor: default;
+}
+
+@keyframes sheen {
+  0%,
+  62% {
+    left: -40%;
+  }
+  92%,
+  100% {
+    left: 130%;
+  }
 }
 
 /* ── Partner-paid surprise screen (PRODUCT_SPEC §3.5b) ─────────────────── */
@@ -450,13 +493,19 @@ body {
 .pp-heart {
   position: absolute;
   bottom: -24px;
+  display: block;
   color: var(--accent);
   opacity: 0;
   animation-name: pp-heart-rise;
   animation-timing-function: ease-in;
   animation-iteration-count: infinite;
   will-change: transform, opacity;
-  text-shadow: 0 0 12px rgba(139, 37, 59, 0.5);
+  filter: drop-shadow(0 0 8px rgba(139, 37, 59, 0.55));
+}
+.pp-heart svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .pp-hero {
@@ -610,9 +659,16 @@ body {
   animation: pp-stamp-in 0.55s 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.5) both;
 }
 .pp-stamp-tick {
-  font-size: 10px;
-  font-weight: 900;
+  display: grid;
+  place-items: center;
+  width: 11px;
+  height: 11px;
   color: var(--accent-deep);
+}
+.pp-stamp-tick svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .pp-title {
@@ -910,14 +966,30 @@ body {
   line-height: 1;
   text-transform: uppercase;
 }
+/* A burgundy seal on the avatar's corner, holding an authored vector (never an
+   emoji, which would render as Apple art and blur when scaled). */
 .tkt-avatar-badge {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  font-size: 1.05em;
-  line-height: 1;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+  top: -4px;
+  right: -4px;
+  width: 30%;
+  height: 30%;
+  min-width: 22px;
+  min-height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  box-shadow:
+    0 0 0 2.5px var(--bg),
+    0 4px 12px -3px rgba(139, 37, 59, 0.9);
   pointer-events: none;
+}
+.tkt-avatar-badge svg {
+  width: 58%;
+  height: 58%;
+  display: block;
 }
 .tkt-avatar-overlap {
   margin-left: -12px;

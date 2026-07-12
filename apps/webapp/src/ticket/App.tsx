@@ -29,6 +29,7 @@ import { Confetti } from "./Confetti.js";
 import { PartialTimer } from "./PartialTimer.js";
 import { PartnerPaidCard } from "./PartnerPaidCard.js";
 import { Avatar } from "./Avatar.js";
+import { HeartMark } from "./marks.js";
 
 const app = window.Telegram?.WebApp;
 const params = new URLSearchParams(location.search);
@@ -316,6 +317,7 @@ export function App(): ReactElement {
                   src={partnerPhotoSrc}
                   name={state.partnerName}
                   size={132}
+                  badge={<HeartMark />}
                   className="tkt-avatar-hero"
                 />
               </div>
@@ -346,7 +348,7 @@ export function App(): ReactElement {
               <button
                 key={`${b.action}:${b.scope}`}
                 type="button"
-                className={`${b.primary ? "btn-primary" : "btn-secondary"}${discounted ? " btn-famine" : ""}${b.scope === "both" ? " btn-with-avatars" : ""}`}
+                className={`${b.primary ? "btn-hero" : "btn-secondary"}${discounted ? " btn-famine" : ""}${b.scope === "both" ? " btn-with-avatars" : ""}`}
                 onClick={() => onOfferButton(state, b)}
               >
                 {b.scope === "both" && (
@@ -376,7 +378,7 @@ export function App(): ReactElement {
               <button
                 key={`${b.action}:${b.scope}`}
                 type="button"
-                className={b.primary ? "btn-primary" : "btn-secondary"}
+                className={b.primary ? "btn-hero" : "btn-secondary"}
                 onClick={() => onOfferButton(state, b)}
               >
                 {offerLabel(b, state, s)}

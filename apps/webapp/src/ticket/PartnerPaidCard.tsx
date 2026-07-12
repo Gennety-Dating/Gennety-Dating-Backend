@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { fill, type TicketStrings } from "./i18n.js";
 import { Avatar } from "./Avatar.js";
+import { HeartMark, CheckMark, HatMark } from "./marks.js";
 import logoUrl from "./gennety-logo.png";
 
 /**
@@ -8,7 +9,7 @@ import logoUrl from "./gennety-logo.png";
  *
  * Shown only when the partner covered THIS user's ticket (pay-for-both). The
  * woman opened the Mini App braced to pay — so this screen is deliberately
- * minimal-text, max-emotion: a softly glowing covered ticket with a ❤ "PAID"
+ * minimal-text, max-emotion: a softly glowing covered ticket with a sealed "PAID"
  * seal, drifting hearts, and two short lines. The continue CTA lives in the
  * shared action-bar (App.tsx). PRODUCT_SPEC §3.5b.
  */
@@ -45,10 +46,11 @@ export function PartnerPaidCard({
               left: h.left,
               animationDelay: h.delay,
               animationDuration: h.dur,
-              fontSize: h.size,
+              width: h.size,
+              height: h.size,
             }}
           >
-            ❤
+            <HeartMark />
           </span>
         ))}
       </div>
@@ -59,7 +61,7 @@ export function PartnerPaidCard({
             src={partnerPhotoUrl}
             name={partnerName}
             size={124}
-            badge="🎩"
+            badge={<HatMark />}
             className="tkt-avatar-hero pp-payer-avatar"
           />
         </div>
@@ -78,7 +80,7 @@ export function PartnerPaidCard({
           </div>
           <div className="pp-stamp">
             <span className="pp-stamp-tick" aria-hidden="true">
-              ✓
+              <CheckMark />
             </span>
             {s.partnerPaidStamp}
           </div>

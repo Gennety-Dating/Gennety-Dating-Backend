@@ -6,27 +6,14 @@
 @import "./theme.css";
 
 :root {
-  /* Local aliases onto the shared theme tokens (theme.css). --accent /
-     --accent-bright / --bg / --text / --text-faint come from theme.css and
-     adapt to the active theme; venue-change keeps its own glass naming. */
+  /* Local aliases onto the shared tokens (theme.css). The two-party colour
+     language (--self / --peer / --card-frame) is shared with the Calendar and
+     the Ticket Mini App, so all three read the same way. */
   --accent-deep: #6d1c2e;
-  --bg-soft: var(--surface);
   --text-dim: var(--text-muted);
-  --glass: var(--glass-bg);
+  --glass: var(--fill);
   --glass-press: var(--fill-strong);
-  --glass-edge: inset 0 1px 0 var(--glass-highlight);
-  --danger: #e0566e;
-
-  /* Two-party colour language, shared with the Calendar Mini App: MY marks are
-     neutral/white, the PARTNER's are brand burgundy, and a place we both marked
-     carries both colours. Identity is never carried by tone alone. */
-  --self: #ffffff;
-  --self-glow: rgba(255, 255, 255, 0.55);
-  --self-fill: rgba(255, 255, 255, 0.1);
-  --self-fill-strong: rgba(255, 255, 255, 0.2);
-  --peer: var(--accent-bright);
-  --peer-fill: rgba(139, 37, 59, 0.16);
-  --peer-fill-strong: rgba(139, 37, 59, 0.32);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
   /* Telegram chrome inset (close ×, menu ⋯) in fullscreen — populated from
      `Telegram.WebApp.contentSafeAreaInset` at boot (telegram-insets.ts). The
@@ -34,14 +21,8 @@
   --tg-content-top: 56px;
   --tg-content-bottom: 0px;
 }
-/* On the cream page the "neutral" side flips to ink so it still reads. */
 :root[data-theme="light"] {
-  --self: #1d1d1d;
-  --self-glow: rgba(0, 0, 0, 0.3);
-  --self-fill: rgba(0, 0, 0, 0.06);
-  --self-fill-strong: rgba(0, 0, 0, 0.13);
-  --peer-fill: rgba(139, 37, 59, 0.1);
-  --peer-fill-strong: rgba(139, 37, 59, 0.2);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 * {
@@ -62,19 +43,10 @@ body {
   overflow-x: hidden;
 }
 
+/* A flat, neutral stage. Colour is spent on marks and one action — never on
+   the backdrop, which is what drowned the burgundy signal before. */
 body {
-  background:
-    radial-gradient(120% 80% at 50% -10%, rgba(139, 37, 59, 0.3), transparent 62%),
-    radial-gradient(90% 60% at 50% 110%, rgba(139, 37, 59, 0.15), transparent 60%),
-    var(--bg);
   min-height: 100vh;
-}
-/* Soften the burgundy ambience on the cream page. */
-:root[data-theme="light"] body {
-  background:
-    radial-gradient(120% 80% at 50% -10%, rgba(139, 37, 59, 0.14), transparent 62%),
-    radial-gradient(90% 60% at 50% 110%, rgba(139, 37, 59, 0.07), transparent 60%),
-    var(--bg);
 }
 
 .vc-page {
@@ -175,10 +147,8 @@ body {
   position: relative;
   padding: 16px 18px;
   border-radius: 20px;
-  background: var(--glass);
-  box-shadow: var(--glass-edge), var(--glass-shadow);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background: var(--surface);
+  box-shadow: var(--glass-edge);
   margin-bottom: 18px;
 }
 .vc-current-badge {
@@ -186,8 +156,8 @@ body {
   align-items: center;
   padding: 4px 11px;
   border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-bright);
+  background: var(--fill-strong);
+  color: var(--text-muted);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -226,10 +196,8 @@ body {
   padding: 12px;
   border: none;
   border-radius: 20px;
-  background: var(--glass);
+  background: var(--surface);
   box-shadow: var(--glass-edge);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   color: var(--text);
   text-align: left;
   font-family: inherit;
@@ -245,9 +213,7 @@ body {
   width: 68px;
   height: 68px;
   border-radius: 15px;
-  background:
-    radial-gradient(120% 90% at 20% 0%, rgba(139, 37, 59, 0.28), transparent 60%),
-    linear-gradient(155deg, var(--surface-2), var(--surface));
+  background: linear-gradient(155deg, var(--surface-2), var(--surface));
   background-size: cover;
   background-position: center;
   box-shadow: var(--glass-edge);
@@ -303,8 +269,8 @@ body {
   gap: 4px;
   padding: 3px 9px;
   border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-bright);
+  background: var(--fill);
+  color: var(--text-muted);
   font-size: 11.5px;
   font-weight: 600;
   white-space: nowrap;
@@ -342,9 +308,7 @@ body {
   width: min(78vw, 340px);
   height: 220px;
   border-radius: 22px;
-  background:
-    radial-gradient(120% 90% at 20% 0%, rgba(139, 37, 59, 0.22), transparent 58%),
-    linear-gradient(155deg, var(--surface-2) 0%, var(--surface) 60%, var(--surface-2) 100%);
+  background: linear-gradient(155deg, var(--surface-2) 0%, var(--surface) 60%, var(--surface-2) 100%);
   background-size: cover;
   background-position: center;
   box-shadow:
@@ -479,13 +443,11 @@ a.vc-info-row .vc-info-text {
   width: 22px;
   height: 22px;
 }
-/* My mark is neutral/white — never the partner's burgundy. */
+/* My mark is white — never the partner's burgundy. */
 .vc-heart.is-mine {
-  background: var(--self-fill-strong);
-  color: var(--self);
-  box-shadow:
-    var(--glass-edge),
-    0 6px 18px rgba(0, 0, 0, 0.28);
+  background: var(--self);
+  color: var(--bg);
+  box-shadow: 0 6px 18px -6px var(--self-glow);
 }
 .vc-heart.is-mine .vc-heart-icon {
   animation: heart-pop 0.34s cubic-bezier(0.2, 1.6, 0.4, 1) both;
@@ -508,10 +470,10 @@ a.vc-info-row .vc-info-text {
 }
 
 /* ── Framed cards: who marked this, said in words and in colour ──────── */
-/* A frame wraps the card on the top/left/right and opens a band along the
-   bottom for the caption — the Calendar's "window" idiom. The frame is ALWAYS
-   in the DOM: bare cards simply keep it transparent and the band collapsed, so
-   marking a place expands it smoothly instead of re-rendering the list. */
+/* A card someone touched is LIFTED — the frame is a neutral step up from the
+   surface (bg → surface → frame), and identity lives in a thin coloured edge
+   and the caption dot. Tinting the whole card is what made every state read as
+   the same burgundy mush. */
 .vc-frame {
   border-radius: 24px;
   padding: 0;
@@ -523,22 +485,27 @@ a.vc-info-row .vc-info-text {
 }
 .vc-frame.is-marked {
   padding: 4px 4px 0;
-  box-shadow: var(--glass-edge);
+  background: var(--card-frame);
+  box-shadow: 0 10px 26px -14px rgba(0, 0, 0, 0.7);
 }
-/* MINE — neutral/white. */
+/* MINE — a white hairline along the frame. */
 .vc-frame.is-mine {
-  background: linear-gradient(180deg, var(--self-fill-strong), var(--self-fill));
-}
-/* THEIRS — brand burgundy. */
-.vc-frame.is-peer {
-  background: linear-gradient(180deg, var(--peer-fill-strong), var(--peer-fill));
-}
-/* BOTH — the two colours meet; the only state that glows. */
-.vc-frame.is-match {
-  background: linear-gradient(115deg, var(--self-fill-strong) 0%, var(--peer-fill-strong) 55%, var(--accent) 130%);
   box-shadow:
-    var(--glass-edge),
-    0 12px 34px rgba(139, 37, 59, 0.3);
+    inset 0 0 0 1.5px var(--self-fill-strong),
+    0 10px 26px -14px rgba(0, 0, 0, 0.7);
+}
+/* THEIRS — the same, in burgundy. */
+.vc-frame.is-peer {
+  box-shadow:
+    inset 0 0 0 1.5px var(--peer),
+    0 10px 26px -14px rgba(0, 0, 0, 0.7);
+}
+/* BOTH — the two colours meet, and this is the only state that glows. */
+.vc-frame.is-match {
+  background: linear-gradient(120deg, var(--card-frame) 0%, var(--accent) 145%);
+  box-shadow:
+    inset 0 0 0 1.5px var(--peer),
+    0 14px 32px -12px rgba(139, 37, 59, 0.55);
 }
 
 /* The inner card — flush inside the frame so the two read as one window. */
@@ -548,9 +515,6 @@ a.vc-info-row .vc-info-text {
 .vc-frame.is-marked > .vc-card {
   border-radius: 20px;
   background: var(--surface);
-}
-:root[data-theme="light"] .vc-frame.is-marked > .vc-card {
-  background: var(--bg-elevated);
 }
 
 /* The caption band — collapsed to nothing until the card is marked. */
@@ -586,16 +550,16 @@ a.vc-info-row .vc-info-text {
 }
 .vc-cap-dot.is-self {
   background: var(--self);
-  box-shadow: 0 0 9px var(--self-glow);
+  box-shadow: 0 0 8px var(--self-glow);
 }
 .vc-cap-dot.is-peer {
-  background: var(--accent);
-  box-shadow: 0 0 9px rgba(139, 37, 59, 0.75);
+  background: var(--accent-bright);
+  box-shadow: 0 0 8px rgba(182, 48, 79, 0.8);
 }
 /* Overlapping pair, like the Calendar's overlap indicator. */
 .vc-cap-dot + .vc-cap-dot {
   margin-left: -4px;
-  outline: 2px solid var(--surface);
+  outline: 2px solid var(--card-frame);
 }
 .vc-cap-text {
   flex: 1;
@@ -608,8 +572,349 @@ a.vc-info-row .vc-info-text {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.vc-frame.is-match .vc-cap-text {
+/* NEW pill — the partner marked this since I last looked. */
+.vc-badge-new {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
   color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  animation: pill-in 0.3s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+.vc-frame.is-match .vc-badge-new {
+  background: #fff;
+  color: var(--accent);
+}
+
+/* ── Contextual banner ───────────────────────────────────────────────── */
+.vc-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--glass-edge);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+  transition: opacity 0.22s ease, background 0.3s ease;
+  animation: rise 0.4s ease both;
+}
+.vc-banner-icon {
+  width: 17px;
+  height: 17px;
+  color: var(--text-muted);
+}
+.vc-banner-icon.is-peer {
+  color: var(--accent-bright);
+}
+.vc-banner-icon.is-self {
+  color: var(--self);
+}
+/* The one banner that matters: you agree. It alone wears the accent. */
+.vc-banner.is-match {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 12px 30px -14px rgba(139, 37, 59, 0.8);
+}
+.vc-banner.is-match .vc-banner-icon {
+  color: #fff;
+}
+
+/* ── Detail ───────────────────────────────────────────────────────────── */
+.vc-detail {
+  animation: rise 0.4s ease both;
+}
+/* Photo gallery — full-bleed horizontal scroll-snap rail. */
+.vc-gallery {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -20px 4px;
+  padding: 0 20px;
+  scrollbar-width: none;
+}
+.vc-gallery::-webkit-scrollbar {
+  display: none;
+}
+.vc-shot {
+  flex: 0 0 auto;
+  scroll-snap-align: center;
+  width: min(78vw, 340px);
+  height: 220px;
+  border-radius: 22px;
+  background: linear-gradient(155deg, var(--surface-2) 0%, var(--surface) 60%, var(--surface-2) 100%);
+  background-size: cover;
+  background-position: center;
+  box-shadow:
+    var(--glass-shadow),
+    inset 0 1px 0 var(--glass-highlight);
+  display: grid;
+  place-items: center;
+  font-size: 40px;
+  overflow: hidden;
+}
+.vc-shot.is-single {
+  width: 100%;
+}
+/* Soft dot indicator under the gallery. */
+.vc-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 10px 0 2px;
+}
+.vc-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(244, 236, 255, 0.25);
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.vc-dot.is-active {
+  background: var(--accent);
+  transform: scale(1.25);
+}
+
+.vc-detail-name {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 16px 0 10px;
+}
+.vc-detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.vc-summary {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0 0 16px;
+}
+/* Address + Maps — borderless glass rows. */
+.vc-info-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--glass);
+  box-shadow: var(--glass-edge);
+  margin-bottom: 10px;
+}
+.vc-info-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+}
+.vc-info-text {
+  min-width: 0;
+  flex: 1;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+a.vc-info-row {
+  text-decoration: none;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+a.vc-info-row:active {
+  background: var(--glass-press);
+}
+a.vc-info-row .vc-info-text {
+  color: var(--accent-bright);
+  font-weight: 600;
+}
+.vc-info-chevron {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--text-dim);
+  opacity: 0.6;
+}
+
+/* ── Authored icons (icons.ts) — never platform emoji ────────────────── */
+.icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: block;
+  color: inherit;
+  /* Vectors stay crisp under any scale/animation — the reason the emoji heart
+     went soft along its bottom edge on the web. */
+  vector-effect: non-scaling-stroke;
+}
+
+/* ── The mark button (vector heart) ──────────────────────────────────── */
+.vc-heart {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border: none;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  background: var(--fill);
+  box-shadow: var(--glass-edge);
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-faint);
+  /* The pop animation scales the button; let the glow escape its box. */
+  overflow: visible;
+  transition: transform 0.15s ease, background 0.2s ease, box-shadow 0.2s ease,
+    color 0.2s ease;
+}
+.vc-heart:active {
+  transform: scale(0.9);
+}
+.vc-heart-icon {
+  width: 22px;
+  height: 22px;
+}
+/* My mark is white — never the partner's burgundy. */
+.vc-heart.is-mine {
+  background: var(--self);
+  color: var(--bg);
+  box-shadow: 0 6px 18px -6px var(--self-glow);
+}
+.vc-heart.is-mine .vc-heart-icon {
+  animation: heart-pop 0.34s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+/* Their mark rides the corner of the same button, in burgundy. */
+.vc-heart.is-theirs::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2.5px var(--bg), 0 0 10px rgba(182, 48, 79, 0.65);
+  animation: pill-in 0.3s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+.vc-heart {
+  position: relative;
+}
+
+/* ── Framed cards: who marked this, said in words and in colour ──────── */
+/* A card someone touched is LIFTED — the frame is a neutral step up from the
+   surface (bg → surface → frame), and identity lives in a thin coloured edge
+   and the caption dot. Tinting the whole card is what made every state read as
+   the same burgundy mush. */
+.vc-frame {
+  border-radius: 24px;
+  padding: 0;
+  background: transparent;
+  transition:
+    background 0.35s ease,
+    padding 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s ease;
+}
+.vc-frame.is-marked {
+  padding: 4px 4px 0;
+  background: var(--card-frame);
+  box-shadow: 0 10px 26px -14px rgba(0, 0, 0, 0.7);
+}
+/* MINE — a white hairline along the frame. */
+.vc-frame.is-mine {
+  box-shadow:
+    inset 0 0 0 1.5px var(--self-fill-strong),
+    0 10px 26px -14px rgba(0, 0, 0, 0.7);
+}
+/* THEIRS — the same, in burgundy. */
+.vc-frame.is-peer {
+  box-shadow:
+    inset 0 0 0 1.5px var(--peer),
+    0 10px 26px -14px rgba(0, 0, 0, 0.7);
+}
+/* BOTH — the two colours meet, and this is the only state that glows. */
+.vc-frame.is-match {
+  background: linear-gradient(120deg, var(--card-frame) 0%, var(--accent) 145%);
+  box-shadow:
+    inset 0 0 0 1.5px var(--peer),
+    0 14px 32px -12px rgba(139, 37, 59, 0.55);
+}
+
+/* The inner card — flush inside the frame so the two read as one window. */
+.vc-frame > .vc-card {
+  transition: border-radius 0.35s ease, background 0.35s ease;
+}
+.vc-frame.is-marked > .vc-card {
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+/* The caption band — collapsed to nothing until the card is marked. */
+.vc-cap {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    max-height 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.28s ease,
+    padding 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.vc-frame.is-marked .vc-cap {
+  max-height: 42px;
+  opacity: 1;
+  padding: 9px 14px 10px;
+}
+
+/* Identity dots — white = me, burgundy = them, paired = both. */
+.vc-cap-dots {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.vc-cap-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+.vc-cap-dot.is-self {
+  background: var(--self);
+  box-shadow: 0 0 8px var(--self-glow);
+}
+.vc-cap-dot.is-peer {
+  background: var(--accent-bright);
+  box-shadow: 0 0 8px rgba(182, 48, 79, 0.8);
+}
+/* Overlapping pair, like the Calendar's overlap indicator. */
+.vc-cap-dot + .vc-cap-dot {
+  margin-left: -4px;
+  outline: 2px solid var(--card-frame);
+}
+.vc-cap-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* NEW pill — the partner marked this since I last looked. */
 .vc-badge-new {
@@ -675,19 +980,15 @@ a.vc-info-row .vc-info-text {
   position: relative;
   padding: 18px;
   border-radius: 24px;
-  background: var(--glass);
-  box-shadow: var(--glass-edge), var(--glass-shadow);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background: var(--surface);
+  box-shadow: var(--glass-edge), inset 0 0 0 1.5px var(--peer);
   text-align: center;
 }
 .vc-agreed-photo {
   width: 100%;
   height: 190px;
   border-radius: 18px;
-  background:
-    radial-gradient(120% 90% at 20% 0%, rgba(139, 37, 59, 0.28), transparent 60%),
-    linear-gradient(155deg, var(--surface-2), var(--surface));
+  background: linear-gradient(155deg, var(--surface-2), var(--surface));
   background-size: cover;
   background-position: center;
   display: grid;
@@ -751,10 +1052,10 @@ a.vc-info-row .vc-info-text {
   display: grid;
   place-items: center;
   color: #fff;
-  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 55%, var(--accent-deep) 100%);
+  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 70%, var(--accent-deep) 100%);
   box-shadow:
-    0 14px 40px rgba(139, 37, 59, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    0 16px 44px -16px rgba(139, 37, 59, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
   animation: heart-pop 0.55s cubic-bezier(0.2, 1.6, 0.4, 1) both;
 }
 .vc-settled .vc-current {
@@ -902,17 +1203,19 @@ a.vc-info-row .vc-info-text {
 }
 
 /* ── Action bar (our own buttons, pinned bottom) ──────────────────────── */
+/* One ladder, used everywhere: BURGUNDY hero (the paid, one-tap action) →
+   WHITE primary (the ordinary commit) → grey glass (alternatives) → ghost.
+   Two buttons never wear the same weight, so the screen always says what it
+   wants you to do. */
 .vc-bar {
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 14px 20px calc(16px + env(safe-area-inset-bottom) + var(--tg-content-bottom));
-  background: linear-gradient(to top, var(--bg) 56%, rgba(18, 14, 28, 0));
+  background: linear-gradient(to top, var(--bg) 58%, transparent);
   transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease;
 }
-/* The board's CTA lives in the DOM permanently and slides out of view when
-   there's nothing to submit — so marking a place never re-lays out the page. */
 .vc-bar.is-hidden {
   transform: translateY(115%);
   opacity: 0;
@@ -933,57 +1236,164 @@ a.vc-info-row .vc-info-text {
 .vc-page.has-cta .vc-scroll {
   padding-bottom: 150px;
 }
+
 .btn-primary,
-.btn-secondary {
+.btn-secondary,
+.btn-express,
+.btn-glass {
   width: 100%;
-  border: none;
-  border-radius: 18px;
-  padding: 16px 20px;
-  font-size: 16px;
-  font-weight: 600;
   font-family: inherit;
   cursor: pointer;
+  border: none;
   transition: transform 0.15s ease, filter 0.15s ease, background 0.15s ease;
 }
-/* Rank 2 — the collaborative actions (suggest / confirm / continue). Bright and
-   inviting, lifted off the page, but calm: no sweep. The hero sweep belongs to
-   the instant-change button below, so the two never compete. */
+
+/* PRIMARY — solid white (ink on the cream theme). The highest-contrast thing
+   on a grey stage, so the ordinary commit is unmistakable without shouting. */
 .btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
   padding: 17px 22px;
   border-radius: 20px;
   font-size: 16.5px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 58%, var(--accent-deep) 100%);
-  color: #fff;
-  box-shadow:
-    0 13px 32px rgba(139, 37, 59, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.9);
 }
 .btn-primary:disabled {
-  filter: grayscale(0.35) brightness(0.8);
+  filter: brightness(0.72);
   cursor: default;
 }
 .btn-primary:not(:disabled):active {
   transform: scale(0.98);
 }
-.btn-secondary {
-  background: none;
-  color: var(--text-dim);
-  font-size: 14px;
-  font-weight: 500;
-  padding: 8px;
+
+/* HERO — the one paid, one-tap action. The only burgundy button, and the only
+   one carrying the shimmer, so nothing on the board competes with it. */
+.btn-express {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-radius: 22px;
+  padding: 19px 22px;
+  font-size: 17.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 70%, var(--accent-deep) 100%);
+  box-shadow:
+    0 16px 40px -14px rgba(182, 48, 79, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
-.btn-secondary:active {
+/* Specular sweep — one slow highlight, not a disco. */
+.btn-express::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transform: skewX(-18deg);
+  animation: sheen 3.4s ease-in-out infinite;
+  pointer-events: none;
+}
+.btn-express .btn-icon {
+  width: 20px;
+  height: 20px;
+}
+.btn-express .btn-star {
+  width: 17px;
+  height: 17px;
+}
+.btn-express:active {
+  transform: scale(0.98);
+}
+
+/* SECONDARY / glass — alternatives. Grey, quiet, still tappable. */
+.btn-glass,
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 18px;
+  padding: 15px 20px;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text);
+  background: var(--fill);
+  box-shadow: var(--glass-edge);
+}
+.btn-glass:active,
+.btn-secondary:active {
+  background: var(--fill-strong);
+}
+
+/* TERTIARY — the way back. Present, never loud. */
+.btn-quiet {
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 10px;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.btn-quiet:active {
+  color: var(--text);
+}
+
+/* "Keep this place" on the pinned current venue — the way back on the board. */
+.vc-keep {
+  margin-top: 12px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 12px;
+  background: var(--fill);
+  box-shadow: var(--glass-edge);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.vc-keep:active {
+  background: var(--fill-strong);
+}
+.vc-keep.is-hidden {
+  display: none;
+}
+
+/* Icons inside buttons ride the label's colour. */
+.btn-icon {
+  width: 18px;
+  height: 18px;
+}
+.btn-star {
+  width: 15px;
+  height: 15px;
+  margin-left: -3px;
+  opacity: 0.9;
 }
 .btn-spin {
   display: inline-block;
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.25);
+  border-top-color: currentColor;
   animation: spin 0.7s linear infinite;
   vertical-align: -2px;
 }
@@ -1003,6 +1413,7 @@ a.vc-info-row .vc-info-text {
   place-items: center;
   margin-bottom: 26px;
 }
+/* "Sent" = your own act → the white side of the language. */
 .vc-ok-mark {
   position: relative;
   width: 92px;
@@ -1010,23 +1421,18 @@ a.vc-info-row .vc-info-text {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: #fff;
-  background: linear-gradient(140deg, var(--self-fill-strong), var(--fill));
-  box-shadow:
-    var(--glass-edge),
-    0 16px 44px rgba(0, 0, 0, 0.35);
+  color: var(--bg);
+  background: var(--self);
+  box-shadow: 0 18px 46px -18px var(--self-glow);
   animation: mark-in 0.6s cubic-bezier(0.2, 1.5, 0.4, 1) both;
 }
-:root[data-theme="light"] .vc-ok-mark {
-  color: var(--text);
-}
-/* Agreed = the two-colour state, the only one that glows. */
+/* "Agreed" = the shared, paid-ahead moment → burgundy, and it alone glows. */
 .vc-ok-mark.is-agreed {
   color: #fff;
-  background: linear-gradient(140deg, #f0637d 0%, var(--accent-bright) 45%, var(--accent) 100%);
+  background: linear-gradient(140deg, var(--accent-bright) 0%, var(--accent) 75%, var(--accent-deep) 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    0 18px 48px rgba(182, 48, 79, 0.5);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 20px 50px -16px rgba(182, 48, 79, 0.9);
 }
 .vc-ok-glyph {
   width: 40px;
