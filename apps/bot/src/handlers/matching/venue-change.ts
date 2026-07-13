@@ -8,9 +8,13 @@
  * auto-agrees; multiple simultaneous overlaps ask the actor to pick one. A
  * settled change costs `VENUE_CHANGE_STARS` (Telegram Stars); the payer matrix:
  *   • hetero pair — the MAN pays, whoever initiated. If she initiated, he gets
- *     a pay/decline fork; his "not this time" is single and final. She can
- *     always pay in parallel (first successful payment wins the settle CAS),
- *     and may send him a one-time "wish card" asking him to cover it.
+ *     a pay/decline fork, and she may send him a one-time "wish card" asking him
+ *     to cover it. His "not this time" is single and final and ENDS the change:
+ *     the session closes, the originally-assigned venue stands, and she gets a
+ *     neutral notice (no price, no pay button) — she is never pushed to foot the
+ *     bill for a change he wouldn't. While the fork is still open (before he
+ *     decides) both invoices can be open in parallel — her pay-self and his —
+ *     and the settle CAS makes the first successful payment win.
  *   • same-sex pair — the session initiator (first like) pays.
  *   • express — the female's unilateral instant swap (no agreement): she mints
  *     an invoice for any catalog venue; the partner learns only from the
@@ -337,7 +341,8 @@ export interface VenueBoardStateView {
   priceStars: number | null;
   canOfferPartner: boolean;
   offerSent: boolean;
-  payDeclined: boolean;
+  /** The caller is viewing their OWN hidden express mint (drives express copy). */
+  express: boolean;
   expressAvailable: boolean;
   /** Set when status = settled: the new canonical venue + whether the peer paid. */
   settled: { name: string; address: string; mapsUri: string | null; peerPaid: boolean } | null;
@@ -396,12 +401,13 @@ function buildBoardState(match: VcMatch, side: Side, now: Date): VenueBoardState
     if (iAmExpressMinter) {
       myAction = "pay"; // finish (or abandon — it quietly reverts)
     } else if (payer === side) {
+      // He initiated → pays no questions; she initiated → his pay/decline fork.
+      // (His decline ENDS the change — it never lingers as an `agreed` state, so
+      // there is no post-decline branch to model here.)
       myAction = hetero && initiatorIsFemale ? "pay_or_decline" : "pay";
-      if (match.venueChangePayDeclinedAt) myAction = null; // he already declined
     } else if (hetero && me.gender === "female" && initiatorIsFemale) {
       myAction = "pay_or_offer";
-      canOfferPartner =
-        !match.venueChangeOfferPaySentAt && !match.venueChangePayDeclinedAt;
+      canOfferPartner = !match.venueChangeOfferPaySentAt;
     } else {
       myAction = "wait";
     }
@@ -441,7 +447,7 @@ function buildBoardState(match: VcMatch, side: Side, now: Date): VenueBoardState
     priceStars: paying || expressAvailable ? env.VENUE_CHANGE_STARS : null,
     canOfferPartner,
     offerSent: match.venueChangeOfferPaySentAt != null,
-    payDeclined: match.venueChangePayDeclinedAt != null,
+    express: iAmExpressMinter,
     expressAvailable,
     settled:
       status === "settled"
@@ -1192,7 +1198,9 @@ export async function offerPartnerPay(
   const eligible =
     isHeteroPair(match) && me.gender === "female" && match.venueChangeProposerId === me.id;
   if (!eligible) return { ok: false, reason: "not-allowed" };
-  if (match.venueChangePayDeclinedAt) return { ok: false, reason: "pay-declined" };
+  // (No pay-declined guard: under the current matrix his decline ENDS the
+  // change and closes the session, so an `agreed` row never carries a decline
+  // stamp — `venueChangePayDeclinedAt` is vestigial, never read for a decision.)
 
   const claim = await prisma.match.updateMany({
     where: { id: matchId, venueChangeStatus: "agreed", venueChangeOfferPaySentAt: null },

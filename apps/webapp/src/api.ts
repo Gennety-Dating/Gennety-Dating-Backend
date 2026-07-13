@@ -700,7 +700,8 @@ export interface VenueBoardState {
   priceStars: number | null;
   canOfferPartner: boolean;
   offerSent: boolean;
-  payDeclined: boolean;
+  /** The caller is viewing their OWN hidden express mint (drives express copy). */
+  express: boolean;
   expressAvailable: boolean;
   settled: { name: string; address: string; mapsUri: string | null; peerPaid: boolean } | null;
 }

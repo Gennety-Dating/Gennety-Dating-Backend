@@ -401,25 +401,19 @@ describe("getVenueBoardState", () => {
     expect(her.state.priceStars).toBeNull();
   });
 
-  it("an express mint is invisible to the partner", async () => {
+  it("an express mint is invisible to the partner (and flagged to the minter)", async () => {
     mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangeExpressAt: new Date() }));
     const him = await getVenueBoardState(200n, "m1");
     const her = await getVenueBoardState(100n, "m1");
     if (!him.ok || !her.ok) throw new Error("expected ok");
     expect(him.state.agreed).toBeNull();
     expect(him.state.myAction).toBeNull();
+    expect(him.state.express).toBe(false);
     expect(her.state.agreed?.name).toBe("New Cafe");
     expect(her.state.myAction).toBe("pay");
-  });
-
-  it("his decline hides her offer option and his own actions", async () => {
-    mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangePayDeclinedAt: new Date() }));
-    const her = await getVenueBoardState(100n, "m1");
-    const him = await getVenueBoardState(200n, "m1");
-    if (!her.ok || !him.ok) throw new Error("expected ok");
-    expect(her.state.canOfferPartner).toBe(false);
-    expect(her.state.myAction).toBe("pay_or_offer"); // pay-self path stays
-    expect(him.state.myAction).toBeNull();
+    // The minter's own view is flagged express so the Mini App drops the
+    // "your match chose this too" copy (the partner never saw it).
+    expect(her.state.express).toBe(true);
   });
 
   it("express is offered to her (hetero) while the board is open", async () => {
@@ -450,15 +444,9 @@ describe("offerPartnerPay / declineVenuePay", () => {
     expect(String(api.sendMessage.mock.calls[0][1])).toContain("Alina");
   });
 
-  it("refuses the offer from the male / after his decline / when already sent", async () => {
+  it("refuses the offer from the male / when already sent", async () => {
     mMatch.findUnique.mockResolvedValue(agreedMatch());
     expect((await offerPartnerPay(fakeApi(), 200n, "m1")).ok).toBe(false);
-
-    mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangePayDeclinedAt: new Date() }));
-    expect(await offerPartnerPay(fakeApi(), 100n, "m1")).toEqual({
-      ok: false,
-      reason: "pay-declined",
-    });
 
     mMatch.findUnique.mockResolvedValue(agreedMatch());
     mMatch.updateMany.mockResolvedValue({ count: 0 }); // guard already stamped

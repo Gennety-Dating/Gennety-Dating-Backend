@@ -1344,14 +1344,18 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
     protected; text fallback so the offer never wedges) with pay/decline
     buttons. One offer per session.
   - His "not this time" (wish card button or Mini App fork) is **single and
-    final**: it permanently hides her offer option and DMs her a soft pay-self
-    nudge that never mentions a refusal. **Her pay-self path stays active in
-    parallel the whole time** — both invoices can be open; the settle CAS makes
-    the first payment win and `refundStarPayment` returns the Stars of a lost
-    race. `pre_checkout_query` re-validates amount + that the swap is still
-    `agreed`, so stale (reusable) invoice links are declined before any Stars
-    move. She never sees a price anywhere in the shared flow — the reveal
-    ("{name} covered the venue change ❤️") is part of the product.
+    final, and ENDS the change**: the session closes, the originally-assigned
+    venue simply stands, and she gets a neutral notice (`venueDeclinedKeepDm` —
+    no price, no pay button) that never mentions a refusal. She is **never
+    pushed to foot the bill** for a change he wouldn't. **While the fork is still
+    open** (before he decides) both invoices can be open in parallel — her
+    pay-self path and his — and the settle CAS makes the first payment win, with
+    `refundStarPayment` returning the Stars of a lost race. `pre_checkout_query`
+    re-validates amount + that the swap is still `agreed`, so stale (reusable)
+    invoice links are declined before any Stars move (a decline having closed the
+    session also invalidates any open link). She never sees a price anywhere in
+    the shared flow — the reveal ("{name} covered the venue change ❤️") is part
+    of the product.
   - **Express (hers alone, hetero).** On any venue's detail page the female
     gets "⚡ Change right now — 150⭐": a unilateral swap with no agreement.
     The mint stamps the pick (`venueChangeExpressAt`), stays **invisible to the

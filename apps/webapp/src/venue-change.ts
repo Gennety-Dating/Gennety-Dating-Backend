@@ -103,7 +103,10 @@ interface Strings {
   capKeepPeer: (name: string) => string;
   capKeepBoth: string;
   ctaKeepConfirm: string;
+  /** Proposing (not yet mutual) to keep the current venue — my mark only. */
+  ctaKeepSuggest: string;
   bannerKeepMatch: string;
+  bannerKeepSuggest: string;
   badgeNew: string;
   /** Contextual banner above the list — explains the current situation. */
   bannerPeerPicked: (name: string) => string;
@@ -180,7 +183,9 @@ const T: Record<Lang, Strings> = {
     capKeepPeer: (name) => `${name} would keep this place`,
     capKeepBoth: "You both want to keep this place",
     ctaKeepConfirm: "Keep this place",
+    ctaKeepSuggest: "Suggest keeping this place",
     bannerKeepMatch: "You both want to keep it — confirm to stay here.",
+    bannerKeepSuggest: "You'd keep this place. Your match will see it — it only stays if you both agree.",
     badgeNew: "New",
     bannerPeerPicked: (name) => `${name} marked the places below. Mark the ones you like too.`,
     bannerMatch: "You agree on a place — confirm to make it your date spot.",
@@ -255,7 +260,9 @@ const T: Record<Lang, Strings> = {
     capKeepPeer: (name) => `${name} хочет остаться здесь`,
     capKeepBoth: "Вы оба хотите остаться здесь",
     ctaKeepConfirm: "Остаёмся здесь",
+    ctaKeepSuggest: "Предложить остаться здесь",
     bannerKeepMatch: "Вы оба хотите остаться — подтвердите, чтобы не менять место.",
+    bannerKeepSuggest: "Вы хотите остаться здесь. Партнёр это увидит — место сохранится, только если вы оба согласитесь.",
     badgeNew: "Новое",
     bannerPeerPicked: (name) => `${name} присматривает места ниже. Отметьте те, что нравятся и вам.`,
     bannerMatch: "Вы сошлись на месте — подтвердите, чтобы закрепить его.",
@@ -330,7 +337,9 @@ const T: Record<Lang, Strings> = {
     capKeepPeer: (name) => `${name} хоче залишитися тут`,
     capKeepBoth: "Ви обоє хочете залишитися тут",
     ctaKeepConfirm: "Залишаємось тут",
+    ctaKeepSuggest: "Запропонувати залишитися",
     bannerKeepMatch: "Ви обоє хочете залишитися — підтвердіть, щоб не міняти місце.",
+    bannerKeepSuggest: "Ви хочете залишитися тут. Партнер це побачить — місце збережеться, лише якщо ви обоє погодитесь.",
     badgeNew: "Нове",
     bannerPeerPicked: (name) => `${name} придивляється до місць нижче. Позначте ті, що подобаються й вам.`,
     bannerMatch: "Ви зійшлися на місці — підтвердіть, щоб закріпити його.",
@@ -405,7 +414,9 @@ const T: Record<Lang, Strings> = {
     capKeepPeer: (name) => `${name} will hier bleiben`,
     capKeepBoth: "Ihr wollt beide hier bleiben",
     ctaKeepConfirm: "Hier bleiben",
+    ctaKeepSuggest: "Hierbleiben vorschlagen",
     bannerKeepMatch: "Ihr wollt beide bleiben — bestätige, um den Ort zu behalten.",
+    bannerKeepSuggest: "Du willst hier bleiben. Dein Match sieht es — es bleibt nur, wenn ihr beide zustimmt.",
     badgeNew: "Neu",
     bannerPeerPicked: (name) => `${name} schaut sich die Orte unten an. Markiere die, die dir auch gefallen.`,
     bannerMatch: "Ihr seid euch einig — bestätige, um den Ort zu übernehmen.",
@@ -480,7 +491,9 @@ const T: Record<Lang, Strings> = {
     capKeepPeer: (name) => `${name} chce zostać tutaj`,
     capKeepBoth: "Oboje chcecie zostać tutaj",
     ctaKeepConfirm: "Zostajemy tutaj",
+    ctaKeepSuggest: "Zaproponuj pozostanie",
     bannerKeepMatch: "Oboje chcecie zostać — potwierdź, aby nie zmieniać miejsca.",
+    bannerKeepSuggest: "Chcesz zostać tutaj. Twoja para to zobaczy — miejsce zostanie tylko, jeśli oboje się zgodzicie.",
     badgeNew: "Nowe",
     bannerPeerPicked: (name) => `${name} przygląda się miejscom poniżej. Zaznacz te, które podobają się też Tobie.`,
     bannerMatch: "Zgadzacie się co do miejsca — potwierdź, aby je ustawić.",
@@ -905,6 +918,10 @@ function syncBoardChrome(): void {
 
   const ov = selectedOverlap();
   const soleKeep = ov.length === 1 && ov[0] === KEEP_KEY;
+  // Only the current venue is marked (and not yet mutual) → I'm proposing to
+  // KEEP, not to change. The whole board chrome must say so, not "suggest / the
+  // venue changes", which contradicts staying put.
+  const soleKeepSel = selection.size === 1 && selection.has(KEEP_KEY);
   if (bannerEl) {
     const agreeing = ov.length > 0;
     let mark: IconName = "heart";
@@ -919,7 +936,7 @@ function syncBoardChrome(): void {
       copy = s.bannerPeerPicked(st.partnerName);
     } else if (selection.size > 0) {
       markCls += " is-self";
-      copy = s.bannerSuggest;
+      copy = soleKeepSel ? s.bannerKeepSuggest : s.bannerSuggest;
     }
     bannerEl.classList.toggle("is-match", agreeing);
     bannerEl.hidden = copy === "";
@@ -942,7 +959,9 @@ function syncBoardChrome(): void {
           ? s.ctaWithdraw
           : agreeing
             ? (soleKeep ? s.ctaKeepConfirm : s.ctaConfirm)
-            : s.ctaSuggest;
+            : soleKeepSel
+              ? s.ctaKeepSuggest
+              : s.ctaSuggest;
       ctaBtn.disabled = saving;
     }
   }
@@ -1243,7 +1262,11 @@ async function submitSelection(): Promise<void> {
     haptic("success");
     saving = false;
     busy = false;
-    renderSuccess("suggested");
+    // If all I submitted was "keep the current venue", this is a proposal to
+    // STAY, not a suggestion to change — land on the keep-asked screen (the
+    // partner got the matching "would like to keep" note), never generic copy.
+    const onlyKeep = selection.size === 1 && selection.has(KEEP_KEY);
+    renderSuccess(onlyKeep ? "keep-asked" : "suggested");
   } catch (err) {
     saving = false;
     busy = false;
@@ -1673,9 +1696,14 @@ function renderAgreed(st: VenueBoardState): void {
   switch (st.myAction) {
     case "pay":
     case "pay_or_decline":
-      // Tell the payer their match chose this place too, so paying doesn't feel
-      // like acting alone — they agreed, now he seals it.
-      nodes.push(el("p", { class: "vc-note vc-note-agree", text: s.agreedBothChose(partner) }));
+      // Board agreement → tell the payer their match chose this place too, so
+      // paying doesn't feel like acting alone. An express mint has no partner
+      // agreement (she alone picked it, still hidden), so it gets its own note.
+      nodes.push(
+        st.express
+          ? el("p", { class: "vc-note vc-note-center", text: s.expressHint })
+          : el("p", { class: "vc-note vc-note-agree", text: s.agreedBothChose(partner) }),
+      );
       if (price != null) {
         bar.push(
           iconBtn("btn-primary", "check", s.payBtn(price), () => void payAgreed(), true),
@@ -1710,8 +1738,8 @@ function renderAgreed(st: VenueBoardState): void {
       nodes.push(el("p", { class: "vc-note vc-note-center", text: s.agreedWaitNote(partner) }));
       break;
     default:
-      // His post-decline view — neutral, decision is out of his hands now.
-      nodes.push(el("p", { class: "vc-note vc-note-center", text: s.agreedDeclinedNote }));
+      // No paying action while agreed is unreachable under the current matrix
+      // (his decline ENDS the change rather than lingering here) — render nothing.
       break;
   }
 
@@ -1921,7 +1949,7 @@ function mockState(): VenueBoardState {
     priceStars: 150,
     canOfferPartner: false,
     offerSent: false,
-    payDeclined: false,
+    express: false,
     expressAvailable: true,
     settled: null,
   };
