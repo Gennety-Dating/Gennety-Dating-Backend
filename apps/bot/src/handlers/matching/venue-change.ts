@@ -180,6 +180,31 @@ export function venueKeyOf(v: {
   return v.placeId ?? `${v.name}|${v.address}`;
 }
 
+/**
+ * Sentinel like-key for "keep the originally assigned venue". The pinned
+ * current venue is a markable board choice just like a catalog alternative —
+ * so proposing to keep it is a real, visible pick that the partner must agree
+ * to. Agreement on this key means "keep it": no payment, session closes.
+ */
+export const KEEP_KEY = "__keep__";
+
+/** A board snapshot for the match's originally-assigned venue, under KEEP_KEY. */
+function originalSnapshot(match: VcMatch): VenueLikeSnapshot | null {
+  if (match.venueLat == null || match.venueLng == null || !match.venueName) return null;
+  return {
+    key: KEEP_KEY,
+    placeId: null,
+    name: match.venueName,
+    address: match.venueAddress ?? "",
+    lat: match.venueLat,
+    lng: match.venueLng,
+    mapsUri: match.venueGoogleMapsUri,
+    category: "cafe",
+    photoUrl: null,
+    photoRef: null,
+  };
+}
+
 function toSnapshot(v: CatalogVenue): VenueLikeSnapshot {
   return {
     key: venueKeyOf(v),
@@ -499,7 +524,7 @@ export type SubmitLikesResult =
         | VenueChangeIneligibleReason
         | "invalid-venue";
     }
-  | { ok: true; agreed: boolean; overlapCandidates: string[] };
+  | { ok: true; agreed: boolean; kept: boolean; overlapCandidates: string[] };
 
 /**
  * Replace the caller's like set (calendar `pick` semantics). Every key is
@@ -554,6 +579,14 @@ export async function submitVenueLikes(
   const byKey = new Map(catalog.map((v) => [venueKeyOf(v), v]));
   const snapshots: VenueLikeSnapshot[] = [];
   for (const key of [...new Set(keys)]) {
+    if (key === KEEP_KEY) {
+      // "Keep the original" is a first-class board choice, resolved from the
+      // match itself (it isn't in the alternatives catalog).
+      const orig = originalSnapshot(match);
+      if (!orig) return { ok: false, reason: "no-venue" };
+      snapshots.push(orig);
+      continue;
+    }
     const venue = byKey.get(key);
     if (!venue) return { ok: false, reason: "invalid-venue" };
     snapshots.push(toSnapshot(venue));
@@ -588,21 +621,24 @@ export async function submitVenueLikes(
   const peerKeys = new Set(likesOfSide(match, otherSide(side)).map((l) => l.key));
   const overlap = snapshots.filter((s) => peerKeys.has(s.key));
   if (overlap.length === 1) {
-    const agreed = await reachAgreement(api, matchId, me.id, overlap[0], now);
-    return { ok: true, agreed, overlapCandidates: [] };
+    const r = await reachAgreement(api, matchId, me.id, overlap[0], now);
+    return { ok: true, agreed: r.agreed, kept: r.kept, overlapCandidates: [] };
   }
 
-  // No agreement yet → keep the partner's single board-invite current: delete
-  // the previous one and post a fresh one, so they always have exactly ONE
-  // nudge and it is the latest message in the chat. (Skipped above when the
-  // submission agreed — an agreement speaks for itself, and `reachAgreement`
-  // retires the stale invites.)
+  // No agreement yet → keep the partner's single board message current: delete
+  // the previous one and post a fresh one, so they always have exactly ONE nudge
+  // and it is the latest in the chat. If my only pick is "keep the original", the
+  // message says so ("I'd like to keep {venue}") rather than "eyeing places".
   if (snapshots.length > 0) {
-    await refreshBoardPing(api, match, side).catch((err) => {
+    const onlyKeep = snapshots.every((s) => s.key === KEEP_KEY);
+    const ping = onlyKeep
+      ? refreshKeepNotice(api, match, side)
+      : refreshBoardPing(api, match, side);
+    await ping.catch((err) => {
       console.warn("[venue-change] board ping failed:", err);
     });
   }
-  return { ok: true, agreed: false, overlapCandidates: overlap.map((s) => s.key) };
+  return { ok: true, agreed: false, kept: false, overlapCandidates: overlap.map((s) => s.key) };
 }
 
 /**
@@ -684,7 +720,7 @@ export type ConfirmVenueResult =
         | VenueChangeIneligibleReason
         | "not-overlapping";
     }
-  | { ok: true };
+  | { ok: true; kept: boolean };
 
 /** Resolve a multi-overlap: the actor picks one venue both sides liked. */
 export async function confirmVenueAgreement(
@@ -719,8 +755,8 @@ export async function confirmVenueAgreement(
   const theirs = likesOfSide(match, otherSide(side)).find((l) => l.key === key);
   if (!mine || !theirs) return { ok: false, reason: "not-overlapping" };
 
-  await reachAgreement(api, matchId, me.id, mine, now);
-  return { ok: true };
+  const r = await reachAgreement(api, matchId, me.id, mine, now);
+  return { ok: true, kept: r.kept };
 }
 
 /**
@@ -733,9 +769,17 @@ async function reachAgreement(
   finalizerUserId: string,
   venue: VenueLikeSnapshot,
   now: Date,
-): Promise<boolean> {
+): Promise<{ agreed: boolean; kept: boolean }> {
   const fresh = await loadMatch(matchId);
-  if (!fresh || !fresh.agreedTime) return false;
+  if (!fresh || !fresh.agreedTime) return { agreed: false, kept: false };
+
+  // Both sides landed on "keep the original" → that IS the agreement: no venue
+  // changes, no payment. Close the session cleanly and tell them both.
+  if (venue.key === KEEP_KEY) {
+    const kept = await agreeToKeep(api, matchId, fresh);
+    return { agreed: kept, kept };
+  }
+
   const deadline = venueChangeDeadline(now, fresh.agreedTime);
 
   const claim = await prisma.match.updateMany({
@@ -754,7 +798,7 @@ async function reachAgreement(
       venueChangeExpressAt: null,
     },
   });
-  if (claim.count === 0) return false;
+  if (claim.count === 0) return { agreed: false, kept: false };
 
   console.info(`[venue-change] agreement match=${matchId} venue="${venue.name}"`);
 
@@ -769,7 +813,7 @@ async function reachAgreement(
   //   • hetero, initiator = female → NO DM: he either finalized (his in-app
   //     fork) or she did (her pay/offer fork decides what he sees).
   const payer = payerSide(fresh);
-  if (!payer) return true;
+  if (!payer) return { agreed: true, kept: false };
   const payerUser = userOfSide(fresh, payer);
   const initiatorId = fresh.venueChangeProposerId;
   const payerInitiated = initiatorId === payerUser.id;
@@ -789,6 +833,49 @@ async function reachAgreement(
     } catch (err) {
       console.warn("[venue-change] pay-prompt DM failed:", err);
     }
+  }
+  return { agreed: true, kept: false };
+}
+
+/**
+ * Both sides agreed to keep the originally-assigned venue — no change, no
+ * payment. Close the session (back to a pristine no-session state, likes and
+ * stamps cleared) and let both know they're staying put. Returns false only on
+ * a lost CAS race.
+ */
+async function agreeToKeep(api: Api<RawApi>, matchId: string, match: VcMatch): Promise<boolean> {
+  const claim = await prisma.match.updateMany({
+    where: { id: matchId, status: "scheduled", venueChangeStatus: "liking" },
+    data: {
+      venueChangeStatus: null,
+      venueChangeProposerId: null,
+      venueChangeProposedAt: null,
+      venueChangeExpiresAt: null,
+      venueChangeExpressAt: null,
+      venueChangeOfferPaySentAt: null,
+      venueChangePayDeclinedAt: null,
+      venueChangePingSentToAAt: null,
+      venueChangePingSentToBAt: null,
+      venueChangePingMsgIdA: null,
+      venueChangePingMsgIdB: null,
+      venueLikesA: [],
+      venueLikesB: [],
+    },
+  });
+  if (claim.count === 0) return false;
+
+  console.info(`[venue-change] agreed to KEEP original match=${matchId}`);
+  await retireBoardPings(api, match).catch(() => undefined);
+
+  const original = match.venueName ?? "";
+  for (const user of [match.userA, match.userB]) {
+    if (!isTelegramTarget(user.telegramId)) continue;
+    await api
+      .sendMessage(
+        toTelegramChatId(user.telegramId),
+        t(langOf(user.language), "venueBothKeepDm", { venue: original }),
+      )
+      .catch(() => undefined);
   }
   return true;
 }
@@ -1175,35 +1262,49 @@ export async function declineVenuePay(
   if (match.venueChangeStatus !== "agreed" || match.venueChangeExpressAt) return { ok: false };
   if (payerSide(match) !== side) return { ok: false };
 
+  // In a hetero pair the man pays; his "not this time" ENDS the attempt and
+  // keeps the original — she is never pushed to foot the bill for a change he
+  // wouldn't. Close the session cleanly (back to the assigned venue).
   const claim = await prisma.match.updateMany({
-    where: { id: matchId, venueChangeStatus: "agreed", venueChangePayDeclinedAt: null },
-    data: { venueChangePayDeclinedAt: new Date() },
+    where: { id: matchId, status: "scheduled", venueChangeStatus: "agreed" },
+    data: {
+      venueChangeStatus: null,
+      venueChangeProposerId: null,
+      venueChangeProposedAt: null,
+      venueChangeExpiresAt: null,
+      venueChangeExpressAt: null,
+      venueChangeName: null,
+      venueChangeAddress: null,
+      venueChangeLat: null,
+      venueChangeLng: null,
+      venueChangeMapsUri: null,
+      venueChangePlaceId: null,
+      venueChangePhotoUrl: null,
+      venueChangePhotoName: null,
+      venueChangeOfferPaySentAt: null,
+      venueChangePayDeclinedAt: null,
+      venueChangePingSentToAAt: null,
+      venueChangePingSentToBAt: null,
+      venueChangePingMsgIdA: null,
+      venueChangePingMsgIdB: null,
+      venueLikesA: [],
+      venueLikesB: [],
+    },
   });
   if (claim.count === 0) return { ok: false };
 
-  console.info(`[venue-change] pay declined match=${matchId} by user=${me.id}`);
+  console.info(`[venue-change] pay declined → keep original match=${matchId} by user=${me.id}`);
+  await retireBoardPings(api, match).catch(() => undefined);
 
-  // Soft pay-self nudge to her — venue + a direct invoice link, no refusal talk.
+  // Neutral notice to her — the original stands. No price, no pay button.
   const her = userOfSide(match, otherSide(side));
   if (isTelegramTarget(her.telegramId)) {
-    const lang = langOf(her.language);
-    const venueName = match.venueChangeName ?? "";
-    try {
-      const link = await createVenueInvoiceLink(api, lang, matchId, "agreed", venueName);
-      const kb = new InlineKeyboard().url(
-        t(lang, "venuePaySelfBtn", { stars: env.VENUE_CHANGE_STARS }),
-        link,
-      );
-      await api.sendMessage(
+    await api
+      .sendMessage(
         toTelegramChatId(her.telegramId),
-        t(lang, "venuePaySelfDm", {
-          venue: venueLabel(venueName, match.venueChangeAddress ?? ""),
-        }),
-        { reply_markup: kb },
-      );
-    } catch (err) {
-      console.warn("[venue-change] pay-self DM failed:", err);
-    }
+        t(langOf(her.language), "venueDeclinedKeepDm", { venue: match.venueName ?? "" }),
+      )
+      .catch(() => undefined);
   }
   return { ok: true };
 }

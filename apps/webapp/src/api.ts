@@ -783,10 +783,11 @@ export async function submitVenueLikes(
   initData: string,
   matchId: string,
   keys: string[],
-): Promise<{ agreed: boolean; overlapCandidates: string[] }> {
+): Promise<{ agreed: boolean; kept: boolean; overlapCandidates: string[] }> {
   const body = await venuePost(initData, "like", { matchId, keys });
   return {
     agreed: body.agreed === true,
+    kept: body.kept === true,
     overlapCandidates: Array.isArray(body.overlapCandidates)
       ? (body.overlapCandidates as string[])
       : [],
@@ -798,8 +799,9 @@ export async function confirmVenueChoice(
   initData: string,
   matchId: string,
   key: string,
-): Promise<void> {
-  await venuePost(initData, "confirm", { matchId, key });
+): Promise<{ kept: boolean }> {
+  const body = await venuePost(initData, "confirm", { matchId, key });
+  return { kept: body.kept === true };
 }
 
 /** Her one-shot "offer him to pay" (sends the wish card to his chat). */

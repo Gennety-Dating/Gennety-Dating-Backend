@@ -579,6 +579,8 @@ const translations = {
     venueBoardPingFromM: "{name} suggests a look at a couple of other spots for your date 👀",
     venueBoardPingBtn: "Take a look",
     venueKeepNotice: "Your match would like to keep {venue} 👍 You can still suggest another spot below.",
+    venueBothKeepDm: "You're both keeping {venue} — nothing changes, see you there 👍",
+    venueDeclinedKeepDm: "You're keeping {venue}, as originally planned 👍",
     venuePayPromptDm:
       "You two picked a new place for your date together!\n📍 {venue}\n" +
       "Lock it in — and we'll update your date cards.",
@@ -1324,6 +1326,8 @@ const translations = {
     venueBoardPingFromM: "{name} предлагает взглянуть на пару других мест для вашего свидания 👀",
     venueBoardPingBtn: "Взглянуть",
     venueKeepNotice: "Партнёр хотел бы остаться в {venue} 👍 Можно предложить другое место ниже.",
+    venueBothKeepDm: "Вы оба остаётесь в {venue} — ничего не меняется, до встречи 👍",
+    venueDeclinedKeepDm: "Остаётесь в {venue}, как и планировали изначально 👍",
     venuePayPromptDm:
       "Вы вместе выбрали новое место для свидания!\n📍 {venue}\n" +
       "Закрепи его — и мы обновим ваши карточки.",
@@ -2066,6 +2070,8 @@ const translations = {
     venueBoardPingFromM: "{name} пропонує поглянути на кілька інших місць для вашого побачення 👀",
     venueBoardPingBtn: "Поглянути",
     venueKeepNotice: "Партнер хотів би залишитися у {venue} 👍 Можна запропонувати інше місце нижче.",
+    venueBothKeepDm: "Ви обоє залишаєтесь у {venue} — нічого не змінюється, до зустрічі 👍",
+    venueDeclinedKeepDm: "Залишаєтесь у {venue}, як і планували спочатку 👍",
     venuePayPromptDm:
       "Ви разом обрали нове місце для побачення!\n📍 {venue}\n" +
       "Закріпи його — і ми оновимо ваші картки.",
@@ -2775,6 +2781,8 @@ const deTranslations: TranslationTable = {
   venueBoardPingFromM: "{name} schlägt vor, ein paar andere Orte für euer Date anzusehen 👀",
   venueBoardPingBtn: "Ansehen",
   venueKeepNotice: "Dein Match möchte lieber bei {venue} bleiben 👍 Du kannst unten trotzdem einen anderen Ort vorschlagen.",
+  venueBothKeepDm: "Ihr bleibt beide bei {venue} — nichts ändert sich, bis dann 👍",
+  venueDeclinedKeepDm: "Ihr bleibt bei {venue}, wie ursprünglich geplant 👍",
   venuePayPromptDm:
     "Ihr habt zusammen einen neuen Ort für euer Date gewählt!\n📍 {venue}\n" +
     "Sichere ihn — und wir aktualisieren eure Karten.",
@@ -3417,6 +3425,8 @@ const plTranslations: TranslationTable = {
   venueBoardPingFromM: "{name} proponuje spojrzeć na kilka innych miejsc na waszą randkę 👀",
   venueBoardPingBtn: "Zobacz",
   venueKeepNotice: "Twoja para wolałaby zostać w {venue} 👍 Możesz zaproponować inne miejsce poniżej.",
+  venueBothKeepDm: "Oboje zostajecie w {venue} — nic się nie zmienia, do zobaczenia 👍",
+  venueDeclinedKeepDm: "Zostajecie w {venue}, zgodnie z pierwotnym planem 👍",
   venuePayPromptDm:
     "Razem wybraliście nowe miejsce na randkę!\n📍 {venue}\n" +
     "Zatwierdź je — a my zaktualizujemy wasze karty.",

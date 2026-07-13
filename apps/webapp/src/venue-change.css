@@ -1648,3 +1648,27 @@ a.vc-info-row .vc-info-text {
     animation: none;
   }
 }
+
+/* ── The pinned current venue as a markable board card ───────────────── */
+/* It shares the frame/mark language with the alternatives (so keeping the
+   original reads as your visible, mutual pick) while staying pinned above the
+   list with its "Picked for you" badge. */
+.vc-frame.is-current {
+  margin-bottom: 18px;
+}
+.vc-card.is-current {
+  align-items: flex-start;
+}
+.vc-card.is-current .vc-card-meta {
+  gap: 5px;
+  padding: 2px 0;
+}
+.vc-card.is-current .vc-current-badge {
+  margin-bottom: 2px;
+}
+.vc-card.is-current .vc-card-name {
+  font-size: 17px;
+}
+.vc-card.is-current .vc-card-addr {
+  white-space: normal;
+}

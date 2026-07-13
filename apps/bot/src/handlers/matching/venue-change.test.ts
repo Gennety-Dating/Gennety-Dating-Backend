@@ -41,6 +41,7 @@ import {
   mintExpressChange,
   keepOriginalVenue,
   venueKeyOf,
+  KEEP_KEY,
 } from "./venue-change.js";
 import type { CatalogVenue } from "../../services/venue-change.js";
 
@@ -195,7 +196,7 @@ describe("submitVenueLikes", () => {
     mMatch.findUnique.mockResolvedValue(fakeMatch());
 
     const res = await submitVenueLikes(api, 100n, "m1", ["p1"], { loadCatalog });
-    expect(res).toEqual({ ok: true, agreed: false, overlapCandidates: [] });
+    expect(res).toEqual({ ok: true, agreed: false, kept: false, overlapCandidates: [] });
 
     // Likes written with server-resolved snapshots (never client data).
     const likeWrites = updateCalls((d) => Array.isArray(d.venueLikesA));
@@ -221,6 +222,44 @@ describe("submitVenueLikes", () => {
     expect(mMatch.updateMany).not.toHaveBeenCalled();
   });
 
+  it("both marking KEEP → agree to keep the original: no payment, session closes", async () => {
+    const api = fakeApi();
+    // He already marked "keep the original"; she now marks it too → they agree
+    // to stay put. Nobody pays.
+    const keepLike = {
+      key: KEEP_KEY,
+      placeId: null,
+      name: "Old Cafe",
+      address: "Old St",
+      lat: 50.45,
+      lng: 50.52,
+      mapsUri: "https://maps.google.com/old",
+      category: "cafe",
+      photoUrl: null,
+      photoRef: null,
+    };
+    mMatch.findUnique.mockResolvedValue(
+      fakeMatch({
+        venueChangeStatus: "liking",
+        venueChangeProposerId: "b",
+        venueChangeProposedAt: new Date(),
+        venueLikesB: [keepLike],
+      }),
+    );
+
+    const res = await submitVenueLikes(api, 100n, "m1", [KEEP_KEY], { loadCatalog });
+    expect(res).toEqual({ ok: true, agreed: true, kept: true, overlapCandidates: [] });
+
+    // Session closed back to no-session; never routed to payment.
+    const close = updateCalls((d) => d.venueChangeStatus === null);
+    expect(close.length).toBeGreaterThan(0);
+    expect(api.createInvoiceLink).not.toHaveBeenCalled();
+    // Both told they're keeping the original.
+    const chats = api.sendMessage.mock.calls.map((c: unknown[]) => c[0]);
+    expect(chats).toContain(100);
+    expect(chats).toContain(200);
+  });
+
   it("single overlap auto-agrees; the male initiator gets the pay-prompt DM", async () => {
     const api = fakeApi();
     // He liked p1 first (initiator = male); she now hearts p1 → agreement.
@@ -237,7 +276,7 @@ describe("submitVenueLikes", () => {
     mMatch.findUnique.mockResolvedValue(row);
 
     const res = await submitVenueLikes(api, 100n, "m1", ["p1"], { loadCatalog });
-    expect(res).toEqual({ ok: true, agreed: true, overlapCandidates: [] });
+    expect(res).toEqual({ ok: true, agreed: true, kept: false, overlapCandidates: [] });
 
     const agree = updateCalls((d) => d.venueChangeStatus === "agreed");
     expect(agree.length).toBe(1);
@@ -263,7 +302,7 @@ describe("submitVenueLikes", () => {
     mMatch.findUnique.mockResolvedValue(row);
 
     const res = await submitVenueLikes(api, 200n, "m1", ["p1"], { loadCatalog });
-    expect(res).toEqual({ ok: true, agreed: true, overlapCandidates: [] });
+    expect(res).toEqual({ ok: true, agreed: true, kept: false, overlapCandidates: [] });
     expect(updateCalls((d) => d.venueChangeStatus === "agreed").length).toBe(1);
     expect(api.sendMessage).not.toHaveBeenCalled();
     expect(api.createInvoiceLink).not.toHaveBeenCalled();
@@ -282,7 +321,7 @@ describe("submitVenueLikes", () => {
     mMatch.findUnique.mockResolvedValue(row);
 
     const res = await submitVenueLikes(api, 100n, "m1", ["p1", "p2"], { loadCatalog });
-    expect(res).toEqual({ ok: true, agreed: false, overlapCandidates: ["p1", "p2"] });
+    expect(res).toEqual({ ok: true, agreed: false, kept: false, overlapCandidates: ["p1", "p2"] });
     expect(updateCalls((d) => d.venueChangeStatus === "agreed").length).toBe(0);
   });
 
@@ -309,7 +348,7 @@ describe("confirmVenueAgreement", () => {
     mMatch.findUnique.mockResolvedValue(row);
 
     const res = await confirmVenueAgreement(fakeApi(), 100n, "m1", "p2");
-    expect(res).toEqual({ ok: true });
+    expect(res).toEqual({ ok: true, kept: false });
     const agree = updateCalls((d) => d.venueChangeStatus === "agreed");
     expect(agree.length).toBe(1);
     expect(agree[0][0].data).toMatchObject({ venueChangeName: "Park Spot" });
@@ -429,16 +468,24 @@ describe("offerPartnerPay / declineVenuePay", () => {
     });
   });
 
-  it("his decline stamps once and sends her the soft pay-self DM (no refusal talk)", async () => {
+  it("his decline ENDS the change (keeps original) and never pushes her to pay", async () => {
     const api = fakeApi();
     mMatch.findUnique.mockResolvedValue(agreedMatch());
 
     const res = await declineVenuePay(api, 200n, "m1");
     expect(res.ok).toBe(true);
-    expect(updateCalls((d) => d.venueChangePayDeclinedAt != null).length).toBe(1);
+
+    // The session is closed back to the assigned venue — no agreed venue left.
+    const data = updateCalls((d) => d.venueChangeStatus === null)[0][0].data;
+    expect(data).toMatchObject({ venueChangeName: null });
+    expect(data.venueLikesA).toEqual([]);
+
+    // She gets a neutral notice — NO invoice link, NO pay button.
+    expect(api.createInvoiceLink).not.toHaveBeenCalled();
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     expect(api.sendMessage.mock.calls[0][0]).toBe(100);
-    expect(String(api.sendMessage.mock.calls[0][1]).toLowerCase()).not.toContain("declin");
+    // Plain text DM (chatId, text) — no options object, so no pay CTA.
+    expect(api.sendMessage.mock.calls[0][2]).toBeUndefined();
   });
 
   it("only the payer may decline; express/settled states refuse", async () => {

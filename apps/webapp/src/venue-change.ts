@@ -83,6 +83,9 @@ const SUPPORTED: ReadonlySet<Lang> = new Set(["en", "ru", "uk", "de", "pl"]);
 const lang: Lang = SUPPORTED.has(queryLang as Lang) ? (queryLang as Lang) : "en";
 document.documentElement?.setAttribute("lang", lang);
 
+/** Sentinel like-key for "keep the originally assigned venue" (mirrors server). */
+const KEEP_KEY = "__keep__";
+
 // ---------------------------------------------------------------------------
 // Strings
 // ---------------------------------------------------------------------------
@@ -95,6 +98,12 @@ interface Strings {
   capPeer: (name: string) => string;
   capBoth: string;
   capMine: string;
+  /** Captions for marking the CURRENT venue — "keep this". */
+  capKeepMine: string;
+  capKeepPeer: (name: string) => string;
+  capKeepBoth: string;
+  ctaKeepConfirm: string;
+  bannerKeepMatch: string;
   badgeNew: string;
   /** Contextual banner above the list — explains the current situation. */
   bannerPeerPicked: (name: string) => string;
@@ -167,6 +176,11 @@ const T: Record<Lang, Strings> = {
     capPeer: (name) => `${name} marked this place`,
     capBoth: "You both marked this one",
     capMine: "You marked this",
+    capKeepMine: "You'd keep this place",
+    capKeepPeer: (name) => `${name} would keep this place`,
+    capKeepBoth: "You both want to keep this place",
+    ctaKeepConfirm: "Keep this place",
+    bannerKeepMatch: "You both want to keep it — confirm to stay here.",
     badgeNew: "New",
     bannerPeerPicked: (name) => `${name} marked the places below. Mark the ones you like too.`,
     bannerMatch: "You agree on a place — confirm to make it your date spot.",
@@ -237,6 +251,11 @@ const T: Record<Lang, Strings> = {
     capPeer: (name) => `Выбор ${name}`,
     capBoth: "Вы оба отметили это место",
     capMine: "Вы отметили",
+    capKeepMine: "Вы хотите остаться здесь",
+    capKeepPeer: (name) => `${name} хочет остаться здесь`,
+    capKeepBoth: "Вы оба хотите остаться здесь",
+    ctaKeepConfirm: "Остаёмся здесь",
+    bannerKeepMatch: "Вы оба хотите остаться — подтвердите, чтобы не менять место.",
     badgeNew: "Новое",
     bannerPeerPicked: (name) => `${name} присматривает места ниже. Отметьте те, что нравятся и вам.`,
     bannerMatch: "Вы сошлись на месте — подтвердите, чтобы закрепить его.",
@@ -307,6 +326,11 @@ const T: Record<Lang, Strings> = {
     capPeer: (name) => `Вибір ${name}`,
     capBoth: "Ви обоє позначили це місце",
     capMine: "Ви позначили",
+    capKeepMine: "Ви хочете залишитися тут",
+    capKeepPeer: (name) => `${name} хоче залишитися тут`,
+    capKeepBoth: "Ви обоє хочете залишитися тут",
+    ctaKeepConfirm: "Залишаємось тут",
+    bannerKeepMatch: "Ви обоє хочете залишитися — підтвердіть, щоб не міняти місце.",
     badgeNew: "Нове",
     bannerPeerPicked: (name) => `${name} придивляється до місць нижче. Позначте ті, що подобаються й вам.`,
     bannerMatch: "Ви зійшлися на місці — підтвердіть, щоб закріпити його.",
@@ -377,6 +401,11 @@ const T: Record<Lang, Strings> = {
     capPeer: (name) => `${name}s Wahl`,
     capBoth: "Ihr habt beide diesen Ort markiert",
     capMine: "Von dir markiert",
+    capKeepMine: "Du willst hier bleiben",
+    capKeepPeer: (name) => `${name} will hier bleiben`,
+    capKeepBoth: "Ihr wollt beide hier bleiben",
+    ctaKeepConfirm: "Hier bleiben",
+    bannerKeepMatch: "Ihr wollt beide bleiben — bestätige, um den Ort zu behalten.",
     badgeNew: "Neu",
     bannerPeerPicked: (name) => `${name} schaut sich die Orte unten an. Markiere die, die dir auch gefallen.`,
     bannerMatch: "Ihr seid euch einig — bestätige, um den Ort zu übernehmen.",
@@ -447,6 +476,11 @@ const T: Record<Lang, Strings> = {
     capPeer: (name) => `Wybór ${name}`,
     capBoth: "Oboje zaznaczyliście to miejsce",
     capMine: "Zaznaczone przez Ciebie",
+    capKeepMine: "Chcesz zostać tutaj",
+    capKeepPeer: (name) => `${name} chce zostać tutaj`,
+    capKeepBoth: "Oboje chcecie zostać tutaj",
+    ctaKeepConfirm: "Zostajemy tutaj",
+    bannerKeepMatch: "Oboje chcecie zostać — potwierdź, aby nie zmieniać miejsca.",
     badgeNew: "Nowe",
     bannerPeerPicked: (name) => `${name} przygląda się miejscom poniżej. Zaznacz te, które podobają się też Tobie.`,
     bannerMatch: "Zgadzacie się co do miejsca — potwierdź, aby je ustawić.",
@@ -814,7 +848,6 @@ let pageEl: HTMLElement | null = null;
 let bannerEl: HTMLElement | null = null;
 let barEl: HTMLElement | null = null;
 let ctaBtn: HTMLButtonElement | null = null;
-let keepBtn: HTMLElement | null = null;
 
 function renderBoard(): void {
   screen = "board";
@@ -828,20 +861,12 @@ function renderBoard(): void {
     el("p", { class: "vc-lead", text: s.boardLead }),
   ]);
 
-  // The current venue — the eternal default, pinned on top. Once I have marks
-  // in play it also carries the way back: "actually, let's just stay here".
-  keepBtn = el("button", {
-    class: "vc-keep",
-    type: "button",
-    text: s.keepOriginal,
-    onClick: () => void keepOriginal(),
-  });
-  const current = el("div", { class: "vc-current glass-in" }, [
-    el("div", { class: "vc-current-badge", text: s.currentBadge }),
-    el("div", { class: "vc-current-name", text: st.original.name ?? "" }),
-    el("div", { class: "vc-current-addr", text: st.original.address ?? "" }),
-    keepBtn,
-  ]);
+  // The current venue — the eternal default, pinned on top. It is a MARKABLE
+  // board choice like any alternative: hearting it means "let's keep this",
+  // which the partner must also mark to agree (agreeing keeps it, free). So the
+  // way back is the same white-mark language as everything else, visible and
+  // mutual — never a silent one-tap override.
+  const current = renderCurrentCard(st);
 
   // Contextual banner — says what's going on and what the next tap will do, so
   // the board never leans on the marks alone to carry meaning.
@@ -878,14 +903,16 @@ function syncBoardChrome(): void {
   const st = boardState;
   if (!st) return;
 
+  const ov = selectedOverlap();
+  const soleKeep = ov.length === 1 && ov[0] === KEEP_KEY;
   if (bannerEl) {
-    const agreeing = selectedOverlap().length > 0;
+    const agreeing = ov.length > 0;
     let mark: IconName = "heart";
     let markCls = "icon vc-banner-icon";
     let copy = "";
     if (agreeing) {
       mark = "spark";
-      copy = s.bannerMatch;
+      copy = soleKeep ? s.bannerKeepMatch : s.bannerMatch;
     } else if (st.peerLikes.length > 0 && selection.size === 0) {
       mark = "heart-filled";
       markCls += " is-peer";
@@ -907,14 +934,14 @@ function syncBoardChrome(): void {
     // Only open room for the bar once it actually exists on screen.
     pageEl?.classList.toggle("has-cta", dirty);
     if (dirty) {
-      const agreeing = selectedOverlap().length > 0;
+      const agreeing = ov.length > 0;
       const withdrawing = selection.size === 0 && confirmed.size > 0;
       ctaBtn.textContent = saving
         ? s.ctaSaving
         : withdrawing
           ? s.ctaWithdraw
           : agreeing
-            ? s.ctaConfirm
+            ? (soleKeep ? s.ctaKeepConfirm : s.ctaConfirm)
             : s.ctaSuggest;
       ctaBtn.disabled = saving;
     }
@@ -933,6 +960,7 @@ function patchCard(key: string): void {
 
   refs.frame.className =
     "vc-frame" +
+    (key === KEEP_KEY ? " is-current" : "") +
     (mine || theirs ? " is-marked" : "") +
     (both ? " is-match" : theirs ? " is-peer" : mine ? " is-mine" : "");
 
@@ -949,11 +977,13 @@ function captionKids(key: string, mine: boolean, theirs: boolean): Node[] {
   if (mine) dots.push(el("span", { class: "vc-cap-dot is-self" }));
   if (theirs) dots.push(el("span", { class: "vc-cap-dot is-peer" }));
 
+  const isKeep = key === KEEP_KEY;
+  const name = boardState?.partnerName ?? "";
   const text = mine && theirs
-    ? s.capBoth
+    ? (isKeep ? s.capKeepBoth : s.capBoth)
     : theirs
-      ? s.capPeer(boardState?.partnerName ?? "")
-      : s.capMine;
+      ? (isKeep ? s.capKeepPeer(name) : s.capPeer(name))
+      : (isKeep ? s.capKeepMine : s.capMine);
 
   const kids: Node[] = [
     el("span", { class: "vc-cap-dots" }, dots),
@@ -1072,7 +1102,11 @@ function venueThumb(v: VenueChangeCatalogItem, className = "vc-thumb"): HTMLElem
  * nothing and is undone by tapping again.
  */
 function toggleMark(v: VenueChangeCatalogItem): void {
-  const key = keyOf(v);
+  toggleMarkKey(keyOf(v));
+}
+
+/** Toggle a mark by key (local, reversible) and repaint just that card. */
+function toggleMarkKey(key: string): void {
   if (selection.has(key)) selection.delete(key);
   else selection.add(key);
   haptic("select");
@@ -1080,6 +1114,68 @@ function toggleMark(v: VenueChangeCatalogItem): void {
     patchCard(key);
     syncBoardChrome();
   }
+}
+
+/**
+ * The pinned current venue, rendered as a markable board card (KEEP_KEY). Same
+ * white/burgundy mark language as the alternatives: hearting it proposes to
+ * keep the assigned venue, and both hearting it keeps it — a real, visible,
+ * mutual decision rather than a silent one-tap lock.
+ */
+function renderCurrentCard(st: VenueBoardState): HTMLElement {
+  const key = KEEP_KEY;
+  const mine = selection.has(key);
+  const theirs = boardState?.peerLikes.includes(key) ?? false;
+  const both = mine && theirs;
+
+  const heart = el(
+    "button",
+    {
+      class: `vc-heart${mine ? " is-mine" : ""}${theirs ? " is-theirs" : ""}`,
+      type: "button",
+      onClick: (e) => {
+        e.stopPropagation();
+        toggleMarkKey(key);
+      },
+    },
+    [icon(mine ? "heart-filled" : "heart", "icon vc-heart-icon")],
+  );
+
+  const meta = el("div", { class: "vc-card-meta" }, [
+    el("div", { class: "vc-current-badge", text: s.currentBadge }),
+    el("div", { class: "vc-card-name", text: st.original.name ?? "" }),
+    el("div", { class: "vc-card-addr", text: st.original.address ?? "" }),
+  ]);
+  const card = el(
+    "div",
+    {
+      class: "vc-card is-current",
+      onClick: () =>
+        openVenuePreview(
+          {
+            key,
+            name: st.original.name ?? "",
+            address: st.original.address ?? "",
+            mapsUri: st.original.mapsUri,
+          },
+          () => renderBoard(),
+        ),
+    },
+    [meta, heart],
+  );
+  const cap = el("div", { class: "vc-cap" }, captionKids(key, mine, theirs));
+  const frame = el(
+    "div",
+    {
+      class:
+        "vc-frame is-current glass-in" +
+        (mine || theirs ? " is-marked" : "") +
+        (both ? " is-match" : theirs ? " is-peer" : mine ? " is-mine" : ""),
+    },
+    [card, cap],
+  );
+  cardRefs.set(key, { frame, heart, cap });
+  return frame;
 }
 
 /**
@@ -1130,7 +1226,8 @@ async function submitSelection(): Promise<void> {
       haptic("success");
       saving = false;
       busy = false;
-      renderSuccess("agreed");
+      // Agreeing on KEEP_KEY means "keep the original" — no payment, kept screen.
+      renderSuccess(res.kept ? "kept" : "agreed");
       return;
     }
     if (res.overlapCandidates.length > 1) {
@@ -1418,11 +1515,11 @@ async function confirmOverlap(v: VenueChangeCatalogItem): Promise<void> {
   busy = true;
   showLoading();
   try {
-    await confirmVenueChoice(getInitData(), matchId, keyOf(v));
+    const cr = await confirmVenueChoice(getInitData(), matchId, keyOf(v));
     boardState = await fetchVenueBoardState(getInitData(), matchId);
     busy = false;
     haptic("success");
-    renderSuccess("agreed");
+    renderSuccess(cr.kept ? "kept" : "agreed");
     return;
   } catch (err) {
     haptic("error");
