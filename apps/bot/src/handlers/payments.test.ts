@@ -204,7 +204,9 @@ describe("handleSuccessfulPayment", () => {
       telegram_payment_charge_id: "charge_g",
     });
     await handleSuccessfulPayment(ctx);
-    expect(settleStars).toHaveBeenCalledWith(ctx.api, 111n, GATE_UUID, "both");
+    // The charge id rides along so the gate can return an overpaid `both` slot
+    // (she settled hers first) as a wallet ticket, exactly once.
+    expect(settleStars).toHaveBeenCalledWith(ctx.api, 111n, GATE_UUID, "both", "charge_g");
     expect(grant).not.toHaveBeenCalled();
   });
 

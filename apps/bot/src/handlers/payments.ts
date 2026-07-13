@@ -224,9 +224,10 @@ async function handleGateSuccessfulPayment(
   const telegramId = BigInt(ctx.from!.id);
   // The gate is settled by an atomic CAS on the still-null `ticketPaid*` slot
   // (see `settleTicket`), so a redelivered `successful_payment` is already a
-  // no-op — no charge-id dedupe column is needed here (unlike the store top-up,
-  // which credits a counter and therefore uses `TicketLedger.externalPaymentId`).
-  // Log the charge id for manual reconciliation.
+  // no-op for the settlement itself. The charge id is still passed down: a
+  // `both` payment that lands after she already settled her own slot overpays,
+  // and the surplus is returned as a wallet ticket keyed on
+  // `TicketLedger.externalPaymentId` so a redelivery can't mint a second one.
   console.info(
     `[stars] gate payment user=${telegramId} match=${gate.matchId} scope=${gate.scope} ` +
       `stars=${payment.total_amount} charge=${payment.telegram_payment_charge_id}`,
@@ -235,7 +236,13 @@ async function handleGateSuccessfulPayment(
   // Dynamic import keeps the heavy gate/scheduler graph out of this handler's
   // static module graph (so the store handlers stay unit-testable in isolation).
   const { applyStarsTicketPayment } = await import("./matching/ticket-gate.js");
-  const result = await applyStarsTicketPayment(ctx.api, telegramId, gate.matchId, gate.scope);
+  const result = await applyStarsTicketPayment(
+    ctx.api,
+    telegramId,
+    gate.matchId,
+    gate.scope,
+    payment.telegram_payment_charge_id,
+  );
   if (!result.ok) {
     console.error(
       `[stars] gate settle failed user=${telegramId} match=${gate.matchId} ` +

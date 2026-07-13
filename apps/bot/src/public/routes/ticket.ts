@@ -134,6 +134,14 @@ export function createTicketRouter(api: Api<RawApi>): Router {
       res.status(403).json({ error: "scope-not-allowed" });
       return;
     }
+    // Nothing left to cover once she settled her own slot: a `both` invoice
+    // would charge the doubled price while only his single slot can still be
+    // claimed, and a `partner` invoice would buy nothing at all. Refuse to mint
+    // it — the Mini App re-fetches state and falls back to the `self` scope.
+    if ((scope === "both" || scope === "partner") && stateRes.state.partnerPaid) {
+      res.status(409).json({ error: "partner-already-paid" });
+      return;
+    }
 
     const stars = gateStarsForScope(scope);
     if (stars <= 0) {

@@ -13,7 +13,7 @@ import {
   type PaymentMode,
   refundTicketPayment,
 } from "../../services/ticket-payment.js";
-import { spendTickets, grantTickets } from "../../services/ticket-wallet.js";
+import { spendTickets, grantTickets, isUniqueViolation } from "../../services/ticket-wallet.js";
 import {
   activeDiscountFromColumns,
   consumeActiveDiscount,
@@ -553,8 +553,45 @@ export async function applyStarsTicketPayment(
   telegramId: bigint,
   matchId: string,
   scope: TicketScope,
+  chargeId?: string,
 ): Promise<ApplyPaymentResult> {
-  const { result } = await settleTicket(api, telegramId, matchId, scope);
+  const { result, claimedCount } = await settleTicket(api, telegramId, matchId, scope);
+  if (!result.ok) return result;
+
+  // Surplus guard. The Mini App no longer offers `both`/`partner` once she has
+  // settled her own slot, and the invoice route refuses to mint one — but she
+  // can still pay in the seconds between him opening a `both` invoice and
+  // confirming it, in which case only his single slot is claimable and he has
+  // paid the doubled price. Telegram can only refund a Stars charge in FULL
+  // (never partially), so the overpaid slot is returned as a wallet ticket
+  // instead — the same principle as the wallet path's surplus refund, and he
+  // keeps the value. `externalPaymentId` makes it exactly-once, so a redelivered
+  // `successful_payment` (which the slot CAS already no-ops) cannot mint a
+  // second free ticket.
+  const surplus = Math.max(0, ticketsForScope(scope) - claimedCount);
+  if (surplus > 0 && chargeId) {
+    const payer = await prisma.user.findUnique({
+      where: { telegramId },
+      select: { id: true },
+    });
+    if (payer) {
+      try {
+        await grantTickets({
+          userId: payer.id,
+          count: surplus,
+          reason: "refund",
+          matchId,
+          externalPaymentId: chargeId,
+        });
+        console.info(
+          `[stars] gate surplus refunded as ${surplus} ticket(s) user=${telegramId} ` +
+            `match=${matchId} scope=${scope} claimed=${claimedCount} charge=${chargeId}`,
+        );
+      } catch (err) {
+        if (!isUniqueViolation(err)) throw err; // redelivery — already refunded
+      }
+    }
+  }
   return result;
 }
 

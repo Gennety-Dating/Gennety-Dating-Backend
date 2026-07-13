@@ -121,6 +121,31 @@ describe("deriveOfferButtons (balance-aware)", () => {
       primary: false,
     });
   });
+
+  // Regression: she settled her own slot first (she had a wallet ticket, or
+  // simply got there first). There is nothing left for him to cover, so any
+  // `both` button would charge the DOUBLED price while only his single slot
+  // could ever be claimed — a straight overcharge. He must see `self` only.
+  describe("partner already paid — nothing left to cover", () => {
+    it("male with no tickets is offered his own ticket only (never 'pay for both')", () => {
+      const btns = deriveOfferButtons(state({ myGender: "male", myBalance: 0, partnerPaid: true }));
+      expect(btns).toEqual([
+        { action: "pay", scope: "self", amountCents: 699, ticketCost: 0, primary: true },
+      ]);
+    });
+    it("male with 1 ticket is offered the self spend only (no cover-both combo)", () => {
+      const btns = deriveOfferButtons(state({ myGender: "male", myBalance: 1, partnerPaid: true }));
+      expect(btns).toEqual([
+        { action: "use", scope: "self", amountCents: 0, ticketCost: 1, primary: true },
+      ]);
+    });
+    it("male with 2 tickets does not get the 'use 2 tickets' both button", () => {
+      const btns = deriveOfferButtons(state({ myGender: "male", myBalance: 2, partnerPaid: true }));
+      expect(btns).toEqual([
+        { action: "use", scope: "self", amountCents: 0, ticketCost: 1, primary: true },
+      ]);
+    });
+  });
 });
 
 describe("deriveCoverPartnerButtons", () => {

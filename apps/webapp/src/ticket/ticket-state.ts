@@ -69,13 +69,19 @@ function useSelfPayPartner(price: number, primary: boolean): OfferButton {
  *   male, balance=0 → pay for both + pay only mine
  * Unknown gender is treated as female — never offer pay/use-for-both without a
  * confirmed male gender (the server enforces this too).
+ *
+ * A male whose partner ALREADY settled her own slot has nothing left to cover,
+ * so he is offered the `self` scope only. Without this he'd be shown "pay for
+ * both" at the doubled price while `settleTicket` could only ever claim his one
+ * remaining slot — i.e. a straight overcharge for a slot that doesn't exist.
  */
 export function deriveOfferButtons(state: TicketState): OfferButton[] {
   const price = state.priceCents;
   // Famine discount applies to the actor's OWN ticket only (the `self` money
   // button). `both`/`partner` and the wallet combo keep full per-ticket price.
   const selfPrice = state.selfPriceCents;
-  if (state.myGender === "male") {
+  const canCover = state.myGender === "male" && !state.partnerPaid;
+  if (canCover) {
     if (state.myBalance >= 2) {
       return [use("both", 2, true), use("self", 1, false)];
     }
