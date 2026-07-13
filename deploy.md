@@ -387,20 +387,27 @@ Stars, Registration v2's phone track, the fact collector (which is what actually
 feeds the matching engine's vibe axes), Elo vision seed, pre-date coordination,
 venue change v2, the date card, the match card, and Rekognition face-match.
 
-Two flags are deliberately **off**, and turning them on before the credential
-below is fixed would break registration outright:
-`ENABLE_PERSONA_VERIFICATION` and `MANDATORY_VERIFICATION_ENABLED`.
+Two flags are deliberately **off**: `ENABLE_PERSONA_VERIFICATION` and
+`MANDATORY_VERIFICATION_ENABLED`. Turning either on today would make the product
+*worse*, not better — see the Supabase row below.
 
-**Three provider credentials are currently broken/absent** (verified by probing
-each provider from the droplet — a flag is worthless without its provider):
+**Provider credentials, verified by probing each one from the droplet** (a flag
+is worthless without its provider):
 
-| Credential | State | What stays broken until it is fixed |
+| Credential | State | Consequence |
 |---|---|---|
-| `PERSONA_API_KEY` | **HTTP 403** | All identity verification. Liveness cannot run, so no user is ever `verified`, no Elo is seeded (the whole `V_league` matching gate stays inert at the default 500), and mandatory verification cannot be switched on. |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Invalid Compact JWS** (not a valid key) | Supabase *Storage*: verified selfies, mobile profile photos, Aether chat images. The database itself is fine — it authenticates via `DATABASE_URL`, not this key. |
-| `PLACES_API_KEY` | **empty** | Google Places: the venue fallback when no curated venue is in range, the Location Mini App autocomplete, the venue-change catalog beyond curated rows, and the date card's venue photo. The curated venue base still covers Kyiv/Kharkiv/Odesa, so scheduling degrades rather than dies. |
+| `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_ANON_KEY` | **placeholders** — the literal `your_supabase_…` values from `.env.example` | Supabase **Storage** has never worked in production (Postgres is fine — it authenticates via `DATABASE_URL`, not these keys). This is the real verification blocker: `verification-pipeline.ts` step 1 uploads the Persona selfie to `SUPABASE_SELFIE_BUCKET`, gets `403 Invalid Compact JWS`, and an infra failure routes the user to `pending_review` by design. With `MANDATORY_VERIFICATION_ENABLED` on, activation happens **only** through a `verified` outcome — so every new user would land in `pending_review`, be excluded from the match pool, and never activate. Even enabling Persona *alone* would be a regression: today unverified users auto-activate; with liveness on and storage broken, anyone who taps Verify gets frozen out of matching. |
+| `PERSONA_API_KEY` | **works, but it is a SANDBOX key** (`persona_sand…`) | The API answers 200 on the endpoints the pipeline actually calls (`GET /inquiries/:id`). Identity checks would run against Persona's sandbox, i.e. they are test flows, not real KYC. A production key is needed before liveness means anything. (A 403 on `/inquiry-templates` is a red herring — that endpoint is outside the key's scope and the product never calls it.) |
+| `PLACES_API_KEY` | **empty** | Google Places: the venue fallback when no curated venue is in range, the Location Mini App autocomplete, the venue-change catalog beyond curated rows, and the date card's venue photo. The curated base still covers Kyiv/Kharkiv/Odesa, so scheduling degrades rather than dies. |
+| `EXPO_ACCESS_TOKEN` | empty | Mobile push. No Expo app ships from this repo yet, so this is inert. |
 
-Re-probe any of them from the droplet before trusting a flag flip.
+Knock-on effect on matching: because nobody can reach `verified`, the AI vision
+Elo seed never runs, every profile keeps the default Elo of 500, and `V_league`
+— the assortative gate that decides whether a pair is viable at all — evaluates
+to 1.0 for everyone. Fixing Supabase Storage is what brings that gate to life.
+
+Re-probe any credential from the droplet before trusting a flag flip; the probes
+are cheap and each one of these was wrong in a different way.
 
 Required/high-impact env keys:
 
