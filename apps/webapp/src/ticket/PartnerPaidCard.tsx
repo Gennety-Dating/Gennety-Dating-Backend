@@ -62,7 +62,7 @@ export function PartnerPaidCard({
             src={partnerPhotoUrl}
             name={partnerName}
             size={124}
-            className="tkt-avatar-hero pp-payer-avatar"
+            className="tkt-avatar-hero"
           />
         </div>
         {/* The float wrapper bobs the whole ticket *and* the corner stamp

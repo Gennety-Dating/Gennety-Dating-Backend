@@ -65,8 +65,12 @@ app?.expand();
 
 // Bot API 8.0+ — immersive fullscreen so the map fills the screen edge-to-edge.
 // Older clients silently fall through to expand().
+// Guarded like the `setAttribute("lang", …)` call below: this runs at module
+// scope, so a host without a populated `documentElement` (a test DOM stub) would
+// otherwise throw before the app ever boots. A real client always has one, and
+// falls back to the dark chrome when the theme attribute is absent.
 const chromeColor =
-  document.documentElement.dataset.theme === "light" ? "#f5f5f5" : "#030303";
+  document.documentElement?.dataset.theme === "light" ? "#f5f5f5" : "#030303";
 try {
   if (app?.isVersionAtLeast?.("8.0") && !app.isFullscreen) {
     app.requestFullscreen?.();
