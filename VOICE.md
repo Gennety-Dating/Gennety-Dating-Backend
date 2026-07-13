@@ -1,9 +1,7 @@
 # Gennety — Voice & Tone
 
-> Audience here is **university students** (the production product). The beta
-> clone's `VOICE.md` is identical except its audience is **adults ~23–40** — keep
-> the two in sync on everything below *except* the audience descriptor and
-> age-band wording.
+> Audience: **university students** on the student track, plus the general adult
+> track opened by Registration v2 — keep the copy readable for both.
 
 Source of truth for how the bot talks. Governs both surfaces:
 

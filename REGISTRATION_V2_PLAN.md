@@ -4,8 +4,7 @@
 > sign-up fork (0ac8f15), mandatory liveness (a7f49be), matching union gate
 > (756e776), student bonus (dd6c391), copy/admin/docs (this commit). D1–D4
 > resolved per the inline recommendations. Remaining: Phase 6 (dev-bot E2E walk
-> of both tracks, deploy + staged flag flip). Authored 2026-07-07. Implementation happens in THIS repo
-> (prod); beta stays phone-only per BETA.md.
+> of both tracks, deploy + staged flag flip). Authored 2026-07-07.
 
 ## Product decision (from the founder)
 
@@ -14,8 +13,8 @@ university community:
 
 1. **Two registration tracks** with an explicit fork at sign-up:
    - **Student track** — university email OTP (existing flow).
-   - **General track** — phone number (Telegram one-tap `requestContact`,
-     ported from beta) for users arriving via external ad channels.
+   - **General track** — phone number (Telegram one-tap `requestContact`) for
+     users arriving via external ad channels.
 2. **Mandatory Liveness (Persona)** for BOTH tracks. The current two-step
    "soft skip + Elo penalty" path is removed for new users; verification
    becomes a hard activation gate.
@@ -37,13 +36,13 @@ university community:
   (`verificationSkippedAt`, `UNVERIFIED_ELO_PENALTY = 150`); pool excludes
   only `rejected`/`pending_review`; `verified` auto-activates
   (`verification-pipeline.ts` ~748).
-- Beta already has the full phone rail: `User.phone @unique` +
+- The phone rail this plan builds is the full set: `User.phone @unique` +
   `phoneVerifiedAt` schema, `handlers/onboarding/phone.ts` (trusted
   `contact.user_id === from.id` path, E.164 normalize, P2002 "number taken"),
   Mini App `PhoneGate` (poll `/state` until verified), track-aware
   `/complete` gate (`phone-required`), match-engine phone gate, agent-prompt
-  adaptation, tests. This ports into prod as ONE BRANCH of the fork, not a
-  replacement.
+  adaptation, tests. It lands as ONE BRANCH of the fork, not a replacement of
+  the email gate.
 - Ticket wallet already supports idempotent ledger-claim grants
   (`verification_bonus`, `welcome_gift`) — the student bonus reuses this
   exact mechanism.
@@ -72,9 +71,7 @@ university community:
 
 ## Work plan (phases ≈ solo focused days)
 
-### Phase 0 — Port the phone rail from beta (~1–1.5 d)
-Cherry-pick/adapt beta's phone commits into prod (divergence-aware, per
-BETA.md porting recipe in reverse):
+### Phase 0 — Build the phone rail (~1–1.5 d)
 - Schema: `User.phone String? @unique`, `phoneVerifiedAt DateTime?`,
   `registrationTrack String?` → `db:push`.
 - `packages/shared` `normalizePhoneE164` (+ tests).
@@ -96,10 +93,9 @@ the email gate.
 - Website pre-registration handoff (`auth_<token>`) pre-verifies email →
   auto-select student track, skip email screens (current skip logic reused).
 - Onboarding agent: track-aware prompt + finalize gate — email OTP tools only
-  for student track; general track never asked for email (port beta's
-  adaptation intent).
-- Tests: fork state machine, both `/complete` gates (+ phone-required test
-  from beta), agent gate tests.
+  for student track; general track never asked for email.
+- Tests: fork state machine, both `/complete` gates (incl. phone-required),
+  agent gate tests.
 
 ### Phase 2 — Mandatory liveness (~1.5–2 d)
 - Verification CTA (`handlers/onboarding/verification.ts`): remove the
@@ -148,8 +144,8 @@ the email gate.
 
 ### Phase 5 — Copy, admin, docs (~1–1.5 d)
 - Copy audit: onboarding visual scenes + menu i18n move to a shared neutral
-  tone; student flavor gated on track (prod keeps the campus vibe for
-  students, unlike beta's blanket neutralization).
+  tone; student flavor gated on track (the campus vibe stays for students
+  rather than being neutralized across the board).
 - `my-profile` / serializers: show "verified via phone" when no domain.
 - Admin audience/gender analytics: student vs general segmentation.
 - Docs: PRODUCT_SPEC core principles (dual-track replaces "Hyper-Local
@@ -162,8 +158,6 @@ the email gate.
 - Full typecheck + test suites; E2E walk of both tracks on the dev bot
   (dev-bypass updated for phone).
 - Deploy: `db:push` (additive columns only), env flags dark → staged enable.
-- Post-launch: BETA.md divergence map update (prod now owns a superset of the
-  auth area; future ports reconcile against the fork, not the email gate).
 
 **Total: ≈ 8.5–11.5 focused days.**
 
@@ -208,8 +202,7 @@ Rollback = flip flags back; columns stay.
 - **D2. Student bonus size.** Recommend **2 tickets** (≈ $14 value anchor) —
   material enough to steer channel choice, cheap while payments are mocked.
 - **D3. General-track copy tone.** Recommend shared neutral base + student
-  flavor by track (NOT beta's blanket adult re-copy — prod keeps both
-  audiences).
+  flavor by track (NOT a blanket adult re-copy — we keep both audiences).
 - **D4. Mobile.** Recommend email-only on Expo v1; SMS OTP is a separate
   later project with provider selection.
 
@@ -223,5 +216,3 @@ Rollback = flip flags back; columns stay.
   blocker with no skip escape → admin review SLA + backlog alert (Phase 2).
 - **One account per number** (P2002) — support path needed for legit
   number-recycling cases (manual admin unlink).
-- **Beta divergence**: auth-area cherry-picks get more conflict-prone after
-  this lands; the divergence map update in Phase 6 is not optional.

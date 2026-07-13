@@ -1,26 +1,24 @@
-# Telegram Stars Monetization — Port from Beta to Prod
+# Telegram Stars Monetization
 
 > Status: **IMPLEMENTED (2026-07-07)** — Phases A–E done; all tests green
 > (bot 1517 / webapp 108 / shared 146), full typecheck green. Behind
 > `TICKET_STARS_ENABLED` (dark by default). Remaining: Phase F (dev-bot live
 > Stars test) + staged flag flip at launch. Real Telegram Stars (XTR) replace the
-> mock USD/Stripe stub as the production payment rail. This is a reverse port
-> (beta → prod): Stars were authored in the beta clone and are live there; prod
-> diverged in the ticket zone (student_bonus, goodwill-cover read-receipt), so
-> the Stars pieces are hand-ported with divergence reconciliation, not
-> cherry-picked.
+> mock USD/Stripe stub as the production payment rail, reconciled against the
+> ticket zone this repo already owns (student_bonus, goodwill-cover
+> read-receipt).
 
 ## Founder decisions (2026-07-07)
 - **Star price per ticket = 350⭐** (`TICKET_BUNDLE_STARS` default `1:350,3:830,6:1350`).
   Gate: self=350, both=700, partner=350. Store bundles: 1→350 / 3→830 (~277 ea) /
   6→1350 (~225 ea). ~$5–7/ticket at typical Star retail. Env-overridable.
-- **Mock stays as the `TICKET_STARS_ENABLED=false` fallback** (beta parity):
-  Stars is the primary rail when the flag is on; the mock USD path survives only
-  when it's off. PAY-1 guard closes the mock bypass while Stars is on.
+- **Mock stays as the `TICKET_STARS_ENABLED=false` fallback**: Stars is the
+  primary rail when the flag is on; the mock USD path survives only when it's
+  off. PAY-1 guard closes the mock bypass while Stars is on.
 - Both surfaces ported: **store top-up** (My Tickets → native in-chat ⭐ invoices)
   AND **date-gate direct pay** (`WebApp.openInvoice` at the ticket gate).
 
-## Trust model (from beta, unchanged)
+## Trust model
 - `pre_checkout_query` — re-validate payload + Star amount, approve within 10s.
 - `message:successful_payment` — the ONLY trust boundary that credits/settles.
 - Store top-up: exactly-once via the new unique `TicketLedger.externalPaymentId`

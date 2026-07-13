@@ -643,8 +643,7 @@ describe("Menu — Edit Profile", () => {
   });
 
   it("handleEditPhotosDelete removes one photo and persists aligned arrays", async () => {
-    // Start above the MIN_PHOTOS floor (MAX in both repos) so the delete is
-    // allowed regardless of whether MIN is 2 (beta) or 4 (prod).
+    // Start at MAX_PHOTOS, above the MIN_PHOTOS floor, so the delete is allowed.
     const photos = Array.from({ length: MAX_PHOTOS }, (_, i) => `p${i}`);
     const scores = photos.map((_, i) => (i + 1) / 10);
     const media = photos.map((photo) => ({ type: "photo" as const, photo }));

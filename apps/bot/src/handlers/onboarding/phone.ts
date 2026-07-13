@@ -5,9 +5,8 @@ import type { Language } from "@gennety/shared";
 import { onboardingActivityPatch } from "../../workers/re-engagement-schedule.js";
 
 /**
- * Registration v2 — phone verification for the GENERAL track (ported from the
- * beta clone, where it replaced the university-email gate outright; here it is
- * one branch of the sign-up fork and the student email OTP path is untouched).
+ * Registration v2 — phone verification for the GENERAL track: one branch of the
+ * sign-up fork, leaving the student email OTP path untouched.
  *
  * Trusted path: when the user shares their number via the Mini App one-tap
  * `WebApp.requestContact` (or a `request_contact` reply-keyboard button),
