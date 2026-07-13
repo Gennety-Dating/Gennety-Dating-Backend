@@ -462,7 +462,7 @@ describe("keepOriginalVenue", () => {
     );
 
     const res = await keepOriginalVenue(api, 100n, "m1");
-    expect(res).toEqual({ ok: true });
+    expect(res).toEqual({ ok: true, toldPartner: true });
 
     const back = updateCalls((d) => "venueLikesA" in d);
     expect(back.length).toBe(1);
@@ -477,11 +477,38 @@ describe("keepOriginalVenue", () => {
     // The match itself is never touched.
     expect(data.status).toBeUndefined();
 
+    // The partner is told we'd rather keep the original.
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     expect(api.sendMessage.mock.calls[0][0]).toBe(200);
   });
 
-  it("retires the whole session when neither side has marks left", async () => {
+  it("does NOT silently override a partner who is still suggesting — it voices a preference", async () => {
+    const api = fakeApi();
+    // He proposed places (has marks); she has none and taps "keep".
+    mMatch.findUnique.mockResolvedValue(
+      fakeMatch({
+        venueChangeStatus: "liking",
+        venueChangeProposerId: "b",
+        venueChangeProposedAt: new Date(),
+        venueLikesB: [likeOf("p1", "New Cafe")],
+      }),
+    );
+
+    const res = await keepOriginalVenue(api, 100n, "m1");
+    // toldPartner → the client shows "we let them know", not "locked in".
+    expect(res).toEqual({ ok: true, toldPartner: true });
+
+    // The board stays open (his suggestion is still live), never auto-locked.
+    const data = updateCalls((d) => "venueLikesA" in d)[0][0].data;
+    expect(data.venueChangeStatus).toBe("liking");
+    expect(data.status).toBeUndefined();
+
+    // He gets the single "would like to keep" note in his chat.
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0][0]).toBe(200);
+  });
+
+  it("retires the whole session, silently, when neither side has marks left", async () => {
     const api = fakeApi();
     mMatch.findUnique.mockResolvedValue(
       fakeMatch({
@@ -493,7 +520,7 @@ describe("keepOriginalVenue", () => {
     );
 
     const res = await keepOriginalVenue(api, 100n, "m1");
-    expect(res).toEqual({ ok: true });
+    expect(res).toEqual({ ok: true, toldPartner: false });
     const data = updateCalls((d) => "venueLikesA" in d)[0][0].data;
     expect(data).toMatchObject({
       venueChangeStatus: null,
@@ -511,8 +538,8 @@ describe("keepOriginalVenue", () => {
     );
 
     const res = await keepOriginalVenue(api, 100n, "m1");
-    expect(res).toEqual({ ok: true });
-    // He never knew about it — no notice.
+    // The partner never saw the express mint, so there is no one to tell.
+    expect(res).toEqual({ ok: true, toldPartner: false });
     expect(api.sendMessage).not.toHaveBeenCalled();
   });
 });

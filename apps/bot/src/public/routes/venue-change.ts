@@ -233,7 +233,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       res.status(statusForReason(result.reason)).json({ error: result.reason });
       return;
     }
-    res.status(200).json({ ok: true });
+    res.status(200).json({ ok: true, toldPartner: result.toldPartner });
   });
 
   // His in-app "not this time" (the Mini App fork twin of the wish-card button).

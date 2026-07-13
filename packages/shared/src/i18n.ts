@@ -578,6 +578,7 @@ const translations = {
     venueBoardPingFromF: "{name} is eyeing a cozier spot for your date 👀",
     venueBoardPingFromM: "{name} suggests a look at a couple of other spots for your date 👀",
     venueBoardPingBtn: "Take a look",
+    venueKeepNotice: "Your match would like to keep {venue} 👍 You can still suggest another spot below.",
     venuePayPromptDm:
       "You two picked a new place for your date together!\n📍 {venue}\n" +
       "Lock it in — and we'll update your date cards.",
@@ -1322,6 +1323,7 @@ const translations = {
     venueBoardPingFromF: "{name} присматривает местечко поуютнее для вашего свидания 👀",
     venueBoardPingFromM: "{name} предлагает взглянуть на пару других мест для вашего свидания 👀",
     venueBoardPingBtn: "Взглянуть",
+    venueKeepNotice: "Партнёр хотел бы остаться в {venue} 👍 Можно предложить другое место ниже.",
     venuePayPromptDm:
       "Вы вместе выбрали новое место для свидания!\n📍 {venue}\n" +
       "Закрепи его — и мы обновим ваши карточки.",
@@ -2063,6 +2065,7 @@ const translations = {
     venueBoardPingFromF: "{name} придивляється до затишнішого місця для вашого побачення 👀",
     venueBoardPingFromM: "{name} пропонує поглянути на кілька інших місць для вашого побачення 👀",
     venueBoardPingBtn: "Поглянути",
+    venueKeepNotice: "Партнер хотів би залишитися у {venue} 👍 Можна запропонувати інше місце нижче.",
     venuePayPromptDm:
       "Ви разом обрали нове місце для побачення!\n📍 {venue}\n" +
       "Закріпи його — і ми оновимо ваші картки.",
@@ -2771,6 +2774,7 @@ const deTranslations: TranslationTable = {
   venueBoardPingFromF: "{name} schaut sich nach einem gemütlicheren Ort für euer Date um 👀",
   venueBoardPingFromM: "{name} schlägt vor, ein paar andere Orte für euer Date anzusehen 👀",
   venueBoardPingBtn: "Ansehen",
+  venueKeepNotice: "Dein Match möchte lieber bei {venue} bleiben 👍 Du kannst unten trotzdem einen anderen Ort vorschlagen.",
   venuePayPromptDm:
     "Ihr habt zusammen einen neuen Ort für euer Date gewählt!\n📍 {venue}\n" +
     "Sichere ihn — und wir aktualisieren eure Karten.",
@@ -3412,6 +3416,7 @@ const plTranslations: TranslationTable = {
   venueBoardPingFromF: "{name} rozgląda się za przytulniejszym miejscem na waszą randkę 👀",
   venueBoardPingFromM: "{name} proponuje spojrzeć na kilka innych miejsc na waszą randkę 👀",
   venueBoardPingBtn: "Zobacz",
+  venueKeepNotice: "Twoja para wolałaby zostać w {venue} 👍 Możesz zaproponować inne miejsce poniżej.",
   venuePayPromptDm:
     "Razem wybraliście nowe miejsce na randkę!\n📍 {venue}\n" +
     "Zatwierdź je — a my zaktualizujemy wasze karty.",

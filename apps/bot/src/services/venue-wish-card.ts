@@ -17,8 +17,12 @@ import { prisma } from "@gennety/db";
 import type { Language } from "@gennety/shared";
 import { renderDateCard, type CardTheme } from "./date-card/index.js";
 
-/** Fixed English brand-voice headline (mirrors `dateCardSlogan`'s policy). */
-const WISH_SLOGAN = "Her pick. Your move.";
+/**
+ * Fixed English brand-voice headline (mirrors `dateCardSlogan`'s policy). Split
+ * onto two lines: as one line the 78px headline runs under the butterfly mark
+ * top-right — two short lines clear it, and the last line takes the accent.
+ */
+const WISH_SLOGAN = "Her pick.\nYour move.";
 
 const USER_SELECT = {
   id: true,

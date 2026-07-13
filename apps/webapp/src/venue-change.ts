@@ -116,6 +116,8 @@ interface Strings {
   okAgreedSub: string;
   okKeptTitle: string;
   okKeptSub: string;
+  okKeepAskedTitle: string;
+  okKeepAskedSub: (name: string) => string;
   okDone: string;
   okContinue: string;
   catalogEmpty: string;
@@ -177,6 +179,8 @@ const T: Record<Lang, Strings> = {
     okAgreedSub: "One last step and this becomes your date spot.",
     okKeptTitle: "Staying where you were",
     okKeptSub: "Your date keeps the place we picked for you. Nothing changed.",
+    okKeepAskedTitle: "You'd rather keep this one",
+    okKeepAskedSub: (name) => `We let ${name} know. They can still suggest another spot — and it only changes if you both agree.`,
     okDone: "Back to places",
     okContinue: "Continue",
     catalogEmpty: "No suitable places nearby right now. Your venue stays as is.",
@@ -243,6 +247,8 @@ const T: Record<Lang, Strings> = {
     okAgreedSub: "Остался один шаг — и это место станет вашим.",
     okKeptTitle: "Остаётесь на прежнем месте",
     okKeptSub: "Свидание проходит там, где мы для вас выбрали. Ничего не изменилось.",
+    okKeepAskedTitle: "Вы предпочли остаться здесь",
+    okKeepAskedSub: (name) => `Мы сообщили ${name}. Партнёр всё ещё может предложить другое место — и оно сменится, только если вы оба согласитесь.`,
     okDone: "К местам",
     okContinue: "Продолжить",
     catalogEmpty: "Подходящих мест рядом сейчас нет. Ваше место остаётся в силе.",
@@ -309,6 +315,8 @@ const T: Record<Lang, Strings> = {
     okAgreedSub: "Лишився один крок — і це місце стане вашим.",
     okKeptTitle: "Залишаєтесь на попередньому місці",
     okKeptSub: "Побачення відбудеться там, де ми для вас обрали. Нічого не змінилося.",
+    okKeepAskedTitle: "Ви віддали перевагу цьому місцю",
+    okKeepAskedSub: (name) => `Ми повідомили ${name}. Партнер усе ще може запропонувати інше місце — і воно зміниться, лише якщо ви обоє погодитесь.`,
     okDone: "До місць",
     okContinue: "Продовжити",
     catalogEmpty: "Підходящих місць поруч зараз немає. Ваше місце залишається.",
@@ -375,6 +383,8 @@ const T: Record<Lang, Strings> = {
     okAgreedSub: "Ein letzter Schritt — dann ist es euer Date-Ort.",
     okKeptTitle: "Ihr bleibt, wo ihr wart",
     okKeptSub: "Euer Date bleibt an dem Ort, den wir für euch gewählt haben. Nichts hat sich geändert.",
+    okKeepAskedTitle: "Du bleibst lieber bei diesem Ort",
+    okKeepAskedSub: (name) => `Wir haben ${name} Bescheid gegeben. Sie können weiterhin einen anderen Ort vorschlagen — geändert wird nur, wenn ihr beide zustimmt.`,
     okDone: "Zu den Orten",
     okContinue: "Weiter",
     catalogEmpty: "Gerade keine passenden Orte in der Nähe. Euer Ort bleibt bestehen.",
@@ -441,6 +451,8 @@ const T: Record<Lang, Strings> = {
     okAgreedSub: "Jeszcze jeden krok — i to będzie wasze miejsce.",
     okKeptTitle: "Zostajecie w tym samym miejscu",
     okKeptSub: "Randka odbędzie się tam, gdzie wybraliśmy dla was. Nic się nie zmieniło.",
+    okKeepAskedTitle: "Wolisz zostać w tym miejscu",
+    okKeepAskedSub: (name) => `Daliśmy znać ${name}. Może nadal zaproponować inne miejsce — zmieni się tylko, jeśli oboje się zgodzicie.`,
     okDone: "Do miejsc",
     okContinue: "Dalej",
     catalogEmpty: "Brak odpowiednich miejsc w pobliżu. Wasze miejsce pozostaje.",
@@ -1067,7 +1079,7 @@ async function keepOriginal(): Promise<void> {
   busy = true;
   syncBoardChrome();
   try {
-    await keepOriginalVenue(getInitData(), matchId);
+    const { toldPartner } = await keepOriginalVenue(getInitData(), matchId);
     boardState = await fetchVenueBoardState(getInitData(), matchId);
     selection = new Set(boardState.myLikes);
     confirmed = new Set(boardState.myLikes);
@@ -1075,7 +1087,10 @@ async function keepOriginal(): Promise<void> {
     haptic("success");
     saving = false;
     busy = false;
-    renderSuccess("kept");
+    // If the partner was actively proposing, we told them we'd rather keep the
+    // original (rather than silently overriding them) — say so, and don't imply
+    // it is locked. Otherwise there was no one to tell: it simply stays.
+    renderSuccess(toldPartner ? "keep-asked" : "kept");
     return;
   } catch (err) {
     haptic("error");
@@ -1413,23 +1428,31 @@ async function confirmOverlap(v: VenueChangeCatalogItem): Promise<void> {
  * Deliberately a screen of its own: confirming is the one committing act on the
  * board, so it should feel like it landed rather than silently redraw a list.
  */
-function renderSuccess(kind: "suggested" | "agreed" | "kept"): void {
+function renderSuccess(kind: "suggested" | "agreed" | "kept" | "keep-asked"): void {
   screen = "success";
   setBack(null);
   const st = boardState;
   const agreed = kind === "agreed";
-  const kept = kind === "kept";
+  const keptLike = kind === "kept" || kind === "keep-asked";
 
   const medallion = el("div", { class: `vc-ok-mark${agreed ? " is-agreed" : ""}` }, [
-    icon(agreed ? "spark" : kept ? "pin" : "check", "icon vc-ok-glyph"),
+    icon(agreed ? "spark" : keptLike ? "pin" : "check", "icon vc-ok-glyph"),
   ]);
 
-  const title = agreed ? s.okAgreedTitle : kept ? s.okKeptTitle : s.okSuggestTitle;
+  const title = agreed
+    ? s.okAgreedTitle
+    : kind === "keep-asked"
+      ? s.okKeepAskedTitle
+      : kind === "kept"
+        ? s.okKeptTitle
+        : s.okSuggestTitle;
   const sub = agreed
     ? s.okAgreedSub
-    : kept
-      ? s.okKeptSub
-      : s.okSuggestSub(st?.partnerName ?? "");
+    : kind === "keep-asked"
+      ? s.okKeepAskedSub(st?.partnerName ?? "")
+      : kind === "kept"
+        ? s.okKeptSub
+        : s.okSuggestSub(st?.partnerName ?? "");
 
   const nodes: Node[] = [
     el("div", { class: "vc-ok-halo" }, [medallion]),
@@ -1440,7 +1463,7 @@ function renderSuccess(kind: "suggested" | "agreed" | "kept"): void {
   // Name the place — and let them tap through to it. Confirming a venue you
   // have only seen as a line of text is a leap of faith; this is the way to
   // double-check the place and come straight back.
-  const venue = agreed ? st?.agreed : kept ? st?.original : null;
+  const venue = agreed ? st?.agreed : keptLike ? st?.original : null;
   if (venue?.name) {
     const ref: VenueRef = {
       key: agreed ? (st?.agreed?.key ?? null) : null,

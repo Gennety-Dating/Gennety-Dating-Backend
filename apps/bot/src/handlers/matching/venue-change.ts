@@ -900,20 +900,25 @@ export type KeepOriginalResult =
       ok: false;
       reason: "match-not-found" | "not-participant" | VenueChangeIneligibleReason;
     }
-  | { ok: true };
+  | { ok: true; toldPartner: boolean };
 
 /**
- * "Actually, let's just stay where we were." The explicit way back, at any
- * point before a change is paid for:
- *   - while marking/suggesting — withdraws MY marks (the partner's stay, so
- *     they can keep browsing; the board simply has nothing from me anymore);
- *   - after an agreement — calls the agreement off, so nobody is left waiting
- *     on a payment neither side wants. The original venue was never touched,
- *     so there is nothing to restore: dropping the agreement IS the way back.
+ * "Actually, let's just keep the place we were given." The explicit way back,
+ * at any point before a change is paid for. It is deliberately NOT a unilateral
+ * override — one tap can never silently lock the original out from under a
+ * partner who is actively proposing. What it does depends on the situation:
  *
- * Without this the only route back was to let an unwanted agreement rot until
- * the 12h/T-5h lapse. The partner's own marks, and the sticky offer/decline
- * stamps that protect them from being re-nagged, are deliberately left intact.
+ *   - after an agreement — calls the agreement off (nobody is left waiting on a
+ *     payment neither side wants) and tells the partner you'd rather keep it.
+ *   - while the PARTNER is still suggesting places — withdraws my own marks and
+ *     sends the partner a single live "I'd like to keep {venue}" note. Their
+ *     suggestions stay live: this is me *voicing* a preference, not vetoing
+ *     theirs, and we can still agree if they win me over. (`toldPartner=true`.)
+ *   - when nobody is suggesting anything anymore — quietly closes the session;
+ *     the original venue was never touched, so there is nothing to restore.
+ *     (`toldPartner=false` — there was no one to tell.)
+ *
+ * The original venue was never mutated, so dropping the change IS the restore.
  */
 export async function keepOriginalVenue(
   api: Api<RawApi>,
@@ -988,13 +993,17 @@ export async function keepOriginalVenue(
   if (claim.count === 0) return { ok: false, reason: "wrong-state" };
 
   console.info(
-    `[venue-change] keep-original match=${matchId} by=${me.id} wasAgreed=${wasAgreed}`,
+    `[venue-change] keep-original match=${matchId} by=${me.id} wasAgreed=${wasAgreed} ` +
+      `peerLikes=${peerHasLikes}`,
   );
 
-  // Only tell the partner when there was something for them to be waiting on.
-  // An express mint was never visible to them, so cancelling it stays silent.
+  const peer = userOfSide(match, otherSide(side));
+  let toldPartner = false;
+
   if (wasAgreed && !wasExpress) {
-    const peer = userOfSide(match, otherSide(side));
+    // We called off an agreement the partner was expecting — tell them plainly
+    // that we'd rather keep the original. (An express mint they never saw stays
+    // silent.)
     if (isTelegramTarget(peer.telegramId)) {
       await api
         .sendMessage(
@@ -1003,8 +1012,59 @@ export async function keepOriginalVenue(
         )
         .catch(() => undefined);
     }
+    toldPartner = true;
+  } else if (!wasExpress && peerHasLikes) {
+    // The partner is still actively suggesting places. Rather than silently
+    // dismiss them, voice the preference: replace their single live board
+    // message with an "I'd like to keep {venue}" note (they can still suggest
+    // more — the board is not closed).
+    await refreshKeepNotice(api, match, side).catch((err) => {
+      console.warn("[venue-change] keep notice failed:", err);
+    });
+    toldPartner = true;
   }
-  return { ok: true };
+
+  // A fully-retired session leaves stale board-invite messages behind — bin them.
+  if (nextStatus === null) {
+    await retireBoardPings(api, match).catch(() => undefined);
+  }
+  return { ok: true, toldPartner };
+}
+
+/**
+ * Put the "your match would like to keep {venue}" note into the partner's ONE
+ * live board-message slot (delete the previous one, post a fresh one), so it is
+ * the latest message in their chat and never stacks with the earlier invites.
+ * Same slot the board-invite ping uses, so the two can never coexist.
+ */
+async function refreshKeepNotice(api: Api<RawApi>, match: VcMatch, keeperSide: Side): Promise<void> {
+  const recipientSide = otherSide(keeperSide);
+  const recipient = userOfSide(match, recipientSide);
+  if (!isTelegramTarget(recipient.telegramId)) return;
+
+  const chatId = toTelegramChatId(recipient.telegramId);
+  const prevId =
+    recipientSide === "A" ? match.venueChangePingMsgIdA : match.venueChangePingMsgIdB;
+  if (prevId != null) {
+    await api.deleteMessage(chatId, prevId).catch(() => undefined);
+  }
+
+  const lang = langOf(recipient.language);
+  const kb = new InlineKeyboard().webApp(
+    t(lang, "venueBoardPingBtn"),
+    venueChangeUrl(match.id, lang),
+  );
+  const sent = await api
+    .sendMessage(chatId, t(lang, "venueKeepNotice", { venue: match.venueName ?? "" }), {
+      reply_markup: kb,
+    })
+    .catch(() => null);
+  if (!sent) return;
+
+  const msgCol = recipientSide === "A" ? "venueChangePingMsgIdA" : "venueChangePingMsgIdB";
+  await prisma.match
+    .update({ where: { id: match.id }, data: { [msgCol]: sent.message_id } })
+    .catch(() => undefined);
 }
 
 // ---------------------------------------------------------------------------
