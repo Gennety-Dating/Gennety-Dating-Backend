@@ -1002,6 +1002,35 @@ a.vc-info-row .vc-info-text {
   transform: scale(0.985);
   background: var(--surface-2);
 }
+.vc-agreed-meta {
+  margin-top: 2px;
+}
+/* The "open the place" affordance — makes the whole card visibly tappable. */
+.vc-agreed-open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent-bright);
+}
+.vc-agreed-chevron {
+  width: 15px;
+  height: 15px;
+}
+
+/* Payer context line — "your match chose this too". */
+.vc-note-agree {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
 .vc-agreed-photo {
   width: 100%;
   height: 190px;
@@ -1475,6 +1504,12 @@ a.vc-info-row .vc-info-text {
 .vc-ok-venue:active {
   transform: scale(0.985);
   background: var(--surface-2);
+}
+.vc-ok-venue.is-highlight {
+  background: var(--self-fill);
+  box-shadow:
+    var(--glass-edge),
+    inset 0 0 0 1.5px var(--self-fill-strong);
 }
 .vc-ok-venue-chevron {
   flex: none;

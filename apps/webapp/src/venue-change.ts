@@ -133,8 +133,13 @@ interface Strings {
   overlapTitle: string;
   overlapLead: string;
   agreedTitle: string;
-  agreedWaitNote: string;
+  /** Payer context: your match chose this place too. */
+  agreedBothChose: (name: string) => string;
+  /** The non-payer who agreed, waiting for the partner's payment. */
+  agreedWaitNote: (name: string) => string;
   agreedDeclinedNote: string;
+  /** Nudge that the venue card is tappable for the full place. */
+  agreedTapHint: string;
   payBtn: (stars: number) => string;
   paySelfBtn: (stars: number) => string;
   offerBtn: string;
@@ -203,8 +208,10 @@ const T: Record<Lang, Strings> = {
     overlapTitle: "Your hearts met!",
     overlapLead: "You matched on several places — pick the one.",
     agreedTitle: "You agreed on a new spot",
-    agreedWaitNote: "Agreed. One last touch and your date cards update.",
+    agreedBothChose: (name) => `${name} chose this place too — you're both in.`,
+    agreedWaitNote: (name) => `You're both set on this place! Now we just need ${name} to cover the venue change. As soon as that's done, we'll lock it in and send you both the updated date details.`,
     agreedDeclinedNote: "The venue stays as planned for now.",
+    agreedTapHint: "Tap the place for photos, rating & map.",
     payBtn: (stars) => `Lock it in — ${stars}`,
     paySelfBtn: (stars) => `Lock it in myself — ${stars}`,
     offerBtn: "Ask them to lock it in",
@@ -271,8 +278,10 @@ const T: Record<Lang, Strings> = {
     overlapTitle: "Ваши сердечки совпали!",
     overlapLead: "Вы совпали в нескольких местах — выберите одно.",
     agreedTitle: "Вы сошлись на новом месте",
-    agreedWaitNote: "Согласовано. Последний штрих — и карточки свидания обновятся.",
+    agreedBothChose: (name) => `${name} тоже выбрал(а) это место — вы сошлись.`,
+    agreedWaitNote: (name) => `Вы оба выбрали это место! Теперь осталось, чтобы ${name} оплатил(а) смену места. Как только это произойдёт, мы окончательно закрепим его и пришлём вам обоим точные детали свидания.`,
     agreedDeclinedNote: "Место пока остаётся прежним.",
+    agreedTapHint: "Нажмите на заведение — фото, рейтинг и карта.",
     payBtn: (stars) => `Закрепить — ${stars}`,
     paySelfBtn: (stars) => `Закрепить самой — ${stars}`,
     offerBtn: "Предложить закрепить партнёру",
@@ -339,8 +348,10 @@ const T: Record<Lang, Strings> = {
     overlapTitle: "Ваші серденька збіглися!",
     overlapLead: "Ви збіглися в кількох місцях — оберіть одне.",
     agreedTitle: "Ви зійшлися на новому місці",
-    agreedWaitNote: "Погоджено. Останній штрих — і картки побачення оновляться.",
+    agreedBothChose: (name) => `${name} теж обрав(ла) це місце — ви зійшлися.`,
+    agreedWaitNote: (name) => `Ви обоє обрали це місце! Тепер лишилося, щоб ${name} оплатив(ла) зміну місця. Щойно це станеться, ми остаточно закріпимо його й надішлемо вам обом точні деталі побачення.`,
     agreedDeclinedNote: "Місце поки залишається тим самим.",
+    agreedTapHint: "Натисніть на заклад — фото, рейтинг і карта.",
     payBtn: (stars) => `Закріпити — ${stars}`,
     paySelfBtn: (stars) => `Закріпити самій — ${stars}`,
     offerBtn: "Запропонувати закріпити партнеру",
@@ -407,8 +418,10 @@ const T: Record<Lang, Strings> = {
     overlapTitle: "Eure Herzen haben sich getroffen!",
     overlapLead: "Ihr habt mehrere Orte gemeinsam — wählt einen aus.",
     agreedTitle: "Ihr habt euch auf einen neuen Ort geeinigt",
-    agreedWaitNote: "Vereinbart. Ein letzter Schritt — dann werden eure Karten aktualisiert.",
+    agreedBothChose: (name) => `${name} hat diesen Ort auch gewählt — ihr seid euch einig.`,
+    agreedWaitNote: (name) => `Ihr habt euch beide für diesen Ort entschieden! Jetzt muss ${name} nur noch die Ortsänderung übernehmen. Sobald das erledigt ist, sichern wir ihn und senden euch beiden die aktualisierten Date-Details.`,
     agreedDeclinedNote: "Der Ort bleibt vorerst wie geplant.",
+    agreedTapHint: "Tippe auf den Ort für Fotos, Bewertung & Karte.",
     payBtn: (stars) => `Sichern — ${stars}`,
     paySelfBtn: (stars) => `Selbst sichern — ${stars}`,
     offerBtn: "Deinem Match das Sichern anbieten",
@@ -475,8 +488,10 @@ const T: Record<Lang, Strings> = {
     overlapTitle: "Wasze serduszka się spotkały!",
     overlapLead: "Zgadzacie się w kilku miejscach — wybierz jedno.",
     agreedTitle: "Zgodziliście się na nowe miejsce",
-    agreedWaitNote: "Uzgodnione. Ostatni krok — i wasze karty się zaktualizują.",
+    agreedBothChose: (name) => `${name} też wybrał(a) to miejsce — zgadzacie się.`,
+    agreedWaitNote: (name) => `Oboje wybraliście to miejsce! Teraz wystarczy, aby ${name} opłacił(a) zmianę miejsca. Gdy tylko to nastąpi, zatwierdzimy je i wyślemy wam obojgu dokładne szczegóły randki.`,
     agreedDeclinedNote: "Miejsce na razie zostaje bez zmian.",
+    agreedTapHint: "Dotknij miejsca — zdjęcia, ocena i mapa.",
     payBtn: (stars) => `Zatwierdź — ${stars}`,
     paySelfBtn: (stars) => `Zatwierdź samodzielnie — ${stars}`,
     offerBtn: "Zaproponuj parze zatwierdzenie",
@@ -1475,7 +1490,10 @@ function renderSuccess(kind: "suggested" | "agreed" | "kept" | "keep-asked"): vo
       el(
         "div",
         {
-          class: "vc-ok-venue",
+          // On the "we sent your preference" screen, highlight this card — it is
+          // the very thing you're proposing to keep, so it should read as your
+          // active pick, not passive context.
+          class: `vc-ok-venue${kind === "keep-asked" ? " is-highlight" : ""}`,
           onClick: () => openVenuePreview(ref, () => renderSuccess(kind)),
         },
         [
@@ -1520,7 +1538,9 @@ function renderAgreed(st: VenueBoardState): void {
     : el("div", { class: "vc-agreed-photo" }, [icon("pin", "icon vc-shot-icon")]);
 
   // Borderless and unbadged — the photo carries it. Tapping opens the place, so
-  // you can double-check what you are about to pay for and come back.
+  // you can double-check what you are about to pay for and come back. A chevron
+  // + hint make the tap obvious, since the agreed screen is where someone is
+  // about to spend money on a venue they may only have seen as a line of text.
   const card = el(
     "div",
     {
@@ -1533,8 +1553,14 @@ function renderAgreed(st: VenueBoardState): void {
     },
     [
       hero,
-      el("div", { class: "vc-current-name", text: agreed.name }),
-      el("div", { class: "vc-current-addr", text: agreed.address }),
+      el("div", { class: "vc-agreed-meta" }, [
+        el("div", { class: "vc-current-name", text: agreed.name }),
+        el("div", { class: "vc-current-addr", text: agreed.address }),
+      ]),
+      el("div", { class: "vc-agreed-open" }, [
+        el("span", { text: s.agreedTapHint }),
+        icon("chevron", "icon vc-agreed-chevron"),
+      ]),
     ],
   );
 
@@ -1545,10 +1571,14 @@ function renderAgreed(st: VenueBoardState): void {
   const nodes: Node[] = [header, card];
   const bar: Node[] = [];
   const price = st.priceStars;
+  const partner = st.partnerName;
 
   switch (st.myAction) {
     case "pay":
     case "pay_or_decline":
+      // Tell the payer their match chose this place too, so paying doesn't feel
+      // like acting alone — they agreed, now he seals it.
+      nodes.push(el("p", { class: "vc-note vc-note-agree", text: s.agreedBothChose(partner) }));
       if (price != null) {
         bar.push(
           iconBtn("btn-primary", "check", s.payBtn(price), () => void payAgreed(), true),
@@ -1578,7 +1608,9 @@ function renderAgreed(st: VenueBoardState): void {
       }
       break;
     case "wait":
-      nodes.push(el("p", { class: "vc-note vc-note-center", text: s.agreedWaitNote }));
+      // She agreed; the man pays. Spell out the next step so she isn't left on a
+      // bare "agreed" screen wondering what happens now.
+      nodes.push(el("p", { class: "vc-note vc-note-center", text: s.agreedWaitNote(partner) }));
       break;
     default:
       // His post-decline view — neutral, decision is out of his hands now.
