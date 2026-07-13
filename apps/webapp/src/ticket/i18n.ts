@@ -40,10 +40,11 @@ export interface TicketStrings {
    * Success screen when HE covered HER ticket — the goodwill gesture (§3.5b).
    *
    * TRANSLATOR NOTE: `coveredHerTitle` is a mate clapping you on the shoulder —
-   * "well played, man" / "respect". It is NOT a compliment about his looks: the
-   * Russian «Красавчик!» here means "nice one", never "handsome guy". Keep the
-   * register warm and peer-level — never congratulatory-from-above, never
-   * sentimental, and no emoji.
+   * "respect", "well played". It is NOT a compliment about his looks, which is
+   * exactly why «Красавчик!» / «Красунчик!» were dropped: they read as "handsome
+   * guy" to half the audience. Prefer the plain, unambiguous "respect" in every
+   * locale. Keep the register warm and peer-level — never congratulatory-from-
+   * above, never sentimental, and no emoji.
    */
   coveredHerTitle: string;
   coveredHerSub: string;
@@ -144,7 +145,7 @@ const ru: TicketStrings = {
   processing: "Обработка…",
   successTitle: "Готово 🎟️",
   successSub: "Оба билета у вас. Время выбрать момент.",
-  coveredHerTitle: "Красавчик!",
+  coveredHerTitle: "Респект!",
   coveredHerSub: "Ты оплатил билет за {name} — мы дали ей знать. Осталось выбрать момент.",
   goToScheduling: "Перейти к планированию даты",
   waitingTitle: "Билет закреплён 🎟️",
@@ -193,7 +194,7 @@ const uk: TicketStrings = {
   processing: "Обробка…",
   successTitle: "Готово 🎟️",
   successSub: "Обидва квитки у вас. Час обрати момент.",
-  coveredHerTitle: "Красунчик!",
+  coveredHerTitle: "Респект!",
   coveredHerSub: "Ти оплатив квиток за {name} — ми дали їй знати. Лишилось обрати момент.",
   goToScheduling: "Перейти до планування побачення",
   waitingTitle: "Квиток закріплено 🎟️",
@@ -291,7 +292,7 @@ const pl: TicketStrings = {
   processing: "Przetwarzanie...",
   successTitle: "Gotowe 🎟️",
   successSub: "Oba bilety są zabezpieczone. Czas wybrać termin.",
-  coveredHerTitle: "Szacun!",
+  coveredHerTitle: "Respekt!",
   coveredHerSub: "Opłaciłeś bilet za {name} — daliśmy jej znać. Teraz wybierz termin.",
   goToScheduling: "Przejdź do planowania randki",
   waitingTitle: "Bilet zabezpieczony 🎟️",

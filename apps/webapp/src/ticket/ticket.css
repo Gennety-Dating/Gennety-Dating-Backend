@@ -484,20 +484,27 @@ body {
   overflow: hidden;
 }
 
+/* The hearts drift up behind the hero. `overflow: hidden` alone CLIPPED them at
+   the container's bottom border, so each heart snapped into existence along a
+   straight line just above the action bar — a visible wall they walked out from.
+   A soft mask on that edge (and on the top) dissolves the boundary instead, so
+   they materialise gradually out of nothing and dissolve again on the way out. */
 .pp-hearts {
   position: absolute;
   inset: 0;
   pointer-events: none;
   overflow: hidden;
+  -webkit-mask-image: linear-gradient(to top, transparent 0, #000 16%, #000 80%, transparent 100%);
+  mask-image: linear-gradient(to top, transparent 0, #000 16%, #000 80%, transparent 100%);
 }
 .pp-heart {
   position: absolute;
-  bottom: -24px;
+  bottom: -32px;
   display: block;
   color: var(--accent);
   opacity: 0;
   animation-name: pp-heart-rise;
-  animation-timing-function: ease-in;
+  animation-timing-function: linear;
   animation-iteration-count: infinite;
   will-change: transform, opacity;
   filter: drop-shadow(0 0 8px rgba(139, 37, 59, 0.55));
@@ -647,8 +654,10 @@ body {
    the drop shadow lifts it off the corner like a real sticker. */
 .pp-stamp {
   position: absolute;
-  top: -11px;
-  left: -12px;
+  /* Nudged down + left off the ticket's top-left corner, clear of the avatar
+     sitting right above it. */
+  top: -3px;
+  left: -20px;
   z-index: 4;
   display: inline-flex;
   align-items: center;
@@ -908,16 +917,22 @@ body {
     transform: rotate(-9deg) scale(1);
   }
 }
+/* Stay invisible while still inside the masked spawn zone, then ease up. The
+   long 0 → 0.75 ramp is what makes them "appear out of nothing" rather than
+   arrive already lit. */
 @keyframes pp-heart-rise {
   0% {
     opacity: 0;
-    transform: translateY(0) translateX(0) scale(0.8);
+    transform: translateY(0) translateX(0) scale(0.72);
   }
-  15% {
-    opacity: 0.8;
+  14% {
+    opacity: 0;
   }
-  70% {
-    opacity: 0.5;
+  34% {
+    opacity: 0.75;
+  }
+  72% {
+    opacity: 0.45;
   }
   100% {
     opacity: 0;
@@ -1041,18 +1056,11 @@ body {
   justify-content: center;
   margin: 4px 0 18px;
 }
+/* Extra clearance under his photo: the PAID stamp hangs over the ticket's top
+   edge, and at 16px it could clip the bottom of the avatar. Lifting the avatar
+   and dropping the stamp (below) keeps the two from ever touching. */
 .pp-payer {
   display: flex;
   justify-content: center;
-  margin-bottom: 16px;
-}
-/* Top hat rests just above his head — raised clear of the photo so it barely
-   (ideally doesn't) overlap the face, centred and lightly tilted. */
-.pp-payer-avatar .tkt-avatar-badge {
-  top: -40px;
-  left: 50%;
-  right: auto;
-  transform: translateX(-36%) rotate(-10deg);
-  font-size: 3.1rem;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+  margin-bottom: 26px;
 }
