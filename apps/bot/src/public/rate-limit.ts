@@ -78,6 +78,19 @@ export const locationSearchLimiter = make({
   message: { error: "Too many location searches, try again later." },
 });
 
+/**
+ * City lookup for the website's pre-registration form. The visitor has no
+ * account yet, so this is keyed by IP alone — the ceiling is higher than the
+ * Mini App's because a debounced search-as-you-type burns several calls per
+ * city, and a shared campus NAT puts many students behind one address.
+ */
+export const publicReadLimiter = make({
+  windowMs: 3_600_000,
+  limit: 240,
+  keyGenerator: (req): string => `public-read:${ipKey(req)}`,
+  message: { error: "Too many requests, try again later." },
+});
+
 /** Persona webhook ingress — protects raw-body parsing before global limits. */
 export const personaWebhookLimiter = make({
   windowMs: 60_000,

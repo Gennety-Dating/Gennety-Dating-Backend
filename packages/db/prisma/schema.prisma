@@ -1056,19 +1056,38 @@ model EmailOtp {
 /// deep link (`/start web_<token>`). Only its SHA-256 hash is stored here, so
 /// logs and DB snapshots do not expose a usable account-linking secret.
 model WebRegistrationLink {
-  id                 String                 @id @default(uuid()) @db.Uuid
-  tokenHash          String                 @unique @map("token_hash")
-  email              String
-  universityDomain   String                 @map("university_domain")
-  language           Language
-  purpose            WebRegistrationPurpose @default(join)
-  termsAccepted      Boolean                @map("terms_accepted")
-  termsAcceptedAt    DateTime               @map("terms_accepted_at")
-  researchOptIn      Boolean                @default(false) @map("research_opt_in")
-  expiresAt          DateTime               @map("expires_at")
-  consumedAt         DateTime?              @map("consumed_at")
-  consumedTelegramId BigInt?                @map("consumed_telegram_id")
-  createdAt          DateTime               @default(now()) @map("created_at")
+  id        String @id @default(uuid()) @db.Uuid
+  tokenHash String @unique @map("token_hash")
+  /// Registration v2 track picked on the website. `student` — the university
+  /// email below was OTP-verified on the site. `general` — the user chose the
+  /// phone rail, which the website deliberately does NOT verify: a number is
+  /// only ever trusted from Telegram's own `message.contact` one-tap, so the
+  /// handoff carries the *choice* and the bot's Mini App runs the actual gate.
+  /// Null on links minted before the fork existed (all of them were student).
+  registrationTrack String? @map("registration_track")
+  /// Verified university email — student track only, hence nullable. A general
+  /// track link has no email at all.
+  email            String?
+  universityDomain String? @map("university_domain")
+  language         Language
+  purpose          WebRegistrationPurpose @default(join)
+  termsAccepted    Boolean  @map("terms_accepted")
+  termsAcceptedAt  DateTime @map("terms_accepted_at")
+  researchOptIn    Boolean  @default(false) @map("research_opt_in")
+  /// Dating city picked on the website (student track only — the general track
+  /// picks its city in the Mini App, right after the phone gate). Mirrors the
+  /// `Profile` columns so the handoff can satisfy the city gate and the user
+  /// never re-answers it in Telegram.
+  homeCity           String?   @map("home_city")
+  homeCountryCode    String?   @map("home_country_code")
+  homeCityKey        String?   @map("home_city_key")
+  homePlaceId        String?   @map("home_place_id")
+  latitude           Float?
+  longitude          Float?
+  expiresAt          DateTime  @map("expires_at")
+  consumedAt         DateTime? @map("consumed_at")
+  consumedTelegramId BigInt?   @map("consumed_telegram_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
 
   @@index([email, createdAt])
   @@index([expiresAt, consumedAt])

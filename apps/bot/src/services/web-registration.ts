@@ -7,6 +7,7 @@ import {
   type WebRegistrationLink,
   type WebRegistrationPurpose,
 } from "@gennety/db";
+import { saveHomeLocationForUser, type HomeLocationInput } from "../public/home-location.js";
 
 export const WEB_REGISTRATION_START_PREFIX = "web_";
 export const AUTH_REGISTRATION_START_PREFIX = "auth_";
@@ -24,13 +25,33 @@ function extractDomain(email: string): string {
   return email.slice(at + 1).toLowerCase();
 }
 
-export interface CreateWebRegistrationLinkInput {
-  email: string;
+export type WebRegistrationTrack = "student" | "general";
+
+/**
+ * The website owns the first slice of onboarding: language, consent, and the
+ * sign-up fork. What it may verify depends on the track.
+ *
+ * - `student` — the university email is OTP-verified on the site, and the
+ *   dating city is picked there too, so Telegram resumes at the theme picker.
+ * - `general` — the site collects nothing but language + consent. The phone is
+ *   **not** verified on the web on purpose: a number is only trusted when it
+ *   arrives as Telegram's own `message.contact`, so the handoff carries the
+ *   *choice* of rail and the Mini App runs the real gate.
+ */
+export type CreateWebRegistrationLinkInput = {
   language: Language;
   purpose: WebRegistrationPurpose;
   termsAccepted: true;
   researchOptIn: boolean;
-}
+} & (
+  | {
+      track: "student";
+      email: string;
+      /** Dating city chosen on the website. */
+      city: HomeLocationInput;
+    }
+  | { track: "general"; email?: undefined; city?: undefined }
+);
 
 export interface CreatedWebRegistrationLink {
   token: string;
@@ -41,30 +62,46 @@ export interface CreatedWebRegistrationLink {
 export async function createWebRegistrationLink(
   input: CreateWebRegistrationLinkInput,
 ): Promise<CreatedWebRegistrationLink> {
-  const email = input.email.trim().toLowerCase();
+  const email = input.track === "student" ? input.email.trim().toLowerCase() : null;
+  const city = input.track === "student" ? input.city : null;
   const token = randomBytes(TOKEN_BYTES).toString("base64url");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + TOKEN_TTL_MS);
 
-  await prisma.$transaction([
-    prisma.webRegistrationLink.updateMany({
-      where: { email, consumedAt: null },
-      data: { consumedAt: now },
-    }),
-    prisma.webRegistrationLink.create({
-      data: {
-        tokenHash: hashToken(token),
-        email,
-        universityDomain: extractDomain(email),
-        language: input.language,
-        purpose: input.purpose,
-        termsAccepted: input.termsAccepted,
-        termsAcceptedAt: now,
-        researchOptIn: input.researchOptIn,
-        expiresAt,
-      },
-    }),
-  ]);
+  const create = prisma.webRegistrationLink.create({
+    data: {
+      tokenHash: hashToken(token),
+      registrationTrack: input.track,
+      email,
+      universityDomain: email ? extractDomain(email) : null,
+      language: input.language,
+      purpose: input.purpose,
+      termsAccepted: input.termsAccepted,
+      termsAcceptedAt: now,
+      researchOptIn: input.researchOptIn,
+      homeCity: city?.homeCity ?? null,
+      homeCountryCode: city?.homeCountryCode ?? null,
+      homeCityKey: city?.homeCityKey ?? null,
+      homePlaceId: city?.homePlaceId ?? null,
+      latitude: city?.latitude ?? null,
+      longitude: city?.longitude ?? null,
+      expiresAt,
+    },
+  });
+
+  // Superseding an earlier unconsumed link is only meaningful for the student
+  // track: it is keyed by email, and a general-track link has none.
+  if (email) {
+    await prisma.$transaction([
+      prisma.webRegistrationLink.updateMany({
+        where: { email, consumedAt: null },
+        data: { consumedAt: now },
+      }),
+      create,
+    ]);
+  } else {
+    await create;
+  }
 
   return {
     token,
@@ -74,7 +111,17 @@ export async function createWebRegistrationLink(
 }
 
 export type ConsumeWebRegistrationResult =
-  | { kind: "linked"; user: User; purpose: WebRegistrationPurpose }
+  | {
+      kind: "linked";
+      user: User;
+      purpose: WebRegistrationPurpose;
+      /**
+       * The track the link was minted for. Callers MUST branch on this rather
+       * than assume a web handoff means a verified university email — only the
+       * student track carries one (and only it earns the student bonus).
+       */
+      track: WebRegistrationTrack;
+    }
   | { kind: "invalid_token" }
   | { kind: "not_found" }
   | { kind: "expired" }
@@ -94,26 +141,64 @@ function stepAfterWebLink(
   return currentStep === "completed" ? "completed" : "conversational";
 }
 
+/** A link carries a verified email only on the student track. */
+export function trackOf(link: WebRegistrationLink): WebRegistrationTrack {
+  // Legacy links (minted before the fork) always carried a verified university
+  // email, so an absent track reads as `student`.
+  return link.registrationTrack === "general" ? "general" : "student";
+}
+
 function webPatchFor(
   link: WebRegistrationLink,
   existing?: Pick<User, "onboardingStep" | "referralSource"> | null,
 ) {
-  return {
-    email: link.email,
-    universityDomain: link.universityDomain,
+  const track = trackOf(link);
+  const shared = {
     language: link.language,
     hasConsented: true,
     consentedAt: link.termsAcceptedAt,
     termsAccepted: true,
     termsAcceptedAt: link.termsAcceptedAt,
     researchOptIn: link.researchOptIn,
+    registrationTrack: track,
+    onboardingStep: stepAfterWebLink(existing?.onboardingStep),
+    ...(existing?.referralSource ? {} : { referralSource: `web:${link.purpose}` }),
+  };
+
+  // The general track brings NO contact rail with it. The website never sees the
+  // number, so nothing here may imply a verified phone — `phoneVerifiedAt` stays
+  // null and the Mini App's phone gate (and the server-side `/complete` contact
+  // gate) is what actually verifies it.
+  if (track === "general") return shared;
+
+  return {
+    ...shared,
+    email: link.email,
+    universityDomain: link.universityDomain,
     isEmailVerified: true,
     emailOtp: null,
     emailOtpExpiresAt: null,
-    // Registration v2: a verified university email IS the student track.
-    registrationTrack: "student",
-    onboardingStep: stepAfterWebLink(existing?.onboardingStep),
-    ...(existing?.referralSource ? {} : { referralSource: `web:${link.purpose}` }),
+  };
+}
+
+/** The city the user picked on the website, if this link carries one. */
+function cityOf(link: WebRegistrationLink): HomeLocationInput | null {
+  if (
+    !link.homeCity ||
+    !link.homeCountryCode ||
+    !link.homeCityKey ||
+    link.latitude === null ||
+    link.longitude === null
+  ) {
+    return null;
+  }
+  return {
+    homeCity: link.homeCity,
+    homeCountryCode: link.homeCountryCode,
+    homeCityKey: link.homeCityKey,
+    homePlaceId: link.homePlaceId,
+    latitude: link.latitude,
+    longitude: link.longitude,
   };
 }
 
@@ -124,6 +209,39 @@ export async function consumeWebRegistrationLink(
   const cleanToken = token.trim();
   if (!TOKEN_RE.test(cleanToken)) return { kind: "invalid_token" };
 
+  const result = await linkTelegramToWebRegistration(cleanToken, telegramId);
+
+  // The city the user picked on the website is written after the link is
+  // committed: it lives on `Profile`, and failing to persist it must not undo
+  // the account link. The cost of a failure here is one extra screen — the Mini
+  // App simply shows the city gate, exactly as it does for the general track.
+  if (result.kind === "linked" && result.city) {
+    try {
+      await saveHomeLocationForUser(result.user.id, result.city);
+    } catch (err) {
+      console.error("[web-registration] city handoff failed, user will pick it in-app:", err);
+    }
+  }
+
+  return result.kind === "linked"
+    ? { kind: "linked", user: result.user, purpose: result.purpose, track: result.track }
+    : result;
+}
+
+type LinkOutcome =
+  | {
+      kind: "linked";
+      user: User;
+      purpose: WebRegistrationPurpose;
+      track: WebRegistrationTrack;
+      city: HomeLocationInput | null;
+    }
+  | Exclude<ConsumeWebRegistrationResult, { kind: "linked" }>;
+
+async function linkTelegramToWebRegistration(
+  cleanToken: string,
+  telegramId: bigint,
+): Promise<LinkOutcome> {
   return prisma.$transaction(async (tx) => {
     const link = await tx.webRegistrationLink.findUnique({
       where: { tokenHash: hashToken(cleanToken) },
@@ -133,30 +251,37 @@ export async function consumeWebRegistrationLink(
     if (link.consumedAt) return { kind: "used" as const };
     if (link.expiresAt <= new Date()) return { kind: "expired" as const };
 
+    const linkEmail = link.email;
+
+    // A general-track link carries no email, so every email-collision check
+    // below is inapplicable — there is nothing to collide with. Its identity is
+    // the Telegram account alone.
     const [telegramUser, emailUser] = await Promise.all([
       tx.user.findUnique({ where: { telegramId } }),
-      tx.user.findUnique({ where: { email: link.email } }),
+      linkEmail ? tx.user.findUnique({ where: { email: linkEmail } }) : Promise.resolve(null),
     ]);
 
-    if (telegramUser?.email && telegramUser.email !== link.email) {
-      return {
-        kind: "telegram_has_other_email" as const,
-        email: telegramUser.email,
-      };
-    }
+    if (linkEmail) {
+      if (telegramUser?.email && telegramUser.email !== linkEmail) {
+        return {
+          kind: "telegram_has_other_email" as const,
+          email: telegramUser.email,
+        };
+      }
 
-    if (emailUser && telegramUser && emailUser.id !== telegramUser.id) {
-      return {
-        kind: "email_linked_to_other_telegram" as const,
-        email: link.email,
-      };
-    }
+      if (emailUser && telegramUser && emailUser.id !== telegramUser.id) {
+        return {
+          kind: "email_linked_to_other_telegram" as const,
+          email: linkEmail,
+        };
+      }
 
-    if (emailUser && emailUser.telegramId > 0n && emailUser.telegramId !== telegramId) {
-      return {
-        kind: "email_linked_to_other_telegram" as const,
-        email: link.email,
-      };
+      if (emailUser && emailUser.telegramId > 0n && emailUser.telegramId !== telegramId) {
+        return {
+          kind: "email_linked_to_other_telegram" as const,
+          email: linkEmail,
+        };
+      }
     }
 
     const consumed = await tx.webRegistrationLink.updateMany({
@@ -206,6 +331,12 @@ export async function consumeWebRegistrationLink(
       });
     }
 
-    return { kind: "linked" as const, user, purpose: link.purpose };
+    return {
+      kind: "linked" as const,
+      user,
+      purpose: link.purpose,
+      track: trackOf(link),
+      city: cityOf(link),
+    };
   });
 }
