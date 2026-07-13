@@ -1,6 +1,6 @@
 # Gennety Dating Deploy
 
-Last verified: 2026-05-04.
+Last verified: 2026-07-13 (full server + Mini App deploy, schema push).
 
 This file is the production runbook for the DigitalOcean deployment. It
 contains the real hostnames, paths, service names, and deploy commands. Raw
@@ -275,10 +275,14 @@ pnpm build
 ```
 
 If `packages/db/prisma/schema.prisma` changed, update the production database
-schema before restarting the bot:
+schema before restarting the bot. The Prisma CLI runs inside `packages/db` and
+does **not** read the root `/opt/gennety/.env`, so `DATABASE_URL` must be passed
+in explicitly — without it `db:push` fails with `P1012: Environment variable not
+found: DATABASE_URL`:
 
 ```sh
 cp .env ".env.bak.$(date +%Y%m%d-%H%M%S)"
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
 pnpm --filter @gennety/db db:push
 ```
 
@@ -286,6 +290,28 @@ There is no Prisma migrations directory in this repo at the moment, so the
 current workflow is Prisma `db:push`. Before risky schema changes, take a
 Supabase backup from the Supabase dashboard. The droplet currently does not
 have `pg_dump` installed.
+
+Prisma refuses to add a `@unique` column without `--accept-data-loss`, even when
+the column is brand new (it cannot know the column will be all-`NULL`). Before
+reaching for that flag, confirm the change is genuinely additive — the deploy is
+only safe if **both** hold:
+
+```sh
+# 1. No column/model removals in the schema diff (empty output = additive only):
+diff -u <(ssh root@167.172.178.229 'cat /opt/gennety/packages/db/prisma/schema.prisma') \
+        packages/db/prisma/schema.prisma | grep '^-' | grep -v '^---' | grep -vE '^-\s*(///)?\s*$'
+# 2. The new unique columns do not yet exist in the *public* schema (Supabase's
+#    auth.users has its own `phone` column — always filter on table_schema).
+```
+
+Then run `pnpm --filter @gennety/db db:push --accept-data-loss`.
+
+**Schema drift is a real failure mode here.** A production DB missing a column
+the code reads throws `P2022` as an *unhandled rejection*, which kills the
+process — an unnoticed drift shows up as a PM2 restart loop, not as a clean
+error. If `pm2 status` shows a climbing restart count, check
+`grep P2022 /root/.pm2/logs/gennety-bot-error.log` before anything else; a
+`db:push` is the fix.
 
 Restart after the code and any required schema update are both in place:
 
