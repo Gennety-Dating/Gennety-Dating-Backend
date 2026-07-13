@@ -380,6 +380,28 @@ pm2 logs gennety-bot --lines 80 --nostream
 curl -s https://dating-api.gennety.com/v1/ping
 ```
 
+### Production flag state (2026-07-13)
+
+Every product feature is now **on** in `/opt/gennety/.env`: tickets + Telegram
+Stars, Registration v2's phone track, the fact collector (which is what actually
+feeds the matching engine's vibe axes), Elo vision seed, pre-date coordination,
+venue change v2, the date card, the match card, and Rekognition face-match.
+
+Two flags are deliberately **off**, and turning them on before the credential
+below is fixed would break registration outright:
+`ENABLE_PERSONA_VERIFICATION` and `MANDATORY_VERIFICATION_ENABLED`.
+
+**Three provider credentials are currently broken/absent** (verified by probing
+each provider from the droplet — a flag is worthless without its provider):
+
+| Credential | State | What stays broken until it is fixed |
+|---|---|---|
+| `PERSONA_API_KEY` | **HTTP 403** | All identity verification. Liveness cannot run, so no user is ever `verified`, no Elo is seeded (the whole `V_league` matching gate stays inert at the default 500), and mandatory verification cannot be switched on. |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Invalid Compact JWS** (not a valid key) | Supabase *Storage*: verified selfies, mobile profile photos, Aether chat images. The database itself is fine — it authenticates via `DATABASE_URL`, not this key. |
+| `PLACES_API_KEY` | **empty** | Google Places: the venue fallback when no curated venue is in range, the Location Mini App autocomplete, the venue-change catalog beyond curated rows, and the date card's venue photo. The curated venue base still covers Kyiv/Kharkiv/Odesa, so scheduling degrades rather than dies. |
+
+Re-probe any of them from the droplet before trusting a flag flip.
+
 Required/high-impact env keys:
 
 - Telegram: `BOT_TOKEN`, `BOT_USERNAME`, `WEBAPP_URL`,
@@ -449,8 +471,10 @@ Required/high-impact env keys:
   (default 0.85), `FACE_MATCH_THRESHOLD_REVIEW` (default 0.75),
   `FACE_MATCH_MIN_VERIFIED_PHOTOS` (default 1), `AWS_REGION`,
   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `ELO_VISION_SEED_ENABLED`
-- Profile media validation: `PROFILE_MEDIA_VALIDATION_ENABLED` (default
-  `false`), `PROFILE_MEDIA_VALIDATION_FAIL_OPEN` (must remain `false` in
+- Profile media validation: `PROFILE_MEDIA_VALIDATION_ENABLED` (default **`true`**
+  — `config.ts` reads `!== "false"`, so strict upload-time validation is on
+  unless it is explicitly disabled; this doc previously claimed `false`),
+  `PROFILE_MEDIA_VALIDATION_FAIL_OPEN` (must remain `false` in
   production), `PROFILE_VIDEO_MAX_ANALYSIS_FRAMES` (default `24`), and
   `PROFILE_VIDEO_VALIDATION_TIMEOUT_MS` (default `60000`). Requires local
   `ffmpeg` + `ffprobe`, OpenAI, and an IAM policy containing exactly
