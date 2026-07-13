@@ -40,16 +40,26 @@ export function CheckMark(): ReactElement {
   );
 }
 
-/** Top hat — the gentleman badge on the payer's avatar. */
-export function HatMark(): ReactElement {
+/**
+ * The brand butterfly — the mark stamped inside the ticket itself.
+ *
+ * Same path as `apps/bot/src/assets/brand/butterfly-logo.svg` (the one the date
+ * and match cards carry), but painted with `currentColor` instead of the brand
+ * gradient, so the ticket can render it flat white and it reads as punched out
+ * of the ticket rather than pasted on top of it.
+ */
+export function ButterflyMark(): ReactElement {
   return (
-    <svg viewBox={BOX} aria-hidden="true" focusable="false" shapeRendering="geometricPrecision">
+    <svg
+      viewBox="0 0 100 100"
+      aria-hidden="true"
+      focusable="false"
+      shapeRendering="geometricPrecision"
+    >
       <path
-        d="M7.6 14.4V5.2c0-.9.7-1.6 1.6-1.6h5.6c.9 0 1.6.7 1.6 1.6v9.2"
+        d="M 50 35 C 20 0, -10 30, 15 55 C -5 75, 25 100, 48 65 L 52 65 C 75 100, 105 75, 85 55 C 110 30, 80 0, 50 35 Z"
         fill="currentColor"
       />
-      <path d="M3.2 15.2h17.6v2.6H3.2z" fill="currentColor" />
-      <path d="M6.4 12.6h11.2v2.6H6.4z" fill="currentColor" opacity="0.55" />
     </svg>
   );
 }

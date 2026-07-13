@@ -1,8 +1,7 @@
 import type { ReactElement } from "react";
 import { fill, type TicketStrings } from "./i18n.js";
 import { Avatar } from "./Avatar.js";
-import { HeartMark, CheckMark, HatMark } from "./marks.js";
-import logoUrl from "./gennety-logo.png";
+import { HeartMark, CheckMark, ButterflyMark } from "./marks.js";
 
 /**
  * The "your match already paid your ticket ❤️" surprise screen.
@@ -57,11 +56,12 @@ export function PartnerPaidCard({
 
       <div className="pp-hero">
         <div className="pp-payer">
+          {/* No badge: the payer's face carries the gesture on its own. A top-hat
+              "gentleman" mark on top of it read as a costume prop, not as him. */}
           <Avatar
             src={partnerPhotoUrl}
             name={partnerName}
             size={124}
-            badge={<HatMark />}
             className="tkt-avatar-hero pp-payer-avatar"
           />
         </div>
@@ -72,7 +72,9 @@ export function PartnerPaidCard({
           <div className="pp-ticket">
             <div className="pp-shine" aria-hidden="true" />
             <div className="pp-ticket-main">
-              <img className="pp-logo" src={logoUrl} alt="" aria-hidden="true" />
+              <span className="pp-logo" aria-hidden="true">
+                <ButterflyMark />
+              </span>
             </div>
             <div className="pp-ticket-stub" aria-hidden="true">
               <span className="pp-stub-dots" />

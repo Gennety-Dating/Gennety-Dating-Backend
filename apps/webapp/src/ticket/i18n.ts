@@ -36,7 +36,15 @@ export interface TicketStrings {
   processing: string;
   successTitle: string;
   successSub: string;
-  /** Success screen when HE covered HER ticket — the goodwill gesture (§3.5b). */
+  /**
+   * Success screen when HE covered HER ticket — the goodwill gesture (§3.5b).
+   *
+   * TRANSLATOR NOTE: `coveredHerTitle` is a mate clapping you on the shoulder —
+   * "well played, man" / "respect". It is NOT a compliment about his looks: the
+   * Russian «Красавчик!» here means "nice one", never "handsome guy". Keep the
+   * register warm and peer-level — never congratulatory-from-above, never
+   * sentimental, and no emoji.
+   */
   coveredHerTitle: string;
   coveredHerSub: string;
   goToScheduling: string;
@@ -87,7 +95,7 @@ const en: TicketStrings = {
   processing: "Processing…",
   successTitle: "You're in 🎟️",
   successSub: "Both tickets are secured. Time to pick your moment.",
-  coveredHerTitle: "Classy move 💛",
+  coveredHerTitle: "Nice one!",
   coveredHerSub: "You covered {name}'s ticket — we've let her know. Now just pick your moment.",
   goToScheduling: "Go to date planning",
   waitingTitle: "Ticket secured 🎟️",
@@ -136,7 +144,7 @@ const ru: TicketStrings = {
   processing: "Обработка…",
   successTitle: "Готово 🎟️",
   successSub: "Оба билета у вас. Время выбрать момент.",
-  coveredHerTitle: "Красиво 💛",
+  coveredHerTitle: "Красавчик!",
   coveredHerSub: "Ты оплатил билет за {name} — мы дали ей знать. Осталось выбрать момент.",
   goToScheduling: "Перейти к планированию даты",
   waitingTitle: "Билет закреплён 🎟️",
@@ -185,7 +193,7 @@ const uk: TicketStrings = {
   processing: "Обробка…",
   successTitle: "Готово 🎟️",
   successSub: "Обидва квитки у вас. Час обрати момент.",
-  coveredHerTitle: "Красиво 💛",
+  coveredHerTitle: "Красунчик!",
   coveredHerSub: "Ти оплатив квиток за {name} — ми дали їй знати. Лишилось обрати момент.",
   goToScheduling: "Перейти до планування побачення",
   waitingTitle: "Квиток закріплено 🎟️",
@@ -234,7 +242,7 @@ const de: TicketStrings = {
   processing: "Verarbeitung...",
   successTitle: "Du bist dabei 🎟️",
   successSub: "Beide Tickets sind gesichert. Jetzt wählt ihr euren Moment.",
-  coveredHerTitle: "Starke Geste 💛",
+  coveredHerTitle: "Respekt!",
   coveredHerSub: "Du hast {name}s Ticket übernommen — sie weiß Bescheid. Jetzt nur noch euren Moment wählen.",
   goToScheduling: "Date planen",
   waitingTitle: "Ticket gesichert 🎟️",
@@ -283,7 +291,7 @@ const pl: TicketStrings = {
   processing: "Przetwarzanie...",
   successTitle: "Gotowe 🎟️",
   successSub: "Oba bilety są zabezpieczone. Czas wybrać termin.",
-  coveredHerTitle: "Klasa 💛",
+  coveredHerTitle: "Szacun!",
   coveredHerSub: "Opłaciłeś bilet za {name} — daliśmy jej znać. Teraz wybierz termin.",
   goToScheduling: "Przejdź do planowania randki",
   waitingTitle: "Bilet zabezpieczony 🎟️",
