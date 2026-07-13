@@ -297,17 +297,28 @@ exists. `code` is bcrypt-hashed; raw is only delivered via the email provider. T
 
 ### `web_registration_links`
 
-Browser → Telegram pre-registration handoff. A user can verify their corporate
-email on the website *before* opening the bot; the verified state is carried
-into Telegram via a one-time deep link. Columns: `tokenHash` (unique SHA-256 of
-the raw token — only the hash is stored, the raw token rides the
-`/start auth_<token>` / legacy `web_<token>` deep link), `email`,
-`universityDomain`, `language`, `purpose` (`WebRegistrationPurpose` ∈
-`join`/`login`), `termsAccepted`/`termsAcceptedAt`, `researchOptIn`,
-`expiresAt`, `consumedAt`, `consumedTelegramId`. Written by
-`services/web-registration.ts` via the `/v1/web-registration/*` API; consuming
-the link in onboarding lets the Mini App skip the Email/OTP screens
-(`isEmailVerified` is pre-set). See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §1.1.
+Browser → Telegram pre-registration handoff. The website resolves the first
+slice of onboarding (language, consent, the Registration v2 fork) and carries
+the result into Telegram through a one-time deep link.
+
+Columns: `tokenHash` (unique SHA-256 of the raw token — only the hash is stored,
+the raw token rides the `/start auth_<token>` / legacy `web_<token>` deep link),
+**`registrationTrack`** (`student`/`general`; null on pre-fork links, which all
+carried a verified email and so read as `student`), `email` +
+`universityDomain` (**nullable** — a general-track link has neither),
+`language`, `purpose` (`WebRegistrationPurpose` ∈ `join`/`login`),
+`termsAccepted`/`termsAcceptedAt`, `researchOptIn`, the **city snapshot**
+(`homeCity`/`homeCountryCode`/`homeCityKey`/`homePlaceId`/`latitude`/`longitude`
+— student track only; mirrors the `Profile` columns so the city gate is already
+satisfied), `expiresAt`, `consumedAt`, `consumedTelegramId`.
+
+Written by `services/web-registration.ts` via the `/v1/web-registration/*` API.
+Consuming the link pre-sets exactly what the site actually verified — the
+student track's `isEmailVerified` + city, the general track's rail *choice* and
+nothing more — and the Mini App's state-driven phase machine skips whatever is
+already resolved. **The phone is never verified on the web** (only Telegram's
+`message.contact` is trusted), so a link can never satisfy the contact gate it
+did not earn. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §1.1.
 
 ### `user_sessions`
 
@@ -452,7 +463,9 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | POST | `/v1/auth/otp/verify` | Verify OTP → mint access + refresh JWT |
 | POST | `/v1/auth/refresh` | Rotate refresh token |
 | POST | `/v1/web-registration/otp/request` | Website pre-registration: send corp-email OTP before the user opens Telegram (rate-limited; no auth — pre-account) |
-| POST | `/v1/web-registration/complete` | Website pre-registration: verify OTP + ToS, mint a one-time `web_registration_links` token, return the `/start auth_<token>` deep link that carries verified state into the bot (rate-limited) |
+| POST | `/v1/web-registration/complete` | Website pre-registration: mint a one-time `web_registration_links` token and return the `/start auth_<token>` deep link. Track-aware — `student` verifies the OTP and requires the city payload; `general` takes only language + consent (no email, and **no phone** — Telegram verifies that itself). Rate-limited, no auth (pre-account) |
+| GET | `/v1/web-registration/city/search` | City lookup for the website's student-track city gate. Unauthenticated (the visitor has no account yet) and IP-rate-limited; proxies Google Places so `PLACES_API_KEY` stays server-side, and degrades to the built-in city list without it. Shares `public/city-search.ts` with the Mini App's city gate |
+| POST | `/v1/web-registration/city/resolve` | Browser geolocation → city, so the site offers the same one-tap as the Mini App |
 | GET / PATCH / DELETE | `/v1/me` | Read / patch / delete current user |
 | POST | `/v1/me/home-location` | Persist canonical dating city (`homeCityKey`) + coordinates for match eligibility |
 | POST | `/v1/me/location` | Persist raw home-base lat/lng for Meet-Halfway; does not by itself unlock matching |
