@@ -98,24 +98,37 @@ const PIVOT_LINE_HOLD_MS = 1440; // Pivot (screen 3): unchanged between-line hol
 const INTRO_LINE_FADE_MS = 200; // fade-out before the next line types in
 const INTRO_FINAL_HOLD_MS = 2040; // hold on the closing hook question (+1s read buffer)
 const INTRO_SKIP_HOLD_MS = 600; // hold on the final line when the user taps to skip
-// Per-part pre-type pauses, aligned 1:1 with each language's `introLines` shape.
-// These create the deliberate mid-sentence beats the copy is written around.
-const INTRO_PART_PAUSES_MS: number[][] = [
-  [0],
-  [0],
-  [0],
-  [0],
-  [0, 800, 1200],
-  [0],
-  [0, 1200],
-];
-// Pivot scene ("we built Gennety") — same typewriter, a short beat before the brand name.
+// Per-part pre-type pauses, indexed [lineIndex][partIndex]. Single-line
+// typewriter screens (waste / burnout / cost-2026 / matchmaker) only need a
+// no-op leading pause.
+const SINGLE_LINE_PAUSES: number[][] = [[0]];
+// Stat-hook screen (after the Stats drum): a deliberate ~1.5s beat after
+// "Статистически," before the "only 3% ..." payload lands.
+const STAT_HOOK_PAUSES: number[][] = [[0, 1500]];
+// Pivot scene ("we built Gennety") — a short beat before the brand name.
 const PIVOT_PART_PAUSES_MS: number[][] = [[0], [0, 160]];
-// Cost scene (after the Stats metrics) — two short, conversational problem beats.
-const COST_PART_PAUSES_MS: number[][] = [[0], [0]];
-// Matchmaker scene (between Pivot and How-it-works) — two beats about the
-// always-on personal AI matchmaker.
-const MATCHMAKER_PART_PAUSES_MS: number[][] = [[0], [0]];
+const MATCHMAKER_PART_PAUSES_MS: number[][] = SINGLE_LINE_PAUSES;
+
+// Reveal timings for the two typewriter screens that raise an image once the
+// line finishes typing: scene 0 raises the three dating-app icons, scene 6
+// (Pivot) raises the Gennety star. `delay` waits after the text lands before
+// the image rises; `view` holds it on screen before the scene auto-advances.
+const ICON_REVEAL_DELAY_MS = 1000;
+const ICON_REVEAL_VIEW_MS = 1700;
+const LOGO_RISE_DELAY_MS = 150;
+const LOGO_RISE_VIEW_MS = 1750;
+
+// Competitor app icons: raised on scene 0 and shown small under the stats
+// footnote. PNGs live in `apps/webapp/public/app-icons/`; a missing file hides
+// only that slot (see `AppIconRow`). Operator-provided, not bundled.
+const APP_ICONS: Array<{ key: string; src: string; label: string }> = [
+  { key: "bumble", src: "/app-icons/bumble.png", label: "Bumble" },
+  { key: "tinder", src: "/app-icons/tinder.png", label: "Tinder" },
+  { key: "badoo", src: "/app-icons/badoo.png", label: "Badoo" },
+];
+// Gennety app icon (the purple star) raised on the Pivot screen. Lives in
+// `apps/webapp/public/brand/`; a missing file just leaves the text.
+const GENNETY_STAR_SRC = "/brand/gennety-star.png";
 const PRIVACY_POLICY_URL = "https://gennety.com/privacy";
 const TERMS_OF_SERVICE_URL = "https://gennety.com/terms";
 
@@ -350,26 +363,69 @@ function App(): ReactElement {
       {chrome}
       {bootError ? <div className="gate-meta" style={{ position: "fixed", top: 12, left: 20, right: 20, zIndex: 60 }}>{bootError}</div> : null}
       <Scene active={phase.kind === "visual" && phase.index === 0}>
-        <IntroScene active={phase.kind === "visual" && phase.index === 0} onNext={nextVisualSilently} />
+        <TypewriterScene
+          active={phase.kind === "visual" && phase.index === 0}
+          lines={strings.wasteLines}
+          pauses={SINGLE_LINE_PAUSES}
+          onNext={nextVisualSilently}
+          reveal={<AppIconRow variant="reveal" />}
+          revealDelayMs={ICON_REVEAL_DELAY_MS}
+          revealViewMs={ICON_REVEAL_VIEW_MS}
+        />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 1}>
-        <StatsCycleScene active={phase.kind === "visual" && phase.index === 1} onNext={nextVisualWithHaptic} />
+        <TypewriterScene
+          active={phase.kind === "visual" && phase.index === 1}
+          lines={strings.burnoutLines}
+          pauses={SINGLE_LINE_PAUSES}
+          onNext={nextVisualSilently}
+        />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 2}>
-        <CostScene active={phase.kind === "visual" && phase.index === 2} onNext={nextVisualSilently} />
+        <TypewriterScene
+          active={phase.kind === "visual" && phase.index === 2}
+          lines={strings.cost2026Lines}
+          pauses={SINGLE_LINE_PAUSES}
+          onNext={nextVisualSilently}
+        />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 3}>
-        <ProfileCycleScene active={phase.kind === "visual" && phase.index === 3} onNext={nextVisualWithHaptic} />
+        <StatsCycleScene active={phase.kind === "visual" && phase.index === 3} onNext={nextVisualWithHaptic} />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 4}>
-        <PivotScene active={phase.kind === "visual" && phase.index === 4} onNext={nextVisualSilently} />
+        <TypewriterScene
+          active={phase.kind === "visual" && phase.index === 4}
+          lines={strings.statHookLines}
+          pauses={STAT_HOOK_PAUSES}
+          onNext={nextVisualSilently}
+        />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 5}>
-        <MatchmakerScene active={phase.kind === "visual" && phase.index === 5} onNext={nextVisualSilently} />
+        <ProfileCycleScene active={phase.kind === "visual" && phase.index === 5} onNext={nextVisualWithHaptic} />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 6}>
-        <HowItWorksScene
+        <TypewriterScene
           active={phase.kind === "visual" && phase.index === 6}
+          lines={strings.pivotLines}
+          pauses={PIVOT_PART_PAUSES_MS}
+          lineHoldMs={PIVOT_LINE_HOLD_MS}
+          onNext={nextVisualSilently}
+          reveal={<GennetyRise />}
+          revealDelayMs={LOGO_RISE_DELAY_MS}
+          revealViewMs={LOGO_RISE_VIEW_MS}
+        />
+      </Scene>
+      <Scene active={phase.kind === "visual" && phase.index === 7}>
+        <TypewriterScene
+          active={phase.kind === "visual" && phase.index === 7}
+          lines={strings.matchmakerLines}
+          pauses={MATCHMAKER_PART_PAUSES_MS}
+          onNext={nextVisualSilently}
+        />
+      </Scene>
+      <Scene active={phase.kind === "visual" && phase.index === 8}>
+        <HowItWorksScene
+          active={phase.kind === "visual" && phase.index === 8}
           onMore={() => setPhase({ kind: "detail", index: 0 })}
         />
       </Scene>
@@ -576,72 +632,83 @@ function useIntroStream(
   return { display, lineIndex, fading, done, skip };
 }
 
-function IntroScene(props: { active: boolean; onNext: () => void }): ReactElement {
-  const s = useOnboardingStrings();
-  const { display, lineIndex, fading, done, skip } = useIntroStream(
-    props.active,
-    s.introLines,
-    INTRO_PART_PAUSES_MS,
-  );
-
-  useEffect(() => {
-    if (done) props.onNext();
-  }, [done, props.onNext]);
-
+// Row of competitor app icons. `reveal` is the large row that rises on scene 0;
+// `inline` is the small row under the stats footnote. A PNG that fails to load
+// hides only its own slot, so the row degrades cleanly until the operator drops
+// the files into `public/app-icons/`.
+function AppIconRow(props: { variant: "reveal" | "inline" }): ReactElement {
   return (
-    <main className="hook-main intro-main" onClick={skip}>
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-        <div className="hook-glow w-64 h-64 bg-primary rounded-full blur-[100px]" />
-      </div>
-      <p key={lineIndex} className={`hook-title intro-line ${fading ? "is-fading" : ""}`}>
-        <span className="intro-line-text">
-          {display}
-          <span className="intro-caret" aria-hidden="true" />
-        </span>
-      </p>
-    </main>
+    <div className={`app-icon-row app-icon-row--${props.variant}`}>
+      {APP_ICONS.map((icon) => (
+        <img
+          key={icon.key}
+          className="app-icon"
+          src={icon.src}
+          alt={icon.label}
+          onError={(e) => {
+            e.currentTarget.style.visibility = "hidden";
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
-function PivotScene(props: { active: boolean; onNext: () => void }): ReactElement {
-  const s = useOnboardingStrings();
-  const { display, lineIndex, fading, done, skip } = useIntroStream(
-    props.active,
-    s.pivotLines,
-    PIVOT_PART_PAUSES_MS,
-    PIVOT_LINE_HOLD_MS,
-  );
-
-  useEffect(() => {
-    if (done) props.onNext();
-  }, [done, props.onNext]);
-
+// The Gennety app icon (purple star) that rises on the Pivot screen.
+function GennetyRise(): ReactElement {
   return (
-    <main className="hook-main intro-main" onClick={skip}>
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-        <div className="hook-glow w-64 h-64 bg-primary rounded-full blur-[100px]" />
-      </div>
-      <p key={lineIndex} className={`hook-title intro-line ${fading ? "is-fading" : ""}`}>
-        <span className="intro-line-text">
-          {display}
-          <span className="intro-caret" aria-hidden="true" />
-        </span>
-      </p>
-    </main>
+    <img
+      className="gennety-rise-icon"
+      src={GENNETY_STAR_SRC}
+      alt="Gennety"
+      onError={(e) => {
+        e.currentTarget.style.display = "none";
+      }}
+    />
   );
 }
 
-function CostScene(props: { active: boolean; onNext: () => void }): ReactElement {
-  const s = useOnboardingStrings();
+// One typewriter screen. Types `lines` out with the "live human" cadence, then
+// auto-advances. If `reveal` is set, once the line lands the scene waits
+// `revealDelayMs`, rises the image in, holds it `revealViewMs`, then advances
+// (scene 0's app icons and the Pivot's Gennety star both use this).
+function TypewriterScene(props: {
+  active: boolean;
+  lines: string[][];
+  pauses: number[][];
+  lineHoldMs?: number;
+  onNext: () => void;
+  reveal?: ReactNode;
+  revealDelayMs?: number;
+  revealViewMs?: number;
+}): ReactElement {
   const { display, lineIndex, fading, done, skip } = useIntroStream(
     props.active,
-    s.costLines,
-    COST_PART_PAUSES_MS,
+    props.lines,
+    props.pauses,
+    props.lineHoldMs,
   );
+  const [revealShown, setRevealShown] = useState(false);
+
+  const { active, onNext, reveal, revealDelayMs = 0, revealViewMs = 0 } = props;
+
+  // Replay the reveal on every re-entry (e.g. the user pages back to this scene).
+  useEffect(() => {
+    if (!active) setRevealShown(false);
+  }, [active]);
 
   useEffect(() => {
-    if (done) props.onNext();
-  }, [done, props.onNext]);
+    if (!done) return;
+    if (!reveal) {
+      onNext();
+      return;
+    }
+    const timers = [
+      window.setTimeout(() => setRevealShown(true), revealDelayMs),
+      window.setTimeout(() => onNext(), revealDelayMs + revealViewMs),
+    ];
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [done, reveal, revealDelayMs, revealViewMs, onNext]);
 
   return (
     <main className="hook-main intro-main" onClick={skip}>
@@ -654,33 +721,11 @@ function CostScene(props: { active: boolean; onNext: () => void }): ReactElement
           <span className="intro-caret" aria-hidden="true" />
         </span>
       </p>
-    </main>
-  );
-}
-
-function MatchmakerScene(props: { active: boolean; onNext: () => void }): ReactElement {
-  const s = useOnboardingStrings();
-  const { display, lineIndex, fading, done, skip } = useIntroStream(
-    props.active,
-    s.matchmakerLines,
-    MATCHMAKER_PART_PAUSES_MS,
-  );
-
-  useEffect(() => {
-    if (done) props.onNext();
-  }, [done, props.onNext]);
-
-  return (
-    <main className="hook-main intro-main" onClick={skip}>
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-        <div className="hook-glow w-64 h-64 bg-primary rounded-full blur-[100px]" />
-      </div>
-      <p key={lineIndex} className={`hook-title intro-line ${fading ? "is-fading" : ""}`}>
-        <span className="intro-line-text">
-          {display}
-          <span className="intro-caret" aria-hidden="true" />
-        </span>
-      </p>
+      {reveal ? (
+        <div className={`intro-reveal ${revealShown ? "is-shown" : ""}`} aria-hidden="true">
+          {reveal}
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -996,7 +1041,10 @@ function StatsCycleScene(props: {
             </div>
           </div>
         </div>
-        <p className="stat-footnote">{s.statFootnote}</p>
+        <div className="stat-footnote-block">
+          <p className="stat-footnote">{s.statFootnote}</p>
+          <AppIconRow variant="inline" />
+        </div>
       </main>
       <div className={`stats-dots-dock ${cycle.canContinue ? "with-cta" : ""}`}>
         <CycleDots total={statCopy.length} active={cycle.index} complete={cycle.canContinue} />

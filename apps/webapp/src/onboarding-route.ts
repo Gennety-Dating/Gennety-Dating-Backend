@@ -2,8 +2,14 @@ import type { TelegramOnboardingState } from "./api.js";
 
 type RemoteUser = TelegramOnboardingState["user"];
 
-/** Final visual scene index (Intro=0, Stats=1, Cost=2, Profile=3, Pivot=4, Matchmaker=5, HowItWorks=6). */
-export const VISUAL_LAST_INDEX = 6;
+/**
+ * Final visual scene index. Play order:
+ * 0 Waste (typewriter + app-icon reveal), 1 Burnout (typewriter),
+ * 2 Cost-2026 (typewriter), 3 Stats drum, 4 Stat-hook (typewriter),
+ * 5 Profile swipe simulator, 6 Pivot (typewriter + rising Gennety icon),
+ * 7 Matchmaker (typewriter), 8 HowItWorks.
+ */
+export const VISUAL_LAST_INDEX = 8;
 /**
  * Sentinel persisted once the user has clicked past the last visual scene.
  * On the next launch it means "skip the animation, resume the post-visual

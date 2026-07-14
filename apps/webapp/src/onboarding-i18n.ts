@@ -4,14 +4,17 @@ export interface OnboardingStrings {
   back: string;
   next: string;
   more: string;
-  hookTitle: string;
-  introLines: string[][];
-  costLines: string[][];
-  exhaustionLines: string[];
+  // Intro typewriter scenes, in play order (each is one auto-advancing screen).
+  // Scene indices map to onboarding.tsx's visual dispatch (see onboarding-route).
+  wasteLines: string[][]; // scene 0 — "modern apps eat your time" (+ app-icon reveal)
+  burnoutLines: string[][]; // scene 1 — "we burn out first"
+  cost2026Lines: string[][]; // scene 2 — "what does a relationship cost in 2026?"
+  statHookLines: string[][]; // scene 4 — "statistically, only 3% ..." (after the stats drum)
+  exhaustionLines: string[]; // scene 5 — swipe-simulator cycling lines
   statLabels: [string, string, string];
   statFootnote: string;
-  pivotLines: string[][];
-  matchmakerLines: string[][];
+  pivotLines: string[][]; // scene 6 — "we see these problems / so we built Gennety"
+  matchmakerLines: string[][]; // scene 7 — "you get a personal AI matchmaker"
   howItWorksSteps: Array<{ title: string; body: string }>;
   dateFlowSteps: Array<{ title: string; body: string }>;
   profileName: string;
@@ -93,24 +96,15 @@ const en: OnboardingStrings = {
   back: "Go back",
   next: "Next",
   more: "Learn more",
-  hookTitle: "What does it cost to find a relationship in 2026?",
-  introLines: [
-    ["Statistically, only 3% of people on modern dating apps ever make it to a date"],
-    ["We're all wrapped up in work, study, or ourselves"],
-    ["We don't meet on the street anymore"],
-    ["We've stopped seeing each other in person"],
-    ["Behind millions of avatars it's hard to see the person"],
-    ["We need real, in-person meetings"],
-    ["But,", " what does it cost to find a relationship in 2026?"],
-  ],
-  costLines: [
-    ["Modern dating apps eat up so much time on endless scrolling through profile after profile"],
-    ["We burn out before we ever find “our” person"],
-  ],
+  wasteLines: [["Modern dating apps eat up so much time on endless scrolling through profile after profile"]],
+  burnoutLines: [["We burn out before we ever find our person"]],
+  cost2026Lines: [["What does it cost to find a relationship in 2026?"]],
+  statHookLines: [["Statistically,", " only 3% of people who use dating apps ever make it to a date"]],
   exhaustionLines: [
+    "Endlessly browsing people like products.",
     "It feels more like scrolling a TikTok feed",
-    "Endlessly browsing people like products kills empathy",
-    "You spend weeks on chats that lead nowhere",
+    "where people spend weeks searching",
+    "and chats that lead nowhere",
   ],
   statLabels: ["hours", "swipes", "in in-app purchases"],
   statFootnote: "That's what the average user of modern dating apps spends to find a relationship.",
@@ -255,27 +249,18 @@ const ru: OnboardingStrings = {
   back: "Назад",
   next: "Дальше",
   more: "Подробнее",
-  hookTitle: "Сколько стоит найти отношения в 2026 году?",
-  introLines: [
-    ["Статистически только 3% людей, которые пользуются современными дейтинг-приложениями, доходят до свидания"],
-    ["Мы все зациклены на работе, учёбе или самих себе"],
-    ["Мы больше не знакомимся на улицах"],
-    ["Мы перестали видеться вживую"],
-    ["За миллионами аватаров сложно разглядеть человека"],
-    ["Нужны реальные встречи"],
-    ["Но,", " сколько же стоит найти отношения в 2026 году?"],
-  ],
+  wasteLines: [["Современные приложения для знакомств съедают кучу времени на бесконечный перебор анкет"]],
+  burnoutLines: [["Мы выгораем раньше, чем находим своего человека"]],
+  cost2026Lines: [["Сколько стоит найти отношения в 2026 году?"]],
+  statHookLines: [["Статистически,", " только 3% людей, которые пользуются приложениями для знакомств, доходят до свидания"]],
   exhaustionLines: [
-    "Он больше похож на скроллинг ТикТок-ленты",
-    "Бесконечный перебор людей, как товаров, убивает эмпатию",
-    "Ты тратишь недели на переписки, которые ни к чему не приводят",
+    "Бесконечный перебор людей, как товаров.",
+    "Больше похоже на скроллинг TikTok-ленты",
+    "в которой люди тратят недели на поиск",
+    "и переписки, которые ни к чему не приводят",
   ],
   statLabels: ["часов", "свайпов", "на покупки внутри приложений"],
   statFootnote: "Столько тратит средний пользователь современных приложений для знакомств, чтобы найти отношения.",
-  costLines: [
-    ["Современные приложения для знакомств съедают кучу времени на бесконечный перебор анкет"],
-    ["Мы выгораем раньше, чем находим «своего» человека"],
-  ],
   pivotLines: [["Мы видим эти проблемы"], ["Поэтому мы создали ", "Gennety"]],
   matchmakerLines: [
     ["У тебя будет личный AI-матчмейкер, который работает круглосуточно и находит идеально подходящую тебе пару"],
@@ -416,27 +401,18 @@ const uk: OnboardingStrings = {
   back: "Назад",
   next: "Далі",
   more: "Детальніше",
-  hookTitle: "Скільки коштує знайти стосунки у 2026 році?",
-  introLines: [
-    ["Статистично лише 3% людей, які користуються сучасними дейтинг-застосунками, доходять до побачення"],
-    ["Ми всі зациклені на роботі, навчанні чи самих собі"],
-    ["Ми більше не знайомимось на вулицях"],
-    ["Ми перестали бачитися наживо"],
-    ["За мільйонами аватарів складно розгледіти людину"],
-    ["Потрібні справжні зустрічі"],
-    ["Але,", " скільки ж коштує знайти стосунки у 2026 році?"],
-  ],
+  wasteLines: [["Сучасні застосунки для знайомств зʼїдають купу часу на безкінечний перебір анкет"]],
+  burnoutLines: [["Ми вигораємо раніше, ніж знаходимо свою людину"]],
+  cost2026Lines: [["Скільки коштує знайти стосунки у 2026 році?"]],
+  statHookLines: [["Статистично,", " лише 3% людей, які користуються застосунками для знайомств, доходять до побачення"]],
   exhaustionLines: [
-    "Він більше схожий на скролінг ТікТок-стрічки",
-    "Нескінченний перебір людей, наче товарів, убиває емпатію",
-    "Ти витрачаєш тижні на листування, які ні до чого не ведуть",
+    "Нескінченний перебір людей, наче товарів.",
+    "Більше схоже на скролінг стрічки TikTok",
+    "де люди витрачають тижні на пошук",
+    "і листування, які ні до чого не ведуть",
   ],
   statLabels: ["годин", "свайпів", "на покупки в застосунках"],
   statFootnote: "Стільки витрачає середній користувач сучасних застосунків для знайомств, щоб знайти стосунки.",
-  costLines: [
-    ["Сучасні застосунки для знайомств зʼїдають купу часу на безкінечний перебір анкет"],
-    ["Ми вигораємо раніше, ніж знаходимо «свою» людину"],
-  ],
   pivotLines: [["Ми бачимо ці проблеми"], ["Тому ми створили ", "Gennety"]],
   matchmakerLines: [
     ["У тебе буде особистий AI-матчмейкер, який працює цілодобово й знаходить ідеально підходящу тобі пару"],
@@ -578,27 +554,18 @@ const de: OnboardingStrings = {
   back: "Zurück",
   next: "Weiter",
   more: "Mehr erfahren",
-  hookTitle: "Was kostet es, 2026 eine Beziehung zu finden?",
-  introLines: [
-    ["Statistisch schaffen es nur 3% der Menschen in modernen Dating-Apps je zu einem Date"],
-    ["Wir sind alle mit Arbeit, Studium oder uns selbst beschäftigt"],
-    ["Wir lernen uns nicht mehr auf der Straße kennen"],
-    ["Wir sehen uns nicht mehr persönlich"],
-    ["Hinter Millionen Avataren ist der Mensch kaum zu erkennen"],
-    ["Wir brauchen echte Begegnungen"],
-    ["Aber,", " was kostet es, 2026 eine Beziehung zu finden?"],
-  ],
+  wasteLines: [["Moderne Dating-Apps fressen so viel Zeit mit endlosem Scrollen, Profil um Profil"]],
+  burnoutLines: [["Wir brennen aus, bevor wir unseren Menschen finden"]],
+  cost2026Lines: [["Was kostet es, 2026 eine Beziehung zu finden?"]],
+  statHookLines: [["Statistisch gesehen", " schaffen es nur 3% der Menschen, die Dating-Apps nutzen, je zu einem Date"]],
   exhaustionLines: [
+    "Endloses Durchblättern von Menschen wie Produkten.",
     "Es fühlt sich eher an wie das Scrollen durch einen TikTok-Feed",
-    "Endloses Durchsuchen von Menschen wie Produkten zerstört Empathie",
-    "Du verbringst Wochen mit Chats, die nirgendwohin führen",
+    "in dem man Wochen mit Suchen verbringt",
+    "und Chats, die zu nichts führen",
   ],
   statLabels: ["Stunden", "Swipes", "für In-App-Käufe"],
   statFootnote: "So viel gibt ein durchschnittlicher Nutzer moderner Dating-Apps aus, um eine Beziehung zu finden.",
-  costLines: [
-    ["Moderne Dating-Apps fressen so viel Zeit mit endlosem Scrollen, Profil um Profil"],
-    ["Wir brennen aus, bevor wir „unseren“ Menschen finden"],
-  ],
   pivotLines: [["Wir sehen diese Probleme"], ["Deshalb haben wir ", "Gennety gebaut"]],
   matchmakerLines: [
     ["Du bekommst einen persönlichen KI-Matchmaker, der rund um die Uhr die Person findet, die perfekt zu dir passt"],
@@ -740,27 +707,18 @@ const pl: OnboardingStrings = {
   back: "Wstecz",
   next: "Dalej",
   more: "Więcej",
-  hookTitle: "Ile kosztuje znalezienie związku w 2026 roku?",
-  introLines: [
-    ["Statystycznie tylko 3% osób w nowoczesnych aplikacjach randkowych dochodzi do randki"],
-    ["Wszyscy jesteśmy pochłonięci pracą, nauką albo sobą"],
-    ["Już nie poznajemy się na ulicy"],
-    ["Przestaliśmy widywać się na żywo"],
-    ["Za milionami awatarów trudno dostrzec człowieka"],
-    ["Potrzebujemy prawdziwych spotkań"],
-    ["Ale,", " ile kosztuje znalezienie związku w 2026 roku?"],
-  ],
+  wasteLines: [["Współczesne aplikacje randkowe pochłaniają mnóstwo czasu na bezustanne przewijanie profilu za profilem"]],
+  burnoutLines: [["Wypalamy się, zanim znajdziemy swojego człowieka"]],
+  cost2026Lines: [["Ile kosztuje znalezienie związku w 2026 roku?"]],
+  statHookLines: [["Statystycznie,", " tylko 3% osób, które korzystają z aplikacji randkowych, dochodzi do randki"]],
   exhaustionLines: [
-    "To bardziej przypomina przewijanie feedu TikToka",
-    "Niekończące się przeglądanie ludzi jak produktów zabija empatię",
-    "Spędzasz tygodnie na rozmowach, które prowadzą donikąd",
+    "Niekończące się przeglądanie ludzi jak produktów.",
+    "Bardziej przypomina to przewijanie feedu TikToka",
+    "w którym ludzie spędzają tygodnie na szukaniu",
+    "i rozmowy, które prowadzą donikąd",
   ],
   statLabels: ["godzin", "przesunięć", "na zakupy w aplikacjach"],
   statFootnote: "Tyle wydaje przeciętny użytkownik nowoczesnych aplikacji randkowych, aby znaleźć związek.",
-  costLines: [
-    ["Współczesne aplikacje randkowe pochłaniają mnóstwo czasu na bezustanne przewijanie profilu za profilem"],
-    ["Wypalamy się, zanim znajdziemy „swojego” człowieka"],
-  ],
   pivotLines: [["Widzimy te problemy"], ["Dlatego stworzyliśmy ", "Gennety"]],
   matchmakerLines: [
     ["Dostajesz osobistego AI-matchmakera, który działa całą dobę i znajduje osobę idealnie do ciebie dopasowaną"],

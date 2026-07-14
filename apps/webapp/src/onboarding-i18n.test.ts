@@ -14,17 +14,21 @@ describe("onboarding i18n", () => {
   it("provides every dynamic onboarding label in all supported languages", () => {
     for (const lang of languages) {
       const s = onboardingStrings(lang);
-      expect(s.hookTitle.length).toBeGreaterThan(0);
-      expect(s.introLines).toHaveLength(7);
-      for (const line of s.introLines) {
-        expect(line.length).toBeGreaterThan(0);
-        for (const part of line) expect(part.length).toBeGreaterThan(0);
+      const typewriterFields = [
+        s.wasteLines,
+        s.burnoutLines,
+        s.cost2026Lines,
+        s.statHookLines,
+      ];
+      for (const field of typewriterFields) {
+        expect(field.length).toBeGreaterThan(0);
+        for (const line of field) {
+          expect(line.length).toBeGreaterThan(0);
+          for (const part of line) expect(part.length).toBeGreaterThan(0);
+        }
       }
-      expect(s.costLines).toHaveLength(2);
-      for (const line of s.costLines) {
-        expect(line.length).toBeGreaterThan(0);
-        for (const part of line) expect(part.length).toBeGreaterThan(0);
-      }
+      // The stat-hook line splits on the comma so the typewriter can pause there.
+      expect(s.statHookLines[0]).toHaveLength(2);
       expect(s.pivotLines).toHaveLength(2);
       for (const line of s.pivotLines) {
         expect(line.length).toBeGreaterThan(0);
@@ -46,7 +50,7 @@ describe("onboarding i18n", () => {
         expect(step.body.length).toBeGreaterThan(0);
       }
       expect(s.more.length).toBeGreaterThan(0);
-      expect(s.exhaustionLines).toHaveLength(3);
+      expect(s.exhaustionLines).toHaveLength(4);
       expect(s.statLabels).toHaveLength(3);
       expect(s.consentTitle.length).toBeGreaterThan(0);
       expect(s.emailTitle.length).toBeGreaterThan(0);
