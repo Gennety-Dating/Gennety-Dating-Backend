@@ -40,6 +40,18 @@ webRegistrationRouter.post(
 );
 
 /**
+ * What the website is allowed to offer. The phone rail is feature-flagged in the
+ * bot, and the fork screens live on a separately-deployed site — so the site has
+ * to ask rather than assume. With the flag off, offering the phone track would
+ * strand the user: both the Mini App's phase machine and the server contact gate
+ * fall back to the email rail, which is precisely the one a phone-track user
+ * doesn't have.
+ */
+webRegistrationRouter.get("/config", publicReadLimiter, (_req: Request, res: Response): void => {
+  res.json({ ok: true, phoneAuthEnabled: env.PHONE_AUTH_ENABLED });
+});
+
+/**
  * City lookup for the website's student-track city gate. Unauthenticated by
  * necessity — the visitor has no account yet — so it is rate-limited and only
  * ever proxies a public Places search, keeping `PLACES_API_KEY` server-side.
@@ -135,6 +147,14 @@ webRegistrationRouter.post(
 
     try {
       if (trackCandidate === "general") {
+        // The real boundary behind GET /config: never mint a phone-track link
+        // the bot cannot honour — the user would land on an email gate they
+        // have no email for.
+        if (!env.PHONE_AUTH_ENABLED) {
+          res.status(409).json({ error: "phone-auth-disabled" });
+          return;
+        }
+
         // No email, no OTP, no phone — by design.
         const link = await createWebRegistrationLink({
           track: "general",
