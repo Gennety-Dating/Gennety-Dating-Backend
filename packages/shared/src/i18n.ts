@@ -717,7 +717,6 @@ const translations = {
     dateHubPlanningNegotiating: "You matched with {name}! Pick a time that suits you:",
     dateHubPlanningVenue:
       "Almost set with {name}. Mark where you'll be heading out from:",
-    dateHubIcebreakers: "💬 Ice-breakers for your date:",
 
     // --- Voice notes ---
     voiceTranscriptionFailed:
@@ -1480,7 +1479,6 @@ const translations = {
     dateHubPlanningNegotiating: "У тебя мэтч с {name}! Выбери удобное время:",
     dateHubPlanningVenue:
       "Почти всё готово с {name}. Отметь, откуда будешь добираться:",
-    dateHubIcebreakers: "💬 Темы для начала разговора на свидании:",
 
     // --- Voice notes ---
     voiceTranscriptionFailed:
@@ -2243,7 +2241,6 @@ const translations = {
     dateHubPlanningNegotiating: "У тебе метч із {name}! Обери зручний час:",
     dateHubPlanningVenue:
       "Майже все готово з {name}. Познач, звідки вирушатимеш:",
-    dateHubIcebreakers: "💬 Теми для початку розмови на побаченні:",
 
     // --- Voice notes ---
     voiceTranscriptionFailed:
@@ -2958,7 +2955,6 @@ const deTranslations: TranslationTable = {
   dateHubPlanningNegotiating: "Du hast ein Match mit {name}! Wähle eine passende Zeit:",
   dateHubPlanningVenue:
     "Fast geschafft mit {name}. Markiere, von wo aus du losgehst:",
-  dateHubIcebreakers: "💬 Gesprächsstarter für dein Date:",
   voiceTranscriptionFailed: "Ich konnte das nicht klar verstehen - kannst du es tippen?",
   voiceTooLong: "Die Sprachnachricht ist etwas lang. Maximal 5 Minuten - oder schreib es einfach.",
   rateLimitFloodNotice:
@@ -3621,7 +3617,6 @@ const plTranslations: TranslationTable = {
   dateHubPlanningNegotiating: "Masz dopasowanie z {name}! Wybierz pasujący czas:",
   dateHubPlanningVenue:
     "Prawie gotowe z {name}. Zaznacz, skąd będziesz wyruszać:",
-  dateHubIcebreakers: "💬 Tematy na początek rozmowy na randce:",
   voiceTranscriptionFailed: "Nie usłyszałem/am wyraźnie - możesz napisać tekstem?",
   voiceTooLong: "Ta głosówka jest trochę długa. Do 5 minut albo po prostu napisz tekst.",
   rateLimitFloodNotice:

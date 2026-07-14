@@ -588,10 +588,13 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
     board is open), **Share** (blurred off-platform copy), **Enter chat** (while
     the coordination proxy window is open), **Cancel date** (native `danger`;
     available for the whole `scheduled` window — the emergency handler keeps its
-    own two-step red confirmation), **Report**, **Back**;
-  - **ice-breakers** (and the wingman hint) — shown only once their T-gate has
-    already fired (`icebreakersSentAt` / `wingmanSentAt`), so the hub never
-    unmasks a wingman hint before the T-1.5h reveal invariant.
+    own two-step red confirmation), **Report**, **Back**.
+
+  The hub deliberately does **not** surface ice-breakers or the wingman hint:
+  those are time-gated *pre-date* content the lifecycle drops shortly before the
+  meeting (T-5h / T-1.5h, §Phase 4), and their whole point is that arrival right
+  before the date. They are not durable "date details" to browse from the menu,
+  so the hub is a status/actions surface only.
 
   For the pre-`scheduled` stages the hub is a lightweight card re-surfacing the
   one Mini App entry the user might have lost (Calendar for `negotiating` — unless

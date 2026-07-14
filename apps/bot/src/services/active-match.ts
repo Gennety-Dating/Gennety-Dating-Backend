@@ -42,13 +42,6 @@ export interface ActiveMatchResult {
     venuePhotoName: string | null;
     parsedCategoryA: string | null;
     parsedCategoryB: string | null;
-    iceBreakersA: string[];
-    iceBreakersB: string[];
-    icebreakersSentAt: Date | null;
-    wingmanHintA: string | null;
-    wingmanHintB: string | null;
-    wingmanSentAt: Date | null;
-    coordMethod: string | null;
     proxyOpenedAt: Date | null;
     proxyClosedAt: Date | null;
     proxyClosesAt: Date | null;
@@ -114,13 +107,6 @@ export async function findActiveMatchForTelegramId(
       venuePhotoName: true,
       parsedCategoryA: true,
       parsedCategoryB: true,
-      iceBreakersA: true,
-      iceBreakersB: true,
-      icebreakersSentAt: true,
-      wingmanHintA: true,
-      wingmanHintB: true,
-      wingmanSentAt: true,
-      coordMethod: true,
       proxyOpenedAt: true,
       proxyClosedAt: true,
       proxyClosesAt: true,
@@ -168,13 +154,6 @@ export async function findActiveMatchForTelegramId(
       venuePhotoName: match.venuePhotoName,
       parsedCategoryA: match.parsedCategoryA,
       parsedCategoryB: match.parsedCategoryB,
-      iceBreakersA: match.iceBreakersA,
-      iceBreakersB: match.iceBreakersB,
-      icebreakersSentAt: match.icebreakersSentAt,
-      wingmanHintA: match.wingmanHintA,
-      wingmanHintB: match.wingmanHintB,
-      wingmanSentAt: match.wingmanSentAt,
-      coordMethod: match.coordMethod,
       proxyOpenedAt: match.proxyOpenedAt,
       proxyClosedAt: match.proxyClosedAt,
       proxyClosesAt: match.proxyClosesAt,

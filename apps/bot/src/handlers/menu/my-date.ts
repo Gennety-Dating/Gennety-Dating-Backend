@@ -84,8 +84,6 @@ async function renderScheduledHub(ctx: BotContext, active: ActiveMatchResult): P
   if (!cardSent) {
     await sendFallbackCard(ctx, active, caption, keyboard);
   }
-
-  await sendIcebreakers(ctx, active);
 }
 
 interface Caption {
@@ -198,29 +196,6 @@ async function sendFallbackCard(
     entities: [caption.entity],
     reply_markup: keyboard,
   });
-}
-
-/**
- * Ice-breakers (and the wingman hint) are shown ONLY once their T-gate has
- * already fired — i.e. `icebreakersSentAt` / `wingmanSentAt` are set. Reading
- * the reveal timestamps (not the raw columns) keeps the hub from unmasking a
- * wingman hint before the T-1.5h reveal invariant.
- */
-async function sendIcebreakers(ctx: BotContext, active: ActiveMatchResult): Promise<void> {
-  const lang = ctx.session.language;
-  const { match, side } = active;
-  if (!match.icebreakersSentAt) return;
-  const icebreakers = side === "A" ? match.iceBreakersA : match.iceBreakersB;
-  if (icebreakers.length === 0) return;
-
-  const lines = icebreakers.map((s, i) => `${i + 1}. ${s}`).join("\n");
-  let body = `${t(lang, "dateHubIcebreakers")}\n${lines}`;
-
-  const wingman = side === "A" ? match.wingmanHintA : match.wingmanHintB;
-  if (match.wingmanSentAt && wingman) {
-    body += `\n\n${t(lang, "wingmanHintIntro")}${wingman}`;
-  }
-  await ctx.reply(body).catch(() => undefined);
 }
 
 /** All still-relevant actions for a scheduled date, reusing existing callbacks. */
