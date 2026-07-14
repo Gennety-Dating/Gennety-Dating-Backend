@@ -723,6 +723,16 @@ interface PhotoBatchAccumulator {
   consensusRejectedCount: number;
   /** Structured rejection counts for the unified validation pipeline. */
   rejectionReasons: Partial<Record<MediaValidationReason, number>>;
+  /**
+   * Per-frame rejections, in arrival order. Carries the Telegram `message_id`
+   * of the offending photo so the explanation can be sent as a *reply to that
+   * exact frame* — an album arrives as N separate messages, so a detached
+   * "your face is hard to make out" line leaves the user guessing which of the
+   * four photos it meant (the founder hit exactly this: "3/4" with no way to
+   * tell which one failed). `messageId` is optional because a frame can be
+   * rejected before we ever see its message (infra errors).
+   */
+  rejections: Array<{ messageId?: number; reason: MediaValidationReason }>;
   /** True if any frame hit an infra error (getFile / OpenAI failure) */
   hadInfraError: boolean;
   /** True when the batch arrived before `request_photos` was called */
@@ -889,6 +899,7 @@ async function handlePhotoFrame(
       consensusPendingCount: 0,
       consensusRejectedCount: 0,
       rejectionReasons: {},
+      rejections: [],
       hadInfraError: false,
       unsolicited: !ctx.session.expectingPhoto,
       timer: null,
@@ -908,13 +919,16 @@ async function handlePhotoFrame(
   try {
     const fileId = media.staticPhoto.file_id;
     const fileUniqueId = media.uniqueId;
+    // The frame's own message — every rejection below is anchored to it so the
+    // user is told which photo failed, not just that "one" did.
+    const frameMessageId = ctx.message?.message_id;
     const user = await prisma.user.findUnique({
       where: { telegramId },
       select: { id: true },
     });
     if (!user) {
       acc.hadInfraError = true;
-      incrementRejectionReason(acc, "processing_unavailable");
+      recordRejection(acc, "processing_unavailable", frameMessageId);
       return;
     }
 
@@ -925,7 +939,7 @@ async function handlePhotoFrame(
         reason: "duplicate_exact",
       });
       acc.duplicateCount++;
-      incrementRejectionReason(acc, "duplicate_exact");
+      recordRejection(acc, "duplicate_exact", frameMessageId);
       return;
     }
 
@@ -944,7 +958,7 @@ async function handlePhotoFrame(
       const photoBytes = await downloadTelegramFile(ctx.api, fileId);
       if (!photoBytes) {
         acc.hadInfraError = true;
-        incrementRejectionReason(acc, "processing_unavailable");
+        recordRejection(acc, "processing_unavailable", frameMessageId);
         return;
       }
 
@@ -959,7 +973,7 @@ async function handlePhotoFrame(
         }),
       );
       if (!validation.ok) {
-        incrementRejectionReason(acc, validation.reason);
+        recordRejection(acc, validation.reason, frameMessageId);
         if (
           validation.reason === "duplicate_exact" ||
           validation.reason === "duplicate_near"
@@ -1023,7 +1037,7 @@ async function handlePhotoFrame(
 
       if (!validation.valid) {
         acc.rejectedCount++;
-        incrementRejectionReason(acc, "no_face");
+        recordRejection(acc, "no_face", frameMessageId);
         return;
       }
     }
@@ -1130,11 +1144,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
       }
       if (acc.rejectedCount > 0) {
         if (!acc.unsolicited) {
-          await replyText(
-            acc.api,
-            acc.chatId,
-            photoBatchRejectionText(session.language, acc),
-          );
+          await sendPhotoRejectionNotices(acc, session.language);
           await sendPhotoStagePrompt(
             acc.api,
             acc.chatId,
@@ -1145,10 +1155,8 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
           );
           return;
         }
-        await injectSystemMessage(
-          acc.telegramId,
-          `Photo batch rejected: ${acc.rejectedCount} frame(s) had no clear single human face.`,
-        );
+        await sendPhotoRejectionNotices(acc, session.language);
+        await injectSystemMessage(acc.telegramId, photoRejectionSystemNote(acc));
         const result = await runAgentTurn(
           acc.telegramId,
           { kind: "photos_updated" },
@@ -1194,11 +1202,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
         return;
       }
       if (acc.duplicateCount > 0 && !acc.unsolicited) {
-        await replyText(
-          acc.api,
-          acc.chatId,
-          photoBatchRejectionText(session.language, acc),
-        );
+        await sendPhotoRejectionNotices(acc, session.language);
         await sendPhotoStagePrompt(
           acc.api,
           acc.chatId,
@@ -1220,12 +1224,11 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
         update: { data: session as unknown as object },
       });
 
-      if (acc.rejectedCount > 0) {
-        await replyText(
-          acc.api,
-          acc.chatId,
-          photoBatchRejectionText(session.language, acc),
-        );
+      // A mixed batch (some accepted, some not) is exactly where the old code
+      // hurt most: the user saw "3/4" plus one floating line. Explain each
+      // rejected frame on the frame itself — duplicates included.
+      if (acc.rejections.length > 0) {
+        await sendPhotoRejectionNotices(acc, session.language);
       }
       const consensusText = photoConsensusBatchText(session.language, acc);
       if (consensusText) {
@@ -1255,9 +1258,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
       acc.telegramId,
       unsolicitedNote +
         `User uploaded a batch of ${acc.validatedCount} photo candidate(s). ${photoConsensusSystemNote(acc)} ${photoProgressMessage(count)}` +
-        (acc.rejectedCount > 0
-          ? ` ${acc.rejectedCount} frame(s) in the batch were rejected (no clear face).`
-          : ""),
+        (acc.rejections.length > 0 ? ` ${photoRejectionSystemNote(acc)}` : ""),
     );
 
     if (count >= MAX_PHOTOS) {
@@ -1506,31 +1507,111 @@ async function logTelegramMediaRejection(
   });
 }
 
-function incrementRejectionReason(
+function recordRejection(
   acc: PhotoBatchAccumulator,
   reason: MediaValidationReason,
+  messageId?: number,
 ): void {
   acc.rejectionReasons[reason] = (acc.rejectionReasons[reason] ?? 0) + 1;
+  acc.rejections.push({ reason, ...(messageId ? { messageId } : {}) });
 }
 
+/**
+ * i18n key per rejection reason. Ordered most-specific first so
+ * `photoBatchRejectionText` can still collapse a batch to a single line when
+ * no frame can be pointed at (see below).
+ */
+const REJECTION_REASON_KEYS: Array<
+  [MediaValidationReason, Parameters<typeof t>[1]]
+> = [
+  ["invalid_media", "photoInvalidMedia"],
+  ["identity_mismatch", "photoIdentityMismatch"],
+  ["identity_uncertain", "photoIdentityMismatch"],
+  ["unsafe_content", "photoUnsafeContent"],
+  ["face_obscured", "photoFaceObscured"],
+  ["multiple_faces_photo", "photoMultipleFaces"],
+  ["no_face", "photoRejected"],
+  ["duplicate_near", "photoDuplicateNear"],
+  ["duplicate_exact", "photoDuplicate"],
+  ["processing_unavailable", "photoVisionError"],
+];
+
+function rejectionReasonText(
+  language: SessionData["language"],
+  reason: MediaValidationReason,
+): string {
+  const hit = REJECTION_REASON_KEYS.find(([candidate]) => candidate === reason);
+  return t(language, hit?.[1] ?? "photoRejected");
+}
+
+/**
+ * Fallback for frames we cannot point at (no `message_id`): collapse the batch
+ * to the single most-specific reason. Used only when `sendPhotoRejectionNotices`
+ * has nothing to reply to.
+ */
 function photoBatchRejectionText(
   language: SessionData["language"],
   acc: PhotoBatchAccumulator,
 ): string {
-  const priority: Array<[MediaValidationReason, Parameters<typeof t>[1]]> = [
-    ["invalid_media", "photoInvalidMedia"],
-    ["identity_mismatch", "photoIdentityMismatch"],
-    ["identity_uncertain", "photoIdentityMismatch"],
-    ["unsafe_content", "photoUnsafeContent"],
-    ["face_obscured", "photoFaceObscured"],
-    ["multiple_faces_photo", "photoRejected"],
-    ["no_face", "photoRejected"],
-    ["duplicate_near", "photoDuplicateNear"],
-    ["duplicate_exact", "photoDuplicate"],
-    ["processing_unavailable", "photoVisionError"],
-  ];
-  const selected = priority.find(([reason]) => acc.rejectionReasons[reason]);
+  const selected = REJECTION_REASON_KEYS.find(
+    ([reason]) => acc.rejectionReasons[reason],
+  );
   return t(language, selected?.[1] ?? "photoRejected");
+}
+
+/**
+ * Explain every rejected frame *on the frame itself*: reply to that photo's
+ * message with the concrete reason and mark it with a reaction. An album is N
+ * separate messages, so one detached line for the whole batch cannot say which
+ * photo failed — which is precisely the gap this closes.
+ */
+async function sendPhotoRejectionNotices(
+  acc: PhotoBatchAccumulator,
+  language: SessionData["language"],
+): Promise<void> {
+  const anchored = acc.rejections.filter((r) => r.messageId !== undefined);
+  for (const rejection of anchored) {
+    const text = rejectionReasonText(language, rejection.reason);
+    try {
+      await acc.api.sendMessage(acc.chatId, text, {
+        reply_parameters: {
+          message_id: rejection.messageId!,
+          allow_sending_without_reply: true,
+        },
+      });
+    } catch {
+      await replyText(acc.api, acc.chatId, text);
+    }
+    await reactToMessage(
+      acc.api,
+      { chatId: acc.chatId, messageId: rejection.messageId },
+      MESSAGE_REACTION.think,
+    );
+  }
+
+  // Frames rejected before their message was known (infra errors) still owe the
+  // user an explanation, but there is nothing to anchor it to.
+  if (anchored.length === 0 && acc.rejections.length > 0) {
+    await replyText(acc.api, acc.chatId, photoBatchRejectionText(language, acc));
+  }
+}
+
+/**
+ * What the agent is told about a batch. It used to be hard-coded to "had no
+ * clear single human face" regardless of the real reason, so a user who asked
+ * "I sent 4 photos?!" got a canned re-ask instead of an answer.
+ */
+function photoRejectionSystemNote(acc: PhotoBatchAccumulator): string {
+  const reasons = Object.entries(acc.rejectionReasons)
+    .filter(([, count]) => (count ?? 0) > 0)
+    .map(([reason, count]) => `${reason} ×${count}`)
+    .join(", ");
+  if (!reasons) return "";
+  return (
+    `${acc.rejections.length} photo(s) in the batch were REJECTED (${reasons}). ` +
+    `The user has already been told which photo failed and why, in a reply to that photo. ` +
+    `If they push back ("I sent 4!"), acknowledge the rejected photo and its reason instead of repeating the request.`
+  );
 }
 
 type LivePhotoRejectReason = "missing_static" | "too_long" | "too_large";

@@ -1518,10 +1518,23 @@ describe("Album (media_group_id) photo coalescing", () => {
     await vi.advanceTimersByTimeAsync(800);
 
     expect(visionMock).not.toHaveBeenCalled();
+    // The explanation is anchored to the offending photo itself (an album is N
+    // separate messages, so a detached line cannot say *which* frame failed).
     expect(ctx.api.sendMessage).toHaveBeenCalledWith(
       99001,
       expect.stringContaining("already in your profile"),
-      { parse_mode: "Markdown" },
+      {
+        reply_parameters: {
+          message_id: 610,
+          allow_sending_without_reply: true,
+        },
+      },
+    );
+    expect(ctx.api.setMessageReaction).toHaveBeenCalledWith(
+      99001,
+      610,
+      [{ type: "emoji", emoji: "🤔" }],
+      { is_big: false },
     );
     expect(ctx.api.sendMessage).toHaveBeenCalledWith(
       99001,
@@ -1668,6 +1681,55 @@ describe("Album (media_group_id) photo coalescing", () => {
       99001,
       expect.stringContaining("All photos must belong to the same person"),
       expect.anything(),
+    );
+  });
+
+  it("points at the exact photo that failed, with its real reason", async () => {
+    // The founder's own onboarding: an album of photos where ONE is bounced.
+    // The bot used to answer "3/4" plus one detached line, so there was no way
+    // to tell which frame failed or why. The explanation must land ON the frame.
+    mutableValidationEnv.PROFILE_MEDIA_VALIDATION_ENABLED = true;
+    mediaValidationMocks.validatePhoto.mockResolvedValueOnce({
+      ok: false,
+      reason: "face_obscured",
+      retryable: false,
+    });
+    const ctx = createMockCtx({
+      session: {
+        onboardingStep: "conversational",
+        expectingPhoto: true,
+        pendingPhotos: ["photo_1"],
+        pendingPhotoUniqueIds: ["uid_1"],
+      },
+      photo: { file_id: "photo_sunglasses", file_unique_id: "uid_sunglasses" },
+      messageId: 777,
+      fromId: 99001,
+    });
+
+    await handleConversational(ctx as any);
+    (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: ctx.session,
+    });
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(ctx.session.pendingPhotos).toEqual(["photo_1"]);
+    // Reason is the concrete one (sunglasses / covering), not a generic bounce…
+    expect(ctx.api.sendMessage).toHaveBeenCalledWith(
+      99001,
+      expect.stringContaining("sunglasses"),
+      {
+        reply_parameters: {
+          message_id: 777,
+          allow_sending_without_reply: true,
+        },
+      },
+    );
+    // …and the offending frame is marked, so an album shows which one it was.
+    expect(ctx.api.setMessageReaction).toHaveBeenCalledWith(
+      99001,
+      777,
+      [{ type: "emoji", emoji: "🤔" }],
+      { is_big: false },
     );
   });
 

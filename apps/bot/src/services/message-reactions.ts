@@ -7,6 +7,9 @@ export const MESSAGE_REACTION = {
   like: "👍",
   fire: "🔥",
   heart: "❤",
+  // Marks a profile photo that failed validation, so the offending frame in an
+  // album is identifiable at a glance — before the user even reads the reply.
+  think: "🤔",
 } as const satisfies Record<string, EmojiReaction>;
 
 export interface MessageReactionTarget {

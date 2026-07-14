@@ -261,7 +261,14 @@ Hard rules enforced by the collector:
   profile is caught there. Unsafe, no-face, duplicate, and technical-processing
   failures are rejected before accepted-profile persistence, logged to
   `media_validation_rejections`, and keep the user in the same retryable upload
-  session.
+  session. **A rejection is always explained on the offending photo itself**: the
+  bot replies to that frame's own message with the concrete reason (sunglasses /
+  covering, duplicate, no face, …) and marks it with a 🤔 reaction. An album
+  arrives as N separate messages, so a single batch-level line could not say
+  *which* frame failed — a 4-photo album coming back as "3/4" with one detached
+  sentence left the user guessing (and re-sending). The reasons are also handed
+  to the onboarding agent, so pushback ("but I sent 4!") is answered with the
+  actual rejection rather than a repeated request.
 - When `TICKET_FEATURE_ENABLED`, the first post-minimum offer explains both
   rewards: reaching `PHOTO_BONUS_TICKET_THRESHOLD` (6) face-validated photos
   grants a free Date Ticket, and adding a profile video grants another. A batch
