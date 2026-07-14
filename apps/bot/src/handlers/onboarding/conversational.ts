@@ -1155,8 +1155,8 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
           );
           return;
         }
+        // `sendPhotoRejectionNotices` already injected the reasons for the agent.
         await sendPhotoRejectionNotices(acc, session.language);
-        await injectSystemMessage(acc.telegramId, photoRejectionSystemNote(acc));
         const result = await runAgentTurn(
           acc.telegramId,
           { kind: "photos_updated" },
@@ -1251,14 +1251,17 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
       return;
     }
 
+    // Unsolicited batches get the same per-frame explanations (and hand the
+    // reasons to the agent) as the deterministic path.
+    await sendPhotoRejectionNotices(acc, session.language);
+
     const unsolicitedNote = acc.unsolicited
       ? "User sent photos BEFORE you called request_photos. They were auto-accepted and validated. Call request_photos NOW to formalize the photo step, briefly acknowledge the upload, and continue. "
       : "";
     await injectSystemMessage(
       acc.telegramId,
       unsolicitedNote +
-        `User uploaded a batch of ${acc.validatedCount} photo candidate(s). ${photoConsensusSystemNote(acc)} ${photoProgressMessage(count)}` +
-        (acc.rejections.length > 0 ? ` ${photoRejectionSystemNote(acc)}` : ""),
+        `User uploaded a batch of ${acc.validatedCount} photo candidate(s). ${photoConsensusSystemNote(acc)} ${photoProgressMessage(count)}`,
     );
 
     if (count >= MAX_PHOTOS) {
@@ -1569,6 +1572,8 @@ async function sendPhotoRejectionNotices(
   acc: PhotoBatchAccumulator,
   language: SessionData["language"],
 ): Promise<void> {
+  if (acc.rejections.length === 0) return;
+
   const anchored = acc.rejections.filter((r) => r.messageId !== undefined);
   for (const rejection of anchored) {
     const text = rejectionReasonText(language, rejection.reason);
@@ -1582,6 +1587,10 @@ async function sendPhotoRejectionNotices(
     } catch {
       await replyText(acc.api, acc.chatId, text);
     }
+    // The media stage is deterministic, so these lines are sent outside any
+    // agent turn — without recording them the transcript (and therefore the
+    // agent) never learns the bot ever explained anything.
+    await recordOnboardingAssistantReply(acc.telegramId, text);
     await reactToMessage(
       acc.api,
       { chatId: acc.chatId, messageId: rejection.messageId },
@@ -1591,9 +1600,17 @@ async function sendPhotoRejectionNotices(
 
   // Frames rejected before their message was known (infra errors) still owe the
   // user an explanation, but there is nothing to anchor it to.
-  if (anchored.length === 0 && acc.rejections.length > 0) {
-    await replyText(acc.api, acc.chatId, photoBatchRejectionText(language, acc));
+  if (anchored.length === 0) {
+    const text = photoBatchRejectionText(language, acc);
+    await replyText(acc.api, acc.chatId, text);
+    await recordOnboardingAssistantReply(acc.telegramId, text);
   }
+
+  // Teach the agent what just happened on EVERY path, including the
+  // deterministic one where no agent turn runs. Otherwise the next thing the
+  // user types ("but I sent 4!") is answered by an agent that has no idea a
+  // photo was ever rejected — which is exactly what happened in production.
+  await injectSystemMessage(acc.telegramId, photoRejectionSystemNote(acc));
 }
 
 /**
@@ -1608,9 +1625,14 @@ function photoRejectionSystemNote(acc: PhotoBatchAccumulator): string {
     .join(", ");
   if (!reasons) return "";
   return (
-    `${acc.rejections.length} photo(s) in the batch were REJECTED (${reasons}). ` +
-    `The user has already been told which photo failed and why, in a reply to that photo. ` +
-    `If they push back ("I sent 4!"), acknowledge the rejected photo and its reason instead of repeating the request.`
+    `${acc.rejections.length} of the photo(s) the user just sent were REJECTED (${reasons}). ` +
+    `Each rejected photo was answered in a reply to that photo with the concrete reason, ` +
+    `so the user knows WHICH one failed. Keep this in mind for the rest of the photo stage: ` +
+    `if the user asks why a photo did not count, or pushes back ("but I sent 4!"), explain the ` +
+    `actual reason above in their language and tell them what the next photo should look like ` +
+    `(e.g. face_obscured -> no dark sunglasses / nothing covering the face; no_face -> the face ` +
+    `must be clearly visible; duplicate_* -> it must be a different shot, not a re-send or a crop ` +
+    `of one already uploaded). Never respond by simply repeating the request for photos.`
   );
 }
 

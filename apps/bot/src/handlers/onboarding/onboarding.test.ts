@@ -1733,6 +1733,44 @@ describe("Album (media_group_id) photo coalescing", () => {
     );
   });
 
+  it("hands the real rejection reason to the agent on the deterministic path", async () => {
+    // The media stage runs no agent turn, so without an explicit injection the
+    // agent stays blind: the user's next message ("why didn't it count?") would
+    // be answered by a model that never learned a photo was rejected.
+    mutableValidationEnv.PROFILE_MEDIA_VALIDATION_ENABLED = true;
+    mediaValidationMocks.validatePhoto.mockResolvedValueOnce({
+      ok: false,
+      reason: "face_obscured",
+      retryable: false,
+    });
+    const ctx = createMockCtx({
+      session: {
+        onboardingStep: "conversational",
+        expectingPhoto: true,
+        pendingPhotos: ["photo_1"],
+        pendingPhotoUniqueIds: ["uid_1"],
+      },
+      photo: { file_id: "photo_shades", file_unique_id: "uid_shades" },
+      messageId: 812,
+      fromId: 99001,
+    });
+
+    await handleConversational(ctx as any);
+    (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: ctx.session,
+    });
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(injectSystemMessage).toHaveBeenCalledWith(
+      99001n,
+      expect.stringContaining("face_obscured"),
+    );
+    expect(injectSystemMessage).toHaveBeenCalledWith(
+      99001n,
+      expect.stringContaining("Never respond by simply repeating the request"),
+    );
+  });
+
   it("keeps the existing video when owner evidence is too brief", async () => {
     mutableValidationEnv.PROFILE_MEDIA_VALIDATION_ENABLED = true;
     mediaValidationMocks.validateVideo.mockResolvedValueOnce({
