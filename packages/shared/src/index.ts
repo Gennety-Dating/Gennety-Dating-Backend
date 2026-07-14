@@ -20,6 +20,7 @@ export { contextDumpInstruction } from "./onboarding-copy.js";
 export {
   computeStatusSnapshot,
   formatStatusText,
+  formatDateCountdownText,
   nextMatchDispatchAt,
   isMatchBatchProcessing,
 } from "./status/format-status.js";
@@ -27,6 +28,7 @@ export type {
   StatusTimerPhase,
   StatusTimerInput,
   StatusTimerSnapshot,
+  DateCountdownInput,
 } from "./status/format-status.js";
 export type {
   OnboardingStep,

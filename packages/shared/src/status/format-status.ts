@@ -89,6 +89,45 @@ export function formatStatusText(
   }
 }
 
+export interface DateCountdownInput {
+  now: Date;
+  /** The user's locked-in `agreedTime`. */
+  dateAt: Date;
+  /** Venue name appended after the countdown when known (a proper noun — no
+   *  translation needed; only the surrounding phrase is localized). */
+  venueName?: string | null;
+}
+
+/**
+ * Render the pinned banner for a user whose date is scheduled: a discrete
+ * countdown to `dateAt` (same buckets as the next-match banner) with the venue
+ * name appended when known. `status-timer.ts` uses this in place of the
+ * next-batch countdown whenever the user has an upcoming scheduled date.
+ */
+export function formatDateCountdownText(
+  input: DateCountdownInput,
+  lang: Language,
+): string {
+  const snap = computeStatusSnapshot({ now: input.now, nextMatchAt: input.dateAt });
+  let base: string;
+  switch (snap.phase) {
+    case "days":
+      base = t(lang, "statusDateDaysHours", { d: snap.days ?? 0, h: snap.hours ?? 0 });
+      break;
+    case "hours":
+      base = t(lang, "statusDateHoursMinutes", { h: snap.hours ?? 0, m: snap.minutes ?? 0 });
+      break;
+    case "minutes":
+      base = t(lang, "statusDateMinutes", { m: snap.minutes ?? 0 });
+      break;
+    default:
+      // `processing` = the agreed time is now/just passed — the date is today.
+      base = t(lang, "statusDateSoon");
+  }
+  const venue = input.venueName?.trim();
+  return venue ? `${base} · ${venue}` : base;
+}
+
 /**
  * Weekly matching batch runs on Thursday at 18:00 Europe/Kyiv (see
  * `MATCH_CRON_SCHEDULE` in apps/bot/src/index.ts). Compute the next

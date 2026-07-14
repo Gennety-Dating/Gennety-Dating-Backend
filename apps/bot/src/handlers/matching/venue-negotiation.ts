@@ -548,7 +548,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
   // screenshot/forward-protected with a Share button; any render failure falls
   // back to the plain-text card per-side, so one render hiccup never denies the
   // other person their card and scheduling never wedges.
-  await Promise.all([
+  const [dateCardFileIdA, dateCardFileIdB] = await Promise.all([
     sendScheduledConfirmation(api, {
       telegramId: match.userA.telegramId,
       text: textA,
@@ -577,6 +577,19 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
     }),
   ]);
 
+  // Cache the rendered date-card `file_id` per side so the "My date" menu hub
+  // can re-open the card instantly instead of re-rendering it. `null` (text
+  // fallback / feature off) leaves the column untouched.
+  if (dateCardFileIdA || dateCardFileIdB) {
+    const data: { dateCardFileIdA?: string; dateCardFileIdB?: string } = {};
+    if (dateCardFileIdA) data.dateCardFileIdA = dateCardFileIdA;
+    if (dateCardFileIdB) data.dateCardFileIdB = dateCardFileIdB;
+    await prisma.match
+      .update({ where: { id: matchId }, data })
+      .catch((err) => {
+        console.warn(`[date-card] file_id cache update failed for ${matchId}:`, err);
+      });
+  }
 }
 
 interface ScheduledConfirmationInput {
@@ -605,8 +618,8 @@ interface ScheduledConfirmationInput {
 async function sendScheduledConfirmation(
   api: Api<RawApi>,
   input: ScheduledConfirmationInput,
-): Promise<void> {
-  if (!isTelegramTarget(input.telegramId)) return;
+): Promise<string | null> {
+  if (!isTelegramTarget(input.telegramId)) return null;
   const chatId = Number(input.telegramId);
 
   if (env.DATE_CARD_FEATURE_ENABLED) {
@@ -645,13 +658,14 @@ async function sendScheduledConfirmation(
         ],
       };
       try {
-        await api.sendPhoto(chatId, new InputFile(card, "date-card.png"), {
+        const sent = await api.sendPhoto(chatId, new InputFile(card, "date-card.png"), {
           caption: input.text,
           caption_entities: [input.entity],
           reply_markup: keyboard,
           protect_content: true,
         });
-        return;
+        // Largest rendition's file_id — cached for instant re-open in the hub.
+        return sent.photo?.at(-1)?.file_id ?? null;
       } catch (err) {
         console.warn(
           `[date-card] sendPhoto failed for ${chatId}, falling back to text:`,
@@ -665,6 +679,7 @@ async function sendScheduledConfirmation(
     entities: [input.entity],
     reply_markup: input.keyboard,
   });
+  return null;
 }
 
 /**

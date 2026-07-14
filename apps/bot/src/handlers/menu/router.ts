@@ -2,6 +2,7 @@ import { Composer } from "grammy";
 import type { BotContext } from "../../session.js";
 import { showMainMenu } from "./main.js";
 import { handleMyProfile } from "./my-profile.js";
+import { handleMyDate } from "./my-date.js";
 import {
   handleEditOpen,
   handleEditBioStart,
@@ -158,6 +159,11 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     // My Profile
     case "menu:profile":
       await handleMyProfile(ctx);
+      return;
+
+    // My Date hub (conditional row — only present while a live match exists)
+    case "menu:date":
+      await handleMyDate(ctx);
       return;
 
     // Edit Profile

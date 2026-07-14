@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   computeStatusSnapshot,
   formatStatusText,
+  formatDateCountdownText,
   nextMatchDispatchAt,
   isMatchBatchProcessing,
 } from "./format-status.js";
@@ -239,6 +240,37 @@ describe("nextMatchDispatchAt", () => {
   it("returns current Thursday at exactly 18:00 Kyiv", () => {
     const now = new Date("2026-04-16T15:00:00Z");
     expect(nextMatchDispatchAt(now).toISOString()).toBe("2026-04-16T15:00:00.000Z");
+  });
+});
+
+describe("formatDateCountdownText", () => {
+  const DATE_AT = new Date("2026-04-16T16:00:00.000Z");
+
+  it("renders a days countdown with the venue appended", () => {
+    const now = new Date("2026-04-14T16:00:00.000Z"); // exactly 2 days before
+    const text = formatDateCountdownText({ now, dateAt: DATE_AT, venueName: "Blur Cafe" }, "en");
+    expect(text).toContain("2d");
+    expect(text).toContain("· Blur Cafe");
+  });
+
+  it("renders an hours countdown", () => {
+    const now = new Date("2026-04-16T13:30:00.000Z"); // 2h30m before
+    const text = formatDateCountdownText({ now, dateAt: DATE_AT, venueName: null }, "en");
+    expect(text).toContain("2h");
+    expect(text).not.toContain("·");
+  });
+
+  it("falls back to the 'soon' phrasing once the date moment has passed", () => {
+    const now = new Date("2026-04-16T16:00:00.000Z"); // exactly at agreed time
+    const text = formatDateCountdownText({ now, dateAt: DATE_AT, venueName: "Blur Cafe" }, "en");
+    expect(text.toLowerCase()).toContain("today");
+    expect(text).toContain("· Blur Cafe");
+  });
+
+  it("localizes the phrase (ru)", () => {
+    const now = new Date("2026-04-14T16:00:00.000Z");
+    const text = formatDateCountdownText({ now, dateAt: DATE_AT, venueName: null }, "ru");
+    expect(text).toContain("Свидание");
   });
 });
 

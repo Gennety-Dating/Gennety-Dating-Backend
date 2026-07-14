@@ -700,6 +700,25 @@ const translations = {
     statusMinutes: "✨ Almost ready! Matches drop in {m}m",
     statusProcessing: "✨ Analyzing your city… Check back shortly.",
 
+    // --- My date (menu row + hub) + scheduled-date banner ---
+    statusDateDaysHours: "💫 Date in {d}d {h}h",
+    statusDateHoursMinutes: "💫 Date in {h}h {m}m",
+    statusDateMinutes: "💫 Date in {m}m",
+    statusDateSoon: "💫 Date is today ✨",
+    menuMyDateDays: "💫 My date · in {d}d {h}h",
+    menuMyDateHours: "💫 My date · in {h}h {m}m",
+    menuMyDateMinutes: "💫 My date · in {m}m",
+    menuMyDateSoon: "💫 My date · today ✨",
+    menuMyDatePlanning: "⏳ Date being planned",
+    dateHubNoActive: "You don't have an active date right now.",
+    dateHubHeaderScheduled: "💫 Your date with {name}",
+    dateHubPlanningProposed:
+      "You have a match with {name}. Check the pitch above — then just tell me if you'd like to go.",
+    dateHubPlanningNegotiating: "You matched with {name}! Pick a time that suits you:",
+    dateHubPlanningVenue:
+      "Almost set with {name}. Mark where you'll be heading out from:",
+    dateHubIcebreakers: "💬 Ice-breakers for your date:",
+
     // --- Voice notes ---
     voiceTranscriptionFailed:
       "Sorry, I couldn't hear that clearly — could you type it instead?",
@@ -1443,6 +1462,25 @@ const translations = {
     statusHoursMinutes: "⏳ Мэтчи прилетят через {h}ч {m}мин",
     statusMinutes: "✨ Почти готово! Мэтчи прилетят через {m} мин",
     statusProcessing: "✨ Сканируем твой город… Загляни чуть позже.",
+
+    // --- My date (menu row + hub) + scheduled-date banner ---
+    statusDateDaysHours: "💫 Свидание через {d}д {h}ч",
+    statusDateHoursMinutes: "💫 Свидание через {h}ч {m}мин",
+    statusDateMinutes: "💫 Свидание через {m} мин",
+    statusDateSoon: "💫 Свидание сегодня ✨",
+    menuMyDateDays: "💫 Моё свидание · через {d}д {h}ч",
+    menuMyDateHours: "💫 Моё свидание · через {h}ч {m}мин",
+    menuMyDateMinutes: "💫 Моё свидание · через {m} мин",
+    menuMyDateSoon: "💫 Моё свидание · сегодня ✨",
+    menuMyDatePlanning: "⏳ Свидание планируется",
+    dateHubNoActive: "Сейчас у тебя нет запланированного свидания.",
+    dateHubHeaderScheduled: "💫 Твоё свидание с {name}",
+    dateHubPlanningProposed:
+      "У тебя мэтч с {name}. Посмотри карточку выше — и просто скажи, хочешь ли пойти.",
+    dateHubPlanningNegotiating: "У тебя мэтч с {name}! Выбери удобное время:",
+    dateHubPlanningVenue:
+      "Почти всё готово с {name}. Отметь, откуда будешь добираться:",
+    dateHubIcebreakers: "💬 Темы для начала разговора на свидании:",
 
     // --- Voice notes ---
     voiceTranscriptionFailed:
@@ -2188,6 +2226,25 @@ const translations = {
     statusMinutes: "✨ Майже готово! Метчі прилетять за {m} хв",
     statusProcessing: "✨ Скануємо твоє місто… Зазирни трохи згодом.",
 
+    // --- My date (menu row + hub) + scheduled-date banner ---
+    statusDateDaysHours: "💫 Побачення через {d}д {h}г",
+    statusDateHoursMinutes: "💫 Побачення через {h}г {m}хв",
+    statusDateMinutes: "💫 Побачення через {m} хв",
+    statusDateSoon: "💫 Побачення сьогодні ✨",
+    menuMyDateDays: "💫 Моє побачення · через {d}д {h}г",
+    menuMyDateHours: "💫 Моє побачення · через {h}г {m}хв",
+    menuMyDateMinutes: "💫 Моє побачення · через {m} хв",
+    menuMyDateSoon: "💫 Моє побачення · сьогодні ✨",
+    menuMyDatePlanning: "⏳ Побачення планується",
+    dateHubNoActive: "Зараз у тебе немає запланованого побачення.",
+    dateHubHeaderScheduled: "💫 Твоє побачення з {name}",
+    dateHubPlanningProposed:
+      "У тебе метч із {name}. Поглянь на картку вище — і просто скажи, чи хочеш піти.",
+    dateHubPlanningNegotiating: "У тебе метч із {name}! Обери зручний час:",
+    dateHubPlanningVenue:
+      "Майже все готово з {name}. Познач, звідки вирушатимеш:",
+    dateHubIcebreakers: "💬 Теми для початку розмови на побаченні:",
+
     // --- Voice notes ---
     voiceTranscriptionFailed:
       "Не розчув — можеш написати текстом?",
@@ -2883,6 +2940,25 @@ const deTranslations: TranslationTable = {
   statusHoursMinutes: "⏳ Matches droppen in {h}Std {m}Min",
   statusMinutes: "✨ Fast bereit! Matches droppen in {m} Min",
   statusProcessing: "✨ Analysiere deine Stadt... Schau später nochmal rein.",
+
+  // --- My date (menu row + hub) + scheduled-date banner ---
+  statusDateDaysHours: "💫 Date in {d}T {h}Std",
+  statusDateHoursMinutes: "💫 Date in {h}Std {m}Min",
+  statusDateMinutes: "💫 Date in {m} Min",
+  statusDateSoon: "💫 Date ist heute ✨",
+  menuMyDateDays: "💫 Mein Date · in {d}T {h}Std",
+  menuMyDateHours: "💫 Mein Date · in {h}Std {m}Min",
+  menuMyDateMinutes: "💫 Mein Date · in {m} Min",
+  menuMyDateSoon: "💫 Mein Date · heute ✨",
+  menuMyDatePlanning: "⏳ Date wird geplant",
+  dateHubNoActive: "Du hast gerade kein geplantes Date.",
+  dateHubHeaderScheduled: "💫 Dein Date mit {name}",
+  dateHubPlanningProposed:
+    "Du hast ein Match mit {name}. Sieh dir oben den Pitch an — und sag mir einfach, ob du gehen möchtest.",
+  dateHubPlanningNegotiating: "Du hast ein Match mit {name}! Wähle eine passende Zeit:",
+  dateHubPlanningVenue:
+    "Fast geschafft mit {name}. Markiere, von wo aus du losgehst:",
+  dateHubIcebreakers: "💬 Gesprächsstarter für dein Date:",
   voiceTranscriptionFailed: "Ich konnte das nicht klar verstehen - kannst du es tippen?",
   voiceTooLong: "Die Sprachnachricht ist etwas lang. Maximal 5 Minuten - oder schreib es einfach.",
   rateLimitFloodNotice:
@@ -3527,6 +3603,25 @@ const plTranslations: TranslationTable = {
   statusHoursMinutes: "⏳ Dopasowania wlecą za {h}h {m}min",
   statusMinutes: "✨ Prawie gotowe! Dopasowania wlecą za {m} min",
   statusProcessing: "✨ Analizujemy Twoje miasto... Zajrzyj trochę później.",
+
+  // --- My date (menu row + hub) + scheduled-date banner ---
+  statusDateDaysHours: "💫 Randka za {d}d {h}h",
+  statusDateHoursMinutes: "💫 Randka za {h}h {m}min",
+  statusDateMinutes: "💫 Randka za {m} min",
+  statusDateSoon: "💫 Randka dzisiaj ✨",
+  menuMyDateDays: "💫 Moja randka · za {d}d {h}h",
+  menuMyDateHours: "💫 Moja randka · za {h}h {m}min",
+  menuMyDateMinutes: "💫 Moja randka · za {m} min",
+  menuMyDateSoon: "💫 Moja randka · dzisiaj ✨",
+  menuMyDatePlanning: "⏳ Randka jest planowana",
+  dateHubNoActive: "Nie masz teraz zaplanowanej randki.",
+  dateHubHeaderScheduled: "💫 Twoja randka z {name}",
+  dateHubPlanningProposed:
+    "Masz dopasowanie z {name}. Sprawdź ofertę powyżej — i po prostu daj znać, czy chcesz iść.",
+  dateHubPlanningNegotiating: "Masz dopasowanie z {name}! Wybierz pasujący czas:",
+  dateHubPlanningVenue:
+    "Prawie gotowe z {name}. Zaznacz, skąd będziesz wyruszać:",
+  dateHubIcebreakers: "💬 Tematy na początek rozmowy na randce:",
   voiceTranscriptionFailed: "Nie usłyszałem/am wyraźnie - możesz napisać tekstem?",
   voiceTooLong: "Ta głosówka jest trochę długa. Do 5 minut albo po prostu napisz tekst.",
   rateLimitFloodNotice:

@@ -1,10 +1,44 @@
 import { InlineKeyboard, type Api } from "grammy";
 import type { MessageEntity } from "grammy/types";
 import type { BotContext } from "../../session.js";
-import { prisma } from "@gennety/db";
-import { t, type Language } from "@gennety/shared";
+import { prisma, type MatchStatus } from "@gennety/db";
+import { computeStatusSnapshot, t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { menuToggleStateFor, type MenuToggleState } from "../../services/user-status.js";
+import { findActiveMatchForTelegramId } from "../../services/active-match.js";
+
+/** Minimal descriptor for the conditional "My date" menu row. */
+export interface ActiveDateDescriptor {
+  status: MatchStatus;
+  agreedTime: Date | null;
+}
+
+/**
+ * Label for the "My date" row. A `scheduled` date shows a live countdown
+ * (reusing the status-banner rounding so it matches the pinned banner);
+ * earlier stages show a generic "being planned" line.
+ */
+function buildMyDateLabel(
+  lang: Language,
+  activeDate: ActiveDateDescriptor,
+  now: Date,
+): string {
+  if (activeDate.status !== "scheduled" || !activeDate.agreedTime) {
+    return t(lang, "menuMyDatePlanning");
+  }
+  const snap = computeStatusSnapshot({ now, nextMatchAt: activeDate.agreedTime });
+  switch (snap.phase) {
+    case "days":
+      return t(lang, "menuMyDateDays", { d: snap.days ?? 0, h: snap.hours ?? 0 });
+    case "hours":
+      return t(lang, "menuMyDateHours", { h: snap.hours ?? 0, m: snap.minutes ?? 0 });
+    case "minutes":
+      return t(lang, "menuMyDateMinutes", { m: snap.minutes ?? 0 });
+    default:
+      // `processing` = agreed time is now/just-passed; the date is imminent.
+      return t(lang, "menuMyDateSoon");
+  }
+}
 
 /** Build the main menu inline keyboard. Pause/Resume label depends on current user status. */
 export function buildMainMenuKeyboard(
@@ -19,13 +53,25 @@ function buildMainMenuKeyboardFor(
   lang: Language,
   status: MenuToggleState,
   videoReward: boolean,
+  activeDate: ActiveDateDescriptor | null = null,
+  now: Date = new Date(),
 ): InlineKeyboard {
+  const kb = new InlineKeyboard();
+
+  // Conditional first row: a primary-styled "My date" entry, shown ONLY while
+  // the user has a live match. The native `primary` style + optional animated
+  // icon make it the visual anchor of the menu (grammY 1.42 builder methods —
+  // no raw-markup cast needed). Opens the date hub (`menu:date`).
+  if (activeDate) {
+    kb.text(buildMyDateLabel(lang, activeDate, now), "menu:date").primary();
+    if (env.CUSTOM_EMOJI_DATE_ID) kb.icon(env.CUSTOM_EMOJI_DATE_ID);
+    kb.row();
+  }
+
   // My Profile is now a single combined view+edit screen (the old separate
   // "Edit Profile" button was merged in — `menu:edit` still routes there for
   // any stale keyboards).
-  const kb = new InlineKeyboard()
-    .text(t(lang, "menuMyProfile"), "menu:profile")
-    .row();
+  kb.text(t(lang, "menuMyProfile"), "menu:profile").row();
 
   if (status !== "locked") {
     const pauseLabel = status === "paused" ? t(lang, "menuResume") : t(lang, "menuPause");
@@ -60,8 +106,9 @@ export async function showMainMenu(ctx: BotContext): Promise<void> {
   });
   const status = menuToggleStateFor(user?.status);
   const videoReward = videoRewardAvailable(user?.profile?.videoBonusTicketAt ?? null);
+  const activeDate = await loadActiveDate(telegramId);
 
-  const { text, options } = buildMainMenuPayload(lang, status, videoReward);
+  const { text, options } = buildMainMenuPayload(lang, status, videoReward, activeDate);
   await ctx.reply(text, options);
 }
 
@@ -81,8 +128,9 @@ export async function sendMainMenu(
   });
   const status = menuToggleStateFor(user?.status);
   const videoReward = videoRewardAvailable(user?.profile?.videoBonusTicketAt ?? null);
+  const activeDate = await loadActiveDate(telegramId);
 
-  const { text, options } = buildMainMenuPayload(lang, status, videoReward);
+  const { text, options } = buildMainMenuPayload(lang, status, videoReward, activeDate);
   await api.sendMessage(chatId, text, options);
 }
 
@@ -91,10 +139,22 @@ function videoRewardAvailable(videoBonusTicketAt: Date | null): boolean {
   return env.TICKET_FEATURE_ENABLED && !videoBonusTicketAt;
 }
 
+/**
+ * Resolve the caller's live match into the minimal descriptor the menu row
+ * needs (one extra query per menu render — same order of magnitude as the
+ * existing user lookup). `null` when there is no in-flight match.
+ */
+async function loadActiveDate(telegramId: bigint): Promise<ActiveDateDescriptor | null> {
+  const active = await findActiveMatchForTelegramId(telegramId);
+  if (!active) return null;
+  return { status: active.match.status, agreedTime: active.match.agreedTime };
+}
+
 function buildMainMenuPayload(
   lang: Language,
   status: MenuToggleState,
   videoReward: boolean,
+  activeDate: ActiveDateDescriptor | null = null,
 ): { text: string; options: Record<string, unknown> } {
   const menuEmojiId = env.CUSTOM_EMOJI_MENU_ID;
 
@@ -121,7 +181,7 @@ function buildMainMenuPayload(
       text: plainText,
       options: {
         entities,
-        reply_markup: buildMainMenuKeyboardFor(lang, status, videoReward),
+        reply_markup: buildMainMenuKeyboardFor(lang, status, videoReward, activeDate),
       },
     };
   }
@@ -130,7 +190,7 @@ function buildMainMenuPayload(
     text: t(lang, "menuTitle"),
     options: {
       parse_mode: "Markdown",
-      reply_markup: buildMainMenuKeyboardFor(lang, status, videoReward),
+      reply_markup: buildMainMenuKeyboardFor(lang, status, videoReward, activeDate),
     },
   };
 }

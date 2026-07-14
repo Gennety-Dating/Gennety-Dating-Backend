@@ -675,6 +675,15 @@ model Match {
   /// raw bytes are never persisted (Places ToS). Both null until `scheduled`.
   venuePhotoUrl      String? @map("venue_photo_url")
   venuePhotoName     String? @map("venue_photo_name")
+  /// Telegram photo `file_id` of the rendered date-card PNG, captured per side
+  /// the first time the `scheduled` confirmation card is sent
+  /// (`DATE_CARD_FEATURE_ENABLED`). Lets the "My date" menu hub re-open the card
+  /// instantly instead of re-rendering it (satori/resvg is a multi-second beat).
+  /// Null until the card is actually sent (feature off, render/send failed, or
+  /// the plain-text fallback was used). Cleared implicitly by never being read
+  /// once the match leaves `scheduled`.
+  dateCardFileIdA    String? @map("date_card_file_id_a")
+  dateCardFileIdB    String? @map("date_card_file_id_b")
   /// Idempotency marker: when the concierge prompt was dispatched to both users.
   venuePromptAskedAt DateTime? @map("venue_prompt_asked_at")
 

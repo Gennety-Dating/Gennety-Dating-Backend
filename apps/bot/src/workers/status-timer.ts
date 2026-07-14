@@ -3,6 +3,7 @@ import { GrammyError } from "grammy";
 import { prisma } from "@gennety/db";
 import {
   formatStatusText,
+  formatDateCountdownText,
   nextMatchDispatchAt,
   isMatchBatchProcessing,
 } from "@gennety/shared";
@@ -72,11 +73,31 @@ export async function statusTimerTick(
       telegramId: { gt: 0n },
     },
     select: {
+      id: true,
       telegramId: true,
       language: true,
       statusMessageId: true,
     },
   });
+
+  // Users with an upcoming scheduled date see a countdown to *that date* (with
+  // the venue) instead of the next weekly-batch countdown. One extra query per
+  // tick, sized by the number of live scheduled dates. Earliest upcoming date
+  // wins if a user somehow appears in two.
+  const dateByUser = new Map<string, { at: Date; venue: string | null }>();
+  const scheduled = await prisma.match.findMany({
+    where: { status: "scheduled", agreedTime: { gt: now } },
+    select: { userAId: true, userBId: true, agreedTime: true, venueName: true },
+  });
+  for (const m of scheduled) {
+    if (!m.agreedTime) continue;
+    for (const uid of [m.userAId, m.userBId]) {
+      const existing = dateByUser.get(uid);
+      if (!existing || m.agreedTime < existing.at) {
+        dateByUser.set(uid, { at: m.agreedTime, venue: m.venueName });
+      }
+    }
+  }
 
   const result: StatusTimerResult = {
     scanned: users.length,
@@ -91,7 +112,13 @@ export async function statusTimerTick(
 
   for (const user of users) {
     const lang: Language = user.language ?? "en";
-    const text = formatStatusText({ now, nextMatchAt, isProcessing }, lang);
+    const upcomingDate = dateByUser.get(user.id);
+    const text = upcomingDate
+      ? formatDateCountdownText(
+          { now, dateAt: upcomingDate.at, venueName: upcomingDate.venue },
+          lang,
+        )
+      : formatStatusText({ now, nextMatchAt, isProcessing }, lang);
 
     const cacheKey = String(user.telegramId);
     if (cache.get(cacheKey) === text) {

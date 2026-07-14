@@ -80,6 +80,11 @@ export const env = {
   /// `verified`. Empty value falls back to a static `✓` glyph (no entity).
   /// Picked from a public Telegram emoji pack — operator selects the visual.
   CUSTOM_EMOJI_VERIFIED_ID: process.env.CUSTOM_EMOJI_VERIFIED_ID ?? "",
+  /// Optional animated emoji shown as the icon of the "My date" main-menu row
+  /// (the primary-styled row that appears only while the user has a live
+  /// match). Empty value → the row still renders (💫 in the label), just with
+  /// no `icon_custom_emoji_id`. Picked from a public Telegram emoji pack.
+  CUSTOM_EMOJI_DATE_ID: process.env.CUSTOM_EMOJI_DATE_ID ?? "",
   /// Empty by default → no floating-hearts animation on match-accept messages.
   /// Set a Telegram effect id via env to re-enable.
   MESSAGE_EFFECT_MATCH_ID: process.env.MESSAGE_EFFECT_MATCH_ID ?? "",

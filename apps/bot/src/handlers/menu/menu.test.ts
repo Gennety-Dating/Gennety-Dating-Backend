@@ -18,10 +18,17 @@ vi.mock("@gennety/db", () => ({
     },
     match: {
       findMany: vi.fn(),
+      findFirst: vi.fn().mockResolvedValue(null),
       update: vi.fn(),
     },
     $transaction: vi.fn().mockResolvedValue(null),
   },
+}));
+
+// The "My date" menu row is driven by this helper; default to "no live match"
+// so the base menu tests are unchanged. Individual tests override it.
+vi.mock("../../services/active-match.js", () => ({
+  findActiveMatchForTelegramId: vi.fn().mockResolvedValue(null),
 }));
 
 // Avoid loading config.ts (requires BOT_TOKEN) during tests.
@@ -38,6 +45,7 @@ vi.mock("../../config.js", () => ({
     CUSTOM_EMOJI_LIKE_ID: "",
     CUSTOM_EMOJI_DISLIKE_ID: "",
     CUSTOM_EMOJI_MENU_ID: "",
+    CUSTOM_EMOJI_DATE_ID: "",
     WEBAPP_URL: "https://test.invalid/calendar",
   },
 }));
@@ -75,6 +83,7 @@ vi.mock("../../services/ticket-reward.js", () => ({
 }));
 
 import { prisma } from "@gennety/db";
+import { findActiveMatchForTelegramId } from "../../services/active-match.js";
 import { showMainMenu, buildMainMenuKeyboard } from "./main.js";
 import { handleMyProfile } from "./my-profile.js";
 import { handlePause, handleResume } from "./pause.js";
@@ -219,6 +228,43 @@ describe("Menu — main keyboard", () => {
     const callArgs = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(callArgs[1].parse_mode).toBe("Markdown");
     expect(callArgs[1].reply_markup).toBeDefined();
+  });
+
+  it("omits the My date row when there is no live match", async () => {
+    (findActiveMatchForTelegramId as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    const ctx = createMockCtx({});
+    await showMainMenu(ctx);
+    const kb = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
+    expect(JSON.stringify(kb.inline_keyboard)).not.toContain("menu:date");
+  });
+
+  it("shows a primary-styled My date row as the first row for a scheduled date", async () => {
+    (findActiveMatchForTelegramId as ReturnType<typeof vi.fn>).mockResolvedValue({
+      match: {
+        status: "scheduled",
+        agreedTime: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+      },
+    });
+    const ctx = createMockCtx({});
+    await showMainMenu(ctx);
+    const kb = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
+    // First row carries the date entry.
+    const firstBtn = kb.inline_keyboard[0][0];
+    expect(firstBtn.callback_data).toBe("menu:date");
+    expect(firstBtn.style).toBe("primary");
+  });
+
+  it("labels the My date row as 'being planned' before the date is locked", async () => {
+    (findActiveMatchForTelegramId as ReturnType<typeof vi.fn>).mockResolvedValue({
+      match: { status: "negotiating", agreedTime: null },
+    });
+    const ctx = createMockCtx({});
+    await showMainMenu(ctx);
+    const kb = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
+    const firstBtn = kb.inline_keyboard[0][0];
+    expect(firstBtn.callback_data).toBe("menu:date");
+    // Planning-stage label (⏳), not a countdown.
+    expect(firstBtn.text).toContain("⏳");
   });
 });
 

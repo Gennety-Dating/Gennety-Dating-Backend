@@ -561,10 +561,43 @@ when `CUSTOM_EMOJI_MENU_ID` is set. **Bot API limitation:** inline keyboard
 button labels CANNOT carry `custom_emoji` entities — buttons fall back to
 plain Unicode emoji.
 
-Layout: the two **paired** rows come first — **My Profile · Edit Profile**, then
-**Pause Matching · Settings** — followed by the single-button rows in order:
-**Profile Video**, **My Tickets** (feature-flagged), **Report / Help**.
+Layout: a conditional **My Date** row can come first (only while a live match
+exists — see below), then the two **paired** rows — **My Profile · Edit
+Profile**, then **Pause Matching · Settings** — followed by the single-button
+rows in order: **Profile Video**, **My Tickets** (feature-flagged),
+**Report / Help**.
 
+- **My Date** — a conditional first row, present **only** while the user has an
+  in-flight match (`proposed` / `negotiating` / `negotiating_venue` /
+  `scheduled`, via `services/active-match.ts`). It is the visual anchor of the
+  menu: native **`primary`** style (blue) + an optional animated icon
+  (`CUSTOM_EMOJI_DATE_ID`) so it stands apart from the ordinary gray rows. A
+  `scheduled` date shows a live countdown in the label (💫 "My date · in Xd Yh",
+  reusing the status-banner rounding); the earlier stages show "⏳ Date being
+  planned". Tapping it (`menu:date`) opens the **My Date hub**
+  (`handlers/menu/my-date.ts`) — the single durable re-entry to a date whose
+  original chat messages have scrolled away. It re-surfaces:
+  - the partner **date card** (re-sent instantly from the cached Telegram
+    `file_id` in `Match.dateCardFileIdA/B`; re-rendered on demand and re-cached
+    when absent and `DATE_CARD_FEATURE_ENABLED`; a protected partner-photo album
+    + text otherwise), carrying the venue block + the tappable `date_time`
+    phrase;
+  - every still-relevant action, each reusing an existing handler (the date /
+    matching routers run before the menu router, so their callbacks are already
+    live from a hub keyboard): 📍 Open in Maps, **Change venue** (while the paid
+    board is open), **Share** (blurred off-platform copy), **Enter chat** (while
+    the coordination proxy window is open), **Cancel date** (native `danger`;
+    available for the whole `scheduled` window — the emergency handler keeps its
+    own two-step red confirmation), **Report**, **Back**;
+  - **ice-breakers** (and the wingman hint) — shown only once their T-gate has
+    already fired (`icebreakersSentAt` / `wingmanSentAt`), so the hub never
+    unmasks a wingman hint before the T-1.5h reveal invariant.
+
+  For the pre-`scheduled` stages the hub is a lightweight card re-surfacing the
+  one Mini App entry the user might have lost (Calendar for `negotiating` — unless
+  the Date Ticket gate is still open — or the Location picker for
+  `negotiating_venue`) plus Report. No new product mechanic is introduced; the
+  hub is purely a second entry point to existing flows.
 - **My Profile** — generated bio + photos (and the profile video, when present).
   When no video is set, a one-line hint points to the Profile Video entry.
 - **Edit Profile** — non-identity fields only. `firstName`, `age`,
@@ -619,7 +652,12 @@ A pinned **status banner** is created on activation
 (`services/status-banner.ts`) and live-edited every minute by the
 `status-timer` worker. It shows a discrete countdown to the next batch
 ("Xd Yh", "Xh Ym", "Xm"), de-duplicated in-memory so unchanged text never
-hits the Bot API.
+hits the Bot API. **While the user has an upcoming `scheduled` date the banner
+switches to a countdown to *that date* + the venue name** ("💫 Date in Xd Yh ·
+Venue"), so the pin becomes an always-visible "active date" status; it reverts
+to the next-batch countdown once the date passes. The worker resolves this from
+one extra `scheduled`-match sweep per tick, and the in-memory de-dup naturally
+absorbs the text switch.
 
 ### 2.2 Mobile API / Expo handoff
 

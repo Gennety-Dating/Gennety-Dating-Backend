@@ -458,9 +458,22 @@ Required/high-impact env keys:
   `CUSTOM_EMOJI_MENU_ID`, `CUSTOM_EMOJI_ACCEPT_ID`,
   `CUSTOM_EMOJI_DECLINE_ID`, `CUSTOM_EMOJI_VERIFIED_ID` (optional —
   animated checkmark next to a verified partner in the match-pitch caption;
-  empty falls back to a static `✓` glyph), `MESSAGE_EFFECT_MATCH_ID`,
+  empty falls back to a static `✓` glyph),
+  `CUSTOM_EMOJI_DATE_ID` (optional — animated icon on the conditional
+  primary-styled "My Date" main-menu row; empty → the 💫 label still renders,
+  just without an `icon_custom_emoji_id`), `MESSAGE_EFFECT_MATCH_ID`,
   `MESSAGE_EFFECT_FEEDBACK_ID` (optional — Bot API 7.6 effect on the T+24 h
   feedback DM; empty = no effect)
+- **My Date hub + scheduled-date banner (always-on — no feature flag).** The
+  conditional "My Date" main-menu row and its hub (PRODUCT_SPEC §2.1) plus the
+  status-banner countdown-to-your-date are always active; they degrade to the
+  parts each sub-feature enables (the cached/re-rendered date card respects
+  `DATE_CARD_FEATURE_ENABLED`, Change venue `VENUE_CHANGE_FEATURE_ENABLED`, Enter
+  chat `COORDINATION_FEATURE_ENABLED`). **Requires `db:push` of the additive
+  `matches.date_card_file_id_a` / `date_card_file_id_b` columns first**
+  (non-destructive; they cache the rendered date-card `file_id` for instant hub
+  re-open). No new system dependency; the only optional env is
+  `CUSTOM_EMOJI_DATE_ID` above.
 - Database/storage: `DATABASE_URL`, `SUPABASE_URL`,
   `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_SELFIE_BUCKET`,
   `SUPABASE_PHOTO_BUCKET`, `SUPABASE_CHAT_BUCKET`
