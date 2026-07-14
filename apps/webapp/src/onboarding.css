@@ -466,7 +466,7 @@ button {
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
 }
 
-/* The Gennety app icon (purple star) rising on the Pivot screen. */
+/* The Gennety app icon (burgundy butterfly) rising on the Pivot screen. */
 .gennety-rise-icon {
   width: clamp(84px, 24vw, 116px);
   height: auto;

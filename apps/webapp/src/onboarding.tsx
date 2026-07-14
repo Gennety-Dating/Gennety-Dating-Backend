@@ -126,9 +126,9 @@ const APP_ICONS: Array<{ key: string; src: string; label: string }> = [
   { key: "tinder", src: "/app-icons/tinder.png", label: "Tinder" },
   { key: "badoo", src: "/app-icons/badoo.png", label: "Badoo" },
 ];
-// Gennety app icon (the purple star) raised on the Pivot screen. Lives in
-// `apps/webapp/public/brand/`; a missing file just leaves the text.
-const GENNETY_STAR_SRC = "/brand/gennety-star.png";
+// Gennety app icon (the burgundy butterfly) raised on the Pivot screen. Lives
+// in `apps/webapp/public/brand/`; a missing file just leaves the text.
+const GENNETY_ICON_SRC = "/brand/gennety-icon.png";
 const PRIVACY_POLICY_URL = "https://gennety.com/privacy";
 const TERMS_OF_SERVICE_URL = "https://gennety.com/terms";
 
@@ -654,12 +654,12 @@ function AppIconRow(props: { variant: "reveal" | "inline" }): ReactElement {
   );
 }
 
-// The Gennety app icon (purple star) that rises on the Pivot screen.
+// The Gennety app icon (burgundy butterfly) that rises on the Pivot screen.
 function GennetyRise(): ReactElement {
   return (
     <img
       className="gennety-rise-icon"
-      src={GENNETY_STAR_SRC}
+      src={GENNETY_ICON_SRC}
       alt="Gennety"
       onError={(e) => {
         e.currentTarget.style.display = "none";
