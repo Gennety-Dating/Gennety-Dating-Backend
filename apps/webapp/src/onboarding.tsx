@@ -114,9 +114,9 @@ const MATCHMAKER_PART_PAUSES_MS: number[][] = SINGLE_LINE_PAUSES;
 // (Pivot) raises the Gennety star. `delay` waits after the text lands before
 // the image rises; `view` holds it on screen before the scene auto-advances.
 const ICON_REVEAL_DELAY_MS = 1000;
-const ICON_REVEAL_VIEW_MS = 1700;
+const ICON_REVEAL_VIEW_MS = 2400;
 const LOGO_RISE_DELAY_MS = 150;
-const LOGO_RISE_VIEW_MS = 1750;
+const LOGO_RISE_VIEW_MS = 2200;
 
 // Competitor app icons: raised on scene 0 and shown small under the stats
 // footnote. PNGs live in `apps/webapp/public/app-icons/`; a missing file hides
@@ -639,32 +639,48 @@ function useIntroStream(
 function AppIconRow(props: { variant: "reveal" | "inline" }): ReactElement {
   return (
     <div className={`app-icon-row app-icon-row--${props.variant}`}>
-      {APP_ICONS.map((icon) => (
-        <img
-          key={icon.key}
-          className="app-icon"
-          src={icon.src}
-          alt={icon.label}
-          onError={(e) => {
-            e.currentTarget.style.visibility = "hidden";
-          }}
-        />
-      ))}
+      {APP_ICONS.map((icon) => {
+        const img = (
+          <img
+            className="app-icon"
+            src={icon.src}
+            alt={icon.label}
+            onError={(e) => {
+              e.currentTarget.style.visibility = "hidden";
+            }}
+          />
+        );
+        // The reveal wraps each icon in a slot: the slot carries the arc
+        // position + staggered spring entrance, the img inside carries the
+        // gentle float, so the two transforms never fight (see onboarding.css).
+        return props.variant === "reveal" ? (
+          <span key={icon.key} className="app-icon-slot">
+            {img}
+          </span>
+        ) : (
+          <span key={icon.key} className="app-icon-inline">
+            {img}
+          </span>
+        );
+      })}
     </div>
   );
 }
 
 // The Gennety app icon (burgundy butterfly) that rises on the Pivot screen.
+// Same slot/img split as the app icons: slot = rise entrance, img = float.
 function GennetyRise(): ReactElement {
   return (
-    <img
-      className="gennety-rise-icon"
-      src={GENNETY_ICON_SRC}
-      alt="Gennety"
-      onError={(e) => {
-        e.currentTarget.style.display = "none";
-      }}
-    />
+    <span className="gennety-rise-slot">
+      <img
+        className="gennety-rise-icon"
+        src={GENNETY_ICON_SRC}
+        alt="Gennety"
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+      />
+    </span>
   );
 }
 
