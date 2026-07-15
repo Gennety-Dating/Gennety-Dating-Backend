@@ -522,13 +522,13 @@ const translations = {
     matchSchedulePickedPrefix: "You picked: ",
     matchScheduleWaitingPeer: "Waiting on the other person…",
     matchSchedulePeerProposed:
-      "Your match marked dates and times in the calendar. Open it to confirm one or suggest your own:",
+      "Your match marked their times in the calendar. Open it — agree with one, or drop your own:",
     matchSchedulePeerSuggestedAlternative:
-      "Your match suggested a different time. Check their answer: you can agree with it or suggest your own.",
+      "Your match countered with a different time. Take a look — agree, or suggest your own.",
     matchScheduleSavedConfirmation:
-      "✨ Saved your dates and times. We pinged your match — I'll let you know the moment they reply.",
+      "Saved ✨ Your match got a ping — I'll tell you the moment they answer.",
     matchScheduleNoOverlapYet:
-      "You both marked dates and times, but none overlap. Open the calendar and add a few more — we'll lock it in as soon as one slot matches:",
+      "You've both picked times, but nothing overlaps yet. Add a few more — the second a slot matches, it's locked:",
     venueConciergeIntro:
       "Time's locked 🗓️ One thing before I find your spot.\n\n" +
       "📍 *Mark where you'll be setting off from* for the date — your place, a metro station, a friend's flat, wherever you'll actually be leaving from.\n\n" +
@@ -578,12 +578,12 @@ const translations = {
     venueBoardPingFromF: "{name} is eyeing a cozier spot for your date 👀",
     venueBoardPingFromM: "{name} suggests a look at a couple of other spots for your date 👀",
     venueBoardPingBtn: "Take a look",
-    venueKeepNotice: "Your match would like to keep {venue} 👍 You can still suggest another spot below.",
-    venueBothKeepDm: "You're both keeping {venue} — nothing changes, see you there 👍",
-    venueDeclinedKeepDm: "You're keeping {venue}, as originally planned 👍",
+    venueKeepNotice: "Your match would rather keep {venue}. You can still suggest another spot below.",
+    venueBothKeepDm: "You're both keeping {venue} — nothing changes, see you there.",
+    venueDeclinedKeepDm: "You're keeping {venue}, as originally planned.",
     venuePayPromptDm:
-      "You two picked a new place for your date together!\n📍 {venue}\n" +
-      "Lock it in — and we'll update your date cards.",
+      "You two picked a new place for your date.\n📍 {venue}\n" +
+      "Lock it in — I'll update your date cards.",
     venuePayBtn: "⭐ Lock it in — {stars}",
     venueWishText:
       "{name} found a place she loves for your date ✨\n📍 {venue}\n" +
@@ -593,15 +593,15 @@ const translations = {
     venuePayDeclineAck:
       "Got it — the venue stays as planned for now. If it changes, you'll get an updated card.",
     venuePaySelfDm:
-      "You two agreed on a new place!\n📍 {venue}\nLock it in — and we'll update your date cards ✨",
+      "You two agreed on a new place.\n📍 {venue}\nLock it in — I'll update your date cards ✨",
     venuePaySelfBtn: "⭐ Lock it in — {stars}",
-    venueSettledCard: "Done — your date has a new home! 📍 {venue}",
+    venueSettledCard: "Done — your date has a new home 📍 {venue}",
     venueSettledPaidByM: "{name} covered the venue change ❤️ Your date now happens at 📍 {venue}",
     venueSettledPaidByF: "{name} covered the venue change ❤️ Your date now happens at 📍 {venue}",
     venueExpressPartnerFromF: "{name} picked a cozier spot for your date ✨ New place: 📍 {venue}",
     venueExpressPartnerFromM: "{name} picked a new spot for your date ✨ New place: 📍 {venue}",
-    venueLapsedDm: "The venue change wasn't locked in — you're meeting at {venue}, as planned 👌",
-    venueKeepOriginalDm: "Your match decided to keep the original spot — you're meeting at {venue}, as planned 👌",
+    venueLapsedDm: "The venue change wasn't locked in — you're meeting at {venue}, as planned.",
+    venueKeepOriginalDm: "Your match decided to keep the original spot — you're meeting at {venue}, as planned.",
     venueInvoiceTitle: "Venue change",
     venueInvoiceDesc: "New date venue: {venue}",
     venueInvoiceLabel: "Venue change",
@@ -1253,13 +1253,13 @@ const translations = {
       "🎟️ Небольшая благодарность за терпение: твоё следующее первое свидание — со скидкой {pct}% на один билет. " +
       "Мы применим скидку автоматически, когда тебе выпадет пара или ты откроешь свои билеты.",
     matchSchedulePeerProposed:
-      "Твой собеседник уже отметил даты и время в календаре. Открой его, чтобы согласиться или предложить своё:",
+      "Твой мэтч уже отметил время в календаре. Открой — согласись или предложи своё:",
     matchSchedulePeerSuggestedAlternative:
-      "Твой собеседник предложил другое время. Проверь его ответ: ты можешь согласиться с предложением или предложить свой вариант.",
+      "Твой мэтч предложил другое время. Глянь — можно согласиться или предложить свой вариант.",
     matchScheduleSavedConfirmation:
-      "✨ Сохранил твои даты и время. Пингнул собеседника — напишу, как только он(а) ответит.",
+      "Сохранил ✨ Мэтч получил пинг — напишу, как только ответит.",
     matchScheduleNoOverlapYet:
-      "Вы оба отметили даты и время, но варианты не пересеклись. Открой календарь и допиши несколько слотов — как только один совпадёт, я зафиксирую дату:",
+      "Вы оба отметили время, но пока ничего не совпало. Добавь ещё пару слотов — как только один пересечётся, фиксирую дату:",
     matchScheduleProposal: "Как тебе эти варианты? Жми подходящий:",
     matchScheduleIter3:
       "Взаимно 🤍 Открой календарь и отметь удобное время.",
@@ -1343,12 +1343,12 @@ const translations = {
     venueBoardPingFromF: "{name} присматривает местечко поуютнее для вашего свидания 👀",
     venueBoardPingFromM: "{name} предлагает взглянуть на пару других мест для вашего свидания 👀",
     venueBoardPingBtn: "Взглянуть",
-    venueKeepNotice: "Партнёр хотел бы остаться в {venue} 👍 Можно предложить другое место ниже.",
-    venueBothKeepDm: "Вы оба остаётесь в {venue} — ничего не меняется, до встречи 👍",
-    venueDeclinedKeepDm: "Остаётесь в {venue}, как и планировали изначально 👍",
+    venueKeepNotice: "Твой мэтч хотел бы остаться в {venue}. Можно предложить другое место ниже.",
+    venueBothKeepDm: "Вы оба остаётесь в {venue} — ничего не меняется, до встречи.",
+    venueDeclinedKeepDm: "Остаётесь в {venue}, как и планировали.",
     venuePayPromptDm:
-      "Вы вместе выбрали новое место для свидания!\n📍 {venue}\n" +
-      "Закрепи его — и мы обновим ваши карточки.",
+      "Вы вместе выбрали новое место для свидания.\n📍 {venue}\n" +
+      "Закрепи его — и я обновлю ваши карточки.",
     venuePayBtn: "⭐ Закрепить — {stars}",
     venueWishText:
       "{name} нашла место, которое ей очень нравится ✨\n📍 {venue}\n" +
@@ -1358,15 +1358,15 @@ const translations = {
     venuePayDeclineAck:
       "Понял — место пока остаётся прежним. Если оно изменится, придёт обновлённая карточка.",
     venuePaySelfDm:
-      "Вы сошлись на новом месте!\n📍 {venue}\nЗакрепи его — и мы обновим ваши карточки ✨",
+      "Вы сошлись на новом месте.\n📍 {venue}\nЗакрепи его — и я обновлю ваши карточки ✨",
     venuePaySelfBtn: "⭐ Закрепить — {stars}",
-    venueSettledCard: "Готово — у вашего свидания новое место! 📍 {venue}",
+    venueSettledCard: "Готово — у вашего свидания новое место 📍 {venue}",
     venueSettledPaidByM: "{name} оплатил смену места ❤️ Ваше свидание теперь в 📍 {venue}",
     venueSettledPaidByF: "{name} оплатила смену места ❤️ Ваше свидание теперь в 📍 {venue}",
     venueExpressPartnerFromF: "{name} выбрала для вас место поуютнее ✨ Новое место: 📍 {venue}",
     venueExpressPartnerFromM: "{name} выбрал для вас новое место ✨ Новое место: 📍 {venue}",
-    venueLapsedDm: "Смена места не была закреплена — встречаетесь в {venue}, как и планировали 👌",
-    venueKeepOriginalDm: "Партнёр решил оставить исходное место — встречаетесь в {venue}, как и планировали 👌",
+    venueLapsedDm: "Смену места так и не закрепили — встречаетесь в {venue}, как и планировали.",
+    venueKeepOriginalDm: "Твой мэтч решил оставить исходное место — встречаетесь в {venue}, как и планировали.",
     venueInvoiceTitle: "Смена места свидания",
     venueInvoiceDesc: "Новое место свидания: {venue}",
     venueInvoiceLabel: "Смена места",
@@ -2049,13 +2049,13 @@ const translations = {
     matchSchedulePickedPrefix: "Ти обрав: ",
     matchScheduleWaitingPeer: "Чекаємо на вибір іншої сторони…",
     matchSchedulePeerProposed:
-      "Співрозмовник позначив дати й час у календарі. Відкрий його, щоб погодитись або запропонувати свій:",
+      "Твій метч уже позначив час у календарі. Відкрий — погодься або запропонуй свій:",
     matchSchedulePeerSuggestedAlternative:
-      "Співрозмовник запропонував інший час. Перевір відповідь: можеш погодитись із пропозицією або запропонувати свій варіант.",
+      "Твій метч запропонував інший час. Глянь — можна погодитись або запропонувати свій варіант.",
     matchScheduleSavedConfirmation:
-      "✨ Зберіг твої дати й час. Пінганув співрозмовника — напишу, щойно він(вона) відповість.",
+      "Зберіг ✨ Метч отримав пінг — напишу, щойно відповість.",
     matchScheduleNoOverlapYet:
-      "Ви обидва позначили дати й час, але варіанти не збіглись. Відкрий календар і додай ще кілька слотів — щойно один збіжиться, я зафіксую дату:",
+      "Ви обоє позначили час, але поки нічого не збіглося. Додай ще кілька слотів — щойно один перетнеться, фіксую дату:",
     venueConciergeIntro:
       "Час зафіксовано 🗓️ Один момент, перш ніж підібрати місце.\n\n" +
       "📍 *Познач, звідки ти будеш виїжджати* на побачення — дім, станція метро, квартира друга, звідки тобі реально зручно стартувати.\n\n" +
@@ -2105,12 +2105,12 @@ const translations = {
     venueBoardPingFromF: "{name} придивляється до затишнішого місця для вашого побачення 👀",
     venueBoardPingFromM: "{name} пропонує поглянути на кілька інших місць для вашого побачення 👀",
     venueBoardPingBtn: "Поглянути",
-    venueKeepNotice: "Партнер хотів би залишитися у {venue} 👍 Можна запропонувати інше місце нижче.",
-    venueBothKeepDm: "Ви обоє залишаєтесь у {venue} — нічого не змінюється, до зустрічі 👍",
-    venueDeclinedKeepDm: "Залишаєтесь у {venue}, як і планували спочатку 👍",
+    venueKeepNotice: "Твій метч хотів би залишитися у {venue}. Можна запропонувати інше місце нижче.",
+    venueBothKeepDm: "Ви обоє залишаєтесь у {venue} — нічого не змінюється, до зустрічі.",
+    venueDeclinedKeepDm: "Залишаєтесь у {venue}, як і планували.",
     venuePayPromptDm:
-      "Ви разом обрали нове місце для побачення!\n📍 {venue}\n" +
-      "Закріпи його — і ми оновимо ваші картки.",
+      "Ви разом обрали нове місце для побачення.\n📍 {venue}\n" +
+      "Закріпи його — і я оновлю ваші картки.",
     venuePayBtn: "⭐ Закріпити — {stars}",
     venueWishText:
       "{name} знайшла місце, яке їй дуже подобається ✨\n📍 {venue}\n" +
@@ -2120,15 +2120,15 @@ const translations = {
     venuePayDeclineAck:
       "Зрозумів — місце поки лишається тим самим. Якщо воно зміниться, прийде оновлена картка.",
     venuePaySelfDm:
-      "Ви зійшлися на новому місці!\n📍 {venue}\nЗакріпи його — і ми оновимо ваші картки ✨",
+      "Ви зійшлися на новому місці.\n📍 {venue}\nЗакріпи його — і я оновлю ваші картки ✨",
     venuePaySelfBtn: "⭐ Закріпити — {stars}",
-    venueSettledCard: "Готово — у вашого побачення нове місце! 📍 {venue}",
+    venueSettledCard: "Готово — у вашого побачення нове місце 📍 {venue}",
     venueSettledPaidByM: "{name} оплатив зміну місця ❤️ Ваше побачення тепер у 📍 {venue}",
     venueSettledPaidByF: "{name} оплатила зміну місця ❤️ Ваше побачення тепер у 📍 {venue}",
     venueExpressPartnerFromF: "{name} обрала для вас затишніше місце ✨ Нове місце: 📍 {venue}",
     venueExpressPartnerFromM: "{name} обрав для вас нове місце ✨ Нове місце: 📍 {venue}",
-    venueLapsedDm: "Зміну місця не закріплено — зустрічаєтесь у {venue}, як і планували 👌",
-    venueKeepOriginalDm: "Партнер вирішив залишити початкове місце — зустрічаєтесь у {venue}, як і планували 👌",
+    venueLapsedDm: "Зміну місця так і не закріпили — зустрічаєтесь у {venue}, як і планували.",
+    venueKeepOriginalDm: "Твій метч вирішив залишити початкове місце — зустрічаєтесь у {venue}, як і планували.",
     venueInvoiceTitle: "Зміна місця побачення",
     venueInvoiceDesc: "Нове місце побачення: {venue}",
     venueInvoiceLabel: "Зміна місця",
@@ -2779,13 +2779,13 @@ const deTranslations: TranslationTable = {
   matchSchedulePickedPrefix: "Du hast gewählt: ",
   matchScheduleWaitingPeer: "Warten auf die andere Person...",
   matchSchedulePeerProposed:
-    "Dein Match hat Daten und Zeiten im Kalender markiert. Öffne ihn, um eine zu bestätigen oder eine eigene vorzuschlagen:",
+    "Dein Match hat schon Zeiten im Kalender markiert. Öffne ihn — bestätige eine oder schlag eine eigene vor:",
   matchSchedulePeerSuggestedAlternative:
-    "Dein Match hat eine andere Zeit vorgeschlagen. Schau dir die Antwort an: du kannst zustimmen oder selbst etwas vorschlagen.",
+    "Dein Match hat eine andere Zeit vorgeschlagen. Schau rein — zustimmen oder selbst etwas vorschlagen.",
   matchScheduleSavedConfirmation:
-    "✨ Deine Daten und Zeiten sind gespeichert. Wir haben dein Match gepingt - ich sage Bescheid, sobald eine Antwort kommt.",
+    "Gespeichert ✨ Dein Match hat einen Ping bekommen — ich sage Bescheid, sobald eine Antwort kommt.",
   matchScheduleNoOverlapYet:
-    "Ihr habt beide Daten und Zeiten markiert, aber noch keine Überschneidung. Öffne den Kalender und füge ein paar Optionen hinzu - sobald ein Slot passt, fixieren wir es:",
+    "Ihr habt beide Zeiten markiert, aber noch passt nichts zusammen. Füg ein paar Optionen hinzu — sobald ein Slot passt, ist es fix:",
   venueConciergeIntro:
     "Zeit steht 🗓️ Eine Sache, bevor ich den Ort finde.\n\n" +
     "📍 *Markiere, von wo du losfährst* zum Date - dein Zuhause, eine Metro-Station, die Wohnung einer Freundin, wo immer du tatsächlich startest.\n\n" +
@@ -2834,12 +2834,12 @@ const deTranslations: TranslationTable = {
   venueBoardPingFromF: "{name} schaut sich nach einem gemütlicheren Ort für euer Date um 👀",
   venueBoardPingFromM: "{name} schlägt vor, ein paar andere Orte für euer Date anzusehen 👀",
   venueBoardPingBtn: "Ansehen",
-  venueKeepNotice: "Dein Match möchte lieber bei {venue} bleiben 👍 Du kannst unten trotzdem einen anderen Ort vorschlagen.",
-  venueBothKeepDm: "Ihr bleibt beide bei {venue} — nichts ändert sich, bis dann 👍",
-  venueDeclinedKeepDm: "Ihr bleibt bei {venue}, wie ursprünglich geplant 👍",
+  venueKeepNotice: "Dein Match möchte lieber bei {venue} bleiben. Du kannst unten trotzdem einen anderen Ort vorschlagen.",
+  venueBothKeepDm: "Ihr bleibt beide bei {venue} — nichts ändert sich, bis dann.",
+  venueDeclinedKeepDm: "Ihr bleibt bei {venue}, wie geplant.",
   venuePayPromptDm:
-    "Ihr habt zusammen einen neuen Ort für euer Date gewählt!\n📍 {venue}\n" +
-    "Sichere ihn — und wir aktualisieren eure Karten.",
+    "Ihr habt zusammen einen neuen Ort für euer Date gewählt.\n📍 {venue}\n" +
+    "Sichere ihn — ich aktualisiere eure Karten.",
   venuePayBtn: "⭐ Sichern — {stars}",
   venueWishText:
     "{name} hat einen Ort gefunden, der ihr sehr gefällt ✨\n📍 {venue}\n" +
@@ -2849,15 +2849,15 @@ const deTranslations: TranslationTable = {
   venuePayDeclineAck:
     "Verstanden — der Ort bleibt vorerst wie geplant. Falls er sich ändert, bekommst du eine neue Karte.",
   venuePaySelfDm:
-    "Ihr habt euch auf einen neuen Ort geeinigt!\n📍 {venue}\nSichere ihn — und wir aktualisieren eure Karten ✨",
+    "Ihr habt euch auf einen neuen Ort geeinigt.\n📍 {venue}\nSichere ihn — ich aktualisiere eure Karten ✨",
   venuePaySelfBtn: "⭐ Sichern — {stars}",
-  venueSettledCard: "Erledigt — euer Date hat einen neuen Ort! 📍 {venue}",
+  venueSettledCard: "Erledigt — euer Date hat ein neues Zuhause 📍 {venue}",
   venueSettledPaidByM: "{name} hat die Ortsänderung übernommen ❤️ Euer Date findet jetzt statt in 📍 {venue}",
   venueSettledPaidByF: "{name} hat die Ortsänderung übernommen ❤️ Euer Date findet jetzt statt in 📍 {venue}",
   venueExpressPartnerFromF: "{name} hat einen gemütlicheren Ort für euer Date gewählt ✨ Neuer Ort: 📍 {venue}",
   venueExpressPartnerFromM: "{name} hat einen neuen Ort für euer Date gewählt ✨ Neuer Ort: 📍 {venue}",
-  venueLapsedDm: "Die Ortsänderung wurde nicht gesichert — ihr trefft euch wie geplant in {venue} 👌",
-  venueKeepOriginalDm: "Dein Match bleibt beim ursprünglichen Ort — ihr trefft euch wie geplant in {venue} 👌",
+  venueLapsedDm: "Die Ortsänderung wurde nicht gesichert — ihr trefft euch wie geplant in {venue}.",
+  venueKeepOriginalDm: "Dein Match bleibt beim ursprünglichen Ort — ihr trefft euch wie geplant in {venue}.",
   venueInvoiceTitle: "Ortsänderung",
   venueInvoiceDesc: "Neuer Date-Ort: {venue}",
   venueInvoiceLabel: "Ortsänderung",
@@ -3441,13 +3441,13 @@ const plTranslations: TranslationTable = {
   matchSchedulePickedPrefix: "Wybrałeś/wybrałaś: ",
   matchScheduleWaitingPeer: "Czekamy na drugą osobę...",
   matchSchedulePeerProposed:
-    "Twoje dopasowanie zaznaczyło daty i godziny w kalendarzu. Otwórz go, żeby potwierdzić jedną albo zaproponować własną:",
+    "Twój match zaznaczył już godziny w kalendarzu. Otwórz — potwierdź jedną albo zaproponuj własną:",
   matchSchedulePeerSuggestedAlternative:
-    "Twoje dopasowanie zaproponowało inny termin. Sprawdź odpowiedź: możesz się zgodzić albo zaproponować swój.",
+    "Twój match zaproponował inny termin. Zerknij — możesz się zgodzić albo zaproponować swój.",
   matchScheduleSavedConfirmation:
-    "✨ Zapisaliśmy Twoje daty i godziny. Daliśmy znać dopasowaniu - odezwę się, gdy odpowiedzą.",
+    "Zapisane ✨ Dałem znać twojemu matchowi — odezwę się, gdy odpowie.",
   matchScheduleNoOverlapYet:
-    "Oboje zaznaczyliście daty i godziny, ale jeszcze nic się nie pokrywa. Otwórz kalendarz i dodaj kilka opcji - ustalimy randkę, gdy tylko slot się zgodzi:",
+    "Oboje zaznaczyliście godziny, ale jeszcze nic się nie pokrywa. Dodaj kilka opcji — gdy tylko jakiś slot się zgodzi, klepnięte:",
   venueConciergeIntro:
     "Termin ustalony 🗓️ Jedna rzecz, zanim znajdę miejsce.\n\n" +
     "📍 *Zaznacz, skąd będziesz wyruszać* na randkę - twój dom, stacja metra, mieszkanie znajomego, skądkolwiek faktycznie ruszasz.\n\n" +
@@ -3496,12 +3496,12 @@ const plTranslations: TranslationTable = {
   venueBoardPingFromF: "{name} rozgląda się za przytulniejszym miejscem na waszą randkę 👀",
   venueBoardPingFromM: "{name} proponuje spojrzeć na kilka innych miejsc na waszą randkę 👀",
   venueBoardPingBtn: "Zobacz",
-  venueKeepNotice: "Twoja para wolałaby zostać w {venue} 👍 Możesz zaproponować inne miejsce poniżej.",
-  venueBothKeepDm: "Oboje zostajecie w {venue} — nic się nie zmienia, do zobaczenia 👍",
-  venueDeclinedKeepDm: "Zostajecie w {venue}, zgodnie z pierwotnym planem 👍",
+  venueKeepNotice: "Twój match wolałby zostać w {venue}. Możesz zaproponować inne miejsce poniżej.",
+  venueBothKeepDm: "Oboje zostajecie w {venue} — nic się nie zmienia, do zobaczenia.",
+  venueDeclinedKeepDm: "Zostajecie w {venue}, zgodnie z planem.",
   venuePayPromptDm:
-    "Razem wybraliście nowe miejsce na randkę!\n📍 {venue}\n" +
-    "Zatwierdź je — a my zaktualizujemy wasze karty.",
+    "Razem wybraliście nowe miejsce na randkę.\n📍 {venue}\n" +
+    "Zatwierdź je — zaktualizuję wasze karty.",
   venuePayBtn: "⭐ Zatwierdź — {stars}",
   venueWishText:
     "{name} znalazła miejsce, które bardzo jej się podoba ✨\n📍 {venue}\n" +
@@ -3511,15 +3511,15 @@ const plTranslations: TranslationTable = {
   venuePayDeclineAck:
     "Rozumiem — miejsce na razie zostaje bez zmian. Jeśli się zmieni, dostaniesz nową kartę.",
   venuePaySelfDm:
-    "Zgodziliście się na nowe miejsce!\n📍 {venue}\nZatwierdź je — a my zaktualizujemy wasze karty ✨",
+    "Zgodziliście się na nowe miejsce.\n📍 {venue}\nZatwierdź je — zaktualizuję wasze karty ✨",
   venuePaySelfBtn: "⭐ Zatwierdź — {stars}",
-  venueSettledCard: "Gotowe — wasza randka ma nowe miejsce! 📍 {venue}",
+  venueSettledCard: "Gotowe — wasza randka ma nowe miejsce 📍 {venue}",
   venueSettledPaidByM: "{name} opłacił zmianę miejsca ❤️ Wasza randka odbędzie się w 📍 {venue}",
   venueSettledPaidByF: "{name} opłaciła zmianę miejsca ❤️ Wasza randka odbędzie się w 📍 {venue}",
   venueExpressPartnerFromF: "{name} wybrała dla was przytulniejsze miejsce ✨ Nowe miejsce: 📍 {venue}",
   venueExpressPartnerFromM: "{name} wybrał dla was nowe miejsce ✨ Nowe miejsce: 📍 {venue}",
-  venueLapsedDm: "Zmiana miejsca nie została zatwierdzona — spotykacie się w {venue}, jak planowano 👌",
-  venueKeepOriginalDm: "Twoja para zostaje przy pierwotnym miejscu — spotykacie się w {venue}, jak planowano 👌",
+  venueLapsedDm: "Zmiana miejsca nie została zatwierdzona — spotykacie się w {venue}, jak planowano.",
+  venueKeepOriginalDm: "Twój match zostaje przy pierwotnym miejscu — spotykacie się w {venue}, jak planowano.",
   venueInvoiceTitle: "Zmiana miejsca randki",
   venueInvoiceDesc: "Nowe miejsce randki: {venue}",
   venueInvoiceLabel: "Zmiana miejsca",

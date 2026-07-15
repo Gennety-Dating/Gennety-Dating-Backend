@@ -470,7 +470,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     expect(api.deleteMessage).toHaveBeenCalledWith(1002, 72);
     expect(api.sendMessage).toHaveBeenCalledWith(
       1002,
-      expect.stringContaining("suggested a different time"),
+      expect.stringContaining("countered with a different time"),
       expect.objectContaining({ reply_markup: expect.any(Object) }),
     );
     expect(api.editMessageText).not.toHaveBeenCalled();
