@@ -1378,7 +1378,7 @@ async function refreshCollectorSnapshot(
 const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
   en: {
     first_name_age: "What should I call you, and how old are you?",
-    gender: "What is your gender? Please answer directly: man or woman.",
+    gender: "Are you a man or a woman? Answer directly — I never guess this.",
     preference: "Who would you like to date: men, women, or both?",
     height: "How tall are you? You can answer in centimeters or feet and inches.",
     hobbies: "What do you enjoy doing? One hobby is enough, and “no hobbies” is a valid answer.",
@@ -1423,7 +1423,7 @@ const QUESTIONS: Record<Language, Record<OnboardingQuestion, string>> = {
   },
   de: {
     first_name_age: "Wie soll ich dich nennen und wie alt bist du?",
-    gender: "Was ist dein Geschlecht? Bitte antworte direkt: Mann oder Frau.",
+    gender: "Bist du ein Mann oder eine Frau? Antworte direkt — ich rate das nie.",
     preference: "Wen möchtest du daten: Männer, Frauen oder beide?",
     height: "Wie groß bist du? Du kannst in Zentimetern antworten.",
     hobbies: "Was machst du gern? Ein Hobby reicht, und „keine Hobbys“ ist ebenfalls eine gültige Antwort.",
@@ -1491,10 +1491,10 @@ export function onboardingValidationText(
   );
   if (age) {
     return {
-      en: `Right now Gennety is only available for people aged ${MIN_AGE}-${MAX_AGE}. Please enter an age in that range to continue testing.`,
+      en: `Right now Gennety is only available for people aged ${MIN_AGE}-${MAX_AGE}. Enter an age in that range to continue.`,
       ru: `Сейчас Gennety доступен только для возраста ${MIN_AGE}-${MAX_AGE}. Чтобы продолжить тест, укажи возраст в этом диапазоне.`,
       uk: `Зараз Gennety доступний тільки для віку ${MIN_AGE}-${MAX_AGE}. Щоб продовжити тест, вкажи вік у цьому діапазоні.`,
-      de: `Gennety ist aktuell nur für Personen von ${MIN_AGE}-${MAX_AGE} verfügbar. Gib bitte ein Alter in diesem Bereich ein, um den Test fortzusetzen.`,
+      de: `Gennety ist aktuell nur für Personen von ${MIN_AGE}-${MAX_AGE} verfügbar. Gib ein Alter in diesem Bereich an, um weiterzumachen.`,
       pl: `Gennety jest teraz dostępne tylko dla osób w wieku ${MIN_AGE}-${MAX_AGE}. Podaj wiek z tego zakresu, aby kontynuować test.`,
     }[language];
   }
@@ -1504,10 +1504,10 @@ export function onboardingValidationText(
   );
   if (height) {
     return {
-      en: "That height looks outside the supported range. Please send a plausible height in cm, for example 180 cm.",
+      en: "That height looks outside the supported range. Send a plausible height in cm, for example 180 cm.",
       ru: "Этот рост выглядит вне допустимого диапазона. Напиши реалистичный рост в сантиметрах, например 180 см.",
       uk: "Цей зріст виглядає поза допустимим діапазоном. Напиши реалістичний зріст у сантиметрах, наприклад 180 см.",
-      de: "Diese Größe liegt außerhalb des unterstützten Bereichs. Sende bitte eine realistische Größe in Zentimetern, zum Beispiel 180 cm.",
+      de: "Diese Größe liegt außerhalb des unterstützten Bereichs. Schick eine realistische Größe in Zentimetern, zum Beispiel 180 cm.",
       pl: "Ten wzrost wygląda poza obsługiwanym zakresem. Podaj realistyczny wzrost w centymetrach, na przykład 180 cm.",
     }[language];
   }
@@ -1548,7 +1548,7 @@ const NOT_UNDERSTOOD_HINTS: Record<
     ethnicity: "A short answer is enough — or reply “skip”.",
     friday_vibe: "Tell me in a sentence or two how you'd actually spend it.",
     vibe_focus: "Is it more about the experience itself, or who you're with?",
-    ai_memory: "Please answer yes or no.",
+    ai_memory: "Just a yes or no works.",
   },
   ru: {
     name_age: "Можно ответить так: «Максим, 21».",
@@ -1590,7 +1590,7 @@ const NOT_UNDERSTOOD_HINTS: Record<
     ethnicity: "Eine kurze Antwort reicht — oder schreib „überspringen“.",
     friday_vibe: "Beschreib in ein, zwei Sätzen, wie du ihn wirklich verbringen würdest.",
     vibe_focus: "Geht es dir mehr um das Erlebnis oder um die Leute dabei?",
-    ai_memory: "Antworte bitte mit Ja oder Nein.",
+    ai_memory: "Ein Ja oder Nein reicht.",
   },
   pl: {
     name_age: "Możesz odpowiedzieć na przykład: „Alex, 21”.",

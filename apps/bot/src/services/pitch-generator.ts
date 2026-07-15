@@ -152,11 +152,11 @@ export function localFallbackPitch(input: PitchInput): string {
   const other = input.otherFirstName ?? "someone";
   switch (input.language) {
     case "ru":
-      return `Мы нашли для вас совпадение: ${other}. Наш ИИ считает, что у вас совпадают ценности и темп общения. Готовы познакомиться?`;
+      return `Нашёл тебе мэтч: ${other}. Похоже, у вас совпадают ценности и темп общения. Глянешь?`;
     case "uk":
-      return `Ми знайшли для вас метч: ${other}. Наш ШІ вважає, що у вас збігаються цінності та темп спілкування. Готові познайомитись?`;
+      return `Знайшов тобі метч: ${other}. Схоже, у вас збігаються цінності та темп спілкування. Глянеш?`;
     default:
-      return `We found a match for you: ${other}. Our AI thinks your values and communication rhythms line up nicely. Want to meet?`;
+      return `Found you a match: ${other}. Looks like your values and communication rhythms line up. Take a look?`;
   }
 }
 

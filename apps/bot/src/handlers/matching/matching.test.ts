@@ -769,7 +769,7 @@ describe("pitch-generator: fallback + splitter", () => {
       language: "ru",
     });
     expect(text).toContain("Маша");
-    expect(text).toMatch(/совпадение/);
+    expect(text).toMatch(/мэтч/);
   });
 
   it("splitPitchIntoDrafts returns one chunk for a single sentence", () => {
