@@ -11,6 +11,7 @@ import { assistantRouter } from "./routes/assistant.js";
 import { chatRouter } from "./routes/chat.js";
 import { matchesRouter } from "./routes/matches.js";
 import { countdownRouter } from "./routes/countdown.js";
+import { founderReportRouter } from "./routes/founder-report.js";
 import { verificationRouter } from "./routes/verification.js";
 import { webRegistrationRouter } from "./routes/web-registration.js";
 import { createPersonaWebhookRouter } from "./routes/persona-webhook.js";
@@ -257,6 +258,10 @@ app.use("/v1/assistant", assistantRouter);
 app.use("/v1/chat", chatRouter);
 app.use("/v1/matches", matchesRouter);
 app.use("/v1/countdown", countdownRouter);
+// Founder weekly-matches report page + media proxy. Public by design — the
+// unguessable token in the path is the authorization (no JWT/initData). Ops-only
+// and inert unless FOUNDER_NOTIFY_ENABLED (reports are never created otherwise).
+app.use("/v1/founder", founderReportRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ error: "Not found" });

@@ -7,6 +7,7 @@ import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { env } from "../config.js";
 import { runFaceMatchVerificationDefault } from "../services/verification-pipeline.js";
+import { buildWeeklyMatchesReport } from "../services/weekly-matches-report.js";
 import {
   downloadProfileImage,
   downloadChatImage,
@@ -352,6 +353,34 @@ app.get("/admin/analytics/matches", async (_req: Request, res: Response) => {
     });
   } catch (err) {
     console.error("[admin] matches error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/analytics/weekly-matches?weekOf=YYYY-MM-DD
+// Full per-pair report for the dashboard's "Weekly Matches" view: both users
+// (name/age/gender/city/verification/attractiveness) + photo refs (streamed via
+// /admin/media) + synergy. Shares the assembler with the founder report page.
+// `weekOf` selects that day's 7-day window; omitted → the last 7 days.
+// ---------------------------------------------------------------------------
+app.get("/admin/analytics/weekly-matches", async (req: Request, res: Response) => {
+  try {
+    const weekOfRaw = typeof req.query.weekOf === "string" ? req.query.weekOf : "";
+    let since: Date;
+    let until: Date;
+    if (weekOfRaw && !Number.isNaN(Date.parse(weekOfRaw))) {
+      since = new Date(weekOfRaw);
+      since.setUTCHours(0, 0, 0, 0);
+      until = new Date(since.getTime() + 7 * 24 * 60 * 60 * 1000);
+    } else {
+      until = new Date();
+      since = new Date(until.getTime() - 7 * 24 * 60 * 60 * 1000);
+    }
+    const report = await buildWeeklyMatchesReport({ since, until });
+    res.json({ weekOf: since.toISOString(), ...report });
+  } catch (err) {
+    console.error("[admin] weekly-matches error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
