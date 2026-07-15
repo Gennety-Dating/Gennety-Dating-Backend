@@ -10,6 +10,8 @@ import {
   computeCityDistribution,
   type CityUserInput,
 } from "./cities.js";
+import { computeAcquisition, normalizeChannel } from "../utils/growth.js";
+import { percentile } from "../utils/buckets.js";
 
 export const onboardingFunnelRouter: Router = Router();
 
@@ -270,6 +272,111 @@ onboardingFunnelRouter.get(
       res.json(data);
     } catch (err) {
       console.error("[admin] founder-digest error:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /admin/analytics/growth
+// Acquisition-by-channel with downstream conversion + activation + dormancy —
+// the growth-stage view (which channels bring users who actually activate).
+// ---------------------------------------------------------------------------
+const DORMANT_DAYS = 14;
+
+onboardingFunnelRouter.get(
+  "/admin/analytics/growth",
+  async (_req: Request, res: Response) => {
+    try {
+      const data = await getOrCompute("growth:v1", 900, async () => {
+        const dormantBefore = new Date(Date.now() - DORMANT_DAYS * 86_400_000);
+
+        const [users, matchPairs, statusGroups] = await Promise.all([
+          prisma.user.findMany({
+            select: {
+              id: true,
+              referralSource: true,
+              onboardingStep: true,
+              status: true,
+              createdAt: true,
+              verifiedAt: true,
+              lastMessageAt: true,
+            },
+          }),
+          prisma.match.findMany({ select: { userAId: true, userBId: true } }),
+          prisma.user.groupBy({ by: ["status"], _count: { _all: true } }),
+        ]);
+
+        const matchedIds = new Set<string>();
+        for (const m of matchPairs) {
+          matchedIds.add(m.userAId);
+          matchedIds.add(m.userBId);
+        }
+
+        const acquisition = computeAcquisition(
+          users.map((u) => ({
+            referralSource: u.referralSource,
+            onboardingStep: u.onboardingStep,
+            status: u.status,
+            matched: matchedIds.has(u.id),
+          })),
+        );
+
+        const statusCounts: Record<string, number> = {};
+        for (const g of statusGroups) statusCounts[g.status] = g._count._all;
+        const activeUsers = users.filter((u) => u.status === "active");
+        const activeTotal = activeUsers.length;
+
+        // Dormancy: active users who have gone quiet (no message in DORMANT_DAYS).
+        const dormantActive = activeUsers.filter(
+          (u) => !u.lastMessageAt || u.lastMessageAt < dormantBefore,
+        ).length;
+
+        // Time-to-verify (activation proxy): median days from signup to
+        // verifiedAt over users who verified.
+        const daysToVerify = users
+          .filter((u) => u.verifiedAt)
+          .map((u) => (u.verifiedAt!.getTime() - u.createdAt.getTime()) / 86_400_000)
+          .sort((a, b) => a - b);
+        const medianDaysToVerify =
+          daysToVerify.length > 0
+            ? +percentile(daysToVerify, 0.5)!.toFixed(2)
+            : null;
+
+        // Referral / virality proxy (approximate — see Hermes prompt caveat).
+        const referredSignups = users.filter(
+          (u) => normalizeChannel(u.referralSource) === "referral",
+        ).length;
+
+        return {
+          generatedAt: new Date().toISOString(),
+          note: "signups are vanity; activationRate per channel is the real yield",
+          acquisition,
+          activation: {
+            totalUsers: users.length,
+            active: activeTotal,
+            activationRate:
+              users.length > 0 ? +(activeTotal / users.length).toFixed(3) : 0,
+            medianDaysToVerify,
+          },
+          health: {
+            statusCounts,
+            dormantActive,
+            dormantActiveShare:
+              activeTotal > 0 ? +(dormantActive / activeTotal).toFixed(3) : 0,
+            dormantThresholdDays: DORMANT_DAYS,
+          },
+          referral: {
+            referredSignups,
+            kFactorApprox:
+              activeTotal > 0 ? +(referredSignups / activeTotal).toFixed(3) : 0,
+          },
+        };
+      });
+
+      res.json(data);
+    } catch (err) {
+      console.error("[admin] growth error:", err);
       res.status(500).json({ error: "Internal server error" });
     }
   },

@@ -557,7 +557,14 @@ active users per city with centroid `lat`/`lng`, and verification pass rate) for
 the external **Hermes** weekly founder report (see `HERMES_AGENT_PROMPT.md`).
 `GET /admin/analytics/cities` (`routes/cities.ts`) carries the full per-city
 male/female distribution and now also each city's centroid `lat`/`lng` so the
-dashboard can plot the user-geography map.
+dashboard can plot the user-geography map. `GET /admin/analytics/growth`
+(same router; pure aggregation in `utils/growth.ts`) is the growth-stage view:
+acquisition **by channel** (`referralSource` normalized to
+`tg:<campaign>`/`mobile`/`web:*`/`referral`/`organic`) with downstream
+conversion (signups → completedOnboarding → active → matched and
+completion/activation rates), an activation block (`signup→active` rate +
+median days-to-verify), a health block (status counts + dormant-active share:
+`active` users quiet ≥14 days), and an approximate referral K-factor.
 
 `GET /admin/analytics/cities` returns the male/female split **per city**
 (`routes/cities.ts`, cached 10 min). Per-user city attribution follows two
