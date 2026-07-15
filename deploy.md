@@ -726,6 +726,25 @@ Required/high-impact env keys:
   extra OpenAI call per side for the short card copy. Any copy/render/send
   failure falls back to the plain protected media group, so the flag is safe to
   toggle live with `pm2 restart gennety-bot --update-env`. No schema change.
+- Founder notifications (feature-flagged private ops feed): `FOUNDER_NOTIFY_ENABLED`
+  (default `false` — leave off until the founder bot + chat id are set). When on,
+  a SEPARATE founder bot DMs the founder three things: (1) each new user's full
+  profile + photos on first activation (no AI-memory dump), (2) a tokenized
+  weekly-matches report link after the Thursday batch, (3) both date cards + venue
+  when a date locks in. Requires `FOUNDER_BOT_TOKEN` (a NEW bot from BotFather —
+  kept distinct from `BOT_TOKEN`; `file_id`s are per-bot so the founder bot uploads
+  raw bytes), `FOUNDER_TELEGRAM_ID` (the founder's numeric chat id — they must
+  `/start` the founder bot once), and `PUBLIC_BASE_URL` (default
+  `https://dating-api.gennety.com`, used to build the report link). **Requires
+  `db:push` of the additive `users.founder_notified_at` column and the new
+  `founder_reports` table first** (non-destructive; the idempotency marker +
+  report snapshots). The report page (`GET /v1/founder/report/:token`) is served
+  by the existing public API — no Caddy/DNS change. Photos in the report stream
+  through the main bot, so no `PLACES_API_KEY` dependency. Runs inline at
+  activation / venue-finalize / the weekly cron — no new cron schedule. The
+  founder-facing dashboard "Weekly matches" tab lives in the separate
+  `gennety-dating-dashboard` repo and consumes `GET /admin/analytics/weekly-matches`.
+  Rollback: flip the flag off; the additive column/table may stay.
 - Optional cron overrides: `MATCH_CRON_SCHEDULE`, `CRON_TIMEZONE`,
   `EXPIRY_CRON_SCHEDULE`, `NO_MATCH_NOTICE_CRON_SCHEDULE`,
   `PROPOSAL_COUNTDOWN_CRON_SCHEDULE`, `RE_ENGAGEMENT_CRON_SCHEDULE`,

@@ -415,6 +415,19 @@ consecutive-famine count; `dropDate` is truncated to the UTC day of the cron
 firing, and `(userId, dropDate)` is unique — both an idempotency guard and
 the data source for the dashboard's churn-warning trend.
 
+### `founder_reports`
+
+Snapshot of a weekly founder matches report (feature-flagged ops feed, gated by
+`FOUNDER_NOTIFY_ENABLED`). Built after the Thursday batch by
+`notifyFounderWeeklyMatches` (`services/founder-notify.ts`) and read by the
+tokenized report page (`GET /v1/founder/report/:token`). Columns: `token`
+(unique crypto-random URL token = the page's sole authorization, never logged),
+`weekOf` (UTC day of the batch), `dataJson` (the assembled `WeeklyMatchesReport`
+snapshot — pairs + user cards + photo refs; **never** `psychologicalSummary` /
+AI-memory dumps), `createdAt`. Indexed `(createdAt)`. Standalone model (no user
+relation); PII lives only in the snapshot. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md)
+is unaffected — this is an ops surface, not a product flow.
+
 ### `curated_venues`
 
 First-party, hand-curated first-date venues currently scoped by
@@ -531,6 +544,8 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | POST | `/v1/venue-change/stars-invoice` | Mint the `VENUE_CHANGE_STARS` (150⭐) invoice link — body `{matchId, mode: "agreed"}` (payer / her parallel pay-self) or `{matchId, mode: "express", key}` (stamps her hidden express mint first). Settled by the bot's `successful_payment` handler (payload `venue:<matchId>:<mode>`); `pre_checkout_query` declines stale links. Telegram `initData` HMAC auth. |
 | GET  | `/v1/verification/mini-app/init` | Verification Mini App SDK config — returns `{referenceId, templateId, environmentId, language, environment}` for the Persona Embedded SDK and flips `verificationStatus` to `pending`. 503 if Persona feature flag/ids missing, 409 if already verified. Telegram `initData` HMAC auth. |
 | POST | `/v1/verification/mini-app/event` | Verification Mini App terminal SDK callback — body `{kind: "complete"\|"cancel"\|"error", inquiryId?, status?, message?}`. `complete` writes `personaInquiryId` (CAS on null) and triggers `pullVerificationStatus` fire-and-forget; `cancel`/`error` are logged only. Does NOT write `verified`/`rejected` — the HMAC webhook is the only path that can. Telegram `initData` HMAC auth. |
+| GET  | `/v1/founder/report/:token` | Founder weekly-matches report page (feature-flagged ops feed). Tokenized, login-free — the unguessable `FounderReport.token` is the sole auth; renders a self-contained `noindex` HTML page of the week's pairs (both users + photos + attractiveness). Inert unless `FOUNDER_NOTIFY_ENABLED` (no report rows exist otherwise). |
+| GET  | `/v1/founder/report/:token/media?ref=` | Scoped image proxy for the report page — streams a photo ref via the MAIN bot, but only refs present in THAT report's snapshot (not an arbitrary proxy). |
 | POST | `/v1/webhooks/persona` | Persona inquiry webhook (HMAC of raw body, mounted **before** `express.json`) |
 
 ## Admin `/admin/*` API Surface
@@ -542,6 +557,13 @@ internal analytics dashboard.
 Top-level routers: `audience`, `algorithm`, `gender`, `retention`, `dates`,
 `verification` (incl. a "rerun face-match pipeline" admin button), `cities`,
 `onboarding-funnel`.
+
+`GET /admin/analytics/weekly-matches?weekOf=YYYY-MM-DD` returns the full
+per-pair report (both users' name/age/gender/city/verification/attractiveness +
+photo refs + synergy) for the dashboard's **Weekly matches** view — sharing the
+`buildWeeklyMatchesReport()` assembler with the founder report page
+(`services/weekly-matches-report.ts`). Photos ride the existing `/admin/media`
+proxy. `weekOf` selects that day's 7-day window; omitted → the last 7 days.
 
 `GET /admin/analytics/onboarding-funnel` surfaces the onboarding drop-off /
 hesitation funnel from `onboarding_step_events` (`routes/onboarding-funnel.ts`,
