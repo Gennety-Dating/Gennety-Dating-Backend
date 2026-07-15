@@ -85,7 +85,6 @@ const {
   grantTickets,
   spendTickets,
   getBalance,
-  grantVerificationBonusIfEligible,
   grantStudentBonusIfEligible,
   grantWelcomeGiftIfEligible,
   grantPhotoBonusIfEligible,
@@ -148,30 +147,6 @@ describe("photo bonus", () => {
   });
 });
 
-describe("verification bonus", () => {
-  it("grants one ticket once and uses the ledger as the claim marker", async () => {
-    const first = await grantVerificationBonusIfEligible("u1");
-    expect(first).toEqual({ granted: true, balance: 1 });
-
-    const second = await grantVerificationBonusIfEligible("u1");
-    expect(second).toEqual({ granted: false, balance: 1 });
-    expect(db.ledger).toEqual([
-      expect.objectContaining({
-        userId: "u1",
-        delta: 1,
-        reason: "verification_bonus",
-      }),
-    ]);
-  });
-
-  it("is a no-op when the feature flag is off", async () => {
-    flag.TICKET_FEATURE_ENABLED = false;
-    const result = await grantVerificationBonusIfEligible("u1");
-    expect(result).toEqual({ granted: false, balance: 0 });
-    expect(db.ledger).toHaveLength(0);
-  });
-});
-
 describe("student bonus (Registration v2)", () => {
   it("grants 2 tickets once and uses the ledger as the claim marker", async () => {
     const first = await grantStudentBonusIfEligible("u1");
@@ -189,10 +164,10 @@ describe("student bonus (Registration v2)", () => {
     ]);
   });
 
-  it("stacks with the verification bonus (separate claims)", async () => {
+  it("stacks with the welcome gift (separate claims)", async () => {
     await grantStudentBonusIfEligible("u1");
-    const verification = await grantVerificationBonusIfEligible("u1");
-    expect(verification).toEqual({ granted: true, balance: 3 });
+    const welcome = await grantWelcomeGiftIfEligible("u1");
+    expect(welcome).toEqual({ granted: true, balance: 3 });
   });
 
   it("is a no-op when the feature flag is off", async () => {

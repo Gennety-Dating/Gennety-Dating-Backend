@@ -371,15 +371,14 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   host (dev without a tunnel) the bot silently falls back to the legacy
   `InlineKeyboardButton.url` opening the hosted flow at
   `buildPersonaHostedUrl(userId)`. Mobile (Expo) still uses the hosted
-  URL via `/v1/me/verification/url` — it isn't a Telegram client. When
-  `TICKET_FEATURE_ENABLED`, the CTA also promises one free Date Ticket for a
-  successful final `verified` result. The verification pipeline credits it once
-  through `TicketLedger` (`reason = verification_bonus`), so webhook retries,
-  manual pulls, photo-triggered reruns, and later re-verification cannot
-  duplicate it. The reward DM confirms the new balance.
+  URL via `/v1/me/verification/url` — it isn't a Telegram client. Passing
+  verification grants no free Date Ticket (the `verification_bonus` reward was
+  retired); the CTA copy only frames the ELO cost of skipping. Historical
+  `verification_bonus` `TicketLedger` rows granted before the change stay valid
+  and are never clawed back.
 - **Skip for now** — *(legacy path — hidden when
   `MANDATORY_VERIFICATION_ENABLED` is on: the CTA then carries only the Verify
-  button with the `verifyPitchMandatory[Ticket]` copy, and taps on pre-flip
+  button with the `verifyPitchMandatory` copy, and taps on pre-flip
   Skip / Skip-anyway buttons refuse with `verifyMandatoryNotice` + a fresh
   Verify button — no penalty, no unverified activation; already-skipped users
   stay grandfathered.)* A *two-step soft skip*. The first tap does **not** apply
@@ -390,8 +389,7 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   Verification Mini App / hosted flow) or **Skip anyway**. Only **Skip anyway**
   flips `verificationSkippedAt`, drops `Profile.eloScore` by
   `UNVERIFIED_ELO_PENALTY` (= 150 from a 500 default), and activates the user as
-  `unverified`. With tickets enabled, the text also makes clear that skipping
-  forfeits the free verification ticket. Telegram's native inline-button styles
+  `unverified`. Telegram's native inline-button styles
   render the reconsider action as `success` (green) and the final skip action as
   `danger` (red), with emoji labels retained for older clients. Reversible by
   later running Persona. The voice assets are
@@ -994,7 +992,7 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   `TICKET_FEATURE_ENABLED`.
 - **Ticket wallet (pre-purchase + bonuses).** Users carry a `User.ticketBalance`
   topped up by onboarding bonuses (§1.3: 6+ photos, adding a video;
-  §1.4: successful identity verification; Registration v2: the one-time
+  Registration v2: the one-time
   **student bonus** — `STUDENT_BONUS_TICKETS` (2) tickets granted at
   university-email verification via the idempotent `student_bonus` ledger
   claim, announced with the `ticketRewardStudent` DM — the student track's

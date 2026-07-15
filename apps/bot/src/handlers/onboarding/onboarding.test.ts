@@ -1935,8 +1935,10 @@ describe("sendVerificationCTABare", () => {
       "https://test.invalid/calendar/verification.html?lang=en",
     );
     expect(keyboard[0]?.[0]?.style).toBe("success");
-    expect(api.sendMessage.mock.calls[0]?.[1]).toContain("1 free Date Ticket");
-    expect(api.sendMessage.mock.calls[0]?.[1]).toContain("150");
+    // The verification-bonus free ticket was retired, so the CTA no longer
+    // promises one — it only frames the ELO cost of skipping.
+    expect(api.sendMessage.mock.calls[0]?.[1]).not.toContain("Date Ticket");
+    expect(api.sendMessage.mock.calls[0]?.[1]).toContain("ELO");
     // Make sure we're NOT serving the legacy Persona URL or the legacy
     // verify:check callback — both should be gone from the CTA surface.
     expect(keyboard[0]?.[0]?.url).toBeUndefined();
@@ -2022,9 +2024,10 @@ describe("handleVerificationSkip — soft skip (voice nudge + fork)", () => {
     expect(keyboard[0]?.[0]?.style).toBe("success");
     expect(keyboard[1]?.[0]?.callback_data).toBe(VERIFY_SKIP_CONFIRM_CALLBACK);
     expect(keyboard[1]?.[0]?.style).toBe("danger");
-    expect(keyboard[1]?.[0]?.text).toContain("Give up the bonus");
-    expect(voiceOpts.caption).toContain("free ticket");
-    expect(voiceOpts.caption).toContain("150");
+    // The verification-bonus free ticket was retired: the skip fork no longer
+    // frames a forfeited bonus, just the plain "skip anyway" confirm.
+    expect(keyboard[1]?.[0]?.text).toContain("Skip anyway");
+    expect(voiceOpts.caption).not.toContain("ticket");
     // No penalty, no activation — the soft skip only nudges.
     expect(prisma.profile.updateMany).not.toHaveBeenCalled();
     expect(prisma.user.update).not.toHaveBeenCalled();

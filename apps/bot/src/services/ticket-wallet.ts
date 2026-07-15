@@ -24,6 +24,9 @@ import { env } from "../config.js";
 export type TicketReason =
   | "photo_bonus"
   | "video_bonus"
+  // Legacy: the identity-verification bonus was retired. No new rows are
+  // written with this reason; it stays in the union so historical ledger rows
+  // (and their balances) remain valid.
   | "verification_bonus"
   | "student_bonus"
   | "welcome_gift"
@@ -152,67 +155,15 @@ function isSerializationConflict(error: unknown): boolean {
 }
 
 /**
- * Grant the one-time identity-verification bonus.
- *
- * The ledger row is the claim marker, so no Prisma schema change is needed.
- * Serializable isolation makes the read + wallet increment atomic under a
- * webhook/pull race; a serialization loser retries and then sees the winner's
- * `verification_bonus` row.
- */
-export async function grantVerificationBonusIfEligible(
-  userId: string,
-): Promise<BonusResult> {
-  if (!env.TICKET_FEATURE_ENABLED) {
-    return { granted: false, balance: await getBalance(userId) };
-  }
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      return await prisma.$transaction(
-        async (tx) => {
-          const existing = await tx.ticketLedger.findFirst({
-            where: { userId, reason: "verification_bonus" },
-            select: { id: true },
-          });
-          if (existing) {
-            const user = await tx.user.findUnique({
-              where: { id: userId },
-              select: { ticketBalance: true },
-            });
-            return { granted: false, balance: user?.ticketBalance ?? 0 };
-          }
-
-          const user = await tx.user.update({
-            where: { id: userId },
-            data: { ticketBalance: { increment: 1 } },
-            select: { ticketBalance: true },
-          });
-          await tx.ticketLedger.create({
-            data: { userId, delta: 1, reason: "verification_bonus" },
-          });
-          return { granted: true, balance: user.ticketBalance };
-        },
-        { isolationLevel: "Serializable" },
-      );
-    } catch (error) {
-      if (!isSerializationConflict(error) || attempt === 2) throw error;
-    }
-  }
-
-  return { granted: false, balance: await getBalance(userId) };
-}
-
-/**
  * Registration v2 student loyalty: grant the one-time student bonus
  * (`STUDENT_BONUS_TICKETS` free Date Tickets) when a university email is
  * verified. The student track's welcome perk — the general/phone track gets
  * none — so registering with a university email is materially rewarded.
  *
- * Same idempotency model as the verification bonus: the `student_bonus`
- * ledger row is the claim marker and Serializable isolation makes the
- * existence check + wallet increment atomic, so the four email-verify call
- * sites (Mini App OTP, agent verify_otp, web handoff, mobile OTP) can all
- * fire it blindly and the wallet is credited exactly once.
+ * The `student_bonus` ledger row is the claim marker and Serializable
+ * isolation makes the existence check + wallet increment atomic, so the four
+ * email-verify call sites (Mini App OTP, agent verify_otp, web handoff, mobile
+ * OTP) can all fire it blindly and the wallet is credited exactly once.
  */
 export async function grantStudentBonusIfEligible(
   userId: string,
@@ -263,9 +214,9 @@ export async function grantStudentBonusIfEligible(
  * pre-roll on the user's first-ever match pitch (see `services/welcome-gift.ts`
  * + `handlers/matching/pitch.ts`).
  *
- * Same idempotency model as the verification bonus: the `welcome_gift` ledger
- * row is the claim marker (no Prisma schema change), and Serializable isolation
- * makes the existence check + wallet increment atomic. Because the grant is
+ * The `welcome_gift` ledger row is the claim marker (no Prisma schema change),
+ * and Serializable isolation makes the existence check + wallet increment
+ * atomic. Because the grant is
  * idempotent, the first qualifying pitch becomes the gift moment automatically
  * — no separate "first match" detection is needed. Returns `granted:true` only
  * on the call that actually credits the ticket, so the caller can gate the

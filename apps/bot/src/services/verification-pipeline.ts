@@ -8,8 +8,6 @@ import { compareFaces } from "./face-match.js";
 import { fetchInquirySelfie, fetchLatestInquiryByReference } from "./persona-api.js";
 import { pinStatusBanner } from "./status-banner.js";
 import { downloadProfileImage, uploadSelfie } from "./storage.js";
-import { sendTicketRewardDM } from "./ticket-reward.js";
-import { grantVerificationBonusIfEligible } from "./ticket-wallet.js";
 
 /**
  * Face-match verification pipeline (Phase 6.3 — third iteration).
@@ -114,15 +112,6 @@ export interface PipelineDeps {
    * pipeline stays testable and mobile-only users can no-op.
    */
   surfaceVerifiedActivation?: (input: {
-    userId: string;
-    telegramId: bigint;
-  }) => Promise<void>;
-  /**
-   * One-time Date Ticket reward for a successful identity verification.
-   * The production hook is ledger-idempotent and feature-flagged; failures
-   * never change the verification outcome.
-   */
-  awardVerificationBonus?: (input: {
     userId: string;
     telegramId: bigint;
   }) => Promise<void>;
@@ -234,12 +223,6 @@ export async function runFaceMatchVerification(
   // We key on `inquiryId` (not on `verifiedAt` alone) so a re-verification
   // attempt — new Persona inquiry, possibly different result — DOES re-run.
   if (user.personaInquiryId === inquiryId && user.faceMatchedAt !== null) {
-    if (user.verificationStatus === "verified") {
-      await awardVerificationBonus(deps, {
-        userId,
-        telegramId: user.telegramId,
-      });
-    }
     return { kind: "skipped_idempotent", userId };
   }
 
@@ -520,10 +503,6 @@ export async function runFaceMatchVerification(
       }
     }
     await sendOutcomeMessage(deps, user.telegramId, "verified");
-    await awardVerificationBonus(deps, {
-      userId,
-      telegramId: user.telegramId,
-    });
     if (user.telegramId > 0n) {
       await surfaceVerifiedActivation(deps, {
         userId,
@@ -612,21 +591,6 @@ async function surfaceVerifiedActivation(
   }
 }
 
-async function awardVerificationBonus(
-  deps: Pick<PipelineDeps, "awardVerificationBonus">,
-  input: { userId: string; telegramId: bigint },
-): Promise<void> {
-  if (!deps.awardVerificationBonus) return;
-  try {
-    await deps.awardVerificationBonus(input);
-  } catch (err) {
-    console.warn(`${LOG_PREFIX} verification ticket reward failed`, {
-      userId: input.userId,
-      err,
-    });
-  }
-}
-
 async function surfaceVerifiedActivationDefault(
   api: Api<RawApi>,
   userId: string,
@@ -702,22 +666,6 @@ export async function runFaceMatchVerificationDefault(
       },
       surfaceVerifiedActivation: async (input) => {
         await surfaceVerifiedActivationDefault(api, input.userId, input.telegramId);
-      },
-      awardVerificationBonus: async (input) => {
-        const reward = await grantVerificationBonusIfEligible(input.userId);
-        if (!reward.granted || input.telegramId <= 0n) return;
-
-        const user = await prisma.user.findUnique({
-          where: { id: input.userId },
-          select: { language: true },
-        });
-        await sendTicketRewardDM(
-          api,
-          Number(input.telegramId),
-          user?.language ?? "en",
-          "verification",
-          reward.balance,
-        );
       },
       db: {
         findUser: async (id) => {

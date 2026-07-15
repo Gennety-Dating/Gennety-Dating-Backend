@@ -376,16 +376,18 @@ wrappers before a rejected asset can be committed to `profiles`.
 ### `ticket_ledger` (feature-flagged)
 
 Append-only audit of every ticket-wallet movement (`userId`, `delta`, `reason`
-∈ `photo_bonus`/`video_bonus`/`verification_bonus`/`student_bonus`/`welcome_gift`/
-`store_purchase`/`spend_match`/`refund`, optional
+∈ `photo_bonus`/`video_bonus`/`student_bonus`/`welcome_gift`/
+`store_purchase`/`spend_match`/`refund`, plus the retired legacy
+`verification_bonus` that survives only on historical rows and is never written
+anymore, optional
 `matchId`/`amountCents`/`bundleSize`/`externalPaymentId`, `createdAt`;
 `onDelete: Cascade` from `users`). The running sum of `delta` equals
 `User.ticketBalance`, which is materialized for fast reads; both are written in
 the same transaction by `services/ticket-wallet.ts`. Photo/video onboarding
 bonuses are idempotent via `Profile.photoBonusTicketAt` / `videoBonusTicketAt`;
-the verification bonus, the first-pitch welcome gift, and the Registration v2
+the first-pitch welcome gift and the Registration v2
 student bonus (+2 at university-email verification) use a serializable ledger
-claim on `verification_bonus` / `welcome_gift` / `student_bonus`.
+claim on `welcome_gift` / `student_bonus`.
 **`externalPaymentId`** is the unique provider charge id (Telegram Stars
 `telegram_payment_charge_id`) set on a paid **store** top-up — its unique
 constraint makes a redelivered `successful_payment` roll back the duplicate

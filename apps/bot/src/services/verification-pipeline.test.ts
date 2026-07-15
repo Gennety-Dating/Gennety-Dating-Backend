@@ -28,7 +28,6 @@ interface Harness {
   persisted: PersistOutcomeInput[];
   notifications: Array<{ telegramId: bigint; message: string }>;
   activationSurfaces: Array<{ userId: string; telegramId: bigint }>;
-  verificationRewards: Array<{ userId: string; telegramId: bigint }>;
   deps: PipelineDeps;
 }
 
@@ -71,7 +70,6 @@ function makeHarness(
   const persisted: PersistOutcomeInput[] = [];
   const notifications: Array<{ telegramId: bigint; message: string }> = [];
   const activationSurfaces: Array<{ userId: string; telegramId: bigint }> = [];
-  const verificationRewards: Array<{ userId: string; telegramId: bigint }> = [];
 
   const deps: PipelineDeps = {
     fetchInquirySelfie: vi.fn(async () => selfie),
@@ -91,9 +89,6 @@ function makeHarness(
     surfaceVerifiedActivation: vi.fn(async (input) => {
       activationSurfaces.push(input);
     }),
-    awardVerificationBonus: vi.fn(async (input) => {
-      verificationRewards.push(input);
-    }),
     db: {
       findUser: vi.fn(async () => user),
       persistOutcome: vi.fn(async (input: PersistOutcomeInput) => {
@@ -107,7 +102,6 @@ function makeHarness(
     persisted,
     notifications,
     activationSurfaces,
-    verificationRewards,
     deps,
   };
 }
@@ -141,9 +135,6 @@ describe("runFaceMatchVerification — happy path (quorum)", () => {
     expect(h.notifications).toHaveLength(1);
     expect(h.notifications[0]!.message).toContain("Verified");
     expect(h.activationSurfaces).toEqual([
-      { userId: USER_ID, telegramId: 999_001n },
-    ]);
-    expect(h.verificationRewards).toEqual([
       { userId: USER_ID, telegramId: 999_001n },
     ]);
   });
@@ -424,24 +415,6 @@ describe("runFaceMatchVerification — idempotency", () => {
     expect(h.persisted).toHaveLength(0);
     expect(h.notifications).toHaveLength(0);
     expect(h.activationSurfaces).toHaveLength(0);
-    expect(h.verificationRewards).toEqual([
-      { userId: USER_ID, telegramId: 999_001n },
-    ]);
-  });
-
-  it("does not award a ticket for an idempotent non-verified outcome", async () => {
-    const h = makeHarness({
-      user: {
-        verificationStatus: "pending_review",
-        personaInquiryId: INQUIRY_ID,
-        faceMatchedAt: new Date("2026-04-29T10:00:00Z"),
-      },
-    });
-
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
-
-    expect(outcome).toEqual({ kind: "skipped_idempotent", userId: USER_ID });
-    expect(h.verificationRewards).toHaveLength(0);
   });
 
   it("re-runs when a NEW inquiry arrives for a previously verified user", async () => {
@@ -481,9 +454,6 @@ describe("runFaceMatchVerification — DM behavior", () => {
     await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
     expect(h.notifications).toHaveLength(0);
     expect(h.activationSurfaces).toHaveLength(0);
-    expect(h.verificationRewards).toEqual([
-      { userId: USER_ID, telegramId: -1n },
-    ]);
   });
 
   it("swallows DM errors (does not change the pipeline outcome)", async () => {
@@ -512,20 +482,6 @@ describe("runFaceMatchVerification — DM behavior", () => {
     expect(outcome.kind).toBe("verified");
     expect(h.persisted[0]!.verificationStatus).toBe("verified");
     expect(h.notifications[0]!.message).toContain("Verified");
-  });
-
-  it("swallows verification reward errors after a successful check", async () => {
-    const h = makeHarness();
-    h.deps.awardVerificationBonus = vi.fn(async () => {
-      throw new Error("wallet unavailable");
-    });
-
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
-
-    expect(outcome.kind).toBe("verified");
-    expect(h.persisted[0]!.verificationStatus).toBe("verified");
-    expect(h.notifications[0]!.message).toContain("Verified");
-    expect(h.activationSurfaces).toHaveLength(1);
   });
 });
 

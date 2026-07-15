@@ -119,12 +119,8 @@ export async function sendVerificationCTABare(
   }
 
   const pitchKey = env.MANDATORY_VERIFICATION_ENABLED
-    ? env.TICKET_FEATURE_ENABLED
-      ? "verifyPitchMandatoryTicket"
-      : "verifyPitchMandatory"
-    : env.TICKET_FEATURE_ENABLED
-      ? "verifyPitchTicket"
-      : "verifyPitch";
+    ? "verifyPitchMandatory"
+    : "verifyPitch";
   await api.sendMessage(
     chatId,
     t(lang, pitchKey, { penalty: UNVERIFIED_ELO_PENALTY }),
@@ -220,10 +216,7 @@ async function sendSkipNudge(
   lang: Language,
   keyboard: InlineKeyboard,
 ): Promise<void> {
-  const captionKey = env.TICKET_FEATURE_ENABLED
-    ? "verifySkipNudgeCaptionTicket"
-    : "verifySkipNudgeCaption";
-  const caption = t(lang, captionKey, {
+  const caption = t(lang, "verifySkipNudgeCaption", {
     penalty: UNVERIFIED_ELO_PENALTY,
   });
   if (SKIP_NUDGE_VOICE_LANGS.has(lang)) {
@@ -425,12 +418,9 @@ export async function handleVerificationSkip(ctx: BotContext): Promise<void> {
     t(lang, "verifyBtnReconsider"),
   );
   if (hasVerifyButton) keyboard.success();
-  const skipConfirmKey = env.TICKET_FEATURE_ENABLED
-    ? "verifyBtnSkipConfirmTicket"
-    : "verifyBtnSkipConfirm";
   keyboard
     .row()
-    .text(t(lang, skipConfirmKey), VERIFY_SKIP_CONFIRM_CALLBACK)
+    .text(t(lang, "verifyBtnSkipConfirm"), VERIFY_SKIP_CONFIRM_CALLBACK)
     .danger();
 
   await sendSkipNudge(ctx.api, ctx.chat!.id, lang, keyboard);
