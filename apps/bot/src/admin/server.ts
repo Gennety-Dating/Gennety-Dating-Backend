@@ -19,6 +19,7 @@ import { retentionRouter } from "./routes/retention.js";
 import { datesRouter } from "./routes/dates.js";
 import { verificationRouter } from "./routes/verification.js";
 import { citiesRouter } from "./routes/cities.js";
+import { onboardingFunnelRouter } from "./routes/onboarding-funnel.js";
 
 // ---------------------------------------------------------------------------
 // Auth middleware — Bearer token matching ADMIN_API_KEY (timing-safe)
@@ -154,6 +155,7 @@ app.use(retentionRouter);
 app.use(datesRouter);
 app.use(verificationRouter);
 app.use(citiesRouter);
+app.use(onboardingFunnelRouter);
 
 type AdminProfileSnapshot = {
   height: number | null;

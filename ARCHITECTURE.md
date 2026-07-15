@@ -223,6 +223,21 @@ extraction; `resume`, `context_dump`, and `photos_updated` are typed synthetic
 events. Backfill reads canonical columns and raw user-authored messages, never
 AI summaries, assistant messages, or historical tool arguments.
 
+### `onboarding_step_events`
+
+Append-only onboarding funnel telemetry (one row per step transition), written
+best-effort from the collector's post-commit path in
+`services/onboarding-analytics.ts` — never inside the save transaction, so a
+telemetry failure can't abort a user's onboarding. Columns: `userId`, `step`
+(an `ONBOARDING_QUESTIONS` key or `verification`), `kind`
+(`asked`/`answered`/`skipped`), `dwellMs` (hesitation on the step = the gap
+since its latest `asked`; null on `asked` rows), `language`, `platform`,
+`createdAt`. Stores **only** the step key, its outcome, and timing — never the
+user's answer text. Drop-off is derived, not stored (a still-`onboarding` user
+whose latest `asked` step has no matching resolution is stuck there). Indexed
+`(userId, createdAt)` and `(step, kind, createdAt)`; `onDelete: Cascade` from
+`users`. Powers `GET /admin/analytics/onboarding-funnel`.
+
 ### `profiles` (1:1 with `users`)
 
 Columns (≈ 25):
@@ -523,7 +538,21 @@ Mounted by `apps/bot/src/admin/server.ts`. Bearer-auth via `ADMIN_API_KEY`
 internal analytics dashboard.
 
 Top-level routers: `audience`, `algorithm`, `gender`, `retention`, `dates`,
-`verification` (incl. a "rerun face-match pipeline" admin button), `cities`.
+`verification` (incl. a "rerun face-match pipeline" admin button), `cities`,
+`onboarding-funnel`.
+
+`GET /admin/analytics/onboarding-funnel` surfaces the onboarding drop-off /
+hesitation funnel from `onboarding_step_events` (`routes/onboarding-funnel.ts`,
+pure aggregation in `utils/onboarding-funnel.ts`, cached 15 min). Per canonical
+step (`first_name_age → … → photos`, plus a `verification` tail derived from
+`User.status`/`verificationStatus`): `reached`/`answered`/`skipped`/`advanced`
+counts, `stuckHere` (still-onboarding users whose furthest step is this one =
+the leak), `dropOffRate`, and `dwellMsMedian`/`dwellMsP90` (hesitation), with
+`topDropOffSteps` / `slowestSteps` shortlists. `GET
+/admin/analytics/founder-digest` returns this-week-vs-last-week headline KPIs
+(new users + growth %, onboarding completions, match creation/acceptance,
+no-match count, verification pass rate) for the external **Hermes** weekly
+founder report (see `HERMES_AGENT_PROMPT.md`).
 
 `GET /admin/analytics/cities` returns the male/female split **per city**
 (`routes/cities.ts`, cached 10 min). Per-user city attribution follows two

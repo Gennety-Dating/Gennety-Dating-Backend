@@ -8,6 +8,10 @@ import {
 } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
 import {
+  platformFromTelegramId,
+  recordStepTransition,
+} from "./onboarding-analytics.js";
+import {
   contextDumpInstruction,
   MAX_AGE,
   MIN_AGE,
@@ -1267,6 +1271,25 @@ export async function collectOnboardingInput(
       });
       const acceptedFields = uniqueFields(accepted.map(({ field }) => field));
       logCollector(telegramId, acceptedFields, rejected, next);
+      // Funnel telemetry (best-effort): only when the question actually
+      // advanced this turn. A clarifying/unparsed turn leaves `next === current`
+      // and records nothing, so each step gets exactly one `asked` row.
+      if (next !== current) {
+        const resolvedField = questionField(current);
+        const kind: "answered" | "skipped" =
+          resolvedField &&
+          progress.skipped.has(resolvedField) &&
+          !progress.completed.has(resolvedField)
+            ? "skipped"
+            : "answered";
+        await recordStepTransition({
+          userId: user.id,
+          resolved: { step: current, kind },
+          askedNext: next,
+          language: languageOf(user),
+          platform: platformFromTelegramId(telegramId),
+        });
+      }
       // Nothing was saved and the question did not advance (an ethnicity skip
       // advances `next`, so it is not flagged): the answer went unparsed.
       const unparsedAnswer = acceptedFields.length === 0 && next === current;
@@ -1314,6 +1337,13 @@ export async function markOnboardingField(
     },
   });
   logCollector(telegramId, [field], [], next);
+  await recordStepTransition({
+    userId: ensured.id,
+    resolved: { step: field, kind: skipped ? "skipped" : "answered" },
+    askedNext: next,
+    language: languageOf(ensured),
+    platform: platformFromTelegramId(telegramId),
+  });
   return refreshCollectorSnapshot(ensured.id, [field], []);
 }
 

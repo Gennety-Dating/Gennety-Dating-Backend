@@ -259,6 +259,7 @@ model User {
 
   profile Profile?
   onboardingProgress OnboardingProgress?
+  onboardingStepEvents OnboardingStepEvent[]
   sessions UserSession[]
   profilerAnswers ProfilerAnswer[]
   ticketLedger TicketLedger[]
@@ -336,6 +337,40 @@ model OnboardingProgress {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("onboarding_progress")
+}
+
+/// Append-only onboarding funnel telemetry: one row per step transition.
+/// `kind = asked` when a step is first surfaced to the user; `answered` /
+/// `skipped` when they resolve it (advancing to the next step). `dwellMs` on
+/// an `answered`/`skipped` row is the wall-clock gap since that step's matching
+/// `asked` row — i.e. how long the user hesitated on that step. Drop-off is
+/// derived, not stored: a still-`onboarding` user whose latest `asked` step has
+/// no matching `answered`/`skipped` is stuck there. Feeds the
+/// `/admin/analytics/onboarding-funnel` endpoint (drop-off %, dwell median/p90,
+/// abandonment hotspots). Written from the onboarding collector's existing
+/// persistence transaction (`services/onboarding-analytics.ts`); never mines
+/// personal answers — only the step key, its outcome, and timing.
+model OnboardingStepEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  /// Step key: an `ONBOARDING_QUESTIONS` value (first_name_age, gender, …,
+  /// photos), the trailing `verification` CTA, or a Mini-App macro step
+  /// (consent/language/city/theme/ai_memory).
+  step      String
+  /// `asked` | `answered` | `skipped`.
+  kind      String
+  /// ms hesitated on this step (now − matching `asked`); null on `asked` rows
+  /// and when no matching `asked` was found.
+  dwellMs   Int?     @map("dwell_ms")
+  language  String?
+  platform  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([step, kind, createdAt])
+  @@map("onboarding_step_events")
 }
 
 model Profile {

@@ -735,6 +735,14 @@ Required/high-impact env keys:
   `VENUE_REVALIDATION_CRON_SCHEDULE`, `TICKET_EXPIRY_CRON_SCHEDULE`,
   `PROFILER_CRON_SCHEDULE`, `DATE_LIFECYCLE_TICK_MS`, `DISPATCH_DELAY_MS`,
   `MATCH_PREROLL_DELAY_MS`
+- Onboarding funnel analytics (always-on, no feature flag): step-level
+  drop-off + hesitation telemetry feeding `GET /admin/analytics/onboarding-funnel`
+  and the weekly `GET /admin/analytics/founder-digest` (consumed by the external
+  **Hermes** agent — see `HERMES_AGENT_PROMPT.md`). Requires `db:push` of the new
+  additive `onboarding_step_events` table first (non-destructive; missing table →
+  the collector's best-effort telemetry just logs a warning and onboarding still
+  works, but the endpoint returns empty until the table exists). No new env, no
+  new system dependency; writes ride the existing onboarding collector.
 - Profiler (Phase 1b, always-on): post-onboarding Q&A batches that fuel
   icebreakers + date-planning hints (NOT matching). No feature flag —
   `PROFILER_CRON_SCHEDULE` (default `*/15 * * * *`) only tunes cadence; set it
