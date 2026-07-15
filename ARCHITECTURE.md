@@ -551,8 +551,13 @@ the leak), `dropOffRate`, and `dwellMsMedian`/`dwellMsP90` (hesitation), with
 `topDropOffSteps` / `slowestSteps` shortlists. `GET
 /admin/analytics/founder-digest` returns this-week-vs-last-week headline KPIs
 (new users + growth %, onboarding completions, match creation/acceptance,
-no-match count, verification pass rate) for the external **Hermes** weekly
-founder report (see `HERMES_AGENT_PROMPT.md`).
+**unattended matches** — TTL-expired + `EXPIRED_SILENT`/`EXPIRED_PEER_IGNORED`
+event counts, **no-match this week by famine tier**, a **geography snapshot** of
+active users per city with centroid `lat`/`lng`, and verification pass rate) for
+the external **Hermes** weekly founder report (see `HERMES_AGENT_PROMPT.md`).
+`GET /admin/analytics/cities` (`routes/cities.ts`) carries the full per-city
+male/female distribution and now also each city's centroid `lat`/`lng` so the
+dashboard can plot the user-geography map.
 
 `GET /admin/analytics/cities` returns the male/female split **per city**
 (`routes/cities.ts`, cached 10 min). Per-user city attribution follows two

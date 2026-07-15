@@ -44,6 +44,12 @@ export interface CityRow {
   unknown: number;
   /** How many of this city's users were placed by their departure pin. */
   fromDeparture: number;
+  /**
+   * City centroid (mean of member coordinates) for plotting the geography map;
+   * null for the Unknown bucket or a city whose members carry no coordinates.
+   */
+  lat: number | null;
+  lng: number | null;
 }
 
 export interface CityDistribution {
@@ -199,6 +205,12 @@ export function computeCityDistribution(
     }
   }
 
+  const centroidFor = (key: string): { lat: number | null; lng: number | null } => {
+    const entry = registry.get(key);
+    if (!entry || entry.coordCount === 0) return { lat: null, lng: null };
+    return { lat: entry.latSum / entry.coordCount, lng: entry.lngSum / entry.coordCount };
+  };
+
   const cities: CityRow[] = Array.from(buckets.entries())
     .map(([cityKey, b]) => ({
       cityKey,
@@ -209,6 +221,7 @@ export function computeCityDistribution(
       female: b.female,
       unknown: b.unknown,
       fromDeparture: b.fromDeparture,
+      ...(cityKey === UNKNOWN_CITY_KEY ? { lat: null, lng: null } : centroidFor(cityKey)),
     }))
     .sort((a, b) => b.total - a.total);
 

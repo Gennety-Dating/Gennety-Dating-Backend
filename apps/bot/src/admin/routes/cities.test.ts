@@ -36,6 +36,9 @@ describe("computeCityDistribution", () => {
 
     const kyiv = result.cities.find((c) => c.cityKey === "ua:kyiv")!;
     expect(kyiv).toMatchObject({ city: "Kyiv", countryCode: "UA", male: 1, female: 1, unknown: 0, total: 2, fromDeparture: 0 });
+    // Centroid coordinates ride each city row for the geography map.
+    expect(kyiv.lat).toBeCloseTo((KYIV.lat + 50.46) / 2, 3);
+    expect(kyiv.lng).toBeCloseTo((KYIV.lng + 30.53) / 2, 3);
 
     const lviv = result.cities.find((c) => c.cityKey === "ua:lviv")!;
     expect(lviv).toMatchObject({ female: 1, male: 0, total: 1, fromDeparture: 0 });
@@ -78,7 +81,7 @@ describe("computeCityDistribution", () => {
     const result = computeCityDistribution(users, new Map());
 
     const unknown = result.cities.find((c) => c.cityKey === "unknown")!;
-    expect(unknown).toMatchObject({ city: "Unknown", countryCode: null, unknown: 1, total: 1 });
+    expect(unknown).toMatchObject({ city: "Unknown", countryCode: null, unknown: 1, total: 1, lat: null, lng: null });
     expect(result.attribution).toEqual({ byDeparture: 0, byMatchingCity: 1, unknown: 1 });
   });
 

@@ -6,6 +6,10 @@ import {
   type StepEventLite,
 } from "../utils/onboarding-funnel.js";
 import { ONBOARDING_QUESTIONS } from "../../services/onboarding-collector.js";
+import {
+  computeCityDistribution,
+  type CityUserInput,
+} from "./cities.js";
 
 export const onboardingFunnelRouter: Router = Router();
 
@@ -103,7 +107,11 @@ onboardingFunnelRouter.get(
           matchesThisWeek,
           matchesLastWeek,
           noMatchThisWeek,
+          noMatchTierGroups,
+          expiredThisWeek,
+          ignoreEventGroups,
           verificationGroups,
+          geoUsers,
         ] = await Promise.all([
           prisma.user.count({ where: { createdAt: { gte: weekAgo } } }),
           prisma.user.count({
@@ -123,10 +131,42 @@ onboardingFunnelRouter.get(
             where: { createdAt: { gte: twoWeeksAgo, lt: weekAgo } },
           }),
           prisma.noMatchNotice.count({ where: { sentAt: { gte: weekAgo } } }),
+          prisma.noMatchNotice.groupBy({
+            by: ["tier"],
+            where: { sentAt: { gte: weekAgo } },
+            _count: { _all: true },
+          }),
+          // "Unattended" matches: proposals nobody acted on before the 24h TTL.
+          prisma.match.count({
+            where: { status: "expired", updatedAt: { gte: weekAgo } },
+          }),
+          // Ghosting telemetry: who let a live pitch expire this week.
+          prisma.matchEvent.groupBy({
+            by: ["actionType"],
+            where: { createdAt: { gte: weekAgo } },
+            _count: { _all: true },
+          }),
           prisma.user.groupBy({
             by: ["verificationStatus"],
             where: { onboardingStep: "completed" },
             _count: { _all: true },
+          }),
+          // Geography snapshot — active users placed by their matching city.
+          prisma.user.findMany({
+            where: { status: "active" },
+            select: {
+              id: true,
+              gender: true,
+              profile: {
+                select: {
+                  homeCityKey: true,
+                  homeCity: true,
+                  homeCountryCode: true,
+                  latitude: true,
+                  longitude: true,
+                },
+              },
+            },
           }),
         ]);
 
@@ -148,6 +188,32 @@ onboardingFunnelRouter.get(
         const growthPct = (cur: number, prev: number): number | null =>
           prev > 0 ? +(((cur - prev) / prev) * 100).toFixed(1) : null;
 
+        // #1 Unattended matches: split silent-self ghosting from peer-ignored.
+        const ignoreEvents: Record<string, number> = {};
+        for (const g of ignoreEventGroups) ignoreEvents[g.actionType] = g._count._all;
+        const silentGhostThisWeek = ignoreEvents.EXPIRED_SILENT ?? 0;
+        const peerIgnoredThisWeek = ignoreEvents.EXPIRED_PEER_IGNORED ?? 0;
+
+        // #2 No-match this week, by consecutive-famine severity.
+        const noMatchByTier = { tier1: 0, tier2: 0, tier3plus: 0 };
+        for (const g of noMatchTierGroups) {
+          if (g.tier === 1) noMatchByTier.tier1 += g._count._all;
+          else if (g.tier === 2) noMatchByTier.tier2 += g._count._all;
+          else noMatchByTier.tier3plus += g._count._all;
+        }
+
+        // #3 Geography snapshot (matching-city attribution; no departure pins).
+        const geoInput: CityUserInput[] = geoUsers.map((u) => ({
+          id: u.id,
+          gender: u.gender,
+          homeCityKey: u.profile?.homeCityKey ?? null,
+          homeCity: u.profile?.homeCity ?? null,
+          homeCountryCode: u.profile?.homeCountryCode ?? null,
+          latitude: u.profile?.latitude ?? null,
+          longitude: u.profile?.longitude ?? null,
+        }));
+        const geo = computeCityDistribution(geoInput, new Map());
+
         return {
           generatedAt: new Date().toISOString(),
           window: "rolling 7-day windows (thisWeek vs lastWeek)",
@@ -167,7 +233,31 @@ onboardingFunnelRouter.get(
             acceptedTotal: accepted,
             acceptanceRate:
               proposedTotal > 0 ? +(accepted / proposedTotal).toFixed(3) : 0,
-            noMatchNoticesThisWeek: noMatchThisWeek,
+            // #1 Matches left without attention (expired unattended this week).
+            unattended: {
+              expiredThisWeek,
+              silentGhostThisWeek,
+              peerIgnoredThisWeek,
+            },
+          },
+          // #2 People left without a match this week, by famine severity.
+          noMatch: {
+            thisWeek: noMatchThisWeek,
+            byTier: noMatchByTier,
+          },
+          // #3 Where the active user base actually is (for the geography map).
+          geography: {
+            totalPlaced: geo.totalUsers,
+            cities: geo.cities.map((c) => ({
+              cityKey: c.cityKey,
+              city: c.city,
+              countryCode: c.countryCode,
+              total: c.total,
+              male: c.male,
+              female: c.female,
+              lat: c.lat,
+              lng: c.lng,
+            })),
           },
           verification: {
             finalizedUsers: verifByStatus,
