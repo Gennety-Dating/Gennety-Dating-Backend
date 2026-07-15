@@ -50,6 +50,29 @@ export interface MenuAgentResult {
   reply: string;
 }
 
+/** Max bubbles per reply — more reads as spam, not chat. */
+const MAX_REPLY_BUBBLES = 3;
+
+/**
+ * Split a model reply into chat bubbles on blank lines (BASE_PERSONA asks the
+ * model to separate distinct thoughts that way). Overflow folds into the last
+ * bubble so nothing is dropped; a reply without blank lines stays one bubble.
+ */
+export function splitReplyIntoBubbles(reply: string): string[] {
+  const parts = reply
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return [reply.trim()].filter(Boolean);
+  if (parts.length > MAX_REPLY_BUBBLES) {
+    return [
+      ...parts.slice(0, MAX_REPLY_BUBBLES - 1),
+      parts.slice(MAX_REPLY_BUBBLES - 1).join("\n\n"),
+    ];
+  }
+  return parts;
+}
+
 export interface MenuAgentDeps {
   fetchFn?: typeof fetch;
 }

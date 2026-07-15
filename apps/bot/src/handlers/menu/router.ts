@@ -37,7 +37,7 @@ import {
 } from "./settings.js";
 import { handleHelp } from "./help.js";
 import { handleMyTickets } from "./tickets.js";
-import { runMenuAgentTurn } from "../../services/menu-agent.js";
+import { runMenuAgentTurn, splitReplyIntoBubbles } from "../../services/menu-agent.js";
 
 /**
  * Post-onboarding menu router.
@@ -137,7 +137,18 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     try {
       const telegramId = BigInt(ctx.from!.id);
       const result = await runMenuAgentTurn(telegramId, text);
-      await ctx.reply(result.reply);
+      const bubbles = splitReplyIntoBubbles(result.reply);
+      for (let i = 0; i < bubbles.length; i++) {
+        if (i > 0) {
+          // A beat of "typing…" between bubbles so the split reads as chat,
+          // not as a burst; scaled by bubble length, capped well under a nag.
+          await ctx.replyWithChatAction("typing").catch(() => {});
+          await new Promise((resolve) =>
+            setTimeout(resolve, Math.min(1600, 350 + bubbles[i]!.length * 15)),
+          );
+        }
+        await ctx.reply(bubbles[i]!);
+      }
     } catch (err) {
       console.error("Menu agent error:", err);
       await showMainMenu(ctx);

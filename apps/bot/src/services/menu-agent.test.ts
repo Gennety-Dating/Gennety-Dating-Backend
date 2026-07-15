@@ -52,7 +52,7 @@ vi.mock("../handlers/matching/negative-constraints.js", () => ({
 }));
 
 import { prisma } from "@gennety/db";
-import { runMenuAgentTurn } from "./menu-agent.js";
+import { runMenuAgentTurn, splitReplyIntoBubbles } from "./menu-agent.js";
 import { clearKnowledgeCache } from "./prompt-builder.js";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
 
@@ -400,5 +400,38 @@ describe("menu-agent resume_matching", () => {
     const toolMessage = secondCallBody.messages.find((m: { role: string }) => m.role === "tool");
     expect(toolMessage).toBeDefined();
     expect(JSON.parse(toolMessage.content).success).toBe(false);
+  });
+});
+
+describe("splitReplyIntoBubbles", () => {
+  it("keeps a reply without blank lines as one bubble", () => {
+    expect(splitReplyIntoBubbles("готово ✨ жду вторую сторону")).toEqual([
+      "готово ✨ жду вторую сторону",
+    ]);
+    expect(splitReplyIntoBubbles("line one\nstill same bubble")).toEqual([
+      "line one\nstill same bubble",
+    ]);
+  });
+
+  it("splits on blank lines into separate bubbles", () => {
+    expect(splitReplyIntoBubbles("первая мысль\n\nвторая мысль")).toEqual([
+      "первая мысль",
+      "вторая мысль",
+    ]);
+  });
+
+  it("caps at three bubbles, folding overflow into the last", () => {
+    const out = splitReplyIntoBubbles("a\n\nb\n\nc\n\nd\n\ne");
+    expect(out).toHaveLength(3);
+    expect(out[0]).toBe("a");
+    expect(out[1]).toBe("b");
+    expect(out[2]).toBe("c\n\nd\n\ne");
+  });
+
+  it("drops empty fragments and trims whitespace", () => {
+    expect(splitReplyIntoBubbles("  привет  \n\n\n\n  как дела  ")).toEqual([
+      "привет",
+      "как дела",
+    ]);
   });
 });
