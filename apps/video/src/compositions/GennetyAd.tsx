@@ -122,7 +122,7 @@ const Brand: React.FC<{
   <div style={{display: "flex", alignItems: "center", gap: size * 0.34, ...style}}>
     <Img
       src={asset("brand/butterfly-logo.svg")}
-      style={{width: size * 1.55, height: size, objectFit: "contain"}}
+      style={{width: size, height: size, objectFit: "contain", flexShrink: 0}}
     />
     {markOnly ? null : (
       <Img
@@ -334,8 +334,8 @@ const HookScene: React.FC<FormatProps & {duration: number}> = ({format, duration
     <AbsoluteFill style={{opacity, overflow: "hidden"}}>
       <Ambient format={format} />
       <Brand
-        size={vertical ? 44 : 38}
-        style={{position: "absolute", top: vertical ? 70 : 48, left: vertical ? 72 : 78}}
+        size={vertical ? 56 : 46}
+        style={{position: "absolute", zIndex: 20, top: vertical ? 70 : 48, left: vertical ? 72 : 78}}
       />
 
       <div
@@ -433,7 +433,6 @@ const OrbitPortrait: React.FC<{
 }> = ({path, size, x, y, delay, frame}) => {
   const {fps} = useVideoConfig();
   const p = enter(frame, fps, delay);
-  const float = Math.sin((frame + delay * 7) / 20) * 12;
   return (
     <div
       style={{
@@ -443,7 +442,7 @@ const OrbitPortrait: React.FC<{
         borderRadius: size * 0.27,
         overflow: "hidden",
         left: x,
-        top: y + float,
+        top: y,
         opacity: p,
         transform: `scale(${0.6 + p * 0.4}) rotate(${(1 - p) * 12}deg)`,
         border: "1px solid rgba(255,255,255,.18)",
@@ -458,8 +457,18 @@ const OrbitPortrait: React.FC<{
 const MatchingLines: React.FC<{format: GennetyAdProps["format"]; progress: number}> = ({format, progress}) => {
   const vertical = format === "vertical";
   const paths = vertical
-    ? ["M160 350 C340 590 300 780 540 930", "M920 430 C710 570 760 810 540 930", "M120 1260 C340 1120 340 980 540 930", "M960 1310 C730 1160 760 1010 540 930"]
-    : ["M1050 140 C920 280 1080 430 1240 540", "M1730 220 C1510 300 1510 470 1240 540", "M1020 850 C1050 700 1110 610 1240 540", "M1770 860 C1540 760 1510 610 1240 540"];
+    ? [
+        "M540 935 C390 850 300 780 150 745",
+        "M540 935 C690 850 780 780 930 745",
+        "M540 935 C390 1040 300 1210 150 1305",
+        "M540 935 C690 1040 790 1210 920 1305",
+      ]
+    : [
+        "M1245 545 C1160 420 1110 270 1060 170",
+        "M1245 545 C1440 420 1580 280 1725 185",
+        "M1245 545 C1140 660 1090 790 1025 875",
+        "M1245 545 C1460 650 1590 760 1740 835",
+      ];
   return (
     <svg style={{position: "absolute", inset: 0, width: "100%", height: "100%"}} viewBox={vertical ? "0 0 1080 1920" : "0 0 1920 1080"}>
       <defs>
@@ -475,7 +484,7 @@ const MatchingLines: React.FC<{format: GennetyAdProps["format"]; progress: numbe
           d={d}
           fill="none"
           stroke="url(#line)"
-          strokeWidth="2"
+          strokeWidth="3"
           pathLength="1"
           strokeDashoffset={1 - progress + index * 0.03}
           strokeDasharray={`${progress} ${1 - progress}`}
@@ -504,16 +513,16 @@ const AiScene: React.FC<FormatProps & {duration: number}> = ({format, duration})
   });
   const portraits = vertical
     ? [
-        {path: PROFILE_ASSETS[4], size: 160, x: 30, y: 640},
-        {path: PROFILE_ASSETS[6], size: 160, x: 890, y: 650},
-        {path: PROFILE_ASSETS[7], size: 200, x: 20, y: 1180},
-        {path: PROFILE_ASSETS[8], size: 220, x: 820, y: 1240},
+        {path: PROFILE_ASSETS[4], size: 250, x: 25, y: 620},
+        {path: PROFILE_ASSETS[6], size: 250, x: 805, y: 620},
+        {path: PROFILE_ASSETS[7], size: 250, x: 25, y: 1180},
+        {path: PROFILE_ASSETS[8], size: 270, x: 785, y: 1170},
       ]
     : [
-        {path: PROFILE_ASSETS[4], size: 180, x: 980, y: 70},
-        {path: PROFILE_ASSETS[6], size: 170, x: 1640, y: 110},
-        {path: PROFILE_ASSETS[7], size: 190, x: 930, y: 750},
-        {path: PROFILE_ASSETS[8], size: 200, x: 1640, y: 730},
+        {path: PROFILE_ASSETS[4], size: 220, x: 950, y: 60},
+        {path: PROFILE_ASSETS[6], size: 210, x: 1620, y: 80},
+        {path: PROFILE_ASSETS[7], size: 230, x: 910, y: 760},
+        {path: PROFILE_ASSETS[8], size: 230, x: 1625, y: 720},
       ];
   return (
     <AbsoluteFill style={{opacity, overflow: "hidden"}}>
@@ -542,7 +551,7 @@ const AiScene: React.FC<FormatProps & {duration: number}> = ({format, duration})
           backdropFilter: "blur(34px)",
         }}
       >
-        <Brand size={vertical ? 104 : 72} markOnly />
+        <Brand size={vertical ? 196 : 130} markOnly />
       </div>
 
       <div
@@ -555,11 +564,7 @@ const AiScene: React.FC<FormatProps & {duration: number}> = ({format, duration})
           transform: `translateY(${(1 - copy) * 50}px)`,
         }}
       >
-        <GlassPill>
-          <span style={{width: 9, height: 9, borderRadius: "50%", background: WINE_LIGHT, boxShadow: `0 0 20px ${WINE_LIGHT}`}} />
-          AI-метчмейкер працює
-        </GlassPill>
-        <Headline format={format} size={vertical ? 100 : 105} style={{marginTop: 30}}>
+        <Headline format={format} size={vertical ? 100 : 105}>
           Шукає метч, поки ти <span style={{color: WINE_LIGHT}}>живеш.</span>
         </Headline>
         <div
@@ -595,7 +600,7 @@ const MatchScene: React.FC<FormatProps & {duration: number}> = ({format, duratio
     <AbsoluteFill style={{opacity, overflow: "hidden"}}>
       <Ambient format={format} />
       <Brand
-        size={vertical ? 42 : 36}
+        size={vertical ? 56 : 46}
         style={{position: "absolute", top: vertical ? 70 : 45, left: vertical ? 72 : 82}}
       />
 
@@ -606,7 +611,7 @@ const MatchScene: React.FC<FormatProps & {duration: number}> = ({format, duratio
         rotate={vertical ? -6 : -5}
         style={{
           left: vertical ? interpolate(meet, [0, 1], [-120, 135]) : interpolate(meet, [0, 1], [820, 1050]),
-          top: vertical ? 420 : 190,
+          top: vertical ? 590 : 190,
           transform: `rotate(-6deg) scale(${0.9 + p * 0.1})`,
         }}
       />
@@ -617,7 +622,7 @@ const MatchScene: React.FC<FormatProps & {duration: number}> = ({format, duratio
         rotate={vertical ? 6 : 5}
         style={{
           right: vertical ? interpolate(meet, [0, 1], [-120, 135]) : interpolate(meet, [0, 1], [-80, 120]),
-          top: vertical ? 510 : 250,
+          top: vertical ? 650 : 250,
           transform: `rotate(6deg) scale(${0.9 + p * 0.1})`,
         }}
       />
@@ -626,21 +631,21 @@ const MatchScene: React.FC<FormatProps & {duration: number}> = ({format, duratio
         style={{
           position: "absolute",
           left: vertical ? 435 : 1350,
-          top: vertical ? 780 : 445,
-          width: vertical ? 210 : 170,
-          height: vertical ? 210 : 170,
+          top: vertical ? 870 : 445,
+          width: vertical ? 220 : 170,
+          height: vertical ? 220 : 170,
           borderRadius: "50%",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           opacity: meet,
           transform: `scale(${0.45 + meet * 0.55}) rotate(${(1 - meet) * -30}deg)`,
-          background: WINE,
-          border: "10px solid #050505",
-          boxShadow: `0 0 90px rgba(139,37,59,.9)`,
+          background: "rgba(245,245,245,.97)",
+          border: "1px solid rgba(255,255,255,.72)",
+          boxShadow: "0 28px 90px rgba(0,0,0,.46), 0 0 80px rgba(139,37,59,.4)",
         }}
       >
-        <Brand size={vertical ? 66 : 52} markOnly />
+        <Brand size={vertical ? 106 : 82} markOnly />
       </div>
 
       <div
@@ -648,13 +653,12 @@ const MatchScene: React.FC<FormatProps & {duration: number}> = ({format, duratio
           position: "absolute",
           left: vertical ? 72 : 90,
           right: vertical ? 72 : 1050,
-          top: vertical ? 150 : 180,
+          top: vertical ? 170 : 180,
           opacity: p,
           transform: `translateY(${(1 - p) * 50}px)`,
         }}
       >
-        <GlassPill style={{color: "#f3ccd4"}}>Збіг знайдено</GlassPill>
-        <Headline format={format} size={vertical ? 102 : 116} style={{marginTop: 28}}>
+        <Headline format={format} size={vertical ? 94 : 116}>
           Контекст.<br />Цінності.<br />
           <span style={{color: WINE_LIGHT}}>Вайб.</span>
         </Headline>
@@ -769,23 +773,13 @@ const CalendarUi: React.FC<{frame: number}> = ({frame}) => {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const cursorX = interpolate(frame, [0, 22, 48, 58], [520, 375, 375, 305], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: ease,
-  });
-  const cursorY = interpolate(frame, [0, 22, 48, 58], [900, 350, 350, 812], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: ease,
-  });
   const confirmed = frame > 92;
   return (
     <AbsoluteFill style={{background: "#030303", color: SOFT, fontFamily: "Roboto"}}>
       <div style={{padding: "72px 44px 28px"}}>
         <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
-          <Brand size={29} />
-          <GlassPill style={{padding: "8px 12px", fontSize: 14}}>Календар</GlassPill>
+          <Brand size={32} />
+          <div style={{color: MUTED, fontSize: 14, fontWeight: 700, letterSpacing: 0.4}}>Календар</div>
         </div>
         <div style={{fontFamily: "Unbounded", fontWeight: 700, fontSize: 40, letterSpacing: -1.7, marginTop: 52, lineHeight: 1.02}}>
           Коли вам зручно?
@@ -815,9 +809,8 @@ const CalendarUi: React.FC<{frame: number}> = ({frame}) => {
                 justifyContent: "center",
                 gap: 7,
                 color: selected ? "#111" : SOFT,
-                background: selected ? SOFT : SURFACE,
-                border: `1px solid ${selected ? SOFT : "rgba(255,255,255,.08)"}`,
-                boxShadow: selected ? "0 18px 46px rgba(255,255,255,.12)" : "none",
+                background: selected ? SOFT : "#151515",
+                transform: selected ? `scale(${1 - pressOne * 0.035})` : "none",
               }}
             >
               <span style={{fontSize: 14, fontWeight: 700, opacity: 0.58}}>{item.day}</span>
@@ -836,10 +829,8 @@ const CalendarUi: React.FC<{frame: number}> = ({frame}) => {
           padding: "28px 26px",
           borderRadius: "34px 34px 42px 42px",
           transform: `translateY(${(1 - sheet) * 690}px)`,
-          background: "rgba(26,26,26,.94)",
-          border: "1px solid rgba(255,255,255,.13)",
-          boxShadow: "0 -28px 80px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08)",
-          backdropFilter: "blur(34px)",
+          background: "#141414",
+          boxShadow: "0 -18px 54px rgba(0,0,0,.42)",
         }}
       >
         <div style={{width: 54, height: 5, borderRadius: 9, background: "rgba(255,255,255,.22)", margin: "0 auto 24px"}} />
@@ -868,7 +859,7 @@ const CalendarUi: React.FC<{frame: number}> = ({frame}) => {
                       : index === 1 && peer > 0.65
                         ? WINE
                         : "#242424",
-                  border: "1px solid rgba(255,255,255,.09)",
+                  transform: index === 2 ? `scale(${1 - pressTwo * 0.04})` : "none",
                 }}
               >
                 {time}
@@ -888,13 +879,11 @@ const CalendarUi: React.FC<{frame: number}> = ({frame}) => {
             fontSize: 20,
             fontWeight: 700,
             background: `linear-gradient(135deg, ${WINE}, #A93F58)`,
-            boxShadow: "0 20px 46px rgba(139,37,59,.34)",
           }}
         >
           {confirmed ? "Час збігається ✓" : "Зберегти час"}
         </div>
       </div>
-      {frame < 104 ? <Cursor x={cursorX} y={cursorY} pressed={Math.max(pressOne, pressTwo)} /> : null}
     </AbsoluteFill>
   );
 };
@@ -904,7 +893,7 @@ const ProductSceneLayout: React.FC<
     duration: number;
     title: ReactNode;
     subtitle: string;
-    pill: string;
+    pill?: string;
     children: ReactNode;
   }
 > = ({format, duration, title, subtitle, pill, children}) => {
@@ -928,8 +917,8 @@ const ProductSceneLayout: React.FC<
           transform: `translateY(${(1 - copy) * 46}px)`,
         }}
       >
-        <GlassPill>{pill}</GlassPill>
-        <Headline format={format} size={vertical ? 93 : 105} style={{marginTop: 27}}>
+        {pill ? <GlassPill>{pill}</GlassPill> : null}
+        <Headline format={format} size={vertical ? 93 : 105} style={{marginTop: pill ? 27 : 0}}>
           {title}
         </Headline>
         <div
@@ -965,7 +954,6 @@ const CalendarScene: React.FC<FormatProps & {duration: number}> = ({format, dura
     <ProductSceneLayout
       format={format}
       duration={duration}
-      pill="Жодної координації в чаті"
       title={<>Обираєте час — <span style={{color: WINE_LIGHT}}>разом.</span></>}
       subtitle="Справжній календар Gennety показує перетин ваших вільних слотів у реальному часі."
     >
@@ -1130,7 +1118,6 @@ const VenueScene: React.FC<FormatProps & {duration: number}> = ({format, duratio
     <ProductSceneLayout
       format={format}
       duration={duration}
-      pill="Місце теж планує Gennety"
       title={<>Зустріч — у <span style={{color: WINE_LIGHT}}>перевіреному місці.</span></>}
       subtitle="Сервіс підбирає якісний публічний заклад і веде вас до підтвердження."
     >
@@ -1168,9 +1155,8 @@ const DateCard: React.FC<{format: GennetyAdProps["format"]; progress: number}> =
         transform: `rotate(${vertical ? -1.5 : 2.2}deg) scale(${0.91 + progress * 0.09})`,
       }}
     >
-      <div style={{position: "absolute", left: 46, right: 46, top: 42, display: "flex", justifyContent: "space-between", zIndex: 5}}>
-        <Brand size={vertical ? 31 : 28} />
-        <Brand size={vertical ? 42 : 38} markOnly />
+      <div style={{position: "absolute", left: 46, top: 38, zIndex: 5}}>
+        <Brand size={vertical ? 48 : 40} />
       </div>
       <div
         style={{
@@ -1202,7 +1188,7 @@ const DateCard: React.FC<{format: GennetyAdProps["format"]; progress: number}> =
           boxShadow: "0 30px 80px rgba(0,0,0,.5)",
         }}
       >
-        <Img src={asset("places/kyiv-honey.jpg")} style={{width: "100%", height: "100%", objectFit: "cover", filter: "saturate(.72) contrast(1.1)"}} />
+        <Img src={asset("places/kyiv-idealist.jpg")} style={{width: "100%", height: "100%", objectFit: "cover", filter: "saturate(.82) contrast(1.08)"}} />
         <AbsoluteFill style={{background: "linear-gradient(180deg, rgba(139,37,59,.1), rgba(0,0,0,.48))"}} />
       </div>
       <div
@@ -1223,8 +1209,8 @@ const DateCard: React.FC<{format: GennetyAdProps["format"]; progress: number}> =
         <Img src={asset(PROFILE_ASSETS[2])} style={{width: "100%", height: "100%", objectFit: "cover"}} />
       </div>
       <div style={{position: "absolute", left: 48, right: 48, bottom: 46}}>
-        <div style={{color: SOFT, fontSize: vertical ? 30 : 27, fontWeight: 700}}>Honey Café</div>
-        <div style={{color: MUTED, fontSize: vertical ? 20 : 18, marginTop: 8}}>вул. Нижній Вал, 19 · П’ятниця, 18:00</div>
+        <div style={{color: SOFT, fontSize: vertical ? 30 : 27, fontWeight: 700}}>Idealist Café</div>
+        <div style={{color: MUTED, fontSize: vertical ? 20 : 18, marginTop: 8}}>Київ · П’ятниця, 18:00</div>
       </div>
       <Noise opacity={0.09} />
     </div>
@@ -1289,8 +1275,16 @@ const CoupleVisual: React.FC<{
           bottom: vertical ? 700 : 70,
         }}
       >
-        <Img src={asset(couplePhoto)} style={{width: "100%", height: "100%", objectFit: "cover"}} />
-        <AbsoluteFill style={{background: "linear-gradient(180deg, rgba(0,0,0,.04), rgba(0,0,0,.5))"}} />
+        <Img
+          src={asset(couplePhoto)}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: vertical ? "center 44%" : "center 43%",
+          }}
+        />
+        <AbsoluteFill style={{background: "linear-gradient(180deg, rgba(0,0,0,.02), rgba(0,0,0,.36))"}} />
       </div>
     );
   }

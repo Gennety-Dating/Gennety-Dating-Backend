@@ -16,7 +16,7 @@ export const RemotionRoot: React.FC = () => {
         fps={FPS}
         width={1080}
         height={1920}
-        defaultProps={{format: "vertical"}}
+        defaultProps={{format: "vertical", couplePhoto: "couple/final-couple.jpg"}}
       />
       <Composition<typeof gennetyAdSchema, GennetyAdProps>
         id="GennetyAdHorizontal"
@@ -26,7 +26,7 @@ export const RemotionRoot: React.FC = () => {
         fps={FPS}
         width={1920}
         height={1080}
-        defaultProps={{format: "horizontal"}}
+        defaultProps={{format: "horizontal", couplePhoto: "couple/final-couple.jpg"}}
       />
     </>
   );

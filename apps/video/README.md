@@ -35,16 +35,17 @@ responsive layouts rather than cropping one master.
 4. Production-derived Calendar interaction with live overlap states.
 5. Production-derived location confirmation in a public venue.
 6. Date-card reveal based on the bot's real generated card language.
-7. Registration CTA and replaceable couple-photo finish.
+7. Registration CTA and the approved couple-photo finish.
 
 All on-screen copy is Ukrainian. The current build intentionally has no music
 or voiceover so sound direction can be selected after the visual cut is
 approved.
 
-## Replacing the temporary couple finish
+## Couple-photo finish
 
-Put the approved image under `public/`, then set `couplePhoto` in both
-composition `defaultProps` in `src/Root.tsx`, for example:
+The approved image is stored as a render-optimized copy at
+`public/couple/final-couple.jpg` and configured through `couplePhoto` in both
+composition `defaultProps` in `src/Root.tsx`:
 
 ```tsx
 defaultProps={{
@@ -53,7 +54,7 @@ defaultProps={{
 }}
 ```
 
-When `couplePhoto` is present, the split-profile placeholder and its internal
+When `couplePhoto` is present, the split-profile fallback and its internal
 draft label disappear automatically. Portraits are intentionally stored as
 render-optimized JPEG copies; the user-supplied source files remain untouched.
 
