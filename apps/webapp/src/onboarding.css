@@ -420,6 +420,12 @@ button {
   opacity: 1;
 }
 
+/* The Pivot raises the Gennety icon ABOVE the centered line, not under it. */
+.intro-reveal--above {
+  top: 24%;
+  bottom: auto;
+}
+
 /* The PNGs already carry rounded corners on a transparent background, so the
    shadow rides the alpha (drop-shadow), not the box. Kept soft + low so the
    icons read as clean tiles, never as outlined boxes. */
@@ -524,23 +530,35 @@ button {
   }
 }
 
-/* ── Inline row (stats footnote) ───────────────────────────────────────────
-   Small, flat, no arc — just the three cleaned tiles in a quiet row. */
-.app-icon-row--inline {
-  display: flex;
+/* ── Stats row (above the numbers) ─────────────────────────────────────────
+   The three cleaned tiles sit in one liquid-glass tray above the metric drum:
+   a frosted translucent pane with a specular top edge and soft depth (the
+   shared glass kit). The icons carry NO drop-shadow of their own here, so there
+   are no grey/dark frames — the glass is the only surface. */
+.app-icon-row--stats {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: clamp(12px, 4vw, 20px);
+  padding: clamp(10px, 2.6vw, 15px) clamp(16px, 4.5vw, 24px);
+  border-radius: 26px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  margin-bottom: clamp(1.25rem, 4dvh, 2.25rem);
 }
 
-.app-icon-inline {
+.app-icon-tile {
   display: block;
 }
 
-.app-icon-row--inline .app-icon {
-  width: 28px;
-  height: 28px;
-  filter: drop-shadow(0 4px 9px rgba(0, 0, 0, 0.14));
+.app-icon-row--stats .app-icon {
+  width: clamp(40px, 12vw, 52px);
+  height: clamp(40px, 12vw, 52px);
 }
 
 /* ── Gennety icon rise (Pivot screen) ──────────────────────────────────────
@@ -556,11 +574,13 @@ button {
   animation: logoRise 900ms cubic-bezier(0.34, 1.45, 0.64, 1) both;
 }
 
+/* Soft, theme-aware shadow — dark enough to lift on the black page, gentle
+   enough not to smudge the cream one (it now sits just above the copy). */
 .gennety-rise-icon {
   display: block;
   width: clamp(92px, 26vw, 128px);
   height: auto;
-  filter: drop-shadow(0 16px 30px rgba(0, 0, 0, 0.26));
+  filter: drop-shadow(0 14px 26px var(--shadow));
 }
 
 .intro-reveal.is-shown .gennety-rise-slot .gennety-rise-icon {
@@ -676,6 +696,9 @@ button {
   overflow: hidden;
 }
 
+/* Soft ambient wash behind the scene. Kept faint (and near-invisible on the
+   light theme, see the override below) so it reads as atmosphere, never as a
+   coloured smudge behind the card. */
 .lavender-glow {
   position: absolute;
   top: 33%;
@@ -683,32 +706,24 @@ button {
   width: 16rem;
   height: 16rem;
   border-radius: 9999px;
-  background: rgba(139, 37, 59, 0.2);
-  filter: blur(100px);
+  background: rgba(139, 37, 59, 0.14);
+  filter: blur(110px);
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
 
 /* Tinder-style auto-swiping deck (Profile scene): two stacked cards — the front
-   swipes out left/right ~1×/s while the one behind rises to take its place. */
+   swipes out left/right ~1×/s while the one behind rises to take its place.
+   No backlight glow behind the deck: as the front card swiped away it exposed
+   and re-covered a burgundy halo every cycle, which read as a flickering light
+   (and a dirty pink shadow on the light theme). The card's own soft shadow is
+   the only depth cue. */
 .swipe-deck {
   position: relative;
   width: min(66vw, 16rem, 31dvh);
   aspect-ratio: 3 / 4;
   margin-bottom: clamp(1rem, 2.4dvh, 2.25rem);
   flex: 0 0 auto;
-}
-
-/* Single static neon backlight behind the deck. Kept on the container (not on
-   the cards) so swapping cards never stacks two glows into a brighter flash. */
-.swipe-deck::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 1rem;
-  box-shadow: 0 0 40px 10px rgba(139, 37, 59, 0.15);
-  pointer-events: none;
-  z-index: 0;
 }
 
 .profile-card {
@@ -718,7 +733,7 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
   background: #1a1a1a;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65);
+  box-shadow: 0 24px 48px -18px rgba(0, 0, 0, 0.55);
   will-change: transform, opacity;
 }
 
@@ -2557,13 +2572,23 @@ button {
 
 /* Profile-cycle Tinder cards: keep the photo + its bottom scrim (over-photo
    text stays white), but give the card frame/fallback a light surface so it
-   reads as a light card instead of a dark box on white. The base card's deep
-   black drop shadow reads as a dirty halo on the pale page, so it steps down to
-   the theme's own (much softer) shadow. */
+   reads as a light card instead of a dark box on white. On the pale page the
+   deep drop shadow reads as a dirty halo, so it becomes a clean two-layer soft
+   shadow (a tight contact shadow + a wide diffuse one) — modern light-theme
+   elevation, no hard edge. */
 :root[data-theme="light"] .profile-card {
-  border: 1px solid var(--border);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   background: var(--surface);
-  box-shadow: 0 20px 44px -18px var(--shadow-strong);
+  box-shadow:
+    0 2px 6px rgba(17, 12, 20, 0.06),
+    0 18px 40px -20px rgba(17, 12, 20, 0.22);
+}
+
+/* On the light page the burgundy ambient wash turns to a pink smudge behind the
+   card; drop it to a barely-there neutral lift instead. */
+:root[data-theme="light"] .lavender-glow {
+  background: rgba(17, 12, 20, 0.05);
+  filter: blur(120px);
 }
 
 /* The circular back affordance is white liquid glass — correct over the dark

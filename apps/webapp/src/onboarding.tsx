@@ -413,6 +413,7 @@ function App(): ReactElement {
           reveal={<GennetyRise />}
           revealDelayMs={LOGO_RISE_DELAY_MS}
           revealViewMs={LOGO_RISE_VIEW_MS}
+          revealAbove
         />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 7}>
@@ -633,10 +634,10 @@ function useIntroStream(
 }
 
 // Row of competitor app icons. `reveal` is the large row that rises on scene 0;
-// `inline` is the small row under the stats footnote. A PNG that fails to load
-// hides only its own slot, so the row degrades cleanly until the operator drops
-// the files into `public/app-icons/`.
-function AppIconRow(props: { variant: "reveal" | "inline" }): ReactElement {
+// `stats` is the larger liquid-glass tray shown above the numbers on the stats
+// scene. A PNG that fails to load hides only its own slot, so the row degrades
+// cleanly until the operator drops the files into `public/app-icons/`.
+function AppIconRow(props: { variant: "reveal" | "stats" }): ReactElement {
   return (
     <div className={`app-icon-row app-icon-row--${props.variant}`}>
       {APP_ICONS.map((icon) => {
@@ -658,7 +659,7 @@ function AppIconRow(props: { variant: "reveal" | "inline" }): ReactElement {
             {img}
           </span>
         ) : (
-          <span key={icon.key} className="app-icon-inline">
+          <span key={icon.key} className="app-icon-tile">
             {img}
           </span>
         );
@@ -697,6 +698,9 @@ function TypewriterScene(props: {
   reveal?: ReactNode;
   revealDelayMs?: number;
   revealViewMs?: number;
+  // Places the reveal above the centered line instead of below it (the Pivot
+  // screen raises the Gennety icon over the text, not under it).
+  revealAbove?: boolean;
 }): ReactElement {
   const { display, lineIndex, fading, done, skip } = useIntroStream(
     props.active,
@@ -738,7 +742,10 @@ function TypewriterScene(props: {
         </span>
       </p>
       {reveal ? (
-        <div className={`intro-reveal ${revealShown ? "is-shown" : ""}`} aria-hidden="true">
+        <div
+          className={`intro-reveal ${props.revealAbove ? "intro-reveal--above" : ""} ${revealShown ? "is-shown" : ""}`}
+          aria-hidden="true"
+        >
           {reveal}
         </div>
       ) : null}
@@ -1047,6 +1054,7 @@ function StatsCycleScene(props: {
       <main className="trap-main">
         <div className="stats-native-panel">
           <div className="stat-wrap stat-drum-wrap">
+            <AppIconRow variant="stats" />
             <div key={`${copy.value}-${copy.label}`} className="drum-window stat-drum-window">
               <h1 className={`stat-value ${copy.valueSmall ? "small" : ""}`}>
                 <CountUpText value={copy.value} />
@@ -1059,7 +1067,6 @@ function StatsCycleScene(props: {
         </div>
         <div className="stat-footnote-block">
           <p className="stat-footnote">{s.statFootnote}</p>
-          <AppIconRow variant="inline" />
         </div>
       </main>
       <div className={`stats-dots-dock ${cycle.canContinue ? "with-cta" : ""}`}>
