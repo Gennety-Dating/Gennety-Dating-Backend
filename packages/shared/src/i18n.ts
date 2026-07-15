@@ -3633,19 +3633,26 @@ const translationsByLanguage: Record<Language, TranslationTable> = {
   pl: plTranslations,
 };
 
+/** Replace `{param}` placeholders. Shared by `t()` and the variant picker. */
+export function interpolate(
+  text: string,
+  params?: Record<string, string | number>,
+): string {
+  if (!params) return text;
+  let out = text;
+  for (const [k, v] of Object.entries(params)) {
+    out = out.replaceAll(`{${k}}`, String(v));
+  }
+  return out;
+}
+
 /** Get a translated string, with optional placeholder replacement */
 export function t(
   lang: Language,
   key: TranslationKey,
   params?: Record<string, string | number>,
 ): string {
-  let text: string = translationsByLanguage[lang][key];
-  if (params) {
-    for (const [k, v] of Object.entries(params)) {
-      text = text.replaceAll(`{${k}}`, String(v));
-    }
-  }
-  return text;
+  return interpolate(translationsByLanguage[lang][key], params);
 }
 
 /**

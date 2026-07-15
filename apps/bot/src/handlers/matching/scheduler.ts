@@ -2,7 +2,7 @@ import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
 import type { InlineKeyboardMarkup } from "grammy/types";
 import { prisma } from "@gennety/db";
-import { t, type Language } from "@gennety/shared";
+import { t, tv, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
@@ -478,7 +478,7 @@ export async function processCalendarSlotsUpdate(
         api
           .sendMessage(
             Number(actorTelegramId),
-            t(actorLang, "matchScheduleSavedConfirmation"),
+            tv(actorLang, "matchScheduleSavedConfirmation"),
           )
           .catch(() => {}),
       );

@@ -1,5 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { t } from "@gennety/shared";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { t, setVariantRng } from "@gennety/shared";
+
+// Pin the variant picker to the canonical i18n string for exact-match asserts.
+setVariantRng(() => 0);
+afterAll(() => setVariantRng(null));
 
 vi.mock("@gennety/db", () => ({
   prisma: {

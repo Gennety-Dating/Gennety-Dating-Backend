@@ -14,8 +14,10 @@ export type {
   ScoredProfilerAnswer,
 } from "./profiler-questions.js";
 export { cityKeyToTimeZone, isValidTimeZone, DEFAULT_TIME_ZONE } from "./timezone.js";
-export { t, escapeMd } from "./i18n.js";
+export { t, escapeMd, interpolate } from "./i18n.js";
 export type { TranslationKey } from "./i18n.js";
+export { tv, setVariantRng, variantAlternates, VARIANT_KEYS } from "./i18n-variants.js";
+export type { VariantRng } from "./i18n-variants.js";
 export { contextDumpInstruction } from "./onboarding-copy.js";
 export {
   computeStatusSnapshot,

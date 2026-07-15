@@ -30,7 +30,7 @@ import type {
   ReplyKeyboardMarkup,
 } from "grammy/types";
 import { prisma } from "@gennety/db";
-import { t, type Language } from "@gennety/shared";
+import { t, tv, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
 import { parseVibe, mergeParsed } from "../../services/vibe-parser.js";
@@ -236,7 +236,7 @@ export async function sendVenuePostSaveAck(
   }
 
   await api
-    .sendMessage(Number(telegramId), t(lang, key), {
+    .sendMessage(Number(telegramId), tv(lang, key), {
       // venueLocationNoted carries `*vibe*` markdown to bold the prompt;
       // the others are plain but Markdown is safe (no offending chars).
       parse_mode: "Markdown",
