@@ -20,8 +20,8 @@ pnpm --filter @gennety/video lint
 `dev:video` opens Remotion Studio. `render:video` creates both final-sized
 drafts in the ignored `apps/video/out/` directory:
 
-- `gennety-ad-vertical.mp4` — 1080×1920, 22 seconds, 30 fps.
-- `gennety-ad-horizontal.mp4` — 1920×1080, 22 seconds, 30 fps.
+- `gennety-ad-vertical.mp4` — 1080×1920, 30 seconds, 30 fps.
+- `gennety-ad-horizontal.mp4` — 1920×1080, 30 seconds, 30 fps.
 
 The Studio compositions are `GennetyAdVertical` and
 `GennetyAdHorizontal`. They share the same story beats but use independent

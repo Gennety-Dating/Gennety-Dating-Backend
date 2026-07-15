@@ -3,7 +3,7 @@ import {Composition} from "remotion";
 import {GennetyAd, gennetyAdSchema, type GennetyAdProps} from "./compositions/GennetyAd";
 
 const FPS = 30;
-const DURATION_IN_FRAMES = 22 * FPS;
+const DURATION_IN_FRAMES = 30 * FPS;
 
 export const RemotionRoot: React.FC = () => {
   return (

@@ -23,6 +23,7 @@ const PROFILE_ASSETS = Array.from(
   {length: 10},
   (_, index) => `portraits/profile-${String(index + 1).padStart(2, "0")}.jpg`,
 );
+const DATE_CARD_PORTRAIT = "portraits/date-card-man.jpg";
 
 export const gennetyAdSchema = z.object({
   format: z.enum(["vertical", "horizontal"]),
@@ -724,30 +725,28 @@ const Cursor: React.FC<{x: number; y: number; pressed?: number}> = ({x, y, press
       zIndex: 30,
       left: x,
       top: y,
-      width: 58,
-      height: 58,
-      borderRadius: "50%",
-      background: "rgba(255,255,255,.12)",
-      border: "2px solid rgba(255,255,255,.8)",
-      boxShadow: `0 0 0 ${pressed * 28}px rgba(255,255,255,${0.2 * (1 - pressed)}), 0 8px 24px rgba(0,0,0,.3)`,
-      transform: `translate(-50%, -50%) scale(${1 - pressed * 0.28})`,
+      width: 38,
+      height: 48,
+      pointerEvents: "none",
+      transform: `translate(-4px, -4px) scale(${1 - pressed * 0.08})`,
+      transformOrigin: "4px 4px",
+      filter: "drop-shadow(0 4px 6px rgba(0,0,0,.5))",
     }}
   >
-    <div
-      style={{
-        position: "absolute",
-        left: 18,
-        top: 18,
-        width: 18,
-        height: 18,
-        borderRadius: "50%",
-        background: "#fff",
-      }}
-    />
+    <svg width="38" height="48" viewBox="0 0 38 48" aria-hidden="true">
+      <path
+        d="M4 3.5V35.2L12.7 27.5L19.5 43.1L26.1 40.1L19.6 25.4H31.5L4 3.5Z"
+        fill="#F7F7F7"
+        stroke="#090909"
+        strokeWidth="2.4"
+        strokeLinejoin="round"
+      />
+    </svg>
   </div>
 );
 
-const CalendarUi: React.FC<{frame: number}> = ({frame}) => {
+const CalendarUi: React.FC<{frame: number; format: GennetyAdProps["format"]}> = ({frame, format}) => {
+  const vertical = format === "vertical";
   const dates = [
     {day: "СР", date: "15"},
     {day: "ЧТ", date: "16"},
@@ -755,25 +754,37 @@ const CalendarUi: React.FC<{frame: number}> = ({frame}) => {
     {day: "СБ", date: "18"},
     {day: "НД", date: "19"},
   ];
-  const sheet = interpolate(frame, [24, 46], [0, 1], {
+  const sheet = interpolate(frame, [28, 50], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
     easing: ease,
   });
-  const peer = interpolate(frame, [68, 90], [0, 1], {
+  const peer = interpolate(frame, [82, 104], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
     easing: ease,
   });
-  const pressOne = interpolate(frame, [18, 24, 30], [0, 1, 0], {
+  const pressOne = interpolate(frame, [17, 23, 29], [0, 1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const pressTwo = interpolate(frame, [47, 54, 61], [0, 1, 0], {
+  const pressTwo = interpolate(frame, [53, 59, 65], [0, 1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
-  const confirmed = frame > 92;
+  const cursorX = interpolate(frame, [0, 14, 30, 51], [520, 330, 330, 170], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: ease,
+  });
+  const cursorY = interpolate(frame, [0, 14, 30, 51], [245, 355, 355, vertical ? 805 : 505], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: ease,
+  });
+  const dateSelected = frame >= 23;
+  const timeSelected = frame >= 59;
+  const confirmed = frame > 110;
   return (
     <AbsoluteFill style={{background: "#030303", color: SOFT, fontFamily: "Roboto"}}>
       <div style={{padding: "72px 44px 28px"}}>
@@ -790,12 +801,18 @@ const CalendarUi: React.FC<{frame: number}> = ({frame}) => {
         <div style={{display: "flex", gap: 18, marginTop: 24, color: MUTED, fontSize: 15}}>
           <span><b style={{display: "inline-block", width: 10, height: 10, borderRadius: 3, background: SOFT, marginRight: 7}} />Ви</span>
           <span><b style={{display: "inline-block", width: 10, height: 10, borderRadius: 3, background: WINE, marginRight: 7}} />Метч</span>
-          <span><b style={{display: "inline-block", width: 10, height: 10, borderRadius: 3, background: `linear-gradient(135deg, ${SOFT} 50%, ${WINE} 50%)`, marginRight: 7}} />Разом</span>
+          <span>
+            <b style={{display: "inline-flex", width: 14, height: 10, position: "relative", marginRight: 7}}>
+              <i style={{position: "absolute", width: 9, height: 9, borderRadius: "50%", background: SOFT, left: 0}} />
+              <i style={{position: "absolute", width: 9, height: 9, borderRadius: "50%", background: WINE_LIGHT, right: 0}} />
+            </b>
+            Разом
+          </span>
         </div>
       </div>
       <div style={{display: "flex", gap: 12, padding: "18px 30px"}}>
         {dates.map((item, index) => {
-          const selected = index === 2;
+          const selected = index === 2 && dateSelected;
           return (
             <div
               key={item.date}
@@ -838,12 +855,20 @@ const CalendarUi: React.FC<{frame: number}> = ({frame}) => {
         <div style={{color: MUTED, fontSize: 16, marginTop: 7}}>Оберіть один або кілька слотів</div>
         <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 25}}>
           {["17:00", "17:30", "18:00", "18:30", "19:00", "19:30"].map((time, index) => {
-            const mine = index === 2 || index === 3;
-            const overlap = index === 2 && peer > 0.65;
+            const mine = index === 2 && timeSelected;
+            const overlapProgress = index === 2
+              ? interpolate(peer, [0.45, 0.9], [0, 1], {
+                  extrapolateLeft: "clamp",
+                  extrapolateRight: "clamp",
+                })
+              : 0;
+            const overlap = overlapProgress > 0;
+            const peerOnly = index === 1 && peer > 0.65;
             return (
               <div
                 key={time}
                 style={{
+                  position: "relative",
                   height: 72,
                   borderRadius: 16,
                   display: "flex",
@@ -851,18 +876,30 @@ const CalendarUi: React.FC<{frame: number}> = ({frame}) => {
                   justifyContent: "center",
                   fontSize: 21,
                   fontWeight: 700,
-                  color: mine ? "#111" : SOFT,
+                  color: overlap ? SOFT : mine ? "#111" : SOFT,
                   background: overlap
-                    ? `linear-gradient(135deg, ${SOFT} 0 48%, ${WINE} 52% 100%)`
+                    ? `rgba(139,37,59,${0.2 + overlapProgress * 0.68})`
                     : mine
                       ? SOFT
-                      : index === 1 && peer > 0.65
-                        ? WINE
+                      : peerOnly
+                        ? "rgba(139,37,59,.72)"
                         : "#242424",
+                  border: overlap
+                    ? `1px solid rgba(209,107,128,${0.34 + overlapProgress * 0.66})`
+                    : "1px solid transparent",
+                  boxShadow: overlap
+                    ? `0 0 0 ${2 * overlapProgress}px rgba(209,107,128,.16), inset 0 1px 0 rgba(255,255,255,.12)`
+                    : "none",
                   transform: index === 2 ? `scale(${1 - pressTwo * 0.04})` : "none",
                 }}
               >
                 {time}
+                {overlap ? (
+                  <span style={{position: "absolute", right: 12, top: 10, display: "flex", width: 17}}>
+                    <i style={{width: 9, height: 9, borderRadius: "50%", background: SOFT}} />
+                    <i style={{width: 9, height: 9, borderRadius: "50%", background: WINE_LIGHT, marginLeft: -2}} />
+                  </span>
+                ) : null}
               </div>
             );
           })}
@@ -884,6 +921,7 @@ const CalendarUi: React.FC<{frame: number}> = ({frame}) => {
           {confirmed ? "Час збігається ✓" : "Зберегти час"}
         </div>
       </div>
+      {frame < 74 ? <Cursor x={cursorX} y={cursorY} pressed={Math.max(pressOne, pressTwo)} /> : null}
     </AbsoluteFill>
   );
 };
@@ -894,15 +932,18 @@ const ProductSceneLayout: React.FC<
     title: ReactNode;
     subtitle: string;
     pill?: string;
+    stabilizeDevice?: boolean;
     children: ReactNode;
   }
-> = ({format, duration, title, subtitle, pill, children}) => {
+> = ({format, duration, title, subtitle, pill, stabilizeDevice = false, children}) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
   const vertical = format === "vertical";
   const opacity = fade(frame, duration, 14);
   const copy = enter(frame, fps, 4);
   const device = enter(frame, fps, 10);
+  const copyProgress = frame >= 44 ? 1 : copy;
+  const deviceProgress = frame >= 50 ? 1 : device;
   return (
     <AbsoluteFill style={{opacity, overflow: "hidden"}}>
       <Ambient format={format} />
@@ -913,8 +954,8 @@ const ProductSceneLayout: React.FC<
           top: vertical ? 104 : 210,
           width: vertical ? 900 : 710,
           zIndex: 5,
-          opacity: copy,
-          transform: `translateY(${(1 - copy) * 46}px)`,
+          opacity: copyProgress,
+          transform: `translateY(${(1 - copyProgress) * 46}px)`,
         }}
       >
         {pill ? <GlassPill>{pill}</GlassPill> : null}
@@ -937,8 +978,11 @@ const ProductSceneLayout: React.FC<
         style={{
           position: "absolute",
           inset: 0,
-          opacity: device,
-          transform: `translateY(${(1 - device) * 90}px) scale(${0.94 + device * 0.06})`,
+          opacity: deviceProgress,
+          transform: stabilizeDevice
+            ? `translate3d(0, ${Math.round((1 - deviceProgress) * 58)}px, 0)`
+            : `translateY(${(1 - deviceProgress) * 90}px) scale(${0.94 + deviceProgress * 0.06})`,
+          backfaceVisibility: "hidden",
         }}
       >
         {children}
@@ -966,7 +1010,7 @@ const CalendarScene: React.FC<FormatProps & {duration: number}> = ({format, dura
           transform: vertical ? "rotate(1.8deg)" : "rotate(2.5deg)",
         }}
       >
-        <CalendarUi frame={frame} />
+        <CalendarUi frame={frame} format={format} />
       </Phone>
     </ProductSceneLayout>
   );
@@ -1026,7 +1070,8 @@ const Pin: React.FC = () => (
   </div>
 );
 
-const LocationUi: React.FC<{frame: number}> = ({frame}) => {
+const LocationUi: React.FC<{frame: number; format: GennetyAdProps["format"]}> = ({frame, format}) => {
+  const vertical = format === "vertical";
   const press = interpolate(frame, [54, 61, 69], [0, 1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -1036,13 +1081,13 @@ const LocationUi: React.FC<{frame: number}> = ({frame}) => {
     extrapolateRight: "clamp",
     easing: ease,
   });
-  const cursorY = interpolate(frame, [0, 52], [590, 1080], {
+  const cursorY = interpolate(frame, [0, 52], vertical ? [590, 1080] : [380, 825], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
     easing: ease,
   });
   return (
-    <AbsoluteFill style={{color: SOFT}}>
+    <AbsoluteFill style={{color: SOFT, WebkitFontSmoothing: "antialiased"}}>
       <MapBackdrop />
       <Pin />
       <div
@@ -1059,10 +1104,9 @@ const LocationUi: React.FC<{frame: number}> = ({frame}) => {
           gap: 16,
           color: "rgba(255,255,255,.62)",
           fontSize: 18,
-          background: "rgba(20,20,20,.72)",
+          background: "rgba(20,20,20,.96)",
           border: "1px solid rgba(255,255,255,.16)",
           boxShadow: "0 20px 50px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.1)",
-          backdropFilter: "blur(26px)",
         }}
       >
         <span style={{fontSize: 30}}>⌕</span> Пошук адреси
@@ -1075,10 +1119,9 @@ const LocationUi: React.FC<{frame: number}> = ({frame}) => {
           bottom: 18,
           padding: "24px",
           borderRadius: 34,
-          background: "rgba(18,18,18,.85)",
+          background: "rgba(18,18,18,.97)",
           border: "1px solid rgba(255,255,255,.16)",
           boxShadow: "0 -24px 70px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.1)",
-          backdropFilter: "blur(30px)",
         }}
       >
         <div style={{display: "flex", gap: 15, alignItems: "center"}}>
@@ -1106,7 +1149,7 @@ const LocationUi: React.FC<{frame: number}> = ({frame}) => {
           {selected > 0.8 ? "Місце підтверджено ✓" : "Підтвердити місце"}
         </div>
       </div>
-      {frame < 82 ? <Cursor x={470} y={cursorY} pressed={press} /> : null}
+      {frame < 82 ? <Cursor x={vertical ? 470 : 400} y={cursorY} pressed={press} /> : null}
     </AbsoluteFill>
   );
 };
@@ -1118,6 +1161,7 @@ const VenueScene: React.FC<FormatProps & {duration: number}> = ({format, duratio
     <ProductSceneLayout
       format={format}
       duration={duration}
+      stabilizeDevice
       title={<>Зустріч — у <span style={{color: WINE_LIGHT}}>перевіреному місці.</span></>}
       subtitle="Сервіс підбирає якісний публічний заклад і веде вас до підтвердження."
     >
@@ -1127,10 +1171,11 @@ const VenueScene: React.FC<FormatProps & {duration: number}> = ({format, duratio
         style={{
           left: vertical ? 210 : 1120,
           top: vertical ? 610 : 65,
-          transform: vertical ? "rotate(-1.5deg)" : "rotate(-2.3deg)",
+          transform: "translateZ(0)",
+          backfaceVisibility: "hidden",
         }}
       >
-        <LocationUi frame={frame} />
+        <LocationUi frame={frame} format={format} />
       </Phone>
     </ProductSceneLayout>
   );
@@ -1206,7 +1251,10 @@ const DateCard: React.FC<{format: GennetyAdProps["format"]; progress: number}> =
           zIndex: 4,
         }}
       >
-        <Img src={asset(PROFILE_ASSETS[2])} style={{width: "100%", height: "100%", objectFit: "cover"}} />
+        <Img
+          src={asset(DATE_CARD_PORTRAIT)}
+          style={{width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 38%"}}
+        />
       </div>
       <div style={{position: "absolute", left: 48, right: 48, bottom: 46}}>
         <div style={{color: SOFT, fontSize: vertical ? 30 : 27, fontWeight: 700}}>Idealist Café</div>
@@ -1384,26 +1432,26 @@ const CtaScene: React.FC<FormatProps & {duration: number; couplePhoto?: string}>
 export const GennetyAd: React.FC<GennetyAdProps> = ({format, couplePhoto}) => {
   return (
     <AbsoluteFill style={{background: INK}}>
-      <Sequence durationInFrames={120} premountFor={30}>
-        <HookScene format={format} duration={120} />
+      <Sequence durationInFrames={150} premountFor={30}>
+        <HookScene format={format} duration={150} />
       </Sequence>
-      <Sequence from={105} durationInFrames={150} premountFor={30}>
-        <AiScene format={format} duration={150} />
+      <Sequence from={130} durationInFrames={165} premountFor={30}>
+        <AiScene format={format} duration={165} />
       </Sequence>
-      <Sequence from={240} durationInFrames={90} premountFor={30}>
-        <MatchScene format={format} duration={90} />
+      <Sequence from={275} durationInFrames={135} premountFor={30}>
+        <MatchScene format={format} duration={135} />
       </Sequence>
-      <Sequence from={315} durationInFrames={135} premountFor={30}>
-        <CalendarScene format={format} duration={135} />
+      <Sequence from={390} durationInFrames={165} premountFor={30}>
+        <CalendarScene format={format} duration={165} />
       </Sequence>
-      <Sequence from={435} durationInFrames={105} premountFor={30}>
-        <VenueScene format={format} duration={105} />
+      <Sequence from={535} durationInFrames={150} premountFor={30}>
+        <VenueScene format={format} duration={150} />
       </Sequence>
-      <Sequence from={525} durationInFrames={75} premountFor={30}>
-        <ConfirmationScene format={format} duration={75} />
+      <Sequence from={665} durationInFrames={120} premountFor={30}>
+        <ConfirmationScene format={format} duration={120} />
       </Sequence>
-      <Sequence from={585} durationInFrames={75} premountFor={30}>
-        <CtaScene format={format} duration={75} couplePhoto={couplePhoto} />
+      <Sequence from={765} durationInFrames={135} premountFor={30}>
+        <CtaScene format={format} duration={135} couplePhoto={couplePhoto} />
       </Sequence>
     </AbsoluteFill>
   );
