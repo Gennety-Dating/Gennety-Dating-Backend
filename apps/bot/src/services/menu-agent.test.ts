@@ -428,6 +428,18 @@ describe("splitReplyIntoBubbles", () => {
     expect(out[2]).toBe("c\n\nd\n\ne");
   });
 
+  it("strips markdown emphasis — bubbles are sent as plain text", () => {
+    expect(
+      splitReplyIntoBubbles("у тебя уже есть дата: **четверг, 16 июля, 19:00**, **Kyiv Food Market**."),
+    ).toEqual(["у тебя уже есть дата: четверг, 16 июля, 19:00, Kyiv Food Market."]);
+    expect(splitReplyIntoBubbles("могу напомнить, __как вы найдёте друг друга__")).toEqual([
+      "могу напомнить, как вы найдёте друг друга",
+    ]);
+    expect(splitReplyIntoBubbles("набери `/menu` в чате")).toEqual([
+      "набери /menu в чате",
+    ]);
+  });
+
   it("drops empty fragments and trims whitespace", () => {
     expect(splitReplyIntoBubbles("  привет  \n\n\n\n  как дела  ")).toEqual([
       "привет",

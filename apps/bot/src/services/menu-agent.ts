@@ -54,12 +54,25 @@ export interface MenuAgentResult {
 const MAX_REPLY_BUBBLES = 3;
 
 /**
+ * The menu agent's replies are sent WITHOUT a parse_mode, so any markdown the
+ * model sneaks in ("**bold**", "__underline__", "`code`") shows up as literal
+ * symbols in the chat. BASE_PERSONA forbids it; this is the safety net.
+ */
+function stripMarkdownEmphasis(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/gs, "$1")
+    .replace(/__(.+?)__/gs, "$1")
+    .replace(/`([^`\n]+)`/g, "$1");
+}
+
+/**
  * Split a model reply into chat bubbles on blank lines (BASE_PERSONA asks the
  * model to separate distinct thoughts that way). Overflow folds into the last
  * bubble so nothing is dropped; a reply without blank lines stays one bubble.
+ * Also strips markdown emphasis — the bubbles are sent as plain text.
  */
 export function splitReplyIntoBubbles(reply: string): string[] {
-  const parts = reply
+  const parts = stripMarkdownEmphasis(reply)
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean);
