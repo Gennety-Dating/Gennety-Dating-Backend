@@ -13,8 +13,8 @@ const translations = {
     chooseLanguage: "Pick your language:",
     philosophyPitch:
       "Gennety runs on one idea: *Zero Chat*.\n\n" +
-      "You never message your match. Our AI gets who you are, " +
-      "finds someone actually compatible, and handles everything — time, place, the whole thing.\n\n" +
+      "You never message your match. I get who you are, " +
+      "find someone actually compatible, and handle everything — time, place, the whole thing.\n\n" +
       "You just show up. Sound good?",
     philosophyContinue: "I'm in 🚀",
     askEmail: "Drop your uni email (like name@stanford.edu):",
@@ -51,7 +51,7 @@ const translations = {
     photoDuplicateNear:
       "This photo is already in your profile. Add a different shot — every photo must be unique.",
     photoUnsafeContent:
-      "That photo can't be published in a profile. Please choose a different, non-explicit photo.",
+      "That photo can't be published in a profile. Pick a different, non-explicit one.",
     photoFaceObscured:
       "Your face is hard to make out. Take off sunglasses or a face covering and send a clearer shot.",
     photoMultipleFaces:
@@ -85,7 +85,7 @@ const translations = {
     videoChecking:
       "Checking the video for safety and making sure you appear in several moments...",
     videoUnsafeContent:
-      "That video contains content that can't be published in a profile. Please choose a different clip.",
+      "That video contains content that can't be published in a profile. Pick a different clip.",
     videoOwnerMissing:
       "Your face needs to be in frame for most of the video. Record a new video.",
     videoOwnerTooBrief:
@@ -97,7 +97,7 @@ const translations = {
     videoNeedsPhotoFirst:
       "Send at least one clear profile photo first, then I can verify that you appear in the video.",
     videoProcessingUnavailable:
-      "I couldn't check that video right now. Your existing video was not changed. Please try again shortly.",
+      "I couldn't check that video right now. Your existing video was not changed. Try again in a bit.",
     ticketRewardPhoto:
       "🎟️ Nice — you just earned a *free Date Ticket*!\n\nHere's the deal: every date you go on costs 1 ticket, and tickets normally cost money. Adding photos got you one on the house. Balance: *{balance}* 🎟️",
     ticketRewardVideo:
@@ -110,7 +110,7 @@ const translations = {
       "🎟 Your first ticket — on me, personally.\n\nEvery date here costs 1 ticket, normally ~$6.99\nThis one's free — let your first step be about the person, not the price\n\nIt's already in your wallet ❤️",
     ticketStorePurchased:
       "✨ Payment received — *{count}* ticket(s) added!\n\nBalance: *{balance}* 🎟️",
-    ticketStoreCheckoutError: "Couldn't confirm that payment. Please try again.",
+    ticketStoreCheckoutError: "Couldn't confirm that payment. Try again in a moment.",
     ticketStoreInvoiceTitle: "Gennety Date Tickets",
     ticketStoreInvoiceDesc:
       "{count} Date Ticket(s) added to your wallet. Each ticket covers one date.",
@@ -159,7 +159,7 @@ const translations = {
     profileEdit: "Change something",
     onboardingComplete:
       "You're in! 🎉\n\n" +
-      "Our AI is already looking for your match. " +
+      "I'm already on it — looking for your match. " +
       "I'll hit you up as soon as someone special comes along.",
     btnLike: "👍",
     btnDislike: "👎",
@@ -223,7 +223,7 @@ const translations = {
     verifyOutcomePendingReview:
       "🔍 We're double-checking your profile photos against your verification selfie. This usually takes a few hours — I'll message you the moment it's done.",
     verifyOutcomeRejected:
-      "⚠️ The photos in your profile don't appear to match the selfie we captured during verification. Please replace them with clear photos of yourself, then open Settings → Verify your account to retry.",
+      "⚠️ The photos in your profile don't appear to match the selfie we captured during verification. Replace them with clear photos of yourself, then open Settings → Verify your account to retry.",
     verifyAutoPollStarted:
       "✨ Got it. Grab a coffee ☕ — I'm cross-checking your selfie against your profile photos. " +
       "Should take a minute or two.",
@@ -237,11 +237,11 @@ const translations = {
     verifyMiniAppLoading: "Opening verification…",
     verifyMiniAppFinishing: "Almost done. Checking results…",
     verifyMiniAppError:
-      "Couldn't start verification. Please try again.",
+      "Couldn't start verification. Try again.",
     verifyMiniAppCloseBtn: "Close",
     photoMatchMismatch:
       "⚠️ This photo doesn't match your verification selfie. " +
-      "Please upload a clear photo of yourself, taken under similar lighting.",
+      "Upload a clear photo of yourself, taken in similar lighting.",
 
     // --- Main Menu ---
     menuTitle: "🎓 *Gennety Menu*\nWhat's up?",
@@ -306,7 +306,7 @@ const translations = {
       "You already have a profile video. Send a new one to replace it, or remove it below.",
     editVideoRemoveBtn: "🗑 Remove video",
     editVideoRemoved: "Profile video removed.",
-    editVideoNotAVideo: "Please send a *video* (up to {sec}s, max {mb} MB).",
+    editVideoNotAVideo: "Send a *video* (up to {sec}s, max {mb} MB).",
     myProfileAddVideoHint:
       "🎬 Tip: add a short profile video from the menu — it makes your profile stand out.",
     myProfileAddVideoHintReward:
@@ -314,7 +314,7 @@ const translations = {
 
     // --- Pause / Resume ---
     pauseConfirmed: "Matching paused ⏸\nNo new matches until you resume.",
-    resumeConfirmed: "Matching back on ▶️\nOur AI is on it.",
+    resumeConfirmed: "Matching back on ▶️\nI'm on it.",
 
     // --- Settings ---
     settingsTitle: "⚙️ Settings",
@@ -329,7 +329,7 @@ const translations = {
     settingsVerify: "🛡 Verify your account",
     settingsVerifyNotNeeded: "You're already verified ✨",
     settingsVerifyUnavailable:
-      "Verification is temporarily unavailable. Please try again later.",
+      "Verification is temporarily unavailable. Try again a bit later.",
     helpBody:
       "*Need help?* 💬\n\n" +
       "We don't do chats between users — that's by design. " +
@@ -436,7 +436,7 @@ const translations = {
     matchExpiredSilentWarning:
       "Time's up — you didn't reply to your match in 24h. " +
       "Wait for next Thursday's drop.\n\n" +
-      "Please don't ignore proposals — it's disrespectful to your partner. " +
+      "Don't ignore proposals — it's disrespectful to your partner. " +
       "Next time we'll lower your rating for this.",
     matchExpiredSilentPenalty:
       "Time's up — you didn't reply to your match in 24h. " +
@@ -661,7 +661,7 @@ const translations = {
     reportDetailAsk:
       "Anything else that would help review this faster? You can type, send a voice note, or skip.",
     reportDetailAskOther:
-      "Please briefly describe what happened. You can type or send a voice note.",
+      "Briefly describe what happened. You can type or send a voice note.",
     reportSkipBtn: "Skip",
     reportThanksT1: "Got it — we'll use this to tune your future matches 🎯",
     reportThanksT2: "Reported. Thanks — we'll act on this.",
@@ -777,8 +777,8 @@ const translations = {
     chooseLanguage: "Выбери язык:",
     philosophyPitch:
       "Gennety работает по одному принципу: *Zero Chat*.\n\n" +
-      "Ты не пишешь мэтчу. Наш ИИ разбирается, кто ты, " +
-      "находит реально совместимого человека и берёт на себя всё — время, место, всю логистику.\n\n" +
+      "Ты не пишешь мэтчу. Я разбираюсь, кто ты, " +
+      "нахожу реально совместимого человека и беру на себя всё — время, место, всю логистику.\n\n" +
       "Тебе только прийти. Заходишь?",
     philosophyContinue: "Го! 🚀",
     askEmail: "Скинь свою универскую почту (типа name@msu.edu.ru):",
@@ -923,7 +923,7 @@ const translations = {
     profileEdit: "Поменять",
     onboardingComplete:
       "Ты в деле! 🎉\n\n" +
-      "Наш ИИ уже ищет тебе пару. " +
+      "Я уже ищу тебе пару. " +
       "Напишу, как только найду кого-то стоящего.",
     btnLike: "👍",
     btnDislike: "👎",
@@ -1005,7 +1005,7 @@ const translations = {
     verifyMiniAppCloseBtn: "Закрыть",
     photoMatchMismatch:
       "⚠️ Это фото не совпадает с селфи из верификации. " +
-      "Загрузи, пожалуйста, чёткое фото себя при похожем освещении.",
+      "Загрузи чёткое фото себя при похожем освещении.",
 
     // --- Main Menu ---
     menuTitle: "🎓 *Меню Gennety*\nЧто делаем?",
@@ -1070,7 +1070,7 @@ const translations = {
       "У тебя уже есть видео в профиле. Пришли новое, чтобы заменить, или удали его кнопкой ниже.",
     editVideoRemoveBtn: "🗑 Удалить видео",
     editVideoRemoved: "Видео из профиля удалено.",
-    editVideoNotAVideo: "Пришли, пожалуйста, *видео* (до {sec} сек, не больше {mb} МБ).",
+    editVideoNotAVideo: "Пришли *видео* (до {sec} сек, не больше {mb} МБ).",
     myProfileAddVideoHint:
       "🎬 Совет: добавь короткое видео в профиль через меню — так анкета заметнее.",
     myProfileAddVideoHintReward:
@@ -1078,7 +1078,7 @@ const translations = {
 
     // --- Pause / Resume ---
     pauseConfirmed: "Поиск на паузе ⏸\nНовых мэтчей не будет, пока не включишь.",
-    resumeConfirmed: "Поиск запущен ▶️\nИИ уже работает.",
+    resumeConfirmed: "Поиск запущен ▶️\nЯ уже в деле.",
 
     // --- Settings ---
     settingsTitle: "⚙️ Настройки",
@@ -1200,7 +1200,7 @@ const translations = {
     matchExpiredSilentWarning:
       "Время вышло — за сутки ты так и не ответил(-а) на мэтч. " +
       "Жди следующего четверга.\n\n" +
-      "Пожалуйста, не игнорируй предложения — это неуважение к твоему партнёру. " +
+      "Не игнорируй предложения — это неуважение к твоему партнёру. " +
       "В следующий раз за такое поведение мы снизим твой рейтинг.",
     matchExpiredSilentPenalty:
       "Время вышло — за сутки ты так и не ответил(-а) на мэтч. " +
@@ -1418,7 +1418,7 @@ const translations = {
     reportDetailAsk:
       "Есть что-то ещё, что поможет быстрее разобраться? Можно написать, отправить голосовое или пропустить.",
     reportDetailAskOther:
-      "Пожалуйста, коротко опиши, что случилось. Можно написать или отправить голосовое.",
+      "Коротко опиши, что случилось. Можно написать или отправить голосовое.",
     reportSkipBtn: "Пропустить",
     reportThanksT1: "Принято — учтём в будущих мэтчах 🎯",
     reportThanksT2: "Жалоба зарегистрирована. Спасибо — разберёмся.",
@@ -1534,8 +1534,8 @@ const translations = {
     chooseLanguage: "Обери мову:",
     philosophyPitch:
       "Gennety працює за одним принципом: *Zero Chat*.\n\n" +
-      "Ти не пишеш метчу. Наш ШІ розбирається, хто ти, " +
-      "знаходить реально сумісну людину і бере на себе все — час, місце, всю логістику.\n\n" +
+      "Ти не пишеш метчу. Я розбираюся, хто ти, " +
+      "знаходжу реально сумісну людину і беру на себе все — час, місце, всю логістику.\n\n" +
       "Тобі лише прийти. Заходиш?",
     philosophyContinue: "Го! 🚀",
     askEmail: "Скинь свою університетську пошту (типу name@knu.edu.ua):",
@@ -1680,8 +1680,8 @@ const translations = {
     profileEdit: "Змінити",
     onboardingComplete:
       "Ти в грі! 🎉\n\n" +
-      "Наш ШІ вже шукає тобі пару. " +
-      "Напишу, як тільки знайду когось стоящого.",
+      "Я вже шукаю тобі пару. " +
+      "Напишу, щойно знайду когось вартого твого часу.",
     btnLike: "👍",
     btnDislike: "👎",
     btnContinuePhotos: "Далі ➡️",
@@ -1762,7 +1762,7 @@ const translations = {
     verifyMiniAppCloseBtn: "Закрити",
     photoMatchMismatch:
       "⚠️ Це фото не збігається з селфі верифікації. " +
-      "Будь ласка, завантаж чітке фото себе при схожому освітленні.",
+      "Завантаж чітке фото себе при схожому освітленні.",
 
     // --- Main Menu ---
     menuTitle: "🎓 *Меню Gennety*\nЩо робимо?",
@@ -1827,7 +1827,7 @@ const translations = {
       "У тебе вже є відео в профілі. Надішли нове, щоб замінити, або видали його кнопкою нижче.",
     editVideoRemoveBtn: "🗑 Видалити відео",
     editVideoRemoved: "Відео з профілю видалено.",
-    editVideoNotAVideo: "Надішли, будь ласка, *відео* (до {sec} сек, не більше {mb} МБ).",
+    editVideoNotAVideo: "Надішли *відео* (до {sec} сек, не більше {mb} МБ).",
     myProfileAddVideoHint:
       "🎬 Порада: додай коротке відео в профіль через меню — так анкета помітніша.",
     myProfileAddVideoHintReward:
@@ -1835,7 +1835,7 @@ const translations = {
 
     // --- Pause / Resume ---
     pauseConfirmed: "Пошук на паузі ⏸\nНових метчів не буде, поки не ввімкнеш.",
-    resumeConfirmed: "Пошук запущено ▶️\nШІ вже працює.",
+    resumeConfirmed: "Пошук запущено ▶️\nЯ вже в ділі.",
 
     // --- Settings ---
     settingsTitle: "⚙️ Налаштування",
@@ -1957,7 +1957,7 @@ const translations = {
     matchExpiredSilentWarning:
       "Час вийшов — за добу ти так і не відповів(-ла) на метч. " +
       "Чекай наступного четверга.\n\n" +
-      "Будь ласка, не ігноруй пропозиції — це неповага до твого партнера. " +
+      "Не ігноруй пропозиції — це неповага до твого партнера. " +
       "Наступного разу за таку поведінку ми знизимо твій рейтинг.",
     matchExpiredSilentPenalty:
       "Час вийшов — за добу ти так і не відповів(-ла) на метч. " +
@@ -2175,7 +2175,7 @@ const translations = {
     reportDetailAsk:
       "Є щось іще, що допоможе швидше розібратися? Можна написати, надіслати голосове або пропустити.",
     reportDetailAskOther:
-      "Будь ласка, коротко опиши, що сталося. Можна написати або надіслати голосове.",
+      "Коротко опиши, що сталося. Можна написати або надіслати голосове.",
     reportSkipBtn: "Пропустити",
     reportThanksT1: "Прийнято — врахуємо в майбутніх мєтчах 🎯",
     reportThanksT2: "Скаргу зареєстровано. Дякуємо — розберемося.",
@@ -2297,8 +2297,8 @@ const deTranslations: TranslationTable = {
   chooseLanguage: "Wähle deine Sprache:",
   philosophyPitch:
     "Gennety basiert auf einer Idee: *Zero Chat*.\n\n" +
-    "Du schreibst deinem Match nicht. Unsere AI versteht, wer du bist, " +
-    "findet jemanden, der wirklich passt, und kümmert sich um alles - Zeit, Ort, das ganze Setup.\n\n" +
+    "Du schreibst deinem Match nicht. Ich verstehe, wer du bist, " +
+    "finde jemanden, der wirklich passt, und kümmere mich um alles - Zeit, Ort, das ganze Setup.\n\n" +
     "Du musst nur auftauchen. Klingt gut?",
   philosophyContinue: "Ich bin dabei 🚀",
   askEmail: "Schick deine Uni-Mail (z. B. name@stanford.edu):",
@@ -2367,7 +2367,7 @@ const deTranslations: TranslationTable = {
   profileEdit: "Etwas ändern",
   onboardingComplete:
     "Du bist drin! 🎉\n\n" +
-    "Unsere AI sucht schon nach deinem Match. " +
+    "Ich suche schon nach deinem Match. " +
     "Ich melde mich, sobald jemand Besonderes auftaucht.",
   btnContinuePhotos: "Weiter ➡️",
   finishOnboardingFirst:
@@ -2437,11 +2437,11 @@ const deTranslations: TranslationTable = {
   // Persona Embedded Mini App copy (verification.html)
   verifyMiniAppLoading: "Verifizierung wird geöffnet…",
   verifyMiniAppFinishing: "Gleich fertig. Ergebnis wird geprüft…",
-  verifyMiniAppError: "Verifizierung konnte nicht gestartet werden. Bitte versuch es erneut.",
+  verifyMiniAppError: "Verifizierung konnte nicht gestartet werden. Versuch es gleich noch mal.",
   verifyMiniAppCloseBtn: "Schließen",
   photoMatchMismatch:
     "⚠️ Dieses Foto passt nicht zu deinem Verifizierungs-Selfie. " +
-    "Bitte lade ein klares Foto von dir hoch, möglichst bei ähnlichem Licht.",
+    "Lade ein klares Foto von dir hoch, möglichst bei ähnlichem Licht.",
   menuTitle: "🎓 *Gennety Menü*\nWas geht?",
   menuMyProfile: "👤 Mein Profil",
   menuEdit: "✏️ Profil bearbeiten",
@@ -2482,7 +2482,7 @@ const deTranslations: TranslationTable = {
     "🎟 Dein erstes Ticket — von mir persönlich.\n\nJedes Date hier kostet 1 Ticket, normalerweise ~$6,99\nDieses ist gratis — dein erster Schritt soll um den Menschen gehen, nicht um den Preis\n\nEs liegt schon in deinem Guthaben ❤️",
   ticketStorePurchased:
     "✨ Zahlung erhalten — *{count}* Ticket(s) hinzugefügt!\n\nGuthaben: *{balance}* 🎟️",
-  ticketStoreCheckoutError: "Zahlung konnte nicht bestätigt werden. Bitte versuch es erneut.",
+  ticketStoreCheckoutError: "Zahlung konnte nicht bestätigt werden. Versuch es gleich noch mal.",
   ticketStoreInvoiceTitle: "Gennety Date-Tickets",
   ticketStoreInvoiceDesc:
     "{count} Date-Ticket(s) für deine Wallet. Jedes Ticket deckt ein Date ab.",
@@ -2569,13 +2569,13 @@ const deTranslations: TranslationTable = {
     "Du hast bereits ein Profilvideo. Sende ein neues, um es zu ersetzen, oder entferne es unten.",
   editVideoRemoveBtn: "🗑 Video entfernen",
   editVideoRemoved: "Profilvideo entfernt.",
-  editVideoNotAVideo: "Bitte sende ein *Video* (bis {sec} Sek., max. {mb} MB).",
+  editVideoNotAVideo: "Schick ein *Video* (bis {sec} Sek., max. {mb} MB).",
   myProfileAddVideoHint:
     "🎬 Tipp: Füge über das Menü ein kurzes Profilvideo hinzu — so fällt dein Profil mehr auf.",
   myProfileAddVideoHintReward:
     "🎬 Tipp: Füge über das Menü ein kurzes Profilvideo hinzu und sichere dir ein kostenloses Ticket 🎁.",
   pauseConfirmed: "Matching pausiert ⏸\nKeine neuen Matches, bis du fortsetzt.",
-  resumeConfirmed: "Matching läuft wieder ▶️\nUnsere AI ist dran.",
+  resumeConfirmed: "Matching läuft wieder ▶️\nIch bin dran.",
   settingsTitle: "⚙️ Einstellungen",
   settingsLanguage: "🌐 Sprache",
   settingsLanguagePick: "Wähle eine Sprache:",
@@ -2691,7 +2691,7 @@ const deTranslations: TranslationTable = {
   matchExpiredSilentWarning:
     "Zeit abgelaufen - du hast deinem Match innerhalb von 24h nicht geantwortet. " +
     "Warte auf den nächsten Donnerstags-Drop.\n\n" +
-    "Bitte ignoriere Vorschläge nicht - das ist deinem Gegenüber gegenüber unfair. " +
+    "Ignorier Vorschläge nicht - das ist deinem Gegenüber gegenüber unfair. " +
     "Beim nächsten Mal senken wir dafür dein Rating.",
   matchExpiredSilentPenalty:
     "Zeit abgelaufen - du hast deinem Match innerhalb von 24h nicht geantwortet. " +
@@ -2955,8 +2955,8 @@ const plTranslations: TranslationTable = {
   chooseLanguage: "Wybierz język:",
   philosophyPitch:
     "Gennety działa według jednej zasady: *Zero Chat*.\n\n" +
-    "Nie piszesz do swojego dopasowania. Nasza AI rozumie, kim jesteś, " +
-    "znajduje naprawdę kompatybilną osobę i ogarnia wszystko - czas, miejsce, cały plan.\n\n" +
+    "Nie piszesz do swojego matcha. Rozumiem, kim jesteś, " +
+    "znajduję naprawdę kompatybilną osobę i ogarniam wszystko - czas, miejsce, cały plan.\n\n" +
     "Ty po prostu przychodzisz. Brzmi dobrze?",
   philosophyContinue: "Wchodzę w to 🚀",
   askEmail: "Wyślij swój e-mail uniwersytecki (np. name@stanford.edu):",
@@ -3025,7 +3025,7 @@ const plTranslations: TranslationTable = {
   profileEdit: "Zmień coś",
   onboardingComplete:
     "Jesteś w środku! 🎉\n\n" +
-    "Nasza AI już szuka Twojego dopasowania. " +
+    "Już szukam Twojego matcha. " +
     "Odezwę się, gdy pojawi się ktoś wyjątkowy.",
   btnContinuePhotos: "Dalej ➡️",
   finishOnboardingFirst:
@@ -3233,7 +3233,7 @@ const plTranslations: TranslationTable = {
   myProfileAddVideoHintReward:
     "🎬 Wskazówka: dodaj krótkie wideo do profilu z menu i zdobądź darmowy bilet 🎁.",
   pauseConfirmed: "Matching wstrzymany ⏸\nNie będzie nowych dopasowań, dopóki go nie wznowisz.",
-  resumeConfirmed: "Matching znowu działa ▶️\nNasza AI już pracuje.",
+  resumeConfirmed: "Matching znowu działa ▶️\nJuż działam.",
   settingsTitle: "⚙️ Ustawienia",
   settingsLanguage: "🌐 Język",
   settingsLanguagePick: "Wybierz język:",
@@ -3348,7 +3348,7 @@ const plTranslations: TranslationTable = {
   matchExpiredSilentWarning:
     "Czas minął - nie odpowiedziałeś/odpowiedziałaś na dopasowanie w ciągu 24h. " +
     "Poczekaj na kolejny czwartkowy drop.\n\n" +
-    "Prosimy, nie ignoruj propozycji - to nie fair wobec drugiej osoby. " +
+    "Nie ignoruj propozycji - to nie fair wobec drugiej osoby. " +
     "Następnym razem obniżymy za to Twój rating.",
   matchExpiredSilentPenalty:
     "Czas minął - nie odpowiedziałeś/odpowiedziałaś na dopasowanie w ciągu 24h. " +
