@@ -12,6 +12,7 @@ import { sendConsentPrompt } from "./onboarding/consent.js";
 import { computeDevBypassFields } from "./dev-bypass.js";
 import { grantStudentBonusIfEligible } from "../services/ticket-wallet.js";
 import { startPoll } from "../services/verification-poller.js";
+import { sendVerificationGateNotice } from "./onboarding/verification.js";
 import { pinStatusBanner } from "../services/status-banner.js";
 import { buildLanguageKeyboard } from "./language-keyboard.js";
 import { syncTelegramUsername } from "../utils/username.js";
@@ -327,6 +328,25 @@ start.command("start", async (ctx) => {
       await showMainMenu(ctx);
       await pinStatusBanner(ctx.api, telegramId, ctx.session.language);
       return;
+    }
+
+    // Finalized onboarding but still held at `status = onboarding`: the Persona
+    // liveness gate hasn't been cleared, so the user is NOT active and the
+    // matchmaker has NOT started searching for them. Greeting them with
+    // "your AI is already looking for a match" (onboardingComplete) misleads
+    // them — surface their real verification state + the Verify button instead,
+    // then the menu, and do NOT pin the next-match banner.
+    if (user.status === "onboarding") {
+      const handled = await sendVerificationGateNotice(
+        ctx.api,
+        ctx.chat!.id,
+        telegramId,
+        ctx.session.language,
+      );
+      if (handled) {
+        await showMainMenu(ctx);
+        return;
+      }
     }
 
     await ctx.reply(t(ctx.session.language, "onboardingComplete"));

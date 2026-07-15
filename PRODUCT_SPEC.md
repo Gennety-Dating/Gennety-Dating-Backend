@@ -479,6 +479,18 @@ button) on the same decaying cadence until the pipeline activates the user or
 the chain exhausts. `pending_review`/`rejected` users are deliberately NOT
 nudged — they already did their part (or got rejection guidance).
 
+**Re-`/start` while still verification-gated.** Whenever a finalized-but-not-yet
+activated user (`status='onboarding'`, `onboardingStep='completed'`) reopens the
+bot, `/start` must NOT show the `onboardingComplete` "your AI is already looking
+for a match" greeting — the matchmaker has not started for them. It instead
+surfaces their real verification state (`handlers/onboarding/verification.ts`
+`sendVerificationGateNotice`): the `verifyReminderNudge` + Verify button for
+`pending`/`unverified`, `verifyOutcomePendingReview` for `pending_review`,
+`verifyOutcomeRejected` for `rejected`, then the menu — and it does not pin the
+next-match banner. This holds independent of `MANDATORY_VERIFICATION_ENABLED`
+(the same `onboarding`/`completed` state exists whenever Persona liveness is
+enabled and the user hasn't yet cleared it).
+
 ## Phase 1b — Profiler
 
 The **Profiler** (`workers/profiler.ts` + `services/profiler.ts`,

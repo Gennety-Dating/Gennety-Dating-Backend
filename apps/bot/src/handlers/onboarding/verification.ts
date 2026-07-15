@@ -333,6 +333,56 @@ export async function sendVerificationReminder(
 }
 
 /**
+ * A user who FINALIZED onboarding (`onboardingStep = completed`) but is still
+ * held at `status = onboarding` reopened the bot. The only thing that leaves a
+ * user in that state is the Persona liveness gate (see `finalize_onboarding`):
+ * they have NOT been activated and the matchmaker has NOT started searching for
+ * them. Surfacing the normal "your AI is already looking for a match" greeting
+ * here misleads them — matching is paused until they clear verification.
+ *
+ * Instead, tell them their ACTUAL verification state:
+ *   • `pending_review` — the pipeline ran and we're double-checking their
+ *     photos; nothing for them to do, so no button.
+ *   • `rejected` — their photos didn't match the selfie; the copy points them
+ *     at Settings → re-verify (fix photos, retry).
+ *   • `pending` / `unverified` (default) — they never completed Persona, so
+ *     re-offer the Verify button; matching begins right after it passes.
+ *
+ * Returns true when a gate notice was sent (the caller should then SKIP the
+ * misleading `onboardingComplete` greeting and the next-match banner). Returns
+ * false only for the defensive `verified`-but-not-active edge, so the caller
+ * can fall back to the normal greeting.
+ */
+export async function sendVerificationGateNotice(
+  api: Api,
+  chatId: number,
+  telegramId: bigint,
+  lang: Language,
+): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true, verificationStatus: true },
+  });
+  if (!user) return false;
+
+  switch (user.verificationStatus) {
+    case "verified":
+      // A verified user should already be `active`; if we somehow land here,
+      // let the caller show the normal greeting rather than a stale nudge.
+      return false;
+    case "pending_review":
+      await api.sendMessage(chatId, t(lang, "verifyOutcomePendingReview"));
+      return true;
+    case "rejected":
+      await api.sendMessage(chatId, t(lang, "verifyOutcomeRejected"));
+      return true;
+    default:
+      await sendVerificationReminder(api, chatId, lang, user.id);
+      return true;
+  }
+}
+
+/**
  * Handle the "Skip" button on the verification CTA — the *soft* skip.
  *
  * Instead of immediately applying the Elo penalty, this plays a short personal
