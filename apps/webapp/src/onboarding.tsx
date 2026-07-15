@@ -44,6 +44,10 @@ import {
   type OnboardingStrings,
 } from "./onboarding-i18n.js";
 import { typewriterLineHoldMs } from "./onboarding-timing.js";
+import bumbleIcon from "./app-icons/bumble.png";
+import tinderIcon from "./app-icons/tinder.png";
+import badooIcon from "./app-icons/badoo.png";
+import gennetyIcon from "./brand/gennety-icon.png";
 import "./theme.css";
 import "./onboarding.css";
 
@@ -118,17 +122,16 @@ const ICON_REVEAL_VIEW_MS = 2400;
 const LOGO_RISE_DELAY_MS = 150;
 const LOGO_RISE_VIEW_MS = 2200;
 
-// Competitor app icons: raised on scene 0 and shown small under the stats
-// footnote. PNGs live in `apps/webapp/public/app-icons/`; a missing file hides
-// only that slot (see `AppIconRow`). Operator-provided, not bundled.
+// Competitor app icons (scene 0 arc + stats tray) and the Gennety icon (Pivot).
+// Imported as Vite assets so their emitted filenames are content-hashed — a
+// changed icon busts the `immutable`-cached URL automatically, instead of
+// serving a stale PNG from a fixed `public/` path.
 const APP_ICONS: Array<{ key: string; src: string; label: string }> = [
-  { key: "bumble", src: "/app-icons/bumble.png", label: "Bumble" },
-  { key: "tinder", src: "/app-icons/tinder.png", label: "Tinder" },
-  { key: "badoo", src: "/app-icons/badoo.png", label: "Badoo" },
+  { key: "bumble", src: bumbleIcon, label: "Bumble" },
+  { key: "tinder", src: tinderIcon, label: "Tinder" },
+  { key: "badoo", src: badooIcon, label: "Badoo" },
 ];
-// Gennety app icon (the burgundy butterfly) raised on the Pivot screen. Lives
-// in `apps/webapp/public/brand/`; a missing file just leaves the text.
-const GENNETY_ICON_SRC = "/brand/gennety-icon.png";
+const GENNETY_ICON_SRC = gennetyIcon;
 const PRIVACY_POLICY_URL = "https://gennety.com/privacy";
 const TERMS_OF_SERVICE_URL = "https://gennety.com/terms";
 
@@ -635,8 +638,8 @@ function useIntroStream(
 
 // Row of competitor app icons. `reveal` is the large row that rises on scene 0;
 // `stats` is the larger liquid-glass tray shown above the numbers on the stats
-// scene. A PNG that fails to load hides only its own slot, so the row degrades
-// cleanly until the operator drops the files into `public/app-icons/`.
+// scene. The icons are bundled assets (see the imports at the top); the onError
+// guard just hides a slot rather than showing a broken-image glyph.
 function AppIconRow(props: { variant: "reveal" | "stats" }): ReactElement {
   return (
     <div className={`app-icon-row app-icon-row--${props.variant}`}>
