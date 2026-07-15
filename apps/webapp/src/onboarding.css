@@ -2405,14 +2405,20 @@ button {
 }
 
 /* ── Theme picker (onboarding step right after the city gate) ──────────────
-   Each tile is a real swatch of the theme it selects — its bg + text are pinned
-   to that theme so both previews read regardless of the active one. The glyph,
-   selected ring, and check are the burgundy brand accent. */
+   Each tile is a self-referential MINI-PREVIEW of this very app in the theme it
+   selects: the theme's own "wallpaper" (bg + a soft burgundy / warm glow, plus
+   faint stars on the dark one) carrying a celestial mood glyph, over a floating
+   Liquid-Glass mini-card (burgundy accent pill + neutral skeleton lines) — a
+   scale replica of this screen's card, so the swatch literally shows what you
+   pick. NO borders anywhere: tiles separate by elevation, per the design system
+   ("depth comes from elevation, never a wash/outline"). Each tile always renders
+   its OWN theme regardless of the active one, so colours are pinned per-variant
+   and exposed as --tile-* custom props consumed by the shared child rules. */
 .theme-tile-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  margin-top: 4px;
+  gap: 16px;
+  margin-top: 8px;
 }
 
 .theme-tile {
@@ -2420,47 +2426,110 @@ button {
   aspect-ratio: 3 / 4;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
+  gap: 12px;
+  padding: 15px 15px 16px;
+  border: 0;
   border-radius: 26px;
-  border: 1.5px solid var(--border);
+  background: var(--tile-bg);
+  color: var(--tile-ink);
+  box-shadow: var(--tile-rest-shadow);
   overflow: hidden;
+  isolation: isolate;
   transition:
-    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 200ms ease,
-    box-shadow 220ms ease;
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 260ms ease;
 }
 
+/* Dark swatch — near-black wallpaper, cool moonlight upper-right, a low burgundy
+   bloom, and a scatter of faint stars painted straight into the bg gradient. */
 .theme-tile--dark {
-  background: #030303;
-  color: #e9e6e5;
+  --tile-ink: #e9e6e5;
+  --tile-accent: #b6304f;
+  --tile-card: rgba(255, 255, 255, 0.07);
+  --tile-card-edge: rgba(255, 255, 255, 0.16);
+  --tile-line: rgba(255, 255, 255, 0.18);
+  --tile-rest-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  --tile-bg:
+    radial-gradient(1.4px 1.4px at 22% 26%, rgba(255, 255, 255, 0.55), transparent 60%),
+    radial-gradient(1.2px 1.2px at 66% 15%, rgba(255, 255, 255, 0.42), transparent 60%),
+    radial-gradient(1.1px 1.1px at 43% 40%, rgba(255, 255, 255, 0.3), transparent 60%),
+    radial-gradient(85% 58% at 74% 14%, rgba(220, 214, 224, 0.1), transparent 62%),
+    radial-gradient(130% 90% at 50% 128%, rgba(139, 37, 59, 0.34), transparent 60%),
+    #060506;
 }
 
+/* Light swatch — cream wallpaper, warm sun glow upper-right, a whisper of
+   burgundy at the base; no stars, the daylight glow carries it. */
 .theme-tile--light {
-  background: #f5f5f5;
-  color: #1d1d1d;
+  --tile-ink: #1d1d1d;
+  --tile-accent: #8b253b;
+  --tile-card: rgba(255, 255, 255, 0.7);
+  --tile-card-edge: rgba(255, 255, 255, 0.95);
+  --tile-line: rgba(0, 0, 0, 0.13);
+  --tile-rest-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+  --tile-bg:
+    radial-gradient(80% 62% at 76% 14%, rgba(255, 206, 158, 0.6), transparent 60%),
+    radial-gradient(130% 90% at 50% 128%, rgba(139, 37, 59, 0.12), transparent 60%),
+    #f3f1ee;
 }
 
 .theme-tile:active {
-  transform: scale(0.97);
+  transform: scale(0.975);
 }
 
 .theme-tile:disabled {
-  opacity: 0.65;
+  opacity: 0.6;
 }
 
 .theme-tile.is-selected {
-  border-color: #8b253b;
+  transform: translateY(-3px);
   box-shadow:
-    0 0 0 3px rgba(139, 37, 59, 0.28),
-    0 16px 36px rgba(0, 0, 0, 0.28);
+    var(--tile-rest-shadow),
+    0 0 0 1.5px var(--tile-accent),
+    0 12px 30px rgba(139, 37, 59, 0.32);
+}
+
+.theme-tile.is-selected:active {
+  transform: translateY(-3px) scale(0.975);
+}
+
+/* Sky region — reserves the top zone; the mood glyph floats top-left and the
+   selection check badge top-right, both absolute within it. */
+.theme-tile__sky {
+  position: relative;
+  height: 34%;
+  min-height: 44px;
 }
 
 .theme-tile__glyph {
-  width: 46px;
-  height: 46px;
-  color: #8b253b;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 34px;
+  height: 34px;
+  color: var(--tile-accent);
+  filter: drop-shadow(0 2px 10px rgba(139, 37, 59, 0.45));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-tile__glyph {
+    animation: theme-glyph-float 6s ease-in-out infinite;
+  }
+
+  .theme-tile--light .theme-tile__glyph {
+    animation-delay: -3s;
+  }
+}
+
+@keyframes theme-glyph-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
 }
 
 .theme-tile__glyph svg {
@@ -2469,28 +2538,65 @@ button {
   height: 100%;
 }
 
+/* The floating Liquid-Glass mini-card — a scale replica of this screen's own
+   card (translucent fill + specular top edge + blur picking up the wallpaper
+   behind it). Grows to fill the tile below the sky. */
+.theme-tile__mini {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
+  padding: 13px;
+  border-radius: 15px;
+  background: var(--tile-card);
+  box-shadow: inset 0 1px 0 var(--tile-card-edge);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.theme-tile__mini-accent {
+  width: 34px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--tile-accent);
+}
+
+.theme-tile__mini-line {
+  height: 7px;
+  border-radius: 999px;
+  background: var(--tile-line);
+}
+
+.theme-tile__mini-line--short {
+  width: 62%;
+}
+
 .theme-tile__name {
-  font-size: 15px;
+  text-align: center;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.2px;
+  color: var(--tile-ink);
 }
 
 .theme-tile__check {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 22px;
-  height: 22px;
+  top: 0;
+  right: 0;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
   border-radius: 999px;
-  background: #8b253b;
+  background: var(--tile-accent);
   color: #fff;
+  box-shadow: 0 2px 8px rgba(139, 37, 59, 0.4);
   opacity: 0;
-  transform: scale(0.6);
+  transform: scale(0.5);
   transition:
-    opacity 180ms ease,
-    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 200ms ease,
+    transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .theme-tile__check svg {

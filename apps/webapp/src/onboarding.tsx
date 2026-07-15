@@ -1472,11 +1472,16 @@ function ThemeGate(props: {
               aria-label={label}
               aria-pressed={props.selected === value}
             >
-              <span className="theme-tile__check" aria-hidden="true">
-                {CheckGlyph}
+              <span className="theme-tile__sky" aria-hidden="true">
+                <span className="theme-tile__glyph">
+                  {value === "dark" ? MoonGlyph : SunGlyph}
+                </span>
+                <span className="theme-tile__check">{CheckGlyph}</span>
               </span>
-              <span className="theme-tile__glyph" aria-hidden="true">
-                {value === "dark" ? MoonGlyph : SunGlyph}
+              <span className="theme-tile__mini" aria-hidden="true">
+                <span className="theme-tile__mini-accent" />
+                <span className="theme-tile__mini-line" />
+                <span className="theme-tile__mini-line theme-tile__mini-line--short" />
               </span>
               <span className="theme-tile__name">{busy === value ? s.saving : label}</span>
             </button>
