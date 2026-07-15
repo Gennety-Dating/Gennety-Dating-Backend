@@ -149,7 +149,7 @@ describe("sendNoMatchNotices", () => {
 
     const [, body1] = api.sendMessage.mock.calls[0]!;
     const [, body2] = api.sendMessage.mock.calls[1]!;
-    expect(body1).toMatch(/чесними/);
+    expect(body1).toMatch(/Знову чесно/);
     expect(body2).toMatch(/honest update/);
   });
 

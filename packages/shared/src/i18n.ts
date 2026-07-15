@@ -397,21 +397,21 @@ const translations = {
     matchBothAccepted: "It's mutual 🤍 Let's find a time.",
     matchDeclined:
       "All good. What was the main reason you passed?\n\n" +
-      "Pick one below, or send a short text or voice note. The AI will analyze it and use it for the next drop.\n\n" +
-      "If it's something else, tell us - next time, we'll suggest someone who better fits your interests and preferences.",
+      "Pick one below, or send a short text or voice note — I'll factor it into the next drop.\n\n" +
+      "If it's something else, just tell me — next time I'll bring someone closer to what you're after.",
     matchDeclineReasonType: "Not my type",
     matchDeclineReasonVibe: "Different vibe",
     matchDeclineReasonInterests: "Interests don't match",
     matchDeclineReasonLifestyle: "Lifestyle mismatch",
     matchDeclineReasonOther: "Something else",
     matchDeclineOtherAsk:
-      "Sure - send a short text or voice note with the reason. The AI will analyze it and use it for the next drop.",
+      "Sure — send a short text or voice note with the reason. I'll factor it into the next drop.",
     matchDeclineFeedbackSaved:
-      "Got it. We'll use this to tune your next recommendations 🎯",
-    matchDeclineAlreadyNoted: "Already noted - thanks.",
+      "Got it. I'll tune the next picks around this.",
+    matchDeclineAlreadyNoted: "Already noted — thanks.",
     matchDeclineFeedbackFailed:
       "Couldn't save that right now. You can still send a short text or voice note.",
-    matchDeclineThanks: "Noted. We'll keep looking 🎯",
+    matchDeclineThanks: "Noted. I keep looking.",
     matchPeerDecided:
       "Your match has already given their answer. Your turn.\n\n" +
       "*What* they chose — you'll see only after you reply yourself. " +
@@ -419,13 +419,11 @@ const translations = {
     matchPeerWasAccepted: "FYI — your match was in. Just didn't line up this time.",
     matchPeerWasDeclined: "FYI — your match passed this time.",
     matchAcceptedPeerDeclined:
-      "Unfortunately, your match didn't agree to meet. " +
-      "That's okay. In Gennety, dates only happen when the interest is mutual. " +
-      "We'll keep looking for a more relevant match.",
+      "This time it's a no from their side. It happens — here a date only happens when it's mutual. " +
+      "I keep looking; the next pick will be closer.",
     matchAcceptedPeerDeclinedPriority:
-      "Unfortunately, your match didn't agree to meet. " +
-      "That's okay. In Gennety, dates only happen when the interest is mutual.\n\n" +
-      "We've boosted your priority for next Thursday so you have a better chance to have a genuinely pleasant evening.",
+      "This time it's a no from their side. It happens — here a date only happens when it's mutual.\n\n" +
+      "I've boosted your priority for next Thursday. The next pick will be closer.",
     matchPhotoCaption: "{name}, {age}",
     matchVerifiedLabel: "Verified",
     matchVerifiedQuote:
@@ -455,31 +453,28 @@ const translations = {
       "Your priority for next week's drop has been boosted.",
     noMatchThisWeekTier1:
       "Hey 💫\n\n" +
-      "This week our matchmaker couldn't find you a partner who actually meets our quality bar — " +
-      "and we'd rather wait than pair you with someone who isn't worth your time.\n\n" +
-      "Where things stand:\n" +
-      "• We're growing the community fast and refining the matchmaking algorithm every day.\n" +
-      "• A truly fitting partner should arrive in one of the next drops.\n" +
-      "• Every week you wait bumps up your priority in the next drop.\n\n" +
-      "See you next Thursday at 18:00 ✨",
+      "No match this week. Not because something's off with you — the quality bar just stays where it is, " +
+      "and I'd rather wait than hand you someone who isn't worth your time.\n\n" +
+      "Meanwhile:\n" +
+      "• the community keeps growing, and the matching gets sharper every week.\n" +
+      "• every week you wait raises your priority in the next drop.\n\n" +
+      "Next Thursday, 18:00 ✨",
     noMatchThisWeekTier2:
       "Hey 🌿\n\n" +
-      "Second week running and our matchmaker still hasn't found anyone we'd be excited to introduce you to. " +
-      "Thank you for your patience — it means a lot.\n\n" +
-      "Where we are right now:\n" +
-      "• We're actively bringing more people like you into the community and tuning the algorithm in your favour.\n" +
-      "• A genuinely great partner should be just a few drops away.\n" +
-      "• Your priority for the next drop is already raised for the wait.\n\n" +
-      "See you next Thursday at 18:00 — we're working for you 🤍",
+      "Second week running — still no one I'd actually be excited to introduce you to. " +
+      "Thanks for sticking around; that matters.\n\n" +
+      "What's happening:\n" +
+      "• I'm bringing more people like you in and tuning the algorithm in your favour.\n" +
+      "• your priority for the next drop is already raised.\n\n" +
+      "Thursday, 18:00 — I'm on it 🤍",
     noMatchThisWeekTier3:
       "Hey ✨\n\n" +
-      "We owe you another honest update — still no partner that's truly worth your time. " +
-      "We hate this even more than you do, and we're not going to pretend otherwise.\n\n" +
-      "What's actually happening on our side:\n" +
-      "• We're personally watching your queue and pushing the community to grow in your area.\n" +
-      "• The right person will land in one of the coming drops — we won't stop until they do.\n" +
-      "• Every week you wait, we move you higher up the priority list for the next drop.\n\n" +
-      "Thank you for trusting us. See you Thursday at 18:00 🤍",
+      "Another honest update — still no one truly worth your time. " +
+      "I like this even less than you do, and I won't pretend otherwise.\n\n" +
+      "On my side:\n" +
+      "• I'm personally watching your queue and pushing growth in your area.\n" +
+      "• every week you wait moves you higher up the list for the next drop.\n\n" +
+      "Thanks for trusting me. Thursday, 18:00 🤍",
     noMatchDiscountOffer:
       "🎟️ A small thank-you for your patience: your next first date is {pct}% off — one Date Ticket, almost on us. " +
       "We'll apply the discount automatically the next time you get a match or open your tickets.",
@@ -1166,21 +1161,21 @@ const translations = {
     matchBothAccepted: "Взаимно 🤍 Найдём время.",
     matchDeclined:
       "Ок, всё нормально. Что стало главной причиной?\n\n" +
-      "Выбери вариант ниже или отправь короткий текст/голосовое. ИИ разберёт фидбэк и учтёт его в следующем дропе.\n\n" +
-      "Если причина в чём-то другом - напиши: в следующий раз предложим человека, который лучше подходит под твои интересы и предпочтения.",
+      "Выбери вариант ниже или отправь короткий текст/голосовое — учту в следующем дропе.\n\n" +
+      "Если причина в чём-то другом — просто напиши: в следующий раз приведу кого-то ближе к тому, что ты ищешь.",
     matchDeclineReasonType: "Не мой тип",
     matchDeclineReasonVibe: "Не тот вайб",
     matchDeclineReasonInterests: "Не совпали интересы",
     matchDeclineReasonLifestyle: "Разный образ жизни",
     matchDeclineReasonOther: "Другая причина",
     matchDeclineOtherAsk:
-      "Ок - отправь короткий текст или голосовое с причиной. ИИ разберёт это и учтёт в следующем дропе.",
+      "Ок — отправь короткий текст или голосовое с причиной. Учту в следующем дропе.",
     matchDeclineFeedbackSaved:
-      "Принято. Учтём это в следующих рекомендациях 🎯",
-    matchDeclineAlreadyNoted: "Уже записали - спасибо.",
+      "Принял. Следующий подбор настрою с учётом этого.",
+    matchDeclineAlreadyNoted: "Уже записал — спасибо.",
     matchDeclineFeedbackFailed:
       "Не получилось сохранить прямо сейчас. Можешь всё равно отправить короткий текст или голосовое.",
-    matchDeclineThanks: "Понял. Ищем дальше 🎯",
+    matchDeclineThanks: "Понял. Ищу дальше.",
     matchPeerDecided:
       "Твой мэтч уже дал ответ. Твоя очередь.\n\n" +
       "*Что* именно он выбрал — увидишь только после своего ответа. " +
@@ -1188,13 +1183,11 @@ const translations = {
     matchPeerWasAccepted: "Кстати — твой мэтч был согласен. В этот раз просто не сошлось.",
     matchPeerWasDeclined: "Кстати — твой мэтч в этот раз отказался.",
     matchAcceptedPeerDeclined:
-      "К сожалению, твой партнер не согласился на встречу. " +
-      "Это нормально. В Gennety свидания случаются только при взаимном интересе. " +
-      "Мы продолжаем искать для тебя более релевантный мэтч.",
+      "В этот раз с той стороны — нет. Бывает: здесь свидание случается только при взаимном интересе. " +
+      "Ищу дальше — следующий вариант будет ближе.",
     matchAcceptedPeerDeclinedPriority:
-      "К сожалению, твой партнер не согласился на встречу. " +
-      "Это нормально. В Gennety свидания случаются только при взаимном интересе.\n\n" +
-      "Мы повысили твой приоритет на следующий четверг, чтобы у тебя было больше шансов провести по-настоящему приятный вечер.",
+      "В этот раз с той стороны — нет. Бывает: здесь свидание случается только при взаимном интересе.\n\n" +
+      "Я поднял твой приоритет на следующий четверг. Следующий вариант будет ближе.",
     matchPhotoCaption: "{name}, {age}",
     matchVerifiedLabel: "Подтверждён",
     matchVerifiedQuote:
@@ -1224,31 +1217,28 @@ const translations = {
       "Твой приоритет на следующую неделю повышен.",
     noMatchThisWeekTier1:
       "Привет 💫\n\n" +
-      "На этой неделе наш матчмейкер не нашёл для тебя пары, которая по-настоящему соответствовала бы нашему уровню качества — " +
-      "и мы не готовы предлагать «лишь бы было».\n\n" +
-      "Что сейчас происходит:\n" +
-      "• Мы активно расширяем сообщество и каждый день улучшаем алгоритм подбора.\n" +
-      "• По-настоящему подходящий человек должен появиться в одном из ближайших дропов.\n" +
-      "• Каждая неделя ожидания повышает твой приоритет в следующем дропе.\n\n" +
-      "До следующего четверга в 18:00 ✨",
+      "На этой неделе без мэтча. Не потому что с тобой что-то не так — просто планка качества стоит там, где стоит, " +
+      "и я лучше подожду, чем предложу «лишь бы было».\n\n" +
+      "Тем временем:\n" +
+      "• сообщество растёт, подбор с каждой неделей точнее.\n" +
+      "• каждая неделя ожидания поднимает твой приоритет в следующем дропе.\n\n" +
+      "До четверга, 18:00 ✨",
     noMatchThisWeekTier2:
       "Привет 🌿\n\n" +
-      "Уже вторая неделя подряд, как наш матчмейкер не находит кого-то, кого мы были бы рады тебе показать. " +
-      "Спасибо, что остаёшься с нами — это правда важно.\n\n" +
-      "Где мы сейчас:\n" +
-      "• Мы активно приводим новых людей и настраиваем алгоритм под твои критерии.\n" +
-      "• Действительно стоящий партнёр должен быть всего в нескольких дропах от тебя.\n" +
-      "• За ожидание твой приоритет в следующем дропе уже повышен.\n\n" +
-      "До следующего четверга в 18:00 — мы работаем для тебя 🤍",
+      "Уже вторая неделя подряд — всё ещё нет никого, кого я был бы рад тебе показать. " +
+      "Спасибо, что остаёшься — это правда важно.\n\n" +
+      "Что происходит:\n" +
+      "• привожу новых людей и настраиваю алгоритм под твои критерии.\n" +
+      "• твой приоритет в следующем дропе уже повышен.\n\n" +
+      "До четверга, 18:00 — я этим занимаюсь 🤍",
     noMatchThisWeekTier3:
       "Привет ✨\n\n" +
-      "Должны снова быть честными — пары, которая правда стоит твоего времени, всё ещё нет. " +
-      "Нам это не нравится даже сильнее, чем тебе, и мы не будем делать вид, что всё хорошо.\n\n" +
-      "Что мы реально делаем:\n" +
-      "• Лично следим за твоей очередью и подталкиваем рост сообщества в твоём районе.\n" +
-      "• Тот самый человек обязательно появится в одном из ближайших дропов — мы не остановимся.\n" +
-      "• Каждую неделю ожидания мы поднимаем тебя выше в приоритете следующего дропа.\n\n" +
-      "Спасибо, что доверяешь. До четверга в 18:00 🤍",
+      "Снова честно: пары, которая правда стоит твоего времени, всё ещё нет. " +
+      "Мне это нравится даже меньше, чем тебе, и делать вид, что всё ок, я не буду.\n\n" +
+      "Что делаю:\n" +
+      "• лично слежу за твоей очередью и подталкиваю рост в твоём городе.\n" +
+      "• каждая неделя ожидания двигает тебя выше в приоритете дропа.\n\n" +
+      "Спасибо, что доверяешь. До четверга, 18:00 🤍",
     noMatchDiscountOffer:
       "🎟️ Небольшая благодарность за терпение: твоё следующее первое свидание — со скидкой {pct}% на один билет. " +
       "Мы применим скидку автоматически, когда тебе выпадет пара или ты откроешь свои билеты.",
@@ -1936,13 +1926,13 @@ const translations = {
     matchDeclineReasonLifestyle: "Різний спосіб життя",
     matchDeclineReasonOther: "Інша причина",
     matchDeclineOtherAsk:
-      "Ок - надішли короткий текст або голосове з причиною. ШІ проаналізує це й врахує в наступному дропі.",
+      "Ок — надішли короткий текст або голосове з причиною. Врахую в наступному дропі.",
     matchDeclineFeedbackSaved:
-      "Прийнято. Врахуємо це в наступних рекомендаціях 🎯",
-    matchDeclineAlreadyNoted: "Уже записали - дякую.",
+      "Прийняв. Наступний підбір налаштую з урахуванням цього.",
+    matchDeclineAlreadyNoted: "Уже записав — дякую.",
     matchDeclineFeedbackFailed:
       "Не вдалося зберегти просто зараз. Можеш усе одно надіслати короткий текст або голосове.",
-    matchDeclineThanks: "Зрозуміли. Шукаємо далі 🎯",
+    matchDeclineThanks: "Зрозумів. Шукаю далі.",
     matchPeerDecided:
       "Твій метч уже дав відповідь. Твоя черга.\n\n" +
       "*Що* саме він обрав — побачиш лише після своєї відповіді. " +
@@ -1950,13 +1940,11 @@ const translations = {
     matchPeerWasAccepted: "До речі — твій метч був згодний. Цього разу просто не склалось.",
     matchPeerWasDeclined: "До речі — твій метч цього разу відмовився.",
     matchAcceptedPeerDeclined:
-      "На жаль, твій партнер не погодився на зустріч. " +
-      "Це нормально. У Gennety побачення відбуваються лише за взаємного інтересу. " +
-      "Ми продовжуємо шукати для тебе релевантніший метч.",
+      "Цього разу з того боку — ні. Буває: тут побачення стається лише за взаємного інтересу. " +
+      "Шукаю далі — наступний варіант буде ближчим.",
     matchAcceptedPeerDeclinedPriority:
-      "На жаль, твій партнер не погодився на зустріч. " +
-      "Це нормально. У Gennety побачення відбуваються лише за взаємного інтересу.\n\n" +
-      "Ми підвищили твій пріоритет на наступний четвер, щоб у тебе було більше шансів провести справді приємний вечір.",
+      "Цього разу з того боку — ні. Буває: тут побачення стається лише за взаємного інтересу.\n\n" +
+      "Я підняв твій пріоритет на наступний четвер. Наступний варіант буде ближчим.",
     matchPhotoCaption: "{name}, {age}",
     matchVerifiedLabel: "Підтверджено",
     matchVerifiedQuote:
@@ -1986,31 +1974,28 @@ const translations = {
       "Твій пріоритет на наступний тиждень підвищено.",
     noMatchThisWeekTier1:
       "Привіт 💫\n\n" +
-      "Цього тижня наш матчмейкер не знайшов для тебе пари, яка справді відповідала б нашому рівню якості — " +
-      "і ми не готові пропонувати «аби було».\n\n" +
-      "Що зараз відбувається:\n" +
-      "• Ми активно розширюємо спільноту й щодня покращуємо алгоритм підбору партнера.\n" +
-      "• По-справжньому відповідна людина має з'явитися в одному з найближчих дропів.\n" +
-      "• Кожен тиждень очікування підвищує твій пріоритет у наступному дропі.\n\n" +
-      "До наступного четверга о 18:00 ✨",
+      "Цього тижня без метчу. Не тому що з тобою щось не так — просто планка якості стоїть там, де стоїть, " +
+      "і я краще почекаю, ніж запропоную «аби було».\n\n" +
+      "Тим часом:\n" +
+      "• спільнота росте, підбір з кожним тижнем точніший.\n" +
+      "• кожен тиждень очікування піднімає твій пріоритет у наступному дропі.\n\n" +
+      "До четверга, 18:00 ✨",
     noMatchThisWeekTier2:
       "Привіт 🌿\n\n" +
-      "Уже другий тиждень поспіль, як наш матчмейкер не знаходить когось, кого ми були б раді тобі показати. " +
-      "Дякуємо, що лишаєшся з нами — це справді важливо.\n\n" +
-      "Де ми зараз:\n" +
-      "• Ми активно приводимо нових людей і налаштовуємо алгоритм під твої критерії.\n" +
-      "• Дійсно вартий партнер має бути всього за кілька дропів від тебе.\n" +
-      "• За очікування твій пріоритет у наступному дропі вже підвищено.\n\n" +
-      "До наступного четверга о 18:00 — ми працюємо для тебе 🤍",
+      "Уже другий тиждень поспіль — досі немає нікого, кого я був би радий тобі показати. " +
+      "Дякую, що лишаєшся — це справді важливо.\n\n" +
+      "Що відбувається:\n" +
+      "• приводжу нових людей і налаштовую алгоритм під твої критерії.\n" +
+      "• твій пріоритет у наступному дропі вже підвищено.\n\n" +
+      "До четверга, 18:00 — я цим займаюся 🤍",
     noMatchThisWeekTier3:
       "Привіт ✨\n\n" +
-      "Маємо знову бути чесними — пари, яка справді варта твого часу, досі немає. " +
-      "Нам це не подобається ще більше, ніж тобі, і ми не вдаватимемо, що все добре.\n\n" +
-      "Що ми насправді робимо:\n" +
-      "• Особисто стежимо за твоєю чергою і підштовхуємо ріст спільноти у твоєму районі.\n" +
-      "• Та сама людина обов'язково з'явиться в одному з найближчих дропів — ми не зупинимось.\n" +
-      "• Щотижня очікування ми піднімаємо тебе вище у пріоритеті наступного дропу.\n\n" +
-      "Дякуємо, що довіряєш. До четверга о 18:00 🤍",
+      "Знову чесно: пари, яка справді варта твого часу, досі немає. " +
+      "Мені це подобається ще менше, ніж тобі, і вдавати, що все ок, я не буду.\n\n" +
+      "Що роблю:\n" +
+      "• особисто стежу за твоєю чергою і підштовхую ріст у твоєму місті.\n" +
+      "• кожен тиждень очікування рухає тебе вище у пріоритеті дропу.\n\n" +
+      "Дякую, що довіряєш. До четверга, 18:00 🤍",
     noMatchDiscountOffer:
       "🎟️ Невелика подяка за терпіння: твоє наступне перше побачення — зі знижкою {pct}% на один квиток. " +
       "Ми застосуємо знижку автоматично, коли тобі випаде пара або ти відкриєш свої квитки.",
@@ -2669,19 +2654,19 @@ const deTranslations: TranslationTable = {
   matchBothAccepted: "Beidseitig 🤍 Lass uns eine Zeit finden.",
   matchDeclined:
     "Alles gut. Was war der Hauptgrund, warum du gepasst hast?\n\n" +
-    "Wähle unten etwas aus oder schick einen kurzen Text bzw. eine Sprachnachricht. Die AI analysiert das für den nächsten Drop.\n\n" +
-    "Wenn es etwas anderes war, sag es uns - nächstes Mal schlagen wir jemanden vor, der besser zu deinen Interessen und Vorlieben passt.",
+    "Wähle unten etwas aus oder schick einen kurzen Text bzw. eine Sprachnachricht — ich nehme es in den nächsten Drop mit.\n\n" +
+    "Wenn es etwas anderes war, sag es mir — nächstes Mal bringe ich jemanden, der näher an dem ist, was du suchst.",
   matchDeclineReasonType: "Nicht mein Typ",
   matchDeclineReasonVibe: "Anderer Vibe",
   matchDeclineReasonInterests: "Interessen passen nicht",
   matchDeclineReasonLifestyle: "Lifestyle passt nicht",
   matchDeclineReasonOther: "Etwas anderes",
   matchDeclineOtherAsk:
-    "Klar - schick einen kurzen Text oder eine Sprachnachricht mit dem Grund. Die AI nutzt das für den nächsten Drop.",
-  matchDeclineFeedbackSaved: "Verstanden. Wir nutzen das, um deine nächsten Empfehlungen zu verbessern 🎯",
-  matchDeclineAlreadyNoted: "Schon notiert - danke.",
+    "Klar — schick einen kurzen Text oder eine Sprachnachricht mit dem Grund. Ich nehme es in den nächsten Drop mit.",
+  matchDeclineFeedbackSaved: "Verstanden. Die nächsten Vorschläge stelle ich darauf ein.",
+  matchDeclineAlreadyNoted: "Schon notiert — danke.",
   matchDeclineFeedbackFailed: "Konnte das gerade nicht speichern. Du kannst trotzdem einen kurzen Text oder eine Sprachnachricht senden.",
-  matchDeclineThanks: "Notiert. Wir suchen weiter 🎯",
+  matchDeclineThanks: "Notiert. Ich suche weiter.",
   matchPeerDecided:
     "Dein Match hat schon geantwortet. Jetzt bist du dran.\n\n" +
     "*Was* sie gewählt haben, siehst du erst nach deiner eigenen Antwort. " +
@@ -2689,13 +2674,11 @@ const deTranslations: TranslationTable = {
   matchPeerWasAccepted: "Zur Info - dein Match war dabei. Es hat diesmal nur nicht gepasst.",
   matchPeerWasDeclined: "Zur Info - dein Match hat diesmal gepasst.",
   matchAcceptedPeerDeclined:
-    "Leider wollte dein Match sich nicht treffen. " +
-    "Das ist okay. Bei Gennety passieren Dates nur, wenn Interesse beidseitig ist. " +
-    "Wir suchen weiter nach einem passenderen Match.",
+    "Diesmal war es ein Nein von der anderen Seite. Passiert — hier gibt es ein Date nur, wenn es beidseitig ist. " +
+    "Ich suche weiter; der nächste Vorschlag sitzt näher.",
   matchAcceptedPeerDeclinedPriority:
-    "Leider wollte dein Match sich nicht treffen. " +
-    "Das ist okay. Bei Gennety passieren Dates nur, wenn Interesse beidseitig ist.\n\n" +
-    "Wir haben deine Priorität für nächsten Donnerstag erhöht, damit du bessere Chancen auf einen wirklich angenehmen Abend hast.",
+    "Diesmal war es ein Nein von der anderen Seite. Passiert — hier gibt es ein Date nur, wenn es beidseitig ist.\n\n" +
+    "Deine Priorität für nächsten Donnerstag ist erhöht. Der nächste Vorschlag sitzt näher.",
   matchPhotoCaption: "{name}, {age}",
   matchVerifiedLabel: "Verifiziert",
   matchVerifiedQuote:
@@ -2724,31 +2707,28 @@ const deTranslations: TranslationTable = {
     "Deine Priorität für den nächsten Drop wurde erhöht.",
   noMatchThisWeekTier1:
     "Hey 💫\n\n" +
-    "Diese Woche konnte unser Matchmaker niemanden finden, der wirklich unsere Qualitätslatte für dich erreicht - " +
-    "und wir warten lieber, als dich mit jemandem zu matchen, der deine Zeit nicht wert ist.\n\n" +
-    "Wie der Stand ist:\n" +
-    "• Wir bauen die Community schnell aus und verbessern den Algorithmus jeden Tag.\n" +
-    "• Ein wirklich passender Mensch sollte in einem der nächsten Drops auftauchen.\n" +
-    "• Jede Woche Wartezeit erhöht deine Priorität im nächsten Drop.\n\n" +
-    "Bis nächsten Donnerstag um 18:00 ✨",
+    "Diese Woche kein Match. Nicht, weil mit dir etwas nicht stimmt — die Qualitätslatte bleibt einfach, wo sie ist, " +
+    "und ich warte lieber, als dir jemanden zu geben, der deine Zeit nicht wert ist.\n\n" +
+    "In der Zwischenzeit:\n" +
+    "• die Community wächst, das Matching wird jede Woche schärfer.\n" +
+    "• jede Woche Wartezeit erhöht deine Priorität im nächsten Drop.\n\n" +
+    "Bis Donnerstag, 18:00 ✨",
   noMatchThisWeekTier2:
     "Hey 🌿\n\n" +
-    "Zweite Woche in Folge und unser Matchmaker hat noch niemanden gefunden, den wir dir wirklich gern vorstellen würden. " +
-    "Danke für deine Geduld - das bedeutet uns viel.\n\n" +
-    "Was du wissen solltest:\n" +
-    "• Wir bringen aktiv mehr passende Menschen in die Community und tunen den Algorithmus für dich.\n" +
-    "• Ein wirklich guter Partner sollte nur ein paar Drops entfernt sein.\n" +
-    "• Deine Priorität für den nächsten Drop ist für die Wartezeit bereits erhöht.\n\n" +
-    "Bis Donnerstag um 18:00 - wir arbeiten für dich 🤍",
+    "Zweite Woche in Folge — immer noch niemand, den ich dir wirklich gern vorstellen würde. " +
+    "Danke, dass du dranbleibst; das zählt.\n\n" +
+    "Was gerade passiert:\n" +
+    "• ich hole mehr passende Leute rein und stelle den Algorithmus auf dich ein.\n" +
+    "• deine Priorität für den nächsten Drop ist bereits erhöht.\n\n" +
+    "Donnerstag, 18:00 — ich bin dran 🤍",
   noMatchThisWeekTier3:
     "Hey ✨\n\n" +
-    "Wir schulden dir ein ehrliches Update - immer noch niemand, der deine Zeit wirklich wert wäre. " +
-    "Uns nervt das selbst, und wir tun nicht so, als wäre es anders.\n\n" +
-    "Was bei uns gerade passiert:\n" +
-    "• Wir beobachten deine Queue persönlich und pushen das Community-Wachstum in deiner Gegend.\n" +
-    "• Die richtige Person kommt in einem der nächsten Drops - wir hören nicht auf, bis es klappt.\n" +
-    "• Jede Woche Wartezeit rücken wir dich in der Priorität für den nächsten Drop weiter nach oben.\n\n" +
-    "Danke für dein Vertrauen. Bis Donnerstag um 18:00 🤍",
+    "Wieder ein ehrliches Update — immer noch niemand, der deine Zeit wirklich wert wäre. " +
+    "Mich nervt das noch mehr als dich, und ich tue nicht so, als wäre es anders.\n\n" +
+    "Auf meiner Seite:\n" +
+    "• ich beobachte deine Queue persönlich und pushe das Wachstum in deiner Gegend.\n" +
+    "• jede Woche Wartezeit rückst du in der Priorität weiter nach oben.\n\n" +
+    "Danke für dein Vertrauen. Donnerstag, 18:00 🤍",
   noMatchDiscountOffer:
     "🎟️ Ein kleines Dankeschön für deine Geduld: dein nächstes erstes Date gibt es mit {pct}% Rabatt auf ein Ticket. " +
     "Wir ziehen den Rabatt automatisch ab, sobald du ein Match bekommst oder deine Tickets öffnest.",
@@ -3331,19 +3311,19 @@ const plTranslations: TranslationTable = {
   matchBothAccepted: "Wzajemne 🤍 Znajdźmy termin.",
   matchDeclined:
     "W porządku. Jaki był główny powód, że odpuściłeś/odpuściłaś?\n\n" +
-    "Wybierz poniżej albo wyślij krótki tekst lub wiadomość głosową. AI przeanalizuje to dla kolejnego dropu.\n\n" +
-    "Jeśli chodzi o coś innego, powiedz nam - następnym razem zaproponujemy kogoś lepiej pasującego do Twoich zainteresowań i preferencji.",
+    "Wybierz poniżej albo wyślij krótki tekst lub głosówkę — uwzględnię to w kolejnym dropie.\n\n" +
+    "Jeśli chodzi o coś innego, po prostu napisz — następnym razem przyprowadzę kogoś bliższego temu, czego szukasz.",
   matchDeclineReasonType: "Nie mój typ",
   matchDeclineReasonVibe: "Inny vibe",
   matchDeclineReasonInterests: "Zainteresowania nie pasują",
   matchDeclineReasonLifestyle: "Styl życia nie pasuje",
   matchDeclineReasonOther: "Coś innego",
   matchDeclineOtherAsk:
-    "Jasne - wyślij krótki tekst albo wiadomość głosową z powodem. AI użyje tego w kolejnym dropie.",
-  matchDeclineFeedbackSaved: "Jasne. Użyjemy tego, żeby lepiej stroić kolejne rekomendacje 🎯",
-  matchDeclineAlreadyNoted: "Już zapisane - dzięki.",
+    "Jasne — wyślij krótki tekst albo głosówkę z powodem. Uwzględnię to w kolejnym dropie.",
+  matchDeclineFeedbackSaved: "Zapisane. Kolejne propozycje ustawię pod to.",
+  matchDeclineAlreadyNoted: "Już zapisane — dzięki.",
   matchDeclineFeedbackFailed: "Nie udało się teraz zapisać. Nadal możesz wysłać krótki tekst albo głosówkę.",
-  matchDeclineThanks: "Zapisane. Szukamy dalej 🎯",
+  matchDeclineThanks: "Jasne. Szukam dalej.",
   matchPeerDecided:
     "Twoje dopasowanie już odpowiedziało. Teraz Twoja kolej.\n\n" +
     "*Co* wybrali, zobaczysz dopiero po własnej odpowiedzi. " +
@@ -3351,13 +3331,11 @@ const plTranslations: TranslationTable = {
   matchPeerWasAccepted: "FYI - Twoje dopasowanie było na tak. Tym razem po prostu się nie złożyło.",
   matchPeerWasDeclined: "FYI - Twoje dopasowanie tym razem odpuściło.",
   matchAcceptedPeerDeclined:
-    "Niestety Twoje dopasowanie nie zgodziło się na spotkanie. " +
-    "To okej. W Gennety randki dzieją się tylko wtedy, gdy zainteresowanie jest wzajemne. " +
-    "Będziemy szukać lepszego dopasowania.",
+    "Tym razem z drugiej strony padło „nie”. Zdarza się — tu randka dzieje się tylko przy wzajemnym zainteresowaniu. " +
+    "Szukam dalej; następna propozycja będzie bliżej.",
   matchAcceptedPeerDeclinedPriority:
-    "Niestety Twoje dopasowanie nie zgodziło się na spotkanie. " +
-    "To okej. W Gennety randki dzieją się tylko wtedy, gdy zainteresowanie jest wzajemne.\n\n" +
-    "Podnieśliśmy Twoją priorytetowość na kolejny czwartek, żeby zwiększyć szansę na naprawdę przyjemny wieczór.",
+    "Tym razem z drugiej strony padło „nie”. Zdarza się — tu randka dzieje się tylko przy wzajemnym zainteresowaniu.\n\n" +
+    "Podniosłem Twój priorytet na kolejny czwartek. Następna propozycja będzie bliżej.",
   matchPhotoCaption: "{name}, {age}",
   matchVerifiedLabel: "Zweryfikowano",
   matchVerifiedQuote:
@@ -3386,31 +3364,28 @@ const plTranslations: TranslationTable = {
     "Twoja priorytetowość na kolejny drop została podniesiona.",
   noMatchThisWeekTier1:
     "Hej 💫\n\n" +
-    "W tym tygodniu nasz matchmaker nie znalazł osoby, która naprawdę spełniałaby nasz próg jakości dla Ciebie - " +
-    "wolimy poczekać niż łączyć Cię z kimś niewartym Twojego czasu.\n\n" +
-    "Jak teraz wygląda sytuacja:\n" +
-    "• Szybko rozwijamy społeczność i codziennie dopracowujemy algorytm.\n" +
-    "• Naprawdę pasująca osoba powinna pojawić się w jednym z kolejnych dropów.\n" +
-    "• Każdy tydzień oczekiwania podnosi Twój priorytet w kolejnym dropie.\n\n" +
-    "Do zobaczenia w następny czwartek o 18:00 ✨",
+    "W tym tygodniu bez matcha. Nie dlatego, że coś z Tobą nie tak — po prostu poprzeczka jakości stoi tam, gdzie stoi, " +
+    "i wolę poczekać, niż podsunąć Ci kogoś niewartego Twojego czasu.\n\n" +
+    "Tymczasem:\n" +
+    "• społeczność rośnie, dobór z tygodnia na tydzień jest celniejszy.\n" +
+    "• każdy tydzień czekania podnosi Twój priorytet w kolejnym dropie.\n\n" +
+    "Do czwartku, 18:00 ✨",
   noMatchThisWeekTier2:
     "Hej 🌿\n\n" +
-    "Drugi tydzień z rzędu nasz matchmaker nadal nie znalazł osoby, którą naprawdę chcielibyśmy Ci przedstawić. " +
-    "Dzięki za cierpliwość - to dla nas ważne.\n\n" +
-    "Co chcemy, żebyś wiedział(a):\n" +
-    "• Aktywnie sprowadzamy więcej osób podobnych do Ciebie i stroimy algorytm pod Twoją korzyść.\n" +
-    "• Naprawdę świetna osoba powinna być już tylko kilka dropów stąd.\n" +
-    "• Twój priorytet w kolejnym dropie jest już podniesiony za czas oczekiwania.\n\n" +
-    "Do czwartku o 18:00 - pracujemy dla Ciebie 🤍",
+    "Drugi tydzień z rzędu — wciąż nie ma nikogo, kogo naprawdę chciałbym Ci przedstawić. " +
+    "Dzięki, że jesteś; to ma znaczenie.\n\n" +
+    "Co się dzieje:\n" +
+    "• ściągam więcej osób podobnych do Ciebie i stroję algorytm pod Ciebie.\n" +
+    "• Twój priorytet w kolejnym dropie jest już podniesiony.\n\n" +
+    "Czwartek, 18:00 — działam 🤍",
   noMatchThisWeekTier3:
     "Hej ✨\n\n" +
-    "Należy Ci się kolejne szczere info - nadal nie ma osoby, która naprawdę byłaby warta Twojego czasu. " +
-    "Nas też to frustruje i nie będziemy udawać inaczej.\n\n" +
-    "Co dzieje się po naszej stronie:\n" +
-    "• Osobiście obserwujemy Twoją kolejkę i rozwijamy społeczność w Twojej okolicy.\n" +
-    "• Właściwa osoba trafi do jednego z kolejnych dropów - nie przestaniemy, dopóki się nie uda.\n" +
-    "• Co tydzień oczekiwania podnosimy Cię wyżej w priorytecie kolejnego dropu.\n\n" +
-    "Dzięki za zaufanie. Do czwartku o 18:00 🤍",
+    "Znowu szczerze: wciąż nie ma osoby, która naprawdę byłaby warta Twojego czasu. " +
+    "Mnie to frustruje jeszcze bardziej niż Ciebie i nie będę udawać inaczej.\n\n" +
+    "Po mojej stronie:\n" +
+    "• osobiście pilnuję Twojej kolejki i popycham wzrost w Twojej okolicy.\n" +
+    "• każdy tydzień czekania przesuwa Cię wyżej w priorytecie dropu.\n\n" +
+    "Dzięki za zaufanie. Czwartek, 18:00 🤍",
   noMatchDiscountOffer:
     "🎟️ Małe podziękowanie za cierpliwość: Twoja następna pierwsza randka z rabatem {pct}% na jeden bilet. " +
     "Zastosujemy rabat automatycznie, gdy trafi Ci się para lub otworzysz swoje bilety.",
