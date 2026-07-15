@@ -22,10 +22,13 @@ drafts in the ignored `apps/video/out/` directory:
 
 - `gennety-ad-vertical.mp4` — 1080×1920, 30 seconds, 30 fps.
 - `gennety-ad-horizontal.mp4` — 1920×1080, 30 seconds, 30 fps.
+- `gennety-ad-vertical-en.mp4` — English, 1080×1920, 30 seconds, 30 fps.
+- `gennety-ad-horizontal-en.mp4` — English, 1920×1080, 30 seconds, 30 fps.
 
 The Studio compositions are `GennetyAdVertical` and
-`GennetyAdHorizontal`. They share the same story beats but use independent
-responsive layouts rather than cropping one master.
+`GennetyAdHorizontal` for Ukrainian, plus `GennetyAdVerticalEnglish` and
+`GennetyAdHorizontalEnglish` for English. They share the same story beats but
+use independent responsive layouts rather than cropping one master.
 
 ## Current ad structure
 
@@ -37,9 +40,10 @@ responsive layouts rather than cropping one master.
 6. Date-card reveal based on the bot's real generated card language.
 7. Registration CTA and the approved couple-photo finish.
 
-All on-screen copy is Ukrainian. The current build intentionally has no music
-or voiceover so sound direction can be selected after the visual cut is
-approved.
+All on-screen copy, including the Calendar and venue interfaces, is selected
+through the typed `language` composition prop. The current build intentionally
+has no music or voiceover so sound direction can be selected after the visual
+cut is approved.
 
 ## Couple-photo finish
 
@@ -50,6 +54,7 @@ composition `defaultProps` in `src/Root.tsx`:
 ```tsx
 defaultProps={{
   format: "vertical",
+  language: "uk",
   couplePhoto: "couple/final-couple.jpg",
 }}
 ```

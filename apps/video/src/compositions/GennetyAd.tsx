@@ -25,15 +25,127 @@ const PROFILE_ASSETS = Array.from(
 );
 const DATE_CARD_PORTRAIT = "portraits/date-card-man.jpg";
 
+type Language = "uk" | "en";
+
+const COPY = {
+  uk: {
+    distance: "2 км від вас",
+    chatGreeting: "Привіт :) Як твій день?",
+    chatMeet: "Може, якось побачимось?",
+    chatPlan: "Так, треба щось придумати…",
+    hookBefore: "Поки ти свайпаєш…",
+    hookAfter: "Хтось уже йде на",
+    hookAccent: "побачення.",
+    aiTitle: "Шукає метч, поки ти",
+    aiAccent: "живеш.",
+    aiSubtitle: "Аналізує контекст, цінності та ваш вайб — без нескінченного перебору анкет.",
+    matchContext: "Контекст.",
+    matchValues: "Цінності.",
+    matchVibe: "Вайб.",
+    matchSubtitle: "Не просто “лайк”. Причина зустрітися.",
+    calendarDays: ["СР", "ЧТ", "ПТ", "СБ", "НД"],
+    calendarLabel: "Календар",
+    calendarQuestion: "Коли вам зручно?",
+    calendarHint: "Оберіть час. Перетин з’явиться автоматично.",
+    calendarYou: "Ви",
+    calendarMatch: "Метч",
+    calendarTogether: "Разом",
+    calendarDate: "П’ятниця, 17 липня",
+    calendarSlotsHint: "Оберіть один або кілька слотів",
+    calendarConfirmed: "Час збігається ✓",
+    calendarSave: "Зберегти час",
+    calendarSceneTitle: "Обираєте час —",
+    calendarSceneAccent: "разом.",
+    calendarSceneSubtitle: "Справжній календар Gennety показує перетин ваших вільних слотів у реальному часі.",
+    mapGoldenGate: "Золоті ворота",
+    mapTeatralna: "Театральна",
+    mapStreet: "вул. Володимирська",
+    mapSearch: "Пошук адреси",
+    mapAddress: "вул. Нижній Вал, 19",
+    mapCity: "Київ, Україна",
+    mapConfirmed: "Місце підтверджено ✓",
+    mapConfirm: "Підтвердити місце",
+    venueSceneTitle: "Зустріч — у",
+    venueSceneAccent: "перевіреному місці.",
+    venueSceneSubtitle: "Сервіс підбирає якісний публічний заклад і веде вас до підтвердження.",
+    cardError: "Error 404: чат не знайдено.",
+    cardLife: "Спробуй реальне життя.",
+    cardDetails: "Київ · П’ятниця, 18:00",
+    confirmationPill: "Побачення заплановано",
+    confirmationTitle: "Менше чатів.",
+    confirmationAccent: "Більше життя.",
+    confirmationSubtitle: "Час, місце і деталі вже у твоїй картці.",
+    couplePlaceholder: "Фінальне фото пари — наступна заміна",
+    ctaTitle: "Твій персональний",
+    ctaAccent: "AI-метчмейкер.",
+    ctaSubtitle: "Справжні люди. Справжні побачення.",
+    ctaButton: "Приєднатися до Gennety →",
+  },
+  en: {
+    distance: "2 km away",
+    chatGreeting: "Hey :) How’s your day?",
+    chatMeet: "Want to meet sometime?",
+    chatPlan: "Yeah, we should plan something…",
+    hookBefore: "While you keep swiping…",
+    hookAfter: "Someone’s already going on",
+    hookAccent: "a date.",
+    aiTitle: "Finds your match while you",
+    aiAccent: "live.",
+    aiSubtitle: "Reads your context, values and vibe — without endless profile browsing.",
+    matchContext: "Context.",
+    matchValues: "Values.",
+    matchVibe: "Vibe.",
+    matchSubtitle: "Not just a like. A reason to meet.",
+    calendarDays: ["WED", "THU", "FRI", "SAT", "SUN"],
+    calendarLabel: "Calendar",
+    calendarQuestion: "When are you free?",
+    calendarHint: "Choose a time. Your overlap appears automatically.",
+    calendarYou: "You",
+    calendarMatch: "Match",
+    calendarTogether: "Together",
+    calendarDate: "Friday, July 17",
+    calendarSlotsHint: "Choose one or more time slots",
+    calendarConfirmed: "Time matched ✓",
+    calendarSave: "Save availability",
+    calendarSceneTitle: "Choose a time —",
+    calendarSceneAccent: "together.",
+    calendarSceneSubtitle: "Gennety’s live calendar finds the overlap between both schedules.",
+    mapGoldenGate: "Golden Gate",
+    mapTeatralna: "Teatralna",
+    mapStreet: "Volodymyrska St.",
+    mapSearch: "Search address",
+    mapAddress: "19 Nyzhnii Val St.",
+    mapCity: "Kyiv, Ukraine",
+    mapConfirmed: "Location confirmed ✓",
+    mapConfirm: "Confirm location",
+    venueSceneTitle: "Meet — at a",
+    venueSceneAccent: "trusted place.",
+    venueSceneSubtitle: "Gennety selects a quality public venue and guides you through confirmation.",
+    cardError: "Error 404: chat not found.",
+    cardLife: "Try real life.",
+    cardDetails: "Kyiv · Friday, 6:00 PM",
+    confirmationPill: "Date planned",
+    confirmationTitle: "Less chat.",
+    confirmationAccent: "More life.",
+    confirmationSubtitle: "Time, place and details are already in your date card.",
+    couplePlaceholder: "Final couple photo — next replacement",
+    ctaTitle: "Your personal",
+    ctaAccent: "AI matchmaker.",
+    ctaSubtitle: "Real people. Real dates.",
+    ctaButton: "Join Gennety →",
+  },
+} as const;
+
 export const gennetyAdSchema = z.object({
   format: z.enum(["vertical", "horizontal"]),
+  language: z.enum(["uk", "en"]),
   /** Optional public/ path. Add the final couple photo without changing scene code. */
   couplePhoto: z.string().optional(),
 });
 
 export type GennetyAdProps = z.infer<typeof gennetyAdSchema>;
 
-type FormatProps = Pick<GennetyAdProps, "format">;
+type FormatProps = Pick<GennetyAdProps, "format" | "language">;
 
 const asset = (path: string) => staticFile(path);
 
@@ -230,10 +342,11 @@ const ProfileCard: React.FC<{
 const SwipeCard: React.FC<{
   name: string;
   path: string;
+  distance: string;
   style: CSSProperties;
   frame: number;
   delay: number;
-}> = ({name, path, style, frame, delay}) => {
+}> = ({name, path, distance, style, frame, delay}) => {
   const {fps} = useVideoConfig();
   const progress = enter(frame, fps, delay);
   const {transform: styleTransform, ...restStyle} = style;
@@ -263,7 +376,7 @@ const SwipeCard: React.FC<{
       />
       <div style={{position: "absolute", left: 24, right: 24, bottom: 24}}>
         <div style={{color: SOFT, fontSize: 30, fontWeight: 700}}>{name}</div>
-        <div style={{color: "rgba(255,255,255,.66)", fontSize: 18, marginTop: 4}}>2 км від вас</div>
+        <div style={{color: "rgba(255,255,255,.66)", fontSize: 18, marginTop: 4}}>{distance}</div>
       </div>
       <div
         style={{
@@ -315,10 +428,11 @@ const ChatBubble: React.FC<{text: string; left?: boolean; style?: CSSProperties}
   </div>
 );
 
-const HookScene: React.FC<FormatProps & {duration: number}> = ({format, duration}) => {
+const HookScene: React.FC<FormatProps & {duration: number}> = ({format, language, duration}) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
   const vertical = format === "vertical";
+  const copy = COPY[language];
   const opacity = fade(frame, duration, 18);
   const titleIn = enter(frame, fps, 8);
   const pivot = interpolate(frame, [42, 66], [0, 1], {
@@ -349,6 +463,7 @@ const HookScene: React.FC<FormatProps & {duration: number}> = ({format, duration
         <SwipeCard
           name="Marta, 24"
           path={PROFILE_ASSETS[1]}
+          distance={copy.distance}
           frame={frame}
           delay={2}
           style={{
@@ -360,6 +475,7 @@ const HookScene: React.FC<FormatProps & {duration: number}> = ({format, duration
         <SwipeCard
           name="Alex, 26"
           path={PROFILE_ASSETS[3]}
+          distance={copy.distance}
           frame={frame}
           delay={8}
           style={{
@@ -371,6 +487,7 @@ const HookScene: React.FC<FormatProps & {duration: number}> = ({format, duration
         <SwipeCard
           name="Sofia, 23"
           path={PROFILE_ASSETS[4]}
+          distance={copy.distance}
           frame={frame}
           delay={14}
           style={{
@@ -383,16 +500,16 @@ const HookScene: React.FC<FormatProps & {duration: number}> = ({format, duration
 
       <ChatBubble
         left
-        text="Привіт :) Як твій день?"
+        text={copy.chatGreeting}
         style={{left: vertical ? 76 : 100, top: vertical ? 910 : 620, opacity: 1 - pivot * 0.7}}
       />
       <ChatBubble
-        text="Може, якось побачимось?"
+        text={copy.chatMeet}
         style={{right: vertical ? 72 : 104, top: vertical ? 1040 : 730, opacity: 1 - pivot * 0.7}}
       />
       <ChatBubble
         left
-        text="Так, треба щось придумати…"
+        text={copy.chatPlan}
         style={{left: vertical ? 130 : 230, top: vertical ? 1180 : 840, opacity: 1 - pivot * 0.7}}
       />
 
@@ -406,8 +523,8 @@ const HookScene: React.FC<FormatProps & {duration: number}> = ({format, duration
           transform: `translateY(${(1 - titleIn) * 58}px)`,
         }}
       >
-        <Headline format={format} size={vertical ? 98 : 108}>
-          <span style={{opacity: 1 - pivot}}>Поки ти свайпаєш…</span>
+        <Headline format={format} size={language === "en" ? (vertical ? 88 : 96) : (vertical ? 98 : 108)}>
+          <span style={{opacity: 1 - pivot}}>{copy.hookBefore}</span>
           <span
             style={{
               display: "block",
@@ -416,7 +533,7 @@ const HookScene: React.FC<FormatProps & {duration: number}> = ({format, duration
               color: SOFT,
             }}
           >
-            Хтось уже йде на <span style={{color: WINE_LIGHT}}>побачення.</span>
+            {copy.hookAfter} <span style={{color: WINE_LIGHT}}>{copy.hookAccent}</span>
           </span>
         </Headline>
       </div>
@@ -496,12 +613,13 @@ const MatchingLines: React.FC<{format: GennetyAdProps["format"]; progress: numbe
   );
 };
 
-const AiScene: React.FC<FormatProps & {duration: number}> = ({format, duration}) => {
+const AiScene: React.FC<FormatProps & {duration: number}> = ({format, language, duration}) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
   const vertical = format === "vertical";
+  const copy = COPY[language];
   const opacity = fade(frame, duration, 18);
-  const copy = enter(frame, fps, 10);
+  const copyIn = enter(frame, fps, 10);
   const lineProgress = interpolate(frame, [12, 72], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -561,12 +679,12 @@ const AiScene: React.FC<FormatProps & {duration: number}> = ({format, duration})
           left: vertical ? 72 : 92,
           top: vertical ? 150 : 178,
           width: vertical ? 870 : 760,
-          opacity: copy,
-          transform: `translateY(${(1 - copy) * 50}px)`,
+          opacity: copyIn,
+          transform: `translateY(${(1 - copyIn) * 50}px)`,
         }}
       >
-        <Headline format={format} size={vertical ? 100 : 105}>
-          Шукає метч, поки ти <span style={{color: WINE_LIGHT}}>живеш.</span>
+        <Headline format={format} size={language === "en" ? (vertical ? 94 : 96) : (vertical ? 100 : 105)}>
+          {copy.aiTitle} <span style={{color: WINE_LIGHT}}>{copy.aiAccent}</span>
         </Headline>
         <div
           style={{
@@ -577,17 +695,18 @@ const AiScene: React.FC<FormatProps & {duration: number}> = ({format, duration})
             maxWidth: vertical ? 760 : 650,
           }}
         >
-          Аналізує контекст, цінності та ваш вайб — без нескінченного перебору анкет.
+          {copy.aiSubtitle}
         </div>
       </div>
     </AbsoluteFill>
   );
 };
 
-const MatchScene: React.FC<FormatProps & {duration: number}> = ({format, duration}) => {
+const MatchScene: React.FC<FormatProps & {duration: number}> = ({format, language, duration}) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
   const vertical = format === "vertical";
+  const copy = COPY[language];
   const opacity = fade(frame, duration, 14);
   const p = enter(frame, fps, 4);
   const meet = interpolate(frame, [10, 54], [0, 1], {
@@ -659,12 +778,12 @@ const MatchScene: React.FC<FormatProps & {duration: number}> = ({format, duratio
           transform: `translateY(${(1 - p) * 50}px)`,
         }}
       >
-        <Headline format={format} size={vertical ? 94 : 116}>
-          Контекст.<br />Цінності.<br />
-          <span style={{color: WINE_LIGHT}}>Вайб.</span>
+        <Headline format={format} size={language === "en" ? (vertical ? 103 : 116) : (vertical ? 94 : 116)}>
+          {copy.matchContext}<br />{copy.matchValues}<br />
+          <span style={{color: WINE_LIGHT}}>{copy.matchVibe}</span>
         </Headline>
         <div style={{color: MUTED, fontSize: vertical ? 29 : 28, marginTop: 28, lineHeight: 1.4}}>
-          Не просто “лайк”. Причина зустрітися.
+          {copy.matchSubtitle}
         </div>
       </div>
     </AbsoluteFill>
@@ -745,14 +864,19 @@ const Cursor: React.FC<{x: number; y: number; pressed?: number}> = ({x, y, press
   </div>
 );
 
-const CalendarUi: React.FC<{frame: number; format: GennetyAdProps["format"]}> = ({frame, format}) => {
+const CalendarUi: React.FC<{
+  frame: number;
+  format: GennetyAdProps["format"];
+  language: Language;
+}> = ({frame, format, language}) => {
   const vertical = format === "vertical";
+  const copy = COPY[language];
   const dates = [
-    {day: "СР", date: "15"},
-    {day: "ЧТ", date: "16"},
-    {day: "ПТ", date: "17"},
-    {day: "СБ", date: "18"},
-    {day: "НД", date: "19"},
+    {day: copy.calendarDays[0], date: "15"},
+    {day: copy.calendarDays[1], date: "16"},
+    {day: copy.calendarDays[2], date: "17"},
+    {day: copy.calendarDays[3], date: "18"},
+    {day: copy.calendarDays[4], date: "19"},
   ];
   const sheet = interpolate(frame, [28, 50], [0, 1], {
     extrapolateLeft: "clamp",
@@ -790,23 +914,23 @@ const CalendarUi: React.FC<{frame: number; format: GennetyAdProps["format"]}> = 
       <div style={{padding: "72px 44px 28px"}}>
         <div style={{display: "flex", justifyContent: "space-between", alignItems: "center"}}>
           <Brand size={32} />
-          <div style={{color: MUTED, fontSize: 14, fontWeight: 700, letterSpacing: 0.4}}>Календар</div>
+          <div style={{color: MUTED, fontSize: 14, fontWeight: 700, letterSpacing: 0.4}}>{copy.calendarLabel}</div>
         </div>
         <div style={{fontFamily: "Unbounded", fontWeight: 700, fontSize: 40, letterSpacing: -1.7, marginTop: 52, lineHeight: 1.02}}>
-          Коли вам зручно?
+          {copy.calendarQuestion}
         </div>
         <div style={{color: MUTED, fontSize: 19, marginTop: 13, lineHeight: 1.35}}>
-          Оберіть час. Перетин з’явиться автоматично.
+          {copy.calendarHint}
         </div>
         <div style={{display: "flex", gap: 18, marginTop: 24, color: MUTED, fontSize: 15}}>
-          <span><b style={{display: "inline-block", width: 10, height: 10, borderRadius: 3, background: SOFT, marginRight: 7}} />Ви</span>
-          <span><b style={{display: "inline-block", width: 10, height: 10, borderRadius: 3, background: WINE, marginRight: 7}} />Метч</span>
+          <span><b style={{display: "inline-block", width: 10, height: 10, borderRadius: 3, background: SOFT, marginRight: 7}} />{copy.calendarYou}</span>
+          <span><b style={{display: "inline-block", width: 10, height: 10, borderRadius: 3, background: WINE, marginRight: 7}} />{copy.calendarMatch}</span>
           <span>
             <b style={{display: "inline-flex", width: 14, height: 10, position: "relative", marginRight: 7}}>
               <i style={{position: "absolute", width: 9, height: 9, borderRadius: "50%", background: SOFT, left: 0}} />
               <i style={{position: "absolute", width: 9, height: 9, borderRadius: "50%", background: WINE_LIGHT, right: 0}} />
             </b>
-            Разом
+            {copy.calendarTogether}
           </span>
         </div>
       </div>
@@ -851,8 +975,8 @@ const CalendarUi: React.FC<{frame: number; format: GennetyAdProps["format"]}> = 
         }}
       >
         <div style={{width: 54, height: 5, borderRadius: 9, background: "rgba(255,255,255,.22)", margin: "0 auto 24px"}} />
-        <div style={{fontWeight: 700, fontSize: 25}}>П’ятниця, 17 липня</div>
-        <div style={{color: MUTED, fontSize: 16, marginTop: 7}}>Оберіть один або кілька слотів</div>
+        <div style={{fontWeight: 700, fontSize: 25}}>{copy.calendarDate}</div>
+        <div style={{color: MUTED, fontSize: 16, marginTop: 7}}>{copy.calendarSlotsHint}</div>
         <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 25}}>
           {["17:00", "17:30", "18:00", "18:30", "19:00", "19:30"].map((time, index) => {
             const mine = index === 2 && timeSelected;
@@ -918,7 +1042,7 @@ const CalendarUi: React.FC<{frame: number; format: GennetyAdProps["format"]}> = 
             background: `linear-gradient(135deg, ${WINE}, #A93F58)`,
           }}
         >
-          {confirmed ? "Час збігається ✓" : "Зберегти час"}
+          {confirmed ? copy.calendarConfirmed : copy.calendarSave}
         </div>
       </div>
       {frame < 74 ? <Cursor x={cursorX} y={cursorY} pressed={Math.max(pressOne, pressTwo)} /> : null}
@@ -927,7 +1051,7 @@ const CalendarUi: React.FC<{frame: number; format: GennetyAdProps["format"]}> = 
 };
 
 const ProductSceneLayout: React.FC<
-  FormatProps & {
+  Pick<GennetyAdProps, "format"> & {
     duration: number;
     title: ReactNode;
     subtitle: string;
@@ -991,15 +1115,16 @@ const ProductSceneLayout: React.FC<
   );
 };
 
-const CalendarScene: React.FC<FormatProps & {duration: number}> = ({format, duration}) => {
+const CalendarScene: React.FC<FormatProps & {duration: number}> = ({format, language, duration}) => {
   const frame = useCurrentFrame();
   const vertical = format === "vertical";
+  const copy = COPY[language];
   return (
     <ProductSceneLayout
       format={format}
       duration={duration}
-      title={<>Обираєте час — <span style={{color: WINE_LIGHT}}>разом.</span></>}
-      subtitle="Справжній календар Gennety показує перетин ваших вільних слотів у реальному часі."
+      title={<>{copy.calendarSceneTitle} <span style={{color: WINE_LIGHT}}>{copy.calendarSceneAccent}</span></>}
+      subtitle={copy.calendarSceneSubtitle}
     >
       <Phone
         width={vertical ? 660 : 520}
@@ -1010,13 +1135,15 @@ const CalendarScene: React.FC<FormatProps & {duration: number}> = ({format, dura
           transform: vertical ? "rotate(1.8deg)" : "rotate(2.5deg)",
         }}
       >
-        <CalendarUi frame={frame} format={format} />
+        <CalendarUi frame={frame} format={format} language={language} />
       </Phone>
     </ProductSceneLayout>
   );
 };
 
-const MapBackdrop: React.FC = () => (
+const MapBackdrop: React.FC<{language: Language}> = ({language}) => {
+  const copy = COPY[language];
+  return (
   <AbsoluteFill style={{background: "#17191b"}}>
     <svg width="100%" height="100%" viewBox="0 0 720 1280" preserveAspectRatio="xMidYMid slice">
       <rect width="720" height="1280" fill="#17191b" />
@@ -1032,14 +1159,15 @@ const MapBackdrop: React.FC = () => (
         <path d="M30 1080h210v130H30z" /><path d="M300 1040h150v180H300z" />
       </g>
       <g fill="#9c9798" opacity=".58" fontFamily="Roboto" fontSize="18">
-        <text x="60" y="245">Золоті ворота</text>
-        <text x="475" y="815">Театральна</text>
-        <text x="270" y="960">вул. Володимирська</text>
+        <text x="60" y="245">{copy.mapGoldenGate}</text>
+        <text x="475" y="815">{copy.mapTeatralna}</text>
+        <text x="270" y="960">{copy.mapStreet}</text>
       </g>
     </svg>
     <AbsoluteFill style={{background: "radial-gradient(circle at 50% 50%, transparent 35%, rgba(0,0,0,.45) 100%)"}} />
   </AbsoluteFill>
-);
+  );
+};
 
 const Pin: React.FC = () => (
   <div
@@ -1070,8 +1198,13 @@ const Pin: React.FC = () => (
   </div>
 );
 
-const LocationUi: React.FC<{frame: number; format: GennetyAdProps["format"]}> = ({frame, format}) => {
+const LocationUi: React.FC<{
+  frame: number;
+  format: GennetyAdProps["format"];
+  language: Language;
+}> = ({frame, format, language}) => {
   const vertical = format === "vertical";
+  const copy = COPY[language];
   const press = interpolate(frame, [54, 61, 69], [0, 1, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -1088,7 +1221,7 @@ const LocationUi: React.FC<{frame: number; format: GennetyAdProps["format"]}> = 
   });
   return (
     <AbsoluteFill style={{color: SOFT, WebkitFontSmoothing: "antialiased"}}>
-      <MapBackdrop />
+      <MapBackdrop language={language} />
       <Pin />
       <div
         style={{
@@ -1109,7 +1242,7 @@ const LocationUi: React.FC<{frame: number; format: GennetyAdProps["format"]}> = 
           boxShadow: "0 20px 50px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.1)",
         }}
       >
-        <span style={{fontSize: 30}}>⌕</span> Пошук адреси
+        <span style={{fontSize: 30}}>⌕</span> {copy.mapSearch}
       </div>
       <div
         style={{
@@ -1127,8 +1260,8 @@ const LocationUi: React.FC<{frame: number; format: GennetyAdProps["format"]}> = 
         <div style={{display: "flex", gap: 15, alignItems: "center"}}>
           <div style={{width: 50, height: 50, borderRadius: 17, background: WINE, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24}}>⌖</div>
           <div>
-            <div style={{fontSize: 20, fontWeight: 700}}>вул. Нижній Вал, 19</div>
-            <div style={{fontSize: 15, color: MUTED, marginTop: 4}}>Київ, Україна</div>
+            <div style={{fontSize: 20, fontWeight: 700}}>{copy.mapAddress}</div>
+            <div style={{fontSize: 15, color: MUTED, marginTop: 4}}>{copy.mapCity}</div>
           </div>
         </div>
         <div
@@ -1146,7 +1279,7 @@ const LocationUi: React.FC<{frame: number; format: GennetyAdProps["format"]}> = 
             boxShadow: `0 22px 54px rgba(139,37,59,${0.36 * (1 - selected)})`,
           }}
         >
-          {selected > 0.8 ? "Місце підтверджено ✓" : "Підтвердити місце"}
+          {selected > 0.8 ? copy.mapConfirmed : copy.mapConfirm}
         </div>
       </div>
       {frame < 82 ? <Cursor x={vertical ? 470 : 400} y={cursorY} pressed={press} /> : null}
@@ -1154,16 +1287,17 @@ const LocationUi: React.FC<{frame: number; format: GennetyAdProps["format"]}> = 
   );
 };
 
-const VenueScene: React.FC<FormatProps & {duration: number}> = ({format, duration}) => {
+const VenueScene: React.FC<FormatProps & {duration: number}> = ({format, language, duration}) => {
   const frame = useCurrentFrame();
   const vertical = format === "vertical";
+  const copy = COPY[language];
   return (
     <ProductSceneLayout
       format={format}
       duration={duration}
       stabilizeDevice
-      title={<>Зустріч — у <span style={{color: WINE_LIGHT}}>перевіреному місці.</span></>}
-      subtitle="Сервіс підбирає якісний публічний заклад і веде вас до підтвердження."
+      title={<>{copy.venueSceneTitle} <span style={{color: WINE_LIGHT}}>{copy.venueSceneAccent}</span></>}
+      subtitle={copy.venueSceneSubtitle}
     >
       <Phone
         width={vertical ? 660 : 520}
@@ -1175,14 +1309,19 @@ const VenueScene: React.FC<FormatProps & {duration: number}> = ({format, duratio
           backfaceVisibility: "hidden",
         }}
       >
-        <LocationUi frame={frame} format={format} />
+        <LocationUi frame={frame} format={format} language={language} />
       </Phone>
     </ProductSceneLayout>
   );
 };
 
-const DateCard: React.FC<{format: GennetyAdProps["format"]; progress: number}> = ({format, progress}) => {
+const DateCard: React.FC<{
+  format: GennetyAdProps["format"];
+  language: Language;
+  progress: number;
+}> = ({format, language, progress}) => {
   const vertical = format === "vertical";
+  const copy = COPY[language];
   const width = vertical ? 820 : 720;
   const height = width * 1.25;
   return (
@@ -1218,8 +1357,8 @@ const DateCard: React.FC<{format: GennetyAdProps["format"]; progress: number}> =
           zIndex: 4,
         }}
       >
-        Error 404: чат не знайдено.<br />
-        <span style={{color: WINE_LIGHT}}>Спробуй реальне життя.</span>
+        {copy.cardError}<br />
+        <span style={{color: WINE_LIGHT}}>{copy.cardLife}</span>
       </div>
       <div
         style={{
@@ -1258,23 +1397,24 @@ const DateCard: React.FC<{format: GennetyAdProps["format"]; progress: number}> =
       </div>
       <div style={{position: "absolute", left: 48, right: 48, bottom: 46}}>
         <div style={{color: SOFT, fontSize: vertical ? 30 : 27, fontWeight: 700}}>Idealist Café</div>
-        <div style={{color: MUTED, fontSize: vertical ? 20 : 18, marginTop: 8}}>Київ · П’ятниця, 18:00</div>
+        <div style={{color: MUTED, fontSize: vertical ? 20 : 18, marginTop: 8}}>{copy.cardDetails}</div>
       </div>
       <Noise opacity={0.09} />
     </div>
   );
 };
 
-const ConfirmationScene: React.FC<FormatProps & {duration: number}> = ({format, duration}) => {
+const ConfirmationScene: React.FC<FormatProps & {duration: number}> = ({format, language, duration}) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
   const vertical = format === "vertical";
+  const copy = COPY[language];
   const opacity = fade(frame, duration, 12);
   const p = enter(frame, fps, 3);
   return (
     <AbsoluteFill style={{opacity, overflow: "hidden"}}>
       <Ambient format={format} />
-      <DateCard format={format} progress={p} />
+      <DateCard format={format} language={language} progress={p} />
       <div
         style={{
           position: "absolute",
@@ -1285,13 +1425,13 @@ const ConfirmationScene: React.FC<FormatProps & {duration: number}> = ({format, 
           transform: `translateY(${(1 - p) * 50}px)`,
         }}
       >
-        <GlassPill>Побачення заплановано</GlassPill>
+        <GlassPill>{copy.confirmationPill}</GlassPill>
         <Headline format={format} size={vertical ? 101 : 114} style={{marginTop: 27}}>
-          Менше чатів.<br />
-          <span style={{color: WINE_LIGHT}}>Більше життя.</span>
+          {copy.confirmationTitle}<br />
+          <span style={{color: WINE_LIGHT}}>{copy.confirmationAccent}</span>
         </Headline>
         <div style={{color: MUTED, fontSize: vertical ? 28 : 28, marginTop: 27, lineHeight: 1.4}}>
-          Час, місце і деталі вже у твоїй картці.
+          {copy.confirmationSubtitle}
         </div>
       </div>
     </AbsoluteFill>
@@ -1300,10 +1440,12 @@ const ConfirmationScene: React.FC<FormatProps & {duration: number}> = ({format, 
 
 const CoupleVisual: React.FC<{
   format: GennetyAdProps["format"];
+  language: Language;
   couplePhoto?: string;
   progress: number;
-}> = ({format, couplePhoto, progress}) => {
+}> = ({format, language, couplePhoto, progress}) => {
   const vertical = format === "vertical";
+  const copy = COPY[language];
   const frameStyle: CSSProperties = {
     position: "absolute",
     overflow: "hidden",
@@ -1366,7 +1508,7 @@ const CoupleVisual: React.FC<{
           justifyContent: "center",
         }}
       >
-        <GlassPill style={{fontSize: vertical ? 22 : 19}}>Фінальне фото пари — наступна заміна</GlassPill>
+        <GlassPill style={{fontSize: vertical ? 22 : 19}}>{copy.couplePlaceholder}</GlassPill>
       </div>
     </div>
   );
@@ -1374,19 +1516,21 @@ const CoupleVisual: React.FC<{
 
 const CtaScene: React.FC<FormatProps & {duration: number; couplePhoto?: string}> = ({
   format,
+  language,
   duration,
   couplePhoto,
 }) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
   const vertical = format === "vertical";
+  const copy = COPY[language];
   const opacity = fade(frame, duration, 8);
   const p = enter(frame, fps, 2);
   const pulse = 1 + Math.sin(frame / 8) * 0.018;
   return (
     <AbsoluteFill style={{opacity, overflow: "hidden"}}>
       <Ambient format={format} />
-      <CoupleVisual format={format} couplePhoto={couplePhoto} progress={p} />
+      <CoupleVisual format={format} language={language} couplePhoto={couplePhoto} progress={p} />
       <div
         style={{
           position: "absolute",
@@ -1398,12 +1542,16 @@ const CtaScene: React.FC<FormatProps & {duration: number; couplePhoto?: string}>
         }}
       >
         <Brand size={vertical ? 52 : 46} />
-        <Headline format={format} size={vertical ? 97 : 82} style={{marginTop: 32}}>
-          Твій персональний<br />
-          <span style={{color: WINE_LIGHT}}>AI-метчмейкер.</span>
+        <Headline
+          format={format}
+          size={language === "en" && vertical ? 84 : vertical ? 97 : 82}
+          style={{marginTop: 32}}
+        >
+          {copy.ctaTitle}<br />
+          <span style={{color: WINE_LIGHT}}>{copy.ctaAccent}</span>
         </Headline>
         <div style={{color: "rgba(245,245,245,.72)", fontSize: vertical ? 29 : 28, marginTop: 25}}>
-          Справжні люди. Справжні побачення.
+          {copy.ctaSubtitle}
         </div>
         <div
           style={{
@@ -1422,36 +1570,36 @@ const CtaScene: React.FC<FormatProps & {duration: number; couplePhoto?: string}>
             boxShadow: "0 28px 72px rgba(139,37,59,.48), inset 0 1px 0 rgba(255,255,255,.16)",
           }}
         >
-          Приєднатися до Gennety →
+          {copy.ctaButton}
         </div>
       </div>
     </AbsoluteFill>
   );
 };
 
-export const GennetyAd: React.FC<GennetyAdProps> = ({format, couplePhoto}) => {
+export const GennetyAd: React.FC<GennetyAdProps> = ({format, language, couplePhoto}) => {
   return (
     <AbsoluteFill style={{background: INK}}>
       <Sequence durationInFrames={150} premountFor={30}>
-        <HookScene format={format} duration={150} />
+        <HookScene format={format} language={language} duration={150} />
       </Sequence>
       <Sequence from={130} durationInFrames={165} premountFor={30}>
-        <AiScene format={format} duration={165} />
+        <AiScene format={format} language={language} duration={165} />
       </Sequence>
       <Sequence from={275} durationInFrames={135} premountFor={30}>
-        <MatchScene format={format} duration={135} />
+        <MatchScene format={format} language={language} duration={135} />
       </Sequence>
       <Sequence from={390} durationInFrames={165} premountFor={30}>
-        <CalendarScene format={format} duration={165} />
+        <CalendarScene format={format} language={language} duration={165} />
       </Sequence>
       <Sequence from={535} durationInFrames={150} premountFor={30}>
-        <VenueScene format={format} duration={150} />
+        <VenueScene format={format} language={language} duration={150} />
       </Sequence>
       <Sequence from={665} durationInFrames={120} premountFor={30}>
-        <ConfirmationScene format={format} duration={120} />
+        <ConfirmationScene format={format} language={language} duration={120} />
       </Sequence>
       <Sequence from={765} durationInFrames={135} premountFor={30}>
-        <CtaScene format={format} duration={135} couplePhoto={couplePhoto} />
+        <CtaScene format={format} language={language} duration={135} couplePhoto={couplePhoto} />
       </Sequence>
     </AbsoluteFill>
   );

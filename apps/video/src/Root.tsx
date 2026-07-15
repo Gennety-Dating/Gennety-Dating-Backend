@@ -16,7 +16,7 @@ export const RemotionRoot: React.FC = () => {
         fps={FPS}
         width={1080}
         height={1920}
-        defaultProps={{format: "vertical", couplePhoto: "couple/final-couple.jpg"}}
+        defaultProps={{format: "vertical", language: "uk", couplePhoto: "couple/final-couple.jpg"}}
       />
       <Composition<typeof gennetyAdSchema, GennetyAdProps>
         id="GennetyAdHorizontal"
@@ -26,7 +26,27 @@ export const RemotionRoot: React.FC = () => {
         fps={FPS}
         width={1920}
         height={1080}
-        defaultProps={{format: "horizontal", couplePhoto: "couple/final-couple.jpg"}}
+        defaultProps={{format: "horizontal", language: "uk", couplePhoto: "couple/final-couple.jpg"}}
+      />
+      <Composition<typeof gennetyAdSchema, GennetyAdProps>
+        id="GennetyAdVerticalEnglish"
+        component={GennetyAd}
+        schema={gennetyAdSchema}
+        durationInFrames={DURATION_IN_FRAMES}
+        fps={FPS}
+        width={1080}
+        height={1920}
+        defaultProps={{format: "vertical", language: "en", couplePhoto: "couple/final-couple.jpg"}}
+      />
+      <Composition<typeof gennetyAdSchema, GennetyAdProps>
+        id="GennetyAdHorizontalEnglish"
+        component={GennetyAd}
+        schema={gennetyAdSchema}
+        durationInFrames={DURATION_IN_FRAMES}
+        fps={FPS}
+        width={1920}
+        height={1080}
+        defaultProps={{format: "horizontal", language: "en", couplePhoto: "couple/final-couple.jpg"}}
       />
     </>
   );
