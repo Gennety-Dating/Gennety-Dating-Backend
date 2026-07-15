@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -182,7 +182,16 @@ function App(): ReactElement {
   const [remoteUser, setRemoteUser] = useState<RemoteUser | null>(null);
   const [flowToken, setFlowToken] = useState<string | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
-  const strings = onboardingStrings(lang);
+  // Pivot → Matchmaker: the Gennety logo lives in a persistent overlay ABOVE
+  // the scene stack (not inside either scene), so it stays put while the copy
+  // crossfades from "So we built Gennety" to the matchmaker line, then fades
+  // out on the way to "How it works". The Pivot scene's reveal cue flips this
+  // true once its line has landed.
+  const [logoRisen, setLogoRisen] = useState(false);
+  // Stable per language: the typewriter scenes key their run on the `lines`
+  // array identity, so a mid-scene parent re-render (e.g. the logo rising)
+  // must not hand them a fresh object and restart the typing.
+  const strings = useMemo(() => onboardingStrings(lang), [lang]);
 
   useEffect(() => {
     document.documentElement?.setAttribute("lang", lang);
@@ -358,6 +367,13 @@ function App(): ReactElement {
     }
   }, [phase.kind, remoteUser, routeFromRemote]);
 
+  // Re-arm the logo each time the Pivot scene (index 6) is (re)entered so paging
+  // back replays the rise; the Pivot reveal cue sets it true again after the
+  // line lands, and it stays true across the Matchmaker scene (index 7).
+  useEffect(() => {
+    if (phase.kind === "visual" && phase.index === 6) setLogoRisen(false);
+  }, [phase]);
+
   const chrome = canGoBack ? <TopChrome onBack={goBack} /> : null;
 
   return (
@@ -413,10 +429,12 @@ function App(): ReactElement {
           pauses={PIVOT_PART_PAUSES_MS}
           lineHoldMs={PIVOT_LINE_HOLD_MS}
           onNext={nextVisualSilently}
-          reveal={<GennetyRise />}
+          // The logo itself is the persistent overlay below; this invisible cue
+          // just reuses the reveal timing to rise it once the line has landed.
+          reveal={<span className="pivot-reveal-cue" aria-hidden="true" />}
           revealDelayMs={LOGO_RISE_DELAY_MS}
           revealViewMs={LOGO_RISE_VIEW_MS}
-          revealAbove
+          onReveal={() => setLogoRisen(true)}
         />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 7}>
@@ -425,6 +443,9 @@ function App(): ReactElement {
           lines={strings.matchmakerLines}
           pauses={MATCHMAKER_PART_PAUSES_MS}
           onNext={nextVisualSilently}
+          // Sits a touch lower than centre so the persistent logo above it has
+          // clear room.
+          mainClassName="hook-main--lower"
         />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 8}>
@@ -520,6 +541,23 @@ function App(): ReactElement {
       <Scene active={phase.kind === "done"}>
         <DoneScene />
       </Scene>
+      {phase.kind === "visual" ? (
+        <div
+          className={`pivot-logo ${phase.index === 6 || phase.index === 7 ? (logoRisen ? "is-risen" : "") : ""}`}
+          aria-hidden="true"
+        >
+          <span className="pivot-logo-slot">
+            <img
+              className="pivot-logo-icon"
+              src={GENNETY_ICON_SRC}
+              alt=""
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+            />
+          </span>
+        </div>
+      ) : null}
       </div>
     </OnboardingI18nContext.Provider>
   );
@@ -671,27 +709,11 @@ function AppIconRow(props: { variant: "reveal" | "stats" }): ReactElement {
   );
 }
 
-// The Gennety app icon (burgundy butterfly) that rises on the Pivot screen.
-// Same slot/img split as the app icons: slot = rise entrance, img = float.
-function GennetyRise(): ReactElement {
-  return (
-    <span className="gennety-rise-slot">
-      <img
-        className="gennety-rise-icon"
-        src={GENNETY_ICON_SRC}
-        alt="Gennety"
-        onError={(e) => {
-          e.currentTarget.style.display = "none";
-        }}
-      />
-    </span>
-  );
-}
-
 // One typewriter screen. Types `lines` out with the "live human" cadence, then
 // auto-advances. If `reveal` is set, once the line lands the scene waits
 // `revealDelayMs`, rises the image in, holds it `revealViewMs`, then advances
-// (scene 0's app icons and the Pivot's Gennety star both use this).
+// (scene 0's app icons use this to raise the dating-app row; the Pivot screen
+// passes an invisible cue whose `onReveal` rises the persistent logo overlay).
 function TypewriterScene(props: {
   active: boolean;
   lines: string[][];
@@ -701,9 +723,13 @@ function TypewriterScene(props: {
   reveal?: ReactNode;
   revealDelayMs?: number;
   revealViewMs?: number;
-  // Places the reveal above the centered line instead of below it (the Pivot
-  // screen raises the Gennety icon over the text, not under it).
+  // Places the reveal above the centered line instead of below it.
   revealAbove?: boolean;
+  // Fires the moment the reveal is shown (used to hand the Pivot's logo off to
+  // the persistent overlay).
+  onReveal?: () => void;
+  // Extra modifier on the scene <main> (e.g. shift the copy lower).
+  mainClassName?: string;
 }): ReactElement {
   const { display, lineIndex, fading, done, skip } = useIntroStream(
     props.active,
@@ -713,7 +739,7 @@ function TypewriterScene(props: {
   );
   const [revealShown, setRevealShown] = useState(false);
 
-  const { active, onNext, reveal, revealDelayMs = 0, revealViewMs = 0 } = props;
+  const { active, onNext, reveal, revealDelayMs = 0, revealViewMs = 0, onReveal } = props;
 
   // Replay the reveal on every re-entry (e.g. the user pages back to this scene).
   useEffect(() => {
@@ -727,14 +753,17 @@ function TypewriterScene(props: {
       return;
     }
     const timers = [
-      window.setTimeout(() => setRevealShown(true), revealDelayMs),
+      window.setTimeout(() => {
+        setRevealShown(true);
+        onReveal?.();
+      }, revealDelayMs),
       window.setTimeout(() => onNext(), revealDelayMs + revealViewMs),
     ];
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [done, reveal, revealDelayMs, revealViewMs, onNext]);
+  }, [done, reveal, revealDelayMs, revealViewMs, onNext, onReveal]);
 
   return (
-    <main className="hook-main intro-main" onClick={skip}>
+    <main className={`hook-main intro-main ${props.mainClassName ?? ""}`} onClick={skip}>
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
         <div className="hook-glow w-64 h-64 bg-primary rounded-full blur-[100px]" />
       </div>
