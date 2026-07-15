@@ -26,6 +26,33 @@ describe("buildProductPlaybook", () => {
     expect(text).toContain("How to find each other at the venue");
   });
 
+  it("states the anti-hallucination facts the agent must never get wrong", () => {
+    const text = buildProductPlaybook(ALL_OFF);
+    // The user SEES the partner (photos/name/age/pitch) before deciding —
+    // "blind" is ONLY about the partner's accept/decline, never their look.
+    expect(text).toContain("DOES see their match");
+    expect(text).toContain("NEVER claim photos or the profile are hidden");
+    expect(text).toMatch(/"Blind" refers to ONE thing only/);
+    // Private material never reaches the partner.
+    expect(text).toContain("NEVER shown to the partner");
+    // Unknown product questions must not be improvised.
+    expect(text).toContain("NEVER guess, extrapolate, or invent a product rule");
+  });
+
+  it("describes the v2 venue-change board (both sides, decline never cancels)", () => {
+    const text = buildProductPlaybook({ ...ALL_OFF, venueChange: true });
+    expect(text).toContain("BOTH people have");
+    expect(text).toContain("NEVER cancels the date");
+    expect(text).not.toContain("declining cancels the date");
+  });
+
+  it("keeps the ticket earn list accurate (6 photos, no verification bonus)", () => {
+    const text = buildProductPlaybook({ ...ALL_OFF, tickets: true });
+    expect(text).toContain("reaching 6 photos");
+    expect(text).toContain("does NOT grant a ticket");
+    expect(text).not.toContain("4+ photos");
+  });
+
   describe("coordination flag", () => {
     it("describes the proxy chat + contact share when ON", () => {
       const text = buildProductPlaybook({ ...ALL_OFF, coordination: true });
