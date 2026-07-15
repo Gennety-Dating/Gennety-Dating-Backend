@@ -803,9 +803,14 @@ function ProfileCycleScene(props: {
               {copy}
             </p>
           </div>
-          <CycleDots total={s.exhaustionLines.length} active={cycle.index} complete={cycle.canContinue} />
         </div>
       </main>
+      {/* Docked near the bottom (rising above the CTA when it appears) instead
+          of floating under the centered copy, so the screen indicator sits close
+          to the Next button. */}
+      <div className={`dots-dock ${cycle.canContinue ? "with-cta" : ""}`}>
+        <CycleDots total={s.exhaustionLines.length} active={cycle.index} complete={cycle.canContinue} />
+      </div>
       {cycle.canContinue ? <BottomCta onClick={props.onNext} label={s.next} /> : null}
     </>
   );
@@ -1069,7 +1074,7 @@ function StatsCycleScene(props: {
           <p className="stat-footnote">{s.statFootnote}</p>
         </div>
       </main>
-      <div className={`stats-dots-dock ${cycle.canContinue ? "with-cta" : ""}`}>
+      <div className={`dots-dock ${cycle.canContinue ? "with-cta" : ""}`}>
         <CycleDots total={statCopy.length} active={cycle.index} complete={cycle.canContinue} />
       </div>
       {cycle.canContinue ? <BottomCta onClick={props.onNext} label={s.next} /> : null}

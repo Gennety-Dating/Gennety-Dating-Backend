@@ -8,7 +8,9 @@
     "compositions": "remotion compositions",
     "dev": "remotion studio",
     "lint": "eslint src",
-    "render": "remotion render GennetyVideo out/gennety-video.mp4",
+    "render": "pnpm run render:vertical && pnpm run render:horizontal",
+    "render:horizontal": "remotion render GennetyAdHorizontal out/gennety-ad-horizontal.mp4",
+    "render:vertical": "remotion render GennetyAdVertical out/gennety-ad-vertical.mp4",
     "typecheck": "tsc --noEmit",
     "upgrade": "remotion upgrade",
     "versions": "remotion versions"

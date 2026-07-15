@@ -17,9 +17,45 @@ pnpm --filter @gennety/video typecheck
 pnpm --filter @gennety/video lint
 ```
 
-`dev:video` opens Remotion Studio. `render:video` creates
-`apps/video/out/gennety-video.mp4`; the output directory is intentionally
-ignored by Git.
+`dev:video` opens Remotion Studio. `render:video` creates both final-sized
+drafts in the ignored `apps/video/out/` directory:
+
+- `gennety-ad-vertical.mp4` — 1080×1920, 22 seconds, 30 fps.
+- `gennety-ad-horizontal.mp4` — 1920×1080, 22 seconds, 30 fps.
+
+The Studio compositions are `GennetyAdVertical` and
+`GennetyAdHorizontal`. They share the same story beats but use independent
+responsive layouts rather than cropping one master.
+
+## Current ad structure
+
+1. FOMO hook: old swipe/chat loop versus an actual date.
+2. AI matchmaker: profile context, values, and vibe are analyzed.
+3. Match reveal using the approved portrait assets.
+4. Production-derived Calendar interaction with live overlap states.
+5. Production-derived location confirmation in a public venue.
+6. Date-card reveal based on the bot's real generated card language.
+7. Registration CTA and replaceable couple-photo finish.
+
+All on-screen copy is Ukrainian. The current build intentionally has no music
+or voiceover so sound direction can be selected after the visual cut is
+approved.
+
+## Replacing the temporary couple finish
+
+Put the approved image under `public/`, then set `couplePhoto` in both
+composition `defaultProps` in `src/Root.tsx`, for example:
+
+```tsx
+defaultProps={{
+  format: "vertical",
+  couplePhoto: "couple/final-couple.jpg",
+}}
+```
+
+When `couplePhoto` is present, the split-profile placeholder and its internal
+draft label disappear automatically. Portraits are intentionally stored as
+render-optimized JPEG copies; the user-supplied source files remain untouched.
 
 ## Documentation-based working rules
 
