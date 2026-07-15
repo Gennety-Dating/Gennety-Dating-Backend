@@ -106,9 +106,9 @@ const INTRO_SKIP_HOLD_MS = 600; // hold on the final line when the user taps to 
 // typewriter screens (waste / burnout / cost-2026 / matchmaker) only need a
 // no-op leading pause.
 const SINGLE_LINE_PAUSES: number[][] = [[0]];
-// Stat-hook screen (after the Stats drum): a deliberate ~1.5s beat after
-// "Статистически," before the "only 3% ..." payload lands.
-const STAT_HOOK_PAUSES: number[][] = [[0, 1500]];
+// Stat-hook screen (after the Stats drum): the "only 3% ..." payload types
+// straight through as one line.
+const STAT_HOOK_PAUSES: number[][] = [[0]];
 // Pivot scene ("we built Gennety") — a short beat before the brand name.
 const PIVOT_PART_PAUSES_MS: number[][] = [[0], [0, 160]];
 const MATCHMAKER_PART_PAUSES_MS: number[][] = SINGLE_LINE_PAUSES;

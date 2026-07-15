@@ -27,8 +27,9 @@ describe("onboarding i18n", () => {
           for (const part of line) expect(part.length).toBeGreaterThan(0);
         }
       }
-      // The stat-hook line splits on the comma so the typewriter can pause there.
-      expect(s.statHookLines[0]).toHaveLength(2);
+      // The stat-hook line is a single typed line (the "statistically," opener
+      // and its pause were removed), so no comma split remains.
+      expect(s.statHookLines[0]).toHaveLength(1);
       expect(s.pivotLines).toHaveLength(2);
       for (const line of s.pivotLines) {
         expect(line.length).toBeGreaterThan(0);

@@ -9,7 +9,7 @@ export interface OnboardingStrings {
   wasteLines: string[][]; // scene 0 — "modern apps eat your time" (+ app-icon reveal)
   burnoutLines: string[][]; // scene 1 — "we burn out first"
   cost2026Lines: string[][]; // scene 2 — "what does a relationship cost in 2026?"
-  statHookLines: string[][]; // scene 4 — "statistically, only 3% ..." (after the stats drum)
+  statHookLines: string[][]; // scene 4 — "only 3% ..." (after the stats drum)
   exhaustionLines: string[]; // scene 5 — swipe-simulator cycling lines
   statLabels: [string, string, string];
   statFootnote: string;
@@ -99,7 +99,7 @@ const en: OnboardingStrings = {
   wasteLines: [["Modern dating apps eat up so much time on endless scrolling through profile after profile"]],
   burnoutLines: [["We burn out before we ever find our person"]],
   cost2026Lines: [["What does it cost to find a relationship in 2026?"]],
-  statHookLines: [["Statistically,", " only 3% of people who use dating apps ever make it to a date"]],
+  statHookLines: [["Only 3% of people who use dating apps ever make it to a date"]],
   exhaustionLines: [
     "Endlessly browsing people like products.",
     "It feels more like scrolling a TikTok feed",
@@ -252,7 +252,7 @@ const ru: OnboardingStrings = {
   wasteLines: [["Современные приложения для знакомств съедают кучу времени на бесконечный перебор анкет"]],
   burnoutLines: [["Мы выгораем раньше, чем находим своего человека"]],
   cost2026Lines: [["Сколько стоит найти отношения в 2026 году?"]],
-  statHookLines: [["Статистически,", " только 3% людей, которые пользуются приложениями для знакомств, доходят до свидания"]],
+  statHookLines: [["Только 3% людей, которые пользуются приложениями для знакомств, доходят до свидания"]],
   exhaustionLines: [
     "Бесконечный перебор людей, как товаров.",
     "Больше похоже на скроллинг TikTok-ленты",
@@ -404,7 +404,7 @@ const uk: OnboardingStrings = {
   wasteLines: [["Сучасні застосунки для знайомств зʼїдають купу часу на безкінечний перебір анкет"]],
   burnoutLines: [["Ми вигораємо раніше, ніж знаходимо свою людину"]],
   cost2026Lines: [["Скільки коштує знайти стосунки у 2026 році?"]],
-  statHookLines: [["Статистично,", " лише 3% людей, які користуються застосунками для знайомств, доходять до побачення"]],
+  statHookLines: [["Лише 3% людей, які користуються застосунками для знайомств, доходять до побачення"]],
   exhaustionLines: [
     "Нескінченний перебір людей, наче товарів.",
     "Більше схоже на скролінг стрічки TikTok",
@@ -557,7 +557,7 @@ const de: OnboardingStrings = {
   wasteLines: [["Moderne Dating-Apps fressen so viel Zeit mit endlosem Scrollen, Profil um Profil"]],
   burnoutLines: [["Wir brennen aus, bevor wir unseren Menschen finden"]],
   cost2026Lines: [["Was kostet es, 2026 eine Beziehung zu finden?"]],
-  statHookLines: [["Statistisch gesehen", " schaffen es nur 3% der Menschen, die Dating-Apps nutzen, je zu einem Date"]],
+  statHookLines: [["Nur 3% der Menschen, die Dating-Apps nutzen, schaffen es je zu einem Date"]],
   exhaustionLines: [
     "Endloses Durchblättern von Menschen wie Produkten.",
     "Es fühlt sich eher an wie das Scrollen durch einen TikTok-Feed",
@@ -710,7 +710,7 @@ const pl: OnboardingStrings = {
   wasteLines: [["Współczesne aplikacje randkowe pochłaniają mnóstwo czasu na bezustanne przewijanie profilu za profilem"]],
   burnoutLines: [["Wypalamy się, zanim znajdziemy swojego człowieka"]],
   cost2026Lines: [["Ile kosztuje znalezienie związku w 2026 roku?"]],
-  statHookLines: [["Statystycznie,", " tylko 3% osób, które korzystają z aplikacji randkowych, dochodzi do randki"]],
+  statHookLines: [["Tylko 3% osób, które korzystają z aplikacji randkowych, dochodzi do randki"]],
   exhaustionLines: [
     "Niekończące się przeglądanie ludzi jak produktów.",
     "Bardziej przypomina to przewijanie feedu TikToka",
