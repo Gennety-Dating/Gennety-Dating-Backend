@@ -8,6 +8,7 @@ import { compareFaces } from "./face-match.js";
 import { fetchInquirySelfie, fetchLatestInquiryByReference } from "./persona-api.js";
 import { pinStatusBanner } from "./status-banner.js";
 import { downloadProfileImage, uploadSelfie } from "./storage.js";
+import { notifyFounderNewUser } from "./founder-notify.js";
 
 /**
  * Face-match verification pipeline (Phase 6.3 — third iteration).
@@ -509,6 +510,10 @@ export async function runFaceMatchVerification(
         telegramId: user.telegramId,
       });
     }
+    // Founder ops feed: first activation via a `verified` outcome. The vision
+    // Elo seed above has run, so the DM'd profile carries the attractiveness
+    // score. Idempotent + status-gated inside the notifier; fire-and-forget.
+    void notifyFounderNewUser(userId).catch(() => {});
     return { kind: "verified", userId, score: maxDetected, scores };
   }
 

@@ -254,6 +254,13 @@ model User {
   ticketDiscountGrantedAt  DateTime? @map("ticket_discount_granted_at")
   ticketDiscountExpiresAt  DateTime? @map("ticket_discount_expires_at")
   ticketDiscountConsumedAt DateTime? @map("ticket_discount_consumed_at")
+  /// Founder-notify (gated by `FOUNDER_NOTIFY_ENABLED`): stamped the first time
+  /// this user becomes `active` and the "new registration" profile card is sent
+  /// to the founder's personal Telegram. Idempotency marker — the notifier
+  /// updates it with `where: { founderNotifiedAt: null }`, so re-activation
+  /// (verified-after-skip, unfreeze on `/start`) never re-sends. Null = never
+  /// notified.
+  founderNotifiedAt DateTime?        @map("founder_notified_at")
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
 
@@ -1271,4 +1278,25 @@ model CuratedVenue {
 
   @@index([universityDomain, category, active])
   @@map("curated_venues")
+}
+
+/// Snapshot of a weekly founder matches report (gated by `FOUNDER_NOTIFY_ENABLED`).
+/// Built after the Thursday batch (`notifyFounderWeeklyMatches`), stored so the
+/// tokenized report page (`GET /v1/founder/report/:token`) renders a stable view
+/// regardless of later profile edits. Contains PII (names, cities, photo refs,
+/// attractiveness scores) but never `psychologicalSummary`/AI-memory dumps. The
+/// `token` is a cryptographically-random unguessable string = the page's only
+/// authorization (no login), so it must never be logged.
+model FounderReport {
+  id        String   @id @default(uuid()) @db.Uuid
+  /// Crypto-random URL token = the report page's sole authorization.
+  token     String   @unique
+  /// UTC day of the batch this report covers (dedup + display).
+  weekOf    DateTime @map("week_of")
+  /// Assembled `WeeklyMatchesReport` snapshot (pairs + user cards + photo refs).
+  dataJson  Json     @map("data_json")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("founder_reports")
 }

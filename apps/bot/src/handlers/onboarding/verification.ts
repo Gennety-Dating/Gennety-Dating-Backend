@@ -8,6 +8,7 @@ import { terminalVerificationMessage } from "../../services/verification-message
 import { pullVerificationStatus } from "../../services/verification-pipeline.js";
 import { showMainMenu } from "../menu/main.js";
 import { pinStatusBanner } from "../../services/status-banner.js";
+import { notifyFounderNewUser } from "../../services/founder-notify.js";
 import { UNVERIFIED_ELO_PENALTY } from "../../utils/elo-calculator.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { skipAnalysisSteps } from "../../services/analysis-status.js";
@@ -478,6 +479,10 @@ export async function handleVerificationSkipConfirm(
       onboardingStep: "completed",
     },
   });
+
+  // Founder ops feed: first activation via a soft-skip (no vision score yet).
+  // Idempotent + status-gated inside the notifier; fire-and-forget.
+  void notifyFounderNewUser(user.id).catch(() => {});
 
   // Even when the user skips Persona, narrate the profile build so the app
   // feels like it's working rather than going silent on activation.

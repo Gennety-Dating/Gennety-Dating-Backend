@@ -51,6 +51,7 @@ import { isTelegramTarget } from "../../utils/telegram-target.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { venueSearchSteps, dateCardSteps } from "../../services/analysis-status.js";
 import { renderDateCard, buildShareButton, type CardTheme } from "../../services/date-card/index.js";
+import { notifyFounderDateScheduled } from "../../services/founder-notify.js";
 
 /**
  * Build the reply keyboard that surfaces Telegram's `request_location`
@@ -377,9 +378,10 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
           language: true,
           theme: true,
           gender: true,
+          age: true,
           universityDomain: true,
           firstName: true,
-          profile: { select: { photos: true } },
+          profile: { select: { photos: true, homeCity: true } },
         },
       },
       userB: {
@@ -388,8 +390,9 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
           language: true,
           theme: true,
           gender: true,
+          age: true,
           firstName: true,
-          profile: { select: { photos: true } },
+          profile: { select: { photos: true, homeCity: true } },
         },
       },
     },
@@ -548,7 +551,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
   // screenshot/forward-protected with a Share button; any render failure falls
   // back to the plain-text card per-side, so one render hiccup never denies the
   // other person their card and scheduling never wedges.
-  const [dateCardFileIdA, dateCardFileIdB] = await Promise.all([
+  const [resultA, resultB] = await Promise.all([
     sendScheduledConfirmation(api, {
       telegramId: match.userA.telegramId,
       text: textA,
@@ -576,6 +579,8 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
       agreedTime: match.agreedTime,
     }),
   ]);
+  const dateCardFileIdA = resultA.fileId;
+  const dateCardFileIdB = resultB.fileId;
 
   // Cache the rendered date-card `file_id` per side so the "My date" menu hub
   // can re-open the card instantly instead of re-rendering it. `null` (text
@@ -590,6 +595,33 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
         console.warn(`[date-card] file_id cache update failed for ${matchId}:`, err);
       });
   }
+
+  // Founder ops feed: DM both date cards (male + female) as one media group.
+  // The rendered PNG buffers ride back from `sendScheduledConfirmation` so the
+  // founder bot can re-upload raw bytes (cross-bot file_ids don't transfer);
+  // when the date-card feature is off it falls back to partner photos.
+  // No-op unless FOUNDER_NOTIFY_ENABLED. Fire-and-forget.
+  void notifyFounderDateScheduled({
+    matchId,
+    cardBufferA: resultA.cardBuffer,
+    cardBufferB: resultB.cardBuffer,
+    userA: {
+      firstName: match.userA.firstName,
+      age: match.userA.age,
+      gender: match.userA.gender,
+      city: match.userA.profile?.homeCity ?? null,
+    },
+    userB: {
+      firstName: match.userB.firstName,
+      age: match.userB.age,
+      gender: match.userB.gender,
+      city: match.userB.profile?.homeCity ?? null,
+    },
+    venue: { name: venue.name, address: venue.address },
+    agreedTime: match.agreedTime,
+    photoRefA: match.userB.profile?.photos?.[0] ?? null,
+    photoRefB: match.userA.profile?.photos?.[0] ?? null,
+  }).catch(() => {});
 }
 
 interface ScheduledConfirmationInput {
@@ -618,8 +650,8 @@ interface ScheduledConfirmationInput {
 async function sendScheduledConfirmation(
   api: Api<RawApi>,
   input: ScheduledConfirmationInput,
-): Promise<string | null> {
-  if (!isTelegramTarget(input.telegramId)) return null;
+): Promise<{ fileId: string | null; cardBuffer: Buffer | null }> {
+  if (!isTelegramTarget(input.telegramId)) return { fileId: null, cardBuffer: null };
   const chatId = Number(input.telegramId);
 
   if (env.DATE_CARD_FEATURE_ENABLED) {
@@ -665,7 +697,9 @@ async function sendScheduledConfirmation(
           protect_content: true,
         });
         // Largest rendition's file_id — cached for instant re-open in the hub.
-        return sent.photo?.at(-1)?.file_id ?? null;
+        // The buffer rides back too so the founder feed can re-upload it via
+        // the founder bot (cross-bot file_ids don't transfer).
+        return { fileId: sent.photo?.at(-1)?.file_id ?? null, cardBuffer: card };
       } catch (err) {
         console.warn(
           `[date-card] sendPhoto failed for ${chatId}, falling back to text:`,
@@ -679,7 +713,7 @@ async function sendScheduledConfirmation(
     entities: [input.entity],
     reply_markup: input.keyboard,
   });
-  return null;
+  return { fileId: null, cardBuffer: null };
 }
 
 /**

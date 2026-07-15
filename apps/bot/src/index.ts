@@ -9,6 +9,8 @@ import cron from "node-cron";
 import { ensureMatchPairIndex } from "@gennety/db";
 import { env } from "./config.js";
 import { createBot } from "./bot.js";
+import { setMainBotApi } from "./services/main-bot-api.js";
+import { notifyFounderWeeklyMatches } from "./services/founder-notify.js";
 import { autoUnsuspendElapsed, runWeeklyBatch } from "./services/match-engine.js";
 import { dispatchMatches } from "./services/dispatch-queue.js";
 import { sendNoMatchNotices } from "./services/no-match-notifier.js";
@@ -50,6 +52,9 @@ process.on("unhandledRejection", (reason) => {
 });
 
 const bot = createBot(env.BOT_TOKEN);
+// Publish the main bot Api so context-less services (founder-notify) can act
+// as @gennetybot — e.g. download a user's own profile-photo bytes.
+setMainBotApi(bot.api);
 
 const DEFAULT_DATE_LIFECYCLE_TICK_MS = 2 * 60 * 1000;
 /**
@@ -221,6 +226,12 @@ async function weeklyMatchingJob(): Promise<void> {
       console.log(
         `[cron] Dispatch complete: sent=${dispatch.dispatched} failed=${dispatch.failed}`,
       );
+
+      // Founder ops feed: snapshot the week's pairs and DM the founder a
+      // tokenized report link (no-op unless FOUNDER_NOTIFY_ENABLED). Best-effort.
+      await notifyFounderWeeklyMatches(result.matchIds).catch((err) => {
+        console.warn("[cron] founder weekly-matches notify failed:", err);
+      });
     }
 
     if (result.missedUserIds.length > 0) {

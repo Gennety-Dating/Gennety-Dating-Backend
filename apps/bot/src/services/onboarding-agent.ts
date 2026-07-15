@@ -1,6 +1,7 @@
 import { prisma, Prisma, type Language } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
 import { grantStudentBonusIfEligible } from "./ticket-wallet.js";
+import { notifyFounderNewUser } from "./founder-notify.js";
 import {
   isUniversityEmail,
   MIN_PHOTOS,
@@ -1623,6 +1624,11 @@ async function execFinalizeOnboarding(
       },
     });
   }
+
+  // Founder ops feed: when this finalize also activated the user (persona off),
+  // DM the founder the new profile. Idempotent + status-gated inside the
+  // notifier, so it safely no-ops when persona keeps the user in `onboarding`.
+  void notifyFounderNewUser(finalized.id).catch(() => {});
 
   return JSON.stringify({
     success: true,

@@ -133,6 +133,28 @@ export const env = {
   /// header and are unaffected either way. In production set this to the concrete
   /// browser origins: the Mini App host (WEBAPP_URL) plus any web signup site.
   PUBLIC_CORS_ORIGIN: process.env.PUBLIC_CORS_ORIGIN ?? "",
+
+  // ── Founder notifications (private ops feed) ─────────────────
+  /// Master switch for the founder-notify feed (new-registration profile card,
+  /// weekly-matches report link, date-scheduled cards). Off (default) → all
+  /// three notifiers are inert no-ops, so the feature ships dark. See
+  /// `services/founder-notify.ts`, PRODUCT_SPEC is unaffected (ops-only).
+  FOUNDER_NOTIFY_ENABLED: process.env.FOUNDER_NOTIFY_ENABLED === "true",
+  /// Bot token of the SEPARATE founder bot (created in BotFather) used to DM
+  /// the founder. Kept distinct from `BOT_TOKEN` so the founder ops feed is
+  /// isolated from the user-facing @gennetybot — and because `file_id`s are
+  /// per-bot, the founder bot always uploads raw bytes, never re-sends a
+  /// @gennetybot `file_id`. Empty → the feed is inert even if the flag is on.
+  FOUNDER_BOT_TOKEN: process.env.FOUNDER_BOT_TOKEN ?? "",
+  /// Numeric Telegram chat id of the founder (their personal chat with the
+  /// founder bot). The founder must `/start` the founder bot once so it may DM
+  /// them. Empty → the feed is inert.
+  FOUNDER_TELEGRAM_ID: process.env.FOUNDER_TELEGRAM_ID ?? "",
+  /// Absolute base URL of the public `/v1/*` API, used to build the tokenized
+  /// weekly-matches report link sent to the founder (`GET /v1/founder/report/
+  /// :token`). Defaults to the production public API host.
+  PUBLIC_BASE_URL: process.env.PUBLIC_BASE_URL ?? "https://dating-api.gennety.com",
+
   /// Expo Push Service access token (https://expo.dev/accounts/…/settings/access-tokens).
   /// Optional — unset disables push dispatch.
   EXPO_ACCESS_TOKEN: process.env.EXPO_ACCESS_TOKEN ?? "",
