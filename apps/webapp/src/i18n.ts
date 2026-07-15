@@ -98,8 +98,8 @@ const dict: Record<Lang, Strings> = {
     btnEdit: "Change my picks",
     btnRemind: "Remind me",
     btnRemindArmed: "We'll remind",
-    errExpired: "This calendar link expired. Please reopen it from the bot.",
-    errMatchGone: "We couldn't find this match anymore. Please reopen the calendar from the bot.",
+    errExpired: "This calendar link expired. Reopen it from the bot.",
+    errMatchGone: "Couldn't find this match anymore. Reopen the calendar from the bot.",
     errInvalidSlot: "That slot isn't available anymore. Pick another one.",
     errWrongState: "This match isn't waiting for a calendar pick.",
     errNotParticipant: "You're not part of this match.",
@@ -138,12 +138,12 @@ const dict: Record<Lang, Strings> = {
     locErrMapUnavailable: "The map couldn't load. Check your connection and try again.",
     verifyMiniAppLoading: "Opening verification…",
     verifyMiniAppFinishing: "Almost done. Checking results…",
-    verifyMiniAppError: "Couldn't start verification. Please try again.",
+    verifyMiniAppError: "Couldn't start verification. Try again.",
     verifyMiniAppCloseBtn: "Close",
     verifyMiniAppAlreadyVerified:
       "You're already verified — nothing to do here.",
     verifyMiniAppNotConfigured:
-      "Verification isn't available right now. Please try again later.",
+      "Verification isn't available right now. Try again a bit later.",
   },
   ru: {
     title: "Выбери время для свидания",
@@ -340,12 +340,12 @@ const dict: Record<Lang, Strings> = {
     verifyMiniAppLoading: "Verifizierung wird geöffnet...",
     verifyMiniAppFinishing: "Gleich fertig. Ergebnis wird geprüft...",
     verifyMiniAppError:
-      "Verifizierung konnte nicht gestartet werden. Bitte versuch es erneut.",
+      "Verifizierung konnte nicht gestartet werden. Versuch es gleich noch mal.",
     verifyMiniAppCloseBtn: "Schließen",
     verifyMiniAppAlreadyVerified:
       "Du bist bereits verifiziert - hier gibt's nichts zu tun.",
     verifyMiniAppNotConfigured:
-      "Verifizierung ist derzeit nicht verfügbar. Bitte versuch es später.",
+      "Verifizierung ist derzeit nicht verfügbar. Versuch es später noch mal.",
   },
   pl: {
     title: "Wybierz termin randki",
