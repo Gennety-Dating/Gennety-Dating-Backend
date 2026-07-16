@@ -436,10 +436,23 @@ button {
 
 /* The PNGs already carry rounded corners on a transparent background, so the
    shadow rides the alpha (drop-shadow), not the box. Kept soft + low so the
-   icons read as clean tiles, never as outlined boxes. */
+   icons read as clean tiles, never as outlined boxes.
+
+   An icon paints nothing until `.is-ready` — AppIcon adds it once decode()
+   resolves. A PNG paints its scanlines as they arrive, and a half-decoded icon
+   is a rectangular slab, so anything painted before decode is a box rather than
+   the tile (see AppIcon). opacity:0 (not visibility) keeps the slot's layout and
+   its iconRise/iconFloat transforms untouched; the short fade means a cold icon
+   arrives a beat late instead of snapping in. */
 .app-icon {
   display: block;
   object-fit: contain;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.app-icon.is-ready {
+  opacity: 1;
 }
 
 /* ── Reveal arc (scene 0) ──────────────────────────────────────────────────
@@ -483,6 +496,11 @@ button {
 .app-icon-row--reveal .app-icon {
   width: clamp(66px, 20vw, 88px);
   height: clamp(66px, 20vw, 88px);
+}
+
+/* Gated with the reveal itself: a drop-shadow traces whatever alpha is painted,
+   so before decode it would trace the half-decoded slab and read as a box. */
+.app-icon-row--reveal .app-icon.is-ready {
   filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.16));
 }
 

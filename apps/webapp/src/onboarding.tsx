@@ -212,15 +212,19 @@ function App(): ReactElement {
     document.documentElement?.setAttribute("lang", lang);
   }, [lang]);
 
-  // Warm the competitor-icon cache on mount so scene 0's reveal paints the
-  // already-decoded PNGs. Otherwise the first appearance flashes a rectangular
-  // frame for a beat — the `drop-shadow` filter renders against the image's box
-  // while the transparent PNG is still decoding, then snaps to the alpha shape
-  // once it lands. Most visible on the light theme (dark shadow on cream).
+  // Warm the competitor icons during the boot round-trip (the reveal DOM only
+  // mounts once /state resolves, so this buys scene 0 a real head start).
+  // `img.src =` alone only starts the fetch, so decode() is what actually leaves
+  // a paintable bitmap in the cache. This is a head start, not the guarantee —
+  // AppIcon gates each icon on its own decode, so a preload that loses the race
+  // just delays an icon instead of flashing a half-decoded slab.
   useEffect(() => {
     for (const icon of APP_ICONS) {
       const img = new Image();
       img.src = icon.src;
+      void img.decode().catch(() => {
+        // Warming is best-effort; AppIcon's own gate is what the reveal waits on.
+      });
     }
   }, []);
 
@@ -708,6 +712,53 @@ function useIntroStream(
   return { display, lineIndex, fading, done, skip };
 }
 
+// One competitor icon, held back until its PNG is fully decoded.
+//
+// A non-interlaced PNG paints incrementally as its scanlines arrive, so a
+// half-arrived icon paints as a rectangular slab — the decoded top rows at full
+// width with a hard flat bottom. That slab, not the element box, is what the
+// reveal's `drop-shadow` traces, which is why scene 0 used to flash a dark
+// square on the light theme (on the near-black theme the same 16% shadow is
+// invisible). `decode()` is the only signal that the whole bitmap is paintable;
+// `complete`/`onLoad` fire too late to help and `img.src =` alone just starts
+// the fetch. Until then the img must paint NOTHING at all — opacity 0 with no
+// filter, which also covers the alt text and any UA placeholder.
+//
+// Failure resolves the gate too, so a broken icon can never leave the row
+// permanently blank: the onError guard below hides that slot as it always did.
+function AppIcon(props: { src: string; alt: string }): ReactElement {
+  const [ready, setReady] = useState(false);
+
+  // A ref, not onLoad: an icon already warmed by the mount-time preload can be
+  // decoded before React ever attaches a load listener, and onLoad would never
+  // fire. decode() settles correctly whether the bitmap is already in hand or
+  // still on the wire.
+  const gate = useCallback((img: HTMLImageElement | null) => {
+    if (!img) return;
+    const settle = () => setReady(true);
+    try {
+      // Reject settles too: a row of icons that never paint would be a worse
+      // bug than the flash this gate exists to remove.
+      void img.decode().then(settle, settle);
+    } catch {
+      // No decode() on this WebView — paint immediately rather than never.
+      settle();
+    }
+  }, []);
+
+  return (
+    <img
+      ref={gate}
+      className={`app-icon${ready ? " is-ready" : ""}`}
+      src={props.src}
+      alt={props.alt}
+      onError={(e) => {
+        e.currentTarget.style.visibility = "hidden";
+      }}
+    />
+  );
+}
+
 // Row of competitor app icons. `reveal` is the large row that rises on scene 0;
 // `stats` is the larger liquid-glass tray shown above the numbers on the stats
 // scene. The icons are bundled assets (see the imports at the top); the onError
@@ -716,16 +767,7 @@ function AppIconRow(props: { variant: "reveal" | "stats" }): ReactElement {
   return (
     <div className={`app-icon-row app-icon-row--${props.variant}`}>
       {APP_ICONS.map((icon) => {
-        const img = (
-          <img
-            className="app-icon"
-            src={icon.src}
-            alt={icon.label}
-            onError={(e) => {
-              e.currentTarget.style.visibility = "hidden";
-            }}
-          />
-        );
+        const img = <AppIcon src={icon.src} alt={icon.label} />;
         // The reveal wraps each icon in a slot: the slot carries the arc
         // position + staggered spring entrance, the img inside carries the
         // gentle float, so the two transforms never fight (see onboarding.css).
