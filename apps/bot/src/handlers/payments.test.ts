@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@gennety/db", () => ({
-  prisma: { user: { findUnique: vi.fn() } },
+  prisma: {
+    user: { findUnique: vi.fn() },
+    match: { findUnique: vi.fn() },
+  },
 }));
 vi.mock("../config.js", () => ({
   env: { TICKET_BUNDLE_STARS: { 1: 350, 3: 830, 6: 1350 } },
@@ -22,6 +25,7 @@ import { applyStarsTicketPayment } from "./matching/ticket-gate.js";
 import { handlePreCheckout, handleSuccessfulPayment } from "./payments.js";
 
 const findUnique = prisma.user.findUnique as unknown as ReturnType<typeof vi.fn>;
+const matchFindUnique = prisma.match.findUnique as unknown as ReturnType<typeof vi.fn>;
 const grant = grantTickets as unknown as ReturnType<typeof vi.fn>;
 const settleStars = applyStarsTicketPayment as unknown as ReturnType<typeof vi.fn>;
 
@@ -121,7 +125,8 @@ describe("handlePreCheckout", () => {
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
   });
 
-  it("approves a valid gate payment at the correct Star amount (both = 700)", async () => {
+  it("approves a valid gate payment at the correct Star amount (both = 700) while the gate is open", async () => {
+    matchFindUnique.mockResolvedValue({ status: "negotiating", ticketStatus: "pending" });
     const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
       invoice_payload: `gate:${GATE_UUID}:both`,
       currency: "XTR",
@@ -136,6 +141,41 @@ describe("handlePreCheckout", () => {
       invoice_payload: `gate:${GATE_UUID}:self`,
       currency: "XTR",
       total_amount: 700, // self should be 350
+    });
+    await handlePreCheckout(ctx);
+    expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
+    // Amount mismatch is rejected before any DB read.
+    expect(matchFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("declines a gate payment when the match is no longer negotiating (M1: stale reusable invoice on a cancelled match)", async () => {
+    matchFindUnique.mockResolvedValue({ status: "cancelled", ticketStatus: "pending" });
+    const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+      invoice_payload: `gate:${GATE_UUID}:both`,
+      currency: "XTR",
+      total_amount: 700,
+    });
+    await handlePreCheckout(ctx);
+    expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
+  });
+
+  it("declines a gate payment when the gate is already completed", async () => {
+    matchFindUnique.mockResolvedValue({ status: "negotiating", ticketStatus: "completed" });
+    const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+      invoice_payload: `gate:${GATE_UUID}:self`,
+      currency: "XTR",
+      total_amount: 350,
+    });
+    await handlePreCheckout(ctx);
+    expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
+  });
+
+  it("declines a gate payment when the match no longer exists", async () => {
+    matchFindUnique.mockResolvedValue(null);
+    const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+      invoice_payload: `gate:${GATE_UUID}:self`,
+      currency: "XTR",
+      total_amount: 350,
     });
     await handlePreCheckout(ctx);
     expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());

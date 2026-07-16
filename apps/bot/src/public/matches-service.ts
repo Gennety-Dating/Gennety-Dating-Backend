@@ -745,7 +745,7 @@ export async function submitMatchReport(
           reportedUserId,
           reasonSummary,
           language,
-        }, tx);
+        }, tx, getBotApi());
       });
     }
   } catch (err) {

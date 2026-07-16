@@ -2,6 +2,8 @@ import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
+import { cancelInFlightMatchesForUser } from "./cancel-in-flight-matches.js";
+import { sendPushToUser } from "./push.js";
 
 /**
  * Post-match moderation engine. Invoked after the LLM has classified a
@@ -42,6 +44,7 @@ export type ModerationOutcome =
 export async function applyReportAction(
   input: ApplyReportActionInput,
   db: ModerationDb = prisma,
+  api: Api<RawApi> | null = null,
 ): Promise<ModerationOutcome> {
   const { tier, reporterUserId, reportedUserId, reasonSummary, language } = input;
 
@@ -55,7 +58,7 @@ export async function applyReportAction(
       where: { id: reportedUserId },
       data: { status: "pending_investigation" },
     });
-    await cancelInFlightMatches(reportedUserId, db);
+    await cancelInFlightMatchesForUser(reportedUserId, api);
     return { kind: "tier3_frozen" };
   }
 
@@ -73,7 +76,7 @@ export async function applyReportAction(
       where: { id: reportedUserId },
       data: { status: "banned" },
     });
-    await cancelInFlightMatches(reportedUserId, db);
+    await cancelInFlightMatchesForUser(reportedUserId, api);
     return { kind: "tier2_banned", strikes };
   }
   if (strikes === 2) {
@@ -82,28 +85,10 @@ export async function applyReportAction(
       where: { id: reportedUserId },
       data: { status: "suspended", suspendedUntil: until },
     });
-    await cancelInFlightMatches(reportedUserId, db);
+    await cancelInFlightMatchesForUser(reportedUserId, api);
     return { kind: "tier2_suspended", strikes: 2, until };
   }
   return { kind: "tier2_warning", strikes: 1 };
-}
-
-/**
- * Mark any `proposed` or `negotiating` matches involving the banned /
- * suspended / frozen user as `cancelled` so they don't linger in the
- * pipeline after a status change.
- */
-async function cancelInFlightMatches(
-  userId: string,
-  db: ModerationDb = prisma,
-): Promise<void> {
-  await db.match.updateMany({
-    where: {
-      status: { in: ["proposed", "negotiating"] },
-      OR: [{ userAId: userId }, { userBId: userId }],
-    },
-    data: { status: "cancelled" },
-  });
 }
 
 /**
@@ -127,8 +112,17 @@ export async function notifyReportedUser(
   const key = messageKeyFor(outcome);
   if (!key) return;
 
-  // M-17: mobile-only users get the moderation outcome via push, not DM.
-  if (user.telegramId <= 0n) return;
+  // M-17: mobile-only users (synthetic negative telegramId) can't be DM'd —
+  // deliver the same moderation outcome via push instead. Best-effort:
+  // `sendPushToUser` no-ops without a token and swallows its own errors.
+  if (user.telegramId <= 0n) {
+    await sendPushToUser(reportedUserId, {
+      title: "Gennety",
+      body: t(lang, key),
+      data: { type: "moderation" },
+    });
+    return;
+  }
 
   try {
     await api.sendMessage(Number(user.telegramId), t(lang, key));

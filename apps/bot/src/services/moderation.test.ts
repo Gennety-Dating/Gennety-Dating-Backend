@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
-// Mocks — prisma + negative-constraints. The moderation service is pure
-// policy logic; everything it touches is injected through these mocks.
+// Mocks — prisma + negative-constraints + the shared cancel-in-flight helper +
+// push. The moderation service is pure policy logic; everything it touches is
+// injected/mocked so these tests only assert the policy + delegation.
 // ---------------------------------------------------------------------------
 
 vi.mock("@gennety/db", () => ({
@@ -11,9 +12,6 @@ vi.mock("@gennety/db", () => ({
       update: vi.fn(),
       findUnique: vi.fn(),
     },
-    match: {
-      updateMany: vi.fn(),
-    },
   },
 }));
 
@@ -21,8 +19,18 @@ vi.mock("../handlers/matching/negative-constraints.js", () => ({
   appendNegativeConstraint: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("./cancel-in-flight-matches.js", () => ({
+  cancelInFlightMatchesForUser: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("./push.js", () => ({
+  sendPushToUser: vi.fn().mockResolvedValue(true),
+}));
+
 import { prisma } from "@gennety/db";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
+import { cancelInFlightMatchesForUser } from "./cancel-in-flight-matches.js";
+import { sendPushToUser } from "./push.js";
 import {
   applyReportAction,
   notifyReportedUser,
@@ -31,8 +39,9 @@ import {
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mUser = prisma.user as unknown as { update: MockFn; findUnique: MockFn };
-const mMatch = prisma.match as unknown as { updateMany: MockFn };
 const mAppend = appendNegativeConstraint as unknown as MockFn;
+const mCancel = cancelInFlightMatchesForUser as unknown as MockFn;
+const mPush = sendPushToUser as unknown as MockFn;
 
 const REPORTED_ID = "11111111-1111-1111-1111-111111111111";
 const REPORTER_ID = "22222222-2222-2222-2222-222222222222";
@@ -54,7 +63,7 @@ describe("applyReportAction — Tier 1 (Product Disappointment)", () => {
     expect(outcome).toEqual({ kind: "tier1" });
     expect(mAppend).toHaveBeenCalledWith(REPORTER_ID, "Not my type", "en");
     expect(mUser.update).not.toHaveBeenCalled();
-    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    expect(mCancel).not.toHaveBeenCalled();
   });
 });
 
@@ -79,7 +88,8 @@ describe("applyReportAction — Tier 2 (Ethical Violation)", () => {
       data: { strikes: { increment: 1 } },
       select: { strikes: true },
     });
-    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    // Strike 1 is a warning only — no matches are cancelled.
+    expect(mCancel).not.toHaveBeenCalled();
     expect(mAppend).not.toHaveBeenCalled();
   });
 
@@ -87,7 +97,6 @@ describe("applyReportAction — Tier 2 (Ethical Violation)", () => {
     mUser.update
       .mockResolvedValueOnce({ strikes: 2 }) // increment
       .mockResolvedValueOnce({}); // status update
-    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
 
     const before = Date.now();
     const outcome = await applyReportAction({
@@ -115,21 +124,16 @@ describe("applyReportAction — Tier 2 (Ethical Violation)", () => {
     expect(secondCall.data.status).toBe("suspended");
     expect(secondCall.data.suspendedUntil).toBeInstanceOf(Date);
 
-    // In-flight matches for the suspended user are cancelled.
-    expect(mMatch.updateMany).toHaveBeenCalledWith({
-      where: {
-        status: { in: ["proposed", "negotiating"] },
-        OR: [{ userAId: REPORTED_ID }, { userBId: REPORTED_ID }],
-      },
-      data: { status: "cancelled" },
-    });
+    // In-flight matches for the suspended user are cancelled via the shared
+    // helper (which covers proposed/negotiating/negotiating_venue/scheduled and
+    // notifies + comps the partner). `api` is null in these unit calls.
+    expect(mCancel).toHaveBeenCalledWith(REPORTED_ID, null);
   });
 
   it("third Tier 2 report → strikes = 3, status becomes banned", async () => {
     mUser.update
       .mockResolvedValueOnce({ strikes: 3 })
       .mockResolvedValueOnce({});
-    mMatch.updateMany.mockResolvedValueOnce({ count: 1 });
 
     const outcome = await applyReportAction({
       tier: 2,
@@ -142,14 +146,13 @@ describe("applyReportAction — Tier 2 (Ethical Violation)", () => {
     expect(outcome).toEqual({ kind: "tier2_banned", strikes: 3 });
     const secondCall = mUser.update.mock.calls[1][0];
     expect(secondCall.data.status).toBe("banned");
-    expect(mMatch.updateMany).toHaveBeenCalled();
+    expect(mCancel).toHaveBeenCalledWith(REPORTED_ID, null);
   });
 });
 
 describe("applyReportAction — Tier 3 (Safety Threat)", () => {
-  it("immediately freezes account with pending_investigation status", async () => {
+  it("immediately freezes account with pending_investigation status and cancels dates", async () => {
     mUser.update.mockResolvedValueOnce({});
-    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
 
     const outcome = await applyReportAction({
       tier: 3,
@@ -165,10 +168,30 @@ describe("applyReportAction — Tier 3 (Safety Threat)", () => {
       where: { id: REPORTED_ID },
       data: { status: "pending_investigation" },
     });
-    // In-flight matches cancelled.
-    expect(mMatch.updateMany).toHaveBeenCalled();
+    // In-flight matches (including negotiating_venue / scheduled) cancelled —
+    // the safety-critical fix: a flagged user's booked date must not proceed.
+    expect(mCancel).toHaveBeenCalledWith(REPORTED_ID, null);
     // Strikes are NOT touched — this is a direct-freeze path.
     expect(mAppend).not.toHaveBeenCalled();
+  });
+
+  it("forwards the bot api to the cancellation helper when provided", async () => {
+    mUser.update.mockResolvedValueOnce({});
+    const api = { sendMessage: vi.fn() } as unknown as Parameters<typeof applyReportAction>[2];
+
+    await applyReportAction(
+      {
+        tier: 3,
+        reporterUserId: REPORTER_ID,
+        reportedUserId: REPORTED_ID,
+        reasonSummary: "Threat",
+        language: "en",
+      },
+      undefined,
+      api,
+    );
+
+    expect(mCancel).toHaveBeenCalledWith(REPORTED_ID, api);
   });
 });
 
@@ -198,6 +221,7 @@ describe("notifyReportedUser — DM delivery", () => {
     expect(chatId).toBe(9999);
     expect(typeof body).toBe("string");
     expect(body).toContain("14");
+    expect(mPush).not.toHaveBeenCalled();
   });
 
   it("sends the pending-investigation DM for Tier 3", async () => {
@@ -210,6 +234,22 @@ describe("notifyReportedUser — DM delivery", () => {
     expect(sendMessage).toHaveBeenCalledTimes(1);
     const [, body] = sendMessage.mock.calls[0];
     expect(body).toContain("frozen");
+  });
+
+  it("delivers the outcome to a mobile-only user via push, not DM", async () => {
+    // Synthetic negative telegramId → mobile-only account; can't be DM'd.
+    mUser.findUnique.mockResolvedValueOnce({ telegramId: -5n, language: "en" });
+    const sendMessage = vi.fn().mockResolvedValue({});
+    const api = { sendMessage } as unknown as Parameters<typeof notifyReportedUser>[0];
+
+    await notifyReportedUser(api, REPORTED_ID, { kind: "tier2_banned", strikes: 3 });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(mPush).toHaveBeenCalledTimes(1);
+    const [userId, payload] = mPush.mock.calls[0];
+    expect(userId).toBe(REPORTED_ID);
+    expect(typeof payload.body).toBe("string");
+    expect(payload.data).toEqual({ type: "moderation" });
   });
 
   it("swallows sendMessage errors (reporter outcome must not surface)", async () => {
@@ -240,7 +280,6 @@ describe("escalation integration — two Tier 2 reports in sequence", () => {
     mUser.update
       .mockResolvedValueOnce({ strikes: 2 })
       .mockResolvedValueOnce({});
-    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
     const second = await applyReportAction({
       tier: 2,
       reporterUserId: "reporter-2",

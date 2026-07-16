@@ -64,15 +64,29 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
     }
   } else {
     // Date gate — payload `gate:<matchId>:<scope>`. The participant + male-only
-    // checks were enforced at invoice creation and re-enforced at settle time;
-    // here we only confirm the payload shape + Star amount match.
+    // checks were enforced at invoice creation and re-enforced at settle time.
+    // Beyond the payload shape + Star amount we ALSO re-validate the gate is
+    // still open here: invoice links are reusable, so a stale one (the match was
+    // cancelled — e.g. the partner was banned/froze — or expired, or the gate is
+    // already `completed`) must be declined BEFORE any Stars move. Without this
+    // the settle CAS claims nothing and the Stars are consumed with no ticket
+    // and no refund. Mirrors the venue branch above.
     const gate = parseGateInvoicePayload(query.invoice_payload);
     if (gate != null) {
       const expectedStars = gateStarsForScope(gate.scope);
-      ok =
+      if (
         expectedStars > 0 &&
         query.currency === "XTR" &&
-        query.total_amount === expectedStars;
+        query.total_amount === expectedStars
+      ) {
+        const match = await prisma.match
+          .findUnique({
+            where: { id: gate.matchId },
+            select: { status: true, ticketStatus: true },
+          })
+          .catch(() => null);
+        ok = match?.status === "negotiating" && match.ticketStatus !== "completed";
+      }
     }
   }
 

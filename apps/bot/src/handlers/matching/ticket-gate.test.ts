@@ -34,6 +34,7 @@ import { t } from "@gennety/shared";
 import {
   sendTicketOffer,
   applyTicketPayment,
+  applyStarsTicketPayment,
   useTicketFromBalance,
   notePartnerPaidSeen,
 } from "./ticket-gate.js";
@@ -56,6 +57,7 @@ function createApi() {
       message_id: nextMessageId++,
     })),
     editMessageText: vi.fn().mockResolvedValue(undefined),
+    refundStarPayment: vi.fn().mockResolvedValue(true),
   } as any;
 }
 
@@ -351,5 +353,46 @@ describe("useTicketFromBalance — wallet refund accounting", () => {
       expect.objectContaining({ count: 2 }),
     );
     expect(mGrant).not.toHaveBeenCalled();
+  });
+});
+
+describe("applyStarsTicketPayment — M1 refund on a closed match", () => {
+  const mGrant = grantTickets as unknown as MockFn;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mMatch.findUnique.mockReset();
+    mMatch.update.mockResolvedValue({});
+    mStartScheduling.mockResolvedValue(undefined);
+    mGrant.mockResolvedValue(undefined);
+  });
+
+  it("refunds the Stars when the gate no longer settles (match cancelled after pre_checkout)", async () => {
+    // The invoice link is reusable and pre_checkout raced the cancellation: the
+    // match is no longer `negotiating`, so the settle CAS claims 0 slots and the
+    // gate settles nothing. The Stars must be given back, not silently kept.
+    mMatch.findUnique.mockResolvedValue(matchRow({ status: "cancelled" }));
+    mMatch.updateMany.mockResolvedValue({ count: 0 }); // CAS on status:"negotiating" claims nothing
+    const api = createApi();
+
+    const result = await applyStarsTicketPayment(api, 1001n, "match-1", "self", "charge_x");
+
+    expect(result.ok).toBe(false);
+    expect(api.refundStarPayment).toHaveBeenCalledWith(1001, "charge_x");
+    // No surplus wallet ticket minted — the real Stars refund is the remedy.
+    expect(mGrant).not.toHaveBeenCalled();
+    expect(mStartScheduling).not.toHaveBeenCalled();
+  });
+
+  it("does not refund a successful settle", async () => {
+    // Fresh gate, self scope claims cleanly → no refund.
+    mMatch.findUnique.mockResolvedValue(matchRow());
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
+    const api = createApi();
+
+    const result = await applyStarsTicketPayment(api, 1001n, "match-1", "self", "charge_ok");
+
+    expect(result.ok).toBe(true);
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
   });
 });

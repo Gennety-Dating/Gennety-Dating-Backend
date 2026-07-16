@@ -151,6 +151,7 @@ describe("structured report flow", () => {
         reportedUserId: "reported-1",
       }),
       expect.anything(),
+      expect.anything(),
     );
     expect(ctx.session.matchFlow).toBe("idle");
     expect(ctx.session.activeMatchId).toBeNull();
@@ -192,6 +193,7 @@ describe("structured report flow", () => {
         tier: 2,
         reasonSummary: "Misleading profile photos",
       }),
+      expect.anything(),
       expect.anything(),
     );
     expect(ctx.reply).toHaveBeenCalledWith("reportThanksT2");

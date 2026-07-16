@@ -7,7 +7,7 @@ import { sendVerificationCTABare } from "../onboarding/verification.js";
 import { buildLanguageKeyboard } from "../language-keyboard.js";
 import { sendDeleteFreezeVideoNote } from "../../services/delete-freeze-video.js";
 import { unpinStatusBanner } from "../../services/status-banner.js";
-import { applyEmergencyCancellationPeerBoost } from "../../utils/elo-calculator.js";
+import { cancelInFlightMatchesForUser } from "../../services/cancel-in-flight-matches.js";
 import { notifyFounderAccountClosed } from "../../services/founder-notify.js";
 
 /**
@@ -40,18 +40,6 @@ const FOUNDER_ACCOUNT_SELECT = {
     },
   },
 } satisfies Prisma.UserSelect;
-
-/**
- * Match statuses that are "in flight" — a live proposal, a scheduling handshake,
- * or a booked date. Freezing (or deleting) a participant must cancel these so a
- * partner is never left waiting on someone who has left.
- */
-const IN_FLIGHT_MATCH_STATUSES = [
-  "proposed",
-  "negotiating",
-  "negotiating_venue",
-  "scheduled",
-] as const;
 
 const VALID_LANGUAGES = new Set<Language>(SUPPORTED_LANGUAGES);
 const VALID_THEMES = new Set<Theme>(["light", "dark"]);
@@ -265,59 +253,6 @@ export async function handleDeleteAccountStart(ctx: BotContext): Promise<void> {
 }
 
 /**
- * Cancel every in-flight match a leaving user is part of, so no partner is
- * stranded. Each cancelled partner gets a neutral notice (the blind-decision
- * invariant doesn't apply — there's nothing to reveal) plus the same small
- * priority/Elo comp used for emergency cancellations. Best-effort throughout;
- * one failed DM must never block the freeze.
- */
-async function cancelInFlightMatchesForLeavingUser(
-  ctx: BotContext,
-  userId: string,
-): Promise<void> {
-  const matches = await prisma.match.findMany({
-    where: {
-      status: { in: [...IN_FLIGHT_MATCH_STATUSES] },
-      OR: [{ userAId: userId }, { userBId: userId }],
-    },
-    select: {
-      id: true,
-      userAId: true,
-      userBId: true,
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
-    },
-  });
-
-  for (const match of matches) {
-    try {
-      await prisma.match.update({
-        where: { id: match.id },
-        data: { status: "cancelled" },
-      });
-    } catch (err) {
-      console.warn("[freeze] match cancel failed:", err);
-      continue;
-    }
-
-    const isA = match.userAId === userId;
-    const partnerId = isA ? match.userBId : match.userAId;
-    const partner = isA ? match.userB : match.userA;
-
-    await applyEmergencyCancellationPeerBoost(partnerId);
-
-    if (partner.telegramId > 0n) {
-      const partnerLang = (partner.language ?? "en") as Language;
-      await ctx.api
-        .sendMessage(Number(partner.telegramId), t(partnerLang, "freezePartnerNotice"))
-        .catch((err: unknown) => {
-          console.warn("[freeze] partner notice failed:", err);
-        });
-    }
-  }
-}
-
-/**
  * Freeze branch — the soft-delete alternative.
  *
  * Keeps the User/Profile/embedding/verification/coordinates intact, cancels any
@@ -339,7 +274,7 @@ export async function handleFreezeAccount(ctx: BotContext): Promise<void> {
     return;
   }
 
-  await cancelInFlightMatchesForLeavingUser(ctx, user.id);
+  await cancelInFlightMatchesForUser(user.id, ctx.api);
 
   await prisma.user.update({
     where: { telegramId },
@@ -405,7 +340,7 @@ export async function handleDeleteAccountExecute(ctx: BotContext): Promise<void>
     select: FOUNDER_ACCOUNT_SELECT,
   });
   if (leaving) {
-    await cancelInFlightMatchesForLeavingUser(ctx, leaving.id);
+    await cancelInFlightMatchesForUser(leaving.id, ctx.api);
     // Founder ops feed: snapshot the profile + phone + photo refs and DM the
     // founder BEFORE the cascade wipes the row. Photo file_ids stay valid
     // Telegram-side, so the async byte download still resolves post-delete.

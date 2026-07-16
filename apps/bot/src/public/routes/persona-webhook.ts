@@ -1,6 +1,7 @@
 import express, { Router, type Request, type Response } from "express";
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
+import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import {
   PERSONA_SIGNATURE_HEADER,
@@ -107,6 +108,7 @@ async function handlePersonaEvent(
     select: {
       id: true,
       telegramId: true,
+      language: true,
       verificationStatus: true,
       status: true,
       profile: {
@@ -180,11 +182,9 @@ async function handlePersonaEvent(
       data: { verificationStatus: "rejected" },
     });
     if (user.telegramId > 0n) {
+      const lang = (user.language ?? "en") as Language;
       await api
-        .sendMessage(
-          Number(user.telegramId),
-          "⚠️ Verification didn't pass. Please retry from the profile menu — make sure the lighting is good and your ID is clearly visible.",
-        )
+        .sendMessage(Number(user.telegramId), t(lang, "verifyAutoPollPersonaFailed"))
         .catch(() => {});
     }
     return;

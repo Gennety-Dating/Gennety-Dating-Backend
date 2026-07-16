@@ -397,7 +397,7 @@ async function submitStructuredReport(
           reportedUserId: reportContext.reportedUserId,
           reasonSummary,
           language: lang,
-        }, tx);
+        }, tx, ctx.api);
       });
     }
   } catch (err) {

@@ -556,7 +556,22 @@ export async function applyStarsTicketPayment(
   chargeId?: string,
 ): Promise<ApplyPaymentResult> {
   const { result, claimedCount } = await settleTicket(api, telegramId, matchId, scope);
-  if (!result.ok) return result;
+  if (!result.ok) {
+    // Telegram already moved the Stars (this runs from `successful_payment`), but
+    // nothing settled — the match left `negotiating` between the pre_checkout
+    // approval and this callback (a reusable invoice link paid after the match
+    // was cancelled / expired). Give the Stars back rather than silently keeping
+    // them; mirrors the venue-change lost-race refund. Best-effort + idempotent:
+    // a redelivery hits an already-refunded charge and is caught. `settleTicket`
+    // returns `ok:true` for an idempotent duplicate, so this never refunds a
+    // genuinely-settled payment.
+    if (chargeId) {
+      await api
+        .refundStarPayment(Number(telegramId), chargeId)
+        .catch((err) => console.error("[stars] gate settle-failed refund failed:", err));
+    }
+    return result;
+  }
 
   // Surplus guard. The Mini App no longer offers `both`/`partner` once she has
   // settled her own slot, and the invoice route refuses to mint one — but she
