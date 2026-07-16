@@ -730,11 +730,14 @@ Required/high-impact env keys:
   failure falls back to the plain protected media group, so the flag is safe to
   toggle live with `pm2 restart gennety-bot --update-env`. No schema change.
 - Founder notifications (feature-flagged private ops feed): `FOUNDER_NOTIFY_ENABLED`
-  (default `false` — leave off until the founder bot + chat id are set). When on,
-  a SEPARATE founder bot DMs the founder three things: (1) each new user's full
-  profile + photos on first activation (no AI-memory dump), (2) a tokenized
+  — **ON in production since 2026-07-16** (founder bot `@sverkausbot`, chat id set).
+  When on, a SEPARATE founder bot DMs the founder four things: (1) each new user's
+  full profile + photos on first activation (no AI-memory dump), (2) a tokenized
   weekly-matches report link after the Thursday batch, (3) both date cards + venue
-  when a date locks in. Requires `FOUNDER_BOT_TOKEN` (a NEW bot from BotFather —
+  when a date locks in, (4) the full profile + **phone number** + photos when a
+  user freezes or hard-deletes their account (bot Settings→Delete/Freeze and mobile
+  `DELETE /v1/me`; the delete path snapshots the row before the Prisma cascade).
+  Requires `FOUNDER_BOT_TOKEN` (a bot from BotFather —
   kept distinct from `BOT_TOKEN`; `file_id`s are per-bot so the founder bot uploads
   raw bytes), `FOUNDER_TELEGRAM_ID` (the founder's numeric chat id — they must
   `/start` the founder bot once), and `PUBLIC_BASE_URL` (default
