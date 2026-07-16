@@ -245,7 +245,7 @@ function getTouchToneHint(touchIndex: number): string {
  * Generate a personalised re-engagement message using the user's
  * conversation history, onboarding step, and the touch index in the chain.
  */
-async function generateHookMessage(
+export async function generateHookMessage(
   user: {
     onboardingStep: string;
     messageHistory: unknown[];
