@@ -1543,7 +1543,6 @@ function ThemeGate(props: {
                 <span className="theme-tile__mini-line" />
                 <span className="theme-tile__mini-line theme-tile__mini-line--short" />
               </span>
-              <span className="theme-tile__name">{busy === value ? s.saving : label}</span>
             </button>
           );
         })}

@@ -2613,14 +2613,6 @@ button {
   width: 62%;
 }
 
-.theme-tile__name {
-  text-align: center;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  color: var(--tile-ink);
-}
-
 .theme-tile__check {
   position: absolute;
   top: 0;
