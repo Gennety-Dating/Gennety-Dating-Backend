@@ -117,7 +117,13 @@ const MATCHMAKER_PART_PAUSES_MS: number[][] = SINGLE_LINE_PAUSES;
 // line finishes typing: scene 0 raises the three dating-app icons, scene 6
 // (Pivot) raises the Gennety star. `delay` waits after the text lands before
 // the image rises; `view` holds it on screen before the scene auto-advances.
-const ICON_REVEAL_DELAY_MS = 1000;
+// Scene 0 raises the dating-app icon row once the "waste" line lands. The old
+// pacing sat on the finished long line for the full 2.2s long-line read buffer
+// and *then* waited another 1s before the icons rose — ~3.2s of dead air. Cut
+// both: a short breath on the finished line (like the Pivot's PIVOT_FINAL_HOLD_MS)
+// plus a brief reveal delay ≈ 0.75s total, so the icons follow the text closely.
+const ICON_REVEAL_FINAL_HOLD_MS = 300;
+const ICON_REVEAL_DELAY_MS = 450;
 const ICON_REVEAL_VIEW_MS = 2400;
 const LOGO_RISE_DELAY_MS = 150;
 const LOGO_RISE_VIEW_MS = 2200;
@@ -408,6 +414,7 @@ function App(): ReactElement {
           lines={strings.wasteLines}
           pauses={SINGLE_LINE_PAUSES}
           onNext={nextVisualSilently}
+          finalHoldMs={ICON_REVEAL_FINAL_HOLD_MS}
           reveal={<AppIconRow variant="reveal" />}
           revealDelayMs={ICON_REVEAL_DELAY_MS}
           revealViewMs={ICON_REVEAL_VIEW_MS}
