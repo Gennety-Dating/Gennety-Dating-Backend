@@ -1,6 +1,9 @@
 # Gennety Dating Deploy
 
-Last verified: 2026-07-13 (full server + Mini App deploy, schema push).
+Last verified: 2026-07-15 (full server + Mini App deploy + additive schema push:
+`founder_notified_at`, `date_card_file_id_a/b`, `onboarding_step_events`,
+`founder_reports`, `WebRegistrationLink` nullable/new columns). Prior full
+deploy: 2026-07-13.
 
 This file is the production runbook for the DigitalOcean deployment. It
 contains the real hostnames, paths, service names, and deploy commands. Raw
