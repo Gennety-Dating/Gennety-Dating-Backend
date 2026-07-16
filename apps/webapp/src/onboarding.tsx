@@ -121,6 +121,15 @@ const ICON_REVEAL_DELAY_MS = 1000;
 const ICON_REVEAL_VIEW_MS = 2400;
 const LOGO_RISE_DELAY_MS = 150;
 const LOGO_RISE_VIEW_MS = 2200;
+// Pivot (scene 6): raise the Gennety logo almost the instant the line lands,
+// instead of sitting on the finished "So we built Gennety" text for the full
+// read-buffer hold. Just a short breath so it doesn't fire on the last keystroke.
+const PIVOT_FINAL_HOLD_MS = 300;
+// Matchmaker (scene 7): the copy here is longer, so hold it well past the
+// default read buffer (~1.8s more than the standard long-line hold) before it
+// advances to How-it-works — the time freed up by the faster logo above is
+// spent here, where there's more to read.
+const MATCHMAKER_FINAL_HOLD_MS = 4000;
 
 // Competitor app icons (scene 0 arc + stats tray) and the Gennety icon (Pivot).
 // Imported as Vite assets so their emitted filenames are content-hashed — a
@@ -196,6 +205,18 @@ function App(): ReactElement {
   useEffect(() => {
     document.documentElement?.setAttribute("lang", lang);
   }, [lang]);
+
+  // Warm the competitor-icon cache on mount so scene 0's reveal paints the
+  // already-decoded PNGs. Otherwise the first appearance flashes a rectangular
+  // frame for a beat — the `drop-shadow` filter renders against the image's box
+  // while the transparent PNG is still decoding, then snaps to the alpha shape
+  // once it lands. Most visible on the light theme (dark shadow on cream).
+  useEffect(() => {
+    for (const icon of APP_ICONS) {
+      const img = new Image();
+      img.src = icon.src;
+    }
+  }, []);
 
   useEffect(() => {
     configureTelegramChrome();
@@ -428,6 +449,7 @@ function App(): ReactElement {
           lines={strings.pivotLines}
           pauses={PIVOT_PART_PAUSES_MS}
           lineHoldMs={PIVOT_LINE_HOLD_MS}
+          finalHoldMs={PIVOT_FINAL_HOLD_MS}
           onNext={nextVisualSilently}
           // The logo itself is the persistent overlay below; this invisible cue
           // just reuses the reveal timing to rise it once the line has landed.
@@ -442,6 +464,7 @@ function App(): ReactElement {
           active={phase.kind === "visual" && phase.index === 7}
           lines={strings.matchmakerLines}
           pauses={MATCHMAKER_PART_PAUSES_MS}
+          finalHoldMs={MATCHMAKER_FINAL_HOLD_MS}
           onNext={nextVisualSilently}
           // Sits a touch lower than centre so the persistent logo above it has
           // clear room.
@@ -585,6 +608,10 @@ function useIntroStream(
   lines: string[][],
   pauses: number[][],
   lineHoldMs: number = INTRO_LINE_HOLD_MS,
+  // Overrides the hold on the FINAL line before it resolves (`done`). Raw when
+  // provided — it deliberately skips the long-line bump so a scene can raise its
+  // reveal the instant the line lands (Pivot) or hold longer copy (Matchmaker).
+  finalHoldMs?: number,
 ): { display: string; lineIndex: number; fading: boolean; done: boolean; skip: () => void } {
   const [display, setDisplay] = useState("");
   const [lineIndex, setLineIndex] = useState(0);
@@ -645,7 +672,7 @@ function useIntroStream(
           setFading(true);
           await wait(INTRO_LINE_FADE_MS);
         } else {
-          await wait(typewriterLineHoldMs(parts, INTRO_FINAL_HOLD_MS));
+          await wait(finalHoldMs ?? typewriterLineHoldMs(parts, INTRO_FINAL_HOLD_MS));
         }
       }
 
@@ -665,7 +692,7 @@ function useIntroStream(
       cancelled = true;
       timers.forEach((timer) => window.clearTimeout(timer));
     };
-  }, [active, lines, pauses, lineHoldMs]);
+  }, [active, lines, pauses, lineHoldMs, finalHoldMs]);
 
   const skip = useCallback(() => {
     skipRef.current = true;
@@ -719,6 +746,9 @@ function TypewriterScene(props: {
   lines: string[][];
   pauses: number[][];
   lineHoldMs?: number;
+  // Raw hold on the final line before the scene resolves (skips the long-line
+  // bump). Used to raise the Pivot logo immediately / hold the Matchmaker copy.
+  finalHoldMs?: number;
   onNext: () => void;
   reveal?: ReactNode;
   revealDelayMs?: number;
@@ -736,6 +766,7 @@ function TypewriterScene(props: {
     props.lines,
     props.pauses,
     props.lineHoldMs,
+    props.finalHoldMs,
   );
   const [revealShown, setRevealShown] = useState(false);
 
