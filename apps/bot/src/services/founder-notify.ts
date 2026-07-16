@@ -195,6 +195,96 @@ function buildNewUserHeader(user: UserWithProfile): string {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+// Feature 4 — account closed (freeze / delete)
+// ───────────────────────────────────────────────────────────────────────────
+
+/** Minimal shape the account-closed notifier reads. Caller pre-fetches it so a
+ * hard delete can snapshot the row BEFORE the Prisma cascade wipes it. */
+export interface FounderAccountUser {
+  firstName: string | null;
+  age: number | null;
+  gender: string | null;
+  preference: string | null;
+  phone: string | null;
+  email: string | null;
+  language: string | null;
+  registrationTrack: string | null;
+  verificationStatus: string;
+  telegramUsername: string | null;
+  telegramId: bigint;
+  profile: {
+    homeCity: string | null;
+    height: number | null;
+    hobbies: string[];
+    partnerPreferences: string | null;
+    ethnicity: string | null;
+    photos: string[];
+    eloSeedDetails: unknown;
+  } | null;
+}
+
+/**
+ * DM the founder when a user closes their account — freeze (soft) or delete
+ * (hard). Includes the full profile, PHONE NUMBER, and photos. Because a hard
+ * delete cascades the row away, the CALLER must pre-fetch `user` (with profile)
+ * and invoke this BEFORE the delete; photo `file_id`s stay valid Telegram-side
+ * even after the DB row is gone, so the async byte download still resolves.
+ */
+export async function notifyFounderAccountClosed(
+  action: "frozen" | "deleted",
+  user: FounderAccountUser,
+): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+
+  try {
+    const header = buildAccountClosedHeader(action, user);
+    const botApi = getMainBotApi();
+    const buffers: Buffer[] = [];
+    const photoRefs = user.profile?.photos ?? [];
+    if (botApi) {
+      for (const ref of photoRefs.slice(0, MEDIA_GROUP_MAX)) {
+        const buf = await downloadProfileImage(ref, botApi);
+        if (buf) buffers.push(buf);
+      }
+    }
+    await sendHeaderWithPhotos(api, founderChatId(), header, buffers);
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} notifyFounderAccountClosed failed`, { action, err });
+  }
+}
+
+function buildAccountClosedHeader(
+  action: "frozen" | "deleted",
+  user: FounderAccountUser,
+): string {
+  const p = user.profile;
+  const title = action === "deleted" ? "🗑 Аккаунт УДАЛЁН" : "❄️ Аккаунт ЗАМОРОЖЕН";
+  const lines: string[] = [title];
+  const name = user.firstName ?? "—";
+  const age = user.age != null ? `, ${user.age}` : "";
+  lines.push(`👤 ${name}${age}`);
+  // The phone number is the headline datum for this notification.
+  lines.push(`📞 Телефон: ${user.phone ?? "—"}`);
+  if (user.email) lines.push(`✉️ Email: ${user.email}`);
+  if (user.gender) lines.push(`Пол: ${user.gender}`);
+  if (user.preference) lines.push(`Искал(а): ${user.preference}`);
+  if (p?.homeCity) lines.push(`Город: ${p.homeCity}`);
+  if (p?.height) lines.push(`Рост: ${p.height} см`);
+  if (p?.hobbies && p.hobbies.length) lines.push(`Хобби: ${p.hobbies.join(", ")}`);
+  if (p?.partnerPreferences) lines.push(`Хотел(а) в партнёре: ${p.partnerPreferences}`);
+  if (p?.ethnicity) lines.push(`Национальность/этнос: ${p.ethnicity}`);
+  if (user.language) lines.push(`Язык: ${user.language}`);
+  if (user.registrationTrack) lines.push(`Трек: ${user.registrationTrack}`);
+  lines.push(`Верификация: ${user.verificationStatus}`);
+  const score = attractivenessOf((p ?? null) as Record<string, unknown> | null);
+  if (score != null) lines.push(`⭐ Attractiveness: ${score}/100`);
+  if (user.telegramUsername) lines.push(`TG: @${user.telegramUsername}`);
+  lines.push(`Telegram ID: ${user.telegramId.toString()}`);
+  return truncateCaption(lines.join("\n"));
+}
+
+// ───────────────────────────────────────────────────────────────────────────
 // Feature 2 — weekly matches report
 // ───────────────────────────────────────────────────────────────────────────
 

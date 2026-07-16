@@ -28,6 +28,7 @@ import {
 } from "../../services/storage.js";
 import { gateProfilePhoto } from "../../services/face-match-gate.js";
 import { triggerVerificationRerun } from "../../services/verification-pipeline.js";
+import { notifyFounderAccountClosed } from "../../services/founder-notify.js";
 import {
   injectSystemMessage,
   runAgentTurn,
@@ -277,6 +278,11 @@ meRouter.delete(
     const chatImagePaths = chatImages
       .map((row) => row.imageUrl)
       .filter((path): path is string => typeof path === "string" && path.length > 0);
+
+    // Founder ops feed: DM the founder the deleted user's profile + phone +
+    // photos before the cascade wipes the row. No-op unless
+    // FOUNDER_NOTIFY_ENABLED. Fire-and-forget.
+    void notifyFounderAccountClosed("deleted", user).catch(() => {});
 
     try {
       await prisma.user.delete({ where: { id: req.userId! } });
