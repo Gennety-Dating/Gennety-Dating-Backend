@@ -219,7 +219,7 @@ describe("re-engagement worker", () => {
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.messages[0].content).toContain("Touch 3 of 5");
-    expect(body.messages[0].content).toContain("Evening nudge");
+    expect(body.messages[0].content).toContain("Same-day evening");
   });
 
   it("respects batchSize limit", async () => {
@@ -253,7 +253,7 @@ describe("getFallbackMessage", () => {
   it("returns English touch-1 fallback", () => {
     const msg = getFallbackMessage("Alice", "en", 1);
     expect(msg).toContain("Alice");
-    expect(msg).toMatch(/still with us/i);
+    expect(msg).toMatch(/still there/i);
   });
 
   it("softens tone at the final touch", () => {
@@ -265,7 +265,7 @@ describe("getFallbackMessage", () => {
 
   it("supports Ukrainian", () => {
     const msg = getFallbackMessage("", "uk", 1);
-    expect(msg).toMatch(/Гей/);
+    expect(msg).toMatch(/гей/i);
   });
 
   it("supports German and Polish", () => {

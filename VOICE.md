@@ -162,9 +162,17 @@ swap `t` → `tv` at the call site, seed `setVariantRng` in affected tests.
 
 ## 11. Where this is encoded
 
+A compact, reusable slice of this voice is exported as `VOICE_CORE` from
+`packages/shared/src/ai/prompts.ts` (persona line + anti-try-hard law +
+understatement + emoji policy + native-register rules). One-shot surfaces that
+have no persona of their own inject it at the top of their prompt so they can't
+drift; `BASE_PERSONA` and the pitch/ice-breaker/scheduling prompts still state
+the same voice inline.
+
 | Surface | Where | Mechanism |
 |---|---|---|
 | Assistant / menu | `services/prompt-builder.ts` `BASE_PERSONA` + the `- Gender:` context line | LLM adapts emphasis from gender in context |
+| Onboarding re-engagement nudge | `workers/re-engagement.ts` `generateHookMessage` (prompt) + `getFallbackMessage` (5-lang fallbacks) | LLM prompt injects `VOICE_CORE`; gender-neutral (drop-off = gender unknown) |
 | Onboarding agent | `services/onboarding-agent.ts` Conversation Style block | LLM |
 | Aether (mobile) | `services/aether-agent.ts` `SYSTEM_PROMPT` | LLM |
 | Match pitch / synergy | `packages/shared/src/ai/prompts.ts` `pitchAndSynergyPrompt` | LLM, per recipient — *gender not yet threaded (see §12)* |

@@ -75,6 +75,7 @@ export {
 } from "./stars.js";
 export {
   MAGIC_CONTEXT_PROMPT,
+  VOICE_CORE,
   magicContextPrompt,
   parseLLMDumpPrompt,
   pitchAndSynergyPrompt,

@@ -1,5 +1,6 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
+import { VOICE_CORE } from "@gennety/shared";
 import type { Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { openaiFetch } from "../services/openai-fetch.js";
@@ -226,17 +227,17 @@ function getStepContext(step: string): string {
 function getTouchToneHint(touchIndex: number): string {
   switch (touchIndex) {
     case 1:
-      return "This is a QUICK 15-min check-in. Casual, one-liner, like 'hey, still there?'";
+      return "Quick 15-min check-in. A calm one-liner — 'ещё тут?' energy, nothing more.";
     case 2:
-      return "Second check-in (~2h later). Still casual, maybe hint at what they'll miss.";
+      return "Second check-in (~2h later). Still low-key; just note the profile is almost done.";
     case 3:
-      return "Evening nudge the same day. Tone: 'take 2 min to finish before bed'.";
+      return "Same-day evening. Plainly: two minutes to wrap it up whenever there's a moment.";
     case 4:
-      return "Next-day evening. A touch warmer, like a friend who remembered.";
+      return "Next-day evening. A touch warmer — a friend who remembered, no pressure.";
     case 5:
-      return "Final nudge, day after that. Honest and low-pressure — the last message they'll get.";
+      return "Final nudge, day after. Honest, quiet, low-pressure — the last message they'll get.";
     default:
-      return "Warm, friendly reminder.";
+      return "Warm, low-key reminder.";
   }
 }
 
@@ -269,7 +270,9 @@ async function generateHookMessage(
   const stepCtx = getStepContext(user.onboardingStep);
   const toneHint = getTouchToneHint(user.upcomingStep);
 
-  const prompt = `You are Gennety Dating's re-engagement assistant. A user dropped off during onboarding.
+  const prompt = `${VOICE_CORE}
+
+Right now you're doing ONE thing: a user started onboarding and dropped off before finishing their profile. Send a single short message to bring them back — the same voice you'd use in any normal chat with them, not a "campaign" blast.
 
 User info:
 - Name: ${name || "unknown"}
@@ -280,19 +283,18 @@ User info:
 Recent conversation:
 ${lastMessages || "(no messages yet)"}
 
-Write a SHORT, casual message (1-2 sentences max) to bring them back. Like a friend checking in — not a bot. Mention something specific from the conversation if you can. Use 1 emoji max. Write in ${lang}.
-
-Tone: casual, warm, no cringe. No "Здравствуйте" or formal phrases. Talk like a cool older friend.
+Write it in ${lang}. 1–2 short sentences, one idea. Reference something concrete from the conversation if there is one; otherwise keep it simple. Emoji default is ZERO (at most one, only if it truly lands). No begging, no hype, no "заходи скорее!".
 
 CRITICAL: Use strictly gender-neutral language. We do NOT know the user's gender. In Russian/Ukrainian/Polish, avoid gendered past-tense verb forms (e.g. do NOT use «упоминал/упоминала», «отвечал/отвечала», «відповів/відповіла», "wróciłeś/wróciłaś"). Rephrase to avoid gendered forms entirely — use infinitives, nouns, or impersonal constructions instead.
 
-Good examples:
-- "Эй, [name]! Помнишь свои хобби? У нас уже есть мэтчи 👀 Давай дооформим профиль!"
-- "Almost there! Profile is almost done. Come back and let's get you matched."
+Good examples (register, not to copy):
+- "эй, ты ещё тут? профиль почти готов — осталась пара шагов."
+- "almost there — профиль на финишной прямой. вернёшься, когда будет минута?"
+- "still there? profile's basically done, just needs the last bit."
 
 Bad examples (DON'T do this):
-- "Уважаемый пользователь, напоминаем вам..."
-- "Incredibly exciting matches await you!"
+- "Уважаемый пользователь, напоминаем вам..." (corporate)
+- "Incredibly exciting matches await you!" / "У нас уже есть мэтчи 👀 Давай дооформим!" (hype, exclamation, emoji spam)
 - Any message with gendered past-tense forms in Russian/Ukrainian/Polish (упоминал, ответил, зашёл, wróciłeś/wróciłaś, etc.)
 
 Output ONLY the message text.`;
@@ -336,74 +338,77 @@ export function getFallbackMessage(
   touchIndex = 1,
 ): string {
   const greeting = name ? ` ${name}` : "";
-  // Keep fallbacks short and gender-neutral. Tone softens as the chain
-  // progresses — final touch is the least pushy.
+  const lead = name ? `${name}, ` : "";
+  // Fallbacks follow VOICE.md: understatement over hype, emoji default zero
+  // (only the warm final touch carries one 🤍), no exclamation-mark hype, no
+  // corporate phrasing, native per language. Kept gender-neutral (drop-off =
+  // gender unknown). Tone softens as the chain progresses.
   if (lang === "ru") {
     switch (touchIndex) {
       case 1:
-        return `Эй${greeting}, всё ещё с нами? Профиль почти готов 👀`;
+        return `эй${greeting}, ещё тут? профиль почти готов — осталась пара шагов.`;
       case 2:
-        return `${name ? `${name}, ` : ""}возвращайся, когда будет минутка — закончим профиль ☕`;
+        return `${lead}вернёшься, когда будет минута? допишем профиль.`;
       case 3:
-        return `${name ? `${name}, ` : ""}вечер — отличное время дооформить профиль. Займёт пару минут 🌙`;
+        return `${lead}вечером как раз пара минут, чтобы дооформить профиль.`;
       case 4:
-        return `${name ? `${name}, ` : ""}напоминаем: профиль ждёт. Пары подбираются по нему 💭`;
+        return `${lead}профиль всё ещё ждёт — по нему и подбираем пару.`;
       default:
-        return `${name ? `${name}, ` : ""}последнее напоминание — если не завершить профиль, мы не сможем подобрать пару. Будем рады видеть 🤍`;
+        return `${lead}последнее напоминание: без готового профиля не выйдет подобрать пару. будем рады, если вернёшься 🤍`;
     }
   }
   if (lang === "uk") {
     switch (touchIndex) {
       case 1:
-        return `Гей${greeting}, ще з нами? Профіль майже готовий 👀`;
+        return `гей${greeting}, ще тут? профіль майже готовий — лишилось пару кроків.`;
       case 2:
-        return `${name ? `${name}, ` : ""}повертайся, коли буде хвилинка — закінчимо профіль ☕`;
+        return `${lead}повертайся, коли буде хвилинка — допишемо профіль.`;
       case 3:
-        return `${name ? `${name}, ` : ""}вечір — чудовий час дооформити профіль. Займе пару хвилин 🌙`;
+        return `${lead}увечері якраз пара хвилин, щоб дооформити профіль.`;
       case 4:
-        return `${name ? `${name}, ` : ""}нагадуємо: профіль чекає. Пари добираються за ним 💭`;
+        return `${lead}профіль ще чекає — саме за ним і добираємо пару.`;
       default:
-        return `${name ? `${name}, ` : ""}останнє нагадування — без завершеного профілю не зможемо підібрати пару. Будемо раді побачити 🤍`;
+        return `${lead}останнє нагадування: без готового профілю не вийде підібрати пару. будемо раді, якщо повернешся 🤍`;
     }
   }
   if (lang === "de") {
     switch (touchIndex) {
       case 1:
-        return `Hey${greeting}, noch dabei? Dein Profil ist fast fertig 👀`;
+        return `hey${greeting}, noch da? dein Profil ist fast fertig — nur ein paar Schritte fehlen.`;
       case 2:
-        return `${name ? `${name}, ` : ""}komm zurück, wenn du kurz Zeit hast - wir schließen dein Profil ab ☕`;
+        return `${lead}komm zurück, wenn du kurz Zeit hast — wir machen dein Profil fertig.`;
       case 3:
-        return `${name ? `${name}, ` : ""}abends lässt sich das Profil gut fertig machen. Dauert nur ein paar Minuten 🌙`;
+        return `${lead}abends passt gut, um das Profil abzuschließen. dauert zwei Minuten.`;
       case 4:
-        return `${name ? `${name}, ` : ""}kurzer Reminder: dein Profil ist die Basis für deine Matches 💭`;
+        return `${lead}dein Profil wartet noch — darüber matchen wir.`;
       default:
-        return `${name ? `${name}, ` : ""}letzter Reminder - ohne fertiges Profil können wir dich nicht matchen. Wir freuen uns auf dich 🤍`;
+        return `${lead}letzter Reminder: ohne fertiges Profil können wir dich nicht matchen. schön, wenn du zurückkommst 🤍`;
     }
   }
   if (lang === "pl") {
     switch (touchIndex) {
       case 1:
-        return `Hej${greeting}, nadal z nami? Twój profil jest prawie gotowy 👀`;
+        return `hej${greeting}, jesteś tam? twój profil jest prawie gotowy — zostało parę kroków.`;
       case 2:
-        return `${name ? `${name}, ` : ""}wróć, gdy masz chwilę - dokończymy profil ☕`;
+        return `${lead}wróć, gdy masz chwilę — dokończymy profil.`;
       case 3:
-        return `${name ? `${name}, ` : ""}wieczór to dobry moment, żeby domknąć profil. Zajmie parę minut 🌙`;
+        return `${lead}wieczorem w sam raz domknąć profil. zajmie dwie minuty.`;
       case 4:
-        return `${name ? `${name}, ` : ""}krótkie przypomnienie: profil jest podstawą dopasowań 💭`;
+        return `${lead}profil wciąż czeka — to na jego podstawie dobieramy parę.`;
       default:
-        return `${name ? `${name}, ` : ""}ostatnie przypomnienie - bez gotowego profilu nie możemy dobrać pary. Chętnie Cię zobaczymy 🤍`;
+        return `${lead}ostatnie przypomnienie: bez gotowego profilu nie dobierzemy pary. będzie miło, jeśli wrócisz 🤍`;
     }
   }
   switch (touchIndex) {
     case 1:
-      return `Hey${greeting}, still with us? Your profile is almost done 👀`;
+      return `hey${greeting}, still there? your profile's almost done — just a couple steps left.`;
     case 2:
-      return `${name ? `${name}, ` : ""}come back when you have a minute — let's finish your profile ☕`;
+      return `${lead}come back when you have a minute — let's finish your profile.`;
     case 3:
-      return `${name ? `${name}, ` : ""}evenings are a good time to wrap this up. Takes two minutes 🌙`;
+      return `${lead}evening's a good time to wrap this up. takes two minutes.`;
     case 4:
-      return `${name ? `${name}, ` : ""}quick reminder: your profile is what we match on 💭`;
+      return `${lead}your profile's still waiting — it's what we match on.`;
     default:
-      return `${name ? `${name}, ` : ""}last nudge — without a finished profile we can't match you. Would love to have you 🤍`;
+      return `${lead}last nudge — without a finished profile we can't match you. would be good to have you 🤍`;
   }
 }
