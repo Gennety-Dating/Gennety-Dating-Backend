@@ -10,7 +10,20 @@
       /* Design tokens — self-contained (both themes) so the inline styles never
        * flash before a JS-imported sheet loads. Mirrors the shared theme.css +
        * Liquid Glass values. "You/mine" is a theme-flipping neutral; the peer
-       * ("match") accent is the unified burgundy. */
+       * ("match") accent is the unified burgundy.
+       *
+       * Burgundy comes in two tones of the SAME hue (347°): `--brand` #8b253b
+       * (L 34%) and `--brand-light` #d16b80 (L 62%). They are not two colours —
+       * they are one brand colour at two lightnesses, and which one applies is
+       * decided by what sits on top:
+       *   --brand       — burgundy CARRYING white text (the NEW pill: 8.7:1).
+       *   --brand-light — burgundy that must read AGAINST the page ITSELF: the
+       *                   peer's fill, dot, rule and gradients.
+       * On the near-black page only lightness carries contrast, so #8b253b on
+       * the #161616 card is 2.1:1 — below the 3:1 floor for UI graphics, which
+       * is why a peer slot used to vanish. #d16b80 is 5.3:1. In LIGHT theme the
+       * page is bright, so `--brand-light` resolves back to #8b253b and every
+       * peer affordance below is byte-identical to before. */
       :root,
       :root[data-theme="dark"] {
         color-scheme: dark;
@@ -18,7 +31,7 @@
         --surface: #161616;
         --surface-2: #202020;
         --surface-3: #2a2a2e;
-        --card-frame: #2c1a1f;
+        --card-frame: #3c242b;
         --text: #e9e6e5;
         --text-90: rgba(233, 230, 229, 0.92);
         --text-70: rgba(233, 230, 229, 0.7);
@@ -31,7 +44,13 @@
         --glass-bg: rgba(255, 255, 255, 0.03);
         --brand: #8b253b;
         --brand-light: #d16b80;
-        --brand-glow: rgba(139, 37, 59, 0.5);
+        --brand-glow: rgba(209, 107, 128, 0.45);
+        --brand-glow-soft: rgba(209, 107, 128, 0.16);
+        /* Peer wash. Tuned against `--self-fill-*` so a peer slot and a mine
+         * slot land on the same lightness step (both composite over --bg):
+         * white .25 → #424242, this → #552d35. Equal weight, different colour. */
+        --brand-fill-strong: rgba(209, 107, 128, 0.4);
+        --brand-fill-soft: rgba(209, 107, 128, 0.1);
         --cta-bg: #ffffff;
         --cta-fg: #0a0a0a;
         --cta-glow: rgba(255, 255, 255, 0.15);
@@ -58,6 +77,8 @@
         --surface-2: #ececec;
         --surface-3: #e2e2e2;
         --card-frame: #f0e2e5;
+        /* Light theme keeps the deep burgundy: on a bright page it is the tone
+         * that reads, so these are the pre-existing values, unchanged. */
         --text: #1d1d1d;
         --text-90: rgba(29, 29, 29, 0.92);
         --text-70: rgba(29, 29, 29, 0.66);
@@ -70,6 +91,9 @@
         --glass-bg: rgba(0, 0, 0, 0.03);
         --brand-light: #8b253b;
         --brand-glow: rgba(139, 37, 59, 0.35);
+        --brand-glow-soft: rgba(139, 37, 59, 0.12);
+        --brand-fill-strong: rgba(139, 37, 59, 0.28);
+        --brand-fill-soft: rgba(139, 37, 59, 0.05);
         --cta-bg: #1d1d1d;
         --cta-fg: #ffffff;
         --cta-glow: rgba(0, 0, 0, 0.14);
@@ -173,7 +197,7 @@
         box-shadow: 0 0 8px var(--self-glow);
       }
       .legend-dot.dot-match {
-        background: var(--brand);
+        background: var(--brand-light);
         box-shadow: 0 0 8px var(--brand-glow);
       }
       .legend-pair { display: flex; }
@@ -344,12 +368,15 @@
         box-shadow: 0 0 10px var(--self-glow);
       }
 
-      /* State: peer (burgundy) */
+      /* State: peer (burgundy — the light tone, mirroring `state-you` exactly).
+       * The old wash was the DARK tone faded into an opaque `--surface`, so it
+       * composited to #290d13 against the mine slot's #424242: same shape, a
+       * third of the weight. Both states now run strong → soft over the page. */
       .slot.state-match {
         background: linear-gradient(
           90deg,
-          rgba(139, 37, 59, 0.28) 0%,
-          var(--surface) 100%
+          var(--brand-fill-strong) 0%,
+          var(--brand-fill-soft) 100%
         );
         border-color: transparent;
         background-clip: padding-box;
@@ -359,8 +386,8 @@
       .slot.state-match .slot-time-label { font-weight: 600; color: var(--text); }
       .slot.state-match .indicator-tag { color: var(--brand-light); }
       .slot.state-match .indicator-dot {
-        background: var(--brand);
-        box-shadow: 0 0 10px rgba(139, 37, 59, 0.7);
+        background: var(--brand-light);
+        box-shadow: 0 0 10px var(--brand-glow);
       }
 
       /* State: both (animated gradient border) */
@@ -368,7 +395,7 @@
         background: var(--surface);
         border-color: transparent;
         background-clip: padding-box;
-        box-shadow: 0 0 20px rgba(139, 37, 59, 0.15);
+        box-shadow: 0 0 20px var(--brand-glow-soft);
       }
       .slot.state-both::before {
         content: "";
@@ -379,9 +406,9 @@
         background: linear-gradient(
           90deg,
           var(--self),
-          var(--brand),
+          var(--brand-light),
           var(--self),
-          var(--brand)
+          var(--brand-light)
         );
         background-size: 300% 100%;
         animation: gradient-border 3s linear infinite;
@@ -395,7 +422,7 @@
       .slot.state-both .slot-label .slot-day { font-weight: 600; color: var(--text); }
       .slot.state-both .slot-time-label { font-weight: 600; color: var(--text); }
       .slot.state-both .indicator-tag {
-        background: linear-gradient(90deg, var(--self), var(--brand));
+        background: linear-gradient(90deg, var(--self), var(--brand-light));
         -webkit-background-clip: text;
                 background-clip: text;
         color: transparent;
@@ -544,7 +571,7 @@
         width: 84px;
         height: 84px;
         margin: 32px 0 48px;
-        color: var(--brand);
+        color: var(--brand-light);
       }
       .check-svg path {
         stroke-dasharray: 100;
@@ -578,7 +605,7 @@
         font-size: 48px;
         font-weight: 700;
         line-height: 1.05;
-        background: linear-gradient(90deg, var(--self), var(--brand));
+        background: linear-gradient(90deg, var(--self), var(--brand-light));
         -webkit-background-clip: text;
                 background-clip: text;
         color: transparent;
@@ -922,8 +949,8 @@
       .overlap-card.is-selected {
         background: linear-gradient(
           90deg,
-          rgba(139, 37, 59, 0.35) 0%,
-          rgba(139, 37, 59, 0.08) 100%
+          var(--brand-fill-strong) 0%,
+          var(--brand-fill-soft) 100%
         );
         border: none;
         padding: 21px 21px 21px 25px;
