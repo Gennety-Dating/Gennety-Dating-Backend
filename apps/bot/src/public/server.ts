@@ -27,6 +27,10 @@ import { createVerificationMiniAppRouter } from "./routes/verification-mini-app.
 import { createTicketRouter } from "./routes/ticket.js";
 import { createTicketStoreRouter } from "./routes/tickets.js";
 import { createVenueChangeRouter } from "./routes/venue-change.js";
+import {
+  isStrongJwtSecret,
+  JWT_SECRET_MIN_BYTES,
+} from "./jwt.js";
 
 /**
  * Public `/v1/*` HTTP API consumed by the Expo mobile app.
@@ -321,9 +325,10 @@ export function startPublicServer(api?: Api<RawApi>): void {
     console.log("[public] JWT_SECRET not set — public /v1/* API disabled");
     return;
   }
-  if (env.JWT_SECRET.length < 16) {
+  if (!isStrongJwtSecret(env.JWT_SECRET)) {
     console.error(
-      "[public] JWT_SECRET is too short (<16 chars). Refusing to start the public API.",
+      `[public] JWT_SECRET is too short (<${JWT_SECRET_MIN_BYTES} bytes). ` +
+        "Refusing to start the public API.",
     );
     return;
   }

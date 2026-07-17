@@ -3,9 +3,11 @@ import { t } from "@gennety/shared";
 import type { BotContext } from "../session.js";
 import { env } from "../config.js";
 import { transcribeVoice } from "../services/whisper.js";
+import { readResponseBuffer } from "../utils/bounded-response.js";
 
 const MAX_VOICE_DURATION_SEC = 300;
 const MAX_VOICE_BYTES = 20 * 1024 * 1024;
+const VOICE_DOWNLOAD_TIMEOUT_MS = 20_000;
 
 /**
  * Intercept Telegram voice notes, transcribe them via Whisper, and feed the
@@ -48,12 +50,14 @@ voiceHandler.on("message:voice", async (ctx, next) => {
       return;
     }
     const url = `https://api.telegram.org/file/bot${env.BOT_TOKEN}/${file.file_path}`;
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(VOICE_DOWNLOAD_TIMEOUT_MS),
+    });
     if (!res.ok) {
       await ctx.reply(t(language, "voiceTranscriptionFailed"));
       return;
     }
-    buffer = Buffer.from(await res.arrayBuffer());
+    buffer = await readResponseBuffer(res, MAX_VOICE_BYTES);
   } catch (err) {
     console.warn("Voice download failed:", err);
     await ctx.reply(t(language, "voiceTranscriptionFailed"));

@@ -4,13 +4,14 @@
  * mocked, so this focuses on auth, validation, and result→status mapping. The
  * board/payment state machine itself is covered by the handler unit test.
  */
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
 import { createHmac } from "node:crypto";
 
 const BOT_TOKEN = "123456:test-bot-token-for-venue-change";
 const VALID_UUID = "33333333-3333-4333-8333-333333333333";
+const originalPlacesKey = process.env.PLACES_API_KEY;
 
 vi.mock("../config.js", () => ({
   env: { BOT_TOKEN, VENUE_CHANGE_STARS: 150 },
@@ -104,6 +105,12 @@ beforeEach(() => {
   createVenueInvoiceLink.mockReset();
 });
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+  if (originalPlacesKey === undefined) delete process.env.PLACES_API_KEY;
+  else process.env.PLACES_API_KEY = originalPlacesKey;
+});
+
 describe("GET /v1/venue-change/state", () => {
   it("401 without initData", async () => {
     const res = await request(buildApp()).get(`/v1/venue-change/state?match=${VALID_UUID}`);
@@ -181,6 +188,54 @@ describe("GET /v1/venue-change/photo", () => {
       .get(`/v1/venue-change/photo?ref=${encodeURIComponent("places/x/photos/y")}&tma=${encodeURIComponent(rawInitData())}`);
     expect(res.status).toBe(404);
     if (prev !== undefined) process.env.PLACES_API_KEY = prev;
+  });
+
+  it("proxies only bounded image responses with a timeout", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("image", { headers: { "content-type": "image/jpeg" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await request(buildApp())
+      .get(`/v1/venue-change/photo?ref=${encodeURIComponent("places/x/photos/y")}&tma=${encodeURIComponent(rawInitData())}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/^image\/jpeg/);
+    expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("rejects a non-image upstream response", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("not an image", { headers: { "content-type": "text/html" } }),
+      ),
+    );
+
+    const res = await request(buildApp())
+      .get(`/v1/venue-change/photo?ref=${encodeURIComponent("places/x/photos/y")}&tma=${encodeURIComponent(rawInitData())}`);
+    expect(res.status).toBe(502);
+  });
+
+  it("rejects an oversized upstream image", async () => {
+    process.env.PLACES_API_KEY = "test-key";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("x", {
+          headers: {
+            "content-type": "image/jpeg",
+            "content-length": String(10 * 1024 * 1024 + 1),
+          },
+        }),
+      ),
+    );
+
+    const res = await request(buildApp())
+      .get(`/v1/venue-change/photo?ref=${encodeURIComponent("places/x/photos/y")}&tma=${encodeURIComponent(rawInitData())}`);
+    expect(res.status).toBe(502);
   });
 });
 

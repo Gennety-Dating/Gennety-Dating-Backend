@@ -8,6 +8,16 @@ export interface AccessTokenPayload {
   typ: "access";
 }
 
+export const JWT_ISSUER = "gennety-public-api";
+export const JWT_AUDIENCE = "gennety-mobile";
+export const JWT_SECRET_MIN_BYTES = 32;
+const USER_ID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const REFRESH_TOKEN_REGEX = /^[A-Za-z0-9_-]{64}$/;
+
+export function isStrongJwtSecret(secret: string): boolean {
+  return Buffer.byteLength(secret, "utf8") >= JWT_SECRET_MIN_BYTES;
+}
+
 /**
  * M-11 defense. The bot runs in two modes:
  *   - bot-only (Telegram poller): `JWT_SECRET` is optional — local dev.
@@ -23,18 +33,27 @@ export interface AccessTokenPayload {
  * staging instead of in prod under a real attacker.
  */
 function assertJwtSecret(): string {
-  if (!env.JWT_SECRET || env.JWT_SECRET.length < 16) {
+  if (!env.JWT_SECRET || !isStrongJwtSecret(env.JWT_SECRET)) {
     throw new Error(
       "JWT_SECRET is missing or too short — refusing to sign/verify tokens. " +
-        "Set JWT_SECRET (≥16 chars) in env before starting the public API.",
+        `Set a cryptographically random JWT_SECRET (≥${JWT_SECRET_MIN_BYTES} bytes) ` +
+        "before starting the public API.",
     );
   }
   return env.JWT_SECRET;
 }
 
 export function signAccessToken(userId: string): string {
+  if (!USER_ID_REGEX.test(userId)) {
+    throw new Error("Cannot sign an access token for an invalid user id");
+  }
   const secret = assertJwtSecret();
-  const options = { expiresIn: env.JWT_ACCESS_TTL } as jwt.SignOptions;
+  const options: jwt.SignOptions = {
+    algorithm: "HS256",
+    audience: JWT_AUDIENCE,
+    issuer: JWT_ISSUER,
+    expiresIn: env.JWT_ACCESS_TTL as NonNullable<jwt.SignOptions["expiresIn"]>,
+  };
   return jwt.sign(
     { sub: userId, typ: "access" } satisfies AccessTokenPayload,
     secret,
@@ -44,12 +63,17 @@ export function signAccessToken(userId: string): string {
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
   const secret = assertJwtSecret();
-  const decoded = jwt.verify(token, secret);
+  const decoded = jwt.verify(token, secret, {
+    algorithms: ["HS256"],
+    audience: JWT_AUDIENCE,
+    issuer: JWT_ISSUER,
+  });
   if (
     typeof decoded !== "object" ||
     decoded === null ||
     (decoded as AccessTokenPayload).typ !== "access" ||
-    typeof (decoded as AccessTokenPayload).sub !== "string"
+    typeof (decoded as AccessTokenPayload).sub !== "string" ||
+    !USER_ID_REGEX.test((decoded as AccessTokenPayload).sub)
   ) {
     throw new Error("Invalid access token payload");
   }
@@ -98,6 +122,9 @@ export async function rotateRefreshToken(
   rawToken: string,
   userAgent: string | null,
 ): Promise<{ userId: string; nextRefreshToken: string } | null> {
+  // Real refresh tokens are exactly 48 random bytes encoded as base64url.
+  // Reject malformed attacker input before hashing or touching PostgreSQL.
+  if (!REFRESH_TOKEN_REGEX.test(rawToken)) return null;
   const hash = hashRefreshToken(rawToken);
   return prisma.$transaction(async (tx) => {
     const session = await tx.userSession.findUnique({ where: { refreshTokenHash: hash } });

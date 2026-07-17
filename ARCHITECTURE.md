@@ -147,7 +147,9 @@ A **single** Node.js process (`apps/bot`) hosts everything:
   handlers (`handlers/router.ts`).
 - **Public Express server** on `PUBLIC_PORT` (default `3101`). Mobile client
   consumer; also receives the Persona webhook and the signed Calendar
-  Mini App POST. Refuses to start if `JWT_SECRET` is shorter than 16 chars.
+  Mini App POST. Refuses to start if `JWT_SECRET` is shorter than 32 bytes.
+  Access JWTs are pinned to HS256, issuer `gennety-public-api`, audience
+  `gennety-mobile`, and a UUID subject.
 - **Admin Express server** on `ADMIN_PORT` (default `3100`). Started only
   when `ADMIN_API_KEY` is set. Bearer-auth + helmet + per-IP rate limit.
 - **Background jobs** — 14 `node-cron` schedules (one, ticket-expiry, is only

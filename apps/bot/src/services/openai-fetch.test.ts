@@ -18,6 +18,27 @@ afterEach(() => {
 });
 
 describe("openaiFetch token metering", () => {
+  it("adds a default timeout when the caller does not provide a signal", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openaiFetch("https://api.openai.com/v1/chat/completions");
+
+    expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("preserves an explicit caller signal", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+
+    await openaiFetch("https://api.openai.com/v1/chat/completions", {
+      signal: controller.signal,
+    });
+
+    expect(fetchMock.mock.calls[0]![1]?.signal).toBe(controller.signal);
+  });
+
   it("attributes usage.total_tokens to the ambient key and returns an intact response", async () => {
     const body = {
       choices: [{ message: { content: "hi" } }],

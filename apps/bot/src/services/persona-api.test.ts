@@ -224,6 +224,35 @@ describe("fetchInquirySelfie — error paths", () => {
     expect(result).toEqual({ ok: false, error: "download_failed" });
   });
 
+  it("returns download_failed without buffering an oversized selfie", async () => {
+    const { fetchFn } = makeFetch(
+      {
+        status: 200,
+        json: {
+          data: { type: "inquiry", id: INQUIRY_ID, attributes: { status: "approved" } },
+          included: [
+            {
+              type: "verification/selfie-v2",
+              id: "ver_1",
+              attributes: { "centered-photo-url": SIGNED_PHOTO_URL },
+            },
+          ],
+        },
+      },
+      {
+        status: 200,
+        headers: {
+          "content-type": "image/jpeg",
+          "content-length": String(10 * 1024 * 1024 + 1),
+        },
+      },
+    );
+
+    await expect(
+      fetchInquirySelfie(INQUIRY_ID, { fetchFn, apiKey: API_KEY }),
+    ).resolves.toEqual({ ok: false, error: "download_failed" });
+  });
+
   it("returns timeout when fetch is aborted", async () => {
     const fetchFn = vi.fn(async () => {
       const err = new Error("aborted");

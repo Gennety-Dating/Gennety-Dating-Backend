@@ -20,7 +20,7 @@
 | Google Places key | `PLACES_API_KEY` |
 | OpenAI key | `OPENAI_API_KEY` |
 | Media validation | `ffmpeg -version`, `ffprobe -version`; IAM allows `CompareFaces`, `DetectFaces`, `DetectModerationLabels`; validation flag on, fail-open off |
-| JWT secret ≥16 chars | `.env.local`: `JWT_SECRET` |
+| JWT secret ≥32 random bytes | `.env.local`: `JWT_SECRET` |
 | Tunnel running | `cloudflared tunnel --url http://localhost:5173`, URL → `WEBAPP_URL` |
 | DB reset | `pnpm dev:db:down && pnpm dev:db:up && pnpm dev:db:push` |
 | Bot running | `pnpm dev:bot` — confirm `[dev-bypass] DEV_OTP_BYPASS_TELEGRAM_IDS active for: 5986970093` in logs |

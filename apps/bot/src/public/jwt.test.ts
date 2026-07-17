@@ -10,6 +10,7 @@
  *     throws; we never end up with a half-rotated session pair.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import jwt from "jsonwebtoken";
 
 vi.mock("../config.js", () => ({
   env: {
@@ -89,7 +90,12 @@ vi.mock("@gennety/db", () => {
   return { prisma: prismaMock };
 });
 
-const { rotateRefreshToken, createRefreshToken } = await import("./jwt.js");
+const {
+  rotateRefreshToken,
+  createRefreshToken,
+  signAccessToken,
+  verifyAccessToken,
+} = await import("./jwt.js");
 const { prisma } = await import("@gennety/db");
 
 beforeEach(() => {
@@ -124,6 +130,7 @@ describe("rotateRefreshToken (C-5)", () => {
   it("returns null for an unknown token", async () => {
     const result = await rotateRefreshToken("not-a-real-token", null);
     expect(result).toBeNull();
+    expect(prisma.userSession.findUnique).not.toHaveBeenCalled();
   });
 
   it("rejects expired tokens", async () => {
@@ -206,5 +213,46 @@ describe("rotateRefreshToken (C-5)", () => {
       2,
       expect.objectContaining({ where: { userId: "u-5", revokedAt: null } }),
     );
+  });
+});
+
+describe("access token trust boundary", () => {
+  const userId = "11111111-1111-4111-8111-111111111111";
+
+  it("pins HS256, issuer and audience on signed tokens", () => {
+    const token = signAccessToken(userId);
+    const decoded = jwt.decode(token, { complete: true });
+
+    expect(decoded?.header.alg).toBe("HS256");
+    expect(decoded?.payload).toMatchObject({
+      sub: userId,
+      typ: "access",
+      iss: "gennety-public-api",
+      aud: "gennety-mobile",
+    });
+    expect(verifyAccessToken(token)).toMatchObject({ sub: userId, typ: "access" });
+  });
+
+  it("rejects a valid signature with a missing audience/issuer", () => {
+    const token = jwt.sign(
+      { sub: userId, typ: "access" },
+      "test-secret-long-enough-for-m11-guard",
+      { algorithm: "HS256", expiresIn: "15m" },
+    );
+    expect(() => verifyAccessToken(token)).toThrow();
+  });
+
+  it("refuses to sign or accept a non-UUID subject", () => {
+    expect(() => signAccessToken("u-1")).toThrow(/invalid user id/i);
+    const token = jwt.sign(
+      { sub: "u-1", typ: "access" },
+      "test-secret-long-enough-for-m11-guard",
+      {
+        algorithm: "HS256",
+        audience: "gennety-mobile",
+        issuer: "gennety-public-api",
+      },
+    );
+    expect(() => verifyAccessToken(token)).toThrow(/payload/i);
   });
 });

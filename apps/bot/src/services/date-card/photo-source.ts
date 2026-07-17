@@ -1,4 +1,5 @@
 import { buildPlacesPhotoUrl } from "../venue.js";
+import { readResponseBuffer } from "../../utils/bounded-response.js";
 
 /**
  * Photo sourcing for the date card. The partner photo is resolved by the
@@ -8,6 +9,7 @@ import { buildPlacesPhotoUrl } from "../venue.js";
  */
 
 const VENUE_PHOTO_TIMEOUT_MS = 8_000;
+const VENUE_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
 
 export interface VenuePhotoResult {
   buffer: Buffer;
@@ -53,7 +55,7 @@ async function fetchImage(url: string, fetchFn: typeof fetch): Promise<Buffer | 
       signal: AbortSignal.timeout(VENUE_PHOTO_TIMEOUT_MS),
     });
     if (!res.ok) return null;
-    return Buffer.from(await res.arrayBuffer());
+    return await readResponseBuffer(res, VENUE_PHOTO_MAX_BYTES);
   } catch {
     return null;
   }

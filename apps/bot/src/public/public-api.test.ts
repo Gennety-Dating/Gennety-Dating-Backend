@@ -895,7 +895,12 @@ function signAccess(userId: string): string {
   return jwt.sign(
     { sub: userId, typ: "access" },
     "test-jwt-secret-not-for-production",
-    { expiresIn: "15m" },
+    {
+      algorithm: "HS256",
+      audience: "gennety-mobile",
+      issuer: "gennety-public-api",
+      expiresIn: "15m",
+    },
   );
 }
 

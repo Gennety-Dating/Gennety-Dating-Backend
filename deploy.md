@@ -169,6 +169,13 @@ dating-calendar.gennety.com {
     encode gzip zstd
     try_files {path} /index.html
 
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
     @assets path *.js *.css *.svg *.png *.woff2
     header @assets Cache-Control "public, max-age=31536000, immutable"
     header /index.html Cache-Control "no-cache"
@@ -793,8 +800,11 @@ Production safety checks:
   Enable Development first and complete the two-account E2E. Production
   rollback is the env flag; the additive `onboarding_progress` table may stay.
 - `OTP_LOG_TO_CONSOLE` must be `false` or unset in production.
-- `JWT_SECRET` must be set and at least 16 characters, otherwise the public API
-  refuses to start.
+- `JWT_SECRET` must contain at least 32 cryptographically random bytes (the
+  template uses 64 hex characters), otherwise the public API refuses to start.
+  Access tokens are accepted only as HS256 tokens issued by
+  `gennety-public-api` for the `gennety-mobile` audience; changing these claims
+  is an API migration, not a deploy-time toggle.
 - `PUBLIC_PORT` should remain `3101` unless Caddy is changed too.
 - `ADMIN_PORT` should remain `3100` unless Caddy is changed too.
 - `WEBAPP_URL` should point to `https://dating-calendar.gennety.com`.

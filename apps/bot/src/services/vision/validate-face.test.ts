@@ -54,6 +54,9 @@ describe("validateSingleFace", () => {
     expect(fetchFn.mock.calls[0]![0]).toBe(
       "https://api.telegram.org/file/bottest-bot-token/photos/file_1.jpg",
     );
+    expect((fetchFn.mock.calls[0]![1] as RequestInit).signal).toBeInstanceOf(
+      AbortSignal,
+    );
     // The OpenAI body should contain a data URL, not a Telegram URL. This keeps
     // validation independent of OpenAI's ability to fetch Telegram file links.
     const body = JSON.parse((fetchFn.mock.calls[1]![1] as RequestInit).body as string);

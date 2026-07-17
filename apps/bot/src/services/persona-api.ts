@@ -1,4 +1,5 @@
 import { env } from "../config.js";
+import { readResponseBuffer } from "../utils/bounded-response.js";
 
 /**
  * Persona REST API client (server-to-server).
@@ -26,6 +27,7 @@ const PERSONA_API_BASE = "https://api.withpersona.com/api/v1";
  */
 const PERSONA_API_VERSION = "2023-01-05";
 const DEFAULT_TIMEOUT_MS = 15_000;
+const SELFIE_MAX_BYTES = 10 * 1024 * 1024;
 
 /**
  * Successful selfie fetch — raw image bytes ready to hand to Rekognition,
@@ -186,8 +188,7 @@ export async function fetchInquirySelfie(
 
     if (!photoRes.ok) return { ok: false, error: "download_failed" };
 
-    const arrayBuf = await photoRes.arrayBuffer();
-    const buffer = Buffer.from(arrayBuf);
+    const buffer = await readResponseBuffer(photoRes, SELFIE_MAX_BYTES);
     const mime = photoRes.headers.get("content-type") ?? "image/jpeg";
 
     return {

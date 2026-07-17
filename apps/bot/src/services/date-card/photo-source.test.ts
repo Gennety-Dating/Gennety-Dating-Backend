@@ -47,4 +47,13 @@ describe("resolveVenuePhoto", () => {
     expect(await resolveVenuePhoto(null, null, fetchFn)).toBeNull();
     expect(fetchFn).not.toHaveBeenCalled();
   });
+
+  it("rejects an oversized venue photo", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      new Response("x", {
+        headers: { "content-length": String(10 * 1024 * 1024 + 1) },
+      }),
+    );
+    await expect(resolveVenuePhoto("https://cdn/x.jpg", null, fetchFn)).resolves.toBeNull();
+  });
 });

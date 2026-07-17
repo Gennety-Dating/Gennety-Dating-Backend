@@ -5,6 +5,7 @@ import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
 import { buildPlacesPhotoUrl } from "../../services/venue.js";
 import { prisma } from "@gennety/db";
+import { readResponseBuffer } from "../../utils/bounded-response.js";
 import {
   getVenueBoardState,
   getVenueChangeCatalog,
@@ -44,6 +45,8 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * open fetch proxy for arbitrary Google URLs.
  */
 const PHOTO_REF_REGEX = /^places\/[A-Za-z0-9_-]+\/photos\/[A-Za-z0-9_.-]+$/;
+const PHOTO_PROXY_TIMEOUT_MS = 10_000;
+const PHOTO_PROXY_MAX_BYTES = 10 * 1024 * 1024;
 
 export function createVenueChangeRouter(api: Api<RawApi>): Router {
   const router = Router();
@@ -87,13 +90,21 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
     }
 
     try {
-      const upstream = await fetch(url);
+      const upstream = await fetch(url, {
+        signal: AbortSignal.timeout(PHOTO_PROXY_TIMEOUT_MS),
+      });
       if (!upstream.ok) {
         res.status(502).json({ error: "upstream" });
         return;
       }
-      const buf = Buffer.from(await upstream.arrayBuffer());
-      res.setHeader("Content-Type", upstream.headers.get("content-type") ?? "image/jpeg");
+      const contentType = upstream.headers.get("content-type") ?? "";
+      if (!contentType.toLowerCase().startsWith("image/")) {
+        await upstream.body?.cancel();
+        res.status(502).json({ error: "upstream" });
+        return;
+      }
+      const buf = await readResponseBuffer(upstream, PHOTO_PROXY_MAX_BYTES);
+      res.setHeader("Content-Type", contentType);
       // Cache so the same image used as a card thumbnail and a detail hero
       // isn't re-fetched from Google. Private — it's tied to the signed ref.
       res.setHeader("Cache-Control", "private, max-age=86400");

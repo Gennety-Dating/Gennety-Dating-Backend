@@ -1,5 +1,7 @@
 import { buildHomeCityKey, type HomeLocationInput } from "./home-location.js";
 
+const PLACES_TIMEOUT_MS = 10_000;
+
 /**
  * City lookup shared by the Telegram onboarding Mini App and the website's
  * pre-registration form (the student track picks its dating city on the web).
@@ -70,6 +72,7 @@ export async function searchCities(query: string): Promise<CitySearchHit[]> {
         includedType: "locality",
         maxResultCount: 8,
       }),
+      signal: AbortSignal.timeout(PLACES_TIMEOUT_MS),
     });
     if (!response.ok) return fallbackCitySearch(query);
     const json = (await response.json()) as { places?: PlacesTextPlace[] };
@@ -138,7 +141,10 @@ export async function resolveCityFromCoordinates(lat: number, lng: number): Prom
       key: apiKey,
       result_type: "locality|administrative_area_level_1",
     });
-    const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`);
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`,
+      { signal: AbortSignal.timeout(PLACES_TIMEOUT_MS) },
+    );
     if (!response.ok) return FALLBACK_CITIES[0]!;
     const json = (await response.json()) as { results?: GeocodeResult[] };
     for (const result of json.results ?? []) {

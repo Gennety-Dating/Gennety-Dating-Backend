@@ -1,6 +1,7 @@
 import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
 import { openaiFetch } from "../openai-fetch.js";
+import { readResponseBuffer } from "../../utils/bounded-response.js";
 
 /**
  * Face-validation service for onboarding photo upload.
@@ -37,6 +38,7 @@ const SYSTEM_PROMPT =
   "people are visible, the face is extremely obscured/tiny, or it is clearly not a " +
   "real profile photo.";
 const DEFAULT_TIMEOUT_MS = 10_000;
+const TELEGRAM_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
 
 export interface ValidateFaceOptions {
   /** Override the Telegram bot token (defaults to `env.BOT_TOKEN`). */
@@ -165,12 +167,18 @@ export async function validateSingleFace(
   let buffer: Buffer;
   let mime = "image/jpeg";
   try {
-    const fileRes = await fetchFn(fileUrl);
+    const fileRes = await fetchFn(fileUrl, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
     if (!fileRes.ok) return { ok: false, error: "api" };
     mime = fileRes.headers.get("content-type") ?? mime;
-    buffer = Buffer.from(await fileRes.arrayBuffer());
-  } catch {
-    return { ok: false, error: "api" };
+    buffer = await readResponseBuffer(fileRes, TELEGRAM_PHOTO_MAX_BYTES);
+  } catch (err) {
+    const name = (err as { name?: string }).name;
+    return {
+      ok: false,
+      error: name === "AbortError" || name === "TimeoutError" ? "timeout" : "api",
+    };
   }
 
   const dataUrlResult = await validateSingleFaceFromBuffer(buffer, mime, {

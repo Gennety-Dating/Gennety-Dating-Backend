@@ -16,7 +16,8 @@ services:
     image: pgvector/pgvector:pg16
     container_name: gennety-dev-db
     ports:
-      - "5434:5432"
+      # Never expose the fixed local-development credentials on the LAN.
+      - "127.0.0.1:5434:5432"
     environment:
       POSTGRES_USER: gennety
       POSTGRES_PASSWORD: gennety

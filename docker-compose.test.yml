@@ -13,7 +13,8 @@ services:
     image: pgvector/pgvector:pg16
     container_name: gennety-test-db
     ports:
-      - "5433:5432"
+      # Test credentials are intentionally simple, so bind only to loopback.
+      - "127.0.0.1:5433:5432"
     environment:
       POSTGRES_USER: gennety
       POSTGRES_PASSWORD: gennety

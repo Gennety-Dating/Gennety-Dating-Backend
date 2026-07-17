@@ -27,6 +27,8 @@ interface UsagePayload {
   };
 }
 
+const DEFAULT_OPENAI_TIMEOUT_MS = 30_000;
+
 function extractTotalTokens(body: unknown): number {
   const usage = (body as UsagePayload | null)?.usage;
   if (!usage) return 0;
@@ -37,7 +39,10 @@ function extractTotalTokens(body: unknown): number {
 }
 
 export const openaiFetch: typeof fetch = async (input, init) => {
-  const res = await fetch(input, init);
+  const res = await fetch(input, {
+    ...init,
+    signal: init?.signal ?? AbortSignal.timeout(DEFAULT_OPENAI_TIMEOUT_MS),
+  });
 
   // Capture the spender synchronously while the ALS context is still active —
   // the detached read below may settle after the caller's context has exited.
