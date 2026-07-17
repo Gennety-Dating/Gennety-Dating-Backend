@@ -7,7 +7,7 @@ import "./config.js";
 
 import cron from "node-cron";
 import { ensureMatchPairIndex } from "@gennety/db";
-import { env } from "./config.js";
+import { assertIdentityTrustConfiguration, env } from "./config.js";
 import { createBot } from "./bot.js";
 import { setMainBotApi } from "./services/main-bot-api.js";
 import { notifyFounderWeeklyMatches } from "./services/founder-notify.js";
@@ -50,6 +50,8 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason) => {
   console.error("[bot] unhandledRejection (non-fatal, continuing):", reason);
 });
+
+assertIdentityTrustConfiguration();
 
 const bot = createBot(env.BOT_TOKEN);
 // Publish the main bot Api so context-less services (founder-notify) can act

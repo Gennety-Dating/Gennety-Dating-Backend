@@ -45,8 +45,8 @@ export const env = {
   /// Registration v2: mandatory Persona liveness. On → the verification CTA
   /// carries no Skip button and the legacy soft-skip callbacks refuse with a
   /// "verification is required" notice, so activation happens ONLY through the
-  /// pipeline's `verified` outcome. Existing active users are grandfathered
-  /// (the pool gate is untouched); this governs new activations only.
+  /// pipeline's `verified` outcome. Existing users with a persisted legacy
+  /// `verificationSkippedAt` remain grandfathered by the pool gate.
   MANDATORY_VERIFICATION_ENABLED:
     process.env.MANDATORY_VERIFICATION_ENABLED === "true",
   /// Custom emoji id that leads each rich "thinking" shimmer block — the
@@ -174,11 +174,9 @@ export const env = {
   SUPABASE_CHAT_BUCKET: process.env.SUPABASE_CHAT_BUCKET ?? "chat-attachments",
 
   // ── Persona liveness / biometric verification (Phase 6.3) ────
-  /// Master kill switch for the Persona step. When false (default), the bot
-  /// skips the verification CTA entirely and activates users straight after
-  /// `finalize_onboarding`. When true, the credentials below must also be
-  /// set — otherwise the CTA falls through to the main menu (defensive: a
-  /// half-configured deploy never strands users at a broken Persona link).
+  /// Master switch for the Persona step. Production-like processes fail closed
+  /// at startup unless this and mandatory verification are enabled with live
+  /// credentials. Local/test environments may still turn it off explicitly.
   ENABLE_PERSONA_VERIFICATION: process.env.ENABLE_PERSONA_VERIFICATION === "true",
   /// Inquiry Template id from the Persona Dashboard — defines which steps the
   /// user goes through (selfie + government ID + liveness). Empty value
@@ -410,6 +408,70 @@ export const env = {
   /// `.env.local`. The bot logs a loud warning at startup if non-empty.
   DEV_OTP_BYPASS_TELEGRAM_IDS: parseTelegramIdSet(process.env.DEV_OTP_BYPASS_TELEGRAM_IDS),
 } as const;
+
+export interface IdentityTrustConfiguration {
+  OTP_LOG_TO_CONSOLE: boolean;
+  MANDATORY_VERIFICATION_ENABLED: boolean;
+  ENABLE_PERSONA_VERIFICATION: boolean;
+  PERSONA_TEMPLATE_ID: string;
+  PERSONA_ENVIRONMENT_ID: string;
+  PERSONA_API_KEY: string;
+  PERSONA_WEBHOOK_SECRET: string;
+  FACE_MATCH_PROVIDER: "rekognition" | "disabled";
+  PROFILE_MEDIA_VALIDATION_ENABLED: boolean;
+}
+
+/**
+ * Fail closed before a production-like bot starts accepting users or running
+ * the weekly matcher. Vitest sets NODE_ENV=test; local development is
+ * explicitly identified by OTP_LOG_TO_CONSOLE=true. Every other runtime is
+ * treated as production-like so forgetting NODE_ENV cannot silently disable
+ * the identity trust boundary.
+ */
+export function identityTrustConfigurationErrors(
+  config: IdentityTrustConfiguration = env,
+  runtime = process.env.NODE_ENV,
+): string[] {
+  if (runtime === "test" || config.OTP_LOG_TO_CONSOLE) return [];
+
+  const errors: string[] = [];
+  if (!config.MANDATORY_VERIFICATION_ENABLED) {
+    errors.push("MANDATORY_VERIFICATION_ENABLED must be true");
+  }
+  if (!config.ENABLE_PERSONA_VERIFICATION) {
+    errors.push("ENABLE_PERSONA_VERIFICATION must be true");
+  }
+  for (const [name, value] of [
+    ["PERSONA_TEMPLATE_ID", config.PERSONA_TEMPLATE_ID],
+    ["PERSONA_ENVIRONMENT_ID", config.PERSONA_ENVIRONMENT_ID],
+    ["PERSONA_API_KEY", config.PERSONA_API_KEY],
+    ["PERSONA_WEBHOOK_SECRET", config.PERSONA_WEBHOOK_SECRET],
+  ] as const) {
+    if (!value) errors.push(`${name} must be configured`);
+  }
+  if (/^persona_sand/i.test(config.PERSONA_API_KEY)) {
+    errors.push("PERSONA_API_KEY must be a production key, not persona_sand*");
+  }
+  if (config.FACE_MATCH_PROVIDER !== "rekognition") {
+    errors.push("FACE_MATCH_PROVIDER must be rekognition");
+  }
+  if (!config.PROFILE_MEDIA_VALIDATION_ENABLED) {
+    errors.push("PROFILE_MEDIA_VALIDATION_ENABLED must be true");
+  }
+  return errors;
+}
+
+export function assertIdentityTrustConfiguration(
+  config: IdentityTrustConfiguration = env,
+  runtime = process.env.NODE_ENV,
+): void {
+  const errors = identityTrustConfigurationErrors(config, runtime);
+  if (errors.length > 0) {
+    throw new Error(
+      `Unsafe identity verification configuration:\n- ${errors.join("\n- ")}`,
+    );
+  }
+}
 
 /**
  * Parse `TICKET_BUNDLE_STARS` ("<count>:<stars>,…") into a count→Stars map.

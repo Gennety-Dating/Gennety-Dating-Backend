@@ -30,12 +30,9 @@ import { prisma } from "@gennety/db";
  *      partner twice. Backed by the `matches_pair_canonical_idx` functional
  *      index on `LEAST/GREATEST(user_a_id, user_b_id)`.
  *   6. Cooldown: skip users whose `lastMatchedAt` is within MATCH_COOLDOWN_MS.
- *   7. Verification gate: exclude `rejected` (face-match concluded the
- *      profile is impostor / wrong-person) and `pending_review` (admin
- *      hasn't cleared them yet). `unverified` (skipped Persona) and
- *      `pending` (Persona inquiry mid-flight) DO match — the Elo skip
- *      penalty handles the former and re-verification will move the
- *      latter to a terminal state shortly.
+ *   7. Verification gate: admit only `verified` users plus the explicit legacy
+ *      cohort that already has `verificationSkippedAt`. New `unverified`,
+ *      `pending`, `pending_review`, and `rejected` users never enter the pool.
  */
 
 // ---------------------------------------------------------------------------
@@ -390,7 +387,13 @@ export function buildCandidateSql(): string {
     WHERE u.id <> $1::uuid
       AND u.status = 'active'
       AND u.onboarding_step = 'completed'
-      AND u.verification_status NOT IN ('rejected', 'pending_review')
+      AND (
+        u.verification_status = 'verified'
+        OR (
+          u.verification_status = 'unverified'
+          AND u.verification_skipped_at IS NOT NULL
+        )
+      )
       AND (u.is_email_verified OR u.phone_verified_at IS NOT NULL)
       AND p.home_city_key = $3
       AND p.latitude IS NOT NULL
@@ -883,6 +886,8 @@ export async function findCandidatesFor(
       universityDomain: true,
       isEmailVerified: true,
       phoneVerifiedAt: true,
+      verificationStatus: true,
+      verificationSkippedAt: true,
       status: true,
       onboardingStep: true,
       profile: {
@@ -907,6 +912,10 @@ export async function findCandidatesFor(
     seeker.onboardingStep !== "completed" ||
     !seeker.gender ||
     !seeker.preference ||
+    !(
+      seeker.verificationStatus === "verified" ||
+      (seeker.verificationStatus === "unverified" && seeker.verificationSkippedAt !== null)
+    ) ||
     // Registration v2 union contact rail: verified email OR verified phone.
     (!seeker.isEmailVerified && !seeker.phoneVerifiedAt) ||
     !seeker.profile?.homeCityKey ||
@@ -1251,12 +1260,19 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
     where: {
       status: "active",
       onboardingStep: "completed",
-      // Verification gate (mirrors `buildCandidateSql` rule 7).
-      verificationStatus: { notIn: ["rejected", "pending_review"] },
       gender: { not: null },
       preference: { not: null },
-      // Registration v2 union contact rail: verified email OR verified phone.
-      OR: [{ isEmailVerified: true }, { phoneVerifiedAt: { not: null } }],
+      AND: [
+        // Registration v2 union contact rail: verified email OR verified phone.
+        { OR: [{ isEmailVerified: true }, { phoneVerifiedAt: { not: null } }] },
+        // Mandatory identity gate with an explicit persisted legacy cohort.
+        {
+          OR: [
+            { verificationStatus: "verified" },
+            { verificationStatus: "unverified", verificationSkippedAt: { not: null } },
+          ],
+        },
+      ],
       profile: {
         lastMatchedAt: { lt: cutoff },
         homeCityKey: { not: null },
@@ -1293,12 +1309,17 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
     where: {
       status: "active",
       onboardingStep: "completed",
-      // Verification gate (mirrors `buildCandidateSql` rule 7).
-      verificationStatus: { notIn: ["rejected", "pending_review"] },
       gender: { not: null },
       preference: { not: null },
-      // Registration v2 union contact rail: verified email OR verified phone.
-      OR: [{ isEmailVerified: true }, { phoneVerifiedAt: { not: null } }],
+      AND: [
+        { OR: [{ isEmailVerified: true }, { phoneVerifiedAt: { not: null } }] },
+        {
+          OR: [
+            { verificationStatus: "verified" },
+            { verificationStatus: "unverified", verificationSkippedAt: { not: null } },
+          ],
+        },
+      ],
       profile: {
         lastMatchedAt: null,
         homeCityKey: { not: null },

@@ -64,8 +64,9 @@ out of Telegram-only workers.
   `MANDATORY_VERIFICATION_ENABLED` on (Registration v2), the CTA has no Skip
   button and activation happens ONLY through the pipeline's `verified`
   outcome; legacy skip callbacks refuse politely and pre-flip skippers are
-  grandfathered with their `UNVERIFIED_ELO_PENALTY`. With the flag off, the
-  legacy two-step soft skip + Elo penalty applies (see §1.4).
+  grandfathered with their `UNVERIFIED_ELO_PENALTY`. A production-like process
+  refuses to boot when the flag is off, Persona uses a sandbox key, Rekognition
+  is disabled, or profile-media validation is disabled.
 - **Progressive Logistics** — The AI auto-proposes timeslots first; if both
   rounds fail it hands off to the Calendar Mini App; venue is chosen by an
   AI concierge from each user's free-text *vibe* + commute pin.
@@ -376,12 +377,14 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   retired); the CTA copy only frames the ELO cost of skipping. Historical
   `verification_bonus` `TicketLedger` rows granted before the change stay valid
   and are never clawed back.
-- **Skip for now** — *(legacy path — hidden when
+- **Skip for now** — *(retired production path — hidden when
   `MANDATORY_VERIFICATION_ENABLED` is on: the CTA then carries only the Verify
   button with the `verifyPitchMandatory` copy, and taps on pre-flip
   Skip / Skip-anyway buttons refuse with `verifyMandatoryNotice` + a fresh
   Verify button — no penalty, no unverified activation; already-skipped users
-  stay grandfathered.)* A *two-step soft skip*. The first tap does **not** apply
+  stay grandfathered.)* The implementation remains available only for explicit
+  local/test configurations so historical callbacks and fixtures can be tested.
+  Its old behavior was a *two-step soft skip*. The first tap did **not** apply
   any penalty: the bot plays a short personal **voice note** (native Telegram
   `sendVoice`, OGG/Opus, language-aware across all five onboarding languages
   `en`/`ru`/`uk`/`de`/`pl`) explaining why skipping
@@ -450,13 +453,12 @@ are discarded rather than corrupting the `photos[i] ↔ photoFaceScores[i]`
 alignment. The admin "rerun verification" endpoint shares the same code
 path.
 
-**Match-pool exclusion.** Users with `verificationStatus IN ('rejected',
-'pending_review')` are excluded from the weekly batch matching pool
-regardless of `User.status` — the photo-edit auto-rerun handles
-rehabilitation, while admin moderation (for pending_review) handles
-borderline cases. `unverified` (Persona skipped) and `pending` (Persona
-inquiry mid-flight) DO match: the former carries the documented
-`UNVERIFIED_ELO_PENALTY` and the latter is a brief transient state.
+**Match-pool inclusion.** A user is eligible only when
+`verificationStatus='verified'`, or when they belong to the explicit legacy
+cohort `verificationStatus='unverified' AND verificationSkippedAt IS NOT NULL`.
+New `unverified`, `pending`, `pending_review`, and `rejected` users never enter
+candidate or weekly-batch queries. The photo-edit auto-rerun handles
+rehabilitation and admin moderation handles borderline cases.
 
 ### 1.5 Re-engagement chain
 

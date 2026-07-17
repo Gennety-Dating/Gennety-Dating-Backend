@@ -46,6 +46,7 @@ async function seedFullUser(opts: {
     | "pending_review"
     | "verified"
     | "rejected";
+  verificationSkippedAt?: Date | null;
   // Registration v2 contact rails (default: email-verified legacy user).
   isEmailVerified?: boolean;
   phoneVerifiedAt?: Date | null;
@@ -58,8 +59,9 @@ async function seedFullUser(opts: {
     onboardingStep: "completed",
     // Spread-conditionally: under exactOptionalPropertyTypes, passing
     // `verificationStatus: undefined` is a type error. Only forward when set.
-    ...(opts.verificationStatus !== undefined
-      ? { verificationStatus: opts.verificationStatus }
+    verificationStatus: opts.verificationStatus ?? "verified",
+    ...(opts.verificationSkippedAt !== undefined
+      ? { verificationSkippedAt: opts.verificationSkippedAt }
       : {}),
     ...(opts.isEmailVerified !== undefined
       ? { isEmailVerified: opts.isEmailVerified }
@@ -496,17 +498,20 @@ describe("match-engine SQL (integration)", () => {
     expect(rows.length).toBe(0);
   });
 
-  it("includes verified, unverified, and pending candidates", async () => {
-    // `unverified` (skipped Persona) carries the Elo penalty but still
-    // matches. `pending` (Persona inquiry mid-flight) is brief so we
-    // optimistically include them.
+  it("includes verified and explicit legacy skippers, but excludes new unverified/pending users", async () => {
     const seeker = await seedFullUser({ gender: "male", preference: "women" });
     const verified = await seedFullUser({
       gender: "female",
       preference: "men",
       verificationStatus: "verified",
     });
-    const unverified = await seedFullUser({
+    const grandfathered = await seedFullUser({
+      gender: "female",
+      preference: "men",
+      verificationStatus: "unverified",
+      verificationSkippedAt: new Date("2026-05-08T20:00:00Z"),
+    });
+    await seedFullUser({
       gender: "female",
       preference: "men",
       verificationStatus: "unverified",
@@ -526,7 +531,7 @@ describe("match-engine SQL (integration)", () => {
     );
 
     const ids = rows.map((r) => r.userId).sort();
-    expect(ids).toEqual([verified.id, unverified.id, pending.id].sort());
+    expect(ids).toEqual([verified.id, grandfathered.id].sort());
   });
 
   it("orders candidates by embedding distance ASC", async () => {

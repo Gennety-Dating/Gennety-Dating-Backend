@@ -187,23 +187,27 @@ pnpm test
 pnpm build
 ```
 
-Profile-media validation preflight:
+Identity and profile-media validation preflight:
 
 ```sh
 ffmpeg -version
 ffprobe -version
+# The process must refuse to boot unless all of these are production-ready:
+grep -E '^(MANDATORY_VERIFICATION_ENABLED|ENABLE_PERSONA_VERIFICATION|FACE_MATCH_PROVIDER|PROFILE_MEDIA_VALIDATION_ENABLED)=' .env
 ```
 
 These local checks do not prove that the production droplet has the package.
 Run the server-side installation/check in **Required Production System
 Dependency** during the production rollout.
 
-Keep `PROFILE_MEDIA_VALIDATION_ENABLED=false` through code deployment. Verify
-the three narrow Rekognition actions and run consenting/synthetic QA media,
-then set the flag to `true` and restart with
-`pm2 restart gennety-bot --update-env`. Emergency rollback is to set the flag
-back to `false`; do not set `PROFILE_MEDIA_VALIDATION_FAIL_OPEN=true` in
-production.
+Verify the three narrow Rekognition actions and run consenting/synthetic QA
+media before deployment. Production must have
+`MANDATORY_VERIFICATION_ENABLED=true`, `ENABLE_PERSONA_VERIFICATION=true`, a
+non-sandbox Persona key, `FACE_MATCH_PROVIDER=rekognition`, and
+`PROFILE_MEDIA_VALIDATION_ENABLED=true`. The process now fails closed before
+starting if any trust boundary is weakened. An identity-provider outage is not
+rolled back by disabling verification; pause new onboarding or roll back code
+while keeping existing verified users safe.
 
 For narrow code changes, file-scoped tests are acceptable before the full build:
 
@@ -383,15 +387,17 @@ pm2 logs gennety-bot --lines 80 --nostream
 curl -s https://dating-api.gennety.com/v1/ping
 ```
 
-### Production flag state (2026-07-13)
+### Production flag state last observed (2026-07-13)
 
 Every product feature is now **on** in `/opt/gennety/.env`: tickets + Telegram
 Stars, Registration v2's phone track, the fact collector (which is what actually
 feeds the matching engine's vibe axes), Elo vision seed, pre-date coordination,
 venue change v2, the date card, the match card, and Rekognition face-match.
 
-`ENABLE_PERSONA_VERIFICATION` is on. `MANDATORY_VERIFICATION_ENABLED` is
-deliberately still **off** — see "Verification" below.
+`ENABLE_PERSONA_VERIFICATION` was on, while
+`MANDATORY_VERIFICATION_ENABLED` was still off. This state is no longer accepted
+by the application after the identity trust-gate hardening: do not deploy until
+the live Persona requirements below are satisfied.
 
 **Provider credentials, verified by probing each one from the droplet** (a flag
 is worthless without its provider):
@@ -439,19 +445,17 @@ code. If it ever has to be repeated:
    upload into `SUPABASE_SELFIE_BUCKET` returns 200 (that upload is step 1 of
    `verification-pipeline.ts` and is exactly what used to fail).
 
-### Verification (why `MANDATORY_VERIFICATION_ENABLED` is still off)
+### Verification production gate
 
-Storage works now, so the pipeline *can* complete — but no user has ever
-actually reached `verified` in production. Under a mandatory gate, activation
-happens **only** through a `verified` outcome, so flipping that flag before a
-single real end-to-end pass would risk locking every new signup out of the
-product. Walk one live verification through the bot first; once it lands
-`verified`, flip the flag.
+Storage works, but the last recorded Persona credential was sandbox-only and no
+user had reached a production `verified` outcome. Obtain a live Persona key,
+walk one consenting end-to-end verification through staging, set the mandatory
+production values, and only then deploy. The service intentionally refuses to
+start rather than admit unverified users.
 
-Matching depends on this: the AI vision Elo seed runs *inside* the verification
-pipeline, so until someone verifies, every profile keeps the default Elo of 500
-and `V_league` — the assortative gate that decides whether a pair is viable at
-all — evaluates to 1.0 for everyone.
+Matching admits only verified users and the persisted pre-flip skip cohort. The
+AI vision Elo seed runs inside the verification pipeline, so live verification
+also restores meaningful league calibration for new users.
 
 Required/high-impact env keys:
 
@@ -553,21 +557,22 @@ Required/high-impact env keys:
   (enum `Theme`, default `dark`) / `theme_chosen_at` columns first** (additive,
   non-destructive), and redeploy the Mini App bundle so all screens ship the
   theme system. No new env, no new system dependency.
-- Registration v2 (feature-flagged, ship dark — flip both at launch):
+- Registration v2 (phone rail feature-flagged; identity gate mandatory):
   `PHONE_AUTH_ENABLED` (default `false`) turns on the sign-up fork + the
   general-track phone rail (Mini App PathGate/PhoneGate, `POST
   /v1/telegram-onboarding/track`, the trusted `message.contact` handler);
-  `MANDATORY_VERIFICATION_ENABLED` (default `false`) removes the verification
+  `MANDATORY_VERIFICATION_ENABLED=true` removes the verification
   Skip button, refuses legacy skip callbacks, and adds the verification-stall
-  re-engagement sweep. **Requires `db:push` of the additive `users.phone`
+  re-engagement sweep. Production-like startup refuses any other verification
+  setting. **Requires `db:push` of the additive `users.phone`
   (unique) / `phone_verified_at` / `registration_track` columns first**
   (non-destructive; deploy code + push schema BEFORE flipping either flag —
   the new columns are read unconditionally by matching and `/state`). Also
   redeploy the Mini App bundle (`onboarding.html`) so the fork screens exist.
   The student ticket bonus (+2 at uni-email verification, `student_bonus`
   ledger reason) rides `TICKET_FEATURE_ENABLED` — no flag of its own, no
-  schema beyond the wallet tables. Rollback: flip the flag(s) back — the
-  email-only flow returns exactly as before; the additive columns may stay.
+  schema beyond the wallet tables. `PHONE_AUTH_ENABLED` can be rolled back to
+  the email-only flow; mandatory identity verification must remain enabled.
 - Matching: `MALE_REACH_ELO` (default `36` Elo ≈ 6 attractiveness points) —
   one-directional "reach up" allowance that lets a less-attractive man match a
   somewhat more-attractive woman without the `V_league` penalty (hetero pairs
