@@ -68,7 +68,7 @@ export interface TicketStrings {
 }
 
 const en: TicketStrings = {
-  heading: "It's a match 🔥",
+  heading: "It's a match 🤍",
   sub: "Claim your Date Ticket to unlock planning.",
   ticketLabel: "CURATED DATE TICKET",
   ticketTagline: "One Perfect Match • Verified • Zero Drama",
@@ -117,7 +117,7 @@ const en: TicketStrings = {
 };
 
 const ru: TicketStrings = {
-  heading: "Это match 🔥",
+  heading: "Это мэтч 🤍",
   sub: "Забери свой билет на свидание, чтобы открыть планирование.",
   ticketLabel: "КУРАТОРСКИЙ БИЛЕТ НА СВИДАНИЕ",
   ticketTagline: "Идеальный метч • Проверено • Без драмы",
@@ -166,7 +166,7 @@ const ru: TicketStrings = {
 };
 
 const uk: TicketStrings = {
-  heading: "Це match 🔥",
+  heading: "Це метч 🤍",
   sub: "Забери свій квиток на побачення, щоб відкрити планування.",
   ticketLabel: "КУРАТОРСЬКИЙ КВИТОК НА ПОБАЧЕННЯ",
   ticketTagline: "Ідеальний метч • Перевірено • Без драми",
@@ -215,7 +215,7 @@ const uk: TicketStrings = {
 };
 
 const de: TicketStrings = {
-  heading: "Es ist ein Match 🔥",
+  heading: "Es ist ein Match 🤍",
   sub: "Sichere dein Date Ticket, um die Planung freizuschalten.",
   ticketLabel: "KURATIERTES DATE TICKET",
   ticketTagline: "Ein perfektes Match • Verifiziert • Kein Drama",
@@ -264,7 +264,7 @@ const de: TicketStrings = {
 };
 
 const pl: TicketStrings = {
-  heading: "To match 🔥",
+  heading: "To match 🤍",
   sub: "Odbierz Date Ticket, aby odblokować planowanie.",
   ticketLabel: "WYBRANY DATE TICKET",
   ticketTagline: "Jedno idealne dopasowanie • Weryfikacja • Bez dramatu",

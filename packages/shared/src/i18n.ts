@@ -282,7 +282,7 @@ const translations = {
       "Your photos. Delete the ones you don't want or add new ones (min {min}, max {max}).",
     photoManagerDeleteBtn: "🗑 {n}",
     photoManagerAddBtn: "➕ Add photo",
-    photoManagerDoneBtn: "✅ Done",
+    photoManagerDoneBtn: "Done",
     photoManagerMinReached: "You need at least {min} photos. Add a new one first.",
     photoManagerDeleted: "Photo deleted.",
     menuVideo: "🎬 Profile Video",
@@ -369,9 +369,9 @@ const translations = {
     matchBtnConfirmDecline: "❌ Yes, pass",
     matchBtnKeepDeciding: "← Go back",
     matchDecisionQuestionM:
-      "So — want to go on a date with him? 😊 Just answer me right here, in your own words.",
+      "So — want to go on a date with him? Just say yes or no.",
     matchDecisionQuestionF:
-      "So — want to go on a date with her? 😊 Just answer me right here, in your own words.",
+      "So — want to go on a date with her? Just say yes or no.",
     matchTextYesConfirm: "Love that ✨ Confirm below — and I'll take care of the rest:",
     matchBtnConfirmGo: "💫 Yes, I'm going",
     matchTextUnsure:
@@ -1033,7 +1033,7 @@ const translations = {
       "Твои фото. Удали лишние или добавь новые (мин {min}, макс {max}).",
     photoManagerDeleteBtn: "🗑 {n}",
     photoManagerAddBtn: "➕ Добавить",
-    photoManagerDoneBtn: "✅ Готово",
+    photoManagerDoneBtn: "Готово",
     photoManagerMinReached: "Нужно минимум {min} фото. Сначала добавь новое.",
     photoManagerDeleted: "Фото удалено.",
     menuVideo: "🎬 Видео профиля",
@@ -1120,9 +1120,9 @@ const translations = {
     matchBtnConfirmDecline: "❌ Да, пас",
     matchBtnKeepDeciding: "← Назад",
     matchDecisionQuestionM:
-      "Ну что — хочешь пойти с ним на свидание? 😊 Просто ответь мне словами прямо здесь.",
+      "Ну что — хочешь пойти с ним на свидание? Просто да или нет.",
     matchDecisionQuestionF:
-      "Ну что — хочешь пойти с ней на свидание? 😊 Просто ответь мне словами прямо здесь.",
+      "Ну что — хочешь пойти с ней на свидание? Просто да или нет.",
     matchTextYesConfirm: "Отлично ✨ Подтверди — и дальше всё сделаю я:",
     matchBtnConfirmGo: "💫 Да, иду на свидание",
     matchTextUnsure:
@@ -1777,7 +1777,7 @@ const translations = {
       "Твої фото. Видали зайві або додай нові (мін {min}, макс {max}).",
     photoManagerDeleteBtn: "🗑 {n}",
     photoManagerAddBtn: "➕ Додати",
-    photoManagerDoneBtn: "✅ Готово",
+    photoManagerDoneBtn: "Готово",
     photoManagerMinReached: "Потрібно щонайменше {min} фото. Спершу додай нове.",
     photoManagerDeleted: "Фото видалено.",
     menuVideo: "🎬 Відео профілю",
@@ -1864,9 +1864,9 @@ const translations = {
     matchBtnConfirmDecline: "❌ Так, пас",
     matchBtnKeepDeciding: "← Назад",
     matchDecisionQuestionM:
-      "Ну що — хочеш піти з ним на побачення? 😊 Просто відповідай мені словами прямо тут.",
+      "Хочеш піти з ним на побачення? Напиши: так або ні.",
     matchDecisionQuestionF:
-      "Ну що — хочеш піти з нею на побачення? 😊 Просто відповідай мені словами прямо тут.",
+      "Хочеш піти з нею на побачення? Напиши: так або ні.",
     matchTextYesConfirm: "Чудово ✨ Підтверди — і далі все зроблю я:",
     matchBtnConfirmGo: "💫 Так, іду на побачення",
     matchTextUnsure:
@@ -2506,7 +2506,7 @@ const deTranslations: TranslationTable = {
     "Deine Fotos. Lösche unerwünschte oder füge neue hinzu (min {min}, max {max}).",
   photoManagerDeleteBtn: "🗑 {n}",
   photoManagerAddBtn: "➕ Hinzufügen",
-  photoManagerDoneBtn: "✅ Fertig",
+  photoManagerDoneBtn: "Fertig",
   photoManagerMinReached: "Du brauchst mindestens {min} Fotos. Füge zuerst ein neues hinzu.",
   photoManagerDeleted: "Foto gelöscht.",
   menuVideo: "🎬 Profilvideo",
@@ -2587,9 +2587,9 @@ const deTranslations: TranslationTable = {
   matchBtnConfirmDecline: "❌ Ja, passen",
   matchBtnKeepDeciding: "← Zurück",
   matchDecisionQuestionM:
-    "Und — willst du mit ihm auf ein Date gehen? 😊 Antworte mir einfach hier in deinen eigenen Worten.",
+    "Und — willst du mit ihm auf ein Date gehen? Einfach ja oder nein.",
   matchDecisionQuestionF:
-    "Und — willst du mit ihr auf ein Date gehen? 😊 Antworte mir einfach hier in deinen eigenen Worten.",
+    "Und — willst du mit ihr auf ein Date gehen? Einfach ja oder nein.",
   matchTextYesConfirm: "Stark ✨ Bestätige unten — den Rest übernehme ich:",
   matchBtnConfirmGo: "💫 Ja, ich gehe hin",
   matchTextUnsure:
@@ -3151,7 +3151,7 @@ const plTranslations: TranslationTable = {
     "Twoje zdjęcia. Usuń niechciane lub dodaj nowe (min {min}, maks {max}).",
   photoManagerDeleteBtn: "🗑 {n}",
   photoManagerAddBtn: "➕ Dodaj",
-  photoManagerDoneBtn: "✅ Gotowe",
+  photoManagerDoneBtn: "Gotowe",
   photoManagerMinReached: "Potrzebujesz co najmniej {min} zdjęć. Najpierw dodaj nowe.",
   photoManagerDeleted: "Zdjęcie usunięte.",
   menuVideo: "🎬 Wideo profilu",
@@ -3231,9 +3231,9 @@ const plTranslations: TranslationTable = {
   matchBtnConfirmDecline: "❌ Tak, odpuść",
   matchBtnKeepDeciding: "← Wróć",
   matchDecisionQuestionM:
-    "No i jak — chcesz iść z nim na randkę? 😊 Po prostu odpowiedz mi tutaj własnymi słowami.",
+    "No i jak — chcesz iść z nim na randkę? Po prostu tak albo nie.",
   matchDecisionQuestionF:
-    "No i jak — chcesz iść z nią na randkę? 😊 Po prostu odpowiedz mi tutaj własnymi słowami.",
+    "No i jak — chcesz iść z nią na randkę? Po prostu tak albo nie.",
   matchTextYesConfirm: "Świetnie ✨ Potwierdź poniżej — resztą zajmę się ja:",
   matchBtnConfirmGo: "💫 Tak, idę na randkę",
   matchTextUnsure:

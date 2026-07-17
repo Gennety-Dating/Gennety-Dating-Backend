@@ -184,8 +184,14 @@ async function sendPartnerMedia(
  * "so — want to go on a date with him/her?" line inviting a plain-text
  * answer. The reply is classified by `decision-text.ts` and always funnels
  * into a mechanical button confirmation, so text alone never commits.
- * Best-effort: a send failure never blocks pitch dispatch (the pitch
- * keyboard already carries the decision).
+ *
+ * The copy asks for a plain "yes"/"no" on purpose: `decision-text.ts`
+ * matches replies against a closed keyword set, so the question has to
+ * elicit that vocabulary to stay on the fast path (VOICE.md §7/§8).
+ *
+ * Best-effort: a send failure never blocks pitch dispatch — the user can
+ * still answer the pitch in words, since the classifier keys off the live
+ * proposal rather than this message.
  */
 async function sendDecisionQuestion(
   api: Api<RawApi>,
