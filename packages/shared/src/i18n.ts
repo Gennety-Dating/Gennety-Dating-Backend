@@ -2244,6 +2244,9 @@ const translations = {
 
 export type TranslationKey = keyof (typeof translations)["en"];
 
+/** Every translation key, source-of-truth being the `en` table. For tests/tooling. */
+export const TRANSLATION_KEYS = Object.keys(translations.en) as TranslationKey[];
+
 type TranslationTable = Record<TranslationKey, string>;
 
 const deTranslations: TranslationTable = {
@@ -2889,6 +2892,66 @@ const deTranslations: TranslationTable = {
     "Wow, das sind viele Nachrichten auf einmal — gib mir ein paar Sekunden, dann geht's weiter. 🙂",
   rateLimitDailyBudgetNotice:
     "Du warst heute super aktiv 🙂 Lass uns morgen weitermachen — das heutige Limit ist erreicht, damit alles für alle rund läuft.",
+
+  // --- Live Photo admission ---
+  livePhotoMissingStatic:
+    "Diesem Live Photo fehlt das Standbild — so kann ich es nicht prüfen. Schick es als normales Foto oder nimm ein anderes.",
+  livePhotoTooLong:
+    "Live Photos dürfen höchstens 10 Sekunden lang sein. Schick ein kürzeres oder ein normales Foto.",
+  livePhotoTooLarge:
+    "Live Photos dürfen höchstens 10 MB groß sein. Schick ein kleineres oder ein normales Foto.",
+
+  // --- Date Ticket DMs ---
+  ticketBothSecuredDm: "Beide Tickets sind da 🎟️ Euer Date steht — fehlt nur die Zeit.",
+  ticketPartnerPaidDm: "{name} hat dein Ticket schon bezahlt ❤️ Für dich fällt nichts an.",
+  ticketCoveredHerConfirm:
+    "💛 Erledigt — du hast {name}s Ticket übernommen. Sobald sie es sieht, sag ich dir Bescheid.",
+  ticketPartnerSawItDm: "❤️ {name} hat gesehen, dass du ihr Ticket übernommen hast.",
+  ticketRefundedDm:
+    "Dein Match hat sein Ticket nicht rechtzeitig geholt — deins ist erstattet. Kein Stress: die Terminplanung ist jetzt gratis offen 📅",
+
+  // --- Pre-date coordination ---
+  coordOfferIntro:
+    "Dein Date ist in etwa einer Stunde.\n\n" +
+    "Wie wollt ihr euch am Ort finden? Wähl eine Option:",
+  coordOfferNoContactNote:
+    "Dein Date ist in etwa einer Stunde.\n\n" +
+    "Dein Match hat keinen öffentlichen Telegram-Namen, direkter Kontakt geht also nicht. Über mich läuft aber ein anonymer Chat:",
+  coordBtnShareSelf: "📲 Mein Telegram teilen",
+  coordBtnRequestPartner: "🙋 Kontakt anfragen",
+  coordBtnProxy: "🕶 Anonymer Chat",
+  coordSharedToPartner:
+    "Dein Date hat Telegram geteilt, damit ihr euch findet 💬\n\n" +
+    "{name}: {link}\n\nKurz Hallo sagen — bis gleich!",
+  coordRequestAck: "Gefragt — sobald eine Zusage da ist, sag ich dir Bescheid ✨",
+  coordPartnerAskApprove:
+    "Dein Date in ~1 Std. sucht einen Weg, dich am Ort zu finden 💬\n\n" +
+    "Dein Telegram mit {name} teilen?",
+  coordPartnerBtnApprove: "✨ Telegram teilen",
+  coordPartnerBtnDecline: "Jetzt nicht",
+  coordRevealToInitiator:
+    "{name} hat Telegram geteilt, damit ihr euch findet 💬\n\n" +
+    "{link}\n\nKurz Hallo sagen — viel Spaß beim Date!",
+  coordPartnerDeclined:
+    "Dein Match teilt gerade lieber keine Kontakte — kein Stress. Der anonyme Chat öffnet ~30 Min. vorher, falls du den nutzen willst.",
+  coordProxyOpenedEnterPrompt:
+    "Dein anonymer Chat ist offen 🕶\n\n" +
+    "Nachrichten laufen über mich, Kontakte bleiben privat. Gut, um euch zu finden oder kurz Bescheid zu geben. Schließt ein paar Stunden nach dem Date.",
+  coordEnterBtn: "💬 Chat öffnen",
+  coordExitBtn: "❌ Chat verlassen",
+  coordReportBtn: "🚨 Melden",
+  coordChatEntered:
+    "Du bist im anonymen Chat 🕶 Schreib einfach, ich leite weiter. Du kannst jederzeit raus.",
+  coordChatExited: "Chat verlassen. /menu bringt dich zurück.",
+  coordProxyRelayPrefix: "💬 Dein Date: ",
+  coordProxyTextOnly:
+    "Hier gehen nur Textnachrichten durch — Fotos und Sprachnachrichten leite ich nicht weiter.",
+  coordProxyClosed:
+    "Der anonyme Chat ist zu. Ich hoffe, das Date war gut — morgen melde ich mich ✨",
+  coordAlreadyChosen: "Du hast für dieses Date schon eine Option gewählt.",
+  coordSharedAck: "Erledigt — jetzt findet dich dein Date 💬 Viel Spaß!",
+  coordProxyChosenAck:
+    "Alles klar 🕶 Dein anonymer Chat öffnet etwa 30 Minuten vor dem Date — den Button schick ich dir dann.",
 };
 
 const plTranslations: TranslationTable = {
@@ -3533,6 +3596,70 @@ const plTranslations: TranslationTable = {
     "Oho, sporo wiadomości naraz — daj mi kilka sekund, potem ruszamy dalej. 🙂",
   rateLimitDailyBudgetNotice:
     "Dziś jesteś bardzo aktywny/a 🙂 Wróćmy do tego jutro — na dziś limit wyczerpany, żeby wszystko działało płynnie dla wszystkich.",
+
+  // --- Live Photo admission ---
+  livePhotoMissingStatic:
+    "W tym Live Photo brakuje klatki zdjęcia, więc nie mogę go sprawdzić. Wyślij zwykłe zdjęcie albo inne Live Photo.",
+  livePhotoTooLong:
+    "Live Photo może mieć najwyżej 10 sekund. Wyślij krótsze albo zwykłe zdjęcie.",
+  livePhotoTooLarge:
+    "Live Photo może ważyć najwyżej 10 MB. Wyślij mniejsze albo zwykłe zdjęcie.",
+
+  // --- Date Ticket DMs ---
+  // Phrased around the gendered past tense: passive ("jest opłacony") and
+  // grammatical agreement with the noun ("druga strona nie odebrała") keep these
+  // correct for any user/partner gender without slash-forms.
+  ticketBothSecuredDm: "Oba bilety są 🎟️ Randka aktualna — zostaje termin.",
+  ticketPartnerPaidDm:
+    "Twój bilet jest już opłacony przez {name} ❤️ Nic nie płacisz.",
+  ticketCoveredHerConfirm:
+    "💛 Gotowe — bilet dla {name} opłacony. Dam znać, gdy tylko go zobaczy.",
+  ticketPartnerSawItDm: "❤️ {name} już wie, że bilet jest od Ciebie.",
+  ticketRefundedDm:
+    "Twój bilet został zwrócony — druga strona nie odebrała swojego na czas. Bez stresu: planowanie terminu jest teraz otwarte za darmo 📅",
+
+  // --- Pre-date coordination ---
+  coordOfferIntro:
+    "Twoja randka jest za jakąś godzinę.\n\n" +
+    "Jak chcecie się znaleźć na miejscu? Wybierz opcję:",
+  coordOfferNoContactNote:
+    "Twoja randka jest za jakąś godzinę.\n\n" +
+    "Twój match nie ma publicznej nazwy na Telegramie, więc bezpośredni kontakt odpada. Zostaje anonimowy czat przeze mnie:",
+  coordBtnShareSelf: "📲 Udostępnij mój Telegram",
+  coordBtnRequestPartner: "🙋 Poproś o kontakt",
+  coordBtnProxy: "🕶 Anonimowy czat",
+  coordSharedToPartner:
+    "Twój match udostępnił swój Telegram, żebyście się znaleźli 💬\n\n" +
+    "{name}: {link}\n\nNapisz cześć — do zobaczenia!",
+  coordRequestAck: "Pytanie poszło. Dam znać, gdy tylko będzie zgoda ✨",
+  coordPartnerAskApprove:
+    "Twoja randka za ~1 godz. — przydałby się sposób, żeby Cię znaleźć na miejscu 💬\n\n" +
+    "Udostępnić Twój Telegram dla {name}?",
+  coordPartnerBtnApprove: "✨ Udostępnij Telegram",
+  coordPartnerBtnDecline: "Nie teraz",
+  coordRevealToInitiator:
+    "{name} udostępnia swój Telegram, żebyście się znaleźli 💬\n\n" +
+    "{link}\n\nNapisz cześć — udanej randki!",
+  coordPartnerDeclined:
+    "Twój match woli teraz nie wymieniać się kontaktami — bez stresu. Anonimowy czat otwiera się ~30 min wcześniej, jeśli wolisz tak.",
+  coordProxyOpenedEnterPrompt:
+    "Anonimowy czat jest otwarty 🕶\n\n" +
+    "Wiadomości idą przeze mnie, kontakty zostają prywatne. Przyda się, żeby się znaleźć albo dać znać o spóźnieniu. Zamyka się parę godzin po randce.",
+  coordEnterBtn: "💬 Wejdź na czat",
+  coordExitBtn: "❌ Opuść czat",
+  coordReportBtn: "🚨 Zgłoś",
+  coordChatEntered:
+    "Jesteś na anonimowym czacie 🕶 Pisz normalnie — przekażę dalej. Możesz wyjść w każdej chwili.",
+  coordChatExited: "Czat zamknięty. /menu wraca do menu.",
+  coordProxyRelayPrefix: "💬 Twój match: ",
+  coordProxyTextOnly:
+    "Tu przechodzą tylko wiadomości tekstowe — zdjęć i głosówek nie przekazuję.",
+  coordProxyClosed:
+    "Anonimowy czat zamknięty. Mam nadzieję, że randka wyszła — odezwę się jutro ✨",
+  coordAlreadyChosen: "Opcja dla tej randki jest już wybrana.",
+  coordSharedAck: "Gotowe — teraz można Cię znaleźć 💬 Udanej randki!",
+  coordProxyChosenAck:
+    "Jasne 🕶 Anonimowy czat otworzy się jakieś 30 minut przed randką — wtedy wyślę przycisk.",
 };
 
 const translationsByLanguage: Record<Language, TranslationTable> = {

@@ -1,6 +1,23 @@
 import { describe, it, expect } from "vitest";
-import { t } from "./i18n.js";
+import { t, TRANSLATION_KEYS } from "./i18n.js";
 import { SUPPORTED_LANGUAGES } from "./types.js";
+
+/**
+ * Keys that are legitimately byte-identical to English in de/pl.
+ * Everything here must be either a pure template/glyph (nothing to translate)
+ * or a deliberate product decision — never "we forgot".
+ */
+const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
+  // Deliberate fixed English brand line in all five locales (PRODUCT_SPEC §3.7a).
+  "dateCardSlogan",
+  // Pure glyphs / placeholder templates — no prose to translate.
+  "btnLike",
+  "btnDislike",
+  "myProfileBody",
+  "photoManagerDeleteBtn",
+  "matchPhotoCaption",
+  "coordProxyRelayNamedPrefix",
+]);
 
 describe("t (translation)", () => {
   it("returns English string by default", () => {
@@ -87,6 +104,25 @@ describe("t (translation)", () => {
       }
     }
   });
+
+  // `deTranslations`/`plTranslations` are built as `{ ...translations.en, ...overrides }`,
+  // so a key nobody overrode silently renders ENGLISH to the user rather than
+  // failing. That shipped the whole pre-date coordination flow + the ticket DMs
+  // in English to de/pl users. Nothing but this test catches the next one.
+  it.each(["de", "pl"] as const)(
+    "%s never falls through to the English string (spread-inheritance guard)",
+    (lang) => {
+      const leaked = TRANSLATION_KEYS.filter(
+        (key) =>
+          !ALLOWED_IDENTICAL_TO_EN.has(key) && t(lang, key) === t("en", key),
+      );
+      expect(
+        leaked,
+        `${leaked.length} ${lang} key(s) are byte-identical to English — either translate them, ` +
+          `or add them to ALLOWED_IDENTICAL_TO_EN with a reason if there is genuinely nothing to translate.`,
+      ).toEqual([]);
+    },
+  );
 
   it("menu keys contain expected action labels in English", () => {
     expect(t("en", "menuMyProfile")).toContain("My Profile");
