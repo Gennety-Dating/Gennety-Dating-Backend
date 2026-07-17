@@ -682,6 +682,7 @@ describe("onboarding-agent", () => {
         preference: "men",
         email: "alice@stanford.edu",
         isEmailVerified: true,
+        termsAccepted: true,
         aiMemoryExportPreference: "accepted",
         profile: {
           ethnicity: null,
@@ -750,6 +751,7 @@ describe("onboarding-agent", () => {
         preference: "men",
         email: "alice@stanford.edu",
         isEmailVerified: true,
+        termsAccepted: true,
         aiMemoryExportPreference: "accepted",
         profile: {
           ethnicity: null,
@@ -797,6 +799,7 @@ describe("onboarding-agent", () => {
         preference: "men",
         email: "alice@stanford.edu",
         isEmailVerified: true,
+        termsAccepted: true,
         profile: {
           height: null,
           hobbies: [],
@@ -860,6 +863,7 @@ describe("onboarding-agent", () => {
         preference: "men",
         email: "alice@stanford.edu",
         isEmailVerified: true,
+        termsAccepted: true,
         aiMemoryExportPreference: "declined",
         profile: {
           ethnicity: "Ukrainian",

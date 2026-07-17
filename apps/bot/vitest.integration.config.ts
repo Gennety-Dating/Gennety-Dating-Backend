@@ -25,6 +25,9 @@ export default defineConfig({
     globals: false,
     environment: "node",
     include: ["src/**/*.integration.test.ts"],
+    // Every integration file owns the same disposable database and truncates
+    // it in beforeEach. Parallel files can erase each other's fixtures.
+    fileParallelism: false,
     testTimeout: 30_000,
     setupFiles: ["./src/test-setup.ts"],
     /** Load test env vars. */

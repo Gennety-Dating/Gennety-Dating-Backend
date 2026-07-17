@@ -5,9 +5,15 @@ import type { InlineKeyboardButton, InlineKeyboardMarkup } from "grammy/types";
 import { callOpenAIJson } from "../../services/openai.js";
 import {
   applyReportAction,
+  moderationOutcomeRequiresCancellation,
   notifyReportedUser,
   type ReportTier,
 } from "../../services/moderation.js";
+import {
+  claimInFlightMatchCancellations,
+  deliverCancelledPartnerEffects,
+  type CancelledPartner,
+} from "../../services/cancel-in-flight-matches.js";
 
 /**
  * Post-match Report flow (PRODUCT_SPEC extension — Reporting & Moderation).
@@ -344,6 +350,7 @@ async function submitStructuredReport(
     | Awaited<ReturnType<typeof applyReportAction>>
     | { kind: "tier1" }
     | null = null;
+  let cancelledPartners: CancelledPartner[] = [];
 
   try {
     if (triage.manualReviewRequired) {
@@ -379,7 +386,7 @@ async function submitStructuredReport(
       });
       outcome = { kind: "tier1" };
     } else {
-      outcome = await prisma.$transaction(async (tx) => {
+      const result = await prisma.$transaction(async (tx) => {
         await tx.report.create({
           data: {
             reporterId: reportContext.reporterId,
@@ -391,14 +398,24 @@ async function submitStructuredReport(
             adminReviewed: tier !== 3,
           },
         });
-        return applyReportAction({
+        const actionOutcome = await applyReportAction({
           tier,
           reporterUserId: reportContext.reporterId,
           reportedUserId: reportContext.reportedUserId,
           reasonSummary,
           language: lang,
-        }, tx, ctx.api);
+        }, tx);
+        const cancellations = moderationOutcomeRequiresCancellation(actionOutcome)
+          ? await claimInFlightMatchCancellations(
+              reportContext.reportedUserId,
+              tx,
+              { strict: true },
+            )
+          : [];
+        return { actionOutcome, cancellations };
       });
+      outcome = result.actionOutcome;
+      cancelledPartners = result.cancellations;
     }
   } catch (err) {
     // Unique violation (reporter already filed on this match) or transient DB error.
@@ -407,6 +424,7 @@ async function submitStructuredReport(
     return;
   }
 
+  await deliverCancelledPartnerEffects(cancelledPartners, ctx.api);
   if (!triage.manualReviewRequired && outcome) {
     await notifyReportedUser(ctx.api, reportContext.reportedUserId, outcome);
   }

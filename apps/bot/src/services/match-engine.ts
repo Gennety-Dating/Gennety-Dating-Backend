@@ -1,5 +1,10 @@
 import { prisma } from "@gennety/db";
 import { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
+import {
+  hasTrackVerifiedContact,
+  TRACK_VERIFIED_CONTACT_SQL,
+  TRACK_VERIFIED_CONTACT_WHERE,
+} from "./contact-verification.js";
 
 /**
  * Match engine — multi-factor candidate scoring.
@@ -21,10 +26,8 @@ import { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
  *   3. Mutual gender compatibility: a's preference must include b's gender
  *      AND b's preference must include a's gender.
  *   4. Same dating city (`Profile.homeCityKey`) while keeping a verified
- *      contact rail as the trust gate — a verified university/corporate
- *      email OR a verified phone (Registration v2 general track). Legacy
- *      users are all email-verified, so the union is a strict superset of
- *      the old email-only rule.
+ *      contact rail as the trust gate — verified university email for
+ *      student/legacy users, or a Telegram-vouched phone for general users.
  *   5. Lifetime ban: exclude any pair that appears in ANY historical Match
  *      row — regardless of terminal status (proposed, negotiating, scheduled,
  *      accepted, cancelled, completed, expired). A user never sees the same
@@ -396,7 +399,7 @@ export function buildCandidateSql(): string {
           AND u.verification_skipped_at IS NOT NULL
         )
       )
-      AND (u.is_email_verified OR u.phone_verified_at IS NOT NULL)
+      AND ${TRACK_VERIFIED_CONTACT_SQL}
       AND p.home_city_key = $3
       AND p.latitude IS NOT NULL
       AND p.longitude IS NOT NULL
@@ -890,9 +893,11 @@ export async function findCandidatesFor(
       gender: true,
       major: true,
       preference: true,
+      email: true,
       universityDomain: true,
       isEmailVerified: true,
       phoneVerifiedAt: true,
+      registrationTrack: true,
       verificationStatus: true,
       verificationSkippedAt: true,
       status: true,
@@ -923,8 +928,7 @@ export async function findCandidatesFor(
       seeker.verificationStatus === "verified" ||
       (seeker.verificationStatus === "unverified" && seeker.verificationSkippedAt !== null)
     ) ||
-    // Registration v2 union contact rail: verified email OR verified phone.
-    (!seeker.isEmailVerified && !seeker.phoneVerifiedAt) ||
+    !hasTrackVerifiedContact(seeker) ||
     !seeker.profile?.homeCityKey ||
     seeker.profile.latitude === null ||
     seeker.profile.longitude === null
@@ -1307,8 +1311,7 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
       gender: { not: null },
       preference: { not: null },
       AND: [
-        // Registration v2 union contact rail: verified email OR verified phone.
-        { OR: [{ isEmailVerified: true }, { phoneVerifiedAt: { not: null } }] },
+        TRACK_VERIFIED_CONTACT_WHERE,
         // Mandatory identity gate with an explicit persisted legacy cohort.
         {
           OR: [
@@ -1358,7 +1361,7 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
       gender: { not: null },
       preference: { not: null },
       AND: [
-        { OR: [{ isEmailVerified: true }, { phoneVerifiedAt: { not: null } }] },
+        TRACK_VERIFIED_CONTACT_WHERE,
         {
           OR: [
             { verificationStatus: "verified" },

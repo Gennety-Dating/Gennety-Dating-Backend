@@ -75,7 +75,13 @@ describe("cancelInFlightMatchesForUser", () => {
     expect(chatId).toBe(200);
     expect(typeof body).toBe("string");
     expect(result).toEqual([
-      { matchId: "m1", partnerUserId: PARTNER, partnerTelegramId: 200n, partnerLanguage: "ru" },
+      {
+        matchId: "m1",
+        partnerUserId: PARTNER,
+        partnerTelegramId: 200n,
+        partnerLanguage: "ru",
+        partnerPlatform: "telegram",
+      },
     ]);
   });
 
@@ -174,6 +180,7 @@ describe("cancelInFlightMatchesForUser", () => {
         partnerUserId: "cccccccc-cccc-cccc-cccc-cccccccccccc",
         partnerTelegramId: 300n,
         partnerLanguage: "en",
+        partnerPlatform: "telegram",
       },
     ]);
     expect(sendMessage).toHaveBeenCalledTimes(1);

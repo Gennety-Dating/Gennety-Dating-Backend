@@ -14,6 +14,7 @@ import {
   KEEP_RECENT_MESSAGES,
   contextDumpInstruction,
   magicContextPrompt,
+  t,
   PROFILER_ENTRY_DELAY_MS,
 } from "@gennety/shared";
 import { env } from "../config.js";
@@ -39,6 +40,7 @@ import {
   type OnboardingInput,
   type OnboardingQuestion,
 } from "./onboarding-collector.js";
+import { hasTrackVerifiedContact } from "./contact-verification.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -710,6 +712,8 @@ interface PersistedOnboardingState {
   universityDomain?: string | null;
   isEmailVerified?: boolean | null;
   phoneVerifiedAt?: Date | null;
+  registrationTrack?: string | null;
+  termsAccepted?: boolean | null;
   aiMemoryExportPreference?: "undecided" | "accepted" | "declined" | null;
   profile?: {
     ethnicity?: string | null;
@@ -852,11 +856,7 @@ function buildCurrentSavedStateSnapshot(
   const profile = user?.profile ?? null;
   const hobbies = Array.isArray(profile?.hobbies) ? profile.hobbies : [];
   const photos = Array.isArray(profile?.photos) ? profile.photos : [];
-  // Registration v2: a verified phone (Telegram one-tap, general track)
-  // satisfies the contact gate in place of the university email.
-  const contactVerified = Boolean(
-    (user?.isEmailVerified && user?.email) || user?.phoneVerifiedAt,
-  );
+  const contactVerified = hasTrackVerifiedContact(user ?? {});
   const aiMemoryExportDeclined = user?.aiMemoryExportPreference === "declined";
 
   const missing: string[] = [];
@@ -875,12 +875,12 @@ function buildCurrentSavedStateSnapshot(
     CURRENT_ONBOARDING_STATE_MARKER,
     "Use this database snapshot as the source of truth over chat memory.",
     "Never re-ask a field marked saved here. If a saved field is not visible in the chat, still treat it as collected.",
-    `Email: ${
-      user?.isEmailVerified && user?.email
-        ? `verified:${user?.universityDomain ?? "domain_saved"}`
-        : user?.phoneVerifiedAt
-          ? "not_needed:phone_verified"
-          : "missing"
+    `Track contact: ${
+      !contactVerified
+        ? "missing"
+        : user?.registrationTrack === "general"
+          ? "verified:telegram_phone"
+          : `verified_email:${user?.universityDomain ?? "domain_saved"}`
     }`,
     `Profile basics: first_name=${status(user?.firstName)}, age=${user?.age ?? "missing"}, gender=${user?.gender ?? "missing"}, preference=${user?.preference ?? "missing"}`,
     `Extended profile: height=${profile?.height ?? "missing"}, ethnicity=${status(profile?.ethnicity)}, hobbies_count=${hobbies.length}, partner_preferences=${status(profile?.partnerPreferences)}`,
@@ -1293,10 +1293,7 @@ function missingBeforePhoto(
 ): string[] {
   const missing: string[] = [];
   const profile = user?.profile ?? null;
-  // Registration v2: a verified phone OR a verified university email
-  // satisfies the contact gate.
-  if (!(user?.phoneVerifiedAt || (user?.isEmailVerified && user.email)))
-    missing.push("email_verification");
+  if (!hasTrackVerifiedContact(user ?? {})) missing.push("contact_verification");
   if (!user?.firstName) missing.push("first_name");
   if (!user?.age) missing.push("age");
   if (!user?.gender) missing.push("gender");
@@ -1486,6 +1483,8 @@ async function execFinalizeOnboarding(
       email: true,
       isEmailVerified: true,
       phoneVerifiedAt: true,
+      registrationTrack: true,
+      termsAccepted: true,
       language: true,
       aiMemoryExportPreference: true,
       profile: {
@@ -1508,10 +1507,8 @@ async function execFinalizeOnboarding(
   if (!user?.age) missing.push("age");
   if (!user?.gender) missing.push("gender");
   if (!user?.preference) missing.push("preference");
-  // Registration v2: a verified phone OR a verified university email
-  // satisfies the contact gate.
-  if (!(user?.phoneVerifiedAt || (user?.isEmailVerified && user.email)))
-    missing.push("contact (phone/email not verified)");
+  if (!user?.termsAccepted) missing.push("terms_acceptance");
+  if (!hasTrackVerifiedContact(user ?? {})) missing.push("track contact not verified");
   if (!user?.profile?.height) missing.push("height");
   // Hobbies are no longer a blocking requirement: whatever the user shared
   // (including "no hobbies" / an empty list) is a valid answer.
@@ -1811,6 +1808,8 @@ export async function runAgentTurn(
       universityDomain: true,
       isEmailVerified: true,
       phoneVerifiedAt: true,
+      registrationTrack: true,
+      termsAccepted: true,
       aiMemoryExportPreference: true,
       firstName: true,
       age: true,
@@ -1831,6 +1830,21 @@ export async function runAgentTurn(
       },
     },
   });
+
+  // Every production row has a concrete boolean. The explicit comparison
+  // keeps older unit-test fixtures (which predate the field) compatible while
+  // preventing real users from invoking the agent before legal consent.
+  if (user?.termsAccepted === false) {
+    return {
+      reply: t(user.language ?? "en", "consentMessage"),
+      expectingPhoto: false,
+      onboardingComplete: false,
+      verificationRequired: false,
+      contextPromptRequested: false,
+      contextDumpStarted: false,
+      contextDumpSaved: false,
+    };
+  }
 
   if (onboardingInput.kind === "photos_continue") {
     const history = ((user?.messageHistory ?? []) as unknown[]).map(
@@ -1878,9 +1892,7 @@ export async function runAgentTurn(
   if (
     env.ONBOARDING_FACT_COLLECTOR_ENABLED &&
     user?.onboardingStep === "conversational" &&
-    // Registration v2: a verified phone OR a verified email satisfies the
-    // contact gate before the collector takes over.
-    (user.phoneVerifiedAt || (user.isEmailVerified && user.email))
+    hasTrackVerifiedContact(user)
   ) {
     return runCollectorTurn(telegramId, onboardingInput, deps);
   }
@@ -1901,11 +1913,13 @@ export async function runAgentTurn(
     // entirely. The agent used to drift back to "MUST provide corporate
     // email" mid-conversation when only a trailing override note told it to
     // skip step 1; now the conflicting rule simply isn't in the prompt.
-    const emailVerified = Boolean(user?.isEmailVerified && user?.email);
-    // Registration v2: phone (Telegram one-tap, general track) satisfies the
-    // contact gate in place of email.
-    const phoneVerified = Boolean(user?.phoneVerifiedAt);
-    const emailAlreadyVerified = emailVerified || phoneVerified;
+    const emailVerified = Boolean(
+      user?.registrationTrack !== "general" && user?.isEmailVerified && user?.email,
+    );
+    const phoneVerified = Boolean(
+      user?.registrationTrack === "general" && user?.phoneVerifiedAt,
+    );
+    const emailAlreadyVerified = hasTrackVerifiedContact(user ?? {});
     const aiMemoryExportDeclined = user?.aiMemoryExportPreference === "declined";
     const verifiedNote = emailVerified
       ? `[VERIFIED EMAIL ON FILE: ${user!.email}] DO NOT ask the user for their email. DO NOT mention email verification. Skip step 1 of the onboarding flow entirely and move directly to profile basics (step 2). Briefly acknowledge in the user's language (e.g. "your @${user!.universityDomain ?? user!.email!.split("@")[1]} email is already verified"), then ask for first name + age. Do NOT add a ✅ or any "Complete"-style emoji to this acknowledgement.`
@@ -2083,6 +2097,8 @@ export async function runAgentTurn(
                     email: true,
                     isEmailVerified: true,
                     phoneVerifiedAt: true,
+                    registrationTrack: true,
+                    termsAccepted: true,
                     aiMemoryExportPreference: true,
                     profile: {
                       select: {

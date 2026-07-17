@@ -2,7 +2,6 @@ import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
-import { cancelInFlightMatchesForUser } from "./cancel-in-flight-matches.js";
 import { sendPushToUser } from "./push.js";
 
 /**
@@ -44,7 +43,6 @@ export type ModerationOutcome =
 export async function applyReportAction(
   input: ApplyReportActionInput,
   db: ModerationDb = prisma,
-  api: Api<RawApi> | null = null,
 ): Promise<ModerationOutcome> {
   const { tier, reporterUserId, reportedUserId, reasonSummary, language } = input;
 
@@ -58,7 +56,6 @@ export async function applyReportAction(
       where: { id: reportedUserId },
       data: { status: "pending_investigation" },
     });
-    await cancelInFlightMatchesForUser(reportedUserId, api);
     return { kind: "tier3_frozen" };
   }
 
@@ -76,7 +73,6 @@ export async function applyReportAction(
       where: { id: reportedUserId },
       data: { status: "banned" },
     });
-    await cancelInFlightMatchesForUser(reportedUserId, api);
     return { kind: "tier2_banned", strikes };
   }
   if (strikes === 2) {
@@ -85,7 +81,6 @@ export async function applyReportAction(
       where: { id: reportedUserId },
       data: { status: "suspended", suspendedUntil: until },
     });
-    await cancelInFlightMatchesForUser(reportedUserId, api);
     return { kind: "tier2_suspended", strikes: 2, until };
   }
   return { kind: "tier2_warning", strikes: 1 };
@@ -96,7 +91,7 @@ export async function applyReportAction(
  * are logged but don't surface to the reporter.
  */
 export async function notifyReportedUser(
-  api: Api<RawApi>,
+  api: Api<RawApi> | null,
   reportedUserId: string,
   outcome: ModerationOutcome,
 ): Promise<void> {
@@ -104,7 +99,7 @@ export async function notifyReportedUser(
 
   const user = await prisma.user.findUnique({
     where: { id: reportedUserId },
-    select: { telegramId: true, language: true },
+    select: { telegramId: true, language: true, platform: true },
   });
   if (!user) return;
 
@@ -112,23 +107,33 @@ export async function notifyReportedUser(
   const key = messageKeyFor(outcome);
   if (!key) return;
 
-  // M-17: mobile-only users (synthetic negative telegramId) can't be DM'd —
-  // deliver the same moderation outcome via push instead. Best-effort:
-  // `sendPushToUser` no-ops without a token and swallows its own errors.
-  if (user.telegramId <= 0n) {
+  if (user.platform === "mobile" || user.platform === "both") {
     await sendPushToUser(reportedUserId, {
       title: "Gennety",
       body: t(lang, key),
       data: { type: "moderation" },
     });
-    return;
   }
 
-  try {
-    await api.sendMessage(Number(user.telegramId), t(lang, key));
-  } catch (err) {
-    console.warn("Failed to notify reported user of moderation outcome:", err);
+  if (
+    api &&
+    user.telegramId > 0n &&
+    (user.platform === "telegram" || user.platform === "both")
+  ) {
+    try {
+      await api.sendMessage(Number(user.telegramId), t(lang, key));
+    } catch (err) {
+      console.warn("Failed to notify reported user of moderation outcome:", err);
+    }
   }
+}
+
+export function moderationOutcomeRequiresCancellation(outcome: ModerationOutcome): boolean {
+  return (
+    outcome.kind === "tier2_suspended" ||
+    outcome.kind === "tier2_banned" ||
+    outcome.kind === "tier3_frozen"
+  );
 }
 
 type ReportDmKey =

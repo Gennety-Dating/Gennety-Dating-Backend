@@ -24,54 +24,58 @@ export async function createAndSendOtp(
 ): Promise<OtpChallengeState> {
   const normalisedEmail = email.toLowerCase();
 
-  // Per-email resend cooldown, enforced server-side and independent of the
-  // per-IP request limiter (audit L2), so an IP-rotating attacker can't
-  // email-bomb a victim's inbox — at most one send per `OTP_RESEND_COOLDOWN_MS`
-  // per address, regardless of source IP. A resend inside the window returns the
-  // existing live challenge WITHOUT minting/sending a new code, matching the
-  // resend timer the UI already surfaces. Only a live, unconsumed, non-exhausted
-  // challenge suppresses a resend; an expired/exhausted one falls through so the
-  // user can always get a fresh code.
-  const existing = await prisma.emailOtp.findFirst({
-    where: { email: normalisedEmail, consumedAt: null },
-    orderBy: { createdAt: "desc" },
-    select: { createdAt: true, expiresAt: true, attempts: true },
-  });
-  if (
-    existing &&
-    existing.expiresAt > new Date() &&
-    existing.attempts < OTP_MAX_ATTEMPTS &&
-    Date.now() - existing.createdAt.getTime() < OTP_RESEND_COOLDOWN_MS
-  ) {
-    return {
-      status: "pending",
-      expiresAt: existing.expiresAt,
-      resendAvailableAt: new Date(existing.createdAt.getTime() + OTP_RESEND_COOLDOWN_MS),
-      attemptsRemaining: Math.max(0, OTP_MAX_ATTEMPTS - existing.attempts),
-    };
-  }
+  // The cooldown check and challenge creation must be serialized per email.
+  // A plain find-then-create lets simultaneous requests all send a code. A
+  // transaction-scoped PostgreSQL advisory lock works across every Node/PM2
+  // process without a schema change. Delivery remains inside the bounded
+  // transaction (the email client has a 15s timeout), so a failed send rolls
+  // the challenge back and a waiting retry can safely create the next one.
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$queryRawUnsafe(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+        normalisedEmail,
+      );
+      const now = new Date();
+      const existing = await tx.emailOtp.findFirst({
+        where: { email: normalisedEmail, consumedAt: null },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true, expiresAt: true, attempts: true },
+      });
+      if (
+        existing &&
+        existing.expiresAt > now &&
+        existing.attempts < OTP_MAX_ATTEMPTS &&
+        now.getTime() - existing.createdAt.getTime() < OTP_RESEND_COOLDOWN_MS
+      ) {
+        return {
+          status: "pending" as const,
+          expiresAt: existing.expiresAt,
+          resendAvailableAt: new Date(
+            existing.createdAt.getTime() + OTP_RESEND_COOLDOWN_MS,
+          ),
+          attemptsRemaining: Math.max(0, OTP_MAX_ATTEMPTS - existing.attempts),
+        };
+      }
 
-  const code = generateOtp(OTP_LENGTH);
-  const codeHash = await bcrypt.hash(code, 10);
-  const expiresAt = new Date(Date.now() + OTP_TTL_MS);
-
-  const challenge = await prisma.emailOtp.create({
-    data: { email: normalisedEmail, codeHash, expiresAt },
-  });
-
-  try {
-    await send(email, code);
-  } catch (error) {
-    await prisma.emailOtp.delete({ where: { id: challenge.id } }).catch(() => undefined);
-    throw error;
-  }
-
-  return {
-    status: "pending",
-    expiresAt,
-    resendAvailableAt: new Date(challenge.createdAt.getTime() + OTP_RESEND_COOLDOWN_MS),
-    attemptsRemaining: OTP_MAX_ATTEMPTS,
-  };
+      const code = generateOtp(OTP_LENGTH);
+      const codeHash = await bcrypt.hash(code, 10);
+      const expiresAt = new Date(now.getTime() + OTP_TTL_MS);
+      const challenge = await tx.emailOtp.create({
+        data: { email: normalisedEmail, codeHash, expiresAt },
+      });
+      await send(email, code);
+      return {
+        status: "pending" as const,
+        expiresAt,
+        resendAvailableAt: new Date(
+          challenge.createdAt.getTime() + OTP_RESEND_COOLDOWN_MS,
+        ),
+        attemptsRemaining: OTP_MAX_ATTEMPTS,
+      };
+    },
+    { timeout: 20_000 },
+  );
 }
 
 export async function getOtpChallengeState(

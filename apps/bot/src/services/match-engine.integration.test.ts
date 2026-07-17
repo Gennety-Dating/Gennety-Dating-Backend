@@ -22,6 +22,8 @@ import {
 import {
   buildCandidateSql,
   createProposedMatch,
+  findCandidatesFor,
+  loadEligibleUsers,
   MATCH_COOLDOWN_MS,
 } from "./match-engine.js";
 
@@ -54,6 +56,7 @@ async function seedFullUser(opts: {
   // Registration v2 contact rails (default: email-verified legacy user).
   isEmailVerified?: boolean;
   phoneVerifiedAt?: Date | null;
+  registrationTrack?: "student" | "general" | null;
 }) {
   const user = await seedUser({
     gender: opts.gender ?? "male",
@@ -72,6 +75,9 @@ async function seedFullUser(opts: {
       : {}),
     ...(opts.phoneVerifiedAt !== undefined
       ? { phoneVerifiedAt: opts.phoneVerifiedAt }
+      : {}),
+    ...(opts.registrationTrack !== undefined
+      ? { registrationTrack: opts.registrationTrack }
       : {}),
   });
 
@@ -182,6 +188,7 @@ describe("match-engine SQL (integration)", () => {
       preference: "men",
       isEmailVerified: false,
       phoneVerifiedAt: new Date(),
+      registrationTrack: "general",
       embeddingVal: 0.6,
     });
 
@@ -195,6 +202,91 @@ describe("match-engine SQL (integration)", () => {
 
     expect(rows.length).toBe(1);
     expect(rows[0]!.userId).toBe(phoneOnly.id);
+  });
+
+  it("does not let a student-track candidate substitute a phone for university email", async () => {
+    const seeker = await seedFullUser({ gender: "male", preference: "women" });
+    await seedFullUser({
+      gender: "female",
+      preference: "men",
+      registrationTrack: "student",
+      isEmailVerified: false,
+      phoneVerifiedAt: new Date(),
+    });
+
+    const rows = await queryCandidates(
+      seeker.id,
+      fakeEmbedding(),
+      "ua:kyiv",
+      "female",
+      new Date(Date.now() - MATCH_COOLDOWN_MS),
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("does not let a general-track candidate substitute email for a trusted phone", async () => {
+    const seeker = await seedFullUser({ gender: "male", preference: "women" });
+    await seedFullUser({
+      gender: "female",
+      preference: "men",
+      registrationTrack: "general",
+      isEmailVerified: true,
+      phoneVerifiedAt: null,
+    });
+
+    const rows = await queryCandidates(
+      seeker.id,
+      fakeEmbedding(),
+      "ua:kyiv",
+      "female",
+      new Date(Date.now() - MATCH_COOLDOWN_MS),
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("rejects a general-track seeker that only has verified email", async () => {
+    const seeker = await seedFullUser({
+      gender: "male",
+      preference: "women",
+      registrationTrack: "general",
+      isEmailVerified: true,
+      phoneVerifiedAt: null,
+    });
+    await seedFullUser({ gender: "female", preference: "men" });
+
+    await expect(findCandidatesFor(seeker.id)).resolves.toEqual([]);
+  });
+
+  it("keeps a valid legacy email-verified seeker eligible", async () => {
+    const seeker = await seedFullUser({ gender: "male", preference: "women" });
+    const candidate = await seedFullUser({ gender: "female", preference: "men" });
+
+    const results = await findCandidatesFor(seeker.id);
+    expect(results.map((result) => result.userId)).toContain(candidate.id);
+  });
+
+  it("applies the same track-aware predicate to batch eligibility", async () => {
+    const validLegacy = await seedFullUser({ gender: "male", preference: "women" });
+    const validGeneral = await seedFullUser({
+      gender: "female",
+      preference: "men",
+      registrationTrack: "general",
+      isEmailVerified: false,
+      phoneVerifiedAt: new Date(),
+    });
+    const invalidGeneral = await seedFullUser({
+      gender: "female",
+      preference: "men",
+      registrationTrack: "general",
+      isEmailVerified: true,
+      phoneVerifiedAt: null,
+    });
+
+    const eligible = await loadEligibleUsers();
+    const ids = eligible.map((user) => user.id);
+    expect(ids).toContain(validLegacy.id);
+    expect(ids).toContain(validGeneral.id);
+    expect(ids).not.toContain(invalidGeneral.id);
   });
 
   it("excludes a candidate with neither verified rail (no email, no phone)", async () => {

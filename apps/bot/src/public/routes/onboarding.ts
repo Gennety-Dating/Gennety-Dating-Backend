@@ -22,8 +22,29 @@ const upload = multer({
 async function loadUser(userId: string) {
   return prisma.user.findUniqueOrThrow({
     where: { id: userId },
-    select: { telegramId: true, onboardingStep: true, messageHistory: true, language: true },
+    select: {
+      telegramId: true,
+      onboardingStep: true,
+      messageHistory: true,
+      language: true,
+      termsAccepted: true,
+    },
   });
+}
+
+function ensureInterviewAllowed(
+  user: Awaited<ReturnType<typeof loadUser>>,
+  res: Response,
+): boolean {
+  if (!user.termsAccepted) {
+    res.status(409).json({ error: "Terms must be accepted before the interview" });
+    return false;
+  }
+  if (!user.language) {
+    res.status(409).json({ error: "Language must be selected before the interview" });
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -49,6 +70,7 @@ onboardingRouter.post("/interview/answer", agentTextLimiter, async (req: Request
   }
 
   const user = await loadUser(req.userId!);
+  if (!ensureInterviewAllowed(user, res)) return;
   const result = await runAgentTurn(user.telegramId, text);
 
   const ctx = await loadStateContext(req.userId!);
@@ -107,6 +129,7 @@ onboardingRouter.post(
     }
 
     const user = await loadUser(req.userId!);
+    if (!ensureInterviewAllowed(user, res)) return;
     const transcript = await transcribeVoice(req.file.buffer, {
       mime: req.file.mimetype,
       ...(user.language ? { language: user.language } : {}),

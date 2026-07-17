@@ -4,16 +4,21 @@ const emailOtpCreate = vi.fn();
 const emailOtpDelete = vi.fn();
 const emailOtpFindFirst = vi.fn();
 const emailOtpUpdateMany = vi.fn();
+const queryRawUnsafe = vi.fn();
+
+const prismaMock = {
+  emailOtp: {
+    create: emailOtpCreate,
+    delete: emailOtpDelete,
+    findFirst: emailOtpFindFirst,
+    updateMany: emailOtpUpdateMany,
+  },
+  $queryRawUnsafe: queryRawUnsafe,
+  $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(prismaMock)),
+};
 
 vi.mock("@gennety/db", () => ({
-  prisma: {
-    emailOtp: {
-      create: emailOtpCreate,
-      delete: emailOtpDelete,
-      findFirst: emailOtpFindFirst,
-      updateMany: emailOtpUpdateMany,
-    },
-  },
+  prisma: prismaMock,
 }));
 
 vi.mock("../services/email.js", () => ({
@@ -33,6 +38,7 @@ beforeEach(() => {
   emailOtpDelete.mockReset();
   emailOtpFindFirst.mockReset();
   emailOtpUpdateMany.mockReset();
+  queryRawUnsafe.mockReset();
 });
 
 describe("OTP challenge state", () => {
@@ -77,18 +83,36 @@ describe("OTP challenge state", () => {
     ).resolves.toMatchObject({ status: "exhausted", attemptsRemaining: 0 });
   });
 
-  it("removes a challenge when email delivery fails", async () => {
+  it("rolls back the challenge transaction when email delivery fails", async () => {
+    emailOtpFindFirst.mockResolvedValue(null);
     emailOtpCreate.mockResolvedValue({
       id: "otp-1",
       createdAt: new Date(),
     });
-    emailOtpDelete.mockResolvedValue({ id: "otp-1" });
     const send = vi.fn().mockRejectedValue(new Error("provider unavailable"));
 
     await expect(createAndSendOtp("alice@stanford.edu", send)).rejects.toThrow(
       "provider unavailable",
     );
-    expect(emailOtpDelete).toHaveBeenCalledWith({ where: { id: "otp-1" } });
+    expect(queryRawUnsafe).toHaveBeenCalledWith(
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+      "alice@stanford.edu",
+    );
+  });
+
+  it("returns the existing challenge without sending during the cooldown", async () => {
+    const createdAt = new Date();
+    const expiresAt = new Date(Date.now() + 60_000);
+    emailOtpFindFirst.mockResolvedValue({ createdAt, expiresAt, attempts: 1 });
+    const send = vi.fn();
+
+    await expect(createAndSendOtp("Alice@Stanford.edu", send)).resolves.toMatchObject({
+      status: "pending",
+      expiresAt,
+      attemptsRemaining: OTP_MAX_ATTEMPTS - 1,
+    });
+    expect(send).not.toHaveBeenCalled();
+    expect(emailOtpCreate).not.toHaveBeenCalled();
   });
 
   it("allows only one concurrent verifier to consume a valid challenge", async () => {

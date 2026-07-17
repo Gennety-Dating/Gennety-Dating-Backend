@@ -46,9 +46,11 @@ import {
 import { validateUserProfilePhoto } from "../../services/profile-media-validation/profile-photo-validation.js";
 import {
   commitProfilePhotoCandidate,
+  ProfilePhotoCommitConflictError,
   type PhotoConsensusCommitResult,
 } from "../../services/profile-media-validation/identity-consensus.js";
 import { photoUploadStatePatch } from "../../services/profile-media-validation/photo-state.js";
+import { sniffImageMime } from "../../utils/image-sniff.js";
 
 export const meRouter: Router = Router();
 
@@ -532,9 +534,9 @@ meRouter.post(
       return;
     }
 
-    const mime = req.file.mimetype || "image/jpeg";
-    if (!mime.startsWith("image/")) {
-      res.status(400).json({ error: "Photo must be an image" });
+    const mime = sniffImageMime(req.file.buffer);
+    if (!mime) {
+      res.status(400).json({ error: "The uploaded file is not a supported image" });
       return;
     }
 
@@ -542,13 +544,10 @@ meRouter.post(
       where: { userId: req.userId! },
       select: {
         photos: true,
-        profileMedia: true,
-        referenceFaceEmbedding: true,
         uploadedPhotoHashes: true,
       },
     });
     const existing = profile?.photos ?? [];
-    const existingMedia = normalizeProfileMedia(profile?.profileMedia ?? [], existing);
     const existingHashes = profile?.uploadedPhotoHashes ?? [];
     if (existing.length >= MAX_PHOTOS) {
       res.status(409).json({ error: "Photo limit reached", max: MAX_PHOTOS });
@@ -617,9 +616,8 @@ meRouter.post(
       return;
     }
 
-    let consensus: PhotoConsensusCommitResult | null = null;
-    let nextPhotos: string[];
-    if (env.PROFILE_MEDIA_VALIDATION_ENABLED) {
+    let consensus: PhotoConsensusCommitResult;
+    try {
       consensus = await commitProfilePhotoCandidate({
         userId: req.userId!,
         photoRef: uploadedPath,
@@ -630,47 +628,18 @@ meRouter.post(
         candidateBuffer: req.file.buffer,
         api: getBotApi(),
       });
-      nextPhotos = consensus.photos;
-    } else {
-      const nextMedia = [...existingMedia, profilePhotoMedia(uploadedPath)];
-      const photoState = photoUploadStatePatch({
-        photos: [...existing, uploadedPath],
-        uploadedPhotoHashes: existingHashes,
-        referenceFaceEmbedding: profile?.referenceFaceEmbedding ?? null,
-      });
-      // Append the gate's per-photo score in lockstep with `photos[]` so the
-      // admin dashboard can spot a specific weak photo. `null` (gate didn't
-      // run, e.g. unverified user) is preserved as such.
-      const existingScores = await prisma.profile
-        .findUnique({
-          where: { userId: req.userId! },
-          select: { photoFaceScores: true },
-        })
-        .then((p) => p?.photoFaceScores ?? []);
-      // Pad existingScores with 0 if it's shorter than existing photos (legacy
-      // rows from before this column existed). The 0 is a sentinel meaning
-      // "score unknown"; admin rerun will refill it on next pipeline run.
-      while (existingScores.length < existing.length) existingScores.push(0);
-      const nextScores = [...existingScores, gateScore ?? 0];
-      nextPhotos = [...existing, uploadedPath];
-
-      await prisma.profile.upsert({
-        where: { userId: req.userId! },
-        update: {
-          photos: nextPhotos,
-          profileMedia: profileMediaToJson(nextMedia),
-          photoFaceScores: nextScores,
-          ...photoState,
-        },
-        create: {
-          userId: req.userId!,
-          photos: nextPhotos,
-          profileMedia: profileMediaToJson(nextMedia),
-          photoFaceScores: nextScores,
-          ...photoState,
-        },
-      });
+    } catch (err) {
+      await deleteStorageObject(env.SUPABASE_PHOTO_BUCKET, uploadedPath).catch(() => false);
+      if (err instanceof ProfilePhotoCommitConflictError) {
+        res.status(409).json({
+          error: err.reason === "limit" ? "Photo limit reached" : "Photo already exists",
+          ...(err.reason === "limit" ? { max: MAX_PHOTOS } : { code: "duplicate_exact" }),
+        });
+        return;
+      }
+      throw err;
     }
+    const nextPhotos = consensus.photos;
 
     // The single-photo gate above re-checked just THIS frame against the
     // verified selfie, but the verification status (`verified` /
@@ -681,7 +650,7 @@ meRouter.post(
     // change the verdict but mustn't leave the score map misaligned
     // either. Fire-and-forget the pipeline; idempotency markers are
     // cleared inside the helper.
-    if (!consensus || consensus.status === "accepted" || consensus.status === "confirmed") {
+    if (consensus.status === "accepted" || consensus.status === "confirmed") {
       queueVerificationRerun(req.userId!);
     }
 
@@ -700,7 +669,7 @@ meRouter.post(
       try {
         await injectSystemMessage(
           userMeta.telegramId,
-          consensus && (consensus.status === "pending" || consensus.status === "capped")
+          consensus.status === "pending" || consensus.status === "capped"
             ? `User uploaded 1 photo via mobile that passed safety/face checks, but no identity anchor is fixed yet. Accepted photos: ${nextPhotos.length}/${MAX_PHOTOS}; pending candidates: ${consensus.pendingCount}. Ask for another different photo of the same person.`
             : `User uploaded 1 verified photo via mobile. Total uploaded: ${nextPhotos.length}/${MAX_PHOTOS}.`,
         );
@@ -719,14 +688,7 @@ meRouter.post(
 
     res.status(201).json({
       ...photosResponse,
-      ...(consensus
-        ? {
-            photoConsensus: serializePhotoConsensus(
-              consensus,
-              userMeta.language ?? "en",
-            ),
-          }
-        : {}),
+      photoConsensus: serializePhotoConsensus(consensus, userMeta.language ?? "en"),
       interviewState,
     });
   },
@@ -772,78 +734,87 @@ meRouter.delete(
       return;
     }
 
-    const user = await prisma.user.findUniqueOrThrow({
-      where: { id: req.userId! },
-      select: {
-        status: true,
-        profile: {
-          select: {
-            photos: true,
-            profileMedia: true,
-            photoFaceScores: true,
-            referenceFaceEmbedding: true,
-            uploadedPhotoHashes: true,
+    const deletion = await prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe(
+        "SELECT id FROM users WHERE id = $1::uuid FOR UPDATE",
+        req.userId!,
+      );
+      const user = await tx.user.findUniqueOrThrow({
+        where: { id: req.userId! },
+        select: {
+          status: true,
+          profile: {
+            select: {
+              photos: true,
+              profileMedia: true,
+              photoFaceScores: true,
+              referenceFaceEmbedding: true,
+              uploadedPhotoHashes: true,
+            },
           },
         },
-      },
+      });
+      const photos = user.profile?.photos ?? [];
+      const media = normalizeProfileMedia(user.profile?.profileMedia ?? [], photos);
+      if (index >= photos.length) return { kind: "not_found" as const };
+
+      const nextPhotos = [...photos.slice(0, index), ...photos.slice(index + 1)];
+      if (nextPhotos.length < MIN_PHOTOS && user.status === "active") {
+        return { kind: "minimum" as const };
+      }
+
+      const nextMedia = [...media.slice(0, index), ...media.slice(index + 1)];
+      const scores = user.profile?.photoFaceScores ?? [];
+      const nextScores =
+        scores.length === photos.length
+          ? [...scores.slice(0, index), ...scores.slice(index + 1)]
+          : [];
+      const hashes = user.profile?.uploadedPhotoHashes ?? [];
+      const nextHashes =
+        hashes.length === photos.length
+          ? [...hashes.slice(0, index), ...hashes.slice(index + 1)]
+          : [];
+      const photoState = photoUploadStatePatch({
+        photos: nextPhotos,
+        uploadedPhotoHashes: nextHashes,
+        referenceFaceEmbedding: user.profile?.referenceFaceEmbedding ?? null,
+        refreshReference: nextPhotos.length > 0 && index === 0,
+        clearReference: nextPhotos.length === 0,
+      });
+
+      await tx.profile.update({
+        where: { userId: req.userId! },
+        data: {
+          photos: nextPhotos,
+          profileMedia: profileMediaToJson(nextMedia),
+          photoFaceScores: nextScores,
+          ...photoState,
+        },
+      });
+      return { kind: "deleted" as const, removedPath: photos[index]!, nextPhotos };
     });
-    const photos = user.profile?.photos ?? [];
-    const media = normalizeProfileMedia(user.profile?.profileMedia ?? [], photos);
-    if (index >= photos.length) {
+
+    if (deletion.kind === "not_found") {
       res.status(404).json({ error: "Photo not found" });
       return;
     }
-
-    const nextPhotos = [...photos.slice(0, index), ...photos.slice(index + 1)];
-    const nextMedia = [...media.slice(0, index), ...media.slice(index + 1)];
-    if (nextPhotos.length < MIN_PHOTOS && user.status === "active") {
+    if (deletion.kind === "minimum") {
       res.status(409).json({ error: "Minimum photos required", min: MIN_PHOTOS });
       return;
     }
 
-    const removedPath = photos[index]!;
     try {
-      await deleteStorageObject(env.SUPABASE_PHOTO_BUCKET, removedPath);
+      await deleteStorageObject(env.SUPABASE_PHOTO_BUCKET, deletion.removedPath);
     } catch (err) {
       console.warn("[DELETE /v1/me/photos/:index] storage delete failed:", err);
     }
-
-    // Drop the corresponding face-match score in parallel — keeps the
-    // photoFaceScores[] array index-aligned with photos[].
-    const scores = user.profile?.photoFaceScores ?? [];
-    const nextScores =
-      scores.length === photos.length
-        ? [...scores.slice(0, index), ...scores.slice(index + 1)]
-        : []; // misaligned legacy row → reset; pipeline rerun refills
-    const hashes = user.profile?.uploadedPhotoHashes ?? [];
-    const nextHashes =
-      hashes.length === photos.length
-        ? [...hashes.slice(0, index), ...hashes.slice(index + 1)]
-        : [];
-    const photoState = photoUploadStatePatch({
-      photos: nextPhotos,
-      uploadedPhotoHashes: nextHashes,
-      referenceFaceEmbedding: user.profile?.referenceFaceEmbedding ?? null,
-      refreshReference: nextPhotos.length > 0 && index === 0,
-      clearReference: nextPhotos.length === 0,
-    });
-
-    await prisma.profile.update({
-      where: { userId: req.userId! },
-      data: {
-        photos: nextPhotos,
-        profileMedia: profileMediaToJson(nextMedia),
-        photoFaceScores: nextScores,
-        ...photoState,
-      },
-    });
 
     // After the photo array is committed: re-run the verification pipeline
     // so the verificationStatus reflects the new set. Fire-and-forget; the
     // photo-edit response shouldn't block on Persona/Rekognition latency.
     queueVerificationRerun(req.userId!);
 
-    res.json(await buildPhotosResponse(nextPhotos));
+    res.json(await buildPhotosResponse(deletion.nextPhotos));
   },
 );
 

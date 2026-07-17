@@ -3,7 +3,11 @@ import cors from "cors";
 import helmet from "helmet";
 import type { Api, RawApi } from "grammy";
 import { env } from "../config.js";
-import { globalLimiter, personaWebhookLimiter } from "./rate-limit.js";
+import {
+  globalLimiter,
+  mapTileLimiter,
+  personaWebhookLimiter,
+} from "./rate-limit.js";
 import { authRouter } from "./routes/auth.js";
 import { meRouter } from "./routes/me.js";
 import { onboardingRouter } from "./routes/onboarding.js";
@@ -101,10 +105,11 @@ app.use("/v1/webhooks/persona", personaWebhookLimiter, (req, res, next) => {
 // reach the tile CDN directly (regional CDN blocks), so the bot fetches tiles
 // server-side and streams them — the phone only ever talks to our own origin,
 // which it already reaches to load the Mini App. Tiles are public + immutable →
-// no auth, aggressive cache. Mounted before express.json + the global limiter
-// because one map view fetches ~15 tiles at once.
+// no auth, aggressive cache. It has a dedicated higher-volume limiter because
+// one map view fetches ~15 tiles at once, but it is never an unbounded proxy.
 const TILE_SUBDOMAINS = ["a", "b", "c", "d"] as const;
-app.get("/v1/maptiles/:z/:x/:y", async (req, res) => {
+const MAX_TILE_BYTES = 1024 * 1024;
+app.get("/v1/maptiles/:z/:x/:y", mapTileLimiter, async (req, res) => {
   const z = Number(req.params.z);
   const x = Number(req.params.x);
   const y = Number(req.params.y);
@@ -127,7 +132,31 @@ app.get("/v1/maptiles/:z/:x/:y", async (req, res) => {
       res.status(502).end();
       return;
     }
-    const buf = Buffer.from(await upstreamRes.arrayBuffer());
+    const declaredBytes = Number(upstreamRes.headers.get("content-length"));
+    if (Number.isFinite(declaredBytes) && declaredBytes > MAX_TILE_BYTES) {
+      await upstreamRes.body?.cancel();
+      res.status(502).end();
+      return;
+    }
+    if (!upstreamRes.body) {
+      res.status(502).end();
+      return;
+    }
+    const reader = upstreamRes.body.getReader();
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_TILE_BYTES) {
+        await reader.cancel();
+        res.status(502).end();
+        return;
+      }
+      chunks.push(Buffer.from(value));
+    }
+    const buf = Buffer.concat(chunks, totalBytes);
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Cache-Control", "public, max-age=604800, immutable");
     res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
@@ -137,8 +166,9 @@ app.get("/v1/maptiles/:z/:x/:y", async (req, res) => {
   }
 });
 
-app.use(express.json({ limit: "512kb" }));
 app.use(globalLimiter);
+// Apply the cheap IP limiter before allocating/parsing attacker-controlled JSON.
+app.use(express.json({ limit: "512kb" }));
 
 // Calendar Mini App pick endpoint — see routes/calendar.ts for why this can't
 // just be a `web_app_data` handler. Mounted AFTER `express.json` so we get a

@@ -42,6 +42,7 @@ export async function cleanDatabase(): Promise<void> {
   await integrationPrisma.$executeRawUnsafe(`
     TRUNCATE TABLE
       bot_sessions,
+      email_otps,
       matches,
       profiles,
       users,
@@ -78,6 +79,7 @@ interface SeedUserOpts {
   /// `false` + `phoneVerifiedAt` to seed a general-track (phone-only) user.
   isEmailVerified?: boolean;
   phoneVerifiedAt?: Date | null;
+  registrationTrack?: "student" | "general" | null;
 }
 
 export async function seedUser(opts: SeedUserOpts = {}) {
@@ -97,6 +99,7 @@ export async function seedUser(opts: SeedUserOpts = {}) {
       verificationSkippedAt: opts.verificationSkippedAt ?? null,
       isEmailVerified: opts.isEmailVerified ?? true,
       phoneVerifiedAt: opts.phoneVerifiedAt ?? null,
+      registrationTrack: opts.registrationTrack ?? null,
       language: "en",
     },
   });

@@ -39,7 +39,9 @@ out of Telegram-only workers.
   `STUDENT_BONUS_TICKETS` (2) free Date Tickets; **general** — phone via
   Telegram one-tap `requestContact` (the bot receives a trusted
   `message.contact`; `User.phone` is `@unique` — one account per number).
-  Matching admits the union (verified email OR verified phone); the student
+  Matching admits the union of the two valid cohorts (student + verified email,
+  or general + verified phone); a credential from the other track never
+  satisfies an individual's gate. The student
   community keeps its flavor via educational homogamy, shared-domain curated
   venues, and the 🎓 profile line.
 - **NO IN-APP CHAT** — Users NEVER message each other through our platform. Do
@@ -807,9 +809,11 @@ Hard SQL filters (`buildCandidateSql`):
 1. `status = 'active'` and `onboardingStep = 'completed'`.
 2. Embedding present, `gender` and `preference` set.
 3. Mutual gender compatibility (a's preference includes b's gender AND vice versa).
-4. Verified contact rail present — `is_email_verified OR phone_verified_at
-   IS NOT NULL` (Registration v2 union; legacy users are all
-   email-verified, so this is a strict superset of the old email rule).
+4. Track-valid contact rail present — `(registration_track = 'general' AND
+   phone_verified_at IS NOT NULL) OR (registration_track IS DISTINCT FROM
+   'general' AND is_email_verified AND email IS NOT NULL)`. The union is over
+   valid student/legacy and general cohorts; one track cannot borrow the
+   other's credential.
 5. Same canonical dating city (`Profile.homeCityKey`) and saved city
    coordinates. Different university domains can match inside the same city.
 6. **Lifetime ban** — exclude any pair that EVER appeared in a `matches` row,

@@ -80,6 +80,7 @@ type UserRow = {
   language: "en" | "ru" | "uk" | "de" | "pl" | null;
   status: string;
   onboardingStep: string;
+  termsAccepted: boolean;
   platform: "telegram" | "mobile" | "both";
   pushToken: string | null;
   pushPlatform: string | null;
@@ -262,6 +263,7 @@ class PrismaClientKnownRequestError extends Error {
 
 vi.mock("@gennety/db", async () => {
   const prismaMock: any = {
+    $queryRawUnsafe: vi.fn(async () => []),
       // ----- user -----
       user: {
         findUnique: vi.fn(async ({ where, include, select }: any) => {
@@ -319,6 +321,7 @@ vi.mock("@gennety/db", async () => {
             language: null,
             status: data.status ?? "onboarding",
             onboardingStep: data.onboardingStep ?? "consent",
+            termsAccepted: data.termsAccepted ?? false,
             platform: data.platform ?? "telegram",
             pushToken: null,
             pushPlatform: null,
@@ -872,6 +875,8 @@ vi.mock("../handlers/matching/negative-constraints.js", () => ({
 
 vi.mock("../services/moderation.js", () => ({
   applyReportAction: vi.fn(async () => ({ kind: "tier2_warning", strikes: 1 })),
+  moderationOutcomeRequiresCancellation: vi.fn(() => false),
+  notifyReportedUser: vi.fn(async () => undefined),
 }));
 
 // next-batch is used by /v1/countdown — don't mock, it's pure.
@@ -910,6 +915,7 @@ async function seedUser(overrides: Partial<UserRow> = {}): Promise<UserRow> {
     language: "en",
     status: overrides.status ?? "active",
     onboardingStep: overrides.onboardingStep ?? "completed",
+    termsAccepted: overrides.termsAccepted ?? true,
     platform: "mobile",
     pushToken: null,
     pushPlatform: null,
@@ -1704,7 +1710,9 @@ describe("POST /v1/me/photos", () => {
     });
   });
 
-  const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]); // any bytes will do
+  const JPEG = Buffer.from([
+    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+  ]);
 
   it("401 without auth", async () => {
     const res = await request(app)
@@ -1749,6 +1757,19 @@ describe("POST /v1/me/photos", () => {
     expect(res.status).toBe(400);
   });
 
+  it("400s when arbitrary bytes are labelled as an image", async () => {
+    const user = await seedUser();
+    const res = await request(app)
+      .post("/v1/me/photos")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .attach("photo", Buffer.from("this is not an image payload"), {
+        filename: "spoofed.jpg",
+        contentType: "image/jpeg",
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/supported image/i);
+  });
+
   it("409 when profile already has MAX_PHOTOS photos", async () => {
     const user = await seedUser();
     const u = db.users.get(user.id)!;
@@ -1770,6 +1791,41 @@ describe("POST /v1/me/photos", () => {
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/limit/i);
     expect(res.body.max).toBe(6);
+  });
+
+  it("cleans up storage when a concurrent upload fills the final slot", async () => {
+    const { uploadProfilePhoto, deleteStorageObject } = await import(
+      "../services/storage.js"
+    );
+    const user = await seedUser();
+    const u = db.users.get(user.id)!;
+    u.profile = {
+      id: crypto.randomUUID(),
+      userId: user.id,
+      hobbies: [],
+      partnerPreferences: null,
+      psychologicalSummary: null,
+      ageRangeMin: null,
+      ageRangeMax: null,
+      photos: ["1.jpg", "2.jpg", "3.jpg", "4.jpg", "5.jpg"],
+      matchRadius: "campus_only",
+    };
+    vi.mocked(uploadProfilePhoto).mockImplementationOnce(async () => {
+      u.profile!.photos.push("concurrent.jpg");
+      return { path: `${user.id}/late.jpg` };
+    });
+
+    const res = await request(app)
+      .post("/v1/me/photos")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .attach("photo", JPEG, { filename: "p.jpg", contentType: "image/jpeg" });
+
+    expect(res.status).toBe(409);
+    expect(deleteStorageObject).toHaveBeenCalledWith(
+      "profile-photos",
+      `${user.id}/late.jpg`,
+    );
+    expect(userById(user.id)?.profile?.photos).not.toContain(`${user.id}/late.jpg`);
   });
 
   it("400 when vision says not a valid face", async () => {
@@ -1836,6 +1892,21 @@ describe("POST /v1/me/photos", () => {
     ).PROFILE_MEDIA_VALIDATION_ENABLED = true;
     const { uploadProfilePhoto } = await import("../services/storage.js");
     const user = await seedUser({ onboardingStep: "conversational" });
+    profileMediaValidationMocks.validateUserProfilePhoto
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          fingerprint: { sha256: "one", differenceHash: "1".repeat(16) },
+          identitySimilarity: 0.93,
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          fingerprint: { sha256: "two", differenceHash: "2".repeat(16) },
+          identitySimilarity: 0.93,
+        },
+      });
     vi.mocked(uploadProfilePhoto)
       .mockResolvedValueOnce({ path: `${user.id}/one.jpg` })
       .mockResolvedValueOnce({ path: `${user.id}/two.jpg` });
@@ -2016,6 +2087,19 @@ describe("/v1/onboarding/interview", () => {
       .send({ text: "Alice, 22" });
     expect(res.status).toBe(200);
     expect(res.body.question).toBe("echo:Alice, 22");
+  });
+
+  it("POST /answer refuses to start before terms are accepted", async () => {
+    const user = await seedUser({
+      onboardingStep: "consent",
+      termsAccepted: false,
+    });
+    const res = await request(app)
+      .post("/v1/onboarding/interview/answer")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ text: "skip ahead" });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain("Terms");
   });
 
   it("POST /answer rejects oversized LLM input", async () => {
@@ -2320,6 +2404,18 @@ describe("/v1/matches/*", () => {
       .set("Authorization", `Bearer ${signAccess(alice.id)}`)
       .send({ category: "tier2_ghosting", message: "ghosted" });
     expect(dup.status).toBe(409);
+  });
+
+  it("POST /:id/report rejects messages over the persisted limit", async () => {
+    const alice = await seedUser();
+    const bob = await seedUser();
+    const match = await seedMatch(alice.id, bob.id);
+    const res = await request(app)
+      .post(`/v1/matches/${match.id}/report`)
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`)
+      .send({ category: "tier3_safety", message: "x".repeat(1_001) });
+    expect(res.status).toBe(413);
+    expect(db.reports).toHaveLength(0);
   });
 
   it("POST /:id/report rolls back the report row when Tier 2 moderation fails", async () => {

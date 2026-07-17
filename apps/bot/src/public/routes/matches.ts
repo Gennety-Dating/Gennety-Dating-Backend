@@ -99,6 +99,10 @@ matchesRouter.post("/:id/report", async (req: Request, res: Response): Promise<v
     res.status(400).json({ error: "Message is required" });
     return;
   }
+  if (message.trim().length > 1_000) {
+    res.status(413).json({ error: "Message is too long" });
+    return;
+  }
 
   const outcome = await submitMatchReport(id, req.userId!, {
     category,

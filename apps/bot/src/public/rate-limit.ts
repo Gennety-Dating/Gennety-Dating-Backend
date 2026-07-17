@@ -98,6 +98,14 @@ export const personaWebhookLimiter = make({
   keyGenerator: (req): string => `persona-webhook:${ipKey(req)}`,
 });
 
+/** Public raster-tile proxy — enough for many map pans, bounded against proxy abuse. */
+export const mapTileLimiter = make({
+  windowMs: 60_000,
+  limit: 600,
+  keyGenerator: (req): string => `map-tile:${ipKey(req)}`,
+  message: { error: "Too many map tile requests, try again later." },
+});
+
 /** Selfie submission — 5/day per user (falls back to IP). */
 export const selfieLimiter = make({
   windowMs: 86_400_000,

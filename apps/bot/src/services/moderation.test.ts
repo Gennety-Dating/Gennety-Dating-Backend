@@ -19,20 +19,16 @@ vi.mock("../handlers/matching/negative-constraints.js", () => ({
   appendNegativeConstraint: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("./cancel-in-flight-matches.js", () => ({
-  cancelInFlightMatchesForUser: vi.fn().mockResolvedValue([]),
-}));
-
 vi.mock("./push.js", () => ({
   sendPushToUser: vi.fn().mockResolvedValue(true),
 }));
 
 import { prisma } from "@gennety/db";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
-import { cancelInFlightMatchesForUser } from "./cancel-in-flight-matches.js";
 import { sendPushToUser } from "./push.js";
 import {
   applyReportAction,
+  moderationOutcomeRequiresCancellation,
   notifyReportedUser,
   SUSPENSION_DAYS,
 } from "./moderation.js";
@@ -40,7 +36,6 @@ import {
 type MockFn = ReturnType<typeof vi.fn>;
 const mUser = prisma.user as unknown as { update: MockFn; findUnique: MockFn };
 const mAppend = appendNegativeConstraint as unknown as MockFn;
-const mCancel = cancelInFlightMatchesForUser as unknown as MockFn;
 const mPush = sendPushToUser as unknown as MockFn;
 
 const REPORTED_ID = "11111111-1111-1111-1111-111111111111";
@@ -63,7 +58,6 @@ describe("applyReportAction — Tier 1 (Product Disappointment)", () => {
     expect(outcome).toEqual({ kind: "tier1" });
     expect(mAppend).toHaveBeenCalledWith(REPORTER_ID, "Not my type", "en");
     expect(mUser.update).not.toHaveBeenCalled();
-    expect(mCancel).not.toHaveBeenCalled();
   });
 });
 
@@ -89,7 +83,6 @@ describe("applyReportAction — Tier 2 (Ethical Violation)", () => {
       select: { strikes: true },
     });
     // Strike 1 is a warning only — no matches are cancelled.
-    expect(mCancel).not.toHaveBeenCalled();
     expect(mAppend).not.toHaveBeenCalled();
   });
 
@@ -124,10 +117,7 @@ describe("applyReportAction — Tier 2 (Ethical Violation)", () => {
     expect(secondCall.data.status).toBe("suspended");
     expect(secondCall.data.suspendedUntil).toBeInstanceOf(Date);
 
-    // In-flight matches for the suspended user are cancelled via the shared
-    // helper (which covers proposed/negotiating/negotiating_venue/scheduled and
-    // notifies + comps the partner). `api` is null in these unit calls.
-    expect(mCancel).toHaveBeenCalledWith(REPORTED_ID, null);
+    expect(moderationOutcomeRequiresCancellation(outcome)).toBe(true);
   });
 
   it("third Tier 2 report → strikes = 3, status becomes banned", async () => {
@@ -146,7 +136,7 @@ describe("applyReportAction — Tier 2 (Ethical Violation)", () => {
     expect(outcome).toEqual({ kind: "tier2_banned", strikes: 3 });
     const secondCall = mUser.update.mock.calls[1][0];
     expect(secondCall.data.status).toBe("banned");
-    expect(mCancel).toHaveBeenCalledWith(REPORTED_ID, null);
+    expect(moderationOutcomeRequiresCancellation(outcome)).toBe(true);
   });
 });
 
@@ -168,30 +158,15 @@ describe("applyReportAction — Tier 3 (Safety Threat)", () => {
       where: { id: REPORTED_ID },
       data: { status: "pending_investigation" },
     });
-    // In-flight matches (including negotiating_venue / scheduled) cancelled —
-    // the safety-critical fix: a flagged user's booked date must not proceed.
-    expect(mCancel).toHaveBeenCalledWith(REPORTED_ID, null);
+    expect(moderationOutcomeRequiresCancellation(outcome)).toBe(true);
     // Strikes are NOT touched — this is a direct-freeze path.
     expect(mAppend).not.toHaveBeenCalled();
   });
 
-  it("forwards the bot api to the cancellation helper when provided", async () => {
-    mUser.update.mockResolvedValueOnce({});
-    const api = { sendMessage: vi.fn() } as unknown as Parameters<typeof applyReportAction>[2];
-
-    await applyReportAction(
-      {
-        tier: 3,
-        reporterUserId: REPORTER_ID,
-        reportedUserId: REPORTED_ID,
-        reasonSummary: "Threat",
-        language: "en",
-      },
-      undefined,
-      api,
-    );
-
-    expect(mCancel).toHaveBeenCalledWith(REPORTED_ID, api);
+  it("does not require cancellation for a warning-only outcome", () => {
+    expect(
+      moderationOutcomeRequiresCancellation({ kind: "tier2_warning", strikes: 1 }),
+    ).toBe(false);
   });
 });
 
@@ -206,7 +181,11 @@ describe("notifyReportedUser — DM delivery", () => {
   });
 
   it("sends the suspension DM in the reported user's language", async () => {
-    mUser.findUnique.mockResolvedValueOnce({ telegramId: 9999n, language: "ru" });
+    mUser.findUnique.mockResolvedValueOnce({
+      telegramId: 9999n,
+      language: "ru",
+      platform: "telegram",
+    });
     const sendMessage = vi.fn().mockResolvedValue({});
     const api = { sendMessage } as unknown as Parameters<typeof notifyReportedUser>[0];
 
@@ -225,7 +204,11 @@ describe("notifyReportedUser — DM delivery", () => {
   });
 
   it("sends the pending-investigation DM for Tier 3", async () => {
-    mUser.findUnique.mockResolvedValueOnce({ telegramId: 1234n, language: "en" });
+    mUser.findUnique.mockResolvedValueOnce({
+      telegramId: 1234n,
+      language: "en",
+      platform: "telegram",
+    });
     const sendMessage = vi.fn().mockResolvedValue({});
     const api = { sendMessage } as unknown as Parameters<typeof notifyReportedUser>[0];
 
@@ -238,7 +221,11 @@ describe("notifyReportedUser — DM delivery", () => {
 
   it("delivers the outcome to a mobile-only user via push, not DM", async () => {
     // Synthetic negative telegramId → mobile-only account; can't be DM'd.
-    mUser.findUnique.mockResolvedValueOnce({ telegramId: -5n, language: "en" });
+    mUser.findUnique.mockResolvedValueOnce({
+      telegramId: -5n,
+      language: "en",
+      platform: "mobile",
+    });
     const sendMessage = vi.fn().mockResolvedValue({});
     const api = { sendMessage } as unknown as Parameters<typeof notifyReportedUser>[0];
 
@@ -253,7 +240,11 @@ describe("notifyReportedUser — DM delivery", () => {
   });
 
   it("swallows sendMessage errors (reporter outcome must not surface)", async () => {
-    mUser.findUnique.mockResolvedValueOnce({ telegramId: 1n, language: "en" });
+    mUser.findUnique.mockResolvedValueOnce({
+      telegramId: 1n,
+      language: "en",
+      platform: "telegram",
+    });
     const sendMessage = vi.fn().mockRejectedValueOnce(new Error("blocked"));
     const api = { sendMessage } as unknown as Parameters<typeof notifyReportedUser>[0];
 

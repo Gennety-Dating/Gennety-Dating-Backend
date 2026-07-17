@@ -113,6 +113,22 @@ describe("validateInitData", () => {
     expect(result.valid).toBe(true);
   });
 
+  it("rejects a correctly signed auth_date too far in the future", () => {
+    const tenMinutesFromNow = Math.floor(Date.now() / 1000) + 600;
+    const initData = buildInitData({ authDate: tenMinutesFromNow });
+    expect(validateInitData(initData, BOT_TOKEN)).toEqual({
+      valid: false,
+      reason: "future-auth-date",
+    });
+  });
+
+  it("allows small client/server clock skew", () => {
+    const thirtySecondsFromNow = Math.floor(Date.now() / 1000) + 30;
+    expect(validateInitData(buildInitData({ authDate: thirtySecondsFromNow }), BOT_TOKEN).valid).toBe(
+      true,
+    );
+  });
+
   it("rejects when auth_date is missing", () => {
     // Sign without auth_date by hand — `buildInitData` always adds one.
     const params = new URLSearchParams();
@@ -149,6 +165,17 @@ describe("validateInitData", () => {
     const result = validateInitData(initData, BOT_TOKEN);
     expect(result).toEqual({ valid: false, reason: "malformed-user" });
   });
+
+  it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
+    "rejects an invalid numeric Telegram user id (%s)",
+    (id) => {
+      const initData = buildInitData({ user: { id } });
+      expect(validateInitData(initData, BOT_TOKEN)).toEqual({
+        valid: false,
+        reason: "malformed-user",
+      });
+    },
+  );
 
   it("rejects when the hash field is the wrong length (e.g. truncated)", () => {
     const initData = buildInitData();

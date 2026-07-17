@@ -32,7 +32,7 @@ export interface TelegramInitDataUser {
 }
 
 export type InitDataValidation =
-  | { valid: false; reason: "missing-hash" | "bad-hash" | "expired" | "missing-user" | "malformed-user" | "missing-auth-date" }
+  | { valid: false; reason: "missing-hash" | "bad-hash" | "expired" | "future-auth-date" | "missing-user" | "malformed-user" | "missing-auth-date" }
   | { valid: true; user: TelegramInitDataUser; authDate: number };
 
 /**
@@ -42,6 +42,7 @@ export type InitDataValidation =
  * can't be reused indefinitely.
  */
 export const DEFAULT_INIT_DATA_MAX_AGE_SECONDS = 7200;
+export const MAX_INIT_DATA_FUTURE_SKEW_SECONDS = 60;
 
 export function validateInitData(
   initData: string,
@@ -97,6 +98,9 @@ export function validateInitData(
   // closed the Mini App.
   const ageSeconds = Math.floor(now.getTime() / 1000) - authDate;
   if (ageSeconds > maxAgeSeconds) return { valid: false, reason: "expired" };
+  if (ageSeconds < -MAX_INIT_DATA_FUTURE_SKEW_SECONDS) {
+    return { valid: false, reason: "future-auth-date" };
+  }
 
   const userJson = params.get("user");
   if (!userJson) return { valid: false, reason: "missing-user" };
@@ -107,7 +111,13 @@ export function validateInitData(
   } catch {
     return { valid: false, reason: "malformed-user" };
   }
-  if (typeof user.id !== "number") return { valid: false, reason: "malformed-user" };
+  if (
+    typeof user.id !== "number" ||
+    !Number.isSafeInteger(user.id) ||
+    user.id <= 0
+  ) {
+    return { valid: false, reason: "malformed-user" };
+  }
 
   return { valid: true, user, authDate };
 }

@@ -10,7 +10,18 @@ import {
 } from "../services/geo.js";
 import { resolveVenue } from "../services/curated-venue.js";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
-import { applyReportAction, type ReportTier } from "../services/moderation.js";
+import {
+  applyReportAction,
+  moderationOutcomeRequiresCancellation,
+  notifyReportedUser,
+  type ModerationOutcome,
+  type ReportTier,
+} from "../services/moderation.js";
+import {
+  claimInFlightMatchCancellations,
+  deliverCancelledPartnerEffects,
+  type CancelledPartner,
+} from "../services/cancel-in-flight-matches.js";
 import { sendPushToUser } from "../services/push.js";
 import { generateAndSaveWingmanHints } from "../services/wingman-hint.js";
 import { runVenueFinalizationOnce } from "../services/venue-finalization-flight.js";
@@ -708,6 +719,8 @@ export async function submitMatchReport(
   const tier = REPORT_TIER[payload.category];
   const rawText = payload.message.slice(0, 1000);
   const reasonSummary = rawText.slice(0, 240);
+  let outcome: ModerationOutcome = { kind: "tier1" };
+  let cancelledPartners: CancelledPartner[] = [];
 
   // M-1: classify Prisma errors specifically (only P2002 is a duplicate),
   // and keep Tier 2/3 moderation inside the same transaction as the report
@@ -726,7 +739,7 @@ export async function submitMatchReport(
         },
       });
     } else {
-      await prisma.$transaction(async (tx) => {
+      const result = await prisma.$transaction(async (tx) => {
         await tx.report.create({
           data: {
             reporterId: reporterUserId,
@@ -738,14 +751,20 @@ export async function submitMatchReport(
             adminReviewed: tier !== 3,
           },
         });
-        await applyReportAction({
+        const actionOutcome = await applyReportAction({
           tier,
           reporterUserId,
           reportedUserId,
           reasonSummary,
           language,
-        }, tx, getBotApi());
+        }, tx);
+        const cancellations = moderationOutcomeRequiresCancellation(actionOutcome)
+          ? await claimInFlightMatchCancellations(reportedUserId, tx, { strict: true })
+          : [];
+        return { actionOutcome, cancellations };
       });
+      outcome = result.actionOutcome;
+      cancelledPartners = result.cancellations;
     }
   } catch (err) {
     if (
@@ -771,5 +790,8 @@ export async function submitMatchReport(
       throw err;
     }
   }
+  const api = getBotApi();
+  await deliverCancelledPartnerEffects(cancelledPartners, api);
+  await notifyReportedUser(api, reportedUserId, outcome);
   return "ok";
 }

@@ -30,6 +30,7 @@ import {
   validateHomeLocationPayload,
 } from "../home-location.js";
 import { resolveCityFromCoordinates, searchCities } from "../city-search.js";
+import { unresolvedTrackContactGate } from "../../services/contact-verification.js";
 
 const VALID_LANGUAGES = new Set<string>(SUPPORTED_LANGUAGES);
 const FLOW_TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -752,18 +753,8 @@ function ensureReadyForEmail(user: MiniUser): "terms-required" | "language-requi
   return null;
 }
 
-/**
- * Registration v2: the contact gate is track-aware. The general track must
- * verify a phone (Telegram one-tap `message.contact`); the student track —
- * and legacy null-track users — must verify a university email. With
- * PHONE_AUTH_ENABLED off the email rule applies unconditionally (pre-fork
- * behavior). Switching tracks re-points the requirement, never waives it.
- */
 function unresolvedContactGate(user: MiniUser): "email-required" | "phone-required" | null {
-  if (env.PHONE_AUTH_ENABLED && user.registrationTrack === "general") {
-    return user.phoneVerifiedAt ? null : "phone-required";
-  }
-  return user.isEmailVerified ? null : "email-required";
+  return unresolvedTrackContactGate(user);
 }
 
 function ensureReadyForLocation(

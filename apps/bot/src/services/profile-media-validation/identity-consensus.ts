@@ -2,6 +2,7 @@ import type { Api, RawApi } from "grammy";
 import { Prisma, prisma } from "@gennety/db";
 import {
   FACE_SIMILARITY_THRESHOLD,
+  MAX_PHOTOS,
   normalizeProfileMedia,
   profilePhotoMedia,
   type ProfileMedia,
@@ -52,6 +53,13 @@ export interface CommitProfilePhotoCandidateInput {
   source: PendingPhotoCandidateSource;
   candidateBuffer?: Buffer | null;
   api?: Api<RawApi> | null;
+}
+
+export class ProfilePhotoCommitConflictError extends Error {
+  constructor(public readonly reason: "limit" | "duplicate") {
+    super(reason === "limit" ? "Profile photo limit reached" : "Profile photo already exists");
+    this.name = "ProfilePhotoCommitConflictError";
+  }
 }
 
 interface ConsensusEvaluationDeps {
@@ -165,42 +173,56 @@ export async function evaluatePhotoCandidateConsensus(
 export async function commitProfilePhotoCandidate(
   input: CommitProfilePhotoCandidateInput,
 ): Promise<PhotoConsensusCommitResult> {
-  const user = await prisma.user.findUnique({
-    where: { id: input.userId },
-    select: {
-      verifiedSelfiePath: true,
-      profile: {
-        select: {
-          photos: true,
-          profileMedia: true,
-          photoFaceScores: true,
-          referenceFaceEmbedding: true,
-          uploadedPhotoHashes: true,
-          pendingPhotoCandidates: true,
+  return prisma.$transaction(async (tx) => {
+    // The user row always exists before a profile row and gives every upload
+    // path a common lock target, including the first concurrent upload.
+    await tx.$queryRawUnsafe(
+      "SELECT id FROM users WHERE id = $1::uuid FOR UPDATE",
+      input.userId,
+    );
+
+    const user = await tx.user.findUnique({
+      where: { id: input.userId },
+      select: {
+        profile: {
+          select: {
+            photos: true,
+            profileMedia: true,
+            photoFaceScores: true,
+            referenceFaceEmbedding: true,
+            uploadedPhotoHashes: true,
+            pendingPhotoCandidates: true,
+          },
         },
       },
-    },
-  });
-  if (!user) {
-    throw new Error("User not found");
-  }
+    });
+    if (!user) throw new Error("User not found");
 
-  const profile = user.profile;
-  const photos = [...(profile?.photos ?? [])];
-  const profileMedia = normalizeProfileMedia(profile?.profileMedia ?? [], photos);
-  const uploadedPhotoHashes = [...(profile?.uploadedPhotoHashes ?? [])];
-  const photoFaceScores = [...(profile?.photoFaceScores ?? [])];
-  while (photoFaceScores.length < photos.length) photoFaceScores.push(0);
+    const profile = user.profile;
+    const photos = [...(profile?.photos ?? [])];
+    if (photos.length >= MAX_PHOTOS) {
+      throw new ProfilePhotoCommitConflictError("limit");
+    }
+    const profileMedia = normalizeProfileMedia(profile?.profileMedia ?? [], photos);
+    const uploadedPhotoHashes = [...(profile?.uploadedPhotoHashes ?? [])];
+    if (
+      photos.includes(input.photoRef) ||
+      (input.perceptualHash && uploadedPhotoHashes.includes(input.perceptualHash))
+    ) {
+      throw new ProfilePhotoCommitConflictError("duplicate");
+    }
+    const photoFaceScores = [...(profile?.photoFaceScores ?? [])];
+    while (photoFaceScores.length < photos.length) photoFaceScores.push(0);
 
-  const candidate: PendingPhotoCandidate = {
-    version: PENDING_PHOTO_CANDIDATE_VERSION,
-    photoRef: input.photoRef,
-    profileMedia: input.profileMedia,
-    ...(input.perceptualHash ? { perceptualHash: input.perceptualHash } : {}),
-    faceScore: input.faceScore ?? 0,
-    uploadedAt: new Date().toISOString(),
-    source: input.source,
-  };
+    const candidate: PendingPhotoCandidate = {
+      version: PENDING_PHOTO_CANDIDATE_VERSION,
+      photoRef: input.photoRef,
+      profileMedia: input.profileMedia,
+      ...(input.perceptualHash ? { perceptualHash: input.perceptualHash } : {}),
+      faceScore: input.faceScore ?? 0,
+      uploadedAt: new Date().toISOString(),
+      source: input.source,
+    };
 
   // Every candidate that reaches here already passed per-photo validation
   // (safe content + not a duplicate + a usable face, and — when the user is
@@ -215,42 +237,44 @@ export async function commitProfilePhotoCandidate(
   // verification, which re-checks every photo against the selfie. We also never
   // derive a self-photo identity anchor here (`skipReferenceCreation: true`),
   // so a later photo is never gated against an earlier upload.
-  const nextPhotos = [...photos, candidate.photoRef];
-  const nextMedia = [...profileMedia, candidate.profileMedia];
-  const nextHashes = [
-    ...uploadedPhotoHashes,
-    ...(candidate.perceptualHash ? [candidate.perceptualHash] : []),
-  ];
-  const nextScores = [...photoFaceScores, candidate.faceScore];
-  const photoState = photoUploadStatePatch({
-    photos: nextPhotos,
-    uploadedPhotoHashes: nextHashes,
-    referenceFaceEmbedding: profile?.referenceFaceEmbedding ?? null,
-    skipReferenceCreation: true,
+    const nextPhotos = [...photos, candidate.photoRef];
+    const nextMedia = [...profileMedia, candidate.profileMedia];
+    const nextHashes = [
+      ...uploadedPhotoHashes,
+      ...(candidate.perceptualHash ? [candidate.perceptualHash] : []),
+    ];
+    const nextScores = [...photoFaceScores, candidate.faceScore];
+    const photoState = photoUploadStatePatch({
+      photos: nextPhotos,
+      uploadedPhotoHashes: nextHashes,
+      referenceFaceEmbedding: profile?.referenceFaceEmbedding ?? null,
+      skipReferenceCreation: true,
+    });
+    await upsertPhotoState(tx, input.userId, {
+      photos: nextPhotos,
+      profileMedia: nextMedia,
+      photoFaceScores: nextScores,
+      uploadedPhotoHashes: nextHashes,
+      pendingPhotoCandidates: [],
+      photoState,
+    });
+    return {
+      status: "accepted",
+      photos: nextPhotos,
+      profileMedia: nextMedia,
+      uploadedPhotoHashes: nextHashes,
+      photoFaceScores: nextScores,
+      pendingCandidates: [],
+      acceptedCount: nextPhotos.length,
+      pendingCount: 0,
+      rejectedCount: 0,
+      rejectedCandidates: [],
+    };
   });
-  await upsertPhotoState(input.userId, {
-    photos: nextPhotos,
-    profileMedia: nextMedia,
-    photoFaceScores: nextScores,
-    uploadedPhotoHashes: nextHashes,
-    pendingPhotoCandidates: [],
-    photoState,
-  });
-  return {
-    status: "accepted",
-    photos: nextPhotos,
-    profileMedia: nextMedia,
-    uploadedPhotoHashes: nextHashes,
-    photoFaceScores: nextScores,
-    pendingCandidates: [],
-    acceptedCount: nextPhotos.length,
-    pendingCount: 0,
-    rejectedCount: 0,
-    rejectedCandidates: [],
-  };
 }
 
 async function upsertPhotoState(
+  db: Prisma.TransactionClient,
   userId: string,
   input: {
     photos: string[];
@@ -265,7 +289,7 @@ async function upsertPhotoState(
     };
   },
 ): Promise<void> {
-  await prisma.profile.upsert({
+  await db.profile.upsert({
     where: { userId },
     create: {
       userId,

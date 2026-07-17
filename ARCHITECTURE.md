@@ -194,7 +194,7 @@ Columns (≈ 35; grouped by purpose):
 | Lifecycle | `status` (`UserStatus`), `onboardingStep`, `aiMemoryExportPreference`, `aiMemoryExportPreferenceAt`, `hasConsented`, `consentedAt`, `termsAccepted`, `termsAcceptedAt`, `researchOptIn`, `createdAt`, `updatedAt` |
 | UI theme | `theme` (`Theme`, default `dark`) — the recipient's chosen app-wide light/dark theme, honored by every Mini App (via the shared `theme.css` tokens) and both server-rendered PNG cards; `themeChosenAt` marks the explicit pick so the onboarding theme step shows once. |
 | Email OTP | `emailOtp`, `emailOtpExpiresAt`, `isEmailVerified` |
-| Registration v2 | `phone` (unique E.164, written only from a trusted Telegram `message.contact`), `phoneVerifiedAt` (the general-track contact gate), `registrationTrack` (`student`/`general`, null = pre-fork legacy). Matching admits `isEmailVerified OR phoneVerifiedAt` (union rail). |
+| Registration v2 | `phone` (unique E.164, written only from a trusted Telegram `message.contact`), `phoneVerifiedAt` (the general-track contact gate), `registrationTrack` (`student`/`general`, null = pre-fork legacy). Matching admits the union of track-valid cohorts: `general + phoneVerifiedAt`, or `student`/legacy + `isEmailVerified` and a stored email. |
 | Conversational state | `messageHistory` (`Json[]`), `lastMessageAt`, `lastPreMatchAnnounceAt` |
 | Re-engagement | `reEngagementStep` (0–5), `reEngagementNextAt` |
 | Trust & safety | `strikes`, `suspendedUntil` |
@@ -309,14 +309,20 @@ Emergency cancellation's small peer boost is applied directly by
 Post-match user-vs-user reports. LLM-triaged into `tier` 1/2/3
 (`reasonSummary` is the distilled rationale). `adminReviewed` flips on the
 manual-queue clear. Unique `(reporterId, matchId)` blocks duplicates. See
-[PRODUCT_SPEC.md](PRODUCT_SPEC.md) §5 for tier policy.
+[PRODUCT_SPEC.md](PRODUCT_SPEC.md) §5 for tier policy. Tier 2/3 status changes
+and cancellation of every in-flight match are committed in the same database
+transaction; partner compensation and Telegram/Expo notifications run only
+after commit and never weaken the cancellation safety gate.
 
 ### `email_otps`
 
 Mobile-side OTP store. **Distinct from `users.emailOtp`**: keyed by `email`
 (not `userId`) because mobile users start the funnel before a `User` row
 exists. `code` is bcrypt-hashed; raw is only delivered via the email provider. Tracks
-`attempts` and `consumedAt` for replay protection.
+`attempts` and `consumedAt` for replay protection. Request creation takes a
+transaction-scoped PostgreSQL advisory lock keyed by normalized email, so
+concurrent requests across processes cannot bypass the resend cooldown or send
+multiple competing codes.
 
 ### `web_registration_links`
 
@@ -503,8 +509,9 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | Method | Path | Purpose |
 |---|---|---|
 | GET  | `/v1/ping` | Liveness probe |
+| GET | `/v1/maptiles/:z/:x/:y` | Public CARTO raster-tile proxy with strict coordinate validation, a dedicated per-IP limiter, 8-second upstream timeout, 1 MiB response ceiling, and immutable caching. |
 | GET/POST | `/v1/telegram-onboarding/*` | Telegram full-screen Onboarding Mini App state/consent/language/**sign-up fork (`POST /track`, Registration v2)**/email OTP/**phone gate**/city/AI-memory choice/completion handoff. Authenticates with `Authorization: tma <initData>`; `/state` mirrors `phoneAuthEnabled` + `isPhoneVerified`/`phone`/`registrationTrack`, `POST /track` persists the re-choosable fork pick (404 while `PHONE_AUTH_ENABLED` is off), and `/complete` runs the track-aware contact gate (`email-required` \| `phone-required`) before city + AI-memory checks. `/state` also returns `theme` + `themeChosen`, and `POST /theme` records the light/dark pick (`theme` + `themeChosenAt`) — reused by the bot's Settings "Change theme" flow. |
-| POST | `/v1/auth/otp/request` | Send corp-email OTP (rate-limited) |
+| POST | `/v1/auth/otp/request` | Send corp-email OTP (IP/email rate-limited; per-email creation serialized in PostgreSQL) |
 | POST | `/v1/auth/otp/verify` | Verify OTP → mint access + refresh JWT |
 | POST | `/v1/auth/refresh` | Rotate refresh token |
 | POST | `/v1/web-registration/otp/request` | Website pre-registration: send corp-email OTP before the user opens Telegram (rate-limited; no auth — pre-account) |
@@ -516,12 +523,12 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | POST | `/v1/me/location` | Persist raw home-base lat/lng for Meet-Halfway; does not by itself unlock matching |
 | PATCH | `/v1/me/preferences` | `matchRadius`, gender preference |
 | POST | `/v1/me/push-token` | Register Expo / APNs / FCM token |
-| GET  | `/v1/me/photos` / POST / DELETE | Photo CRUD with face-match gate |
+| GET  | `/v1/me/photos` / POST / DELETE | Photo CRUD with content-sniffed image types and face-match gate. Add/delete array mutations serialize on the user row; the database rechecks limit/duplicate state, and failed post-upload commits clean the new storage object. |
 | GET  | `/v1/me/verification` | Read current verification state |
 | GET  | `/v1/me/verification/url` | Mint Persona hosted-flow URL |
 | GET  | `/v1/onboarding/interview` | Resume server-owned conversational onboarding |
-| POST | `/v1/onboarding/interview/answer` | Send text to the shared onboarding collector |
-| POST | `/v1/onboarding/interview/voice` | Transcribe voice and send it to the same collector |
+| POST | `/v1/onboarding/interview/answer` | Send text to the shared onboarding collector; rejected until ToS acceptance and language selection are persisted |
+| POST | `/v1/onboarding/interview/voice` | Transcribe voice and send it to the same collector; uses the same legal/language gate |
 | POST | `/v1/onboarding/consent` | Record ToS + research-opt-in |
 | POST | `/v1/assistant/ask` | Lightweight one-shot helper |
 | POST | `/v1/assistant/voice` | Transcribe voice and send the turn to the post-onboarding assistant |
