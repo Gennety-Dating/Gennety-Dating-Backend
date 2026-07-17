@@ -942,7 +942,11 @@ bot's `successful_payment` handler (`handlers/payments.ts`) is the trust boundar
 that settles: `store:<count>` credits the wallet (exactly-once via the unique
 `TicketLedger.externalPaymentId` = `telegram_payment_charge_id`), and
 `gate:<matchId>:<scope>` settles the ticket slot(s) via `applyStarsTicketPayment`
-(the atomic slot CAS makes redelivery a no-op, so it needs no charge-id column).
+(the charge id is first recorded as a zero-delta `TicketLedger` audit row; its
+settlement outcome commits atomically with the slot CAS. The unique charge id
+makes redelivery exactly-once and retains the provider key needed for a later
+refund; a partial pay-for-both overpayment remains a durable pending wallet
+credit until granted exactly once).
 `pre_checkout_query` re-validates payload + Star amount within Telegram's 10 s
 window. The famine single-ticket discount is **USD-only** and never applies to a
 Stars purchase. Star prices are env-tunable (`TICKET_BUNDLE_STARS`, default
@@ -1061,10 +1065,13 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   (it still waits for a genuine open — e.g. tapping the nudge button). All three
   are idempotent and best-effort (a DM failure never blocks settlement).
 - **`ticketStatus` lifecycle.** `pending` → `partial` (one paid; `ticketExpiresAt`
-  is the second side's deadline) → `completed`; or `refunded`/`expired` on
-  timeout. **Refund/expiry policy:** the hourly `ticket-expiry` cron refunds a
-  stalled `partial` payment (mock = no-op) and **opens the Calendar for free** —
-  an already-accepted match is never killed by a payment stall.
+  is the second side's deadline) → `completed`; or `refund_pending` → `refunded`
+  / `expired` on timeout. `refund_pending` is an internal retry state and renders
+  as closed in the Mini App. **Refund/expiry policy:** the hourly `ticket-expiry`
+  cron returns the original Telegram Stars charge (or restores the wallet
+  ticket), durably retries provider failures, and only after a successful refund
+  **opens the Calendar for free**. An already-accepted match is never killed by
+  a payment stall, and a failed refund is never announced as successful.
 - **State machine.** The whole gate runs while `Match.status = negotiating`;
   `ticketStatus` is a sub-state so the scheduling/venue/lifecycle code is
   untouched. Blind-decision and all other invariants are unaffected.

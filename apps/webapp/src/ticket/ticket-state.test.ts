@@ -53,6 +53,7 @@ describe("deriveScreen", () => {
     ).toBe("partner-paid");
   });
   it("closed on refund/expiry", () => {
+    expect(deriveScreen(state({ ticketStatus: "refund_pending" }))).toBe("closed");
     expect(deriveScreen(state({ ticketStatus: "refunded" }))).toBe("closed");
     expect(deriveScreen(state({ ticketStatus: "expired" }))).toBe("closed");
   });

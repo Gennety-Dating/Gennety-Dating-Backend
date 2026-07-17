@@ -9,8 +9,10 @@ vi.mock("@gennety/db", () => ({
 }));
 
 const refundAndFallbackToScheduling = vi.fn();
+const retryPendingStarsGateRefunds = vi.fn();
 vi.mock("../handlers/matching/ticket-gate.js", () => ({
   refundAndFallbackToScheduling: (...a: unknown[]) => refundAndFallbackToScheduling(...a),
+  retryPendingStarsGateRefunds: (...a: unknown[]) => retryPendingStarsGateRefunds(...a),
 }));
 
 import { prisma } from "@gennety/db";
@@ -23,6 +25,8 @@ const fakeApi = {} as Parameters<typeof ticketExpiryTick>[0];
 beforeEach(() => {
   mFindMany.mockReset();
   refundAndFallbackToScheduling.mockReset();
+  retryPendingStarsGateRefunds.mockReset();
+  retryPendingStarsGateRefunds.mockResolvedValue(0);
 });
 
 describe("ticketExpiryTick", () => {
@@ -33,6 +37,7 @@ describe("ticketExpiryTick", () => {
     const res = await ticketExpiryTick(fakeApi);
 
     expect(res.swept).toBe(2);
+    expect(retryPendingStarsGateRefunds).toHaveBeenCalledWith(fakeApi);
     expect(refundAndFallbackToScheduling).toHaveBeenCalledTimes(2);
     expect(refundAndFallbackToScheduling).toHaveBeenCalledWith(fakeApi, "m1");
     expect(refundAndFallbackToScheduling).toHaveBeenCalledWith(fakeApi, "m2");
@@ -43,8 +48,9 @@ describe("ticketExpiryTick", () => {
     await ticketExpiryTick(fakeApi);
     const where = mFindMany.mock.calls[0]![0].where;
     expect(where.status).toBe("negotiating");
-    expect(where.ticketStatus).toEqual({ in: ["pending", "partial"] });
-    expect(where.ticketExpiresAt.lt).toBeInstanceOf(Date);
+    expect(where.OR[0].ticketStatus).toEqual({ in: ["pending", "partial"] });
+    expect(where.OR[0].ticketExpiresAt.lt).toBeInstanceOf(Date);
+    expect(where.OR[1]).toEqual({ ticketStatus: "refund_pending" });
   });
 
   it("keeps sweeping after one match throws", async () => {

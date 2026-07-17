@@ -1,14 +1,17 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import { refundAndFallbackToScheduling } from "../handlers/matching/ticket-gate.js";
+import {
+  refundAndFallbackToScheduling,
+  retryPendingStarsGateRefunds,
+} from "../handlers/matching/ticket-gate.js";
 
 /**
  * Date Ticket expiry sweep.
  *
- * Finds matches whose ticket gate has stalled — `ticketStatus IN (pending,
- * partial)` with a lapsed `ticketExpiresAt` — and runs the refund + free
- * Calendar fallback. An accepted match is never killed by a payment stall;
- * the paying side (if any) is refunded (mock = no-op) and scheduling opens.
+ * First retries durable Stars refunds/surplus credits, then finds matches whose
+ * ticket gate has stalled — `ticketStatus IN (pending, partial)` with a lapsed
+ * `ticketExpiresAt` — and runs the refund + free Calendar fallback. An accepted
+ * match is never killed by a payment stall; scheduling opens after reversal.
  *
  * Idempotent: `refundAndFallbackToScheduling` claims the terminal status flip
  * atomically, so a double tick refunds at most once. No quiet-hours gating —
@@ -16,11 +19,18 @@ import { refundAndFallbackToScheduling } from "../handlers/matching/ticket-gate.
  */
 export async function ticketExpiryTick(api: Api<RawApi>): Promise<{ swept: number }> {
   const now = new Date();
+  await retryPendingStarsGateRefunds(api);
+
   const stale = await prisma.match.findMany({
     where: {
       status: "negotiating",
-      ticketStatus: { in: ["pending", "partial"] },
-      ticketExpiresAt: { not: null, lt: now },
+      OR: [
+        {
+          ticketStatus: { in: ["pending", "partial"] },
+          ticketExpiresAt: { not: null, lt: now },
+        },
+        { ticketStatus: "refund_pending" },
+      ],
     },
     select: { id: true },
     take: 200,

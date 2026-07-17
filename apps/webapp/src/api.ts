@@ -460,7 +460,13 @@ export async function postVerificationEvent(
 export type TicketScope = "self" | "both" | "partner";
 
 export interface TicketState {
-  ticketStatus: "pending" | "partial" | "completed" | "refunded" | "expired";
+  ticketStatus:
+    | "pending"
+    | "partial"
+    | "completed"
+    | "refund_pending"
+    | "refunded"
+    | "expired";
   priceCents: number;
   myGender: "male" | "female" | null;
   mySide: "A" | "B";

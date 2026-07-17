@@ -300,7 +300,10 @@ model User {
 ///   verification_bonus — +1 one-time bonus for successful identity verification
 ///   store_purchase — +N from a bundle purchase in the store Mini App
 ///   spend_match    — -1 (or -2) consumed at the §3.5b date gate
-///   refund         — +N reversal (e.g. an expired/refunded match ticket)
+///   refund         — +N wallet reversal (e.g. an expired/refunded match ticket)
+///   gate_payment / gate_processing / gate_settled — atomic Stars settlement
+///   gate_surplus_pending — durable pending wallet credit for partial overpay
+///   gate_refund_pending / gate_refunded — durable Stars refund state
 model TicketLedger {
   id          String   @id @default(uuid()) @db.Uuid
   userId      String   @map("user_id") @db.Uuid
@@ -316,10 +319,10 @@ model TicketLedger {
   /// Bundle size for `store_purchase` rows (1 / 3 / 6).
   bundleSize  Int?     @map("bundle_size")
   /// Unique provider charge id (Telegram Stars `telegram_payment_charge_id`)
-  /// set on a paid `store_purchase` top-up. Its unique constraint makes a
-  /// redelivered `successful_payment` roll back the duplicate credit
-  /// (exactly-once). Null for free bonuses, spends, refunds, and the date gate
-  /// (which settles via an atomic slot CAS, needing no charge-id dedupe).
+  /// set on paid store purchases and date-gate Stars payments. Its unique
+  /// constraint makes Telegram redelivery exactly-once and preserves the charge
+  /// id required for later expiry refunds. Synthetic ids also dedupe wallet
+  /// reversals and surplus credits.
   externalPaymentId String? @unique @map("external_payment_id")
   createdAt   DateTime @default(now()) @map("created_at")
 

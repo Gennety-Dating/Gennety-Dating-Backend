@@ -15,7 +15,13 @@ export type TicketScreen =
   | "closed"; // ticket refunded/expired — scheduling already opened free
 
 export function deriveScreen(state: TicketState): TicketScreen {
-  if (state.ticketStatus === "refunded" || state.ticketStatus === "expired") return "closed";
+  if (
+    state.ticketStatus === "refund_pending" ||
+    state.ticketStatus === "refunded" ||
+    state.ticketStatus === "expired"
+  ) {
+    return "closed";
+  }
   // Partner-paid takes precedence over the generic success screen so the
   // covered user sees the dedicated "they paid for you ❤️" card.
   if (state.partnerPaidForMe) return "partner-paid";

@@ -268,7 +268,7 @@ Columns (≈ 40). Drives the entire matching → scheduling → date lifecycle. 
 | Concierge venue | `vibeTextA`, `vibeTextB`, `vibeLatA/LngA`, `vibeLatB/LngB`, `vibeAddressA/B` (Mini App map-picker label), `parsedCategoryA`, `parsedCategoryB`, `venueName`, `venueAddress`, `venueLat`, `venueLng`, `venueGoogleMapsUri`, `venuePhotoUrl` (curated photo absolute URL) / `venuePhotoName` (Places photo resource name; rebuilt to a media URL at date-card render with the server-side key, never persisting Google's bytes), `venuePromptAskedAt` |
 | Date lifecycle | `icebreakersSentAt`, `iceBreakersA`/`B` (`String[]`), `safetyNoteSentAt`, `safetyAckA`/`B`, `wingmanHintA`/`B`, `wingmanSentAt`, `emergencyCancelledBy`, `emergencyReason`, `feedbackByA`/`B`, `feedbackPromptedAt`, `dateCardFileIdA`/`B` (Telegram `file_id` of the rendered date-card PNG, cached per side at the `scheduled` DM so the "My Date" menu hub — PRODUCT_SPEC §2.1 — re-opens the card instantly instead of re-rendering; null when the card was never sent) |
 | Nudges | `nudge1SentAt`, `nudge2SentAt` (legacy), `proposalNudge1SentAt`, `proposalNudge2SentAt`, `schedNudge1SentAt`, `schedNudge2SentAt` |
-| Date Ticket (feature-flagged) | `ticketPriceCents`, `ticketPaidA/B`, `paidForPartnerByA/B`, `partnerPaidSeenAt` / `partnerPaidNudgedAt` (goodwill-cover read-receipt: first-seen stamp gating the payer's "she saw it ❤️" DM, and the completion-nudge guard — §3.5b), `ticketStatus` (`pending`/`partial`/`completed`/`refunded`/`expired` — string, not a Prisma enum), `ticketExpiresAt`. Monetization sub-state machine that runs while `status = negotiating`; inert when `TICKET_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
+| Date Ticket (feature-flagged) | `ticketPriceCents`, `ticketPaidA/B`, `paidForPartnerByA/B`, `partnerPaidSeenAt` / `partnerPaidNudgedAt` (goodwill-cover read-receipt: first-seen stamp gating the payer's "she saw it ❤️" DM, and the completion-nudge guard — §3.5b), `ticketStatus` (`pending`/`partial`/`completed`/`refund_pending`/`refunded`/`expired` — string, not a Prisma enum), `ticketExpiresAt`. `refund_pending` is the durable retry boundary: scheduling opens only after the provider/wallet reversal succeeds. Monetization sub-state machine that runs while `status = negotiating`; inert when `TICKET_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
 | Pre-date coordination (feature-flagged) | `coordOfferSentAt`, `coordInitiatorId`, `coordMethod` (`share_self`/`request_partner`/`proxy` — string, not a Prisma enum), `coordChosenAt`, `coordPartnerConsent` (Variant B only), `coordResolvedAt`, `proxyOpenedAt`, `proxyClosesAt`, `proxyClosedAt`. Sub-state machine running on a `scheduled` match; inert when `COORDINATION_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §Phase 4. |
 | Venue change v2 (feature-flagged) | `venueChangeStatus` (null/`liking`/`agreed`/`settled`/`lapsed` — string, not a Prisma enum), `venueChangeProposerId`/`ProposedAt` (session initiator — first like / express mint), `venueLikesA/B` (`Json[]` server-resolved like snapshots), `venueChangeName`/`Address`/`Lat`/`Lng`/`MapsUri`/`PlaceId`/`PhotoUrl`/`PhotoName` (agreed venue snapshot), `venueChangeExpiresAt` (payment deadline)/`ResolvedAt`, `venueChangePaidById`/`PaidAt` (settle stamp), `venueChangePayDeclinedAt` (vestigial v2 — his decline now ENDS the change/closes the session rather than stamping a lingering `agreed` state, so this is no longer written or read for a decision), `venueChangeOfferPaySentAt` (wish-card guard), `venueChangePingSentToA/BAt` (board-invite guards), `venueChangeExpressAt` (her hidden unilateral mint), `venueChangeComment` (legacy v1, no longer written). Paid multiplayer venue-board sub-state on a `scheduled` match — a lapse never cancels the match; inert when `VENUE_CHANGE_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.7b. |
 
@@ -375,9 +375,11 @@ wrappers before a rejected asset can be committed to `profiles`.
 
 ### `ticket_ledger` (feature-flagged)
 
-Append-only audit of every ticket-wallet movement (`userId`, `delta`, `reason`
-∈ `photo_bonus`/`video_bonus`/`student_bonus`/`welcome_gift`/
-`store_purchase`/`spend_match`/`refund`, plus the retired legacy
+Append-only audit of every ticket-wallet movement or payment/refund transition
+(`userId`, `delta`, `reason` ∈ `photo_bonus`/`video_bonus`/`student_bonus`/
+`welcome_gift`/`store_purchase`/`spend_match`/`refund`/`gate_payment`/
+`gate_processing`/`gate_settled`/`gate_surplus_pending`/
+`gate_refund_pending`/`gate_refunded`, plus the retired legacy
 `verification_bonus` that survives only on historical rows and is never written
 anymore, optional
 `matchId`/`amountCents`/`bundleSize`/`externalPaymentId`, `createdAt`;
@@ -388,11 +390,15 @@ bonuses are idempotent via `Profile.photoBonusTicketAt` / `videoBonusTicketAt`;
 the first-pitch welcome gift and the Registration v2
 student bonus (+2 at university-email verification) use a serializable ledger
 claim on `welcome_gift` / `student_bonus`.
-**`externalPaymentId`** is the unique provider charge id (Telegram Stars
-`telegram_payment_charge_id`) set on a paid **store** top-up — its unique
-constraint makes a redelivered `successful_payment` roll back the duplicate
-credit (exactly-once); the date gate needs no such column because it settles via
-an atomic slot CAS. Indexed `(userId, createdAt)`.
+**`externalPaymentId`** is either the unique provider charge id (Telegram Stars
+`telegram_payment_charge_id`) for a paid store/date-gate purchase or a synthetic
+id for an exactly-once wallet reversal. For the date gate, zero-delta
+`gate_payment` rows retain the charge needed by `refundStarPayment`; their
+settlement reason advances atomically with the match-slot CAS to `gate_settled`
+or a durable refund/surplus state. The hourly worker retries pending provider
+refunds and wallet credits; a `gate_payment` row still unprocessed after five
+minutes is treated as an abandoned pre-transaction charge and safely refunded.
+Indexed `(userId, createdAt)`.
 Inert unless `TICKET_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b.
 
 ### `profiler_answers`
@@ -473,7 +479,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `0 * * * *` | UTC | Auto-unsuspend elapsed Tier-2 suspensions | `services/match-engine.ts` (`autoUnsuspendElapsed`) |
 | `30 3 * * *` | Europe/Kyiv | GDPR Article 9 selfie scrub (90 d post-`verifiedAt`) | `services/selfie-retention.ts` |
 | `0 4 * * *` | Europe/Kyiv | Curated venue re-validation (closure/rating sweep + hours refresh, ≤30 rows/tick) | `services/venue-revalidation.ts` |
-| `0 * * * *` (only when `TICKET_FEATURE_ENABLED`) | UTC | Date Ticket expiry: refund stalled `partial` payments and open the Calendar for free | `workers/ticket-expiry.ts` → `handlers/matching/ticket-gate.ts` |
+| `0 * * * *` (only when `TICKET_FEATURE_ENABLED`) | UTC | Date Ticket expiry: retry durable Stars refunds, reverse stalled `partial` payments, then open the Calendar for free | `workers/ticket-expiry.ts` → `handlers/matching/ticket-gate.ts` |
 | `setInterval(2 min)` | — | Date lifecycle: **venue-change lapse sweep** (an unpaid `agreed` swap lapses — original venue stands, match untouched; an abandoned express mint quietly reverts — feature-flagged), ice-breakers (T-5 h), emergency window, T-1.5 h pre-date safety, T+24 h feedback, wingman; **pre-date coordination** (T-60 m offer, T-30 m proxy open, T+2 h proxy close — feature-flagged) | `services/date-lifecycle.ts` + `services/pre-date-safety.ts` + `services/coordination.ts` + `handlers/matching/venue-change.ts` |
 
 Quiet hours **23:00–09:00 Europe/Kyiv** are enforced inside `re-engagement`

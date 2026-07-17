@@ -2,9 +2,22 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@gennety/db", () => ({
   prisma: {
+    $transaction: vi.fn(async (callback: (tx: unknown) => unknown) =>
+      callback((await import("@gennety/db")).prisma),
+    ),
+    user: {
+      findUnique: vi.fn(),
+    },
     match: {
       findUnique: vi.fn(),
       update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    ticketLedger: {
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
   },
@@ -37,6 +50,8 @@ import {
   applyStarsTicketPayment,
   useTicketFromBalance,
   notePartnerPaidSeen,
+  refundAndFallbackToScheduling,
+  retryPendingStarsGateRefunds,
 } from "./ticket-gate.js";
 import { startScheduling, sendCalendarCard } from "./scheduler.js";
 import { spendTickets, grantTickets } from "../../services/ticket-wallet.js";
@@ -45,6 +60,14 @@ type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as {
   findUnique: MockFn;
   update: MockFn;
+  updateMany: MockFn;
+};
+const mUser = prisma.user as unknown as { findUnique: MockFn };
+const mLedger = prisma.ticketLedger as unknown as {
+  findUnique: MockFn;
+  findFirst: MockFn;
+  findMany: MockFn;
+  create: MockFn;
   updateMany: MockFn;
 };
 const mStartScheduling = startScheduling as unknown as MockFn;
@@ -85,6 +108,10 @@ function matchRow(overrides: Record<string, unknown> = {}) {
       gender: "male",
       firstName: "Alex",
       ticketBalance: 0,
+      ticketDiscountPct: 0,
+      ticketDiscountExpiresAt: null,
+      ticketDiscountConsumedAt: null,
+      profile: { photos: ["alex-photo"] },
     },
     userB: {
       id: "uid-B",
@@ -93,10 +120,30 @@ function matchRow(overrides: Record<string, unknown> = {}) {
       gender: "female",
       firstName: "Bea",
       ticketBalance: 0,
+      ticketDiscountPct: 0,
+      ticketDiscountExpiresAt: null,
+      ticketDiscountConsumedAt: null,
+      profile: { photos: ["bea-photo"] },
     },
     ...overrides,
   };
 }
+
+beforeEach(() => {
+  mUser.findUnique.mockResolvedValue({ id: "uid-A" });
+  mLedger.findUnique.mockResolvedValue(null);
+  mLedger.findFirst.mockResolvedValue(null);
+  mLedger.findMany.mockResolvedValue([]);
+  mLedger.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+    id: "ledger-1",
+    userId: data.userId,
+    matchId: data.matchId,
+    reason: data.reason,
+    externalPaymentId: data.externalPaymentId,
+    bundleSize: data.bundleSize,
+  }));
+  mLedger.updateMany.mockResolvedValue({ count: 1 });
+});
 
 describe("ticket gate post-accept status message", () => {
   beforeEach(() => {
@@ -354,6 +401,26 @@ describe("useTicketFromBalance — wallet refund accounting", () => {
     );
     expect(mGrant).not.toHaveBeenCalled();
   });
+
+  it("refunds both wallet tickets when a stale 'both' claim loses to the partner payment", async () => {
+    const partnerPaid = new Date("2026-06-19T10:00:00Z");
+    mMatch.findUnique
+      .mockResolvedValueOnce(matchRow()) // wallet preflight
+      .mockResolvedValueOnce(matchRow()) // settlement read: both slots looked open
+      .mockResolvedValueOnce(matchRow({ ticketPaidB: partnerPaid })); // lost CAS reread
+    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
+    const api = createApi();
+
+    const result = await useTicketFromBalance(api, 1001n, "match-1", "both");
+
+    expect(result).toEqual({ ok: false, reason: "wrong-state" });
+    expect(mMatch.updateMany.mock.calls[0]![0].where).toEqual(
+      expect.objectContaining({ ticketPaidA: null, ticketPaidB: null }),
+    );
+    expect(mGrant).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "uid-A", count: 2, reason: "refund" }),
+    );
+  });
 });
 
 describe("applyStarsTicketPayment — M1 refund on a closed match", () => {
@@ -393,6 +460,249 @@ describe("applyStarsTicketPayment — M1 refund on a closed match", () => {
     const result = await applyStarsTicketPayment(api, 1001n, "match-1", "self", "charge_ok");
 
     expect(result.ok).toBe(true);
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
+    expect(mLedger.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          reason: "gate_payment",
+          externalPaymentId: "charge_ok",
+          matchId: "match-1",
+        }),
+      }),
+    );
+  });
+
+  it("does not mint a surplus ticket when Telegram redelivers an already-settled charge", async () => {
+    mLedger.findUnique.mockResolvedValueOnce({
+      id: "ledger-settled",
+      userId: "uid-A",
+      matchId: "match-1",
+      reason: "gate_settled",
+      externalPaymentId: "charge_redelivered",
+      bundleSize: 1,
+    });
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ ticketStatus: "partial", ticketPaidA: new Date("2026-06-19T10:00:00Z") }),
+    );
+    const api = createApi();
+
+    const result = await applyStarsTicketPayment(
+      api,
+      1001n,
+      "match-1",
+      "self",
+      "charge_redelivered",
+    );
+
+    expect(result.ok).toBe(true);
+    expect(mGrant).not.toHaveBeenCalled();
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("refunds a distinct charge that loses the atomic slot claim", async () => {
+    mMatch.findUnique
+      .mockResolvedValueOnce(matchRow())
+      .mockResolvedValueOnce(
+        matchRow({ ticketStatus: "partial", ticketPaidA: new Date("2026-06-19T10:00:00Z") }),
+      );
+    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
+    const api = createApi();
+
+    const result = await applyStarsTicketPayment(
+      api,
+      1001n,
+      "match-1",
+      "self",
+      "charge_lost_race",
+    );
+
+    expect(result).toEqual({ ok: false, reason: "wrong-state" });
+    expect(api.refundStarPayment).toHaveBeenCalledWith(1001, "charge_lost_race");
+    expect(mGrant).not.toHaveBeenCalled();
+    expect(mLedger.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ reason: "gate_refund_pending" }) }),
+    );
+  });
+
+  it("credits a one-ticket surplus exactly once when a both charge wins only one slot", async () => {
+    const partnerPaid = new Date("2026-06-19T10:00:00Z");
+    mMatch.findUnique.mockResolvedValue(
+      matchRow({ ticketStatus: "partial", ticketPaidB: partnerPaid }),
+    );
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
+    const api = createApi();
+
+    const result = await applyStarsTicketPayment(
+      api,
+      1001n,
+      "match-1",
+      "both",
+      "charge_surplus",
+    );
+
+    expect(result.ok).toBe(true);
+    expect(mGrant).toHaveBeenCalledWith({
+      userId: "uid-A",
+      count: 1,
+      reason: "refund",
+      matchId: "match-1",
+      externalPaymentId: "gate-surplus:charge_surplus",
+    });
+    expect(mLedger.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { reason: "gate_settled" } }),
+    );
+  });
+});
+
+describe("ticket expiry — durable provider and wallet refunds", () => {
+  const mGrant = grantTickets as unknown as MockFn;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mMatch.findUnique.mockReset();
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
+    mStartScheduling.mockResolvedValue(undefined);
+    mGrant.mockResolvedValue(undefined);
+  });
+
+  it("refunds the original Stars charge before opening free scheduling", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ ticketStatus: "partial", ticketPaidA: new Date("2026-06-19T10:00:00Z") }),
+    );
+    mLedger.findMany.mockResolvedValueOnce([
+      {
+        id: "stars-ledger",
+        userId: "uid-A",
+        matchId: "match-1",
+        reason: "gate_settled",
+        externalPaymentId: "charge_expired",
+        bundleSize: 1,
+      },
+      {
+        id: "losing-ledger",
+        userId: "uid-A",
+        matchId: "match-1",
+        reason: "gate_refunded",
+        externalPaymentId: "charge_already_refunded",
+        bundleSize: 1,
+      },
+    ]);
+    const api = createApi();
+
+    await refundAndFallbackToScheduling(api, "match-1");
+
+    expect(api.refundStarPayment).toHaveBeenCalledWith(1001, "charge_expired");
+    expect(api.refundStarPayment).toHaveBeenCalledTimes(1);
+    expect(mStartScheduling).toHaveBeenCalledWith(api, "match-1", { afterTicketGate: true });
+    expect(mMatch.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ ticketStatus: "refund_pending" }),
+        data: expect.objectContaining({ ticketStatus: "refunded" }),
+      }),
+    );
+    expect(api.sendMessage).toHaveBeenCalledWith(1001, t("en", "ticketRefundedDm"));
+  });
+
+  it("restores a wallet ticket exactly once when a wallet-funded gate expires", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ ticketStatus: "partial", ticketPaidA: new Date("2026-06-19T10:00:00Z") }),
+    );
+    mLedger.findMany.mockResolvedValueOnce([]); // no Stars payment
+    mLedger.findFirst.mockResolvedValueOnce({ id: "wallet-spend" });
+    const api = createApi();
+
+    await refundAndFallbackToScheduling(api, "match-1");
+
+    expect(mGrant).toHaveBeenCalledWith({
+      userId: "uid-A",
+      count: 1,
+      reason: "refund",
+      matchId: "match-1",
+      externalPaymentId: "wallet-expiry-refund:match-1:uid-A",
+    });
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
+    expect(mStartScheduling).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the match retryable and withholds scheduling when the Stars refund fails", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ ticketStatus: "partial", ticketPaidA: new Date("2026-06-19T10:00:00Z") }),
+    );
+    mLedger.findMany.mockResolvedValueOnce([
+      {
+        id: "stars-ledger",
+        userId: "uid-A",
+        matchId: "match-1",
+        reason: "gate_payment",
+        externalPaymentId: "charge_retry",
+        bundleSize: 1,
+      },
+    ]);
+    const api = createApi();
+    api.refundStarPayment.mockRejectedValueOnce(new Error("temporary network failure"));
+
+    await expect(refundAndFallbackToScheduling(api, "match-1")).rejects.toThrow(
+      "Ticket refund remains pending",
+    );
+
+    expect(mStartScheduling).not.toHaveBeenCalled();
+    expect(mMatch.updateMany).toHaveBeenCalledTimes(1);
+    expect(mMatch.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ ticketStatus: "refund_pending" }) }),
+    );
+    expect(mLedger.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { reason: "gate_refund_pending" } }),
+    );
+  });
+
+  it("retries durable Stars refunds left pending by an earlier callback", async () => {
+    mLedger.findMany.mockResolvedValueOnce([
+      {
+        id: "stars-ledger",
+        userId: "uid-A",
+        matchId: "match-1",
+        reason: "gate_refund_pending",
+        externalPaymentId: "charge_retry",
+        user: { telegramId: 1001n },
+      },
+    ]);
+    const api = createApi();
+
+    await expect(retryPendingStarsGateRefunds(api)).resolves.toBe(1);
+
+    expect(api.refundStarPayment).toHaveBeenCalledWith(1001, "charge_retry");
+    expect(mLedger.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: { reason: "gate_refunded" } }),
+    );
+    const retryWhere = mLedger.findMany.mock.calls[0]![0].where;
+    expect(retryWhere.OR[0].reason).toEqual({
+      in: ["gate_refund_pending", "gate_surplus_pending"],
+    });
+    expect(retryWhere.OR[1]).toEqual({
+      reason: "gate_payment",
+      createdAt: { lt: expect.any(Date) },
+    });
+  });
+
+  it("does not refund an abandoned-row candidate that concurrently became settled", async () => {
+    mLedger.findMany.mockResolvedValueOnce([
+      {
+        id: "stars-ledger",
+        userId: "uid-A",
+        matchId: "match-1",
+        reason: "gate_payment",
+        externalPaymentId: "charge_racing",
+        bundleSize: 1,
+        user: { telegramId: 1001n },
+      },
+    ]);
+    mLedger.updateMany.mockResolvedValueOnce({ count: 0 });
+    mLedger.findUnique.mockResolvedValueOnce({ reason: "gate_settled" });
+    const api = createApi();
+
+    await expect(retryPendingStarsGateRefunds(api)).resolves.toBe(0);
+
     expect(api.refundStarPayment).not.toHaveBeenCalled();
   });
 });

@@ -620,9 +620,12 @@ Required/high-impact env keys:
     `currency: "XTR"`); Stars→TON withdrawal is a Telegram-side setting.
     `TICKET_BUNDLE_STARS` (default `1:350,3:830,6:1350`, `<count>:<stars>` pairs)
     sets the per-bundle Star price; the gate derives its per-scope price from the
-    1-ticket entry (self/partner 1×, both 2×). **Requires `db:push` of the
-    additive unique `ticket_ledger.external_payment_id` column first** (the
-    Telegram charge id — exactly-once store credit; non-destructive). When Stars
+    1-ticket entry (self/partner 1×, both 2×). **Requires the additive unique
+    `ticket_ledger.external_payment_id` column to be deployed first** (the
+    Telegram charge id — exactly-once store credit and durable date-gate
+    refunds; non-destructive). Gate payments are recorded before settlement;
+    the hourly expiry worker retries `gate_refund_pending` rows and opens free
+    scheduling only after Telegram confirms the refund. When Stars
     is on, the mock `/{ticket,tickets/store}/{intent,confirm}` routes 404 (PAY-1)
     so Stars is the sole purchase rail; the free wallet "Use a ticket" path is
     unaffected. Redeploy the Mini App bundle (`ticket.html` + `tickets.html`) so

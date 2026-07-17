@@ -397,7 +397,13 @@ async function settleTicket(
   telegramId: bigint,
   matchId: string,
   scope: TicketScope,
-): Promise<{ result: ApplyPaymentResult; claimedCount: number }> {
+  starsLedger?: StarsGateLedgerRecord,
+): Promise<{
+  result: ApplyPaymentResult;
+  claimedCount: number;
+  ledgerReason?: string;
+  surplusCount?: number;
+}> {
   const match = await loadTicketMatch(matchId);
   if (!match) return { result: { ok: false, reason: "match-not-found" }, claimedCount: 0 };
   const side = sideForTelegramId(match, telegramId);
@@ -417,6 +423,9 @@ async function settleTicket(
   const partnerPaidAlready = (side === "A" ? match.ticketPaidB : match.ticketPaidA) !== null;
 
   let claimedCount = 0;
+  let claimAttempted = false;
+  let ledgerReason: string | undefined;
+  let surplusCount = 0;
 
   if (scope === "partner") {
     // Cover only the partner's slot — requires the actor to have already paid
@@ -425,11 +434,18 @@ async function settleTicket(
       return { result: { ok: false, reason: "wrong-state" }, claimedCount: 0 };
     }
     if (!partnerPaidAlready) {
-      const claim = await prisma.match.updateMany({
-        where: { id: matchId, status: "negotiating", [partnerPaidField]: null },
-        data: { [partnerPaidField]: now, [paidForPartnerField]: true },
-      });
-      claimedCount = claim.count > 0 ? 1 : 0;
+      claimAttempted = true;
+      const claim = await claimTicketSlots(
+        {
+          where: { id: matchId, status: "negotiating", [partnerPaidField]: null },
+          data: { [partnerPaidField]: now, [paidForPartnerField]: true },
+        },
+        1,
+        starsLedger,
+      );
+      claimedCount = claim.claimedCount;
+      ledgerReason = claim.ledgerReason;
+      surplusCount = claim.surplusCount;
       if (claimedCount > 0) {
         emitTicketEvent("ticket_paid", { matchId, side, scope, amountCents: amountForScope(scope, match.ticketPriceCents) });
       }
@@ -449,11 +465,46 @@ async function settleTicket(
       data[paidForPartnerField] = true;
       data[partnerPaidField] = now;
     }
-    const claim = await prisma.match.updateMany({
-      where: { id: matchId, status: "negotiating", [paidField]: null },
-      data,
-    });
-    if (claim.count === 0) {
+    claimAttempted = true;
+    const claim = await claimTicketSlots(
+      {
+        where: {
+          id: matchId,
+          status: "negotiating",
+          [paidField]: null,
+          // A stale "both" read must not overwrite a partner payment that landed
+          // concurrently. Losing this stronger CAS causes the whole charge/spend
+          // to be refunded by the caller.
+          ...(coverPartner ? { [partnerPaidField]: null } : {}),
+        },
+        data,
+      },
+      coverPartner ? 2 : 1,
+      starsLedger,
+    );
+    claimedCount = claim.claimedCount;
+    ledgerReason = claim.ledgerReason;
+    surplusCount = claim.surplusCount;
+    if (claimedCount === 0) {
+      if (starsLedger) {
+        const fresh = await loadTicketMatch(matchId);
+        if (
+          fresh &&
+          (ledgerReason === GATE_SETTLED_REASON || ledgerReason === GATE_SURPLUS_PENDING_REASON)
+        ) {
+          return {
+            result: { ok: true, state: buildTicketStateView(fresh, side) },
+            claimedCount: 0,
+            ledgerReason,
+            surplusCount,
+          };
+        }
+        return {
+          result: { ok: false, reason: "wrong-state" },
+          claimedCount: 0,
+          ...(ledgerReason ? { ledgerReason } : {}),
+        };
+      }
       // Lost the race or wrong state. Re-read; if our side is now paid it was a
       // concurrent duplicate — treat as success (idempotent).
       const fresh = await loadTicketMatch(matchId);
@@ -462,9 +513,43 @@ async function settleTicket(
       if (!sidePaidNow) return { result: { ok: false, reason: "wrong-state" }, claimedCount: 0 };
       return { result: { ok: true, state: buildTicketStateView(fresh, side) }, claimedCount: 0 };
     }
-    claimedCount = coverPartner ? 2 : 1;
     emitTicketEvent("ticket_paid", { matchId, side, scope, amountCents: amountForScope(scope, match.ticketPriceCents) });
 
+  }
+
+  if (starsLedger && claimAttempted && claimedCount === 0) {
+    const fresh = await loadTicketMatch(matchId);
+    if (
+      fresh &&
+      (ledgerReason === GATE_SETTLED_REASON || ledgerReason === GATE_SURPLUS_PENDING_REASON)
+    ) {
+      return {
+        result: { ok: true, state: buildTicketStateView(fresh, side) },
+        claimedCount: 0,
+        ledgerReason,
+        surplusCount,
+      };
+    }
+    return {
+      result: { ok: false, reason: "wrong-state" },
+      claimedCount: 0,
+      ...(ledgerReason ? { ledgerReason } : {}),
+    };
+  }
+
+  // A newly paid Stars charge that found its requested slot already occupied
+  // must be refunded. Wallet/mock redeliveries retain their older idempotent
+  // behavior, but a distinct provider charge can never be silently accepted.
+  if (starsLedger && !claimAttempted) {
+    await prisma.ticketLedger.updateMany({
+      where: { id: starsLedger.id, reason: GATE_PAYMENT_REASON },
+      data: { reason: GATE_REFUND_PENDING_REASON },
+    });
+    return {
+      result: { ok: false, reason: "wrong-state" },
+      claimedCount: 0,
+      ledgerReason: GATE_REFUND_PENDING_REASON,
+    };
   }
 
   // Takt 1 — the payer just covered the partner's slot (the goodwill gesture):
@@ -495,8 +580,13 @@ async function settleTicket(
     await completeTicketGateAndUnlockScheduling(api, matchId);
   } else if (!bothPaid && after.ticketStatus === "pending") {
     // First payment → partial; give the second side a fresh window.
-    await prisma.match.update({
-      where: { id: matchId },
+    await prisma.match.updateMany({
+      where: {
+        id: matchId,
+        status: "negotiating",
+        ticketStatus: "pending",
+        OR: [{ ticketPaidA: null }, { ticketPaidB: null }],
+      },
       data: { ticketStatus: "partial", ticketExpiresAt: new Date(Date.now() + PARTIAL_WINDOW_MS) },
     });
   }
@@ -506,7 +596,12 @@ async function settleTicket(
   // edit here. The Calendar follows as its own message via startScheduling.
   const final = await loadTicketMatch(matchId);
   if (!final) return { result: { ok: false, reason: "match-not-found" }, claimedCount };
-  return { result: { ok: true, state: buildTicketStateView(final, side) }, claimedCount };
+  return {
+    result: { ok: true, state: buildTicketStateView(final, side) },
+    claimedCount,
+    ...(ledgerReason ? { ledgerReason } : {}),
+    surplusCount,
+  };
 }
 
 /**
@@ -539,6 +634,273 @@ export async function applyTicketPayment(
   return result;
 }
 
+const GATE_PAYMENT_REASON = "gate_payment";
+const GATE_PROCESSING_REASON = "gate_processing";
+const GATE_SETTLED_REASON = "gate_settled";
+const GATE_SURPLUS_PENDING_REASON = "gate_surplus_pending";
+const GATE_REFUND_PENDING_REASON = "gate_refund_pending";
+const GATE_REFUNDED_REASON = "gate_refunded";
+
+interface StarsGateLedgerRecord {
+  id: string;
+  userId: string;
+  matchId: string | null;
+  reason: string;
+  externalPaymentId: string | null;
+  bundleSize: number | null;
+}
+
+type MatchUpdateManyArgs = Parameters<typeof prisma.match.updateMany>[0];
+
+/** Atomically associate a Stars charge with the match slots it won. The ledger
+ * outcome and slot CAS commit together, eliminating the crash window where a
+ * redelivery could not distinguish its own settlement from another charge. */
+async function claimTicketSlots(
+  args: MatchUpdateManyArgs,
+  slotsWhenClaimed: number,
+  starsLedger?: StarsGateLedgerRecord,
+): Promise<{ claimedCount: number; ledgerReason?: string; surplusCount: number }> {
+  if (!starsLedger) {
+    const claim = await prisma.match.updateMany(args);
+    return { claimedCount: claim.count > 0 ? slotsWhenClaimed : 0, surplusCount: 0 };
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const processing = await tx.ticketLedger.updateMany({
+      where: { id: starsLedger.id, reason: GATE_PAYMENT_REASON },
+      data: { reason: GATE_PROCESSING_REASON },
+    });
+    if (processing.count === 0) {
+      const existing = await tx.ticketLedger.findUnique({
+        where: { id: starsLedger.id },
+        select: { reason: true, bundleSize: true },
+      });
+      if (!existing) throw new Error("Stars gate ledger disappeared during settlement");
+      return {
+        claimedCount: 0,
+        ledgerReason: existing.reason,
+        surplusCount:
+          existing.reason === GATE_SURPLUS_PENDING_REASON ? (existing.bundleSize ?? 0) : 0,
+      };
+    }
+
+    const claim = await tx.match.updateMany(args);
+    const claimedCount = claim.count > 0 ? slotsWhenClaimed : 0;
+    const requestedCount = starsLedger.bundleSize ?? slotsWhenClaimed;
+    const surplus = Math.max(0, requestedCount - claimedCount);
+    const nextReason =
+      claimedCount === 0
+        ? GATE_REFUND_PENDING_REASON
+        : surplus > 0
+          ? GATE_SURPLUS_PENDING_REASON
+          : GATE_SETTLED_REASON;
+    await tx.ticketLedger.updateMany({
+      where: { id: starsLedger.id, reason: GATE_PROCESSING_REASON },
+      data: {
+        reason: nextReason,
+        ...(surplus > 0 ? { bundleSize: surplus } : {}),
+      },
+    });
+    return {
+      claimedCount,
+      ledgerReason: nextReason,
+      surplusCount: surplus,
+    };
+  });
+}
+
+async function recordStarsGatePayment(input: {
+  telegramId: bigint;
+  matchId: string;
+  scope: TicketScope;
+  chargeId: string;
+}): Promise<StarsGateLedgerRecord | null> {
+  const payer = await prisma.user.findUnique({
+    where: { telegramId: input.telegramId },
+    select: { id: true },
+  });
+  if (!payer) return null;
+
+  const existing = await prisma.ticketLedger.findUnique({
+    where: { externalPaymentId: input.chargeId },
+    select: {
+      id: true,
+      userId: true,
+      matchId: true,
+      reason: true,
+      externalPaymentId: true,
+      bundleSize: true,
+    },
+  });
+  if (existing) {
+    if (existing.userId !== payer.id || existing.matchId !== input.matchId) {
+      throw new Error("Telegram charge id is already attached to another ticket payment");
+    }
+    return existing;
+  }
+
+  try {
+    const record = await prisma.ticketLedger.create({
+      data: {
+        userId: payer.id,
+        delta: 0,
+        reason: GATE_PAYMENT_REASON,
+        matchId: input.matchId,
+        bundleSize: ticketsForScope(input.scope),
+        externalPaymentId: input.chargeId,
+      },
+      select: {
+        id: true,
+        userId: true,
+        matchId: true,
+        reason: true,
+        externalPaymentId: true,
+        bundleSize: true,
+      },
+    });
+    return record;
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+    const raced = await prisma.ticketLedger.findUnique({
+      where: { externalPaymentId: input.chargeId },
+      select: {
+        id: true,
+        userId: true,
+        matchId: true,
+        reason: true,
+        externalPaymentId: true,
+        bundleSize: true,
+      },
+    });
+    if (!raced || raced.userId !== payer.id || raced.matchId !== input.matchId) throw error;
+    return raced;
+  }
+}
+
+function isAlreadyRefundedError(error: unknown): boolean {
+  const text =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error !== null && "description" in error
+        ? String((error as { description?: unknown }).description ?? "")
+        : String(error);
+  return /already[^\n]*refund|refund[^\n]*already/i.test(text);
+}
+
+async function refundStarsLedgerRecord(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  record: StarsGateLedgerRecord,
+  options: { allowSettled?: boolean } = {},
+): Promise<boolean> {
+  const chargeId = record.externalPaymentId;
+  if (!chargeId) return false;
+  if (record.reason === GATE_REFUNDED_REASON) return true;
+
+  const claim = await prisma.ticketLedger.updateMany({
+    where: {
+      id: record.id,
+      reason: {
+        in: [
+          GATE_PAYMENT_REASON,
+          GATE_REFUND_PENDING_REASON,
+          ...(options.allowSettled ? [GATE_SETTLED_REASON] : []),
+        ],
+      },
+    },
+    data: { reason: GATE_REFUND_PENDING_REASON },
+  });
+  if (claim.count === 0) {
+    const current = await prisma.ticketLedger.findUnique({
+      where: { id: record.id },
+      select: { reason: true },
+    });
+    if (current?.reason === GATE_REFUNDED_REASON) return true;
+    if (current?.reason !== GATE_REFUND_PENDING_REASON) return false;
+  }
+
+  try {
+    await api.refundStarPayment(Number(telegramId), chargeId);
+  } catch (error) {
+    if (!isAlreadyRefundedError(error)) return false;
+  }
+
+  await prisma.ticketLedger.updateMany({
+    where: {
+      id: record.id,
+      reason: {
+        in: [GATE_PAYMENT_REASON, GATE_SETTLED_REASON, GATE_REFUND_PENDING_REASON],
+      },
+    },
+    data: { reason: GATE_REFUNDED_REASON },
+  });
+  return true;
+}
+
+async function creditStarsSurplus(
+  record: StarsGateLedgerRecord,
+  count: number,
+): Promise<boolean> {
+  const chargeId = record.externalPaymentId;
+  if (!chargeId || !record.matchId || count <= 0) return false;
+  try {
+    await grantTickets({
+      userId: record.userId,
+      count,
+      reason: "refund",
+      matchId: record.matchId,
+      externalPaymentId: `gate-surplus:${chargeId}`,
+    });
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+  }
+  await prisma.ticketLedger.updateMany({
+    where: { id: record.id, reason: GATE_SURPLUS_PENDING_REASON },
+    data: { reason: GATE_SETTLED_REASON },
+  });
+  return true;
+}
+
+/** Retry durable Stars refunds/surplus credits. A payment row left unprocessed
+ * for five minutes means the process died between recording the Telegram charge
+ * and entering the atomic slot transaction, so it is safely refunded too. */
+export async function retryPendingStarsGateRefunds(api: Api<RawApi>): Promise<number> {
+  const abandonedBefore = new Date(Date.now() - 5 * 60_000);
+  const pending = await prisma.ticketLedger.findMany({
+    where: {
+      externalPaymentId: { not: null },
+      OR: [
+        { reason: { in: [GATE_REFUND_PENDING_REASON, GATE_SURPLUS_PENDING_REASON] } },
+        { reason: GATE_PAYMENT_REASON, createdAt: { lt: abandonedBefore } },
+      ],
+    },
+    select: {
+      id: true,
+      userId: true,
+      matchId: true,
+      reason: true,
+      externalPaymentId: true,
+      bundleSize: true,
+      user: { select: { telegramId: true } },
+    },
+    take: 200,
+  });
+
+  let adjusted = 0;
+  for (const record of pending) {
+    try {
+      if (record.reason === GATE_SURPLUS_PENDING_REASON) {
+        if (await creditStarsSurplus(record, record.bundleSize ?? 0)) adjusted += 1;
+      } else if (await refundStarsLedgerRecord(api, record.user.telegramId, record)) {
+        adjusted += 1;
+      }
+    } catch (error) {
+      console.error(`[stars] failed to retry gate adjustment ledger=${record.id}:`, error);
+    }
+  }
+  return adjusted;
+}
+
 /**
  * Telegram Stars path: settle the gate after Telegram confirms a Star payment
  * (the `successful_payment` update is the trust boundary, same role as the mock
@@ -553,9 +915,44 @@ export async function applyStarsTicketPayment(
   telegramId: bigint,
   matchId: string,
   scope: TicketScope,
-  chargeId?: string,
+  chargeId: string,
 ): Promise<ApplyPaymentResult> {
-  const { result, claimedCount } = await settleTicket(api, telegramId, matchId, scope);
+  const ledger = await recordStarsGatePayment({ telegramId, matchId, scope, chargeId });
+  if (!ledger) {
+    await api.refundStarPayment(Number(telegramId), chargeId).catch((error) => {
+      console.error("[stars] gate payment has no payer row and could not be durably refunded:", error);
+    });
+    return { ok: false, reason: "wrong-state" };
+  }
+  if (ledger.reason === GATE_REFUNDED_REASON) {
+    return { ok: false, reason: "wrong-state" };
+  }
+  if (ledger.reason === GATE_REFUND_PENDING_REASON) {
+    await refundStarsLedgerRecord(api, telegramId, ledger);
+    return { ok: false, reason: "wrong-state" };
+  }
+  if (ledger.reason === GATE_SURPLUS_PENDING_REASON) {
+    await creditStarsSurplus(ledger, ledger.bundleSize ?? 0);
+    const state = await getTicketState(telegramId, matchId);
+    return state.ok ? { ok: true, state: state.state } : { ok: false, reason: state.reason };
+  }
+  if (ledger.reason === GATE_SETTLED_REASON) {
+    const state = await getTicketState(telegramId, matchId);
+    return state.ok ? { ok: true, state: state.state } : { ok: false, reason: state.reason };
+  }
+
+  const { result, ledgerReason, surplusCount = 0 } = await settleTicket(
+    api,
+    telegramId,
+    matchId,
+    scope,
+    ledger,
+  );
+  const effectiveLedger = {
+    ...ledger,
+    reason: ledgerReason ?? ledger.reason,
+    ...(ledgerReason === GATE_SURPLUS_PENDING_REASON ? { bundleSize: surplusCount } : {}),
+  };
   if (!result.ok) {
     // Telegram already moved the Stars (this runs from `successful_payment`), but
     // nothing settled — the match left `negotiating` between the pre_checkout
@@ -565,10 +962,13 @@ export async function applyStarsTicketPayment(
     // a redelivery hits an already-refunded charge and is caught. `settleTicket`
     // returns `ok:true` for an idempotent duplicate, so this never refunds a
     // genuinely-settled payment.
-    if (chargeId) {
-      await api
-        .refundStarPayment(Number(telegramId), chargeId)
-        .catch((err) => console.error("[stars] gate settle-failed refund failed:", err));
+    const refunded = await refundStarsLedgerRecord(api, telegramId, effectiveLedger);
+    if (!refunded) {
+      console.error("[stars] gate settle-failed refund queued", {
+        matchId,
+        telegramId: telegramId.toString(),
+        chargeId,
+      });
     }
     return result;
   }
@@ -583,29 +983,12 @@ export async function applyStarsTicketPayment(
   // keeps the value. `externalPaymentId` makes it exactly-once, so a redelivered
   // `successful_payment` (which the slot CAS already no-ops) cannot mint a
   // second free ticket.
-  const surplus = Math.max(0, ticketsForScope(scope) - claimedCount);
-  if (surplus > 0 && chargeId) {
-    const payer = await prisma.user.findUnique({
-      where: { telegramId },
-      select: { id: true },
-    });
-    if (payer) {
-      try {
-        await grantTickets({
-          userId: payer.id,
-          count: surplus,
-          reason: "refund",
-          matchId,
-          externalPaymentId: chargeId,
-        });
-        console.info(
-          `[stars] gate surplus refunded as ${surplus} ticket(s) user=${telegramId} ` +
-            `match=${matchId} scope=${scope} claimed=${claimedCount} charge=${chargeId}`,
-        );
-      } catch (err) {
-        if (!isUniqueViolation(err)) throw err; // redelivery — already refunded
-      }
-    }
+  if (ledgerReason === GATE_SURPLUS_PENDING_REASON && surplusCount > 0) {
+    await creditStarsSurplus(effectiveLedger, surplusCount);
+    console.info(
+      `[stars] gate surplus refunded as ${surplusCount} ticket(s) user=${telegramId} ` +
+        `match=${matchId} scope=${scope} charge=${chargeId}`,
+    );
   }
   return result;
 }
@@ -721,10 +1104,77 @@ export async function completeTicketGateAndUnlockScheduling(
   });
 }
 
+async function refundPaidTicketSide(
+  api: Api<RawApi>,
+  match: TicketMatch,
+  paidSide: Side,
+): Promise<boolean> {
+  const payer = selfUser(match, paidSide);
+  const stars = await prisma.ticketLedger.findMany({
+    where: {
+      userId: payer.id,
+      matchId: match.id,
+      reason: {
+        in: [
+          GATE_PAYMENT_REASON,
+          GATE_SETTLED_REASON,
+          GATE_REFUND_PENDING_REASON,
+          GATE_REFUNDED_REASON,
+        ],
+      },
+      externalPaymentId: { not: null },
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      userId: true,
+      matchId: true,
+      reason: true,
+      externalPaymentId: true,
+      bundleSize: true,
+    },
+  });
+  if (stars.length > 0) {
+    let allRefunded = true;
+    for (const record of stars) {
+      const refunded = await refundStarsLedgerRecord(api, payer.telegramId, record, {
+        allowSettled: true,
+      });
+      if (!refunded) allRefunded = false;
+    }
+    return allRefunded;
+  }
+
+  const walletSpend = await prisma.ticketLedger.findFirst({
+    where: { userId: payer.id, matchId: match.id, reason: "spend_match", delta: { lt: 0 } },
+    select: { id: true },
+  });
+  if (walletSpend) {
+    try {
+      await grantTickets({
+        userId: payer.id,
+        count: 1,
+        reason: "refund",
+        matchId: match.id,
+        externalPaymentId: `wallet-expiry-refund:${match.id}:${payer.id}`,
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+    }
+    return true;
+  }
+
+  const fallback = await refundTicketPayment({
+    matchId: match.id,
+    amountCents: match.ticketPriceCents,
+  });
+  return fallback.ok;
+}
+
 /**
- * A `partial` (or `pending`) ticket lapsed. Refund whoever paid (mock = no-op),
- * mark the row terminal, DM the payer, then open the Calendar for FREE — an
- * already-accepted match must never be killed by a payment stall.
+ * A `partial` (or `pending`) ticket lapsed. Claim `refund_pending`, perform the
+ * provider/wallet refund, and only then mark the row `refunded` and announce it.
+ * Failed refunds stay retryable instead of being reported as successful.
  */
 export async function refundAndFallbackToScheduling(
   api: Api<RawApi>,
@@ -738,25 +1188,40 @@ export async function refundAndFallbackToScheduling(
   }
 
   const paidSide: Side | null = match.ticketPaidA !== null ? "A" : match.ticketPaidB !== null ? "B" : null;
-  const terminal = paidSide ? "refunded" : "expired";
-
-  // Claim the terminal flip atomically so a double cron tick refunds once.
-  const flip = await prisma.match.updateMany({
-    where: { id: matchId, status: "negotiating", ticketStatus: { in: ["pending", "partial"] } },
-    data: { ticketStatus: terminal, ticketExpiresAt: null },
-  });
-  if (flip.count === 0) return;
-
-  if (paidSide) {
-    await refundTicketPayment({ matchId, amountCents: match.ticketPriceCents });
-    emitTicketEvent("ticket_refunded", { matchId, side: paidSide });
-    const payer = selfUser(match, paidSide);
-    if (isTelegramTarget(payer.telegramId)) {
-      await api.sendMessage(toTelegramChatId(payer.telegramId), t(langOf(payer), "ticketRefundedDm"));
-    }
+  if (!paidSide) {
+    const expired = await prisma.match.updateMany({
+      where: { id: matchId, status: "negotiating", ticketStatus: { in: ["pending", "partial"] } },
+      data: { ticketStatus: "expired", ticketExpiresAt: null },
+    });
+    if (expired.count === 0) return;
+    await startScheduling(api, matchId, { afterTicketGate: true });
+    return;
   }
 
-  // Open scheduling for free. The persistent ticket card is still above, so the
-  // Calendar follows it with the plain (non-duplicating) caption.
+  if (match.ticketStatus !== "refund_pending") {
+    const claimed = await prisma.match.updateMany({
+      where: { id: matchId, status: "negotiating", ticketStatus: { in: ["pending", "partial"] } },
+      data: { ticketStatus: "refund_pending", ticketExpiresAt: null },
+    });
+    if (claimed.count === 0) return;
+  }
+
+  const refunded = await refundPaidTicketSide(api, match, paidSide);
+  if (!refunded) throw new Error(`Ticket refund remains pending for match ${matchId}`);
+
+  // Keep `refund_pending` through the scheduling handoff. If the Calendar send
+  // fails, the next expiry tick retries the idempotent refund + scheduler path.
   await startScheduling(api, matchId, { afterTicketGate: true });
+
+  const finalized = await prisma.match.updateMany({
+    where: { id: matchId, status: "negotiating", ticketStatus: "refund_pending" },
+    data: { ticketStatus: "refunded", ticketExpiresAt: null },
+  });
+  if (finalized.count === 0) return;
+
+  emitTicketEvent("ticket_refunded", { matchId, side: paidSide });
+  const payer = selfUser(match, paidSide);
+  if (isTelegramTarget(payer.telegramId)) {
+    await api.sendMessage(toTelegramChatId(payer.telegramId), t(langOf(payer), "ticketRefundedDm"));
+  }
 }

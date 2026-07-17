@@ -236,12 +236,9 @@ async function handleGateSuccessfulPayment(
   if (!gate) return; // foreign payload — credit/settle nothing
 
   const telegramId = BigInt(ctx.from!.id);
-  // The gate is settled by an atomic CAS on the still-null `ticketPaid*` slot
-  // (see `settleTicket`), so a redelivered `successful_payment` is already a
-  // no-op for the settlement itself. The charge id is still passed down: a
-  // `both` payment that lands after she already settled her own slot overpays,
-  // and the surplus is returned as a wallet ticket keyed on
-  // `TicketLedger.externalPaymentId` so a redelivery can't mint a second one.
+  // The charge id is durably recorded before the atomic slot CAS. That makes a
+  // redelivered `successful_payment` idempotent, preserves the provider key for
+  // expiry refunds, and dedupes any wallet credit for a `both` overpayment.
   console.info(
     `[stars] gate payment user=${telegramId} match=${gate.matchId} scope=${gate.scope} ` +
       `stars=${payment.total_amount} charge=${payment.telegram_payment_charge_id}`,
