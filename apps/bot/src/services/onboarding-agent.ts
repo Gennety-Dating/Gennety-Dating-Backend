@@ -447,7 +447,7 @@ What you MUST do next: ONE short bubble acknowledging what you got, then ask onl
 - If the user's gender answer is contradictory or joking (e.g. "I'm a guy and a girl at the same time"), do NOT guess. Ask one short clarification because the matching engine currently needs one of two profile values.
 - After "ищу девушку" / "ищу парня" / "ищу обоих" / "looking for a girl/guy/both" → DO NOT ask "кто тебе нравится?" again. Save the preference.
 - After ANY first hobby reply (one hobby, several, or "no hobbies") → DO NOT ask for another hobby. The first reply IS the answer.
-- After a height like "180 см" / "5'10\"" / "180" appears in any user message → DO NOT re-ask height.
+- After a height like "180 см" / 5′10″ / "180" appears in any user message → DO NOT re-ask height.
 - After a partner-preferences sentence is given → DO NOT ask the user to elaborate or "tell me more".
 - After save_context_dump succeeds → move straight to request_photos. DO NOT re-ask any profile field.
 

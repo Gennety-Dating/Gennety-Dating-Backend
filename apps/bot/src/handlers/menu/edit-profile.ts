@@ -225,7 +225,6 @@ export async function handleEditAgeRangeInput(ctx: BotContext): Promise<void> {
  */
 export async function handleEditPhotosStart(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
-  const lang = ctx.session.language;
   const telegramId = BigInt(ctx.from!.id);
 
   const profile = await prisma.profile.findFirst({

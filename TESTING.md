@@ -8,6 +8,16 @@
 > - **@GN01001** — Telegram ID `782065541`. Full real-world flow: corp-email
 >   OTP via Resend, Persona hosted KYC, AWS Rekognition face-match.
 
+## Automated CI gate
+
+Every push to `main` and every pull request installs the frozen pnpm lockfile,
+checks tracked files for high-confidence secret formats, rejects dependency
+advisories at moderate severity or above, runs workspace lint/typecheck/unit
+tests, builds the Mini App, and runs the PostgreSQL/pgvector integration suite.
+The same checks can be reproduced locally with `pnpm security:secrets`,
+`pnpm security:audit`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and
+`pnpm test:integration` after starting/pushing the test database.
+
 ## Prerequisites
 
 | Check | Command / location |

@@ -1,6 +1,5 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import { PROFILER_ENTRY_DELAY_MS } from "@gennety/shared";
 import {
   isQuietHourLocal,
   nextWindowAt,

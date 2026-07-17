@@ -196,7 +196,7 @@ export function pitchAndSynergyPrompt(input: PitchAndSynergyInput): string {
 You MUST respond with a single JSON object — no markdown, no commentary, no fences. Schema:
 
 {
-  "pitch": "2–3 SHORT sentences in ${input.language}, second-person (\"you\"). Mention ONE concrete compatibility point. Warm, confident, understatement over hype — never sycophantic, never salesy. Chat-style lowercase sentence openings are fine; keep names capitalized. Never promise anything.",
+  "pitch": "2–3 SHORT sentences in ${input.language}, second-person ("you"). Mention ONE concrete compatibility point. Warm, confident, understatement over hype — never sycophantic, never salesy. Chat-style lowercase sentence openings are fine; keep names capitalized. Never promise anything.",
   "synergy_score": <integer between 70 and 99 inclusive>,
   "synergy_reason": "1–2 sentences in ${input.language} explaining WHY the AI put them together this week. Framed positively per the rules below."
 }

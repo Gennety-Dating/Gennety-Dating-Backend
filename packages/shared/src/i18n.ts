@@ -3707,5 +3707,5 @@ export function t(
  * content doesn't break `parse_mode: "Markdown"`.
  */
 export function escapeMd(text: string): string {
-  return text.replace(/([_*`\[])/g, "\\$1");
+  return text.replace(/[[_*`]/g, "\\$&");
 }

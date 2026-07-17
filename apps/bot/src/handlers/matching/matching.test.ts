@@ -121,7 +121,6 @@ import {
   rankCandidates,
   extractSocialEnergy,
   quadrantProximityScore,
-  SCORING_WEIGHTS,
 } from "../../services/match-engine.js";
 import type { RichCandidateRow, SeekerProfile } from "../../services/match-engine.js";
 import { localFallbackPitch, splitPitchIntoDrafts } from "../../services/pitch-generator.js";
@@ -198,9 +197,14 @@ describe("match-engine: pure helpers", () => {
     expect(sql).toMatch(/\$2::vector/);
     expect(sql).toMatch(/\$3/);
     expect(sql).toMatch(/\$7/);
-    // Must enforce the citywide local rule while keeping the Registration v2
-    // union contact rail (verified email OR verified phone) as the trust gate.
-    expect(sql).toMatch(/u\.is_email_verified OR u\.phone_verified_at IS NOT NULL/);
+    // Must enforce the citywide local rule and Registration v2's track-aware
+    // trust gate: general candidates need phone; student/legacy need email.
+    expect(sql).toMatch(
+      /u\.registration_track = 'general' AND u\.phone_verified_at IS NOT NULL/,
+    );
+    expect(sql).toMatch(
+      /u\.registration_track IS DISTINCT FROM 'general' AND u\.is_email_verified AND u\.email IS NOT NULL/,
+    );
     expect(sql).toMatch(/p\.home_city_key\s*=\s*\$3/);
     // Must enforce the lifetime ban: any historical Match between the two
     // users excludes the candidate, regardless of terminal status.
@@ -617,8 +621,6 @@ describe("researchScore", () => {
 
 describe("scoreCandidate — composite formula", () => {
   it("candidate with matching traits and no red flags scores higher than embedding-only match", () => {
-    const seeker = makeSeeker();
-
     // Candidate A: good embedding, matching visual, no penalty
     const goodCandidate = makeCandidate({
       userId: "good",

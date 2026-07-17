@@ -168,7 +168,6 @@ function fakeApi() {
     sendPhoto: vi.fn().mockResolvedValue(undefined),
     createInvoiceLink: vi.fn().mockResolvedValue("https://t.me/invoice/test"),
     refundStarPayment: vi.fn().mockResolvedValue(true),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
 }
 

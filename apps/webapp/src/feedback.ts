@@ -418,7 +418,7 @@ async function main(): Promise<void> {
   document.title = strings.heroTitle;
 
   const draft = await loadDraft(matchId);
-  let state: DraftState = draft;
+  const state: DraftState = draft;
   let submitting = false;
 
   const $track = document.getElementById("slider-track") as HTMLDivElement;

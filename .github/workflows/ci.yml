@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: gennety
+          POSTGRES_PASSWORD: gennety
+          POSTGRES_DB: gennety_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U gennety -d gennety_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      CI: true
+      NODE_ENV: test
+      DATABASE_URL: postgresql://gennety:gennety@localhost:5433/gennety_test
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.33.0 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check tracked secrets
+        run: pnpm security:secrets
+
+      - name: Audit dependencies
+        run: pnpm security:audit
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Run unit tests
+        run: pnpm test
+
+      - name: Build Mini App
+        run: pnpm --filter @gennety/webapp build
+
+      - name: Apply test database schema
+        run: pnpm test:db:push
+
+      - name: Run PostgreSQL integration tests
+        run: pnpm test:integration

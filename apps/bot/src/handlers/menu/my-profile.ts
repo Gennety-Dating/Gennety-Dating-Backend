@@ -102,7 +102,7 @@ async function renderMyProfile(ctx: BotContext): Promise<void> {
     await ctx.reply(body, { parse_mode: "Markdown", reply_markup: keyboard });
   } catch {
     // Markdown parse failure — fall back to plain text
-    await ctx.reply(body.replace(/[\\*_`\[]/g, ""), { reply_markup: keyboard });
+    await ctx.reply(body.replace(/[[\\*_`]/g, ""), { reply_markup: keyboard });
   }
 }
 

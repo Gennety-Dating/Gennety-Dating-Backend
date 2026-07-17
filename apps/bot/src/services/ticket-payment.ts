@@ -282,7 +282,7 @@ export async function verifyStorePayment(args: {
  * Refund a paid ticket (used by the expiry cron when a `partial` payment
  * lapses). Mock mode is a no-op success. Stripe mode will issue a real refund.
  */
-export async function refundTicketPayment(args: {
+export async function refundTicketPayment(_args: {
   matchId: string;
   amountCents: number;
 }): Promise<{ ok: boolean }> {

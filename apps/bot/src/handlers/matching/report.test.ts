@@ -27,9 +27,20 @@ vi.mock("../../services/openai.js", () => ({
 
 const applyReportAction = vi.fn();
 const notifyReportedUser = vi.fn();
+const moderationOutcomeRequiresCancellation = vi.fn(
+  (outcome: { kind: string }) => outcome.kind === "tier3_frozen",
+);
 vi.mock("../../services/moderation.js", () => ({
   applyReportAction,
+  moderationOutcomeRequiresCancellation,
   notifyReportedUser,
+}));
+
+const claimInFlightMatchCancellations = vi.fn().mockResolvedValue([]);
+const deliverCancelledPartnerEffects = vi.fn().mockResolvedValue(undefined);
+vi.mock("../../services/cancel-in-flight-matches.js", () => ({
+  claimInFlightMatchCancellations,
+  deliverCancelledPartnerEffects,
 }));
 
 const {
@@ -50,7 +61,11 @@ describe("structured report flow", () => {
     });
     reportFindUnique.mockResolvedValue(null);
     reportCreate.mockResolvedValue({});
-    applyReportAction.mockResolvedValue({ kind: "tier2_warning", strikes: 1 });
+    applyReportAction.mockImplementation(async ({ tier }: { tier: number }) =>
+      tier === 3
+        ? { kind: "tier3_frozen" }
+        : { kind: "tier2_warning", strikes: 1 },
+    );
     notifyReportedUser.mockResolvedValue(undefined);
     transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
       cb({
@@ -151,7 +166,6 @@ describe("structured report flow", () => {
         reportedUserId: "reported-1",
       }),
       expect.anything(),
-      expect.anything(),
     );
     expect(ctx.session.matchFlow).toBe("idle");
     expect(ctx.session.activeMatchId).toBeNull();
@@ -193,7 +207,6 @@ describe("structured report flow", () => {
         tier: 2,
         reasonSummary: "Misleading profile photos",
       }),
-      expect.anything(),
       expect.anything(),
     );
     expect(ctx.reply).toHaveBeenCalledWith("reportThanksT2");

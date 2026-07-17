@@ -30,7 +30,7 @@
 
 import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
-import type { InlineKeyboardButton, InlineKeyboardMarkup } from "grammy/types";
+import type { InlineKeyboardButton } from "grammy/types";
 import { prisma } from "@gennety/db";
 import type { Prisma } from "@gennety/db";
 import {

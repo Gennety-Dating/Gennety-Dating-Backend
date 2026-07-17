@@ -121,7 +121,7 @@ export function getNextBatchDate(
   const cron = parseWeeklyCron(cronExpression ?? process.env.MATCH_CRON_SCHEDULE ?? DEFAULT_CRON);
 
   const kyivNow = getZonedParts(now, BATCH_TZ);
-  let daysUntil = (cron.dayOfWeek - kyivNow.dayOfWeek + 7) % 7;
+  const daysUntil = (cron.dayOfWeek - kyivNow.dayOfWeek + 7) % 7;
 
   let candidate = zonedWallToUtc(
     kyivNow.year,

@@ -1035,7 +1035,7 @@ describe("onboarding-agent", () => {
         textResponse("Sorry, I couldn't send the email. Please try again."),
       );
 
-    const result = await runAgentTurn(telegramId, "resend code please", {
+    await runAgentTurn(telegramId, "resend code please", {
       fetchFn: mockFetch,
       sendOtp: vi.fn().mockResolvedValue(undefined),
     });

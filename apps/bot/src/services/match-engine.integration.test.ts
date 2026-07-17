@@ -651,7 +651,7 @@ describe("match-engine SQL (integration)", () => {
       preference: "men",
       verificationStatus: "unverified",
     });
-    const pending = await seedFullUser({
+    await seedFullUser({
       gender: "female",
       preference: "men",
       verificationStatus: "pending",

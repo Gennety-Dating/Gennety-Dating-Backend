@@ -310,12 +310,6 @@ const FIELD_MASK = [
   "places.editorialSummary",
 ].join(",");
 
-/** Internal: enriched candidate with computed score. */
-interface ScoredPlace {
-  place: PlaceV1;
-  score: number;
-}
-
 export function createPlacesVenueClient(apiKey: string): VenueClient {
   return {
     async pick(input: VenueInput): Promise<Venue> {

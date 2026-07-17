@@ -20,7 +20,6 @@ function makeApi() {
     unpinAllChatMessages: vi.fn().mockResolvedValue(true),
     sendMessage: vi.fn().mockResolvedValue({ message_id: 555 }),
     pinChatMessage: vi.fn().mockResolvedValue(true),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
 }
 
