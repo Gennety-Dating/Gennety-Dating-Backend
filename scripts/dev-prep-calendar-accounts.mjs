@@ -71,7 +71,7 @@ const CITY = {
 };
 
 async function prep(prisma, telegramId, fallbackGender) {
-  const u = await prisma.user.findUnique({
+  let u = await prisma.user.findUnique({
     where: { telegramId },
     select: {
       id: true, firstName: true, gender: true, preference: true,
@@ -80,10 +80,19 @@ async function prep(prisma, telegramId, fallbackGender) {
     },
   });
   if (!u) {
-    throw new Error(
-      `Telegram ${telegramId} has no user row — open @gennetytestbot from that ` +
-      `account and send /start once, then re-run.`,
-    );
+    // The account may not have a row yet (e.g. inbound polling was down when it
+    // sent /start). Create a minimal one directly — the calendar Mini App test
+    // does not need the bot to have processed the /start, only that Telegram
+    // permits an outbound DM (which it does once the user messaged the bot).
+    u = await prisma.user.create({
+      data: { telegramId, status: "onboarding", onboardingStep: "consent", language: "en" },
+      select: {
+        id: true, firstName: true, gender: true, preference: true,
+        isEmailVerified: true, universityDomain: true, language: true,
+        profile: { select: { id: true, homeCityKey: true, latitude: true, longitude: true } },
+      },
+    });
+    console.log(`  (created new user row for ${telegramId})`);
   }
 
   await prisma.user.update({
