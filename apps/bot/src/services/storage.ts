@@ -330,9 +330,9 @@ export async function downloadChatImage(path: string): Promise<Buffer | null> {
 
 /**
  * Delete an object from a Supabase Storage bucket. Returns `true` on
- * successful delete, `false` otherwise (including "not configured" and
- * transient errors). Callers are expected to log + proceed: a dangling
- * storage object is far less bad than a failed DB mutation.
+ * successful delete or when the object is already absent, `false` otherwise
+ * (including "not configured" and transient errors). Ordinary media edits may
+ * proceed best-effort; account deletion treats `false` as a retryable blocker.
  */
 export async function deleteStorageObject(
   bucket: string,
@@ -349,7 +349,9 @@ export async function deleteStorageObject(
       },
       signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
     });
-    return res.ok;
+    // A retry after a partial account cleanup commonly sees 404 for objects
+    // removed by the first attempt. "Already absent" satisfies deletion.
+    return res.ok || res.status === 404;
   } catch {
     return false;
   }

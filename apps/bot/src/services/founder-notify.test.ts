@@ -59,35 +59,8 @@ import {
   notifyFounderNewUser,
   notifyFounderWeeklyMatches,
   notifyFounderAccountClosed,
-  type FounderAccountUser,
   __resetFounderApiForTests,
 } from "./founder-notify.js";
-
-function accountUser(over: Partial<FounderAccountUser> = {}): FounderAccountUser {
-  return {
-    firstName: "Alice",
-    age: 22,
-    gender: "female",
-    preference: "men",
-    phone: "+380991234567",
-    email: "a@uni.edu",
-    language: "en",
-    registrationTrack: "general",
-    verificationStatus: "verified",
-    telegramUsername: "alice",
-    telegramId: 12345n,
-    profile: {
-      homeCity: "Kyiv",
-      height: 170,
-      hobbies: ["art"],
-      partnerPreferences: "kind",
-      ethnicity: null,
-      photos: ["f1"],
-      eloSeedDetails: { score: 66 },
-    },
-    ...over,
-  };
-}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -158,32 +131,32 @@ describe("notifyFounderNewUser", () => {
 describe("notifyFounderAccountClosed", () => {
   it("is a no-op when disabled", async () => {
     env.FOUNDER_NOTIFY_ENABLED = false;
-    await notifyFounderAccountClosed("deleted", accountUser());
+    await notifyFounderAccountClosed("deleted");
     expect(ApiCtor).not.toHaveBeenCalled();
     expect(sendPhoto).not.toHaveBeenCalled();
   });
 
-  it("DMs the founder the profile + phone with a delete title", async () => {
+  it("sends an anonymous delete event without profile media or PII", async () => {
     env.FOUNDER_NOTIFY_ENABLED = true;
-    await notifyFounderAccountClosed("deleted", accountUser());
-    // One photo → sendPhoto with a caption.
-    expect(sendPhoto).toHaveBeenCalledTimes(1);
-    const [chatId, , opts] = sendPhoto.mock.calls[0]!;
+    await notifyFounderAccountClosed("deleted");
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    const [chatId, text] = sendMessage.mock.calls[0]!;
     expect(chatId).toBe(999);
-    const caption = (opts as { caption?: string }).caption ?? "";
-    expect(caption).toContain("УДАЛЁН");
-    expect(caption).toContain("+380991234567");
-    expect(caption).toContain("Alice");
+    expect(text).toContain("удалён");
+    expect(text).toContain("анонимное");
+    expect(text).not.toContain("+380991234567");
+    expect(text).not.toContain("Alice");
+    expect(sendPhoto).not.toHaveBeenCalled();
+    expect(sendMediaGroup).not.toHaveBeenCalled();
   });
 
   it("uses the freeze title for a frozen account", async () => {
     env.FOUNDER_NOTIFY_ENABLED = true;
-    await notifyFounderAccountClosed("frozen", accountUser({ profile: null }));
-    // No profile → no photos → header sent as a plain message.
+    await notifyFounderAccountClosed("frozen");
     expect(sendMessage).toHaveBeenCalledTimes(1);
     const [, text] = sendMessage.mock.calls[0]!;
-    expect(text).toContain("ЗАМОРОЖЕН");
-    expect(text).toContain("+380991234567");
+    expect(text).toContain("заморожен");
+    expect(text).toContain("анонимное");
   });
 });
 

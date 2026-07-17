@@ -4,9 +4,13 @@ vi.mock("@gennety/db", () => ({
   prisma: {
     match: {
       findMany: vi.fn(),
-      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
   },
+}));
+
+vi.mock("./push.js", () => ({
+  sendPushToUser: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock("../utils/elo-calculator.js", () => ({
@@ -15,21 +19,23 @@ vi.mock("../utils/elo-calculator.js", () => ({
 
 import { prisma } from "@gennety/db";
 import { applyEmergencyCancellationPeerBoost } from "../utils/elo-calculator.js";
+import { sendPushToUser } from "./push.js";
 import {
   cancelInFlightMatchesForUser,
   IN_FLIGHT_MATCH_STATUSES,
 } from "./cancel-in-flight-matches.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
-const mMatch = prisma.match as unknown as { findMany: MockFn; update: MockFn };
+const mMatch = prisma.match as unknown as { findMany: MockFn; updateMany: MockFn };
 const mComp = applyEmergencyCancellationPeerBoost as unknown as MockFn;
+const mPush = sendPushToUser as unknown as MockFn;
 
 const LEAVING = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const PARTNER = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mMatch.update.mockResolvedValue({});
+  mMatch.updateMany.mockResolvedValue({ count: 1 });
 });
 
 describe("cancelInFlightMatchesForUser", () => {
@@ -50,8 +56,8 @@ describe("cancelInFlightMatchesForUser", () => {
         id: "m1",
         userAId: LEAVING,
         userBId: PARTNER,
-        userA: { telegramId: 100n, language: "en" },
-        userB: { telegramId: 200n, language: "ru" },
+        userA: { telegramId: 100n, language: "en", platform: "telegram" },
+        userB: { telegramId: 200n, language: "ru", platform: "telegram" },
       },
     ]);
     const sendMessage = vi.fn().mockResolvedValue({});
@@ -59,8 +65,8 @@ describe("cancelInFlightMatchesForUser", () => {
 
     const result = await cancelInFlightMatchesForUser(LEAVING, api);
 
-    expect(mMatch.update).toHaveBeenCalledWith({
-      where: { id: "m1" },
+    expect(mMatch.updateMany).toHaveBeenCalledWith({
+      where: { id: "m1", status: { in: [...IN_FLIGHT_MATCH_STATUSES] } },
       data: { status: "cancelled" },
     });
     expect(mComp).toHaveBeenCalledWith(PARTNER);
@@ -79,8 +85,8 @@ describe("cancelInFlightMatchesForUser", () => {
         id: "m2",
         userAId: PARTNER,
         userBId: LEAVING,
-        userA: { telegramId: 300n, language: "en" },
-        userB: { telegramId: 400n, language: "en" },
+        userA: { telegramId: 300n, language: "en", platform: "telegram" },
+        userB: { telegramId: 400n, language: "en", platform: "telegram" },
       },
     ]);
     const sendMessage = vi.fn().mockResolvedValue({});
@@ -93,14 +99,14 @@ describe("cancelInFlightMatchesForUser", () => {
     expect(result[0].partnerUserId).toBe(PARTNER);
   });
 
-  it("skips the DM for a mobile-only partner (negative telegramId) but still cancels + comps", async () => {
+  it("pushes a neutral cancellation notice to a mobile-only partner", async () => {
     mMatch.findMany.mockResolvedValueOnce([
       {
         id: "m3",
         userAId: LEAVING,
         userBId: PARTNER,
-        userA: { telegramId: 100n, language: "en" },
-        userB: { telegramId: -7n, language: "en" },
+        userA: { telegramId: 100n, language: "en", platform: "telegram" },
+        userB: { telegramId: -7n, language: "en", platform: "mobile" },
       },
     ]);
     const sendMessage = vi.fn().mockResolvedValue({});
@@ -108,9 +114,14 @@ describe("cancelInFlightMatchesForUser", () => {
 
     await cancelInFlightMatchesForUser(LEAVING, api);
 
-    expect(mMatch.update).toHaveBeenCalledTimes(1);
+    expect(mMatch.updateMany).toHaveBeenCalledTimes(1);
     expect(mComp).toHaveBeenCalledWith(PARTNER);
     expect(sendMessage).not.toHaveBeenCalled();
+    expect(mPush).toHaveBeenCalledWith(PARTNER, {
+      title: "Gennety",
+      body: expect.any(String),
+      data: { type: "match.cancelled", matchId: "m3" },
+    });
   });
 
   it("with api=null, cancels + comps without sending any DM", async () => {
@@ -119,14 +130,14 @@ describe("cancelInFlightMatchesForUser", () => {
         id: "m4",
         userAId: LEAVING,
         userBId: PARTNER,
-        userA: { telegramId: 100n, language: "en" },
-        userB: { telegramId: 200n, language: "en" },
+        userA: { telegramId: 100n, language: "en", platform: "telegram" },
+        userB: { telegramId: 200n, language: "en", platform: "telegram" },
       },
     ]);
 
     const result = await cancelInFlightMatchesForUser(LEAVING, null);
 
-    expect(mMatch.update).toHaveBeenCalledTimes(1);
+    expect(mMatch.updateMany).toHaveBeenCalledTimes(1);
     expect(mComp).toHaveBeenCalledWith(PARTNER);
     expect(result).toHaveLength(1);
   });
@@ -137,20 +148,20 @@ describe("cancelInFlightMatchesForUser", () => {
         id: "bad",
         userAId: LEAVING,
         userBId: PARTNER,
-        userA: { telegramId: 100n, language: "en" },
-        userB: { telegramId: 200n, language: "en" },
+        userA: { telegramId: 100n, language: "en", platform: "telegram" },
+        userB: { telegramId: 200n, language: "en", platform: "telegram" },
       },
       {
         id: "good",
         userAId: LEAVING,
         userBId: "cccccccc-cccc-cccc-cccc-cccccccccccc",
-        userA: { telegramId: 100n, language: "en" },
-        userB: { telegramId: 300n, language: "en" },
+        userA: { telegramId: 100n, language: "en", platform: "telegram" },
+        userB: { telegramId: 300n, language: "en", platform: "telegram" },
       },
     ]);
-    mMatch.update
+    mMatch.updateMany
       .mockRejectedValueOnce(new Error("db blip"))
-      .mockResolvedValueOnce({});
+      .mockResolvedValueOnce({ count: 1 });
     const sendMessage = vi.fn().mockResolvedValue({});
     const api = { sendMessage } as unknown as Parameters<typeof cancelInFlightMatchesForUser>[1];
 
@@ -166,5 +177,40 @@ describe("cancelInFlightMatchesForUser", () => {
       },
     ]);
     expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not overwrite a concurrently resolved match or double-compensate", async () => {
+    mMatch.findMany.mockResolvedValueOnce([
+      {
+        id: "raced",
+        userAId: LEAVING,
+        userBId: PARTNER,
+        userA: { telegramId: 100n, language: "en", platform: "telegram" },
+        userB: { telegramId: 200n, language: "en", platform: "telegram" },
+      },
+    ]);
+    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const result = await cancelInFlightMatchesForUser(LEAVING, null);
+
+    expect(result).toEqual([]);
+    expect(mComp).not.toHaveBeenCalled();
+  });
+
+  it("propagates DB cancellation failures in strict mode", async () => {
+    mMatch.findMany.mockResolvedValueOnce([
+      {
+        id: "bad",
+        userAId: LEAVING,
+        userBId: PARTNER,
+        userA: { telegramId: 100n, language: "en", platform: "telegram" },
+        userB: { telegramId: 200n, language: "en", platform: "telegram" },
+      },
+    ]);
+    mMatch.updateMany.mockRejectedValueOnce(new Error("db down"));
+
+    await expect(
+      cancelInFlightMatchesForUser(LEAVING, null, { strict: true }),
+    ).rejects.toThrow("db down");
   });
 });

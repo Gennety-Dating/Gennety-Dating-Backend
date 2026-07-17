@@ -439,8 +439,9 @@ tokenized report page (`GET /v1/founder/report/:token`). Columns: `token`
 `weekOf` (UTC day of the batch), `dataJson` (the assembled `WeeklyMatchesReport`
 snapshot — pairs + user cards + photo refs; **never** `psychologicalSummary` /
 AI-memory dumps), `createdAt`. Indexed `(createdAt)`. Standalone model (no user
-relation); PII lives only in the snapshot. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md)
-is unaffected — this is an ops surface, not a product flow.
+relation); PII lives only in the snapshot. Because no foreign key can cascade
+into JSON, the shared account-deletion service explicitly deletes every report
+whose snapshot contains the departing `userId` before deleting the User row.
 
 ### `curated_venues`
 
@@ -510,7 +511,7 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | POST | `/v1/web-registration/complete` | Website pre-registration: mint a one-time `web_registration_links` token and return the `/start auth_<token>` deep link. Track-aware — `student` verifies the OTP and requires the city payload; `general` takes only language + consent (no email, and **no phone** — Telegram verifies that itself). Rate-limited, no auth (pre-account) |
 | GET | `/v1/web-registration/city/search` | City lookup for the website's student-track city gate. Unauthenticated (the visitor has no account yet) and IP-rate-limited; proxies Google Places so `PLACES_API_KEY` stays server-side, and degrades to the built-in city list without it. Shares `public/city-search.ts` with the Mini App's city gate |
 | POST | `/v1/web-registration/city/resolve` | Browser geolocation → city, so the site offers the same one-tap as the Mini App |
-| GET / PATCH / DELETE | `/v1/me` | Read / patch / delete current user |
+| GET / PATCH / DELETE | `/v1/me` | Read / patch / delete current user. DELETE shares the Telegram GDPR workflow: strict owned-media cleanup + active-match partner notification + founder-report purge before relational cascade; returns 503 and preserves the account if storage erasure is unavailable. |
 | POST | `/v1/me/home-location` | Persist canonical dating city (`homeCityKey`) + coordinates for match eligibility |
 | POST | `/v1/me/location` | Persist raw home-base lat/lng for Meet-Halfway; does not by itself unlock matching |
 | PATCH | `/v1/me/preferences` | `matchRadius`, gender preference |

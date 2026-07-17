@@ -28,7 +28,10 @@ import {
 } from "../../services/storage.js";
 import { gateProfilePhoto } from "../../services/face-match-gate.js";
 import { triggerVerificationRerun } from "../../services/verification-pipeline.js";
-import { notifyFounderAccountClosed } from "../../services/founder-notify.js";
+import {
+  AccountDeletionCleanupError,
+  deleteUserAccount,
+} from "../../services/account-deletion.js";
 import {
   injectSystemMessage,
   runAgentTurn,
@@ -242,83 +245,26 @@ function isValidAgeBound(v: unknown): v is number | null | undefined {
 /**
  * DELETE /v1/me — GDPR "Right to be Forgotten".
  *
- * Prisma cascade removes the `Profile` row (including its pgvector
- * embedding) and all `Match` rows where this user participates. Storage
- * cleanup (selfie + profile photos) is best-effort: a dangling object is
- * far less bad than leaving a zombie DB row. See the Zero-Chat vector
- * rules — hard-delete is only triggered here, never from match lifecycle.
+ * Uses the same privacy-safe workflow as Telegram Settings: partner
+ * cancellation, strict storage erasure, founder-report cleanup, relational
+ * cascade, then an anonymous lifecycle event.
  */
 meRouter.delete(
   "/",
   accountDeleteLimiter,
   async (req: Request, res: Response): Promise<void> => {
-    const [user, chatImages] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: req.userId! },
-        include: { profile: true },
-      }),
-      prisma.message.findMany({
-        where: { userId: req.userId!, imageUrl: { not: null } },
-        select: { imageUrl: true },
-      }),
-    ]);
-    if (!user) {
-      res.status(404).json({ error: "User not found" });
-      return;
-    }
-
-    const selfiePaths = Array.from(
-      new Set(
-        [user.selfiePath, user.verifiedSelfiePath].filter(
-          (path): path is string => Boolean(path),
-        ),
-      ),
-    );
-    const photoPaths = user.profile?.photos ?? [];
-    const chatImagePaths = chatImages
-      .map((row) => row.imageUrl)
-      .filter((path): path is string => typeof path === "string" && path.length > 0);
-
-    // Founder ops feed: DM the founder the deleted user's profile + phone +
-    // photos before the cascade wipes the row. No-op unless
-    // FOUNDER_NOTIFY_ENABLED. Fire-and-forget.
-    void notifyFounderAccountClosed("deleted", user).catch(() => {});
-
     try {
-      await prisma.user.delete({ where: { id: req.userId! } });
-    } catch (err) {
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === "P2025"
-      ) {
+      const result = await deleteUserAccount(req.userId!, getBotApi());
+      if (!result.deleted) {
         res.status(404).json({ error: "User not found" });
         return;
       }
+    } catch (err) {
+      if (err instanceof AccountDeletionCleanupError) {
+        res.status(503).json({ error: "Account cleanup unavailable, please retry" });
+        return;
+      }
       throw err;
-    }
-
-    // Best-effort storage cleanup — never fail the request on storage
-    // errors because the DB state has already been committed.
-    for (const selfiePath of selfiePaths) {
-      try {
-        await deleteStorageObject(env.SUPABASE_SELFIE_BUCKET, selfiePath);
-      } catch (err) {
-        console.warn("[DELETE /v1/me] selfie cleanup failed:", err);
-      }
-    }
-    for (const path of photoPaths) {
-      try {
-        await deleteStorageObject(env.SUPABASE_PHOTO_BUCKET, path);
-      } catch (err) {
-        console.warn("[DELETE /v1/me] photo cleanup failed:", err);
-      }
-    }
-    for (const path of chatImagePaths) {
-      try {
-        await deleteStorageObject(env.SUPABASE_CHAT_BUCKET, path);
-      } catch (err) {
-        console.warn("[DELETE /v1/me] chat image cleanup failed:", err);
-      }
     }
 
     res.status(204).end();

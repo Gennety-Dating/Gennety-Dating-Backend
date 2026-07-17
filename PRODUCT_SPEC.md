@@ -655,13 +655,19 @@ path is visually distinct: a blue (`primary`) **❄️ Freeze account** over a r
   profile — no re-onboarding, no re-verification, no re-embedding.
 - **Delete anyway** leads to a final confirmation that isolates the destructive
   option: one red **Yes, I'm 100% sure** against two green back-out buttons. Only
-  the red path runs the existing GDPR hard delete (Prisma cascade). The hard
-  delete now also notifies/comps any in-flight partner before the cascade wipes
-  the match rows.
+  the red path runs the GDPR hard delete. Telegram and mobile share one deletion
+  service: it compare-and-set cancels every in-flight match, notifies/comps the
+  partner on their actual channel (Telegram and/or Expo push), strictly erases
+  known user-owned Supabase selfies/profile media/chat attachments, removes any
+  founder-report snapshot containing that user, then deletes the User and all
+  relational data by Prisma cascade. A storage failure leaves the account row
+  intact so the user can retry instead of reporting success with orphaned media.
+  The founder receives only an anonymous lifecycle event — deletion never
+  creates a fresh copy of the user's contact data, profile, or photos.
 - The кружок assets live at `apps/bot/src/assets/delete-freeze/<lang>.mp4`
   (square, ≤60 s, same mechanics as the welcome-gift video note); a missing
   language degrades gracefully to the text + buttons. Mobile keeps the plain
-  `DELETE /v1/me` hard delete (no freeze).
+  `DELETE /v1/me` entry point (no freeze) but uses the same deletion service.
 
 A pinned **status banner** is created on activation
 (`services/status-banner.ts`) and live-edited every minute by the

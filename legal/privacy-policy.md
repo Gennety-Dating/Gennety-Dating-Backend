@@ -280,9 +280,13 @@ We keep personal data only as long as necessary for the purposes above.
 | Frozen accounts (soft-delete) | Retained intact while frozen; reactivated on your next start, or deleted on request |
 | Diagnostic/technical logs | Short-term, then rotated |
 
-On account deletion, we perform a cascading deletion of your data across our
-database. Some records may be retained where required by law (e.g. financial
-records) or in anonymised form.
+On account deletion, we erase known account-owned objects from our private
+storage (selfies, profile media, and chat attachments), remove founder-report
+snapshots containing your account, and perform a cascading deletion across our
+database. We do not send your identity or profile to an operations channel as
+part of deletion. Some records may be retained where required by law (e.g.
+financial records), by a processor under its disclosed legal/retention duties,
+or in anonymised form.
 
 ---
 
@@ -347,8 +351,10 @@ consent where required.
 - **Freeze (soft-delete):** removes you from matching and hides your status, but
   keeps your profile, photos, verification, and embedding so you can return
   instantly. You are silently reactivated when you next open the bot.
-- **Deletion (hard-delete):** permanently and irreversibly removes your account
-  and cascades deletion across your data. This cannot be undone.
+- **Deletion (hard-delete):** permanently and irreversibly removes your account,
+  known account-owned storage objects, and founder-report snapshots, then
+  cascades deletion across related database data. If storage erasure is
+  temporarily unavailable, deletion does not report success and you can retry.
 
 ---
 

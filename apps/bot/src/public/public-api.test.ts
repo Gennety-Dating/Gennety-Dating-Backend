@@ -208,6 +208,11 @@ type MessageRow = {
   createdAt: Date;
 };
 
+type FounderReportRow = {
+  id: string;
+  dataJson: unknown;
+};
+
 const db = {
   users: new Map<string, UserRow>(),
   otps: [] as OtpRow[],
@@ -216,6 +221,7 @@ const db = {
   reports: [] as ReportRow[],
   matchEvents: [] as MatchEventRow[],
   messages: [] as MessageRow[],
+  founderReports: [] as FounderReportRow[],
 };
 
 function resetDb(): void {
@@ -226,6 +232,7 @@ function resetDb(): void {
   db.reports.length = 0;
   db.matchEvents.length = 0;
   db.messages.length = 0;
+  db.founderReports.length = 0;
 }
 
 function userById(id: string): UserRow | undefined {
@@ -578,6 +585,16 @@ vi.mock("@gennety/db", async () => {
         }),
       },
 
+      founderReport: {
+        findMany: vi.fn(async () => structuredClone(db.founderReports)),
+        deleteMany: vi.fn(async ({ where }: any) => {
+          const ids = new Set<string>(where.id?.in ?? []);
+          const before = db.founderReports.length;
+          db.founderReports = db.founderReports.filter((row) => !ids.has(row.id));
+          return { count: before - db.founderReports.length };
+        }),
+      },
+
       // ----- profile -----
       profile: {
         findUnique: vi.fn(async ({ where, select }: any) => {
@@ -675,6 +692,7 @@ vi.mock("@gennety/db", async () => {
       reports: structuredClone(db.reports),
       matchEvents: structuredClone(db.matchEvents),
       messages: structuredClone(db.messages),
+      founderReports: structuredClone(db.founderReports),
     };
   }
 
@@ -686,6 +704,7 @@ vi.mock("@gennety/db", async () => {
     db.reports = snapshot.reports;
     db.matchEvents = snapshot.matchEvents;
     db.messages = snapshot.messages;
+    db.founderReports = snapshot.founderReports;
   }
 
   prismaMock.$transaction = vi.fn(async (ops: unknown) => {
@@ -1480,9 +1499,10 @@ describe("DELETE /v1/me", () => {
     expect(db.users.get(user.id)).toBeUndefined();
   });
 
-  it("best-effort cleans up selfie + photo storage paths", async () => {
+  it("strictly cleans up selfie + photo storage paths", async () => {
     const { deleteStorageObject } = await import("../services/storage.js");
-    const user = await seedUser({ selfiePath: "u/selfie.jpg" });
+    const user = await seedUser();
+    user.selfiePath = `${user.id}/selfie.jpg`;
     const u = db.users.get(user.id)!;
     u.profile = {
       id: crypto.randomUUID(),
@@ -1492,29 +1512,31 @@ describe("DELETE /v1/me", () => {
       psychologicalSummary: null,
       ageRangeMin: null,
       ageRangeMax: null,
-      photos: ["u/p1.jpg", "u/p2.jpg"],
+      photos: [`${user.id}/p1.jpg`, `${user.id}/p2.jpg`],
       matchRadius: "campus_only",
     };
     const res = await request(app)
       .delete("/v1/me")
       .set("Authorization", `Bearer ${signAccess(user.id)}`);
     expect(res.status).toBe(204);
-    expect(deleteStorageObject).toHaveBeenCalledWith("selfies", "u/selfie.jpg");
     expect(deleteStorageObject).toHaveBeenCalledWith(
-      "profile-photos",
-      "u/p1.jpg",
+      "selfies",
+      `${user.id}/selfie.jpg`,
     );
     expect(deleteStorageObject).toHaveBeenCalledWith(
       "profile-photos",
-      "u/p2.jpg",
+      `${user.id}/p1.jpg`,
+    );
+    expect(deleteStorageObject).toHaveBeenCalledWith(
+      "profile-photos",
+      `${user.id}/p2.jpg`,
     );
   });
 
   it("cleans up the current Persona verification selfie path", async () => {
     const { deleteStorageObject } = await import("../services/storage.js");
-    const user = await seedUser({
-      verifiedSelfiePath: "u/persona-selfie.jpg",
-    });
+    const user = await seedUser();
+    user.verifiedSelfiePath = `${user.id}/persona-selfie.jpg`;
 
     const res = await request(app)
       .delete("/v1/me")
@@ -1523,7 +1545,7 @@ describe("DELETE /v1/me", () => {
     expect(res.status).toBe(204);
     expect(deleteStorageObject).toHaveBeenCalledWith(
       "selfies",
-      "u/persona-selfie.jpg",
+      `${user.id}/persona-selfie.jpg`,
     );
   });
 
@@ -1535,7 +1557,7 @@ describe("DELETE /v1/me", () => {
       userId: user.id,
       role: "user",
       content: "photo",
-      imageUrl: "u/chat-1.jpg",
+      imageUrl: `${user.id}/chat-1.jpg`,
       createdAt: new Date(),
     });
     db.messages.push({
@@ -1554,8 +1576,57 @@ describe("DELETE /v1/me", () => {
     expect(res.status).toBe(204);
     expect(deleteStorageObject).toHaveBeenCalledWith(
       "chat-attachments",
-      "u/chat-1.jpg",
+      `${user.id}/chat-1.jpg`,
     );
+  });
+
+  it("keeps the account and returns 503 when owned media cannot be erased", async () => {
+    const { deleteStorageObject } = await import("../services/storage.js");
+    const user = await seedUser();
+    user.verifiedSelfiePath = `${user.id}/persona-selfie.jpg`;
+    vi.mocked(deleteStorageObject).mockResolvedValueOnce(false);
+
+    const res = await request(app)
+      .delete("/v1/me")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+    expect(res.status).toBe(503);
+    expect(db.users.get(user.id)).toBeDefined();
+  });
+
+  it("cancels an active match and pushes the mobile partner before deletion", async () => {
+    const { sendPushToUser } = await import("../services/push.js");
+    const leaving = await seedUser();
+    const partner = await seedUser({ language: "ru", platform: "mobile" });
+    const match = await seedMatch(leaving.id, partner.id, { status: "scheduled" });
+
+    const res = await request(app)
+      .delete("/v1/me")
+      .set("Authorization", `Bearer ${signAccess(leaving.id)}`);
+
+    expect(res.status).toBe(204);
+    expect(db.matches.get(match.id)?.status).toBe("cancelled");
+    expect(sendPushToUser).toHaveBeenCalledWith(
+      partner.id,
+      expect.objectContaining({
+        data: { type: "match.cancelled", matchId: match.id },
+      }),
+    );
+  });
+
+  it("deletes founder report snapshots containing the departing user", async () => {
+    const user = await seedUser();
+    db.founderReports.push(
+      { id: "hit", dataJson: { pairs: [{ users: [{ userId: user.id }] }] } },
+      { id: "keep", dataJson: { pairs: [{ users: [{ userId: "other" }] }] } },
+    );
+
+    const res = await request(app)
+      .delete("/v1/me")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+    expect(res.status).toBe(204);
+    expect(db.founderReports.map((row) => row.id)).toEqual(["keep"]);
   });
 
   it("returns 404 if called a second time (user already gone)", async () => {

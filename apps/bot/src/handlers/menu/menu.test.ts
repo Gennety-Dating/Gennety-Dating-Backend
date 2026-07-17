@@ -20,6 +20,7 @@ vi.mock("@gennety/db", () => ({
       findMany: vi.fn(),
       findFirst: vi.fn().mockResolvedValue(null),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     $transaction: vi.fn().mockResolvedValue(null),
   },
@@ -81,6 +82,11 @@ vi.mock("../../services/ticket-wallet.js", () => ({
 vi.mock("../../services/ticket-reward.js", () => ({
   sendTicketRewardDM: vi.fn().mockResolvedValue(undefined),
 }));
+
+const accountDeletionMocks = vi.hoisted(() => ({
+  deleteUserAccount: vi.fn(),
+}));
+vi.mock("../../services/account-deletion.js", () => accountDeletionMocks);
 
 import { prisma } from "@gennety/db";
 import { findActiveMatchForTelegramId } from "../../services/active-match.js";
@@ -958,7 +964,7 @@ describe("Menu — Help", () => {
 describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (prisma.user.delete as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    accountDeletionMocks.deleteUserAccount.mockResolvedValue({ deleted: true });
     (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "uuid-user-1",
@@ -1007,15 +1013,20 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
         id: "match-1",
         userAId: "uuid-user-1",
         userBId: "uuid-partner",
-        userA: { telegramId: BigInt(12345), language: "en" },
-        userB: { telegramId: BigInt(67890), language: "en" },
+        userA: { telegramId: BigInt(12345), language: "en", platform: "telegram" },
+        userB: { telegramId: BigInt(67890), language: "en", platform: "telegram" },
       },
     ]);
-    (prisma.match.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
     const ctx = createMockCtx({ callbackData: "menu:settings:freeze", fromId: 12345 });
     await handleFreezeAccount(ctx);
-    expect(prisma.match.update).toHaveBeenCalledWith({
-      where: { id: "match-1" },
+    expect(prisma.match.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "match-1",
+        status: {
+          in: ["proposed", "negotiating", "negotiating_venue", "scheduled"],
+        },
+      },
       data: { status: "cancelled" },
     });
     // The partner (telegramId 67890) gets a neutral notice.
@@ -1034,15 +1045,16 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
     expect(serialized).toContain("menu:back");
   });
 
-  it("handleDeleteAccountExecute calls prisma.user.delete with the correct telegramId", async () => {
+  it("handleDeleteAccountExecute delegates to the shared deletion workflow", async () => {
     const ctx = createMockCtx({
       callbackData: "menu:settings:delete:yes",
       fromId: 99999,
     });
     await handleDeleteAccountExecute(ctx);
-    expect(prisma.user.delete).toHaveBeenCalledWith({
-      where: { telegramId: BigInt(99999) },
-    });
+    expect(accountDeletionMocks.deleteUserAccount).toHaveBeenCalledWith(
+      "uuid-user-1",
+      ctx.api,
+    );
   });
 
   it("handleDeleteAccountExecute resets session to defaults", async () => {
@@ -1074,25 +1086,15 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
     expect(body).toContain("/start");
   });
 
-  it("cascade: deleting user removes profile and matches (schema contract)", async () => {
-    // This test documents the schema-level contract: onDelete: Cascade
-    // is set on Profile→User and Match→User relations. The actual DB
-    // enforcement is tested via prisma db push; here we verify that the
-    // handler relies on a single prisma.user.delete to wipe profile + match
-    // rows. We DO query matches first — only to notify/comp any in-flight
-    // partner before the cascade removes those rows — but we never manually
-    // clean up profiles or matches.
-    const deleteCall = prisma.user.delete as ReturnType<typeof vi.fn>;
-    deleteCall.mockClear();
-
+  it("preserves the session and shows a retry message if safe cleanup fails", async () => {
+    accountDeletionMocks.deleteUserAccount.mockRejectedValueOnce(
+      new Error("storage unavailable"),
+    );
     const ctx = createMockCtx({ callbackData: "menu:settings:delete:yes" });
     await handleDeleteAccountExecute(ctx);
 
-    // Only user.delete performs cleanup — cascade handles profiles + matches.
-    expect(prisma.user.delete).toHaveBeenCalledTimes(1);
-    expect(prisma.profile.update).not.toHaveBeenCalled();
-    expect((prisma as any).profile.findUnique).not.toHaveBeenCalled();
-    expect((prisma as any).match.update).not.toHaveBeenCalled();
+    expect(ctx.session.onboardingStep).toBe("completed");
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("try again"));
   });
 });
 

@@ -332,6 +332,8 @@ const translations = {
     deleteAccountDone:
       "Account deleted. All data wiped.\n" +
       "Want to come back? Just send /start.",
+    deleteAccountFailed:
+      "We couldn't safely erase everything right now. Nothing was deleted — please try again.",
     deleteFreezeIntro:
       "Wait — before you delete everything 👀\n\n" +
       "You don't have to lose it all. *Freeze* your account instead: your profile, " +
@@ -1083,6 +1085,8 @@ const translations = {
     deleteAccountDone:
       "Аккаунт удалён. Все данные стёрты.\n" +
       "Захочешь вернуться — отправь /start.",
+    deleteAccountFailed:
+      "Сейчас не удалось безопасно удалить все данные. Аккаунт сохранён — попробуй ещё раз.",
     deleteFreezeIntro:
       "Подожди — прежде чем всё удалять 👀\n\n" +
       "Необязательно терять всё. Лучше *заморозь* аккаунт: профиль, фото и верификация " +
@@ -1827,6 +1831,8 @@ const translations = {
     deleteAccountDone:
       "Акаунт видалено. Усі дані стерто.\n" +
       "Захочеш повернутись — надішли /start.",
+    deleteAccountFailed:
+      "Зараз не вдалося безпечно видалити всі дані. Акаунт збережено — спробуй ще раз.",
     deleteFreezeIntro:
       "Зачекай — перш ніж усе видаляти 👀\n\n" +
       "Необов'язково втрачати все. Краще *заморозь* акаунт: профіль, фото та верифікація " +
@@ -2554,6 +2560,8 @@ const deTranslations: TranslationTable = {
   deleteAccountDone:
     "Account gelöscht. Alle Daten entfernt.\n" +
     "Wenn du zurückkommen willst, sende einfach /start.",
+  deleteAccountFailed:
+    "Wir konnten gerade nicht alle Daten sicher löschen. Dein Account bleibt bestehen — bitte versuche es erneut.",
   deleteFreezeIntro:
     "Warte — bevor du alles löschst 👀\n\n" +
     "Du musst nicht alles verlieren. *Friere* deinen Account lieber ein: Profil, Fotos " +
@@ -3259,6 +3267,8 @@ const plTranslations: TranslationTable = {
   deleteAccountDone:
     "Konto usunięte. Wszystkie dane wyczyszczone.\n" +
     "Chcesz wrócić? Po prostu wyślij /start.",
+  deleteAccountFailed:
+    "Nie udało się teraz bezpiecznie usunąć wszystkich danych. Konto pozostało — spróbuj ponownie.",
   deleteFreezeIntro:
     "Zaczekaj — zanim wszystko usuniesz 👀\n\n" +
     "Nie musisz tracić wszystkiego. Lepiej *zamroź* konto: profil, zdjęcia i weryfikacja " +

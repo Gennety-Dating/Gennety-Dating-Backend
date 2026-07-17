@@ -1,6 +1,6 @@
 import { InlineKeyboard } from "grammy";
 import type { BotContext } from "../../session.js";
-import { prisma, Prisma, type Theme } from "@gennety/db";
+import { prisma, type Theme } from "@gennety/db";
 import { t, type Language, DEFAULT_SESSION, SUPPORTED_LANGUAGES } from "@gennety/shared";
 import { showMainMenu } from "./main.js";
 import { sendVerificationCTABare } from "../onboarding/verification.js";
@@ -9,37 +9,7 @@ import { sendDeleteFreezeVideoNote } from "../../services/delete-freeze-video.js
 import { unpinStatusBanner } from "../../services/status-banner.js";
 import { cancelInFlightMatchesForUser } from "../../services/cancel-in-flight-matches.js";
 import { notifyFounderAccountClosed } from "../../services/founder-notify.js";
-
-/**
- * Fields the founder account-closed notification needs (profile + phone +
- * photos). Shared by the freeze and hard-delete handlers so the hard-delete
- * path can snapshot the row before the Prisma cascade removes it.
- */
-const FOUNDER_ACCOUNT_SELECT = {
-  id: true,
-  telegramId: true,
-  firstName: true,
-  age: true,
-  gender: true,
-  preference: true,
-  phone: true,
-  email: true,
-  language: true,
-  registrationTrack: true,
-  verificationStatus: true,
-  telegramUsername: true,
-  profile: {
-    select: {
-      homeCity: true,
-      height: true,
-      hobbies: true,
-      partnerPreferences: true,
-      ethnicity: true,
-      photos: true,
-      eloSeedDetails: true,
-    },
-  },
-} satisfies Prisma.UserSelect;
+import { deleteUserAccount } from "../../services/account-deletion.js";
 
 const VALID_LANGUAGES = new Set<Language>(SUPPORTED_LANGUAGES);
 const VALID_THEMES = new Set<Theme>(["light", "dark"]);
@@ -267,7 +237,7 @@ export async function handleFreezeAccount(ctx: BotContext): Promise<void> {
 
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: FOUNDER_ACCOUNT_SELECT,
+    select: { id: true },
   });
   if (!user) {
     await showMainMenu(ctx);
@@ -281,9 +251,8 @@ export async function handleFreezeAccount(ctx: BotContext): Promise<void> {
     data: { status: "frozen" },
   });
 
-  // Founder ops feed: DM the founder the frozen user's profile + phone + photos.
-  // No-op unless FOUNDER_NOTIFY_ENABLED. Fire-and-forget.
-  void notifyFounderAccountClosed("frozen", user).catch(() => {});
+  // Aggregate-only event: never relay contact data, profile facts, or photos.
+  void notifyFounderAccountClosed("frozen").catch(() => {});
 
   await unpinStatusBanner(ctx.api, telegramId);
 
@@ -333,22 +302,26 @@ export async function handleDeleteAccountExecute(ctx: BotContext): Promise<void>
   const lang = ctx.session.language;
   const telegramId = BigInt(ctx.from!.id);
 
-  // Notify + comp any partner in an in-flight match before the cascade wipes the
-  // match rows, so a hard delete doesn't silently strand them either.
   const leaving = await prisma.user.findUnique({
     where: { telegramId },
-    select: FOUNDER_ACCOUNT_SELECT,
+    select: { id: true },
   });
-  if (leaving) {
-    await cancelInFlightMatchesForUser(leaving.id, ctx.api);
-    // Founder ops feed: snapshot the profile + phone + photo refs and DM the
-    // founder BEFORE the cascade wipes the row. Photo file_ids stay valid
-    // Telegram-side, so the async byte download still resolves post-delete.
-    // No-op unless FOUNDER_NOTIFY_ENABLED. Fire-and-forget.
-    void notifyFounderAccountClosed("deleted", leaving).catch(() => {});
+  if (!leaving) {
+    await showMainMenu(ctx);
+    return;
   }
 
-  await prisma.user.delete({ where: { telegramId } });
+  try {
+    const result = await deleteUserAccount(leaving.id, ctx.api);
+    if (!result.deleted) {
+      await showMainMenu(ctx);
+      return;
+    }
+  } catch (err) {
+    console.error("[settings] account deletion failed:", err);
+    await ctx.reply(t(lang, "deleteAccountFailed"));
+    return;
+  }
 
   // Reset the in-memory session to defaults — no user data survives.
   Object.assign(ctx.session, {
