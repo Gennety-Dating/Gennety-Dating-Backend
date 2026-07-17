@@ -15,6 +15,15 @@
   --glass-press: var(--fill-strong);
   --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
+  /* Marked-card "plate": a marked venue fills its whole body with burgundy —
+     identity is the FILL, not an outer frame, edge or glow. One tone for a
+     single-side mark, a brighter one when both agree. White content rides the
+     plate in BOTH themes, so a marked card looks identical light/dark and no
+     stacked layers (frame + border + glow) compete for focus. */
+  --pick-fill: #7c2234;
+  --pick-fill-strong: #a12c46;
+  --pick-rose: #eaa9b4; /* the partner's identity dot, readable on the plate */
+
   /* Telegram chrome inset (close ×, menu ⋯) in fullscreen — populated from
      `Telegram.WebApp.contentSafeAreaInset` at boot (telegram-insets.ts). The
      56px fallback covers older clients / the first paint. */
@@ -1671,4 +1680,113 @@ a.vc-info-row .vc-info-text {
 }
 .vc-card.is-current .vc-card-addr {
   white-space: normal;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MARKED-CARD REDESIGN (2026-07) — authoritative overrides, placed last.
+   Replaces the old "lifted frame + coloured edge + burgundy glow" marked
+   state (defined TWICE earlier — this file has a duplicated section) with a
+   single solid burgundy PLATE. Being last, it wins the cascade over both
+   copies without touching them.
+
+   Product intent: frameless always; a marked card fills its whole body with
+   burgundy (fill, not a border); no glow; no corner dot on the heart; no
+   white rim between the caption dots. Identity moves into the heart + the
+   caption, and the plate makes "which cards are chosen" unmistakable on the
+   near-black — and on the cream light page (white content rides the plate in
+   BOTH themes, so the marked state looks identical light/dark).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Frameless wrapper — a rounded plate clips itself via border-radius. */
+.vc-frame {
+  border-radius: 20px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+/* Any single-side mark → one burgundy plate + a soft NEUTRAL lift (no glow). */
+.vc-frame.is-marked,
+.vc-frame.is-mine,
+.vc-frame.is-peer {
+  padding: 0;
+  background: var(--pick-fill);
+  box-shadow: 0 8px 22px -14px rgba(0, 0, 0, 0.75);
+}
+/* Both agree → the same plate, brighter — the peak reads by saturation, not glow. */
+.vc-frame.is-match {
+  padding: 0;
+  background: var(--pick-fill-strong);
+  box-shadow: 0 10px 26px -14px rgba(0, 0, 0, 0.8);
+}
+/* Row + caption go transparent so the plate shows through as ONE block, and
+   the content flips to white on the plate (both themes). */
+.vc-frame.is-marked > .vc-card,
+.vc-frame.is-marked .vc-cap {
+  background: transparent;
+}
+.vc-frame.is-marked > .vc-card {
+  border-radius: 20px;
+  color: var(--on-accent);
+}
+.vc-frame.is-marked .vc-card-name {
+  color: var(--on-accent);
+}
+.vc-frame.is-marked .vc-card-addr,
+.vc-frame.is-marked .vc-card-tags,
+.vc-frame.is-marked .vc-card-chevron {
+  color: rgba(255, 255, 255, 0.74);
+  opacity: 1;
+}
+.vc-frame.is-marked .vc-chip {
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
+}
+.vc-frame.is-marked .vc-current-badge {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Heart on the plate — a clear tap target; MINE stays the solid chip. */
+.vc-frame.is-marked .vc-heart {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  box-shadow: none;
+}
+.vc-frame.is-marked .vc-heart.is-mine {
+  background: var(--self);
+  color: var(--bg);
+  box-shadow: 0 6px 18px -6px var(--self-glow);
+}
+/* No corner dot on the heart — the plate + caption already say who marked it. */
+.vc-heart.is-theirs::after {
+  content: none;
+  display: none;
+}
+
+/* Caption dots read on the plate: white = me, light rose = partner. No glow,
+   no overlap, no white rim — two clean dots with a small gap. */
+.vc-cap-dots {
+  gap: 5px;
+}
+.vc-cap-dot.is-self {
+  background: #fff;
+  box-shadow: none;
+}
+.vc-cap-dot.is-peer {
+  background: var(--pick-rose);
+  box-shadow: none;
+}
+.vc-cap-dot + .vc-cap-dot {
+  margin-left: 0;
+  outline: none;
+}
+.vc-frame.is-marked .vc-cap-text {
+  color: var(--on-accent);
+}
+/* NEW pill sits on the plate → invert it (white pill, burgundy text). */
+.vc-badge-new,
+.vc-frame.is-match .vc-badge-new {
+  background: #fff;
+  color: var(--accent);
 }
