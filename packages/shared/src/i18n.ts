@@ -99,15 +99,15 @@ const translations = {
     videoProcessingUnavailable:
       "I couldn't check that video right now. Your existing video was not changed. Try again in a bit.",
     ticketRewardPhoto:
-      "🎟️ Nice — you just earned a *free Date Ticket*!\n\nHere's the deal: every date you go on costs 1 ticket, and tickets normally cost money. Adding photos got you one on the house. Balance: *{balance}* 🎟️",
+      "🎟️ Nice — you just earned a *free Date Ticket*!\n\nHere's the deal: every date you go on costs 1 ticket, and tickets normally cost money. Adding photos got you one on the house. Balance: *{balance}*",
     ticketRewardVideo:
-      "🎟️ A profile video — love it! That's another *free Date Ticket*.\n\nEach date costs 1 ticket (normally paid), so you're set for your next one. Balance: *{balance}* 🎟️",
+      "🎟️ A profile video — love it! That's another *free Date Ticket*.\n\nEach date costs 1 ticket (normally paid), so you're set for your next one. Balance: *{balance}*",
     ticketRewardStudent:
-      "🎓 University email verified — student perk unlocked: *2 free Date Tickets* are in your wallet.\n\nEach date costs 1 ticket, so your first two dates are covered. Balance: *{balance}* 🎟️",
+      "🎓 University email verified — student perk unlocked: *2 free Date Tickets* are in your wallet.\n\nEach date costs 1 ticket, so your first two dates are covered. Balance: *{balance}*",
     welcomeGiftTicket:
-      "🎟 Your first ticket — on me, personally.\n\nEvery date here costs 1 ticket, normally ~$6.99\nThis one's free — let your first step be about the person, not the price\n\nIt's already in your wallet ❤️",
+      "Your first ticket — on me, personally.\n\nEvery date here costs 1 ticket, normally ~$6.99\nThis one's free — let your first step be about the person, not the price\n\nIt's already in your wallet ❤️",
     ticketStorePurchased:
-      "✨ Payment received — *{count}* ticket(s) added!\n\nBalance: *{balance}* 🎟️",
+      "✨ Payment received — *{count}* ticket(s) added!\n\nBalance: *{balance}*",
     ticketStoreCheckoutError: "Couldn't confirm that payment. Try again in a moment.",
     ticketStoreInvoiceTitle: "Gennety Date Tickets",
     ticketStoreInvoiceDesc:
@@ -198,7 +198,7 @@ const translations = {
       "I don't see a verification attempt yet. Tap 🟢 Verify now first, " +
       "complete the flow, then come back and tap this button.",
     verifyCheckPersonaFailed:
-      "❌ Verification didn't pass on Persona's side. Tap 🟢 Verify now " +
+      "Verification didn't pass on Persona's side. Tap 🟢 Verify now " +
       "to try again.",
     verifyCheckAlreadyDone:
       "Already processed — you should have gotten the result message above. " +
@@ -212,7 +212,7 @@ const translations = {
     verifyOutcomeRejected:
       "⚠️ The photos in your profile don't appear to match the selfie we captured during verification. Replace them with clear photos of yourself, then open Settings → Verify your account to retry.",
     verifyAutoPollStarted:
-      "✨ Got it. Grab a coffee ☕ — I'm cross-checking your selfie against your profile photos. " +
+      "Got it. Grab a coffee ☕ — I'm cross-checking your selfie against your profile photos. " +
       "Should take a minute or two.",
     verifyAutoPollTimeout:
       "Hmm, taking longer than usual. Tap the button below when you want me to check again.",
@@ -270,7 +270,7 @@ const translations = {
       "What do you do? (job / studies / field, max 100 chars)\n👀 Shown to your match.",
     editMajorTooLong: "Too long — keep it under 100.",
     editMajorSaved: "Saved ✨",
-    editPrefsTitle: "💘 *Who I want*\n\n👀 Affects who you get matched with. What to change?",
+    editPrefsTitle: "💘 *Who I want*\n\nAffects who you get matched with. What to change?",
     editPrefsAgeBtn: "🎂 Partner age range",
     editPrefsBack: "⬅️ Back to Edit",
     editAgeRangePrompt: "What partner age range are you looking for? (e.g. 20-28)\nMin: {min}, Max: {max}.",
@@ -297,7 +297,7 @@ const translations = {
     myProfileAddVideoHint:
       "🎬 Tip: add a short profile video from the menu — it makes your profile stand out.",
     myProfileAddVideoHintReward:
-      "🎬 Tip: add a short profile video from the menu and earn a free Date Ticket 🎁.",
+      "Tip: add a short profile video from the menu and earn a free Date Ticket 🎁.",
 
     // --- Pause / Resume ---
     pauseConfirmed: "Matching paused ⏸\nNo new matches until you resume.",
@@ -318,7 +318,7 @@ const translations = {
     settingsVerifyUnavailable:
       "Verification is temporarily unavailable. Try again a bit later.",
     helpBody:
-      "*Need help?* 💬\n\n" +
+      "*Need help?*\n\n" +
       "We don't do chats between users — that's by design. " +
       "Got an issue with a match, date, or the bot? Hit up support:\n\n" +
       "💬 [@gennetysupport](https://t.me/gennetysupport)",
@@ -439,7 +439,7 @@ const translations = {
       "We don't compromise on quality. There isn't a high-synergy match for you this week.\n\n" +
       "Your priority for next week's drop has been boosted.",
     noMatchThisWeekTier1:
-      "Hey 💫\n\n" +
+      "Hey\n\n" +
       "No match this week. Not because something's off with you — the quality bar just stays where it is, " +
       "and I'd rather wait than hand you someone who isn't worth your time.\n\n" +
       "Meanwhile:\n" +
@@ -447,7 +447,7 @@ const translations = {
       "• every week you wait raises your priority in the next drop.\n\n" +
       "Next Thursday, 18:00 ✨",
     noMatchThisWeekTier2:
-      "Hey 🌿\n\n" +
+      "Hey\n\n" +
       "Second week running — still no one I'd actually be excited to introduce you to. " +
       "Thanks for sticking around; that matters.\n\n" +
       "What's happening:\n" +
@@ -455,7 +455,7 @@ const translations = {
       "• your priority for the next drop is already raised.\n\n" +
       "Thursday, 18:00 — I'm on it 🤍",
     noMatchThisWeekTier3:
-      "Hey ✨\n\n" +
+      "Hey\n\n" +
       "Another honest update — still no one truly worth your time. " +
       "I like this even less than you do, and I won't pretend otherwise.\n\n" +
       "On my side:\n" +
@@ -479,7 +479,7 @@ const translations = {
     ticketViewButton: "🎟️ View your date ticket",
     ticketStatusButton: "Open date",
     ticketGateWaiting: "Ticket ready ✨ Waiting on them.",
-    ticketBothSecuredDm: "Both tickets secured 🎟️✨ Your date is on — let's pick a time.",
+    ticketBothSecuredDm: "Both tickets secured 🎟️ Your date is on — let's pick a time.",
     ticketPartnerPaidDm: "{name} already covered your date ticket ❤️ You're all set — nothing to pay.",
     // Goodwill "he covered her ticket" read-receipt (§3.5b): confirm his gesture
     // landed (takt 1), then let him know once she's actually seen it (takt 2).
@@ -512,7 +512,7 @@ const translations = {
     matchScheduleNoOverlapYet:
       "You've both picked times, but nothing overlaps yet. Add a few more — the second a slot matches, it's locked:",
     venueConciergeIntro:
-      "Time's locked 🗓️ One thing before I find your spot.\n\n" +
+      "Time's locked. One thing before I find your spot.\n\n" +
       "📍 *Mark where you'll be setting off from* for the date — your place, a metro station, a friend's flat, wherever you'll actually be leaving from.\n\n" +
       "I'll use that point to find a comfortable meeting spot that's easy for *both* of you to reach, close to where you start out. Tap below to drop it on the map:",
     venueConciergeBtnLocation: "📍 Send my location",
@@ -568,20 +568,20 @@ const translations = {
       "Lock it in — I'll update your date cards.",
     venuePayBtn: "⭐ Lock it in — {stars}",
     venueWishText:
-      "{name} found a place she loves for your date ✨\n📍 {venue}\n" +
+      "{name} found a place she loves for your date.\n📍 {venue}\n" +
       "She'd be happy if you locked it in.",
-    venueWishPayBtn: "💫 Lock it in — {stars} ⭐",
+    venueWishPayBtn: "Lock it in — {stars} ⭐",
     venueWishDeclineBtn: "Not this time",
     venuePayDeclineAck:
       "Got it — the venue stays as planned for now. If it changes, you'll get an updated card.",
     venuePaySelfDm:
-      "You two agreed on a new place.\n📍 {venue}\nLock it in — I'll update your date cards ✨",
+      "You two agreed on a new place.\n📍 {venue}\nLock it in — I'll update your date cards.",
     venuePaySelfBtn: "⭐ Lock it in — {stars}",
     venueSettledCard: "Done — your date has a new home 📍 {venue}",
-    venueSettledPaidByM: "{name} covered the venue change ❤️ Your date now happens at 📍 {venue}",
-    venueSettledPaidByF: "{name} covered the venue change ❤️ Your date now happens at 📍 {venue}",
-    venueExpressPartnerFromF: "{name} picked a cozier spot for your date ✨ New place: 📍 {venue}",
-    venueExpressPartnerFromM: "{name} picked a new spot for your date ✨ New place: 📍 {venue}",
+    venueSettledPaidByM: "{name} covered the venue change ❤️ Your date now happens at {venue}",
+    venueSettledPaidByF: "{name} covered the venue change ❤️ Your date now happens at {venue}",
+    venueExpressPartnerFromF: "{name} picked a cozier spot for your date. New place: 📍 {venue}",
+    venueExpressPartnerFromM: "{name} picked a new spot for your date. New place: 📍 {venue}",
     venueLapsedDm: "The venue change wasn't locked in — you're meeting at {venue}, as planned.",
     venueKeepOriginalDm: "Your match decided to keep the original spot — you're meeting at {venue}, as planned.",
     venueInvoiceTitle: "Venue change",
@@ -686,11 +686,11 @@ const translations = {
     statusDateDaysHours: "💫 Date in {d}d {h}h",
     statusDateHoursMinutes: "💫 Date in {h}h {m}m",
     statusDateMinutes: "💫 Date in {m}m",
-    statusDateSoon: "💫 Date is today ✨",
+    statusDateSoon: "💫 Date is today",
     menuMyDateDays: "💫 My date · in {d}d {h}h",
     menuMyDateHours: "💫 My date · in {h}h {m}m",
     menuMyDateMinutes: "💫 My date · in {m}m",
-    menuMyDateSoon: "💫 My date · today ✨",
+    menuMyDateSoon: "💫 My date · today",
     menuMyDatePlanning: "⏳ Date being planned",
     dateHubNoActive: "You don't have an active date right now.",
     dateHubHeaderScheduled: "💫 Your date with {name}",
@@ -850,15 +850,15 @@ const translations = {
     videoProcessingUnavailable:
       "Сейчас не получилось проверить видео. Предыдущее видео не изменено. Попробуй ещё раз немного позже.",
     ticketRewardPhoto:
-      "🎟️ Класс — ты только что получил *бесплатный билет на свидание*!\n\nКак это работает: каждое свидание стоит 1 билет, и обычно билеты платные. За добавленные фото — один в подарок. Баланс: *{balance}* 🎟️",
+      "🎟️ Класс — ты только что получил *бесплатный билет на свидание*!\n\nКак это работает: каждое свидание стоит 1 билет, и обычно билеты платные. За добавленные фото — один в подарок. Баланс: *{balance}*",
     ticketRewardVideo:
-      "🎟️ Видео в профиле — супер! Вот ещё *бесплатный билет на свидание*.\n\nКаждое свидание стоит 1 билет (обычно платный), так что на следующее ты готов. Баланс: *{balance}* 🎟️",
+      "🎟️ Видео в профиле — супер! Вот ещё *бесплатный билет на свидание*.\n\nКаждое свидание стоит 1 билет (обычно платный), так что на следующее ты готов. Баланс: *{balance}*",
     ticketRewardStudent:
-      "🎓 Университетская почта подтверждена — студенческий бонус: *2 бесплатных билета на свидания* уже на балансе.\n\nКаждое свидание стоит 1 билет, так что первые две встречи за наш счёт. Баланс: *{balance}* 🎟️",
+      "🎓 Университетская почта подтверждена — студенческий бонус: *2 бесплатных билета на свидания* уже на балансе.\n\nКаждое свидание стоит 1 билет, так что первые две встречи за наш счёт. Баланс: *{balance}*",
     welcomeGiftTicket:
-      "🎟 Твой первый билет — от меня лично.\n\nКаждое свидание здесь стоит 1 билет, обычно ~$6.99\nЭтот — бесплатно: пусть первый шаг будет про человека, а не про цену\n\nБилет уже в твоём кошельке ❤️",
+      "Твой первый билет — от меня лично.\n\nКаждое свидание здесь стоит 1 билет, обычно ~$6.99\nЭтот — бесплатно: пусть первый шаг будет про человека, а не про цену\n\nБилет уже в твоём кошельке ❤️",
     ticketStorePurchased:
-      "✨ Оплата прошла — добавлено *{count}* 🎟️!\n\nБаланс: *{balance}* 🎟️",
+      "✨ Оплата прошла — добавлено *{count}* билет(ов)!\n\nБаланс: *{balance}*",
     ticketStoreCheckoutError: "Не удалось подтвердить оплату. Попробуй ещё раз.",
     ticketStoreInvoiceTitle: "Билеты Gennety",
     ticketStoreInvoiceDesc:
@@ -949,7 +949,7 @@ const translations = {
       "Пока не вижу попытки верификации. Сначала нажми 🟢 Пройти верификацию, " +
       "пройди флоу, потом возвращайся и нажми эту кнопку.",
     verifyCheckPersonaFailed:
-      "❌ Верификация не прошла на стороне Persona. Нажми 🟢 Пройти верификацию, " +
+      "Верификация не прошла на стороне Persona. Нажми 🟢 Пройти верификацию, " +
       "чтобы попробовать ещё раз.",
     verifyCheckAlreadyDone:
       "Уже обработано — сообщение с результатом должно быть выше. " +
@@ -963,7 +963,7 @@ const translations = {
     verifyOutcomeRejected:
       "⚠️ Фото в профиле не совпали с селфи из верификации. Замени их на чёткие фотографии себя, затем открой Настройки → Верифицировать аккаунт и попробуй ещё раз.",
     verifyAutoPollStarted:
-      "✨ Принято. Хватай кофе ☕ — я сверяю твоё селфи с фото из профиля. " +
+      "Принято. Хватай кофе ☕ — я сверяю твоё селфи с фото из профиля. " +
       "Это займёт минуту-две.",
     verifyAutoPollTimeout:
       "Хм, дольше обычного. Нажми кнопку ниже, когда захочешь, чтобы я проверил ещё раз.",
@@ -1021,7 +1021,7 @@ const translations = {
       "Чем занимаешься? (работа / учёба / сфера, до 100 символов)\n👀 Видно твоей паре.",
     editMajorTooLong: "Слишком длинно — уложись в 100.",
     editMajorSaved: "Сохранено ✨",
-    editPrefsTitle: "💘 *Кого ищу*\n\n👀 Влияет на то, кто тебе попадётся. Что меняем?",
+    editPrefsTitle: "💘 *Кого ищу*\n\nВлияет на то, кто тебе попадётся. Что меняем?",
     editPrefsAgeBtn: "🎂 Возраст партнёра",
     editPrefsBack: "⬅️ К редактированию",
     editAgeRangePrompt: "В каком возрастном диапазоне искать тебе пару? (напр. 20-28)\nМин: {min}, Макс: {max}.",
@@ -1048,7 +1048,7 @@ const translations = {
     myProfileAddVideoHint:
       "🎬 Совет: добавь короткое видео в профиль через меню — так анкета заметнее.",
     myProfileAddVideoHintReward:
-      "🎬 Совет: добавь короткое видео в профиль через меню и получи бесплатный билет 🎁.",
+      "Совет: добавь короткое видео в профиль через меню и получи бесплатный билет 🎁.",
 
     // --- Pause / Resume ---
     pauseConfirmed: "Поиск на паузе ⏸\nНовых мэтчей не будет, пока не включишь.",
@@ -1069,7 +1069,7 @@ const translations = {
     settingsVerifyUnavailable:
       "Верификация временно недоступна. Попробуй позже.",
     helpBody:
-      "*Нужна помощь?* 💬\n\n" +
+      "*Нужна помощь?*\n\n" +
       "Чатов между юзерами у нас нет — это by design. " +
       "Проблема с мэтчем, свиданием или ботом? Пиши в саппорт:\n\n" +
       "💬 [@gennetysupport](https://t.me/gennetysupport)",
@@ -1190,7 +1190,7 @@ const translations = {
       "Мы не идём на компромиссы по качеству. На этой неделе для тебя нет мэтча с высокой синергией.\n\n" +
       "Твой приоритет на следующую неделю повышен.",
     noMatchThisWeekTier1:
-      "Привет 💫\n\n" +
+      "Привет\n\n" +
       "На этой неделе без мэтча. Не потому что с тобой что-то не так — просто планка качества стоит там, где стоит, " +
       "и я лучше подожду, чем предложу «лишь бы было».\n\n" +
       "Тем временем:\n" +
@@ -1198,7 +1198,7 @@ const translations = {
       "• каждая неделя ожидания поднимает твой приоритет в следующем дропе.\n\n" +
       "До четверга, 18:00 ✨",
     noMatchThisWeekTier2:
-      "Привет 🌿\n\n" +
+      "Привет\n\n" +
       "Уже вторая неделя подряд — всё ещё нет никого, кого я был бы рад тебе показать. " +
       "Спасибо, что остаёшься — это правда важно.\n\n" +
       "Что происходит:\n" +
@@ -1206,7 +1206,7 @@ const translations = {
       "• твой приоритет в следующем дропе уже повышен.\n\n" +
       "До четверга, 18:00 — я этим занимаюсь 🤍",
     noMatchThisWeekTier3:
-      "Привет ✨\n\n" +
+      "Привет\n\n" +
       "Снова честно: пары, которая правда стоит твоего времени, всё ещё нет. " +
       "Мне это нравится даже меньше, чем тебе, и делать вид, что всё ок, я не буду.\n\n" +
       "Что делаю:\n" +
@@ -1237,7 +1237,7 @@ const translations = {
     ticketViewButton: "🎟️ Посмотреть свой билет на свидание",
     ticketStatusButton: "Открыть свидание",
     ticketGateWaiting: "Билет готов ✨ Ждём вторую сторону.",
-    ticketBothSecuredDm: "Оба билета у вас 🎟️✨ Свидание в силе — давай выберем время.",
+    ticketBothSecuredDm: "Оба билета у вас 🎟️ Свидание в силе — давай выберем время.",
     ticketPartnerPaidDm: "{name} уже оплатил твой билет на свидание ❤️ Тебе ничего не нужно делать.",
     ticketCoveredHerConfirm:
       "💛 Готово — ты оплатил билет за {name}. Как только она это увидит, я дам тебе знать.",
@@ -1259,7 +1259,7 @@ const translations = {
     matchSchedulePickedPrefix: "Ты выбрал: ",
     matchScheduleWaitingPeer: "Ждём выбор второй стороны…",
     venueConciergeIntro:
-      "Время выбрано 🗓️ Один момент перед тем, как подобрать место.\n\n" +
+      "Время выбрано. Один момент перед тем, как подобрать место.\n\n" +
       "📍 *Отметь, откуда ты будешь выезжать* на свидание — дом, станция метро, квартира друга, откуда тебе реально удобно стартовать.\n\n" +
       "По этой точке я подберу удобное место встречи, до которого легко добраться вам *обоим*, недалеко от твоего старта. Нажми кнопку ниже и отметь точку на карте:",
     venueConciergeBtnLocation: "📍 Отправить геолокацию",
@@ -1315,20 +1315,20 @@ const translations = {
       "Закрепи его — и я обновлю ваши карточки.",
     venuePayBtn: "⭐ Закрепить — {stars}",
     venueWishText:
-      "{name} нашла место, которое ей очень нравится ✨\n📍 {venue}\n" +
+      "{name} нашла место, которое ей очень нравится.\n📍 {venue}\n" +
       "Ей будет приятно, если закрепишь его ты.",
-    venueWishPayBtn: "💫 Закрепить — {stars} ⭐",
+    venueWishPayBtn: "Закрепить — {stars} ⭐",
     venueWishDeclineBtn: "Не в этот раз",
     venuePayDeclineAck:
       "Понял — место пока остаётся прежним. Если оно изменится, придёт обновлённая карточка.",
     venuePaySelfDm:
-      "Вы сошлись на новом месте.\n📍 {venue}\nЗакрепи его — и я обновлю ваши карточки ✨",
+      "Вы сошлись на новом месте.\n📍 {venue}\nЗакрепи его — и я обновлю ваши карточки.",
     venuePaySelfBtn: "⭐ Закрепить — {stars}",
     venueSettledCard: "Готово — у вашего свидания новое место 📍 {venue}",
-    venueSettledPaidByM: "{name} оплатил смену места ❤️ Ваше свидание теперь в 📍 {venue}",
-    venueSettledPaidByF: "{name} оплатила смену места ❤️ Ваше свидание теперь в 📍 {venue}",
-    venueExpressPartnerFromF: "{name} выбрала для вас место поуютнее ✨ Новое место: 📍 {venue}",
-    venueExpressPartnerFromM: "{name} выбрал для вас новое место ✨ Новое место: 📍 {venue}",
+    venueSettledPaidByM: "{name} оплатил смену места ❤️ Ваше свидание теперь в {venue}",
+    venueSettledPaidByF: "{name} оплатила смену места ❤️ Ваше свидание теперь в {venue}",
+    venueExpressPartnerFromF: "{name} выбрала для вас место поуютнее. Новое место: 📍 {venue}",
+    venueExpressPartnerFromM: "{name} выбрал для вас новое место. Новое место: 📍 {venue}",
     venueLapsedDm: "Смену места так и не закрепили — встречаетесь в {venue}, как и планировали.",
     venueKeepOriginalDm: "Твой мэтч решил оставить исходное место — встречаетесь в {venue}, как и планировали.",
     venueInvoiceTitle: "Смена места свидания",
@@ -1430,11 +1430,11 @@ const translations = {
     statusDateDaysHours: "💫 Свидание через {d}д {h}ч",
     statusDateHoursMinutes: "💫 Свидание через {h}ч {m}мин",
     statusDateMinutes: "💫 Свидание через {m} мин",
-    statusDateSoon: "💫 Свидание сегодня ✨",
+    statusDateSoon: "💫 Свидание сегодня",
     menuMyDateDays: "💫 Моё свидание · через {d}д {h}ч",
     menuMyDateHours: "💫 Моё свидание · через {h}ч {m}мин",
     menuMyDateMinutes: "💫 Моё свидание · через {m} мин",
-    menuMyDateSoon: "💫 Моё свидание · сегодня ✨",
+    menuMyDateSoon: "💫 Моё свидание · сегодня",
     menuMyDatePlanning: "⏳ Свидание планируется",
     dateHubNoActive: "Сейчас у тебя нет запланированного свидания.",
     dateHubHeaderScheduled: "💫 Твоё свидание с {name}",
@@ -1594,15 +1594,15 @@ const translations = {
     videoProcessingUnavailable:
       "Зараз не вдалося перевірити відео. Попереднє відео не змінено. Спробуй ще раз трохи пізніше.",
     ticketRewardPhoto:
-      "🎟️ Клас — ти щойно отримав *безкоштовний квиток на побачення*!\n\nЯк це працює: кожне побачення коштує 1 квиток, і зазвичай квитки платні. За додані фото — один у подарунок. Баланс: *{balance}* 🎟️",
+      "🎟️ Клас — ти щойно отримав *безкоштовний квиток на побачення*!\n\nЯк це працює: кожне побачення коштує 1 квиток, і зазвичай квитки платні. За додані фото — один у подарунок. Баланс: *{balance}*",
     ticketRewardVideo:
-      "🎟️ Відео в профілі — супер! Ось ще *безкоштовний квиток на побачення*.\n\nКожне побачення коштує 1 квиток (зазвичай платний), тож на наступне ти готовий. Баланс: *{balance}* 🎟️",
+      "🎟️ Відео в профілі — супер! Ось ще *безкоштовний квиток на побачення*.\n\nКожне побачення коштує 1 квиток (зазвичай платний), тож на наступне ти готовий. Баланс: *{balance}*",
     ticketRewardStudent:
-      "🎓 Університетську пошту підтверджено — студентський бонус: *2 безкоштовні квитки на побачення* вже на балансі.\n\nКожне побачення коштує 1 квиток, тож перші дві зустрічі за наш рахунок. Баланс: *{balance}* 🎟️",
+      "🎓 Університетську пошту підтверджено — студентський бонус: *2 безкоштовні квитки на побачення* вже на балансі.\n\nКожне побачення коштує 1 квиток, тож перші дві зустрічі за наш рахунок. Баланс: *{balance}*",
     welcomeGiftTicket:
-      "🎟 Твій перший квиток — від мене особисто.\n\nКожне побачення тут коштує 1 квиток, зазвичай ~$6.99\nЦе — безкоштовно: нехай перший крок буде про людину, а не про ціну\n\nКвиток уже у твоєму гаманці ❤️",
+      "Твій перший квиток — від мене особисто.\n\nКожне побачення тут коштує 1 квиток, зазвичай ~$6.99\nЦе — безкоштовно: нехай перший крок буде про людину, а не про ціну\n\nКвиток уже у твоєму гаманці ❤️",
     ticketStorePurchased:
-      "✨ Оплату отримано — додано *{count}* 🎟️!\n\nБаланс: *{balance}* 🎟️",
+      "✨ Оплату отримано — додано *{count}* квиток(ів)!\n\nБаланс: *{balance}*",
     ticketStoreCheckoutError: "Не вдалося підтвердити оплату. Спробуй ще раз.",
     ticketStoreInvoiceTitle: "Квитки Gennety",
     ticketStoreInvoiceDesc:
@@ -1693,7 +1693,7 @@ const translations = {
       "Поки не бачу спроби верифікації. Спочатку натисни 🟢 Пройти верифікацію, " +
       "пройди флоу, потім повертайся і натисни цю кнопку.",
     verifyCheckPersonaFailed:
-      "❌ Верифікація не пройшла на стороні Persona. Натисни 🟢 Пройти верифікацію, " +
+      "Верифікація не пройшла на стороні Persona. Натисни 🟢 Пройти верифікацію, " +
       "щоб спробувати ще раз.",
     verifyCheckAlreadyDone:
       "Вже оброблено — повідомлення з результатом має бути вище. " +
@@ -1707,7 +1707,7 @@ const translations = {
     verifyOutcomeRejected:
       "⚠️ Фото в профілі не збіглися з селфі з верифікації. Заміни їх на чіткі фото себе, потім відкрий Налаштування → Верифікувати акаунт і спробуй ще раз.",
     verifyAutoPollStarted:
-      "✨ Прийнято. Хапай каву ☕ — я звіряю твоє селфі з фото у профілі. " +
+      "Прийнято. Хапай каву ☕ — я звіряю твоє селфі з фото у профілі. " +
       "Це займе хвилину-дві.",
     verifyAutoPollTimeout:
       "Хм, довше ніж зазвичай. Натисни кнопку нижче, коли захочеш, щоб я перевірив ще раз.",
@@ -1765,7 +1765,7 @@ const translations = {
       "Чим займаєшся? (робота / навчання / сфера, до 100 символів)\n👀 Видно твоїй парі.",
     editMajorTooLong: "Задовге — вклади в 100.",
     editMajorSaved: "Збережено ✨",
-    editPrefsTitle: "💘 *Кого шукаю*\n\n👀 Впливає на те, хто тобі трапиться. Що міняємо?",
+    editPrefsTitle: "💘 *Кого шукаю*\n\nВпливає на те, хто тобі трапиться. Що міняємо?",
     editPrefsAgeBtn: "🎂 Вік партнера",
     editPrefsBack: "⬅️ До редагування",
     editAgeRangePrompt: "У якому віковому діапазоні шукати тобі пару? (напр. 20-28)\nМін: {min}, Макс: {max}.",
@@ -1792,7 +1792,7 @@ const translations = {
     myProfileAddVideoHint:
       "🎬 Порада: додай коротке відео в профіль через меню — так анкета помітніша.",
     myProfileAddVideoHintReward:
-      "🎬 Порада: додай коротке відео в профіль через меню та отримай безкоштовний квиток 🎁.",
+      "Порада: додай коротке відео в профіль через меню та отримай безкоштовний квиток 🎁.",
 
     // --- Pause / Resume ---
     pauseConfirmed: "Пошук на паузі ⏸\nНових метчів не буде, поки не ввімкнеш.",
@@ -1813,7 +1813,7 @@ const translations = {
     settingsVerifyUnavailable:
       "Верифікація тимчасово недоступна. Спробуй пізніше.",
     helpBody:
-      "*Потрібна допомога?* 💬\n\n" +
+      "*Потрібна допомога?*\n\n" +
       "Чатів між юзерами у нас немає — це by design. " +
       "Проблема з метчем, побаченням чи ботом? Пиши в сапорт:\n\n" +
       "💬 [@gennetysupport](https://t.me/gennetysupport)",
@@ -1934,7 +1934,7 @@ const translations = {
       "Ми не йдемо на компроміси щодо якості. Цього тижня для тебе немає метчу з високою синергією.\n\n" +
       "Твій пріоритет на наступний тиждень підвищено.",
     noMatchThisWeekTier1:
-      "Привіт 💫\n\n" +
+      "Привіт\n\n" +
       "Цього тижня без метчу. Не тому що з тобою щось не так — просто планка якості стоїть там, де стоїть, " +
       "і я краще почекаю, ніж запропоную «аби було».\n\n" +
       "Тим часом:\n" +
@@ -1942,7 +1942,7 @@ const translations = {
       "• кожен тиждень очікування піднімає твій пріоритет у наступному дропі.\n\n" +
       "До четверга, 18:00 ✨",
     noMatchThisWeekTier2:
-      "Привіт 🌿\n\n" +
+      "Привіт\n\n" +
       "Уже другий тиждень поспіль — досі немає нікого, кого я був би радий тобі показати. " +
       "Дякую, що лишаєшся — це справді важливо.\n\n" +
       "Що відбувається:\n" +
@@ -1950,7 +1950,7 @@ const translations = {
       "• твій пріоритет у наступному дропі вже підвищено.\n\n" +
       "До четверга, 18:00 — я цим займаюся 🤍",
     noMatchThisWeekTier3:
-      "Привіт ✨\n\n" +
+      "Привіт\n\n" +
       "Знову чесно: пари, яка справді варта твого часу, досі немає. " +
       "Мені це подобається ще менше, ніж тобі, і вдавати, що все ок, я не буду.\n\n" +
       "Що роблю:\n" +
@@ -1973,7 +1973,7 @@ const translations = {
     ticketViewButton: "🎟️ Переглянути свій квиток на побачення",
     ticketStatusButton: "Відкрити побачення",
     ticketGateWaiting: "Квиток готовий ✨ Чекаємо на іншу сторону.",
-    ticketBothSecuredDm: "Обидва квитки у вас 🎟️✨ Побачення в силі — оберімо час.",
+    ticketBothSecuredDm: "Обидва квитки у вас 🎟️ Побачення в силі — оберімо час.",
     ticketPartnerPaidDm: "{name} вже сплатив твій квиток на побачення ❤️ Тобі нічого не потрібно робити.",
     ticketCoveredHerConfirm:
       "💛 Готово — ти оплатив квиток за {name}. Щойно вона це побачить, я дам тобі знати.",
@@ -2003,7 +2003,7 @@ const translations = {
     matchScheduleNoOverlapYet:
       "Ви обоє позначили час, але поки нічого не збіглося. Додай ще кілька слотів — щойно один перетнеться, фіксую дату:",
     venueConciergeIntro:
-      "Час зафіксовано 🗓️ Один момент, перш ніж підібрати місце.\n\n" +
+      "Час зафіксовано. Один момент, перш ніж підібрати місце.\n\n" +
       "📍 *Познач, звідки ти будеш виїжджати* на побачення — дім, станція метро, квартира друга, звідки тобі реально зручно стартувати.\n\n" +
       "За цією точкою я підберу зручне місце зустрічі, до якого легко дістатися вам *обом*, неподалік від твого старту. Натисни кнопку нижче й познач точку на карті:",
     venueConciergeBtnLocation: "📍 Надіслати геолокацію",
@@ -2059,20 +2059,20 @@ const translations = {
       "Закріпи його — і я оновлю ваші картки.",
     venuePayBtn: "⭐ Закріпити — {stars}",
     venueWishText:
-      "{name} знайшла місце, яке їй дуже подобається ✨\n📍 {venue}\n" +
+      "{name} знайшла місце, яке їй дуже подобається.\n📍 {venue}\n" +
       "Їй буде приємно, якщо закріпиш його ти.",
-    venueWishPayBtn: "💫 Закріпити — {stars} ⭐",
+    venueWishPayBtn: "Закріпити — {stars} ⭐",
     venueWishDeclineBtn: "Не цього разу",
     venuePayDeclineAck:
       "Зрозумів — місце поки лишається тим самим. Якщо воно зміниться, прийде оновлена картка.",
     venuePaySelfDm:
-      "Ви зійшлися на новому місці.\n📍 {venue}\nЗакріпи його — і я оновлю ваші картки ✨",
+      "Ви зійшлися на новому місці.\n📍 {venue}\nЗакріпи його — і я оновлю ваші картки.",
     venuePaySelfBtn: "⭐ Закріпити — {stars}",
     venueSettledCard: "Готово — у вашого побачення нове місце 📍 {venue}",
-    venueSettledPaidByM: "{name} оплатив зміну місця ❤️ Ваше побачення тепер у 📍 {venue}",
-    venueSettledPaidByF: "{name} оплатила зміну місця ❤️ Ваше побачення тепер у 📍 {venue}",
-    venueExpressPartnerFromF: "{name} обрала для вас затишніше місце ✨ Нове місце: 📍 {venue}",
-    venueExpressPartnerFromM: "{name} обрав для вас нове місце ✨ Нове місце: 📍 {venue}",
+    venueSettledPaidByM: "{name} оплатив зміну місця ❤️ Ваше побачення тепер у {venue}",
+    venueSettledPaidByF: "{name} оплатила зміну місця ❤️ Ваше побачення тепер у {venue}",
+    venueExpressPartnerFromF: "{name} обрала для вас затишніше місце. Нове місце: 📍 {venue}",
+    venueExpressPartnerFromM: "{name} обрав для вас нове місце. Нове місце: 📍 {venue}",
     venueLapsedDm: "Зміну місця так і не закріпили — зустрічаєтесь у {venue}, як і планували.",
     venueKeepOriginalDm: "Твій метч вирішив залишити початкове місце — зустрічаєтесь у {venue}, як і планували.",
     venueInvoiceTitle: "Зміна місця побачення",
@@ -2174,11 +2174,11 @@ const translations = {
     statusDateDaysHours: "💫 Побачення через {d}д {h}г",
     statusDateHoursMinutes: "💫 Побачення через {h}г {m}хв",
     statusDateMinutes: "💫 Побачення через {m} хв",
-    statusDateSoon: "💫 Побачення сьогодні ✨",
+    statusDateSoon: "💫 Побачення сьогодні",
     menuMyDateDays: "💫 Моє побачення · через {d}д {h}г",
     menuMyDateHours: "💫 Моє побачення · через {h}г {m}хв",
     menuMyDateMinutes: "💫 Моє побачення · через {m} хв",
-    menuMyDateSoon: "💫 Моє побачення · сьогодні ✨",
+    menuMyDateSoon: "💫 Моє побачення · сьогодні",
     menuMyDatePlanning: "⏳ Побачення планується",
     dateHubNoActive: "Зараз у тебе немає запланованого побачення.",
     dateHubHeaderScheduled: "💫 Твоє побачення з {name}",
@@ -2365,7 +2365,7 @@ const deTranslations: TranslationTable = {
     "Ich sehe noch keinen Verifizierungsversuch. Tippe zuerst auf 🟢 Jetzt verifizieren, " +
     "schließe den Flow ab und komm dann zurück.",
   verifyCheckPersonaFailed:
-    "❌ Die Verifizierung ist bei Persona fehlgeschlagen. Tippe auf 🟢 Jetzt verifizieren, " +
+    "Die Verifizierung ist bei Persona fehlgeschlagen. Tippe auf 🟢 Jetzt verifizieren, " +
     "um es erneut zu versuchen.",
   verifyCheckAlreadyDone:
     "Schon verarbeitet - du solltest die Ergebnisnachricht oben bekommen haben. " +
@@ -2378,7 +2378,7 @@ const deTranslations: TranslationTable = {
   verifyOutcomeRejected:
     "⚠️ Die Fotos in deinem Profil scheinen nicht zum Selfie aus der Verifizierung zu passen. Ersetze sie bitte durch klare Fotos von dir und öffne dann Einstellungen → Konto verifizieren, um es erneut zu versuchen.",
   verifyAutoPollStarted:
-    "✨ Verstanden. Hol dir einen Kaffee ☕ - ich vergleiche dein Selfie mit deinen Profilfotos. " +
+    "Verstanden. Hol dir einen Kaffee ☕ - ich vergleiche dein Selfie mit deinen Profilfotos. " +
     "Das dauert ein bis zwei Minuten.",
   verifyAutoPollTimeout:
     "Hm, das dauert länger als sonst. Tippe unten auf den Button, wenn ich nochmal prüfen soll.",
@@ -2421,15 +2421,15 @@ const deTranslations: TranslationTable = {
   videoProcessingUnavailable:
     "Ich konnte das Video gerade nicht prüfen. Dein bisheriges Video wurde nicht geändert. Versuch es bitte gleich noch einmal.",
   ticketRewardPhoto:
-    "🎟️ Stark — du hast gerade ein *kostenloses Date-Ticket* verdient!\n\nSo läuft's: Jedes Date kostet 1 Ticket, und Tickets kosten normalerweise Geld. Für deine Fotos gibt's eins gratis. Guthaben: *{balance}* 🎟️",
+    "🎟️ Stark — du hast gerade ein *kostenloses Date-Ticket* verdient!\n\nSo läuft's: Jedes Date kostet 1 Ticket, und Tickets kosten normalerweise Geld. Für deine Fotos gibt's eins gratis. Guthaben: *{balance}*",
   ticketRewardVideo:
-    "🎟️ Ein Profilvideo — top! Noch ein *kostenloses Date-Ticket* für dich.\n\nJedes Date kostet 1 Ticket (sonst kostenpflichtig). Guthaben: *{balance}* 🎟️",
+    "🎟️ Ein Profilvideo — top! Noch ein *kostenloses Date-Ticket* für dich.\n\nJedes Date kostet 1 Ticket (sonst kostenpflichtig). Guthaben: *{balance}*",
   ticketRewardStudent:
-    "🎓 Universitäts-E-Mail bestätigt — Studi-Bonus freigeschaltet: *2 kostenlose Date-Tickets* sind in deinem Guthaben.\n\nJedes Date kostet 1 Ticket — deine ersten zwei Dates gehen auf uns. Guthaben: *{balance}* 🎟️",
+    "🎓 Universitäts-E-Mail bestätigt — Studi-Bonus freigeschaltet: *2 kostenlose Date-Tickets* sind in deinem Guthaben.\n\nJedes Date kostet 1 Ticket — deine ersten zwei Dates gehen auf uns. Guthaben: *{balance}*",
   welcomeGiftTicket:
-    "🎟 Dein erstes Ticket — von mir persönlich.\n\nJedes Date hier kostet 1 Ticket, normalerweise ~$6,99\nDieses ist gratis — dein erster Schritt soll um den Menschen gehen, nicht um den Preis\n\nEs liegt schon in deinem Guthaben ❤️",
+    "Dein erstes Ticket — von mir persönlich.\n\nJedes Date hier kostet 1 Ticket, normalerweise ~$6,99\nDieses ist gratis — dein erster Schritt soll um den Menschen gehen, nicht um den Preis\n\nEs liegt schon in deinem Guthaben ❤️",
   ticketStorePurchased:
-    "✨ Zahlung erhalten — *{count}* Ticket(s) hinzugefügt!\n\nGuthaben: *{balance}* 🎟️",
+    "✨ Zahlung erhalten — *{count}* Ticket(s) hinzugefügt!\n\nGuthaben: *{balance}*",
   ticketStoreCheckoutError: "Zahlung konnte nicht bestätigt werden. Versuch es gleich noch mal.",
   ticketStoreInvoiceTitle: "Gennety Date-Tickets",
   ticketStoreInvoiceDesc:
@@ -2494,7 +2494,7 @@ const deTranslations: TranslationTable = {
     "Was machst du? (Job / Studium / Bereich, max. 100 Zeichen)\n👀 Für dein Match sichtbar.",
   editMajorTooLong: "Zu lang - bleib unter 100 Zeichen.",
   editMajorSaved: "Gespeichert ✨",
-  editPrefsTitle: "💘 *Wen ich suche*\n\n👀 Beeinflusst, wer dir vorgeschlagen wird. Was ändern?",
+  editPrefsTitle: "💘 *Wen ich suche*\n\nBeeinflusst, wer dir vorgeschlagen wird. Was ändern?",
   editPrefsAgeBtn: "🎂 Partner-Alter",
   editPrefsBack: "⬅️ Zurück zu Bearbeiten",
   editAgeRangePrompt: "In welcher Altersspanne sollen wir nach einem Partner für dich suchen? (z. B. 20-28)\nMin: {min}, Max: {max}.",
@@ -2521,7 +2521,7 @@ const deTranslations: TranslationTable = {
   myProfileAddVideoHint:
     "🎬 Tipp: Füge über das Menü ein kurzes Profilvideo hinzu — so fällt dein Profil mehr auf.",
   myProfileAddVideoHintReward:
-    "🎬 Tipp: Füge über das Menü ein kurzes Profilvideo hinzu und sichere dir ein kostenloses Ticket 🎁.",
+    "Tipp: Füge über das Menü ein kurzes Profilvideo hinzu und sichere dir ein kostenloses Ticket 🎁.",
   pauseConfirmed: "Matching pausiert ⏸\nKeine neuen Matches, bis du fortsetzt.",
   resumeConfirmed: "Matching läuft wieder ▶️\nIch bin dran.",
   settingsTitle: "⚙️ Einstellungen",
@@ -2537,7 +2537,7 @@ const deTranslations: TranslationTable = {
   settingsVerifyNotNeeded: "Du bist schon verifiziert ✨",
   settingsVerifyUnavailable: "Verifizierung ist vorübergehend nicht verfügbar. Versuch es später erneut.",
   helpBody:
-    "*Brauchst du Hilfe?* 💬\n\n" +
+    "*Brauchst du Hilfe?*\n\n" +
     "Wir machen bewusst keine Chats zwischen Nutzern. " +
     "Problem mit Match, Date oder Bot? Schreib dem Support:\n\n" +
     "💬 [@gennetysupport](https://t.me/gennetysupport)",
@@ -2654,7 +2654,7 @@ const deTranslations: TranslationTable = {
     "Wir machen keine Kompromisse bei Qualität. Diese Woche gibt es kein High-Synergy-Match für dich.\n\n" +
     "Deine Priorität für den nächsten Drop wurde erhöht.",
   noMatchThisWeekTier1:
-    "Hey 💫\n\n" +
+    "Hey\n\n" +
     "Diese Woche kein Match. Nicht, weil mit dir etwas nicht stimmt — die Qualitätslatte bleibt einfach, wo sie ist, " +
     "und ich warte lieber, als dir jemanden zu geben, der deine Zeit nicht wert ist.\n\n" +
     "In der Zwischenzeit:\n" +
@@ -2662,7 +2662,7 @@ const deTranslations: TranslationTable = {
     "• jede Woche Wartezeit erhöht deine Priorität im nächsten Drop.\n\n" +
     "Bis Donnerstag, 18:00 ✨",
   noMatchThisWeekTier2:
-    "Hey 🌿\n\n" +
+    "Hey\n\n" +
     "Zweite Woche in Folge — immer noch niemand, den ich dir wirklich gern vorstellen würde. " +
     "Danke, dass du dranbleibst; das zählt.\n\n" +
     "Was gerade passiert:\n" +
@@ -2670,7 +2670,7 @@ const deTranslations: TranslationTable = {
     "• deine Priorität für den nächsten Drop ist bereits erhöht.\n\n" +
     "Donnerstag, 18:00 — ich bin dran 🤍",
   noMatchThisWeekTier3:
-    "Hey ✨\n\n" +
+    "Hey\n\n" +
     "Wieder ein ehrliches Update — immer noch niemand, der deine Zeit wirklich wert wäre. " +
     "Mich nervt das noch mehr als dich, und ich tue nicht so, als wäre es anders.\n\n" +
     "Auf meiner Seite:\n" +
@@ -2715,7 +2715,7 @@ const deTranslations: TranslationTable = {
   matchScheduleNoOverlapYet:
     "Ihr habt beide Zeiten markiert, aber noch passt nichts zusammen. Füg ein paar Optionen hinzu — sobald ein Slot passt, ist es fix:",
   venueConciergeIntro:
-    "Zeit steht 🗓️ Eine Sache, bevor ich den Ort finde.\n\n" +
+    "Zeit steht. Eine Sache, bevor ich den Ort finde.\n\n" +
     "📍 *Markiere, von wo du losfährst* zum Date - dein Zuhause, eine Metro-Station, die Wohnung einer Freundin, wo immer du tatsächlich startest.\n\n" +
     "Anhand dieses Punkts finde ich einen angenehmen Treffpunkt, der für *euch beide* gut erreichbar ist, nah an deinem Start. Tippe unten, um ihn auf der Karte zu setzen:",
   venueConciergeBtnLocation: "📍 Standort senden",
@@ -2770,20 +2770,20 @@ const deTranslations: TranslationTable = {
     "Sichere ihn — ich aktualisiere eure Karten.",
   venuePayBtn: "⭐ Sichern — {stars}",
   venueWishText:
-    "{name} hat einen Ort gefunden, der ihr sehr gefällt ✨\n📍 {venue}\n" +
+    "{name} hat einen Ort gefunden, der ihr sehr gefällt.\n📍 {venue}\n" +
     "Sie würde sich freuen, wenn du ihn sicherst.",
-  venueWishPayBtn: "💫 Sichern — {stars} ⭐",
+  venueWishPayBtn: "Sichern — {stars} ⭐",
   venueWishDeclineBtn: "Nicht diesmal",
   venuePayDeclineAck:
     "Verstanden — der Ort bleibt vorerst wie geplant. Falls er sich ändert, bekommst du eine neue Karte.",
   venuePaySelfDm:
-    "Ihr habt euch auf einen neuen Ort geeinigt.\n📍 {venue}\nSichere ihn — ich aktualisiere eure Karten ✨",
+    "Ihr habt euch auf einen neuen Ort geeinigt.\n📍 {venue}\nSichere ihn — ich aktualisiere eure Karten.",
   venuePaySelfBtn: "⭐ Sichern — {stars}",
   venueSettledCard: "Erledigt — euer Date hat ein neues Zuhause 📍 {venue}",
-  venueSettledPaidByM: "{name} hat die Ortsänderung übernommen ❤️ Euer Date findet jetzt statt in 📍 {venue}",
-  venueSettledPaidByF: "{name} hat die Ortsänderung übernommen ❤️ Euer Date findet jetzt statt in 📍 {venue}",
-  venueExpressPartnerFromF: "{name} hat einen gemütlicheren Ort für euer Date gewählt ✨ Neuer Ort: 📍 {venue}",
-  venueExpressPartnerFromM: "{name} hat einen neuen Ort für euer Date gewählt ✨ Neuer Ort: 📍 {venue}",
+  venueSettledPaidByM: "{name} hat die Ortsänderung übernommen ❤️ Euer Date findet jetzt statt in {venue}",
+  venueSettledPaidByF: "{name} hat die Ortsänderung übernommen ❤️ Euer Date findet jetzt statt in {venue}",
+  venueExpressPartnerFromF: "{name} hat einen gemütlicheren Ort für euer Date gewählt. Neuer Ort: 📍 {venue}",
+  venueExpressPartnerFromM: "{name} hat einen neuen Ort für euer Date gewählt. Neuer Ort: 📍 {venue}",
   venueLapsedDm: "Die Ortsänderung wurde nicht gesichert — ihr trefft euch wie geplant in {venue}.",
   venueKeepOriginalDm: "Dein Match bleibt beim ursprünglichen Ort — ihr trefft euch wie geplant in {venue}.",
   venueInvoiceTitle: "Ortsänderung",
@@ -2870,11 +2870,11 @@ const deTranslations: TranslationTable = {
   statusDateDaysHours: "💫 Date in {d}T {h}Std",
   statusDateHoursMinutes: "💫 Date in {h}Std {m}Min",
   statusDateMinutes: "💫 Date in {m} Min",
-  statusDateSoon: "💫 Date ist heute ✨",
+  statusDateSoon: "💫 Date ist heute",
   menuMyDateDays: "💫 Mein Date · in {d}T {h}Std",
   menuMyDateHours: "💫 Mein Date · in {h}Std {m}Min",
   menuMyDateMinutes: "💫 Mein Date · in {m} Min",
-  menuMyDateSoon: "💫 Mein Date · heute ✨",
+  menuMyDateSoon: "💫 Mein Date · heute",
   menuMyDatePlanning: "⏳ Date wird geplant",
   dateHubNoActive: "Du hast gerade kein geplantes Date.",
   dateHubHeaderScheduled: "💫 Dein Date mit {name}",
@@ -3010,7 +3010,7 @@ const plTranslations: TranslationTable = {
     "Nie widzę jeszcze próby weryfikacji. Najpierw kliknij 🟢 Zweryfikuj teraz, " +
     "przejdź flow, potem wróć i kliknij ten przycisk.",
   verifyCheckPersonaFailed:
-    "❌ Weryfikacja nie przeszła po stronie Persona. Kliknij 🟢 Zweryfikuj teraz, " +
+    "Weryfikacja nie przeszła po stronie Persona. Kliknij 🟢 Zweryfikuj teraz, " +
     "aby spróbować ponownie.",
   verifyCheckAlreadyDone:
     "Już przetworzone - powinna pojawić się wiadomość z wynikiem powyżej. " +
@@ -3023,7 +3023,7 @@ const plTranslations: TranslationTable = {
   verifyOutcomeRejected:
     "⚠️ Zdjęcia w profilu nie wyglądają na zgodne z selfie z weryfikacji. Zmień je na wyraźne zdjęcia siebie, potem otwórz Ustawienia → Zweryfikuj konto i spróbuj ponownie.",
   verifyAutoPollStarted:
-    "✨ Jasne. Złap kawę ☕ - porównuję selfie z Twoimi zdjęciami profilowymi. " +
+    "Jasne. Złap kawę ☕ - porównuję selfie z Twoimi zdjęciami profilowymi. " +
     "To potrwa minutę albo dwie.",
   verifyAutoPollTimeout:
     "Hm, trwa to dłużej niż zwykle. Kliknij przycisk poniżej, gdy mam sprawdzić ponownie.",
@@ -3066,15 +3066,15 @@ const plTranslations: TranslationTable = {
   videoProcessingUnavailable:
     "Nie udało się teraz sprawdzić wideo. Poprzednie wideo nie zostało zmienione. Spróbuj ponownie za chwilę.",
   ticketRewardPhoto:
-    "🎟️ Świetnie — właśnie zdobyłeś *darmowy bilet na randkę*!\n\nJak to działa: każda randka kosztuje 1 bilet, a bilety zwykle są płatne. Za dodane zdjęcia masz jeden gratis. Saldo: *{balance}* 🎟️",
+    "🎟️ Świetnie — właśnie zdobyłeś *darmowy bilet na randkę*!\n\nJak to działa: każda randka kosztuje 1 bilet, a bilety zwykle są płatne. Za dodane zdjęcia masz jeden gratis. Saldo: *{balance}*",
   ticketRewardVideo:
-    "🎟️ Wideo w profilu — super! Oto kolejny *darmowy bilet na randkę*.\n\nKażda randka kosztuje 1 bilet (zwykle płatny). Saldo: *{balance}* 🎟️",
+    "🎟️ Wideo w profilu — super! Oto kolejny *darmowy bilet na randkę*.\n\nKażda randka kosztuje 1 bilet (zwykle płatny). Saldo: *{balance}*",
   ticketRewardStudent:
-    "🎓 E-mail uczelniany potwierdzony — bonus studencki: *2 darmowe bilety na randki* są już w Twoim portfelu.\n\nKażda randka kosztuje 1 bilet, więc pierwsze dwie randki są na nasz koszt. Saldo: *{balance}* 🎟️",
+    "🎓 E-mail uczelniany potwierdzony — bonus studencki: *2 darmowe bilety na randki* są już w Twoim portfelu.\n\nKażda randka kosztuje 1 bilet, więc pierwsze dwie randki są na nasz koszt. Saldo: *{balance}*",
   welcomeGiftTicket:
-    "🎟 Twój pierwszy bilet — ode mnie osobiście.\n\nKażda randka kosztuje tu 1 bilet, zwykle ~$6.99\nTen jest za darmo — niech pierwszy krok będzie o człowieku, a nie o cenie\n\nBilet jest już w Twoim portfelu ❤️",
+    "Twój pierwszy bilet — ode mnie osobiście.\n\nKażda randka kosztuje tu 1 bilet, zwykle ~$6.99\nTen jest za darmo — niech pierwszy krok będzie o człowieku, a nie o cenie\n\nBilet jest już w Twoim portfelu ❤️",
   ticketStorePurchased:
-    "✨ Płatność otrzymana — dodano *{count}* 🎟️!\n\nSaldo: *{balance}* 🎟️",
+    "✨ Płatność otrzymana — dodano *{count}* bilet(ów)!\n\nSaldo: *{balance}*",
   ticketStoreCheckoutError: "Nie udało się potwierdzić płatności. Spróbuj ponownie.",
   ticketStoreInvoiceTitle: "Bilety Gennety",
   ticketStoreInvoiceDesc:
@@ -3139,7 +3139,7 @@ const plTranslations: TranslationTable = {
     "Czym się zajmujesz? (praca / studia / branża, maks. 100 znaków)\n👀 Widoczne dla Twojej pary.",
   editMajorTooLong: "Za długie - zmieść się w 100 znakach.",
   editMajorSaved: "Zapisano ✨",
-  editPrefsTitle: "💘 *Kogo szukam*\n\n👀 Wpływa na to, kto Ci się trafi. Co zmienić?",
+  editPrefsTitle: "💘 *Kogo szukam*\n\nWpływa na to, kto Ci się trafi. Co zmienić?",
   editPrefsAgeBtn: "🎂 Wiek partnera",
   editPrefsBack: "⬅️ Wróć do edycji",
   editAgeRangePrompt: "W jakim przedziale wiekowym mamy szukać dla Ciebie partnera? (np. 20-28)\nMin: {min}, Max: {max}.",
@@ -3166,7 +3166,7 @@ const plTranslations: TranslationTable = {
   myProfileAddVideoHint:
     "🎬 Wskazówka: dodaj krótkie wideo do profilu z menu — dzięki temu profil bardziej się wyróżnia.",
   myProfileAddVideoHintReward:
-    "🎬 Wskazówka: dodaj krótkie wideo do profilu z menu i zdobądź darmowy bilet 🎁.",
+    "Wskazówka: dodaj krótkie wideo do profilu z menu i zdobądź darmowy bilet 🎁.",
   pauseConfirmed: "Matching wstrzymany ⏸\nNie będzie nowych dopasowań, dopóki go nie wznowisz.",
   resumeConfirmed: "Matching znowu działa ▶️\nJuż działam.",
   settingsTitle: "⚙️ Ustawienia",
@@ -3182,7 +3182,7 @@ const plTranslations: TranslationTable = {
   settingsVerifyNotNeeded: "Masz już weryfikację ✨",
   settingsVerifyUnavailable: "Weryfikacja jest tymczasowo niedostępna. Spróbuj później.",
   helpBody:
-    "*Potrzebujesz pomocy?* 💬\n\n" +
+    "*Potrzebujesz pomocy?*\n\n" +
     "Nie tworzymy czatów między użytkownikami - tak działa nasz model. " +
     "Problem z dopasowaniem, randką albo botem? Napisz do supportu:\n\n" +
     "💬 [@gennetysupport](https://t.me/gennetysupport)",
@@ -3298,7 +3298,7 @@ const plTranslations: TranslationTable = {
     "Nie idziemy na kompromis w jakości. W tym tygodniu nie ma dla Ciebie wysokosynergicznego dopasowania.\n\n" +
     "Twoja priorytetowość na kolejny drop została podniesiona.",
   noMatchThisWeekTier1:
-    "Hej 💫\n\n" +
+    "Hej\n\n" +
     "W tym tygodniu bez matcha. Nie dlatego, że coś z Tobą nie tak — po prostu poprzeczka jakości stoi tam, gdzie stoi, " +
     "i wolę poczekać, niż podsunąć Ci kogoś niewartego Twojego czasu.\n\n" +
     "Tymczasem:\n" +
@@ -3306,7 +3306,7 @@ const plTranslations: TranslationTable = {
     "• każdy tydzień czekania podnosi Twój priorytet w kolejnym dropie.\n\n" +
     "Do czwartku, 18:00 ✨",
   noMatchThisWeekTier2:
-    "Hej 🌿\n\n" +
+    "Hej\n\n" +
     "Drugi tydzień z rzędu — wciąż nie ma nikogo, kogo naprawdę chciałbym Ci przedstawić. " +
     "Dzięki, że jesteś; to ma znaczenie.\n\n" +
     "Co się dzieje:\n" +
@@ -3314,7 +3314,7 @@ const plTranslations: TranslationTable = {
     "• Twój priorytet w kolejnym dropie jest już podniesiony.\n\n" +
     "Czwartek, 18:00 — działam 🤍",
   noMatchThisWeekTier3:
-    "Hej ✨\n\n" +
+    "Hej\n\n" +
     "Znowu szczerze: wciąż nie ma osoby, która naprawdę byłaby warta Twojego czasu. " +
     "Mnie to frustruje jeszcze bardziej niż Ciebie i nie będę udawać inaczej.\n\n" +
     "Po mojej stronie:\n" +
@@ -3359,7 +3359,7 @@ const plTranslations: TranslationTable = {
   matchScheduleNoOverlapYet:
     "Oboje zaznaczyliście godziny, ale jeszcze nic się nie pokrywa. Dodaj kilka opcji — gdy tylko jakiś slot się zgodzi, klepnięte:",
   venueConciergeIntro:
-    "Termin ustalony 🗓️ Jedna rzecz, zanim znajdę miejsce.\n\n" +
+    "Termin ustalony. Jedna rzecz, zanim znajdę miejsce.\n\n" +
     "📍 *Zaznacz, skąd będziesz wyruszać* na randkę - twój dom, stacja metra, mieszkanie znajomego, skądkolwiek faktycznie ruszasz.\n\n" +
     "Na podstawie tego punktu znajdę wygodne miejsce spotkania, łatwo dostępne dla *was obojga*, blisko twojego startu. Kliknij poniżej, aby zaznaczyć je na mapie:",
   venueConciergeBtnLocation: "📍 Wyślij lokalizację",
@@ -3414,20 +3414,20 @@ const plTranslations: TranslationTable = {
     "Zatwierdź je — zaktualizuję wasze karty.",
   venuePayBtn: "⭐ Zatwierdź — {stars}",
   venueWishText:
-    "{name} znalazła miejsce, które bardzo jej się podoba ✨\n📍 {venue}\n" +
+    "{name} znalazła miejsce, które bardzo jej się podoba.\n📍 {venue}\n" +
     "Będzie jej miło, jeśli to Ty je zatwierdzisz.",
-  venueWishPayBtn: "💫 Zatwierdź — {stars} ⭐",
+  venueWishPayBtn: "Zatwierdź — {stars} ⭐",
   venueWishDeclineBtn: "Nie tym razem",
   venuePayDeclineAck:
     "Rozumiem — miejsce na razie zostaje bez zmian. Jeśli się zmieni, dostaniesz nową kartę.",
   venuePaySelfDm:
-    "Zgodziliście się na nowe miejsce.\n📍 {venue}\nZatwierdź je — zaktualizuję wasze karty ✨",
+    "Zgodziliście się na nowe miejsce.\n📍 {venue}\nZatwierdź je — zaktualizuję wasze karty.",
   venuePaySelfBtn: "⭐ Zatwierdź — {stars}",
   venueSettledCard: "Gotowe — wasza randka ma nowe miejsce 📍 {venue}",
-  venueSettledPaidByM: "{name} opłacił zmianę miejsca ❤️ Wasza randka odbędzie się w 📍 {venue}",
-  venueSettledPaidByF: "{name} opłaciła zmianę miejsca ❤️ Wasza randka odbędzie się w 📍 {venue}",
-  venueExpressPartnerFromF: "{name} wybrała dla was przytulniejsze miejsce ✨ Nowe miejsce: 📍 {venue}",
-  venueExpressPartnerFromM: "{name} wybrał dla was nowe miejsce ✨ Nowe miejsce: 📍 {venue}",
+  venueSettledPaidByM: "{name} opłacił zmianę miejsca ❤️ Wasza randka odbędzie się w {venue}",
+  venueSettledPaidByF: "{name} opłaciła zmianę miejsca ❤️ Wasza randka odbędzie się w {venue}",
+  venueExpressPartnerFromF: "{name} wybrała dla was przytulniejsze miejsce. Nowe miejsce: 📍 {venue}",
+  venueExpressPartnerFromM: "{name} wybrał dla was nowe miejsce. Nowe miejsce: 📍 {venue}",
   venueLapsedDm: "Zmiana miejsca nie została zatwierdzona — spotykacie się w {venue}, jak planowano.",
   venueKeepOriginalDm: "Twój match zostaje przy pierwotnym miejscu — spotykacie się w {venue}, jak planowano.",
   venueInvoiceTitle: "Zmiana miejsca randki",
@@ -3514,11 +3514,11 @@ const plTranslations: TranslationTable = {
   statusDateDaysHours: "💫 Randka za {d}d {h}h",
   statusDateHoursMinutes: "💫 Randka za {h}h {m}min",
   statusDateMinutes: "💫 Randka za {m} min",
-  statusDateSoon: "💫 Randka dzisiaj ✨",
+  statusDateSoon: "💫 Randka dzisiaj",
   menuMyDateDays: "💫 Moja randka · za {d}d {h}h",
   menuMyDateHours: "💫 Moja randka · za {h}h {m}min",
   menuMyDateMinutes: "💫 Moja randka · za {m} min",
-  menuMyDateSoon: "💫 Moja randka · dzisiaj ✨",
+  menuMyDateSoon: "💫 Moja randka · dzisiaj",
   menuMyDatePlanning: "⏳ Randka jest planowana",
   dateHubNoActive: "Nie masz teraz zaplanowanej randki.",
   dateHubHeaderScheduled: "💫 Twoja randka z {name}",

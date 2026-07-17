@@ -126,6 +126,22 @@ Emoji are an **accent, not punctuation** — not in every message. Default is
 - **Avoid:** ✅, 🔥, and emoji stacks.
 - Max **one** emoji per message.
 
+**Carve-outs — the max-one rule governs prose, not chrome or navigation:**
+
+- **Scannable lists.** Where a glyph heads each bullet of a checklist the user
+  *scans* rather than reads: `safetyNoteFemale`, the T-1.5h pre-date safety
+  brief. Its seven glyphs are wayfinding through a 999-char brief a woman reads
+  before meeting a stranger; flattening them to one emoji trades a safety
+  affordance for a tone rule. Deliberate exemption — do not "fix" it.
+- **Transition pairs.** One glyph → another rendering a state change
+  (`freezeWelcomeBack`: ❄️ → ☀️). Reads as a single unit, not a stack.
+- **Button icons.** Inline-keyboard labels (👤 My Profile, ⚙️ Settings, ⏸ Pause,
+  🟢/🔴 on the verify fork). PRODUCT_SPEC §2.1 documents these as the deliberate
+  fallback for `icon_custom_emoji_id`, which Bot API does not permit on button
+  labels; 🟢/🔴 additionally mirror the native `success`/`danger` styles.
+
+Everything outside those three is prose, and prose defaults to **zero**.
+
 ## 9. Examples (RU, «ты») — before → after
 
 Confirmation:
