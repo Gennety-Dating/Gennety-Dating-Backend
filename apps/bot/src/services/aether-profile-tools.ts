@@ -260,6 +260,9 @@ export async function attachAetherProfilePhoto(
     if (gate.kind === "blocked") {
       return { ok: false, detail: "Photo does not match verification selfie" };
     }
+    if (gate.kind === "unavailable") {
+      return { ok: false, detail: "Identity verification is temporarily unavailable" };
+    }
     gateScore = gate.score ?? 0;
   }
 

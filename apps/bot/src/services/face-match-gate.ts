@@ -2,7 +2,12 @@ import type { Api } from "grammy";
 import { prisma } from "@gennety/db";
 import { env } from "../config.js";
 import { compareFaces } from "./face-match.js";
-import { downloadSelfie, downloadTelegramFile } from "./storage.js";
+import { downloadTelegramFile } from "./storage.js";
+import {
+  resolveVerifiedIdentityReference,
+  type VerifiedIdentityReferenceResult,
+  type VerifiedIdentityUser,
+} from "./verified-identity-reference.js";
 
 /**
  * Photo-upload gate: enforces that any photo a verified user adds to their
@@ -16,12 +21,10 @@ import { downloadSelfie, downloadTelegramFile } from "./storage.js";
  *
  * Failure-mode policy:
  *   - User not verified → allow (no reference selfie to compare against).
- *   - Selfie expired (90-day retention scrubbed it) → allow + log; we'll
- *     re-check the whole profile during the next manual admin rerun.
- *   - Rekognition / Supabase outage → ALLOW (fail-open). Reason: a
- *     transient outage shouldn't block legitimate uploads, and the
- *     stored photo is still available for re-validation when the admin
- *     reruns. We log loudly so a sustained outage is visible in Grafana.
+ *   - Selfie expired (90-day retention scrubbed it) → re-fetch it from
+ *     Persona for this comparison without retaining a new copy.
+ *   - Rekognition / Supabase / Persona outage → fail closed and ask the
+ *     caller to retry; never publish a verified user's unchecked photo.
  *   - Photo doesn't match → BLOCK. The whole point of the gate.
  *   - Photo has no detectable face → BLOCK. Already gated by
  *     `validate-face.ts` upstream, but defensive: we treat
@@ -30,7 +33,8 @@ import { downloadSelfie, downloadTelegramFile } from "./storage.js";
 
 export type GateOutcome =
   | { kind: "allowed"; score: number | null }
-  | { kind: "blocked"; reason: "mismatch"; score: number };
+  | { kind: "blocked"; reason: "mismatch"; score: number }
+  | { kind: "unavailable" };
 
 export interface GateOptions {
   /** Override the verify threshold (tests). */
@@ -40,8 +44,14 @@ export interface GateOptions {
 }
 
 export interface GateDeps {
-  findUser: (userId: string) => Promise<{ verifiedSelfiePath: string | null } | null>;
-  downloadSelfie: typeof downloadSelfie;
+  findUser: (userId: string) => Promise<{
+    verificationStatus: string;
+    verifiedSelfiePath: string | null;
+    personaInquiryId: string | null;
+  } | null>;
+  resolveIdentityReference: (
+    user: VerifiedIdentityUser,
+  ) => Promise<VerifiedIdentityReferenceResult>;
   compareFaces: typeof compareFaces;
 }
 
@@ -53,10 +63,8 @@ const LOG_PREFIX = "[face-match-gate]";
  * score alongside the photo), or `{ kind: 'blocked', reason: 'mismatch' }`
  * to surface a 422 to the user.
  *
- * `score` is null on the allow path when the gate didn't actually run —
- * either because the user has no verified selfie yet, or because of an
- * infrastructure failure we chose to fail-open through. Callers should
- * persist `null` (or skip the score append) in that case.
+ * `score` is null on the allow path only when the user has not completed
+ * verification yet. Infrastructure failures return `unavailable`.
  */
 export async function gateProfilePhoto(
   userId: string,
@@ -67,38 +75,38 @@ export async function gateProfilePhoto(
     findUser: async (id) =>
       prisma.user.findUnique({
         where: { id },
-        select: { verifiedSelfiePath: true },
+        select: {
+          verificationStatus: true,
+          verifiedSelfiePath: true,
+          personaInquiryId: true,
+        },
       }),
-    downloadSelfie,
+    resolveIdentityReference: resolveVerifiedIdentityReference,
     compareFaces,
   };
   const thresholdVerify = options.thresholdVerify ?? env.FACE_MATCH_THRESHOLD_VERIFY;
 
   const user = await deps.findUser(userId);
-  if (!user || !user.verifiedSelfiePath) {
-    // User isn't verified yet — no reference selfie. Photo upload is
-    // governed by the existing single-face-vision gate only. The score
-    // for this photo will be filled in later when the verification
-    // pipeline runs (it scans the full photo array).
+  if (!user) return { kind: "unavailable" };
+
+  const reference = await deps.resolveIdentityReference(user);
+  if (reference.kind === "not_required") {
     return { kind: "allowed", score: null };
   }
-
-  const selfieBuffer = await deps.downloadSelfie(user.verifiedSelfiePath);
-  if (!selfieBuffer) {
-    console.warn(`${LOG_PREFIX} verified selfie unavailable, failing open`, {
+  if (reference.kind === "unavailable") {
+    console.warn(`${LOG_PREFIX} verified selfie unavailable, failing closed`, {
       userId,
-      path: user.verifiedSelfiePath,
     });
-    return { kind: "allowed", score: null };
+    return { kind: "unavailable" };
   }
 
-  const result = await deps.compareFaces(selfieBuffer, photoBuffer);
+  const result = await deps.compareFaces(reference.buffer, photoBuffer);
   if (!result.ok) {
-    console.warn(`${LOG_PREFIX} compareFaces error, failing open`, {
+    console.warn(`${LOG_PREFIX} compareFaces error, failing closed`, {
       userId,
       error: result.error,
     });
-    return { kind: "allowed", score: null };
+    return { kind: "unavailable" };
   }
 
   // `faceFound=false` already implies similarity=0 in face-match.ts; we
@@ -117,8 +125,7 @@ export async function gateProfilePhoto(
  * Download a Telegram photo by `file_id` and return its bytes. Used by the
  * bot's edit-photos flow to feed the face-match gate, since photos there
  * are stored as `file_id` strings (not Supabase paths). Returns `null` on
- * any failure — the bot caller treats that as "skip the gate" (fail-open),
- * matching the storage-side gate's behavior.
+ * any failure. Callers must reject the upload when bytes are unavailable.
  *
  * Thin wrapper over `storage.downloadTelegramFile` so the actual fetch
  * lives in exactly one place — historically this had its own duplicate

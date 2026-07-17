@@ -603,6 +603,10 @@ meRouter.post(
         });
         return;
       }
+      if (gate.kind === "unavailable") {
+        res.status(503).json({ error: "Identity verification unavailable, please retry" });
+        return;
+      }
       gateScore = gate.score;
     }
 

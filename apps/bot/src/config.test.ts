@@ -9,6 +9,7 @@ function productionReady(
 ): IdentityTrustConfiguration {
   return {
     OTP_LOG_TO_CONSOLE: false,
+    DEV_OTP_BYPASS_TELEGRAM_IDS: new Set(),
     MANDATORY_VERIFICATION_ENABLED: true,
     ENABLE_PERSONA_VERIFICATION: true,
     PERSONA_TEMPLATE_ID: "itmpl_live",
@@ -36,6 +37,30 @@ describe("identity trust configuration", () => {
     );
     expect(errors).toContain("MANDATORY_VERIFICATION_ENABLED must be true");
     expect(errors).toContain("PERSONA_API_KEY must be a production key, not persona_sand*");
+  });
+
+  it("rejects console OTP and dev bypass accounts outside development", () => {
+    const errors = identityTrustConfigurationErrors(
+      productionReady({
+        OTP_LOG_TO_CONSOLE: true,
+        DEV_OTP_BYPASS_TELEGRAM_IDS: new Set([123n]),
+      }),
+      "production",
+    );
+
+    expect(errors).toContain("OTP_LOG_TO_CONSOLE must be false outside development");
+    expect(errors).toContain(
+      "DEV_OTP_BYPASS_TELEGRAM_IDS must be empty outside development",
+    );
+  });
+
+  it("does not treat a debug OTP flag as local when NODE_ENV is missing", () => {
+    const errors = identityTrustConfigurationErrors(
+      productionReady({ OTP_LOG_TO_CONSOLE: true }),
+      "",
+    );
+
+    expect(errors).toContain("OTP_LOG_TO_CONSOLE must be false outside development");
   });
 
   it("allows explicit local and test configurations", () => {

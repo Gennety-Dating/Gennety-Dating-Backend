@@ -534,14 +534,20 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
       return;
     }
     const photoBytes = await fetchTelegramFileBuffer(ctx.api, fileId);
-    if (photoBytes) {
-      const gate = await gateProfilePhoto(userRow.id, photoBytes);
-      if (gate.kind === "blocked") {
-        await ctx.reply(t(lang, "photoMatchMismatch"));
-        return;
-      }
-      gateScore = gate.score ?? 0;
+    if (!photoBytes) {
+      await ctx.reply(t(lang, "photoVisionError"));
+      return;
     }
+    const gate = await gateProfilePhoto(userRow.id, photoBytes);
+    if (gate.kind === "blocked") {
+      await ctx.reply(t(lang, "photoMatchMismatch"));
+      return;
+    }
+    if (gate.kind === "unavailable") {
+      await ctx.reply(t(lang, "photoVisionError"));
+      return;
+    }
+    gateScore = gate.score ?? 0;
     // Legacy fallback only runs when unified media validation is explicitly disabled.
   }
 

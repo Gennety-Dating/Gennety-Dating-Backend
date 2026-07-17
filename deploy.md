@@ -792,14 +792,16 @@ Required/high-impact env keys:
 
 Production safety checks:
 
-- `DEV_OTP_BYPASS_TELEGRAM_IDS` must be empty in production.
+- `DEV_OTP_BYPASS_TELEGRAM_IDS` must be empty in production; startup refuses
+  any non-empty value outside the explicit development runtime.
 - Keep `ONBOARDING_FACT_COLLECTOR_ENABLED=false` during the first production
   deploy. Before enabling it: back up PostgreSQL, run
   `pnpm --filter @gennety/db db:push`, run `pnpm onboarding:backfill` and
   inspect aggregate counts, then run `pnpm onboarding:backfill:apply`.
   Enable Development first and complete the two-account E2E. Production
   rollback is the env flag; the additive `onboarding_progress` table may stay.
-- `OTP_LOG_TO_CONSOLE` must be `false` or unset in production.
+- `OTP_LOG_TO_CONSOLE` must be `false` or unset in production. It only relaxes
+  local identity checks when `NODE_ENV=development`; otherwise startup fails.
 - `JWT_SECRET` must contain at least 32 cryptographically random bytes (the
   template uses 64 hex characters), otherwise the public API refuses to start.
   Access tokens are accepted only as HS256 tokens issued by

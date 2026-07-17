@@ -217,7 +217,8 @@ model User {
   /// any future photo edits). Auto-deleted by the retention worker 90 days
   /// after `verifiedAt` — the storage path is null thereafter even though
   /// the user remains `verified`. Re-verifications (or photo edits past the
-  /// 90-day window) re-fetch from Persona via `personaInquiryId`.
+  /// 90-day window) re-fetch ephemerally from Persona via `personaInquiryId`
+  /// and fail closed if no authoritative reference is available.
   verifiedSelfiePath  String?        @map("verified_selfie_path")
   /// Minimum face-match similarity (0..1) across all profile photos, taken
   /// against `verifiedSelfiePath`. Below `env.FACE_MATCH_THRESHOLD_VERIFY`

@@ -3,7 +3,6 @@ import { prisma } from "@gennety/db";
 import { FACE_SIMILARITY_THRESHOLD } from "@gennety/shared";
 import {
   downloadProfilePhoto,
-  downloadSelfie,
   downloadTelegramFile,
 } from "../storage.js";
 import {
@@ -18,6 +17,7 @@ import type {
   ValidatedPhoto,
 } from "./types.js";
 import { logMediaValidationRejection } from "./rejection-log.js";
+import { resolveVerifiedIdentityReference } from "../verified-identity-reference.js";
 
 export interface ValidateUserProfilePhotoInput {
   userId: string;
@@ -34,7 +34,9 @@ export async function validateUserProfilePhoto(
   const user = await prisma.user.findUnique({
     where: { id: input.userId },
     select: {
+      verificationStatus: true,
       verifiedSelfiePath: true,
+      personaInquiryId: true,
       profile: {
         select: {
           photos: true,
@@ -53,11 +55,10 @@ export async function validateUserProfilePhoto(
   // and stranded honest users with zero accepted photos. Persona verification
   // is the real identity gate; an unverified user already carries the Elo
   // penalty and is re-checked against the selfie on every later photo edit.
-  let identityReference: Buffer | null = null;
-  if (user.verifiedSelfiePath) {
-    identityReference = await downloadSelfie(user.verifiedSelfiePath);
-    if (!identityReference) return unavailable();
-  }
+  const resolvedReference = await resolveVerifiedIdentityReference(user);
+  if (resolvedReference.kind === "unavailable") return unavailable();
+  const identityReference =
+    resolvedReference.kind === "available" ? resolvedReference.buffer : null;
 
   const pendingCandidates = parsePendingPhotoCandidates(
     user.profile?.pendingPhotoCandidates ?? [],

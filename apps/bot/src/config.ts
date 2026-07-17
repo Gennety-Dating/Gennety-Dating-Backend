@@ -411,6 +411,7 @@ export const env = {
 
 export interface IdentityTrustConfiguration {
   OTP_LOG_TO_CONSOLE: boolean;
+  DEV_OTP_BYPASS_TELEGRAM_IDS: ReadonlySet<bigint>;
   MANDATORY_VERIFICATION_ENABLED: boolean;
   ENABLE_PERSONA_VERIFICATION: boolean;
   PERSONA_TEMPLATE_ID: string;
@@ -423,18 +424,25 @@ export interface IdentityTrustConfiguration {
 
 /**
  * Fail closed before a production-like bot starts accepting users or running
- * the weekly matcher. Vitest sets NODE_ENV=test; local development is
- * explicitly identified by OTP_LOG_TO_CONSOLE=true. Every other runtime is
- * treated as production-like so forgetting NODE_ENV cannot silently disable
- * the identity trust boundary.
+ * the weekly matcher. Vitest sets NODE_ENV=test; the supported local launcher
+ * explicitly sets NODE_ENV=development and OTP_LOG_TO_CONSOLE=true. Every
+ * other runtime is treated as production-like so a debug env flag or missing
+ * NODE_ENV cannot silently disable the identity trust boundary.
  */
 export function identityTrustConfigurationErrors(
   config: IdentityTrustConfiguration = env,
   runtime = process.env.NODE_ENV,
 ): string[] {
-  if (runtime === "test" || config.OTP_LOG_TO_CONSOLE) return [];
+  if (runtime === "test") return [];
+  if (runtime === "development" && config.OTP_LOG_TO_CONSOLE) return [];
 
   const errors: string[] = [];
+  if (config.OTP_LOG_TO_CONSOLE) {
+    errors.push("OTP_LOG_TO_CONSOLE must be false outside development");
+  }
+  if (config.DEV_OTP_BYPASS_TELEGRAM_IDS.size > 0) {
+    errors.push("DEV_OTP_BYPASS_TELEGRAM_IDS must be empty outside development");
+  }
   if (!config.MANDATORY_VERIFICATION_ENABLED) {
     errors.push("MANDATORY_VERIFICATION_ENABLED must be true");
   }

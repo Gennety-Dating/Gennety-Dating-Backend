@@ -20,9 +20,9 @@ import { deleteStorageObject } from "./storage.js";
  *
  * `verificationStatus` and `verifiedAt` are intentionally NOT cleared —
  * the user remains verified, just without the stored reference image.
- * If they later upload a new photo and the gate finds no selfie, it
- * fails open and the photo is accepted; admin can manually rerun (which
- * re-fetches from Persona via `personaInquiryId`) if suspicion arises.
+ * If they later upload a new photo, the upload gate re-fetches the reference
+ * from Persona for that one comparison via `personaInquiryId`. It fails closed
+ * if Persona cannot provide the reference and never persists the fresh copy.
  *
  * Called once daily by the cron in `index.ts`. Idempotent: runs that find
  * nothing to scrub are a cheap COUNT — fine to over-tick.
