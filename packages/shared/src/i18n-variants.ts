@@ -8,7 +8,10 @@
  *
  * Rules for adding a variant (see VOICE.md):
  * - identical `{placeholder}` set and Markdown markers as the canonical string;
- * - same register: short, warm, understatement over hype; ✨-policy applies;
+ * - same register: short, warm, understatement over hype;
+ * - vary the EMOJI too, not just the words. ✨ on every alternate makes it
+ *   guaranteed rather than an accent, which is the punctuation failure §8 bans
+ *   — so it rides the canonical string only, i.e. roughly one send in three;
  * - 2–3 alternates per key per language, authored natively — never translated.
  */
 
@@ -28,90 +31,90 @@ export function setVariantRng(fn: VariantRng | null): void {
 const VARIANTS: Partial<Record<TranslationKey, Record<Language, string[]>>> = {
   venueWaitingPeer: {
     en: [
-      "Yours is in ✨ Now we wait for them…",
-      "Noted ✨ Their move now…",
+      "Yours is in. Now we wait for them…",
+      "Noted. Their move now…",
     ],
     ru: [
-      "Записал ✨ Теперь ждём вторую сторону…",
-      "Есть ✨ Ход за твоим мэтчем…",
+      "Записал. Теперь ждём вторую сторону…",
+      "Есть. Ход за твоим мэтчем…",
     ],
     uk: [
-      "Записав ✨ Тепер чекаємо на іншу сторону…",
-      "Є ✨ Хід за твоїм метчем…",
+      "Записав. Тепер чекаємо на іншу сторону…",
+      "Є. Хід за твоїм метчем…",
     ],
     de: [
-      "Notiert ✨ Jetzt warten wir auf dein Match…",
-      "Passt ✨ Jetzt ist dein Match dran…",
+      "Notiert. Jetzt warten wir auf dein Match…",
+      "Passt. Jetzt ist dein Match dran…",
     ],
     pl: [
-      "Zapisane ✨ Teraz czekamy na drugą stronę…",
-      "Jest ✨ Teraz ruch twojego matcha…",
+      "Zapisane. Teraz czekamy na drugą stronę…",
+      "Jest. Teraz ruch twojego matcha…",
     ],
   },
   matchScheduleSavedConfirmation: {
     en: [
-      "Done ✨ Your match got the ping — you'll hear from me the moment they answer.",
-      "Locked your picks in ✨ I'll ping you as soon as your match replies.",
+      "Done. Your match got the ping — you'll hear from me the moment they answer.",
+      "Locked your picks in. I'll ping you as soon as your match replies.",
     ],
     ru: [
-      "Готово ✨ Мэтч получил пинг — напишу сразу, как ответит.",
-      "Зафиксировал твои слоты ✨ Как только мэтч ответит — дам знать.",
+      "Готово. Мэтч получил пинг — напишу сразу, как ответит.",
+      "Зафиксировал твои слоты. Как только мэтч ответит — дам знать.",
     ],
     uk: [
-      "Готово ✨ Метч отримав пінг — напишу, щойно відповість.",
-      "Зафіксував твої слоти ✨ Щойно метч відповість — дам знати.",
+      "Готово. Метч отримав пінг — напишу, щойно відповість.",
+      "Зафіксував твої слоти. Щойно метч відповість — дам знати.",
     ],
     de: [
-      "Erledigt ✨ Dein Match hat den Ping — du hörst von mir, sobald eine Antwort da ist.",
-      "Deine Slots stehen ✨ Sobald dein Match antwortet, sage ich Bescheid.",
+      "Erledigt. Dein Match hat den Ping — du hörst von mir, sobald eine Antwort da ist.",
+      "Deine Slots stehen. Sobald dein Match antwortet, sage ich Bescheid.",
     ],
     pl: [
-      "Gotowe ✨ Twój match dostał ping — odezwę się, gdy tylko odpowie.",
-      "Twoje sloty zapisane ✨ Dam znać, jak tylko match odpowie.",
+      "Gotowe. Twój match dostał ping — odezwę się, gdy tylko odpowie.",
+      "Twoje sloty zapisane. Dam znać, jak tylko match odpowie.",
     ],
   },
   venueLocationNoted: {
     en: [
-      "Starting point locked ✨ Next — the *vibe*: _quiet cafe_, _vegan brunch_, _park walk_, _small museum_?",
-      "Got your starting point ✨ Now tell me the *vibe* — e.g. _quiet cafe_, _park walk_, _small museum_.",
+      "Starting point locked. Next — the *vibe*: _quiet cafe_, _vegan brunch_, _park walk_, _small museum_?",
+      "Got your starting point. Now tell me the *vibe* — e.g. _quiet cafe_, _park walk_, _small museum_.",
     ],
     ru: [
-      "Точка есть ✨ Дальше — *вайб*: _тихое кафе_, _веган-завтрак_, _прогулка в парке_, _небольшой музей_?",
-      "Точку выезда записал ✨ Теперь расскажи про *вайб* — например _тихое кафе_, _прогулка в парке_, _небольшой музей_.",
+      "Точка есть. Дальше — *вайб*: _тихое кафе_, _веган-завтрак_, _прогулка в парке_, _небольшой музей_?",
+      "Точку выезда записал. Теперь расскажи про *вайб* — например _тихое кафе_, _прогулка в парке_, _небольшой музей_.",
     ],
     uk: [
-      "Точка є ✨ Далі — *вайб*: _тихе кафе_, _веган-сніданок_, _прогулянка в парку_, _невеликий музей_?",
-      "Точку виїзду записав ✨ Тепер розкажи про *вайб* — наприклад _тихе кафе_, _прогулянка в парку_, _невеликий музей_.",
+      "Точка є. Далі — *вайб*: _тихе кафе_, _веган-сніданок_, _прогулянка в парку_, _невеликий музей_?",
+      "Точку виїзду записав. Тепер розкажи про *вайб* — наприклад _тихе кафе_, _прогулянка в парку_, _невеликий музей_.",
     ],
     de: [
-      "Startpunkt steht ✨ Als Nächstes — der *Vibe*: _ruhiges Cafe_, _veganer Brunch_, _Parkspaziergang_, _kleines Museum_?",
-      "Startpunkt notiert ✨ Jetzt zum *Vibe* — z. B. _ruhiges Cafe_, _Parkspaziergang_, _kleines Museum_.",
+      "Startpunkt steht. Als Nächstes — der *Vibe*: _ruhiges Cafe_, _veganer Brunch_, _Parkspaziergang_, _kleines Museum_?",
+      "Startpunkt notiert. Jetzt zum *Vibe* — z. B. _ruhiges Cafe_, _Parkspaziergang_, _kleines Museum_.",
     ],
     pl: [
-      "Punkt startowy jest ✨ Dalej — *vibe*: _cicha kawiarnia_, _wegański brunch_, _spacer po parku_, _małe muzeum_?",
-      "Punkt startowy zapisany ✨ Teraz powiedz, jaki *vibe* — np. _cicha kawiarnia_, _spacer po parku_, _małe muzeum_.",
+      "Punkt startowy jest. Dalej — *vibe*: _cicha kawiarnia_, _wegański brunch_, _spacer po parku_, _małe muzeum_?",
+      "Punkt startowy zapisany. Teraz powiedz, jaki *vibe* — np. _cicha kawiarnia_, _spacer po parku_, _małe muzeum_.",
     ],
   },
   venueVibeNoted: {
     en: [
-      "Vibe locked ✨ Now — where will you be coming from?",
-      "Noted the vibe ✨ Last thing: where do you set off from?",
+      "Vibe locked. Now — where will you be coming from?",
+      "Noted the vibe. Last thing: where do you set off from?",
     ],
     ru: [
-      "Вайб есть ✨ Теперь — откуда поедешь?",
-      "Вайб записал ✨ Осталось одно: откуда стартуешь?",
+      "Вайб есть. Теперь — откуда поедешь?",
+      "Вайб записал. Осталось одно: откуда стартуешь?",
     ],
     uk: [
-      "Вайб є ✨ Тепер — звідки поїдеш?",
-      "Вайб записав ✨ Лишилось одне: звідки стартуєш?",
+      "Вайб є. Тепер — звідки поїдеш?",
+      "Вайб записав. Лишилось одне: звідки стартуєш?",
     ],
     de: [
-      "Vibe steht ✨ Jetzt — von wo kommst du?",
-      "Vibe notiert ✨ Eine Sache noch: von wo startest du?",
+      "Vibe steht. Jetzt — von wo kommst du?",
+      "Vibe notiert. Eine Sache noch: von wo startest du?",
     ],
     pl: [
-      "Vibe jest ✨ Teraz — skąd będziesz jechać?",
-      "Vibe zapisany ✨ Została jedna rzecz: skąd startujesz?",
+      "Vibe jest. Teraz — skąd będziesz jechać?",
+      "Vibe zapisany. Została jedna rzecz: skąd startujesz?",
     ],
   },
 };
