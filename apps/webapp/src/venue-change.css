@@ -154,6 +154,10 @@ body {
 .vc-current-badge {
   display: inline-flex;
   align-items: center;
+  /* The badge is a child of the `.vc-card-meta` COLUMN flex, whose default
+     `align-items: stretch` would pull the pill across the card's full width —
+     `inline-flex` alone does not stop that. Hug the text instead. */
+  align-self: flex-start;
   padding: 4px 11px;
   border-radius: 999px;
   background: var(--fill-strong);
@@ -1754,6 +1758,32 @@ a.vc-info-row .vc-info-text {
 .vc-frame.is-match .vc-current-badge {
   background: rgba(255, 255, 255, 0.2);
   color: #fff;
+}
+
+/* No specular edge on a plate. `--glass-edge` is a 1px top highlight meant to
+   catch light on a translucent glass surface — rgba(255,255,255,0.9) in the
+   LIGHT theme. Over a saturated burgundy fill it stops reading as a highlight
+   and becomes a hard white rule across the top of the block and across the top
+   of the photo inside it. The plate is opaque, so it needs no specular. */
+.vc-frame.is-peer > .vc-card,
+.vc-frame.is-match > .vc-card,
+.vc-frame.is-peer .vc-thumb,
+.vc-frame.is-match .vc-thumb {
+  box-shadow: none;
+}
+
+/* A photo rides its inline `background-image`, so it is untouched here. But a
+   venue with NO photo falls back to this element's grey `--surface` gradient,
+   which on burgundy reads as a dead grey patch — wash it into the plate and
+   let the category icon carry it. */
+.vc-frame.is-peer .vc-thumb,
+.vc-frame.is-match .vc-thumb {
+  background-image: none;
+  background-color: rgba(255, 255, 255, 0.14);
+}
+.vc-frame.is-peer .vc-thumb-icon,
+.vc-frame.is-match .vc-thumb-icon {
+  color: rgba(255, 255, 255, 0.8);
 }
 
 /* Heart on the plate — a legible tap target; MINE stays the solid white chip

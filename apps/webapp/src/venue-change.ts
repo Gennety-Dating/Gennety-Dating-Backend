@@ -175,7 +175,7 @@ const T: Record<Lang, Strings> = {
   en: {
     boardTitle: "Your date spot",
     boardLead: "Mark the places you'd like. Your match sees them — and nothing changes until you confirm.",
-    currentBadge: "Picked for you",
+    currentBadge: "Current venue",
     capPeer: (name) => `${name} marked this place`,
     capBoth: "You both marked this one",
     capMine: "You marked this",
@@ -252,7 +252,7 @@ const T: Record<Lang, Strings> = {
   ru: {
     boardTitle: "Место свидания",
     boardLead: "Отметьте места, которые нравятся. Партнёр их увидит — пока вы не подтвердите, ничего не меняется.",
-    currentBadge: "Выбрано для вас",
+    currentBadge: "Текущее место встречи",
     capPeer: (name) => `Выбор ${name}`,
     capBoth: "Вы оба отметили это место",
     capMine: "Вы отметили",
@@ -329,7 +329,7 @@ const T: Record<Lang, Strings> = {
   uk: {
     boardTitle: "Місце побачення",
     boardLead: "Позначте місця, які подобаються. Партнер їх побачить — доки не підтвердите, нічого не змінюється.",
-    currentBadge: "Обрано для вас",
+    currentBadge: "Поточне місце зустрічі",
     capPeer: (name) => `Вибір ${name}`,
     capBoth: "Ви обоє позначили це місце",
     capMine: "Ви позначили",
@@ -406,7 +406,7 @@ const T: Record<Lang, Strings> = {
   de: {
     boardTitle: "Euer Date-Ort",
     boardLead: "Markiere Orte, die dir gefallen. Dein Match sieht sie — bis du bestätigst, ändert sich nichts.",
-    currentBadge: "Für euch gewählt",
+    currentBadge: "Aktueller Treffpunkt",
     capPeer: (name) => `${name}s Wahl`,
     capBoth: "Ihr habt beide diesen Ort markiert",
     capMine: "Von dir markiert",
@@ -483,7 +483,7 @@ const T: Record<Lang, Strings> = {
   pl: {
     boardTitle: "Miejsce randki",
     boardLead: "Zaznacz miejsca, które Ci się podobają. Twoja para je zobaczy — dopóki nie potwierdzisz, nic się nie zmienia.",
-    currentBadge: "Wybrane dla was",
+    currentBadge: "Obecne miejsce spotkania",
     capPeer: (name) => `Wybór ${name}`,
     capBoth: "Oboje zaznaczyliście to miejsce",
     capMine: "Zaznaczone przez Ciebie",
