@@ -259,6 +259,14 @@ Columns (≈ 25):
 Columns (≈ 40). Drives the entire matching → scheduling → date lifecycle. See
 [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3–4 for the state machine.
 
+Application invariant: a user occupies at most one live row across `proposed`,
+`negotiating`, `negotiating_venue`, and `scheduled`. Eligibility queries exclude
+both match relations, and `createProposedMatch` locks both user rows in sorted
+order before re-checking and inserting. If legacy/corrupt data contains several
+live rows, all current-match surfaces choose explicitly by product progression:
+`scheduled` → `negotiating_venue` → `negotiating` → `proposed` (newest wins ties),
+never by PostgreSQL enum declaration order.
+
 | Group | Columns |
 |---|---|
 | Identity | `id`, `userAId`, `userBId`, `status` (`MatchStatus`), `createdAt`, `updatedAt` |
@@ -466,7 +474,7 @@ All schedules are env-overridable (the canonical names are listed below).
 
 | Schedule (default) | TZ | Purpose | Module |
 |---|---|---|---|
-| `0 18 * * 4` (Thu 18:00) | Europe/Kyiv | **Weekly matching batch** — same-city global greedy + dispatch | `services/match-engine.ts` → `services/dispatch-queue.ts` |
+| `0 18 * * 4` (Thu 18:00) | Europe/Kyiv | **Weekly matching batch** — same-city global greedy + single-live-match locked allocation + dispatch | `services/match-engine.ts` → `services/dispatch-queue.ts` |
 | `15 18 * * 4` (Thu 18:15) | Europe/Kyiv | "No match this week" empathetic DM | `services/no-match-notifier.ts` |
 | `0 18 * * 3` (Wed 18:00) | Europe/Kyiv | Pre-match teaser (24 h ahead of batch) | `workers/pre-match-announce.ts` |
 | `*/15 * * * *` | UTC | 24 h TTL match expiry | `services/match-expiry.ts` + `services/expiry-notify.ts` |
@@ -519,7 +527,7 @@ except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 | POST | `/v1/chat/upload` | Upload Aether chat image to private storage |
 | POST | `/v1/chat/message` | Aether concierge turn (text + image) |
 | GET  | `/v1/chat/history` | Aether chat history |
-| GET  | `/v1/matches/current` | Current active match (with serializer gates) |
+| GET  | `/v1/matches/current` | Current active match (explicit progression priority, with serializer gates) |
 | POST | `/v1/matches/:id/decision` | Accept / decline (mirrors bot decision handler) |
 | POST | `/v1/matches/:id/vibe-location` | Submit concierge vibe + location pin |
 | POST | `/v1/matches/:id/safety-ack` | Acknowledge T-1.5 h safety brief |

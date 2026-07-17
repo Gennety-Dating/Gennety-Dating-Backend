@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { SessionData } from "@gennety/shared";
 import { DEFAULT_SESSION } from "@gennety/shared";
 
-const { mClaimMatchDecision } = vi.hoisted(() => ({
+const { mClaimMatchDecision, mUpdateEloScores } = vi.hoisted(() => ({
   mClaimMatchDecision: vi.fn(),
+  mUpdateEloScores: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,10 @@ vi.mock("../../config.js", () => ({
 
 vi.mock("../../services/match-decision-claim.js", () => ({
   claimMatchDecision: (...args: unknown[]) => mClaimMatchDecision(...args),
+}));
+
+vi.mock("../../utils/elo-calculator.js", () => ({
+  updateEloScores: (...args: unknown[]) => mUpdateEloScores(...args),
 }));
 
 // Keep the scheduler handoff inert during decision tests — we assert the
@@ -204,8 +209,10 @@ describe("match-engine: pure helpers", () => {
     // index (matches_pair_canonical_idx) is the chosen access path.
     expect(sql).toMatch(/LEAST\(m\.user_a_id, m\.user_b_id\)/);
     expect(sql).toMatch(/GREATEST\(m\.user_a_id, m\.user_b_id\)/);
-    // No status filter — lifetime ban covers every terminal state.
-    expect(sql).not.toMatch(/status IN/);
+    // The pair-history alias has no status filter — lifetime ban covers every
+    // terminal state. A separate active_match anti-join is intentionally scoped.
+    expect(sql).not.toMatch(/\bm\.status\b/);
+    expect(sql).toMatch(/active_match\.status IN/);
     // Must ORDER BY pgvector distance ASC.
     expect(sql).toMatch(/ORDER BY distance ASC/);
   });
@@ -1271,11 +1278,12 @@ describe("matching decision flow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mMatch.update.mockResolvedValue({ id: "match-1", acceptedByA: null, acceptedByB: null });
-    mMatch.updateMany.mockResolvedValue({ count: 0 });
+    mMatch.updateMany.mockResolvedValue({ count: 1 });
     mMatchEvent.updateMany.mockResolvedValue({ count: 1 });
     mProfile.updateMany.mockResolvedValue({ count: 1 });
     mUser.findUnique.mockResolvedValue({ id: "uid-A" });
     mClaimMatchDecision.mockResolvedValue({ claimed: false });
+    mUpdateEloScores.mockResolvedValue(null);
   });
 
   it("accept from userA sets acceptedByA=true and stays pending when B not yet accepted", async () => {
@@ -1598,6 +1606,60 @@ describe("matching decision flow", () => {
     expect(peerSends).toHaveLength(1);
     expect(peerSends[0]![1]).toMatch(/your match passed/i);
     expect(mProfile.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not duplicate mixed-outcome side effects when the peer wins the terminal CAS", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ acceptedByA: false, acceptedByB: null }),
+    );
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: false,
+      acceptedByB: true,
+    });
+    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:accept:match-1",
+      fromId: 1002,
+    });
+
+    await handleMatchDecision(ctx);
+
+    expect(mMatchEvent.create).toHaveBeenCalledTimes(1);
+    expect(mUpdateEloScores).not.toHaveBeenCalled();
+    expect(mProfile.updateMany).not.toHaveBeenCalled();
+    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledTimes(1); // own acceptance acknowledgement only
+  });
+
+  it("keeps decline feedback but does not duplicate final effects after losing the CAS", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ acceptedByA: true, acceptedByB: null }),
+    );
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: true,
+      acceptedByB: false,
+    });
+    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
+    const ctx = createCtx({
+      session: { onboardingStep: "completed" },
+      callbackData: "match:do:decline:match-1",
+      fromId: 1002,
+    });
+
+    await handleMatchDecision(ctx);
+
+    expect(mMatchEvent.create).toHaveBeenCalledTimes(1);
+    expect(mUpdateEloScores).not.toHaveBeenCalled();
+    expect(mProfile.updateMany).not.toHaveBeenCalled();
+    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledTimes(1); // decline reason keyboard remains available
   });
 
   it("tapping Pass opens a confirmation card and does NOT commit the decline", async () => {

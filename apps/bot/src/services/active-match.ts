@@ -1,5 +1,9 @@
 import { prisma, Prisma, type MatchStatus, type Theme } from "@gennety/db";
 import type { Language } from "@gennety/shared";
+import {
+  ACTIVE_MATCH_STATUSES,
+  pickCurrentMatch,
+} from "./active-match-priority.js";
 
 /**
  * The four in-flight match statuses. A user has at most one row in any of
@@ -8,12 +12,7 @@ import type { Language } from "@gennety/shared";
  * the `PROFILER_BLOCKING_MATCH_STATUSES` set, but keeps `scheduled` in — the
  * "My date" menu hub needs the locked-in date too.
  */
-export const ACTIVE_MATCH_STATUSES: readonly MatchStatus[] = [
-  "proposed",
-  "negotiating",
-  "negotiating_venue",
-  "scheduled",
-];
+export { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
 
 export type MatchSide = "A" | "B";
 
@@ -65,8 +64,8 @@ export interface ActiveMatchResult {
  * match (or no account). Used by the main-menu "My date" row and the date hub
  * (`handlers/menu/my-date.ts`).
  *
- * Ordering mirrors `getCurrentMatchForUser`: enum order happens to surface the
- * most-progressed status first, `createdAt desc` as a tiebreak.
+ * Explicit product priority selects the most-progressed status; `createdAt
+ * desc` breaks ties. Never rely on Prisma/PostgreSQL enum declaration order.
  */
 export async function findActiveMatchForTelegramId(
   telegramId: bigint,
@@ -86,12 +85,12 @@ export async function findActiveMatchForTelegramId(
     profile: { select: { photos: true } },
   } satisfies Prisma.UserSelect;
 
-  const match = await prisma.match.findFirst({
+  const matches = await prisma.match.findMany({
     where: {
       status: { in: [...ACTIVE_MATCH_STATUSES] },
       OR: [{ userAId: user.id }, { userBId: user.id }],
     },
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    orderBy: { createdAt: "desc" },
     select: {
       id: true,
       status: true,
@@ -118,6 +117,7 @@ export async function findActiveMatchForTelegramId(
       userB: { select: participantSelect },
     },
   });
+  const match = pickCurrentMatch(matches);
   if (!match) return null;
 
   const side: MatchSide = match.userAId === user.id ? "A" : "B";

@@ -810,6 +810,10 @@ Hard SQL filters (`buildCandidateSql`):
    regardless of terminal status. Backed by the canonical-pair functional
    index. A user never sees the same partner twice.
 7. Cooldown — `Profile.lastMatchedAt < now − MATCH_COOLDOWN_MS (24 h)`.
+8. **Single-live-match invariant** — exclude anyone participating in
+   `proposed`, `negotiating`, `negotiating_venue`, or `scheduled`. Match creation
+   locks both user rows in canonical order and re-checks this invariant inside
+   the transaction, so overlapping batch runs cannot allocate either user twice.
 
 Score breakdown for every created pair is frozen into `match_score_logs`
 for the dashboard's algorithm-quality view.
@@ -894,7 +898,10 @@ committed.
   (who only saw their ack earlier) is also DM'd the outcome at this moment.
   Status flips to `cancelled`. In the mixed case, the user who accepted but
   whose peer declined receives a softer, accepted-side-specific reveal and
-  gets a compensating priority boost for the next weekly batch.
+  gets a compensating priority boost for the next weekly batch. The terminal
+  `proposed → cancelled` compare-and-set is the ownership boundary: only its
+  winner applies Elo, priority, and final reveal side effects, while each
+  successfully claimed decision still records its own event/acknowledgement.
 - **TTL expiry asymmetry** — if the silent side ghosted a partner who had
   *accepted*, the expiry message includes `matchExpiredYouMissedDate` ("you
   missed a real date") on top of the standard rating warning. If the

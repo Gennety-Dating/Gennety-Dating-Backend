@@ -384,19 +384,24 @@ async function handleAccept(
   // The first decider already saw `matchDeclined` so we tell them via
   // a follow-up reveal too.
   if (peerPrior === false) {
-    await prisma.match.updateMany({
+    // The actor's own acknowledgement belongs to their successfully claimed
+    // decision and is safe to send even if the peer wins the terminal CAS.
+    await ctx
+      .reply(t(lang, "matchAccepted"), {
+        ...(effectId ? { message_effect_id: effectId } : {}),
+      })
+      .catch(() => {});
+    const transitioned = await prisma.match.updateMany({
       where: { id: match.id, status: "proposed" },
       data: { status: "cancelled" },
     });
+    if (transitioned.count === 0) return;
     // Elo: actor accepted, peer declined earlier. Use the existing
     // `updateEloScores` semantics — accepted=true, declined=false.
     const aDecision: boolean = side === "A" ? true : false;
     const bDecision: boolean = side === "B" ? true : false;
     await updateEloScores(match.userAId, match.userBId, aDecision, bDecision);
     const acceptedSidePriorityBoosted = await boostAcceptedSidePriority(actorId);
-    await ctx.reply(t(lang, "matchAccepted"), {
-      ...(effectId ? { message_effect_id: effectId } : {}),
-    });
     await sendActorReveal(ctx, peerPrior, lang, true, acceptedSidePriorityBoosted);
     await sendPeerOutcomeReveal(ctx, match, side, peerPrior, true, acceptedSidePriorityBoosted);
     return;
@@ -434,19 +439,29 @@ async function handleDecline(
   if (!claimed.claimed) return;
   const peerPrior = side === "A" ? claimed.acceptedByB : claimed.acceptedByA;
 
-  if (peerPrior !== null) {
-    await prisma.match.updateMany({
-      where: { id: match.id, status: "proposed" },
-      data: { status: "cancelled" },
-    });
-  }
-
   await createMatchEventBestEffort({
     matchId: match.id,
     actorId,
     targetId,
     actionType: "DECLINED",
   });
+
+  // Every successfully claimed decline gets its own acknowledgement/feedback
+  // affordance. Terminal Elo/priority/reveal effects below belong only to the
+  // single caller that wins proposed -> cancelled.
+  await ctx
+    .reply(t(lang, "matchDeclined"), {
+      reply_markup: buildDeclineReasonKeyboard(match.id, lang),
+    })
+    .catch(() => {});
+
+  if (peerPrior !== null) {
+    const transitioned = await prisma.match.updateMany({
+      where: { id: match.id, status: "proposed" },
+      data: { status: "cancelled" },
+    });
+    if (transitioned.count === 0) return;
+  }
 
   // Elo: actor's verdict is locked in (false). Peer's prior verdict is
   // either null (first decider — Elo update deferred to expiry job) or
@@ -457,10 +472,6 @@ async function handleDecline(
     const bDecision: boolean = side === "B" ? false : peerPrior;
     await updateEloScores(match.userAId, match.userBId, aDecision, bDecision);
   }
-
-  await ctx.reply(t(lang, "matchDeclined"), {
-    reply_markup: buildDeclineReasonKeyboard(match.id, lang),
-  });
 
   if (peerPrior === null) {
     // Blind nudge — peer doesn't yet know which way the actor went.

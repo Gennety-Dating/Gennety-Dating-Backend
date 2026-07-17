@@ -457,6 +457,19 @@ vi.mock("@gennety/db", async () => {
           if (select) return matchSelect(hit, select);
           return hit;
         }),
+        findMany: vi.fn(async ({ where, select, orderBy }: any) => {
+          const statusFilter = (where.status?.in as string[]) ?? null;
+          const uid = where.OR?.[0]?.userAId as string | undefined;
+          const hits = [...db.matches.values()].filter(
+            (m) =>
+              (!statusFilter || statusFilter.includes(m.status)) &&
+              (m.userAId === uid || m.userBId === uid),
+          );
+          if (orderBy?.createdAt === "desc") {
+            hits.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+          }
+          return select ? hits.map((m) => matchSelect(m, select)) : hits;
+        }),
         update: vi.fn(async ({ where, data }: any) => {
           const m = db.matches.get(where.id);
           if (!m) throw new Error("Match not found");
@@ -1988,6 +2001,29 @@ describe("/v1/matches/*", () => {
       .set("Authorization", `Bearer ${signAccess(user.id)}`);
     expect(res.status).toBe(200);
     expect(res.body).toBeNull();
+  });
+
+  it("GET /current prioritizes a scheduled date over a newer proposed row", async () => {
+    const alice = await seedUser({ firstName: "Alice" });
+    const bob = await seedUser({ firstName: "Bob" });
+    const carol = await seedUser({ firstName: "Carol" });
+    const scheduled = await seedMatch(alice.id, bob.id, {
+      status: "scheduled",
+      createdAt: new Date("2026-07-01T00:00:00Z"),
+      agreedTime: new Date("2026-07-20T19:00:00Z"),
+    });
+    await seedMatch(alice.id, carol.id, {
+      status: "proposed",
+      createdAt: new Date("2026-07-15T00:00:00Z"),
+    });
+
+    const res = await request(app)
+      .get("/v1/matches/current")
+      .set("Authorization", `Bearer ${signAccess(alice.id)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(scheduled.id);
+    expect(res.body.status).toBe("scheduled");
   });
 
   it("POST /:id/decision FIRST decline keeps the row 'proposed' (blind invariant) and nudges the peer", async () => {

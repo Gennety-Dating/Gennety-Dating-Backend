@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@gennety/db", () => ({
   prisma: {
     user: { findUnique: vi.fn() },
-    match: { findFirst: vi.fn() },
+    match: { findMany: vi.fn() },
   },
   // `Prisma` namespace is only used for a `satisfies` type in the source; a
   // bare object keeps the runtime import happy.
@@ -14,7 +14,7 @@ import { prisma } from "@gennety/db";
 import { findActiveMatchForTelegramId, ACTIVE_MATCH_STATUSES } from "./active-match.js";
 
 const mUser = prisma.user.findUnique as ReturnType<typeof vi.fn>;
-const mMatch = prisma.match.findFirst as ReturnType<typeof vi.fn>;
+const mMatch = prisma.match.findMany as ReturnType<typeof vi.fn>;
 
 function participant(id: string, over: Record<string, unknown> = {}) {
   return {
@@ -68,13 +68,13 @@ describe("findActiveMatchForTelegramId", () => {
 
   it("returns null when there is no live match", async () => {
     mUser.mockResolvedValue({ id: "uid-A" });
-    mMatch.mockResolvedValue(null);
+    mMatch.mockResolvedValue([]);
     expect(await findActiveMatchForTelegramId(1001n)).toBeNull();
   });
 
   it("resolves side A and the partner (userB)", async () => {
     mUser.mockResolvedValue({ id: "uid-A" });
-    mMatch.mockResolvedValue(scheduledMatch());
+    mMatch.mockResolvedValue([scheduledMatch()]);
 
     const result = await findActiveMatchForTelegramId(1001n);
     expect(result).not.toBeNull();
@@ -88,7 +88,7 @@ describe("findActiveMatchForTelegramId", () => {
 
   it("resolves side B and the partner (userA)", async () => {
     mUser.mockResolvedValue({ id: "uid-B" });
-    mMatch.mockResolvedValue(scheduledMatch());
+    mMatch.mockResolvedValue([scheduledMatch()]);
 
     const result = await findActiveMatchForTelegramId(1002n);
     expect(result!.side).toBe("B");
@@ -99,9 +99,9 @@ describe("findActiveMatchForTelegramId", () => {
 
   it("defaults a null language to en", async () => {
     mUser.mockResolvedValue({ id: "uid-A" });
-    mMatch.mockResolvedValue(
+    mMatch.mockResolvedValue([
       scheduledMatch({ userB: participant("uid-B", { language: null }) }),
-    );
+    ]);
     const result = await findActiveMatchForTelegramId(1001n);
     expect(result!.partner.language).toBe("en");
   });
@@ -113,5 +113,20 @@ describe("findActiveMatchForTelegramId", () => {
       "negotiating_venue",
       "scheduled",
     ]);
+  });
+
+  it("selects scheduled over a newer proposed row using explicit product priority", async () => {
+    mUser.mockResolvedValue({ id: "uid-A" });
+    mMatch.mockResolvedValue([
+      scheduledMatch({ id: "new-proposal", status: "proposed" }),
+      scheduledMatch({ id: "locked-date", status: "scheduled" }),
+    ]);
+
+    const result = await findActiveMatchForTelegramId(1001n);
+
+    expect(result?.match.id).toBe("locked-date");
+    expect(mMatch).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { createdAt: "desc" } }),
+    );
   });
 });

@@ -1,4 +1,5 @@
 import { prisma } from "@gennety/db";
+import { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
 
 /**
  * Match engine — multi-factor candidate scoring.
@@ -44,6 +45,7 @@ export const DEFAULT_CANDIDATE_LIMIT = 5;
 
 /** Wider pool fetched from SQL before Node.js re-ranking. */
 const CANDIDATE_POOL_SIZE = 20;
+const ACTIVE_MATCH_STATUS_SQL = ACTIVE_MATCH_STATUSES.map((status) => `'${status}'`).join(", ");
 
 // ---------------------------------------------------------------------------
 // Scoring weights
@@ -404,6 +406,11 @@ export function buildCandidateSql(): string {
         CASE $4 WHEN 'male' THEN 'men' WHEN 'female' THEN 'women' ELSE '' END
       ))
       AND (p.last_matched_at IS NULL OR p.last_matched_at < $6)
+      AND NOT EXISTS (
+        SELECT 1 FROM matches active_match
+         WHERE active_match.status IN (${ACTIVE_MATCH_STATUS_SQL})
+           AND (active_match.user_a_id = u.id OR active_match.user_b_id = u.id)
+      )
       AND NOT EXISTS (
         SELECT 1 FROM matches m
          WHERE LEAST(m.user_a_id, m.user_b_id)    = LEAST($1::uuid, u.id)
@@ -925,6 +932,15 @@ export async function findCandidatesFor(
     return [];
   }
 
+  const seekerHasActiveMatch = await prisma.match.findFirst({
+    where: {
+      status: { in: [...ACTIVE_MATCH_STATUSES] },
+      OR: [{ userAId: seekerUserId }, { userBId: seekerUserId }],
+    },
+    select: { id: true },
+  });
+  if (seekerHasActiveMatch) return [];
+
   // Pull the seeker embedding via raw SQL (pgvector is `Unsupported` in Prisma).
   const embeddingRows = await prisma.$queryRawUnsafe<Array<{ embedding: string | null }>>(
     `SELECT embedding::text AS embedding FROM profiles WHERE user_id = $1::uuid`,
@@ -980,9 +996,37 @@ export async function createProposedMatch(
   userAId: string,
   userBId: string,
   breakdown?: ScoredPair["breakdown"],
-): Promise<{ id: string }> {
+): Promise<{ id: string } | null> {
   const now = new Date();
   return prisma.$transaction(async (tx) => {
+    // Serialize allocations that touch either participant. A sorted lock order
+    // avoids deadlocks; the active-match re-check closes the gap between the
+    // weekly preview and creation, including overlapping cron executions.
+    const participantIds = [userAId, userBId].sort();
+    await tx.$queryRawUnsafe(
+      "SELECT id FROM users WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE",
+      participantIds,
+    );
+    const existingConflict = await tx.match.findFirst({
+      where: {
+        OR: [
+          {
+            status: { in: [...ACTIVE_MATCH_STATUSES] },
+            OR: [
+              { userAId: { in: participantIds } },
+              { userBId: { in: participantIds } },
+            ],
+          },
+          // Lifetime pair ban must survive a stale plan too, even if a prior
+          // proposal resolved before this allocation acquired the user locks.
+          { userAId, userBId },
+          { userAId: userBId, userBId: userAId },
+        ],
+      },
+      select: { id: true },
+    });
+    if (existingConflict) return null;
+
     const match = await tx.match.create({
       data: { userAId, userBId, status: "proposed" },
       select: { id: true },
@@ -1279,6 +1323,8 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
         latitude: { not: null },
         longitude: { not: null },
       },
+      matchesAsA: { none: { status: { in: [...ACTIVE_MATCH_STATUSES] } } },
+      matchesAsB: { none: { status: { in: [...ACTIVE_MATCH_STATUSES] } } },
     },
     select: {
       id: true,
@@ -1326,6 +1372,8 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
         latitude: { not: null },
         longitude: { not: null },
       },
+      matchesAsA: { none: { status: { in: [...ACTIVE_MATCH_STATUSES] } } },
+      matchesAsB: { none: { status: { in: [...ACTIVE_MATCH_STATUSES] } } },
     },
     select: {
       id: true,
@@ -1517,17 +1565,42 @@ export async function runWeeklyBatch(): Promise<WeeklyBatchResult> {
 
   // Create match rows.
   const matchIds: string[] = [];
+  const createdPairs: ScoredPair[] = [];
+  const skippedUserIds: string[] = [];
   for (const pair of plan.finalPairs) {
     const match = await createProposedMatch(
       pair.userAId,
       pair.userBId,
       pair.breakdown,
     );
-    matchIds.push(match.id);
+    if (match) {
+      matchIds.push(match.id);
+      createdPairs.push(pair);
+    } else {
+      skippedUserIds.push(pair.userAId, pair.userBId);
+    }
   }
 
   // Diff eligible-vs-paired and update starvation counters.
-  const pairedUserIds = plan.finalPairs.flatMap((pair) => [pair.userAId, pair.userBId]);
+  const pairedUserIds = createdPairs.flatMap((pair) => [pair.userAId, pair.userBId]);
+  const missedCandidates = [...new Set([...plan.missedUserIds, ...skippedUserIds])];
+  const activeRows =
+    missedCandidates.length === 0
+      ? []
+      : await prisma.match.findMany({
+          where: {
+            status: { in: [...ACTIVE_MATCH_STATUSES] },
+            OR: [
+              { userAId: { in: missedCandidates } },
+              { userBId: { in: missedCandidates } },
+            ],
+          },
+          select: { userAId: true, userBId: true },
+        });
+  const activeUserIds = new Set(
+    activeRows.flatMap((match) => [match.userAId, match.userBId]),
+  );
+  const missedUserIds = missedCandidates.filter((userId) => !activeUserIds.has(userId));
   const now = new Date();
 
   await prisma.$transaction([
@@ -1536,7 +1609,7 @@ export async function runWeeklyBatch(): Promise<WeeklyBatchResult> {
       data: { standbyCount: 0, missedWeeks: 0 },
     }),
     prisma.profile.updateMany({
-      where: { userId: { in: plan.missedUserIds } },
+      where: { userId: { in: missedUserIds } },
       data: {
         standbyCount: { increment: 1 },
         missedWeeks: { increment: 1 },
@@ -1546,14 +1619,14 @@ export async function runWeeklyBatch(): Promise<WeeklyBatchResult> {
   ]);
 
   console.log(
-    `[weekly-batch] eligible=${plan.eligible} pairs=${plan.pairs} missed=${plan.missedUserIds.length}`,
+    `[weekly-batch] eligible=${plan.eligible} pairs=${matchIds.length} missed=${missedUserIds.length}`,
   );
 
   return {
     eligible: plan.eligible,
-    pairs: plan.pairs,
+    pairs: matchIds.length,
     matchIds,
-    missedUserIds: plan.missedUserIds,
+    missedUserIds,
   };
 }
 

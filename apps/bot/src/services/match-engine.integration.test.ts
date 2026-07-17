@@ -19,7 +19,11 @@ import {
   seedUser,
   seedProfile,
 } from "../../../../packages/db/src/test-integration.js";
-import { buildCandidateSql, MATCH_COOLDOWN_MS } from "./match-engine.js";
+import {
+  buildCandidateSql,
+  createProposedMatch,
+  MATCH_COOLDOWN_MS,
+} from "./match-engine.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -362,6 +366,45 @@ describe("match-engine SQL (integration)", () => {
     );
 
     expect(rows.length).toBe(0);
+  });
+
+  it("excludes a candidate who has an open match with a different user", async () => {
+    const seeker = await seedFullUser({ gender: "male", preference: "women" });
+    const candidate = await seedFullUser({ gender: "female", preference: "men" });
+    const other = await seedFullUser({ gender: "male", preference: "women" });
+    await integrationPrisma.match.create({
+      data: { userAId: other.id, userBId: candidate.id, status: "scheduled" },
+    });
+
+    const rows = await queryCandidates(
+      seeker.id,
+      fakeEmbedding(0.5),
+      "ua:kyiv",
+      "female",
+      new Date(Date.now() - MATCH_COOLDOWN_MS),
+    );
+
+    expect(rows).toEqual([]);
+  });
+
+  it("serializes competing allocations so a user receives only one live match", async () => {
+    const shared = await seedFullUser({ gender: "male", preference: "women" });
+    const first = await seedFullUser({ gender: "female", preference: "men" });
+    const second = await seedFullUser({ gender: "female", preference: "men" });
+
+    const results = await Promise.all([
+      createProposedMatch(shared.id, first.id),
+      createProposedMatch(shared.id, second.id),
+    ]);
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+    const active = await integrationPrisma.match.findMany({
+      where: {
+        status: { in: ["proposed", "negotiating", "negotiating_venue", "scheduled"] },
+        OR: [{ userAId: shared.id }, { userBId: shared.id }],
+      },
+    });
+    expect(active).toHaveLength(1);
   });
 
   it("excludes candidates the seeker was already matched with (completed — lifetime ban)", async () => {

@@ -26,6 +26,10 @@ import {
 import { getBotApi } from "./server.js";
 import { PROPOSAL_TTL_MS } from "../utils/countdown-plate.js";
 import { PRE_DATE_WINGMAN_HOURS } from "@gennety/shared";
+import {
+  ACTIVE_MATCH_STATUSES,
+  pickCurrentMatch,
+} from "../services/active-match-priority.js";
 
 /**
  * Mobile-only wrappers around the existing match-engine pipeline. These
@@ -199,15 +203,12 @@ async function notifyParticipant(
 export async function getCurrentMatchForUser(
   userId: string,
 ): Promise<SerializedMatch | null> {
-  const match = await prisma.match.findFirst({
+  const matches = await prisma.match.findMany({
     where: {
-      status: { in: ["proposed", "negotiating", "negotiating_venue", "scheduled"] },
+      status: { in: [...ACTIVE_MATCH_STATUSES] },
       OR: [{ userAId: userId }, { userBId: userId }],
     },
-    orderBy: [
-      { status: "asc" }, // enum order happens to align — defensive; refined below
-      { createdAt: "desc" },
-    ],
+    orderBy: { createdAt: "desc" },
     select: {
       id: true,
       status: true,
@@ -241,6 +242,7 @@ export async function getCurrentMatchForUser(
       userB: { select: { firstName: true, age: true, universityDomain: true } },
     },
   });
+  const match = pickCurrentMatch(matches);
   if (!match) return null;
 
   const side: MatchSide = match.userAId === userId ? "A" : "B";
@@ -414,10 +416,11 @@ export async function applyMatchDecision(
     // the accepter, and reveal the outcome both ways. (Previously the mobile
     // accept path ignored this and left the row stuck in `proposed` — H1.)
     if (peerPrior === false) {
-      await prisma.match.updateMany({
+      const transitioned = await prisma.match.updateMany({
         where: { id: matchId, status: "proposed" },
         data: { status: "cancelled" },
       });
+      if (transitioned.count === 0) return getCurrentMatchForUser(userId);
       await updateEloScores(
         match.userAId,
         match.userBId,
@@ -449,15 +452,16 @@ export async function applyMatchDecision(
   }
 
   // ----- decline -----
+  await createMatchEventBestEffort({
+    matchId,
+    actorId,
+    targetId,
+    actionType: "DECLINED",
+  });
+
   if (peerPrior === null) {
     // First decider declines: KEEP `proposed` so the peer's keyboard stays
     // live and they decide blind. Only record this side's verdict + nudge.
-    await createMatchEventBestEffort({
-      matchId,
-      actorId,
-      targetId,
-      actionType: "DECLINED",
-    });
     await notifyParticipant(peer, "matchPeerDecided", {
       type: "match.peer_decided",
       title: "Gennety",
@@ -468,16 +472,11 @@ export async function applyMatchDecision(
 
   // Second decider declines → both decided. Cancel, update Elo, and (if the
   // peer had accepted) compensate them; reveal the outcome both ways.
-  await prisma.match.updateMany({
+  const transitioned = await prisma.match.updateMany({
     where: { id: matchId, status: "proposed" },
     data: { status: "cancelled" },
   });
-  await createMatchEventBestEffort({
-    matchId,
-    actorId,
-    targetId,
-    actionType: "DECLINED",
-  });
+  if (transitioned.count === 0) return getCurrentMatchForUser(userId);
   await updateEloScores(
     match.userAId,
     match.userBId,
