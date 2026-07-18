@@ -930,13 +930,11 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [message, uiHint]
+                required: [message]
                 properties:
                   message: { $ref: "#/components/schemas/ChatMessage" }
                   uiHint:
-                    oneOf:
-                      - $ref: "#/components/schemas/UiHint"
-                      - type: "null"
+                    $ref: "#/components/schemas/UiHint"
                     description: Always null for Aether turns today; contract slot for future hints
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -1034,13 +1032,13 @@ paths:
       summary: Most relevant in-flight match (or null)
       responses:
         "200":
-          description: Serialized match, or JSON `null` when nothing is open
+          description: Envelope with the match, `match` null/absent when nothing is open
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: "#/components/schemas/SerializedMatch"
-                  - type: "null"
+                type: object
+                properties:
+                  match: { $ref: "#/components/schemas/SerializedMatch" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/matches/{id}/decision-intent:
@@ -1441,7 +1439,7 @@ components:
     InterviewState:
       type: object
       description: Mirrors `InterviewStateDto` in `public/routes/onboarding-state.ts`
-      required: [stepIndex, totalSteps, question, completed, messages, expectingPhoto, photoCount, minPhotos, uiHint]
+      required: [stepIndex, totalSteps, question, completed, messages, expectingPhoto, photoCount, minPhotos]
       properties:
         stepIndex: { type: integer }
         totalSteps: { type: integer }
@@ -1464,9 +1462,8 @@ components:
         photoCount: { type: integer }
         minPhotos: { type: integer }
         uiHint:
-          oneOf:
-            - $ref: "#/components/schemas/UiHint"
-            - type: "null"
+          $ref: "#/components/schemas/UiHint"
+          description: Null/absent → plain text field
 
     ChatMessage:
       type: object
@@ -1518,13 +1515,11 @@ components:
       allOf:
         - $ref: "#/components/schemas/PhotosResponse"
         - type: object
-          required: [photoConsensus, interviewState]
+          required: [photoConsensus]
           properties:
             photoConsensus: { $ref: "#/components/schemas/PhotoConsensus" }
             interviewState:
-              oneOf:
-                - $ref: "#/components/schemas/InterviewState"
-                - type: "null"
+              $ref: "#/components/schemas/InterviewState"
               description: Present only during onboarding (agent advanced after the upload)
 
     PhotoRejection:

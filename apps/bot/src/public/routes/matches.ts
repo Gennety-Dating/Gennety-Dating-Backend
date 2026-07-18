@@ -35,7 +35,9 @@ const REPORT_CATEGORIES = new Set<ReportCategory>([
 
 matchesRouter.get("/current", async (req: Request, res: Response): Promise<void> => {
   const match = await getCurrentMatchForUser(req.userId!);
-  res.json(match);
+  // Wrapped (2026-07-18, mobile contract): a bare `null` JSON body is
+  // awkward for typed clients — `{ match: null }` keeps the envelope stable.
+  res.json({ match });
 });
 
 /**

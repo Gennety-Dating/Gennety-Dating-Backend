@@ -2155,13 +2155,13 @@ describe("/v1/assistant/ask", () => {
 describe("/v1/matches/*", () => {
   beforeEach(resetDb);
 
-  it("GET /current returns null when the user has no match", async () => {
+  it("GET /current returns { match: null } when the user has no match", async () => {
     const user = await seedUser();
     const res = await request(app)
       .get("/v1/matches/current")
       .set("Authorization", `Bearer ${signAccess(user.id)}`);
     expect(res.status).toBe(200);
-    expect(res.body).toBeNull();
+    expect(res.body).toEqual({ match: null });
   });
 
   it("GET /current prioritizes a scheduled date over a newer proposed row", async () => {
@@ -2183,8 +2183,8 @@ describe("/v1/matches/*", () => {
       .set("Authorization", `Bearer ${signAccess(alice.id)}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.id).toBe(scheduled.id);
-    expect(res.body.status).toBe("scheduled");
+    expect(res.body.match.id).toBe(scheduled.id);
+    expect(res.body.match.status).toBe("scheduled");
   });
 
   it("POST /:id/decision FIRST decline keeps the row 'proposed' (blind invariant) and nudges the peer", async () => {
