@@ -189,6 +189,14 @@ export const env = {
   /// fully client-constructed from template-id + environment-id + reference-id)
   /// but needed if we ever call Persona's REST API to re-read inquiry details.
   PERSONA_API_KEY: process.env.PERSONA_API_KEY ?? "",
+  /// Founder-approved escape hatch: lets a production-like process boot with a
+  /// Persona SANDBOX key. Sandbox inquiries are test flows, not real KYC —
+  /// every `verified` granted while this is on carries no identity guarantee
+  /// and stays `verified` in the database after the flag is removed. The
+  /// startup assertion logs a loud warning whenever the override is active.
+  /// Only the sandbox-key check is waived; every other identity trust
+  /// requirement still fails closed.
+  ALLOW_SANDBOX_PERSONA: process.env.ALLOW_SANDBOX_PERSONA === "true",
   /// Shared secret for validating incoming webhook HMAC signatures
   /// (`Persona-Signature: t=<ts>,v1=<hex>` header). Rotate per webhook in the
   /// dashboard — different from `PERSONA_API_KEY`.
@@ -418,6 +426,7 @@ export interface IdentityTrustConfiguration {
   PERSONA_ENVIRONMENT_ID: string;
   PERSONA_API_KEY: string;
   PERSONA_WEBHOOK_SECRET: string;
+  ALLOW_SANDBOX_PERSONA: boolean;
   FACE_MATCH_PROVIDER: "rekognition" | "disabled";
   PROFILE_MEDIA_VALIDATION_ENABLED: boolean;
 }
@@ -457,7 +466,10 @@ export function identityTrustConfigurationErrors(
   ] as const) {
     if (!value) errors.push(`${name} must be configured`);
   }
-  if (/^persona_sand/i.test(config.PERSONA_API_KEY)) {
+  if (
+    /^persona_sand/i.test(config.PERSONA_API_KEY) &&
+    !config.ALLOW_SANDBOX_PERSONA
+  ) {
     errors.push("PERSONA_API_KEY must be a production key, not persona_sand*");
   }
   if (config.FACE_MATCH_PROVIDER !== "rekognition") {
@@ -477,6 +489,19 @@ export function assertIdentityTrustConfiguration(
   if (errors.length > 0) {
     throw new Error(
       `Unsafe identity verification configuration:\n- ${errors.join("\n- ")}`,
+    );
+  }
+  if (
+    runtime !== "test" &&
+    config.ALLOW_SANDBOX_PERSONA &&
+    /^persona_sand/i.test(config.PERSONA_API_KEY)
+  ) {
+    console.warn(
+      "⚠️  ALLOW_SANDBOX_PERSONA override active: Persona is running with a " +
+        "SANDBOX key. Identity verification is a TEST flow, not real KYC — " +
+        "every `verified` granted now has no identity guarantee and will " +
+        "persist after switching to a production key. Remove the override " +
+        "as soon as a live Persona key is configured.",
     );
   }
 }

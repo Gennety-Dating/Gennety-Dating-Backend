@@ -68,7 +68,13 @@ out of Telegram-only workers.
   outcome; legacy skip callbacks refuse politely and pre-flip skippers are
   grandfathered with their `UNVERIFIED_ELO_PENALTY`. A production-like process
   refuses to boot when the flag is off, Persona uses a sandbox key, Rekognition
-  is disabled, or profile-media validation is disabled.
+  is disabled, or profile-media validation is disabled. One founder-approved
+  escape hatch exists: `ALLOW_SANDBOX_PERSONA=true` waives ONLY the
+  sandbox-key check (every other requirement still fails closed) and logs a
+  loud startup warning — verifications made under it are Persona test flows,
+  not real KYC, and the `verified` statuses they grant persist after the
+  override is removed. It exists for the deliberate early-launch window before
+  a live Persona key; remove it as soon as one is configured.
 - **Progressive Logistics** — The AI auto-proposes timeslots first; if both
   rounds fail it hands off to the Calendar Mini App; venue is chosen by an
   AI concierge from each user's free-text *vibe* + commute pin.

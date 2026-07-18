@@ -402,9 +402,11 @@ feeds the matching engine's vibe axes), Elo vision seed, pre-date coordination,
 venue change v2, the date card, the match card, and Rekognition face-match.
 
 `ENABLE_PERSONA_VERIFICATION` was on, while
-`MANDATORY_VERIFICATION_ENABLED` was still off. This state is no longer accepted
-by the application after the identity trust-gate hardening: do not deploy until
-the live Persona requirements below are satisfied.
+`MANDATORY_VERIFICATION_ENABLED` was still off. After the identity trust-gate
+hardening that state stopped booting; as of 2026-07-17
+`MANDATORY_VERIFICATION_ENABLED=true` is set and production runs the sandbox
+Persona key behind the explicit `ALLOW_SANDBOX_PERSONA=true` override (see
+"Verification production gate" below).
 
 **Provider credentials, verified by probing each one from the droplet** (a flag
 is worthless without its provider):
@@ -454,11 +456,23 @@ code. If it ever has to be repeated:
 
 ### Verification production gate
 
-Storage works, but the last recorded Persona credential was sandbox-only and no
-user had reached a production `verified` outcome. Obtain a live Persona key,
-walk one consenting end-to-end verification through staging, set the mandatory
-production values, and only then deploy. The service intentionally refuses to
-start rather than admit unverified users.
+Storage works, but the Persona credential is still sandbox-only and no user has
+reached a production `verified` outcome. The end state remains: obtain a live
+Persona key, walk one consenting end-to-end verification through staging, and
+set the mandatory production values. The service intentionally refuses to start
+rather than admit unverified users.
+
+**Deliberate interim state (since 2026-07-17):** production runs with
+`ALLOW_SANDBOX_PERSONA=true` — a founder-approved override that waives ONLY the
+sandbox-key startup check so the current sandbox Persona flow can serve the
+early-launch window. Every other identity requirement
+(`MANDATORY_VERIFICATION_ENABLED`, Rekognition, profile-media validation, no
+OTP bypasses) still fails closed, and the bot logs a loud warning at boot while
+the override is active. Consequences to keep in mind: verifications are Persona
+TEST flows (not real KYC), and every `verified` granted during this window
+persists after switching to a live key — plan to audit/re-verify that cohort.
+When the live key lands: set `PERSONA_API_KEY`, remove `ALLOW_SANDBOX_PERSONA`,
+restart.
 
 Matching admits only verified users and the persisted pre-flip skip cohort. The
 AI vision Elo seed runs inside the verification pipeline, so live verification
@@ -541,7 +555,9 @@ Required/high-impact env keys:
 - Push: `EXPO_ACCESS_TOKEN`
 - Persona: `ENABLE_PERSONA_VERIFICATION`, `PERSONA_TEMPLATE_ID`,
   `PERSONA_ENVIRONMENT_ID`, `PERSONA_API_KEY`,
-  `PERSONA_WEBHOOK_SECRET`, `PERSONA_HOSTED_URL_BASE`
+  `PERSONA_WEBHOOK_SECRET`, `PERSONA_HOSTED_URL_BASE`,
+  `ALLOW_SANDBOX_PERSONA` (deliberate interim override — see "Verification
+  production gate" above; remove once a live Persona key is configured)
 - Face match: `FACE_MATCH_PROVIDER`, `FACE_MATCH_THRESHOLD_VERIFY`
   (default 0.85), `FACE_MATCH_THRESHOLD_REVIEW` (default 0.75),
   `FACE_MATCH_MIN_VERIFIED_PHOTOS` (default 1), `AWS_REGION`,

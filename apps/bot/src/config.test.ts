@@ -16,6 +16,7 @@ function productionReady(
     PERSONA_ENVIRONMENT_ID: "env_live",
     PERSONA_API_KEY: "persona_prod_live",
     PERSONA_WEBHOOK_SECRET: "webhook-live",
+    ALLOW_SANDBOX_PERSONA: false,
     FACE_MATCH_PROVIDER: "rekognition",
     PROFILE_MEDIA_VALIDATION_ENABLED: true,
     ...overrides,
@@ -37,6 +38,33 @@ describe("identity trust configuration", () => {
     );
     expect(errors).toContain("MANDATORY_VERIFICATION_ENABLED must be true");
     expect(errors).toContain("PERSONA_API_KEY must be a production key, not persona_sand*");
+  });
+
+  it("waives only the sandbox-key check under ALLOW_SANDBOX_PERSONA", () => {
+    expect(
+      identityTrustConfigurationErrors(
+        productionReady({
+          PERSONA_API_KEY: "persona_sand_test",
+          ALLOW_SANDBOX_PERSONA: true,
+        }),
+        "production",
+      ),
+    ).toEqual([]);
+
+    const errors = identityTrustConfigurationErrors(
+      productionReady({
+        PERSONA_API_KEY: "persona_sand_test",
+        ALLOW_SANDBOX_PERSONA: true,
+        MANDATORY_VERIFICATION_ENABLED: false,
+        PROFILE_MEDIA_VALIDATION_ENABLED: false,
+      }),
+      "production",
+    );
+    expect(errors).toContain("MANDATORY_VERIFICATION_ENABLED must be true");
+    expect(errors).toContain("PROFILE_MEDIA_VALIDATION_ENABLED must be true");
+    expect(errors).not.toContain(
+      "PERSONA_API_KEY must be a production key, not persona_sand*",
+    );
   });
 
   it("rejects console OTP and dev bypass accounts outside development", () => {
