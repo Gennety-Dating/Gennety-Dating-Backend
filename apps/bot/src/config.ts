@@ -42,6 +42,12 @@ export const env = {
   /// registration path and the bot ignores `message.contact` shares, exactly
   /// as before. Ship dark; flip at launch together with the fork Mini App.
   PHONE_AUTH_ENABLED: process.env.PHONE_AUTH_ENABLED === "true",
+  /// Native iOS forced-update kill switch, served pre-auth by
+  /// `GET /v1/app/config` as `minSupportedIosVersion`. A client build whose
+  /// version compares lower must block behind an "update the app" screen.
+  /// Empty (default) → no forced update. Set e.g. "1.2.0" only when an old
+  /// build must be retired (broken contract, security issue).
+  IOS_MIN_SUPPORTED_APP_VERSION: process.env.IOS_MIN_SUPPORTED_APP_VERSION ?? "",
   /// Registration v2: mandatory Persona liveness. On → the verification CTA
   /// carries no Skip button and the legacy soft-skip callbacks refuse with a
   /// "verification is required" notice, so activation happens ONLY through the

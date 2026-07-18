@@ -51,6 +51,23 @@ paths:
                   ok: { type: boolean, const: true }
                   now: { type: string, format: date-time }
 
+  /v1/app/config:
+    get:
+      tags: [system]
+      operationId: getAppConfig
+      summary: Pre-auth mobile bootstrap — forced-update kill switch + feature flags
+      description: |
+        Unauthenticated by design: the client must learn "update required"
+        before it can log in. `minSupportedIosVersion` null → no forced update.
+      security: []
+      responses:
+        "200":
+          description: Client bootstrap payload
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppConfig" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
   /v1/auth/otp/request:
     post:
       tags: [auth]
@@ -879,6 +896,22 @@ components:
       properties:
         error: { type: string }
       additionalProperties: true
+
+    AppConfig:
+      type: object
+      required: [minSupportedIosVersion, features, serverNow]
+      properties:
+        minSupportedIosVersion:
+          type: [string, "null"]
+          description: Semver floor; a lower client build must block behind an update screen
+        features:
+          type: object
+          required: [phoneAuth, tickets, coordination]
+          properties:
+            phoneAuth: { type: boolean }
+            tickets: { type: boolean }
+            coordination: { type: boolean }
+        serverNow: { type: string, format: date-time }
 
     Language:
       type: string

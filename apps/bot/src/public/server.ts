@@ -15,6 +15,7 @@ import { assistantRouter } from "./routes/assistant.js";
 import { chatRouter } from "./routes/chat.js";
 import { matchesRouter } from "./routes/matches.js";
 import { countdownRouter } from "./routes/countdown.js";
+import { appConfigRouter } from "./routes/app-config.js";
 import { founderReportRouter } from "./routes/founder-report.js";
 import { verificationRouter } from "./routes/verification.js";
 import { webRegistrationRouter } from "./routes/web-registration.js";
@@ -280,6 +281,10 @@ app.use("/v1/tickets", (req, res, next) => {
 app.get("/v1/ping", (_req: Request, res: Response) => {
   res.json({ ok: true, now: new Date().toISOString() });
 });
+
+// Pre-auth mobile bootstrap: forced-update kill switch + client feature flags.
+// Unauthenticated by design (see routes/app-config.ts); globalLimiter applies.
+app.use("/v1/app", appConfigRouter);
 
 app.use("/v1/auth", authRouter);
 app.use("/v1/web-registration", webRegistrationRouter);

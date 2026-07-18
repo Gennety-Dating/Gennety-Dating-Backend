@@ -561,6 +561,11 @@ Required/high-impact env keys:
   mobile clients send no `Origin` header and are unaffected. Prefer listing the
   concrete browser origins — the Mini App host `https://dating-calendar.gennety.com`
   plus any web signup site — over `*`, which still works but logs a warning.)
+- Native iOS app: `IOS_MIN_SUPPORTED_APP_VERSION` (optional, default empty →
+  no forced update). Served pre-auth by `GET /v1/app/config` as
+  `minSupportedIosVersion`; set e.g. `1.2.0` only to retire a broken/insecure
+  old build — every older client blocks behind an "update the app" screen.
+  Toggled live with `pm2 restart gennety-bot --update-env`; no schema change.
 - Push: `EXPO_ACCESS_TOKEN`
 - Persona: `ENABLE_PERSONA_VERIFICATION`, `PERSONA_TEMPLATE_ID`,
   `PERSONA_ENVIRONMENT_ID`, `PERSONA_API_KEY`,
