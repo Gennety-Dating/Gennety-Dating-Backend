@@ -52,19 +52,62 @@ export async function findOrCreateMobileUser(email: string): Promise<User> {
 
   const universityDomain = extractDomain(normalisedEmail);
 
+  return createMobileUserWithRetry({
+    email: normalisedEmail,
+    universityDomain,
+    isEmailVerified: true,
+    registrationTrack: "student",
+  });
+}
+
+/**
+ * Find or create a user keyed by verified phone (native-app general track,
+ * Registration v2). The number reaching this point has just passed the
+ * Gateway/Twilio code check, so `phoneVerifiedAt` is stamped on both paths.
+ * An existing row (e.g. a Telegram user whose trusted `message.contact`
+ * carried the same number) is reused as-is — `phone` is `@unique`, one
+ * account per number.
+ */
+export async function findOrCreateMobileUserByPhone(phone: string): Promise<User> {
+  const existing = await prisma.user.findUnique({ where: { phone } });
+  if (existing) {
+    if (existing.phoneVerifiedAt) return existing;
+    return prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        phoneVerifiedAt: new Date(),
+        // Never rewrite an existing track (a student stays a student); only
+        // fill the gap for pre-fork legacy rows that somehow carry a phone.
+        ...(existing.registrationTrack ? {} : { registrationTrack: "general" }),
+      },
+    });
+  }
+
+  return createMobileUserWithRetry({
+    phone,
+    phoneVerifiedAt: new Date(),
+    registrationTrack: "general",
+  });
+}
+
+/**
+ * Create a mobile-platform user with a synthetic negative `telegramId`,
+ * retrying on the (practically impossible) id collision. Shared by the
+ * email- and phone-track creation paths.
+ */
+async function createMobileUserWithRetry(
+  data: Prisma.UserCreateInput extends never ? never : Record<string, unknown>,
+): Promise<User> {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       return await prisma.user.create({
         data: {
           telegramId: syntheticTelegramId(),
-          email: normalisedEmail,
-          universityDomain,
           platform: "mobile",
           status: "onboarding",
           onboardingStep: "consent",
-          isEmailVerified: true,
-          registrationTrack: "student",
-        },
+          ...data,
+        } as Prisma.UserUncheckedCreateInput,
       });
     } catch (err: unknown) {
       if (

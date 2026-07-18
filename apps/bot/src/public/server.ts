@@ -16,6 +16,7 @@ import { chatRouter } from "./routes/chat.js";
 import { matchesRouter } from "./routes/matches.js";
 import { countdownRouter } from "./routes/countdown.js";
 import { appConfigRouter } from "./routes/app-config.js";
+import { phoneAuthRouter } from "./routes/phone-auth.js";
 import { founderReportRouter } from "./routes/founder-report.js";
 import { verificationRouter } from "./routes/verification.js";
 import { webRegistrationRouter } from "./routes/web-registration.js";
@@ -286,6 +287,10 @@ app.get("/v1/ping", (_req: Request, res: Response) => {
 // Unauthenticated by design (see routes/app-config.ts); globalLimiter applies.
 app.use("/v1/app", appConfigRouter);
 
+// Native-app phone rail (Registration v2 general track) — Gateway/Twilio
+// fork, 404 while PHONE_AUTH_ENABLED is off. Mounted before the generic
+// /v1/auth router so the more-specific prefix wins.
+app.use("/v1/auth/phone", phoneAuthRouter);
 app.use("/v1/auth", authRouter);
 app.use("/v1/web-registration", webRegistrationRouter);
 // Mount /v1/me/verification BEFORE /v1/me so Express tries the more-specific

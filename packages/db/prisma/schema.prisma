@@ -1106,6 +1106,28 @@ model EmailOtp {
   @@map("email_otps")
 }
 
+/// Native-app phone-code challenges (general track on iOS/Android, where the
+/// Telegram one-tap `message.contact` rail does not exist). Twin of
+/// `email_otps`, keyed by E.164 phone because the funnel starts before a User
+/// row exists. `provider` records the delivery rail: "telegram_gateway"
+/// stores our own bcrypt code hash (we generate the code and verify locally);
+/// "twilio_verify" delegates code generation/checking to Twilio Verify
+/// (`codeHash` null, `providerRequestId` = the Verification SID).
+model PhoneOtp {
+  id                String    @id @default(uuid()) @db.Uuid
+  phone             String
+  provider          String
+  codeHash          String?   @map("code_hash")
+  providerRequestId String?   @map("provider_request_id")
+  expiresAt         DateTime  @map("expires_at")
+  attempts          Int       @default(0)
+  consumedAt        DateTime? @map("consumed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@index([phone, createdAt])
+  @@map("phone_otps")
+}
+
 /// Browser pre-registration handoff into Telegram.
 /// The raw token is returned to the browser once and placed in the Telegram
 /// deep link (`/start web_<token>`). Only its SHA-256 hash is stored here, so

@@ -39,6 +39,12 @@ out of Telegram-only workers.
   `STUDENT_BONUS_TICKETS` (2) free Date Tickets; **general** — phone via
   Telegram one-tap `requestContact` (the bot receives a trusted
   `message.contact`; `User.phone` is `@unique` — one account per number).
+  On the **native mobile app** (no Telegram one-tap there) the general track
+  verifies the phone with a delivered code instead: **Telegram Gateway**
+  service message by default, **Twilio SMS** fallback
+  (`/v1/auth/phone/*`, same `PHONE_AUTH_ENABLED` gate; the verified number
+  lands in the same unique `User.phone` + `phoneVerifiedAt`, so Telegram and
+  mobile registrations can never duplicate an account).
   Matching admits the union of the two valid cohorts (student + verified email,
   or general + verified phone); a credential from the other track never
   satisfies an individual's gate. The student

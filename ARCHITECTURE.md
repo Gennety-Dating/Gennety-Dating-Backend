@@ -326,6 +326,20 @@ transaction-scoped PostgreSQL advisory lock keyed by normalized email, so
 concurrent requests across processes cannot bypass the resend cooldown or send
 multiple competing codes.
 
+### `phone_otps`
+
+Native-app phone-code challenges (Registration v2 general track on iOS —
+the Telegram one-tap `message.contact` rail doesn't exist there). Twin of
+`email_otps`, keyed by E.164 `phone` (the funnel starts before a `User` row
+exists). `provider` records the delivery rail: `telegram_gateway` stores our
+own bcrypt `codeHash` (verified locally), `twilio_verify` delegates code
+generation/checking to Twilio (`codeHash` null, `providerRequestId` = the
+Verification SID). `attempts`/`consumedAt` mirror the email OTP state
+machine; per-phone creation is serialized with a transaction-scoped advisory
+lock, and a durable per-phone daily cap backs the in-memory rate limiter.
+Indexed `(phone, createdAt)`. Written by
+`services/phone-verification.ts`; consumed by `public/routes/phone-auth.ts`.
+
 ### `web_registration_links`
 
 Browser → Telegram pre-registration handoff. The website resolves the first
@@ -523,6 +537,8 @@ auth) are deliberately outside the spec.
 | GET/POST | `/v1/telegram-onboarding/*` | Telegram full-screen Onboarding Mini App state/consent/language/**sign-up fork (`POST /track`, Registration v2)**/email OTP/**phone gate**/city/AI-memory choice/completion handoff. Authenticates with `Authorization: tma <initData>`; `/state` mirrors `phoneAuthEnabled` + `isPhoneVerified`/`phone`/`registrationTrack`, `POST /track` persists the re-choosable fork pick (404 while `PHONE_AUTH_ENABLED` is off), and `/complete` runs the track-aware contact gate (`email-required` \| `phone-required`) before city + AI-memory checks. `/state` also returns `theme` + `themeChosen`, and `POST /theme` records the light/dark pick (`theme` + `themeChosenAt`) — reused by the bot's Settings "Change theme" flow. |
 | POST | `/v1/auth/otp/request` | Send corp-email OTP (IP/email rate-limited; per-email creation serialized in PostgreSQL) |
 | POST | `/v1/auth/otp/verify` | Verify OTP → mint access + refresh JWT |
+| POST | `/v1/auth/phone/request` | Native-app phone rail (general track): send a code with a server-side provider fork — **Telegram Gateway primary** (`checkSendAbility` → code as an official Telegram service message, our bcrypt-hashed code), **Twilio Verify SMS fallback** (no Telegram on the number / Gateway failure / client's `channel: "sms"`). Per-phone cooldown + daily cap serialized via advisory lock (`phone_otps`); 404 while `PHONE_AUTH_ENABLED` off. Response carries `deliveredVia: telegram\|sms`. |
+| POST | `/v1/auth/phone/verify` | Verify the phone code (local hash for Gateway rows, Twilio `VerificationCheck` for SMS rows) → find-or-create the mobile general-track user by unique `phone` (stamps `phoneVerifiedAt`) → mint access + refresh JWT |
 | POST | `/v1/auth/refresh` | Rotate refresh token |
 | POST | `/v1/web-registration/otp/request` | Website pre-registration: send corp-email OTP before the user opens Telegram (rate-limited; no auth — pre-account) |
 | POST | `/v1/web-registration/complete` | Website pre-registration: mint a one-time `web_registration_links` token and return the `/start auth_<token>` deep link. Track-aware — `student` verifies the OTP and requires the city payload; `general` takes only language + consent (no email, and **no phone** — Telegram verifies that itself). Rate-limited, no auth (pre-account) |
@@ -721,4 +737,6 @@ currently bot-side only.
 | satori + @resvg/resvg-js + @napi-rs/canvas | In-process date-card PNG rendering (§3.7a, feature-flagged): `satori` builds an SVG from a plain element tree, `@resvg/resvg-js` rasterizes it to PNG, and `@napi-rs/canvas` pixelates the partner's face for the share copy plus applies the venue-photo duotone and the film-grain tile. Pure Node (no headless browser); bundled Roboto + Archivo Black TTFs live in `apps/bot/src/assets/fonts/`. |
 | Supabase | Postgres + pgvector primary store, Storage for selfies, mobile profile photos, and chat images |
 | Resend/email provider | Corporate-email OTP delivery |
+| Telegram Gateway | PRIMARY phone-code delivery for the native app (`gatewayapi.telegram.org` — `checkSendAbility` + `sendVerificationMessage` with our own code, ≈$0.01/code). Env `TELEGRAM_GATEWAY_TOKEN`. |
+| Twilio Verify | SMS fallback for phone codes (numbers without Telegram / Gateway outages / explicit "send SMS"). REST via fetch — no SDK dependency, no Twilio phone number needed. Env `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID`. |
 | Expo / APNs / FCM | Mobile push notifications |

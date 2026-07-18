@@ -42,6 +42,18 @@ export const env = {
   /// registration path and the bot ignores `message.contact` shares, exactly
   /// as before. Ship dark; flip at launch together with the fork Mini App.
   PHONE_AUTH_ENABLED: process.env.PHONE_AUTH_ENABLED === "true",
+  /// Telegram Gateway (gateway.telegram.org) — PRIMARY delivery rail for the
+  /// native app's phone verification codes (~$0.01/code, arrives as an
+  /// official Telegram service message). Empty → Gateway is skipped and the
+  /// Twilio SMS fallback below is the only rail.
+  TELEGRAM_GATEWAY_TOKEN: process.env.TELEGRAM_GATEWAY_TOKEN ?? "",
+  /// Twilio Verify — SMS FALLBACK for phone codes (numbers without Telegram,
+  /// Gateway outages, or the user's explicit "send SMS instead"). All three
+  /// must be set for the SMS rail to be available; no Twilio phone number is
+  /// needed (Verify manages sending and code checking).
+  TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID ?? "",
+  TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN ?? "",
+  TWILIO_VERIFY_SERVICE_SID: process.env.TWILIO_VERIFY_SERVICE_SID ?? "",
   /// Native iOS forced-update kill switch, served pre-auth by
   /// `GET /v1/app/config` as `minSupportedIosVersion`. A client build whose
   /// version compares lower must block behind an "update the app" screen.

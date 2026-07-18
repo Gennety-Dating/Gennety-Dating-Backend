@@ -46,6 +46,28 @@ export const otpVerifyLimiter = make({
   message: { error: "Too many verification attempts." },
 });
 
+/**
+ * Phone code send — 5/hour per (phone + IP). First anti-SMS-pumping line;
+ * the durable backstop (per-phone cooldown + daily cap) lives in
+ * `services/phone-verification.ts` because this counter is in-memory.
+ */
+export const phoneOtpRequestLimiter = make({
+  windowMs: 3_600_000,
+  limit: 5,
+  keyGenerator: (req): string =>
+    `phone-otp-req:${(req.body?.phone ?? "").toString()}:${ipKey(req)}`,
+  message: { error: "Too many code requests, try again later." },
+});
+
+/** Phone code verify — 10/hour per (phone + IP), same rationale as email. */
+export const phoneOtpVerifyLimiter = make({
+  windowMs: 3_600_000,
+  limit: 10,
+  keyGenerator: (req): string =>
+    `phone-otp-vrf:${(req.body?.phone ?? "").toString()}:${ipKey(req)}`,
+  message: { error: "Too many verification attempts." },
+});
+
 /** Refresh — 60/hour per IP. */
 export const refreshLimiter = make({ windowMs: 3_600_000, limit: 60 });
 

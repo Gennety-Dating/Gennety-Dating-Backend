@@ -566,6 +566,16 @@ Required/high-impact env keys:
   `minSupportedIosVersion`; set e.g. `1.2.0` only to retire a broken/insecure
   old build — every older client blocks behind an "update the app" screen.
   Toggled live with `pm2 restart gennety-bot --update-env`; no schema change.
+- Native-app phone rail (`/v1/auth/phone/*`, shares the Registration v2
+  `PHONE_AUTH_ENABLED` gate — 404 while off): `TELEGRAM_GATEWAY_TOKEN`
+  (primary rail — gateway.telegram.org account token; empty → Gateway
+  skipped) and `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` /
+  `TWILIO_VERIFY_SERVICE_SID` (SMS fallback via Twilio Verify — no phone
+  number purchase needed). Either rail alone works; with neither set the
+  endpoints answer 503 and the Telegram one-tap flow is unaffected.
+  **Requires `db:push` of the additive `phone_otps` table first**
+  (non-destructive). Anti-SMS-pumping: per-phone+IP express limits plus a
+  durable per-phone cooldown (60 s) and daily cap (6/day) in the table.
 - Push: `EXPO_ACCESS_TOKEN`
 - Persona: `ENABLE_PERSONA_VERIFICATION`, `PERSONA_TEMPLATE_ID`,
   `PERSONA_ENVIRONMENT_ID`, `PERSONA_API_KEY`,

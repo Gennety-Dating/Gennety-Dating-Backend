@@ -129,6 +129,111 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /v1/auth/phone/request:
+    post:
+      tags: [auth]
+      operationId: requestPhoneCode
+      summary: Send a verification code to a phone (general track)
+      description: |
+        Provider fork is server-side — Telegram Gateway by default (the code
+        arrives as an official Telegram service message), Twilio SMS when the
+        number has no Telegram or `channel: "sms"` is forced (the client's
+        "не пришло? отправить по SMS" button). 404 while `PHONE_AUTH_ENABLED`
+        is off.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                  description: E.164 (lenient — spaces/dashes tolerated, `+` optional)
+                channel:
+                  type: string
+                  enum: [sms]
+                  description: Force the SMS rail, skipping Telegram Gateway
+      responses:
+        "200":
+          description: Code sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, deliveredVia, expiresAt, resendAvailableAt]
+                properties:
+                  ok: { type: boolean, const: true }
+                  deliveredVia:
+                    type: string
+                    enum: [telegram, sms]
+                  expiresAt: { type: string, format: date-time }
+                  resendAvailableAt: { type: string, format: date-time }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          description: Phone rail disabled (`PHONE_AUTH_ENABLED` off)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: Cooldown (carries `resendAvailableAt`), daily cap, or rate limit
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: No delivery rail available
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/auth/phone/verify:
+    post:
+      tags: [auth]
+      operationId: verifyPhoneCode
+      summary: Verify the phone code and mint tokens
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              properties:
+                phone: { type: string }
+                code:
+                  type: string
+                  pattern: "^\\d{4,8}$"
+      responses:
+        "200":
+          description: Tokens + serialized user (created on first verify)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthTokens" }
+        "400":
+          description: Invalid payload, expired, exhausted, or no pending code
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: Code mismatch
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Phone rail disabled (`PHONE_AUTH_ENABLED` off)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "502":
+          description: Verification provider unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/auth/refresh:
     post:
       tags: [auth]
