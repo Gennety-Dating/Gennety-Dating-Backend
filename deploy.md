@@ -123,8 +123,8 @@ all credential locations documented here:
 | AWS Rekognition | AWS IAM user `gennety-bot-rekognition` |
 | Google Places | Google Cloud API key `PLACES_API_KEY` |
 | APNs push (native iOS) | Apple Developer → Certificates → Keys: `.p8` APNs Auth Key (`APNS_KEY_PATH` on the droplet) + Key ID + Team ID |
-| Telegram Gateway | gateway.telegram.org (login with the founder's Telegram); token is `TELEGRAM_GATEWAY_TOKEN` |
-| Twilio Verify | Twilio console; `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID` |
+| Twilio Verify (primary phone rail) | Twilio console; `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID` |
+| Telegram Gateway (optional secondary) | gateway.telegram.org (login with the founder's Telegram); token is `TELEGRAM_GATEWAY_TOKEN` |
 
 SSH connect:
 
@@ -580,12 +580,16 @@ Required/high-impact env keys:
   old build — every older client blocks behind an "update the app" screen.
   Toggled live with `pm2 restart gennety-bot --update-env`; no schema change.
 - Native-app phone rail (`/v1/auth/phone/*`, shares the Registration v2
-  `PHONE_AUTH_ENABLED` gate — 404 while off): `TELEGRAM_GATEWAY_TOKEN`
-  (primary rail — gateway.telegram.org account token; empty → Gateway
-  skipped) and `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` /
-  `TWILIO_VERIFY_SERVICE_SID` (SMS fallback via Twilio Verify — no phone
-  number purchase needed). Either rail alone works; with neither set the
-  endpoints answer 503 and the Telegram one-tap flow is unaffected.
+  `PHONE_AUTH_ENABLED` gate — 404 while off): `TWILIO_ACCOUNT_SID` /
+  `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID` (**primary rail** —
+  Twilio Verify, founder decision 2026-07-18; no phone number purchase
+  needed) and optionally `TELEGRAM_GATEWAY_TOKEN` (secondary —
+  gateway.telegram.org; empty → Gateway never used).
+  `PHONE_CODE_PRIMARY_PROVIDER` (default `twilio`; set `telegram` to flip
+  the order). Either rail alone works; with neither set the endpoints
+  answer 503 and the Telegram one-tap flow is unaffected. Twilio gotchas:
+  a trial account only texts numbers verified in the console, and Geo
+  Permissions must allow the target countries.
   **Requires `db:push` of the additive `phone_otps` table first**
   (non-destructive). Anti-SMS-pumping: per-phone+IP express limits plus a
   durable per-phone cooldown (60 s) and daily cap (6/day) in the table.

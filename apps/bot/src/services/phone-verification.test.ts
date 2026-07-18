@@ -23,6 +23,7 @@ vi.mock("@gennety/db", () => ({
 }));
 
 const envMock = {
+  PHONE_CODE_PRIMARY_PROVIDER: "twilio",
   TELEGRAM_GATEWAY_TOKEN: "gw-token",
   TWILIO_ACCOUNT_SID: "AC123",
   TWILIO_AUTH_TOKEN: "tw-secret",
@@ -76,6 +77,7 @@ beforeEach(() => {
   phoneOtpUpdateMany.mockReset();
   phoneOtpCount.mockReset();
   queryRawUnsafe.mockReset();
+  envMock.PHONE_CODE_PRIMARY_PROVIDER = "twilio";
   envMock.TELEGRAM_GATEWAY_TOKEN = "gw-token";
   envMock.TWILIO_ACCOUNT_SID = "AC123";
   envMock.TWILIO_AUTH_TOKEN = "tw-secret";
@@ -108,7 +110,35 @@ describe("normalizePhone", () => {
 });
 
 describe("requestPhoneCode", () => {
-  it("delivers via Telegram Gateway by default and stores our code hash", async () => {
+  it("uses Twilio SMS first by default (primary = twilio) without touching the Gateway", async () => {
+    const fetchMock = stubProviders({
+      twilioStart: () => jsonResponse({ sid: "VE100" }, 201),
+    });
+
+    const result = await requestPhoneCode("+380631234567");
+    expect(result).toMatchObject({ ok: true, deliveredVia: "sms" });
+    const created = phoneOtpCreate.mock.calls[0]![0].data;
+    expect(created.provider).toBe("twilio_verify");
+    expect(created.codeHash).toBeUndefined();
+    expect(created.providerRequestId).toBe("VE100");
+    const urls = fetchMock.mock.calls.map((c) => c[0]!.toString());
+    expect(urls.some((u) => u.includes("gatewayapi.telegram.org"))).toBe(false);
+  });
+
+  it("falls back to Telegram Gateway when Twilio fails and Gateway is configured", async () => {
+    stubProviders({
+      twilioStart: () => jsonResponse({}, 500),
+      checkSendAbility: () => jsonResponse({ ok: true, result: { request_id: "req-9" } }),
+      sendVerificationMessage: () => jsonResponse({ ok: true, result: { request_id: "req-9" } }),
+    });
+
+    const result = await requestPhoneCode("+380631234567");
+    expect(result).toMatchObject({ ok: true, deliveredVia: "telegram" });
+    expect(phoneOtpCreate.mock.calls[0]![0].data.provider).toBe("telegram_gateway");
+  });
+
+  it("delivers via Telegram Gateway first when it is set as the primary", async () => {
+    envMock.PHONE_CODE_PRIMARY_PROVIDER = "telegram";
     stubProviders({
       checkSendAbility: () => jsonResponse({ ok: true, result: { request_id: "req-1" } }),
       sendVerificationMessage: () => jsonResponse({ ok: true, result: { request_id: "req-1" } }),
@@ -122,7 +152,8 @@ describe("requestPhoneCode", () => {
     expect(created.providerRequestId).toBe("req-1");
   });
 
-  it("falls back to Twilio SMS when the number has no Telegram", async () => {
+  it("falls back to Twilio SMS when the primary Gateway can't deliver", async () => {
+    envMock.PHONE_CODE_PRIMARY_PROVIDER = "telegram";
     stubProviders({
       checkSendAbility: () => jsonResponse({ ok: false, error: "PHONE_NUMBER_NOT_FOUND" }),
       twilioStart: () => jsonResponse({ sid: "VE123" }, 201),
@@ -132,17 +163,17 @@ describe("requestPhoneCode", () => {
     expect(result).toMatchObject({ ok: true, deliveredVia: "sms" });
     const created = phoneOtpCreate.mock.calls[0]![0].data;
     expect(created.provider).toBe("twilio_verify");
-    expect(created.codeHash).toBeUndefined();
     expect(created.providerRequestId).toBe("VE123");
   });
 
-  it("skips the Gateway entirely when the client forces SMS", async () => {
+  it("forceSms never falls back to the Gateway even when Twilio fails", async () => {
+    envMock.PHONE_CODE_PRIMARY_PROVIDER = "telegram";
     const fetchMock = stubProviders({
-      twilioStart: () => jsonResponse({ sid: "VE124" }, 201),
+      twilioStart: () => jsonResponse({}, 500),
     });
 
     const result = await requestPhoneCode("+380631234567", { forceSms: true });
-    expect(result).toMatchObject({ ok: true, deliveredVia: "sms" });
+    expect(result).toEqual({ ok: false, reason: "unavailable" });
     const urls = fetchMock.mock.calls.map((c) => c[0]!.toString());
     expect(urls.some((u) => u.includes("gatewayapi.telegram.org"))).toBe(false);
   });

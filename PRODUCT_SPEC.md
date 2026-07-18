@@ -40,8 +40,9 @@ out of Telegram-only workers.
   Telegram one-tap `requestContact` (the bot receives a trusted
   `message.contact`; `User.phone` is `@unique` — one account per number).
   On the **native mobile app** (no Telegram one-tap there) the general track
-  verifies the phone with a delivered code instead: **Telegram Gateway**
-  service message by default, **Twilio SMS** fallback
+  verifies the phone with a delivered code instead: **Twilio SMS by default**
+  (founder decision 2026-07-18; Telegram Gateway remains an optional
+  secondary rail behind `PHONE_CODE_PRIMARY_PROVIDER`)
   (`/v1/auth/phone/*`, same `PHONE_AUTH_ENABLED` gate; the verified number
   lands in the same unique `User.phone` + `phoneVerifiedAt`, so Telegram and
   mobile registrations can never duplicate an account).

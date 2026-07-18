@@ -135,11 +135,11 @@ paths:
       operationId: requestPhoneCode
       summary: Send a verification code to a phone (general track)
       description: |
-        Provider fork is server-side — Telegram Gateway by default (the code
-        arrives as an official Telegram service message), Twilio SMS when the
-        number has no Telegram or `channel: "sms"` is forced (the client's
-        "не пришло? отправить по SMS" button). 404 while `PHONE_AUTH_ENABLED`
-        is off.
+        Provider fork is server-side — Twilio SMS by default
+        (`PHONE_CODE_PRIMARY_PROVIDER`), Telegram Gateway as an optional
+        secondary rail; `channel: "sms"` always forces Twilio. The client
+        only reads `deliveredVia` for the status line. 404 while
+        `PHONE_AUTH_ENABLED` is off.
       security: []
       requestBody:
         required: true

@@ -42,15 +42,19 @@ export const env = {
   /// registration path and the bot ignores `message.contact` shares, exactly
   /// as before. Ship dark; flip at launch together with the fork Mini App.
   PHONE_AUTH_ENABLED: process.env.PHONE_AUTH_ENABLED === "true",
-  /// Telegram Gateway (gateway.telegram.org) — PRIMARY delivery rail for the
-  /// native app's phone verification codes (~$0.01/code, arrives as an
-  /// official Telegram service message). Empty → Gateway is skipped and the
-  /// Twilio SMS fallback below is the only rail.
+  /// Which rail tries first for the native app's phone codes. Founder
+  /// decision 2026-07-18: **twilio** (SMS) is the primary; "telegram" flips
+  /// back to Gateway-first. Whichever is primary, the other configured rail
+  /// remains the automatic fallback.
+  PHONE_CODE_PRIMARY_PROVIDER:
+    process.env.PHONE_CODE_PRIMARY_PROVIDER === "telegram" ? "telegram" : "twilio",
+  /// Telegram Gateway (gateway.telegram.org) — optional secondary rail
+  /// (~$0.01/code, arrives as an official Telegram service message). Empty →
+  /// Gateway is never used.
   TELEGRAM_GATEWAY_TOKEN: process.env.TELEGRAM_GATEWAY_TOKEN ?? "",
-  /// Twilio Verify — SMS FALLBACK for phone codes (numbers without Telegram,
-  /// Gateway outages, or the user's explicit "send SMS instead"). All three
-  /// must be set for the SMS rail to be available; no Twilio phone number is
-  /// needed (Verify manages sending and code checking).
+  /// Twilio Verify — the PRIMARY phone-code rail. All three must be set for
+  /// SMS to be available; no Twilio phone number is needed (Verify manages
+  /// sending and code checking).
   TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID ?? "",
   TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN ?? "",
   TWILIO_VERIFY_SERVICE_SID: process.env.TWILIO_VERIFY_SERVICE_SID ?? "",

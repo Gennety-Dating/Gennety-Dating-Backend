@@ -5,19 +5,21 @@ import { env } from "../config.js";
 
 /**
  * Phone verification for the native mobile app (Registration v2 general
- * track). Provider fork, founder decision 2026-07-18:
+ * track). Two rails; the order is env-driven (`PHONE_CODE_PRIMARY_PROVIDER`,
+ * founder decision 2026-07-18: **Twilio SMS primary**, Gateway optional
+ * secondary):
  *
- *   1. PRIMARY — Telegram Gateway (gateway.telegram.org): `checkSendAbility`
- *      asks whether the number has Telegram, then `sendVerificationMessage`
- *      delivers OUR generated code as an official Telegram service message.
- *      We store the bcrypt hash and verify locally (same model as email OTP).
- *   2. FALLBACK — Twilio Verify SMS: numbers without Telegram, Gateway
- *      failures, or the client's explicit "send SMS instead" button
- *      (`forceSms`). Twilio generates and checks the code itself; we keep
- *      only the Verification SID.
+ *   - Twilio Verify SMS: Twilio generates and checks the code itself; we
+ *     keep only the Verification SID.
+ *   - Telegram Gateway (gateway.telegram.org): `checkSendAbility` asks
+ *     whether the number has Telegram, then `sendVerificationMessage`
+ *     delivers OUR generated code as an official Telegram service message.
+ *     We store the bcrypt hash and verify locally (same model as email OTP).
  *
- * The client never sees the fork — `/v1/auth/phone/*` responds with
- * `deliveredVia: "telegram" | "sms"` for the status line.
+ * Whichever is primary, the other configured rail is the automatic fallback;
+ * `forceSms` (the client's "send SMS instead" button) always goes straight
+ * to Twilio. The client never sees the fork — `/v1/auth/phone/*` responds
+ * with `deliveredVia: "telegram" | "sms"` for the status line.
  *
  * Anti-SMS-pumping layers: per-phone+IP express rate limit (middleware),
  * per-phone resend cooldown + daily cap here (advisory-lock serialized, same
@@ -254,35 +256,33 @@ export async function requestPhoneCode(
 
       const expiresAt = new Date(now.getTime() + PHONE_OTP_TTL_MS);
 
-      // Rail 1: Telegram Gateway with our own code, unless SMS was forced.
-      if (!options.forceSms) {
+      const viaTelegram = async () => {
         const code = generateOtp(PHONE_CODE_LENGTH);
         const requestId = await sendViaTelegramGateway(phone, code);
-        if (requestId) {
-          const codeHash = await bcrypt.hash(code, 10);
-          const row = await tx.phoneOtp.create({
-            data: {
-              phone,
-              provider: "telegram_gateway",
-              codeHash,
-              providerRequestId: requestId,
-              expiresAt,
-            },
-          });
-          return {
-            ok: true as const,
-            deliveredVia: "telegram" as const,
+        if (!requestId) return null;
+        const codeHash = await bcrypt.hash(code, 10);
+        const row = await tx.phoneOtp.create({
+          data: {
+            phone,
+            provider: "telegram_gateway",
+            codeHash,
+            providerRequestId: requestId,
             expiresAt,
-            resendAvailableAt: new Date(
-              row.createdAt.getTime() + PHONE_OTP_RESEND_COOLDOWN_MS,
-            ),
-          };
-        }
-      }
+          },
+        });
+        return {
+          ok: true as const,
+          deliveredVia: "telegram" as const,
+          expiresAt,
+          resendAvailableAt: new Date(
+            row.createdAt.getTime() + PHONE_OTP_RESEND_COOLDOWN_MS,
+          ),
+        };
+      };
 
-      // Rail 2: Twilio Verify SMS.
-      const sid = await twilioStartVerification(phone);
-      if (sid) {
+      const viaTwilio = async () => {
+        const sid = await twilioStartVerification(phone);
+        if (!sid) return null;
         const row = await tx.phoneOtp.create({
           data: {
             phone,
@@ -299,6 +299,19 @@ export async function requestPhoneCode(
             row.createdAt.getTime() + PHONE_OTP_RESEND_COOLDOWN_MS,
           ),
         };
+      };
+
+      // forceSms → Twilio only; otherwise the primary rail first with the
+      // other configured rail as automatic fallback
+      // (order = PHONE_CODE_PRIMARY_PROVIDER, default twilio).
+      const order = options.forceSms
+        ? [viaTwilio]
+        : env.PHONE_CODE_PRIMARY_PROVIDER === "telegram"
+          ? [viaTelegram, viaTwilio]
+          : [viaTwilio, viaTelegram];
+      for (const attempt of order) {
+        const result = await attempt();
+        if (result) return result;
       }
 
       return { ok: false as const, reason: "unavailable" as const };
