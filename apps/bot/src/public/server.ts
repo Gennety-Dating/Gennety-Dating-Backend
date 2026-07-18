@@ -18,6 +18,7 @@ import { countdownRouter } from "./routes/countdown.js";
 import { appConfigRouter } from "./routes/app-config.js";
 import { phoneAuthRouter } from "./routes/phone-auth.js";
 import { liveActivityRouter } from "./routes/live-activity.js";
+import { accountStatusRouter } from "./routes/account-status.js";
 import { founderReportRouter } from "./routes/founder-report.js";
 import { verificationRouter } from "./routes/verification.js";
 import { webRegistrationRouter } from "./routes/web-registration.js";
@@ -299,6 +300,9 @@ app.use("/v1/web-registration", webRegistrationRouter);
 app.use("/v1/me/verification", verificationRouter);
 // Live Activity token registration (same more-specific-prefix rule).
 app.use("/v1/me/live-activity-token", liveActivityRouter);
+// Pause/resume + freeze (native app). Same mount as meRouter, tried first;
+// unmatched /v1/me/* paths fall through to the main router below.
+app.use("/v1/me", accountStatusRouter);
 app.use("/v1/me", meRouter);
 app.use("/v1/onboarding", onboardingRouter);
 app.use("/v1/assistant", assistantRouter);

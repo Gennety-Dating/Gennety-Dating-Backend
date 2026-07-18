@@ -331,6 +331,65 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/status:
+    patch:
+      tags: [me]
+      operationId: setMatchmakingStatus
+      summary: Pause/resume matching (the "Сегодня" gesture)
+      description: |
+        Allowed transitions: active→paused, paused→active, frozen→active
+        (silent reactivation on app return). Same-state requests are
+        idempotent. onboarding/suspended/banned/pending_investigation → 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [active, paused]
+      responses:
+        "200":
+          description: Updated user + profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MeResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Transition not allowed from the current status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/me/freeze:
+    post:
+      tags: [me]
+      operationId: freezeAccount
+      summary: Soft-delete alternative — leave the pool, keep everything
+      description: |
+        Telegram Settings parity: cancels in-flight matches (partner is
+        notified/compensated), keeps profile/verification/embedding intact,
+        flips to `frozen`. Reactivate via PATCH /v1/me/status {active}.
+        Idempotent when already frozen.
+      responses:
+        "200":
+          description: Updated user + profile (status frozen)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MeResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Freeze not allowed from the current status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/me/location:
     post:
       tags: [me]
