@@ -606,6 +606,74 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/me/verification/native-init:
+    get:
+      tags: [me]
+      operationId: getNativeVerificationConfig
+      summary: Persona Inquiry SDK config for the native client
+      description: |
+        JWT twin of the Mini App's embedded-flow init: same fields, flips
+        verificationStatus to `pending`. Only the HMAC webhook / pull
+        pipeline can ever write `verified`/`rejected`.
+      responses:
+        "200":
+          description: SDK config
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [referenceId, templateId, environmentId, language]
+                properties:
+                  referenceId: { type: string, format: uuid }
+                  templateId: { type: string }
+                  environmentId: { type: string }
+                  language: { $ref: "#/components/schemas/Language" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Already verified
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503":
+          description: Persona not configured
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/me/verification/native-event:
+    post:
+      tags: [me]
+      operationId: reportNativeVerificationEvent
+      summary: Terminal event from the native Persona SDK
+      description: |
+        `complete` records the inquiry id (CAS — never overwrites) and
+        triggers the server's pull-fallback pipeline; `cancel`/`error` are
+        logged only. Poll GET /v1/me/verification for the outcome.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind:
+                  type: string
+                  enum: [complete, cancel, error]
+                inquiryId: { type: string, maxLength: 128 }
+                message: { type: string, maxLength: 512 }
+      responses:
+        "200":
+          description: Acknowledged
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /v1/me/photos:
     get:
       tags: [me]

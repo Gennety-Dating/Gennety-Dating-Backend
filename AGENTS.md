@@ -37,8 +37,10 @@ When prose and code disagree:
 - **Video workspace**: Remotion + React in `apps/video` for local Studio preview
   and programmatic video rendering. It is not part of the production bot or
   Mini App runtime.
-- **Mobile surface**: public `/v1/*` API plus `mobile-handoff/` components. A
-  full `apps/mobile` workspace is not present in this repo yet.
+- **Mobile surface**: the public `/v1/*` API, consumed by the native SwiftUI
+  app in the separate `Gennety-iOS` repo (`~/Desktop/Gennety-iOS`; its
+  OpenAPI contract is `openapi/gennety-v1.yaml` here). The legacy Expo
+  `mobile-handoff/` components were removed 2026-07-18.
 - **Database**: PostgreSQL + pgvector through Prisma (`packages/db`).
 - **AI / media / verification**: OpenAI, Persona, AWS Rekognition, Supabase
   Storage, Google Places, Expo push.
@@ -84,7 +86,6 @@ Prefer file-scoped or package-scoped verification while iterating:
 │   ├── bot/          # grammY bot, Express public/admin APIs, workers
 │   ├── video/        # Remotion Studio, compositions, and local renders
 │   └── webapp/       # Vite Telegram Calendar Mini App
-├── mobile-handoff/   # Expo handoff components, not a workspace app
 ├── packages/
 │   ├── db/           # Prisma schema, client exports, DB helpers
 │   └── shared/       # constants, i18n, types, AI prompts

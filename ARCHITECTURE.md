@@ -565,7 +565,9 @@ auth) are deliberately outside the spec.
 | POST | `/v1/me/live-activity-token` | Register an ActivityKit push token — `activityType ∈ {match_decision, date_day}`, `kind ∈ {start, update}`; upsert per (user, type, kind). `DELETE /:activityType/:kind` drops it when the activity ends locally. Backs `sendLiveActivityUpdateToUser` in `services/push.ts`. |
 | GET  | `/v1/me/photos` / POST / DELETE | Photo CRUD with content-sniffed image types and face-match gate. Add/delete array mutations serialize on the user row; the database rechecks limit/duplicate state, and failed post-upload commits clean the new storage object. |
 | GET  | `/v1/me/verification` | Read current verification state |
-| GET  | `/v1/me/verification/url` | Mint Persona hosted-flow URL |
+| GET  | `/v1/me/verification/url` | Mint Persona hosted-flow URL (legacy webview fallback) |
+| GET  | `/v1/me/verification/native-init` | Persona Inquiry SDK config for the native iOS client (JWT twin of the Mini App embedded init — same fields, flips status to `pending`; webhook/pull pipeline remain the only writers of terminal statuses) |
+| POST | `/v1/me/verification/native-event` | Terminal event from the native Persona SDK: `complete` CAS-writes `personaInquiryId` + fires the pull-fallback; `cancel`/`error` logged only |
 | GET  | `/v1/onboarding/interview` | Resume server-owned conversational onboarding |
 | POST | `/v1/onboarding/interview/answer` | Send text to the shared onboarding collector; rejected until ToS acceptance and language selection are persisted |
 | POST | `/v1/onboarding/interview/voice` | Transcribe voice and send it to the same collector; uses the same legal/language gate |

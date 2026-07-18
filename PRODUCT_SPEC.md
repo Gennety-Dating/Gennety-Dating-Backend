@@ -22,8 +22,9 @@ acts as the matchmaker: it finds the match, pitches it, and negotiates the
 logistics until both users meet in person.
 
 The product surface is Telegram-first: `@gennetybot`, the Calendar Mini App,
-and a shared `/v1/*` HTTP API for the Expo/mobile client. This repo contains
-the backend, Mini App, public API, and `mobile-handoff/` components; a full
+and a shared `/v1/*` HTTP API for the native mobile client. This repo contains
+the backend, Mini App, and public API (the native iOS client lives in the
+separate `Gennety-iOS` repo); a full
 `apps/mobile` workspace is not present here yet. Both Telegram and mobile users
 share the same Postgres backend (`User.platform ∈ {telegram, mobile, both}`).
 Mobile-only users carry a synthetic **negative** `telegramId` and are filtered
@@ -672,7 +673,7 @@ path is visually distinct: a blue (`primary`) **❄️ Freeze account** over a r
   option: one red **Yes, I'm 100% sure** against two green back-out buttons. Only
   the red path runs the GDPR hard delete. Telegram and mobile share one deletion
   service: it compare-and-set cancels every in-flight match, notifies/comps the
-  partner on their actual channel (Telegram and/or Expo push), strictly erases
+  partner on their actual channel (Telegram and/or APNs push), strictly erases
   known user-owned Supabase selfies/profile media/chat attachments, removes any
   founder-report snapshot containing that user, then deletes the User and all
   relational data by Prisma cascade. A storage failure leaves the account row
@@ -695,12 +696,14 @@ to the next-batch countdown once the date passes. The worker resolves this from
 one extra `scheduled`-match sweep per tick, and the in-memory de-dup naturally
 absorbs the text switch.
 
-### 2.2 Mobile API / Expo handoff
+### 2.2 Mobile API (native iOS client)
 
-The public `/v1/*` API is the integration surface for the Expo/mobile client
-(Bearer JWT, refresh-token rotation). This repo currently ships API support
-and handoff components rather than a full mobile workspace. Supported
-first-class flows:
+The public `/v1/*` API is the integration surface for the native SwiftUI
+client (Bearer JWT, refresh-token rotation; separate `Gennety-iOS` repo,
+machine contract in `openapi/gennety-v1.yaml`). The Expo era is over: push is
+direct APNs, the general track verifies phones with a Twilio-first code, and
+the hybrid-chat `ui_hint` field names the native control per interview step.
+Supported first-class flows:
 
 - Onboarding / consent / OTP / Persona via `/v1/onboarding/*`,
   `/v1/auth/*`, `/v1/me/verification/*`.
