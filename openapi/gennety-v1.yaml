@@ -418,7 +418,8 @@ paths:
       summary: Register the device push token
       description: |
         One token per user row; silent overwrite on re-registration.
-        `platform` currently defaults to `expo`; the iOS client sends `apns`.
+        The native iOS client sends `platform: "apns"` (delivery is direct
+        APNs; the legacy default remains `expo` for wire-compat only).
       requestBody:
         required: true
         content:
@@ -439,6 +440,63 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/me/live-activity-token:
+    post:
+      tags: [me]
+      operationId: registerLiveActivityToken
+      summary: Register an ActivityKit push token (start or update)
+      description: |
+        One registration per (user, activityType, kind) — re-registration
+        upserts in place. The server uses `update` tokens to drive the
+        "match decision" and "date day" Live Activities via APNs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [activityType, kind, token]
+              properties:
+                activityType:
+                  type: string
+                  enum: [match_decision, date_day]
+                kind:
+                  type: string
+                  enum: [start, update]
+                token: { type: string, maxLength: 200 }
+                matchId: { type: string }
+      responses:
+        "200":
+          description: Registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/me/live-activity-token/{activityType}/{kind}:
+    delete:
+      tags: [me]
+      operationId: deleteLiveActivityToken
+      summary: Drop a registration when the activity ends locally
+      parameters:
+        - name: activityType
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [match_decision, date_day]
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [start, update]
+      responses:
+        "204": { description: Deleted (idempotent) }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 

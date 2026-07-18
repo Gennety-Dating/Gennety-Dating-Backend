@@ -175,7 +175,15 @@ export const env = {
 
   /// Expo Push Service access token (https://expo.dev/accounts/…/settings/access-tokens).
   /// Optional — unset disables push dispatch.
-  EXPO_ACCESS_TOKEN: process.env.EXPO_ACCESS_TOKEN ?? "",
+  /// Direct APNs (token-based .p8) — the push rail for the native iOS app
+  /// and the only rail for Live Activity updates. All four required for
+  /// pushes to leave the process (`apnsConfigured()`); environment picks the
+  /// host: "sandbox" (default — TestFlight/dev builds) or "production".
+  APNS_KEY_PATH: process.env.APNS_KEY_PATH ?? "",
+  APNS_KEY_ID: process.env.APNS_KEY_ID ?? "",
+  APNS_TEAM_ID: process.env.APNS_TEAM_ID ?? "",
+  APNS_BUNDLE_ID: process.env.APNS_BUNDLE_ID ?? "com.gennety.ios",
+  APNS_ENVIRONMENT: process.env.APNS_ENVIRONMENT ?? "sandbox",
   /// Supabase Storage bucket for selfie uploads.
   SUPABASE_URL: process.env.SUPABASE_URL ?? "",
   SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",

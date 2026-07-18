@@ -1,42 +1,51 @@
-import { Expo, type ExpoPushMessage, type ExpoPushTicket } from "expo-server-sdk";
 import { prisma } from "@gennety/db";
-import { env } from "../config.js";
+import {
+  apnsConfigured,
+  buildAlertPayload,
+  buildLiveActivityPayload,
+  sendApnsNotification,
+  type LiveActivityUpdateInput,
+} from "./apns.js";
 
 /**
- * Expo Push dispatcher.
+ * Push dispatcher for native mobile users (`User.platform === "mobile"`).
+ * Bot-side notifications stay Telegram DMs; callers pass an internal
+ * `userId` and we look up the `pushToken` registered via
+ * POST /v1/me/push-token (`pushPlatform: "apns"`).
  *
- * The bot-side notification layer still uses Telegram DMs; this module is
- * used only for mobile (`User.platform === "mobile"`) users. Callers pass
- * an internal `userId` and we look up their cached `pushToken` on the
- * `User` row (registered via POST /v1/me/push-token).
+ * Transport is direct APNs (`services/apns.ts`) — the Expo SDK rail was
+ * retired 2026-07-18 (IOS_APP_ROADMAP task 0.2; no Expo client ever
+ * shipped). Legacy `ExponentPushToken[...]` rows fail APNs validation as
+ * `BadDeviceToken` and are purged by the same dead-token sweep.
  *
- * Invalid / stale tokens get cleared automatically so we don't keep
- * spamming dead devices — Expo returns `DeviceNotRegistered` tickets for
- * those.
+ * Dead tokens (`Unregistered`, `BadDeviceToken`, …, or HTTP 410) are cleared
+ * automatically so we never keep spamming devices that uninstalled the app.
  */
-
-let client: Expo | null = null;
-
-function getClient(): Expo {
-  if (!client) {
-    client = new Expo({
-      ...(env.EXPO_ACCESS_TOKEN ? { accessToken: env.EXPO_ACCESS_TOKEN } : {}),
-    });
-  }
-  return client;
-}
 
 export interface PushPayload {
   title: string;
   body: string;
-  /** Custom JSON blob forwarded to the Expo client — e.g. deep-link data. */
+  /** Custom JSON forwarded to the client alongside `aps` — deep-link data. */
   data?: Record<string, unknown>;
 }
 
+const DEAD_TOKEN_REASONS = new Set([
+  "BadDeviceToken",
+  "Unregistered",
+  "DeviceTokenNotForTopic",
+  "ExpiredToken",
+]);
+
+function tokenIsDead(result: { ok: boolean; status?: number; reason?: string | null }): boolean {
+  if (result.ok) return false;
+  if (result.status === 410) return true;
+  return DEAD_TOKEN_REASONS.has(result.reason ?? "");
+}
+
 /**
- * Send a push to a single mobile user. Resolves to `true` if Expo accepted
- * the ticket. No-op (resolves `false`) when the user has no token, isn't
- * on mobile, or the token is malformed.
+ * Send a push to a single mobile user. Resolves `true` when APNs accepted
+ * the notification; `false` (never throws) when the user has no token,
+ * APNs isn't configured, or delivery failed.
  */
 export async function sendPushToUser(
   userId: string,
@@ -44,34 +53,27 @@ export async function sendPushToUser(
 ): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { pushToken: true, platform: true },
+    select: { pushToken: true },
   });
   if (!user?.pushToken) return false;
-  if (!Expo.isExpoPushToken(user.pushToken)) {
-    // Silent purge of malformed tokens.
-    await prisma.user.update({ where: { id: userId }, data: { pushToken: null } });
+  if (!apnsConfigured()) {
+    console.warn("[push] APNs not configured — dropping push for", userId);
     return false;
   }
 
-  const message: ExpoPushMessage = {
-    to: user.pushToken,
-    sound: "default",
-    title: payload.title,
-    body: payload.body,
-    ...(payload.data ? { data: payload.data } : {}),
-  };
-
-  try {
-    const chunks = getClient().chunkPushNotifications([message]);
-    for (const chunk of chunks) {
-      const tickets = await getClient().sendPushNotificationsAsync(chunk);
-      await handleTickets(userId, tickets);
-    }
-    return true;
-  } catch (err) {
-    console.warn("[push] sendPushToUser failed:", err);
+  const result = await sendApnsNotification(user.pushToken, buildAlertPayload(payload), {
+    pushType: "alert",
+  });
+  if (tokenIsDead(result)) {
+    await prisma.user
+      .update({ where: { id: userId }, data: { pushToken: null } })
+      .catch(() => undefined);
     return false;
   }
+  if (!result.ok) {
+    console.warn(`[push] send failed for ${userId}: ${result.status} ${result.reason}`);
+  }
+  return result.ok;
 }
 
 /**
@@ -88,24 +90,40 @@ export async function sendPushToUsers(
   );
 }
 
+export type LiveActivityType = "match_decision" | "date_day";
+
 /**
- * Clear tokens that Expo told us are dead. We only check `status === "error"`
- * + common `DeviceNotRegistered` details; other errors (rate-limit, payload
- * too big) are transient and should not wipe the token.
+ * Push a remote update (or end) into the user's running Live Activity of the
+ * given type, using the update token the iOS client registered via
+ * POST /v1/me/live-activity-token. Resolves `false` when no token is
+ * registered or delivery failed; a dead token deletes its row so the next
+ * activity re-registers cleanly.
  */
-async function handleTickets(
+export async function sendLiveActivityUpdateToUser(
   userId: string,
-  tickets: ExpoPushTicket[],
-): Promise<void> {
-  for (const ticket of tickets) {
-    if (ticket.status !== "error") continue;
-    const errCode = ticket.details?.error;
-    if (errCode === "DeviceNotRegistered") {
-      await prisma.user
-        .update({ where: { id: userId }, data: { pushToken: null } })
-        .catch(() => undefined);
-      return;
-    }
-    console.warn(`[push] ticket error for user ${userId}: ${ticket.message}`);
+  activityType: LiveActivityType,
+  update: LiveActivityUpdateInput,
+): Promise<boolean> {
+  if (!apnsConfigured()) return false;
+  const row = await prisma.liveActivityToken.findUnique({
+    where: {
+      userId_activityType_kind: { userId, activityType, kind: "update" },
+    },
+    select: { id: true, token: true },
+  });
+  if (!row) return false;
+
+  const result = await sendApnsNotification(row.token, buildLiveActivityPayload(update), {
+    pushType: "liveactivity",
+  });
+  if (tokenIsDead(result)) {
+    await prisma.liveActivityToken.delete({ where: { id: row.id } }).catch(() => undefined);
+    return false;
   }
+  if (!result.ok) {
+    console.warn(
+      `[push] live-activity ${activityType} update failed for ${userId}: ${result.status} ${result.reason}`,
+    );
+  }
+  return result.ok;
 }

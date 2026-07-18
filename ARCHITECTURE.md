@@ -326,6 +326,17 @@ transaction-scoped PostgreSQL advisory lock keyed by normalized email, so
 concurrent requests across processes cannot bypass the resend cooldown or send
 multiple competing codes.
 
+### `live_activity_tokens`
+
+APNs push tokens for the native app's Live Activities (ActivityKit). One row
+per (user, `activityType` ∈ `match_decision`/`date_day`, `kind` ∈
+`start`/`update`), unique composite — the single-live-match invariant means a
+user never runs two activities of one type, so re-registration upserts in
+place. A token APNs reports dead is deleted so the next activity re-registers
+cleanly. `onDelete: Cascade` from `users`. Written by
+`public/routes/live-activity.ts`; consumed by
+`services/push.ts → sendLiveActivityUpdateToUser`.
+
 ### `phone_otps`
 
 Native-app phone-code challenges (Registration v2 general track on iOS —
@@ -548,7 +559,8 @@ auth) are deliberately outside the spec.
 | POST | `/v1/me/home-location` | Persist canonical dating city (`homeCityKey`) + coordinates for match eligibility |
 | POST | `/v1/me/location` | Persist raw home-base lat/lng for Meet-Halfway; does not by itself unlock matching |
 | PATCH | `/v1/me/preferences` | `matchRadius`, gender preference |
-| POST | `/v1/me/push-token` | Register Expo / APNs / FCM token |
+| POST | `/v1/me/push-token` | Register the device push token (native iOS sends `platform: "apns"`; delivery is direct APNs) |
+| POST | `/v1/me/live-activity-token` | Register an ActivityKit push token — `activityType ∈ {match_decision, date_day}`, `kind ∈ {start, update}`; upsert per (user, type, kind). `DELETE /:activityType/:kind` drops it when the activity ends locally. Backs `sendLiveActivityUpdateToUser` in `services/push.ts`. |
 | GET  | `/v1/me/photos` / POST / DELETE | Photo CRUD with content-sniffed image types and face-match gate. Add/delete array mutations serialize on the user row; the database rechecks limit/duplicate state, and failed post-upload commits clean the new storage object. |
 | GET  | `/v1/me/verification` | Read current verification state |
 | GET  | `/v1/me/verification/url` | Mint Persona hosted-flow URL |
@@ -739,4 +751,4 @@ currently bot-side only.
 | Resend/email provider | Corporate-email OTP delivery |
 | Telegram Gateway | PRIMARY phone-code delivery for the native app (`gatewayapi.telegram.org` — `checkSendAbility` + `sendVerificationMessage` with our own code, ≈$0.01/code). Env `TELEGRAM_GATEWAY_TOKEN`. |
 | Twilio Verify | SMS fallback for phone codes (numbers without Telegram / Gateway outages / explicit "send SMS"). REST via fetch — no SDK dependency, no Twilio phone number needed. Env `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID`. |
-| Expo / APNs / FCM | Mobile push notifications |
+| APNs (direct) | Native-app push + Live Activity updates: token-based `.p8` auth (`jsonwebtoken` ES256 provider JWT, cached 50 min) over `node:http2` (APNs is HTTP/2-only; no SDK dependency). `services/apns.ts` transport + `services/push.ts` dispatcher; dead tokens (`Unregistered`/410) are auto-purged. Env `APNS_KEY_PATH/KEY_ID/TEAM_ID/BUNDLE_ID/ENVIRONMENT`. The Expo SDK rail was retired 2026-07-18 (no Expo client ever shipped). |

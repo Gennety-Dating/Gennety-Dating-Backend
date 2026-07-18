@@ -111,7 +111,9 @@ all credential locations documented here:
 | Persona | Persona dashboard; current env comments say sandbox credentials |
 | AWS Rekognition | AWS IAM user `gennety-bot-rekognition` |
 | Google Places | Google Cloud API key `PLACES_API_KEY` |
-| Expo push | Expo access token `EXPO_ACCESS_TOKEN` |
+| APNs push (native iOS) | Apple Developer → Certificates → Keys: `.p8` APNs Auth Key (`APNS_KEY_PATH` on the droplet) + Key ID + Team ID |
+| Telegram Gateway | gateway.telegram.org (login with the founder's Telegram); token is `TELEGRAM_GATEWAY_TOKEN` |
+| Twilio Verify | Twilio console; `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID` |
 
 SSH connect:
 
@@ -425,7 +427,7 @@ is worthless without its provider):
 | Supabase (DB + Storage) | **migrated 2026-07-13 to a new project** — see below | Storage works for the first time (the old project's keys were never filled in — they were the literal `your_supabase_…` placeholders from `.env.example`, so uploads 403'd with `Invalid Compact JWS`). |
 | `PERSONA_API_KEY` | **works, but it is a SANDBOX key** (`persona_sand…`) | The API answers 200 on the endpoints the pipeline actually calls (`GET /inquiries/:id`). Identity checks run against Persona's sandbox, i.e. they are test flows, not real KYC. A production key is needed before liveness *means* anything. (A 403 on `/inquiry-templates` is a red herring — that endpoint is outside the key's scope and the product never calls it.) |
 | `PLACES_API_KEY` | **empty** | Google Places: the venue fallback when no curated venue is in range, the Location Mini App autocomplete, the venue-change catalog beyond curated rows, and the date card's venue photo. The curated base still covers Kyiv/Kharkiv/Odesa, so scheduling degrades rather than dies. |
-| `EXPO_ACCESS_TOKEN` | empty | Mobile push. No Expo app ships from this repo yet, so this is inert. |
+| `EXPO_ACCESS_TOKEN` | retired 2026-07-18 (Expo rail removed; native push is direct APNs via `APNS_*`) | Can be deleted from `/opt/gennety/.env`; the process no longer reads it. |
 
 Re-probe any credential from the droplet before trusting a flag flip; the probes
 are cheap and each one of these was wrong in a different way.
@@ -576,7 +578,17 @@ Required/high-impact env keys:
   **Requires `db:push` of the additive `phone_otps` table first**
   (non-destructive). Anti-SMS-pumping: per-phone+IP express limits plus a
   durable per-phone cooldown (60 s) and daily cap (6/day) in the table.
-- Push: `EXPO_ACCESS_TOKEN`
+- Push (native iOS, direct APNs — the Expo rail was retired 2026-07-18):
+  `APNS_KEY_PATH` (path to the `.p8` APNs Auth Key on the droplet, e.g.
+  `/opt/gennety/keys/AuthKey_XXXXXX.p8` — NOT committed; scp it manually),
+  `APNS_KEY_ID` (the key's 10-char id), `APNS_TEAM_ID` (Apple Developer
+  Team ID), `APNS_BUNDLE_ID` (default `com.gennety.ios`),
+  `APNS_ENVIRONMENT` (`sandbox` default — dev/TestFlight builds use the
+  sandbox host; set `production` for App Store builds). With any of the
+  first three empty, pushes are dropped with a warning and everything else
+  works. **Requires `db:push` of the additive `live_activity_tokens` table
+  first** (non-destructive). `EXPO_ACCESS_TOKEN` is retired and can be
+  removed from `/opt/gennety/.env`.
 - Persona: `ENABLE_PERSONA_VERIFICATION`, `PERSONA_TEMPLATE_ID`,
   `PERSONA_ENVIRONMENT_ID`, `PERSONA_API_KEY`,
   `PERSONA_WEBHOOK_SECRET`, `PERSONA_HOSTED_URL_BASE`,

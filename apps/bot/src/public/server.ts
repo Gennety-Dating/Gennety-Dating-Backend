@@ -17,6 +17,7 @@ import { matchesRouter } from "./routes/matches.js";
 import { countdownRouter } from "./routes/countdown.js";
 import { appConfigRouter } from "./routes/app-config.js";
 import { phoneAuthRouter } from "./routes/phone-auth.js";
+import { liveActivityRouter } from "./routes/live-activity.js";
 import { founderReportRouter } from "./routes/founder-report.js";
 import { verificationRouter } from "./routes/verification.js";
 import { webRegistrationRouter } from "./routes/web-registration.js";
@@ -296,6 +297,8 @@ app.use("/v1/web-registration", webRegistrationRouter);
 // Mount /v1/me/verification BEFORE /v1/me so Express tries the more-specific
 // prefix first — both routers match `/v1/me/verification/*` otherwise.
 app.use("/v1/me/verification", verificationRouter);
+// Live Activity token registration (same more-specific-prefix rule).
+app.use("/v1/me/live-activity-token", liveActivityRouter);
 app.use("/v1/me", meRouter);
 app.use("/v1/onboarding", onboardingRouter);
 app.use("/v1/assistant", assistantRouter);

@@ -271,6 +271,7 @@ model User {
   sessions UserSession[]
   profilerAnswers ProfilerAnswer[]
   ticketLedger TicketLedger[]
+  liveActivityTokens LiveActivityToken[]
   mediaValidationRejections MediaValidationRejection[]
 
   matchesAsA Match[] @relation("MatchUserA")
@@ -1104,6 +1105,30 @@ model EmailOtp {
 
   @@index([email, createdAt])
   @@map("email_otps")
+}
+
+/// APNs push tokens for the native app's Live Activities (ActivityKit).
+/// One row per (user, activity type, token kind): `activityType` ∈
+/// "match_decision" | "date_day", `kind` ∈ "start" (push-to-start) |
+/// "update" (per-activity update token). The single-live-match invariant
+/// means a user never runs two activities of one type, so the composite
+/// unique is enough — re-registration upserts in place, and a dead token
+/// (APNs `Unregistered`) deletes the row. Written by
+/// `public/routes/live-activity.ts`; consumed by
+/// `services/push.ts → sendLiveActivityUpdateToUser`.
+model LiveActivityToken {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activityType String   @map("activity_type")
+  kind         String
+  matchId      String?  @map("match_id") @db.Uuid
+  token        String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, activityType, kind])
+  @@map("live_activity_tokens")
 }
 
 /// Native-app phone-code challenges (general track on iOS/Android, where the
