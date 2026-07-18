@@ -214,7 +214,10 @@ export async function requestPhoneCode(
 
   return prisma.$transaction(
     async (tx) => {
-      await tx.$queryRawUnsafe(
+      // $executeRawUnsafe, not $queryRawUnsafe: pg_advisory_xact_lock returns
+      // `void`, which Prisma 6.19+ refuses to deserialize (P2010) — caught
+      // live on the first prod probe of this endpoint.
+      await tx.$executeRawUnsafe(
         "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
         `phone-otp:${phone}`,
       );

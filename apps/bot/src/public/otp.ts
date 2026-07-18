@@ -32,7 +32,11 @@ export async function createAndSendOtp(
   // the challenge back and a waiting retry can safely create the next one.
   return prisma.$transaction(
     async (tx) => {
-      await tx.$queryRawUnsafe(
+      // $executeRawUnsafe, not $queryRawUnsafe: pg_advisory_xact_lock returns
+      // `void`, which Prisma 6.19+ refuses to deserialize as a result column
+      // (P2010 "Failed to deserialize column of type 'void'"). Execute skips
+      // result deserialization entirely — the lock side effect is all we need.
+      await tx.$executeRawUnsafe(
         "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
         normalisedEmail,
       );

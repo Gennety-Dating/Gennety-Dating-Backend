@@ -14,7 +14,7 @@ const prismaMock = {
     updateMany: phoneOtpUpdateMany,
     count: phoneOtpCount,
   },
-  $queryRawUnsafe: queryRawUnsafe,
+  $executeRawUnsafe: queryRawUnsafe,
   $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(prismaMock)),
 };
 

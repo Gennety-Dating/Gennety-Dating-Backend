@@ -13,7 +13,7 @@ const prismaMock = {
     findFirst: emailOtpFindFirst,
     updateMany: emailOtpUpdateMany,
   },
-  $queryRawUnsafe: queryRawUnsafe,
+  $executeRawUnsafe: queryRawUnsafe,
   $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(prismaMock)),
 };
 

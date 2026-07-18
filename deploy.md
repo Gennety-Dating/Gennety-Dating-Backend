@@ -1,10 +1,21 @@
 # Gennety Dating Deploy
 
-Last verified: 2026-07-17 (full server deploy — the 2026-07-16 security/i18n
-series + `ALLOW_SANDBOX_PERSONA=true` interim override; no schema change. The
-PM2 command changed to the explicit tsx binary path — see the PM2 gotcha in
-Production Inventory). Prior full deploys: 2026-07-15 (server + Mini App +
-additive schema push), 2026-07-13.
+Last verified: 2026-07-18 (full server deploy — iOS Stage 0 backend slice:
+`/v1/app/config`, phone rail `/v1/auth/phone/*` (Gateway/Twilio creds not yet
+set → clean 503), direct APNs transport with the live `.p8` key at
+`/opt/gennety/keys/AuthKey_JTLFAQ8RM2.p8` (sandbox probe returned
+`BadDeviceToken` = provider auth verified), additive `db:push` of
+`phone_otps` + `live_activity_tokens`, and the advisory-lock P2010 hotfix —
+see the Prisma gotcha below). Prior full deploys: 2026-07-17 (security/i18n
++ `ALLOW_SANDBOX_PERSONA=true`; PM2 command changed to the explicit tsx
+binary path — see the PM2 gotcha in Production Inventory), 2026-07-15,
+2026-07-13.
+
+**Prisma raw-SQL gotcha (2026-07-18):** `pg_advisory_xact_lock(...)` returns
+`void`, and Prisma 6.19+ throws P2010 ("Failed to deserialize column of type
+'void'") when it is run through `$queryRawUnsafe`. Use `$executeRawUnsafe`
+for lock/side-effect statements — it skips result deserialization. This bit
+the phone rail's first live probe and was latent in the email-OTP path.
 
 This file is the production runbook for the DigitalOcean deployment. It
 contains the real hostnames, paths, service names, and deploy commands. Raw
