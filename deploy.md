@@ -593,6 +593,17 @@ Required/high-impact env keys:
   **Requires `db:push` of the additive `phone_otps` table first**
   (non-destructive). Anti-SMS-pumping: per-phone+IP express limits plus a
   durable per-phone cooldown (60 s) and daily cap (6/day) in the table.
+- StoreKit 2 tickets (native iOS; rides `TICKET_FEATURE_ENABLED`):
+  `APPSTORE_KEY_PATH` (App Store Connect → Users and Access → Integrations →
+  In-App Purchase key `.p8`, scp'd next to the APNs key), `APPSTORE_KEY_ID`,
+  `APPSTORE_ISSUER_ID` (same Integrations page), `APPSTORE_BUNDLE_ID`
+  (default `com.gennety.ios`), `APPSTORE_ENVIRONMENT` (`sandbox` default →
+  TestFlight/dev purchases; `production` for App Store builds),
+  `APPSTORE_TICKET_PRODUCTS` (default `ticket_1:1,ticket_3:3,ticket_6:6`).
+  Server Notifications V2 URL to set in App Store Connect:
+  `https://dating-api.gennety.com/v1/webhooks/appstore`. Without the keys
+  the purchase endpoint answers 503; no schema change (rides the unique
+  `ticket_ledger.external_payment_id` already deployed for Stars).
 - Push (native iOS, direct APNs — the Expo rail was retired 2026-07-18):
   `APNS_KEY_PATH` (path to the `.p8` APNs Auth Key on the droplet, e.g.
   `/opt/gennety/keys/AuthKey_XXXXXX.p8` — NOT committed; scp it manually),

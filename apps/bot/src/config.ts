@@ -58,6 +58,20 @@ export const env = {
   TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID ?? "",
   TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN ?? "",
   TWILIO_VERIFY_SERVICE_SID: process.env.TWILIO_VERIFY_SERVICE_SID ?? "",
+  /// App Store Server API (StoreKit 2 ticket purchases + refund webhooks).
+  /// Key from App Store Connect → Users and Access → Integrations →
+  /// In-App Purchase. All four required for the verification rail; without
+  /// them /v1/tickets/appstore answers 503 and nothing else is affected.
+  APPSTORE_KEY_PATH: process.env.APPSTORE_KEY_PATH ?? "",
+  APPSTORE_KEY_ID: process.env.APPSTORE_KEY_ID ?? "",
+  APPSTORE_ISSUER_ID: process.env.APPSTORE_ISSUER_ID ?? "",
+  APPSTORE_BUNDLE_ID: process.env.APPSTORE_BUNDLE_ID ?? "com.gennety.ios",
+  /// "sandbox" (default — TestFlight/dev purchases) | "production".
+  APPSTORE_ENVIRONMENT: process.env.APPSTORE_ENVIRONMENT ?? "sandbox",
+  /// Consumable product → ticket count pairs; matches the full product id
+  /// or its last dot-segment (com.gennety.ios.ticket_3 ≡ ticket_3).
+  APPSTORE_TICKET_PRODUCTS:
+    process.env.APPSTORE_TICKET_PRODUCTS ?? "ticket_1:1,ticket_3:3,ticket_6:6",
   /// Native iOS forced-update kill switch, served pre-auth by
   /// `GET /v1/app/config` as `minSupportedIosVersion`. A client build whose
   /// version compares lower must block behind an "update the app" screen.

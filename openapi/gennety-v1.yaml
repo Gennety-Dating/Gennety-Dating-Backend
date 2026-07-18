@@ -907,6 +907,58 @@ paths:
                     items: { $ref: "#/components/schemas/ChatHistoryMessage" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/tickets/appstore/transaction:
+    post:
+      tags: [me]
+      operationId: reportAppStoreTransaction
+      summary: Report a StoreKit 2 consumable purchase for wallet credit
+      description: |
+        Send `transaction.jwsRepresentation` after a successful purchase.
+        The server extracts the transactionId (decode only), verifies it
+        authoritatively via the App Store Server API, and credits the ticket
+        wallet exactly-once. Call `transaction.finish()` only after a 2xx —
+        an unprocessed purchase must be re-reported on next launch.
+        Idempotent: a duplicate report answers 200 with `credited: 0`.
+        404 while tickets are feature-disabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jws]
+              properties:
+                jws: { type: string, maxLength: 20000 }
+      responses:
+        "200":
+          description: Credited (or already processed)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, credited, balance]
+                properties:
+                  ok: { type: boolean, const: true }
+                  credited: { type: integer, description: 0 when already processed }
+                  balance: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Ticket feature disabled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Transaction rejected (unknown/foreign/revoked/unknown product)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: App Store verification unavailable — keep the transaction unfinished and retry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/matches/current:
     get:
       tags: [matches]

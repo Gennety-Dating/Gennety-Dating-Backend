@@ -19,6 +19,8 @@ import { appConfigRouter } from "./routes/app-config.js";
 import { phoneAuthRouter } from "./routes/phone-auth.js";
 import { liveActivityRouter } from "./routes/live-activity.js";
 import { accountStatusRouter } from "./routes/account-status.js";
+import { ticketsAppStoreRouter } from "./routes/tickets-appstore.js";
+import { appStoreWebhookRouter } from "./routes/appstore-webhook.js";
 import { founderReportRouter } from "./routes/founder-report.js";
 import { verificationRouter } from "./routes/verification.js";
 import { webRegistrationRouter } from "./routes/web-registration.js";
@@ -268,6 +270,12 @@ app.use("/v1/matches/:matchId/ticket", (req, res, next) => {
   if (!ticketRouter) ticketRouter = createTicketRouter(injectedBotApi);
   ticketRouter(req, res, next);
 });
+
+// StoreKit 2 purchase reporting (native app, JWT auth) — must be mounted
+// BEFORE the generic initData-authed /v1/tickets router so the more-specific
+// prefix wins. App Store Server Notifications V2 land on /v1/webhooks.
+app.use("/v1/tickets/appstore", ticketsAppStoreRouter);
+app.use("/v1/webhooks/appstore", appStoreWebhookRouter);
 
 // Ticket store / wallet Mini App — TMA-authed, feature-flagged. No bot api
 // needed (no DMs), so it doesn't depend on injectedBotApi.
