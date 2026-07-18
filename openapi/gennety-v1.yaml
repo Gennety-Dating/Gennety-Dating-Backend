@@ -864,6 +864,49 @@ paths:
                   - type: "null"
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/matches/{id}/decision-intent:
+    post:
+      tags: [matches]
+      operationId: classifyDecisionIntent
+      summary: Classify a free-text answer to the pitch question
+      description: |
+        The кино-питч's conversational decision. Server-side keyword
+        fast-path + LLM fallback (same logic as the Telegram surface).
+        Text NEVER commits — show the guarded confirm card for `yes`/`no`,
+        a no-rush nudge for `unsure`, treat `other` as ordinary chat; the
+        commit stays POST /decision behind an explicit tap.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        "200":
+          description: Classified intent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [intent]
+                properties:
+                  intent:
+                    type: string
+                    enum: [yes, no, unsure, other]
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Match not found, not a participant, already decided, or not proposed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
   /v1/matches/{id}/decision:
     post:
       tags: [matches]

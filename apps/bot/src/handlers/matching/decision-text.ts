@@ -27,80 +27,8 @@ import type { InlineKeyboardButton, InlineKeyboardMarkup } from "grammy/types";
 import { t, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
-import { openaiFetch } from "../../services/openai-fetch.js";
+import { classifyDecisionIntent } from "../../services/decision-intent.js";
 import { buildDeclineConfirmKeyboard } from "./decision.js";
-
-type DecisionIntent = "yes" | "no" | "unsure" | "other";
-
-const MODEL = "gpt-4.1-mini";
-const OPENAI_TIMEOUT_MS = 12_000;
-/** Keyword shortcut only below this length; longer texts go to the LLM. */
-const KEYWORD_MAX_LEN = 48;
-
-/** Negations first — "не хочу" must not match the bare "хочу" yes-pattern. */
-const NO_PATTERNS = [
-  "не хочу", "не пойду", "не пiду", "не піду", "не в этот раз", "не цього разу",
-  "нет", "неа", "ні", "нi", "no", "nope", "nein", "nie", "pass", "пас",
-  "skip", "не буду", "откажусь", "відмовлюсь", "not this time",
-];
-
-const YES_PATTERNS = [
-  "да", "иду", "пойду", "хочу", "конечно", "давай", "го ", "погнали",
-  "yes", "yep", "yeah", "sure", "of course", "i'm in", "im in",
-  "так", "піду", "пiду", "авжеж", "звісно", "хочу піти",
-  "ja", "gerne", "klar", "tak", "chcę", "chce", "оk", "ok", "ок", "окей",
-];
-
-function classifyByKeywords(text: string): DecisionIntent | null {
-  const lower = ` ${text.toLowerCase().replace(/[!.,?()"']/g, " ").trim()} `;
-  if (lower.trim().length === 0) return null;
-  for (const p of NO_PATTERNS) {
-    if (lower.includes(` ${p} `) || lower.trim() === p) return "no";
-  }
-  for (const p of YES_PATTERNS) {
-    if (lower.includes(` ${p.trim()} `) || lower.trim() === p.trim()) return "yes";
-  }
-  const unsureMarkers = ["не знаю", "подумаю", "не уверен", "не впевнен", "maybe", "не вирішив", "hmm", "хм"];
-  for (const p of unsureMarkers) if (lower.includes(p)) return "unsure";
-  return null;
-}
-
-async function classifyViaLlm(text: string): Promise<DecisionIntent> {
-  const apiKey = env.OPENAI_API_KEY;
-  if (!apiKey) return "other";
-  try {
-    const res = await openaiFetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_completion_tokens: 16,
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content:
-              'The user was just asked whether they want to go on the proposed date. Classify their reply. Return JSON {"intent":"yes"|"no"|"unsure"|"other"}. "other" = the message is about something else entirely (a question, profile edit, etc.).',
-          },
-          { role: "user", content: text.slice(0, 400) },
-        ],
-      }),
-      signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
-    });
-    if (!res.ok) return "other";
-    const json = (await res.json()) as { choices: Array<{ message: { content: string | null } }> };
-    const parsed = JSON.parse(json.choices[0]?.message?.content ?? "{}") as { intent?: unknown };
-    return parsed.intent === "yes" || parsed.intent === "no" || parsed.intent === "unsure"
-      ? parsed.intent
-      : "other";
-  } catch {
-    return "other";
-  }
-}
 
 function buildGoConfirmKeyboard(matchId: string, lang: Language): InlineKeyboardMarkup {
   const goBtn: InlineKeyboardButton.CallbackButton & Record<string, unknown> = {
@@ -151,9 +79,7 @@ export async function handleProposalTextReply(ctx: BotContext): Promise<boolean>
   });
   if (!match) return false;
 
-  const intent =
-    (text.length <= KEYWORD_MAX_LEN ? classifyByKeywords(text) : null) ??
-    (await classifyViaLlm(text));
+  const intent = await classifyDecisionIntent(text);
 
   const lang = ctx.session.language;
   // The confirm card replies to the user's own words — the button visually

@@ -1,5 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { requireAuth } from "../auth-middleware.js";
+import { agentTextLimiter } from "../rate-limit.js";
+import { classifyMatchDecisionForUser } from "../../services/decision-intent.js";
 import {
   getCurrentMatchForUser,
   applyMatchDecision,
@@ -35,6 +37,34 @@ matchesRouter.get("/current", async (req: Request, res: Response): Promise<void>
   const match = await getCurrentMatchForUser(req.userId!);
   res.json(match);
 });
+
+/**
+ * POST /v1/matches/:id/decision-intent — classify a free-text answer to the
+ * pitch question ("хочешь пойти на свидание?"). The кино-питч's conversational
+ * decision: the client shows the guarded confirm card for `yes`/`no`, a
+ * no-rush nudge for `unsure`, and treats `other` as ordinary chat. Text
+ * NEVER commits — the commit stays `POST /:id/decision` behind an explicit
+ * tap (blind-decision invariant untouched).
+ */
+matchesRouter.post(
+  "/:id/decision-intent",
+  agentTextLimiter,
+  async (req: Request, res: Response): Promise<void> => {
+    const id = paramId(req);
+    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+    if (!text || text.length > 1_000) {
+      res.status(400).json({ error: "Invalid text" });
+      return;
+    }
+
+    const intent = await classifyMatchDecisionForUser(id, req.userId!, text);
+    if (!intent) {
+      res.status(404).json({ error: "Match not found or not actionable" });
+      return;
+    }
+    res.json({ intent });
+  },
+);
 
 matchesRouter.post("/:id/decision", async (req: Request, res: Response): Promise<void> => {
   const id = paramId(req);
