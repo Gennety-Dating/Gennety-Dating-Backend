@@ -10,6 +10,7 @@
     "dev:webapp": "pnpm --filter @gennety/webapp dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
+    "openapi:lint": "npx --yes @redocly/cli@latest lint openapi/gennety-v1.yaml",
     "security:secrets": "node scripts/check-tracked-secrets.mjs",
     "security:audit": "pnpm audit --audit-level moderate",
     "test": "pnpm -r test",

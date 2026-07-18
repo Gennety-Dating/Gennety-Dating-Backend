@@ -508,6 +508,13 @@ so a touch landing in quiet hours is deferred to the next allowed window.
 Mounted by `apps/bot/src/public/server.ts`. JWT bearer auth on all routes
 except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
 
+**Machine-readable contract (mobile surface):** the JWT-authed subset consumed
+by the native iOS client is specified in [`openapi/gennety-v1.yaml`](openapi/gennety-v1.yaml)
+(OpenAPI 3.1; the Gennety-iOS repo generates its Swift client from it). Any
+change to those route shapes MUST update the spec in the same commit —
+validate with `pnpm openapi:lint`. Mini App-only routes (`tma <initData>`
+auth) are deliberately outside the spec.
+
 | Method | Path | Purpose |
 |---|---|---|
 | GET  | `/v1/ping` | Liveness probe |
