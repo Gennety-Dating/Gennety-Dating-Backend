@@ -1395,13 +1395,12 @@ components:
 
     MeResponse:
       type: object
-      required: [user, profile]
+      required: [user]
       properties:
         user: { $ref: "#/components/schemas/SerializedUser" }
         profile:
-          oneOf:
-            - $ref: "#/components/schemas/SerializedProfile"
-            - type: "null"
+          $ref: "#/components/schemas/SerializedProfile"
+          description: Null/absent until the profile row exists
 
     AuthTokens:
       type: object
