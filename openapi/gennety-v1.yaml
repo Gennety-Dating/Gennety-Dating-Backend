@@ -803,9 +803,14 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [message]
+                required: [message, uiHint]
                 properties:
                   message: { $ref: "#/components/schemas/ChatMessage" }
+                  uiHint:
+                    oneOf:
+                      - $ref: "#/components/schemas/UiHint"
+                      - type: "null"
+                    description: Always null for Aether turns today; contract slot for future hints
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
@@ -1187,10 +1192,34 @@ components:
         expiresIn: { type: integer, description: Access TTL in seconds }
         user: { $ref: "#/components/schemas/SerializedUser" }
 
+    UiHint:
+      type: object
+      description: |
+        Hybrid-chat hint: which native inline control best captures the
+        answer to the current question. Derived deterministically from the
+        server-owned collector state — never from LLM output. A hint is a
+        suggestion, not a gate (free text is always accepted); the client
+        MUST fall back to a plain text field for null or an unknown
+        `control` value.
+      required: [control]
+      properties:
+        control:
+          type: string
+          enum:
+            [name_age, choice_chips, height_wheel, text, multiline_text,
+             magic_prompt, photo_upload]
+        options:
+          type: array
+          items: { type: string }
+          description: choice_chips only — canonical values accepted verbatim
+        min: { type: integer }
+        max: { type: integer }
+        skippable: { type: boolean }
+
     InterviewState:
       type: object
       description: Mirrors `InterviewStateDto` in `public/routes/onboarding-state.ts`
-      required: [stepIndex, totalSteps, question, completed, messages, expectingPhoto, photoCount, minPhotos]
+      required: [stepIndex, totalSteps, question, completed, messages, expectingPhoto, photoCount, minPhotos, uiHint]
       properties:
         stepIndex: { type: integer }
         totalSteps: { type: integer }
@@ -1212,6 +1241,10 @@ components:
         expectingPhoto: { type: boolean }
         photoCount: { type: integer }
         minPhotos: { type: integer }
+        uiHint:
+          oneOf:
+            - $ref: "#/components/schemas/UiHint"
+            - type: "null"
 
     ChatMessage:
       type: object

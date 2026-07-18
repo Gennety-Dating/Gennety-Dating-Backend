@@ -264,6 +264,7 @@ class PrismaClientKnownRequestError extends Error {
 vi.mock("@gennety/db", async () => {
   const prismaMock: any = {
     $queryRawUnsafe: vi.fn(async () => []),
+    $executeRawUnsafe: vi.fn(async () => 1),
       // ----- user -----
       user: {
         findUnique: vi.fn(async ({ where, include, select }: any) => {

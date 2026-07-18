@@ -122,6 +122,10 @@ chatRouter.post(
         imageUrl: turn.imageUrl,
         createdAt: turn.createdAt.toISOString(),
       },
+      // Hybrid-chat contract slot (same shape as the interview's uiHint).
+      // Aether turns are free-form, so no hint is derived yet — the field
+      // exists so the generated client handles both surfaces uniformly.
+      uiHint: null,
     });
   },
 );

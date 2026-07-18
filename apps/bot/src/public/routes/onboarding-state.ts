@@ -1,5 +1,6 @@
 import { prisma, type OnboardingStep } from "@gennety/db";
 import { MIN_PHOTOS } from "@gennety/shared";
+import { uiHintForQuestion, type UiHint } from "../ui-hints.js";
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -16,6 +17,13 @@ export interface InterviewStateDto {
   expectingPhoto: boolean;
   photoCount: number;
   minPhotos: number;
+  /**
+   * Which native inline control the hybrid-chat client should render for
+   * the current question (see `public/ui-hints.ts`). Null → plain text
+   * field. Derived deterministically from the collector's
+   * `currentQuestion`; null for legacy pre-collector users.
+   */
+  uiHint: UiHint | null;
 }
 
 const STEP_ORDER: OnboardingStep[] = ["consent", "language", "conversational", "completed"];
@@ -77,6 +85,14 @@ export function buildInterviewState(ctx: StateContext): InterviewStateDto {
     ctx.photoCount < MIN_PHOTOS &&
     (ctx.currentQuestion === "photos" || hasPhotoRequest(ctx.history));
 
+  // The photo gate can be active (legacy `request_photos` tool call) even
+  // when `currentQuestion` lags behind — prefer the observable state.
+  const uiHint = expectingPhoto
+    ? uiHintForQuestion("photos")
+    : ctx.step === "conversational"
+      ? uiHintForQuestion(ctx.currentQuestion)
+      : null;
+
   return {
     stepIndex: STEP_ORDER.indexOf(ctx.step),
     totalSteps: STEP_ORDER.length,
@@ -87,6 +103,7 @@ export function buildInterviewState(ctx: StateContext): InterviewStateDto {
     expectingPhoto,
     photoCount: ctx.photoCount,
     minPhotos: MIN_PHOTOS,
+    uiHint,
   };
 }
 
