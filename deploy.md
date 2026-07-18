@@ -1,9 +1,10 @@
 # Gennety Dating Deploy
 
-Last verified: 2026-07-15 (full server + Mini App deploy + additive schema push:
-`founder_notified_at`, `date_card_file_id_a/b`, `onboarding_step_events`,
-`founder_reports`, `WebRegistrationLink` nullable/new columns). Prior full
-deploy: 2026-07-13.
+Last verified: 2026-07-17 (full server deploy — the 2026-07-16 security/i18n
+series + `ALLOW_SANDBOX_PERSONA=true` interim override; no schema change. The
+PM2 command changed to the explicit tsx binary path — see the PM2 gotcha in
+Production Inventory). Prior full deploys: 2026-07-15 (server + Mini App +
+additive schema push), 2026-07-13.
 
 This file is the production runbook for the DigitalOcean deployment. It
 contains the real hostnames, paths, service names, and deploy commands. Raw
@@ -26,8 +27,16 @@ gitignored env files and provider dashboards listed below.
 | Caddy config | `/etc/caddy/Caddyfile` |
 | PM2 process | `gennety-bot` |
 | PM2 cwd | `/opt/gennety` |
-| PM2 command | `npx tsx apps/bot/src/index.ts` |
+| PM2 command | `cd /opt/gennety && ./apps/bot/node_modules/.bin/tsx apps/bot/src/index.ts` |
 | PM2 startup service | `pm2-root.service` |
+
+**PM2 command gotcha (2026-07-17):** the process must launch tsx via the
+explicit workspace binary (`./apps/bot/node_modules/.bin/tsx`), NOT `npx tsx`.
+`tsx` is a devDependency of `apps/bot` only; after the 2026-07-16 lockfile
+change, `pnpm install` no longer hoists a root `node_modules/.bin/tsx`, so
+`npx tsx` from `/opt/gennety` hits `tsx: not found` and PM2 crash-loops
+(observed live on the 2026-07-17 deploy). Keep the cwd at `/opt/gennety` —
+`.env` resolution is file-relative and unaffected, but stay consistent.
 
 ## Autonomous Deploy Rule
 
@@ -878,7 +887,7 @@ If the PM2 process is missing:
 ```sh
 ssh root@167.172.178.229
 cd /opt/gennety
-pm2 start bash --name gennety-bot -- -c "npx tsx apps/bot/src/index.ts"
+pm2 start bash --name gennety-bot -- -c "cd /opt/gennety && ./apps/bot/node_modules/.bin/tsx apps/bot/src/index.ts"
 pm2 save
 systemctl status pm2-root --no-pager
 ```
