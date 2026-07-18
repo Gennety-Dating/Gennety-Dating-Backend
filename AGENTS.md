@@ -129,10 +129,42 @@ references. Focus on:
 - Matchmaking invariants: no repeated pair, blind decision, no in-app user chat.
 - Verification bypasses: corporate email, Persona, face-match, skip penalties.
 - Worker side effects: cron idempotency, duplicate DMs, quiet hours, rate limits.
+- Mobile parity: does the change touch the `/v1/*` JWT surface or a product
+  flow the iOS app consumes? Spec updated same-commit; Telegram-only scope
+  explicit; channel-aware notifications (see "Two Clients, One Backend").
 - Missing tests for changed behavior.
 
 If no issues are found, say that clearly and mention any remaining test or
 runtime risk.
+
+## Two Clients, One Backend (Telegram + native iOS)
+
+This backend serves TWO product surfaces: the Telegram bot/Mini Apps AND the
+native SwiftUI app (separate repo `~/Desktop/Gennety-iOS`, contract =
+`openapi/gennety-v1.yaml` here, docs there: AGENTS/PRODUCT_SPEC/DESIGN/
+ARCHITECTURE/ROADMAP/IMPLEMENTATION_PLAN). Both share one Postgres and ONE
+matching pool (`User.platform`). Rules for every behavior change:
+
+1. **Design for both surfaces by default.** A new product mechanic, flow
+   change, or invariant change must state how it behaves on Telegram AND on
+   iOS. "Telegram-only" is a legitimate answer, but it must be an explicit,
+   recorded decision (like the existing Telegram-only feature flags), never
+   an accident of where the code happened to be written.
+2. **`/v1/*` JWT surface = the iOS contract.** Any change to those route
+   shapes updates `openapi/gennety-v1.yaml` in the SAME commit
+   (`pnpm openapi:lint`), and is additive unless explicitly approved —
+   the App Store cannot roll back shipped clients (kill switch:
+   `IOS_MIN_SUPPORTED_APP_VERSION`).
+3. **Mobile-relevant work gets recorded in the iOS repo.** If a backend
+   change creates client work (new endpoint to adopt, changed flow, new
+   push/Live-Activity event), add or update the task in
+   `~/Desktop/Gennety-iOS/IMPLEMENTATION_PLAN.md` (its AGENTS.md living-docs
+   protocol applies there).
+4. **Shared services stay channel-aware.** Notifications go through
+   channel-aware helpers (Telegram DM and/or APNs push — see
+   `notifyParticipant` / `services/push.ts`); never assume a user is
+   reachable via Telegram (`platform` may be `mobile`, `telegramId` may be
+   synthetic negative).
 
 ## Product Guardrails
 
