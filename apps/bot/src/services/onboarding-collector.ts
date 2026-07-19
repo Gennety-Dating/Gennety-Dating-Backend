@@ -1235,6 +1235,17 @@ export async function collectOnboardingInput(
       progress.completed.add(candidate.field);
       progress.skipped.delete(candidate.field);
     }
+    // Declining AI-memory export skips the Magic Prompt (context_dump) step
+    // entirely. `buildProgress` already encodes this from the persisted user
+    // state, but the in-memory `progress` used to pick the NEXT question only
+    // saw `ai_memory` flip this turn — so mark context_dump here too, or
+    // `nextOnboardingQuestion` stalls on context_dump and `currentQuestion`
+    // never reaches `photos` (breaking the mobile hybrid-chat photo stage:
+    // wrong uiHint + expectingPhoto stuck false).
+    if (accepted.some((c) => c.field === "ai_memory" && c.value === "declined")) {
+      progress.completed.add("context_dump");
+      progress.skipped.add("context_dump");
+    }
     const updates = updatesForCandidates(accepted);
     const next = nextOnboardingQuestion(progress);
     const nextField = questionField(next);

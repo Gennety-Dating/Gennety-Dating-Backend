@@ -463,6 +463,33 @@ describe("onboarding collector routing", () => {
     ).toBe("ai_memory");
   });
 
+  it("skips the Magic Prompt straight to photos when AI-memory is declined", () => {
+    // Regression: a declined AI-memory turn must land on `photos`, not stall
+    // on `context_dump` — the mobile hybrid-chat photo stage keys off
+    // currentQuestion === "photos" (expectingPhoto + photo_upload uiHint).
+    const throughAiMemory = new Set<OnboardingField>([
+      "first_name",
+      "age",
+      "gender",
+      "preference",
+      "height",
+      "hobbies",
+      "partner_preferences",
+      "ethnicity",
+      "friday_vibe",
+      "vibe_focus",
+      "ai_memory",
+      "context_dump",
+    ]);
+    expect(
+      nextOnboardingQuestion({
+        completed: throughAiMemory,
+        skipped: new Set<OnboardingField>(["context_dump"]),
+        asked: new Set(),
+      }),
+    ).toBe("photos");
+  });
+
   it("captures and validates free-text vibe answers", () => {
     const friday = deterministicCandidates(
       "a quiet dinner at home then a film with one close friend",
