@@ -112,13 +112,31 @@ describe("scheduler: pure slot helpers", () => {
       { hour: 19, minute: 30 },
     ]);
 
+    // Slots are Europe/Kyiv wall-clock instants, independent of the machine's
+    // own timezone — assert the KYIV hour/minute, not server-local getHours().
+    const kyivHM = (d: Date): [number, number] => {
+      const p = Object.fromEntries(
+        new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Europe/Kyiv",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })
+          .formatToParts(d)
+          .map((x) => [x.type, x.value]),
+      );
+      return [p.hour === "24" ? 0 : Number(p.hour), Number(p.minute)];
+    };
+    // Earliest slot is 13:00 Kyiv — the whole point of the change.
+    expect(kyivHM(slots[0]!)).toEqual([13, 0]);
+
     for (let day = 0; day < CALENDAR_DAY_COUNT; day++) {
       const daySlots = slots.slice(
         day * CALENDAR_TIME_SLOTS.length,
         (day + 1) * CALENDAR_TIME_SLOTS.length,
       );
       expect(daySlots.length).toBe(CALENDAR_TIME_SLOTS.length);
-      expect(daySlots.map((s) => [s.getHours(), s.getMinutes()])).toEqual(
+      expect(daySlots.map(kyivHM)).toEqual(
         CALENDAR_TIME_SLOTS.map((s) => [s.hour, s.minute]),
       );
     }

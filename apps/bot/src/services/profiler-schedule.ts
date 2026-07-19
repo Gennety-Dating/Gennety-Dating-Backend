@@ -24,7 +24,7 @@ import type { Gender } from "@gennety/shared";
 const QUIET_START_HOUR = 23;
 const QUIET_END_HOUR = 9;
 
-interface ZonedParts {
+export interface ZonedParts {
   year: number;
   month: number;
   day: number;
@@ -32,7 +32,10 @@ interface ZonedParts {
   minute: number;
 }
 
-function zonedParts(date: Date, timeZone: string): ZonedParts {
+// zonedParts / wallToUtc are generic timezone primitives (no Profiler state);
+// they're exported for reuse by the Calendar grid (`generateProposalSlots`),
+// which also needs wall-clock-in-Kyiv → UTC conversion.
+export function zonedParts(date: Date, timeZone: string): ZonedParts {
   const fmt = new Intl.DateTimeFormat("en-GB", {
     timeZone,
     year: "numeric",
@@ -67,7 +70,7 @@ function zoneOffsetMinutes(date: Date, timeZone: string): number {
 }
 
 /** Convert a wall-clock Y/M/D/H:M in `timeZone` to the equivalent UTC instant. */
-function wallToUtc(
+export function wallToUtc(
   year: number,
   month: number,
   day: number,

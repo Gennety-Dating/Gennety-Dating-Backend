@@ -7,6 +7,7 @@ import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
+import { zonedParts, wallToUtc } from "../../services/profiler-schedule.js";
 import {
   sendOrEditPostAcceptMessage,
   type PostAcceptSide,
@@ -55,12 +56,23 @@ export const CALENDAR_TIME_SLOTS: ReadonlyArray<{ hour: number; minute: number }
 export const CALENDAR_SLOT_COUNT = CALENDAR_DAY_COUNT * CALENDAR_TIME_SLOTS.length;
 
 /**
+ * The calendar grid is rendered in the users' LOCAL time — Europe/Kyiv, the
+ * product's single scheduling timezone (all current cities are Ukrainian; this
+ * mirrors the hardcoded quiet-hours / cron timezone). Deliberately NOT the
+ * server's own timezone: the droplet runs in UTC, so a bare `setHours(13)`
+ * would write 13:00 UTC (≈16:00 Kyiv) and the "13:00" the user picked would
+ * drift. We resolve each Kyiv wall-clock slot to its exact UTC instant instead.
+ */
+export const CALENDAR_TIME_ZONE = "Europe/Kyiv";
+
+/**
  * Generate the calendar grid: the next `dayCount` consecutive days starting
- * tomorrow, with fourteen exact time options per day (every 30 min from
- * 13:00 through 19:30 local). No weekday filter — past UX feedback was that
- * skipping Sun/Mon pruned dates users actually preferred (e.g. Sunday
- * brunches, Monday holidays). 6 days is "next week's worth of options";
- * the Mini App groups the exact DateTime allowlist into date → time steps.
+ * tomorrow (in Europe/Kyiv), with fourteen exact time options per day (every
+ * 30 min from 13:00 through 19:30 Kyiv local). No weekday filter — past UX
+ * feedback was that skipping Sun/Mon pruned dates users actually preferred
+ * (e.g. Sunday brunches, Monday holidays). 6 days is "next week's worth of
+ * options"; the Mini App groups the exact DateTime allowlist into date → time
+ * steps.
  *
  * Exported so tests can assert the shape — the Mini App reads the grid
  * from the server via `GET /v1/calendar/state`, no client-side mirror.
@@ -69,17 +81,23 @@ export function generateProposalSlots(
   now: Date = new Date(),
   dayCount: number = CALENDAR_DAY_COUNT,
 ): Date[] {
+  // Anchor date arithmetic at noon UTC of each Kyiv calendar day so stepping
+  // forward never lands on a DST day boundary; `wallToUtc` then resolves each
+  // slot's exact instant for that Kyiv date (DST-correct per day).
+  const today = zonedParts(now, CALENDAR_TIME_ZONE);
+  const anchor = Date.UTC(today.year, today.month - 1, today.day, 12, 0, 0);
   const out: Date[] = [];
-  const cursor = new Date(now);
-  cursor.setHours(0, 0, 0, 0);
-  cursor.setDate(cursor.getDate() + 1);
-  for (let day = 0; day < dayCount; day++) {
+  for (let day = 1; day <= dayCount; day++) {
+    const d = new Date(anchor);
+    d.setUTCDate(d.getUTCDate() + day); // day = 1 → tomorrow (Kyiv)
+    const year = d.getUTCFullYear();
+    const month = d.getUTCMonth() + 1;
+    const dayOfMonth = d.getUTCDate();
     for (const slot of CALENDAR_TIME_SLOTS) {
-      const candidate = new Date(cursor);
-      candidate.setHours(slot.hour, slot.minute, 0, 0);
-      out.push(candidate);
+      out.push(
+        wallToUtc(year, month, dayOfMonth, slot.hour, slot.minute, CALENDAR_TIME_ZONE),
+      );
     }
-    cursor.setDate(cursor.getDate() + 1);
   }
   return out;
 }
