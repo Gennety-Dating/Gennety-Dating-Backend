@@ -261,7 +261,13 @@
         color: inherit;
         text-align: left;
         background: var(--surface);
-        border: 1px solid var(--border);
+        /* Default (unpressed) bubble is borderless: the shape is carried by the
+         * `--surface` fill/tone, not an outline. Kept as a 1px *transparent*
+         * border (not `border: none`) purely as a box-size spacer, so the
+         * selected states below — which flip `border-color` to their tint /
+         * transparent — keep the exact same dimensions and unchanged
+         * press/hover/active effects. */
+        border: 1px solid transparent;
         border-radius: 16px;
         padding: 16px 16px 16px 20px;
         cursor: pointer;
