@@ -571,7 +571,7 @@ auth) are deliberately outside the spec.
 | GET  | `/v1/onboarding/interview` | Resume server-owned conversational onboarding |
 | POST | `/v1/onboarding/interview/answer` | Send text to the shared onboarding collector; rejected until ToS acceptance and language selection are persisted |
 | POST | `/v1/onboarding/interview/voice` | Transcribe voice and send it to the same collector; uses the same legal/language gate |
-| POST | `/v1/onboarding/consent` | Record ToS + research-opt-in |
+| POST | `/v1/onboarding/consent` | Record ToS + research-opt-in + `language` (native client sets it from the system locale — no picker). Advances `onboardingStep` to `conversational` once terms + language + a verified contact rail are all present, handing the interview to the server-owned fact collector (the native-client equivalent of Telegram's onboarding Mini App handoff). |
 | POST | `/v1/assistant/ask` | Lightweight one-shot helper |
 | POST | `/v1/assistant/voice` | Transcribe voice and send the turn to the post-onboarding assistant |
 | POST | `/v1/chat/upload` | Upload Aether chat image to private storage |

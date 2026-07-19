@@ -775,6 +775,12 @@ paths:
               properties:
                 termsAccepted: { type: boolean, const: true }
                 researchOptIn: { type: boolean, default: false }
+                language:
+                  $ref: "#/components/schemas/Language"
+                  description: >
+                    From the system locale (no picker). Advances onboarding to
+                    the conversational interview once terms + language + a
+                    verified contact rail are all set.
       responses:
         "200":
           description: Updated user

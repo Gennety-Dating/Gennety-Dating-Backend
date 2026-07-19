@@ -1,10 +1,12 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { prisma } from "@gennety/db";
+import { SUPPORTED_LANGUAGES, type Language } from "@gennety/shared";
 import { requireAuth } from "../auth-middleware.js";
 import { usageGuard } from "../usage-middleware.js";
 import { agentTextLimiter, voiceLimiter } from "../rate-limit.js";
 import { runAgentTurn } from "../../services/onboarding-agent.js";
+import { hasTrackVerifiedContact } from "../../services/contact-verification.js";
 import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
 import { serializeUser } from "./serializers.js";
 import { buildInterviewState, loadStateContext } from "./onboarding-state.js";
@@ -80,16 +82,23 @@ onboardingRouter.post("/interview/answer", agentTextLimiter, async (req: Request
 /**
  * POST /v1/onboarding/consent — Initialization & Consent screen.
  *
- * Records the explicit ToS click and the optional research opt-in, then
- * advances `onboardingStep` from `consent` → `language` (idempotent: a
- * later step is preserved). `termsAccepted` is the legal gate and MUST be
- * the boolean literal `true`; `researchOptIn` is optional and defaults to
- * false. Both fields reject any non-boolean type — no truthy coercion.
+ * Records the explicit ToS click, the optional research opt-in, and the
+ * client's `language` (native iOS sets it from the system locale — no
+ * picker, per DESIGN). `termsAccepted` is the legal gate and MUST be the
+ * boolean literal `true`; `researchOptIn` is optional (default false).
+ *
+ * Step transition: `consent → language`, and further to `conversational`
+ * once terms + language + a verified contact rail are all in place, so the
+ * server-owned fact collector (which drives the hybrid-chat `uiHint`) takes
+ * over the interview. Telegram reaches `conversational` via the onboarding
+ * Mini App handoff; this is the native-client equivalent. A later step is
+ * never regressed (idempotent).
  */
 onboardingRouter.post("/consent", async (req: Request, res: Response): Promise<void> => {
   const body = (req.body ?? {}) as Record<string, unknown>;
   const termsAccepted = body.termsAccepted;
   const researchOptIn = body.researchOptIn;
+  const language = body.language;
 
   if (termsAccepted !== true) {
     res.status(400).json({ error: "Terms must be accepted" });
@@ -99,11 +108,38 @@ onboardingRouter.post("/consent", async (req: Request, res: Response): Promise<v
     res.status(400).json({ error: "Invalid researchOptIn" });
     return;
   }
+  if (
+    language !== undefined &&
+    (typeof language !== "string" || !SUPPORTED_LANGUAGES.includes(language as Language))
+  ) {
+    res.status(400).json({ error: "Invalid language" });
+    return;
+  }
 
   const current = await prisma.user.findUniqueOrThrow({
     where: { id: req.userId! },
-    select: { onboardingStep: true },
+    select: {
+      onboardingStep: true,
+      language: true,
+      registrationTrack: true,
+      phoneVerifiedAt: true,
+      isEmailVerified: true,
+      email: true,
+    },
   });
+
+  const nextLanguage = (language as Language | undefined) ?? current.language ?? null;
+  const contactReady = hasTrackVerifiedContact(current);
+  const preConversational =
+    current.onboardingStep === "consent" || current.onboardingStep === "language";
+  // Hand the interview to the fact collector only when everything it needs is
+  // present; otherwise sit at `language` until the client sets it.
+  const nextStep =
+    preConversational && nextLanguage && contactReady
+      ? ("conversational" as const)
+      : current.onboardingStep === "consent"
+        ? ("language" as const)
+        : current.onboardingStep;
 
   const user = await prisma.user.update({
     where: { id: req.userId! },
@@ -111,7 +147,8 @@ onboardingRouter.post("/consent", async (req: Request, res: Response): Promise<v
       termsAccepted: true,
       termsAcceptedAt: new Date(),
       researchOptIn: researchOptIn ?? false,
-      ...(current.onboardingStep === "consent" ? { onboardingStep: "language" as const } : {}),
+      ...(language !== undefined ? { language: language as Language } : {}),
+      ...(nextStep !== current.onboardingStep ? { onboardingStep: nextStep } : {}),
     },
   });
 
