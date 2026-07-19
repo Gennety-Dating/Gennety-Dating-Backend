@@ -139,13 +139,24 @@ re-scanned legacy profiles) are neutral on the candidate side.
 - 12 photos per set arranged as a balanced fractional-factorial plan (each
   value appears 4–6×, attribute pairs decorrelated by construction) + 5
   pre-authored contrast pairs per set for clarifications.
-- **Validity constraints (every photo):** identical neutral warm-grey studio
-  background, soft diffused light, three-quarter mid-thigh-up framing (build
-  must be readable), direct gaze + mild friendly expression, natural constant
-  makeup (style is expressed through clothing ONLY), bare/short-sleeved arms
-  (tattoo attribute must be visible or verifiably absent), comparable
-  "girl/guy-next-door" attractiveness level across the whole set (level must
-  not confound direction), age 23–26.
+- **Validity constraints (every photo):** the photos are candid **lifestyle**
+  shots, not studio portraits — ecological validity: the user will judge real
+  candid pitch photos, so taste must be calibrated in the same visual domain,
+  and the scene primes the actual question ("do you want this person across
+  the table?"). The scene is nevertheless a **held constant**: ONE shared
+  setting for the whole set (cozy warmly-lit evening café/bar, subject
+  standing/leaning at the counter — never seated, build must stay readable),
+  softly blurred background with no other people (vibe without distraction or
+  scene-driven noise). Per-photo constants: three-quarter mid-thigh-up
+  framing, direct gaze + the same light genuine "greeting my date" smile
+  across the set, constant natural makeup (style/vibe is expressed through
+  clothing ONLY), bare/short-sleeved arms (tattoo attribute visible or
+  verifiably absent), comparable "girl/guy-next-door" attractiveness level
+  (level must not confound direction), age 23–26. Varying the scene per photo
+  is forbidden — an uncontrolled setting becomes a confound (user likes the
+  bar's vibe, algorithm records "likes redheads"). If one scene feels
+  monotonous, the sanctioned alternative is exactly TWO scenes balanced
+  across every attribute value (each value split evenly between scenes).
 - Contrast pairs: generate both frames from the same prompt with a **fixed
   seed** (`--seed` / Flux seed, MJ `--cref` for identity hold), swapping only
   the tested attribute descriptor.
