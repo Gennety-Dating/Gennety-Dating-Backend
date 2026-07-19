@@ -100,8 +100,13 @@
         --cta-hover: #2c2c2c;
         --self: #1d1d1d;
         --self-glow: rgba(0, 0, 0, 0.35);
-        --self-fill-strong: rgba(0, 0, 0, 0.14);
-        --self-fill-soft: rgba(0, 0, 0, 0.05);
+        /* "Mine" wash (state-you gradient only). Intentionally stronger than a
+         * naive mirror of dark: the light empty slot is now `--surface-3` (a mid
+         * grey, not white), so a faint black wash barely reads against it. These
+         * darker blacks make the user's own mark a clearly-accented chip while
+         * keeping the dark label text readable. */
+        --self-fill-strong: rgba(0, 0, 0, 0.24);
+        --self-fill-soft: rgba(0, 0, 0, 0.12);
       }
 
       * { box-sizing: border-box; }
