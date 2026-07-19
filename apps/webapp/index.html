@@ -260,13 +260,17 @@
         font: inherit;
         color: inherit;
         text-align: left;
-        background: var(--surface);
-        /* Default (unpressed) bubble is borderless: the shape is carried by the
-         * `--surface` fill/tone, not an outline. Kept as a 1px *transparent*
-         * border (not `border: none`) purely as a box-size spacer, so the
-         * selected states below — which flip `border-color` to their tint /
-         * transparent — keep the exact same dimensions and unchanged
-         * press/hover/active effects. */
+        /* Default (unpressed) bubble is borderless: the shape is carried by an
+         * elevated *tone*, not an outline. It must use `--surface-3`, NOT
+         * `--surface`: the time slots live inside the `.sheet` (also `--surface`),
+         * so a `--surface` fill would be invisible there — same colour, no edge.
+         * `--surface-3` sits a clear step above both the sheet (`--surface`) and
+         * the page (`--bg`) in both themes, so the chip reads in either context.
+         * Kept as a 1px *transparent* border (not `border: none`) purely as a
+         * box-size spacer, so the selected states below — which flip
+         * `border-color` to their tint / transparent — keep the exact same
+         * dimensions and unchanged press/hover/active effects. */
+        background: var(--surface-3);
         border: 1px solid transparent;
         border-radius: 16px;
         padding: 16px 16px 16px 20px;
