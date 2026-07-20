@@ -685,12 +685,14 @@ path is visually distinct: a blue (`primary`) **❄️ Freeze account** over a r
 - **Delete anyway** leads to a final confirmation that isolates the destructive
   option: one red **Yes, I'm 100% sure** against two green back-out buttons. Only
   the red path runs the GDPR hard delete. Telegram and mobile share one deletion
-  service: it compare-and-set cancels every in-flight match, notifies/comps the
-  partner on their actual channel (Telegram and/or APNs push), strictly erases
-  known user-owned Supabase selfies/profile media/chat attachments, removes any
-  founder-report snapshot containing that user, then deletes the User and all
-  relational data by Prisma cascade. A storage failure leaves the account row
-  intact so the user can retry instead of reporting success with orphaned media.
+  service: it strictly erases known user-owned Supabase selfies/profile
+  media/chat attachments first, then atomically compare-and-set cancels every
+  in-flight match, removes any founder-report snapshot containing that user,
+  and deletes the User and all relational data by Prisma cascade. Only after
+  that commit does it notify/compensate the partner on their actual channel
+  (Telegram and/or APNs push). A storage failure therefore leaves both the
+  account and live matches intact for a safe retry instead of creating a
+  half-deleted account with real partner effects.
   The founder receives only an anonymous lifecycle event — deletion never
   creates a fresh copy of the user's contact data, profile, or photos.
 - Freeze/Delete confirmation keyboards are bound to a cryptographically random

@@ -299,9 +299,10 @@ scanning the hot `matches` table.
 Embedding freshness is fail-closed. Embedding-feeding edits mark the profile
 dirty and attempt a 30-second user-scoped refresh. `runWeeklyBatch()` first
 processes a snapshot of the entire dirty backlog (independent of the periodic
-worker's 20-row cap), then eligibility requires `embeddingDirty = false` in
-both Prisma and raw-vector paths. The vector update is guarded by
-`embeddingDirtyAt`, so a concurrent edit cannot be cleared by an older
+worker's 20-row cap) through a bounded parallel pool, then eligibility requires
+`embeddingDirty = false` in both Prisma and raw-vector paths. The vector update
+compares `embeddingDirtyAt` *and* the captured embedding-source fields, so an
+edit that lands in the same timestamp millisecond cannot be cleared by an older
 generation. Preflight logging is aggregate-only (`scanned/refreshed/failed/
 stillDirty`), and excluded dirty users never enter standby accounting.
 
@@ -700,6 +701,9 @@ Hashes are positional: every `photos[i]` has `uploadedPhotoHashes[i]` (a real
 hash or the empty-string sentinel). Shared alignment helpers normalize legacy
 length mismatches without guessing associations, and every Telegram/mobile/
 Aether append or delete updates photos, media, face score, and hash together.
+Telegram deletion uses the same per-user lock as Telegram/mobile/Aether append,
+then replaces its session from the locked canonical state; a stale Telegram
+album can therefore never erase a photo concurrently added on another surface.
 **Identity is enforced only by Persona verification, not at upload time
 (simplified 2026-06-23).** A static photo that passes per-photo safety,
 usable-face (Rekognition confidence ≥ 0.55, area ≥ 0.8%; plus a light
