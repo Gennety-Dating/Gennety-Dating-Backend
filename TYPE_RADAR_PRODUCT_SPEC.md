@@ -1,9 +1,11 @@
 # Type Radar — "Choose Your Type" (visual preference calibration)
 
-> **Status:** design draft, pre-implementation (2026-07-19). Feature-flagged
-> (`TYPE_RADAR_ENABLED`, default off), Telegram-only in v1 (explicit decision —
-> see Mobile parity). The AI-memory export (Magic Prompt) **stays**; the radar
-> is an additional onboarding step placed immediately **before** it.
+> **Status:** design draft, pre-implementation (updated 2026-07-20).
+> Feature-flagged (`TYPE_RADAR_ENABLED`, default off), Telegram-only in v1
+> (explicit decision — see Mobile parity). The AI-memory export (Magic Prompt)
+> **stays**; the radar runs in the conversational phase immediately **before**
+> the Magic Prompt is delivered — so `age`/`gender`/`preference` are already
+> collected (age bands + gender set are read, not asked).
 > Photo dataset briefs + generation prompts:
 > [`scripts/type-radar.dataset.draft.json`](scripts/type-radar.dataset.draft.json).
 
@@ -26,25 +28,32 @@ radar never scores "how attractive", preventing double-counting with Elo.
 
 ## Placement in onboarding
 
-New Mini App phase `typeRadar` in `apps/webapp/src/onboarding-route.ts`,
-inserted in `postVisualPhaseFromRemote` after `theme` and **before**
-`aiMemoryExport`:
+The radar is a Mini App **launched from the conversational onboarding flow**,
+at the **AI-memory step boundary — right before the Magic Prompt is
+delivered** (the moment the user paste-imports their ChatGPT memory). That is
+where AI-memory import sits in the canonical collector order. For users who
+declined AI-memory export, the same slot sits right before photos.
 
 ```
-… city → theme → visual scenes → [TYPE RADAR] → aiMemoryExport → loading/handoff
+conversational collector:
+name+age → gender → preference → height → hobbies → partner → nationality
+        → vibe → [TYPE RADAR] → AI-memory import (Magic Prompt) → photos
 ```
 
-Because `gender`/`preference`/`age` are collected later (conversational
-phase), the radar opens with a one-tap **intent screen** — "Who are you
-interested in?" (men / women / both) plus an **age input** — which persist
-`User.preference` and `User.age` server-side. The onboarding collector
-already picks "the first actually missing field", so pre-seeded
-preference/age are simply skipped later (same pattern as the Mini App
-city/theme gates). `preference = both` serves an interleaved 8+8 subset of
-both sets (marked lower-confidence). The captured age selects the **age
-band** of the shown set (see *Age bands* under Dataset) — this is the only
-place age is needed before the conversational phase, which is exactly why it
-is captured here.
+**`age`, `gender`, and `preference` are ALL already collected by this point**
+(they are the first three conversational fields), so the radar reads them
+directly from the `User` row — **no intent screen, no age capture**.
+Gender-of-interest picks the photo set; the user's own `age` picks the age
+band (see *Age bands* under Dataset). `preference = both` serves an
+interleaved 8+8 subset of both sets (marked lower-confidence). (This corrects
+an earlier draft that placed the radar inside the onboarding Mini App before
+the conversational phase, where age was not yet known — it isn't: the radar
+runs after profile capture, right before the Magic Prompt.)
+
+The bot opens the radar Mini App from chat ("before we go further, let's
+calibrate your type"); on completion it proceeds to the Magic Prompt (or, for
+decliners, to photos). The Mini App still authenticates with
+`tma <initData>`.
 
 Flow: intent tap → 12 binary cards (preload next 2–3 images; tap or swipe),
 with a one-tap **reason-chip** question after the first 2 verdicts and after
@@ -61,7 +70,7 @@ weight) — never re-asked.
 | `Profile.typeRadarAnswers Json[]` | Raw audit: `{photoId, verdict, at}` per tap (incl. clarifications) |
 | `Profile.typePrefTags Json?` | Computed preference vector: per attribute value `{score, confidence}` |
 | `Profile.typeRadarCompletedAt DateTime?` | Phase-machine gate + idempotency |
-| `Profile.typeRadarAgeBand String?` | Age band (`a`/`b`/`c`) shown to this user, derived from the age captured at radar entry — audit + resume |
+| `Profile.typeRadarAgeBand String?` | Age band (`a`/`b`/`c`) shown to this user, derived from the already-collected `User.age` — audit + resume |
 | `Profile.appearanceTags Json?` + `appearanceTagsAt DateTime?` | Candidate-side tags extracted from the user's own photos (vision) |
 | `match_score_logs.scoreType Float @default(1)` | Frozen factor per created pair (precedent: `scoreAgePref`, default 1 = neutral for old rows) |
 
@@ -72,8 +81,7 @@ like `socialRole` / venue categories).
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/v1/telegram-onboarding/radar` | Dataset refs for the chosen intent + progress (resume-safe). 404 while `TYPE_RADAR_ENABLED` off (pattern: `POST /track`) |
-| POST | `/v1/telegram-onboarding/radar/intent` | Persist the one-tap preference (men/women/both) |
+| GET | `/v1/telegram-onboarding/radar` | Dataset refs for this user's set — gender-of-interest × age band, both read from the `User` row (no intent/age input) — + progress (resume-safe). 404 while `TYPE_RADAR_ENABLED` off (pattern: `POST /track`) |
 | POST | `/v1/telegram-onboarding/radar/answer` | `{photoId, verdict}` → server persists, returns `continue` \| `askReason {chips}` \| `clarify {pairId}` \| `done` |
 | POST | `/v1/telegram-onboarding/radar/reason` | `{photoId, chipId}` (or explicit skip) → per-card attribution reweight, returns next step |
 | POST | `/v1/telegram-onboarding/radar/clarify` | Fallback contrast pair: `{pairId, chosenPhotoId}` (or explicit skip) → next step or `done` |
@@ -176,8 +184,8 @@ re-scanned legacy profiles) are neutral on the candidate side.
   ethnicity/scene), so band B/C compile from the band-A prompts, not a rewrite.
   Bands (see `ageBands` in the dataset): **A 22–28** (this file's set, v1),
   **B 29–37**, **C 38–48**; architecture supports more, generation is scoped
-  to the real pool. Anchor is the **viewer's age** — the age captured on the
-  radar intent screen picks the band. Preferred-*partner* age (often skewed,
+  to the real pool. Anchor is the **viewer's age** — the already-collected
+  `User.age` picks the band. Preferred-*partner* age (often skewed,
   e.g. men younger) is deliberately NOT baked into the radar default: that
   belongs to `V_agePref`/`ageRangeMin-Max`, keeping an age-gap assumption out
   of the product's defaults (same discipline as not scoring ethnicity).
@@ -240,9 +248,10 @@ re-scanned legacy profiles) are neutral on the candidate side.
 3. **Backend** — `services/type-radar.ts` (math, unit-tested), radar routes on
    `telegram-onboarding.ts`, `/state` mirror, elo-seed tag extraction +
    rerun-path refresh.
-4. **Mini App** — `typeRadar` phase in `onboarding.tsx` / `onboarding-route.ts`
-   (intent screen, card stack with preload, contrast-pair screen), i18n for
-   all five languages in `onboarding-i18n.ts`, theme-aware.
+4. **Mini App** — radar Mini App launched from the conversational flow right
+   before the Magic Prompt (reads gender/preference/age from the `User` row —
+   no intent screen, no age capture): card stack with preload, reason-chip
+   sheet, contrast-pair fallback screen; i18n for all five languages, theme-aware.
 5. **Engine** — `V_type` in `scorePair` + `scoreType` logging (shadow).
 6. **Tests** — pref-vector/ambiguity math; route gating (flag off ⇒ 404 +
    phase absent); phase-machine resume (`onboarding-route.test.ts`); scorePair
