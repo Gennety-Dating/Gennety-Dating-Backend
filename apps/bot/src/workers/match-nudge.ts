@@ -1,5 +1,6 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
+import { VOICE_CORE } from "@gennety/shared";
 import { env } from "../config.js";
 import { openaiFetch } from "../services/openai-fetch.js";
 import { isQuietHours } from "./quiet-hours.js";
@@ -178,7 +179,9 @@ async function generateProposalNudge(
       ? "casual first check-in"
       : "gentle second reminder — they still haven't replied";
 
-  const prompt = `You are Gennety Dating's assistant. A user received a match proposal but hasn't responded.
+  const prompt = `${VOICE_CORE}
+
+Right now you're doing ONE thing: this user got a match proposal and hasn't replied yet. Send a single short nudge back to it — the same voice you'd use in any normal chat, not a "campaign" blast.
 
 User info:
 - Name: ${name || "unknown"}
@@ -186,11 +189,9 @@ User info:
 - Nudge type: ${urgency}
 - ${pitchSnippet}
 
-Write a SHORT message (1-2 sentences) reminding them to check their match. Reference the pitch context if it helps. 1 emoji max. Write in ${lang}.
+Write it in ${lang}. 1–2 short sentences, one idea. Reference the pitch lightly if it helps. Understated and warm, never pushy — like texting a friend who forgot to reply. No deadline-as-threat, no "hurry!". Emoji default is ZERO (at most one, only ✨/🍵/🤍, and only if it truly lands).
 
-Tone: warm, curious, never pushy. Like texting a friend who forgot to reply.
-
-CRITICAL: Use strictly gender-neutral language. We do NOT know the user's gender. In Russian/Ukrainian/Polish, avoid gendered past-tense verb forms (e.g. do NOT use «ответил/ответила», «відповів/відповіла», "odpowiedział/odpowiedziała"). Use impersonal or infinitive constructions instead (e.g. «ответа ещё нет», «нема відповіді», "brak odpowiedzi").
+CRITICAL: Use strictly gender-neutral language. We do NOT know the user's gender. In Russian/Ukrainian/Polish, avoid gendered past-tense verb forms (e.g. do NOT use «ответил/ответила», «відповів/відповіла», "odpowiedział/odpowiedziała"). Use impersonal or infinitive constructions instead (e.g. «ответа пока нет», «нема відповіді», "brak odpowiedzi").
 
 Output ONLY the message text.`;
 
@@ -204,7 +205,7 @@ Output ONLY the message text.`;
       body: JSON.stringify({
         model: "gpt-4.1-mini",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.8,
+        temperature: 0.7,
         max_completion_tokens: 120,
       }),
     });
@@ -224,39 +225,33 @@ Output ONLY the message text.`;
   }
 }
 
+// VOICE.md: understatement over hype — no exclamation-mark hype, no 👀/⏰,
+// no deadline-as-threat. Gender-neutral (no gendered past-tense forms), native
+// per language, all five covered so de/pl never fall back to English.
 function getProposalFallback(name: string, lang: string, nudge: number): string {
-  const greetingWord =
-    lang === "ru"
-      ? "Эй"
-      : lang === "uk"
-        ? "Гей"
-        : lang === "de"
-          ? "Hey"
-          : lang === "pl"
-            ? "Hej"
-            : "Hey";
-  const greeting = name ? `${greetingWord}, ${name}!` : `${greetingWord}!`;
+  const g = name ? ` ${name}` : "";
+  const lead = name ? `${name}, ` : "";
   switch (lang) {
     case "ru":
       return nudge === 1
-        ? `${greeting} Мы нашли для тебя пару — ответа пока нет 👀`
-        : `${greeting} Не забудь — мэтч всё ещё ждёт. Загляни, пока не истёк срок!`;
+        ? `эй${g}, нашёл тебе пару — ответа пока нет. глянешь, когда будет минута?`
+        : `${lead}матч всё ещё ждёт ответа. без спешки, но окно скоро закроется.`;
     case "uk":
       return nudge === 1
-        ? `${greeting} Ми знайшли для тебе пару — відповіді ще немає 👀`
-        : `${greeting} Не забудь — мэтч досі чекає. Зазирни, поки не закінчився термін!`;
+        ? `гей${g}, знайшов тобі пару — відповіді ще немає. глянеш, коли буде хвилинка?`
+        : `${lead}матч ще чекає відповіді. без поспіху, але вікно скоро закриється.`;
     case "de":
       return nudge === 1
-        ? `${greeting} Wir haben ein Match für dich gefunden - noch keine Antwort 👀`
-        : `${greeting} Kurzer Reminder - dein Match wartet noch. Lass es nicht ablaufen!`;
+        ? `hey${g}, hab ein Match für dich — noch keine Antwort. schaust du mal rein?`
+        : `${lead}dein Match wartet noch auf eine Antwort. kein Stress, aber das Fenster schließt bald.`;
     case "pl":
       return nudge === 1
-        ? `${greeting} Znaleźliśmy dla Ciebie dopasowanie - jeszcze nie ma odpowiedzi 👀`
-        : `${greeting} Przypominamy - Twoje dopasowanie nadal czeka. Nie pozwól, żeby wygasło!`;
+        ? `hej${g}, mam dla ciebie dopasowanie — jeszcze bez odpowiedzi. zerkniesz, gdy masz chwilę?`
+        : `${lead}twoje dopasowanie wciąż czeka na odpowiedź. bez pośpiechu, ale okno niedługo się zamknie.`;
     default:
       return nudge === 1
-        ? `${greeting} We found you a match — no response yet 👀`
-        : `${greeting} Just a reminder — your match is still waiting. Don't let it expire!`;
+        ? `hey${g}, found you a match — no reply yet. want to take a look?`
+        : `${lead}your match is still waiting for an answer. no rush, but the window closes soon.`;
   }
 }
 
@@ -370,14 +365,18 @@ async function generateSchedulingNudge(
       ? "They need to open the calendar in the Mini App to pick a time."
       : "They need to pick one of the proposed time slots.";
 
-  const prompt = `You are Gennety Dating's assistant. Two people matched and accepted each other, but one hasn't picked a meeting time yet.
+  const prompt = `${VOICE_CORE}
+
+Right now you're doing ONE thing: two people matched and both said yes, but this user hasn't picked a meeting time yet. Send a single short nudge to pick a time — the same voice you'd use in any normal chat.
 
 User info:
 - Name: ${name || "unknown"}
 - Language: ${lang}
 - ${calendarHint}
 
-Write a SHORT nudge (1-2 sentences) reminding them to pick a time. Friendly, not nagging. 1 emoji max. Write in ${lang}.
+Write it in ${lang}. 1–2 short sentences, one idea. Understated and warm, never nagging — the time is on them, whenever there's a minute. Emoji default is ZERO (at most one, only ✨/🍵/🤍, and only if it lands).
+
+CRITICAL: Use strictly gender-neutral language (we do NOT know the user's gender). In Russian/Ukrainian/Polish avoid gendered past-tense verb forms — use impersonal or infinitive constructions.
 
 Output ONLY the message text.`;
 
@@ -391,7 +390,7 @@ Output ONLY the message text.`;
       body: JSON.stringify({
         model: "gpt-4.1-mini",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.8,
+        temperature: 0.7,
         max_completion_tokens: 100,
       }),
     });
@@ -411,14 +410,20 @@ Output ONLY the message text.`;
   }
 }
 
+// VOICE.md §9: the nudge is understated, not an imperative with ⏰ — "the time
+// is on you". All five languages covered so de/pl never fall back to English.
 function getSchedulingFallback(name: string, lang: string): string {
   const g = name ? `${name}, ` : "";
   switch (lang) {
     case "ru":
-      return `${g}не забудь выбрать время для встречи ⏰`;
+      return `${g}время всё ещё за тобой — открой календарь, когда будет минута.`;
     case "uk":
-      return `${g}не забудь обрати час для зустрічі ⏰`;
+      return `${g}час усе ще за тобою — відкрий календар, коли буде хвилинка.`;
+    case "de":
+      return `${g}die Zeit liegt bei dir — mach den Kalender auf, wenn du kurz Zeit hast.`;
+    case "pl":
+      return `${g}termin zależy od ciebie — otwórz kalendarz, gdy masz chwilę.`;
     default:
-      return `${g}don't forget to pick a meeting time ⏰`;
+      return `${g}the time's on you — open the calendar whenever there's a minute.`;
   }
 }

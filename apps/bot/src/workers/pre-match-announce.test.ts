@@ -189,7 +189,7 @@ describe("getAnnounceFallback", () => {
 
   it("works with empty name", () => {
     const msg = getAnnounceFallback("", "en");
-    expect(msg).toContain("Hey");
+    expect(msg).toContain("hey");
   });
 });
 

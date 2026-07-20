@@ -189,6 +189,8 @@ the same voice inline.
 |---|---|---|
 | Assistant / menu | `services/prompt-builder.ts` `BASE_PERSONA` + the `- Gender:` context line | LLM adapts emphasis from gender in context |
 | Onboarding re-engagement nudge | `workers/re-engagement.ts` `generateHookMessage` (prompt) + `getFallbackMessage` (5-lang fallbacks) | LLM prompt injects `VOICE_CORE`; gender-neutral (drop-off = gender unknown) |
+| Match nudge (proposal + scheduling) | `workers/match-nudge.ts` `generateProposalNudge` / `generateSchedulingNudge` (prompts) + `getProposalFallback` / `getSchedulingFallback` (5-lang fallbacks) | LLM prompt injects `VOICE_CORE`; understated, no deadline-as-threat; gender-neutral (gender not threaded) |
+| Pre-match teaser | `workers/pre-match-announce.ts` `generateAnnounce` (prompt) + `getAnnounceFallback` (5-lang fallbacks) | LLM prompt injects `VOICE_CORE`; understated, no hype/secret-reveal; gender-neutral |
 | Onboarding agent | `services/onboarding-agent.ts` Conversation Style block | LLM |
 | Aether (mobile) | `services/aether-agent.ts` `SYSTEM_PROMPT` | LLM |
 | Match pitch / synergy | `packages/shared/src/ai/prompts.ts` `pitchAndSynergyPrompt` | LLM, per recipient — *gender not yet threaded (see §12)* |

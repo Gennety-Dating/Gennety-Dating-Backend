@@ -1,7 +1,7 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { openaiFetch } from "../services/openai-fetch.js";
-import { t, type Language } from "@gennety/shared";
+import { t, type Language, VOICE_CORE } from "@gennety/shared";
 import { env } from "../config.js";
 import { previewWeeklyBatch } from "../services/match-engine.js";
 import { isQuietHours } from "./quiet-hours.js";
@@ -124,21 +124,21 @@ async function generateAnnounce(
   const lang = user.language ?? "en";
   const name = user.firstName ?? "";
 
-  const prompt = `You are Gennety Dating's assistant. Tomorrow evening the weekly matching batch runs — the user will receive their curated match.
+  const prompt = `${VOICE_CORE}
+
+Right now you're doing ONE thing: it's the evening before the weekly match drop, and this user gets their curated match tomorrow evening (18:00). Send a single short teaser — the same voice you'd use texting them, not a "campaign" blast.
 
 User info:
 - Name: ${name || "unknown"}
 - Language: ${lang}
 
-Write a SHORT teaser message (2-3 sentences max) telling them we've been searching for their perfect match all week and they'll get it tomorrow evening. Make it feel exciting and personal — like a friend who's about to reveal a secret. 1-2 emojis max. Write in ${lang}.
+Write it in ${lang}. 1–2 short sentences, one idea: you've been looking this week, their match lands tomorrow evening. Understated, a little warm — no hype, no "get ready!!", no secret-reveal drama. Emoji default is ZERO (at most one, only ✨/🍵/🤍, and only if it truly lands).
 
-Tone: warm, a little mysterious, zero corporate-speak.
+CRITICAL: Use strictly gender-neutral language. We do NOT know the user's gender. Avoid gendered verb forms or adjectives referring to the user — use neutral imperatives and impersonal constructions.
 
-CRITICAL: Use strictly gender-neutral language. We do NOT know the user's gender. Avoid any gendered verb forms or adjectives referring to the user. Use neutral imperatives and impersonal constructions.
-
-Good example:
-- "Эй, [name]! Мы целую неделю искали для тебя идеальную пару 🔍 Завтра вечером — покажем. Готовься 👀"
-- "Hey [name]! We've spent the whole week hunting down your perfect match. Tomorrow evening, we're pulling back the curtain 👀"
+Good examples (register, not to copy):
+- "нашёл тебе пару на эту неделю. покажу завтра вечером."
+- "your match for this week's ready — I'll show you tomorrow evening."
 
 Output ONLY the message text.`;
 
@@ -152,7 +152,7 @@ Output ONLY the message text.`;
       body: JSON.stringify({
         model: "gpt-4.1-mini",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.85,
+        temperature: 0.7,
         max_completion_tokens: 160,
       }),
     });
@@ -172,15 +172,21 @@ Output ONLY the message text.`;
   }
 }
 
+// VOICE.md: understatement over hype — no exclamation, no 🔍/👀, at most one
+// approved emoji. Gender-neutral, native per language (all five covered).
 export function getAnnounceFallback(name: string, lang: string): string {
-  const g = name ? `, ${name}` : "";
+  const g = name ? ` ${name}` : "";
   switch (lang) {
     case "ru":
-      return `Эй${g}! Мы целую неделю искали для тебя идеальную пару 🔍 Завтра вечером — покажем. Готовься 👀`;
+      return `эй${g}, нашёл тебе пару на эту неделю. покажу завтра вечером ✨`;
     case "uk":
-      return `Гей${g}! Ми цілий тиждень шукали для тебе ідеальну пару 🔍 Завтра ввечері — покажемо. Готуйся 👀`;
+      return `гей${g}, знайшов тобі пару на цей тиждень. покажу завтра ввечері ✨`;
+    case "de":
+      return `hey${g}, dein Match für diese Woche steht. zeig's dir morgen Abend ✨`;
+    case "pl":
+      return `hej${g}, twoje dopasowanie na ten tydzień gotowe. pokażę jutro wieczorem ✨`;
     default:
-      return `Hey${g}! We've spent the whole week finding your perfect match 🔍 Tomorrow evening — we'll reveal them. Stay tuned 👀`;
+      return `hey${g}, your perfect match for this week is ready — I'll show you tomorrow evening ✨`;
   }
 }
 
