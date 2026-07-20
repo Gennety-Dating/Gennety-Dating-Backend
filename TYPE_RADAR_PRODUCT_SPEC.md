@@ -167,12 +167,23 @@ re-scanned legacy profiles) are neutral on the candidate side.
   calibrated in the same visual domain, and the scene primes the actual
   question ("do you want this person across the table?"). Front-camera
   selfies were considered and rejected: arm's-length framing crops at the
-  chest and kills the build attribute. The scene is a **held constant**: ONE
-  shared
-  setting for the whole set (cozy warmly-lit evening café/bar, subject
-  standing/leaning at the counter — never seated, build must stay readable),
-  softly blurred background with no other people (vibe without distraction or
-  scene-driven noise). Per-photo constants: three-quarter mid-thigh-up
+  chest and kills the build attribute. The scene is a **balanced nuisance
+  factor** (founder decision 2026-07-19, replacing the earlier single-scene
+  rule): exactly THREE fixed warm scenes — evening café / old-town street by
+  a terrace / park at golden hour — 4 photos per scene per set, the
+  assignment balanced so every attribute value appears in at least two
+  scenes; scene effects therefore average out and cannot glue to any
+  attribute. The per-photo `scene` field in the dataset is part of the
+  design — never reassign it casually. Subject always standing/leaning
+  (never seated, build must stay readable), softly blurred background with
+  no other people. **Ethnicity is a held constant matched to the launch
+  market** (Ukraine → Eastern European appearance on every frame): left
+  unspecified, generators randomize it into the strongest uncontrolled
+  visual confound of all; it is deliberately NOT a scored attribute (the
+  existing text channel — the optional nationality/ethnicity onboarding
+  question + `negativeConstraints` — owns that preference), and market
+  expansion means a localized dataset per market. Per-photo constants:
+  three-quarter mid-thigh-up
   framing, direct gaze + the same light genuine "greeting my date" smile
   across the set, constant natural makeup (style/vibe is expressed through
   clothing ONLY), bare/short-sleeved arms (tattoo attribute visible or
