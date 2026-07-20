@@ -288,6 +288,9 @@ async function execUpdateMajor(
   telegramId: bigint,
   args: { major: string },
 ): Promise<string> {
+  if (typeof args.major !== "string") {
+    return JSON.stringify({ success: false, error: "Major must be text." });
+  }
   const major = args.major.trim();
   if (major.length > MAX_MAJOR_LENGTH) {
     return JSON.stringify({
@@ -308,7 +311,15 @@ async function execUpdateAgeRange(
   telegramId: bigint,
   args: { min_age: number; max_age: number },
 ): Promise<string> {
-  if (args.min_age < MIN_AGE || args.max_age > MAX_AGE || args.min_age > args.max_age) {
+  if (
+    !Number.isFinite(args.min_age) ||
+    !Number.isInteger(args.min_age) ||
+    !Number.isFinite(args.max_age) ||
+    !Number.isInteger(args.max_age) ||
+    args.min_age < MIN_AGE ||
+    args.max_age > MAX_AGE ||
+    args.min_age > args.max_age
+  ) {
     return JSON.stringify({
       success: false,
       error: `Age range must be between ${MIN_AGE} and ${MAX_AGE}, with min ≤ max.`,
