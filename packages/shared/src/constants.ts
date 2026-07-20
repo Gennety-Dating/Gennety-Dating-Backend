@@ -28,14 +28,14 @@ export const OTP_LENGTH = 6;
 
 /** Min/max photos allowed during onboarding */
 export const MIN_PHOTOS = 4;
-export const MAX_PHOTOS = 6;
+export const MAX_PHOTOS = 10;
 
 /**
  * Profile-photo count that earns the one-time onboarding ticket bonus
  * (Date Ticket monetization, gated by `TICKET_FEATURE_ENABLED`). Reaching this
- * many face-validated photos grants +1 free ticket. Currently equal to
- * MAX_PHOTOS, so the bonus is earned only by uploading the full allowance;
- * keep it ≤ MAX_PHOTOS.
+ * many face-validated photos grants +1 free ticket. This deliberately stays
+ * below MAX_PHOTOS: the reward is earned at 6 photos, while users may keep
+ * adding optional photos up to the 10-photo profile limit.
  */
 export const PHOTO_BONUS_TICKET_THRESHOLD = 6;
 

@@ -50,8 +50,8 @@ describe("onboardingPhotoStageText", () => {
     });
 
     expect(text).toContain("короткое видео");
-    expect(text).toContain("продолжить");
-    expect(text).not.toContain("до 6");
+    expect(text).toContain("продолжай");
+    expect(text).toContain("до 10");
   });
 
   it("uses a non-monetized optional-media message when tickets are disabled", () => {
@@ -81,7 +81,7 @@ describe("onboardingPhotoStageText", () => {
   it("only offers Continue when all media slots and bonuses are complete", () => {
     const text = onboardingPhotoStageText({
       language: "en",
-      photoCount: 6,
+      photoCount: 10,
       ticketFeatureEnabled: true,
       hasVideo: true,
     });

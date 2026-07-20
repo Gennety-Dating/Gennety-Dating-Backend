@@ -629,14 +629,14 @@ describe("Menu — Edit Profile", () => {
   });
 
   it("handleEditPhotosUpload does not add media beyond MAX_PHOTOS", async () => {
-    const existingPhotos = ["file_1", "file_2", "file_3", "file_4", "file_5", "file_6"];
+    const existingPhotos = Array.from({ length: MAX_PHOTOS }, (_, index) => `file_${index + 1}`);
     const ctx = createMockCtx({
       session: {
         menuState: "edit_photos",
         pendingPhotos: existingPhotos,
         pendingProfileMedia: existingPhotos.map((photo) => ({ type: "photo", photo })),
         pendingPhotoUniqueIds: [],
-        pendingPhotoScores: [0, 0, 0, 0, 0, 0],
+        pendingPhotoScores: existingPhotos.map(() => 0),
       },
       message: {
         live_photo: {
@@ -665,7 +665,7 @@ describe("Menu — Edit Profile", () => {
         data: expect.objectContaining({
           photos: existingPhotos,
           profileMedia: existingPhotos.map((photo) => ({ type: "photo", photo })),
-          photoFaceScores: [0, 0, 0, 0, 0, 0],
+          photoFaceScores: existingPhotos.map(() => 0),
         }),
       }),
     );

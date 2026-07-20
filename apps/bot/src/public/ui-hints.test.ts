@@ -42,6 +42,7 @@ describe("uiHintForQuestion", () => {
       min: MIN_PHOTOS,
       max: MAX_PHOTOS,
     });
+    expect(MAX_PHOTOS).toBe(10);
   });
 
   it("resolves null for unknown keys and empty input (client falls back to text)", () => {

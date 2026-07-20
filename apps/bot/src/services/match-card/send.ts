@@ -15,14 +15,14 @@
 import { InputFile } from "grammy";
 import type { Api, RawApi } from "grammy";
 import type { InputMediaPhoto, MessageEntity } from "grammy/types";
-import type { Language } from "@gennety/shared";
+import { MAX_PHOTOS, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { downloadProfileImage } from "../storage.js";
 import { generateMatchCardTexts } from "./copy.js";
 import { renderMatchCardSet, type MatchCardTheme } from "./index.js";
 
-/** Telegram albums cap at 10; profiles cap at MAX_PHOTOS (6) anyway. */
-const MAX_CARD_PHOTOS = 6;
+/** One rendered card holds two photos, so 10 profile photos become five cards. */
+const MAX_CARD_PHOTOS = MAX_PHOTOS;
 
 export interface PartnerMatchCardsInput {
   matchId: string;

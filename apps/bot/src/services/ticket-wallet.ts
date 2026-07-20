@@ -12,7 +12,7 @@ import { env } from "../config.js";
  *
  * A ticket is spent at the date gate (one per person, per date). The balance is
  * topped up by bundle purchases (store Mini App) and one-time onboarding
- * bonuses (4+ profile photos, adding a profile video, completing identity
+ * bonuses (6+ profile photos, adding a profile video, completing identity
  * verification). Everything here is gated by `TICKET_FEATURE_ENABLED`; when
  * the flag is off, grants are no-ops so production behavior is unchanged.
  *

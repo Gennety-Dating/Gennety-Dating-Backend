@@ -12,6 +12,7 @@ import request from "supertest";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
+import { MAX_PHOTOS } from "@gennety/shared";
 
 // ---------------------------------------------------------------------------
 // 1. Mock env BEFORE any backend module loads `config.ts`.
@@ -1787,7 +1788,7 @@ describe("POST /v1/me/photos", () => {
       psychologicalSummary: null,
       ageRangeMin: null,
       ageRangeMax: null,
-      photos: ["a.jpg", "b.jpg", "c.jpg", "d.jpg", "e.jpg", "f.jpg"],
+      photos: Array.from({ length: MAX_PHOTOS }, (_, index) => `${index + 1}.jpg`),
       matchRadius: "campus_only",
     };
     const res = await request(app)
@@ -1796,7 +1797,7 @@ describe("POST /v1/me/photos", () => {
       .attach("photo", JPEG, { filename: "p.jpg", contentType: "image/jpeg" });
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/limit/i);
-    expect(res.body.max).toBe(6);
+    expect(res.body.max).toBe(MAX_PHOTOS);
   });
 
   it("cleans up storage when a concurrent upload fills the final slot", async () => {
@@ -1813,7 +1814,10 @@ describe("POST /v1/me/photos", () => {
       psychologicalSummary: null,
       ageRangeMin: null,
       ageRangeMax: null,
-      photos: ["1.jpg", "2.jpg", "3.jpg", "4.jpg", "5.jpg"],
+      photos: Array.from(
+        { length: MAX_PHOTOS - 1 },
+        (_, index) => `${index + 1}.jpg`,
+      ),
       matchRadius: "campus_only",
     };
     vi.mocked(uploadProfilePhoto).mockImplementationOnce(async () => {

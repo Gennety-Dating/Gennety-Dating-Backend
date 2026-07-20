@@ -237,7 +237,7 @@ Hard rules enforced by the collector:
 - Nationality/ethnicity is asked at most once and may be explicitly skipped.
 - "No hobbies" / a single hobby is a valid answer; the agent must NOT chain
   "one more, one more" requests.
-- `MIN_PHOTOS` (4) is a hard floor; anything beyond up to `MAX_PHOTOS` (6) is
+- `MIN_PHOTOS` (4) is a hard floor; anything beyond up to `MAX_PHOTOS` (10) is
   purely optional. In Telegram conversational onboarding, the media stage is
   deterministic rather than LLM-owned:
   before the minimum, the bot reports exactly how many valid photos are still
@@ -246,7 +246,7 @@ Hard rules enforced by the collector:
   sending photos one-by-one or as a Telegram album, send a short profile video,
   tap Continue, or type a localized equivalent such as "done" / "дальше".
   Albums and rapid standalone photos are coalesced into one progress response,
-  so a 4- or 6-photo burst does not produce one reply per frame. At 5 photos the
+  so a 4- or 10-photo burst does not produce one reply per frame. At 5 photos the
   bot uses a short progress reminder rather than repeating the full pitch.
   Exact duplicates (same Telegram `file_unique_id` within a batch) and
   re-encoded / cropped copies (perceptual `differenceHash` within
@@ -290,7 +290,8 @@ Hard rules enforced by the collector:
   rewards: reaching `PHOTO_BONUS_TICKET_THRESHOLD` (6) face-validated photos
   grants a free Date Ticket, and adding a profile video grants another. A batch
   that already reaches 6+ photos receives the photo reward immediately, but the
-  media stage remains open so the user can still add the optional video. Each
+  media stage remains open so the user can still add optional photos up to 10
+  and the optional video. Each
   bonus is one-time/idempotent (`Profile.photoBonusTicketAt` /
   `videoBonusTicketAt`) and explains the mechanic in the reward DM (each date
   costs 1 ticket; tickets normally cost money). See §3.5b.

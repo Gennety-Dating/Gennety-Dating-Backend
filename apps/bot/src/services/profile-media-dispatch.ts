@@ -116,25 +116,18 @@ async function sendStaticFallback(
   );
 }
 
-/**
- * Send profile media in Telegram. Live Photo sends use Bot API 10.0 via a
- * narrow raw helper when grammY hasn't typed `sendLivePhoto` yet. Any media
- * failure is swallowed by callers; this helper makes one live->static fallback
- * attempt before surfacing the error.
- */
-export async function sendProfileMediaCard(
+/** Send one Telegram-compatible chunk (1–10 media items). */
+async function sendProfileMediaChunk(
   api: Api<RawApi>,
   chatId: number,
   media: readonly ProfileMedia[],
-  caption: MediaCaption = {},
-  options: { protect?: boolean } = {},
+  caption: MediaCaption,
+  protect: boolean,
 ): Promise<void> {
-  const protect = options.protect ?? false;
-  const slice = media.slice(0, MAX_TELEGRAM_MEDIA_GROUP_SIZE);
-  if (slice.length === 0) return;
+  if (media.length === 0) return;
 
-  if (slice.length === 1) {
-    const item = slice[0]!;
+  if (media.length === 1) {
+    const item = media[0]!;
     if (item.type === "live_photo") {
       try {
         await sendLivePhoto(
@@ -160,7 +153,7 @@ export async function sendProfileMediaCard(
     return;
   }
 
-  const inputMedia = slice.map((item, index) =>
+  const inputMedia = media.map((item, index) =>
     toInputMedia(item, index === 0 ? caption : {}),
   );
 
@@ -171,8 +164,29 @@ export async function sendProfileMediaCard(
       protect ? { protect_content: true } : undefined,
     );
   } catch (err) {
-    if (!slice.some((item) => item.type === "live_photo")) throw err;
+    if (!media.some((item) => item.type === "live_photo")) throw err;
     console.warn("sendMediaGroup with live photos failed, falling back to static photos:", err);
-    await sendStaticFallback(api, chatId, slice, caption, protect);
+    await sendStaticFallback(api, chatId, media, caption, protect);
+  }
+}
+
+/**
+ * Send every profile media item in Telegram. Live Photo sends use Bot API
+ * 10.0 via a narrow raw helper when grammY hasn't typed `sendLivePhoto` yet.
+ * Profiles may contain 10 photos plus one optional video, so the payload is
+ * split into Telegram-compatible groups instead of silently truncating the
+ * video. Only the first chunk carries the caption.
+ */
+export async function sendProfileMediaCard(
+  api: Api<RawApi>,
+  chatId: number,
+  media: readonly ProfileMedia[],
+  caption: MediaCaption = {},
+  options: { protect?: boolean } = {},
+): Promise<void> {
+  const protect = options.protect ?? false;
+  for (let offset = 0; offset < media.length; offset += MAX_TELEGRAM_MEDIA_GROUP_SIZE) {
+    const chunk = media.slice(offset, offset + MAX_TELEGRAM_MEDIA_GROUP_SIZE);
+    await sendProfileMediaChunk(api, chatId, chunk, offset === 0 ? caption : {}, protect);
   }
 }

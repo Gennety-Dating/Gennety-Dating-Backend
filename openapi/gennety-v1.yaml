@@ -689,7 +689,7 @@ paths:
     post:
       tags: [me]
       operationId: uploadPhoto
-      summary: Upload one profile photo (multipart field `photo`, ≤8 MB)
+      summary: Upload one profile photo (multipart field `photo`, ≤8 MB; profile max 10)
       requestBody:
         required: true
         content:
@@ -1387,8 +1387,9 @@ components:
         ageRangeMax: { type: [integer, "null"] }
         photos:
           type: array
+          maxItems: 10
           items: { type: string }
-          description: Opaque storage paths — render via signed URLs from /v1/me/photos
+          description: Up to 10 opaque storage paths — render via signed URLs from /v1/me/photos
         matchRadius: { $ref: "#/components/schemas/MatchRadius" }
         standbyCount: { type: integer }
         latitude: { type: [number, "null"] }
@@ -1498,7 +1499,9 @@ components:
       properties:
         photos:
           type: array
+          maxItems: 10
           items: { type: string }
+          description: Ordered profile photos, capped at 10
         signedUrls:
           type: array
           items: { type: string }

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { MAX_PHOTOS } from "@gennety/shared";
 
 const { findMany } = vi.hoisted(() => ({ findMany: vi.fn() }));
 vi.mock("@gennety/db", () => ({
@@ -16,7 +17,7 @@ function userRow(over: Record<string, unknown> = {}) {
     verificationStatus: "verified",
     profile: {
       homeCity: "Kyiv",
-      photos: ["f1", "f2", "f3", "f4", "f5", "f6", "f7"],
+      photos: Array.from({ length: MAX_PHOTOS + 1 }, (_, index) => `f${index + 1}`),
       eloSeedDetails: { score: 74.6 },
     },
     ...over,
@@ -55,8 +56,8 @@ describe("buildWeeklyMatchesReport", () => {
     // eloSeedDetails.score rounds to an integer 0..100.
     expect(a.attractiveness).toBe(75);
     expect(a.city).toBe("Kyiv");
-    // Photos are capped at 6 per user.
-    expect(a.photoRefs).toHaveLength(6);
+    // Reports preserve the full profile allowance and discard legacy overflow.
+    expect(a.photoRefs).toHaveLength(MAX_PHOTOS);
     // No vision seed → null score, single photo preserved.
     expect(b.attractiveness).toBeNull();
     expect(b.photoRefs).toEqual(["g1"]);

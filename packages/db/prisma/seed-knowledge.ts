@@ -31,7 +31,7 @@ Users should keep their profile active and updated to maximize match quality.`,
     priority: 2,
     content: `Core identity data (Name, Age, University/Email) is FIXED after onboarding and cannot be changed.
 Users CAN edit: bio/psychological summary, major, age range preferences, visual preferences, and photos.
-Minimum 2 photos required at all times. Maximum 6 photos.
+Minimum 4 photos are required for an active profile. Maximum 10 photos.
 Bio length is capped at 500 characters.
 Encourage users to keep their profile fresh — updated photos and preferences improve match quality.`,
   },

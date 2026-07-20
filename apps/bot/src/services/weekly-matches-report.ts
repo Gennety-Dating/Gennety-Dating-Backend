@@ -1,4 +1,5 @@
 import { prisma } from "@gennety/db";
+import { MAX_PHOTOS } from "@gennety/shared";
 
 /**
  * Weekly founder matches report (PII, ops-only). The single assembler shared by
@@ -47,8 +48,6 @@ interface BuildArgs {
   until?: Date;
 }
 
-const MAX_PHOTOS_PER_USER = 6;
-
 function attractivenessFromSeed(details: unknown): number | null {
   if (details && typeof details === "object" && "score" in details) {
     const s = (details as { score?: unknown }).score;
@@ -77,7 +76,7 @@ function toUserCard(user: {
     city: user.profile?.homeCity ?? null,
     verificationStatus: user.verificationStatus,
     attractiveness: attractivenessFromSeed(user.profile?.eloSeedDetails),
-    photoRefs: (user.profile?.photos ?? []).slice(0, MAX_PHOTOS_PER_USER),
+    photoRefs: (user.profile?.photos ?? []).slice(0, MAX_PHOTOS),
   };
 }
 

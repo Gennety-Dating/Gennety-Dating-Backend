@@ -238,7 +238,7 @@ model User {
   /// Materialized ticket wallet balance (Date Ticket monetization, gated by
   /// `TICKET_FEATURE_ENABLED`). A ticket is spent at the §3.5b date gate; it
   /// is topped up by bundle purchases (the store Mini App) and one-time
-  /// onboarding bonuses (4+ profile photos, adding a profile video). This is
+  /// onboarding bonuses (6+ profile photos, adding a profile video). This is
   /// the materialized counter — every change is written atomically alongside a
   /// `TicketLedger` audit row in the same transaction, so the ledger is the
   /// append-only source of truth and this column is its running sum.
@@ -297,7 +297,7 @@ model User {
 /// both are written in the same transaction by `services/ticket-wallet.ts`.
 ///
 /// `reason` (string, validated in app code — not a Prisma enum):
-///   photo_bonus    — +1 one-time bonus for reaching 4+ profile photos
+///   photo_bonus    — +1 one-time bonus for reaching 6+ profile photos
 ///   video_bonus    — +1 one-time bonus for adding a profile video
 ///   verification_bonus — +1 one-time bonus for successful identity verification
 ///   store_purchase — +N from a bundle purchase in the store Mini App
@@ -521,7 +521,7 @@ model Profile {
   profilerActiveQuestionId String?               @map("profiler_active_question_id")
   profilerBatchRemaining   Int                   @default(0) @map("profiler_batch_remaining")
   /// One-time onboarding ticket-bonus idempotency markers (gated by
-  /// `TICKET_FEATURE_ENABLED`). Set the first time the profile reaches 4+
+  /// `TICKET_FEATURE_ENABLED`). Set the first time the profile reaches 6+
   /// face-validated photos (`photoBonusTicketAt`) or gains a profile video
   /// (`videoBonusTicketAt`). The grant is never re-issued, even if the user
   /// later edits photos/video. See `services/ticket-wallet.ts`.
