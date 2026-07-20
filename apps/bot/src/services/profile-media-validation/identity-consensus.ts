@@ -59,6 +59,14 @@ export interface CommitProfilePhotoCandidateInput {
   api?: Api<RawApi> | null;
 }
 
+export interface RemoveProfilePhotoResult {
+  found: boolean;
+  photos: string[];
+  profileMedia: ProfileMedia[];
+  uploadedPhotoHashes: string[];
+  photoFaceScores: number[];
+}
+
 export class ProfilePhotoCommitConflictError extends Error {
   constructor(public readonly reason: "limit" | "duplicate") {
     super(reason === "limit" ? "Profile photo limit reached" : "Profile photo already exists");
@@ -277,6 +285,86 @@ export async function commitProfilePhotoCandidate(
       pendingCount: 0,
       rejectedCount: 0,
       rejectedCandidates: [],
+    };
+  });
+}
+
+/**
+ * Remove one accepted photo under the same per-user lock as every upload
+ * path. A Telegram editor may hold an old album snapshot while mobile/Aether
+ * appends a photo; deriving the deletion from the freshly locked DB state
+ * ensures that removing A never accidentally overwrites a concurrent D.
+ */
+export async function removeProfilePhotoByRef(
+  userId: string,
+  photoRef: string,
+): Promise<RemoveProfilePhotoResult> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRawUnsafe(
+      "SELECT id FROM users WHERE id = $1::uuid FOR UPDATE",
+      userId,
+    );
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: {
+        profile: {
+          select: {
+            photos: true,
+            profileMedia: true,
+            photoFaceScores: true,
+            uploadedPhotoHashes: true,
+            referenceFaceEmbedding: true,
+            pendingPhotoCandidates: true,
+          },
+        },
+      },
+    });
+    const profile = user?.profile;
+    const photos = [...(profile?.photos ?? [])];
+    const index = photos.indexOf(photoRef);
+    if (index < 0) {
+      return {
+        found: false,
+        photos,
+        profileMedia: normalizeProfileMedia(profile?.profileMedia ?? [], photos),
+        uploadedPhotoHashes: alignPhotoHashes(photos, profile?.uploadedPhotoHashes ?? []),
+        photoFaceScores: [...(profile?.photoFaceScores ?? [])].slice(0, photos.length),
+      };
+    }
+
+    const media = normalizeProfileMedia(profile?.profileMedia ?? [], photos);
+    const hashes = alignPhotoHashes(photos, profile?.uploadedPhotoHashes ?? []);
+    const scores = [...(profile?.photoFaceScores ?? [])];
+    while (scores.length < photos.length) scores.push(0);
+    const nextPhotos = [...photos.slice(0, index), ...photos.slice(index + 1)];
+    const nextMedia = [...media.slice(0, index), ...media.slice(index + 1)];
+    const nextHashes = [...hashes.slice(0, index), ...hashes.slice(index + 1)];
+    const nextScores = [...scores.slice(0, index), ...scores.slice(index + 1)];
+    const pendingCandidates = (profile?.pendingPhotoCandidates ?? [])
+      .map(parsePendingPhotoCandidate)
+      .filter((candidate): candidate is PendingPhotoCandidate => candidate !== null)
+      .filter((candidate) => candidate.photoRef !== photoRef);
+    const photoState = photoUploadStatePatch({
+      photos: nextPhotos,
+      uploadedPhotoHashes: nextHashes,
+      referenceFaceEmbedding: profile?.referenceFaceEmbedding ?? null,
+      refreshReference: index === 0,
+      skipReferenceCreation: true,
+    });
+    await upsertPhotoState(tx, userId, {
+      photos: nextPhotos,
+      profileMedia: nextMedia,
+      photoFaceScores: nextScores,
+      uploadedPhotoHashes: photoState.uploadedPhotoHashes,
+      pendingPhotoCandidates: pendingCandidates,
+      photoState,
+    });
+    return {
+      found: true,
+      photos: nextPhotos,
+      profileMedia: nextMedia,
+      uploadedPhotoHashes: photoState.uploadedPhotoHashes,
+      photoFaceScores: nextScores,
     };
   });
 }

@@ -103,6 +103,12 @@ const accountStatusMocks = vi.hoisted(() => ({
 }));
 vi.mock("../../services/account-status-transitions.js", () => accountStatusMocks);
 
+const photoConsensusMocks = vi.hoisted(() => ({
+  commitProfilePhotoCandidate: vi.fn(),
+  removeProfilePhotoByRef: vi.fn(),
+}));
+vi.mock("../../services/profile-media-validation/identity-consensus.js", () => photoConsensusMocks);
+
 import { prisma } from "@gennety/db";
 import { findActiveMatchForTelegramId } from "../../services/active-match.js";
 import { showMainMenu, buildMainMenuKeyboard } from "./main.js";
@@ -772,6 +778,13 @@ describe("Menu — Edit Profile", () => {
       },
       callbackData: "menu:edit:photos:del:1",
     });
+    photoConsensusMocks.removeProfilePhotoByRef.mockResolvedValue({
+      found: true,
+      photos: expectedPhotos,
+      profileMedia: expectedPhotos.map((photo) => ({ type: "photo", photo })),
+      uploadedPhotoHashes: expectedHashes,
+      photoFaceScores: expectedScores,
+    });
 
     await handleEditPhotosDelete(ctx);
 
@@ -784,16 +797,11 @@ describe("Menu — Edit Profile", () => {
     expect(ctx.session.pendingProfileMedia).toEqual(
       expectedPhotos.map((photo) => ({ type: "photo", photo })),
     );
-    // Persisted immediately so the consensus upload path can't resurrect it.
-    expect(prisma.profile.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { userId: "uuid-user-1" },
-        data: expect.objectContaining({
-          photos: expectedPhotos,
-          photoFaceScores: expectedScores,
-          uploadedPhotoHashes: expectedHashes,
-        }),
-      }),
+    // Persisted immediately under the shared per-user upload lock so the
+    // consensus/mobile paths cannot resurrect the deleted item.
+    expect(photoConsensusMocks.removeProfilePhotoByRef).toHaveBeenCalledWith(
+      "uuid-user-1",
+      "p1",
     );
   });
 

@@ -32,6 +32,7 @@ import { env } from "../../config.js";
 import { validateUserProfilePhoto } from "../../services/profile-media-validation/profile-photo-validation.js";
 import {
   commitProfilePhotoCandidate,
+  removeProfilePhotoByRef,
   type PhotoConsensusCommitResult,
 } from "../../services/profile-media-validation/identity-consensus.js";
 import type { MediaValidationReason } from "../../services/profile-media-validation/types.js";
@@ -469,6 +470,10 @@ export async function handleEditPhotosDelete(ctx: BotContext): Promise<void> {
   }
   await ctx.answerCallbackQuery({ text: t(lang, "photoManagerDeleted") });
 
+  const deletedPhotoRef = ctx.session.pendingPhotos[idx]!;
+  const priorPhotos = [...ctx.session.pendingPhotos];
+  const priorUniqueIds = [...ctx.session.pendingPhotoUniqueIds];
+
   const media = normalizeProfileMedia(
     ctx.session.pendingProfileMedia,
     ctx.session.pendingPhotos,
@@ -486,7 +491,26 @@ export async function handleEditPhotosDelete(ctx: BotContext): Promise<void> {
   }
   ctx.session.pendingPhotos.splice(idx, 1);
 
-  await persistPendingPhotos(ctx);
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(ctx.from!.id) },
+    select: { id: true },
+  });
+  if (user) {
+    const committed = await removeProfilePhotoByRef(user.id, deletedPhotoRef);
+    // The locked service may retain photos added by a concurrent mobile/Aether
+    // edit. Mirror that canonical state back into this Telegram session so its
+    // next button cannot overwrite those additions.
+    ctx.session.pendingPhotos = committed.photos;
+    ctx.session.pendingProfileMedia = committed.profileMedia;
+    ctx.session.pendingPhotoHashes = committed.uploadedPhotoHashes;
+    ctx.session.pendingPhotoScores = committed.photoFaceScores;
+    ctx.session.pendingPhotoUniqueIds = committed.photos.map((photoRef) => {
+      const priorIndex = priorPhotos.indexOf(photoRef);
+      return priorIndex >= 0 ? priorUniqueIds[priorIndex] ?? "" : "";
+    });
+  } else {
+    await persistPendingPhotos(ctx);
+  }
   await renderPhotoManager(ctx);
 }
 
@@ -797,7 +821,15 @@ async function persistPendingPhotos(ctx: BotContext): Promise<string | null> {
 async function finishEditPhotos(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
 
-  const userId = await persistPendingPhotos(ctx);
+  // With the unified validator on, every accepted upload and every deletion
+  // has already committed through per-user locked services. A final full-array
+  // save here would reintroduce the stale-session overwrite that those paths
+  // deliberately prevent. Keep the legacy fallback for disabled rollouts.
+  const userId = env.PROFILE_MEDIA_VALIDATION_ENABLED
+    ? await prisma.user
+        .findUnique({ where: { telegramId: BigInt(ctx.from!.id) }, select: { id: true } })
+        .then((user) => user?.id ?? null)
+    : await persistPendingPhotos(ctx);
   if (!userId) return;
 
   // Re-run face-match verification against the new photo set. The
