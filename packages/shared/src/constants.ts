@@ -120,6 +120,7 @@ export const MAX_AGE = 55;
 
 /** Edit profile length limits */
 export const MAX_BIO_LENGTH = 500;
+export const MAX_PARTNER_PREFERENCES_LENGTH = 500;
 export const MAX_MAJOR_LENGTH = 100;
 
 /** Phase 4: Date lifecycle timing */

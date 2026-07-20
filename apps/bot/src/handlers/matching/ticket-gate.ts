@@ -1,7 +1,7 @@
 import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
 import type { InlineKeyboardMarkup } from "grammy/types";
-import { prisma } from "@gennety/db";
+import { prisma, type Theme } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.js";
@@ -20,6 +20,7 @@ import {
   discountedCents,
 } from "../../services/ticket-discount.js";
 import { emitTicketEvent } from "../../services/ticket-analytics.js";
+import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 
 /**
  * Date Ticket gate — the premium monetization step inserted between mutual
@@ -43,6 +44,7 @@ interface TicketUser {
   id: string;
   telegramId: bigint;
   language: string | null;
+  theme: Theme;
   gender: "male" | "female" | null;
   firstName: string | null;
   ticketBalance: number;
@@ -90,8 +92,8 @@ const TICKET_SELECT = {
   calendarMessageIdB: true,
   userAId: true,
   userBId: true,
-  userA: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, profile: { select: { photos: true } } } },
-  userB: { select: { id: true, telegramId: true, language: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, profile: { select: { photos: true } } } },
+  userA: { select: { id: true, telegramId: true, language: true, theme: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, profile: { select: { photos: true } } } },
+  userB: { select: { id: true, telegramId: true, language: true, theme: true, gender: true, firstName: true, ticketBalance: true, ticketDiscountPct: true, ticketDiscountExpiresAt: true, ticketDiscountConsumedAt: true, profile: { select: { photos: true } } } },
 } as const;
 
 function loadTicketMatch(matchId: string): Promise<TicketMatch | null> {
@@ -306,16 +308,17 @@ export async function notePartnerPaidSeen(
 
 // ── Offer (called from the mutual-accept handler) ───────────────────────────
 
-function ticketUrl(matchId: string, lang: Language): string {
-  return `${env.WEBAPP_URL}/ticket.html?match=${matchId}&lang=${lang}`;
+export function ticketUrl(matchId: string, lang: Language, theme: Theme): string {
+  return buildMiniAppUrl("ticket", { lang, theme, query: { match: matchId } });
 }
 
 function buildTicketKeyboard(
   matchId: string,
   lang: Language,
+  theme: Theme,
   labelKey: "ticketButton" | "ticketViewButton" = "ticketButton",
 ): InlineKeyboardMarkup {
-  const kb = new InlineKeyboard().webApp(t(lang, labelKey), ticketUrl(matchId, lang));
+  const kb = new InlineKeyboard().webApp(t(lang, labelKey), ticketUrl(matchId, lang, theme));
   return { inline_keyboard: kb.inline_keyboard };
 }
 
@@ -358,7 +361,7 @@ export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promis
         t(langOf(user), "ticketCardCaption"),
         {
           parse_mode: "Markdown",
-          reply_markup: buildTicketKeyboard(matchId, langOf(user)),
+          reply_markup: buildTicketKeyboard(matchId, langOf(user), user.theme),
         },
       ),
     );
@@ -1085,7 +1088,7 @@ export async function completeTicketGateAndUnlockScheduling(
             toTelegramChatId(covered.telegramId),
             t(langOf(covered), "ticketPartnerPaidDm", { name: payer.firstName ?? "" }),
             // She was already covered — the button is "view your ticket", not "get".
-            { reply_markup: buildTicketKeyboard(matchId, langOf(covered), "ticketViewButton") },
+            { reply_markup: buildTicketKeyboard(matchId, langOf(covered), covered.theme, "ticketViewButton") },
           )
           .catch(() => {});
       }

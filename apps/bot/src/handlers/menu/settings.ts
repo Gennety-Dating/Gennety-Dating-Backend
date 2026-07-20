@@ -6,10 +6,14 @@ import { showMainMenu } from "./main.js";
 import { sendVerificationCTABare } from "../onboarding/verification.js";
 import { buildLanguageKeyboard } from "../language-keyboard.js";
 import { sendDeleteFreezeVideoNote } from "../../services/delete-freeze-video.js";
-import { unpinStatusBanner } from "../../services/status-banner.js";
-import { cancelInFlightMatchesForUser } from "../../services/cancel-in-flight-matches.js";
-import { notifyFounderAccountClosed } from "../../services/founder-notify.js";
 import { deleteUserAccount } from "../../services/account-deletion.js";
+import { freezeAccount } from "../../services/account-status-transitions.js";
+import {
+  consumePendingAccountAction,
+  invalidatePendingAccountAction,
+  newAccountActionNonce,
+  setPendingAccountAction,
+} from "./account-action.js";
 
 const VALID_LANGUAGES = new Set<Language>(SUPPORTED_LANGUAGES);
 const VALID_THEMES = new Set<Theme>(["light", "dark"]);
@@ -139,9 +143,21 @@ export async function handleSettingsLanguageSet(ctx: BotContext): Promise<void> 
   ctx.session.language = newLang;
   ctx.session.menuState = "idle";
 
-  await prisma.user.update({
-    where: { telegramId: BigInt(ctx.from!.id) },
-    data: { language: newLang },
+  const telegramId = BigInt(ctx.from!.id);
+  await prisma.$transaction(async (tx) => {
+    const user = await tx.user.update({
+      where: { telegramId },
+      data: { language: newLang },
+      select: { id: true },
+    });
+    await tx.match.updateMany({
+      where: { userAId: user.id, status: "scheduled" },
+      data: { dateCardFileIdA: null },
+    });
+    await tx.match.updateMany({
+      where: { userBId: user.id, status: "scheduled" },
+      data: { dateCardFileIdB: null },
+    });
   });
 
   await ctx.reply(t(newLang, "settingsLanguageSaved"));
@@ -180,9 +196,21 @@ export async function handleSettingsThemeSet(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
   ctx.session.menuState = "idle";
 
-  await prisma.user.update({
-    where: { telegramId: BigInt(ctx.from!.id) },
-    data: { theme: newTheme, themeChosenAt: new Date() },
+  const telegramId = BigInt(ctx.from!.id);
+  await prisma.$transaction(async (tx) => {
+    const user = await tx.user.update({
+      where: { telegramId },
+      data: { theme: newTheme, themeChosenAt: new Date() },
+      select: { id: true },
+    });
+    await tx.match.updateMany({
+      where: { userAId: user.id, status: "scheduled" },
+      data: { dateCardFileIdA: null },
+    });
+    await tx.match.updateMany({
+      where: { userBId: user.id, status: "scheduled" },
+      data: { dateCardFileIdB: null },
+    });
   });
 
   const lang = ctx.session.language;
@@ -202,6 +230,7 @@ export async function handleSettingsThemeSet(ctx: BotContext): Promise<void> {
 export async function handleDeleteAccountStart(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
   const lang = ctx.session.language;
+  await invalidatePendingAccountAction(ctx);
 
   // Best-effort founder кружок — skipped gracefully when no asset exists for
   // this language; the fork below is always sent regardless.
@@ -209,17 +238,27 @@ export async function handleDeleteAccountStart(ctx: BotContext): Promise<void> {
     await sendDeleteFreezeVideoNote(ctx.api, ctx.chat.id, lang);
   }
 
-  const keyboard = new InlineKeyboard()
-    .text(t(lang, "deleteFreezeBtn"), "menu:settings:freeze")
-    .primary()
-    .row()
-    .text(t(lang, "deleteProceedBtn"), "menu:settings:delete:proceed")
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(ctx.from!.id) },
+    select: { status: true },
+  });
+  const nonce = newAccountActionNonce();
+  const keyboard = new InlineKeyboard();
+  if (user?.status === "active" || user?.status === "paused") {
+    keyboard
+      .text(t(lang, "deleteFreezeBtn"), `menu:settings:freeze:${nonce}`)
+      .primary()
+      .row();
+  }
+  keyboard
+    .text(t(lang, "deleteProceedBtn"), `menu:settings:delete:proceed:${nonce}`)
     .danger();
 
-  await ctx.reply(t(lang, "deleteFreezeIntro"), {
+  const message = await ctx.reply(t(lang, "deleteFreezeIntro"), {
     parse_mode: "Markdown",
     reply_markup: keyboard,
   });
+  setPendingAccountAction(ctx, "freeze_or_delete", nonce, message.message_id);
 }
 
 /**
@@ -231,30 +270,22 @@ export async function handleDeleteAccountStart(ctx: BotContext): Promise<void> {
  * silently reactivated straight into their ready profile (see `handlers/start.ts`).
  */
 export async function handleFreezeAccount(ctx: BotContext): Promise<void> {
-  await ctx.answerCallbackQuery();
+  if (
+    !(await consumePendingAccountAction(
+      ctx,
+      "freeze_or_delete",
+      "menu:settings:freeze:",
+    ))
+  ) return;
   const lang = ctx.session.language;
   const telegramId = BigInt(ctx.from!.id);
 
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    select: { id: true },
-  });
-  if (!user) {
+  const result = await freezeAccount({ telegramId }, ctx.api);
+  if (result.kind === "forbidden" || result.kind === "not_found") {
+    await ctx.reply(t(lang, "statusActionUnavailable"));
     await showMainMenu(ctx);
     return;
   }
-
-  await cancelInFlightMatchesForUser(user.id, ctx.api);
-
-  await prisma.user.update({
-    where: { telegramId },
-    data: { status: "frozen" },
-  });
-
-  // Aggregate-only event: never relay contact data, profile facts, or photos.
-  void notifyFounderAccountClosed("frozen").catch(() => {});
-
-  await unpinStatusBanner(ctx.api, telegramId);
 
   // Drop the fork buttons so the screen can't be re-tapped.
   await ctx.editMessageReplyMarkup().catch(() => {});
@@ -269,8 +300,15 @@ export async function handleFreezeAccount(ctx: BotContext): Promise<void> {
  * back-out buttons, so an accidental delete takes deliberate effort.
  */
 export async function handleDeleteAccountConfirm(ctx: BotContext): Promise<void> {
-  await ctx.answerCallbackQuery();
+  if (
+    !(await consumePendingAccountAction(
+      ctx,
+      "freeze_or_delete",
+      "menu:settings:delete:proceed:",
+    ))
+  ) return;
   const lang = ctx.session.language;
+  const nonce = newAccountActionNonce();
 
   const keyboard = new InlineKeyboard()
     .text(t(lang, "deleteFinalNoSoft"), "menu:back")
@@ -279,13 +317,14 @@ export async function handleDeleteAccountConfirm(ctx: BotContext): Promise<void>
     .text(t(lang, "deleteFinalNoHard"), "menu:back")
     .success()
     .row()
-    .text(t(lang, "deleteFinalYes"), "menu:settings:delete:yes")
+    .text(t(lang, "deleteFinalYes"), `menu:settings:delete:yes:${nonce}`)
     .danger();
 
-  await ctx.reply(t(lang, "deleteAccountConfirm"), {
+  const message = await ctx.reply(t(lang, "deleteAccountConfirm"), {
     parse_mode: "Markdown",
     reply_markup: keyboard,
   });
+  setPendingAccountAction(ctx, "delete_final", nonce, message.message_id);
 }
 
 /**
@@ -298,7 +337,13 @@ export async function handleDeleteAccountConfirm(ctx: BotContext): Promise<void>
  * Then resets the grammY session to defaults so no stale data lingers in memory.
  */
 export async function handleDeleteAccountExecute(ctx: BotContext): Promise<void> {
-  await ctx.answerCallbackQuery();
+  if (
+    !(await consumePendingAccountAction(
+      ctx,
+      "delete_final",
+      "menu:settings:delete:yes:",
+    ))
+  ) return;
   const lang = ctx.session.language;
   const telegramId = BigInt(ctx.from!.id);
 

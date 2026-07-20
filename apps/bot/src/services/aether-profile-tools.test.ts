@@ -25,11 +25,61 @@ describe("Aether profile tools", () => {
         findUser: vi.fn().mockResolvedValue({ onboardingStep: "completed" }),
         updateUser,
         upsertProfile: vi.fn().mockResolvedValue(undefined),
+        refreshEmbedding: vi.fn().mockResolvedValue(undefined),
       },
     );
 
     expect(result.ok).toBe(true);
     expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("refreshes matching data immediately after an embedding-feeding edit", async () => {
+    const refreshEmbedding = vi.fn().mockResolvedValue(undefined);
+    const result = await applyAetherProfilePatch(
+      "user-1",
+      { partnerPreferences: "kind and curious" },
+      {
+        findUser: vi.fn().mockResolvedValue({ onboardingStep: "completed" }),
+        updateUser: vi.fn(),
+        upsertProfile: vi.fn().mockResolvedValue(undefined),
+        refreshEmbedding,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(refreshEmbedding).toHaveBeenCalledWith("user-1");
+  });
+
+  it("keeps a saved profile edit successful when immediate refresh fails", async () => {
+    const result = await applyAetherProfilePatch(
+      "user-1",
+      { hobbies: ["climbing"] },
+      {
+        findUser: vi.fn().mockResolvedValue({ onboardingStep: "completed" }),
+        updateUser: vi.fn(),
+        upsertProfile: vi.fn().mockResolvedValue(undefined),
+        refreshEmbedding: vi.fn().mockRejectedValue(new Error("OpenAI down")),
+      },
+    );
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("enforces the shared partner-preferences length contract", async () => {
+    const upsertProfile = vi.fn();
+    const result = await applyAetherProfilePatch(
+      "user-1",
+      { partnerPreferences: "x".repeat(501) },
+      {
+        findUser: vi.fn().mockResolvedValue({ onboardingStep: "completed" }),
+        updateUser: vi.fn(),
+        upsertProfile,
+        refreshEmbedding: vi.fn(),
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(upsertProfile).not.toHaveBeenCalled();
   });
 
   it("rejects a chat image when the single-face gate fails", async () => {

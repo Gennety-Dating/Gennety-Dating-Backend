@@ -49,6 +49,8 @@ function scheduledMatch(over: Record<string, unknown> = {}) {
     proxyClosesAt: null,
     venueChangeStatus: null,
     ticketStatus: null,
+    pitchMessageIdA: 11,
+    pitchMessageIdB: 22,
     dateCardFileIdA: null,
     dateCardFileIdB: null,
     userA: participant("uid-A"),
@@ -128,5 +130,23 @@ describe("findActiveMatchForTelegramId", () => {
     expect(mMatch).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { createdAt: "desc" } }),
     );
+  });
+
+  it("hides a proposed match until the caller's side has received its pitch", async () => {
+    mUser.mockResolvedValue({ id: "uid-A" });
+    mMatch.mockResolvedValue([
+      scheduledMatch({ status: "proposed", pitchMessageIdA: null, pitchMessageIdB: 22 }),
+    ]);
+
+    expect(await findActiveMatchForTelegramId(1001n)).toBeNull();
+  });
+
+  it("shows a one-sided proposal to the side whose pitch was delivered", async () => {
+    mUser.mockResolvedValue({ id: "uid-B" });
+    mMatch.mockResolvedValue([
+      scheduledMatch({ status: "proposed", pitchMessageIdA: null, pitchMessageIdB: 22 }),
+    ]);
+
+    expect((await findActiveMatchForTelegramId(1002n))?.match.id).toBe("match-1");
   });
 });

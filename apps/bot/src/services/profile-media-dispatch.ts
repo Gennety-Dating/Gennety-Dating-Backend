@@ -190,3 +190,68 @@ export async function sendProfileMediaCard(
     await sendProfileMediaChunk(api, chatId, chunk, offset === 0 ? caption : {}, protect);
   }
 }
+
+/**
+ * Return only the moving parts of a profile. Match-card PNGs already contain
+ * every static photo, including the poster frame of a Live Photo, so sending
+ * those frames again would duplicate the profile. Both standalone videos and
+ * Live Photo motion parts are represented as Telegram videos here.
+ */
+export function motionOnlyProfileMedia(
+  media: readonly ProfileMedia[],
+): ProfileMedia[] {
+  return media.flatMap((item) => {
+    if (item.type === "photo") return [];
+    if (item.type === "video") return [item];
+    return [
+      {
+        type: "video" as const,
+        video: item.livePhoto,
+        ...(item.duration !== undefined ? { duration: item.duration } : {}),
+        ...(item.width !== undefined ? { width: item.width } : {}),
+        ...(item.height !== undefined ? { height: item.height } : {}),
+        ...(item.fileSize !== undefined ? { fileSize: item.fileSize } : {}),
+        ...(item.mimeType !== undefined ? { mimeType: item.mimeType } : {}),
+      },
+    ];
+  });
+}
+
+/**
+ * Send profile motion after a successful static Match Card delivery. This is
+ * deliberately caption-free: the card already carries the partner identity
+ * and verification caption. Telegram privacy protection matches the card.
+ */
+export async function sendMotionProfileMedia(
+  api: Api<RawApi>,
+  chatId: number,
+  media: readonly ProfileMedia[],
+  options: { protect?: boolean } = {},
+): Promise<void> {
+  const motion = motionOnlyProfileMedia(media);
+  if (motion.length <= 1) {
+    await sendProfileMediaCard(api, chatId, motion, {}, options);
+    return;
+  }
+
+  try {
+    await sendProfileMediaCard(api, chatId, motion, {}, options);
+  } catch (groupError) {
+    // Some Telegram clients/file combinations reject mixed or stale video
+    // groups. Fall back to independent protected videos so one bad motion
+    // asset does not hide the rest of the profile.
+    let delivered = 0;
+    for (const item of motion) {
+      if (item.type !== "video") continue;
+      try {
+        await api.sendVideo(chatId, item.video, {
+          ...(options.protect ? { protect_content: true } : {}),
+        });
+        delivered++;
+      } catch (err) {
+        console.warn("sendMotionProfileMedia individual video failed, skipping:", err);
+      }
+    }
+    if (delivered === 0) throw groupError;
+  }
+}

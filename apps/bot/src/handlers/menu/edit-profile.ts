@@ -8,8 +8,10 @@ import {
   MIN_AGE,
   MAX_AGE,
   MAX_BIO_LENGTH,
+  MAX_PARTNER_PREFERENCES_LENGTH,
   MAX_MAJOR_LENGTH,
   normalizeProfileMedia,
+  escapeMd,
 } from "@gennety/shared";
 import { validateSingleFace } from "../../services/vision/validate-face.js";
 import {
@@ -34,7 +36,24 @@ import {
 } from "../../services/profile-media-validation/identity-consensus.js";
 import type { MediaValidationReason } from "../../services/profile-media-validation/types.js";
 import { logMediaValidationRejection } from "../../services/profile-media-validation/rejection-log.js";
-import { photoUploadStatePatch } from "../../services/profile-media-validation/photo-state.js";
+import {
+  alignPhotoHashes,
+  MISSING_PHOTO_HASH,
+  photoUploadStatePatch,
+} from "../../services/profile-media-validation/photo-state.js";
+import { refreshUserEmbedding } from "../../workers/embedding-refresh.js";
+
+async function embeddingRefreshStillPending(userId: string): Promise<boolean> {
+  try {
+    return (await refreshUserEmbedding(userId)).stillDirty > 0;
+  } catch (err) {
+    console.warn(
+      `[edit-profile] immediate embedding refresh failed userId=${userId}:`,
+      err instanceof Error ? err.message : err,
+    );
+    return true;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Edit profile entry — merged into the combined My Profile screen
@@ -104,8 +123,11 @@ export async function handleEditBioInput(ctx: BotContext): Promise<void> {
     },
   });
 
+  const syncPending = await embeddingRefreshStillPending(user.id);
+
   ctx.session.menuState = "idle";
   await ctx.reply(t(lang, "editBioSaved"));
+  if (syncPending) await ctx.reply(t(lang, "profileEmbeddingSyncPending"));
   await showMainMenu(ctx);
 }
 
@@ -150,17 +172,81 @@ export async function handleEditMajorInput(ctx: BotContext): Promise<void> {
 /** Show the Search Preferences sub-menu. */
 export async function handleEditPrefsOpen(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
+  await showEditPrefsMenu(ctx);
+}
+
+async function showEditPrefsMenu(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(ctx.from!.id) },
+    select: {
+      profile: {
+        select: { partnerPreferences: true, ageRangeMin: true, ageRangeMax: true },
+      },
+    },
+  });
+  const preferences =
+    user?.profile?.partnerPreferences?.trim() || t(lang, "editPrefsNotSet");
+  const ageRange =
+    user?.profile?.ageRangeMin != null && user.profile.ageRangeMax != null
+      ? `${user.profile.ageRangeMin}–${user.profile.ageRangeMax}`
+      : t(lang, "editPrefsNotSet");
 
   const keyboard = new InlineKeyboard()
+    .text(t(lang, "editPrefsDescriptionBtn"), "menu:edit:prefs:description")
+    .row()
     .text(t(lang, "editPrefsAgeBtn"), "menu:edit:prefs:age")
     .row()
     .text(t(lang, "editPrefsBack"), "menu:edit");
 
-  await ctx.reply(t(lang, "editPrefsTitle"), {
+  const body = `${t(lang, "editPrefsTitle")}\n\n${t(lang, "editPrefsCurrent", {
+    preferences: escapeMd(preferences),
+    ageRange,
+  })}`;
+  await ctx.reply(body, {
     parse_mode: "Markdown",
     reply_markup: keyboard,
   });
+}
+
+export async function handleEditPartnerPreferencesStart(ctx: BotContext): Promise<void> {
+  await ctx.answerCallbackQuery();
+  ctx.session.menuState = "edit_partner_preferences";
+  await ctx.reply(t(ctx.session.language, "editPrefsDescriptionPrompt"));
+}
+
+export async function handleEditPartnerPreferencesInput(ctx: BotContext): Promise<void> {
+  const lang = ctx.session.language;
+  const rawText = ctx.message?.text;
+  if (typeof rawText !== "string") return;
+  const text = rawText.trim();
+  if (!text) {
+    await ctx.reply(t(lang, "editPrefsDescriptionEmpty"));
+    return;
+  }
+  if (text.length > MAX_PARTNER_PREFERENCES_LENGTH) {
+    await ctx.reply(t(lang, "editPrefsDescriptionTooLong"));
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(ctx.from!.id) },
+    select: { id: true },
+  });
+  if (!user) return;
+  await prisma.profile.update({
+    where: { userId: user.id },
+    data: {
+      partnerPreferences: text,
+      embeddingDirty: true,
+      embeddingDirtyAt: new Date(),
+    },
+  });
+  const syncPending = await embeddingRefreshStillPending(user.id);
+  ctx.session.menuState = "idle";
+  await ctx.reply(t(lang, "editPrefsDescriptionSaved"));
+  if (syncPending) await ctx.reply(t(lang, "profileEmbeddingSyncPending"));
+  await showEditPrefsMenu(ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -209,7 +295,7 @@ export async function handleEditAgeRangeInput(ctx: BotContext): Promise<void> {
 
   ctx.session.menuState = "idle";
   await ctx.reply(t(lang, "editAgeRangeSaved"));
-  await showMainMenu(ctx);
+  await showEditPrefsMenu(ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -247,8 +333,8 @@ export async function handleEditPhotosStart(ctx: BotContext): Promise<void> {
   // We can't recover `file_unique_id` from a stored `file_id`, so dedupe
   // for newly-arriving photos starts fresh. The album-retry / double-delivery
   // dedupe path only matters within a single editing session.
-  ctx.session.pendingPhotoUniqueIds = [];
-  ctx.session.pendingPhotoHashes = [...existingHashes];
+  ctx.session.pendingPhotoUniqueIds = existing.map(() => "");
+  ctx.session.pendingPhotoHashes = alignPhotoHashes(existing, existingHashes);
   // Mirror existing scores 1:1 with the preloaded photos. If the existing
   // arrays drift (legacy rows from before the face-match column existed),
   // pad with 0 so the invariant `pendingPhotoScores.length === pendingPhotos.length`
@@ -350,12 +436,9 @@ export async function handleEditPhotosAdd(ctx: BotContext): Promise<void> {
 /**
  * Delete one photo from the manager (`menu:edit:photos:del:<index>`).
  *
- * Splices the index out of the three index-aligned arrays (`pendingPhotos`,
- * `pendingProfileMedia`, `pendingPhotoScores`) so the `photos[i] ↔
- * photoFaceScores[i]` invariant holds. `pendingPhotoHashes` (a best-effort
- * dedupe set, not 1:1 with photos) and `pendingPhotoUniqueIds` (within-session
- * dedupe) are intentionally left untouched — at worst re-uploading the exact
- * deleted photo in the same session is blocked as a near-duplicate.
+ * Splices the index out of every index-aligned array so media, score, hash and
+ * Telegram unique id always continue to describe the same photo. This also
+ * permits a deliberately deleted photo to be uploaded again in the session.
  *
  * The reduced set is persisted immediately so it stays consistent with the
  * consensus upload path (`commitProfilePhotoCandidate` reads `photos` from the
@@ -394,6 +477,12 @@ export async function handleEditPhotosDelete(ctx: BotContext): Promise<void> {
   ctx.session.pendingProfileMedia = media;
   if (idx < ctx.session.pendingPhotoScores.length) {
     ctx.session.pendingPhotoScores.splice(idx, 1);
+  }
+  if (idx < ctx.session.pendingPhotoHashes.length) {
+    ctx.session.pendingPhotoHashes.splice(idx, 1);
+  }
+  if (idx < ctx.session.pendingPhotoUniqueIds.length) {
+    ctx.session.pendingPhotoUniqueIds.splice(idx, 1);
   }
   ctx.session.pendingPhotos.splice(idx, 1);
 
@@ -489,6 +578,8 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
       photoHash = validation.value.fingerprint.differenceHash;
     }
 
+    const priorPhotos = [...ctx.session.pendingPhotos];
+    const priorUniqueIds = [...ctx.session.pendingPhotoUniqueIds];
     const consensus = await commitProfilePhotoCandidate({
       userId: userRow.id,
       photoRef: fileId,
@@ -499,11 +590,12 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
       candidateBuffer: photoBytes,
       api: ctx.api,
     });
-    syncEditSessionFromConsensus(ctx, consensus);
-    ctx.session.pendingPhotoUniqueIds = [
-      ...(ctx.session.pendingPhotoUniqueIds ?? []),
-      fileUniqueId,
-    ];
+    syncEditSessionFromConsensus(ctx, consensus, {
+      priorPhotos,
+      priorUniqueIds,
+      candidatePhotoRef: fileId,
+      candidateUniqueId: fileUniqueId,
+    });
 
     const consensusMessage = photoConsensusEditMessage(lang, consensus);
     if (consensusMessage) await ctx.reply(consensusMessage);
@@ -561,8 +653,11 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
     fileUniqueId,
   ];
   ctx.session.pendingPhotoHashes = [
-    ...(ctx.session.pendingPhotoHashes ?? []),
-    ...(photoHash ? [photoHash] : []),
+    ...alignPhotoHashes(
+      ctx.session.pendingPhotos.slice(0, -1),
+      ctx.session.pendingPhotoHashes ?? [],
+    ),
+    photoHash ?? MISSING_PHOTO_HASH,
   ];
   ctx.session.pendingPhotoScores = [
     ...(ctx.session.pendingPhotoScores ?? []),
@@ -603,11 +698,22 @@ function photoValidationMessage(
 function syncEditSessionFromConsensus(
   ctx: BotContext,
   consensus: PhotoConsensusCommitResult,
+  uniqueIds: {
+    priorPhotos: readonly string[];
+    priorUniqueIds: readonly string[];
+    candidatePhotoRef: string;
+    candidateUniqueId: string;
+  },
 ): void {
   ctx.session.pendingPhotos = [...consensus.photos];
   ctx.session.pendingProfileMedia = [...consensus.profileMedia];
   ctx.session.pendingPhotoHashes = [...consensus.uploadedPhotoHashes];
   ctx.session.pendingPhotoScores = [...consensus.photoFaceScores];
+  ctx.session.pendingPhotoUniqueIds = consensus.photos.map((photoRef) => {
+    if (photoRef === uniqueIds.candidatePhotoRef) return uniqueIds.candidateUniqueId;
+    const previousIndex = uniqueIds.priorPhotos.indexOf(photoRef);
+    return previousIndex >= 0 ? uniqueIds.priorUniqueIds[previousIndex] ?? "" : "";
+  });
 }
 
 function photoConsensusEditMessage(
@@ -664,10 +770,10 @@ async function persistPendingPhotos(ctx: BotContext): Promise<string | null> {
   ].slice(0, ctx.session.pendingPhotos.length);
   const photoState = photoUploadStatePatch({
     photos: ctx.session.pendingPhotos,
-    uploadedPhotoHashes:
-      ctx.session.pendingPhotoHashes.length > 0
-        ? ctx.session.pendingPhotoHashes
-        : user.profile?.uploadedPhotoHashes ?? [],
+    uploadedPhotoHashes: alignPhotoHashes(
+      ctx.session.pendingPhotos,
+      ctx.session.pendingPhotoHashes,
+    ),
     referenceFaceEmbedding: user.profile?.referenceFaceEmbedding ?? null,
   });
 

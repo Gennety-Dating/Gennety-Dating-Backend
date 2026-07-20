@@ -9,7 +9,11 @@ import {
 } from "@gennety/shared";
 import type { FaceMatchResult } from "../face-match.js";
 import { profileMediaToJson } from "../profile-media-json.js";
-import { photoUploadStatePatch } from "./photo-state.js";
+import {
+  alignPhotoHashes,
+  appendAlignedPhotoHash,
+  photoUploadStatePatch,
+} from "./photo-state.js";
 
 const PENDING_PHOTO_CANDIDATE_VERSION = 1;
 
@@ -204,7 +208,10 @@ export async function commitProfilePhotoCandidate(
       throw new ProfilePhotoCommitConflictError("limit");
     }
     const profileMedia = normalizeProfileMedia(profile?.profileMedia ?? [], photos);
-    const uploadedPhotoHashes = [...(profile?.uploadedPhotoHashes ?? [])];
+    const uploadedPhotoHashes = alignPhotoHashes(
+      photos,
+      profile?.uploadedPhotoHashes ?? [],
+    );
     if (
       photos.includes(input.photoRef) ||
       (input.perceptualHash && uploadedPhotoHashes.includes(input.perceptualHash))
@@ -239,10 +246,11 @@ export async function commitProfilePhotoCandidate(
   // so a later photo is never gated against an earlier upload.
     const nextPhotos = [...photos, candidate.photoRef];
     const nextMedia = [...profileMedia, candidate.profileMedia];
-    const nextHashes = [
-      ...uploadedPhotoHashes,
-      ...(candidate.perceptualHash ? [candidate.perceptualHash] : []),
-    ];
+    const nextHashes = appendAlignedPhotoHash(
+      photos,
+      uploadedPhotoHashes,
+      candidate.perceptualHash,
+    );
     const nextScores = [...photoFaceScores, candidate.faceScore];
     const photoState = photoUploadStatePatch({
       photos: nextPhotos,
@@ -254,7 +262,7 @@ export async function commitProfilePhotoCandidate(
       photos: nextPhotos,
       profileMedia: nextMedia,
       photoFaceScores: nextScores,
-      uploadedPhotoHashes: nextHashes,
+      uploadedPhotoHashes: photoState.uploadedPhotoHashes,
       pendingPhotoCandidates: [],
       photoState,
     });
@@ -262,7 +270,7 @@ export async function commitProfilePhotoCandidate(
       status: "accepted",
       photos: nextPhotos,
       profileMedia: nextMedia,
-      uploadedPhotoHashes: nextHashes,
+      uploadedPhotoHashes: photoState.uploadedPhotoHashes,
       photoFaceScores: nextScores,
       pendingCandidates: [],
       acceptedCount: nextPhotos.length,

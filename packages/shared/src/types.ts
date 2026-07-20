@@ -30,7 +30,15 @@ export type MenuState =
   | "edit_video"
   | "edit_bio"
   | "edit_major"
+  | "edit_partner_preferences"
   | "edit_age_range";
+
+export interface PendingAccountAction {
+  nonce: string;
+  stage: "freeze_or_delete" | "delete_final";
+  expiresAtMs: number;
+  messageId: number;
+}
 
 /**
  * Sub-state for the matching / scheduling flow. `idle` means no match is
@@ -93,6 +101,8 @@ export interface SessionData {
    * stale button from deleting the wrong index. Null when no manager is open.
    */
   photoManagerMsgId: number | null;
+  /** One-time, expiring confirmation for Telegram Freeze/Delete callbacks. */
+  pendingAccountAction: PendingAccountAction | null;
   /** Sub-state for the matching / scheduling flow (Phase 3) */
   matchFlow: MatchFlowState;
   /** Match id currently awaiting this user's text input (rejection reason / calendar) */
@@ -126,6 +136,7 @@ export const DEFAULT_SESSION: SessionData = {
   pendingPhotoScores: [],
   menuState: "idle",
   photoManagerMsgId: null,
+  pendingAccountAction: null,
   matchFlow: "idle",
   activeMatchId: null,
   pendingReportCategory: null,

@@ -52,6 +52,7 @@ import {
   notePartnerPaidSeen,
   refundAndFallbackToScheduling,
   retryPendingStarsGateRefunds,
+  ticketUrl,
 } from "./ticket-gate.js";
 import { startScheduling, sendCalendarCard } from "./scheduler.js";
 import { spendTickets, grantTickets } from "../../services/ticket-wallet.js";
@@ -105,6 +106,7 @@ function matchRow(overrides: Record<string, unknown> = {}) {
       id: "uid-A",
       telegramId: 1001n,
       language: "en",
+      theme: "dark",
       gender: "male",
       firstName: "Alex",
       ticketBalance: 0,
@@ -117,6 +119,7 @@ function matchRow(overrides: Record<string, unknown> = {}) {
       id: "uid-B",
       telegramId: 1002n,
       language: "en",
+      theme: "light",
       gender: "female",
       firstName: "Bea",
       ticketBalance: 0,
@@ -143,6 +146,14 @@ beforeEach(() => {
     bundleSize: data.bundleSize,
   }));
   mLedger.updateMany.mockResolvedValue({ count: 1 });
+});
+
+it("builds a reusable ticket URL with the current language and theme", () => {
+  const url = new URL(ticketUrl("match 1", "uk", "light"));
+  expect(url.pathname).toBe("/calendar/ticket.html");
+  expect(url.searchParams.get("match")).toBe("match 1");
+  expect(url.searchParams.get("lang")).toBe("uk");
+  expect(url.searchParams.get("theme")).toBe("light");
 });
 
 describe("ticket gate post-accept status message", () => {

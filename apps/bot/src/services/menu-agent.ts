@@ -14,6 +14,7 @@ import { prisma, Prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
 import {
   MAX_BIO_LENGTH,
+  MAX_PARTNER_PREFERENCES_LENGTH,
   MAX_MAJOR_LENGTH,
   MIN_AGE,
   MAX_AGE,
@@ -22,8 +23,9 @@ import {
 import { env } from "../config.js";
 import { buildSystemPrompt } from "./prompt-builder.js";
 import { truncateForApi, type ChatMessage } from "./onboarding-agent.js";
-import { canResumeMatching } from "./user-status.js";
 import { recordRejectionFeedback } from "./rejection-feedback.js";
+import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
+import { transitionAccountStatus } from "./account-status-transitions.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -164,7 +166,8 @@ const TOOLS = [
         properties: {
           preferences: {
             type: "string",
-            description: "New partner preference description",
+            maxLength: MAX_PARTNER_PREFERENCES_LENGTH,
+            description: `New partner preference description (max ${MAX_PARTNER_PREFERENCES_LENGTH} characters)`,
           },
         },
         required: ["preferences"],
@@ -244,6 +247,9 @@ async function execUpdateBio(
   telegramId: bigint,
   args: { bio: string },
 ): Promise<string> {
+  if (typeof args.bio !== "string" || !args.bio.trim()) {
+    return JSON.stringify({ success: false, error: "Bio cannot be empty." });
+  }
   const bio = args.bio.trim();
   if (bio.length > MAX_BIO_LENGTH) {
     return JSON.stringify({
@@ -267,8 +273,15 @@ async function execUpdateBio(
       embeddingDirtyAt: new Date(),
     },
   });
+  const sync = await refreshUserEmbedding(user.id).catch(() => ({ stillDirty: 1 }));
 
-  return JSON.stringify({ success: true, message: "Bio updated." });
+  return JSON.stringify({
+    success: true,
+    message:
+      sync.stillDirty === 0
+        ? "Bio updated and applied to matching."
+        : "Bio saved; matching will apply it after automatic profile sync.",
+  });
 }
 
 async function execUpdateMajor(
@@ -320,6 +333,16 @@ async function execUpdatePartnerPreferences(
   telegramId: bigint,
   args: { preferences: string },
 ): Promise<string> {
+  if (typeof args.preferences !== "string" || !args.preferences.trim()) {
+    return JSON.stringify({ success: false, error: "Partner preferences cannot be empty." });
+  }
+  const preferences = args.preferences.trim();
+  if (preferences.length > MAX_PARTNER_PREFERENCES_LENGTH) {
+    return JSON.stringify({
+      success: false,
+      error: `Partner preferences must be ${MAX_PARTNER_PREFERENCES_LENGTH} characters or less.`,
+    });
+  }
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: { id: true },
@@ -330,13 +353,20 @@ async function execUpdatePartnerPreferences(
     where: { userId: user.id },
     // M-2: partner preferences feed `buildEmbeddingInput` — mark dirty.
     data: {
-      partnerPreferences: args.preferences.trim(),
+      partnerPreferences: preferences,
       embeddingDirty: true,
       embeddingDirtyAt: new Date(),
     },
   });
+  const sync = await refreshUserEmbedding(user.id).catch(() => ({ stillDirty: 1 }));
 
-  return JSON.stringify({ success: true, message: "Partner preferences updated." });
+  return JSON.stringify({
+    success: true,
+    message:
+      sync.stillDirty === 0
+        ? "Partner preferences updated and applied to matching."
+        : "Partner preferences saved; matching will apply them after automatic profile sync.",
+  });
 }
 
 async function execGetMyProfile(telegramId: bigint): Promise<string> {
@@ -393,19 +423,16 @@ async function execGetMyProfile(telegramId: bigint): Promise<string> {
 }
 
 async function execPauseMatching(telegramId: bigint): Promise<string> {
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    select: { status: true },
-  });
-
-  if (user?.status === "paused") {
+  const result = await transitionAccountStatus({ telegramId }, "pause");
+  if (result.kind === "not_found") {
+    return JSON.stringify({ success: false, error: "User not found." });
+  }
+  if (result.kind === "already") {
     return JSON.stringify({ success: false, error: "Matching is already paused." });
   }
-
-  await prisma.user.update({
-    where: { telegramId },
-    data: { status: "paused" },
-  });
+  if (result.kind === "forbidden") {
+    return JSON.stringify({ success: false, error: "This account state cannot be changed by the menu." });
+  }
 
   return JSON.stringify({ success: true, message: "Matching paused. You won't receive new matches until you resume." });
 }
@@ -449,26 +476,14 @@ async function execRecordRejectionFeedback(
 }
 
 async function execResumeMatching(telegramId: bigint): Promise<string> {
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    select: { status: true },
-  });
-
-  if (user?.status === "active") {
+  const result = await transitionAccountStatus({ telegramId }, "resume");
+  if (result.kind === "not_found") {
+    return JSON.stringify({ success: false, error: "User not found." });
+  }
+  if (result.kind === "already") {
     return JSON.stringify({ success: false, error: "Matching is already active." });
   }
-  if (!canResumeMatching(user?.status)) {
-    return JSON.stringify({
-      success: false,
-      error: "Matching can only be resumed from a paused account state.",
-    });
-  }
-
-  const resumed = await prisma.user.updateMany({
-    where: { telegramId, status: "paused" },
-    data: { status: "active" },
-  });
-  if (resumed.count === 0) {
+  if (result.kind === "forbidden") {
     return JSON.stringify({
       success: false,
       error: "Matching can only be resumed from a paused account state.",

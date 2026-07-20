@@ -1,5 +1,6 @@
 import { prisma } from "@gennety/db";
 import { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
+import { refreshAllDirtyEmbeddings } from "../workers/embedding-refresh.js";
 import {
   hasTrackVerifiedContact,
   TRACK_VERIFIED_CONTACT_SQL,
@@ -404,6 +405,7 @@ export function buildCandidateSql(): string {
       AND p.latitude IS NOT NULL
       AND p.longitude IS NOT NULL
       AND p.embedding IS NOT NULL
+      AND p.embedding_dirty = false
       AND ($5 = '' OR u.gender::text = $5)
       AND (u.preference::text = 'both' OR u.preference::text = (
         CASE $4 WHEN 'male' THEN 'men' WHEN 'female' THEN 'women' ELSE '' END
@@ -914,6 +916,7 @@ export async function findCandidatesFor(
           longitude: true,
           ageRangeMin: true,
           ageRangeMax: true,
+          embeddingDirty: true,
         },
       },
     },
@@ -931,7 +934,8 @@ export async function findCandidatesFor(
     !hasTrackVerifiedContact(seeker) ||
     !seeker.profile?.homeCityKey ||
     seeker.profile.latitude === null ||
-    seeker.profile.longitude === null
+    seeker.profile.longitude === null ||
+    seeker.profile.embeddingDirty
   ) {
     return [];
   }
@@ -1322,6 +1326,7 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
       ],
       profile: {
         lastMatchedAt: { lt: cutoff },
+        embeddingDirty: false,
         homeCityKey: { not: null },
         latitude: { not: null },
         longitude: { not: null },
@@ -1371,6 +1376,7 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
       ],
       profile: {
         lastMatchedAt: null,
+        embeddingDirty: false,
         homeCityKey: { not: null },
         latitude: { not: null },
         longitude: { not: null },
@@ -1561,6 +1567,10 @@ async function loadHistoricalMatchPairs(
  */
 export async function runWeeklyBatch(): Promise<WeeklyBatchResult> {
   await autoUnsuspendElapsed();
+  const embeddingPreflight = await refreshAllDirtyEmbeddings();
+  console.log(
+    `[weekly-batch] embedding-preflight scanned=${embeddingPreflight.scanned} refreshed=${embeddingPreflight.refreshed} failed=${embeddingPreflight.failed} stillDirty=${embeddingPreflight.stillDirty}`,
+  );
   const plan = await previewWeeklyBatch();
   if (plan.eligible === 0) {
     return { eligible: 0, pairs: 0, matchIds: [], missedUserIds: [] };

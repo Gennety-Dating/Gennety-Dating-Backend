@@ -272,6 +272,16 @@ const translations = {
     editMajorSaved: "Saved",
     editPrefsTitle: "💘 *Who I want*\n\nAffects who you get matched with. What to change?",
     editPrefsAgeBtn: "🎂 Partner age range",
+    editPrefsDescriptionBtn: "✨ The kind of person",
+    editPrefsCurrent:
+      "Current preferences:\n• Person: {preferences}\n• Age: {ageRange}",
+    editPrefsNotSet: "Not set",
+    editPrefsDescriptionPrompt: "Describe the kind of person you want to meet (max 500 chars).",
+    editPrefsDescriptionEmpty: "Please add a short description — it can't be empty.",
+    editPrefsDescriptionTooLong: "Too long — keep it under 500.",
+    editPrefsDescriptionSaved: "Partner preferences updated",
+    profileEmbeddingSyncPending:
+      "Saved. Matching will apply it after the automatic profile sync finishes.",
     editPrefsBack: "⬅️ Back to Edit",
     editAgeRangePrompt: "What partner age range are you looking for? (e.g. 20-28)\nMin: {min}, Max: {max}.",
     editAgeRangeInvalid: "Didn't get that. Two numbers like 20-28 (range {min}–{max}).",
@@ -334,6 +344,8 @@ const translations = {
       "Want to come back? Just send /start.",
     deleteAccountFailed:
       "We couldn't safely erase everything right now. Nothing was deleted — please try again.",
+    accountActionExpired: "This confirmation expired. Open the action again.",
+    statusActionUnavailable: "This action isn't available for the current account status.",
     deleteFreezeIntro:
       "Wait — before you delete everything 👀\n\n" +
       "You don't have to lose it all. *Freeze* your account instead: your profile, " +
@@ -1025,6 +1037,16 @@ const translations = {
     editMajorSaved: "Сохранено",
     editPrefsTitle: "💘 *Кого ищу*\n\nВлияет на то, кто тебе попадётся. Что меняем?",
     editPrefsAgeBtn: "🎂 Возраст партнёра",
+    editPrefsDescriptionBtn: "✨ Какого человека ищу",
+    editPrefsCurrent:
+      "Текущие настройки:\n• Человек: {preferences}\n• Возраст: {ageRange}",
+    editPrefsNotSet: "Не задано",
+    editPrefsDescriptionPrompt: "Опиши, какого человека хочешь встретить (до 500 символов).",
+    editPrefsDescriptionEmpty: "Добавь короткое описание — оно не может быть пустым.",
+    editPrefsDescriptionTooLong: "Слишком длинно — уложись в 500.",
+    editPrefsDescriptionSaved: "Предпочтения обновлены",
+    profileEmbeddingSyncPending:
+      "Сохранено. Подбор применит это после автоматической синхронизации профиля.",
     editPrefsBack: "⬅️ К редактированию",
     editAgeRangePrompt: "В каком возрастном диапазоне искать тебе пару? (напр. 20-28)\nМин: {min}, Макс: {max}.",
     editAgeRangeInvalid: "Не понял. Два числа через дефис, напр. 20-28 (от {min} до {max}).",
@@ -1087,6 +1109,8 @@ const translations = {
       "Захочешь вернуться — отправь /start.",
     deleteAccountFailed:
       "Сейчас не удалось безопасно удалить все данные. Аккаунт сохранён — попробуй ещё раз.",
+    accountActionExpired: "Подтверждение устарело. Открой действие заново.",
+    statusActionUnavailable: "Это действие недоступно для текущего статуса аккаунта.",
     deleteFreezeIntro:
       "Подожди — прежде чем всё удалять 👀\n\n" +
       "Необязательно терять всё. Лучше *заморозь* аккаунт: профиль, фото и верификация " +
@@ -1771,6 +1795,16 @@ const translations = {
     editMajorSaved: "Збережено",
     editPrefsTitle: "💘 *Кого шукаю*\n\nВпливає на те, хто тобі трапиться. Що міняємо?",
     editPrefsAgeBtn: "🎂 Вік партнера",
+    editPrefsDescriptionBtn: "✨ Яку людину шукаю",
+    editPrefsCurrent:
+      "Поточні налаштування:\n• Людина: {preferences}\n• Вік: {ageRange}",
+    editPrefsNotSet: "Не задано",
+    editPrefsDescriptionPrompt: "Опиши, яку людину хочеш зустріти (до 500 символів).",
+    editPrefsDescriptionEmpty: "Додай короткий опис — він не може бути порожнім.",
+    editPrefsDescriptionTooLong: "Задовге — вклади в 500.",
+    editPrefsDescriptionSaved: "Уподобання оновлено",
+    profileEmbeddingSyncPending:
+      "Збережено. Підбір застосує це після автоматичної синхронізації профілю.",
     editPrefsBack: "⬅️ До редагування",
     editAgeRangePrompt: "У якому віковому діапазоні шукати тобі пару? (напр. 20-28)\nМін: {min}, Макс: {max}.",
     editAgeRangeInvalid: "Не зрозумів. Два числа через дефіс, напр. 20-28 (від {min} до {max}).",
@@ -1833,6 +1867,8 @@ const translations = {
       "Захочеш повернутись — надішли /start.",
     deleteAccountFailed:
       "Зараз не вдалося безпечно видалити всі дані. Акаунт збережено — спробуй ще раз.",
+    accountActionExpired: "Підтвердження застаріло. Відкрий дію знову.",
+    statusActionUnavailable: "Ця дія недоступна для поточного статусу акаунта.",
     deleteFreezeIntro:
       "Зачекай — перш ніж усе видаляти 👀\n\n" +
       "Необов'язково втрачати все. Краще *заморозь* акаунт: профіль, фото та верифікація " +
@@ -2505,6 +2541,16 @@ const deTranslations: TranslationTable = {
   editMajorSaved: "Gespeichert",
   editPrefsTitle: "💘 *Wen ich suche*\n\nBeeinflusst, wer dir vorgeschlagen wird. Was ändern?",
   editPrefsAgeBtn: "🎂 Partner-Alter",
+  editPrefsDescriptionBtn: "✨ Welche Person ich suche",
+  editPrefsCurrent:
+    "Aktuelle Einstellungen:\n• Person: {preferences}\n• Alter: {ageRange}",
+  editPrefsNotSet: "Nicht festgelegt",
+  editPrefsDescriptionPrompt: "Beschreibe die Person, die du kennenlernen möchtest (max. 500 Zeichen).",
+  editPrefsDescriptionEmpty: "Füge eine kurze Beschreibung hinzu — sie darf nicht leer sein.",
+  editPrefsDescriptionTooLong: "Zu lang — bleib unter 500 Zeichen.",
+  editPrefsDescriptionSaved: "Partnerwünsche aktualisiert",
+  profileEmbeddingSyncPending:
+    "Gespeichert. Das Matching übernimmt es nach der automatischen Profilsynchronisierung.",
   editPrefsBack: "⬅️ Zurück zu Bearbeiten",
   editAgeRangePrompt: "In welcher Altersspanne sollen wir nach einem Partner für dich suchen? (z. B. 20-28)\nMin: {min}, Max: {max}.",
   editAgeRangeInvalid: "Das habe ich nicht verstanden. Zwei Zahlen wie 20-28 (Bereich {min}-{max}).",
@@ -2562,6 +2608,8 @@ const deTranslations: TranslationTable = {
     "Wenn du zurückkommen willst, sende einfach /start.",
   deleteAccountFailed:
     "Wir konnten gerade nicht alle Daten sicher löschen. Dein Account bleibt bestehen — bitte versuche es erneut.",
+  accountActionExpired: "Diese Bestätigung ist abgelaufen. Öffne die Aktion erneut.",
+  statusActionUnavailable: "Diese Aktion ist für den aktuellen Accountstatus nicht verfügbar.",
   deleteFreezeIntro:
     "Warte — bevor du alles löschst 👀\n\n" +
     "Du musst nicht alles verlieren. *Friere* deinen Account lieber ein: Profil, Fotos " +
@@ -3212,6 +3260,16 @@ const plTranslations: TranslationTable = {
   editMajorSaved: "Zapisano",
   editPrefsTitle: "💘 *Kogo szukam*\n\nWpływa na to, kto Ci się trafi. Co zmienić?",
   editPrefsAgeBtn: "🎂 Wiek partnera",
+  editPrefsDescriptionBtn: "✨ Jakiej osoby szukam",
+  editPrefsCurrent:
+    "Aktualne ustawienia:\n• Osoba: {preferences}\n• Wiek: {ageRange}",
+  editPrefsNotSet: "Nie ustawiono",
+  editPrefsDescriptionPrompt: "Opisz osobę, którą chcesz poznać (maks. 500 znaków).",
+  editPrefsDescriptionEmpty: "Dodaj krótki opis — nie może być pusty.",
+  editPrefsDescriptionTooLong: "Za długie — zmieść się w 500 znakach.",
+  editPrefsDescriptionSaved: "Preferencje zaktualizowane",
+  profileEmbeddingSyncPending:
+    "Zapisano. Matching zastosuje to po automatycznej synchronizacji profilu.",
   editPrefsBack: "⬅️ Wróć do edycji",
   editAgeRangePrompt: "W jakim przedziale wiekowym mamy szukać dla Ciebie partnera? (np. 20-28)\nMin: {min}, Max: {max}.",
   editAgeRangeInvalid: "Nie łapię. Podaj dwie liczby, np. 20-28 (zakres {min}-{max}).",
@@ -3269,6 +3327,8 @@ const plTranslations: TranslationTable = {
     "Chcesz wrócić? Po prostu wyślij /start.",
   deleteAccountFailed:
     "Nie udało się teraz bezpiecznie usunąć wszystkich danych. Konto pozostało — spróbuj ponownie.",
+  accountActionExpired: "To potwierdzenie wygasło. Otwórz działanie ponownie.",
+  statusActionUnavailable: "Ta czynność jest niedostępna dla bieżącego statusu konta.",
   deleteFreezeIntro:
     "Zaczekaj — zanim wszystko usuniesz 👀\n\n" +
     "Nie musisz tracić wszystkiego. Lepiej *zamroź* konto: profil, zdjęcia i weryfikacja " +

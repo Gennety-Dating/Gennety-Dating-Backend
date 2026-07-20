@@ -29,7 +29,7 @@ import type {
   MessageEntity,
   ReplyKeyboardMarkup,
 } from "grammy/types";
-import { prisma } from "@gennety/db";
+import { prisma, type Theme } from "@gennety/db";
 import { t, tv, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
@@ -52,6 +52,7 @@ import { runStatusSequence } from "../../services/ai-stream.js";
 import { venueSearchSteps, dateCardSteps } from "../../services/analysis-status.js";
 import { renderDateCard, buildShareButton, type CardTheme } from "../../services/date-card/index.js";
 import { notifyFounderDateScheduled } from "../../services/founder-notify.js";
+import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 
 /**
  * Build the reply keyboard that surfaces Telegram's `request_location`
@@ -92,8 +93,9 @@ export function buildLocationRequestKeyboard(lang: Language): ReplyKeyboardMarku
 export function buildLocationMapKeyboard(
   matchId: string,
   lang: Language,
+  theme: Theme = "dark",
 ): InlineKeyboardMarkup {
-  const url = `${env.WEBAPP_URL}/location.html?match=${matchId}&lang=${lang}`;
+  const url = buildMiniAppUrl("location", { lang, theme, query: { match: matchId } });
   const kb = new InlineKeyboard().webApp(t(lang, "venueConciergeBtnMap"), url);
   return { inline_keyboard: kb.inline_keyboard };
 }
@@ -150,8 +152,8 @@ export async function startVenueNegotiation(
     where: { id: matchId },
     select: {
       id: true,
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
+      userA: { select: { telegramId: true, language: true, theme: true } },
+      userB: { select: { telegramId: true, language: true, theme: true } },
     },
   });
   if (!match) return;
@@ -166,7 +168,7 @@ export async function startVenueNegotiation(
     sends.push(
       api.sendMessage(Number(match.userA.telegramId), t(langA, "venueConciergeIntro"), {
         parse_mode: "Markdown",
-        reply_markup: buildLocationMapKeyboard(matchId, langA),
+        reply_markup: buildLocationMapKeyboard(matchId, langA, match.userA.theme),
       }),
     );
   }
@@ -174,7 +176,7 @@ export async function startVenueNegotiation(
     sends.push(
       api.sendMessage(Number(match.userB.telegramId), t(langB, "venueConciergeIntro"), {
         parse_mode: "Markdown",
-        reply_markup: buildLocationMapKeyboard(matchId, langB),
+        reply_markup: buildLocationMapKeyboard(matchId, langB, match.userB.theme),
       }),
     );
   }
@@ -215,6 +217,8 @@ export async function sendVenuePostSaveAck(
       vibeLngA: true,
       vibeLatB: true,
       vibeLngB: true,
+      userA: { select: { theme: true } },
+      userB: { select: { theme: true } },
     },
   });
   if (!m) return null;
@@ -241,7 +245,15 @@ export async function sendVenuePostSaveAck(
       // venueLocationNoted carries `*vibe*` markdown to bold the prompt;
       // the others are plain but Markdown is safe (no offending chars).
       parse_mode: "Markdown",
-      ...(withMapButton ? { reply_markup: buildLocationMapKeyboard(matchId, lang) } : {}),
+      ...(withMapButton
+        ? {
+            reply_markup: buildLocationMapKeyboard(
+              matchId,
+              lang,
+              side === "A" ? m.userA.theme : m.userB.theme,
+            ),
+          }
+        : {}),
     })
     .catch((err) => {
       console.warn(`[venue-ack] sendMessage failed for ${telegramId}:`, err);
@@ -312,9 +324,13 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
       ? locState?.vibeLatA != null && locState?.vibeLngA != null
       : locState?.vibeLatB != null && locState?.vibeLngB != null;
   if (!hasLocation) {
+    const actor = await prisma.user.findUnique({
+      where: { telegramId: BigInt(ctx.from!.id) },
+      select: { theme: true },
+    });
     await ctx.reply(t(lang, "venueLocationFirst"), {
       parse_mode: "Markdown",
-      reply_markup: buildLocationMapKeyboard(matchId, lang),
+      reply_markup: buildLocationMapKeyboard(matchId, lang, actor?.theme ?? "dark"),
     });
     return;
   }
@@ -542,8 +558,12 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
   // Venue-change v2 board button on BOTH scheduled cards (feature-flagged) —
   // a passive affordance; no proactive "does the venue suit you?" question.
   if (shouldOfferVenueChange()) {
-    mapsKeyboardA.inline_keyboard.push([buildVenueChangeButton(matchId, langA)]);
-    mapsKeyboardB.inline_keyboard.push([buildVenueChangeButton(matchId, langB)]);
+    mapsKeyboardA.inline_keyboard.push([
+      buildVenueChangeButton(matchId, langA, match.userA.theme),
+    ]);
+    mapsKeyboardB.inline_keyboard.push([
+      buildVenueChangeButton(matchId, langB, match.userB.theme),
+    ]);
   }
 
   // Each side's scheduled confirmation. When the date-card feature is on we

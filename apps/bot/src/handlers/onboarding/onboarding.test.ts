@@ -596,7 +596,7 @@ describe("Context dump processing delay", () => {
               },
             ],
             acceptedPhotoCount: 1,
-            uploadedPhotoHashes: [],
+            uploadedPhotoHashes: [""],
             referenceFaceEmbedding: expect.objectContaining({
               kind: "reference_photo",
               photoRef: "live_static_1",
@@ -1917,6 +1917,7 @@ describe("sendVerificationCTABare", () => {
   it("renders the web_app Verification Mini App button (prod path) + Skip fallback", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "user-uuid",
+      theme: "dark",
     });
     (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
     const api = { sendMessage: vi.fn().mockResolvedValue(undefined) };
@@ -1931,9 +1932,10 @@ describe("sendVerificationCTABare", () => {
     // "I've finished" manual-check button was removed because the embedded
     // SDK posts back to /v1/verification/mini-app/event automatically.
     expect(keyboard).toHaveLength(2);
-    expect(keyboard[0]?.[0]?.web_app?.url).toBe(
-      "https://test.invalid/calendar/verification.html?lang=en",
-    );
+    const verificationUrl = new URL(keyboard[0]?.[0]?.web_app?.url);
+    expect(verificationUrl.pathname).toBe("/calendar/verification.html");
+    expect(verificationUrl.searchParams.get("lang")).toBe("en");
+    expect(verificationUrl.searchParams.get("theme")).toBe("dark");
     expect(keyboard[0]?.[0]?.style).toBe("success");
     // The verification-bonus free ticket was retired, so the CTA no longer
     // promises one — it only frames the ELO cost of skipping.

@@ -134,11 +134,12 @@ function fakeMatch(over: Record<string, unknown> = {}) {
       id: "a",
       telegramId: 100n,
       language: "en",
+      theme: "dark",
       gender: "female",
       firstName: "Alina",
       universityDomain: "kyiv.edu",
     },
-    userB: { id: "b", telegramId: 200n, language: "en", gender: "male", firstName: "Max" },
+    userB: { id: "b", telegramId: 200n, language: "en", theme: "light", gender: "male", firstName: "Max" },
     ...over,
   };
 }

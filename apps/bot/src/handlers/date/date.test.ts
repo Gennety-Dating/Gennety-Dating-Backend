@@ -538,8 +538,8 @@ describe("date-lifecycle tick", () => {
       .mockResolvedValueOnce([
         {
           id: "match-2",
-          userA: { telegramId: 2001n, language: "en" },
-          userB: { telegramId: 2002n, language: "uk" },
+          userA: { telegramId: 2001n, language: "en", theme: "light" },
+          userB: { telegramId: 2002n, language: "uk", theme: "dark" },
         },
       ]);
     mMatch.update.mockResolvedValue({});
@@ -565,6 +565,7 @@ describe("date-lifecycle tick", () => {
     expect(formBtn.web_app?.url).toContain("/feedback.html");
     expect(formBtn.web_app?.url).toContain("match=match-2");
     expect(formBtn.web_app?.url).toContain("lang=en");
+    expect(formBtn.web_app?.url).toContain("theme=light");
     expect(voiceBtn.callback_data).toBe("feedback:voice:match-2");
 
     // Transition to completed AND stamp feedbackPromptedAt (C-1 dedup marker).

@@ -7,6 +7,7 @@ import {
   MIN_AGE,
   MAX_AGE,
   MAX_BIO_LENGTH,
+  MAX_PARTNER_PREFERENCES_LENGTH,
   MAX_MAJOR_LENGTH,
   normalizeProfileMedia,
   profilePhotoMedia,
@@ -49,8 +50,12 @@ import {
   ProfilePhotoCommitConflictError,
   type PhotoConsensusCommitResult,
 } from "../../services/profile-media-validation/identity-consensus.js";
-import { photoUploadStatePatch } from "../../services/profile-media-validation/photo-state.js";
+import {
+  photoUploadStatePatch,
+  removeAlignedPhotoHash,
+} from "../../services/profile-media-validation/photo-state.js";
 import { sniffImageMime } from "../../utils/image-sniff.js";
+import { refreshUserEmbedding } from "../../workers/embedding-refresh.js";
 
 export const meRouter: Router = Router();
 
@@ -157,11 +162,24 @@ meRouter.patch("/", async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: `Invalid ${field}` });
       return;
     }
-    if (typeof v === "string" && v.length > MAX_BIO_LENGTH) {
+    const maxLength =
+      field === "partnerPreferences"
+        ? MAX_PARTNER_PREFERENCES_LENGTH
+        : MAX_BIO_LENGTH;
+    if (typeof v === "string" && v.length > maxLength) {
       res.status(400).json({ error: `Field too long: ${field}` });
       return;
     }
-    profileUpdate[field] = v as string | null;
+    if (field === "partnerPreferences" && typeof v === "string") {
+      const trimmed = v.trim();
+      if (!trimmed) {
+        res.status(400).json({ error: "Invalid partnerPreferences" });
+        return;
+      }
+      profileUpdate[field] = trimmed;
+    } else {
+      profileUpdate[field] = v as string | null;
+    }
   }
 
   // --- profile: ageRangeMin / ageRangeMax (validated together) -------------
@@ -227,6 +245,17 @@ meRouter.patch("/", async (req: Request, res: Response): Promise<void> => {
       );
     }
     await prisma.$transaction(ops);
+  }
+
+  if (profileChangedEmbeddingInput) {
+    await refreshUserEmbedding(req.userId!, { timeoutMs: 30_000 }).catch((err) => {
+      // The profile edit is already durable and remains marked dirty. Keep the
+      // public response shape stable; the periodic worker will retry.
+      console.warn(
+        `[PATCH /v1/me] immediate embedding refresh failed userId=${req.userId!}:`,
+        err instanceof Error ? err.message : err,
+      );
+    });
   }
 
   const user = await prisma.user.findUniqueOrThrow({
@@ -773,11 +802,11 @@ meRouter.delete(
         scores.length === photos.length
           ? [...scores.slice(0, index), ...scores.slice(index + 1)]
           : [];
-      const hashes = user.profile?.uploadedPhotoHashes ?? [];
-      const nextHashes =
-        hashes.length === photos.length
-          ? [...hashes.slice(0, index), ...hashes.slice(index + 1)]
-          : [];
+      const nextHashes = removeAlignedPhotoHash(
+        photos,
+        user.profile?.uploadedPhotoHashes ?? [],
+        index,
+      );
       const photoState = photoUploadStatePatch({
         photos: nextPhotos,
         uploadedPhotoHashes: nextHashes,

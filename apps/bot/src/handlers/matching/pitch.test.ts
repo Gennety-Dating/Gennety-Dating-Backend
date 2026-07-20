@@ -7,11 +7,14 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mFindUnique, mUpdate, mGrant, mPreroll } = vi.hoisted(() => ({
+const { mFindUnique, mUpdate, mGrant, mPreroll, mCards, mMedia, mMotion } = vi.hoisted(() => ({
   mFindUnique: vi.fn(),
   mUpdate: vi.fn(),
   mGrant: vi.fn(),
   mPreroll: vi.fn(),
+  mCards: vi.fn(),
+  mMedia: vi.fn(),
+  mMotion: vi.fn(),
 }));
 
 vi.mock("@gennety/db", () => ({
@@ -31,6 +34,13 @@ vi.mock("../../services/ticket-wallet.js", () => ({
 }));
 vi.mock("../../services/welcome-gift.js", () => ({
   sendWelcomeGiftPreroll: mPreroll,
+}));
+vi.mock("../../services/match-card/send.js", () => ({
+  sendPartnerMatchCards: mCards,
+}));
+vi.mock("../../services/profile-media-dispatch.js", () => ({
+  sendProfileMediaCard: mMedia,
+  sendMotionProfileMedia: mMotion,
 }));
 
 const { sendMatchProposal, sendMatchWelcomeGiftPreroll } = await import("./pitch.js");
@@ -80,6 +90,9 @@ function payload(overrides: { telegramIdA?: bigint; telegramIdB?: bigint } = {})
 beforeEach(() => {
   vi.clearAllMocks();
   mUpdate.mockResolvedValue({ id: "match-1" });
+  mCards.mockResolvedValue(false);
+  mMedia.mockResolvedValue(undefined);
+  mMotion.mockResolvedValue(undefined);
 });
 
 describe("sendMatchProposal — welcome-gift pre-roll", () => {
@@ -156,6 +169,47 @@ describe("sendMatchProposal — welcome-gift pre-roll", () => {
 
     expect(mGrant).not.toHaveBeenCalled();
     expect(mPreroll).not.toHaveBeenCalled();
+    expect(stream).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends protected motion media after successful static Match Cards", async () => {
+    const row = payload();
+    Object.assign(row.userB.profile, {
+      profileMedia: [
+        { type: "live_photo", photo: "poster-b", livePhoto: "motion-b" },
+        { type: "video", video: "video-b" },
+      ],
+    });
+    mFindUnique.mockResolvedValue(row);
+    mCards.mockResolvedValue(true);
+    mGrant.mockResolvedValue({ granted: false, balance: 1 });
+    const api = makeApi();
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await sendMatchProposal(api, "match-1", { streamImpl: stream });
+
+    expect(mMotion).toHaveBeenCalledWith(
+      api,
+      1001,
+      expect.arrayContaining([
+        expect.objectContaining({ type: "live_photo", livePhoto: "motion-b" }),
+        expect.objectContaining({ type: "video", video: "video-b" }),
+      ]),
+      { protect: true },
+    );
+    expect(mMedia).not.toHaveBeenCalled();
+  });
+
+  it("does not block pitch delivery when a motion follow-up fails", async () => {
+    mFindUnique.mockResolvedValue(payload());
+    mCards.mockResolvedValue(true);
+    mMotion.mockRejectedValue(new Error("motion unavailable"));
+    mGrant.mockResolvedValue({ granted: false, balance: 1 });
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await expect(
+      sendMatchProposal(makeApi(), "match-1", { streamImpl: stream }),
+    ).resolves.toBeUndefined();
     expect(stream).toHaveBeenCalledTimes(2);
   });
 });

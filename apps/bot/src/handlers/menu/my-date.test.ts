@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@gennety/db", () => ({
-  prisma: { match: { update: vi.fn().mockResolvedValue(null) } },
+  prisma: { match: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) } },
 }));
 
 vi.mock("../../config.js", () => ({
@@ -59,7 +59,7 @@ import { handleMyDate } from "./my-date.js";
 const mActive = findActiveMatchForTelegramId as ReturnType<typeof vi.fn>;
 const mRender = renderDateCard as ReturnType<typeof vi.fn>;
 const mProxyOpen = isProxyOpen as ReturnType<typeof vi.fn>;
-const mUpdate = prisma.match.update as ReturnType<typeof vi.fn>;
+const mUpdate = prisma.match.updateMany as ReturnType<typeof vi.fn>;
 
 function scheduledActive(over: { match?: Record<string, unknown> } = {}) {
   return {
@@ -157,6 +157,10 @@ describe("handleMyDate", () => {
     // Largest rendition's file_id is persisted for next time.
     expect(mUpdate).toHaveBeenCalledOnce();
     expect(mUpdate.mock.calls[0][0].data).toEqual({ dateCardFileIdA: "big-file-id" });
+    expect(mUpdate.mock.calls[0][0].where).toEqual({
+      id: "match-1",
+      userA: { id: "uid-A", language: "en", theme: "dark" },
+    });
   });
 
   it("shows an Enter chat button only while the proxy window is open", async () => {
@@ -189,7 +193,42 @@ describe("handleMyDate", () => {
     const ctx = createCtx();
     await handleMyDate(ctx);
     const kb = JSON.stringify(ctx.reply.mock.calls[0][1].reply_markup.inline_keyboard);
-    // No calendar Mini App link while tickets are unpaid.
-    expect(kb).not.toContain("match=match-1&lang=");
+    expect(kb).toContain("ticket.html?match=match-1");
+    expect(kb).not.toContain('"https://test.invalid/calendar?');
   });
+
+  it.each(["pending", "partial", "refund_pending"])(
+    "restores the match-specific Ticket CTA for %s",
+    async (ticketStatus) => {
+      mActive.mockResolvedValue(
+        scheduledActive({
+          match: { status: "negotiating", venueName: null, agreedTime: null, ticketStatus },
+        }),
+      );
+      const ctx = createCtx();
+      await handleMyDate(ctx);
+      const kb = JSON.stringify(ctx.reply.mock.calls[0][1].reply_markup.inline_keyboard);
+      expect(kb).toContain("ticket.html?match=match-1");
+      expect(kb).toContain("lang=en");
+      expect(kb).toContain("theme=dark");
+    },
+  );
+
+  it.each([null, "completed", "refunded", "expired"])(
+    "restores Calendar for terminal ticket status %s",
+    async (ticketStatus) => {
+      mActive.mockResolvedValue(
+        scheduledActive({
+          match: { status: "negotiating", venueName: null, agreedTime: null, ticketStatus },
+        }),
+      );
+      const ctx = createCtx();
+      await handleMyDate(ctx);
+      const kb = JSON.stringify(ctx.reply.mock.calls[0][1].reply_markup.inline_keyboard);
+      expect(kb).toContain("https://test.invalid/calendar?match=match-1");
+      expect(kb).toContain("lang=en");
+      expect(kb).toContain("theme=dark");
+      expect(kb).not.toContain("ticket.html");
+    },
+  );
 });

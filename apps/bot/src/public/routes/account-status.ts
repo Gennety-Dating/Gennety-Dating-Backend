@@ -2,10 +2,11 @@ import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
 import { serializeProfile, serializeUser } from "./serializers.js";
-import { canResumeMatching } from "../../services/user-status.js";
-import { cancelInFlightMatchesForUser } from "../../services/cancel-in-flight-matches.js";
-import { notifyFounderAccountClosed } from "../../services/founder-notify.js";
-import { unpinStatusBanner } from "../../services/status-banner.js";
+import {
+  freezeAccount,
+  transitionAccountStatus,
+  type StatusTransitionResult,
+} from "../../services/account-status-transitions.js";
 import { getBotApi } from "../server.js";
 
 /**
@@ -49,33 +50,24 @@ accountStatusRouter.patch("/status", async (req: Request, res: Response): Promis
     return;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: req.userId! },
-    select: { status: true },
-  });
-  if (!user) {
+  let result: StatusTransitionResult;
+  if (requested === "paused") {
+    result = await transitionAccountStatus({ id: req.userId! }, "pause");
+  } else {
+    result = await transitionAccountStatus({ id: req.userId! }, "resume");
+    if (result.kind === "forbidden" && result.status === "frozen") {
+      result = await transitionAccountStatus({ id: req.userId! }, "return_from_freeze");
+    }
+  }
+
+  if (result.kind === "not_found") {
     res.status(404).json({ error: "User not found" });
     return;
   }
-
-  if (user.status === requested) {
-    await respondWithMe(req.userId!, res);
+  if (result.kind === "forbidden") {
+    res.status(409).json({ error: `Cannot switch from ${result.status} to ${requested}` });
     return;
   }
-
-  const allowed =
-    requested === "paused"
-      ? user.status === "active"
-      : canResumeMatching(user.status) || user.status === "frozen";
-  if (!allowed) {
-    res.status(409).json({ error: `Cannot switch from ${user.status} to ${requested}` });
-    return;
-  }
-
-  await prisma.user.update({
-    where: { id: req.userId! },
-    data: { status: requested },
-  });
   await respondWithMe(req.userId!, res);
 });
 
@@ -87,34 +79,14 @@ accountStatusRouter.patch("/status", async (req: Request, res: Response): Promis
  * Reactivation: PATCH /status {active} (or the bot's /start).
  */
 accountStatusRouter.post("/freeze", async (req: Request, res: Response): Promise<void> => {
-  const user = await prisma.user.findUnique({
-    where: { id: req.userId! },
-    select: { status: true, telegramId: true },
-  });
-  if (!user) {
+  const result = await freezeAccount({ id: req.userId! }, getBotApi());
+  if (result.kind === "not_found") {
     res.status(404).json({ error: "User not found" });
     return;
   }
-  if (user.status === "frozen") {
-    await respondWithMe(req.userId!, res);
+  if (result.kind === "forbidden") {
+    res.status(409).json({ error: `Cannot freeze from ${result.status}` });
     return;
   }
-  if (user.status !== "active" && user.status !== "paused") {
-    res.status(409).json({ error: `Cannot freeze from ${user.status}` });
-    return;
-  }
-
-  const api = getBotApi();
-  await cancelInFlightMatchesForUser(req.userId!, api);
-  await prisma.user.update({
-    where: { id: req.userId! },
-    data: { status: "frozen" },
-  });
-
-  // Aggregate-only founder event; banner unpin only matters for users with a
-  // real Telegram presence (unpinStatusBanner self-guards negative ids).
-  void notifyFounderAccountClosed("frozen").catch(() => {});
-  if (api) await unpinStatusBanner(api, user.telegramId).catch(() => {});
-
   await respondWithMe(req.userId!, res);
 });

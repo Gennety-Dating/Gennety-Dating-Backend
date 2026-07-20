@@ -2,8 +2,8 @@ import { InlineKeyboard } from "grammy";
 import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
 import { t } from "@gennety/shared";
-import { env } from "../../config.js";
 import { getBalance } from "../../services/ticket-wallet.js";
+import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 
 /**
  * Render the "My Tickets" wallet card: current balance + a button into the
@@ -25,11 +25,12 @@ export async function handleMyTickets(ctx: BotContext): Promise<void> {
   const theme = user?.theme ?? "dark";
 
   const keyboard = new InlineKeyboard();
-  if (env.WEBAPP_URL.startsWith("https://")) {
+  const storeUrl = buildMiniAppUrl("tickets", { lang, theme });
+  if (storeUrl.startsWith("https://")) {
     keyboard
       .webApp(
         t(lang, "ticketWalletOpenStore"),
-        `${env.WEBAPP_URL}/tickets.html?lang=${lang}&theme=${theme}`,
+        storeUrl,
       )
       .row();
   }

@@ -23,7 +23,6 @@ import { ticketsAppStoreRouter } from "./routes/tickets-appstore.js";
 import { appStoreWebhookRouter } from "./routes/appstore-webhook.js";
 import { founderReportRouter } from "./routes/founder-report.js";
 import { verificationRouter } from "./routes/verification.js";
-import { webRegistrationRouter } from "./routes/web-registration.js";
 import { createPersonaWebhookRouter } from "./routes/persona-webhook.js";
 import { createCalendarRouter } from "./routes/calendar.js";
 import { createFeedbackRouter } from "./routes/feedback.js";
@@ -302,7 +301,6 @@ app.use("/v1/app", appConfigRouter);
 // /v1/auth router so the more-specific prefix wins.
 app.use("/v1/auth/phone", phoneAuthRouter);
 app.use("/v1/auth", authRouter);
-app.use("/v1/web-registration", webRegistrationRouter);
 // Mount /v1/me/verification BEFORE /v1/me so Express tries the more-specific
 // prefix first — both routers match `/v1/me/verification/*` otherwise.
 app.use("/v1/me/verification", verificationRouter);

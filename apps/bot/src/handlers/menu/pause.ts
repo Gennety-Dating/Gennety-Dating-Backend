@@ -1,8 +1,7 @@
 import type { BotContext } from "../../session.js";
-import { prisma } from "@gennety/db";
 import { t } from "@gennety/shared";
 import { showMainMenu } from "./main.js";
-import { canResumeMatching } from "../../services/user-status.js";
+import { transitionAccountStatus } from "../../services/account-status-transitions.js";
 
 /** Pause matching — flips User.status to "paused". */
 export async function handlePause(ctx: BotContext): Promise<void> {
@@ -10,12 +9,14 @@ export async function handlePause(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
   const telegramId = BigInt(ctx.from!.id);
 
-  await prisma.user.update({
-    where: { telegramId },
-    data: { status: "paused" },
-  });
+  const result = await transitionAccountStatus({ telegramId }, "pause");
+  if (result.kind === "forbidden" || result.kind === "not_found") {
+    await ctx.reply(t(lang, "statusActionUnavailable"));
+    await showMainMenu(ctx);
+    return;
+  }
 
-  await ctx.reply(t(lang, "pauseConfirmed"));
+  if (result.kind === "changed") await ctx.reply(t(lang, "pauseConfirmed"));
   await showMainMenu(ctx);
 }
 
@@ -25,20 +26,13 @@ export async function handleResume(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
   const telegramId = BigInt(ctx.from!.id);
 
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    select: { status: true },
-  });
-  if (!canResumeMatching(user?.status)) {
+  const result = await transitionAccountStatus({ telegramId }, "resume");
+  if (result.kind === "forbidden" || result.kind === "not_found") {
+    await ctx.reply(t(lang, "statusActionUnavailable"));
     await showMainMenu(ctx);
     return;
   }
 
-  await prisma.user.update({
-    where: { telegramId },
-    data: { status: "active" },
-  });
-
-  await ctx.reply(t(lang, "resumeConfirmed"));
+  if (result.kind === "changed") await ctx.reply(t(lang, "resumeConfirmed"));
   await showMainMenu(ctx);
 }

@@ -10,6 +10,44 @@ export interface ReferenceFaceAnchor {
   createdAt: string;
 }
 
+/** Empty string is the persisted sentinel for a photo with no available hash. */
+export const MISSING_PHOTO_HASH = "";
+
+/**
+ * Keep hashes strictly positional with `photos`. A legacy array whose length
+ * differs is ambiguous (old writers omitted missing hashes), so it is safer to
+ * discard those associations than attach a hash to the wrong photo.
+ */
+export function alignPhotoHashes(
+  photos: readonly string[],
+  uploadedPhotoHashes: readonly string[],
+): string[] {
+  if (uploadedPhotoHashes.length !== photos.length) {
+    return photos.map(() => MISSING_PHOTO_HASH);
+  }
+  return photos.map((_, index) => uploadedPhotoHashes[index] ?? MISSING_PHOTO_HASH);
+}
+
+export function appendAlignedPhotoHash(
+  photos: readonly string[],
+  uploadedPhotoHashes: readonly string[],
+  hash: string | null | undefined,
+): string[] {
+  return [
+    ...alignPhotoHashes(photos, uploadedPhotoHashes),
+    hash || MISSING_PHOTO_HASH,
+  ];
+}
+
+export function removeAlignedPhotoHash(
+  photos: readonly string[],
+  uploadedPhotoHashes: readonly string[],
+  index: number,
+): string[] {
+  const aligned = alignPhotoHashes(photos, uploadedPhotoHashes);
+  return [...aligned.slice(0, index), ...aligned.slice(index + 1)];
+}
+
 export function buildReferenceFaceEmbedding(
   photoRef: string | undefined,
   perceptualHash: string | undefined,
@@ -49,7 +87,10 @@ export function photoUploadStatePatch(args: {
   acceptedPhotoCount: number;
   referenceFaceEmbedding?: Prisma.InputJsonValue | typeof Prisma.DbNull;
 } {
-  const uploadedPhotoHashes = [...args.uploadedPhotoHashes].filter(Boolean);
+  const uploadedPhotoHashes = alignPhotoHashes(
+    args.photos,
+    args.uploadedPhotoHashes,
+  );
   if (args.clearReference) {
     return {
       uploadedPhotoHashes,

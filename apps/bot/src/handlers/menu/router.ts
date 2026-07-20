@@ -10,6 +10,8 @@ import {
   handleEditMajorStart,
   handleEditMajorInput,
   handleEditPrefsOpen,
+  handleEditPartnerPreferencesStart,
+  handleEditPartnerPreferencesInput,
   handleEditAgeRangeStart,
   handleEditAgeRangeInput,
   handleEditPhotosStart,
@@ -38,6 +40,7 @@ import {
 import { handleHelp } from "./help.js";
 import { handleMyTickets } from "./tickets.js";
 import { runMenuAgentTurn, splitReplyIntoBubbles } from "../../services/menu-agent.js";
+import { invalidatePendingAccountAction } from "./account-action.js";
 
 /**
  * Post-onboarding menu router.
@@ -52,6 +55,13 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
   if (ctx.session.onboardingStep !== "completed") return;
 
   const data = ctx.callbackQuery?.data;
+  const isAccountActionCallback =
+    data?.startsWith("menu:settings:freeze:") ||
+    data?.startsWith("menu:settings:delete:proceed:") ||
+    data?.startsWith("menu:settings:delete:yes:");
+  if (ctx.session.pendingAccountAction && !isAccountActionCallback) {
+    await invalidatePendingAccountAction(ctx);
+  }
 
   // -----------------------------------------------------------------------
   // Multi-turn sub-flows: consume raw messages based on menuState
@@ -76,6 +86,7 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     ctx.session.pendingPhotos = [];
     ctx.session.pendingProfileMedia = [];
     ctx.session.pendingPhotoUniqueIds = [];
+    ctx.session.pendingPhotoHashes = [];
     ctx.session.pendingPhotoScores = [];
     ctx.session.photoManagerMsgId = null;
   }
@@ -117,6 +128,14 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
   if (ctx.session.menuState === "edit_age_range") {
     if (!data) {
       await handleEditAgeRangeInput(ctx);
+      return;
+    }
+    ctx.session.menuState = "idle";
+  }
+
+  if (ctx.session.menuState === "edit_partner_preferences") {
+    if (!data) {
+      await handleEditPartnerPreferencesInput(ctx);
       return;
     }
     ctx.session.menuState = "idle";
@@ -193,6 +212,9 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     case "menu:edit:prefs:age":
       await handleEditAgeRangeStart(ctx);
       return;
+    case "menu:edit:prefs:description":
+      await handleEditPartnerPreferencesStart(ctx);
+      return;
     case "menu:edit:photos":
       await handleEditPhotosStart(ctx);
       return;
@@ -229,6 +251,9 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     case "menu:settings:delete":
       await handleDeleteAccountStart(ctx);
       return;
+    // Legacy destructive keyboards intentionally fail closed. Route them
+    // through the token consumer so Telegram receives an explicit expiry
+    // alert instead of leaving the callback spinner hanging.
     case "menu:settings:freeze":
       await handleFreezeAccount(ctx);
       return;
@@ -238,7 +263,6 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     case "menu:settings:delete:yes":
       await handleDeleteAccountExecute(ctx);
       return;
-
     // My Tickets (wallet + store; only reachable when TICKET_FEATURE_ENABLED)
     case "menu:tickets":
       await handleMyTickets(ctx);
@@ -256,6 +280,18 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       }
       if (data.startsWith("menu:theme:")) {
         await handleSettingsThemeSet(ctx);
+        return;
+      }
+      if (data.startsWith("menu:settings:freeze:")) {
+        await handleFreezeAccount(ctx);
+        return;
+      }
+      if (data.startsWith("menu:settings:delete:proceed:")) {
+        await handleDeleteAccountConfirm(ctx);
+        return;
+      }
+      if (data.startsWith("menu:settings:delete:yes:")) {
+        await handleDeleteAccountExecute(ctx);
         return;
       }
   }

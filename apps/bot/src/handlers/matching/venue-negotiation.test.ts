@@ -72,8 +72,8 @@ describe("startVenueNegotiation — location-first intro", () => {
     mMatch.findUnique.mockResolvedValue({
       id: "m1",
       status: "negotiating",
-      userA: { telegramId: 111n, language: "en" },
-      userB: { telegramId: 222n, language: "en" },
+      userA: { telegramId: 111n, language: "en", theme: "dark" },
+      userB: { telegramId: 222n, language: "en", theme: "light" },
     });
 
     const api = createApi();
@@ -96,6 +96,10 @@ describe("startVenueNegotiation — location-first intro", () => {
     // … surfaced with the Mini App map button.
     const button = opts.reply_markup.inline_keyboard[0][0];
     expect(button.web_app.url).toContain("/location.html?match=m1");
+    expect(button.web_app.url).toContain("lang=en");
+    expect(button.web_app.url).toContain("theme=dark");
+    const secondButton = api.sendMessage.mock.calls[1]![2].reply_markup.inline_keyboard[0][0];
+    expect(secondButton.web_app.url).toContain("theme=light");
   });
 });
 

@@ -19,7 +19,10 @@ import {
   appendCountdownPlate,
   PROPOSAL_TTL_MS,
 } from "../../utils/countdown-plate.js";
-import { sendProfileMediaCard } from "../../services/profile-media-dispatch.js";
+import {
+  sendMotionProfileMedia,
+  sendProfileMediaCard,
+} from "../../services/profile-media-dispatch.js";
 import { sendPartnerMatchCards } from "../../services/match-card/send.js";
 import { grantWelcomeGiftIfEligible } from "../../services/ticket-wallet.js";
 import {
@@ -558,7 +561,15 @@ export async function sendMatchProposal(
       theme: themeA,
       caption: captionForA,
     });
-    if (!cardsSentA) await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
+    if (!cardsSentA) {
+      await sendPartnerMedia(api, chatA, photosForA, mediaForA, captionForA);
+    } else {
+      await sendMotionProfileMedia(api, chatA, normalizeProfileMedia(mediaForA, photosForA), {
+        protect: true,
+      }).catch((err) => {
+        console.warn("sendMotionProfileMedia failed for side A, skipping:", err);
+      });
+    }
     const result = await stream(api, chatA, draftsA, {
       replyMarkup: kbA,
       rich: true,
@@ -592,7 +603,15 @@ export async function sendMatchProposal(
       theme: themeB,
       caption: captionForB,
     });
-    if (!cardsSentB) await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
+    if (!cardsSentB) {
+      await sendPartnerMedia(api, chatB, photosForB, mediaForB, captionForB);
+    } else {
+      await sendMotionProfileMedia(api, chatB, normalizeProfileMedia(mediaForB, photosForB), {
+        protect: true,
+      }).catch((err) => {
+        console.warn("sendMotionProfileMedia failed for side B, skipping:", err);
+      });
+    }
     const result = await stream(api, chatB, draftsB, {
       replyMarkup: kbB,
       rich: true,

@@ -22,6 +22,8 @@ import {
   shouldOfferVenueChange,
   buildVenueChangeButton,
 } from "../matching/venue-change.js";
+import { buildMiniAppUrl } from "../../services/mini-app-url.js";
+import { ticketUrl } from "../matching/ticket-gate.js";
 
 /**
  * "My date" hub (`menu:date`). The conditional main-menu row opens this screen
@@ -157,9 +159,19 @@ async function renderAndSendCard(
 
   const fileId = message.photo?.at(-1)?.file_id ?? null;
   if (fileId) {
+    const settingsGuard = {
+      id: self.id,
+      language: lang,
+      theme: self.theme,
+    };
     await prisma.match
-      .update({
-        where: { id: match.id },
+      .updateMany({
+        where: {
+          id: match.id,
+          ...(side === "A"
+            ? { userA: settingsGuard }
+            : { userB: settingsGuard }),
+        },
         data: side === "A" ? { dateCardFileIdA: fileId } : { dateCardFileIdB: fileId },
       })
       .catch(() => undefined);
@@ -228,7 +240,7 @@ function buildDateHubKeyboard(
       now,
     }).ok
   ) {
-    kb.add(buildVenueChangeButton(match.id, lang)).row();
+    kb.add(buildVenueChangeButton(match.id, lang, self.theme)).row();
   }
 
   // Share the (blurred) card off-platform — only meaningful when a card exists.
@@ -269,7 +281,7 @@ function buildMapsUrl(match: ActiveMatchResult["match"]): string {
  */
 async function renderPlanningHub(ctx: BotContext, active: ActiveMatchResult): Promise<void> {
   const lang = ctx.session.language;
-  const { match, partner } = active;
+  const { match, partner, self } = active;
   const name = partner.firstName ?? "";
   const kb = new InlineKeyboard();
 
@@ -278,18 +290,30 @@ async function renderPlanningHub(ctx: BotContext, active: ActiveMatchResult): Pr
     text = t(lang, "dateHubPlanningVenue", { name });
     kb.webApp(
       t(lang, "venueConciergeBtnMap"),
-      `${env.WEBAPP_URL}/location.html?match=${match.id}&lang=${lang}`,
+      buildMiniAppUrl("location", {
+        lang,
+        theme: self.theme,
+        query: { match: match.id },
+      }),
     ).row();
   } else if (match.status === "negotiating") {
     text = t(lang, "dateHubPlanningNegotiating", { name });
-    const ticketGateOpen =
-      env.TICKET_FEATURE_ENABLED &&
+    const ticketGateOpen = env.TICKET_FEATURE_ENABLED &&
       match.ticketStatus != null &&
-      match.ticketStatus !== "completed";
-    if (!ticketGateOpen) {
+      ["pending", "partial", "refund_pending"].includes(match.ticketStatus);
+    if (ticketGateOpen) {
+      kb.webApp(
+        t(lang, "ticketViewButton"),
+        ticketUrl(match.id, lang, self.theme),
+      ).row();
+    } else {
       kb.webApp(
         t(lang, "matchScheduleBtnCalendar"),
-        `${env.WEBAPP_URL}?match=${match.id}&lang=${lang}`,
+        buildMiniAppUrl("calendar", {
+          lang,
+          theme: self.theme,
+          query: { match: match.id },
+        }),
       ).row();
     }
   } else {

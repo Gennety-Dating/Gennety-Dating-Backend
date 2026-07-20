@@ -28,18 +28,30 @@ import {
  */
 
 export const DEFAULT_EMBEDDING_REFRESH_BATCH = 20;
+export const DEFAULT_EMBEDDING_REFRESH_TIMEOUT_MS = 30_000;
 
 export interface EmbeddingRefreshOptions {
   /** Cap rows touched per tick. Default 20 — balances OpenAI cost vs. lag. */
   batchSize?: number;
   /** Test injection: override the OpenAI embedding client. */
   client?: EmbeddingClient;
+  /** Optional per-row deadline. Timeout leaves the row dirty for a retry. */
+  timeoutMs?: number;
 }
 
 export interface EmbeddingRefreshResult {
   scanned: number;
   refreshed: number;
   failed: number;
+  /** Scanned rows that remain dirty after this attempt (failures + CAS races). */
+  stillDirty: number;
+}
+
+interface RefreshSelection {
+  batchSize?: number;
+  userId?: string;
+  /** Weekly preflight emits only its aggregate summary from match-engine. */
+  aggregateOnly?: boolean;
 }
 
 /**
@@ -49,18 +61,51 @@ export interface EmbeddingRefreshResult {
 export async function embeddingRefreshTick(
   options: EmbeddingRefreshOptions = {},
 ): Promise<EmbeddingRefreshResult> {
-  const batchSize = options.batchSize ?? DEFAULT_EMBEDDING_REFRESH_BATCH;
+  return refreshDirtyEmbeddings(
+    { batchSize: options.batchSize ?? DEFAULT_EMBEDDING_REFRESH_BATCH },
+    options,
+  );
+}
+
+/** Refresh one profile immediately after an embedding-feeding edit. */
+export async function refreshUserEmbedding(
+  userId: string,
+  options: EmbeddingRefreshOptions = {},
+): Promise<EmbeddingRefreshResult> {
+  return refreshDirtyEmbeddings(
+    { userId },
+    { ...options, timeoutMs: options.timeoutMs ?? DEFAULT_EMBEDDING_REFRESH_TIMEOUT_MS },
+  );
+}
+
+/**
+ * Refresh the complete dirty snapshot before weekly matching. Rows dirtied
+ * after the snapshot are intentionally left for the next worker/preflight.
+ */
+export async function refreshAllDirtyEmbeddings(
+  options: Omit<EmbeddingRefreshOptions, "batchSize"> = {},
+): Promise<EmbeddingRefreshResult> {
+  return refreshDirtyEmbeddings(
+    { aggregateOnly: true },
+    { ...options, timeoutMs: options.timeoutMs ?? DEFAULT_EMBEDDING_REFRESH_TIMEOUT_MS },
+  );
+}
+
+async function refreshDirtyEmbeddings(
+  selection: RefreshSelection,
+  options: EmbeddingRefreshOptions,
+): Promise<EmbeddingRefreshResult> {
   const client =
     options.client ??
     (env.OPENAI_API_KEY ? createOpenAIEmbeddingClient(env.OPENAI_API_KEY) : null);
 
-  // Without an OpenAI key we can't refresh. Stay quiet — local dev uses this.
-  if (!client) return { scanned: 0, refreshed: 0, failed: 0 };
-
   const dirty = await prisma.profile.findMany({
-    where: { embeddingDirty: true },
+    where: {
+      embeddingDirty: true,
+      ...(selection.userId ? { userId: selection.userId } : {}),
+    },
     orderBy: { embeddingDirtyAt: "asc" },
-    take: batchSize,
+    ...(selection.batchSize === undefined ? {} : { take: selection.batchSize }),
     select: {
       id: true,
       userId: true,
@@ -71,6 +116,18 @@ export async function embeddingRefreshTick(
       embeddingDirtyAt: true,
     },
   });
+
+  // A missing/misconfigured client is a refresh failure, not a successful
+  // no-op. Report the dirty rows accurately so Telegram can tell the user
+  // that automatic synchronization is still pending and matching stays closed.
+  if (!client) {
+    return {
+      scanned: dirty.length,
+      refreshed: 0,
+      failed: dirty.length,
+      stillDirty: dirty.length,
+    };
+  }
 
   let refreshed = 0;
   let failed = 0;
@@ -92,7 +149,10 @@ export async function embeddingRefreshTick(
         text += `\nDealbreakers: ${row.negativeConstraints}`;
       }
 
-      const vec = await client.embed(text.slice(0, 8000));
+      const embeddingPromise = client.embed(text.slice(0, 8000));
+      const vec = options.timeoutMs
+        ? await withTimeout(embeddingPromise, options.timeoutMs)
+        : await embeddingPromise;
       const literal = toPgVectorLiteral(vec);
 
       // Vector + flag update is atomic. If the row was re-dirtied while the
@@ -110,18 +170,40 @@ export async function embeddingRefreshTick(
         refreshed++;
       } else {
         // Row was re-dirtied while we were generating. Next tick picks it up.
-        console.log(
-          `[embedding-refresh] skipped userId=${row.userId} — row re-dirtied during refresh`,
-        );
+        if (!selection.aggregateOnly) {
+          console.log(
+            `[embedding-refresh] skipped userId=${row.userId} — row re-dirtied during refresh`,
+          );
+        }
       }
     } catch (err) {
       failed++;
-      console.warn(
-        `[embedding-refresh] failed userId=${row.userId}:`,
-        err instanceof Error ? err.message : err,
-      );
+      if (!selection.aggregateOnly) {
+        console.warn(
+          `[embedding-refresh] failed userId=${row.userId}:`,
+          err instanceof Error ? err.message : err,
+        );
+      }
     }
   }
 
-  return { scanned: dirty.length, refreshed, failed };
+  return {
+    scanned: dirty.length,
+    refreshed,
+    failed,
+    stillDirty: dirty.length - refreshed,
+  };
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = setTimeout(
+      () => reject(new Error(`Embedding refresh timed out after ${timeoutMs}ms`)),
+      timeoutMs,
+    );
+  });
+  return Promise.race([promise, deadline]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
 }

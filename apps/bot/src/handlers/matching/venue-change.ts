@@ -32,7 +32,7 @@ import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
 import type { InlineKeyboardButton } from "grammy/types";
 import { prisma } from "@gennety/db";
-import type { Prisma } from "@gennety/db";
+import type { Prisma, Theme } from "@gennety/db";
 import {
   t,
   type Language,
@@ -40,6 +40,7 @@ import {
   type VenueInvoiceMode,
 } from "@gennety/shared";
 import { env } from "../../config.js";
+import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import type { BotContext } from "../../session.js";
 import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.js";
 import { buildDateTimeEntity } from "../../services/datetime-entity.js";
@@ -99,13 +100,14 @@ const VC_SELECT = {
       id: true,
       telegramId: true,
       language: true,
+      theme: true,
       gender: true,
       firstName: true,
       universityDomain: true,
     },
   },
   userB: {
-    select: { id: true, telegramId: true, language: true, gender: true, firstName: true },
+    select: { id: true, telegramId: true, language: true, theme: true, gender: true, firstName: true },
   },
 } as const;
 
@@ -259,16 +261,20 @@ export function shouldOfferVenueChange(): boolean {
   return env.VENUE_CHANGE_FEATURE_ENABLED;
 }
 
-function venueChangeUrl(matchId: string, lang: Language): string {
-  return `${env.WEBAPP_URL}/venue-change.html?match=${matchId}&lang=${lang}`;
+function venueChangeUrl(matchId: string, lang: Language, theme: Theme): string {
+  return buildMiniAppUrl("venue-change", { lang, theme, query: { match: matchId } });
 }
 
 /** The `web_app` button appended to each side's scheduled-date card. */
 export function buildVenueChangeButton(
   matchId: string,
   lang: Language,
+  theme: Theme = "dark",
 ): InlineKeyboardButton.WebAppButton {
-  return { text: t(lang, "venueChangeButton"), web_app: { url: venueChangeUrl(matchId, lang) } };
+  return {
+    text: t(lang, "venueChangeButton"),
+    web_app: { url: venueChangeUrl(matchId, lang, theme) },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -674,7 +680,7 @@ async function refreshBoardPing(api: Api<RawApi>, match: VcMatch, likerSide: Sid
   const key = liker.gender === "female" ? "venueBoardPingFromF" : "venueBoardPingFromM";
   const kb = new InlineKeyboard().webApp(
     t(lang, "venueBoardPingBtn"),
-    venueChangeUrl(match.id, lang),
+    venueChangeUrl(match.id, lang, recipient.theme),
   );
   const sent = await api
     .sendMessage(chatId, t(lang, key, { name: liker.firstName ?? "" }), { reply_markup: kb })
@@ -1145,7 +1151,7 @@ async function refreshKeepNotice(api: Api<RawApi>, match: VcMatch, keeperSide: S
   const lang = langOf(recipient.language);
   const kb = new InlineKeyboard().webApp(
     t(lang, "venueBoardPingBtn"),
-    venueChangeUrl(match.id, lang),
+    venueChangeUrl(match.id, lang, recipient.theme),
   );
   const sent = await api
     .sendMessage(chatId, t(lang, "venueKeepNotice", { venue: match.venueName ?? "" }), {

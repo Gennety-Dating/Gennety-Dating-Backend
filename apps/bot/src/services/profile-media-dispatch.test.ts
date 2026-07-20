@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ProfileMedia } from "@gennety/shared";
-import { sendProfileMediaCard } from "./profile-media-dispatch.js";
+import {
+  motionOnlyProfileMedia,
+  sendMotionProfileMedia,
+  sendProfileMediaCard,
+} from "./profile-media-dispatch.js";
 
 function mockApi() {
   return {
@@ -18,6 +22,76 @@ const video = (id: string): ProfileMedia => ({
   width: 720,
   height: 1280,
   fileSize: 1024,
+});
+
+describe("motion-only Match Card follow-up", () => {
+  it("keeps profile videos and only the video part of a Live Photo", () => {
+    expect(
+      motionOnlyProfileMedia([
+        photo("static"),
+        {
+          type: "live_photo",
+          photo: "live-poster",
+          livePhoto: "live-motion",
+          duration: 4,
+        },
+        video("profile-video"),
+      ]),
+    ).toEqual([
+      { type: "video", video: "live-motion", duration: 4 },
+      video("profile-video"),
+    ]);
+  });
+
+  it("sends motion with privacy protection and no duplicate static frame", async () => {
+    const api = mockApi();
+    await sendMotionProfileMedia(
+      api,
+      1,
+      [
+        photo("static"),
+        { type: "live_photo", photo: "poster", livePhoto: "motion" },
+      ],
+      { protect: true },
+    );
+
+    expect(api.sendPhoto).not.toHaveBeenCalled();
+    expect(api.sendVideo).toHaveBeenCalledWith(
+      1,
+      "motion",
+      expect.objectContaining({ protect_content: true }),
+    );
+  });
+
+  it("falls back to individual protected videos when the motion group fails", async () => {
+    const api = mockApi();
+    api.sendMediaGroup.mockRejectedValueOnce(new Error("group rejected"));
+
+    await sendMotionProfileMedia(
+      api,
+      1,
+      [
+        { type: "live_photo", photo: "poster", livePhoto: "motion" },
+        video("profile-video"),
+      ],
+      { protect: true },
+    );
+
+    expect(api.sendPhoto).not.toHaveBeenCalled();
+    expect(api.sendVideo).toHaveBeenCalledTimes(2);
+    expect(api.sendVideo).toHaveBeenNthCalledWith(
+      1,
+      1,
+      "motion",
+      expect.objectContaining({ protect_content: true }),
+    );
+    expect(api.sendVideo).toHaveBeenNthCalledWith(
+      2,
+      1,
+      "profile-video",
+      expect.objectContaining({ protect_content: true }),
+    );
+  });
 });
 
 describe("sendProfileMediaCard protect_content threading", () => {

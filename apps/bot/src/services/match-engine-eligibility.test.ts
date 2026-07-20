@@ -53,6 +53,7 @@ describe("match allocation active-slot guard", () => {
       expect(args.where.matchesAsB).toEqual({
         none: { status: { in: [...ACTIVE_MATCH_STATUSES] } },
       });
+      expect(args.where.profile.embeddingDirty).toBe(false);
     }
   });
 
@@ -97,5 +98,6 @@ describe("match allocation active-slot guard", () => {
     const sql = buildCandidateSql();
     expect(sql).toContain("active_match.status IN ('proposed', 'negotiating', 'negotiating_venue', 'scheduled')");
     expect(sql).toContain("active_match.user_a_id = u.id OR active_match.user_b_id = u.id");
+    expect(sql).toContain("p.embedding_dirty = false");
   });
 });

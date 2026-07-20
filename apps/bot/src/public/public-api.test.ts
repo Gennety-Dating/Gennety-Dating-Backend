@@ -14,6 +14,31 @@ import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import { MAX_PHOTOS } from "@gennety/shared";
 
+const embeddingRefreshMocks = vi.hoisted(() => ({
+  refreshUserEmbedding: vi.fn().mockResolvedValue({
+    scanned: 1,
+    refreshed: 1,
+    failed: 0,
+    stillDirty: 0,
+  }),
+}));
+
+vi.mock("../workers/embedding-refresh.js", () => ({
+  refreshUserEmbedding: embeddingRefreshMocks.refreshUserEmbedding,
+  refreshAllDirtyEmbeddings: vi.fn().mockResolvedValue({
+    scanned: 0,
+    refreshed: 0,
+    failed: 0,
+    stillDirty: 0,
+  }),
+  embeddingRefreshTick: vi.fn().mockResolvedValue({
+    scanned: 0,
+    refreshed: 0,
+    failed: 0,
+    stillDirty: 0,
+  }),
+}));
+
 // ---------------------------------------------------------------------------
 // 1. Mock env BEFORE any backend module loads `config.ts`.
 // ---------------------------------------------------------------------------
@@ -1353,7 +1378,27 @@ describe("PATCH /v1/me", () => {
     const stored = userById(user.id)!;
     expect(stored.major).toBe("Computer Science");
     expect(stored.profile?.hobbies).toEqual(["reading", "hiking"]);
+    expect(embeddingRefreshMocks.refreshUserEmbedding).toHaveBeenCalledWith(
+      user.id,
+      { timeoutMs: 30_000 },
+    );
   });
+
+  it.each(["   ", "x".repeat(501)])(
+    "rejects invalid partnerPreferences without changing the saved profile",
+    async (partnerPreferences) => {
+      const user = await seedUser();
+      seedProfile(user.id, { partnerPreferences: "kind" });
+      const res = await request(app)
+        .patch("/v1/me")
+        .set("Authorization", `Bearer ${signAccess(user.id)}`)
+        .send({ profile: { partnerPreferences } });
+
+      expect(res.status).toBe(400);
+      expect(userById(user.id)?.profile?.partnerPreferences).toBe("kind");
+      expect(embeddingRefreshMocks.refreshUserEmbedding).not.toHaveBeenCalled();
+    },
+  );
 
   it("silently ignores fixed identity fields (firstName, age, status, email, photos)", async () => {
     const user = await seedUser({ firstName: "Alice", age: 22, status: "active" });
@@ -1992,6 +2037,7 @@ describe("DELETE /v1/me/photos/:index", () => {
       "d.jpg",
       "e.jpg",
     ]);
+    userById(user.id)!.profile!.uploadedPhotoHashes = ["ha", "hb", "hc", "hd", "he"];
     const res = await request(app)
       .delete("/v1/me/photos/1")
       .set("Authorization", `Bearer ${signAccess(user.id)}`);
@@ -2003,6 +2049,24 @@ describe("DELETE /v1/me/photos/:index", () => {
       "d.jpg",
       "e.jpg",
     ]);
+    expect(userById(user.id)?.profile?.uploadedPhotoHashes).toEqual([
+      "ha",
+      "hc",
+      "hd",
+      "he",
+    ]);
+  });
+
+  it("normalizes ambiguous legacy hashes before deleting a photo", async () => {
+    const user = await seedWithPhotos(["a.jpg", "b.jpg", "c.jpg"], "paused");
+    userById(user.id)!.profile!.uploadedPhotoHashes = ["hash-with-unknown-index"];
+
+    const res = await request(app)
+      .delete("/v1/me/photos/1")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`);
+
+    expect(res.status).toBe(200);
+    expect(userById(user.id)?.profile?.uploadedPhotoHashes).toEqual(["", ""]);
   });
 
   it("404 on out-of-range index", async () => {

@@ -1,6 +1,6 @@
 import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
-import { prisma } from "@gennety/db";
+import { prisma, type Theme } from "@gennety/db";
 import {
   t,
   type Language,
@@ -18,6 +18,7 @@ import { AI_EMOJI } from "./ai-emoji.js";
 import { generateAndSaveWingmanHints } from "./wingman-hint.js";
 import { sendPushToUser } from "./push.js";
 import { sweepExpiredVenueChanges } from "../handlers/matching/venue-change.js";
+import { buildMiniAppUrl } from "./mini-app-url.js";
 
 /**
  * Build the post-date feedback DM keyboard: two stacked buttons, form first.
@@ -29,8 +30,17 @@ import { sweepExpiredVenueChanges } from "../handlers/matching/venue-change.js";
  * leading glyph in each label is plain Unicode — same constraint we hit on
  * the main menu keyboard (PRODUCT_SPEC.md §2.1).
  */
-function buildFeedbackKeyboard(matchId: string, lang: Language): InlineKeyboard {
-  const url = `${env.WEBAPP_FEEDBACK_URL}?match=${matchId}&lang=${lang}`;
+function buildFeedbackKeyboard(
+  matchId: string,
+  lang: Language,
+  theme: Theme,
+): InlineKeyboard {
+  const url = buildMiniAppUrl("feedback", {
+    baseUrl: env.WEBAPP_FEEDBACK_URL,
+    lang,
+    theme,
+    query: { match: matchId },
+  });
   return new InlineKeyboard()
     .webApp(t(lang, "feedbackBtnForm"), url)
     .row()
@@ -463,8 +473,8 @@ export async function runDateLifecycleTick(
     },
     select: {
       id: true,
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
+      userA: { select: { telegramId: true, language: true, theme: true } },
+      userB: { select: { telegramId: true, language: true, theme: true } },
     },
   });
 
@@ -482,8 +492,8 @@ export async function runDateLifecycleTick(
     const langA = (match.userA.language ?? "en") as Language;
     const langB = (match.userB.language ?? "en") as Language;
 
-    const kbA = buildFeedbackKeyboard(match.id, langA);
-    const kbB = buildFeedbackKeyboard(match.id, langB);
+    const kbA = buildFeedbackKeyboard(match.id, langA, match.userA.theme);
+    const kbB = buildFeedbackKeyboard(match.id, langB, match.userB.theme);
 
     // Bot API 7.6 message_effect — a soft "your moment matters" flourish on
     // the prompt itself. Empty env falls through to no effect.

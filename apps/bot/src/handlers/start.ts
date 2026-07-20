@@ -17,6 +17,8 @@ import { pinStatusBanner } from "../services/status-banner.js";
 import { buildLanguageKeyboard } from "./language-keyboard.js";
 import { syncTelegramUsername } from "../utils/username.js";
 import { shouldUseOnboardingMiniApp } from "./onboarding-mini-app-gate.js";
+import { transitionAccountStatus } from "../services/account-status-transitions.js";
+import { buildMiniAppUrl } from "../services/mini-app-url.js";
 import {
   AUTH_REGISTRATION_START_PREFIX,
   consumeWebRegistrationLink,
@@ -107,19 +109,16 @@ function parseRegistrationPayload(payload: string): RegistrationPayload {
   return null;
 }
 
-function webAppRoot(): string {
-  const raw = env.WEBAPP_URL.replace(/\/$/, "");
-  if (raw.endsWith("/index.html")) return raw.slice(0, -"/index.html".length);
-  if (raw.endsWith("/calendar")) return raw.slice(0, -"/calendar".length);
-  return raw;
-}
-
-function onboardingMiniAppUrl(source: "telegram" | "web", lang: Language): string {
-  const url = new URL(`${webAppRoot()}/onboarding.html`);
-  url.searchParams.set("source", source);
-  url.searchParams.set("lang", lang);
-  url.searchParams.set("v", Date.now().toString(36));
-  return url.toString();
+function onboardingMiniAppUrl(
+  source: "telegram" | "web",
+  lang: Language,
+  theme: User["theme"],
+): string {
+  return buildMiniAppUrl("onboarding", {
+    lang,
+    theme,
+    query: { source, v: Date.now().toString(36) },
+  });
 }
 
 function onboardingMiniAppCopy(
@@ -179,7 +178,10 @@ async function sendOnboardingMiniAppPrompt(
 ): Promise<void> {
   const lang = (ctx.session.language ?? user.language ?? "en") as Language;
   const copy = onboardingMiniAppCopy(lang, source, user.isEmailVerified);
-  const keyboard = new InlineKeyboard().webApp(copy.button, onboardingMiniAppUrl(source, lang));
+  const keyboard = new InlineKeyboard().webApp(
+    copy.button,
+    onboardingMiniAppUrl(source, lang, user.theme),
+  );
   await ctx.reply(copy.message, { reply_markup: keyboard });
 }
 
@@ -318,16 +320,24 @@ start.command("start", async (ctx) => {
     // Silently reactivate them straight into their ready profile — no
     // re-onboarding, no re-verification (PRODUCT_SPEC §Settings / freeze flow).
     if (user.status === "frozen") {
-      await prisma.user.update({
-        where: { telegramId },
-        data: { status: "active" },
-      });
-      await ctx.reply(t(ctx.session.language, "freezeWelcomeBack"), {
-        parse_mode: "Markdown",
-      });
-      await showMainMenu(ctx);
-      await pinStatusBanner(ctx.api, telegramId, ctx.session.language);
-      return;
+      const reactivated = await transitionAccountStatus(
+        { telegramId },
+        "return_from_freeze",
+      );
+      if (reactivated.kind === "changed" || reactivated.kind === "already") {
+        await ctx.reply(t(ctx.session.language, "freezeWelcomeBack"), {
+          parse_mode: "Markdown",
+        });
+        await showMainMenu(ctx);
+        await pinStatusBanner(ctx.api, telegramId, ctx.session.language);
+        return;
+      }
+
+      // Moderation may have changed the status after the initial user read.
+      // Continue using that authoritative state and never overwrite it.
+      if (reactivated.kind === "forbidden") {
+        user = { ...user, status: reactivated.status };
+      }
     }
 
     // Finalized onboarding but still held at `status = onboarding`: the Persona

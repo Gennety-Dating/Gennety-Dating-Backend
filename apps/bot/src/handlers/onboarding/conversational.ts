@@ -34,7 +34,11 @@ import {
   prepareProfileVideo,
   videoSavedAck,
 } from "../../services/profile-video.js";
-import { photoUploadStatePatch } from "../../services/profile-media-validation/photo-state.js";
+import {
+  alignPhotoHashes,
+  MISSING_PHOTO_HASH,
+  photoUploadStatePatch,
+} from "../../services/profile-media-validation/photo-state.js";
 import { showMainMenu } from "../menu/main.js";
 import { withTyping } from "../../utils/with-typing.js";
 import { pinStatusBanner } from "../../services/status-banner.js";
@@ -998,6 +1002,8 @@ async function handlePhotoFrame(
       }
 
       const acceptedBefore = ctx.session.pendingPhotos.length;
+      const priorPhotos = [...ctx.session.pendingPhotos];
+      const priorUniqueIds = [...ctx.session.pendingPhotoUniqueIds];
       const consensus = await commitProfilePhotoCandidate({
         userId: user.id,
         photoRef: fileId,
@@ -1008,11 +1014,12 @@ async function handlePhotoFrame(
         candidateBuffer: photoBytes,
         api: ctx.api,
       });
-      syncSessionFromConsensus(ctx.session, consensus);
-      ctx.session.pendingPhotoUniqueIds = [
-        ...(ctx.session.pendingPhotoUniqueIds ?? []),
-        fileUniqueId,
-      ];
+      syncSessionFromConsensus(ctx.session, consensus, {
+        priorPhotos,
+        priorUniqueIds,
+        candidatePhotoRef: fileId,
+        candidateUniqueId: fileUniqueId,
+      });
       ctx.session.expectingPhoto = true;
       acc.validatedCount++;
       recordConsensusOutcome(acc, consensus);
@@ -1060,8 +1067,11 @@ async function handlePhotoFrame(
       fileUniqueId,
     ];
     ctx.session.pendingPhotoHashes = [
-      ...(ctx.session.pendingPhotoHashes ?? []),
-      ...(photoHash ? [photoHash] : []),
+      ...alignPhotoHashes(
+        ctx.session.pendingPhotos.slice(0, -1),
+        ctx.session.pendingPhotoHashes ?? [],
+      ),
+      photoHash ?? MISSING_PHOTO_HASH,
     ];
     ctx.session.pendingPhotoScores = [
       ...(ctx.session.pendingPhotoScores ?? []),
@@ -1337,11 +1347,22 @@ async function replyText(api: Api, chatId: number, text: string): Promise<void> 
 function syncSessionFromConsensus(
   session: SessionData,
   consensus: PhotoConsensusCommitResult,
+  uniqueIds: {
+    priorPhotos: readonly string[];
+    priorUniqueIds: readonly string[];
+    candidatePhotoRef: string;
+    candidateUniqueId: string;
+  },
 ): void {
   session.pendingPhotos = [...consensus.photos];
   session.pendingProfileMedia = [...consensus.profileMedia];
   session.pendingPhotoHashes = [...consensus.uploadedPhotoHashes];
   session.pendingPhotoScores = [...consensus.photoFaceScores];
+  session.pendingPhotoUniqueIds = consensus.photos.map((photoRef) => {
+    if (photoRef === uniqueIds.candidatePhotoRef) return uniqueIds.candidateUniqueId;
+    const priorIndex = uniqueIds.priorPhotos.indexOf(photoRef);
+    return priorIndex >= 0 ? uniqueIds.priorUniqueIds[priorIndex] ?? "" : "";
+  });
 }
 
 function recordConsensusOutcome(
@@ -1469,10 +1490,7 @@ async function persistPhotos(
   const normalizedScores = photos.map((_, index) => photoFaceScores[index] ?? 0);
   const photoState = photoUploadStatePatch({
     photos,
-    uploadedPhotoHashes:
-      uploadedPhotoHashes.length > 0
-        ? uploadedPhotoHashes
-        : user.profile?.uploadedPhotoHashes ?? [],
+    uploadedPhotoHashes: alignPhotoHashes(photos, uploadedPhotoHashes),
     referenceFaceEmbedding: user.profile?.referenceFaceEmbedding ?? null,
   });
   await prisma.profile.upsert({

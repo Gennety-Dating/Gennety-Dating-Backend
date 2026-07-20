@@ -64,6 +64,15 @@ vi.mock("../../services/verification-pipeline.js", () => ({
   triggerVerificationRerun: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../../workers/embedding-refresh.js", () => ({
+  refreshUserEmbedding: vi.fn().mockResolvedValue({
+    scanned: 1,
+    refreshed: 1,
+    failed: 0,
+    stillDirty: 0,
+  }),
+}));
+
 vi.mock("../../services/profile-video.js", () => ({
   prepareProfileVideo: vi.fn().mockResolvedValue({
     kind: "accepted",
@@ -87,6 +96,12 @@ const accountDeletionMocks = vi.hoisted(() => ({
   deleteUserAccount: vi.fn(),
 }));
 vi.mock("../../services/account-deletion.js", () => accountDeletionMocks);
+
+const accountStatusMocks = vi.hoisted(() => ({
+  transitionAccountStatus: vi.fn(),
+  freezeAccount: vi.fn(),
+}));
+vi.mock("../../services/account-status-transitions.js", () => accountStatusMocks);
 
 import { prisma } from "@gennety/db";
 import { findActiveMatchForTelegramId } from "../../services/active-match.js";
@@ -112,6 +127,7 @@ import {
   handleEditMajorStart,
   handleEditMajorInput,
   handleEditPrefsOpen,
+  handleEditPartnerPreferencesInput,
   handleEditAgeRangeStart,
   handleEditAgeRangeInput,
   handleEditPhotosStart,
@@ -132,6 +148,7 @@ import {
   fetchTelegramFileBuffer,
   gateProfilePhoto,
 } from "../../services/face-match-gate.js";
+import { refreshUserEmbedding } from "../../workers/embedding-refresh.js";
 
 function createMockCtx(overrides: {
   session?: Partial<SessionData>;
@@ -140,6 +157,7 @@ function createMockCtx(overrides: {
   messageText?: string;
   photoFileIds?: string[];
   fromId?: number;
+  callbackMessageId?: number;
 }) {
   const session: SessionData = {
     ...DEFAULT_SESSION,
@@ -156,7 +174,12 @@ function createMockCtx(overrides: {
     : overrides.photoFileIds
       ? { photo: overrides.photoFileIds.map((id) => ({ file_id: id })) }
       : undefined;
-  const callbackQuery = overrides.callbackData ? { data: overrides.callbackData } : undefined;
+  const callbackQuery = overrides.callbackData
+    ? {
+        data: overrides.callbackData,
+        message: { message_id: overrides.callbackMessageId ?? 77 },
+      }
+    : undefined;
 
   return {
     session,
@@ -168,7 +191,7 @@ function createMockCtx(overrides: {
       ...(message ? { message } : {}),
       ...(callbackQuery ? { callback_query: callbackQuery } : {}),
     },
-    reply: vi.fn().mockResolvedValue(undefined),
+    reply: vi.fn().mockResolvedValue({ message_id: 77 }),
     editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
     api: {
       getFile: vi.fn(),
@@ -357,43 +380,57 @@ describe("Menu — My Profile", () => {
 describe("Menu — Pause / Resume", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
-    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ status: "paused" });
+    accountStatusMocks.transitionAccountStatus.mockResolvedValue({
+      kind: "changed",
+      previousStatus: "active",
+      status: "paused",
+      user: { id: "uuid-user-1", telegramId: 12345n, status: "paused" },
+    });
   });
 
-  it("handlePause writes status=paused", async () => {
+  it("handlePause delegates to the safe active-to-paused transition", async () => {
     const ctx = createMockCtx({ callbackData: "menu:pause" });
     await handlePause(ctx);
-    expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: "paused" }),
-      }),
+    expect(accountStatusMocks.transitionAccountStatus).toHaveBeenCalledWith(
+      { telegramId: 12345n },
+      "pause",
     );
   });
 
-  it("handleResume writes status=active", async () => {
-    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ status: "paused" });
+  it("handleResume delegates to the safe paused-to-active transition", async () => {
+    accountStatusMocks.transitionAccountStatus.mockResolvedValueOnce({
+      kind: "changed",
+      previousStatus: "paused",
+      status: "active",
+      user: { id: "uuid-user-1", telegramId: 12345n, status: "active" },
+    });
     const ctx = createMockCtx({ callbackData: "menu:resume" });
     await handleResume(ctx);
-    expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ status: "active" }),
-      }),
+    expect(accountStatusMocks.transitionAccountStatus).toHaveBeenCalledWith(
+      { telegramId: 12345n },
+      "resume",
     );
   });
 
   it("handleResume ignores non-paused users", async () => {
-    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ status: "banned" });
+    accountStatusMocks.transitionAccountStatus.mockResolvedValueOnce({
+      kind: "forbidden",
+      status: "banned",
+      user: { id: "uuid-user-1", telegramId: 12345n, status: "banned" },
+    });
     const ctx = createMockCtx({ callbackData: "menu:resume" });
     await handleResume(ctx);
-    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("isn't available"));
   });
 });
 
 describe("Menu — Settings (language change)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (work: (tx: typeof prisma) => unknown) => work(prisma),
+    );
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "uuid-user-1" });
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ status: "active" });
   });
 
@@ -430,6 +467,14 @@ describe("Menu — Settings (language change)", () => {
         data: expect.objectContaining({ language: "ru" }),
       }),
     );
+    expect(prisma.match.updateMany).toHaveBeenCalledWith({
+      where: { userAId: "uuid-user-1", status: "scheduled" },
+      data: { dateCardFileIdA: null },
+    });
+    expect(prisma.match.updateMany).toHaveBeenCalledWith({
+      where: { userBId: "uuid-user-1", status: "scheduled" },
+      data: { dateCardFileIdB: null },
+    });
   });
 
   it("handleSettingsLanguageSet ignores invalid language codes", async () => {
@@ -446,7 +491,10 @@ describe("Menu — Settings (language change)", () => {
 describe("Menu — Settings (theme change)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (work: (tx: typeof prisma) => unknown) => work(prisma),
+    );
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "uuid-user-1" });
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ status: "active" });
   });
 
@@ -478,6 +526,14 @@ describe("Menu — Settings (theme change)", () => {
         data: expect.objectContaining({ theme: "light" }),
       }),
     );
+    expect(prisma.match.updateMany).toHaveBeenCalledWith({
+      where: { userAId: "uuid-user-1", status: "scheduled" },
+      data: { dateCardFileIdA: null },
+    });
+    expect(prisma.match.updateMany).toHaveBeenCalledWith({
+      where: { userBId: "uuid-user-1", status: "scheduled" },
+      data: { dateCardFileIdB: null },
+    });
   });
 
   it("handleSettingsThemeSet ignores invalid themes", async () => {
@@ -554,7 +610,7 @@ describe("Menu — Edit Profile", () => {
           ],
           photoFaceScores: [0, 0, 0, 0],
           acceptedPhotoCount: 4,
-          uploadedPhotoHashes: [],
+          uploadedPhotoHashes: ["", "", "", ""],
           referenceFaceEmbedding: expect.objectContaining({
             kind: "reference_photo",
             photoRef: "file_1",
@@ -699,14 +755,20 @@ describe("Menu — Edit Profile", () => {
     const photos = Array.from({ length: MAX_PHOTOS }, (_, i) => `p${i}`);
     const scores = photos.map((_, i) => (i + 1) / 10);
     const media = photos.map((photo) => ({ type: "photo" as const, photo }));
+    const hashes = photos.map((_, i) => `h${i}`);
+    const uniqueIds = photos.map((_, i) => `u${i}`);
     const expectedPhotos = photos.filter((_, i) => i !== 1);
     const expectedScores = scores.filter((_, i) => i !== 1);
+    const expectedHashes = hashes.filter((_, i) => i !== 1);
+    const expectedUniqueIds = uniqueIds.filter((_, i) => i !== 1);
     const ctx = createMockCtx({
       session: {
         menuState: "edit_photos",
         pendingPhotos: [...photos],
         pendingProfileMedia: media.map((m) => ({ ...m })),
         pendingPhotoScores: [...scores],
+        pendingPhotoHashes: [...hashes],
+        pendingPhotoUniqueIds: [...uniqueIds],
       },
       callbackData: "menu:edit:photos:del:1",
     });
@@ -716,6 +778,9 @@ describe("Menu — Edit Profile", () => {
     // photos[i] ↔ photoFaceScores[i] alignment preserved after the splice.
     expect(ctx.session.pendingPhotos).toEqual(expectedPhotos);
     expect(ctx.session.pendingPhotoScores).toEqual(expectedScores);
+    expect(ctx.session.pendingPhotoHashes).toEqual(expectedHashes);
+    expect(ctx.session.pendingPhotoUniqueIds).toEqual(expectedUniqueIds);
+    expect(ctx.session.pendingPhotoUniqueIds).not.toContain("u1");
     expect(ctx.session.pendingProfileMedia).toEqual(
       expectedPhotos.map((photo) => ({ type: "photo", photo })),
     );
@@ -726,6 +791,7 @@ describe("Menu — Edit Profile", () => {
         data: expect.objectContaining({
           photos: expectedPhotos,
           photoFaceScores: expectedScores,
+          uploadedPhotoHashes: expectedHashes,
         }),
       }),
     );
@@ -805,6 +871,25 @@ describe("Menu — Edit Bio", () => {
     expect(ctx.session.menuState).toBe("idle");
   });
 
+  it("keeps a saved bio dirty and tells the user when immediate sync fails", async () => {
+    (refreshUserEmbedding as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("embedding unavailable"),
+    );
+    const ctx = createMockCtx({
+      session: { menuState: "edit_bio" },
+      messageText: "Updated bio",
+    });
+
+    await handleEditBioInput(ctx);
+
+    expect(prisma.profile.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ embeddingDirty: true }) }),
+    );
+    expect(ctx.reply).toHaveBeenCalledWith(
+      expect.stringContaining("automatic profile sync"),
+    );
+  });
+
   it("handleEditBioInput rejects text exceeding 500 chars", async () => {
     const longText = "x".repeat(501);
     const ctx = createMockCtx({
@@ -873,6 +958,57 @@ describe("Menu — Edit Search Preferences", () => {
     const serialized = JSON.stringify(markup);
     expect(serialized).toContain("menu:edit:prefs:age");
     expect(serialized).toContain("menu:edit");
+  });
+
+  it("handleEditPrefsOpen shows the current description and age range", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      profile: {
+        partnerPreferences: "Kind, curious, and active",
+        ageRangeMin: 20,
+        ageRangeMax: 27,
+      },
+    });
+    const ctx = createMockCtx({ callbackData: "menu:edit:prefs" });
+    await handleEditPrefsOpen(ctx);
+    const body = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(body).toContain("Kind, curious, and active");
+    expect(body).toContain("20–27");
+    expect(JSON.stringify((ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup))
+      .toContain("menu:edit:prefs:description");
+  });
+
+  it("edits the free-text partner description and returns to refreshed preferences", async () => {
+    const ctx = createMockCtx({
+      session: { menuState: "edit_partner_preferences" },
+      messageText: "  Warm and intellectually curious  ",
+    });
+    await handleEditPartnerPreferencesInput(ctx);
+    expect(prisma.profile.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          partnerPreferences: "Warm and intellectually curious",
+          embeddingDirty: true,
+        }),
+      }),
+    );
+    expect(ctx.session.menuState).toBe("idle");
+  });
+
+  it("rejects empty and over-limit partner descriptions", async () => {
+    const emptyCtx = createMockCtx({
+      session: { menuState: "edit_partner_preferences" },
+      messageText: "   ",
+    });
+    await handleEditPartnerPreferencesInput(emptyCtx);
+    expect(emptyCtx.reply).toHaveBeenCalledWith(expect.stringContaining("can't be empty"));
+
+    const longCtx = createMockCtx({
+      session: { menuState: "edit_partner_preferences" },
+      messageText: "x".repeat(501),
+    });
+    await handleEditPartnerPreferencesInput(longCtx);
+    expect(longCtx.reply).toHaveBeenCalledWith(expect.stringContaining("500"));
+    expect(prisma.profile.update).not.toHaveBeenCalled();
   });
 
   it("handleEditAgeRangeStart sets menuState to edit_age_range", async () => {
@@ -962,10 +1098,34 @@ describe("Menu — Help", () => {
 });
 
 describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
+  const pendingCtx = (
+    stage: "freeze_or_delete" | "delete_final",
+    callbackData: string,
+    session: Partial<SessionData> = {},
+  ) => createMockCtx({
+    callbackData,
+    callbackMessageId: 77,
+    session: {
+      ...session,
+      pendingAccountAction: {
+        nonce: "nonce",
+        stage,
+        messageId: 77,
+        expiresAtMs: Date.now() + 60_000,
+      },
+    },
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     accountDeletionMocks.deleteUserAccount.mockResolvedValue({ deleted: true });
-    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    accountStatusMocks.freezeAccount.mockResolvedValue({
+      kind: "changed",
+      previousStatus: "active",
+      status: "frozen",
+      user: { id: "uuid-user-1", telegramId: 12345n, status: "frozen" },
+      cancelled: [],
+    });
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "uuid-user-1",
       status: "active",
@@ -993,48 +1153,33 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
     expect(serialized).toContain("danger");
   });
 
-  it("handleFreezeAccount flips status to frozen and unpins the banner", async () => {
-    const ctx = createMockCtx({
-      callbackData: "menu:settings:freeze",
-      fromId: 12345,
-    });
+  it("handleFreezeAccount delegates the atomic freeze and partner cleanup", async () => {
+    const ctx = pendingCtx("freeze_or_delete", "menu:settings:freeze:nonce");
     await handleFreezeAccount(ctx);
-    expect(prisma.user.update).toHaveBeenCalledWith({
-      where: { telegramId: BigInt(12345) },
-      data: { status: "frozen" },
-    });
+    expect(accountStatusMocks.freezeAccount).toHaveBeenCalledWith(
+      { telegramId: 12345n },
+      ctx.api,
+    );
     expect(prisma.user.delete).not.toHaveBeenCalled();
-    expect(ctx.api.unpinAllChatMessages).toHaveBeenCalled();
+    expect(ctx.session.pendingAccountAction).toBeNull();
   });
 
-  it("handleFreezeAccount cancels an in-flight match and notifies the partner", async () => {
-    (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      {
-        id: "match-1",
-        userAId: "uuid-user-1",
-        userBId: "uuid-partner",
-        userA: { telegramId: BigInt(12345), language: "en", platform: "telegram" },
-        userB: { telegramId: BigInt(67890), language: "en", platform: "telegram" },
-      },
-    ]);
-    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
-    const ctx = createMockCtx({ callbackData: "menu:settings:freeze", fromId: 12345 });
-    await handleFreezeAccount(ctx);
-    expect(prisma.match.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: "match-1",
-        status: {
-          in: ["proposed", "negotiating", "negotiating_venue", "scheduled"],
-        },
-      },
-      data: { status: "cancelled" },
+  it("handleFreezeAccount refuses a moderation-owned status", async () => {
+    accountStatusMocks.freezeAccount.mockResolvedValueOnce({
+      kind: "forbidden",
+      status: "banned",
+      user: { id: "uuid-user-1", telegramId: 12345n, status: "banned" },
     });
-    // The partner (telegramId 67890) gets a neutral notice.
-    expect(ctx.api.sendMessage).toHaveBeenCalledWith(67890, expect.any(String));
+    const ctx = pendingCtx("freeze_or_delete", "menu:settings:freeze:nonce");
+    await handleFreezeAccount(ctx);
+    expect(ctx.reply).toHaveBeenCalledWith(expect.stringContaining("isn't available"));
   });
 
   it("handleDeleteAccountConfirm shows the final confirmation with one delete + two back-outs", async () => {
-    const ctx = createMockCtx({ callbackData: "menu:settings:delete:proceed" });
+    const ctx = pendingCtx(
+      "freeze_or_delete",
+      "menu:settings:delete:proceed:nonce",
+    );
     await handleDeleteAccountConfirm(ctx);
     expect(ctx.answerCallbackQuery).toHaveBeenCalled();
     const body = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0];
@@ -1046,10 +1191,7 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
   });
 
   it("handleDeleteAccountExecute delegates to the shared deletion workflow", async () => {
-    const ctx = createMockCtx({
-      callbackData: "menu:settings:delete:yes",
-      fromId: 99999,
-    });
+    const ctx = pendingCtx("delete_final", "menu:settings:delete:yes:nonce");
     await handleDeleteAccountExecute(ctx);
     expect(accountDeletionMocks.deleteUserAccount).toHaveBeenCalledWith(
       "uuid-user-1",
@@ -1058,16 +1200,17 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
   });
 
   it("handleDeleteAccountExecute resets session to defaults", async () => {
-    const ctx = createMockCtx({
-      callbackData: "menu:settings:delete:yes",
-      session: {
+    const ctx = pendingCtx(
+      "delete_final",
+      "menu:settings:delete:yes:nonce",
+      {
         onboardingStep: "completed",
         language: "ru",
         menuState: "idle",
         matchFlow: "idle",
         activeMatchId: "some-match-id",
       },
-    });
+    );
     await handleDeleteAccountExecute(ctx);
     expect(ctx.session.onboardingStep).toBe("consent");
     expect(ctx.session.language).toBe("en");
@@ -1076,10 +1219,11 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
   });
 
   it("handleDeleteAccountExecute sends farewell message", async () => {
-    const ctx = createMockCtx({
-      callbackData: "menu:settings:delete:yes",
-      session: { language: "en" },
-    });
+    const ctx = pendingCtx(
+      "delete_final",
+      "menu:settings:delete:yes:nonce",
+      { language: "en" },
+    );
     await handleDeleteAccountExecute(ctx);
     const body = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(body).toContain("deleted");
@@ -1090,7 +1234,7 @@ describe("Menu — Delete Account (GDPR Right to be Forgotten)", () => {
     accountDeletionMocks.deleteUserAccount.mockRejectedValueOnce(
       new Error("storage unavailable"),
     );
-    const ctx = createMockCtx({ callbackData: "menu:settings:delete:yes" });
+    const ctx = pendingCtx("delete_final", "menu:settings:delete:yes:nonce");
     await handleDeleteAccountExecute(ctx);
 
     expect(ctx.session.onboardingStep).toBe("completed");

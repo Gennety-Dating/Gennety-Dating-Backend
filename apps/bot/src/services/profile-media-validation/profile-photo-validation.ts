@@ -18,6 +18,7 @@ import type {
 } from "./types.js";
 import { logMediaValidationRejection } from "./rejection-log.js";
 import { resolveVerifiedIdentityReference } from "../verified-identity-reference.js";
+import { alignPhotoHashes } from "./photo-state.js";
 
 export interface ValidateUserProfilePhotoInput {
   userId: string;
@@ -63,22 +64,28 @@ export async function validateUserProfilePhoto(
   const pendingCandidates = parsePendingPhotoCandidates(
     user.profile?.pendingPhotoCandidates ?? [],
   );
-  const baseExistingHashes =
-    input.existingPhotoHashes ?? user.profile?.uploadedPhotoHashes ?? [];
+  const basePhotoRefs =
+    input.existingPhotoRefs.length > 0
+      ? [...input.existingPhotoRefs]
+      : [...(user.profile?.photos ?? [])];
+  const baseExistingHashes = alignPhotoHashes(
+    basePhotoRefs,
+    input.existingPhotoHashes ?? user.profile?.uploadedPhotoHashes ?? [],
+  );
   const pendingHashes = pendingCandidates
     .map((candidate) => candidate.perceptualHash)
     .filter((hash): hash is string => Boolean(hash));
-  const existingHashes = [...baseExistingHashes, ...pendingHashes];
+  const existingHashes = [
+    ...baseExistingHashes.filter(Boolean),
+    ...pendingHashes,
+  ];
   const existingPhotos: ExistingPhotoForValidation[] = [];
-  const needsPhotoFallbackHashes = existingHashes.length === 0;
-  const refsForDuplicateFallback = needsPhotoFallbackHashes
-    ? [
-        ...(input.existingPhotoRefs.length > 0
-          ? input.existingPhotoRefs
-          : (user.profile?.photos ?? [])),
-        ...pendingCandidates.map((candidate) => candidate.photoRef),
-      ]
-    : [];
+  const refsForDuplicateFallback = [
+    ...basePhotoRefs.filter((_, index) => !baseExistingHashes[index]),
+    ...pendingCandidates
+      .filter((candidate) => !candidate.perceptualHash)
+      .map((candidate) => candidate.photoRef),
+  ];
   for (const ref of refsForDuplicateFallback) {
     const buffer = await downloadExistingPhoto(ref, input.api);
     if (!buffer) return unavailable();

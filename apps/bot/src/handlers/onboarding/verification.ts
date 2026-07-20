@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { InlineKeyboard, InputFile, type Api } from "grammy";
-import { prisma } from "@gennety/db";
+import { prisma, type Theme } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { buildPersonaHostedUrl } from "../../services/persona.js";
@@ -14,6 +14,7 @@ import { runStatusSequence } from "../../services/ai-stream.js";
 import { skipAnalysisSteps } from "../../services/analysis-status.js";
 import { computeNextTouch } from "../../workers/re-engagement-schedule.js";
 import type { BotContext } from "../../session.js";
+import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 
 /**
  * Callback data for the "Skip verification" button on the CTA card. This is now
@@ -83,7 +84,7 @@ export async function sendVerificationCTABare(
   }
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { id: true },
+    select: { id: true, theme: true },
   });
   if (!user) return false;
 
@@ -108,7 +109,7 @@ export async function sendVerificationCTABare(
     .catch(() => {});
 
   const keyboard = new InlineKeyboard();
-  if (!appendVerifyNowButton(keyboard, lang, user.id, t(lang, "verifyBtnGo"))) {
+  if (!(await appendVerifyNowButton(keyboard, lang, user.id, t(lang, "verifyBtnGo"), user.theme))) {
     return false;
   }
   keyboard.success();
@@ -144,19 +145,24 @@ export async function sendVerificationCTABare(
  * the caller can decide whether that is fatal (CTA aborts; the skip-nudge fork
  * just drops the button and keeps the "Skip anyway" option).
  */
-function appendVerifyNowButton(
+async function appendVerifyNowButton(
   keyboard: InlineKeyboard,
   lang: Language,
   userId: string,
   label: string,
-): boolean {
+  knownTheme?: Theme,
+): Promise<boolean> {
   const miniAppHost = env.WEBAPP_URL;
   const useMiniApp =
     miniAppHost.startsWith("https://") &&
     !miniAppHost.includes("example.invalid");
 
   if (useMiniApp) {
-    const miniAppUrl = `${miniAppHost.replace(/\/+$/, "")}/verification.html?lang=${lang}`;
+    const theme = knownTheme ?? (await prisma.user.findUnique({
+      where: { id: userId },
+      select: { theme: true },
+    }))?.theme ?? "dark";
+    const miniAppUrl = buildMiniAppUrl("verification", { lang, theme });
     keyboard.webApp(label, miniAppUrl);
     return true;
   }
@@ -300,7 +306,7 @@ async function sendMandatoryVerifyNotice(
   userId: string,
 ): Promise<void> {
   const keyboard = new InlineKeyboard();
-  const hasButton = appendVerifyNowButton(keyboard, lang, userId, t(lang, "verifyBtnGo"));
+  const hasButton = await appendVerifyNowButton(keyboard, lang, userId, t(lang, "verifyBtnGo"));
   if (hasButton) keyboard.success();
   await api.sendMessage(chatId, t(lang, "verifyMandatoryNotice"), {
     ...(hasButton ? { reply_markup: keyboard } : {}),
@@ -319,7 +325,7 @@ export async function sendVerificationReminder(
   userId: string,
 ): Promise<void> {
   const keyboard = new InlineKeyboard();
-  const hasButton = appendVerifyNowButton(keyboard, lang, userId, t(lang, "verifyBtnGo"));
+  const hasButton = await appendVerifyNowButton(keyboard, lang, userId, t(lang, "verifyBtnGo"));
   if (hasButton) keyboard.success();
   await api.sendMessage(chatId, t(lang, "verifyReminderNudge"), {
     ...(hasButton ? { reply_markup: keyboard } : {}),
@@ -412,7 +418,7 @@ export async function handleVerificationSkip(ctx: BotContext): Promise<void> {
   }
 
   const keyboard = new InlineKeyboard();
-  const hasVerifyButton = appendVerifyNowButton(
+  const hasVerifyButton = await appendVerifyNowButton(
     keyboard,
     lang,
     user.id,

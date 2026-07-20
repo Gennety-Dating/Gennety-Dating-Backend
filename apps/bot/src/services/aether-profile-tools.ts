@@ -2,6 +2,7 @@ import { Prisma, prisma } from "@gennety/db";
 import {
   MAX_AGE,
   MAX_PHOTOS,
+  MAX_PARTNER_PREFERENCES_LENGTH,
   MIN_AGE,
   normalizeProfileMedia,
   profilePhotoMedia,
@@ -22,7 +23,11 @@ import {
   type PhotoConsensusCommitResult,
 } from "./profile-media-validation/identity-consensus.js";
 import type { MediaValidationReason } from "./profile-media-validation/types.js";
-import { photoUploadStatePatch } from "./profile-media-validation/photo-state.js";
+import {
+  appendAlignedPhotoHash,
+  photoUploadStatePatch,
+} from "./profile-media-validation/photo-state.js";
+import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
 
 export interface AetherToolResult {
   ok: boolean;
@@ -36,6 +41,7 @@ interface AetherProfilePatchDeps {
     userId: string,
     data: Prisma.ProfileUncheckedUpdateInput,
   ) => Promise<unknown>;
+  refreshEmbedding: (userId: string) => Promise<unknown>;
 }
 
 const profilePatchDeps: AetherProfilePatchDeps = {
@@ -55,6 +61,8 @@ const profilePatchDeps: AetherProfilePatchDeps = {
       update: data,
       create: Object.assign({}, data, { userId }) as Prisma.ProfileUncheckedCreateInput,
     }),
+  refreshEmbedding: (userId) =>
+    refreshUserEmbedding(userId, { timeoutMs: 30_000 }),
 };
 
 export async function applyAetherProfilePatch(
@@ -104,7 +112,14 @@ export async function applyAetherProfilePatch(
     }
   }
   if (typeof args.partnerPreferences === "string" && args.partnerPreferences.trim()) {
-    profilePatch.partnerPreferences = args.partnerPreferences.trim().slice(0, 280);
+    const partnerPreferences = args.partnerPreferences.trim();
+    if (partnerPreferences.length > MAX_PARTNER_PREFERENCES_LENGTH) {
+      return {
+        ok: false,
+        detail: `Partner preferences must be ${MAX_PARTNER_PREFERENCES_LENGTH} characters or less`,
+      };
+    }
+    profilePatch.partnerPreferences = partnerPreferences;
     touchedEmbedding = true;
   }
 
@@ -117,6 +132,16 @@ export async function applyAetherProfilePatch(
   }
   if (Object.keys(profilePatch).length > 0) {
     await deps.upsertProfile(userId, profilePatch);
+  }
+  if (touchedEmbedding) {
+    await deps.refreshEmbedding(userId).catch((err) => {
+      // The profile patch is already saved with embeddingDirty=true. Aether
+      // must not report the edit as failed merely because refresh will retry.
+      console.warn(
+        `[aether] immediate embedding refresh failed userId=${userId}:`,
+        err instanceof Error ? err.message : err,
+      );
+    });
   }
   return { ok: true };
 }
@@ -295,10 +320,11 @@ export async function attachAetherProfilePhoto(
   const scores = [...(profile?.photoFaceScores ?? [])];
   while (scores.length < existing.length) scores.push(0);
   const nextPhotos = [...existing, uploaded.path];
-  const nextHashes = [
-    ...(profile?.uploadedPhotoHashes ?? []),
-    ...(photoHash ? [photoHash] : []),
-  ];
+  const nextHashes = appendAlignedPhotoHash(
+    existing,
+    profile?.uploadedPhotoHashes ?? [],
+    photoHash,
+  );
   const photoState = photoUploadStatePatch({
     photos: nextPhotos,
     uploadedPhotoHashes: nextHashes,

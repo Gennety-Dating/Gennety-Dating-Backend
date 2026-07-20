@@ -111,13 +111,27 @@ export async function findActiveMatchForTelegramId(
       proxyClosesAt: true,
       venueChangeStatus: true,
       ticketStatus: true,
+      pitchMessageIdA: true,
+      pitchMessageIdB: true,
       dateCardFileIdA: true,
       dateCardFileIdB: true,
       userA: { select: participantSelect },
       userB: { select: participantSelect },
     },
   });
-  const match = pickCurrentMatch(matches);
+  // A proposed match becomes visible to each participant only after that
+  // participant's pitch was actually delivered. Match creation and the
+  // two Telegram delivery legs are intentionally separate, so a global
+  // dispatched marker can reveal a partner during pre-roll or while only the
+  // other side has received their pitch.
+  const visibleMatches = matches.filter((candidate) => {
+    if (candidate.status !== "proposed") return true;
+    const callerIsA = candidate.userAId === user.id;
+    return callerIsA
+      ? candidate.pitchMessageIdA !== null
+      : candidate.pitchMessageIdB !== null;
+  });
+  const match = pickCurrentMatch(visibleMatches);
   if (!match) return null;
 
   const side: MatchSide = match.userAId === user.id ? "A" : "B";

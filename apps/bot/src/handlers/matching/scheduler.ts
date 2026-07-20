@@ -1,10 +1,9 @@
 import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
 import type { InlineKeyboardMarkup } from "grammy/types";
-import { prisma } from "@gennety/db";
+import { prisma, type Theme } from "@gennety/db";
 import { t, tv, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
-import { env } from "../../config.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
 import { zonedParts, wallToUtc } from "../../services/profiler-schedule.js";
@@ -12,6 +11,7 @@ import {
   sendOrEditPostAcceptMessage,
   type PostAcceptSide,
 } from "./post-accept-message.js";
+import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 
 /**
  * Calendar-only scheduler.
@@ -174,8 +174,8 @@ export async function startScheduling(
     select: {
       calendarMessageIdA: true,
       calendarMessageIdB: true,
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
+      userA: { select: { telegramId: true, language: true, theme: true } },
+      userB: { select: { telegramId: true, language: true, theme: true } },
     },
   });
   if (!match) return;
@@ -194,6 +194,7 @@ export async function startScheduling(
         match.calendarMessageIdA,
         t(langA, captionKey),
         langA,
+        match.userA.theme,
       ),
     );
   }
@@ -207,6 +208,7 @@ export async function startScheduling(
         match.calendarMessageIdB,
         t(langB, captionKey),
         langB,
+        match.userB.theme,
       ),
     );
   }
@@ -231,8 +233,8 @@ export async function sendCalendarCard(
     select: {
       calendarMessageIdA: true,
       calendarMessageIdB: true,
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
+      userA: { select: { telegramId: true, language: true, theme: true } },
+      userB: { select: { telegramId: true, language: true, theme: true } },
     },
   });
   if (!match) return;
@@ -247,11 +249,12 @@ export async function sendCalendarCard(
     existingMsgId,
     t(lang, "matchScheduleAfterTicket"),
     lang,
+    user.theme,
   );
 }
 
-function calendarUrl(matchId: string, lang: Language): string {
-  return `${env.WEBAPP_URL}?match=${matchId}&lang=${lang}`;
+function calendarUrl(matchId: string, lang: Language, theme: Theme): string {
+  return buildMiniAppUrl("calendar", { lang, theme, query: { match: matchId } });
 }
 
 /**
@@ -267,12 +270,13 @@ async function replaceCalendarMessage(
   previousMessageId: number | null,
   text: string,
   lang: Language,
+  theme: Theme,
   resend = false,
 ): Promise<void> {
   if (!isTelegramTarget(telegramId)) return;
 
   const options = {
-    reply_markup: buildCalendarKeyboard(calendarUrl(matchId, lang), lang),
+    reply_markup: buildCalendarKeyboard(calendarUrl(matchId, lang, theme), lang),
   };
 
   await sendOrEditPostAcceptMessage({
@@ -373,8 +377,8 @@ export async function processCalendarSlotsUpdate(
       availableTimesB: true,
       calendarMessageIdA: true,
       calendarMessageIdB: true,
-      userA: { select: { telegramId: true, language: true } },
-      userB: { select: { telegramId: true, language: true } },
+      userA: { select: { telegramId: true, language: true, theme: true } },
+      userB: { select: { telegramId: true, language: true, theme: true } },
     },
   });
   if (!match) return { ok: false, reason: "match-not-found" };
@@ -495,6 +499,7 @@ export async function processCalendarSlotsUpdate(
           isA ? match.calendarMessageIdB : match.calendarMessageIdA,
           t(peerLang, "matchSchedulePeerProposed"),
           peerLang,
+          isA ? match.userB.theme : match.userA.theme,
           true, // delete old card + send fresh so the peer is actually notified
         ).catch(() => {}),
       );
@@ -532,6 +537,7 @@ export async function processCalendarSlotsUpdate(
           isA ? match.calendarMessageIdB : match.calendarMessageIdA,
           t(peerLang, "matchSchedulePeerSuggestedAlternative"),
           peerLang,
+          isA ? match.userB.theme : match.userA.theme,
           true, // delete old card + send fresh so the peer is actually notified
         ).catch(() => {}),
       );
@@ -642,8 +648,15 @@ export async function handleSchedulePick(ctx: BotContext): Promise<void> {
   if (!matchId) return;
 
   const lang = ctx.session.language;
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(ctx.from!.id) },
+    select: { theme: true },
+  });
   await ctx.reply(t(lang, "matchScheduleIter3"), {
-    reply_markup: buildCalendarKeyboard(calendarUrl(matchId, lang), lang),
+    reply_markup: buildCalendarKeyboard(
+      calendarUrl(matchId, lang, user?.theme ?? "dark"),
+      lang,
+    ),
   });
 }
 
