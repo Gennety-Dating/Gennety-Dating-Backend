@@ -591,14 +591,16 @@ button labels CANNOT carry `custom_emoji` entities — buttons fall back to
 plain Unicode emoji.
 
 Layout: a conditional **My Date** row can come first (only while a live match
-exists — see below), then the two **paired** rows — **My Profile · Edit
-Profile**, then **Pause Matching · Settings** — followed by the single-button
+exists — see below), then the combined **My Profile** row, the paired
+**Pause/Resume Matching · Settings** row, followed by the single-button
 rows in order: **Profile Video**, **My Tickets** (feature-flagged),
 **Report / Help**.
 
 - **My Date** — a conditional first row, present **only** while the user has an
   in-flight match (`proposed` / `negotiating` / `negotiating_venue` /
-  `scheduled`, via `services/active-match.ts`). It is the visual anchor of the
+  `scheduled`, via `services/active-match.ts`). A `proposed` match becomes
+  visible to each side only after that side's own `pitchMessageIdA/B` exists;
+  creation or delivery to the other side never reveals it early. It is the visual anchor of the
   menu: native **`primary`** style (blue) + an optional animated icon
   (`CUSTOM_EMOJI_DATE_ID`) so it stands apart from the ordinary gray rows. A
   `scheduled` date shows a live countdown in the label (💫 "My date · in Xd Yh",
@@ -626,19 +628,31 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
   so the hub is a status/actions surface only.
 
   For the pre-`scheduled` stages the hub is a lightweight card re-surfacing the
-  one Mini App entry the user might have lost (Calendar for `negotiating` — unless
-  the Date Ticket gate is still open — or the Location picker for
-  `negotiating_venue`) plus Report. No new product mechanic is introduced; the
+  one Mini App entry the user might have lost: the match-specific Ticket CTA
+  while `ticketStatus` is `pending`, `partial`, or `refund_pending`; Calendar
+  when it is `completed`, `refunded`, `expired`, or absent; or the Location
+  picker for `negotiating_venue`. Every restored link carries the caller's
+  current language and theme. No new product mechanic is introduced; the
   hub is purely a second entry point to existing flows.
-- **My Profile** — generated bio + photos (and the profile video, when present).
-  When no video is set, a one-line hint points to the Profile Video entry.
-- **Edit Profile** — non-identity fields only. `firstName`, `age`,
-  `email`, `universityDomain` are **fixed** post-onboarding.
-- **Pause Matching** — flips `User.status = paused`. The match engine ignores
-  paused users; the status banner shows "paused".
+- **My Profile** — the single combined view/edit surface: generated bio + photos
+  (and profile video when present), followed by **About me**, **Who I want**,
+  **What I do**, and **My photos** actions. **Who I want** shows both the
+  current preferred-partner age range and the free-text `partnerPreferences`
+  (max 500 characters) and edits them independently. `firstName`, `age`,
+  `email`, and `universityDomain` remain fixed post-onboarding. When no video
+  is set, a one-line hint points to the Profile Video entry.
+- **Pause Matching** — uses an atomic compare-and-set transition and permits
+  only `active → paused`; Resume permits only `paused → active`. Menu actions
+  cannot overwrite onboarding or moderation-owned states (`suspended`,
+  `pending_investigation`, `banned`).
 - **Settings** — change `language`; **change theme** (a light/dark inline
   toggle mirroring the language flow — persists `User.theme`, which every Mini
-  App and both PNG cards honor); re-open verification when applicable; and
+  App and both PNG cards honor). A successful language/theme change atomically
+  clears only that user's side of the scheduled date-card cache; a concurrent
+  stale render is prevented from writing the old variant back. The shared Mini
+  App URL builder always carries current `lang` + `theme` for Calendar,
+  Feedback, Location, Onboarding, Verification, Ticket, Ticket Store, and Venue
+  Change. Settings also re-opens verification when applicable and provides
   **Delete Account**, which now offers a softer alternative first (Telegram-only,
   see below).
 - **Profile Video** — the first single-button row: an **always-visible**
@@ -670,6 +684,10 @@ path is visually distinct: a blue (`primary`) **❄️ Freeze account** over a r
   priority/Elo comp), and unpins the status banner. On the user's next `/start`
   they are **silently reactivated** to `active` straight into their ready
   profile — no re-onboarding, no re-verification, no re-embedding.
+  Freeze is offered only from `active` or `paused`; the status transition and
+  all in-flight match cancellations commit in one transaction, and partner
+  effects run only after commit. Return uses the sole `frozen → active`
+  transition. Concurrent moderation always wins.
 - **Delete anyway** leads to a final confirmation that isolates the destructive
   option: one red **Yes, I'm 100% sure** against two green back-out buttons. Only
   the red path runs the GDPR hard delete. Telegram and mobile share one deletion
@@ -681,6 +699,11 @@ path is visually distinct: a blue (`primary`) **❄️ Freeze account** over a r
   intact so the user can retry instead of reporting success with orphaned media.
   The founder receives only an anonymous lifecycle event — deletion never
   creates a fresh copy of the user's contact data, profile, or photos.
+- Freeze/Delete confirmation keyboards are bound to a cryptographically random
+  nonce, the exact Telegram message, a single stage, and a 10-minute expiry.
+  They are one-use: Back, another menu action, free text, a wrong/replayed tap,
+  or expiry burns the token and strips the old keyboard. GDPR delete itself
+  remains available regardless of the current account status.
 - The кружок assets live at `apps/bot/src/assets/delete-freeze/<lang>.mp4`
   (square, ≤60 s, same mechanics as the welcome-gift video note); a missing
   language degrades gracefully to the text + buttons. Mobile keeps the plain
@@ -864,6 +887,11 @@ for the dashboard's algorithm-quality view.
   name/age/✓ caption; collage jitter is seeded by match id + side. Any copy /
   render / send failure falls back to the plain protected media group, so
   pitch dispatch never wedges. Telegram-only.
+- A successful PNG Match Card album is followed by the profile's motion-only
+  assets: the standalone profile video and the video part of each Live Photo,
+  protected with `protect_content`. Static photos/poster frames are not sent a
+  second time. A rejected motion group falls back to individual videos, and a
+  motion-delivery failure never blocks the pitch stream.
 - Pitches are queued through `services/dispatch-queue.ts` (rate-limited,
   default 2 s between sends ≈ 30/min). When a first-match welcome gift is
   actually delivered, the queue sends those gift pre-rolls first, waits
@@ -1651,8 +1679,16 @@ breaks ties without forcing bad pairings.
 
 Every code path that mutates `psychologicalSummary`, `partnerPreferences`,
 `negativeConstraints`, or `hobbies` flips `Profile.embeddingDirty = true`.
-The `embedding-refresh` cron (every 5 min, ≤20 rows/tick) recomputes via
-OpenAI and clears the flag. Pre-M-2 the embedding silently went stale on
+Bio and partner-preference edits immediately attempt a user-scoped refresh with
+a 30-second deadline; failure leaves the dirty marker intact and the user is
+told that automatic synchronization will finish later. The
+`embedding-refresh` cron (every 5 min, ≤20 rows/tick) remains the retry path.
+Before every weekly batch, matching takes and processes the complete dirty
+snapshot without the cron's 20-row cap, logging only aggregate counts.
+Eligibility requires `embeddingDirty = false`: a still-dirty profile is skipped
+fail-closed, receives no stale match, and does not gain a false standby penalty.
+The embedding write clears the flag only when `embeddingDirtyAt` still matches,
+so a concurrent edit is retried rather than overwritten. Pre-M-2 the embedding silently went stale on
 every profile edit, slowly degrading match quality. Initial embedding failures
 during either AI-memory analysis or fallback-profile finalization also leave
 the profile dirty, so the same worker retries them instead of silently

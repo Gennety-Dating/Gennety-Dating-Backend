@@ -170,7 +170,7 @@ when columns diverge, Prisma wins.
 
 | Enum | Values |
 |---|---|
-| `UserStatus` | `onboarding`, `active`, `paused`, `frozen`, `suspended`, `pending_investigation`, `banned` (`frozen` = soft-delete: user chose "Freeze" instead of deleting; row/profile/embedding/verification kept, excluded from matching, silently reactivated to `active` on next `/start`) |
+| `UserStatus` | `onboarding`, `active`, `paused`, `frozen`, `suspended`, `pending_investigation`, `banned`. User-owned changes go only through `services/account-status-transitions.ts`: CAS `active ↔ paused`, transactional `active|paused → frozen`, and CAS `frozen → active`; moderation-owned states cannot be overwritten. Freeze commits match cancellations atomically before external partner effects. |
 | `Language` | `en`, `ru`, `uk`, `de`, `pl` |
 | `OnboardingStep` | `consent`, `language`, `conversational`, `completed` |
 | `Theme` | `light`, `dark` (app-wide UI theme; `dark` is the brand default) |
@@ -249,7 +249,7 @@ Columns (≈ 25):
 | Demographics | `userId` (unique), `ethnicity`, `height`, `hobbies` (`String[]`), `partnerPreferences`, `psychologicalSummary`, `negativeConstraints`, `ageRangeMin`, `ageRangeMax` (stated preferred-**partner** age band, user-editable post-onboarding; read by the match engine as the soft `V_agePref` multiplier — see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.2) |
 | Vector | `embedding` (`vector(1536)`), `embeddingDirty`, `embeddingDirtyAt` |
 | Elo | `eloScore` (default 500), seeded from the server-side mean of all per-photo vision scores; `eloMatchesPlayed`; `eloSeededAt`; auditable aggregate/per-photo output in `eloSeedDetails` |
-| Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `referenceFaceEmbedding` (`Json?` legacy self-photo identity-anchor metadata — retained, no longer written by the upload flow since identity moved to Persona-only, 2026-06-23), `uploadedPhotoHashes` (`String[]` perceptual hashes for accepted static photos, dup detection), `pendingPhotoCandidates` (`Json[]` legacy consensus pool — retained, no longer written), `acceptedPhotoCount` (`Int`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
+| Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `referenceFaceEmbedding` (`Json?` legacy self-photo identity-anchor metadata — retained, no longer written by the upload flow since identity moved to Persona-only, 2026-06-23), `uploadedPhotoHashes` (`String[]`, strictly 1:1 with `photos`; perceptual hash or `""` sentinel at every index), `pendingPhotoCandidates` (`Json[]` legacy consensus pool — retained, no longer written), `acceptedPhotoCount` (`Int`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
 | Geo / radius | `matchRadius` (`campus_only` / `citywide`), `homeCity`, `homeCountryCode`, `homeCityKey`, `homePlaceId`, `latitude`, `longitude`, `locationUpdatedAt`, `timeZone` (IANA, derived from the dating city; drives the Profiler's local-time batch windows) |
 | Match priority | `lastMatchedAt`, `missedWeeks`, `standbyCount`, `lastMissedAt`, `silentIgnoreCount` |
 | Profiler (Phase 1b) | `profilerStartedAt`, `profilerNextAt`, `profilerActiveQuestionId`, `profilerBatchRemaining` — scheduler state for the post-onboarding Q&A batches that fuel icebreakers/hints (see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §Phase 1b). Indexed `@@index([profilerNextAt])` for the worker sweep. |
@@ -276,7 +276,7 @@ never by PostgreSQL enum declaration order.
 | Decision (blind invariant) | `acceptedByA`, `acceptedByB` (tri-state `null`/`true`/`false`), `rejectionReasonA`, `rejectionReasonB`, `dispatchedAt`, `pitchMessageIdA`, `pitchMessageIdB` |
 | Calendar scheduling | `proposedTimes` (`DateTime[]`, server-side allowlist of valid slots: 6 dates × 14 slots/date, every 30 min from 13:00 to 19:30), `availableTimesA`/`availableTimesB` (`DateTime[]`, each side's marked availability), `agreedTime` (set after a single exact overlap is agreed; multi-overlap is confirmed in the Mini App), `calendarMessageIdA/B` (current Telegram post-accept CTA per side: accepted/waiting, Date Ticket, or Calendar; edited on status changes and cleared after agreement). `schedulingIteration` and `pickedTimeA/B` are deprecated — retained for backwards-compat with in-flight rows mid-deploy and will be dropped in a follow-up cleanup migration. |
 | Concierge venue | `vibeTextA`, `vibeTextB`, `vibeLatA/LngA`, `vibeLatB/LngB`, `vibeAddressA/B` (Mini App map-picker label), `parsedCategoryA`, `parsedCategoryB`, `venueName`, `venueAddress`, `venueLat`, `venueLng`, `venueGoogleMapsUri`, `venuePhotoUrl` (curated photo absolute URL) / `venuePhotoName` (Places photo resource name; rebuilt to a media URL at date-card render with the server-side key, never persisting Google's bytes), `venuePromptAskedAt` |
-| Date lifecycle | `icebreakersSentAt`, `iceBreakersA`/`B` (`String[]`), `safetyNoteSentAt`, `safetyAckA`/`B`, `wingmanHintA`/`B`, `wingmanSentAt`, `emergencyCancelledBy`, `emergencyReason`, `feedbackByA`/`B`, `feedbackPromptedAt`, `dateCardFileIdA`/`B` (Telegram `file_id` of the rendered date-card PNG, cached per side at the `scheduled` DM so the "My Date" menu hub — PRODUCT_SPEC §2.1 — re-opens the card instantly instead of re-rendering; null when the card was never sent) |
+| Date lifecycle | `icebreakersSentAt`, `iceBreakersA`/`B` (`String[]`), `safetyNoteSentAt`, `safetyAckA`/`B`, `wingmanHintA`/`B`, `wingmanSentAt`, `emergencyCancelledBy`, `emergencyReason`, `feedbackByA`/`B`, `feedbackPromptedAt`, `dateCardFileIdA`/`B` (Telegram `file_id` cached per side for My Date; that side is cleared transactionally on language/theme change, and cache writes compare the rendering language/theme against the current participant so a concurrent stale render cannot repopulate it) |
 | Nudges | `nudge1SentAt`, `nudge2SentAt` (legacy), `proposalNudge1SentAt`, `proposalNudge2SentAt`, `schedNudge1SentAt`, `schedNudge2SentAt` |
 | Date Ticket (feature-flagged) | `ticketPriceCents`, `ticketPaidA/B`, `paidForPartnerByA/B`, `partnerPaidSeenAt` / `partnerPaidNudgedAt` (goodwill-cover read-receipt: first-seen stamp gating the payer's "she saw it ❤️" DM, and the completion-nudge guard — §3.5b), `ticketStatus` (`pending`/`partial`/`completed`/`refund_pending`/`refunded`/`expired` — string, not a Prisma enum), `ticketExpiresAt`. `refund_pending` is the durable retry boundary: scheduling opens only after the provider/wallet reversal succeeds. Monetization sub-state machine that runs while `status = negotiating`; inert when `TICKET_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
 | Pre-date coordination (feature-flagged) | `coordOfferSentAt`, `coordInitiatorId`, `coordMethod` (`share_self`/`request_partner`/`proxy` — string, not a Prisma enum), `coordChosenAt`, `coordPartnerConsent` (Variant B only), `coordResolvedAt`, `proxyOpenedAt`, `proxyClosesAt`, `proxyClosedAt`. Sub-state machine running on a `scheduled` match; inert when `COORDINATION_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §Phase 4. |
@@ -296,6 +296,15 @@ factor existed read as neutral), `scoreTotal`,
 `embeddingDistance`, `starvationBonus`. Powers
 `/admin/analytics/algorithm` so component weights can be A/B-tuned without
 scanning the hot `matches` table.
+
+Embedding freshness is fail-closed. Embedding-feeding edits mark the profile
+dirty and attempt a 30-second user-scoped refresh. `runWeeklyBatch()` first
+processes a snapshot of the entire dirty backlog (independent of the periodic
+worker's 20-row cap), then eligibility requires `embeddingDirty = false` in
+both Prisma and raw-vector paths. The vector update is guarded by
+`embeddingDirtyAt`, so a concurrent edit cannot be cleared by an older
+generation. Preflight logging is aggregate-only (`scanned/refreshed/failed/
+stillDirty`), and excluded dirty users never enter standby accounting.
 
 ### `match_events`
 
@@ -508,7 +517,7 @@ All schedules are env-overridable (the canonical names are listed below).
 
 | Schedule (default) | TZ | Purpose | Module |
 |---|---|---|---|
-| `0 18 * * 4` (Thu 18:00) | Europe/Kyiv | **Weekly matching batch** — same-city global greedy + single-live-match locked allocation + dispatch | `services/match-engine.ts` → `services/dispatch-queue.ts` |
+| `0 18 * * 4` (Thu 18:00) | Europe/Kyiv | **Weekly matching batch** — full dirty-embedding snapshot preflight, then same-city global greedy + single-live-match locked allocation + dispatch | `services/match-engine.ts` → `services/dispatch-queue.ts` |
 | `15 18 * * 4` (Thu 18:15) | Europe/Kyiv | "No match this week" empathetic DM | `services/no-match-notifier.ts` |
 | `0 18 * * 3` (Wed 18:00) | Europe/Kyiv | Pre-match teaser (24 h ahead of batch) | `workers/pre-match-announce.ts` |
 | `*/15 * * * *` | UTC | 24 h TTL match expiry | `services/match-expiry.ts` + `services/expiry-notify.ts` |
@@ -717,6 +726,10 @@ Richer Telegram display media lives additively in `Profile.profileMedia[]`:
 `{ type: "photo", photo }`, `{ type: "live_photo", photo, livePhoto, ...metadata }`,
 or `{ type: "video", video, ...metadata }`. Static media admission stores
 `uploadedPhotoHashes` for duplicate detection and `acceptedPhotoCount`.
+Hashes are positional: every `photos[i]` has `uploadedPhotoHashes[i]` (a real
+hash or the empty-string sentinel). Shared alignment helpers normalize legacy
+length mismatches without guessing associations, and every Telegram/mobile/
+Aether append or delete updates photos, media, face score, and hash together.
 **Identity is enforced only by Persona verification, not at upload time
 (simplified 2026-06-23).** A static photo that passes per-photo safety,
 usable-face (Rekognition confidence ≥ 0.55, area ≥ 0.8%; plus a light
