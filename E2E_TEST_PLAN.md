@@ -116,13 +116,11 @@
 |---|---|---|---|
 | 1 | Telegram `/start` (чистый) | Создаёт `User`, открывает Onboarding Mini App | ⭐ A |
 | 2 | `/start <param>` | Реферал-атрибуция `tg:<param>` | опц. |
-| 3 | `/start auth_<token>` (legacy `web_<token>`) | Web-registration handoff, email pre-verified | опц. |
-| 4 | `/start verify_done` | Контрольный сигнал после hosted Persona | опц. |
-| 5 | Dev-bypass `/start` | ID в `DEV_OTP_BYPASS_TELEGRAM_IDS` → синтетический verified email | ⭐ B |
-| 6 | Mobile/Expo `/v1/auth/otp/*` → `/v1/onboarding/*` | Синтетический отрицательный telegramId | опц. |
-| 7 | Website pre-reg `/v1/web-registration/*` | Выдаёт deep-link `/start auth_<token>` | опц. |
-| 8 | Persona webhook `/v1/webhooks/persona` | HMAC terminal inquiry → pipeline | через Pass 2 |
-| 9 | Mini Apps (onboarding/calendar/verification/ticket/tickets/venue-change/feedback/location) | `web_app` + initData HMAC | через профильные passes |
+| 3 | `/start verify_done` | Контрольный сигнал после hosted Persona | опц. |
+| 4 | Dev-bypass `/start` | ID в `DEV_OTP_BYPASS_TELEGRAM_IDS` → синтетический verified email | ⭐ B |
+| 5 | Mobile `/v1/auth/otp/*` → `/v1/onboarding/*` | Синтетический отрицательный telegramId | опц. |
+| 6 | Persona webhook `/v1/webhooks/persona` | HMAC terminal inquiry → pipeline | через Pass 2 |
+| 7 | Mini Apps (onboarding/calendar/verification/ticket/tickets/venue-change/feedback/location) | `web_app` + initData HMAC | через профильные passes |
 
 ---
 

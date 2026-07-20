@@ -10,7 +10,6 @@ import { showMyProfile } from "./menu/my-profile.js";
 import { showSettingsMenu } from "./menu/settings.js";
 import { sendConsentPrompt } from "./onboarding/consent.js";
 import { computeDevBypassFields } from "./dev-bypass.js";
-import { grantStudentBonusIfEligible } from "../services/ticket-wallet.js";
 import { startPoll } from "../services/verification-poller.js";
 import { sendVerificationGateNotice } from "./onboarding/verification.js";
 import { pinStatusBanner } from "../services/status-banner.js";
@@ -19,11 +18,6 @@ import { syncTelegramUsername } from "../utils/username.js";
 import { shouldUseOnboardingMiniApp } from "./onboarding-mini-app-gate.js";
 import { transitionAccountStatus } from "../services/account-status-transitions.js";
 import { buildMiniAppUrl } from "../services/mini-app-url.js";
-import {
-  AUTH_REGISTRATION_START_PREFIX,
-  consumeWebRegistrationLink,
-  WEB_REGISTRATION_START_PREFIX,
-} from "../services/web-registration.js";
 
 /**
  * Deep-link payload set on Persona's `redirect-uri` so the bot knows the
@@ -86,101 +80,64 @@ function looksLikeContextDumpInstruction(content: string): boolean {
   );
 }
 
-type RegistrationPayload =
-  | { kind: "web"; token: string; prefix: typeof WEB_REGISTRATION_START_PREFIX }
-  | { kind: "auth"; token: string; prefix: typeof AUTH_REGISTRATION_START_PREFIX }
-  | null;
-
-function parseRegistrationPayload(payload: string): RegistrationPayload {
-  if (payload.startsWith(AUTH_REGISTRATION_START_PREFIX)) {
-    return {
-      kind: "auth",
-      prefix: AUTH_REGISTRATION_START_PREFIX,
-      token: payload.slice(AUTH_REGISTRATION_START_PREFIX.length),
-    };
-  }
-  if (payload.startsWith(WEB_REGISTRATION_START_PREFIX)) {
-    return {
-      kind: "web",
-      prefix: WEB_REGISTRATION_START_PREFIX,
-      token: payload.slice(WEB_REGISTRATION_START_PREFIX.length),
-    };
-  }
-  return null;
-}
-
-function onboardingMiniAppUrl(
-  source: "telegram" | "web",
-  lang: Language,
-  theme: User["theme"],
-): string {
+function onboardingMiniAppUrl(lang: Language, theme: User["theme"]): string {
   return buildMiniAppUrl("onboarding", {
     lang,
     theme,
-    query: { source, v: Date.now().toString(36) },
+    query: { source: "telegram", v: Date.now().toString(36) },
   });
 }
 
 function onboardingMiniAppCopy(
   lang: Language,
-  source: "telegram" | "web",
   emailVerified: boolean,
 ): { message: string; button: string } {
   if (lang === "ru") {
     return {
       button: "Открыть Gennety",
-      message:
-        source === "web" || emailVerified
-          ? "Почта уже подтверждена. Открой полноэкранный Mini App — он быстро доведёт вход до конца, а потом я продолжу здесь."
-          : "Запустим Gennety в полноэкранном Mini App. Там будет короткий вход, а потом я продолжу онбординг прямо здесь.",
+      message: emailVerified
+        ? "Почта уже подтверждена. Открой полноэкранный Mini App — он быстро доведёт вход до конца, а потом я продолжу здесь."
+        : "Запустим Gennety в полноэкранном Mini App. Там будет короткий вход, а потом я продолжу онбординг прямо здесь.",
     };
   }
   if (lang === "uk") {
     return {
       button: "Відкрити Gennety",
-      message:
-        source === "web" || emailVerified
-          ? "Пошту вже підтверджено. Відкрий повноекранний Mini App — він швидко завершить вхід, а потім я продовжу тут."
-          : "Запустимо Gennety у повноекранному Mini App. Там буде короткий вхід, а потім я продовжу онбординг тут.",
+      message: emailVerified
+        ? "Пошту вже підтверджено. Відкрий повноекранний Mini App — він швидко завершить вхід, а потім я продовжу тут."
+        : "Запустимо Gennety у повноекранному Mini App. Там буде короткий вхід, а потім я продовжу онбординг тут.",
     };
   }
   if (lang === "de") {
     return {
       button: "Gennety öffnen",
-      message:
-        source === "web" || emailVerified
-          ? "Deine E-Mail ist bereits bestätigt. Öffne die Vollbild-Mini-App, um den Einstieg abzuschließen. Danach mache ich hier weiter."
-          : "Öffnen wir Gennety als Vollbild-Mini-App. Dort erledigst du den kurzen Einstieg, danach setze ich das Onboarding hier fort.",
+      message: emailVerified
+        ? "Deine E-Mail ist bereits bestätigt. Öffne die Vollbild-Mini-App, um den Einstieg abzuschließen. Danach mache ich hier weiter."
+        : "Öffnen wir Gennety als Vollbild-Mini-App. Dort erledigst du den kurzen Einstieg, danach setze ich das Onboarding hier fort.",
     };
   }
   if (lang === "pl") {
     return {
       button: "Otwórz Gennety",
-      message:
-        source === "web" || emailVerified
-          ? "Twój e-mail jest już potwierdzony. Otwórz pełnoekranową Mini App, aby dokończyć wejście, a potem będę kontynuować tutaj."
-          : "Otwórzmy Gennety w pełnoekranowej Mini App. Tam przejdziesz krótki proces wejścia, a potem będę kontynuować onboarding tutaj.",
+      message: emailVerified
+        ? "Twój e-mail jest już potwierdzony. Otwórz pełnoekranową Mini App, aby dokończyć wejście, a potem będę kontynuować tutaj."
+        : "Otwórzmy Gennety w pełnoekranowej Mini App. Tam przejdziesz krótki proces wejścia, a potem będę kontynuować onboarding tutaj.",
     };
   }
   return {
     button: "Open Gennety",
-    message:
-      source === "web" || emailVerified
-        ? "Your email is already verified. Open the full-screen Mini App to finish the handoff, then I'll continue here."
-        : "Let's open Gennety in a full-screen Mini App. It handles the short entry flow, then I'll continue onboarding here.",
+    message: emailVerified
+      ? "Your email is already verified. Open the full-screen Mini App to finish the handoff, then I'll continue here."
+      : "Let's open Gennety in a full-screen Mini App. It handles the short entry flow, then I'll continue onboarding here.",
   };
 }
 
-async function sendOnboardingMiniAppPrompt(
-  ctx: BotContext,
-  user: User,
-  source: "telegram" | "web",
-): Promise<void> {
+async function sendOnboardingMiniAppPrompt(ctx: BotContext, user: User): Promise<void> {
   const lang = (ctx.session.language ?? user.language ?? "en") as Language;
-  const copy = onboardingMiniAppCopy(lang, source, user.isEmailVerified);
+  const copy = onboardingMiniAppCopy(lang, user.isEmailVerified);
   const keyboard = new InlineKeyboard().webApp(
     copy.button,
-    onboardingMiniAppUrl(source, lang, user.theme),
+    onboardingMiniAppUrl(lang, user.theme),
   );
   await ctx.reply(copy.message, { reply_markup: keyboard });
 }
@@ -193,101 +150,47 @@ start.command("start", async (ctx) => {
     env.DEV_OTP_BYPASS_TELEGRAM_IDS,
   );
 
-  let user: User | null = null;
-  const registrationPayload = parseRegistrationPayload(startPayload);
+  // Upsert user — create if new, load existing state if returning
+  let user: User | null = await prisma.user.findUnique({ where: { telegramId } });
 
-  if (registrationPayload) {
-    const result = await consumeWebRegistrationLink(registrationPayload.token, telegramId);
+  if (!user) {
+    // First-touch attribution: capture deep-link start_param from
+    // `/start <param>` (e.g. `https://t.me/bot?start=ig_story`). Stored
+    // once, never overwritten on later /start invocations so the
+    // attribution is stable across re-onboarding. The `verify_done`
+    // payload is a control signal, not an attribution source — skip it.
+    const referralSource =
+      startPayload.length > 0 &&
+      startPayload.length <= 64 &&
+      startPayload !== VERIFY_DONE_START_PARAM
+        ? `tg:${startPayload}`
+        : null;
 
-    if (result.kind !== "linked") {
-      if (result.kind === "telegram_has_other_email") {
-        await ctx.reply(
-          `This Telegram account is already linked to ${result.email}. ` +
-            "Please continue with that email or contact support.",
-        );
-        return;
-      }
-      if (result.kind === "email_linked_to_other_telegram") {
-        await ctx.reply(
-          "This email is already linked to another Telegram account. " +
-            "Please open Gennety from that account or contact support.",
-        );
-        return;
-      }
-      await ctx.reply(
-        "This registration link has expired or was already used. " +
-          "Please return to gennety.com and request a new code.",
-      );
-      return;
-    }
-
-    user = result.user;
-
-    // Registration v2 student loyalty: +2 tickets, exactly once (idempotent
-    // ledger claim; no-op while tickets are off). Fire-and-forget with the
-    // celebratory DM.
-    //
-    // Gated on the track, NOT on the mere existence of a web handoff:
-    // `grantStudentBonusIfEligible` checks idempotency, not eligibility, so a
-    // general-track (phone) link reaching it would hand out the student perk to
-    // someone who never verified a university email.
-    if (result.track === "student") {
-      const handoffUser = result.user;
-      void grantStudentBonusIfEligible(handoffUser.id)
-        .then(async (reward) => {
-          if (!reward.granted) return;
-          const lang = (handoffUser.language ?? "en") as Language;
-          await ctx.reply(t(lang, "ticketRewardStudent", { balance: reward.balance }), {
-            parse_mode: "Markdown",
-          });
-        })
-        .catch((err) => {
-          console.warn("[student-bonus] handoff grant/DM failed:", (err as Error).message);
-        });
-    }
-  } else {
-    // Upsert user — create if new, load existing state if returning
-    user = await prisma.user.findUnique({ where: { telegramId } });
-
-    if (!user) {
-      // First-touch attribution: capture deep-link start_param from
-      // `/start <param>` (e.g. `https://t.me/bot?start=ig_story`). Stored
-      // once, never overwritten on later /start invocations so the
-      // attribution is stable across re-onboarding. The `verify_done`
-      // payload is a control signal, not an attribution source — skip it.
-      const referralSource =
-        startPayload.length > 0 &&
-        startPayload.length <= 64 &&
-        startPayload !== VERIFY_DONE_START_PARAM
-          ? `tg:${startPayload}`
-          : null;
-
-      // Dev-only: skip the corporate-email step for whitelisted Telegram IDs.
-      // See `dev-bypass.ts` for the rationale.
-      if (devBypassFields) {
-        console.warn(
-          `[dev-bypass] Creating user ${telegramId} with synthetic verified email ` +
-            `(DEV_OTP_BYPASS_TELEGRAM_IDS). DO NOT ship this configuration to prod.`,
-        );
-      }
-
-      user = await prisma.user.create({
-        data: { telegramId, firstName: null, referralSource, ...(devBypassFields ?? {}) },
-      });
-    } else if (devBypassFields && (!user.isEmailVerified || !user.email)) {
+    // Dev-only: skip the corporate-email step for whitelisted Telegram IDs.
+    // See `dev-bypass.ts` for the rationale.
+    if (devBypassFields) {
       console.warn(
-        `[dev-bypass] Updating existing user ${telegramId} with synthetic verified email ` +
+        `[dev-bypass] Creating user ${telegramId} with synthetic verified email ` +
           `(DEV_OTP_BYPASS_TELEGRAM_IDS). DO NOT ship this configuration to prod.`,
       );
-      user = await prisma.user.update({
-        where: { telegramId },
-        data: {
-          ...devBypassFields,
-          emailOtp: null,
-          emailOtpExpiresAt: null,
-        },
-      });
     }
+
+    user = await prisma.user.create({
+      data: { telegramId, firstName: null, referralSource, ...(devBypassFields ?? {}) },
+    });
+  } else if (devBypassFields && (!user.isEmailVerified || !user.email)) {
+    console.warn(
+      `[dev-bypass] Updating existing user ${telegramId} with synthetic verified email ` +
+        `(DEV_OTP_BYPASS_TELEGRAM_IDS). DO NOT ship this configuration to prod.`,
+    );
+    user = await prisma.user.update({
+      where: { telegramId },
+      data: {
+        ...devBypassFields,
+        emailOtp: null,
+        emailOtpExpiresAt: null,
+      },
+    });
   }
 
   // Opportunistically capture the public Telegram username for the pre-date
@@ -379,11 +282,7 @@ start.command("start", async (ctx) => {
       Boolean(onboardingProfile?.homeCityKey),
     )
   ) {
-    await sendOnboardingMiniAppPrompt(
-      ctx,
-      user,
-      registrationPayload ? "web" : "telegram",
-    );
+    await sendOnboardingMiniAppPrompt(ctx, user);
     return;
   }
 

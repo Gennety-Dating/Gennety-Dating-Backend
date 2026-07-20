@@ -90,8 +90,12 @@ the email gate.
   both continue to `city` unchanged.
 - `/v1/telegram-onboarding/complete`: track-aware gate
   (`email-required` | `phone-required`).
-- Website pre-registration handoff (`auth_<token>`) pre-verifies email →
-  auto-select student track, skip email screens (current skip logic reused).
+- ~~Website pre-registration handoff (`auth_<token>`) pre-verifies email →
+  auto-select student track, skip email screens (current skip logic reused).~~
+  **Removed 2026-07-19** — the website no longer runs onboarding; it routes to
+  the `/app` platform chooser and everyone onboards natively. The generic
+  skip-what's-resolved logic stays (for dev-bypass / mobile-first), but no
+  pre-filled state originates from the web anymore.
 - Onboarding agent: track-aware prompt + finalize gate — email OTP tools only
   for student track; general track never asked for email.
 - Tests: fork state machine, both `/complete` gates (incl. phone-required),

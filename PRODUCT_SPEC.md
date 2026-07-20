@@ -122,24 +122,18 @@ out of Telegram-only workers.
   visual intro; default `dark`, changeable later in Settings — `POST /theme`
   records it), and the final AI memory export choice, using Telegram `initData`
   HMAC auth for all writes (`POST /track` persists the re-choosable fork pick).
-- **Website handoff (`auth_<token>`; legacy `web_<token>` still accepted).** The
-  website (`gennety.com`) owns the first slice of onboarding — language, legal
-  consent, and the sign-up fork — and hands the rest to Telegram. What it
-  resolves depends on the track:
-  - **student** — the university email is OTP-verified *on the site*, and the
-    dating city is picked there too. Telegram therefore skips the fork, the
-    Email/OTP screens **and** the city gate, resuming at the theme picker.
-  - **general** — the site collects nothing beyond language + consent. The phone
-    number is deliberately **not** taken on the web: a number is only trusted
-    when Telegram itself vouches for it via the one-tap `message.contact`, so
-    the handoff carries only the *choice* of rail (`registrationTrack=general`)
-    and the user lands straight on the Mini App's PhoneGate.
-
-  A web link can therefore never grant a contact rail it did not verify: the
-  server-side `/complete` contact gate still refuses to finish onboarding
-  without a verified email or phone, whatever the link claimed. The student
-  ticket bonus is likewise gated on the track, not on the mere presence of a
-  handoff.
+- **No website onboarding handoff (removed 2026-07-19).** The website
+  (`gennety.com`) no longer runs any slice of onboarding. Its `Log in` / `Join`
+  CTAs route to the `/app` platform chooser (Telegram vs App Store); the visitor
+  onboards entirely inside their chosen client. There is no browser
+  pre-registration flow, no `auth_`/`web_` Telegram deep-link handoff, no
+  `web_registration_links` table, and no `/v1/web-registration/*` API — every
+  user resolves language, consent, the sign-up fork, and the contact rail
+  natively in the Telegram Onboarding Mini App (or the iOS app). The generic
+  phase machine still skips whatever is already resolved (e.g. a dev-bypass or a
+  returning mobile-first user), but no pre-filled state ever originates from the
+  web. The student ticket bonus is granted at native university-email
+  verification, gated on the track — not on any handoff.
 - When the Mini App reaches its handoff step, it calls
   `/v1/telegram-onboarding/complete` with the visual-flow token issued by
   `/v1/telegram-onboarding/state`; the bot immediately resumes the chat through

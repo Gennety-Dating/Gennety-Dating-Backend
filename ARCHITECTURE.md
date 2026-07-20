@@ -177,7 +177,6 @@ when columns diverge, Prisma wins.
 | `Gender` | `male`, `female` |
 | `GenderPreference` | `men`, `women`, `both` |
 | `Platform` | `telegram`, `mobile`, `both` |
-| `WebRegistrationPurpose` | `join`, `login` |
 | `VerificationStatus` | `unverified`, `pending`, `pending_review`, `verified`, `rejected` |
 | `MatchRadius` | `campus_only`, `citywide` |
 | `MatchStatus` | `proposed`, `negotiating`, `negotiating_venue`, `scheduled`, `cancelled`, `completed`, `expired` |
@@ -360,31 +359,6 @@ lock, and a durable per-phone daily cap backs the in-memory rate limiter.
 Indexed `(phone, createdAt)`. Written by
 `services/phone-verification.ts`; consumed by `public/routes/phone-auth.ts`.
 
-### `web_registration_links`
-
-Browser → Telegram pre-registration handoff. The website resolves the first
-slice of onboarding (language, consent, the Registration v2 fork) and carries
-the result into Telegram through a one-time deep link.
-
-Columns: `tokenHash` (unique SHA-256 of the raw token — only the hash is stored,
-the raw token rides the `/start auth_<token>` / legacy `web_<token>` deep link),
-**`registrationTrack`** (`student`/`general`; null on pre-fork links, which all
-carried a verified email and so read as `student`), `email` +
-`universityDomain` (**nullable** — a general-track link has neither),
-`language`, `purpose` (`WebRegistrationPurpose` ∈ `join`/`login`),
-`termsAccepted`/`termsAcceptedAt`, `researchOptIn`, the **city snapshot**
-(`homeCity`/`homeCountryCode`/`homeCityKey`/`homePlaceId`/`latitude`/`longitude`
-— student track only; mirrors the `Profile` columns so the city gate is already
-satisfied), `expiresAt`, `consumedAt`, `consumedTelegramId`.
-
-Written by `services/web-registration.ts` via the `/v1/web-registration/*` API.
-Consuming the link pre-sets exactly what the site actually verified — the
-student track's `isEmailVerified` + city, the general track's rail *choice* and
-nothing more — and the Mini App's state-driven phase machine skips whatever is
-already resolved. **The phone is never verified on the web** (only Telegram's
-`message.contact` is trusted), so a link can never satisfy the contact gate it
-did not earn. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §1.1.
-
 ### `user_sessions`
 
 Active mobile refresh tokens. Access JWTs are stateless; refresh tokens are
@@ -560,10 +534,6 @@ auth) are deliberately outside the spec.
 | POST | `/v1/auth/phone/request` | Native-app phone rail (general track): send a code with a server-side provider fork — order is env-driven (`PHONE_CODE_PRIMARY_PROVIDER`, **default `twilio`** — founder decision 2026-07-18): **Twilio Verify SMS primary**, Telegram Gateway optional secondary (`checkSendAbility` → code as an official Telegram service message, our bcrypt-hashed code). Whichever is primary, the other configured rail auto-falls back; `channel: "sms"` always forces Twilio. Per-phone cooldown + daily cap serialized via advisory lock (`phone_otps`); 404 while `PHONE_AUTH_ENABLED` off. Response carries `deliveredVia: telegram\|sms`. |
 | POST | `/v1/auth/phone/verify` | Verify the phone code (local hash for Gateway rows, Twilio `VerificationCheck` for SMS rows) → find-or-create the mobile general-track user by unique `phone` (stamps `phoneVerifiedAt`) → mint access + refresh JWT |
 | POST | `/v1/auth/refresh` | Rotate refresh token |
-| POST | `/v1/web-registration/otp/request` | Website pre-registration: send corp-email OTP before the user opens Telegram (rate-limited; no auth — pre-account) |
-| POST | `/v1/web-registration/complete` | Website pre-registration: mint a one-time `web_registration_links` token and return the `/start auth_<token>` deep link. Track-aware — `student` verifies the OTP and requires the city payload; `general` takes only language + consent (no email, and **no phone** — Telegram verifies that itself). Rate-limited, no auth (pre-account) |
-| GET | `/v1/web-registration/city/search` | City lookup for the website's student-track city gate. Unauthenticated (the visitor has no account yet) and IP-rate-limited; proxies Google Places so `PLACES_API_KEY` stays server-side, and degrades to the built-in city list without it. Shares `public/city-search.ts` with the Mini App's city gate |
-| POST | `/v1/web-registration/city/resolve` | Browser geolocation → city, so the site offers the same one-tap as the Mini App |
 | GET / PATCH / DELETE | `/v1/me` | Read / patch / delete current user. DELETE shares the Telegram GDPR workflow: strict owned-media cleanup + active-match partner notification + founder-report purge before relational cascade; returns 503 and preserves the account if storage erasure is unavailable. |
 | POST | `/v1/me/home-location` | Persist canonical dating city (`homeCityKey`) + coordinates for match eligibility |
 | PATCH | `/v1/me/status` | Native-app pause/resume toggle: `active→paused`, `paused→active`, plus `frozen→active` (mobile twin of the /start silent reactivation). Idempotent same-state; 409 for states owned by other flows. |
