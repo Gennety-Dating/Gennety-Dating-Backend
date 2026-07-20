@@ -1,7 +1,10 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { env } from "../config.js";
-import { cancelInFlightMatchesForUser } from "./cancel-in-flight-matches.js";
+import {
+  claimInFlightMatchCancellations,
+  deliverCancelledPartnerEffects,
+} from "./cancel-in-flight-matches.js";
 import { notifyFounderAccountClosed } from "./founder-notify.js";
 import { deleteStorageObject } from "./storage.js";
 
@@ -23,12 +26,12 @@ export interface DeleteUserAccountResult {
  * One owner for destructive account deletion across Telegram and the public
  * mobile API. The sequence is intentionally privacy-first:
  *
- * 1. cancel live matches with a strict compare-and-set guard;
- * 2. remove every known user-owned Supabase object, failing closed so a retry
+ * 1. remove every known user-owned Supabase object, failing closed so a retry
  *    remains possible while the DB references still exist;
- * 3. remove founder report snapshots containing the user and delete the User
- *    row (all relational data cascades) in one DB transaction;
- * 4. emit only an anonymous lifecycle counter to the founder feed.
+ * 2. claim live-match cancellation, remove founder report snapshots, and
+ *    delete the User row (all relational data cascades) in one DB transaction;
+ * 3. after commit only, deliver partner notifications/compensation and emit
+ *    an anonymous lifecycle counter to the founder feed.
  */
 export async function deleteUserAccount(
   userId: string,
@@ -65,10 +68,6 @@ export async function deleteUserAccount(
     };
   }
 
-  const cancelled = await cancelInFlightMatchesForUser(user.id, api, {
-    strict: true,
-  });
-
   const selfiePaths = collectOwnedPaths(
     [user.selfiePath, user.verifiedSelfiePath],
     user.id,
@@ -103,7 +102,9 @@ export async function deleteUserAccount(
     .filter((report) => containsExactValue(report.dataJson, user.id))
     .map((report) => report.id);
 
+  let cancelled: Awaited<ReturnType<typeof claimInFlightMatchCancellations>> = [];
   const deletedFounderReports = await prisma.$transaction(async (tx) => {
+    cancelled = await claimInFlightMatchCancellations(user.id, tx, { strict: true });
     const deletedReports =
       reportIds.length > 0
         ? await tx.founderReport.deleteMany({ where: { id: { in: reportIds } } })
@@ -111,6 +112,11 @@ export async function deleteUserAccount(
     await tx.user.delete({ where: { id: user.id } });
     return deletedReports.count;
   });
+
+  // The database state is now irreversible and consistent. Only now may the
+  // outside world observe cancellation; a storage-cleanup failure above leaves
+  // both the account and every in-flight match untouched for a safe retry.
+  await deliverCancelledPartnerEffects(cancelled, api);
 
   // No user payload is accepted by this notifier: deletion cannot create a
   // fresh external PII copy after the relational data has been erased.

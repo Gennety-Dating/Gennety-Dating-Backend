@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   messageFindMany: vi.fn(),
   reportFindMany: vi.fn(),
   reportDeleteMany: vi.fn(),
-  cancelMatches: vi.fn(),
+  claimMatches: vi.fn(),
+  deliverEffects: vi.fn(),
   deleteStorageObject: vi.fn(),
   notifyFounder: vi.fn(),
 }));
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@gennety/db", () => {
   const tx = {
     user: { delete: mocks.userDelete },
+    match: { findMany: vi.fn(), updateMany: vi.fn() },
     founderReport: { deleteMany: mocks.reportDeleteMany },
   };
   return {
@@ -35,7 +37,8 @@ vi.mock("../config.js", () => ({
 }));
 
 vi.mock("./cancel-in-flight-matches.js", () => ({
-  cancelInFlightMatchesForUser: mocks.cancelMatches,
+  claimInFlightMatchCancellations: mocks.claimMatches,
+  deliverCancelledPartnerEffects: mocks.deliverEffects,
 }));
 vi.mock("./storage.js", () => ({
   deleteStorageObject: mocks.deleteStorageObject,
@@ -83,18 +86,20 @@ beforeEach(() => {
   ]);
   mocks.reportDeleteMany.mockResolvedValue({ count: 1 });
   mocks.userDelete.mockResolvedValue({});
-  mocks.cancelMatches.mockResolvedValue([{ matchId: "m1" }]);
+  mocks.claimMatches.mockResolvedValue([{ matchId: "m1" }]);
+  mocks.deliverEffects.mockResolvedValue(undefined);
   mocks.deleteStorageObject.mockResolvedValue(true);
   mocks.notifyFounder.mockResolvedValue(undefined);
 });
 
 describe("deleteUserAccount", () => {
-  it("cancels matches, erases every owned object and PII report, then deletes", async () => {
+  it("erases storage before atomically cancelling matches and deleting the account", async () => {
     const result = await deleteUserAccount(USER_ID, null);
 
-    expect(mocks.cancelMatches).toHaveBeenCalledWith(USER_ID, null, {
+    expect(mocks.claimMatches).toHaveBeenCalledWith(USER_ID, expect.anything(), {
       strict: true,
     });
+    expect(mocks.deliverEffects).toHaveBeenCalledWith([{ matchId: "m1" }], null);
     expect(mocks.deleteStorageObject.mock.calls).toEqual(
       expect.arrayContaining([
         ["selfies", `${USER_ID}/legacy-selfie.jpg`],
@@ -131,6 +136,8 @@ describe("deleteUserAccount", () => {
     );
     expect(mocks.userDelete).not.toHaveBeenCalled();
     expect(mocks.reportDeleteMany).not.toHaveBeenCalled();
+    expect(mocks.claimMatches).not.toHaveBeenCalled();
+    expect(mocks.deliverEffects).not.toHaveBeenCalled();
     expect(mocks.notifyFounder).not.toHaveBeenCalled();
   });
 
@@ -144,7 +151,7 @@ describe("deleteUserAccount", () => {
       deletedFounderReports: 0,
       deletedStorageObjects: 0,
     });
-    expect(mocks.cancelMatches).not.toHaveBeenCalled();
+    expect(mocks.claimMatches).not.toHaveBeenCalled();
     expect(mocks.deleteStorageObject).not.toHaveBeenCalled();
     expect(mocks.userDelete).not.toHaveBeenCalled();
   });

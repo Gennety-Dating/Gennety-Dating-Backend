@@ -10,6 +10,15 @@ import { matchingRouter } from "./handlers/matching/router.js";
 import { dateRouter } from "./handlers/date/router.js";
 import { profilerRouter } from "./handlers/profiler/router.js";
 import { voiceHandler } from "./handlers/voice.js";
+import { invalidatePendingAccountAction } from "./handlers/menu/account-action.js";
+
+function isPendingAccountActionCallback(data: string | undefined): boolean {
+  return Boolean(
+    data?.startsWith("menu:settings:freeze:") ||
+      data?.startsWith("menu:settings:delete:proceed:") ||
+      data?.startsWith("menu:settings:delete:yes:"),
+  );
+}
 
 export function createBot(token: string): Bot<BotContext> {
   const bot = new Bot<BotContext>(token);
@@ -27,6 +36,21 @@ export function createBot(token: string): Bot<BotContext> {
   bot.on("message:successful_payment", handleSuccessfulPayment);
 
   bot.use(sessionMiddleware());
+
+  // Destructive confirmations are intentionally single-use and bound to the
+  // exact menu message. Any navigation, free text, command, or unrelated
+  // callback abandons the confirmation before another router can consume the
+  // update. Keeping this at the top of the post-session chain closes paths
+  // such as /start, matching callbacks, date actions, and profiler answers.
+  bot.use(async (ctx, next) => {
+    if (
+      ctx.session.pendingAccountAction &&
+      !isPendingAccountActionCallback(ctx.callbackQuery?.data)
+    ) {
+      await invalidatePendingAccountAction(ctx);
+    }
+    await next();
+  });
 
   // Anti-spam guard — meters text/voice per user (flood + daily token budget)
   // before any handler runs. Needs `ctx.session.language`; never throttles

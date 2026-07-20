@@ -294,6 +294,8 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
         await handleDeleteAccountExecute(ctx);
         return;
       }
+      await ctx.answerCallbackQuery().catch(() => {});
+      return;
   }
 });
 

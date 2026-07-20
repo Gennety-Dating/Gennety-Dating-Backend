@@ -136,7 +136,10 @@ export async function handleSettingsLanguageSet(ctx: BotContext): Promise<void> 
   if (!data?.startsWith("menu:lang:")) return;
 
   const newLang = data.slice("menu:lang:".length) as Language;
-  if (!VALID_LANGUAGES.has(newLang)) return;
+  if (!VALID_LANGUAGES.has(newLang)) {
+    await ctx.answerCallbackQuery().catch(() => {});
+    return;
+  }
 
   await ctx.answerCallbackQuery();
 
@@ -191,7 +194,10 @@ export async function handleSettingsThemeSet(ctx: BotContext): Promise<void> {
   if (!data?.startsWith("menu:theme:")) return;
 
   const newTheme = data.slice("menu:theme:".length) as Theme;
-  if (!VALID_THEMES.has(newTheme)) return;
+  if (!VALID_THEMES.has(newTheme)) {
+    await ctx.answerCallbackQuery().catch(() => {});
+    return;
+  }
 
   await ctx.answerCallbackQuery();
   ctx.session.menuState = "idle";
