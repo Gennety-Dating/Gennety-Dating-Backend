@@ -21,6 +21,8 @@ import { env } from "../config.js";
 import {
   analyseAndSaveProfile,
   appendVibeToSummary,
+  extractJsonSummary,
+  isValidFastPathSummary,
   saveFallbackProfileAnalysis,
 } from "./profile-analysis.js";
 import { extractVibeAxes, saveVibeAxes } from "./vibe-axes.js";
@@ -41,6 +43,9 @@ import {
   type OnboardingQuestion,
 } from "./onboarding-collector.js";
 import { hasTrackVerifiedContact } from "./contact-verification.js";
+
+const AI_MEMORY_RECEIVED_MARKER =
+  "[AI memory response received; raw content intentionally not retained]";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -133,8 +138,10 @@ async function appendCollectorHistory(
   const history = ((user?.messageHistory ?? []) as unknown[]).map(
     (message) => message as ChatMessage,
   );
-  if (input.kind === "user_text" || input.kind === "context_dump") {
+  if (input.kind === "user_text") {
     history.push({ role: "user", content: input.text });
+  } else if (input.kind === "context_dump") {
+    history.push({ role: "system", content: AI_MEMORY_RECEIVED_MARKER });
   }
   if (includeMagicPrompt) {
     history.push({
@@ -615,7 +622,7 @@ const TOOLS = [
     function: {
       name: "save_context_dump",
       description:
-        "Persist the long psychological analysis the user just pasted from their ChatGPT/Claude/etc. Call this when the user's MOST RECENT message looks like a real LLM-generated profile — sections like values, attachment style, communication style, ideal partner, dealbreakers, summary. The server reads the dump from the user's actual message; raw_dump is a hint only and may be omitted or summarized. Do NOT call this if the user's last message is a question, a one-liner, or anything other than a substantial pasted analysis.",
+        "Process the complete AI-memory response the user just pasted. Prefer the V2 JSON with schema_version, relationships, emotions_and_conflict, needs_and_boundaries, values_in_action, sustained_interests, partner_fit, likely_friction, and grounded_summary; legacy profile JSON is also supported. Empty V2 sections are valid and must not be filled with guesses. The server reads the user's actual message; raw_dump is only a hint. Do NOT call this for a question or one-liner.",
       parameters: {
         type: "object",
         properties: {
@@ -1081,10 +1088,12 @@ async function execSaveContextDump(
   // Truth source is the user's actual latest message, not the LLM-supplied
   // `raw_dump`. LLMs reliably auto-correct / rephrase long text passed
   // through tool args (single-character drift broke the previous strict
-  // grounding check on real pastes). Hallucination is still blocked: if
-  // the user hasn't pasted anything substantial, length < 200 rejects.
+  // grounding check on real pastes). Hallucination is still blocked: a short
+  // non-JSON message rejects, while a complete structured payload may be
+  // shorter than the old heuristic threshold.
   const raw = latestUserMessage.trim();
-  if (raw.length < 200) {
+  const structured = extractJsonSummary(raw);
+  if (raw.length < 200 && !isValidFastPathSummary(structured)) {
     return JSON.stringify({
       success: false,
       error:
@@ -1102,10 +1111,17 @@ async function execSaveContextDump(
 
   const analyse = deps.analyseProfile ?? analyseAndSaveProfile;
   try {
-    await analyse(user.id, raw, undefined, {
+    const analysis = await analyse(user.id, raw, undefined, {
       firstName: user.firstName ?? "User",
       language: user.language ?? "en",
     });
+    if (!analysis.parsed) {
+      return JSON.stringify({
+        success: false,
+        error:
+          "I couldn't verify this as a complete AI-memory response. Ask the user to paste the full JSON output again; do not summarize or fill it in for them.",
+      });
+    }
   } catch (err) {
     console.error("Context dump analysis failed:", err);
     return JSON.stringify({
@@ -1117,7 +1133,7 @@ async function execSaveContextDump(
   return JSON.stringify({
     success: true,
     message:
-      "Context dump analysed and saved. Psychological profile and embedding generated. Proceed to photo upload.",
+      "AI memory processed and supported signals saved. If no supported signals were present, onboarding answers will supply the fallback profile. Proceed to photo upload.",
     next_instruction:
       "Context dump is now saved. Do not ask for profile fields again; call request_photos unless photos are already complete.",
   });
@@ -1493,6 +1509,7 @@ async function execFinalizeOnboarding(
           height: true,
           hobbies: true,
           partnerPreferences: true,
+          psychologicalSummary: true,
           fridayVibeText: true,
           vibeFocusText: true,
           photos: true,
@@ -1551,7 +1568,10 @@ async function execFinalizeOnboarding(
     }
   }
 
-  if (aiMemoryExportDeclined && user?.profile) {
+  const importedSummaryAvailable = Boolean(
+    user?.profile?.psychologicalSummary?.trim(),
+  );
+  if ((aiMemoryExportDeclined || !importedSummaryAvailable) && user?.profile) {
     const saveFallback = deps.saveFallbackProfile ?? saveFallbackProfileAnalysis;
     try {
       await saveFallback(user.id, {
@@ -1566,6 +1586,7 @@ async function execFinalizeOnboarding(
         homeCityKey: user.profile.homeCityKey!,
         fridayVibe,
         vibeFocus,
+        source: aiMemoryExportDeclined ? "declined" : "no_relevant_ai_memory",
       });
     } catch (err) {
       console.error("Fallback profile analysis failed:", err);
@@ -1844,6 +1865,14 @@ export async function runAgentTurn(
       contextDumpStarted: false,
       contextDumpSaved: false,
     };
+  }
+
+  if (onboardingInput.kind === "context_dump") {
+    // Telegram's paste buffer and the native interview endpoint both send a
+    // typed context dump. Process it directly regardless of the legacy
+    // collector flag: this avoids a redundant agent round, preserves the
+    // photo gate, and keeps the raw payload out of stored chat history.
+    return runCollectorTurn(telegramId, onboardingInput, deps);
   }
 
   if (onboardingInput.kind === "photos_continue") {
@@ -2180,9 +2209,28 @@ export async function runAgentTurn(
         content: result,
       });
 
-      if (fnName === "save_context_dump" && toolResultSucceeded(result)) {
-        contextDumpSaved = true;
-        history.push(contextDumpSavedSystemMessage());
+      if (fnName === "save_context_dump") {
+        // Defense for legacy/untyped clients: after the parser has consumed
+        // the payload, replace the raw turn before persisting history or
+        // making another agent call.
+        let rawIndex = -1;
+        for (let i = history.length - 1; i >= 0; i--) {
+          const message = history[i];
+          if (message?.role === "user" && message.content === userMessage) {
+            rawIndex = i;
+            break;
+          }
+        }
+        if (rawIndex >= 0) {
+          history.splice(rawIndex, 1, {
+            role: "system",
+            content: AI_MEMORY_RECEIVED_MARKER,
+          });
+        }
+        if (toolResultSucceeded(result)) {
+          contextDumpSaved = true;
+          history.push(contextDumpSavedSystemMessage());
+        }
       }
 
       // Persist the Magic Prompt as an assistant turn so non-Telegram clients

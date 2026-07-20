@@ -812,13 +812,15 @@ vi.mock("../services/push.js", () => ({
 
 vi.mock("../services/onboarding-agent.js", () => ({
   injectSystemMessage: vi.fn(async () => undefined),
-  runAgentTurn: vi.fn(async (_tgId: bigint, text: string) => ({
-    reply: `echo:${text}`,
-    expectingPhoto: false,
-    onboardingComplete: false,
-    contextPromptRequested: false,
-    contextDumpStarted: false,
-  })),
+  runAgentTurn: vi.fn(
+    async (_tgId: bigint, input: string | { kind: string; text: string }) => ({
+      reply: `echo:${typeof input === "string" ? input : input.text}`,
+      expectingPhoto: false,
+      onboardingComplete: false,
+      contextPromptRequested: false,
+      contextDumpStarted: false,
+    }),
+  ),
 }));
 
 vi.mock("../services/menu-agent.js", () => ({
@@ -913,6 +915,10 @@ vi.mock("../services/moderation.js", () => ({
 // ---------------------------------------------------------------------------
 
 const { app } = await import("./server.js");
+const { prisma: prismaMock } = await import("@gennety/db");
+const { runAgentTurn: runAgentTurnMock } = await import(
+  "../services/onboarding-agent.js"
+);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -2184,6 +2190,42 @@ describe("/v1/onboarding/interview", () => {
       .send({ text: "x".repeat(4_001) });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Text is too long");
+  });
+
+  it("POST /answer accepts a full AI-memory dump and sends it as typed context", async () => {
+    const user = await seedUser({ onboardingStep: "conversational" });
+    vi.mocked(prismaMock.onboardingProgress.findUnique)
+      .mockResolvedValueOnce({ currentQuestion: "context_dump" } as never)
+      .mockResolvedValueOnce({ currentQuestion: "photos" } as never);
+    const item = {
+      signal: "Specific supported dating signal",
+      basis: "x".repeat(480),
+      kind: "pattern",
+    };
+    const dump = JSON.stringify({
+      schema_version: 2,
+      relationships: [item],
+      emotions_and_conflict: [item],
+      needs_and_boundaries: [item],
+      values_in_action: [item],
+      life_rhythm_and_social_energy: [item],
+      sustained_interests: [item],
+      partner_fit: [item],
+      likely_friction: [item],
+      grounded_summary: "A grounded summary based on the supported signals.",
+    });
+    expect(dump.length).toBeGreaterThan(4_000);
+
+    const res = await request(app)
+      .post("/v1/onboarding/interview/answer")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({ text: dump });
+
+    expect(res.status).toBe(200);
+    expect(runAgentTurnMock).toHaveBeenCalledWith(user.telegramId, {
+      kind: "context_dump",
+      text: dump,
+    });
   });
 });
 

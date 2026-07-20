@@ -1,7 +1,11 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { prisma } from "@gennety/db";
-import { SUPPORTED_LANGUAGES, type Language } from "@gennety/shared";
+import {
+  MAX_DUMP_BUFFER_CHARS,
+  SUPPORTED_LANGUAGES,
+  type Language,
+} from "@gennety/shared";
 import { requireAuth } from "../auth-middleware.js";
 import { usageGuard } from "../usage-middleware.js";
 import { agentTextLimiter, voiceLimiter } from "../rate-limit.js";
@@ -66,14 +70,20 @@ onboardingRouter.post("/interview/answer", agentTextLimiter, async (req: Request
     res.status(400).json({ error: "Missing text" });
     return;
   }
-  if (text.length > 4_000) {
+  const user = await loadUser(req.userId!);
+  if (!ensureInterviewAllowed(user, res)) return;
+  const before = await loadStateContext(req.userId!);
+  const isContextDump = before.currentQuestion === "context_dump";
+  const maxLength = isContextDump ? MAX_DUMP_BUFFER_CHARS : 4_000;
+  if (text.length > maxLength) {
     res.status(400).json({ error: "Text is too long" });
     return;
   }
 
-  const user = await loadUser(req.userId!);
-  if (!ensureInterviewAllowed(user, res)) return;
-  const result = await runAgentTurn(user.telegramId, text);
+  const result = await runAgentTurn(
+    user.telegramId,
+    isContextDump ? { kind: "context_dump", text } : text,
+  );
 
   const ctx = await loadStateContext(req.userId!);
   res.json(buildInterviewState({ ...ctx, question: result.reply }));

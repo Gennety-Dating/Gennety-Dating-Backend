@@ -820,7 +820,13 @@ paths:
               type: object
               required: [text]
               properties:
-                text: { type: string, maxLength: 4000 }
+                text:
+                  type: string
+                  maxLength: 32000
+                  description: >-
+                    Ordinary interview answers are limited to 4,000 characters.
+                    When the server-owned current question is `context_dump`, the
+                    complete AI-memory JSON response may use up to 32,000.
       responses:
         "200":
           description: Next interview state (with the agent's reply as `question`)

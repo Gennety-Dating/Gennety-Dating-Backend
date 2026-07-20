@@ -15,7 +15,7 @@ import { callOpenAIJson } from "./openai.js";
  * schema.prisma, so it must be written via raw SQL with a `::vector` cast.
  */
 
-export interface ParsedProfileSummary {
+export interface LegacyProfileSummary {
   personality_traits?: string[];
   communication_style?: string;
   interests?: string[];
@@ -26,6 +26,53 @@ export interface ParsedProfileSummary {
   ideal_partner?: string;
   dealbreakers?: string[];
   summary?: string;
+}
+
+export type EvidenceKind = "explicit" | "pattern" | "inference";
+
+export interface EvidenceSignal {
+  signal: string;
+  basis: string;
+  kind: EvidenceKind;
+}
+
+export const EVIDENCE_SECTION_KEYS = [
+  "relationships",
+  "emotions_and_conflict",
+  "needs_and_boundaries",
+  "values_in_action",
+  "life_rhythm_and_social_energy",
+  "sustained_interests",
+  "partner_fit",
+  "likely_friction",
+] as const;
+
+export type EvidenceSectionKey = (typeof EVIDENCE_SECTION_KEYS)[number];
+
+export interface ParsedProfileSummary extends LegacyProfileSummary {
+  schema_version?: 2;
+  relationships?: EvidenceSignal[];
+  emotions_and_conflict?: EvidenceSignal[];
+  needs_and_boundaries?: EvidenceSignal[];
+  values_in_action?: EvidenceSignal[];
+  life_rhythm_and_social_energy?: EvidenceSignal[];
+  sustained_interests?: EvidenceSignal[];
+  partner_fit?: EvidenceSignal[];
+  likely_friction?: EvidenceSignal[];
+  grounded_summary?: string | null;
+}
+
+export interface EvidenceProfileSummary extends ParsedProfileSummary {
+  schema_version: 2;
+  relationships: EvidenceSignal[];
+  emotions_and_conflict: EvidenceSignal[];
+  needs_and_boundaries: EvidenceSignal[];
+  values_in_action: EvidenceSignal[];
+  life_rhythm_and_social_energy: EvidenceSignal[];
+  sustained_interests: EvidenceSignal[];
+  partner_fit: EvidenceSignal[];
+  likely_friction: EvidenceSignal[];
+  grounded_summary: string | null;
 }
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
@@ -74,19 +121,24 @@ export function isValidFastPathSummary(
   if (!parsed || typeof parsed !== "object") return false;
   const p = parsed as Record<string, unknown>;
 
-  const hasStringArray = (v: unknown, min: number): boolean =>
+  if (p.schema_version === 2) return isEvidenceProfileSummary(parsed);
+
+  const hasStringArray = (v: unknown, min: number, max: number): boolean =>
     Array.isArray(v) &&
     v.length >= min &&
-    v.every((x) => typeof x === "string" && x.length > 0);
+    v.length <= max &&
+    v.every(
+      (x) => typeof x === "string" && x.trim().length > 0 && x.length <= 2_000,
+    );
 
   const hasNonEmptyString = (v: unknown): boolean =>
-    typeof v === "string" && v.trim().length > 0;
+    typeof v === "string" && v.trim().length > 0 && v.length <= 4_000;
 
   return (
-    hasStringArray(p.personality_traits, 3) &&
-    hasStringArray(p.interests, 2) &&
-    hasStringArray(p.values, 2) &&
-    hasStringArray(p.dealbreakers, 1) &&
+    hasStringArray(p.personality_traits, 3, 10) &&
+    hasStringArray(p.interests, 2, 20) &&
+    hasStringArray(p.values, 2, 20) &&
+    hasStringArray(p.dealbreakers, 1, 20) &&
     hasNonEmptyString(p.communication_style) &&
     hasNonEmptyString(p.attachment_style) &&
     hasNonEmptyString(p.social_energy) &&
@@ -97,6 +149,55 @@ export function isValidFastPathSummary(
 }
 
 /**
+ * Strict V2 validator. All sections must be present, but every one may be
+ * empty. This is the load-bearing difference from V1: "no evidence" is a
+ * valid result and must not trigger a second model that fills the gaps.
+ */
+export function isEvidenceProfileSummary(
+  parsed: unknown,
+): parsed is EvidenceProfileSummary {
+  if (!parsed || typeof parsed !== "object") return false;
+  const p = parsed as Record<string, unknown>;
+  if (p.schema_version !== 2) return false;
+
+  const validKind = (value: unknown): value is EvidenceKind =>
+    value === "explicit" || value === "pattern" || value === "inference";
+  const validItem = (value: unknown): value is EvidenceSignal => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const item = value as Record<string, unknown>;
+    return (
+      typeof item.signal === "string" &&
+      item.signal.trim().length > 0 &&
+      item.signal.length <= 240 &&
+      typeof item.basis === "string" &&
+      item.basis.trim().length > 0 &&
+      item.basis.length <= 500 &&
+      validKind(item.kind)
+    );
+  };
+
+  for (const key of EVIDENCE_SECTION_KEYS) {
+    const section = p[key];
+    if (!Array.isArray(section) || section.length > 3 || !section.every(validItem)) {
+      return false;
+    }
+  }
+
+  const grounded = p.grounded_summary;
+  if (
+    grounded !== null &&
+    (typeof grounded !== "string" || grounded.trim().length === 0 || grounded.length > 1_200)
+  ) {
+    return false;
+  }
+
+  const hasEvidence = EVIDENCE_SECTION_KEYS.some(
+    (key) => (p[key] as EvidenceSignal[]).length > 0,
+  );
+  return hasEvidence || grounded === null;
+}
+
+/**
  * Parse a raw LLM dump.
  *
  * Fast path: if the user's paste is already a valid JSON object matching
@@ -104,8 +205,8 @@ export function isValidFastPathSummary(
  * directly — no second OpenAI call.
  *
  * Slow path: send the raw text to OpenAI JSON mode with
- * `parseLLMDumpPrompt`. Last resort: naive JSON extraction from the raw
- * dump.
+ * `parseLLMDumpPrompt`. Invalid output is rejected; raw text is never used as
+ * a persisted profile fallback.
  */
 export async function parseDumpWithLLM(
   rawDump: string,
@@ -118,15 +219,18 @@ export async function parseDumpWithLLM(
   }
 
   const systemPrompt = parseLLMDumpPrompt({ firstName, language });
-  const result = await callOpenAIJson<ParsedProfileSummary>(
+  const result = await callOpenAIJson<unknown>(
     systemPrompt,
     rawDump.slice(0, 12_000), // cap input to stay within context limits
+    { maxTokens: 3_000, temperature: 0.2 },
   );
-  if (result && typeof result === "object" && result.summary) {
+  if (isValidFastPathSummary(result)) {
     return result;
   }
-  // Last resort: naive extraction from the raw dump itself (no schema check)
-  return fastPathCandidate;
+  // Do not save a partial object or the raw dump as a profile. The caller can
+  // safely ask for a retry while a valid old or V2 JSON paste still works
+  // without this server-side model call.
+  return null;
 }
 
 /**
@@ -139,6 +243,29 @@ export function buildEmbeddingInput(
   raw: string,
 ): string {
   if (!parsed) return raw.slice(0, 8000);
+
+  if (isEvidenceProfileSummary(parsed)) {
+    const parts: string[] = [];
+    const grounded = parsed.grounded_summary?.trim();
+    if (grounded) parts.push(`Summary: ${grounded}`);
+
+    const labels: Record<EvidenceSectionKey, string> = {
+      relationships: "Relationships",
+      emotions_and_conflict: "Emotions and conflict",
+      needs_and_boundaries: "Needs and boundaries",
+      values_in_action: "Values in action",
+      life_rhythm_and_social_energy: "Life rhythm and social energy",
+      sustained_interests: "Sustained interests",
+      partner_fit: "Partner fit",
+      likely_friction: "Likely friction",
+    };
+    for (const key of EVIDENCE_SECTION_KEYS) {
+      const signals = parsed[key].map((item) => item.signal.trim()).filter(Boolean);
+      if (signals.length) parts.push(`${labels[key]}: ${signals.join("; ")}`);
+    }
+    return parts.join("\n").slice(0, 8000);
+  }
+
   const parts: string[] = [];
   if (parsed.summary) parts.push(`Summary: ${parsed.summary}`);
   if (parsed.personality_traits?.length) {
@@ -149,6 +276,18 @@ export function buildEmbeddingInput(
   }
   if (parsed.interests?.length) {
     parts.push(`Interests: ${parsed.interests.join(", ")}`);
+  }
+  if (parsed.values?.length) {
+    parts.push(`Values: ${parsed.values.join(", ")}`);
+  }
+  if (parsed.attachment_style) {
+    parts.push(`Attachment: ${parsed.attachment_style}`);
+  }
+  if (parsed.social_energy) {
+    parts.push(`Social energy: ${parsed.social_energy}`);
+  }
+  if (parsed.humor_style) {
+    parts.push(`Humor: ${parsed.humor_style}`);
   }
   if (parsed.ideal_partner) {
     parts.push(`Ideal partner: ${parsed.ideal_partner}`);
@@ -179,6 +318,8 @@ export interface FallbackProfileAnalysisInput {
    */
   fridayVibe?: string | null;
   vibeFocus?: string | null;
+  /** Why ordinary onboarding answers are being used for the base profile. */
+  source?: "declined" | "no_relevant_ai_memory";
 }
 
 /**
@@ -292,8 +433,11 @@ export function buildVibeBlock(
 export function buildFallbackProfileAnalysis(
   input: FallbackProfileAnalysisInput,
 ): string {
+  const source = input.source ?? "declined";
   const lines = [
-    "Profile source: onboarding answers (AI memory export declined)",
+    source === "no_relevant_ai_memory"
+      ? "Profile source: onboarding answers (AI memory contained no supported dating signals)"
+      : "Profile source: onboarding answers (AI memory export declined)",
     `Ethnicity/nationality: ${input.ethnicity?.trim() || "not provided"}`,
     `Hobbies/interests: ${input.hobbies.length ? input.hobbies.join(", ") : "none provided"}`,
     `Partner preferences: ${input.partnerPreferences}`,
@@ -326,10 +470,10 @@ export async function saveFallbackProfileAnalysis(
 }
 
 /**
- * High-level orchestrator used by the bot handler. Parses the dump via
- * the LLM JSON-mode pipeline (falling back to naive extraction),
- * generates an embedding when `OPENAI_API_KEY` is present, and saves both.
- * Never throws — falls back to saving the raw text only.
+ * High-level orchestrator used by the bot handler. Parses the dump through
+ * the strict V1/V2 pipeline, generates an embedding when `OPENAI_API_KEY` is
+ * present, and saves only validated, redacted profile text. Never persists
+ * the raw import when parsing or repair fails.
  */
 export async function analyseAndSaveProfile(
   userId: string,
@@ -344,18 +488,26 @@ export async function analyseAndSaveProfile(
   try {
     parsed = await parseDumpWithLLM(rawDump, firstName, language);
   } catch {
-    parsed = extractJsonSummary(rawDump);
+    const candidate = extractJsonSummary(rawDump);
+    parsed = isValidFastPathSummary(candidate) ? candidate : null;
   }
 
   const embeddingClient =
     client ?? (env.OPENAI_API_KEY ? createOpenAIEmbeddingClient(env.OPENAI_API_KEY) : null);
 
-  // Build the compact text used for both embedding and persistence.
-  // GDPR: only the synthesized summary is stored — never the raw LLM dump.
+  // Reject an unparseable payload instead of persisting the raw dump. A valid
+  // V1/V2 JSON response takes the fast path; prose/partial JSON gets one
+  // evidence-only repair attempt above.
+  if (!parsed) return { parsed: null, embeddingSaved: false };
+
+  // Build the compact text used for both embedding and persistence. Evidence
+  // bases served their grounding purpose at import time; only the redacted
+  // signals are retained, so private third-party context is not exposed in the
+  // user's profile or future prompts.
   const sanitisedSummary = buildEmbeddingInput(parsed, rawDump);
 
   let embedding: number[] | null = null;
-  if (embeddingClient) {
+  if (embeddingClient && sanitisedSummary.trim()) {
     try {
       embedding = await embeddingClient.embed(sanitisedSummary);
     } catch (err) {

@@ -95,6 +95,15 @@ const ONBOARDING_THINKING_EVERY = 3;
  */
 const SHORT_MESSAGE_THRESHOLD = 400;
 
+/** A sparse but valid V2 export can be shorter than a normal user question. */
+function looksLikeStructuredAiMemory(text: string): boolean {
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "");
+  if (!trimmed.startsWith("{")) return false;
+  return /"(?:schema_version|relationships|grounded_summary|personality_traits|attachment_style)"\s*:/.test(
+    trimmed,
+  );
+}
+
 /**
  * Handle all messages during the `conversational` onboarding step.
  *
@@ -270,7 +279,9 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
   if (ctx.session.awaitingContextDump) {
     const bufferEmpty = ctx.session.contextDumpBuffer.length === 0;
     const looksLikeQuestion =
-      bufferEmpty && text.length < SHORT_MESSAGE_THRESHOLD;
+      bufferEmpty &&
+      text.length < SHORT_MESSAGE_THRESHOLD &&
+      !looksLikeStructuredAiMemory(text);
     if (looksLikeQuestion) {
       // Fall through to the normal runAgentTurn call below — buffer stays
       // empty, awaitingContextDump stays true, the user can paste afterwards.

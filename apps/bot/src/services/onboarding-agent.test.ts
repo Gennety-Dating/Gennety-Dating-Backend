@@ -37,7 +37,12 @@ vi.mock("./email.js", () => ({
 }));
 
 vi.mock("./profile-analysis.js", () => ({
-  analyseAndSaveProfile: vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: false }),
+  analyseAndSaveProfile: vi.fn().mockResolvedValue({
+    parsed: { schema_version: 2 },
+    embeddingSaved: false,
+  }),
+  extractJsonSummary: vi.fn(() => null),
+  isValidFastPathSummary: vi.fn(() => false),
   saveFallbackProfileAnalysis: vi.fn().mockResolvedValue({
     summary: "fallback",
     embeddingSaved: false,
@@ -326,7 +331,10 @@ describe("onboarding-agent", () => {
         ]),
       )
       .mockResolvedValueOnce(textResponse("This response must never be used."));
-    const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
+    const mockAnalyse = vi.fn().mockResolvedValue({
+      parsed: { schema_version: 2 },
+      embeddingSaved: true,
+    });
 
     const result = await runAgentTurn(telegramId, "готово, дай промпт", {
       fetchFn: mockFetch,
@@ -457,7 +465,10 @@ describe("onboarding-agent", () => {
         "A warm, music-oriented person who wants grounded closeness without performance. He values simple honesty, tenderness, and a relationship that feels calm rather than dramatic.",
     });
     const llmRephrased = userPaste.replace("warm,", "warm and"); // single-char drift
-    const mockAnalyse = vi.fn().mockResolvedValue({ parsed: null, embeddingSaved: true });
+    const mockAnalyse = vi.fn().mockResolvedValue({
+      parsed: { schema_version: 2 },
+      embeddingSaved: true,
+    });
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         id: "uuid-1",
@@ -494,6 +505,14 @@ describe("onboarding-agent", () => {
       language: "en",
     });
     expect(result.reply).toContain("Profile saved");
+    const persisted = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]
+      .data.messageHistory as ChatMessage[];
+    expect(persisted.some((message) => message.content === userPaste)).toBe(false);
+    expect(
+      persisted.some((message) =>
+        message.content?.includes("raw content intentionally not retained"),
+      ),
+    ).toBe(true);
   });
 
   it("rejects save_context_dump when the user's latest message is too short to be a real dump", async () => {
@@ -666,6 +685,10 @@ describe("onboarding-agent", () => {
   });
 
   it("sets onboardingComplete=true when finalize_onboarding is called with complete data", async () => {
+    const saveFallbackProfile = vi.fn().mockResolvedValue({
+      summary: "fallback",
+      embeddingSaved: true,
+    });
     // finalize_onboarding now checks DB for completeness — mock a complete profile
     (prisma.user.findUnique as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
@@ -689,6 +712,7 @@ describe("onboarding-agent", () => {
           height: 165,
           hobbies: ["tennis", "reading"],
           partnerPreferences: "someone kind and funny",
+          psychologicalSummary: "",
           photos: ["photo1", "photo2", "photo3", "photo4"],
           homeCityKey: "ua:kyiv",
         },
@@ -707,6 +731,7 @@ describe("onboarding-agent", () => {
 
     const result = await runAgentTurn(telegramId, "looks good, finish up", {
       fetchFn: mockFetch,
+      saveFallbackProfile,
     });
 
     expect(result.onboardingComplete).toBe(true);
@@ -728,6 +753,10 @@ describe("onboarding-agent", () => {
         reEngagementStep: 0,
         reEngagementNextAt: null,
       }),
+    );
+    expect(saveFallbackProfile).toHaveBeenCalledWith(
+      "uuid-1",
+      expect.objectContaining({ source: "no_relevant_ai_memory" }),
     );
   });
 
@@ -906,6 +935,7 @@ describe("onboarding-agent", () => {
       homeCityKey: "ua:kyiv",
       fridayVibe: "quiet dinner at home with one close friend",
       vibeFocus: "who's there",
+      source: "declined",
     });
   });
 

@@ -212,6 +212,20 @@ The final Mini App screen records `User.aiMemoryExportPreference` through
   guards (`save_context_dump` before photos/finalization).
 - The pasted AI response is processed automatically after a short idle pause;
   there is no separate paste-confirmation button.
+- The Magic Prompt uses the evidence-first V2 JSON contract. It asks the
+  personal AI for dating-relevant signals only when backed by an explicit
+  disclosure, repeated pattern, or concrete episode; generic AI-use
+  preferences, forced personality/attachment labels, and gap-filling are
+  forbidden. Every section may be `[]`, and `grounded_summary` may be `null`.
+- Complete legacy V1 Magic Prompt JSON remains accepted so an already-copied
+  prompt never strands a user. Partial/prose responses get one server-side
+  evidence-only repair pass; unparseable long text is rejected instead of
+  being stored as a profile.
+- The raw pasted response is transient. Only the redacted signal summary and
+  its embedding are persisted; onboarding history records a non-sensitive
+  receipt marker. If V2 contains no supported dating signal, finalization uses
+  the ordinary onboarding answers + vibe as the fallback profile rather than
+  inventing context.
 - `declined` suppresses the Magic Prompt for the current onboarding run,
   permits photo collection directly after the ordinary profile fields, and
   generates `Profile.psychologicalSummary` + embedding from those fields at

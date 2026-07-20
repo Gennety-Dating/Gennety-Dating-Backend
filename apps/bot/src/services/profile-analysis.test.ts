@@ -28,17 +28,189 @@ vi.mock("./openai.js", () => ({
 
 const {
   analyseAndSaveProfile,
+  buildEmbeddingInput,
   saveFallbackProfileAnalysis,
   saveProfileAnalysis,
   buildFallbackProfileAnalysis,
   appendVibeToSummary,
+  isEvidenceProfileSummary,
+  isValidFastPathSummary,
+  parseDumpWithLLM,
 } = await import("./profile-analysis.js");
+const { callOpenAIJson } = await import("./openai.js");
+
+const emptyEvidenceProfile = {
+  schema_version: 2 as const,
+  relationships: [],
+  emotions_and_conflict: [],
+  needs_and_boundaries: [],
+  values_in_action: [],
+  life_rhythm_and_social_energy: [],
+  sustained_interests: [],
+  partner_fit: [],
+  likely_friction: [],
+  grounded_summary: null,
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
   profileUpsert.mockResolvedValue({});
   executeRaw.mockResolvedValue(1);
   profileUpdate.mockResolvedValue({});
+});
+
+describe("evidence-first AI-memory parsing", () => {
+  it("accepts a fully sparse V2 object without asking another model to fill it", async () => {
+    const parsed = await parseDumpWithLLM(
+      JSON.stringify(emptyEvidenceProfile),
+      "Alice",
+      "en",
+    );
+
+    expect(parsed).toEqual(emptyEvidenceProfile);
+    expect(callOpenAIJson).not.toHaveBeenCalled();
+  });
+
+  it("accepts grounded evidence items and rejects unsupported summaries", () => {
+    const grounded = {
+      ...emptyEvidenceProfile,
+      relationships: [
+        {
+          signal: "Needs time before discussing conflict",
+          basis: "Described pausing before two difficult conversations",
+          kind: "pattern",
+        },
+      ],
+      grounded_summary: "They tend to slow conflict down before responding.",
+    };
+    expect(isEvidenceProfileSummary(grounded)).toBe(true);
+    expect(isValidFastPathSummary(grounded)).toBe(true);
+    expect(
+      isEvidenceProfileSummary({
+        ...emptyEvidenceProfile,
+        grounded_summary: "A generic flattering portrait without evidence.",
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps a complete legacy Magic Prompt response backward-compatible", () => {
+    expect(
+      isValidFastPathSummary({
+        personality_traits: ["curious", "warm", "direct"],
+        communication_style: "Reflective and direct.",
+        interests: ["music", "travel"],
+        values: ["honesty", "kindness"],
+        attachment_style: "secure",
+        social_energy: "ambivert",
+        humor_style: "dry",
+        ideal_partner: "Someone thoughtful.",
+        dealbreakers: ["dishonesty"],
+        summary: "A thoughtful and curious person.",
+      }),
+    ).toBe(true);
+  });
+
+  it("does not persist arbitrary long prose when repair cannot validate it", async () => {
+    vi.mocked(callOpenAIJson).mockResolvedValueOnce(null);
+    const client = { embed: vi.fn() };
+
+    const result = await analyseAndSaveProfile(
+      "user-invalid",
+      "This is unrelated prose. ".repeat(30),
+      client,
+    );
+
+    expect(result).toEqual({ parsed: null, embeddingSaved: false });
+    expect(client.embed).not.toHaveBeenCalled();
+    expect(profileUpsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects partial JSON when the repair service fails", async () => {
+    vi.mocked(callOpenAIJson).mockRejectedValueOnce(new Error("repair unavailable"));
+    const client = { embed: vi.fn() };
+
+    const result = await analyseAndSaveProfile(
+      "user-partial",
+      JSON.stringify({ relationships: [], grounded_summary: null }),
+      client,
+    );
+
+    expect(result).toEqual({ parsed: null, embeddingSaved: false });
+    expect(client.embed).not.toHaveBeenCalled();
+    expect(profileUpsert).not.toHaveBeenCalled();
+  });
+
+  it("saves a sparse V2 import without creating a meaningless empty embedding", async () => {
+    const client = { embed: vi.fn() };
+
+    const result = await analyseAndSaveProfile(
+      "user-sparse",
+      JSON.stringify(emptyEvidenceProfile),
+      client,
+    );
+
+    expect(result.parsed).toEqual(emptyEvidenceProfile);
+    expect(result.embeddingSaved).toBe(false);
+    expect(client.embed).not.toHaveBeenCalled();
+    expect(profileUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ psychologicalSummary: "" }),
+      }),
+    );
+  });
+});
+
+describe("buildEmbeddingInput", () => {
+  it("retains every evidence signal but not its private basis", () => {
+    const text = buildEmbeddingInput(
+      {
+        ...emptyEvidenceProfile,
+        relationships: [
+          {
+            signal: "Prefers calm repair after conflict",
+            basis: "Discussed reconnecting after cooling down",
+            kind: "pattern",
+          },
+        ],
+        values_in_action: [
+          {
+            signal: "Protects time for close friendships",
+            basis: "Repeatedly chose friends over optional work events",
+            kind: "pattern",
+          },
+        ],
+        grounded_summary: "Values calm repair and durable close relationships.",
+      },
+      "ignored",
+    );
+
+    expect(text).toContain("Prefers calm repair after conflict");
+    expect(text).toContain("Protects time for close friendships");
+    expect(text).not.toContain("cooling down");
+    expect(text).not.toContain("optional work events");
+  });
+
+  it("keeps previously dropped legacy values and style signals", () => {
+    const text = buildEmbeddingInput(
+      {
+        personality_traits: ["curious", "warm", "direct"],
+        communication_style: "Direct.",
+        interests: ["music", "travel"],
+        values: ["honesty", "kindness"],
+        attachment_style: "secure",
+        social_energy: "ambivert",
+        humor_style: "dry",
+        ideal_partner: "Thoughtful.",
+        dealbreakers: ["dishonesty"],
+        summary: "Grounded.",
+      },
+      "ignored",
+    );
+    expect(text).toContain("Values: honesty, kindness");
+    expect(text).toContain("Attachment: secure");
+    expect(text).toContain("Social energy: ambivert");
+    expect(text).toContain("Humor: dry");
+  });
 });
 
 describe("profile analysis embedding retry", () => {

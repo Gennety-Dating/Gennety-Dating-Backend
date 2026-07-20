@@ -5,10 +5,9 @@ import { contextDumpInstruction } from "./onboarding-copy.js";
 describe("contextDumpInstruction", () => {
   it("keeps the canonical Russian copy exact", () => {
     expect(contextDumpInstruction("ru")).toBe(
-      "Gennety анализирует твои диалоги и на их основе подбирает кандидатов. " +
-        "Чем больше контекста — от главных ценностей до мелких деталей, — " +
-        "тем точнее твой психологический профиль. " +
-        "Такой же глубокий опрос проходит каждый, так что совместимость пары — не случайность.\n\n" +
+      "Gennety использует подтверждённые сигналы из твоих диалогов, чтобы точнее подбирать кандидатов. " +
+        "Промпт просит AI ничего не додумывать: если данных о какой-то стороне жизни нет, раздел останется пустым. " +
+        "Такой же принцип действует для всех пользователей.\n\n" +
         "Скопируй промпт выше, вставь его в ChatGPT, Claude, Gemini или любой " +
         "другой AI-чат, а потом скинь мне полный ответ.",
     );
@@ -30,4 +29,12 @@ describe("contextDumpInstruction", () => {
       contextDumpInstruction("en"),
     );
   });
+
+  it.each(SUPPORTED_LANGUAGES)(
+    "explains the no-gap-filling rule in %s",
+    (language) => {
+      const instruction = contextDumpInstruction(language);
+      expect(instruction).toMatch(/empty|пуст|порож|leer|pusta/i);
+    },
+  );
 });

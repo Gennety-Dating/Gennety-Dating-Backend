@@ -18,8 +18,8 @@ describe("magicContextPrompt", () => {
   it("instructs the LLM to output a single JSON object only", () => {
     const result = magicContextPrompt("en");
     expect(result).toContain("ONE JSON object");
-    expect(result).toContain("no markdown fences");
-    expect(result).toMatch(/start with `\{`/);
+    expect(result).toContain("no prose, commentary, or markdown fences");
+    expect(result).toMatch(/start with `\{`/i);
   });
 
   it("does NOT use character-count as a length constraint", () => {
@@ -31,49 +31,47 @@ describe("magicContextPrompt", () => {
     expect(result).not.toMatch(/count the characters/i);
   });
 
-  it("lists all ParsedProfileSummary schema fields", () => {
+  it("lists the complete evidence-first V2 schema", () => {
     const result = magicContextPrompt("en");
     for (const field of [
-      "personality_traits",
-      "communication_style",
-      "interests",
-      "values",
-      "attachment_style",
-      "social_energy",
-      "humor_style",
-      "ideal_partner",
-      "dealbreakers",
-      "summary",
+      "schema_version",
+      "relationships",
+      "emotions_and_conflict",
+      "needs_and_boundaries",
+      "values_in_action",
+      "life_rhythm_and_social_energy",
+      "sustained_interests",
+      "partner_fit",
+      "likely_friction",
+      "grounded_summary",
     ]) {
       expect(result).toContain(`"${field}"`);
     }
   });
 
-  it("enforces exact list sizes via structural rules", () => {
+  it("makes missing evidence valid instead of forcing filler", () => {
     const result = magicContextPrompt("en");
-    expect(result).toMatch(/exactly 5/i); // personality_traits
-    expect(result).toMatch(/3[–-]6/); // interests range
-    expect(result).toMatch(/3[–-]5/); // values range
-    expect(result).toMatch(/2[–-]4/); // dealbreakers range
+    expect(result).toContain("Use [] when a section has no evidence");
+    expect(result).toContain("otherwise null");
+    expect(result).toContain("absence, not a guess");
+    expect(result).not.toContain("Fill EVERY field");
+    expect(result).not.toContain("give your best read");
   });
 
-  it("enforces sentence/word caps on free-text fields", () => {
+  it("requires concrete evidence and filters generic AI-use preferences", () => {
     const result = magicContextPrompt("en");
-    expect(result).toMatch(/ONE sentence/i);
-    expect(result).toMatch(/2[–-]3 sentences/);
-    expect(result).toMatch(/3[–-]4 sentences/);
-    expect(result).toMatch(/≤\s*\d+\s*words/);
+    expect(result).toContain("explicit disclosure");
+    expect(result).toContain("repeated pattern");
+    expect(result).toContain("concrete episode");
+    expect(result).toContain("likes concise answers");
+    expect(result).toContain('"kind":"explicit|pattern|inference"');
   });
 
-  it("pins enum fields to fixed value sets", () => {
+  it("keeps output compact without forcing category counts", () => {
     const result = magicContextPrompt("en");
-    expect(result).toContain('"secure"');
-    expect(result).toContain('"anxious"');
-    expect(result).toContain('"avoidant"');
-    expect(result).toContain('"disorganized"');
-    expect(result).toContain('"introvert"');
-    expect(result).toContain('"ambivert"');
-    expect(result).toContain('"extrovert"');
+    expect(result).toContain("at most 3 items per array");
+    expect(result).toMatch(/2[–-]4 factual sentences/);
+    expect(result).not.toContain("attachment_style");
   });
 
   it("writes free-text fields in the caller's language", () => {
@@ -92,30 +90,35 @@ describe("parseLLMDumpPrompt", () => {
   it("injects firstName and language into the prompt", () => {
     const result = parseLLMDumpPrompt({ firstName: "Alice", language: "en" });
     expect(result).toContain("Alice");
-    expect(result).toContain("Language preference: en");
+    expect(result).toContain("Output language: en");
   });
 
-  it("includes JSON schema with required fields", () => {
+  it("includes the V2 JSON schema with evidence fields", () => {
     const result = parseLLMDumpPrompt({ firstName: "Bob", language: "ru" });
-    expect(result).toContain('"personality_traits"');
-    expect(result).toContain('"communication_style"');
-    expect(result).toContain('"interests"');
-    expect(result).toContain('"ideal_partner"');
-    expect(result).toContain('"dealbreakers"');
-    expect(result).toContain('"summary"');
-    expect(result).toContain('"attachment_style"');
-    expect(result).toContain('"values"');
+    expect(result).toContain('"schema_version": 2');
+    expect(result).toContain('"relationships"');
+    expect(result).toContain('"emotions_and_conflict"');
+    expect(result).toContain('"needs_and_boundaries"');
+    expect(result).toContain('"grounded_summary"');
   });
 
   it("instructs the model to write the summary in the user's language", () => {
     const result = parseLLMDumpPrompt({ firstName: "Oleg", language: "uk" });
-    expect(result).toContain("summary: write in uk");
+    expect(result).toContain("in uk");
+    expect(result).toContain("grounded_summary");
   });
 
   it("enforces JSON-only output", () => {
     const result = parseLLMDumpPrompt({ firstName: "Test", language: "en" });
     expect(result).toContain("single JSON object");
     expect(result).toContain("no markdown");
+  });
+
+  it("treats imported text as data and forbids gap filling", () => {
+    const result = parseLLMDumpPrompt({ firstName: "Test", language: "en" });
+    expect(result).toContain("untrusted source data");
+    expect(result).toContain("do not complete a personality test or fill gaps");
+    expect(result).toContain("[] when unsupported");
   });
 });
 
