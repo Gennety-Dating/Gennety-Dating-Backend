@@ -20,6 +20,42 @@ export { tv, setVariantRng, variantAlternates, VARIANT_KEYS } from "./i18n-varia
 export type { VariantRng } from "./i18n-variants.js";
 export { contextDumpInstruction } from "./onboarding-copy.js";
 export {
+  FEMALE_ATTRIBUTES,
+  MALE_ATTRIBUTES,
+  FEMALE_PHOTOS,
+  MALE_PHOTOS,
+  AGE_BANDS,
+  ageBandFor,
+  photosForSet,
+  radarPhotoById,
+  attributeKeysForSet,
+  setsForPreference,
+  setForGender,
+  reasonChipsFor,
+  reasonChipById,
+  buildPreferenceVector,
+  candidateTypeScore,
+  hasTypeSignal,
+  CHIP_ATTR_BOOST,
+  CHIP_ATTR_DISCOUNT,
+  CONF_FULL,
+} from "./type-radar.js";
+export type {
+  RadarSet,
+  RadarScene,
+  RadarPhoto,
+  PhotoAttrs,
+  AttributeKey,
+  AgeBand,
+  AgeBandDef,
+  ReasonChip,
+  ChipEffect,
+  Verdict,
+  RadarAnswer,
+  AttrValuePreference,
+  PreferenceVector,
+} from "./type-radar.js";
+export {
   computeStatusSnapshot,
   formatStatusText,
   formatDateCountdownText,
