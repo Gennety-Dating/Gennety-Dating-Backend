@@ -610,7 +610,18 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
     if (dateCardFileIdA) data.dateCardFileIdA = dateCardFileIdA;
     if (dateCardFileIdB) data.dateCardFileIdB = dateCardFileIdB;
     await prisma.match
-      .update({ where: { id: matchId }, data })
+      .updateMany({
+        // Rendering happens outside a transaction. Do not repopulate a cache
+        // invalidated by a concurrent theme/language change (or by a terminal
+        // match transition) while the PNG was being generated.
+        where: {
+          id: matchId,
+          status: "scheduled",
+          userA: { language: match.userA.language, theme: match.userA.theme },
+          userB: { language: match.userB.language, theme: match.userB.theme },
+        },
+        data,
+      })
       .catch((err) => {
         console.warn(`[date-card] file_id cache update failed for ${matchId}:`, err);
       });

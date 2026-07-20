@@ -479,6 +479,12 @@ export async function runDateLifecycleTick(
   });
 
   for (const match of pastDates) {
+    const langA = (match.userA.language ?? "en") as Language;
+    const langB = (match.userB.language ?? "en") as Language;
+    // Build the Mini App URLs before claiming the one-shot marker. A malformed
+    // optional feedback host must not consume the only retry opportunity.
+    const kbA = buildFeedbackKeyboard(match.id, langA, match.userA.theme);
+    const kbB = buildFeedbackKeyboard(match.id, langB, match.userB.theme);
     const feedbackClaim = await prisma.match.updateMany({
       where: {
         id: match.id,
@@ -488,12 +494,6 @@ export async function runDateLifecycleTick(
       data: { status: "completed", feedbackPromptedAt: now },
     });
     if (feedbackClaim.count === 0) continue;
-
-    const langA = (match.userA.language ?? "en") as Language;
-    const langB = (match.userB.language ?? "en") as Language;
-
-    const kbA = buildFeedbackKeyboard(match.id, langA, match.userA.theme);
-    const kbB = buildFeedbackKeyboard(match.id, langB, match.userB.theme);
 
     // Bot API 7.6 message_effect — a soft "your moment matters" flourish on
     // the prompt itself. Empty env falls through to no effect.

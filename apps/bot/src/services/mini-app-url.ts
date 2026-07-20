@@ -41,7 +41,11 @@ export function buildMiniAppUrl(
   page: MiniAppPage,
   options: BuildMiniAppUrlOptions,
 ): string {
-  const url = new URL(options.baseUrl ?? env.WEBAPP_URL);
+  // Environment variables are operational input, not trusted URLs. In
+  // particular, `WEBAPP_FEEDBACK_URL=` is a common empty deployment value;
+  // treat it exactly like an omitted override and retain the canonical host.
+  const baseUrl = options.baseUrl?.trim() || env.WEBAPP_URL;
+  const url = new URL(baseUrl);
 
   if (page === "calendar") {
     url.pathname = url.pathname.replace(/\/+$/, "") || "/";
