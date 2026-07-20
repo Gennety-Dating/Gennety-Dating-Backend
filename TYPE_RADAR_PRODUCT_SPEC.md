@@ -13,8 +13,9 @@ A fast visual calibration of appearance-type preferences inside the Telegram
 onboarding Mini App. The user sees 10–12 contrasting AI-generated portraits and
 answers binary "My type" / "Not my type". The server decomposes each photo into
 pre-authored attribute tags (build, hair color/length, style, tattoos, beard)
-and learns a preference vector. Up to 2 visual **contrast-pair clarifications**
-resolve confounded attributes. The result feeds a new soft multiplier
+and learns a preference vector. Ambiguity is resolved by a one-tap
+**reason-chip attribution layer** ("what caught you here?" — the Ditto
+pattern); pre-authored contrast pairs remain a fallback only. The result feeds a new soft multiplier
 `V_type` in the match engine — launched in **shadow mode** (logged, not
 applied) until accept/decline data proves predictive power (precedent:
 `socialRole` — stored, not scored in v1).
@@ -41,10 +42,13 @@ pre-seeded preference is simply skipped later (same pattern as the Mini App
 city/theme gates). `preference = both` serves an interleaved 8+8 subset of both
 sets (marked lower-confidence).
 
-Flow: intent tap → 12 binary cards (preload next 2–3 images; tap or swipe) →
-0–2 contrast-pair clarifications ("Which is closer to your type?", one tap) →
-done → `aiMemoryExport` phase as today. Unresolved ambiguity after the cap is
-recorded as "no expressed preference" (neutral weight) — never re-asked.
+Flow: intent tap → 12 binary cards (preload next 2–3 images; tap or swipe),
+with a one-tap **reason-chip** question after the first 2 verdicts and after
+model-surprising verdicts (cap 4/session, always skippable) → optional
+contrast-pair fallback ("Which is closer to your type?") only for a confound
+chips failed to resolve → done → `aiMemoryExport` phase as today. Unresolved
+ambiguity after the caps is recorded as "no expressed preference" (neutral
+weight) — never re-asked.
 
 ## Data model (additive, non-destructive)
 
@@ -65,8 +69,9 @@ like `socialRole` / venue categories).
 |---|---|---|
 | GET | `/v1/telegram-onboarding/radar` | Dataset refs for the chosen intent + progress (resume-safe). 404 while `TYPE_RADAR_ENABLED` off (pattern: `POST /track`) |
 | POST | `/v1/telegram-onboarding/radar/intent` | Persist the one-tap preference (men/women/both) |
-| POST | `/v1/telegram-onboarding/radar/answer` | `{photoId, verdict}` → server persists, returns `continue` \| `clarify {pairId}` \| `done` |
-| POST | `/v1/telegram-onboarding/radar/clarify` | `{pairId, chosenPhotoId}` (or explicit skip) → next clarification or `done` |
+| POST | `/v1/telegram-onboarding/radar/answer` | `{photoId, verdict}` → server persists, returns `continue` \| `askReason {chips}` \| `clarify {pairId}` \| `done` |
+| POST | `/v1/telegram-onboarding/radar/reason` | `{photoId, chipId}` (or explicit skip) → per-card attribution reweight, returns next step |
+| POST | `/v1/telegram-onboarding/radar/clarify` | Fallback contrast pair: `{pairId, chosenPhotoId}` (or explicit skip) → next step or `done` |
 
 `/state` mirrors `typeRadarEnabled` + `typeRadarDone` (pattern:
 `phoneAuthEnabled`). The phase machine gates on both, so the flag off ⇒ the
@@ -82,10 +87,26 @@ the venue-change board).
   `confidence(v) = min(1, shown/4)`; weight `w(v) = score·confidence`.
 - **Shrinkage:** a user with no consistent signal converges to `w ≈ 0`
   everywhere ⇒ the factor goes silent instead of noisy.
-- **Ambiguity/confound detection:** for an attribute pair whose values
-  co-occurred in this user's answer trajectory (high co-occurrence correlation,
-  both with moderate `|w|`), serve the pre-authored contrast pair that
-  decorrelates exactly that pair. Hard cap 2 clarifications.
+- **Attribution layer (reason chips, Ditto pattern):** after a verdict the
+  Mini App may ask one one-tap "why?" — chips mapped to the attribute space
+  (face / figure / hair / style / tattoo / beard / whole vibe / bad photo; see
+  `reasonChips` in the dataset draft). A named attribute gets a boosted
+  per-card weight and the other attributes are discounted for that card;
+  `face`/`bad photo` **exclude the card** from attribute learning entirely —
+  the explicit noise channel that neutralizes reaction-to-the-specific-face
+  confounds; `whole vibe` = uniform update. Asked after the first 2 verdicts
+  (teaching moment) and afterwards only on model-surprising verdicts; hard cap
+  4 per session; always skippable. Self-reports reweight ONE card and never
+  override set-level statistics (declared attribution is
+  rationalization-biased; the statistical and declared layers cross-check each
+  other). Lifestyle chips (e.g. "too flashy/party") are **logged, not scored**
+  (precedent: `socialRole`) — v2 research input.
+- **Ambiguity/confound fallback:** for an attribute pair whose values
+  co-occurred in this user's answer trajectory (high co-occurrence
+  correlation, both with moderate `|w|`) and which chips did not disambiguate,
+  serve the pre-authored contrast pair that decorrelates exactly that pair.
+  Hard cap 2; the pairs may not ship in v1 at all (chips are expected to cover
+  ~90% of cases).
 - Candidate scoring: `raw = mean over attributes of w(candidateValue)`;
   `typeScore = 0.5 + 0.5·raw ∈ [0,1]`. Pair score averages both directions;
   a side without radar data contributes neutral (1.0).
@@ -139,11 +160,15 @@ re-scanned legacy profiles) are neutral on the candidate side.
 - 12 photos per set arranged as a balanced fractional-factorial plan (each
   value appears 4–6×, attribute pairs decorrelated by construction) + 5
   pre-authored contrast pairs per set for clarifications.
-- **Validity constraints (every photo):** the photos are candid **lifestyle**
-  shots, not studio portraits — ecological validity: the user will judge real
-  candid pitch photos, so taste must be calibrated in the same visual domain,
-  and the scene primes the actual question ("do you want this person across
-  the table?"). The scene is nevertheless a **held constant**: ONE shared
+- **Validity constraints (every photo):** the photos read as **amateur
+  friend-shot smartphone snapshots** (founder decision 2026-07-19) — slightly
+  imperfect framing, no professional lighting, no studio gloss — ecological
+  validity: the user will judge real candid pitch photos, so taste must be
+  calibrated in the same visual domain, and the scene primes the actual
+  question ("do you want this person across the table?"). Front-camera
+  selfies were considered and rejected: arm's-length framing crops at the
+  chest and kills the build attribute. The scene is a **held constant**: ONE
+  shared
   setting for the whole set (cozy warmly-lit evening café/bar, subject
   standing/leaning at the counter — never seated, build must stay readable),
   softly blurred background with no other people (vibe without distraction or
