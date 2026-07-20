@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => {
   const tx = {
     $queryRawUnsafe: vi.fn(),
+    user: { findMany: vi.fn() },
     match: { findFirst: vi.fn(), create: vi.fn() },
     profile: { updateMany: vi.fn() },
     matchScoreLog: { create: vi.fn() },
@@ -36,7 +37,32 @@ describe("match allocation active-slot guard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.userFindMany.mockResolvedValue([]);
-    mocks.tx.$queryRawUnsafe.mockResolvedValue([]);
+    const eligibleRows = ["aaaa", "bbbb"].map((id) => ({
+      id,
+      age: 25,
+      gender: "male",
+      major: null,
+      preference: "women",
+      universityDomain: null,
+      profile: {
+        height: null,
+        negativeConstraints: null,
+        psychologicalSummary: null,
+        energyAxis: null,
+        orientationAxis: null,
+        eloScore: 500,
+        standbyCount: 0,
+        homeCityKey: "ua:kyiv",
+        ageRangeMin: null,
+        ageRangeMax: null,
+      },
+    }));
+    mocks.tx.user.findMany.mockResolvedValue(eligibleRows);
+    mocks.tx.$queryRawUnsafe.mockImplementation((sql: string) =>
+      sql.includes("embedding::text")
+        ? Promise.resolve(eligibleRows.map(({ id }) => ({ user_id: id, embedding: "[0]" })))
+        : Promise.resolve([]),
+    );
     mocks.tx.match.findFirst.mockResolvedValue(null);
     mocks.tx.match.create.mockResolvedValue({ id: "match-new" });
     mocks.tx.profile.updateMany.mockResolvedValue({ count: 2 });

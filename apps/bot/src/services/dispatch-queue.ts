@@ -46,7 +46,7 @@ async function stampDispatchedIfDelivered(matchId: string): Promise<void> {
   if (!m || m.dispatchedAt !== null) return;
   if (m.pitchMessageIdA === null && m.pitchMessageIdB === null) return;
   await prisma.match.updateMany({
-    where: { id: matchId, dispatchedAt: null },
+    where: { id: matchId, status: "proposed", dispatchedAt: null },
     data: { dispatchedAt: new Date() },
   });
 }
@@ -77,6 +77,11 @@ export async function dispatchMatches(
     for (let i = 0; i < matchIds.length; i++) {
       const matchId = matchIds[i]!;
       try {
+        const dispatchable = await prisma.match.findFirst({
+          where: { id: matchId, status: "proposed" },
+          select: { id: true },
+        });
+        if (!dispatchable) continue;
         const result = await sendMatchWelcomeGiftPreroll(api, matchId);
         if (result.sent > 0) {
           prerollSent += result.sent;
@@ -103,6 +108,11 @@ export async function dispatchMatches(
   for (let i = 0; i < matchIds.length; i++) {
     const matchId = matchIds[i]!;
     try {
+      const dispatchable = await prisma.match.findFirst({
+        where: { id: matchId, status: "proposed" },
+        select: { id: true },
+      });
+      if (!dispatchable) continue;
       let lastError: unknown;
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
@@ -120,10 +130,14 @@ export async function dispatchMatches(
         }
       }
       if (lastError !== undefined) throw lastError;
-      await prisma.match.update({
-        where: { id: matchId },
+      const stamped = await prisma.match.updateMany({
+        where: { id: matchId, status: "proposed" },
         data: { dispatchedAt: new Date() },
       });
+      // A cancellation can win while a Telegram request is in flight. Never
+      // resurrect its TTL state or report it as a successfully dispatched
+      // proposal; cancellation owns the terminal outcome.
+      if (stamped.count === 0) continue;
       dispatched++;
       console.log(
         `[dispatch] ${i + 1}/${matchIds.length} matchId=${matchId} OK`,

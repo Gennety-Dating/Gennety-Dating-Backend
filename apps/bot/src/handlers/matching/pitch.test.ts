@@ -58,6 +58,7 @@ function makeApi() {
 function payload(overrides: { telegramIdA?: bigint; telegramIdB?: bigint } = {}) {
   return {
     id: "match-1",
+    status: "proposed",
     pitchForA: "You two click.",
     pitchForB: "You two click.",
     synergyScore: 87,

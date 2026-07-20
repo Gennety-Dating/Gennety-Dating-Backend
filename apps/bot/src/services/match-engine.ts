@@ -1,4 +1,4 @@
-import { prisma } from "@gennety/db";
+import { prisma, type Prisma } from "@gennety/db";
 import { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
 import { refreshAllDirtyEmbeddings } from "../workers/embedding-refresh.js";
 import {
@@ -1004,6 +1004,10 @@ export async function createProposedMatch(
   userAId: string,
   userBId: string,
   breakdown?: ScoredPair["breakdown"],
+  expectedAllocationFingerprints?: {
+    userA: string;
+    userB: string;
+  },
 ): Promise<{ id: string } | null> {
   const now = new Date();
   return prisma.$transaction(async (tx) => {
@@ -1015,6 +1019,28 @@ export async function createProposedMatch(
       "SELECT id FROM users WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE",
       participantIds,
     );
+    // Profiles carry matching inputs which can be edited independently of the
+    // user row. Lock them too, then re-read eligibility below. This turns the
+    // weekly plan into a conditional allocation rather than a stale command:
+    // pausing, freezing, editing preferences, or a dirty embedding between
+    // preview and creation makes this pair a safe no-op.
+    await tx.$queryRawUnsafe(
+      "SELECT user_id FROM profiles WHERE user_id = ANY($1::uuid[]) ORDER BY user_id FOR UPDATE",
+      participantIds,
+    );
+    const currentParticipants = await loadEligibleUsersForIds(tx, participantIds);
+    if (currentParticipants.length !== participantIds.length) return null;
+    if (expectedAllocationFingerprints) {
+      const currentById = new Map(
+        currentParticipants.map((participant) => [participant.id, participant.allocationFingerprint]),
+      );
+      if (
+        currentById.get(userAId) !== expectedAllocationFingerprints.userA ||
+        currentById.get(userBId) !== expectedAllocationFingerprints.userB
+      ) {
+        return null;
+      }
+    }
     const existingConflict = await tx.match.findFirst({
       where: {
         OR: [
@@ -1112,6 +1138,9 @@ export interface BatchUser {
    *  unset. Feeds the `V_agePref` multiplier in both scoring directions. */
   ageRangeMin: number | null;
   ageRangeMax: number | null;
+  /** Immutable snapshot of every eligibility and scoring input used by the
+   * batch. Allocation compares it under row locks before writing a match. */
+  allocationFingerprint?: string;
 }
 
 /** A scored pair produced by the global scoring phase. */
@@ -1131,6 +1160,9 @@ export interface ScoredPair {
     embeddingDistance: number;
     starvationBonus: number;
   };
+  /** Matching-input snapshots captured during preview. They are intentionally
+   * internal: persisted MatchScoreLog remains the public audit record. */
+  allocationFingerprints?: { userA: string; userB: string };
 }
 
 /**
@@ -1305,11 +1337,38 @@ export async function autoUnsuspendElapsed(
  * Load all eligible users for batch matching. Returns users with active
  * status, completed onboarding, valid profile data, and embeddings.
  */
-export async function loadEligibleUsers(): Promise<BatchUser[]> {
-  const cutoff = new Date(Date.now() - MATCH_COOLDOWN_MS);
+type MatchReadClient = Pick<Prisma.TransactionClient, "user" | "$queryRawUnsafe">;
 
-  const users = await prisma.user.findMany({
+/**
+ * A stable representation of the inputs which determine both eligibility and
+ * pair ranking. It intentionally includes the vector literal: a successful
+ * dirty-embedding refresh changes the semantic signal and must invalidate a
+ * plan calculated from the preceding vector.
+ */
+function allocationFingerprint(user: Omit<BatchUser, "allocationFingerprint">): string {
+  return JSON.stringify(user);
+}
+
+export async function loadEligibleUsers(): Promise<BatchUser[]> {
+  return loadEligibleUsersForIds(prisma);
+}
+
+/**
+ * Read the same eligibility snapshot for either the full pool or a locked set
+ * of participants. Keeping this in one helper prevents allocation-time checks
+ * from quietly drifting away from the weekly planner's definition of eligible.
+ */
+async function loadEligibleUsersForIds(
+  db: MatchReadClient,
+  requestedIds?: readonly string[],
+): Promise<BatchUser[]> {
+  const cutoff = new Date(Date.now() - MATCH_COOLDOWN_MS);
+  if (requestedIds?.length === 0) return [];
+  const requestedWhere = requestedIds ? { id: { in: [...requestedIds] } } : {};
+
+  const users = await db.user.findMany({
     where: {
+      ...requestedWhere,
       status: "active",
       onboardingStep: "completed",
       gender: { not: null },
@@ -1359,8 +1418,9 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
   });
 
   // Also include users whose profile has no lastMatchedAt (never matched).
-  const neverMatched = await prisma.user.findMany({
+  const neverMatched = await db.user.findMany({
     where: {
+      ...requestedWhere,
       status: "active",
       onboardingStep: "completed",
       gender: { not: null },
@@ -1420,7 +1480,7 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
   const ids = deduped.map((u) => u.id);
   if (ids.length === 0) return [];
 
-  const embeddingRows = await prisma.$queryRawUnsafe<
+  const embeddingRows = await db.$queryRawUnsafe<
     Array<{ user_id: string; embedding: string | null }>
   >(
     `SELECT user_id, embedding::text AS embedding FROM profiles WHERE user_id = ANY($1::uuid[])`,
@@ -1433,25 +1493,28 @@ export async function loadEligibleUsers(): Promise<BatchUser[]> {
 
   return deduped
     .filter((u) => embeddingMap.get(u.id)) // Must have an embedding
-    .map((u) => ({
-      id: u.id,
-      age: u.age,
-      gender: u.gender,
-      major: u.major,
-      preference: u.preference,
-      universityDomain: u.universityDomain,
-      height: u.profile?.height ?? null,
-      negativeConstraints: u.profile?.negativeConstraints ?? null,
-      psychologicalSummary: u.profile?.psychologicalSummary ?? null,
-      energyAxis: u.profile?.energyAxis ?? null,
-      orientationAxis: u.profile?.orientationAxis ?? null,
-      embeddingLiteral: embeddingMap.get(u.id) ?? null,
-      eloScore: u.profile?.eloScore ?? 500,
-      standbyCount: u.profile?.standbyCount ?? 0,
-      homeCityKey: u.profile?.homeCityKey ?? null,
-      ageRangeMin: u.profile?.ageRangeMin ?? null,
-      ageRangeMax: u.profile?.ageRangeMax ?? null,
-    }));
+    .map((u) => {
+      const snapshot: Omit<BatchUser, "allocationFingerprint"> = {
+        id: u.id,
+        age: u.age,
+        gender: u.gender,
+        major: u.major,
+        preference: u.preference,
+        universityDomain: u.universityDomain,
+        height: u.profile?.height ?? null,
+        negativeConstraints: u.profile?.negativeConstraints ?? null,
+        psychologicalSummary: u.profile?.psychologicalSummary ?? null,
+        energyAxis: u.profile?.energyAxis ?? null,
+        orientationAxis: u.profile?.orientationAxis ?? null,
+        embeddingLiteral: embeddingMap.get(u.id) ?? null,
+        eloScore: u.profile?.eloScore ?? 500,
+        standbyCount: u.profile?.standbyCount ?? 0,
+        homeCityKey: u.profile?.homeCityKey ?? null,
+        ageRangeMin: u.profile?.ageRangeMin ?? null,
+        ageRangeMax: u.profile?.ageRangeMax ?? null,
+      };
+      return { ...snapshot, allocationFingerprint: allocationFingerprint(snapshot) };
+    });
 }
 
 /**
@@ -1585,6 +1648,7 @@ export async function runWeeklyBatch(): Promise<WeeklyBatchResult> {
       pair.userAId,
       pair.userBId,
       pair.breakdown,
+      pair.allocationFingerprints,
     );
     if (match) {
       matchIds.push(match.id);
@@ -1597,23 +1661,11 @@ export async function runWeeklyBatch(): Promise<WeeklyBatchResult> {
   // Diff eligible-vs-paired and update starvation counters.
   const pairedUserIds = createdPairs.flatMap((pair) => [pair.userAId, pair.userBId]);
   const missedCandidates = [...new Set([...plan.missedUserIds, ...skippedUserIds])];
-  const activeRows =
-    missedCandidates.length === 0
-      ? []
-      : await prisma.match.findMany({
-          where: {
-            status: { in: [...ACTIVE_MATCH_STATUSES] },
-            OR: [
-              { userAId: { in: missedCandidates } },
-              { userBId: { in: missedCandidates } },
-            ],
-          },
-          select: { userAId: true, userBId: true },
-        });
-  const activeUserIds = new Set(
-    activeRows.flatMap((match) => [match.userAId, match.userBId]),
-  );
-  const missedUserIds = missedCandidates.filter((userId) => !activeUserIds.has(userId));
+  // A user can pause, freeze, or edit their matching inputs after preview.
+  // Reuse the allocation eligibility predicate so a stale plan never awards a
+  // standby boost to a user who is no longer actually waiting for a match.
+  const currentMissedUsers = await loadEligibleUsersForIds(prisma, missedCandidates);
+  const missedUserIds = currentMissedUsers.map((user) => user.id);
   const now = new Date();
 
   await prisma.$transaction([
@@ -1622,7 +1674,16 @@ export async function runWeeklyBatch(): Promise<WeeklyBatchResult> {
       data: { standbyCount: 0, missedWeeks: 0 },
     }),
     prisma.profile.updateMany({
-      where: { userId: { in: missedUserIds } },
+      where: {
+        userId: { in: missedUserIds },
+        embeddingDirty: false,
+        user: {
+          status: "active",
+          onboardingStep: "completed",
+          matchesAsA: { none: { status: { in: [...ACTIVE_MATCH_STATUSES] } } },
+          matchesAsB: { none: { status: { in: [...ACTIVE_MATCH_STATUSES] } } },
+        },
+      },
       data: {
         standbyCount: { increment: 1 },
         missedWeeks: { increment: 1 },
@@ -1678,7 +1739,16 @@ export async function previewWeeklyBatch(): Promise<WeeklyBatchPlan> {
     if (!a || !b) continue;
 
     const { score, breakdown } = scorePair(a, b, distance);
-    scoredPairs.push({ userAId: aId, userBId: bId, score, breakdown });
+    scoredPairs.push({
+      userAId: aId,
+      userBId: bId,
+      score,
+      breakdown,
+      allocationFingerprints: {
+        userA: a.allocationFingerprint ?? "",
+        userB: b.allocationFingerprint ?? "",
+      },
+    });
   }
 
   const finalPairs = greedyPair(scoredPairs);

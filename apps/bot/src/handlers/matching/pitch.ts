@@ -288,6 +288,7 @@ export async function sendMatchWelcomeGiftPreroll(
   const match = await prisma.match.findUnique({
     where: { id: matchId },
     select: {
+      status: true,
       pitchMessageIdA: true,
       pitchMessageIdB: true,
       userA: {
@@ -308,7 +309,9 @@ export async function sendMatchWelcomeGiftPreroll(
       },
     },
   });
-  if (!match) return { sent: 0, sentA: false, sentB: false };
+  if (!match || match.status !== "proposed") {
+    return { sent: 0, sentA: false, sentB: false };
+  }
 
   let sent = 0;
   let sentA = false;
@@ -358,6 +361,7 @@ export async function sendMatchProposal(
     where: { id: matchId },
     select: {
       id: true,
+      status: true,
       pitchForA: true,
       pitchForB: true,
       pitchMessageIdA: true,
@@ -398,7 +402,7 @@ export async function sendMatchProposal(
       },
     },
   });
-  if (!match) return;
+  if (!match || match.status !== "proposed") return;
 
   const stream = options.streamImpl ?? streamDraftsToChat;
   const pitch = options.pitchImpl ?? ((args) => generatePitch(args, undefined, matchId));

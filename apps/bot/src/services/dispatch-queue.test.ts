@@ -3,8 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@gennety/db", () => ({
   prisma: {
     match: {
-      update: vi.fn().mockResolvedValue({}),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      findFirst: vi.fn().mockResolvedValue({ id: "m1" }),
       findUnique: vi.fn().mockResolvedValue(null),
     },
   },
@@ -30,11 +30,10 @@ type MockFn = ReturnType<typeof vi.fn>;
 const mSendPitch = sendMatchProposal as unknown as MockFn;
 const mSendPreroll = sendMatchWelcomeGiftPreroll as unknown as MockFn;
 const mMatch = prisma.match as unknown as {
-  update: MockFn;
   updateMany: MockFn;
   findUnique: MockFn;
+  findFirst: MockFn;
 };
-const mMatchUpdate = mMatch.update;
 const mMatchUpdateMany = mMatch.updateMany;
 const mMatchFindUnique = mMatch.findUnique;
 
@@ -53,10 +52,10 @@ describe("dispatchMatches", () => {
     expect(result.failed).toBe(0);
     expect(result.errors).toHaveLength(0);
     expect(mSendPitch).toHaveBeenCalledTimes(3);
-    expect(mMatchUpdate).toHaveBeenCalledTimes(3);
+    expect(mMatchUpdateMany).toHaveBeenCalledTimes(3);
 
     // Each update should set dispatchedAt.
-    for (const call of mMatchUpdate.mock.calls) {
+    for (const call of mMatchUpdateMany.mock.calls) {
       const arg = call[0] as { data: { dispatchedAt?: Date } };
       expect(arg.data.dispatchedAt).toBeInstanceOf(Date);
     }
@@ -87,7 +86,7 @@ describe("dispatchMatches", () => {
 
     expect(result).toMatchObject({ dispatched: 1, failed: 0 });
     expect(mSendPitch).toHaveBeenCalledTimes(2);
-    expect(mMatchUpdate).toHaveBeenCalledOnce();
+    expect(mMatchUpdateMany).toHaveBeenCalledOnce();
   });
 
   it("handles empty input gracefully", async () => {
@@ -95,6 +94,16 @@ describe("dispatchMatches", () => {
     expect(result.dispatched).toBe(0);
     expect(result.failed).toBe(0);
     expect(mSendPitch).not.toHaveBeenCalled();
+  });
+
+  it("does not deliver a proposal that was cancelled while it waited in the queue", async () => {
+    mMatch.findFirst.mockResolvedValueOnce(null);
+
+    const result = await dispatchMatches({} as any, ["cancelled"], 0);
+
+    expect(result).toMatchObject({ dispatched: 0, failed: 0 });
+    expect(mSendPitch).not.toHaveBeenCalled();
+    expect(mMatchUpdateMany).not.toHaveBeenCalled();
   });
 
   it("sends first-match gift pre-rolls before pitching when configured", async () => {
@@ -131,7 +140,6 @@ describe("dispatchMatches", () => {
 
     expect(result.failed).toBe(1);
     // The success-path update never ran; the salvage updateMany started the TTL.
-    expect(mMatchUpdate).not.toHaveBeenCalled();
     expect(mMatchUpdateMany).toHaveBeenCalledTimes(1);
     const arg = mMatchUpdateMany.mock.calls[0]![0] as {
       where: { id: string; dispatchedAt: null };
