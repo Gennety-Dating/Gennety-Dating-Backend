@@ -58,12 +58,24 @@ vi.mock("@gennety/db", () => ({
         _literal: string,
         id: string,
         dirtyAt: Date | null,
+        psychologicalSummary: string | null,
+        partnerPreferences: string | null,
+        negativeConstraints: string | null,
+        hobbies: string[],
       ) => {
         const row = profiles.get(id);
         if (!row || !row.embeddingDirty) return 0;
         const actual = row.embeddingDirtyAt?.getTime() ?? null;
         const expected = dirtyAt?.getTime() ?? null;
         if (actual !== expected) return 0;
+        if (
+          row.psychologicalSummary !== psychologicalSummary ||
+          row.partnerPreferences !== partnerPreferences ||
+          row.negativeConstraints !== negativeConstraints ||
+          JSON.stringify(row.hobbies) !== JSON.stringify(hobbies)
+        ) {
+          return 0;
+        }
         row.embeddingDirty = false;
         row.embeddingDirtyAt = null;
         row.embedding = "vector";
@@ -149,6 +161,30 @@ describe("embeddingRefreshTick (M-2)", () => {
     // saw the moved dirtyAt and no-op'd.
     expect(result.refreshed).toBe(0);
     expect(profiles.get("p2")!.embeddingDirty).toBe(true);
+  });
+
+  it("does not clear a same-millisecond re-edit with an unchanged dirty timestamp", async () => {
+    const sameTimestamp = new Date("2026-01-01T00:00:00.000Z");
+    const row = seedDirty("same-ms", sameTimestamp);
+    let resolveEmbed: (v: number[]) => void = () => {};
+    const stubClient = {
+      embed: vi.fn(
+        () =>
+          new Promise<number[]>((resolve) => {
+            resolveEmbed = resolve;
+          }),
+      ),
+    };
+
+    const tick = embeddingRefreshTick({ client: stubClient });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    // Date timestamps have millisecond precision. A second edit in the same
+    // millisecond must still be protected by the captured source fields.
+    row.partnerPreferences = "loves hiking";
+    resolveEmbed(new Array(1536).fill(0.5));
+
+    await expect(tick).resolves.toEqual({ scanned: 1, refreshed: 0, failed: 0, stillDirty: 1 });
+    expect(row.embeddingDirty).toBe(true);
   });
 
   it("counts failures without throwing", async () => {

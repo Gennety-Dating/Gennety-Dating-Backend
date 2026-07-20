@@ -29,6 +29,10 @@ import {
 
 export const DEFAULT_EMBEDDING_REFRESH_BATCH = 20;
 export const DEFAULT_EMBEDDING_REFRESH_TIMEOUT_MS = 30_000;
+/** Bound upstream work while keeping weekly preflight independent of cron's
+ * 20-row page size. Four requests avoids an hours-long serial backlog without
+ * creating an OpenAI rate-limit stampede. */
+export const DEFAULT_EMBEDDING_REFRESH_CONCURRENCY = 4;
 
 export interface EmbeddingRefreshOptions {
   /** Cap rows touched per tick. Default 20 — balances OpenAI cost vs. lag. */
@@ -37,6 +41,8 @@ export interface EmbeddingRefreshOptions {
   client?: EmbeddingClient;
   /** Optional per-row deadline. Timeout leaves the row dirty for a retry. */
   timeoutMs?: number;
+  /** Maximum simultaneous embedding requests. */
+  concurrency?: number;
 }
 
 export interface EmbeddingRefreshResult {
@@ -129,9 +135,7 @@ async function refreshDirtyEmbeddings(
     };
   }
 
-  let refreshed = 0;
-  let failed = 0;
-  for (const row of dirty) {
+  const refreshOne = async (row: (typeof dirty)[number]): Promise<"refreshed" | "failed" | "stale"> => {
     try {
       // Compose a normalised text representation. Re-using
       // `buildEmbeddingInput` keeps this consistent with the onboarding
@@ -165,9 +169,13 @@ async function refreshDirtyEmbeddings(
          WHERE id = ${row.id}::uuid
            AND embedding_dirty = true
            AND embedding_dirty_at IS NOT DISTINCT FROM ${row.embeddingDirtyAt}
+           AND psychological_summary IS NOT DISTINCT FROM ${row.psychologicalSummary}
+           AND partner_preferences IS NOT DISTINCT FROM ${row.partnerPreferences}
+           AND negative_constraints IS NOT DISTINCT FROM ${row.negativeConstraints}
+           AND hobbies IS NOT DISTINCT FROM ${row.hobbies}
       `;
       if (updated > 0) {
-        refreshed++;
+        return "refreshed";
       } else {
         // Row was re-dirtied while we were generating. Next tick picks it up.
         if (!selection.aggregateOnly) {
@@ -175,17 +183,26 @@ async function refreshDirtyEmbeddings(
             `[embedding-refresh] skipped userId=${row.userId} — row re-dirtied during refresh`,
           );
         }
+        return "stale";
       }
     } catch (err) {
-      failed++;
       if (!selection.aggregateOnly) {
         console.warn(
           `[embedding-refresh] failed userId=${row.userId}:`,
           err instanceof Error ? err.message : err,
         );
       }
+      return "failed";
     }
-  }
+  };
+
+  const outcomes = await mapWithConcurrency(
+    dirty,
+    Math.max(1, Math.floor(options.concurrency ?? DEFAULT_EMBEDDING_REFRESH_CONCURRENCY)),
+    refreshOne,
+  );
+  const refreshed = outcomes.filter((outcome) => outcome === "refreshed").length;
+  const failed = outcomes.filter((outcome) => outcome === "failed").length;
 
   return {
     scanned: dirty.length,
@@ -193,6 +210,28 @@ async function refreshDirtyEmbeddings(
     failed,
     stillDirty: dirty.length - refreshed,
   };
+}
+
+/** Execute a complete snapshot with a bounded worker pool. The input is
+ * captured before this runs, so rows dirtied later are intentionally retried
+ * by the next tick/preflight rather than extending this batch indefinitely. */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) return;
+      results[index] = await mapper(items[index]!);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
