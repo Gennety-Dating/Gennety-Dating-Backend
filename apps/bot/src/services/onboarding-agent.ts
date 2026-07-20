@@ -808,6 +808,35 @@ function hasContextDumpSaved(history: ChatMessage[]): boolean {
   return hasSuccessfulToolResult(history, "save_context_dump");
 }
 
+/**
+ * Remove the advisory `raw_dump` argument from a persisted `save_context_dump`
+ * tool call so a copy of the pasted AI-memory export does not linger in the
+ * stored chat history. Mutates the assistant message that owns `toolCallId` in
+ * place; other arguments (if any) are preserved. The server never reads
+ * `raw_dump`, so blanking it is behaviour-preserving.
+ */
+function stripRawDumpArgument(history: ChatMessage[], toolCallId: string): void {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const message = history[i];
+    if (message?.role !== "assistant" || !message.tool_calls) continue;
+    const call = message.tool_calls.find((c) => c.id === toolCallId);
+    if (!call) continue;
+    let args: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(call.function.arguments || "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        args = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Unparseable args: the whole string may be raw text — drop it entirely.
+      args = {};
+    }
+    delete args.raw_dump;
+    call.function.arguments = JSON.stringify(args);
+    return;
+  }
+}
+
 function contextDumpSavedSystemMessage(): ChatMessage {
   return {
     role: "system",
@@ -2100,9 +2129,23 @@ export async function runAgentTurn(
             // turn, which leaves the user stranded mid-step. Enforce the
             // ordering server-side by requiring a successful save_context_dump
             // tool result, not just any psychologicalSummary row.
+            // A typed context dump (Telegram paste buffer / native interview)
+            // is processed by the collector, which records success in
+            // `onboardingProgress.completedFields` and pushes only a receipt
+            // marker into history — it never emits the tool-result / marker
+            // that `hasContextDumpSaved(history)` looks for. Honour that path
+            // too, otherwise a user who already pasted a valid dump gets
+            // wedged in a paste loop whenever this tool-loop path runs (e.g.
+            // ONBOARDING_FACT_COLLECTOR_ENABLED off, the documented rollback).
+            const contextDumpAlreadySaved =
+              hasContextDumpSaved(history) ||
+              (user?.onboardingProgress?.completedFields.includes(
+                "context_dump",
+              ) ??
+                false);
             if (
               user?.aiMemoryExportPreference !== "declined" &&
-              !hasContextDumpSaved(history)
+              !contextDumpAlreadySaved
             ) {
               result = JSON.stringify({
                 success: false,
@@ -2144,7 +2187,7 @@ export async function runAgentTurn(
               : user;
             const missingForPhotos = missingBeforePhoto(
               photoGateUser,
-              hasContextDumpSaved(history),
+              contextDumpAlreadySaved,
               history,
             );
             if (missingForPhotos.length > 0) {
@@ -2227,6 +2270,13 @@ export async function runAgentTurn(
             content: AI_MEMORY_RECEIVED_MARKER,
           });
         }
+        // The LLM often echoes a near-verbatim copy of the pasted AI-memory
+        // export into the advisory `raw_dump` tool argument. The server never
+        // reads it (the user's actual message is the truth source), so strip
+        // it before this assistant turn is persisted — otherwise a copy of
+        // the raw export (potentially with third-party details) would survive
+        // in `messageHistory` despite the user turn being scrubbed above.
+        stripRawDumpArgument(history, toolCall.id);
         if (toolResultSucceeded(result)) {
           contextDumpSaved = true;
           history.push(contextDumpSavedSystemMessage());

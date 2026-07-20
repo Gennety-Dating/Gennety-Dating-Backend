@@ -97,10 +97,14 @@ const SHORT_MESSAGE_THRESHOLD = 400;
 
 /** A sparse but valid V2 export can be shorter than a normal user question. */
 function looksLikeStructuredAiMemory(text: string): boolean {
-  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "");
-  if (!trimmed.startsWith("{")) return false;
+  // Look for the schema-key signature anywhere inside a JSON object, so a
+  // compliant paste still counts even if the model prepended a stray line
+  // like "Here's your JSON:" before the opening brace.
+  const stripped = text.replace(/```(?:json)?/gi, "");
+  const start = stripped.indexOf("{");
+  if (start === -1) return false;
   return /"(?:schema_version|relationships|grounded_summary|personality_traits|attachment_style)"\s*:/.test(
-    trimmed,
+    stripped.slice(start),
   );
 }
 

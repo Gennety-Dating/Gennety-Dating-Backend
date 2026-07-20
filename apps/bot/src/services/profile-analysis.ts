@@ -183,10 +183,17 @@ export function isEvidenceProfileSummary(
     }
   }
 
+  // A model that has no summary should emit `null`, but some emit an empty or
+  // whitespace-only string instead. Treat that as "no summary" rather than
+  // rejecting an otherwise-valid payload (which would needlessly discard real
+  // section evidence and force a repair round).
+  if (typeof p.grounded_summary === "string" && p.grounded_summary.trim().length === 0) {
+    p.grounded_summary = null;
+  }
   const grounded = p.grounded_summary;
   if (
     grounded !== null &&
-    (typeof grounded !== "string" || grounded.trim().length === 0 || grounded.length > 1_200)
+    (typeof grounded !== "string" || grounded.length > 1_200)
   ) {
     return false;
   }

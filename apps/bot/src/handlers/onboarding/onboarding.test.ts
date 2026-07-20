@@ -793,6 +793,53 @@ describe("Context dump processing delay", () => {
     }
   });
 
+  it("routes a short V2 export as a dump even when the model prepended a stray line", async () => {
+    vi.useFakeTimers();
+    try {
+      const sparse =
+        "Here's your JSON:\n" +
+        JSON.stringify({
+          schema_version: 2,
+          relationships: [],
+          emotions_and_conflict: [],
+          needs_and_boundaries: [],
+          values_in_action: [],
+          life_rhythm_and_social_energy: [],
+          sustained_interests: [],
+          partner_fit: [],
+          likely_friction: [],
+          grounded_summary: null,
+        });
+      expect(sparse.length).toBeLessThan(400);
+      const ctx = createMockCtx({
+        session: {
+          onboardingStep: "conversational",
+          awaitingContextDump: true,
+          contextDumpBuffer: "",
+        },
+        messageText: sparse,
+      });
+
+      await handleConversational(ctx);
+      // Not misrouted to the agent as a question — buffered as a dump.
+      expect(agentMock).not.toHaveBeenCalled();
+      expect(ctx.session.contextDumpBuffer).toBe(sparse);
+
+      (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        data: ctx.session,
+      });
+      await vi.advanceTimersByTimeAsync(2_000);
+
+      expect(agentMock).toHaveBeenCalledWith(BigInt(12345), {
+        kind: "context_dump",
+        text: sparse,
+      });
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   it("silently accumulates subsequent chunks until the debounce expires", async () => {
     vi.useFakeTimers();
     try {

@@ -93,6 +93,24 @@ describe("evidence-first AI-memory parsing", () => {
     ).toBe(false);
   });
 
+  it("accepts real section evidence even when grounded_summary is an empty string", () => {
+    // Some models emit "" instead of null for "no summary"; that must not
+    // discard a payload that carries real evidence.
+    const withEmptySummary = {
+      ...emptyEvidenceProfile,
+      sustained_interests: [
+        {
+          signal: "Plays piano regularly",
+          basis: "Mentioned weekly practice across several months",
+          kind: "pattern",
+        },
+      ],
+      grounded_summary: "   ",
+    };
+    expect(isEvidenceProfileSummary(withEmptySummary)).toBe(true);
+    expect(isValidFastPathSummary(withEmptySummary)).toBe(true);
+  });
+
   it("keeps a complete legacy Magic Prompt response backward-compatible", () => {
     expect(
       isValidFastPathSummary({

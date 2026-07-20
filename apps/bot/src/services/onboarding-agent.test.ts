@@ -300,6 +300,49 @@ describe("onboarding-agent", () => {
     expect(result.reply).toContain("photos");
   });
 
+  it("allows request_photos when the collector already completed context_dump (no tool-result marker)", async () => {
+    // Regression: a typed context dump is saved by the collector, which records
+    // success only in onboardingProgress.completedFields and pushes a receipt
+    // marker (not the CONTEXT_DUMP_SAVED tool marker). If the tool-loop path
+    // then runs (e.g. ONBOARDING_FACT_COLLECTOR_ENABLED off), request_photos
+    // must not be blocked into a paste loop.
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "uuid-1",
+      messageHistory: [],
+      language: "en",
+      aiMemoryExportPreference: "accepted",
+      email: "alice@stanford.edu",
+      isEmailVerified: true,
+      universityDomain: "stanford.edu",
+      firstName: "Alice",
+      age: 21,
+      gender: "female",
+      preference: "men",
+      onboardingProgress: { completedFields: ["context_dump"] },
+      profile: {
+        height: 165,
+        ethnicity: "Asian",
+        hobbies: ["tennis"],
+        partnerPreferences: "someone kind",
+        photos: [],
+        homeCityKey: "ua:kyiv",
+      },
+    });
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "call-1", name: "request_photos", args: {} }]),
+      )
+      .mockResolvedValueOnce(textResponse("Now send me your photos!"));
+
+    const result = await runAgentTurn(telegramId, "ready for photos", {
+      fetchFn: mockFetch,
+    });
+
+    expect(result.expectingPhoto).toBe(true);
+  });
+
   it("stops immediately after request_context_dump so the model cannot synthesize the user's dump", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "uuid-1",
@@ -513,6 +556,14 @@ describe("onboarding-agent", () => {
         message.content?.includes("raw content intentionally not retained"),
       ),
     ).toBe(true);
+    // The advisory raw_dump tool argument must not smuggle a copy of the paste
+    // into persisted history (the LLM echoed `llmRephrased` there).
+    const persistedToolArgs = persisted
+      .flatMap((message) => message.tool_calls ?? [])
+      .map((call) => call.function.arguments)
+      .join("\n");
+    expect(persistedToolArgs).not.toContain("music-oriented");
+    expect(persistedToolArgs).not.toContain(llmRephrased);
   });
 
   it("rejects save_context_dump when the user's latest message is too short to be a real dump", async () => {

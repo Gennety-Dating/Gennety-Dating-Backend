@@ -196,7 +196,7 @@ Columns (≈ 35; grouped by purpose):
 | UI theme | `theme` (`Theme`, default `dark`) — the recipient's chosen app-wide light/dark theme, honored by every Mini App (via the shared `theme.css` tokens) and both server-rendered PNG cards; `themeChosenAt` marks the explicit pick so the onboarding theme step shows once. |
 | Email OTP | `emailOtp`, `emailOtpExpiresAt`, `isEmailVerified` |
 | Registration v2 | `phone` (unique E.164, written only from a trusted Telegram `message.contact`), `phoneVerifiedAt` (the general-track contact gate), `registrationTrack` (`student`/`general`, null = pre-fork legacy). Matching admits the union of track-valid cohorts: `general + phoneVerifiedAt`, or `student`/legacy + `isEmailVerified` and a stored email. |
-| Conversational state | `messageHistory` (`Json[]`), `lastMessageAt`, `lastPreMatchAnnounceAt`. AI-memory response bodies are deliberately not retained here: a typed `context_dump` is replaced by a non-sensitive receipt marker after parsing. |
+| Conversational state | `messageHistory` (`Json[]`), `lastMessageAt`, `lastPreMatchAnnounceAt`. AI-memory response bodies are deliberately not retained here: a typed `context_dump` is replaced by a non-sensitive receipt marker after parsing, and on the legacy tool-loop path the advisory `raw_dump` tool argument is stripped from the persisted assistant turn for the same reason. |
 | Re-engagement | `reEngagementStep` (0–5), `reEngagementNextAt` |
 | Trust & safety | `strikes`, `suspendedUntil` |
 | Telegram UI | `statusMessageId` (pinned banner) |
