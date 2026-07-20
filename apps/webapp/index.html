@@ -59,11 +59,6 @@
         --self-glow: rgba(255, 255, 255, 0.7);
         --self-fill-strong: rgba(255, 255, 255, 0.25);
         --self-fill-soft: rgba(255, 255, 255, 0.08);
-        /* Overlap (both picked this slot) — the saturated "win" fill: a burgundy
-         * wash layered over the opaque --surface-3 base so it never blends into
-         * the picker sheet. Richer than the peer wash — this is the agreement. */
-        --overlap-fill-start: rgba(209, 107, 128, 0.30);
-        --overlap-fill-end: rgba(139, 37, 59, 0.52);
         --font-stack: -apple-system, BlinkMacSystemFont, "SF Pro Display",
           "Inter", system-ui, sans-serif;
         --safe-top: env(safe-area-inset-top, 0px);
@@ -112,10 +107,6 @@
          * keeping the dark label text readable. */
         --self-fill-strong: rgba(0, 0, 0, 0.24);
         --self-fill-soft: rgba(0, 0, 0, 0.12);
-        /* Overlap fill — burgundy, kept light enough that the dark label text
-         * stays readable (see dark theme for the rationale). */
-        --overlap-fill-start: rgba(139, 37, 59, 0.16);
-        --overlap-fill-end: rgba(139, 37, 59, 0.40);
       }
 
       * { box-sizing: border-box; }
@@ -414,18 +405,12 @@
         box-shadow: 0 0 10px var(--brand-glow);
       }
 
-      /* State: both (saturated burgundy fill + animated gradient border) */
+      /* State: both (animated gradient border) */
       .slot.state-both {
-        /* Saturated burgundy "you both agree" fill over the opaque --surface-3
-         * base (never bare --surface — that matched the picker sheet and left
-         * this, the win state, looking the dimmest). Animated border + a
-         * stronger glow ride on top. */
-        background:
-          linear-gradient(90deg, var(--overlap-fill-start) 0%, var(--overlap-fill-end) 100%),
-          var(--surface-3);
+        background: var(--surface);
         border-color: transparent;
         background-clip: padding-box;
-        box-shadow: 0 0 26px var(--brand-glow);
+        box-shadow: 0 0 20px var(--brand-glow-soft);
       }
       .slot.state-both::before {
         content: "";
