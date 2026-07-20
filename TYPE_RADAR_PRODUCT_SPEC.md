@@ -34,13 +34,17 @@ inserted in `postVisualPhaseFromRemote` after `theme` and **before**
 … city → theme → visual scenes → [TYPE RADAR] → aiMemoryExport → loading/handoff
 ```
 
-Because `gender`/`preference` are collected later (conversational phase), the
-radar opens with a one-tap **intent screen** — "Who are you interested in?"
-(men / women / both) — which persists `User.preference` server-side. The
-onboarding collector already picks "the first actually missing field", so a
-pre-seeded preference is simply skipped later (same pattern as the Mini App
-city/theme gates). `preference = both` serves an interleaved 8+8 subset of both
-sets (marked lower-confidence).
+Because `gender`/`preference`/`age` are collected later (conversational
+phase), the radar opens with a one-tap **intent screen** — "Who are you
+interested in?" (men / women / both) plus an **age input** — which persist
+`User.preference` and `User.age` server-side. The onboarding collector
+already picks "the first actually missing field", so pre-seeded
+preference/age are simply skipped later (same pattern as the Mini App
+city/theme gates). `preference = both` serves an interleaved 8+8 subset of
+both sets (marked lower-confidence). The captured age selects the **age
+band** of the shown set (see *Age bands* under Dataset) — this is the only
+place age is needed before the conversational phase, which is exactly why it
+is captured here.
 
 Flow: intent tap → 12 binary cards (preload next 2–3 images; tap or swipe),
 with a one-tap **reason-chip** question after the first 2 verdicts and after
@@ -57,6 +61,7 @@ weight) — never re-asked.
 | `Profile.typeRadarAnswers Json[]` | Raw audit: `{photoId, verdict, at}` per tap (incl. clarifications) |
 | `Profile.typePrefTags Json?` | Computed preference vector: per attribute value `{score, confidence}` |
 | `Profile.typeRadarCompletedAt DateTime?` | Phase-machine gate + idempotency |
+| `Profile.typeRadarAgeBand String?` | Age band (`a`/`b`/`c`) shown to this user, derived from the age captured at radar entry — audit + resume |
 | `Profile.appearanceTags Json?` + `appearanceTagsAt DateTime?` | Candidate-side tags extracted from the user's own photos (vision) |
 | `match_score_logs.scoreType Float @default(1)` | Frozen factor per created pair (precedent: `scoreAgePref`, default 1 = neutral for old rows) |
 
@@ -160,6 +165,22 @@ re-scanned legacy profiles) are neutral on the candidate side.
 - 12 photos per set arranged as a balanced fractional-factorial plan (each
   value appears 4–6×, attribute pairs decorrelated by construction) + 5
   pre-authored contrast pairs per set for clarifications.
+- **Age bands (founder decision 2026-07-20 — NOT one age for everyone):** the
+  shown set is age-matched to the **viewer's own age band**, not a fixed
+  24/26. A single young set is wrong twice — (1) UX: showing a 22-year-old to
+  a 46-year-old promises a pool that won't deliver; (2) methodology: attributes
+  read differently with age (build, graying vs "light hair", beard), so taste
+  learned on young faces transfers poorly to an older candidate pool. The
+  **attribute matrix / scene plan / balance is identical across bands** — a
+  band changes ONLY the age descriptor in the prompt (a mechanical swap, like
+  ethnicity/scene), so band B/C compile from the band-A prompts, not a rewrite.
+  Bands (see `ageBands` in the dataset): **A 22–28** (this file's set, v1),
+  **B 29–37**, **C 38–48**; architecture supports more, generation is scoped
+  to the real pool. Anchor is the **viewer's age** — the age captured on the
+  radar intent screen picks the band. Preferred-*partner* age (often skewed,
+  e.g. men younger) is deliberately NOT baked into the radar default: that
+  belongs to `V_agePref`/`ageRangeMin-Max`, keeping an age-gap assumption out
+  of the product's defaults (same discipline as not scoring ethnicity).
 - **Validity constraints (every photo):** the photos read as **amateur
   friend-shot smartphone snapshots** (founder decision 2026-07-19) — slightly
   imperfect framing, no professional lighting, no studio gloss — ecological
