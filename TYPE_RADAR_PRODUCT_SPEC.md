@@ -177,7 +177,14 @@ re-scanned legacy profiles) are neutral on the candidate side.
   across the set, constant natural makeup (style/vibe is expressed through
   clothing ONLY), bare/short-sleeved arms (tattoo attribute visible or
   verifiably absent), comparable "girl/guy-next-door" attractiveness level
-  (level must not confound direction), age 23–26. Varying the scene per photo
+  (level must not confound direction), age 23–26. **Aesthetic quality is a
+  held constant too** (founder decision 2026-07-19): every photo is equally
+  Pinterest-grade stylish (pleasing warm color grade, fashionably fitted
+  clothes, nothing AI-rendered or sloppy), and each style archetype is an
+  equally well-executed fashionable version of itself — a cheap-looking
+  "sporty" against a chic "elegant" would measure taste for "well-dressed",
+  not style direction; a frame that stands out for beauty *as a photo* is
+  rejected. Varying the scene per photo
   is forbidden — an uncontrolled setting becomes a confound (user likes the
   bar's vibe, algorithm records "likes redheads"). If one scene feels
   monotonous, the sanctioned alternative is exactly TWO scenes balanced
