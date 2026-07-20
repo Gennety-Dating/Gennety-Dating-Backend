@@ -1,0 +1,813 @@
+{
+  "version": 1,
+  "note": "Compiled generation worklist: all 72 Type Radar prompts (24 profiles x 3 age bands). Band A is the canonical source in type-radar.dataset.draft.json; bands B/C are age-descriptor swaps of band A (identical attributes/scene/style). MJ v6 as-is; Flux = drop --ar/--style.",
+  "bands": {
+    "a": {
+      "label": "22-28",
+      "photos": {
+        "f01": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "blonde",
+            "hairLength": "long",
+            "build": "slim",
+            "style": "elegant",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 24-year-old eastern european woman taken by a friend on a smartphone, slender petite build, long straight golden-blonde hair, wearing an elegant fitted black slip dress with thin straps and delicate minimal gold jewelry, bare arms with no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f02": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "brunette",
+            "hairLength": "long",
+            "build": "athletic",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 24-year-old eastern european woman taken by a friend on a smartphone, toned athletic build with defined shoulders and waist, long wavy dark-brown hair, wearing a stylish athleisure set: a fitted white ribbed tank top and high-waist flared leggings, bare arms with no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f03": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "red",
+            "hairLength": "short",
+            "build": "slim",
+            "style": "edgy",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 24-year-old eastern european woman taken by a friend on a smartphone, slender petite build, a chin-length natural copper-red bob, wearing a well-styled vintage black band t-shirt with rolled short sleeves, layered silver necklaces and fitted dark jeans, a delicate fine-line tattoo sleeve clearly visible on her right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f04": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "brunette",
+            "hairLength": "short",
+            "build": "curvy",
+            "style": "elegant",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 24-year-old eastern european woman taken by a friend on a smartphone, soft curvy full-figured hourglass build, a sleek chin-length dark-brown bob, wearing an elegant fitted black slip dress with thin straps and delicate minimal gold jewelry, bare arms with no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f05": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "blonde",
+            "hairLength": "short",
+            "build": "athletic",
+            "style": "edgy",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 24-year-old eastern european woman taken by a friend on a smartphone, toned athletic build with defined shoulders and waist, a chin-length blonde bob, wearing a well-styled vintage black band t-shirt with rolled short sleeves, layered silver necklaces and fitted dark jeans, a delicate fine-line tattoo sleeve clearly visible on her right forearm, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f06": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "red",
+            "hairLength": "long",
+            "build": "curvy",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 24-year-old eastern european woman taken by a friend on a smartphone, soft curvy full-figured hourglass build, long natural copper-red hair, wearing a stylish athleisure set: a fitted white ribbed tank top and high-waist flared leggings, bare arms with no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f07": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "brunette",
+            "hairLength": "long",
+            "build": "slim",
+            "style": "sporty",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 24-year-old eastern european woman taken by a friend on a smartphone, slender petite build, long wavy dark-brown hair, wearing a stylish athleisure set: a fitted white ribbed tank top and high-waist flared leggings, a delicate fine-line tattoo sleeve clearly visible on her right forearm, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f08": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "blonde",
+            "hairLength": "long",
+            "build": "curvy",
+            "style": "edgy",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 24-year-old eastern european woman taken by a friend on a smartphone, soft curvy full-figured hourglass build, long straight golden-blonde hair, wearing a well-styled vintage black band t-shirt with rolled short sleeves, layered silver necklaces and fitted dark jeans, bare arms with no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f09": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "red",
+            "hairLength": "short",
+            "build": "athletic",
+            "style": "elegant",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 24-year-old eastern european woman taken by a friend on a smartphone, toned athletic build with defined shoulders and waist, a chin-length natural copper-red bob, wearing an elegant fitted black slip dress with thin straps and delicate minimal gold jewelry, bare arms with no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f10": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "brunette",
+            "hairLength": "short",
+            "build": "slim",
+            "style": "edgy",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 24-year-old eastern european woman taken by a friend on a smartphone, slender petite build, a sleek chin-length dark-brown bob, wearing a well-styled vintage black band t-shirt with rolled short sleeves, layered silver necklaces and fitted dark jeans, bare arms with no tattoos, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f11": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "blonde",
+            "hairLength": "short",
+            "build": "curvy",
+            "style": "sporty",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 24-year-old eastern european woman taken by a friend on a smartphone, soft curvy full-figured hourglass build, a chin-length blonde bob, wearing a stylish athleisure set: a fitted white ribbed tank top and high-waist flared leggings, a delicate fine-line tattoo sleeve clearly visible on her right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f12": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "red",
+            "hairLength": "long",
+            "build": "athletic",
+            "style": "elegant",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 24-year-old eastern european woman taken by a friend on a smartphone, toned athletic build with defined shoulders and waist, long natural copper-red hair, wearing an elegant fitted black slip dress with thin straps and delicate minimal gold jewelry, a delicate fine-line tattoo sleeve clearly visible on her right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m01": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "clean",
+            "build": "lean",
+            "style": "classic",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 26-year-old eastern european man taken by a friend on a smartphone, slim lean build, short textured dark-brown hair, clean-shaven, wearing a well-fitted light-blue oxford shirt with sleeves rolled to the elbow, no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m02": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "beard",
+            "build": "athletic",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 26-year-old eastern european man taken by a friend on a smartphone, fit athletic build with broad shoulders, short light-blond hair, a full neatly trimmed short beard, wearing a clean minimalist off-white athletic-fit t-shirt, no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m03": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "beard",
+            "build": "athletic",
+            "style": "edgy",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 26-year-old eastern european man taken by a friend on a smartphone, fit athletic build with broad shoulders, short textured dark-brown hair, a full neatly trimmed short beard, wearing a stylish boxy black graphic t-shirt and a thin silver chain necklace, a bold tattoo sleeve clearly visible on his right forearm, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m04": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "clean",
+            "build": "athletic",
+            "style": "classic",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 26-year-old eastern european man taken by a friend on a smartphone, fit athletic build with broad shoulders, short light-blond hair, clean-shaven, wearing a well-fitted light-blue oxford shirt with sleeves rolled to the elbow, no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m05": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "beard",
+            "build": "big",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 26-year-old eastern european man taken by a friend on a smartphone, tall heavyset powerful build, short textured dark-brown hair, a full neatly trimmed short beard, wearing a clean minimalist off-white athletic-fit t-shirt, no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m06": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "clean",
+            "build": "lean",
+            "style": "edgy",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 26-year-old eastern european man taken by a friend on a smartphone, slim lean build, short light-blond hair, clean-shaven, wearing a stylish boxy black graphic t-shirt and a thin silver chain necklace, a bold tattoo sleeve clearly visible on his right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m07": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "clean",
+            "build": "athletic",
+            "style": "sporty",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 26-year-old eastern european man taken by a friend on a smartphone, fit athletic build with broad shoulders, short textured dark-brown hair, clean-shaven, wearing a clean minimalist off-white athletic-fit t-shirt, a bold tattoo sleeve clearly visible on his right forearm, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m08": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "beard",
+            "build": "lean",
+            "style": "classic",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 26-year-old eastern european man taken by a friend on a smartphone, slim lean build, short light-blond hair, a full neatly trimmed short beard, wearing a well-fitted light-blue oxford shirt with sleeves rolled to the elbow, a bold tattoo sleeve clearly visible on his right forearm, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m09": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "beard",
+            "build": "lean",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 26-year-old eastern european man taken by a friend on a smartphone, slim lean build, short textured dark-brown hair, a full neatly trimmed short beard, wearing a clean minimalist off-white athletic-fit t-shirt, no tattoos, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m10": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "clean",
+            "build": "big",
+            "style": "edgy",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 26-year-old eastern european man taken by a friend on a smartphone, tall heavyset powerful build, short light-blond hair, clean-shaven, wearing a stylish boxy black graphic t-shirt and a thin silver chain necklace, no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m11": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "clean",
+            "build": "big",
+            "style": "classic",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 26-year-old eastern european man taken by a friend on a smartphone, tall heavyset powerful build, short textured dark-brown hair, clean-shaven, wearing a well-fitted light-blue oxford shirt with sleeves rolled to the elbow, a bold tattoo sleeve clearly visible on his right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m12": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "beard",
+            "build": "big",
+            "style": "edgy",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 26-year-old eastern european man taken by a friend on a smartphone, tall heavyset powerful build, short light-blond hair, a full neatly trimmed short beard, wearing a stylish boxy black graphic t-shirt and a thin silver chain necklace, no tattoos, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        }
+      }
+    },
+    "b": {
+      "label": "29-37",
+      "photos": {
+        "f01": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "blonde",
+            "hairLength": "long",
+            "build": "slim",
+            "style": "elegant",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 32-year-old eastern european woman taken by a friend on a smartphone, slender petite build, long straight golden-blonde hair, wearing an elegant fitted black slip dress with thin straps and delicate minimal gold jewelry, bare arms with no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f02": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "brunette",
+            "hairLength": "long",
+            "build": "athletic",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 32-year-old eastern european woman taken by a friend on a smartphone, toned athletic build with defined shoulders and waist, long wavy dark-brown hair, wearing a stylish athleisure set: a fitted white ribbed tank top and high-waist flared leggings, bare arms with no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f03": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "red",
+            "hairLength": "short",
+            "build": "slim",
+            "style": "edgy",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 32-year-old eastern european woman taken by a friend on a smartphone, slender petite build, a chin-length natural copper-red bob, wearing a well-styled vintage black band t-shirt with rolled short sleeves, layered silver necklaces and fitted dark jeans, a delicate fine-line tattoo sleeve clearly visible on her right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f04": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "brunette",
+            "hairLength": "short",
+            "build": "curvy",
+            "style": "elegant",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 32-year-old eastern european woman taken by a friend on a smartphone, soft curvy full-figured hourglass build, a sleek chin-length dark-brown bob, wearing an elegant fitted black slip dress with thin straps and delicate minimal gold jewelry, bare arms with no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f05": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "blonde",
+            "hairLength": "short",
+            "build": "athletic",
+            "style": "edgy",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 32-year-old eastern european woman taken by a friend on a smartphone, toned athletic build with defined shoulders and waist, a chin-length blonde bob, wearing a well-styled vintage black band t-shirt with rolled short sleeves, layered silver necklaces and fitted dark jeans, a delicate fine-line tattoo sleeve clearly visible on her right forearm, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f06": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "red",
+            "hairLength": "long",
+            "build": "curvy",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 32-year-old eastern european woman taken by a friend on a smartphone, soft curvy full-figured hourglass build, long natural copper-red hair, wearing a stylish athleisure set: a fitted white ribbed tank top and high-waist flared leggings, bare arms with no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f07": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "brunette",
+            "hairLength": "long",
+            "build": "slim",
+            "style": "sporty",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 32-year-old eastern european woman taken by a friend on a smartphone, slender petite build, long wavy dark-brown hair, wearing a stylish athleisure set: a fitted white ribbed tank top and high-waist flared leggings, a delicate fine-line tattoo sleeve clearly visible on her right forearm, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f08": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "blonde",
+            "hairLength": "long",
+            "build": "curvy",
+            "style": "edgy",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 32-year-old eastern european woman taken by a friend on a smartphone, soft curvy full-figured hourglass build, long straight golden-blonde hair, wearing a well-styled vintage black band t-shirt with rolled short sleeves, layered silver necklaces and fitted dark jeans, bare arms with no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f09": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "red",
+            "hairLength": "short",
+            "build": "athletic",
+            "style": "elegant",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 32-year-old eastern european woman taken by a friend on a smartphone, toned athletic build with defined shoulders and waist, a chin-length natural copper-red bob, wearing an elegant fitted black slip dress with thin straps and delicate minimal gold jewelry, bare arms with no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f10": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "brunette",
+            "hairLength": "short",
+            "build": "slim",
+            "style": "edgy",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 32-year-old eastern european woman taken by a friend on a smartphone, slender petite build, a sleek chin-length dark-brown bob, wearing a well-styled vintage black band t-shirt with rolled short sleeves, layered silver necklaces and fitted dark jeans, bare arms with no tattoos, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f11": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "blonde",
+            "hairLength": "short",
+            "build": "curvy",
+            "style": "sporty",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 32-year-old eastern european woman taken by a friend on a smartphone, soft curvy full-figured hourglass build, a chin-length blonde bob, wearing a stylish athleisure set: a fitted white ribbed tank top and high-waist flared leggings, a delicate fine-line tattoo sleeve clearly visible on her right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f12": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "red",
+            "hairLength": "long",
+            "build": "athletic",
+            "style": "elegant",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 32-year-old eastern european woman taken by a friend on a smartphone, toned athletic build with defined shoulders and waist, long natural copper-red hair, wearing an elegant fitted black slip dress with thin straps and delicate minimal gold jewelry, a delicate fine-line tattoo sleeve clearly visible on her right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m01": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "clean",
+            "build": "lean",
+            "style": "classic",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 33-year-old eastern european man taken by a friend on a smartphone, slim lean build, short textured dark-brown hair, clean-shaven, wearing a well-fitted light-blue oxford shirt with sleeves rolled to the elbow, no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m02": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "beard",
+            "build": "athletic",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 33-year-old eastern european man taken by a friend on a smartphone, fit athletic build with broad shoulders, short light-blond hair, a full neatly trimmed short beard, wearing a clean minimalist off-white athletic-fit t-shirt, no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m03": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "beard",
+            "build": "athletic",
+            "style": "edgy",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 33-year-old eastern european man taken by a friend on a smartphone, fit athletic build with broad shoulders, short textured dark-brown hair, a full neatly trimmed short beard, wearing a stylish boxy black graphic t-shirt and a thin silver chain necklace, a bold tattoo sleeve clearly visible on his right forearm, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m04": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "clean",
+            "build": "athletic",
+            "style": "classic",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 33-year-old eastern european man taken by a friend on a smartphone, fit athletic build with broad shoulders, short light-blond hair, clean-shaven, wearing a well-fitted light-blue oxford shirt with sleeves rolled to the elbow, no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m05": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "beard",
+            "build": "big",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 33-year-old eastern european man taken by a friend on a smartphone, tall heavyset powerful build, short textured dark-brown hair, a full neatly trimmed short beard, wearing a clean minimalist off-white athletic-fit t-shirt, no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m06": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "clean",
+            "build": "lean",
+            "style": "edgy",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 33-year-old eastern european man taken by a friend on a smartphone, slim lean build, short light-blond hair, clean-shaven, wearing a stylish boxy black graphic t-shirt and a thin silver chain necklace, a bold tattoo sleeve clearly visible on his right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m07": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "clean",
+            "build": "athletic",
+            "style": "sporty",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 33-year-old eastern european man taken by a friend on a smartphone, fit athletic build with broad shoulders, short textured dark-brown hair, clean-shaven, wearing a clean minimalist off-white athletic-fit t-shirt, a bold tattoo sleeve clearly visible on his right forearm, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m08": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "beard",
+            "build": "lean",
+            "style": "classic",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 33-year-old eastern european man taken by a friend on a smartphone, slim lean build, short light-blond hair, a full neatly trimmed short beard, wearing a well-fitted light-blue oxford shirt with sleeves rolled to the elbow, a bold tattoo sleeve clearly visible on his right forearm, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m09": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "beard",
+            "build": "lean",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 33-year-old eastern european man taken by a friend on a smartphone, slim lean build, short textured dark-brown hair, a full neatly trimmed short beard, wearing a clean minimalist off-white athletic-fit t-shirt, no tattoos, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m10": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "clean",
+            "build": "big",
+            "style": "edgy",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 33-year-old eastern european man taken by a friend on a smartphone, tall heavyset powerful build, short light-blond hair, clean-shaven, wearing a stylish boxy black graphic t-shirt and a thin silver chain necklace, no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m11": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "clean",
+            "build": "big",
+            "style": "classic",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 33-year-old eastern european man taken by a friend on a smartphone, tall heavyset powerful build, short textured dark-brown hair, clean-shaven, wearing a well-fitted light-blue oxford shirt with sleeves rolled to the elbow, a bold tattoo sleeve clearly visible on his right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m12": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "beard",
+            "build": "big",
+            "style": "edgy",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 33-year-old eastern european man taken by a friend on a smartphone, tall heavyset powerful build, short light-blond hair, a full neatly trimmed short beard, wearing a stylish boxy black graphic t-shirt and a thin silver chain necklace, no tattoos, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        }
+      }
+    },
+    "c": {
+      "label": "38-48",
+      "photos": {
+        "f01": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "blonde",
+            "hairLength": "long",
+            "build": "slim",
+            "style": "elegant",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 42-year-old eastern european woman taken by a friend on a smartphone, slender petite build, long straight golden-blonde hair, wearing an elegant fitted black slip dress with thin straps and delicate minimal gold jewelry, bare arms with no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f02": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "brunette",
+            "hairLength": "long",
+            "build": "athletic",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 42-year-old eastern european woman taken by a friend on a smartphone, toned athletic build with defined shoulders and waist, long wavy dark-brown hair, wearing a stylish athleisure set: a fitted white ribbed tank top and high-waist flared leggings, bare arms with no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f03": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "red",
+            "hairLength": "short",
+            "build": "slim",
+            "style": "edgy",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 42-year-old eastern european woman taken by a friend on a smartphone, slender petite build, a chin-length natural copper-red bob, wearing a well-styled vintage black band t-shirt with rolled short sleeves, layered silver necklaces and fitted dark jeans, a delicate fine-line tattoo sleeve clearly visible on her right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f04": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "brunette",
+            "hairLength": "short",
+            "build": "curvy",
+            "style": "elegant",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 42-year-old eastern european woman taken by a friend on a smartphone, soft curvy full-figured hourglass build, a sleek chin-length dark-brown bob, wearing an elegant fitted black slip dress with thin straps and delicate minimal gold jewelry, bare arms with no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f05": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "blonde",
+            "hairLength": "short",
+            "build": "athletic",
+            "style": "edgy",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 42-year-old eastern european woman taken by a friend on a smartphone, toned athletic build with defined shoulders and waist, a chin-length blonde bob, wearing a well-styled vintage black band t-shirt with rolled short sleeves, layered silver necklaces and fitted dark jeans, a delicate fine-line tattoo sleeve clearly visible on her right forearm, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f06": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "red",
+            "hairLength": "long",
+            "build": "curvy",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 42-year-old eastern european woman taken by a friend on a smartphone, soft curvy full-figured hourglass build, long natural copper-red hair, wearing a stylish athleisure set: a fitted white ribbed tank top and high-waist flared leggings, bare arms with no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f07": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "brunette",
+            "hairLength": "long",
+            "build": "slim",
+            "style": "sporty",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 42-year-old eastern european woman taken by a friend on a smartphone, slender petite build, long wavy dark-brown hair, wearing a stylish athleisure set: a fitted white ribbed tank top and high-waist flared leggings, a delicate fine-line tattoo sleeve clearly visible on her right forearm, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f08": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "blonde",
+            "hairLength": "long",
+            "build": "curvy",
+            "style": "edgy",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 42-year-old eastern european woman taken by a friend on a smartphone, soft curvy full-figured hourglass build, long straight golden-blonde hair, wearing a well-styled vintage black band t-shirt with rolled short sleeves, layered silver necklaces and fitted dark jeans, bare arms with no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f09": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "red",
+            "hairLength": "short",
+            "build": "athletic",
+            "style": "elegant",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 42-year-old eastern european woman taken by a friend on a smartphone, toned athletic build with defined shoulders and waist, a chin-length natural copper-red bob, wearing an elegant fitted black slip dress with thin straps and delicate minimal gold jewelry, bare arms with no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f10": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "brunette",
+            "hairLength": "short",
+            "build": "slim",
+            "style": "edgy",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 42-year-old eastern european woman taken by a friend on a smartphone, slender petite build, a sleek chin-length dark-brown bob, wearing a well-styled vintage black band t-shirt with rolled short sleeves, layered silver necklaces and fitted dark jeans, bare arms with no tattoos, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f11": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "blonde",
+            "hairLength": "short",
+            "build": "curvy",
+            "style": "sporty",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 42-year-old eastern european woman taken by a friend on a smartphone, soft curvy full-figured hourglass build, a chin-length blonde bob, wearing a stylish athleisure set: a fitted white ribbed tank top and high-waist flared leggings, a delicate fine-line tattoo sleeve clearly visible on her right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "f12": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "red",
+            "hairLength": "long",
+            "build": "athletic",
+            "style": "elegant",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 42-year-old eastern european woman taken by a friend on a smartphone, toned athletic build with defined shoulders and waist, long natural copper-red hair, wearing an elegant fitted black slip dress with thin straps and delicate minimal gold jewelry, a delicate fine-line tattoo sleeve clearly visible on her right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a light genuine smile as if greeting someone she came to meet, natural minimal makeup, realistic skin texture, naturally attractive girl-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m01": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "clean",
+            "build": "lean",
+            "style": "classic",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 43-year-old eastern european man taken by a friend on a smartphone, slim lean build, short textured dark-brown hair, clean-shaven, wearing a well-fitted light-blue oxford shirt with sleeves rolled to the elbow, no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m02": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "beard",
+            "build": "athletic",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 43-year-old eastern european man taken by a friend on a smartphone, fit athletic build with broad shoulders, short light-blond hair, a full neatly trimmed short beard, wearing a clean minimalist off-white athletic-fit t-shirt, no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m03": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "beard",
+            "build": "athletic",
+            "style": "edgy",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 43-year-old eastern european man taken by a friend on a smartphone, fit athletic build with broad shoulders, short textured dark-brown hair, a full neatly trimmed short beard, wearing a stylish boxy black graphic t-shirt and a thin silver chain necklace, a bold tattoo sleeve clearly visible on his right forearm, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m04": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "clean",
+            "build": "athletic",
+            "style": "classic",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 43-year-old eastern european man taken by a friend on a smartphone, fit athletic build with broad shoulders, short light-blond hair, clean-shaven, wearing a well-fitted light-blue oxford shirt with sleeves rolled to the elbow, no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m05": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "beard",
+            "build": "big",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 43-year-old eastern european man taken by a friend on a smartphone, tall heavyset powerful build, short textured dark-brown hair, a full neatly trimmed short beard, wearing a clean minimalist off-white athletic-fit t-shirt, no tattoos, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m06": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "clean",
+            "build": "lean",
+            "style": "edgy",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 43-year-old eastern european man taken by a friend on a smartphone, slim lean build, short light-blond hair, clean-shaven, wearing a stylish boxy black graphic t-shirt and a thin silver chain necklace, a bold tattoo sleeve clearly visible on his right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m07": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "clean",
+            "build": "athletic",
+            "style": "sporty",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 43-year-old eastern european man taken by a friend on a smartphone, fit athletic build with broad shoulders, short textured dark-brown hair, clean-shaven, wearing a clean minimalist off-white athletic-fit t-shirt, a bold tattoo sleeve clearly visible on his right forearm, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m08": {
+          "scene": "street",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "beard",
+            "build": "lean",
+            "style": "classic",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 43-year-old eastern european man taken by a friend on a smartphone, slim lean build, short light-blond hair, a full neatly trimmed short beard, wearing a well-fitted light-blue oxford shirt with sleeves rolled to the elbow, a bold tattoo sleeve clearly visible on his right forearm, leaning casually against a sunlit old-town street wall by a café terrace on a warm afternoon, softly blurred empty street background with no other people, warm golden daylight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m09": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "beard",
+            "build": "lean",
+            "style": "sporty",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 43-year-old eastern european man taken by a friend on a smartphone, slim lean build, short textured dark-brown hair, a full neatly trimmed short beard, wearing a clean minimalist off-white athletic-fit t-shirt, no tattoos, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m10": {
+          "scene": "cafe",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "clean",
+            "build": "big",
+            "style": "edgy",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 43-year-old eastern european man taken by a friend on a smartphone, tall heavyset powerful build, short light-blond hair, clean-shaven, wearing a stylish boxy black graphic t-shirt and a thin silver chain necklace, no tattoos, leaning casually against the bar counter of a cozy warmly-lit café in the evening, softly blurred empty café background with no other people, warm ambient light, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m11": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "dark",
+            "beard": "clean",
+            "build": "big",
+            "style": "classic",
+            "tattoos": "yes"
+          },
+          "prompt": "candid unposed photo of a 43-year-old eastern european man taken by a friend on a smartphone, tall heavyset powerful build, short textured dark-brown hair, clean-shaven, wearing a well-fitted light-blue oxford shirt with sleeves rolled to the elbow, a bold tattoo sleeve clearly visible on his right forearm, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        },
+        "m12": {
+          "scene": "park",
+          "attrs": {
+            "hairColor": "light",
+            "beard": "beard",
+            "build": "big",
+            "style": "edgy",
+            "tattoos": "no"
+          },
+          "prompt": "candid unposed photo of a 43-year-old eastern european man taken by a friend on a smartphone, tall heavyset powerful build, short light-blond hair, a full neatly trimmed short beard, wearing a stylish boxy black graphic t-shirt and a thin silver chain necklace, no tattoos, standing casually on a tree-lined park path at golden hour, softly blurred green park background with no other people, warm low golden sunlight, three-quarter framing from mid-thigh up, casual effortless framing, looking at the camera with a calm easy smile as if greeting someone he came to meet, realistic skin texture, naturally attractive guy-next-door look, not model-glamorous, tasteful Pinterest-style aesthetic with a pleasing warm color grade, authentic phone-camera feel of a well-liked social media photo, no studio lighting, no plastic AI-render look --ar 3:4 --style raw"
+        }
+      }
+    }
+  }
+}
