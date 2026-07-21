@@ -44,6 +44,13 @@ export interface CatalogVenue {
   mapsUri: string | null;
   /** One of VENUE_CATEGORY_WHITELIST (string for transport simplicity). */
   category: string;
+  /**
+   * `base` (student-friendly, always selectable) or `premium` (Gennety Premium
+   * tier — shown but locked unless a participant has an active subscription; may
+   * exceed the ≤ MODERATE price cap). Places-fallback rows are always `base`.
+   * See PRODUCT_SPEC.md §Premium.
+   */
+  tier: string;
   /** Great-circle distance from the original venue center, km (rounded to 0.1). */
   distanceKm: number;
   /** Operator-supplied photo for curated rows; null for Places fallbacks. */
@@ -171,6 +178,13 @@ export interface BuildCatalogInput {
   agreedTime: Date;
   /** Radius cap; defaults to the product 3 km. */
   radiusKm?: number;
+  /**
+   * Include `premium`-tier curated venues in the catalog (shown but locked in
+   * the board). Pass `PREMIUM_FEATURE_ENABLED`; when false the catalog is
+   * base-only, so premium venues never surface while the feature is off.
+   * Places-fallback rows are always base. See PRODUCT_SPEC.md §Premium.
+   */
+  includePremium?: boolean;
 }
 
 export interface BuildCatalogDeps {
@@ -193,7 +207,13 @@ export async function listCuratedVenuesNear(
   const radiusKm = input.radiusKm ?? VENUE_CHANGE_RADIUS_KM;
 
   const rows = await prisma.curatedVenue.findMany({
-    where: { universityDomain: input.universityDomain, active: true },
+    where: {
+      universityDomain: input.universityDomain,
+      active: true,
+      // Premium venues only surface when the feature is on (they're then shown
+      // locked in the board). Base-only otherwise.
+      ...(input.includePremium ? {} : { tier: "base" }),
+    },
     select: {
       name: true,
       address: true,
@@ -201,6 +221,7 @@ export async function listCuratedVenuesNear(
       lng: true,
       googleMapsUri: true,
       category: true,
+      tier: true,
       photoUrl: true,
       utcOffsetMinutes: true,
       openingHours: true,
@@ -230,6 +251,7 @@ export async function listCuratedVenuesNear(
       lng: r.lng,
       mapsUri: r.googleMapsUri,
       category: r.category,
+      tier: r.tier,
       distanceKm: round1(distanceKm),
       photoUrl: r.photoUrl,
       // Curated rows carry a single operator photo (above), no Places gallery
@@ -289,6 +311,8 @@ export async function listPlacesVenuesNear(
         lng: c.lng,
         mapsUri: c.googleMapsUri,
         category: c.category,
+        // Places-fallback rows are always base (they pass the ≤ MODERATE gate).
+        tier: "base",
         distanceKm: round1(distanceKm),
         photoUrl: null,
         photoRefs: c.photos.slice(0, VENUE_CHANGE_PHOTOS_PER_VENUE),

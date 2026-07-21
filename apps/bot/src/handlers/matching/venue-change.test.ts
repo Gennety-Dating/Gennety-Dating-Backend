@@ -67,6 +67,7 @@ function catalogVenue(placeId: string, name: string): CatalogVenue {
     lng: 30.521,
     mapsUri: `https://maps.google.com/${placeId}`,
     category: "cafe",
+    tier: "base",
     distanceKm: 0.3,
     photoUrl: null,
     photoRefs: [`places/${placeId}/photos/x`],

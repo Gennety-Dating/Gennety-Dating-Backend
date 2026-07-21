@@ -299,8 +299,8 @@ describe("premium subscription (sub:premium)", () => {
       total_amount: 500,
       telegram_payment_charge_id: "charge_sub_1",
     });
-    (ctx.message!.successful_payment as Record<string, unknown>).is_first_recurring = true;
-    (ctx.message!.successful_payment as Record<string, unknown>).subscription_expiration_date =
+    (ctx.message!.successful_payment as unknown as Record<string, unknown>).is_first_recurring = true;
+    (ctx.message!.successful_payment as unknown as Record<string, unknown>).subscription_expiration_date =
       Math.floor(Date.now() / 1000) + 2_592_000;
     await handleSuccessfulPayment(ctx);
     expect(activatePremium).toHaveBeenCalledWith(
@@ -323,8 +323,8 @@ describe("premium subscription (sub:premium)", () => {
       total_amount: 500,
       telegram_payment_charge_id: "charge_sub_2",
     });
-    (ctx.message!.successful_payment as Record<string, unknown>).is_recurring = true;
-    (ctx.message!.successful_payment as Record<string, unknown>).is_first_recurring = false;
+    (ctx.message!.successful_payment as unknown as Record<string, unknown>).is_recurring = true;
+    (ctx.message!.successful_payment as unknown as Record<string, unknown>).is_first_recurring = false;
     await handleSuccessfulPayment(ctx);
     expect(activatePremium).toHaveBeenCalledWith(expect.objectContaining({ event: "renewed" }));
     expect(reply).not.toHaveBeenCalled();
@@ -339,7 +339,7 @@ describe("premium subscription (sub:premium)", () => {
       total_amount: 500,
       telegram_payment_charge_id: "charge_sub_1",
     });
-    (ctx.message!.successful_payment as Record<string, unknown>).is_first_recurring = true;
+    (ctx.message!.successful_payment as unknown as Record<string, unknown>).is_first_recurring = true;
     await handleSuccessfulPayment(ctx);
     expect(reply).not.toHaveBeenCalled();
   });

@@ -77,6 +77,10 @@ const DEFAULT_CANDIDATES = resolve(root, "scripts/curated-venues.candidates.json
 const DEFAULT_CATEGORIES = ["cafe", "coffee_shop", "restaurant", "park", "museum"];
 const DEFAULT_RADIUS_M = 4000;
 const PER_CATEGORY = Number(args.get("per-category") ?? "8");
+// `--tier=premium` seeds the Gennety Premium venue tier: candidates are pulled
+// with the price ceiling relaxed (EXPENSIVE allowed) and tagged tier=premium.
+// Default `base` keeps the student-friendly ≤ MODERATE gate. See §Premium.
+const SEED_TIER = args.get("tier") === "premium" ? "premium" : "base";
 
 function resolveCliPath(name, fallback) {
   const value = args.get(name);
@@ -119,13 +123,18 @@ async function pull() {
     for (const category of categories) {
       let found = [];
       try {
-        found = await searchVenueCandidates(apiKey, {
-          lat,
-          lng,
-          category,
-          keywords: [],
-          radiusMeters,
-        });
+        found = await searchVenueCandidates(
+          apiKey,
+          {
+            lat,
+            lng,
+            category,
+            keywords: [],
+            radiusMeters,
+          },
+          // Relax the ≤ MODERATE price ceiling for the premium tier only.
+          /* strict */ SEED_TIER !== "premium",
+        );
       } catch (err) {
         console.warn(`  ! ${universityDomain}/${category} search failed:`, err?.message ?? err);
         continue;
@@ -144,6 +153,7 @@ async function pull() {
           placeId: c.placeId,
           category: c.category,
           priority: defaultPriority,
+          tier: SEED_TIER,
           vibeTags: [],
           utcOffsetMinutes: c.utcOffsetMinutes,
           openingHours: c.openingHours,
@@ -173,7 +183,7 @@ async function importVenues() {
   if (!Array.isArray(rows)) fail("Candidates file must be a JSON array.");
 
   const { prisma } = await import("@gennety/db");
-  const { isValidVenueCategory } = await import(
+  const { isValidVenueCategory, isValidVenueTier } = await import(
     "../apps/bot/src/services/curated-venue.js"
   );
   const { isBlockedVenueName } = await import(
@@ -227,6 +237,9 @@ async function importVenues() {
       placeId: r.placeId ?? null,
       category: r.category,
       priority: Number.isFinite(r.priority) ? r.priority : 2,
+      // Tier defaults to `base`; a row is `premium` only when it explicitly says
+      // so (validated against the whitelist). See §Premium.
+      tier: isValidVenueTier(r.tier) ? r.tier : "base",
       vibeTags: Array.isArray(r.vibeTags) ? r.vibeTags : [],
       utcOffsetMinutes: Number.isFinite(r.utcOffsetMinutes) ? r.utcOffsetMinutes : null,
       openingHours: r.openingHours ?? null,
@@ -235,7 +248,9 @@ async function importVenues() {
     };
 
     if (!apply) {
-      console.log(`  would upsert: [${data.universityDomain}] ${data.name} (${data.category}, p${data.priority})`);
+      console.log(
+        `  would upsert: [${data.universityDomain}] ${data.name} (${data.category}, p${data.priority}, ${data.tier})`,
+      );
       continue;
     }
 

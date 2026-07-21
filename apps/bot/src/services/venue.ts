@@ -669,10 +669,18 @@ export interface VenueCandidate {
 export async function searchVenueCandidates(
   apiKey: string,
   input: MidpointVenueInput,
+  /**
+   * When `true` (default) the student-friendly ≤ MODERATE price ceiling applies
+   * to food categories. Pass `false` ONLY for the Gennety Premium venue seed
+   * (`seed-venues:pull --tier=premium`) to admit EXPENSIVE/VERY_EXPENSIVE spots;
+   * every other quality gate (operational, type deny-list, rating, reviews)
+   * still applies. See PRODUCT_SPEC.md §Premium.
+   */
+  strict = true,
 ): Promise<VenueCandidate[]> {
   const places = await searchNearby(apiKey, input);
   return places
-    .filter((p) => gate(p, input.category, /* strict */ true))
+    .filter((p) => gate(p, input.category, strict))
     .map((p) => ({
       place: p,
       s: score(p, { lat: input.lat, lng: input.lng }, input.radiusMeters),

@@ -252,7 +252,10 @@ export async function pickCuratedVenue(
   if (!input.universityDomain) return null;
 
   const rows = await prisma.curatedVenue.findMany({
-    where: { universityDomain: input.universityDomain, active: true },
+    // Auto-assign only ever picks a `base` venue — the default date must respect
+    // the student-friendly ≤ MODERATE cap. Premium venues are opt-in via a paid
+    // venue change, never the automatic first assignment (PRODUCT_SPEC §Premium).
+    where: { universityDomain: input.universityDomain, active: true, tier: "base" },
     select: {
       name: true,
       address: true,
