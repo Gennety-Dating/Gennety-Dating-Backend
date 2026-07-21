@@ -155,12 +155,12 @@ export const GENNETY_AD_DURATION_IN_FRAMES = {
 const TIMELINES = {
   uk: {
     hook: {from: 0, duration: 150},
-    ai: {from: 130, duration: 165},
-    match: {from: 275, duration: 145},
-    calendar: {from: 400, duration: 165},
-    venue: {from: 545, duration: 150},
-    confirmation: {from: 675, duration: 130},
-    cta: {from: 785, duration: 145},
+    ai: {from: 130, duration: 150},
+    match: {from: 260, duration: 150},
+    calendar: {from: 390, duration: 150},
+    venue: {from: 520, duration: 150},
+    confirmation: {from: 650, duration: 150},
+    cta: {from: 780, duration: 150},
   },
   en: {
     hook: {from: 0, duration: 150},
@@ -460,6 +460,11 @@ const HookScene: React.FC<FormatProps & {duration: number}> = ({format, language
   const vertical = format === "vertical";
   const copy = COPY[language];
   const opacity = fade(frame, duration, 18);
+  const contentExit = interpolate(frame, [duration - 20, duration - 8], [1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: ease,
+  });
   const titleIn = enter(frame, fps, 8);
   const pivot = interpolate(frame, [42, 66], [0, 1], {
     extrapolateLeft: "clamp",
@@ -474,95 +479,103 @@ const HookScene: React.FC<FormatProps & {duration: number}> = ({format, language
   return (
     <AbsoluteFill style={{opacity, overflow: "hidden"}}>
       <Ambient format={format} />
-      <Brand
-        size={vertical ? 56 : 46}
-        style={{position: "absolute", zIndex: 20, top: vertical ? 70 : 48, left: vertical ? 72 : 78}}
-      />
-
-      <div
+      <AbsoluteFill
         style={{
-          position: "absolute",
-          inset: 0,
-          transform: vertical ? `translateY(${cardShift}px)` : `translateX(${cardShift}px)`,
+          opacity: contentExit,
+          overflow: "hidden",
+          transform: `translateY(${(1 - contentExit) * -22}px)`,
         }}
       >
-        <SwipeCard
-          name="Marta, 24"
-          path={PROFILE_ASSETS[1]}
-          distance={copy.distance}
-          frame={frame}
-          delay={2}
-          style={{
-            left: vertical ? -80 : 830,
-            top: vertical ? 265 : 100,
-            transform: "rotate(-8deg)",
-          }}
+        <Brand
+          size={vertical ? 56 : 46}
+          style={{position: "absolute", zIndex: 20, top: vertical ? 70 : 48, left: vertical ? 72 : 78}}
         />
-        <SwipeCard
-          name="Alex, 26"
-          path={PROFILE_ASSETS[3]}
-          distance={copy.distance}
-          frame={frame}
-          delay={8}
-          style={{
-            left: vertical ? 360 : 1170,
-            top: vertical ? 215 : 190,
-            transform: "rotate(7deg)",
-          }}
-        />
-        <SwipeCard
-          name="Sofia, 23"
-          path={PROFILE_ASSETS[4]}
-          distance={copy.distance}
-          frame={frame}
-          delay={14}
-          style={{
-            left: vertical ? 730 : 1460,
-            top: vertical ? 350 : 55,
-            transform: "rotate(11deg)",
-          }}
-        />
-      </div>
 
-      <ChatBubble
-        left
-        text={copy.chatGreeting}
-        style={{left: vertical ? 76 : 100, top: vertical ? 910 : 620, opacity: 1 - pivot * 0.7}}
-      />
-      <ChatBubble
-        text={copy.chatMeet}
-        style={{right: vertical ? 72 : 104, top: vertical ? 1040 : 730, opacity: 1 - pivot * 0.7}}
-      />
-      <ChatBubble
-        left
-        text={copy.chatPlan}
-        style={{left: vertical ? 130 : 230, top: vertical ? 1180 : 840, opacity: 1 - pivot * 0.7}}
-      />
-
-      <div
-        style={{
-          position: "absolute",
-          left: vertical ? 72 : 92,
-          right: vertical ? 72 : 980,
-          bottom: vertical ? 245 : 175,
-          opacity: titleIn,
-          transform: `translateY(${(1 - titleIn) * 58}px)`,
-        }}
-      >
-        <Headline format={format} size={language === "en" ? (vertical ? 88 : 96) : (vertical ? 98 : 108)}>
-          <span style={{opacity: 1 - pivot}}>{copy.hookBefore}</span>
-          <span
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            transform: vertical ? `translateY(${cardShift}px)` : `translateX(${cardShift}px)`,
+          }}
+        >
+          <SwipeCard
+            name="Marta, 24"
+            path={PROFILE_ASSETS[1]}
+            distance={copy.distance}
+            frame={frame}
+            delay={2}
             style={{
-              display: "block",
-              marginTop: vertical ? -105 : -110,
-              opacity: pivot,
-              color: SOFT,
+              left: vertical ? -80 : 830,
+              top: vertical ? 265 : 100,
+              transform: "rotate(-8deg)",
             }}
-          >
-            {copy.hookAfter} <span style={{color: WINE_LIGHT}}>{copy.hookAccent}</span>
-          </span>
-        </Headline>
-      </div>
+          />
+          <SwipeCard
+            name="Alex, 26"
+            path={PROFILE_ASSETS[3]}
+            distance={copy.distance}
+            frame={frame}
+            delay={8}
+            style={{
+              left: vertical ? 360 : 1170,
+              top: vertical ? 215 : 190,
+              transform: "rotate(7deg)",
+            }}
+          />
+          <SwipeCard
+            name="Sofia, 23"
+            path={PROFILE_ASSETS[4]}
+            distance={copy.distance}
+            frame={frame}
+            delay={14}
+            style={{
+              left: vertical ? 730 : 1460,
+              top: vertical ? 350 : 55,
+              transform: "rotate(11deg)",
+            }}
+          />
+        </div>
+
+        <ChatBubble
+          left
+          text={copy.chatGreeting}
+          style={{left: vertical ? 76 : 100, top: vertical ? 910 : 620, opacity: 1 - pivot * 0.7}}
+        />
+        <ChatBubble
+          text={copy.chatMeet}
+          style={{right: vertical ? 72 : 104, top: vertical ? 1040 : 730, opacity: 1 - pivot * 0.7}}
+        />
+        <ChatBubble
+          left
+          text={copy.chatPlan}
+          style={{left: vertical ? 130 : 230, top: vertical ? 1180 : 840, opacity: 1 - pivot * 0.7}}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            left: vertical ? 72 : 92,
+            right: vertical ? 72 : 980,
+            bottom: vertical ? 245 : 175,
+            opacity: titleIn,
+            transform: `translateY(${(1 - titleIn) * 58}px)`,
+          }}
+        >
+          <Headline format={format} size={language === "en" ? (vertical ? 88 : 96) : (vertical ? 98 : 108)}>
+            <span style={{opacity: 1 - pivot}}>{copy.hookBefore}</span>
+            <span
+              style={{
+                display: "block",
+                marginTop: vertical ? -105 : -110,
+                opacity: pivot,
+                color: SOFT,
+              }}
+            >
+              {copy.hookAfter} <span style={{color: WINE_LIGHT}}>{copy.hookAccent}</span>
+            </span>
+          </Headline>
+        </div>
+      </AbsoluteFill>
     </AbsoluteFill>
   );
 };
@@ -1582,25 +1595,25 @@ const CtaScene: React.FC<FormatProps & {duration: number; couplePhoto?: string}>
         {language === "uk" ? (
           <div
             style={{
-              marginTop: 38,
+              width: vertical ? "100%" : 560,
+              minHeight: vertical ? 108 : 94,
+              marginTop: 36,
+              padding: vertical ? "0 36px" : "0 30px",
+              borderRadius: vertical ? 30 : 27,
               display: "flex",
               alignItems: "center",
-              gap: 14,
+              justifyContent: "center",
               color: SOFT,
-              fontSize: vertical ? 30 : 27,
-              fontWeight: 700,
+              fontSize: vertical ? 36 : 31,
+              fontWeight: 800,
+              lineHeight: 1.15,
+              textAlign: "center",
+              letterSpacing: -0.5,
+              background: `linear-gradient(135deg, ${WINE}, #B54460)`,
+              border: "1px solid rgba(255,255,255,.18)",
+              boxShadow: "0 28px 78px rgba(139,37,59,.52), inset 0 1px 0 rgba(255,255,255,.2)",
             }}
           >
-            <span
-              style={{
-                width: 10,
-                height: 10,
-                flex: "0 0 auto",
-                borderRadius: "50%",
-                background: WINE_LIGHT,
-                boxShadow: `0 0 22px ${WINE_LIGHT}`,
-              }}
-            />
             {copy.ctaButton}
           </div>
         ) : (
