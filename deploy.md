@@ -1,6 +1,23 @@
 # Gennety Dating Deploy
 
-Last verified: 2026-07-18 (full server deploy — iOS Stage 0 backend slice:
+Last verified: 2026-07-21 (full server deploy — **Gennety Premium launch**:
+recurring Telegram Stars + StoreKit subscription, venue-change premium tier.
+`PREMIUM_FEATURE_ENABLED=true` + `PREMIUM_STARS=500` / `PREMIUM_PRICE_USD_DISPLAY=$10`
+/ `PREMIUM_APPSTORE_PRODUCT_ID=premium_monthly` added; Mini App redeployed
+(`premium.html` + reworked `venue-change.html`); Kyiv premium catalog imported
+(70 premium venues, 14/domain × 5 domains); `features.premium: true` live,
+`/v1/premium/state` → 401 (mounted+on). **Schema applied additively via
+`prisma db execute`, NOT `db:push`:** the prod DB still carries the obsolete
+`web_registration_links` table (6 rows) + `WebRegistrationPurpose` enum from the
+2026-07-19 web-registration removal, so a plain `db:push` demands
+`--accept-data-loss` to drop them. To keep the Premium launch additive-only, the
+five premium ALTER/CREATE statements (`users.premium_*`, `curated_venues.tier`,
+`matches.venue_change_tier`, `subscription_ledger`) were generated with
+`prisma migrate diff` and run via `prisma db execute`, filtering out the two
+DROP statements. **Follow-up (separate, founder-approved):** run
+`prisma db push --accept-data-loss` to drop the dead `web_registration_links`
+table + enum once you're comfortable — no code reads them (PRODUCT_SPEC §1.1).
+Prior full deploys: 2026-07-18 (iOS Stage 0 backend slice:
 `/v1/app/config`, phone rail `/v1/auth/phone/*` (Gateway/Twilio creds not yet
 set → clean 503), direct APNs transport with the live `.p8` key at
 `/opt/gennety/keys/AuthKey_JTLFAQ8RM2.p8` (sandbox probe returned
