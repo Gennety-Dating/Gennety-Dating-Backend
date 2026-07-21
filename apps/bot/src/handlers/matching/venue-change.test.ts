@@ -588,7 +588,7 @@ describe("mintExpressChange", () => {
   it("stamps the express pick for the female (hetero)", async () => {
     mMatch.findUnique.mockResolvedValue(fakeMatch());
     const res = await mintExpressChange(100n, "m1", "p1", { loadCatalog });
-    expect(res).toEqual({ ok: true, venueName: "New Cafe" });
+    expect(res).toEqual({ ok: true, venueName: "New Cafe", free: false });
     const mint = updateCalls((d) => d.venueChangeExpressAt != null);
     expect(mint.length).toBe(1);
     expect(mint[0][0].data).toMatchObject({
@@ -702,5 +702,52 @@ describe("sweepExpiredVenueChanges", () => {
     expect(revert.length).toBe(1);
     expect(revert[0][0].data).toMatchObject({ venueChangeName: null, venueChangeExpressAt: null });
     expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("premium venue gating + fee waiver (§Premium)", () => {
+  const premiumVenue = (): CatalogVenue => ({ ...catalogVenue("prem1", "Rooftop"), tier: "premium" });
+  const premiumUntil = new Date(Date.now() + 30 * 24 * HOUR);
+
+  it("rejects a premium pick when neither participant is premium", async () => {
+    mMatch.findUnique.mockResolvedValue(fakeMatch());
+    const res = await submitVenueLikes(fakeApi(), 100n, "m1", ["prem1"], {
+      loadCatalog: async () => [premiumVenue()],
+    });
+    expect(res).toEqual({ ok: false, reason: "premium-locked" });
+  });
+
+  it("allows a premium pick when either participant is premium", async () => {
+    const base = fakeMatch();
+    mMatch.findUnique.mockResolvedValue({
+      ...base,
+      userA: { ...base.userA, premiumUntil },
+    });
+    const res = await submitVenueLikes(fakeApi(), 100n, "m1", ["prem1"], {
+      loadCatalog: async () => [premiumVenue()],
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it("exposes pairPremiumActive=false + premiumWouldWaive for a non-premium payer", async () => {
+    // agreed, base venue, she initiated → the male (userB, non-premium) is the payer.
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+    const he = await getVenueBoardState(200n, "m1");
+    expect(he.ok).toBe(true);
+    if (he.ok) {
+      expect(he.state.pairPremiumActive).toBe(false);
+      expect(he.state.premiumWouldWaive).toBe(true);
+    }
+  });
+
+  it("reports pairPremiumActive=true when a participant is premium", async () => {
+    const agreed = agreedMatch();
+    mMatch.findUnique.mockResolvedValue({
+      ...agreed,
+      userA: { ...agreed.userA, premiumUntil },
+    });
+    const she = await getVenueBoardState(100n, "m1");
+    expect(she.ok).toBe(true);
+    if (she.ok) expect(she.state.pairPremiumActive).toBe(true);
   });
 });

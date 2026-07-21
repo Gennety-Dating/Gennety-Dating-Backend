@@ -983,6 +983,12 @@ model Match {
   /// unilateral silent swap): hidden from the partner until settled, and a
   /// lapse stays silent for the partner (they never knew).
   venueChangeExpressAt      DateTime? @map("venue_change_express_at")
+  /// Tier of the agreed venue-change venue (`base` | `premium`), stamped at
+  /// agreement. Drives the Gennety Premium fee waiver: a `premium` venue (or a
+  /// `base` venue settled by a premium user) is free; a `base` venue settled by
+  /// a non-premium user costs VENUE_CHANGE_STARS + shows the counterfactual
+  /// upsell. Null = no agreed venue / legacy row. See PRODUCT_SPEC.md §Premium.
+  venueChangeTier           String?   @map("venue_change_tier")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

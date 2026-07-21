@@ -15,6 +15,7 @@ import {
   declineVenuePay,
   keepOriginalVenue,
   mintExpressChange,
+  settleFreeVenueChange,
   createVenueInvoiceLink,
 } from "../../handlers/matching/venue-change.js";
 
@@ -297,6 +298,17 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
         res.status(statusForReason(mint.reason)).json({ error: mint.reason });
         return;
       }
+      // Premium free express: no invoice — settle instantly and tell the Mini
+      // App it's done (§Premium).
+      if (mint.free) {
+        const settled = await settleFreeVenueChange(api, BigInt(auth.user.id), matchId);
+        if (!settled.ok) {
+          res.status(409).json({ error: settled.reason ?? "wrong-state" });
+          return;
+        }
+        res.status(200).json({ ok: true, settled: true, free: true });
+        return;
+      }
       venueName = mint.venueName;
     } else {
       // "agreed": re-derive the caller's paying rights from the board state —
@@ -373,6 +385,9 @@ function statusForReason(reason: string): number {
     case "feature-disabled":
     case "not-allowed":
       return 403;
+    // Premium-gated pick — the Mini App turns this into the subscribe CTA.
+    case "premium-locked":
+      return 402;
     case "already-changed":
     case "past-cutoff":
     case "already-offered":

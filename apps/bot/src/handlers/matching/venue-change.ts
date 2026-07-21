@@ -52,6 +52,7 @@ import {
   type CatalogVenue,
   type VenueChangeIneligibleReason,
 } from "../../services/venue-change.js";
+import { isPremiumHeadActive } from "../../services/premium.js";
 
 /** How long an abandoned express mint holds the board before quietly reverting. */
 const EXPRESS_HOLD_MINUTES = 30;
@@ -91,6 +92,7 @@ const VC_SELECT = {
   venueChangePingMsgIdA: true,
   venueChangePingMsgIdB: true,
   venueChangeExpressAt: true,
+  venueChangeTier: true,
   venueLikesA: true,
   venueLikesB: true,
   userAId: true,
@@ -104,10 +106,19 @@ const VC_SELECT = {
       gender: true,
       firstName: true,
       universityDomain: true,
+      premiumUntil: true,
     },
   },
   userB: {
-    select: { id: true, telegramId: true, language: true, theme: true, gender: true, firstName: true },
+    select: {
+      id: true,
+      telegramId: true,
+      language: true,
+      theme: true,
+      gender: true,
+      firstName: true,
+      premiumUntil: true,
+    },
   },
 } as const;
 
@@ -160,6 +171,34 @@ function expressAllowed(match: VcMatch, side: Side): boolean {
   return true; // same-sex/unknown: either side (the veto asymmetry is hetero-only)
 }
 
+/** Resolve a Side from a user id (not telegram id). */
+function sideOfUserId(match: VcMatch, userId: string): Side | null {
+  if (match.userA.id === userId) return "A";
+  if (match.userB.id === userId) return "B";
+  return null;
+}
+
+/**
+ * Gennety Premium (§Premium): either participant's active subscription unlocks
+ * premium-venue selection for the pair.
+ */
+function pairPremiumActive(match: VcMatch, now: Date = new Date()): boolean {
+  return (
+    isPremiumHeadActive(match.userA, now) || isPremiumHeadActive(match.userB, now)
+  );
+}
+
+/**
+ * Whether a settled change is FREE (no Stars). Premium venues are always free
+ * (only reachable because the pair has premium); a base venue is free only when
+ * the settling actor is themselves premium. Otherwise it costs
+ * VENUE_CHANGE_STARS and the non-premium payer sees the counterfactual upsell.
+ */
+function changeIsFree(agreedTier: string | null, settler: { premiumUntil: Date | null }, now: Date): boolean {
+  if (agreedTier === "premium") return true;
+  return isPremiumHeadActive(settler, now);
+}
+
 // ---------------------------------------------------------------------------
 // Like snapshots (Json[] on the match row)
 // ---------------------------------------------------------------------------
@@ -174,6 +213,8 @@ export interface VenueLikeSnapshot {
   lng: number;
   mapsUri: string | null;
   category: string;
+  /** `base` | `premium` — Gennety Premium tier of the venue (§Premium). */
+  tier: string;
   photoUrl: string | null;
   photoRef: string | null;
 }
@@ -206,6 +247,9 @@ function originalSnapshot(match: VcMatch): VenueLikeSnapshot | null {
     lng: match.venueLng,
     mapsUri: match.venueGoogleMapsUri,
     category: "cafe",
+    // The originally-assigned venue is always a base spot (auto-assign is
+    // base-only) — keeping it is free regardless of premium.
+    tier: "base",
     photoUrl: null,
     photoRef: null,
   };
@@ -221,6 +265,7 @@ function toSnapshot(v: CatalogVenue): VenueLikeSnapshot {
     lng: v.lng,
     mapsUri: v.mapsUri,
     category: v.category,
+    tier: v.tier,
     photoUrl: v.photoUrl,
     photoRef: v.photoRefs[0] ?? null,
   };
@@ -241,6 +286,7 @@ function parseLikes(raw: Prisma.JsonValue[]): VenueLikeSnapshot[] {
       lng: typeof o.lng === "number" ? o.lng : 0,
       mapsUri: typeof o.mapsUri === "string" ? o.mapsUri : null,
       category: typeof o.category === "string" ? o.category : "cafe",
+      tier: o.tier === "premium" ? "premium" : "base",
       photoUrl: typeof o.photoUrl === "string" ? o.photoUrl : null,
       photoRef: typeof o.photoRef === "string" ? o.photoRef : null,
     });
@@ -352,6 +398,18 @@ export interface VenueBoardStateView {
   expressAvailable: boolean;
   /** Set when status = settled: the new canonical venue + whether the peer paid. */
   settled: { name: string; address: string; mapsUri: string | null; peerPaid: boolean } | null;
+  /**
+   * Gennety Premium (§Premium): either participant has an active subscription →
+   * premium-tier venues are selectable (the Mini App unlocks their cards).
+   */
+  pairPremiumActive: boolean;
+  /**
+   * True when the caller has a paying action but is NOT premium — the
+   * counterfactual upsell ("with Premium this change is free") is shown at the
+   * pay step. (A premium venue, or a premium payer, settles free before ever
+   * reaching a paying state.)
+   */
+  premiumWouldWaive: boolean;
 }
 
 export type VenueBoardStateResult =
@@ -423,6 +481,7 @@ function buildBoardState(match: VcMatch, side: Side, now: Date): VenueBoardState
     eligibility.ok && (status === "none" || status === "liking") && expressAllowed(match, side);
 
   const paying = myAction === "pay" || myAction === "pay_or_decline" || myAction === "pay_or_offer";
+  const callerPremium = isPremiumHeadActive(me, now);
 
   return {
     status,
@@ -464,6 +523,8 @@ function buildBoardState(match: VcMatch, side: Side, now: Date): VenueBoardState
             peerPaid: match.venueChangePaidById != null && match.venueChangePaidById !== me.id,
           }
         : null,
+    pairPremiumActive: pairPremiumActive(match, now),
+    premiumWouldWaive: paying && !callerPremium,
   };
 }
 
@@ -534,7 +595,8 @@ export type SubmitLikesResult =
         | "match-not-found"
         | "not-participant"
         | VenueChangeIneligibleReason
-        | "invalid-venue";
+        | "invalid-venue"
+        | "premium-locked";
     }
   | { ok: true; agreed: boolean; kept: boolean; overlapCandidates: string[] };
 
@@ -602,6 +664,13 @@ export async function submitVenueLikes(
     const venue = byKey.get(key);
     if (!venue) return { ok: false, reason: "invalid-venue" };
     snapshots.push(toSnapshot(venue));
+  }
+
+  // Premium gate: a premium-tier pick requires an active subscription on either
+  // side. Never trust the client — the tier is re-resolved from the catalog
+  // above. See PRODUCT_SPEC.md §Premium.
+  if (snapshots.some((s) => s.tier === "premium") && !pairPremiumActive(match, now)) {
+    return { ok: false, reason: "premium-locked" };
   }
 
   const likesColumn = side === "A" ? "venueLikesA" : "venueLikesB";
@@ -730,7 +799,8 @@ export type ConfirmVenueResult =
         | "match-not-found"
         | "not-participant"
         | VenueChangeIneligibleReason
-        | "not-overlapping";
+        | "not-overlapping"
+        | "premium-locked";
     }
   | { ok: true; kept: boolean };
 
@@ -766,6 +836,11 @@ export async function confirmVenueAgreement(
   const mine = likesOfSide(match, side).find((l) => l.key === key);
   const theirs = likesOfSide(match, otherSide(side)).find((l) => l.key === key);
   if (!mine || !theirs) return { ok: false, reason: "not-overlapping" };
+  // Premium gate (defensive — likes were already gated at submit time, but the
+  // subscription could have lapsed since). See §Premium.
+  if (mine.tier === "premium" && !pairPremiumActive(match, now)) {
+    return { ok: false, reason: "premium-locked" };
+  }
 
   const r = await reachAgreement(api, matchId, me.id, mine, now);
   return { ok: true, kept: r.kept };
@@ -806,17 +881,29 @@ async function reachAgreement(
       venueChangePlaceId: venue.placeId,
       venueChangePhotoUrl: venue.photoUrl,
       venueChangePhotoName: venue.photoRef,
+      venueChangeTier: venue.tier,
       venueChangeExpiresAt: deadline,
       venueChangeExpressAt: null,
     },
   });
   if (claim.count === 0) return { agreed: false, kept: false };
 
-  console.info(`[venue-change] agreement match=${matchId} venue="${venue.name}"`);
+  console.info(`[venue-change] agreement match=${matchId} venue="${venue.name}" tier=${venue.tier}`);
 
   // The board invites are stale the moment you agree — leaving them in the chat
   // next to a payment prompt would just be confusing.
   await retireBoardPings(api, fresh).catch(() => undefined);
+
+  // Gennety Premium fee waiver: when the change is free (premium venue, or the
+  // payer is a premium subscriber) it settles instantly with no payment step —
+  // no invoice, no wish-card fork. Non-free changes fall through to the paid
+  // routing below. See PRODUCT_SPEC.md §Premium.
+  const payerForFree = payerSide(fresh);
+  const payerUserForFree = payerForFree ? userOfSide(fresh, payerForFree) : null;
+  if (payerUserForFree && changeIsFree(venue.tier, payerUserForFree, now)) {
+    await finalizeVenueChangeFree(api, matchId, finalizerUserId);
+    return { agreed: true, kept: false };
+  }
 
   // Payment routing: DM the payer an invoice ONLY when they weren't the
   // finalizer AND no in-app fork covers them —
@@ -904,9 +991,10 @@ export type ExpressMintResult =
         | "not-participant"
         | VenueChangeIneligibleReason
         | "invalid-venue"
-        | "not-allowed";
+        | "not-allowed"
+        | "premium-locked";
     }
-  | { ok: true; venueName: string };
+  | { ok: true; venueName: string; free: boolean };
 
 /**
  * Stamp an express pick onto the row (status → agreed + expressAt) so the
@@ -954,6 +1042,11 @@ export async function mintExpressChange(
   const venue = catalog.find((v) => venueKeyOf(v) === key);
   if (!venue) return { ok: false, reason: "invalid-venue" };
   const snapshot = toSnapshot(venue);
+  // Premium gate — a premium express pick needs an active subscription in the
+  // pair (§Premium).
+  if (snapshot.tier === "premium" && !pairPremiumActive(match, now)) {
+    return { ok: false, reason: "premium-locked" };
+  }
 
   const holdUntil = new Date(
     Math.min(
@@ -980,14 +1073,35 @@ export async function mintExpressChange(
       venueChangePlaceId: snapshot.placeId,
       venueChangePhotoUrl: snapshot.photoUrl,
       venueChangePhotoName: snapshot.photoRef,
+      venueChangeTier: snapshot.tier,
       venueChangeExpiresAt: holdUntil,
       venueChangeExpressAt: now,
     },
   });
   if (claim.count === 0) return { ok: false, reason: "wrong-state" };
 
-  console.info(`[venue-change] express mint match=${matchId} venue="${snapshot.name}"`);
-  return { ok: true, venueName: snapshot.name };
+  console.info(`[venue-change] express mint match=${matchId} venue="${snapshot.name}" tier=${snapshot.tier}`);
+  // Free for a premium minter (or a premium venue) — the caller settles it
+  // without paying; the route locks it in immediately (§Premium).
+  const free = changeIsFree(snapshot.tier, me, now);
+  return { ok: true, venueName: snapshot.name, free };
+}
+
+/**
+ * Settle a free (premium) venue change on behalf of `settlerTelegramId` — the
+ * telegram-id entry point used by the express route when the mint came back
+ * free. Resolves the internal side, then runs the shared free-settle core.
+ */
+export async function settleFreeVenueChange(
+  api: Api<RawApi>,
+  settlerTelegramId: bigint,
+  matchId: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const match = await loadMatch(matchId);
+  if (!match) return { ok: false, reason: "match-not-found" };
+  const side = sideOfUser(match, settlerTelegramId);
+  if (!side) return { ok: false, reason: "not-participant" };
+  return finalizeVenueChangeFree(api, matchId, userOfSide(match, side).id);
 }
 
 // ---------------------------------------------------------------------------
@@ -1425,6 +1539,65 @@ export async function settleVenuePayment(
       venueName,
       venueAddress,
       mapsUri,
+    );
+  }
+  return { ok: true };
+}
+
+/**
+ * Gennety Premium free settle (§Premium): a change that costs nothing (premium
+ * venue, or a base venue settled by a premium subscriber) locks in immediately
+ * — no invoice, no wish-card fork. Mirrors the settle core of
+ * `settleVenuePayment` but without any Stars/refund logic. Both sides get the
+ * neutral updated venue card (nobody paid, so there is no "who covered it"
+ * reveal). Idempotent via the agreed→settled CAS.
+ */
+async function finalizeVenueChangeFree(
+  api: Api<RawApi>,
+  matchId: string,
+  settlerUserId: string,
+): Promise<{ ok: boolean; reason?: string }> {
+  const match = await loadMatch(matchId);
+  if (!match) return { ok: false, reason: "match-not-found" };
+  const side = sideOfUserId(match, settlerUserId);
+  if (!side) return { ok: false, reason: "not-participant" };
+  const settler = userOfSide(match, side);
+
+  const claim = await prisma.match.updateMany({
+    where: { id: matchId, status: "scheduled", venueChangeStatus: "agreed" },
+    data: {
+      venueChangeStatus: "settled",
+      venueChangeResolvedAt: new Date(),
+      venueChangeExpiresAt: null,
+      venueChangePaidById: settler.id,
+      venueChangePaidAt: new Date(),
+      venueName: match.venueChangeName,
+      venueAddress: match.venueChangeAddress,
+      venueLat: match.venueChangeLat,
+      venueLng: match.venueChangeLng,
+      venueGoogleMapsUri: match.venueChangeMapsUri,
+      venuePhotoUrl: match.venueChangePhotoUrl,
+      venuePhotoName: match.venueChangePhotoName,
+    },
+  });
+  if (claim.count === 0) return { ok: false, reason: "not-agreed" };
+
+  console.info(`[venue-change] settled FREE (premium) match=${matchId} settler=${settler.id}`);
+
+  const venueName = match.venueChangeName ?? "";
+  const venueAddress = match.venueChangeAddress ?? "";
+  const label = venueLabel(venueName, venueAddress);
+  const agreedTime = match.agreedTime ?? new Date();
+  for (const user of [match.userA, match.userB]) {
+    await sendUpdatedVenueCard(
+      api,
+      user,
+      "venueSettledCard",
+      { venue: label },
+      agreedTime,
+      venueName,
+      venueAddress,
+      match.venueChangeMapsUri,
     );
   }
   return { ok: true };
