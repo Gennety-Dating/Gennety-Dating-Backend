@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-06-13",
+  "checkedAt": "2026-07-21",
   "universityDomains": [
     "kneu.edu.ua",
     "knu.ua",
@@ -348,6 +348,188 @@
       "category": "park",
       "priority": 1,
       "vibeTags": ["walk", "nature", "quiet"]
+    },
+    {
+      "placeId": "ChIJM6zQ4FvO1EARCeqAXgHuR3Y",
+      "name": "Зиґзаґ",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": ["brunch", "cozy", "central"]
+    },
+    {
+      "placeId": "ChIJf8RaLTfP1EARAtLVFgD4d5w",
+      "name": "Львівські Круасани на Володимирській",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": ["bakery", "brunch", "casual"]
+    },
+    {
+      "placeId": "ChIJk1HPosDP1EARSv5hbF1USIo",
+      "name": "Breakfast Club",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": ["breakfast", "brunch", "cozy"]
+    },
+    {
+      "placeId": "ChIJb45VZ5jP1EARH-EQG5dSDS8",
+      "name": "Coffee Records",
+      "category": "coffee_shop",
+      "priority": 1,
+      "vibeTags": ["coffee", "vinyl", "podil"]
+    },
+    {
+      "placeId": "ChIJjYxLUgDP1EARzrKYQjfmm2g",
+      "name": "Remi Cafe",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": ["bakery", "brunch", "cozy"]
+    },
+    {
+      "placeId": "ChIJ87hEd2fP1EAREidDScA3ydY",
+      "name": "Suite13",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": ["coffee", "cocktail", "design"]
+    },
+    {
+      "placeId": "ChIJDVUrV3fP1EARE-RN0R0LtQc",
+      "name": "СПÉЛЬТА",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": ["bakery", "sourdough", "podil"]
+    },
+    {
+      "placeId": "ChIJpxHcJFPP1EAREJ03iyBOhn0",
+      "name": "Кицуня",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": ["asian", "ramen", "casual"]
+    },
+    {
+      "placeId": "ChIJvTIlPVnO1EAR2PGvU34cUbM",
+      "name": "Китайський Привіт",
+      "category": "restaurant",
+      "priority": 1,
+      "vibeTags": ["chinese", "casual", "central"]
+    },
+    {
+      "placeId": "ChIJrX1QmYTP1EARwo1gg9RYh_k",
+      "name": "Японський Привіт",
+      "category": "restaurant",
+      "priority": 1,
+      "vibeTags": ["japanese", "sushi", "retro"]
+    },
+    {
+      "placeId": "ChIJFf1HDl3P1EARZH3FZawwBJI",
+      "name": "Бути Sofie",
+      "category": "cafe",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": ["romantic", "terrace", "cozy"]
+    },
+    {
+      "placeId": "ChIJKYK2Xm3P1EAREj1aU0yDQ8s",
+      "name": "Bassano Ristorante",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": ["italian", "dessert", "romantic"]
+    },
+    {
+      "placeId": "ChIJ_1OYiqrP1EAR9QHwuIzPZ5M",
+      "name": "La Veranda Restaurant & Garden",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": ["terrace", "garden", "romantic"]
+    },
+    {
+      "placeId": "ChIJEzB7aT3P1EAR6HPkRP8d0nw",
+      "name": "Fish&Pussycat Sushi Bar",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": ["sushi", "seafood", "design"]
+    },
+    {
+      "placeId": "ChIJud7obz_O1EARvvaO3Gl5BUk",
+      "name": "Vero Vero",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": ["italian", "terrace", "podil"]
+    },
+    {
+      "placeId": "ChIJESt9sljP1EARBFD_tyn-rT8",
+      "name": "Італійська Редакція",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": ["italian", "dinner", "design"]
+    },
+    {
+      "placeId": "ChIJnwP4sETO1EARIT8t_OC3vZM",
+      "name": "Catch Seafood Restaurant",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": ["seafood", "raw", "dinner"]
+    },
+    {
+      "placeId": "ChIJ95ClDVjO1EARZxFUI5Yi5lo",
+      "name": "Citronelle",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": ["french", "romantic", "dinner"]
+    },
+    {
+      "placeId": "ChIJdXIBUfzO1EARWHFVG97WzMM",
+      "name": "NAM",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": ["vietnamese", "design", "dinner"]
+    },
+    {
+      "placeId": "ChIJ38FRLAfP1EARxPwOz5ylfjY",
+      "name": "BAO Modern Chinese Cuisine",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": ["chinese", "design", "dinner"]
+    },
+    {
+      "placeId": "ChIJmwWDTgfP1EARab2RAvhE788",
+      "name": "Lucky Restaurant Vinotheque",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": ["wine", "dinner", "upscale"]
+    },
+    {
+      "placeId": "ChIJCT8LqyfP1EAR0OvPuoTt7ko",
+      "name": "11 Mirrors Restaurant & Bar",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": ["rooftop", "view", "cocktail"]
+    },
+    {
+      "placeId": "ChIJhalizqnP1EAReP85e7Ckmn8",
+      "name": "Biggoli",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": ["italian", "pasta", "romantic"]
+    },
+    {
+      "placeId": "ChIJX4dpWHvO1EARPMfnxsa7cCs",
+      "name": "VINO e CUCINA",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": ["italian", "wine", "cozy"]
     }
   ],
   "excludedPlaces": [
@@ -360,21 +542,6 @@
       "name": "Mr. Zuma",
       "placeId": "ChIJD23SMf7O1EARHx_OqlNbVjM",
       "reason": "Google Places reports CLOSED_TEMPORARILY."
-    },
-    {
-      "name": "BAO Modern Chinese Cuisine",
-      "placeId": "ChIJ38FRLAfP1EARxPwOz5ylfjY",
-      "reason": "Google price level is VERY_EXPENSIVE."
-    },
-    {
-      "name": "Vero Vero",
-      "placeId": "ChIJud7obz_O1EARvvaO3Gl5BUk",
-      "reason": "Google price level is EXPENSIVE."
-    },
-    {
-      "name": "VINO e CUCINA",
-      "placeId": "ChIJX4dpWHvO1EARPMfnxsa7cCs",
-      "reason": "Google price level is EXPENSIVE."
     },
     {
       "name": "Matisse",
@@ -394,7 +561,42 @@
     {
       "name": "Milk Bar на Князів Острозьких",
       "placeId": "ChIJwY6OVQDP1EARWT3AdYpsrDM",
-      "reason": "Rating 2.8 with 11 reviews is below the production quality floor."
+      "reason": "Rating 2.6 with 13 reviews is below the production quality floor."
+    },
+    {
+      "name": "PAUL",
+      "placeId": "ChIJAQCEW1HO1EARc9GXgU-Uv0U",
+      "reason": "The qualifying central branches are PRICE_LEVEL_EXPENSIVE, above the base-tier price ceiling."
+    },
+    {
+      "name": "Good Girl",
+      "placeId": "ChIJuTx6kYXP1EAR3r6cBZ7cYoE",
+      "reason": "Google price level is EXPENSIVE, above the requested base tier."
+    },
+    {
+      "name": "Bonco біля Львівської площі",
+      "placeId": "ChIJX6HAICzP1EARYw55niFbK6I",
+      "reason": "Only 15 reviews, below the production floor of 30; the qualifying Vatslava Havela branch is not the requested central location."
+    },
+    {
+      "name": "Kyiv Food Market",
+      "placeId": "ChIJG2gG1jLP1EARjHvotWXRDdc",
+      "reason": "Google price level is EXPENSIVE, above the requested base tier."
+    },
+    {
+      "name": "Тайський Привіт",
+      "placeId": "ChIJC6PJY9zP1EARpEaB4_SPM6s",
+      "reason": "Google price level is EXPENSIVE, above the requested base tier."
+    },
+    {
+      "name": "Food Spot Corp.",
+      "placeId": "ChIJfYsoPF_O1EARPXsC7ccZEnk",
+      "reason": "Google price level is EXPENSIVE, above the requested base tier."
+    },
+    {
+      "name": "La Maison",
+      "placeId": "ChIJmVjAKoTP1EARj--aKFvR5Rg",
+      "reason": "Google Places reports CLOSED_PERMANENTLY and rating 3.9, below the production floor."
     }
   ]
 }

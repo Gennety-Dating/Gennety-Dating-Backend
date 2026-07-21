@@ -81,16 +81,23 @@ function assertCatalog(catalog, manifest) {
       fail(`Rejected venue remains in catalog: ${row.name} (${row.placeId})`);
     }
     if (!expectedIds.has(row.placeId)) continue;
-    const domains = byId.get(row.placeId) ?? new Set();
-    domains.add(row.universityDomain);
+    const domains = byId.get(row.placeId) ?? new Map();
+    domains.set(row.universityDomain, row);
     byId.set(row.placeId, domains);
   }
 
   for (const place of manifest.places) {
-    const domains = byId.get(place.placeId) ?? new Set();
+    const domains = byId.get(place.placeId) ?? new Map();
+    const expectedTier = place.tier ?? "base";
     for (const domain of expectedDomains) {
       if (!domains.has(domain)) {
         fail(`${place.name} (${place.placeId}) is missing for ${domain}`);
+      }
+      const row = domains.get(domain);
+      if ((row.tier ?? "base") !== expectedTier) {
+        fail(
+          `${place.name} (${place.placeId}) has tier ${row.tier ?? "base"} for ${domain}, expected ${expectedTier}`,
+        );
       }
     }
   }
@@ -156,6 +163,7 @@ function validatePlace(config, details) {
 
   const food = new Set(["cafe", "coffee_shop", "restaurant", "lounge"]);
   if (
+    config.tier !== "premium" &&
     food.has(config.category) &&
     ["PRICE_LEVEL_EXPENSIVE", "PRICE_LEVEL_VERY_EXPENSIVE"].includes(
       details.priceLevel,
@@ -240,6 +248,7 @@ async function main() {
         placeId: place.id ?? config.placeId,
         category: config.category,
         priority: config.priority,
+        tier: config.tier ?? "base",
         vibeTags: config.vibeTags,
         utcOffsetMinutes: place.utcOffsetMinutes ?? null,
         openingHours: place.regularOpeningHours ?? null,
