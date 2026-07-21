@@ -23,6 +23,10 @@ const PROFILE_ASSETS = Array.from(
   {length: 10},
   (_, index) => `portraits/profile-${String(index + 1).padStart(2, "0")}.jpg`,
 );
+const AI_WOMAN_PORTRAITS = [
+  "portraits/ai-woman-restaurant.jpg",
+  "portraits/ai-woman-mirror.jpg",
+] as const;
 const DATE_CARD_PORTRAIT = "portraits/date-card-man.jpg";
 
 type Language = "uk" | "en";
@@ -681,15 +685,15 @@ const AiScene: React.FC<FormatProps & {duration: number}> = ({format, language, 
   });
   const portraits = vertical
     ? [
-        {path: PROFILE_ASSETS[4], size: 250, x: 25, y: 620},
+        {path: AI_WOMAN_PORTRAITS[0], size: 250, x: 25, y: 620},
         {path: PROFILE_ASSETS[6], size: 250, x: 805, y: 620},
-        {path: PROFILE_ASSETS[7], size: 250, x: 25, y: 1180},
+        {path: AI_WOMAN_PORTRAITS[1], size: 250, x: 25, y: 1180},
         {path: PROFILE_ASSETS[8], size: 270, x: 785, y: 1170},
       ]
     : [
-        {path: PROFILE_ASSETS[4], size: 220, x: 950, y: 60},
+        {path: AI_WOMAN_PORTRAITS[0], size: 220, x: 950, y: 60},
         {path: PROFILE_ASSETS[6], size: 210, x: 1620, y: 80},
-        {path: PROFILE_ASSETS[7], size: 230, x: 910, y: 760},
+        {path: AI_WOMAN_PORTRAITS[1], size: 230, x: 910, y: 760},
         {path: PROFILE_ASSETS[8], size: 230, x: 1625, y: 720},
       ];
   return (
