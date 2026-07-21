@@ -765,6 +765,21 @@ const translations = {
     coordSharedAck: "Done — they can find you now 💬 Have a great date!",
     coordProxyChosenAck:
       "Got it 🕶 Your anonymous chat opens about 30 minutes before the date — I'll send you the button then.",
+    menuPremium: "✨ Gennety Premium",
+    menuPremiumActive: "✨ Premium · until {date}",
+    premiumHubTitle: "✨ Gennety Premium",
+    premiumHubBody:
+      "Premium unlocks the good stuff:\n\n• *Free venue changes* — swap your date spot as often as you like, no fee\n• *Premium venues* — a hand-picked tier of nicer places, unlocked in the venue board\n\nMore perks are coming. {price}/month, cancel anytime.",
+    premiumHubActiveNote: "You're Premium ✨ Active until {date}.",
+    premiumSubscribeCta: "Subscribe — {price}/mo",
+    premiumManageNote: "Manage or cancel anytime in Telegram → Settings → Subscriptions.",
+    premiumWelcomeDm:
+      "Welcome to Gennety Premium ✨\n\nVenue changes are on us now, and the premium venue tier is unlocked. Active until {date}.",
+    premiumInvoiceTitle: "Gennety Premium",
+    premiumInvoiceDesc:
+      "Monthly subscription — free venue changes + premium venues. Renews every 30 days; cancel anytime.",
+    premiumInvoiceLabel: "Gennety Premium — 1 month",
+    premiumCheckoutError: "Couldn't start that subscription. Try again in a moment.",
   },
   ru: {
     // --- Onboarding ---
@@ -1523,6 +1538,21 @@ const translations = {
     coordSharedAck: "Готово — теперь тебя смогут найти 💬 Хорошего свидания!",
     coordProxyChosenAck:
       "Принято 🕶 Анонимный чат откроется примерно за 30 минут до свидания — тогда пришлю кнопку.",
+    menuPremium: "✨ Gennety Premium",
+    menuPremiumActive: "✨ Premium · до {date}",
+    premiumHubTitle: "✨ Gennety Premium",
+    premiumHubBody:
+      "Premium открывает лучшее:\n\n• *Бесплатная смена места* — меняй место свидания сколько угодно, без оплаты\n• *Премиум-заведения* — отобранный тир мест получше, открывается в подборе\n\nДальше — больше. {price}/месяц, отмена в любой момент.",
+    premiumHubActiveNote: "У тебя Premium ✨ Активен до {date}.",
+    premiumSubscribeCta: "Оформить — {price}/мес",
+    premiumManageNote: "Управлять и отменить — в Telegram → Настройки → Подписки.",
+    premiumWelcomeDm:
+      "Добро пожаловать в Gennety Premium ✨\n\nСмена места теперь бесплатна, а премиум-заведения открыты. Активно до {date}.",
+    premiumInvoiceTitle: "Gennety Premium",
+    premiumInvoiceDesc:
+      "Месячная подписка — бесплатная смена места + премиум-заведения. Продление каждые 30 дней; отмена в любой момент.",
+    premiumInvoiceLabel: "Gennety Premium — 1 месяц",
+    premiumCheckoutError: "Не получилось оформить подписку. Попробуй через минуту.",
   },
   uk: {
     // --- Onboarding ---
@@ -2281,6 +2311,21 @@ const translations = {
     coordSharedAck: "Готово — тепер тебе зможуть знайти 💬 Гарного побачення!",
     coordProxyChosenAck:
       "Прийнято 🕶 Анонімний чат відкриється приблизно за 30 хвилин до побачення — тоді надішлю кнопку.",
+    menuPremium: "✨ Gennety Premium",
+    menuPremiumActive: "✨ Premium · до {date}",
+    premiumHubTitle: "✨ Gennety Premium",
+    premiumHubBody:
+      "Premium відкриває найкраще:\n\n• *Безкоштовна зміна місця* — змінюй місце побачення скільки завгодно, без оплати\n• *Преміум-заклади* — відібраний тір кращих місць, відкривається в підборі\n\nДалі — більше. {price}/місяць, скасування будь-коли.",
+    premiumHubActiveNote: "У тебе Premium ✨ Активний до {date}.",
+    premiumSubscribeCta: "Оформити — {price}/міс",
+    premiumManageNote: "Керувати та скасувати — у Telegram → Налаштування → Підписки.",
+    premiumWelcomeDm:
+      "Ласкаво просимо до Gennety Premium ✨\n\nЗміна місця тепер безкоштовна, а преміум-заклади відкриті. Активно до {date}.",
+    premiumInvoiceTitle: "Gennety Premium",
+    premiumInvoiceDesc:
+      "Місячна підписка — безкоштовна зміна місця + преміум-заклади. Продовження кожні 30 днів; скасування будь-коли.",
+    premiumInvoiceLabel: "Gennety Premium — 1 місяць",
+    premiumCheckoutError: "Не вдалося оформити підписку. Спробуй за хвилину.",
   },
 } as const;
 
@@ -3008,6 +3053,21 @@ const deTranslations: TranslationTable = {
   coordSharedAck: "Erledigt — jetzt findet dich dein Date 💬 Viel Spaß!",
   coordProxyChosenAck:
     "Alles klar 🕶 Dein anonymer Chat öffnet etwa 30 Minuten vor dem Date — den Button schick ich dir dann.",
+  menuPremium: "✨ Gennety Premium",
+  menuPremiumActive: "✨ Premium · bis {date}",
+  premiumHubTitle: "✨ Gennety Premium",
+  premiumHubBody:
+    "Premium schaltet das Beste frei:\n\n• *Kostenlose Ortswechsel* — wechsle den Date-Ort so oft du willst, ohne Gebühr\n• *Premium-Orte* — eine handverlesene Auswahl schönerer Orte, im Ortsboard freigeschaltet\n\nMehr kommt. {price}/Monat, jederzeit kündbar.",
+  premiumHubActiveNote: "Du bist Premium ✨ Aktiv bis {date}.",
+  premiumSubscribeCta: "Abonnieren — {price}/Mon.",
+  premiumManageNote: "Verwalten oder kündigen jederzeit in Telegram → Einstellungen → Abos.",
+  premiumWelcomeDm:
+    "Willkommen bei Gennety Premium ✨\n\nOrtswechsel gehen jetzt auf uns, und die Premium-Orte sind frei. Aktiv bis {date}.",
+  premiumInvoiceTitle: "Gennety Premium",
+  premiumInvoiceDesc:
+    "Monatliches Abo — kostenlose Ortswechsel + Premium-Orte. Verlängert alle 30 Tage; jederzeit kündbar.",
+  premiumInvoiceLabel: "Gennety Premium — 1 Monat",
+  premiumCheckoutError: "Das Abo konnte nicht gestartet werden. Bitte gleich nochmal.",
 };
 
 const plTranslations: TranslationTable = {
@@ -3730,6 +3790,21 @@ const plTranslations: TranslationTable = {
   coordSharedAck: "Gotowe — teraz można Cię znaleźć 💬 Udanej randki!",
   coordProxyChosenAck:
     "Jasne 🕶 Anonimowy czat otworzy się jakieś 30 minut przed randką — wtedy wyślę przycisk.",
+  menuPremium: "✨ Gennety Premium",
+  menuPremiumActive: "✨ Premium · do {date}",
+  premiumHubTitle: "✨ Gennety Premium",
+  premiumHubBody:
+    "Premium odblokowuje to, co najlepsze:\n\n• *Darmowa zmiana miejsca* — zmieniaj miejsce randki ile chcesz, bez opłat\n• *Miejsca premium* — wyselekcjonowany zestaw lepszych miejsc, odblokowany w tablicy miejsc\n\nWięcej wkrótce. {price}/miesiąc, anulujesz kiedy chcesz.",
+  premiumHubActiveNote: "Masz Premium ✨ Aktywne do {date}.",
+  premiumSubscribeCta: "Subskrybuj — {price}/mies.",
+  premiumManageNote: "Zarządzaj lub anuluj w Telegram → Ustawienia → Subskrypcje.",
+  premiumWelcomeDm:
+    "Witaj w Gennety Premium ✨\n\nZmiany miejsca są teraz na nasz koszt, a miejsca premium odblokowane. Aktywne do {date}.",
+  premiumInvoiceTitle: "Gennety Premium",
+  premiumInvoiceDesc:
+    "Miesięczna subskrypcja — darmowe zmiany miejsca + miejsca premium. Odnawia się co 30 dni; anulujesz kiedy chcesz.",
+  premiumInvoiceLabel: "Gennety Premium — 1 miesiąc",
+  premiumCheckoutError: "Nie udało się rozpocząć subskrypcji. Spróbuj za chwilę.",
 };
 
 const translationsByLanguage: Record<Language, TranslationTable> = {

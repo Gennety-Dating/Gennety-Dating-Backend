@@ -7,7 +7,7 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 vi.mock("../config.js", () => ({
-  env: { TICKET_BUNDLE_STARS: { 1: 350, 3: 830, 6: 1350 } },
+  env: { TICKET_BUNDLE_STARS: { 1: 350, 3: 830, 6: 1350 }, PREMIUM_STARS: 500 },
 }));
 vi.mock("../services/ticket-wallet.js", () => ({
   grantTickets: vi.fn(),
@@ -16,17 +16,23 @@ vi.mock("../services/ticket-wallet.js", () => ({
   isUniqueViolation: (e: unknown) =>
     typeof e === "object" && e !== null && (e as { code?: string }).code === "P2002",
 }));
+vi.mock("../services/premium.js", () => ({
+  activateOrExtendPremium: vi.fn(),
+  formatPremiumUntil: () => "19 August 2026",
+}));
 // Settled via dynamic import in handleSuccessfulPayment's gate branch.
 vi.mock("./matching/ticket-gate.js", () => ({ applyStarsTicketPayment: vi.fn() }));
 
 import { prisma } from "@gennety/db";
 import { grantTickets } from "../services/ticket-wallet.js";
+import { activateOrExtendPremium } from "../services/premium.js";
 import { applyStarsTicketPayment } from "./matching/ticket-gate.js";
 import { handlePreCheckout, handleSuccessfulPayment } from "./payments.js";
 
 const findUnique = prisma.user.findUnique as unknown as ReturnType<typeof vi.fn>;
 const matchFindUnique = prisma.match.findUnique as unknown as ReturnType<typeof vi.fn>;
 const grant = grantTickets as unknown as ReturnType<typeof vi.fn>;
+const activatePremium = activateOrExtendPremium as unknown as ReturnType<typeof vi.fn>;
 const settleStars = applyStarsTicketPayment as unknown as ReturnType<typeof vi.fn>;
 
 const GATE_UUID = "22222222-2222-4222-8222-222222222222";
@@ -260,5 +266,81 @@ describe("handleSuccessfulPayment", () => {
     await handleSuccessfulPayment(ctx);
     expect(settleStars).not.toHaveBeenCalled();
     expect(grant).not.toHaveBeenCalled();
+  });
+});
+
+describe("premium subscription (sub:premium)", () => {
+  it("approves a pre-checkout at the correct Star amount", async () => {
+    const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+      invoice_payload: "sub:premium",
+      currency: "XTR",
+      total_amount: 500,
+    });
+    await handlePreCheckout(ctx);
+    expect(answerPreCheckoutQuery).toHaveBeenCalledWith(true, undefined);
+  });
+
+  it("declines a pre-checkout at the wrong Star amount", async () => {
+    const { ctx, answerPreCheckoutQuery } = preCheckoutCtx({
+      invoice_payload: "sub:premium",
+      currency: "XTR",
+      total_amount: 350,
+    });
+    await handlePreCheckout(ctx);
+    expect(answerPreCheckoutQuery).toHaveBeenCalledWith(false, expect.anything());
+  });
+
+  it("grants premium and DMs the welcome on the first charge", async () => {
+    findUnique.mockResolvedValueOnce({ id: "u1", language: "en" });
+    activatePremium.mockResolvedValueOnce({ applied: true, premiumUntil: new Date() });
+    const { ctx, reply } = successCtx({
+      invoice_payload: "sub:premium",
+      currency: "XTR",
+      total_amount: 500,
+      telegram_payment_charge_id: "charge_sub_1",
+    });
+    (ctx.message!.successful_payment as Record<string, unknown>).is_first_recurring = true;
+    (ctx.message!.successful_payment as Record<string, unknown>).subscription_expiration_date =
+      Math.floor(Date.now() / 1000) + 2_592_000;
+    await handleSuccessfulPayment(ctx);
+    expect(activatePremium).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "u1",
+        provider: "telegram_stars",
+        externalPaymentId: "charge_sub_1",
+        event: "started",
+      }),
+    );
+    expect(reply).toHaveBeenCalled();
+  });
+
+  it("extends silently on an auto-renewal (no DM)", async () => {
+    findUnique.mockResolvedValueOnce({ id: "u1", language: "en" });
+    activatePremium.mockResolvedValueOnce({ applied: true, premiumUntil: new Date() });
+    const { ctx, reply } = successCtx({
+      invoice_payload: "sub:premium",
+      currency: "XTR",
+      total_amount: 500,
+      telegram_payment_charge_id: "charge_sub_2",
+    });
+    (ctx.message!.successful_payment as Record<string, unknown>).is_recurring = true;
+    (ctx.message!.successful_payment as Record<string, unknown>).is_first_recurring = false;
+    await handleSuccessfulPayment(ctx);
+    expect(activatePremium).toHaveBeenCalledWith(expect.objectContaining({ event: "renewed" }));
+    expect(reply).not.toHaveBeenCalled();
+  });
+
+  it("does not re-DM on a duplicate redelivery (applied: false)", async () => {
+    findUnique.mockResolvedValueOnce({ id: "u1", language: "en" });
+    activatePremium.mockResolvedValueOnce({ applied: false, premiumUntil: new Date() });
+    const { ctx, reply } = successCtx({
+      invoice_payload: "sub:premium",
+      currency: "XTR",
+      total_amount: 500,
+      telegram_payment_charge_id: "charge_sub_1",
+    });
+    (ctx.message!.successful_payment as Record<string, unknown>).is_first_recurring = true;
+    await handleSuccessfulPayment(ctx);
+    expect(reply).not.toHaveBeenCalled();
   });
 });

@@ -6,11 +6,14 @@ import {
   parseStoreInvoicePayload,
   parseGateInvoicePayload,
   parseVenueInvoicePayload,
+  parseSubInvoicePayload,
   ticketBundleFor,
+  PREMIUM_SUBSCRIPTION_PERIOD_SECONDS,
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { grantTickets, isUniqueViolation } from "../services/ticket-wallet.js";
 import { gateStarsForScope } from "../services/ticket-payment.js";
+import { activateOrExtendPremium, formatPremiumUntil } from "../services/premium.js";
 
 /**
  * Telegram Stars (XTR) payment handlers.
@@ -22,6 +25,8 @@ import { gateStarsForScope } from "../services/ticket-payment.js";
  *     slot(s) on the match (the native replacement for the mock USD pay path).
  *   • `venue:<matchId>:<mode>` — §3.7b venue-change board/express payment;
  *     settles the venue swap.
+ *   • `sub:premium` — §Premium recurring Star *subscription* payment; grants /
+ *     extends the Gennety Premium entitlement (first charge + auto-renewals).
  *
  * Telegram drives two trusted updates for each:
  *   • `pre_checkout_query` — re-validate the payload + Star amount and approve
@@ -41,6 +46,8 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
   // Store top-up — payload `store:<count>`.
   const count = parseStoreInvoicePayload(query.invoice_payload);
   const venue = count == null ? parseVenueInvoicePayload(query.invoice_payload) : null;
+  const sub =
+    count == null && venue == null ? parseSubInvoicePayload(query.invoice_payload) : null;
   if (count != null) {
     const expectedStars = env.TICKET_BUNDLE_STARS[count];
     ok =
@@ -48,6 +55,12 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
       expectedStars != null &&
       query.currency === "XTR" &&
       query.total_amount === expectedStars;
+  } else if (sub != null) {
+    // Premium subscription — payload `sub:premium`. The amount is the only thing
+    // to re-validate here (there's no per-user state to check; the recurring
+    // charge is anchored by the subscription itself). A stale/tampered amount is
+    // declined before any Stars move.
+    ok = query.currency === "XTR" && query.total_amount === env.PREMIUM_STARS;
   } else if (venue != null) {
     // Venue change — payload `venue:<matchId>:<mode>`. Invoice links are
     // reusable, so beyond the amount we also confirm the swap is still
@@ -126,8 +139,14 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
 
   const count = parseStoreInvoicePayload(payment.invoice_payload);
   if (count == null || ticketBundleFor(count) == null) {
-    // Not a store bundle — try the §3.7b venue change, then the §3.5b date
-    // gate, before giving up so a foreign payload still credits nothing.
+    // Not a store bundle — try §Premium subscription, then the §3.7b venue
+    // change, then the §3.5b date gate, before giving up so a foreign payload
+    // still credits nothing.
+    const sub = parseSubInvoicePayload(payment.invoice_payload);
+    if (sub != null) {
+      await handlePremiumSuccessfulPayment(ctx, payment);
+      return;
+    }
     const venue = parseVenueInvoicePayload(payment.invoice_payload);
     if (venue != null) {
       await handleVenueSuccessfulPayment(ctx, venue.matchId, payment);
@@ -182,6 +201,69 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
     await ctx.reply(text, { parse_mode: "Markdown" });
   } catch {
     await ctx.reply(text.replace(/[*_`[\]]/g, "")).catch(() => {});
+  }
+}
+
+/**
+ * §Premium recurring Star payment (payload `sub:premium`). Telegram fires this
+ * on the first charge AND on every 30-day auto-renewal (`is_recurring: true`).
+ * Each charge carries its own `telegram_payment_charge_id`, so the entitlement
+ * service dedupes redelivery via the unique ledger id. The authoritative expiry
+ * is Telegram's `subscription_expiration_date`; we advance `premiumUntil` to it.
+ */
+async function handlePremiumSuccessfulPayment(
+  ctx: BotContext,
+  payment: {
+    total_amount: number;
+    telegram_payment_charge_id: string;
+    subscription_expiration_date?: number;
+    is_recurring?: boolean;
+    is_first_recurring?: boolean;
+  },
+): Promise<void> {
+  const telegramId = BigInt(ctx.from!.id);
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true, language: true },
+  });
+  if (!user) return;
+
+  // Prefer Telegram's authoritative expiry; fall back to now + 30d defensively
+  // (a subscription payment should always carry it).
+  const periodEnd = payment.subscription_expiration_date
+    ? new Date(payment.subscription_expiration_date * 1000)
+    : new Date(Date.now() + PREMIUM_SUBSCRIPTION_PERIOD_SECONDS * 1000);
+  const isFirst = payment.is_first_recurring ?? !payment.is_recurring;
+
+  console.info(
+    `[stars] premium sub user=${user.id} recurring=${payment.is_recurring ?? false} ` +
+      `first=${isFirst} stars=${payment.total_amount} ` +
+      `charge=${payment.telegram_payment_charge_id} until=${periodEnd.toISOString()}`,
+  );
+
+  const result = await activateOrExtendPremium({
+    userId: user.id,
+    provider: "telegram_stars",
+    periodEnd,
+    externalPaymentId: payment.telegram_payment_charge_id,
+    event: isFirst ? "started" : "renewed",
+    amount: payment.total_amount,
+    currency: "XTR",
+  });
+  // Duplicate redelivery, or an unknown user — nothing to announce.
+  if (!result.applied) return;
+
+  // DM only on the first period; auto-renewals settle silently.
+  if (isFirst) {
+    const lang = (user.language ?? "en") as Language;
+    const text = t(lang, "premiumWelcomeDm", {
+      date: formatPremiumUntil(periodEnd, lang),
+    });
+    try {
+      await ctx.reply(text, { parse_mode: "Markdown" });
+    } catch {
+      await ctx.reply(text.replace(/[*_`[\]]/g, "")).catch(() => {});
+    }
   }
 }
 

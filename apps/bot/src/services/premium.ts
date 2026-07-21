@@ -1,5 +1,24 @@
 import { prisma } from "@gennety/db";
+import type { Language } from "@gennety/shared";
 import { isUniqueViolation } from "./ticket-wallet.js";
+
+const PREMIUM_LOCALE_TAGS: Record<Language, string> = {
+  en: "en-GB",
+  ru: "ru-RU",
+  uk: "uk-UA",
+  de: "de-DE",
+  pl: "pl-PL",
+};
+
+/** Localized "active until" date for premium DMs / menu / hub (day month year). */
+export function formatPremiumUntil(date: Date | null | undefined, lang: Language): string {
+  if (!date) return "";
+  return new Intl.DateTimeFormat(PREMIUM_LOCALE_TAGS[lang] ?? "en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
 
 /**
  * Gennety Premium — the channel-agnostic per-user subscription entitlement
