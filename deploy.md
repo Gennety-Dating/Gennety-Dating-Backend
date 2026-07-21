@@ -1,6 +1,19 @@
 # Gennety Dating Deploy
 
-Last verified: 2026-07-21 (full server deploy — **Gennety Premium launch**:
+Last verified: 2026-07-21 (full server deploy — **self-healing Telegram drop
+banner**, commit `045279c`; no Prisma schema change). Production build and PM2
+restart succeeded; `/v1/ping` stayed healthy, every Mini App returned `200`,
+and the unauthenticated admin API returned `401`. A legacy pinned-banner orphan
+was unpinned only after its message id, create/edit timestamps, text, account
+creation timestamp, and status matched the pre-deploy audit; the final
+production orphan count was zero. The 16-minute observation window produced the
+expected second heartbeat with `eligible=2`, `unchanged=2`, no new errors, no
+429s, and no PM2 restart-count growth. Both DB-active Telegram rows returned
+`400 chat not found`, so the worker correctly left them untracked under the
+six-hour unreachable cooldown; there was no reachable active chat for a live
+client rendering check.)
+
+Prior full deploy: 2026-07-21 (**Gennety Premium launch**:
 recurring Telegram Stars + StoreKit subscription, venue-change premium tier.
 `PREMIUM_FEATURE_ENABLED=true` + `PREMIUM_STARS=500` / `PREMIUM_PRICE_USD_DISPLAY=$10`
 / `PREMIUM_APPSTORE_PRODUCT_ID=premium_monthly` added; Mini App redeployed
