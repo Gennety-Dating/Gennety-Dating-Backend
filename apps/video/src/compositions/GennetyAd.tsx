@@ -38,7 +38,7 @@ const COPY = {
     chatMeet: "Може, якось побачимось?",
     chatPlan: "Так, треба щось придумати…",
     hookBefore: "Поки ти свайпаєш…",
-    hookAfter: "Хтось уже йде на",
+    hookAfter: "Хтось вже йде на",
     hookAccent: "побачення.",
     aiTitle: "Автономно знаходить твій",
     aiAccent: "метч.",
@@ -786,7 +786,7 @@ const MatchScene: React.FC<FormatProps & {duration: number}> = ({format, languag
         rotate={vertical ? -6 : -5}
         style={{
           left: vertical ? interpolate(meet, [0, 1], [-120, 135]) : interpolate(meet, [0, 1], [820, 1050]),
-          top: vertical ? 590 : 190,
+          top: vertical ? 680 : 190,
           transform: `rotate(-6deg) scale(${0.9 + p * 0.1})`,
         }}
       />
@@ -797,7 +797,7 @@ const MatchScene: React.FC<FormatProps & {duration: number}> = ({format, languag
         rotate={vertical ? 6 : 5}
         style={{
           right: vertical ? interpolate(meet, [0, 1], [-120, 135]) : interpolate(meet, [0, 1], [-80, 120]),
-          top: vertical ? 650 : 250,
+          top: vertical ? 740 : 250,
           transform: `rotate(6deg) scale(${0.9 + p * 0.1})`,
         }}
       />
@@ -806,7 +806,7 @@ const MatchScene: React.FC<FormatProps & {duration: number}> = ({format, languag
         style={{
           position: "absolute",
           left: vertical ? 435 : 1350,
-          top: vertical ? 870 : 445,
+          top: vertical ? 960 : 445,
           width: vertical ? 220 : 170,
           height: vertical ? 220 : 170,
           borderRadius: "50%",
@@ -828,7 +828,7 @@ const MatchScene: React.FC<FormatProps & {duration: number}> = ({format, languag
           position: "absolute",
           left: vertical ? 72 : 90,
           right: vertical ? 72 : 1050,
-          top: vertical ? 170 : 180,
+          top: vertical ? 250 : 180,
           opacity: p,
           transform: `translateY(${(1 - p) * 50}px)`,
         }}
@@ -1132,7 +1132,7 @@ const ProductSceneLayout: React.FC<
         style={{
           position: "absolute",
           left: vertical ? 70 : 90,
-          top: vertical ? 104 : 210,
+          top: vertical ? 220 : 210,
           width: vertical ? 900 : 710,
           zIndex: 5,
           opacity: copyProgress,
@@ -1478,7 +1478,7 @@ const ConfirmationScene: React.FC<FormatProps & {duration: number}> = ({format, 
         style={{
           position: "absolute",
           left: vertical ? 72 : 90,
-          top: vertical ? 120 : 230,
+          top: vertical ? 230 : 230,
           width: vertical ? 850 : 820,
           opacity: p,
           transform: `translateY(${(1 - p) * 50}px)`,
