@@ -1541,6 +1541,68 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   nothing was lost. The v1 "decline = cancel the match" branch is gone
   entirely, and with it the v1 disclaimer.
 
+### 3.8 Gennety Premium (feature-flagged recurring subscription)
+
+An optional **$10/month** subscription (Gennety Premium), gated by
+`PREMIUM_FEATURE_ENABLED` (default **off**). It is a **standalone per-user
+entitlement** owned by `services/premium.ts` and deliberately decoupled from any
+one feature — its first (v1) benefit is venue-change, but the entitlement is the
+seam future perks plug into. Active ⇔ `User.premiumUntil > now`; the
+append-only `subscription_ledger` (unique `externalPaymentId`) is the
+source of truth and makes every grant/renewal exactly-once. An entitlement a
+user already paid for stays valid regardless of the flag.
+
+- **Two payment rails, one entitlement.** Telegram: a native **Telegram Stars
+  recurring subscription** (`createInvoiceLink` with
+  `subscription_period = 2592000` — Telegram supports only the 30-day period;
+  empty provider token + `XTR`, no merchant account). The `sub:premium` payload
+  is settled by the `successful_payment` handler on the first charge AND every
+  auto-renewal, exactly-once via the recurring `telegram_payment_charge_id`;
+  `premiumUntil` advances to Telegram's `subscription_expiration_date`.
+  Cancellation is native (Telegram → Settings → Subscriptions) and the
+  entitlement simply lapses. iOS: a **StoreKit 2 auto-renewable subscription**
+  (`POST /v1/premium/appstore/transaction` + App Store Server Notifications V2)
+  reusing the ticket-rail trust model (JWS/notification is only a pointer; the
+  authoritative transaction is re-fetched from Apple). The subscription's
+  `originalTransactionId` is stored on `User.premiumExternalId` so a renewal
+  webhook (which carries no user id) finds the owner.
+- **Purchase surface.** Telegram: a ✨ **Gennety Premium** main-menu row → the
+  Premium hub (benefits + price, or "active until …") → the Premium Mini App
+  (`apps/webapp/premium.html`, `WebApp.openInvoice`). iOS: a native paywall
+  (designed in parallel; `features.premium` in `GET /v1/app/config`).
+
+**Benefit #1 — venue-change (v1).** Inside the §3.7b board:
+
+- **Premium venues.** Curated venues carry a `tier` (`base` | `premium`).
+  Premium venues are hand-picked nicer spots that **may exceed the ≤ MODERATE
+  student-friendly price cap** — a deliberate, documented exception to the
+  §3.7/§3.7b price gate that applies **only** to the premium tier and **only**
+  in the paid venue-change board. The **auto-assign concierge picker stays
+  base-only** (§3.7), so the default date can never break the price cap; premium
+  is always an opt-in change, never the automatic first assignment.
+- **Selection gate (either-party unlock).** Premium venues are always **shown**
+  in the board (with a "Premium" plate on the card face + a lock badge on the
+  select button) but are **selectable only when either participant has an active
+  subscription** (`pairPremiumActive`). The gate is enforced server-side (the
+  tier is re-resolved from the catalog; the client is never trusted) across
+  likes, the multi-overlap confirm, and the express mint — a locked pick returns
+  `premium-locked` (HTTP 402), which the Mini App turns into a subscribe-in-place
+  CTA. Tapping the locked button opens the subscription flow; the card is still
+  tappable to view details / open in Maps.
+- **Fee waiver + counterfactual.** A settled change normally costs
+  `VENUE_CHANGE_STARS` (§3.7b). With Premium it is **free**: a premium venue is
+  always free (the pair has premium), and a base venue is free when the settling
+  actor is themselves premium — a free change settles instantly at agreement with
+  no invoice and no wish-card fork. A **non-premium** payer settling a base venue
+  still pays the flat price AND sees an in-flow **counterfactual** ("with Premium
+  this is free ✨", `premiumWouldWaive`) right at the pay step, so the limit is
+  felt in the real moment. The "man pays for the woman → surprise reveal"
+  gesture (§3.7b) is preserved for non-subscribers.
+
+The blind-decision, no-in-app-chat, 3 km commute, open-at-slot, and fairness
+invariants are all unaffected; premium venues still pass every non-price gate.
+Telegram-first; iOS in parallel.
+
 ## Phase 4 — Date Lifecycle
 
 Driven by `services/date-lifecycle.ts` + `services/pre-date-safety.ts`,

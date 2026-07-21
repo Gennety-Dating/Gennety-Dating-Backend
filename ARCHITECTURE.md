@@ -204,6 +204,7 @@ Columns (≈ 35; grouped by purpose):
 | Verification | `verificationStatus`, `personaInquiryId` (unique), `verifiedAt`, `verificationSkippedAt`, `verifiedSelfiePath`, `faceMatchScore`, `faceMatchedAt`, `selfiePath` (legacy). Matching admits only `verified` plus the persisted pre-flip cohort (`unverified` with non-null `verificationSkippedAt`). Production-like startup fails closed unless Persona is live/mandatory and Rekognition/profile-media validation are enabled. |
 | Attribution | `referralSource` (`tg:start_param` / `mobile:utm=…` / `referral:USER_ID`) |
 | Tickets (feature-flagged) | `ticketBalance` — materialized ticket-wallet balance; running sum of `TicketLedger.delta` (see `ticket_ledger`). `ticketDiscountPct` / `ticketDiscountGrantedAt` / `ticketDiscountExpiresAt` / `ticketDiscountConsumedAt` — one-time famine single-ticket discount (PRODUCT_SPEC §3.5b; active ⇔ `pct > 0 AND consumedAt IS NULL AND expiresAt > now`), owned by `services/ticket-discount.ts`. |
+| Premium (feature-flagged) | `premiumUntil` / `premiumSince` / `premiumProvider` (`telegram_stars`\|`app_store`) / `premiumAutoRenew` / `premiumExternalId` — Gennety Premium subscription head (PRODUCT_SPEC §3.8 / §Premium). Materialized from the append-only `subscription_ledger`; active ⇔ `premiumUntil > now`. `premiumExternalId` is the recurring anchor (Stars charge id / App Store `originalTransactionId`) used to reconcile renewals + find the owner from a webhook. Owned by `services/premium.ts`; inert-to-write unless `PREMIUM_FEATURE_ENABLED`, but an existing entitlement is honored regardless of the flag. |
 
 Indexes: `(status, reEngagementNextAt)`, `(status, suspendedUntil)`.
 
@@ -279,7 +280,7 @@ never by PostgreSQL enum declaration order.
 | Nudges | `nudge1SentAt`, `nudge2SentAt` (legacy), `proposalNudge1SentAt`, `proposalNudge2SentAt`, `schedNudge1SentAt`, `schedNudge2SentAt` |
 | Date Ticket (feature-flagged) | `ticketPriceCents`, `ticketPaidA/B`, `paidForPartnerByA/B`, `partnerPaidSeenAt` / `partnerPaidNudgedAt` (goodwill-cover read-receipt: first-seen stamp gating the payer's "she saw it ❤️" DM, and the completion-nudge guard — §3.5b), `ticketStatus` (`pending`/`partial`/`completed`/`refund_pending`/`refunded`/`expired` — string, not a Prisma enum), `ticketExpiresAt`. `refund_pending` is the durable retry boundary: scheduling opens only after the provider/wallet reversal succeeds. Monetization sub-state machine that runs while `status = negotiating`; inert when `TICKET_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
 | Pre-date coordination (feature-flagged) | `coordOfferSentAt`, `coordInitiatorId`, `coordMethod` (`share_self`/`request_partner`/`proxy` — string, not a Prisma enum), `coordChosenAt`, `coordPartnerConsent` (Variant B only), `coordResolvedAt`, `proxyOpenedAt`, `proxyClosesAt`, `proxyClosedAt`. Sub-state machine running on a `scheduled` match; inert when `COORDINATION_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §Phase 4. |
-| Venue change v2 (feature-flagged) | `venueChangeStatus` (null/`liking`/`agreed`/`settled`/`lapsed` — string, not a Prisma enum), `venueChangeProposerId`/`ProposedAt` (session initiator — first like / express mint), `venueLikesA/B` (`Json[]` server-resolved like snapshots), `venueChangeName`/`Address`/`Lat`/`Lng`/`MapsUri`/`PlaceId`/`PhotoUrl`/`PhotoName` (agreed venue snapshot), `venueChangeExpiresAt` (payment deadline)/`ResolvedAt`, `venueChangePaidById`/`PaidAt` (settle stamp), `venueChangePayDeclinedAt` (vestigial v2 — his decline now ENDS the change/closes the session rather than stamping a lingering `agreed` state, so this is no longer written or read for a decision), `venueChangeOfferPaySentAt` (wish-card guard), `venueChangePingSentToA/BAt` (board-invite guards), `venueChangeExpressAt` (her hidden unilateral mint), `venueChangeComment` (legacy v1, no longer written). Paid multiplayer venue-board sub-state on a `scheduled` match — a lapse never cancels the match; inert when `VENUE_CHANGE_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.7b. |
+| Venue change v2 (feature-flagged) | `venueChangeStatus` (null/`liking`/`agreed`/`settled`/`lapsed` — string, not a Prisma enum), `venueChangeProposerId`/`ProposedAt` (session initiator — first like / express mint), `venueLikesA/B` (`Json[]` server-resolved like snapshots), `venueChangeName`/`Address`/`Lat`/`Lng`/`MapsUri`/`PlaceId`/`PhotoUrl`/`PhotoName` (agreed venue snapshot), `venueChangeExpiresAt` (payment deadline)/`ResolvedAt`, `venueChangePaidById`/`PaidAt` (settle stamp), `venueChangePayDeclinedAt` (vestigial v2 — his decline now ENDS the change/closes the session rather than stamping a lingering `agreed` state, so this is no longer written or read for a decision), `venueChangeOfferPaySentAt` (wish-card guard), `venueChangePingSentToA/BAt` (board-invite guards), `venueChangeExpressAt` (her hidden unilateral mint), `venueChangeTier` (`base`/`premium` of the agreed venue, stamped at agreement — drives the §Premium fee waiver: a premium venue, or a base venue settled by a premium user, is free), `venueChangeComment` (legacy v1, no longer written). Paid multiplayer venue-board sub-state on a `scheduled` match — a lapse never cancels the match; inert when `VENUE_CHANGE_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.7b / §3.8. |
 
 Indexes: `(status, createdAt)`, `(userAId, userBId)`, `(ticketStatus, ticketExpiresAt)` (ticket-expiry cron sweep), `(status, coordOfferSentAt)` (coordination offer sweep), `(coordMethod, proxyClosedAt)` (proxy open/close sweeps), `(venueChangeStatus, venueChangeExpiresAt)` (venue-change expiry sweep), plus the functional
 `matches_pair_canonical_idx` on `LEAST/GREATEST(user_a_id, user_b_id)` —
@@ -426,6 +427,23 @@ minutes is treated as an abandoned pre-transaction charge and safely refunded.
 Indexed `(userId, createdAt)`.
 Inert unless `TICKET_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b.
 
+### `subscription_ledger` (feature-flagged)
+
+Append-only audit of every Gennety Premium subscription movement (`userId`,
+`provider` ∈ `telegram_stars`/`app_store`, `event` ∈
+`started`/`renewed`/`cancelled`/`expired`/`refunded`, unique `externalPaymentId`,
+`periodStart`/`periodEnd`, `amount`/`currency`, `createdAt`; `onDelete: Cascade`
+from `users`). Mirrors `ticket_ledger`: the unique `externalPaymentId` (the
+Telegram Stars recurring charge id, or `appstore:<transactionId>`) makes provider
+redelivery exactly-once, so a renewal is applied at most once. `User.premiumUntil`
+/ `premiumSince` are the materialized head, written in the same transaction by
+`services/premium.ts`. The Stars rail settles through the `sub:premium`
+`successful_payment` path; the iOS rail through `services/appstore-premium.ts`
+(`POST /v1/premium/appstore/transaction` + the App Store Server Notifications
+webhook, owner found by the `originalTransactionId` anchor on
+`User.premiumExternalId`). Indexed `(userId, createdAt)`. Inert unless
+`PREMIUM_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.8 / §Premium.
+
 ### `profiler_answers`
 
 One row per (user, Profiler question) — `questionId`, `priority`
@@ -469,7 +487,11 @@ cross-domain city matches (see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.7). Standa
 relation) — the venue pool is now first-party data we own, not a per-request
 Places lookup. Columns: `name`, `address`, `lat`, `lng`, `googleMapsUri`,
 `category` (validated against the shared whitelist in app code, not a Prisma
-enum), `priority` (1 best … 3 acceptable), `vibeTags`, `active`,
+enum), `priority` (1 best … 3 acceptable), `tier` (`base`/`premium`,
+whitelist-validated in app code — a `premium` venue may exceed the ≤ MODERATE
+price cap and is shown-but-locked in the venue-change board unless a participant
+has Gennety Premium; the auto-assign picker reads only `base`; PRODUCT_SPEC
+§3.8), `vibeTags`, `active`,
 `lastVerifiedAt`, plus `placeId` (Places resource id for exact re-fetch),
 `utcOffsetMinutes` + `openingHours` (Places `regularOpeningHours`, for the
 open-at-slot check), and `photoUrl` (optional operator-supplied venue photo,
@@ -593,6 +615,9 @@ auth) are deliberately outside the spec.
 | GET  | `/v1/founder/report/:token` | Founder weekly-matches report page (feature-flagged ops feed). Tokenized, login-free — the unguessable `FounderReport.token` is the sole auth; renders a self-contained `noindex` HTML page of the week's pairs (both users + photos + attractiveness). Inert unless `FOUNDER_NOTIFY_ENABLED` (no report rows exist otherwise). |
 | GET  | `/v1/founder/report/:token/media?ref=` | Scoped image proxy for the report page — streams a photo ref via the MAIN bot, but only refs present in THAT report's snapshot (not an arbitrary proxy). |
 | POST | `/v1/webhooks/persona` | Persona inquiry webhook (HMAC of raw body, mounted **before** `express.json`) |
+| GET  | `/v1/premium/state` | Gennety Premium Mini App state — `{active, premiumUntil, autoRenew, provider, priceStars, priceDisplay}`. Telegram `initData` HMAC auth; feature-flagged (`PREMIUM_FEATURE_ENABLED`, else 404). See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.8. |
+| POST | `/v1/premium/stars-invoice` | Mint the recurring Telegram Stars subscription invoice link (`createInvoiceLink` + `subscription_period=2592000`, payload `sub:premium`), opened via `WebApp.openInvoice`; settled + auto-renewed by the `successful_payment` handler. `initData` HMAC auth; 404 when feature off. |
+| POST | `/v1/premium/appstore/transaction` | Native-app StoreKit 2 auto-renewable subscription report (JWT — mounted before the initData `/v1/premium` router): client JWS decoded ONLY for the transactionId, authoritative state re-fetched from the App Store Server API; activates/extends Premium to Apple's `expiresDate` exactly-once via `SubscriptionLedger.externalPaymentId = appstore:<txId>`. Renewals also arrive on `/v1/webhooks/appstore` (routed by product). 404 while `PREMIUM_FEATURE_ENABLED` off; 503 without `APPSTORE_*` config. |
 
 ## Admin `/admin/*` API Surface
 

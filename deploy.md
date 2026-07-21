@@ -797,6 +797,41 @@ Required/high-impact env keys:
   for the venue picker). Runs on the existing date-lifecycle `setInterval`
   (lapse/express-revert sweep) — no new cron schedule. Rollback: flip the flag
   off; the additive columns may stay.
+- Gennety Premium (feature-flagged, recurring subscription, §Premium):
+  `PREMIUM_FEATURE_ENABLED` (default `false` — leave off until launch),
+  `PREMIUM_STARS` (default `500`, the monthly Telegram Stars price ≈ $10),
+  `PREMIUM_PRICE_USD_DISPLAY` (default `$10`, display-only), and
+  `PREMIUM_APPSTORE_PRODUCT_ID` (default `premium_monthly`, the StoreKit 2
+  auto-renewable subscription id — matched by full id or last dot-segment). When
+  on, the menu shows a ✨ Gennety Premium row → hub → the Premium Mini App
+  (`premium.html`), and the venue-change board shows premium venues locked with a
+  subscribe-in-place upsell; a subscriber's venue changes are free. **Standalone
+  per-user entitlement** (`services/premium.ts`) — decoupled from venue-change.
+  - **Telegram Stars recurring rail.** `POST /v1/premium/stars-invoice` mints a
+    `createInvoiceLink` with `subscription_period=2592000` (Telegram supports
+    only the 30-day period; empty provider token + `XTR`, no merchant account).
+    The `sub:premium` payload is settled by the bot's `successful_payment`
+    handler on the first charge AND every auto-renewal, exactly-once via the
+    recurring `telegram_payment_charge_id`. Cancellation is native (Telegram →
+    Settings → Subscriptions); the entitlement simply lapses at `premiumUntil`.
+  - **iOS StoreKit rail (parallel).** `POST /v1/premium/appstore/transaction`
+    (JWT) + the existing App Store Server Notifications webhook
+    (`/v1/webhooks/appstore`, now routes SUBSCRIBED/DID_RENEW/EXPIRED/REFUND/
+    REVOKE for the premium product) reuse the `APPSTORE_*` config already
+    deployed for tickets. No new Apple keys.
+  - **Premium venues.** Curated venues carry a `tier` (`base`/`premium`); premium
+    rows may exceed the ≤ MODERATE price cap and are seeded with
+    `pnpm seed-venues:pull --tier=premium` (relaxed price gate; every other
+    quality gate stays) → review → `seed-venues:import --apply`. The auto-assign
+    concierge picker stays base-only.
+  - **Requires `db:push` first** of the additive `users.premium_*` columns, the
+    new `subscription_ledger` table, `curated_venues.tier`, and
+    `matches.venue_change_tier` (all non-destructive; deploy code + push schema
+    BEFORE flipping the flag — the new columns are read by the venue board and
+    the entitlement service). Redeploy the Mini App bundle (`premium.html` +
+    reworked `venue-change.html`). No new system dependency. Rollback: flip
+    `PREMIUM_FEATURE_ENABLED` off; the additive columns/table may stay. An
+    entitlement already granted stays valid regardless of the flag.
 - Date card (feature-flagged): `DATE_CARD_FEATURE_ENABLED` (default `false` —
   leave off until launch). When on, each side's `scheduled` confirmation is a
   rendered PNG date card (partner photo + venue photo + details) sent
