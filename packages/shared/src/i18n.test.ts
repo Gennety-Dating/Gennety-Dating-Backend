@@ -17,6 +17,10 @@ const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
   "photoManagerDeleteBtn",
   "matchPhotoCaption",
   "coordProxyRelayNamedPrefix",
+  // "Gennety Premium" is a fixed brand line — identical across all locales.
+  "menuPremium",
+  "premiumHubTitle",
+  "premiumInvoiceTitle",
 ]);
 
 describe("t (translation)", () => {
