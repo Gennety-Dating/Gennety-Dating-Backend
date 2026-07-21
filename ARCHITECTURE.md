@@ -490,7 +490,9 @@ Places lookup. Columns: `name`, `address`, `lat`, `lng`, `googleMapsUri`,
 enum), `priority` (1 best … 3 acceptable), `tier` (`base`/`premium`,
 whitelist-validated in app code — a `premium` venue may exceed the ≤ MODERATE
 price cap and is shown-but-locked in the venue-change board unless a participant
-has Gennety Premium; the auto-assign picker reads only `base`; PRODUCT_SPEC
+has Gennety Premium; the auto-assign picker reads only quality-qualified `base`
+rows with positive non-premium price evidence for commercial/admission venues;
+PRODUCT_SPEC
 §3.8), `vibeTags`, `active`,
 `lastVerifiedAt`, plus `placeId` (Places resource id for exact re-fetch),
 `utcOffsetMinutes` + `openingHours` (Places `regularOpeningHours`, for the
@@ -789,6 +791,13 @@ deduplicates legacy domain copies by stable place ID.
 The V2 selector gathers city-curated candidates and canonical Places lanes,
 applies operational/hours/hard/commute gates, ranks top-1, and records a
 raw-text-free `VenueSelectionLog`. Provider retry state is durable on `Match`.
+Before ranking, `services/initial-venue-policy.ts` applies the product-owned
+initial-assignment gate equally to curated and Places candidates: base tier,
+rating/review floor and a known `FREE`/`INEXPENSIVE`/`MODERATE` price for
+commercial/admission categories. Provider price outranks an operator tag;
+public parks are the only category allowed without a commercial price. The
+deprecated `VenueHardConstraints.maxPrice` field remains in the additive API
+shape but is normalized to null and is not a participant control.
 Per-side `venueFitBy*` and `venueFitReasonsBy*` fields feed suggestion quality
 without exposing one participant's feedback to the other.
 JWT routes live under `/v1/matches/{id}/venue-intent`; Telegram Mini App routes

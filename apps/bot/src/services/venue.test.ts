@@ -68,11 +68,16 @@ describe("gate (quality filter)", () => {
     expect(gate(place({ priceLevel: "PRICE_LEVEL_VERY_EXPENSIVE" }), "cafe", true)).toBe(false);
   });
 
-  it("accepts EXPENSIVE food places under relaxed mode (tier-2 fallback)", () => {
+  it("rejects unknown commercial prices under strict mode", () => {
+    expect(gate(place({ priceLevel: undefined }), "cafe", true)).toBe(false);
+    expect(gate(place({ priceLevel: "PRICE_LEVEL_UNSPECIFIED" }), "restaurant", true)).toBe(false);
+  });
+
+  it("accepts EXPENSIVE food only when premium catalog seeding opts out", () => {
     expect(gate(place({ priceLevel: "PRICE_LEVEL_EXPENSIVE" }), "restaurant", false)).toBe(true);
   });
 
-  it("does NOT apply the price filter to non-food categories (parks/museums often have no price)", () => {
+  it("leaves non-food price evidence to the V2 initial policy", () => {
     expect(gate(place({ priceLevel: "PRICE_LEVEL_EXPENSIVE" }), "park", true)).toBe(true);
     expect(gate(place({ priceLevel: undefined }), "museum", true)).toBe(true);
   });
@@ -168,6 +173,19 @@ describe("createPlacesVenueClient.pickAtMidpoint", () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+  });
+
+  it("keeps the legacy domain fallback inside the same initial price gate", async () => {
+    responses = [{
+      places: [
+        place({ displayName: { text: "Unknown Price" }, priceLevel: undefined }),
+        place({ displayName: { text: "Premium Spot" }, priceLevel: "PRICE_LEVEL_EXPENSIVE" }),
+        place({ displayName: { text: "Comfortable Cafe" }, priceLevel: "PRICE_LEVEL_MODERATE" }),
+      ],
+    }];
+    const client = createPlacesVenueClient("test-key");
+    const venue = await client.pick({ universityDomainA: "example.edu", universityDomainB: "example.edu" });
+    expect(venue.name).toBe("Comfortable Cafe");
   });
 
   it("calls Places API (New) v1 searchNearby with the expected field mask + circle restriction", async () => {

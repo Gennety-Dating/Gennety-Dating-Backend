@@ -19,8 +19,8 @@
  *     applies in strict AND relaxed mode; the main `searchText` leak path)
  *   - `userRatingCount >= MIN_RATING_COUNT`
  *   - `rating >= MIN_RATING`
- *   - `priceLevel ∈ STUDENT_FRIENDLY_PRICES` for `restaurant`/`lounge`
- *     (no price filter for `park`/`museum` — usually free anyway)
+ *   - known `priceLevel ∈ STUDENT_FRIENDLY_PRICES` for commercial categories
+ *     (V2 adds its own evidence rule for admission venues)
  *
  * Score (`rating * log10(userRatingCount + 10) * distanceFactor`) picks
  * the strongest candidate over the closest-but-mediocre one.
@@ -111,14 +111,13 @@ const MAX_RESULT_COUNT = 15;
 const PLACES_TIMEOUT_MS = 15_000;
 
 /**
- * Price levels considered student-friendly. PRICE_LEVEL_FREE / _UNSPECIFIED
- * are always accepted (parks, museums, places with unknown pricing).
+ * Price levels considered eligible for the automatically assigned first date.
+ * Unknown commercial prices fail closed; parks and other public categories are
+ * handled separately by the Venue Intent V2 initial-venue policy.
  * EXPENSIVE / VERY_EXPENSIVE are excluded for food categories so we don't
- * push two students into a $80/head dinner on a first date. Re-included
- * by the relaxed-fallback step.
+ * push two students into a high-cost dinner on an automatic first assignment.
  */
 const STUDENT_FRIENDLY_PRICES: ReadonlySet<string> = new Set([
-  "PRICE_LEVEL_UNSPECIFIED",
   "PRICE_LEVEL_FREE",
   "PRICE_LEVEL_INEXPENSIVE",
   "PRICE_LEVEL_MODERATE",
@@ -327,9 +326,9 @@ export function createPlacesVenueClient(apiKey: string): VenueClient {
       // a coarse query. Kept for rollback / when no midpoint is available.
       const query = `cafe near ${input.universityDomainA ?? input.universityDomainB ?? "university"}`;
       const places = await searchText(apiKey, query, null);
-      const first = places[0];
+      const first = places.find((place) => gate(place, "cafe", true));
       if (!first?.displayName?.text) {
-        throw new Error("Places API returned no results");
+        throw new VenueSelectionError("no_candidates", "Places API returned no eligible results");
       }
       return placeToVenue(first);
     },
@@ -383,7 +382,8 @@ export function gate(
   // Price gate only applies to food categories (parks/museums often
   // have no price level published, would be falsely rejected).
   if (strict && FOOD_CATEGORIES.has(category)) {
-    const pl = p.priceLevel ?? "PRICE_LEVEL_UNSPECIFIED";
+    const pl = p.priceLevel;
+    if (!pl) return false;
     if (!STUDENT_FRIENDLY_PRICES.has(pl)) return false;
   }
   return true;

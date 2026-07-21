@@ -377,4 +377,5 @@ button.cta.saving .arrow {
 .vibe-chip { border: 1px solid rgba(255,255,255,.17); border-radius: 999px; padding: 9px 12px; color: #fff; background: rgba(255,255,255,.08); font: inherit; font-size: 14px; }
 .vibe-chip.active { border-color: #c5adff; background: rgba(137, 91, 255, .3); }
 .vibe-review-label { margin-top: 22px; font-weight: 650; }
+.vibe-price-note { margin: 14px 0; font-size: 13px; color: rgba(255,255,255,.62) !important; }
 .vibe-error { min-height: 22px; color: #ff93a6 !important; }

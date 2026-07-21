@@ -25,7 +25,7 @@ import {
 import { env } from "../config.js";
 import { midpoint, haversineDistanceKm, venueSearchRadiusMeters } from "./geo.js";
 import { callOpenAIJson } from "./openai.js";
-import { isVenueOpenAt } from "./curated-venue.js";
+import { isValidVenueCategory, isVenueOpenAt } from "./curated-venue.js";
 import {
   searchVenueCandidates,
   type RegularOpeningHours,
@@ -35,6 +35,7 @@ import { runVenueFinalizationOnce } from "./venue-finalization-flight.js";
 import { sendPushToUser } from "./push.js";
 import { generateAndSaveWingmanHints } from "./wingman-hint.js";
 import { notifyFounderVenueSelectionFailure } from "./founder-notify.js";
+import { applyInitialVenueConstraintPolicy, evaluateInitialVenuePolicy } from "./initial-venue-policy.js";
 
 export type VenueIntentSide = "A" | "B";
 export type VenueIntentStatus = "none" | "draft" | "confirmed";
@@ -133,7 +134,12 @@ async function participant(matchId: string, userId: string) {
 function parseStored(value: Prisma.JsonValue | null): VenueIntentV2 | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   try {
-    return normalizeVenueIntent(value as unknown as VenueIntentV2);
+    const normalized = normalizeVenueIntent(value as unknown as VenueIntentV2);
+    // Price is a product-owned initial-assignment policy, not a participant
+    // constraint. Clearing legacy drafts here keeps both clients and the
+    // finalizer deterministic during the compatibility window.
+    normalized.hardConstraints = applyInitialVenueConstraintPolicy(normalized.hardConstraints);
+    return normalized;
   } catch {
     return null;
   }
@@ -278,7 +284,7 @@ export async function confirmVenueIntent(
     experiences: input.experiences,
     ambiences: input.ambiences,
     formats: input.formats,
-    hardConstraints: input.hardConstraints,
+    hardConstraints: applyInitialVenueConstraintPolicy(input.hardConstraints),
     origin: { lat: origin.lat, lng: origin.lng, address: origin.address?.slice(0, 256) ?? null },
     state: "confirmed",
     confirmedAt: new Date().toISOString(),
@@ -370,8 +376,16 @@ interface SelectionRecord {
 function candidateFromPlaces(row: VenueCandidate, a: VenueIntentV2, b: VenueIntentV2): SelectionRecord | null {
   if (!row.placeId || row.lat == null || row.lng == null || !row.googleMapsUri) return null;
   if (!row.openingHours || row.utcOffsetMinutes == null) return null;
+  const policy = evaluateInitialVenuePolicy({
+    category: row.category,
+    tier: "base",
+    priceLevel: row.priceLevel,
+    rating: row.rating,
+    reviews: row.userRatingCount,
+  });
+  if (!policy.eligible) return null;
   const facts = categoryFacets(row.category);
-  facts.price = priceFromPlaces(row.priceLevel);
+  facts.price = policy.price;
   return {
     rank: {
       id: row.placeId, placeId: row.placeId, priority: 2, rating: row.rating,
@@ -397,8 +411,6 @@ function minimalRelaxation(a: VenueIntentV2, b: VenueIntentV2): { key: string; s
   if (alcoholSides) return { key: "alcohol_free", sides: alcoholSides };
   if (a.hardConstraints.setting) return { key: a.hardConstraints.setting, sides: "A" };
   if (b.hardConstraints.setting) return { key: b.hardConstraints.setting, sides: "B" };
-  const priceSides = affected((hard) => hard.maxPrice != null);
-  if (priceSides) return { key: "max_price", sides: priceSides };
   return { key: "commute_12_km", sides: "AB" };
 }
 
@@ -456,15 +468,27 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       ...(cityKey ? { cityKey } : universityDomain ? { universityDomain } : {}),
     },
     orderBy: [{ priority: "asc" }, { updatedAt: "desc" }],
-    take: 20,
+    // Read past temporarily ineligible/stale rows, then cap the eligible base
+    // pool below. Invalid rows must not crowd good base venues out of ranking.
+    take: 60,
   });
   const selections: SelectionRecord[] = curated.flatMap((row) => {
     if (!row.googleMapsUri) return [];
+    if (!isValidVenueCategory(row.category)) return [];
     if (row.hoursConfidence !== "always_open" && row.hoursConfidence !== "operator_confirmed" && (!row.openingHours || row.utcOffsetMinutes == null)) return [];
     if (row.hoursConfidence !== "always_open" && !isVenueOpenAt(row.openingHours as RegularOpeningHours | null, row.utcOffsetMinutes, match.agreedTime!)) return [];
     const tags = [...row.facetTags, ...row.hardCapabilities];
     const facets = categoryFacets(row.category, tags);
-    facets.price = priceFromPlaces(row.priceLevel);
+    const policy = evaluateInitialVenuePolicy({
+      category: row.category,
+      tier: row.tier,
+      priceLevel: row.priceLevel,
+      priceTags: tags,
+      rating: row.rating,
+      reviews: row.userRatingCount,
+    });
+    if (!policy.eligible) return [];
+    facets.price = policy.price;
     const affinity = !!row.universityDomain && row.universityDomain === match.userA.universityDomain && row.universityDomain === match.userB.universityDomain;
     return [{
       rank: {
@@ -477,7 +501,7 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       mapsUri: row.googleMapsUri, source: "curated" as const,
       photoUrl: row.photoUrl, photoName: null,
     }];
-  });
+  }).slice(0, 20);
 
   let placesCalls = 0;
   let providerFailed = false;

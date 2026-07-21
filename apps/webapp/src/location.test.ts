@@ -1,13 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { selectLocationMock } = vi.hoisted(() => ({
+const { selectLocationMock, fetchVenueIntentStateMock, interpretVenueIntentTmaMock, confirmVenueIntentTmaMock } = vi.hoisted(() => ({
   selectLocationMock: vi.fn(),
+  fetchVenueIntentStateMock: vi.fn(),
+  interpretVenueIntentTmaMock: vi.fn(),
+  confirmVenueIntentTmaMock: vi.fn(),
 }));
 
 vi.mock("./api.js", () => ({
   apiBase: "",
   searchLocations: vi.fn(),
   selectLocation: selectLocationMock,
+  fetchVenueIntentState: fetchVenueIntentStateMock,
+  interpretVenueIntentTma: interpretVenueIntentTmaMock,
+  confirmVenueIntentTma: confirmVenueIntentTmaMock,
   CalendarApiError: class CalendarApiError extends Error {
     status: number;
     reason: string | undefined;
@@ -42,6 +48,8 @@ class FakeElement {
   style: Record<string, string> = {};
   textContent = "";
   value = "";
+  hidden = false;
+  children: FakeElement[] = [];
   private listeners = new Map<string, Array<(event: unknown) => void>>();
 
   constructor(readonly id = "") {}
@@ -53,6 +61,10 @@ class FakeElement {
   }
 
   append(..._children: FakeElement[]): void {}
+
+  replaceChildren(...children: FakeElement[]): void {
+    this.children = children;
+  }
 
   click(): void {
     for (const handler of this.listeners.get("click") ?? []) {
@@ -89,6 +101,17 @@ class FakeDocument {
       "addr-label",
       "selected",
       "no-context",
+      "vibe-stage",
+      "vibe-suggestions",
+      "vibe-text",
+      "vibe-review",
+      "vibe-chips",
+      "vibe-constraints",
+      "vibe-price-note",
+      "vibe-back",
+      "vibe-interpret",
+      "vibe-confirm",
+      "vibe-error",
     ]) {
       this.elements.set(id, new FakeElement(id));
     }
@@ -146,11 +169,23 @@ async function flushPromises(): Promise<void> {
 async function loadLocationApp(options: {
   geolocation?: Geolocation | undefined;
   isSecureContext?: boolean;
+  venueState?: unknown;
 } = {}) {
   vi.resetModules();
   vi.useFakeTimers();
   selectLocationMock.mockReset();
   selectLocationMock.mockResolvedValue(undefined);
+  fetchVenueIntentStateMock.mockReset();
+  fetchVenueIntentStateMock.mockResolvedValue(options.venueState ?? {
+    intent: null,
+    status: "none",
+    partnerSubmitted: false,
+    suggestions: [],
+    selectionError: null,
+    mode: "off",
+  });
+  interpretVenueIntentTmaMock.mockReset();
+  confirmVenueIntentTmaMock.mockReset();
 
   const document = new FakeDocument();
   const mainButton = {
@@ -346,5 +381,61 @@ describe("Location Mini App geolocation quick-action", () => {
     callbacks.success?.(makePosition(50.46, 30.51));
     await flushPromises();
     expect(selectLocationMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Venue Intent V2 initial price policy", () => {
+  it("does not render price chips and clears a restored legacy price before confirm", async () => {
+    const venueState = {
+      intent: {
+        rawText: "quiet coffee",
+        experiences: ["coffee_treats"],
+        ambiences: ["quiet"],
+        formats: ["seated"],
+        hardConstraints: {
+          dietary: [],
+          alcoholFree: false,
+          stepFree: false,
+          setting: null,
+          maxPrice: "free",
+          maxCommuteKm: 8,
+        },
+        parserConfidence: 1,
+        state: "draft",
+        manualConfirmationRequired: false,
+        origin: { lat: 50.45, lng: 30.52, address: null },
+      },
+      status: "draft",
+      partnerSubmitted: false,
+      suggestions: [],
+      selectionError: null,
+      mode: "live",
+    };
+    confirmVenueIntentTmaMock.mockResolvedValue({
+      intent: null,
+      status: "confirmed",
+      partnerSubmitted: false,
+      suggestions: [],
+      selectionError: null,
+      mode: "live",
+    });
+
+    const { document } = await loadLocationApp({ venueState });
+    await flushPromises();
+
+    const labels = document.getElementById("vibe-constraints")!.children.map((child) => child.textContent);
+    expect(labels).not.toContain("Free");
+    expect(labels).not.toContain("Inexpensive");
+    expect(labels).not.toContain("Moderate");
+
+    document.getElementById("vibe-confirm")!.click();
+    await flushPromises();
+    expect(confirmVenueIntentTmaMock).toHaveBeenCalledWith(
+      "init-data",
+      MATCH_ID,
+      expect.objectContaining({
+        hardConstraints: expect.objectContaining({ maxPrice: null }),
+      }),
+    );
   });
 });

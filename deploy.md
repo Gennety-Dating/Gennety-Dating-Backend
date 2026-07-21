@@ -1150,6 +1150,13 @@ legacy vibe or venue columns. Backfill curated rows with `city_key` (`ua:kyiv`,
 `ua:kharkiv`, `ua:odesa`) via the reviewed venue import inputs; duplicate legacy
 domain rows may remain because runtime deduplicates them.
 
+Before live rollout, audit every active `base` curated row used by V2: rating
+must be at least 4.0 with at least 30 reviews; commercial/admission categories
+must have a provider `price_level` or one operator-confirmed canonical price tag
+(`free`, `inexpensive`, `moderate`). Rows without this evidence remain stored
+for operator repair and Venue Change, but fail closed for the initial automatic
+assignment. No schema migration is required for this policy update.
+
 Start with all three flags at zero/off. Then enable the master flag with shadow
 10% and live 0%. Keep shadow for at least seven days and 30 completed pairs.
 Advance live 10% → 50% → 100% with at least 48 hours per step. Roll live back to

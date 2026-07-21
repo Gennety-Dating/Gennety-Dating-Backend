@@ -1341,10 +1341,10 @@ Quality gate (strict tier):
   used to leak through and get pitched as a date venue.
 - `userRatingCount >= 30`
 - `rating >= 4.0`
-- For `cafe`/`coffee_shop`/`restaurant`/`lounge`:
-  `priceLevel ∈ {UNSPECIFIED, FREE, INEXPENSIVE, MODERATE}` — no
-  premium spots on a student first date. `park`/`museum` skip the
-  price filter (often free or unpublished).
+- For `cafe`/`coffee_shop`/`restaurant`/`lounge`, price evidence is mandatory
+  and `priceLevel ∈ {FREE, INEXPENSIVE, MODERATE}`. Unknown and premium
+  commercial prices fail closed. V2 museums likewise need provider or
+  operator-confirmed price evidence; public parks may have no commercial price.
 
 Candidates that pass the gate are ranked by
 `rating × log10(userRatingCount + 10) × distanceFactor` (linear
@@ -1352,12 +1352,10 @@ Candidates that pass the gate are ranked by
 beats Google's default ordering, which would pick the
 closest-but-mediocre place over a slightly-further-but-popular one.
 
-Multi-step fallback so scheduling never wedges:
-1. `searchNearby` with strict gates
-2. Same response, relaxed price ceiling (allows `EXPENSIVE` for food)
-3. `searchText` biased on the midpoint (catches places not in
-   `includedTypes` but matching the keyword, e.g. a "gallery cafe")
-4. Local stub (last resort)
+The compatibility picker tries `searchNearby`, then midpoint-biased
+`searchText`, under the same strict gates and fails closed when neither returns
+an eligible real place. Production has no relaxed expensive tier and no local
+venue stub.
 
 Persisted columns on success: `venueName`, `venueAddress`, `venueLat`,
 `venueLng`, **`venueGoogleMapsUri`** (deep-link to the picked place).
@@ -1806,7 +1804,15 @@ Experience IDs: `conversation`, `coffee_treats`, `meal_discovery`, `walk_view`,
 `quiet`, `cozy_public`, `lively`, `design_forward`, `scenic`,
 `romantic_public`. Format IDs: `seated`, `walking`, `interactive`, `indoor`,
 `outdoor`. These are soft preferences. Only explicitly confirmed dietary,
-alcohol-free, step-free, required setting, price and commute relaxation are hard.
+alcohol-free, step-free, required setting and commute relaxation are hard.
+
+The automatic first assignment has a separate server-owned baseline policy:
+only quality-eligible `base` inventory is considered; commercial venues and
+admission venues need positive price evidence at `FREE`, `INEXPENSIVE` or
+`MODERATE`; `EXPENSIVE`, `VERY_EXPENSIVE`, `premium` and `exclusive` candidates
+are excluded before ranking. Public parks may have no commercial price. This is
+not written as a participant preference and the initial clients show no price
+chips. Price/exclusivity choice belongs to the post-assignment Venue Change.
 
 Incompatible preferences use a deterministic bridge lane and max-min pair fit;
 they never silently collapse to café. Every assigned V2 venue must be a real,

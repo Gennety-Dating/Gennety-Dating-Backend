@@ -500,6 +500,13 @@ const VIBE_ERRORS: Record<Lang, { describe: string; experience: string; relax: s
   de: { describe: "Beschreibe zuerst die Stimmung.", experience: "Wähle mindestens ein Erlebnis.", relax: "Kein geprüfter Ort erfüllt alle Bedingungen. Bitte lockere: " },
   pl: { describe: "Najpierw opisz klimat.", experience: "Wybierz co najmniej jeden rodzaj spotkania.", relax: "Żadne zweryfikowane miejsce nie spełnia wszystkich warunków. Poluzuj: " },
 };
+const INITIAL_PRICE_NOTE: Record<Lang, string> = {
+  en: "The first place is always a quality, comfortable-price option. Premium and exclusive venues are available only through Venue Change.",
+  ru: "Первое место всегда подбирается качественным и комфортным по цене. Премиальные и эксклюзивные варианты доступны только через смену места.",
+  uk: "Перше місце завжди добирається якісним і комфортним за ціною. Преміальні та ексклюзивні варіанти доступні лише через зміну місця.",
+  de: "Der erste Ort ist immer hochwertig und preislich angenehm. Premium- und exklusive Orte gibt es nur über den Ortswechsel.",
+  pl: "Pierwsze miejsce jest zawsze dobrej jakości i w komfortowej cenie. Miejsca premium i ekskluzywne są dostępne tylko przy zmianie miejsca.",
+};
 const LABELS: Record<Lang, Record<string, string>> = {
   en: { conversation: "Easy conversation", coffee_treats: "Coffee & treats", meal_discovery: "Discover food", walk_view: "Walk & views", art_culture: "Art & culture", drinks_evening: "Evening drinks", playful_activity: "Playful activity", surprise_me: "Surprise me", quiet: "Quiet", cozy_public: "Cozy", lively: "Lively", design_forward: "Design-led", scenic: "Scenic", romantic_public: "Romantic", seated: "Seated", walking: "Walking", interactive: "Interactive", indoor: "Indoor", outdoor: "Outdoor", vegan: "Vegan", vegetarian: "Vegetarian", halal: "Halal", kosher: "Kosher", gluten_free: "Gluten-free", alcohol_free: "No alcohol", step_free: "Step-free", required_indoor: "Must be indoors", required_outdoor: "Must be outdoors", free: "Free", inexpensive: "Inexpensive", moderate: "Moderate", max_price: "Maximum price", commute_12_km: "Allow up to 12 km" },
   ru: { conversation: "Спокойно поговорить", coffee_treats: "Кофе и десерт", meal_discovery: "Новая еда", walk_view: "Прогулка и виды", art_culture: "Искусство", drinks_evening: "Вечерние напитки", playful_activity: "Активность", surprise_me: "Удивите меня", quiet: "Тихо", cozy_public: "Уютно", lively: "Живо", design_forward: "Стильный дизайн", scenic: "Красивый вид", romantic_public: "Романтично", seated: "За столиком", walking: "Прогулка", interactive: "Интерактивно", indoor: "В помещении", outdoor: "На улице", vegan: "Веган", vegetarian: "Вегетарианское", halal: "Халяль", kosher: "Кошер", gluten_free: "Без глютена", alcohol_free: "Без алкоголя", step_free: "Без ступеней", required_indoor: "Только в помещении", required_outdoor: "Только на улице", free: "Бесплатно", inexpensive: "Недорого", moderate: "Умеренно", max_price: "Максимальная цена", commute_12_km: "Разрешить до 12 км" },
@@ -512,6 +519,8 @@ const label = (id: string): string => LABELS[lang][id] ?? id.replaceAll("_", " "
 function showVibeStage(): void {
   const stage = document.getElementById("vibe-stage") as HTMLElement | null;
   if (stage) stage.hidden = false;
+  const priceNote = document.getElementById("vibe-price-note");
+  if (priceNote) priceNote.textContent = INITIAL_PRICE_NOTE[lang];
   const suggestions = document.getElementById("vibe-suggestions");
   if (suggestions && venueState?.suggestions.length) {
     suggestions.replaceChildren(...venueState.suggestions.map((item) => chipButton(item.experiences.map(label).join(" · "), false, () => {
@@ -537,6 +546,9 @@ function toggleList<T extends string>(list: T[], value: T): T[] {
 
 function renderDraft(): void {
   if (!draft) return;
+  // Price is owned by the automatic initial-venue policy, not by this user.
+  // Clear a restored legacy draft so an invisible old chip cannot affect it.
+  draft.hardConstraints.maxPrice = null;
   const text = document.getElementById("vibe-text") as HTMLTextAreaElement | null;
   if (text && !text.value) text.value = draft.rawText;
   const review = document.getElementById("vibe-review") as HTMLElement | null;
@@ -553,10 +565,10 @@ function renderDraft(): void {
     });
   }));
   const constraints = document.getElementById("vibe-constraints");
-  const constraintIds = [...DIET_IDS, "alcohol_free", "step_free", "required_indoor", "required_outdoor", "free", "inexpensive", "moderate", ...(venueState?.selectionError?.startsWith("no_candidates:commute_12_km:") ? ["commute_12_km"] : [])];
+  const constraintIds = [...DIET_IDS, "alcohol_free", "step_free", "required_indoor", "required_outdoor", ...(venueState?.selectionError?.startsWith("no_candidates:commute_12_km:") ? ["commute_12_km"] : [])];
   if (constraints) constraints.replaceChildren(...constraintIds.map((id) => {
     const hard = draft!.hardConstraints;
-    const active = DIET_IDS.includes(id as VenueDietary) ? hard.dietary.includes(id as VenueDietary) : id === "alcohol_free" ? hard.alcoholFree : id === "step_free" ? hard.stepFree : id === "required_indoor" ? hard.setting === "indoor" : id === "required_outdoor" ? hard.setting === "outdoor" : id === "commute_12_km" ? hard.maxCommuteKm === 12 : hard.maxPrice === id;
+    const active = DIET_IDS.includes(id as VenueDietary) ? hard.dietary.includes(id as VenueDietary) : id === "alcohol_free" ? hard.alcoholFree : id === "step_free" ? hard.stepFree : id === "required_indoor" ? hard.setting === "indoor" : id === "required_outdoor" ? hard.setting === "outdoor" : hard.maxCommuteKm === 12;
     return chipButton(label(id), active, () => {
       if (DIET_IDS.includes(id as VenueDietary)) hard.dietary = toggleList(hard.dietary, id as VenueDietary);
       else if (id === "alcohol_free") hard.alcoholFree = !hard.alcoholFree;
@@ -564,7 +576,6 @@ function renderDraft(): void {
       else if (id === "required_indoor") hard.setting = hard.setting === "indoor" ? null : "indoor";
       else if (id === "required_outdoor") hard.setting = hard.setting === "outdoor" ? null : "outdoor";
       else if (id === "commute_12_km") hard.maxCommuteKm = hard.maxCommuteKm === 12 ? 8 : 12;
-      else hard.maxPrice = hard.maxPrice === id ? null : id as "free" | "inexpensive" | "moderate";
       renderDraft();
     });
   }));

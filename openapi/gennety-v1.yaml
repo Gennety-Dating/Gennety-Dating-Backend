@@ -1695,7 +1695,11 @@ components:
         alcoholFree: { type: boolean }
         stepFree: { type: boolean }
         setting: { type: [string, "null"], enum: [indoor, outdoor, null] }
-        maxPrice: { type: [string, "null"], enum: [free, inexpensive, moderate, null] }
+        maxPrice:
+          type: [string, "null"]
+          enum: [free, inexpensive, moderate, null]
+          deprecated: true
+          description: Compatibility field. Initial assignment uses the server-owned base price policy and normalizes this value to null; price/exclusivity is selected only in Venue Change.
         maxCommuteKm: { type: integer, enum: [8, 12] }
 
     VenueIntentConfirmation:
