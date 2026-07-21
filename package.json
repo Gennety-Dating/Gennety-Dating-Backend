@@ -29,6 +29,7 @@
     "dev:reset-onboarding": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-reset-onboarding.mjs",
     "dev:reset-onboarding:apply": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-reset-onboarding.mjs --apply",
     "dev:watch-and-match": "pnpm --filter @gennety/bot exec tsx ../../scripts/dev-watch-and-match.mjs",
+    "audit:stuck-matches": "pnpm --filter @gennety/bot exec tsx ../../scripts/audit-stuck-matches.mjs",
     "onboarding:backfill": "pnpm --filter @gennety/bot exec tsx ../../scripts/backfill-onboarding-progress.mjs",
     "onboarding:backfill:apply": "pnpm --filter @gennety/bot exec tsx ../../scripts/backfill-onboarding-progress.mjs --apply",
     "seed-venues:pull": "pnpm --filter @gennety/bot exec tsx ../../scripts/seed-venues.mjs --pull",
