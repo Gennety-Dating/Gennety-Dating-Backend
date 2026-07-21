@@ -99,10 +99,9 @@ export interface DateCountdownInput {
 }
 
 /**
- * Render the pinned banner for a user whose date is scheduled: a discrete
- * countdown to `dateAt` (same buckets as the next-match banner) with the venue
- * name appended when known. `status-timer.ts` uses this in place of the
- * next-batch countdown whenever the user has an upcoming scheduled date.
+ * Render the additional pinned-banner line for a scheduled date: a discrete
+ * countdown to `dateAt` with the venue name appended when known. The next-drop
+ * status remains primary and this line supplements it.
  */
 export function formatDateCountdownText(
   input: DateCountdownInput,

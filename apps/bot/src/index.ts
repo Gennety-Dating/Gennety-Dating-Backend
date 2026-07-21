@@ -10,7 +10,10 @@ import { ensureMatchPairIndex } from "@gennety/db";
 import { assertIdentityTrustConfiguration, env } from "./config.js";
 import { createBot } from "./bot.js";
 import { setMainBotApi } from "./services/main-bot-api.js";
-import { notifyFounderWeeklyMatches } from "./services/founder-notify.js";
+import {
+  notifyFounderStatusTimerHealth,
+  notifyFounderWeeklyMatches,
+} from "./services/founder-notify.js";
 import { autoUnsuspendElapsed, runWeeklyBatch } from "./services/match-engine.js";
 import { dispatchMatches } from "./services/dispatch-queue.js";
 import { sendNoMatchNotices } from "./services/no-match-notifier.js";
@@ -21,12 +24,17 @@ import { runPreDateSafetyTick } from "./services/pre-date-safety.js";
 import { runCoordinationTick } from "./services/coordination.js";
 import { startAdminServer } from "./admin/server.js";
 import { startPublicServer } from "./public/server.js";
+import {
+  CRON_TIMEZONE,
+  MATCH_CRON_SCHEDULE,
+} from "./services/next-batch.js";
 import { reEngagementTick } from "./workers/re-engagement.js";
 import { profilerTick } from "./workers/profiler.js";
 import { matchNudgeTick } from "./workers/match-nudge.js";
 import { proposalCountdownTick } from "./workers/proposal-countdown.js";
 import { preMatchAnnounceTick } from "./workers/pre-match-announce.js";
 import { statusTimerTick } from "./workers/status-timer.js";
+import { createStatusTimerRunner } from "./workers/status-timer-runner.js";
 import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
 import { ticketExpiryTick } from "./workers/ticket-expiry.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
@@ -57,6 +65,10 @@ const bot = createBot(env.BOT_TOKEN);
 // Publish the main bot Api so context-less services (founder-notify) can act
 // as @gennetybot — e.g. download a user's own profile-photo bytes.
 setMainBotApi(bot.api);
+const runStatusTimer = createStatusTimerRunner({
+  tick: () => statusTimerTick(bot.api),
+  notifyHealth: notifyFounderStatusTimerHealth,
+});
 
 const DEFAULT_DATE_LIFECYCLE_TICK_MS = 2 * 60 * 1000;
 /**
@@ -82,15 +94,6 @@ function resolveDateLifecycleTickMs(raw: string | undefined): number {
   return parsed;
 }
 const DATE_LIFECYCLE_TICK_MS = resolveDateLifecycleTickMs(process.env.DATE_LIFECYCLE_TICK_MS);
-
-/**
- * Weekly matching cron schedule. Default: Thursday at 18:00 Europe/Kyiv.
- * Override via MATCH_CRON_SCHEDULE env var for testing.
- */
-const MATCH_CRON_SCHEDULE = process.env.MATCH_CRON_SCHEDULE ?? "0 18 * * 4";
-
-/** Timezone all weekly cron jobs are anchored to. */
-const CRON_TIMEZONE = process.env.CRON_TIMEZONE ?? "Europe/Kyiv";
 
 /**
  * Expiry cron schedule. Runs every 15 minutes to expire proposals
@@ -481,15 +484,7 @@ bot.start({
     // Pinned status banner — discrete countdown to next match dispatch.
     cron.schedule(
       STATUS_TIMER_CRON_SCHEDULE,
-      guardedTick("status-timer", () =>
-        statusTimerTick(bot.api).then((r) => {
-          if (r.edited > 0 || r.cleared > 0 || r.errors > 0) {
-            console.log(
-              `[status-timer] scanned=${r.scanned} edited=${r.edited} skipped=${r.skippedSameText} cleared=${r.cleared} errors=${r.errors}`,
-            );
-          }
-        }),
-      ),
+      guardedTick("status-timer", runStatusTimer),
     );
     console.log(`[cron] Status timer scheduled: "${STATUS_TIMER_CRON_SCHEDULE}"`);
 

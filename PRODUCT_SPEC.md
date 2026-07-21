@@ -720,15 +720,23 @@ path is visually distinct: a blue (`primary`) **❄️ Freeze account** over a r
   `DELETE /v1/me` entry point (no freeze) but uses the same deletion service.
 
 A pinned **status banner** is created on activation
-(`services/status-banner.ts`) and live-edited every minute by the
-`status-timer` worker. It shows a discrete countdown to the next batch
-("Xd Yh", "Xh Ym", "Xm"), de-duplicated in-memory so unchanged text never
-hits the Bot API. **While the user has an upcoming `scheduled` date the banner
-switches to a countdown to *that date* + the venue name** ("💫 Date in Xd Yh ·
-Venue"), so the pin becomes an always-visible "active date" status; it reverts
-to the next-batch countdown once the date passes. The worker resolves this from
-one extra `scheduled`-match sweep per tick, and the in-memory de-dup naturally
-absorbs the text switch.
+(`services/status-banner.ts`) and reconciled every minute by the
+`status-timer` worker. Its first blue (`primary`) inline button always carries
+the discrete countdown to the next configured weekly batch ("Xd Yh", "Xh
+Ym", "Xm") and opens the current main menu; the message body repeats the exact
+localized batch date/time. **An upcoming `scheduled` date is additional
+context, never a replacement for the next-drop countdown**: its countdown and
+venue appear below the drop status. Telegram-only delivery follows the same
+`MATCH_CRON_SCHEDULE` + `CRON_TIMEZONE` source as `/v1/countdown`; the native
+iOS surface keeps rendering its own countdown from that API.
+
+The banner is self-healing: active Telegram users with a null/stale message id
+get a replacement, deleted messages are recreated in the same tick, and an
+hourly physical-pin audit re-pins a tracked message that is no longer on top.
+Full render state (text + button) is de-duplicated in memory. Leaving `active`
+removes the pin; resume recreates it. Account deletion unpins the exact tracked
+message before erasing the row, while first-touch re-registration clears any
+physical orphan left by a Telegram outage during deletion.
 
 ### 2.2 Mobile API (native iOS client)
 

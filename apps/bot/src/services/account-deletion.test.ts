@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   deliverEffects: vi.fn(),
   deleteStorageObject: vi.fn(),
   notifyFounder: vi.fn(),
+  unpinKnownStatusBanner: vi.fn(),
 }));
 
 vi.mock("@gennety/db", () => {
@@ -46,6 +47,9 @@ vi.mock("./storage.js", () => ({
 vi.mock("./founder-notify.js", () => ({
   notifyFounderAccountClosed: mocks.notifyFounder,
 }));
+vi.mock("./status-banner.js", () => ({
+  unpinKnownStatusBanner: mocks.unpinKnownStatusBanner,
+}));
 
 import {
   AccountDeletionCleanupError,
@@ -58,6 +62,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.userFindUnique.mockResolvedValue({
     id: USER_ID,
+    telegramId: 42n,
+    statusMessageId: 555,
     selfiePath: `${USER_ID}/legacy-selfie.jpg`,
     verifiedSelfiePath: `${USER_ID}/persona.jpg`,
     profile: {
@@ -90,6 +96,7 @@ beforeEach(() => {
   mocks.deliverEffects.mockResolvedValue(undefined);
   mocks.deleteStorageObject.mockResolvedValue(true);
   mocks.notifyFounder.mockResolvedValue(undefined);
+  mocks.unpinKnownStatusBanner.mockResolvedValue(undefined);
 });
 
 describe("deleteUserAccount", () => {
@@ -139,6 +146,17 @@ describe("deleteUserAccount", () => {
     expect(mocks.claimMatches).not.toHaveBeenCalled();
     expect(mocks.deliverEffects).not.toHaveBeenCalled();
     expect(mocks.notifyFounder).not.toHaveBeenCalled();
+    expect(mocks.unpinKnownStatusBanner).not.toHaveBeenCalled();
+  });
+
+  it("unpins the exact Telegram banner after storage cleanup and before DB erasure", async () => {
+    const api = {} as any;
+    await deleteUserAccount(USER_ID, api);
+
+    expect(mocks.unpinKnownStatusBanner).toHaveBeenCalledWith(api, 42n, 555);
+    expect(mocks.unpinKnownStatusBanner.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.userDelete.mock.invocationCallOrder[0]!,
+    );
   });
 
   it("returns a not-found result without touching related systems", async () => {

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { parseWeeklyCron, getNextBatchDate, formatNextBatchDate } from "./next-batch.js";
+import {
+  parseWeeklyCron,
+  getNextBatchDate,
+  formatNextBatchDate,
+  isWeeklyBatchProcessing,
+} from "./next-batch.js";
 
 /**
  * All tests anchor on absolute UTC instants so they're TZ-independent.
@@ -123,5 +128,34 @@ describe("formatNextBatchDate", () => {
     expect(formatted).toContain("April");
     expect(formatted).toContain("17");
     expect(formatted).toContain("18:00");
+  });
+});
+
+describe("isWeeklyBatchProcessing", () => {
+  it("starts exactly on the configured batch boundary", () => {
+    expect(
+      isWeeklyBatchProcessing(
+        new Date("2025-04-17T15:00:00.000Z"),
+        10,
+        "0 18 * * 4",
+      ),
+    ).toBe(true);
+  });
+
+  it("follows a non-default configured weekly cron", () => {
+    expect(
+      isWeeklyBatchProcessing(
+        new Date("2025-04-16T06:05:00.000Z"), // Wed 09:05 Kyiv
+        10,
+        "0 9 * * 3",
+      ),
+    ).toBe(true);
+    expect(
+      isWeeklyBatchProcessing(
+        new Date("2025-04-16T06:11:00.000Z"),
+        10,
+        "0 9 * * 3",
+      ),
+    ).toBe(false);
   });
 });

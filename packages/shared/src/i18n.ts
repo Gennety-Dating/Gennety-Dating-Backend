@@ -695,6 +695,12 @@ const translations = {
     statusHoursMinutes: "⏳ Matches drop in {h}h {m}m",
     statusMinutes: "✨ Almost ready! Matches drop in {m}m",
     statusProcessing: "✨ Analyzing your city… Check back shortly.",
+    statusBannerSchedule: "Next drop: {date}, {time}",
+    statusBannerActive: "We're already tuning your compatibility ✦",
+    statusButtonDaysHours: "⏳ Drop in {d}d {h}h",
+    statusButtonHoursMinutes: "⏳ Drop in {h}h {m}m",
+    statusButtonMinutes: "✨ Drop in {m}m",
+    statusButtonProcessing: "✨ Matching in progress",
 
     // --- My date (menu row + hub) + scheduled-date banner ---
     statusDateDaysHours: "💫 Date in {d}d {h}h",
@@ -1468,6 +1474,12 @@ const translations = {
     statusHoursMinutes: "⏳ Мэтчи прилетят через {h}ч {m}мин",
     statusMinutes: "✨ Почти готово! Мэтчи прилетят через {m} мин",
     statusProcessing: "✨ Сканируем твой город… Загляни чуть позже.",
+    statusBannerSchedule: "Следующий дроп: {date}, {time}",
+    statusBannerActive: "Мы уже подбираем твою совместимость ✦",
+    statusButtonDaysHours: "⏳ До дропа: {d}д {h}ч",
+    statusButtonHoursMinutes: "⏳ До дропа: {h}ч {m}мин",
+    statusButtonMinutes: "✨ До дропа: {m}мин",
+    statusButtonProcessing: "✨ Подбираем мэтчи",
 
     // --- My date (menu row + hub) + scheduled-date banner ---
     statusDateDaysHours: "💫 Свидание через {d}д {h}ч",
@@ -2241,6 +2253,12 @@ const translations = {
     statusHoursMinutes: "⏳ Метчі прилетять через {h}г {m}хв",
     statusMinutes: "✨ Майже готово! Метчі прилетять за {m} хв",
     statusProcessing: "✨ Скануємо твоє місто… Зазирни трохи згодом.",
+    statusBannerSchedule: "Наступний дроп: {date}, {time}",
+    statusBannerActive: "Ми вже підбираємо твою сумісність ✦",
+    statusButtonDaysHours: "⏳ До дропу: {d}д {h}г",
+    statusButtonHoursMinutes: "⏳ До дропу: {h}г {m}хв",
+    statusButtonMinutes: "✨ До дропу: {m}хв",
+    statusButtonProcessing: "✨ Підбираємо метчі",
 
     // --- My date (menu row + hub) + scheduled-date banner ---
     statusDateDaysHours: "💫 Побачення через {d}д {h}г",
@@ -2969,6 +2987,12 @@ const deTranslations: TranslationTable = {
   statusHoursMinutes: "⏳ Matches droppen in {h}Std {m}Min",
   statusMinutes: "✨ Fast bereit! Matches droppen in {m} Min",
   statusProcessing: "✨ Analysiere deine Stadt... Schau später nochmal rein.",
+  statusBannerSchedule: "Nächster Drop: {date}, {time}",
+  statusBannerActive: "Wir stimmen deine Kompatibilität bereits ab ✦",
+  statusButtonDaysHours: "⏳ Drop in {d}T {h}Std",
+  statusButtonHoursMinutes: "⏳ Drop in {h}Std {m}Min",
+  statusButtonMinutes: "✨ Drop in {m}Min",
+  statusButtonProcessing: "✨ Matching läuft",
 
   // --- My date (menu row + hub) + scheduled-date banner ---
   statusDateDaysHours: "💫 Date in {d}T {h}Std",
@@ -3702,6 +3726,12 @@ const plTranslations: TranslationTable = {
   statusHoursMinutes: "⏳ Dopasowania wlecą za {h}h {m}min",
   statusMinutes: "✨ Prawie gotowe! Dopasowania wlecą za {m} min",
   statusProcessing: "✨ Analizujemy Twoje miasto... Zajrzyj trochę później.",
+  statusBannerSchedule: "Następny drop: {date}, {time}",
+  statusBannerActive: "Już dopasowujemy Twoją kompatybilność ✦",
+  statusButtonDaysHours: "⏳ Do dropu: {d}d {h}h",
+  statusButtonHoursMinutes: "⏳ Do dropu: {h}h {m}min",
+  statusButtonMinutes: "✨ Do dropu: {m}min",
+  statusButtonProcessing: "✨ Dobieramy dopasowania",
 
   // --- My date (menu row + hub) + scheduled-date banner ---
   statusDateDaysHours: "💫 Randka za {d}d {h}h",

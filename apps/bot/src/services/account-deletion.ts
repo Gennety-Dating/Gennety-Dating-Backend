@@ -7,6 +7,7 @@ import {
 } from "./cancel-in-flight-matches.js";
 import { notifyFounderAccountClosed } from "./founder-notify.js";
 import { deleteStorageObject } from "./storage.js";
+import { unpinKnownStatusBanner } from "./status-banner.js";
 
 export class AccountDeletionCleanupError extends Error {
   constructor(readonly failedObjects: readonly string[]) {
@@ -42,6 +43,8 @@ export async function deleteUserAccount(
       where: { id: userId },
       select: {
         id: true,
+        telegramId: true,
+        statusMessageId: true,
         selfiePath: true,
         verifiedSelfiePath: true,
         profile: {
@@ -93,6 +96,18 @@ export async function deleteUserAccount(
   const failedObjects = cleanup.flatMap((result) => result.failedObjects);
   if (failedObjects.length > 0) {
     throw new AccountDeletionCleanupError(failedObjects);
+  }
+
+  // The storage phase has succeeded, so deletion can proceed. Remove the
+  // exact known Telegram pin before erasing its durable message id. This is
+  // deliberately best-effort: Telegram downtime must not block GDPR erasure,
+  // and first-touch cleanup on a future registration is the fallback.
+  if (api) {
+    await unpinKnownStatusBanner(
+      api,
+      user.telegramId,
+      user.statusMessageId,
+    );
   }
 
   const reports = await prisma.founderReport.findMany({

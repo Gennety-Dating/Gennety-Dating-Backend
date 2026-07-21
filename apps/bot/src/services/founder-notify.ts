@@ -55,6 +55,24 @@ function founderChatId(): number {
   return Number(env.FOUNDER_TELEGRAM_ID);
 }
 
+/** Anonymous ops alert for the pinned status-timer worker. */
+export async function notifyFounderStatusTimerHealth(
+  state: "degraded" | "recovered",
+  consecutiveFailures: number,
+): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+  const text =
+    state === "degraded"
+      ? `⚠️ Status timer degraded after ${consecutiveFailures} consecutive failed ticks.`
+      : `✅ Status timer recovered after ${consecutiveFailures} failed ticks.`;
+  try {
+    await api.sendMessage(founderChatId(), text);
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} status-timer health notify failed`, err);
+  }
+}
+
 function truncateCaption(text: string): string {
   return text.length <= CAPTION_MAX ? text : `${text.slice(0, CAPTION_MAX - 1)}…`;
 }

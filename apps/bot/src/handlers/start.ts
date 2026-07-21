@@ -12,7 +12,10 @@ import { sendConsentPrompt } from "./onboarding/consent.js";
 import { computeDevBypassFields } from "./dev-bypass.js";
 import { startPoll } from "../services/verification-poller.js";
 import { sendVerificationGateNotice } from "./onboarding/verification.js";
-import { pinStatusBanner } from "../services/status-banner.js";
+import {
+  clearStaleStatusPins,
+  pinStatusBanner,
+} from "../services/status-banner.js";
 import { buildLanguageKeyboard } from "./language-keyboard.js";
 import { syncTelegramUsername } from "../utils/username.js";
 import { shouldUseOnboardingMiniApp } from "./onboarding-mini-app-gate.js";
@@ -152,6 +155,7 @@ start.command("start", async (ctx) => {
 
   // Upsert user — create if new, load existing state if returning
   let user: User | null = await prisma.user.findUnique({ where: { telegramId } });
+  let createdNewUser = false;
 
   if (!user) {
     // First-touch attribution: capture deep-link start_param from
@@ -178,6 +182,7 @@ start.command("start", async (ctx) => {
     user = await prisma.user.create({
       data: { telegramId, firstName: null, referralSource, ...(devBypassFields ?? {}) },
     });
+    createdNewUser = true;
   } else if (devBypassFields && (!user.isEmailVerified || !user.email)) {
     console.warn(
       `[dev-bypass] Updating existing user ${telegramId} with synthetic verified email ` +
@@ -191,6 +196,14 @@ start.command("start", async (ctx) => {
         emailOtpExpiresAt: null,
       },
     });
+  }
+
+  // A GDPR-deleted prior account may have left a physical Telegram pin if the
+  // Bot API was unavailable during deletion. Clean it on the first touch of
+  // the replacement account instead of leaving a frozen countdown throughout
+  // onboarding. Existing returning accounts are never disturbed here.
+  if (createdNewUser) {
+    await clearStaleStatusPins(ctx.api, telegramId);
   }
 
   // Opportunistically capture the public Telegram username for the pre-date

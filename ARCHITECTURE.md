@@ -522,7 +522,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `0 * * * *` | UTC | Match nudges — proposal (3 h / 10 h), scheduling (6 h / 12 h) | `workers/match-nudge.ts` |
 | `*/5 * * * *` | UTC | Onboarding re-engagement (5-step decay) | `workers/re-engagement.ts` |
 | `*/15 * * * *` | UTC | Profiler scheduler — lazy-seed + dispatch post-onboarding Q&A batches in local morning/evening windows | `workers/profiler.ts` → `services/profiler.ts` |
-| `* * * * *` | UTC | Pinned status banner (live discrete countdown; switches to an upcoming-`scheduled`-date countdown + venue when the user has one) | `workers/status-timer.ts` |
+| `* * * * *` | UTC | Telegram-only pinned status banner: canonical next-drop countdown + blue menu button, optional scheduled-date detail, null/stale-message repair, non-active cleanup; hourly physical-pin reconciliation and 15-minute health heartbeat | `workers/status-timer.ts` |
 | `*/5 * * * *` | UTC | Embedding refresh (dirty-flag scan, ≤20 rows/tick) | `workers/embedding-refresh.ts` |
 | `0 * * * *` | UTC | Auto-unsuspend elapsed Tier-2 suspensions | `services/match-engine.ts` (`autoUnsuspendElapsed`) |
 | `30 3 * * *` | Europe/Kyiv | GDPR Article 9 selfie scrub (90 d post-`verifiedAt`) | `services/selfie-retention.ts` |

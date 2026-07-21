@@ -7,11 +7,12 @@
  * anchored to Europe/Kyiv wall-clock time (DST-aware via Intl API).
  */
 
-/** Default cron: Thursday at 18:00 Kyiv. */
-const DEFAULT_CRON = "0 18 * * 4";
+/** Canonical weekly schedule shared by node-cron, Telegram and /v1/countdown. */
+export const MATCH_CRON_SCHEDULE =
+  process.env.MATCH_CRON_SCHEDULE ?? "0 18 * * 4";
 
 /** Timezone for batch scheduling — matches node-cron `timezone` option. */
-const BATCH_TZ = process.env.CRON_TIMEZONE ?? "Europe/Kyiv";
+export const CRON_TIMEZONE = process.env.CRON_TIMEZONE ?? "Europe/Kyiv";
 
 interface ParsedWeeklyCron {
   minute: number;
@@ -118,9 +119,9 @@ export function getNextBatchDate(
   now: Date = new Date(),
   cronExpression?: string,
 ): Date {
-  const cron = parseWeeklyCron(cronExpression ?? process.env.MATCH_CRON_SCHEDULE ?? DEFAULT_CRON);
+  const cron = parseWeeklyCron(cronExpression ?? MATCH_CRON_SCHEDULE);
 
-  const kyivNow = getZonedParts(now, BATCH_TZ);
+  const kyivNow = getZonedParts(now, CRON_TIMEZONE);
   const daysUntil = (cron.dayOfWeek - kyivNow.dayOfWeek + 7) % 7;
 
   let candidate = zonedWallToUtc(
@@ -129,7 +130,7 @@ export function getNextBatchDate(
     kyivNow.day + daysUntil,
     cron.hour,
     cron.minute,
-    BATCH_TZ,
+    CRON_TIMEZONE,
   );
 
   if (daysUntil === 0 && candidate.getTime() <= now.getTime()) {
@@ -139,7 +140,7 @@ export function getNextBatchDate(
       kyivNow.day + 7,
       cron.hour,
       cron.minute,
-      BATCH_TZ,
+      CRON_TIMEZONE,
     );
   }
 
@@ -162,6 +163,21 @@ export function getPreviousBatchDate(
 }
 
 /**
+ * True while the most recent configured weekly batch is expected to be
+ * processing. Unlike the legacy shared helper, this follows the exact same
+ * MATCH_CRON_SCHEDULE + CRON_TIMEZONE inputs as node-cron and /v1/countdown.
+ */
+export function isWeeklyBatchProcessing(
+  now: Date = new Date(),
+  windowMinutes = 10,
+  cronExpression?: string,
+): boolean {
+  const previous = getPreviousBatchDate(now, cronExpression);
+  const elapsedMs = now.getTime() - previous.getTime();
+  return elapsedMs >= 0 && elapsedMs <= windowMinutes * 60_000;
+}
+
+/**
  * Human-readable string for the next batch date, formatted in Europe/Kyiv.
  * Example: "Thursday, April 16 at 18:00"
  */
@@ -176,14 +192,14 @@ export function formatNextBatchDate(
     weekday: "long",
     month: "long",
     day: "numeric",
-    timeZone: BATCH_TZ,
+    timeZone: CRON_TIMEZONE,
   });
 
   const timePart = next.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone: BATCH_TZ,
+    timeZone: CRON_TIMEZONE,
   });
 
   return `${datePart} at ${timePart}`;
