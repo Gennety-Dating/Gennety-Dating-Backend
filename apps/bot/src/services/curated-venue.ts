@@ -316,3 +316,18 @@ export async function resolveVenue(
 export function isValidVenueCategory(value: string): value is VenueCategory {
   return (VENUE_CATEGORY_WHITELIST as readonly string[]).includes(value);
 }
+
+/**
+ * Curated-venue tiers (PRODUCT_SPEC §Premium). `base` is the default
+ * student-friendly pool; `premium` venues may exceed the ≤ MODERATE price cap
+ * and are shown-but-locked in the venue-change board unless a participant has
+ * an active Gennety Premium subscription. Whitelist-validated in app code, not
+ * a Prisma enum (mirrors `category`).
+ */
+export const VENUE_TIER_WHITELIST = ["base", "premium"] as const;
+export type VenueTier = (typeof VENUE_TIER_WHITELIST)[number];
+
+/** Validate a tier string; used by the seeder import path before DB writes. */
+export function isValidVenueTier(value: string): value is VenueTier {
+  return (VENUE_TIER_WHITELIST as readonly string[]).includes(value);
+}

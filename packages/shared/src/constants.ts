@@ -163,6 +163,14 @@ export const VENUE_CHANGE_MIN_COMMENT_LEN = 10;
 /** Max characters stored/relayed for the venue-change comment (emergency-reason clamp). */
 export const VENUE_CHANGE_MAX_COMMENT_LEN = 1000;
 
+/** Gennety Premium (§Premium, feature-flagged). */
+/**
+ * Telegram Stars subscription period, in seconds. Telegram Stars subscriptions
+ * currently support ONLY a 30-day period, so this is fixed (not env-tunable).
+ * The monthly price (Stars) is env-tunable (`PREMIUM_STARS`).
+ */
+export const PREMIUM_SUBSCRIPTION_PERIOD_SECONDS = 2_592_000;
+
 /**
  * Phase 1b: Profiler (PRODUCT_SPEC §Phase 1b). Timed batches of gender-specific
  * Q&A harvested after onboarding to fuel icebreakers and date-planning hints.

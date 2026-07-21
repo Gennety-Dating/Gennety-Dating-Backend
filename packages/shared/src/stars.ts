@@ -107,3 +107,36 @@ export function parseVenueInvoicePayload(
   if (mode !== "agreed" && mode !== "express") return null;
   return { matchId, mode };
 }
+
+/**
+ * Gennety Premium (§Premium) recurring-subscription Star payment payload. A
+ * single flat monthly price (env `PREMIUM_STARS`) sold via a native Telegram
+ * Star *subscription* invoice (`subscription_period: 2592000`). The payer is
+ * identified from `ctx.from`, so the payload carries no per-user data — just the
+ * product tag. Format: `sub:premium`. Recurring renewals redeliver a
+ * `successful_payment` with this same payload and `is_recurring: true`.
+ */
+export const SUB_INVOICE_PREFIX = "sub:";
+
+/** The only subscription product today. */
+export type SubInvoiceProduct = "premium";
+
+/** Build the invoice payload for a Premium subscription Star payment. */
+export function buildSubInvoicePayload(product: SubInvoiceProduct = "premium"): string {
+  return `${SUB_INVOICE_PREFIX}${product}`;
+}
+
+/**
+ * Parse a subscription invoice payload back into `{ product }`. Returns null for
+ * any non-subscription, malformed, or unknown-product payload — so a foreign or
+ * tampered invoice never grants Premium. The Star-amount check remains the trust
+ * boundary in the pre-checkout / successful-payment handlers.
+ */
+export function parseSubInvoicePayload(
+  payload: string | null | undefined,
+): { product: SubInvoiceProduct } | null {
+  if (!payload || !payload.startsWith(SUB_INVOICE_PREFIX)) return null;
+  const product = payload.slice(SUB_INVOICE_PREFIX.length);
+  if (product !== "premium") return null;
+  return { product };
+}

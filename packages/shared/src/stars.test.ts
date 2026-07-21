@@ -7,6 +7,9 @@ import {
   parseGateInvoicePayload,
   buildVenueInvoicePayload,
   parseVenueInvoicePayload,
+  SUB_INVOICE_PREFIX,
+  buildSubInvoicePayload,
+  parseSubInvoicePayload,
 } from "./stars.js";
 
 const UUID = "22222222-2222-4222-8222-222222222222";
@@ -95,5 +98,29 @@ describe("venue-change invoice payload", () => {
     expect(parseStoreInvoicePayload(buildVenueInvoicePayload(UUID, "agreed"))).toBeNull();
     expect(parseGateInvoicePayload(buildVenueInvoicePayload(UUID, "agreed"))).toBeNull();
     expect(parseVenueInvoicePayload(buildGateInvoicePayload(UUID, "self"))).toBeNull();
+  });
+});
+
+describe("subscription invoice payload", () => {
+  it("round-trips build → parse", () => {
+    expect(buildSubInvoicePayload()).toBe(`${SUB_INVOICE_PREFIX}premium`);
+    expect(parseSubInvoicePayload(buildSubInvoicePayload("premium"))).toEqual({
+      product: "premium",
+    });
+  });
+
+  it("returns null for non-sub or unknown-product payloads", () => {
+    expect(parseSubInvoicePayload("")).toBeNull();
+    expect(parseSubInvoicePayload(null)).toBeNull();
+    expect(parseSubInvoicePayload(undefined)).toBeNull();
+    expect(parseSubInvoicePayload("sub:")).toBeNull();
+    expect(parseSubInvoicePayload("sub:gold")).toBeNull();
+    expect(parseSubInvoicePayload(`store:3`)).toBeNull();
+  });
+
+  it("does not cross-parse with the other helpers", () => {
+    expect(parseStoreInvoicePayload(buildSubInvoicePayload())).toBeNull();
+    expect(parseVenueInvoicePayload(buildSubInvoicePayload())).toBeNull();
+    expect(parseSubInvoicePayload(buildStoreInvoicePayload(3))).toBeNull();
   });
 });

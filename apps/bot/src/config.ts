@@ -391,6 +391,27 @@ export const env = {
   /// for every path (agreed board pick, express). Env-tunable at launch.
   VENUE_CHANGE_STARS: Number(process.env.VENUE_CHANGE_STARS ?? "150"),
 
+  // ── Gennety Premium (recurring subscription, §Premium) ─────
+  /// Master flag for Gennety Premium. When false (default), no premium menu
+  /// row, no premium purchase surface, and every venue is treated as `base`
+  /// (premium-tier venues are hidden from the venue-change catalog). When true,
+  /// the venue-change board shows premium venues locked, offers subscription
+  /// (Telegram Stars recurring / iOS StoreKit), and waives the change fee for
+  /// subscribers. Standalone per-user entitlement (`services/premium.ts`).
+  PREMIUM_FEATURE_ENABLED: process.env.PREMIUM_FEATURE_ENABLED === "true",
+  /// Telegram Stars (XTR) monthly price of a Gennety Premium subscription
+  /// (`subscription_period` is fixed at 30 days by Telegram). ~$10/mo ≈ 500⭐
+  /// at user-facing rates; env-tunable at launch. Keep within Telegram's
+  /// per-subscription Star ceiling.
+  PREMIUM_STARS: Number(process.env.PREMIUM_STARS ?? "500"),
+  /// Human-readable price shown in premium copy (the Stars amount is the actual
+  /// charge; this is display-only for the "$10/mo" framing).
+  PREMIUM_PRICE_USD_DISPLAY: process.env.PREMIUM_PRICE_USD_DISPLAY ?? "$10",
+  /// StoreKit 2 auto-renewable subscription product id for the native iOS app.
+  /// Matched by full id or last dot-segment (mirrors APPSTORE_TICKET_PRODUCTS).
+  PREMIUM_APPSTORE_PRODUCT_ID:
+    process.env.PREMIUM_APPSTORE_PRODUCT_ID ?? "premium_monthly",
+
   // ── Date card (shareable PNG for a fully scheduled date) ─────
   /// Master flag for the date-card feature. When false (default), the
   /// scheduled-date confirmation is the existing plain-text DM. When true, both
