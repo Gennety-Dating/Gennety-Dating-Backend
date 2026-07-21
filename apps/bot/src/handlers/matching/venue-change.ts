@@ -541,6 +541,8 @@ type LoadVenueChangeCatalog = (args: {
   universityDomain: string | null;
   center: { lat: number; lng: number };
   agreedTime: Date;
+  /** §Premium: include premium-tier venues (shown locked). Pass the feature flag. */
+  includePremium?: boolean;
 }) => Promise<CatalogVenue[]>;
 
 export async function getVenueChangeCatalog(
@@ -575,6 +577,8 @@ export async function getVenueChangeCatalog(
     universityDomain: match.userA.universityDomain,
     center: { lat: match.venueLat, lng: match.venueLng },
     agreedTime: match.agreedTime,
+    // §Premium: surface premium venues (locked) whenever the feature is on.
+    includePremium: env.PREMIUM_FEATURE_ENABLED,
   });
   return { ok: true, venues };
 }
@@ -649,6 +653,8 @@ export async function submitVenueLikes(
     universityDomain: match.userA.universityDomain,
     center: { lat: match.venueLat, lng: match.venueLng },
     agreedTime: match.agreedTime,
+    // §Premium: surface premium venues (locked) whenever the feature is on.
+    includePremium: env.PREMIUM_FEATURE_ENABLED,
   });
   const byKey = new Map(catalog.map((v) => [venueKeyOf(v), v]));
   const snapshots: VenueLikeSnapshot[] = [];
@@ -1038,6 +1044,8 @@ export async function mintExpressChange(
     universityDomain: match.userA.universityDomain,
     center: { lat: match.venueLat, lng: match.venueLng },
     agreedTime: match.agreedTime,
+    // §Premium: surface premium venues (locked) whenever the feature is on.
+    includePremium: env.PREMIUM_FEATURE_ENABLED,
   });
   const venue = catalog.find((v) => venueKeyOf(v) === key);
   if (!venue) return { ok: false, reason: "invalid-venue" };

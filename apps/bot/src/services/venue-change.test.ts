@@ -8,6 +8,8 @@ import {
   venueChangeCutoff,
   venueChangeDeadline,
   buildVenueChangeCatalog,
+  capCatalog,
+  VENUE_CHANGE_PREMIUM_RESERVED,
   isWithinRadius,
   type CatalogVenue,
   type VenueBoardEligibilityInput,
@@ -214,5 +216,60 @@ describe("buildVenueChangeCatalog", () => {
     }));
     const out = await buildVenueChangeCatalog(input, { listCurated: async () => many });
     expect(out.length).toBe(12);
+  });
+});
+
+describe("capCatalog (§Premium slot reservation)", () => {
+  const venue = (i: number, tier: "base" | "premium"): CatalogVenue => ({
+    source: "curated",
+    placeId: `${tier}-${i}`,
+    name: `${tier} ${i}`,
+    address: `${i} St`,
+    lat: 50.45,
+    lng: 30.52,
+    mapsUri: null,
+    category: "cafe",
+    tier,
+    distanceKm: i * 0.1, // farther as i grows
+    photoUrl: null,
+    photoRefs: [],
+    rating: null,
+    userRatingCount: null,
+    editorialSummary: null,
+  });
+
+  it("returns everything when under the cap", () => {
+    const list = [venue(1, "base"), venue(2, "premium")];
+    expect(capCatalog(list)).toHaveLength(2);
+  });
+
+  it("guarantees premium venues survive a dense base pool past the cap", () => {
+    // 15 nearby base venues (0.1..1.5 km) then 2 farther premium (2.0, 2.1 km).
+    const base = Array.from({ length: 15 }, (_, i) => venue(i + 1, "base"));
+    const premium = [venue(20, "premium"), venue(21, "premium")];
+    const capped = capCatalog([...base, ...premium]);
+    expect(capped).toHaveLength(12);
+    expect(capped.filter((v) => v.tier === "premium")).toHaveLength(2);
+    // Still sorted nearest-first.
+    for (let i = 1; i < capped.length; i++) {
+      expect(capped[i].distanceKm).toBeGreaterThanOrEqual(capped[i - 1].distanceKm);
+    }
+  });
+
+  it("reserves at most VENUE_CHANGE_PREMIUM_RESERVED premium slots", () => {
+    const base = Array.from({ length: 12 }, (_, i) => venue(i + 1, "base"));
+    const premium = Array.from({ length: 8 }, (_, i) => venue(30 + i, "premium"));
+    const capped = capCatalog([...base, ...premium]);
+    expect(capped).toHaveLength(12);
+    expect(capped.filter((v) => v.tier === "premium").length).toBe(
+      VENUE_CHANGE_PREMIUM_RESERVED,
+    );
+  });
+
+  it("plain distance cap when there are no premium venues", () => {
+    const base = Array.from({ length: 15 }, (_, i) => venue(i + 1, "base"));
+    const capped = capCatalog(base);
+    expect(capped).toHaveLength(12);
+    expect(capped.every((v) => v.tier === "base")).toBe(true);
   });
 });

@@ -326,6 +326,13 @@ export async function listPlacesVenuesNear(
 }
 
 /**
+ * Max premium-tier slots reserved in the capped catalog so the §Premium tier is
+ * always discoverable even when nearer base venues would otherwise fill every
+ * slot. Only ever reserves slots that premium venues actually occupy.
+ */
+export const VENUE_CHANGE_PREMIUM_RESERVED = 4;
+
+/**
  * Build the venue-change catalog: curated rows within range win; only when
  * none qualify do we sweep Google Places. Capped to keep the card list short.
  * `deps` is injectable for tests (no DB / network).
@@ -339,7 +346,27 @@ export async function buildVenueChangeCatalog(
 
   const curated = await listCurated(input);
   const chosen = curated.length > 0 ? curated : await listPlaces(input);
-  return chosen.slice(0, VENUE_CHANGE_CATALOG_LIMIT);
+  return capCatalog(chosen);
+}
+
+/**
+ * Distance-sorted cap that guarantees premium venues a few slots — otherwise a
+ * dense base pool could crowd every premium spot past the cap and the tier would
+ * never surface (§Premium). Reserves up to `VENUE_CHANGE_PREMIUM_RESERVED`
+ * nearest premium venues, fills the rest with nearest base, and re-sorts by
+ * distance so the list still reads nearest-first.
+ */
+export function capCatalog(venues: CatalogVenue[]): CatalogVenue[] {
+  if (venues.length <= VENUE_CHANGE_CATALOG_LIMIT) return venues;
+  const premium = venues.filter((v) => v.tier === "premium");
+  if (premium.length === 0) return venues.slice(0, VENUE_CHANGE_CATALOG_LIMIT);
+  const base = venues.filter((v) => v.tier !== "premium");
+  const premiumSlots = Math.min(premium.length, VENUE_CHANGE_PREMIUM_RESERVED);
+  const kept = [
+    ...base.slice(0, VENUE_CHANGE_CATALOG_LIMIT - premiumSlots),
+    ...premium.slice(0, premiumSlots),
+  ];
+  return kept.sort((a, b) => a.distanceKm - b.distanceKm);
 }
 
 /**
