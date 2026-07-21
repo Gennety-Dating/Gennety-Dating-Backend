@@ -39,6 +39,7 @@ import {
 } from "./settings.js";
 import { handleHelp } from "./help.js";
 import { handleMyTickets } from "./tickets.js";
+import { handlePremiumHub } from "./premium.js";
 import { runMenuAgentTurn, splitReplyIntoBubbles } from "../../services/menu-agent.js";
 import { invalidatePendingAccountAction } from "./account-action.js";
 
@@ -266,6 +267,11 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     // My Tickets (wallet + store; only reachable when TICKET_FEATURE_ENABLED)
     case "menu:tickets":
       await handleMyTickets(ctx);
+      return;
+
+    // Gennety Premium hub (only reachable when PREMIUM_FEATURE_ENABLED)
+    case "menu:premium":
+      await handlePremiumHub(ctx);
       return;
 
     // Help

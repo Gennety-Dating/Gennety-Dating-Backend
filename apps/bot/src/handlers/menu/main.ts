@@ -92,6 +92,12 @@ function buildMainMenuKeyboardFor(
     kb.text(t(lang, "menuMyTickets"), "menu:tickets").row();
   }
 
+  // Gennety Premium entry — only when the Premium feature is live. The hub
+  // itself shows whether the subscription is active.
+  if (env.PREMIUM_FEATURE_ENABLED) {
+    kb.text(t(lang, "menuPremium"), "menu:premium").row();
+  }
+
   return kb.text(t(lang, "menuHelp"), "menu:help");
 }
 

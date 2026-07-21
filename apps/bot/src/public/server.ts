@@ -32,6 +32,7 @@ import { createVerificationMiniAppRouter } from "./routes/verification-mini-app.
 import { createTicketRouter } from "./routes/ticket.js";
 import { createTicketStoreRouter } from "./routes/tickets.js";
 import { createVenueChangeRouter } from "./routes/venue-change.js";
+import { createPremiumRouter } from "./routes/premium.js";
 import {
   isStrongJwtSecret,
   JWT_SECRET_MIN_BYTES,
@@ -101,6 +102,7 @@ let verificationMiniAppRouter: ReturnType<typeof createVerificationMiniAppRouter
 let ticketRouter: ReturnType<typeof createTicketRouter> | null = null;
 let ticketStoreRouter: ReturnType<typeof createTicketStoreRouter> | null = null;
 let venueChangeRouter: ReturnType<typeof createVenueChangeRouter> | null = null;
+let premiumRouter: ReturnType<typeof createPremiumRouter> | null = null;
 app.use("/v1/webhooks/persona", personaWebhookLimiter, (req, res, next) => {
   if (!injectedBotApi) {
     res.status(503).json({ error: "Persona webhook not ready" });
@@ -285,6 +287,17 @@ app.use("/v1/tickets", (req, res, next) => {
   }
   if (!ticketStoreRouter) ticketStoreRouter = createTicketStoreRouter();
   ticketStoreRouter(req, res, next);
+});
+
+// Gennety Premium Mini App — TMA-authed, feature-flagged. The invoice mint
+// pulls the bot api via getBotApi() at request time, so no injection here.
+app.use("/v1/premium", (req, res, next) => {
+  if (!env.PREMIUM_FEATURE_ENABLED) {
+    res.status(404).json({ error: "premium-disabled" });
+    return;
+  }
+  if (!premiumRouter) premiumRouter = createPremiumRouter();
+  premiumRouter(req, res, next);
 });
 
 // Liveness/readiness probe — unauthenticated, intentionally cheap.

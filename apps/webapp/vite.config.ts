@@ -23,6 +23,7 @@ export default defineConfig({
         ticket: resolve(__dirname, "ticket.html"),
         tickets: resolve(__dirname, "tickets.html"),
         "venue-change": resolve(__dirname, "venue-change.html"),
+        premium: resolve(__dirname, "premium.html"),
       },
     },
   },
