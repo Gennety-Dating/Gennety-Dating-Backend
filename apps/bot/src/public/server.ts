@@ -20,6 +20,7 @@ import { phoneAuthRouter } from "./routes/phone-auth.js";
 import { liveActivityRouter } from "./routes/live-activity.js";
 import { accountStatusRouter } from "./routes/account-status.js";
 import { ticketsAppStoreRouter } from "./routes/tickets-appstore.js";
+import { premiumAppStoreRouter } from "./routes/premium-appstore.js";
 import { appStoreWebhookRouter } from "./routes/appstore-webhook.js";
 import { founderReportRouter } from "./routes/founder-report.js";
 import { verificationRouter } from "./routes/verification.js";
@@ -288,6 +289,11 @@ app.use("/v1/tickets", (req, res, next) => {
   if (!ticketStoreRouter) ticketStoreRouter = createTicketStoreRouter();
   ticketStoreRouter(req, res, next);
 });
+
+// StoreKit 2 Premium subscription reporting (native app, JWT auth) — mounted
+// BEFORE the generic initData-authed /v1/premium router so this more-specific
+// prefix wins. App Store Server Notifications V2 land on /v1/webhooks/appstore.
+app.use("/v1/premium/appstore", premiumAppStoreRouter);
 
 // Gennety Premium Mini App — TMA-authed, feature-flagged. The invoice mint
 // pulls the bot api via getBotApi() at request time, so no injection here.

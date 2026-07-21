@@ -1037,6 +1037,61 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/premium/appstore/transaction:
+    post:
+      tags: [me]
+      operationId: reportAppStorePremiumTransaction
+      summary: Report a StoreKit 2 auto-renewable Premium subscription transaction
+      description: |
+        Send the subscription `transaction.jwsRepresentation` after a purchase
+        or on app launch when a renewal is observed. The server extracts the
+        transactionId (decode only), verifies it authoritatively via the App
+        Store Server API, and activates/extends Gennety Premium to Apple's
+        `expiresDate` exactly-once. Renewals also arrive via the App Store
+        Server Notifications webhook, so this endpoint is idempotent. A refunded
+        or revoked transaction ends the entitlement. 404 while Premium is
+        feature-disabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jws]
+              properties:
+                jws: { type: string, maxLength: 20000 }
+      responses:
+        "200":
+          description: Activated, already processed, or revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean, const: true }
+                  active: { type: boolean }
+                  premiumUntil:
+                    type: [string, "null"]
+                    format: date-time
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Premium feature disabled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Transaction rejected (unknown/foreign/not the premium product/no expiry)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: App Store verification unavailable — keep the transaction unfinished and retry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/matches/current:
     get:
       tags: [matches]
@@ -1311,6 +1366,7 @@ components:
             phoneAuth: { type: boolean }
             tickets: { type: boolean }
             coordination: { type: boolean }
+            premium: { type: boolean }
         serverNow: { type: string, format: date-time }
 
     Language:

@@ -87,6 +87,9 @@ export interface AppStoreTransaction {
   quantity: number;
   /** Present ⇔ Apple refunded/revoked the purchase. */
   revocationDate: number | null;
+  /** Auto-renewable subscription paid-through instant (ms epoch); null for
+   * consumables. Used as the Premium `periodEnd`. */
+  expiresDate: number | null;
 }
 
 export type TransactionLookup =
@@ -105,7 +108,19 @@ function toTransaction(payload: Record<string, unknown>): AppStoreTransaction | 
     productId: typeof payload.productId === "string" ? payload.productId : null,
     quantity: typeof payload.quantity === "number" && payload.quantity > 0 ? payload.quantity : 1,
     revocationDate: typeof payload.revocationDate === "number" ? payload.revocationDate : null,
+    expiresDate: typeof payload.expiresDate === "number" ? payload.expiresDate : null,
   };
+}
+
+/**
+ * Whether a StoreKit product id is the Gennety Premium subscription. Matches the
+ * full id or its last dot-segment (mirrors `ticketCountForProduct`), so
+ * `com.gennety.ios.premium_monthly` and a bare `premium_monthly` both resolve.
+ */
+export function isPremiumProduct(productId: string | null): boolean {
+  if (!productId) return false;
+  const target = env.PREMIUM_APPSTORE_PRODUCT_ID;
+  return productId === target || (productId.split(".").pop() ?? productId) === target;
 }
 
 /**

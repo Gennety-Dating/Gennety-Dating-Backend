@@ -46,6 +46,7 @@ const okTx = {
   productId: "com.gennety.ios.ticket_3",
   quantity: 1,
   revocationDate: null,
+  expiresDate: null,
 };
 
 beforeEach(() => {

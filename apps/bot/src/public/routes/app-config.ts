@@ -22,6 +22,7 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       phoneAuth: env.PHONE_AUTH_ENABLED,
       tickets: env.TICKET_FEATURE_ENABLED,
       coordination: env.COORDINATION_FEATURE_ENABLED,
+      premium: env.PREMIUM_FEATURE_ENABLED,
     },
     serverNow: new Date().toISOString(),
   });

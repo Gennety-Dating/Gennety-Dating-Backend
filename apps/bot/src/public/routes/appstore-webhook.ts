@@ -3,8 +3,13 @@ import {
   appStoreConfigured,
   decodeJwsPayload,
   getVerifiedTransaction,
+  isPremiumProduct,
 } from "../../services/appstore.js";
 import { refundAppStoreTransaction } from "../../services/appstore-tickets.js";
+import {
+  handleAppStorePremiumNotification,
+  PREMIUM_RENEW_NOTIFICATIONS,
+} from "../../services/appstore-premium.js";
 
 /**
  * App Store Server Notifications V2 (`POST /v1/webhooks/appstore`).
@@ -22,6 +27,15 @@ import { refundAppStoreTransaction } from "../../services/appstore-tickets.js";
 export const appStoreWebhookRouter: Router = Router();
 
 const REFUND_NOTIFICATION_TYPES = new Set(["REFUND", "REVOKE", "CONSUMPTION_REQUEST"]);
+// §Premium subscription lifecycle notifications we consume (renew + end).
+const PREMIUM_NOTIFICATION_TYPES = new Set([
+  ...PREMIUM_RENEW_NOTIFICATIONS,
+  "EXPIRED",
+  "GRACE_PERIOD_EXPIRED",
+  "REFUND",
+  "REVOKE",
+  "DID_CHANGE_RENEWAL_STATUS",
+]);
 
 appStoreWebhookRouter.post("/", async (req: Request, res: Response): Promise<void> => {
   const signedPayload =
@@ -51,7 +65,16 @@ appStoreWebhookRouter.post("/", async (req: Request, res: Response): Promise<voi
     return;
   }
 
-  if (!REFUND_NOTIFICATION_TYPES.has(notificationType)) {
+  // Route by product: a premium-subscription notification goes to the §Premium
+  // handler; a ticket refund/revoke to the wallet claw-back. The untrusted
+  // productId is used ONLY for routing — every consequence re-fetches Apple's
+  // authoritative transaction below.
+  const untrustedProductId =
+    txPayload && typeof txPayload.productId === "string" ? txPayload.productId : null;
+  const isPremium =
+    isPremiumProduct(untrustedProductId) && PREMIUM_NOTIFICATION_TYPES.has(notificationType);
+
+  if (!isPremium && !REFUND_NOTIFICATION_TYPES.has(notificationType)) {
     res.json({ ok: true, ignored: notificationType });
     return;
   }
@@ -67,6 +90,15 @@ appStoreWebhookRouter.post("/", async (req: Request, res: Response): Promise<voi
   }
   if (lookup.status === "not_found") {
     res.json({ ok: true, ignored: "unknown_transaction" });
+    return;
+  }
+
+  if (isPremium) {
+    const premium = await handleAppStorePremiumNotification(lookup.transaction, notificationType);
+    console.log(
+      `[appstore-webhook] premium ${notificationType} tx=${transactionId} -> ${premium.status}`,
+    );
+    res.json({ ok: true, result: premium.status });
     return;
   }
 
