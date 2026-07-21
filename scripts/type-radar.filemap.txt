@@ -1,0 +1,304 @@
+TYPE RADAR — SAVE-AS FILE MAP (name each generated image exactly this)
+Folder: apps/webapp/public/radar/<band>/<id>.jpg   (v1 = band 'a' only, 24 files)
+The id is the ONLY link between an image and its attributes — a wrong name silently corrupts learning. QA each against its brief.
+================================================================================
+
+################################################################################
+# BAND A (22-28)  ->  radar/a/
+################################################################################
+
+radar/a/f01.jpg   [cafe]
+    hairColor=blonde / hairLength=long / build=slim / style=elegant / tattoos=no
+    QA: Гипотеза: классически-женственный «мягкий» типаж — длинные светлые волосы, стройная фигура, элегантный стиль. Проверь: блонд однозначный (не русый), волосы ниже лопаток, силуэт читаемо стройный, простое чёрное платье без принтов, руки без тату.
+
+radar/a/f02.jpg   [cafe]
+    hairColor=brunette / hairLength=long / build=athletic / style=sporty / tattoos=no
+    QA: Гипотеза: «фитнес-девушка» — спортивная брюнетка. Проверь: подтянутость видна (плечи/талия), но без бодибилдерского рельефа; волосы явно тёмные и длинные; спортивный верх простой, без логотипов; без тату.
+
+radar/a/f03.jpg   [park]
+    hairColor=red / hairLength=short / build=slim / style=edgy / tattoos=yes
+    QA: Гипотеза: альтернативный типаж — рыжий боб + тату + дерзкая одежда. Проверь: рыжий натуральный медный (не морковно-крашеный), боб до подбородка, тату-рукав читается на правом предплечье, чёрная футболка.
+
+radar/a/f04.jpg   [street]
+    hairColor=brunette / hairLength=short / build=curvy / style=elegant / tattoos=no
+    QA: Гипотеза: элегантная фигуристая брюнетка с каре. Проверь: формы читаются именно как curvy/песочные часы (не полнота и не slim), каре аккуратное тёмное, классическое платье, без тату.
+
+radar/a/f05.jpg   [cafe]
+    hairColor=blonde / hairLength=short / build=athletic / style=edgy / tattoos=yes
+    QA: Гипотеза: контраст «нежный блонд × жёсткий стиль» — дерзкая спортивная блондинка с бобом и тату. Проверь: блонд-боб, фигура подтянутая, тату на предплечье видно, edgy-одежда чёрная.
+
+radar/a/f06.jpg   [cafe]
+    hairColor=red / hairLength=long / build=curvy / style=sporty / tattoos=no
+    QA: Гипотеза: фигуристая рыжая в спортивном. Проверь: длинные медно-рыжие волосы, формы curvy читаются даже в спортивной одежде (не скрыты свободным кроем), без тату.
+
+radar/a/f07.jpg   [street]
+    hairColor=brunette / hairLength=long / build=slim / style=sporty / tattoos=yes
+    QA: Гипотеза: изолируем тату — стройная спортивная брюнетка, где тату единственный «жёсткий» элемент. Проверь: всё остальное нейтрально-спортивное, волосы длинные тёмные, тату-рукав явно виден.
+
+radar/a/f08.jpg   [street]
+    hairColor=blonde / hairLength=long / build=curvy / style=edgy / tattoos=no
+    QA: Гипотеза: изолируем стиль от тату — фигуристая блондинка в edgy-одежде, но с чистыми руками. Проверь: длинный блонд, curvy-формы, дерзкая одежда, тату НЕТ (это принципиально).
+
+radar/a/f09.jpg   [street]
+    hairColor=red / hairLength=short / build=athletic / style=elegant / tattoos=no
+    QA: Гипотеза: элегантная атлетичная рыжая с бобом. Проверь: платье + спортивная фигура одновременно; рыжий боб; ничего «альтернативного» в образе; без тату.
+
+radar/a/f10.jpg   [park]
+    hairColor=brunette / hairLength=short / build=slim / style=edgy / tattoos=no
+    QA: Гипотеза: edgy только за счёт одежды — стройная брюнетка-боб без тату. Проверь: дерзость образа создаёт исключительно одежда; тату нет; фигура стройная; тёмный боб.
+
+radar/a/f11.jpg   [park]
+    hairColor=blonde / hairLength=short / build=curvy / style=sporty / tattoos=yes
+    QA: Гипотеза: тройной контраст — короткие волосы + curvy + тату в спортивном образе. Проверь: все три маркера читаются одновременно (блонд-боб, формы, тату-рукав), одежда спортивная.
+
+radar/a/f12.jpg   [park]
+    hairColor=red / hairLength=long / build=athletic / style=elegant / tattoos=yes
+    QA: Гипотеза: «вечернее платье + тату-рукав» — элегантная атлетичная рыжая с длинными волосами. Проверь: сочетание выглядит естественно; тату заметно на фоне платья; длинные рыжие волосы.
+
+radar/a/m01.jpg   [cafe]
+    hairColor=dark / beard=clean / build=lean / style=classic / tattoos=no
+    QA: Гипотеза: база «аккуратный хороший парень» — рубашка, бритый, худощавый, тёмный. Проверь: рубашка голубая с закатанными рукавами (руки видны, тату нет), телосложение именно lean, не атлетичное.
+
+radar/a/m02.jpg   [cafe]
+    hairColor=light / beard=beard / build=athletic / style=sporty / tattoos=no
+    QA: Гипотеза: спортивный блондин с бородой. Проверь: волосы явно светлые, борода короткая ухоженная (не щетина и не лопата), плечи широкие атлетичные, простая футболка, без тату.
+
+radar/a/m03.jpg   [cafe]
+    hairColor=dark / beard=beard / build=athletic / style=edgy / tattoos=yes
+    QA: Гипотеза: максимально «брутальный» кластер — тёмный, борода, тату, чёрная футболка, атлетичный. Проверь: все маркеры читаются одновременно; тату-рукав на предплечье явный.
+
+radar/a/m04.jpg   [street]
+    hairColor=light / beard=clean / build=athletic / style=classic / tattoos=no
+    QA: Гипотеза: «чистый» атлетичный блондин — прямой контраст к m03 при той же фигуре. Проверь: бритый, рубашка, светлые волосы, без тату; атлетичность сопоставима с m03.
+
+radar/a/m05.jpg   [street]
+    hairColor=dark / beard=beard / build=big / style=sporty / tattoos=no
+    QA: Гипотеза: крупный «медведь» — массивный, борода, спортивный. Проверь: телосложение именно крупное/мощное (НЕ полное и НЕ фитнес-рельеф), борода, без тату.
+
+radar/a/m06.jpg   [park]
+    hairColor=light / beard=clean / build=lean / style=edgy / tattoos=yes
+    QA: Гипотеза: худощавый светлый в альтернативном стиле с тату при чистом лице — изолируем стиль/тату от бороды и массы. Проверь: lean-фигура, бритый, тату виден, чёрная футболка.
+
+radar/a/m07.jpg   [street]
+    hairColor=dark / beard=clean / build=athletic / style=sporty / tattoos=yes
+    QA: Гипотеза: тату при бритом лице у спортивного тёмного парня — изолируем тату от бороды. Проверь: бритый, футболка спортивная, тату-рукав явный, атлетичный.
+
+radar/a/m08.jpg   [street]
+    hairColor=light / beard=beard / build=lean / style=classic / tattoos=yes
+    QA: Гипотеза: нетипичная комбинация — рубашка + борода + тату у худощавого светлого. Проверь: тату выглядывает из-под закатанного рукава рубашки; борода аккуратная; фигура lean.
+
+radar/a/m09.jpg   [park]
+    hairColor=dark / beard=beard / build=lean / style=sporty / tattoos=no
+    QA: Гипотеза: борода при худощавой фигуре — тёмный, спортивный, без тату. Проверь: борода читается, телосложение lean (контраст к бородатым m02/m05), руки чистые.
+
+radar/a/m10.jpg   [cafe]
+    hairColor=light / beard=clean / build=big / style=edgy / tattoos=no
+    QA: Гипотеза: изолируем крупное телосложение — большой светлый, бритый, edgy, без тату и без бороды. Проверь: масса читается сама по себе, лицо чистое, руки чистые.
+
+radar/a/m11.jpg   [park]
+    hairColor=dark / beard=clean / build=big / style=classic / tattoos=yes
+    QA: Гипотеза: «офисный большой» — крупный тёмный в рубашке, бритый, с тату. Проверь: рубашка на крупной фигуре сидит аккуратно, тату-рукав из-под закатанного рукава заметен.
+
+radar/a/m12.jpg   [park]
+    hairColor=light / beard=beard / build=big / style=edgy / tattoos=no
+    QA: Гипотеза: «викинг» — крупный светлый с бородой в чёрном, без тату. Проверь: борода + масса + edgy-одежда одновременно; светлые волосы; руки чистые.
+
+################################################################################
+# BAND B (29-37)  ->  radar/b/
+################################################################################
+
+radar/b/f01.jpg   [cafe]
+    hairColor=blonde / hairLength=long / build=slim / style=elegant / tattoos=no
+    QA: Гипотеза: классически-женственный «мягкий» типаж — длинные светлые волосы, стройная фигура, элегантный стиль. Проверь: блонд однозначный (не русый), волосы ниже лопаток, силуэт читаемо стройный, простое чёрное платье без принтов, руки без тату.
+
+radar/b/f02.jpg   [cafe]
+    hairColor=brunette / hairLength=long / build=athletic / style=sporty / tattoos=no
+    QA: Гипотеза: «фитнес-девушка» — спортивная брюнетка. Проверь: подтянутость видна (плечи/талия), но без бодибилдерского рельефа; волосы явно тёмные и длинные; спортивный верх простой, без логотипов; без тату.
+
+radar/b/f03.jpg   [park]
+    hairColor=red / hairLength=short / build=slim / style=edgy / tattoos=yes
+    QA: Гипотеза: альтернативный типаж — рыжий боб + тату + дерзкая одежда. Проверь: рыжий натуральный медный (не морковно-крашеный), боб до подбородка, тату-рукав читается на правом предплечье, чёрная футболка.
+
+radar/b/f04.jpg   [street]
+    hairColor=brunette / hairLength=short / build=curvy / style=elegant / tattoos=no
+    QA: Гипотеза: элегантная фигуристая брюнетка с каре. Проверь: формы читаются именно как curvy/песочные часы (не полнота и не slim), каре аккуратное тёмное, классическое платье, без тату.
+
+radar/b/f05.jpg   [cafe]
+    hairColor=blonde / hairLength=short / build=athletic / style=edgy / tattoos=yes
+    QA: Гипотеза: контраст «нежный блонд × жёсткий стиль» — дерзкая спортивная блондинка с бобом и тату. Проверь: блонд-боб, фигура подтянутая, тату на предплечье видно, edgy-одежда чёрная.
+
+radar/b/f06.jpg   [cafe]
+    hairColor=red / hairLength=long / build=curvy / style=sporty / tattoos=no
+    QA: Гипотеза: фигуристая рыжая в спортивном. Проверь: длинные медно-рыжие волосы, формы curvy читаются даже в спортивной одежде (не скрыты свободным кроем), без тату.
+
+radar/b/f07.jpg   [street]
+    hairColor=brunette / hairLength=long / build=slim / style=sporty / tattoos=yes
+    QA: Гипотеза: изолируем тату — стройная спортивная брюнетка, где тату единственный «жёсткий» элемент. Проверь: всё остальное нейтрально-спортивное, волосы длинные тёмные, тату-рукав явно виден.
+
+radar/b/f08.jpg   [street]
+    hairColor=blonde / hairLength=long / build=curvy / style=edgy / tattoos=no
+    QA: Гипотеза: изолируем стиль от тату — фигуристая блондинка в edgy-одежде, но с чистыми руками. Проверь: длинный блонд, curvy-формы, дерзкая одежда, тату НЕТ (это принципиально).
+
+radar/b/f09.jpg   [street]
+    hairColor=red / hairLength=short / build=athletic / style=elegant / tattoos=no
+    QA: Гипотеза: элегантная атлетичная рыжая с бобом. Проверь: платье + спортивная фигура одновременно; рыжий боб; ничего «альтернативного» в образе; без тату.
+
+radar/b/f10.jpg   [park]
+    hairColor=brunette / hairLength=short / build=slim / style=edgy / tattoos=no
+    QA: Гипотеза: edgy только за счёт одежды — стройная брюнетка-боб без тату. Проверь: дерзость образа создаёт исключительно одежда; тату нет; фигура стройная; тёмный боб.
+
+radar/b/f11.jpg   [park]
+    hairColor=blonde / hairLength=short / build=curvy / style=sporty / tattoos=yes
+    QA: Гипотеза: тройной контраст — короткие волосы + curvy + тату в спортивном образе. Проверь: все три маркера читаются одновременно (блонд-боб, формы, тату-рукав), одежда спортивная.
+
+radar/b/f12.jpg   [park]
+    hairColor=red / hairLength=long / build=athletic / style=elegant / tattoos=yes
+    QA: Гипотеза: «вечернее платье + тату-рукав» — элегантная атлетичная рыжая с длинными волосами. Проверь: сочетание выглядит естественно; тату заметно на фоне платья; длинные рыжие волосы.
+
+radar/b/m01.jpg   [cafe]
+    hairColor=dark / beard=clean / build=lean / style=classic / tattoos=no
+    QA: Гипотеза: база «аккуратный хороший парень» — рубашка, бритый, худощавый, тёмный. Проверь: рубашка голубая с закатанными рукавами (руки видны, тату нет), телосложение именно lean, не атлетичное.
+
+radar/b/m02.jpg   [cafe]
+    hairColor=light / beard=beard / build=athletic / style=sporty / tattoos=no
+    QA: Гипотеза: спортивный блондин с бородой. Проверь: волосы явно светлые, борода короткая ухоженная (не щетина и не лопата), плечи широкие атлетичные, простая футболка, без тату.
+
+radar/b/m03.jpg   [cafe]
+    hairColor=dark / beard=beard / build=athletic / style=edgy / tattoos=yes
+    QA: Гипотеза: максимально «брутальный» кластер — тёмный, борода, тату, чёрная футболка, атлетичный. Проверь: все маркеры читаются одновременно; тату-рукав на предплечье явный.
+
+radar/b/m04.jpg   [street]
+    hairColor=light / beard=clean / build=athletic / style=classic / tattoos=no
+    QA: Гипотеза: «чистый» атлетичный блондин — прямой контраст к m03 при той же фигуре. Проверь: бритый, рубашка, светлые волосы, без тату; атлетичность сопоставима с m03.
+
+radar/b/m05.jpg   [street]
+    hairColor=dark / beard=beard / build=big / style=sporty / tattoos=no
+    QA: Гипотеза: крупный «медведь» — массивный, борода, спортивный. Проверь: телосложение именно крупное/мощное (НЕ полное и НЕ фитнес-рельеф), борода, без тату.
+
+radar/b/m06.jpg   [park]
+    hairColor=light / beard=clean / build=lean / style=edgy / tattoos=yes
+    QA: Гипотеза: худощавый светлый в альтернативном стиле с тату при чистом лице — изолируем стиль/тату от бороды и массы. Проверь: lean-фигура, бритый, тату виден, чёрная футболка.
+
+radar/b/m07.jpg   [street]
+    hairColor=dark / beard=clean / build=athletic / style=sporty / tattoos=yes
+    QA: Гипотеза: тату при бритом лице у спортивного тёмного парня — изолируем тату от бороды. Проверь: бритый, футболка спортивная, тату-рукав явный, атлетичный.
+
+radar/b/m08.jpg   [street]
+    hairColor=light / beard=beard / build=lean / style=classic / tattoos=yes
+    QA: Гипотеза: нетипичная комбинация — рубашка + борода + тату у худощавого светлого. Проверь: тату выглядывает из-под закатанного рукава рубашки; борода аккуратная; фигура lean.
+
+radar/b/m09.jpg   [park]
+    hairColor=dark / beard=beard / build=lean / style=sporty / tattoos=no
+    QA: Гипотеза: борода при худощавой фигуре — тёмный, спортивный, без тату. Проверь: борода читается, телосложение lean (контраст к бородатым m02/m05), руки чистые.
+
+radar/b/m10.jpg   [cafe]
+    hairColor=light / beard=clean / build=big / style=edgy / tattoos=no
+    QA: Гипотеза: изолируем крупное телосложение — большой светлый, бритый, edgy, без тату и без бороды. Проверь: масса читается сама по себе, лицо чистое, руки чистые.
+
+radar/b/m11.jpg   [park]
+    hairColor=dark / beard=clean / build=big / style=classic / tattoos=yes
+    QA: Гипотеза: «офисный большой» — крупный тёмный в рубашке, бритый, с тату. Проверь: рубашка на крупной фигуре сидит аккуратно, тату-рукав из-под закатанного рукава заметен.
+
+radar/b/m12.jpg   [park]
+    hairColor=light / beard=beard / build=big / style=edgy / tattoos=no
+    QA: Гипотеза: «викинг» — крупный светлый с бородой в чёрном, без тату. Проверь: борода + масса + edgy-одежда одновременно; светлые волосы; руки чистые.
+
+################################################################################
+# BAND C (38-48)  ->  radar/c/
+################################################################################
+
+radar/c/f01.jpg   [cafe]
+    hairColor=blonde / hairLength=long / build=slim / style=elegant / tattoos=no
+    QA: Гипотеза: классически-женственный «мягкий» типаж — длинные светлые волосы, стройная фигура, элегантный стиль. Проверь: блонд однозначный (не русый), волосы ниже лопаток, силуэт читаемо стройный, простое чёрное платье без принтов, руки без тату.
+
+radar/c/f02.jpg   [cafe]
+    hairColor=brunette / hairLength=long / build=athletic / style=sporty / tattoos=no
+    QA: Гипотеза: «фитнес-девушка» — спортивная брюнетка. Проверь: подтянутость видна (плечи/талия), но без бодибилдерского рельефа; волосы явно тёмные и длинные; спортивный верх простой, без логотипов; без тату.
+
+radar/c/f03.jpg   [park]
+    hairColor=red / hairLength=short / build=slim / style=edgy / tattoos=yes
+    QA: Гипотеза: альтернативный типаж — рыжий боб + тату + дерзкая одежда. Проверь: рыжий натуральный медный (не морковно-крашеный), боб до подбородка, тату-рукав читается на правом предплечье, чёрная футболка.
+
+radar/c/f04.jpg   [street]
+    hairColor=brunette / hairLength=short / build=curvy / style=elegant / tattoos=no
+    QA: Гипотеза: элегантная фигуристая брюнетка с каре. Проверь: формы читаются именно как curvy/песочные часы (не полнота и не slim), каре аккуратное тёмное, классическое платье, без тату.
+
+radar/c/f05.jpg   [cafe]
+    hairColor=blonde / hairLength=short / build=athletic / style=edgy / tattoos=yes
+    QA: Гипотеза: контраст «нежный блонд × жёсткий стиль» — дерзкая спортивная блондинка с бобом и тату. Проверь: блонд-боб, фигура подтянутая, тату на предплечье видно, edgy-одежда чёрная.
+
+radar/c/f06.jpg   [cafe]
+    hairColor=red / hairLength=long / build=curvy / style=sporty / tattoos=no
+    QA: Гипотеза: фигуристая рыжая в спортивном. Проверь: длинные медно-рыжие волосы, формы curvy читаются даже в спортивной одежде (не скрыты свободным кроем), без тату.
+
+radar/c/f07.jpg   [street]
+    hairColor=brunette / hairLength=long / build=slim / style=sporty / tattoos=yes
+    QA: Гипотеза: изолируем тату — стройная спортивная брюнетка, где тату единственный «жёсткий» элемент. Проверь: всё остальное нейтрально-спортивное, волосы длинные тёмные, тату-рукав явно виден.
+
+radar/c/f08.jpg   [street]
+    hairColor=blonde / hairLength=long / build=curvy / style=edgy / tattoos=no
+    QA: Гипотеза: изолируем стиль от тату — фигуристая блондинка в edgy-одежде, но с чистыми руками. Проверь: длинный блонд, curvy-формы, дерзкая одежда, тату НЕТ (это принципиально).
+
+radar/c/f09.jpg   [street]
+    hairColor=red / hairLength=short / build=athletic / style=elegant / tattoos=no
+    QA: Гипотеза: элегантная атлетичная рыжая с бобом. Проверь: платье + спортивная фигура одновременно; рыжий боб; ничего «альтернативного» в образе; без тату.
+
+radar/c/f10.jpg   [park]
+    hairColor=brunette / hairLength=short / build=slim / style=edgy / tattoos=no
+    QA: Гипотеза: edgy только за счёт одежды — стройная брюнетка-боб без тату. Проверь: дерзость образа создаёт исключительно одежда; тату нет; фигура стройная; тёмный боб.
+
+radar/c/f11.jpg   [park]
+    hairColor=blonde / hairLength=short / build=curvy / style=sporty / tattoos=yes
+    QA: Гипотеза: тройной контраст — короткие волосы + curvy + тату в спортивном образе. Проверь: все три маркера читаются одновременно (блонд-боб, формы, тату-рукав), одежда спортивная.
+
+radar/c/f12.jpg   [park]
+    hairColor=red / hairLength=long / build=athletic / style=elegant / tattoos=yes
+    QA: Гипотеза: «вечернее платье + тату-рукав» — элегантная атлетичная рыжая с длинными волосами. Проверь: сочетание выглядит естественно; тату заметно на фоне платья; длинные рыжие волосы.
+
+radar/c/m01.jpg   [cafe]
+    hairColor=dark / beard=clean / build=lean / style=classic / tattoos=no
+    QA: Гипотеза: база «аккуратный хороший парень» — рубашка, бритый, худощавый, тёмный. Проверь: рубашка голубая с закатанными рукавами (руки видны, тату нет), телосложение именно lean, не атлетичное.
+
+radar/c/m02.jpg   [cafe]
+    hairColor=light / beard=beard / build=athletic / style=sporty / tattoos=no
+    QA: Гипотеза: спортивный блондин с бородой. Проверь: волосы явно светлые, борода короткая ухоженная (не щетина и не лопата), плечи широкие атлетичные, простая футболка, без тату.
+
+radar/c/m03.jpg   [cafe]
+    hairColor=dark / beard=beard / build=athletic / style=edgy / tattoos=yes
+    QA: Гипотеза: максимально «брутальный» кластер — тёмный, борода, тату, чёрная футболка, атлетичный. Проверь: все маркеры читаются одновременно; тату-рукав на предплечье явный.
+
+radar/c/m04.jpg   [street]
+    hairColor=light / beard=clean / build=athletic / style=classic / tattoos=no
+    QA: Гипотеза: «чистый» атлетичный блондин — прямой контраст к m03 при той же фигуре. Проверь: бритый, рубашка, светлые волосы, без тату; атлетичность сопоставима с m03.
+
+radar/c/m05.jpg   [street]
+    hairColor=dark / beard=beard / build=big / style=sporty / tattoos=no
+    QA: Гипотеза: крупный «медведь» — массивный, борода, спортивный. Проверь: телосложение именно крупное/мощное (НЕ полное и НЕ фитнес-рельеф), борода, без тату.
+
+radar/c/m06.jpg   [park]
+    hairColor=light / beard=clean / build=lean / style=edgy / tattoos=yes
+    QA: Гипотеза: худощавый светлый в альтернативном стиле с тату при чистом лице — изолируем стиль/тату от бороды и массы. Проверь: lean-фигура, бритый, тату виден, чёрная футболка.
+
+radar/c/m07.jpg   [street]
+    hairColor=dark / beard=clean / build=athletic / style=sporty / tattoos=yes
+    QA: Гипотеза: тату при бритом лице у спортивного тёмного парня — изолируем тату от бороды. Проверь: бритый, футболка спортивная, тату-рукав явный, атлетичный.
+
+radar/c/m08.jpg   [street]
+    hairColor=light / beard=beard / build=lean / style=classic / tattoos=yes
+    QA: Гипотеза: нетипичная комбинация — рубашка + борода + тату у худощавого светлого. Проверь: тату выглядывает из-под закатанного рукава рубашки; борода аккуратная; фигура lean.
+
+radar/c/m09.jpg   [park]
+    hairColor=dark / beard=beard / build=lean / style=sporty / tattoos=no
+    QA: Гипотеза: борода при худощавой фигуре — тёмный, спортивный, без тату. Проверь: борода читается, телосложение lean (контраст к бородатым m02/m05), руки чистые.
+
+radar/c/m10.jpg   [cafe]
+    hairColor=light / beard=clean / build=big / style=edgy / tattoos=no
+    QA: Гипотеза: изолируем крупное телосложение — большой светлый, бритый, edgy, без тату и без бороды. Проверь: масса читается сама по себе, лицо чистое, руки чистые.
+
+radar/c/m11.jpg   [park]
+    hairColor=dark / beard=clean / build=big / style=classic / tattoos=yes
+    QA: Гипотеза: «офисный большой» — крупный тёмный в рубашке, бритый, с тату. Проверь: рубашка на крупной фигуре сидит аккуратно, тату-рукав из-под закатанного рукава заметен.
+
+radar/c/m12.jpg   [park]
+    hairColor=light / beard=beard / build=big / style=edgy / tattoos=no
+    QA: Гипотеза: «викинг» — крупный светлый с бородой в чёрном, без тату. Проверь: борода + масса + edgy-одежда одновременно; светлые волосы; руки чистые.
