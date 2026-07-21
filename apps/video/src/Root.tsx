@@ -1,9 +1,13 @@
 import "./index.css";
 import {Composition} from "remotion";
-import {GennetyAd, gennetyAdSchema, type GennetyAdProps} from "./compositions/GennetyAd";
+import {
+  GENNETY_AD_DURATION_IN_FRAMES,
+  GennetyAd,
+  gennetyAdSchema,
+  type GennetyAdProps,
+} from "./compositions/GennetyAd";
 
 const FPS = 30;
-const DURATION_IN_FRAMES = 30 * FPS;
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -12,7 +16,7 @@ export const RemotionRoot: React.FC = () => {
         id="GennetyAdVertical"
         component={GennetyAd}
         schema={gennetyAdSchema}
-        durationInFrames={DURATION_IN_FRAMES}
+        durationInFrames={GENNETY_AD_DURATION_IN_FRAMES.uk}
         fps={FPS}
         width={1080}
         height={1920}
@@ -22,7 +26,7 @@ export const RemotionRoot: React.FC = () => {
         id="GennetyAdHorizontal"
         component={GennetyAd}
         schema={gennetyAdSchema}
-        durationInFrames={DURATION_IN_FRAMES}
+        durationInFrames={GENNETY_AD_DURATION_IN_FRAMES.uk}
         fps={FPS}
         width={1920}
         height={1080}
@@ -32,7 +36,7 @@ export const RemotionRoot: React.FC = () => {
         id="GennetyAdVerticalEnglish"
         component={GennetyAd}
         schema={gennetyAdSchema}
-        durationInFrames={DURATION_IN_FRAMES}
+        durationInFrames={GENNETY_AD_DURATION_IN_FRAMES.en}
         fps={FPS}
         width={1080}
         height={1920}
@@ -42,7 +46,7 @@ export const RemotionRoot: React.FC = () => {
         id="GennetyAdHorizontalEnglish"
         component={GennetyAd}
         schema={gennetyAdSchema}
-        durationInFrames={DURATION_IN_FRAMES}
+        durationInFrames={GENNETY_AD_DURATION_IN_FRAMES.en}
         fps={FPS}
         width={1920}
         height={1080}

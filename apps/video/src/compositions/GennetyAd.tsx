@@ -36,8 +36,8 @@ const COPY = {
     hookBefore: "Поки ти свайпаєш…",
     hookAfter: "Хтось уже йде на",
     hookAccent: "побачення.",
-    aiTitle: "Шукає метч, поки ти",
-    aiAccent: "живеш.",
+    aiTitle: "Автономно знаходить твій",
+    aiAccent: "метч.",
     aiSubtitle: "Аналізує контекст, цінності та ваш вайб — без нескінченного перебору анкет.",
     matchContext: "Контекст.",
     matchValues: "Цінності.",
@@ -79,7 +79,7 @@ const COPY = {
     ctaTitle: "Твій персональний",
     ctaAccent: "AI-метчмейкер.",
     ctaSubtitle: "Справжні люди. Справжні побачення.",
-    ctaButton: "Приєднатися до Gennety →",
+    ctaButton: "Посилання — у коментарях ↓",
   },
   en: {
     distance: "2 km away",
@@ -146,6 +146,32 @@ export const gennetyAdSchema = z.object({
 export type GennetyAdProps = z.infer<typeof gennetyAdSchema>;
 
 type FormatProps = Pick<GennetyAdProps, "format" | "language">;
+
+export const GENNETY_AD_DURATION_IN_FRAMES = {
+  uk: 31 * 30,
+  en: 30 * 30,
+} as const satisfies Record<Language, number>;
+
+const TIMELINES = {
+  uk: {
+    hook: {from: 0, duration: 150},
+    ai: {from: 130, duration: 165},
+    match: {from: 275, duration: 145},
+    calendar: {from: 400, duration: 165},
+    venue: {from: 545, duration: 150},
+    confirmation: {from: 675, duration: 130},
+    cta: {from: 785, duration: 145},
+  },
+  en: {
+    hook: {from: 0, duration: 150},
+    ai: {from: 130, duration: 165},
+    match: {from: 275, duration: 135},
+    calendar: {from: 390, duration: 165},
+    venue: {from: 535, duration: 150},
+    confirmation: {from: 665, duration: 120},
+    cta: {from: 765, duration: 135},
+  },
+} as const satisfies Record<Language, Record<string, {from: number; duration: number}>>;
 
 const asset = (path: string) => staticFile(path);
 
@@ -1553,53 +1579,90 @@ const CtaScene: React.FC<FormatProps & {duration: number; couplePhoto?: string}>
         <div style={{color: "rgba(245,245,245,.72)", fontSize: vertical ? 29 : 28, marginTop: 25}}>
           {copy.ctaSubtitle}
         </div>
-        <div
-          style={{
-            width: vertical ? "100%" : 430,
-            height: vertical ? 92 : 82,
-            marginTop: 36,
-            borderRadius: 26,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: SOFT,
-            fontSize: vertical ? 30 : 27,
-            fontWeight: 700,
-            transform: `scale(${pulse})`,
-            background: `linear-gradient(135deg, ${WINE}, #B54460)`,
-            boxShadow: "0 28px 72px rgba(139,37,59,.48), inset 0 1px 0 rgba(255,255,255,.16)",
-          }}
-        >
-          {copy.ctaButton}
-        </div>
+        {language === "uk" ? (
+          <div
+            style={{
+              marginTop: 38,
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              color: SOFT,
+              fontSize: vertical ? 30 : 27,
+              fontWeight: 700,
+            }}
+          >
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                flex: "0 0 auto",
+                borderRadius: "50%",
+                background: WINE_LIGHT,
+                boxShadow: `0 0 22px ${WINE_LIGHT}`,
+              }}
+            />
+            {copy.ctaButton}
+          </div>
+        ) : (
+          <div
+            style={{
+              width: vertical ? "100%" : 430,
+              height: vertical ? 92 : 82,
+              marginTop: 36,
+              borderRadius: 26,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: SOFT,
+              fontSize: vertical ? 30 : 27,
+              fontWeight: 700,
+              transform: `scale(${pulse})`,
+              background: `linear-gradient(135deg, ${WINE}, #B54460)`,
+              boxShadow: "0 28px 72px rgba(139,37,59,.48), inset 0 1px 0 rgba(255,255,255,.16)",
+            }}
+          >
+            {copy.ctaButton}
+          </div>
+        )}
       </div>
     </AbsoluteFill>
   );
 };
 
 export const GennetyAd: React.FC<GennetyAdProps> = ({format, language, couplePhoto}) => {
+  const timeline = TIMELINES[language];
+
   return (
     <AbsoluteFill style={{background: INK}}>
-      <Sequence durationInFrames={150} premountFor={30}>
-        <HookScene format={format} language={language} duration={150} />
+      <Sequence from={timeline.hook.from} durationInFrames={timeline.hook.duration} premountFor={30}>
+        <HookScene format={format} language={language} duration={timeline.hook.duration} />
       </Sequence>
-      <Sequence from={130} durationInFrames={165} premountFor={30}>
-        <AiScene format={format} language={language} duration={165} />
+      <Sequence from={timeline.ai.from} durationInFrames={timeline.ai.duration} premountFor={30}>
+        <AiScene format={format} language={language} duration={timeline.ai.duration} />
       </Sequence>
-      <Sequence from={275} durationInFrames={135} premountFor={30}>
-        <MatchScene format={format} language={language} duration={135} />
+      <Sequence from={timeline.match.from} durationInFrames={timeline.match.duration} premountFor={30}>
+        <MatchScene format={format} language={language} duration={timeline.match.duration} />
       </Sequence>
-      <Sequence from={390} durationInFrames={165} premountFor={30}>
-        <CalendarScene format={format} language={language} duration={165} />
+      <Sequence from={timeline.calendar.from} durationInFrames={timeline.calendar.duration} premountFor={30}>
+        <CalendarScene format={format} language={language} duration={timeline.calendar.duration} />
       </Sequence>
-      <Sequence from={535} durationInFrames={150} premountFor={30}>
-        <VenueScene format={format} language={language} duration={150} />
+      <Sequence from={timeline.venue.from} durationInFrames={timeline.venue.duration} premountFor={30}>
+        <VenueScene format={format} language={language} duration={timeline.venue.duration} />
       </Sequence>
-      <Sequence from={665} durationInFrames={120} premountFor={30}>
-        <ConfirmationScene format={format} language={language} duration={120} />
+      <Sequence
+        from={timeline.confirmation.from}
+        durationInFrames={timeline.confirmation.duration}
+        premountFor={30}
+      >
+        <ConfirmationScene format={format} language={language} duration={timeline.confirmation.duration} />
       </Sequence>
-      <Sequence from={765} durationInFrames={135} premountFor={30}>
-        <CtaScene format={format} language={language} duration={135} couplePhoto={couplePhoto} />
+      <Sequence from={timeline.cta.from} durationInFrames={timeline.cta.duration} premountFor={30}>
+        <CtaScene
+          format={format}
+          language={language}
+          duration={timeline.cta.duration}
+          couplePhoto={couplePhoto}
+        />
       </Sequence>
     </AbsoluteFill>
   );
