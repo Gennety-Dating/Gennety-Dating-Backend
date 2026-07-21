@@ -148,19 +148,19 @@ export type GennetyAdProps = z.infer<typeof gennetyAdSchema>;
 type FormatProps = Pick<GennetyAdProps, "format" | "language">;
 
 export const GENNETY_AD_DURATION_IN_FRAMES = {
-  uk: 31 * 30,
+  uk: 43 * 30,
   en: 30 * 30,
 } as const satisfies Record<Language, number>;
 
 const TIMELINES = {
   uk: {
-    hook: {from: 0, duration: 150},
-    ai: {from: 130, duration: 150},
-    match: {from: 260, duration: 150},
-    calendar: {from: 390, duration: 150},
-    venue: {from: 520, duration: 150},
-    confirmation: {from: 650, duration: 150},
-    cta: {from: 780, duration: 150},
+    hook: {from: 0, duration: 210},
+    ai: {from: 190, duration: 210},
+    match: {from: 380, duration: 210},
+    calendar: {from: 570, duration: 210},
+    venue: {from: 760, duration: 210},
+    confirmation: {from: 950, duration: 210},
+    cta: {from: 1140, duration: 150},
   },
   en: {
     hook: {from: 0, duration: 150},
@@ -460,22 +460,32 @@ const HookScene: React.FC<FormatProps & {duration: number}> = ({format, language
   const vertical = format === "vertical";
   const copy = COPY[language];
   const opacity = fade(frame, duration, 18);
-  const contentExit = interpolate(frame, [duration - 20, duration - 8], [1, 0], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: ease,
-  });
+  const contentExit = interpolate(
+    frame,
+    language === "uk" ? [165, 194] : [duration - 20, duration - 8],
+    [1, 0],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+      easing: ease,
+    },
+  );
   const titleIn = enter(frame, fps, 8);
-  const pivot = interpolate(frame, [42, 66], [0, 1], {
+  const pivot = interpolate(frame, language === "uk" ? [96, 126] : [42, 66], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
     easing: ease,
   });
-  const cardShift = interpolate(frame, [60, 106], [0, vertical ? -820 : -470], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: ease,
-  });
+  const cardShift = interpolate(
+    frame,
+    language === "uk" ? [130, 194] : [60, 106],
+    [0, vertical ? -820 : -470],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+      easing: ease,
+    },
+  );
   return (
     <AbsoluteFill style={{opacity, overflow: "hidden"}}>
       <Ambient format={format} />
@@ -725,17 +735,19 @@ const AiScene: React.FC<FormatProps & {duration: number}> = ({format, language, 
         <Headline format={format} size={language === "en" ? (vertical ? 94 : 96) : (vertical ? 100 : 105)}>
           {copy.aiTitle} <span style={{color: WINE_LIGHT}}>{copy.aiAccent}</span>
         </Headline>
-        <div
-          style={{
-            color: "rgba(245,245,245,.7)",
-            fontSize: vertical ? 31 : 29,
-            lineHeight: 1.35,
-            marginTop: 30,
-            maxWidth: vertical ? 760 : 650,
-          }}
-        >
-          {copy.aiSubtitle}
-        </div>
+        {language === "en" ? (
+          <div
+            style={{
+              color: "rgba(245,245,245,.7)",
+              fontSize: vertical ? 31 : 29,
+              lineHeight: 1.35,
+              marginTop: 30,
+              maxWidth: vertical ? 760 : 650,
+            }}
+          >
+            {copy.aiSubtitle}
+          </div>
+        ) : null}
       </div>
     </AbsoluteFill>
   );
@@ -821,9 +833,11 @@ const MatchScene: React.FC<FormatProps & {duration: number}> = ({format, languag
           {copy.matchContext}<br />{copy.matchValues}<br />
           <span style={{color: WINE_LIGHT}}>{copy.matchVibe}</span>
         </Headline>
-        <div style={{color: MUTED, fontSize: vertical ? 29 : 28, marginTop: 28, lineHeight: 1.4}}>
-          {copy.matchSubtitle}
-        </div>
+        {language === "en" ? (
+          <div style={{color: MUTED, fontSize: vertical ? 29 : 28, marginTop: 28, lineHeight: 1.4}}>
+            {copy.matchSubtitle}
+          </div>
+        ) : null}
       </div>
     </AbsoluteFill>
   );
@@ -1093,7 +1107,7 @@ const ProductSceneLayout: React.FC<
   Pick<GennetyAdProps, "format"> & {
     duration: number;
     title: ReactNode;
-    subtitle: string;
+    subtitle?: string;
     pill?: string;
     stabilizeDevice?: boolean;
     children: ReactNode;
@@ -1125,17 +1139,19 @@ const ProductSceneLayout: React.FC<
         <Headline format={format} size={vertical ? 93 : 105} style={{marginTop: pill ? 27 : 0}}>
           {title}
         </Headline>
-        <div
-          style={{
-            color: "rgba(245,245,245,.66)",
-            fontSize: vertical ? 28 : 28,
-            lineHeight: 1.42,
-            marginTop: 27,
-            maxWidth: vertical ? 780 : 620,
-          }}
-        >
-          {subtitle}
-        </div>
+        {subtitle ? (
+          <div
+            style={{
+              color: "rgba(245,245,245,.66)",
+              fontSize: vertical ? 28 : 28,
+              lineHeight: 1.42,
+              marginTop: 27,
+              maxWidth: vertical ? 780 : 620,
+            }}
+          >
+            {subtitle}
+          </div>
+        ) : null}
       </div>
       <div
         style={{
@@ -1163,7 +1179,7 @@ const CalendarScene: React.FC<FormatProps & {duration: number}> = ({format, lang
       format={format}
       duration={duration}
       title={<>{copy.calendarSceneTitle} <span style={{color: WINE_LIGHT}}>{copy.calendarSceneAccent}</span></>}
-      subtitle={copy.calendarSceneSubtitle}
+      subtitle={language === "en" ? copy.calendarSceneSubtitle : undefined}
     >
       <Phone
         width={vertical ? 660 : 520}
@@ -1336,7 +1352,7 @@ const VenueScene: React.FC<FormatProps & {duration: number}> = ({format, languag
       duration={duration}
       stabilizeDevice
       title={<>{copy.venueSceneTitle} <span style={{color: WINE_LIGHT}}>{copy.venueSceneAccent}</span></>}
-      subtitle={copy.venueSceneSubtitle}
+      subtitle={language === "en" ? copy.venueSceneSubtitle : undefined}
     >
       <Phone
         width={vertical ? 660 : 520}
@@ -1464,14 +1480,16 @@ const ConfirmationScene: React.FC<FormatProps & {duration: number}> = ({format, 
           transform: `translateY(${(1 - p) * 50}px)`,
         }}
       >
-        <GlassPill>{copy.confirmationPill}</GlassPill>
-        <Headline format={format} size={vertical ? 101 : 114} style={{marginTop: 27}}>
+        {language === "en" ? <GlassPill>{copy.confirmationPill}</GlassPill> : null}
+        <Headline format={format} size={vertical ? 101 : 114} style={{marginTop: language === "en" ? 27 : 0}}>
           {copy.confirmationTitle}<br />
           <span style={{color: WINE_LIGHT}}>{copy.confirmationAccent}</span>
         </Headline>
-        <div style={{color: MUTED, fontSize: vertical ? 28 : 28, marginTop: 27, lineHeight: 1.4}}>
-          {copy.confirmationSubtitle}
-        </div>
+        {language === "en" ? (
+          <div style={{color: MUTED, fontSize: vertical ? 28 : 28, marginTop: 27, lineHeight: 1.4}}>
+            {copy.confirmationSubtitle}
+          </div>
+        ) : null}
       </div>
     </AbsoluteFill>
   );
@@ -1589,15 +1607,17 @@ const CtaScene: React.FC<FormatProps & {duration: number; couplePhoto?: string}>
           {copy.ctaTitle}<br />
           <span style={{color: WINE_LIGHT}}>{copy.ctaAccent}</span>
         </Headline>
-        <div style={{color: "rgba(245,245,245,.72)", fontSize: vertical ? 29 : 28, marginTop: 25}}>
-          {copy.ctaSubtitle}
-        </div>
+        {language === "en" ? (
+          <div style={{color: "rgba(245,245,245,.72)", fontSize: vertical ? 29 : 28, marginTop: 25}}>
+            {copy.ctaSubtitle}
+          </div>
+        ) : null}
         {language === "uk" ? (
           <div
             style={{
               width: vertical ? "100%" : 560,
               minHeight: vertical ? 108 : 94,
-              marginTop: 36,
+              marginTop: 34,
               padding: vertical ? "0 36px" : "0 30px",
               borderRadius: vertical ? 30 : 27,
               display: "flex",

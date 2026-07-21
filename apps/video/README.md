@@ -20,8 +20,8 @@ pnpm --filter @gennety/video lint
 `dev:video` opens Remotion Studio. `render:video` creates all localized final-sized
 drafts in the ignored `apps/video/out/` directory:
 
-- `gennety-ad-vertical.mp4` — Ukrainian, 1080×1920, 31 seconds, 30 fps.
-- `gennety-ad-horizontal.mp4` — Ukrainian, 1920×1080, 31 seconds, 30 fps.
+- `gennety-ad-vertical.mp4` — Ukrainian, 1080×1920, 43 seconds, 30 fps.
+- `gennety-ad-horizontal.mp4` — Ukrainian, 1920×1080, 43 seconds, 30 fps.
 - `gennety-ad-vertical-en.mp4` — English, 1080×1920, 30 seconds, 30 fps.
 - `gennety-ad-horizontal-en.mp4` — English, 1920×1080, 30 seconds, 30 fps.
 
