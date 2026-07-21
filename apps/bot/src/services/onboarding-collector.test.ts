@@ -545,12 +545,9 @@ describe("onboarding collector routing", () => {
   it("explains why the Magic Prompt is needed before asking for the AI response", () => {
     const text = onboardingQuestionText("en", "context_dump");
 
-    // Evidence-first copy: it promises better matches from supported signals,
-    // tells the user's AI not to fill gaps (empty sections are fine), and notes
-    // the same rule applies to everyone.
-    expect(text).toContain("Gennety uses supported signals from your conversations");
-    expect(text).toContain("not to fill gaps");
-    expect(text).toContain("The same rule applies to every user");
+    expect(text).toContain("Gennety analyzes your conversations");
+    expect(text).toContain("psychological profile");
+    expect(text).toContain("We interview all other users in exactly the same way");
   });
 
   it.each(["en", "ru", "uk", "de", "pl"] as const)(
