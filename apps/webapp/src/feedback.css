@@ -302,6 +302,10 @@ body::before {
   color: #fff;
 }
 
+.reason-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.reason-chip { border: 1px solid var(--glass-border); border-radius: var(--radius-pill); padding: 8px 11px; color: var(--text); background: var(--fill); font: inherit; font-size: 13px; }
+.reason-chip[aria-pressed="true"] { border-color: var(--accent-bright); background: color-mix(in srgb, var(--accent) 28%, transparent); }
+
 /* ── Textarea ──────────────────────────────────────────────────── */
 
 .notes {

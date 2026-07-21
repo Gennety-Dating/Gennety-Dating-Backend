@@ -221,9 +221,7 @@ describe("createPlacesVenueClient.pickAtMidpoint", () => {
     expect(venue.name).toBe("Real Cafe");
   });
 
-  it("falls back to relaxed price ceiling on tier-1 reject (all results were EXPENSIVE)", async () => {
-    // Tier-1 result is EXPENSIVE — strict gate rejects it. But in
-    // tier-2 (relaxed), the same place passes.
+  it("never auto-relaxes the price ceiling when all results are EXPENSIVE", async () => {
     responses = [
       {
         places: [
@@ -235,12 +233,8 @@ describe("createPlacesVenueClient.pickAtMidpoint", () => {
       },
     ];
     const client = createPlacesVenueClient("test-key");
-    const venue = await client.pickAtMidpoint!(midpointInput({ category: "restaurant" }));
-    // Tier-1 gates fail strict mode → tier-2 reuses the same result
-    // list (single fetch optimisation) and the relaxed gate accepts.
-    // We assert the picker landed on the relaxed result.
-    expect(venue.name).toBe("Premium Spot");
-    expect(calls.length).toBe(1); // No second searchNearby call needed.
+    await expect(client.pickAtMidpoint!(midpointInput({ category: "restaurant" })))
+      .rejects.toMatchObject({ code: "no_candidates" });
   });
 
   it("falls back to searchText when searchNearby returns zero results", async () => {
@@ -268,7 +262,7 @@ describe("createPlacesVenueClient.pickAtMidpoint", () => {
     ];
     const client = createPlacesVenueClient("test-key");
     await expect(client.pickAtMidpoint!(midpointInput())).rejects.toThrow(
-      /no usable results/,
+      /no eligible results/,
     );
   });
 
@@ -292,13 +286,13 @@ describe("createPlacesVenueClient.pickAtMidpoint", () => {
     ];
     const client = createPlacesVenueClient("test-key");
     await expect(client.pickAtMidpoint!(midpointInput())).rejects.toThrow(
-      /no usable results/,
+      /no eligible results/,
     );
   });
 });
 
 describe("pickVenueAtMidpoint (high-level wrapper)", () => {
-  it("falls back to the local stub on any throw — match must always finalise", async () => {
+  it("surfaces provider outage instead of scheduling a fake venue", async () => {
     const throwingClient = {
       async pick() {
         throw new Error("fail");
@@ -307,17 +301,16 @@ describe("pickVenueAtMidpoint (high-level wrapper)", () => {
         throw new Error("fail");
       },
     };
-    const venue = await pickVenueAtMidpoint(midpointInput(), throwingClient);
-    expect(venue.name).toMatch(/Neighbourhood/);
-    expect(venue.googleMapsUri).toBeNull();
+    await expect(pickVenueAtMidpoint(midpointInput(), throwingClient))
+      .rejects.toMatchObject({ code: "provider_unavailable" });
   });
 });
 
 describe("localStubVenueClient", () => {
-  it("returns null googleMapsUri so downstream UI knows not to render the link", async () => {
+  it("cannot fabricate a midpoint venue", async () => {
     const client = localStubVenueClient();
-    const venue = await client.pickAtMidpoint!(midpointInput());
-    expect(venue.googleMapsUri).toBeNull();
+    await expect(client.pickAtMidpoint!(midpointInput()))
+      .rejects.toMatchObject({ code: "provider_unavailable" });
   });
 });
 

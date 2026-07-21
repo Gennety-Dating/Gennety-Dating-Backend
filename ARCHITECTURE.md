@@ -771,3 +771,26 @@ currently bot-side only.
 | Twilio Verify | SMS fallback for phone codes (numbers without Telegram / Gateway outages / explicit "send SMS"). REST via fetch — no SDK dependency, no Twilio phone number needed. Env `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_VERIFY_SERVICE_SID`. |
 | App Store Server API | StoreKit 2 purchase verification + refund webhooks for the native app's ticket wallet (`services/appstore.ts` — ES256 provider JWT via `jsonwebtoken`, REST via fetch, no SDK). Env `APPSTORE_KEY_PATH/KEY_ID/ISSUER_ID/BUNDLE_ID/ENVIRONMENT/TICKET_PRODUCTS`. |
 | APNs (direct) | Native-app push + Live Activity updates: token-based `.p8` auth (`jsonwebtoken` ES256 provider JWT, cached 50 min) over `node:http2` (APNs is HTTP/2-only; no SDK dependency). `services/apns.ts` transport + `services/push.ts` dispatcher; dead tokens (`Unregistered`/410) are auto-purged. Env `APNS_KEY_PATH/KEY_ID/TEAM_ID/BUNDLE_ID/ENVIRONMENT`. The Expo SDK rail was retired 2026-07-18 (no Expo client ever shipped). |
+# Venue Intent V2 ownership
+
+`packages/shared/src/venue-intent.ts` owns canonical IDs, normalization, bridge
+compatibility, hard filtering and deterministic scoring. Both clients are thin:
+they collect origin/text/chip confirmation and consume the generated OpenAPI
+contract; interpretation, evidence checks and ranking remain server-only.
+
+`Match.venueIntentA/B` are versioned JSON snapshots. Interpret writes a durable
+draft; confirm writes the final structure plus origin. Finalisation reads only
+confirmed snapshots. `venueMidpointLat/Lng` records route geometry while
+`venueLat/Lng` records the real selected venue for V2; null
+`venueSelectionVersion` preserves legacy midpoint semantics. Curated inventory
+is city-scoped (`cityKey`) and university domain is affinity only. Runtime
+deduplicates legacy domain copies by stable place ID.
+
+The V2 selector gathers city-curated candidates and canonical Places lanes,
+applies operational/hours/hard/commute gates, ranks top-1, and records a
+raw-text-free `VenueSelectionLog`. Provider retry state is durable on `Match`.
+Per-side `venueFitBy*` and `venueFitReasonsBy*` fields feed suggestion quality
+without exposing one participant's feedback to the other.
+JWT routes live under `/v1/matches/{id}/venue-intent`; Telegram Mini App routes
+under `/v1/location/venue-intent/*` authenticate with signed initData and call
+the same service.

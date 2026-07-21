@@ -14,6 +14,13 @@ import {
   type VibeTag,
   type ReportCategory,
 } from "../matches-service.js";
+import {
+  confirmVenueIntent,
+  getVenueIntentState,
+  interpretVenueIntent,
+  venueIntentMode,
+  type ConfirmVenueIntentInput,
+} from "../../services/venue-intent-v2.js";
 
 export const matchesRouter: Router = Router();
 
@@ -79,6 +86,50 @@ matchesRouter.post("/:id/decision", async (req: Request, res: Response): Promise
   const result = await applyMatchDecision(id, req.userId!, decision);
   if (!result) {
     res.status(404).json({ error: "Match not found or not actionable" });
+    return;
+  }
+  res.json(result);
+});
+
+matchesRouter.get("/:id/venue-intent", async (req: Request, res: Response): Promise<void> => {
+  const id = paramId(req);
+  const result = await getVenueIntentState(id, req.userId!);
+  if (!result) {
+    res.status(404).json({ error: "Match not found" });
+    return;
+  }
+  res.json({ ...result, mode: venueIntentMode(id) });
+});
+
+matchesRouter.post(
+  "/:id/venue-intent/interpret",
+  agentTextLimiter,
+  async (req: Request, res: Response): Promise<void> => {
+    const id = paramId(req);
+    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+    if (!text || text.length > 500) {
+      res.status(400).json({ error: "Text must be 1–500 characters" });
+      return;
+    }
+    const intent = await interpretVenueIntent(id, req.userId!, text, req.body?.origin ?? null);
+    if (!intent) {
+      res.status(409).json({ error: "Match not in venue negotiation" });
+      return;
+    }
+    res.json({ intent });
+  },
+);
+
+matchesRouter.put("/:id/venue-intent", async (req: Request, res: Response): Promise<void> => {
+  const id = paramId(req);
+  const body = req.body as ConfirmVenueIntentInput | undefined;
+  if (!body?.origin || !Array.isArray(body.experiences) || !Array.isArray(body.ambiences) || !Array.isArray(body.formats) || !body.hardConstraints) {
+    res.status(400).json({ error: "Invalid venue intent" });
+    return;
+  }
+  const result = await confirmVenueIntent(id, req.userId!, body);
+  if (!result) {
+    res.status(409).json({ error: "Draft not found or match not actionable" });
     return;
   }
   res.json(result);

@@ -8,6 +8,13 @@ import {
   tryFinalize,
   sendVenuePostSaveAck,
 } from "../../handlers/matching/venue-negotiation.js";
+import {
+  confirmVenueIntent,
+  getVenueIntentState,
+  interpretVenueIntent,
+  venueIntentMode,
+  type ConfirmVenueIntentInput,
+} from "../../services/venue-intent-v2.js";
 
 /**
  * Location Mini App endpoints (Phase 3.7 — concierge venue, map picker).
@@ -43,6 +50,56 @@ interface PlaceSearchHit {
 
 export function createLocationRouter(api: Api<RawApi>): Router {
   const router = Router();
+
+  router.get("/venue-intent/state", async (req: Request, res: Response): Promise<void> => {
+    const actor = await authenticatedUser(req, res);
+    if (!actor) return;
+    const matchId = typeof req.query.matchId === "string" ? req.query.matchId : "";
+    if (!UUID_REGEX.test(matchId)) {
+      res.status(404).json({ error: "match-not-found" });
+      return;
+    }
+    const state = await getVenueIntentState(matchId, actor.id);
+    if (!state) {
+      res.status(404).json({ error: "match-not-found" });
+      return;
+    }
+    res.json({ ok: true, ...state, mode: venueIntentMode(matchId) });
+  });
+
+  router.post("/venue-intent/interpret", locationSearchLimiter, async (req: Request, res: Response): Promise<void> => {
+    const actor = await authenticatedUser(req, res);
+    if (!actor) return;
+    const matchId = typeof req.body?.matchId === "string" ? req.body.matchId : "";
+    const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+    if (!UUID_REGEX.test(matchId) || !text || text.length > 500) {
+      res.status(400).json({ error: "invalid-request" });
+      return;
+    }
+    const intent = await interpretVenueIntent(matchId, actor.id, text, req.body?.origin ?? null);
+    if (!intent) {
+      res.status(409).json({ error: "wrong-state" });
+      return;
+    }
+    res.json({ ok: true, intent });
+  });
+
+  router.put("/venue-intent/confirm", async (req: Request, res: Response): Promise<void> => {
+    const actor = await authenticatedUser(req, res);
+    if (!actor) return;
+    const matchId = typeof req.body?.matchId === "string" ? req.body.matchId : "";
+    const intent = req.body?.intent as ConfirmVenueIntentInput | undefined;
+    if (!UUID_REGEX.test(matchId) || !intent) {
+      res.status(400).json({ error: "invalid-request" });
+      return;
+    }
+    const state = await confirmVenueIntent(matchId, actor.id, intent);
+    if (!state) {
+      res.status(409).json({ error: "draft-not-found" });
+      return;
+    }
+    res.json({ ok: true, ...state });
+  });
 
   router.get("/search", locationSearchLimiter, async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
@@ -194,6 +251,26 @@ export function createLocationRouter(api: Api<RawApi>): Router {
   });
 
   return router;
+}
+
+async function authenticatedUser(
+  req: Request,
+  res: Response,
+): Promise<{ id: string; telegramId: bigint } | null> {
+  const auth = authenticate(req);
+  if (!auth.ok) {
+    res.status(401).json(auth.body);
+    return null;
+  }
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(auth.user.id) },
+    select: { id: true, telegramId: true },
+  });
+  if (!user) {
+    res.status(404).json({ error: "user-not-found" });
+    return null;
+  }
+  return user;
 }
 
 type AuthOk = { ok: true; user: { id: number } };

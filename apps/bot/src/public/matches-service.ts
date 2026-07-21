@@ -1,5 +1,5 @@
 import { Prisma, prisma, type MatchStatus } from "@gennety/db";
-import { t, type Language, type TranslationKey } from "@gennety/shared";
+import { legacyVibeToVenueIntent, type VenueIntentV2, t, type Language, type TranslationKey } from "@gennety/shared";
 import { env } from "../config.js";
 import { parseVibe, mergeParsed, type VenueCategory } from "../services/vibe-parser.js";
 import {
@@ -25,6 +25,7 @@ import {
 import { sendPushToUser } from "../services/push.js";
 import { generateAndSaveWingmanHints } from "../services/wingman-hint.js";
 import { runVenueFinalizationOnce } from "../services/venue-finalization-flight.js";
+import { tryFinalizeVenueIntentV2, venueIntentMode } from "../services/venue-intent-v2.js";
 import { createMatchEventBestEffort } from "../services/match-events.js";
 import { claimMatchDecision } from "../services/match-decision-claim.js";
 import { updateEloScores } from "../utils/elo-calculator.js";
@@ -93,6 +94,11 @@ export interface SerializedMatch {
   venueAddress: string | null;
   venueLat: number | null;
   venueLng: number | null;
+  venueGoogleMapsUri: string | null;
+  venueSelectionReason: string | null;
+  myVenueIntentStatus: "none" | "draft" | "confirmed";
+  partnerVenueIntentSubmitted: boolean;
+  venueIntentMode: "off" | "shadow" | "live";
   venueCategory: string | null;
   mapPreviewUrl: string | null;
   transitHint: string | null;
@@ -238,6 +244,10 @@ export async function getCurrentMatchForUser(
       venueAddress: true,
       venueLat: true,
       venueLng: true,
+      venueGoogleMapsUri: true,
+      venueSelectionReason: true,
+      venueIntentA: true,
+      venueIntentB: true,
       parsedCategoryA: true,
       parsedCategoryB: true,
       vibeTextA: true,
@@ -268,6 +278,14 @@ export async function getCurrentMatchForUser(
     side === "A"
       ? Boolean(match.vibeTextB) && match.vibeLatB != null && match.vibeLngB != null
       : Boolean(match.vibeTextA) && match.vibeLatA != null && match.vibeLngA != null;
+  const myVenueIntent = (side === "A" ? match.venueIntentA : match.venueIntentB) as
+    | { state?: string }
+    | null;
+  const partnerVenueIntent = (side === "A" ? match.venueIntentB : match.venueIntentA) as
+    | { state?: string }
+    | null;
+  const myVenueIntentStatus =
+    myVenueIntent?.state === "confirmed" ? "confirmed" : myVenueIntent?.state === "draft" ? "draft" : "none";
 
   // Prefer side-specific category; fall back to the other side for the label.
   const venueCategory =
@@ -312,6 +330,11 @@ export async function getCurrentMatchForUser(
     venueAddress: match.venueAddress,
     venueLat: match.venueLat,
     venueLng: match.venueLng,
+    venueGoogleMapsUri: match.venueGoogleMapsUri,
+    venueSelectionReason: match.venueSelectionReason,
+    myVenueIntentStatus,
+    partnerVenueIntentSubmitted: partnerVenueIntent?.state === "confirmed",
+    venueIntentMode: venueIntentMode(match.id),
     venueCategory,
     mapPreviewUrl: null,
     transitHint: null,
@@ -539,6 +562,11 @@ export async function submitVibeLocation(
 
   const vibeText = VIBE_TEXT[payload.vibe];
   const parsed = await parseVibe(vibeText);
+  const venueIntent: VenueIntentV2 = legacyVibeToVenueIntent(payload.vibe, {
+    lat: payload.lat,
+    lng: payload.lng,
+    address: null,
+  });
 
   const base =
     side === "A"
@@ -547,12 +575,14 @@ export async function submitVibeLocation(
           vibeLatA: payload.lat,
           vibeLngA: payload.lng,
           parsedCategoryA: parsed.category,
+          venueIntentA: venueIntent as unknown as Prisma.InputJsonValue,
         }
       : {
           vibeTextB: vibeText,
           vibeLatB: payload.lat,
           vibeLngB: payload.lng,
           parsedCategoryB: parsed.category,
+          venueIntentB: venueIntent as unknown as Prisma.InputJsonValue,
         };
 
   // If we're still in `negotiating`, flip to `negotiating_venue` now that
@@ -565,7 +595,12 @@ export async function submitVibeLocation(
 
   await prisma.match.update({ where: { id: matchId }, data });
 
-  await tryFinalizeMatchVenue(matchId);
+  const venueMode = venueIntentMode(matchId);
+  if (venueMode === "live") await tryFinalizeVenueIntentV2(matchId);
+  else {
+    if (venueMode === "shadow") await tryFinalizeVenueIntentV2(matchId);
+    await tryFinalizeMatchVenue(matchId);
+  }
   return getCurrentMatchForUser(userId);
 }
 

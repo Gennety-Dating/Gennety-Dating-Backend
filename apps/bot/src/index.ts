@@ -39,6 +39,7 @@ import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
 import { ticketExpiryTick } from "./workers/ticket-expiry.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
 import { venueRevalidationTick } from "./services/venue-revalidation.js";
+import { retryDueVenueSelections } from "./services/venue-intent-v2.js";
 import { guardedTick } from "./utils/guarded-tick.js";
 
 /* ── Process-level crash guard ─────────────────────────────── */
@@ -276,10 +277,11 @@ async function expiryJob(): Promise<void> {
 
 async function dateLifecycleTick(): Promise<void> {
   try {
-    const [lifecycle, safety, coordination] = await Promise.all([
+    const [lifecycle, safety, coordination, venueRetries] = await Promise.all([
       runDateLifecycleTick(bot.api),
       runPreDateSafetyTick(bot.api),
       runCoordinationTick(bot.api),
+      retryDueVenueSelections(),
     ]);
     if (
       lifecycle.icebreakers > 0 ||
@@ -296,6 +298,7 @@ async function dateLifecycleTick(): Promise<void> {
         `[coordination] offers=${coordination.offers} proxyOpened=${coordination.opened} proxyClosed=${coordination.closed}`,
       );
     }
+    if (venueRetries > 0) console.log(`[venue-intent-v2] retried=${venueRetries}`);
   } catch (err) {
     console.error("date lifecycle tick failed:", err);
   }

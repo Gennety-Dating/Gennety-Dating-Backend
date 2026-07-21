@@ -112,7 +112,7 @@ async function pull() {
 
   const candidates = [];
   for (const uni of config) {
-    const { universityDomain, lat, lng } = uni;
+    const { universityDomain, lat, lng, cityKey = "ua:kyiv" } = uni;
     if (!universityDomain || typeof lat !== "number" || typeof lng !== "number") {
       fail(`Bad config entry (need universityDomain, lat, lng): ${JSON.stringify(uni)}`);
     }
@@ -145,6 +145,7 @@ async function pull() {
         candidates.push({
           approved: false, // <-- flip to true to keep
           universityDomain,
+          cityKey,
           name: c.name,
           address: c.address,
           lat: c.lat,
@@ -181,6 +182,11 @@ async function importVenues() {
 
   const rows = JSON.parse(readFileSync(inPath, "utf8"));
   if (!Array.isArray(rows)) fail("Candidates file must be a JSON array.");
+  const inferredCityKey = /kharkiv/i.test(inPath)
+    ? "ua:kharkiv"
+    : /odesa|odessa/i.test(inPath)
+      ? "ua:odesa"
+      : "ua:kyiv";
 
   const { prisma } = await import("@gennety/db");
   const { isValidVenueCategory, isValidVenueTier } = await import(
@@ -229,6 +235,7 @@ async function importVenues() {
 
     const data = {
       universityDomain: r.universityDomain,
+      cityKey: r.cityKey ?? inferredCityKey,
       name: r.name,
       address: r.address,
       lat: r.lat,
@@ -241,6 +248,14 @@ async function importVenues() {
       // so (validated against the whitelist). See §Premium.
       tier: isValidVenueTier(r.tier) ? r.tier : "base",
       vibeTags: Array.isArray(r.vibeTags) ? r.vibeTags : [],
+      facetTags: Array.isArray(r.facetTags) ? r.facetTags : [],
+      hardCapabilities: Array.isArray(r.hardCapabilities) ? r.hardCapabilities : [],
+      rating: Number.isFinite(r.rating ?? r._rating) ? (r.rating ?? r._rating) : null,
+      userRatingCount: Number.isFinite(r.userRatingCount ?? r._reviews) ? (r.userRatingCount ?? r._reviews) : null,
+      priceLevel: r.priceLevel ?? r._priceLevel ?? null,
+      primaryType: r.primaryType ?? r._primaryType ?? null,
+      editorialSummary: r.editorialSummary ?? null,
+      hoursConfidence: r.hoursConfidence ?? (r.openingHours ? "provider" : "unknown"),
       utcOffsetMinutes: Number.isFinite(r.utcOffsetMinutes) ? r.utcOffsetMinutes : null,
       openingHours: r.openingHours ?? null,
       active: true,

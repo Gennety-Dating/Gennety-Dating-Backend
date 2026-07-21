@@ -47,6 +47,12 @@ import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import { generateAndSaveWingmanHints } from "../../services/wingman-hint.js";
 import { generateVenueBlurb } from "../../services/venue-blurb.js";
 import { runVenueFinalizationOnce } from "../../services/venue-finalization-flight.js";
+import {
+  confirmVenueIntent,
+  interpretVenueIntent,
+  tryFinalizeVenueIntentV2,
+  venueIntentMode,
+} from "../../services/venue-intent-v2.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { venueSearchSteps, dateCardSteps } from "../../services/analysis-status.js";
@@ -308,6 +314,19 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
   const { matchId, side } = resolved;
 
   const lang = ctx.session.language;
+  // V2 drafts are created only inside the Mini App and require explicit chip
+  // confirmation. Ordinary chat text must never overwrite a confirmed intent.
+  if (venueIntentMode(matchId) === "live") {
+    const actor = await prisma.user.findUnique({
+      where: { telegramId: BigInt(ctx.from!.id) },
+      select: { theme: true },
+    });
+    await ctx.reply(t(lang, "venueConciergeIntro"), {
+      parse_mode: "Markdown",
+      reply_markup: buildLocationMapKeyboard(matchId, lang, actor?.theme ?? "dark"),
+    });
+    return;
+  }
 
   // Location-first ordering: we only ask for the *vibe* once the user has
   // marked their departure point. If free text lands before that pin, the
@@ -317,7 +336,7 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
   // emitted by `sendVenuePostSaveAck` right after the location saves.
   const locState = await prisma.match.findUnique({
     where: { id: matchId },
-    select: { vibeLatA: true, vibeLngA: true, vibeLatB: true, vibeLngB: true },
+    select: { vibeLatA: true, vibeLngA: true, vibeAddressA: true, vibeLatB: true, vibeLngB: true, vibeAddressB: true },
   });
   const hasLocation =
     side === "A"
@@ -349,6 +368,31 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
         };
   await prisma.match.update({ where: { id: matchId }, data });
 
+  // Shadow traffic exercises the real multilingual parser/ranker while the
+  // legacy result remains authoritative. This stored confirmation is isolated
+  // to structured facets and never changes the user-visible V1 flow.
+  if (venueIntentMode(matchId) === "shadow") {
+    const actor = await prisma.user.findUnique({
+      where: { telegramId: BigInt(ctx.from!.id) },
+      select: { id: true },
+    });
+    const origin = side === "A"
+      ? { lat: locState!.vibeLatA!, lng: locState!.vibeLngA!, address: locState!.vibeAddressA }
+      : { lat: locState!.vibeLatB!, lng: locState!.vibeLngB!, address: locState!.vibeAddressB };
+    if (actor) {
+      const shadowDraft = await interpretVenueIntent(matchId, actor.id, text, origin);
+      if (shadowDraft) {
+        await confirmVenueIntent(matchId, actor.id, {
+          experiences: shadowDraft.experiences,
+          ambiences: shadowDraft.ambiences,
+          formats: shadowDraft.formats,
+          hardConstraints: shadowDraft.hardConstraints,
+          origin,
+        });
+      }
+    }
+  }
+
   // If safety layer overrode the user's request, let them know (softly).
   if (!parsed.safe) {
     await ctx.reply(t(lang, "venueSafetyOverride"));
@@ -370,6 +414,7 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
  * the midpoint → Places pipeline and finalise.
  */
 export async function tryFinalize(api: Api<RawApi>, matchId: string): Promise<void> {
+  if (venueIntentMode(matchId) === "shadow") await tryFinalizeVenueIntentV2(matchId);
   return runVenueFinalizationOnce(matchId, () => finalizeVenue(api, matchId));
 }
 

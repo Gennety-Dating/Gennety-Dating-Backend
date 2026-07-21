@@ -97,6 +97,26 @@
     <!-- No-context fallback (opened without a match id) -->
     <div id="no-context" style="display: none"></div>
 
+    <!-- Venue Intent V2: location stays in memory while the second step opens. -->
+    <section id="vibe-stage" class="vibe-stage" hidden aria-live="polite">
+      <div class="vibe-card">
+        <button id="vibe-back" class="vibe-back" type="button" aria-label="Back">←</button>
+        <div class="vibe-step">2 / 2</div>
+        <h1 id="vibe-title">What should the date feel like?</h1>
+        <p id="vibe-help">Describe it naturally — for example: quiet gallery and a walk, no alcohol.</p>
+        <div id="vibe-suggestions" class="vibe-suggestions"></div>
+        <textarea id="vibe-text" maxlength="500" rows="4" placeholder="Cozy, design-forward place where we can really talk…"></textarea>
+        <button id="vibe-interpret" class="cta" type="button"><span class="cta-text">Continue</span></button>
+        <div id="vibe-review" hidden>
+          <p class="vibe-review-label">I understood this:</p>
+          <div id="vibe-chips" class="vibe-chips"></div>
+          <div class="vibe-constraints" id="vibe-constraints"></div>
+          <button id="vibe-confirm" class="cta" type="button"><span class="cta-text">Everything looks right</span></button>
+        </div>
+        <p id="vibe-error" class="vibe-error" role="alert"></p>
+      </div>
+    </section>
+
     <script type="module" src="/src/location.ts"></script>
   </body>
 </html>

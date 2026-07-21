@@ -55,7 +55,7 @@ describe("generateVenueBlurb", () => {
     expect(out).toBe("A quiet coffee spot, easy to chat.");
   });
 
-  it("grounds the prompt on editorial summary, rating, and the merged vibe", async () => {
+  it("grounds the prompt on venue facts without treating the requested vibe as evidence", async () => {
     mCall.mockResolvedValueOnce("A calm coffee bar, easy to talk.");
     await generateVenueBlurb({
       venue: venue(),
@@ -66,7 +66,7 @@ describe("generateVenueBlurb", () => {
     const systemPrompt = mCall.mock.calls[0]![0] as string;
     expect(systemPrompt).toContain("Cosy specialty coffee bar");
     expect(systemPrompt).toContain("4.6");
-    expect(systemPrompt).toContain("quiet, vegan");
+    expect(systemPrompt).not.toContain("quiet, vegan");
   });
 
   it("falls back to a generic line when the model returns nothing (no API key)", async () => {
@@ -77,9 +77,7 @@ describe("generateVenueBlurb", () => {
       keywords: [],
       language: "en",
     });
-    expect(out).toBe(
-      "A relaxed, easy-going spot — good for unhurried conversation on a first date.",
-    );
+    expect(out).toBe("A verified public place selected with both of your routes in mind.");
   });
 
   it("rejects over-long output, a question, or a URL leak → fallback", async () => {
@@ -90,22 +88,22 @@ describe("generateVenueBlurb", () => {
       .mockResolvedValueOnce("See it at http://example.com");
 
     const en = { venue: venue(), category: "cafe" as const, keywords: [], language: "en" as const };
-    expect(await generateVenueBlurb(en)).toMatch(/relaxed, easy-going spot/);
-    expect(await generateVenueBlurb(en)).toMatch(/relaxed, easy-going spot/);
-    expect(await generateVenueBlurb(en)).toMatch(/relaxed, easy-going spot/);
+    expect(await generateVenueBlurb(en)).toMatch(/verified public place/);
+    expect(await generateVenueBlurb(en)).toMatch(/verified public place/);
+    expect(await generateVenueBlurb(en)).toMatch(/verified public place/);
   });
 
   it("uses the per-language fallback (ru/de/pl)", async () => {
     mCall.mockResolvedValue("");
     expect(
       await generateVenueBlurb({ venue: venue(), category: "cafe", keywords: [], language: "ru" }),
-    ).toMatch(/Спокойное/);
+    ).toMatch(/Проверенное публичное/);
     expect(
       await generateVenueBlurb({ venue: venue(), category: "cafe", keywords: [], language: "de" }),
-    ).toMatch(/gemütlicher Ort/);
+    ).toMatch(/überprüfter öffentlicher Ort/);
     expect(
       await generateVenueBlurb({ venue: venue(), category: "cafe", keywords: [], language: "pl" }),
-    ).toMatch(/przytulne miejsce/);
+    ).toMatch(/Sprawdzone publiczne miejsce/);
   });
 
   it("survives an OpenAI throw → fallback (never blocks finalization)", async () => {
@@ -116,6 +114,6 @@ describe("generateVenueBlurb", () => {
       keywords: [],
       language: "en",
     });
-    expect(out).toMatch(/relaxed, easy-going spot/);
+    expect(out).toMatch(/verified public place/);
   });
 });

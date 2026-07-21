@@ -433,7 +433,7 @@ export interface VenueBlurbInput {
   userRatingCount: number | null;
   /** Google's own short editorial description, when available. */
   editorialSummary: string | null;
-  /** The vibe keywords both users asked for (e.g. ["quiet", "vegan"]). */
+  /** Pair-request context. Never evidence about the venue itself. */
   keywords: string[];
   language: string;
 }
@@ -458,9 +458,6 @@ export function generateVenueBlurbPrompt(input: VenueBlurbInput): string {
       input.userRatingCount != null ? ` from ${input.userRatingCount} reviews` : "";
     facts.push(`- Google rating: ${input.rating.toFixed(1)}/5${count}`);
   }
-  if (input.keywords.length > 0) {
-    facts.push(`- The vibe both people asked for: ${input.keywords.join(", ")}`);
-  }
   const factBlock = facts.length > 0 ? facts.join("\n") : "- (no extra details)";
 
   return `You are Gennety — a personal AI matchmaker with quiet self-respect: warm, precise, never salesy. Two people just locked in their first date at "${input.venueName}". Write a tiny blurb that tells them what kind of place it is, so the spot feels intentional rather than random.
@@ -471,7 +468,7 @@ ${factBlock}
 ## Your Task
 Write 1–2 short sentences in **${input.language}** describing the place's vibe. It must:
 1. Use ONLY the facts above. If a rating is given you may nod to it ("well-rated", "a local favourite"); otherwise don't mention popularity.
-2. Read warm and inviting, framed for a relaxed first date ("easy to talk", "calm enough to actually hear each other").
+2. Read warm and inviting without claiming ambience, menu, accessibility, dietary support, or other qualities absent from the facts.
 3. Be at most ~25 words total. Plain prose, native phrasing in the target language.
 
 ## Never do these

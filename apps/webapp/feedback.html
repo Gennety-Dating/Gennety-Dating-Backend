@@ -46,9 +46,23 @@
         </div>
       </section>
 
-      <section class="card" aria-labelledby="notes-label">
+      <section class="card" aria-labelledby="venue-fit-label">
         <div class="card-header">
           <span class="card-num">3</span>
+          <h2 id="venue-fit-label">Did the place match your vibe?</h2>
+        </div>
+        <div class="segmented" role="tablist" id="venue-fit-segmented">
+          <span class="seg-indicator" aria-hidden="true"></span>
+          <button class="segment" type="button" role="tab" data-value="yes" id="venue-fit-yes">Yes</button>
+          <button class="segment" type="button" role="tab" data-value="partly" id="venue-fit-partly">Partly</button>
+          <button class="segment" type="button" role="tab" data-value="no" id="venue-fit-no">No</button>
+        </div>
+        <div class="reason-chips" id="venue-fit-reasons" hidden></div>
+      </section>
+
+      <section class="card" aria-labelledby="notes-label">
+        <div class="card-header">
+          <span class="card-num">4</span>
           <h2 id="notes-label">Anything else?</h2>
         </div>
         <textarea

@@ -1935,7 +1935,7 @@ describe("venue negotiation finalization", () => {
     expect(caption).not.toContain("http");
     expect(caption).not.toContain("maps.google.com");
     // The blurb line (fallback, since OPENAI_API_KEY is empty in tests) is there.
-    expect(caption).toContain("unhurried conversation");
+    expect(caption).toContain("verified public place selected with both of your routes in mind");
   });
 
   it("falls back to a Google Maps search URL when the venue has no Places deep-link", async () => {
@@ -2062,18 +2062,16 @@ describe("venue service", () => {
     expect(v.name).toBe("Campus Café");
   });
 
-  it("pickVenueForMatch swallows a throwing custom client and falls back", async () => {
+  it("pickVenueForMatch fails closed when an injected provider throws", async () => {
     const throwing = {
       async pick() {
         throw new Error("boom");
       },
     };
-    const v = await pickVenueForMatch(
+    await expect(pickVenueForMatch(
       { universityDomainA: "stanford.edu", universityDomainB: "stanford.edu" },
       throwing,
-    );
-    // Fallback stub returns Stanford entry since domain matches the table.
-    expect(v.name).toBe("Coupa Café");
+    )).rejects.toThrow("boom");
   });
 });
 

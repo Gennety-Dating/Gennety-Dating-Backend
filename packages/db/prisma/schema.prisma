@@ -747,9 +747,25 @@ model Match {
   /// coffee_shop | park | museum | lounge). Audit trail for overrides.
   parsedCategoryA    String?   @map("parsed_category_a")
   parsedCategoryB    String?   @map("parsed_category_b")
-  /// Resolved midpoint used for the Places query — kept for audit / retries.
+  /// Venue Intent V2 snapshots. A draft is replaced only when that user edits
+  /// their text; finalisation consumes the confirmed JSON and never re-parses.
+  venueIntentA       Json?     @map("venue_intent_a")
+  venueIntentB       Json?     @map("venue_intent_b")
+  /// V2 stores the route midpoint separately. For pre-V2 rows venueLat/Lng are
+  /// the legacy midpoint and venueSelectionVersion remains null.
+  venueMidpointLat   Float?    @map("venue_midpoint_lat")
+  venueMidpointLng   Float?    @map("venue_midpoint_lng")
+  /// Actual venue coordinates for V2 (legacy rows keep midpoint semantics).
   venueLat           Float?    @map("venue_lat")
   venueLng           Float?    @map("venue_lng")
+  venuePlaceId       String?   @map("venue_place_id")
+  venueSource        String?   @map("venue_source")
+  venueSelectionVersion String? @map("venue_selection_version")
+  venueSelectionConfidence Float? @map("venue_selection_confidence")
+  venueSelectionReason String? @map("venue_selection_reason")
+  venueSelectionAttempts Int @default(0) @map("venue_selection_attempts")
+  venueSelectionNextRetryAt DateTime? @map("venue_selection_next_retry_at")
+  venueSelectionError String? @map("venue_selection_error")
   /// Google Maps deep-link to the picked place (`googleMapsUri` from the
   /// Places API (New) response). Surfaced in the final scheduled DM so
   /// users can verify the venue exists and pre-check address / hours.
@@ -785,6 +801,10 @@ model Match {
   emergencyReason      String?   @map("emergency_reason")
   feedbackByA          String?   @map("feedback_by_a")
   feedbackByB          String?   @map("feedback_by_b")
+  venueFitByA          String?   @map("venue_fit_by_a")
+  venueFitByB          String?   @map("venue_fit_by_b")
+  venueFitReasonsByA   String[]  @default([]) @map("venue_fit_reasons_by_a")
+  venueFitReasonsByB   String[]  @default([]) @map("venue_fit_reasons_by_b")
   /// Idempotency marker for the post-date feedback DM. The prompt is sent
   /// once per match 24h after `agreedTime`; this column gates the cron tick
   /// so the same pair can't be re-prompted every 2 minutes when one or
@@ -1000,6 +1020,7 @@ model Match {
   reports       Report[]
   scoreLog      MatchScoreLog?
   proxyMessages ProxyMessage[]
+  venueSelectionLogs VenueSelectionLog[]
 
   @@index([status, createdAt])
   @@index([userAId, userBId])
@@ -1013,6 +1034,32 @@ model Match {
   /// Drives the venue-change TTL/cutoff expiry sweep on the lifecycle tick.
   @@index([venueChangeStatus, venueChangeExpiresAt])
   @@map("matches")
+}
+
+/// Structured, append-only audit trail for live and shadow venue ranking.
+/// Raw preference text is deliberately excluded.
+model VenueSelectionLog {
+  id              String   @id @default(uuid()) @db.Uuid
+  matchId         String   @map("match_id") @db.Uuid
+  mode            String
+  parserVersion   String   @map("parser_version")
+  rankerVersion   String   @map("ranker_version")
+  intentA         Json     @map("intent_a")
+  intentB         Json     @map("intent_b")
+  topCandidates   Json     @map("top_candidates")
+  selectedSource  String?  @map("selected_source")
+  selectedPlaceId String?  @map("selected_place_id")
+  failureReason   String?  @map("failure_reason")
+  latencyMs       Int      @map("latency_ms")
+  placesCallCount Int      @map("places_call_count")
+  chipCorrections Int      @default(0) @map("chip_corrections")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([matchId, createdAt])
+  @@index([mode, createdAt])
+  @@map("venue_selection_logs")
 }
 
 /// Append-only audit log of every message relayed through a Variant C
@@ -1295,7 +1342,9 @@ model NoMatchNotice {
 /// `scripts/seed-venues.mjs` (Places-backed pull → manual review → import).
 model CuratedVenue {
   id               String    @id @default(uuid()) @db.Uuid
-  universityDomain String    @map("university_domain")
+  universityDomain String?   @map("university_domain")
+  /// Primary availability scope. University domain is now affinity only.
+  cityKey          String?   @map("city_key")
   name             String
   address          String
   lat              Float
@@ -1325,6 +1374,16 @@ model CuratedVenue {
   /// See PRODUCT_SPEC.md §Premium / §3.7b.
   tier             String    @default("base")
   vibeTags         String[]  @default([]) @map("vibe_tags")
+  /// Canonical V2 facets and positively evidenced capabilities.
+  facetTags        String[]  @default([]) @map("facet_tags")
+  hardCapabilities String[]  @default([]) @map("hard_capabilities")
+  rating           Float?
+  userRatingCount  Int?      @map("user_rating_count")
+  priceLevel       String?   @map("price_level")
+  primaryType      String?   @map("primary_type")
+  editorialSummary String?   @map("editorial_summary")
+  /// unknown | provider | operator_confirmed | always_open
+  hoursConfidence  String    @default("unknown") @map("hours_confidence")
   /// Operator-supplied venue photo URL (Supabase Storage or any hosted image),
   /// filled by hand for venues we curate. Surfaced in the venue-change catalog
   /// Mini App card. Null for seeded-but-not-yet-photographed rows; Places-
@@ -1339,6 +1398,7 @@ model CuratedVenue {
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
   @@index([universityDomain, category, active])
+  @@index([cityKey, tier, active])
   @@map("curated_venues")
 }
 

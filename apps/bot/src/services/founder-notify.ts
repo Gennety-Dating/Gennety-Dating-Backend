@@ -73,6 +73,24 @@ export async function notifyFounderStatusTimerHealth(
   }
 }
 
+/** Privacy-safe terminal alert for Venue Intent V2 provider failures. */
+export async function notifyFounderVenueSelectionFailure(
+  matchId: string,
+  reason: string,
+  attempts: number,
+): Promise<void> {
+  const api = getFounderApi();
+  if (!api) return;
+  try {
+    await api.sendMessage(
+      founderChatId(),
+      `⚠️ Venue Intent V2 finalization failed\nmatch=${matchId}\nreason=${reason}\nattempts=${attempts}`,
+    );
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} venue-selection failure notify failed`, { matchId, err });
+  }
+}
+
 function truncateCaption(text: string): string {
   return text.length <= CAPTION_MAX ? text : `${text.slice(0, CAPTION_MAX - 1)}…`;
 }

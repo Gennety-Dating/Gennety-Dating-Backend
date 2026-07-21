@@ -10,8 +10,8 @@ import type { VenueCategory } from "./vibe-parser.js";
  * "date locked" card under the name + address (replacing the inlined Maps URL,
  * which already lives on the keyboard button). It lands at the emotional peak
  * of the flow, so trust matters more than flair: the model writes ONLY from the
- * facts we pass it (Google's editorial summary, rating, category, and the vibe
- * both users asked for) and never invents specifics about the place.
+ * facts we pass it (Google's editorial summary, rating, and category) and
+ * never turns the pair's request into an unverified property of the place.
  *
  * Failsafe by construction: a missing OpenAI key, an empty/garbage completion,
  * or output that drifts from the contract all collapse to a per-language
@@ -22,11 +22,11 @@ import type { VenueCategory } from "./vibe-parser.js";
 const MAX_BLURB_CHARS = 180;
 
 const FALLBACK: Record<Language, string> = {
-  en: "A relaxed, easy-going spot — good for unhurried conversation on a first date.",
-  ru: "Спокойное, уютное место — самое то, чтобы не спеша поговорить на первом свидании.",
-  uk: "Спокійне, затишне місце — саме те, щоб неквапливо поспілкуватися на першому побаченні.",
-  de: "Ein entspannter, gemütlicher Ort — ideal für ein ruhiges erstes Date.",
-  pl: "Spokojne, przytulne miejsce — idealne na niespieszną rozmowę na pierwszej randce.",
+  en: "A verified public place selected with both of your routes in mind.",
+  ru: "Проверенное публичное место, выбранное с учётом ваших маршрутов.",
+  uk: "Перевірене публічне місце, обране з урахуванням ваших маршрутів.",
+  de: "Ein überprüfter öffentlicher Ort, ausgewählt mit Blick auf eure Wege.",
+  pl: "Sprawdzone publiczne miejsce, wybrane z uwzględnieniem waszych tras.",
 };
 
 /**

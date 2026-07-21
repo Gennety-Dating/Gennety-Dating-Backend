@@ -131,6 +131,79 @@ export async function selectLocation(
   if (!res.ok) throw await toError(res);
 }
 
+export type VenueExperience = "conversation" | "coffee_treats" | "meal_discovery" | "walk_view" | "art_culture" | "drinks_evening" | "playful_activity" | "surprise_me";
+export type VenueAmbience = "quiet" | "cozy_public" | "lively" | "design_forward" | "scenic" | "romantic_public";
+export type VenueFormat = "seated" | "walking" | "interactive" | "indoor" | "outdoor";
+export type VenueDietary = "vegan" | "vegetarian" | "halal" | "kosher" | "gluten_free";
+export interface VenueHardConstraints {
+  dietary: VenueDietary[];
+  alcoholFree: boolean;
+  stepFree: boolean;
+  setting: "indoor" | "outdoor" | null;
+  maxPrice: "free" | "inexpensive" | "moderate" | null;
+  maxCommuteKm: 8 | 12;
+}
+export interface VenueIntentDraft {
+  rawText: string;
+  experiences: VenueExperience[];
+  ambiences: VenueAmbience[];
+  formats: VenueFormat[];
+  hardConstraints: VenueHardConstraints;
+  parserConfidence: number;
+  state: "draft" | "confirmed";
+  manualConfirmationRequired: boolean;
+  origin?: { lat: number; lng: number; address: string | null } | null;
+}
+export interface VenueIntentTmaState {
+  intent: VenueIntentDraft | null;
+  status: "none" | "draft" | "confirmed";
+  partnerSubmitted: boolean;
+  suggestions: Array<Pick<VenueIntentDraft, "experiences" | "ambiences" | "formats">>;
+  selectionError: string | null;
+  mode: "off" | "shadow" | "live";
+}
+
+export async function fetchVenueIntentState(initData: string, matchId: string): Promise<VenueIntentTmaState> {
+  const params = new URLSearchParams({ matchId });
+  const res = await fetch(`${apiBase}/v1/location/venue-intent/state?${params}`, {
+    headers: { Authorization: `tma ${initData}` },
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as VenueIntentTmaState & { ok: true };
+}
+
+export async function interpretVenueIntentTma(
+  initData: string,
+  matchId: string,
+  text: string,
+  origin: { lat: number; lng: number; address: string | null },
+): Promise<VenueIntentDraft> {
+  const res = await fetch(`${apiBase}/v1/location/venue-intent/interpret`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
+    body: JSON.stringify({ matchId, text, origin }),
+  });
+  if (!res.ok) throw await toError(res);
+  const body = (await res.json()) as { ok: true; intent: VenueIntentDraft };
+  return body.intent;
+}
+
+export async function confirmVenueIntentTma(
+  initData: string,
+  matchId: string,
+  intent: Omit<VenueIntentDraft, "rawText" | "parserConfidence" | "state" | "manualConfirmationRequired"> & {
+    origin: { lat: number; lng: number; address: string | null };
+  },
+): Promise<VenueIntentTmaState> {
+  const res = await fetch(`${apiBase}/v1/location/venue-intent/confirm`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `tma ${initData}` },
+    body: JSON.stringify({ matchId, intent }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as VenueIntentTmaState & { ok: true };
+}
+
 // ---------------------------------------------------------------------------
 // Telegram Onboarding Mini App API
 // ---------------------------------------------------------------------------

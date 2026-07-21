@@ -387,6 +387,17 @@ export const env = {
   /// same-sex — the initiator pays. Decline/lapse never cancels the match —
   /// the original venue simply stands. Telegram-only (PRODUCT_SPEC.md §3.7b).
   VENUE_CHANGE_FEATURE_ENABLED: process.env.VENUE_CHANGE_FEATURE_ENABLED === "true",
+  /// Venue Intent V2 rollout. Master enables the new draft/confirm APIs;
+  /// deterministic bucketing controls live and shadow selection independently.
+  VENUE_INTENT_V2_ENABLED: process.env.VENUE_INTENT_V2_ENABLED === "true",
+  VENUE_INTENT_V2_SHADOW_PERCENT: Math.max(
+    0,
+    Math.min(100, Number(process.env.VENUE_INTENT_V2_SHADOW_PERCENT ?? "0")),
+  ),
+  VENUE_INTENT_V2_ROLLOUT_PERCENT: Math.max(
+    0,
+    Math.min(100, Number(process.env.VENUE_INTENT_V2_ROLLOUT_PERCENT ?? "0")),
+  ),
   /// Telegram Stars (XTR) price of one settled venue change — one flat price
   /// for every path (agreed board pick, express). Env-tunable at launch.
   VENUE_CHANGE_STARS: Number(process.env.VENUE_CHANGE_STARS ?? "150"),

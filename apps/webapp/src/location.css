@@ -356,3 +356,25 @@ button.cta.saving .arrow {
   color: var(--text-faint) !important;
   font-size: 10px;
 }
+
+.vibe-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  padding: max(72px, env(safe-area-inset-top)) 18px max(24px, env(safe-area-inset-bottom));
+  overflow: auto;
+  background: radial-gradient(circle at 80% 0%, rgba(134, 91, 255, .32), transparent 42%), #0d0a14;
+  color: #fff;
+}
+.vibe-stage[hidden] { display: none; }
+.vibe-card { max-width: 560px; margin: 0 auto; }
+.vibe-step { color: rgba(255,255,255,.54); font-size: 13px; letter-spacing: .08em; }
+.vibe-card h1 { margin: 14px 0 8px; font-size: 30px; line-height: 1.08; }
+.vibe-card > p { color: rgba(255,255,255,.68); line-height: 1.45; }
+.vibe-back { float: right; width: 42px; height: 42px; border: 0; border-radius: 21px; color: #fff; background: rgba(255,255,255,.1); font-size: 22px; }
+#vibe-text { box-sizing: border-box; width: 100%; margin: 18px 0 12px; padding: 16px; resize: vertical; border: 1px solid rgba(255,255,255,.14); border-radius: 18px; color: #fff; background: rgba(255,255,255,.08); font: inherit; line-height: 1.4; }
+.vibe-suggestions, .vibe-chips, .vibe-constraints { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.vibe-chip { border: 1px solid rgba(255,255,255,.17); border-radius: 999px; padding: 9px 12px; color: #fff; background: rgba(255,255,255,.08); font: inherit; font-size: 14px; }
+.vibe-chip.active { border-color: #c5adff; background: rgba(137, 91, 255, .3); }
+.vibe-review-label { margin-top: 22px; font-weight: 650; }
+.vibe-error { min-height: 22px; color: #ff93a6 !important; }

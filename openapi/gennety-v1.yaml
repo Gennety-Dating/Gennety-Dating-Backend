@@ -1217,6 +1217,74 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/matches/{id}/venue-intent:
+    get:
+      tags: [matches]
+      operationId: getVenueIntent
+      summary: Get this user's Venue Intent V2 draft or confirmation
+      description: Never returns the partner's facets; only a submitted boolean.
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      responses:
+        "200":
+          description: Own intent, smart suggestions, and partner submission state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenueIntentState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [matches]
+      operationId: confirmVenueIntent
+      summary: Confirm edited canonical chips and departure origin atomically
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VenueIntentConfirmation" }
+      responses:
+        "200":
+          description: Confirmed state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VenueIntentState" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /v1/matches/{id}/venue-intent/interpret:
+    post:
+      tags: [matches]
+      operationId: interpretVenueIntent
+      summary: Interpret free text once and persist a recoverable draft
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 500 }
+                origin: { $ref: "#/components/schemas/VenueOrigin" }
+      responses:
+        "200":
+          description: Canonical draft; empty chips mean manual confirmation is required
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [intent]
+                properties:
+                  intent: { $ref: "#/components/schemas/VenueIntentV2" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
   /v1/matches/{id}/safety-ack:
     post:
       tags: [matches]
@@ -1329,6 +1397,11 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
     NotFound:
       description: Not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Current match state does not allow the operation
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -1603,12 +1676,92 @@ components:
           examples: [no_face, face_obscured, duplicate_near, unsafe_content, identity_mismatch]
         retryable: { type: boolean }
 
+    VenueOrigin:
+      type: object
+      required: [lat, lng, address]
+      properties:
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lng: { type: number, minimum: -180, maximum: 180 }
+        address: { type: [string, "null"], maxLength: 256 }
+
+    VenueHardConstraints:
+      type: object
+      required: [dietary, alcoholFree, stepFree, setting, maxPrice, maxCommuteKm]
+      properties:
+        dietary:
+          type: array
+          uniqueItems: true
+          items: { type: string, enum: [vegan, vegetarian, halal, kosher, gluten_free] }
+        alcoholFree: { type: boolean }
+        stepFree: { type: boolean }
+        setting: { type: [string, "null"], enum: [indoor, outdoor, null] }
+        maxPrice: { type: [string, "null"], enum: [free, inexpensive, moderate, null] }
+        maxCommuteKm: { type: integer, enum: [8, 12] }
+
+    VenueIntentConfirmation:
+      type: object
+      required: [experiences, ambiences, formats, hardConstraints, origin]
+      properties:
+        experiences:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items: { type: string, enum: [conversation, coffee_treats, meal_discovery, walk_view, art_culture, drinks_evening, playful_activity, surprise_me] }
+        ambiences:
+          type: array
+          maxItems: 3
+          uniqueItems: true
+          items: { type: string, enum: [quiet, cozy_public, lively, design_forward, scenic, romantic_public] }
+        formats:
+          type: array
+          maxItems: 3
+          uniqueItems: true
+          items: { type: string, enum: [seated, walking, interactive, indoor, outdoor] }
+        hardConstraints: { $ref: "#/components/schemas/VenueHardConstraints" }
+        origin: { $ref: "#/components/schemas/VenueOrigin" }
+
+    VenueIntentV2:
+      allOf:
+        - $ref: "#/components/schemas/VenueIntentConfirmation"
+        - type: object
+          required: [rawText, parserConfidence, parserVersion, state, interpretedAt, confirmedAt, manualConfirmationRequired]
+          properties:
+            rawText: { type: string, maxLength: 500 }
+            parserConfidence: { type: number, minimum: 0, maximum: 1 }
+            parserVersion: { type: string, enum: [venue-intent-v2] }
+            state: { type: string, enum: [draft, confirmed] }
+            interpretedAt: { type: string, format: date-time }
+            confirmedAt: { type: [string, "null"], format: date-time }
+            manualConfirmationRequired: { type: boolean }
+
+    VenueIntentState:
+      type: object
+      required: [status, partnerSubmitted, suggestions, selectionError]
+      properties:
+        intent: { $ref: "#/components/schemas/VenueIntentV2" }
+        status: { type: string, enum: [none, draft, confirmed] }
+        partnerSubmitted: { type: boolean }
+        suggestions:
+          type: array
+          maxItems: 3
+          items:
+            type: object
+            required: [experiences, ambiences, formats]
+            properties:
+              experiences: { type: array, items: { type: string } }
+              ambiences: { type: array, items: { type: string } }
+              formats: { type: array, items: { type: string } }
+        selectionError: { type: [string, "null"] }
+
     SerializedMatch:
       type: object
       description: Mirrors `SerializedMatch` in `public/matches-service.ts`
       required:
         [id, status, pitchForMe, iceBreakers, wingmanHint, synergyScore, synergyReason,
          agreedTime, venueName, venueAddress, venueLat, venueLng, venueCategory,
+         venueGoogleMapsUri, venueSelectionReason, myVenueIntentStatus,
+         partnerVenueIntentSubmitted, venueIntentMode,
          mapPreviewUrl, transitHint, partnerFirstName, partnerAge,
          partnerUniversityDomain, myVibeSubmitted, partnerVibeSubmitted,
          safetyBriefAck, proposalDeadlineAt, serverTimeAt]
@@ -1632,6 +1785,11 @@ components:
         venueAddress: { type: [string, "null"] }
         venueLat: { type: [number, "null"] }
         venueLng: { type: [number, "null"] }
+        venueGoogleMapsUri: { type: [string, "null"], format: uri }
+        venueSelectionReason: { type: [string, "null"] }
+        myVenueIntentStatus: { type: string, enum: [none, draft, confirmed] }
+        partnerVenueIntentSubmitted: { type: boolean }
+        venueIntentMode: { type: string, enum: [off, shadow, live] }
         venueCategory: { type: [string, "null"] }
         mapPreviewUrl: { type: [string, "null"] }
         transitHint: { type: [string, "null"] }

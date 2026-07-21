@@ -3,8 +3,17 @@ import {
   apiBase,
   searchLocations,
   selectLocation,
+  fetchVenueIntentState,
+  interpretVenueIntentTma,
+  confirmVenueIntentTma,
   CalendarApiError,
   type LocationSearchHit,
+  type VenueIntentDraft,
+  type VenueIntentTmaState,
+  type VenueExperience,
+  type VenueAmbience,
+  type VenueFormat,
+  type VenueDietary,
 } from "./api.js";
 import { pickLang, tr, type Lang } from "./i18n.js";
 import { wireContentInsets } from "./telegram-insets.js";
@@ -108,6 +117,24 @@ let selectedLng: number = DEFAULT_CENTER[1];
 let selectedAddress: string | null = null;
 let confirming = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+let venueState: VenueIntentTmaState | null = null;
+let draft: VenueIntentDraft | null = null;
+const venueStatePromise = matchId && app
+  ? fetchVenueIntentState(app.initData, matchId).then((state) => {
+      venueState = state;
+      if (state.intent?.state === "draft" || (state.intent?.state === "confirmed" && state.selectionError?.startsWith("no_candidates:"))) {
+        draft = state.intent;
+        if (draft.origin) {
+          selectedLat = draft.origin.lat;
+          selectedLng = draft.origin.lng;
+          selectedAddress = draft.origin.address;
+        }
+        showVibeStage();
+        renderDraft();
+      }
+      return state;
+    }).catch(() => null)
+  : Promise.resolve(null);
 
 if (searchEl) searchEl.placeholder = tr(lang, "locSearchPlaceholder");
 if (shareTextEl) shareTextEl.textContent = tr(lang, "locShareCurrent");
@@ -342,7 +369,7 @@ async function handleConfirm(): Promise<void> {
     return;
   }
   startSaving(false);
-  await saveLocation(selectedLat, selectedLng, selectedAddress);
+  await completeLocationStep(selectedLat, selectedLng, selectedAddress);
 }
 
 function handleShareCurrentLocation(): void {
@@ -381,7 +408,7 @@ async function handleGeolocationSuccess(position: GeolocationPosition): Promise<
 
   const label = tr(lang, "locCurrentLocation");
   recenter(lat, lng, label);
-  await saveLocation(lat, lng, label);
+  await completeLocationStep(lat, lng, label);
 }
 
 function handleGeolocationError(error: GeolocationPositionError): void {
@@ -448,6 +475,136 @@ async function saveLocation(
     app.showAlert(msg);
   }
 }
+
+async function completeLocationStep(lat: number, lng: number, address: string | null): Promise<void> {
+  const state = await venueStatePromise;
+  if (state?.mode === "live") {
+    resetSaving();
+    selectedLat = lat;
+    selectedLng = lng;
+    selectedAddress = address;
+    showVibeStage();
+    return;
+  }
+  await saveLocation(lat, lng, address);
+}
+
+const EXPERIENCE_IDS: VenueExperience[] = ["conversation", "coffee_treats", "meal_discovery", "walk_view", "art_culture", "drinks_evening", "playful_activity", "surprise_me"];
+const AMBIENCE_IDS: VenueAmbience[] = ["quiet", "cozy_public", "lively", "design_forward", "scenic", "romantic_public"];
+const FORMAT_IDS: VenueFormat[] = ["seated", "walking", "interactive", "indoor", "outdoor"];
+const DIET_IDS: VenueDietary[] = ["vegan", "vegetarian", "halal", "kosher", "gluten_free"];
+const VIBE_ERRORS: Record<Lang, { describe: string; experience: string; relax: string }> = {
+  en: { describe: "Please describe the vibe first.", experience: "Choose at least one experience.", relax: "No verified place matches every requirement. Please relax: " },
+  ru: { describe: "Сначала опишите вайб.", experience: "Выберите хотя бы один формат встречи.", relax: "Нет проверенного места со всеми условиями. Ослабьте ограничение: " },
+  uk: { describe: "Спочатку опишіть вайб.", experience: "Оберіть хоча б один формат зустрічі.", relax: "Немає перевіреного місця з усіма умовами. Послабте обмеження: " },
+  de: { describe: "Beschreibe zuerst die Stimmung.", experience: "Wähle mindestens ein Erlebnis.", relax: "Kein geprüfter Ort erfüllt alle Bedingungen. Bitte lockere: " },
+  pl: { describe: "Najpierw opisz klimat.", experience: "Wybierz co najmniej jeden rodzaj spotkania.", relax: "Żadne zweryfikowane miejsce nie spełnia wszystkich warunków. Poluzuj: " },
+};
+const LABELS: Record<Lang, Record<string, string>> = {
+  en: { conversation: "Easy conversation", coffee_treats: "Coffee & treats", meal_discovery: "Discover food", walk_view: "Walk & views", art_culture: "Art & culture", drinks_evening: "Evening drinks", playful_activity: "Playful activity", surprise_me: "Surprise me", quiet: "Quiet", cozy_public: "Cozy", lively: "Lively", design_forward: "Design-led", scenic: "Scenic", romantic_public: "Romantic", seated: "Seated", walking: "Walking", interactive: "Interactive", indoor: "Indoor", outdoor: "Outdoor", vegan: "Vegan", vegetarian: "Vegetarian", halal: "Halal", kosher: "Kosher", gluten_free: "Gluten-free", alcohol_free: "No alcohol", step_free: "Step-free", required_indoor: "Must be indoors", required_outdoor: "Must be outdoors", free: "Free", inexpensive: "Inexpensive", moderate: "Moderate", max_price: "Maximum price", commute_12_km: "Allow up to 12 km" },
+  ru: { conversation: "Спокойно поговорить", coffee_treats: "Кофе и десерт", meal_discovery: "Новая еда", walk_view: "Прогулка и виды", art_culture: "Искусство", drinks_evening: "Вечерние напитки", playful_activity: "Активность", surprise_me: "Удивите меня", quiet: "Тихо", cozy_public: "Уютно", lively: "Живо", design_forward: "Стильный дизайн", scenic: "Красивый вид", romantic_public: "Романтично", seated: "За столиком", walking: "Прогулка", interactive: "Интерактивно", indoor: "В помещении", outdoor: "На улице", vegan: "Веган", vegetarian: "Вегетарианское", halal: "Халяль", kosher: "Кошер", gluten_free: "Без глютена", alcohol_free: "Без алкоголя", step_free: "Без ступеней", required_indoor: "Только в помещении", required_outdoor: "Только на улице", free: "Бесплатно", inexpensive: "Недорого", moderate: "Умеренно", max_price: "Максимальная цена", commute_12_km: "Разрешить до 12 км" },
+  uk: { conversation: "Спокійно поговорити", coffee_treats: "Кава й десерт", meal_discovery: "Нова їжа", walk_view: "Прогулянка й краєвиди", art_culture: "Мистецтво", drinks_evening: "Вечірні напої", playful_activity: "Активність", surprise_me: "Здивуйте мене", quiet: "Тихо", cozy_public: "Затишно", lively: "Жваво", design_forward: "Стильний дизайн", scenic: "Гарний краєвид", romantic_public: "Романтично", seated: "За столиком", walking: "Прогулянка", interactive: "Інтерактивно", indoor: "У приміщенні", outdoor: "Надворі", vegan: "Веган", vegetarian: "Вегетаріанське", halal: "Халяль", kosher: "Кошер", gluten_free: "Без глютену", alcohol_free: "Без алкоголю", step_free: "Без сходинок", required_indoor: "Лише в приміщенні", required_outdoor: "Лише надворі", free: "Безкоштовно", inexpensive: "Недорого", moderate: "Помірно", max_price: "Максимальна ціна", commute_12_km: "Дозволити до 12 км" },
+  de: { conversation: "Gut reden", coffee_treats: "Kaffee & Süßes", meal_discovery: "Essen entdecken", walk_view: "Spaziergang & Aussicht", art_culture: "Kunst & Kultur", drinks_evening: "Drinks am Abend", playful_activity: "Aktivität", surprise_me: "Überrasch mich", quiet: "Ruhig", cozy_public: "Gemütlich", lively: "Lebhaft", design_forward: "Designorientiert", scenic: "Schöne Aussicht", romantic_public: "Romantisch", seated: "Sitzend", walking: "Spaziergang", interactive: "Interaktiv", indoor: "Drinnen", outdoor: "Draußen", vegan: "Vegan", vegetarian: "Vegetarisch", halal: "Halal", kosher: "Koscher", gluten_free: "Glutenfrei", alcohol_free: "Ohne Alkohol", step_free: "Barrierearm", required_indoor: "Nur drinnen", required_outdoor: "Nur draußen", free: "Kostenlos", inexpensive: "Günstig", moderate: "Moderat", max_price: "Höchstpreis", commute_12_km: "Bis 12 km erlauben" },
+  pl: { conversation: "Spokojna rozmowa", coffee_treats: "Kawa i słodkości", meal_discovery: "Odkrywanie jedzenia", walk_view: "Spacer i widoki", art_culture: "Sztuka i kultura", drinks_evening: "Wieczorne drinki", playful_activity: "Aktywność", surprise_me: "Zaskocz mnie", quiet: "Cicho", cozy_public: "Przytulnie", lively: "Żywo", design_forward: "Dobry design", scenic: "Widokowo", romantic_public: "Romantycznie", seated: "Przy stoliku", walking: "Spacer", interactive: "Interaktywnie", indoor: "W środku", outdoor: "Na zewnątrz", vegan: "Wegańskie", vegetarian: "Wegetariańskie", halal: "Halal", kosher: "Koszerne", gluten_free: "Bez glutenu", alcohol_free: "Bez alkoholu", step_free: "Bez schodów", required_indoor: "Tylko wewnątrz", required_outdoor: "Tylko na zewnątrz", free: "Bezpłatnie", inexpensive: "Niedrogo", moderate: "Umiarkowanie", max_price: "Maksymalna cena", commute_12_km: "Zezwól do 12 km" },
+};
+const label = (id: string): string => LABELS[lang][id] ?? id.replaceAll("_", " ");
+
+function showVibeStage(): void {
+  const stage = document.getElementById("vibe-stage") as HTMLElement | null;
+  if (stage) stage.hidden = false;
+  const suggestions = document.getElementById("vibe-suggestions");
+  if (suggestions && venueState?.suggestions.length) {
+    suggestions.replaceChildren(...venueState.suggestions.map((item) => chipButton(item.experiences.map(label).join(" · "), false, () => {
+      draft = draft ? { ...draft, experiences: item.experiences, ambiences: item.ambiences, formats: item.formats } : draft;
+      const text = document.getElementById("vibe-text") as HTMLTextAreaElement | null;
+      if (text) text.value = item.experiences.map(label).join(", ");
+    })));
+  }
+}
+
+function chipButton(text: string, active: boolean, action: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `vibe-chip${active ? " active" : ""}`;
+  button.textContent = text;
+  button.addEventListener("click", action);
+  return button;
+}
+
+function toggleList<T extends string>(list: T[], value: T): T[] {
+  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value].slice(0, 3);
+}
+
+function renderDraft(): void {
+  if (!draft) return;
+  const text = document.getElementById("vibe-text") as HTMLTextAreaElement | null;
+  if (text && !text.value) text.value = draft.rawText;
+  const review = document.getElementById("vibe-review") as HTMLElement | null;
+  if (review) review.hidden = false;
+  const chips = document.getElementById("vibe-chips");
+  const all = [...EXPERIENCE_IDS, ...AMBIENCE_IDS, ...FORMAT_IDS];
+  if (chips) chips.replaceChildren(...all.map((id) => {
+    const active = draft!.experiences.includes(id as VenueExperience) || draft!.ambiences.includes(id as VenueAmbience) || draft!.formats.includes(id as VenueFormat);
+    return chipButton(label(id), active, () => {
+      if (EXPERIENCE_IDS.includes(id as VenueExperience)) draft!.experiences = toggleList(draft!.experiences, id as VenueExperience);
+      else if (AMBIENCE_IDS.includes(id as VenueAmbience)) draft!.ambiences = toggleList(draft!.ambiences, id as VenueAmbience);
+      else draft!.formats = toggleList(draft!.formats, id as VenueFormat);
+      renderDraft();
+    });
+  }));
+  const constraints = document.getElementById("vibe-constraints");
+  const constraintIds = [...DIET_IDS, "alcohol_free", "step_free", "required_indoor", "required_outdoor", "free", "inexpensive", "moderate", ...(venueState?.selectionError?.startsWith("no_candidates:commute_12_km:") ? ["commute_12_km"] : [])];
+  if (constraints) constraints.replaceChildren(...constraintIds.map((id) => {
+    const hard = draft!.hardConstraints;
+    const active = DIET_IDS.includes(id as VenueDietary) ? hard.dietary.includes(id as VenueDietary) : id === "alcohol_free" ? hard.alcoholFree : id === "step_free" ? hard.stepFree : id === "required_indoor" ? hard.setting === "indoor" : id === "required_outdoor" ? hard.setting === "outdoor" : id === "commute_12_km" ? hard.maxCommuteKm === 12 : hard.maxPrice === id;
+    return chipButton(label(id), active, () => {
+      if (DIET_IDS.includes(id as VenueDietary)) hard.dietary = toggleList(hard.dietary, id as VenueDietary);
+      else if (id === "alcohol_free") hard.alcoholFree = !hard.alcoholFree;
+      else if (id === "step_free") hard.stepFree = !hard.stepFree;
+      else if (id === "required_indoor") hard.setting = hard.setting === "indoor" ? null : "indoor";
+      else if (id === "required_outdoor") hard.setting = hard.setting === "outdoor" ? null : "outdoor";
+      else if (id === "commute_12_km") hard.maxCommuteKm = hard.maxCommuteKm === 12 ? 8 : 12;
+      else hard.maxPrice = hard.maxPrice === id ? null : id as "free" | "inexpensive" | "moderate";
+      renderDraft();
+    });
+  }));
+}
+
+document.getElementById("vibe-back")?.addEventListener("click", () => {
+  const stage = document.getElementById("vibe-stage") as HTMLElement | null;
+  if (stage) stage.hidden = true;
+});
+document.getElementById("vibe-interpret")?.addEventListener("click", async () => {
+  if (!app) return;
+  const text = (document.getElementById("vibe-text") as HTMLTextAreaElement | null)?.value.trim() ?? "";
+  const error = document.getElementById("vibe-error");
+  if (!text) { if (error) error.textContent = VIBE_ERRORS[lang].describe; return; }
+  try {
+    draft = await interpretVenueIntentTma(app.initData, matchId, text, { lat: selectedLat, lng: selectedLng, address: selectedAddress });
+    if (error) error.textContent = "";
+    renderDraft();
+  } catch { if (error) error.textContent = tr(lang, "errNetwork"); }
+});
+document.getElementById("vibe-confirm")?.addEventListener("click", async () => {
+  if (!app || !draft) return;
+  const error = document.getElementById("vibe-error");
+  if (draft.experiences.length === 0) { if (error) error.textContent = VIBE_ERRORS[lang].experience; return; }
+  try {
+    venueState = await confirmVenueIntentTma(app.initData, matchId, {
+      experiences: draft.experiences, ambiences: draft.ambiences, formats: draft.formats,
+      hardConstraints: draft.hardConstraints,
+      origin: { lat: selectedLat, lng: selectedLng, address: selectedAddress },
+    });
+    if (venueState.selectionError?.startsWith("no_candidates:")) {
+      draft = venueState.intent;
+      renderDraft();
+      if (error) error.textContent = VIBE_ERRORS[lang].relax + label(venueState.selectionError.split(":")[1] ?? "");
+      return;
+    }
+    app.HapticFeedback?.notificationOccurred?.("success");
+    setTimeout(() => app.close(), 250);
+  } catch { if (error) error.textContent = tr(lang, "errNetwork"); }
+});
 
 function errorMessage(err: CalendarApiError): string {
   switch (err.reason) {

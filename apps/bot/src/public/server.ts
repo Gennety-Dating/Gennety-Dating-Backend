@@ -83,7 +83,7 @@ if (env.PUBLIC_CORS_ORIGIN === "*") {
 app.use(
   cors({
     origin: publicCorsOrigin,
-    methods: ["GET", "POST", "PATCH", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "OPTIONS"],
   }),
 );
 // Persona webhook MUST be mounted before express.json — the signature is HMAC

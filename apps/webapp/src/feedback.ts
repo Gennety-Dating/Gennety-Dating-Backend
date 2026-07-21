@@ -53,6 +53,9 @@ const lang: Lang = SUPPORTED_LANGS.has(queryLang as Lang) ? (queryLang as Lang) 
 document.documentElement?.setAttribute("lang", lang);
 
 type SecondDate = "yes" | "maybe" | "no";
+type VenueFit = "yes" | "partly" | "no";
+const VENUE_REASON_IDS = ["wrong_vibe", "too_loud", "too_expensive", "route_unfair", "accessibility", "closed_or_unavailable"] as const;
+type VenueReason = typeof VENUE_REASON_IDS[number];
 
 interface I18nStrings {
   heroTitle: string;
@@ -221,6 +224,13 @@ const T: Record<Lang, I18nStrings> = {
   },
 };
 const strings = T[lang];
+const VFIT: Record<Lang, { title: string; yes: string; partly: string; no: string; reasons: Record<VenueReason, string> }> = {
+  en: { title: "Did the place match your vibe?", yes: "Yes", partly: "Partly", no: "No", reasons: { wrong_vibe: "Wrong vibe", too_loud: "Too loud", too_expensive: "Too expensive", route_unfair: "Route felt unfair", accessibility: "Accessibility", closed_or_unavailable: "Closed or unavailable" } },
+  ru: { title: "Место совпало с вашим вайбом?", yes: "Да", partly: "Частично", no: "Нет", reasons: { wrong_vibe: "Не тот вайб", too_loud: "Слишком шумно", too_expensive: "Слишком дорого", route_unfair: "Неудобный маршрут", accessibility: "Доступность", closed_or_unavailable: "Закрыто или недоступно" } },
+  uk: { title: "Місце збіглося з вашим вайбом?", yes: "Так", partly: "Частково", no: "Ні", reasons: { wrong_vibe: "Не той вайб", too_loud: "Надто гучно", too_expensive: "Надто дорого", route_unfair: "Незручний маршрут", accessibility: "Доступність", closed_or_unavailable: "Зачинено або недоступно" } },
+  de: { title: "Hat der Ort zu deiner Stimmung gepasst?", yes: "Ja", partly: "Teilweise", no: "Nein", reasons: { wrong_vibe: "Falsche Stimmung", too_loud: "Zu laut", too_expensive: "Zu teuer", route_unfair: "Unfairer Weg", accessibility: "Barrierefreiheit", closed_or_unavailable: "Geschlossen oder nicht verfügbar" } },
+  pl: { title: "Czy miejsce pasowało do twojego klimatu?", yes: "Tak", partly: "Częściowo", no: "Nie", reasons: { wrong_vibe: "Nie ten klimat", too_loud: "Za głośno", too_expensive: "Za drogo", route_unfair: "Niesprawiedliwy dojazd", accessibility: "Dostępność", closed_or_unavailable: "Zamknięte lub niedostępne" } },
+};
 
 const NS = "gennety.feedback";
 function draftKey(id: string): string {
@@ -231,12 +241,14 @@ interface DraftState {
   chemistry: number;
   wantsSecondDate: SecondDate | null;
   text: string;
+  venueFit: VenueFit | null;
+  venueFitReasons: VenueReason[];
   /** True iff the user has touched chemistry or second-date (text alone doesn't count). */
   touched: boolean;
 }
 
 function defaultDraft(): DraftState {
-  return { chemistry: 5, wantsSecondDate: null, text: "", touched: false };
+  return { chemistry: 5, wantsSecondDate: null, text: "", venueFit: null, venueFitReasons: [], touched: false };
 }
 
 async function loadDraft(id: string): Promise<DraftState> {
@@ -248,6 +260,8 @@ async function loadDraft(id: string): Promise<DraftState> {
       chemistry: clampInt(parsed.chemistry ?? 5, 1, 10),
       wantsSecondDate: isSecondDate(parsed.wantsSecondDate) ? parsed.wantsSecondDate : null,
       text: typeof parsed.text === "string" ? parsed.text : "",
+      venueFit: parsed.venueFit === "yes" || parsed.venueFit === "partly" || parsed.venueFit === "no" ? parsed.venueFit : null,
+      venueFitReasons: Array.isArray(parsed.venueFitReasons) ? parsed.venueFitReasons.filter((value): value is VenueReason => VENUE_REASON_IDS.includes(value as VenueReason)).slice(0, 3) : [],
       touched: parsed.touched === true,
     };
   } catch {
@@ -334,6 +348,8 @@ interface PostBody {
   wantsSecondDate: SecondDate;
   text: string;
   language: Lang;
+  venueFit: VenueFit;
+  venueFitReasons: VenueReason[];
 }
 interface PostError {
   status: number;
@@ -414,6 +430,10 @@ async function main(): Promise<void> {
   document.getElementById("sd-yes")!.textContent = strings.sdYes;
   document.getElementById("sd-maybe")!.textContent = strings.sdMaybe;
   document.getElementById("sd-no")!.textContent = strings.sdNo;
+  document.getElementById("venue-fit-label")!.textContent = VFIT[lang].title;
+  document.getElementById("venue-fit-yes")!.textContent = VFIT[lang].yes;
+  document.getElementById("venue-fit-partly")!.textContent = VFIT[lang].partly;
+  document.getElementById("venue-fit-no")!.textContent = VFIT[lang].no;
   document.getElementById("footer-note")!.textContent = strings.footerNote;
   document.title = strings.heroTitle;
 
@@ -426,11 +446,14 @@ async function main(): Promise<void> {
   const $thumb = document.getElementById("slider-thumb") as HTMLButtonElement;
   const $value = document.getElementById("slider-value") as HTMLSpanElement;
   const $segmented = document.getElementById("sd-segmented") as HTMLDivElement;
+  const $venueSegmented = document.getElementById("venue-fit-segmented") as HTMLDivElement;
+  const $venueReasons = document.getElementById("venue-fit-reasons") as HTMLDivElement;
   const $notes = document.getElementById("notes") as HTMLTextAreaElement;
   const $hint = document.getElementById("notes-hint") as HTMLSpanElement;
   const $counter = document.getElementById("notes-counter") as HTMLSpanElement;
 
   const segmentBtns = $segmented.querySelectorAll<HTMLButtonElement>(".segment");
+  const venueSegmentBtns = $venueSegmented.querySelectorAll<HTMLButtonElement>(".segment");
 
   function persist(): void {
     saveDraft(matchId, state);
@@ -458,6 +481,34 @@ async function main(): Promise<void> {
     } else {
       $segmented.classList.remove("is-selected");
     }
+  }
+
+  function renderVenueFit(): void {
+    let idx = -1;
+    venueSegmentBtns.forEach((btn, i) => {
+      const on = btn.dataset.value === state.venueFit;
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+      if (on) idx = i;
+    });
+    $venueSegmented.classList.toggle("is-selected", idx >= 0);
+    if (idx >= 0) $venueSegmented.style.setProperty("--seg-index", String(idx));
+    $venueReasons.hidden = state.venueFit === null || state.venueFit === "yes";
+    $venueReasons.replaceChildren(...VENUE_REASON_IDS.map((id) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "reason-chip";
+      button.textContent = VFIT[lang].reasons[id];
+      button.setAttribute("aria-pressed", state.venueFitReasons.includes(id) ? "true" : "false");
+      button.addEventListener("click", () => {
+        state.venueFitReasons = state.venueFitReasons.includes(id)
+          ? state.venueFitReasons.filter((value) => value !== id)
+          : [...state.venueFitReasons, id].slice(0, 3);
+        state.touched = true;
+        persist();
+        renderVenueFit();
+      });
+      return button;
+    }));
   }
 
   function renderCounter(): void {
@@ -551,6 +602,19 @@ async function main(): Promise<void> {
       window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("light");
     });
   }
+  for (const btn of venueSegmentBtns) {
+    btn.addEventListener("click", () => {
+      const value = btn.dataset.value;
+      if (value !== "yes" && value !== "partly" && value !== "no") return;
+      state.venueFit = value;
+      if (value === "yes") state.venueFitReasons = [];
+      state.touched = true;
+      renderVenueFit();
+      persist();
+      syncSubmit();
+      window.Telegram?.WebApp?.HapticFeedback?.impactOccurred("light");
+    });
+  }
 
   // ── Textarea + cycling placeholder
 
@@ -583,12 +647,13 @@ async function main(): Promise<void> {
   // Initial paint.
   renderSlider();
   renderSegmented();
+  renderVenueFit();
   renderCounter();
   syncSubmit();
 
   async function handleSubmit(): Promise<void> {
     if (!app || submitting || !state.touched) return;
-    if (!state.wantsSecondDate) {
+    if (!state.wantsSecondDate || !state.venueFit) {
       // We require the second-date pick before sending — chemistry alone is too
       // ambiguous a signal for the matching adjustment. Nudge the user and
       // pulse the segmented control.
@@ -616,6 +681,8 @@ async function main(): Promise<void> {
       wantsSecondDate: state.wantsSecondDate,
       text: state.text,
       language: lang,
+      venueFit: state.venueFit,
+      venueFitReasons: state.venueFitReasons,
     });
 
     if (err) {

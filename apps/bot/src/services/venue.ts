@@ -25,12 +25,12 @@
  * Score (`rating * log10(userRatingCount + 10) * distanceFactor`) picks
  * the strongest candidate over the closest-but-mediocre one.
  *
- * Multi-step fallback so scheduling never wedges:
+ * Candidate search:
  *   1. searchNearby with strict gates
- *   2. searchNearby with relaxed price ceiling (allow EXPENSIVE)
- *   3. searchText biased on midpoint (catches non-categorised places
+ *   2. searchText biased on midpoint (catches non-categorised places
  *      that match the keyword)
- *   4. localStubVenueClient (last resort — match still finalises)
+ * Missing providers and empty results fail closed. Test-only stub clients must
+ * be injected explicitly and are never selected by production code.
  *
  * AGENTS.md: no new dependencies. We use `fetch` + a typed wrapper
  * rather than pulling in `@googlemaps/google-maps-services-js`.
@@ -41,7 +41,7 @@ import type { VenueCategory } from "./vibe-parser.js";
 export interface Venue {
   name: string;
   address: string;
-  /** Google Maps deep-link. Null when the picker fell back to the local stub. */
+  /** Google Maps deep-link. Null only for explicitly injected test fixtures. */
   googleMapsUri: string | null;
   /**
    * Absolute, operator-owned venue photo URL (curated venues only). Clean
@@ -66,6 +66,14 @@ export interface Venue {
   rating?: number | null;
   userRatingCount?: number | null;
   primaryType?: string | null;
+  /** Stable provenance required for every Venue Intent V2 assignment. */
+  placeId?: string | null;
+  source?: "places" | "curated" | "legacy";
+  lat?: number | null;
+  lng?: number | null;
+  priceLevel?: string | null;
+  openingHours?: RegularOpeningHours | null;
+  utcOffsetMinutes?: number | null;
 }
 
 /** Legacy (pre-concierge) input. Retained for tests + rollback path. */
@@ -201,7 +209,7 @@ const PLACES_TYPE_MAP: Record<VenueCategory, string[]> = {
 };
 
 // ---------------------------------------------------------------------------
-// Local stub
+// Legacy local-only fixtures
 // ---------------------------------------------------------------------------
 
 const STUB_CAFES: Record<string, Venue> = {
@@ -241,17 +249,19 @@ export function localStubVenueClient(): VenueClient {
         googleMapsUri: null,
       };
     },
-    async pickAtMidpoint(input: MidpointVenueInput): Promise<Venue> {
-      const label = input.keywords[0]
-        ? `${input.keywords[0]} ${input.category}`
-        : input.category;
-      return {
-        name: `Neighbourhood ${label}`.replace(/_/g, " "),
-        address: `Near ${input.lat.toFixed(3)}, ${input.lng.toFixed(3)}`,
-        googleMapsUri: null,
-      };
+    async pickAtMidpoint(): Promise<Venue> {
+      throw new VenueSelectionError("provider_unavailable", "No Places provider configured");
     },
   };
+}
+
+export type VenueSelectionFailure = "no_candidates" | "provider_unavailable";
+
+export class VenueSelectionError extends Error {
+  constructor(public readonly code: VenueSelectionFailure, message: string) {
+    super(message);
+    this.name = "VenueSelectionError";
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -331,13 +341,7 @@ export function createPlacesVenueClient(apiKey: string): VenueClient {
       const strictPicked = pickBest(tier1, input, strictGate);
       if (strictPicked) return placeToVenue(strictPicked);
 
-      // Step 2 — relax price ceiling for food categories. Other gates
-      // (operational + rating + count) stay in place.
-      const relaxedGate = (p: PlaceV1) => gate(p, input.category, /* strict */ false);
-      const relaxedPicked = pickBest(tier1, input, relaxedGate);
-      if (relaxedPicked) return placeToVenue(relaxedPicked);
-
-      // Step 3 — text search with the keyword + category, biased on the
+      // Step 2 — text search with the canonical keyword + category, biased on the
       // midpoint. Catches places that aren't categorised in `includedTypes`
       // but match the keyword (e.g. a "gallery cafe" indexed only as
       // gallery).
@@ -351,15 +355,10 @@ export function createPlacesVenueClient(apiKey: string): VenueClient {
         lng: input.lng,
         radiusMeters: input.radiusMeters,
       });
-      const tier3Picked = pickBest(tier3, input, relaxedGate);
+      const tier3Picked = pickBest(tier3, input, strictGate);
       if (tier3Picked) return placeToVenue(tier3Picked);
 
-      // No tier produced a place that clears the quality gate. We deliberately
-      // do NOT fall back to "any operational result" — that path used to pitch
-      // gas stations / convenience stores as date venues. Throwing here routes
-      // to the local stub (see `pickVenueAtMidpoint`), which is a safe, clearly
-      // generic placeholder rather than a real-but-wrong place.
-      throw new Error("Places API returned no usable results");
+      throw new VenueSelectionError("no_candidates", "Places API returned no eligible results");
     },
   };
 }
@@ -449,6 +448,13 @@ function placeToVenue(p: PlaceV1): Venue {
     rating: p.rating ?? null,
     userRatingCount: p.userRatingCount ?? null,
     primaryType: p.primaryType ?? null,
+    placeId: p.id ?? null,
+    source: "places",
+    lat: p.location?.latitude ?? null,
+    lng: p.location?.longitude ?? null,
+    priceLevel: p.priceLevel ?? null,
+    openingHours: p.regularOpeningHours ?? null,
+    utcOffsetMinutes: p.utcOffsetMinutes ?? null,
   };
 }
 
@@ -617,14 +623,10 @@ export async function pickVenueForMatch(
   input: VenueInput,
   client?: VenueClient,
 ): Promise<Venue> {
+  if (client) return client.pick(input);
   const apiKey = process.env.PLACES_API_KEY ?? "";
-  const impl = client ?? (apiKey ? createPlacesVenueClient(apiKey) : localStubVenueClient());
-  try {
-    return await impl.pick(input);
-  } catch (err) {
-    console.warn("Venue pick failed, using stub:", err);
-    return localStubVenueClient().pick(input);
-  }
+  if (!apiKey) throw new VenueSelectionError("provider_unavailable", "No Places provider configured");
+  return createPlacesVenueClient(apiKey).pick(input);
 }
 
 /**
@@ -712,14 +714,21 @@ export async function pickVenueAtMidpoint(
   client?: VenueClient,
 ): Promise<Venue> {
   const apiKey = process.env.PLACES_API_KEY ?? "";
-  const impl = client ?? (apiKey ? createPlacesVenueClient(apiKey) : localStubVenueClient());
+  if (!client && !apiKey) {
+    throw new VenueSelectionError("provider_unavailable", "PLACES_API_KEY is not configured");
+  }
+  const impl = client ?? createPlacesVenueClient(apiKey);
   try {
     if (impl.pickAtMidpoint) {
       return await impl.pickAtMidpoint(input);
     }
-    return await localStubVenueClient().pickAtMidpoint!(input);
+    throw new VenueSelectionError("provider_unavailable", "Venue client has no midpoint picker");
   } catch (err) {
-    console.warn("Midpoint venue pick failed, using stub:", err);
-    return localStubVenueClient().pickAtMidpoint!(input);
+    if (err instanceof VenueSelectionError) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    if (/returned no eligible|no results/i.test(message)) {
+      throw new VenueSelectionError("no_candidates", message);
+    }
+    throw new VenueSelectionError("provider_unavailable", message);
   }
 }

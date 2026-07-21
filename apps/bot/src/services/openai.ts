@@ -34,6 +34,8 @@ export interface OpenAICallOptions {
   fetchFn?: typeof fetch;
   /** Temperature (default: 0.7 for text, 0.3 for JSON). */
   temperature?: number;
+  /** Optional strict Structured Outputs schema. */
+  jsonSchema?: { name: string; schema: Record<string, unknown> };
 }
 
 /**
@@ -67,7 +69,16 @@ export async function callOpenAIJson<T>(
         model,
         max_completion_tokens: maxTokens,
         temperature,
-        response_format: { type: "json_object" },
+        response_format: options.jsonSchema
+          ? {
+              type: "json_schema",
+              json_schema: {
+                name: options.jsonSchema.name,
+                strict: true,
+                schema: options.jsonSchema.schema,
+              },
+            }
+          : { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },

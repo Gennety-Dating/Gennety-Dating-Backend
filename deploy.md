@@ -1142,3 +1142,17 @@ Then check:
 - Public `/v1/ping` returns `{ "ok": true, ... }`.
 - Calendar, onboarding, and verification Mini Apps return HTTP `200`.
 - Admin API returns HTTP `401` without bearer auth.
+# Venue Intent V2 rollout
+
+This release is additive. Before enabling it, take the standard production DB
+backup, deploy code, then run the documented production `db:push`. Do not drop
+legacy vibe or venue columns. Backfill curated rows with `city_key` (`ua:kyiv`,
+`ua:kharkiv`, `ua:odesa`) via the reviewed venue import inputs; duplicate legacy
+domain rows may remain because runtime deduplicates them.
+
+Start with all three flags at zero/off. Then enable the master flag with shadow
+10% and live 0%. Keep shadow for at least seven days and 30 completed pairs.
+Advance live 10% → 50% → 100% with at least 48 hours per step. Roll live back to
+0 immediately on any hard-constraint violation, fake/closed assignment,
+finalisation error regression, or venue-change-rate increase over baseline by
+more than five percentage points. Shadow can remain on during rollback.

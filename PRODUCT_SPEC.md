@@ -1792,3 +1792,37 @@ excluding an otherwise-complete user from matching.
 `de`/`pl` blocks from their own modules. Onboarding/menu/Aether agents
 auto-detect the user's language and forbid English enum injection into
 non-English replies.
+# Venue Intent V2 (2026-07-21)
+
+Venue negotiation is a two-step concierge flow on Telegram and iOS: departure
+origin → free-text vibe → editable canonical chips → one explicit confirmation.
+The initial venue is always selected automatically; users never browse a venue
+catalog in this flow. Confirmed V2 intent is stored per participant and is the
+only input to finalisation; ordinary Telegram messages cannot overwrite it and
+the server never re-parses it at selection time.
+
+Experience IDs: `conversation`, `coffee_treats`, `meal_discovery`, `walk_view`,
+`art_culture`, `drinks_evening`, `playful_activity`, `surprise_me`. Ambience IDs:
+`quiet`, `cozy_public`, `lively`, `design_forward`, `scenic`,
+`romantic_public`. Format IDs: `seated`, `walking`, `interactive`, `indoor`,
+`outdoor`. These are soft preferences. Only explicitly confirmed dietary,
+alcohol-free, step-free, required setting, price and commute relaxation are hard.
+
+Incompatible preferences use a deterministic bridge lane and max-min pair fit;
+they never silently collapse to café. Every assigned V2 venue must be a real,
+operational, open-at-slot public place with provenance, stable place/curated ID,
+actual coordinates and Maps URI. Unknown evidence fails hard constraints and
+unknown hours fail closed. If no candidate satisfies the pair, the match stays
+`negotiating_venue` and the concierge identifies one constraint to relax. A
+provider outage uses an eligible curated venue or durable 1/5/15-minute retries;
+it never schedules a placeholder. The paid post-assignment Venue Change remains
+unchanged.
+
+Post-date feedback records `yes | partly | no` for whether the venue matched
+the confirmed vibe, with optional structured reason chips. Only positive or
+unrated historical intents can become future smart suggestions; historical
+hard constraints are never reactivated.
+
+Release is controlled by `VENUE_INTENT_V2_ENABLED`, deterministic live rollout
+percentage and independent shadow percentage. Shadow ranking writes only the
+append-only structured selection log and cannot mutate a match or notify users.

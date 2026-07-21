@@ -15,6 +15,8 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 const ALLOWED_LANGS: ReadonlySet<Language> = new Set(SUPPORTED_LANGUAGES);
 const ALLOWED_SECOND_DATE = new Set(["yes", "maybe", "no"] as const);
+const ALLOWED_VENUE_FIT = new Set(["yes", "partly", "no"] as const);
+const ALLOWED_VENUE_REASONS = new Set(["wrong_vibe", "too_loud", "too_expensive", "route_unfair", "accessibility", "closed_or_unavailable"]);
 type SecondDateAnswer = "yes" | "maybe" | "no";
 
 const MAX_TEXT_LEN = 1000;
@@ -25,6 +27,8 @@ interface FeedbackBody {
   chemistry?: unknown;
   wantsSecondDate?: unknown;
   language?: unknown;
+  venueFit?: unknown;
+  venueFitReasons?: unknown;
 }
 
 /**
@@ -165,6 +169,12 @@ export function createFeedbackRouter(api: Api<RawApi>): Router {
       return;
     }
     const wantsSecondDate = wantsSecondDateRaw as SecondDateAnswer;
+    const venueFit = typeof body.venueFit === "string" && ALLOWED_VENUE_FIT.has(body.venueFit as "yes" | "partly" | "no")
+      ? body.venueFit as "yes" | "partly" | "no"
+      : null;
+    const venueFitReasons = Array.isArray(body.venueFitReasons)
+      ? [...new Set(body.venueFitReasons.filter((value): value is string => typeof value === "string" && ALLOWED_VENUE_REASONS.has(value)))].slice(0, 3)
+      : [];
 
     // The form may submit empty `text` if the user only moved the slider /
     // tapped a chip — still a valid signal. Compose the text-blob ourselves.
@@ -205,6 +215,18 @@ export function createFeedbackRouter(api: Api<RawApi>): Router {
             : 400;
       res.status(status).json({ error: result.reason });
       return;
+    }
+
+    if (venueFit) {
+      const participant = await prisma.match.findUnique({
+        where: { id: matchId },
+        select: { userAId: true, userBId: true },
+      });
+      if (participant?.userAId === user.id) {
+        await prisma.match.update({ where: { id: matchId }, data: { venueFitByA: venueFit, venueFitReasonsByA: venueFitReasons } });
+      } else if (participant?.userBId === user.id) {
+        await prisma.match.update({ where: { id: matchId }, data: { venueFitByB: venueFit, venueFitReasonsByB: venueFitReasons } });
+      }
     }
 
     // Confirmation DM — symmetric with the voice path's `ctx.reply`. Best-effort:
