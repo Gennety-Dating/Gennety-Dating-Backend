@@ -882,6 +882,9 @@ describe("sendMatchProposal — photo + synergy dispatch", () => {
       key in overrides ? ((overrides as Record<string, unknown>)[key] as T) : fallback;
     return {
       id: "match-photo-1",
+      // `sendMatchProposal` bails unless the row is still `proposed` (dispatch-race
+      // guard added in ca380c7); the fixture must carry it.
+      status: "proposed",
       pitchForA: pick<string | null>("pitchForA", "You two click. Both love jazz."),
       pitchForB: pick<string | null>("pitchForB", "You two click. Both love jazz."),
       synergyScore: pick<number | null>("synergyScore", 87),
