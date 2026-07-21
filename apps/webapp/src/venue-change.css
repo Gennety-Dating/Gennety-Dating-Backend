@@ -1833,3 +1833,57 @@ a.vc-info-row .vc-info-text {
   background: #fff;
   color: var(--accent);
 }
+
+/* ── §Premium: locked premium venues + counterfactual ─────────────── */
+.vc-card.is-premium {
+  position: relative;
+  overflow: visible;
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft), var(--glass-edge);
+}
+.vc-premium-plate {
+  position: absolute;
+  top: -9px;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 12px var(--shadow);
+}
+.vc-premium-plate-ico {
+  width: 12px;
+  height: 12px;
+}
+.vc-heart.is-locked {
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+}
+.vc-premium-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 11px 14px;
+  border: 1px dashed var(--accent);
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.vc-premium-hint-ico {
+  width: 15px;
+  height: 15px;
+}

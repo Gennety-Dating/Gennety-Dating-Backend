@@ -29,7 +29,8 @@ export type IconName =
   | "bolt"
   | "letter"
   | "check"
-  | "chevron";
+  | "chevron"
+  | "lock";
 
 /**
  * Path data per icon. `solid: true` icons paint with `fill: currentColor` and
@@ -130,6 +131,13 @@ const ICONS: Record<IconName, { d: string[]; solid?: boolean }> = {
   },
   chevron: {
     d: ["M9.2 5.6 15.6 12l-6.4 6.4"],
+  },
+  // Padlock — the "premium, locked" state on a venue's select button.
+  lock: {
+    d: [
+      "M6 10.5h12a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 18 19.5H6A1.5 1.5 0 0 1 4.5 18v-6A1.5 1.5 0 0 1 6 10.5Z",
+      "M8 10.5V8a4 4 0 0 1 8 0v2.5",
+    ],
   },
 };
 

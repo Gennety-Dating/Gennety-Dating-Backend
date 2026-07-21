@@ -117,6 +117,8 @@ interface TelegramWebApp {
   sendData(data: string): void;
   /** Native modal alert — used to surface POST errors to the user. */
   showAlert(message: string, callback?: () => void): void;
+  /** Native confirm popup (Bot API 6.2+) — OK/Cancel; callback gets `true` on OK. */
+  showConfirm?(message: string, callback?: (confirmed: boolean) => void): void;
   /**
    * Request the user's phone number (Bot API 6.9+). Shows a native consent
    * popup; on accept Telegram delivers the contact to the BOT as a trusted

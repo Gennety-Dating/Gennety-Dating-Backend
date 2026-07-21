@@ -710,6 +710,11 @@ export interface VenueBoardState {
   express: boolean;
   expressAvailable: boolean;
   settled: { name: string; address: string; mapsUri: string | null; peerPaid: boolean } | null;
+  /** §Premium: either participant is premium → premium venues are selectable. */
+  pairPremiumActive?: boolean;
+  /** §Premium: caller has a paying action but isn't premium → show the "free with
+   * Premium" counterfactual at the pay step. */
+  premiumWouldWaive?: boolean;
 }
 
 export interface VenueChangeCatalogItem {
@@ -721,6 +726,9 @@ export interface VenueChangeCatalogItem {
   lng: number;
   mapsUri: string | null;
   category: string;
+  /** §Premium: "base" | "premium". Premium cards show a plate + a locked button
+   * unless a participant is premium. */
+  tier?: string;
   distanceKm: number;
   photoUrl: string | null;
   /** Google Places photo resource names → resolved via `venueChangePhotoUrl`. */
@@ -838,6 +846,27 @@ export async function venueStarsInvoice(
   key?: string,
 ): Promise<{ link: string; stars: number }> {
   const body = await venuePost(initData, "stars-invoice", { matchId, mode, key });
+  return { link: String(body.link), stars: Number(body.stars) };
+}
+
+/**
+ * §Premium: mint the recurring Telegram Stars subscription invoice from inside a
+ * Mini App (opened with WebApp.openInvoice). Used by the venue-change board's
+ * locked premium cards to unlock the tier in place.
+ */
+export async function premiumStarsInvoice(
+  initData: string,
+): Promise<{ link: string; stars: number }> {
+  const res = await fetch(`${apiBase}/v1/premium/stars-invoice`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `tma ${initData}`,
+    },
+    body: JSON.stringify({ product: "premium" }),
+  });
+  if (!res.ok) throw await toError(res);
+  const body = (await res.json()) as { link: string; stars: number };
   return { link: String(body.link), stars: Number(body.stars) };
 }
 
