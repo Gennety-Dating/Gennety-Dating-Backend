@@ -20,3 +20,4 @@ tmp/
 .env.local.bak*
 .env*.bak*
 .gstack/
+.codex/skills/remotion-*

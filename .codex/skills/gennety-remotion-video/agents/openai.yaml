@@ -1,0 +1,5 @@
+interface:
+  display_name: "Gennety Remotion Video"
+  short_description: "Brief, design, build, and QA Gennety videos"
+  default_prompt: "Use $gennety-remotion-video to brief, plan, build, and QA a new Gennety motion video in Remotion."
+  brand_color: "#8B253B"
