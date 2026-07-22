@@ -238,6 +238,34 @@ describe("onboarding collector parsing", () => {
     ).toBe(false);
   });
 
+  it("does not read a bare 'both' inside free-text as a preference answer", () => {
+    // A partner-preferences / vibe answer that merely mentions "both" must NOT
+    // clobber the matching-critical `preference` hard filter.
+    for (const [text, question] of [
+      ["someone who values both career and family", "partner_preferences"],
+      ["chilling with both my close friends", "friday_vibe"],
+      ["підходить для обох з нас", "partner_preferences"],
+    ] as const) {
+      expect(
+        deterministicCandidates(text, question).some(
+          ({ field }) => field === "preference",
+        ),
+      ).toBe(false);
+    }
+    // The bare "both" is still a valid direct answer to the preference question.
+    expect(
+      deterministicCandidates("both", "preference").find(
+        ({ field }) => field === "preference",
+      )?.value,
+    ).toBe("both");
+    // An unambiguous "men and women" statement is still captured anywhere.
+    expect(
+      deterministicCandidates("open to men and women honestly", "partner_preferences").find(
+        ({ field }) => field === "preference",
+      )?.value,
+    ).toBe("both");
+  });
+
   it.each([
     ["Девушка.", "female"],
     ["ж", "female"],

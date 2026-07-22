@@ -602,17 +602,24 @@ function preferenceCandidate(
   // understands ASCII word characters), so short forms like "оба" cannot fire
   // inside another word ("обаятельный").
   const matchable = matchableText(text);
+  // Only UNAMBIGUOUS "men and women" statements fire regardless of the current
+  // question (multi-field harvesting): the two genders are named explicitly, so
+  // this cannot be a stray remark. Bare "both"/"обоих"/"обох" is a weak signal
+  // — "someone who values both career and family" at partner_preferences must
+  // NOT be read as preference=both — so it is scoped to the preference question
+  // in `colloquialBoth` below, alongside the other colloquial forms.
   const both = matchable.match(
-    /\b(?:both|men and women|women and men|all genders)\b|(?<!\p{L})(?:и парни и девушки|и мужчины и женщины|і хлопці і дівчата|обоих|обох|mężczyźni i kobiety|männer und frauen)(?!\p{L})/iu,
+    /\b(?:men and women|women and men|all genders)\b|(?<!\p{L})(?:и парни и девушки|и мужчины и женщины|і хлопці і дівчата|mężczyźni i kobiety|männer und frauen)(?!\p{L})/iu,
   );
   if (both) return { field: "preference", evidence: both[0], value: "both" };
 
-  // Colloquial "both" forms that only make sense as a direct answer to the
-  // preference question ("и тех, и тех", "either", "оба") — scoped to the
-  // current question so they can never fire inside unrelated free text.
+  // Colloquial / bare "both" forms that only make sense as a direct answer to
+  // the preference question ("both", "и тех, и тех", "either", "оба") — scoped
+  // to the current question so they can never fire inside unrelated free text
+  // (partner preferences, the Friday-night vibe, etc.).
   if (question === "preference") {
     const colloquialBoth = matchable.match(
-      /\b(?:both of them|everyone|either|anyone|beide)\b|(?<!\p{L})(?:тех и тех|тих і тих|оба|обе|обеих|обоє|обидва|обидві|oboje|obie grupy)(?!\p{L})/iu,
+      /\b(?:both|both of them|everyone|either|anyone|beide)\b|(?<!\p{L})(?:тех и тех|тих і тих|оба|обе|обеих|обоих|обох|обоє|обидва|обидві|oboje|obie grupy)(?!\p{L})/iu,
     );
     if (colloquialBoth) {
       return { field: "preference", evidence: colloquialBoth[0], value: "both" };
