@@ -1,9 +1,17 @@
 import { prisma, type Prisma } from "@gennety/db";
 import {
   typePreferenceMultiplier,
+  setForGender,
   type PreferenceVector,
   type PhotoAttrs,
+  type RadarSet,
 } from "@gennety/shared";
+
+/** Per-radar-set preference vectors stored on `Profile.typePrefTags`. A hetero
+ *  viewer populates only the one set they were shown; a `both` viewer populates
+ *  both. Scoring selects the sub-vector matching the CANDIDATE's gender, so male
+ *  and female signal never conflate on shared attribute values. */
+export type TypePrefTags = Partial<Record<RadarSet, PreferenceVector>>;
 import { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
 import { refreshAllDirtyEmbeddings } from "../workers/embedding-refresh.js";
 import {
@@ -381,9 +389,10 @@ export interface SeekerProfile {
    *  the user never set one. Drives the `V_agePref` multiplier. */
   ageRangeMin: number | null;
   ageRangeMax: number | null;
-  /** Compiled Type Radar preference vector (`Profile.typePrefTags`); null when
-   *  the user hasn't done the radar → `V_type` stays neutral. */
-  typePrefTags?: PreferenceVector | null;
+  /** Compiled Type Radar preference vectors per set (`Profile.typePrefTags`);
+   *  null when the user hasn't done the radar → `V_type` stays neutral. Scoring
+   *  picks the sub-vector matching the candidate's gender. */
+  typePrefTags?: TypePrefTags | null;
 }
 
 export interface ScoredCandidate {
@@ -885,11 +894,17 @@ export function scoreCandidate(
     candidate.age,
   );
   // V_type: appearance-preference multiplier from the Type Radar. Neutral (1.0)
-  // unless the feature is enabled with a sub-1 floor AND both the seeker has
-  // radar signal and this candidate carries overlapping appearance tags.
+  // unless the feature is enabled with a sub-1 floor AND the seeker has radar
+  // signal for the CANDIDATE's gender AND this candidate carries overlapping
+  // appearance tags. The per-set lookup keeps male/female signal from
+  // conflating on shared attribute values (athletic/sporty/edgy/tattoos).
+  const typePref =
+    seeker.typePrefTags && candidate.gender
+      ? seeker.typePrefTags[setForGender(candidate.gender as "male" | "female")]
+      : undefined;
   const vType =
-    seeker.typePrefTags && candidate.appearanceTags
-      ? typePreferenceMultiplier(seeker.typePrefTags, candidate.appearanceTags, typeFloor)
+    typePref && candidate.appearanceTags
+      ? typePreferenceMultiplier(typePref, candidate.appearanceTags, typeFloor)
       : 1;
 
   const positive =
@@ -1038,7 +1053,7 @@ export async function findCandidatesFor(
     ageRangeMin: seeker.profile?.ageRangeMin ?? null,
     ageRangeMax: seeker.profile?.ageRangeMax ?? null,
     typePrefTags:
-      (seeker.profile?.typePrefTags as unknown as PreferenceVector | null) ?? null,
+      (seeker.profile?.typePrefTags as unknown as TypePrefTags | null) ?? null,
   };
 
   return rankCandidates(seekerProfile, pool, limit);
@@ -1197,11 +1212,11 @@ export interface BatchUser {
    *  unset. Feeds the `V_agePref` multiplier in both scoring directions. */
   ageRangeMin: number | null;
   ageRangeMax: number | null;
-  /** Compiled Type Radar preference vector (`Profile.typePrefTags`) — this user
+  /** Compiled Type Radar preference vectors (`Profile.typePrefTags`) — this user
    *  as the seeker — and their own appearance tags (`Profile.appearanceTags`) —
    *  this user as the candidate. Both feed `V_type` in the two scoring
    *  directions; null when absent → neutral. */
-  typePrefTags: PreferenceVector | null;
+  typePrefTags: TypePrefTags | null;
   appearanceTags: PhotoAttrs | null;
   /** Immutable snapshot of every eligibility and scoring input used by the
    * batch. Allocation compares it under row locks before writing a match. */
@@ -1589,7 +1604,7 @@ async function loadEligibleUsersForIds(
         ageRangeMin: u.profile?.ageRangeMin ?? null,
         ageRangeMax: u.profile?.ageRangeMax ?? null,
         typePrefTags:
-          (u.profile?.typePrefTags as unknown as PreferenceVector | null) ?? null,
+          (u.profile?.typePrefTags as unknown as TypePrefTags | null) ?? null,
         appearanceTags:
           (u.profile?.appearanceTags as unknown as PhotoAttrs | null) ?? null,
       };

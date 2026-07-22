@@ -73,7 +73,9 @@ describe("scoreCandidate — V_type multiplier", () => {
     eloScore: 500,
     ageRangeMin: null,
     ageRangeMax: null,
-    typePrefTags: pref,
+    // Per-set map: the candidates below are female, so the female sub-vector
+    // is the one V_type selects (via setForGender).
+    typePrefTags: { female: pref },
   };
   const baseCandidate: Omit<RichCandidateRow, "appearanceTags"> = {
     userId: "c",
@@ -133,6 +135,22 @@ describe("scoreCandidate — V_type multiplier", () => {
     const scored = scoreCandidate(
       seeker,
       { ...baseCandidate, appearanceTags: null },
+      undefined,
+      0.7,
+    );
+    expect(scored.breakdown.type).toBe(1);
+  });
+
+  it("does not apply female radar signal to a male candidate (per-set isolation)", () => {
+    // Seeker only calibrated the female set; a male candidate has no matching
+    // sub-vector, so V_type must stay neutral even at a sub-1 floor.
+    const scored = scoreCandidate(
+      seeker,
+      {
+        ...baseCandidate,
+        gender: "male",
+        appearanceTags: { hairColor: "dark", build: "athletic" },
+      },
       undefined,
       0.7,
     );

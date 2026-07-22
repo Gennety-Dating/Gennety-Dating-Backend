@@ -321,6 +321,13 @@ export const env = {
   /// $6.99 ticket before scheduling unlocks. Telegram-only in v1 (the mobile
   /// decision path still schedules directly).
   TICKET_FEATURE_ENABLED: process.env.TICKET_FEATURE_ENABLED === "true",
+  /// Master flag for Type Radar (PRODUCT_SPEC §Type Radar). When false
+  /// (default), the onboarding radar screen is skipped and its `/v1/radar/*`
+  /// routes 404 — the whole feature ships dark. When true, onboarding collects
+  /// the visual appearance-preference calibration; the `V_type` match multiplier
+  /// stays a shadow no-op until `TYPE_PREF_FLOOR` is lowered below 1 (read
+  /// directly by the match engine, mirroring `AGE_RANGE_PREF_*`).
+  TYPE_RADAR_ENABLED: process.env.TYPE_RADAR_ENABLED === "true",
   /// Payment backend. `mock` (default) fully simulates Stripe with no
   /// credentials — `services/ticket-payment.ts` mints a fake clientSecret and
   /// trusts the client confirm. `stripe` is the production path (real

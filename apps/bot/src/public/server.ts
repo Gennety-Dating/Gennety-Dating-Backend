@@ -32,6 +32,7 @@ import { createTelegramOnboardingRouter } from "./routes/telegram-onboarding.js"
 import { createVerificationMiniAppRouter } from "./routes/verification-mini-app.js";
 import { createTicketRouter } from "./routes/ticket.js";
 import { createTicketStoreRouter } from "./routes/tickets.js";
+import { createRadarRouter } from "./routes/radar.js";
 import { createVenueChangeRouter } from "./routes/venue-change.js";
 import { createPremiumRouter } from "./routes/premium.js";
 import {
@@ -102,6 +103,7 @@ let telegramOnboardingRouter: ReturnType<typeof createTelegramOnboardingRouter> 
 let verificationMiniAppRouter: ReturnType<typeof createVerificationMiniAppRouter> | null = null;
 let ticketRouter: ReturnType<typeof createTicketRouter> | null = null;
 let ticketStoreRouter: ReturnType<typeof createTicketStoreRouter> | null = null;
+let radarRouter: ReturnType<typeof createRadarRouter> | null = null;
 let venueChangeRouter: ReturnType<typeof createVenueChangeRouter> | null = null;
 let premiumRouter: ReturnType<typeof createPremiumRouter> | null = null;
 app.use("/v1/webhooks/persona", personaWebhookLimiter, (req, res, next) => {
@@ -288,6 +290,13 @@ app.use("/v1/tickets", (req, res, next) => {
   }
   if (!ticketStoreRouter) ticketStoreRouter = createTicketStoreRouter();
   ticketStoreRouter(req, res, next);
+});
+
+// Type Radar Mini App — TMA-authed, feature-flagged (routes 404 when
+// TYPE_RADAR_ENABLED is off). No bot api needed (no DMs).
+app.use("/v1/radar", (req, res, next) => {
+  if (!radarRouter) radarRouter = createRadarRouter();
+  radarRouter(req, res, next);
 });
 
 // StoreKit 2 Premium subscription reporting (native app, JWT auth) — mounted
