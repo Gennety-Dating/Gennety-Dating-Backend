@@ -38,6 +38,8 @@ export {
   hasTypeSignal,
   typeOverlapCount,
   typePreferenceMultiplier,
+  radarBandLive,
+  RADAR_LIVE_BANDS,
   CHIP_ATTR_BOOST,
   CHIP_ATTR_DISCOUNT,
   CONF_FULL,

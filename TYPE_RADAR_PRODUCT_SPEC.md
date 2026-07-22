@@ -1,6 +1,41 @@
 # Type Radar — "Choose Your Type" (visual preference calibration)
 
-> **Status:** design draft, pre-implementation (updated 2026-07-20).
+> **Status: IMPLEMENTED (2026-07-22), shipped dark behind `TYPE_RADAR_ENABLED`
+> (default off).** As-built vs this design draft:
+> - **Skippable step** (founder decision): the onboarding gate offers a Skip
+>   button; a skip stamps `Profile.typeRadarCompletedAt` with empty
+>   `typePrefTags`, so `V_type` stays neutral. Full skippable / mandatory /
+>   soft-mandatory options were considered; skippable won for conversion.
+> - **`typePrefTags` is stored per radar set** (`{ female?, male? }`) and the
+>   engine selects the sub-vector by the *candidate's* gender (`setForGender`),
+>   so a `both` viewer's male/female signal never conflates on shared attribute
+>   values (athletic/sporty/edgy/tattoos).
+> - **`V_type = TYPE_PREF_FLOOR + (1 − floor)·typeScore`**, neutral `1.0` on
+>   shadow floor (≥1), no viewer signal, or zero tag overlap. `TYPE_PREF_FLOOR`
+>   default `1.0` (no-op); launch ≈ `0.7`. Pure math + the multiplier live in
+>   `packages/shared/src/type-radar.ts`.
+> - **Candidate `appearanceTags` come from a dedicated ISOLATED vision pass**
+>   (`services/vision/tag-appearance.ts`, cheap `visionFast` model) on the
+>   verified branch — deliberately NOT piggybacked on the production Elo
+>   attractiveness call, so a tagging regression can't perturb the live Elo seed.
+> - **Routes:** `GET /v1/radar/deck` + `POST /v1/radar/submit` (Telegram
+>   `initData` HMAC, feature-flag-gated 404). The onboarding gate lives in the
+>   conversational agent (`typeRadarGatePending` at the request_context_dump /
+>   request_photos boundary); the invite (web_app + Skip) and resume are in
+>   `handlers/onboarding/type-radar.ts`. 24 band-A portraits ship at
+>   `apps/webapp/public/radar/a/*.jpg`; the Mini App is `radar.html`.
+> - **Schema (additive):** `Profile.typeRadarAnswers/typePrefTags/
+>   typeRadarCompletedAt/typeRadarAgeBand/appearanceTags`,
+>   `match_score_logs.scoreType`.
+> - Band B/C portrait sets (ages 32/33, 42/43) are not generated yet — v1 runs
+>   on band A only (`ageBandFor` still maps every viewer to a band; B/C reuse A's
+>   ids until their images land).
+>
+> Deploy/rollout: see `deploy.md` → "Type Radar (feature-flagged …)".
+>
+> ---
+>
+> **Original design draft below (updated 2026-07-20).**
 > Feature-flagged (`TYPE_RADAR_ENABLED`, default off), Telegram-only in v1
 > (explicit decision — see Mobile parity). The AI-memory export (Magic Prompt)
 > **stays**; the radar runs in the conversational phase immediately **before**

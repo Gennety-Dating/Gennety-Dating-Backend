@@ -13,6 +13,8 @@ import {
   MAX_HISTORY_FOR_API,
   SUMMARIZE_THRESHOLD,
   KEEP_RECENT_MESSAGES,
+  ageBandFor,
+  radarBandLive,
   contextDumpInstruction,
   magicContextPrompt,
   t,
@@ -1852,9 +1854,16 @@ export async function summarizeHistory(
  * is a no-op for the current production flow.
  */
 export function typeRadarGatePending(
-  user: { profile: { typeRadarCompletedAt: Date | null } | null } | null | undefined,
+  user:
+    | { age: number | null; profile: { typeRadarCompletedAt: Date | null } | null }
+    | null
+    | undefined,
 ): boolean {
-  return env.TYPE_RADAR_ENABLED && (user?.profile?.typeRadarCompletedAt ?? null) === null;
+  if (!env.TYPE_RADAR_ENABLED) return false;
+  if ((user?.profile?.typeRadarCompletedAt ?? null) !== null) return false;
+  // Only gate viewers whose age band has a deployed portrait set (v1 = band A).
+  if (user?.age == null) return false;
+  return radarBandLive(ageBandFor(user.age));
 }
 
 export async function runAgentTurn(

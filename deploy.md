@@ -903,6 +903,32 @@ Required/high-impact env keys:
   extra OpenAI call per side for the short card copy. Any copy/render/send
   failure falls back to the plain protected media group, so the flag is safe to
   toggle live with `pm2 restart gennety-bot --update-env`. No schema change.
+- Type Radar (feature-flagged visual appearance calibration, §Type Radar /
+  `TYPE_RADAR_PRODUCT_SPEC.md`): `TYPE_RADAR_ENABLED` (default `false` — the
+  whole feature ships dark) + `TYPE_PREF_FLOOR` (default `1.0` = the `V_type`
+  match multiplier is a pure no-op even when enabled; launch value ≈ `0.7`,
+  the weakest factor — read directly by the match engine, mirroring
+  `AGE_RANGE_PREF_*`). When on, the conversational onboarding shows a skippable
+  visual "choose your type" step **before** the Magic Prompt (a `web_app` button
+  into `radar.html` + an inline Skip); submit/skip resumes the flow. The
+  compiled per-set preference vector (`Profile.typePrefTags`) scores a partner's
+  `Profile.appearanceTags` — the candidate side is tagged by an **isolated**
+  cheap vision pass on the verified branch (separate from the Elo attractiveness
+  call, so a tagging regression never perturbs the live Elo seed; no extra call
+  while dark). **Requires `db:push` of the additive `Profile.type_radar_answers`
+  / `type_pref_tags` / `type_radar_completed_at` / `type_radar_age_band` /
+  `appearance_tags` and `match_score_logs.score_type` columns first** (all
+  nullable/defaulted, non-destructive). Also **redeploy the Mini App bundle**
+  (`radar.html` ships with the Vite build) — the 24 band-A calibration portraits
+  live in `apps/webapp/public/radar/a/*.jpg` and ride the webapp rsync. No new
+  system dependency (tagging reuses `OPENAI_API_KEY` via the `visionFast`
+  model). Rollout is two-stage: (1) `db:push` + deploy code + Mini App with the
+  flag OFF (everything inert); (2) flip `TYPE_RADAR_ENABLED=true` to start
+  collecting radar answers while `TYPE_PREF_FLOOR=1.0` keeps scoring unchanged
+  (shadow); later lower `TYPE_PREF_FLOOR` (e.g. `0.7`) to let `V_type` actually
+  re-rank. `WEBAPP_URL` must be a real HTTPS host for the picker button (dev
+  without a tunnel degrades to Skip-only). Rollback: flip the flag off; the
+  additive columns/images may stay.
 - Founder notifications (feature-flagged private ops feed): `FOUNDER_NOTIFY_ENABLED`
   — **ON in production since 2026-07-16** (founder bot `@sverkausbot`, chat id set).
   When on, a SEPARATE founder bot DMs the founder four things: (1) each new user's

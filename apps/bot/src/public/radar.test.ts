@@ -93,16 +93,25 @@ describe("GET /v1/radar/deck", () => {
     expect(res.body.chips.male).toBeUndefined();
   });
 
-  it("returns both sets for a `both` viewer", async () => {
-    userFindUnique.mockResolvedValue({ age: 40, preference: "both", language: "en" });
+  it("returns both sets for a `both` viewer in a live band", async () => {
+    userFindUnique.mockResolvedValue({ age: 26, preference: "both", language: "en" });
     const res = await request(buildApp())
       .get("/v1/radar/deck")
       .set("Authorization", `tma ${signInitData()}`);
     expect(res.status).toBe(200);
-    expect(res.body.band).toBe("c");
+    expect(res.body.band).toBe("a");
     expect(res.body.cards).toHaveLength(FEMALE_PHOTOS.length + MALE_PHOTOS.length);
     expect(res.body.chips.female).toBeDefined();
     expect(res.body.chips.male).toBeDefined();
+  });
+
+  it("409s when the viewer's age band has no deployed portrait set (v1 = band A only)", async () => {
+    userFindUnique.mockResolvedValue({ age: 45, preference: "women", language: "en" });
+    const res = await request(buildApp())
+      .get("/v1/radar/deck")
+      .set("Authorization", `tma ${signInitData()}`);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("band-not-live");
   });
 });
 

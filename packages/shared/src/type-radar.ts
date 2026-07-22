@@ -90,6 +90,20 @@ export function ageBandFor(age: number): AgeBand {
   return "c";
 }
 
+/**
+ * Age bands whose portrait sets actually exist and are deployed. v1 ships band
+ * A (`apps/webapp/public/radar/a/`) only; B/C portrait sets aren't generated
+ * yet. Serving band-A (young) photos to an older viewer would reintroduce the
+ * exact age-mismatch the bands exist to prevent, so the onboarding gate and the
+ * deck route only run for a viewer whose band is live. Extend this as B/C ship.
+ */
+export const RADAR_LIVE_BANDS: readonly AgeBand[] = ["a"];
+
+/** True when a viewer's age band has a deployed portrait set. */
+export function radarBandLive(band: AgeBand): boolean {
+  return RADAR_LIVE_BANDS.includes(band);
+}
+
 // ── Reason chips (Ditto-pattern attribution layer) ──────────────────────────
 // A one-tap "why?" after a verdict. A named-attribute chip boosts that
 // attribute's weight for the card and discounts the rest; `excludeCard` chips

@@ -3,6 +3,7 @@ import type { Api, RawApi } from "grammy";
 import { prisma, type Prisma } from "@gennety/db";
 import {
   ageBandFor,
+  radarBandLive,
   setsForPreference,
   radarPhotoById,
   photosForSet,
@@ -131,6 +132,12 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
     }
 
     const band = ageBandFor(user.age);
+    // v1 ships band-A portraits only; a viewer whose band has no deployed set
+    // must never be served age-mismatched (or missing) images.
+    if (!radarBandLive(band)) {
+      res.status(409).json({ error: "band-not-live" });
+      return;
+    }
     const sets = setsForPreference(user.preference as GenderPreference);
     const cards: DeckCard[] = sets.flatMap((set) =>
       photosForSet(set).map((p) => ({
