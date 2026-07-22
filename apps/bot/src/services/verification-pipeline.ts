@@ -4,6 +4,7 @@ import type { Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { sendMainMenu } from "../handlers/menu/main.js";
 import { seedEloFromVisionDefault, type SeedEloResult } from "./elo-seed.js";
+import { tagAndPersistAppearanceDefault } from "./appearance-tags.js";
 import { compareFaces } from "./face-match.js";
 import { fetchInquirySelfie, fetchLatestInquiryByReference } from "./persona-api.js";
 import { pinStatusBanner } from "./status-banner.js";
@@ -130,6 +131,18 @@ export interface PipelineDeps {
     photoPaths: readonly string[],
   ) => Promise<SeedEloResult>;
   /**
+   * Type Radar candidate tagging via an ISOLATED vision pass (§Type Radar,
+   * step 6). Optional and independent of the Elo seed — when undefined (feature
+   * flag off, or unset by tests) the pipeline skips it and `V_type` stays
+   * neutral for this candidate. Runs only on the `verified` branch, best-effort;
+   * a failure never blocks verification (same contract as `seedEloFromVision`).
+   */
+  tagAppearance?: (
+    userId: string,
+    photoPaths: readonly string[],
+    gender: string | null,
+  ) => Promise<unknown>;
+  /**
    * DB shim so tests can hand in an in-memory store. Production uses the
    * real Prisma client. Only the slices we actually call.
    */
@@ -143,6 +156,7 @@ export interface PipelineUserRow {
   id: string;
   telegramId: bigint;
   status: string;
+  gender: string | null;
   verificationStatus: string;
   personaInquiryId: string | null;
   faceMatchedAt: Date | null;
@@ -503,6 +517,16 @@ export async function runFaceMatchVerification(
         console.warn(`${LOG_PREFIX} elo seed threw (swallowed)`, { userId, err });
       }
     }
+    // Type Radar candidate tagging (§Type Radar, step 6): an isolated vision
+    // pass, independent of the Elo seed above. Best-effort and flag-gated at the
+    // dep level; a failure only leaves `V_type` neutral for this candidate.
+    if (deps.tagAppearance && photos.length > 0) {
+      try {
+        await deps.tagAppearance(userId, photos, user.gender);
+      } catch (err) {
+        console.warn(`${LOG_PREFIX} appearance tagging threw (swallowed)`, { userId, err });
+      }
+    }
     await sendOutcomeMessage(deps, user.telegramId, "verified");
     if (user.telegramId > 0n) {
       await surfaceVerifiedActivation(deps, {
@@ -666,6 +690,15 @@ export async function runFaceMatchVerificationDefault(
               seedEloFromVisionDefault(uid, photos, api),
           }
         : {}),
+      // Type Radar candidate tagging — its own isolated vision pass, gated by
+      // TYPE_RADAR_ENABLED (dark by default → no dep, no OpenAI call). The
+      // default helper re-checks the flag, so this is belt-and-suspenders.
+      ...(env.TYPE_RADAR_ENABLED
+        ? {
+            tagAppearance: (uid: string, photos: readonly string[], gender: string | null) =>
+              tagAndPersistAppearanceDefault(uid, photos, gender, api),
+          }
+        : {}),
       notify: async (telegramId, message) => {
         await api.sendMessage(Number(telegramId), message);
       },
@@ -680,6 +713,7 @@ export async function runFaceMatchVerificationDefault(
               id: true,
               telegramId: true,
               status: true,
+              gender: true,
               verificationStatus: true,
               personaInquiryId: true,
               faceMatchedAt: true,
