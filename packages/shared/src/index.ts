@@ -32,6 +32,7 @@ export {
   setsForPreference,
   setForGender,
   reasonChipsFor,
+  reasonChipsForPhoto,
   reasonChipById,
   buildPreferenceVector,
   candidateTypeScore,

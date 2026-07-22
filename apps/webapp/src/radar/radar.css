@@ -25,11 +25,14 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  /* Extra top reserve so the title clears Telegram's floating close ×/menu ⋯
-     controls in fullscreen. `--tg-content-top` is the real inset when the
-     client reports it; the 18px fallback covers older clients that don't. */
-  padding: calc(var(--tg-content-top, 18px) + 26px) 18px
-    calc(var(--tg-content-bottom, 0px) + 24px);
+  /* Reserve enough top space that the title clears Telegram's floating close ×
+     / menu ⋯ controls in fullscreen. Some clients under-report
+     `--tg-content-top`, so we take the LARGER of the reported inset and a safe
+     floor (notch/status-bar via env() + ~54px for the button row). */
+  padding: calc(
+      max(var(--tg-content-top, 0px), env(safe-area-inset-top, 0px) + 54px) + 8px
+    )
+    18px calc(var(--tg-content-bottom, 0px) + 24px);
   gap: 16px;
 }
 

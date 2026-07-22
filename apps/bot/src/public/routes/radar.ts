@@ -7,9 +7,10 @@ import {
   setsForPreference,
   radarPhotoById,
   photosForSet,
-  reasonChipsFor,
+  reasonChipsForPhoto,
   buildPreferenceVector,
   type RadarSet,
+  type RadarPhoto,
   type RadarAnswer,
   type Verdict,
   type PreferenceVector,
@@ -86,12 +87,16 @@ interface DeckCard {
   set: RadarSet;
   /** Path relative to the Mini App origin: `radar/<band>/<id>.jpg`. */
   image: string;
+  /** Reason chips for THIS photo (presence-only chips like beard/tattoo are
+   *  dropped when the person on the card doesn't have them). */
+  chips: { like: { id: string }[]; dislike: { id: string }[] };
 }
 
 // Chip ids only — the Mini App owns the localized label per id in the viewer's
-// language (chips carry no copy in the shared dataset).
-function chipsForSet(set: RadarSet): { like: { id: string }[]; dislike: { id: string }[] } {
-  const ids = (verdict: Verdict) => reasonChipsFor(set, verdict).map((c) => ({ id: c.id }));
+// language (chips carry no copy in the shared dataset). Per-photo so a
+// clean-shaven card is never offered a "beard" reason.
+function chipsForPhoto(photo: RadarPhoto): DeckCard["chips"] {
+  const ids = (verdict: Verdict) => reasonChipsForPhoto(photo, verdict).map((c) => ({ id: c.id }));
   return { like: ids("like"), dislike: ids("dislike") };
 }
 
@@ -144,13 +149,12 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
         photoId: p.id,
         set,
         image: `radar/${band}/${p.id}.jpg`,
+        chips: chipsForPhoto(p),
       })),
     );
     const ordered = seededShuffle(cards, seedFrom(`${auth.telegramId}:${band}`));
-    const chips: Partial<Record<RadarSet, ReturnType<typeof chipsForSet>>> = {};
-    for (const set of sets) chips[set] = chipsForSet(set);
 
-    res.json({ ok: true, band, cards: ordered, chips });
+    res.json({ ok: true, band, cards: ordered });
   });
 
   // POST /v1/radar/submit — persist the verdict log + compiled per-set vectors.

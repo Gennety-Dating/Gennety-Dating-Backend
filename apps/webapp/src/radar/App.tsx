@@ -154,7 +154,7 @@ export function App() {
   const onVerdict = (verdict: RadarVerdict) => {
     if (!card) return;
     app?.HapticFeedback?.selectionChanged?.();
-    const chips = deck?.chips[card.set]?.[verdict] ?? [];
+    const chips = card.chips?.[verdict] ?? [];
     if (promptIdx.has(index) && chips.length > 0) {
       setPending({ photoId: card.photoId, verdict });
       setPhase("chips");
@@ -206,7 +206,7 @@ export function App() {
     );
   }
 
-  const chips = pending ? (deck?.chips[card!.set]?.[pending.verdict] ?? []) : [];
+  const chips = pending ? (card?.chips?.[pending.verdict] ?? []) : [];
 
   return (
     <div className="radar-screen">

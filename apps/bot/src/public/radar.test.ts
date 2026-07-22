@@ -7,6 +7,13 @@ import { FEMALE_PHOTOS, MALE_PHOTOS } from "@gennety/shared";
 const BOT_TOKEN = "123456:test-bot-token-for-radar";
 const TELEGRAM_ID = 5986970093;
 
+type DeckCard = {
+  photoId: string;
+  set: string;
+  image: string;
+  chips: { like: { id: string }[]; dislike: { id: string }[] };
+};
+
 vi.mock("../config.js", () => ({
   env: {
     BOT_TOKEN,
@@ -79,30 +86,61 @@ describe("GET /v1/radar/deck", () => {
     expect(res.body.error).toBe("profile-not-ready");
   });
 
-  it("returns the female deck + chips for a women-preferring viewer", async () => {
+  it("returns the female deck with per-card chips for a women-preferring viewer", async () => {
     userFindUnique.mockResolvedValue({ age: 24, preference: "women", language: "en" });
     const res = await request(buildApp())
       .get("/v1/radar/deck")
       .set("Authorization", `tma ${signInitData()}`);
     expect(res.status).toBe(200);
     expect(res.body.band).toBe("a");
-    expect(res.body.cards).toHaveLength(FEMALE_PHOTOS.length);
-    expect(res.body.cards.every((c: { set: string }) => c.set === "female")).toBe(true);
-    expect(res.body.cards[0].image).toMatch(/^radar\/a\/[a-z0-9]+\.jpg$/);
-    expect(res.body.chips.female.like.length).toBeGreaterThan(0);
-    expect(res.body.chips.male).toBeUndefined();
+    const cards = res.body.cards as DeckCard[];
+    expect(cards).toHaveLength(FEMALE_PHOTOS.length);
+    expect(cards.every((c) => c.set === "female")).toBe(true);
+    expect(cards[0]!.image).toMatch(/^radar\/a\/[a-z0-9]+\.jpg$/);
+    // Chips are per-card now, not a top-level set map.
+    expect(res.body.chips).toBeUndefined();
+    expect(cards[0]!.chips.like.length).toBeGreaterThan(0);
+    expect(cards[0]!.chips.dislike.length).toBeGreaterThan(0);
+    // The female set never offers a beard chip on any card.
+    expect(cards.every((c) => c.chips.like.every((ch) => ch.id !== "beard"))).toBe(true);
   });
 
-  it("returns both sets for a `both` viewer in a live band", async () => {
+  it("returns both sets, each card carrying its own chips, for a `both` viewer", async () => {
     userFindUnique.mockResolvedValue({ age: 26, preference: "both", language: "en" });
     const res = await request(buildApp())
       .get("/v1/radar/deck")
       .set("Authorization", `tma ${signInitData()}`);
     expect(res.status).toBe(200);
     expect(res.body.band).toBe("a");
-    expect(res.body.cards).toHaveLength(FEMALE_PHOTOS.length + MALE_PHOTOS.length);
-    expect(res.body.chips.female).toBeDefined();
-    expect(res.body.chips.male).toBeDefined();
+    const cards = res.body.cards as DeckCard[];
+    expect(cards).toHaveLength(FEMALE_PHOTOS.length + MALE_PHOTOS.length);
+    const sets = new Set(cards.map((c) => c.set));
+    expect(sets.has("female")).toBe(true);
+    expect(sets.has("male")).toBe(true);
+    expect(
+      cards.every((c) => Array.isArray(c.chips.like) && Array.isArray(c.chips.dislike)),
+    ).toBe(true);
+  });
+
+  it("scopes reason chips to each photo — no beard/tattoo chip when the person lacks them", async () => {
+    userFindUnique.mockResolvedValue({ age: 24, preference: "men", language: "en" });
+    const res = await request(buildApp())
+      .get("/v1/radar/deck")
+      .set("Authorization", `tma ${signInitData()}`);
+    expect(res.status).toBe(200);
+    const cards = res.body.cards as DeckCard[];
+    const byId = (id: string): DeckCard => cards.find((c) => c.photoId === id)!;
+    const ids = (c: DeckCard, v: "like" | "dislike"): string[] => c.chips[v].map((x) => x.id);
+    const cleanNoTattoo = byId("m01"); // beard: clean, tattoos: no
+    const beardedTattoo = byId("m03"); // beard: beard, tattoos: yes
+    // Clean-shaven with no tattoos → neither chip is offered, on like or dislike.
+    expect(ids(cleanNoTattoo, "like")).not.toContain("beard");
+    expect(ids(cleanNoTattoo, "like")).not.toContain("tattoo");
+    expect(ids(cleanNoTattoo, "dislike")).not.toContain("beard");
+    expect(ids(cleanNoTattoo, "dislike")).not.toContain("tattoo");
+    // Bearded + tattooed → both chips are offered.
+    expect(ids(beardedTattoo, "like")).toContain("beard");
+    expect(ids(beardedTattoo, "like")).toContain("tattoo");
   });
 
   it("409s when the viewer's age band has no deployed portrait set (v1 = band A only)", async () => {

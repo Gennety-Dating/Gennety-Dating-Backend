@@ -948,20 +948,22 @@ export async function premiumStarsInvoice(
 // ---------------------------------------------------------------------------
 
 export type RadarSet = "female" | "male";
+export interface RadarChip {
+  id: string;
+}
 export interface RadarDeckCard {
   photoId: string;
   set: RadarSet;
-  /** Path relative to the Mini App origin: `radar/<band>/<id>.png`. */
+  /** Path relative to the Mini App origin: `radar/<band>/<id>.jpg`. */
   image: string;
-}
-export interface RadarChip {
-  id: string;
+  /** Reason chips scoped to THIS photo (presence-only chips like beard/tattoo
+   *  are omitted server-side when the person doesn't have them). */
+  chips: { like: RadarChip[]; dislike: RadarChip[] };
 }
 export interface RadarDeck {
   ok: true;
   band: string;
   cards: RadarDeckCard[];
-  chips: Partial<Record<RadarSet, { like: RadarChip[]; dislike: RadarChip[] }>>;
 }
 export type RadarVerdict = "like" | "dislike";
 export interface RadarAnswerInput {

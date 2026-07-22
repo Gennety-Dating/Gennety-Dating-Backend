@@ -155,6 +155,28 @@ export function reasonChipById(
   return reasonChipsFor(set, verdict).find((c) => c.id === id);
 }
 
+/**
+ * "Presence" attributes whose reason chip only makes sense when the feature is
+ * actually visible on THIS photo. Offering "beard" on a clean-shaven man (or
+ * "tattoo" on someone with none) reads as a bug to the user and pollutes the
+ * signal. Build / hair / style are universal (everyone has them), so their
+ * chips always apply.
+ */
+function chipAppliesToPhoto(chip: ReasonChip, photo: RadarPhoto): boolean {
+  if (chip.id === "beard") return photo.attrs.beard === "beard";
+  if (chip.id === "tattoo") return photo.attrs.tattoos === "yes";
+  return true;
+}
+
+/**
+ * Reason chips for a SPECIFIC photo: the set-level chips minus any
+ * presence-only chip (beard / tattoo) the photo doesn't actually exhibit, so a
+ * "why?" prompt never offers a trait the person on screen doesn't have.
+ */
+export function reasonChipsForPhoto(photo: RadarPhoto, verdict: Verdict): ReasonChip[] {
+  return reasonChipsFor(photo.set, verdict).filter((c) => chipAppliesToPhoto(c, photo));
+}
+
 // ── Photo sets (band-invariant attribute assignments) ───────────────────────
 // Balanced fractional-factorial plan: each attribute value appears 4–6×, with
 // attribute pairs decorrelated by construction. Scene is a balanced nuisance
