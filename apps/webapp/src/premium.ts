@@ -1,6 +1,6 @@
 import "./theme.css";
 import "./premium.css";
-import { icon } from "./icons";
+import { icon, type IconName } from "./icons";
 import { wireContentInsets } from "./telegram-insets";
 
 /**
@@ -28,9 +28,11 @@ interface Copy {
   title: string;
   sub: string;
   b1t: string; // benefit 1 title
-  b1d: string; // benefit 1 detail
+  b1d: string; // benefit 1 detail (short, always visible)
+  b1x: string; // benefit 1 explanation (revealed on tap)
   b2t: string;
   b2d: string;
+  b2x: string;
   more: string;
   price: (p: string) => string;
   subscribe: (p: string) => string;
@@ -47,8 +49,10 @@ const COPY: Record<Lang, Copy> = {
     sub: "The good stuff, unlocked.",
     b1t: "Free venue changes",
     b1d: "Swap your date spot as often as you like — no fee.",
+    b1x: "Changing the venue normally costs a small fee each time. With Premium every swap on the venue board is free, right up until the date — rethink the spot as many times as you both want.",
     b2t: "Premium venues",
     b2d: "A hand-picked tier of nicer places in the venue board.",
+    b2x: "Premium unlocks a separate tier of hand-picked spots — nicer, more memorable places that stay locked for everyone else. They show up on the venue board the moment your subscription is active.",
     more: "More perks are on the way.",
     price: (p) => `${p}/month · cancel anytime`,
     subscribe: (p) => `Subscribe — ${p}/mo`,
@@ -63,8 +67,10 @@ const COPY: Record<Lang, Copy> = {
     sub: "Лучшее — открыто.",
     b1t: "Бесплатная смена места",
     b1d: "Меняй место свидания сколько угодно — без оплаты.",
+    b1x: "Обычно каждая смена места стоит небольшую сумму. С Premium любая замена в подборе мест — бесплатна, вплоть до самого свидания. Пересматривайте место столько раз, сколько захотите вдвоём.",
     b2t: "Премиум-заведения",
     b2d: "Отобранный тир мест получше в подборе.",
+    b2x: "Premium открывает отдельный тир заведений — места получше, отобранные вручную, которые для остальных закрыты. Они появляются в подборе сразу, как только подписка активна.",
     more: "Дальше будет больше.",
     price: (p) => `${p}/месяц · отмена в любой момент`,
     subscribe: (p) => `Оформить — ${p}/мес`,
@@ -79,8 +85,10 @@ const COPY: Record<Lang, Copy> = {
     sub: "Найкраще — відкрито.",
     b1t: "Безкоштовна зміна місця",
     b1d: "Змінюй місце побачення скільки завгодно — без оплати.",
+    b1x: "Зазвичай кожна зміна місця коштує невелику суму. З Premium будь-яка заміна в підборі місць — безкоштовна, аж до самого побачення. Переглядайте місце стільки разів, скільки захочете вдвох.",
     b2t: "Преміум-заклади",
     b2d: "Відібраний тір кращих місць у підборі.",
+    b2x: "Premium відкриває окремий тір закладів — кращі місця, відібрані вручну, які для інших закриті. Вони з’являються в підборі щойно підписка активна.",
     more: "Далі буде більше.",
     price: (p) => `${p}/місяць · скасування будь-коли`,
     subscribe: (p) => `Оформити — ${p}/міс`,
@@ -95,8 +103,10 @@ const COPY: Record<Lang, Copy> = {
     sub: "Das Beste, freigeschaltet.",
     b1t: "Kostenlose Ortswechsel",
     b1d: "Wechsle den Date-Ort so oft du willst — ohne Gebühr.",
+    b1x: "Normalerweise kostet jeder Ortswechsel eine kleine Gebühr. Mit Premium ist jeder Wechsel im Ortsboard kostenlos — bis zum Date. Überdenkt den Ort so oft ihr beide wollt.",
     b2t: "Premium-Orte",
     b2d: "Eine handverlesene Auswahl schönerer Orte im Ortsboard.",
+    b2x: "Premium schaltet eine eigene Kategorie handverlesener Orte frei — schönere, besondere Plätze, die für alle anderen gesperrt bleiben. Sie erscheinen im Ortsboard, sobald dein Abo aktiv ist.",
     more: "Mehr kommt bald.",
     price: (p) => `${p}/Monat · jederzeit kündbar`,
     subscribe: (p) => `Abonnieren — ${p}/Mon.`,
@@ -111,8 +121,10 @@ const COPY: Record<Lang, Copy> = {
     sub: "To, co najlepsze — odblokowane.",
     b1t: "Darmowa zmiana miejsca",
     b1d: "Zmieniaj miejsce randki ile chcesz — bez opłat.",
+    b1x: "Zwykle każda zmiana miejsca kosztuje niewielką opłatę. Z Premium każda zmiana w tablicy miejsc jest darmowa — aż do samej randki. Zmieniajcie miejsce tyle razy, ile chcecie.",
     b2t: "Miejsca premium",
     b2d: "Wyselekcjonowany zestaw lepszych miejsc w tablicy.",
+    b2x: "Premium odblokowuje osobny poziom ręcznie wybranych miejsc — lepszych i bardziej wyjątkowych, zamkniętych dla pozostałych. Pojawiają się w tablicy, gdy tylko subskrypcja jest aktywna.",
     more: "Więcej wkrótce.",
     price: (p) => `${p}/miesiąc · anulujesz kiedy chcesz`,
     subscribe: (p) => `Subskrybuj — ${p}/mies.`,
@@ -215,6 +227,55 @@ function crest(): HTMLElement {
   return logo;
 }
 
+/**
+ * A borderless glass benefit card that expands its explanation on tap. The tile
+ * icon swaps closed↔open and plays a quick pop each toggle, so pressing a card
+ * gives a small, light animated response.
+ */
+function benefitCard(
+  icoClosed: IconName,
+  icoOpen: IconName,
+  title: string,
+  short: string,
+  long: string,
+): HTMLElement {
+  const wrap = el("div", "pm-benefit-wrap");
+
+  const tile = el("div", "pm-benefit-tile");
+  tile.append(icon(icoClosed));
+  tile.addEventListener("animationend", () => tile.classList.remove("is-pop"));
+
+  const txt = el("div", "pm-benefit-txt");
+  txt.append(el("div", "pm-benefit-title", title), el("div", "pm-benefit-detail", short));
+
+  const chevron = icon("chevron", "icon pm-benefit-chevron");
+
+  const row = el("button", "pm-benefit-row") as HTMLButtonElement;
+  row.type = "button";
+  row.setAttribute("aria-expanded", "false");
+  row.append(tile, txt, chevron);
+
+  const panel = el("div", "pm-benefit-panel");
+  const panelIn = el("div", "pm-benefit-panel-in");
+  panelIn.append(el("p", "pm-benefit-long", long));
+  panel.append(panelIn);
+
+  row.addEventListener("click", () => {
+    const open = wrap.classList.toggle("is-open");
+    row.setAttribute("aria-expanded", open ? "true" : "false");
+    // Swap the tile icon and replay the pop on every toggle.
+    tile.replaceChildren(icon(open ? icoOpen : icoClosed));
+    tile.classList.remove("is-pop");
+    // Force reflow so re-adding the class restarts the animation.
+    void tile.offsetWidth;
+    tile.classList.add("is-pop");
+    haptic("success");
+  });
+
+  wrap.append(row, panel);
+  return wrap;
+}
+
 function renderLoading(): void {
   const page = el("div", "pm-page");
   const center = el("div", "pm-center");
@@ -254,19 +315,14 @@ function renderOffer(state: PremiumState): void {
   hero.append(el("p", "pm-sub", s.sub));
   scroll.append(hero);
 
-  const list = el("ul", "pm-benefits");
-  for (const [ico, tt, dd] of [
-    ["map", s.b1t, s.b1d],
-    ["star", s.b2t, s.b2d],
+  const list = el("div", "pm-benefits");
+  // [icon-closed, icon-open, title, short detail, long explanation]. Tapping a
+  // card expands the explanation and swaps the tile icon with a quick pop.
+  for (const [icoClosed, icoOpen, tt, dd, xx] of [
+    ["map", "bolt", s.b1t, s.b1d, s.b1x],
+    ["star", "spark", s.b2t, s.b2d, s.b2x],
   ] as const) {
-    const li = el("li", "pm-benefit");
-    const tile = el("div", "pm-benefit-tile");
-    tile.append(icon(ico));
-    li.append(tile);
-    const txt = el("div", "pm-benefit-txt");
-    txt.append(el("div", "pm-benefit-title", tt), el("div", "pm-benefit-detail", dd));
-    li.append(txt);
-    list.append(li);
+    list.append(benefitCard(icoClosed, icoOpen, tt, dd, xx));
   }
   scroll.append(list);
   scroll.append(el("p", "pm-more", s.more));

@@ -21,12 +21,19 @@
   --pm-shimmer-base: #8b8b93;
   --pm-shimmer-hi: #ffffff;
 
-  /* Liquid-glass control tokens. */
+  /* Liquid-glass control tokens (badge / tiles). */
   --pm-glass-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.07) 100%);
   --pm-glass-rim: rgba(255, 255, 255, 0.3);
   --pm-glass-hi: rgba(255, 255, 255, 0.72);
   --pm-glass-tile: rgba(255, 255, 255, 0.07);
+
+  /* The CTA — a bright brushed-silver glass so dark text stays fully legible
+     (the old translucent fill over near-black was too dark to read). The white
+     glare then reads clearly as a gloss sweep across the light surface. */
+  --pm-cta-fill: linear-gradient(180deg, #f6f6f9 0%, #dcdce2 100%);
   --pm-cta-fg: #0b0b0b;
+  --pm-cta-rim: rgba(255, 255, 255, 0.95);
+  --pm-cta-glare: rgba(255, 255, 255, 0.95);
 
   /* Butterfly crest — metallic vertical gradient stops. */
   --pm-bf-a: #ffffff;
@@ -50,7 +57,13 @@
   --pm-glass-rim: rgba(0, 0, 0, 0.14);
   --pm-glass-hi: rgba(255, 255, 255, 0.95);
   --pm-glass-tile: rgba(0, 0, 0, 0.045);
-  --pm-cta-fg: #0d0d0d;
+
+  /* On the cream page the CTA flips to an ink-black glass with white text — the
+     "black shades" side of the monochrome identity, high-contrast and glossy. */
+  --pm-cta-fill: linear-gradient(180deg, #26262b 0%, #0b0b0d 100%);
+  --pm-cta-fg: #ffffff;
+  --pm-cta-rim: rgba(255, 255, 255, 0.22);
+  --pm-cta-glare: rgba(255, 255, 255, 0.5);
 
   --pm-bf-a: #2a2a2e;
   --pm-bf-b: #050505;
@@ -248,30 +261,42 @@ body {
   box-shadow: 0 0 8px var(--pm-glow);
 }
 
-/* ── Benefits — borderless glass rows with monochrome icon tiles ──────── */
+/* ── Benefits — borderless glass cards that expand on tap ─────────────── */
 .pm-benefits {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-.pm-benefit {
+.pm-benefit-wrap {
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--pm-glass-edge);
+  overflow: hidden;
+  animation: pm-rise 0.5s ease both;
+}
+.pm-benefit-wrap:nth-child(1) {
+  animation-delay: 0.2s;
+}
+.pm-benefit-wrap:nth-child(2) {
+  animation-delay: 0.28s;
+}
+/* The tappable header row. */
+.pm-benefit-row {
+  width: 100%;
   display: flex;
   gap: 14px;
   align-items: center;
   padding: 15px 16px;
-  border-radius: 22px;
-  background: var(--surface);
-  box-shadow: var(--pm-glass-edge);
-  animation: pm-rise 0.5s ease both;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text);
+  transition: background 0.15s ease;
 }
-.pm-benefit:nth-child(1) {
-  animation-delay: 0.2s;
-}
-.pm-benefit:nth-child(2) {
-  animation-delay: 0.28s;
+.pm-benefit-row:active {
+  background: var(--fill);
 }
 .pm-benefit-tile {
   flex: none;
@@ -284,12 +309,17 @@ body {
   box-shadow: var(--pm-glass-edge);
   color: var(--pm-ink);
 }
+/* Quick, light pop on every toggle. */
+.pm-benefit-tile.is-pop {
+  animation: pm-pop 0.42s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
 .pm-benefit-tile .icon {
   width: 22px;
   height: 22px;
   stroke-width: 1.7;
 }
 .pm-benefit-txt {
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -304,6 +334,35 @@ body {
 .pm-benefit-detail {
   font-size: 13px;
   line-height: 1.4;
+  color: var(--text-muted);
+}
+.pm-benefit-chevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--text-faint);
+  transition: transform 0.3s ease;
+}
+.pm-benefit-wrap.is-open .pm-benefit-chevron {
+  transform: rotate(180deg);
+}
+/* Expanding explanation — grid-rows 0fr→1fr gives a smooth height reveal. */
+.pm-benefit-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.32s ease;
+}
+.pm-benefit-wrap.is-open .pm-benefit-panel {
+  grid-template-rows: 1fr;
+}
+.pm-benefit-panel-in {
+  overflow: hidden;
+}
+.pm-benefit-long {
+  margin: 0;
+  padding: 2px 18px 16px 76px;
+  font-size: 13.5px;
+  line-height: 1.5;
   color: var(--text-muted);
 }
 
@@ -332,9 +391,10 @@ body {
   font-size: 13.5px;
 }
 
-/* THE HERO ACTION — a liquid-glass pill: translucent frosted fill, a bright
-   specular top edge, and a slow travelling glare (the "liquid" refraction).
-   Generously rounded, monochrome, high-contrast label. */
+/* THE HERO ACTION — a liquid-glass pill: a bright glossy fill (so the label is
+   always fully legible), a specular top edge, and a smooth travelling glare
+   (the "liquid" refraction, compositor-only transform → no jank). Generously
+   rounded, monochrome, high-contrast label. */
 .pm-cta {
   position: relative;
   overflow: hidden;
@@ -344,7 +404,7 @@ body {
   justify-content: center;
   gap: 9px;
   border: none;
-  border-radius: 28px;
+  border-radius: 30px;
   padding: 19px 24px;
   font-family: "Inter", system-ui, sans-serif;
   font-size: 16.5px;
@@ -352,12 +412,9 @@ body {
   letter-spacing: -0.01em;
   color: var(--pm-cta-fg);
   cursor: pointer;
-  background: var(--pm-glass-fill);
-  -webkit-backdrop-filter: blur(20px) saturate(165%);
-  backdrop-filter: blur(20px) saturate(165%);
+  background: var(--pm-cta-fill);
   box-shadow:
-    inset 0 1px 0 var(--pm-glass-hi),
-    inset 0 0 0 1px var(--pm-glass-rim),
+    inset 0 1px 0 var(--pm-cta-rim),
     0 12px 34px rgba(0, 0, 0, 0.4);
   transition: transform 0.15s ease, opacity 0.2s ease;
 }
@@ -367,22 +424,23 @@ body {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(180deg, var(--pm-glass-hi) 0%, transparent 46%);
-  opacity: 0.55;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, transparent 44%);
   pointer-events: none;
 }
-/* Travelling liquid glare. */
+/* Travelling liquid glare — animated via transform for a smooth, non-janky
+   sweep (animating `left` forced a paint every frame). */
 .pm-cta::after {
   content: "";
   position: absolute;
   top: -60%;
-  left: -35%;
-  width: 55%;
+  left: 0;
+  width: 42%;
   height: 220%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.6), transparent);
-  transform: skewX(-16deg);
-  animation: pm-glare 4.2s ease-in-out infinite;
+  background: linear-gradient(100deg, transparent, var(--pm-cta-glare), transparent);
+  transform: translateX(-260%) skewX(-16deg);
+  animation: pm-glare 3.4s cubic-bezier(0.45, 0, 0.2, 1) infinite;
   pointer-events: none;
+  will-change: transform;
 }
 .pm-cta > * {
   position: relative;
@@ -473,13 +531,26 @@ body {
   }
 }
 @keyframes pm-glare {
-  0%,
-  55% {
-    left: -35%;
+  0% {
+    transform: translateX(-260%) skewX(-16deg);
   }
-  85%,
+  55%,
   100% {
-    left: 135%;
+    transform: translateX(430%) skewX(-16deg);
+  }
+}
+@keyframes pm-pop {
+  0% {
+    transform: scale(1) rotate(0);
+  }
+  40% {
+    transform: scale(1.3) rotate(-9deg);
+  }
+  70% {
+    transform: scale(0.92) rotate(5deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
   }
 }
 
@@ -490,7 +561,8 @@ body {
   .pm-title,
   .pm-sub,
   .pm-badge,
-  .pm-benefit,
+  .pm-benefit-wrap,
+  .pm-benefit-tile.is-pop,
   .pm-more,
   .pm-cta::after {
     animation: none !important;
