@@ -20,8 +20,7 @@ export interface OnboardingStrings {
   // yes → glass confirm → waiting → "it's mutual". Mirrors the shared product
   // copy; partner names are fixed English demo names.
   matchDemo: {
-    introTitle: string;
-    introBullets: [string, string, string];
+    introTitle: string; // bold headline on the intro screen (no specifics)
     choosePrompt: string;
     chooseWoman: string;
     chooseMan: string;
@@ -132,12 +131,7 @@ const en: OnboardingStrings = {
     ["You get a personal AI matchmaker that works around the clock to find the person who perfectly fits you"],
   ],
   matchDemo: {
-    introTitle: "This is how finding your person works in Gennety",
-    introBullets: [
-      "Your personal AI matchmaker searches around the clock — you never swipe.",
-      "It reads thousands of profiles and picks the ones that truly fit you.",
-      "You just approve the ones you'd actually want to meet.",
-    ],
+    introTitle: "Now — let's find your person. Here's how it works in Gennety.",
     choosePrompt: "Who should I show you?",
     chooseWoman: "A woman",
     chooseMan: "A man",
@@ -314,12 +308,7 @@ const ru: OnboardingStrings = {
     ["У тебя будет личный AI-матчмейкер, который работает круглосуточно и находит идеально подходящую тебе пару"],
   ],
   matchDemo: {
-    introTitle: "Вот как в Gennety выглядит поиск твоего человека",
-    introBullets: [
-      "Твой личный AI-матчмейкер ищет круглосуточно — тебе не нужно листать анкеты.",
-      "Он читает тысячи профилей и отбирает тех, кто действительно тебе подходит.",
-      "Ты просто соглашаешься на тех, с кем правда хочешь встретиться.",
-    ],
+    introTitle: "Сейчас найдём твоего человека. Вот как это работает в Gennety.",
     choosePrompt: "Кого тебе показать?",
     chooseWoman: "Девушку",
     chooseMan: "Парня",
@@ -495,12 +484,7 @@ const uk: OnboardingStrings = {
     ["У тебе буде особистий AI-матчмейкер, який працює цілодобово й знаходить ідеально підходящу тобі пару"],
   ],
   matchDemo: {
-    introTitle: "Ось як у Gennety виглядає пошук твоєї людини",
-    introBullets: [
-      "Твій особистий AI-матчмейкер шукає цілодобово — тобі не треба гортати анкети.",
-      "Він читає тисячі профілів і відбирає тих, хто справді тобі підходить.",
-      "Ти просто погоджуєшся на тих, з ким дійсно хочеш зустрітися.",
-    ],
+    introTitle: "Зараз знайдемо твою людину. Ось як це працює в Gennety.",
     choosePrompt: "Кого тобі показати?",
     chooseWoman: "Дівчину",
     chooseMan: "Хлопця",
@@ -677,12 +661,7 @@ const de: OnboardingStrings = {
     ["Du bekommst einen persönlichen KI-Matchmaker, der rund um die Uhr die Person findet, die perfekt zu dir passt"],
   ],
   matchDemo: {
-    introTitle: "So findest du bei Gennety deinen Menschen",
-    introBullets: [
-      "Dein persönlicher KI-Matchmaker sucht rund um die Uhr — du swipest nie.",
-      "Er liest Tausende Profile und wählt die aus, die wirklich zu dir passen.",
-      "Du bestätigst nur die, die du wirklich treffen möchtest.",
-    ],
+    introTitle: "Jetzt finden wir deinen Menschen. So funktioniert es bei Gennety.",
     choosePrompt: "Wen soll ich dir zeigen?",
     chooseWoman: "Eine Frau",
     chooseMan: "Einen Mann",
@@ -859,12 +838,7 @@ const pl: OnboardingStrings = {
     ["Dostajesz osobistego AI-matchmakera, który działa całą dobę i znajduje osobę idealnie do ciebie dopasowaną"],
   ],
   matchDemo: {
-    introTitle: "Tak w Gennety wygląda szukanie twojej osoby",
-    introBullets: [
-      "Twój osobisty AI-matchmaker szuka całą dobę — nie przewijasz żadnych profili.",
-      "Czyta tysiące profili i wybiera te, które naprawdę do ciebie pasują.",
-      "Ty tylko akceptujesz osoby, które naprawdę chcesz poznać.",
-    ],
+    introTitle: "Teraz znajdziemy twoją osobę. Tak to działa w Gennety.",
     choosePrompt: "Kogo mam ci pokazać?",
     chooseWoman: "Kobietę",
     chooseMan: "Mężczyznę",

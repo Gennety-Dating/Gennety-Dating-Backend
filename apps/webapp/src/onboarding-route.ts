@@ -7,9 +7,10 @@ type RemoteUser = TelegramOnboardingState["user"];
  * 0 Waste (typewriter + app-icon reveal), 1 Burnout (typewriter),
  * 2 Cost-2026 (typewriter), 3 Stats drum, 4 Stat-hook (typewriter),
  * 5 Profile swipe simulator, 6 Pivot (typewriter + rising Gennety icon),
- * 7 Matchmaker (typewriter), 8 Gennety render-card swipe demo, 9 HowItWorks.
+ * 7 Matchmaker (typewriter), 8 Match-demo intro (headline),
+ * 9 Match-decision chat demo (gender selector + chat), 10 HowItWorks.
  */
-export const VISUAL_LAST_INDEX = 9;
+export const VISUAL_LAST_INDEX = 10;
 /**
  * Sentinel persisted once the user has clicked past the last visual scene.
  * On the next launch it means "skip the animation, resume the post-visual

@@ -506,11 +506,14 @@ function App(): ReactElement {
         />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 8}>
-        <MatchDemoScene active={phase.kind === "visual" && phase.index === 8} onNext={nextVisualWithHaptic} />
+        <MatchIntroScene onNext={nextVisualWithHaptic} />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 9}>
+        <MatchDemoScene active={phase.kind === "visual" && phase.index === 9} onNext={nextVisualWithHaptic} />
+      </Scene>
+      <Scene active={phase.kind === "visual" && phase.index === 10}>
         <HowItWorksScene
-          active={phase.kind === "visual" && phase.index === 9}
+          active={phase.kind === "visual" && phase.index === 10}
           onMore={() => setPhase({ kind: "detail", index: 0 })}
         />
       </Scene>
@@ -1351,19 +1354,35 @@ function ProfileCard(props: {
   );
 }
 
-// Scene 8 — first an intro/explainer + gender selector (so we show a relevant
-// partner and the user understands what this screen is), then a scripted chat
-// demo of the REAL Gennety decision flow (swiping isn't our mechanic; "do you
-// want to go on a date with them?" is). The chat auto-plays to the glass confirm
-// card, then WAITS — the user taps "Yes, I'm going" themselves. On confirm: a
-// shimmer "waiting" line, then ~3s later the "it's mutual" success bursts with
-// confetti. Copy mirrors the shared product strings (§3.3/§3.4). Stages:
-// 0 idle · 1 card · 2 question · 3 yes · 4 lead · 5 confirm-open · 7 waiting ·
-// 8 mutual.
+// Scene 8 — a plain, bold intro headline that tells the user what's about to
+// happen (no specifics), then a Next CTA into the demo screen (scene 9).
+function MatchIntroScene(props: { onNext: () => void }): ReactElement {
+  const s = useOnboardingStrings();
+  return (
+    <>
+      <main className="matchdemo-main matchdemo-intro-main">
+        <div className="lavender-glow" />
+        <div className="md-intro md-enter">
+          <h2 className="md-intro-title">{s.matchDemo.introTitle}</h2>
+        </div>
+      </main>
+      <BottomCta onClick={props.onNext} label={s.next} />
+    </>
+  );
+}
+
+// Scene 9 — a gender selector that slides up as a bottom sheet, then a scripted
+// chat demo of the REAL Gennety decision flow (swiping isn't our mechanic; "do
+// you want to go on a date with them?" is). The chat auto-plays to the glass
+// confirm card, then WAITS — the user taps "Yes, I'm going" themselves. On
+// confirm: a shimmer "waiting" line, then ~3s later "it's mutual" lands as a chat
+// message and fireworks burst from both sides. Copy mirrors the shared product
+// strings (§3.3/§3.4). Stages: 0 idle · 1 card · 2 question · 3 yes · 4 lead ·
+// 5 confirm-open · 7 waiting · 8 mutual.
 function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactElement {
   const s = useOnboardingStrings();
   const d = s.matchDemo;
-  // `gender === null` → the intro/selector screen; otherwise the chat demo.
+  // `gender === null` → the slide-up selector sheet; otherwise the chat demo.
   const [gender, setGender] = useState<"man" | "woman" | null>(null);
   const [stage, setStage] = useState(0);
   const [pressing, setPressing] = useState(false);
@@ -1396,7 +1415,7 @@ function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactEl
     [clearTimers],
   );
 
-  // Re-entering the scene always returns to the intro selector.
+  // Re-entering the scene always returns to the selector sheet.
   useEffect(() => {
     clearTimers();
     setGender(null);
@@ -1443,7 +1462,7 @@ function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactEl
     ];
   }, [stage, pressing, clearTimers]);
 
-  // "Go back" returns to the intro selector so a different person can be shown.
+  // "Go back" returns to the selector sheet so a different person can be shown.
   const handleBack = useCallback(() => {
     if (stage !== 5) return;
     app?.HapticFeedback?.selectionChanged?.();
@@ -1453,25 +1472,14 @@ function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactEl
     setGender(null);
   }, [stage, clearTimers]);
 
-  // Intro / explainer + gender selector.
+  // Gender selector — a bottom sheet that slides up before the demo plays.
   if (gender === null) {
     return (
-      <main className="matchdemo-main matchdemo-intro-main">
+      <main className="matchdemo-main">
         <div className="lavender-glow" />
-        <div className="md-intro md-enter">
-          <h2 className="md-intro-title">{d.introTitle}</h2>
-          <ul className="md-intro-bullets">
-            {d.introBullets.map((b) => (
-              <li key={b}>
-                <span className="md-intro-ic" aria-hidden="true">
-                  ✓
-                </span>
-                <span>{b}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="md-intro-prompt">{d.choosePrompt}</p>
-          <div className="md-intro-choices">
+        <div className="md-select md-sheet-in">
+          <p className="md-select-prompt">{d.choosePrompt}</p>
+          <div className="md-select-choices">
             <button type="button" className="md-choice" onClick={() => handleChoose("woman")}>
               {d.chooseWoman}
             </button>
@@ -1492,7 +1500,8 @@ function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactEl
     <>
       <main className="matchdemo-main">
         <div className="lavender-glow" />
-        <div className="matchdemo-chat">
+        {/* Lift the messages clear of the confirm sheet while it's open. */}
+        <div className={`matchdemo-chat ${confirmOpen ? "is-lifted" : ""}`}>
           {stage >= 1 ? (
             <div className="md-card-row md-enter">
               <div className="md-partner-card">
@@ -1527,14 +1536,10 @@ function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactEl
           {stage >= 4 ? <div className="md-bubble md-bot md-enter">{d.confirmLead}</div> : null}
           {stage >= 7 ? (
             <div className="md-bubble md-bot md-waiting md-enter">
-              <span className="md-typing" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-              </span>
-              <span className="md-shimmer-text">{d.waiting}</span>
+              <span className={stage === 7 ? "md-shimmer-text" : undefined}>{d.waiting}</span>
             </div>
           ) : null}
+          {stage >= 8 ? <div className="md-bubble md-bot md-mutual md-enter">{d.mutual}</div> : null}
         </div>
 
         {confirmOpen ? (
@@ -1552,42 +1557,41 @@ function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactEl
           </div>
         ) : null}
 
-        {stage >= 8 ? (
-          <div className="md-success" role="status">
-            <Confetti />
-            <div className="md-success-card">
-              <span className="md-success-heart" aria-hidden="true">
-                ❤️
-              </span>
-              <p className="md-success-text">{d.mutual}</p>
-            </div>
-          </div>
-        ) : null}
+        {stage >= 8 ? <SideFireworks /> : null}
       </main>
       {stage >= 8 ? <BottomCta onClick={props.onNext} label={s.next} /> : null}
     </>
   );
 }
 
-// Lightweight CSS confetti burst for the mutual-match reveal. Purely
-// decorative; each piece's angle/delay rides an inline custom property and the
-// keyframes fan them out from the centre. reduced-motion pins them (no burst).
-function Confetti(): ReactElement {
-  const pieces = Array.from({ length: 26 });
+// Side fireworks for the mutual-match reveal: two edge emitters whose pieces fan
+// up-and-inward. Purely decorative; each piece's angle/delay rides an inline
+// custom property. reduced-motion hides them (no burst).
+function SideFireworks(): ReactElement {
   return (
-    <div className="md-confetti" aria-hidden="true">
-      {pieces.map((_, i) => (
-        <span
-          key={i}
-          className={`md-confetti-piece md-confetti-c${i % 5}`}
-          style={
-            {
-              "--a": `${Math.round((i / pieces.length) * 360)}deg`,
-              "--d": `${(i % 6) * 30}ms`,
-            } as CSSProperties
-          }
-        />
-      ))}
+    <div className="md-fireworks" aria-hidden="true">
+      <FireworkBurst side="left" />
+      <FireworkBurst side="right" />
+    </div>
+  );
+}
+
+function FireworkBurst(props: { side: "left" | "right" }): ReactElement {
+  const n = 14;
+  const pieces = Array.from({ length: n });
+  return (
+    <div className={`md-fw md-fw-${props.side}`}>
+      {pieces.map((_, i) => {
+        const spread = 8 + (i / (n - 1)) * 78; // 8°..86° from straight up
+        const angle = props.side === "left" ? spread : -spread;
+        return (
+          <span
+            key={i}
+            className={`md-fw-piece md-confetti-c${i % 5}`}
+            style={{ "--a": `${angle}deg`, "--d": `${(i % 5) * 45}ms` } as CSSProperties}
+          />
+        );
+      })}
     </div>
   );
 }
