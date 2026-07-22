@@ -60,6 +60,24 @@ const TRAP_BACKGROUND =
 const DRUM_CYCLE_INTERVAL_MS = 2500; // Stats (screen 1) auto-cycle interval
 const PROFILE_CYCLE_INTERVAL_MS = 3000; // Profile (screen 2) text auto-cycle interval
 const PROFILE_SWIPE_INTERVAL_MS = 1000; // Profile (screen 2) Tinder-style card swipe cadence
+const RENDER_CYCLE_INTERVAL_MS = 3000; // Render demo (scene 8) caption auto-cycle interval
+// Render demo swaps a full, detailed Gennety card each step, so it moves far
+// slower than the Tinder deck above — the whole point is that the card is legible
+// long enough to read before the next one slides in.
+const RENDER_SWIPE_INTERVAL_MS = 2400;
+
+// Pre-rendered Gennety match/date cards (1080×1350), shown as an auto-swiping
+// deck on scene 8 to contrast the "person as a portrait" render format against
+// the Tinder-style swipe simulator (scene 5). Files live in
+// `apps/webapp/public/renders/` (1.jpg..5.jpg); a missing file degrades to the
+// card background. Order alternates hero-panel and torn-collage layouts.
+const RENDER_CARDS: string[] = [
+  "/renders/1.jpg",
+  "/renders/2.jpg",
+  "/renders/3.jpg",
+  "/renders/4.jpg",
+  "/renders/5.jpg",
+];
 
 interface ProfileCardData {
   name: string;
@@ -483,8 +501,11 @@ function App(): ReactElement {
         />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 8}>
+        <RenderCycleScene active={phase.kind === "visual" && phase.index === 8} onNext={nextVisualWithHaptic} />
+      </Scene>
+      <Scene active={phase.kind === "visual" && phase.index === 9}>
         <HowItWorksScene
-          active={phase.kind === "visual" && phase.index === 8}
+          active={phase.kind === "visual" && phase.index === 9}
           onMore={() => setPhase({ kind: "detail", index: 0 })}
         />
       </Scene>
@@ -1321,6 +1342,130 @@ function ProfileCard(props: {
           <MockAction icon="bolt" tone="purple" small />
         </div>
       </div>
+    </div>
+  );
+}
+
+// Scene 8 — the Gennety-render payoff to the swipe simulator (scene 5). Same
+// deck-plus-cycling-copy shape as ProfileCycleScene, but the cards are our own
+// pre-rendered match/date cards (full images) rather than mock Tinder profiles.
+function RenderCycleScene(props: {
+  active: boolean;
+  onNext: () => void;
+}): ReactElement {
+  const s = useOnboardingStrings();
+  const cycle = useTimedCycle(props.active, s.rendersLines.length, RENDER_CYCLE_INTERVAL_MS);
+  const copy = s.rendersLines[cycle.index] ?? s.rendersLines[0]!;
+
+  return (
+    <>
+      <main className="exhaustion-main">
+        <div className="lavender-glow" />
+        <RenderDeck active={props.active} />
+        <div className="exhaustion-copy exhaustion-drum">
+          <div key={copy} className="drum-window profile-drum-window">
+            <p key={copy} className="copy-headline drum-copy-item">
+              {copy}
+            </p>
+          </div>
+        </div>
+      </main>
+      <div className={`dots-dock ${cycle.canContinue ? "with-cta" : ""}`}>
+        <CycleDots total={s.rendersLines.length} active={cycle.index} complete={cycle.canContinue} />
+      </div>
+      {cycle.canContinue ? <BottomCta onClick={props.onNext} label={s.next} /> : null}
+    </>
+  );
+}
+
+// Auto-swiping deck of full pre-rendered Gennety cards. Mirrors ProfileDeck's
+// front/back swap + alternating swipe direction, but each card is a single
+// image (the render already carries its own name/bio/branding), so there is no
+// caption/action overlay.
+function RenderDeck(props: { active: boolean }): ReactElement {
+  const total = RENDER_CARDS.length;
+  const [index, setIndex] = useState(0);
+  const [leaving, setLeaving] = useState(false);
+  const [dir, setDir] = useState<"left" | "right">("right");
+
+  useEffect(() => {
+    if (!props.active) {
+      setIndex(0);
+      setLeaving(false);
+      setDir("right");
+      return;
+    }
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    const timer = window.setInterval(() => {
+      if (reduce) {
+        setIndex((cur) => (cur + 1) % total);
+        setDir((cur) => (cur === "right" ? "left" : "right"));
+      } else {
+        setLeaving(true);
+      }
+    }, RENDER_SWIPE_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [props.active, total]);
+
+  // Warm the image cache so a freshly-mounted back card never flashes its
+  // placeholder before the render paints.
+  useEffect(() => {
+    for (const src of RENDER_CARDS) {
+      const img = new Image();
+      img.src = src;
+    }
+  }, []);
+
+  const handleExitEnd = useCallback(() => {
+    setIndex((cur) => (cur + 1) % total);
+    setDir((cur) => (cur === "right" ? "left" : "right"));
+    setLeaving(false);
+  }, [total]);
+
+  const front = RENDER_CARDS[index] ?? RENDER_CARDS[0]!;
+  const back = RENDER_CARDS[(index + 1) % total] ?? RENDER_CARDS[0]!;
+
+  return (
+    <div className="swipe-deck render-deck">
+      <RenderCard key={(index + 1) % total} src={back} variant="back" rising={leaving} />
+      <RenderCard key={index} src={front} variant="front" leaving={leaving} dir={dir} onExitEnd={handleExitEnd} />
+    </div>
+  );
+}
+
+function RenderCard(props: {
+  src: string;
+  variant: "front" | "back";
+  rising?: boolean;
+  leaving?: boolean;
+  dir?: "left" | "right";
+  onExitEnd?: () => void;
+}): ReactElement {
+  const className = [
+    "profile-card",
+    "render-card",
+    `is-${props.variant}`,
+    props.rising ? "is-rising" : "",
+    props.leaving ? `is-leaving-${props.dir}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <div
+      className={className}
+      onAnimationEnd={(event) => {
+        if (props.leaving && event.animationName.startsWith("swipeOut")) props.onExitEnd?.();
+      }}
+    >
+      <img
+        className="render-card-image"
+        src={props.src}
+        alt=""
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+      />
     </div>
   );
 }

@@ -15,6 +15,7 @@ export interface OnboardingStrings {
   statFootnote: string;
   pivotLines: string[][]; // scene 6 — "we see these problems / so we built Gennety"
   matchmakerLines: string[][]; // scene 7 — "you get a personal AI matchmaker"
+  rendersLines: string[]; // scene 8 — Gennety render-card swipe demo cycling lines
   howItWorksSteps: Array<{ title: string; body: string }>;
   dateFlowSteps: Array<{ title: string; body: string }>;
   profileName: string;
@@ -111,6 +112,11 @@ const en: OnboardingStrings = {
   pivotLines: [["We see these problems"], ["So we built ", "Gennety"]],
   matchmakerLines: [
     ["You get a personal AI matchmaker that works around the clock to find the person who perfectly fits you"],
+  ],
+  rendersLines: [
+    "This is how we introduce a person.",
+    "A real portrait — not a product to swipe.",
+    "One match, chosen for you.",
   ],
   howItWorksSteps: [
     {
@@ -265,6 +271,11 @@ const ru: OnboardingStrings = {
   matchmakerLines: [
     ["У тебя будет личный AI-матчмейкер, который работает круглосуточно и находит идеально подходящую тебе пару"],
   ],
+  rendersLines: [
+    "Вот как мы показываем человека.",
+    "Живой портрет, а не товар для свайпа.",
+    "Одна пара — выбранная для тебя.",
+  ],
   howItWorksSteps: [
     {
       title: "Быстрый вход",
@@ -416,6 +427,11 @@ const uk: OnboardingStrings = {
   pivotLines: [["Ми бачимо ці проблеми"], ["Тому ми створили ", "Gennety"]],
   matchmakerLines: [
     ["У тебе буде особистий AI-матчмейкер, який працює цілодобово й знаходить ідеально підходящу тобі пару"],
+  ],
+  rendersLines: [
+    "Ось як ми показуємо людину.",
+    "Живий портрет, а не товар для свайпу.",
+    "Одна пара — обрана для тебе.",
   ],
   howItWorksSteps: [
     {
@@ -570,6 +586,11 @@ const de: OnboardingStrings = {
   matchmakerLines: [
     ["Du bekommst einen persönlichen KI-Matchmaker, der rund um die Uhr die Person findet, die perfekt zu dir passt"],
   ],
+  rendersLines: [
+    "So stellen wir dir einen Menschen vor.",
+    "Ein echtes Porträt — kein Produkt zum Swipen.",
+    "Eine Person — für dich ausgewählt.",
+  ],
   howItWorksSteps: [
     {
       title: "Schneller Einstieg",
@@ -722,6 +743,11 @@ const pl: OnboardingStrings = {
   pivotLines: [["Widzimy te problemy"], ["Dlatego stworzyliśmy ", "Gennety"]],
   matchmakerLines: [
     ["Dostajesz osobistego AI-matchmakera, który działa całą dobę i znajduje osobę idealnie do ciebie dopasowaną"],
+  ],
+  rendersLines: [
+    "Tak przedstawiamy ci człowieka.",
+    "Prawdziwy portret — nie produkt do przesuwania.",
+    "Jedna osoba — wybrana dla ciebie.",
   ],
   howItWorksSteps: [
     {
