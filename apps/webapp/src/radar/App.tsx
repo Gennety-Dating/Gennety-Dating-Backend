@@ -26,6 +26,50 @@ function chipPromptIndices(total: number): Set<number> {
   return idx;
 }
 
+/** How many leading cards must be paint-ready before we reveal the rating UI.
+ *  Just the current + next: enough to start instantly and land on card 2 with
+ *  no flash, while the rest keep preloading in the background. */
+const HEAD_READY = 2;
+/** Parallel image fetches. Small enough to stay polite on a phone connection,
+ *  large enough to race ahead of a user rating one card every ~1–2s. */
+const PRELOAD_CONCURRENCY = 4;
+
+/** Load + decode one image; resolves paint-ready (or on error, so the ordered
+ *  queue never stalls on a single bad asset). */
+function preloadOne(url: string): Promise<void> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve();
+    img.onerror = () => resolve();
+    img.src = url;
+    // decode() (when supported) guarantees the bytes are decoded and ready to
+    // paint, so the later background-image swap is instant, not a re-decode.
+    void img.decode?.().then(() => resolve()).catch(() => {});
+  });
+}
+
+/** Preload `urls` in order with bounded concurrency, calling `onReady(index)`
+ *  as each becomes paint-ready. `cancelled()` lets an unmounted deck bail. */
+function preloadOrdered(
+  urls: string[],
+  concurrency: number,
+  onReady: (index: number) => void,
+  cancelled: () => boolean,
+): void {
+  let next = 0;
+  const pump = (): void => {
+    if (cancelled()) return;
+    const idx = next++;
+    if (idx >= urls.length) return;
+    void preloadOne(urls[idx]!).then(() => {
+      if (cancelled()) return;
+      onReady(idx);
+      pump();
+    });
+  };
+  for (let k = 0; k < Math.min(concurrency, urls.length); k++) pump();
+}
+
 type Status = "loading" | "ready" | "error" | "submitting" | "done";
 type Phase = "rating" | "chips";
 
@@ -36,14 +80,14 @@ export function App() {
   const [answers, setAnswers] = useState<RadarAnswerInput[]>([]);
   const [phase, setPhase] = useState<Phase>("rating");
   const [pending, setPending] = useState<{ photoId: string; verdict: RadarVerdict } | null>(null);
+  // Indices whose card image is fully decoded and instant to paint.
+  const [ready, setReady] = useState<Set<number>>(new Set());
 
   const load = () => {
     setStatus("loading");
+    setReady(new Set());
     fetchRadarDeck(initData)
-      .then((d) => {
-        setDeck(d);
-        setStatus("ready");
-      })
+      .then((d) => setDeck(d))
       .catch(() => setStatus("error"));
   };
   useEffect(load, []);
@@ -52,14 +96,32 @@ export function App() {
   const promptIdx = useMemo(() => chipPromptIndices(total), [total]);
   const card = deck?.cards[index] ?? null;
 
-  // Preload the next image so the swap feels instant.
+  // Once the deck arrives, preload every card image in swipe order in the
+  // background so listing never waits on a network fetch. We reveal the rating
+  // UI as soon as the first HEAD_READY images are paint-ready (below), while the
+  // rest keep streaming into the browser cache ahead of the user.
   useEffect(() => {
-    const next = deck?.cards[index + 1];
-    if (next) {
-      const img = new Image();
-      img.src = next.image;
-    }
-  }, [deck, index]);
+    if (!deck) return;
+    let cancelled = false;
+    preloadOrdered(
+      deck.cards.map((c) => c.image),
+      PRELOAD_CONCURRENCY,
+      (idx) => setReady((prev) => new Set(prev).add(idx)),
+      () => cancelled,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [deck]);
+
+  // Reveal the deck the moment the leading cards are decoded — not after all of
+  // them — so the picker starts fast even on a slow connection.
+  const headReady =
+    total > 0 &&
+    Array.from({ length: Math.min(HEAD_READY, total) }, (_, i) => i).every((i) => ready.has(i));
+  useEffect(() => {
+    if (status === "loading" && deck && headReady) setStatus("ready");
+  }, [status, deck, headReady]);
 
   const finish = (finalAnswers: RadarAnswerInput[]) => {
     setStatus("submitting");
@@ -107,9 +169,26 @@ export function App() {
   };
 
   if (status === "loading") {
+    // Instant, on-brand boot screen: the real title/subtitle plus shimmering
+    // card silhouettes and a live indeterminate bar, so the Mini App never
+    // reads as a frozen blank while the deck + first images warm up.
     return (
-      <div className="radar-screen radar-center">
-        <div className="radar-spinner" />
+      <div className="radar-screen radar-boot">
+        <header className="radar-head">
+          <h1 className="radar-title">{s.title}</h1>
+          <p className="radar-sub">{s.subtitle}</p>
+        </header>
+        <div className="radar-boot-stack">
+          <span className="radar-boot-ghost radar-boot-ghost-3" />
+          <span className="radar-boot-ghost radar-boot-ghost-2" />
+          <span className="radar-boot-ghost radar-boot-ghost-1" />
+        </div>
+        <div className="radar-boot-foot">
+          <div className="radar-boot-bar">
+            <span className="radar-boot-bar-sweep" />
+          </div>
+          <p className="radar-finishing">{s.preparing}</p>
+        </div>
       </div>
     );
   }
@@ -156,9 +235,11 @@ export function App() {
       <div className="radar-card-stack">
         {card && (
           <div
-            className={`radar-card ${phase === "chips" ? "radar-card-dim" : ""}`}
+            className={`radar-card ${phase === "chips" ? "radar-card-dim" : ""} ${
+              ready.has(index) ? "" : "radar-card-loading"
+            }`}
             key={card.photoId}
-            style={{ backgroundImage: `url(${card.image})` }}
+            style={ready.has(index) ? { backgroundImage: `url(${card.image})` } : undefined}
           />
         )}
 

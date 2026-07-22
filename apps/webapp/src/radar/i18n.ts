@@ -10,6 +10,7 @@ export interface RadarStrings {
   notMyType: string;
   whyOptional: string;
   skipChip: string;
+  preparing: string;
   finishing: string;
   loadError: string;
   retry: string;
@@ -35,6 +36,7 @@ const STRINGS: Record<Lang, RadarStrings> = {
     notMyType: "Not for me",
     whyOptional: "What caught your eye? (optional)",
     skipChip: "Skip",
+    preparing: "Getting your cards ready…",
     finishing: "Saving your taste…",
     loadError: "Couldn't load the cards.",
     retry: "Try again",
@@ -48,6 +50,7 @@ const STRINGS: Record<Lang, RadarStrings> = {
     notMyType: "Не моё",
     whyOptional: "Что зацепило? (необязательно)",
     skipChip: "Пропустить",
+    preparing: "Готовим карточки…",
     finishing: "Сохраняем твой вкус…",
     loadError: "Не удалось загрузить карточки.",
     retry: "Ещё раз",
@@ -69,6 +72,7 @@ const STRINGS: Record<Lang, RadarStrings> = {
     notMyType: "Не моє",
     whyOptional: "Що зачепило? (необовʼязково)",
     skipChip: "Пропустити",
+    preparing: "Готуємо картки…",
     finishing: "Зберігаємо твій смак…",
     loadError: "Не вдалося завантажити картки.",
     retry: "Ще раз",
@@ -90,6 +94,7 @@ const STRINGS: Record<Lang, RadarStrings> = {
     notMyType: "Nichts für mich",
     whyOptional: "Was hat dir gefallen? (optional)",
     skipChip: "Überspringen",
+    preparing: "Karten werden vorbereitet…",
     finishing: "Wir speichern deinen Geschmack…",
     loadError: "Karten konnten nicht geladen werden.",
     retry: "Erneut",
@@ -111,6 +116,7 @@ const STRINGS: Record<Lang, RadarStrings> = {
     notMyType: "Nie moje",
     whyOptional: "Co przyciągnęło wzrok? (opcjonalnie)",
     skipChip: "Pomiń",
+    preparing: "Przygotowujemy karty…",
     finishing: "Zapisujemy twój gust…",
     loadError: "Nie udało się wczytać kart.",
     retry: "Ponów",
