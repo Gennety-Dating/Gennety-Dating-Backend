@@ -1553,6 +1553,7 @@ async function execFinalizeOnboarding(
           psychologicalSummary: true,
           fridayVibeText: true,
           vibeFocusText: true,
+          vibeExtractedAt: true,
           photos: true,
           homeCityKey: true,
         },
@@ -1593,7 +1594,10 @@ async function execFinalizeOnboarding(
   // null. Runs for accepted AND declined users.
   const fridayVibe = user?.profile?.fridayVibeText ?? null;
   const vibeFocus = user?.profile?.vibeFocusText ?? null;
-  if (user) {
+  // Idempotent: once axes are extracted (`vibeExtractedAt` stamped), a finalize
+  // retry must NOT re-run the LLM — a transient extractor failure would return
+  // null and `saveVibeAxes` would wipe the already-persisted axes back to null.
+  if (user && !user.profile?.vibeExtractedAt) {
     const extractAxes = deps.extractVibeAxes ?? extractVibeAxes;
     const persistAxes = deps.saveVibeAxes ?? saveVibeAxes;
     try {

@@ -65,6 +65,7 @@ import { contextDumpInstruction } from "@gennety/shared";
 import { env } from "../config.js";
 import { typeRadarInviteCopy } from "./type-radar-copy.js";
 import { createAndSendOtp, verifyOtp } from "../public/otp.js";
+import { extractVibeAxes, saveVibeAxes } from "./vibe-axes.js";
 import { runAgentTurn, injectSystemMessage, truncateForApi, summarizeHistory } from "./onboarding-agent.js";
 import type { ChatMessage } from "./onboarding-agent.js";
 
@@ -1054,6 +1055,65 @@ describe("onboarding-agent", () => {
       vibeFocus: "who's there",
       source: "declined",
     });
+  });
+
+  it("does not re-extract vibe axes on a finalize retry once already extracted", async () => {
+    // A finalize that runs after vibe axes were already stamped must NOT call
+    // the extractor again — a transient LLM failure would return null and wipe
+    // the good axes. Guard: `profile.vibeExtractedAt` is set.
+    const saveFallbackProfile = vi.fn().mockResolvedValue({
+      summary: "fallback",
+      embeddingSaved: true,
+    });
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        messageHistory: [],
+        language: "en",
+        aiMemoryExportPreference: "declined",
+      })
+      .mockResolvedValueOnce({
+        id: "uuid-1",
+        firstName: "Alice",
+        age: 21,
+        gender: "female",
+        preference: "men",
+        email: "alice@stanford.edu",
+        isEmailVerified: true,
+        termsAccepted: true,
+        aiMemoryExportPreference: "declined",
+        profile: {
+          ethnicity: "Ukrainian",
+          height: 165,
+          hobbies: ["tennis"],
+          partnerPreferences: "kind and funny",
+          fridayVibeText: "quiet dinner at home",
+          vibeFocusText: "who's there",
+          vibeExtractedAt: new Date("2026-07-20T00:00:00.000Z"),
+          photos: ["p1", "p2", "p3", "p4"],
+          homeCityKey: "ua:kyiv",
+        },
+      });
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-1",
+      profile: null,
+    });
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "call-1", name: "finalize_onboarding", args: {} }]),
+      )
+      .mockResolvedValueOnce(textResponse("You're all set."));
+
+    const result = await runAgentTurn(telegramId, "finish", {
+      fetchFn: mockFetch,
+      saveFallbackProfile,
+    });
+
+    expect(result.onboardingComplete).toBe(true);
+    expect(extractVibeAxes).not.toHaveBeenCalled();
+    expect(saveVibeAxes).not.toHaveBeenCalled();
   });
 
   it("handles verify_otp with correct code", async () => {
