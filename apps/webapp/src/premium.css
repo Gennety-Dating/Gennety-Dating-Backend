@@ -216,12 +216,15 @@ body {
     var(--pm-shimmer-base) 60%,
     var(--pm-shimmer-base) 100%
   );
-  background-size: 250% 100%;
+  /* 3× the text width, so the bright band is fully off the letters at both ends
+     of the loop — the wrap is invisible and the "interval" is just the band
+     travelling through the off-text region. */
+  background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: pm-shimmer 4.8s ease-in-out infinite;
+  animation: pm-shimmer 4.6s linear infinite;
 }
 .pm-sub {
   margin: 0;
@@ -458,7 +461,9 @@ body {
   height: 220%;
   background: linear-gradient(100deg, transparent, var(--pm-cta-glare), transparent);
   transform: translateX(-260%) skewX(-16deg);
-  animation: pm-glare 3.4s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  /* Constant-speed sweep (linear); the glare then rests fully off the right edge
+     for the rest of the cycle — same feel as the wordmark shimmer. */
+  animation: pm-glare 3.8s linear infinite;
   pointer-events: none;
   will-change: transform;
 }
@@ -542,18 +547,16 @@ body {
     transform: scale(1.06);
   }
 }
-/* One clean sweep, then park the highlight fully off the left and rest. Both the
-   hold point (-120%) and the restart point (220%) sit off the text, so the loop
-   never flashes a second highlight over the last letters. */
+/* Pure constant-speed travel (no hold, no easing): the highlight glides left→
+   right through the letters and off the far edge, and since it's fully off-text
+   at both 100% and 0% the wrap doesn't flash. The off-text half of each cycle is
+   the natural pause between passes — no freeze, no speed change. */
 @keyframes pm-shimmer {
-  0% {
-    background-position: 220% 0;
+  from {
+    background-position: 100% 0;
   }
-  38% {
-    background-position: -120% 0;
-  }
-  100% {
-    background-position: -120% 0;
+  to {
+    background-position: 0% 0;
   }
 }
 @keyframes pm-glare {
