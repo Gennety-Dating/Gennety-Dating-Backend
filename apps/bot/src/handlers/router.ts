@@ -15,6 +15,7 @@ import {
   handleVerificationSkip,
   handleVerificationSkipConfirm,
 } from "./onboarding/verification.js";
+import { RADAR_SKIP_CALLBACK, handleRadarSkip } from "./onboarding/type-radar.js";
 import { menuRouter } from "./menu/router.js";
 
 const router = new Composer<BotContext>();
@@ -55,6 +56,13 @@ router.use(async (ctx, next) => {
   }
   if (ctx.callbackQuery?.data === VERIFY_CHECK_CALLBACK) {
     await handleVerificationCheck(ctx);
+    return;
+  }
+  // Type Radar Skip fires mid-onboarding (onboardingStep is still
+  // `conversational`), so it must be caught before the completed-user menu
+  // delegation below. No-op unless TYPE_RADAR_ENABLED (the button is never sent).
+  if (ctx.callbackQuery?.data === RADAR_SKIP_CALLBACK) {
+    await handleRadarSkip(ctx);
     return;
   }
   await next();

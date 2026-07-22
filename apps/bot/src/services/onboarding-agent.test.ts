@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -62,6 +62,8 @@ vi.mock("../public/otp.js", () => ({
 
 import { prisma } from "@gennety/db";
 import { contextDumpInstruction } from "@gennety/shared";
+import { env } from "../config.js";
+import { typeRadarInviteCopy } from "./type-radar-copy.js";
 import { createAndSendOtp, verifyOtp } from "../public/otp.js";
 import { runAgentTurn, injectSystemMessage, truncateForApi, summarizeHistory } from "./onboarding-agent.js";
 import type { ChatMessage } from "./onboarding-agent.js";
@@ -487,6 +489,70 @@ describe("onboarding-agent", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(result.contextPromptRequested).toBe(true);
     expect(result.reply).toBe(contextDumpInstruction("ru"));
+  });
+
+  describe("Type Radar gate (step 5B)", () => {
+    const radarUser = (typeRadarCompletedAt: Date | null) => ({
+      id: "uuid-1",
+      messageHistory: [
+        { role: "assistant", content: "Как ты описываешь своё происхождение? Можно пропустить" },
+        { role: "user", content: "пропустим" },
+      ],
+      language: "ru",
+      email: "alice@stanford.edu",
+      universityDomain: "stanford.edu",
+      isEmailVerified: true,
+      firstName: "Алексей",
+      age: 24,
+      gender: "male",
+      preference: "women",
+      profile: {
+        ethnicity: null,
+        height: 176,
+        hobbies: ["готовка"],
+        partnerPreferences: "девушка",
+        photos: [],
+        typeRadarCompletedAt,
+      },
+    });
+
+    afterEach(() => {
+      (env as { TYPE_RADAR_ENABLED?: boolean }).TYPE_RADAR_ENABLED = false;
+    });
+
+    it("intercepts request_context_dump before the Magic Prompt when enabled and not completed", async () => {
+      (env as { TYPE_RADAR_ENABLED?: boolean }).TYPE_RADAR_ENABLED = true;
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(radarUser(null));
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          toolCallResponse([{ id: "call-ctx", name: "request_context_dump", args: {} }]),
+        );
+
+      const result = await runAgentTurn(telegramId, "ок дальше", { fetchFn: mockFetch });
+
+      expect(result.typeRadarRequested).toBe(true);
+      expect(result.contextPromptRequested).toBe(false);
+      expect(result.contextDumpStarted).toBe(false);
+      expect(result.reply).toBe(typeRadarInviteCopy("ru").intro);
+    });
+
+    it("lets request_context_dump through once the radar is completed", async () => {
+      (env as { TYPE_RADAR_ENABLED?: boolean }).TYPE_RADAR_ENABLED = true;
+      (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+        radarUser(new Date()),
+      );
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          toolCallResponse([{ id: "call-ctx", name: "request_context_dump", args: {} }]),
+        );
+
+      const result = await runAgentTurn(telegramId, "ок дальше", { fetchFn: mockFetch });
+
+      expect(result.typeRadarRequested).toBe(false);
+      expect(result.contextPromptRequested).toBe(true);
+    });
   });
 
   it("saves the user's latest pasted message as the dump, ignoring any LLM rephrasing in raw_dump", async () => {

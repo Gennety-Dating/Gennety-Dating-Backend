@@ -293,9 +293,10 @@ app.use("/v1/tickets", (req, res, next) => {
 });
 
 // Type Radar Mini App — TMA-authed, feature-flagged (routes 404 when
-// TYPE_RADAR_ENABLED is off). No bot api needed (no DMs).
+// TYPE_RADAR_ENABLED is off). The bot api is optional: deck/submit work without
+// it; when present, submit resumes the onboarding conversation past the gate.
 app.use("/v1/radar", (req, res, next) => {
-  if (!radarRouter) radarRouter = createRadarRouter();
+  if (!radarRouter) radarRouter = createRadarRouter(injectedBotApi);
   radarRouter(req, res, next);
 });
 

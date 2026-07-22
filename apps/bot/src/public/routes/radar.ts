@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import type { Api, RawApi } from "grammy";
 import { prisma, type Prisma } from "@gennety/db";
 import {
   ageBandFor,
@@ -15,6 +16,10 @@ import {
 } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
+import {
+  resumeOnboardingAfterRadar,
+  patchOnboardingSession,
+} from "../../handlers/onboarding/type-radar.js";
 
 /**
  * Type Radar Mini App API (PRODUCT_SPEC §Type Radar). A fast visual
@@ -89,7 +94,7 @@ function chipsForSet(set: RadarSet): { like: { id: string }[]; dislike: { id: st
   return { like: ids("like"), dislike: ids("dislike") };
 }
 
-export function createRadarRouter(): Router {
+export function createRadarRouter(api: Api<RawApi> | null): Router {
   const router = Router();
 
   // Whole feature ships dark — every route 404s until the flag is on.
@@ -151,7 +156,7 @@ export function createRadarRouter(): Router {
 
     const user = await prisma.user.findUnique({
       where: { telegramId: auth.telegramId },
-      select: { id: true, age: true, preference: true },
+      select: { id: true, age: true, preference: true, onboardingStep: true },
     });
     if (!user) {
       res.status(404).json({ error: "user-not-found" });
@@ -236,6 +241,26 @@ export function createRadarRouter(): Router {
         typeRadarAgeBand: band,
       },
     });
+
+    // Resume the onboarding conversation past the radar gate (accepted → Magic
+    // Prompt, declined → photos) and persist the resulting session state. Only
+    // while the user is still onboarding; a post-onboarding retake just saves.
+    // Best-effort: a resume hiccup never fails the save the Mini App relies on.
+    if (api && user.onboardingStep !== "completed") {
+      try {
+        const { sessionPatch } = await resumeOnboardingAfterRadar(
+          api,
+          auth.telegramId,
+          Number(auth.telegramId),
+        );
+        await patchOnboardingSession(auth.telegramId, sessionPatch);
+      } catch (err) {
+        console.warn("[radar] onboarding resume after submit failed", {
+          telegramId: String(auth.telegramId),
+          err,
+        });
+      }
+    }
 
     res.json({ ok: true, counted: answers.length });
   });

@@ -46,7 +46,7 @@ function signInitData(): string {
 function buildApp() {
   const app = express();
   app.use(express.json());
-  app.use("/v1/radar", createRadarRouter());
+  app.use("/v1/radar", createRadarRouter(null));
   return app;
 }
 

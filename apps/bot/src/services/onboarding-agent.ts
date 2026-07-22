@@ -1,5 +1,6 @@
 import { prisma, Prisma, type Language } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
+import { typeRadarInviteCopy } from "./type-radar-copy.js";
 import { grantStudentBonusIfEligible } from "./ticket-wallet.js";
 import { notifyFounderNewUser } from "./founder-notify.js";
 import {
@@ -94,6 +95,14 @@ export interface AgentTurnResult {
   verificationRequired: boolean;
   /** When true, the handler must send MAGIC_CONTEXT_PROMPT in a code block after the reply */
   contextPromptRequested: boolean;
+  /**
+   * Type Radar gate (§Type Radar, step 5B). When true, the visual type picker
+   * must be completed (or skipped) before the Magic Prompt / photos step: the
+   * handler sends `reply` with the radar `web_app` button + a Skip button and
+   * waits. Optional so the many `AgentTurnResult` return sites stay untouched;
+   * only set on the conversational path that hits the gate.
+   */
+  typeRadarRequested?: boolean;
   /**
    * When true, the handler must switch the session into context-dump-buffering
    * mode so that the pasted response can be acknowledged and then sent to the
@@ -1835,6 +1844,19 @@ export async function summarizeHistory(
  *
  * Returns the assistant's reply and flags for the bot handler.
  */
+/**
+ * Type Radar gate (§Type Radar, step 5B). The visual type picker is shown once,
+ * right before the Magic Prompt / photos step, to EVERY user. It is pending only
+ * while the feature is enabled and the user hasn't yet completed OR skipped it
+ * (`Profile.typeRadarCompletedAt` stamps both outcomes). Off by default, so this
+ * is a no-op for the current production flow.
+ */
+export function typeRadarGatePending(
+  user: { profile: { typeRadarCompletedAt: Date | null } | null } | null | undefined,
+): boolean {
+  return env.TYPE_RADAR_ENABLED && (user?.profile?.typeRadarCompletedAt ?? null) === null;
+}
+
 export async function runAgentTurn(
   telegramId: bigint,
   input: string | OnboardingInput,
@@ -1877,6 +1899,7 @@ export async function runAgentTurn(
           partnerPreferences: true,
           photos: true,
           homeCityKey: true,
+          typeRadarCompletedAt: true,
         },
       },
     },
@@ -2017,6 +2040,7 @@ export async function runAgentTurn(
   let contextDumpStarted = false;
   let contextDumpSaved = false;
   let profileDataSavedThisTurn = false;
+  let typeRadarRequested = false;
 
   // Loop: call OpenAI, handle tool_calls, repeat until we get a text reply
   const MAX_TOOL_ROUNDS = 8;
@@ -2096,6 +2120,17 @@ export async function runAgentTurn(
                   "Example in Russian: \"Как ты описываешь своё происхождение или национальность? Можно пропустить\" " +
                   "Do not ask any other profile question in that message. If they skip, ignore it, or answer another field, you may proceed next time.",
               });
+            } else if (typeRadarGatePending(user)) {
+              // Visual type picker must come first. The server sends it (web_app
+              // button + Skip) and stops; the Magic Prompt follows on resume.
+              typeRadarRequested = true;
+              stopAfterToolRound = true;
+              result = JSON.stringify({
+                success: false,
+                reason: "type_radar_required",
+                message:
+                  "The user must complete the quick visual type picker first. The server is sending it now and stopping this turn — do not call any more tools.",
+              });
             } else {
               contextPromptRequested = true;
               contextDumpStarted = true;
@@ -2124,6 +2159,20 @@ export async function runAgentTurn(
             }
             break;
           case "request_photos": {
+            // Type Radar gate for the DECLINED path (no Magic Prompt): the visual
+            // picker still comes before photos. For accepted users this is a
+            // no-op here — they already cleared the gate at request_context_dump.
+            if (typeRadarGatePending(user)) {
+              typeRadarRequested = true;
+              stopAfterToolRound = true;
+              result = JSON.stringify({
+                success: false,
+                reason: "type_radar_required",
+                message:
+                  "The user must complete the quick visual type picker first. The server is sending it now and stopping this turn — do not call any more tools.",
+              });
+              break;
+            }
             // Defense-in-depth: the system prompt forbids calling request_photos
             // before save_context_dump succeeds, but LLMs occasionally violate
             // it — chaining request_context_dump → request_photos in the same
@@ -2286,8 +2335,9 @@ export async function runAgentTurn(
 
       // Persist the Magic Prompt as an assistant turn so non-Telegram clients
       // (mobile chat) can render it. Telegram still sends ctx.reply(prompt)
-      // separately; this just records what was already shown.
-      if (fnName === "request_context_dump") {
+      // separately; this just records what was already shown. Skipped when the
+      // Type Radar gate intercepted this request_context_dump — no prompt yet.
+      if (fnName === "request_context_dump" && !typeRadarRequested) {
         history.push({
           role: "assistant",
           content: magicContextPrompt(user?.language ?? "en"),
@@ -2303,6 +2353,16 @@ export async function runAgentTurn(
     if (stopAfterToolRound) {
       break;
     }
+  }
+
+  // Type Radar gate: replace the model's trailing text with the deterministic
+  // invite copy (the caller sends it with the web_app + Skip buttons) and record
+  // it so the resume turn / mobile client see what was shown.
+  if (typeRadarRequested) {
+    history.push({
+      role: "assistant",
+      content: typeRadarInviteCopy(user?.language).intro,
+    });
   }
 
   const now = new Date();
@@ -2337,6 +2397,7 @@ export async function runAgentTurn(
     contextPromptRequested,
     contextDumpStarted,
     contextDumpSaved,
+    typeRadarRequested,
   };
 }
 

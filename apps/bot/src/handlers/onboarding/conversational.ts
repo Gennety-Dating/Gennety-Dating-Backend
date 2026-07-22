@@ -1,6 +1,7 @@
 import { InlineKeyboard, type Api } from "grammy";
 import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
+import { sendTypeRadarInvite } from "./type-radar.js";
 import type { SessionData } from "@gennety/shared";
 import {
   MIN_PHOTOS,
@@ -389,6 +390,14 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
         await ctx.reply("⚠️ Couldn't send the prompt. Please try again — type anything and I'll resend it.");
       }
     }
+  }
+
+  // Type Radar gate: the agent asked for the visual picker before the Magic
+  // Prompt / photos step. Send the invite (web_app + Skip) instead of the plain
+  // reply and stop — submit (Mini App route) or Skip (callback) resumes the flow.
+  if (result.typeRadarRequested && ctx.chat?.id !== undefined) {
+    await sendTypeRadarInvite(ctx.api, ctx.chat.id, telegramId, result.reply);
+    return;
   }
 
   if (result.contextDumpSaved && ctx.chat?.id !== undefined) {
