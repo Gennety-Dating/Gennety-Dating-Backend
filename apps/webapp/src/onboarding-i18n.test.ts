@@ -50,12 +50,20 @@ describe("onboarding i18n", () => {
         expect(step.title.length).toBeGreaterThan(0);
         expect(step.body.length).toBeGreaterThan(0);
       }
-      // Scene 8 match-decision chat demo copy: every field present per language.
-      expect(s.matchDemo.name.length).toBeGreaterThan(0);
-      expect(s.matchDemo.age).toBeGreaterThan(0);
+      // Scene 8 intro + gender selector + chat demo copy: everything per language.
+      expect(s.matchDemo.introBullets).toHaveLength(3);
+      for (const partner of [s.matchDemo.man, s.matchDemo.woman]) {
+        expect(partner.name.length).toBeGreaterThan(0);
+        expect(partner.age).toBeGreaterThan(0);
+        expect(partner.tagline.length).toBeGreaterThan(0);
+        expect(partner.question.length).toBeGreaterThan(0);
+      }
       for (const field of [
-        s.matchDemo.tagline,
-        s.matchDemo.question,
+        s.matchDemo.introTitle,
+        ...s.matchDemo.introBullets,
+        s.matchDemo.choosePrompt,
+        s.matchDemo.chooseWoman,
+        s.matchDemo.chooseMan,
         s.matchDemo.userYes,
         s.matchDemo.confirmLead,
         s.matchDemo.confirmGo,

@@ -15,14 +15,18 @@ export interface OnboardingStrings {
   statFootnote: string;
   pivotLines: string[][]; // scene 6 — "we see these problems / so we built Gennety"
   matchmakerLines: string[][]; // scene 7 — "you get a personal AI matchmaker"
-  // scene 8 — scripted chat demo of the real Gennety decision flow (no swipe):
-  // partner card → "date with him?" → yes → glass confirm → waiting → "it's mutual".
-  // Mirrors the shared product copy; the partner name is a fixed English demo name.
+  // scene 8 — an intro/explainer + gender selector, then a scripted chat demo of
+  // the real Gennety decision flow (no swipe): partner card → "date with them?" →
+  // yes → glass confirm → waiting → "it's mutual". Mirrors the shared product
+  // copy; partner names are fixed English demo names.
   matchDemo: {
-    name: string;
-    age: number;
-    tagline: string;
-    question: string; // = matchDecisionQuestionM
+    introTitle: string;
+    introBullets: [string, string, string];
+    choosePrompt: string;
+    chooseWoman: string;
+    chooseMan: string;
+    man: { name: string; age: number; tagline: string; question: string }; // question = matchDecisionQuestionM
+    woman: { name: string; age: number; tagline: string; question: string }; // question = matchDecisionQuestionF
     userYes: string;
     confirmLead: string; // = matchTextYesConfirm
     confirmGo: string; // = matchBtnConfirmGo
@@ -128,10 +132,27 @@ const en: OnboardingStrings = {
     ["You get a personal AI matchmaker that works around the clock to find the person who perfectly fits you"],
   ],
   matchDemo: {
-    name: "Timur",
-    age: 24,
-    tagline: "Easy-going, but calm to be around",
-    question: "So — want to go on a date with him?",
+    introTitle: "This is how finding your person works in Gennety",
+    introBullets: [
+      "Your personal AI matchmaker searches around the clock — you never swipe.",
+      "It reads thousands of profiles and picks the ones that truly fit you.",
+      "You just approve the ones you'd actually want to meet.",
+    ],
+    choosePrompt: "Who should I show you?",
+    chooseWoman: "A woman",
+    chooseMan: "A man",
+    man: {
+      name: "Timur",
+      age: 24,
+      tagline: "Easy-going, but calm to be around",
+      question: "So — want to go on a date with him?",
+    },
+    woman: {
+      name: "Sonya",
+      age: 21,
+      tagline: "Warm and lively — laughs before you finish the joke",
+      question: "So — want to go on a date with her?",
+    },
     userYes: "Yes",
     confirmLead: "Love that ✨ Confirm below — and I'll take care of the rest:",
     confirmGo: "💫 Yes, I'm going",
@@ -293,10 +314,27 @@ const ru: OnboardingStrings = {
     ["У тебя будет личный AI-матчмейкер, который работает круглосуточно и находит идеально подходящую тебе пару"],
   ],
   matchDemo: {
-    name: "Timur",
-    age: 24,
-    tagline: "Лёгкий на подъём, но рядом с ним спокойно",
-    question: "Ну что — хочешь пойти с ним на свидание?",
+    introTitle: "Вот как в Gennety выглядит поиск твоего человека",
+    introBullets: [
+      "Твой личный AI-матчмейкер ищет круглосуточно — тебе не нужно листать анкеты.",
+      "Он читает тысячи профилей и отбирает тех, кто действительно тебе подходит.",
+      "Ты просто соглашаешься на тех, с кем правда хочешь встретиться.",
+    ],
+    choosePrompt: "Кого тебе показать?",
+    chooseWoman: "Девушку",
+    chooseMan: "Парня",
+    man: {
+      name: "Timur",
+      age: 24,
+      tagline: "Лёгкий на подъём, но рядом с ним спокойно",
+      question: "Ну что — хочешь пойти с ним на свидание?",
+    },
+    woman: {
+      name: "Sonya",
+      age: 21,
+      tagline: "Тёплая и живая, смеётся раньше, чем дошутишь",
+      question: "Ну что — хочешь пойти с ней на свидание?",
+    },
     userYes: "Да",
     confirmLead: "Отлично ✨ Подтверди — и дальше всё сделаю я:",
     confirmGo: "💫 Да, иду на свидание",
@@ -457,10 +495,27 @@ const uk: OnboardingStrings = {
     ["У тебе буде особистий AI-матчмейкер, який працює цілодобово й знаходить ідеально підходящу тобі пару"],
   ],
   matchDemo: {
-    name: "Timur",
-    age: 24,
-    tagline: "Легкий на підйом, але поруч з ним спокійно",
-    question: "Хочеш піти з ним на побачення?",
+    introTitle: "Ось як у Gennety виглядає пошук твоєї людини",
+    introBullets: [
+      "Твій особистий AI-матчмейкер шукає цілодобово — тобі не треба гортати анкети.",
+      "Він читає тисячі профілів і відбирає тих, хто справді тобі підходить.",
+      "Ти просто погоджуєшся на тих, з ким дійсно хочеш зустрітися.",
+    ],
+    choosePrompt: "Кого тобі показати?",
+    chooseWoman: "Дівчину",
+    chooseMan: "Хлопця",
+    man: {
+      name: "Timur",
+      age: 24,
+      tagline: "Легкий на підйом, але поруч з ним спокійно",
+      question: "Хочеш піти з ним на побачення?",
+    },
+    woman: {
+      name: "Sonya",
+      age: 21,
+      tagline: "Тепла і жива, сміється раніше, ніж дожартуєш",
+      question: "Хочеш піти з нею на побачення?",
+    },
     userYes: "Так",
     confirmLead: "Чудово ✨ Підтверди — і далі все зроблю я:",
     confirmGo: "💫 Так, іду на побачення",
@@ -622,10 +677,27 @@ const de: OnboardingStrings = {
     ["Du bekommst einen persönlichen KI-Matchmaker, der rund um die Uhr die Person findet, die perfekt zu dir passt"],
   ],
   matchDemo: {
-    name: "Timur",
-    age: 24,
-    tagline: "Unkompliziert, aber angenehm ruhig",
-    question: "Und — willst du mit ihm auf ein Date gehen?",
+    introTitle: "So findest du bei Gennety deinen Menschen",
+    introBullets: [
+      "Dein persönlicher KI-Matchmaker sucht rund um die Uhr — du swipest nie.",
+      "Er liest Tausende Profile und wählt die aus, die wirklich zu dir passen.",
+      "Du bestätigst nur die, die du wirklich treffen möchtest.",
+    ],
+    choosePrompt: "Wen soll ich dir zeigen?",
+    chooseWoman: "Eine Frau",
+    chooseMan: "Einen Mann",
+    man: {
+      name: "Timur",
+      age: 24,
+      tagline: "Unkompliziert, aber angenehm ruhig",
+      question: "Und — willst du mit ihm auf ein Date gehen?",
+    },
+    woman: {
+      name: "Sonya",
+      age: 21,
+      tagline: "Warm und lebendig — lacht, bevor du die Pointe erreichst",
+      question: "Und — willst du mit ihr auf ein Date gehen?",
+    },
     userYes: "Ja",
     confirmLead: "Stark ✨ Bestätige unten — den Rest übernehme ich:",
     confirmGo: "💫 Ja, ich gehe hin",
@@ -787,10 +859,27 @@ const pl: OnboardingStrings = {
     ["Dostajesz osobistego AI-matchmakera, który działa całą dobę i znajduje osobę idealnie do ciebie dopasowaną"],
   ],
   matchDemo: {
-    name: "Timur",
-    age: 24,
-    tagline: "Lekki na start, ale spokojnie przy nim",
-    question: "No i jak — chcesz iść z nim na randkę?",
+    introTitle: "Tak w Gennety wygląda szukanie twojej osoby",
+    introBullets: [
+      "Twój osobisty AI-matchmaker szuka całą dobę — nie przewijasz żadnych profili.",
+      "Czyta tysiące profili i wybiera te, które naprawdę do ciebie pasują.",
+      "Ty tylko akceptujesz osoby, które naprawdę chcesz poznać.",
+    ],
+    choosePrompt: "Kogo mam ci pokazać?",
+    chooseWoman: "Kobietę",
+    chooseMan: "Mężczyznę",
+    man: {
+      name: "Timur",
+      age: 24,
+      tagline: "Lekki na start, ale spokojnie przy nim",
+      question: "No i jak — chcesz iść z nim na randkę?",
+    },
+    woman: {
+      name: "Sonya",
+      age: 21,
+      tagline: "Ciepła i żywa — śmieje się, zanim skończysz żart",
+      question: "No i jak — chcesz iść z nią na randkę?",
+    },
     userYes: "Tak",
     confirmLead: "Świetnie ✨ Potwierdź poniżej — resztą zajmę się ja:",
     confirmGo: "💫 Tak, idę na randkę",

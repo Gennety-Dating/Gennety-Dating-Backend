@@ -61,10 +61,13 @@ const DRUM_CYCLE_INTERVAL_MS = 2500; // Stats (screen 1) auto-cycle interval
 const PROFILE_CYCLE_INTERVAL_MS = 3000; // Profile (screen 2) text auto-cycle interval
 const PROFILE_SWIPE_INTERVAL_MS = 1000; // Profile (screen 2) Tinder-style card swipe cadence
 
-// Scene 8 — the demo partner photo (a clean crop of the Timur render card).
-// Lives in `apps/webapp/public/renders/`; a missing file degrades to the card
-// background.
-const MATCH_DEMO_PHOTO = "/renders/timur.jpg";
+// Scene 8 — demo partner photos (clean crops of the Timur / Sonya render cards),
+// one per selectable gender. Live in `apps/webapp/public/renders/`; a missing
+// file degrades to the card background.
+const MATCH_DEMO_PHOTO: Record<"man" | "woman", string> = {
+  man: "/renders/timur.jpg",
+  woman: "/renders/sonya.jpg",
+};
 // Scripted intro beats (ms from scene entry) for the MatchDemoScene. The chat
 // auto-plays up to the glass confirm card, then STOPS — the user taps
 // "Yes, I'm going" themselves (manual confirm). Cadence is deliberately unhurried
@@ -1348,17 +1351,20 @@ function ProfileCard(props: {
   );
 }
 
-// Scene 8 — scripted chat demo of the REAL Gennety decision flow, replacing the
-// old swipe deck (swiping isn't our mechanic; "do you want to go on a date with
-// them?" is). The chat auto-plays to the glass confirm card, then WAITS — the
-// user taps "Yes, I'm going" themselves. On confirm: a shimmer "waiting" line
-// shows, and ~3s later the "it's mutual" success bursts with confetti. Copy
-// mirrors the shared product strings (§3.3/§3.4). The Next CTA appears only once
-// the success lands. Stages: 0 idle · 1 card · 2 question · 3 yes · 4 lead ·
-// 5 confirm-open (awaiting tap) · 7 waiting · 8 mutual.
+// Scene 8 — first an intro/explainer + gender selector (so we show a relevant
+// partner and the user understands what this screen is), then a scripted chat
+// demo of the REAL Gennety decision flow (swiping isn't our mechanic; "do you
+// want to go on a date with them?" is). The chat auto-plays to the glass confirm
+// card, then WAITS — the user taps "Yes, I'm going" themselves. On confirm: a
+// shimmer "waiting" line, then ~3s later the "it's mutual" success bursts with
+// confetti. Copy mirrors the shared product strings (§3.3/§3.4). Stages:
+// 0 idle · 1 card · 2 question · 3 yes · 4 lead · 5 confirm-open · 7 waiting ·
+// 8 mutual.
 function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactElement {
   const s = useOnboardingStrings();
   const d = s.matchDemo;
+  // `gender === null` → the intro/selector screen; otherwise the chat demo.
+  const [gender, setGender] = useState<"man" | "woman" | null>(null);
   const [stage, setStage] = useState(0);
   const [pressing, setPressing] = useState(false);
   const timersRef = useRef<number[]>([]);
@@ -1368,8 +1374,8 @@ function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactEl
     timersRef.current = [];
   }, []);
 
-  // Play the intro up to the confirm card, then stop and wait for the tap.
-  const runIntro = useCallback(
+  // Play the chat up to the confirm card, then stop and wait for the tap.
+  const playChat = useCallback(
     (reduce: boolean) => {
       clearTimers();
       setPressing(false);
@@ -1390,28 +1396,37 @@ function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactEl
     [clearTimers],
   );
 
+  // Re-entering the scene always returns to the intro selector.
   useEffect(() => {
-    if (!props.active) {
-      clearTimers();
-      setStage(0);
-      setPressing(false);
-      return;
-    }
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    runIntro(reduce);
+    clearTimers();
+    setGender(null);
+    setStage(0);
+    setPressing(false);
     return clearTimers;
-  }, [props.active, runIntro, clearTimers]);
+  }, [props.active, clearTimers]);
 
-  // Warm the partner photo once so the card doesn't flash a blank frame.
+  // Warm both partner photos so the chosen card doesn't flash a blank frame.
   useEffect(() => {
-    const img = new Image();
-    img.src = MATCH_DEMO_PHOTO;
+    for (const src of Object.values(MATCH_DEMO_PHOTO)) {
+      const img = new Image();
+      img.src = src;
+    }
   }, []);
 
   // Fire the success haptic the instant the mutual reveal lands.
   useEffect(() => {
     if (stage >= 8) app?.HapticFeedback?.notificationOccurred?.("success");
   }, [stage]);
+
+  const handleChoose = useCallback(
+    (g: "man" | "woman") => {
+      app?.HapticFeedback?.selectionChanged?.();
+      setGender(g);
+      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+      playChat(reduce);
+    },
+    [playChat],
+  );
 
   // The user commits the date. Press feedback → shimmer wait → mutual reveal.
   const handleConfirm = useCallback(() => {
@@ -1428,14 +1443,49 @@ function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactEl
     ];
   }, [stage, pressing, clearTimers]);
 
-  // "Go back" replays the demo from the top so it can be watched again.
+  // "Go back" returns to the intro selector so a different person can be shown.
   const handleBack = useCallback(() => {
     if (stage !== 5) return;
     app?.HapticFeedback?.selectionChanged?.();
-    runIntro(false);
-  }, [stage, runIntro]);
+    clearTimers();
+    setPressing(false);
+    setStage(0);
+    setGender(null);
+  }, [stage, clearTimers]);
 
-  // The glass confirm card is open once the intro finishes, until the user taps.
+  // Intro / explainer + gender selector.
+  if (gender === null) {
+    return (
+      <main className="matchdemo-main matchdemo-intro-main">
+        <div className="lavender-glow" />
+        <div className="md-intro md-enter">
+          <h2 className="md-intro-title">{d.introTitle}</h2>
+          <ul className="md-intro-bullets">
+            {d.introBullets.map((b) => (
+              <li key={b}>
+                <span className="md-intro-ic" aria-hidden="true">
+                  ✓
+                </span>
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="md-intro-prompt">{d.choosePrompt}</p>
+          <div className="md-intro-choices">
+            <button type="button" className="md-choice" onClick={() => handleChoose("woman")}>
+              {d.chooseWoman}
+            </button>
+            <button type="button" className="md-choice" onClick={() => handleChoose("man")}>
+              {d.chooseMan}
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const partner = d[gender];
+  const photo = MATCH_DEMO_PHOTO[gender];
   const confirmOpen = stage === 5;
 
   return (
@@ -1448,7 +1498,7 @@ function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactEl
               <div className="md-partner-card">
                 <div className="md-partner-photo">
                   <img
-                    src={MATCH_DEMO_PHOTO}
+                    src={photo}
                     alt=""
                     onError={(e) => {
                       e.currentTarget.style.display = "none";
@@ -1461,18 +1511,18 @@ function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactEl
                 <div className="md-partner-info">
                   <span className="md-partner-accent" aria-hidden="true" />
                   <h3 className="md-partner-name">
-                    {d.name}
-                    <span className="md-partner-age">, {d.age}</span>
+                    {partner.name}
+                    <span className="md-partner-age">, {partner.age}</span>
                     <span className="md-partner-verified material-symbols-outlined" aria-hidden="true">
                       verified
                     </span>
                   </h3>
-                  <p className="md-partner-tag">{d.tagline}</p>
+                  <p className="md-partner-tag">{partner.tagline}</p>
                 </div>
               </div>
             </div>
           ) : null}
-          {stage >= 2 ? <div className="md-bubble md-bot md-enter">{d.question}</div> : null}
+          {stage >= 2 ? <div className="md-bubble md-bot md-enter">{partner.question}</div> : null}
           {stage >= 3 ? <div className="md-bubble md-user md-enter">{d.userYes}</div> : null}
           {stage >= 4 ? <div className="md-bubble md-bot md-enter">{d.confirmLead}</div> : null}
           {stage >= 7 ? (

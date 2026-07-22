@@ -890,6 +890,85 @@ button {
   width: 100%;
 }
 
+/* Intro / explainer + gender selector (shown before the chat demo plays). */
+.matchdemo-intro-main {
+  justify-content: center;
+}
+.md-intro {
+  width: 100%;
+  max-width: 22rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+.md-intro-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.22;
+  color: var(--text);
+}
+.md-intro-bullets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.md-intro-bullets li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.md-intro-ic {
+  flex: 0 0 auto;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-top: 0.05rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+.md-intro-prompt {
+  margin-top: 0.35rem;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.md-intro-choices {
+  display: flex;
+  gap: 0.7rem;
+}
+.md-choice {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.85rem 0.75rem;
+  border-radius: 1rem;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+  color: var(--text);
+  font-size: 0.98rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.md-choice:active {
+  transform: scale(0.97);
+  border-color: var(--accent);
+}
+
 /* Element enter: each new message/card fades + rises in. */
 .md-enter {
   animation: mdEnter 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
