@@ -1,62 +1,217 @@
-/* Gennety Premium Mini App (§Premium). Theme tokens come from theme.css. */
+/* Gennety Premium Mini App (PRODUCT_SPEC §Premium).
+   "Burgundy Glass" — the shared full-screen Mini App language (Ticket / Venue
+   Change): a flat neutral stage where colour is spent only on the one hero and
+   the one paid action. Every surface is BORDERLESS — depth comes from layered
+   fills, inset light and shadow, never from an outline. Theme tokens live in
+   theme.css; the burgundy accent is shared across both themes. */
+
+@import "./theme.css";
+
+:root {
+  /* Local aliases onto the shared tokens (theme.css), matching venue-change so
+     the two paid screens read identically. */
+  --accent-deep: #6d1c2e;
+  --glass: var(--fill);
+  --glass-press: var(--fill-strong);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+  /* Telegram fullscreen chrome inset (close × / menu ⋯) — populated from
+     `Telegram.WebApp.contentSafeAreaInset` at boot (telegram-insets.ts). The
+     56px fallback covers older clients / the first paint. */
+  --tg-content-top: 56px;
+  --tg-content-bottom: 0px;
+}
+:root[data-theme="light"] {
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
 
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
+  padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
+  width: 100%;
+  overflow-x: hidden;
 }
 
-#root {
+body {
   min-height: 100vh;
+}
+
+/* A single soft burgundy bloom high on the stage — the only tint on the page,
+   so the medallion and the CTA read as the warm points, never the backdrop. */
+.pm-page {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+.pm-page::before {
+  content: "";
+  position: absolute;
+  top: -14%;
+  left: 50%;
+  width: 150%;
+  height: 46%;
+  transform: translateX(-50%);
+  background: radial-gradient(
+    60% 60% at 50% 0%,
+    rgba(139, 37, 59, 0.28) 0%,
+    rgba(139, 37, 59, 0.08) 42%,
+    transparent 72%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+:root[data-theme="light"] .pm-page::before {
+  background: radial-gradient(
+    60% 60% at 50% 0%,
+    rgba(139, 37, 59, 0.16) 0%,
+    rgba(139, 37, 59, 0.05) 42%,
+    transparent 72%
+  );
+}
+
+/* Scroll area — flexes; the action bar pins to the bottom. */
+.pm-scroll {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: calc(30px + env(safe-area-inset-top) + var(--tg-content-top)) 20px 24px;
+}
+
+/* Centered states (loading / active). */
+.pm-center {
+  position: relative;
+  z-index: 1;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
-  gap: 20px;
+  text-align: center;
+  gap: 16px;
+  padding: 28px 24px calc(28px + env(safe-area-inset-bottom));
 }
 
-.pm-card {
-  width: 100%;
-  max-width: 420px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 22px;
-  padding: 26px 22px;
-  box-shadow: var(--glass-shadow);
+.pm-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid rgba(139, 37, 59, 0.25);
+  border-top-color: var(--accent);
+  animation: pm-spin 0.8s linear infinite;
+}
+
+/* ── Hero ─────────────────────────────────────────────────────────────── */
+.pm-hero {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  margin-bottom: 26px;
 }
 
-.pm-crest {
-  font-size: 40px;
-  line-height: 1;
-  text-align: center;
+/* Halo — a soft burgundy ring that breathes out behind the medallion. */
+.pm-halo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin-bottom: 6px;
+}
+.pm-halo::before {
+  content: "";
+  position: absolute;
+  width: 190px;
+  height: 190px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(182, 48, 79, 0.45) 0%, transparent 68%);
+  animation: pm-breathe 4.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* The medallion — the one warm object on the stage. */
+.pm-medallion {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 68%, var(--accent-deep) 100%);
+  box-shadow:
+    0 20px 50px -16px rgba(139, 37, 59, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  animation: pm-mark-in 0.6s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+.pm-medallion-glyph {
+  width: 44px;
+  height: 44px;
+  stroke-width: 2;
+  animation: pm-glyph-in 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) 0.14s both;
 }
 
 .pm-title {
   font-family: "Space Grotesk", "Inter", sans-serif;
   font-weight: 700;
-  font-size: 26px;
-  text-align: center;
+  font-size: 27px;
+  letter-spacing: -0.015em;
   margin: 0;
-  letter-spacing: -0.01em;
+  animation: pm-rise 0.5s ease 0.08s both;
 }
-
 .pm-sub {
-  text-align: center;
+  margin: 0;
   color: var(--text-muted);
   font-size: 15px;
-  margin: -6px 0 0;
+  line-height: 1.5;
+  max-width: 300px;
+  animation: pm-rise 0.5s ease 0.16s both;
 }
 
+/* Active badge — the one pill; accent-soft fill, no outline. */
+.pm-badge {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px 6px 11px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+  box-shadow: var(--glass-edge);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  animation: pm-pill-in 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) 0.1s both;
+}
+.pm-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  box-shadow: 0 0 8px var(--accent-bright);
+}
+
+/* ── Benefits — borderless glass rows with icon tiles ─────────────────── */
 .pm-benefits {
   list-style: none;
   margin: 0;
@@ -65,88 +220,238 @@ body {
   flex-direction: column;
   gap: 12px;
 }
-
 .pm-benefit {
   display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  background: var(--surface-inset);
-  border: 1px solid var(--border);
+  gap: 14px;
+  align-items: center;
+  padding: 15px 16px;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--glass-edge);
+  animation: pm-rise 0.5s ease both;
+}
+.pm-benefit:nth-child(1) {
+  animation-delay: 0.2s;
+}
+.pm-benefit:nth-child(2) {
+  animation-delay: 0.28s;
+}
+.pm-benefit:nth-child(3) {
+  animation-delay: 0.36s;
+}
+.pm-benefit-tile {
+  flex: none;
+  width: 46px;
+  height: 46px;
   border-radius: 14px;
-  padding: 13px 14px;
+  display: grid;
+  place-items: center;
+  background: var(--glass);
+  box-shadow: var(--glass-edge);
+  color: var(--accent-bright);
 }
-
-.pm-benefit-ico {
-  font-size: 20px;
-  line-height: 1.2;
+.pm-benefit-tile .icon {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.7;
 }
-
 .pm-benefit-txt {
-  font-size: 14px;
-  line-height: 1.35;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
-
-.pm-benefit-txt b {
+.pm-benefit-title {
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.2;
   color: var(--text);
 }
+.pm-benefit-detail {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
 
+/* "More perks are on the way." — a quiet forward-looking line. */
+.pm-more {
+  margin: 16px 4px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-faint);
+  animation: pm-rise 0.5s ease 0.42s both;
+}
+
+/* ── Pinned action bar ────────────────────────────────────────────────── */
+.pm-action {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 20px calc(16px + env(safe-area-inset-bottom) + var(--tg-content-bottom));
+  /* A faint lift off the scroll content — a fill fade, never a hard rule. */
+  background: linear-gradient(to top, var(--bg) 62%, transparent);
+}
 .pm-price {
   text-align: center;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 13.5px;
 }
 
-.pm-btn {
+/* THE HERO ACTION — the one paid moment, so it is the brightest thing on the
+   screen: warm burgundy gradient, a deep bloom, and the only sheen sweep. */
+.pm-cta {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
   border: none;
-  border-radius: 14px;
-  padding: 15px 18px;
-  font-family: "Inter", sans-serif;
+  border-radius: 20px;
+  padding: 18px 22px;
+  font-family: inherit;
+  font-size: 17px;
   font-weight: 700;
-  font-size: 16px;
+  letter-spacing: -0.01em;
+  color: #fff;
   cursor: pointer;
-  background: var(--accent);
-  color: var(--on-accent);
-  transition: transform 0.08s ease, opacity 0.15s ease;
+  background: linear-gradient(
+    135deg,
+    #ff7f94 0%,
+    #f0637d 26%,
+    var(--accent-bright) 62%,
+    var(--accent) 100%
+  );
+  box-shadow:
+    0 18px 44px rgba(240, 99, 125, 0.42),
+    0 3px 12px rgba(139, 37, 59, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: transform 0.15s ease, opacity 0.2s ease;
 }
-
-.pm-btn:active {
+.pm-cta::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 35%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.42), transparent);
+  transform: skewX(-18deg);
+  animation: pm-sheen 3.4s ease-in-out infinite;
+  pointer-events: none;
+}
+.pm-cta:active {
   transform: scale(0.98);
 }
-
-.pm-btn[disabled] {
-  opacity: 0.55;
+.pm-cta[disabled] {
+  opacity: 0.6;
   cursor: default;
 }
-
-.pm-active-badge {
-  align-self: center;
-  background: var(--accent-soft);
-  color: var(--accent-bright);
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-weight: 700;
-  font-size: 13px;
+.pm-cta .icon {
+  width: 19px;
+  height: 19px;
 }
 
 .pm-manage {
   text-align: center;
   color: var(--text-faint);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.45;
+  margin: 0;
 }
 
-.pm-spinner {
-  width: 30px;
-  height: 30px;
-  border: 3px solid var(--border-strong);
-  border-top-color: var(--accent-bright);
-  border-radius: 50%;
-  animation: pm-spin 0.8s linear infinite;
+.hidden {
+  display: none !important;
 }
 
+/* ── Keyframes ────────────────────────────────────────────────────────── */
 @keyframes pm-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+@keyframes pm-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pm-mark-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes pm-glyph-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) rotate(-12deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+@keyframes pm-pill-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes pm-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+@keyframes pm-sheen {
+  0%,
+  62% {
+    left: -40%;
+  }
+  92%,
+  100% {
+    left: 130%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-hero,
+  .pm-title,
+  .pm-sub,
+  .pm-badge,
+  .pm-benefit,
+  .pm-more,
+  .pm-medallion,
+  .pm-medallion-glyph {
+    animation: none !important;
+  }
+  .pm-halo::before,
+  .pm-cta::after {
+    animation: none !important;
+  }
+  .pm-cta::after {
+    display: none;
   }
 }

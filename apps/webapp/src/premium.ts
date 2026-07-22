@@ -1,5 +1,7 @@
 import "./theme.css";
 import "./premium.css";
+import { icon } from "./icons";
+import { wireContentInsets } from "./telegram-insets";
 
 /**
  * Gennety Premium Mini App (PRODUCT_SPEC §Premium). A small vanilla-TS page that
@@ -188,47 +190,82 @@ function el(tag: string, className?: string, text?: string): HTMLElement {
   return node;
 }
 
+/** The burgundy medallion + breathing halo — the one warm object on the stage. */
+function medallion(): HTMLElement {
+  const halo = el("div", "pm-halo");
+  const med = el("div", "pm-medallion");
+  med.append(icon("spark", "pm-medallion-glyph"));
+  halo.append(med);
+  return halo;
+}
+
 function renderLoading(): void {
-  root.replaceChildren(el("div", "pm-spinner"));
+  const page = el("div", "pm-page");
+  const center = el("div", "pm-center");
+  center.append(el("div", "pm-spinner"));
+  page.append(center);
+  root.replaceChildren(page);
 }
 
 function renderActive(state: PremiumState): void {
-  const card = el("div", "pm-card");
-  card.append(el("div", "pm-crest", s.crest));
-  card.append(el("h1", "pm-title", s.title));
-  card.append(el("div", "pm-active-badge", s.activeBadge));
-  card.append(el("p", "pm-sub", s.activeUntil(fmtDate(state.premiumUntil))));
-  card.append(el("p", "pm-manage", s.manage));
-  root.replaceChildren(card);
+  const page = el("div", "pm-page");
+  const center = el("div", "pm-center");
+
+  const hero = el("div", "pm-hero");
+  hero.append(medallion());
+
+  const badge = el("div", "pm-badge");
+  badge.append(el("span", "pm-badge-dot"), document.createTextNode(s.activeBadge));
+  hero.append(badge);
+
+  hero.append(el("h1", "pm-title", s.title));
+  hero.append(el("p", "pm-sub", s.activeUntil(fmtDate(state.premiumUntil))));
+  center.append(hero);
+
+  center.append(el("p", "pm-manage", s.manage));
+  page.append(center);
+  root.replaceChildren(page);
 }
 
 function renderOffer(state: PremiumState): void {
-  const card = el("div", "pm-card");
-  card.append(el("div", "pm-crest", s.crest));
-  card.append(el("h1", "pm-title", s.title));
-  card.append(el("p", "pm-sub", s.sub));
+  const page = el("div", "pm-page");
+  const scroll = el("div", "pm-scroll");
+
+  const hero = el("div", "pm-hero");
+  hero.append(medallion());
+  hero.append(el("h1", "pm-title", s.title));
+  hero.append(el("p", "pm-sub", s.sub));
+  scroll.append(hero);
 
   const list = el("ul", "pm-benefits");
   for (const [ico, tt, dd] of [
-    ["🆓", s.b1t, s.b1d],
-    ["📍", s.b2t, s.b2d],
+    ["map", s.b1t, s.b1d],
+    ["star", s.b2t, s.b2d],
   ] as const) {
     const li = el("li", "pm-benefit");
-    li.append(el("span", "pm-benefit-ico", ico));
+    const tile = el("div", "pm-benefit-tile");
+    tile.append(icon(ico));
+    li.append(tile);
     const txt = el("div", "pm-benefit-txt");
-    const b = el("b", undefined, tt);
-    txt.append(b, document.createElement("br"), document.createTextNode(dd));
+    txt.append(el("div", "pm-benefit-title", tt), el("div", "pm-benefit-detail", dd));
     li.append(txt);
     list.append(li);
   }
-  card.append(list);
-  card.append(el("p", "pm-price", `${s.more} ${s.price(state.priceDisplay)}`));
+  scroll.append(list);
+  scroll.append(el("p", "pm-more", s.more));
 
-  const btn = el("button", "pm-btn", s.subscribe(state.priceDisplay)) as HTMLButtonElement;
+  const action = el("div", "pm-action");
+  action.append(el("p", "pm-price", s.price(state.priceDisplay)));
+
+  const btn = el("button", "pm-cta") as HTMLButtonElement;
+  btn.append(icon("spark"), document.createTextNode(s.subscribe(state.priceDisplay)));
   btn.addEventListener("click", () => void subscribe(btn));
-  card.append(btn);
-  card.append(el("p", "pm-manage", s.manage));
-  root.replaceChildren(card);
+  action.append(btn);
+
+  action.append(el("p", "pm-manage", s.manage));
+
+  page.append(scroll, action);
+  root.replaceChildren(page);
 }
 
 async function subscribe(btn: HTMLButtonElement): Promise<void> {
@@ -307,4 +344,21 @@ async function load(): Promise<void> {
 
 app?.ready?.();
 app?.expand?.();
+
+// Bot API 8.0+ — immersive fullscreen removes the top sheet gap so the paid
+// composition fills the screen. Older clients silently fall through to expand().
+const chromeColor = document.documentElement.dataset.theme === "light" ? "#f5f5f5" : "#030303";
+try {
+  if (app?.isVersionAtLeast?.("8.0") && !app.isFullscreen) {
+    app.requestFullscreen?.();
+  }
+  app?.setHeaderColor?.(chromeColor);
+  app?.setBackgroundColor?.(chromeColor);
+  app?.setBottomBarColor?.(chromeColor);
+} catch {
+  // Best-effort cosmetic boot — never crash over chrome theming.
+}
+// Reserve room for Telegram's floating close × / menu ⋯ in fullscreen.
+wireContentInsets(app);
+
 void load();
