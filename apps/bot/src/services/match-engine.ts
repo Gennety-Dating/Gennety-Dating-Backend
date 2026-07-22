@@ -1,4 +1,9 @@
 import { prisma, type Prisma } from "@gennety/db";
+import {
+  typePreferenceMultiplier,
+  type PreferenceVector,
+  type PhotoAttrs,
+} from "@gennety/shared";
 import { ACTIVE_MATCH_STATUSES } from "./active-match-priority.js";
 import { refreshAllDirtyEmbeddings } from "../workers/embedding-refresh.js";
 import {
@@ -246,6 +251,35 @@ export const AGE_RANGE_PREF_DECAY_PER_YEAR = Math.max(
   Number(process.env.AGE_RANGE_PREF_DECAY_PER_YEAR ?? "0.1"),
 );
 
+// ---------------------------------------------------------------------------
+// Type Radar appearance preference (V_type multiplier)
+// ---------------------------------------------------------------------------
+
+/**
+ * Feature flag for the Type Radar `V_type` multiplier. Off → the factor is
+ * forced to a neutral 1.0 regardless of any stored radar signal (see
+ * PRODUCT_SPEC §Type Radar / TYPE_RADAR_PRODUCT_SPEC.md). Read directly from env
+ * (not via `config.ts`) so the scoring functions stay importable in unit tests.
+ */
+export const TYPE_RADAR_ENABLED = process.env.TYPE_RADAR_ENABLED === "true";
+/**
+ * Floor of the `V_type` multiplier — how hard an anti-type candidate can be
+ * damped. `1.0` (the default, and the shadow-launch value) makes the factor a
+ * pure no-op even when enabled, so scoring is unchanged until ops deliberately
+ * lowers it (launch ≈ 0.7 → weakest factor). Clamped to [0, 1]; sourced from
+ * `TYPE_PREF_FLOOR`.
+ */
+export const TYPE_PREF_FLOOR = Math.min(
+  1,
+  Math.max(0, Number(process.env.TYPE_PREF_FLOOR ?? "1")),
+);
+/**
+ * Effective floor passed into the pure multiplier: the env floor when the
+ * feature is enabled, else `1` (which `typePreferenceMultiplier` treats as a
+ * no-op). Lets `scoreCandidate` stay a pure function with an env-derived default.
+ */
+export const EFFECTIVE_TYPE_FLOOR = TYPE_RADAR_ENABLED ? TYPE_PREF_FLOOR : 1;
+
 /**
  * `V_agePref`: how well a candidate's *actual* age satisfies the seeker's
  * stated **preferred-partner age band** (`Profile.ageRangeMin/Max`). Returns a
@@ -327,6 +361,10 @@ export interface RichCandidateRow extends CandidateRow {
   orientationAxis: number | null;
   eloScore: number;
   homeCityKey: string | null;
+  /** This candidate's own appearance tags (hairColor/build/beard/tattoos/…),
+   *  scored against the seeker's `typePrefTags` by `V_type`. Null when the Elo
+   *  vision pass hasn't tagged them / legacy rows → `V_type` stays neutral. */
+  appearanceTags?: PhotoAttrs | null;
 }
 
 /** Seeker profile data needed for scoring. */
@@ -343,6 +381,9 @@ export interface SeekerProfile {
    *  the user never set one. Drives the `V_agePref` multiplier. */
   ageRangeMin: number | null;
   ageRangeMax: number | null;
+  /** Compiled Type Radar preference vector (`Profile.typePrefTags`); null when
+   *  the user hasn't done the radar → `V_type` stays neutral. */
+  typePrefTags?: PreferenceVector | null;
 }
 
 export interface ScoredCandidate {
@@ -357,6 +398,8 @@ export interface ScoredCandidate {
     penalty: number;
     /** Stated age-range preference multiplier (`V_agePref`), 1 = neutral. */
     agePref: number;
+    /** Type Radar appearance-preference multiplier (`V_type`), 1 = neutral. */
+    type: number;
   };
 }
 
@@ -387,6 +430,7 @@ export function buildCandidateSql(): string {
       p.orientation_axis      AS "orientationAxis",
       p.elo_score             AS "eloScore",
       p.home_city_key         AS "homeCityKey",
+      p.appearance_tags       AS "appearanceTags",
       (p.embedding <=> $2::vector) AS distance
     FROM users u
     JOIN profiles p ON p.user_id = u.id
@@ -804,6 +848,7 @@ export function scoreCandidate(
   seeker: SeekerProfile,
   candidate: RichCandidateRow,
   weights = SCORING_WEIGHTS,
+  typeFloor: number = EFFECTIVE_TYPE_FLOOR,
 ): ScoredCandidate {
   const vExplicit = explicitScore(candidate.distance);
   const vResearch = researchScore(
@@ -839,11 +884,19 @@ export function scoreCandidate(
     seeker.ageRangeMax,
     candidate.age,
   );
+  // V_type: appearance-preference multiplier from the Type Radar. Neutral (1.0)
+  // unless the feature is enabled with a sub-1 floor AND both the seeker has
+  // radar signal and this candidate carries overlapping appearance tags.
+  const vType =
+    seeker.typePrefTags && candidate.appearanceTags
+      ? typePreferenceMultiplier(seeker.typePrefTags, candidate.appearanceTags, typeFloor)
+      : 1;
 
   const positive =
     (weights.explicit * vExplicit + weights.research * vResearch) *
     vLeague *
-    vAgePref;
+    vAgePref *
+    vType;
   const score = positive - weights.penalty * vPenalty;
 
   return {
@@ -857,6 +910,7 @@ export function scoreCandidate(
       league: vLeague,
       penalty: vPenalty,
       agePref: vAgePref,
+      type: vType,
     },
   };
 }
@@ -916,6 +970,7 @@ export async function findCandidatesFor(
           longitude: true,
           ageRangeMin: true,
           ageRangeMax: true,
+          typePrefTags: true,
           embeddingDirty: true,
         },
       },
@@ -982,6 +1037,8 @@ export async function findCandidatesFor(
     eloScore: seeker.profile?.eloScore ?? 500,
     ageRangeMin: seeker.profile?.ageRangeMin ?? null,
     ageRangeMax: seeker.profile?.ageRangeMax ?? null,
+    typePrefTags:
+      (seeker.profile?.typePrefTags as unknown as PreferenceVector | null) ?? null,
   };
 
   return rankCandidates(seekerProfile, pool, limit);
@@ -1074,7 +1131,8 @@ export async function createProposedMatch(
         (SCORING_WEIGHTS.explicit * breakdown.explicit +
           SCORING_WEIGHTS.research * breakdown.research) *
           breakdown.league *
-          breakdown.agePref -
+          breakdown.agePref *
+          breakdown.type -
         SCORING_WEIGHTS.penalty * breakdown.penalty +
         breakdown.starvationBonus;
       await tx.matchScoreLog.create({
@@ -1085,6 +1143,7 @@ export async function createProposedMatch(
           scoreLeague: breakdown.league,
           scorePenalty: breakdown.penalty,
           scoreAgePref: breakdown.agePref,
+          scoreType: breakdown.type,
           scoreTotal,
           embeddingDistance: breakdown.embeddingDistance,
           starvationBonus: breakdown.starvationBonus,
@@ -1138,6 +1197,12 @@ export interface BatchUser {
    *  unset. Feeds the `V_agePref` multiplier in both scoring directions. */
   ageRangeMin: number | null;
   ageRangeMax: number | null;
+  /** Compiled Type Radar preference vector (`Profile.typePrefTags`) — this user
+   *  as the seeker — and their own appearance tags (`Profile.appearanceTags`) —
+   *  this user as the candidate. Both feed `V_type` in the two scoring
+   *  directions; null when absent → neutral. */
+  typePrefTags: PreferenceVector | null;
+  appearanceTags: PhotoAttrs | null;
   /** Immutable snapshot of every eligibility and scoring input used by the
    * batch. Allocation compares it under row locks before writing a match. */
   allocationFingerprint?: string;
@@ -1157,6 +1222,7 @@ export interface ScoredPair {
     league: number;
     penalty: number;
     agePref: number;
+    type: number;
     embeddingDistance: number;
     starvationBonus: number;
   };
@@ -1202,6 +1268,7 @@ export interface PairScoreResult {
     league: number;
     penalty: number;
     agePref: number;
+    type: number;
     embeddingDistance: number;
     starvationBonus: number;
   };
@@ -1223,6 +1290,7 @@ export function scorePair(
     eloScore: a.eloScore,
     ageRangeMin: a.ageRangeMin,
     ageRangeMax: a.ageRangeMax,
+    typePrefTags: a.typePrefTags ?? null,
   };
 
   const candidateB: RichCandidateRow = {
@@ -1240,6 +1308,7 @@ export function scorePair(
     orientationAxis: b.orientationAxis,
     eloScore: b.eloScore,
     homeCityKey: b.homeCityKey,
+    appearanceTags: b.appearanceTags ?? null,
   };
 
   const scored = scoreCandidate(seekerA, candidateB);
@@ -1256,6 +1325,7 @@ export function scorePair(
     eloScore: b.eloScore,
     ageRangeMin: b.ageRangeMin,
     ageRangeMax: b.ageRangeMax,
+    typePrefTags: b.typePrefTags ?? null,
   };
 
   const candidateA: RichCandidateRow = {
@@ -1273,6 +1343,7 @@ export function scorePair(
     orientationAxis: a.orientationAxis,
     eloScore: a.eloScore,
     homeCityKey: a.homeCityKey,
+    appearanceTags: a.appearanceTags ?? null,
   };
 
   const scoredReverse = scoreCandidate(seekerB, candidateA);
@@ -1290,6 +1361,7 @@ export function scorePair(
       league: (scored.breakdown.league + scoredReverse.breakdown.league) / 2,
       penalty: (scored.breakdown.penalty + scoredReverse.breakdown.penalty) / 2,
       agePref: (scored.breakdown.agePref + scoredReverse.breakdown.agePref) / 2,
+      type: (scored.breakdown.type + scoredReverse.breakdown.type) / 2,
       embeddingDistance,
       starvationBonus: bonus,
     },
@@ -1412,6 +1484,8 @@ async function loadEligibleUsersForIds(
           homeCityKey: true,
           ageRangeMin: true,
           ageRangeMax: true,
+          typePrefTags: true,
+          appearanceTags: true,
         },
       },
     },
@@ -1463,6 +1537,8 @@ async function loadEligibleUsersForIds(
           homeCityKey: true,
           ageRangeMin: true,
           ageRangeMax: true,
+          typePrefTags: true,
+          appearanceTags: true,
         },
       },
     },
@@ -1512,6 +1588,10 @@ async function loadEligibleUsersForIds(
         homeCityKey: u.profile?.homeCityKey ?? null,
         ageRangeMin: u.profile?.ageRangeMin ?? null,
         ageRangeMax: u.profile?.ageRangeMax ?? null,
+        typePrefTags:
+          (u.profile?.typePrefTags as unknown as PreferenceVector | null) ?? null,
+        appearanceTags:
+          (u.profile?.appearanceTags as unknown as PhotoAttrs | null) ?? null,
       };
       return { ...snapshot, allocationFingerprint: allocationFingerprint(snapshot) };
     });

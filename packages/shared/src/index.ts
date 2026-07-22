@@ -36,6 +36,8 @@ export {
   buildPreferenceVector,
   candidateTypeScore,
   hasTypeSignal,
+  typeOverlapCount,
+  typePreferenceMultiplier,
   CHIP_ATTR_BOOST,
   CHIP_ATTR_DISCOUNT,
   CONF_FULL,

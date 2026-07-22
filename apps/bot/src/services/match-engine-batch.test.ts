@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
+import { buildPreferenceVector, FEMALE_PHOTOS } from "@gennety/shared";
 import {
   greedyPair,
   areMutuallyCompatible,
   scorePair,
+  scoreCandidate,
   leagueScore,
   pairLeagueScore,
   starvationBonus,
@@ -13,6 +15,8 @@ import {
   isUuid,
   type BatchUser,
   type ScoredPair,
+  type SeekerProfile,
+  type RichCandidateRow,
 } from "./match-engine.js";
 
 // ---------------------------------------------------------------------------
@@ -37,9 +41,104 @@ function makeBatchUser(overrides: Partial<BatchUser> & { id: string }): BatchUse
     standbyCount: 0,
     ageRangeMin: null,
     ageRangeMax: null,
+    typePrefTags: null,
+    appearanceTags: null,
     ...overrides,
   };
 }
+
+// ---------------------------------------------------------------------------
+// V_type in scoreCandidate
+// ---------------------------------------------------------------------------
+
+describe("scoreCandidate — V_type multiplier", () => {
+  const pref = buildPreferenceVector(
+    "female",
+    FEMALE_PHOTOS.map((p) => ({
+      photoId: p.id,
+      verdict: p.attrs.hairColor === "blonde" ? ("like" as const) : ("dislike" as const),
+    })),
+  );
+  const blondeTags = FEMALE_PHOTOS.find((p) => p.attrs.hairColor === "blonde")!.attrs;
+  const redTags = FEMALE_PHOTOS.find((p) => p.attrs.hairColor === "red")!.attrs;
+
+  const seeker: SeekerProfile = {
+    age: 26,
+    gender: "male",
+    height: 180,
+    major: null,
+    negativeConstraints: null,
+    energyAxis: null,
+    orientationAxis: null,
+    eloScore: 500,
+    ageRangeMin: null,
+    ageRangeMax: null,
+    typePrefTags: pref,
+  };
+  const baseCandidate: Omit<RichCandidateRow, "appearanceTags"> = {
+    userId: "c",
+    telegramId: 0n,
+    firstName: null,
+    distance: 0.4,
+    age: 24,
+    gender: "female",
+    height: 168,
+    major: null,
+    psychologicalSummary: null,
+    negativeConstraints: null,
+    energyAxis: null,
+    orientationAxis: null,
+    eloScore: 500,
+    homeCityKey: "ua:kyiv",
+  };
+
+  it("is inert (type=1, score unchanged) at the shadow floor of 1", () => {
+    const withType = scoreCandidate(
+      seeker,
+      { ...baseCandidate, appearanceTags: redTags },
+      undefined,
+      1,
+    );
+    const noSignal = scoreCandidate(
+      { ...seeker, typePrefTags: null },
+      { ...baseCandidate, appearanceTags: redTags },
+      undefined,
+      1,
+    );
+    expect(withType.breakdown.type).toBe(1);
+    expect(withType.score).toBeCloseTo(noSignal.score, 10);
+  });
+
+  it("damps the anti-type below the preferred type when the floor is < 1", () => {
+    const blonde = scoreCandidate(
+      seeker,
+      { ...baseCandidate, appearanceTags: blondeTags },
+      undefined,
+      0.7,
+    );
+    const red = scoreCandidate(
+      seeker,
+      { ...baseCandidate, appearanceTags: redTags },
+      undefined,
+      0.7,
+    );
+    expect(blonde.breakdown.type).toBeGreaterThan(red.breakdown.type);
+    expect(red.breakdown.type).toBeGreaterThanOrEqual(0.7);
+    expect(blonde.breakdown.type).toBeLessThanOrEqual(1);
+    // The damped positive bracket makes the anti-type score strictly lower.
+    expect(blonde.score).toBeGreaterThan(red.score);
+  });
+
+  it("stays neutral (type=1) when the candidate has no appearance tags", () => {
+    const scored = scoreCandidate(
+      seeker,
+      { ...baseCandidate, appearanceTags: null },
+      undefined,
+      0.7,
+    );
+    expect(scored.breakdown.type).toBe(1);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // areMutuallyCompatible

@@ -343,3 +343,44 @@ export function hasTypeSignal(pref: PreferenceVector): boolean {
   }
   return false;
 }
+
+/**
+ * Number of candidate tags the viewer actually has learned signal on — the
+ * overlap that `candidateTypeScore` averages over. Zero means "no information",
+ * which the multiplier below treats as fully neutral (not as an average 0.5).
+ */
+export function typeOverlapCount(pref: PreferenceVector, candidateTags: PhotoAttrs): number {
+  let n = 0;
+  for (const [key, value] of Object.entries(candidateTags)) {
+    if (pref[key]?.[value]?.weight !== undefined) n += 1;
+  }
+  return n;
+}
+
+/**
+ * Map a preference vector + a candidate's appearance tags to the `V_type`
+ * multiplier applied to the positive bracket of the match score. Best-type
+ * candidate → 1.0 (no damping); worst-type → `floor`; a purely average
+ * candidate → the floor-blended midpoint.
+ *
+ * Returns exactly `1.0` (fully neutral — zero effect on ranking) whenever there
+ * is nothing to act on, so the factor is safe to leave wired everywhere:
+ *   - `floor >= 1` — shadow mode (`TYPE_PREF_FLOOR` default 1.0): no-op.
+ *   - the viewer has no directional radar signal (skipped / undecided radar).
+ *   - the candidate has no overlapping tag the viewer has learned on.
+ *
+ * `floor` is clamped to [0, 1]. Pure and env-free: the engine passes the env
+ * floor and gates on `TYPE_RADAR_ENABLED` before calling.
+ */
+export function typePreferenceMultiplier(
+  pref: PreferenceVector,
+  candidateTags: PhotoAttrs,
+  floor: number,
+): number {
+  const f = floor < 0 ? 0 : floor > 1 ? 1 : floor;
+  if (f >= 1) return 1;
+  if (!hasTypeSignal(pref)) return 1;
+  if (typeOverlapCount(pref, candidateTags) === 0) return 1;
+  const s = candidateTypeScore(pref, candidateTags); // ∈ [0, 1], 0.5 = neutral
+  return f + (1 - f) * s;
+}

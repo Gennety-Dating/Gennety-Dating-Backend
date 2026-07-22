@@ -10,6 +10,8 @@ import {
   buildPreferenceVector,
   candidateTypeScore,
   hasTypeSignal,
+  typeOverlapCount,
+  typePreferenceMultiplier,
   CONF_FULL,
   type RadarAnswer,
   type RadarSet,
@@ -183,5 +185,53 @@ describe("candidateTypeScore", () => {
       expect(s).toBeGreaterThanOrEqual(0);
       expect(s).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+// ── V_type multiplier ───────────────────────────────────────────────────────
+
+describe("typePreferenceMultiplier (V_type)", () => {
+  const set: RadarSet = "female";
+  // Strong, clean signal: like every blonde, dislike everyone else.
+  const blondeLover: RadarAnswer[] = FEMALE_PHOTOS.map((p) => ({
+    photoId: p.id,
+    verdict: p.attrs.hairColor === "blonde" ? "like" : "dislike",
+  }));
+  const pref = buildPreferenceVector(set, blondeLover);
+  const blonde = FEMALE_PHOTOS.find((p) => p.attrs.hairColor === "blonde")!;
+  const red = FEMALE_PHOTOS.find((p) => p.attrs.hairColor === "red")!;
+
+  it("is a no-op (1.0) at floor >= 1 regardless of signal (shadow mode)", () => {
+    expect(typePreferenceMultiplier(pref, blonde.attrs, 1)).toBe(1);
+    expect(typePreferenceMultiplier(pref, red.attrs, 1)).toBe(1);
+    // Out-of-range floor clamps to 1 → still a no-op.
+    expect(typePreferenceMultiplier(pref, red.attrs, 1.5)).toBe(1);
+  });
+
+  it("is neutral (1.0) when the viewer has no directional signal", () => {
+    const empty = buildPreferenceVector(set, []);
+    expect(hasTypeSignal(empty)).toBe(false);
+    expect(typePreferenceMultiplier(empty, blonde.attrs, 0.7)).toBe(1);
+  });
+
+  it("is neutral (1.0) when the candidate has zero overlapping tags", () => {
+    // Male-only tag keys never appear in a female preference vector.
+    const alien = { beard: "beard", nonexistentKey: "x" };
+    expect(typeOverlapCount(pref, alien)).toBe(0);
+    expect(typePreferenceMultiplier(pref, alien, 0.7)).toBe(1);
+  });
+
+  it("favors the preferred type over the anti-type, bounded by [floor, 1]", () => {
+    const mBlonde = typePreferenceMultiplier(pref, blonde.attrs, 0.7);
+    const mRed = typePreferenceMultiplier(pref, red.attrs, 0.7);
+    expect(mBlonde).toBeGreaterThan(mRed);
+    expect(mBlonde).toBeLessThanOrEqual(1);
+    expect(mRed).toBeGreaterThanOrEqual(0.7);
+  });
+
+  it("clamps a negative floor to 0", () => {
+    const m = typePreferenceMultiplier(pref, red.attrs, -0.5);
+    expect(m).toBeGreaterThanOrEqual(0);
+    expect(m).toBeLessThanOrEqual(1);
   });
 });
