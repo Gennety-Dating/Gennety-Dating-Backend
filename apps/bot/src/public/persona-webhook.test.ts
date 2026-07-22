@@ -343,4 +343,44 @@ describe("Persona webhook", () => {
     expect(u.status).toBe("onboarding");
     expect(runPipeline).not.toHaveBeenCalled();
   });
+
+  it("does not run the pipeline (or corrupt personaInquiryId) on a verified event missing its inquiry id", async () => {
+    // Defensive guard: a terminal approved event should always carry the
+    // inquiry id, but if one ever arrives without it, the handler must NOT
+    // pass "" into the pipeline — persistOutcome would overwrite
+    // personaInquiryId with the empty string, breaking every later Persona
+    // re-fetch (selfie retention, reruns → 404). Seed a prior valid inquiry
+    // id to prove it survives untouched.
+    store.get("user-1")!.personaInquiryId = "inq_prior_valid";
+    const ts = String(Math.floor(Date.now() / 1000));
+    // Approved terminal event but with the inquiry `id` omitted.
+    const body = JSON.stringify({
+      data: {
+        type: "event",
+        id: "evt_no_id",
+        attributes: {
+          name: "inquiry.approved",
+          payload: {
+            data: {
+              type: "inquiry",
+              // id intentionally omitted
+              attributes: { status: "approved", referenceId: "user-1" },
+            },
+          },
+        },
+      },
+    });
+    const res = await request(buildApp())
+      .post("/v1/webhooks/persona")
+      .set("content-type", "application/json")
+      .set("persona-signature", `t=${ts},v1=${sign(ts, body)}`)
+      .send(body);
+
+    expect(res.status).toBe(200);
+    await flushImmediate();
+    const u = store.get("user-1")!;
+    expect(runPipeline).not.toHaveBeenCalled();
+    // The prior valid inquiry id must not be clobbered.
+    expect(u.personaInquiryId).toBe("inq_prior_valid");
+  });
 });

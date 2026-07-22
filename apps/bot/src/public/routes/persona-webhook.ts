@@ -138,6 +138,20 @@ async function handlePersonaEvent(
   const next = mapPersonaStatusToInternal(status);
 
   if (next === "verified") {
+    // Defensive: a terminal approved event should always carry the inquiry id.
+    // If one ever arrives without it, refuse to run the pipeline with `""` —
+    // `persistOutcome` writes `personaInquiryId` unconditionally, so an empty
+    // id would clobber a valid one and break every later Persona re-fetch
+    // (selfie retention, photo-edit reruns → 404). The next well-formed event
+    // (or the pull-fallback) resolves the user cleanly.
+    if (!inquiryId) {
+      console.warn("[persona] verified event missing inquiry id — skipping pipeline", {
+        eventName,
+        referenceId,
+      });
+      return;
+    }
+
     // Liveness passed at Persona — but DON'T flip to `verified` yet. The
     // face-match pipeline still has to confirm the photos in this profile
     // belong to the same person Persona just put in front of the camera.
@@ -165,7 +179,7 @@ async function handlePersonaEvent(
       });
 
     setImmediate(() => {
-      runFaceMatchVerificationDefault(user.id, inquiryId ?? "", api).catch((err: unknown) => {
+      runFaceMatchVerificationDefault(user.id, inquiryId, api).catch((err: unknown) => {
         // Catch-all so an unhandled rejection doesn't crash the process.
         // The pipeline already persists pending_review on every internal
         // error path; this log catches truly unexpected exceptions
