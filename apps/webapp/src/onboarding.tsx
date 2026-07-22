@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactElement, ReactNode } from "react";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import {
   acceptTelegramOnboardingConsent,
@@ -60,24 +60,25 @@ const TRAP_BACKGROUND =
 const DRUM_CYCLE_INTERVAL_MS = 2500; // Stats (screen 1) auto-cycle interval
 const PROFILE_CYCLE_INTERVAL_MS = 3000; // Profile (screen 2) text auto-cycle interval
 const PROFILE_SWIPE_INTERVAL_MS = 1000; // Profile (screen 2) Tinder-style card swipe cadence
-const RENDER_CYCLE_INTERVAL_MS = 3000; // Render demo (scene 8) caption auto-cycle interval
-// Render demo swaps a full, detailed Gennety card each step, so it moves far
-// slower than the Tinder deck above — the whole point is that the card is legible
-// long enough to read before the next one slides in.
-const RENDER_SWIPE_INTERVAL_MS = 2400;
 
-// Pre-rendered Gennety match/date cards (1080×1350), shown as an auto-swiping
-// deck on scene 8 to contrast the "person as a portrait" render format against
-// the Tinder-style swipe simulator (scene 5). Files live in
-// `apps/webapp/public/renders/` (1.jpg..5.jpg); a missing file degrades to the
-// card background. Order alternates hero-panel and torn-collage layouts.
-const RENDER_CARDS: string[] = [
-  "/renders/1.jpg",
-  "/renders/2.jpg",
-  "/renders/3.jpg",
-  "/renders/4.jpg",
-  "/renders/5.jpg",
-];
+// Scene 8 — the demo partner photo (a clean crop of the Timur render card).
+// Lives in `apps/webapp/public/renders/`; a missing file degrades to the card
+// background.
+const MATCH_DEMO_PHOTO = "/renders/timur.jpg";
+// Scripted beats (ms from scene entry) for the MatchDemoScene chat animation.
+// Each step reveals one more element of the real Gennety decision flow:
+// partner card → question → "yes" → confirm lead → glass confirm card →
+// auto-press → shimmer "waiting" → "it's mutual" success (+ Next CTA).
+const MATCH_DEMO_STEP_MS = {
+  card: 350,
+  question: 1350,
+  userYes: 2650,
+  confirmLead: 3550,
+  confirm: 4500,
+  pressed: 6100,
+  waiting: 6800,
+  mutual: 9800,
+} as const;
 
 interface ProfileCardData {
   name: string;
@@ -501,7 +502,7 @@ function App(): ReactElement {
         />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 8}>
-        <RenderCycleScene active={phase.kind === "visual" && phase.index === 8} onNext={nextVisualWithHaptic} />
+        <MatchDemoScene active={phase.kind === "visual" && phase.index === 8} onNext={nextVisualWithHaptic} />
       </Scene>
       <Scene active={phase.kind === "visual" && phase.index === 9}>
         <HowItWorksScene
@@ -1346,127 +1347,176 @@ function ProfileCard(props: {
   );
 }
 
-// Scene 8 — the Gennety-render payoff to the swipe simulator (scene 5). Same
-// deck-plus-cycling-copy shape as ProfileCycleScene, but the cards are our own
-// pre-rendered match/date cards (full images) rather than mock Tinder profiles.
-function RenderCycleScene(props: {
-  active: boolean;
-  onNext: () => void;
-}): ReactElement {
+// Scene 8 — scripted chat demo of the REAL Gennety decision flow, replacing the
+// old swipe deck (swiping isn't our mechanic; "do you want to go on a date with
+// them?" is). It auto-plays once: the partner card drops in, the bot asks, the
+// user says "yes", a liquid-glass confirm card slides up and auto-presses, a
+// shimmer "waiting" line shows, and ~3s later the "it's mutual" success bursts
+// with confetti. The copy mirrors the shared product strings (§3.3/§3.4). The
+// Next CTA appears only once the success lands.
+function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactElement {
   const s = useOnboardingStrings();
-  const cycle = useTimedCycle(props.active, s.rendersLines.length, RENDER_CYCLE_INTERVAL_MS);
-  const copy = s.rendersLines[cycle.index] ?? s.rendersLines[0]!;
+  const d = s.matchDemo;
+  const [stage, setStage] = useState(0);
+
+  useEffect(() => {
+    if (!props.active) {
+      setStage(0);
+      return;
+    }
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    if (reduce) {
+      // No motion: jump straight to the finished conversation + success.
+      setStage(8);
+      return;
+    }
+    setStage(0);
+    const timers = [
+      window.setTimeout(() => setStage(1), MATCH_DEMO_STEP_MS.card),
+      window.setTimeout(() => setStage(2), MATCH_DEMO_STEP_MS.question),
+      window.setTimeout(() => setStage(3), MATCH_DEMO_STEP_MS.userYes),
+      window.setTimeout(() => setStage(4), MATCH_DEMO_STEP_MS.confirmLead),
+      window.setTimeout(() => setStage(5), MATCH_DEMO_STEP_MS.confirm),
+      window.setTimeout(() => setStage(6), MATCH_DEMO_STEP_MS.pressed),
+      window.setTimeout(() => setStage(7), MATCH_DEMO_STEP_MS.waiting),
+      window.setTimeout(() => setStage(8), MATCH_DEMO_STEP_MS.mutual),
+    ];
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, [props.active]);
+
+  // Warm the partner photo once so the card doesn't flash a blank frame.
+  useEffect(() => {
+    const img = new Image();
+    img.src = MATCH_DEMO_PHOTO;
+  }, []);
+
+  // Fire the success haptic the instant the mutual reveal lands.
+  useEffect(() => {
+    if (stage >= 8) app?.HapticFeedback?.notificationOccurred?.("success");
+  }, [stage]);
+
+  // The glass confirm card is open between "confirm below" and the auto-press.
+  const confirmOpen = stage >= 5 && stage < 7;
 
   return (
     <>
-      <main className="exhaustion-main">
+      <main className="matchdemo-main">
         <div className="lavender-glow" />
-        <RenderDeck active={props.active} />
-        <div className="exhaustion-copy exhaustion-drum">
-          <div key={copy} className="drum-window profile-drum-window">
-            <p key={copy} className="copy-headline drum-copy-item">
-              {copy}
-            </p>
-          </div>
+        <div className="matchdemo-chat">
+          {stage >= 1 ? (
+            <div className="md-card-row md-enter">
+              <div className="md-partner-card">
+                <div className="md-partner-photo">
+                  <img
+                    src={MATCH_DEMO_PHOTO}
+                    alt=""
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                  <span className="md-partner-butterfly" aria-hidden="true">
+                    <BrandButterfly />
+                  </span>
+                </div>
+                <div className="md-partner-info">
+                  <span className="md-partner-accent" aria-hidden="true" />
+                  <h3 className="md-partner-name">
+                    {d.name}
+                    <span className="md-partner-age">, {d.age}</span>
+                    <span className="md-partner-verified material-symbols-outlined" aria-hidden="true">
+                      verified
+                    </span>
+                  </h3>
+                  <p className="md-partner-tag">{d.tagline}</p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {stage >= 2 ? <div className="md-bubble md-bot md-enter">{d.question}</div> : null}
+          {stage >= 3 ? <div className="md-bubble md-user md-enter">{d.userYes}</div> : null}
+          {stage >= 4 ? <div className="md-bubble md-bot md-enter">{d.confirmLead}</div> : null}
+          {stage >= 7 ? (
+            <div className="md-bubble md-bot md-waiting md-enter">
+              <span className="md-typing" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
+              <span className="md-shimmer-text">{d.waiting}</span>
+            </div>
+          ) : null}
         </div>
+
+        {confirmOpen ? (
+          <div className="md-confirm md-confirm-in" aria-hidden="true">
+            <div className="md-confirm-lead">{d.confirmLead}</div>
+            <button type="button" className={`md-confirm-go ${stage >= 6 ? "is-press" : ""}`} tabIndex={-1}>
+              {d.confirmGo}
+            </button>
+            <button type="button" className="md-confirm-back" tabIndex={-1}>
+              {d.goBack}
+            </button>
+          </div>
+        ) : null}
+
+        {stage >= 8 ? (
+          <div className="md-success" role="status">
+            <Confetti />
+            <div className="md-success-card">
+              <span className="md-success-heart" aria-hidden="true">
+                ❤️
+              </span>
+              <p className="md-success-text">{d.mutual}</p>
+            </div>
+          </div>
+        ) : null}
       </main>
-      <div className={`dots-dock ${cycle.canContinue ? "with-cta" : ""}`}>
-        <CycleDots total={s.rendersLines.length} active={cycle.index} complete={cycle.canContinue} />
-      </div>
-      {cycle.canContinue ? <BottomCta onClick={props.onNext} label={s.next} /> : null}
+      {stage >= 8 ? <BottomCta onClick={props.onNext} label={s.next} /> : null}
     </>
   );
 }
 
-// Auto-swiping deck of full pre-rendered Gennety cards. Mirrors ProfileDeck's
-// front/back swap + alternating swipe direction, but each card is a single
-// image (the render already carries its own name/bio/branding), so there is no
-// caption/action overlay.
-function RenderDeck(props: { active: boolean }): ReactElement {
-  const total = RENDER_CARDS.length;
-  const [index, setIndex] = useState(0);
-  const [leaving, setLeaving] = useState(false);
-  const [dir, setDir] = useState<"left" | "right">("right");
-
-  useEffect(() => {
-    if (!props.active) {
-      setIndex(0);
-      setLeaving(false);
-      setDir("right");
-      return;
-    }
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    const timer = window.setInterval(() => {
-      if (reduce) {
-        setIndex((cur) => (cur + 1) % total);
-        setDir((cur) => (cur === "right" ? "left" : "right"));
-      } else {
-        setLeaving(true);
-      }
-    }, RENDER_SWIPE_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-  }, [props.active, total]);
-
-  // Warm the image cache so a freshly-mounted back card never flashes its
-  // placeholder before the render paints.
-  useEffect(() => {
-    for (const src of RENDER_CARDS) {
-      const img = new Image();
-      img.src = src;
-    }
-  }, []);
-
-  const handleExitEnd = useCallback(() => {
-    setIndex((cur) => (cur + 1) % total);
-    setDir((cur) => (cur === "right" ? "left" : "right"));
-    setLeaving(false);
-  }, [total]);
-
-  const front = RENDER_CARDS[index] ?? RENDER_CARDS[0]!;
-  const back = RENDER_CARDS[(index + 1) % total] ?? RENDER_CARDS[0]!;
-
+// Lightweight CSS confetti burst for the mutual-match reveal. Purely
+// decorative; each piece's angle/delay rides an inline custom property and the
+// keyframes fan them out from the centre. reduced-motion pins them (no burst).
+function Confetti(): ReactElement {
+  const pieces = Array.from({ length: 26 });
   return (
-    <div className="swipe-deck render-deck">
-      <RenderCard key={(index + 1) % total} src={back} variant="back" rising={leaving} />
-      <RenderCard key={index} src={front} variant="front" leaving={leaving} dir={dir} onExitEnd={handleExitEnd} />
+    <div className="md-confetti" aria-hidden="true">
+      {pieces.map((_, i) => (
+        <span
+          key={i}
+          className={`md-confetti-piece md-confetti-c${i % 5}`}
+          style={
+            {
+              "--a": `${Math.round((i / pieces.length) * 360)}deg`,
+              "--d": `${(i % 6) * 30}ms`,
+            } as CSSProperties
+          }
+        />
+      ))}
     </div>
   );
 }
 
-function RenderCard(props: {
-  src: string;
-  variant: "front" | "back";
-  rising?: boolean;
-  leaving?: boolean;
-  dir?: "left" | "right";
-  onExitEnd?: () => void;
-}): ReactElement {
-  const className = [
-    "profile-card",
-    "render-card",
-    `is-${props.variant}`,
-    props.rising ? "is-rising" : "",
-    props.leaving ? `is-leaving-${props.dir}` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
+// Brand butterfly mark (same path as the render cards' `butterfly-logo.svg`).
+// Inline SVG with the burgundy radial glow so it needs no extra asset request.
+function BrandButterfly(): ReactElement {
   return (
-    <div
-      className={className}
-      onAnimationEnd={(event) => {
-        if (props.leaving && event.animationName.startsWith("swipeOut")) props.onExitEnd?.();
-      }}
-    >
-      <img
-        className="render-card-image"
-        src={props.src}
-        alt=""
-        onError={(e) => {
-          e.currentTarget.style.display = "none";
-        }}
+    <svg viewBox="0 0 100 100" className="md-butterfly-svg" aria-hidden="true">
+      <defs>
+        <radialGradient id="md-bf-glow" cx="30%" cy="100%" r="100%">
+          <stop offset="0%" stopColor="#FF00FF" />
+          <stop offset="30%" stopColor="#C82356" />
+          <stop offset="70%" stopColor="#8B253B" />
+          <stop offset="100%" stopColor="#3B0B1E" />
+        </radialGradient>
+      </defs>
+      <path
+        d="M 50 35 C 20 0, -10 30, 15 55 C -5 75, 25 100, 48 65 L 52 65 C 75 100, 105 75, 85 55 C 110 30, 80 0, 50 35 Z"
+        fill="url(#md-bf-glow)"
       />
-    </div>
+    </svg>
   );
 }
 

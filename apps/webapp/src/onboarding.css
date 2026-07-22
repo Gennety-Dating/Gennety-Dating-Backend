@@ -856,33 +856,415 @@ button {
   object-fit: cover;
 }
 
-/* Scene 8 (render demo): same front/back swipe mechanics as the Tinder deck,
-   but each card is a full pre-rendered Gennety card (4:5). It swaps the dark
-   card body + translucent border for a light card shell, since the render
-   already carries its own light background, text and branding. */
-.render-deck {
-  width: min(70vw, 17rem, 33dvh);
-  aspect-ratio: 4 / 5;
-}
-
-.render-card {
-  background: #ececef;
-  border-color: rgba(0, 0, 0, 0.06);
-  box-shadow: 0 26px 52px -20px rgba(0, 0, 0, 0.5);
-}
-
-.render-card-image {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
 .profile-card-gradient {
   position: absolute;
   inset: 0;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.2), transparent);
+}
+
+/* ============================================================
+   Scene 8 — Match-decision chat demo (MatchDemoScene)
+   A scripted mock of the real Gennety flow: partner card → question →
+   "yes" → glass confirm → shimmer wait → "it's mutual" burst.
+   ============================================================ */
+.matchdemo-main {
+  width: 100%;
+  max-width: 30rem;
+  height: 100%;
+  margin: 0 auto;
+  padding: calc(4.75rem + env(safe-area-inset-top, 0)) max(1.25rem, env(safe-area-inset-left, 0))
+    calc(7.25rem + env(safe-area-inset-bottom, 0)) max(1.25rem, env(safe-area-inset-right, 0));
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.matchdemo-chat {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+/* Element enter: each new message/card fades + rises in. */
+.md-enter {
+  animation: mdEnter 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes mdEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Partner card "drops" from above like a photo landing in the chat. */
+.md-card-row {
+  display: flex;
+  justify-content: flex-start;
+}
+.md-card-row.md-enter {
+  animation: mdDrop 0.44s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes mdDrop {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.95) rotate(-1.6deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.md-partner-card {
+  width: min(62vw, 14.5rem);
+  background: var(--surface-2);
+  border: 1px solid var(--glass-border);
+  border-radius: 1.1rem;
+  overflow: hidden;
+  box-shadow: var(--glass-shadow);
+}
+.md-partner-photo {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  background: var(--fill);
+}
+.md-partner-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.md-partner-butterfly {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+.md-butterfly-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+.md-partner-info {
+  padding: 0.55rem 0.7rem 0.7rem;
+}
+.md-partner-accent {
+  display: block;
+  width: 1.6rem;
+  height: 0.2rem;
+  border-radius: 999px;
+  background: var(--accent);
+  margin-bottom: 0.4rem;
+}
+.md-partner-name {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--text);
+}
+.md-partner-age {
+  font-weight: 600;
+  opacity: 0.85;
+}
+.md-partner-verified {
+  font-size: 1rem;
+  color: var(--accent-bright);
+  margin-left: 0.2rem;
+}
+.md-partner-tag {
+  margin-top: 0.28rem;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+
+/* Chat bubbles. Bot = left/neutral, user = right/accent. */
+.md-bubble {
+  max-width: 80%;
+  padding: 0.55rem 0.8rem;
+  border-radius: 1.05rem;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.md-bot {
+  align-self: flex-start;
+  background: var(--surface-2);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  border-bottom-left-radius: 0.35rem;
+}
+.md-user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--on-accent);
+  border-bottom-right-radius: 0.35rem;
+}
+
+/* Waiting bubble: typing dots + shimmering text. */
+.md-waiting {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.md-typing {
+  display: inline-flex;
+  gap: 0.22rem;
+  flex: 0 0 auto;
+}
+.md-typing i {
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 999px;
+  background: var(--text-muted);
+  animation: mdTyping 1s ease-in-out infinite;
+}
+.md-typing i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.md-typing i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes mdTyping {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+.md-shimmer-text {
+  background: linear-gradient(100deg, var(--text-muted) 30%, var(--text) 50%, var(--text-muted) 70%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mdShimmer 1.5s linear infinite;
+}
+@keyframes mdShimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Liquid-glass confirm sheet that slides up over the chat, then auto-presses. */
+.md-confirm {
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.9rem;
+  border-radius: 1.3rem;
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+}
+.md-confirm-in {
+  animation: mdSheetUp 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes mdSheetUp {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.md-confirm-lead {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+.md-confirm-go {
+  width: 100%;
+  padding: 0.72rem;
+  border: 0;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(180deg, #37c26a, #2ea25a);
+  box-shadow: 0 8px 20px -8px rgba(46, 162, 90, 0.7);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+.md-confirm-go.is-press {
+  transform: scale(0.95);
+  filter: brightness(1.08);
+  box-shadow: 0 0 0 5px rgba(46, 162, 90, 0.28), 0 8px 20px -8px rgba(46, 162, 90, 0.7);
+}
+.md-confirm-back {
+  width: 100%;
+  padding: 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+/* "It's mutual" success reveal — glass card + pulsing heart + confetti burst. */
+.md-success {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+/* Dim the chat behind the reveal so the mutual card is the clear focus. */
+.md-success::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 45%, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.58));
+  animation: mdFade 0.4s ease both;
+}
+@keyframes mdFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.md-success-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 1.9rem;
+  border-radius: 1.5rem;
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+  animation: mdPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes mdPop {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.md-success-heart {
+  font-size: 2.6rem;
+  line-height: 1;
+  animation: mdHeart 1.1s ease-in-out infinite;
+}
+@keyframes mdHeart {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.18);
+  }
+  40% {
+    transform: scale(0.98);
+  }
+}
+.md-success-text {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--text);
+  text-align: center;
+}
+
+.md-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.md-confetti-piece {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.5rem;
+  height: 0.8rem;
+  border-radius: 2px;
+  opacity: 0;
+  transform: rotate(var(--a));
+  animation: mdConfetti 1.15s ease-out var(--d, 0ms) forwards;
+}
+.md-confetti-c0 {
+  background: var(--accent);
+}
+.md-confetti-c1 {
+  background: var(--accent-bright);
+}
+.md-confetti-c2 {
+  background: #ffd166;
+}
+.md-confetti-c3 {
+  background: #37c26a;
+}
+.md-confetti-c4 {
+  background: #ffffff;
+}
+@keyframes mdConfetti {
+  0% {
+    opacity: 1;
+    transform: rotate(var(--a)) translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--a)) translateY(-44vh) scale(0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .md-enter,
+  .md-card-row.md-enter,
+  .md-confirm-in,
+  .md-success-card,
+  .md-success-heart,
+  .md-shimmer-text,
+  .md-typing i,
+  .md-confetti-piece,
+  .md-success::before {
+    animation: none !important;
+  }
+  /* Without the shimmer sweep the clipped text would be invisible. */
+  .md-shimmer-text {
+    color: var(--text-muted);
+    -webkit-text-fill-color: currentColor;
+  }
+  .md-confetti {
+    display: none;
+  }
 }
 
 .profile-card-foot {
@@ -2435,9 +2817,12 @@ button {
     margin-bottom: 1rem;
   }
 
-  .render-deck {
-    width: min(56vw, 13rem, 26dvh);
-    margin-bottom: 1rem;
+  .matchdemo-chat {
+    gap: 0.5rem;
+  }
+
+  .md-partner-card {
+    width: min(58vw, 13.5rem);
   }
 
   .exhaustion-copy {

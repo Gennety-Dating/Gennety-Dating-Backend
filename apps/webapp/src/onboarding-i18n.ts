@@ -15,7 +15,21 @@ export interface OnboardingStrings {
   statFootnote: string;
   pivotLines: string[][]; // scene 6 — "we see these problems / so we built Gennety"
   matchmakerLines: string[][]; // scene 7 — "you get a personal AI matchmaker"
-  rendersLines: string[]; // scene 8 — Gennety render-card swipe demo cycling lines
+  // scene 8 — scripted chat demo of the real Gennety decision flow (no swipe):
+  // partner card → "date with him?" → yes → glass confirm → waiting → "it's mutual".
+  // Mirrors the shared product copy; the partner name is a fixed English demo name.
+  matchDemo: {
+    name: string;
+    age: number;
+    tagline: string;
+    question: string; // = matchDecisionQuestionM
+    userYes: string;
+    confirmLead: string; // = matchTextYesConfirm
+    confirmGo: string; // = matchBtnConfirmGo
+    goBack: string; // = matchBtnKeepDeciding
+    waiting: string;
+    mutual: string; // short form of matchBothAccepted
+  };
   howItWorksSteps: Array<{ title: string; body: string }>;
   dateFlowSteps: Array<{ title: string; body: string }>;
   profileName: string;
@@ -113,11 +127,18 @@ const en: OnboardingStrings = {
   matchmakerLines: [
     ["You get a personal AI matchmaker that works around the clock to find the person who perfectly fits you"],
   ],
-  rendersLines: [
-    "This is how we introduce a person.",
-    "A real portrait — not a product to swipe.",
-    "One match, chosen for you.",
-  ],
+  matchDemo: {
+    name: "Timur",
+    age: 24,
+    tagline: "Easy-going, but calm to be around",
+    question: "So — want to go on a date with him?",
+    userYes: "Yes",
+    confirmLead: "Love that ✨ Confirm below — and I'll take care of the rest:",
+    confirmGo: "💫 Yes, I'm going",
+    goBack: "← Go back",
+    waiting: "Waiting for the other side…",
+    mutual: "It's mutual 🤍",
+  },
   howItWorksSteps: [
     {
       title: "Quick start",
@@ -271,11 +292,18 @@ const ru: OnboardingStrings = {
   matchmakerLines: [
     ["У тебя будет личный AI-матчмейкер, который работает круглосуточно и находит идеально подходящую тебе пару"],
   ],
-  rendersLines: [
-    "Вот как мы показываем человека.",
-    "Живой портрет, а не товар для свайпа.",
-    "Одна пара — выбранная для тебя.",
-  ],
+  matchDemo: {
+    name: "Timur",
+    age: 24,
+    tagline: "Лёгкий на подъём, но рядом с ним спокойно",
+    question: "Ну что — хочешь пойти с ним на свидание?",
+    userYes: "Да",
+    confirmLead: "Отлично ✨ Подтверди — и дальше всё сделаю я:",
+    confirmGo: "💫 Да, иду на свидание",
+    goBack: "← Назад",
+    waiting: "Ждём ответа второй стороны…",
+    mutual: "Взаимно 🤍",
+  },
   howItWorksSteps: [
     {
       title: "Быстрый вход",
@@ -428,11 +456,18 @@ const uk: OnboardingStrings = {
   matchmakerLines: [
     ["У тебе буде особистий AI-матчмейкер, який працює цілодобово й знаходить ідеально підходящу тобі пару"],
   ],
-  rendersLines: [
-    "Ось як ми показуємо людину.",
-    "Живий портрет, а не товар для свайпу.",
-    "Одна пара — обрана для тебе.",
-  ],
+  matchDemo: {
+    name: "Timur",
+    age: 24,
+    tagline: "Легкий на підйом, але поруч з ним спокійно",
+    question: "Хочеш піти з ним на побачення?",
+    userYes: "Так",
+    confirmLead: "Чудово ✨ Підтверди — і далі все зроблю я:",
+    confirmGo: "💫 Так, іду на побачення",
+    goBack: "← Назад",
+    waiting: "Чекаємо на відповідь іншої сторони…",
+    mutual: "Взаємно 🤍",
+  },
   howItWorksSteps: [
     {
       title: "Швидкий вхід",
@@ -586,11 +621,18 @@ const de: OnboardingStrings = {
   matchmakerLines: [
     ["Du bekommst einen persönlichen KI-Matchmaker, der rund um die Uhr die Person findet, die perfekt zu dir passt"],
   ],
-  rendersLines: [
-    "So stellen wir dir einen Menschen vor.",
-    "Ein echtes Porträt — kein Produkt zum Swipen.",
-    "Eine Person — für dich ausgewählt.",
-  ],
+  matchDemo: {
+    name: "Timur",
+    age: 24,
+    tagline: "Unkompliziert, aber angenehm ruhig",
+    question: "Und — willst du mit ihm auf ein Date gehen?",
+    userYes: "Ja",
+    confirmLead: "Stark ✨ Bestätige unten — den Rest übernehme ich:",
+    confirmGo: "💫 Ja, ich gehe hin",
+    goBack: "← Zurück",
+    waiting: "Warten auf die andere Person…",
+    mutual: "Beidseitig 🤍",
+  },
   howItWorksSteps: [
     {
       title: "Schneller Einstieg",
@@ -744,11 +786,18 @@ const pl: OnboardingStrings = {
   matchmakerLines: [
     ["Dostajesz osobistego AI-matchmakera, który działa całą dobę i znajduje osobę idealnie do ciebie dopasowaną"],
   ],
-  rendersLines: [
-    "Tak przedstawiamy ci człowieka.",
-    "Prawdziwy portret — nie produkt do przesuwania.",
-    "Jedna osoba — wybrana dla ciebie.",
-  ],
+  matchDemo: {
+    name: "Timur",
+    age: 24,
+    tagline: "Lekki na start, ale spokojnie przy nim",
+    question: "No i jak — chcesz iść z nim na randkę?",
+    userYes: "Tak",
+    confirmLead: "Świetnie ✨ Potwierdź poniżej — resztą zajmę się ja:",
+    confirmGo: "💫 Tak, idę na randkę",
+    goBack: "← Wróć",
+    waiting: "Czekamy na drugą osobę…",
+    mutual: "Wzajemne 🤍",
+  },
   howItWorksSteps: [
     {
       title: "Szybki start",
