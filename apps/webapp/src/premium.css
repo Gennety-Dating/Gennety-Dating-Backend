@@ -211,17 +211,17 @@ body {
   background: linear-gradient(
     100deg,
     var(--pm-shimmer-base) 0%,
-    var(--pm-shimmer-base) 36%,
+    var(--pm-shimmer-base) 40%,
     var(--pm-shimmer-hi) 50%,
-    var(--pm-shimmer-base) 64%,
+    var(--pm-shimmer-base) 60%,
     var(--pm-shimmer-base) 100%
   );
-  background-size: 220% 100%;
+  background-size: 250% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: pm-shimmer 3.4s linear infinite;
+  animation: pm-shimmer 4.8s ease-in-out infinite;
 }
 .pm-sub {
   margin: 0;
@@ -542,12 +542,18 @@ body {
     transform: scale(1.06);
   }
 }
+/* One clean sweep, then park the highlight fully off the left and rest. Both the
+   hold point (-120%) and the restart point (220%) sit off the text, so the loop
+   never flashes a second highlight over the last letters. */
 @keyframes pm-shimmer {
-  from {
-    background-position: 200% 0;
+  0% {
+    background-position: 220% 0;
   }
-  to {
-    background-position: -40% 0;
+  38% {
+    background-position: -120% 0;
+  }
+  100% {
+    background-position: -120% 0;
   }
 }
 @keyframes pm-glare {

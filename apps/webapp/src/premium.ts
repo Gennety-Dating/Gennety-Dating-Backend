@@ -308,7 +308,6 @@ function renderActive(state: PremiumState): void {
   hero.append(el("p", "pm-sub", s.activeUntil(fmtDate(state.premiumUntil))));
   center.append(hero);
 
-  center.append(el("p", "pm-manage", s.manage));
   page.append(center);
   root.replaceChildren(page);
 }
@@ -320,7 +319,6 @@ function renderOffer(state: PremiumState): void {
   const hero = el("div", "pm-hero");
   hero.append(crest());
   hero.append(el("h1", "pm-title pm-shimmer", s.title));
-  hero.append(el("p", "pm-sub", s.sub));
   scroll.append(hero);
 
   const list = el("div", "pm-benefits");
@@ -342,9 +340,9 @@ function renderOffer(state: PremiumState): void {
   btn.addEventListener("click", () => void subscribe(btn));
   action.append(btn);
 
-  // Price/terms sit just under the button; the manage note is quietest, last.
+  // Only the price/terms sit under the button now. How to cancel lives in the
+  // bot conversation (the agent can explain it and cancel on request), not here.
   action.append(el("p", "pm-price", s.price(state.priceDisplay)));
-  action.append(el("p", "pm-manage", s.manage));
 
   page.append(scroll, action);
   root.replaceChildren(page);
