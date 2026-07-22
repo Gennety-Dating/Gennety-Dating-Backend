@@ -190,13 +190,29 @@ function el(tag: string, className?: string, text?: string): HTMLElement {
   return node;
 }
 
-/** The burgundy medallion + breathing halo — the one warm object on the stage. */
-function medallion(): HTMLElement {
-  const halo = el("div", "pm-halo");
-  const med = el("div", "pm-medallion");
-  med.append(icon("spark", "pm-medallion-glyph"));
-  halo.append(med);
-  return halo;
+/**
+ * The brand butterfly crest — the premium logo. A metallic vertical gradient
+ * (theme-aware via the .pm-bf-a / .pm-bf-b CSS stops), a breathing monochrome
+ * halo behind it, and a slow float. Static trusted markup — no user data.
+ */
+const BUTTERFLY_SVG = `
+  <svg class="pm-butterfly" viewBox="-12 -10 124 120" role="img" aria-label="Gennety">
+    <defs>
+      <linearGradient id="pm-bf-grad" x1="0" y1="0" x2="0" y2="1">
+        <stop class="pm-bf-a" offset="0" />
+        <stop class="pm-bf-b" offset="1" />
+      </linearGradient>
+    </defs>
+    <path
+      d="M 50 35 C 20 0, -10 30, 15 55 C -5 75, 25 100, 48 65 L 52 65 C 75 100, 105 75, 85 55 C 110 30, 80 0, 50 35 Z"
+      fill="url(#pm-bf-grad)"
+    />
+  </svg>`;
+
+function crest(): HTMLElement {
+  const logo = el("div", "pm-logo");
+  logo.innerHTML = BUTTERFLY_SVG;
+  return logo;
 }
 
 function renderLoading(): void {
@@ -212,13 +228,14 @@ function renderActive(state: PremiumState): void {
   const center = el("div", "pm-center");
 
   const hero = el("div", "pm-hero");
-  hero.append(medallion());
+  hero.append(crest());
 
   const badge = el("div", "pm-badge");
-  badge.append(el("span", "pm-badge-dot"), document.createTextNode(s.activeBadge));
+  const badgeTxt = el("span", "pm-shimmer", s.activeBadge);
+  badge.append(el("span", "pm-badge-dot"), badgeTxt);
   hero.append(badge);
 
-  hero.append(el("h1", "pm-title", s.title));
+  hero.append(el("h1", "pm-title pm-shimmer", s.title));
   hero.append(el("p", "pm-sub", s.activeUntil(fmtDate(state.premiumUntil))));
   center.append(hero);
 
@@ -232,8 +249,8 @@ function renderOffer(state: PremiumState): void {
   const scroll = el("div", "pm-scroll");
 
   const hero = el("div", "pm-hero");
-  hero.append(medallion());
-  hero.append(el("h1", "pm-title", s.title));
+  hero.append(crest());
+  hero.append(el("h1", "pm-title pm-shimmer", s.title));
   hero.append(el("p", "pm-sub", s.sub));
   scroll.append(hero);
 
@@ -258,7 +275,7 @@ function renderOffer(state: PremiumState): void {
   action.append(el("p", "pm-price", s.price(state.priceDisplay)));
 
   const btn = el("button", "pm-cta") as HTMLButtonElement;
-  btn.append(icon("spark"), document.createTextNode(s.subscribe(state.priceDisplay)));
+  btn.append(el("span", undefined, s.subscribe(state.priceDisplay)));
   btn.addEventListener("click", () => void subscribe(btn));
   action.append(btn);
 

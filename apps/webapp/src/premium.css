@@ -1,28 +1,61 @@
 /* Gennety Premium Mini App (PRODUCT_SPEC §Premium).
-   "Burgundy Glass" — the shared full-screen Mini App language (Ticket / Venue
-   Change): a flat neutral stage where colour is spent only on the one hero and
-   the one paid action. Every surface is BORDERLESS — depth comes from layered
-   fills, inset light and shadow, never from an outline. Theme tokens live in
-   theme.css; the burgundy accent is shared across both themes. */
+   Premium has its OWN identity, distinct from the burgundy product screens: a
+   monochrome "white noir" luxe — predominantly white (ink on the light theme),
+   the brand butterfly as the crest, liquid-glass controls, a minimalist heavy
+   wordmark, and a silver shimmer on the "premium" copy. Every surface stays
+   BORDERLESS: depth comes from translucency, inset light and shadow. Base
+   tokens live in theme.css; the local --pm-* palette overrides the accent from
+   burgundy to the monochrome premium tone. */
 
 @import "./theme.css";
 
-:root {
-  /* Local aliases onto the shared tokens (theme.css), matching venue-change so
-     the two paid screens read identically. */
-  --accent-deep: #6d1c2e;
-  --glass: var(--fill);
-  --glass-press: var(--fill-strong);
-  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+:root,
+:root[data-theme="dark"] {
+  /* The premium accent = white (the high-contrast "self" tone), not burgundy. */
+  --pm-ink: #ffffff;
+  --pm-ink-soft: rgba(255, 255, 255, 0.7);
+  --pm-glow: rgba(255, 255, 255, 0.5);
+  --pm-glow-soft: rgba(255, 255, 255, 0.16);
 
-  /* Telegram fullscreen chrome inset (close × / menu ⋯) — populated from
-     `Telegram.WebApp.contentSafeAreaInset` at boot (telegram-insets.ts). The
-     56px fallback covers older clients / the first paint. */
+  /* Wordmark shimmer — silver base, bright white travelling band. */
+  --pm-shimmer-base: #8b8b93;
+  --pm-shimmer-hi: #ffffff;
+
+  /* Liquid-glass control tokens. */
+  --pm-glass-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.07) 100%);
+  --pm-glass-rim: rgba(255, 255, 255, 0.3);
+  --pm-glass-hi: rgba(255, 255, 255, 0.72);
+  --pm-glass-tile: rgba(255, 255, 255, 0.07);
+  --pm-cta-fg: #0b0b0b;
+
+  /* Butterfly crest — metallic vertical gradient stops. */
+  --pm-bf-a: #ffffff;
+  --pm-bf-b: #b6b6c0;
+
+  --pm-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --tg-content-top: 56px;
   --tg-content-bottom: 0px;
 }
+
 :root[data-theme="light"] {
-  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --pm-ink: #0d0d0d;
+  --pm-ink-soft: rgba(0, 0, 0, 0.64);
+  --pm-glow: rgba(0, 0, 0, 0.2);
+  --pm-glow-soft: rgba(0, 0, 0, 0.05);
+
+  --pm-shimmer-base: #2c2c31;
+  --pm-shimmer-hi: #a9a9b2;
+
+  --pm-glass-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0.4) 100%);
+  --pm-glass-rim: rgba(0, 0, 0, 0.14);
+  --pm-glass-hi: rgba(255, 255, 255, 0.95);
+  --pm-glass-tile: rgba(0, 0, 0, 0.045);
+  --pm-cta-fg: #0d0d0d;
+
+  --pm-bf-a: #2a2a2e;
+  --pm-bf-b: #050505;
+
+  --pm-glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 * {
@@ -45,8 +78,8 @@ body {
   min-height: 100vh;
 }
 
-/* A single soft burgundy bloom high on the stage — the only tint on the page,
-   so the medallion and the CTA read as the warm points, never the backdrop. */
+/* A single soft monochrome bloom high on the stage — the only wash on the page,
+   so the crest and the CTA read as the luminous points, never the backdrop. */
 .pm-page {
   position: relative;
   width: 100%;
@@ -61,30 +94,20 @@ body {
 .pm-page::before {
   content: "";
   position: absolute;
-  top: -14%;
+  top: -16%;
   left: 50%;
   width: 150%;
-  height: 46%;
+  height: 48%;
   transform: translateX(-50%);
   background: radial-gradient(
-    60% 60% at 50% 0%,
-    rgba(139, 37, 59, 0.28) 0%,
-    rgba(139, 37, 59, 0.08) 42%,
-    transparent 72%
+    58% 58% at 50% 0%,
+    var(--pm-glow-soft) 0%,
+    transparent 70%
   );
   pointer-events: none;
   z-index: 0;
 }
-:root[data-theme="light"] .pm-page::before {
-  background: radial-gradient(
-    60% 60% at 50% 0%,
-    rgba(139, 37, 59, 0.16) 0%,
-    rgba(139, 37, 59, 0.05) 42%,
-    transparent 72%
-  );
-}
 
-/* Scroll area — flexes; the action bar pins to the bottom. */
 .pm-scroll {
   position: relative;
   z-index: 1;
@@ -96,7 +119,6 @@ body {
   padding: calc(30px + env(safe-area-inset-top) + var(--tg-content-top)) 20px 24px;
 }
 
-/* Centered states (loading / active). */
 .pm-center {
   position: relative;
   z-index: 1;
@@ -114,68 +136,79 @@ body {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  border: 3px solid rgba(139, 37, 59, 0.25);
-  border-top-color: var(--accent);
+  border: 3px solid var(--pm-glow-soft);
+  border-top-color: var(--pm-ink);
   animation: pm-spin 0.8s linear infinite;
 }
 
-/* ── Hero ─────────────────────────────────────────────────────────────── */
+/* ── Hero — brand butterfly crest ─────────────────────────────────────── */
 .pm-hero {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 10px;
-  margin-bottom: 26px;
+  gap: 12px;
+  margin-bottom: 28px;
 }
 
-/* Halo — a soft burgundy ring that breathes out behind the medallion. */
-.pm-halo {
+.pm-logo {
   position: relative;
   display: grid;
   place-items: center;
-  margin-bottom: 6px;
-}
-.pm-halo::before {
-  content: "";
-  position: absolute;
-  width: 190px;
-  height: 190px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(182, 48, 79, 0.45) 0%, transparent 68%);
-  animation: pm-breathe 4.2s ease-in-out infinite;
-  pointer-events: none;
-}
-
-/* The medallion — the one warm object on the stage. */
-.pm-medallion {
-  position: relative;
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent) 68%, var(--accent-deep) 100%);
-  box-shadow:
-    0 20px 50px -16px rgba(139, 37, 59, 0.95),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  margin-bottom: 4px;
   animation: pm-mark-in 0.6s cubic-bezier(0.2, 1.5, 0.4, 1) both;
 }
-.pm-medallion-glyph {
-  width: 44px;
-  height: 44px;
-  stroke-width: 2;
-  animation: pm-glyph-in 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) 0.14s both;
+/* Soft monochrome halo that breathes out behind the butterfly. */
+.pm-logo::before {
+  content: "";
+  position: absolute;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--pm-glow) 0%, transparent 66%);
+  opacity: 0.5;
+  animation: pm-breathe 4.4s ease-in-out infinite;
+  pointer-events: none;
+}
+.pm-butterfly {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  filter: drop-shadow(0 10px 26px var(--pm-glow));
+  animation: pm-float 5.5s ease-in-out infinite;
+}
+.pm-bf-a {
+  stop-color: var(--pm-bf-a);
+}
+.pm-bf-b {
+  stop-color: var(--pm-bf-b);
 }
 
+/* Minimalist heavy wordmark with a travelling silver shimmer. */
 .pm-title {
-  font-family: "Space Grotesk", "Inter", sans-serif;
-  font-weight: 700;
-  font-size: 27px;
-  letter-spacing: -0.015em;
+  font-family: "Inter", system-ui, sans-serif;
+  font-weight: 900;
+  font-size: 30px;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
   margin: 0;
   animation: pm-rise 0.5s ease 0.08s both;
+}
+.pm-shimmer {
+  background: linear-gradient(
+    100deg,
+    var(--pm-shimmer-base) 0%,
+    var(--pm-shimmer-base) 36%,
+    var(--pm-shimmer-hi) 50%,
+    var(--pm-shimmer-base) 64%,
+    var(--pm-shimmer-base) 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: pm-shimmer 3.4s linear infinite;
 }
 .pm-sub {
   margin: 0;
@@ -186,20 +219,24 @@ body {
   animation: pm-rise 0.5s ease 0.16s both;
 }
 
-/* Active badge — the one pill; accent-soft fill, no outline. */
+/* Active badge — liquid-glass pill; its label carries the same shimmer. */
 .pm-badge {
   align-self: center;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 14px 6px 11px;
+  gap: 8px;
+  padding: 7px 15px 7px 12px;
   border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-bright);
-  box-shadow: var(--glass-edge);
+  background: var(--pm-glass-fill);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 var(--pm-glass-hi),
+    inset 0 0 0 1px var(--pm-glass-rim),
+    0 6px 18px rgba(0, 0, 0, 0.25);
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-weight: 800;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   animation: pm-pill-in 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) 0.1s both;
 }
@@ -207,11 +244,11 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent-bright);
-  box-shadow: 0 0 8px var(--accent-bright);
+  background: var(--pm-ink);
+  box-shadow: 0 0 8px var(--pm-glow);
 }
 
-/* ── Benefits — borderless glass rows with icon tiles ─────────────────── */
+/* ── Benefits — borderless glass rows with monochrome icon tiles ──────── */
 .pm-benefits {
   list-style: none;
   margin: 0;
@@ -225,9 +262,9 @@ body {
   gap: 14px;
   align-items: center;
   padding: 15px 16px;
-  border-radius: 20px;
+  border-radius: 22px;
   background: var(--surface);
-  box-shadow: var(--glass-edge);
+  box-shadow: var(--pm-glass-edge);
   animation: pm-rise 0.5s ease both;
 }
 .pm-benefit:nth-child(1) {
@@ -236,19 +273,16 @@ body {
 .pm-benefit:nth-child(2) {
   animation-delay: 0.28s;
 }
-.pm-benefit:nth-child(3) {
-  animation-delay: 0.36s;
-}
 .pm-benefit-tile {
   flex: none;
   width: 46px;
   height: 46px;
-  border-radius: 14px;
+  border-radius: 15px;
   display: grid;
   place-items: center;
-  background: var(--glass);
-  box-shadow: var(--glass-edge);
-  color: var(--accent-bright);
+  background: var(--pm-glass-tile);
+  box-shadow: var(--pm-glass-edge);
+  color: var(--pm-ink);
 }
 .pm-benefit-tile .icon {
   width: 22px;
@@ -273,7 +307,6 @@ body {
   color: var(--text-muted);
 }
 
-/* "More perks are on the way." — a quiet forward-looking line. */
 .pm-more {
   margin: 16px 4px 0;
   text-align: center;
@@ -291,7 +324,6 @@ body {
   flex-direction: column;
   gap: 12px;
   padding: 14px 20px calc(16px + env(safe-area-inset-bottom) + var(--tg-content-bottom));
-  /* A faint lift off the scroll content — a fill fade, never a hard rule. */
   background: linear-gradient(to top, var(--bg) 62%, transparent);
 }
 .pm-price {
@@ -300,8 +332,9 @@ body {
   font-size: 13.5px;
 }
 
-/* THE HERO ACTION — the one paid moment, so it is the brightest thing on the
-   screen: warm burgundy gradient, a deep bloom, and the only sheen sweep. */
+/* THE HERO ACTION — a liquid-glass pill: translucent frosted fill, a bright
+   specular top edge, and a slow travelling glare (the "liquid" refraction).
+   Generously rounded, monochrome, high-contrast label. */
 .pm-cta {
   position: relative;
   overflow: hidden;
@@ -311,38 +344,49 @@ body {
   justify-content: center;
   gap: 9px;
   border: none;
-  border-radius: 20px;
-  padding: 18px 22px;
-  font-family: inherit;
-  font-size: 17px;
-  font-weight: 700;
+  border-radius: 28px;
+  padding: 19px 24px;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 16.5px;
+  font-weight: 800;
   letter-spacing: -0.01em;
-  color: #fff;
+  color: var(--pm-cta-fg);
   cursor: pointer;
-  background: linear-gradient(
-    135deg,
-    #ff7f94 0%,
-    #f0637d 26%,
-    var(--accent-bright) 62%,
-    var(--accent) 100%
-  );
+  background: var(--pm-glass-fill);
+  -webkit-backdrop-filter: blur(20px) saturate(165%);
+  backdrop-filter: blur(20px) saturate(165%);
   box-shadow:
-    0 18px 44px rgba(240, 99, 125, 0.42),
-    0 3px 12px rgba(139, 37, 59, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    inset 0 1px 0 var(--pm-glass-hi),
+    inset 0 0 0 1px var(--pm-glass-rim),
+    0 12px 34px rgba(0, 0, 0, 0.4);
   transition: transform 0.15s ease, opacity 0.2s ease;
 }
+/* Glass top-highlight — the light catching the curved top of the pill. */
+.pm-cta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, var(--pm-glass-hi) 0%, transparent 46%);
+  opacity: 0.55;
+  pointer-events: none;
+}
+/* Travelling liquid glare. */
 .pm-cta::after {
   content: "";
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -40%;
-  width: 35%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.42), transparent);
-  transform: skewX(-18deg);
-  animation: pm-sheen 3.4s ease-in-out infinite;
+  top: -60%;
+  left: -35%;
+  width: 55%;
+  height: 220%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  transform: skewX(-16deg);
+  animation: pm-glare 4.2s ease-in-out infinite;
   pointer-events: none;
+}
+.pm-cta > * {
+  position: relative;
+  z-index: 1;
 }
 .pm-cta:active {
   transform: scale(0.98);
@@ -350,10 +394,6 @@ body {
 .pm-cta[disabled] {
   opacity: 0.6;
   cursor: default;
-}
-.pm-cta .icon {
-  width: 19px;
-  height: 19px;
 }
 
 .pm-manage {
@@ -387,21 +427,11 @@ body {
 @keyframes pm-mark-in {
   0% {
     opacity: 0;
-    transform: scale(0.55);
+    transform: scale(0.6);
   }
   100% {
     opacity: 1;
     transform: scale(1);
-  }
-}
-@keyframes pm-glyph-in {
-  0% {
-    opacity: 0;
-    transform: scale(0.4) rotate(-12deg);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) rotate(0);
   }
 }
 @keyframes pm-pill-in {
@@ -414,44 +444,65 @@ body {
     transform: scale(1);
   }
 }
+@keyframes pm-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
 @keyframes pm-breathe {
   0%,
   100% {
-    opacity: 0.55;
-    transform: scale(0.9);
+    opacity: 0.4;
+    transform: scale(0.92);
   }
   50% {
-    opacity: 1;
+    opacity: 0.72;
     transform: scale(1.06);
   }
 }
-@keyframes pm-sheen {
-  0%,
-  62% {
-    left: -40%;
+@keyframes pm-shimmer {
+  from {
+    background-position: 200% 0;
   }
-  92%,
+  to {
+    background-position: -40% 0;
+  }
+}
+@keyframes pm-glare {
+  0%,
+  55% {
+    left: -35%;
+  }
+  85%,
   100% {
-    left: 130%;
+    left: 135%;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pm-hero,
+  .pm-logo,
+  .pm-butterfly,
+  .pm-logo::before,
   .pm-title,
   .pm-sub,
   .pm-badge,
   .pm-benefit,
   .pm-more,
-  .pm-medallion,
-  .pm-medallion-glyph {
-    animation: none !important;
-  }
-  .pm-halo::before,
   .pm-cta::after {
     animation: none !important;
   }
   .pm-cta::after {
     display: none;
+  }
+  /* Freeze the shimmer to a legible solid so the wordmark never sits mid-fade. */
+  .pm-shimmer {
+    animation: none !important;
+    background: none;
+    color: var(--pm-ink);
+    -webkit-text-fill-color: var(--pm-ink);
   }
 }
