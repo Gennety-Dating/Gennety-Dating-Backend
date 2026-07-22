@@ -169,25 +169,18 @@ export function App() {
   };
 
   if (status === "loading") {
-    // Instant, on-brand boot screen: the real title/subtitle plus shimmering
-    // card silhouettes and a live indeterminate bar, so the Mini App never
-    // reads as a frozen blank while the deck + first images warm up.
+    // Render the exact same markup as the static shell in radar.html (shared
+    // inline `.boot` CSS), so React taking over the #root is a seamless, jump-
+    // free handoff while the deck + first images warm up.
     return (
-      <div className="radar-screen radar-boot">
-        <header className="radar-head">
-          <h1 className="radar-title">{s.title}</h1>
-          <p className="radar-sub">{s.subtitle}</p>
-        </header>
-        <div className="radar-boot-stack">
-          <span className="radar-boot-ghost radar-boot-ghost-3" />
-          <span className="radar-boot-ghost radar-boot-ghost-2" />
-          <span className="radar-boot-ghost radar-boot-ghost-1" />
+      <div className="boot">
+        <div className="boot-stack">
+          <span className="boot-ghost g3" />
+          <span className="boot-ghost g2" />
+          <span className="boot-ghost g1" />
         </div>
-        <div className="radar-boot-foot">
-          <div className="radar-boot-bar">
-            <span className="radar-boot-bar-sweep" />
-          </div>
-          <p className="radar-finishing">{s.preparing}</p>
+        <div className="boot-bar">
+          <span />
         </div>
       </div>
     );
@@ -219,7 +212,6 @@ export function App() {
     <div className="radar-screen">
       <header className="radar-head">
         <h1 className="radar-title">{s.title}</h1>
-        <p className="radar-sub">{s.subtitle}</p>
       </header>
 
       <div className="radar-progress-wrap">
