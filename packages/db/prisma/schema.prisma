@@ -597,6 +597,27 @@ model Profile {
   /// Idempotency/audit marker: when the vibe-axis extraction last ran. Guards
   /// the accepted-path summary append so finalize retries don't double-append.
   vibeExtractedAt          DateTime?                    @map("vibe_extracted_at")
+  /// Type Radar (PRODUCT_SPEC §Type Radar / TYPE_RADAR_PRODUCT_SPEC.md). A fast
+  /// visual appearance-preference calibration shown in onboarding right BEFORE
+  /// the Magic Prompt: the user reacts "My Type" / "Not My Type" to ~12
+  /// contrasting portraits (band chosen from the viewer's own age via
+  /// `ageBandFor`), optionally tapping one reason chip. Pure math lives in
+  /// `@gennety/shared` (`type-radar.ts`); feature-flagged by `TYPE_RADAR_ENABLED`
+  /// and scored as the soft `V_type` multiplier (shadow-safe: `TYPE_PREF_FLOOR`
+  /// default 1.0 = no effect). All columns are additive/nullable.
+  ///   - `typeRadarAnswers`: raw verdict log `[{cardId, verdict, chipId?}]`.
+  ///   - `typePrefTags`: compiled preference vector from `buildPreferenceVector`
+  ///     (per attribute-value weight); the only thing matching reads.
+  ///   - `typeRadarAgeBand`: `'a'|'b'|'c'` band the user actually rated.
+  typeRadarAnswers         Json[]                       @default([]) @map("type_radar_answers")
+  typePrefTags             Json?                        @map("type_pref_tags")
+  typeRadarCompletedAt     DateTime?                    @map("type_radar_completed_at")
+  typeRadarAgeBand         String?                      @map("type_radar_age_band")
+  /// Structured appearance tags for THIS user as a candidate (hairColor, build,
+  /// beard, tattoos, …), scored against a partner's `typePrefTags` by `V_type`.
+  /// Piggybacks the Elo cold-start vision pass (no extra OpenAI call). Null until
+  /// that pass runs / for legacy rows; `V_type` is neutral (0.5→floor) when absent.
+  appearanceTags           Json?                        @map("appearance_tags")
   createdAt                DateTime                     @default(now()) @map("created_at")
   updatedAt                DateTime                     @updatedAt @map("updated_at")
 
@@ -729,57 +750,57 @@ model Match {
   /// midpoint. All fields nullable — populated incrementally as each user
   /// responds; once all four of (vibeText*, vibeLat*) pairs are present the
   /// match finalizes to `scheduled`.
-  vibeTextA          String?   @map("vibe_text_a")
-  vibeTextB          String?   @map("vibe_text_b")
-  vibeLatA           Float?    @map("vibe_lat_a")
-  vibeLngA           Float?    @map("vibe_lng_a")
+  vibeTextA                 String?   @map("vibe_text_a")
+  vibeTextB                 String?   @map("vibe_text_b")
+  vibeLatA                  Float?    @map("vibe_lat_a")
+  vibeLngA                  Float?    @map("vibe_lng_a")
   /// Human-readable address each user picked in the Location Mini App
   /// (e.g. "Lukyanivska Metro Station, Kyiv"). Used for display in the
   /// concierge confirmation message — not for the matching algorithm
   /// (lat/lng above is the source of truth for midpoint computation).
   /// Null when the user shared a raw location pin via Telegram's attach
   /// menu instead of using the Mini App.
-  vibeAddressA       String?   @map("vibe_address_a")
-  vibeAddressB       String?   @map("vibe_address_b")
-  vibeLatB           Float?    @map("vibe_lat_b")
-  vibeLngB           Float?    @map("vibe_lng_b")
+  vibeAddressA              String?   @map("vibe_address_a")
+  vibeAddressB              String?   @map("vibe_address_b")
+  vibeLatB                  Float?    @map("vibe_lat_b")
+  vibeLngB                  Float?    @map("vibe_lng_b")
   /// Whitelisted Places category after safety override (cafe | restaurant |
   /// coffee_shop | park | museum | lounge). Audit trail for overrides.
-  parsedCategoryA    String?   @map("parsed_category_a")
-  parsedCategoryB    String?   @map("parsed_category_b")
+  parsedCategoryA           String?   @map("parsed_category_a")
+  parsedCategoryB           String?   @map("parsed_category_b")
   /// Venue Intent V2 snapshots. A draft is replaced only when that user edits
   /// their text; finalisation consumes the confirmed JSON and never re-parses.
-  venueIntentA       Json?     @map("venue_intent_a")
-  venueIntentB       Json?     @map("venue_intent_b")
+  venueIntentA              Json?     @map("venue_intent_a")
+  venueIntentB              Json?     @map("venue_intent_b")
   /// V2 stores the route midpoint separately. For pre-V2 rows venueLat/Lng are
   /// the legacy midpoint and venueSelectionVersion remains null.
-  venueMidpointLat   Float?    @map("venue_midpoint_lat")
-  venueMidpointLng   Float?    @map("venue_midpoint_lng")
+  venueMidpointLat          Float?    @map("venue_midpoint_lat")
+  venueMidpointLng          Float?    @map("venue_midpoint_lng")
   /// Actual venue coordinates for V2 (legacy rows keep midpoint semantics).
-  venueLat           Float?    @map("venue_lat")
-  venueLng           Float?    @map("venue_lng")
-  venuePlaceId       String?   @map("venue_place_id")
-  venueSource        String?   @map("venue_source")
-  venueSelectionVersion String? @map("venue_selection_version")
-  venueSelectionConfidence Float? @map("venue_selection_confidence")
-  venueSelectionReason String? @map("venue_selection_reason")
-  venueSelectionAttempts Int @default(0) @map("venue_selection_attempts")
+  venueLat                  Float?    @map("venue_lat")
+  venueLng                  Float?    @map("venue_lng")
+  venuePlaceId              String?   @map("venue_place_id")
+  venueSource               String?   @map("venue_source")
+  venueSelectionVersion     String?   @map("venue_selection_version")
+  venueSelectionConfidence  Float?    @map("venue_selection_confidence")
+  venueSelectionReason      String?   @map("venue_selection_reason")
+  venueSelectionAttempts    Int       @default(0) @map("venue_selection_attempts")
   venueSelectionNextRetryAt DateTime? @map("venue_selection_next_retry_at")
-  venueSelectionError String? @map("venue_selection_error")
+  venueSelectionError       String?   @map("venue_selection_error")
   /// Google Maps deep-link to the picked place (`googleMapsUri` from the
   /// Places API (New) response). Surfaced in the final scheduled DM so
   /// users can verify the venue exists and pre-check address / hours.
   /// Null on the legacy domain-based venue path (no Maps URI available
   /// there) and on local-stub fallbacks.
-  venueGoogleMapsUri String?   @map("venue_google_maps_uri")
+  venueGoogleMapsUri        String?   @map("venue_google_maps_uri")
   /// Date-card venue imagery (feature-flagged, `DATE_CARD_FEATURE_ENABLED`).
   /// `venuePhotoUrl` is an absolute, operator-owned URL from a curated venue
   /// (clean licensing). `venuePhotoName` is a Google Places photo *resource
   /// name* (`places/X/photos/Y`); the displayable media URL is rebuilt at card
   /// render time with the server-side key (`buildPlacesPhotoUrl`) so Google's
   /// raw bytes are never persisted (Places ToS). Both null until `scheduled`.
-  venuePhotoUrl      String?   @map("venue_photo_url")
-  venuePhotoName     String?   @map("venue_photo_name")
+  venuePhotoUrl             String?   @map("venue_photo_url")
+  venuePhotoName            String?   @map("venue_photo_name")
   /// Telegram photo `file_id` of the rendered date-card PNG, captured per side
   /// the first time the `scheduled` confirmation card is sent
   /// (`DATE_CARD_FEATURE_ENABLED`). Lets the "My date" menu hub re-open the card
@@ -787,10 +808,10 @@ model Match {
   /// Null until the card is actually sent (feature off, render/send failed, or
   /// the plain-text fallback was used). Cleared implicitly by never being read
   /// once the match leaves `scheduled`.
-  dateCardFileIdA    String?   @map("date_card_file_id_a")
-  dateCardFileIdB    String?   @map("date_card_file_id_b")
+  dateCardFileIdA           String?   @map("date_card_file_id_a")
+  dateCardFileIdB           String?   @map("date_card_file_id_b")
   /// Idempotency marker: when the concierge prompt was dispatched to both users.
-  venuePromptAskedAt DateTime? @map("venue_prompt_asked_at")
+  venuePromptAskedAt        DateTime? @map("venue_prompt_asked_at")
 
   /// Phase 4: Date lifecycle
   icebreakersSentAt    DateTime? @map("icebreakers_sent_at")
@@ -1016,10 +1037,10 @@ model Match {
   userA User @relation("MatchUserA", fields: [userAId], references: [id], onDelete: Cascade)
   userB User @relation("MatchUserB", fields: [userBId], references: [id], onDelete: Cascade)
 
-  events        MatchEvent[]
-  reports       Report[]
-  scoreLog      MatchScoreLog?
-  proxyMessages ProxyMessage[]
+  events             MatchEvent[]
+  reports            Report[]
+  scoreLog           MatchScoreLog?
+  proxyMessages      ProxyMessage[]
   venueSelectionLogs VenueSelectionLog[]
 
   @@index([status, createdAt])
@@ -1101,6 +1122,12 @@ model MatchScoreLog {
   /// positive bracket alongside `scoreLeague`. Defaults to 1 so historical rows
   /// logged before this factor existed read as neutral.
   scoreAgePref      Float    @default(1) @map("score_age_pref")
+  /// Type Radar appearance-preference multiplier in [floor..1] (1 = candidate's
+  /// `appearanceTags` match the seeker's `typePrefTags`, or no radar signal).
+  /// Multiplies the positive bracket alongside `scoreLeague`/`scoreAgePref`.
+  /// Defaults to 1 so rows logged before the factor existed — and every row
+  /// while `TYPE_RADAR_ENABLED`/`TYPE_PREF_FLOOR` keep it inert — read as neutral.
+  scoreType         Float    @default(1) @map("score_type")
   /// Final composite (after weights + starvation bonus).
   scoreTotal        Float    @map("score_total")
   /// Pairwise embedding L2 distance, kept for debugging / re-ranking.
