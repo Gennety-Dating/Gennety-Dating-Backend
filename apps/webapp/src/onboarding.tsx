@@ -65,20 +65,21 @@ const PROFILE_SWIPE_INTERVAL_MS = 1000; // Profile (screen 2) Tinder-style card 
 // Lives in `apps/webapp/public/renders/`; a missing file degrades to the card
 // background.
 const MATCH_DEMO_PHOTO = "/renders/timur.jpg";
-// Scripted beats (ms from scene entry) for the MatchDemoScene chat animation.
-// Each step reveals one more element of the real Gennety decision flow:
-// partner card → question → "yes" → confirm lead → glass confirm card →
-// auto-press → shimmer "waiting" → "it's mutual" success (+ Next CTA).
+// Scripted intro beats (ms from scene entry) for the MatchDemoScene. The chat
+// auto-plays up to the glass confirm card, then STOPS — the user taps
+// "Yes, I'm going" themselves (manual confirm). Cadence is deliberately unhurried
+// so each message lands like a real conversation, not a burst.
 const MATCH_DEMO_STEP_MS = {
-  card: 350,
-  question: 1350,
-  userYes: 2650,
-  confirmLead: 3550,
-  confirm: 4500,
-  pressed: 6100,
-  waiting: 6800,
-  mutual: 9800,
+  card: 450,
+  question: 2100,
+  userYes: 3900,
+  confirmLead: 5600,
+  confirm: 7100,
 } as const;
+// After the user taps confirm: brief press feedback, then the shimmer "waiting"
+// line, then the mutual reveal ~3s later (as if the other side just answered).
+const MATCH_DEMO_PRESS_MS = 300;
+const MATCH_DEMO_WAIT_MS = 3000;
 
 interface ProfileCardData {
   name: string;
@@ -1349,40 +1350,57 @@ function ProfileCard(props: {
 
 // Scene 8 — scripted chat demo of the REAL Gennety decision flow, replacing the
 // old swipe deck (swiping isn't our mechanic; "do you want to go on a date with
-// them?" is). It auto-plays once: the partner card drops in, the bot asks, the
-// user says "yes", a liquid-glass confirm card slides up and auto-presses, a
-// shimmer "waiting" line shows, and ~3s later the "it's mutual" success bursts
-// with confetti. The copy mirrors the shared product strings (§3.3/§3.4). The
-// Next CTA appears only once the success lands.
+// them?" is). The chat auto-plays to the glass confirm card, then WAITS — the
+// user taps "Yes, I'm going" themselves. On confirm: a shimmer "waiting" line
+// shows, and ~3s later the "it's mutual" success bursts with confetti. Copy
+// mirrors the shared product strings (§3.3/§3.4). The Next CTA appears only once
+// the success lands. Stages: 0 idle · 1 card · 2 question · 3 yes · 4 lead ·
+// 5 confirm-open (awaiting tap) · 7 waiting · 8 mutual.
 function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactElement {
   const s = useOnboardingStrings();
   const d = s.matchDemo;
   const [stage, setStage] = useState(0);
+  const [pressing, setPressing] = useState(false);
+  const timersRef = useRef<number[]>([]);
+
+  const clearTimers = useCallback(() => {
+    timersRef.current.forEach((t) => window.clearTimeout(t));
+    timersRef.current = [];
+  }, []);
+
+  // Play the intro up to the confirm card, then stop and wait for the tap.
+  const runIntro = useCallback(
+    (reduce: boolean) => {
+      clearTimers();
+      setPressing(false);
+      if (reduce) {
+        // No motion: show the whole conversation with the confirm already open.
+        setStage(5);
+        return;
+      }
+      setStage(0);
+      timersRef.current = [
+        window.setTimeout(() => setStage(1), MATCH_DEMO_STEP_MS.card),
+        window.setTimeout(() => setStage(2), MATCH_DEMO_STEP_MS.question),
+        window.setTimeout(() => setStage(3), MATCH_DEMO_STEP_MS.userYes),
+        window.setTimeout(() => setStage(4), MATCH_DEMO_STEP_MS.confirmLead),
+        window.setTimeout(() => setStage(5), MATCH_DEMO_STEP_MS.confirm),
+      ];
+    },
+    [clearTimers],
+  );
 
   useEffect(() => {
     if (!props.active) {
+      clearTimers();
       setStage(0);
+      setPressing(false);
       return;
     }
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    if (reduce) {
-      // No motion: jump straight to the finished conversation + success.
-      setStage(8);
-      return;
-    }
-    setStage(0);
-    const timers = [
-      window.setTimeout(() => setStage(1), MATCH_DEMO_STEP_MS.card),
-      window.setTimeout(() => setStage(2), MATCH_DEMO_STEP_MS.question),
-      window.setTimeout(() => setStage(3), MATCH_DEMO_STEP_MS.userYes),
-      window.setTimeout(() => setStage(4), MATCH_DEMO_STEP_MS.confirmLead),
-      window.setTimeout(() => setStage(5), MATCH_DEMO_STEP_MS.confirm),
-      window.setTimeout(() => setStage(6), MATCH_DEMO_STEP_MS.pressed),
-      window.setTimeout(() => setStage(7), MATCH_DEMO_STEP_MS.waiting),
-      window.setTimeout(() => setStage(8), MATCH_DEMO_STEP_MS.mutual),
-    ];
-    return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [props.active]);
+    runIntro(reduce);
+    return clearTimers;
+  }, [props.active, runIntro, clearTimers]);
 
   // Warm the partner photo once so the card doesn't flash a blank frame.
   useEffect(() => {
@@ -1395,8 +1413,30 @@ function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactEl
     if (stage >= 8) app?.HapticFeedback?.notificationOccurred?.("success");
   }, [stage]);
 
-  // The glass confirm card is open between "confirm below" and the auto-press.
-  const confirmOpen = stage >= 5 && stage < 7;
+  // The user commits the date. Press feedback → shimmer wait → mutual reveal.
+  const handleConfirm = useCallback(() => {
+    if (stage !== 5 || pressing) return;
+    app?.HapticFeedback?.impactOccurred?.("medium");
+    setPressing(true);
+    clearTimers();
+    timersRef.current = [
+      window.setTimeout(() => {
+        setPressing(false);
+        setStage(7);
+      }, MATCH_DEMO_PRESS_MS),
+      window.setTimeout(() => setStage(8), MATCH_DEMO_PRESS_MS + MATCH_DEMO_WAIT_MS),
+    ];
+  }, [stage, pressing, clearTimers]);
+
+  // "Go back" replays the demo from the top so it can be watched again.
+  const handleBack = useCallback(() => {
+    if (stage !== 5) return;
+    app?.HapticFeedback?.selectionChanged?.();
+    runIntro(false);
+  }, [stage, runIntro]);
+
+  // The glass confirm card is open once the intro finishes, until the user taps.
+  const confirmOpen = stage === 5;
 
   return (
     <>
@@ -1448,12 +1488,15 @@ function MatchDemoScene(props: { active: boolean; onNext: () => void }): ReactEl
         </div>
 
         {confirmOpen ? (
-          <div className="md-confirm md-confirm-in" aria-hidden="true">
-            <div className="md-confirm-lead">{d.confirmLead}</div>
-            <button type="button" className={`md-confirm-go ${stage >= 6 ? "is-press" : ""}`} tabIndex={-1}>
+          <div className="md-confirm md-confirm-in">
+            <button
+              type="button"
+              className={`md-confirm-go ${pressing ? "is-press" : ""}`}
+              onClick={handleConfirm}
+            >
               {d.confirmGo}
             </button>
-            <button type="button" className="md-confirm-back" tabIndex={-1}>
+            <button type="button" className="md-confirm-back" onClick={handleBack}>
               {d.goBack}
             </button>
           </div>

@@ -1003,7 +1003,6 @@ button {
 .md-bot {
   align-self: flex-start;
   background: var(--surface-2);
-  border: 1px solid var(--glass-border);
   color: var(--text);
   border-bottom-left-radius: 0.35rem;
 }
@@ -1097,11 +1096,6 @@ button {
     transform: none;
   }
 }
-.md-confirm-lead {
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  text-align: center;
-}
 .md-confirm-go {
   width: 100%;
   padding: 0.72rem;
@@ -1110,10 +1104,12 @@ button {
   font-size: 0.95rem;
   font-weight: 700;
   color: #fff;
+  cursor: pointer;
   background: linear-gradient(180deg, #37c26a, #2ea25a);
   box-shadow: 0 8px 20px -8px rgba(46, 162, 90, 0.7);
   transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 }
+.md-confirm-go:active,
 .md-confirm-go.is-press {
   transform: scale(0.95);
   filter: brightness(1.08);
@@ -1127,6 +1123,7 @@ button {
   color: var(--text-muted);
   font-size: 0.88rem;
   font-weight: 600;
+  cursor: pointer;
 }
 
 /* "It's mutual" success reveal — glass card + pulsing heart + confetti burst. */
