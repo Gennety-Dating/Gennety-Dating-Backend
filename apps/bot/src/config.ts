@@ -424,7 +424,7 @@ export const env = {
   PREMIUM_STARS: Number(process.env.PREMIUM_STARS ?? "500"),
   /// Human-readable price shown in premium copy (the Stars amount is the actual
   /// charge; this is display-only for the "$10/mo" framing).
-  PREMIUM_PRICE_USD_DISPLAY: process.env.PREMIUM_PRICE_USD_DISPLAY ?? "$10",
+  PREMIUM_PRICE_USD_DISPLAY: process.env.PREMIUM_PRICE_USD_DISPLAY ?? "$9.99",
   /// StoreKit 2 auto-renewable subscription product id for the native iOS app.
   /// Matched by full id or last dot-segment (mirrors APPSTORE_TICKET_PRODUCTS).
   PREMIUM_APPSTORE_PRODUCT_ID:

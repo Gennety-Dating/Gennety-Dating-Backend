@@ -1549,7 +1549,7 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
 
 ### 3.8 Gennety Premium (feature-flagged recurring subscription)
 
-An optional **$10/month** subscription (Gennety Premium), gated by
+An optional **$9.99/month** subscription (Gennety Premium), gated by
 `PREMIUM_FEATURE_ENABLED` (default **off**). It is a **standalone per-user
 entitlement** owned by `services/premium.ts` and deliberately decoupled from any
 one feature — its first (v1) benefit is venue-change, but the entitlement is the

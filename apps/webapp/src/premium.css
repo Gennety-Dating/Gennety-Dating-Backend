@@ -309,14 +309,19 @@ body {
   box-shadow: var(--pm-glass-edge);
   color: var(--pm-ink);
 }
-/* Quick, light pop on every toggle. */
-.pm-benefit-tile.is-pop {
-  animation: pm-pop 0.42s cubic-bezier(0.2, 1.4, 0.4, 1);
-}
 .pm-benefit-tile .icon {
   width: 22px;
   height: 22px;
   stroke-width: 1.7;
+  transform-origin: center;
+}
+/* The icon never changes — on each toggle it plays its own short animation.
+   Star → a smooth twinkle; map → an unfold/flutter. */
+.pm-benefit-tile.is-play[data-anim="twinkle"] .icon {
+  animation: pm-twinkle 0.64s ease;
+}
+.pm-benefit-tile.is-play[data-anim="flutter"] .icon {
+  animation: pm-unfold 0.66s ease;
 }
 .pm-benefit-txt {
   flex: 1;
@@ -351,6 +356,8 @@ body {
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows 0.32s ease;
+  /* When scrolled into view on expand, leave a gap above the pinned footer. */
+  scroll-margin-bottom: 16px;
 }
 .pm-benefit-wrap.is-open .pm-benefit-panel {
   grid-template-rows: 1fr;
@@ -381,14 +388,27 @@ body {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px 20px calc(16px + env(safe-area-inset-bottom) + var(--tg-content-bottom));
-  background: linear-gradient(to top, var(--bg) 62%, transparent);
+  gap: 11px;
+  padding: 8px 20px calc(14px + env(safe-area-inset-bottom) + var(--tg-content-bottom));
+  background: var(--bg);
+}
+/* A soft, tall scroll-fade above the opaque footer — no hard divider line, and
+   a shorter gap so expanded cards don't get crowded under it. */
+.pm-action::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -34px;
+  height: 34px;
+  background: linear-gradient(to top, var(--bg) 12%, transparent);
+  pointer-events: none;
 }
 .pm-price {
   text-align: center;
   color: var(--text-muted);
   font-size: 13.5px;
+  margin: 2px 0 0;
 }
 
 /* THE HERO ACTION — a liquid-glass pill: a bright glossy fill (so the label is
@@ -539,18 +559,41 @@ body {
     transform: translateX(430%) skewX(-16deg);
   }
 }
-@keyframes pm-pop {
+/* Star — a smooth twinkle: swells and dims, then settles. */
+@keyframes pm-twinkle {
   0% {
     transform: scale(1) rotate(0);
+    opacity: 1;
   }
-  40% {
-    transform: scale(1.3) rotate(-9deg);
+  30% {
+    transform: scale(1.28) rotate(10deg);
+    opacity: 0.5;
   }
-  70% {
-    transform: scale(0.92) rotate(5deg);
+  55% {
+    transform: scale(0.94) rotate(-5deg);
+    opacity: 1;
+  }
+  75% {
+    transform: scale(1.08) rotate(3deg);
   }
   100% {
     transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+/* Map — a paper-like unfold / flutter through perspective. */
+@keyframes pm-unfold {
+  0% {
+    transform: perspective(220px) rotateX(0) rotateY(0);
+  }
+  35% {
+    transform: perspective(220px) rotateX(-34deg) rotateY(12deg);
+  }
+  68% {
+    transform: perspective(220px) rotateX(14deg) rotateY(-6deg);
+  }
+  100% {
+    transform: perspective(220px) rotateX(0) rotateY(0);
   }
 }
 
@@ -562,7 +605,7 @@ body {
   .pm-sub,
   .pm-badge,
   .pm-benefit-wrap,
-  .pm-benefit-tile.is-pop,
+  .pm-benefit-tile.is-play .icon,
   .pm-more,
   .pm-cta::after {
     animation: none !important;

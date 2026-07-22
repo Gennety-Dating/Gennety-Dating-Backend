@@ -846,7 +846,9 @@ Required/high-impact env keys:
 - Gennety Premium (feature-flagged, recurring subscription, §Premium):
   `PREMIUM_FEATURE_ENABLED` (default `false` — leave off until launch),
   `PREMIUM_STARS` (default `500`, the monthly Telegram Stars price ≈ $10),
-  `PREMIUM_PRICE_USD_DISPLAY` (default `$10`, display-only), and
+  `PREMIUM_PRICE_USD_DISPLAY` (default `$9.99`, display-only — production `.env`
+  still carries the launch value `$10`; update it to `$9.99` on the next deploy
+  to match the code default), and
   `PREMIUM_APPSTORE_PRODUCT_ID` (default `premium_monthly`, the StoreKit 2
   auto-renewable subscription id — matched by full id or last dot-segment). When
   on, the menu shows a ✨ Gennety Premium row → hub → the Premium Mini App

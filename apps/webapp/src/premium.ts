@@ -229,12 +229,14 @@ function crest(): HTMLElement {
 
 /**
  * A borderless glass benefit card that expands its explanation on tap. The tile
- * icon swaps closed↔open and plays a quick pop each toggle, so pressing a card
- * gives a small, light animated response.
+ * icon stays the SAME icon but plays a short, icon-specific animation on every
+ * toggle (`data-anim` → a CSS keyframe: e.g. the star twinkles, the map
+ * unfolds), so pressing a card gives a small, light animated response without
+ * the icon ever changing.
  */
 function benefitCard(
-  icoClosed: IconName,
-  icoOpen: IconName,
+  ico: IconName,
+  anim: "twinkle" | "flutter",
   title: string,
   short: string,
   long: string,
@@ -242,8 +244,10 @@ function benefitCard(
   const wrap = el("div", "pm-benefit-wrap");
 
   const tile = el("div", "pm-benefit-tile");
-  tile.append(icon(icoClosed));
-  tile.addEventListener("animationend", () => tile.classList.remove("is-pop"));
+  tile.dataset.anim = anim;
+  tile.append(icon(ico));
+  // The keyframe runs on the inner .icon; animationend bubbles up to the tile.
+  tile.addEventListener("animationend", () => tile.classList.remove("is-play"));
 
   const txt = el("div", "pm-benefit-txt");
   txt.append(el("div", "pm-benefit-title", title), el("div", "pm-benefit-detail", short));
@@ -263,13 +267,17 @@ function benefitCard(
   row.addEventListener("click", () => {
     const open = wrap.classList.toggle("is-open");
     row.setAttribute("aria-expanded", open ? "true" : "false");
-    // Swap the tile icon and replay the pop on every toggle.
-    tile.replaceChildren(icon(open ? icoOpen : icoClosed));
-    tile.classList.remove("is-pop");
-    // Force reflow so re-adding the class restarts the animation.
-    void tile.offsetWidth;
-    tile.classList.add("is-pop");
+    // Replay the icon's own animation (same icon, just a quick move).
+    tile.classList.remove("is-play");
+    void tile.offsetWidth; // reflow so the animation restarts
+    tile.classList.add("is-play");
     haptic("success");
+    // Reveal the expanded panel above the pinned footer once it has grown.
+    if (open) {
+      window.setTimeout(() => {
+        panel.scrollIntoView({ behavior: "smooth", block: "end" });
+      }, 360);
+    }
   });
 
   wrap.append(row, panel);
@@ -316,25 +324,26 @@ function renderOffer(state: PremiumState): void {
   scroll.append(hero);
 
   const list = el("div", "pm-benefits");
-  // [icon-closed, icon-open, title, short detail, long explanation]. Tapping a
-  // card expands the explanation and swaps the tile icon with a quick pop.
-  for (const [icoClosed, icoOpen, tt, dd, xx] of [
-    ["map", "bolt", s.b1t, s.b1d, s.b1x],
-    ["star", "spark", s.b2t, s.b2d, s.b2x],
+  // [icon, tap-animation, title, short detail, long explanation]. Tapping a card
+  // expands the explanation; the icon stays the same but plays its own animation.
+  for (const [ico, anim, tt, dd, xx] of [
+    ["map", "flutter", s.b1t, s.b1d, s.b1x],
+    ["star", "twinkle", s.b2t, s.b2d, s.b2x],
   ] as const) {
-    list.append(benefitCard(icoClosed, icoOpen, tt, dd, xx));
+    list.append(benefitCard(ico, anim, tt, dd, xx));
   }
   scroll.append(list);
   scroll.append(el("p", "pm-more", s.more));
 
   const action = el("div", "pm-action");
-  action.append(el("p", "pm-price", s.price(state.priceDisplay)));
 
   const btn = el("button", "pm-cta") as HTMLButtonElement;
   btn.append(el("span", undefined, s.subscribe(state.priceDisplay)));
   btn.addEventListener("click", () => void subscribe(btn));
   action.append(btn);
 
+  // Price/terms sit just under the button; the manage note is quietest, last.
+  action.append(el("p", "pm-price", s.price(state.priceDisplay)));
   action.append(el("p", "pm-manage", s.manage));
 
   page.append(scroll, action);
@@ -410,7 +419,7 @@ async function load(): Promise<void> {
       premiumUntil: null,
       autoRenew: false,
       priceStars: 0,
-      priceDisplay: "$10",
+      priceDisplay: "$9.99",
     });
   }
 }
