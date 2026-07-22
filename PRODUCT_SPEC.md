@@ -1565,8 +1565,9 @@ user already paid for stays valid regardless of the flag.
   is settled by the `successful_payment` handler on the first charge AND every
   auto-renewal, exactly-once via the recurring `telegram_payment_charge_id`;
   `premiumUntil` advances to Telegram's `subscription_expiration_date`.
-  Cancellation is native (Telegram → Settings → Subscriptions) and the
-  entitlement simply lapses. iOS: a **StoreKit 2 auto-renewable subscription**
+  Cancellation is native (Telegram → Settings → Subscriptions) OR **in-chat via
+  the menu agent** (below) and the entitlement simply lapses. iOS: a **StoreKit 2
+  auto-renewable subscription**
   (`POST /v1/premium/appstore/transaction` + App Store Server Notifications V2)
   reusing the ticket-rail trust model (JWS/notification is only a pointer; the
   authoritative transaction is re-fetched from Apple). The subscription's
@@ -1575,7 +1576,28 @@ user already paid for stays valid regardless of the flag.
 - **Purchase surface.** Telegram: a ✨ **Gennety Premium** main-menu row → the
   Premium hub (benefits + price, or "active until …") → the Premium Mini App
   (`apps/webapp/premium.html`, `WebApp.openInvoice`). iOS: a native paywall
-  (designed in parallel; `features.premium` in `GET /v1/app/config`).
+  (designed in parallel; `features.premium` in `GET /v1/app/config`). The Premium
+  Mini App and hub deliberately carry **no "how to cancel" instructions** — that
+  lives in the bot conversation (below).
+- **In-chat cancellation (Telegram, agent-driven).** When a user tells the menu
+  agent they want to cancel / stop / turn off Premium — or asks how — the agent
+  calls the `offer_cancel_premium` tool (`services/menu-agent.ts`); it never
+  cancels from raw text. For a **Telegram Stars** sub the bot posts a
+  nonce-bound, one-use confirm card (`❄️ Keep` over `Yes, cancel`, same token
+  mechanics as Freeze/Delete, `handlers/menu/premium-cancel.ts`); tapping
+  confirm calls Bot API `editUserStarSubscription(is_canceled: true)` to stop the
+  renewal at Telegram, then `recordInChatCancellation` flips
+  `premiumAutoRenew=false` and appends a `cancelled` `subscription_ledger` row.
+  Access is **never** revoked early — `premiumUntil` stands, so the user keeps
+  Premium until the paid period ends, and there is no mid-period refund. If the
+  Stars API cancel fails (or no recurring anchor is on file) the bot does NOT
+  claim success — it points the user to Telegram → Settings → Subscriptions. An
+  **App Store** sub can't be cancelled server-side (Apple owns it), so the agent
+  shows the exact iOS-Settings steps instead of a button. After a confirmed
+  cancel the bot politely asks **why** (one line, skippable); the free-text
+  answer is stored on that `cancelled` ledger row's `note` for churn analysis.
+  Telegram-only (the menu agent is Telegram-only); iOS cancels natively via
+  Apple.
 
 **Benefit #1 — venue-change (v1).** Inside the §3.7b board:
 

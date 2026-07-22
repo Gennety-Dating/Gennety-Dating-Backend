@@ -368,6 +368,9 @@ model SubscriptionLedger {
   /// `XTR` for Telegram Stars; ISO currency for App Store rows. Null for
   /// non-charge events.
   currency          String?
+  /// Free-text churn reason captured after an in-chat cancellation (the menu
+  /// agent's cancel flow). Only ever set on `cancelled` rows; null otherwise.
+  note              String?
   createdAt         DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -5,11 +5,13 @@ const ALL_OFF: PlaybookFeatures = {
   coordination: false,
   venueChange: false,
   tickets: false,
+  premium: false,
 };
 const ALL_ON: PlaybookFeatures = {
   coordination: true,
   venueChange: true,
   tickets: true,
+  premium: true,
 };
 
 describe("buildProductPlaybook", () => {

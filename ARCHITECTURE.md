@@ -432,12 +432,17 @@ Inert unless `TICKET_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §
 Append-only audit of every Gennety Premium subscription movement (`userId`,
 `provider` ∈ `telegram_stars`/`app_store`, `event` ∈
 `started`/`renewed`/`cancelled`/`expired`/`refunded`, unique `externalPaymentId`,
-`periodStart`/`periodEnd`, `amount`/`currency`, `createdAt`; `onDelete: Cascade`
+`periodStart`/`periodEnd`, `amount`/`currency`, optional `note`, `createdAt`;
+`onDelete: Cascade`
 from `users`). Mirrors `ticket_ledger`: the unique `externalPaymentId` (the
 Telegram Stars recurring charge id, or `appstore:<transactionId>`) makes provider
 redelivery exactly-once, so a renewal is applied at most once. `User.premiumUntil`
 / `premiumSince` are the materialized head, written in the same transaction by
-`services/premium.ts`. The Stars rail settles through the `sub:premium`
+`services/premium.ts`. `note` is the free-text churn reason captured after an
+in-chat cancellation (the menu agent's `offer_cancel_premium` flow →
+`recordInChatCancellation` + `attachCancellationReason`, PRODUCT_SPEC §3.8); it
+is only ever set on `cancelled` rows. The Stars rail settles through the
+`sub:premium`
 `successful_payment` path; the iOS rail through `services/appstore-premium.ts`
 (`POST /v1/premium/appstore/transaction` + the App Store Server Notifications
 webhook, owner found by the `originalTransactionId` anchor on

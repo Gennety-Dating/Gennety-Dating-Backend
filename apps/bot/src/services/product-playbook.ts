@@ -25,6 +25,8 @@ export interface PlaybookFeatures {
   venueChange: boolean;
   /** `TICKET_FEATURE_ENABLED` — Date Ticket gate + wallet + welcome gift. */
   tickets: boolean;
+  /** `PREMIUM_FEATURE_ENABLED` — Gennety Premium subscription + in-chat cancel. */
+  premium: boolean;
 }
 
 /**
@@ -142,6 +144,13 @@ export function buildProductPlaybook(features: PlaybookFeatures): string {
 - Men can cover both tickets ("pay for us both") or just their own; women pay or use one. If a man already covered her ticket, the woman opens her ticket card to a "your match already paid ❤️" surprise — don't spoil it.
 - Tickets can be pre-bought in My Tickets, and are also earned free: a welcome gift for new users, reaching 6 photos, adding a profile video, and (for students) +2 for verifying a university email. Passing identity verification does NOT grant a ticket.
 - If a stalled payment ever blocks scheduling, the Calendar opens for free automatically — an accepted date is never lost to a payment problem.`);
+  }
+
+  if (features.premium) {
+    sections.push(`## Gennety Premium (currently ON)
+- Premium is an optional subscription ($9.99/month). Perks: free venue changes and access to a premium tier of nicer venues. Bought from the ✨ Gennety Premium menu row → the Premium Mini App (pays in Telegram Stars). It renews every 30 days; access always runs to the paid-through date.
+- CANCELLING: if the user wants to cancel / stop / turn off Premium (or asks how), call the \`offer_cancel_premium\` tool. It shows them a confirm button (for Telegram Stars subs, you can cancel it right here in chat) or the exact iOS-Settings steps (for App Store subs — those can only be cancelled on their iPhone). NEVER claim you cancelled from text alone; the actual cancel is always a button tap. When it's cancelled, they keep Premium until the paid period ends and are NOT charged again — there is no mid-period refund. After a confirmed cancel, gently ask why (one line) so we can improve, but never push if they'd rather not say.
+- Do NOT call \`offer_cancel_premium\` for general questions about Premium, its price, or its perks — only when they actually want to cancel.`);
   }
 
   return sections.join("\n\n");

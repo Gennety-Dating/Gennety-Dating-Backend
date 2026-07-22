@@ -48,6 +48,7 @@ function playbookFeatures(): PlaybookFeatures {
     coordination: env.COORDINATION_FEATURE_ENABLED === true,
     venueChange: env.VENUE_CHANGE_FEATURE_ENABLED === true,
     tickets: env.TICKET_FEATURE_ENABLED === true,
+    premium: env.PREMIUM_FEATURE_ENABLED === true,
   };
 }
 

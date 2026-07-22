@@ -19,6 +19,7 @@ import {
   MIN_AGE,
   MAX_AGE,
   MAX_HISTORY_FOR_API,
+  type Language,
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
@@ -27,6 +28,7 @@ import { truncateForApi, type ChatMessage } from "./onboarding-agent.js";
 import { recordRejectionFeedback } from "./rejection-feedback.js";
 import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
 import { transitionAccountStatus } from "./account-status-transitions.js";
+import { getPremiumCancelContext, formatPremiumUntil } from "./premium.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,8 +51,20 @@ interface ChatCompletionResponse {
   }>;
 }
 
+/**
+ * A post-reply UI action the caller (the Telegram menu router) performs after
+ * sending the agent's text bubbles. Used so a tool can trigger a native
+ * affordance the agent can't render itself — e.g. the Premium cancel-confirm
+ * card. `premium_cancel_confirm` → send the nonce-bound Yes/Keep card (Stars);
+ * `premium_cancel_appstore` → send the iOS-Settings cancellation guide.
+ */
+export type MenuAgentAction =
+  | { kind: "premium_cancel_confirm" }
+  | { kind: "premium_cancel_appstore" };
+
 export interface MenuAgentResult {
   reply: string;
+  action?: MenuAgentAction;
 }
 
 /** Max bubbles per reply — more reads as spam, not chat. */
@@ -235,6 +249,19 @@ const TOOLS = [
           },
         },
         required: ["match_id", "reason"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "offer_cancel_premium",
+      description:
+        "Call ONLY when the user clearly wants to CANCEL / stop / turn off their Gennety Premium subscription, or explicitly asks how to cancel it. This surfaces a confirmation button (Telegram Stars) or shows App Store cancellation guidance — you NEVER cancel directly and text alone never cancels. Do NOT call for general questions about premium features/pricing or when the user is merely curious about Premium.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
       },
     },
   },
@@ -487,6 +514,60 @@ async function execRecordRejectionFeedback(
   });
 }
 
+/**
+ * Decide how to surface a Premium cancellation. Does NOT cancel anything — it
+ * only tells the model what to say and returns the post-reply UI action the
+ * router performs (the deterministic confirm card / iOS guide). Stars subs get a
+ * confirm button; App Store subs are routed to the iOS-Settings guide; a user
+ * with no active subscription gets a plain "nothing to cancel" instruction.
+ */
+async function evaluatePremiumCancelOffer(
+  telegramId: bigint,
+): Promise<{ toolResult: string; action: MenuAgentAction | null }> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true, language: true },
+  });
+  if (!user) return { toolResult: JSON.stringify({ active: false }), action: null };
+
+  const cx = await getPremiumCancelContext(user.id);
+  if (!cx.active) {
+    return {
+      toolResult: JSON.stringify({
+        active: false,
+        instruction:
+          "The user has no active Premium subscription — there is nothing to cancel. Tell them that briefly and warmly; do not show any button.",
+      }),
+      action: null,
+    };
+  }
+
+  const activeUntil = formatPremiumUntil(cx.premiumUntil, (user.language ?? "en") as Language);
+  if (cx.provider === "app_store") {
+    return {
+      toolResult: JSON.stringify({
+        active: true,
+        provider: "app_store",
+        activeUntil,
+        instruction:
+          "This subscription was bought via the App Store and can only be cancelled in iOS Settings. A guidance message with the exact steps is shown automatically — reply with only a brief, warm one-liner and do NOT restate the steps or the date.",
+      }),
+      action: { kind: "premium_cancel_appstore" },
+    };
+  }
+
+  return {
+    toolResult: JSON.stringify({
+      active: true,
+      provider: "telegram_stars",
+      activeUntil,
+      instruction:
+        "A confirmation card with the details and Yes/Keep buttons is shown to the user automatically. Reply with only a short, warm one-liner (acknowledge, no pressure); do NOT list steps, restate the date, or ask a question.",
+    }),
+    action: { kind: "premium_cancel_confirm" },
+  };
+}
+
 async function execResumeMatching(telegramId: bigint): Promise<string> {
   const result = await transitionAccountStatus({ telegramId }, "resume");
   if (result.kind === "not_found") {
@@ -552,6 +633,9 @@ export async function runMenuAgentTurn(
 
   history.push({ role: "user", content: userMessage });
 
+  // A tool may request a post-reply UI action (e.g. the Premium cancel card).
+  let pendingAction: MenuAgentAction | null = null;
+
   // Agent loop
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const response = await callOpenAI(truncateForApi(history, MAX_HISTORY_FOR_API), fetchFn);
@@ -613,6 +697,12 @@ export async function runMenuAgentTurn(
             args as { match_id: string; reason: string },
           );
           break;
+        case "offer_cancel_premium": {
+          const outcome = await evaluatePremiumCancelOffer(telegramId);
+          result = outcome.toolResult;
+          if (outcome.action) pendingAction = outcome.action;
+          break;
+        }
         default:
           result = JSON.stringify({ error: `Unknown tool: ${fnName}` });
       }
@@ -641,7 +731,7 @@ export async function runMenuAgentTurn(
   const reply =
     lastAssistant?.content ?? "Something went wrong. Try again in a moment.";
 
-  return { reply };
+  return { reply, ...(pendingAction ? { action: pendingAction } : {}) };
 }
 
 // ---------------------------------------------------------------------------

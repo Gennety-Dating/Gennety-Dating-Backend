@@ -861,7 +861,12 @@ Required/high-impact env keys:
     The `sub:premium` payload is settled by the bot's `successful_payment`
     handler on the first charge AND every auto-renewal, exactly-once via the
     recurring `telegram_payment_charge_id`. Cancellation is native (Telegram →
-    Settings → Subscriptions); the entitlement simply lapses at `premiumUntil`.
+    Settings → Subscriptions) OR **in-chat via the menu agent** (the user asks to
+    cancel → `offer_cancel_premium` tool → a nonce-bound confirm card → Bot API
+    `editUserStarSubscription`, `handlers/menu/premium-cancel.ts`); either way the
+    entitlement simply lapses at `premiumUntil` (no early revoke, no mid-period
+    refund). After a confirmed in-chat cancel the bot asks the churn reason and
+    stores it on the `cancelled` `subscription_ledger.note`. Telegram-only.
   - **iOS StoreKit rail (parallel).** `POST /v1/premium/appstore/transaction`
     (JWT) + the existing App Store Server Notifications webhook
     (`/v1/webhooks/appstore`, now routes SUBSCRIBED/DID_RENEW/EXPIRED/REFUND/
@@ -872,8 +877,15 @@ Required/high-impact env keys:
     `pnpm seed-venues:pull --tier=premium` (relaxed price gate; every other
     quality gate stays) → review → `seed-venues:import --apply`. The auto-assign
     concierge picker stays base-only.
+  - **In-chat cancellation.** No new env. The menu agent's `offer_cancel_premium`
+    tool + `handlers/menu/premium-cancel.ts` handle it; the churn reason lands in
+    the additive `subscription_ledger.note` column (see below). Telegram-only —
+    App Store subs are guided to iOS Settings, iOS cancels natively via Apple, so
+    no `/v1/*` contract change.
   - **Requires `db:push` first** of the additive `users.premium_*` columns, the
-    new `subscription_ledger` table, `curated_venues.tier`, and
+    new `subscription_ledger` table (now including the additive nullable
+    `subscription_ledger.note` churn-reason column — non-destructive; a DB
+    missing it throws `P2022` on an in-chat cancel), `curated_venues.tier`, and
     `matches.venue_change_tier` (all non-destructive; deploy code + push schema
     BEFORE flipping the flag — the new columns are read by the venue board and
     the entitlement service). Redeploy the Mini App bundle (`premium.html` +

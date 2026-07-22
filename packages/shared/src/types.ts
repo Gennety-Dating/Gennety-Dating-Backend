@@ -31,11 +31,25 @@ export type MenuState =
   | "edit_bio"
   | "edit_major"
   | "edit_partner_preferences"
-  | "edit_age_range";
+  | "edit_age_range"
+  /**
+   * After an in-chat Premium cancellation, the bot politely asks WHY. The next
+   * free-text message is captured as the churn reason (and attached to the
+   * `cancelled` SubscriptionLedger row) instead of going to the menu agent.
+   * `premiumCancelLedgerId` holds the row to annotate; a Skip button also exits.
+   */
+  | "awaiting_premium_cancel_reason";
 
 export interface PendingAccountAction {
   nonce: string;
   stage: "freeze_or_delete" | "delete_final";
+  expiresAtMs: number;
+  messageId: number;
+}
+
+/** One-time, expiring confirmation for the in-chat Premium cancel button. */
+export interface PendingPremiumCancel {
+  nonce: string;
   expiresAtMs: number;
   messageId: number;
 }
@@ -103,6 +117,13 @@ export interface SessionData {
   photoManagerMsgId: number | null;
   /** One-time, expiring confirmation for Telegram Freeze/Delete callbacks. */
   pendingAccountAction: PendingAccountAction | null;
+  /** One-time, expiring confirmation for the in-chat Premium cancel button. */
+  pendingPremiumCancel: PendingPremiumCancel | null;
+  /**
+   * `SubscriptionLedger` row id of an in-chat cancellation whose churn reason we
+   * are waiting for (paired with `menuState === "awaiting_premium_cancel_reason"`).
+   */
+  premiumCancelLedgerId: string | null;
   /** Sub-state for the matching / scheduling flow (Phase 3) */
   matchFlow: MatchFlowState;
   /** Match id currently awaiting this user's text input (rejection reason / calendar) */
@@ -137,6 +158,8 @@ export const DEFAULT_SESSION: SessionData = {
   menuState: "idle",
   photoManagerMsgId: null,
   pendingAccountAction: null,
+  pendingPremiumCancel: null,
+  premiumCancelLedgerId: null,
   matchFlow: "idle",
   activeMatchId: null,
   pendingReportCategory: null,

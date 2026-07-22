@@ -239,11 +239,13 @@ describe("describeActiveMatch", () => {
     coordination: false,
     venueChange: false,
     tickets: false,
+    premium: false,
   };
   const FEATURES_ON: PlaybookFeatures = {
     coordination: true,
     venueChange: true,
     tickets: true,
+    premium: true,
   };
 
   function scheduled(overrides: Partial<ActiveMatchView> = {}): ActiveMatchView {

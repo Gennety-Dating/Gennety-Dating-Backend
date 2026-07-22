@@ -42,6 +42,18 @@ import { handleMyTickets } from "./tickets.js";
 import { handlePremiumHub } from "./premium.js";
 import { runMenuAgentTurn, splitReplyIntoBubbles } from "../../services/menu-agent.js";
 import { invalidatePendingAccountAction } from "./account-action.js";
+import {
+  PREM_CANCEL_YES_PREFIX,
+  PREM_CANCEL_KEEP_PREFIX,
+  PREM_CANCEL_REASON_SKIP,
+  sendPremiumCancelConfirm,
+  sendPremiumCancelAppStoreGuide,
+  handlePremiumCancelConfirm,
+  handlePremiumCancelKeep,
+  handlePremiumCancelReasonInput,
+  handlePremiumCancelReasonSkip,
+  invalidatePendingPremiumCancel,
+} from "./premium-cancel.js";
 
 /**
  * Post-onboarding menu router.
@@ -62,6 +74,11 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     data?.startsWith("menu:settings:delete:yes:");
   if (ctx.session.pendingAccountAction && !isAccountActionCallback) {
     await invalidatePendingAccountAction(ctx);
+  }
+  const isPremiumCancelCallback =
+    data?.startsWith(PREM_CANCEL_YES_PREFIX) || data?.startsWith(PREM_CANCEL_KEEP_PREFIX);
+  if (ctx.session.pendingPremiumCancel && !isPremiumCancelCallback) {
+    await invalidatePendingPremiumCancel(ctx);
   }
 
   // -----------------------------------------------------------------------
@@ -142,6 +159,22 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     ctx.session.menuState = "idle";
   }
 
+  // After an in-chat Premium cancellation, capture the churn reason: the next
+  // free-text message is the reason (not an agent turn); a Skip button exits.
+  if (ctx.session.menuState === "awaiting_premium_cancel_reason") {
+    if (!data) {
+      await handlePremiumCancelReasonInput(ctx);
+      return;
+    }
+    if (data === PREM_CANCEL_REASON_SKIP) {
+      await handlePremiumCancelReasonSkip(ctx);
+      return;
+    }
+    // Any other action mid-flow → drop the reason capture and fall through.
+    ctx.session.menuState = "idle";
+    ctx.session.premiumCancelLedgerId = null;
+  }
+
   // -----------------------------------------------------------------------
   // No active sub-flow — free-form text goes to the LLM Router.
   // -----------------------------------------------------------------------
@@ -168,6 +201,13 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
           );
         }
         await ctx.reply(bubbles[i]!);
+      }
+      // A tool may ask us to follow the reply with a native affordance the
+      // agent can't render — the Premium cancel-confirm card / iOS guide.
+      if (result.action?.kind === "premium_cancel_confirm") {
+        await sendPremiumCancelConfirm(ctx);
+      } else if (result.action?.kind === "premium_cancel_appstore") {
+        await sendPremiumCancelAppStoreGuide(ctx);
       }
     } catch (err) {
       console.error("Menu agent error:", err);
@@ -298,6 +338,19 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       }
       if (data.startsWith("menu:settings:delete:yes:")) {
         await handleDeleteAccountExecute(ctx);
+        return;
+      }
+      // In-chat Premium cancellation (nonce-bound confirm / keep / reason skip).
+      if (data.startsWith(PREM_CANCEL_YES_PREFIX)) {
+        await handlePremiumCancelConfirm(ctx);
+        return;
+      }
+      if (data.startsWith(PREM_CANCEL_KEEP_PREFIX)) {
+        await handlePremiumCancelKeep(ctx);
+        return;
+      }
+      if (data === PREM_CANCEL_REASON_SKIP) {
+        await handlePremiumCancelReasonSkip(ctx);
         return;
       }
       await ctx.answerCallbackQuery().catch(() => {});

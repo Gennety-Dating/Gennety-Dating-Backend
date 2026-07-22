@@ -786,6 +786,20 @@ const translations = {
       "Monthly subscription — free venue changes + premium venues. Renews every 30 days; cancel anytime.",
     premiumInvoiceLabel: "Gennety Premium — 1 month",
     premiumCheckoutError: "Couldn't start that subscription. Try again in a moment.",
+    premiumCancelConfirm:
+      "Cancel Gennety Premium?\n\nPremium stays active until {date} — everything keeps working until then. After that it won't renew and nothing else is charged.",
+    premiumCancelConfirmYes: "Yes, cancel",
+    premiumCancelKeepBtn: "Keep Premium",
+    premiumCancelDone:
+      "Done — auto-renew is off. Premium stays active until {date}, and nothing else will be charged. You can resubscribe anytime.",
+    premiumCancelKept: "Keeping it ✨ Premium is active until {date}.",
+    premiumCancelAppStore:
+      "This subscription was bought through the App Store, so it can only be cancelled on your iPhone: Settings → [your name] → Subscriptions → Gennety Premium → Cancel. Your access stays until {date}.",
+    premiumCancelNotActive: "You don't have an active Premium subscription right now.",
+    premiumCancelReasonAsk:
+      "Thanks for being with us 🤍 If you don't mind — what made you cancel? A word or two really helps us improve.",
+    premiumCancelReasonSkipBtn: "Rather not say",
+    premiumCancelReasonThanks: "Thank you — noted 🤍 You can bring Premium back anytime.",
   },
   ru: {
     // --- Onboarding ---
@@ -1565,6 +1579,20 @@ const translations = {
       "Месячная подписка — бесплатная смена места + премиум-заведения. Продление каждые 30 дней; отмена в любой момент.",
     premiumInvoiceLabel: "Gennety Premium — 1 месяц",
     premiumCheckoutError: "Не получилось оформить подписку. Попробуй через минуту.",
+    premiumCancelConfirm:
+      "Отменяем Gennety Premium?\n\nPremium останется активным до {date} — до этой даты всё работает. Дальше подписка не продлится и больше ничего не спишется.",
+    premiumCancelConfirmYes: "Да, отменить",
+    premiumCancelKeepBtn: "Оставить Premium",
+    premiumCancelDone:
+      "Готово — автопродление отключено. Premium активен до {date}, больше ничего не спишется. Вернуться можно в любой момент.",
+    premiumCancelKept: "Оставляем ✨ Premium активен до {date}.",
+    premiumCancelAppStore:
+      "Подписка оформлена через App Store, поэтому отменить её можно только на iPhone: Настройки → [ваше имя] → Подписки → Gennety Premium → Отменить. Доступ сохранится до {date}.",
+    premiumCancelNotActive: "Сейчас у тебя нет активной подписки Premium.",
+    premiumCancelReasonAsk:
+      "Спасибо, что был с нами 🤍 Если не сложно — расскажи в двух словах, почему решил отменить? Это правда помогает нам стать лучше.",
+    premiumCancelReasonSkipBtn: "Не хочу отвечать",
+    premiumCancelReasonThanks: "Спасибо, учтём 🤍 Premium всегда можно вернуть.",
   },
   uk: {
     // --- Onboarding ---
@@ -2344,6 +2372,20 @@ const translations = {
       "Місячна підписка — безкоштовна зміна місця + преміум-заклади. Продовження кожні 30 днів; скасування будь-коли.",
     premiumInvoiceLabel: "Gennety Premium — 1 місяць",
     premiumCheckoutError: "Не вдалося оформити підписку. Спробуй за хвилину.",
+    premiumCancelConfirm:
+      "Скасовуємо Gennety Premium?\n\nPremium залишиться активним до {date} — до цієї дати все працює. Далі підписка не подовжиться і більше нічого не спишеться.",
+    premiumCancelConfirmYes: "Так, скасувати",
+    premiumCancelKeepBtn: "Залишити Premium",
+    premiumCancelDone:
+      "Готово — автоподовження вимкнено. Premium активний до {date}, більше нічого не спишеться. Повернутися можна будь-коли.",
+    premiumCancelKept: "Залишаємо ✨ Premium активний до {date}.",
+    premiumCancelAppStore:
+      "Підписку оформлено через App Store, тож скасувати її можна лише на iPhone: Налаштування → [ваше ім'я] → Підписки → Gennety Premium → Скасувати. Доступ збережеться до {date}.",
+    premiumCancelNotActive: "Зараз у тебе немає активної підписки Premium.",
+    premiumCancelReasonAsk:
+      "Дякуємо, що був із нами 🤍 Якщо не важко — розкажи двома словами, чому вирішив скасувати? Це справді допомагає нам ставати кращими.",
+    premiumCancelReasonSkipBtn: "Не хочу відповідати",
+    premiumCancelReasonThanks: "Дякуємо, врахуємо 🤍 Premium завжди можна повернути.",
   },
 } as const;
 
@@ -3092,6 +3134,20 @@ const deTranslations: TranslationTable = {
     "Monatliches Abo — kostenlose Ortswechsel + Premium-Orte. Verlängert alle 30 Tage; jederzeit kündbar.",
   premiumInvoiceLabel: "Gennety Premium — 1 Monat",
   premiumCheckoutError: "Das Abo konnte nicht gestartet werden. Bitte gleich nochmal.",
+  premiumCancelConfirm:
+    "Gennety Premium kündigen?\n\nPremium bleibt bis {date} aktiv — bis dahin funktioniert alles. Danach verlängert es sich nicht und es wird nichts mehr berechnet.",
+  premiumCancelConfirmYes: "Ja, kündigen",
+  premiumCancelKeepBtn: "Premium behalten",
+  premiumCancelDone:
+    "Erledigt — die automatische Verlängerung ist aus. Premium bleibt bis {date} aktiv, weitere Kosten entstehen nicht. Du kannst jederzeit wieder abonnieren.",
+  premiumCancelKept: "Bleibt ✨ Premium ist bis {date} aktiv.",
+  premiumCancelAppStore:
+    "Dieses Abo wurde über den App Store abgeschlossen und kann nur auf deinem iPhone gekündigt werden: Einstellungen → [dein Name] → Abonnements → Gennety Premium → Kündigen. Dein Zugang bleibt bis {date}.",
+  premiumCancelNotActive: "Du hast gerade kein aktives Premium-Abo.",
+  premiumCancelReasonAsk:
+    "Danke, dass du dabei warst 🤍 Wenn es dir nichts ausmacht — warum kündigst du? Ein, zwei Worte helfen uns wirklich, besser zu werden.",
+  premiumCancelReasonSkipBtn: "Lieber nicht",
+  premiumCancelReasonThanks: "Danke, notiert 🤍 Du kannst Premium jederzeit zurückholen.",
 };
 
 const plTranslations: TranslationTable = {
@@ -3835,6 +3891,20 @@ const plTranslations: TranslationTable = {
     "Miesięczna subskrypcja — darmowe zmiany miejsca + miejsca premium. Odnawia się co 30 dni; anulujesz kiedy chcesz.",
   premiumInvoiceLabel: "Gennety Premium — 1 miesiąc",
   premiumCheckoutError: "Nie udało się rozpocząć subskrypcji. Spróbuj za chwilę.",
+  premiumCancelConfirm:
+    "Anulować Gennety Premium?\n\nPremium pozostanie aktywne do {date} — do tego czasu wszystko działa. Później nie odnowi się i nic więcej nie zostanie pobrane.",
+  premiumCancelConfirmYes: "Tak, anuluj",
+  premiumCancelKeepBtn: "Zostaw Premium",
+  premiumCancelDone:
+    "Gotowe — automatyczne odnawianie wyłączone. Premium jest aktywne do {date}, nic więcej nie zostanie pobrane. Możesz wrócić w każdej chwili.",
+  premiumCancelKept: "Zostaje ✨ Premium jest aktywne do {date}.",
+  premiumCancelAppStore:
+    "Ta subskrypcja została kupiona przez App Store, więc można ją anulować tylko na iPhonie: Ustawienia → [twoje imię] → Subskrypcje → Gennety Premium → Anuluj. Dostęp pozostanie do {date}.",
+  premiumCancelNotActive: "Nie masz teraz aktywnej subskrypcji Premium.",
+  premiumCancelReasonAsk:
+    "Dzięki, że byłeś z nami 🤍 Jeśli możesz — napisz w dwóch słowach, czemu rezygnujesz? To naprawdę pomaga nam być lepszymi.",
+  premiumCancelReasonSkipBtn: "Wolę nie mówić",
+  premiumCancelReasonThanks: "Dziękujemy, zapiszemy 🤍 Premium zawsze można przywrócić.",
 };
 
 const translationsByLanguage: Record<Language, TranslationTable> = {

@@ -447,3 +447,101 @@ describe("splitReplyIntoBubbles", () => {
     ]);
   });
 });
+
+describe("menu-agent offer_cancel_premium", () => {
+  const telegramId = BigInt(2002);
+  const FUTURE = new Date("2026-08-19T12:00:00Z");
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    clearKnowledgeCache();
+    (prisma.systemKnowledge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { select?: Record<string, unknown> }) => {
+        if (args.select && "matchesAsA" in args.select) {
+          return {
+            id: "uid-A",
+            firstName: "Alice",
+            universityDomain: "stanford.edu",
+            status: "active",
+            language: "en",
+            matchesAsA: [],
+            matchesAsB: [],
+          };
+        }
+        if (args.select && "messageHistory" in args.select) {
+          return { messageHistory: [] };
+        }
+        // getPremiumCancelContext — an active Telegram Stars subscriber.
+        if (args.select && "premiumUntil" in args.select) {
+          return {
+            premiumUntil: FUTURE,
+            premiumProvider: "telegram_stars",
+            premiumExternalId: "charge-x",
+            premiumAutoRenew: true,
+          };
+        }
+        // evaluatePremiumCancelOffer's own id+language lookup.
+        return { id: "uid-A", language: "en" };
+      },
+    );
+  });
+
+  it("returns the confirm-card action for an active Stars subscriber", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "offer_cancel_premium", args: {} }]),
+      )
+      .mockResolvedValueOnce(textResponse("sure — one sec"));
+
+    const result = await runMenuAgentTurn(telegramId, "cancel my premium please", {
+      fetchFn: mockFetch,
+    });
+
+    expect(result.reply).toBe("sure — one sec");
+    expect(result.action).toEqual({ kind: "premium_cancel_confirm" });
+  });
+
+  it("has no action when the user has no active subscription", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { select?: Record<string, unknown> }) => {
+        if (args.select && "matchesAsA" in args.select) {
+          return {
+            id: "uid-A",
+            firstName: "Alice",
+            universityDomain: "stanford.edu",
+            status: "active",
+            language: "en",
+            matchesAsA: [],
+            matchesAsB: [],
+          };
+        }
+        if (args.select && "messageHistory" in args.select) return { messageHistory: [] };
+        if (args.select && "premiumUntil" in args.select) {
+          return {
+            premiumUntil: null,
+            premiumProvider: null,
+            premiumExternalId: null,
+            premiumAutoRenew: false,
+          };
+        }
+        return { id: "uid-A", language: "en" };
+      },
+    );
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "offer_cancel_premium", args: {} }]),
+      )
+      .mockResolvedValueOnce(textResponse("you don't have an active sub"));
+
+    const result = await runMenuAgentTurn(telegramId, "cancel premium", {
+      fetchFn: mockFetch,
+    });
+
+    expect(result.action).toBeUndefined();
+  });
+});

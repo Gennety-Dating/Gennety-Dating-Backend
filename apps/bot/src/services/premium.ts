@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "@gennety/db";
 import type { Language } from "@gennety/shared";
 import { isUniqueViolation } from "./ticket-wallet.js";
@@ -257,4 +258,103 @@ export async function revokePremium(
     if (isUniqueViolation(err)) return;
     throw err;
   }
+}
+
+// ---------------------------------------------------------------------------
+// In-chat cancellation (the menu agent's cancel flow — PRODUCT_SPEC §Premium)
+// ---------------------------------------------------------------------------
+
+export interface PremiumCancelContext {
+  active: boolean;
+  /** `telegram_stars` | `app_store` | null (never subscribed). */
+  provider: string | null;
+  premiumUntil: Date | null;
+  /**
+   * The recurring anchor needed to cancel at the provider: the Telegram Stars
+   * `telegram_payment_charge_id` (for `editUserStarSubscription`) or the App
+   * Store `originalTransactionId`. Null if never recorded.
+   */
+  recurringAnchor: string | null;
+  autoRenew: boolean;
+}
+
+/**
+ * Everything the in-chat cancel flow needs to decide what to do: whether the
+ * user is active, which rail they're on (Stars → cancel in-chat; App Store →
+ * guide to iOS Settings), when access lapses, and the recurring anchor for the
+ * Stars API call. One query, no writes.
+ */
+export async function getPremiumCancelContext(
+  userId: string,
+  now: Date = new Date(),
+): Promise<PremiumCancelContext> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      premiumUntil: true,
+      premiumProvider: true,
+      premiumExternalId: true,
+      premiumAutoRenew: true,
+    },
+  });
+  return {
+    active: isPremiumHeadActive(user, now),
+    provider: user?.premiumProvider ?? null,
+    premiumUntil: user?.premiumUntil ?? null,
+    recurringAnchor: user?.premiumExternalId ?? null,
+    autoRenew: user?.premiumAutoRenew ?? false,
+  };
+}
+
+export interface InChatCancellationResult {
+  ledgerId: string;
+  premiumUntil: Date | null;
+}
+
+/**
+ * Record an in-chat cancellation: turn auto-renew off (the paid period still
+ * stands — `premiumUntil` is untouched, so the user keeps Premium until it
+ * lapses) and append a `cancelled` audit row that the churn reason is later
+ * attached to. The Telegram Stars API cancel (`editUserStarSubscription`) is a
+ * separate side-effect owned by the handler; this is only the DB side.
+ *
+ * Returns the created ledger row id so the follow-up reason can annotate it.
+ */
+export async function recordInChatCancellation(
+  userId: string,
+  provider: string | null,
+): Promise<InChatCancellationResult> {
+  const externalPaymentId = `cancel:${userId}:${Date.now()}:${randomUUID()}`;
+  const [updated, ledgerRow] = await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { premiumAutoRenew: false },
+      select: { premiumUntil: true },
+    }),
+    prisma.subscriptionLedger.create({
+      data: {
+        userId,
+        provider: provider ?? "unknown",
+        event: "cancelled",
+        externalPaymentId,
+      },
+      select: { id: true },
+    }),
+  ]);
+  return { ledgerId: ledgerRow.id, premiumUntil: updated.premiumUntil };
+}
+
+/**
+ * Attach the free-text churn reason to a `cancelled` ledger row (best-effort;
+ * a vanished row or a race is swallowed — the cancellation already happened).
+ */
+export async function attachCancellationReason(
+  ledgerId: string,
+  note: string,
+): Promise<void> {
+  const trimmed = note.trim().slice(0, 2000);
+  if (!trimmed) return;
+  await prisma.subscriptionLedger
+    .update({ where: { id: ledgerId }, data: { note: trimmed } })
+    .catch(() => {});
 }
