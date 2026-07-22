@@ -12,11 +12,12 @@
  * stabilizes (kept local while the feature is dev-flagged).
  */
 import { env } from "../../config.js";
+import { MODELS } from "../../models.js";
 import { openaiFetch } from "../openai-fetch.js";
 import { t, type Language } from "@gennety/shared";
 import type { MatchCardTexts } from "./template.js";
 
-const MODEL = "gpt-4.1-mini";
+const MODEL = MODELS.agent;
 const MAX_TOKENS = 220;
 const OPENAI_TIMEOUT_MS = 30_000;
 const TAGLINE_MAX = 64;

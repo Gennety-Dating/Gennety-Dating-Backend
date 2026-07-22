@@ -17,6 +17,7 @@ vi.mock("../../config.js", () => ({
 }));
 
 import { validateSingleFace } from "./validate-face.js";
+import { MODELS } from "../../models.js";
 
 // Minimal ctx shim — the validator only touches `ctx.api.getFile` when no
 // getFile override is provided, and we always provide one in these tests.
@@ -60,7 +61,7 @@ describe("validateSingleFace", () => {
     // The OpenAI body should contain a data URL, not a Telegram URL. This keeps
     // validation independent of OpenAI's ability to fetch Telegram file links.
     const body = JSON.parse((fetchFn.mock.calls[1]![1] as RequestInit).body as string);
-    expect(body.model).toBe("gpt-5.4-nano");
+    expect(body.model).toBe(MODELS.visionFast);
     expect(body.messages[1].content[0].image_url.url).toMatch(
       /^data:image\/jpeg;base64,/,
     );

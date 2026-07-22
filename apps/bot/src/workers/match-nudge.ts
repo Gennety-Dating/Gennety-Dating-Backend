@@ -2,6 +2,7 @@ import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { VOICE_CORE } from "@gennety/shared";
 import { env } from "../config.js";
+import { MODELS } from "../models.js";
 import { openaiFetch } from "../services/openai-fetch.js";
 import { isQuietHours } from "./quiet-hours.js";
 
@@ -203,7 +204,7 @@ Output ONLY the message text.`;
         Authorization: `Bearer ${env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-4.1-mini",
+        model: MODELS.fast,
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
         max_completion_tokens: 120,
@@ -388,7 +389,7 @@ Output ONLY the message text.`;
         Authorization: `Bearer ${env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-4.1-mini",
+        model: MODELS.fast,
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
         max_completion_tokens: 100,

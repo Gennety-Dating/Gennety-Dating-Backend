@@ -18,6 +18,7 @@ import {
   MIN_PHOTOS,
 } from "@gennety/shared";
 import { env } from "../config.js";
+import { MODELS } from "../models.js";
 import type { ChatMessage } from "./onboarding-agent.js";
 
 export const ONBOARDING_COLLECTOR_VERSION = 1;
@@ -301,7 +302,7 @@ function matchableText(value: string): string {
   return normalizeText(value.replace(/[.,!?;:…()[\]{}«»„“”"'`]+/gu, " ")).toLocaleLowerCase();
 }
 
-// Some extractor models (e.g. gpt-5.4-mini) wrap the `evidence` quote in
+// Some extractor models wrap the `evidence` quote in
 // literal quotation marks ("\"I prefer women\""). The raw user message has no
 // such characters, so a strict substring check would reject every
 // LLM-extracted fact and silently degrade the collector to regex-only,
@@ -813,7 +814,7 @@ export async function extractWithOpenAI(
       Authorization: `Bearer ${env.OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "gpt-5.4-mini",
+      model: MODELS.agent,
       messages: [
         {
           role: "system",

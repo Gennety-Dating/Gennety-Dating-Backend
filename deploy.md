@@ -571,6 +571,22 @@ Required/high-impact env keys:
     The matching weight re-split (`V_explicit` 0.65 / `V_research` 0.35) and the
     new vibe quadrant factor are code-only and need no env; `V_league` (and
     `MALE_REACH_ELO`) are unchanged.
+- OpenAI model selection (single source of truth, `apps/bot/src/models.ts`):
+  every chat/vision call site resolves its model from the `MODELS` map, so an
+  OpenAI generation retirement is a one-line change (or a live env override).
+  Current defaults are the GPT-5.6 tiers (migrated off the retiring GPT-5.4/4.1
+  families 2026-07): `MODELS.vision`/`MODELS.agent` → **`gpt-5.6-terra`**
+  (attractiveness Elo seed + conversational/user-facing generation),
+  `MODELS.visionFast`/`MODELS.fast` → **`gpt-5.6-luna`** (simple photo checks +
+  cheap classification / short worker DMs). Four optional overrides —
+  `OPENAI_MODEL_VISION`, `OPENAI_MODEL_VISION_FAST`, `OPENAI_MODEL_AGENT`,
+  `OPENAI_MODEL_FAST` — let ops pin/roll a model live via
+  `pm2 restart gennety-bot --update-env`, no redeploy and no schema change.
+  Embeddings (`text-embedding-3-small`), Whisper, and moderation are
+  deliberately NOT routed through `MODELS` (changing the embedding model forces
+  a full re-embed). Note: switching `MODELS.vision` shifts the Elo seed's score
+  distribution for newly verified users; `Profile.eloSeedDetails.model` records
+  the model per seed so the drift is auditable.
 - Chat progress streams: no production env flag. Do not set or reintroduce a
   `RICH_THINKING_ENABLED` live toggle — the rich path is hard-coded per call site
   (`rich: true`), never a global default, because Telegram draft/rich-draft APIs

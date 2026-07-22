@@ -11,6 +11,7 @@ import {
   scoreAttractivenessFromBuffer,
   scoreAttractivenessFromBuffers,
 } from "./score-attractiveness.js";
+import { MODELS } from "../../models.js";
 
 const PHOTO = Buffer.from("photo-bytes");
 
@@ -57,7 +58,7 @@ describe("scoreAttractivenessFromBuffer", () => {
       faceShape: 72,
       featureRegularity: 70,
     });
-    expect(result.model).toBe("gpt-5.4-nano");
+    expect(result.model).toBe(MODELS.vision);
     expect(result.rationale).toContain("balanced");
   });
 
@@ -159,7 +160,7 @@ describe("scoreAttractivenessFromBuffer", () => {
     });
 
     const body = JSON.parse((fetchFn.mock.calls[0]![1] as RequestInit).body as string);
-    expect(body.model).toBe("gpt-5.4-nano");
+    expect(body.model).toBe(MODELS.vision);
     expect(body.response_format).toEqual({ type: "json_object" });
     expect(body.messages[0].content).toMatch(/symmetry/i);
     expect(body.messages[0].content).toMatch(/SCUT-FBP5500/);

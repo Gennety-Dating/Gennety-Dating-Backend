@@ -1,9 +1,10 @@
 import { env } from "../../config.js";
+import { MODELS } from "../../models.js";
 import { openaiFetch } from "../openai-fetch.js";
 import type { ProviderError } from "./types.js";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const MODEL = "gpt-5.4-nano";
+const MODEL = MODELS.visionFast;
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 export type DuplicatePairResult =

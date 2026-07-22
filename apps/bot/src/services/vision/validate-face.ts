@@ -1,5 +1,6 @@
 import type { BotContext } from "../../session.js";
 import { env } from "../../config.js";
+import { MODELS } from "../../models.js";
 import { openaiFetch } from "../openai-fetch.js";
 import { readResponseBuffer } from "../../utils/bounded-response.js";
 
@@ -7,8 +8,8 @@ import { readResponseBuffer } from "../../utils/bounded-response.js";
  * Face-validation service for onboarding photo upload.
  *
  * Given a Telegram `file_id`, download the image and ask OpenAI's
- * vision-capable `gpt-5.4-nano` whether it can work as a one-person
- * profile photo. Used to reject memes, landscapes, group photos, or
+ * vision-capable model (`MODELS.visionFast`) whether it can work as a
+ * one-person profile photo. Used to reject memes, landscapes, group photos, or
  * unusably low-quality selfies during Phase 1 Step 7.
  *
  * @see PRODUCT_SPEC.md — Phase 1 Step 7 (Photo Upload)
@@ -29,7 +30,7 @@ export type FaceValidationResult =
   | { ok: false; error: "timeout" | "api" };
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const VISION_MODEL = "gpt-5.4-nano";
+const VISION_MODEL = MODELS.visionFast;
 const SYSTEM_PROMPT =
   "Decide if this can be accepted as a dating profile photo for one person. " +
   "Answer only 'true' or 'false'. Accept normal selfies, portraits, mirror shots, " +

@@ -12,11 +12,12 @@
  */
 import { prisma } from "@gennety/db";
 import { env } from "../config.js";
+import { MODELS } from "../models.js";
 import { openaiFetch } from "./openai-fetch.js";
 
 export type DecisionIntent = "yes" | "no" | "unsure" | "other";
 
-const MODEL = "gpt-4.1-mini";
+const MODEL = MODELS.fast;
 const OPENAI_TIMEOUT_MS = 12_000;
 /** Keyword shortcut only below this length; longer texts go to the LLM. */
 export const KEYWORD_MAX_LEN = 48;

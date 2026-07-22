@@ -1,4 +1,5 @@
 import { env } from "../../config.js";
+import { MODELS } from "../../models.js";
 import { openaiFetch } from "../openai-fetch.js";
 
 /**
@@ -66,7 +67,7 @@ export interface AttractivenessImageInput {
 }
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const VISION_MODEL = "gpt-5.4-nano";
+const VISION_MODEL = MODELS.vision;
 const DEFAULT_TIMEOUT_MS = 45_000;
 
 const SYSTEM_PROMPT = [

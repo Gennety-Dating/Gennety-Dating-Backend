@@ -1,4 +1,5 @@
 import { env } from "../config.js";
+import { MODELS } from "../models.js";
 import { openaiFetch } from "./openai-fetch.js";
 
 /**
@@ -13,7 +14,7 @@ import { openaiFetch } from "./openai-fetch.js";
  * Both functions accept an optional `fetchFn` for test injection.
  */
 
-const MODEL = "gpt-4.1-mini";
+const MODEL = MODELS.agent;
 const OPENAI_TIMEOUT_MS = 45_000;
 const MAX_TOKENS_JSON = 1024;
 const MAX_TOKENS_TEXT = 512;
@@ -26,7 +27,7 @@ interface ChatCompletionResponse {
 }
 
 export interface OpenAICallOptions {
-  /** Override the model (default: gpt-5.4-mini). */
+  /** Override the model (default: `MODELS.agent`). */
   model?: string;
   /** Override max tokens. */
   maxTokens?: number;

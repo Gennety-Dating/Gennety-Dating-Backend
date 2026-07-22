@@ -21,6 +21,7 @@ import {
   MAX_HISTORY_FOR_API,
 } from "@gennety/shared";
 import { env } from "../config.js";
+import { MODELS } from "../models.js";
 import { buildSystemPrompt } from "./prompt-builder.js";
 import { truncateForApi, type ChatMessage } from "./onboarding-agent.js";
 import { recordRejectionFeedback } from "./rejection-feedback.js";
@@ -658,7 +659,7 @@ async function callOpenAI(
       Authorization: `Bearer ${env.OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "gpt-5.4-mini",
+      model: MODELS.agent,
       messages,
       tools: TOOLS,
       tool_choice: "auto",

@@ -99,7 +99,7 @@ describe("onboarding collector parsing", () => {
   });
 
   it("accepts evidence the extractor wrapped in quotation marks", () => {
-    // gpt-5.4-mini returns evidence as a quoted string ("\"I prefer women\"").
+    // Some extractor models return evidence as a quoted string ("\"I prefer women\"").
     // The guard must strip the wrapping quotes so the LLM-extracted fact is
     // not rejected and the question is not re-asked.
     expect(

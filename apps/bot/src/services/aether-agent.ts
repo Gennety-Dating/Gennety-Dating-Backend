@@ -2,6 +2,7 @@ import { prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
 import { MAX_AGE, MAX_PHOTOS, MIN_AGE } from "@gennety/shared";
 import { env } from "../config.js";
+import { MODELS } from "../models.js";
 import { createChatImageSignedUrl } from "./storage.js";
 import {
   applyAetherProfilePatch,
@@ -19,7 +20,7 @@ import {
  * the model surfaces high-confidence facts during the conversation.
  */
 
-const MODEL = "gpt-4.1-mini";
+const MODEL = MODELS.agent;
 const HISTORY_LIMIT = 30;
 const MAX_TOOL_ITERATIONS = 3;
 const TIMEOUT_MS = 45_000;

@@ -1,4 +1,5 @@
 import { env } from "../config.js";
+import { MODELS } from "../models.js";
 import { openaiFetch } from "./openai-fetch.js";
 import type { Language } from "@gennety/shared";
 import {
@@ -48,7 +49,7 @@ export interface PitchClient {
   generate(input: PitchInput): Promise<PitchResult>;
 }
 
-const MODEL = "gpt-4.1-mini";
+const MODEL = MODELS.agent;
 const MAX_TOKENS = 480;
 const OPENAI_TIMEOUT_MS = 45_000;
 

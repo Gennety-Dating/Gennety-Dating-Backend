@@ -3,6 +3,7 @@ import { prisma } from "@gennety/db";
 import { VOICE_CORE } from "@gennety/shared";
 import type { Language } from "@gennety/shared";
 import { env } from "../config.js";
+import { MODELS } from "../models.js";
 import { openaiFetch } from "../services/openai-fetch.js";
 import { sendVerificationReminder } from "../handlers/onboarding/verification.js";
 import {
@@ -307,7 +308,7 @@ Output ONLY the message text.`;
         Authorization: `Bearer ${env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-4.1-mini",
+        model: MODELS.fast,
         messages: [{ role: "user", content: prompt }],
         temperature: 0.8,
         max_completion_tokens: 150,

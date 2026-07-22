@@ -18,6 +18,7 @@ import {
   PROFILER_ENTRY_DELAY_MS,
 } from "@gennety/shared";
 import { env } from "../config.js";
+import { MODELS } from "../models.js";
 import {
   analyseAndSaveProfile,
   appendVibeToSummary,
@@ -200,7 +201,7 @@ async function generateClarificationReply(
         Authorization: `Bearer ${env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-5.4-mini",
+        model: MODELS.agent,
         messages: [
           {
             role: "system",
@@ -1786,7 +1787,7 @@ export async function summarizeHistory(
       Authorization: `Bearer ${env.OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "gpt-5.4-mini",
+      model: MODELS.agent,
       messages: summaryMessages,
       temperature: 0.3,
       max_completion_tokens: 512,
@@ -2391,7 +2392,7 @@ async function callOpenAI(
         Authorization: `Bearer ${env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-5.4-mini",
+        model: MODELS.agent,
         messages,
         tools: TOOLS,
         tool_choice: "auto",
