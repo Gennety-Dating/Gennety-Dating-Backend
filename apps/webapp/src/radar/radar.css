@@ -1,0 +1,224 @@
+/* Type Radar Mini App. Theme tokens (--bg / --text / --accent / …) come from
+   theme.css and adapt to the active light/dark theme set pre-paint in radar.html. */
+@import "../theme.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100%;
+}
+
+.radar-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: calc(var(--tg-content-top, 0px) + 16px) 18px 22px;
+  gap: 14px;
+}
+
+.radar-center {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 16px;
+}
+
+/* Header */
+.radar-head {
+  text-align: center;
+}
+.radar-title {
+  margin: 0;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.radar-sub {
+  margin: 6px auto 0;
+  max-width: 30ch;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+/* Progress */
+.radar-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.radar-progress-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--fill);
+  overflow: hidden;
+}
+.radar-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+.radar-progress-label {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* Card */
+.radar-card-stack {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.radar-card {
+  flex: 1;
+  min-height: 0;
+  border-radius: 22px;
+  background-color: var(--surface);
+  background-size: cover;
+  background-position: center;
+  box-shadow: var(--shadow-strong, 0 18px 50px rgba(0, 0, 0, 0.4));
+  border: 1px solid var(--border);
+  transition:
+    filter 0.2s ease,
+    transform 0.2s ease;
+}
+.radar-card-dim {
+  filter: brightness(0.55) saturate(0.9);
+}
+
+/* Reason-chip panel (optional "why?") overlaid at the card's foot */
+.radar-chip-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 16px 14px 18px;
+  border-radius: 22px;
+  background: linear-gradient(to top, var(--overlay, rgba(0, 0, 0, 0.72)) 55%, transparent);
+}
+.radar-chip-q {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+.radar-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.radar-chip {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.1s ease, background 0.15s ease;
+}
+.radar-chip:active {
+  transform: scale(0.94);
+}
+.radar-chip-skip {
+  border-style: dashed;
+  background: transparent;
+  opacity: 0.85;
+}
+
+/* Verdict actions */
+.radar-actions {
+  display: flex;
+  gap: 12px;
+}
+.radar-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 10px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.1s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.radar-btn:active {
+  transform: scale(0.96);
+}
+.radar-btn-glyph {
+  font-size: 22px;
+  line-height: 1;
+}
+.radar-btn-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.radar-btn-yes {
+  background: var(--btn-primary-bg, var(--accent));
+  color: var(--btn-primary-fg, var(--on-accent, #fff));
+  border-color: transparent;
+  box-shadow: 0 8px 24px var(--self-glow, rgba(139, 37, 59, 0.35));
+}
+.radar-btn-yes .radar-btn-glyph {
+  color: currentColor;
+}
+.radar-btn-no {
+  color: var(--text-muted);
+}
+.radar-btn-ghost {
+  flex: 0 0 auto;
+  flex-direction: row;
+  padding: 12px 22px;
+}
+
+/* Loading / status */
+.radar-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--fill-strong, rgba(128, 128, 128, 0.3));
+  border-top-color: var(--accent);
+  animation: radar-spin 0.8s linear infinite;
+}
+@keyframes radar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.radar-finishing {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.radar-error {
+  font-size: 15px;
+  color: var(--text);
+}

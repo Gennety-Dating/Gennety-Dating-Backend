@@ -78,7 +78,7 @@ const MAX_ANSWERS = 40;
 interface DeckCard {
   photoId: string;
   set: RadarSet;
-  /** Path relative to the Mini App origin: `radar/<band>/<id>.png`. */
+  /** Path relative to the Mini App origin: `radar/<band>/<id>.jpg`. */
   image: string;
 }
 
@@ -131,7 +131,7 @@ export function createRadarRouter(): Router {
       photosForSet(set).map((p) => ({
         photoId: p.id,
         set,
-        image: `radar/${band}/${p.id}.png`,
+        image: `radar/${band}/${p.id}.jpg`,
       })),
     );
     const ordered = seededShuffle(cards, seedFrom(`${auth.telegramId}:${band}`));

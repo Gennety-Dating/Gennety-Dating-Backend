@@ -943,6 +943,58 @@ export async function premiumStarsInvoice(
   return { link: String(body.link), stars: Number(body.stars) };
 }
 
+// ---------------------------------------------------------------------------
+// Type Radar Mini App API
+// ---------------------------------------------------------------------------
+
+export type RadarSet = "female" | "male";
+export interface RadarDeckCard {
+  photoId: string;
+  set: RadarSet;
+  /** Path relative to the Mini App origin: `radar/<band>/<id>.png`. */
+  image: string;
+}
+export interface RadarChip {
+  id: string;
+}
+export interface RadarDeck {
+  ok: true;
+  band: string;
+  cards: RadarDeckCard[];
+  chips: Partial<Record<RadarSet, { like: RadarChip[]; dislike: RadarChip[] }>>;
+}
+export type RadarVerdict = "like" | "dislike";
+export interface RadarAnswerInput {
+  photoId: string;
+  verdict: RadarVerdict;
+  chipId?: string | null;
+}
+
+export async function fetchRadarDeck(initData: string): Promise<RadarDeck> {
+  const res = await fetch(`${apiBase}/v1/radar/deck`, {
+    method: "GET",
+    headers: { Authorization: `tma ${initData}` },
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as RadarDeck;
+}
+
+export async function submitRadar(
+  initData: string,
+  answers: RadarAnswerInput[],
+): Promise<{ ok: true; counted: number }> {
+  const res = await fetch(`${apiBase}/v1/radar/submit`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `tma ${initData}`,
+    },
+    body: JSON.stringify({ answers }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as { ok: true; counted: number };
+}
+
 async function toError(res: Response): Promise<CalendarApiError> {
   let reason: string | undefined;
   try {

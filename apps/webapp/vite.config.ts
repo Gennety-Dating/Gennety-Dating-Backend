@@ -24,6 +24,7 @@ export default defineConfig({
         tickets: resolve(__dirname, "tickets.html"),
         "venue-change": resolve(__dirname, "venue-change.html"),
         premium: resolve(__dirname, "premium.html"),
+        radar: resolve(__dirname, "radar.html"),
       },
     },
   },

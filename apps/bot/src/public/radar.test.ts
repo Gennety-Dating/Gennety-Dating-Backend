@@ -88,7 +88,7 @@ describe("GET /v1/radar/deck", () => {
     expect(res.body.band).toBe("a");
     expect(res.body.cards).toHaveLength(FEMALE_PHOTOS.length);
     expect(res.body.cards.every((c: { set: string }) => c.set === "female")).toBe(true);
-    expect(res.body.cards[0].image).toMatch(/^radar\/a\/[a-z0-9]+\.png$/);
+    expect(res.body.cards[0].image).toMatch(/^radar\/a\/[a-z0-9]+\.jpg$/);
     expect(res.body.chips.female.like.length).toBeGreaterThan(0);
     expect(res.body.chips.male).toBeUndefined();
   });
