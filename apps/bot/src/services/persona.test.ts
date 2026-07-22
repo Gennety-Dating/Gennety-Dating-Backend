@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createHmac } from "node:crypto";
 import {
+  isTrustedPersonaEvent,
   mapPersonaStatusToInternal,
   parsePersonaSignatureHeader,
+  TRUSTED_PERSONA_EVENT_NAMES,
   verifyPersonaWebhookSignature,
   WEBHOOK_MAX_AGE_SECONDS,
 } from "./persona.js";
@@ -109,5 +111,42 @@ describe("mapPersonaStatusToInternal", () => {
     expect(mapPersonaStatusToInternal("pending")).toBe("pending");
     expect(mapPersonaStatusToInternal("completed")).toBe("pending");
     expect(mapPersonaStatusToInternal("needs_review")).toBe("pending");
+  });
+});
+
+describe("isTrustedPersonaEvent (M-9 terminal-event allowlist)", () => {
+  it("trusts every terminal-decision event in the allowlist", () => {
+    for (const name of TRUSTED_PERSONA_EVENT_NAMES) {
+      expect(isTrustedPersonaEvent(name)).toBe(true);
+    }
+    // The exact terminal set — a regression here would either widen trust
+    // (activating users on intermediate events) or drop a real decision event.
+    expect([...TRUSTED_PERSONA_EVENT_NAMES].sort()).toEqual(
+      [
+        "inquiry.approved",
+        "inquiry.completed",
+        "inquiry.declined",
+        "inquiry.expired",
+        "inquiry.failed",
+        "inquiry.marked-for-review",
+      ].sort(),
+    );
+  });
+
+  it("rejects intermediate lifecycle events that may carry a stale approved status", () => {
+    for (const name of [
+      "inquiry.created",
+      "inquiry.started",
+      "inquiry.transitioned",
+      "inquiry.session-started",
+      "inquiry.expired-session",
+    ]) {
+      expect(isTrustedPersonaEvent(name)).toBe(false);
+    }
+  });
+
+  it("rejects an undefined / empty event name", () => {
+    expect(isTrustedPersonaEvent(undefined)).toBe(false);
+    expect(isTrustedPersonaEvent("")).toBe(false);
   });
 });
