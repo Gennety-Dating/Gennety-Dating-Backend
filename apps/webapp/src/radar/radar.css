@@ -66,7 +66,9 @@ body {
 .radar-progress-fill {
   height: 100%;
   border-radius: 999px;
-  background: var(--accent);
+  /* White line in dark theme (what the user sees); --text stays dark-on-light so
+     the bar never vanishes if the viewer is in light mode. */
+  background: var(--text);
   transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -246,8 +248,8 @@ body {
 .radar-done {
   gap: 18px;
 }
-/* Finish mark — a SOLID, borderless disc (no glass/blur) with a white check
-   that draws itself in. */
+/* Finish mark — a SOLID, borderless WHITE disc (no glass/blur) with a black
+   check that draws itself in. */
 .radar-done-mark {
   width: 96px;
   height: 96px;
@@ -255,7 +257,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent);
+  background: #fff;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
   animation: radar-pop 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -263,7 +265,7 @@ body {
   width: 50px;
   height: 50px;
   fill: none;
-  stroke: #fff;
+  stroke: #111;
   stroke-width: 4.5;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -312,7 +314,7 @@ body {
   height: 34px;
   border-radius: 50%;
   border: 3px solid var(--fill-strong, rgba(128, 128, 128, 0.3));
-  border-top-color: var(--accent);
+  border-top-color: var(--text);
   animation: radar-spin 0.8s linear infinite;
 }
 @keyframes radar-spin {
