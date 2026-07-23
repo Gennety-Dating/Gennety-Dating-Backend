@@ -483,6 +483,28 @@ curl -s https://dating-api.gennety.com/v1/ping
 
 ### Production flag state last observed (2026-07-13)
 
+**Update 2026-07-23 — remaining dark features enabled in safe shadow mode
+(founder-approved, env-only + PM2 restart).** The two features that were still
+off (Type Radar, Venue Intent V2) were switched on in their *designed* launch
+posture — enabled but not yet influencing matching — NOT flipped to full live:
+- `TYPE_RADAR_ENABLED=true` with `TYPE_PREF_FLOOR=1.0` — the "choose your type"
+  onboarding step + answer collection go live; the `V_type` multiplier stays a
+  no-op (shadow) until predictiveness is validated over 3–4 batches, per
+  TYPE_RADAR_PRODUCT_SPEC. Verified live: `GET /v1/radar/deck` now returns `401`
+  (auth-gated) instead of `404`.
+- `VENUE_INTENT_V2_ENABLED=true` with `VENUE_INTENT_V2_SHADOW_PERCENT=100` /
+  `VENUE_INTENT_V2_ROLLOUT_PERCENT=0` — the new two-step concierge selector
+  computes + writes its append-only `venue_selection_logs` for 100% of pairs
+  but real matches still schedule via the existing path (live 0%), exactly the
+  documented "shadow ≥7 days / 30 pairs before advancing live" rollout.
+
+Next steps for either feature are pure env bumps + `pm2 restart --update-env`:
+lower `TYPE_PREF_FLOOR` toward `0.7`, and step `VENUE_INTENT_V2_ROLLOUT_PERCENT`
+10 → 50 → 100 — only after the shadow data clears. No schema/webapp work remains
+(schema reconciled 2026-07-23; `radar.html` + portraits already deployed).
+Persona is still the sandbox key (`ALLOW_SANDBOX_PERSONA=true`) — real KYC
+awaits a live Persona key, not a flag.
+
 Every product feature is now **on** in `/opt/gennety/.env`: tickets + Telegram
 Stars, Registration v2's phone track, the fact collector (which is what actually
 feeds the matching engine's vibe axes), Elo vision seed, pre-date coordination,
