@@ -1,7 +1,9 @@
 # Gennety Dating Deploy
 
-Last verified: 2026-07-21 (full server deploy — **self-healing Telegram drop
-banner**, commit `045279c`; no Prisma schema change). Production build and PM2
+Last verified: 2026-07-23 — dev↔prod schema-drift reconciliation + the
+2026-07-22 code release (details in the dated block below). Prior: 2026-07-21
+(full server deploy — **self-healing Telegram drop banner**, commit `045279c`;
+no Prisma schema change). Production build and PM2
 restart succeeded; `/v1/ping` stayed healthy, every Mini App returned `200`,
 and the unauthenticated admin API returned `401`. A legacy pinned-banner orphan
 was unpinned only after its message id, create/edit timestamps, text, account
@@ -13,17 +15,23 @@ expected second heartbeat with `eligible=2`, `unchanged=2`, no new errors, no
 six-hour unreachable cooldown; there was no reachable active chat for a live
 client rendering check.)
 
-**⚠️ Pending deploy (2026-07-22): prod runs commit `045279c`; local `main` is a
-day ahead and carries ADDITIVE schema not yet applied to prod** — venue-intent-v2
-(`matches.venue_*` columns + the new `venue_selection_logs` table + `curated_venues`
-enrichment, `8181bfb`), Type Radar (`profiles.type_radar_*`/`appearance_tags` +
-`match_score_logs.score_type`, `6cbd996`), and `subscription_ledger.note`
-(`b8b2975`). The next full deploy MUST reconcile the schema BEFORE `pm2 restart`
-(`pnpm db:drift-check` to confirm, then `pnpm --filter @gennety/db db:push
---accept-data-loss` — the only destructive ops in the diff are dropping the dead
-`web_registration_links` table + `WebRegistrationPurpose` enum). Skipping it
-P2022 crash-loops the freshly generated client on the first `GET /v1/me` /
-"My Profile" read that touches a missing column.
+**Deployed 2026-07-23 — dev↔prod schema-drift reconciliation + 2026-07-22 code
+release.** The prod DB was a day behind the code: additive schema from
+venue-intent-v2 (`matches.venue_*` + the `venue_selection_logs` table +
+`curated_venues` enrichment, `8181bfb`), Type Radar (`profiles.type_radar_*`/
+`appearance_tags` + `match_score_logs.score_type`, `6cbd996`), and
+`subscription_ledger.note` (`b8b2975`) was missing, and the DB still carried the
+dead `web_registration_links` table (6 rows) + `WebRegistrationPurpose` enum
+(removed from code 2026-07-19). Reconciled with one
+`prisma db push --accept-data-loss` (Variant B: +32 columns, +`venue_selection_logs`
++ indexes, dropping only the two dead objects; a full `SELECT *` logical backup of
+all 24 tables was taken first via `scripts/dump-prod-backup.mjs`). Then Deploy Full
+Server Code (rsync → build → `pnpm db:drift-check` gate → `pm2 restart`) and Deploy
+Mini App (`deploy-webapp.sh`). Verified: `db:drift-check` OK on the droplet, bot
+online with admin `:3100` + public `:3101` listening, `/v1/ping` healthy, zero new
+P2022, all Mini App pages `200`. No feature flags changed. The new
+`pnpm db:drift-check` preflight guard (`8fa57cb`) is now the mandatory gate in
+Deploy Full Server Code below.
 
 Prior full deploy: 2026-07-21 (**Gennety Premium launch**:
 recurring Telegram Stars + StoreKit subscription, venue-change premium tier.
