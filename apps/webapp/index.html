@@ -31,6 +31,12 @@
         --surface: #161616;
         --surface-2: #202020;
         --surface-3: #2a2a2e;
+        /* Default (unselected) date/time slot fill — one step darker than
+         * `--surface-3` so the empty chips read a touch deeper while still
+         * sitting clearly above the sheet (`--surface` #161616). Kept as its
+         * own token so `.btn-secondary:hover` (which uses `--surface-3`) is
+         * untouched. */
+        --slot-bg: #232327;
         --card-frame: #3c242b;
         --text: #e9e6e5;
         --text-90: rgba(233, 230, 229, 0.92);
@@ -76,6 +82,9 @@
         --surface: #ffffff;
         --surface-2: #ececec;
         --surface-3: #e2e2e2;
+        /* Light-theme empty slot, a touch darker than `--surface-3` so the
+         * default chips read a step deeper against the bright sheet. */
+        --slot-bg: #d7d7d7;
         --card-frame: #f0e2e5;
         /* Light theme keeps the deep burgundy: on a bright page it is the tone
          * that reads, so these are the pre-existing values, unchanged. */
@@ -266,16 +275,18 @@
         color: inherit;
         text-align: left;
         /* Default (unpressed) bubble is borderless: the shape is carried by an
-         * elevated *tone*, not an outline. It must use `--surface-3`, NOT
-         * `--surface`: the time slots live inside the `.sheet` (also `--surface`),
-         * so a `--surface` fill would be invisible there — same colour, no edge.
-         * `--surface-3` sits a clear step above both the sheet (`--surface`) and
-         * the page (`--bg`) in both themes, so the chip reads in either context.
+         * elevated *tone*, not an outline. It uses `--slot-bg` (one step below
+         * `--surface-3`) — a touch darker than a plain surface chip, but still
+         * NOT `--surface`: the time slots live inside the `.sheet` (also
+         * `--surface`), so a `--surface` fill would be invisible there — same
+         * colour, no edge. `--slot-bg` sits a clear step above both the sheet
+         * (`--surface`) and the page (`--bg`) in both themes, so the chip reads
+         * in either context.
          * Kept as a 1px *transparent* border (not `border: none`) purely as a
          * box-size spacer, so the selected states below — which flip
          * `border-color` to their tint / transparent — keep the exact same
          * dimensions and unchanged press/hover/active effects. */
-        background: var(--surface-3);
+        background: var(--slot-bg);
         border: 1px solid transparent;
         border-radius: 16px;
         padding: 16px 16px 16px 20px;
