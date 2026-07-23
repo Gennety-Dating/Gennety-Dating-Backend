@@ -11,6 +11,7 @@ vi.mock("@gennety/db", () => ({
     noMatchNotice: {
       count: vi.fn(),
       create: vi.fn(),
+      deleteMany: vi.fn(),
     },
   },
 }));
@@ -28,6 +29,7 @@ const mUserFindMany = (prisma.user as unknown as { findMany: MockFn }).findMany;
 const mMatchFindFirst = (prisma.match as unknown as { findFirst: MockFn }).findFirst;
 const mNoticeCount = (prisma.noMatchNotice as unknown as { count: MockFn }).count;
 const mNoticeCreate = (prisma.noMatchNotice as unknown as { create: MockFn }).create;
+const mNoticeDeleteMany = (prisma.noMatchNotice as unknown as { deleteMany: MockFn }).deleteMany;
 const mGrant = grantFamineDiscountIfEligible as unknown as MockFn;
 
 function makeApi() {
@@ -60,6 +62,7 @@ describe("sendNoMatchNotices", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mNoticeCreate.mockResolvedValue({});
+    mNoticeDeleteMany.mockResolvedValue({ count: 1 });
     // Default: feature off / not granted (the grant self-gates on the flag).
     mGrant.mockResolvedValue({ granted: false });
   });
@@ -200,6 +203,47 @@ describe("sendNoMatchNotices", () => {
     expect(mNoticeCreate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ userId: "u2" }) }),
     );
+    // (NOMATCH-1) u1's send failed after its claim was made — the claim is
+    // rolled back so a retry (this week or next) can find them again instead
+    // of a failed send permanently masquerading as "notified".
+    expect(mNoticeDeleteMany).toHaveBeenCalledWith({
+      where: { userId: "u1", dropDate: getDropDate(NOW) },
+    });
+    expect(mNoticeDeleteMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("(NOMATCH-1) does not roll back the claim when the send succeeds", async () => {
+    mUserFindMany.mockResolvedValueOnce([{ id: "u1", telegramId: 111n, language: "en" }]);
+    mMatchFindFirst.mockResolvedValueOnce(null);
+    mNoticeCount.mockResolvedValueOnce(0);
+    const api = makeApi();
+
+    await sendNoMatchNotices(api as never, NOW, 0, makeStream() as never);
+
+    expect(mNoticeCreate).toHaveBeenCalledTimes(1);
+    expect(mNoticeDeleteMany).not.toHaveBeenCalled();
+  });
+
+  it("(NOMATCH-1) skips (not fails) a user whose claim races another invocation", async () => {
+    mUserFindMany.mockResolvedValueOnce([
+      { id: "u1", telegramId: 111n, language: "en" },
+      { id: "u2", telegramId: 222n, language: "en" },
+    ]);
+    mMatchFindFirst.mockResolvedValue(null);
+    mNoticeCount.mockResolvedValue(0);
+    const raceError = Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+    mNoticeCreate.mockRejectedValueOnce(raceError).mockResolvedValueOnce({});
+    const api = makeApi();
+
+    const result = await sendNoMatchNotices(api as never, NOW, 0, makeStream() as never);
+
+    // u1 lost the claim race — skipped, not counted as a failure, and never
+    // sent a message (an overlapping worker already owns that notice).
+    expect(result.skipped).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(result.notified).toBe(1);
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0]![0]).toBe(222);
   });
 
   it("tier 1 never attempts the famine discount grant", async () => {

@@ -9,6 +9,7 @@ import {
 import { streamDraftsToChat } from "./ai-stream.js";
 import { AI_EMOJI } from "./ai-emoji.js";
 import { grantFamineDiscountIfEligible } from "./ticket-discount.js";
+import { isUniqueViolation } from "./ticket-wallet.js";
 
 /**
  * Empathetic "no match this week" DM.
@@ -173,11 +174,31 @@ export async function sendNoMatchNotices(
       }
     }
 
+    // Claim this dropDate for this user FIRST — this is what makes an
+    // overlapping worker invocation's candidate query exclude them, so two
+    // concurrent runs (e.g. a manual admin re-run overlapping the tail of the
+    // scheduled cron) can never both send the same weekly notice.
     try {
       await prisma.noMatchNotice.create({
         data: { userId: u.id, tier, dropDate },
       });
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        // Another invocation already claimed (and is presumably sending)
+        // this user's notice for this dropDate — not a failure, just skip.
+        result.skipped++;
+        continue;
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      result.errors.push({ userId: u.id, error: message });
+      result.failed++;
+      console.error(
+        `[no-match-notify] ${i + 1}/${candidates.length} userId=${u.id} claim FAILED: ${message}`,
+      );
+      continue;
+    }
 
+    try {
       // Deliberately SHORT stream (anti-drumroll): one "thinking" lead beat —
       // "we really looked" — then the full empathetic body as the persisted
       // send. We never spell out bad news slowly. Streams via the native rich
@@ -199,6 +220,16 @@ export async function sendNoMatchNotices(
       else if (tier === 2) result.tier2++;
       else result.tier3plus++;
     } catch (err) {
+      // NOMATCH-1: the send failed after the claim landed. A famine discount
+      // may already be durably granted and folded into `body` above (its own
+      // idempotent columns on `User`, unaffected by this rollback), but the
+      // notice row must not survive as a false "notified" record — that would
+      // silently strand the discount announcement with no retry signal this
+      // dropDate. Undo the claim so a same-week retry or next week's cron
+      // (same-`dropDate` exclusion no longer applies) can find them again.
+      await prisma.noMatchNotice
+        .deleteMany({ where: { userId: u.id, dropDate } })
+        .catch(() => {});
       const message = err instanceof Error ? err.message : String(err);
       result.errors.push({ userId: u.id, error: message });
       result.failed++;
