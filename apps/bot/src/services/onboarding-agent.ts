@@ -245,6 +245,9 @@ async function runCollectorTurn(
   telegramId: bigint,
   input: OnboardingInput,
   deps: AgentDeps,
+  radarGateUser?:
+    | { age: number | null; profile: { typeRadarCompletedAt: Date | null } | null }
+    | null,
 ): Promise<AgentTurnResult> {
   let contextDumpSaved = false;
   let snapshot;
@@ -318,6 +321,36 @@ async function runCollectorTurn(
       contextPromptRequested: false,
       contextDumpStarted: false,
       contextDumpSaved: false,
+    };
+  }
+
+  // Type Radar gate (§Type Radar, step 5B): the visual "choose your type" picker
+  // must precede the Magic Prompt (accepted) or the photo step (declined). The
+  // gate is wired into the legacy tool-loop below, but the collector path — which
+  // owns onboarding whenever ONBOARDING_FACT_COLLECTOR_ENABLED is on — bypasses
+  // that switch entirely, so without this the invite is never sent. Mirror the
+  // tool-loop: emit the deterministic invite copy (the caller attaches the
+  // web_app + Skip buttons) and stop this turn. Submit/skip resumes here with the
+  // gate cleared (typeRadarCompletedAt set) and continues to the Magic Prompt or
+  // photos exactly as if the gate hadn't been there.
+  if (
+    input.kind !== "context_dump" &&
+    (snapshot.currentQuestion === "context_dump" ||
+      snapshot.currentQuestion === "photos") &&
+    typeRadarGatePending(radarGateUser)
+  ) {
+    const invite = typeRadarInviteCopy(snapshot.language).intro;
+    await appendCollectorHistory(telegramId, input, invite, false, false);
+    return {
+      reply: invite,
+      expectingPhoto: false,
+      onboardingComplete: false,
+      verificationRequired: false,
+      acceptedOnboardingFields: snapshot.acceptedFields,
+      contextPromptRequested: false,
+      contextDumpStarted: false,
+      contextDumpSaved: false,
+      typeRadarRequested: true,
     };
   }
 
@@ -1938,7 +1971,7 @@ export async function runAgentTurn(
     // typed context dump. Process it directly regardless of the legacy
     // collector flag: this avoids a redundant agent round, preserves the
     // photo gate, and keeps the raw payload out of stored chat history.
-    return runCollectorTurn(telegramId, onboardingInput, deps);
+    return runCollectorTurn(telegramId, onboardingInput, deps, user);
   }
 
   if (onboardingInput.kind === "photos_continue") {
@@ -1989,7 +2022,7 @@ export async function runAgentTurn(
     user?.onboardingStep === "conversational" &&
     hasTrackVerifiedContact(user)
   ) {
-    return runCollectorTurn(telegramId, onboardingInput, deps);
+    return runCollectorTurn(telegramId, onboardingInput, deps, user);
   }
 
   // Rebuild messages array from stored history
