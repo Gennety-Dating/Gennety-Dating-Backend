@@ -55,20 +55,6 @@ body {
   letter-spacing: -0.01em;
 }
 
-/* Liquid-glass surface — a frosted translucent material shared by the verdict
-   buttons and reason chips. It floats over the portrait, so it reads on any
-   photo in either theme. */
-.radar-glass {
-  background: rgba(255, 255, 255, 0.1);
-  -webkit-backdrop-filter: blur(18px) saturate(1.7);
-  backdrop-filter: blur(18px) saturate(1.7);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.38),
-    inset 0 -1px 2px rgba(0, 0, 0, 0.14),
-    0 8px 26px rgba(0, 0, 0, 0.3);
-}
-
 /* Progress — a single hairline bar. No "X / Y" scoreboard: the point is a calm
    taste calibration, not a counter ticking off people. */
 .radar-progress-track {
@@ -172,31 +158,39 @@ body {
   gap: 8px;
   justify-content: center;
 }
+/* Solid white chips with dark text and a soft double shadow — reads crisply
+   over any portrait, no glass. */
 .radar-chip {
   appearance: none;
-  color: #fff;
+  border: none;
+  background: #f4f4f4;
+  color: #1b1b1b;
   font-size: 13px;
   font-weight: 600;
   padding: 9px 15px;
   border-radius: 999px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.26);
+  transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1), filter 0.18s ease;
 }
 .radar-chip:active {
   transform: scale(0.93);
+  filter: brightness(0.94);
 }
-/* Skip is intentionally the quietest, unglassed option. */
+/* Skip stays the quietest option — a ghost pill, not a solid chip. */
 .radar-chip-skip {
-  border: 1px dashed rgba(255, 255, 255, 0.35);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.22);
+  color: #fff;
+  box-shadow: none;
   opacity: 0.9;
 }
 
-/* Verdict actions — two rounded-rectangle liquid-glass buttons with text only
-   (no crosses/hearts/icons), floating over the portrait's lower scrim. Symmetric
-   and calm, so the moment reads as choosing a look, not grading a person; "my
-   type" carries only a warm glass tint to lead gently. */
+/* Verdict actions — two rounded-rectangle SOLID buttons with text only (no
+   crosses/hearts/icons), floating over the portrait's lower scrim. Opaque, each
+   lifted by a soft two-layer shadow. "My type" is the warm gold primary; "not
+   mine" is a calm neutral surface. */
 .radar-actions {
   position: absolute;
   left: 16px;
@@ -210,25 +204,28 @@ body {
 .radar-verdict {
   flex: 1;
   appearance: none;
+  border: none;
   padding: 16px 12px;
   border-radius: 18px;
-  color: #fff;
+  background: var(--surface);
+  color: var(--text);
   font-family: inherit;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.01em;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s ease;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34), 0 2px 6px rgba(0, 0, 0, 0.26);
+  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), filter 0.2s ease;
 }
 .radar-verdict:active {
   transform: scale(0.97);
+  filter: brightness(0.96);
 }
 .radar-verdict-yes {
-  background: rgba(182, 48, 79, 0.34);
-  border-color: rgba(255, 205, 214, 0.5);
-  color: #ffe6ea;
+  background: #e8b23a;
+  color: #241a04;
+  box-shadow: 0 10px 26px rgba(210, 150, 30, 0.45), 0 2px 6px rgba(0, 0, 0, 0.28);
 }
 
 /* Retry button on the error screen — a plain self-contained pill. */
@@ -249,26 +246,25 @@ body {
 .radar-done {
   gap: 18px;
 }
+/* Finish mark — a SOLID, borderless disc (no glass/blur) with a white check
+   that draws itself in. */
 .radar-done-mark {
-  width: 88px;
-  height: 88px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent-soft);
-  border: 1px solid var(--border-strong);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  background: var(--accent);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
   animation: radar-pop 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .radar-done-check {
-  width: 46px;
-  height: 46px;
+  width: 50px;
+  height: 50px;
   fill: none;
-  stroke: var(--accent-bright);
-  stroke-width: 4;
+  stroke: #fff;
+  stroke-width: 4.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -280,17 +276,18 @@ body {
 .radar-done-title {
   margin: 0;
   font-family: "Space Grotesk", "Inter", sans-serif;
-  font-size: 23px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
   animation: radar-fade-up 460ms 140ms both;
 }
 .radar-done-body {
   margin: 0;
-  max-width: 30ch;
-  font-size: 14px;
+  max-width: 26ch;
+  font-size: 16px;
+  font-weight: 500;
   line-height: 1.5;
-  color: var(--text-muted);
+  color: var(--text);
   animation: radar-fade-up 460ms 220ms both;
 }
 @keyframes radar-pop {

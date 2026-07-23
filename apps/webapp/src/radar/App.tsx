@@ -261,7 +261,7 @@ export function App() {
             <p className="radar-chip-q">{s.whyOptional}</p>
             <div className="radar-chip-row">
               {chips.map((c) => (
-                <button key={c.id} className="radar-glass radar-chip" onClick={() => onChip(c.id)}>
+                <button key={c.id} className="radar-chip" onClick={() => onChip(c.id)}>
                   {s.chips[c.id] ?? c.id}
                 </button>
               ))}
@@ -275,13 +275,13 @@ export function App() {
         {phase === "rating" && card && (
           <div className="radar-actions">
             <button
-              className="radar-glass radar-verdict radar-verdict-no"
+              className="radar-verdict radar-verdict-no"
               onClick={() => onVerdict("dislike")}
             >
               {s.notMyType}
             </button>
             <button
-              className="radar-glass radar-verdict radar-verdict-yes"
+              className="radar-verdict radar-verdict-yes"
               onClick={() => onVerdict("like")}
             >
               {s.myType}
