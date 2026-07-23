@@ -23,7 +23,6 @@ import { previewWeeklyBatch } from "../services/match-engine.js";
 import {
   preMatchAnnounceTick,
   getAnnounceFallback,
-  getStandbyFallback,
 } from "./pre-match-announce.js";
 
 const DAY_TIME  = new Date("2024-06-15T11:00:00Z");
@@ -152,26 +151,23 @@ describe("preMatchAnnounceTick", () => {
     expect(result.announced).toBe(0);
   });
 
-  it("sends the standby copy to users previewed as unmatched", async () => {
+  it("never pre-notifies users the preview leaves unpaired", async () => {
+    // Only u3 is unpaired — nobody is matched. The teaser must stay silent;
+    // the real empathetic no-match DM fires after Thursday's batch instead.
     (previewWeeklyBatch as ReturnType<typeof vi.fn>).mockResolvedValue({
       eligible: 1,
       pairs: 0,
       finalPairs: [],
       missedUserIds: ["u3"],
     });
-    (prisma.user.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: "u3", telegramId: BigInt(3), language: "ru", firstName: "Ира", lastPreMatchAnnounceAt: null },
-    ]);
 
     const api = createMockApi();
     const result = await preMatchAnnounceTick(api, { now: DAY_TIME });
 
-    expect(result.announced).toBe(1);
-    expect(api.sendMessage).toHaveBeenCalledWith(
-      3,
-      getStandbyFallback("ru"),
-      { parse_mode: "Markdown" },
-    );
+    expect(result).toEqual({ announced: 0 });
+    // No matched user → we never even query for recipients.
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 });
 
@@ -190,12 +186,5 @@ describe("getAnnounceFallback", () => {
   it("works with empty name", () => {
     const msg = getAnnounceFallback("", "en");
     expect(msg).toContain("hey");
-  });
-});
-
-describe("getStandbyFallback", () => {
-  it("returns the shared standby copy", () => {
-    expect(getStandbyFallback("en")).toContain("STATUS: STANDBY");
-    expect(getStandbyFallback("ru")).toContain("Мы не идём");
   });
 });

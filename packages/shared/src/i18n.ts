@@ -448,10 +448,6 @@ const translations = {
     matchExpiredPeerIgnored:
       "Your match didn't reply within 24h, so the date won't happen. " +
       "We'll see you in next week's drop.",
-    matchStandbyStatus:
-      "STATUS: STANDBY\n\n" +
-      "We don't compromise on quality. There isn't a high-synergy match for you this week.\n\n" +
-      "Your priority for next week's drop has been boosted.",
     noMatchThisWeekTier1:
       "Hey\n\n" +
       "No match this week. Not because something's off with you — the quality bar just stays where it is, " +
@@ -1248,10 +1244,6 @@ const translations = {
     matchExpiredPeerIgnored:
       "Партнёр не ответил в течение суток — свидание не состоится. " +
       "Увидимся в дропе на следующей неделе.",
-    matchStandbyStatus:
-      "STATUS: STANDBY\n\n" +
-      "Мы не идём на компромиссы по качеству. На этой неделе для тебя нет мэтча с высокой синергией.\n\n" +
-      "Твой приоритет на следующую неделю повышен.",
     noMatchThisWeekTier1:
       "Привет\n\n" +
       "На этой неделе без мэтча. Не потому что с тобой что-то не так — просто планка качества стоит там, где стоит, " +
@@ -2041,10 +2033,6 @@ const translations = {
     matchExpiredPeerIgnored:
       "Партнер не відповів протягом доби — побачення не відбудеться. " +
       "Побачимось у дропі наступного тижня.",
-    matchStandbyStatus:
-      "STATUS: STANDBY\n\n" +
-      "Ми не йдемо на компроміси щодо якості. Цього тижня для тебе немає метчу з високою синергією.\n\n" +
-      "Твій пріоритет на наступний тиждень підвищено.",
     noMatchThisWeekTier1:
       "Привіт\n\n" +
       "Цього тижня без метчу. Не тому що з тобою щось не так — просто планка якості стоїть там, де стоїть, " +
@@ -2813,10 +2801,6 @@ const deTranslations: TranslationTable = {
   matchExpiredPeerIgnored:
     "Dein Match hat innerhalb von 24h nicht geantwortet, also findet das Date nicht statt. " +
     "Wir sehen uns beim nächsten Drop.",
-  matchStandbyStatus:
-    "STATUS: STANDBY\n\n" +
-    "Wir machen keine Kompromisse bei Qualität. Diese Woche gibt es kein High-Synergy-Match für dich.\n\n" +
-    "Deine Priorität für den nächsten Drop wurde erhöht.",
   noMatchThisWeekTier1:
     "Hey\n\n" +
     "Diese Woche kein Match. Nicht, weil mit dir etwas nicht stimmt — die Qualitätslatte bleibt einfach, wo sie ist, " +
@@ -3566,10 +3550,6 @@ const plTranslations: TranslationTable = {
   matchExpiredPeerIgnored:
     "Twoje dopasowanie nie odpowiedziało w ciągu 24h, więc randka się nie odbędzie. " +
     "Widzimy się przy kolejnym dropie.",
-  matchStandbyStatus:
-    "STATUS: STANDBY\n\n" +
-    "Nie idziemy na kompromis w jakości. W tym tygodniu nie ma dla Ciebie wysokosynergicznego dopasowania.\n\n" +
-    "Twoja priorytetowość na kolejny drop została podniesiona.",
   noMatchThisWeekTier1:
     "Hej\n\n" +
     "W tym tygodniu bez matcha. Nie dlatego, że coś z Tobą nie tak — po prostu poprzeczka jakości stoi tam, gdzie stoi, " +

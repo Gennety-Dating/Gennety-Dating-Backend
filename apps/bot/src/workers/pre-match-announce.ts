@@ -1,7 +1,7 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { openaiFetch } from "../services/openai-fetch.js";
-import { t, type Language, VOICE_CORE } from "@gennety/shared";
+import { VOICE_CORE } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
 import { previewWeeklyBatch } from "../services/match-engine.js";
@@ -10,9 +10,11 @@ import { isQuietHours } from "./quiet-hours.js";
 /**
  * Pre-match announcement worker.
  *
- * Runs ~24 hours before the weekly matching batch (default: Saturday 18:00).
- * Sends each active user a casual, warm teaser: "We've been looking for your
- * match all week — check in tomorrow evening."
+ * Runs ~24 hours before the weekly matching batch (default: Wednesday 18:00).
+ * Sends a casual, warm teaser — "We've been looking for your match all week —
+ * check in tomorrow evening" — but ONLY to users the batch preview actually
+ * pairs. Users the preview leaves unpaired are not pre-notified: rejecting them
+ * a day early (and then again via the real no-match DM) helps no one.
  *
  * Idempotency: skips users whose `lastPreMatchAnnounceAt` is within the last
  * 6 days, so re-running the cron or a crash/retry doesn't double-send.
@@ -33,8 +35,6 @@ export interface AnnounceResult {
   announced: number;
 }
 
-type PlannedNotificationKind = "matched" | "standby";
-
 export async function preMatchAnnounceTick(
   api: Api<RawApi>,
   options: PreMatchAnnounceOptions = {},
@@ -47,16 +47,17 @@ export async function preMatchAnnounceTick(
   const cooldownCutoff = new Date(now.getTime() - ANNOUNCE_COOLDOWN_MS);
   const plan = await previewWeeklyBatch();
 
-  const plannedKinds = new Map<string, PlannedNotificationKind>();
+  // Only tease users who WILL get a match tomorrow. Users the preview leaves
+  // unpaired are deliberately NOT pre-notified — the empathetic no-match DM
+  // fires after the real Thursday batch (services/no-match-notifier.ts), so a
+  // day-early "no match" heads-up would just reject them twice.
+  const matchedUserIds = new Set<string>();
   for (const pair of plan.finalPairs) {
-    plannedKinds.set(pair.userAId, "matched");
-    plannedKinds.set(pair.userBId, "matched");
-  }
-  for (const userId of plan.missedUserIds) {
-    plannedKinds.set(userId, "standby");
+    matchedUserIds.add(pair.userAId);
+    matchedUserIds.add(pair.userBId);
   }
 
-  const plannedUserIds = [...plannedKinds.keys()].slice(0, batchSize);
+  const plannedUserIds = [...matchedUserIds].slice(0, batchSize);
   if (plannedUserIds.length === 0) {
     return { announced: 0 };
   }
@@ -83,14 +84,11 @@ export async function preMatchAnnounceTick(
   let announced = 0;
 
   for (const user of users) {
-    const plannedKind = plannedKinds.get(user.id);
-    if (!plannedKind) continue;
+    if (!matchedUserIds.has(user.id)) continue;
     if (user.telegramId <= 0n) continue;
 
     try {
-      const text = plannedKind === "matched"
-        ? await generateAnnounce(user, fetchFn)
-        : getStandbyFallback(user.language ?? "en");
+      const text = await generateAnnounce(user, fetchFn);
       const claim = await prisma.user.updateMany({
         where: {
           id: user.id,
@@ -189,8 +187,4 @@ export function getAnnounceFallback(name: string, lang: string): string {
     default:
       return `hey${g}, your perfect match for this week is ready — I'll show you tomorrow evening ✨`;
   }
-}
-
-export function getStandbyFallback(lang: Language): string {
-  return t(lang, "matchStandbyStatus");
 }

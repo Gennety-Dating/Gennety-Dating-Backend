@@ -772,8 +772,12 @@ Supported first-class flows:
 ### 3.1 Cadence
 
 - **Pre-match teaser** — Wednesday 18:00 Europe/Kyiv (`PRE_MATCH_ANNOUNCE_CRON_SCHEDULE = "0 18 * * 3"`).
-  A warm "your match is coming tomorrow" DM goes to active users who
-  haven't been announced for the current cycle.
+  A warm "your match is coming tomorrow" DM goes **only to users the batch
+  preview (`previewWeeklyBatch`) actually pairs** and who haven't been announced
+  for the current cycle. Users the preview leaves unpaired are deliberately NOT
+  pre-notified — the empathetic no-match notice below already tells them after
+  the real Thursday batch, so a day-early "no match this week" heads-up would
+  only reject them twice.
 - **Weekly batch** — Thursday 18:00 Europe/Kyiv (`MATCH_CRON_SCHEDULE = "0 18 * * 4"`).
 - **No-match notice** — Thursday 18:15 Kyiv (`NO_MATCH_NOTICE_CRON_SCHEDULE = "15 18 * * 4"`).
   An empathetic DM goes to every eligible-but-unpaired user. Tier escalates
