@@ -54,23 +54,25 @@ body {
   font-weight: 700;
   letter-spacing: -0.01em;
 }
-.radar-sub {
-  margin: 6px auto 0;
-  max-width: 30ch;
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--text-muted);
+
+/* Liquid-glass surface — a frosted translucent material shared by the verdict
+   buttons and reason chips. It floats over the portrait, so it reads on any
+   photo in either theme. */
+.radar-glass {
+  background: rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.7);
+  backdrop-filter: blur(18px) saturate(1.7);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.14),
+    0 8px 26px rgba(0, 0, 0, 0.3);
 }
 
-/* Progress */
-.radar-progress-wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+/* Progress — a single hairline bar. No "X / Y" scoreboard: the point is a calm
+   taste calibration, not a counter ticking off people. */
 .radar-progress-track {
-  flex: 1;
-  height: 6px;
+  height: 4px;
   border-radius: 999px;
   background: var(--fill);
   overflow: hidden;
@@ -79,12 +81,7 @@ body {
   height: 100%;
   border-radius: 999px;
   background: var(--accent);
-  transition: width 0.25s ease;
-}
-.radar-progress-label {
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
+  transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Card */
@@ -98,18 +95,83 @@ body {
 .radar-card {
   flex: 1;
   min-height: 0;
-  border-radius: 22px;
+  border-radius: 26px;
   background-color: var(--surface);
   background-size: cover;
   background-position: center;
-  box-shadow: var(--shadow-strong, 0 18px 50px rgba(0, 0, 0, 0.4));
+  /* Soft neutral elevation for depth — deliberately NOT a coloured glow. */
+  box-shadow:
+    0 24px 60px -22px rgba(0, 0, 0, 0.62),
+    0 4px 14px rgba(0, 0, 0, 0.22);
   border: 1px solid var(--border);
-  transition:
-    filter 0.2s ease,
-    transform 0.2s ease;
+  transition: filter 0.25s ease;
+  animation: radar-card-in 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .radar-card-dim {
-  filter: brightness(0.55) saturate(0.9);
+  filter: brightness(0.6) saturate(0.92);
+}
+/* Fly-off on a verdict — a light, springy exit that reveals the next card's
+   entrance. Placed after `.radar-card` so its animation wins the cascade. */
+.radar-card-out-right {
+  animation: radar-card-out-right 260ms cubic-bezier(0.4, 0, 0.9, 1) forwards;
+}
+.radar-card-out-left {
+  animation: radar-card-out-left 260ms cubic-bezier(0.4, 0, 0.9, 1) forwards;
+}
+
+/* A cinematic bottom scrim so the floating glass controls stay legible over any
+   portrait, and the lower frame reads as intentional composition. */
+.radar-card-scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 44%;
+  border-radius: 0 0 26px 26px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes radar-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.955);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes radar-card-out-right {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(42%) translateY(-3%) rotate(8deg) scale(0.96);
+  }
+}
+@keyframes radar-card-out-left {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-42%) translateY(-3%) rotate(-8deg) scale(0.96);
+  }
+}
+@keyframes radar-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Reason-chip panel (optional "why?") overlaid at the card's foot */
@@ -118,12 +180,14 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 16px 14px 18px;
-  border-radius: 22px;
-  background: linear-gradient(to top, var(--overlay, rgba(0, 0, 0, 0.72)) 55%, transparent);
+  z-index: 2;
+  padding: 20px 14px 22px;
+  border-radius: 0 0 26px 26px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.74) 45%, transparent);
+  animation: radar-fade-up 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .radar-chip-q {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   font-size: 13px;
   font-weight: 600;
   color: #fff;
@@ -138,35 +202,40 @@ body {
 }
 .radar-chip {
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background: rgba(255, 255, 255, 0.16);
-  backdrop-filter: blur(6px);
   color: #fff;
   font-size: 13px;
   font-weight: 600;
-  padding: 9px 14px;
+  padding: 9px 15px;
   border-radius: 999px;
   cursor: pointer;
-  transition: transform 0.1s ease, background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s ease;
 }
 .radar-chip:active {
-  transform: scale(0.94);
+  transform: scale(0.93);
 }
+/* Skip is intentionally the quietest, unglassed option. */
 .radar-chip-skip {
-  border-style: dashed;
-  background: transparent;
-  opacity: 0.85;
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.04);
+  opacity: 0.9;
 }
 
-/* Verdict actions — borderless, photo-app style: a quiet neutral disc to pass
-   and a filled accent disc (with a soft glow) as the primary "my type" action,
-   each with a small label underneath. No boxed frames. */
+/* Verdict actions — two liquid-glass discs floating over the portrait's lower
+   scrim, each with a small label. Symmetric and calm: no big filled/glowing
+   "approve" button, so the moment reads as choosing a look, not grading a
+   person. "Yes" carries only a warm glass tint to lead gently. */
 .radar-actions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 24px;
+  z-index: 2;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  gap: 46px;
-  padding-top: 2px;
+  gap: 54px;
+  animation: radar-fade-up 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .radar-btn {
   flex: 0 0 auto;
@@ -177,21 +246,25 @@ body {
   padding: 0;
   border: none;
   background: none;
-  color: var(--text-muted);
+  color: #fff;
   font-family: inherit;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 .radar-btn-glyph {
-  width: 66px;
-  height: 66px;
+  width: 68px;
+  height: 68px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   font-size: 27px;
   line-height: 1;
-  transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease;
+  color: #fff;
+  transition:
+    transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.2s ease,
+    box-shadow 0.2s ease;
 }
 .radar-btn:active .radar-btn-glyph {
   transform: scale(0.9);
@@ -200,18 +273,12 @@ body {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.01em;
-}
-.radar-btn-no .radar-btn-glyph {
-  background: var(--fill);
-  color: var(--text);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
 }
 .radar-btn-yes .radar-btn-glyph {
-  background: var(--accent);
-  color: var(--on-accent, #fff);
-  box-shadow: 0 12px 30px var(--self-glow, rgba(139, 37, 59, 0.4));
-}
-.radar-btn-yes .radar-btn-label {
-  color: var(--accent);
+  background: rgba(182, 48, 79, 0.32);
+  border-color: rgba(255, 205, 214, 0.5);
+  color: #ffe3e8;
 }
 /* Retry button on the error screen — a plain self-contained pill (its label is
    raw text, not a glyph/label pair). */
@@ -272,7 +339,12 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .radar-card-loading {
+  .radar-card-loading,
+  .radar-card,
+  .radar-card-out-right,
+  .radar-card-out-left,
+  .radar-actions,
+  .radar-chip-panel {
     animation: none;
   }
 }

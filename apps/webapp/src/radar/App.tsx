@@ -34,6 +34,10 @@ const HEAD_READY = 2;
  *  large enough to race ahead of a user rating one card every ~1–2s. */
 const PRELOAD_CONCURRENCY = 4;
 
+/** How long the card's fly-off animation runs before we advance to the next
+ *  one. Kept in sync with the `radar-card-out-*` keyframe duration in the CSS. */
+const EXIT_MS = 260;
+
 /** Load + decode one image; resolves paint-ready (or on error, so the ordered
  *  queue never stalls on a single bad asset). */
 function preloadOne(url: string): Promise<void> {
@@ -80,6 +84,9 @@ export function App() {
   const [answers, setAnswers] = useState<RadarAnswerInput[]>([]);
   const [phase, setPhase] = useState<Phase>("rating");
   const [pending, setPending] = useState<{ photoId: string; verdict: RadarVerdict } | null>(null);
+  // Non-null while the current card is playing its fly-off animation; also a
+  // re-entrancy guard so a double-tap mid-exit can't record two answers.
+  const [exiting, setExiting] = useState<RadarVerdict | null>(null);
   // Indices whose card image is fully decoded and instant to paint.
   const [ready, setReady] = useState<Set<number>>(new Set());
 
@@ -139,20 +146,35 @@ export function App() {
       });
   };
 
-  const record = (answer: RadarAnswerInput) => {
-    const nextAnswers = [...answers, answer];
-    setAnswers(nextAnswers);
+  const advance = (finalAnswers: RadarAnswerInput[]) => {
     setPhase("rating");
     setPending(null);
     if (index + 1 >= total) {
-      finish(nextAnswers);
+      finish(finalAnswers);
     } else {
       setIndex(index + 1);
     }
   };
 
+  // `animate` plays the card's fly-off before advancing (the fast, no-chip
+  // verdict path); the reason-chip path advances straight to the next card,
+  // whose own entrance animation carries the motion.
+  const record = (answer: RadarAnswerInput, animate = true) => {
+    const nextAnswers = [...answers, answer];
+    setAnswers(nextAnswers);
+    if (animate) {
+      setExiting(answer.verdict);
+      window.setTimeout(() => {
+        setExiting(null);
+        advance(nextAnswers);
+      }, EXIT_MS);
+    } else {
+      advance(nextAnswers);
+    }
+  };
+
   const onVerdict = (verdict: RadarVerdict) => {
-    if (!card) return;
+    if (!card || exiting) return;
     app?.HapticFeedback?.selectionChanged?.();
     const chips = card.chips?.[verdict] ?? [];
     if (promptIdx.has(index) && chips.length > 0) {
@@ -164,8 +186,8 @@ export function App() {
   };
 
   const onChip = (chipId: string | null) => {
-    if (!pending) return;
-    record({ photoId: pending.photoId, verdict: pending.verdict, chipId });
+    if (!pending || exiting) return;
+    record({ photoId: pending.photoId, verdict: pending.verdict, chipId }, false);
   };
 
   if (status === "loading") {
@@ -208,39 +230,44 @@ export function App() {
 
   const chips = pending ? (card?.chips?.[pending.verdict] ?? []) : [];
 
+  const cardClass = [
+    "radar-card",
+    phase === "chips" ? "radar-card-dim" : "",
+    exiting === "like" ? "radar-card-out-right" : exiting === "dislike" ? "radar-card-out-left" : "",
+    ready.has(index) ? "" : "radar-card-loading",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div className="radar-screen">
       <header className="radar-head">
         <h1 className="radar-title">{s.title}</h1>
       </header>
 
-      <div className="radar-progress-wrap">
-        <div className="radar-progress-track">
-          <div
-            className="radar-progress-fill"
-            style={{ width: `${total ? (index / total) * 100 : 0}%` }}
-          />
-        </div>
-        <span className="radar-progress-label">{s.progress(index, total)}</span>
+      <div className="radar-progress-track">
+        <div
+          className="radar-progress-fill"
+          style={{ width: `${total ? (index / total) * 100 : 0}%` }}
+        />
       </div>
 
       <div className="radar-card-stack">
         {card && (
           <div
-            className={`radar-card ${phase === "chips" ? "radar-card-dim" : ""} ${
-              ready.has(index) ? "" : "radar-card-loading"
-            }`}
+            className={cardClass}
             key={card.photoId}
             style={ready.has(index) ? { backgroundImage: `url(${card.image})` } : undefined}
           />
         )}
+        <div className="radar-card-scrim" aria-hidden="true" />
 
         {phase === "chips" && pending && (
           <div className="radar-chip-panel">
             <p className="radar-chip-q">{s.whyOptional}</p>
             <div className="radar-chip-row">
               {chips.map((c) => (
-                <button key={c.id} className="radar-chip" onClick={() => onChip(c.id)}>
+                <button key={c.id} className="radar-glass radar-chip" onClick={() => onChip(c.id)}>
                   {s.chips[c.id] ?? c.id}
                 </button>
               ))}
@@ -250,28 +277,28 @@ export function App() {
             </div>
           </div>
         )}
-      </div>
 
-      {phase === "rating" && (
-        <div className="radar-actions">
-          <button
-            className="radar-btn radar-btn-no"
-            onClick={() => onVerdict("dislike")}
-            aria-label={s.notMyType}
-          >
-            <span className="radar-btn-glyph">✕</span>
-            <span className="radar-btn-label">{s.notMyType}</span>
-          </button>
-          <button
-            className="radar-btn radar-btn-yes"
-            onClick={() => onVerdict("like")}
-            aria-label={s.myType}
-          >
-            <span className="radar-btn-glyph">♥</span>
-            <span className="radar-btn-label">{s.myType}</span>
-          </button>
-        </div>
-      )}
+        {phase === "rating" && card && (
+          <div className="radar-actions">
+            <button
+              className="radar-btn radar-btn-no"
+              onClick={() => onVerdict("dislike")}
+              aria-label={s.notMyType}
+            >
+              <span className="radar-glass radar-btn-glyph">✕</span>
+              <span className="radar-btn-label">{s.notMyType}</span>
+            </button>
+            <button
+              className="radar-btn radar-btn-yes"
+              onClick={() => onVerdict("like")}
+              aria-label={s.myType}
+            >
+              <span className="radar-glass radar-btn-glyph">♥</span>
+              <span className="radar-btn-label">{s.myType}</span>
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
