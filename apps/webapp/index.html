@@ -288,12 +288,18 @@
          * colour, no edge. `--slot-bg` sits a clear step above both the sheet
          * (`--surface`) and the page (`--bg`) in both themes, so the chip reads
          * in either context.
-         * Kept as a 1px *transparent* border (not `border: none`) purely as a
-         * box-size spacer, so the selected states below — which flip
-         * `border-color` to their tint / transparent — keep the exact same
-         * dimensions and unchanged press/hover/active effects. */
+         * Truly borderless (`border: none`). No state below flips the border to
+         * a *visible* colour any more — the selected fills carry the shape and
+         * `state-both` draws its own gradient frame via `::before` — so the old
+         * 1px transparent spacer border earned nothing and actively hurt: with a
+         * translucent selected fill it left a hairline seam where WebKit
+         * composites the transparent border over the rounded corners (a faint
+         * dark line, most visible on the light right edge), and clipping it away
+         * with `padding-box` instead bled the white sheet through as a ring.
+         * Dropping the border removes both. All states share one border-less box,
+         * so dimensions stay identical. */
         background: var(--slot-bg);
-        border: 1px solid transparent;
+        border: none;
         border-radius: 16px;
         padding: 16px 16px 16px 20px;
         cursor: pointer;
@@ -387,13 +393,6 @@
           var(--self-fill-strong) 0%,
           var(--self-fill-soft) 100%
         );
-        border-color: transparent;
-        /* NB: no `background-clip: padding-box` here. The slot keeps a 1px
-         * transparent border as a box-size spacer; with the default border-box
-         * clip the fill paints under it, so the chip stays borderless. Clipping
-         * to padding-box would expose that 1px transparent frame to the
-         * backdrop — inside the white sheet (`--surface` #ffffff) that read as a
-         * white ring around the selected chip (light-theme only). */
       }
       .slot.state-you .slot-label .slot-weekday,
       .slot.state-you .slot-label .slot-day { color: var(--text-90); }
@@ -415,9 +414,6 @@
           var(--brand-fill-strong) 0%,
           var(--brand-fill-soft) 100%
         );
-        border-color: transparent;
-        /* Borderless like `state-you` — no padding-box clip, so no white sheet
-         * ring shows through the 1px transparent spacer border in light theme. */
       }
       .slot.state-match .slot-label .slot-weekday { color: var(--text-90); }
       .slot.state-match .slot-label .slot-day { font-weight: 700; color: var(--text); }
