@@ -68,7 +68,7 @@ const COPY: Record<Lang, Copy> = {
     b1d: "Swap your date spot as often as you like — no fee.",
     b1x: "Changing the venue normally costs a small fee each time. With Premium every swap on the venue board is free, right up until the date — rethink the spot as many times as you both want.",
     b2t: "Premium venues",
-    b2d: "A hand-picked tier of nicer places in the venue board.",
+    b2d: "A hand-picked tier of nicer places in the venue board",
     b2x: "Premium unlocks a separate tier of hand-picked spots — nicer, more memorable places that stay locked for everyone else. They show up on the venue board the moment your subscription is active.",
     b2link: "See the places",
     more: "More perks are on the way.",
@@ -87,7 +87,7 @@ const COPY: Record<Lang, Copy> = {
     b1d: "Меняй место свидания сколько угодно — без оплаты.",
     b1x: "Обычно каждая смена места стоит небольшую сумму. С Premium любая замена в подборе мест — бесплатна, вплоть до самого свидания. Пересматривайте место столько раз, сколько захотите вдвоём.",
     b2t: "Премиум-заведения",
-    b2d: "Отобранный тир мест получше в подборе.",
+    b2d: "Отобранный тир мест получше в подборе",
     b2x: "Premium открывает отдельный тир заведений — места получше, отобранные вручную, которые для остальных закрыты. Они появляются в подборе сразу, как только подписка активна.",
     b2link: "Посмотреть места",
     more: "Дальше будет больше.",
@@ -106,7 +106,7 @@ const COPY: Record<Lang, Copy> = {
     b1d: "Змінюй місце побачення скільки завгодно — без оплати.",
     b1x: "Зазвичай кожна зміна місця коштує невелику суму. З Premium будь-яка заміна в підборі місць — безкоштовна, аж до самого побачення. Переглядайте місце стільки разів, скільки захочете вдвох.",
     b2t: "Преміум-заклади",
-    b2d: "Відібраний тір кращих місць у підборі.",
+    b2d: "Відібраний тір кращих місць у підборі",
     b2x: "Premium відкриває окремий тір закладів — кращі місця, відібрані вручну, які для інших закриті. Вони з’являються в підборі щойно підписка активна.",
     b2link: "Подивитись місця",
     more: "Далі буде більше.",
@@ -125,7 +125,7 @@ const COPY: Record<Lang, Copy> = {
     b1d: "Wechsle den Date-Ort so oft du willst — ohne Gebühr.",
     b1x: "Normalerweise kostet jeder Ortswechsel eine kleine Gebühr. Mit Premium ist jeder Wechsel im Ortsboard kostenlos — bis zum Date. Überdenkt den Ort so oft ihr beide wollt.",
     b2t: "Premium-Orte",
-    b2d: "Eine handverlesene Auswahl schönerer Orte im Ortsboard.",
+    b2d: "Eine handverlesene Auswahl schönerer Orte im Ortsboard",
     b2x: "Premium schaltet eine eigene Kategorie handverlesener Orte frei — schönere, besondere Plätze, die für alle anderen gesperrt bleiben. Sie erscheinen im Ortsboard, sobald dein Abo aktiv ist.",
     b2link: "Orte ansehen",
     more: "Mehr kommt bald.",
@@ -144,7 +144,7 @@ const COPY: Record<Lang, Copy> = {
     b1d: "Zmieniaj miejsce randki ile chcesz — bez opłat.",
     b1x: "Zwykle każda zmiana miejsca kosztuje niewielką opłatę. Z Premium każda zmiana w tablicy miejsc jest darmowa — aż do samej randki. Zmieniajcie miejsce tyle razy, ile chcecie.",
     b2t: "Miejsca premium",
-    b2d: "Wyselekcjonowany zestaw lepszych miejsc w tablicy.",
+    b2d: "Wyselekcjonowany zestaw lepszych miejsc w tablicy",
     b2x: "Premium odblokowuje osobny poziom ręcznie wybranych miejsc — lepszych i bardziej wyjątkowych, zamkniętych dla pozostałych. Pojawiają się w tablicy, gdy tylko subskrypcja jest aktywna.",
     b2link: "Zobacz miejsca",
     more: "Więcej wkrótce.",
@@ -272,8 +272,28 @@ function benefitCard(
   // The keyframe runs on the inner .icon; animationend bubbles up to the tile.
   tile.addEventListener("animationend", () => tile.classList.remove("is-play"));
 
+  // The short detail line, with an optional inline "see the places" link chip
+  // sitting right after the sentence (no icon, thin solid pill). It's a <span>
+  // (not a nested <button>, which is invalid) with its own click that stops
+  // propagation, so it opens the link immediately without toggling the card —
+  // and being inline it doesn't grow the section's height.
+  const detail = el("div", "pm-benefit-detail");
+  detail.append(document.createTextNode(short));
+  if (link) {
+    detail.append(document.createTextNode(" "));
+    const chip = el("span", "pm-benefit-link", link.label);
+    chip.setAttribute("role", "button");
+    chip.setAttribute("tabindex", "0");
+    chip.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      haptic("success");
+      openExternal(link.href);
+    });
+    detail.append(chip);
+  }
+
   const txt = el("div", "pm-benefit-txt");
-  txt.append(el("div", "pm-benefit-title", title), el("div", "pm-benefit-detail", short));
+  txt.append(el("div", "pm-benefit-title", title), detail);
 
   const chevron = icon("chevron", "icon pm-benefit-chevron");
 
@@ -304,25 +324,6 @@ function benefitCard(
   });
 
   wrap.append(row, panel);
-
-  // An always-visible, immediately-tappable link chip pinned to the bottom of
-  // the card (kept OUTSIDE the toggle button — nested buttons are invalid — so
-  // it opens the link without expanding the card). Used for "see the real
-  // Premium venues".
-  if (link) {
-    const chip = el("button", "pm-benefit-link") as HTMLButtonElement;
-    chip.type = "button";
-    chip.append(icon("pin", "icon pm-benefit-link-ico"));
-    chip.append(el("span", "pm-benefit-link-txt", link.label));
-    chip.append(icon("chevron", "icon pm-benefit-link-arrow"));
-    chip.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      haptic("success");
-      openExternal(link.href);
-    });
-    wrap.append(chip);
-  }
-
   return wrap;
 }
 

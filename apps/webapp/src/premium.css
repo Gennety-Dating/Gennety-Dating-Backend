@@ -27,15 +27,19 @@
   --pm-glass-hi: rgba(255, 255, 255, 0.72);
   --pm-glass-tile: rgba(255, 255, 255, 0.07);
 
-  /* The CTA — a clean liquid-glass pill (same kit as the onboarding AI-memory
-     primary): a bright brushed-silver base so dark text stays fully legible, a
-     radial top gloss, a real rim, and a soft glow that lives INSIDE the pill
-     (a gentle breathing bloom, no travelling sweep / hard lines). */
-  --pm-cta-fill: linear-gradient(180deg, #fbfbfd 0%, #dcdce2 100%);
-  --pm-cta-fg: #0b0b0b;
-  --pm-cta-rim: rgba(255, 255, 255, 0.9);
-  --pm-cta-gloss: rgba(255, 255, 255, 0.34);
-  --pm-cta-glow: rgba(255, 255, 255, 0.55);
+  /* The CTA — a dark, expensive liquid-glass pill (borderless). A smoked
+     near-black base with white text, a restrained top gloss and a soft inner
+     glow so it reads as light trapped in dark glass — no white spray, no rim. */
+  --pm-cta-fill: linear-gradient(180deg, #26262c 0%, #0a0a0d 100%);
+  --pm-cta-fg: #ffffff;
+  --pm-cta-top: rgba(255, 255, 255, 0.14);
+  --pm-cta-gloss: rgba(255, 255, 255, 0.14);
+  --pm-cta-glow: rgba(255, 255, 255, 0.13);
+
+  /* Inline "see the places" chip — a small solid pill that inverts the page:
+     white fill + black text on the dark theme. */
+  --pm-chip-fill: #ffffff;
+  --pm-chip-fg: #0a0a0a;
 
   /* Butterfly crest — metallic vertical gradient stops. */
   --pm-bf-a: #ffffff;
@@ -62,12 +66,17 @@
 
   /* On the cream page the CTA flips to an ink-black glass with white text — the
      "black shades" side of the monochrome identity, high-contrast and glossy. */
-  --pm-cta-fill: linear-gradient(180deg, #2a2a30 0%, #0a0a0c 100%);
+  --pm-cta-fill: linear-gradient(180deg, #2a2a30 0%, #08080a 100%);
   --pm-cta-fg: #ffffff;
-  --pm-cta-rim: rgba(255, 255, 255, 0.26);
-  --pm-cta-gloss: rgba(255, 255, 255, 0.5);
+  --pm-cta-top: rgba(255, 255, 255, 0.2);
+  --pm-cta-gloss: rgba(255, 255, 255, 0.16);
   /* Light-in-the-glass bloom on the ink pill — a soft inner glow, not a sweep. */
-  --pm-cta-glow: rgba(255, 255, 255, 0.22);
+  --pm-cta-glow: rgba(255, 255, 255, 0.16);
+
+  /* Inline chip inverts the cream page — black fill + white text on the light
+     theme. */
+  --pm-chip-fill: #101014;
+  --pm-chip-fg: #ffffff;
 
   --pm-bf-a: #2a2a2e;
   --pm-bf-b: #050505;
@@ -380,44 +389,31 @@ body {
   color: var(--text-muted);
 }
 
-/* Always-visible "see the real places" chip pinned at the bottom of the
-   premium-venues card. A small, neat glass pill — tappable straight away, no
-   need to expand the card first. Aligned under the copy (matches the tile
-   gutter) so it reads as part of the block, not a stray button. */
+/* Inline "see the places" chip — a small, thin solid pill sitting right after
+   the premium-venues detail line (no icon), so it's tappable straight away and
+   never grows the card's height. It inverts the page: white fill / black text
+   on dark, black fill / white text on light. */
 .pm-benefit-link {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin: 0 16px 15px 76px;
-  padding: 8px 12px 8px 11px;
-  border: 1px solid var(--pm-glass-rim);
+  margin-left: 6px;
+  padding: 2px 9px;
   border-radius: 999px;
-  background: var(--pm-glass-tile);
-  box-shadow: var(--pm-glass-edge);
-  color: var(--pm-ink);
+  background: var(--pm-chip-fill);
+  color: var(--pm-chip-fg);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 700;
+  line-height: 1.55;
   letter-spacing: -0.005em;
+  white-space: nowrap;
+  vertical-align: middle;
   cursor: pointer;
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
-  backdrop-filter: blur(10px) saturate(140%);
-  transition: transform 0.15s ease, background 0.15s ease;
+  transition: transform 0.12s ease, opacity 0.12s ease;
 }
 .pm-benefit-link:active {
-  transform: scale(0.96);
-  background: var(--fill);
-}
-.pm-benefit-link-ico {
-  width: 15px;
-  height: 15px;
-  stroke-width: 1.7;
-}
-.pm-benefit-link-arrow {
-  width: 13px;
-  height: 13px;
-  stroke-width: 2;
-  opacity: 0.55;
+  transform: scale(0.94);
+  opacity: 0.85;
 }
 
 .pm-more {
@@ -471,7 +467,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 9px;
-  border: 1px solid var(--pm-cta-rim);
+  border: none;
   border-radius: 30px;
   padding: 19px 24px;
   font-family: "Inter", system-ui, sans-serif;
@@ -480,17 +476,19 @@ body {
   letter-spacing: -0.01em;
   color: var(--pm-cta-fg);
   cursor: pointer;
-  /* Radial top gloss over the brushed base = the light catching the curved top
-     of the pill, baked into the fill (no separate ::before slab). */
+  /* Restrained radial top gloss over the smoked base = light catching the
+     curved top of the dark glass, baked into the fill (no rim, no white spray). */
   background:
-    radial-gradient(120% 92% at 50% -28%, var(--pm-cta-gloss), transparent 60%),
+    radial-gradient(120% 92% at 50% -28%, var(--pm-cta-gloss), transparent 58%),
     var(--pm-cta-fill);
   -webkit-backdrop-filter: blur(14px) saturate(150%);
   backdrop-filter: blur(14px) saturate(150%);
+  /* A hair-thin specular top edge + a dark inset base give the glass thickness
+     without a visible border; the drop shadow lifts the pill off the page. */
   box-shadow:
-    inset 0 1px 0 var(--pm-cta-rim),
-    inset 0 -7px 14px rgba(255, 255, 255, 0.1),
-    0 12px 34px rgba(0, 0, 0, 0.4);
+    inset 0 1px 0 var(--pm-cta-top),
+    inset 0 -10px 20px rgba(0, 0, 0, 0.45),
+    0 16px 40px rgba(0, 0, 0, 0.55);
   transition: transform 0.15s ease, opacity 0.2s ease;
 }
 /* Inner glow — a soft, wide bloom that lives INSIDE the pill (no travelling
