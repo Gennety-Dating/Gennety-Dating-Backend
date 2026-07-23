@@ -196,10 +196,8 @@ function successCheckMarkup(): string {
 function successScreen(lang: Lang, textKey: Parameters<typeof tr>[1]): string {
   return `
     <div class="screen">
-      <div class="screen__panel">
-        ${successCheckMarkup()}
-        <p class="screen-text check-caption">${escapeHtml(tr(lang, textKey))}</p>
-      </div>
+      ${successCheckMarkup()}
+      <p class="screen-text check-caption">${escapeHtml(tr(lang, textKey))}</p>
     </div>`;
 }
 
@@ -208,10 +206,8 @@ function renderScreen(root: HTMLElement, screen: Screen, lang: Lang): void {
     case "loading":
       root.innerHTML = `
         <div class="screen">
-          <div class="screen__panel">
-            <div class="spinner" aria-hidden="true"></div>
-            <p class="screen-text">${escapeHtml(tr(lang, "verifyMiniAppLoading"))}</p>
-          </div>
+          <div class="spinner" aria-hidden="true"></div>
+          <p class="screen-text">${escapeHtml(tr(lang, "verifyMiniAppLoading"))}</p>
         </div>`;
       return;
     case "finishing":
