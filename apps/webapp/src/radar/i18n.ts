@@ -12,6 +12,8 @@ export interface RadarStrings {
   skipChip: string;
   preparing: string;
   finishing: string;
+  doneTitle: string;
+  doneBody: string;
   loadError: string;
   retry: string;
   progress: (done: number, total: number) => string;
@@ -38,6 +40,8 @@ const STRINGS: Record<Lang, RadarStrings> = {
     skipChip: "Skip",
     preparing: "Getting your cards ready…",
     finishing: "Saving your taste…",
+    doneTitle: "All set",
+    doneBody: "We've saved your preferences and we'll use them to find your matches.",
     loadError: "Couldn't load the cards.",
     retry: "Try again",
     progress: (d, t) => `${d} / ${t}`,
@@ -52,6 +56,8 @@ const STRINGS: Record<Lang, RadarStrings> = {
     skipChip: "Пропустить",
     preparing: "Готовим карточки…",
     finishing: "Сохраняем твой вкус…",
+    doneTitle: "Готово",
+    doneBody: "Мы сохранили твои предпочтения и учтём их, когда будем подбирать тебе пару.",
     loadError: "Не удалось загрузить карточки.",
     retry: "Ещё раз",
     progress: (d, t) => `${d} / ${t}`,
@@ -74,6 +80,8 @@ const STRINGS: Record<Lang, RadarStrings> = {
     skipChip: "Пропустити",
     preparing: "Готуємо картки…",
     finishing: "Зберігаємо твій смак…",
+    doneTitle: "Готово",
+    doneBody: "Ми зберегли твої вподобання й врахуємо їх, коли шукатимемо тобі пару.",
     loadError: "Не вдалося завантажити картки.",
     retry: "Ще раз",
     progress: (d, t) => `${d} / ${t}`,
@@ -96,6 +104,8 @@ const STRINGS: Record<Lang, RadarStrings> = {
     skipChip: "Überspringen",
     preparing: "Karten werden vorbereitet…",
     finishing: "Wir speichern deinen Geschmack…",
+    doneTitle: "Fertig",
+    doneBody: "Wir haben deine Vorlieben gespeichert und beziehen sie in deine Matches ein.",
     loadError: "Karten konnten nicht geladen werden.",
     retry: "Erneut",
     progress: (d, t) => `${d} / ${t}`,
@@ -118,6 +128,8 @@ const STRINGS: Record<Lang, RadarStrings> = {
     skipChip: "Pomiń",
     preparing: "Przygotowujemy karty…",
     finishing: "Zapisujemy twój gust…",
+    doneTitle: "Gotowe",
+    doneBody: "Zapisaliśmy Twoje preferencje i uwzględnimy je przy dobieraniu par.",
     loadError: "Nie udało się wczytać kart.",
     retry: "Ponów",
     progress: (d, t) => `${d} / ${t}`,

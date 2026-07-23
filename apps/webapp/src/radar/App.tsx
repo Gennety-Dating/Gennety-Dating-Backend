@@ -34,10 +34,6 @@ const HEAD_READY = 2;
  *  large enough to race ahead of a user rating one card every ~1–2s. */
 const PRELOAD_CONCURRENCY = 4;
 
-/** How long the card's fly-off animation runs before we advance to the next
- *  one. Kept in sync with the `radar-card-out-*` keyframe duration in the CSS. */
-const EXIT_MS = 260;
-
 /** Load + decode one image; resolves paint-ready (or on error, so the ordered
  *  queue never stalls on a single bad asset). */
 function preloadOne(url: string): Promise<void> {
@@ -84,9 +80,6 @@ export function App() {
   const [answers, setAnswers] = useState<RadarAnswerInput[]>([]);
   const [phase, setPhase] = useState<Phase>("rating");
   const [pending, setPending] = useState<{ photoId: string; verdict: RadarVerdict } | null>(null);
-  // Non-null while the current card is playing its fly-off animation; also a
-  // re-entrancy guard so a double-tap mid-exit can't record two answers.
-  const [exiting, setExiting] = useState<RadarVerdict | null>(null);
   // Indices whose card image is fully decoded and instant to paint.
   const [ready, setReady] = useState<Set<number>>(new Set());
 
@@ -132,49 +125,37 @@ export function App() {
 
   const finish = (finalAnswers: RadarAnswerInput[]) => {
     setStatus("submitting");
+    // Let the finish screen breathe before Telegram closes the Mini App.
+    const CLOSE_DELAY = 2100;
     submitRadar(initData, finalAnswers)
       .then(() => {
         setStatus("done");
         app?.HapticFeedback?.notificationOccurred?.("success");
-        setTimeout(() => app?.close?.(), 600);
+        setTimeout(() => app?.close?.(), CLOSE_DELAY);
       })
-      // A failed save shouldn't trap the user mid-onboarding — close and let
-      // the bot's Skip path continue the flow (V_type just stays neutral).
+      // A failed save shouldn't trap the user mid-onboarding — still show the
+      // confirmation and close; the bot's Skip path continues the flow
+      // (V_type just stays neutral).
       .catch(() => {
         setStatus("done");
-        setTimeout(() => app?.close?.(), 600);
+        setTimeout(() => app?.close?.(), CLOSE_DELAY);
       });
   };
 
-  const advance = (finalAnswers: RadarAnswerInput[]) => {
+  const record = (answer: RadarAnswerInput) => {
+    const nextAnswers = [...answers, answer];
+    setAnswers(nextAnswers);
     setPhase("rating");
     setPending(null);
     if (index + 1 >= total) {
-      finish(finalAnswers);
+      finish(nextAnswers);
     } else {
       setIndex(index + 1);
     }
   };
 
-  // `animate` plays the card's fly-off before advancing (the fast, no-chip
-  // verdict path); the reason-chip path advances straight to the next card,
-  // whose own entrance animation carries the motion.
-  const record = (answer: RadarAnswerInput, animate = true) => {
-    const nextAnswers = [...answers, answer];
-    setAnswers(nextAnswers);
-    if (animate) {
-      setExiting(answer.verdict);
-      window.setTimeout(() => {
-        setExiting(null);
-        advance(nextAnswers);
-      }, EXIT_MS);
-    } else {
-      advance(nextAnswers);
-    }
-  };
-
   const onVerdict = (verdict: RadarVerdict) => {
-    if (!card || exiting) return;
+    if (!card) return;
     app?.HapticFeedback?.selectionChanged?.();
     const chips = card.chips?.[verdict] ?? [];
     if (promptIdx.has(index) && chips.length > 0) {
@@ -186,8 +167,8 @@ export function App() {
   };
 
   const onChip = (chipId: string | null) => {
-    if (!pending || exiting) return;
-    record({ photoId: pending.photoId, verdict: pending.verdict, chipId }, false);
+    if (!pending) return;
+    record({ photoId: pending.photoId, verdict: pending.verdict, chipId });
   };
 
   if (status === "loading") {
@@ -212,18 +193,32 @@ export function App() {
     return (
       <div className="radar-screen radar-center">
         <p className="radar-error">{s.loadError}</p>
-        <button className="radar-btn radar-btn-ghost" onClick={load}>
+        <button className="radar-btn-ghost" onClick={load}>
           {s.retry}
         </button>
       </div>
     );
   }
 
-  if (status === "submitting" || status === "done") {
+  if (status === "submitting") {
     return (
       <div className="radar-screen radar-center">
         <div className="radar-spinner" />
         <p className="radar-finishing">{s.finishing}</p>
+      </div>
+    );
+  }
+
+  if (status === "done") {
+    return (
+      <div className="radar-screen radar-center radar-done">
+        <div className="radar-done-mark">
+          <svg className="radar-done-check" viewBox="0 0 52 52" aria-hidden="true">
+            <path d="M14 27 L23 36 L39 18" />
+          </svg>
+        </div>
+        <h2 className="radar-done-title">{s.doneTitle}</h2>
+        <p className="radar-done-body">{s.doneBody}</p>
       </div>
     );
   }
@@ -233,7 +228,6 @@ export function App() {
   const cardClass = [
     "radar-card",
     phase === "chips" ? "radar-card-dim" : "",
-    exiting === "like" ? "radar-card-out-right" : exiting === "dislike" ? "radar-card-out-left" : "",
     ready.has(index) ? "" : "radar-card-loading",
   ]
     .filter(Boolean)
@@ -281,20 +275,16 @@ export function App() {
         {phase === "rating" && card && (
           <div className="radar-actions">
             <button
-              className="radar-btn radar-btn-no"
+              className="radar-glass radar-verdict radar-verdict-no"
               onClick={() => onVerdict("dislike")}
-              aria-label={s.notMyType}
             >
-              <span className="radar-glass radar-btn-glyph">✕</span>
-              <span className="radar-btn-label">{s.notMyType}</span>
+              {s.notMyType}
             </button>
             <button
-              className="radar-btn radar-btn-yes"
+              className="radar-glass radar-verdict radar-verdict-yes"
               onClick={() => onVerdict("like")}
-              aria-label={s.myType}
             >
-              <span className="radar-glass radar-btn-glyph">♥</span>
-              <span className="radar-btn-label">{s.myType}</span>
+              {s.myType}
             </button>
           </div>
         )}

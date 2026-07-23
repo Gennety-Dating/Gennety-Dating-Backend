@@ -110,14 +110,6 @@ body {
 .radar-card-dim {
   filter: brightness(0.6) saturate(0.92);
 }
-/* Fly-off on a verdict — a light, springy exit that reveals the next card's
-   entrance. Placed after `.radar-card` so its animation wins the cascade. */
-.radar-card-out-right {
-  animation: radar-card-out-right 260ms cubic-bezier(0.4, 0, 0.9, 1) forwards;
-}
-.radar-card-out-left {
-  animation: radar-card-out-left 260ms cubic-bezier(0.4, 0, 0.9, 1) forwards;
-}
 
 /* A cinematic bottom scrim so the floating glass controls stay legible over any
    portrait, and the lower frame reads as intentional composition. */
@@ -141,26 +133,6 @@ body {
   to {
     opacity: 1;
     transform: none;
-  }
-}
-@keyframes radar-card-out-right {
-  from {
-    opacity: 1;
-    transform: none;
-  }
-  to {
-    opacity: 0;
-    transform: translateX(42%) translateY(-3%) rotate(8deg) scale(0.96);
-  }
-}
-@keyframes radar-card-out-left {
-  from {
-    opacity: 1;
-    transform: none;
-  }
-  to {
-    opacity: 0;
-    transform: translateX(-42%) translateY(-3%) rotate(-8deg) scale(0.96);
   }
 }
 @keyframes radar-fade-up {
@@ -221,76 +193,120 @@ body {
   opacity: 0.9;
 }
 
-/* Verdict actions — two liquid-glass discs floating over the portrait's lower
-   scrim, each with a small label. Symmetric and calm: no big filled/glowing
-   "approve" button, so the moment reads as choosing a look, not grading a
-   person. "Yes" carries only a warm glass tint to lead gently. */
+/* Verdict actions — two rounded-rectangle liquid-glass buttons with text only
+   (no crosses/hearts/icons), floating over the portrait's lower scrim. Symmetric
+   and calm, so the moment reads as choosing a look, not grading a person; "my
+   type" carries only a warm glass tint to lead gently. */
 .radar-actions {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 24px;
+  left: 16px;
+  right: 16px;
+  bottom: 22px;
   z-index: 2;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 54px;
+  gap: 12px;
   animation: radar-fade-up 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-.radar-btn {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 9px;
-  padding: 0;
-  border: none;
-  background: none;
+.radar-verdict {
+  flex: 1;
+  appearance: none;
+  padding: 16px 12px;
+  border-radius: 18px;
   color: #fff;
   font-family: inherit;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.radar-btn-glyph {
-  width: 68px;
-  height: 68px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  font-size: 27px;
-  line-height: 1;
-  color: #fff;
-  transition:
-    transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
-    background 0.2s ease,
-    box-shadow 0.2s ease;
-}
-.radar-btn:active .radar-btn-glyph {
-  transform: scale(0.9);
-}
-.radar-btn-label {
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.01em;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s ease;
 }
-.radar-btn-yes .radar-btn-glyph {
-  background: rgba(182, 48, 79, 0.32);
+.radar-verdict:active {
+  transform: scale(0.97);
+}
+.radar-verdict-yes {
+  background: rgba(182, 48, 79, 0.34);
   border-color: rgba(255, 205, 214, 0.5);
-  color: #ffe3e8;
+  color: #ffe6ea;
 }
-/* Retry button on the error screen — a plain self-contained pill (its label is
-   raw text, not a glyph/label pair). */
+
+/* Retry button on the error screen — a plain self-contained pill. */
 .radar-btn-ghost {
-  flex-direction: row;
   padding: 12px 22px;
   border-radius: 18px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
+  font-family: inherit;
   font-size: 15px;
   font-weight: 600;
+  cursor: pointer;
+}
+
+/* Finish screen — a calm, modern confirmation: a glass check that draws itself
+   in, then the reassurance copy fades up. */
+.radar-done {
+  gap: 18px;
+}
+.radar-done-mark {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  border: 1px solid var(--border-strong);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  animation: radar-pop 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.radar-done-check {
+  width: 46px;
+  height: 46px;
+  fill: none;
+  stroke: var(--accent-bright);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.radar-done-check path {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: radar-draw 460ms 200ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+.radar-done-title {
+  margin: 0;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  animation: radar-fade-up 460ms 140ms both;
+}
+.radar-done-body {
+  margin: 0;
+  max-width: 30ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  animation: radar-fade-up 460ms 220ms both;
+}
+@keyframes radar-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes radar-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 /* Loading / status */
@@ -341,10 +357,15 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .radar-card-loading,
   .radar-card,
-  .radar-card-out-right,
-  .radar-card-out-left,
   .radar-actions,
-  .radar-chip-panel {
+  .radar-chip-panel,
+  .radar-done-mark,
+  .radar-done-title,
+  .radar-done-body {
+    animation: none;
+  }
+  .radar-done-check path {
+    stroke-dashoffset: 0;
     animation: none;
   }
 }
