@@ -109,3 +109,81 @@ describe("openaiFetch token metering", () => {
     expect(record).toHaveBeenCalledWith(undefined, 40);
   });
 });
+
+describe("openaiFetch temperature normalization (GPT-5.6 only supports default=1)", () => {
+  function forwardedBody(fetchMock: ReturnType<typeof vi.fn>): unknown {
+    const raw = fetchMock.mock.calls[0]![1]?.body;
+    return typeof raw === "string" ? JSON.parse(raw) : raw;
+  }
+
+  it("strips a non-default temperature from the chat body", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openaiFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-5.6-terra", messages: [], temperature: 0.3 }),
+    });
+
+    const body = forwardedBody(fetchMock) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("temperature");
+    expect(body.model).toBe("gpt-5.6-terra");
+    expect(body.messages).toEqual([]);
+  });
+
+  it("keeps other sampling params intact while stripping temperature", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openaiFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        temperature: 0,
+        max_completion_tokens: 800,
+        response_format: { type: "json_schema" },
+      }),
+    });
+
+    const body = forwardedBody(fetchMock) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("temperature");
+    expect(body.max_completion_tokens).toBe(800);
+    expect(body.response_format).toEqual({ type: "json_schema" });
+  });
+
+  it("preserves an explicit temperature of 1", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openaiFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ temperature: 1 }),
+    });
+
+    expect((forwardedBody(fetchMock) as Record<string, unknown>).temperature).toBe(1);
+  });
+
+  it("leaves a body without a temperature untouched", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openaiFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-5.6-luna", input: "x" }),
+    });
+
+    const body = forwardedBody(fetchMock) as Record<string, unknown>;
+    expect(body).toEqual({ model: "gpt-5.6-luna", input: "x" });
+  });
+
+  it("leaves a non-JSON string body untouched", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openaiFetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      body: "not-json",
+    });
+
+    expect(fetchMock.mock.calls[0]![1]?.body).toBe("not-json");
+  });
+});
