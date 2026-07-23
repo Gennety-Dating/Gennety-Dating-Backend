@@ -31,11 +31,12 @@
         --surface: #161616;
         --surface-2: #202020;
         --surface-3: #2a2a2e;
-        /* Default (unselected) date/time slot fill — one step darker than
-         * `--surface-3` so the empty chips read a touch deeper while still
-         * sitting clearly above the sheet (`--surface` #161616). Kept as its
-         * own token so `.btn-secondary:hover` (which uses `--surface-3`) is
-         * untouched. */
+        /* Default (unselected) date/time slot fill — pushed darker than
+         * `--surface-3` so the *light* "mine" (white) and "match" (burgundy)
+         * fills pop harder against the empty chips, while still sitting clearly
+         * above the sheet (`--surface` #161616). Kept as its own token so
+         * `.btn-secondary:hover` (which uses `--surface-3`) is untouched. The
+         * light theme mirrors this in the opposite direction (see below). */
         --slot-bg: #1e1e21;
         --card-frame: #3c242b;
         --text: #e9e6e5;
@@ -82,9 +83,14 @@
         --surface: #ffffff;
         --surface-2: #ececec;
         --surface-3: #e2e2e2;
-        /* Light-theme empty slot, a touch darker than `--surface-3` so the
-         * default chips read a step deeper against the bright sheet. */
-        --slot-bg: #cccccc;
+        /* Light-theme empty slot — MIRRORS the dark theme: there the empty
+         * chip is pushed darker so the light "mine"/"match" fills pop; here the
+         * marks are dark washes, so the empty chip is pushed a touch *lighter*
+         * than `--surface-3` instead, giving the dark selected washes more room
+         * to stand out. Kept clearly below the white sheet (`--surface`
+         * #ffffff) and the page (`--bg` #f5f5f5) so the chip edge still reads
+         * inside both. */
+        --slot-bg: #e9e9e9;
         --card-frame: #f0e2e5;
         /* Light theme keeps the deep burgundy: on a bright page it is the tone
          * that reads, so these are the pre-existing values, unchanged. */
