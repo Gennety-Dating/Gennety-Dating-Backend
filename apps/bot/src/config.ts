@@ -418,7 +418,7 @@ export const env = {
   /// subscribers. Standalone per-user entitlement (`services/premium.ts`).
   PREMIUM_FEATURE_ENABLED: process.env.PREMIUM_FEATURE_ENABLED === "true",
   /// Telegram Stars (XTR) monthly price of a Gennety Premium subscription
-  /// (`subscription_period` is fixed at 30 days by Telegram). ~$10/mo ≈ 500⭐
+  /// (`subscription_period` is fixed at 30 days by Telegram). 500⭐ ≈ $11.99
   /// at user-facing rates; env-tunable at launch. Keep within Telegram's
   /// per-subscription Star ceiling.
   PREMIUM_STARS: Number(process.env.PREMIUM_STARS ?? "500"),

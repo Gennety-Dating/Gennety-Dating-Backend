@@ -29,12 +29,13 @@
 
   /* The CTA — a clean liquid-glass pill (same kit as the onboarding AI-memory
      primary): a bright brushed-silver base so dark text stays fully legible, a
-     radial top gloss, a real rim, and a soft, even glare sweep. */
+     radial top gloss, a real rim, and a soft glow that lives INSIDE the pill
+     (a gentle breathing bloom, no travelling sweep / hard lines). */
   --pm-cta-fill: linear-gradient(180deg, #fbfbfd 0%, #dcdce2 100%);
   --pm-cta-fg: #0b0b0b;
   --pm-cta-rim: rgba(255, 255, 255, 0.9);
   --pm-cta-gloss: rgba(255, 255, 255, 0.34);
-  --pm-cta-glare: rgba(255, 255, 255, 0.62);
+  --pm-cta-glow: rgba(255, 255, 255, 0.55);
 
   /* Butterfly crest — metallic vertical gradient stops. */
   --pm-bf-a: #ffffff;
@@ -65,7 +66,8 @@
   --pm-cta-fg: #ffffff;
   --pm-cta-rim: rgba(255, 255, 255, 0.26);
   --pm-cta-gloss: rgba(255, 255, 255, 0.5);
-  --pm-cta-glare: rgba(255, 255, 255, 0.42);
+  /* Light-in-the-glass bloom on the ink pill — a soft inner glow, not a sweep. */
+  --pm-cta-glow: rgba(255, 255, 255, 0.22);
 
   --pm-bf-a: #2a2a2e;
   --pm-bf-b: #050505;
@@ -378,6 +380,46 @@ body {
   color: var(--text-muted);
 }
 
+/* Always-visible "see the real places" chip pinned at the bottom of the
+   premium-venues card. A small, neat glass pill — tappable straight away, no
+   need to expand the card first. Aligned under the copy (matches the tile
+   gutter) so it reads as part of the block, not a stray button. */
+.pm-benefit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 16px 15px 76px;
+  padding: 8px 12px 8px 11px;
+  border: 1px solid var(--pm-glass-rim);
+  border-radius: 999px;
+  background: var(--pm-glass-tile);
+  box-shadow: var(--pm-glass-edge);
+  color: var(--pm-ink);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.pm-benefit-link:active {
+  transform: scale(0.96);
+  background: var(--fill);
+}
+.pm-benefit-link-ico {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.7;
+}
+.pm-benefit-link-arrow {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2;
+  opacity: 0.55;
+}
+
 .pm-more {
   margin: 16px 4px 0;
   text-align: center;
@@ -451,31 +493,22 @@ body {
     0 12px 34px rgba(0, 0, 0, 0.4);
   transition: transform 0.15s ease, opacity 0.2s ease;
 }
-/* Travelling liquid glare — a narrow, symmetric, soft-edged streak. The
-   gradient is a plain 90° band (transparent → peak → transparent) inside a
-   skewed element, so the highlight reads as one even diagonal shine with no
-   harsh edges; a light blur keeps it smooth. Animated via transform only
-   (compositor-only → no per-frame paint, no jank). */
+/* Inner glow — a soft, wide bloom that lives INSIDE the pill (no travelling
+   streak, no hard edges). A single centred radial that gently breathes, so the
+   light reads as coming from within the glass rather than sweeping across it. */
 .pm-cta::after {
   content: "";
   position: absolute;
-  top: -30%;
-  left: 0;
-  width: 30%;
-  height: 160%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    var(--pm-cta-glare) 50%,
-    transparent 100%
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    72% 130% at 50% 46%,
+    var(--pm-cta-glow) 0%,
+    transparent 66%
   );
-  transform: translateX(-220%) skewX(-18deg);
-  filter: blur(4px);
-  /* Constant-speed sweep; the glare rests fully off the right edge for the rest
-     of the cycle — same cadence + feel as the wordmark shimmer. */
-  animation: pm-glare 4.6s linear infinite;
+  opacity: 0.7;
+  animation: pm-cta-glow 5.2s ease-in-out infinite;
   pointer-events: none;
-  will-change: transform;
 }
 .pm-cta > * {
   position: relative;
@@ -569,13 +602,17 @@ body {
     background-position: 0% 0;
   }
 }
-@keyframes pm-glare {
-  0% {
-    transform: translateX(-220%) skewX(-18deg);
-  }
-  55%,
+/* The inner glow breathes: a slow, gentle swell of the bloom inside the pill —
+   never a sweep, never a hard edge. */
+@keyframes pm-cta-glow {
+  0%,
   100% {
-    transform: translateX(520%) skewX(-18deg);
+    opacity: 0.5;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.02);
   }
 }
 /* Star — a smooth twinkle: swells and dims, then settles. */
@@ -627,10 +664,10 @@ body {
   .pm-benefit-tile.is-play .icon,
   .pm-more,
   .pm-cta::after {
+    /* Keep the inner glow, just hold it still (no breathing) at a soft level. */
     animation: none !important;
-  }
-  .pm-cta::after {
-    display: none;
+    opacity: 0.55;
+    transform: none;
   }
   /* Freeze the shimmer to a legible solid so the wordmark never sits mid-fade. */
   .pm-shimmer {

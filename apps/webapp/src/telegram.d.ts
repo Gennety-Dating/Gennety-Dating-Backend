@@ -138,6 +138,11 @@ interface TelegramWebApp {
     url: string,
     callback?: (status: "paid" | "cancelled" | "failed" | "pending") => void,
   ): void;
+  /**
+   * Open an external URL (Bot API 6.1+). Used for the public Premium venue
+   * showcase — Telegram opens it in its in-app browser rather than the WebView.
+   */
+  openLink?(url: string, options?: { try_instant_view?: boolean }): void;
 }
 
 interface Window {

@@ -23,6 +23,22 @@ const lang: Lang = (["en", "ru", "uk", "de", "pl"] as const).includes(rawLang as
 
 const getInitData = (): string => app?.initData ?? "";
 
+/** Public showcase of the real venues Premium unlocks. */
+const PLACES_URL = "https://gennety.com/places";
+
+/** Open an external link via Telegram when available, else a normal new tab. */
+function openExternal(url: string): void {
+  try {
+    if (app?.openLink) {
+      app.openLink(url);
+      return;
+    }
+  } catch {
+    /* fall through */
+  }
+  window.open(url, "_blank");
+}
+
 interface Copy {
   crest: string;
   title: string;
@@ -33,6 +49,7 @@ interface Copy {
   b2t: string;
   b2d: string;
   b2x: string;
+  b2link: string; // "see the actual premium places" link label
   more: string;
   price: (p: string) => string;
   subscribe: (p: string) => string;
@@ -53,6 +70,7 @@ const COPY: Record<Lang, Copy> = {
     b2t: "Premium venues",
     b2d: "A hand-picked tier of nicer places in the venue board.",
     b2x: "Premium unlocks a separate tier of hand-picked spots — nicer, more memorable places that stay locked for everyone else. They show up on the venue board the moment your subscription is active.",
+    b2link: "See the places",
     more: "More perks are on the way.",
     price: (p) => `${p}/month · cancel anytime`,
     subscribe: (p) => `Subscribe — ${p}/mo`,
@@ -71,6 +89,7 @@ const COPY: Record<Lang, Copy> = {
     b2t: "Премиум-заведения",
     b2d: "Отобранный тир мест получше в подборе.",
     b2x: "Premium открывает отдельный тир заведений — места получше, отобранные вручную, которые для остальных закрыты. Они появляются в подборе сразу, как только подписка активна.",
+    b2link: "Посмотреть места",
     more: "Дальше будет больше.",
     price: (p) => `${p}/месяц · отмена в любой момент`,
     subscribe: (p) => `Оформить — ${p}/мес`,
@@ -89,6 +108,7 @@ const COPY: Record<Lang, Copy> = {
     b2t: "Преміум-заклади",
     b2d: "Відібраний тір кращих місць у підборі.",
     b2x: "Premium відкриває окремий тір закладів — кращі місця, відібрані вручну, які для інших закриті. Вони з’являються в підборі щойно підписка активна.",
+    b2link: "Подивитись місця",
     more: "Далі буде більше.",
     price: (p) => `${p}/місяць · скасування будь-коли`,
     subscribe: (p) => `Оформити — ${p}/міс`,
@@ -107,6 +127,7 @@ const COPY: Record<Lang, Copy> = {
     b2t: "Premium-Orte",
     b2d: "Eine handverlesene Auswahl schönerer Orte im Ortsboard.",
     b2x: "Premium schaltet eine eigene Kategorie handverlesener Orte frei — schönere, besondere Plätze, die für alle anderen gesperrt bleiben. Sie erscheinen im Ortsboard, sobald dein Abo aktiv ist.",
+    b2link: "Orte ansehen",
     more: "Mehr kommt bald.",
     price: (p) => `${p}/Monat · jederzeit kündbar`,
     subscribe: (p) => `Abonnieren — ${p}/Mon.`,
@@ -125,6 +146,7 @@ const COPY: Record<Lang, Copy> = {
     b2t: "Miejsca premium",
     b2d: "Wyselekcjonowany zestaw lepszych miejsc w tablicy.",
     b2x: "Premium odblokowuje osobny poziom ręcznie wybranych miejsc — lepszych i bardziej wyjątkowych, zamkniętych dla pozostałych. Pojawiają się w tablicy, gdy tylko subskrypcja jest aktywna.",
+    b2link: "Zobacz miejsca",
     more: "Więcej wkrótce.",
     price: (p) => `${p}/miesiąc · anulujesz kiedy chcesz`,
     subscribe: (p) => `Subskrybuj — ${p}/mies.`,
@@ -240,6 +262,7 @@ function benefitCard(
   title: string,
   short: string,
   long: string,
+  link?: { label: string; href: string },
 ): HTMLElement {
   const wrap = el("div", "pm-benefit-wrap");
 
@@ -281,6 +304,25 @@ function benefitCard(
   });
 
   wrap.append(row, panel);
+
+  // An always-visible, immediately-tappable link chip pinned to the bottom of
+  // the card (kept OUTSIDE the toggle button — nested buttons are invalid — so
+  // it opens the link without expanding the card). Used for "see the real
+  // Premium venues".
+  if (link) {
+    const chip = el("button", "pm-benefit-link") as HTMLButtonElement;
+    chip.type = "button";
+    chip.append(icon("pin", "icon pm-benefit-link-ico"));
+    chip.append(el("span", "pm-benefit-link-txt", link.label));
+    chip.append(icon("chevron", "icon pm-benefit-link-arrow"));
+    chip.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      haptic("success");
+      openExternal(link.href);
+    });
+    wrap.append(chip);
+  }
+
   return wrap;
 }
 
@@ -322,13 +364,18 @@ function renderOffer(state: PremiumState): void {
   scroll.append(hero);
 
   const list = el("div", "pm-benefits");
-  // [icon, tap-animation, title, short detail, long explanation]. Tapping a card
-  // expands the explanation; the icon stays the same but plays its own animation.
-  for (const [ico, anim, tt, dd, xx] of [
+  // [icon, tap-animation, title, short detail, long explanation, optional link].
+  // Tapping a card expands the explanation; the icon stays the same but plays
+  // its own animation. The premium-venues card also carries an always-tappable
+  // "see the places" chip that opens the public showcase.
+  const cards: Array<
+    [IconName, "twinkle" | "flutter", string, string, string, { label: string; href: string }?]
+  > = [
     ["map", "flutter", s.b1t, s.b1d, s.b1x],
-    ["star", "twinkle", s.b2t, s.b2d, s.b2x],
-  ] as const) {
-    list.append(benefitCard(ico, anim, tt, dd, xx));
+    ["star", "twinkle", s.b2t, s.b2d, s.b2x, { label: s.b2link, href: PLACES_URL }],
+  ];
+  for (const [ico, anim, tt, dd, xx, link] of cards) {
+    list.append(benefitCard(ico, anim, tt, dd, xx, link));
   }
   scroll.append(list);
   scroll.append(el("p", "pm-more", s.more));
