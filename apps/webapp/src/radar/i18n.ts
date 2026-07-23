@@ -8,7 +8,8 @@ export interface RadarStrings {
   subtitle: string;
   myType: string;
   notMyType: string;
-  whyOptional: string;
+  whyLike: string;
+  whyDislike: string;
   skipChip: string;
   preparing: string;
   finishing: string;
@@ -38,7 +39,8 @@ const STRINGS: Record<Lang, RadarStrings> = {
     subtitle: "Tap through — this only tunes who we show you. Nobody sees this.",
     myType: "My type",
     notMyType: "Not for me",
-    whyOptional: "What caught your eye? (optional)",
+    whyLike: "What caught your eye? (optional)",
+    whyDislike: "What put you off? (optional)",
     skipChip: "Skip",
     preparing: "Getting your cards ready…",
     finishing: "Saving your taste…",
@@ -54,7 +56,8 @@ const STRINGS: Record<Lang, RadarStrings> = {
     subtitle: "Просто тапай — это лишь настраивает, кого показывать. Этого никто не видит.",
     myType: "Мой типаж",
     notMyType: "Не моё",
-    whyOptional: "Что зацепило? (необязательно)",
+    whyLike: "Что зацепило? (необязательно)",
+    whyDislike: "Что не понравилось? (необязательно)",
     skipChip: "Пропустить",
     preparing: "Готовим карточки…",
     finishing: "Сохраняем твой вкус…",
@@ -80,7 +83,8 @@ const STRINGS: Record<Lang, RadarStrings> = {
     subtitle: "Просто тапай — це лише налаштовує, кого показувати. Цього ніхто не бачить.",
     myType: "Мій типаж",
     notMyType: "Не моє",
-    whyOptional: "Що зачепило? (необовʼязково)",
+    whyLike: "Що зачепило? (необовʼязково)",
+    whyDislike: "Що не сподобалося? (необовʼязково)",
     skipChip: "Пропустити",
     preparing: "Готуємо картки…",
     finishing: "Зберігаємо твій смак…",
@@ -106,7 +110,8 @@ const STRINGS: Record<Lang, RadarStrings> = {
     subtitle: "Einfach durchtippen — das steuert nur, wen wir dir zeigen. Sieht niemand.",
     myType: "Mein Typ",
     notMyType: "Nichts für mich",
-    whyOptional: "Was hat dir gefallen? (optional)",
+    whyLike: "Was hat dir gefallen? (optional)",
+    whyDislike: "Was hat dich gestört? (optional)",
     skipChip: "Überspringen",
     preparing: "Karten werden vorbereitet…",
     finishing: "Wir speichern deinen Geschmack…",
@@ -132,7 +137,8 @@ const STRINGS: Record<Lang, RadarStrings> = {
     subtitle: "Po prostu stukaj — to tylko dostraja, kogo pokazujemy. Nikt tego nie widzi.",
     myType: "Mój typ",
     notMyType: "Nie moje",
-    whyOptional: "Co przyciągnęło wzrok? (opcjonalnie)",
+    whyLike: "Co przyciągnęło wzrok? (opcjonalnie)",
+    whyDislike: "Co ci się nie spodobało? (opcjonalnie)",
     skipChip: "Pomiń",
     preparing: "Przygotowujemy karty…",
     finishing: "Zapisujemy twój gust…",

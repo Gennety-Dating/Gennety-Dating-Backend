@@ -258,7 +258,9 @@ export function App() {
 
         {phase === "chips" && pending && (
           <div className="radar-chip-panel">
-            <p className="radar-chip-q">{s.whyOptional}</p>
+            <p className="radar-chip-q">
+              {pending.verdict === "like" ? s.whyLike : s.whyDislike}
+            </p>
             <div className="radar-chip-row">
               {chips.map((c) => (
                 <button key={c.id} className="radar-chip" onClick={() => onChip(c.id)}>
