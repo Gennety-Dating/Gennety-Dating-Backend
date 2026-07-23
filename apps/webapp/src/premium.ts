@@ -417,7 +417,7 @@ async function load(): Promise<void> {
       premiumUntil: null,
       autoRenew: false,
       priceStars: 0,
-      priceDisplay: "$9.99",
+      priceDisplay: "$11.99",
     });
   }
 }

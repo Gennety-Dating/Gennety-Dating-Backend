@@ -771,7 +771,7 @@ const translations = {
     menuPremiumActive: "✨ Premium · until {date}",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "Premium unlocks the good stuff:\n\n• *Free venue changes* — swap your date spot as often as you like, no fee\n• *Premium venues* — a hand-picked tier of nicer places, unlocked in the venue board\n\nMore perks are coming. {price}/month, cancel anytime.",
+      "*Gennety Premium*\n\n• *Free venue changes* — swap your date spot as often as you like, no fee\n• *Premium venues* — a hand-picked tier of nicer places, unlocked in the venue board\n\nMore perks are coming. {price}/month, cancel anytime.",
     premiumHubActiveNote: "You're Premium ✨ Active until {date}.",
     premiumSubscribeCta: "Subscribe — {price}/mo",
     premiumManageNote: "Manage or cancel anytime in Telegram → Settings → Subscriptions.",
@@ -1560,7 +1560,7 @@ const translations = {
     menuPremiumActive: "✨ Premium · до {date}",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "Premium открывает лучшее:\n\n• *Бесплатная смена места* — меняй место свидания сколько угодно, без оплаты\n• *Премиум-заведения* — отобранный тир мест получше, открывается в подборе\n\nДальше — больше. {price}/месяц, отмена в любой момент.",
+      "*Gennety Premium*\n\n• *Бесплатная смена места* — меняй место свидания сколько угодно, без оплаты\n• *Премиум-заведения* — отобранный тир мест получше, открывается в подборе\n\nДальше — больше. {price}/месяц, отмена в любой момент.",
     premiumHubActiveNote: "У тебя Premium ✨ Активен до {date}.",
     premiumSubscribeCta: "Оформить — {price}/мес",
     premiumManageNote: "Управлять и отменить — в Telegram → Настройки → Подписки.",
@@ -2349,7 +2349,7 @@ const translations = {
     menuPremiumActive: "✨ Premium · до {date}",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
-      "Premium відкриває найкраще:\n\n• *Безкоштовна зміна місця* — змінюй місце побачення скільки завгодно, без оплати\n• *Преміум-заклади* — відібраний тір кращих місць, відкривається в підборі\n\nДалі — більше. {price}/місяць, скасування будь-коли.",
+      "*Gennety Premium*\n\n• *Безкоштовна зміна місця* — змінюй місце побачення скільки завгодно, без оплати\n• *Преміум-заклади* — відібраний тір кращих місць, відкривається в підборі\n\nДалі — більше. {price}/місяць, скасування будь-коли.",
     premiumHubActiveNote: "У тебе Premium ✨ Активний до {date}.",
     premiumSubscribeCta: "Оформити — {price}/міс",
     premiumManageNote: "Керувати та скасувати — у Telegram → Налаштування → Підписки.",
@@ -3107,7 +3107,7 @@ const deTranslations: TranslationTable = {
   menuPremiumActive: "✨ Premium · bis {date}",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
-    "Premium schaltet das Beste frei:\n\n• *Kostenlose Ortswechsel* — wechsle den Date-Ort so oft du willst, ohne Gebühr\n• *Premium-Orte* — eine handverlesene Auswahl schönerer Orte, im Ortsboard freigeschaltet\n\nMehr kommt. {price}/Monat, jederzeit kündbar.",
+    "*Gennety Premium*\n\n• *Kostenlose Ortswechsel* — wechsle den Date-Ort so oft du willst, ohne Gebühr\n• *Premium-Orte* — eine handverlesene Auswahl schönerer Orte, im Ortsboard freigeschaltet\n\nMehr kommt. {price}/Monat, jederzeit kündbar.",
   premiumHubActiveNote: "Du bist Premium ✨ Aktiv bis {date}.",
   premiumSubscribeCta: "Abonnieren — {price}/Mon.",
   premiumManageNote: "Verwalten oder kündigen jederzeit in Telegram → Einstellungen → Abos.",
@@ -3860,7 +3860,7 @@ const plTranslations: TranslationTable = {
   menuPremiumActive: "✨ Premium · do {date}",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
-    "Premium odblokowuje to, co najlepsze:\n\n• *Darmowa zmiana miejsca* — zmieniaj miejsce randki ile chcesz, bez opłat\n• *Miejsca premium* — wyselekcjonowany zestaw lepszych miejsc, odblokowany w tablicy miejsc\n\nWięcej wkrótce. {price}/miesiąc, anulujesz kiedy chcesz.",
+    "*Gennety Premium*\n\n• *Darmowa zmiana miejsca* — zmieniaj miejsce randki ile chcesz, bez opłat\n• *Miejsca premium* — wyselekcjonowany zestaw lepszych miejsc, odblokowany w tablicy miejsc\n\nWięcej wkrótce. {price}/miesiąc, anulujesz kiedy chcesz.",
   premiumHubActiveNote: "Masz Premium ✨ Aktywne do {date}.",
   premiumSubscribeCta: "Subskrybuj — {price}/mies.",
   premiumManageNote: "Zarządzaj lub anuluj w Telegram → Ustawienia → Subskrypcje.",
