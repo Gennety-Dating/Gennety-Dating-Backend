@@ -28,6 +28,8 @@ const CHIPS_EN = {
   tattoo: "Tattoos",
   beard: "The beard",
   wholeVibe: "Whole vibe",
+  tooFlashy: "Too flashy",
+  badPhoto: "Bad photo",
 };
 
 const STRINGS: Record<Lang, RadarStrings> = {
@@ -69,6 +71,8 @@ const STRINGS: Record<Lang, RadarStrings> = {
       tattoo: "Тату",
       beard: "Борода",
       wholeVibe: "Общий вайб",
+      tooFlashy: "Слишком броско",
+      badPhoto: "Плохое фото",
     },
   },
   uk: {
@@ -93,6 +97,8 @@ const STRINGS: Record<Lang, RadarStrings> = {
       tattoo: "Тату",
       beard: "Борода",
       wholeVibe: "Загальний вайб",
+      tooFlashy: "Занадто броско",
+      badPhoto: "Погане фото",
     },
   },
   de: {
@@ -117,6 +123,8 @@ const STRINGS: Record<Lang, RadarStrings> = {
       tattoo: "Tattoos",
       beard: "Bart",
       wholeVibe: "Gesamt-Vibe",
+      tooFlashy: "Zu auffällig",
+      badPhoto: "Schlechtes Foto",
     },
   },
   pl: {
@@ -141,6 +149,8 @@ const STRINGS: Record<Lang, RadarStrings> = {
       tattoo: "Tatuaże",
       beard: "Broda",
       wholeVibe: "Cały klimat",
+      tooFlashy: "Zbyt krzykliwe",
+      badPhoto: "Słabe zdjęcie",
     },
   },
 };
