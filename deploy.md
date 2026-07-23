@@ -13,6 +13,18 @@ expected second heartbeat with `eligible=2`, `unchanged=2`, no new errors, no
 six-hour unreachable cooldown; there was no reachable active chat for a live
 client rendering check.)
 
+**⚠️ Pending deploy (2026-07-22): prod runs commit `045279c`; local `main` is a
+day ahead and carries ADDITIVE schema not yet applied to prod** — venue-intent-v2
+(`matches.venue_*` columns + the new `venue_selection_logs` table + `curated_venues`
+enrichment, `8181bfb`), Type Radar (`profiles.type_radar_*`/`appearance_tags` +
+`match_score_logs.score_type`, `6cbd996`), and `subscription_ledger.note`
+(`b8b2975`). The next full deploy MUST reconcile the schema BEFORE `pm2 restart`
+(`pnpm db:drift-check` to confirm, then `pnpm --filter @gennety/db db:push
+--accept-data-loss` — the only destructive ops in the diff are dropping the dead
+`web_registration_links` table + `WebRegistrationPurpose` enum). Skipping it
+P2022 crash-loops the freshly generated client on the first `GET /v1/me` /
+"My Profile" read that touches a missing column.
+
 Prior full deploy: 2026-07-21 (**Gennety Premium launch**:
 recurring Telegram Stars + StoreKit subscription, venue-change premium tier.
 `PREMIUM_FEATURE_ENABLED=true` + `PREMIUM_STARS=500` / `PREMIUM_PRICE_USD_DISPLAY=$10`
@@ -359,8 +371,14 @@ have `pg_dump` installed.
 
 Prisma refuses to add a `@unique` column without `--accept-data-loss`, even when
 the column is brand new (it cannot know the column will be all-`NULL`). Before
-reaching for that flag, confirm the change is genuinely additive — the deploy is
-only safe if **both** hold:
+reaching for that flag, confirm the change is genuinely additive. The
+authoritative gate is `pnpm db:drift-check` (it introspects the live prod DB
+rather than diffing schema files); to SEE which DROPs `--accept-data-loss` would
+run, dump the plan with `prisma migrate diff --from-schema-datasource
+prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script` (URL
+read from env, never `--from-url`, which would leak the password into `ps` and
+pnpm's failure echo) and confirm every DROP is one you intend. The older manual
+pair below still works as a cross-check — the deploy is only safe if **both** hold:
 
 ```sh
 # 1. No column/model removals in the schema diff (empty output = additive only):
@@ -378,6 +396,15 @@ process — an unnoticed drift shows up as a PM2 restart loop, not as a clean
 error. If `pm2 status` shows a climbing restart count, check
 `grep P2022 /root/.pm2/logs/gennety-bot-error.log` before anything else; a
 `db:push` is the fix.
+
+**Mandatory drift gate before restart.** Whether or not you think the schema
+changed, confirm the production DB now matches the code schema — this turns the
+silent P2022 crash-loop above into a clean pre-restart stop:
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm db:drift-check   # exit 0 = match (safe); exit 2 = DRIFT → run db:push, re-check
+```
 
 Restart after the code and any required schema update are both in place:
 
