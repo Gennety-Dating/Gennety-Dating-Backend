@@ -128,6 +128,29 @@ describe("t (translation)", () => {
     },
   );
 
+  // Byte-identical-to-English is not the only way English leaks: a key can be
+  // *partly* translated yet keep an English interjection or tech phrase inline
+  // (e.g. "Heads up - dein Match…", "это by design", "face-match check"). Those
+  // survive the spread-inheritance guard above because the string as a whole
+  // differs from English. This catches the residue directly.
+  const ENGLISH_RESIDUE = [
+    /\bHeads up\b/i,
+    /\bby design\b/i,
+    /\bface-match check\b/i,
+  ];
+  it.each(["ru", "uk", "de", "pl"] as const)(
+    "%s carries no untranslated English interjections/tech phrases",
+    (lang) => {
+      const leaked = TRANSLATION_KEYS.filter((key) =>
+        ENGLISH_RESIDUE.some((re) => re.test(t(lang, key))),
+      );
+      expect(
+        leaked,
+        `${lang} key(s) still contain raw English: ${leaked.join(", ")}`,
+      ).toEqual([]);
+    },
+  );
+
   it("menu keys contain expected action labels in English", () => {
     expect(t("en", "menuMyProfile")).toContain("My Profile");
     expect(t("en", "menuPause")).toContain("Pause");

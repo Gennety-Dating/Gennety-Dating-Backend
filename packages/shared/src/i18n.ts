@@ -1129,7 +1129,7 @@ const translations = {
       "Верификация временно недоступна. Попробуй позже.",
     helpBody:
       "*Нужна помощь?*\n\n" +
-      "Чатов между юзерами у нас нет — это by design. " +
+      "Чатов между юзерами у нас нет — так задумано. " +
       "Проблема с мэтчем, свиданием или ботом? Пиши в саппорт:\n\n" +
       "💬 [@gennetysupport](https://t.me/gennetysupport)",
     settingsDeleteAccount: "🗑 Удалить аккаунт",
@@ -1922,7 +1922,7 @@ const translations = {
       "Верифікація тимчасово недоступна. Спробуй пізніше.",
     helpBody:
       "*Потрібна допомога?*\n\n" +
-      "Чатів між юзерами у нас немає — це by design. " +
+      "Чатів між юзерами у нас немає — так задумано. " +
       "Проблема з метчем, побаченням чи ботом? Пиши в сапорт:\n\n" +
       "💬 [@gennetysupport](https://t.me/gennetysupport)",
     settingsDeleteAccount: "🗑 Видалити акаунт",
@@ -2809,7 +2809,7 @@ const deTranslations: TranslationTable = {
     "Zeit abgelaufen - du hast deinem Match innerhalb von 24h nicht geantwortet. " +
     "Warte auf den nächsten Donnerstags-Drop.\n\n" +
     "Dein Rating wurde gesenkt, weil das Ignorieren eines Vorschlags unfair gegenüber deinem Gegenüber ist.",
-  matchExpiredYouMissedDate: "Heads up - dein Match war tatsächlich dabei. Du hast ein echtes Date verpasst.\n\n",
+  matchExpiredYouMissedDate: "Wichtig - dein Match war tatsächlich dabei. Du hast ein echtes Date verpasst.\n\n",
   matchExpiredPeerIgnored:
     "Dein Match hat innerhalb von 24h nicht geantwortet, also findet das Date nicht statt. " +
     "Wir sehen uns beim nächsten Drop.",
@@ -2889,7 +2889,7 @@ const deTranslations: TranslationTable = {
   venueVibeNoted: "Vibe notiert ✨ Jetzt wähle, von wo du kommst:",
   venueLocationNoted:
     "Startpunkt gespeichert ✨ Jetzt - welchen *Vibe* willst du? z. B. _ruhiges Cafe_, _veganer Brunch_, _Parkspaziergang_, _kleines Museum_.",
-  venueSafetyOverride: "Heads up - ich habe stattdessen ein öffentliches Cafe gewählt. Erste Dates bleiben bei uns öffentlich.",
+  venueSafetyOverride: "Kurzer Hinweis - ich habe stattdessen ein öffentliches Café gewählt. Erste Dates bleiben bei uns öffentlich.",
   venueWaitingPeer: "Deins ist da ✨ Wir warten auf sie...",
   venueSearching: "🔍 Suche euren Treffpunkt…",
   venueSearchStep2: "📍 Vergleiche eure Routen…",
@@ -3006,7 +3006,7 @@ const deTranslations: TranslationTable = {
   reportFailed: "Konnte die Meldung gerade nicht verarbeiten. Versuch es in einer Minute nochmal.",
   reportDuplicate: "Du hast dieses Match bereits gemeldet.",
   reportWarningStrike1:
-    "⚠️ Heads up: Wir haben eine Meldung zu deinem Verhalten bei einem aktuellen Match erhalten. " +
+    "⚠️ Achtung: Wir haben eine Meldung zu deinem Verhalten bei einem aktuellen Match erhalten. " +
     "Gennety erwartet respektvolles und verlässliches Verhalten. Eine weitere bestätigte Meldung sperrt deinen Account vorübergehend.",
   reportSuspendedDM:
     "🚫 Dein Account wurde wegen wiederholter Meldungen für 14 Tage gesperrt. " +
@@ -3547,7 +3547,7 @@ const plTranslations: TranslationTable = {
   matchPhotoCaption: "{name}, {age}",
   matchVerifiedLabel: "Zweryfikowano",
   matchVerifiedQuote:
-    "Zweryfikowaliśmy tę osobę. Przeszła face-match check - " +
+    "Zweryfikowaliśmy tę osobę. Przeszła naszą weryfikację twarzy - " +
     "zdjęcia w profilu pasują do jej prawdziwej tożsamości.",
   matchSynergyHeader: "💎 *Synergia {score}/99* — {reason}",
   pitchCountdownHours: "⏳ Zostało {hours}h na odpowiedź",
@@ -3562,7 +3562,7 @@ const plTranslations: TranslationTable = {
     "Czas minął - nie odpowiedziałeś/odpowiedziałaś na dopasowanie w ciągu 24h. " +
     "Poczekaj na kolejny czwartkowy drop.\n\n" +
     "Twój rating został obniżony za ignorowanie propozycji - to nie fair wobec drugiej osoby.",
-  matchExpiredYouMissedDate: "Heads up - Twoje dopasowanie było naprawdę na tak. Przegapiłeś/przegapiłaś realną randkę.\n\n",
+  matchExpiredYouMissedDate: "Ważne - Twoje dopasowanie było naprawdę na tak. Przegapiłeś/przegapiłaś realną randkę.\n\n",
   matchExpiredPeerIgnored:
     "Twoje dopasowanie nie odpowiedziało w ciągu 24h, więc randka się nie odbędzie. " +
     "Widzimy się przy kolejnym dropie.",
@@ -3642,7 +3642,7 @@ const plTranslations: TranslationTable = {
   venueVibeNoted: "Vibe zapisany ✨ Teraz wybierz, skąd będziesz jechać:",
   venueLocationNoted:
     "Punkt startowy zapisany ✨ Teraz - jaki *vibe* chcesz? np. _cicha kawiarnia_, _wegański brunch_, _spacer po parku_, _małe muzeum_.",
-  venueSafetyOverride: "Heads up - wybraliśmy publiczną kawiarnię. Pierwsze randki trzymamy w publicznych miejscach.",
+  venueSafetyOverride: "Mała uwaga - wybraliśmy publiczną kawiarnię. Pierwsze randki trzymamy w publicznych miejscach.",
   venueWaitingPeer: "Twoje zapisane ✨ Czekamy na nich...",
   venueSearching: "🔍 Szukam miejsca dla Was…",
   venueSearchStep2: "📍 Porównuję wasze trasy…",
