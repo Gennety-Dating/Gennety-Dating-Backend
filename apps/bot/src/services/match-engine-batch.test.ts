@@ -388,6 +388,83 @@ describe("scorePair", () => {
 });
 
 // ---------------------------------------------------------------------------
+// scorePair — male upward reach flows through the pair path (hetero-only)
+// ---------------------------------------------------------------------------
+
+describe("scorePair — V_league male reach", () => {
+  // Default MALE_REACH_ELO (36) — env is unset in the unit test runtime.
+  const REACH = 36;
+
+  it("forgives the reach allowance when the woman out-scores the man", () => {
+    // Woman +120 Elo. Symmetric would be leagueScore(120); the reach discounts
+    // 36 Elo before the decay, so the pair path must use the *higher* multiplier.
+    const man = makeBatchUser({ id: "m", gender: "male", preference: "women", eloScore: 440 });
+    const woman = makeBatchUser({ id: "w", gender: "female", preference: "men", eloScore: 560 });
+
+    const { breakdown } = scorePair(man, woman, 0.3);
+    expect(breakdown.league).toBeCloseTo(pairLeagueScore(440, "male", 560, "female", REACH), 10);
+    expect(breakdown.league).toBeCloseTo(leagueScore(120 - REACH), 10);
+    expect(breakdown.league).toBeGreaterThan(leagueScore(120));
+  });
+
+  it("does NOT lift when the man is the more attractive side (matching down)", () => {
+    // Man +120 above woman → unchanged symmetric penalty even through the pair.
+    const man = makeBatchUser({ id: "m", gender: "male", preference: "women", eloScore: 560 });
+    const woman = makeBatchUser({ id: "w", gender: "female", preference: "men", eloScore: 440 });
+
+    const { breakdown } = scorePair(man, woman, 0.3);
+    expect(breakdown.league).toBeCloseTo(leagueScore(120), 10);
+  });
+
+  it("keeps the symmetric penalty for same-gender pairs (no reach)", () => {
+    const a = makeBatchUser({ id: "a", gender: "male", preference: "men", eloScore: 440 });
+    const b = makeBatchUser({ id: "b", gender: "male", preference: "men", eloScore: 560 });
+
+    const { breakdown } = scorePair(a, b, 0.3);
+    expect(breakdown.league).toBeCloseTo(leagueScore(120), 10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// scorePair — V_agePref is evaluated symmetrically (each band vs the other age)
+// ---------------------------------------------------------------------------
+
+describe("scorePair — V_agePref symmetric evaluation", () => {
+  it("averages each side's stated band against the other side's actual age", () => {
+    // A (age 30) states a band [20, 22]; B's age 24 is 2 years over →
+    // A-direction agePref = 1 - 2 * 0.1 = 0.8. B has no band → B-direction 1.0.
+    // The pair breakdown must be the average of both directions = 0.9.
+    const a = makeBatchUser({
+      id: "a",
+      gender: "male",
+      preference: "women",
+      age: 30,
+      ageRangeMin: 20,
+      ageRangeMax: 22,
+    });
+    const b = makeBatchUser({
+      id: "b",
+      gender: "female",
+      preference: "men",
+      age: 24,
+      ageRangeMin: null,
+      ageRangeMax: null,
+    });
+
+    const { breakdown } = scorePair(a, b, 0.3);
+    expect(breakdown.agePref).toBeCloseTo(0.9, 5);
+  });
+
+  it("stays neutral (1.0) when neither side set a band", () => {
+    const a = makeBatchUser({ id: "a", gender: "male", preference: "women", age: 25 });
+    const b = makeBatchUser({ id: "b", gender: "female", preference: "men", age: 24 });
+
+    const { breakdown } = scorePair(a, b, 0.3);
+    expect(breakdown.agePref).toBe(1.0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // leagueScore — attractiveness (Elo) is the primary assortative gate
 // ---------------------------------------------------------------------------
 

@@ -1271,9 +1271,11 @@ export function areMutuallyCompatible(a: BatchUser, b: BatchUser): boolean {
  * Score a pair of BatchUsers using the multi-factor formula.
  * Requires the embedding distance to be pre-computed via SQL.
  *
- * The Elo league multiplier is symmetric (|delta|), so the two directions
- * agree on `V_league` even though `V_penalty` and `V_research` may differ
- * by direction.
+ * `V_league` (`pairLeagueScore`) depends only on the two (elo, gender) tuples,
+ * not on which side is "A" vs "B" — the gender-aware male-reach allowance is
+ * one-directional but order-independent — so the two scoring directions agree
+ * on `V_league` even though `V_penalty`, `V_research`, `V_agePref`, and
+ * `V_type` may differ by direction (and are averaged below).
  */
 export interface PairScoreResult {
   score: number;
