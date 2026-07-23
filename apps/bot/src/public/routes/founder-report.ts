@@ -79,7 +79,10 @@ founderReportRouter.get(
         return;
       }
       res.setHeader("Content-Type", "image/jpeg");
-      res.setHeader("Cache-Control", "private, max-age=3600");
+      // PII (real user photos) behind a token-in-URL sole-auth boundary — never
+      // let a browser retain a copy after the tab closes (matches the report
+      // page's own `no-store` above).
+      res.setHeader("Cache-Control", "private, no-store");
       res.setHeader("X-Robots-Tag", "noindex");
       res.status(200).end(buf);
     } catch {
