@@ -261,11 +261,38 @@ export async function interpretVenueIntent(
     confirmedAt: null,
     manualConfirmationRequired: payload == null || PRIVATE_SETTING.test(rawText),
   });
-  await prisma.match.update({
-    where: { id: matchId },
-    data: own.side === "A" ? { venueIntentA: asJson(draft) } : { venueIntentB: asJson(draft) },
+
+  // VENUE-1: never let a fresh interpret draft clobber an already-confirmed
+  // intent — PRODUCT_SPEC states "ordinary Telegram messages cannot
+  // overwrite it". The OpenAI call above takes 1-2s, so a naive "check the
+  // state we read in `participant()`, then write" leaves a real race window
+  // (a `confirm` call could land in that gap); take a row lock and re-check
+  // immediately before the write instead, mirroring the lock+re-check idiom
+  // used elsewhere in this codebase (e.g. `createProposedMatch`, the photo
+  // delete handler in `public/routes/me.ts`).
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRawUnsafe(
+      "SELECT id FROM matches WHERE id = $1::uuid FOR UPDATE",
+      matchId,
+    );
+    const fresh = await tx.match.findUnique({
+      where: { id: matchId },
+      select: { venueIntentA: true, venueIntentB: true },
+    });
+    const currentRaw = own.side === "A" ? fresh?.venueIntentA ?? null : fresh?.venueIntentB ?? null;
+    const current = parseStored(currentRaw);
+    if (current?.state === "confirmed") {
+      // Already locked in — echo it back unchanged rather than reverting to
+      // a draft. The route's existing `if (!intent) 409` branch is unaffected
+      // since this still returns a non-null intent.
+      return current;
+    }
+    await tx.match.update({
+      where: { id: matchId },
+      data: own.side === "A" ? { venueIntentA: asJson(draft) } : { venueIntentB: asJson(draft) },
+    });
+    return draft;
   });
-  return draft;
 }
 
 export async function confirmVenueIntent(
