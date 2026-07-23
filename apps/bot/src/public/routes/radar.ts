@@ -167,7 +167,13 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
 
     const user = await prisma.user.findUnique({
       where: { telegramId: auth.telegramId },
-      select: { id: true, age: true, preference: true, onboardingStep: true },
+      select: {
+        id: true,
+        age: true,
+        preference: true,
+        onboardingStep: true,
+        profile: { select: { typePrefTags: true } },
+      },
     });
     if (!user) {
       res.status(404).json({ error: "user-not-found" });
@@ -231,11 +237,22 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
       }
     }
 
+    // Merge onto whatever is already stored rather than replacing wholesale:
+    // a `both`-preference viewer who retakes the radar and this time rates
+    // only one set (partial client submission, or an interrupted retake)
+    // must not lose the other set's previously-compiled vector.
+    const existingTags =
+      (user.profile?.typePrefTags as Partial<Record<RadarSet, PreferenceVector>> | null) ?? {};
+    const mergedTags: Partial<Record<RadarSet, PreferenceVector>> = {
+      ...existingTags,
+      ...typePrefTags,
+    };
+
     const band = ageBandFor(user.age);
     // RadarAnswer / PreferenceVector are plain JSON-safe shapes; Prisma's
     // Json[] / Json input types don't accept our named interfaces directly.
     const answersJson = answers as unknown as Prisma.InputJsonValue[];
-    const prefTagsJson = typePrefTags as unknown as Prisma.InputJsonValue;
+    const prefTagsJson = mergedTags as unknown as Prisma.InputJsonValue;
     await prisma.profile.upsert({
       where: { userId: user.id },
       create: {

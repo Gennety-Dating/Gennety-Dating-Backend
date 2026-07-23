@@ -202,4 +202,34 @@ describe("POST /v1/radar/submit", () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("invalid-verdict");
   });
+
+  it("(RADAR-1) merges into the existing typePrefTags instead of overwriting a retake that only rates one set", async () => {
+    // A `both`-preference viewer already has a compiled male-set vector on
+    // file (e.g. from an earlier full pass); this submission only rates the
+    // female set. The previously-stored male vector must survive.
+    const existingMaleVector = { hairColor: { black: { weight: 0.4, count: 3 } } };
+    userFindUnique.mockResolvedValue({
+      id: "u1",
+      age: 24,
+      preference: "both",
+      profile: { typePrefTags: { male: existingMaleVector } },
+    });
+    profileUpsert.mockResolvedValue(undefined);
+
+    const answers = FEMALE_PHOTOS.map((p) => ({
+      photoId: p.id,
+      verdict: p.attrs.hairColor === "blonde" ? "like" : "dislike",
+    }));
+    const res = await request(buildApp())
+      .post("/v1/radar/submit")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ answers });
+
+    expect(res.status).toBe(200);
+    const arg = profileUpsert.mock.calls[0]![0];
+    // The freshly-rated female set is compiled...
+    expect(arg.update.typePrefTags.female).toBeDefined();
+    // ...and the previously-stored male set is preserved, not dropped.
+    expect(arg.update.typePrefTags.male).toEqual(existingMaleVector);
+  });
 });
