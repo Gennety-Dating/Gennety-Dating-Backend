@@ -1117,7 +1117,7 @@ async function promptPremiumUnlock(): Promise<void> {
   const open = app?.openInvoice;
   if (!open) {
     busy = false;
-    openExternal(link) || window.open(link, "_blank");
+    if (!openExternal(link)) window.open(link, "_blank");
     return;
   }
   open.call(app, link, (status) => {

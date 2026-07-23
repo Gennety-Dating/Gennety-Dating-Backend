@@ -353,14 +353,6 @@ function categoryFacets(category: string, tags: string[] = []): VenueCandidateFa
   };
 }
 
-function priceFromPlaces(value: string | null): VenueCandidateFacets["price"] {
-  if (value === "PRICE_LEVEL_FREE") return "free";
-  if (value === "PRICE_LEVEL_INEXPENSIVE") return "inexpensive";
-  if (value === "PRICE_LEVEL_MODERATE") return "moderate";
-  if (value === "PRICE_LEVEL_EXPENSIVE" || value === "PRICE_LEVEL_VERY_EXPENSIVE") return "expensive";
-  return null;
-}
-
 interface SelectionRecord {
   rank: VenueRankCandidate;
   name: string;

@@ -367,7 +367,10 @@ describe("generateVenueBlurbPrompt", () => {
     expect(result).toContain("Cosy specialty coffee bar");
     expect(result).toContain("4.6");
     expect(result).toContain("from 412 reviews");
-    expect(result).toContain("quiet, vegan");
+    // Venue Intent V2 (8181bfb): the pair's requested vibe keywords are NOT
+    // venue evidence, so they must never be fed to the grounded blurb — feeding
+    // "quiet, vegan" would let the model claim the venue itself is quiet/vegan.
+    expect(result).not.toContain("quiet, vegan");
     expect(result).toContain("coffee shop");
   });
 
