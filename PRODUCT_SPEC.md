@@ -1655,6 +1655,45 @@ The blind-decision, no-in-app-chat, 3 km commute, open-at-slot, and fairness
 invariants are all unaffected; premium venues still pass every non-price gate.
 Telegram-first; iOS in parallel.
 
+### 3.9 Referral Program (feature-flagged)
+
+An optional referral program ("Give a date, get a date"), gated by
+`REFERRAL_FEATURE_ENABLED` (default **off**); it pays rewards in Date Tickets
+AND complimentary Premium months, so it rides the already-on
+`TICKET_FEATURE_ENABLED` + `PREMIUM_FEATURE_ENABLED`. Full spec:
+[REFERRAL_PRODUCT_SPEC.md](REFERRAL_PRODUCT_SPEC.md).
+
+- **Killer angle.** A ticket is a real date and matching is same-city, so every
+  verified friend also grows the local pool that decides whether the referrer
+  themselves gets matched — the reward is framed as *"give a date, get a date"*.
+- **Trigger = verification.** The referrer is paid only when an invited friend
+  reaches `verificationStatus='verified'` — the same anti-fraud gate (Persona +
+  `phone @unique`) that admits a user to matching, so the reward condition IS
+  the "real, matchable human" condition. The `verified` settlement
+  (`grantReferralRewardsForVerifiedInvitee`) is exactly-once across every path
+  (pipeline `verified` branch + pull/rerun short-circuit) and covers mobile
+  invitees (not gated on `telegramId`).
+- **Invitee reward.** A fixed **1 month of Gennety Premium**
+  (`REFERRAL_INVITEE_PREMIUM_MONTHS`), granted + active at a wow screen shown as
+  the second-to-last screen of the first onboarding Mini App (before the
+  AI-memory choice). Safe pre-verification because Premium's only benefit
+  (venue-change) requires a scheduled date.
+- **Referrer reward.** A milestone ladder (`REFERRAL_LADDER`, default cumulative
+  1/1, 2/2, 3/3, 5/5 tickets+months at 1/3/5/10 verified friends), each rung
+  idempotent via a unique ledger id. The referral Mini App shows the ladder with
+  the dollar value at each rung. A per-referrer 24h velocity guard
+  (`REFERRAL_DAILY_REWARD_CAP`) **holds** (never denies) rewards during a
+  suspicious burst; held rungs self-heal on the next event.
+- **Attribution.** First-touch `User.referralSource = referral:<referrerId>`
+  from a `?start=referral_<id>` deep link (Telegram) or `POST /v1/me/referral/claim`
+  code (iOS); never overwritten. Self-referral (by id or shared verified phone)
+  is blocked.
+- **Rewards reuse the wallet/entitlement ledgers** (`ticket_ledger`
+  `referral_milestone` + `subscription_ledger` `referral`) with the additive
+  `grantComplimentaryPremiumMonths` (extends `premiumUntil` additively without
+  clobbering a real recurring anchor). No new tables; the blind-decision,
+  no-in-app-chat, and ledger exactly-once invariants are unaffected.
+
 ## Phase 4 — Date Lifecycle
 
 Driven by `services/date-lifecycle.ts` + `services/pre-date-safety.ts`,

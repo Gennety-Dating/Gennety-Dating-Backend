@@ -204,7 +204,8 @@ Columns (≈ 35; grouped by purpose):
 | Verification | `verificationStatus`, `personaInquiryId` (unique), `verifiedAt`, `verificationSkippedAt`, `verifiedSelfiePath`, `faceMatchScore`, `faceMatchedAt`, `selfiePath` (legacy). Matching admits only `verified` plus the persisted pre-flip cohort (`unverified` with non-null `verificationSkippedAt`). Production-like startup fails closed unless Persona is live/mandatory and Rekognition/profile-media validation are enabled. |
 | Attribution | `referralSource` (`tg:start_param` / `mobile:utm=…` / `referral:USER_ID`) |
 | Tickets (feature-flagged) | `ticketBalance` — materialized ticket-wallet balance; running sum of `TicketLedger.delta` (see `ticket_ledger`). `ticketDiscountPct` / `ticketDiscountGrantedAt` / `ticketDiscountExpiresAt` / `ticketDiscountConsumedAt` — one-time famine single-ticket discount (PRODUCT_SPEC §3.5b; active ⇔ `pct > 0 AND consumedAt IS NULL AND expiresAt > now`), owned by `services/ticket-discount.ts`. |
-| Premium (feature-flagged) | `premiumUntil` / `premiumSince` / `premiumProvider` (`telegram_stars`\|`app_store`) / `premiumAutoRenew` / `premiumExternalId` — Gennety Premium subscription head (PRODUCT_SPEC §3.8 / §Premium). Materialized from the append-only `subscription_ledger`; active ⇔ `premiumUntil > now`. `premiumExternalId` is the recurring anchor (Stars charge id / App Store `originalTransactionId`) used to reconcile renewals + find the owner from a webhook. Owned by `services/premium.ts`; inert-to-write unless `PREMIUM_FEATURE_ENABLED`, but an existing entitlement is honored regardless of the flag. |
+| Premium (feature-flagged) | `premiumUntil` / `premiumSince` / `premiumProvider` (`telegram_stars`\|`app_store`\|`referral`) / `premiumAutoRenew` / `premiumExternalId` — Gennety Premium subscription head (PRODUCT_SPEC §3.8 / §Premium). Materialized from the append-only `subscription_ledger`; active ⇔ `premiumUntil > now`. `premiumExternalId` is the recurring anchor (Stars charge id / App Store `originalTransactionId`) used to reconcile renewals + find the owner from a webhook. Owned by `services/premium.ts`; inert-to-write unless `PREMIUM_FEATURE_ENABLED`, but an existing entitlement is honored regardless of the flag. `provider: "referral"` marks a complimentary comp grant (`grantComplimentaryPremiumMonths`) that never sets an auto-renew anchor. |
+| Referral (feature-flagged) | `referralVerifiedCount` (referrer's materialized tally of invited friends who cleared verification — the milestone-ladder progress), `referralCountedAt` (invitee-side once-marker: this user was already counted toward their referrer, CAS null→now), `referralInviteePremiumAt` (invitee-side once-marker for the welcome Premium month). Referral program (PRODUCT_SPEC §3.9 / `REFERRAL_PRODUCT_SPEC.md`), owned by `services/referral.ts`; rewards themselves live in `ticket_ledger` (`referral_milestone`) + `subscription_ledger` (`referral`). Inert unless `REFERRAL_FEATURE_ENABLED`. |
 
 Indexes: `(status, reEngagementNextAt)`, `(status, suspendedUntil)`.
 
@@ -403,7 +404,7 @@ wrappers before a rejected asset can be committed to `profiles`.
 
 Append-only audit of every ticket-wallet movement or payment/refund transition
 (`userId`, `delta`, `reason` ∈ `photo_bonus`/`video_bonus`/`student_bonus`/
-`welcome_gift`/`store_purchase`/`spend_match`/`refund`/`gate_payment`/
+`referral_milestone`/`welcome_gift`/`store_purchase`/`spend_match`/`refund`/`gate_payment`/
 `gate_processing`/`gate_settled`/`gate_surplus_pending`/
 `gate_refund_pending`/`gate_refunded`, plus the retired legacy
 `verification_bonus` that survives only on historical rows and is never written
@@ -430,7 +431,8 @@ Inert unless `TICKET_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §
 ### `subscription_ledger` (feature-flagged)
 
 Append-only audit of every Gennety Premium subscription movement (`userId`,
-`provider` ∈ `telegram_stars`/`app_store`, `event` ∈
+`provider` ∈ `telegram_stars`/`app_store`/`referral` (the last a complimentary
+comp grant — referral reward, no auto-renew anchor), `event` ∈
 `started`/`renewed`/`cancelled`/`expired`/`refunded`, unique `externalPaymentId`,
 `periodStart`/`periodEnd`, `amount`/`currency`, optional `note`, `createdAt`;
 `onDelete: Cascade`
@@ -566,6 +568,8 @@ auth) are deliberately outside the spec.
 | POST | `/v1/auth/refresh` | Rotate refresh token |
 | GET / PATCH / DELETE | `/v1/me` | Read / patch / delete current user. DELETE shares the Telegram GDPR workflow: strict owned-media cleanup + active-match partner notification + founder-report purge before relational cascade; returns 503 and preserves the account if storage erasure is unavailable. |
 | POST | `/v1/me/home-location` | Persist canonical dating city (`homeCityKey`) + coordinates for match eligibility |
+| GET | `/v1/me/referral` | Referral ladder state for the native app (§3.9): progress + per-rung $ value + invite link. JWT; 404 when `REFERRAL_FEATURE_ENABLED` off. Shares the `buildReferralStateView` assembler with the Mini App `/v1/referral/state`. |
+| POST | `/v1/me/referral/claim` | Attribute this (mobile) user to a referrer by code (§3.9, iOS entry). First-touch + guarded (self-referral / unknown / already-attributed rejected). JWT. |
 | PATCH | `/v1/me/status` | Native-app pause/resume toggle: `active→paused`, `paused→active`, plus `frozen→active` (mobile twin of the /start silent reactivation). Idempotent same-state; 409 for states owned by other flows. |
 | POST | `/v1/me/freeze` | Native-app freeze (Telegram Settings parity): cancel in-flight matches with partner comp, keep profile/verification intact, flip to `frozen`; idempotent. |
 | POST | `/v1/me/location` | Persist raw home-base lat/lng for Meet-Halfway; does not by itself unlock matching |
@@ -624,6 +628,9 @@ auth) are deliberately outside the spec.
 | POST | `/v1/webhooks/persona` | Persona inquiry webhook (HMAC of raw body, mounted **before** `express.json`) |
 | GET  | `/v1/premium/state` | Gennety Premium Mini App state — `{active, premiumUntil, autoRenew, provider, priceStars, priceDisplay}`. Telegram `initData` HMAC auth; feature-flagged (`PREMIUM_FEATURE_ENABLED`, else 404). See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.8. |
 | POST | `/v1/premium/stars-invoice` | Mint the recurring Telegram Stars subscription invoice link (`createInvoiceLink` + `subscription_period=2592000`, payload `sub:premium`), opened via `WebApp.openInvoice`; settled + auto-renewed by the `successful_payment` handler. `initData` HMAC auth; 404 when feature off. |
+| GET | `/v1/referral/state` | Referral Mini App ladder (§3.9): progress + per-rung $ value + invite link. `initData` HMAC auth; feature-flagged (`REFERRAL_FEATURE_ENABLED`, else 404). |
+| POST | `/v1/referral/share-message` | Mint a `savePreparedInlineMessage` (branded photo card via `GET /card`, or a text article fallback) for one-tap `WebApp.shareMessage` forwarding. `initData` HMAC auth. |
+| GET | `/v1/referral/card` | **Public** HMAC-signed (`?u=&sig=`) invite-card PNG that Telegram fetches to render the shared photo (satori→resvg, `services/referral-card`). No initData — the signature ties it to a bot-minted share. |
 | POST | `/v1/premium/appstore/transaction` | Native-app StoreKit 2 auto-renewable subscription report (JWT — mounted before the initData `/v1/premium` router): client JWS decoded ONLY for the transactionId, authoritative state re-fetched from the App Store Server API; activates/extends Premium to Apple's `expiresDate` exactly-once via `SubscriptionLedger.externalPaymentId = appstore:<txId>`. Renewals also arrive on `/v1/webhooks/appstore` (routed by product). 404 while `PREMIUM_FEATURE_ENABLED` off; 503 without `APPSTORE_*` config. |
 
 ## Admin `/admin/*` API Surface

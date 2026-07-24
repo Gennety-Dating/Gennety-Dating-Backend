@@ -959,6 +959,32 @@ Required/high-impact env keys:
     reworked `venue-change.html`). No new system dependency. Rollback: flip
     `PREMIUM_FEATURE_ENABLED` off; the additive columns/table may stay. An
     entitlement already granted stays valid regardless of the flag.
+- Referral program (feature-flagged, "Give a date, get a date", see
+  `REFERRAL_PRODUCT_SPEC.md`): `REFERRAL_FEATURE_ENABLED` (default `false` —
+  leave off until launch). Rides the already-on `TICKET_FEATURE_ENABLED` +
+  `PREMIUM_FEATURE_ENABLED` (it pays rewards in Date Tickets AND complimentary
+  Premium months). Tunables: `REFERRAL_INVITEE_PREMIUM_MONTHS` (default `1`, the
+  invited user's welcome Premium month shown on the onboarding wow screen),
+  `REFERRAL_LADDER` (default `1:1:1,3:1:1,5:1:1,10:2:2` =
+  `<count>:<ticketsDelta>:<monthsDelta>`, the referrer's milestone ladder —
+  cumulative 1/1, 2/2, 3/3, 5/5), and `REFERRAL_DAILY_REWARD_CAP` (default `3`,
+  a per-referrer 24h anti-fraud reward-hold that matters while Persona is
+  sandbox). The reward fires at the invited friend's **verification** (the
+  anti-fraud gate); the invitee's Premium month is granted at the onboarding
+  screen. **Requires `db:push` of the additive `users.referral_verified_count`
+  (default 0) / `referral_counted_at` / `referral_invitee_premium_at` columns
+  first** (non-destructive; the referrer tally + invitee once-markers). Rewards
+  reuse `ticket_ledger` (`referral_milestone`) + `subscription_ledger`
+  (`referral`) — no new tables. Also **redeploy the Mini App bundle**
+  (`referral.html` ships with the Vite build — the referrer ladder + one-tap
+  share). Uses `BOT_USERNAME` (invite deep link) + `PUBLIC_BASE_URL` (the public
+  HMAC-signed `GET /v1/referral/card` image Telegram fetches for the shared
+  photo) — both already set. The branded share card reuses the date/match-card
+  satori stack + bundled fonts (no new system dependency); a render failure
+  degrades the share to a rich text article. Runs inline at verification / the
+  onboarding screen — no new cron. iOS: `GET/POST /v1/me/referral*` (JWT) +
+  `features.referral` in `/v1/app/config`. Rollback: flip the flag off; the
+  additive columns may stay. Telegram-first; iOS attribution via a referral code.
 - Date card (feature-flagged): `DATE_CARD_FEATURE_ENABLED` (default `false` —
   leave off until launch). When on, each side's `scheduled` confirmation is a
   rendered PNG date card (partner photo + venue photo + details) sent
