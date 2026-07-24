@@ -424,8 +424,10 @@ bot.start({
       MATCH_NUDGE_CRON_SCHEDULE,
       guardedTick("match-nudge", () =>
         matchNudgeTick(bot.api).then((r) => {
-          if (r.proposalNudges > 0 || r.schedNudges > 0) {
-            console.log(`[match-nudge] proposal=${r.proposalNudges} sched=${r.schedNudges}`);
+          if (r.proposalNudges > 0 || r.schedNudges > 0 || r.deadlineNudges > 0) {
+            console.log(
+              `[match-nudge] proposal=${r.proposalNudges} sched=${r.schedNudges} deadline=${r.deadlineNudges}`,
+            );
           }
         }),
       ),

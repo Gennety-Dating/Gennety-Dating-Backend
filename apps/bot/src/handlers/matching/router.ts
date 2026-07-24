@@ -5,6 +5,7 @@ import {
   handleMatchDecision,
   promptDeclineConfirm,
   handleDeclineBack,
+  handleCountdownTap,
 } from "./decision.js";
 import { handleProposalTextReply } from "./decision-text.js";
 import { handleDeclineReasonCallback } from "./decline-feedback.js";
@@ -58,6 +59,11 @@ matchingRouter.use(async (ctx, next) => {
   // Backed out of the Pass confirmation card — no state change.
   if (data?.startsWith("match:keep:")) {
     await handleDeclineBack(ctx);
+    return;
+  }
+  // Tap on the live reply-deadline countdown button — informational toast.
+  if (data?.startsWith("match:countdown:")) {
+    await handleCountdownTap(ctx);
     return;
   }
 

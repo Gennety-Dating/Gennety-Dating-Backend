@@ -47,9 +47,35 @@ export function renderCountdownPlate(
 }
 
 /**
- * Append the plate to a pitch text, separated by a blank line. Used at
- * dispatch and re-used by the worker when rebuilding the message body for
- * `editMessageText`.
+ * Render the label for the live "reply deadline" inline button that rides the
+ * pitch keyboard (2026-07-23). Unlike {@link renderCountdownPlate} (a body-text
+ * plate with hourly, ceil-hours granularity), this shows hours+minutes so the
+ * button visibly ticks every worker pass — the countdown reads as *alive*, the
+ * way the pinned status-banner button does. The proposal-countdown worker
+ * edits ONLY this button's markup, so the pitch body (synergy header + text)
+ * is never rewritten.
+ *
+ * Caller guarantees `minutesLeft > 0` (past-TTL rows are left to the expiry
+ * job, which clears the keyboard); we clamp defensively anyway.
+ */
+export function renderCountdownButtonLabel(
+  lang: Language,
+  minutesLeft: number,
+): string {
+  const safe = Math.max(minutesLeft, 0);
+  if (safe >= 60) {
+    const h = Math.floor(safe / 60);
+    const m = safe % 60;
+    return t(lang, "pitchDeadlineBtnHm", { h, m });
+  }
+  return t(lang, "pitchDeadlineBtnMin", { m: safe });
+}
+
+/**
+ * Append the plate to a pitch text, separated by a blank line. Retained for the
+ * mobile/legacy body-text rendering and its tests; the Telegram pitch now
+ * carries the countdown as an inline button (see
+ * {@link renderCountdownButtonLabel}) instead of appending this plate.
  */
 export function appendCountdownPlate(
   pitchBody: string,

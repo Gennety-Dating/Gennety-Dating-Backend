@@ -1,7 +1,6 @@
-import type { Api, RawApi } from "grammy";
+import { InlineKeyboard, type Api, type RawApi } from "grammy";
 import type {
   InlineKeyboardMarkup,
-  InlineKeyboardButton,
   MessageEntity,
 } from "grammy/types";
 import { prisma } from "@gennety/db";
@@ -16,7 +15,7 @@ import {
 } from "../../services/pitch-generator.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
 import {
-  appendCountdownPlate,
+  renderCountdownButtonLabel,
   PROPOSAL_TTL_MS,
 } from "../../utils/countdown-plate.js";
 import {
@@ -77,17 +76,28 @@ export interface SendMatchProposalOptions {
  * Report affordance stays on the pitch itself; the `match:accept:` /
  * `match:decline:` callback handlers remain live for confirm cards and for
  * legacy in-flight pitches sent before this change.
+ *
+ * When `minutesLeft` is supplied (> 0), a live **reply-deadline** button is
+ * prepended in the native `primary` style — the same look as the pinned
+ * status-banner countdown (2026-07-23). The proposal-countdown worker
+ * re-renders THIS keyboard every 5 min via `editMessageReplyMarkup`, so the
+ * countdown ticks on the button instead of as buried body text. Tapping it is
+ * informational (`match:countdown:` → a toast). Omit `minutesLeft` for confirm
+ * cards / static contexts, which keep just the Report row (unchanged shape).
  */
 export function buildMatchKeyboard(
   matchId: string,
   lang: Language,
+  minutesLeft?: number,
 ): InlineKeyboardMarkup {
-  const reportBtn: InlineKeyboardButton.CallbackButton = {
-    text: t(lang, "reportBtn"),
-    callback_data: `report:open:${matchId}`,
-  };
-
-  return { inline_keyboard: [[reportBtn]] };
+  const kb = new InlineKeyboard();
+  if (minutesLeft != null && minutesLeft > 0) {
+    kb.text(renderCountdownButtonLabel(lang, minutesLeft), `match:countdown:${matchId}`)
+      .primary()
+      .row();
+  }
+  kb.text(t(lang, "reportBtn"), `report:open:${matchId}`);
+  return kb;
 }
 
 /** Static fallback glyph rendered before the localised "Verified" label
@@ -465,10 +475,10 @@ export async function sendMatchProposal(
     });
   }
 
-  // Append the live "⏳ 24h left" plate to the visible (final) chunk so it
-  // ships with the proposal and can be live-edited by the countdown worker.
-  // The plate format is owned by `countdown-plate.ts` so the worker's no-op
-  // cache can compare byte-for-byte against the rendered plate.
+  // The live "⏳ Reply: Xh Ym" countdown now rides an inline *button* on the
+  // pitch keyboard (below), NOT the message body — the proposal-countdown
+  // worker re-renders only that button via `editMessageReplyMarkup`, so the
+  // synergy header + streamed pitch text are never rewritten.
   const initialMinutes = Math.floor(PROPOSAL_TTL_MS / 60_000);
   const chunksA = splitPitchIntoDrafts(pitchForA);
   const chunksB = splitPitchIntoDrafts(pitchForB);
@@ -487,14 +497,12 @@ export async function sendMatchProposal(
     synergyScore != null && synergyReason
       ? t(langB, "matchSynergyHeader", { score: synergyScore, reason: synergyReason })
       : "";
-  const lastWithSynergyA = synergyHeaderA ? `${synergyHeaderA}\n\n${lastA}` : lastA;
-  const lastWithSynergyB = synergyHeaderB ? `${synergyHeaderB}\n\n${lastB}` : lastB;
-  const finalA = appendCountdownPlate(lastWithSynergyA, langA, initialMinutes);
-  const finalB = appendCountdownPlate(lastWithSynergyB, langB, initialMinutes);
+  const finalA = synergyHeaderA ? `${synergyHeaderA}\n\n${lastA}` : lastA;
+  const finalB = synergyHeaderB ? `${synergyHeaderB}\n\n${lastB}` : lastB;
   // The deadline notice is streamed right after the headline so the user
-  // sees the irreversibility warning before any analysis fluff. Plain-text
-  // chunk — the live countdown plate is appended only to the FINAL chunk
-  // because that's the message the worker live-edits.
+  // sees the irreversibility warning before any analysis fluff. The live
+  // countdown rides the keyboard button (below), so the FINAL chunk is just
+  // the synergy header + pitch text — the worker never rewrites this body.
   const draftsA = [
     t(langA, "matchHeadline"),
     t(langA, "matchDeadlineNotice"),
@@ -515,8 +523,8 @@ export async function sendMatchProposal(
   // shimmer beat of the AI-compose stream.
   const thinkingIndex = 2;
 
-  const kbA = buildMatchKeyboard(matchId, langA);
-  const kbB = buildMatchKeyboard(matchId, langB);
+  const kbA = buildMatchKeyboard(matchId, langA, initialMinutes);
+  const kbB = buildMatchKeyboard(matchId, langB, initialMinutes);
 
   // Each user sees their PARTNER's photo + name/age caption — the visual
   // anchor for an Accept/Decline decision since there's no user-to-user

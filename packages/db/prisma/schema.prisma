@@ -871,6 +871,10 @@ model Match {
   /// proposal nudge doesn't dead-letter the scheduling phase's nudge cadence.
   schedNudge1SentAt    DateTime? @map("sched_nudge1_sent_at")
   schedNudge2SentAt    DateTime? @map("sched_nudge2_sent_at")
+  /// Deadline-anchored proposal reminder: one nudge fired ~2h BEFORE the 24h
+  /// TTL expires (not anchored to dispatch like the two above), sent only to
+  /// sides that still haven't decided. Idempotency marker for that single DM.
+  proposalDeadlineNudgeSentAt DateTime? @map("proposal_deadline_nudge_sent_at")
 
   /// Phase 4 mobile: personalised ice-breakers persisted per side so the
   /// Expo app can display the same topics that Telegram users receive via DM.

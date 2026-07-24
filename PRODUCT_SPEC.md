@@ -923,9 +923,9 @@ for the dashboard's algorithm-quality view.
   path (`streamDraftsToChat(..., { rich: true })` → `streamRichDraftsToChat`):
   the headline/deadline/pitch chunks render as growing rich-message drafts with a
   `<tg-thinking>` shimmer beat (`matchStreamStart`), then the FINAL chunk is
-  persisted as a **plain `sendMessage`** carrying the inline Accept/Decline
-  keyboard — it stays a normal text message so the countdown worker's
-  `editMessageText` keeps working against the same `pitchMessageId{A,B}`.
+  persisted as a **plain `sendMessage`** carrying the pitch keyboard — it stays
+  a normal text message so the countdown worker's `editMessageReplyMarkup` keeps
+  re-rendering the live countdown button against the same `pitchMessageId{A,B}`.
   Degrades to the classic edited-message stream when a client can't render rich
   drafts.
 - An explicit `matchDeadlineNotice` follows the headline: **24 h** to reply,
@@ -955,8 +955,14 @@ for the dashboard's algorithm-quality view.
   in-flight pitches dispatched before this change. Telegram-only; the mobile
   `POST /v1/matches/:id/decision` path is unchanged (client-side confirmation
   is the app's concern).
-- The `proposal-countdown` worker live-edits a "⏳ Xh left" plate every
-  5 min — hourly during the first 23 h, then per-5-min during the final hour.
+- The `proposal-countdown` worker re-renders a live **reply-deadline button**
+  on the pitch keyboard every 5 min via `editMessageReplyMarkup` (styled
+  `primary`, like the pinned status-banner countdown). The label shows
+  hours+minutes ("⏳ Reply: Xh Ym"), so it visibly ticks every pass instead of
+  only moving once an hour; tapping it (`match:countdown:`) answers an
+  informational toast (the decision stays conversational). Because only the
+  keyboard is edited, the pitch body (synergy header + streamed text) is never
+  rewritten. Mobile users render their own countdown from the public API.
 
 ### 3.4 Blind Decision Invariant + Peer Nudge
 
@@ -994,17 +1000,25 @@ result to the *decliner's* `Profile.negativeConstraints`.
 
 ### 3.5 Match nudges
 
-`workers/match-nudge.ts` sends two cadence pairs (`MATCH_NUDGE_CRON_SCHEDULE = "0 * * * *"`),
-both honouring quiet hours:
+`workers/match-nudge.ts` sends two cadence pairs plus a deadline heads-up
+(`MATCH_NUDGE_CRON_SCHEDULE = "0 * * * *"`), all honouring quiet hours:
 
 - **Proposal phase** (status `proposed`, awaiting decision) — ≥3 h after
   `dispatchedAt`, then ≥10 h.
 - **Scheduling phase** (status `negotiating`, both accepted, no agreed slot)
   — ≥6 h since last update, then ≥12 h.
+- **Deadline nudge** (status `proposed`) — one final "your window closes in
+  about Xh, decide now" DM fired **~2 h before the 24 h TTL expires**
+  (`PROPOSAL_DEADLINE_NUDGE_LEAD_MS`), anchored to the *deadline* rather than
+  dispatch. Sent only to sides still genuinely undecided (`acceptedBy* IS NULL`
+  — a side that already declined committed irreversibly and is never nagged),
+  Telegram-only, static i18n copy so the "Xh" stays accurate. Idempotent via
+  `Match.proposalDeadlineNudgeSentAt`.
 
-Each cadence has its own pair of timestamp columns
-(`proposalNudge1/2SentAt`, `schedNudge1/2SentAt`) so a row that already got
-a proposal nudge cannot dead-letter the scheduling-phase cadence.
+Each cadence has its own timestamp column(s)
+(`proposalNudge1/2SentAt`, `schedNudge1/2SentAt`, `proposalDeadlineNudgeSentAt`)
+so a row that already got a proposal nudge cannot dead-letter the
+scheduling-phase or deadline cadence.
 
 ### 3.5b Date Ticket Gate (feature-flagged monetization)
 
@@ -1766,8 +1780,10 @@ Other safeguards:
 
 23:00–09:00 Europe/Kyiv. Enforced inside the **re-engagement** and
 **match-nudge** workers (deferred to next 13:00 / next allowed window).
-Pinned status-banner edits and the proposal-countdown plate are exempt
-(no notifications) — they only re-edit existing messages.
+Pinned status-banner edits and the proposal-countdown button re-render are
+exempt (no notifications) — they only re-edit an existing message's markup.
+(The match-nudge deadline heads-up IS a notification, so it stays under the
+quiet-hours guard like the other nudges.)
 
 ### Standby / Starvation
 

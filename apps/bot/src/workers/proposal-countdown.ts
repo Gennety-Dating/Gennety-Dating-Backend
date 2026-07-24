@@ -4,7 +4,7 @@ import { prisma } from "@gennety/db";
 import type { Language } from "@gennety/shared";
 import {
   minutesLeftFromDispatch,
-  renderCountdownPlate,
+  renderCountdownButtonLabel,
 } from "../utils/countdown-plate.js";
 import { buildMatchKeyboard } from "../handlers/matching/pitch.js";
 
@@ -12,15 +12,19 @@ import { buildMatchKeyboard } from "../handlers/matching/pitch.js";
  * Live countdown worker for `proposed` match pitches.
  *
  * Runs every 5 minutes (see `PROPOSAL_COUNTDOWN_CRON_SCHEDULE` in
- * index.ts). For each open proposal:
- *   1. Compute the per-side rendered plate text using the shared helper
- *      in `countdown-plate.ts`. The ceil-hours / raw-minutes split there
- *      naturally produces the product cadence: hourly edits during the
- *      first 23 hours, then 5-minute edits in the final hour.
- *   2. Skip the edit when the rendered plate matches the in-memory cache
+ * index.ts). For each open proposal it re-renders the pitch keyboard's
+ * live **reply-deadline button** (2026-07-23):
+ *   1. Compute the per-side button label (hours+minutes) via the shared
+ *      helper in `countdown-plate.ts`. Hours+minutes means the label
+ *      changes on every 5-minute tick, so the countdown visibly ticks —
+ *      the way the pinned status-banner button does — instead of only
+ *      moving once an hour.
+ *   2. Skip the edit when the rendered label matches the in-memory cache
  *      (no-op on Telegram, no quota burned).
- *   3. `editMessageText` rebuilds the message body as `pitch + plate` and
- *      re-applies the Accept/Decline keyboard.
+ *   3. `editMessageReplyMarkup` re-applies ONLY the keyboard. The pitch
+ *      body (synergy header + streamed text) is never rewritten — this
+ *      replaces the old `editMessageText` path that rebuilt the whole body
+ *      as `pitch + plate` and clobbered the synergy header on first tick.
  *
  * Sides that already accepted are skipped — only the proposer's UI for
  * the other (still-pending) half keeps ticking. Sides whose pitch DM
@@ -60,8 +64,8 @@ interface PendingEdit {
   telegramId: bigint;
   messageId: number;
   lang: Language;
-  body: string;
-  plate: string;
+  minutesLeft: number;
+  label: string;
   cacheKey: string;
 }
 
@@ -90,8 +94,6 @@ export async function proposalCountdownTick(
     select: {
       id: true,
       dispatchedAt: true,
-      pitchForA: true,
-      pitchForB: true,
       pitchMessageIdA: true,
       pitchMessageIdB: true,
       acceptedByA: true,
@@ -122,16 +124,14 @@ export async function proposalCountdownTick(
     for (const side of ["A", "B"] as const) {
       const messageId = side === "A" ? match.pitchMessageIdA : match.pitchMessageIdB;
       const accepted = side === "A" ? match.acceptedByA : match.acceptedByB;
-      const pitch = side === "A" ? match.pitchForA : match.pitchForB;
       const user = side === "A" ? match.userA : match.userB;
       if (messageId == null) continue;
       if (accepted === true) continue;
-      if (!pitch) continue;
 
       const lang: Language = (user.language as Language) ?? "en";
-      const plate = renderCountdownPlate(lang, minutesLeft);
+      const label = renderCountdownButtonLabel(lang, minutesLeft);
       const cacheKey = `${match.id}:${side}`;
-      if (cache.get(cacheKey) === plate) {
+      if (cache.get(cacheKey) === label) {
         result.skippedSameText++;
         continue;
       }
@@ -142,8 +142,8 @@ export async function proposalCountdownTick(
         telegramId: user.telegramId,
         messageId,
         lang,
-        body: pitch,
-        plate,
+        minutesLeft,
+        label,
         cacheKey,
       });
     }
@@ -160,15 +160,11 @@ export async function proposalCountdownTick(
       windowStart = Date.now();
     }
 
-    const finalText = `${edit.body}\n\n${edit.plate}`;
     try {
-      await api.editMessageText(
-        Number(edit.telegramId),
-        edit.messageId,
-        finalText,
-        { reply_markup: buildMatchKeyboard(edit.matchId, edit.lang) },
-      );
-      cache.set(edit.cacheKey, edit.plate);
+      await api.editMessageReplyMarkup(Number(edit.telegramId), edit.messageId, {
+        reply_markup: buildMatchKeyboard(edit.matchId, edit.lang, edit.minutesLeft),
+      });
+      cache.set(edit.cacheKey, edit.label);
       result.edited++;
       editsThisSecond++;
     } catch (err) {
@@ -176,7 +172,7 @@ export async function proposalCountdownTick(
         err instanceof GrammyError &&
         err.description.toLowerCase().includes("message is not modified")
       ) {
-        cache.set(edit.cacheKey, edit.plate);
+        cache.set(edit.cacheKey, edit.label);
         result.skippedSameText++;
         continue;
       }

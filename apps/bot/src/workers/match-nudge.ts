@@ -1,9 +1,10 @@
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import { VOICE_CORE } from "@gennety/shared";
+import { VOICE_CORE, t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
 import { openaiFetch } from "../services/openai-fetch.js";
+import { PROPOSAL_TTL_MS } from "../utils/countdown-plate.js";
 import { isQuietHours } from "./quiet-hours.js";
 
 /**
@@ -28,6 +29,13 @@ export const PROPOSAL_NUDGE1_MS = 3 * 60 * 60 * 1000;   //  3 hours
 export const PROPOSAL_NUDGE2_MS = 10 * 60 * 60 * 1000;  // 10 hours
 export const SCHED_NUDGE1_MS   = 6 * 60 * 60 * 1000;   //  6 hours
 export const SCHED_NUDGE2_MS   = 12 * 60 * 60 * 1000;  // 12 hours
+/**
+ * Lead time before the 24h proposal TTL at which the deadline nudge fires.
+ * With the hourly cron this 2h window guarantees at least one tick lands
+ * inside `[deadline - 2h, deadline)`, so the "window closing" heads-up
+ * always goes out to a still-undecided side before the row expires.
+ */
+export const PROPOSAL_DEADLINE_NUDGE_LEAD_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 export interface NudgeOptions {
   fetchFn?: typeof fetch;
@@ -38,6 +46,7 @@ export interface NudgeOptions {
 export interface NudgeResult {
   proposalNudges: number;
   schedNudges: number;
+  deadlineNudges: number;
 }
 
 export async function matchNudgeTick(
@@ -45,17 +54,108 @@ export async function matchNudgeTick(
   options: NudgeOptions = {},
 ): Promise<NudgeResult> {
   const now = options.now ?? new Date();
-  if (isQuietHours(now)) return { proposalNudges: 0, schedNudges: 0 };
+  if (isQuietHours(now)) return { proposalNudges: 0, schedNudges: 0, deadlineNudges: 0 };
 
   const fetchFn = options.fetchFn ?? openaiFetch;
   const batchSize = options.batchSize ?? 50;
 
-  const [proposalNudges, schedNudges] = await Promise.all([
+  const [proposalNudges, schedNudges, deadlineNudges] = await Promise.all([
     handleProposalNudges(api, now, fetchFn, batchSize),
     handleSchedulingNudges(api, now, fetchFn, batchSize),
+    handleDeadlineNudges(api, now, batchSize),
   ]);
 
-  return { proposalNudges, schedNudges };
+  return { proposalNudges, schedNudges, deadlineNudges };
+}
+
+// ---------------------------------------------------------------------------
+// C) Deadline nudge — one heads-up ~2h before the 24h proposal TTL expires,
+//    to any side that still hasn't decided. Anchored to the DEADLINE, not to
+//    dispatch (unlike the 3h/10h proposal nudges above), so a user who lets
+//    the window drift toward expiry gets a final, clearly-timed prompt. Copy
+//    is static i18n (not LLM) so the "in ~Xh" number stays accurate.
+// ---------------------------------------------------------------------------
+
+async function handleDeadlineNudges(
+  api: Api<RawApi>,
+  now: Date,
+  batchSize: number,
+): Promise<number> {
+  // dispatchedAt must sit in (now - TTL, now - TTL + lead]: newer than that
+  // and the deadline is still >lead away; older and the row has expired (left
+  // to the expiry job, which owns the terminal state + message overwrite).
+  const earliestDispatch = new Date(now.getTime() - PROPOSAL_TTL_MS);
+  const latestDispatch = new Date(
+    now.getTime() - PROPOSAL_TTL_MS + PROPOSAL_DEADLINE_NUDGE_LEAD_MS,
+  );
+
+  const matches = await prisma.match.findMany({
+    where: {
+      status: "proposed",
+      proposalDeadlineNudgeSentAt: null,
+      dispatchedAt: { gt: earliestDispatch, lte: latestDispatch },
+      NOT: { AND: [{ acceptedByA: true }, { acceptedByB: true }] },
+    },
+    select: {
+      id: true,
+      dispatchedAt: true,
+      acceptedByA: true,
+      acceptedByB: true,
+      userA: { select: { telegramId: true, language: true } },
+      userB: { select: { telegramId: true, language: true } },
+    },
+    take: batchSize,
+  });
+
+  let count = 0;
+
+  for (const match of matches) {
+    // One-shot claim so overlapping ticks can't double-send.
+    const claim = await prisma.match.updateMany({
+      where: {
+        id: match.id,
+        status: "proposed",
+        proposalDeadlineNudgeSentAt: null,
+      },
+      data: { proposalDeadlineNudgeSentAt: now },
+    });
+    if (claim.count === 0) continue;
+
+    const deadline = new Date(match.dispatchedAt!.getTime() + PROPOSAL_TTL_MS);
+    const hoursLeft = Math.max(
+      1,
+      Math.round((deadline.getTime() - now.getTime()) / (60 * 60 * 1000)),
+    );
+
+    // Target only genuinely undecided Telegram sides. A side that already
+    // declined committed irreversibly (row stays `proposed` under the blind
+    // rule) — never nag them; an accepted side is done too.
+    const targets: Array<{ telegramId: bigint; language: string | null }> = [];
+    if (match.acceptedByA == null && match.userA.telegramId > 0n) {
+      targets.push(match.userA);
+    }
+    if (match.acceptedByB == null && match.userB.telegramId > 0n) {
+      targets.push(match.userB);
+    }
+
+    for (const target of targets) {
+      const lang: Language = (target.language as Language) ?? "en";
+      try {
+        await api.sendMessage(
+          Number(target.telegramId),
+          t(lang, "pitchDeadlineNudge", { hours: hoursLeft }),
+        );
+        count++;
+      } catch (err) {
+        console.warn(
+          `[match-nudge] deadline send failed for ${target.telegramId}:`,
+          (err as Error).message,
+        );
+      }
+    }
+  }
+
+  return count;
 }
 
 // ---------------------------------------------------------------------------

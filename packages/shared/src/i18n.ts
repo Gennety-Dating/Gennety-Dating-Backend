@@ -433,6 +433,11 @@ const translations = {
     matchSynergyHeader: "💎 *Synergy {score}/99* — {reason}",
     pitchCountdownHours: "⏳ {hours}h left to reply",
     pitchCountdownMinutes: "⏳ {minutes} min left to reply",
+    pitchDeadlineBtnHm: "⏳ Reply: {h}h {m}m left",
+    pitchDeadlineBtnMin: "⏳ Reply: {m}m left",
+    pitchCountdownTapToast: "Just say yes or no whenever you're ready — the window's still open ✨",
+    pitchDeadlineNudge:
+      "Heads up — your window to answer this match closes in about {hours}h. If you'd like to go, just say yes now; no worries if not.",
     pitchExpired: "⏳ Time's up — this proposal expired.",
     matchExpiredSilentWarning:
       "Time's up — you didn't reply to your match in 24h. " +
@@ -1229,6 +1234,11 @@ const translations = {
     matchSynergyHeader: "💎 *Синергия {score}/99* — {reason}",
     pitchCountdownHours: "⏳ Осталось {hours}ч на ответ",
     pitchCountdownMinutes: "⏳ Осталось {minutes} мин на ответ",
+    pitchDeadlineBtnHm: "⏳ Ответить: {h}ч {m}м",
+    pitchDeadlineBtnMin: "⏳ Ответить: {m}м",
+    pitchCountdownTapToast: "Просто скажи да или нет, когда решишь — окно ещё открыто ✨",
+    pitchDeadlineNudge:
+      "Небольшое напоминание — окно, чтобы ответить на этот мэтч, закроется примерно через {hours}ч. Если хочешь пойти, просто скажи да сейчас; если нет — тоже окей.",
     pitchExpired: "⏳ Время вышло — предложение больше не актуально.",
     matchExpiredSilentWarning:
       "Время вышло — за сутки ты так и не ответил(-а) на мэтч. " +
@@ -2018,6 +2028,11 @@ const translations = {
     matchSynergyHeader: "💎 *Синергія {score}/99* — {reason}",
     pitchCountdownHours: "⏳ Залишилось {hours}год на відповідь",
     pitchCountdownMinutes: "⏳ Залишилось {minutes} хв на відповідь",
+    pitchDeadlineBtnHm: "⏳ Відповісти: {h}год {m}хв",
+    pitchDeadlineBtnMin: "⏳ Відповісти: {m}хв",
+    pitchCountdownTapToast: "Просто скажи так чи ні, коли вирішиш — вікно ще відкрите ✨",
+    pitchDeadlineNudge:
+      "Невелике нагадування — вікно, щоб відповісти на цей метч, закриється приблизно за {hours}год. Якщо хочеш піти, просто скажи так зараз; якщо ні — теж окей.",
     pitchExpired: "⏳ Час вийшов — пропозиція більше не актуальна.",
     matchExpiredSilentWarning:
       "Час вийшов — за добу ти так і не відповів(-ла) на метч. " +
@@ -2787,6 +2802,11 @@ const deTranslations: TranslationTable = {
   matchSynergyHeader: "💎 *Synergie {score}/99* — {reason}",
   pitchCountdownHours: "⏳ Noch {hours}h zum Antworten",
   pitchCountdownMinutes: "⏳ Noch {minutes} Min zum Antworten",
+  pitchDeadlineBtnHm: "⏳ Antworten: {h}h {m}m",
+  pitchDeadlineBtnMin: "⏳ Antworten: {m}m",
+  pitchCountdownTapToast: "Sag einfach ja oder nein, wenn du so weit bist — das Fenster ist noch offen ✨",
+  pitchDeadlineNudge:
+    "Kurzer Hinweis — dein Fenster, um auf dieses Match zu antworten, schließt in etwa {hours}h. Wenn du hingehen möchtest, sag jetzt einfach ja; kein Problem, wenn nicht.",
   pitchExpired: "⏳ Zeit abgelaufen - dieser Vorschlag ist verfallen.",
   matchExpiredSilentWarning:
     "Zeit abgelaufen - du hast deinem Match innerhalb von 24h nicht geantwortet. " +
@@ -3536,6 +3556,11 @@ const plTranslations: TranslationTable = {
   matchSynergyHeader: "💎 *Synergia {score}/99* — {reason}",
   pitchCountdownHours: "⏳ Zostało {hours}h na odpowiedź",
   pitchCountdownMinutes: "⏳ Zostało {minutes} min na odpowiedź",
+  pitchDeadlineBtnHm: "⏳ Odpowiedz: {h}h {m}m",
+  pitchDeadlineBtnMin: "⏳ Odpowiedz: {m}m",
+  pitchCountdownTapToast: "Po prostu powiedz tak lub nie, gdy będziesz gotowy — okno wciąż jest otwarte ✨",
+  pitchDeadlineNudge:
+    "Małe przypomnienie — okno na odpowiedź na to dopasowanie zamknie się za około {hours}h. Jeśli chcesz iść, po prostu powiedz teraz tak; jeśli nie — też w porządku.",
   pitchExpired: "⏳ Czas minął - ta propozycja wygasła.",
   matchExpiredSilentWarning:
     "Czas minął - nie odpowiedziałeś/odpowiedziałaś na dopasowanie w ciągu 24h. " +

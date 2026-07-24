@@ -767,6 +767,16 @@ Required/high-impact env keys:
   only; matching down and same-gender pairs unaffected). Raise for a stronger
   male lift, lower toward `0` to disable. No restart side effects beyond the
   standard `pm2 restart`.
+- Proposal reply countdown + deadline nudge (always-on, no feature flag,
+  Telegram-only): the pitch's live reply-deadline **button** re-render
+  (`workers/proposal-countdown.ts`, `editMessageReplyMarkup`) and the new
+  match-nudge **deadline heads-up** (`workers/match-nudge.ts`, one DM ~2 h
+  before the 24 h TTL to still-undecided sides). Both run on the existing crons
+  (`PROPOSAL_COUNTDOWN_CRON_SCHEDULE`, `MATCH_NUDGE_CRON_SCHEDULE`) — no new
+  schedule, no new env. **Requires `db:push` of the additive
+  `matches.proposal_deadline_nudge_sent_at` column first** (nullable,
+  non-destructive; a DB missing it throws `P2022` on the nudge sweep). Mobile
+  clients render their own countdown from the public API and are unaffected.
 - Matching — stated age-band preference: `AGE_RANGE_PREF_FLOOR` (default `0.6`)
   and `AGE_RANGE_PREF_DECAY_PER_YEAR` (default `0.1`). The soft `V_agePref`
   multiplier dampens (never excludes) a candidate whose actual age is outside

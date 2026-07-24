@@ -180,6 +180,21 @@ export async function promptDeclineConfirm(ctx: BotContext): Promise<void> {
 }
 
 /**
+ * Tap on the live reply-deadline countdown button (`match:countdown:`) that
+ * rides the pitch keyboard. The button is informational — the decision itself
+ * is conversational (text → confirm card), so tapping just answers a toast
+ * nudging the user to reply when ready. No state change, blind invariant
+ * untouched (the toast is static copy). Always answers the callback so the
+ * client stops the loading spinner.
+ */
+export async function handleCountdownTap(ctx: BotContext): Promise<void> {
+  const lang = ctx.session.language;
+  await ctx
+    .answerCallbackQuery({ text: t(lang, "pitchCountdownTapToast") })
+    .catch(() => {});
+}
+
+/**
  * User backed out of the decline confirmation card. No state changes; edit the
  * card into a dismissed line so its button can't be tapped again. The original
  * pitch keyboard is still live for a real Accept/Pass.

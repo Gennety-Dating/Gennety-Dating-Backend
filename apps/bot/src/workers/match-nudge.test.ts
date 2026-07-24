@@ -19,7 +19,11 @@ import {
   matchNudgeTick,
   PROPOSAL_NUDGE1_MS,
   PROPOSAL_NUDGE2_MS,
+  PROPOSAL_DEADLINE_NUDGE_LEAD_MS,
 } from "./match-nudge.js";
+
+// 24h TTL — kept in sync with PROPOSAL_TTL_MS in countdown-plate.ts.
+const TTL_MS = 24 * 60 * 60 * 1000;
 
 // 2024-06-15 — Kyiv summer time (UTC+3). C-8 anchored quiet hours to Kyiv,
 // so we pick UTC instants whose Kyiv-local hour is unambiguously day/quiet.
@@ -77,13 +81,17 @@ describe("matchNudgeTick", () => {
     vi.clearAllMocks();
     (prisma.match.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
     (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+    // Default so the third (deadline) findMany call in matchNudgeTick returns
+    // an empty set; individual tests still override the proposal/scheduling
+    // queries via `mockResolvedValueOnce`, which take precedence in call order.
+    (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
   });
 
   it("returns zeros during quiet hours without DB query", async () => {
     const api = createMockApi();
     const result = await matchNudgeTick(api, { now: QUIET_TIME });
 
-    expect(result).toEqual({ proposalNudges: 0, schedNudges: 0 });
+    expect(result).toEqual({ proposalNudges: 0, schedNudges: 0, deadlineNudges: 0 });
     expect(prisma.match.findMany).not.toHaveBeenCalled();
   });
 
@@ -217,6 +225,56 @@ describe("matchNudgeTick", () => {
     // Failed sends don't increment the count, but we still stamped the match
     expect(result.proposalNudges).toBe(0);
     expect(prisma.match.updateMany).toHaveBeenCalled();
+  });
+
+  it("fires the deadline nudge to undecided sides ~2h before the 24h TTL", async () => {
+    // Dispatched 22h30m ago → ~1h30m left, inside the [TTL-2h, TTL) window.
+    const dispatched = new Date(
+      DAY_TIME.getTime() - (TTL_MS - PROPOSAL_DEADLINE_NUDGE_LEAD_MS) - 30 * 60_000,
+    );
+    const match = makeProposedMatch({
+      dispatchedAt: dispatched,
+      // Past the 3h/10h anchors, but both those nudges already went out; only
+      // the deadline query should claim this row now.
+      proposalNudge1SentAt: new Date(DAY_TIME.getTime() - 19 * 60 * 60_000),
+      proposalNudge2SentAt: new Date(DAY_TIME.getTime() - 12 * 60 * 60_000),
+      proposalDeadlineNudgeSentAt: null,
+    });
+    (prisma.match.findMany as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([]) // proposal query (already fully nudged)
+      .mockResolvedValueOnce([]) // scheduling query
+      .mockResolvedValueOnce([match]); // deadline query
+
+    const api = createMockApi();
+    const result = await matchNudgeTick(api, { now: DAY_TIME });
+
+    expect(result.deadlineNudges).toBe(2); // Alice + Bob, both undecided
+    expect(prisma.match.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { proposalDeadlineNudgeSentAt: DAY_TIME } }),
+    );
+  });
+
+  it("deadline nudge skips a side that already declined (committed)", async () => {
+    const dispatched = new Date(
+      DAY_TIME.getTime() - (TTL_MS - PROPOSAL_DEADLINE_NUDGE_LEAD_MS) - 30 * 60_000,
+    );
+    const match = makeProposedMatch({
+      dispatchedAt: dispatched,
+      acceptedByA: false, // Alice already passed — never nag
+      acceptedByB: null, // Bob still undecided
+      proposalDeadlineNudgeSentAt: null,
+    });
+    (prisma.match.findMany as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([match]);
+
+    const api = createMockApi();
+    const result = await matchNudgeTick(api, { now: DAY_TIME });
+
+    expect(result.deadlineNudges).toBe(1);
+    expect(api.sendMessage).toHaveBeenCalledOnce();
+    expect(api.sendMessage).toHaveBeenCalledWith(2, expect.any(String));
   });
 
   it("does not send when another worker already claimed the nudge", async () => {
