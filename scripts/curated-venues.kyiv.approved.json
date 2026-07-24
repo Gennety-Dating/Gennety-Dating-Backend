@@ -118,7 +118,15 @@
     "_rating": 4.5,
     "_reviews": 677,
     "_priceLevel": null,
-    "_primaryType": "book_store"
+    "_primaryType": "book_store",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -239,7 +247,14 @@
     "_rating": 4.4,
     "_reviews": 1258,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bakery"
+    "_primaryType": "bakery",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -360,7 +375,14 @@
     "_rating": 4.7,
     "_reviews": 738,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -481,7 +503,14 @@
     "_rating": 4.6,
     "_reviews": 3241,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -602,7 +631,14 @@
     "_rating": 4.4,
     "_reviews": 500,
     "_priceLevel": null,
-    "_primaryType": "dessert_shop"
+    "_primaryType": "dessert_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -723,7 +759,15 @@
     "_rating": 4.5,
     "_reviews": 207,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -844,7 +888,14 @@
     "_rating": 4.2,
     "_reviews": 1364,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -965,7 +1016,14 @@
     "_rating": 4.5,
     "_reviews": 288,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -1086,7 +1144,14 @@
     "_rating": 4.6,
     "_reviews": 1087,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -1183,7 +1248,12 @@
     "_rating": 4.5,
     "_reviews": 718,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -1304,7 +1374,15 @@
     "_rating": 4.6,
     "_reviews": 925,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -1425,7 +1503,14 @@
     "_rating": 4.6,
     "_reviews": 1816,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -1522,7 +1607,14 @@
     "_rating": 4.8,
     "_reviews": 3107,
     "_priceLevel": null,
-    "_primaryType": "art_museum"
+    "_primaryType": "art_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -1607,7 +1699,12 @@
     "_rating": 4.6,
     "_reviews": 5390,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -1704,7 +1801,14 @@
     "_rating": 4.5,
     "_reviews": 3971,
     "_priceLevel": null,
-    "_primaryType": "art_museum"
+    "_primaryType": "art_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -1801,7 +1905,12 @@
     "_rating": 4.7,
     "_reviews": 987,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -1898,7 +2007,14 @@
     "_rating": 4.4,
     "_reviews": 1903,
     "_priceLevel": null,
-    "_primaryType": "history_museum"
+    "_primaryType": "history_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -2019,7 +2135,12 @@
     "_rating": 4.6,
     "_reviews": 965,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -2140,7 +2261,14 @@
     "_rating": 4.6,
     "_reviews": 2721,
     "_priceLevel": null,
-    "_primaryType": "history_museum"
+    "_primaryType": "history_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -2237,7 +2365,14 @@
     "_rating": 4.7,
     "_reviews": 1374,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -2334,7 +2469,14 @@
     "_rating": 4.6,
     "_reviews": 5044,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -2455,7 +2597,12 @@
     "_rating": 4.7,
     "_reviews": 7796,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -2576,7 +2723,12 @@
     "_rating": 4.7,
     "_reviews": 37931,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -2697,7 +2849,14 @@
     "_rating": 4.8,
     "_reviews": 31540,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -2818,7 +2977,14 @@
     "_rating": 4.6,
     "_reviews": 1636,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -2939,7 +3105,14 @@
     "_rating": 4.4,
     "_reviews": 6071,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -3060,7 +3233,14 @@
     "_rating": 4.1,
     "_reviews": 9704,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -3181,7 +3361,14 @@
     "_rating": 4.4,
     "_reviews": 7139,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -3224,7 +3411,14 @@
     "_rating": 4.7,
     "_reviews": 1072,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -3345,7 +3539,12 @@
     "_rating": 4.5,
     "_reviews": 4930,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "pizza_restaurant"
+    "_primaryType": "pizza_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -3466,7 +3665,14 @@
     "_rating": 4.6,
     "_reviews": 3838,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -3587,7 +3793,14 @@
     "_rating": 4.5,
     "_reviews": 1551,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -3708,7 +3921,12 @@
     "_rating": 4.3,
     "_reviews": 696,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -3829,7 +4047,15 @@
     "_rating": 4.5,
     "_reviews": 677,
     "_priceLevel": null,
-    "_primaryType": "book_store"
+    "_primaryType": "book_store",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -3950,7 +4176,14 @@
     "_rating": 4.4,
     "_reviews": 1258,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bakery"
+    "_primaryType": "bakery",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -4071,7 +4304,14 @@
     "_rating": 4.7,
     "_reviews": 738,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -4192,7 +4432,14 @@
     "_rating": 4.6,
     "_reviews": 3241,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -4313,7 +4560,14 @@
     "_rating": 4.4,
     "_reviews": 500,
     "_priceLevel": null,
-    "_primaryType": "dessert_shop"
+    "_primaryType": "dessert_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -4434,7 +4688,14 @@
     "_rating": 4.2,
     "_reviews": 1364,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -4555,7 +4816,15 @@
     "_rating": 4.6,
     "_reviews": 1194,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -4677,7 +4946,15 @@
     "_reviews": 337,
     "_priceLevel": null,
     "_primaryType": "restaurant",
-    "tier": "premium"
+    "tier": "premium",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -4798,7 +5075,14 @@
     "_rating": 4.5,
     "_reviews": 2581,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -4919,7 +5203,14 @@
     "_rating": 4.6,
     "_reviews": 925,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -5040,7 +5331,14 @@
     "_rating": 4.6,
     "_reviews": 1816,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -5137,7 +5435,14 @@
     "_rating": 4.8,
     "_reviews": 3107,
     "_priceLevel": null,
-    "_primaryType": "art_museum"
+    "_primaryType": "art_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -5222,7 +5527,12 @@
     "_rating": 4.6,
     "_reviews": 5390,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -5319,7 +5629,14 @@
     "_rating": 4.5,
     "_reviews": 3971,
     "_priceLevel": null,
-    "_primaryType": "art_museum"
+    "_primaryType": "art_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -5428,7 +5745,12 @@
     "_rating": 4.6,
     "_reviews": 4755,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -5525,7 +5847,14 @@
     "_rating": 4.4,
     "_reviews": 1903,
     "_priceLevel": null,
-    "_primaryType": "history_museum"
+    "_primaryType": "history_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -5622,7 +5951,14 @@
     "_rating": 4.5,
     "_reviews": 1677,
     "_priceLevel": null,
-    "_primaryType": "art_museum"
+    "_primaryType": "art_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -5743,7 +6079,12 @@
     "_rating": 4.6,
     "_reviews": 2721,
     "_priceLevel": null,
-    "_primaryType": "history_museum"
+    "_primaryType": "history_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -5840,7 +6181,14 @@
     "_rating": 4.7,
     "_reviews": 1374,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -5961,7 +6309,14 @@
     "_rating": 4.7,
     "_reviews": 37931,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -6082,7 +6437,14 @@
     "_rating": 4.8,
     "_reviews": 31540,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -6203,7 +6565,14 @@
     "_rating": 4.6,
     "_reviews": 1636,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -6324,7 +6693,14 @@
     "_rating": 4.6,
     "_reviews": 778,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -6445,7 +6821,15 @@
     "_rating": 4.7,
     "_reviews": 2341,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -6488,7 +6872,15 @@
     "_rating": 4.7,
     "_reviews": 1072,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -6609,7 +7001,14 @@
     "_rating": 4.6,
     "_reviews": 3884,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "ukrainian_restaurant"
+    "_primaryType": "ukrainian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -6730,7 +7129,12 @@
     "_rating": 4.5,
     "_reviews": 4930,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "pizza_restaurant"
+    "_primaryType": "pizza_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -6851,7 +7255,14 @@
     "_rating": 4.6,
     "_reviews": 3838,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -6972,7 +7383,14 @@
     "_rating": 4.5,
     "_reviews": 1551,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -7093,7 +7511,15 @@
     "_rating": 4.5,
     "_reviews": 677,
     "_priceLevel": null,
-    "_primaryType": "book_store"
+    "_primaryType": "book_store",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -7214,7 +7640,14 @@
     "_rating": 4.4,
     "_reviews": 1258,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bakery"
+    "_primaryType": "bakery",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -7335,7 +7768,14 @@
     "_rating": 4.7,
     "_reviews": 738,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -7456,7 +7896,14 @@
     "_rating": 4.6,
     "_reviews": 3241,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -7577,7 +8024,14 @@
     "_rating": 4.4,
     "_reviews": 500,
     "_priceLevel": null,
-    "_primaryType": "dessert_shop"
+    "_primaryType": "dessert_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -7698,7 +8152,15 @@
     "_rating": 4.5,
     "_reviews": 207,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -7819,7 +8281,14 @@
     "_rating": 4.2,
     "_reviews": 1364,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -7940,7 +8409,15 @@
     "_rating": 4.6,
     "_reviews": 1194,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -8061,7 +8538,14 @@
     "_rating": 4.5,
     "_reviews": 288,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -8182,7 +8666,14 @@
     "_rating": 4.6,
     "_reviews": 1087,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -8279,7 +8770,15 @@
     "_rating": 4.5,
     "_reviews": 718,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -8401,7 +8900,16 @@
     "_reviews": 337,
     "_priceLevel": null,
     "_primaryType": "restaurant",
-    "tier": "premium"
+    "tier": "premium",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -8522,7 +9030,14 @@
     "_rating": 4.5,
     "_reviews": 2581,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -8643,7 +9158,15 @@
     "_rating": 4.6,
     "_reviews": 925,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -8764,7 +9287,14 @@
     "_rating": 4.6,
     "_reviews": 1816,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -8861,7 +9391,14 @@
     "_rating": 4.8,
     "_reviews": 3107,
     "_priceLevel": null,
-    "_primaryType": "art_museum"
+    "_primaryType": "art_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -8958,7 +9495,14 @@
     "_rating": 4.7,
     "_reviews": 987,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -9043,7 +9587,12 @@
     "_rating": 4.6,
     "_reviews": 5390,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -9140,7 +9689,14 @@
     "_rating": 4.5,
     "_reviews": 3971,
     "_priceLevel": null,
-    "_primaryType": "art_museum"
+    "_primaryType": "art_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -9237,7 +9793,14 @@
     "_rating": 4.4,
     "_reviews": 1903,
     "_priceLevel": null,
-    "_primaryType": "history_museum"
+    "_primaryType": "history_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -9358,7 +9921,14 @@
     "_rating": 4.6,
     "_reviews": 965,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -9479,7 +10049,14 @@
     "_rating": 4.6,
     "_reviews": 2721,
     "_priceLevel": null,
-    "_primaryType": "history_museum"
+    "_primaryType": "history_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -9576,7 +10153,14 @@
     "_rating": 4.7,
     "_reviews": 1374,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -9673,7 +10257,14 @@
     "_rating": 4.6,
     "_reviews": 5044,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -9794,7 +10385,14 @@
     "_rating": 4.7,
     "_reviews": 7796,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -9915,7 +10513,14 @@
     "_rating": 4.7,
     "_reviews": 37931,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -10036,7 +10641,14 @@
     "_rating": 4.8,
     "_reviews": 31540,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -10157,7 +10769,14 @@
     "_rating": 4.6,
     "_reviews": 1636,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -10278,7 +10897,12 @@
     "_rating": 4.6,
     "_reviews": 2757,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -10399,7 +11023,14 @@
     "_rating": 4.4,
     "_reviews": 6071,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -10520,7 +11151,12 @@
     "_rating": 4.6,
     "_reviews": 778,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -10641,7 +11277,14 @@
     "_rating": 4.4,
     "_reviews": 7139,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -10684,7 +11327,14 @@
     "_rating": 4.7,
     "_reviews": 1072,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -10805,7 +11455,12 @@
     "_rating": 4.5,
     "_reviews": 4930,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "pizza_restaurant"
+    "_primaryType": "pizza_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -10926,7 +11581,14 @@
     "_rating": 4.6,
     "_reviews": 3838,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -11047,7 +11709,14 @@
     "_rating": 4.5,
     "_reviews": 1551,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -11168,7 +11837,12 @@
     "_rating": 4.4,
     "_reviews": 649,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -11289,7 +11963,15 @@
     "_rating": 4.5,
     "_reviews": 677,
     "_priceLevel": null,
-    "_primaryType": "book_store"
+    "_primaryType": "book_store",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -11410,7 +12092,14 @@
     "_rating": 4.4,
     "_reviews": 1258,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bakery"
+    "_primaryType": "bakery",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -11531,7 +12220,14 @@
     "_rating": 4.7,
     "_reviews": 738,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -11652,7 +12348,14 @@
     "_rating": 4.6,
     "_reviews": 3241,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -11773,7 +12476,14 @@
     "_rating": 4.4,
     "_reviews": 500,
     "_priceLevel": null,
-    "_primaryType": "dessert_shop"
+    "_primaryType": "dessert_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -11894,7 +12604,15 @@
     "_rating": 4.5,
     "_reviews": 207,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -12015,7 +12733,12 @@
     "_rating": 4.2,
     "_reviews": 1364,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -12136,7 +12859,14 @@
     "_rating": 4.5,
     "_reviews": 288,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -12257,7 +12987,14 @@
     "_rating": 4.6,
     "_reviews": 1087,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -12354,7 +13091,15 @@
     "_rating": 4.5,
     "_reviews": 718,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -12475,7 +13220,15 @@
     "_rating": 4.6,
     "_reviews": 925,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -12596,7 +13349,14 @@
     "_rating": 4.6,
     "_reviews": 1816,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -12693,7 +13453,14 @@
     "_rating": 4.8,
     "_reviews": 3107,
     "_priceLevel": null,
-    "_primaryType": "art_museum"
+    "_primaryType": "art_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -12778,7 +13545,12 @@
     "_rating": 4.6,
     "_reviews": 5390,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -12875,7 +13647,14 @@
     "_rating": 4.5,
     "_reviews": 3971,
     "_priceLevel": null,
-    "_primaryType": "art_museum"
+    "_primaryType": "art_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -12972,7 +13751,12 @@
     "_rating": 4.7,
     "_reviews": 987,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -13069,7 +13853,14 @@
     "_rating": 4.4,
     "_reviews": 1903,
     "_priceLevel": null,
-    "_primaryType": "history_museum"
+    "_primaryType": "history_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -13190,7 +13981,14 @@
     "_rating": 4.6,
     "_reviews": 2721,
     "_priceLevel": null,
-    "_primaryType": "history_museum"
+    "_primaryType": "history_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -13311,7 +14109,12 @@
     "_rating": 4.8,
     "_reviews": 178,
     "_priceLevel": null,
-    "_primaryType": "cultural_center"
+    "_primaryType": "cultural_center",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -13408,7 +14211,14 @@
     "_rating": 4.7,
     "_reviews": 1374,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -13505,7 +14315,14 @@
     "_rating": 4.6,
     "_reviews": 5044,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -13626,7 +14443,14 @@
     "_rating": 4.7,
     "_reviews": 37931,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -13747,7 +14571,14 @@
     "_rating": 4.8,
     "_reviews": 31540,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -13868,7 +14699,14 @@
     "_rating": 4.6,
     "_reviews": 14199,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -13989,7 +14827,14 @@
     "_rating": 4.6,
     "_reviews": 1636,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -14110,7 +14955,15 @@
     "_rating": 4.5,
     "_reviews": 4265,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -14231,7 +15084,14 @@
     "_rating": 4.4,
     "_reviews": 7139,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -14352,7 +15212,15 @@
     "_rating": 4.7,
     "_reviews": 11901,
     "_priceLevel": null,
-    "_primaryType": "city_park"
+    "_primaryType": "city_park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -14395,7 +15263,15 @@
     "_rating": 4.7,
     "_reviews": 1072,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -14516,7 +15392,12 @@
     "_rating": 4.5,
     "_reviews": 4930,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "pizza_restaurant"
+    "_primaryType": "pizza_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -14637,7 +15518,14 @@
     "_rating": 4.6,
     "_reviews": 3838,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -14758,7 +15646,14 @@
     "_rating": 4.5,
     "_reviews": 1551,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -14879,7 +15774,12 @@
     "_rating": 4.3,
     "_reviews": 696,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -15000,7 +15900,14 @@
     "_rating": 4.6,
     "_reviews": 8428,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "brewpub"
+    "_primaryType": "brewpub",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -15121,7 +16028,12 @@
     "_rating": 4.6,
     "_reviews": 1815,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -15242,7 +16154,15 @@
     "_rating": 4.5,
     "_reviews": 677,
     "_priceLevel": null,
-    "_primaryType": "book_store"
+    "_primaryType": "book_store",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -15363,7 +16283,14 @@
     "_rating": 4.4,
     "_reviews": 1258,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bakery"
+    "_primaryType": "bakery",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -15484,7 +16411,14 @@
     "_rating": 4.7,
     "_reviews": 738,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -15605,7 +16539,14 @@
     "_rating": 4.6,
     "_reviews": 3241,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -15726,7 +16667,14 @@
     "_rating": 4.4,
     "_reviews": 500,
     "_priceLevel": null,
-    "_primaryType": "dessert_shop"
+    "_primaryType": "dessert_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -15847,7 +16795,14 @@
     "_rating": 4.2,
     "_reviews": 1364,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -15968,7 +16923,15 @@
     "_rating": 4.6,
     "_reviews": 1194,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -16090,7 +17053,15 @@
     "_reviews": 337,
     "_priceLevel": null,
     "_primaryType": "restaurant",
-    "tier": "premium"
+    "tier": "premium",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -16211,7 +17182,14 @@
     "_rating": 4.5,
     "_reviews": 2581,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -16332,7 +17310,15 @@
     "_rating": 4.7,
     "_reviews": 439,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -16453,7 +17439,15 @@
     "_rating": 4.6,
     "_reviews": 1816,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -16550,7 +17544,14 @@
     "_rating": 4.8,
     "_reviews": 3107,
     "_priceLevel": null,
-    "_primaryType": "art_museum"
+    "_primaryType": "art_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -16635,7 +17636,12 @@
     "_rating": 4.6,
     "_reviews": 5390,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -16732,7 +17738,14 @@
     "_rating": 4.5,
     "_reviews": 3971,
     "_priceLevel": null,
-    "_primaryType": "art_museum"
+    "_primaryType": "art_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -16829,7 +17842,14 @@
     "_rating": 4.4,
     "_reviews": 1903,
     "_priceLevel": null,
-    "_primaryType": "history_museum"
+    "_primaryType": "history_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -16914,7 +17934,14 @@
     "_rating": 4.5,
     "_reviews": 2851,
     "_priceLevel": null,
-    "_primaryType": "art_museum"
+    "_primaryType": "art_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -17035,7 +18062,12 @@
     "_rating": 4.6,
     "_reviews": 2721,
     "_priceLevel": null,
-    "_primaryType": "history_museum"
+    "_primaryType": "history_museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -17132,7 +18164,14 @@
     "_rating": 4.7,
     "_reviews": 1374,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -17229,7 +18268,12 @@
     "_rating": 4.4,
     "_reviews": 3398,
     "_priceLevel": null,
-    "_primaryType": "museum"
+    "_primaryType": "museum",
+    "hardCapabilities": [
+      "indoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -17350,7 +18394,14 @@
     "_rating": 4.7,
     "_reviews": 37931,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -17471,7 +18522,14 @@
     "_rating": 4.8,
     "_reviews": 31540,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -17592,7 +18650,14 @@
     "_rating": 4.6,
     "_reviews": 1636,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -17713,7 +18778,12 @@
     "_rating": 4.6,
     "_reviews": 778,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -17756,7 +18826,14 @@
     "_rating": 4.7,
     "_reviews": 1072,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -17877,7 +18954,12 @@
     "_rating": 4.5,
     "_reviews": 4930,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "pizza_restaurant"
+    "_primaryType": "pizza_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -17998,7 +19080,14 @@
     "_rating": 4.6,
     "_reviews": 3838,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -18119,7 +19208,14 @@
     "_rating": 4.5,
     "_reviews": 1551,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -18241,7 +19337,15 @@
     "_rating": 4.7,
     "_reviews": 1320,
     "_priceLevel": null,
-    "_primaryType": "book_store"
+    "_primaryType": "book_store",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -18363,7 +19467,14 @@
     "_rating": 4.6,
     "_reviews": 1014,
     "_priceLevel": null,
-    "_primaryType": "bakery"
+    "_primaryType": "bakery",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -18485,7 +19596,14 @@
     "_rating": 4.8,
     "_reviews": 573,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -18607,7 +19725,12 @@
     "_rating": 4.5,
     "_reviews": 437,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -18729,7 +19852,12 @@
     "_rating": 4.7,
     "_reviews": 415,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -18851,7 +19979,12 @@
     "_rating": 4.9,
     "_reviews": 69,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -18973,7 +20106,14 @@
     "_rating": 4.7,
     "_reviews": 459,
     "_priceLevel": null,
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -19095,7 +20235,14 @@
     "_rating": 4.4,
     "_reviews": 239,
     "_priceLevel": null,
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -19217,7 +20364,14 @@
     "_rating": 4.4,
     "_reviews": 919,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -19339,7 +20493,14 @@
     "_rating": 4.3,
     "_reviews": 213,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -19461,7 +20622,14 @@
     "_rating": 4.3,
     "_reviews": 359,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -19559,7 +20727,12 @@
     "_rating": 4,
     "_reviews": 125,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -19657,7 +20830,14 @@
     "_rating": 4.1,
     "_reviews": 80,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -19755,7 +20935,14 @@
     "_rating": 4.6,
     "_reviews": 36,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -19877,7 +21064,14 @@
     "_rating": 4.6,
     "_reviews": 242,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -19999,7 +21193,15 @@
     "_rating": 4.6,
     "_reviews": 705,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -20121,7 +21323,14 @@
     "_rating": 4.6,
     "_reviews": 1037,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -20243,7 +21452,14 @@
     "_rating": 4.6,
     "_reviews": 5772,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -20365,7 +21581,14 @@
     "_rating": 4.6,
     "_reviews": 6254,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -20487,7 +21710,14 @@
     "_rating": 4.6,
     "_reviews": 4210,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -20609,7 +21839,14 @@
     "_rating": 4,
     "_reviews": 376,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -20731,7 +21968,14 @@
     "_rating": 4.6,
     "_reviews": 6064,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -20853,7 +22097,12 @@
     "_rating": 4.1,
     "_reviews": 963,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -20975,7 +22224,12 @@
     "_rating": 4.3,
     "_reviews": 785,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -21097,7 +22351,14 @@
     "_rating": 4.7,
     "_reviews": 200,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -21219,7 +22480,14 @@
     "_rating": 4.5,
     "_reviews": 1810,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -21341,7 +22609,14 @@
     "_rating": 4.5,
     "_reviews": 185,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -21463,7 +22738,14 @@
     "_rating": 4.8,
     "_reviews": 681,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -21585,7 +22867,14 @@
     "_rating": 4.9,
     "_reviews": 110,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -21707,7 +22996,14 @@
     "_rating": 4.6,
     "_reviews": 549,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -21829,7 +23125,14 @@
     "_rating": 4.6,
     "_reviews": 128,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -21951,7 +23254,15 @@
     "_rating": 5,
     "_reviews": 291,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -22073,7 +23384,15 @@
     "_rating": 4.7,
     "_reviews": 929,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -22195,7 +23514,15 @@
     "_rating": 4.6,
     "_reviews": 2641,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "ukrainian_restaurant"
+    "_primaryType": "ukrainian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -22317,7 +23644,12 @@
     "_rating": 4.7,
     "_reviews": 3391,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -22439,7 +23771,15 @@
     "_rating": 4.7,
     "_reviews": 1598,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "wine_bar"
+    "_primaryType": "wine_bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -22561,7 +23901,14 @@
     "_rating": 4.5,
     "_reviews": 1110,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -22671,7 +24018,15 @@
     "_rating": 4.6,
     "_reviews": 784,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -22695,7 +24050,15 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -22817,7 +24180,15 @@
     "_rating": 4.7,
     "_reviews": 14338,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -22841,7 +24212,14 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -22865,7 +24243,14 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -22889,7 +24274,14 @@
     "_rating": 4.8,
     "_reviews": 664,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -22913,7 +24305,15 @@
     "_rating": 3.8,
     "_reviews": 4,
     "_priceLevel": null,
-    "_primaryType": "tourist_attraction"
+    "_primaryType": "tourist_attraction",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -22937,7 +24337,15 @@
     "_rating": 4.6,
     "_reviews": 27892,
     "_priceLevel": null,
-    "_primaryType": "botanical_garden"
+    "_primaryType": "botanical_garden",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -23059,7 +24467,14 @@
     "_rating": 4.5,
     "_reviews": 1854,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -23181,7 +24596,12 @@
     "_rating": 4.6,
     "_reviews": 497,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -23303,7 +24723,14 @@
     "_rating": 4.7,
     "_reviews": 142,
     "_priceLevel": null,
-    "_primaryType": "breakfast_restaurant"
+    "_primaryType": "breakfast_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -23425,7 +24852,15 @@
     "_rating": 4.5,
     "_reviews": 435,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -23547,7 +24982,14 @@
     "_rating": 4.8,
     "_reviews": 2695,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -23669,7 +25111,14 @@
     "_rating": 4.5,
     "_reviews": 102,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -23791,7 +25240,12 @@
     "_rating": 4.3,
     "_reviews": 298,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -23913,7 +25367,12 @@
     "_rating": 4.7,
     "_reviews": 470,
     "_priceLevel": null,
-    "_primaryType": "asian_restaurant"
+    "_primaryType": "asian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -24035,7 +25494,12 @@
     "_rating": 4.5,
     "_reviews": 5433,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "chinese_restaurant"
+    "_primaryType": "chinese_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -24157,7 +25621,14 @@
     "_rating": 4.5,
     "_reviews": 717,
     "_priceLevel": null,
-    "_primaryType": "sushi_restaurant"
+    "_primaryType": "sushi_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -24279,7 +25750,15 @@
     "_rating": 4.4,
     "_reviews": 1147,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -24401,7 +25880,14 @@
     "_rating": 4.5,
     "_reviews": 282,
     "_priceLevel": null,
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -24523,7 +26009,15 @@
     "_rating": 4.6,
     "_reviews": 1016,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -24645,7 +26139,14 @@
     "_rating": 4.6,
     "_reviews": 1491,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "sushi_restaurant"
+    "_primaryType": "sushi_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -24767,7 +26268,12 @@
     "_rating": 4.6,
     "_reviews": 3362,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -24889,7 +26395,15 @@
     "_rating": 4.6,
     "_reviews": 2134,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -25011,7 +26525,14 @@
     "_rating": 4.4,
     "_reviews": 1139,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "seafood_restaurant"
+    "_primaryType": "seafood_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -25133,7 +26654,14 @@
     "_rating": 4.6,
     "_reviews": 793,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "french_restaurant"
+    "_primaryType": "french_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -25255,7 +26783,15 @@
     "_rating": 4.6,
     "_reviews": 2404,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -25377,7 +26913,15 @@
     "_rating": 4.6,
     "_reviews": 2661,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -25499,7 +27043,15 @@
     "_rating": 4.4,
     "_reviews": 400,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -25621,7 +27173,16 @@
     "_rating": 4.6,
     "_reviews": 394,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic",
+      "lively",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -25743,7 +27304,14 @@
     "_rating": 4.7,
     "_reviews": 1367,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -25865,7 +27433,15 @@
     "_rating": 4.6,
     "_reviews": 3770,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -25987,7 +27563,15 @@
     "_rating": 4.7,
     "_reviews": 1320,
     "_priceLevel": null,
-    "_primaryType": "book_store"
+    "_primaryType": "book_store",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -26109,7 +27693,14 @@
     "_rating": 4.6,
     "_reviews": 1014,
     "_priceLevel": null,
-    "_primaryType": "bakery"
+    "_primaryType": "bakery",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -26231,7 +27822,14 @@
     "_rating": 4.8,
     "_reviews": 573,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -26353,7 +27951,12 @@
     "_rating": 4.5,
     "_reviews": 437,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -26475,7 +28078,12 @@
     "_rating": 4.7,
     "_reviews": 415,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -26597,7 +28205,12 @@
     "_rating": 4.9,
     "_reviews": 69,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -26719,7 +28332,14 @@
     "_rating": 4.7,
     "_reviews": 459,
     "_priceLevel": null,
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -26841,7 +28461,12 @@
     "_rating": 4.4,
     "_reviews": 239,
     "_priceLevel": null,
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -26963,7 +28588,14 @@
     "_rating": 4.4,
     "_reviews": 919,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -27085,7 +28717,12 @@
     "_rating": 4.3,
     "_reviews": 213,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -27207,7 +28844,14 @@
     "_rating": 4.3,
     "_reviews": 359,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -27305,7 +28949,12 @@
     "_rating": 4,
     "_reviews": 125,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -27403,7 +29052,14 @@
     "_rating": 4.1,
     "_reviews": 80,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -27501,7 +29157,14 @@
     "_rating": 4.6,
     "_reviews": 36,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -27623,7 +29286,14 @@
     "_rating": 4.6,
     "_reviews": 242,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -27745,7 +29415,15 @@
     "_rating": 4.6,
     "_reviews": 705,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -27867,7 +29545,14 @@
     "_rating": 4.6,
     "_reviews": 1037,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -27989,7 +29674,14 @@
     "_rating": 4.6,
     "_reviews": 5772,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -28111,7 +29803,14 @@
     "_rating": 4.6,
     "_reviews": 6254,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -28233,7 +29932,14 @@
     "_rating": 4.6,
     "_reviews": 4210,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -28355,7 +30061,14 @@
     "_rating": 4,
     "_reviews": 376,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -28477,7 +30190,12 @@
     "_rating": 4.6,
     "_reviews": 6064,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -28599,7 +30317,12 @@
     "_rating": 4.1,
     "_reviews": 963,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -28721,7 +30444,12 @@
     "_rating": 4.3,
     "_reviews": 785,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -28843,7 +30571,14 @@
     "_rating": 4.7,
     "_reviews": 200,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -28965,7 +30700,14 @@
     "_rating": 4.5,
     "_reviews": 1810,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -29087,7 +30829,14 @@
     "_rating": 4.5,
     "_reviews": 185,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -29209,7 +30958,14 @@
     "_rating": 4.8,
     "_reviews": 681,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -29331,7 +31087,14 @@
     "_rating": 4.9,
     "_reviews": 110,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -29453,7 +31216,12 @@
     "_rating": 4.6,
     "_reviews": 549,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -29575,7 +31343,12 @@
     "_rating": 4.6,
     "_reviews": 128,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -29697,7 +31470,14 @@
     "_rating": 5,
     "_reviews": 291,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -29819,7 +31599,15 @@
     "_rating": 4.7,
     "_reviews": 929,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -29941,7 +31729,14 @@
     "_rating": 4.6,
     "_reviews": 2641,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "ukrainian_restaurant"
+    "_primaryType": "ukrainian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -30063,7 +31858,12 @@
     "_rating": 4.7,
     "_reviews": 3391,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -30185,7 +31985,15 @@
     "_rating": 4.7,
     "_reviews": 1598,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "wine_bar"
+    "_primaryType": "wine_bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -30307,7 +32115,14 @@
     "_rating": 4.5,
     "_reviews": 1110,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -30417,7 +32232,15 @@
     "_rating": 4.6,
     "_reviews": 784,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -30441,7 +32264,15 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -30563,7 +32394,15 @@
     "_rating": 4.7,
     "_reviews": 14338,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -30587,7 +32426,14 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -30611,7 +32457,14 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -30635,7 +32488,14 @@
     "_rating": 4.8,
     "_reviews": 664,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -30659,7 +32519,14 @@
     "_rating": 3.8,
     "_reviews": 4,
     "_priceLevel": null,
-    "_primaryType": "tourist_attraction"
+    "_primaryType": "tourist_attraction",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -30683,7 +32550,15 @@
     "_rating": 4.6,
     "_reviews": 27892,
     "_priceLevel": null,
-    "_primaryType": "botanical_garden"
+    "_primaryType": "botanical_garden",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -30805,7 +32680,14 @@
     "_rating": 4.5,
     "_reviews": 1854,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -30927,7 +32809,12 @@
     "_rating": 4.6,
     "_reviews": 497,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -31049,7 +32936,14 @@
     "_rating": 4.7,
     "_reviews": 142,
     "_priceLevel": null,
-    "_primaryType": "breakfast_restaurant"
+    "_primaryType": "breakfast_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -31171,7 +33065,12 @@
     "_rating": 4.5,
     "_reviews": 435,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -31293,7 +33192,14 @@
     "_rating": 4.8,
     "_reviews": 2695,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -31415,7 +33321,14 @@
     "_rating": 4.5,
     "_reviews": 102,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -31537,7 +33450,12 @@
     "_rating": 4.3,
     "_reviews": 298,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -31659,7 +33577,12 @@
     "_rating": 4.7,
     "_reviews": 470,
     "_priceLevel": null,
-    "_primaryType": "asian_restaurant"
+    "_primaryType": "asian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -31781,7 +33704,12 @@
     "_rating": 4.5,
     "_reviews": 5433,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "chinese_restaurant"
+    "_primaryType": "chinese_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -31903,7 +33831,14 @@
     "_rating": 4.5,
     "_reviews": 717,
     "_priceLevel": null,
-    "_primaryType": "sushi_restaurant"
+    "_primaryType": "sushi_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -32025,7 +33960,15 @@
     "_rating": 4.4,
     "_reviews": 1147,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -32147,7 +34090,14 @@
     "_rating": 4.5,
     "_reviews": 282,
     "_priceLevel": null,
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -32269,7 +34219,15 @@
     "_rating": 4.6,
     "_reviews": 1016,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -32391,7 +34349,14 @@
     "_rating": 4.6,
     "_reviews": 1491,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "sushi_restaurant"
+    "_primaryType": "sushi_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -32513,7 +34478,12 @@
     "_rating": 4.6,
     "_reviews": 3362,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -32635,7 +34605,14 @@
     "_rating": 4.6,
     "_reviews": 2134,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -32757,7 +34734,14 @@
     "_rating": 4.4,
     "_reviews": 1139,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "seafood_restaurant"
+    "_primaryType": "seafood_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -32879,7 +34863,14 @@
     "_rating": 4.6,
     "_reviews": 793,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "french_restaurant"
+    "_primaryType": "french_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -33001,7 +34992,15 @@
     "_rating": 4.6,
     "_reviews": 2404,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -33123,7 +35122,15 @@
     "_rating": 4.6,
     "_reviews": 2661,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -33245,7 +35252,15 @@
     "_rating": 4.4,
     "_reviews": 400,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -33367,7 +35382,16 @@
     "_rating": 4.6,
     "_reviews": 394,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively",
+      "scenic",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -33489,7 +35513,14 @@
     "_rating": 4.7,
     "_reviews": 1367,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -33611,7 +35642,15 @@
     "_rating": 4.6,
     "_reviews": 3770,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -33733,7 +35772,15 @@
     "_rating": 4.7,
     "_reviews": 1320,
     "_priceLevel": null,
-    "_primaryType": "book_store"
+    "_primaryType": "book_store",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -33855,7 +35902,14 @@
     "_rating": 4.6,
     "_reviews": 1014,
     "_priceLevel": null,
-    "_primaryType": "bakery"
+    "_primaryType": "bakery",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -33977,7 +36031,14 @@
     "_rating": 4.8,
     "_reviews": 573,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -34099,7 +36160,12 @@
     "_rating": 4.5,
     "_reviews": 437,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -34221,7 +36287,12 @@
     "_rating": 4.7,
     "_reviews": 415,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -34343,7 +36414,12 @@
     "_rating": 4.9,
     "_reviews": 69,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -34465,7 +36541,14 @@
     "_rating": 4.7,
     "_reviews": 459,
     "_priceLevel": null,
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -34587,7 +36670,14 @@
     "_rating": 4.4,
     "_reviews": 239,
     "_priceLevel": null,
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -34709,7 +36799,14 @@
     "_rating": 4.4,
     "_reviews": 919,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -34831,7 +36928,12 @@
     "_rating": 4.3,
     "_reviews": 213,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -34953,7 +37055,14 @@
     "_rating": 4.3,
     "_reviews": 359,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -35051,7 +37160,12 @@
     "_rating": 4,
     "_reviews": 125,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -35149,7 +37263,14 @@
     "_rating": 4.1,
     "_reviews": 80,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -35247,7 +37368,14 @@
     "_rating": 4.6,
     "_reviews": 36,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -35369,7 +37497,14 @@
     "_rating": 4.6,
     "_reviews": 242,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -35491,7 +37626,15 @@
     "_rating": 4.6,
     "_reviews": 705,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -35613,7 +37756,14 @@
     "_rating": 4.6,
     "_reviews": 1037,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -35735,7 +37885,14 @@
     "_rating": 4.6,
     "_reviews": 5772,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -35857,7 +38014,14 @@
     "_rating": 4.6,
     "_reviews": 6254,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -35979,7 +38143,14 @@
     "_rating": 4.6,
     "_reviews": 4210,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -36101,7 +38272,14 @@
     "_rating": 4,
     "_reviews": 376,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -36223,7 +38401,14 @@
     "_rating": 4.6,
     "_reviews": 6064,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -36345,7 +38530,12 @@
     "_rating": 4.1,
     "_reviews": 963,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -36467,7 +38657,12 @@
     "_rating": 4.3,
     "_reviews": 785,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -36589,7 +38784,14 @@
     "_rating": 4.7,
     "_reviews": 200,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -36711,7 +38913,14 @@
     "_rating": 4.5,
     "_reviews": 1810,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -36833,7 +39042,14 @@
     "_rating": 4.5,
     "_reviews": 185,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -36955,7 +39171,14 @@
     "_rating": 4.8,
     "_reviews": 681,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -37077,7 +39300,14 @@
     "_rating": 4.9,
     "_reviews": 110,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -37199,7 +39429,12 @@
     "_rating": 4.6,
     "_reviews": 549,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -37321,7 +39556,12 @@
     "_rating": 4.6,
     "_reviews": 128,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -37443,7 +39683,14 @@
     "_rating": 5,
     "_reviews": 291,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -37565,7 +39812,15 @@
     "_rating": 4.7,
     "_reviews": 929,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -37687,7 +39942,15 @@
     "_rating": 4.6,
     "_reviews": 2641,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "ukrainian_restaurant"
+    "_primaryType": "ukrainian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -37809,7 +40072,14 @@
     "_rating": 4.7,
     "_reviews": 3391,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -37931,7 +40201,15 @@
     "_rating": 4.7,
     "_reviews": 1598,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "wine_bar"
+    "_primaryType": "wine_bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -38053,7 +40331,14 @@
     "_rating": 4.5,
     "_reviews": 1110,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -38163,7 +40448,14 @@
     "_rating": 4.6,
     "_reviews": 784,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -38187,7 +40479,15 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -38309,7 +40609,15 @@
     "_rating": 4.7,
     "_reviews": 14338,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -38333,7 +40641,14 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -38357,7 +40672,14 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -38381,7 +40703,14 @@
     "_rating": 4.8,
     "_reviews": 664,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -38405,7 +40734,14 @@
     "_rating": 3.8,
     "_reviews": 4,
     "_priceLevel": null,
-    "_primaryType": "tourist_attraction"
+    "_primaryType": "tourist_attraction",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -38429,7 +40765,15 @@
     "_rating": 4.6,
     "_reviews": 27892,
     "_priceLevel": null,
-    "_primaryType": "botanical_garden"
+    "_primaryType": "botanical_garden",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -38551,7 +40895,14 @@
     "_rating": 4.5,
     "_reviews": 1854,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -38673,7 +41024,12 @@
     "_rating": 4.6,
     "_reviews": 497,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -38795,7 +41151,14 @@
     "_rating": 4.7,
     "_reviews": 142,
     "_priceLevel": null,
-    "_primaryType": "breakfast_restaurant"
+    "_primaryType": "breakfast_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -38917,7 +41280,12 @@
     "_rating": 4.5,
     "_reviews": 435,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -39039,7 +41407,14 @@
     "_rating": 4.8,
     "_reviews": 2695,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -39161,7 +41536,14 @@
     "_rating": 4.5,
     "_reviews": 102,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -39283,7 +41665,12 @@
     "_rating": 4.3,
     "_reviews": 298,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -39405,7 +41792,12 @@
     "_rating": 4.7,
     "_reviews": 470,
     "_priceLevel": null,
-    "_primaryType": "asian_restaurant"
+    "_primaryType": "asian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -39527,7 +41919,12 @@
     "_rating": 4.5,
     "_reviews": 5433,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "chinese_restaurant"
+    "_primaryType": "chinese_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -39649,7 +42046,12 @@
     "_rating": 4.5,
     "_reviews": 717,
     "_priceLevel": null,
-    "_primaryType": "sushi_restaurant"
+    "_primaryType": "sushi_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -39771,7 +42173,15 @@
     "_rating": 4.4,
     "_reviews": 1147,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -39893,7 +42303,14 @@
     "_rating": 4.5,
     "_reviews": 282,
     "_priceLevel": null,
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -40015,7 +42432,15 @@
     "_rating": 4.6,
     "_reviews": 1016,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -40137,7 +42562,14 @@
     "_rating": 4.6,
     "_reviews": 1491,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "sushi_restaurant"
+    "_primaryType": "sushi_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -40259,7 +42691,14 @@
     "_rating": 4.6,
     "_reviews": 3362,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -40381,7 +42820,15 @@
     "_rating": 4.6,
     "_reviews": 2134,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -40503,7 +42950,14 @@
     "_rating": 4.4,
     "_reviews": 1139,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "seafood_restaurant"
+    "_primaryType": "seafood_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -40625,7 +43079,14 @@
     "_rating": 4.6,
     "_reviews": 793,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "french_restaurant"
+    "_primaryType": "french_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -40747,7 +43208,14 @@
     "_rating": 4.6,
     "_reviews": 2404,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -40869,7 +43337,14 @@
     "_rating": 4.6,
     "_reviews": 2661,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -40991,7 +43466,14 @@
     "_rating": 4.4,
     "_reviews": 400,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -41113,7 +43595,16 @@
     "_rating": 4.6,
     "_reviews": 394,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic",
+      "lively",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -41235,7 +43726,14 @@
     "_rating": 4.7,
     "_reviews": 1367,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -41357,7 +43855,15 @@
     "_rating": 4.6,
     "_reviews": 3770,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -41479,7 +43985,15 @@
     "_rating": 4.7,
     "_reviews": 1320,
     "_priceLevel": null,
-    "_primaryType": "book_store"
+    "_primaryType": "book_store",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -41601,7 +44115,14 @@
     "_rating": 4.6,
     "_reviews": 1014,
     "_priceLevel": null,
-    "_primaryType": "bakery"
+    "_primaryType": "bakery",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -41723,7 +44244,14 @@
     "_rating": 4.8,
     "_reviews": 573,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -41845,7 +44373,12 @@
     "_rating": 4.5,
     "_reviews": 437,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -41967,7 +44500,12 @@
     "_rating": 4.7,
     "_reviews": 415,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -42089,7 +44627,12 @@
     "_rating": 4.9,
     "_reviews": 69,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -42211,7 +44754,14 @@
     "_rating": 4.7,
     "_reviews": 459,
     "_priceLevel": null,
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -42333,7 +44883,14 @@
     "_rating": 4.4,
     "_reviews": 239,
     "_priceLevel": null,
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -42455,7 +45012,14 @@
     "_rating": 4.4,
     "_reviews": 919,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -42577,7 +45141,12 @@
     "_rating": 4.3,
     "_reviews": 213,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -42699,7 +45268,14 @@
     "_rating": 4.3,
     "_reviews": 359,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -42797,7 +45373,12 @@
     "_rating": 4,
     "_reviews": 125,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -42895,7 +45476,14 @@
     "_rating": 4.1,
     "_reviews": 80,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -42993,7 +45581,14 @@
     "_rating": 4.6,
     "_reviews": 36,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -43115,7 +45710,14 @@
     "_rating": 4.6,
     "_reviews": 242,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -43237,7 +45839,15 @@
     "_rating": 4.6,
     "_reviews": 705,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -43359,7 +45969,14 @@
     "_rating": 4.6,
     "_reviews": 1037,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -43481,7 +46098,14 @@
     "_rating": 4.6,
     "_reviews": 5772,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -43603,7 +46227,14 @@
     "_rating": 4.6,
     "_reviews": 6254,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -43725,7 +46356,14 @@
     "_rating": 4.6,
     "_reviews": 4210,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -43847,7 +46485,14 @@
     "_rating": 4,
     "_reviews": 376,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -43969,7 +46614,14 @@
     "_rating": 4.6,
     "_reviews": 6064,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -44091,7 +46743,12 @@
     "_rating": 4.1,
     "_reviews": 963,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -44213,7 +46870,12 @@
     "_rating": 4.3,
     "_reviews": 785,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -44335,7 +46997,14 @@
     "_rating": 4.7,
     "_reviews": 200,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -44457,7 +47126,14 @@
     "_rating": 4.5,
     "_reviews": 1810,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -44579,7 +47255,12 @@
     "_rating": 4.5,
     "_reviews": 185,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -44701,7 +47382,14 @@
     "_rating": 4.8,
     "_reviews": 681,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -44823,7 +47511,14 @@
     "_rating": 4.9,
     "_reviews": 110,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -44945,7 +47640,14 @@
     "_rating": 4.6,
     "_reviews": 549,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -45067,7 +47769,14 @@
     "_rating": 4.6,
     "_reviews": 128,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -45189,7 +47898,15 @@
     "_rating": 5,
     "_reviews": 291,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -45311,7 +48028,15 @@
     "_rating": 4.7,
     "_reviews": 929,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -45433,7 +48158,15 @@
     "_rating": 4.6,
     "_reviews": 2641,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "ukrainian_restaurant"
+    "_primaryType": "ukrainian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -45555,7 +48288,14 @@
     "_rating": 4.7,
     "_reviews": 3391,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -45677,7 +48417,16 @@
     "_rating": 4.7,
     "_reviews": 1598,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "wine_bar"
+    "_primaryType": "wine_bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -45799,7 +48548,14 @@
     "_rating": 4.5,
     "_reviews": 1110,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -45909,7 +48665,15 @@
     "_rating": 4.6,
     "_reviews": 784,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -45933,7 +48697,15 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -46055,7 +48827,15 @@
     "_rating": 4.7,
     "_reviews": 14338,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -46079,7 +48859,14 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -46103,7 +48890,14 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -46127,7 +48921,15 @@
     "_rating": 4.8,
     "_reviews": 664,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -46151,7 +48953,15 @@
     "_rating": 3.8,
     "_reviews": 4,
     "_priceLevel": null,
-    "_primaryType": "tourist_attraction"
+    "_primaryType": "tourist_attraction",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -46175,7 +48985,15 @@
     "_rating": 4.6,
     "_reviews": 27892,
     "_priceLevel": null,
-    "_primaryType": "botanical_garden"
+    "_primaryType": "botanical_garden",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -46297,7 +49115,14 @@
     "_rating": 4.5,
     "_reviews": 1854,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -46419,7 +49244,12 @@
     "_rating": 4.6,
     "_reviews": 497,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -46541,7 +49371,14 @@
     "_rating": 4.7,
     "_reviews": 142,
     "_priceLevel": null,
-    "_primaryType": "breakfast_restaurant"
+    "_primaryType": "breakfast_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -46663,7 +49500,12 @@
     "_rating": 4.5,
     "_reviews": 435,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -46785,7 +49627,14 @@
     "_rating": 4.8,
     "_reviews": 2695,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -46907,7 +49756,14 @@
     "_rating": 4.5,
     "_reviews": 102,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -47029,7 +49885,12 @@
     "_rating": 4.3,
     "_reviews": 298,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -47151,7 +50012,12 @@
     "_rating": 4.7,
     "_reviews": 470,
     "_priceLevel": null,
-    "_primaryType": "asian_restaurant"
+    "_primaryType": "asian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -47273,7 +50139,12 @@
     "_rating": 4.5,
     "_reviews": 5433,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "chinese_restaurant"
+    "_primaryType": "chinese_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -47395,7 +50266,12 @@
     "_rating": 4.5,
     "_reviews": 717,
     "_priceLevel": null,
-    "_primaryType": "sushi_restaurant"
+    "_primaryType": "sushi_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -47517,7 +50393,15 @@
     "_rating": 4.4,
     "_reviews": 1147,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -47639,7 +50523,14 @@
     "_rating": 4.5,
     "_reviews": 282,
     "_priceLevel": null,
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -47761,7 +50652,15 @@
     "_rating": 4.6,
     "_reviews": 1016,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -47883,7 +50782,14 @@
     "_rating": 4.6,
     "_reviews": 1491,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "sushi_restaurant"
+    "_primaryType": "sushi_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -48005,7 +50911,12 @@
     "_rating": 4.6,
     "_reviews": 3362,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -48127,7 +51038,15 @@
     "_rating": 4.6,
     "_reviews": 2134,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -48249,7 +51168,14 @@
     "_rating": 4.4,
     "_reviews": 1139,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "seafood_restaurant"
+    "_primaryType": "seafood_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -48371,7 +51297,14 @@
     "_rating": 4.6,
     "_reviews": 793,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "french_restaurant"
+    "_primaryType": "french_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -48493,7 +51426,15 @@
     "_rating": 4.6,
     "_reviews": 2404,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -48615,7 +51556,15 @@
     "_rating": 4.6,
     "_reviews": 2661,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -48737,7 +51686,15 @@
     "_rating": 4.4,
     "_reviews": 400,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -48859,7 +51816,16 @@
     "_rating": 4.6,
     "_reviews": 394,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively",
+      "scenic",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -48981,7 +51947,14 @@
     "_rating": 4.7,
     "_reviews": 1367,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -49103,7 +52076,15 @@
     "_rating": 4.6,
     "_reviews": 3770,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -49225,7 +52206,15 @@
     "_rating": 4.7,
     "_reviews": 1320,
     "_priceLevel": null,
-    "_primaryType": "book_store"
+    "_primaryType": "book_store",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -49347,7 +52336,14 @@
     "_rating": 4.6,
     "_reviews": 1014,
     "_priceLevel": null,
-    "_primaryType": "bakery"
+    "_primaryType": "bakery",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -49469,7 +52465,14 @@
     "_rating": 4.8,
     "_reviews": 573,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -49591,7 +52594,12 @@
     "_rating": 4.5,
     "_reviews": 437,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -49713,7 +52721,12 @@
     "_rating": 4.7,
     "_reviews": 415,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -49835,7 +52848,12 @@
     "_rating": 4.9,
     "_reviews": 69,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -49957,7 +52975,14 @@
     "_rating": 4.7,
     "_reviews": 459,
     "_priceLevel": null,
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -50079,7 +53104,14 @@
     "_rating": 4.4,
     "_reviews": 239,
     "_priceLevel": null,
-    "_primaryType": "dessert_restaurant"
+    "_primaryType": "dessert_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -50201,7 +53233,12 @@
     "_rating": 4.4,
     "_reviews": 919,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -50323,7 +53360,12 @@
     "_rating": 4.3,
     "_reviews": 213,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -50445,7 +53487,14 @@
     "_rating": 4.3,
     "_reviews": 359,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -50543,7 +53592,12 @@
     "_rating": 4,
     "_reviews": 125,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -50641,7 +53695,14 @@
     "_rating": 4.1,
     "_reviews": 80,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -50739,7 +53800,14 @@
     "_rating": 4.6,
     "_reviews": 36,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -50861,7 +53929,14 @@
     "_rating": 4.6,
     "_reviews": 242,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -50983,7 +54058,15 @@
     "_rating": 4.6,
     "_reviews": 705,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -51105,7 +54188,14 @@
     "_rating": 4.6,
     "_reviews": 1037,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -51227,7 +54317,14 @@
     "_rating": 4.6,
     "_reviews": 5772,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -51349,7 +54446,14 @@
     "_rating": 4.6,
     "_reviews": 6254,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -51471,7 +54575,14 @@
     "_rating": 4.6,
     "_reviews": 4210,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -51593,7 +54704,14 @@
     "_rating": 4,
     "_reviews": 376,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -51715,7 +54833,14 @@
     "_rating": 4.6,
     "_reviews": 6064,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -51837,7 +54962,12 @@
     "_rating": 4.1,
     "_reviews": 963,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -51959,7 +55089,12 @@
     "_rating": 4.3,
     "_reviews": 785,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -52081,7 +55216,14 @@
     "_rating": 4.7,
     "_reviews": 200,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -52203,7 +55345,14 @@
     "_rating": 4.5,
     "_reviews": 1810,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -52325,7 +55474,14 @@
     "_rating": 4.5,
     "_reviews": 185,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "quiet"
+    ]
   },
   {
     "approved": true,
@@ -52447,7 +55603,14 @@
     "_rating": 4.8,
     "_reviews": 681,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -52569,7 +55732,14 @@
     "_rating": 4.9,
     "_reviews": 110,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -52691,7 +55861,12 @@
     "_rating": 4.6,
     "_reviews": 549,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -52813,7 +55988,12 @@
     "_rating": 4.6,
     "_reviews": 128,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -52935,7 +56115,14 @@
     "_rating": 5,
     "_reviews": 291,
     "_priceLevel": null,
-    "_primaryType": "coffee_shop"
+    "_primaryType": "coffee_shop",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -53057,7 +56244,15 @@
     "_rating": 4.7,
     "_reviews": 929,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -53179,7 +56374,15 @@
     "_rating": 4.6,
     "_reviews": 2641,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "ukrainian_restaurant"
+    "_primaryType": "ukrainian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -53301,7 +56504,14 @@
     "_rating": 4.7,
     "_reviews": 3391,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -53423,7 +56633,15 @@
     "_rating": 4.7,
     "_reviews": 1598,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "wine_bar"
+    "_primaryType": "wine_bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -53545,7 +56763,14 @@
     "_rating": 4.5,
     "_reviews": 1110,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -53655,7 +56880,15 @@
     "_rating": 4.6,
     "_reviews": 784,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "bar"
+    "_primaryType": "bar",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -53679,7 +56912,15 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -53801,7 +57042,15 @@
     "_rating": 4.7,
     "_reviews": 14338,
     "_priceLevel": null,
-    "_primaryType": "park"
+    "_primaryType": "park",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -53825,7 +57074,14 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -53849,7 +57105,14 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -53873,7 +57136,14 @@
     "_rating": 4.8,
     "_reviews": 664,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -53897,7 +57167,15 @@
     "_rating": 3.8,
     "_reviews": 4,
     "_priceLevel": null,
-    "_primaryType": "tourist_attraction"
+    "_primaryType": "tourist_attraction",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "scenic",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -53921,7 +57199,15 @@
     "_rating": 4.6,
     "_reviews": 27892,
     "_priceLevel": null,
-    "_primaryType": "botanical_garden"
+    "_primaryType": "botanical_garden",
+    "hardCapabilities": [
+      "outdoor",
+      "walking"
+    ],
+    "facetTags": [
+      "quiet",
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -54043,7 +57329,14 @@
     "_rating": 4.5,
     "_reviews": 1854,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -54165,7 +57458,12 @@
     "_rating": 4.6,
     "_reviews": 497,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -54287,7 +57585,14 @@
     "_rating": 4.7,
     "_reviews": 142,
     "_priceLevel": null,
-    "_primaryType": "breakfast_restaurant"
+    "_primaryType": "breakfast_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -54409,7 +57714,15 @@
     "_rating": 4.5,
     "_reviews": 435,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -54531,7 +57844,14 @@
     "_rating": 4.8,
     "_reviews": 2695,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -54653,7 +57973,14 @@
     "_rating": 4.5,
     "_reviews": 102,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -54775,7 +58102,12 @@
     "_rating": 4.3,
     "_reviews": 298,
     "_priceLevel": null,
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -54897,7 +58229,12 @@
     "_rating": 4.7,
     "_reviews": 470,
     "_priceLevel": null,
-    "_primaryType": "asian_restaurant"
+    "_primaryType": "asian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -55019,7 +58356,12 @@
     "_rating": 4.5,
     "_reviews": 5433,
     "_priceLevel": "PRICE_LEVEL_MODERATE",
-    "_primaryType": "chinese_restaurant"
+    "_primaryType": "chinese_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -55141,7 +58483,14 @@
     "_rating": 4.5,
     "_reviews": 717,
     "_priceLevel": null,
-    "_primaryType": "sushi_restaurant"
+    "_primaryType": "sushi_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -55263,7 +58612,15 @@
     "_rating": 4.4,
     "_reviews": 1147,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -55385,7 +58742,14 @@
     "_rating": 4.5,
     "_reviews": 282,
     "_priceLevel": null,
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -55507,7 +58871,15 @@
     "_rating": 4.6,
     "_reviews": 1016,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -55629,7 +59001,14 @@
     "_rating": 4.6,
     "_reviews": 1491,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "sushi_restaurant"
+    "_primaryType": "sushi_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -55751,7 +59130,14 @@
     "_rating": 4.6,
     "_reviews": 3362,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic"
+    ]
   },
   {
     "approved": true,
@@ -55873,7 +59259,15 @@
     "_rating": 4.6,
     "_reviews": 2134,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -55995,7 +59389,14 @@
     "_rating": 4.4,
     "_reviews": 1139,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "seafood_restaurant"
+    "_primaryType": "seafood_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -56117,7 +59518,14 @@
     "_rating": 4.6,
     "_reviews": 793,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "french_restaurant"
+    "_primaryType": "french_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -56239,7 +59647,15 @@
     "_rating": 4.6,
     "_reviews": 2404,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -56361,7 +59777,15 @@
     "_rating": 4.6,
     "_reviews": 2661,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -56483,7 +59907,14 @@
     "_rating": 4.4,
     "_reviews": 400,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -56605,7 +60036,16 @@
     "_rating": 4.6,
     "_reviews": 394,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic",
+      "lively",
+      "design_forward"
+    ]
   },
   {
     "approved": true,
@@ -56727,7 +60167,14 @@
     "_rating": 4.7,
     "_reviews": 1367,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -56849,7 +60296,15 @@
     "_rating": 4.6,
     "_reviews": 3770,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "italian_restaurant"
+    "_primaryType": "italian_restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -56971,7 +60426,15 @@
     "_reviews": 337,
     "_priceLevel": null,
     "_primaryType": "restaurant",
-    "tier": "premium"
+    "tier": "premium",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -57093,7 +60556,15 @@
     "_reviews": 337,
     "_priceLevel": null,
     "_primaryType": "restaurant",
-    "tier": "premium"
+    "tier": "premium",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "design_forward",
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -57215,7 +60686,14 @@
     "_rating": 4.7,
     "_reviews": 6061,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -57337,7 +60815,14 @@
     "_rating": 4.7,
     "_reviews": 6061,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -57459,7 +60944,14 @@
     "_rating": 4.7,
     "_reviews": 6061,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -57581,7 +61073,14 @@
     "_rating": 4.7,
     "_reviews": 6061,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -57703,7 +61202,14 @@
     "_rating": 4.7,
     "_reviews": 6061,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -57825,7 +61331,12 @@
     "_rating": 4.6,
     "_reviews": 2230,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -57947,7 +61458,12 @@
     "_rating": 4.6,
     "_reviews": 2230,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -58069,7 +61585,12 @@
     "_rating": 4.6,
     "_reviews": 2230,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -58191,7 +61712,12 @@
     "_rating": 4.6,
     "_reviews": 2230,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -58313,7 +61839,12 @@
     "_rating": 4.6,
     "_reviews": 2230,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -58435,7 +61966,14 @@
     "_rating": 4.5,
     "_reviews": 4884,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -58557,7 +62095,14 @@
     "_rating": 4.5,
     "_reviews": 4884,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -58679,7 +62224,14 @@
     "_rating": 4.5,
     "_reviews": 4884,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -58801,7 +62353,14 @@
     "_rating": 4.5,
     "_reviews": 4884,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -58923,7 +62482,14 @@
     "_rating": 4.5,
     "_reviews": 4884,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "lively"
+    ]
   },
   {
     "approved": true,
@@ -59045,7 +62611,14 @@
     "_rating": 4.4,
     "_reviews": 8586,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -59167,7 +62740,14 @@
     "_rating": 4.4,
     "_reviews": 8586,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -59289,7 +62869,14 @@
     "_rating": 4.4,
     "_reviews": 8586,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -59411,7 +62998,14 @@
     "_rating": 4.4,
     "_reviews": 8586,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -59533,7 +63127,14 @@
     "_rating": 4.4,
     "_reviews": 8586,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "cafe"
+    "_primaryType": "cafe",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "cozy_public"
+    ]
   },
   {
     "approved": true,
@@ -59655,7 +63256,12 @@
     "_rating": 4.4,
     "_reviews": 2204,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -59777,7 +63383,12 @@
     "_rating": 4.4,
     "_reviews": 2204,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -59899,7 +63510,12 @@
     "_rating": 4.4,
     "_reviews": 2204,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -60021,7 +63637,12 @@
     "_rating": 4.4,
     "_reviews": 2204,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -60143,7 +63764,12 @@
     "_rating": 4.4,
     "_reviews": 2204,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": []
   },
   {
     "approved": true,
@@ -60265,7 +63891,15 @@
     "_rating": 4.2,
     "_reviews": 177,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -60387,7 +64021,15 @@
     "_rating": 4.2,
     "_reviews": 177,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -60509,7 +64151,15 @@
     "_rating": 4.2,
     "_reviews": 177,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -60631,7 +64281,15 @@
     "_rating": 4.2,
     "_reviews": 177,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic",
+      "romantic_public"
+    ]
   },
   {
     "approved": true,
@@ -60753,6 +64411,14 @@
     "_rating": 4.2,
     "_reviews": 177,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "hardCapabilities": [
+      "indoor",
+      "seated"
+    ],
+    "facetTags": [
+      "scenic",
+      "romantic_public"
+    ]
   }
 ]
