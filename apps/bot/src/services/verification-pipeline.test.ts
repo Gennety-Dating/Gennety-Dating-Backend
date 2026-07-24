@@ -28,6 +28,7 @@ interface Harness {
   persisted: PersistOutcomeInput[];
   notifications: Array<{ telegramId: bigint; message: string }>;
   activationSurfaces: Array<{ userId: string; telegramId: bigint }>;
+  referralSettles: string[];
   deps: PipelineDeps;
 }
 
@@ -71,6 +72,7 @@ function makeHarness(
   const persisted: PersistOutcomeInput[] = [];
   const notifications: Array<{ telegramId: bigint; message: string }> = [];
   const activationSurfaces: Array<{ userId: string; telegramId: bigint }> = [];
+  const referralSettles: string[] = [];
 
   const deps: PipelineDeps = {
     fetchInquirySelfie: vi.fn(async () => selfie),
@@ -90,6 +92,9 @@ function makeHarness(
     surfaceVerifiedActivation: vi.fn(async (input) => {
       activationSurfaces.push(input);
     }),
+    settleReferralReward: vi.fn(async (uid: string) => {
+      referralSettles.push(uid);
+    }),
     db: {
       findUser: vi.fn(async () => user),
       persistOutcome: vi.fn(async (input: PersistOutcomeInput) => {
@@ -103,6 +108,7 @@ function makeHarness(
     persisted,
     notifications,
     activationSurfaces,
+    referralSettles,
     deps,
   };
 }
@@ -138,6 +144,8 @@ describe("runFaceMatchVerification — happy path (quorum)", () => {
     expect(h.activationSurfaces).toEqual([
       { userId: USER_ID, telegramId: 999_001n },
     ]);
+    // Referral settlement fires once on the verified branch (idempotent reward).
+    expect(h.referralSettles).toEqual([USER_ID]);
   });
 
   it("verifies when ONE photo passes and the rest are borderline (quorum=1)", async () => {

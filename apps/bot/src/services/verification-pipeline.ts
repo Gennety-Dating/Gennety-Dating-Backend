@@ -10,6 +10,7 @@ import { fetchInquirySelfie, fetchLatestInquiryByReference } from "./persona-api
 import { pinStatusBanner } from "./status-banner.js";
 import { downloadProfileImage, uploadSelfie } from "./storage.js";
 import { notifyFounderNewUser } from "./founder-notify.js";
+import { settleReferralOnVerified } from "./referral-notify.js";
 
 /**
  * Face-match verification pipeline (Phase 6.3 — third iteration).
@@ -142,6 +143,14 @@ export interface PipelineDeps {
     photoPaths: readonly string[],
     gender: string | null,
   ) => Promise<unknown>;
+  /**
+   * Referral settlement (§Referral): if this newly-verified user was invited
+   * via a `referral:<id>` link, pay the referrer their milestone rung(s) and DM
+   * them. Optional + best-effort — undefined in tests, and a failure never
+   * blocks verification. Not gated on `telegramId > 0n`, so a mobile invitee
+   * still rewards their referrer. No-ops when the feature flag is off.
+   */
+  settleReferralReward?: (userId: string) => Promise<void>;
   /**
    * DB shim so tests can hand in an in-memory store. Production uses the
    * real Prisma client. Only the slices we actually call.
@@ -534,6 +543,17 @@ export async function runFaceMatchVerification(
         telegramId: user.telegramId,
       });
     }
+    // Referral settlement (§Referral): pay + DM the referrer if this invitee was
+    // invited by a `referral:<id>` link. Best-effort; not gated on telegramId so
+    // a mobile invitee still rewards their (possibly Telegram) referrer. The
+    // reward itself is idempotent, so re-runs (admin recheck) never double-pay.
+    if (deps.settleReferralReward) {
+      try {
+        await deps.settleReferralReward(userId);
+      } catch (err) {
+        console.warn(`${LOG_PREFIX} referral settle threw (swallowed)`, { userId, err });
+      }
+    }
     // Founder ops feed: first activation via a `verified` outcome. The vision
     // Elo seed above has run, so the DM'd profile carries the attractiveness
     // score. Idempotent + status-gated inside the notifier; fire-and-forget.
@@ -705,6 +725,11 @@ export async function runFaceMatchVerificationDefault(
       surfaceVerifiedActivation: async (input) => {
         await surfaceVerifiedActivationDefault(api, input.userId, input.telegramId);
       },
+      ...(env.REFERRAL_FEATURE_ENABLED
+        ? {
+            settleReferralReward: (uid: string) => settleReferralOnVerified(uid, api),
+          }
+        : {}),
       db: {
         findUser: async (id) => {
           return prisma.user.findUnique({
@@ -919,6 +944,11 @@ export async function pullVerificationStatus(
   ) {
     if (user.verificationStatus === "verified") {
       await surfaceVerifiedActivationDefault(api, userId, user.telegramId);
+      // Idempotent referral settle — covers a `verified` set outside the pipeline
+      // body; a genuine double never double-pays (unique ledger ids).
+      if (env.REFERRAL_FEATURE_ENABLED) {
+        await settleReferralOnVerified(userId, api).catch(() => {});
+      }
     }
     return { kind: "already_done", verificationStatus: user.verificationStatus };
   }
