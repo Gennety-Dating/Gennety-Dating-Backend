@@ -12,6 +12,12 @@ vi.mock("../../services/venue-intent-v2.js", () => ({
   saveVenueChatDraft: vi.fn(),
   confirmVenueIntent: vi.fn(),
 }));
+// Keep the real chip constants (VENUE_EXPERIENCES etc.) but make `tv` echo the
+// key so the "waiting for partner" branch is deterministically assertable.
+vi.mock("@gennety/shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@gennety/shared")>();
+  return { ...actual, tv: vi.fn((_lang: unknown, key: string) => key) };
+});
 
 import { prisma } from "@gennety/db";
 import {
@@ -81,11 +87,11 @@ describe("buildVibeChipKeyboard", () => {
 });
 
 describe("handleVibeChipCallback — confirm", () => {
-  it("confirms the draft (with its origin) and replaces the card with an ack", async () => {
+  it("confirms the draft (with its origin) and, when the partner has NOT confirmed yet, shows the classic 'waiting for the other side' message", async () => {
     mUser.findUnique.mockResolvedValue({ id: "u1" });
     mMatch.findFirst.mockResolvedValue({ id: "m1" });
     mGet.mockResolvedValue({ side: "A", draft: draft() });
-    mConfirm.mockResolvedValue({});
+    mConfirm.mockResolvedValue({ partnerSubmitted: false });
 
     const c = ctx("vic:ok");
     await handleVibeChipCallback(c);
@@ -98,7 +104,22 @@ describe("handleVibeChipCallback — confirm", () => {
         origin: { lat: 50.45, lng: 30.52, address: "Kyiv" },
       }),
     );
-    expect(c.editMessageText).toHaveBeenCalled();
+    // `tv` is mocked to echo the key → the waiting line is the classic venueWaitingPeer.
+    expect(c.editMessageText).toHaveBeenCalledWith("venueWaitingPeer");
+  });
+
+  it("shows the 'lining up the spot' ack once the partner has also confirmed (finalize runs)", async () => {
+    mUser.findUnique.mockResolvedValue({ id: "u1" });
+    mMatch.findFirst.mockResolvedValue({ id: "m1" });
+    mGet.mockResolvedValue({ side: "A", draft: draft() });
+    mConfirm.mockResolvedValue({ partnerSubmitted: true });
+
+    const c = ctx("vic:ok");
+    await handleVibeChipCallback(c);
+
+    const arg = c.editMessageText.mock.calls[0][0];
+    expect(arg).not.toBe("venueWaitingPeer");
+    expect(arg).toContain("✅");
   });
 
   it("blocks confirm when no experience is selected (alert, no confirm call)", async () => {

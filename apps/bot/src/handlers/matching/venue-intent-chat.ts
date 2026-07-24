@@ -25,6 +25,7 @@ import {
   VENUE_EXPERIENCES,
   VENUE_AMBIENCES,
   VENUE_FORMATS,
+  tv,
   type VenueExperience,
   type VenueAmbience,
   type VenueFormat,
@@ -199,7 +200,7 @@ export async function handleVibeChipCallback(ctx: BotContext): Promise<void> {
       await ctx.answerCallbackQuery({ text: strings(lang).expired }).catch(() => undefined);
       return;
     }
-    await confirmVenueIntent(actor.matchId, actor.userId, {
+    const state = await confirmVenueIntent(actor.matchId, actor.userId, {
       experiences: draft.experiences,
       ambiences: draft.ambiences,
       formats: draft.formats,
@@ -207,8 +208,15 @@ export async function handleVibeChipCallback(ctx: BotContext): Promise<void> {
       origin,
     });
     await ctx.answerCallbackQuery().catch(() => undefined);
-    // Replace the interactive card with a static ack (drops the keyboard).
-    await ctx.editMessageText(strings(lang).confirmedAck).catch(() => undefined);
+    // Replace the interactive card (drops the keyboard). Finalization only runs
+    // once BOTH sides are confirmed — so if the partner hasn't confirmed yet,
+    // show the classic "waiting for the other side" line instead of the
+    // "lining up the perfect spot" ack, which would misleadingly imply a venue
+    // is being picked right now while nothing is actually happening.
+    const ack = state?.partnerSubmitted
+      ? strings(lang).confirmedAck
+      : tv(lang, "venueWaitingPeer");
+    await ctx.editMessageText(ack).catch(() => undefined);
     return;
   }
 
