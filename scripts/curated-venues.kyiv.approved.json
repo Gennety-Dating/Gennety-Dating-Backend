@@ -60144,5 +60144,615 @@
     "_reviews": 2204,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
     "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kneu.edu.ua",
+    "name": "Elevato",
+    "address": "Dniprovs'kyi descent, 1, Kyiv, Ukraine, 02000",
+    "lat": 50.4406113,
+    "lng": 30.5524364,
+    "googleMapsUri": "https://maps.google.com/?cid=12992496702258294426&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "rooftop",
+      "view",
+      "dinner"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 12:00 – 10:00 PM",
+        "Tuesday: 12:00 – 10:00 PM",
+        "Wednesday: 12:00 – 10:00 PM",
+        "Thursday: 12:00 – 10:00 PM",
+        "Friday: 12:00 – 10:00 PM",
+        "Saturday: 12:00 – 10:00 PM",
+        "Sunday: 12:00 – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T09:00:00Z"
+    },
+    "_rating": 4.2,
+    "_reviews": 177,
+    "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "knu.ua",
+    "name": "Elevato",
+    "address": "Dniprovs'kyi descent, 1, Kyiv, Ukraine, 02000",
+    "lat": 50.4406113,
+    "lng": 30.5524364,
+    "googleMapsUri": "https://maps.google.com/?cid=12992496702258294426&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "rooftop",
+      "view",
+      "dinner"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 12:00 – 10:00 PM",
+        "Tuesday: 12:00 – 10:00 PM",
+        "Wednesday: 12:00 – 10:00 PM",
+        "Thursday: 12:00 – 10:00 PM",
+        "Friday: 12:00 – 10:00 PM",
+        "Saturday: 12:00 – 10:00 PM",
+        "Sunday: 12:00 – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T09:00:00Z"
+    },
+    "_rating": 4.2,
+    "_reviews": 177,
+    "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kpi.ua",
+    "name": "Elevato",
+    "address": "Dniprovs'kyi descent, 1, Kyiv, Ukraine, 02000",
+    "lat": 50.4406113,
+    "lng": 30.5524364,
+    "googleMapsUri": "https://maps.google.com/?cid=12992496702258294426&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "rooftop",
+      "view",
+      "dinner"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 12:00 – 10:00 PM",
+        "Tuesday: 12:00 – 10:00 PM",
+        "Wednesday: 12:00 – 10:00 PM",
+        "Thursday: 12:00 – 10:00 PM",
+        "Friday: 12:00 – 10:00 PM",
+        "Saturday: 12:00 – 10:00 PM",
+        "Sunday: 12:00 – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T09:00:00Z"
+    },
+    "_rating": 4.2,
+    "_reviews": 177,
+    "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "stud.nau.edu.ua",
+    "name": "Elevato",
+    "address": "Dniprovs'kyi descent, 1, Kyiv, Ukraine, 02000",
+    "lat": 50.4406113,
+    "lng": 30.5524364,
+    "googleMapsUri": "https://maps.google.com/?cid=12992496702258294426&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "rooftop",
+      "view",
+      "dinner"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 12:00 – 10:00 PM",
+        "Tuesday: 12:00 – 10:00 PM",
+        "Wednesday: 12:00 – 10:00 PM",
+        "Thursday: 12:00 – 10:00 PM",
+        "Friday: 12:00 – 10:00 PM",
+        "Saturday: 12:00 – 10:00 PM",
+        "Sunday: 12:00 – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T09:00:00Z"
+    },
+    "_rating": 4.2,
+    "_reviews": 177,
+    "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "ukma.edu.ua",
+    "name": "Elevato",
+    "address": "Dniprovs'kyi descent, 1, Kyiv, Ukraine, 02000",
+    "lat": 50.4406113,
+    "lng": 30.5524364,
+    "googleMapsUri": "https://maps.google.com/?cid=12992496702258294426&g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+    "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "rooftop",
+      "view",
+      "dinner"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 12,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 12:00 – 10:00 PM",
+        "Tuesday: 12:00 – 10:00 PM",
+        "Wednesday: 12:00 – 10:00 PM",
+        "Thursday: 12:00 – 10:00 PM",
+        "Friday: 12:00 – 10:00 PM",
+        "Saturday: 12:00 – 10:00 PM",
+        "Sunday: 12:00 – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T09:00:00Z"
+    },
+    "_rating": 4.2,
+    "_reviews": 177,
+    "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
+    "_primaryType": "restaurant"
   }
 ]
