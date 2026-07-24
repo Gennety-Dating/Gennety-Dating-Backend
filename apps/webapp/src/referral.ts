@@ -23,6 +23,33 @@ const lang: Lang = (["en", "ru", "uk", "de", "pl"] as const).includes(rawLang as
 
 const getInitData = (): string => app?.initData ?? "";
 
+/**
+ * Preview mode — renders the full ladder UI with mock data and no network call,
+ * so the screen can be opened in a plain browser (no Telegram, no initData) for
+ * design review. Triggered explicitly by `?preview` or implicitly whenever
+ * there is no Telegram initData (i.e. opened outside a Mini App). The real
+ * in-Telegram flow is unaffected: inside a Mini App `initData` is always
+ * present, so this never masks the live `/v1/referral/state` fetch there.
+ */
+const PREVIEW = params.has("preview") || getInitData() === "";
+
+const PREVIEW_STATE: ReferralState = {
+  ok: true,
+  inviteLink: "https://t.me/gennetybot?start=referral_preview",
+  verifiedCount: 3,
+  earnedTickets: 2,
+  earnedMonths: 2,
+  earnedUsd: "$37.96",
+  ladder: [
+    { atCount: 1, tickets: 1, months: 1, usd: "$18.98", reached: true },
+    { atCount: 3, tickets: 2, months: 2, usd: "$37.96", reached: true },
+    { atCount: 5, tickets: 3, months: 3, usd: "$56.94", reached: false },
+    { atCount: 10, tickets: 5, months: 5, usd: "$94.90", reached: false },
+  ],
+  next: { atCount: 5, remaining: 2, usd: "$56.94" },
+  inviteeMonths: 1,
+};
+
 interface LadderRung {
   atCount: number;
   tickets: number;
@@ -237,6 +264,13 @@ async function onShare(btn: HTMLButtonElement): Promise<void> {
   if (sharing) return;
   sharing = true;
   btn.disabled = true;
+  if (PREVIEW) {
+    // No Telegram share sheet in a plain browser — just acknowledge.
+    app?.showAlert?.(s.shareSent) ?? alert(s.shareSent);
+    sharing = false;
+    btn.disabled = false;
+    return;
+  }
   try {
     const res = await fetch(`${apiBase}/v1/referral/share-message`, {
       method: "POST",
@@ -268,6 +302,10 @@ async function boot(): Promise<void> {
   app?.expand?.();
   wireContentInsets(app);
   renderLoading();
+  if (PREVIEW) {
+    render(PREVIEW_STATE);
+    return;
+  }
   try {
     const res = await fetch(`${apiBase}/v1/referral/state`, {
       headers: { Authorization: `tma ${getInitData()}` },

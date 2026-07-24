@@ -56,6 +56,16 @@ const app = window.Telegram?.WebApp;
 const params = new URLSearchParams(location.search);
 const source = params.get("source") ?? app?.initDataUnsafe?.start_param ?? null;
 
+/**
+ * Dev-QA standalone preview of the referral welcome-gift scene. `?preview=referral-gift`
+ * routes straight to that scene with mock data and NO Telegram/remote-state
+ * requirement, so it can be opened in a plain browser for design review (the
+ * scene otherwise sits mid-onboarding behind the initData gate). Harmless in
+ * prod: the flag is only set by that explicit query param, and the Continue
+ * button still requires real initData to actually claim.
+ */
+const PREVIEW_REFERRAL_GIFT = params.get("preview") === "referral-gift";
+
 const TRAP_BACKGROUND =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuDT22v5JOFjqN2g1VkI86PnzZJ_vTS3whfVoE4pTqZMVY_zqEjFKQf0fGlab3jjVTIxx1gKK5zx4u10XcEtFiFDqeEsGaLjoNTdZMWbR46RULeC47iOvuiqYHU8PJrKZ9kQVqufAHWY-pv_0RSTu1V7cSz_tLD89uoBf8RE9OxG9ZhXIGcEKvxkjcwB3oa3Kf9KjRlxyoUZcBMol4eX5hJ6Oh2_fhyciV6tYxlSEoexfNp4Pr7iGISmsLdSC0fp35_bW0OO_cj0xmGN";
 const DRUM_CYCLE_INTERVAL_MS = 2500; // Stats (screen 1) auto-cycle interval
@@ -231,6 +241,12 @@ function App(): ReactElement {
 
   useEffect(() => {
     configureTelegramChrome();
+    // Standalone visual preview — no Telegram, no remote state (see the flag's doc).
+    if (PREVIEW_REFERRAL_GIFT) {
+      setRemoteUser({ referrerFirstName: "Anna", referralGiftMonths: 1 } as unknown as RemoteUser);
+      setPhase({ kind: "referralGift" });
+      return;
+    }
     if (!app?.initData) {
       setBootError(strings.errors["Missing tma initData"] ?? strings.genericError);
       return;
@@ -2139,7 +2155,7 @@ function ReferralGiftGate(props: {
       <div className="referral-gift-actions">
         <button
           className="referral-gift-primary"
-          disabled={busy || !app?.initData}
+          disabled={busy || (!app?.initData && !PREVIEW_REFERRAL_GIFT)}
           onClick={() => void claim()}
         >
           {busy ? s.referralGiftClaiming : s.referralGiftContinue}
