@@ -224,10 +224,18 @@ body {
   transform: scale(0.97);
   filter: brightness(0.96);
 }
+/* "My type" — brand burgundy primary with a Liquid Glass sheen: white
+   highlights sprayed down both edges (inset white glows) plus a top edge
+   catchlight, so the button reads as lit and stays legible over any photo. */
 .radar-verdict-yes {
-  background: #e8b23a;
-  color: #241a04;
-  box-shadow: 0 10px 26px rgba(210, 150, 30, 0.45), 0 2px 6px rgba(0, 0, 0, 0.28);
+  background: linear-gradient(180deg, #9c2b46 0%, #8b253b 58%, #791f31 100%);
+  color: #fff;
+  box-shadow:
+    0 10px 26px rgba(139, 37, 59, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.3),
+    inset 9px 0 20px -11px rgba(255, 255, 255, 0.9),
+    inset -9px 0 20px -11px rgba(255, 255, 255, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 /* Retry button on the error screen — a plain self-contained pill. */
