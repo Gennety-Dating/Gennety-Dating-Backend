@@ -4676,7 +4676,8 @@
     "_rating": 4.6,
     "_reviews": 337,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "tier": "premium"
   },
   {
     "approved": true,
@@ -8399,7 +8400,8 @@
     "_rating": 4.6,
     "_reviews": 337,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "tier": "premium"
   },
   {
     "approved": true,
@@ -16087,7 +16089,8 @@
     "_rating": 4.6,
     "_reviews": 337,
     "_priceLevel": null,
-    "_primaryType": "restaurant"
+    "_primaryType": "restaurant",
+    "tier": "premium"
   },
   {
     "approved": true,
@@ -22059,7 +22062,7 @@
     "placeId": "ChIJwaRXnDLP1EARXVg-qFN4KWA",
     "category": "restaurant",
     "priority": 1,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "italian",
       "cozy",
@@ -22547,7 +22550,7 @@
     "placeId": "ChIJTYHrR3PP1EARKSJMXZ7hI9c",
     "category": "lounge",
     "priority": 2,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "cocktail",
       "music",
@@ -30025,7 +30028,7 @@
     "placeId": "ChIJwaRXnDLP1EARXVg-qFN4KWA",
     "category": "restaurant",
     "priority": 1,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "italian",
       "cozy",
@@ -30513,7 +30516,7 @@
     "placeId": "ChIJTYHrR3PP1EARKSJMXZ7hI9c",
     "category": "lounge",
     "priority": 2,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "cocktail",
       "music",
@@ -37991,7 +37994,7 @@
     "placeId": "ChIJwaRXnDLP1EARXVg-qFN4KWA",
     "category": "restaurant",
     "priority": 1,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "italian",
       "cozy",
@@ -38479,7 +38482,7 @@
     "placeId": "ChIJTYHrR3PP1EARKSJMXZ7hI9c",
     "category": "lounge",
     "priority": 2,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "cocktail",
       "music",
@@ -45957,7 +45960,7 @@
     "placeId": "ChIJwaRXnDLP1EARXVg-qFN4KWA",
     "category": "restaurant",
     "priority": 1,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "italian",
       "cozy",
@@ -46445,7 +46448,7 @@
     "placeId": "ChIJTYHrR3PP1EARKSJMXZ7hI9c",
     "category": "lounge",
     "priority": 2,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "cocktail",
       "music",
@@ -53923,7 +53926,7 @@
     "placeId": "ChIJwaRXnDLP1EARXVg-qFN4KWA",
     "category": "restaurant",
     "priority": 1,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "italian",
       "cozy",
@@ -54411,7 +54414,7 @@
     "placeId": "ChIJTYHrR3PP1EARKSJMXZ7hI9c",
     "category": "lounge",
     "priority": 2,
-    "tier": "base",
+    "tier": "premium",
     "vibeTags": [
       "cocktail",
       "music",
@@ -57947,5 +57950,3909 @@
     "_reviews": 3770,
     "_priceLevel": "PRICE_LEVEL_VERY_EXPENSIVE",
     "_primaryType": "italian_restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kneu.edu.ua",
+    "name": "AVANGARDEN gallery and wine bar",
+    "address": "Sichovykh Striltsiv St, 23а, Kyiv, Ukraine, 04053",
+    "lat": 50.456283899999995,
+    "lng": 30.500901,
+    "googleMapsUri": "https://maps.google.com/?cid=4678584974722998392&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJJRd2gnvP1EAReCDYDT-s7UA",
+    "category": "lounge",
+    "priority": 2,
+    "vibeTags": [
+      "wine",
+      "art",
+      "evening"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 10:00 AM – 10:00 PM",
+        "Tuesday: 10:00 AM – 10:00 PM",
+        "Wednesday: 10:00 AM – 10:00 PM",
+        "Thursday: 10:00 AM – 10:00 PM",
+        "Friday: 10:00 AM – 10:00 PM",
+        "Saturday: 10:00 AM – 10:00 PM",
+        "Sunday: 10:00 AM – 10:00 PM"
+      ],
+      "nextCloseTime": "2026-06-03T19:00:00Z"
+    },
+    "_rating": 4.6,
+    "_reviews": 337,
+    "_priceLevel": null,
+    "_primaryType": "restaurant",
+    "tier": "premium"
+  },
+  {
+    "approved": true,
+    "universityDomain": "stud.nau.edu.ua",
+    "name": "AVANGARDEN gallery and wine bar",
+    "address": "Sichovykh Striltsiv St, 23а, Kyiv, Ukraine, 04053",
+    "lat": 50.456283899999995,
+    "lng": 30.500901,
+    "googleMapsUri": "https://maps.google.com/?cid=4678584974722998392&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJJRd2gnvP1EAReCDYDT-s7UA",
+    "category": "lounge",
+    "priority": 2,
+    "vibeTags": [
+      "wine",
+      "art",
+      "evening"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": true,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 10,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 10:00 AM – 10:00 PM",
+        "Tuesday: 10:00 AM – 10:00 PM",
+        "Wednesday: 10:00 AM – 10:00 PM",
+        "Thursday: 10:00 AM – 10:00 PM",
+        "Friday: 10:00 AM – 10:00 PM",
+        "Saturday: 10:00 AM – 10:00 PM",
+        "Sunday: 10:00 AM – 10:00 PM"
+      ],
+      "nextCloseTime": "2026-06-03T19:00:00Z"
+    },
+    "_rating": 4.6,
+    "_reviews": 337,
+    "_priceLevel": null,
+    "_primaryType": "restaurant",
+    "tier": "premium"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kneu.edu.ua",
+    "name": "Barman Dictat",
+    "address": "Khreschatyk St, 44б, Kyiv, Ukraine, 01001",
+    "lat": 50.4439105,
+    "lng": 30.519662600000004,
+    "googleMapsUri": "https://maps.google.com/?cid=6385741638953514675&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJfxLYDlbO1EARs7Y-ATC2nlg",
+    "category": "lounge",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "cocktail",
+      "evening",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 30
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 5:00 – 10:30 PM",
+        "Tuesday: 5:00 – 10:30 PM",
+        "Wednesday: 5:00 – 10:30 PM",
+        "Thursday: 5:00 – 10:30 PM",
+        "Friday: 4:00 – 10:30 PM",
+        "Saturday: 4:00 – 10:30 PM",
+        "Sunday: 4:00 – 10:30 PM"
+      ],
+      "nextOpenTime": "2026-07-24T13:00:00Z"
+    },
+    "_rating": 4.6,
+    "_reviews": 3945,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "bar"
+  },
+  {
+    "approved": true,
+    "universityDomain": "knu.ua",
+    "name": "Barman Dictat",
+    "address": "Khreschatyk St, 44б, Kyiv, Ukraine, 01001",
+    "lat": 50.4439105,
+    "lng": 30.519662600000004,
+    "googleMapsUri": "https://maps.google.com/?cid=6385741638953514675&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJfxLYDlbO1EARs7Y-ATC2nlg",
+    "category": "lounge",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "cocktail",
+      "evening",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 30
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 5:00 – 10:30 PM",
+        "Tuesday: 5:00 – 10:30 PM",
+        "Wednesday: 5:00 – 10:30 PM",
+        "Thursday: 5:00 – 10:30 PM",
+        "Friday: 4:00 – 10:30 PM",
+        "Saturday: 4:00 – 10:30 PM",
+        "Sunday: 4:00 – 10:30 PM"
+      ],
+      "nextOpenTime": "2026-07-24T13:00:00Z"
+    },
+    "_rating": 4.6,
+    "_reviews": 3945,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "bar"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kpi.ua",
+    "name": "Barman Dictat",
+    "address": "Khreschatyk St, 44б, Kyiv, Ukraine, 01001",
+    "lat": 50.4439105,
+    "lng": 30.519662600000004,
+    "googleMapsUri": "https://maps.google.com/?cid=6385741638953514675&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJfxLYDlbO1EARs7Y-ATC2nlg",
+    "category": "lounge",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "cocktail",
+      "evening",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 30
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 5:00 – 10:30 PM",
+        "Tuesday: 5:00 – 10:30 PM",
+        "Wednesday: 5:00 – 10:30 PM",
+        "Thursday: 5:00 – 10:30 PM",
+        "Friday: 4:00 – 10:30 PM",
+        "Saturday: 4:00 – 10:30 PM",
+        "Sunday: 4:00 – 10:30 PM"
+      ],
+      "nextOpenTime": "2026-07-24T13:00:00Z"
+    },
+    "_rating": 4.6,
+    "_reviews": 3945,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "bar"
+  },
+  {
+    "approved": true,
+    "universityDomain": "stud.nau.edu.ua",
+    "name": "Barman Dictat",
+    "address": "Khreschatyk St, 44б, Kyiv, Ukraine, 01001",
+    "lat": 50.4439105,
+    "lng": 30.519662600000004,
+    "googleMapsUri": "https://maps.google.com/?cid=6385741638953514675&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJfxLYDlbO1EARs7Y-ATC2nlg",
+    "category": "lounge",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "cocktail",
+      "evening",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 30
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 5:00 – 10:30 PM",
+        "Tuesday: 5:00 – 10:30 PM",
+        "Wednesday: 5:00 – 10:30 PM",
+        "Thursday: 5:00 – 10:30 PM",
+        "Friday: 4:00 – 10:30 PM",
+        "Saturday: 4:00 – 10:30 PM",
+        "Sunday: 4:00 – 10:30 PM"
+      ],
+      "nextOpenTime": "2026-07-24T13:00:00Z"
+    },
+    "_rating": 4.6,
+    "_reviews": 3945,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "bar"
+  },
+  {
+    "approved": true,
+    "universityDomain": "ukma.edu.ua",
+    "name": "Barman Dictat",
+    "address": "Khreschatyk St, 44б, Kyiv, Ukraine, 01001",
+    "lat": 50.4439105,
+    "lng": 30.519662600000004,
+    "googleMapsUri": "https://maps.google.com/?cid=6385741638953514675&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJfxLYDlbO1EARs7Y-ATC2nlg",
+    "category": "lounge",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "cocktail",
+      "evening",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 17,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 16,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 30
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 5:00 – 10:30 PM",
+        "Tuesday: 5:00 – 10:30 PM",
+        "Wednesday: 5:00 – 10:30 PM",
+        "Thursday: 5:00 – 10:30 PM",
+        "Friday: 4:00 – 10:30 PM",
+        "Saturday: 4:00 – 10:30 PM",
+        "Sunday: 4:00 – 10:30 PM"
+      ],
+      "nextOpenTime": "2026-07-24T13:00:00Z"
+    },
+    "_rating": 4.6,
+    "_reviews": 3945,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "bar"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kneu.edu.ua",
+    "name": "Favorite Uncle",
+    "address": "Pankivska St, 20, Kyiv, Ukraine, 02000",
+    "lat": 50.438297,
+    "lng": 30.501079100000002,
+    "googleMapsUri": "https://maps.google.com/?cid=17887047372370856234&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJu_dWOfDO1EARKsm_xtCOO_g",
+    "category": "lounge",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "cocktail",
+      "evening",
+      "conversation"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 9:00 AM – 10:00 PM",
+        "Tuesday: 9:00 AM – 10:00 PM",
+        "Wednesday: 9:00 AM – 10:00 PM",
+        "Thursday: 9:00 AM – 10:00 PM",
+        "Friday: 9:00 AM – 10:00 PM",
+        "Saturday: 9:00 AM – 10:00 PM",
+        "Sunday: 9:00 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T06:00:00Z"
+    },
+    "_rating": 4.7,
+    "_reviews": 6061,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "knu.ua",
+    "name": "Favorite Uncle",
+    "address": "Pankivska St, 20, Kyiv, Ukraine, 02000",
+    "lat": 50.438297,
+    "lng": 30.501079100000002,
+    "googleMapsUri": "https://maps.google.com/?cid=17887047372370856234&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJu_dWOfDO1EARKsm_xtCOO_g",
+    "category": "lounge",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "cocktail",
+      "evening",
+      "conversation"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 9:00 AM – 10:00 PM",
+        "Tuesday: 9:00 AM – 10:00 PM",
+        "Wednesday: 9:00 AM – 10:00 PM",
+        "Thursday: 9:00 AM – 10:00 PM",
+        "Friday: 9:00 AM – 10:00 PM",
+        "Saturday: 9:00 AM – 10:00 PM",
+        "Sunday: 9:00 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T06:00:00Z"
+    },
+    "_rating": 4.7,
+    "_reviews": 6061,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kpi.ua",
+    "name": "Favorite Uncle",
+    "address": "Pankivska St, 20, Kyiv, Ukraine, 02000",
+    "lat": 50.438297,
+    "lng": 30.501079100000002,
+    "googleMapsUri": "https://maps.google.com/?cid=17887047372370856234&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJu_dWOfDO1EARKsm_xtCOO_g",
+    "category": "lounge",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "cocktail",
+      "evening",
+      "conversation"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 9:00 AM – 10:00 PM",
+        "Tuesday: 9:00 AM – 10:00 PM",
+        "Wednesday: 9:00 AM – 10:00 PM",
+        "Thursday: 9:00 AM – 10:00 PM",
+        "Friday: 9:00 AM – 10:00 PM",
+        "Saturday: 9:00 AM – 10:00 PM",
+        "Sunday: 9:00 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T06:00:00Z"
+    },
+    "_rating": 4.7,
+    "_reviews": 6061,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "stud.nau.edu.ua",
+    "name": "Favorite Uncle",
+    "address": "Pankivska St, 20, Kyiv, Ukraine, 02000",
+    "lat": 50.438297,
+    "lng": 30.501079100000002,
+    "googleMapsUri": "https://maps.google.com/?cid=17887047372370856234&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJu_dWOfDO1EARKsm_xtCOO_g",
+    "category": "lounge",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "cocktail",
+      "evening",
+      "conversation"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 9:00 AM – 10:00 PM",
+        "Tuesday: 9:00 AM – 10:00 PM",
+        "Wednesday: 9:00 AM – 10:00 PM",
+        "Thursday: 9:00 AM – 10:00 PM",
+        "Friday: 9:00 AM – 10:00 PM",
+        "Saturday: 9:00 AM – 10:00 PM",
+        "Sunday: 9:00 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T06:00:00Z"
+    },
+    "_rating": 4.7,
+    "_reviews": 6061,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "ukma.edu.ua",
+    "name": "Favorite Uncle",
+    "address": "Pankivska St, 20, Kyiv, Ukraine, 02000",
+    "lat": 50.438297,
+    "lng": 30.501079100000002,
+    "googleMapsUri": "https://maps.google.com/?cid=17887047372370856234&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJu_dWOfDO1EARKsm_xtCOO_g",
+    "category": "lounge",
+    "priority": 1,
+    "tier": "premium",
+    "vibeTags": [
+      "cocktail",
+      "evening",
+      "conversation"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 9:00 AM – 10:00 PM",
+        "Tuesday: 9:00 AM – 10:00 PM",
+        "Wednesday: 9:00 AM – 10:00 PM",
+        "Thursday: 9:00 AM – 10:00 PM",
+        "Friday: 9:00 AM – 10:00 PM",
+        "Saturday: 9:00 AM – 10:00 PM",
+        "Sunday: 9:00 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T06:00:00Z"
+    },
+    "_rating": 4.7,
+    "_reviews": 6061,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kneu.edu.ua",
+    "name": "Тайський Привіт",
+    "address": "Chekhovs'kyi Ln, 2, Kyiv, Ukraine, 02000",
+    "lat": 50.4507236,
+    "lng": 30.502715799999997,
+    "googleMapsUri": "https://maps.google.com/?cid=12336362086249612964&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJC6PJY9zP1EARpEaB4_SPM6s",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "thai",
+      "asian",
+      "dinner"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 10,
+            "minute": 30
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 10,
+            "minute": 30
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:30 AM – 10:00 PM",
+        "Tuesday: 11:30 AM – 10:00 PM",
+        "Wednesday: 11:30 AM – 10:00 PM",
+        "Thursday: 11:30 AM – 10:00 PM",
+        "Friday: 11:30 AM – 10:00 PM",
+        "Saturday: 10:30 AM – 10:00 PM",
+        "Sunday: 10:30 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:30:00Z"
+    },
+    "_rating": 4.6,
+    "_reviews": 2230,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "knu.ua",
+    "name": "Тайський Привіт",
+    "address": "Chekhovs'kyi Ln, 2, Kyiv, Ukraine, 02000",
+    "lat": 50.4507236,
+    "lng": 30.502715799999997,
+    "googleMapsUri": "https://maps.google.com/?cid=12336362086249612964&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJC6PJY9zP1EARpEaB4_SPM6s",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "thai",
+      "asian",
+      "dinner"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 10,
+            "minute": 30
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 10,
+            "minute": 30
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:30 AM – 10:00 PM",
+        "Tuesday: 11:30 AM – 10:00 PM",
+        "Wednesday: 11:30 AM – 10:00 PM",
+        "Thursday: 11:30 AM – 10:00 PM",
+        "Friday: 11:30 AM – 10:00 PM",
+        "Saturday: 10:30 AM – 10:00 PM",
+        "Sunday: 10:30 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:30:00Z"
+    },
+    "_rating": 4.6,
+    "_reviews": 2230,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kpi.ua",
+    "name": "Тайський Привіт",
+    "address": "Chekhovs'kyi Ln, 2, Kyiv, Ukraine, 02000",
+    "lat": 50.4507236,
+    "lng": 30.502715799999997,
+    "googleMapsUri": "https://maps.google.com/?cid=12336362086249612964&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJC6PJY9zP1EARpEaB4_SPM6s",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "thai",
+      "asian",
+      "dinner"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 10,
+            "minute": 30
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 10,
+            "minute": 30
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:30 AM – 10:00 PM",
+        "Tuesday: 11:30 AM – 10:00 PM",
+        "Wednesday: 11:30 AM – 10:00 PM",
+        "Thursday: 11:30 AM – 10:00 PM",
+        "Friday: 11:30 AM – 10:00 PM",
+        "Saturday: 10:30 AM – 10:00 PM",
+        "Sunday: 10:30 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:30:00Z"
+    },
+    "_rating": 4.6,
+    "_reviews": 2230,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "stud.nau.edu.ua",
+    "name": "Тайський Привіт",
+    "address": "Chekhovs'kyi Ln, 2, Kyiv, Ukraine, 02000",
+    "lat": 50.4507236,
+    "lng": 30.502715799999997,
+    "googleMapsUri": "https://maps.google.com/?cid=12336362086249612964&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJC6PJY9zP1EARpEaB4_SPM6s",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "thai",
+      "asian",
+      "dinner"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 10,
+            "minute": 30
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 10,
+            "minute": 30
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:30 AM – 10:00 PM",
+        "Tuesday: 11:30 AM – 10:00 PM",
+        "Wednesday: 11:30 AM – 10:00 PM",
+        "Thursday: 11:30 AM – 10:00 PM",
+        "Friday: 11:30 AM – 10:00 PM",
+        "Saturday: 10:30 AM – 10:00 PM",
+        "Sunday: 10:30 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:30:00Z"
+    },
+    "_rating": 4.6,
+    "_reviews": 2230,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "ukma.edu.ua",
+    "name": "Тайський Привіт",
+    "address": "Chekhovs'kyi Ln, 2, Kyiv, Ukraine, 02000",
+    "lat": 50.4507236,
+    "lng": 30.502715799999997,
+    "googleMapsUri": "https://maps.google.com/?cid=12336362086249612964&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJC6PJY9zP1EARpEaB4_SPM6s",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "thai",
+      "asian",
+      "dinner"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 10,
+            "minute": 30
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 30
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 10,
+            "minute": 30
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:30 AM – 10:00 PM",
+        "Tuesday: 11:30 AM – 10:00 PM",
+        "Wednesday: 11:30 AM – 10:00 PM",
+        "Thursday: 11:30 AM – 10:00 PM",
+        "Friday: 11:30 AM – 10:00 PM",
+        "Saturday: 10:30 AM – 10:00 PM",
+        "Sunday: 10:30 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:30:00Z"
+    },
+    "_rating": 4.6,
+    "_reviews": 2230,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kneu.edu.ua",
+    "name": "Kyiv Food Market",
+    "address": "Kniaziv Ostrozkykh St, 8, Kyiv, Ukraine, 01029",
+    "lat": 50.442129099999995,
+    "lng": 30.544610400000003,
+    "googleMapsUri": "https://maps.google.com/?cid=15496272127625558924&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJG2gG1jLP1EARjHvotWXRDdc",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "foodmarket",
+      "casual",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:00 AM – 10:00 PM",
+        "Tuesday: 11:00 AM – 10:00 PM",
+        "Wednesday: 11:00 AM – 10:00 PM",
+        "Thursday: 11:00 AM – 10:00 PM",
+        "Friday: 11:00 AM – 11:00 PM",
+        "Saturday: 11:00 AM – 11:00 PM",
+        "Sunday: 11:00 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:00:00Z"
+    },
+    "_rating": 4.5,
+    "_reviews": 4884,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "knu.ua",
+    "name": "Kyiv Food Market",
+    "address": "Kniaziv Ostrozkykh St, 8, Kyiv, Ukraine, 01029",
+    "lat": 50.442129099999995,
+    "lng": 30.544610400000003,
+    "googleMapsUri": "https://maps.google.com/?cid=15496272127625558924&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJG2gG1jLP1EARjHvotWXRDdc",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "foodmarket",
+      "casual",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:00 AM – 10:00 PM",
+        "Tuesday: 11:00 AM – 10:00 PM",
+        "Wednesday: 11:00 AM – 10:00 PM",
+        "Thursday: 11:00 AM – 10:00 PM",
+        "Friday: 11:00 AM – 11:00 PM",
+        "Saturday: 11:00 AM – 11:00 PM",
+        "Sunday: 11:00 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:00:00Z"
+    },
+    "_rating": 4.5,
+    "_reviews": 4884,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kpi.ua",
+    "name": "Kyiv Food Market",
+    "address": "Kniaziv Ostrozkykh St, 8, Kyiv, Ukraine, 01029",
+    "lat": 50.442129099999995,
+    "lng": 30.544610400000003,
+    "googleMapsUri": "https://maps.google.com/?cid=15496272127625558924&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJG2gG1jLP1EARjHvotWXRDdc",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "foodmarket",
+      "casual",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:00 AM – 10:00 PM",
+        "Tuesday: 11:00 AM – 10:00 PM",
+        "Wednesday: 11:00 AM – 10:00 PM",
+        "Thursday: 11:00 AM – 10:00 PM",
+        "Friday: 11:00 AM – 11:00 PM",
+        "Saturday: 11:00 AM – 11:00 PM",
+        "Sunday: 11:00 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:00:00Z"
+    },
+    "_rating": 4.5,
+    "_reviews": 4884,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "stud.nau.edu.ua",
+    "name": "Kyiv Food Market",
+    "address": "Kniaziv Ostrozkykh St, 8, Kyiv, Ukraine, 01029",
+    "lat": 50.442129099999995,
+    "lng": 30.544610400000003,
+    "googleMapsUri": "https://maps.google.com/?cid=15496272127625558924&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJG2gG1jLP1EARjHvotWXRDdc",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "foodmarket",
+      "casual",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:00 AM – 10:00 PM",
+        "Tuesday: 11:00 AM – 10:00 PM",
+        "Wednesday: 11:00 AM – 10:00 PM",
+        "Thursday: 11:00 AM – 10:00 PM",
+        "Friday: 11:00 AM – 11:00 PM",
+        "Saturday: 11:00 AM – 11:00 PM",
+        "Sunday: 11:00 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:00:00Z"
+    },
+    "_rating": 4.5,
+    "_reviews": 4884,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "ukma.edu.ua",
+    "name": "Kyiv Food Market",
+    "address": "Kniaziv Ostrozkykh St, 8, Kyiv, Ukraine, 01029",
+    "lat": 50.442129099999995,
+    "lng": 30.544610400000003,
+    "googleMapsUri": "https://maps.google.com/?cid=15496272127625558924&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJG2gG1jLP1EARjHvotWXRDdc",
+    "category": "restaurant",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "foodmarket",
+      "casual",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 23,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 23,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:00 AM – 10:00 PM",
+        "Tuesday: 11:00 AM – 10:00 PM",
+        "Wednesday: 11:00 AM – 10:00 PM",
+        "Thursday: 11:00 AM – 10:00 PM",
+        "Friday: 11:00 AM – 11:00 PM",
+        "Saturday: 11:00 AM – 11:00 PM",
+        "Sunday: 11:00 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:00:00Z"
+    },
+    "_rating": 4.5,
+    "_reviews": 4884,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kneu.edu.ua",
+    "name": "Milk Bar",
+    "address": "Shota Rustaveli St, 16, Kyiv, Ukraine, 02000",
+    "lat": 50.4389137,
+    "lng": 30.519500899999997,
+    "googleMapsUri": "https://maps.google.com/?cid=12532284283350401407&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJU44X9f7O1EARf8FPJSie660",
+    "category": "cafe",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "dessert",
+      "brunch",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 1
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 1
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 8:00 AM – 10:00 PM",
+        "Tuesday: 8:00 AM – 10:00 PM",
+        "Wednesday: 8:00 AM – 10:00 PM",
+        "Thursday: 8:00 AM – 10:00 PM",
+        "Friday: 8:00 AM – 10:00 PM",
+        "Saturday: 9:01 AM – 10:00 PM",
+        "Sunday: 9:01 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T05:00:00Z"
+    },
+    "_rating": 4.4,
+    "_reviews": 8586,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "cafe"
+  },
+  {
+    "approved": true,
+    "universityDomain": "knu.ua",
+    "name": "Milk Bar",
+    "address": "Shota Rustaveli St, 16, Kyiv, Ukraine, 02000",
+    "lat": 50.4389137,
+    "lng": 30.519500899999997,
+    "googleMapsUri": "https://maps.google.com/?cid=12532284283350401407&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJU44X9f7O1EARf8FPJSie660",
+    "category": "cafe",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "dessert",
+      "brunch",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 1
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 1
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 8:00 AM – 10:00 PM",
+        "Tuesday: 8:00 AM – 10:00 PM",
+        "Wednesday: 8:00 AM – 10:00 PM",
+        "Thursday: 8:00 AM – 10:00 PM",
+        "Friday: 8:00 AM – 10:00 PM",
+        "Saturday: 9:01 AM – 10:00 PM",
+        "Sunday: 9:01 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T05:00:00Z"
+    },
+    "_rating": 4.4,
+    "_reviews": 8586,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "cafe"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kpi.ua",
+    "name": "Milk Bar",
+    "address": "Shota Rustaveli St, 16, Kyiv, Ukraine, 02000",
+    "lat": 50.4389137,
+    "lng": 30.519500899999997,
+    "googleMapsUri": "https://maps.google.com/?cid=12532284283350401407&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJU44X9f7O1EARf8FPJSie660",
+    "category": "cafe",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "dessert",
+      "brunch",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 1
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 1
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 8:00 AM – 10:00 PM",
+        "Tuesday: 8:00 AM – 10:00 PM",
+        "Wednesday: 8:00 AM – 10:00 PM",
+        "Thursday: 8:00 AM – 10:00 PM",
+        "Friday: 8:00 AM – 10:00 PM",
+        "Saturday: 9:01 AM – 10:00 PM",
+        "Sunday: 9:01 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T05:00:00Z"
+    },
+    "_rating": 4.4,
+    "_reviews": 8586,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "cafe"
+  },
+  {
+    "approved": true,
+    "universityDomain": "stud.nau.edu.ua",
+    "name": "Milk Bar",
+    "address": "Shota Rustaveli St, 16, Kyiv, Ukraine, 02000",
+    "lat": 50.4389137,
+    "lng": 30.519500899999997,
+    "googleMapsUri": "https://maps.google.com/?cid=12532284283350401407&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJU44X9f7O1EARf8FPJSie660",
+    "category": "cafe",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "dessert",
+      "brunch",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 1
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 1
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 8:00 AM – 10:00 PM",
+        "Tuesday: 8:00 AM – 10:00 PM",
+        "Wednesday: 8:00 AM – 10:00 PM",
+        "Thursday: 8:00 AM – 10:00 PM",
+        "Friday: 8:00 AM – 10:00 PM",
+        "Saturday: 9:01 AM – 10:00 PM",
+        "Sunday: 9:01 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T05:00:00Z"
+    },
+    "_rating": 4.4,
+    "_reviews": 8586,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "cafe"
+  },
+  {
+    "approved": true,
+    "universityDomain": "ukma.edu.ua",
+    "name": "Milk Bar",
+    "address": "Shota Rustaveli St, 16, Kyiv, Ukraine, 02000",
+    "lat": 50.4389137,
+    "lng": 30.519500899999997,
+    "googleMapsUri": "https://maps.google.com/?cid=12532284283350401407&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJU44X9f7O1EARf8FPJSie660",
+    "category": "cafe",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "dessert",
+      "brunch",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 9,
+            "minute": 1
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 8,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 0
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 9,
+            "minute": 1
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 0
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 8:00 AM – 10:00 PM",
+        "Tuesday: 8:00 AM – 10:00 PM",
+        "Wednesday: 8:00 AM – 10:00 PM",
+        "Thursday: 8:00 AM – 10:00 PM",
+        "Friday: 8:00 AM – 10:00 PM",
+        "Saturday: 9:01 AM – 10:00 PM",
+        "Sunday: 9:01 AM – 10:00 PM"
+      ],
+      "nextOpenTime": "2026-07-24T05:00:00Z"
+    },
+    "_rating": 4.4,
+    "_reviews": 8586,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "cafe"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kneu.edu.ua",
+    "name": "Food Spot Corp.",
+    "address": "Vulytsya V'yacheslava Lypynsʹkoho, 15, Kyiv, Ukraine, 01030",
+    "lat": 50.448792399999995,
+    "lng": 30.505130299999998,
+    "googleMapsUri": "https://maps.google.com/?cid=8724063774635621181&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJfYsoPF_O1EARPXsC7ccZEnk",
+    "category": "cafe",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "brunch",
+      "casual",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 30
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:00 AM – 9:30 PM",
+        "Tuesday: 11:00 AM – 9:30 PM",
+        "Wednesday: 11:00 AM – 9:30 PM",
+        "Thursday: 11:00 AM – 9:30 PM",
+        "Friday: 11:00 AM – 10:30 PM",
+        "Saturday: 11:00 AM – 10:30 PM",
+        "Sunday: 11:00 AM – 10:30 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:00:00Z"
+    },
+    "_rating": 4.4,
+    "_reviews": 2204,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "knu.ua",
+    "name": "Food Spot Corp.",
+    "address": "Vulytsya V'yacheslava Lypynsʹkoho, 15, Kyiv, Ukraine, 01030",
+    "lat": 50.448792399999995,
+    "lng": 30.505130299999998,
+    "googleMapsUri": "https://maps.google.com/?cid=8724063774635621181&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJfYsoPF_O1EARPXsC7ccZEnk",
+    "category": "cafe",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "brunch",
+      "casual",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 30
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:00 AM – 9:30 PM",
+        "Tuesday: 11:00 AM – 9:30 PM",
+        "Wednesday: 11:00 AM – 9:30 PM",
+        "Thursday: 11:00 AM – 9:30 PM",
+        "Friday: 11:00 AM – 10:30 PM",
+        "Saturday: 11:00 AM – 10:30 PM",
+        "Sunday: 11:00 AM – 10:30 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:00:00Z"
+    },
+    "_rating": 4.4,
+    "_reviews": 2204,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "kpi.ua",
+    "name": "Food Spot Corp.",
+    "address": "Vulytsya V'yacheslava Lypynsʹkoho, 15, Kyiv, Ukraine, 01030",
+    "lat": 50.448792399999995,
+    "lng": 30.505130299999998,
+    "googleMapsUri": "https://maps.google.com/?cid=8724063774635621181&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJfYsoPF_O1EARPXsC7ccZEnk",
+    "category": "cafe",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "brunch",
+      "casual",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 30
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:00 AM – 9:30 PM",
+        "Tuesday: 11:00 AM – 9:30 PM",
+        "Wednesday: 11:00 AM – 9:30 PM",
+        "Thursday: 11:00 AM – 9:30 PM",
+        "Friday: 11:00 AM – 10:30 PM",
+        "Saturday: 11:00 AM – 10:30 PM",
+        "Sunday: 11:00 AM – 10:30 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:00:00Z"
+    },
+    "_rating": 4.4,
+    "_reviews": 2204,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "stud.nau.edu.ua",
+    "name": "Food Spot Corp.",
+    "address": "Vulytsya V'yacheslava Lypynsʹkoho, 15, Kyiv, Ukraine, 01030",
+    "lat": 50.448792399999995,
+    "lng": 30.505130299999998,
+    "googleMapsUri": "https://maps.google.com/?cid=8724063774635621181&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJfYsoPF_O1EARPXsC7ccZEnk",
+    "category": "cafe",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "brunch",
+      "casual",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 30
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:00 AM – 9:30 PM",
+        "Tuesday: 11:00 AM – 9:30 PM",
+        "Wednesday: 11:00 AM – 9:30 PM",
+        "Thursday: 11:00 AM – 9:30 PM",
+        "Friday: 11:00 AM – 10:30 PM",
+        "Saturday: 11:00 AM – 10:30 PM",
+        "Sunday: 11:00 AM – 10:30 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:00:00Z"
+    },
+    "_rating": 4.4,
+    "_reviews": 2204,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
+  },
+  {
+    "approved": true,
+    "universityDomain": "ukma.edu.ua",
+    "name": "Food Spot Corp.",
+    "address": "Vulytsya V'yacheslava Lypynsʹkoho, 15, Kyiv, Ukraine, 01030",
+    "lat": 50.448792399999995,
+    "lng": 30.505130299999998,
+    "googleMapsUri": "https://maps.google.com/?cid=8724063774635621181&g_mp=Cilnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaE5lYXJieRACGAQgAA",
+    "placeId": "ChIJfYsoPF_O1EARPXsC7ccZEnk",
+    "category": "cafe",
+    "priority": 1,
+    "tier": "base",
+    "vibeTags": [
+      "brunch",
+      "casual",
+      "central"
+    ],
+    "utcOffsetMinutes": 180,
+    "openingHours": {
+      "openNow": false,
+      "periods": [
+        {
+          "open": {
+            "day": 0,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 0,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 1,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 1,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 2,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 2,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 3,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 3,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 4,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 4,
+            "hour": 21,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 5,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 5,
+            "hour": 22,
+            "minute": 30
+          }
+        },
+        {
+          "open": {
+            "day": 6,
+            "hour": 11,
+            "minute": 0
+          },
+          "close": {
+            "day": 6,
+            "hour": 22,
+            "minute": 30
+          }
+        }
+      ],
+      "weekdayDescriptions": [
+        "Monday: 11:00 AM – 9:30 PM",
+        "Tuesday: 11:00 AM – 9:30 PM",
+        "Wednesday: 11:00 AM – 9:30 PM",
+        "Thursday: 11:00 AM – 9:30 PM",
+        "Friday: 11:00 AM – 10:30 PM",
+        "Saturday: 11:00 AM – 10:30 PM",
+        "Sunday: 11:00 AM – 10:30 PM"
+      ],
+      "nextOpenTime": "2026-07-24T08:00:00Z"
+    },
+    "_rating": 4.4,
+    "_reviews": 2204,
+    "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
+    "_primaryType": "restaurant"
   }
 ]
