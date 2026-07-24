@@ -23,6 +23,7 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       tickets: env.TICKET_FEATURE_ENABLED,
       coordination: env.COORDINATION_FEATURE_ENABLED,
       premium: env.PREMIUM_FEATURE_ENABLED,
+      referral: env.REFERRAL_FEATURE_ENABLED,
     },
     serverNow: new Date().toISOString(),
   });

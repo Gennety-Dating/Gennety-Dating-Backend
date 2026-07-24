@@ -80,6 +80,110 @@ export function cumulativeLadderTotals(
   return { tickets, months };
 }
 
+function ticketUsd(): number {
+  return env.TICKET_PRICE_CENTS / 100;
+}
+
+/** Numeric monthly Premium price parsed from the display string ("$11.99"). */
+function premiumMonthlyUsd(): number {
+  const m = /([\d]+(?:\.[\d]+)?)/.exec(env.PREMIUM_PRICE_USD_DISPLAY);
+  return m ? Number(m[1]) : 0;
+}
+
+/** Dollar value of `tickets` Date Tickets + `months` Premium months ("$18.98"). */
+export function referralUsdValue(tickets: number, months: number): string {
+  const v = tickets * ticketUsd() + months * premiumMonthlyUsd();
+  return `$${v.toFixed(2)}`;
+}
+
+export interface ReferralStateView {
+  inviteLink: string;
+  verifiedCount: number;
+  earnedTickets: number;
+  earnedMonths: number;
+  earnedUsd: string;
+  ladder: Array<{
+    atCount: number;
+    tickets: number;
+    months: number;
+    usd: string;
+    reached: boolean;
+  }>;
+  next: { atCount: number; remaining: number; usd: string } | null;
+  inviteeMonths: number;
+}
+
+/**
+ * Assemble the referral ladder view (shared by the Telegram Mini App and the
+ * iOS JWT surface). `verifiedCount` is the referrer's materialized tally; every
+ * rung carries its cumulative $ value so a client never re-derives money.
+ */
+export function buildReferralStateView(
+  userId: string,
+  verifiedCount: number,
+  botUsername: string,
+): ReferralStateView {
+  const ladder = env.REFERRAL_LADDER.map((rung) => {
+    const cum = cumulativeLadderTotals(rung.atCount);
+    return {
+      atCount: rung.atCount,
+      tickets: cum.tickets,
+      months: cum.months,
+      usd: referralUsdValue(cum.tickets, cum.months),
+      reached: verifiedCount >= rung.atCount,
+    };
+  });
+  const totals = cumulativeLadderTotals(verifiedCount);
+  const next = nextLadderRung(verifiedCount);
+  const nextCum = next ? cumulativeLadderTotals(next.rung.atCount) : null;
+  return {
+    inviteLink: buildReferralLink(userId, botUsername),
+    verifiedCount,
+    earnedTickets: totals.tickets,
+    earnedMonths: totals.months,
+    earnedUsd: referralUsdValue(totals.tickets, totals.months),
+    ladder,
+    next:
+      next && nextCum
+        ? {
+            atCount: next.rung.atCount,
+            remaining: next.remaining,
+            usd: referralUsdValue(nextCum.tickets, nextCum.months),
+          }
+        : null,
+    inviteeMonths: env.REFERRAL_INVITEE_PREMIUM_MONTHS,
+  };
+}
+
+/**
+ * Attribute an iOS/mobile invitee to a referrer by code (§Referral, iOS entry).
+ * First-touch + guarded: only writes `referralSource` when the user has none
+ * yet, the code resolves to a real *other* user, and it isn't a self-referral.
+ * Returns whether attribution was applied.
+ */
+export async function claimReferralCode(
+  inviteeUserId: string,
+  code: string,
+): Promise<{ applied: boolean; reason?: string }> {
+  if (!env.REFERRAL_FEATURE_ENABLED) return { applied: false, reason: "disabled" };
+  const referrerId = parseReferrer(`referral:${code.trim()}`);
+  if (!referrerId || referrerId === inviteeUserId) {
+    return { applied: false, reason: "invalid" };
+  }
+  const referrer = await prisma.user.findUnique({
+    where: { id: referrerId },
+    select: { id: true },
+  });
+  if (!referrer) return { applied: false, reason: "unknown-referrer" };
+
+  // First-touch only: never overwrite an existing attribution.
+  const cas = await prisma.user.updateMany({
+    where: { id: inviteeUserId, referralSource: null },
+    data: { referralSource: `referral:${referrerId}` },
+  });
+  return cas.count > 0 ? { applied: true } : { applied: false, reason: "already-attributed" };
+}
+
 /** The next unreached rung and how many more verified friends it needs. */
 export function nextLadderRung(
   verifiedCount: number,

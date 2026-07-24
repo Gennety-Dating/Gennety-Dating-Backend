@@ -447,6 +447,69 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /v1/me/referral:
+    get:
+      tags: [me]
+      operationId: getReferral
+      summary: Referral ladder state — progress, $ value per rung, invite link
+      description: >-
+        Feature-flagged (`REFERRAL_FEATURE_ENABLED`; 404 when off). The referrer
+        is paid Date Tickets + Premium months as each invited friend clears
+        verification; every rung carries its cumulative dollar value.
+      responses:
+        "200":
+          description: Ladder + progress + invite link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReferralState" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: "Referral feature disabled, or user not found" }
+
+  /v1/me/referral/claim:
+    post:
+      tags: [me]
+      operationId: claimReferral
+      summary: Attribute this user to a referrer by code (first-touch, guarded)
+      description: >-
+        First-touch only — never overwrites an existing attribution. Rejects a
+        self-referral and an unknown code. The reward is paid to the referrer
+        later, when THIS user clears verification.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  maxLength: 64
+                  description: The referrer's invite code (their user id)
+      responses:
+        "200":
+          description: Attribution applied
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [applied]
+                properties:
+                  applied: { type: boolean, enum: [true] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Referral feature disabled }
+        "409":
+          description: Not applied (self-referral, unknown code, or already attributed)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [applied]
+                properties:
+                  applied: { type: boolean, enum: [false] }
+                  reason: { type: string }
+
   /v1/me/preferences:
     patch:
       tags: [me]
@@ -1440,7 +1503,42 @@ components:
             tickets: { type: boolean }
             coordination: { type: boolean }
             premium: { type: boolean }
+            referral: { type: boolean }
         serverNow: { type: string, format: date-time }
+
+    ReferralState:
+      type: object
+      required: [inviteLink, verifiedCount, earnedTickets, earnedMonths, earnedUsd, ladder, inviteeMonths]
+      properties:
+        inviteLink: { type: string }
+        verifiedCount:
+          type: integer
+          description: Invited friends who cleared verification (ladder progress)
+        earnedTickets: { type: integer }
+        earnedMonths: { type: integer }
+        earnedUsd:
+          type: string
+          description: Total dollar value earned, formatted (e.g. "$18.98")
+        ladder:
+          type: array
+          items:
+            type: object
+            required: [atCount, tickets, months, usd, reached]
+            properties:
+              atCount: { type: integer }
+              tickets: { type: integer, description: Cumulative tickets at this rung }
+              months: { type: integer, description: Cumulative Premium months at this rung }
+              usd: { type: string }
+              reached: { type: boolean }
+        next:
+          type: [object, "null"]
+          properties:
+            atCount: { type: integer }
+            remaining: { type: integer }
+            usd: { type: string }
+        inviteeMonths:
+          type: integer
+          description: Premium months an invited user receives as a welcome gift
 
     Language:
       type: string

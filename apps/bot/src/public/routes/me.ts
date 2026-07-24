@@ -56,6 +56,7 @@ import {
 } from "../../services/profile-media-validation/photo-state.js";
 import { sniffImageMime } from "../../utils/image-sniff.js";
 import { refreshUserEmbedding } from "../../workers/embedding-refresh.js";
+import { buildReferralStateView, claimReferralCode } from "../../services/referral.js";
 
 export const meRouter: Router = Router();
 
@@ -79,6 +80,47 @@ meRouter.get("/", async (req: Request, res: Response): Promise<void> => {
     user: serializeUser(user),
     profile: user.profile ? serializeProfile(user.profile) : null,
   });
+});
+
+/**
+ * GET /v1/me/referral — referral ladder state for the native app's referral
+ * screen (§Referral). Same shape as the Telegram Mini App `/v1/referral/state`,
+ * built from the shared assembler. 404 when the feature is off.
+ */
+meRouter.get("/referral", async (req: Request, res: Response): Promise<void> => {
+  if (!env.REFERRAL_FEATURE_ENABLED) {
+    res.status(404).json({ error: "referral-disabled" });
+    return;
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId! },
+    select: { id: true, referralVerifiedCount: true },
+  });
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  res.json(buildReferralStateView(user.id, user.referralVerifiedCount, env.BOT_USERNAME));
+});
+
+/**
+ * POST /v1/me/referral/claim — attribute this (mobile) user to a referrer by
+ * code (§Referral, iOS entry). First-touch + guarded (self-referral and
+ * already-attributed rejected). The referrer is paid later, when this user
+ * clears verification. Body: `{ code: string }`.
+ */
+meRouter.post("/referral/claim", async (req: Request, res: Response): Promise<void> => {
+  if (!env.REFERRAL_FEATURE_ENABLED) {
+    res.status(404).json({ error: "referral-disabled" });
+    return;
+  }
+  const code = typeof req.body?.code === "string" ? req.body.code : "";
+  if (!code.trim()) {
+    res.status(400).json({ error: "missing-code" });
+    return;
+  }
+  const result = await claimReferralCode(req.userId!, code);
+  res.status(result.applied ? 200 : 409).json({ applied: result.applied, reason: result.reason });
 });
 
 /**

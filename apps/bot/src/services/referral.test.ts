@@ -11,6 +11,9 @@ const h = vi.hoisted(() => ({
     ] as const,
     REFERRAL_INVITEE_PREMIUM_MONTHS: 1,
     REFERRAL_DAILY_REWARD_CAP: 3,
+    TICKET_PRICE_CENTS: 699,
+    PREMIUM_PRICE_USD_DISPLAY: "$11.99",
+    BOT_USERNAME: "gennetybot",
   },
   findUnique: vi.fn(),
   updateMany: vi.fn(),
@@ -51,6 +54,9 @@ const {
   reconcileReferrerRungs,
   grantReferralRewardsForVerifiedInvitee,
   grantInviteePremium,
+  buildReferralStateView,
+  referralUsdValue,
+  claimReferralCode,
 } = await import("./referral.js");
 
 beforeEach(() => {
@@ -259,6 +265,64 @@ describe("grantReferralRewardsForVerifiedInvitee", () => {
       heldByVelocity: true,
     });
     expect(h.grantTickets).not.toHaveBeenCalled();
+  });
+});
+
+describe("referralUsdValue / buildReferralStateView", () => {
+  it("prices tickets ($6.99) + Premium months ($11.99) correctly", () => {
+    expect(referralUsdValue(1, 1)).toBe("$18.98");
+    expect(referralUsdValue(5, 5)).toBe("$94.90");
+    expect(referralUsdValue(0, 0)).toBe("$0.00");
+  });
+
+  it("assembles the ladder view with reached flags + invite link", () => {
+    const view = buildReferralStateView("ref-1", 3, "gennetybot");
+    expect(view.inviteLink).toBe("https://t.me/gennetybot?start=referral_ref-1");
+    expect(view.verifiedCount).toBe(3);
+    expect(view.earnedTickets).toBe(2);
+    expect(view.earnedMonths).toBe(2);
+    expect(view.earnedUsd).toBe("$37.96");
+    expect(view.ladder.map((r) => r.reached)).toEqual([true, true, false, false]);
+    expect(view.ladder[3]).toMatchObject({ atCount: 10, tickets: 5, months: 5, usd: "$94.90" });
+    expect(view.next).toEqual({ atCount: 5, remaining: 2, usd: "$56.94" });
+  });
+
+  it("reports next=null once the top rung is reached", () => {
+    expect(buildReferralStateView("r", 10, "gennetybot").next).toBeNull();
+  });
+});
+
+describe("claimReferralCode", () => {
+  it("attributes a first-touch mobile invitee to a valid referrer", async () => {
+    h.findUnique.mockResolvedValueOnce({ id: "ref" }); // referrer exists
+    h.updateMany.mockResolvedValueOnce({ count: 1 }); // first-touch CAS wins
+    expect(await claimReferralCode("inv", "ref")).toEqual({ applied: true });
+    expect(h.updateMany).toHaveBeenCalledWith({
+      where: { id: "inv", referralSource: null },
+      data: { referralSource: "referral:ref" },
+    });
+  });
+
+  it("rejects a self-referral before any DB call", async () => {
+    expect(await claimReferralCode("inv", "inv")).toEqual({ applied: false, reason: "invalid" });
+    expect(h.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown referrer code", async () => {
+    h.findUnique.mockResolvedValueOnce(null);
+    expect(await claimReferralCode("inv", "ghost")).toEqual({
+      applied: false,
+      reason: "unknown-referrer",
+    });
+  });
+
+  it("does not overwrite an existing attribution (first-touch)", async () => {
+    h.findUnique.mockResolvedValueOnce({ id: "ref" });
+    h.updateMany.mockResolvedValueOnce({ count: 0 }); // already attributed
+    expect(await claimReferralCode("inv", "ref")).toEqual({
+      applied: false,
+      reason: "already-attributed",
+    });
   });
 });
 

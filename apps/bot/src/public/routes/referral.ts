@@ -4,11 +4,7 @@ import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
-import {
-  buildReferralLink,
-  cumulativeLadderTotals,
-  nextLadderRung,
-} from "../../services/referral.js";
+import { buildReferralLink, buildReferralStateView } from "../../services/referral.js";
 import { renderReferralCard } from "../../services/referral-card/index.js";
 
 /**
@@ -47,21 +43,6 @@ function cardSig(referrerId: string): string {
     .slice(0, 24);
 }
 
-function ticketUsd(): number {
-  return env.TICKET_PRICE_CENTS / 100;
-}
-
-/** Numeric monthly Premium price parsed from the display string ("$11.99"). */
-function premiumMonthlyUsd(): number {
-  const m = /([\d]+(?:\.[\d]+)?)/.exec(env.PREMIUM_PRICE_USD_DISPLAY);
-  return m ? Number(m[1]) : 0;
-}
-
-function usdValue(tickets: number, months: number): string {
-  const v = tickets * ticketUsd() + months * premiumMonthlyUsd();
-  return `$${v.toFixed(2)}`;
-}
-
 export function createReferralRouter(): Router {
   const router = Router();
 
@@ -80,38 +61,9 @@ export function createReferralRouter(): Router {
       return;
     }
 
-    const verifiedCount = user.referralVerifiedCount;
-    const ladder = env.REFERRAL_LADDER.map((rung) => {
-      const cum = cumulativeLadderTotals(rung.atCount);
-      return {
-        atCount: rung.atCount,
-        tickets: cum.tickets,
-        months: cum.months,
-        usd: usdValue(cum.tickets, cum.months),
-        reached: verifiedCount >= rung.atCount,
-      };
-    });
-    const totals = cumulativeLadderTotals(verifiedCount);
-    const next = nextLadderRung(verifiedCount);
-    const nextCum = next ? cumulativeLadderTotals(next.rung.atCount) : null;
-
     res.status(200).json({
       ok: true,
-      inviteLink: buildReferralLink(user.id, env.BOT_USERNAME),
-      verifiedCount,
-      earnedTickets: totals.tickets,
-      earnedMonths: totals.months,
-      earnedUsd: usdValue(totals.tickets, totals.months),
-      ladder,
-      next:
-        next && nextCum
-          ? {
-              atCount: next.rung.atCount,
-              remaining: next.remaining,
-              usd: usdValue(nextCum.tickets, nextCum.months),
-            }
-          : null,
-      inviteeMonths: env.REFERRAL_INVITEE_PREMIUM_MONTHS,
+      ...buildReferralStateView(user.id, user.referralVerifiedCount, env.BOT_USERNAME),
     });
   });
 
