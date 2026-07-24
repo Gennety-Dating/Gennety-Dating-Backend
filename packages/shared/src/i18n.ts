@@ -791,7 +791,7 @@ const translations = {
     referralProgressNext: "{remaining} more verified friend(s) unlocks the next reward.",
     referralProgressMaxed: "You've reached the top reward — legend. 💛",
     referralShareCaption:
-      "This is Gennety — dating that's all about real meetings, not texting.\n\nIf you're curious — here's the link.",
+      "Gennety is about real dates, not texting — the AI finds your match and sets up the meeting.",
     referralShareJoin: "Join Gennety 💫",
     referralRewardDm:
       "{name} passed verification via your link.\n\nCredited: +{tickets} 🎟 · +{months} mo Premium.\n{next}",
@@ -803,8 +803,9 @@ const translations = {
     referralCardInvitedGeneric: "You're invited",
     referralCardHeadA: "Real dates.",
     referralCardHeadB: "Zero texting.",
-    referralCardGift: "First {months} month of Premium — on us",
-    referralCardFooter: "The AI matchmaker introduces you and sets up the date.",
+    referralCardSupport: "The AI finds your match on deep compatibility and sets up the meeting in person.",
+    referralCardGift: "{months} month of Premium — on us",
+    referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
       "*Gennety Premium*\n\n• *Free venue changes* — swap your date spot as often as you like, no fee\n• *Premium venues* — a hand-picked tier of nicer places, unlocked in the venue board\n\nMore perks are coming. {price}/month, cancel anytime.",
@@ -1616,7 +1617,7 @@ const translations = {
     referralProgressNext: "Ещё верифицированных друзей: {remaining} — и откроется следующая награда.",
     referralProgressMaxed: "Ты достиг(ла) высшей награды — легенда. 💛",
     referralShareCaption:
-      "Это Gennety — знакомства, где всё про реальные встречи, а не про переписку.\n\nЕсли интересно — вот ссылка.",
+      "Gennety — про реальные свидания, а не переписку. ИИ подбирает пару и сам организует встречу.",
     referralShareJoin: "Присоединиться к Gennety 💫",
     referralRewardDm:
       "{name} прошёл(ла) проверку по твоей ссылке.\n\nНачислено: +{tickets} 🎟 · +{months} мес Premium.\n{next}",
@@ -1628,8 +1629,9 @@ const translations = {
     referralCardInvitedGeneric: "Тебя приглашают",
     referralCardHeadA: "Реальные свидания.",
     referralCardHeadB: "Ноль переписки.",
-    referralCardGift: "Первый {months} месяц Premium — в подарок",
-    referralCardFooter: "AI-сваха знакомит и организует свидание за тебя.",
+    referralCardSupport: "ИИ подбирает пару по глубокой совместимости и сам организует встречу вживую.",
+    referralCardGift: "Premium на {months} мес — в подарок",
+    referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
       "*Gennety Premium*\n\n• *Бесплатная смена места* — меняй место свидания сколько угодно, без оплаты\n• *Премиум-заведения* — отобранный тир мест получше, открывается в подборе\n\nДальше — больше. {price}/месяц, отмена в любой момент.",
@@ -2441,7 +2443,7 @@ const translations = {
     referralProgressNext: "Ще верифікованих друзів: {remaining} — і відкриється наступна нагорода.",
     referralProgressMaxed: "Ти досяг(ла) найвищої нагороди — легенда. 💛",
     referralShareCaption:
-      "Це Gennety — знайомства, де все про реальні зустрічі, а не про листування.\n\nЯкщо цікаво — ось посилання.",
+      "Gennety — про справжні побачення, а не листування. ШІ підбирає пару й сам організовує зустріч.",
     referralShareJoin: "Приєднатися до Gennety 💫",
     referralRewardDm:
       "{name} пройшов(ла) перевірку за твоїм посиланням.\n\nНараховано: +{tickets} 🎟 · +{months} міс Premium.\n{next}",
@@ -2453,8 +2455,9 @@ const translations = {
     referralCardInvitedGeneric: "Тебе запрошують",
     referralCardHeadA: "Справжні побачення.",
     referralCardHeadB: "Нуль листування.",
-    referralCardGift: "Перший {months} місяць Premium — у подарунок",
-    referralCardFooter: "AI-сваха знайомить і організовує побачення за тебе.",
+    referralCardSupport: "ШІ підбирає пару за глибокою сумісністю й сам організовує зустріч наживо.",
+    referralCardGift: "Premium на {months} міс — у подарунок",
+    referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
       "*Gennety Premium*\n\n• *Безкоштовна зміна місця* — змінюй місце побачення скільки завгодно, без оплати\n• *Преміум-заклади* — відібраний тір кращих місць, відкривається в підборі\n\nДалі — більше. {price}/місяць, скасування будь-коли.",
@@ -3235,7 +3238,7 @@ const deTranslations: TranslationTable = {
   referralProgressNext: "Noch {remaining} verifizierte Freunde bis zur nächsten Belohnung.",
   referralProgressMaxed: "Du hast die höchste Belohnung erreicht — Legende. 💛",
   referralShareCaption:
-    "Das ist Gennety — Dating, bei dem es um echte Treffen geht, nicht ums Chatten.\n\nFalls es dich interessiert — hier ist der Link.",
+    "Gennety steht für echte Dates statt Chatten — die KI findet dein Match und plant das Treffen.",
   referralShareJoin: "Gennety beitreten 💫",
   referralRewardDm:
     "{name} hat die Verifizierung über deinen Link bestanden.\n\nGutgeschrieben: +{tickets} 🎟 · +{months} Mon Premium.\n{next}",
@@ -3247,8 +3250,9 @@ const deTranslations: TranslationTable = {
   referralCardInvitedGeneric: "Du bist eingeladen",
   referralCardHeadA: "Echte Dates.",
   referralCardHeadB: "Null Chatten.",
-  referralCardGift: "Erster {months} Monat Premium — geschenkt",
-  referralCardFooter: "Der KI-Matchmaker stellt euch vor und plant das Date.",
+  referralCardSupport: "Die KI findet dein Match nach tiefer Kompatibilität und organisiert das Treffen persönlich.",
+  referralCardGift: "{months} Monat Premium — geschenkt",
+  referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
     "*Gennety Premium*\n\n• *Kostenlose Ortswechsel* — wechsle den Date-Ort so oft du willst, ohne Gebühr\n• *Premium-Orte* — eine handverlesene Auswahl schönerer Orte, im Ortsboard freigeschaltet\n\nMehr kommt. {price}/Monat, jederzeit kündbar.",
@@ -4024,7 +4028,7 @@ const plTranslations: TranslationTable = {
   referralProgressNext: "Jeszcze {remaining} zweryfikowanych znajomych do następnej nagrody.",
   referralProgressMaxed: "Osiągnąłeś(-aś) najwyższą nagrodę — legenda. 💛",
   referralShareCaption:
-    "To Gennety — randki, w których chodzi o prawdziwe spotkania, a nie o pisanie.\n\nJeśli cię to interesuje — oto link.",
+    "Gennety to prawdziwe randki, nie pisanie — AI dobiera parę i sam organizuje spotkanie.",
   referralShareJoin: "Dołącz do Gennety 💫",
   referralRewardDm:
     "{name} przeszedł(-eszła) weryfikację przez twój link.\n\nNaliczono: +{tickets} 🎟 · +{months} mies Premium.\n{next}",
@@ -4036,8 +4040,9 @@ const plTranslations: TranslationTable = {
   referralCardInvitedGeneric: "Masz zaproszenie",
   referralCardHeadA: "Prawdziwe randki.",
   referralCardHeadB: "Zero pisania.",
-  referralCardGift: "Pierwszy {months} miesiąc Premium — w prezencie",
-  referralCardFooter: "Swatka AI przedstawia was i organizuje randkę.",
+  referralCardSupport: "AI dobiera parę według głębokiej zgodności i sam organizuje spotkanie na żywo.",
+  referralCardGift: "{months} miesiąc Premium — w prezencie",
+  referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
     "*Gennety Premium*\n\n• *Darmowa zmiana miejsca* — zmieniaj miejsce randki ile chcesz, bez opłat\n• *Miejsca premium* — wyselekcjonowany zestaw lepszych miejsc, odblokowany w tablicy miejsc\n\nWięcej wkrótce. {price}/miesiąc, anulujesz kiedy chcesz.",

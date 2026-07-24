@@ -1,88 +1,314 @@
 /* Referral Mini App (§Referral) — milestone ladder + one-tap invite.
-   Uses the shared theme.css tokens (--bg / --text / --accent …). */
+   Liquid-glass brand system: every surface is translucent glass (backdrop blur,
+   a specular top edge, a soft rim and depth shadow) over the near-black / cream
+   ground, with the burgundy accent spent only on the "reached" rungs and the
+   one action. Depth comes from translucency + inset light, never a flat border.
+   Base + glass tokens live in theme.css. */
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
+/* A single soft burgundy bloom high on the page — the only wash, so the gift
+   crest and the CTA read as the luminous points, never the backdrop. */
 .ref-wrap {
+  position: relative;
   max-width: 30rem;
   margin: 0 auto;
   padding:
-    calc(1.25rem + var(--tg-content-top, env(safe-area-inset-top, 0)))
+    calc(1.35rem + var(--tg-content-top, env(safe-area-inset-top, 0)))
     max(1.1rem, env(safe-area-inset-right, 0))
-    calc(1.75rem + env(safe-area-inset-bottom, 0))
+    calc(1.9rem + env(safe-area-inset-bottom, 0))
     max(1.1rem, env(safe-area-inset-left, 0));
 }
-
-.ref-hero { text-align: center; padding: 0.5rem 0 0.5rem; }
-.ref-badge {
-  width: 58px; height: 58px; margin: 0 auto 0.75rem; border-radius: 50%;
-  display: grid; place-items: center; font-size: 1.7rem;
-  background:
-    radial-gradient(120% 120% at 50% 0%, color-mix(in srgb, var(--accent) 55%, transparent), transparent 70%),
-    var(--accent-soft);
-  box-shadow: 0 0 34px color-mix(in srgb, var(--accent) 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.18);
-  animation: ref-pulse 2.6s ease-in-out infinite;
+.ref-wrap::before {
+  content: "";
+  position: absolute;
+  top: -6%;
+  left: 50%;
+  width: 150%;
+  height: 42%;
+  transform: translateX(-50%);
+  background: radial-gradient(
+    56% 60% at 50% 0%,
+    color-mix(in srgb, var(--accent) 26%, transparent) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
 }
-@keyframes ref-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
-@media (prefers-reduced-motion: reduce) { .ref-badge { animation: none; } }
+.ref-wrap > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Hero — glowing gift crest ────────────────────────────────────────── */
+.ref-hero {
+  text-align: center;
+  padding: 0.35rem 0 0.4rem;
+}
+.ref-badge {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 0.85rem;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  font-size: 1.8rem;
+  background:
+    radial-gradient(120% 120% at 50% 0%, color-mix(in srgb, var(--accent) 60%, transparent), transparent 72%),
+    var(--glass-bg-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 0 0 1px var(--glass-border),
+    0 12px 34px color-mix(in srgb, var(--accent) 34%, transparent);
+  animation: ref-pulse 2.8s ease-in-out infinite;
+}
+@keyframes ref-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ref-badge { animation: none; }
+}
 
 .ref-title {
-  font-size: 1.5rem; margin: 0 0 0.35rem; font-weight: 800; letter-spacing: -0.01em;
+  font-size: 1.55rem;
+  margin: 0 0 0.4rem;
+  font-weight: 800;
+  letter-spacing: -0.015em;
   text-wrap: balance;
 }
-.ref-tag { color: var(--text-muted); font-size: 0.9rem; margin: 0 auto; max-width: 32ch; line-height: 1.42; }
+.ref-tag {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 0 auto;
+  max-width: 32ch;
+  line-height: 1.45;
+}
 
-.ref-stats { display: flex; gap: 0.6rem; margin: 1.2rem 0 0.3rem; }
+/* ── Glass card base — shared recipe for stats + ladder rungs + track ──── */
+.ref-stat,
+.ref-rung,
+.ref-bar {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 0 0 1px var(--glass-border),
+    0 10px 26px var(--glass-shadow);
+}
+
+.ref-stats {
+  display: flex;
+  gap: 0.6rem;
+  margin: 1.3rem 0 0.3rem;
+}
 .ref-stat {
-  flex: 1; background: var(--bg-elevated); border: 1px solid var(--card-frame);
-  border-radius: 14px; padding: 0.8rem 0.4rem; text-align: center; min-width: 0;
+  flex: 1;
+  border-radius: 17px;
+  padding: 0.85rem 0.4rem;
+  text-align: center;
+  min-width: 0;
 }
-.ref-stat b { display: block; font-size: 1.2rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.ref-stat span { font-size: 0.64rem; letter-spacing: 0.04em; color: var(--text-faint); }
-.ref-stat.value b { color: var(--accent-bright); }
+.ref-stat b {
+  display: block;
+  font-size: 1.22rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ref-stat span {
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.ref-stat.value b {
+  color: var(--accent-bright);
+}
 
-.ref-progress { display: flex; justify-content: center; font-size: 0.82rem; color: var(--text-muted); margin: 1.15rem 0 0.5rem; }
-.ref-bar { height: 8px; border-radius: 99px; background: var(--bg-elevated); overflow: hidden; border: 1px solid var(--card-frame); }
-.ref-bar > i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent-bright)); transition: width 400ms ease; }
+.ref-progress {
+  display: flex;
+  justify-content: center;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 1.25rem 0 0.55rem;
+}
+.ref-bar {
+  height: 9px;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.ref-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-bright));
+  box-shadow: 0 0 16px color-mix(in srgb, var(--accent-bright) 60%, transparent);
+  transition: width 420ms ease;
+}
 
-.ref-ladder { list-style: none; margin: 1.3rem 0 0; padding: 0; display: grid; gap: 0.55rem; }
+/* ── Milestone ladder ─────────────────────────────────────────────────── */
+.ref-ladder {
+  list-style: none;
+  margin: 1.35rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
 .ref-rung {
-  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.8rem;
-  padding: 0.8rem 0.85rem; border-radius: 14px;
-  background: var(--bg-elevated); border: 1px solid var(--card-frame);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 17px;
 }
-.ref-rung.done { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: linear-gradient(180deg, var(--accent-soft), transparent); }
+/* Reached rung — a burgundy-tinted glass so "earned" reads as warmth + light,
+   not just a border colour. */
+.ref-rung.done {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 24%, transparent), color-mix(in srgb, var(--accent) 9%, transparent)),
+    var(--glass-bg);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent-bright) 40%, transparent),
+    0 12px 30px color-mix(in srgb, var(--accent) 26%, transparent);
+}
 .ref-n {
-  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
-  font-weight: 800; font-size: 0.92rem; font-variant-numeric: tabular-nums;
-  background: var(--bg); color: var(--text-muted); border: 1px solid var(--card-frame);
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--glass-border);
 }
-.ref-rung.done .ref-n { background: var(--accent); color: #fff; border-color: transparent; }
-.ref-body { min-width: 0; }
-.ref-body b { font-size: 0.95rem; }
-.ref-body span { display: block; font-size: 0.76rem; color: var(--text-muted); }
-.ref-usd { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 1rem; white-space: nowrap; text-align: right; }
-.ref-rung.done .ref-usd { color: var(--accent-bright); }
-.ref-usd small { display: block; font-size: 0.6rem; font-weight: 600; color: var(--text-faint); letter-spacing: 0.04em; }
-
-.ref-share {
-  margin-top: 1.5rem; width: 100%; border: 0; cursor: pointer;
+.ref-rung.done .ref-n {
   background: linear-gradient(180deg, var(--accent-bright), var(--accent));
-  color: #fff; border-radius: 15px; padding: 1rem; font-size: 1.05rem; font-weight: 800;
-  box-shadow: 0 12px 30px -12px color-mix(in srgb, var(--accent) 70%, transparent);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 4px 12px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.ref-body {
+  min-width: 0;
+}
+.ref-body b {
+  font-size: 0.96rem;
+}
+.ref-body span {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+.ref-usd {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: 1.02rem;
+  white-space: nowrap;
+  text-align: right;
+}
+.ref-rung.done .ref-usd {
+  color: var(--accent-bright);
+}
+.ref-usd small {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: var(--text-faint);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ── The one action — a burgundy liquid-glass pill ────────────────────── */
+.ref-share {
+  position: relative;
+  overflow: hidden;
+  margin-top: 1.6rem;
+  width: 100%;
+  border: 0;
+  cursor: pointer;
+  border-radius: 18px;
+  padding: 1.05rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #fff;
+  background:
+    radial-gradient(120% 90% at 50% -20%, rgba(255, 255, 255, 0.22), transparent 60%),
+    linear-gradient(180deg, var(--accent-bright), var(--accent));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -10px 22px rgba(0, 0, 0, 0.28),
+    0 16px 38px color-mix(in srgb, var(--accent) 55%, transparent);
   transition: transform 140ms ease, opacity 160ms ease;
 }
-.ref-share:active { transform: scale(0.98); }
-.ref-share:disabled { opacity: 0.55; cursor: default; }
-.ref-share-hint { text-align: center; font-size: 0.76rem; color: var(--text-faint); margin: 0.6rem 0 0; }
+/* A soft inner bloom that gently breathes inside the pill — light in glass. */
+.ref-share::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(72% 130% at 50% 44%, rgba(255, 255, 255, 0.18) 0%, transparent 66%);
+  opacity: 0.7;
+  animation: ref-glow 5s ease-in-out infinite;
+  pointer-events: none;
+}
+.ref-share > * {
+  position: relative;
+  z-index: 1;
+}
+.ref-share:active {
+  transform: scale(0.98);
+}
+.ref-share:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+@keyframes ref-glow {
+  0%, 100% { opacity: 0.5; transform: scale(0.98); }
+  50% { opacity: 0.82; transform: scale(1.02); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ref-share::after { animation: none; }
+}
+.ref-share-hint {
+  text-align: center;
+  font-size: 0.76rem;
+  color: var(--text-faint);
+  margin: 0.65rem 0 0;
+}
 
-.ref-skeleton { height: 60vh; border-radius: 18px; background: var(--bg-elevated); border: 1px solid var(--card-frame); opacity: 0.5; }
-.ref-error { color: var(--text-muted); text-align: center; padding: 2rem 1rem; }
-:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+.ref-skeleton {
+  height: 60vh;
+  border-radius: 20px;
+  background: var(--glass-bg);
+  box-shadow: inset 0 0 0 1px var(--glass-border);
+  opacity: 0.6;
+}
+.ref-error {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 2rem 1rem;
+}
+:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}

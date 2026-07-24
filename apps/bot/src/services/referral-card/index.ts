@@ -65,6 +65,7 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
     const kicker = input.referrerName
       ? t(input.lang, "referralCardInvitedBy", { name: input.referrerName })
       : t(input.lang, "referralCardInvitedGeneric");
+    const support = t(input.lang, "referralCardSupport");
     const giftLine = t(input.lang, "referralCardGift", { months: String(input.giftMonths) });
 
     const header = box(
@@ -109,7 +110,10 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
       },
       [
         header,
-        box({ flex: 1 }, []),
+        // A smaller top spacer than before so the content block sits in the
+        // lower-middle third instead of pinned to the very bottom over a big
+        // empty void.
+        box({ flex: 0.62 }, []),
         txt(
           {
             fontSize: 26,
@@ -117,14 +121,25 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
             letterSpacing: 3,
             textTransform: "uppercase",
             color: "#E7C7A6",
-            marginBottom: 22,
+            marginBottom: 20,
           },
           kicker,
         ),
         headline,
+        // Real "what is this" line so the card carries information, not just a
+        // slogan (and no "AI matchmaker" cliché).
         txt(
           {
-            marginTop: 40,
+            marginTop: 26,
+            fontSize: 31,
+            lineHeight: 1.34,
+            color: "rgba(247,236,236,0.74)",
+          },
+          support,
+        ),
+        txt(
+          {
+            marginTop: 34,
             alignSelf: "flex-start",
             alignItems: "center",
             padding: "18px 28px",
@@ -136,8 +151,14 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
           },
           giftLine,
         ),
+        box({ flex: 0.32 }, []),
         txt(
-          { marginTop: 44, fontSize: 24, color: "rgba(247,236,236,0.55)" },
+          {
+            fontSize: 24,
+            fontWeight: 500,
+            letterSpacing: 2,
+            color: "rgba(247,236,236,0.5)",
+          },
           t(input.lang, "referralCardFooter"),
         ),
       ],

@@ -248,33 +248,50 @@ body {
   animation: pm-rise 0.5s ease 0.16s both;
 }
 
-/* Active badge — liquid-glass pill; its label carries the same shimmer. */
-.pm-badge {
+/* Active status plate — an enlarged liquid-glass card that IS the focal element
+   of the active screen: the shimmering ACTIVE label over the big numeric expiry
+   date. Replaces the old small pill + subtitle line. */
+.pm-plate {
   align-self: center;
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 7px 15px 7px 12px;
-  border-radius: 999px;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 24px 40px;
+  border-radius: 26px;
   background: var(--pm-glass-fill);
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
-  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
   box-shadow:
     inset 0 1px 0 var(--pm-glass-hi),
     inset 0 0 0 1px var(--pm-glass-rim),
-    0 6px 18px rgba(0, 0, 0, 0.25);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  animation: pm-pill-in 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) 0.1s both;
+    0 16px 40px rgba(0, 0, 0, 0.32);
+  animation: pm-pill-in 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) 0.12s both;
 }
-.pm-badge-dot {
-  width: 6px;
-  height: 6px;
+.pm-plate-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.pm-plate-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--pm-ink);
-  box-shadow: 0 0 8px var(--pm-glow);
+  box-shadow: 0 0 10px var(--pm-glow);
+}
+.pm-plate-date {
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: var(--pm-ink);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Benefits — borderless glass cards that expand on tap ─────────────── */
@@ -657,7 +674,7 @@ body {
   .pm-logo::before,
   .pm-title,
   .pm-sub,
-  .pm-badge,
+  .pm-plate,
   .pm-benefit-wrap,
   .pm-benefit-tile.is-play .icon,
   .pm-more,

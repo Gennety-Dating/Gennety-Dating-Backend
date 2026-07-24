@@ -54,7 +54,7 @@ interface Copy {
   price: (p: string) => string;
   subscribe: (p: string) => string;
   activeBadge: string;
-  activeUntil: (d: string) => string;
+  activePlateUntil: (d: string) => string;
   manage: string;
   payFailed: string;
 }
@@ -75,7 +75,7 @@ const COPY: Record<Lang, Copy> = {
     price: (p) => `${p}/month · cancel anytime`,
     subscribe: (p) => `Subscribe — ${p}/mo`,
     activeBadge: "PREMIUM ACTIVE",
-    activeUntil: (d) => `You're Premium ✨ Active until ${d}.`,
+    activePlateUntil: (d) => `until ${d}`,
     manage: "Manage or cancel anytime in Telegram → Settings → Subscriptions.",
     payFailed: "That didn't go through. Try again in a moment.",
   },
@@ -94,7 +94,7 @@ const COPY: Record<Lang, Copy> = {
     price: (p) => `${p}/месяц · отмена в любой момент`,
     subscribe: (p) => `Оформить — ${p}/мес`,
     activeBadge: "PREMIUM АКТИВЕН",
-    activeUntil: (d) => `У тебя Premium ✨ Активен до ${d}.`,
+    activePlateUntil: (d) => `до ${d}`,
     manage: "Управлять и отменить — в Telegram → Настройки → Подписки.",
     payFailed: "Не прошло. Попробуй ещё раз через минуту.",
   },
@@ -113,7 +113,7 @@ const COPY: Record<Lang, Copy> = {
     price: (p) => `${p}/місяць · скасування будь-коли`,
     subscribe: (p) => `Оформити — ${p}/міс`,
     activeBadge: "PREMIUM АКТИВНИЙ",
-    activeUntil: (d) => `У тебе Premium ✨ Активний до ${d}.`,
+    activePlateUntil: (d) => `до ${d}`,
     manage: "Керувати та скасувати — у Telegram → Налаштування → Підписки.",
     payFailed: "Не вдалося. Спробуй ще раз за хвилину.",
   },
@@ -132,7 +132,7 @@ const COPY: Record<Lang, Copy> = {
     price: (p) => `${p}/Monat · jederzeit kündbar`,
     subscribe: (p) => `Abonnieren — ${p}/Mon.`,
     activeBadge: "PREMIUM AKTIV",
-    activeUntil: (d) => `Du bist Premium ✨ Aktiv bis ${d}.`,
+    activePlateUntil: (d) => `bis ${d}`,
     manage: "Verwalten oder kündigen in Telegram → Einstellungen → Abos.",
     payFailed: "Das hat nicht geklappt. Bitte gleich nochmal.",
   },
@@ -151,7 +151,7 @@ const COPY: Record<Lang, Copy> = {
     price: (p) => `${p}/miesiąc · anulujesz kiedy chcesz`,
     subscribe: (p) => `Subskrybuj — ${p}/mies.`,
     activeBadge: "PREMIUM AKTYWNE",
-    activeUntil: (d) => `Masz Premium ✨ Aktywne do ${d}.`,
+    activePlateUntil: (d) => `do ${d}`,
     manage: "Zarządzaj lub anuluj w Telegram → Ustawienia → Subskrypcje.",
     payFailed: "Nie udało się. Spróbuj ponownie za chwilę.",
   },
@@ -180,15 +180,14 @@ function haptic(kind: "success" | "error"): void {
   }
 }
 
-function fmtDate(iso: string | null): string {
+/** Numeric DD.MM.YYYY — the active plate shows the expiry date this way. */
+function fmtDateNumeric(iso: string | null): string {
   if (!iso) return "";
-  const tag = { en: "en-GB", ru: "ru-RU", uk: "uk-UA", de: "de-DE", pl: "pl-PL" }[lang];
   try {
-    return new Intl.DateTimeFormat(tag, {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    }).format(new Date(iso));
+    const d = new Date(iso);
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    return `${dd}.${mm}.${d.getFullYear()}`;
   } catch {
     return iso.slice(0, 10);
   }
@@ -341,15 +340,17 @@ function renderActive(state: PremiumState): void {
 
   const hero = el("div", "pm-hero");
   hero.append(crest());
-
-  const badge = el("div", "pm-badge");
-  const badgeTxt = el("span", "pm-shimmer", s.activeBadge);
-  badge.append(el("span", "pm-badge-dot"), badgeTxt);
-  hero.append(badge);
-
   hero.append(el("h1", "pm-title pm-shimmer", s.title));
-  hero.append(el("p", "pm-sub", s.activeUntil(fmtDate(state.premiumUntil))));
   center.append(hero);
+
+  // Enlarged liquid-glass status plate: the ACTIVE label + the expiry date in
+  // numeric DD.MM.YYYY (replaces the old small pill + the "active until" line).
+  const plate = el("div", "pm-plate");
+  const label = el("div", "pm-plate-label");
+  label.append(el("span", "pm-plate-dot"), el("span", "pm-shimmer", s.activeBadge));
+  plate.append(label);
+  plate.append(el("div", "pm-plate-date", s.activePlateUntil(fmtDateNumeric(state.premiumUntil))));
+  center.append(plate);
 
   page.append(center);
   root.replaceChildren(page);
@@ -452,6 +453,23 @@ async function pollUntilActive(attempt = 0): Promise<void> {
 }
 
 async function load(): Promise<void> {
+  // Standalone visual preview (no Telegram/initData): `?preview=active` shows the
+  // subscribed status plate, `?preview=offer` the sales screen. Harmless in prod.
+  const preview = params.get("preview");
+  if (preview === "active" || preview === "offer") {
+    const mock: PremiumState = {
+      ok: true,
+      featureEnabled: true,
+      active: preview === "active",
+      premiumUntil: preview === "active" ? "2026-11-24T00:00:00.000Z" : null,
+      autoRenew: true,
+      priceStars: 500,
+      priceDisplay: "$11.99",
+    };
+    if (preview === "active") renderActive(mock);
+    else renderOffer(mock);
+    return;
+  }
   renderLoading();
   try {
     const state = await fetchState();
