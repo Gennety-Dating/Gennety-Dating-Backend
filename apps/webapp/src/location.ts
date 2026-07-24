@@ -508,6 +508,9 @@ async function completeLocationStep(lat: number, lng: number, address: string | 
     selectedLng = lng;
     selectedAddress = address;
     resetSaving();
+    // Light tactile confirmation on the page turn (the origin→vibe advance had
+    // no haptic before, so it read as an abrupt blink).
+    app?.HapticFeedback?.impactOccurred?.("light");
     showVibeStage();
     (document.getElementById("vibe-text") as HTMLTextAreaElement | null)?.focus?.();
     return;
@@ -517,7 +520,10 @@ async function completeLocationStep(lat: number, lng: number, address: string | 
 
 const EXPERIENCE_IDS: VenueExperience[] = ["conversation", "coffee_treats", "meal_discovery", "walk_view", "art_culture", "drinks_evening", "playful_activity", "surprise_me"];
 const AMBIENCE_IDS: VenueAmbience[] = ["quiet", "cozy_public", "lively", "design_forward", "scenic", "romantic_public"];
-const FORMAT_IDS: VenueFormat[] = ["seated", "walking", "interactive", "indoor", "outdoor"];
+// Format is presented as a SINGLE choice over the "shape" of the date; the soft
+// indoor/outdoor setting is dropped here (its hard form lives in Must-haves as
+// required_indoor/outdoor), so the group can't offer contradictory picks.
+const FORMAT_DISPLAY_IDS: VenueFormat[] = ["seated", "walking", "interactive"];
 const DIET_IDS: VenueDietary[] = ["vegan", "vegetarian", "halal", "kosher", "gluten_free"];
 const VIBE_ERRORS: Record<Lang, { describe: string; experience: string; relax: string }> = {
   en: { describe: "Please describe the vibe first.", experience: "Choose at least one experience.", relax: "No verified place matches every requirement. Please relax: " },
@@ -555,6 +561,8 @@ interface VibeUi {
   groupAtmosphere: string;
   groupFormat: string;
   groupMustHaves: string;
+  multiHint: string;
+  singleHint: string;
 }
 const VIBE_UI: Record<Lang, VibeUi> = {
   en: {
@@ -569,6 +577,8 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     groupAtmosphere: "Atmosphere",
     groupFormat: "Format",
     groupMustHaves: "Must-haves",
+    multiHint: "choose any",
+    singleHint: "pick one",
   },
   ru: {
     step: "Шаг 2 из 2",
@@ -582,6 +592,8 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     groupAtmosphere: "Атмосфера",
     groupFormat: "Формат",
     groupMustHaves: "Обязательно",
+    multiHint: "можно несколько",
+    singleHint: "выбери одно",
   },
   uk: {
     step: "Крок 2 з 2",
@@ -595,6 +607,8 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     groupAtmosphere: "Атмосфера",
     groupFormat: "Формат",
     groupMustHaves: "Обов'язково",
+    multiHint: "можна кілька",
+    singleHint: "обери одне",
   },
   de: {
     step: "Schritt 2 von 2",
@@ -608,6 +622,8 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     groupAtmosphere: "Atmosphäre",
     groupFormat: "Format",
     groupMustHaves: "Unverzichtbar",
+    multiHint: "mehrere möglich",
+    singleHint: "nur eins",
   },
   pl: {
     step: "Krok 2 z 2",
@@ -621,6 +637,8 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     groupAtmosphere: "Atmosfera",
     groupFormat: "Format",
     groupMustHaves: "Obowiązkowo",
+    multiHint: "kilka opcji",
+    singleHint: "wybierz jedno",
   },
 };
 
@@ -647,6 +665,11 @@ function applyVibeUi(): void {
   setText("vibe-label-amb", ui.groupAtmosphere);
   setText("vibe-label-fmt", ui.groupFormat);
   setText("vibe-label-must", ui.groupMustHaves);
+  // Experience / Atmosphere / Must-haves accept several; Format is one choice.
+  setText("vibe-hint-exp", ui.multiHint);
+  setText("vibe-hint-amb", ui.multiHint);
+  setText("vibe-hint-fmt", ui.singleHint);
+  setText("vibe-hint-must", ui.multiHint);
   const ta = document.getElementById("vibe-text") as HTMLTextAreaElement | null;
   if (ta) ta.placeholder = ui.placeholder;
   setCta("vibe-interpret", ui.continueBtn);
@@ -659,14 +682,7 @@ function showVibeStage(): void {
   applyVibeUi();
   const priceNote = document.getElementById("vibe-price-note");
   if (priceNote) priceNote.textContent = INITIAL_PRICE_NOTE[lang];
-  const suggestions = document.getElementById("vibe-suggestions");
-  if (suggestions && venueState?.suggestions.length) {
-    suggestions.replaceChildren(...venueState.suggestions.map((item) => chipButton(item.experiences.map(label).join(" · "), false, () => {
-      draft = draft ? { ...draft, experiences: item.experiences, ambiences: item.ambiences, formats: item.formats } : draft;
-      const text = document.getElementById("vibe-text") as HTMLTextAreaElement | null;
-      if (text) text.value = item.experiences.map(label).join(", ");
-    })));
-  }
+  // No prefill suggestion chips — the user types their vibe in their own words.
 }
 
 function chipButton(text: string, active: boolean, action: () => void): HTMLButtonElement {
@@ -712,6 +728,11 @@ function renderDraft(): void {
   if (text && !text.value) text.value = draft.rawText;
   const review = document.getElementById("vibe-review") as HTMLElement | null;
   if (review) review.hidden = false;
+  // Once the review is open, the top "Continue" button is redundant (the final
+  // Confirm is at the bottom). It re-appears if the user edits the text — see the
+  // textarea input listener below.
+  const interpretBtn = document.getElementById("vibe-interpret") as HTMLElement | null;
+  if (interpretBtn) interpretBtn.hidden = true;
 
   renderChipGroup(
     "vibe-chips-exp",
@@ -729,12 +750,17 @@ function renderDraft(): void {
       draft!.ambiences = toggleList(draft!.ambiences, id as VenueAmbience);
     },
   );
+  // Format is a SINGLE choice — seated / walking / interactive are the shape of
+  // the date and mutually exclusive. Normalize to at most that one shape so what
+  // is shown equals what is sent (drops any interpreted indoor/outdoor).
+  const fmtActive = FORMAT_DISPLAY_IDS.find((id) => draft!.formats.includes(id)) ?? null;
+  draft.formats = fmtActive ? [fmtActive] : [];
   renderChipGroup(
     "vibe-chips-fmt",
-    FORMAT_IDS,
-    (id) => draft!.formats.includes(id as VenueFormat),
+    FORMAT_DISPLAY_IDS,
+    (id) => draft!.formats[0] === id,
     (id) => {
-      draft!.formats = toggleList(draft!.formats, id as VenueFormat);
+      draft!.formats = draft!.formats[0] === id ? [] : [id as VenueFormat];
     },
   );
 
@@ -758,6 +784,13 @@ function renderDraft(): void {
 document.getElementById("vibe-back")?.addEventListener("click", () => {
   const stage = document.getElementById("vibe-stage") as HTMLElement | null;
   if (stage) stage.hidden = true;
+});
+document.getElementById("vibe-text")?.addEventListener("input", () => {
+  // Editing the description after the review opened brings "Continue" back so the
+  // new text can be re-interpreted.
+  const review = document.getElementById("vibe-review") as HTMLElement | null;
+  const interpretBtn = document.getElementById("vibe-interpret") as HTMLElement | null;
+  if (interpretBtn && review && !review.hidden) interpretBtn.hidden = false;
 });
 document.getElementById("vibe-interpret")?.addEventListener("click", async () => {
   if (!app) return;

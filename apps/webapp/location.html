@@ -118,26 +118,37 @@
         <div class="vibe-input">
           <textarea id="vibe-text" maxlength="500" rows="4" placeholder=""></textarea>
         </div>
-        <div id="vibe-suggestions" class="vibe-suggestions"></div>
         <button id="vibe-interpret" class="cta" type="button"><span class="cta-text">Continue</span></button>
 
         <div id="vibe-review" hidden>
           <p class="vibe-review-label" id="vibe-review-label">Here's what I picked up — tap to fine-tune:</p>
 
           <div class="vibe-group">
-            <span class="vibe-group-label" id="vibe-label-exp">Experience</span>
+            <div class="vibe-group-head">
+              <span class="vibe-group-label" id="vibe-label-exp">Experience</span>
+              <span class="vibe-group-hint" id="vibe-hint-exp"></span>
+            </div>
             <div id="vibe-chips-exp" class="vibe-chips"></div>
           </div>
           <div class="vibe-group">
-            <span class="vibe-group-label" id="vibe-label-amb">Atmosphere</span>
+            <div class="vibe-group-head">
+              <span class="vibe-group-label" id="vibe-label-amb">Atmosphere</span>
+              <span class="vibe-group-hint" id="vibe-hint-amb"></span>
+            </div>
             <div id="vibe-chips-amb" class="vibe-chips"></div>
           </div>
           <div class="vibe-group">
-            <span class="vibe-group-label" id="vibe-label-fmt">Format</span>
+            <div class="vibe-group-head">
+              <span class="vibe-group-label" id="vibe-label-fmt">Format</span>
+              <span class="vibe-group-hint" id="vibe-hint-fmt"></span>
+            </div>
             <div id="vibe-chips-fmt" class="vibe-chips"></div>
           </div>
           <div class="vibe-group">
-            <span class="vibe-group-label" id="vibe-label-must">Must-haves</span>
+            <div class="vibe-group-head">
+              <span class="vibe-group-label" id="vibe-label-must">Must-haves</span>
+              <span class="vibe-group-hint" id="vibe-hint-must"></span>
+            </div>
             <div class="vibe-constraints" id="vibe-constraints"></div>
           </div>
 
