@@ -51,12 +51,52 @@ export function renderStatusBanner(input: StatusBannerViewInput): StatusBannerVi
     timeZone: input.timeZone,
   }).format(input.nextDropAt);
 
-  const lines = [
+  // The discrete countdown labels the primary button and — for non-English
+  // locales — also leads the banner text. Telegram's pinned-message preview is a
+  // single truncated line that never renders inline buttons, so the only way to
+  // surface the remaining time "at the top" is inside the text itself. English's
+  // short "Next drop: …" schedule line already fits that preview, so per an
+  // explicit product decision en is left byte-for-byte as before; the longer
+  // ru/uk/de/pl schedule lines pushed the time past the truncation, hiding it.
+  const snap = computeStatusSnapshot({
+    now: input.now,
+    nextMatchAt: input.nextDropAt,
+    isProcessing: input.isProcessing,
+  });
+  let countdown: string;
+  switch (snap.phase) {
+    case "processing":
+      countdown = t(input.language, "statusButtonProcessing");
+      break;
+    case "days":
+      countdown = t(input.language, "statusButtonDaysHours", {
+        d: snap.days ?? 0,
+        h: snap.hours ?? 0,
+      });
+      break;
+    case "hours":
+      countdown = t(input.language, "statusButtonHoursMinutes", {
+        h: snap.hours ?? 0,
+        m: snap.minutes ?? 0,
+      });
+      break;
+    case "minutes":
+      countdown = t(input.language, "statusButtonMinutes", {
+        m: snap.minutes ?? 0,
+      });
+      break;
+  }
+
+  const lines: string[] = [];
+  // Lead with the countdown so it survives the pinned preview's single-line
+  // truncation on the longer locales (en keeps its original layout).
+  if (input.language !== "en") lines.push(countdown, "");
+  lines.push(
     "✦ GENNETY DROP",
     "",
     t(input.language, "statusBannerSchedule", { date, time }),
     t(input.language, "statusBannerActive"),
-  ];
+  );
   if (input.upcomingDate) {
     lines.push(
       "",
@@ -71,38 +111,9 @@ export function renderStatusBanner(input: StatusBannerViewInput): StatusBannerVi
     );
   }
 
-  const snap = computeStatusSnapshot({
-    now: input.now,
-    nextMatchAt: input.nextDropAt,
-    isProcessing: input.isProcessing,
-  });
-  let buttonText: string;
-  switch (snap.phase) {
-    case "processing":
-      buttonText = t(input.language, "statusButtonProcessing");
-      break;
-    case "days":
-      buttonText = t(input.language, "statusButtonDaysHours", {
-        d: snap.days ?? 0,
-        h: snap.hours ?? 0,
-      });
-      break;
-    case "hours":
-      buttonText = t(input.language, "statusButtonHoursMinutes", {
-        h: snap.hours ?? 0,
-        m: snap.minutes ?? 0,
-      });
-      break;
-    case "minutes":
-      buttonText = t(input.language, "statusButtonMinutes", {
-        m: snap.minutes ?? 0,
-      });
-      break;
-  }
-
   const view = {
     text: lines.join("\n"),
-    buttonText,
+    buttonText: countdown,
     callbackData: "menu:open" as const,
     buttonStyle: "primary" as const,
   };

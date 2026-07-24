@@ -724,7 +724,13 @@ A pinned **status banner** is created on activation
 `status-timer` worker. Its first blue (`primary`) inline button always carries
 the discrete countdown to the next configured weekly batch ("Xd Yh", "Xh
 Ym", "Xm") and opens the current main menu; the message body repeats the exact
-localized batch date/time. **An upcoming `scheduled` date is additional
+localized batch date/time. Because Telegram's collapsed pinned-message preview
+is a single truncated line that never renders inline buttons, the **non-English**
+(`ru`/`uk`/`de`/`pl`) body **leads with that same discrete countdown as its first
+line**, so the remaining time always survives the preview truncation and shows
+"at the top"; the longer localized schedule line had otherwise pushed the time
+past the cut-off. English keeps its original layout — its shorter schedule line
+already fits the preview. **An upcoming `scheduled` date is additional
 context, never a replacement for the next-drop countdown**: its countdown and
 venue appear below the drop status. Telegram-only delivery follows the same
 `MATCH_CRON_SCHEDULE` + `CRON_TIMEZONE` source as `/v1/countdown`; the native
