@@ -10,7 +10,13 @@ import {
 import { handleProposalTextReply } from "./decision-text.js";
 import { handleDeclineReasonCallback } from "./decline-feedback.js";
 import { handleSchedulePick, handleCalendarWebAppData } from "./scheduler.js";
-import { handleReportOpen, handleReportCategory, handleReportSkip, handleReportText } from "./report.js";
+import {
+  handleReportOpen,
+  handleReportCancel,
+  handleReportCategory,
+  handleReportSkip,
+  handleReportText,
+} from "./report.js";
 import { handleVenueLocation, handleVenueVibe } from "./venue-negotiation.js";
 import { handleVenuePayDecline } from "./venue-change.js";
 
@@ -91,6 +97,11 @@ matchingRouter.use(async (ctx, next) => {
   }
   if (data?.startsWith("rs:") || data?.startsWith("report:skip:")) {
     await handleReportSkip(ctx);
+    return;
+  }
+  // Backed out of the report category menu (accidental Report tap) — no report filed.
+  if (data?.startsWith("rb:")) {
+    await handleReportCancel(ctx);
     return;
   }
 

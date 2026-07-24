@@ -670,6 +670,8 @@ const translations = {
     reportThanksT3: "Reported. We're freezing their account for manual review — thanks for flagging.",
     reportFailed: "Couldn't process your report right now. Try again in a minute.",
     reportDuplicate: "You've already reported this match.",
+    reportBackBtn: "← Go back",
+    reportCancelled: "Okay — no report sent.",
     reportWarningStrike1:
       "⚠️ Heads up: we received a report about your recent match behavior. " +
       "Gennety expects respectful, reliable conduct. Another confirmed report will suspend your account.",
@@ -1464,6 +1466,8 @@ const translations = {
     reportThanksT3: "Жалоба зарегистрирована. Замораживаем их аккаунт для ручной проверки — спасибо, что сообщил(а).",
     reportFailed: "Не получилось обработать жалобу. Попробуй через минуту.",
     reportDuplicate: "Ты уже жаловался(ась) на этот мэтч.",
+    reportBackBtn: "← Назад",
+    reportCancelled: "Хорошо — жалоба не отправлена.",
     reportWarningStrike1:
       "⚠️ На тебя поступила жалоба по недавнему мэтчу. " +
       "Gennety ожидает уважительного и надёжного поведения. Ещё одна подтверждённая жалоба — и аккаунт будет временно заблокирован.",
@@ -2258,6 +2262,8 @@ const translations = {
     reportThanksT3: "Скаргу зареєстровано. Заморожуємо їхній акаунт для ручної перевірки — дякуємо, що повідомив(ла).",
     reportFailed: "Не вдалося обробити скаргу. Спробуй за хвилину.",
     reportDuplicate: "Ти вже скаржився(лася) на цей мєтч.",
+    reportBackBtn: "← Назад",
+    reportCancelled: "Гаразд — скаргу не надіслано.",
     reportWarningStrike1:
       "⚠️ На тебе надійшла скарга щодо нещодавнього мєтчу. " +
       "Gennety очікує шанобливої та надійної поведінки. Ще одна підтверджена скарга — і акаунт буде тимчасово заблоковано.",
@@ -3009,6 +3015,8 @@ const deTranslations: TranslationTable = {
   reportThanksT3: "Gemeldet. Wir frieren den Account für eine manuelle Prüfung ein - danke fürs Bescheid sagen.",
   reportFailed: "Konnte die Meldung gerade nicht verarbeiten. Versuch es in einer Minute nochmal.",
   reportDuplicate: "Du hast dieses Match bereits gemeldet.",
+  reportBackBtn: "← Zurück",
+  reportCancelled: "Alles klar — keine Meldung gesendet.",
   reportWarningStrike1:
     "⚠️ Achtung: Wir haben eine Meldung zu deinem Verhalten bei einem aktuellen Match erhalten. " +
     "Gennety erwartet respektvolles und verlässliches Verhalten. Eine weitere bestätigte Meldung sperrt deinen Account vorübergehend.",
@@ -3763,6 +3771,8 @@ const plTranslations: TranslationTable = {
   reportThanksT3: "Zgłoszone. Zamrażamy konto tej osoby do ręcznej weryfikacji - dzięki za sygnał.",
   reportFailed: "Nie udało się teraz obsłużyć zgłoszenia. Spróbuj za minutę.",
   reportDuplicate: "Już zgłosiłeś/zgłosiłaś to dopasowanie.",
+  reportBackBtn: "← Wróć",
+  reportCancelled: "Okej — zgłoszenie nie zostało wysłane.",
   reportWarningStrike1:
     "⚠️ Uwaga: otrzymaliśmy zgłoszenie dotyczące Twojego zachowania przy ostatnim dopasowaniu. " +
     "Gennety oczekuje szacunku i odpowiedzialności. Kolejne potwierdzone zgłoszenie tymczasowo zawiesi konto.",

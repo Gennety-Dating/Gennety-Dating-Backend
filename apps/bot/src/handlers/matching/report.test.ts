@@ -45,6 +45,7 @@ vi.mock("../../services/cancel-in-flight-matches.js", () => ({
 
 const {
   handleReportOpen,
+  handleReportCancel,
   handleReportCategory,
   handleReportSkip,
   handleReportText,
@@ -132,6 +133,54 @@ describe("structured report flow", () => {
     callbacks.forEach((data: string) =>
       expect(Buffer.byteLength(data, "utf8")).toBeLessThanOrEqual(64),
     );
+  });
+
+  it("offers a Back button in the category menu so an accidental Report tap can be undone", async () => {
+    const ctx = {
+      from: { id: 12345 },
+      callbackQuery: { data: "report:open:match-1" },
+      session: {
+        language: "en",
+        matchFlow: "idle",
+        activeMatchId: null,
+        pendingReportCategory: null,
+      },
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      reply: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
+    await handleReportOpen(ctx);
+
+    const [, options] = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const rows = options.reply_markup.inline_keyboard;
+    const lastRow = rows[rows.length - 1];
+    expect(lastRow).toEqual([
+      expect.objectContaining({ callback_data: "rb:match-1", text: "reportBackBtn" }),
+    ]);
+  });
+
+  it("cancels the report flow on Back without filing a report", async () => {
+    const ctx = {
+      from: { id: 12345 },
+      callbackQuery: { data: "rb:match-1" },
+      session: {
+        language: "en",
+        matchFlow: "awaiting_report_details",
+        activeMatchId: "match-1",
+        pendingReportCategory: "fake_photos",
+      },
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+      editMessageText: vi.fn().mockResolvedValue(undefined),
+      reply: vi.fn().mockResolvedValue(undefined),
+    } as any;
+
+    await handleReportCancel(ctx);
+
+    expect(ctx.editMessageText).toHaveBeenCalledWith("reportCancelled");
+    expect(ctx.session.matchFlow).toBe("idle");
+    expect(ctx.session.activeMatchId).toBeNull();
+    expect(ctx.session.pendingReportCategory).toBeNull();
+    expect(reportCreate).not.toHaveBeenCalled();
   });
 
   it("submits a category-only skip report without needing free text", async () => {

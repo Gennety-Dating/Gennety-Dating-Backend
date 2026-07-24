@@ -42,6 +42,7 @@ type ReportCategory =
 
 const REPORT_CATEGORY_CALLBACK_PREFIX = "rc:";
 const REPORT_SKIP_CALLBACK_PREFIX = "rs:";
+const REPORT_CANCEL_CALLBACK_PREFIX = "rb:";
 const LEGACY_REPORT_CATEGORY_CALLBACK_PREFIX = "report:category:";
 const LEGACY_REPORT_SKIP_CALLBACK_PREFIX = "report:skip:";
 
@@ -158,6 +159,29 @@ export async function handleReportOpen(ctx: BotContext): Promise<void> {
   });
 }
 
+/**
+ * User backed out of the report category menu (e.g. tapped 🚨 Report by
+ * accident). No report is filed; the menu is edited into a neutral cancelled
+ * line so its buttons can't be tapped again, and any report session state is
+ * cleared. The original match card / Report button stays live for a real report.
+ */
+export async function handleReportCancel(ctx: BotContext): Promise<void> {
+  const data = ctx.callbackQuery?.data;
+  if (!data?.startsWith(REPORT_CANCEL_CALLBACK_PREFIX)) return;
+
+  await ctx.answerCallbackQuery();
+
+  const lang = ctx.session.language;
+  await resetReportSession(ctx);
+
+  const cancelled = t(lang, "reportCancelled");
+  try {
+    await ctx.editMessageText(cancelled);
+  } catch {
+    await ctx.reply(cancelled).catch(() => {});
+  }
+}
+
 export async function handleReportCategory(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
   if (
@@ -261,6 +285,14 @@ function buildReportCategoryKeyboard(
       // Compact prefix keeps UUID + longest category under Telegram's
       // 64-byte callback_data limit.
       callback_data: `${REPORT_CATEGORY_CALLBACK_PREFIX}${matchId}:${category}`,
+    },
+  ]);
+
+  // Escape hatch for an accidental "Report" tap — backs out without filing.
+  buttons.push([
+    {
+      text: t(lang, "reportBackBtn"),
+      callback_data: `${REPORT_CANCEL_CALLBACK_PREFIX}${matchId}`,
     },
   ]);
 
