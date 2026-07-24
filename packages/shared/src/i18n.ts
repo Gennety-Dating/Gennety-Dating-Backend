@@ -566,7 +566,7 @@ const translations = {
     profilerNextFormulating: "💭 Thinking…",
 
     // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
-    venueChangeButton: "📍 Change venue",
+    venueChangeButton: "🔄 Change venue",
     venueBoardPingFromF: "{name} is eyeing a cozier spot for your date 👀",
     venueBoardPingFromM: "{name} suggests a look at a couple of other spots for your date 👀",
     venueBoardPingBtn: "Take a look",
@@ -613,7 +613,7 @@ const translations = {
       "Emergency cancel window is open.\n" +
       "If you really can't make it, tap below.\n" +
       "*You'll need to write a reason — it gets forwarded to your match exactly as you write it.*",
-    emergencyBtn: "🚨 Cancel Date",
+    emergencyBtn: "Cancel Date",
     emergencyConfirmPrompt:
       "Before you cancel, quick check.\n\n" +
       "If this is nerves, being a little late, or uncertainty, keep the date. " +
@@ -1358,7 +1358,7 @@ const translations = {
     profilerNextFormulating: "💭 Думаю…",
 
     // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
-    venueChangeButton: "📍 Сменить место",
+    venueChangeButton: "🔄 Сменить место",
     venueBoardPingFromF: "{name} присматривает местечко поуютнее для вашего свидания 👀",
     venueBoardPingFromM: "{name} предлагает взглянуть на пару других мест для вашего свидания 👀",
     venueBoardPingBtn: "Взглянуть",
@@ -1402,7 +1402,7 @@ const translations = {
       "Окно экстренной отмены открыто.\n" +
       "Совсем не можешь прийти — жми кнопку ниже.\n" +
       "*Нужна причина — она уйдёт мэтчу ровно так, как ты её напишешь.*",
-    emergencyBtn: "🚨 Отменить свидание",
+    emergencyBtn: "Отменить свидание",
     emergencyConfirmPrompt:
       "Перед отменой — короткая проверка.\n\n" +
       "Если это волнение, небольшое опоздание или сомнение, лучше оставь свидание. " +
@@ -2147,7 +2147,7 @@ const translations = {
     profilerNextFormulating: "💭 Думаю…",
 
     // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
-    venueChangeButton: "📍 Змінити місце",
+    venueChangeButton: "🔄 Змінити місце",
     venueBoardPingFromF: "{name} придивляється до затишнішого місця для вашого побачення 👀",
     venueBoardPingFromM: "{name} пропонує поглянути на кілька інших місць для вашого побачення 👀",
     venueBoardPingBtn: "Поглянути",
@@ -2191,7 +2191,7 @@ const translations = {
       "Вікно екстреного скасування відкрите.\n" +
       "Зовсім не можеш прийти — тисни кнопку нижче.\n" +
       "*Потрібна причина — вона піде метчу саме так, як ти її напишеш.*",
-    emergencyBtn: "🚨 Скасувати побачення",
+    emergencyBtn: "Скасувати побачення",
     emergencyConfirmPrompt:
       "Перед скасуванням — коротка перевірка.\n\n" +
       "Якщо це хвилювання, невелике запізнення або сумнів, краще залиш побачення. " +
@@ -2906,7 +2906,7 @@ const deTranslations: TranslationTable = {
   profilerNextFormulating: "💭 Denke nach…",
 
   // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
-  venueChangeButton: "📍 Ort ändern",
+  venueChangeButton: "🔄 Ort ändern",
   venueBoardPingFromF: "{name} schaut sich nach einem gemütlicheren Ort für euer Date um 👀",
   venueBoardPingFromM: "{name} schlägt vor, ein paar andere Orte für euer Date anzusehen 👀",
   venueBoardPingBtn: "Ansehen",
@@ -2946,7 +2946,7 @@ const deTranslations: TranslationTable = {
     "Das Notfall-Storno-Fenster ist offen.\n" +
     "Wenn du wirklich nicht kannst, tippe unten.\n" +
     "*Du musst einen Grund schreiben - er wird exakt so an dein Match weitergeleitet.*",
-  emergencyBtn: "🚨 Date absagen",
+  emergencyBtn: "Date absagen",
   emergencyConfirmPrompt:
     "Bevor du absagst, kurzer Check.\n\n" +
     "Wenn es Nervosität, eine kleine Verspätung oder Unsicherheit ist, behalte das Date. " +
@@ -3655,7 +3655,7 @@ const plTranslations: TranslationTable = {
   profilerNextFormulating: "💭 Myślę…",
 
   // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
-  venueChangeButton: "📍 Zmień miejsce",
+  venueChangeButton: "🔄 Zmień miejsce",
   venueBoardPingFromF: "{name} rozgląda się za przytulniejszym miejscem na waszą randkę 👀",
   venueBoardPingFromM: "{name} proponuje spojrzeć na kilka innych miejsc na waszą randkę 👀",
   venueBoardPingBtn: "Zobacz",
@@ -3695,7 +3695,7 @@ const plTranslations: TranslationTable = {
     "Okno awaryjnego odwołania jest otwarte.\n" +
     "Jeśli naprawdę nie możesz przyjść, kliknij poniżej.\n" +
     "*Musisz napisać powód - przekażemy go dopasowaniu dokładnie tak, jak go napiszesz.*",
-  emergencyBtn: "🚨 Odwołaj randkę",
+  emergencyBtn: "Odwołaj randkę",
   emergencyConfirmPrompt:
     "Zanim odwołasz, krótki check.\n\n" +
     "Jeśli to stres, małe spóźnienie albo niepewność, zostaw randkę. " +

@@ -292,9 +292,15 @@ export async function runDateLifecycleTick(
       topicsForB,
     );
 
-    // Emergency cancellation button
-    const emergKbA = new InlineKeyboard().text(t(langA, "emergencyBtn"), `emerg:start:${match.id}`);
-    const emergKbB = new InlineKeyboard().text(t(langB, "emergencyBtn"), `emerg:start:${match.id}`);
+    // Emergency cancellation button. Native `danger` (red) carries the "this
+    // cancels the date" weight now that the label has no 🚨 glyph — consistent
+    // with the My Date hub's cancel button.
+    const emergKbA = new InlineKeyboard()
+      .text(t(langA, "emergencyBtn"), `emerg:start:${match.id}`)
+      .danger();
+    const emergKbB = new InlineKeyboard()
+      .text(t(langB, "emergencyBtn"), `emerg:start:${match.id}`)
+      .danger();
 
     // Per-side delivery: stream the ice-breakers, THEN drop the emergency-window
     // message so its cancel button lands right after the starters stream in.
