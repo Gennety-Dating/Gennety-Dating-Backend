@@ -34,18 +34,19 @@ const videoNoteFileIds = new Map<string, string>();
 
 /**
  * Resolve the bundled welcome video note for a (gender, language). Tries, in
- * order: a gender+language-specific `<gender>-<lang>.mp4`, a per-language
- * `<lang>.mp4` (same note for both genders of that language), then a single
- * global `default.mp4` (shown to every otherwise-uncovered pair — e.g. `uk`
- * falls back to whatever `default.mp4` holds). Returns the absolute path plus a
- * cache key (the asset basename) so identical assets share one uploaded
+ * order: a gender+language-specific `<gender>-<lang>.mp4`, then a per-language
+ * `<lang>.mp4` (same note for both genders of that language). There is
+ * deliberately NO global `default.mp4` fallback: the video note is an explicit,
+ * per-language opt-in, so a language with no matching file (e.g. everything but
+ * `ru` today) simply gets the text-only gift DM. Returns the absolute path plus
+ * a cache key (the asset basename) so identical assets share one uploaded
  * `file_id`, or `null` when nothing is on disk.
  */
 function resolveWelcomeGiftVideo(
   gender: WelcomeGiftGender,
   lang: Language,
 ): { path: string; key: string } | null {
-  const candidates = [`${gender}-${lang}.mp4`, `${lang}.mp4`, "default.mp4"];
+  const candidates = [`${gender}-${lang}.mp4`, `${lang}.mp4`];
   for (const name of candidates) {
     const path = fileURLToPath(
       new URL(`../assets/welcome-gift/${name}`, import.meta.url),
@@ -58,9 +59,9 @@ function resolveWelcomeGiftVideo(
 /**
  * Send the optional founder video note. Uses the `file_id` cache, falls back to
  * uploading the bundled asset, and is a clean no-op when no asset is recorded
- * for the pair AND no global `default.mp4` exists (the matrix lights up
- * automatically as operators drop new MP4s into `assets/welcome-gift/`, and a
- * lone `default.mp4` plays for every pair). Never throws.
+ * for the pair (the matrix lights up automatically as operators drop new
+ * `<lang>.mp4` / `<gender>-<lang>.mp4` files into `assets/welcome-gift/`; a
+ * language with no file gets the text-only gift DM). Never throws.
  */
 async function sendWelcomeVideoNote(
   api: Api,

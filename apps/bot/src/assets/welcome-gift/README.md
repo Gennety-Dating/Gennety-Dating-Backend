@@ -19,14 +19,15 @@ The sender resolves the note in this order — first hit wins:
 
 1. `<gender>-<lang>.mp4` — gender + language specific.
 2. `<lang>.mp4` — one note per language, shown to both genders.
-3. `default.mp4` — global fallback for every otherwise-uncovered pair.
 
 A more specific file always overrides a broader one; identical files share one
-uploaded Telegram `file_id`.
+uploaded Telegram `file_id`. **There is deliberately no global `default.mp4`
+fallback** — the video note is an explicit per-language opt-in, so any language
+without a matching file gets only the text-only gift DM.
 
-**Currently shipped** (founder note, dubbed per language): `en.mp4`, `de.mp4`,
-`pl.mp4`, and `default.mp4` (Russian — also serves `ru` and `uk`, since neither
-has its own file). Same format rules below.
+**Currently shipped**: `ru.mp4` only (the founder note, one file for both
+genders). Every other language (`en` / `uk` / `de` / `pl`) intentionally ships
+no video note and receives just the gift DM. Same format rules below.
 
 ## Format
 
