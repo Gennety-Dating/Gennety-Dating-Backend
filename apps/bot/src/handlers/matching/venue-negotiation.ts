@@ -48,6 +48,7 @@ import {
   venueIntentMode,
 } from "../../services/venue-intent-v2.js";
 import { deliverScheduledConfirmation } from "../../services/scheduled-confirmation.js";
+import { sendVibeChipCard } from "./venue-intent-chat.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { venueSearchSteps } from "../../services/analysis-status.js";
@@ -292,17 +293,50 @@ export async function handleVenueVibe(ctx: BotContext): Promise<void> {
   const { matchId, side } = resolved;
 
   const lang = ctx.session.language;
-  // V2 drafts are created only inside the Mini App and require explicit chip
-  // confirmation. Ordinary chat text must never overwrite a confirmed intent.
+  // Venue Intent V2 (live): the vibe + chip confirmation happen IN CHAT now, not
+  // in the Mini App (the Mini App captures only the departure origin). Once that
+  // origin is on file, interpret the free-text vibe and surface the canonical
+  // chips as inline toggle buttons; the user adjusts them and taps Confirm
+  // (handlers/matching/venue-intent-chat.ts → confirmVenueIntent → finalize).
+  // If the origin isn't set yet, keep location-first ordering: send the map.
   if (venueIntentMode(matchId) === "live") {
+    const origin = await prisma.match.findUnique({
+      where: { id: matchId },
+      select: {
+        vibeLatA: true, vibeLngA: true, vibeAddressA: true,
+        vibeLatB: true, vibeLngB: true, vibeAddressB: true,
+      },
+    });
+    const lat = side === "A" ? origin?.vibeLatA : origin?.vibeLatB;
+    const lng = side === "A" ? origin?.vibeLngA : origin?.vibeLngB;
+    const address = side === "A" ? origin?.vibeAddressA : origin?.vibeAddressB;
+    if (lat == null || lng == null) {
+      const actor = await prisma.user.findUnique({
+        where: { telegramId: BigInt(ctx.from!.id) },
+        select: { theme: true },
+      });
+      await ctx.reply(t(lang, "venueConciergeIntro"), {
+        parse_mode: "Markdown",
+        reply_markup: buildLocationMapKeyboard(matchId, lang, actor?.theme ?? "dark"),
+      });
+      return;
+    }
     const actor = await prisma.user.findUnique({
       where: { telegramId: BigInt(ctx.from!.id) },
-      select: { theme: true },
+      select: { id: true },
     });
-    await ctx.reply(t(lang, "venueConciergeIntro"), {
-      parse_mode: "Markdown",
-      reply_markup: buildLocationMapKeyboard(matchId, lang, actor?.theme ?? "dark"),
+    if (!actor) return;
+    const draft = await interpretVenueIntent(matchId, actor.id, text, {
+      lat,
+      lng,
+      address: address ?? null,
     });
+    if (draft) {
+      await sendVibeChipCard(ctx, draft, lang);
+    } else {
+      // Unparseable / too long — re-ask for the vibe rather than silently drop.
+      await ctx.reply(tv(lang, "venueLocationNoted"), { parse_mode: "Markdown" });
+    }
     return;
   }
 

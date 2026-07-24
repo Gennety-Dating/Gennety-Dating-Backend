@@ -119,10 +119,20 @@ let confirming = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 let venueState: VenueIntentTmaState | null = null;
 let draft: VenueIntentDraft | null = null;
-const venueStatePromise = matchId && app
-  ? fetchVenueIntentState(app.initData, matchId).then((state) => {
+// Venue Intent V2 (live) now collects the vibe + canonical chips in the Telegram
+// chat (inline buttons — handlers/matching/venue-intent-chat.ts), so this Mini
+// App is origin-only and never restores the in-app vibe stage. Non-live modes
+// never create an in-app draft, so the legacy restore below stays inert for them
+// (kept only for the pre-V2 fallback path).
+if (matchId && app) {
+  void fetchVenueIntentState(app.initData, matchId)
+    .then((state) => {
       venueState = state;
-      if (state.intent?.state === "draft" || (state.intent?.state === "confirmed" && state.selectionError?.startsWith("no_candidates:"))) {
+      if (
+        state.mode !== "live" &&
+        (state.intent?.state === "draft" ||
+          (state.intent?.state === "confirmed" && state.selectionError?.startsWith("no_candidates:")))
+      ) {
         draft = state.intent;
         if (draft.origin) {
           selectedLat = draft.origin.lat;
@@ -132,9 +142,9 @@ const venueStatePromise = matchId && app
         showVibeStage();
         renderDraft();
       }
-      return state;
-    }).catch(() => null)
-  : Promise.resolve(null);
+    })
+    .catch(() => undefined);
+}
 
 if (searchEl) searchEl.placeholder = tr(lang, "locSearchPlaceholder");
 if (shareTextEl) shareTextEl.textContent = tr(lang, "locShareCurrent");
@@ -477,15 +487,11 @@ async function saveLocation(
 }
 
 async function completeLocationStep(lat: number, lng: number, address: string | null): Promise<void> {
-  const state = await venueStatePromise;
-  if (state?.mode === "live") {
-    resetSaving();
-    selectedLat = lat;
-    selectedLng = lng;
-    selectedAddress = address;
-    showVibeStage();
-    return;
-  }
+  // Venue Intent V2 (live): the Mini App now captures ONLY the departure origin.
+  // The vibe + canonical-chip confirmation moved into the Telegram chat (inline
+  // buttons — handlers/matching/venue-intent-chat.ts), so we save the origin and
+  // close; the bot then asks for the vibe in a message. (Non-live shadow/off
+  // modes already saved-and-closed here too.)
   await saveLocation(lat, lng, address);
 }
 

@@ -339,6 +339,58 @@ export async function confirmVenueIntent(
   return getVenueIntentState(matchId, userId);
 }
 
+/**
+ * Load the actor's current V2 draft for the in-chat chip flow
+ * (`handlers/matching/venue-intent-chat.ts`). Returns null when there is no
+ * draft yet, the match isn't in venue negotiation, or the user isn't a
+ * participant.
+ */
+export async function getVenueChatDraft(
+  matchId: string,
+  userId: string,
+): Promise<{ side: VenueIntentSide; draft: VenueIntentV2 } | null> {
+  const own = await participant(matchId, userId);
+  if (!own || own.match.status !== "negotiating_venue") return null;
+  const draft = parseStored(own.side === "A" ? own.match.venueIntentA : own.match.venueIntentB);
+  return draft ? { side: own.side, draft } : null;
+}
+
+/**
+ * Persist edited chip selections onto the actor's existing draft (in-chat
+ * toggle). Mirrors interpret's lock+re-check so a concurrent `confirm` is never
+ * clobbered: an already-confirmed intent is returned unchanged. State stays
+ * `draft` — confirmation is a separate explicit step.
+ */
+export async function saveVenueChatDraft(
+  matchId: string,
+  userId: string,
+  chips: { experiences: VenueExperience[]; ambiences: VenueAmbience[]; formats: VenueFormat[] },
+): Promise<VenueIntentV2 | null> {
+  const own = await participant(matchId, userId);
+  if (!own || own.match.status !== "negotiating_venue") return null;
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRawUnsafe("SELECT id FROM matches WHERE id = $1::uuid FOR UPDATE", matchId);
+    const fresh = await tx.match.findUnique({
+      where: { id: matchId },
+      select: { venueIntentA: true, venueIntentB: true },
+    });
+    const current = parseStored(own.side === "A" ? fresh?.venueIntentA ?? null : fresh?.venueIntentB ?? null);
+    if (!current || current.state === "confirmed") return current;
+    const updated = normalizeVenueIntent({
+      ...current,
+      experiences: chips.experiences,
+      ambiences: chips.ambiences,
+      formats: chips.formats,
+      state: "draft",
+    });
+    await tx.match.update({
+      where: { id: matchId },
+      data: own.side === "A" ? { venueIntentA: asJson(updated) } : { venueIntentB: asJson(updated) },
+    });
+    return updated;
+  });
+}
+
 function experienceToLegacyCategory(experience: VenueExperience | undefined): "cafe" | "coffee_shop" | "restaurant" | "park" | "museum" | "lounge" {
   switch (experience) {
     case "coffee_treats": return "coffee_shop";

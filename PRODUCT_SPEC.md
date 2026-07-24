@@ -1825,6 +1825,19 @@ catalog in this flow. Confirmed V2 intent is stored per participant and is the
 only input to finalisation; ordinary Telegram messages cannot overwrite it and
 the server never re-parses it at selection time.
 
+On **Telegram** the two-step flow is presented natively in the chat, not a Mini
+App screen: the Location Mini App captures ONLY the departure origin (then
+closes), after which the bot asks for the free-text vibe in a message,
+interprets it, and surfaces the editable canonical chips as **inline toggle
+buttons** confirmed with one tap (`handlers/matching/venue-intent-chat.ts`; the
+match is resolved from the actor so the toggle/confirm callbacks fit Telegram's
+64-byte limit). The **iOS** client keeps its own native chip screen via
+`/v1/matches/:id/venue-intent` (OpenAPI contract unchanged). Finalisation of a
+live-mode match delivers the FULL shared scheduled confirmation — the date-card
+PNG (§3.7a), the tappable `date_time` entity, the Maps/Change-venue keyboard, the
+grounded venue blurb, and the founder feed (`services/scheduled-confirmation.ts`,
+shared with the legacy concierge path) — never a bare "venue ready + link" text.
+
 Experience IDs: `conversation`, `coffee_treats`, `meal_discovery`, `walk_view`,
 `art_culture`, `drinks_evening`, `playful_activity`, `surprise_me`. Ambience IDs:
 `quiet`, `cozy_public`, `lively`, `design_forward`, `scenic`,
