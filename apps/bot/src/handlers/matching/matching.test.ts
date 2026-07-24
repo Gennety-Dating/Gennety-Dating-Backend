@@ -1841,7 +1841,9 @@ describe("venue negotiation finalization", () => {
   });
 
   it("adds a localized Open in Maps URL button to the selected venue, not the midpoint", async () => {
-    mMatch.findUnique.mockResolvedValueOnce({
+    // deliverScheduledConfirmation re-loads the match by id, so answer every
+    // findUnique (the finalize load + the confirmation re-load) with this row.
+    mMatch.findUnique.mockResolvedValue({
       id: "match-venue-1",
       status: "negotiating_venue",
       agreedTime: new Date("2026-05-16T16:00:00.000Z"),
@@ -1903,7 +1905,7 @@ describe("venue negotiation finalization", () => {
   });
 
   it("structures the scheduled caption (name/address/blurb) and drops the inlined Maps URL", async () => {
-    mMatch.findUnique.mockResolvedValueOnce({
+    mMatch.findUnique.mockResolvedValue({
       id: "match-venue-1",
       status: "negotiating_venue",
       agreedTime: new Date("2026-05-16T16:00:00.000Z"),
@@ -1944,7 +1946,7 @@ describe("venue negotiation finalization", () => {
       address: "123 Test St",
       googleMapsUri: null,
     });
-    mMatch.findUnique.mockResolvedValueOnce({
+    mMatch.findUnique.mockResolvedValue({
       id: "match-venue-1",
       status: "negotiating_venue",
       agreedTime: new Date("2026-05-16T16:00:00.000Z"),

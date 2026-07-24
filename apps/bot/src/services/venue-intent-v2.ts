@@ -29,12 +29,15 @@ import { isValidVenueCategory, isVenueOpenAt } from "./curated-venue.js";
 import {
   searchVenueCandidates,
   type RegularOpeningHours,
+  type Venue,
   type VenueCandidate,
 } from "./venue.js";
+import { type VenueCategory } from "./vibe-parser.js";
 import { runVenueFinalizationOnce } from "./venue-finalization-flight.js";
 import { sendPushToUser } from "./push.js";
 import { generateAndSaveWingmanHints } from "./wingman-hint.js";
 import { notifyFounderVenueSelectionFailure } from "./founder-notify.js";
+import { deliverScheduledConfirmation } from "./scheduled-confirmation.js";
 import { applyInitialVenueConstraintPolicy, evaluateInitialVenuePolicy } from "./initial-venue-policy.js";
 
 export type VenueIntentSide = "A" | "B";
@@ -388,6 +391,8 @@ interface SelectionRecord {
   lng: number;
   mapsUri: string;
   source: "curated" | "places";
+  /** Resolved venue category — feeds the scheduled-card blurb + busy-note. */
+  category: VenueCategory;
   photoUrl: string | null;
   photoName: string | null;
 }
@@ -414,8 +419,8 @@ function candidateFromPlaces(row: VenueCandidate, a: VenueIntentV2, b: VenueInte
       facets: facts,
     },
     name: row.name, address: row.address, lat: row.lat, lng: row.lng,
-    mapsUri: row.googleMapsUri, source: "places", photoUrl: null,
-    photoName: row.photos[0] ?? null,
+    mapsUri: row.googleMapsUri, source: "places", category: row.category,
+    photoUrl: null, photoName: row.photos[0] ?? null,
   };
 }
 
@@ -518,6 +523,7 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       },
       name: row.name, address: row.address, lat: row.lat, lng: row.lng,
       mapsUri: row.googleMapsUri, source: "curated" as const,
+      category: row.category as VenueCategory,
       photoUrl: row.photoUrl, photoName: null,
     }];
   }).slice(0, 20);
@@ -607,10 +613,45 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   generateAndSaveWingmanHints(matchId).catch((error) => {
     console.warn(`[venue-intent-v2] wingman generation failed for ${matchId}:`, error);
   });
-  await notifyVenueIntentParticipants(match, "scheduled", {
-    venueName: chosen.name,
-    mapsUri: chosen.mapsUri,
-  });
+  // Deliver the rich scheduled confirmation — the SAME date-card PNG + tappable
+  // `date_time` entity + Maps/Change-venue keyboard + grounded venue blurb +
+  // founder feed as the legacy concierge path (services/scheduled-confirmation.ts),
+  // instead of a bare "venue ready + link" text. Telegram-only (the helper
+  // no-ops mobile targets); any render failure degrades to text inside it, so
+  // scheduling never wedges.
+  const api = (await import("../public/server.js")).getBotApi();
+  if (api) {
+    const venueForCard: Venue = {
+      name: chosen.name,
+      address: chosen.address,
+      googleMapsUri: chosen.mapsUri,
+      lat: chosen.lat,
+      lng: chosen.lng,
+      photoUrl: chosen.photoUrl,
+      photoName: chosen.photoName,
+      rating: chosen.rank.rating ?? null,
+      userRatingCount: chosen.rank.reviews ?? null,
+      placeId: chosen.rank.placeId,
+      source: chosen.source,
+    };
+    const keywords = [...new Set<string>([...a.experiences, ...b.experiences])];
+    await deliverScheduledConfirmation(api, matchId, {
+      venue: venueForCard,
+      category: chosen.category,
+      keywords,
+    }).catch((error) => {
+      console.warn(`[venue-intent-v2] scheduled confirmation failed for ${matchId}:`, error);
+    });
+  }
+  // Mobile participants still get the lightweight push (the rich card is
+  // Telegram-only); skip the redundant Telegram plain-text for `scheduled`
+  // since deliverScheduledConfirmation already owns that surface.
+  await notifyVenueIntentParticipants(
+    match,
+    "scheduled",
+    { venueName: chosen.name, mapsUri: chosen.mapsUri },
+    { telegram: false },
+  );
 }
 
 type VenueIntentNotificationMatch = {
@@ -651,6 +692,7 @@ async function notifyVenueIntentParticipants(
   match: VenueIntentNotificationMatch,
   state: string,
   venue?: { venueName: string; mapsUri: string },
+  opts?: { telegram?: boolean },
 ): Promise<void> {
   const api = (await import("../public/server.js")).getBotApi();
   const affected = state.startsWith("no_candidates:") ? state.split(":")[2] : null;
@@ -666,7 +708,7 @@ async function notifyVenueIntentParticipants(
       : state.startsWith("no_candidates")
         ? copy.no_candidates
         : copy.provider_unavailable;
-    if (api && user.telegramId > 0n && (user.platform === "telegram" || user.platform === "both")) {
+    if (opts?.telegram !== false && api && user.telegramId > 0n && (user.platform === "telegram" || user.platform === "both")) {
       await api.sendMessage(Number(user.telegramId), text).catch(() => undefined);
     }
     if (user.platform === "mobile" || user.platform === "both") {
