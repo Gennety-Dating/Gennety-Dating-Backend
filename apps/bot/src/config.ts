@@ -451,6 +451,33 @@ export const env = {
   /// wedges. Default off; flip on for the dev bot first.
   MATCH_CARD_FEATURE_ENABLED: process.env.MATCH_CARD_FEATURE_ENABLED === "true",
 
+  // ── Referral program ("Give a date, get a date") ─────
+  /// Master flag for the referral system (PRODUCT_SPEC §Referral). Default off.
+  /// Rides the already-on TICKET_FEATURE_ENABLED + PREMIUM_FEATURE_ENABLED (it
+  /// pays rewards in Date Tickets AND complimentary Premium months). When true:
+  /// the "Invite a friend" menu row + referral Mini App appear, referral
+  /// deep-links attribute, the invitee gets a welcome Premium month on the
+  /// onboarding wow screen, and the referrer earns the milestone ladder as each
+  /// invited friend clears verification.
+  REFERRAL_FEATURE_ENABLED: process.env.REFERRAL_FEATURE_ENABLED === "true",
+  /// Complimentary Premium months gifted to an INVITED user (shown on the
+  /// onboarding wow screen, granted + active immediately). Default 1.
+  REFERRAL_INVITEE_PREMIUM_MONTHS: Math.max(
+    0,
+    Number(process.env.REFERRAL_INVITEE_PREMIUM_MONTHS ?? "1"),
+  ),
+  /// Milestone ladder ("<count>:<ticketsDelta>:<monthsDelta>,…"). Reward is
+  /// granted to the referrer AT each verified-friend count. Default ladder
+  /// 1→1/1, 3→1/1, 5→1/1, 10→2/2 (cumulative 1/1, 2/2, 3/3, 5/5).
+  REFERRAL_LADDER: parseReferralLadder(process.env.REFERRAL_LADDER),
+  /// Anti-abuse: max referral reward events credited to one referrer per rolling
+  /// 24h. Invited friends beyond this are still counted but reward is deferred/
+  /// skipped (matters mostly while Persona is sandbox). Default 3.
+  REFERRAL_DAILY_REWARD_CAP: Math.max(
+    0,
+    Number(process.env.REFERRAL_DAILY_REWARD_CAP ?? "3"),
+  ),
+
   /// Dev-only preview switch. When true, the `/previewlocation` bot command is
   /// live: it DMs the sender the venue location-picker Mini App button pointed
   /// at a throwaway match id, purely to eyeball the Location Mini App inside
@@ -610,6 +637,54 @@ function parseStarBundles(raw: string | undefined): Readonly<Record<number, numb
     }
   }
   return Object.keys(out).length > 0 ? out : fallback;
+}
+
+/** One rung of the referral milestone ladder (PRODUCT_SPEC §Referral). */
+export interface ReferralLadderRung {
+  /** Verified-friend count at which this rung's reward is granted. */
+  atCount: number;
+  /** Date Tickets granted to the referrer when this rung is reached. */
+  tickets: number;
+  /** Complimentary Premium months granted to the referrer at this rung. */
+  months: number;
+}
+
+/**
+ * Parse `REFERRAL_LADDER` ("<count>:<ticketsDelta>:<monthsDelta>,…") into a
+ * count-sorted rung list. Falls back to the default ladder
+ * (1→1/1, 3→1/1, 5→1/1, 10→2/2) when unset or fully invalid; invalid individual
+ * rungs are skipped. Deltas are what the referrer gains AT that verified-friend
+ * count (cumulative totals are 1/1, 2/2, 3/3, 5/5).
+ */
+function parseReferralLadder(raw: string | undefined): readonly ReferralLadderRung[] {
+  const fallback: ReferralLadderRung[] = [
+    { atCount: 1, tickets: 1, months: 1 },
+    { atCount: 3, tickets: 1, months: 1 },
+    { atCount: 5, tickets: 1, months: 1 },
+    { atCount: 10, tickets: 2, months: 2 },
+  ];
+  if (!raw) return fallback;
+  const out: ReferralLadderRung[] = [];
+  for (const rung of raw.split(",")) {
+    const [c, t, m] = rung.split(":");
+    const atCount = Number((c ?? "").trim());
+    const tickets = Number((t ?? "").trim());
+    const months = Number((m ?? "").trim());
+    if (
+      Number.isInteger(atCount) &&
+      atCount > 0 &&
+      Number.isInteger(tickets) &&
+      tickets >= 0 &&
+      Number.isInteger(months) &&
+      months >= 0 &&
+      (tickets > 0 || months > 0)
+    ) {
+      out.push({ atCount, tickets, months });
+    }
+  }
+  if (out.length === 0) return fallback;
+  out.sort((a, b) => a.atCount - b.atCount);
+  return out;
 }
 
 function parseTelegramIdSet(raw: string | undefined): ReadonlySet<bigint> {

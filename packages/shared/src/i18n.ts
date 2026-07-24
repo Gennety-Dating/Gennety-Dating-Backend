@@ -776,6 +776,29 @@ const translations = {
       "Got it 🕶 Your anonymous chat opens about 30 minutes before the date — I'll send you the button then.",
     menuPremium: "✨ Gennety Premium",
     menuPremiumActive: "✨ Premium · until {date}",
+    menuInviteFriend: "🎁 Invite a friend",
+    referralGiftTitle: "A friend gifted you Premium 💫",
+    referralGiftBody:
+      "Because {name} invited you, your first {months} month of Gennety Premium is on us — it's active right now.",
+    referralGiftBodyNoName:
+      "Because a friend invited you, your first {months} month of Gennety Premium is on us — it's active right now.",
+    referralGiftContinue: "Let's go ✨",
+    referralHubTitle: "🎁 Give a date, get a date",
+    referralHubTagline:
+      "Every friend who joins and gets verified grows your matching pool in your city — and earns you free dates & Premium.",
+    referralShareButton: "📤 Invite a friend",
+    referralRewardsSoFar: "You've earned {tickets} 🎟 and {months} months of Premium — worth {usd}.",
+    referralProgressNext: "{remaining} more verified friend(s) unlocks the next reward.",
+    referralProgressMaxed: "You've reached the top reward — legend. 💛",
+    referralShareCaption:
+      "I'm on Gennety — the AI matchmaker that sets up real dates, no endless chatting. Join with my link and your first month of Premium is on me 💫",
+    referralShareJoin: "Join Gennety 💫",
+    referralRewardDm:
+      "🎉 {name} joined with your link and got verified! Credited to you: {tickets} 🎟 + {months} month(s) of Premium. {next}",
+    referralRewardNext: "Invite {remaining} more verified friend(s) to reach the next reward.",
+    referralRewardNextMax: "You've hit the top reward — thank you. 💛",
+    referralFriendJoinedDm:
+      "👀 {name} just joined with your link. Your reward lands the moment they finish verification.",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
       "*Gennety Premium*\n\n• *Free venue changes* — swap your date spot as often as you like, no fee\n• *Premium venues* — a hand-picked tier of nicer places, unlocked in the venue board\n\nMore perks are coming. {price}/month, cancel anytime.",
@@ -1572,6 +1595,29 @@ const translations = {
       "Принято 🕶 Анонимный чат откроется примерно за 30 минут до свидания — тогда пришлю кнопку.",
     menuPremium: "✨ Gennety Premium",
     menuPremiumActive: "✨ Premium · до {date}",
+    menuInviteFriend: "🎁 Пригласить друга",
+    referralGiftTitle: "Друг подарил тебе Premium 💫",
+    referralGiftBody:
+      "{name} пригласил(а) тебя — поэтому первый {months} месяц Gennety Premium за наш счёт. Он уже активен.",
+    referralGiftBodyNoName:
+      "Тебя пригласил друг — поэтому первый {months} месяц Gennety Premium за наш счёт. Он уже активен.",
+    referralGiftContinue: "Погнали ✨",
+    referralHubTitle: "🎁 Подари свидание — получи своё",
+    referralHubTagline:
+      "Каждый друг, который присоединился и прошёл верификацию, расширяет пул матчей в твоём городе — и приносит тебе бесплатные свидания и Premium.",
+    referralShareButton: "📤 Пригласить друга",
+    referralRewardsSoFar: "Ты получил(а) {tickets} 🎟 и {months} мес. Premium — на сумму {usd}.",
+    referralProgressNext: "Ещё верифицированных друзей: {remaining} — и откроется следующая награда.",
+    referralProgressMaxed: "Ты достиг(ла) высшей награды — легенда. 💛",
+    referralShareCaption:
+      "Я в Gennety — это AI-сваха, которая устраивает реальные свидания без бесконечной переписки. Заходи по моей ссылке, и первый месяц Premium — с меня 💫",
+    referralShareJoin: "Присоединиться к Gennety 💫",
+    referralRewardDm:
+      "🎉 {name} зашёл(ла) по твоей ссылке и прошёл(ла) верификацию! Тебе начислено: {tickets} 🎟 + {months} мес. Premium. {next}",
+    referralRewardNext: "Пригласи ещё {remaining} верифицированных друзей до следующей награды.",
+    referralRewardNextMax: "Ты достиг(ла) высшей награды — спасибо. 💛",
+    referralFriendJoinedDm:
+      "👀 {name} только что зашёл(ла) по твоей ссылке. Награда придёт, как только он(а) закончит верификацию.",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
       "*Gennety Premium*\n\n• *Бесплатная смена места* — меняй место свидания сколько угодно, без оплаты\n• *Премиум-заведения* — отобранный тир мест получше, открывается в подборе\n\nДальше — больше. {price}/месяц, отмена в любой момент.",
@@ -2368,6 +2414,29 @@ const translations = {
       "Прийнято 🕶 Анонімний чат відкриється приблизно за 30 хвилин до побачення — тоді надішлю кнопку.",
     menuPremium: "✨ Gennety Premium",
     menuPremiumActive: "✨ Premium · до {date}",
+    menuInviteFriend: "🎁 Запросити друга",
+    referralGiftTitle: "Друг подарував тобі Premium 💫",
+    referralGiftBody:
+      "{name} запросив(ла) тебе — тому перший {months} місяць Gennety Premium за наш рахунок. Він уже активний.",
+    referralGiftBodyNoName:
+      "Тебе запросив друг — тому перший {months} місяць Gennety Premium за наш рахунок. Він уже активний.",
+    referralGiftContinue: "Погнали ✨",
+    referralHubTitle: "🎁 Подаруй побачення — отримай своє",
+    referralHubTagline:
+      "Кожен друг, який приєднався та пройшов верифікацію, розширює пул матчів у твоєму місті — і приносить тобі безкоштовні побачення та Premium.",
+    referralShareButton: "📤 Запросити друга",
+    referralRewardsSoFar: "Ти отримав(ла) {tickets} 🎟 і {months} міс. Premium — на суму {usd}.",
+    referralProgressNext: "Ще верифікованих друзів: {remaining} — і відкриється наступна нагорода.",
+    referralProgressMaxed: "Ти досяг(ла) найвищої нагороди — легенда. 💛",
+    referralShareCaption:
+      "Я в Gennety — це AI-сваха, яка влаштовує справжні побачення без нескінченного листування. Заходь за моїм посиланням, і перший місяць Premium — за мій рахунок 💫",
+    referralShareJoin: "Приєднатися до Gennety 💫",
+    referralRewardDm:
+      "🎉 {name} зайшов(ла) за твоїм посиланням і пройшов(ла) верифікацію! Тобі нараховано: {tickets} 🎟 + {months} міс. Premium. {next}",
+    referralRewardNext: "Запроси ще {remaining} верифікованих друзів до наступної нагороди.",
+    referralRewardNextMax: "Ти досяг(ла) найвищої нагороди — дякую. 💛",
+    referralFriendJoinedDm:
+      "👀 {name} щойно зайшов(ла) за твоїм посиланням. Нагорода прийде, щойно він(вона) завершить верифікацію.",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
       "*Gennety Premium*\n\n• *Безкоштовна зміна місця* — змінюй місце побачення скільки завгодно, без оплати\n• *Преміум-заклади* — відібраний тір кращих місць, відкривається в підборі\n\nДалі — більше. {price}/місяць, скасування будь-коли.",
@@ -3133,6 +3202,29 @@ const deTranslations: TranslationTable = {
     "Alles klar 🕶 Dein anonymer Chat öffnet etwa 30 Minuten vor dem Date — den Button schick ich dir dann.",
   menuPremium: "✨ Gennety Premium",
   menuPremiumActive: "✨ Premium · bis {date}",
+  menuInviteFriend: "🎁 Freund einladen",
+  referralGiftTitle: "Ein Freund hat dir Premium geschenkt 💫",
+  referralGiftBody:
+    "Weil {name} dich eingeladen hat, geht dein erster {months} Monat Gennety Premium auf uns — er ist ab sofort aktiv.",
+  referralGiftBodyNoName:
+    "Weil ein Freund dich eingeladen hat, geht dein erster {months} Monat Gennety Premium auf uns — er ist ab sofort aktiv.",
+  referralGiftContinue: "Los geht's ✨",
+  referralHubTitle: "🎁 Schenk ein Date, bekomm ein Date",
+  referralHubTagline:
+    "Jeder Freund, der beitritt und verifiziert wird, vergrößert deinen Match-Pool in deiner Stadt — und bringt dir kostenlose Dates & Premium.",
+  referralShareButton: "📤 Freund einladen",
+  referralRewardsSoFar: "Du hast {tickets} 🎟 und {months} Monate Premium verdient — im Wert von {usd}.",
+  referralProgressNext: "Noch {remaining} verifizierte Freunde bis zur nächsten Belohnung.",
+  referralProgressMaxed: "Du hast die höchste Belohnung erreicht — Legende. 💛",
+  referralShareCaption:
+    "Ich bin bei Gennety — dem KI-Matchmaker, der echte Dates arrangiert, ohne endloses Chatten. Tritt mit meinem Link bei, und dein erster Monat Premium geht auf mich 💫",
+  referralShareJoin: "Gennety beitreten 💫",
+  referralRewardDm:
+    "🎉 {name} ist über deinen Link beigetreten und wurde verifiziert! Dir gutgeschrieben: {tickets} 🎟 + {months} Monat(e) Premium. {next}",
+  referralRewardNext: "Lade noch {remaining} verifizierte Freunde ein, um die nächste Belohnung zu erreichen.",
+  referralRewardNextMax: "Du hast die höchste Belohnung erreicht — danke. 💛",
+  referralFriendJoinedDm:
+    "👀 {name} ist gerade über deinen Link beigetreten. Deine Belohnung kommt, sobald die Verifizierung abgeschlossen ist.",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
     "*Gennety Premium*\n\n• *Kostenlose Ortswechsel* — wechsle den Date-Ort so oft du willst, ohne Gebühr\n• *Premium-Orte* — eine handverlesene Auswahl schönerer Orte, im Ortsboard freigeschaltet\n\nMehr kommt. {price}/Monat, jederzeit kündbar.",
@@ -3893,6 +3985,29 @@ const plTranslations: TranslationTable = {
     "Jasne 🕶 Anonimowy czat otworzy się jakieś 30 minut przed randką — wtedy wyślę przycisk.",
   menuPremium: "✨ Gennety Premium",
   menuPremiumActive: "✨ Premium · do {date}",
+  menuInviteFriend: "🎁 Zaproś znajomego",
+  referralGiftTitle: "Znajomy podarował ci Premium 💫",
+  referralGiftBody:
+    "Ponieważ {name} cię zaprosił(a), twój pierwszy {months} miesiąc Gennety Premium jest na nasz koszt — jest już aktywny.",
+  referralGiftBodyNoName:
+    "Ponieważ zaprosił cię znajomy, twój pierwszy {months} miesiąc Gennety Premium jest na nasz koszt — jest już aktywny.",
+  referralGiftContinue: "Zaczynamy ✨",
+  referralHubTitle: "🎁 Podaruj randkę — zdobądź swoją",
+  referralHubTagline:
+    "Każdy znajomy, który dołączy i przejdzie weryfikację, powiększa twoją pulę dopasowań w mieście — i daje ci darmowe randki oraz Premium.",
+  referralShareButton: "📤 Zaproś znajomego",
+  referralRewardsSoFar: "Zdobyłeś(-aś) {tickets} 🎟 i {months} mies. Premium — o wartości {usd}.",
+  referralProgressNext: "Jeszcze {remaining} zweryfikowanych znajomych do następnej nagrody.",
+  referralProgressMaxed: "Osiągnąłeś(-aś) najwyższą nagrodę — legenda. 💛",
+  referralShareCaption:
+    "Jestem na Gennety — swatce AI, która umawia prawdziwe randki bez niekończącego się pisania. Dołącz przez mój link, a pierwszy miesiąc Premium jest na mój koszt 💫",
+  referralShareJoin: "Dołącz do Gennety 💫",
+  referralRewardDm:
+    "🎉 {name} dołączył(a) przez twój link i przeszedł(-eszła) weryfikację! Naliczono ci: {tickets} 🎟 + {months} mies. Premium. {next}",
+  referralRewardNext: "Zaproś jeszcze {remaining} zweryfikowanych znajomych, aby osiągnąć następną nagrodę.",
+  referralRewardNextMax: "Osiągnąłeś(-aś) najwyższą nagrodę — dziękujemy. 💛",
+  referralFriendJoinedDm:
+    "👀 {name} właśnie dołączył(a) przez twój link. Twoja nagroda pojawi się, gdy tylko zakończy weryfikację.",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
     "*Gennety Premium*\n\n• *Darmowa zmiana miejsca* — zmieniaj miejsce randki ile chcesz, bez opłat\n• *Miejsca premium* — wyselekcjonowany zestaw lepszych miejsc, odblokowany w tablicy miejsc\n\nWięcej wkrótce. {price}/miesiąc, anulujesz kiedy chcesz.",

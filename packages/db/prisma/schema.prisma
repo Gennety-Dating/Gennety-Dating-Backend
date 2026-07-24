@@ -263,6 +263,18 @@ model User {
   premiumProvider            String?                  @map("premium_provider")
   premiumAutoRenew           Boolean                  @default(false) @map("premium_auto_renew")
   premiumExternalId          String?                  @map("premium_external_id")
+  /// Referral program (gated by `REFERRAL_FEATURE_ENABLED`; PRODUCT_SPEC
+  /// §Referral). `referralVerifiedCount` is the referrer's materialized tally of
+  /// invited friends who cleared verification — the milestone-ladder progress,
+  /// read by the referral Mini App. `referralCountedAt` is the INVITEE-side
+  /// once-marker (CAS null→now) proving this user was already counted toward
+  /// their referrer, so the ladder can never double-count. `referralInviteePremiumAt`
+  /// is the INVITEE-side once-marker for the 1-month welcome-Premium gift shown
+  /// on the onboarding wow screen. Rewards themselves live in `ticket_ledger`
+  /// (`referral_milestone`) and `subscription_ledger` (`referral`).
+  referralVerifiedCount      Int                      @default(0) @map("referral_verified_count")
+  referralCountedAt          DateTime?                @map("referral_counted_at")
+  referralInviteePremiumAt   DateTime?                @map("referral_invitee_premium_at")
   /// Founder-notify (gated by `FOUNDER_NOTIFY_ENABLED`): stamped the first time
   /// this user becomes `active` and the "new registration" profile card is sent
   /// to the founder's personal Telegram. Idempotency marker — the notifier

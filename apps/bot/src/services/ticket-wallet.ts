@@ -30,6 +30,11 @@ export type TicketReason =
   | "verification_bonus"
   | "student_bonus"
   | "welcome_gift"
+  // Referral ladder reward (PRODUCT_SPEC §Referral). Written for the referrer
+  // each time an invited friend clears verification and a ladder rung is
+  // reached; idempotent via a synthetic unique `externalPaymentId`
+  // (`referral-rung:<referrerId>:<rung>`).
+  | "referral_milestone"
   | "store_purchase"
   | "spend_match"
   | "refund";

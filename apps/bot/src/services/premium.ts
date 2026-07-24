@@ -42,7 +42,7 @@ export function formatPremiumUntil(date: Date | null | undefined, lang: Language
  * The flag gates NEW purchase surfaces / premium UI at the call sites.
  */
 
-export type PremiumProvider = "telegram_stars" | "app_store";
+export type PremiumProvider = "telegram_stars" | "app_store" | "referral";
 
 export type SubscriptionEvent =
   | "started"
@@ -193,6 +193,88 @@ export async function activateOrExtendPremium(
           periodEnd,
           amount: amount ?? null,
           currency: currency ?? null,
+        },
+      }),
+    ]);
+    return { applied: true, premiumUntil: updated.premiumUntil };
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      const head = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { premiumUntil: true },
+      });
+      return { applied: false, premiumUntil: head?.premiumUntil ?? null };
+    }
+    throw err;
+  }
+}
+
+/** Advance `date` by `months` calendar months (clamps end-of-month overflow). */
+function addMonths(date: Date, months: number): Date {
+  const d = new Date(date);
+  const targetMonth = d.getMonth() + months;
+  d.setMonth(targetMonth);
+  return d;
+}
+
+/**
+ * Grant `months` of **complimentary** Premium (PRODUCT_SPEC §Referral) — the
+ * referral reward path, distinct from the paid `activateOrExtendPremium`:
+ *
+ *  - **Additive**: `premiumUntil` is extended from `max(now, premiumUntil)`, so
+ *    a comp stacks on top of an existing paid period instead of overwriting it.
+ *  - **Non-clobbering**: `premiumAutoRenew` / `premiumProvider` /
+ *    `premiumExternalId` are DELIBERATELY untouched, so a user's real recurring
+ *    anchor (Telegram Stars / App Store) survives — a comp is not a renewing
+ *    subscription and must never masquerade as one.
+ *  - **Exactly-once**: a duplicate `externalPaymentId` (P2002) is a no-op,
+ *    exactly like the paid path.
+ *
+ * A fresh comp-only user therefore ends up Premium-active with
+ * `premiumAutoRenew = false` (schema default), which is correct: nothing renews.
+ */
+export async function grantComplimentaryPremiumMonths(input: {
+  userId: string;
+  months: number;
+  externalPaymentId: string;
+  note?: string;
+}): Promise<ActivatePremiumResult> {
+  const { userId, months, externalPaymentId, note } = input;
+  if (months <= 0) return { applied: false, premiumUntil: null };
+
+  const existing = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { premiumSince: true, premiumUntil: true },
+  });
+  if (!existing) return { applied: false, premiumUntil: null };
+
+  const now = new Date();
+  const base =
+    existing.premiumUntil && existing.premiumUntil.getTime() > now.getTime()
+      ? existing.premiumUntil
+      : now;
+  const periodEnd = addMonths(base, months);
+
+  try {
+    const [updated] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: {
+          premiumUntil: periodEnd,
+          premiumSince: existing.premiumSince ?? now,
+          // NOTE: autoRenew / provider / externalId intentionally NOT set.
+        },
+        select: { premiumUntil: true },
+      }),
+      prisma.subscriptionLedger.create({
+        data: {
+          userId,
+          provider: "referral",
+          event: "started",
+          externalPaymentId,
+          periodStart: base,
+          periodEnd,
+          note: note ?? null,
         },
       }),
     ]);
