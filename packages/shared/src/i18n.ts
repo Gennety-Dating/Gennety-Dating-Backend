@@ -783,22 +783,22 @@ const translations = {
     referralGiftBodyNoName:
       "Because a friend invited you, your first {months} month of Gennety Premium is on us — it's active right now.",
     referralGiftContinue: "Let's go ✨",
-    referralHubTitle: "🎁 Give a date, get a date",
+    referralHubTitle: "Invite your friends to Gennety",
     referralHubTagline:
-      "Invite a friend — when they get verified, you both win.\n\nA free month of Premium for them; free dates and Premium for you, as your circle grows in the city.",
+      "For every friend you invite who passes verification — Date Tickets and months of Premium. The more friends, the bigger the rewards.\n\nAnd the more people in your city, the higher the chance we find a match for you too.",
     referralShareButton: "📤 Invite a friend",
     referralRewardsSoFar: "You've earned {tickets} 🎟 and {months} months of Premium — worth {usd}.",
     referralProgressNext: "{remaining} more verified friend(s) unlocks the next reward.",
     referralProgressMaxed: "You've reached the top reward — legend. 💛",
     referralShareCaption:
-      "I'm on Gennety 💫\n\nAn AI matchmaker sets up real dates — no endless texting. Join with my link and your first month of Premium is on me.",
+      "This is Gennety — dating that's all about real meetings, not texting.\n\nIf you're curious — here's the link.",
     referralShareJoin: "Join Gennety 💫",
     referralRewardDm:
-      "{name} joined with your link and got verified 🎉\n\nCredited to you:\n+{tickets} 🎟   ·   +{months} mo Premium\n\n{next}",
-    referralRewardNext: "Invite {remaining} more to unlock the next reward.",
-    referralRewardNextMax: "That's the top reward — thank you 💛",
+      "{name} passed verification via your link.\n\nCredited: +{tickets} 🎟 · +{months} mo Premium.\n{next}",
+    referralRewardNext: "{remaining} more for the next reward.",
+    referralRewardNextMax: "That's the maximum — thank you.",
     referralFriendJoinedDm:
-      "{name} joined with your link 👀\n\nYour reward lands the moment they finish verification.",
+      "{name} joined via your link.\n\nYour reward arrives after they pass verification.",
     referralCardInvitedBy: "Invited by {name}",
     referralCardInvitedGeneric: "You're invited",
     referralCardHeadA: "Real dates.",
@@ -1608,22 +1608,22 @@ const translations = {
     referralGiftBodyNoName:
       "Тебя пригласил друг — поэтому первый {months} месяц Gennety Premium за наш счёт. Он уже активен.",
     referralGiftContinue: "Погнали ✨",
-    referralHubTitle: "🎁 Подари свидание — получи своё",
+    referralHubTitle: "Приглашай друзей в Gennety",
     referralHubTagline:
-      "Пригласи друга — когда он пройдёт верификацию, выигрываете оба.\n\nЕму — бесплатный месяц Premium. Тебе — бесплатные свидания и Premium по мере роста твоего круга в городе.",
+      "За каждого приглашённого, кто пройдёт проверку, — билеты на свидания и месяцы Premium. Чем больше друзей, тем крупнее награды.\n\nИ чем больше людей в твоём городе, тем выше шанс, что подберём пару и тебе.",
     referralShareButton: "📤 Пригласить друга",
     referralRewardsSoFar: "Ты получил(а) {tickets} 🎟 и {months} мес. Premium — на сумму {usd}.",
     referralProgressNext: "Ещё верифицированных друзей: {remaining} — и откроется следующая награда.",
     referralProgressMaxed: "Ты достиг(ла) высшей награды — легенда. 💛",
     referralShareCaption:
-      "Я в Gennety 💫\n\nAI-сваха устраивает реальные свидания — без бесконечной переписки. Заходи по моей ссылке, и первый месяц Premium — с меня.",
+      "Это Gennety — знакомства, где всё про реальные встречи, а не про переписку.\n\nЕсли интересно — вот ссылка.",
     referralShareJoin: "Присоединиться к Gennety 💫",
     referralRewardDm:
-      "{name} зашёл(ла) по твоей ссылке и прошёл(ла) верификацию 🎉\n\nНачислено:\n+{tickets} 🎟   ·   +{months} мес Premium\n\n{next}",
-    referralRewardNext: "Ещё {remaining} — и откроется следующая награда.",
-    referralRewardNextMax: "Это высшая награда — спасибо 💛",
+      "{name} прошёл(ла) проверку по твоей ссылке.\n\nНачислено: +{tickets} 🎟 · +{months} мес Premium.\n{next}",
+    referralRewardNext: "Ещё {remaining} — и следующая награда.",
+    referralRewardNextMax: "Это максимум — спасибо.",
     referralFriendJoinedDm:
-      "{name} зашёл(ла) по твоей ссылке 👀\n\nНаграда придёт, как только он(а) закончит верификацию.",
+      "{name} зашёл(ла) по твоей ссылке.\n\nНаграда придёт после проверки.",
     referralCardInvitedBy: "Тебя пригласил(а) {name}",
     referralCardInvitedGeneric: "Тебя приглашают",
     referralCardHeadA: "Реальные свидания.",
@@ -2433,22 +2433,22 @@ const translations = {
     referralGiftBodyNoName:
       "Тебе запросив друг — тому перший {months} місяць Gennety Premium за наш рахунок. Він уже активний.",
     referralGiftContinue: "Погнали ✨",
-    referralHubTitle: "🎁 Подаруй побачення — отримай своє",
+    referralHubTitle: "Запрошуй друзів у Gennety",
     referralHubTagline:
-      "Запроси друга — коли він пройде верифікацію, виграєте обидва.\n\nЙому — безкоштовний місяць Premium. Тобі — безкоштовні побачення та Premium у міру зростання твого кола в місті.",
+      "За кожного запрошеного, хто пройде перевірку, — квитки на побачення та місяці Premium. Що більше друзів, то більші нагороди.\n\nІ що більше людей у твоєму місті, то вищий шанс, що підберемо пару й тобі.",
     referralShareButton: "📤 Запросити друга",
     referralRewardsSoFar: "Ти отримав(ла) {tickets} 🎟 і {months} міс. Premium — на суму {usd}.",
     referralProgressNext: "Ще верифікованих друзів: {remaining} — і відкриється наступна нагорода.",
     referralProgressMaxed: "Ти досяг(ла) найвищої нагороди — легенда. 💛",
     referralShareCaption:
-      "Я в Gennety 💫\n\nAI-сваха влаштовує справжні побачення — без нескінченного листування. Заходь за моїм посиланням, і перший місяць Premium — за мій рахунок.",
+      "Це Gennety — знайомства, де все про реальні зустрічі, а не про листування.\n\nЯкщо цікаво — ось посилання.",
     referralShareJoin: "Приєднатися до Gennety 💫",
     referralRewardDm:
-      "{name} зайшов(ла) за твоїм посиланням і пройшов(ла) верифікацію 🎉\n\nНараховано:\n+{tickets} 🎟   ·   +{months} міс Premium\n\n{next}",
-    referralRewardNext: "Ще {remaining} — і відкриється наступна нагорода.",
-    referralRewardNextMax: "Це найвища нагорода — дякую 💛",
+      "{name} пройшов(ла) перевірку за твоїм посиланням.\n\nНараховано: +{tickets} 🎟 · +{months} міс Premium.\n{next}",
+    referralRewardNext: "Ще {remaining} — і наступна нагорода.",
+    referralRewardNextMax: "Це максимум — дякую.",
     referralFriendJoinedDm:
-      "{name} зайшов(ла) за твоїм посиланням 👀\n\nНагорода прийде, щойно він(вона) завершить верифікацію.",
+      "{name} зайшов(ла) за твоїм посиланням.\n\nНагорода прийде після перевірки.",
     referralCardInvitedBy: "Тебе запросив(ла) {name}",
     referralCardInvitedGeneric: "Тебе запрошують",
     referralCardHeadA: "Справжні побачення.",
@@ -3227,22 +3227,22 @@ const deTranslations: TranslationTable = {
   referralGiftBodyNoName:
     "Weil ein Freund dich eingeladen hat, geht dein erster {months} Monat Gennety Premium auf uns — er ist ab sofort aktiv.",
   referralGiftContinue: "Los geht's ✨",
-  referralHubTitle: "🎁 Schenk ein Date, bekomm ein Date",
+  referralHubTitle: "Lade deine Freunde zu Gennety ein",
   referralHubTagline:
-    "Lade einen Freund ein — wird er verifiziert, gewinnt ihr beide.\n\nFür ihn: ein Gratismonat Premium. Für dich: kostenlose Dates und Premium, während dein Kreis in der Stadt wächst.",
+    "Für jeden eingeladenen Freund, der die Verifizierung besteht — Date-Tickets und Monate Premium. Je mehr Freunde, desto größer die Belohnungen.\n\nUnd je mehr Menschen in deiner Stadt, desto höher die Chance, dass wir auch für dich ein Match finden.",
   referralShareButton: "📤 Freund einladen",
   referralRewardsSoFar: "Du hast {tickets} 🎟 und {months} Monate Premium verdient — im Wert von {usd}.",
   referralProgressNext: "Noch {remaining} verifizierte Freunde bis zur nächsten Belohnung.",
   referralProgressMaxed: "Du hast die höchste Belohnung erreicht — Legende. 💛",
   referralShareCaption:
-    "Ich bin bei Gennety 💫\n\nEin KI-Matchmaker arrangiert echte Dates — ohne endloses Chatten. Tritt mit meinem Link bei, und dein erster Monat Premium geht auf mich.",
+    "Das ist Gennety — Dating, bei dem es um echte Treffen geht, nicht ums Chatten.\n\nFalls es dich interessiert — hier ist der Link.",
   referralShareJoin: "Gennety beitreten 💫",
   referralRewardDm:
-    "{name} ist über deinen Link beigetreten und wurde verifiziert 🎉\n\nGutgeschrieben:\n+{tickets} 🎟   ·   +{months} Mon Premium\n\n{next}",
-  referralRewardNext: "Lade {remaining} weitere ein, um die nächste Belohnung freizuschalten.",
-  referralRewardNextMax: "Das ist die höchste Belohnung — danke 💛",
+    "{name} hat die Verifizierung über deinen Link bestanden.\n\nGutgeschrieben: +{tickets} 🎟 · +{months} Mon Premium.\n{next}",
+  referralRewardNext: "Noch {remaining} bis zur nächsten Belohnung.",
+  referralRewardNextMax: "Das ist das Maximum — danke.",
   referralFriendJoinedDm:
-    "{name} ist über deinen Link beigetreten 👀\n\nDeine Belohnung kommt, sobald die Verifizierung abgeschlossen ist.",
+    "{name} ist über deinen Link beigetreten.\n\nDeine Belohnung kommt nach der Verifizierung.",
   referralCardInvitedBy: "Eingeladen von {name}",
   referralCardInvitedGeneric: "Du bist eingeladen",
   referralCardHeadA: "Echte Dates.",
@@ -4016,22 +4016,22 @@ const plTranslations: TranslationTable = {
   referralGiftBodyNoName:
     "Ponieważ zaprosił cię znajomy, twój pierwszy {months} miesiąc Gennety Premium jest na nasz koszt — jest już aktywny.",
   referralGiftContinue: "Zaczynamy ✨",
-  referralHubTitle: "🎁 Podaruj randkę — zdobądź swoją",
+  referralHubTitle: "Zapraszaj znajomych do Gennety",
   referralHubTagline:
-    "Zaproś znajomego — gdy przejdzie weryfikację, wygrywacie oboje.\n\nDla niego: darmowy miesiąc Premium. Dla ciebie: darmowe randki i Premium, w miarę jak rośnie twój krąg w mieście.",
+    "Za każdego zaproszonego, kto przejdzie weryfikację — bilety na randki i miesiące Premium. Im więcej znajomych, tym większe nagrody.\n\nA im więcej osób w twoim mieście, tym większa szansa, że dobierzemy parę także tobie.",
   referralShareButton: "📤 Zaproś znajomego",
   referralRewardsSoFar: "Zdobyłeś(-aś) {tickets} 🎟 i {months} mies. Premium — o wartości {usd}.",
   referralProgressNext: "Jeszcze {remaining} zweryfikowanych znajomych do następnej nagrody.",
   referralProgressMaxed: "Osiągnąłeś(-aś) najwyższą nagrodę — legenda. 💛",
   referralShareCaption:
-    "Jestem na Gennety 💫\n\nSwatka AI umawia prawdziwe randki — bez niekończącego się pisania. Dołącz przez mój link, a pierwszy miesiąc Premium jest na mój koszt.",
+    "To Gennety — randki, w których chodzi o prawdziwe spotkania, a nie o pisanie.\n\nJeśli cię to interesuje — oto link.",
   referralShareJoin: "Dołącz do Gennety 💫",
   referralRewardDm:
-    "{name} dołączył(a) przez twój link i przeszedł(-eszła) weryfikację 🎉\n\nNaliczono:\n+{tickets} 🎟   ·   +{months} mies Premium\n\n{next}",
-  referralRewardNext: "Zaproś jeszcze {remaining}, aby odblokować następną nagrodę.",
-  referralRewardNextMax: "To najwyższa nagroda — dziękujemy 💛",
+    "{name} przeszedł(-eszła) weryfikację przez twój link.\n\nNaliczono: +{tickets} 🎟 · +{months} mies Premium.\n{next}",
+  referralRewardNext: "Jeszcze {remaining} do następnej nagrody.",
+  referralRewardNextMax: "To maksimum — dziękujemy.",
   referralFriendJoinedDm:
-    "{name} dołączył(a) przez twój link 👀\n\nTwoja nagroda pojawi się, gdy tylko zakończy weryfikację.",
+    "{name} dołączył(a) przez twój link.\n\nNagroda pojawi się po weryfikacji.",
   referralCardInvitedBy: "Zaproszenie od {name}",
   referralCardInvitedGeneric: "Masz zaproszenie",
   referralCardHeadA: "Prawdziwe randki.",
