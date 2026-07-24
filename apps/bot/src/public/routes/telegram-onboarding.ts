@@ -31,6 +31,7 @@ import {
 } from "../home-location.js";
 import { resolveCityFromCoordinates, searchCities } from "../city-search.js";
 import { unresolvedTrackContactGate } from "../../services/contact-verification.js";
+import { referralSourceFromParam } from "../../services/referral.js";
 
 const VALID_LANGUAGES = new Set<string>(SUPPORTED_LANGUAGES);
 const FLOW_TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -631,7 +632,7 @@ async function findOrCreateTelegramUser(
 
   const referral =
     typeof source === "string" && source.trim()
-      ? `tg-mini:${source.trim().slice(0, 48)}`
+      ? referralSourceFromParam(source.trim().slice(0, 48), "tg-mini")
       : null;
 
   return prisma.user.create({

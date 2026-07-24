@@ -18,6 +18,7 @@ import {
 } from "../services/status-banner.js";
 import { buildLanguageKeyboard } from "./language-keyboard.js";
 import { syncTelegramUsername } from "../utils/username.js";
+import { referralSourceFromParam } from "../services/referral.js";
 import { shouldUseOnboardingMiniApp } from "./onboarding-mini-app-gate.js";
 import { transitionAccountStatus } from "../services/account-status-transitions.js";
 import { buildMiniAppUrl } from "../services/mini-app-url.js";
@@ -163,11 +164,15 @@ start.command("start", async (ctx) => {
     // once, never overwritten on later /start invocations so the
     // attribution is stable across re-onboarding. The `verify_done`
     // payload is a control signal, not an attribution source — skip it.
+    // A `referral_<userId>` payload is stored as the resolvable
+    // `referral:<userId>` so the referral engine can pay the referrer when this
+    // invitee verifies (PRODUCT_SPEC §Referral); every other payload keeps the
+    // `tg:` campaign prefix. `verify_done` is a control signal, not attribution.
     const referralSource =
       startPayload.length > 0 &&
       startPayload.length <= 64 &&
       startPayload !== VERIFY_DONE_START_PARAM
-        ? `tg:${startPayload}`
+        ? referralSourceFromParam(startPayload, "tg")
         : null;
 
     // Dev-only: skip the corporate-email step for whitelisted Telegram IDs.

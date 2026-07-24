@@ -51,6 +51,19 @@ export function buildReferralLink(referrerUserId: string, botUsername: string): 
   return `https://t.me/${botUsername}?start=referral_${referrerUserId}`;
 }
 
+/**
+ * Canonical `User.referralSource` for a first-touch Telegram deep-link / Mini-App
+ * `start`/`startapp` param. A `referral_<id>` payload becomes the resolvable
+ * `referral:<id>`; anything else keeps its channel `prefix` (`tg` / `tg-mini`)
+ * so ordinary campaign attribution is unchanged.
+ */
+export function referralSourceFromParam(param: string, channelPrefix: string): string {
+  const m = /^referral_(.+)$/.exec(param);
+  const id = m?.[1].trim();
+  if (id) return `referral:${id}`;
+  return `${channelPrefix}:${param}`;
+}
+
 /** Cumulative reward totals unlocked once `verifiedCount` friends have verified. */
 export function cumulativeLadderTotals(
   verifiedCount: number,

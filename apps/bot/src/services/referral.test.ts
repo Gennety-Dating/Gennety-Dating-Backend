@@ -44,6 +44,7 @@ vi.mock("./premium.js", () => ({
 
 const {
   parseReferrer,
+  referralSourceFromParam,
   buildReferralLink,
   cumulativeLadderTotals,
   nextLadderRung,
@@ -82,6 +83,20 @@ describe("parseReferrer", () => {
     expect(parseReferrer("referral:")).toBeNull();
     expect(parseReferrer("")).toBeNull();
     expect(parseReferrer(null)).toBeNull();
+  });
+});
+
+describe("referralSourceFromParam", () => {
+  it("canonicalizes a referral_<id> deep link to referral:<id>", () => {
+    expect(referralSourceFromParam("referral_ref-9", "tg")).toBe("referral:ref-9");
+    expect(referralSourceFromParam("referral_ref-9", "tg-mini")).toBe("referral:ref-9");
+  });
+  it("keeps the channel prefix for ordinary campaign params", () => {
+    expect(referralSourceFromParam("ig_story", "tg")).toBe("tg:ig_story");
+    expect(referralSourceFromParam("launch", "tg-mini")).toBe("tg-mini:launch");
+  });
+  it("round-trips with parseReferrer for a referral link", () => {
+    expect(parseReferrer(referralSourceFromParam("referral_ref-1", "tg"))).toBe("ref-1");
   });
 });
 
