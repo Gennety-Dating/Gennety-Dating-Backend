@@ -135,7 +135,16 @@ const FOOD_CATEGORIES: ReadonlySet<VenueCategory> = new Set<VenueCategory>([
  * live Places fallback so removing a brand from the static catalog cannot let
  * it reappear through a later Google search.
  */
-const BLOCKED_VENUE_NAME_FRAGMENTS = ["musafir", "мусафір", "мусафир"];
+const BLOCKED_VENUE_NAME_FRAGMENTS = [
+  "musafir",
+  "мусафір",
+  "мусафир",
+  // Operator-excluded first-date venues (never used, incl. via Places fallback):
+  "beatnik",
+  "бітник",
+  "битник",
+  "underwu",
+];
 
 export function isBlockedVenueName(name: string | null | undefined): boolean {
   const normalized = name?.trim().toLocaleLowerCase() ?? "";
