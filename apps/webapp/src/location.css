@@ -461,12 +461,16 @@ button.cta.saving .arrow {
   font-size: 16px;
   line-height: 1.5;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease;
 }
 #vibe-text::placeholder { color: var(--text-faint); }
+/* On focus: a heavier accent border, NO glow/shadow. box-sizing:border-box keeps
+   the outer box fixed, and trimming padding by the extra 1px of border keeps the
+   text from shifting as the border thickens. */
 #vibe-text:focus {
+  border-width: 2px;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  padding: 14px 15px;
 }
 
 /* Chip rows — quick-fill suggestions, the review chips, and the hard-constraint
