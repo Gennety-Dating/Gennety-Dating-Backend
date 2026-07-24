@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
+import { tv, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
 import { locationSearchLimiter } from "../rate-limit.js";
@@ -97,6 +98,21 @@ export function createLocationRouter(api: Api<RawApi>): Router {
     if (!state) {
       res.status(409).json({ error: "draft-not-found" });
       return;
+    }
+    // Telegram chat cue: finalization only runs once BOTH sides have confirmed
+    // (tryFinalizeVenueIntentV2 returns early otherwise). If the partner hasn't
+    // confirmed yet, send the classic "waiting for the other side" DM so closing
+    // the Mini App leaves a chat receipt — matching the legacy concierge flow.
+    // When the partner HAS confirmed, finalize already delivered the scheduled
+    // confirmation (date card), so no waiting cue is needed. This lives on the
+    // Telegram-only Mini App route (not the shared confirmVenueIntent service) so
+    // the iOS path — which has its own waiting UI — is never DM'd.
+    if (!state.partnerSubmitted) {
+      void api
+        .sendMessage(Number(actor.telegramId), tv((actor.language ?? "en") as Language, "venueWaitingPeer"))
+        .catch((err) => {
+          console.warn(`[venue-intent/confirm] waiting DM failed for ${matchId}:`, err);
+        });
     }
     res.json({ ok: true, ...state });
   });
@@ -256,7 +272,7 @@ export function createLocationRouter(api: Api<RawApi>): Router {
 async function authenticatedUser(
   req: Request,
   res: Response,
-): Promise<{ id: string; telegramId: bigint } | null> {
+): Promise<{ id: string; telegramId: bigint; language: Language | null } | null> {
   const auth = authenticate(req);
   if (!auth.ok) {
     res.status(401).json(auth.body);
@@ -264,7 +280,7 @@ async function authenticatedUser(
   }
   const user = await prisma.user.findUnique({
     where: { telegramId: BigInt(auth.user.id) },
-    select: { id: true, telegramId: true },
+    select: { id: true, telegramId: true, language: true },
   });
   if (!user) {
     res.status(404).json({ error: "user-not-found" });

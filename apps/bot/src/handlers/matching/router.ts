@@ -11,7 +11,6 @@ import { handleDeclineReasonCallback } from "./decline-feedback.js";
 import { handleSchedulePick, handleCalendarWebAppData } from "./scheduler.js";
 import { handleReportOpen, handleReportCategory, handleReportSkip, handleReportText } from "./report.js";
 import { handleVenueLocation, handleVenueVibe } from "./venue-negotiation.js";
-import { handleVibeChipCallback } from "./venue-intent-chat.js";
 import { handleVenuePayDecline } from "./venue-change.js";
 
 /**
@@ -65,14 +64,6 @@ matchingRouter.use(async (ctx, next) => {
   // Scheduling callbacks: iteration 1/2 slot picks
   if (data?.startsWith("sched:pick:")) {
     await handleSchedulePick(ctx);
-    return;
-  }
-
-  // Venue Intent V2: in-chat vibe chip toggle / confirm (the Telegram
-  // presentation of the V2 draft). The match is resolved from the actor, so no
-  // id rides the 64-byte callback.
-  if (data?.startsWith("vic:")) {
-    await handleVibeChipCallback(ctx);
     return;
   }
 

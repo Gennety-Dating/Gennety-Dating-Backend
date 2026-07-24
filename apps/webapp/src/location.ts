@@ -119,19 +119,20 @@ let confirming = false;
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 let venueState: VenueIntentTmaState | null = null;
 let draft: VenueIntentDraft | null = null;
-// Venue Intent V2 (live) now collects the vibe + canonical chips in the Telegram
-// chat (inline buttons — handlers/matching/venue-intent-chat.ts), so this Mini
-// App is origin-only and never restores the in-app vibe stage. Non-live modes
-// never create an in-app draft, so the legacy restore below stays inert for them
-// (kept only for the pre-V2 fallback path).
+// Venue Intent V2: the Location Mini App owns the WHOLE two-step flow again —
+// origin (the map) then the vibe + canonical chips on the in-app "step 2" screen
+// (2026-07: reverted from the short-lived chat-chip presentation because inline
+// Telegram buttons can't carry the brand's liquid-glass design). On reopen, if a
+// draft (or a confirmed-but-no_candidates intent needing relaxation) already
+// exists, jump straight back to the vibe stage so the user doesn't re-pick their
+// origin. Applies to every mode; shadow/off simply never create an in-app draft.
 if (matchId && app) {
   void fetchVenueIntentState(app.initData, matchId)
     .then((state) => {
       venueState = state;
       if (
-        state.mode !== "live" &&
-        (state.intent?.state === "draft" ||
-          (state.intent?.state === "confirmed" && state.selectionError?.startsWith("no_candidates:")))
+        state.intent?.state === "draft" ||
+        (state.intent?.state === "confirmed" && state.selectionError?.startsWith("no_candidates:"))
       ) {
         draft = state.intent;
         if (draft.origin) {
@@ -487,11 +488,30 @@ async function saveLocation(
 }
 
 async function completeLocationStep(lat: number, lng: number, address: string | null): Promise<void> {
-  // Venue Intent V2 (live): the Mini App now captures ONLY the departure origin.
-  // The vibe + canonical-chip confirmation moved into the Telegram chat (inline
-  // buttons — handlers/matching/venue-intent-chat.ts), so we save the origin and
-  // close; the bot then asks for the vibe in a message. (Non-live shadow/off
-  // modes already saved-and-closed here too.)
+  // Venue Intent V2 (live): the Mini App owns the whole two-step flow. Instead of
+  // saving the origin and closing, hold it in memory and advance to the in-app
+  // vibe stage — interpret/confirm persist the origin, and the final in-app
+  // confirm runs the V2 finalizer + delivers the scheduled confirmation. Non-live
+  // (shadow/off legacy) keeps the origin-only save + close; the vibe is collected
+  // elsewhere for those modes.
+  if (!venueState && app) {
+    // The boot fetch normally populates this well before Confirm; re-fetch once
+    // if a very fast tap beat it, so we never fall through to legacy save in live.
+    try {
+      venueState = await fetchVenueIntentState(app.initData, matchId);
+    } catch {
+      /* fall through to the legacy origin-only save */
+    }
+  }
+  if (venueState?.mode === "live") {
+    selectedLat = lat;
+    selectedLng = lng;
+    selectedAddress = address;
+    resetSaving();
+    showVibeStage();
+    (document.getElementById("vibe-text") as HTMLTextAreaElement | null)?.focus?.();
+    return;
+  }
   await saveLocation(lat, lng, address);
 }
 
@@ -522,9 +542,121 @@ const LABELS: Record<Lang, Record<string, string>> = {
 };
 const label = (id: string): string => LABELS[lang][id] ?? id.replaceAll("_", " ");
 
+/** Localized chrome for the step-2 vibe screen (title, help, group labels, CTAs). */
+interface VibeUi {
+  step: string;
+  title: string;
+  help: string;
+  placeholder: string;
+  continueBtn: string;
+  reviewLabel: string;
+  confirmBtn: string;
+  groupExperience: string;
+  groupAtmosphere: string;
+  groupFormat: string;
+  groupMustHaves: string;
+}
+const VIBE_UI: Record<Lang, VibeUi> = {
+  en: {
+    step: "Step 2 of 2",
+    title: "What should the date feel like?",
+    help: "Describe it in your own words — I'll find the perfect spot.",
+    placeholder: "e.g. a cozy, design-led place where we can actually talk — nothing loud",
+    continueBtn: "Continue",
+    reviewLabel: "Here's what I picked up — tap to fine-tune:",
+    confirmBtn: "Looks right — find our spot",
+    groupExperience: "What we'll do",
+    groupAtmosphere: "Atmosphere",
+    groupFormat: "Format",
+    groupMustHaves: "Must-haves",
+  },
+  ru: {
+    step: "Шаг 2 из 2",
+    title: "Каким должно быть свидание?",
+    help: "Опишите своими словами — я подберу идеальное место.",
+    placeholder: "например: уютное, стильное место, где можно спокойно поговорить — без шума",
+    continueBtn: "Дальше",
+    reviewLabel: "Вот что я уловил — нажмите, чтобы поправить:",
+    confirmBtn: "Всё верно — подобрать место",
+    groupExperience: "Что делаем",
+    groupAtmosphere: "Атмосфера",
+    groupFormat: "Формат",
+    groupMustHaves: "Обязательно",
+  },
+  uk: {
+    step: "Крок 2 з 2",
+    title: "Яким має бути побачення?",
+    help: "Опишіть своїми словами — я підберу ідеальне місце.",
+    placeholder: "наприклад: затишне, стильне місце, де можна спокійно поговорити — без гамору",
+    continueBtn: "Далі",
+    reviewLabel: "Ось що я вловив — торкніться, щоб виправити:",
+    confirmBtn: "Усе вірно — підібрати місце",
+    groupExperience: "Що робимо",
+    groupAtmosphere: "Атмосфера",
+    groupFormat: "Формат",
+    groupMustHaves: "Обов'язково",
+  },
+  de: {
+    step: "Schritt 2 von 2",
+    title: "Wie soll das Date sich anfühlen?",
+    help: "Beschreib es in eigenen Worten — ich finde den perfekten Ort.",
+    placeholder: "z. B. ein gemütlicher, designorientierter Ort, wo man wirklich reden kann — nichts Lautes",
+    continueBtn: "Weiter",
+    reviewLabel: "Das habe ich verstanden — zum Anpassen antippen:",
+    confirmBtn: "Passt — Ort finden",
+    groupExperience: "Was wir machen",
+    groupAtmosphere: "Atmosphäre",
+    groupFormat: "Format",
+    groupMustHaves: "Unverzichtbar",
+  },
+  pl: {
+    step: "Krok 2 z 2",
+    title: "Jaka ma być randka?",
+    help: "Opisz to własnymi słowami — dobiorę idealne miejsce.",
+    placeholder: "np. przytulne, designerskie miejsce, gdzie można naprawdę porozmawiać — bez hałasu",
+    continueBtn: "Dalej",
+    reviewLabel: "Oto, co zrozumiałem — dotknij, aby poprawić:",
+    confirmBtn: "Wszystko się zgadza — znajdź miejsce",
+    groupExperience: "Co robimy",
+    groupAtmosphere: "Atmosfera",
+    groupFormat: "Format",
+    groupMustHaves: "Obowiązkowo",
+  },
+};
+
+/** Localize the step-2 chrome once when the stage opens. Guarded per element so
+ *  a test DOM stub missing an id (or an older bundle) never throws. */
+function applyVibeUi(): void {
+  const ui = VIBE_UI[lang];
+  const setText = (id: string, text: string): void => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+  const setCta = (btnId: string, text: string): void => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    const span = btn.querySelector?.(".cta-text");
+    if (span) span.textContent = text;
+    else btn.textContent = text;
+  };
+  setText("vibe-step", ui.step);
+  setText("vibe-title", ui.title);
+  setText("vibe-help", ui.help);
+  setText("vibe-review-label", ui.reviewLabel);
+  setText("vibe-label-exp", ui.groupExperience);
+  setText("vibe-label-amb", ui.groupAtmosphere);
+  setText("vibe-label-fmt", ui.groupFormat);
+  setText("vibe-label-must", ui.groupMustHaves);
+  const ta = document.getElementById("vibe-text") as HTMLTextAreaElement | null;
+  if (ta) ta.placeholder = ui.placeholder;
+  setCta("vibe-interpret", ui.continueBtn);
+  setCta("vibe-confirm", ui.confirmBtn);
+}
+
 function showVibeStage(): void {
   const stage = document.getElementById("vibe-stage") as HTMLElement | null;
   if (stage) stage.hidden = false;
+  applyVibeUi();
   const priceNote = document.getElementById("vibe-price-note");
   if (priceNote) priceNote.textContent = INITIAL_PRICE_NOTE[lang];
   const suggestions = document.getElementById("vibe-suggestions");
@@ -550,6 +682,27 @@ function toggleList<T extends string>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value].slice(0, 3);
 }
 
+/** Render one canonical-chip group (experience / ambience / format) into its own
+ *  labelled container, so the review reads as structured sections — not one
+ *  undifferentiated blob of 19 pills. */
+function renderChipGroup(
+  containerId: string,
+  ids: readonly string[],
+  isActive: (id: string) => boolean,
+  toggle: (id: string) => void,
+): void {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.replaceChildren(
+    ...ids.map((id) =>
+      chipButton(label(id), isActive(id), () => {
+        toggle(id);
+        renderDraft();
+      }),
+    ),
+  );
+}
+
 function renderDraft(): void {
   if (!draft) return;
   // Price is owned by the automatic initial-venue policy, not by this user.
@@ -559,17 +712,32 @@ function renderDraft(): void {
   if (text && !text.value) text.value = draft.rawText;
   const review = document.getElementById("vibe-review") as HTMLElement | null;
   if (review) review.hidden = false;
-  const chips = document.getElementById("vibe-chips");
-  const all = [...EXPERIENCE_IDS, ...AMBIENCE_IDS, ...FORMAT_IDS];
-  if (chips) chips.replaceChildren(...all.map((id) => {
-    const active = draft!.experiences.includes(id as VenueExperience) || draft!.ambiences.includes(id as VenueAmbience) || draft!.formats.includes(id as VenueFormat);
-    return chipButton(label(id), active, () => {
-      if (EXPERIENCE_IDS.includes(id as VenueExperience)) draft!.experiences = toggleList(draft!.experiences, id as VenueExperience);
-      else if (AMBIENCE_IDS.includes(id as VenueAmbience)) draft!.ambiences = toggleList(draft!.ambiences, id as VenueAmbience);
-      else draft!.formats = toggleList(draft!.formats, id as VenueFormat);
-      renderDraft();
-    });
-  }));
+
+  renderChipGroup(
+    "vibe-chips-exp",
+    EXPERIENCE_IDS,
+    (id) => draft!.experiences.includes(id as VenueExperience),
+    (id) => {
+      draft!.experiences = toggleList(draft!.experiences, id as VenueExperience);
+    },
+  );
+  renderChipGroup(
+    "vibe-chips-amb",
+    AMBIENCE_IDS,
+    (id) => draft!.ambiences.includes(id as VenueAmbience),
+    (id) => {
+      draft!.ambiences = toggleList(draft!.ambiences, id as VenueAmbience);
+    },
+  );
+  renderChipGroup(
+    "vibe-chips-fmt",
+    FORMAT_IDS,
+    (id) => draft!.formats.includes(id as VenueFormat),
+    (id) => {
+      draft!.formats = toggleList(draft!.formats, id as VenueFormat);
+    },
+  );
+
   const constraints = document.getElementById("vibe-constraints");
   const constraintIds = [...DIET_IDS, "alcohol_free", "step_free", "required_indoor", "required_outdoor", ...(venueState?.selectionError?.startsWith("no_candidates:commute_12_km:") ? ["commute_12_km"] : [])];
   if (constraints) constraints.replaceChildren(...constraintIds.map((id) => {

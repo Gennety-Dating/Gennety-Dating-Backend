@@ -1825,14 +1825,24 @@ catalog in this flow. Confirmed V2 intent is stored per participant and is the
 only input to finalisation; ordinary Telegram messages cannot overwrite it and
 the server never re-parses it at selection time.
 
-On **Telegram** the two-step flow is presented natively in the chat, not a Mini
-App screen: the Location Mini App captures ONLY the departure origin (then
-closes), after which the bot asks for the free-text vibe in a message,
-interprets it, and surfaces the editable canonical chips as **inline toggle
-buttons** confirmed with one tap (`handlers/matching/venue-intent-chat.ts`; the
-match is resolved from the actor so the toggle/confirm callbacks fit Telegram's
-64-byte limit). The **iOS** client keeps its own native chip screen via
-`/v1/matches/:id/venue-intent` (OpenAPI contract unchanged). Finalisation of a
+On **Telegram** the whole two-step flow runs inside the Location Mini App (a
+branded **liquid-glass** screen — `apps/webapp` `location.html` + `location.ts`,
+theme-aware via the shared `theme.css` tokens), not as chat buttons: step 1 marks
+the departure origin on the map, then the SAME Mini App advances to step 2 — a
+free-text vibe field plus the editable canonical chips grouped as Experience /
+Atmosphere / Format / Must-haves (selection is the bright "self" signal, not a
+faint ✓) — and one in-app Confirm. Confirm runs the V2 finalizer; when the
+partner hasn't confirmed yet the bot DMs the classic "waiting for the other
+side" cue (`venueWaitingPeer`), and when both have, finalisation delivers the
+scheduled confirmation. The Mini App uses the initData-authed
+`/v1/location/venue-intent/{state,interpret,confirm}` routes. (A short-lived
+2026-07 variant presented the chips as **inline Telegram buttons in chat**
+(`handlers/matching/venue-intent-chat.ts`); it was reverted 2026-07-23 —
+inline buttons cannot carry the brand's liquid-glass design or a comfortable
+text field, and origin capture already required the Mini App, so there was
+nothing left to keep in chat.) The **iOS** client keeps its own native chip
+screen via `/v1/matches/:id/venue-intent` (OpenAPI contract unchanged).
+Finalisation of a
 live-mode match delivers the FULL shared scheduled confirmation — the date-card
 PNG (§3.7a), the tappable `date_time` entity, the Maps/Change-venue keyboard, the
 grounded venue blurb, and the founder feed (`services/scheduled-confirmation.ts`,
