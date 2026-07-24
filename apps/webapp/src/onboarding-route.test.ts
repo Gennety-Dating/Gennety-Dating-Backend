@@ -37,6 +37,12 @@ function user(
     phone: null,
     registrationTrack: null,
     phoneAuthEnabled: false,
+    // Referral welcome gift defaults: not a referred user, so the gift screen
+    // is skipped and existing post-visual routing tests are unaffected.
+    invitedByReferral: false,
+    referralGiftSeen: false,
+    referrerFirstName: null,
+    referralGiftMonths: 1,
     homeLocation: null,
     completed: false,
     ...overrides,
@@ -143,6 +149,22 @@ describe("theme picker routing (after the city gate)", () => {
     expect(postVisualPhaseFromRemote(visualReadyUser({ themeChosen: false }))).toEqual({
       kind: "theme",
     });
+  });
+
+  it("shows the referral gift screen (before AI-memory) for an invited user", () => {
+    expect(
+      postVisualPhaseFromRemote(
+        visualReadyUser({ invitedByReferral: true, referralGiftSeen: false }),
+      ),
+    ).toEqual({ kind: "referralGift" });
+  });
+
+  it("skips the referral gift once it has been seen/claimed", () => {
+    expect(
+      postVisualPhaseFromRemote(
+        visualReadyUser({ invitedByReferral: true, referralGiftSeen: true }),
+      ),
+    ).toEqual({ kind: "aiMemoryExport" });
   });
 
   it("ignores stored visual progress until a theme is chosen", () => {

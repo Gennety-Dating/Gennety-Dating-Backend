@@ -242,6 +242,11 @@ export interface TelegramOnboardingState {
     phone: string | null;
     registrationTrack: RegistrationTrack | null;
     phoneAuthEnabled: boolean;
+    // Referral welcome gift (§Referral). Inert for non-referred users.
+    invitedByReferral: boolean;
+    referralGiftSeen: boolean;
+    referrerFirstName: string | null;
+    referralGiftMonths: number;
     homeLocation: TelegramHomeLocation | null;
     completed: boolean;
   };
@@ -349,6 +354,22 @@ export async function setTelegramOnboardingTheme(
       Authorization: `tma ${initData}`,
     },
     body: JSON.stringify({ theme }),
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as TelegramOnboardingState;
+}
+
+/** Claim the invitee's one-time referral welcome Premium month (§Referral). */
+export async function claimTelegramOnboardingReferralGift(
+  initData: string,
+): Promise<TelegramOnboardingState> {
+  const res = await fetch(`${apiBase}/v1/telegram-onboarding/referral-gift`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `tma ${initData}`,
+    },
+    body: "{}",
   });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as TelegramOnboardingState;

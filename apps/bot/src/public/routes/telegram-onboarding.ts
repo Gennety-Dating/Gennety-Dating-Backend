@@ -31,7 +31,7 @@ import {
 } from "../home-location.js";
 import { resolveCityFromCoordinates, searchCities } from "../city-search.js";
 import { unresolvedTrackContactGate } from "../../services/contact-verification.js";
-import { referralSourceFromParam } from "../../services/referral.js";
+import { grantInviteePremium, parseReferrer, referralSourceFromParam } from "../../services/referral.js";
 
 const VALID_LANGUAGES = new Set<string>(SUPPORTED_LANGUAGES);
 const FLOW_TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -56,6 +56,8 @@ type MiniUser = {
   phone: string | null;
   phoneVerifiedAt: Date | null;
   registrationTrack: string | null;
+  referralSource: string | null;
+  referralInviteePremiumAt: Date | null;
   messageHistory: unknown[];
   profile: {
     homeCity: string | null;
@@ -494,6 +496,38 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     res.json(await serializeState(updated));
   });
 
+  // Referral welcome gift (§Referral): claim the invitee's one-time Premium
+  // month, shown on the onboarding wow screen (2nd-to-last, before AI-memory).
+  // Idempotent — `grantInviteePremium` is a no-op once the marker is set or when
+  // the user wasn't genuinely invited, so a replayed tap can't double-grant.
+  router.post("/referral-gift", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+
+    const user = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
+    const referrerId = parseReferrer(user.referralSource);
+    if (!env.REFERRAL_FEATURE_ENABLED || !referrerId || referrerId === user.id) {
+      // Not a valid invitee — return current state so the client just advances.
+      res.json(await serializeState(user));
+      return;
+    }
+
+    const gift = await grantInviteePremium(user.id);
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { ...onboardingActivityPatch() },
+      select: miniUserSelect,
+    });
+    logTelegramOnboarding("referral-gift-claimed", updated, {
+      applied: gift.applied,
+      months: gift.months,
+    });
+    res.json(await serializeState(updated));
+  });
+
   router.post("/complete", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
     if (!auth.ok) {
@@ -585,6 +619,8 @@ const miniUserSelect = {
   phone: true,
   phoneVerifiedAt: true,
   registrationTrack: true,
+  referralSource: true,
+  referralInviteePremiumAt: true,
   messageHistory: true,
   profile: {
     select: {
@@ -651,6 +687,24 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
     ? serializeOtpChallenge(null)
     : serializeOtpChallenge(await getOtpChallengeState(user.email));
 
+  // Referral welcome gift (§Referral): show the wow screen when this user was
+  // invited by a real referrer, the feature is on, and a gift month is offered.
+  const referrerId = parseReferrer(user.referralSource);
+  const invitedByReferral =
+    env.REFERRAL_FEATURE_ENABLED &&
+    env.REFERRAL_INVITEE_PREMIUM_MONTHS > 0 &&
+    referrerId != null &&
+    referrerId !== user.id;
+  const referralGiftSeen = user.referralInviteePremiumAt != null;
+  let referrerFirstName: string | null = null;
+  if (invitedByReferral && !referralGiftSeen && referrerId) {
+    const referrer = await prisma.user.findUnique({
+      where: { id: referrerId },
+      select: { firstName: true },
+    });
+    referrerFirstName = referrer?.firstName ?? null;
+  }
+
   return {
     ok: true,
     flowToken: issueOnboardingFlowToken(user.telegramId),
@@ -670,6 +724,11 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
       phone: user.phone,
       registrationTrack: user.registrationTrack,
       phoneAuthEnabled: env.PHONE_AUTH_ENABLED,
+      // Referral welcome gift (§Referral): drives the onboarding wow screen.
+      invitedByReferral,
+      referralGiftSeen,
+      referrerFirstName,
+      referralGiftMonths: env.REFERRAL_INVITEE_PREMIUM_MONTHS,
       homeLocation: user.profile?.homeCityKey
         ? {
             homeCity: user.profile.homeCity,
@@ -712,6 +771,11 @@ interface TelegramOnboardingStateDto {
     /// Server flag mirror: the Mini App renders the sign-up fork only when
     /// the phone rail is actually live (env-controlled, no rebuild needed).
     phoneAuthEnabled: boolean;
+    // Referral welcome gift (§Referral). Inert for non-referred users.
+    invitedByReferral: boolean;
+    referralGiftSeen: boolean;
+    referrerFirstName: string | null;
+    referralGiftMonths: number;
     homeLocation: {
       homeCity: string | null;
       homeCountryCode: string | null;

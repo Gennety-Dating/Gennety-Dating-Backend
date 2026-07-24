@@ -10,6 +10,7 @@ import {
   searchTelegramOnboardingCities,
   selectTelegramOnboardingCity,
   setTelegramOnboardingAiMemoryPreference,
+  claimTelegramOnboardingReferralGift,
   setTelegramOnboardingLanguage,
   setTelegramOnboardingTheme,
   setTelegramOnboardingTrack,
@@ -288,6 +289,7 @@ function App(): ReactElement {
       void saveOnboardingProgress(phase.index);
     } else if (
       phase.kind === "detail" ||
+      phase.kind === "referralGift" ||
       phase.kind === "aiMemoryExport" ||
       phase.kind === "loading" ||
       phase.kind === "done"
@@ -555,6 +557,17 @@ function App(): ReactElement {
       </Scene>
       <Scene active={phase.kind === "theme"}>
         <ThemeGate selected={remoteUser?.theme ?? "dark"} onState={onState} />
+      </Scene>
+      <Scene active={phase.kind === "referralGift"}>
+        <ReferralGiftGate
+          months={remoteUser?.referralGiftMonths ?? 1}
+          referrerName={remoteUser?.referrerFirstName ?? null}
+          onClaimed={(state) => {
+            setRemoteUser(state.user);
+            setFlowToken(state.flowToken);
+            setPhase(postVisualPhaseFromRemote(state.user));
+          }}
+        />
       </Scene>
       <Scene active={phase.kind === "aiMemoryExport"}>
         <AiMemoryExportGate
@@ -2074,6 +2087,58 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
         {searching ? <div className="gate-meta">{s.citySearching}</div> : null}
       </div>
     </GateShell>
+  );
+}
+
+function ReferralGiftGate(props: {
+  months: number;
+  referrerName: string | null;
+  onClaimed: (state: TelegramOnboardingState) => void;
+}): ReactElement {
+  const s = useOnboardingStrings();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const months = String(props.months);
+  const body = props.referrerName
+    ? s.referralGiftBody.replaceAll("{name}", props.referrerName).replaceAll("{months}", months)
+    : s.referralGiftBodyNoName.replaceAll("{months}", months);
+
+  async function claim(): Promise<void> {
+    if (!app?.initData || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const state = await claimTelegramOnboardingReferralGift(app.initData);
+      app.HapticFeedback?.notificationOccurred("success");
+      props.onClaimed(state);
+    } catch (err) {
+      setError(errorCopy(err, s));
+      app.HapticFeedback?.notificationOccurred("error");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="referral-gift-screen">
+      <div className="referral-gift-content">
+        <div className="referral-gift-badge" aria-hidden="true">
+          ✨
+        </div>
+        <h1 className="referral-gift-title">{s.referralGiftTitle}</h1>
+        <p className="referral-gift-body">{body}</p>
+        {error ? <div className="gate-error referral-gift-error">{error}</div> : null}
+      </div>
+      <div className="referral-gift-actions">
+        <button
+          className="referral-gift-primary"
+          disabled={busy || !app?.initData}
+          onClick={() => void claim()}
+        >
+          {busy ? s.referralGiftClaiming : s.referralGiftContinue}
+        </button>
+      </div>
+    </main>
   );
 }
 
