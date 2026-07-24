@@ -728,9 +728,10 @@ function renderDraft(): void {
   if (text && !text.value) text.value = draft.rawText;
   const review = document.getElementById("vibe-review") as HTMLElement | null;
   if (review) review.hidden = false;
-  // Once the review is open, the top "Continue" button is redundant (the final
-  // Confirm is at the bottom). It re-appears if the user edits the text — see the
-  // textarea input listener below.
+  // Once the review is open the top "Continue" button is gone for good: the
+  // editable description stays for reference, but from here the extracted chips
+  // are the only thing tuned and sent, and the final Confirm sits at the bottom
+  // — so there is no second interpret button to bring back.
   const interpretBtn = document.getElementById("vibe-interpret") as HTMLElement | null;
   if (interpretBtn) interpretBtn.hidden = true;
 
@@ -784,13 +785,6 @@ function renderDraft(): void {
 document.getElementById("vibe-back")?.addEventListener("click", () => {
   const stage = document.getElementById("vibe-stage") as HTMLElement | null;
   if (stage) stage.hidden = true;
-});
-document.getElementById("vibe-text")?.addEventListener("input", () => {
-  // Editing the description after the review opened brings "Continue" back so the
-  // new text can be re-interpreted.
-  const review = document.getElementById("vibe-review") as HTMLElement | null;
-  const interpretBtn = document.getElementById("vibe-interpret") as HTMLElement | null;
-  if (interpretBtn && review && !review.hidden) interpretBtn.hidden = false;
 });
 document.getElementById("vibe-interpret")?.addEventListener("click", async () => {
   if (!app) return;
