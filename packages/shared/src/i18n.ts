@@ -799,6 +799,12 @@ const translations = {
     referralRewardNextMax: "You've hit the top reward — thank you. 💛",
     referralFriendJoinedDm:
       "👀 {name} just joined with your link. Your reward lands the moment they finish verification.",
+    referralCardInvitedBy: "Invited by {name}",
+    referralCardInvitedGeneric: "You're invited",
+    referralCardHeadA: "Real dates.",
+    referralCardHeadB: "Zero texting.",
+    referralCardGift: "🎁 First {months} month of Premium — on us",
+    referralCardFooter: "The AI matchmaker introduces you and sets up the date.",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
       "*Gennety Premium*\n\n• *Free venue changes* — swap your date spot as often as you like, no fee\n• *Premium venues* — a hand-picked tier of nicer places, unlocked in the venue board\n\nMore perks are coming. {price}/month, cancel anytime.",
@@ -1618,6 +1624,12 @@ const translations = {
     referralRewardNextMax: "Ты достиг(ла) высшей награды — спасибо. 💛",
     referralFriendJoinedDm:
       "👀 {name} только что зашёл(ла) по твоей ссылке. Награда придёт, как только он(а) закончит верификацию.",
+    referralCardInvitedBy: "Тебя пригласил(а) {name}",
+    referralCardInvitedGeneric: "Тебя приглашают",
+    referralCardHeadA: "Реальные свидания.",
+    referralCardHeadB: "Ноль переписки.",
+    referralCardGift: "🎁 Первый {months} месяц Premium — в подарок",
+    referralCardFooter: "AI-сваха знакомит и организует свидание за тебя.",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
       "*Gennety Premium*\n\n• *Бесплатная смена места* — меняй место свидания сколько угодно, без оплаты\n• *Премиум-заведения* — отобранный тир мест получше, открывается в подборе\n\nДальше — больше. {price}/месяц, отмена в любой момент.",
@@ -2437,6 +2449,12 @@ const translations = {
     referralRewardNextMax: "Ти досяг(ла) найвищої нагороди — дякую. 💛",
     referralFriendJoinedDm:
       "👀 {name} щойно зайшов(ла) за твоїм посиланням. Нагорода прийде, щойно він(вона) завершить верифікацію.",
+    referralCardInvitedBy: "Тебе запросив(ла) {name}",
+    referralCardInvitedGeneric: "Тебе запрошують",
+    referralCardHeadA: "Справжні побачення.",
+    referralCardHeadB: "Нуль листування.",
+    referralCardGift: "🎁 Перший {months} місяць Premium — у подарунок",
+    referralCardFooter: "AI-сваха знайомить і організовує побачення за тебе.",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
       "*Gennety Premium*\n\n• *Безкоштовна зміна місця* — змінюй місце побачення скільки завгодно, без оплати\n• *Преміум-заклади* — відібраний тір кращих місць, відкривається в підборі\n\nДалі — більше. {price}/місяць, скасування будь-коли.",
@@ -3225,6 +3243,12 @@ const deTranslations: TranslationTable = {
   referralRewardNextMax: "Du hast die höchste Belohnung erreicht — danke. 💛",
   referralFriendJoinedDm:
     "👀 {name} ist gerade über deinen Link beigetreten. Deine Belohnung kommt, sobald die Verifizierung abgeschlossen ist.",
+  referralCardInvitedBy: "Eingeladen von {name}",
+  referralCardInvitedGeneric: "Du bist eingeladen",
+  referralCardHeadA: "Echte Dates.",
+  referralCardHeadB: "Null Chatten.",
+  referralCardGift: "🎁 Erster {months} Monat Premium — geschenkt",
+  referralCardFooter: "Der KI-Matchmaker stellt euch vor und plant das Date.",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
     "*Gennety Premium*\n\n• *Kostenlose Ortswechsel* — wechsle den Date-Ort so oft du willst, ohne Gebühr\n• *Premium-Orte* — eine handverlesene Auswahl schönerer Orte, im Ortsboard freigeschaltet\n\nMehr kommt. {price}/Monat, jederzeit kündbar.",
@@ -4008,6 +4032,12 @@ const plTranslations: TranslationTable = {
   referralRewardNextMax: "Osiągnąłeś(-aś) najwyższą nagrodę — dziękujemy. 💛",
   referralFriendJoinedDm:
     "👀 {name} właśnie dołączył(a) przez twój link. Twoja nagroda pojawi się, gdy tylko zakończy weryfikację.",
+  referralCardInvitedBy: "Zaproszenie od {name}",
+  referralCardInvitedGeneric: "Masz zaproszenie",
+  referralCardHeadA: "Prawdziwe randki.",
+  referralCardHeadB: "Zero pisania.",
+  referralCardGift: "🎁 Pierwszy {months} miesiąc Premium — w prezencie",
+  referralCardFooter: "Swatka AI przedstawia was i organizuje randkę.",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
     "*Gennety Premium*\n\n• *Darmowa zmiana miejsca* — zmieniaj miejsce randki ile chcesz, bez opłat\n• *Miejsca premium* — wyselekcjonowany zestaw lepszych miejsc, odblokowany w tablicy miejsc\n\nWięcej wkrótce. {price}/miesiąc, anulujesz kiedy chcesz.",

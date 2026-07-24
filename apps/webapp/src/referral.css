@@ -1,0 +1,88 @@
+/* Referral Mini App (§Referral) — milestone ladder + one-tap invite.
+   Uses the shared theme.css tokens (--bg / --text / --accent …). */
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ref-wrap {
+  max-width: 30rem;
+  margin: 0 auto;
+  padding:
+    calc(1.25rem + var(--tg-content-top, env(safe-area-inset-top, 0)))
+    max(1.1rem, env(safe-area-inset-right, 0))
+    calc(1.75rem + env(safe-area-inset-bottom, 0))
+    max(1.1rem, env(safe-area-inset-left, 0));
+}
+
+.ref-hero { text-align: center; padding: 0.5rem 0 0.5rem; }
+.ref-badge {
+  width: 58px; height: 58px; margin: 0 auto 0.75rem; border-radius: 50%;
+  display: grid; place-items: center; font-size: 1.7rem;
+  background:
+    radial-gradient(120% 120% at 50% 0%, color-mix(in srgb, var(--accent) 55%, transparent), transparent 70%),
+    var(--accent-soft);
+  box-shadow: 0 0 34px color-mix(in srgb, var(--accent) 40%, transparent), inset 0 1px 0 rgba(255,255,255,0.18);
+  animation: ref-pulse 2.6s ease-in-out infinite;
+}
+@keyframes ref-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@media (prefers-reduced-motion: reduce) { .ref-badge { animation: none; } }
+
+.ref-title {
+  font-size: 1.5rem; margin: 0 0 0.35rem; font-weight: 800; letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.ref-tag { color: var(--text-muted); font-size: 0.9rem; margin: 0 auto; max-width: 32ch; line-height: 1.42; }
+
+.ref-stats { display: flex; gap: 0.6rem; margin: 1.2rem 0 0.3rem; }
+.ref-stat {
+  flex: 1; background: var(--bg-elevated); border: 1px solid var(--card-frame);
+  border-radius: 14px; padding: 0.8rem 0.4rem; text-align: center; min-width: 0;
+}
+.ref-stat b { display: block; font-size: 1.2rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ref-stat span { font-size: 0.64rem; letter-spacing: 0.04em; color: var(--text-faint); }
+.ref-stat.value b { color: var(--accent-bright); }
+
+.ref-progress { display: flex; justify-content: center; font-size: 0.82rem; color: var(--text-muted); margin: 1.15rem 0 0.5rem; }
+.ref-bar { height: 8px; border-radius: 99px; background: var(--bg-elevated); overflow: hidden; border: 1px solid var(--card-frame); }
+.ref-bar > i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent-bright)); transition: width 400ms ease; }
+
+.ref-ladder { list-style: none; margin: 1.3rem 0 0; padding: 0; display: grid; gap: 0.55rem; }
+.ref-rung {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.8rem;
+  padding: 0.8rem 0.85rem; border-radius: 14px;
+  background: var(--bg-elevated); border: 1px solid var(--card-frame);
+}
+.ref-rung.done { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: linear-gradient(180deg, var(--accent-soft), transparent); }
+.ref-n {
+  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+  font-weight: 800; font-size: 0.92rem; font-variant-numeric: tabular-nums;
+  background: var(--bg); color: var(--text-muted); border: 1px solid var(--card-frame);
+}
+.ref-rung.done .ref-n { background: var(--accent); color: #fff; border-color: transparent; }
+.ref-body { min-width: 0; }
+.ref-body b { font-size: 0.95rem; }
+.ref-body span { display: block; font-size: 0.76rem; color: var(--text-muted); }
+.ref-usd { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 1rem; white-space: nowrap; text-align: right; }
+.ref-rung.done .ref-usd { color: var(--accent-bright); }
+.ref-usd small { display: block; font-size: 0.6rem; font-weight: 600; color: var(--text-faint); letter-spacing: 0.04em; }
+
+.ref-share {
+  margin-top: 1.5rem; width: 100%; border: 0; cursor: pointer;
+  background: linear-gradient(180deg, var(--accent-bright), var(--accent));
+  color: #fff; border-radius: 15px; padding: 1rem; font-size: 1.05rem; font-weight: 800;
+  box-shadow: 0 12px 30px -12px color-mix(in srgb, var(--accent) 70%, transparent);
+  transition: transform 140ms ease, opacity 160ms ease;
+}
+.ref-share:active { transform: scale(0.98); }
+.ref-share:disabled { opacity: 0.55; cursor: default; }
+.ref-share-hint { text-align: center; font-size: 0.76rem; color: var(--text-faint); margin: 0.6rem 0 0; }
+
+.ref-skeleton { height: 60vh; border-radius: 18px; background: var(--bg-elevated); border: 1px solid var(--card-frame); opacity: 0.5; }
+.ref-error { color: var(--text-muted); text-align: center; padding: 2rem 1rem; }
+:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }

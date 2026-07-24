@@ -40,6 +40,7 @@ import {
 import { handleHelp } from "./help.js";
 import { handleMyTickets } from "./tickets.js";
 import { handlePremiumHub } from "./premium.js";
+import { handleReferralHub } from "./referral.js";
 import { runMenuAgentTurn, splitReplyIntoBubbles } from "../../services/menu-agent.js";
 import { invalidatePendingAccountAction } from "./account-action.js";
 import {
@@ -312,6 +313,11 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     // Gennety Premium hub (only reachable when PREMIUM_FEATURE_ENABLED)
     case "menu:premium":
       await handlePremiumHub(ctx);
+      return;
+
+    // Referral hub (only reachable when REFERRAL_FEATURE_ENABLED)
+    case "menu:referral":
+      await handleReferralHub(ctx);
       return;
 
     // Help

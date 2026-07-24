@@ -12,7 +12,8 @@ export type MiniAppPage =
   | "tickets"
   | "venue-change"
   | "premium"
-  | "radar";
+  | "radar"
+  | "referral";
 
 const PAGE_FILES: Record<Exclude<MiniAppPage, "calendar">, string> = {
   feedback: "feedback.html",
@@ -24,6 +25,7 @@ const PAGE_FILES: Record<Exclude<MiniAppPage, "calendar">, string> = {
   "venue-change": "venue-change.html",
   premium: "premium.html",
   radar: "radar.html",
+  referral: "referral.html",
 };
 
 export interface BuildMiniAppUrlOptions {

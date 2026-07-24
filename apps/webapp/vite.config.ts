@@ -25,6 +25,7 @@ export default defineConfig({
         "venue-change": resolve(__dirname, "venue-change.html"),
         premium: resolve(__dirname, "premium.html"),
         radar: resolve(__dirname, "radar.html"),
+        referral: resolve(__dirname, "referral.html"),
       },
     },
   },

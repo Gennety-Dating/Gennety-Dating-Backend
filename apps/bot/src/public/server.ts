@@ -35,6 +35,7 @@ import { createTicketStoreRouter } from "./routes/tickets.js";
 import { createRadarRouter } from "./routes/radar.js";
 import { createVenueChangeRouter } from "./routes/venue-change.js";
 import { createPremiumRouter } from "./routes/premium.js";
+import { createReferralRouter } from "./routes/referral.js";
 import {
   isStrongJwtSecret,
   JWT_SECRET_MIN_BYTES,
@@ -106,6 +107,7 @@ let ticketStoreRouter: ReturnType<typeof createTicketStoreRouter> | null = null;
 let radarRouter: ReturnType<typeof createRadarRouter> | null = null;
 let venueChangeRouter: ReturnType<typeof createVenueChangeRouter> | null = null;
 let premiumRouter: ReturnType<typeof createPremiumRouter> | null = null;
+let referralRouter: ReturnType<typeof createReferralRouter> | null = null;
 app.use("/v1/webhooks/persona", personaWebhookLimiter, (req, res, next) => {
   if (!injectedBotApi) {
     res.status(503).json({ error: "Persona webhook not ready" });
@@ -314,6 +316,17 @@ app.use("/v1/premium", (req, res, next) => {
   }
   if (!premiumRouter) premiumRouter = createPremiumRouter();
   premiumRouter(req, res, next);
+});
+
+// Referral Mini App — TMA-authed (except the public signed GET /card image that
+// Telegram fetches to render the shared photo), feature-flagged.
+app.use("/v1/referral", (req, res, next) => {
+  if (!env.REFERRAL_FEATURE_ENABLED) {
+    res.status(404).json({ error: "referral-disabled" });
+    return;
+  }
+  if (!referralRouter) referralRouter = createReferralRouter();
+  referralRouter(req, res, next);
 });
 
 // Liveness/readiness probe — unauthenticated, intentionally cheap.

@@ -143,6 +143,13 @@ interface TelegramWebApp {
    * showcase — Telegram opens it in its in-app browser rather than the WebView.
    */
   openLink?(url: string, options?: { try_instant_view?: boolean }): void;
+  /**
+   * Share a message prepared server-side via `savePreparedInlineMessage`
+   * (Bot API 8.0) — opens the native "share to a chat" sheet with the prepared
+   * message, so the user forwards a rich invite in one tap with nothing to fill
+   * in. `id` is the `PreparedInlineMessage.id` returned by the bot.
+   */
+  shareMessage?(id: string, callback?: (sent: boolean) => void): void;
 }
 
 interface Window {

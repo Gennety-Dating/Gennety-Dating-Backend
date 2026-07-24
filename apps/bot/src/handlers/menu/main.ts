@@ -98,6 +98,11 @@ function buildMainMenuKeyboardFor(
     kb.text(t(lang, "menuPremium"), "menu:premium").row();
   }
 
+  // Referral entry ("Give a date, get a date") — only when the feature is live.
+  if (env.REFERRAL_FEATURE_ENABLED) {
+    kb.text(t(lang, "menuInviteFriend"), "menu:referral").row();
+  }
+
   return kb.text(t(lang, "menuHelp"), "menu:help");
 }
 
