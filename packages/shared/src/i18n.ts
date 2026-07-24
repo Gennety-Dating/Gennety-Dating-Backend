@@ -803,7 +803,7 @@ const translations = {
     referralCardInvitedGeneric: "You're invited",
     referralCardHeadA: "Real dates.",
     referralCardHeadB: "Zero texting.",
-    referralCardGift: "🎁 First {months} month of Premium — on us",
+    referralCardGift: "First {months} month of Premium — on us",
     referralCardFooter: "The AI matchmaker introduces you and sets up the date.",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
@@ -1628,7 +1628,7 @@ const translations = {
     referralCardInvitedGeneric: "Тебя приглашают",
     referralCardHeadA: "Реальные свидания.",
     referralCardHeadB: "Ноль переписки.",
-    referralCardGift: "🎁 Первый {months} месяц Premium — в подарок",
+    referralCardGift: "Первый {months} месяц Premium — в подарок",
     referralCardFooter: "AI-сваха знакомит и организует свидание за тебя.",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
@@ -2453,7 +2453,7 @@ const translations = {
     referralCardInvitedGeneric: "Тебе запрошують",
     referralCardHeadA: "Справжні побачення.",
     referralCardHeadB: "Нуль листування.",
-    referralCardGift: "🎁 Перший {months} місяць Premium — у подарунок",
+    referralCardGift: "Перший {months} місяць Premium — у подарунок",
     referralCardFooter: "AI-сваха знайомить і організовує побачення за тебе.",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
@@ -3247,7 +3247,7 @@ const deTranslations: TranslationTable = {
   referralCardInvitedGeneric: "Du bist eingeladen",
   referralCardHeadA: "Echte Dates.",
   referralCardHeadB: "Null Chatten.",
-  referralCardGift: "🎁 Erster {months} Monat Premium — geschenkt",
+  referralCardGift: "Erster {months} Monat Premium — geschenkt",
   referralCardFooter: "Der KI-Matchmaker stellt euch vor und plant das Date.",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
@@ -4036,7 +4036,7 @@ const plTranslations: TranslationTable = {
   referralCardInvitedGeneric: "Masz zaproszenie",
   referralCardHeadA: "Prawdziwe randki.",
   referralCardHeadB: "Zero pisania.",
-  referralCardGift: "🎁 Pierwszy {months} miesiąc Premium — w prezencie",
+  referralCardGift: "Pierwszy {months} miesiąc Premium — w prezencie",
   referralCardFooter: "Swatka AI przedstawia was i organizuje randkę.",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
