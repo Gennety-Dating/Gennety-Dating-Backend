@@ -247,7 +247,14 @@ function App(): ReactElement {
         setRemoteUser(state.user);
         setFlowToken(state.flowToken);
         if (state.user.language) setLang(state.user.language);
-        setPhase(bootPhaseFromRemote(state.user, storedProgress));
+        // Dev-QA override: `?preview=referral-gift` jumps straight to the
+        // referral welcome-gift screen for visual review (harmless in prod — the
+        // Claim button hits the real, idempotent endpoint and then routes on).
+        if (new URLSearchParams(location.search).get("preview") === "referral-gift") {
+          setPhase({ kind: "referralGift" });
+        } else {
+          setPhase(bootPhaseFromRemote(state.user, storedProgress));
+        }
       })
       .catch((err: unknown) => {
         setBootError(errorCopy(err, onboardingStrings(lang)));
