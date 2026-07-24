@@ -110,11 +110,12 @@ describe("openaiFetch token metering", () => {
   });
 });
 
+function forwardedBody(fetchMock: ReturnType<typeof vi.fn>): unknown {
+  const raw = fetchMock.mock.calls[0]![1]?.body;
+  return typeof raw === "string" ? JSON.parse(raw) : raw;
+}
+
 describe("openaiFetch temperature normalization (GPT-5.6 only supports default=1)", () => {
-  function forwardedBody(fetchMock: ReturnType<typeof vi.fn>): unknown {
-    const raw = fetchMock.mock.calls[0]![1]?.body;
-    return typeof raw === "string" ? JSON.parse(raw) : raw;
-  }
 
   it("strips a non-default temperature from the chat body", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
@@ -185,5 +186,87 @@ describe("openaiFetch temperature normalization (GPT-5.6 only supports default=1
     });
 
     expect(fetchMock.mock.calls[0]![1]?.body).toBe("not-json");
+  });
+});
+
+describe("openaiFetch tool reasoning_effort normalization (GPT-5.6 tools need reasoning_effort:none)", () => {
+  it("injects reasoning_effort:none when the body carries function tools", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openaiFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        model: "gpt-5.6-terra",
+        messages: [],
+        tools: [{ type: "function", function: { name: "get_my_profile" } }],
+        tool_choice: "auto",
+      }),
+    });
+
+    const body = forwardedBody(fetchMock) as Record<string, unknown>;
+    expect(body.reasoning_effort).toBe("none");
+    expect(body.tool_choice).toBe("auto");
+    expect(body.model).toBe("gpt-5.6-terra");
+  });
+
+  it("strips temperature AND injects reasoning_effort in the same tool request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openaiFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        temperature: 0.5,
+        tools: [{ type: "function", function: { name: "pause_matching" } }],
+      }),
+    });
+
+    const body = forwardedBody(fetchMock) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("temperature");
+    expect(body.reasoning_effort).toBe("none");
+  });
+
+  it("does not add reasoning_effort to a tool-less request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openaiFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        model: "gpt-5.6-terra",
+        messages: [],
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    expect(forwardedBody(fetchMock)).not.toHaveProperty("reasoning_effort");
+  });
+
+  it("does not add reasoning_effort for an empty tools array", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openaiFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ tools: [] }),
+    });
+
+    expect(forwardedBody(fetchMock)).not.toHaveProperty("reasoning_effort");
+  });
+
+  it("never overwrites an explicit reasoning_effort a caller already set", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openaiFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        tools: [{ type: "function", function: { name: "get_my_profile" } }],
+        reasoning_effort: "low",
+      }),
+    });
+
+    expect((forwardedBody(fetchMock) as Record<string, unknown>).reasoning_effort).toBe("low");
   });
 });
