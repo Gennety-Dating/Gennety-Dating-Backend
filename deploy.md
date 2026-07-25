@@ -1,7 +1,9 @@
 # Gennety Dating Deploy
 
-Last verified: 2026-07-23 — dev↔prod schema-drift reconciliation + the
-2026-07-22 code release (details in the dated block below). Prior: 2026-07-21
+Last verified: 2026-07-25 — full catch-up release (85 commits), additive
+`db:push`, flag alignment, and a dev↔prod isolation fix (details in the dated
+block below). Prior: 2026-07-23 — dev↔prod schema-drift reconciliation + the
+2026-07-22 code release. Earlier: 2026-07-21
 (full server deploy — **self-healing Telegram drop banner**, commit `045279c`;
 no Prisma schema change). Production build and PM2
 restart succeeded; `/v1/ping` stayed healthy, every Mini App returned `200`,
@@ -14,6 +16,55 @@ expected second heartbeat with `eligible=2`, `unchanged=2`, no new errors, no
 `400 chat not found`, so the worker correctly left them untracked under the
 six-hour unreachable cooldown; there was no reachable active chat for a live
 client rendering check.)
+
+**Deployed 2026-07-25 — full catch-up release + dev↔prod isolation fix.**
+Prod was 85 commits behind (146 files); it had no referral/promo code at all.
+Preflight was green locally (`typecheck` clean, **164 test files / 2127 tests
+passed**, `openapi:lint` valid, tree clean and level with `origin/main`).
+Deployed with Deploy Full Server Code → additive `db:push` → `db:drift-check`
+→ `pm2 restart`, then Deploy Mini App. The schema step was verified additive
+twice before running: the prod↔local `schema.prisma` diff showed no column
+removals, and `prisma migrate diff --script` produced **zero DROP statements**
+(6 new columns — `matches.proposal_deadline_nudge_sent_at`,
+`matches.synergy_reason_b`, `users.promo_redeemed_at`,
+`users.referral_counted_at`, `users.referral_invitee_premium_at`,
+`users.referral_verified_count` — plus the `promo_codes` /
+`promo_redemptions` tables). Post-deploy: `Bot @gennetybot started`, all 14
+crons registered, `:3100`/`:3101` listening, `/v1/ping` ok, admin `401`, all
+11 Mini App pages `200`, **zero new `P2022`** (the 113 in the historical log
+all predate earlier pushes).
+
+Flag changes in this deploy (`/opt/gennety/.env`, backed up first):
+
+| Key | Before | After | Why |
+|---|---|---|---|
+| `VENUE_INTENT_V2_ROLLOUT_PERCENT` | `10` | `100` | Founder decision — full live after the 2026-07-25 dev E2E ran the two-step concierge end-to-end. **Note this skips the staged 10→50→100 / 48h-per-step guard documented in the Venue Intent V2 rollout section**; acceptable here only because prod had 0 matches at the time. Roll back to `10` on any hard-constraint violation or fake/closed assignment. |
+| `VENUE_INTENT_V2_SHADOW_PERCENT` | `100` | `0` | Redundant once live is 100% (dev parity). |
+| `TYPE_PREF_FLOOR` | `1.0` | `0.7` | `V_type` now actually re-ranks instead of shadow no-op. Safe for the existing cohort: `typePreferenceMultiplier` returns `1` when the seeker has no radar signal or the candidate has no overlapping appearance tags. |
+| `PROMO_FEATURE_ENABLED` | (unset) | `true` | Inert until a code exists — create with `pnpm promo:create`. |
+| `REFERRAL_FEATURE_ENABLED` | (unset) | `false` | **Set explicitly, not left to the default.** The referral program is unfinished (founder decision 2026-07-25): its code ships with this release but every surface is gated — menu row, hub, `/v1/referral/*`, `/v1/me/referral*`, the onboarding wow screen, and the verification-pipeline reward all check the flag. Verified live: `/v1/referral/state` → `404`, `features.referral` → `false`. Flip to `true` to launch. |
+| `PREMIUM_PRICE_USD_DISPLAY` | `$10` | `$9.99` | Clears the stale-value note from the 2026-07-21 deploy. |
+| `PUBLIC_CORS_ORIGIN` | `*` | `https://dating-calendar.gennety.com,https://gennety.com,https://www.gennety.com` | Removes the wildcard warning. Verified: Mini App origin gets `access-control-allow-origin`, a foreign origin gets none, and native clients (no `Origin` header) are unaffected. |
+| `EXPO_ACCESS_TOKEN` | `` (empty) | removed | Expo rail retired 2026-07-18; the process no longer reads it. |
+
+**⚠️ rsync `--delete` footgun — the exclude list in Deploy Full Server Code was
+widened.** The old list excluded only `.env`, `.env.local`, `.env.test`, so a
+deploy silently deleted every `/opt/gennety/.env.bak.*` (the documented env
+rollback path) **and `/opt/gennety/keys/`**. That is not hypothetical: the APNs
+`.p8` key at `APNS_KEY_PATH=/opt/gennety/keys/AuthKey_JTLFAQ8RM2.p8` **is gone
+from the droplet** (a full-filesystem `find / -name '*.p8'` returns nothing), so
+native-iOS push and Live Activities are dead until the key is re-uploaded from
+Apple Developer → Certificates → Keys. No user impact today (no iOS client has
+shipped). The exclude list is now `.env*`, `keys/`, and the local tooling dirs;
+always dry-run with `--itemize-changes | grep '^\*deleting'` before a real sync.
+The 6 deletions in this run were all intended (4 obsolete `welcome-gift`
+кружки dropped by commit `d068ccd`, which kept `ru.mp4` only, plus two
+`apps/video/build` artifacts).
+
+**Curated venue catalog: nothing to push.** Prod (972 active = 448 base +
+90 premium `ua:kyiv` + 434 legacy `city_key NULL` rows the runtime dedupes by
+`placeId`) is a superset of dev (537), with equal-or-better facet coverage
+(338 vs 337 base, 87 vs 87 premium).
 
 **Deployed 2026-07-23 — dev↔prod schema-drift reconciliation + 2026-07-22 code
 release.** The prod DB was a day behind the code: additive schema from
@@ -149,6 +200,50 @@ The long local Homebrew build on Intel macOS is not the expected production
 path. Ubuntu normally installs a prebuilt `apt` package. Never set
 `PROFILE_MEDIA_VALIDATION_ENABLED=true` until both production version checks
 succeed.
+
+## Dev ↔ Prod Isolation
+
+Production is the controlled environment with real users; local dev is for
+testing. Nothing may flow between them. Audited 2026-07-25 — current state:
+
+| Resource | Dev | Prod | Isolated? |
+|---|---|---|---|
+| Postgres | local Docker `localhost:5434/gennety_dev` (`pnpm dev:db:up`) | Supabase `aws-0-eu-west-1.pooler…/postgres` | ✅ separate servers |
+| Telegram bot | `@gennetytestbot` (token `8627…`) | `@gennetybot` (token `8707…`) | ✅ separate tokens — mandatory, long polling delivers each update to exactly one consumer |
+| Supabase Storage | `selfies-dev` / `profile-photos-dev` / `chat-attachments-dev` | `selfies` / `profile-photos` / `chat-attachments` | ✅ since 2026-07-25 (same project, separate buckets) |
+| OpenAI / Resend / AWS / Places | shared keys | shared keys | ⚪ stateless — no cross-contamination |
+| Founder ops bot | shared `FOUNDER_BOT_TOKEN` + chat | same | ⚪ intentional; dev events land in the same founder DM |
+| Persona | shared template/environment/API key | same | ⚠️ **see below** |
+
+**Fixed 2026-07-25 — Supabase Storage leak.** `.env.local` overrides
+`BOT_TOKEN` and `DATABASE_URL` but used to leave `SUPABASE_*` to `.env` (the
+prod-like copy), so the dev bot wrote Persona selfies, mobile profile photos,
+and chat images straight into the **production** buckets. Confirmed: dev user
+ids `5607aa76…` / `1a357d89…` had objects in prod `selfies`. `.env.local` now
+pins `SUPABASE_SELFIE_BUCKET=selfies-dev`, `SUPABASE_PHOTO_BUCKET=
+profile-photos-dev`, `SUPABASE_CHAT_BUCKET=chat-attachments-dev`
+(`.env.local.example` carries the same block). The URL and service key stay
+shared, so a stronger isolation would be a second Supabase project for dev.
+
+**Known residue — orphaned dev objects in the prod `selfies` bucket.** 6 of
+its 8 user-id prefixes belong to no prod user row (`6efffed1…`, `5a61bdad…`,
+`5607aa76…`, `4ce48f96…`, `29ed79a8…`, `1a357d89…`); only `d9731286…` and
+`2a899ad8…` are real prod selfies. Deleting the six is a destructive prod
+storage operation — do it deliberately, not as part of a deploy.
+
+**Known shared state — Persona webhooks.** Dev and prod share one Persona
+template/environment, and Persona's webhook target is configured once, at
+prod (`https://dating-api.gennety.com/v1/webhooks/persona`). So a **dev**
+verification fires a webhook at **prod**, which correctly no-ops
+(`[persona] unknown reference-id`) — no prod data is touched. Two
+consequences: the prod error log carries dev noise, and the dev bot never
+receives a webhook at all (its verifications only ever complete through the
+pull fallback, which is why dev shows `webhook signature mismatch`). A
+separate Persona sandbox environment per surface is the real fix.
+
+**Never** point local code at prod: keep `.env.local` present (deleting it
+makes the local process load `.env`, i.e. the **production** bot token and
+database), and never rsync `.env.local` to the droplet.
 
 ## Credentials And Secrets
 
@@ -329,16 +424,37 @@ From the local repo:
 ```sh
 cd "/Users/pro/Desktop/Gennety Dating"
 
+```sh
+# ALWAYS dry-run first. Every line must be a deletion you intend.
+rsync -az --delete --dry-run --itemize-changes \
+  --exclude '.git/' --exclude 'node_modules/' --exclude 'dist/' --exclude 'tmp/' \
+  --exclude '.env*' --exclude 'keys/' \
+  --exclude '.claude/' --exclude '.agents/' --exclude '.codex/' --exclude '.gstack/' \
+  ./ root@167.172.178.229:/opt/gennety/ | grep '^\*deleting'
+```
+
+Then the real sync (identical flags, minus `--dry-run`):
+
+```sh
 rsync -az --delete \
   --exclude '.git/' \
   --exclude 'node_modules/' \
   --exclude 'dist/' \
   --exclude 'tmp/' \
-  --exclude '.env' \
-  --exclude '.env.local' \
-  --exclude '.env.test' \
+  --exclude '.env*' \
+  --exclude 'keys/' \
+  --exclude '.claude/' \
+  --exclude '.agents/' \
+  --exclude '.codex/' \
+  --exclude '.gstack/' \
   ./ root@167.172.178.229:/opt/gennety/
 ```
+
+**`.env*` and `keys/` are not optional excludes.** `.env*` (not just `.env`)
+covers the `.env.bak.*` snapshots that Rollback depends on. `keys/` holds
+server-only Apple secrets (`APNS_KEY_PATH`, `APPSTORE_KEY_PATH`) that exist
+nowhere in the repo — the narrower pre-2026-07-25 list already destroyed the
+APNs `.p8` once.
 
 Then install, validate, and restart on the droplet:
 
@@ -498,12 +614,15 @@ posture — enabled but not yet influencing matching — NOT flipped to full liv
   but real matches still schedule via the existing path (live 0%), exactly the
   documented "shadow ≥7 days / 30 pairs before advancing live" rollout.
 
-Next steps for either feature are pure env bumps + `pm2 restart --update-env`:
-lower `TYPE_PREF_FLOOR` toward `0.7`, and step `VENUE_INTENT_V2_ROLLOUT_PERCENT`
-10 → 50 → 100 — only after the shadow data clears. No schema/webapp work remains
-(schema reconciled 2026-07-23; `radar.html` + portraits already deployed).
-Persona is still the sandbox key (`ALLOW_SANDBOX_PERSONA=true`) — real KYC
-awaits a live Persona key, not a flag.
+**Superseded 2026-07-25.** Both were advanced to their live posture in the
+catch-up deploy: `TYPE_PREF_FLOOR=0.7` (the `V_type` multiplier now re-ranks)
+and `VENUE_INTENT_V2_ROLLOUT_PERCENT=100` / `SHADOW_PERCENT=0`. See the
+2026-07-25 block at the top of this file, including the note that the venue
+rollout skipped the staged 10→50→100 guard. `PROMO_FEATURE_ENABLED=true` was
+added at the same time; `REFERRAL_FEATURE_ENABLED=false` is set explicitly
+because the referral program is unfinished. Persona is still the sandbox key
+(`ALLOW_SANDBOX_PERSONA=true`) — real KYC awaits a live Persona key, not a
+flag. No schema/webapp work remains.
 
 Every product feature is now **on** in `/opt/gennety/.env`: tickets + Telegram
 Stars, Registration v2's phone track, the fact collector (which is what actually
