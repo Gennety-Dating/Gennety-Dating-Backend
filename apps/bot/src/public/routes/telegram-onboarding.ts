@@ -32,6 +32,12 @@ import {
 import { resolveCityFromCoordinates, searchCities } from "../city-search.js";
 import { unresolvedTrackContactGate } from "../../services/contact-verification.js";
 import { grantInviteePremium, parseReferrer, referralSourceFromParam } from "../../services/referral.js";
+import {
+  grantPromoRewardsForUser,
+  parsePromoCode,
+  promoSourceFromParam,
+  resolvePromoCode,
+} from "../../services/promo.js";
 
 const VALID_LANGUAGES = new Set<string>(SUPPORTED_LANGUAGES);
 const FLOW_TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -58,6 +64,7 @@ type MiniUser = {
   registrationTrack: string | null;
   referralSource: string | null;
   referralInviteePremiumAt: Date | null;
+  promoRedeemedAt: Date | null;
   messageHistory: unknown[];
   profile: {
     homeCity: string | null;
@@ -528,6 +535,35 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
     res.json(await serializeState(updated));
   });
 
+  // Promo welcome gift (PROMO_CODES_PRODUCT_SPEC.md): claim the promo-attributed
+  // new user's one-time Date Ticket + Premium months, shown on the richer promo
+  // wow screen (2nd-to-last, before AI-memory). Idempotent —
+  // `grantPromoRewardsForUser` no-ops once redeemed / when not a valid promo
+  // attribution / when the code is no longer redeemable, so a replayed tap can't
+  // double-grant.
+  router.post("/promo-gift", async (req: Request, res: Response): Promise<void> => {
+    const auth = authenticate(req);
+    if (!auth.ok) {
+      res.status(401).json(auth.body);
+      return;
+    }
+
+    const user = await findOrCreateTelegramUser(auth.telegramId, req.query.source);
+    const gift = await grantPromoRewardsForUser(user.id);
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { ...onboardingActivityPatch() },
+      select: miniUserSelect,
+    });
+    logTelegramOnboarding("promo-gift-claimed", updated, {
+      applied: gift != null,
+      code: gift?.code ?? null,
+      tickets: gift?.ticketsApplied ?? 0,
+      months: gift?.monthsApplied ?? 0,
+    });
+    res.json(await serializeState(updated));
+  });
+
   router.post("/complete", async (req: Request, res: Response): Promise<void> => {
     const auth = authenticate(req);
     if (!auth.ok) {
@@ -621,6 +657,7 @@ const miniUserSelect = {
   registrationTrack: true,
   referralSource: true,
   referralInviteePremiumAt: true,
+  promoRedeemedAt: true,
   messageHistory: true,
   profile: {
     select: {
@@ -666,10 +703,13 @@ async function findOrCreateTelegramUser(
   });
   if (existing) return existing;
 
-  const referral =
-    typeof source === "string" && source.trim()
-      ? referralSourceFromParam(source.trim().slice(0, 48), "tg-mini")
-      : null;
+  const rawParam =
+    typeof source === "string" && source.trim() ? source.trim().slice(0, 48) : null;
+  const referral = rawParam
+    ? /^promo_/i.test(rawParam)
+      ? promoSourceFromParam(rawParam, "tg-mini")
+      : referralSourceFromParam(rawParam, "tg-mini")
+    : null;
 
   return prisma.user.create({
     data: {
@@ -687,10 +727,23 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
     ? serializeOtpChallenge(null)
     : serializeOtpChallenge(await getOtpChallengeState(user.email));
 
+  // Promo welcome gift (PROMO_CODES_PRODUCT_SPEC.md): resolve the promo code
+  // (only for promo-attributed users, so no extra DB read on the common path).
+  // Takes precedence over the referral screen — a single `referralSource` value
+  // is one or the other, and promo is the richer gift.
+  const promoCode = env.PROMO_FEATURE_ENABLED ? parsePromoCode(user.referralSource) : null;
+  const promoResolved = promoCode ? await resolvePromoCode(promoCode) : null;
+  const promoGiftSeen = user.promoRedeemedAt != null;
+  const invitedByPromo = promoCode != null && (promoResolved != null || promoGiftSeen);
+  const promoTickets = promoResolved?.ticketReward ?? env.PROMO_DEFAULT_TICKETS;
+  const promoMonths = promoResolved?.premiumMonths ?? env.PROMO_DEFAULT_PREMIUM_MONTHS;
+
   // Referral welcome gift (§Referral): show the wow screen when this user was
   // invited by a real referrer, the feature is on, and a gift month is offered.
+  // Suppressed when a promo gift owns this user's attribution.
   const referrerId = parseReferrer(user.referralSource);
   const invitedByReferral =
+    !invitedByPromo &&
     env.REFERRAL_FEATURE_ENABLED &&
     env.REFERRAL_INVITEE_PREMIUM_MONTHS > 0 &&
     referrerId != null &&
@@ -729,6 +782,13 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
       referralGiftSeen,
       referrerFirstName,
       referralGiftMonths: env.REFERRAL_INVITEE_PREMIUM_MONTHS,
+      // Promo welcome gift (PROMO_CODES_PRODUCT_SPEC.md): drives the richer
+      // promo wow screen; precedence over referral.
+      invitedByPromo,
+      promoGiftSeen,
+      promoCode,
+      promoTickets,
+      promoMonths,
       homeLocation: user.profile?.homeCityKey
         ? {
             homeCity: user.profile.homeCity,
@@ -776,6 +836,14 @@ interface TelegramOnboardingStateDto {
     referralGiftSeen: boolean;
     referrerFirstName: string | null;
     referralGiftMonths: number;
+    // Promo-code welcome gift (PROMO_CODES_PRODUCT_SPEC.md). Drives the richer
+    // promo wow screen (ticket + N months). Takes precedence over the referral
+    // screen. Inert for non-promo users.
+    invitedByPromo: boolean;
+    promoGiftSeen: boolean;
+    promoCode: string | null;
+    promoTickets: number;
+    promoMonths: number;
     homeLocation: {
       homeCity: string | null;
       homeCountryCode: string | null;

@@ -11,6 +11,7 @@ import {
   selectTelegramOnboardingCity,
   setTelegramOnboardingAiMemoryPreference,
   claimTelegramOnboardingReferralGift,
+  claimTelegramOnboardingPromoGift,
   setTelegramOnboardingLanguage,
   setTelegramOnboardingTheme,
   setTelegramOnboardingTrack,
@@ -312,6 +313,7 @@ function App(): ReactElement {
       void saveOnboardingProgress(phase.index);
     } else if (
       phase.kind === "detail" ||
+      phase.kind === "promoGift" ||
       phase.kind === "referralGift" ||
       phase.kind === "aiMemoryExport" ||
       phase.kind === "loading" ||
@@ -580,6 +582,17 @@ function App(): ReactElement {
       </Scene>
       <Scene active={phase.kind === "theme"}>
         <ThemeGate selected={remoteUser?.theme ?? "dark"} onState={onState} />
+      </Scene>
+      <Scene active={phase.kind === "promoGift"}>
+        <PromoGiftGate
+          tickets={remoteUser?.promoTickets ?? 1}
+          months={remoteUser?.promoMonths ?? 3}
+          onClaimed={(state) => {
+            setRemoteUser(state.user);
+            setFlowToken(state.flowToken);
+            setPhase(postVisualPhaseFromRemote(state.user));
+          }}
+        />
       </Scene>
       <Scene active={phase.kind === "referralGift"}>
         <ReferralGiftGate
@@ -2110,6 +2123,90 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
         {searching ? <div className="gate-meta">{s.citySearching}</div> : null}
       </div>
     </GateShell>
+  );
+}
+
+function PromoGiftGate(props: {
+  tickets: number;
+  months: number;
+  onClaimed: (state: TelegramOnboardingState) => void;
+}): ReactElement {
+  const s = useOnboardingStrings();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const ticketLine = s.promoGiftTicketLine.replaceAll("{tickets}", String(props.tickets));
+  const monthsLine = s.promoGiftMonthsLine.replaceAll("{months}", String(props.months));
+
+  async function claim(): Promise<void> {
+    if (!app?.initData || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const state = await claimTelegramOnboardingPromoGift(app.initData);
+      app.HapticFeedback?.notificationOccurred("success");
+      props.onClaimed(state);
+    } catch (err) {
+      setError(errorCopy(err, s));
+      app.HapticFeedback?.notificationOccurred("error");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="promo-gift-screen">
+      <div className="promo-gift-content">
+        <div className="promo-gift-badge" aria-hidden="true">
+          <svg
+            className="promo-gift-butterfly"
+            viewBox="-12 -10 124 120"
+            role="img"
+            aria-label="Gennety Premium"
+            shapeRendering="geometricPrecision"
+          >
+            <defs>
+              <linearGradient id="promo-bf-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop className="promo-bf-a" offset="0" />
+                <stop className="promo-bf-b" offset="1" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M 50 35 C 20 0, -10 30, 15 55 C -5 75, 25 100, 48 65 L 52 65 C 75 100, 105 75, 85 55 C 110 30, 80 0, 50 35 Z"
+              fill="url(#promo-bf-grad)"
+            />
+          </svg>
+        </div>
+        <h1 className="promo-gift-title">{s.promoGiftTitle}</h1>
+        <ul className="promo-gift-statuses" aria-hidden="false">
+          <li className="promo-gift-status">
+            <span className="promo-gift-check">✓</span>
+            {s.promoGiftStatusConfirmed}
+          </li>
+          <li className="promo-gift-status">
+            <span className="promo-gift-check">✓</span>
+            {s.promoGiftPromoActive}
+          </li>
+          <li className="promo-gift-status">
+            <span className="promo-gift-check">✓</span>
+            {s.promoGiftSubActivated}
+          </li>
+        </ul>
+        <div className="promo-gift-rewards">
+          <div className="promo-gift-reward">{ticketLine}</div>
+          <div className="promo-gift-reward">{monthsLine}</div>
+        </div>
+        {error ? <div className="gate-error promo-gift-error">{error}</div> : null}
+      </div>
+      <div className="promo-gift-actions">
+        <button
+          className="promo-gift-primary"
+          disabled={busy || !app?.initData}
+          onClick={() => void claim()}
+        >
+          {busy ? s.promoGiftClaiming : s.promoGiftContinue}
+        </button>
+      </div>
+    </main>
   );
 }
 

@@ -247,6 +247,13 @@ export interface TelegramOnboardingState {
     referralGiftSeen: boolean;
     referrerFirstName: string | null;
     referralGiftMonths: number;
+    // Promo welcome gift (PROMO_CODES_PRODUCT_SPEC.md). The richer wow screen
+    // (ticket + N months). Precedence over referral. Inert for non-promo users.
+    invitedByPromo: boolean;
+    promoGiftSeen: boolean;
+    promoCode: string | null;
+    promoTickets: number;
+    promoMonths: number;
     homeLocation: TelegramHomeLocation | null;
     completed: boolean;
   };
@@ -364,6 +371,25 @@ export async function claimTelegramOnboardingReferralGift(
   initData: string,
 ): Promise<TelegramOnboardingState> {
   const res = await fetch(`${apiBase}/v1/telegram-onboarding/referral-gift`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `tma ${initData}`,
+    },
+    body: "{}",
+  });
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as TelegramOnboardingState;
+}
+
+/**
+ * Claim the promo-code user's one-time welcome gift (Date Ticket + Premium
+ * months) at the promo wow screen (PROMO_CODES_PRODUCT_SPEC.md). Idempotent.
+ */
+export async function claimTelegramOnboardingPromoGift(
+  initData: string,
+): Promise<TelegramOnboardingState> {
+  const res = await fetch(`${apiBase}/v1/telegram-onboarding/promo-gift`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

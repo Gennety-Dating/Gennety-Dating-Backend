@@ -47,6 +47,10 @@ export type OnboardingPhase =
   // App color theme picker — shown once, right after the city gate (before the
   // visual animation, so the animation itself plays in the chosen theme).
   | { kind: "theme" }
+  // Promo welcome gift (PROMO_CODES_PRODUCT_SPEC.md): the richer wow screen for
+  // a promo-code user (ticket + N months + special status), shown once as the
+  // second-to-last screen. Takes precedence over the referral screen.
+  | { kind: "promoGift" }
   // Referral welcome gift (§Referral): a wow screen for an invited user,
   // shown once as the second-to-last screen (right before the AI-memory
   // choice). Skipped entirely for non-referred users.
@@ -74,6 +78,7 @@ export function postVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPh
   if (contactPhase) return contactPhase;
   if (!user.homeLocation?.homeCityKey) return { kind: "city" };
   if (!user.themeChosen) return { kind: "theme" };
+  if (user.invitedByPromo && !user.promoGiftSeen) return { kind: "promoGift" };
   if (user.invitedByReferral && !user.referralGiftSeen) return { kind: "referralGift" };
   if (user.aiMemoryExportPreference === "undecided") return { kind: "aiMemoryExport" };
   return { kind: "loading" };

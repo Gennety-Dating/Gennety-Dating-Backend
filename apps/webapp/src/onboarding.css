@@ -2882,3 +2882,148 @@ button {
   cursor: default;
   opacity: 0.5;
 }
+
+/* ── Promo welcome gift (PROMO_CODES_PRODUCT_SPEC.md) ───────────────────────
+   Richer than the referral gift: three confirmed-status rows + a rewards card
+   (ticket + N months), with the brand burgundy accent so "special status"
+   reads at a glance. */
+.promo-gift-screen {
+  width: 100%;
+  max-width: 26.25rem;
+  height: 100%;
+  margin: 0 auto;
+  padding:
+    calc(4.5rem + env(safe-area-inset-top, 0))
+    max(1.25rem, env(safe-area-inset-right, 0))
+    calc(1.25rem + env(safe-area-inset-bottom, 0))
+    max(1.25rem, env(safe-area-inset-left, 0));
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.promo-gift-content {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 1.1rem;
+}
+
+/* Brand butterfly, burgundy-tinted with a soft glow — distinct from the
+   referral gift's metallic silver crest. */
+.promo-gift-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  filter: drop-shadow(0 0 26px color-mix(in srgb, #8b253b 55%, transparent));
+}
+.promo-gift-butterfly {
+  width: 4.5rem;
+  height: 4.5rem;
+  filter: drop-shadow(0 8px 20px var(--shadow));
+}
+.promo-gift-badge .promo-bf-a {
+  stop-color: #c8556c;
+}
+.promo-gift-badge .promo-bf-b {
+  stop-color: #8b253b;
+}
+
+.promo-gift-title {
+  width: min(100%, 21.25rem);
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(1.5rem, 3.6dvh, 1.8rem);
+  line-height: 1.14;
+  font-weight: 700;
+}
+
+.promo-gift-statuses {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: min(100%, 20rem);
+}
+.promo-gift-status {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.95rem;
+  border-radius: 0.85rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  border: 1px solid color-mix(in srgb, #8b253b 28%, transparent);
+}
+.promo-gift-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #ffffff;
+  background: #8b253b;
+}
+
+.promo-gift-rewards {
+  margin-top: 0.35rem;
+  width: min(100%, 20rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  background: color-mix(in srgb, #8b253b 12%, var(--bg));
+  border: 1px solid color-mix(in srgb, #8b253b 40%, transparent);
+}
+.promo-gift-reward {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.promo-gift-error {
+  margin-top: 0.25rem;
+}
+
+.promo-gift-actions {
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+/* Burgundy primary pill — the "special status" CTA. */
+.promo-gift-primary {
+  position: relative;
+  width: 100%;
+  min-height: 3.5rem;
+  border-radius: 999px;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  border: 0;
+  color: #ffffff;
+  background: linear-gradient(180deg, #a3324a 0%, #8b253b 100%);
+  box-shadow: 0 6px 20px color-mix(in srgb, #8b253b 45%, transparent);
+  transition: transform 150ms ease, opacity 180ms ease;
+}
+.promo-gift-primary:active {
+  transform: scale(0.97);
+}
+.promo-gift-primary:disabled {
+  cursor: default;
+  opacity: 0.5;
+}

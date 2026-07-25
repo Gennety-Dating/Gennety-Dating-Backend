@@ -79,6 +79,15 @@ export interface OnboardingStrings {
   referralGiftBodyNoName: string;
   referralGiftContinue: string;
   referralGiftClaiming: string;
+  // Promo welcome gift (PROMO_CODES_PRODUCT_SPEC.md) — the richer wow screen.
+  promoGiftTitle: string;
+  promoGiftStatusConfirmed: string;
+  promoGiftPromoActive: string;
+  promoGiftSubActivated: string;
+  promoGiftTicketLine: string;
+  promoGiftMonthsLine: string;
+  promoGiftContinue: string;
+  promoGiftClaiming: string;
   themeTitle: string;
   themeLead: string;
   themeDark: string;
@@ -220,6 +229,14 @@ const en: OnboardingStrings = {
     "Because a friend invited you, your first {months} month of Gennety Premium is on us — active right now.",
   referralGiftContinue: "Claim & continue",
   referralGiftClaiming: "Activating...",
+  promoGiftTitle: "Your gift is unlocked",
+  promoGiftStatusConfirmed: "Status confirmed",
+  promoGiftPromoActive: "Promo code active",
+  promoGiftSubActivated: "Subscription activated",
+  promoGiftTicketLine: "🎟 {tickets} free Date Ticket",
+  promoGiftMonthsLine: "✨ {months} months of Gennety Premium",
+  promoGiftContinue: "Claim & continue",
+  promoGiftClaiming: "Activating...",
   themeTitle: "Choose your look",
   themeLead: "Pick a theme for the app. You can change it anytime in Settings.",
   themeDark: "Dark",
@@ -379,6 +396,14 @@ const ru: OnboardingStrings = {
     "Тебя пригласил друг — поэтому первый {months} месяц Gennety Premium за наш счёт. Уже активен.",
   referralGiftContinue: "Забрать и продолжить",
   referralGiftClaiming: "Активирую...",
+  promoGiftTitle: "Твой подарок активирован",
+  promoGiftStatusConfirmed: "Статус подтверждён",
+  promoGiftPromoActive: "Промокод активен",
+  promoGiftSubActivated: "Подписка активирована",
+  promoGiftTicketLine: "🎟 {tickets} бесплатный билет на свидание",
+  promoGiftMonthsLine: "✨ {months} мес. Gennety Premium",
+  promoGiftContinue: "Забрать и продолжить",
+  promoGiftClaiming: "Активирую...",
   themeTitle: "Выбери оформление",
   themeLead: "Выбери тему приложения. Поменять можно в любой момент в настройках.",
   themeDark: "Тёмная",
@@ -538,6 +563,14 @@ const uk: OnboardingStrings = {
     "Тебе запросив друг — тому перший {months} місяць Gennety Premium за наш рахунок. Уже активний.",
   referralGiftContinue: "Забрати й продовжити",
   referralGiftClaiming: "Активую...",
+  promoGiftTitle: "Твій подарунок активовано",
+  promoGiftStatusConfirmed: "Статус підтверджено",
+  promoGiftPromoActive: "Промокод активний",
+  promoGiftSubActivated: "Підписку активовано",
+  promoGiftTicketLine: "🎟 {tickets} безкоштовний квиток на побачення",
+  promoGiftMonthsLine: "✨ {months} міс. Gennety Premium",
+  promoGiftContinue: "Забрати й продовжити",
+  promoGiftClaiming: "Активую...",
   themeTitle: "Обери вигляд",
   themeLead: "Обери тему застосунку. Змінити можна будь-коли в налаштуваннях.",
   themeDark: "Темна",
@@ -698,6 +731,14 @@ const de: OnboardingStrings = {
     "Weil ein Freund dich eingeladen hat, geht dein erster {months} Monat Gennety Premium auf uns — ab sofort aktiv.",
   referralGiftContinue: "Einlösen & weiter",
   referralGiftClaiming: "Wird aktiviert...",
+  promoGiftTitle: "Dein Geschenk ist freigeschaltet",
+  promoGiftStatusConfirmed: "Status bestätigt",
+  promoGiftPromoActive: "Promo-Code aktiv",
+  promoGiftSubActivated: "Abo aktiviert",
+  promoGiftTicketLine: "🎟 {tickets} gratis Date-Ticket",
+  promoGiftMonthsLine: "✨ {months} Monate Gennety Premium",
+  promoGiftContinue: "Einlösen & weiter",
+  promoGiftClaiming: "Wird aktiviert...",
   themeTitle: "Wähle dein Design",
   themeLead: "Wähle ein Theme für die App. Du kannst es jederzeit in den Einstellungen ändern.",
   themeDark: "Dunkel",
@@ -858,6 +899,14 @@ const pl: OnboardingStrings = {
     "Ponieważ zaprosił cię znajomy, twój pierwszy {months} miesiąc Gennety Premium jest na nasz koszt — już aktywny.",
   referralGiftContinue: "Odbierz i kontynuuj",
   referralGiftClaiming: "Aktywuję...",
+  promoGiftTitle: "Twój prezent został odblokowany",
+  promoGiftStatusConfirmed: "Status potwierdzony",
+  promoGiftPromoActive: "Kod promocyjny aktywny",
+  promoGiftSubActivated: "Subskrypcja aktywowana",
+  promoGiftTicketLine: "🎟 {tickets} darmowy bilet na randkę",
+  promoGiftMonthsLine: "✨ {months} mies. Gennety Premium",
+  promoGiftContinue: "Odbierz i kontynuuj",
+  promoGiftClaiming: "Aktywuję...",
   themeTitle: "Wybierz wygląd",
   themeLead: "Wybierz motyw aplikacji. Możesz go zmienić w każdej chwili w ustawieniach.",
   themeDark: "Ciemny",

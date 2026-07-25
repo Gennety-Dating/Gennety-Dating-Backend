@@ -19,6 +19,7 @@ import {
 import { buildLanguageKeyboard } from "./language-keyboard.js";
 import { syncTelegramUsername } from "../utils/username.js";
 import { referralSourceFromParam } from "../services/referral.js";
+import { promoSourceFromParam } from "../services/promo.js";
 import { shouldUseOnboardingMiniApp } from "./onboarding-mini-app-gate.js";
 import { transitionAccountStatus } from "../services/account-status-transitions.js";
 import { buildMiniAppUrl } from "../services/mini-app-url.js";
@@ -166,13 +167,19 @@ start.command("start", async (ctx) => {
     // payload is a control signal, not an attribution source — skip it.
     // A `referral_<userId>` payload is stored as the resolvable
     // `referral:<userId>` so the referral engine can pay the referrer when this
-    // invitee verifies (PRODUCT_SPEC §Referral); every other payload keeps the
-    // `tg:` campaign prefix. `verify_done` is a control signal, not attribution.
+    // invitee verifies (PRODUCT_SPEC §Referral); a `promo_<CODE>` payload is
+    // stored as `promo:<CODE>` so the promo engine grants this new user their
+    // welcome gift at the wow screen (PROMO_CODES_PRODUCT_SPEC.md); every other
+    // payload keeps the `tg:` campaign prefix. `verify_done` is a control
+    // signal, not attribution. Referral and promo are mutually exclusive by
+    // first touch — a single `referralSource` value holds one or the other.
     const referralSource =
       startPayload.length > 0 &&
       startPayload.length <= 64 &&
       startPayload !== VERIFY_DONE_START_PARAM
-        ? referralSourceFromParam(startPayload, "tg")
+        ? /^promo_/i.test(startPayload)
+          ? promoSourceFromParam(startPayload, "tg")
+          : referralSourceFromParam(startPayload, "tg")
         : null;
 
     // Dev-only: skip the corporate-email step for whitelisted Telegram IDs.

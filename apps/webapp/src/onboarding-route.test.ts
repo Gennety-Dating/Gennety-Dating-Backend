@@ -43,6 +43,13 @@ function user(
     referralGiftSeen: false,
     referrerFirstName: null,
     referralGiftMonths: 1,
+    // Promo welcome gift defaults: not a promo user, so the promo screen is
+    // skipped and existing routing tests are unaffected.
+    invitedByPromo: false,
+    promoGiftSeen: false,
+    promoCode: null,
+    promoTickets: 1,
+    promoMonths: 3,
     homeLocation: null,
     completed: false,
     ...overrides,
@@ -165,6 +172,26 @@ describe("theme picker routing (after the city gate)", () => {
         visualReadyUser({ invitedByReferral: true, referralGiftSeen: true }),
       ),
     ).toEqual({ kind: "aiMemoryExport" });
+  });
+
+  it("shows the promo gift screen (before AI-memory) for a promo user", () => {
+    expect(
+      postVisualPhaseFromRemote(visualReadyUser({ invitedByPromo: true, promoGiftSeen: false })),
+    ).toEqual({ kind: "promoGift" });
+  });
+
+  it("skips the promo gift once it has been seen/claimed", () => {
+    expect(
+      postVisualPhaseFromRemote(visualReadyUser({ invitedByPromo: true, promoGiftSeen: true })),
+    ).toEqual({ kind: "aiMemoryExport" });
+  });
+
+  it("prefers the promo gift over the referral gift when both are set", () => {
+    expect(
+      postVisualPhaseFromRemote(
+        visualReadyUser({ invitedByPromo: true, invitedByReferral: true }),
+      ),
+    ).toEqual({ kind: "promoGift" });
   });
 
   it("ignores stored visual progress until a theme is chosen", () => {
