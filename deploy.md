@@ -985,6 +985,36 @@ Required/high-impact env keys:
   onboarding screen — no new cron. iOS: `GET/POST /v1/me/referral*` (JWT) +
   `features.referral` in `/v1/app/config`. Rollback: flip the flag off; the
   additive columns may stay. Telegram-first; iOS attribution via a referral code.
+- Promo codes (feature-flagged, independent campaign links, see
+  `PROMO_CODES_PRODUCT_SPEC.md`): `PROMO_FEATURE_ENABLED` (default `false` — leave
+  off until launch). Rides the already-on `TICKET_FEATURE_ENABLED` +
+  `PREMIUM_FEATURE_ENABLED`. Grants a NEW user **1 free Date Ticket + 3 months
+  Premium** at a richer, distinct onboarding wow screen (new users only,
+  first-touch, mutually exclusive with referral). Tunables (all optional):
+  `PROMO_DEFAULT_TICKETS` (`1`) / `PROMO_DEFAULT_PREMIUM_MONTHS` (`3`, the
+  `promo:create` defaults), `PROMO_ATTRIBUTION_TTL_MIN` (`60`, iOS
+  fingerprint-match window), `PROMO_APP_STORE_URL` (the App Store URL the
+  `GET /v1/promo/:code` landing bounces iOS visitors to; empty → no redirect),
+  and the emergency `PROMO_MANUAL_ENTRY_ENABLED` (`false` — a pre-wired
+  manual-entry fallback field, off by product decision). **Requires `db:push` of
+  the additive `users.promo_redeemed_at` column + the new `promo_codes` /
+  `promo_redemptions` tables first** (non-destructive). Rewards reuse
+  `ticket_ledger` (`promo`) + `subscription_ledger` (`promo`). Also **redeploy
+  the Mini App bundle** (`onboarding.html` ships the new promo wow screen).
+  Create codes with the CLI: `pnpm promo:create --code=SUMMER3M --tickets=1
+  --months=3 --max=500 --expires=2026-09-01` (also `promo:disable` /
+  `promo:stats` / `promo:list`; writes to the `DATABASE_URL` in scope — run with
+  prod env for prod). Telegram uses `t.me/<bot>?start=promo_<CODE>` (reliable);
+  iOS is a custom deferred deep link (clipboard + coarse fingerprint via the
+  in-memory `services/promo-attribution.ts`, `GET /v1/promo/:code` landing +
+  `POST /v1/me/promo/claim-deferred` + `/v1/me/promo/claim`, JWT), **best-effort
+  with no manual fallback** — a miss silently loses the gift (flip
+  `PROMO_MANUAL_ENTRY_ENABLED` if painful). `features.promo` in `/v1/app/config`;
+  iOS client tasks in `~/Desktop/Gennety-iOS/IMPLEMENTATION_PLAN.md`. Runs inline
+  at the wow screen — no new cron, no new system dependency. Rollback: flip the
+  flag off; the additive columns/tables may stay. Launch: deploy code + push
+  schema BEFORE flipping the flag (the new columns are read by onboarding state),
+  create at least one code, then set `PROMO_FEATURE_ENABLED=true`.
 - Date card (feature-flagged): `DATE_CARD_FEATURE_ENABLED` (default `false` —
   leave off until launch). When on, each side's `scheduled` confirmation is a
   rendered PNG date card (partner photo + venue photo + details) sent

@@ -1694,6 +1694,49 @@ AND complimentary Premium months, so it rides the already-on
   clobbering a real recurring anchor). No new tables; the blind-decision,
   no-in-app-chat, and ledger exactly-once invariants are unaffected.
 
+### 3.10 Promo Codes (feature-flagged, independent campaign links)
+
+An optional **independent promo-code** program, gated by `PROMO_FEATURE_ENABLED`
+(default **off**). Distinct from Referral (§3.9): the code belongs to a
+*campaign*, not a referrer, so ad bulletins / promo materials can hand a new user
+a richer welcome gift. Full spec:
+[PROMO_CODES_PRODUCT_SPEC.md](PROMO_CODES_PRODUCT_SPEC.md); it rides the already-on
+`TICKET_FEATURE_ENABLED` + `PREMIUM_FEATURE_ENABLED`.
+
+- **Gift.** A **1 free Date Ticket + 3 months of Gennety Premium** (both per-code
+  configurable), granted + active at a **richer, visually distinct wow screen**
+  (three confirmed-status rows — "Status confirmed · Promo active · Subscription
+  activated" — plus the ticket + months) shown as the second-to-last onboarding
+  screen (Telegram Mini App) or a native paywall-style screen (iOS). Deliberately
+  *more* than the referral welcome screen (which grants only 1 month, no ticket),
+  so it renders differently.
+- **New users only, first-touch.** Recorded as `User.referralSource =
+  promo:<CODE>` on the creating touch (Telegram `?start=promo_<CODE>` /
+  `startapp`, or the iOS deferred-attribution claim). Never applies to an
+  existing user. **Mutually exclusive with Referral** — a single `referralSource`
+  holds one program's value; `parseReferrer` ignores `promo:*` and
+  `parsePromoCode` ignores `referral:*`, and the promo wow screen takes
+  precedence over the referral one.
+- **Grant timing = the wow screen** (like the invitee-Premium), which sits after
+  the onboarding contact gate (unique verified phone / verified email), so
+  farming the gift needs fresh phone numbers. Codes additionally carry `active`,
+  `expiresAt`, and `maxRedemptions`; the grant is exactly-once + cap-safe (an
+  atomic guarded `redeemedCount++` alongside a unique `PromoRedemption` row, then
+  unique-`externalPaymentId` ticket + Premium grants).
+- **iOS attribution.** A custom Apple-native deferred deep link (no external
+  SDK): the promo landing (`GET /v1/promo/:code`) stashes a coarse device
+  fingerprint + copies `GENNETY:<CODE>` to the clipboard, then bounces to the App
+  Store; first launch resolves the code via clipboard and/or a fingerprint match
+  (`POST /v1/me/promo/claim-deferred`), and the native wow screen grants via
+  `POST /v1/me/promo/claim`. Best-effort by product decision — **no manual-entry
+  fallback** (a `PROMO_MANUAL_ENTRY_ENABLED` server seam exists if the miss rate
+  proves painful). Telegram's start-param path is fully reliable.
+- **Management.** Reusable codes are created/managed out-of-band via
+  `scripts/promo-codes.mjs` (`pnpm promo:create|disable|stats|list`). Rewards
+  reuse the wallet/entitlement ledgers (`ticket_ledger` `promo`,
+  `subscription_ledger` `promo`); the blind-decision, no-in-app-chat, and ledger
+  exactly-once invariants are unaffected.
+
 ## Phase 4 — Date Lifecycle
 
 Driven by `services/date-lifecycle.ts` + `services/pre-date-safety.ts`,

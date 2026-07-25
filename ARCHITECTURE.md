@@ -206,6 +206,7 @@ Columns (≈ 35; grouped by purpose):
 | Tickets (feature-flagged) | `ticketBalance` — materialized ticket-wallet balance; running sum of `TicketLedger.delta` (see `ticket_ledger`). `ticketDiscountPct` / `ticketDiscountGrantedAt` / `ticketDiscountExpiresAt` / `ticketDiscountConsumedAt` — one-time famine single-ticket discount (PRODUCT_SPEC §3.5b; active ⇔ `pct > 0 AND consumedAt IS NULL AND expiresAt > now`), owned by `services/ticket-discount.ts`. |
 | Premium (feature-flagged) | `premiumUntil` / `premiumSince` / `premiumProvider` (`telegram_stars`\|`app_store`\|`referral`) / `premiumAutoRenew` / `premiumExternalId` — Gennety Premium subscription head (PRODUCT_SPEC §3.8 / §Premium). Materialized from the append-only `subscription_ledger`; active ⇔ `premiumUntil > now`. `premiumExternalId` is the recurring anchor (Stars charge id / App Store `originalTransactionId`) used to reconcile renewals + find the owner from a webhook. Owned by `services/premium.ts`; inert-to-write unless `PREMIUM_FEATURE_ENABLED`, but an existing entitlement is honored regardless of the flag. `provider: "referral"` marks a complimentary comp grant (`grantComplimentaryPremiumMonths`) that never sets an auto-renew anchor. |
 | Referral (feature-flagged) | `referralVerifiedCount` (referrer's materialized tally of invited friends who cleared verification — the milestone-ladder progress), `referralCountedAt` (invitee-side once-marker: this user was already counted toward their referrer, CAS null→now), `referralInviteePremiumAt` (invitee-side once-marker for the welcome Premium month). Referral program (PRODUCT_SPEC §3.9 / `REFERRAL_PRODUCT_SPEC.md`), owned by `services/referral.ts`; rewards themselves live in `ticket_ledger` (`referral_milestone`) + `subscription_ledger` (`referral`). Inert unless `REFERRAL_FEATURE_ENABLED`. |
+| Promo (feature-flagged) | `promoRedeemedAt` — once-marker for the promo welcome gift's wow screen + grant guard. Independent promo-code program (PRODUCT_SPEC §3.10 / `PROMO_CODES_PRODUCT_SPEC.md`), owned by `services/promo.ts`; attribution reuses `referralSource` as `promo:<CODE>` (mutually exclusive with `referral:*`); the reward lands exactly-once in `PromoRedemption` + `ticket_ledger` (`promo`) + `subscription_ledger` (`promo`). Inert unless `PROMO_FEATURE_ENABLED`. |
 
 Indexes: `(status, reEngagementNextAt)`, `(status, suspendedUntil)`.
 
@@ -404,7 +405,7 @@ wrappers before a rejected asset can be committed to `profiles`.
 
 Append-only audit of every ticket-wallet movement or payment/refund transition
 (`userId`, `delta`, `reason` ∈ `photo_bonus`/`video_bonus`/`student_bonus`/
-`referral_milestone`/`welcome_gift`/`store_purchase`/`spend_match`/`refund`/`gate_payment`/
+`referral_milestone`/`promo`/`welcome_gift`/`store_purchase`/`spend_match`/`refund`/`gate_payment`/
 `gate_processing`/`gate_settled`/`gate_surplus_pending`/
 `gate_refund_pending`/`gate_refunded`, plus the retired legacy
 `verification_bonus` that survives only on historical rows and is never written
@@ -431,8 +432,8 @@ Inert unless `TICKET_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §
 ### `subscription_ledger` (feature-flagged)
 
 Append-only audit of every Gennety Premium subscription movement (`userId`,
-`provider` ∈ `telegram_stars`/`app_store`/`referral` (the last a complimentary
-comp grant — referral reward, no auto-renew anchor), `event` ∈
+`provider` ∈ `telegram_stars`/`app_store`/`referral`/`promo` (the last two
+complimentary comp grants — referral / promo-code rewards, no auto-renew anchor), `event` ∈
 `started`/`renewed`/`cancelled`/`expired`/`refunded`, unique `externalPaymentId`,
 `periodStart`/`periodEnd`, `amount`/`currency`, optional `note`, `createdAt`;
 `onDelete: Cascade`
@@ -450,6 +451,26 @@ is only ever set on `cancelled` rows. The Stars rail settles through the
 webhook, owner found by the `originalTransactionId` anchor on
 `User.premiumExternalId`). Indexed `(userId, createdAt)`. Inert unless
 `PREMIUM_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.8 / §Premium.
+
+### `promo_codes` / `promo_redemptions` (feature-flagged)
+
+Independent promo-code program (PRODUCT_SPEC §3.10 / `PROMO_CODES_PRODUCT_SPEC.md`,
+gated by `PROMO_FEATURE_ENABLED`; owned by `services/promo.ts`). `promo_codes` is
+ONE reusable campaign code (`code` unique + uppercased, per-code `ticketReward` /
+`premiumMonths`, nullable `maxRedemptions` cap, materialized `redeemedCount`,
+`expiresAt`, `active`, `note`) shared in ad materials; managed out-of-band by
+`scripts/promo-codes.mjs`. `promo_redemptions` is the exactly-once + cap-safe
+audit/guard: a unique `userId` (one code per human, first-touch) and
+`@@unique([promoCodeId, userId])`, created in the same transaction as the atomic
+guarded `redeemedCount++`. Reward deltas live in the ledgers (`ticket_ledger`
+`promo`, `subscription_ledger` `promo`) via unique `externalPaymentId`
+`promo:<codeId>:<userId>`. Attribution reuses `User.referralSource` as
+`promo:<CODE>` (mutually exclusive with `referral:*`); `User.promoRedeemedAt` is
+the wow-screen once-marker. iOS deferred-deep-link attribution uses an in-memory
+TTL fingerprint→code store (`services/promo-attribution.ts`, coarse IP+UA+lang
+hash, one-shot match), matching the single-process `usage-limiter` pattern.
+`onDelete: Cascade` from `promo_codes` / `users`. Inert unless
+`PROMO_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.10.
 
 ### `profiler_answers`
 
@@ -560,7 +581,9 @@ auth) are deliberately outside the spec.
 | GET  | `/v1/ping` | Liveness probe |
 | GET  | `/v1/app/config` | Pre-auth mobile bootstrap: `minSupportedIosVersion` (forced-update kill switch, env `IOS_MIN_SUPPORTED_APP_VERSION`, empty → null) + client feature flags (`phoneAuth`/`tickets`/`coordination`). Unauthenticated by design — the client must learn "update required" before it can log in. |
 | GET | `/v1/maptiles/:z/:x/:y` | Public CARTO raster-tile proxy with strict coordinate validation, a dedicated per-IP limiter, 8-second upstream timeout, 1 MiB response ceiling, and immutable caching. |
-| GET/POST | `/v1/telegram-onboarding/*` | Telegram full-screen Onboarding Mini App state/consent/language/**sign-up fork (`POST /track`, Registration v2)**/email OTP/**phone gate**/city/AI-memory choice/completion handoff. Authenticates with `Authorization: tma <initData>`; `/state` mirrors `phoneAuthEnabled` + `isPhoneVerified`/`phone`/`registrationTrack`, `POST /track` persists the re-choosable fork pick (404 while `PHONE_AUTH_ENABLED` is off), and `/complete` runs the track-aware contact gate (`email-required` \| `phone-required`) before city + AI-memory checks. `/state` also returns `theme` + `themeChosen`, and `POST /theme` records the light/dark pick (`theme` + `themeChosenAt`) — reused by the bot's Settings "Change theme" flow. |
+| GET | `/v1/promo/:code` | Promo landing (§3.10, pre-install, no auth): stashes a coarse device fingerprint → code (iOS deferred attribution) and serves a self-contained page that copies `GENNETY:<CODE>` to the clipboard, then bounces to `PROMO_APP_STORE_URL`. 404 when `PROMO_FEATURE_ENABLED` off. |
+| POST | `/v1/promo/attribution` | Record the same fingerprint→code for a landing hosted off-origin (`gennety.com/promo/:code`). No auth; 404 when off. |
+| GET/POST | `/v1/telegram-onboarding/*` | Telegram full-screen Onboarding Mini App state/consent/language/**sign-up fork (`POST /track`, Registration v2)**/email OTP/**phone gate**/city/AI-memory choice/completion handoff. Authenticates with `Authorization: tma <initData>`; `/state` mirrors `phoneAuthEnabled` + `isPhoneVerified`/`phone`/`registrationTrack`, `POST /track` persists the re-choosable fork pick (404 while `PHONE_AUTH_ENABLED` is off), and `/complete` runs the track-aware contact gate (`email-required` \| `phone-required`) before city + AI-memory checks. `/state` also returns `theme` + `themeChosen`, and `POST /theme` records the light/dark pick (`theme` + `themeChosenAt`) — reused by the bot's Settings "Change theme" flow. `/state` also exposes the promo wow-screen fields (`invitedByPromo`/`promoGiftSeen`/`promoCode`/`promoTickets`/`promoMonths`, §3.10, precedence over referral), and `POST /promo-gift` grants the promo welcome gift (Date Ticket + Premium months). |
 | POST | `/v1/auth/otp/request` | Send corp-email OTP (IP/email rate-limited; per-email creation serialized in PostgreSQL) |
 | POST | `/v1/auth/otp/verify` | Verify OTP → mint access + refresh JWT |
 | POST | `/v1/auth/phone/request` | Native-app phone rail (general track): send a code with a server-side provider fork — order is env-driven (`PHONE_CODE_PRIMARY_PROVIDER`, **default `twilio`** — founder decision 2026-07-18): **Twilio Verify SMS primary**, Telegram Gateway optional secondary (`checkSendAbility` → code as an official Telegram service message, our bcrypt-hashed code). Whichever is primary, the other configured rail auto-falls back; `channel: "sms"` always forces Twilio. Per-phone cooldown + daily cap serialized via advisory lock (`phone_otps`); 404 while `PHONE_AUTH_ENABLED` off. Response carries `deliveredVia: telegram\|sms`. |
@@ -570,6 +593,8 @@ auth) are deliberately outside the spec.
 | POST | `/v1/me/home-location` | Persist canonical dating city (`homeCityKey`) + coordinates for match eligibility |
 | GET | `/v1/me/referral` | Referral ladder state for the native app (§3.9): progress + per-rung $ value + invite link. JWT; 404 when `REFERRAL_FEATURE_ENABLED` off. Shares the `buildReferralStateView` assembler with the Mini App `/v1/referral/state`. |
 | POST | `/v1/me/referral/claim` | Attribute this (mobile) user to a referrer by code (§3.9, iOS entry). First-touch + guarded (self-referral / unknown / already-attributed rejected). JWT. |
+| POST | `/v1/me/promo/claim-deferred` | iOS deferred-deep-link promo attribution (§3.10): resolve the code from the clipboard value (`code`, optional `GENNETY:` prefix) OR a coarse fingerprint match against a recent landing touch, then first-touch attribute (`referralSource = promo:<CODE>`). JWT; 404 when `PROMO_FEATURE_ENABLED` off. |
+| POST | `/v1/me/promo/claim` | Grant the promo welcome gift (Date Ticket + Premium months) at the native wow screen (§3.10). Idempotent; twin of the Telegram `/v1/telegram-onboarding/promo-gift`. JWT; 404 when off. |
 | PATCH | `/v1/me/status` | Native-app pause/resume toggle: `active→paused`, `paused→active`, plus `frozen→active` (mobile twin of the /start silent reactivation). Idempotent same-state; 409 for states owned by other flows. |
 | POST | `/v1/me/freeze` | Native-app freeze (Telegram Settings parity): cancel in-flight matches with partner comp, keep profile/verification intact, flip to `frozen`; idempotent. |
 | POST | `/v1/me/location` | Persist raw home-base lat/lng for Meet-Halfway; does not by itself unlock matching |
