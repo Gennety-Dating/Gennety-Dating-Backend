@@ -1,5 +1,6 @@
 import "./theme.css";
 import "./referral.css";
+import { icon, type IconName } from "./icons";
 import { wireContentInsets } from "./telegram-insets";
 
 /**
@@ -97,16 +98,16 @@ const COPY: Record<Lang, Copy> = {
     statFriends: "VERIFIED",
     statEarned: "EARNED",
     statValue: "VALUE",
-    earnedUnit: (t, m) => `${t}🎟 · ${m}mo`,
+    earnedUnit: (t, m) => `${t} · ${m} mo`,
     progress: (r, usd) => `${r} more verified → ${usd}`,
-    maxed: "Top reward reached — legend 💛",
+    maxed: "Top reward reached — legend",
     rungFriends: (n) => `${n} friend${n === 1 ? "" : "s"}`,
     rungReward: (t, m) => `+${t} ticket · +${m} month Premium`,
     got: "EARNED",
     total: "TOTAL",
-    share: "📤 Invite a friend",
+    share: "Invite a friend",
     shareHint: "Forwarded in one tap — nothing to fill in.",
-    shareSent: "Invite sent 💫",
+    shareSent: "Invite sent",
     shareFail: "Couldn't open the share sheet — try again.",
     loadFail: "Couldn't load your referrals — try again.",
   },
@@ -117,16 +118,16 @@ const COPY: Record<Lang, Copy> = {
     statFriends: "ВЕРИФИЦ.",
     statEarned: "ЗАРАБОТАНО",
     statValue: "НА СУММУ",
-    earnedUnit: (t, m) => `${t}🎟 · ${m}мес`,
+    earnedUnit: (t, m) => `${t} · ${m} мес`,
     progress: (r, usd) => `ещё ${r} верифиц. → ${usd}`,
-    maxed: "Высшая награда достигнута — легенда 💛",
+    maxed: "Высшая награда достигнута — легенда",
     rungFriends: (n) => `${n} ${n === 1 ? "друг" : n < 5 ? "друга" : "друзей"}`,
     rungReward: (t, m) => `+${t} билет · +${m} мес Premium`,
     got: "ПОЛУЧЕНО",
     total: "ВСЕГО",
-    share: "📤 Пригласить друга",
+    share: "Пригласить друга",
     shareHint: "Пересылается одним тапом — ничего заполнять не нужно.",
-    shareSent: "Приглашение отправлено 💫",
+    shareSent: "Приглашение отправлено",
     shareFail: "Не удалось открыть окно шеринга — попробуй ещё раз.",
     loadFail: "Не удалось загрузить рефералов — попробуй ещё раз.",
   },
@@ -137,16 +138,16 @@ const COPY: Record<Lang, Copy> = {
     statFriends: "ВЕРИФІК.",
     statEarned: "ЗАРОБЛЕНО",
     statValue: "НА СУМУ",
-    earnedUnit: (t, m) => `${t}🎟 · ${m}міс`,
+    earnedUnit: (t, m) => `${t} · ${m} міс`,
     progress: (r, usd) => `ще ${r} верифік. → ${usd}`,
-    maxed: "Найвищу нагороду досягнуто — легенда 💛",
+    maxed: "Найвищу нагороду досягнуто — легенда",
     rungFriends: (n) => `${n} ${n === 1 ? "друг" : n < 5 ? "друга" : "друзів"}`,
     rungReward: (t, m) => `+${t} квиток · +${m} міс Premium`,
     got: "ОТРИМАНО",
     total: "УСЬОГО",
-    share: "📤 Запросити друга",
+    share: "Запросити друга",
     shareHint: "Пересилається одним тапом — нічого заповнювати не треба.",
-    shareSent: "Запрошення надіслано 💫",
+    shareSent: "Запрошення надіслано",
     shareFail: "Не вдалося відкрити вікно поширення — спробуй ще раз.",
     loadFail: "Не вдалося завантажити рефералів — спробуй ще раз.",
   },
@@ -157,16 +158,16 @@ const COPY: Record<Lang, Copy> = {
     statFriends: "VERIFIZIERT",
     statEarned: "VERDIENT",
     statValue: "WERT",
-    earnedUnit: (t, m) => `${t}🎟 · ${m}Mon`,
+    earnedUnit: (t, m) => `${t} · ${m} Mon`,
     progress: (r, usd) => `${r} weitere verifiziert → ${usd}`,
-    maxed: "Höchste Belohnung erreicht — Legende 💛",
+    maxed: "Höchste Belohnung erreicht — Legende",
     rungFriends: (n) => `${n} Freund${n === 1 ? "" : "e"}`,
     rungReward: (t, m) => `+${t} Ticket · +${m} Monat Premium`,
     got: "ERHALTEN",
     total: "GESAMT",
-    share: "📤 Freund einladen",
+    share: "Freund einladen",
     shareHint: "In einem Tap geteilt — nichts auszufüllen.",
-    shareSent: "Einladung gesendet 💫",
+    shareSent: "Einladung gesendet",
     shareFail: "Teilen-Fenster ließ sich nicht öffnen — versuch es erneut.",
     loadFail: "Empfehlungen konnten nicht geladen werden — versuch es erneut.",
   },
@@ -177,16 +178,16 @@ const COPY: Record<Lang, Copy> = {
     statFriends: "ZWERYFIK.",
     statEarned: "ZDOBYTO",
     statValue: "WARTOŚĆ",
-    earnedUnit: (t, m) => `${t}🎟 · ${m}mies`,
+    earnedUnit: (t, m) => `${t} · ${m} mies`,
     progress: (r, usd) => `jeszcze ${r} zweryfik. → ${usd}`,
-    maxed: "Najwyższa nagroda osiągnięta — legenda 💛",
+    maxed: "Najwyższa nagroda osiągnięta — legenda",
     rungFriends: (n) => `${n} ${n === 1 ? "znajomy" : "znajomych"}`,
     rungReward: (t, m) => `+${t} bilet · +${m} mies Premium`,
     got: "ZDOBYTE",
     total: "RAZEM",
-    share: "📤 Zaproś znajomego",
+    share: "Zaproś znajomego",
     shareHint: "Przesyłane jednym dotknięciem — nic do wypełnienia.",
-    shareSent: "Zaproszenie wysłane 💫",
+    shareSent: "Zaproszenie wysłane",
     shareFail: "Nie udało się otworzyć okna udostępniania — spróbuj ponownie.",
     loadFail: "Nie udało się wczytać poleconych — spróbuj ponownie.",
   },
@@ -197,6 +198,11 @@ const root = document.getElementById("root") as HTMLElement;
 
 function esc(v: string): string {
   return v.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+}
+
+/** Inline SVG markup for a line icon (borderless, inherits currentColor). */
+function glyph(name: IconName, cls = "ref-ic"): string {
+  return icon(name, cls).outerHTML;
 }
 
 function renderLoading(): void {
@@ -211,11 +217,11 @@ function render(state: ReferralState): void {
   const rungs = state.ladder
     .map((r) => {
       const cls = r.reached ? "ref-rung done" : "ref-rung";
-      const marker = r.reached ? "✓" : String(r.atCount);
+      const marker = r.reached ? glyph("check", "ref-ic ref-check") : esc(String(r.atCount));
       const usdTag = r.reached ? s.got : s.total;
       return `
         <li class="${cls}">
-          <span class="ref-n">${esc(marker)}</span>
+          <span class="ref-n">${marker}</span>
           <span class="ref-body"><b>${esc(s.rungFriends(r.atCount))}</b><span>${esc(
             s.rungReward(r.tickets, r.months),
           )}</span></span>
@@ -236,13 +242,13 @@ function render(state: ReferralState): void {
   root.innerHTML = `
     <div class="ref-wrap">
       <div class="ref-hero">
-        <div class="ref-badge">🎁</div>
+        <div class="ref-badge">${glyph("spark", "ref-ic ref-badge-ic")}</div>
         <h1 class="ref-title">${esc(s.title)}</h1>
         <p class="ref-tag">${esc(s.tagline)}</p>
       </div>
       <div class="ref-stats">
         <div class="ref-stat"><b>${state.verifiedCount}</b><span>${esc(s.statFriends)}</span></div>
-        <div class="ref-stat"><b>${esc(
+        <div class="ref-stat"><b class="ref-earn">${glyph("ticket")}${esc(
           s.earnedUnit(state.earnedTickets, state.earnedMonths),
         )}</b><span>${esc(s.statEarned)}</span></div>
         <div class="ref-stat value"><b>${esc(state.earnedUsd)}</b><span>${esc(
@@ -251,7 +257,9 @@ function render(state: ReferralState): void {
       </div>
       ${progressLine}
       <ol class="ref-ladder">${rungs}</ol>
-      <button class="ref-share" id="ref-share">${esc(s.share)}</button>
+      <button class="ref-share" id="ref-share">${glyph("letter", "ref-ic ref-share-ic")}<span>${esc(
+        s.share,
+      )}</span></button>
       <p class="ref-share-hint">${esc(s.shareHint)}</p>
     </div>`;
 

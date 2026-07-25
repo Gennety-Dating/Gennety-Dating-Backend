@@ -1,9 +1,9 @@
 /* Referral Mini App (§Referral) — milestone ladder + one-tap invite.
-   Liquid-glass brand system: every surface is translucent glass (backdrop blur,
-   a specular top edge, a soft rim and depth shadow) over the near-black / cream
-   ground, with the burgundy accent spent only on the "reached" rungs and the
-   one action. Depth comes from translucency + inset light, never a flat border.
-   Base + glass tokens live in theme.css. */
+   Minimal, neutral black-and-white identity (the onboarding AI-memory register):
+   the burgundy accent and every glow/bloom are gone. Depth is a single hairline
+   and a flat surface tint; the one action is the neutral primary pill (white on
+   the dark theme, ink on the cream one). Symbols are borderless line icons from
+   icons.ts, never platform emoji. Base tokens live in theme.css. */
 
 * {
   box-sizing: border-box;
@@ -17,76 +17,43 @@ body {
   overflow-x: hidden;
 }
 
-/* A single soft burgundy bloom high on the page — the only wash, so the gift
-   crest and the CTA read as the luminous points, never the backdrop. */
 .ref-wrap {
-  position: relative;
   max-width: 30rem;
   margin: 0 auto;
   padding:
-    calc(1.35rem + var(--tg-content-top, env(safe-area-inset-top, 0)))
+    calc(1.5rem + var(--tg-content-top, env(safe-area-inset-top, 0)))
     max(1.1rem, env(safe-area-inset-right, 0))
     calc(1.9rem + env(safe-area-inset-bottom, 0))
     max(1.1rem, env(safe-area-inset-left, 0));
 }
-.ref-wrap::before {
-  content: "";
-  position: absolute;
-  top: -6%;
-  left: 50%;
-  width: 150%;
-  height: 42%;
-  transform: translateX(-50%);
-  background: radial-gradient(
-    56% 60% at 50% 0%,
-    color-mix(in srgb, var(--accent) 26%, transparent) 0%,
-    transparent 70%
-  );
-  pointer-events: none;
-  z-index: 0;
-}
-.ref-wrap > * {
-  position: relative;
-  z-index: 1;
+
+/* Shared line-icon sizing — inherits currentColor + a 24-grid vector. */
+.ref-ic {
+  width: 18px;
+  height: 18px;
+  flex: none;
 }
 
-/* ── Hero — glowing gift crest ────────────────────────────────────────── */
+/* ── Hero — one borderless symbol, no frame, no glow ──────────────────── */
 .ref-hero {
   text-align: center;
-  padding: 0.35rem 0 0.4rem;
+  padding: 0.25rem 0 0.4rem;
 }
 .ref-badge {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 0.85rem;
-  border-radius: 20px;
-  display: grid;
-  place-items: center;
-  font-size: 1.8rem;
-  background:
-    radial-gradient(120% 120% at 50% 0%, color-mix(in srgb, var(--accent) 60%, transparent), transparent 72%),
-    var(--glass-bg-strong);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    inset 0 0 0 1px var(--glass-border),
-    0 12px 34px color-mix(in srgb, var(--accent) 34%, transparent);
-  animation: ref-pulse 2.8s ease-in-out infinite;
+  display: flex;
+  justify-content: center;
+  margin: 0 auto 0.9rem;
+  color: var(--text);
 }
-@keyframes ref-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+.ref-badge-ic {
+  width: 44px;
+  height: 44px;
 }
-@media (prefers-reduced-motion: reduce) {
-  .ref-badge { animation: none; }
-}
-
 .ref-title {
-  font-size: 1.55rem;
+  font-size: 1.5rem;
   margin: 0 0 0.4rem;
-  font-weight: 800;
-  letter-spacing: -0.015em;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   text-wrap: balance;
 }
 .ref-tag {
@@ -97,19 +64,7 @@ body {
   line-height: 1.45;
 }
 
-/* ── Glass card base — shared recipe for stats + ladder rungs + track ──── */
-.ref-stat,
-.ref-rung,
-.ref-bar {
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    inset 0 0 0 1px var(--glass-border),
-    0 10px 26px var(--glass-shadow);
-}
-
+/* ── Stats — flat neutral cards, one hairline, no shadow ───────────────── */
 .ref-stats {
   display: flex;
   gap: 0.6rem;
@@ -117,17 +72,31 @@ body {
 }
 .ref-stat {
   flex: 1;
-  border-radius: 17px;
+  border-radius: 14px;
   padding: 0.85rem 0.4rem;
   text-align: center;
   min-width: 0;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 .ref-stat b {
   display: block;
-  font-size: 1.22rem;
+  font-size: 1.2rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  color: var(--text);
+}
+.ref-earn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.ref-earn .ref-ic {
+  width: 15px;
+  height: 15px;
+  color: var(--text-muted);
 }
 .ref-stat span {
   font-size: 0.62rem;
@@ -135,10 +104,12 @@ body {
   text-transform: uppercase;
   color: var(--text-faint);
 }
+/* No colour on VALUE any more — neutral like the rest. */
 .ref-stat.value b {
-  color: var(--accent-bright);
+  color: var(--text);
 }
 
+/* ── Progress — neutral track + neutral fill, no glow ─────────────────── */
 .ref-progress {
   display: flex;
   justify-content: center;
@@ -147,16 +118,17 @@ body {
   margin: 1.25rem 0 0.55rem;
 }
 .ref-bar {
-  height: 9px;
+  height: 8px;
   border-radius: 99px;
   overflow: hidden;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 .ref-bar > i {
   display: block;
   height: 100%;
   border-radius: 99px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-bright));
-  box-shadow: 0 0 16px color-mix(in srgb, var(--accent-bright) 60%, transparent);
+  background: var(--self);
   transition: width 420ms ease;
 }
 
@@ -166,7 +138,7 @@ body {
   margin: 1.35rem 0 0;
   padding: 0;
   display: grid;
-  gap: 0.6rem;
+  gap: 0.55rem;
 }
 .ref-rung {
   display: grid;
@@ -174,44 +146,42 @@ body {
   align-items: center;
   gap: 0.85rem;
   padding: 0.85rem 0.9rem;
-  border-radius: 17px;
+  border-radius: 14px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
-/* Reached rung — a burgundy-tinted glass so "earned" reads as warmth + light,
-   not just a border colour. */
+/* Reached rung — a slightly stronger neutral surface (no colour, no glow). */
 .ref-rung.done {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 24%, transparent), color-mix(in srgb, var(--accent) 9%, transparent)),
-    var(--glass-bg);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent-bright) 40%, transparent),
-    0 12px 30px color-mix(in srgb, var(--accent) 26%, transparent);
+  background: var(--fill-strong);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 .ref-n {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
   display: grid;
   place-items: center;
   font-weight: 800;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
-  background: var(--fill);
-  box-shadow: inset 0 0 0 1px var(--glass-border);
+  background: var(--fill-strong);
 }
+/* Reached marker — a filled neutral chip (white on dark, ink on cream) with the
+   check punched out in the page colour. */
 .ref-rung.done .ref-n {
-  background: linear-gradient(180deg, var(--accent-bright), var(--accent));
-  color: #fff;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    0 4px 12px color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--self);
+  color: var(--bg);
+}
+.ref-check {
+  width: 19px;
+  height: 19px;
 }
 .ref-body {
   min-width: 0;
 }
 .ref-body b {
-  font-size: 0.96rem;
+  font-size: 0.95rem;
 }
 .ref-body span {
   display: block;
@@ -221,12 +191,10 @@ body {
 .ref-usd {
   font-variant-numeric: tabular-nums;
   font-weight: 800;
-  font-size: 1.02rem;
+  font-size: 1rem;
   white-space: nowrap;
   text-align: right;
-}
-.ref-rung.done .ref-usd {
-  color: var(--accent-bright);
+  color: var(--text);
 }
 .ref-usd small {
   display: block;
@@ -237,43 +205,29 @@ body {
   text-transform: uppercase;
 }
 
-/* ── The one action — a burgundy liquid-glass pill ────────────────────── */
+/* ── The one action — the neutral primary pill (theme-correct), no glow ── */
 .ref-share {
-  position: relative;
-  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
   margin-top: 1.6rem;
   width: 100%;
   border: 0;
   cursor: pointer;
-  border-radius: 18px;
-  padding: 1.05rem;
+  border-radius: 16px;
+  padding: 1rem;
   font-size: 1.05rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: #fff;
-  background:
-    radial-gradient(120% 90% at 50% -20%, rgba(255, 255, 255, 0.22), transparent 60%),
-    linear-gradient(180deg, var(--accent-bright), var(--accent));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -10px 22px rgba(0, 0, 0, 0.28),
-    0 16px 38px color-mix(in srgb, var(--accent) 55%, transparent);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--btn-primary-fg);
+  background: var(--btn-primary-bg);
+  box-shadow: 0 6px 18px var(--shadow);
   transition: transform 140ms ease, opacity 160ms ease;
 }
-/* A soft inner bloom that gently breathes inside the pill — light in glass. */
-.ref-share::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(72% 130% at 50% 44%, rgba(255, 255, 255, 0.18) 0%, transparent 66%);
-  opacity: 0.7;
-  animation: ref-glow 5s ease-in-out infinite;
-  pointer-events: none;
-}
-.ref-share > * {
-  position: relative;
-  z-index: 1;
+.ref-share-ic {
+  width: 19px;
+  height: 19px;
 }
 .ref-share:active {
   transform: scale(0.98);
@@ -281,13 +235,6 @@ body {
 .ref-share:disabled {
   opacity: 0.55;
   cursor: default;
-}
-@keyframes ref-glow {
-  0%, 100% { opacity: 0.5; transform: scale(0.98); }
-  50% { opacity: 0.82; transform: scale(1.02); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ref-share::after { animation: none; }
 }
 .ref-share-hint {
   text-align: center;
@@ -298,10 +245,10 @@ body {
 
 .ref-skeleton {
   height: 60vh;
-  border-radius: 20px;
-  background: var(--glass-bg);
-  box-shadow: inset 0 0 0 1px var(--glass-border);
-  opacity: 0.6;
+  border-radius: 16px;
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1px var(--border);
+  opacity: 0.7;
 }
 .ref-error {
   color: var(--text-muted);
@@ -309,6 +256,6 @@ body {
   padding: 2rem 1rem;
 }
 :focus-visible {
-  outline: 2px solid var(--accent-bright);
+  outline: 2px solid var(--text-muted);
   outline-offset: 2px;
 }

@@ -30,7 +30,8 @@ export type IconName =
   | "letter"
   | "check"
   | "chevron"
-  | "lock";
+  | "lock"
+  | "ticket";
 
 /**
  * Path data per icon. `solid: true` icons paint with `fill: currentColor` and
@@ -128,6 +129,13 @@ const ICONS: Record<IconName, { d: string[]; solid?: boolean }> = {
   },
   check: {
     d: ["M4.8 12.6 9.6 17.4l9.6-10.8"],
+  },
+  // Date ticket — a rounded stub with side notches and a perforation line.
+  ticket: {
+    d: [
+      "M5 8h14v3a1.5 1.5 0 0 0 0 3v3H5v-3a1.5 1.5 0 0 0 0-3z",
+      "M14 8v2M14 13v1M14 16v1",
+    ],
   },
   chevron: {
     d: ["M9.2 5.6 15.6 12l-6.4 6.4"],

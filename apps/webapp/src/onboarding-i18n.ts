@@ -213,12 +213,12 @@ const en: OnboardingStrings = {
   aiMemoryAccepting: "Connecting...",
   aiMemoryLater: "Later",
   aiMemorySaving: "Saving...",
-  referralGiftTitle: "A friend gifted you Premium 💫",
+  referralGiftTitle: "A friend gifted you Premium",
   referralGiftBody:
     "Because {name} invited you, your first {months} month of Gennety Premium is on us — active right now.",
   referralGiftBodyNoName:
     "Because a friend invited you, your first {months} month of Gennety Premium is on us — active right now.",
-  referralGiftContinue: "Claim & continue ✨",
+  referralGiftContinue: "Claim & continue",
   referralGiftClaiming: "Activating...",
   themeTitle: "Choose your look",
   themeLead: "Pick a theme for the app. You can change it anytime in Settings.",
@@ -372,12 +372,12 @@ const ru: OnboardingStrings = {
   aiMemoryAccepting: "Подключаю...",
   aiMemoryLater: "Позже",
   aiMemorySaving: "Сохраняю...",
-  referralGiftTitle: "Друг подарил тебе Premium 💫",
+  referralGiftTitle: "Друг подарил тебе Premium",
   referralGiftBody:
     "{name} пригласил(а) тебя — поэтому первый {months} месяц Gennety Premium за наш счёт. Уже активен.",
   referralGiftBodyNoName:
     "Тебя пригласил друг — поэтому первый {months} месяц Gennety Premium за наш счёт. Уже активен.",
-  referralGiftContinue: "Забрать и продолжить ✨",
+  referralGiftContinue: "Забрать и продолжить",
   referralGiftClaiming: "Активирую...",
   themeTitle: "Выбери оформление",
   themeLead: "Выбери тему приложения. Поменять можно в любой момент в настройках.",
@@ -531,12 +531,12 @@ const uk: OnboardingStrings = {
   aiMemoryAccepting: "Підключаю...",
   aiMemoryLater: "Пізніше",
   aiMemorySaving: "Зберігаю...",
-  referralGiftTitle: "Друг подарував тобі Premium 💫",
+  referralGiftTitle: "Друг подарував тобі Premium",
   referralGiftBody:
     "{name} запросив(ла) тебе — тому перший {months} місяць Gennety Premium за наш рахунок. Уже активний.",
   referralGiftBodyNoName:
     "Тебе запросив друг — тому перший {months} місяць Gennety Premium за наш рахунок. Уже активний.",
-  referralGiftContinue: "Забрати й продовжити ✨",
+  referralGiftContinue: "Забрати й продовжити",
   referralGiftClaiming: "Активую...",
   themeTitle: "Обери вигляд",
   themeLead: "Обери тему застосунку. Змінити можна будь-коли в налаштуваннях.",
@@ -691,12 +691,12 @@ const de: OnboardingStrings = {
   aiMemoryAccepting: "Verbinden...",
   aiMemoryLater: "Später",
   aiMemorySaving: "Speichern...",
-  referralGiftTitle: "Ein Freund hat dir Premium geschenkt 💫",
+  referralGiftTitle: "Ein Freund hat dir Premium geschenkt",
   referralGiftBody:
     "Weil {name} dich eingeladen hat, geht dein erster {months} Monat Gennety Premium auf uns — ab sofort aktiv.",
   referralGiftBodyNoName:
     "Weil ein Freund dich eingeladen hat, geht dein erster {months} Monat Gennety Premium auf uns — ab sofort aktiv.",
-  referralGiftContinue: "Einlösen & weiter ✨",
+  referralGiftContinue: "Einlösen & weiter",
   referralGiftClaiming: "Wird aktiviert...",
   themeTitle: "Wähle dein Design",
   themeLead: "Wähle ein Theme für die App. Du kannst es jederzeit in den Einstellungen ändern.",
@@ -851,12 +851,12 @@ const pl: OnboardingStrings = {
   aiMemoryAccepting: "Łączenie...",
   aiMemoryLater: "Później",
   aiMemorySaving: "Zapisywanie...",
-  referralGiftTitle: "Znajomy podarował ci Premium 💫",
+  referralGiftTitle: "Znajomy podarował ci Premium",
   referralGiftBody:
     "Ponieważ {name} cię zaprosił(a), twój pierwszy {months} miesiąc Gennety Premium jest na nasz koszt — już aktywny.",
   referralGiftBodyNoName:
     "Ponieważ zaprosił cię znajomy, twój pierwszy {months} miesiąc Gennety Premium jest na nasz koszt — już aktywny.",
-  referralGiftContinue: "Odbierz i kontynuuj ✨",
+  referralGiftContinue: "Odbierz i kontynuuj",
   referralGiftClaiming: "Aktywuję...",
   themeTitle: "Wybierz wygląd",
   themeLead: "Wybierz motyw aplikacji. Możesz go zmienić w każdej chwili w ustawieniach.",

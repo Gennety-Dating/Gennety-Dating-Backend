@@ -2146,7 +2146,10 @@ function ReferralGiftGate(props: {
     <main className="referral-gift-screen">
       <div className="referral-gift-content">
         <div className="referral-gift-badge" aria-hidden="true">
-          ✨
+          <svg viewBox="0 0 24 24" fill="currentColor" shapeRendering="geometricPrecision">
+            <path d="M12 2.6c1 4 2 5 6 6-4 1-5 2-6 6-1-4-2-5-6-6 4-1 5-2 6-6Z" />
+            <path d="M18.6 14.8c.5 2 1 2.5 3 3-2 .5-2.5 1-3 3-.5-2-1-2.5-3-3 2-.5 2.5-1 3-3Z" />
+          </svg>
         </div>
         <h1 className="referral-gift-title">{s.referralGiftTitle}</h1>
         <p className="referral-gift-body">{body}</p>
