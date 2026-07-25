@@ -683,6 +683,20 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
   (max 500 characters) and edits them independently. `firstName`, `age`,
   `email`, and `universityDomain` remain fixed post-onboarding. When no video
   is set, a one-line hint points to the Profile Video entry.
+  **My photos** opens the photo manager (🗑 per photo, ➕ add, ✅ Done). Uploads
+  into it are **coalesced into one burst**, matching the onboarding media stage
+  (§1.3): a single held "uploading your photos" shimmer covers the whole batch,
+  and one control message reports the result — `n` added, the running
+  `total/MAX`, and a per-frame rejection replied to the offending photo. Before
+  this the manager answered every frame separately, so a 4-photo album produced
+  four "Photo k/10" messages interleaved with detached rejection lines while
+  later frames were still validating (each photo takes seconds), which read as
+  the bot losing track. A **video** sent into the manager is accepted here too
+  (same shared display-only, safety-only validator and one-time ticket bonus as
+  the Profile Video entry) — it used to fall through to "send me photos" and be
+  silently dropped, which strands a user whose menu is locked behind the §1.4
+  verification gate. Reaching `MAX_PHOTOS` no longer auto-commits and ejects the
+  user from the editor; the cap is reported and ✅ Done stays theirs to press.
 - **Pause Matching** — uses an atomic compare-and-set transition and permits
   only `active → paused`; Resume permits only `paused → active`. Menu actions
   cannot overwrite onboarding or moderation-owned states (`suspended`,

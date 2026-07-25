@@ -1,4 +1,4 @@
-import { InlineKeyboard, InputMediaBuilder } from "grammy";
+import { InlineKeyboard, InputMediaBuilder, type Api } from "grammy";
 import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
 import {
@@ -10,8 +10,12 @@ import {
   MAX_BIO_LENGTH,
   MAX_PARTNER_PREFERENCES_LENGTH,
   MAX_MAJOR_LENGTH,
+  PROFILE_VIDEO_MAX_FILE_SIZE_BYTES,
+  DEFAULT_SESSION,
   normalizeProfileMedia,
   escapeMd,
+  type Language,
+  type SessionData,
 } from "@gennety/shared";
 import { validateSingleFace } from "../../services/vision/validate-face.js";
 import {
@@ -23,10 +27,18 @@ import { showMainMenu } from "./main.js";
 import { showMyProfile } from "./my-profile.js";
 import {
   getMessageLivePhoto,
+  getMessageVideo,
   incomingLivePhotoMedia,
   incomingPhotoMedia,
+  incomingVideoMedia,
   type IncomingProfileMedia,
 } from "../../services/telegram-profile-media.js";
+import { prepareProfileVideo, videoSavedAck } from "../../services/profile-video.js";
+import { grantVideoBonusIfEligible } from "../../services/ticket-wallet.js";
+import { sendTicketRewardDM } from "../../services/ticket-reward.js";
+import { runStatusSequence } from "../../services/ai-stream.js";
+import { photoUploadSteps } from "../../services/analysis-status.js";
+import { dispatchToChat } from "../../chat-queue.js";
 import { profileMediaToJson } from "../../services/profile-media-json.js";
 import { env } from "../../config.js";
 import { validateUserProfilePhoto } from "../../services/profile-media-validation/profile-photo-validation.js";
@@ -314,6 +326,7 @@ export async function handleEditAgeRangeInput(ctx: BotContext): Promise<void> {
  */
 export async function handleEditPhotosStart(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
+  discardPhotoBatch(ctx.chat?.id);
   ctx.session.verifyPhotoRedo = false;
   await openPhotoManager(ctx);
 }
@@ -372,6 +385,7 @@ async function openPhotoManager(ctx: BotContext): Promise<void> {
  */
 export async function handleVerifyPhotosRedo(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
+  discardPhotoBatch(ctx.chat?.id);
   ctx.session.verifyPhotoRedo = true;
   await ctx.reply(t(ctx.session.language, "verifyPhotosRedoIntro"));
   await openPhotoManager(ctx);
@@ -389,6 +403,7 @@ export async function handleVerifyPhotosRedo(ctx: BotContext): Promise<void> {
 export async function handleVerifyPhotosClear(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
   await ctx.answerCallbackQuery();
+  discardPhotoBatch(ctx.chat?.id);
 
   const user = await prisma.user.findUnique({
     where: { telegramId: BigInt(ctx.from!.id) },
@@ -428,32 +443,50 @@ export async function handleVerifyPhotosClear(ctx: BotContext): Promise<void> {
  */
 async function renderPhotoManager(
   ctx: BotContext,
-  opts: { showAlbum?: boolean } = {},
+  opts: { showAlbum?: boolean; lead?: string } = {},
 ): Promise<void> {
-  const { showAlbum = true } = opts;
-  const lang = ctx.session.language;
-  const photos = ctx.session.pendingPhotos;
+  if (!ctx.chat) return;
+  await sendPhotoManager(ctx.api, ctx.chat.id, ctx.session, opts);
+}
+
+/**
+ * Ctx-free core of {@link renderPhotoManager}. `session` is mutated in place
+ * (`photoManagerMsgId`), so the caller owns persisting it — the live
+ * `ctx.session` is written back by grammY, while the debounced batch flush
+ * (which runs outside the update lifecycle) upserts the `bot_sessions` row
+ * itself.
+ *
+ * `lead` prepends a summary line to the control message, which is how a whole
+ * upload burst reports itself in ONE message instead of one reply per frame.
+ */
+async function sendPhotoManager(
+  api: Api,
+  chatId: number,
+  session: SessionData,
+  opts: { showAlbum?: boolean; lead?: string } = {},
+): Promise<void> {
+  const { showAlbum = true, lead } = opts;
+  const lang = session.language;
+  const photos = session.pendingPhotos;
 
   // Strip the previous manager keyboard so its now-stale delete buttons can't
   // fire against a changed photo array.
-  if (ctx.session.photoManagerMsgId != null && ctx.chat) {
+  if (session.photoManagerMsgId != null) {
     try {
-      await ctx.api.editMessageReplyMarkup(
-        ctx.chat.id,
-        ctx.session.photoManagerMsgId,
-      );
+      await api.editMessageReplyMarkup(chatId, session.photoManagerMsgId);
     } catch {
       // Message already gone or has no keyboard — nothing to strip.
     }
-    ctx.session.photoManagerMsgId = null;
+    session.photoManagerMsgId = null;
   }
 
-  if (showAlbum && ctx.chat && photos.length > 0) {
+  if (showAlbum && photos.length > 0) {
     try {
       if (photos.length === 1) {
-        await ctx.replyWithPhoto(photos[0]!);
+        await api.sendPhoto(chatId, photos[0]!);
       } else {
-        await ctx.replyWithMediaGroup(
+        await api.sendMediaGroup(
+          chatId,
           photos.slice(0, 10).map((id) => InputMediaBuilder.photo(id)),
         );
       }
@@ -473,7 +506,7 @@ async function renderPhotoManager(
   keyboard.row();
   // Verification redo only: one tap to drop a whole set of someone else's
   // photos instead of up to ten individual deletes.
-  if (ctx.session.verifyPhotoRedo && photos.length > 0) {
+  if (session.verifyPhotoRedo && photos.length > 0) {
     keyboard
       .text(t(lang, "verifyBtnClearPhotos"), VERIFY_PHOTOS_CLEAR_CALLBACK)
       .row();
@@ -483,11 +516,13 @@ async function renderPhotoManager(
   }
   keyboard.text(t(lang, "photoManagerDoneBtn"), "menu:edit:photos:continue");
 
-  const msg = await ctx.reply(
-    t(lang, "photoManagerTitle", { min: MIN_PHOTOS, max: MAX_PHOTOS }),
+  const title = t(lang, "photoManagerTitle", { min: MIN_PHOTOS, max: MAX_PHOTOS });
+  const msg = await api.sendMessage(
+    chatId,
+    lead ? `${lead}\n\n${title}` : title,
     { reply_markup: keyboard },
   );
-  ctx.session.photoManagerMsgId = msg?.message_id ?? null;
+  session.photoManagerMsgId = msg?.message_id ?? null;
 }
 
 /**
@@ -496,6 +531,7 @@ async function renderPhotoManager(
  */
 export async function handleEditPhotosAdd(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
+  discardPhotoBatch(ctx.chat?.id);
   const lang = ctx.session.language;
   if (ctx.session.pendingPhotos.length >= MAX_PHOTOS) {
     await ctx.reply(t(lang, "photoReceived", { n: MAX_PHOTOS, max: MAX_PHOTOS }));
@@ -520,6 +556,7 @@ export async function handleEditPhotosAdd(ctx: BotContext): Promise<void> {
  */
 export async function handleEditPhotosDelete(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
+  discardPhotoBatch(ctx.chat?.id);
   const data = ctx.callbackQuery?.data ?? "";
   const idx = Number.parseInt(
     data.slice("menu:edit:photos:del:".length),
@@ -593,7 +630,15 @@ export async function handleEditPhotosDelete(ctx: BotContext): Promise<void> {
 
 /**
  * Collect incoming photos while `menuState === "edit_photos"`.
- * Refreshes the photo manager after each accepted photo; commits on ✅ Done.
+ *
+ * Uploads are **coalesced into one burst**. A photo takes several seconds to
+ * validate and, under `sequentializeByChat`, an album's frames are processed
+ * serially — so replying per frame produced the reported mess: "Photo 1/10",
+ * then "Photo 2/10", then a detached "your face is hard to make out", each
+ * arriving seconds apart while later frames were still in flight. Instead one
+ * shimmer status covers the whole burst, and a single control message reports
+ * the result with the ✅ Done button. (The onboarding media stage has done this
+ * since PRODUCT_SPEC §1.3; the menu manager never did.)
  */
 export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
@@ -602,6 +647,8 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
   if (data === "menu:edit:photos:continue") {
     await ctx.answerCallbackQuery();
+    // Drop any in-flight burst: its summary would land after the flow ended.
+    discardPhotoBatch(ctx.chat?.id);
     if (ctx.session.pendingPhotos.length >= MIN_PHOTOS) {
       await finishEditPhotos(ctx);
     } else {
@@ -609,6 +656,18 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
       // nothing happened instead of going silent.
       await ctx.reply(t(lang, "photoManagerMinReached", { min: MIN_PHOTOS }));
     }
+    return;
+  }
+
+  // A video sent into the photo manager used to fall through to "send me
+  // photos" and be silently lost. It is display-only (never enters `photos[]`),
+  // so it is accepted here through the same shared validator the Profile Video
+  // menu entry uses — the manager is the only media surface reachable while the
+  // verification gate is up.
+  const video = getMessageVideo(ctx.message);
+  if (video) {
+    await flushPhotoBatchInline(ctx.chat?.id);
+    await handlePhotoStageVideo(ctx, video);
     return;
   }
 
@@ -631,6 +690,24 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
     return;
   }
 
+  if (!ctx.chat) return;
+  const batch = openPhotoBatch(ctx);
+  const outcome = await processPhotoFrame(ctx, incoming);
+  recordFrameOutcome(batch, outcome, ctx.message?.message_id);
+  armPhotoBatchFlush(batch);
+}
+
+/** What one validated frame did, with no user-facing side effects. */
+type PhotoFrameOutcome =
+  | { kind: "accepted"; note?: string }
+  | { kind: "rejected"; reason: MediaValidationReason }
+  | { kind: "infra_error" }
+  | { kind: "capped" };
+
+async function processPhotoFrame(
+  ctx: BotContext,
+  incoming: IncomingProfileMedia,
+): Promise<PhotoFrameOutcome> {
   const fileId = incoming.staticPhoto.file_id;
   const fileUniqueId = incoming.uniqueId;
   const telegramId = BigInt(ctx.from!.id);
@@ -648,23 +725,19 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
         reason: "duplicate_exact",
       });
     }
-    return;
+    return { kind: "rejected", reason: "duplicate_exact" };
   }
 
   if (ctx.session.pendingPhotos.length >= MAX_PHOTOS) {
-    await ctx.reply(t(lang, "photoReceived", { n: MAX_PHOTOS, max: MAX_PHOTOS }));
-    await finishEditPhotos(ctx);
-    return;
+    return { kind: "capped" };
   }
 
   let gateScore = 0;
   let photoHash: string | null = null;
   if (env.PROFILE_MEDIA_VALIDATION_ENABLED) {
     const photoBytes = await fetchTelegramFileBuffer(ctx.api, fileId);
-    if (!userRow || !photoBytes) {
-      await ctx.reply(t(lang, "photoVisionError"));
-      return;
-    }
+    if (!userRow || !photoBytes) return { kind: "infra_error" };
+
     const validation = await validateUserProfilePhoto({
       userId: userRow.id,
       candidate: photoBytes,
@@ -674,14 +747,10 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
       api: ctx.api,
     });
     if (!validation.ok) {
-      await ctx.reply(photoValidationMessage(lang, validation.reason), {
-        parse_mode: "Markdown",
-      });
-      return;
-    } else {
-      gateScore = validation.value.identitySimilarity ?? 0;
-      photoHash = validation.value.fingerprint.differenceHash;
+      return { kind: "rejected", reason: validation.reason };
     }
+    gateScore = validation.value.identitySimilarity ?? 0;
+    photoHash = validation.value.fingerprint.differenceHash;
 
     const priorPhotos = [...ctx.session.pendingPhotos];
     const priorUniqueIds = [...ctx.session.pendingPhotoUniqueIds];
@@ -702,51 +771,23 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
       candidateUniqueId: fileUniqueId,
     });
 
-    const consensusMessage = photoConsensusEditMessage(lang, consensus);
-    if (consensusMessage) await ctx.reply(consensusMessage);
-    const count = ctx.session.pendingPhotos.length;
-    if (
-      (consensus.status === "pending" || consensus.status === "capped") &&
-      count < MIN_PHOTOS
-    ) {
-      return;
-    }
-    await ctx.reply(t(lang, "photoReceived", { n: count, max: MAX_PHOTOS }));
-    await renderPhotoManager(ctx, { showAlbum: false });
-    return;
-  } else {
-    // Legacy path retained behind the rollout flag.
-    const result = await validateSingleFace(ctx, fileId);
-    if (!result.ok) {
-      await ctx.reply(t(lang, "photoVisionError"));
-      return;
-    }
-    if (!result.valid) {
-      await ctx.reply(t(lang, "photoRejected"), { parse_mode: "Markdown" });
-      return;
-    }
-
-    if (!userRow) {
-      await ctx.reply(t(lang, "photoVisionError"));
-      return;
-    }
-    const photoBytes = await fetchTelegramFileBuffer(ctx.api, fileId);
-    if (!photoBytes) {
-      await ctx.reply(t(lang, "photoVisionError"));
-      return;
-    }
-    const gate = await gateProfilePhoto(userRow.id, photoBytes);
-    if (gate.kind === "blocked") {
-      await ctx.reply(t(lang, "photoMatchMismatch"));
-      return;
-    }
-    if (gate.kind === "unavailable") {
-      await ctx.reply(t(lang, "photoVisionError"));
-      return;
-    }
-    gateScore = gate.score ?? 0;
-    // Legacy fallback only runs when unified media validation is explicitly disabled.
+    const note = photoConsensusEditMessage(ctx.session.language, consensus);
+    return { kind: "accepted", ...(note ? { note } : {}) };
   }
+
+  // Legacy path retained behind the rollout flag.
+  const result = await validateSingleFace(ctx, fileId);
+  if (!result.ok) return { kind: "infra_error" };
+  if (!result.valid) return { kind: "rejected", reason: "no_face" };
+  if (!userRow) return { kind: "infra_error" };
+
+  const photoBytes = await fetchTelegramFileBuffer(ctx.api, fileId);
+  if (!photoBytes) return { kind: "infra_error" };
+
+  const gate = await gateProfilePhoto(userRow.id, photoBytes);
+  if (gate.kind === "blocked") return { kind: "rejected", reason: "identity_mismatch" };
+  if (gate.kind === "unavailable") return { kind: "infra_error" };
+  gateScore = gate.score ?? 0;
 
   ctx.session.pendingPhotos.push(fileId);
   ctx.session.pendingProfileMedia = [
@@ -768,8 +809,275 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
     ...(ctx.session.pendingPhotoScores ?? []),
     gateScore,
   ];
-  const count = ctx.session.pendingPhotos.length;
-  await ctx.reply(t(lang, "photoReceived", { n: count, max: MAX_PHOTOS }));
+  return { kind: "accepted" };
+}
+
+// ---------------------------------------------------------------------------
+// Upload burst coalescing
+// ---------------------------------------------------------------------------
+
+/**
+ * One in-flight upload burst per chat. A Telegram album arrives as N separate
+ * messages and standalone photos sent back-to-back behave the same, so the
+ * window measures "time since the last frame finished validating" — the timer
+ * is re-armed after each frame, not when the first one landed.
+ */
+interface PhotoUploadBatch {
+  chatId: number;
+  api: Api;
+  language: Language;
+  accepted: number;
+  capped: number;
+  hadInfraError: boolean;
+  notes: string[];
+  /** Per-frame rejections, carrying the offending message so the reason can
+   *  be replied to THAT photo (PRODUCT_SPEC §1.3 — a detached line leaves the
+   *  user guessing which frame of an album failed). */
+  rejections: Array<{ messageId?: number; reason: MediaValidationReason }>;
+  timer: NodeJS.Timeout | null;
+  /** Resolved on flush; the shimmer status is held until then. */
+  finish: () => void;
+  /** The shimmer itself, awaited before the summary so it is torn down first. */
+  status: Promise<void>;
+}
+
+const photoUploadBatches = new Map<number, PhotoUploadBatch>();
+const PHOTO_UPLOAD_DEBOUNCE_MS = 900;
+
+function openPhotoBatch(ctx: BotContext): PhotoUploadBatch {
+  const chatId = ctx.chat!.id;
+  const existing = photoUploadBatches.get(chatId);
+  if (existing) {
+    if (existing.timer) {
+      clearTimeout(existing.timer);
+      existing.timer = null;
+    }
+    return existing;
+  }
+
+  let finish!: () => void;
+  const done = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const batch: PhotoUploadBatch = {
+    chatId,
+    api: ctx.api,
+    language: ctx.session.language,
+    accepted: 0,
+    capped: 0,
+    hadInfraError: false,
+    notes: [],
+    rejections: [],
+    timer: null,
+    finish,
+    // One shimmer for the whole burst, held until the last frame settles.
+    status: runStatusSequence(ctx.api, chatId, photoUploadSteps(ctx.session.language), {
+      rich: true,
+      until: done,
+    }).catch(() => {}),
+  };
+  photoUploadBatches.set(chatId, batch);
+  return batch;
+}
+
+function recordFrameOutcome(
+  batch: PhotoUploadBatch,
+  outcome: PhotoFrameOutcome,
+  messageId: number | undefined,
+): void {
+  switch (outcome.kind) {
+    case "accepted":
+      batch.accepted += 1;
+      if (outcome.note && !batch.notes.includes(outcome.note)) {
+        batch.notes.push(outcome.note);
+      }
+      return;
+    case "rejected":
+      batch.rejections.push({ ...(messageId ? { messageId } : {}), reason: outcome.reason });
+      return;
+    case "capped":
+      batch.capped += 1;
+      return;
+    case "infra_error":
+      batch.hadInfraError = true;
+      return;
+  }
+}
+
+function armPhotoBatchFlush(batch: PhotoUploadBatch): void {
+  if (batch.timer) clearTimeout(batch.timer);
+  batch.timer = setTimeout(() => {
+    batch.timer = null;
+    photoUploadBatches.delete(batch.chatId);
+    // Runs outside the update lifecycle — queue it on the chat so it cannot
+    // interleave with a concurrent update's session write.
+    dispatchToChat(batch.chatId, () => flushPhotoBatch(batch)).catch((err) =>
+      console.error("[edit-profile] photo batch flush failed:", err),
+    );
+  }, PHOTO_UPLOAD_DEBOUNCE_MS);
+}
+
+/**
+ * Tear down an in-flight burst without reporting it — used when the user takes
+ * an explicit action (Done, delete, clear-all, ➕) that renders the manager
+ * itself, so the pending summary would only duplicate it.
+ */
+function discardPhotoBatch(chatId: number | undefined): void {
+  if (chatId === undefined) return;
+  const batch = photoUploadBatches.get(chatId);
+  if (!batch) return;
+  if (batch.timer) clearTimeout(batch.timer);
+  photoUploadBatches.delete(chatId);
+  batch.finish();
+}
+
+/**
+ * Flush an open burst from INSIDE an update (so `dispatchToChat` would
+ * deadlock on the chat queue this update already holds). Used before the video
+ * path so the two status shimmers never overlap.
+ */
+async function flushPhotoBatchInline(chatId: number | undefined): Promise<void> {
+  if (chatId === undefined) return;
+  const batch = photoUploadBatches.get(chatId);
+  if (!batch) return;
+  if (batch.timer) clearTimeout(batch.timer);
+  photoUploadBatches.delete(chatId);
+  await flushPhotoBatch(batch);
+}
+
+/**
+ * Report a finished burst: tear the shimmer down, explain each rejected frame
+ * on the frame itself, then re-render the manager ONCE with a summary lead and
+ * the ✅ Done button.
+ */
+async function flushPhotoBatch(batch: PhotoUploadBatch): Promise<void> {
+  batch.finish();
+  await batch.status;
+
+  const key = batch.chatId.toString();
+  const row = await prisma.botSession.findUnique({ where: { key } });
+  const session: SessionData = {
+    ...DEFAULT_SESSION,
+    ...((row?.data ?? {}) as Partial<SessionData>),
+  };
+  const lang = session.language ?? batch.language;
+
+  for (const rejection of batch.rejections) {
+    await batch.api
+      .sendMessage(batch.chatId, photoValidationMessage(lang, rejection.reason), {
+        parse_mode: "Markdown",
+        ...(rejection.messageId
+          ? { reply_parameters: { message_id: rejection.messageId } }
+          : {}),
+      })
+      .catch(() => {});
+  }
+  if (batch.hadInfraError) {
+    await batch.api.sendMessage(batch.chatId, t(lang, "photoVisionError")).catch(() => {});
+  }
+
+  const total = session.pendingPhotos.length;
+  const leadLines: string[] = [];
+  if (batch.accepted > 0) {
+    leadLines.push(
+      t(lang, "photoBatchAdded", { n: batch.accepted, total, max: MAX_PHOTOS }),
+    );
+  } else if (batch.rejections.length > 0 || batch.hadInfraError) {
+    leadLines.push(t(lang, "photoBatchNoneAdded"));
+  }
+  if (batch.capped > 0) leadLines.push(t(lang, "photoBatchAtMax", { max: MAX_PHOTOS }));
+  leadLines.push(...batch.notes);
+
+  await sendPhotoManager(batch.api, batch.chatId, session, {
+    showAlbum: false,
+    ...(leadLines.length > 0 ? { lead: leadLines.join("\n") } : {}),
+  });
+
+  await prisma.botSession.upsert({
+    where: { key },
+    create: { key, data: session as unknown as object },
+    update: { data: session as unknown as object },
+  });
+}
+
+/**
+ * Accept a profile video sent into the photo manager. Display-only: it never
+ * enters `photos[]`, so the `photos[i] ↔ photoFaceScores[i]` invariant is
+ * untouched and no verification rerun is needed. Shares the validator and the
+ * one-time ticket bonus with the Profile Video menu entry, then re-renders the
+ * manager so ✅ Done stays reachable (the menu itself may be gate-locked).
+ */
+async function handlePhotoStageVideo(
+  ctx: BotContext,
+  video: NonNullable<ReturnType<typeof getMessageVideo>>,
+): Promise<void> {
+  if (!ctx.chat) return;
+  const lang = ctx.session.language;
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(ctx.from!.id) },
+    select: { id: true, profile: { select: { photos: true, profileMedia: true } } },
+  });
+  if (!user) return;
+
+  const extracted = incomingVideoMedia(video);
+  if (!extracted.ok) {
+    void logMediaValidationRejection({
+      userId: user.id,
+      mediaType: "video",
+      reason: extracted.reason === "too_long" ? "video_too_long" : "video_too_large_to_check",
+    });
+    await ctx.reply(
+      extracted.reason === "too_long"
+        ? t(lang, "videoTooLong")
+        : t(lang, "videoTooLarge", {
+            mb: Math.round(PROFILE_VIDEO_MAX_FILE_SIZE_BYTES / (1024 * 1024)),
+          }),
+    );
+    await renderPhotoManager(ctx, { showAlbum: false });
+    return;
+  }
+
+  const photos = user.profile?.photos ?? [];
+  const existingMedia = normalizeProfileMedia(user.profile?.profileMedia ?? [], photos);
+  const prepared = await prepareProfileVideo({
+    api: ctx.api,
+    chatId: ctx.chat.id,
+    userId: user.id,
+    language: lang,
+    media: extracted.media,
+    profilePhotoRefs: photos,
+    reply: (text) => ctx.reply(text),
+  });
+  if (prepared.kind === "rejected") {
+    await renderPhotoManager(ctx, { showAlbum: false });
+    return;
+  }
+
+  const nextMedia = [
+    ...existingMedia.filter((item) => item.type !== "video"),
+    prepared.media,
+  ];
+  await prisma.profile.update({
+    where: { userId: user.id },
+    data: { profileMedia: profileMediaToJson(normalizeProfileMedia(nextMedia, photos)) },
+  });
+  // Keep the editing session in step so a later ✅ Done doesn't drop the video.
+  ctx.session.pendingProfileMedia = normalizeProfileMedia(
+    [
+      ...normalizeProfileMedia(ctx.session.pendingProfileMedia, ctx.session.pendingPhotos)
+        .filter((item) => item.type !== "video"),
+      prepared.media,
+    ],
+    ctx.session.pendingPhotos,
+  );
+
+  const reward = await grantVideoBonusIfEligible(user.id);
+  if (reward.granted) {
+    await sendTicketRewardDM(ctx.api, ctx.chat.id, lang, "video", reward.balance);
+  } else {
+    await ctx.reply(videoSavedAck(lang));
+  }
   await renderPhotoManager(ctx, { showAlbum: false });
 }
 

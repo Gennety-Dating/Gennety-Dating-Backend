@@ -22,6 +22,10 @@ vi.mock("@gennety/db", () => ({
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    botSession: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      upsert: vi.fn().mockResolvedValue(null),
+    },
     $transaction: vi.fn().mockResolvedValue(null),
   },
 }));
@@ -211,7 +215,12 @@ function createMockCtx(overrides: {
     editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
     api: {
       getFile: vi.fn(),
-      sendMessage: vi.fn().mockResolvedValue(undefined),
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 77 }),
+      sendPhoto: vi.fn().mockResolvedValue({ message_id: 78 }),
+      sendMediaGroup: vi.fn().mockResolvedValue([{ message_id: 78 }]),
+      editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
+      editMessageText: vi.fn().mockResolvedValue(undefined),
+      deleteMessage: vi.fn().mockResolvedValue(undefined),
       sendVideoNote: vi.fn().mockResolvedValue(undefined),
       unpinAllChatMessages: vi.fn().mockResolvedValue(undefined),
       token: "test",
@@ -732,15 +741,12 @@ describe("Menu — Edit Profile", () => {
     await handleEditPhotosUpload(ctx);
 
     expect(validateSingleFace).not.toHaveBeenCalled();
-    expect(prisma.profile.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          photos: existingPhotos,
-          profileMedia: existingPhotos.map((photo) => ({ type: "photo", photo })),
-          photoFaceScores: existingPhotos.map(() => 0),
-        }),
-      }),
-    );
+    // The extra frame is dropped and the user stays in the manager. It used to
+    // auto-commit and exit the editor mid-add, which is a strange place to be
+    // ejected from; the cap is now reported in the burst summary instead.
+    expect(ctx.session.pendingPhotos).toEqual(existingPhotos);
+    expect(ctx.session.menuState).toBe("edit_photos");
+    expect(prisma.profile.update).not.toHaveBeenCalled();
   });
 
   it("handleEditPhotosStart renders the manager with delete/add/done controls", async () => {
@@ -755,10 +761,10 @@ describe("Menu — Edit Profile", () => {
 
     expect(ctx.session.menuState).toBe("edit_photos");
     expect(ctx.session.pendingPhotos).toEqual(["file_1", "file_2", "file_3"]);
-    // The last reply is the control message; it carries one delete button per
-    // photo plus add + done.
-    const replyCalls = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls;
-    const markup = replyCalls[replyCalls.length - 1][1].reply_markup;
+    // The last sent message is the control message; it carries one delete
+    // button per photo plus add + done.
+    const sendCalls = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const markup = sendCalls[sendCalls.length - 1][2].reply_markup;
     const serialized = JSON.stringify(markup);
     expect(serialized).toContain("menu:edit:photos:del:0");
     expect(serialized).toContain("menu:edit:photos:del:2");
@@ -1404,9 +1410,9 @@ describe("Menu — verification photo redo", () => {
     expect(ctx.session.verifyPhotoRedo).toBe(true);
     expect(ctx.session.menuState).toBe("edit_photos");
     expect(ctx.session.pendingPhotos).toEqual(["p0", "p1", "p2", "p3"]);
-    // The manager's keyboard is the last reply; it carries the one-tap reset.
-    const keyboards = ctx.reply.mock.calls
-      .map((call: unknown[]) => (call[1] as { reply_markup?: unknown })?.reply_markup)
+    // The manager's keyboard carries the one-tap reset.
+    const keyboards = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls
+      .map((call: unknown[]) => (call[2] as { reply_markup?: unknown })?.reply_markup)
       .filter(Boolean);
     expect(JSON.stringify(keyboards)).toContain("verify:photos:clear");
   });
@@ -1550,5 +1556,93 @@ describe("Menu — verification photo redo", () => {
 
     expect(ctx.reply).toHaveBeenCalledWith(t("en", "editProfilePhotosSaved"));
     expect(verificationCtaMocks.sendVerificationCTABare).not.toHaveBeenCalled();
+  });
+});
+
+describe("Menu — photo upload burst coalescing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-user-1",
+      profile: { photos: [], profileMedia: [] },
+    });
+    (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+  });
+
+  function photoCtx(session: Partial<SessionData>, fileId: string, messageId: number) {
+    const ctx = createMockCtx({
+      session: { menuState: "edit_photos", ...session },
+      photoFileIds: [fileId],
+    });
+    ctx.message.message_id = messageId;
+    return ctx;
+  }
+
+  it("answers a 4-frame album with ONE control message, not one per frame", async () => {
+    vi.useFakeTimers();
+    try {
+      // One shared session object across the burst, like the real per-chat row.
+      const session: Partial<SessionData> = {
+        pendingPhotos: [],
+        pendingProfileMedia: [],
+        pendingPhotoUniqueIds: [],
+        pendingPhotoHashes: [],
+        pendingPhotoScores: [],
+      };
+      const sent: unknown[][] = [];
+
+      for (let i = 0; i < 4; i++) {
+        const ctx = photoCtx(session, `file_${i}`, 100 + i);
+        (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mockImplementation(
+          async (...args: unknown[]) => {
+            sent.push(args);
+            return { message_id: 500 + sent.length };
+          },
+        );
+        await handleEditPhotosUpload(ctx);
+        // Carry the mutated session into the next frame.
+        Object.assign(session, ctx.session);
+        // Nothing may be reported while more frames are still arriving.
+        expect(sent.filter((c) => (c[2] as { reply_markup?: unknown })?.reply_markup)).toHaveLength(0);
+      }
+
+      (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        key: "12345",
+        data: { ...DEFAULT_SESSION, ...session },
+      });
+
+      await vi.advanceTimersByTimeAsync(2000);
+
+      const withKeyboard = sent.filter(
+        (c) => (c[2] as { reply_markup?: unknown })?.reply_markup,
+      );
+      expect(withKeyboard).toHaveLength(1);
+      expect(String(withKeyboard[0]![1])).toContain("4");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("routes a video sent into the photo manager to the shared video validator", async () => {
+    const ctx = createMockCtx({
+      session: { menuState: "edit_photos", pendingPhotos: ["p0", "p1", "p2", "p3"] },
+      message: {
+        video: {
+          file_id: "vid_1",
+          file_unique_id: "vid_1_u",
+          duration: 12,
+          width: 720,
+          height: 1280,
+          file_size: 2_000_000,
+        },
+      },
+    });
+
+    await handleEditPhotosUpload(ctx);
+
+    // It used to fall through to "send me photos" and be silently dropped.
+    expect(prepareProfileVideo).toHaveBeenCalledTimes(1);
+    expect(prisma.profile.update).toHaveBeenCalled();
+    expect(ctx.session.menuState).toBe("edit_photos");
   });
 });

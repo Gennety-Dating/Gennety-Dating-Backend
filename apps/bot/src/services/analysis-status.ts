@@ -66,6 +66,20 @@ export function verifyAnalysisSteps(lang: Language): StatusStep[] {
  * leads with the film AIActions glyph; the identity + safety beats reuse the
  * spark animation.
  */
+/**
+ * Held while a whole photo-upload burst is validated in the photo manager.
+ * One status for the burst — the per-frame verdicts land together at the end,
+ * instead of a "Photo 1/10" reply arriving per frame while later frames are
+ * still being checked (which read as the bot spamming/losing track).
+ */
+export function photoUploadSteps(lang: Language): StatusStep[] {
+  return [
+    { text: t(lang, "photoUploadStep1"), holdMs: 3000, emojiId: AI_EMOJI.spark },
+    { text: t(lang, "photoUploadStep2"), holdMs: 4000, emojiId: AI_EMOJI.spark },
+    { text: t(lang, "photoUploadStep3"), holdMs: 4000, emojiId: AI_EMOJI.spark },
+  ];
+}
+
 export function videoCheckSteps(lang: Language): StatusStep[] {
   return [
     { text: t(lang, "videoCheckStep1"), holdMs: 2800, emojiId: AI_EMOJI.video },
