@@ -232,8 +232,22 @@ testing. Nothing may flow between them. Audited 2026-07-25 — current state:
 | Telegram bot | `@gennetytestbot` (token `8627…`) | `@gennetybot` (token `8707…`) | ✅ separate tokens — mandatory, long polling delivers each update to exactly one consumer |
 | Supabase Storage | `selfies-dev` / `profile-photos-dev` / `chat-attachments-dev` | `selfies` / `profile-photos` / `chat-attachments` | ✅ since 2026-07-25 (same project, separate buckets) |
 | OpenAI / Resend / AWS / Places | shared keys | shared keys | ⚪ stateless — no cross-contamination |
-| Founder ops bot | shared `FOUNDER_BOT_TOKEN` + chat | same | ⚪ intentional; dev events land in the same founder DM |
+| Founder ops bot | shared `FOUNDER_BOT_TOKEN` + chat, feed OFF | same token/chat, feed ON | ✅ since 2026-07-25 — see below |
 | Persona | shared template/environment/API key | same | ⚠️ **see below** |
+
+**Fixed 2026-07-25 — founder-feed leak (dev registrations in the real ops
+DM).** There is only ONE founder bot and ONE founder chat, and `.env.local`
+carried `FOUNDER_NOTIFY_ENABLED=true` with the same `FOUNDER_BOT_TOKEN` /
+`FOUNDER_TELEGRAM_ID` as prod, so local test accounts were announced to the
+founder exactly like real users. Confirmed: the dev DB has 2 users with
+`founderNotifiedAt` set (2026-07-25 11:42 / 12:12) — both fired from
+`@gennetytestbot`. Two locks now: `.env.local` (+ `.env.local.example`) sets
+`FOUNDER_NOTIFY_ENABLED=false`, and `services/founder-notify.ts` hard-suppresses
+the feed whenever `NODE_ENV=development` (the value `scripts/dev-bot.mjs` sets;
+prod leaves `NODE_ENV` unset, and ONLY an explicit `development` mutes the
+feed, so a missing value can never silence production). Everything reaching the
+founder DM is therefore prod-only: new activations, freeze/delete snapshots,
+weekly-match reports, scheduled-date cards, and ops alerts.
 
 **Fixed 2026-07-25 — Supabase Storage leak.** `.env.local` overrides
 `BOT_TOKEN` and `DATABASE_URL` but used to leave `SUPABASE_*` to `.env` (the

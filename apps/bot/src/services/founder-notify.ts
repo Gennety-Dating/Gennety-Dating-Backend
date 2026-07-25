@@ -36,13 +36,44 @@ const MEDIA_GROUP_MAX = 10;
 let founderApi: Api<RawApi> | null | undefined;
 
 /**
+ * The founder feed is a PRODUCTION-ONLY ops channel.
+ *
+ * Dev and prod deliberately share one founder bot + one founder chat (there is
+ * only one founder), so an enabled `FOUNDER_NOTIFY_ENABLED` in `.env.local`
+ * silently posts local test registrations into the same DM as real users —
+ * which is exactly the signal the feed exists to carry. Env hygiene alone is
+ * not enough: `.env.local` is untracked and drifts.
+ *
+ * The discriminator is the one already used by the identity trust gate
+ * (`identityTrustConfigurationErrors`): the supported local launcher
+ * (`scripts/dev-bot.mjs`) sets `NODE_ENV=development`, while production leaves
+ * it unset. ONLY an explicit `development` mutes the feed — anything else is
+ * treated as production-like, so a missing `NODE_ENV` can never silence the
+ * real one. (`test` is left alone: vitest mocks grammy's `Api`, so no message
+ * ever leaves the process there.)
+ */
+export function isFounderFeedSuppressedRuntime(
+  runtime = process.env.NODE_ENV,
+): boolean {
+  return runtime === "development";
+}
+
+/**
  * Memoized founder-bot `Api`. Returns `null` (and stays null) when the feature
- * is disabled or unconfigured, so every notifier degrades to a no-op. A bare
- * `Api` is enough — the founder bot only ever SENDS, it never polls.
+ * is disabled, unconfigured, or running outside production, so every notifier
+ * degrades to a no-op. A bare `Api` is enough — the founder bot only ever
+ * SENDS, it never polls.
  */
 function getFounderApi(): Api<RawApi> | null {
   if (founderApi !== undefined) return founderApi;
   if (!env.FOUNDER_NOTIFY_ENABLED || !env.FOUNDER_BOT_TOKEN || !env.FOUNDER_TELEGRAM_ID) {
+    founderApi = null;
+    return null;
+  }
+  if (isFounderFeedSuppressedRuntime()) {
+    console.warn(
+      `${FOUNDER_LOG} suppressed: FOUNDER_NOTIFY_ENABLED is on but NODE_ENV=${process.env.NODE_ENV} — the founder feed is production-only`,
+    );
     founderApi = null;
     return null;
   }

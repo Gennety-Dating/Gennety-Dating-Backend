@@ -59,6 +59,7 @@ import {
   notifyFounderNewUser,
   notifyFounderWeeklyMatches,
   notifyFounderAccountClosed,
+  isFounderFeedSuppressedRuntime,
   __resetFounderApiForTests,
 } from "./founder-notify.js";
 
@@ -66,6 +67,36 @@ beforeEach(() => {
   vi.clearAllMocks();
   env.FOUNDER_NOTIFY_ENABLED = false;
   __resetFounderApiForTests();
+});
+
+describe("production-only runtime guard", () => {
+  it("suppresses the feed on the dev launcher's NODE_ENV=development", () => {
+    // Dev and prod share one founder bot + chat, so a stale
+    // FOUNDER_NOTIFY_ENABLED=true in .env.local would post local test
+    // registrations into the real founder DM.
+    expect(isFounderFeedSuppressedRuntime("development")).toBe(true);
+  });
+
+  it("never suppresses a production-like runtime, including an unset NODE_ENV", () => {
+    expect(isFounderFeedSuppressedRuntime(undefined)).toBe(false);
+    expect(isFounderFeedSuppressedRuntime("production")).toBe(false);
+    expect(isFounderFeedSuppressedRuntime("")).toBe(false);
+  });
+
+  it("does not construct the founder Api under NODE_ENV=development", async () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = "development";
+    try {
+      env.FOUNDER_NOTIFY_ENABLED = true;
+      updateMany.mockResolvedValue({ count: 1 });
+      await notifyFounderNewUser("u1");
+      expect(ApiCtor).not.toHaveBeenCalled();
+      expect(sendMediaGroup).not.toHaveBeenCalled();
+      expect(sendPhoto).not.toHaveBeenCalled();
+    } finally {
+      process.env.NODE_ENV = previous;
+    }
+  });
 });
 
 describe("notifyFounderNewUser", () => {
