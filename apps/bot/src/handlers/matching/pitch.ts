@@ -80,7 +80,7 @@ export interface SendMatchProposalOptions {
  * When `minutesLeft` is supplied (> 0), a live **reply-deadline** button is
  * prepended in the native `primary` style — the same look as the pinned
  * status-banner countdown (2026-07-23). The proposal-countdown worker
- * re-renders THIS keyboard every 5 min via `editMessageReplyMarkup`, so the
+ * re-renders THIS keyboard every minute via `editMessageReplyMarkup`, so the
  * countdown ticks on the button instead of as buried body text. Tapping it is
  * informational (`match:countdown:` → a toast). Omit `minutesLeft` for confirm
  * cards / static contexts, which keep just the Report row (unchanged shape).

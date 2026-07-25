@@ -12,14 +12,14 @@ import { PAIR_NOT_BOTH_ACCEPTED } from "../utils/match-filters.js";
 /**
  * Live countdown worker for `proposed` match pitches.
  *
- * Runs every 5 minutes (see `PROPOSAL_COUNTDOWN_CRON_SCHEDULE` in
- * index.ts). For each open proposal it re-renders the pitch keyboard's
- * live **reply-deadline button** (2026-07-23):
+ * Runs every minute (see `PROPOSAL_COUNTDOWN_CRON_SCHEDULE` in index.ts).
+ * For each open proposal it re-renders the pitch keyboard's live
+ * **reply-deadline button** (2026-07-23):
  *   1. Compute the per-side button label (hours+minutes) via the shared
- *      helper in `countdown-plate.ts`. Hours+minutes means the label
- *      changes on every 5-minute tick, so the countdown visibly ticks —
- *      the way the pinned status-banner button does — instead of only
- *      moving once an hour.
+ *      helper in `countdown-plate.ts`. The label is minute-granular, so a
+ *      per-minute tick moves it on every pass — the countdown reads as
+ *      genuinely live, the way the pinned status-banner button does,
+ *      instead of freezing between ticks.
  *   2. Skip the edit when the rendered label matches the in-memory cache
  *      (no-op on Telegram, no quota burned).
  *   3. `editMessageReplyMarkup` re-applies ONLY the keyboard. The pitch

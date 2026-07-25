@@ -773,7 +773,12 @@ Required/high-impact env keys:
   match-nudge **deadline heads-up** (`workers/match-nudge.ts`, one DM ~2 h
   before the 24 h TTL to still-undecided sides). Both run on the existing crons
   (`PROPOSAL_COUNTDOWN_CRON_SCHEDULE`, `MATCH_NUDGE_CRON_SCHEDULE`) — no new
-  schedule, no new env. **Requires `db:push` of the additive
+  schedule, no new env. `PROPOSAL_COUNTDOWN_CRON_SCHEDULE` defaults to
+  `* * * * *` since 2026-07-25 (was `*/5 * * * *`) so the button label moves
+  every minute; `editMessageReplyMarkup` raises no notification, and the load
+  is one edit per undecided side per minute only during a 24 h window (paced at
+  25 edits/s, single-flight via `guardedTick`). Set the env override back to
+  `*/5 * * * *` to restore the old cadence without a redeploy. **Requires `db:push` of the additive
   `matches.proposal_deadline_nudge_sent_at` column first** (nullable,
   non-destructive; a DB missing it throws `P2022` on the nudge sweep). Mobile
   clients render their own countdown from the public API and are unaffected.

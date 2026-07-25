@@ -548,7 +548,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `15 18 * * 4` (Thu 18:15) | Europe/Kyiv | "No match this week" empathetic DM | `services/no-match-notifier.ts` |
 | `0 18 * * 3` (Wed 18:00) | Europe/Kyiv | Pre-match teaser (24 h ahead of batch) | `workers/pre-match-announce.ts` |
 | `*/15 * * * *` | UTC | 24 h TTL match expiry | `services/match-expiry.ts` + `services/expiry-notify.ts` |
-| `*/5 * * * *` | UTC | Live reply-deadline countdown **button** re-render on the pitch keyboard (`editMessageReplyMarkup`, hours+minutes) | `workers/proposal-countdown.ts` |
+| `* * * * *` | UTC | Live reply-deadline countdown **button** re-render on the pitch keyboard (`editMessageReplyMarkup`, hours+minutes; per-minute since 2026-07-25 so the label moves on every pass — markup edits raise no notification) | `workers/proposal-countdown.ts` |
 | `0 * * * *` | UTC | Match nudges — proposal (3 h / 10 h), scheduling (6 h / 12 h), deadline (~2 h before the 24 h TTL) | `workers/match-nudge.ts` |
 | `*/5 * * * *` | UTC | Onboarding re-engagement (5-step decay) | `workers/re-engagement.ts` |
 | `*/15 * * * *` | UTC | Profiler scheduler — lazy-seed, reclaim stalled (unanswered past their deadline) questions as implicit skips, then dispatch post-onboarding Q&A batches in local morning/evening windows | `workers/profiler.ts` → `services/profiler.ts` |

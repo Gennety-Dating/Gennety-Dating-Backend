@@ -1031,10 +1031,12 @@ for the dashboard's algorithm-quality view.
   `POST /v1/matches/:id/decision` path is unchanged (client-side confirmation
   is the app's concern).
 - The `proposal-countdown` worker re-renders a live **reply-deadline button**
-  on the pitch keyboard every 5 min via `editMessageReplyMarkup` (styled
-  `primary`, like the pinned status-banner countdown). The label shows
-  hours+minutes ("⏳ Reply: Xh Ym"), so it visibly ticks every pass instead of
-  only moving once an hour; tapping it (`match:countdown:`) answers an
+  on the pitch keyboard **every minute** via `editMessageReplyMarkup` (styled
+  `primary`, and on the same cadence as the pinned status-banner countdown).
+  The label shows hours+minutes ("⏳ Reply: Xh Ym"), so it moves on every pass
+  across the whole 24 h window rather than freezing between ticks — a markup
+  edit sends no notification, so the cost is API calls, not user noise;
+  tapping it (`match:countdown:`) answers an
   informational toast (the decision stays conversational). Because only the
   keyboard is edited, the pitch body (synergy header + streamed text) is never
   rewritten. Mobile users render their own countdown from the public API.

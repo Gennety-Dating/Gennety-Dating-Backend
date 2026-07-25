@@ -112,13 +112,20 @@ const NO_MATCH_NOTICE_CRON_SCHEDULE =
   process.env.NO_MATCH_NOTICE_CRON_SCHEDULE ?? "15 18 * * 4";
 
 /**
- * Proposal-countdown cron: every 5 minutes. The renderer's ceil-hours /
- * raw-minutes split (in `countdown-plate.ts`) converts this into 1 edit
- * per match-side per hour during the first 23 hours, then 1 edit every
- * 5 minutes during the final hour — matching the product cadence.
+ * Proposal-countdown cron: every minute (2026-07-25; was every five). The button
+ * label is minute-granular (`⏳ Reply: 23h 47m`), so a per-minute tick makes
+ * it move on every pass — the countdown reads as genuinely live instead of
+ * freezing for five minutes at a time. Same cadence as the pinned status
+ * banner, and for the same reason: `editMessageReplyMarkup` sends no
+ * notification, so the cost is API calls, not user noise.
+ *
+ * Load: one edit per undecided side of each open proposal per minute, only
+ * during the 24h window. The worker paces itself at 25 edits/s and
+ * `guardedTick` is single-flight, so a batch large enough to overrun a minute
+ * degrades to "skip a tick" rather than piling up concurrent sweeps.
  */
 const PROPOSAL_COUNTDOWN_CRON_SCHEDULE =
-  process.env.PROPOSAL_COUNTDOWN_CRON_SCHEDULE ?? "*/5 * * * *";
+  process.env.PROPOSAL_COUNTDOWN_CRON_SCHEDULE ?? "* * * * *";
 
 /**
  * Re-engagement cron: every 5 minutes. The worker picks users whose

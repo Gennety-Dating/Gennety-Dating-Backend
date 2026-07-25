@@ -1,17 +1,20 @@
 import { t, type Language } from "@gennety/shared";
 
 /**
- * Helpers for the "⏳ Xh left to reply" plate appended to match-proposal
- * pitches. Shared between the dispatch path (initial render at T-24h) and
- * the proposal-countdown worker (hourly / 5-minute live edits).
+ * Helpers for the reply-deadline countdown on match-proposal pitches.
  *
- * Granularity rule (ceil for hours so `T+0` shows "24h" not "23h"):
- *   - `≥ 60` minutes left → hours, ceiled ("23h left"). Combined with a
- *     5-min worker tick this naturally gives one edit per hour during the
- *     first 23 hours: ceil only changes at exact hour boundaries.
- *   - `< 60` minutes left → raw minute count. With the same 5-min tick
- *     this gives one edit per 5 minutes during the final hour, matching
- *     the product cadence (hourly first 23h, every 5min last hour).
+ * Two renderers live here. {@link renderCountdownButtonLabel} is the live one:
+ * minute-granular, shared by the dispatch path (initial render at T-24h) and
+ * the proposal-countdown worker, which re-renders it every minute.
+ * {@link renderCountdownPlate} / {@link appendCountdownPlate} are the legacy
+ * body-text plate (hourly granularity) kept for the mobile/legacy rendering
+ * path and its tests.
+ *
+ * Legacy-plate granularity rule (ceil for hours so `T+0` shows "24h" not
+ * "23h"):
+ *   - `≥ 60` minutes left → hours, ceiled ("23h left") — the string only
+ *     changes at exact hour boundaries, whatever the tick cadence.
+ *   - `< 60` minutes left → raw minute count.
  *   - `≤ 0`               → final "expired" notice (rendered, but the
  *     expiry job overwrites the message body before this branch is hit).
  *
