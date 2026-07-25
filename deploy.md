@@ -782,6 +782,17 @@ Required/high-impact env keys:
   `matches.proposal_deadline_nudge_sent_at` column first** (nullable,
   non-destructive; a DB missing it throws `P2022` on the nudge sweep). Mobile
   clients render their own countdown from the public API and are unaffected.
+- Per-side synergy rationale (always-on, no feature flag, bug fix 2026-07-25):
+  the match-reveal synergy reason is now stored + rendered **per side in that
+  side's own language** instead of pair-wide (it used to splice side A's
+  sentence into side B's otherwise-localized pitch header, and into the mobile
+  `synergyReason`). **Requires `db:push` of the additive
+  `matches.synergy_reason_b` column first** (nullable, non-destructive; a DB
+  missing it throws `P2022` on every pitch dispatch AND on
+  `GET /v1/matches/current`, so push the schema BEFORE restarting). Existing
+  rows keep their single reason and fall back to it for side B. No env, no new
+  system dependency; `/v1/*` contract unchanged (same `synergyReason` field,
+  correct language).
 - Matching — stated age-band preference: `AGE_RANGE_PREF_FLOOR` (default `0.6`)
   and `AGE_RANGE_PREF_DECAY_PER_YEAR` (default `0.1`). The soft `V_agePref`
   multiplier dampens (never excludes) a candidate whose actual age is outside

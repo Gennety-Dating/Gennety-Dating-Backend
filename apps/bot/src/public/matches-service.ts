@@ -235,6 +235,7 @@ export async function getCurrentMatchForUser(
       pitchForB: true,
       synergyScore: true,
       synergyReason: true,
+      synergyReasonB: true,
       iceBreakersA: true,
       iceBreakersB: true,
       wingmanHintA: true,
@@ -324,7 +325,13 @@ export async function getCurrentMatchForUser(
     iceBreakers: (side === "A" ? match.iceBreakersA : match.iceBreakersB) ?? [],
     wingmanHint,
     synergyScore: match.synergyScore,
-    synergyReason: match.synergyReason,
+    // The score is pair-level, but the reason is prose written in one side's
+    // language — serve the caller THEIR side's text so it matches `pitchForMe`
+    // and the app's own locale. Legacy rows only carry side A's, so fall back.
+    synergyReason:
+      side === "A"
+        ? match.synergyReason ?? match.synergyReasonB
+        : match.synergyReasonB ?? match.synergyReason,
     agreedTime: match.agreedTime?.toISOString() ?? null,
     venueName: match.venueName,
     venueAddress: match.venueAddress,

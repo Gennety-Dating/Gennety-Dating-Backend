@@ -59,10 +59,12 @@ function payload(overrides: { telegramIdA?: bigint; telegramIdB?: bigint } = {})
   return {
     id: "match-1",
     status: "proposed",
-    pitchForA: "You two click.",
-    pitchForB: "You two click.",
-    synergyScore: 87,
-    synergyReason: "Aligned values.",
+    // Nullable so a test can model an ungenerated / legacy row.
+    pitchForA: "You two click." as string | null,
+    pitchForB: "You two click." as string | null,
+    synergyScore: 87 as number | null,
+    synergyReason: "Aligned values." as string | null,
+    synergyReasonB: "Aligned values." as string | null,
     pitchMessageIdA: null,
     pitchMessageIdB: null,
     userA: {
@@ -212,5 +214,93 @@ describe("sendMatchProposal — welcome-gift pre-roll", () => {
       sendMatchProposal(makeApi(), "match-1", { streamImpl: stream }),
     ).resolves.toBeUndefined();
     expect(stream).toHaveBeenCalledTimes(2);
+  });
+});
+
+/**
+ * Regression: the synergy header used to render side A's reason text inside
+ * side B's localized template, so a mixed-language pair saw the pitch stream
+ * in their own language with one foreign sentence spliced into the header.
+ * The reason is now stored + rendered per side.
+ */
+describe("sendMatchProposal — synergy reason language", () => {
+  /** Pull the drafts array the stream received for a given chat id. */
+  function draftsFor(stream: ReturnType<typeof vi.fn>, chatId: number): string[] {
+    const call = stream.mock.calls.find((c) => c[1] === chatId);
+    if (!call) throw new Error(`no stream call for chat ${chatId}`);
+    return call[2] as string[];
+  }
+
+  it("renders each side's stored reason in that side's own language", async () => {
+    const row = payload();
+    row.userA.language = "en";
+    row.userB.language = "ru";
+    row.synergyReason = "Your values line up.";
+    row.synergyReasonB = "Ваши ценности совпадают.";
+    mFindUnique.mockResolvedValue(row);
+    mGrant.mockResolvedValue({ granted: false, balance: 1 });
+    const api = makeApi();
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await sendMatchProposal(api, "match-1", { streamImpl: stream });
+
+    const finalA = draftsFor(stream, 1001).at(-1)!;
+    const finalB = draftsFor(stream, 1002).at(-1)!;
+    expect(finalA).toContain("Your values line up.");
+    expect(finalA).not.toContain("Ваши ценности совпадают.");
+    expect(finalB).toContain("Ваши ценности совпадают.");
+    expect(finalB).not.toContain("Your values line up.");
+  });
+
+  it("persists a per-side reason from each side's own generation", async () => {
+    const row = payload();
+    row.userA.language = "en";
+    row.userB.language = "ru";
+    row.pitchForA = null;
+    row.pitchForB = null;
+    row.synergyScore = null;
+    row.synergyReason = null;
+    row.synergyReasonB = null;
+    mFindUnique.mockResolvedValue(row);
+    mGrant.mockResolvedValue({ granted: false, balance: 1 });
+    const api = makeApi();
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+    const pitchImpl = vi.fn(async (input: { language: string }) => ({
+      pitch: input.language === "ru" ? "Вы совпадаете." : "You two click.",
+      synergyScore: 87,
+      synergyReason: input.language === "ru" ? "Общий ритм." : "Shared rhythm.",
+    }));
+
+    await sendMatchProposal(api, "match-1", { streamImpl: stream, pitchImpl });
+
+    expect(mUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          synergyScore: 87,
+          synergyReason: "Shared rhythm.",
+          synergyReasonB: "Общий ритм.",
+        }),
+      }),
+    );
+    expect(draftsFor(stream, 1001).at(-1)).toContain("Shared rhythm.");
+    expect(draftsFor(stream, 1002).at(-1)).toContain("Общий ритм.");
+  });
+
+  it("falls back to side A's reason for a legacy row without a side-B one", async () => {
+    const row = payload();
+    row.userA.language = "en";
+    row.userB.language = "ru";
+    row.synergyReason = "Your values line up.";
+    row.synergyReasonB = null;
+    mFindUnique.mockResolvedValue(row);
+    mGrant.mockResolvedValue({ granted: false, balance: 1 });
+    const api = makeApi();
+    const stream = vi.fn().mockResolvedValue({ message_id: 7000 });
+
+    await sendMatchProposal(api, "match-1", { streamImpl: stream });
+
+    // Not ideal prose, but strictly better than dropping the header — and the
+    // row can't be regenerated (both pitches are already cached).
+    expect(draftsFor(stream, 1002).at(-1)).toContain("Your values line up.");
   });
 });

@@ -977,7 +977,15 @@ for the dashboard's algorithm-quality view.
 
 - The orchestrator generates a personalised pitch + **Synergy Score**
   (clamped to a motivating 70..99 range) + a 1–2 sentence positive
-  rationale, in side-A's language.
+  rationale. The score is pair-level (one number, taken from side A's
+  generation); the **rationale is per side, each in that side's own
+  language** (`synergyReason` = A's, `synergyReasonB` = B's — mirroring
+  `pitchForA`/`pitchForB`), so the synergy header never renders a foreign
+  sentence inside the localized message it heads. Corrected 2026-07-25:
+  the reason used to be pair-level too, so a mixed-language pair saw side
+  A's sentence spliced into side B's otherwise-localized pitch (Telegram
+  header and the mobile `synergyReason` alike). Legacy rows with no side-B
+  reason fall back to side A's text rather than dropping the header.
 - **Match card set (feature-flagged, `MATCH_CARD_FEATURE_ENABLED`, default
   off).** When on, the partner photo media-group that leads the pitch is
   replaced by a rendered collage **card set** (`services/match-card`,

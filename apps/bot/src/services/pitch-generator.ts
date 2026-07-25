@@ -156,6 +156,10 @@ export function localFallbackPitch(input: PitchInput): string {
       return `Нашёл тебе мэтч: ${other}. Похоже, у вас совпадают ценности и темп общения. Глянешь?`;
     case "uk":
       return `Знайшов тобі метч: ${other}. Схоже, у вас збігаються цінності та темп спілкування. Глянеш?`;
+    case "de":
+      return `Ich hab ein Match für dich: ${other}. Sieht aus, als würden eure Werte und euer Tempo zusammenpassen. Schaust du mal?`;
+    case "pl":
+      return `Mam dla Ciebie match: ${other}. Wygląda na to, że wasze wartości i tempo się zgrywają. Zerkniesz?`;
     default:
       return `Found you a match: ${other}. Looks like your values and communication rhythms line up. Take a look?`;
   }
@@ -182,6 +186,10 @@ export function localFallbackSynergyReason(language: Language): string {
       return "Ваши взгляды и ритмы дополняют друг друга — есть из чего вырасти и о чём поговорить.";
     case "uk":
       return "Ваші погляди та ритми доповнюють одне одного — є з чого зростати та про що поговорити.";
+    case "de":
+      return "Eure Werte und euer Rhythmus ergänzen sich still — da ist Raum zu wachsen und genug zum Reden.";
+    case "pl":
+      return "Wasze wartości i rytmy cicho się uzupełniają — jest gdzie rosnąć i o czym rozmawiać.";
     default:
       return "Your values and rhythms quietly complement each other — there's room to grow and plenty to talk about.";
   }

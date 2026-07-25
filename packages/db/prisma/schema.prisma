@@ -774,11 +774,17 @@ model Match {
   /// reveal and upcoming-date screens. Always clamped server-side to the
   /// motivating 70..99 range; the LLM is *asked* for that range, but a
   /// clamp + fallback in `pitch-generator.ts` is the source of truth.
-  /// `synergyReason` is a 1–2 sentence positive justification framed as
-  /// "complementary" (70–79) or "highly aligned" (80–99). The reason is
-  /// generated in side-A's language to keep the column singular per spec.
-  synergyScore  Int?    @map("synergy_score")
-  synergyReason String? @map("synergy_reason")
+  /// `synergyReason`/`synergyReasonB` are a 1–2 sentence positive
+  /// justification framed as "complementary" (70–79) or "highly aligned"
+  /// (80–99). The score is pair-level (one number), but the reason is prose,
+  /// so it is stored PER SIDE in that side's own language — mirroring
+  /// `pitchForA`/`pitchForB`. `synergyReason` is side A's (kept under the
+  /// original name so legacy rows and the founder report keep reading);
+  /// `synergyReasonB` is side B's. A null `synergyReasonB` (legacy row)
+  /// falls back to side A's text at render time.
+  synergyScore   Int?    @map("synergy_score")
+  synergyReason  String? @map("synergy_reason")
+  synergyReasonB String? @map("synergy_reason_b")
 
   /// Per-user Accept/Decline state. NULL = pending, true = accepted,
   /// false = declined. Both must be true for the match to enter `negotiating`.

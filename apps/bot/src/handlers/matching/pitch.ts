@@ -378,6 +378,7 @@ export async function sendMatchProposal(
       pitchMessageIdB: true,
       synergyScore: true,
       synergyReason: true,
+      synergyReasonB: true,
       userA: {
         select: {
           id: true,
@@ -424,14 +425,17 @@ export async function sendMatchProposal(
   const themeB = match.userB.theme === "light" ? "light" : "dark";
 
   // Reuse stored pitches on retry; otherwise generate + persist. The synergy
-  // score + reason are pair-level (one row, one number) — we take them from
-  // side-A's generation, since it sees both bios in side-A's language. Side
-  // B's call still produces its own translated pitch but its score/reason
-  // are discarded.
+  // SCORE is pair-level (one row, one number) — we take it from side-A's
+  // generation, since it sees both bios. The synergy REASON is prose, so it
+  // is kept per side in that side's own language: side B's own generation
+  // already produced a langB reason, and using side A's there would render a
+  // langA sentence inside a langB header (a visible mid-message language
+  // switch, since everything around it — headline, deadline, pitch — is langB).
   let pitchForA = match.pitchForA;
   let pitchForB = match.pitchForB;
   let synergyScore = match.synergyScore;
-  let synergyReason = match.synergyReason;
+  let synergyReasonA = match.synergyReason;
+  let synergyReasonB = match.synergyReasonB;
 
   if (!pitchForA) {
     const resultA = await pitch({
@@ -444,7 +448,7 @@ export async function sendMatchProposal(
     });
     pitchForA = resultA.pitch;
     if (synergyScore == null) synergyScore = resultA.synergyScore;
-    if (!synergyReason) synergyReason = resultA.synergyReason;
+    if (!synergyReasonA) synergyReasonA = resultA.synergyReason;
   }
 
   if (!pitchForB) {
@@ -457,21 +461,28 @@ export async function sendMatchProposal(
       language: langB,
     });
     pitchForB = resultB.pitch;
-    // If side A was already cached but synergy was somehow missing (older
+    // If side A was already cached but the score was somehow missing (older
     // row pre-feature), backfill from side B's call as a last resort.
     if (synergyScore == null) synergyScore = resultB.synergyScore;
-    if (!synergyReason) synergyReason = resultB.synergyReason;
+    if (!synergyReasonB) synergyReasonB = resultB.synergyReason;
   }
 
   if (
     !match.pitchForA ||
     !match.pitchForB ||
     match.synergyScore == null ||
-    !match.synergyReason
+    !match.synergyReason ||
+    !match.synergyReasonB
   ) {
     await prisma.match.update({
       where: { id: matchId },
-      data: { pitchForA, pitchForB, synergyScore, synergyReason },
+      data: {
+        pitchForA,
+        pitchForB,
+        synergyScore,
+        synergyReason: synergyReasonA,
+        synergyReasonB,
+      },
     });
   }
 
@@ -485,17 +496,20 @@ export async function sendMatchProposal(
   const lastA = chunksA.pop() ?? "";
   const lastB = chunksB.pop() ?? "";
   // Synergy header sits inside the final persistent message (above the
-  // pitch text, below which the countdown plate is appended). Score+reason
-  // are pair-level, but the reason is rendered in each side's language
-  // — using the side-A language is acceptable because the LLM only writes
-  // one reason per pair, and the mobile app shows it raw too.
+  // pitch text, below which the countdown plate is appended). The score is
+  // pair-level; the reason is each side's OWN text, so the header never
+  // mixes languages with the pitch it sits on top of. A legacy row with no
+  // side-B reason falls back to side A's (and vice versa) rather than
+  // dropping the header entirely.
+  const reasonForA = synergyReasonA || synergyReasonB;
+  const reasonForB = synergyReasonB || synergyReasonA;
   const synergyHeaderA =
-    synergyScore != null && synergyReason
-      ? t(langA, "matchSynergyHeader", { score: synergyScore, reason: synergyReason })
+    synergyScore != null && reasonForA
+      ? t(langA, "matchSynergyHeader", { score: synergyScore, reason: reasonForA })
       : "";
   const synergyHeaderB =
-    synergyScore != null && synergyReason
-      ? t(langB, "matchSynergyHeader", { score: synergyScore, reason: synergyReason })
+    synergyScore != null && reasonForB
+      ? t(langB, "matchSynergyHeader", { score: synergyScore, reason: reasonForB })
       : "";
   const finalA = synergyHeaderA ? `${synergyHeaderA}\n\n${lastA}` : lastA;
   const finalB = synergyHeaderB ? `${synergyHeaderB}\n\n${lastB}` : lastB;
