@@ -137,14 +137,14 @@ describe("startVenueNegotiation — location-first intro", () => {
       theme: "light",
     });
 
-    // The caption carries a tappable `date_time` entity (add to calendar).
+    // The caption is framing only: no repeated date phrase and no add-to-calendar
+    // entity — the card renders the time and the final scheduled card owns the
+    // tappable `date_time` affordance.
     const [chatId, , photoOpts] = api.sendPhoto.mock.calls[0]!;
     expect(chatId).toBe(111);
-    expect(photoOpts.caption).toContain(t("ru", "venueTimeLockedCaption"));
-    expect(photoOpts.caption_entities[0]).toMatchObject({
-      type: "date_time",
-      unix_time: Math.floor(agreed.getTime() / 1000),
-    });
+    expect(photoOpts.caption).toBe(t("ru", "venueTimeLockedCaption"));
+    expect(photoOpts.caption_entities).toBeUndefined();
+    expect(photoOpts.caption).not.toContain("📅");
 
     // The card frames the prompt that follows, so it must land first.
     const cardOrder = api.sendPhoto.mock.invocationCallOrder[0]!;

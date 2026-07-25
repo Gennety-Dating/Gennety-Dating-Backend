@@ -545,8 +545,7 @@ const translations = {
     matchScheduleNoOverlapYet:
       "You've both picked times, but nothing overlaps yet. Add a few more — the second a slot matches, it's locked:",
     venueTimeCardLabel: "YOUR DATE",
-    venueTimeLockedCaption:
-      "Your date is locked in ✨\nTap the date to drop it into your calendar.",
+    venueTimeLockedCaption: "Your date is locked in ✨",
     venueConciergeIntro:
       "Time's locked. One thing before I find your spot.\n\n" +
       "📍 *Mark where you'll be setting off from* for the date — your place, a metro station, a friend's flat, wherever you'll actually be leaving from.\n\n" +
@@ -1393,8 +1392,7 @@ const translations = {
     matchSchedulePickedPrefix: "Ты выбрал: ",
     matchScheduleWaitingPeer: "Ждём выбор второй стороны…",
     venueTimeCardLabel: "ВАШЕ СВИДАНИЕ",
-    venueTimeLockedCaption:
-      "Время вашего свидания закреплено ✨\nНажми на дату — она добавится в твой календарь.",
+    venueTimeLockedCaption: "Время вашего свидания закреплено ✨",
     venueConciergeIntro:
       "Время выбрано. Один момент перед тем, как подобрать место.\n\n" +
       "📍 *Отметь, откуда ты будешь выезжать* на свидание — дом, станция метро, квартира друга, откуда тебе реально удобно стартовать.\n\n" +
@@ -2238,8 +2236,7 @@ const translations = {
     matchScheduleNoOverlapYet:
       "Ви обоє позначили час, але поки нічого не збіглося. Додай ще кілька слотів — щойно один перетнеться, фіксую дату:",
     venueTimeCardLabel: "ВАШЕ ПОБАЧЕННЯ",
-    venueTimeLockedCaption:
-      "Час вашого побачення зафіксовано ✨\nНатисни на дату — вона додасться до твого календаря.",
+    venueTimeLockedCaption: "Час вашого побачення зафіксовано ✨",
     venueConciergeIntro:
       "Час зафіксовано. Один момент, перш ніж підібрати місце.\n\n" +
       "📍 *Познач, звідки ти будеш виїжджати* на побачення — дім, станція метро, квартира друга, звідки тобі реально зручно стартувати.\n\n" +
@@ -3055,8 +3052,7 @@ const deTranslations: TranslationTable = {
   matchScheduleNoOverlapYet:
     "Ihr habt beide Zeiten markiert, aber noch passt nichts zusammen. Füg ein paar Optionen hinzu — sobald ein Slot passt, ist es fix:",
   venueTimeCardLabel: "EUER DATE",
-  venueTimeLockedCaption:
-    "Euer Termin steht ✨\nTipp auf das Datum, um es in deinen Kalender zu legen.",
+  venueTimeLockedCaption: "Euer Termin steht ✨",
   venueConciergeIntro:
     "Zeit steht. Eine Sache, bevor ich den Ort finde.\n\n" +
     "📍 *Markiere, von wo du losfährst* zum Date - dein Zuhause, eine Metro-Station, die Wohnung einer Freundin, wo immer du tatsächlich startest.\n\n" +
@@ -3861,8 +3857,7 @@ const plTranslations: TranslationTable = {
   matchScheduleNoOverlapYet:
     "Oboje zaznaczyliście godziny, ale jeszcze nic się nie pokrywa. Dodaj kilka opcji — gdy tylko jakiś slot się zgodzi, klepnięte:",
   venueTimeCardLabel: "WASZA RANDKA",
-  venueTimeLockedCaption:
-    "Termin waszej randki jest ustalony ✨\nKliknij datę, aby dodać ją do kalendarza.",
+  venueTimeLockedCaption: "Termin waszej randki jest ustalony ✨",
   venueConciergeIntro:
     "Termin ustalony. Jedna rzecz, zanim znajdę miejsce.\n\n" +
     "📍 *Zaznacz, skąd będziesz wyruszać* na randkę - twój dom, stacja metra, mieszkanie znajomego, skądkolwiek faktycznie ruszasz.\n\n" +

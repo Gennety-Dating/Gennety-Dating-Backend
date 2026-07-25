@@ -1353,13 +1353,18 @@ better UX than three separate retries.
   date, and the time in the burgundy accent — rendered in the recipient's
   `User.theme` (light: cream + burgundy; dark: graphite + a lifted burgundy,
   since the date card's near-black would sink the accent at preview size)
-  and in the canonical `Europe/Kyiv` both sides share. The caption wraps the
-  same phrase in a `date_time` MessageEntity, so the announcement doubles as
-  add-to-calendar. It is sent **before** the concierge prompt, per side, and
-  is purely a framing/visual-break device — no state, no decision, no button.
-  Any render or send failure degrades to the same text with the same entity,
-  and the departure-point prompt goes out either way. Mobile users are
-  skipped (they render their own scheduling UI).
+  and in the canonical `Europe/Kyiv` both sides share. The caption is a single
+  short line ("Время вашего свидания закреплено ✨") — **no repeated date
+  phrase, no `date_time` entity, no "tap the date to add it to your calendar"
+  explanation** (simplified 2026-07-25): the card already shows the time, and
+  the §3.7 scheduled confirmation carries that exact add-to-calendar
+  affordance, so repeating it here delivered the same tappable date twice with
+  the same instruction. It is sent **before** the concierge prompt, per side,
+  and is purely a framing/visual-break device — no state, no decision, no
+  button. A render or send failure degrades to text, and that fallback DOES
+  keep the localized date phrase + `date_time` entity (with no card there is
+  nothing else stating when the date is); the departure-point prompt goes out
+  either way. Mobile users are skipped (they render their own scheduling UI).
 - **Backwards-compat.** `Match.schedulingIteration` and
   `pickedTimeA/B` are retained as deprecated columns until a follow-up
   cleanup migration drops them; mid-deploy taps on legacy

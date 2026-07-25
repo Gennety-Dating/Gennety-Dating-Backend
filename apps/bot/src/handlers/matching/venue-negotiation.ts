@@ -111,13 +111,17 @@ export function buildLocationMapKeyboard(
  * The card is the visual break that answers "when is this, actually?" without
  * adding a step to the flow.
  *
- * The caption carries a `date_time` MessageEntity, so the announcement is also
- * an add-to-calendar affordance (resolved in the user's own timezone), while
- * the card itself renders the canonical `Europe/Kyiv` figures both sides share.
+ * The caption is deliberately a single short line ("your time is locked ✨"):
+ * the card itself already renders the canonical `Europe/Kyiv` date + time, and
+ * the FINAL scheduled confirmation (§3.7) carries the tappable `date_time`
+ * add-to-calendar phrase. Repeating that affordance here made the same date
+ * arrive twice with the same "tap to add it to your calendar" explanation, so
+ * the caption stays framing-only — no date phrase, no entity, no hint line.
  *
- * Best-effort by design: a render or send failure degrades to the same text
- * with the same entity, and a failure of THAT is swallowed — the concierge
- * prompt below must go out either way.
+ * Best-effort by design: a render or send failure degrades to text, and a
+ * failure of THAT is swallowed — the concierge prompt below must go out either
+ * way. The text fallback DOES keep the date phrase + entity, because with no
+ * card there is nothing else telling the user when the date actually is.
  */
 async function sendTimeLockedCard(
   api: Api<RawApi>,
@@ -127,11 +131,7 @@ async function sendTimeLockedCard(
   theme: Theme,
 ): Promise<void> {
   const chatId = toTelegramChatId(telegramId);
-  const { text, entity } = buildDateTimeEntity(
-    t(lang, "venueTimeLockedCaption"),
-    agreedTime,
-    lang,
-  );
+  const caption = t(lang, "venueTimeLockedCaption");
 
   const png = await renderTimeCard({
     agreedTime,
@@ -143,14 +143,15 @@ async function sendTimeLockedCard(
   if (png) {
     try {
       await api.sendPhoto(chatId, new InputFile(png, "gennety-time.png"), {
-        caption: text,
-        caption_entities: [entity],
+        caption,
       });
       return;
     } catch (err) {
       console.warn("[venue-negotiation] time card send failed:", err);
     }
   }
+
+  const { text, entity } = buildDateTimeEntity(caption, agreedTime, lang);
 
   try {
     await api.sendMessage(chatId, text, { entities: [entity] });
