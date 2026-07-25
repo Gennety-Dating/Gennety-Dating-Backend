@@ -497,7 +497,16 @@ path.
 `User.language` (shared i18n `verifyOutcome*`; the copy used to be hardcoded
 English). `rejected` is the one outcome the user can act on, so it carries both
 recoveries inline — **📷 Upload different photos** and **🟢 Verify now** — rather
-than sending them hunting through menus.
+than sending them hunting through menus. One exception, so the success copy is
+not repeated at users who have nothing to do with it: a **rerun that merely
+re-confirms an already-`verified` user** sends no DM. Every profile-photo edit
+auto-reruns the pipeline (menu photo manager, mobile `/v1/me/photos`, Aether),
+so without this an active user re-read "verification passed, your profile is
+live" every time they opened their photos. The suppression is scoped to
+`verified → verified`; anything the user can act on (`rejected`,
+`pending_review`) is always announced, including on a rerun. Mirrors the
+existing `statusMessageId` guard that already stops the menu + pinned banner
+from being re-sent on a rerun.
 
 **Verification gate (the app stays locked).** `status='onboarding'` with
 `onboardingStep='completed'` means the profile is finished but Persona is not,

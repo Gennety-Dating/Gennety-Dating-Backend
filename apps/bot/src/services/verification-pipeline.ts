@@ -197,6 +197,27 @@ export interface PipelineConfig {
   minVerifiedPhotos: number;
 }
 
+/**
+ * Per-run context that is NOT derivable from DB state at pipeline time.
+ */
+export interface PipelineRunOptions {
+  /**
+   * The user's `verificationStatus` as it stood BEFORE this run was kicked
+   * off. Only `triggerVerificationRerun` can supply it: the rerun flips the
+   * column to `pending` before launching the pipeline, so by the time
+   * `db.findUser` reads the row the previous state is already gone.
+   *
+   * Used for one thing — silencing the `verified` outcome DM on a rerun that
+   * merely re-confirms an already-verified user. Every profile-photo edit
+   * fires a rerun (menu photo manager, mobile `/v1/me/photos`, Aether), so
+   * without this an active user gets "Проверка пройдена ✨ Профиль активен"
+   * again every time they touch their photos, even though nothing changed.
+   * The DM is only suppressed for `verified → verified`; any status the user
+   * can act on (`rejected`, `pending_review`) is always announced.
+   */
+  previousVerificationStatus?: string | null;
+}
+
 export interface PersistOutcomeInput {
   userId: string;
   /**
@@ -249,6 +270,7 @@ export async function runFaceMatchVerification(
   inquiryId: string,
   deps: PipelineDeps,
   config: PipelineConfig,
+  options: PipelineRunOptions = {},
 ): Promise<VerificationOutcome> {
   const user = await deps.db.findUser(userId);
   if (!user) {
@@ -549,7 +571,16 @@ export async function runFaceMatchVerification(
         console.warn(`${LOG_PREFIX} appearance tagging threw (swallowed)`, { userId, err });
       }
     }
-    await sendOutcomeMessage(deps, user.telegramId, "verified", user.language);
+    // Announce the pass — unless this run only re-confirmed a user who was
+    // ALREADY verified. Photo edits auto-rerun the pipeline, so re-DMing the
+    // success copy would repeat "you're verified, your profile is live" every
+    // time an active user touches their photos. Nothing changed for them and
+    // there is nothing to act on, so stay silent. (Same spirit as the
+    // `statusMessageId` guard in `surfaceVerifiedActivationDefault`, which
+    // already stops the menu + banner from being re-sent on a rerun.)
+    if (options.previousVerificationStatus !== "verified") {
+      await sendOutcomeMessage(deps, user.telegramId, "verified", user.language);
+    }
     if (user.telegramId > 0n) {
       await surfaceVerifiedActivation(deps, {
         userId,
@@ -698,6 +729,7 @@ export async function runFaceMatchVerificationDefault(
   userId: string,
   inquiryId: string,
   api: Api<RawApi>,
+  options: PipelineRunOptions = {},
 ): Promise<VerificationOutcome> {
   return runFaceMatchVerification(
     userId,
@@ -856,6 +888,7 @@ export async function runFaceMatchVerificationDefault(
       thresholdReview: env.FACE_MATCH_THRESHOLD_REVIEW,
       minVerifiedPhotos: env.FACE_MATCH_MIN_VERIFIED_PHOTOS,
     },
+    options,
   );
 }
 
@@ -890,10 +923,15 @@ export async function triggerVerificationRerun(
 ): Promise<RerunOutcome> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { personaInquiryId: true },
+    select: { personaInquiryId: true, verificationStatus: true },
   });
   if (!user) return { kind: "user_missing" };
   if (!user.personaInquiryId) return { kind: "no_inquiry" };
+
+  // Captured BEFORE the `pending` flip below, which would otherwise erase it.
+  // Lets the pipeline stay silent when the rerun just re-confirms an
+  // already-verified user (see `PipelineRunOptions`).
+  const previousVerificationStatus = user.verificationStatus;
 
   // Reset the idempotency marker AND flip status to `pending` so the
   // user sees we're re-checking. We pin the WHERE on `personaInquiryId`
@@ -906,7 +944,9 @@ export async function triggerVerificationRerun(
 
   const inquiryId = user.personaInquiryId;
   // Fire-and-forget; do not await. Errors land in the bot logs.
-  void runFaceMatchVerificationDefault(userId, inquiryId, api).catch((err) => {
+  void runFaceMatchVerificationDefault(userId, inquiryId, api, {
+    previousVerificationStatus,
+  }).catch((err) => {
     console.error("[verification-pipeline] rerun failed", { userId, inquiryId, err });
   });
 

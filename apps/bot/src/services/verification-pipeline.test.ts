@@ -187,6 +187,71 @@ describe("runFaceMatchVerification — happy path (quorum)", () => {
   });
 });
 
+describe("runFaceMatchVerification — rerun outcome DM", () => {
+  // Every profile-photo edit fires `triggerVerificationRerun`, which nulls
+  // `faceMatchedAt` and flips the status to `pending` before re-running. The
+  // pre-rerun status rides along in `PipelineRunOptions` so an unchanged
+  // `verified` outcome doesn't re-DM "you're verified" on every photo touch.
+  function rerunHarness(overrides: Parameters<typeof makeHarness>[0] = {}) {
+    return makeHarness({
+      ...overrides,
+      user: {
+        status: "active",
+        verificationStatus: "pending",
+        personaInquiryId: INQUIRY_ID,
+        faceMatchedAt: null,
+        ...overrides.user,
+      },
+    });
+  }
+
+  it("stays silent when a rerun only re-confirms an already-verified user", async () => {
+    const h = rerunHarness();
+    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG, {
+      previousVerificationStatus: "verified",
+    });
+
+    expect(outcome.kind).toBe("verified");
+    expect(h.persisted[0]!.verificationStatus).toBe("verified");
+    expect(h.notifications).toEqual([]);
+  });
+
+  it("announces the pass when the user was NOT verified before the rerun", async () => {
+    // A rejected user who swapped in their own photos must hear the good news.
+    const h = rerunHarness();
+    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG, {
+      previousVerificationStatus: "rejected",
+    });
+
+    expect(outcome.kind).toBe("verified");
+    expect(h.notifications).toHaveLength(1);
+    expect(h.notifications[0]!.message).toContain("Verified");
+  });
+
+  it("still announces a rejection on a rerun of a previously verified user", async () => {
+    // Suppression is scoped to `verified → verified`; a status the user can
+    // act on is always DM'd.
+    const h = rerunHarness({
+      compareScores: [
+        { ok: true, similarity: 0.92, faceFound: true },
+        { ok: true, similarity: 0.31, faceFound: true }, // impostor photo
+      ],
+    });
+    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG, {
+      previousVerificationStatus: "verified",
+    });
+
+    expect(outcome.kind).toBe("rejected");
+    expect(h.notifications).toHaveLength(1);
+  });
+
+  it("announces the pass on a first-time run (no options passed)", async () => {
+    const h = makeHarness();
+    await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    expect(h.notifications).toHaveLength(1);
+  });
+});
+
 describe("runFaceMatchVerification — quorum gating", () => {
   it("pending_review when nothing passes (all borderline)", async () => {
     const h = makeHarness({
