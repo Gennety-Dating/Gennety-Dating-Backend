@@ -1514,6 +1514,12 @@ export async function settleVenuePayment(
       venueLng: match.venueChangeLng,
       venueGoogleMapsUri: match.venueChangeMapsUri,
       venuePhotoName: match.venueChangePhotoName,
+      // The cached date-card PNG has the OLD venue baked into its pixels
+      // (services/scheduled-confirmation.ts renders it once at initial
+      // scheduling); without clearing it, "My Date" keeps re-sending the
+      // stale image even though its caption text is freshly correct.
+      dateCardFileIdA: null,
+      dateCardFileIdB: null,
     },
   });
   if (claim.count === 0) {
@@ -1602,6 +1608,10 @@ async function finalizeVenueChangeFree(
       venueLng: match.venueChangeLng,
       venueGoogleMapsUri: match.venueChangeMapsUri,
       venuePhotoName: match.venueChangePhotoName,
+      // See settleVenuePayment: the cached date-card PNG bakes in the OLD
+      // venue, so it must be invalidated here too.
+      dateCardFileIdA: null,
+      dateCardFileIdB: null,
     },
   });
   if (claim.count === 0) return { ok: false, reason: "not-agreed" };
