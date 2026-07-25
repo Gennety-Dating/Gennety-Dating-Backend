@@ -1,8 +1,9 @@
 # Gennety Dating Deploy
 
-Last verified: 2026-07-25 — full catch-up release (85 commits), additive
+Last verified: 2026-07-25 — phone-based account login (`d1ad29f`), code-only.
+Prior the same day: full catch-up release (85 commits), additive
 `db:push`, flag alignment, and a dev↔prod isolation fix (details in the dated
-block below). Prior: 2026-07-23 — dev↔prod schema-drift reconciliation + the
+blocks below). Prior: 2026-07-23 — dev↔prod schema-drift reconciliation + the
 2026-07-22 code release. Earlier: 2026-07-21
 (full server deploy — **self-healing Telegram drop banner**, commit `045279c`;
 no Prisma schema change). Production build and PM2
@@ -16,6 +17,25 @@ expected second heartbeat with `eligible=2`, `unchanged=2`, no new errors, no
 `400 chat not found`, so the worker correctly left them untracked under the
 six-hour unreachable cooldown; there was no reachable active chat for a live
 client rendering check.)
+
+**Deployed 2026-07-25 (later) — phone-based account login (`d1ad29f`).**
+Code-only: no Prisma schema change, no env change, no flag change. A verified
+phone number now resolves to the existing account instead of dead-ending on
+"this number is already linked to another account" (PRODUCT_SPEC §1.1,
+`services/account-linking.ts`), which is what unblocks a user who verified on
+the iOS rail and then opened the bot, or who re-created their Telegram account.
+Preflight green locally: **166 bot / 13 webapp / 13 shared test files (2156 /
+127 / 202 tests)**, both typechecks clean, `pnpm build` clean, tree level with
+`origin/main`. (One pre-existing lint error in `apps/webapp/src/referral.ts:277`
+is unrelated and was left alone.)
+
+Ran Deploy Full Server Code → `db:drift-check` (**OK**, nothing to push) →
+`pm2 restart`, then Deploy Mini App Only (`apps/webapp` changed: a `completed`
+account now routes straight to the done screen). The rsync dry-run listed only
+two stale `apps/video/build` artifacts as deletions. Post-deploy verified:
+`Bot @gennetybot started`, all 14 crons registered, `:3100`/`:3101` listening,
+`/v1/ping` ok, admin `401`, all 11 Mini App pages `200`, no `P2022` / unhandled
+rejections, and the PM2 restart count held at 25 (no crash loop).
 
 **Deployed 2026-07-25 — full catch-up release + dev↔prod isolation fix.**
 Prod was 85 commits behind (146 files); it had no referral/promo code at all.
