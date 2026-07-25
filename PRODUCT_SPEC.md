@@ -46,7 +46,10 @@ out of Telegram-only workers.
   secondary rail behind `PHONE_CODE_PRIMARY_PROVIDER`)
   (`/v1/auth/phone/*`, same `PHONE_AUTH_ENABLED` gate; the verified number
   lands in the same unique `User.phone` + `phoneVerifiedAt`, so Telegram and
-  mobile registrations can never duplicate an account).
+  mobile registrations can never duplicate an account). Because the number is
+  the shared identity across both rails, **verifying it is also the login**: a
+  uniqueness collision resolves to the existing account rather than a refusal
+  (§1.1).
   Matching admits the union of the two valid cohorts (student + verified email,
   or general + verified phone); a credential from the other track never
   satisfies an individual's gate. The student
@@ -122,6 +125,30 @@ out of Telegram-only workers.
   visual intro; default `dark`, changeable later in Settings — `POST /theme`
   records it), and the final AI memory export choice, using Telegram `initData`
   HMAC auth for all writes (`POST /track` persists the re-choosable fork pick).
+- **The phone gate is also the LOGIN (2026-07-25).** A trusted `message.contact`
+  is Telegram vouching that the number belongs to the current Telegram account,
+  and Telegram allows one active account per number — so a `User.phone` unique
+  collision means the row already holding that number is the *same human*, and
+  the product answer is to log them in, not to refuse. Sharing the contact
+  therefore **adopts** that account: its `telegramId`/`telegramUsername` are
+  re-pointed at the sharing Telegram account, a `mobile` row becomes `both`, the
+  stale pinned-banner id is cleared, the fresh touch's `referralSource` is kept
+  when the account had none, and the empty registration row that was just
+  created is deleted (`services/account-linking.ts`). This is what makes the two
+  rails one product: someone who verified their number in the iOS app and then
+  opens the bot lands in their existing profile instead of a dead end, and so
+  does someone who re-created their Telegram account. Accepted tradeoff
+  (founder decision): a carrier-recycled number hands the new holder the
+  previous profile — the phone rail already makes exactly this trade, since
+  `/v1/auth/phone/verify` logs whoever proves the number into the row. The one
+  case that is never automated is a collision where **both** rows carry real
+  data (finished onboarding, photos, matches, tickets, premium, a redeemed
+  promo, a verified email): that is a merge of two populated accounts and is
+  routed to @gennetysupport. An adopted account that is already past onboarding
+  re-enters through the same path `/start` uses (unfreeze → verification gate →
+  menu + pinned banner), and the Mini App closes instead of replaying gates.
+  Deleting the chat, deleting the bot, or clearing history never loses an
+  account — `/start` resolves it by the permanent `telegramId`.
 - **No website onboarding handoff (removed 2026-07-19).** The website
   (`gennety.com`) no longer runs any slice of onboarding. Its `Log in` / `Join`
   CTAs route to the `/app` platform chooser (Telegram vs App Store); the visitor

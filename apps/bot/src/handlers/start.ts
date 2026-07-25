@@ -150,6 +150,72 @@ async function sendOnboardingMiniAppPrompt(ctx: BotContext, user: User): Promise
   await ctx.reply(copy.message, { reply_markup: keyboard });
 }
 
+/**
+ * Entry point for a user whose onboarding is already `completed`: unfreeze a
+ * soft-deleted account, hold anyone still behind the mandatory Persona gate,
+ * otherwise greet them and open the menu + pinned banner.
+ *
+ * Extracted from `/start` so the phone-based account login
+ * (`handlers/onboarding/phone.ts` → `services/account-linking.ts`) lands a
+ * returning user in exactly the same place as `/start` would, instead of
+ * re-deriving this state machine.
+ */
+export async function sendCompletedUserEntry(
+  ctx: BotContext,
+  user: Pick<User, "telegramId" | "status">,
+): Promise<void> {
+  const telegramId = user.telegramId;
+  ctx.session.menuState = "idle";
+
+  // Soft-delete recovery: a `frozen` user chose "Freeze" instead of deleting.
+  // Silently reactivate them straight into their ready profile — no
+  // re-onboarding, no re-verification (PRODUCT_SPEC §Settings / freeze flow).
+  if (user.status === "frozen") {
+    const reactivated = await transitionAccountStatus(
+      { telegramId },
+      "return_from_freeze",
+    );
+    if (reactivated.kind === "changed" || reactivated.kind === "already") {
+      await ctx.reply(t(ctx.session.language, "freezeWelcomeBack"), {
+        parse_mode: "Markdown",
+      });
+      await showMainMenu(ctx);
+      await pinStatusBanner(ctx.api, telegramId, ctx.session.language);
+      return;
+    }
+
+    // Moderation may have changed the status after the initial user read.
+    // Continue using that authoritative state and never overwrite it.
+    if (reactivated.kind === "forbidden") {
+      user = { ...user, status: reactivated.status };
+    }
+  }
+
+  // Finalized onboarding but still held at `status = onboarding`: the Persona
+  // liveness gate hasn't been cleared, so the user is NOT active and the
+  // matchmaker has NOT started searching for them. Greeting them with
+  // "your AI is already looking for a match" (onboardingComplete) misleads
+  // them — surface their real verification state + the Verify/photo buttons
+  // instead. The menu is deliberately NOT shown and the next-match banner is
+  // not pinned: verification is mandatory, so nothing behind the menu is
+  // available to them yet (see services/verification-gate.ts).
+  if (user.status === "onboarding") {
+    const handled = await sendVerificationGateNotice(
+      ctx.api,
+      ctx.chat!.id,
+      telegramId,
+      ctx.session.language,
+    );
+    if (handled) return;
+  }
+
+  await ctx.reply(t(ctx.session.language, "onboardingComplete"));
+  await showMainMenu(ctx);
+  if (user.status === "active") {
+    await pinStatusBanner(ctx.api, telegramId, ctx.session.language);
+  }
+}
+
 start.command("start", async (ctx) => {
   const telegramId = BigInt(ctx.from!.id);
   const startPayload = ctx.match?.toString().trim() ?? "";
@@ -245,55 +311,7 @@ start.command("start", async (ctx) => {
 
   // If user already completed onboarding, greet them and open the main menu.
   if (user.onboardingStep === "completed") {
-    ctx.session.menuState = "idle";
-
-    // Soft-delete recovery: a `frozen` user chose "Freeze" instead of deleting.
-    // Silently reactivate them straight into their ready profile — no
-    // re-onboarding, no re-verification (PRODUCT_SPEC §Settings / freeze flow).
-    if (user.status === "frozen") {
-      const reactivated = await transitionAccountStatus(
-        { telegramId },
-        "return_from_freeze",
-      );
-      if (reactivated.kind === "changed" || reactivated.kind === "already") {
-        await ctx.reply(t(ctx.session.language, "freezeWelcomeBack"), {
-          parse_mode: "Markdown",
-        });
-        await showMainMenu(ctx);
-        await pinStatusBanner(ctx.api, telegramId, ctx.session.language);
-        return;
-      }
-
-      // Moderation may have changed the status after the initial user read.
-      // Continue using that authoritative state and never overwrite it.
-      if (reactivated.kind === "forbidden") {
-        user = { ...user, status: reactivated.status };
-      }
-    }
-
-    // Finalized onboarding but still held at `status = onboarding`: the Persona
-    // liveness gate hasn't been cleared, so the user is NOT active and the
-    // matchmaker has NOT started searching for them. Greeting them with
-    // "your AI is already looking for a match" (onboardingComplete) misleads
-    // them — surface their real verification state + the Verify/photo buttons
-    // instead. The menu is deliberately NOT shown and the next-match banner is
-    // not pinned: verification is mandatory, so nothing behind the menu is
-    // available to them yet (see services/verification-gate.ts).
-    if (user.status === "onboarding") {
-      const handled = await sendVerificationGateNotice(
-        ctx.api,
-        ctx.chat!.id,
-        telegramId,
-        ctx.session.language,
-      );
-      if (handled) return;
-    }
-
-    await ctx.reply(t(ctx.session.language, "onboardingComplete"));
-    await showMainMenu(ctx);
-    if (user.status === "active") {
-      await pinStatusBanner(ctx.api, telegramId, ctx.session.language);
-    }
+    await sendCompletedUserEntry(ctx, user);
     return;
   }
 

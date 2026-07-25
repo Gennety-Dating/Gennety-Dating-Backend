@@ -319,6 +319,39 @@ describe("Registration v2 sign-up fork (phoneAuthEnabled)", () => {
   });
 });
 
+/**
+ * Phone-based account login (PRODUCT_SPEC §1.1): sharing a contact that belongs
+ * to an existing account swaps the server-side user underneath a live Mini App
+ * session, so `/state` can start returning a fully onboarded user mid-flow.
+ */
+describe("an already-onboarded user has nothing left in the Mini App", () => {
+  it("routes straight to done instead of replaying the gates", () => {
+    expect(
+      preVisualPhaseFromRemote(
+        user({
+          onboardingStep: "completed",
+          // Deliberately unset: a completed account must not be pulled back
+          // into the city/theme gates by missing pre-visual fields.
+          homeLocation: null,
+          themeChosen: false,
+        }),
+      ),
+    ).toEqual({ kind: "done" });
+  });
+
+  it("routes to done from the post-visual phase too", () => {
+    expect(postVisualPhaseFromRemote(user({ onboardingStep: "completed" }))).toEqual({
+      kind: "done",
+    });
+  });
+
+  it("ignores stored visual progress for a completed account", () => {
+    expect(bootPhaseFromRemote(user({ onboardingStep: "completed" }), 3)).toEqual({
+      kind: "done",
+    });
+  });
+});
+
 describe("optional 'Подробнее' date-flow walkthrough", () => {
   it("exposes the final date-flow screen index", () => {
     expect(DATEFLOW_LAST_INDEX).toBe(5);

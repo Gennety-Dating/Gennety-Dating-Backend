@@ -3,6 +3,12 @@ import { prisma } from "@gennety/db";
 import { normalizePhoneE164 } from "@gennety/shared";
 import type { Language } from "@gennety/shared";
 import { onboardingActivityPatch } from "../../workers/re-engagement-schedule.js";
+import {
+  ACCOUNT_LINK_SELECT,
+  adoptAccountByPhone,
+  classifyPhoneConflict,
+} from "../../services/account-linking.js";
+import { sendCompletedUserEntry } from "../start.js";
 
 /**
  * Registration v2 — phone verification for the GENERAL track: one branch of the
@@ -56,16 +62,81 @@ export async function handlePhoneContact(ctx: BotContext): Promise<void> {
       },
     });
   } catch (err) {
-    // `User.phone` is @unique — P2002 means this number is already linked to a
-    // different Telegram account (one account per number).
+    // `User.phone` is @unique — P2002 means another row already holds this
+    // number. Telegram vouched that the number belongs to THIS account, and
+    // Telegram allows one active account per number, so that row is the same
+    // human: treat the collision as a login, not a refusal (PRODUCT_SPEC §1.1).
     if (isUniqueViolation(err)) {
-      await ctx.reply(phoneCopy(lang, "taken"));
+      await resolvePhoneConflict(ctx, telegramId, phone, lang);
       return;
     }
     throw err;
   }
 
   await ctx.reply(phoneCopy(lang, "ok"));
+}
+
+/**
+ * "Вход по номеру": the number is already on file, so hand this Telegram
+ * account the existing profile instead of dead-ending the user. Only a
+ * collision where BOTH rows carry real data needs a human (a true merge).
+ */
+async function resolvePhoneConflict(
+  ctx: BotContext,
+  telegramId: bigint,
+  phone: string,
+  lang: Language,
+): Promise<void> {
+  const [current, owner] = await Promise.all([
+    prisma.user.findUnique({ where: { telegramId }, select: ACCOUNT_LINK_SELECT }),
+    prisma.user.findUnique({ where: { phone }, select: ACCOUNT_LINK_SELECT }),
+  ]);
+
+  // Either row vanishing under us means the state has moved on; the safe answer
+  // is the conservative one rather than a guess.
+  if (!current || !owner) {
+    await ctx.reply(phoneCopy(lang, "taken"));
+    return;
+  }
+
+  const decision = classifyPhoneConflict(current, owner);
+  if (decision.kind === "same") {
+    await ctx.reply(phoneCopy(lang, "ok"));
+    return;
+  }
+  if (decision.kind === "manual-merge") {
+    await ctx.reply(phoneCopy(lang, "conflict"));
+    return;
+  }
+
+  const adopted = await adoptAccountByPhone({
+    ownerId: decision.ownerId,
+    stubId: decision.stubId,
+    telegramId,
+    phone,
+    telegramUsername: ctx.from?.username ?? null,
+  });
+  if (adopted.kind === "stale") {
+    await ctx.reply(phoneCopy(lang, "taken"));
+    return;
+  }
+
+  const user = adopted.user;
+  // The session still carries the deleted row's onboarding position. Without
+  // this sync the router would keep walking a fully onboarded user through
+  // registration.
+  ctx.session.onboardingStep = user.onboardingStep;
+  if (user.language) ctx.session.language = user.language;
+  const adoptedLang = user.language ?? lang;
+
+  await ctx.reply(phoneCopy(adoptedLang, "welcomeBack"));
+
+  if (user.onboardingStep === "completed") {
+    await sendCompletedUserEntry(ctx, {
+      telegramId: user.telegramId,
+      status: user.status,
+    });
+  }
 }
 
 function isUniqueViolation(err: unknown): boolean {
@@ -77,7 +148,13 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
-type PhoneCopyKey = "ok" | "notOwn" | "invalid" | "taken";
+type PhoneCopyKey =
+  | "ok"
+  | "notOwn"
+  | "invalid"
+  | "taken"
+  | "welcomeBack"
+  | "conflict";
 
 /**
  * Inline localized confirmations (same approach as `handlers/start.ts`). The
@@ -91,30 +168,57 @@ function phoneCopy(lang: Language, key: PhoneCopyKey): string {
       notOwn: "Please share *your own* number using the button (not another contact).",
       invalid: "That number didn't look valid. Please try sharing it again.",
       taken: "This number is already linked to another account.",
+      welcomeBack: "✅ Number confirmed — welcome back! This is your existing account.",
+      conflict:
+        "This number belongs to another Gennety account, and this one already " +
+        "has your data — we can't merge them automatically. Write to " +
+        "@gennetysupport and we'll sort it out.",
     },
     ru: {
       ok: "✅ Номер телефона подтверждён.",
       notOwn: "Поделись, пожалуйста, *своим* номером через кнопку (не чужим контактом).",
       invalid: "Номер выглядит некорректным. Попробуй поделиться им ещё раз.",
       taken: "Этот номер уже привязан к другому аккаунту.",
+      welcomeBack: "✅ Номер подтверждён — с возвращением! Это твой аккаунт.",
+      conflict:
+        "Этот номер привязан к другому аккаунту Gennety, а в текущем уже есть " +
+        "твои данные — объединить их автоматически нельзя. Напиши " +
+        "@gennetysupport, и мы всё решим.",
     },
     uk: {
       ok: "✅ Номер телефону підтверджено.",
       notOwn: "Поділися, будь ласка, *своїм* номером через кнопку (не чужим контактом).",
       invalid: "Номер виглядає некоректним. Спробуй поділитися ним ще раз.",
       taken: "Цей номер уже прив'язаний до іншого акаунта.",
+      welcomeBack: "✅ Номер підтверджено — з поверненням! Це твій акаунт.",
+      conflict:
+        "Цей номер прив'язаний до іншого акаунта Gennety, а в поточному вже є " +
+        "твої дані — об'єднати їх автоматично не вийде. Напиши " +
+        "@gennetysupport, і ми все вирішимо.",
     },
     de: {
       ok: "✅ Telefonnummer bestätigt.",
       notOwn: "Bitte teile *deine eigene* Nummer über den Button (keinen anderen Kontakt).",
       invalid: "Die Nummer schien ungültig. Bitte versuche es erneut.",
       taken: "Diese Nummer ist bereits mit einem anderen Konto verknüpft.",
+      welcomeBack:
+        "✅ Nummer bestätigt — willkommen zurück! Das ist dein bestehendes Konto.",
+      conflict:
+        "Diese Nummer gehört zu einem anderen Gennety-Konto, und dieses hier " +
+        "enthält bereits deine Daten — automatisch zusammenführen können wir " +
+        "das nicht. Schreib an @gennetysupport, wir klären das.",
     },
     pl: {
       ok: "✅ Numer telefonu potwierdzony.",
       notOwn: "Udostępnij proszę *swój* numer przyciskiem (nie cudzy kontakt).",
       invalid: "Numer wygląda na nieprawidłowy. Spróbuj udostępnić go ponownie.",
       taken: "Ten numer jest już powiązany z innym kontem.",
+      welcomeBack:
+        "✅ Numer potwierdzony — witaj z powrotem! To twoje istniejące konto.",
+      conflict:
+        "Ten numer należy do innego konta Gennety, a to już zawiera twoje dane " +
+        "— nie możemy połączyć ich automatycznie. Napisz do @gennetysupport, " +
+        "a wszystko ustalimy.",
     },
   };
   return copy[lang]?.[key] ?? copy.en[key];

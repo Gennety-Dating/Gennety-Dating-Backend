@@ -71,11 +71,24 @@ export async function findOrCreateMobileUser(email: string): Promise<User> {
 export async function findOrCreateMobileUserByPhone(phone: string): Promise<User> {
   const existing = await prisma.user.findUnique({ where: { phone } });
   if (existing) {
-    if (existing.phoneVerifiedAt) return existing;
+    // A Telegram-registered account reached through the native app now lives on
+    // both surfaces. Without this the row stays `telegram` and channel-aware
+    // helpers never consider APNs for them. Mirror of the Telegram-side login
+    // in `services/account-linking.ts`, which flips `mobile` → `both`.
+    const platformPatch =
+      existing.platform === "telegram" ? { platform: "both" as const } : {};
+    if (existing.phoneVerifiedAt) {
+      if (Object.keys(platformPatch).length === 0) return existing;
+      return prisma.user.update({
+        where: { id: existing.id },
+        data: platformPatch,
+      });
+    }
     return prisma.user.update({
       where: { id: existing.id },
       data: {
         phoneVerifiedAt: new Date(),
+        ...platformPatch,
         // Never rewrite an existing track (a student stays a student); only
         // fill the gap for pre-fork legacy rows that somehow carry a phone.
         ...(existing.registrationTrack ? {} : { registrationTrack: "general" }),

@@ -59,8 +59,23 @@ export type OnboardingPhase =
   | { kind: "loading" }
   | { kind: "done" };
 
+/**
+ * The bot already owns this user — the Mini App has nothing left to collect.
+ *
+ * Reachable in two ways: re-opening a stale Mini App link after onboarding, and
+ * (the reason this exists) the phone-based account login — sharing a contact
+ * that belongs to an existing account swaps the server-side user underneath a
+ * live Mini App session, and the returning state can be a fully onboarded one.
+ * Without this guard the phone gate would route that user back through city /
+ * theme / the visual intro they finished long ago.
+ */
+function isOnboarded(user: RemoteUser): boolean {
+  return user.onboardingStep === "completed";
+}
+
 export function preVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPhase {
   if (!user) return { kind: "syncing" };
+  if (isOnboarded(user)) return { kind: "done" };
   if (!user.language) return { kind: "language" };
   if (!user.termsAccepted) return { kind: "consent" };
   const contactPhase = unresolvedContactPhase(user);
@@ -72,6 +87,7 @@ export function preVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPha
 
 export function postVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPhase {
   if (!user) return { kind: "syncing" };
+  if (isOnboarded(user)) return { kind: "done" };
   if (!user.language) return { kind: "language" };
   if (!user.termsAccepted) return { kind: "consent" };
   const contactPhase = unresolvedContactPhase(user);
