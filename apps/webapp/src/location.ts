@@ -600,7 +600,7 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     groupMustHaves: "Обязательно",
     multiHint: "можно несколько",
     singleHint: "выбери одно",
-    thinkingSteps: ["Читаю ваш вайб…", "Думаю…", "Выделяю детали…"],
+    thinkingSteps: ["Считываю вайб…", "Думаю…", "Выделяю детали…"],
     findingSteps: ["Сверяю ваши вайбы…", "Проверяю реальные места…", "Подбираю ваше место…"],
   },
   uk: {
@@ -617,7 +617,7 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     groupMustHaves: "Обов'язково",
     multiHint: "можна кілька",
     singleHint: "обери одне",
-    thinkingSteps: ["Читаю ваш вайб…", "Думаю…", "Виділяю деталі…"],
+    thinkingSteps: ["Зчитую вайб…", "Думаю…", "Виділяю деталі…"],
     findingSteps: ["Звіряю ваші вайби…", "Перевіряю реальні місця…", "Добираю ваше місце…"],
   },
   de: {
