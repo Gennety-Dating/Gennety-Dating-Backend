@@ -18,7 +18,7 @@ import { butterflyPng } from "../match-card/collage.js";
  */
 
 const CARD_W = 900;
-const CARD_H = 1125;
+const CARD_H = 1000;
 
 type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
 let cachedFonts: SatoriFonts | null = null;
@@ -69,52 +69,28 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
     const kicker = input.referrerName
       ? t(input.lang, "referralCardInvitedBy", { name: input.referrerName })
       : t(input.lang, "referralCardInvitedGeneric");
-    const support = t(input.lang, "referralCardSupport");
     const giftLine = t(input.lang, "referralCardGift", { months: String(input.giftMonths) });
 
-    // Aspect-correct butterfly (never squished into a square box).
-    const bfH = 56;
+    // Bigger butterfly crest, tilted ~20° clockwise — the mark, like our other
+    // cards. Aspect-correct (never squished into a square box).
+    const bfH = 98;
     const bfW = butterfly ? Math.round((butterfly.w / butterfly.h) * bfH) : bfH;
-    const header = box(
-      { justifyContent: "space-between", alignItems: "center" },
-      [
-        txt(
-          {
-            fontSize: 30,
-            fontWeight: 700,
-            letterSpacing: 6,
-            textTransform: "uppercase",
-            opacity: 0.92,
-          },
-          "GENNETY",
-        ),
-        butterfly
-          ? {
-              type: "img",
-              props: { src: butterfly.uri, style: { display: "flex", width: bfW, height: bfH } },
-            }
-          : box({ width: bfH, height: bfH }, []),
-      ],
-    );
 
-    // Fixed English brand tagline right under the header — says what Gennety is
-    // and fills the top of the card so it no longer reads as an empty void.
-    const tagline = txt(
-      {
-        marginTop: 16,
-        fontSize: 28,
-        fontWeight: 500,
-        letterSpacing: 0.5,
-        color: "rgba(247,236,236,0.62)",
-      },
-      "Your personal AI matchmaker",
-    );
+    // Everything is centre-formatted: a full-width row with the text centred.
+    const center = { width: "100%", justifyContent: "center", textAlign: "center" } as const;
 
     const headline = box(
-      { flexDirection: "column", fontFamily: "Archivo Black", fontSize: 78, lineHeight: 1.02 },
+      {
+        width: "100%",
+        flexDirection: "column",
+        alignItems: "center",
+        fontFamily: "Archivo Black",
+        fontSize: 76,
+        lineHeight: 1.03,
+      },
       [
-        txt({ color: "#F7ECEC" }, t(input.lang, "referralCardHeadA")),
-        txt({ color: "#F0B7A0" }, t(input.lang, "referralCardHeadB")),
+        txt({ ...center, color: "#F7ECEC" }, t(input.lang, "referralCardHeadA")),
+        txt({ ...center, color: "#F0B7A0" }, t(input.lang, "referralCardHeadB")),
       ],
     );
 
@@ -123,63 +99,70 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
         width: CARD_W,
         height: CARD_H,
         flexDirection: "column",
-        padding: 64,
+        alignItems: "center",
+        padding: 72,
         background: "linear-gradient(158deg, #17090D 0%, #2A0E17 42%, #6E1B2E 100%)",
         color: "#F7ECEC",
         fontFamily: "Roboto",
       },
       [
-        header,
-        tagline,
-        // Content sits in the lower-middle; the header + tagline anchor the top
-        // so the card is balanced top-to-bottom, not empty-over-crammed.
-        box({ flex: 0.5 }, []),
+        butterfly
+          ? {
+              type: "img",
+              props: {
+                src: butterfly.uri,
+                style: {
+                  display: "flex",
+                  width: bfW,
+                  height: bfH,
+                  transform: "rotate(20deg)",
+                  marginBottom: 26,
+                },
+              },
+            }
+          : box({ width: bfH, height: bfH, marginBottom: 26 }, []),
+        txt(
+          { ...center, fontSize: 36, fontWeight: 700, letterSpacing: 7, textTransform: "uppercase" },
+          "GENNETY",
+        ),
         txt(
           {
+            ...center,
+            marginTop: 14,
+            fontSize: 28,
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            color: "rgba(247,236,236,0.6)",
+          },
+          "Your personal AI matchmaker",
+        ),
+        box({ flex: 1 }, []),
+        txt(
+          {
+            ...center,
             fontSize: 26,
             fontWeight: 700,
             letterSpacing: 3,
             textTransform: "uppercase",
             color: "#E7C7A6",
-            marginBottom: 20,
+            marginBottom: 22,
           },
           kicker,
         ),
         headline,
-        // Real "what is this" line so the card carries information, not just a
-        // slogan (and no "AI matchmaker" cliché).
+        box({ flex: 1 }, []),
+        // The Premium gift badge is now the bottom element (replaces gennety.com).
         txt(
           {
-            marginTop: 26,
-            fontSize: 31,
-            lineHeight: 1.34,
-            color: "rgba(247,236,236,0.74)",
-          },
-          support,
-        ),
-        txt(
-          {
-            marginTop: 34,
-            alignSelf: "flex-start",
             alignItems: "center",
-            padding: "18px 28px",
+            justifyContent: "center",
+            padding: "22px 40px",
             borderRadius: 999,
-            border: "1px solid rgba(255,255,255,0.22)",
-            background: "rgba(255,255,255,0.10)",
-            fontSize: 30,
-            fontWeight: 600,
+            background: "rgba(255,255,255,0.12)",
+            fontSize: 33,
+            fontWeight: 700,
           },
           giftLine,
-        ),
-        box({ flex: 0.4 }, []),
-        txt(
-          {
-            fontSize: 24,
-            fontWeight: 500,
-            letterSpacing: 2,
-            color: "rgba(247,236,236,0.5)",
-          },
-          t(input.lang, "referralCardFooter"),
         ),
       ],
     );
