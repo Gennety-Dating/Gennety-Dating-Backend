@@ -464,7 +464,7 @@ async function load(): Promise<void> {
       premiumUntil: preview === "active" ? "2026-11-24T00:00:00.000Z" : null,
       autoRenew: true,
       priceStars: 500,
-      priceDisplay: "$9.99",
+      priceDisplay: "$11.99",
     };
     if (preview === "active") renderActive(mock);
     else renderOffer(mock);
@@ -483,7 +483,7 @@ async function load(): Promise<void> {
       premiumUntil: null,
       autoRenew: false,
       priceStars: 0,
-      priceDisplay: "$9.99",
+      priceDisplay: "$11.99",
     });
   }
 }

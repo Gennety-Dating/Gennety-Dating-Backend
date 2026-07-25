@@ -12,7 +12,7 @@ const h = vi.hoisted(() => ({
     REFERRAL_INVITEE_PREMIUM_MONTHS: 1,
     REFERRAL_DAILY_REWARD_CAP: 3,
     TICKET_PRICE_CENTS: 699,
-    PREMIUM_PRICE_USD_DISPLAY: "$9.99",
+    PREMIUM_PRICE_USD_DISPLAY: "$11.99",
     BOT_USERNAME: "gennetybot",
   },
   findUnique: vi.fn(),
@@ -269,9 +269,9 @@ describe("grantReferralRewardsForVerifiedInvitee", () => {
 });
 
 describe("referralUsdValue / buildReferralStateView", () => {
-  it("prices tickets ($6.99) + Premium months ($9.99) correctly", () => {
-    expect(referralUsdValue(1, 1)).toBe("$16.98");
-    expect(referralUsdValue(5, 5)).toBe("$84.90");
+  it("prices tickets ($6.99) + Premium months ($11.99) correctly", () => {
+    expect(referralUsdValue(1, 1)).toBe("$18.98");
+    expect(referralUsdValue(5, 5)).toBe("$94.90");
     expect(referralUsdValue(0, 0)).toBe("$0.00");
   });
 
@@ -281,10 +281,10 @@ describe("referralUsdValue / buildReferralStateView", () => {
     expect(view.verifiedCount).toBe(3);
     expect(view.earnedTickets).toBe(2);
     expect(view.earnedMonths).toBe(2);
-    expect(view.earnedUsd).toBe("$33.96");
+    expect(view.earnedUsd).toBe("$37.96");
     expect(view.ladder.map((r) => r.reached)).toEqual([true, true, false, false]);
-    expect(view.ladder[3]).toMatchObject({ atCount: 10, tickets: 5, months: 5, usd: "$84.90" });
-    expect(view.next).toEqual({ atCount: 5, remaining: 2, usd: "$50.94" });
+    expect(view.ladder[3]).toMatchObject({ atCount: 10, tickets: 5, months: 5, usd: "$94.90" });
+    expect(view.next).toEqual({ atCount: 5, remaining: 2, usd: "$56.94" });
   });
 
   it("reports next=null once the top rung is reached", () => {

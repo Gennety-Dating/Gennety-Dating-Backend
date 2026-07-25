@@ -40,14 +40,14 @@ const PREVIEW_STATE: ReferralState = {
   verifiedCount: 3,
   earnedTickets: 2,
   earnedMonths: 2,
-  earnedUsd: "$33.96",
+  earnedUsd: "$37.96",
   ladder: [
-    { atCount: 1, tickets: 1, months: 1, usd: "$16.98", reached: true },
-    { atCount: 3, tickets: 2, months: 2, usd: "$33.96", reached: true },
-    { atCount: 5, tickets: 3, months: 3, usd: "$50.94", reached: false },
-    { atCount: 10, tickets: 5, months: 5, usd: "$84.90", reached: false },
+    { atCount: 1, tickets: 1, months: 1, usd: "$18.98", reached: true },
+    { atCount: 3, tickets: 2, months: 2, usd: "$37.96", reached: true },
+    { atCount: 5, tickets: 3, months: 3, usd: "$56.94", reached: false },
+    { atCount: 10, tickets: 5, months: 5, usd: "$94.90", reached: false },
   ],
-  next: { atCount: 5, remaining: 2, usd: "$50.94" },
+  next: { atCount: 5, remaining: 2, usd: "$56.94" },
   inviteeMonths: 1,
 };
 
