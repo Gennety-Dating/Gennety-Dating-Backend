@@ -994,8 +994,9 @@ for the dashboard's algorithm-quality view.
 - **Conversational decision (no Accept button, 2026-07-05).** The pitch
   message itself carries only the `[Report]` affordance — there is NO permanent
   Accept/Decline keyboard. After the pitch (and trust card) the bot asks a
-  natural question in the recipient's locale — "So — want to go on a date with
-  him/her?" (`matchDecisionQuestionM/F`, gendered by the partner) — and the
+  natural question in the recipient's locale — "Want to go on a date with
+  him/her? Just answer yes or no." (`matchDecisionQuestionM/F`, gendered by the
+  partner) — and the
   user answers in their own words. `handlers/matching/decision-text.ts`
   classifies the reply (keyword fast-path across all five locales, small LLM
   fallback; unrelated messages fall through to the menu agent; active

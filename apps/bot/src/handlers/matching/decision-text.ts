@@ -1,6 +1,6 @@
 /**
  * Conversational decision replies. The pitch closes with a natural question
- * ("So — want to go on a date with him?"), and the user may answer in plain
+ * ("Want to go on a date with him?"), and the user may answer in plain
  * words instead of tapping the keyboard. This module classifies that reply
  * and turns it into the SAME mechanical confirmation the buttons provide:
  *

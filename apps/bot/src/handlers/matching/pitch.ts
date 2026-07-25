@@ -194,7 +194,7 @@ async function sendPartnerMedia(
 
 /**
  * The conversational closer after the pitch (and trust card): a natural
- * "so — want to go on a date with him/her?" line inviting a plain-text
+ * "want to go on a date with him/her?" line inviting a plain-text
  * answer. The reply is classified by `decision-text.ts` and always funnels
  * into a mechanical button confirmation, so text alone never commits.
  *

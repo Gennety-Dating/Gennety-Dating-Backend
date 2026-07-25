@@ -1,6 +1,6 @@
 /**
  * Classification of a free-text answer to the match-decision question
- * ("So — want to go on a date with him/her?"). Shared by the Telegram
+ * ("Want to go on a date with him/her?"). Shared by the Telegram
  * conversational-decision handler (`handlers/matching/decision-text.ts`)
  * and the mobile endpoint `POST /v1/matches/:id/decision-intent` — both
  * surfaces enforce the same product rule: text alone NEVER commits, the

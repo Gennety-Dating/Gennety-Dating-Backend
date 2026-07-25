@@ -401,9 +401,9 @@ const translations = {
     matchBtnConfirmDecline: "❌ Yes, pass",
     matchBtnKeepDeciding: "← Go back",
     matchDecisionQuestionM:
-      "So — want to go on a date with him? Just say yes or no.",
+      "Want to go on a date with him? Just answer yes or no.",
     matchDecisionQuestionF:
-      "So — want to go on a date with her? Just say yes or no.",
+      "Want to go on a date with her? Just answer yes or no.",
     matchTextYesConfirm: "Love that ✨ Confirm below — and I'll take care of the rest:",
     matchBtnConfirmGo: "💫 Yes, I'm going",
     matchTextUnsure:
@@ -1250,9 +1250,9 @@ const translations = {
     matchBtnConfirmDecline: "❌ Да, пас",
     matchBtnKeepDeciding: "← Назад",
     matchDecisionQuestionM:
-      "Ну что — хочешь пойти с ним на свидание? Просто да или нет.",
+      "Хочешь пойти с ним на свидание? Просто ответь да или нет.",
     matchDecisionQuestionF:
-      "Ну что — хочешь пойти с ней на свидание? Просто да или нет.",
+      "Хочешь пойти с ней на свидание? Просто ответь да или нет.",
     matchTextYesConfirm: "Отлично ✨ Подтверди — и дальше всё сделаю я:",
     matchBtnConfirmGo: "💫 Да, иду на свидание",
     matchTextUnsure:
@@ -2092,9 +2092,9 @@ const translations = {
     matchBtnConfirmDecline: "❌ Так, пас",
     matchBtnKeepDeciding: "← Назад",
     matchDecisionQuestionM:
-      "Хочеш піти з ним на побачення? Напиши: так або ні.",
+      "Хочеш піти з ним на побачення? Просто відповідай так або ні.",
     matchDecisionQuestionF:
-      "Хочеш піти з нею на побачення? Напиши: так або ні.",
+      "Хочеш піти з нею на побачення? Просто відповідай так або ні.",
     matchTextYesConfirm: "Чудово ✨ Підтверди — і далі все зроблю я:",
     matchBtnConfirmGo: "💫 Так, іду на побачення",
     matchTextUnsure:
@@ -2917,9 +2917,9 @@ const deTranslations: TranslationTable = {
   matchBtnConfirmDecline: "❌ Ja, passen",
   matchBtnKeepDeciding: "← Zurück",
   matchDecisionQuestionM:
-    "Und — willst du mit ihm auf ein Date gehen? Einfach ja oder nein.",
+    "Willst du mit ihm auf ein Date gehen? Antworte einfach ja oder nein.",
   matchDecisionQuestionF:
-    "Und — willst du mit ihr auf ein Date gehen? Einfach ja oder nein.",
+    "Willst du mit ihr auf ein Date gehen? Antworte einfach ja oder nein.",
   matchTextYesConfirm: "Stark ✨ Bestätige unten — den Rest übernehme ich:",
   matchBtnConfirmGo: "💫 Ja, ich gehe hin",
   matchTextUnsure:
@@ -3720,9 +3720,9 @@ const plTranslations: TranslationTable = {
   matchBtnConfirmDecline: "❌ Tak, odpuść",
   matchBtnKeepDeciding: "← Wróć",
   matchDecisionQuestionM:
-    "No i jak — chcesz iść z nim na randkę? Po prostu tak albo nie.",
+    "Chcesz iść z nim na randkę? Po prostu odpowiedz tak albo nie.",
   matchDecisionQuestionF:
-    "No i jak — chcesz iść z nią na randkę? Po prostu tak albo nie.",
+    "Chcesz iść z nią na randkę? Po prostu odpowiedz tak albo nie.",
   matchTextYesConfirm: "Świetnie ✨ Potwierdź poniżej — resztą zajmę się ja:",
   matchBtnConfirmGo: "💫 Tak, idę na randkę",
   matchTextUnsure:
