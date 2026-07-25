@@ -85,7 +85,7 @@ function wants(preference, gender) {
     (preference === "women" && gender === "female");
 }
 
-function assertReady(label, user) {
+function assertReady(label, user, hasTrackVerifiedContact) {
   if (!user) throw new Error(`${label} account not found. Complete /start first.`);
   if (user.status !== "active") {
     throw new Error(`${label} must be active; current status=${user.status}.`);
@@ -93,8 +93,11 @@ function assertReady(label, user) {
   if (user.onboardingStep !== "completed") {
     throw new Error(`${label} onboarding must be completed; current step=${user.onboardingStep}.`);
   }
-  if (!user.isEmailVerified || !user.universityDomain) {
-    throw new Error(`${label} must have verified email and universityDomain.`);
+  // Registration v2 union gate (student/legacy email OR general phone) —
+  // see services/contact-verification.ts. The old email-only check rejected
+  // valid phone-track accounts.
+  if (!hasTrackVerifiedContact(user)) {
+    throw new Error(`${label} must have a track-verified contact rail (email or phone).`);
   }
   if (
     !user.profile?.homeCityKey ||
@@ -158,6 +161,8 @@ async function loadUser(telegramId) {
       email: true,
       universityDomain: true,
       isEmailVerified: true,
+      registrationTrack: true,
+      phoneVerifiedAt: true,
       status: true,
       onboardingStep: true,
       firstName: true,
@@ -247,13 +252,14 @@ async function main() {
   const { createProposedMatch } = await import("../apps/bot/src/services/match-engine.js");
   const { dispatchMatches } = await import("../apps/bot/src/services/dispatch-queue.js");
   const { createBot } = await import("../apps/bot/src/bot.js");
+  const { hasTrackVerifiedContact } = await import("../apps/bot/src/services/contact-verification.js");
 
   let primary = await loadUser(primaryTg);
   let secondary = await loadUser(secondaryTg);
   secondary = await maybeAlignSecondaryDomain(primary, secondary);
 
-  assertReady("Primary", primary);
-  assertReady("Secondary", secondary);
+  assertReady("Primary", primary, hasTrackVerifiedContact);
+  assertReady("Secondary", secondary, hasTrackVerifiedContact);
 
   if (primary.profile.homeCityKey !== secondary.profile.homeCityKey) {
     throw new Error(
@@ -327,6 +333,9 @@ async function main() {
     research: 0.78,
     league: 1,
     agePref: 1,
+    // Type Radar V_type factor — 1 = neutral/no-op, matching the shadow-mode
+    // TYPE_PREF_FLOOR default (services/match-engine.ts multiplies by this).
+    type: 1,
     penalty: 0,
     embeddingDistance: 0.24,
     starvationBonus: 0,

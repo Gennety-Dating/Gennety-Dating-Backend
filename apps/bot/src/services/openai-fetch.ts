@@ -46,19 +46,46 @@ const DEFAULT_OPENAI_TIMEOUT_MS = 30_000;
  *      three tool-calling agents (menu, onboarding, Aether) — the failing
  *      request bubbles up and the caller silently falls back to the plain
  *      menu / a canned reply.
+ *   3. Reasoning tokens are billed against `max_completion_tokens`, so a
+ *      tight budget sized for the *visible* answer can be consumed entirely by
+ *      hidden reasoning: the call returns HTTP 200 with
+ *      `finish_reason: "length"` and an EMPTY `content`. Measured on
+ *      2026-07-25 against the live API: the match-card copy call (220 tokens)
+ *      burned all 220 on reasoning in 1 of 3 runs, and the decision-intent
+ *      classifier (16 tokens) failed 3 of 3 — silently degrading every
+ *      non-keyword Accept/Decline reply to "other". It is intermittent and
+ *      budget-dependent, which is what makes it so easy to misread as a flaky
+ *      model rather than a systematic misconfiguration.
  *
- * Both are normalised here, in one place, so every chat request that flows
+ * All three are normalised here, in one place, so every chat request that flows
  * through `openaiFetch` is corrected regardless of call site: drop a
  * non-default `temperature`, and inject `reasoning_effort: "none"` whenever the
- * body carries function `tools` (respecting an explicit value if a caller ever
- * sets one). Non-tool requests are otherwise untouched, bodies that aren't JSON
- * strings (embeddings, streams) pass through unchanged, and any parse failure
- * leaves the request as-is.
+ * body carries function `tools` OR declares a completion budget too tight to
+ * survive reasoning overhead (respecting an explicit value if a caller ever
+ * sets one). A request with no `max_completion_tokens` is left alone — its
+ * output is unbounded, so reasoning cannot starve it — as are generous budgets
+ * where reasoning is affordable and often desirable (the Elo vision seed at
+ * 1000, the onboarding fact collector at 800). Bodies that aren't JSON strings
+ * (embeddings, streams) pass through unchanged, and any parse failure leaves
+ * the request as-is.
  *
  * SINGLE REVERT POINT: when a model that supports custom temperature and tool
  * calls without this flag is configured (an `OPENAI_MODEL_*` override), remove
  * this shim.
  */
+/**
+ * Completion budgets at or below this are treated as "too tight to reason in":
+ * reasoning is disabled so the whole budget reaches the visible answer.
+ *
+ * Chosen from measured behaviour — reasoning expands to fill the space it is
+ * given (~110-122 tokens observed at a 700 budget), so anything in the low
+ * hundreds risks being fully consumed. This covers every short-output call site
+ * in the bot (classification at 16, worker DMs at 100-160, card copy at 220,
+ * appearance tags at 300, the pitch at 480) while leaving the deliberately
+ * generous, quality-sensitive budgets (800+) reasoning as before.
+ */
+const REASONING_STARVATION_BUDGET = 512;
+
 function normalizeChatCompletionBody(
   init: RequestInit | undefined,
 ): RequestInit | undefined {
@@ -81,15 +108,18 @@ function normalizeChatCompletionBody(
   }
 
   // (2) Function tools require `reasoning_effort: "none"` on these reasoning
-  // models. Only inject for a non-empty tools array, and never overwrite an
-  // explicit value a caller already set.
-  if (
-    Array.isArray(body.tools) &&
-    body.tools.length > 0 &&
-    !("reasoning_effort" in body)
-  ) {
-    body.reasoning_effort = "none";
-    changed = true;
+  // models. (3) So do tight completion budgets, which hidden reasoning would
+  // otherwise consume whole, returning an empty `content` with
+  // `finish_reason: "length"`. Never overwrite an explicit value a caller set.
+  if (!("reasoning_effort" in body)) {
+    const hasTools = Array.isArray(body.tools) && body.tools.length > 0;
+    const budget = body.max_completion_tokens;
+    const hasTightBudget =
+      typeof budget === "number" && budget > 0 && budget <= REASONING_STARVATION_BUDGET;
+    if (hasTools || hasTightBudget) {
+      body.reasoning_effort = "none";
+      changed = true;
+    }
   }
 
   if (!changed) return init;

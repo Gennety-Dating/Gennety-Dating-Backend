@@ -19,6 +19,8 @@ import type { MatchCardTexts } from "./template.js";
 
 const MODEL = MODELS.agent;
 const MAX_TOKENS = 220;
+/** One retry: the fallback (a plain photo album) is visibly worse than a card. */
+const MAX_ATTEMPTS = 2;
 const OPENAI_TIMEOUT_MS = 30_000;
 const TAGLINE_MAX = 64;
 const PARAGRAPH_MAX = 230;
@@ -72,49 +74,79 @@ export async function generateMatchCardTexts(
   const name = input.partnerFirstName?.trim();
   if (!name) return null;
 
-  try {
-    const res = await openaiFetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_completion_tokens: MAX_TOKENS,
-        temperature: 0.7,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: buildPrompt(input) },
-          { role: "user", content: "Generate the card copy now." },
-        ],
-      }),
-      signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
-    });
-    if (!res.ok) throw new Error(`OpenAI card copy failed: ${res.status}`);
-    const json = (await res.json()) as {
-      choices: Array<{ message: { content: string | null } }>;
-    };
-    const raw = json.choices[0]?.message?.content?.trim();
-    if (!raw) throw new Error("OpenAI card copy returned empty content");
-    const parsed = JSON.parse(raw) as { tagline?: unknown; paragraph?: unknown };
-    const tagline = typeof parsed.tagline === "string" ? stripEmoji(parsed.tagline) : "";
-    const paragraph = typeof parsed.paragraph === "string" ? stripEmoji(parsed.paragraph) : "";
-    if (!tagline || !paragraph) throw new Error("OpenAI card copy missing fields");
-
-    return {
-      // Empty eyebrow → the panel opens with the wine accent bar (template.ts).
-      eyebrow: "",
-      name:
-        input.partnerAge == null
-          ? name
-          : t(input.language, "matchPhotoCaption", { name, age: input.partnerAge }),
-      tagline: clamp(tagline, TAGLINE_MAX),
-      paragraphs: [clamp(paragraph, PARAGRAPH_MAX)],
-      wordmark: "Gennety",
-    };
-  } catch (err) {
-    console.warn("[match-card] copy generation failed:", err);
-    return null;
+  // A failure here downgrades the recipient to the plain photo album, so the
+  // pair visibly gets two different pitches. One retry converts the residual
+  // transient (network blip, a malformed JSON body) into a card.
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const copy = await requestCardCopy(input, apiKey);
+      return {
+        // Empty eyebrow → the panel opens with the wine accent bar (template.ts).
+        eyebrow: "",
+        name:
+          input.partnerAge == null
+            ? name
+            : t(input.language, "matchPhotoCaption", { name, age: input.partnerAge }),
+        tagline: clamp(copy.tagline, TAGLINE_MAX),
+        paragraphs: [clamp(copy.paragraph, PARAGRAPH_MAX)],
+        wordmark: "Gennety",
+      };
+    } catch (err) {
+      if (attempt < MAX_ATTEMPTS) {
+        console.warn(`[match-card] copy attempt ${attempt} failed, retrying:`, err);
+        continue;
+      }
+      console.warn("[match-card] copy generation failed:", err);
+      return null;
+    }
   }
+  return null;
+}
+
+/** One copy request. Throws on any transport, shape, or content failure. */
+async function requestCardCopy(
+  input: MatchCardCopyInput,
+  apiKey: string,
+): Promise<{ tagline: string; paragraph: string }> {
+  const res = await openaiFetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_completion_tokens: MAX_TOKENS,
+      // Hidden reasoning is billed against `max_completion_tokens`, and this
+      // budget is sized for the visible JSON only — left on, reasoning can
+      // consume the whole allowance and return empty content with
+      // `finish_reason: "length"` (observed live 2026-07-25). The copy is short
+      // constrained writing from a supplied summary, so it needs no reasoning.
+      // `openaiFetch` would inject this anyway for a tight budget; setting it
+      // explicitly keeps the requirement visible at the call site.
+      reasoning_effort: "none",
+      temperature: 0.7,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: buildPrompt(input) },
+        { role: "user", content: "Generate the card copy now." },
+      ],
+    }),
+    signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`OpenAI card copy failed: ${res.status}`);
+  const json = (await res.json()) as {
+    choices: Array<{ message: { content: string | null }; finish_reason?: string }>;
+  };
+  const raw = json.choices[0]?.message?.content?.trim();
+  if (!raw) {
+    throw new Error(
+      `OpenAI card copy returned empty content (finish_reason=${json.choices[0]?.finish_reason ?? "unknown"})`,
+    );
+  }
+  const parsed = JSON.parse(raw) as { tagline?: unknown; paragraph?: unknown };
+  const tagline = typeof parsed.tagline === "string" ? stripEmoji(parsed.tagline) : "";
+  const paragraph = typeof parsed.paragraph === "string" ? stripEmoji(parsed.paragraph) : "";
+  if (!tagline || !paragraph) throw new Error("OpenAI card copy missing fields");
+  return { tagline, paragraph };
 }

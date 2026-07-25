@@ -51,6 +51,21 @@ describe("classifyDecisionKeywords", () => {
     }
   });
 
+  it("reads affirmative idioms that contain a negation word as yes", () => {
+    // "почему бы и нет" embeds "нет"; the negation pass used to win and show
+    // an accepting user the red decline-confirmation card (PRODUCT_SPEC §3.4).
+    for (const text of [
+      "ну давай, почему бы и нет",
+      "почему бы и нет",
+      "чому б і ні",
+      "why not",
+      "warum nicht",
+      "czemu nie",
+    ]) {
+      expect(classifyDecisionKeywords(text), text).toBe("yes");
+    }
+  });
+
   it("recognizes unsure markers", () => {
     expect(classifyDecisionKeywords("хм, не знаю")).toBe("unsure");
     expect(classifyDecisionKeywords("maybe")).toBe("unsure");

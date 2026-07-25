@@ -227,7 +227,7 @@ describe("openaiFetch tool reasoning_effort normalization (GPT-5.6 tools need re
     expect(body.reasoning_effort).toBe("none");
   });
 
-  it("does not add reasoning_effort to a tool-less request", async () => {
+  it("does not add reasoning_effort to a tool-less request with no declared budget", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -237,6 +237,43 @@ describe("openaiFetch tool reasoning_effort normalization (GPT-5.6 tools need re
         model: "gpt-5.6-terra",
         messages: [],
         response_format: { type: "json_object" },
+      }),
+    });
+
+    expect(forwardedBody(fetchMock)).not.toHaveProperty("reasoning_effort");
+  });
+
+  it("injects reasoning_effort:none for a tool-less request with a tight budget", async () => {
+    // Reasoning is billed against max_completion_tokens; at 220 it can consume
+    // the entire allowance and return empty content (match-card copy, observed
+    // live 2026-07-25).
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openaiFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        model: "gpt-5.6-terra",
+        max_completion_tokens: 220,
+        messages: [],
+      }),
+    });
+
+    expect((forwardedBody(fetchMock) as Record<string, unknown>).reasoning_effort).toBe("none");
+  });
+
+  it("leaves a generous completion budget reasoning", async () => {
+    // The Elo vision seed (1000) and fact collector (800) can afford reasoning
+    // and benefit from it — the tight-budget guard must not reach them.
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await openaiFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({
+        model: "gpt-5.6-terra",
+        max_completion_tokens: 1000,
+        messages: [],
       }),
     });
 

@@ -22,6 +22,17 @@ const OPENAI_TIMEOUT_MS = 12_000;
 /** Keyword shortcut only below this length; longer texts go to the LLM. */
 export const KEYWORD_MAX_LEN = 48;
 
+/**
+ * Affirmative idioms that CONTAIN a negation word ("why not"). They must be
+ * matched before {@link NO_PATTERNS}, otherwise the bare "нет"/"ні"/"not"
+ * inside them wins and an enthusiastic yes is read as a pass — which then
+ * shows the user the red decline-confirmation card (PRODUCT_SPEC §3.4).
+ */
+const AFFIRMATIVE_IDIOMS = [
+  "почему бы и нет", "почему бы нет", "чому б і ні", "чому б ні",
+  "why not", "warum nicht", "czemu nie", "dlaczego nie",
+];
+
 /** Negations first — "не хочу" must not match the bare "хочу" yes-pattern. */
 const NO_PATTERNS = [
   "не хочу", "не пойду", "не пiду", "не піду", "не в этот раз", "не цього разу",
@@ -39,6 +50,9 @@ const YES_PATTERNS = [
 export function classifyDecisionKeywords(text: string): DecisionIntent | null {
   const lower = ` ${text.toLowerCase().replace(/[!.,?()"']/g, " ").trim()} `;
   if (lower.trim().length === 0) return null;
+  for (const p of AFFIRMATIVE_IDIOMS) {
+    if (lower.includes(p)) return "yes";
+  }
   for (const p of NO_PATTERNS) {
     if (lower.includes(` ${p} `) || lower.trim() === p) return "no";
   }
