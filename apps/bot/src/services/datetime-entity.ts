@@ -18,10 +18,16 @@ import type { Language } from "@gennety/shared";
  * correct while keeping strict type checking elsewhere.
  */
 
-const RENDER_TZ = "Europe/Kyiv";
+/**
+ * Canonical render timezone for every user-facing absolute date/time string.
+ * Exported so the time card (`services/time-card.ts`) renders the same figures
+ * as this entity's fallback text — the entity itself resolves to the user's
+ * own timezone when tapped.
+ */
+export const RENDER_TZ = "Europe/Kyiv";
 const CALENDAR_AFFORDANCE = "📅 ";
 
-const LOCALE_TAGS: Record<Language, string> = {
+export const LOCALE_TAGS: Record<Language, string> = {
   en: "en-GB",
   ru: "ru-RU",
   uk: "uk-UA",

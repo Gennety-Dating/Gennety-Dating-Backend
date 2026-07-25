@@ -1326,6 +1326,23 @@ better UX than three separate retries.
   Both `GET /v1/calendar/state` and `POST /v1/calendar/pick` therefore
   authenticate via `Authorization: tma <initData>` (HMAC verified
   against `BOT_TOKEN`).
+- **Locked-time card (always-on, Telegram-only).** The slot locks
+  *automatically* on the first single overlap, so the side that didn't act
+  last never explicitly learns **which** slot won — and the very next thing
+  they receive is the §3.7 departure-point Mini App prompt, about something
+  else entirely. Entering `negotiating_venue` therefore DMs each Telegram
+  side a minimal PNG banner (`services/time-card.ts`, ~1000×420 so Telegram
+  renders it as a compact strip) carrying only a small label, the localized
+  date, and the time in the burgundy accent — rendered in the recipient's
+  `User.theme` (light: cream + burgundy; dark: graphite + a lifted burgundy,
+  since the date card's near-black would sink the accent at preview size)
+  and in the canonical `Europe/Kyiv` both sides share. The caption wraps the
+  same phrase in a `date_time` MessageEntity, so the announcement doubles as
+  add-to-calendar. It is sent **before** the concierge prompt, per side, and
+  is purely a framing/visual-break device — no state, no decision, no button.
+  Any render or send failure degrades to the same text with the same entity,
+  and the departure-point prompt goes out either way. Mobile users are
+  skipped (they render their own scheduling UI).
 - **Backwards-compat.** `Match.schedulingIteration` and
   `pickedTimeA/B` are retained as deprecated columns until a follow-up
   cleanup migration drops them; mid-deploy taps on legacy

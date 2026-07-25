@@ -32,6 +32,12 @@ vi.mock("../../services/venue-finalization-flight.js", () => ({
   runVenueFinalizationOnce: vi.fn().mockResolvedValue(undefined),
 }));
 
+// The locked-time card rasterizes real fonts through satori — stub it so these
+// unit tests stay fast and offline. The renderer has its own smoke test.
+vi.mock("../../services/time-card.js", () => ({
+  renderTimeCard: vi.fn().mockResolvedValue(Buffer.from("png")),
+}));
+
 import { prisma } from "@gennety/db";
 import {
   startVenueNegotiation,
@@ -39,6 +45,7 @@ import {
 } from "./venue-negotiation.js";
 import { parseVibe } from "../../services/vibe-parser.js";
 import { runVenueFinalizationOnce } from "../../services/venue-finalization-flight.js";
+import { renderTimeCard } from "../../services/time-card.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as {
@@ -50,10 +57,12 @@ const mMatch = prisma.match as unknown as {
 const mUser = prisma.user as unknown as { findUnique: MockFn };
 const mParseVibe = parseVibe as unknown as MockFn;
 const mFinalize = runVenueFinalizationOnce as unknown as MockFn;
+const mRenderTimeCard = renderTimeCard as unknown as MockFn;
 
 function createApi() {
   return {
     sendMessage: vi.fn().mockResolvedValue({ message_id: 1 }),
+    sendPhoto: vi.fn().mockResolvedValue({ message_id: 2 }),
   } as any;
 }
 
@@ -65,6 +74,7 @@ beforeEach(() => {
   mUser.findUnique.mockReset();
   mParseVibe.mockReset().mockResolvedValue({ category: "cafe", keywords: [], safe: true });
   mFinalize.mockReset().mockResolvedValue(undefined);
+  mRenderTimeCard.mockReset().mockResolvedValue(Buffer.from("png"));
 });
 
 describe("startVenueNegotiation — location-first intro", () => {
@@ -100,6 +110,85 @@ describe("startVenueNegotiation — location-first intro", () => {
     expect(button.web_app.url).toContain("theme=dark");
     const secondButton = api.sendMessage.mock.calls[1]![2].reply_markup.inline_keyboard[0][0];
     expect(secondButton.web_app.url).toContain("theme=light");
+  });
+
+  it("announces the locked time as a card before the departure-point ask", async () => {
+    mMatch.findUnique.mockResolvedValue({
+      id: "m1",
+      status: "negotiating",
+      userA: { telegramId: 111n, language: "ru", theme: "dark" },
+      userB: { telegramId: 222n, language: "en", theme: "light" },
+    });
+
+    const api = createApi();
+    const agreed = new Date("2026-06-20T16:00:00Z");
+    await startVenueNegotiation(api, "m1", agreed);
+
+    // One card per side, rendered in that side's own language + theme.
+    expect(api.sendPhoto).toHaveBeenCalledTimes(2);
+    expect(mRenderTimeCard).toHaveBeenCalledTimes(2);
+    expect(mRenderTimeCard.mock.calls[0]![0]).toMatchObject({
+      agreedTime: agreed,
+      language: "ru",
+      theme: "dark",
+    });
+    expect(mRenderTimeCard.mock.calls[1]![0]).toMatchObject({
+      language: "en",
+      theme: "light",
+    });
+
+    // The caption carries a tappable `date_time` entity (add to calendar).
+    const [chatId, , photoOpts] = api.sendPhoto.mock.calls[0]!;
+    expect(chatId).toBe(111);
+    expect(photoOpts.caption).toContain(t("ru", "venueTimeLockedCaption"));
+    expect(photoOpts.caption_entities[0]).toMatchObject({
+      type: "date_time",
+      unix_time: Math.floor(agreed.getTime() / 1000),
+    });
+
+    // The card frames the prompt that follows, so it must land first.
+    const cardOrder = api.sendPhoto.mock.invocationCallOrder[0]!;
+    const introOrder = api.sendMessage.mock.invocationCallOrder[0]!;
+    expect(cardOrder).toBeLessThan(introOrder);
+  });
+
+  it("falls back to a text confirmation when the card cannot be rendered", async () => {
+    mMatch.findUnique.mockResolvedValue({
+      id: "m1",
+      status: "negotiating",
+      userA: { telegramId: 111n, language: "en", theme: "dark" },
+      userB: { telegramId: -5n, language: "en", theme: "dark" }, // mobile-only
+    });
+    mRenderTimeCard.mockResolvedValue(null);
+
+    const api = createApi();
+    const agreed = new Date("2026-06-20T16:00:00Z");
+    await startVenueNegotiation(api, "m1", agreed);
+
+    expect(api.sendPhoto).not.toHaveBeenCalled();
+    // Mobile-only side is skipped entirely: one text confirmation + one intro.
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    const [, text, opts] = api.sendMessage.mock.calls[0]!;
+    expect(text).toContain(t("en", "venueTimeLockedCaption"));
+    expect(opts.entities[0]).toMatchObject({ type: "date_time" });
+    expect(api.sendMessage.mock.calls[1]![1]).toBe(t("en", "venueConciergeIntro"));
+  });
+
+  it("still sends the concierge prompt when the card send fails", async () => {
+    mMatch.findUnique.mockResolvedValue({
+      id: "m1",
+      status: "negotiating",
+      userA: { telegramId: 111n, language: "en", theme: "dark" },
+      userB: { telegramId: -5n, language: "en", theme: "dark" },
+    });
+
+    const api = createApi();
+    api.sendPhoto.mockRejectedValue(new Error("telegram down"));
+    await startVenueNegotiation(api, "m1", new Date("2026-06-20T16:00:00Z"));
+
+    // Photo failed → text fallback, and the departure-point ask still goes out.
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    expect(api.sendMessage.mock.calls[1]![1]).toBe(t("en", "venueConciergeIntro"));
   });
 });
 

@@ -17,6 +17,8 @@ const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
   "photoManagerDeleteBtn",
   "matchPhotoCaption",
   "coordProxyRelayNamedPrefix",
+  // Bare domain on the referral card — a URL, not prose.
+  "referralCardFooter",
   // "Gennety Premium" is a fixed brand line — identical across all locales.
   "menuPremium",
   "premiumHubTitle",

@@ -23,7 +23,7 @@
  */
 
 import type { Api, RawApi } from "grammy";
-import { InlineKeyboard, Keyboard } from "grammy";
+import { InlineKeyboard, InputFile, Keyboard } from "grammy";
 import type {
   InlineKeyboardMarkup,
   ReplyKeyboardMarkup,
@@ -48,7 +48,9 @@ import {
   venueIntentMode,
 } from "../../services/venue-intent-v2.js";
 import { deliverScheduledConfirmation } from "../../services/scheduled-confirmation.js";
-import { isTelegramTarget } from "../../utils/telegram-target.js";
+import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.js";
+import { buildDateTimeEntity } from "../../services/datetime-entity.js";
+import { renderTimeCard, type TimeCardTheme } from "../../services/time-card.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { venueSearchSteps } from "../../services/analysis-status.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
@@ -100,11 +102,70 @@ export function buildLocationMapKeyboard(
 }
 
 /**
+ * Announce the LOCKED date/time to one side as a minimal PNG banner, sent
+ * immediately before the concierge's departure-point ask.
+ *
+ * The calendar locks a slot the moment both availability sets intersect, so
+ * the side that didn't act last never explicitly saw *which* slot won — and
+ * the very next thing they receive is a Mini App prompt about something else.
+ * The card is the visual break that answers "when is this, actually?" without
+ * adding a step to the flow.
+ *
+ * The caption carries a `date_time` MessageEntity, so the announcement is also
+ * an add-to-calendar affordance (resolved in the user's own timezone), while
+ * the card itself renders the canonical `Europe/Kyiv` figures both sides share.
+ *
+ * Best-effort by design: a render or send failure degrades to the same text
+ * with the same entity, and a failure of THAT is swallowed — the concierge
+ * prompt below must go out either way.
+ */
+async function sendTimeLockedCard(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  agreedTime: Date,
+  lang: Language,
+  theme: Theme,
+): Promise<void> {
+  const chatId = toTelegramChatId(telegramId);
+  const { text, entity } = buildDateTimeEntity(
+    t(lang, "venueTimeLockedCaption"),
+    agreedTime,
+    lang,
+  );
+
+  const png = await renderTimeCard({
+    agreedTime,
+    language: lang,
+    theme: (theme ?? "dark") as TimeCardTheme,
+    label: t(lang, "venueTimeCardLabel"),
+  });
+
+  if (png) {
+    try {
+      await api.sendPhoto(chatId, new InputFile(png, "gennety-time.png"), {
+        caption: text,
+        caption_entities: [entity],
+      });
+      return;
+    } catch (err) {
+      console.warn("[venue-negotiation] time card send failed:", err);
+    }
+  }
+
+  try {
+    await api.sendMessage(chatId, text, { entities: [entity] });
+  } catch (err) {
+    console.warn("[venue-negotiation] time-locked text fallback failed:", err);
+  }
+}
+
+/**
  * Enter `negotiating_venue`: writes the agreed time, sets the status, and
- * DMs both users the location-first concierge prompt (`venueConciergeIntro`)
- * + the Mini App map button. The vibe is asked separately once the departure
- * point is saved (see `sendVenuePostSaveAck`), so this opening message is
- * scoped to a single, unambiguous ask: "mark where you'll set off from".
+ * DMs both users the locked-time card followed by the location-first
+ * concierge prompt (`venueConciergeIntro`) + the Mini App map button. The
+ * vibe is asked separately once the departure point is saved (see
+ * `sendVenuePostSaveAck`), so this opening message is scoped to a single,
+ * unambiguous ask: "mark where you'll set off from".
  *
  * Called from the scheduler the moment a time overlap is found.
  */
@@ -147,22 +208,28 @@ export async function startVenueNegotiation(
 
   // M-17: mobile-only users use the `/v1/matches/:id/vibe-location` route
   // instead of the Telegram concierge prompt — skip them here.
+  //
+  // Per side the two messages are strictly ordered (locked-time card, then the
+  // departure-point ask) — the card exists to frame the prompt that follows it,
+  // so it must never land after. The two sides still run in parallel.
+  const sendSide = async (
+    telegramId: bigint,
+    lang: Language,
+    theme: Theme,
+  ): Promise<void> => {
+    await sendTimeLockedCard(api, telegramId, agreedTime, lang, theme);
+    await api.sendMessage(toTelegramChatId(telegramId), t(lang, "venueConciergeIntro"), {
+      parse_mode: "Markdown",
+      reply_markup: buildLocationMapKeyboard(matchId, lang, theme),
+    });
+  };
+
   const sends: Array<Promise<unknown>> = [];
   if (isTelegramTarget(match.userA.telegramId)) {
-    sends.push(
-      api.sendMessage(Number(match.userA.telegramId), t(langA, "venueConciergeIntro"), {
-        parse_mode: "Markdown",
-        reply_markup: buildLocationMapKeyboard(matchId, langA, match.userA.theme),
-      }),
-    );
+    sends.push(sendSide(match.userA.telegramId, langA, match.userA.theme));
   }
   if (isTelegramTarget(match.userB.telegramId)) {
-    sends.push(
-      api.sendMessage(Number(match.userB.telegramId), t(langB, "venueConciergeIntro"), {
-        parse_mode: "Markdown",
-        reply_markup: buildLocationMapKeyboard(matchId, langB, match.userB.theme),
-      }),
-    );
+    sends.push(sendSide(match.userB.telegramId, langB, match.userB.theme));
   }
   await Promise.all(sends);
 }
