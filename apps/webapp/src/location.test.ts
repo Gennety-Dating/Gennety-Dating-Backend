@@ -451,4 +451,52 @@ describe("Venue Intent V2 initial price policy", () => {
       }),
     );
   });
+
+  it("closes on confirm and never re-opens a relax hint from a stale selectionError", async () => {
+    // The server now finalizes in the BACKGROUND, so the confirm response can
+    // still carry the PREVIOUS attempt's `no_candidates` error. Trusting it
+    // would strand the user on a stale hint; the concierge DMs the relax notice
+    // in chat instead. The Mini App's job is simply to get out of the way.
+    const venueState = {
+      intent: {
+        rawText: "quiet coffee",
+        experiences: ["coffee_treats"],
+        ambiences: ["quiet"],
+        formats: ["seated"],
+        hardConstraints: {
+          dietary: [],
+          alcoholFree: false,
+          stepFree: false,
+          setting: null,
+          maxPrice: null,
+          maxCommuteKm: 8,
+        },
+        parserConfidence: 1,
+        state: "draft",
+        manualConfirmationRequired: false,
+        origin: { lat: 50.45, lng: 30.52, address: null },
+      },
+      status: "draft",
+      partnerSubmitted: false,
+      suggestions: [],
+      selectionError: null,
+      mode: "live",
+    };
+    confirmVenueIntentTmaMock.mockResolvedValue({
+      ...venueState,
+      intent: venueState.intent,
+      status: "confirmed",
+      selectionError: "no_candidates:commute_12_km:AB",
+    });
+
+    const { app, document } = await loadLocationApp({ venueState });
+    await flushPromises();
+
+    document.getElementById("vibe-confirm")!.click();
+    await flushPromises();
+    expect(confirmVenueIntentTmaMock).toHaveBeenCalledTimes(1);
+    expect(document.getElementById("vibe-error")!.textContent).toBe("");
+    vi.advanceTimersByTime(400);
+    expect(app.close).toHaveBeenCalledTimes(1);
+  });
 });

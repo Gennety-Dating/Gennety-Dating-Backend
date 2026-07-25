@@ -94,7 +94,12 @@ export function createLocationRouter(api: Api<RawApi>): Router {
       res.status(400).json({ error: "invalid-request" });
       return;
     }
-    const state = await confirmVenueIntent(matchId, actor.id, intent);
+    // Telegram Mini App: respond as soon as the confirmation is persisted and
+    // let the selector run in the background. The Mini App closes on this ack,
+    // and the concierge narrates the search with its chat status shimmer before
+    // the date card lands — instead of the user staring at a spinning button in
+    // a web view that used to stay open for the whole selection.
+    const state = await confirmVenueIntent(matchId, actor.id, intent, { awaitFinalization: false });
     if (!state) {
       res.status(409).json({ error: "draft-not-found" });
       return;

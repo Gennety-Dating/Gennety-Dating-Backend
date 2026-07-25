@@ -20,6 +20,7 @@ import {
   type VenueHardConstraints,
   type VenueIntentOrigin,
   type VenueIntentV2,
+  type Language,
   type VenueRankCandidate,
 } from "@gennety/shared";
 import { env } from "../config.js";
@@ -39,6 +40,15 @@ import { generateAndSaveWingmanHints } from "./wingman-hint.js";
 import { notifyFounderVenueSelectionFailure } from "./founder-notify.js";
 import { deliverScheduledConfirmation } from "./scheduled-confirmation.js";
 import { applyInitialVenueConstraintPolicy, evaluateInitialVenuePolicy } from "./initial-venue-policy.js";
+import { runStatusSequence } from "./ai-stream.js";
+import { venueSearchSteps } from "./analysis-status.js";
+
+/**
+ * Hard ceiling on the in-chat venue-search status. The selector normally
+ * resolves it explicitly; this only guards against an unexpected throw leaving
+ * the held beat waiting forever.
+ */
+const VENUE_SEARCH_STATUS_MAX_MS = 45_000;
 
 export type VenueIntentSide = "A" | "B";
 export type VenueIntentStatus = "none" | "draft" | "confirmed";
@@ -302,6 +312,19 @@ export async function confirmVenueIntent(
   matchId: string,
   userId: string,
   input: ConfirmVenueIntentInput,
+  /**
+   * `awaitFinalization: false` persists the confirmation and kicks the selector
+   * in the BACKGROUND, so the caller's response returns in milliseconds.
+   *
+   * The Telegram Mini App uses it: the venue selector + card render take
+   * seconds, and holding the HTTP response meant the Mini App sat open on a
+   * spinner through the whole wait. The product wants the opposite — the app
+   * closes the instant the user confirms, and the concierge narrates the search
+   * with its status shimmer in the chat before the date card lands
+   * (`finalizeVenueIntentV2`). iOS keeps the default `true`: its native flow
+   * reads `selectionError` off this very response.
+   */
+  opts?: { awaitFinalization?: boolean },
 ): Promise<VenueIntentStateResponse | null> {
   const own = await participant(matchId, userId);
   if (!own || own.match.status !== "negotiating_venue") return null;
@@ -335,7 +358,15 @@ export async function confirmVenueIntent(
           parsedCategoryB: legacyCategory,
         },
   });
-  if (venueIntentMode(matchId) === "live") await tryFinalizeVenueIntentV2(matchId);
+  if (venueIntentMode(matchId) === "live") {
+    if (opts?.awaitFinalization === false) {
+      void tryFinalizeVenueIntentV2(matchId).catch((err) => {
+        console.warn(`[venue-intent-v2] background finalization failed for ${matchId}:`, err);
+      });
+    } else {
+      await tryFinalizeVenueIntentV2(matchId);
+    }
+  }
   return getVenueIntentState(matchId, userId);
 }
 
@@ -535,6 +566,43 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   const originA = a.origin;
   const originB = b.origin;
   const mid = midpoint(originA, originB);
+  // Both sides have confirmed and the search is about to run, so narrate the
+  // wait in the chat exactly like the legacy concierge path does: a self-
+  // replacing "picking the best spot" shimmer, its final beat held `until` the
+  // selection settles, then torn down before the outcome (date card or the
+  // relax notice) lands. This is what lets the Mini App close the instant the
+  // user confirms — the wait belongs to the chat, not to a stuck web view.
+  // Shadow mode must stay invisible, so it never opens a status.
+  const liveRun = venueIntentMode(matchId) === "live";
+  let settleSelection: () => void = () => {};
+  const selectionSettled = new Promise<void>((resolve) => {
+    settleSelection = resolve;
+    // Fail-safe: an unexpected throw inside the selector below would otherwise
+    // leave the held final beat waiting on a promise nobody resolves, stranding
+    // the status message in the chat. Unref'd so it never holds the process up.
+    setTimeout(resolve, VENUE_SEARCH_STATUS_MAX_MS).unref?.();
+  });
+  const statusRuns: Array<Promise<unknown>> = [];
+  if (liveRun) {
+    const statusApi = (await import("../public/server.js")).getBotApi();
+    for (const user of [match.userA, match.userB]) {
+      if (!statusApi || user.telegramId <= 0n) continue;
+      if (user.platform !== "telegram" && user.platform !== "both") continue;
+      statusRuns.push(
+        runStatusSequence(
+          statusApi,
+          Number(user.telegramId),
+          venueSearchSteps((user.language ?? "en") as Language),
+          { until: selectionSettled, untilFromStepIndex: 3, rich: true },
+        ).catch(() => undefined),
+      );
+    }
+  }
+  /** Tear the shimmer down and wait for it to clear the chat. Idempotent. */
+  const endSearchStatus = async (): Promise<void> => {
+    settleSelection();
+    await Promise.all(statusRuns);
+  };
   const cityKey = match.userA.profile?.homeCityKey ?? match.userB.profile?.homeCityKey ?? null;
   const universityDomain = match.userA.universityDomain ?? match.userB.universityDomain ?? null;
   const curated = await prisma.curatedVenue.findMany({
@@ -607,6 +675,10 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   const best = ranked[0];
   const chosen = best ? deduped.find((row) => row.rank.id === best.candidate.id) ?? null : null;
   const mode = venueIntentMode(matchId) === "shadow" ? "shadow" : "live";
+  // The search is over: clear the "picking the best spot" shimmer BEFORE the
+  // outcome so the chat never carries two live status messages (the date-card
+  // render inside `deliverScheduledConfirmation` opens its own).
+  await endSearchStatus();
 
   if (!chosen || !best) {
     const relaxation = minimalRelaxation(a, b);

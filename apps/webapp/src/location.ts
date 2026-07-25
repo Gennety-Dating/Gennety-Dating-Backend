@@ -565,8 +565,6 @@ interface VibeUi {
   singleHint: string;
   /** Status beats cycled inside "Continue" while the vibe is interpreted. */
   thinkingSteps: string[];
-  /** Status beats cycled inside the final Confirm while the venue is picked. */
-  findingSteps: string[];
 }
 const VIBE_UI: Record<Lang, VibeUi> = {
   en: {
@@ -584,7 +582,6 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     multiHint: "choose any",
     singleHint: "pick one",
     thinkingSteps: ["Reading your vibe…", "Thinking…", "Picking out the details…"],
-    findingSteps: ["Matching your vibes…", "Checking real venues…", "Finding your spot…"],
   },
   ru: {
     step: "Шаг 2 из 2",
@@ -601,7 +598,6 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     multiHint: "можно несколько",
     singleHint: "выбери одно",
     thinkingSteps: ["Считываю вайб…", "Думаю…", "Выделяю детали…"],
-    findingSteps: ["Сверяю ваши вайбы…", "Проверяю реальные места…", "Подбираю ваше место…"],
   },
   uk: {
     step: "Крок 2 з 2",
@@ -618,7 +614,6 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     multiHint: "можна кілька",
     singleHint: "обери одне",
     thinkingSteps: ["Зчитую вайб…", "Думаю…", "Виділяю деталі…"],
-    findingSteps: ["Звіряю ваші вайби…", "Перевіряю реальні місця…", "Добираю ваше місце…"],
   },
   de: {
     step: "Schritt 2 von 2",
@@ -635,7 +630,6 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     multiHint: "mehrere möglich",
     singleHint: "nur eins",
     thinkingSteps: ["Lese deine Stimmung…", "Denke nach…", "Filtere die Details…"],
-    findingSteps: ["Gleiche eure Stimmungen ab…", "Prüfe echte Orte…", "Suche euren Ort…"],
   },
   pl: {
     step: "Krok 2 z 2",
@@ -652,7 +646,6 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     multiHint: "kilka opcji",
     singleHint: "wybierz jedno",
     thinkingSteps: ["Czytam twój klimat…", "Myślę…", "Wyłapuję szczegóły…"],
-    findingSteps: ["Zestawiam wasze klimaty…", "Sprawdzam prawdziwe miejsca…", "Szukam waszego miejsca…"],
   },
 };
 
@@ -883,6 +876,23 @@ document.getElementById("vibe-interpret")?.addEventListener("click", async () =>
     vibeBusy = false;
   }
 });
+/**
+ * Final confirm — hand off to the chat and get out of the way.
+ *
+ * The server persists the confirmation and runs the venue selector in the
+ * BACKGROUND (`awaitFinalization: false`), so this call returns in
+ * milliseconds. Deliberately NO thinking status here: the concierge narrates
+ * the search with its own shimmer in the Telegram chat and then drops the date
+ * card, which is where that moment belongs — a Mini App idling on a spinner for
+ * the whole selection is exactly what we're removing.
+ *
+ * A "no eligible venue" outcome is therefore also a chat event now (the
+ * concierge DMs the affected side to reopen this screen and relax one
+ * condition, which restores the draft plus the relax chip). We never re-render
+ * a relax hint off this response — with the selector still running its
+ * `selectionError` is whatever the PREVIOUS attempt left behind, so trusting it
+ * would strand the user on a stale error instead of closing.
+ */
 document.getElementById("vibe-confirm")?.addEventListener("click", async () => {
   if (!app || !draft || vibeBusy) return;
   const error = document.getElementById("vibe-error");
@@ -893,33 +903,19 @@ document.getElementById("vibe-confirm")?.addEventListener("click", async () => {
   }
   app.HapticFeedback?.impactOccurred?.("medium");
   vibeBusy = true;
-  const stopThinking = startCtaThinking(
-    document.getElementById("vibe-confirm") as HTMLButtonElement,
-    VIBE_UI[lang].findingSteps,
-  );
+  const confirmBtn = document.getElementById("vibe-confirm") as HTMLButtonElement | null;
+  if (confirmBtn) confirmBtn.disabled = true;
   try {
     venueState = await confirmVenueIntentTma(app.initData, matchId, {
       experiences: draft.experiences, ambiences: draft.ambiences, formats: draft.formats,
       hardConstraints: draft.hardConstraints,
       origin: { lat: selectedLat, lng: selectedLng, address: selectedAddress },
     });
-    if (venueState.selectionError?.startsWith("no_candidates:")) {
-      stopThinking();
-      app.HapticFeedback?.notificationOccurred?.("warning");
-      draft = venueState.intent;
-      renderDraft();
-      if (error) error.textContent = VIBE_ERRORS[lang].relax + label(venueState.selectionError.split(":")[1] ?? "");
-      return;
-    }
-    // Keep the busy state on screen through the close — the app is about to
-    // dismiss, so restoring the idle label would only flash.
     app.HapticFeedback?.notificationOccurred?.("success");
-    setTimeout(() => {
-      stopThinking();
-      app.close();
-    }, 250);
+    // Brief beat so the success haptic registers before Telegram dismisses.
+    setTimeout(() => app.close(), 200);
   } catch {
-    stopThinking();
+    if (confirmBtn) confirmBtn.disabled = false;
     app.HapticFeedback?.notificationOccurred?.("error");
     if (error) error.textContent = tr(lang, "errNetwork");
   } finally {
