@@ -182,7 +182,9 @@ async function main() {
   // Every user-facing referral surface, sent to the right side with a header
   // line so each can be reviewed in context.
   const inviteLink = `https://t.me/${process.env.BOT_USERNAME}?start=referral_${referrer.id}`;
-  const cardUrl = `${publicBase}/v1/referral/card?u=${referrer.id}&sig=${cardSig(referrer.id)}`;
+  // &v cache-busts Telegram's server-side photo cache so a re-render is fetched
+  // fresh (the URL is otherwise stable, so Telegram would reuse the old image).
+  const cardUrl = `${publicBase}/v1/referral/card?u=${referrer.id}&sig=${cardSig(referrer.id)}&v=${Date.now()}`;
   const joinKb = { inline_keyboard: [[{ text: t(lang, "referralShareJoin"), url: inviteLink }]] };
 
   // ══ REFERRER SIDE (tg=782065541) ══════════════════════════════════════

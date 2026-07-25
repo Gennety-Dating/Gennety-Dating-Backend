@@ -35,12 +35,16 @@ function loadFonts(): SatoriFonts {
   return cachedFonts;
 }
 
-let cachedButterfly: string | null = null;
-async function butterflyDataUri(): Promise<string | null> {
-  if (cachedButterfly !== null) return cachedButterfly || null;
-  const mark = await butterflyPng(150, "#F0C9B0");
-  cachedButterfly = mark ? `data:image/png;base64,${mark.png.toString("base64")}` : "";
-  return cachedButterfly || null;
+// The mark keeps its natural aspect ratio (width/height) — forcing it into a
+// square box squished the butterfly on the card.
+let cachedButterfly: { uri: string; w: number; h: number } | null = null;
+async function butterflyMark(): Promise<{ uri: string; w: number; h: number } | null> {
+  if (cachedButterfly) return cachedButterfly.uri ? cachedButterfly : null;
+  const mark = await butterflyPng(180, "#F0C9B0");
+  cachedButterfly = mark
+    ? { uri: `data:image/png;base64,${mark.png.toString("base64")}`, w: mark.width, h: mark.height }
+    : { uri: "", w: 0, h: 0 };
+  return cachedButterfly.uri ? cachedButterfly : null;
 }
 
 // Minimal satori node helpers (this is a .ts file, so no JSX). Every box carries
@@ -61,13 +65,16 @@ export interface ReferralCardInput {
 
 export async function renderReferralCard(input: ReferralCardInput): Promise<Buffer | null> {
   try {
-    const butterfly = await butterflyDataUri();
+    const butterfly = await butterflyMark();
     const kicker = input.referrerName
       ? t(input.lang, "referralCardInvitedBy", { name: input.referrerName })
       : t(input.lang, "referralCardInvitedGeneric");
     const support = t(input.lang, "referralCardSupport");
     const giftLine = t(input.lang, "referralCardGift", { months: String(input.giftMonths) });
 
+    // Aspect-correct butterfly (never squished into a square box).
+    const bfH = 56;
+    const bfW = butterfly ? Math.round((butterfly.w / butterfly.h) * bfH) : bfH;
     const header = box(
       { justifyContent: "space-between", alignItems: "center" },
       [
@@ -84,10 +91,23 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
         butterfly
           ? {
               type: "img",
-              props: { src: butterfly, style: { display: "flex", width: 66, height: 66 } },
+              props: { src: butterfly.uri, style: { display: "flex", width: bfW, height: bfH } },
             }
-          : box({ width: 66, height: 66 }, []),
+          : box({ width: bfH, height: bfH }, []),
       ],
+    );
+
+    // Fixed English brand tagline right under the header — says what Gennety is
+    // and fills the top of the card so it no longer reads as an empty void.
+    const tagline = txt(
+      {
+        marginTop: 16,
+        fontSize: 28,
+        fontWeight: 500,
+        letterSpacing: 0.5,
+        color: "rgba(247,236,236,0.62)",
+      },
+      "Your personal AI matchmaker",
     );
 
     const headline = box(
@@ -110,10 +130,10 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
       },
       [
         header,
-        // A smaller top spacer than before so the content block sits in the
-        // lower-middle third instead of pinned to the very bottom over a big
-        // empty void.
-        box({ flex: 0.62 }, []),
+        tagline,
+        // Content sits in the lower-middle; the header + tagline anchor the top
+        // so the card is balanced top-to-bottom, not empty-over-crammed.
+        box({ flex: 0.5 }, []),
         txt(
           {
             fontSize: 26,
@@ -151,7 +171,7 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
           },
           giftLine,
         ),
-        box({ flex: 0.32 }, []),
+        box({ flex: 0.4 }, []),
         txt(
           {
             fontSize: 24,

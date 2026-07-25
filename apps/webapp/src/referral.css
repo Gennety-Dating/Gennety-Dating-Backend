@@ -5,6 +5,14 @@
    the dark theme, ink on the cream one). Symbols are borderless line icons from
    icons.ts, never platform emoji. Base tokens live in theme.css. */
 
+/* Fullscreen (Bot API 8.0+) floats the close × / menu ⋯ over the page; reserve
+   room so the hero never slides under them. wireContentInsets overrides these
+   with Telegram's real content-safe-area values when the event fires. */
+:root {
+  --tg-content-top: 56px;
+  --tg-content-bottom: 0px;
+}
+
 * {
   box-sizing: border-box;
 }

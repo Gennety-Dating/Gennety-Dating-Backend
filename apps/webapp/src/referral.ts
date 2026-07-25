@@ -308,6 +308,19 @@ async function onShare(btn: HTMLButtonElement): Promise<void> {
 async function boot(): Promise<void> {
   app?.ready?.();
   app?.expand?.();
+  // Bot API 8.0+ immersive fullscreen — removes the top sheet header so the page
+  // fills the screen natively (older clients silently fall through to expand()).
+  const chromeColor = document.documentElement.dataset.theme === "light" ? "#f5f5f5" : "#030303";
+  try {
+    if (app?.isVersionAtLeast?.("8.0") && !app.isFullscreen) {
+      app.requestFullscreen?.();
+    }
+    app?.setHeaderColor?.(chromeColor);
+    app?.setBackgroundColor?.(chromeColor);
+    app?.setBottomBarColor?.(chromeColor);
+  } catch {
+    // Best-effort cosmetic boot — never crash over chrome theming.
+  }
   wireContentInsets(app);
   renderLoading();
   if (PREVIEW) {
