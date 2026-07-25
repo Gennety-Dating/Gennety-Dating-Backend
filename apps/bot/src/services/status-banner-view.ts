@@ -89,6 +89,7 @@ export function renderStatusBanner(input: StatusBannerViewInput): StatusBannerVi
     "✦ GENNETY DROP",
     "",
     t(input.language, "statusBannerSchedule", { date, time }),
+    "",
     t(input.language, "statusBannerActive"),
   );
   if (input.upcomingDate) {
