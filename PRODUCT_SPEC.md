@@ -1042,7 +1042,7 @@ for the dashboard's algorithm-quality view.
 - The `proposal-countdown` worker re-renders a live **reply-deadline button**
   on the pitch keyboard **every minute** via `editMessageReplyMarkup` (styled
   `primary`, and on the same cadence as the pinned status-banner countdown).
-  The label shows hours+minutes ("⏳ Reply: Xh Ym"), so it moves on every pass
+  The label shows hours+minutes ("⏳ Xh Ym left to reply"), so it moves on every pass
   across the whole 24 h window rather than freezing between ticks — a markup
   edit sends no notification, so the cost is API calls, not user noise;
   tapping it (`match:countdown:`) answers an
