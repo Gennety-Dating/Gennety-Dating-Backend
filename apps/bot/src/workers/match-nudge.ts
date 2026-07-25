@@ -5,6 +5,7 @@ import { env } from "../config.js";
 import { MODELS } from "../models.js";
 import { openaiFetch } from "../services/openai-fetch.js";
 import { PROPOSAL_TTL_MS } from "../utils/countdown-plate.js";
+import { PAIR_NOT_BOTH_ACCEPTED } from "../utils/match-filters.js";
 import { isQuietHours } from "./quiet-hours.js";
 
 /**
@@ -94,7 +95,10 @@ async function handleDeadlineNudges(
       status: "proposed",
       proposalDeadlineNudgeSentAt: null,
       dispatchedAt: { gt: earliestDispatch, lte: latestDispatch },
-      NOT: { AND: [{ acceptedByA: true }, { acceptedByB: true }] },
+      // Null-safe "not both accepted" — a `NOT: { AND: [...] }` here would
+      // drop precisely the silent pairs this nudge exists for. See
+      // `utils/match-filters.ts`.
+      ...PAIR_NOT_BOTH_ACCEPTED,
     },
     select: {
       id: true,
@@ -179,7 +183,8 @@ async function handleProposalNudges(
       status: "proposed",
       dispatchedAt: { not: null, lt: nudge1Cutoff },
       proposalNudge2SentAt: null, // haven't sent the final nudge yet
-      NOT: { AND: [{ acceptedByA: true }, { acceptedByB: true }] },
+      // Null-safe "not both accepted" (see `utils/match-filters.ts`).
+      ...PAIR_NOT_BOTH_ACCEPTED,
     },
     select: {
       id: true,

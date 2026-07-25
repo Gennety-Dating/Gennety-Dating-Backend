@@ -7,6 +7,7 @@ import {
   renderCountdownButtonLabel,
 } from "../utils/countdown-plate.js";
 import { buildMatchKeyboard } from "../handlers/matching/pitch.js";
+import { PAIR_NOT_BOTH_ACCEPTED } from "../utils/match-filters.js";
 
 /**
  * Live countdown worker for `proposed` match pitches.
@@ -81,15 +82,21 @@ export async function proposalCountdownTick(
     where: {
       status: "proposed",
       dispatchedAt: { not: null },
-      OR: [
-        { pitchMessageIdA: { not: null } },
-        { pitchMessageIdB: { not: null } },
+      // Both clauses are OR-shaped, so they are AND-ed explicitly rather
+      // than fighting over the single top-level `OR` key.
+      AND: [
+        {
+          OR: [
+            { pitchMessageIdA: { not: null } },
+            { pitchMessageIdB: { not: null } },
+          ],
+        },
+        // If both already accepted, the decision handler is about to flip
+        // status to `negotiating` — skip to avoid racing with that flip.
+        // Null-safe by construction: see `utils/match-filters.ts` for why a
+        // `NOT: { AND: [...] }` here silently dropped every undecided pair.
+        PAIR_NOT_BOTH_ACCEPTED,
       ],
-      // If both already accepted, the decision handler is about to flip
-      // status to `negotiating` — skip to avoid racing with that flip.
-      NOT: {
-        AND: [{ acceptedByA: true }, { acceptedByB: true }],
-      },
     },
     select: {
       id: true,

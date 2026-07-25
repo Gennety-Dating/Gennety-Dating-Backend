@@ -1,5 +1,6 @@
 import { prisma } from "@gennety/db";
 import { applySilentIgnorePenalty } from "../utils/elo-calculator.js";
+import { PAIR_NOT_BOTH_ACCEPTED } from "../utils/match-filters.js";
 import { createMatchEvent } from "./match-events.js";
 
 /**
@@ -97,9 +98,12 @@ export async function expireStaleMatches(
     where: {
       status: "proposed",
       dispatchedAt: { not: null, lt: cutoff },
-      NOT: {
-        AND: [{ acceptedByA: true }, { acceptedByB: true }],
-      },
+      // Null-safe "not both accepted". The old `NOT: { AND: [...] }` excluded
+      // every double-silent pair, so a proposal both sides ignored was never
+      // expired — it sat in `proposed` forever and, via the single-live-match
+      // invariant, locked both users out of all future weekly batches. See
+      // `utils/match-filters.ts`.
+      ...PAIR_NOT_BOTH_ACCEPTED,
     },
     select: {
       id: true,
