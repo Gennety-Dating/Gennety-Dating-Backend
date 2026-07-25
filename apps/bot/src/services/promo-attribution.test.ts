@@ -1,0 +1,56 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const h = vi.hoisted(() => ({ env: { PROMO_ATTRIBUTION_TTL_MIN: 60 } }));
+vi.mock("../config.js", () => ({ env: h.env }));
+
+const {
+  fingerprint,
+  recordAttribution,
+  matchAttribution,
+  __resetPromoAttributions,
+} = await import("./promo-attribution.js");
+
+beforeEach(() => {
+  __resetPromoAttributions();
+  h.env.PROMO_ATTRIBUTION_TTL_MIN = 60;
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe("fingerprint", () => {
+  it("is deterministic and normalizes UA/language", () => {
+    const a = fingerprint({ ip: "1.2.3.4", userAgent: "iPhone", acceptLanguage: "en-US,en;q=0.9" });
+    const b = fingerprint({ ip: "1.2.3.4", userAgent: "iPhone", acceptLanguage: "en-US" });
+    expect(a).toBe(b);
+    expect(a).toHaveLength(32);
+  });
+
+  it("differs for a different IP", () => {
+    const a = fingerprint({ ip: "1.2.3.4", userAgent: "x", acceptLanguage: "en" });
+    const b = fingerprint({ ip: "9.9.9.9", userAgent: "x", acceptLanguage: "en" });
+    expect(a).not.toBe(b);
+  });
+});
+
+describe("record / match attribution", () => {
+  it("matches a recorded code once, then consumes it", () => {
+    const fp = fingerprint({ ip: "1.2.3.4", userAgent: "ua", acceptLanguage: "en" });
+    recordAttribution(fp, "SUMMER3M");
+    expect(matchAttribution(fp)).toBe("SUMMER3M");
+    // one-shot: a second match no longer resolves
+    expect(matchAttribution(fp)).toBeNull();
+  });
+
+  it("returns null for an unknown fingerprint", () => {
+    expect(matchAttribution("deadbeef")).toBeNull();
+  });
+
+  it("expires after the TTL", () => {
+    vi.useFakeTimers();
+    const fp = "fp1";
+    recordAttribution(fp, "SUMMER3M");
+    vi.advanceTimersByTime(61 * 60 * 1000); // TTL is 60 min
+    expect(matchAttribution(fp)).toBeNull();
+  });
+});

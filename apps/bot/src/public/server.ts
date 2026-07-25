@@ -36,6 +36,7 @@ import { createRadarRouter } from "./routes/radar.js";
 import { createVenueChangeRouter } from "./routes/venue-change.js";
 import { createPremiumRouter } from "./routes/premium.js";
 import { createReferralRouter } from "./routes/referral.js";
+import { createPromoRouter } from "./routes/promo.js";
 import {
   isStrongJwtSecret,
   JWT_SECRET_MIN_BYTES,
@@ -337,6 +338,11 @@ app.get("/v1/ping", (_req: Request, res: Response) => {
 // Pre-auth mobile bootstrap: forced-update kill switch + client feature flags.
 // Unauthenticated by design (see routes/app-config.ts); globalLimiter applies.
 app.use("/v1/app", appConfigRouter);
+
+// Promo landing + iOS deferred-attribution recorder (PROMO_CODES_PRODUCT_SPEC.md).
+// Pre-install / pre-auth by design (the visitor has no account yet); 404 when
+// the feature is off. The in-app claim endpoints live on the JWT /v1/me router.
+app.use("/v1/promo", createPromoRouter());
 
 // Native-app phone rail (Registration v2 general track) — Gateway/Twilio
 // fork, 404 while PHONE_AUTH_ENABLED is off. Mounted before the generic

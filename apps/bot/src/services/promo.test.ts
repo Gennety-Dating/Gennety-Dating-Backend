@@ -39,6 +39,7 @@ const {
   promoSourceFromParam,
   resolvePromoCode,
   grantPromoRewardsForUser,
+  claimPromoCodeForUser,
 } = await import("./promo.js");
 
 function code(overrides: Record<string, unknown> = {}) {
@@ -220,5 +221,44 @@ describe("grantPromoRewardsForUser", () => {
     h.grantComplimentaryPremiumMonths.mockResolvedValueOnce({ applied: false, premiumUntil: null });
     const res = await grantPromoRewardsForUser("u1");
     expect(res).toEqual({ code: "SUMMER3M", ticketsApplied: 0, monthsApplied: 0 });
+  });
+});
+
+describe("claimPromoCodeForUser (iOS first-touch attribution)", () => {
+  it("no-ops when the feature is off", async () => {
+    h.env.PROMO_FEATURE_ENABLED = false;
+    expect(await claimPromoCodeForUser("u1", "SUMMER3M")).toEqual({
+      applied: false,
+      reason: "disabled",
+    });
+  });
+
+  it("rejects an invalid / unredeemable code", async () => {
+    h.promoFindUnique.mockResolvedValueOnce(null);
+    expect(await claimPromoCodeForUser("u1", "GHOST")).toEqual({
+      applied: false,
+      reason: "invalid",
+    });
+  });
+
+  it("first-touch attributes a fresh user (referralSource null CAS wins)", async () => {
+    h.promoFindUnique.mockResolvedValueOnce(code());
+    h.userUpdateMany.mockResolvedValueOnce({ count: 1 });
+    const res = await claimPromoCodeForUser("u1", "summer3m");
+    expect(res.applied).toBe(true);
+    expect(res.resolved?.code).toBe("SUMMER3M");
+    expect(h.userUpdateMany).toHaveBeenCalledWith({
+      where: { id: "u1", referralSource: null },
+      data: { referralSource: "promo:SUMMER3M" },
+    });
+  });
+
+  it("does not overwrite an existing attribution (first-touch)", async () => {
+    h.promoFindUnique.mockResolvedValueOnce(code());
+    h.userUpdateMany.mockResolvedValueOnce({ count: 0 });
+    expect(await claimPromoCodeForUser("u1", "SUMMER3M")).toMatchObject({
+      applied: false,
+      reason: "already-attributed",
+    });
   });
 });

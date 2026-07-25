@@ -89,6 +89,32 @@ export async function resolvePromoCode(code: string | null): Promise<ResolvedPro
   };
 }
 
+/**
+ * First-touch attribution for a native-app user (iOS deferred-deep-link claim).
+ * Sets `referralSource = promo:<CODE>` only when the code is currently redeemable
+ * AND the user has no prior attribution (never overwrites first touch). The
+ * Telegram path attributes at user creation instead; this is the mobile twin.
+ * The reward itself is granted later at the wow screen via
+ * `grantPromoRewardsForUser`.
+ */
+export async function claimPromoCodeForUser(
+  userId: string,
+  code: string,
+): Promise<{ applied: boolean; reason?: string; resolved?: ResolvedPromoCode }> {
+  if (!env.PROMO_FEATURE_ENABLED) return { applied: false, reason: "disabled" };
+  const resolved = await resolvePromoCode(code);
+  if (!resolved) return { applied: false, reason: "invalid" };
+
+  // First-touch only: never overwrite an existing attribution (referral or promo).
+  const cas = await prisma.user.updateMany({
+    where: { id: userId, referralSource: null },
+    data: { referralSource: `promo:${resolved.code}` },
+  });
+  return cas.count > 0
+    ? { applied: true, resolved }
+    : { applied: false, reason: "already-attributed", resolved };
+}
+
 export interface PromoRewardResult {
   code: string;
   /** Tickets actually credited in this invocation (0 if already granted). */

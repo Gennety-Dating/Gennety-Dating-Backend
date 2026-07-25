@@ -510,6 +510,77 @@ paths:
                   applied: { type: boolean, enum: [false] }
                   reason: { type: string }
 
+  /v1/me/promo/claim-deferred:
+    post:
+      tags: [me]
+      operationId: claimPromoDeferred
+      summary: Attribute this new user to a promo code (iOS deferred deep link)
+      description: >-
+        Feature-flagged (`PROMO_FEATURE_ENABLED`; 404 when off). First-launch
+        resolves the effective promo code from either the clipboard-carried
+        value (`code`, optional `GENNETY:` prefix) or a coarse device-fingerprint
+        match against a recent promo landing-page touch, then first-touch
+        attributes this user (never overwrites an existing attribution). The
+        welcome gift itself is granted later at the wow screen via
+        `/v1/me/promo/claim`. New users only.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  maxLength: 64
+                  description: >-
+                    Promo code read from the clipboard (with or without the
+                    `GENNETY:` prefix). Omit to rely on fingerprint matching.
+      responses:
+        "200":
+          description: Attribution result (attributed=false when no code resolved)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [attributed]
+                properties:
+                  attributed: { type: boolean }
+                  reason: { type: string }
+                  code: { type: [string, "null"] }
+                  tickets: { type: integer }
+                  months: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Promo feature disabled }
+
+  /v1/me/promo/claim:
+    post:
+      tags: [me]
+      operationId: claimPromo
+      summary: Grant the promo welcome gift (Date Ticket + Premium months)
+      description: >-
+        Feature-flagged (`PROMO_FEATURE_ENABLED`; 404 when off). Idempotent —
+        grants the promo-attributed user their one-time Date Ticket + Premium
+        months at the native wow screen. Twin of the Telegram
+        `/v1/telegram-onboarding/promo-gift`. Applied=false when there is nothing
+        to grant (not a promo user, code no longer redeemable, or already
+        redeemed).
+      responses:
+        "200":
+          description: Grant result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [applied]
+                properties:
+                  applied: { type: boolean }
+                  code: { type: [string, "null"] }
+                  tickets: { type: integer }
+                  months: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Promo feature disabled }
+
   /v1/me/preferences:
     patch:
       tags: [me]
@@ -1504,6 +1575,7 @@ components:
             coordination: { type: boolean }
             premium: { type: boolean }
             referral: { type: boolean }
+            promo: { type: boolean }
         serverNow: { type: string, format: date-time }
 
     ReferralState:

@@ -501,6 +501,10 @@ export const env = {
   /// manual-entry field in onboarding on both clients — a pre-wired fallback for
   /// when the auto (iOS clipboard/fingerprint) attribution miss rate hurts.
   PROMO_MANUAL_ENTRY_ENABLED: process.env.PROMO_MANUAL_ENTRY_ENABLED === "true",
+  /// App Store product URL the promo landing page (`GET /v1/promo/:code`)
+  /// bounces an iOS visitor to after stashing the clipboard code + fingerprint.
+  /// Empty → the landing shows the code + "open the app" copy without a redirect.
+  PROMO_APP_STORE_URL: process.env.PROMO_APP_STORE_URL ?? "",
 
   /// Dev-only preview switch. When true, the `/previewlocation` bot command is
   /// live: it DMs the sender the venue location-picker Mini App button pointed

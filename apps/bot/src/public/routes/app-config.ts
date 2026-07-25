@@ -24,6 +24,7 @@ appConfigRouter.get("/config", (_req: Request, res: Response) => {
       coordination: env.COORDINATION_FEATURE_ENABLED,
       premium: env.PREMIUM_FEATURE_ENABLED,
       referral: env.REFERRAL_FEATURE_ENABLED,
+      promo: env.PROMO_FEATURE_ENABLED,
     },
     serverNow: new Date().toISOString(),
   });

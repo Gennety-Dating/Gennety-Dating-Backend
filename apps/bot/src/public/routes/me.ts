@@ -57,6 +57,8 @@ import {
 import { sniffImageMime } from "../../utils/image-sniff.js";
 import { refreshUserEmbedding } from "../../workers/embedding-refresh.js";
 import { buildReferralStateView, claimReferralCode } from "../../services/referral.js";
+import { claimPromoCodeForUser, grantPromoRewardsForUser } from "../../services/promo.js";
+import { fingerprint, matchAttribution } from "../../services/promo-attribution.js";
 
 export const meRouter: Router = Router();
 
@@ -121,6 +123,61 @@ meRouter.post("/referral/claim", async (req: Request, res: Response): Promise<vo
   }
   const result = await claimReferralCode(req.userId!, code);
   res.status(result.applied ? 200 : 409).json({ applied: result.applied, reason: result.reason });
+});
+
+/**
+ * POST /v1/me/promo/claim-deferred — iOS deferred-deep-link attribution
+ * (PROMO_CODES_PRODUCT_SPEC.md). First-launch resolves the effective promo code
+ * from either the clipboard-carried value (`code`, with an optional `GENNETY:`
+ * prefix) or a coarse-fingerprint match against a recent landing-page touch,
+ * then first-touch attributes this new user (`referralSource = promo:<CODE>`).
+ * The reward is granted later at the wow screen via `/v1/me/promo/claim`.
+ * 404 when the feature is off. Body: `{ code?: string }`.
+ */
+meRouter.post("/promo/claim-deferred", async (req: Request, res: Response): Promise<void> => {
+  if (!env.PROMO_FEATURE_ENABLED) {
+    res.status(404).json({ error: "promo-disabled" });
+    return;
+  }
+  const rawCode =
+    typeof req.body?.code === "string" ? req.body.code.replace(/^GENNETY:/i, "").trim() : "";
+  const fp = fingerprint({
+    ip: req.ip,
+    userAgent: req.header("user-agent") ?? undefined,
+    acceptLanguage: req.header("accept-language") ?? undefined,
+  });
+  const code = rawCode || matchAttribution(fp);
+  if (!code) {
+    res.json({ attributed: false, reason: "no-code" });
+    return;
+  }
+  const result = await claimPromoCodeForUser(req.userId!, code);
+  res.json({
+    attributed: result.applied,
+    reason: result.reason,
+    code: result.resolved?.code ?? null,
+    tickets: result.resolved?.ticketReward ?? 0,
+    months: result.resolved?.premiumMonths ?? 0,
+  });
+});
+
+/**
+ * POST /v1/me/promo/claim — grant the promo welcome gift (Date Ticket + Premium
+ * months) at the native wow screen. Idempotent; twin of the Telegram
+ * `/v1/telegram-onboarding/promo-gift`. 404 when the feature is off.
+ */
+meRouter.post("/promo/claim", async (req: Request, res: Response): Promise<void> => {
+  if (!env.PROMO_FEATURE_ENABLED) {
+    res.status(404).json({ error: "promo-disabled" });
+    return;
+  }
+  const gift = await grantPromoRewardsForUser(req.userId!);
+  res.json({
+    applied: gift != null,
+    code: gift?.code ?? null,
+    tickets: gift?.ticketsApplied ?? 0,
+    months: gift?.monthsApplied ?? 0,
+  });
 });
 
 /**
