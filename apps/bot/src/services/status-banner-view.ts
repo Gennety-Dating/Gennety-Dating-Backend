@@ -51,13 +51,10 @@ export function renderStatusBanner(input: StatusBannerViewInput): StatusBannerVi
     timeZone: input.timeZone,
   }).format(input.nextDropAt);
 
-  // The discrete countdown labels the primary button and — for non-English
-  // locales — also leads the banner text. Telegram's pinned-message preview is a
-  // single truncated line that never renders inline buttons, so the only way to
-  // surface the remaining time "at the top" is inside the text itself. English's
-  // short "Next drop: …" schedule line already fits that preview, so per an
-  // explicit product decision en is left byte-for-byte as before; the longer
-  // ru/uk/de/pl schedule lines pushed the time past the truncation, hiding it.
+  // The discrete countdown labels the primary button only. It is deliberately
+  // NOT repeated inside the banner text (product decision): the live remaining
+  // time is already surfaced on the inline button, so duplicating it in the body
+  // is redundant.
   const snap = computeStatusSnapshot({
     now: input.now,
     nextMatchAt: input.nextDropAt,
@@ -88,9 +85,6 @@ export function renderStatusBanner(input: StatusBannerViewInput): StatusBannerVi
   }
 
   const lines: string[] = [];
-  // Lead with the countdown so it survives the pinned preview's single-line
-  // truncation on the longer locales (en keeps its original layout).
-  if (input.language !== "en") lines.push(countdown, "");
   lines.push(
     "✦ GENNETY DROP",
     "",
