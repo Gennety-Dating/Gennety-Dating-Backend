@@ -2807,16 +2807,30 @@ button {
   gap: 1.25rem;
 }
 
-/* One borderless line symbol — no frame, no glow, neutral ink. */
+/* The brand butterfly crest — the same mark the Premium purchase screen uses,
+   with its metallic vertical gradient. Borderless, no glowing halo; just a soft
+   neutral drop-shadow for depth. */
 .referral-gift-badge {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text);
 }
-.referral-gift-badge svg {
-  width: 3rem;
-  height: 3rem;
+.referral-gift-butterfly {
+  width: 4.25rem;
+  height: 4.25rem;
+  filter: drop-shadow(0 8px 20px var(--shadow));
+}
+.referral-gift-badge .gift-bf-a {
+  stop-color: #ffffff;
+}
+.referral-gift-badge .gift-bf-b {
+  stop-color: #b6b6c0;
+}
+:root[data-theme="light"] .referral-gift-badge .gift-bf-a {
+  stop-color: #2a2a2e;
+}
+:root[data-theme="light"] .referral-gift-badge .gift-bf-b {
+  stop-color: #050505;
 }
 
 .referral-gift-title {

@@ -2146,9 +2146,23 @@ function ReferralGiftGate(props: {
     <main className="referral-gift-screen">
       <div className="referral-gift-content">
         <div className="referral-gift-badge" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="currentColor" shapeRendering="geometricPrecision">
-            <path d="M12 2.6c1 4 2 5 6 6-4 1-5 2-6 6-1-4-2-5-6-6 4-1 5-2 6-6Z" />
-            <path d="M18.6 14.8c.5 2 1 2.5 3 3-2 .5-2.5 1-3 3-.5-2-1-2.5-3-3 2-.5 2.5-1 3-3Z" />
+          <svg
+            className="referral-gift-butterfly"
+            viewBox="-12 -10 124 120"
+            role="img"
+            aria-label="Gennety Premium"
+            shapeRendering="geometricPrecision"
+          >
+            <defs>
+              <linearGradient id="gift-bf-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop className="gift-bf-a" offset="0" />
+                <stop className="gift-bf-b" offset="1" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M 50 35 C 20 0, -10 30, 15 55 C -5 75, 25 100, 48 65 L 52 65 C 75 100, 105 75, 85 55 C 110 30, 80 0, 50 35 Z"
+              fill="url(#gift-bf-grad)"
+            />
           </svg>
         </div>
         <h1 className="referral-gift-title">{s.referralGiftTitle}</h1>

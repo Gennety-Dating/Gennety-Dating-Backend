@@ -71,10 +71,23 @@ async function tgSend(chatId, text, options = {}) {
   const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, ...options }),
+    // chat_id may arrive as a BigInt (telegramId) — coerce so JSON.stringify
+    // doesn't throw. Telegram chat ids fit safely in a JS number.
+    body: JSON.stringify({ chat_id: Number(chatId), text, ...options }),
   });
   const json = await res.json().catch(() => null);
   if (!res.ok || !json?.ok) throw new Error(`Telegram sendMessage failed: ${json?.description ?? res.status}`);
+  return json.result;
+}
+
+async function tgSendPhoto(chatId, photoUrl, caption, options = {}) {
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: Number(chatId), photo: photoUrl, caption, ...options }),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json?.ok) throw new Error(`Telegram sendPhoto failed: ${json?.description ?? res.status}`);
   return json.result;
 }
 
@@ -110,6 +123,7 @@ async function main() {
   }
 
   const { prisma } = await import("@gennety/db");
+  const { t } = await import("@gennety/shared");
   const CITY = { homeCityKey: "kyiv", homeCountryCode: "UA", latitude: 50.4501, longitude: 30.5234, timeZone: "Europe/Kyiv" };
   const DOMAIN = "kneu.edu.ua";
   const now = new Date();
@@ -165,20 +179,41 @@ async function main() {
   console.log(`✔ referrer ${referrer.firstName} tg=${referrerTg} id=${referrer.id} (referralVerifiedCount=${count})`);
   console.log(`✔ invitee  tg=${inviteeTg} id=${invitee.id} (referralSource=referral:${referrer.id})`);
 
-  // ── DM the referrer: ladder Mini App + printable card URL ──────────────
-  await tgSend(referrerTg, "🎁 Referral — ladder Mini App (review both themes):", {
+  // Every user-facing referral surface, sent to the right side with a header
+  // line so each can be reviewed in context.
+  const inviteLink = `https://t.me/${process.env.BOT_USERNAME}?start=referral_${referrer.id}`;
+  const cardUrl = `${publicBase}/v1/referral/card?u=${referrer.id}&sig=${cardSig(referrer.id)}`;
+  const joinKb = { inline_keyboard: [[{ text: t(lang, "referralShareJoin"), url: inviteLink }]] };
+
+  // ══ REFERRER SIDE (tg=782065541) ══════════════════════════════════════
+  // A. Menu hub — the "Пригласить друга" entry (message + share button).
+  await tgSend(referrerTg, "──────────\nA. РЕФЕРОВОД · меню-хаб (по кнопке «Пригласить друга»):");
+  await tgSend(referrerTg, `${t(lang, "referralHubTitle")}\n\n${t(lang, "referralHubTagline")}`, {
+    reply_markup: {
+      inline_keyboard: [[{ text: t(lang, "referralShareButton"), web_app: { url: `${webapp}/referral.html?theme=dark&lang=${lang}` } }]],
+    },
+  });
+  // B. Ladder Mini App (both themes).
+  await tgSend(referrerTg, "──────────\nB. РЕФЕРОВОД · экран лестницы наград (обе темы):", {
     reply_markup: miniAppButtons("referral.html"),
   });
-  const cardUrl = `${publicBase}/v1/referral/card?u=${referrer.id}&sig=${cardSig(referrer.id)}`;
-  console.log(`\nShare-card PNG (open in a browser to preview the render):\n  ${cardUrl}`);
+  // C. The forwarded invite — exactly what the referrer sends (card + caption + Join).
+  await tgSend(referrerTg, "──────────\nC. РЕФЕРОВОД · что уходит другу при пересылке (карточка + подпись + кнопка):");
+  await tgSendPhoto(referrerTg, cardUrl, t(lang, "referralShareCaption"), { reply_markup: joinKb });
 
-  // ── DM the invitee: onboarding welcome-gift screen ─────────────────────
-  await tgSend(inviteeTg, "💫 Referral — invitee welcome-gift screen (review both themes):", {
+  // ══ INVITEE SIDE (tg=5986970093) ══════════════════════════════════════
+  // C(recv). What the invited friend receives.
+  await tgSend(inviteeTg, "──────────\nD. ПРИГЛАШЁННЫЙ · сообщение-приглашение, которое он получает:");
+  await tgSendPhoto(inviteeTg, cardUrl, t(lang, "referralShareCaption"), { reply_markup: joinKb });
+  // D. Onboarding welcome-gift screen (both themes).
+  await tgSend(inviteeTg, "──────────\nE. ПРИГЛАШЁННЫЙ · экран подарка Premium в онбординге (обе темы):", {
     reply_markup: miniAppButtons("onboarding.html?preview=referral-gift"),
   });
+  console.log(`\nShare-card PNG URL:\n  ${cardUrl}`);
 
   // ── Optionally fire the REAL reward settle → genuine DM to the referrer ─
   if (fireReward) {
+    await tgSend(referrerTg, "──────────\nF. РЕФЕРОВОД · DM-награда (когда приглашённый прошёл верификацию):");
     const api = {
       async sendMessage(chatId, text, options = {}) {
         return tgSend(chatId, text, options);
