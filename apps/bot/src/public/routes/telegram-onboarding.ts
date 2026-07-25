@@ -14,6 +14,7 @@ import {
   t,
 } from "@gennety/shared";
 import { env } from "../../config.js";
+import { effectiveAiMemoryPreference } from "../../services/ai-memory-export.js";
 import { validateInitData, type TelegramInitDataUser } from "../init-data.js";
 import {
   createAndSendOtp,
@@ -439,6 +440,14 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
   });
 
   router.post("/ai-memory", async (req: Request, res: Response): Promise<void> => {
+    // AI-memory export kill switch: with the feature off the Mini App never
+    // renders the choice screen, so a request here is a stale client. 404 the
+    // route (same shape as the phone-rail gate) rather than persisting a
+    // preference the flag would mask anyway.
+    if (!env.AI_MEMORY_EXPORT_ENABLED) {
+      res.status(404).json({ error: "ai-memory-export-disabled" });
+      return;
+    }
     const auth = authenticate(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
@@ -604,7 +613,9 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
       res.status(409).json({ error: "location-required" });
       return;
     }
-    if (user.aiMemoryExportPreference === "undecided") {
+    // Masked to `declined` while `AI_MEMORY_EXPORT_ENABLED` is off, so the
+    // handoff no longer waits on a choice screen the client never shows.
+    if (effectiveAiMemoryPreference(user.aiMemoryExportPreference) === "undecided") {
       res.status(409).json({ error: "ai-memory-preference-required" });
       return;
     }
@@ -765,6 +776,9 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
       onboardingStep: user.onboardingStep,
       aiMemoryExportPreference: user.aiMemoryExportPreference,
       aiMemoryExportPreferenceAt: user.aiMemoryExportPreferenceAt?.toISOString() ?? null,
+      // AI-memory export kill switch (PRODUCT_SPEC §1.1). False → the Mini App
+      // skips the choice screen entirely and goes straight to the handoff.
+      aiMemoryExportEnabled: env.AI_MEMORY_EXPORT_ENABLED,
       termsAccepted: user.termsAccepted,
       researchOptIn: user.researchOptIn,
       language: user.language,
@@ -814,6 +828,8 @@ interface TelegramOnboardingStateDto {
     onboardingStep: MiniUser["onboardingStep"];
     aiMemoryExportPreference: MiniUser["aiMemoryExportPreference"];
     aiMemoryExportPreferenceAt: string | null;
+    /** `AI_MEMORY_EXPORT_ENABLED` — false hides the AI-memory choice screen. */
+    aiMemoryExportEnabled: boolean;
     termsAccepted: boolean;
     researchOptIn: boolean;
     language: Language | null;

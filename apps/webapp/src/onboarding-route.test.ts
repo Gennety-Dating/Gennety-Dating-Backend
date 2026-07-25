@@ -236,6 +236,32 @@ describe("bootPhaseFromRemote — visual animation resume", () => {
     ).toEqual({ kind: "aiMemoryExport" });
   });
 
+  it("skips the AI-memory screen entirely when the server disables the feature", () => {
+    // `AI_MEMORY_EXPORT_ENABLED=false`: undecided must NOT strand the user on a
+    // choice screen the server no longer accepts (`POST /ai-memory` 404s).
+    expect(
+      bootPhaseFromRemote(
+        visualReadyUser({
+          aiMemoryExportPreference: "undecided",
+          aiMemoryExportEnabled: false,
+        }),
+        VISUAL_DONE,
+      ),
+    ).toEqual({ kind: "loading" });
+  });
+
+  it("still shows the AI-memory screen when the server reports it enabled", () => {
+    expect(
+      bootPhaseFromRemote(
+        visualReadyUser({
+          aiMemoryExportPreference: "undecided",
+          aiMemoryExportEnabled: true,
+        }),
+        VISUAL_DONE,
+      ),
+    ).toEqual({ kind: "aiMemoryExport" });
+  });
+
   it("jumps to the loading phase once the animation was completed (decided)", () => {
     expect(
       bootPhaseFromRemote(

@@ -20,6 +20,8 @@ vi.mock("../config.js", () => ({
     BOT_TOKEN: "test",
     DATABASE_URL: "test",
     OPENAI_API_KEY: "test-key",
+    // AI-memory export kill switch — these suites exercise the enabled flow.
+    AI_MEMORY_EXPORT_ENABLED: true,
     SMTP_HOST: "test",
     SMTP_PORT: 587,
     SMTP_USER: "test",

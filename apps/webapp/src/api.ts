@@ -228,6 +228,11 @@ export interface TelegramOnboardingState {
     onboardingStep: TelegramOnboardingStep;
     aiMemoryExportPreference: AiMemoryExportPreference;
     aiMemoryExportPreferenceAt: string | null;
+    // AI-memory export kill switch (`AI_MEMORY_EXPORT_ENABLED`). False → the
+    // choice screen is skipped entirely and onboarding hands off directly.
+    // Optional so an older cached bundle keeps working against a new server
+    // and vice versa; absent is read as "on", the historical behavior.
+    aiMemoryExportEnabled?: boolean;
     termsAccepted: boolean;
     researchOptIn: boolean;
     language: OnboardingLanguage | null;

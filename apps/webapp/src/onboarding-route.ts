@@ -80,7 +80,14 @@ export function postVisualPhaseFromRemote(user: RemoteUser | null): OnboardingPh
   if (!user.themeChosen) return { kind: "theme" };
   if (user.invitedByPromo && !user.promoGiftSeen) return { kind: "promoGift" };
   if (user.invitedByReferral && !user.referralGiftSeen) return { kind: "referralGift" };
-  if (user.aiMemoryExportPreference === "undecided") return { kind: "aiMemoryExport" };
+  // `aiMemoryExportEnabled === false` is the server kill switch: skip the
+  // choice screen entirely (an older server omits the field → treat as on).
+  if (
+    user.aiMemoryExportEnabled !== false &&
+    user.aiMemoryExportPreference === "undecided"
+  ) {
+    return { kind: "aiMemoryExport" };
+  }
   return { kind: "loading" };
 }
 

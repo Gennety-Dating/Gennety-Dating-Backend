@@ -37,6 +37,20 @@ export const env = {
   /// production can keep the legacy LLM-driven flow during staged rollout.
   ONBOARDING_FACT_COLLECTOR_ENABLED:
     process.env.ONBOARDING_FACT_COLLECTOR_ENABLED === "true",
+  /// AI-memory export (the Magic Prompt / "import your ChatGPT memory" branch,
+  /// PRODUCT_SPEC §1.1/§1.3). **On by default** — this is long-standing product
+  /// behavior, so only an explicit `AI_MEMORY_EXPORT_ENABLED=false` turns it
+  /// off. When off, every surface behaves exactly as it already does for a user
+  /// who *declined*: the onboarding Mini App skips the AI-memory choice screen,
+  /// `POST /v1/telegram-onboarding/ai-memory` 404s, the collector marks
+  /// `ai_memory` + `context_dump` complete/skipped (photos follow the vibe
+  /// questions directly), and the legacy onboarding agent never requests or
+  /// accepts a Magic Prompt paste. Nothing is written to the DB because of the
+  /// flag: `User.aiMemoryExportPreference` stays whatever it was, so flipping
+  /// the flag back on restores the branch with no migration or backfill.
+  /// Profiles built while it is off use the deterministic fallback summary +
+  /// embedding, exactly like a declined user.
+  AI_MEMORY_EXPORT_ENABLED: process.env.AI_MEMORY_EXPORT_ENABLED !== "false",
   /// Registration v2: the sign-up fork + phone (Telegram one-tap) rail for the
   /// general track. Off (default) → the university-email gate is the only
   /// registration path and the bot ignores `message.contact` shares, exactly

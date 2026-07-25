@@ -205,6 +205,20 @@ must also choose a **dating city** (`Profile.homeCityKey`). This is framed as
 for a city manually or let the Mini App resolve their browser geolocation to a
 city; raw coordinates alone do not satisfy the matching gate.
 
+**Kill switch (`AI_MEMORY_EXPORT_ENABLED`, default on).** The whole AI-memory
+branch can be turned off with one env var while it is reworked, without a
+schema change, a backfill, or any other flow moving. When off, every surface
+behaves exactly as it already does for a user who **declined**: the onboarding
+Mini App skips the AI-memory choice screen (the server mirrors the flag as
+`aiMemoryExportEnabled` in `/state`), `POST /v1/telegram-onboarding/ai-memory`
+404s, the collector marks `ai_memory` + `context_dump` complete/skipped so the
+canonical order runs vibe → photos, the legacy onboarding agent never requests
+or accepts a Magic Prompt paste (a paste still in flight when the flag flips is
+dropped rather than saved), and finalization uses the deterministic fallback
+summary + embedding. The flag never writes to the database:
+`User.aiMemoryExportPreference` keeps whatever it held (including `accepted`),
+so flipping it back on restores the branch for everyone as-is.
+
 The final Mini App screen records `User.aiMemoryExportPreference` through
 `POST /v1/telegram-onboarding/ai-memory`:
 

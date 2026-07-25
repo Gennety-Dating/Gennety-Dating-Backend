@@ -6,6 +6,7 @@ import {
   Prisma,
   prisma,
 } from "@gennety/db";
+import { effectiveAiMemoryPreference } from "./ai-memory-export.js";
 import { openaiFetch } from "./openai-fetch.js";
 import {
   platformFromTelegramId,
@@ -370,13 +371,14 @@ function progressFromUser(user: CollectorUser): MutableProgress {
   if (user.profile?.fridayVibeText) completed.add("friday_vibe");
   if (user.profile?.vibeFocusText) completed.add("vibe_focus");
   if ((user.profile?.hobbies.length ?? 0) > 0) completed.add("hobbies");
-  if (user.aiMemoryExportPreference !== "undecided") completed.add("ai_memory");
-  if (
-    user.aiMemoryExportPreference === "declined" ||
-    user.profile?.psychologicalSummary
-  ) {
+  // While `AI_MEMORY_EXPORT_ENABLED` is off the stored preference is masked to
+  // `declined`, so both steps resolve as already-handled and the canonical
+  // order runs vibe → photos with no Magic Prompt (PRODUCT_SPEC §1.3).
+  const aiMemory = effectiveAiMemoryPreference(user.aiMemoryExportPreference);
+  if (aiMemory !== "undecided") completed.add("ai_memory");
+  if (aiMemory === "declined" || user.profile?.psychologicalSummary) {
     completed.add("context_dump");
-    if (user.aiMemoryExportPreference === "declined") skipped.add("context_dump");
+    if (aiMemory === "declined") skipped.add("context_dump");
   }
   if ((user.profile?.photos.length ?? 0) >= MIN_PHOTOS) completed.add("photos");
 

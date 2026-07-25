@@ -10,6 +10,8 @@ vi.mock("../config.js", () => ({
   env: {
     BOT_TOKEN,
     DATABASE_URL: "postgresql://test",
+    // AI-memory export kill switch (default-on); flipped per test via mutableEnv.
+    AI_MEMORY_EXPORT_ENABLED: true,
   },
 }));
 
@@ -55,6 +57,7 @@ const { createTelegramOnboardingRouter } = await import("./routes/telegram-onboa
 // fork tests flip the phone rail on/off through it.
 const mutableEnv = (await import("../config.js")).env as unknown as {
   PHONE_AUTH_ENABLED?: boolean;
+  AI_MEMORY_EXPORT_ENABLED?: boolean;
 };
 
 const fakeApi = {
@@ -418,6 +421,41 @@ describe("Telegram onboarding city gate", () => {
     expect(res.status).toBe(409);
     expect(res.body.error).toBe("location-required");
     expect(userUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("AI-memory export kill switch (AI_MEMORY_EXPORT_ENABLED)", () => {
+  afterEach(() => {
+    mutableEnv.AI_MEMORY_EXPORT_ENABLED = true;
+  });
+
+  it("404s /ai-memory while the feature is off and persists nothing", async () => {
+    mutableEnv.AI_MEMORY_EXPORT_ENABLED = false;
+    userFindUnique.mockResolvedValue(miniUser({}));
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/ai-memory")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ preference: "accepted" });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe("ai-memory-export-disabled");
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("mirrors the flag to the Mini App in /state", async () => {
+    mutableEnv.AI_MEMORY_EXPORT_ENABLED = false;
+    userFindUnique.mockResolvedValue(miniUser({}));
+
+    const res = await request(buildApp())
+      .get("/v1/telegram-onboarding/state")
+      .set("Authorization", `tma ${signInitData()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.aiMemoryExportEnabled).toBe(false);
+    // The stored preference is untouched by the flag — flipping it back on
+    // must restore the branch with no backfill.
+    expect(res.body.user.aiMemoryExportPreference).toBe("undecided");
   });
 });
 

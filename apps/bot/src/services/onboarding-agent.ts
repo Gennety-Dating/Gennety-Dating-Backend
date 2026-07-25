@@ -1,4 +1,9 @@
 import { prisma, Prisma, type Language } from "@gennety/db";
+import {
+  effectiveAiMemoryPreference,
+  isAiMemoryExportDeclined,
+  isAiMemoryExportEnabled,
+} from "./ai-memory-export.js";
 import { openaiFetch } from "./openai-fetch.js";
 import { typeRadarInviteCopy } from "./type-radar-copy.js";
 import { grantStudentBonusIfEligible } from "./ticket-wallet.js";
@@ -251,6 +256,15 @@ async function runCollectorTurn(
 ): Promise<AgentTurnResult> {
   let contextDumpSaved = false;
   let snapshot;
+
+  // AI-memory export off: a `context_dump` input can only be a paste that was
+  // already in flight when the flag flipped (a stale buffered session). Drop it
+  // instead of persisting a Magic Prompt response the feature no longer accepts,
+  // and resume on the ordinary next question — which is already `photos`,
+  // because the collector treats the export as declined.
+  if (input.kind === "context_dump" && !isAiMemoryExportEnabled()) {
+    input = { kind: "resume" };
+  }
 
   if (input.kind === "context_dump") {
     const saved = await execSaveContextDump(
@@ -938,7 +952,7 @@ function buildCurrentSavedStateSnapshot(
   const hobbies = Array.isArray(profile?.hobbies) ? profile.hobbies : [];
   const photos = Array.isArray(profile?.photos) ? profile.photos : [];
   const contactVerified = hasTrackVerifiedContact(user ?? {});
-  const aiMemoryExportDeclined = user?.aiMemoryExportPreference === "declined";
+  const aiMemoryExportDeclined = isAiMemoryExportDeclined(user?.aiMemoryExportPreference);
 
   const missing: string[] = [];
   if (!contactVerified) missing.push("email_verification");
@@ -966,7 +980,7 @@ function buildCurrentSavedStateSnapshot(
     `Profile basics: first_name=${status(user?.firstName)}, age=${user?.age ?? "missing"}, gender=${user?.gender ?? "missing"}, preference=${user?.preference ?? "missing"}`,
     `Extended profile: height=${profile?.height ?? "missing"}, ethnicity=${status(profile?.ethnicity)}, hobbies_count=${hobbies.length}, partner_preferences=${status(profile?.partnerPreferences)}`,
     `Dating city: ${profile?.homeCityKey ? `saved:${profile.homeCityKey}` : "missing"}`,
-    `AI memory export: ${user?.aiMemoryExportPreference ?? "undecided"}`,
+    `AI memory export: ${effectiveAiMemoryPreference(user?.aiMemoryExportPreference)}`,
     `Context dump: ${contextDumpSaved ? "saved" : aiMemoryExportDeclined ? "skipped_by_user" : "missing"}`,
     `Photos: ${photos.length}/${MIN_PHOTOS} required minimum`,
     `Missing next: ${missing.length ? missing.join(", ") : "none"}`,
@@ -1396,7 +1410,7 @@ function missingBeforePhoto(
   if (!profile?.ethnicity && !hasEthnicityPromptAlreadyHappened(history)) {
     missing.push("ethnicity_question");
   }
-  if (user?.aiMemoryExportPreference !== "declined" && !contextDumpSaved) {
+  if (!isAiMemoryExportDeclined(user?.aiMemoryExportPreference) && !contextDumpSaved) {
     missing.push("context_dump");
   }
   return missing;
@@ -1550,7 +1564,7 @@ async function execSaveProfileData(
       partner_preferences: true,
     },
     next_instruction:
-      user.aiMemoryExportPreference === "declined"
+      isAiMemoryExportDeclined(user.aiMemoryExportPreference)
         ? "Do not ask for saved profile fields again. AI memory export was declined, so call request_photos now and never request a context dump."
         : "Do not ask for saved profile fields again. If context_dump is not saved, call request_context_dump now. If context_dump is saved, continue to photos/finalization as appropriate.",
   });
@@ -1608,7 +1622,7 @@ async function execFinalizeOnboarding(
     missing.push("partner_preferences");
   if (!user?.profile?.homeCityKey)
     missing.push("home_city");
-  const aiMemoryExportDeclined = user?.aiMemoryExportPreference === "declined";
+  const aiMemoryExportDeclined = isAiMemoryExportDeclined(user?.aiMemoryExportPreference);
   if (!contextDumpSaved && !aiMemoryExportDeclined)
     missing.push("context_dump (deep profile not yet saved)");
   if (!user?.profile?.photos?.length || user.profile.photos.length < MIN_PHOTOS)
@@ -1979,7 +1993,7 @@ export async function runAgentTurn(
       (message) => message as ChatMessage,
     );
     const contextDumpSaved =
-      user?.aiMemoryExportPreference === "declined" ||
+      isAiMemoryExportDeclined(user?.aiMemoryExportPreference) ||
       user?.onboardingProgress?.completedFields.includes("context_dump") ||
       hasContextDumpSaved(history);
     const finalized = await execFinalizeOnboarding(
@@ -2048,7 +2062,7 @@ export async function runAgentTurn(
       user?.registrationTrack === "general" && user?.phoneVerifiedAt,
     );
     const emailAlreadyVerified = hasTrackVerifiedContact(user ?? {});
-    const aiMemoryExportDeclined = user?.aiMemoryExportPreference === "declined";
+    const aiMemoryExportDeclined = isAiMemoryExportDeclined(user?.aiMemoryExportPreference);
     const verifiedNote = emailVerified
       ? `[VERIFIED EMAIL ON FILE: ${user!.email}] DO NOT ask the user for their email. DO NOT mention email verification. Skip step 1 of the onboarding flow entirely and move directly to profile basics (step 2). Briefly acknowledge in the user's language (e.g. "your @${user!.universityDomain ?? user!.email!.split("@")[1]} email is already verified"), then ask for first name + age. Do NOT add a ✅ or any "Complete"-style emoji to this acknowledgement.`
       : phoneVerified
@@ -2151,7 +2165,7 @@ export async function runAgentTurn(
             result = await execResendOtp(telegramId, deps);
             break;
           case "request_context_dump":
-            if (user?.aiMemoryExportPreference === "declined") {
+            if (isAiMemoryExportDeclined(user?.aiMemoryExportPreference)) {
               result = JSON.stringify({
                 success: false,
                 error:
@@ -2189,7 +2203,7 @@ export async function runAgentTurn(
             }
             break;
           case "save_context_dump":
-            if (user?.aiMemoryExportPreference === "declined") {
+            if (isAiMemoryExportDeclined(user?.aiMemoryExportPreference)) {
               result = JSON.stringify({
                 success: false,
                 error:
@@ -2240,7 +2254,7 @@ export async function runAgentTurn(
               ) ??
                 false);
             if (
-              user?.aiMemoryExportPreference !== "declined" &&
+              !isAiMemoryExportDeclined(user?.aiMemoryExportPreference) &&
               !contextDumpAlreadySaved
             ) {
               result = JSON.stringify({

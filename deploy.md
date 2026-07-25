@@ -736,6 +736,22 @@ Required/high-impact env keys:
 - AI/email/onboarding: `OPENAI_API_KEY`, `RESEND_API_KEY`, `SMTP_FROM`,
   `OTP_LOG_TO_CONSOLE`, `ONBOARDING_FACT_COLLECTOR_ENABLED` (default `false`;
   enable only after schema push and backfill verification)
+  - **AI-memory export kill switch:** `AI_MEMORY_EXPORT_ENABLED` (default
+    **`true`** — `config.ts` reads `!== "false"`, so the Magic Prompt branch
+    stays on unless explicitly disabled). Set `AI_MEMORY_EXPORT_ENABLED=false`
+    to hide the whole feature (PRODUCT_SPEC §1.3): the onboarding Mini App skips
+    the AI-memory choice screen, `POST /v1/telegram-onboarding/ai-memory` 404s,
+    and onboarding runs vibe → photos with the deterministic fallback summary —
+    i.e. every user takes the existing "declined" path. **No schema change, no
+    backfill, no Mini App rebuild required to flip it** (the bundle reads the
+    server's `aiMemoryExportEnabled` from `/state`; redeploying the Mini App is
+    only needed to pick up the client-side skip for *cached* older bundles,
+    which are already safe because the server 404s the write). Toggle live with
+    `pm2 restart gennety-bot --update-env`. Rollback = remove the line (or set
+    `true`); `User.aiMemoryExportPreference` is never rewritten by the flag, so
+    the branch returns exactly as it was. In-flight effects when turning it
+    off: users parked on the choice screen / Magic Prompt step advance straight
+    to photos, and a paste already buffered is dropped instead of saved.
   - **Vibe onboarding questions (no flag of their own).** The two §1.3 vibe
     questions (`friday_vibe` / `vibe_focus`) and their matching signal live in
     the collector, so they are active only when
