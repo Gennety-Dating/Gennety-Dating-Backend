@@ -275,6 +275,15 @@ model User {
   referralVerifiedCount      Int                      @default(0) @map("referral_verified_count")
   referralCountedAt          DateTime?                @map("referral_counted_at")
   referralInviteePremiumAt   DateTime?                @map("referral_invitee_premium_at")
+  /// Promo-code program (gated by `PROMO_FEATURE_ENABLED`; see
+  /// PROMO_CODES_PRODUCT_SPEC.md). Independent campaign codes (not tied to a
+  /// referrer) that grant a new user a Date Ticket + Premium months at the
+  /// onboarding wow screen. Attribution reuses `referralSource` as
+  /// `promo:<CODE>` (mutually exclusive with `referral:*`). `promoRedeemedAt`
+  /// is the once-marker for the wow screen + grant guard; the reward itself is
+  /// recorded exactly-once in `PromoRedemption` + `ticket_ledger` (`promo`) +
+  /// `subscription_ledger` (`promo`).
+  promoRedeemedAt            DateTime?                @map("promo_redeemed_at")
   /// Founder-notify (gated by `FOUNDER_NOTIFY_ENABLED`): stamped the first time
   /// this user becomes `active` and the "new registration" profile card is sent
   /// to the founder's personal Telegram. Idempotency marker — the notifier
@@ -307,9 +316,60 @@ model User {
 
   noMatchNotices NoMatchNotice[]
 
+  promoRedemption PromoRedemption?
+
   @@index([status, reEngagementNextAt])
   @@index([status, suspendedUntil])
   @@map("users")
+}
+
+/// Independent promo-code campaign (gated by `PROMO_FEATURE_ENABLED`; see
+/// PROMO_CODES_PRODUCT_SPEC.md). ONE reusable code per campaign, shared in ad
+/// materials, that grants a new user a Date Ticket + Premium months at the
+/// onboarding wow screen. `redeemedCount` is the materialized running tally of
+/// `PromoRedemption` rows (both written in one transaction), capped by
+/// `maxRedemptions` (null = unlimited). Managed out-of-band by
+/// `scripts/promo-codes.mjs`.
+model PromoCode {
+  id             String    @id @default(uuid()) @db.Uuid
+  /// The campaign code, stored uppercased (matched case-insensitively).
+  code           String    @unique
+  /// Per-code reward (launch defaults 1 ticket / 3 months of Premium).
+  ticketReward   Int       @default(1) @map("ticket_reward")
+  premiumMonths  Int       @default(3) @map("premium_months")
+  /// Activation cap; null = unlimited. `redeemedCount` never exceeds it.
+  maxRedemptions Int?      @map("max_redemptions")
+  redeemedCount  Int       @default(0) @map("redeemed_count")
+  expiresAt      DateTime? @map("expires_at")
+  active         Boolean   @default(true)
+  /// Internal campaign label (not user-facing).
+  note           String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  redemptions PromoRedemption[]
+
+  @@map("promo_codes")
+}
+
+/// One-per-user record that a promo code was redeemed (gated by
+/// `PROMO_FEATURE_ENABLED`). The unique `userId` enforces first-touch,
+/// one-code-per-human; `@@unique([promoCodeId, userId])` plus the same-tx
+/// `PromoCode.redeemedCount++` makes the grant exactly-once and cap-safe under
+/// concurrency. Reward deltas live in the ledgers; this is the audit + guard.
+model PromoRedemption {
+  id             String    @id @default(uuid()) @db.Uuid
+  promoCodeId    String    @map("promo_code_id") @db.Uuid
+  userId         String    @unique @map("user_id") @db.Uuid
+  ticketsApplied Int       @map("tickets_applied")
+  monthsApplied  Int       @map("months_applied")
+  redeemedAt     DateTime  @default(now()) @map("redeemed_at")
+
+  promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([promoCodeId, userId])
+  @@index([promoCodeId, redeemedAt])
+  @@map("promo_redemptions")
 }
 
 /// Append-only audit log of every ticket-wallet movement (Date Ticket

@@ -35,6 +35,10 @@ export type TicketReason =
   // reached; idempotent via a synthetic unique `externalPaymentId`
   // (`referral-rung:<referrerId>:<rung>`).
   | "referral_milestone"
+  // Independent promo-code welcome gift (PROMO_CODES_PRODUCT_SPEC.md). Granted
+  // once to a promo-attributed new user at the onboarding wow screen; idempotent
+  // via a unique `externalPaymentId` (`promo:<codeId>:<userId>`).
+  | "promo"
   | "store_purchase"
   | "spend_match"
   | "refund";

@@ -238,8 +238,11 @@ export async function grantComplimentaryPremiumMonths(input: {
   months: number;
   externalPaymentId: string;
   note?: string;
+  /// `subscription_ledger.provider` for the audit row. Complimentary grants are
+  /// not a paid rail; defaults to `referral`, promo passes `promo`.
+  provider?: string;
 }): Promise<ActivatePremiumResult> {
-  const { userId, months, externalPaymentId, note } = input;
+  const { userId, months, externalPaymentId, note, provider = "referral" } = input;
   if (months <= 0) return { applied: false, premiumUntil: null };
 
   const existing = await prisma.user.findUnique({
@@ -269,7 +272,7 @@ export async function grantComplimentaryPremiumMonths(input: {
       prisma.subscriptionLedger.create({
         data: {
           userId,
-          provider: "referral",
+          provider,
           event: "started",
           externalPaymentId,
           periodStart: base,

@@ -479,6 +479,29 @@ export const env = {
     Number(process.env.REFERRAL_DAILY_REWARD_CAP ?? "3"),
   ),
 
+  /// Independent promo-code program (see PROMO_CODES_PRODUCT_SPEC.md). When
+  /// true: `?start=promo_<CODE>` deep-links attribute as `promo:<CODE>`, the
+  /// richer promo wow screen shows in onboarding, and a new user is granted a
+  /// Date Ticket + Premium months at that screen. No-op when off.
+  PROMO_FEATURE_ENABLED: process.env.PROMO_FEATURE_ENABLED === "true",
+  /// Reward a promo code grants when its own row leaves a value unset (also the
+  /// `scripts/promo-codes.mjs` create defaults). Ticket = 1, Premium = 3 months.
+  PROMO_DEFAULT_TICKETS: Math.max(0, Number(process.env.PROMO_DEFAULT_TICKETS ?? "1")),
+  PROMO_DEFAULT_PREMIUM_MONTHS: Math.max(
+    0,
+    Number(process.env.PROMO_DEFAULT_PREMIUM_MONTHS ?? "3"),
+  ),
+  /// iOS deferred-deep-link attribution window: how long a landing-page
+  /// fingerprint stays matchable to a first-launch claim. Default 60 min.
+  PROMO_ATTRIBUTION_TTL_MIN: Math.max(
+    1,
+    Number(process.env.PROMO_ATTRIBUTION_TTL_MIN ?? "60"),
+  ),
+  /// Emergency escape hatch (default off). Surfaces a tiny "Have a promo code?"
+  /// manual-entry field in onboarding on both clients — a pre-wired fallback for
+  /// when the auto (iOS clipboard/fingerprint) attribution miss rate hurts.
+  PROMO_MANUAL_ENTRY_ENABLED: process.env.PROMO_MANUAL_ENTRY_ENABLED === "true",
+
   /// Dev-only preview switch. When true, the `/previewlocation` bot command is
   /// live: it DMs the sender the venue location-picker Mini App button pointed
   /// at a throwaway match id, purely to eyeball the Location Mini App inside
