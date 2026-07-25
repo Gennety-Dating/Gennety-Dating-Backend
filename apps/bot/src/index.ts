@@ -113,7 +113,7 @@ const NO_MATCH_NOTICE_CRON_SCHEDULE =
 
 /**
  * Proposal-countdown cron: every minute (2026-07-25; was every five). The button
- * label is minute-granular (`⏳ Reply: 23h 47m`), so a per-minute tick makes
+ * label is minute-granular (`⏳ 23h 47m left to reply`), so a per-minute tick makes
  * it move on every pass — the countdown reads as genuinely live instead of
  * freezing for five minutes at a time. Same cadence as the pinned status
  * banner, and for the same reason: `editMessageReplyMarkup` sends no

@@ -475,7 +475,7 @@ export async function sendMatchProposal(
     });
   }
 
-  // The live "⏳ Reply: Xh Ym" countdown now rides an inline *button* on the
+  // The live "⏳ Xh Ym left to reply" countdown now rides an inline *button* on the
   // pitch keyboard (below), NOT the message body — the proposal-countdown
   // worker re-renders only that button via `editMessageReplyMarkup`, so the
   // synergy header + streamed pitch text are never rewritten.
