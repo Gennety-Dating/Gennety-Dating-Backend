@@ -563,6 +563,10 @@ interface VibeUi {
   groupMustHaves: string;
   multiHint: string;
   singleHint: string;
+  /** Status beats cycled inside "Continue" while the vibe is interpreted. */
+  thinkingSteps: string[];
+  /** Status beats cycled inside the final Confirm while the venue is picked. */
+  findingSteps: string[];
 }
 const VIBE_UI: Record<Lang, VibeUi> = {
   en: {
@@ -579,6 +583,8 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     groupMustHaves: "Must-haves",
     multiHint: "choose any",
     singleHint: "pick one",
+    thinkingSteps: ["Reading your vibe…", "Thinking…", "Picking out the details…"],
+    findingSteps: ["Matching your vibes…", "Checking real venues…", "Finding your spot…"],
   },
   ru: {
     step: "Шаг 2 из 2",
@@ -594,6 +600,8 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     groupMustHaves: "Обязательно",
     multiHint: "можно несколько",
     singleHint: "выбери одно",
+    thinkingSteps: ["Читаю ваш вайб…", "Думаю…", "Выделяю детали…"],
+    findingSteps: ["Сверяю ваши вайбы…", "Проверяю реальные места…", "Подбираю ваше место…"],
   },
   uk: {
     step: "Крок 2 з 2",
@@ -609,6 +617,8 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     groupMustHaves: "Обов'язково",
     multiHint: "можна кілька",
     singleHint: "обери одне",
+    thinkingSteps: ["Читаю ваш вайб…", "Думаю…", "Виділяю деталі…"],
+    findingSteps: ["Звіряю ваші вайби…", "Перевіряю реальні місця…", "Добираю ваше місце…"],
   },
   de: {
     step: "Schritt 2 von 2",
@@ -624,6 +634,8 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     groupMustHaves: "Unverzichtbar",
     multiHint: "mehrere möglich",
     singleHint: "nur eins",
+    thinkingSteps: ["Lese deine Stimmung…", "Denke nach…", "Filtere die Details…"],
+    findingSteps: ["Gleiche eure Stimmungen ab…", "Prüfe echte Orte…", "Suche euren Ort…"],
   },
   pl: {
     step: "Krok 2 z 2",
@@ -639,6 +651,8 @@ const VIBE_UI: Record<Lang, VibeUi> = {
     groupMustHaves: "Obowiązkowo",
     multiHint: "kilka opcji",
     singleHint: "wybierz jedno",
+    thinkingSteps: ["Czytam twój klimat…", "Myślę…", "Wyłapuję szczegóły…"],
+    findingSteps: ["Zestawiam wasze klimaty…", "Sprawdzam prawdziwe miejsca…", "Szukam waszego miejsca…"],
   },
 };
 
@@ -782,25 +796,107 @@ function renderDraft(): void {
   }));
 }
 
+/** How long each "thinking" status beat is held inside a busy CTA. */
+const CTA_STATUS_STEP_MS = 1600;
+/** One vibe-stage request at a time (a second tap while thinking is a no-op). */
+let vibeBusy = false;
+
+/**
+ * Put a CTA into its "agent is working" state and cycle status beats through its
+ * label until the caller stops it.
+ *
+ * Both vibe-stage CTAs fire a real server round-trip (an LLM interpret pass, then
+ * the venue selector), which takes seconds. Before this the button simply sat
+ * there inert — no haptic, no spinner, no copy change — so the tap read as "did
+ * it even register?" and users re-tapped. The spinner + rotating status is the
+ * same "agent is working" language the bot uses in chat (PRODUCT_SPEC §1.3).
+ *
+ * Returns a stop function that restores the original label and re-enables the
+ * button, so a failed request lands back on a normal, tappable CTA.
+ */
+function startCtaThinking(btn: HTMLButtonElement, steps: string[]): () => void {
+  const textEl = btn.querySelector?.(".cta-text") ?? null;
+  const originalLabel = textEl?.textContent ?? "";
+  btn.disabled = true;
+  btn.classList.add("saving");
+  let index = 0;
+  const paint = (): void => {
+    if (!textEl) return;
+    textEl.textContent = steps[index % steps.length] ?? originalLabel;
+    // Re-trigger the swap fade: drop the class, force a reflow, add it back.
+    textEl.classList.remove("swap");
+    void (textEl as HTMLElement).offsetWidth;
+    textEl.classList.add("swap");
+  };
+  paint();
+  const timer = setInterval(() => {
+    index += 1;
+    paint();
+  }, CTA_STATUS_STEP_MS);
+  return () => {
+    clearInterval(timer);
+    btn.disabled = false;
+    btn.classList.remove("saving");
+    if (textEl) {
+      textEl.classList.remove("swap");
+      textEl.textContent = originalLabel;
+    }
+  };
+}
+
 document.getElementById("vibe-back")?.addEventListener("click", () => {
   const stage = document.getElementById("vibe-stage") as HTMLElement | null;
   if (stage) stage.hidden = true;
 });
 document.getElementById("vibe-interpret")?.addEventListener("click", async () => {
-  if (!app) return;
-  const text = (document.getElementById("vibe-text") as HTMLTextAreaElement | null)?.value.trim() ?? "";
+  if (!app || vibeBusy) return;
+  const textArea = document.getElementById("vibe-text") as HTMLTextAreaElement | null;
+  const text = textArea?.value.trim() ?? "";
   const error = document.getElementById("vibe-error");
-  if (!text) { if (error) error.textContent = VIBE_ERRORS[lang].describe; return; }
+  if (!text) {
+    app.HapticFeedback?.notificationOccurred?.("warning");
+    if (error) error.textContent = VIBE_ERRORS[lang].describe;
+    return;
+  }
+  // Acknowledge the tap before anything else — the request itself takes seconds.
+  app.HapticFeedback?.impactOccurred?.("medium");
+  // Dismiss the keyboard so the chips that replace this button are visible the
+  // moment they arrive.
+  textArea?.blur?.();
+  vibeBusy = true;
+  const stopThinking = startCtaThinking(
+    document.getElementById("vibe-interpret") as HTMLButtonElement,
+    VIBE_UI[lang].thinkingSteps,
+  );
   try {
     draft = await interpretVenueIntentTma(app.initData, matchId, text, { lat: selectedLat, lng: selectedLng, address: selectedAddress });
     if (error) error.textContent = "";
+    stopThinking();
+    // renderDraft() hides this button for good and reveals the chips.
     renderDraft();
-  } catch { if (error) error.textContent = tr(lang, "errNetwork"); }
+    app.HapticFeedback?.notificationOccurred?.("success");
+  } catch {
+    stopThinking();
+    app.HapticFeedback?.notificationOccurred?.("error");
+    if (error) error.textContent = tr(lang, "errNetwork");
+  } finally {
+    vibeBusy = false;
+  }
 });
 document.getElementById("vibe-confirm")?.addEventListener("click", async () => {
-  if (!app || !draft) return;
+  if (!app || !draft || vibeBusy) return;
   const error = document.getElementById("vibe-error");
-  if (draft.experiences.length === 0) { if (error) error.textContent = VIBE_ERRORS[lang].experience; return; }
+  if (draft.experiences.length === 0) {
+    app.HapticFeedback?.notificationOccurred?.("warning");
+    if (error) error.textContent = VIBE_ERRORS[lang].experience;
+    return;
+  }
+  app.HapticFeedback?.impactOccurred?.("medium");
+  vibeBusy = true;
+  const stopThinking = startCtaThinking(
+    document.getElementById("vibe-confirm") as HTMLButtonElement,
+    VIBE_UI[lang].findingSteps,
+  );
   try {
     venueState = await confirmVenueIntentTma(app.initData, matchId, {
       experiences: draft.experiences, ambiences: draft.ambiences, formats: draft.formats,
@@ -808,14 +904,27 @@ document.getElementById("vibe-confirm")?.addEventListener("click", async () => {
       origin: { lat: selectedLat, lng: selectedLng, address: selectedAddress },
     });
     if (venueState.selectionError?.startsWith("no_candidates:")) {
+      stopThinking();
+      app.HapticFeedback?.notificationOccurred?.("warning");
       draft = venueState.intent;
       renderDraft();
       if (error) error.textContent = VIBE_ERRORS[lang].relax + label(venueState.selectionError.split(":")[1] ?? "");
       return;
     }
+    // Keep the busy state on screen through the close — the app is about to
+    // dismiss, so restoring the idle label would only flash.
     app.HapticFeedback?.notificationOccurred?.("success");
-    setTimeout(() => app.close(), 250);
-  } catch { if (error) error.textContent = tr(lang, "errNetwork"); }
+    setTimeout(() => {
+      stopThinking();
+      app.close();
+    }, 250);
+  } catch {
+    stopThinking();
+    app.HapticFeedback?.notificationOccurred?.("error");
+    if (error) error.textContent = tr(lang, "errNetwork");
+  } finally {
+    vibeBusy = false;
+  }
 });
 
 function errorMessage(err: CalendarApiError): string {

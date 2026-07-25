@@ -315,9 +315,49 @@ button.cta.saving .arrow {
   display: none;
 }
 
+/* A busy CTA breathes while it cycles its status beats, so the wait reads as
+   "working" rather than "frozen" (the disabled dimming alone was too quiet). */
+button.cta.saving {
+  animation: ctaBusyPulse 1.7s ease-in-out infinite;
+}
+/* Each status beat fades up into place instead of hard-swapping the label. */
+button.cta .cta-text.swap {
+  animation: ctaTextSwap 0.28s ease-out both;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes ctaBusyPulse {
+  0%,
+  100% {
+    box-shadow: 0 6px 20px rgba(139, 37, 59, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  }
+  50% {
+    box-shadow: 0 8px 28px rgba(139, 37, 59, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  }
+}
+
+@keyframes ctaTextSwap {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.cta.saving {
+    animation: none;
+  }
+  button.cta .cta-text.swap {
+    animation: none;
   }
 }
 
@@ -508,6 +548,29 @@ button.cta.saving .arrow {
   content: "✓";
   margin-right: 6px;
   font-weight: 700;
+}
+
+/* The extracted chips glide in where the "Continue" button just vanished, so
+   the interpret round-trip resolves into a visible arrival instead of a blink.
+   Only plays on the hidden → shown flip; later chip toggles re-render the chips
+   inside an already-visible container and never restart it. */
+#vibe-review:not([hidden]) {
+  animation: vibeReviewIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes vibeReviewIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #vibe-review:not([hidden]) {
+    animation: none;
+  }
 }
 
 /* Grouped review sections give the step real structure (Experience / Atmosphere

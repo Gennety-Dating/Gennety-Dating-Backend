@@ -118,7 +118,10 @@
         <div class="vibe-input">
           <textarea id="vibe-text" maxlength="500" rows="4" placeholder=""></textarea>
         </div>
-        <button id="vibe-interpret" class="cta" type="button"><span class="cta-text">Continue</span></button>
+        <button id="vibe-interpret" class="cta" type="button">
+          <span class="cta-text">Continue</span>
+          <span class="spinner" aria-hidden="true"></span>
+        </button>
 
         <div id="vibe-review" hidden>
           <p class="vibe-review-label" id="vibe-review-label">Here's what I picked up — tap to fine-tune:</p>
@@ -153,7 +156,10 @@
           </div>
 
           <p id="vibe-price-note" class="vibe-price-note"></p>
-          <button id="vibe-confirm" class="cta" type="button"><span class="cta-text">Looks right — find our spot</span></button>
+          <button id="vibe-confirm" class="cta" type="button">
+            <span class="cta-text">Looks right — find our spot</span>
+            <span class="spinner" aria-hidden="true"></span>
+          </button>
         </div>
 
         <p id="vibe-error" class="vibe-error" role="alert"></p>
