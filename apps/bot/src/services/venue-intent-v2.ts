@@ -28,6 +28,7 @@ import { midpoint, haversineDistanceKm, venueSearchRadiusMeters } from "./geo.js
 import { callOpenAIJson } from "./openai.js";
 import { isValidVenueCategory, isVenueOpenAt } from "./curated-venue.js";
 import {
+  fetchPlacePhotoName,
   searchVenueCandidates,
   type RegularOpeningHours,
   type Venue,
@@ -476,7 +477,17 @@ interface SelectionRecord {
   source: "curated" | "places";
   /** Resolved venue category — feeds the scheduled-card blurb + busy-note. */
   category: VenueCategory;
-  photoUrl: string | null;
+  /**
+   * The REAL Google Places id, or null. Distinct from `rank.placeId`, which
+   * falls back to a synthetic `curated:<id>` so ranking can dedupe — that
+   * synthetic value must never be sent to Places.
+   */
+  placeId: string | null;
+  /**
+   * Cover photo resource name. Places candidates carry one from the search
+   * response; curated candidates start null and are resolved from `placeId`
+   * once the venue is actually chosen (one request per scheduled date).
+   */
   photoName: string | null;
 }
 
@@ -503,7 +514,7 @@ function candidateFromPlaces(row: VenueCandidate, a: VenueIntentV2, b: VenueInte
     },
     name: row.name, address: row.address, lat: row.lat, lng: row.lng,
     mapsUri: row.googleMapsUri, source: "places", category: row.category,
-    photoUrl: null, photoName: row.photos[0] ?? null,
+    placeId: row.placeId, photoName: row.photos[0] ?? null,
   };
 }
 
@@ -644,7 +655,7 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       name: row.name, address: row.address, lat: row.lat, lng: row.lng,
       mapsUri: row.googleMapsUri, source: "curated" as const,
       category: row.category as VenueCategory,
-      photoUrl: row.photoUrl, photoName: null,
+      placeId: row.placeId, photoName: null,
     }];
   }).slice(0, 20);
 
@@ -675,6 +686,14 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   const best = ranked[0];
   const chosen = best ? deduped.find((row) => row.rank.id === best.candidate.id) ?? null : null;
   const mode = venueIntentMode(matchId) === "shadow" ? "shadow" : "live";
+  // Curated candidates store no imagery of their own, so the winner's cover
+  // photo is pulled from Places by its stable `placeId` — one request, only for
+  // the venue we actually assign. Done here, while the "picking the best spot"
+  // shimmer is still up, so the wait is covered. Skipped in shadow mode (which
+  // assigns nothing) and for Places rows (already photographed by the search).
+  if (chosen && mode === "live" && !chosen.photoName) {
+    chosen.photoName = await fetchPlacePhotoName(apiKey, chosen.placeId);
+  }
   // The search is over: clear the "picking the best spot" shimmer BEFORE the
   // outcome so the chat never carries two live status messages (the date-card
   // render inside `deliverScheduledConfirmation` opens its own).
@@ -729,7 +748,7 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       venueGoogleMapsUri: chosen.mapsUri, venuePlaceId: chosen.rank.placeId,
       venueSource: chosen.source, venueSelectionVersion: VENUE_SELECTION_VERSION,
       venueSelectionConfidence: best.score.evidenceConfidence, venueSelectionReason: reason,
-      venuePhotoUrl: chosen.photoUrl, venuePhotoName: chosen.photoName,
+      venuePhotoName: chosen.photoName,
       venueSelectionError: null, venueSelectionNextRetryAt: null,
     },
   });
@@ -751,7 +770,6 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       googleMapsUri: chosen.mapsUri,
       lat: chosen.lat,
       lng: chosen.lng,
-      photoUrl: chosen.photoUrl,
       photoName: chosen.photoName,
       rating: chosen.rank.rating ?? null,
       userRatingCount: chosen.rank.reviews ?? null,

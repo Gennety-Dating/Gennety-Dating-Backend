@@ -34,7 +34,7 @@ import type { VenueCategory } from "./vibe-parser.js";
 // ---------------------------------------------------------------------------
 
 export interface CatalogVenue {
-  /** Where the row came from — drives whether `photoUrl` can be present. */
+  /** Where the row came from — drives which display fields can be present. */
   source: "curated" | "places";
   placeId: string | null;
   name: string;
@@ -53,13 +53,14 @@ export interface CatalogVenue {
   tier: string;
   /** Great-circle distance from the original venue center, km (rounded to 0.1). */
   distanceKm: number;
-  /** Operator-supplied photo for curated rows; null for Places fallbacks. */
-  photoUrl: string | null;
   /**
-   * Google Places photo *resource names* for the detail-page gallery (Places
-   * rows only; empty for curated). The Mini App resolves each to a displayable
-   * image through the server-side `/v1/venue-change/photo` proxy so the
-   * `PLACES_API_KEY` is never shipped to the client.
+   * Google Places photo *resource names* for the board card + detail-page
+   * gallery — the single source of venue imagery. Populated for Places rows
+   * from the search response; empty for curated rows, which store none (the
+   * board shows a category placeholder, and the winner's cover is resolved from
+   * its `placeId` when the change is agreed). The Mini App resolves each ref to
+   * a displayable image through the server-side `/v1/venue-change/photo` proxy
+   * so the `PLACES_API_KEY` is never shipped to the client.
    */
   photoRefs: string[];
   /** Places quality signals surfaced on the venue detail page (null for curated). */
@@ -222,7 +223,6 @@ export async function listCuratedVenuesNear(
       googleMapsUri: true,
       category: true,
       tier: true,
-      photoUrl: true,
       utcOffsetMinutes: true,
       openingHours: true,
       placeId: true,
@@ -253,9 +253,7 @@ export async function listCuratedVenuesNear(
       category: r.category,
       tier: r.tier,
       distanceKm: round1(distanceKm),
-      photoUrl: r.photoUrl,
-      // Curated rows carry a single operator photo (above), no Places gallery
-      // and no public rating/blurb in our base.
+      // Curated rows store no imagery and no public rating/blurb in our base.
       photoRefs: [],
       rating: null,
       userRatingCount: null,
@@ -314,7 +312,6 @@ export async function listPlacesVenuesNear(
         // Places-fallback rows are always base (they pass the ≤ MODERATE gate).
         tier: "base",
         distanceKm: round1(distanceKm),
-        photoUrl: null,
         photoRefs: c.photos.slice(0, VENUE_CHANGE_PHOTOS_PER_VENUE),
         rating: c.rating,
         userRatingCount: c.userRatingCount,

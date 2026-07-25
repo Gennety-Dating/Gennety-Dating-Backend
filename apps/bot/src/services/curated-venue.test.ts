@@ -38,7 +38,7 @@ function row(overrides: Partial<CuratedVenueRow> = {}): CuratedVenueRow {
     vibeTags: [],
     utcOffsetMinutes: null,
     openingHours: null,
-    photoUrl: null,
+    placeId: null,
     ...overrides,
   };
 }
@@ -212,7 +212,7 @@ describe("resolveVenue", () => {
     };
   }
 
-  it("returns the curated venue and does NOT call Places when curated hits", async () => {
+  it("returns the curated venue and does NOT call Places search when curated hits", async () => {
     const pickPlaces = vi.fn();
     const venue = await resolveVenue(input(), {
       pickCurated: async () => ({
@@ -224,6 +224,60 @@ describe("resolveVenue", () => {
     });
     expect(venue.name).toBe("Curated Spot");
     expect(pickPlaces).not.toHaveBeenCalled();
+  });
+
+  // Regression: curated rows store no imagery, so before this the curated
+  // branch shipped `photoName: null` and every curated date card rendered its
+  // bare gradient — with curated being the PRIMARY source, that was the common
+  // path. The cover must be resolved from the row's stable `placeId`.
+  it("fills a curated pick's cover photo from its placeId", async () => {
+    process.env.PLACES_API_KEY = "k";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ photos: [{ name: "places/c9/photos/lead" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const venue = await resolveVenue(input(), {
+      pickCurated: async () => ({
+        name: "Curated Spot",
+        address: "2 Curated Rd",
+        googleMapsUri: "https://maps.google.com/?cid=9",
+        placeId: "c9",
+        photoName: null,
+      }),
+      pickPlaces: vi.fn(),
+    });
+
+    expect(venue.photoName).toBe("places/c9/photos/lead");
+    expect(fetchMock.mock.calls[0]![0]).toContain("/v1/places/c9");
+    vi.unstubAllGlobals();
+    delete process.env.PLACES_API_KEY;
+  });
+
+  it("keeps the curated pick when the cover lookup fails", async () => {
+    process.env.PLACES_API_KEY = "k";
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("places down")));
+
+    const venue = await resolveVenue(input(), {
+      pickCurated: async () => ({
+        name: "Curated Spot",
+        address: "2 Curated Rd",
+        googleMapsUri: null,
+        placeId: "c9",
+        photoName: null,
+      }),
+      pickPlaces: vi.fn(),
+    });
+
+    // A missing photo is cosmetic (the card falls back to its gradient); it must
+    // never take the venue assignment down with it.
+    expect(venue.name).toBe("Curated Spot");
+    expect(venue.photoName).toBeNull();
+    vi.unstubAllGlobals();
+    delete process.env.PLACES_API_KEY;
   });
 
   it("falls back to Places (with the midpoint) when curated misses", async () => {

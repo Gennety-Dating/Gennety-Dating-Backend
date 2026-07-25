@@ -24,36 +24,40 @@ function okResponse(): Response {
 }
 
 describe("resolveVenuePhoto", () => {
-  it("prefers the curated photoUrl (no Google attribution)", async () => {
-    const fetchFn = vi.fn().mockResolvedValue(okResponse());
-    const res = await resolveVenuePhoto("https://cdn/x.jpg", "places/x/photos/y", fetchFn);
-    expect(res?.attribution).toBe(false);
-    expect(res?.buffer).toBeInstanceOf(Buffer);
-    expect(fetchFn).toHaveBeenCalledTimes(1);
-    expect(fetchFn.mock.calls[0]![0]).toBe("https://cdn/x.jpg");
-  });
-
-  it("falls back to a Places photo (with attribution) when no curated url", async () => {
+  it("fetches the Places photo and always requires attribution", async () => {
     process.env.PLACES_API_KEY = "k";
     const fetchFn = vi.fn().mockResolvedValue(okResponse());
-    const res = await resolveVenuePhoto(null, "places/x/photos/y", fetchFn);
+    const res = await resolveVenuePhoto("places/x/photos/y", fetchFn);
     expect(res?.attribution).toBe(true);
+    expect(res?.buffer).toBeInstanceOf(Buffer);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(fetchFn.mock.calls[0]![0]).toContain("/media?");
     delete process.env.PLACES_API_KEY;
   });
 
-  it("returns null when nothing is available", async () => {
+  it("returns null without a photo name", async () => {
+    process.env.PLACES_API_KEY = "k";
     const fetchFn = vi.fn();
-    expect(await resolveVenuePhoto(null, null, fetchFn)).toBeNull();
+    expect(await resolveVenuePhoto(null, fetchFn)).toBeNull();
+    expect(fetchFn).not.toHaveBeenCalled();
+    delete process.env.PLACES_API_KEY;
+  });
+
+  it("returns null without an API key rather than calling out", async () => {
+    delete process.env.PLACES_API_KEY;
+    const fetchFn = vi.fn();
+    expect(await resolveVenuePhoto("places/x/photos/y", fetchFn)).toBeNull();
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it("rejects an oversized venue photo", async () => {
+    process.env.PLACES_API_KEY = "k";
     const fetchFn = vi.fn().mockResolvedValue(
       new Response("x", {
         headers: { "content-length": String(10 * 1024 * 1024 + 1) },
       }),
     );
-    await expect(resolveVenuePhoto("https://cdn/x.jpg", null, fetchFn)).resolves.toBeNull();
+    await expect(resolveVenuePhoto("places/x/photos/y", fetchFn)).resolves.toBeNull();
+    delete process.env.PLACES_API_KEY;
   });
 });

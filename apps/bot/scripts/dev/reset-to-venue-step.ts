@@ -132,7 +132,6 @@ await prisma.match.update({
     venueLat: null,
     venueLng: null,
     venueGoogleMapsUri: null,
-    venuePhotoUrl: null,
     venuePhotoName: null,
     // Cached date card + post-schedule lifecycle stamps
     dateCardFileIdA: null,

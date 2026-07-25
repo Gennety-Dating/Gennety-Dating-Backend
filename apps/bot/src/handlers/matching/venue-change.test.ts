@@ -69,7 +69,6 @@ function catalogVenue(placeId: string, name: string): CatalogVenue {
     category: "cafe",
     tier: "base",
     distanceKm: 0.3,
-    photoUrl: null,
     photoRefs: [`places/${placeId}/photos/x`],
     rating: 4.5,
     userRatingCount: 100,
@@ -91,7 +90,6 @@ function likeOf(placeId: string, name: string) {
     lng: v.lng,
     mapsUri: v.mapsUri,
     category: v.category,
-    photoUrl: null,
     photoRef: v.photoRefs[0],
   };
 }
@@ -118,7 +116,6 @@ function fakeMatch(over: Record<string, unknown> = {}) {
     venueChangeLng: null,
     venueChangeMapsUri: null,
     venueChangePlaceId: null,
-    venueChangePhotoUrl: null,
     venueChangePhotoName: null,
     venueChangePaidById: null,
     venueChangePaidAt: null,
@@ -236,7 +233,6 @@ describe("submitVenueLikes", () => {
       lng: 50.52,
       mapsUri: "https://maps.google.com/old",
       category: "cafe",
-      photoUrl: null,
       photoRef: null,
     };
     mMatch.findUnique.mockResolvedValue(

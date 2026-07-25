@@ -850,8 +850,11 @@ export interface VenueChangeCatalogItem {
    * unless a participant is premium. */
   tier?: string;
   distanceKm: number;
-  photoUrl: string | null;
-  /** Google Places photo resource names → resolved via `venueChangePhotoUrl`. */
+  /**
+   * Google Places photo resource names → resolved via `venueChangePhotoUrl`.
+   * The single source of venue imagery; empty for curated rows, which show the
+   * category placeholder instead.
+   */
   photoRefs: string[];
   rating: number | null;
   userRatingCount: number | null;

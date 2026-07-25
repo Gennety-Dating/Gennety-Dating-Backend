@@ -52,6 +52,7 @@ import {
   type CatalogVenue,
   type VenueChangeIneligibleReason,
 } from "../../services/venue-change.js";
+import { fetchPlacePhotoName } from "../../services/venue.js";
 import { isPremiumHeadActive } from "../../services/premium.js";
 
 /** How long an abandoned express mint holds the board before quietly reverting. */
@@ -81,7 +82,6 @@ const VC_SELECT = {
   venueChangeLng: true,
   venueChangeMapsUri: true,
   venueChangePlaceId: true,
-  venueChangePhotoUrl: true,
   venueChangePhotoName: true,
   venueChangePaidById: true,
   venueChangePaidAt: true,
@@ -215,8 +215,26 @@ export interface VenueLikeSnapshot {
   category: string;
   /** `base` | `premium` — Gennety Premium tier of the venue (§Premium). */
   tier: string;
-  photoUrl: string | null;
+  /**
+   * Google Places cover-photo resource name — the single venue-imagery source.
+   * Null for curated rows (they store none) and for the KEEP sentinel; resolved
+   * from `placeId` when the change is actually agreed, so the re-rendered date
+   * card gets a photo instead of the bare gradient.
+   */
   photoRef: string | null;
+}
+
+/**
+ * Fill in a snapshot's cover photo from its `placeId` when it has none.
+ *
+ * Curated board rows carry no imagery, so without this a settled change wrote
+ * `venueChangePhotoName: null` and the new date card lost its venue photo —
+ * the same gap the auto-assign path had. One Places request, only at the point
+ * a venue actually becomes THE venue. Never throws.
+ */
+async function withCoverPhoto(v: VenueLikeSnapshot): Promise<VenueLikeSnapshot> {
+  if (v.photoRef || !v.placeId) return v;
+  return { ...v, photoRef: await fetchPlacePhotoName(process.env.PLACES_API_KEY, v.placeId) };
 }
 
 export function venueKeyOf(v: {
@@ -250,7 +268,6 @@ function originalSnapshot(match: VcMatch): VenueLikeSnapshot | null {
     // The originally-assigned venue is always a base spot (auto-assign is
     // base-only) — keeping it is free regardless of premium.
     tier: "base",
-    photoUrl: null,
     photoRef: null,
   };
 }
@@ -266,7 +283,6 @@ function toSnapshot(v: CatalogVenue): VenueLikeSnapshot {
     mapsUri: v.mapsUri,
     category: v.category,
     tier: v.tier,
-    photoUrl: v.photoUrl,
     photoRef: v.photoRefs[0] ?? null,
   };
 }
@@ -287,7 +303,6 @@ function parseLikes(raw: Prisma.JsonValue[]): VenueLikeSnapshot[] {
       mapsUri: typeof o.mapsUri === "string" ? o.mapsUri : null,
       category: typeof o.category === "string" ? o.category : "cafe",
       tier: o.tier === "premium" ? "premium" : "base",
-      photoUrl: typeof o.photoUrl === "string" ? o.photoUrl : null,
       photoRef: typeof o.photoRef === "string" ? o.photoRef : null,
     });
   }
@@ -874,20 +889,23 @@ async function reachAgreement(
   }
 
   const deadline = venueChangeDeadline(now, fresh.agreedTime);
+  // This venue is about to become THE venue, so give it a cover photo if the
+  // board row had none (curated rows never do) — the settled change copies it
+  // onto `venuePhotoName`, which is what the re-rendered date card uses.
+  const picked = await withCoverPhoto(venue);
 
   const claim = await prisma.match.updateMany({
     where: { id: matchId, status: "scheduled", venueChangeStatus: "liking" },
     data: {
       venueChangeStatus: "agreed",
-      venueChangeName: venue.name.slice(0, 256),
-      venueChangeAddress: venue.address.slice(0, 256),
-      venueChangeLat: venue.lat,
-      venueChangeLng: venue.lng,
-      venueChangeMapsUri: venue.mapsUri,
-      venueChangePlaceId: venue.placeId,
-      venueChangePhotoUrl: venue.photoUrl,
-      venueChangePhotoName: venue.photoRef,
-      venueChangeTier: venue.tier,
+      venueChangeName: picked.name.slice(0, 256),
+      venueChangeAddress: picked.address.slice(0, 256),
+      venueChangeLat: picked.lat,
+      venueChangeLng: picked.lng,
+      venueChangeMapsUri: picked.mapsUri,
+      venueChangePlaceId: picked.placeId,
+      venueChangePhotoName: picked.photoRef,
+      venueChangeTier: picked.tier,
       venueChangeExpiresAt: deadline,
       venueChangeExpressAt: null,
     },
@@ -1055,6 +1073,9 @@ export async function mintExpressChange(
   if (snapshot.tier === "premium" && !pairPremiumActive(match, now)) {
     return { ok: false, reason: "premium-locked" };
   }
+  // Express skips the agreement step, so this IS the point the venue is locked
+  // in — resolve its cover photo here for the same reason (see reachAgreement).
+  const picked = await withCoverPhoto(snapshot);
 
   const holdUntil = new Date(
     Math.min(
@@ -1073,15 +1094,14 @@ export async function mintExpressChange(
       venueChangeStatus: "agreed",
       venueChangeProposerId: me.id,
       venueChangeProposedAt: match.venueChangeProposedAt ?? now,
-      venueChangeName: snapshot.name.slice(0, 256),
-      venueChangeAddress: snapshot.address.slice(0, 256),
-      venueChangeLat: snapshot.lat,
-      venueChangeLng: snapshot.lng,
-      venueChangeMapsUri: snapshot.mapsUri,
-      venueChangePlaceId: snapshot.placeId,
-      venueChangePhotoUrl: snapshot.photoUrl,
-      venueChangePhotoName: snapshot.photoRef,
-      venueChangeTier: snapshot.tier,
+      venueChangeName: picked.name.slice(0, 256),
+      venueChangeAddress: picked.address.slice(0, 256),
+      venueChangeLat: picked.lat,
+      venueChangeLng: picked.lng,
+      venueChangeMapsUri: picked.mapsUri,
+      venueChangePlaceId: picked.placeId,
+      venueChangePhotoName: picked.photoRef,
+      venueChangeTier: picked.tier,
       venueChangeExpiresAt: holdUntil,
       venueChangeExpressAt: now,
     },
@@ -1185,7 +1205,6 @@ export async function keepOriginalVenue(
     venueChangeLng: null,
     venueChangeMapsUri: null,
     venueChangePlaceId: null,
-    venueChangePhotoUrl: null,
     venueChangePhotoName: null,
     venueChangeExpiresAt: null,
     venueChangeExpressAt: null,
@@ -1415,7 +1434,6 @@ export async function declineVenuePay(
       venueChangeLng: null,
       venueChangeMapsUri: null,
       venueChangePlaceId: null,
-      venueChangePhotoUrl: null,
       venueChangePhotoName: null,
       venueChangeOfferPaySentAt: null,
       venueChangePayDeclinedAt: null,
@@ -1495,7 +1513,6 @@ export async function settleVenuePayment(
       venueLat: match.venueChangeLat,
       venueLng: match.venueChangeLng,
       venueGoogleMapsUri: match.venueChangeMapsUri,
-      venuePhotoUrl: match.venueChangePhotoUrl,
       venuePhotoName: match.venueChangePhotoName,
     },
   });
@@ -1584,7 +1601,6 @@ async function finalizeVenueChangeFree(
       venueLat: match.venueChangeLat,
       venueLng: match.venueChangeLng,
       venueGoogleMapsUri: match.venueChangeMapsUri,
-      venuePhotoUrl: match.venueChangePhotoUrl,
       venuePhotoName: match.venueChangePhotoName,
     },
   });
@@ -1684,7 +1700,6 @@ export async function sweepExpiredVenueChanges(
           venueChangeLng: null,
           venueChangeMapsUri: null,
           venueChangePlaceId: null,
-          venueChangePhotoUrl: null,
           venueChangePhotoName: null,
           venueChangeExpiresAt: null,
           venueChangeExpressAt: null,

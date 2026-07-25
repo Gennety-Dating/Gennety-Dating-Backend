@@ -19,6 +19,7 @@
 import { prisma } from "@gennety/db";
 import { haversineDistanceKm, type LatLng } from "./geo.js";
 import {
+  fetchPlacePhotoName,
   isBlockedVenueName,
   pickVenueAtMidpoint,
   type Venue,
@@ -65,8 +66,13 @@ export interface CuratedVenueRow {
   vibeTags: string[];
   utcOffsetMinutes: number | null;
   openingHours: RegularOpeningHours | null;
-  /** Optional operator-supplied venue photo (absolute URL), for the date card. */
-  photoUrl: string | null;
+  /**
+   * Stable Google Places id. Curated rows store no imagery of their own, so
+   * this is what `resolveVenue` uses to pull the venue's cover photo at
+   * assignment time (see `fetchPlacePhotoName`). Null for rows seeded without
+   * one — those simply get no photo.
+   */
+  placeId: string | null;
 }
 
 export interface ResolveVenueInput {
@@ -229,7 +235,10 @@ function rowToVenue(row: CuratedVenueRow): Venue {
     name: row.name,
     address: row.address,
     googleMapsUri: row.googleMapsUri,
-    photoUrl: row.photoUrl,
+    placeId: row.placeId,
+    source: "curated",
+    // Resolved from `placeId` by `resolveVenue` below — curated rows store no
+    // imagery, and Places is the single source for it.
     photoName: null,
     // Curated rows carry no Places editorial summary / rating; expose the
     // operator category so the blurb still has an honest grounding fact, and
@@ -267,7 +276,7 @@ export async function pickCuratedVenue(
       vibeTags: true,
       utcOffsetMinutes: true,
       openingHours: true,
-      photoUrl: true,
+      placeId: true,
     },
   });
   if (rows.length === 0) return null;
@@ -301,7 +310,17 @@ export async function resolveVenue(
   const pickPlaces = deps.pickPlaces ?? pickVenueAtMidpoint;
 
   const curated = await pickCurated(input);
-  if (curated) return curated;
+  if (curated) {
+    // Curated rows store no imagery, so pull the venue's Google cover photo
+    // once, here, at assignment. Without this the date card renders its plain
+    // gradient for every curated pick — which is the common path.
+    return {
+      ...curated,
+      photoName:
+        curated.photoName ??
+        (await fetchPlacePhotoName(process.env.PLACES_API_KEY, curated.placeId)),
+    };
+  }
 
   return pickPlaces({
     lat: input.midpoint.lat,

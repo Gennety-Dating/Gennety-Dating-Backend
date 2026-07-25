@@ -124,7 +124,6 @@ async function renderAndSendCard(
       partnerPhotoRef: partner.photos[0] ?? null,
       venueName: match.venueName!,
       venueAddress: match.venueAddress ?? "",
-      venuePhotoUrl: match.venuePhotoUrl,
       venuePhotoName: match.venuePhotoName,
       agreedTime: match.agreedTime!,
       language: lang,

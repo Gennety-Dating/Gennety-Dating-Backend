@@ -524,7 +524,7 @@ is worthless without its provider):
 |---|---|---|
 | Supabase (DB + Storage) | **migrated 2026-07-13 to a new project** — see below | Storage works for the first time (the old project's keys were never filled in — they were the literal `your_supabase_…` placeholders from `.env.example`, so uploads 403'd with `Invalid Compact JWS`). |
 | `PERSONA_API_KEY` | **works, but it is a SANDBOX key** (`persona_sand…`) | The API answers 200 on the endpoints the pipeline actually calls (`GET /inquiries/:id`). Identity checks run against Persona's sandbox, i.e. they are test flows, not real KYC. A production key is needed before liveness *means* anything. (A 403 on `/inquiry-templates` is a red herring — that endpoint is outside the key's scope and the product never calls it.) |
-| `PLACES_API_KEY` | **empty** | Google Places: the venue fallback when no curated venue is in range, the Location Mini App autocomplete, the venue-change catalog beyond curated rows, and the date card's venue photo. The curated base still covers Kyiv/Kharkiv/Odesa, so scheduling degrades rather than dies. |
+| `PLACES_API_KEY` | ~~empty~~ → **set** (re-verified on the droplet 2026-07-25; a live Place Details probe of a real curated Kyiv venue returned its cover photo) | Google Places: the venue fallback when no curated venue is in range, the Location Mini App autocomplete, the venue-change catalog beyond curated rows, and — since 2026-07-25 — **every** venue photo, including for curated venues (resolved from `placeId` at assignment). Without it the curated base still covers Kyiv/Kharkiv/Odesa, so scheduling degrades to gradient-only cards rather than dying. |
 | `EXPO_ACCESS_TOKEN` | retired 2026-07-18 (Expo rail removed; native push is direct APNs via `APNS_*`) | Can be deleted from `/opt/gennety/.env`; the process no longer reads it. |
 
 Re-probe any credential from the droplet before trusting a flag flip; the probes
@@ -1031,11 +1031,20 @@ Required/high-impact env keys:
   `pnpm install --frozen-lockfile`, **not** ffmpeg/Chromium), and the bundled
   Roboto + Archivo Black TTFs in `apps/bot/src/assets/fonts/` ride the standard
   code rsync.
-  Venue photos come from `CuratedVenue.photoUrl` first, else the Google Places
-  cover photo (needs `PLACES_API_KEY`; fetched at render, credited on the card,
-  never persisted). Runs inline at venue finalization — no new cron. Any render
-  failure degrades to the existing plain-text scheduled DM, so the flag is safe
-  to toggle live with `pm2 restart gennety-bot --update-env`.
+  **Venue photos require `PLACES_API_KEY` — no key, no venue photo** (the card
+  still renders, on its branded gradient). Since 2026-07-25 Google Places is the
+  SINGLE source: the retired `CuratedVenue.photoUrl` fallback is gone, and
+  curated venues — the primary assignment source — have their cover resolved
+  from their stored `placeId` at assignment time (`fetchPlacePhotoName`, one
+  extra Places request per scheduled date; also fires at a §3.7b venue-change
+  agreement / express mint). Google's bytes are fetched at render, credited on
+  the card, never persisted. (`PLACES_API_KEY` re-verified present on the
+  droplet 2026-07-25, and a live probe of a real curated Kyiv venue returned its
+  cover photo — superseding the stale "empty" note in the 2026-07-13 flag table
+  below.) Runs inline at venue finalization —
+  no new cron. Any render failure degrades to the existing plain-text scheduled
+  DM, so the flag is safe to toggle live with `pm2 restart gennety-bot
+  --update-env`.
 - Match card (feature-flagged): `MATCH_CARD_FEATURE_ENABLED` (default `false`).
   When on, the match-pitch photo album is replaced by the rendered collage
   card set (card 1 = photo + name/vibe panel, following cards = one full-bleed

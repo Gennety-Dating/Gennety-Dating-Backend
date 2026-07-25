@@ -868,13 +868,20 @@ model Match {
   /// Null on the legacy domain-based venue path (no Maps URI available
   /// there) and on local-stub fallbacks.
   venueGoogleMapsUri        String?   @map("venue_google_maps_uri")
-  /// Date-card venue imagery (feature-flagged, `DATE_CARD_FEATURE_ENABLED`).
-  /// `venuePhotoUrl` is an absolute, operator-owned URL from a curated venue
-  /// (clean licensing). `venuePhotoName` is a Google Places photo *resource
-  /// name* (`places/X/photos/Y`); the displayable media URL is rebuilt at card
-  /// render time with the server-side key (`buildPlacesPhotoUrl`) so Google's
-  /// raw bytes are never persisted (Places ToS). Both null until `scheduled`.
+  /// RETIRED 2026-07-25 — no longer read or written. Held an operator-owned
+  /// curated photo URL, but no curated row ever had one, so curated picks (the
+  /// primary source) always rendered a photo-less date card. Google Places is
+  /// now the single venue-imagery source; see `venuePhotoName`. Column kept
+  /// (all-null in production) so the change stays additive — drop it in a
+  /// separate, deliberate migration.
   venuePhotoUrl             String?   @map("venue_photo_url")
+  /// Date-card venue imagery (feature-flagged, `DATE_CARD_FEATURE_ENABLED`) —
+  /// the SINGLE source. A Google Places photo *resource name*
+  /// (`places/X/photos/Y`); the displayable media URL is rebuilt at card render
+  /// time with the server-side key (`buildPlacesPhotoUrl`) so Google's raw bytes
+  /// are never persisted (Places ToS). Places-sourced venues get it from the
+  /// search response; curated venues have theirs resolved from their stored
+  /// `placeId` at assignment (`fetchPlacePhotoName`). Null until `scheduled`.
   venuePhotoName            String?   @map("venue_photo_name")
   /// Telegram photo `file_id` of the rendered date-card PNG, captured per side
   /// the first time the `scheduled` confirmation card is sent
@@ -1073,13 +1080,17 @@ model Match {
   venueChangeComment        String?   @map("venue_change_comment")
   /// v2 board likes, one Json[] per side. Each entry is a server-resolved
   /// venue snapshot: { key, placeId, name, address, lat, lng, mapsUri,
-  /// category, photoUrl, photoRef }. `key` = placeId ?? "name|address".
+  /// category, tier, photoRef }. `key` = placeId ?? "name|address".
+  /// (A legacy `photoUrl` member may exist on rows written before 2026-07-25;
+  /// it is ignored on read.)
   venueLikesA               Json[]    @map("venue_likes_a")
   venueLikesB               Json[]    @map("venue_likes_b")
-  /// Agreed-venue photo refs (curated absolute URL / Places photo resource
-  /// name), copied onto venuePhotoUrl/venuePhotoName at settle so the updated
-  /// date card renders the NEW venue's photo.
+  /// RETIRED 2026-07-25 alongside `venuePhotoUrl` — no longer read or written.
   venueChangePhotoUrl       String?   @map("venue_change_photo_url")
+  /// Agreed-venue Google Places photo resource name, copied onto
+  /// `venuePhotoName` at settle so the updated date card renders the NEW
+  /// venue's photo. Resolved from the agreed venue's `placeId` at agreement /
+  /// express mint, since curated board rows carry no imagery of their own.
   venueChangePhotoName      String?   @map("venue_change_photo_name")
   /// Who actually paid the Stars and when (settle stamp).
   venueChangePaidById       String?   @map("venue_change_paid_by_id") @db.Uuid
@@ -1490,11 +1501,14 @@ model CuratedVenue {
   editorialSummary String?   @map("editorial_summary")
   /// unknown | provider | operator_confirmed | always_open
   hoursConfidence  String    @default("unknown") @map("hours_confidence")
-  /// Operator-supplied venue photo URL (Supabase Storage or any hosted image),
-  /// filled by hand for venues we curate. Surfaced in the venue-change catalog
-  /// Mini App card. Null for seeded-but-not-yet-photographed rows; Places-
-  /// fallback catalog entries have no photo (the Mini App shows a category
-  /// placeholder). Not used by the auto-assign concierge picker.
+  /// RETIRED 2026-07-25 — no longer read or written. Intended for a hand-filled
+  /// operator photo, but no row was ever populated (0/537 in production), so it
+  /// only ever produced photo-less date cards for curated picks. Venue imagery
+  /// now comes exclusively from Google Places, resolved from `placeId` at
+  /// assignment time (`fetchPlacePhotoName`). Column kept so the change stays
+  /// additive — drop it in a separate, deliberate migration. If operator-owned
+  /// photos are ever wanted back, reintroduce them as an explicit override with
+  /// a seeder path, not a silently-null field.
   photoUrl         String?   @map("photo_url")
   active           Boolean   @default(true)
   /// Set when the row was last confirmed live against Places (by the seeder

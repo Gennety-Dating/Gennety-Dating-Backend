@@ -101,7 +101,6 @@ async function sendScheduledConfirmation(
         partnerPhotoRef: input.partnerPhotoRef,
         venueName: input.venue.name,
         venueAddress: input.venue.address,
-        venuePhotoUrl: input.venue.photoUrl ?? null,
         venuePhotoName: input.venue.photoName ?? null,
         agreedTime: input.agreedTime,
         language: input.language,

@@ -75,7 +75,6 @@ function scheduledActive(over: { match?: Record<string, unknown> } = {}) {
       venueGoogleMapsUri: "https://maps.google.com/?q=blur",
       venueLat: 50.4,
       venueLng: 30.5,
-      venuePhotoUrl: null,
       venuePhotoName: null,
       proxyOpenedAt: null,
       proxyClosedAt: null,

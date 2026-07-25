@@ -1540,10 +1540,21 @@ live only in the Telegram caption.
   chat. (OS screenshots still can't be blocked in a normal bot chat — that is a
   Telegram platform limit, not a toggle — so the blurred share copy remains the
   actual off-platform privacy guarantee.)
-- **Venue photo.** Curated-first: an operator-owned `CuratedVenue.photoUrl`
-  (clean licensing) when present; otherwise the venue's Google Places **cover**
-  photo (credited on the card; Google's bytes are fetched at render time and
-  never persisted). No photo → a branded gradient backdrop.
+- **Venue photo — Google Places, single source (2026-07-25).** Every venue's
+  hero image is the place's Google Places **cover** photo, credited on the card;
+  Google's bytes are fetched at render time and never persisted (only the photo
+  *resource name* is stored). This holds regardless of how the venue was chosen:
+  Places-sourced venues carry the resource name from the search response, and
+  **curated** venues — which store no imagery of their own — have theirs
+  resolved from their stable `placeId` at the moment the venue is assigned
+  (auto-assign, and the §3.7b venue-change agreement / express mint alike). One
+  lookup per scheduled date, so the pointer is always fresh rather than a stored
+  ref that can rotate and 404. No photo → a branded gradient backdrop.
+  The previous "curated-first, operator-owned `CuratedVenue.photoUrl`" rule was
+  removed: not one curated row was ever photographed, so the primary assignment
+  path always fell through to a photo-less card. Operator-supplied photos are
+  not part of the product today; if reintroduced they must be an explicit
+  override with a seeding path, never a silently-null field.
 - **Never wedges.** Any render/send failure degrades per-side to the existing
   plain-text scheduled card, so one side's hiccup never denies the other their
   card and scheduling always completes.

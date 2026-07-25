@@ -160,7 +160,6 @@ describe("buildVenueChangeCatalog", () => {
       category: "cafe",
       tier: "base",
       distanceKm: 0.2,
-      photoUrl: "https://img/c1.jpg",
       photoRefs: [],
       rating: null,
       userRatingCount: null,
@@ -179,7 +178,6 @@ describe("buildVenueChangeCatalog", () => {
       category: "cafe",
       tier: "base",
       distanceKm: 0.3,
-      photoUrl: null,
       photoRefs: ["places/p1/photos/x"],
       rating: 4.5,
       userRatingCount: 120,
@@ -231,7 +229,6 @@ describe("capCatalog (§Premium slot reservation)", () => {
     category: "cafe",
     tier,
     distanceKm: i * 0.1, // farther as i grows
-    photoUrl: null,
     photoRefs: [],
     rating: null,
     userRatingCount: null,

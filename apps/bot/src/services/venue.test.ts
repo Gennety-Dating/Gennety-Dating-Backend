@@ -13,6 +13,7 @@ import {
   localStubVenueClient,
   pickVenueAtMidpoint,
   searchVenueCandidates,
+  fetchPlacePhotoName,
   gate,
   isBlockedVenueName,
   score,
@@ -391,5 +392,59 @@ describe("searchVenueCandidates (curated seeder)", () => {
       midpointInput({ category: "restaurant" }),
     );
     expect(candidates.map((c) => c.name)).toEqual(["Passenger Gastro Bar"]);
+  });
+});
+
+describe("fetchPlacePhotoName", () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function mockDetails(body: unknown, status = 200): ReturnType<typeof vi.fn> {
+    const fn = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    globalThis.fetch = fn as unknown as typeof globalThis.fetch;
+    return fn;
+  }
+
+  it("returns the cover (first) photo resource name", async () => {
+    const fn = mockDetails({
+      photos: [{ name: "places/x/photos/lead" }, { name: "places/x/photos/second" }],
+    });
+    await expect(fetchPlacePhotoName("test-key", "x")).resolves.toBe("places/x/photos/lead");
+    const [url, init] = fn.mock.calls[0]!;
+    expect(url).toBe("https://places.googleapis.com/v1/places/x");
+    // Minimal field mask — the re-validation cron's own Place Details cost must
+    // not move because this lookup exists.
+    expect((init as RequestInit).headers).toMatchObject({ "X-Goog-FieldMask": "photos" });
+  });
+
+  it("returns null for a place with no photos", async () => {
+    mockDetails({});
+    await expect(fetchPlacePhotoName("test-key", "x")).resolves.toBeNull();
+  });
+
+  it("never calls out without a key or a placeId", async () => {
+    const fn = mockDetails({ photos: [{ name: "places/x/photos/lead" }] });
+    await expect(fetchPlacePhotoName(null, "x")).resolves.toBeNull();
+    await expect(fetchPlacePhotoName("test-key", null)).resolves.toBeNull();
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it("swallows a provider error — a missing photo must not fail assignment", async () => {
+    mockDetails({ error: "boom" }, 500);
+    await expect(fetchPlacePhotoName("test-key", "x")).resolves.toBeNull();
+
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error("network")) as unknown as typeof globalThis.fetch;
+    await expect(fetchPlacePhotoName("test-key", "x")).resolves.toBeNull();
   });
 });

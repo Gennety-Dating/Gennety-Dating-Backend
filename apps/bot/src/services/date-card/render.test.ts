@@ -24,7 +24,6 @@ describe("renderDateCard", () => {
           partnerPhotoRef: null,
           venueName: "Lviv Coffee",
           venueAddress: "Khreshchatyk 14, Kyiv",
-          venuePhotoUrl: null,
           venuePhotoName: null,
           agreedTime: new Date("2026-05-16T16:00:00Z"),
           language: "uk",

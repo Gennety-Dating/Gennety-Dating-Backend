@@ -50,7 +50,6 @@ const scheduledMatch = {
   userBId: "uid-B",
   venueName: "Cafe",
   venueAddress: "1 St",
-  venuePhotoUrl: null,
   venuePhotoName: null,
   userA: { firstName: "Alex", profile: { photos: ["fileA"] } },
   userB: { firstName: "Bea", profile: { photos: ["fileB"] } },

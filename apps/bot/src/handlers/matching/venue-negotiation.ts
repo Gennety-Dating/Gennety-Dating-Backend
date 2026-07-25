@@ -523,8 +523,7 @@ async function finalizeVenue(api: Api<RawApi>, matchId: string): Promise<void> {
       venueLat: mid.lat,
       venueLng: mid.lng,
       venueGoogleMapsUri: venue.googleMapsUri,
-      // Date-card imagery refs (feature-flagged render; harmless to store always).
-      venuePhotoUrl: venue.photoUrl ?? null,
+      // Date-card imagery ref (feature-flagged render; harmless to store always).
       venuePhotoName: venue.photoName ?? null,
     },
   });

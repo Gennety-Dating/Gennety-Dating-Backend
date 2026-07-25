@@ -37,7 +37,6 @@ export interface ActiveMatchResult {
     venueGoogleMapsUri: string | null;
     venueLat: number | null;
     venueLng: number | null;
-    venuePhotoUrl: string | null;
     venuePhotoName: string | null;
     parsedCategoryA: string | null;
     parsedCategoryB: string | null;
@@ -102,7 +101,6 @@ export async function findActiveMatchForTelegramId(
       venueGoogleMapsUri: true,
       venueLat: true,
       venueLng: true,
-      venuePhotoUrl: true,
       venuePhotoName: true,
       parsedCategoryA: true,
       parsedCategoryB: true,
@@ -164,7 +162,6 @@ export async function findActiveMatchForTelegramId(
       venueGoogleMapsUri: match.venueGoogleMapsUri,
       venueLat: match.venueLat,
       venueLng: match.venueLng,
-      venuePhotoUrl: match.venuePhotoUrl,
       venuePhotoName: match.venuePhotoName,
       parsedCategoryA: match.parsedCategoryA,
       parsedCategoryB: match.parsedCategoryB,

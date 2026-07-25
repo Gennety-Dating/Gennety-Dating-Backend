@@ -661,12 +661,10 @@ function setBack(handler: (() => void) | null): void {
 
 // ── Photo helpers ──
 function thumbUrl(v: VenueChangeCatalogItem): string | null {
-  if (v.photoUrl) return v.photoUrl;
   if (v.photoRefs[0]) return venueChangePhotoUrl(getInitData(), v.photoRefs[0], 240);
   return null;
 }
 function galleryUrls(v: VenueChangeCatalogItem): string[] {
-  if (v.photoUrl) return [v.photoUrl];
   return v.photoRefs.map((ref) => venueChangePhotoUrl(getInitData(), ref, 1000));
 }
 /**
@@ -2109,7 +2107,6 @@ function mockCatalog(): VenueChangeCatalogItem[] {
     mapsUri: null,
     category,
     distanceKm,
-    photoUrl: null,
     photoRefs: [],
     rating,
     userRatingCount: count,

@@ -44,15 +44,15 @@ export interface Venue {
   /** Google Maps deep-link. Null only for explicitly injected test fixtures. */
   googleMapsUri: string | null;
   /**
-   * Absolute, operator-owned venue photo URL (curated venues only). Clean
-   * licensing — safe to composite into the shareable date card. Null otherwise.
-   */
-  photoUrl?: string | null;
-  /**
-   * Google Places photo *resource name* (e.g. `places/X/photos/Y`) for venues
-   * sourced from Places. The displayable media URL is built on demand with the
-   * server-side API key (`buildPlacesPhotoUrl`) — we never persist Google's raw
-   * bytes (Places ToS). Null for curated / stub venues.
+   * Google Places photo *resource name* (e.g. `places/X/photos/Y`) — the SINGLE
+   * source of venue imagery for every venue we assign, curated or Places-found
+   * (the operator-supplied `photoUrl` alternative was removed 2026-07-25: it was
+   * never populated, so curated picks silently shipped photo-less date cards).
+   * Curated rows carry no photo of their own, so theirs is resolved from their
+   * stored `placeId` via {@link fetchPlacePhotoName} at the moment the venue is
+   * assigned. The displayable media URL is built on demand with the server-side
+   * API key (`buildPlacesPhotoUrl`) — we never persist Google's raw bytes
+   * (Places ToS). Null only when the place genuinely has no photo.
    */
   photoName?: string | null;
   /**
@@ -449,7 +449,6 @@ function placeToVenue(p: PlaceV1): Venue {
     name: p.displayName?.text ?? "",
     address: p.formattedAddress ?? "",
     googleMapsUri: p.googleMapsUri ?? null,
-    photoUrl: null,
     // Cover photo (first in the list is the highest-quality lead image).
     photoName: p.photos?.[0]?.name ?? null,
     // Grounding facts for the scheduled-card blurb (see `venue-blurb.ts`).
@@ -483,6 +482,49 @@ export function buildPlacesPhotoUrl(
     `https://places.googleapis.com/v1/${photoName}/media` +
     `?maxWidthPx=${maxWidthPx}&key=${encodeURIComponent(apiKey)}`
   );
+}
+
+/**
+ * Resolve a place's cover-photo resource name from its stable `placeId`.
+ *
+ * This is how a CURATED venue gets a photo. Curated rows are hand-picked by
+ * `placeId` and store no imagery, so before this existed every curated
+ * assignment wrote `photoName: null` and the date card fell back to its plain
+ * gradient — the visible "no venue photo" bug. Places-sourced venues already
+ * carry a `photoName` from the search response and never reach here.
+ *
+ * Called once per venue *assignment* (not per render, not per board open), so
+ * it costs one request per scheduled date. Resolving late also keeps the
+ * pointer fresh: Places photo names can rotate, and a stale stored one 404s.
+ *
+ * Never throws and never blocks: a photo is decoration, and losing it must not
+ * fail venue selection. Uses a minimal `photos` field mask so the re-validation
+ * cron's own Place Details cost is untouched.
+ */
+export async function fetchPlacePhotoName(
+  apiKey: string | null | undefined,
+  placeId: string | null | undefined,
+): Promise<string | null> {
+  if (!apiKey || !placeId) return null;
+  try {
+    const res = await fetch(
+      `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
+      {
+        method: "GET",
+        headers: { "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": "photos" },
+        signal: AbortSignal.timeout(PLACES_TIMEOUT_MS),
+      },
+    );
+    if (!res.ok) {
+      console.warn(`[venue] cover photo lookup for ${placeId} failed: ${res.status}`);
+      return null;
+    }
+    const p = (await res.json()) as PlaceV1;
+    return p.photos?.[0]?.name ?? null;
+  } catch (err) {
+    console.warn(`[venue] cover photo lookup for ${placeId} failed:`, err);
+    return null;
+  }
 }
 
 async function searchNearby(

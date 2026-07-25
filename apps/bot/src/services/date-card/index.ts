@@ -31,7 +31,7 @@ export interface DateCardInput {
   partnerPhotoRef: string | null;
   venueName: string;
   venueAddress: string;
-  venuePhotoUrl: string | null;
+  /** Google Places photo resource name — the single venue-imagery source. */
   venuePhotoName: string | null;
   agreedTime: Date;
   language: Language;
@@ -111,7 +111,7 @@ export async function renderDateCard(
   // 2. Venue photo (best-effort; template falls back to a gradient). Duotone it
   //    into the brand palette so a stock Places/curated photo reads as part of
   //    the card. Falls back to a plain PNG, then to the gradient, on failure.
-  const venueRaw = await resolveVenuePhoto(input.venuePhotoUrl, input.venuePhotoName);
+  const venueRaw = await resolveVenuePhoto(input.venuePhotoName);
   let venuePhoto: Buffer | null = null;
   if (venueRaw) {
     venuePhoto =
