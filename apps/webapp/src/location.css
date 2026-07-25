@@ -208,6 +208,16 @@ input.search::placeholder {
   z-index: 3;
   pointer-events: none;
 }
+/* Light theme: the black lift reads as a dirty grey smudge under the pin on the
+   inverted (near-white) basemap — it only ever worked against the dark map. Drop
+   the ground dot entirely and tint the pin's own shadow burgundy so the marker
+   still lifts off the tiles without a grey blob. */
+:root[data-theme="light"] #pin {
+  filter: drop-shadow(0 3px 6px rgba(109, 28, 46, 0.22));
+}
+:root[data-theme="light"] #pin-shadow {
+  display: none;
+}
 
 /* --- Bottom confirm island: address readout + "use my location" + CTA --- */
 .confirm-island {
