@@ -73,7 +73,7 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
 
     // Bigger butterfly crest, tilted ~20° clockwise — the mark, like our other
     // cards. Aspect-correct (never squished into a square box).
-    const bfH = 98;
+    const bfH = 122;
     const bfW = butterfly ? Math.round((butterfly.w / butterfly.h) * bfH) : bfH;
 
     // Everything is centre-formatted: a full-width row with the text centred.
@@ -98,6 +98,7 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
       {
         width: CARD_W,
         height: CARD_H,
+        position: "relative",
         flexDirection: "column",
         alignItems: "center",
         padding: 72,
@@ -106,6 +107,7 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
         fontFamily: "Roboto",
       },
       [
+        // Butterfly crest — bigger, in the top-right corner, tilted ~20° clockwise.
         butterfly
           ? {
               type: "img",
@@ -113,26 +115,29 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
                 src: butterfly.uri,
                 style: {
                   display: "flex",
+                  position: "absolute",
+                  top: 52,
+                  right: 58,
                   width: bfW,
                   height: bfH,
                   transform: "rotate(20deg)",
-                  marginBottom: 26,
                 },
               },
             }
-          : box({ width: bfH, height: bfH, marginBottom: 26 }, []),
+          : box({}, []),
+        // Heavier wordmark — Archivo Black (Roboto tops out at 700).
         txt(
-          { ...center, fontSize: 36, fontWeight: 700, letterSpacing: 7, textTransform: "uppercase" },
+          { ...center, fontFamily: "Archivo Black", fontSize: 40, letterSpacing: 4, textTransform: "uppercase" },
           "GENNETY",
         ),
         txt(
           {
             ...center,
-            marginTop: 14,
-            fontSize: 28,
+            marginTop: 16,
+            fontSize: 29,
             fontWeight: 700,
             letterSpacing: 0.5,
-            color: "rgba(247,236,236,0.6)",
+            color: "rgba(247,236,236,0.74)",
           },
           "Your personal AI matchmaker",
         ),
@@ -140,7 +145,7 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
         txt(
           {
             ...center,
-            fontSize: 26,
+            fontSize: 27,
             fontWeight: 700,
             letterSpacing: 3,
             textTransform: "uppercase",
@@ -151,15 +156,15 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
         ),
         headline,
         box({ flex: 1 }, []),
-        // The Premium gift badge is now the bottom element (replaces gennety.com).
+        // The Premium gift badge is the bottom element (replaces gennety.com).
         txt(
           {
             alignItems: "center",
             justifyContent: "center",
-            padding: "22px 40px",
+            padding: "22px 42px",
             borderRadius: 999,
             background: "rgba(255,255,255,0.12)",
-            fontSize: 33,
+            fontSize: 34,
             fontWeight: 700,
           },
           giftLine,
