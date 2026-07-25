@@ -5,10 +5,12 @@ import {
   t,
   type Language,
   PROFILER_MAX_ANSWER_LEN,
+  PROFILER_STALL_TIMEOUT_MS,
   profilerQuestionById,
   profilerQuestionText,
   type ProfilerQuestion,
 } from "@gennety/shared";
+import { dispatchToChat } from "../chat-queue.js";
 import { getNextBatchDate } from "./next-batch.js";
 import { runStatusSequence, streamComposedRich } from "./ai-stream.js";
 import {
@@ -92,6 +94,7 @@ interface ProfilerUserState {
   language: Language;
   timeZone: string | null;
   profilerBatchRemaining: number;
+  activeQuestionId: string | null;
   answers: ProfilerAnswerRow[];
 }
 
@@ -107,6 +110,7 @@ async function loadState(userId: string): Promise<ProfilerUserState | null> {
         select: {
           timeZone: true,
           profilerBatchRemaining: true,
+          profilerActiveQuestionId: true,
         },
       },
       profilerAnswers: {
@@ -128,6 +132,7 @@ async function loadState(userId: string): Promise<ProfilerUserState | null> {
     language: (user.language ?? "en") as Language,
     timeZone: user.profile.timeZone,
     profilerBatchRemaining: user.profile.profilerBatchRemaining,
+    activeQuestionId: user.profile.profilerActiveQuestionId ?? null,
     answers: user.profilerAnswers,
   };
 }
@@ -249,7 +254,11 @@ async function sendOneFromBatch(
     data: {
       profilerActiveQuestionId: question.id,
       profilerBatchRemaining: state.profilerBatchRemaining - 1,
-      profilerNextAt: null,
+      // NOT null: while a question is active, `profilerNextAt` carries its
+      // stall deadline so `expireStalledProfilerQuestion` can reclaim a user
+      // who simply never replied. The dispatch sweep is unaffected — it also
+      // requires `profilerActiveQuestionId: null`.
+      profilerNextAt: new Date(now.getTime() + PROFILER_STALL_TIMEOUT_MS),
     },
   });
   return "sent";
@@ -290,6 +299,94 @@ async function pauseOrFinish(
   return "paused";
 }
 
+/**
+ * Atomically claim the user's active question so exactly ONE reply can ever
+ * resolve it. Returns false when `questionId` is not the currently active
+ * question — a stale/replayed tap, a double tap, or a reply that raced another.
+ *
+ * This is the single guard behind the "questions duplicate / arrive several at
+ * a time" class of bugs. The Skip keyboard is never removed from older question
+ * messages, so any of them can be tapped at any time; before this claim, each
+ * such tap ran the full record→advance pipeline and pushed out another
+ * question. Worse, because a *sent* question has no `ProfilerAnswer` row until
+ * it is answered or skipped, `selectNextProfilerQuestion` would hand back the
+ * very question still sitting unanswered on screen — sending it twice.
+ */
+async function claimActiveQuestion(userId: string, questionId: string): Promise<boolean> {
+  const { count } = await prisma.profile.updateMany({
+    where: { userId, profilerActiveQuestionId: questionId },
+    data: { profilerActiveQuestionId: null },
+  });
+  return count === 1;
+}
+
+/**
+ * Reclaim a question the user simply never replied to: record the silence as an
+ * implicit skip (so it returns once, then steps aside for the rest of the drop
+ * cycle — the same courtesy an explicit Skip gets) and re-arm the schedule at
+ * the user's next local window.
+ *
+ * Called by the worker sweep for users whose active question passed its
+ * `PROFILER_STALL_TIMEOUT_MS` deadline. Sends nothing: the point is to stop
+ * being stuck, not to nag.
+ */
+export async function expireStalledProfilerQuestion(
+  userId: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const profile = await prisma.profile.findUnique({
+    where: { userId },
+    select: { profilerActiveQuestionId: true, timeZone: true },
+  });
+  const questionId = profile?.profilerActiveQuestionId;
+  if (!questionId) return false;
+  // Claim it first — if the user answered in the same instant, they win.
+  if (!(await claimActiveQuestion(userId, questionId))) return false;
+
+  const question = profilerQuestionById(questionId);
+  if (question) {
+    const cycleId = profilerCycleId(now);
+    const existing = await prisma.profilerAnswer.findUnique({
+      where: { userId_questionId: { userId, questionId } },
+      select: {
+        questionId: true,
+        answerText: true,
+        skipped: true,
+        skipReturned: true,
+        cycleId: true,
+      },
+    });
+    // Never overwrite a real answer (defensive: a racing reply that landed
+    // between the claim and here).
+    if (!existing?.answerText) {
+      const { skipped, skipReturned } = skipTransition(existing ?? undefined, cycleId);
+      await prisma.profilerAnswer.upsert({
+        where: { userId_questionId: { userId, questionId } },
+        create: {
+          userId,
+          questionId,
+          priority: question.priority,
+          answerText: null,
+          skipped,
+          skipReturned,
+          cycleId,
+        },
+        update: { skipped, skipReturned, cycleId },
+      });
+    }
+  }
+
+  await prisma.profile.update({
+    where: { userId },
+    data: {
+      profilerActiveQuestionId: null,
+      profilerBatchRemaining: 0,
+      profilerNextAt: nextWindowAt(now, resolveZone(profile?.timeZone ?? null)),
+    },
+  });
+  return true;
+}
+
 /** Quiesce the Profiler for a user with no pending questions. Silent (spec §2.5). */
 async function finish(userId: string): Promise<void> {
   await prisma.profile.update({
@@ -306,6 +403,12 @@ async function finish(userId: string): Promise<void> {
  * Open a new batch: size it for the current mode and send the first question.
  * Called by the worker when `profilerNextAt` is due. No-op when nothing's
  * pending (silently finishes).
+ *
+ * The send runs on the chat's serial queue (`dispatchToChat`) so a cron-opened
+ * batch can't interleave with an update the user is sending at that exact
+ * moment (e.g. a Skip tap that also advances the batch) and emit two questions
+ * at once. Safe from deadlock: this is a cron entry point only — the reply path
+ * (`advanceAfterReply`) is already inside the queue and never calls it.
  */
 export async function startProfilerBatch(
   api: Api<RawApi>,
@@ -315,13 +418,21 @@ export async function startProfilerBatch(
 ): Promise<"sent" | "paused" | "done"> {
   const state = await loadState(userId);
   if (!state) return "done";
-  const rush = isRushMode(now, getNextBatchDate(now));
-  state.profilerBatchRemaining = batchSizeFor(rush);
-  await prisma.profile.update({
-    where: { userId },
-    data: { profilerBatchRemaining: state.profilerBatchRemaining, profilerNextAt: null },
+  if (state.telegramId <= 0n) return "done";
+  return dispatchToChat(Number(state.telegramId), async () => {
+    // Re-read inside the queue: a reply may have landed while we waited, which
+    // would have opened its own question (active != null) or finished the run.
+    const fresh = await loadState(userId);
+    if (!fresh) return "done";
+    if (fresh.activeQuestionId) return "paused";
+    const rush = isRushMode(now, getNextBatchDate(now));
+    fresh.profilerBatchRemaining = batchSizeFor(rush);
+    await prisma.profile.update({
+      where: { userId },
+      data: { profilerBatchRemaining: fresh.profilerBatchRemaining, profilerNextAt: null },
+    });
+    return sendOneFromBatch(api, fresh, now, "open", wait);
   });
-  return sendOneFromBatch(api, state, now, "open", wait);
 }
 
 /**
@@ -342,6 +453,9 @@ export async function recordProfilerAnswer(
   if (!answerText) return false;
   const now = options.now ?? new Date();
   const cycleId = profilerCycleId(now);
+
+  // Only the reply that actually owns the active question may record + advance.
+  if (!(await claimActiveQuestion(userId, questionId))) return false;
 
   await prisma.profilerAnswer.upsert({
     where: { userId_questionId: { userId, questionId } },
@@ -385,6 +499,10 @@ export async function recordProfilerSkip(
   if (!question) return false;
   const now = options.now ?? new Date();
   const cycleId = profilerCycleId(now);
+
+  // A stale Skip button (they are never stripped from older question messages)
+  // must not record a second skip or push out another question.
+  if (!(await claimActiveQuestion(userId, questionId))) return false;
 
   const existing = await prisma.profilerAnswer.findUnique({
     where: { userId_questionId: { userId, questionId } },

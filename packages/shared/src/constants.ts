@@ -198,6 +198,26 @@ export const PROFILER_RUSH_WINDOW_HOURS = 48;
 /** Max characters stored for a single free-text Profiler answer. */
 export const PROFILER_MAX_ANSWER_LEN = 1000;
 /**
+ * How long an unanswered Profiler question stays "active" before the worker
+ * treats the silence as an implicit skip and re-opens the schedule.
+ *
+ * Without this the Profiler dead-locks: a sent question sets
+ * `profilerActiveQuestionId` and the dispatch sweep only picks users whose
+ * active question is null, so one ignored question silences the Profiler for
+ * that user forever. Deliberately generous (a full day) so a genuine
+ * "answered the next morning" reply still lands on the question it was
+ * written for, rather than being re-attributed to a newer one.
+ */
+export const PROFILER_STALL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+/**
+ * Debounce window for free-text Profiler answers. People split one thought
+ * across several messages ("люблю кино" + "и музыку"); without coalescing,
+ * each message would be consumed as the answer to a *different* question and
+ * would fire a new question in return. Mirrors the onboarding photo/context
+ * batchers, which solve the same problem.
+ */
+export const PROFILER_ANSWER_DEBOUNCE_MS = 2500;
+/**
  * Icebreaker / hint generation weighting (spec §5.3). `priority` weights
  * scale how much a partner's answer is emphasised; `penalty` coefficients
  * down-weight an answer when a pairwise incompatibility is detected. Hand-set

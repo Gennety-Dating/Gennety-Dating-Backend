@@ -19,6 +19,7 @@ import type { InlineKeyboardMarkup } from "grammy/types";
 import {
   t,
   type Language,
+  PROFILER_STALL_TIMEOUT_MS,
   profilerQuestionBank,
   profilerQuestionText,
 } from "@gennety/shared";
@@ -64,7 +65,9 @@ await prisma.profile.update({
   data: {
     profilerActiveQuestionId: first.id,
     profilerBatchRemaining: remaining,
-    profilerNextAt: null,
+    // Mirror a real send: an active question carries its stall deadline, so the
+    // worker's reclaim sweep leaves the demo alone until it genuinely goes cold.
+    profilerNextAt: new Date(Date.now() + PROFILER_STALL_TIMEOUT_MS),
     profilerStartedAt: new Date(),
   },
 });

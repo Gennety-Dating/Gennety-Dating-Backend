@@ -5,7 +5,11 @@ import {
   nextWindowAt,
   resolveZone,
 } from "../services/profiler-schedule.js";
-import { hasActiveDatePlanning, startProfilerBatch } from "../services/profiler.js";
+import {
+  expireStalledProfilerQuestion,
+  hasActiveDatePlanning,
+  startProfilerBatch,
+} from "../services/profiler.js";
 
 /**
  * Profiler scheduler tick (PRODUCT_SPEC §Phase 1b). Runs on a cron (default
@@ -14,7 +18,13 @@ import { hasActiveDatePlanning, startProfilerBatch } from "../services/profiler.
  *   1. **Lazy seed** — arm the Profiler for active, onboarding-complete
  *      Telegram users that don't have it yet (legacy rows / paths that bypass
  *      the finalize hook). First question lands at the next daily window.
- *   2. **Dispatch** — start a batch for every user whose `profilerNextAt` is
+ *   2. **Reclaim** — a question the user never replied to keeps
+ *      `profilerActiveQuestionId` set, and the dispatch sweep below only picks
+ *      users whose active question is null. Without this step ONE ignored
+ *      question silences the Profiler for that user permanently. Past its
+ *      `PROFILER_STALL_TIMEOUT_MS` deadline the silence is recorded as an
+ *      implicit skip and the schedule re-opens at the next window.
+ *   3. **Dispatch** — start a batch for every user whose `profilerNextAt` is
  *      due, deferring out of the user's local quiet hours and while the user is
  *      mid date-negotiation (pitch decision / scheduling / venue selection).
  *
@@ -23,6 +33,7 @@ import { hasActiveDatePlanning, startProfilerBatch } from "../services/profiler.
 
 const MAX_SEED_PER_TICK = 100;
 const MAX_DISPATCH_PER_TICK = 50;
+const MAX_EXPIRE_PER_TICK = 50;
 
 export interface ProfilerTickResult {
   seeded: number;
@@ -30,13 +41,21 @@ export interface ProfilerTickResult {
   deferred: number;
   /** Due users held back because they're mid date-negotiation (not `scheduled`). */
   blocked: number;
+  /** Unanswered questions reclaimed past their stall deadline. */
+  expired: number;
 }
 
 export async function profilerTick(
   api: Api<RawApi>,
   now: Date = new Date(),
 ): Promise<ProfilerTickResult> {
-  const result: ProfilerTickResult = { seeded: 0, dispatched: 0, deferred: 0, blocked: 0 };
+  const result: ProfilerTickResult = {
+    seeded: 0,
+    dispatched: 0,
+    deferred: 0,
+    blocked: 0,
+    expired: 0,
+  };
 
   // 1. Lazy seed — never-armed users. First batch at the next window (we don't
   // blast existing users immediately). New completions get the precise
@@ -65,7 +84,37 @@ export async function profilerTick(
     result.seeded++;
   }
 
-  // 2. Dispatch due batches. `profilerActiveQuestionId: null` ensures we never
+  // 2. Reclaim stalled questions. While a question is active, `profilerNextAt`
+  // holds its stall deadline (see `sendOneFromBatch`), so "due AND still
+  // active" is exactly the set that was asked and never answered.
+  //
+  // The `profilerNextAt: null` arm heals the pre-existing backlog: before the
+  // deadline was introduced, sending a question wrote `profilerNextAt = null`,
+  // so every user who ever ignored one is sitting in that state right now with
+  // no way out. Post-change an active question ALWAYS carries a deadline, so
+  // this arm matches nothing but those legacy rows.
+  const stalled = await prisma.profile.findMany({
+    where: {
+      OR: [{ profilerNextAt: { lte: now } }, { profilerNextAt: null }],
+      profilerActiveQuestionId: { not: null },
+      user: {
+        status: "active",
+        onboardingStep: "completed",
+        telegramId: { gt: 0 },
+      },
+    },
+    select: { userId: true },
+    take: MAX_EXPIRE_PER_TICK,
+  });
+  for (const p of stalled) {
+    try {
+      if (await expireStalledProfilerQuestion(p.userId, now)) result.expired++;
+    } catch (err) {
+      console.error(`[profiler] stall reclaim failed for ${p.userId}:`, err);
+    }
+  }
+
+  // 3. Dispatch due batches. `profilerActiveQuestionId: null` ensures we never
   // double-fire into a batch that's mid-flight awaiting a reply.
   const due = await prisma.profile.findMany({
     where: {

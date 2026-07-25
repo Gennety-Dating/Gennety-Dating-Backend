@@ -3,7 +3,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@gennety/db", () => ({
   prisma: {
     user: { findUnique: vi.fn() },
-    profile: { update: vi.fn().mockResolvedValue({}) },
+    profile: {
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      findUnique: vi.fn(),
+    },
     profilerAnswer: { upsert: vi.fn().mockResolvedValue({}), findUnique: vi.fn() },
     match: { findFirst: vi.fn().mockResolvedValue(null) },
   },
@@ -14,6 +18,7 @@ import {
   startProfilerBatch,
   recordProfilerAnswer,
   recordProfilerSkip,
+  expireStalledProfilerQuestion,
   profilerCycleId,
   shouldReactToProfilerAnswer,
 } from "./profiler.js";
@@ -21,6 +26,8 @@ import {
 type MockFn = ReturnType<typeof vi.fn>;
 const mUserFind = (prisma.user as unknown as { findUnique: MockFn }).findUnique;
 const mProfileUpdate = (prisma.profile as unknown as { update: MockFn }).update;
+const mProfileUpdateMany = (prisma.profile as unknown as { updateMany: MockFn }).updateMany;
+const mProfileFind = (prisma.profile as unknown as { findUnique: MockFn }).findUnique;
 const mAnswerUpsert = (prisma.profilerAnswer as unknown as { upsert: MockFn }).upsert;
 const mAnswerFind = (prisma.profilerAnswer as unknown as { findUnique: MockFn }).findUnique;
 const mMatchFind = (prisma.match as unknown as { findFirst: MockFn }).findFirst;
@@ -52,13 +59,17 @@ function richHtmls(): string[] {
 }
 
 /** loadState shape: female user with the given answer rows. */
-function userState(answers: unknown[], batchRemaining = 0) {
+function userState(answers: unknown[], batchRemaining = 0, activeQuestionId: string | null = null) {
   return {
     id: "u1",
     telegramId: 123n,
     gender: "female",
     language: "en",
-    profile: { timeZone: "Europe/Kyiv", profilerBatchRemaining: batchRemaining },
+    profile: {
+      timeZone: "Europe/Kyiv",
+      profilerBatchRemaining: batchRemaining,
+      profilerActiveQuestionId: activeQuestionId,
+    },
     profilerAnswers: answers,
   };
 }
@@ -73,6 +84,8 @@ function activeUpdate(): Record<string, unknown> | undefined {
 beforeEach(() => {
   mUserFind.mockReset();
   mProfileUpdate.mockReset().mockResolvedValue({});
+  mProfileUpdateMany.mockReset().mockResolvedValue({ count: 1 });
+  mProfileFind.mockReset().mockResolvedValue(null);
   mAnswerUpsert.mockReset().mockResolvedValue({});
   mAnswerFind.mockReset();
   mMatchFind.mockReset().mockResolvedValue(null);
@@ -261,5 +274,129 @@ describe("recordProfilerSkip", () => {
     );
     expect(finalSend).toBeDefined();
     expect(activeUpdate()?.profilerActiveQuestionId).toBe("f_comm_style");
+  });
+});
+
+describe("active-question claim (stale/duplicate taps)", () => {
+  // The Skip keyboard is never stripped from older question messages, so any of
+  // them can be tapped at any time — including a second tap on the one just
+  // used. Before the atomic claim, each such tap re-ran record → advance and
+  // pushed out another question; because a merely *sent* question has no
+  // ProfilerAnswer row, the advance could even re-select the question still
+  // sitting unanswered on screen and send it twice.
+  it("ignores a skip for a question that is no longer active", async () => {
+    mProfileUpdateMany.mockResolvedValue({ count: 0 }); // claim lost
+    mAnswerFind.mockResolvedValue(null);
+    mUserFind.mockResolvedValue(userState([], 2));
+
+    const ok = await recordProfilerSkip(fakeApi, "u1", "f_date_spots", { wait: noWait });
+
+    expect(ok).toBe(false);
+    expect(mAnswerUpsert).not.toHaveBeenCalled();
+    expect(sendRichMessage).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(mProfileUpdate).not.toHaveBeenCalled();
+  });
+
+  it("ignores an answer for a question that is no longer active", async () => {
+    mProfileUpdateMany.mockResolvedValue({ count: 0 });
+    mUserFind.mockResolvedValue(userState([], 2));
+
+    const ok = await recordProfilerAnswer(fakeApi, "u1", "f_date_spots", "cafes", {
+      wait: noWait,
+    });
+
+    expect(ok).toBe(false);
+    expect(mAnswerUpsert).not.toHaveBeenCalled();
+    expect(sendRichMessage).not.toHaveBeenCalled();
+  });
+
+  it("claims exactly the question being answered", async () => {
+    mUserFind.mockResolvedValue(userState([], 2));
+    await recordProfilerAnswer(fakeApi, "u1", "f_date_spots", "cafes", { wait: noWait });
+
+    expect(mProfileUpdateMany).toHaveBeenCalledWith({
+      where: { userId: "u1", profilerActiveQuestionId: "f_date_spots" },
+      data: { profilerActiveQuestionId: null },
+    });
+  });
+
+  it("a double tap on the same Skip button only advances once", async () => {
+    mAnswerFind.mockResolvedValue(null);
+    mUserFind.mockResolvedValue(
+      userState(
+        [{ questionId: "f_date_spots", answerText: null, skipped: true, skipReturned: false, cycleId: "x" }],
+        2,
+      ),
+    );
+    // First tap wins the claim, the replay finds the column already cleared.
+    mProfileUpdateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValue({ count: 0 });
+
+    const first = await recordProfilerSkip(fakeApi, "u1", "f_date_spots", { wait: noWait });
+    const second = await recordProfilerSkip(fakeApi, "u1", "f_date_spots", { wait: noWait });
+
+    expect(first).toBe(true);
+    expect(second).toBe(false);
+    // Exactly one skip recorded (a second would flip skipReturned and drop the
+    // question for the rest of the cycle) and exactly one question sent.
+    expect(mAnswerUpsert).toHaveBeenCalledTimes(1);
+    expect(sendRichMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("expireStalledProfilerQuestion", () => {
+  it("records the silence as an implicit skip and re-arms the schedule", async () => {
+    mProfileFind.mockResolvedValue({
+      profilerActiveQuestionId: "f_date_spots",
+      timeZone: "Europe/Kyiv",
+    });
+    mAnswerFind.mockResolvedValue(null);
+
+    const ok = await expireStalledProfilerQuestion("u1", new Date("2026-06-10T07:00:00Z"));
+
+    expect(ok).toBe(true);
+    // Implicit skip → returns once, exactly like an explicit Skip.
+    expect(mAnswerUpsert.mock.calls[0]![0].create).toMatchObject({
+      questionId: "f_date_spots",
+      answerText: null,
+      skipped: true,
+      skipReturned: false,
+    });
+    // Schedule re-opened at the next local window, active cleared. Without this
+    // the user's Profiler stayed silent forever.
+    const last = mProfileUpdate.mock.calls.at(-1)![0].data;
+    expect(last.profilerActiveQuestionId).toBeNull();
+    expect(last.profilerBatchRemaining).toBe(0);
+    expect(last.profilerNextAt).toBeInstanceOf(Date);
+    // Nothing is sent — reclaiming is not a nag.
+    expect(sendRichMessage).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("never overwrites an answer that landed in the same instant", async () => {
+    mProfileFind.mockResolvedValue({
+      profilerActiveQuestionId: "f_date_spots",
+      timeZone: "Europe/Kyiv",
+    });
+    mAnswerFind.mockResolvedValue({
+      questionId: "f_date_spots",
+      answerText: "rooftop cafes",
+      skipped: false,
+      skipReturned: false,
+      cycleId: "x",
+    });
+
+    await expireStalledProfilerQuestion("u1", new Date("2026-06-10T07:00:00Z"));
+
+    expect(mAnswerUpsert).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when no question is active", async () => {
+    mProfileFind.mockResolvedValue({ profilerActiveQuestionId: null, timeZone: "Europe/Kyiv" });
+
+    expect(await expireStalledProfilerQuestion("u1")).toBe(false);
+    expect(mProfileUpdate).not.toHaveBeenCalled();
   });
 });

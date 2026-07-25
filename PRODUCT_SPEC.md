@@ -602,7 +602,20 @@ Telegram-only in v1.
   on a `scheduled` date, never during the pitch/scheduling/venue steps.
 - **Skip.** Every question has a **Skip** button. A skipped question returns
   **once** at the end of the current cycle; skipped twice in a cycle, it drops
-  until the next drop cycle. Answered questions are never re-asked.
+  until the next drop cycle. Answered questions are never re-asked. **Silence
+  is an implicit skip**: a question left unanswered for
+  `PROFILER_STALL_TIMEOUT_MS` (24 h) is recorded with the same return-once
+  semantics and the schedule re-opens at the user's next local window — without
+  this the Profiler dead-locked, since the dispatch sweep only picks users with
+  no active question, so one ignored question silenced it permanently.
+- **One reply per question.** A question is resolved by an atomic claim on
+  `Profile.profilerActiveQuestionId`, so exactly ONE answer or skip can ever
+  advance the batch. The Skip keyboard is stripped from a question once it is
+  used, and a stale/replayed tap on an older question's button is a no-op — it
+  neither records a second skip nor pushes out an extra question. Free-text
+  answers are coalesced over a short debounce window
+  (`PROFILER_ANSWER_DEBOUNCE_MS`), so an answer split across several messages
+  is one answer to one question rather than one answer per message.
 - **Cross-cycle persistence.** Unanswered questions carry into the next drop
   cycle in priority order; the Profiler never resets. Completion is **silent**
   (no "profile complete" ping). No progress indicator, no "why we ask" copy.
