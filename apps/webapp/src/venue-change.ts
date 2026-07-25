@@ -615,7 +615,6 @@ interface ElAttrs {
   type?: string;
   disabled?: boolean;
   ariaHidden?: boolean;
-  bg?: string | null;
   onClick?: (e: Event) => void;
 }
 function el(tag: string, attrs: ElAttrs = {}, children: Array<Node | string> = []): HTMLElement {
@@ -628,7 +627,6 @@ function el(tag: string, attrs: ElAttrs = {}, children: Array<Node | string> = [
   if (attrs.type) node.setAttribute("type", attrs.type);
   if (attrs.disabled != null) (node as HTMLButtonElement).disabled = attrs.disabled;
   if (attrs.ariaHidden) node.setAttribute("aria-hidden", "true");
-  if (attrs.bg) node.style.backgroundImage = `url("${attrs.bg}")`;
   if (attrs.onClick) node.addEventListener("click", attrs.onClick);
   for (const c of children) node.append(c);
   return node;
@@ -670,6 +668,45 @@ function thumbUrl(v: VenueChangeCatalogItem): string | null {
 function galleryUrls(v: VenueChangeCatalogItem): string[] {
   if (v.photoUrl) return [v.photoUrl];
   return v.photoRefs.map((ref) => venueChangePhotoUrl(getInitData(), ref, 1000));
+}
+/**
+ * A photo tile that says "loading" instead of looking empty.
+ *
+ * Venue photos are Google Places bytes streamed through our own proxy, so a
+ * detail gallery routinely takes a second or two — long enough that a bare
+ * gradient tile reads as "this place has no photo" and people back out. The
+ * tile therefore starts as a skeleton with one soft sheen sweeping across it,
+ * and only swaps to the image once it has actually decoded (no half-painted
+ * photo). A failed load drops the shimmer and falls back to the category glyph,
+ * so a dead ref can never leave a tile shimmering forever.
+ */
+function photoTile(url: string | null, className: string, fallback: () => Node): HTMLElement {
+  if (!url) return el("div", { class: className }, [fallback()]);
+
+  const node = el("div", { class: `${className} is-loading` });
+  let settled = false;
+  const settle = (ok: boolean): void => {
+    if (settled) return;
+    settled = true;
+    node.classList.remove("is-loading");
+    if (ok) {
+      node.style.backgroundImage = `url("${url}")`;
+      node.classList.add("is-loaded");
+    } else {
+      node.append(fallback());
+    }
+  };
+
+  const img = new Image();
+  img.decoding = "async";
+  img.onload = () => settle(true);
+  img.onerror = () => settle(false);
+  img.src = url;
+  // Already in the browser cache (re-entering a detail page): paint at once so
+  // a cached photo never flashes a skeleton.
+  if (img.complete && img.naturalWidth > 0) settle(true);
+
+  return node;
 }
 function mapsHref(name: string, address: string, mapsUri: string | null): string {
   if (mapsUri && /^https?:\/\//i.test(mapsUri)) return mapsUri;
@@ -1229,8 +1266,14 @@ function renderVenueCard(v: VenueChangeCatalogItem): HTMLElement {
 }
 
 function venueThumb(v: VenueChangeCatalogItem, className = "vc-thumb"): HTMLElement {
-  const url = thumbUrl(v);
-  return el("div", { class: className, bg: url }, url ? [] : [categoryIcon(v.category, "icon vc-thumb-icon")]);
+  return photoTile(thumbUrl(v), className, () => categoryIcon(v.category, "icon vc-thumb-icon"));
+}
+
+/** One gallery frame (detail + preview), skeleton-shimmering until it decodes. */
+function venueShot(v: VenueChangeCatalogItem, url: string, single: boolean): HTMLElement {
+  return photoTile(url, `vc-shot${single ? " is-single" : ""}`, () =>
+    categoryIcon(v.category, "icon vc-shot-icon"),
+  );
 }
 
 /**
@@ -1407,7 +1450,7 @@ function renderDetail(v: VenueChangeCatalogItem): void {
   const urls = galleryUrls(v);
   const shots =
     urls.length > 0
-      ? urls.map((u) => el("div", { class: `vc-shot${urls.length === 1 ? " is-single" : ""}`, bg: u }))
+      ? urls.map((u) => venueShot(v, u, urls.length === 1))
       : [el("div", { class: "vc-shot is-single" }, [categoryIcon(v.category, "icon vc-shot-icon")])];
   const gallery = el("div", { class: "vc-gallery" }, shots);
 
@@ -1556,9 +1599,7 @@ function renderVenuePreview(ref: VenueRef, back: () => void): void {
     const urls = galleryUrls(item);
     const shots =
       urls.length > 0
-        ? urls.map((u) =>
-            el("div", { class: `vc-shot${urls.length === 1 ? " is-single" : ""}`, bg: u }),
-          )
+        ? urls.map((u) => venueShot(item, u, urls.length === 1))
         : [el("div", { class: "vc-shot is-single" }, [categoryIcon(item.category, "icon vc-shot-icon")])];
     nodes.push(el("div", { class: "vc-gallery" }, shots));
   }

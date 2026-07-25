@@ -20,9 +20,13 @@
      56px fallback covers older clients / the first paint. */
   --tg-content-top: 56px;
   --tg-content-bottom: 0px;
+
+  /* The sheen that sweeps a photo tile while its bytes are in flight. */
+  --photo-sheen: rgba(255, 255, 255, 0.09);
 }
 :root[data-theme="light"] {
   --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --photo-sheen: rgba(0, 0, 0, 0.05);
 }
 
 * {
@@ -1886,4 +1890,66 @@ a.vc-info-row .vc-info-text {
 .vc-premium-hint-ico {
   width: 15px;
   height: 15px;
+}
+
+/* ── Photo skeletons ──────────────────────────────────────────────────── */
+/* Venue photos are Places bytes streamed through our proxy and can take a
+   second or two. A tile that is merely a gradient reads as "no photo here", so
+   a tile still waiting carries one soft sheen sweeping across it — the board's
+   existing shimmer language, dialled right down so it stays a hint, not a
+   second focal point. `is-loading` / `is-loaded` are set by `photoTile()`. */
+.vc-thumb,
+.vc-shot,
+.vc-agreed-photo {
+  position: relative;
+}
+.vc-thumb.is-loading::after,
+.vc-shot.is-loading::after,
+.vc-agreed-photo.is-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 25%,
+    var(--photo-sheen) 50%,
+    transparent 75%
+  );
+  transform: translateX(-100%);
+  animation: photo-sheen 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes photo-sheen {
+  to {
+    transform: translateX(100%);
+  }
+}
+/* The photo fades up out of its skeleton instead of snapping in. */
+.vc-thumb.is-loaded,
+.vc-shot.is-loaded,
+.vc-agreed-photo.is-loaded {
+  animation: photo-in 280ms ease both;
+}
+@keyframes photo-in {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vc-thumb.is-loading::after,
+  .vc-shot.is-loading::after,
+  .vc-agreed-photo.is-loading::after {
+    /* Keep the "still loading" tint, drop the sweep. */
+    animation: none;
+    transform: none;
+    background: var(--photo-sheen);
+  }
+  .vc-thumb.is-loaded,
+  .vc-shot.is-loaded,
+  .vc-agreed-photo.is-loaded {
+    animation: none;
+  }
 }
