@@ -91,7 +91,12 @@ body {
   box-shadow:
     0 24px 60px -22px rgba(0, 0, 0, 0.62),
     0 4px 14px rgba(0, 0, 0, 0.22);
-  border: 1px solid var(--border);
+  /* No hairline over the portrait: the background image is painted under the
+     border box, so a translucent border tints the photo's own edges — in light
+     theme that reads as a stray thin black line along the top of the photo.
+     Depth comes from the shadow; the border is kept only on the image-less
+     loading placeholder below, which needs the definition. */
+  border: none;
   transition: filter 0.25s ease;
   animation: radar-card-in 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -344,6 +349,9 @@ body {
    shared inline `.boot` shell in radar.html (identical markup in App.tsx's
    loading state), so first paint is instant, before this bundle even loads. */
 .radar-card-loading {
+  /* Only the empty placeholder carries a hairline — there is no photo yet for
+     it to tint, and a bare surface-coloured card needs the edge definition. */
+  border: 1px solid var(--border);
   --sheen: rgba(255, 255, 255, 0.1);
   background-image: linear-gradient(100deg, transparent 20%, var(--sheen) 50%, transparent 80%);
   background-size: 200% 100%;
