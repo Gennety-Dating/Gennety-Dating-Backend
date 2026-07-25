@@ -43,6 +43,8 @@ import {
   photoUploadStatePatch,
 } from "../../services/profile-media-validation/photo-state.js";
 import { refreshUserEmbedding } from "../../workers/embedding-refresh.js";
+import { VERIFY_PHOTOS_CLEAR_CALLBACK } from "../../services/verification-keyboard.js";
+import { sendVerificationCTABare } from "../onboarding/verification.js";
 
 async function embeddingRefreshStillPending(userId: string): Promise<boolean> {
   try {
@@ -312,6 +314,16 @@ export async function handleEditAgeRangeInput(ctx: BotContext): Promise<void> {
  */
 export async function handleEditPhotosStart(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
+  ctx.session.verifyPhotoRedo = false;
+  await openPhotoManager(ctx);
+}
+
+/**
+ * Load the current photo set into the session and render the manager. Split out
+ * of {@link handleEditPhotosStart} so the verification redo entry point can
+ * reuse it without acking the same callback query twice.
+ */
+async function openPhotoManager(ctx: BotContext): Promise<void> {
   const telegramId = BigInt(ctx.from!.id);
 
   const profile = await prisma.profile.findFirst({
@@ -346,6 +358,59 @@ export async function handleEditPhotosStart(ctx: BotContext): Promise<void> {
   ];
 
   await renderPhotoManager(ctx);
+}
+
+/**
+ * "📷 Upload different photos" — the way back from any verification prompt
+ * (`verify:photos`).
+ *
+ * Same manager, three deltas driven by `session.verifyPhotoRedo`: a
+ * "delete all and start over" action, no `MIN_PHOTOS` delete floor, and a
+ * finish path that returns to verification instead of the main menu. This is
+ * the ONE menu surface reachable while the app is verification-locked (see
+ * `services/verification-gate.ts`).
+ */
+export async function handleVerifyPhotosRedo(ctx: BotContext): Promise<void> {
+  await ctx.answerCallbackQuery();
+  ctx.session.verifyPhotoRedo = true;
+  await ctx.reply(t(ctx.session.language, "verifyPhotosRedoIntro"));
+  await openPhotoManager(ctx);
+}
+
+/**
+ * "🗑 Delete all and start over" — the one-tap path for the case this whole
+ * flow exists to fix: every photo on the profile is of someone else. Deleting
+ * them one by one would be up to ten taps, and at exactly `MIN_PHOTOS` the
+ * per-photo button is refused outright.
+ *
+ * Each removal goes through the same per-user-locked service the manager's
+ * delete button uses, so a concurrent mobile/Aether edit can't be clobbered.
+ */
+export async function handleVerifyPhotosClear(ctx: BotContext): Promise<void> {
+  const lang = ctx.session.language;
+  await ctx.answerCallbackQuery();
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(ctx.from!.id) },
+    select: { id: true },
+  });
+  if (!user) return;
+
+  // Snapshot first: `removeProfilePhotoByRef` returns the canonical post-delete
+  // state, so we iterate the refs we started with rather than a shifting array.
+  for (const photoRef of [...ctx.session.pendingPhotos]) {
+    const committed = await removeProfilePhotoByRef(user.id, photoRef);
+    ctx.session.pendingPhotos = committed.photos;
+    ctx.session.pendingProfileMedia = committed.profileMedia;
+    ctx.session.pendingPhotoHashes = committed.uploadedPhotoHashes;
+    ctx.session.pendingPhotoScores = committed.photoFaceScores;
+  }
+  ctx.session.pendingPhotoUniqueIds = ctx.session.pendingPhotos.map(() => "");
+
+  await ctx.reply(
+    t(lang, "verifyPhotosCleared", { min: MIN_PHOTOS, max: MAX_PHOTOS }),
+  );
+  await renderPhotoManager(ctx, { showAlbum: false });
 }
 
 /**
@@ -406,6 +471,13 @@ async function renderPhotoManager(
     if ((i + 1) % 3 === 0) keyboard.row();
   });
   keyboard.row();
+  // Verification redo only: one tap to drop a whole set of someone else's
+  // photos instead of up to ten individual deletes.
+  if (ctx.session.verifyPhotoRedo && photos.length > 0) {
+    keyboard
+      .text(t(lang, "verifyBtnClearPhotos"), VERIFY_PHOTOS_CLEAR_CALLBACK)
+      .row();
+  }
   if (photos.length < MAX_PHOTOS) {
     keyboard.text(t(lang, "photoManagerAddBtn"), "menu:edit:photos:add").row();
   }
@@ -461,7 +533,12 @@ export async function handleEditPhotosDelete(ctx: BotContext): Promise<void> {
     await ctx.answerCallbackQuery();
     return;
   }
-  if (ctx.session.pendingPhotos.length <= MIN_PHOTOS) {
+  // The floor keeps a live profile from dropping below the minimum. It is
+  // lifted for the verification redo: that user is not in the matching pool
+  // yet, and someone whose four photos are all of another person could
+  // otherwise delete none of them. `finishEditPhotos` still refuses to commit
+  // below MIN_PHOTOS, so they cannot leave the flow under-filled.
+  if (!ctx.session.verifyPhotoRedo && ctx.session.pendingPhotos.length <= MIN_PHOTOS) {
     await ctx.answerCallbackQuery({
       text: t(lang, "photoManagerMinReached", { min: MIN_PHOTOS }),
       show_alert: true,
@@ -527,6 +604,10 @@ export async function handleEditPhotosUpload(ctx: BotContext): Promise<void> {
     await ctx.answerCallbackQuery();
     if (ctx.session.pendingPhotos.length >= MIN_PHOTOS) {
       await finishEditPhotos(ctx);
+    } else {
+      // Reachable once the verification redo lifts the delete floor — say why
+      // nothing happened instead of going silent.
+      await ctx.reply(t(lang, "photoManagerMinReached", { min: MIN_PHOTOS }));
     }
     return;
   }
@@ -838,11 +919,17 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
   // pending_review / rejected) is a function of the WHOLE array — so a
   // rejected user who replaced their bad photos must be re-evaluated,
   // and the persisted `photoFaceScores` must stay aligned with `photos`.
-  // Fire-and-forget; pipeline errors land in the bot logs.
-  void triggerVerificationRerun(userId, ctx.api).catch((err) => {
+  // The call resolves once the rerun is KICKED OFF (not once it finishes), so
+  // awaiting it costs nothing and tells us whether a Persona selfie is on file.
+  let rerunStarted = false;
+  try {
+    const rerun = await triggerVerificationRerun(userId, ctx.api);
+    rerunStarted = rerun?.kind === "started";
+  } catch (err) {
     console.error("[edit-profile] verification rerun failed:", err);
-  });
+  }
 
+  const wasVerifyRedo = ctx.session.verifyPhotoRedo;
   ctx.session.pendingPhotos = [];
   ctx.session.pendingProfileMedia = [];
   ctx.session.pendingPhotoUniqueIds = [];
@@ -850,6 +937,28 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
   ctx.session.pendingPhotoScores = [];
   ctx.session.photoManagerMsgId = null;
   ctx.session.menuState = "idle";
+  ctx.session.verifyPhotoRedo = false;
+
+  if (wasVerifyRedo) {
+    // Came from a verification prompt: return there, not to the main menu
+    // (which may well still be locked behind the gate).
+    if (rerunStarted) {
+      // A Persona inquiry already exists, so the pipeline re-scores the new
+      // photos against the selfie it captured — no second liveness pass.
+      await ctx.reply(t(lang, "verifyPhotosSavedRecheck"));
+    } else {
+      await ctx.reply(t(lang, "verifyPhotosSavedNowVerify"));
+      if (ctx.chat) {
+        await sendVerificationCTABare(
+          ctx.api,
+          ctx.chat.id,
+          BigInt(ctx.from!.id),
+          lang,
+        );
+      }
+    }
+    return;
+  }
 
   await ctx.reply(t(lang, "editProfilePhotosSaved"));
   await showMainMenu(ctx);

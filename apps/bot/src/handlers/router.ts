@@ -14,7 +14,20 @@ import {
   handleVerificationCheck,
   handleVerificationSkip,
   handleVerificationSkipConfirm,
+  sendVerificationGateNotice,
 } from "./onboarding/verification.js";
+import {
+  VERIFY_PHOTOS_CALLBACK,
+  VERIFY_PHOTOS_CLEAR_CALLBACK,
+} from "../services/verification-keyboard.js";
+import {
+  handleVerifyPhotosClear,
+  handleVerifyPhotosRedo,
+} from "./menu/edit-profile.js";
+import {
+  isVerificationGateAllowed,
+  isVerificationGated,
+} from "../services/verification-gate.js";
 import { RADAR_SKIP_CALLBACK, handleRadarSkip } from "./onboarding/type-radar.js";
 import { menuRouter } from "./menu/router.js";
 
@@ -28,7 +41,7 @@ router.use(async (ctx, next) => {
 
   const user = await prisma.user.findUnique({
     where: { telegramId: BigInt(ctx.from.id) },
-    select: { onboardingStep: true, language: true },
+    select: { onboardingStep: true, language: true, status: true },
   });
 
   if (user) {
@@ -36,6 +49,27 @@ router.use(async (ctx, next) => {
     if (user.language) {
       ctx.session.language = user.language as typeof ctx.session.language;
     }
+  }
+
+  // Verification gate. `onboardingStep = completed` with `status` still
+  // `onboarding` means the profile is done but Persona liveness is not — and
+  // since Registration v2 made verification mandatory, that user is NOT in the
+  // app yet. Without this the next middleware happily hands them the full menu
+  // (profile, pause, tickets, premium, referral, menu agent) even though the
+  // matchmaker has not started for them.
+  //
+  // Only the two actions that can actually clear the gate pass through:
+  // verification itself and re-uploading photos (see verification-gate.ts).
+  if (isVerificationGated(user) && !isVerificationGateAllowed(ctx) && ctx.chat) {
+    if (ctx.callbackQuery) await ctx.answerCallbackQuery().catch(() => {});
+    await sendVerificationGateNotice(
+      ctx.api,
+      ctx.chat.id,
+      BigInt(ctx.from.id),
+      ctx.session.language,
+      { locked: true },
+    );
+    return;
   }
 
   await next();
@@ -56,6 +90,17 @@ router.use(async (ctx, next) => {
   }
   if (ctx.callbackQuery?.data === VERIFY_CHECK_CALLBACK) {
     await handleVerificationCheck(ctx);
+    return;
+  }
+  // The way back to the photo manager from any verification prompt. Routed
+  // here (not in the menu router) so it works while the app is gate-locked,
+  // and for an already-`active` user whose photo edit landed `rejected`.
+  if (ctx.callbackQuery?.data === VERIFY_PHOTOS_CALLBACK) {
+    await handleVerifyPhotosRedo(ctx);
+    return;
+  }
+  if (ctx.callbackQuery?.data === VERIFY_PHOTOS_CLEAR_CALLBACK) {
+    await handleVerifyPhotosClear(ctx);
     return;
   }
   // Type Radar Skip fires mid-onboarding (onboardingStep is still

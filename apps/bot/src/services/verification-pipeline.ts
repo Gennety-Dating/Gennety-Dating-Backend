@@ -11,6 +11,8 @@ import { pinStatusBanner } from "./status-banner.js";
 import { downloadProfileImage, uploadSelfie } from "./storage.js";
 import { notifyFounderNewUser } from "./founder-notify.js";
 import { settleReferralOnVerified } from "./referral-notify.js";
+import { terminalVerificationMessage } from "./verification-messages.js";
+import { buildVerificationKeyboard } from "./verification-keyboard.js";
 
 /**
  * Face-match verification pipeline (Phase 6.3 — third iteration).
@@ -107,8 +109,17 @@ export interface PipelineDeps {
    */
   downloadProfileImage: (pathOrFileId: string) => Promise<Buffer | null>;
   compareFaces: typeof compareFaces;
-  /** DM the user with the outcome. No-op when telegramId ≤ 0 (mobile-only user). */
-  notify: (telegramId: bigint, message: string) => Promise<void>;
+  /**
+   * DM the user with the outcome. No-op when telegramId ≤ 0 (mobile-only user).
+   * `message` is already localized to the user's language; `kind` is passed so
+   * the production wiring can attach the right affordances without re-deriving
+   * them from the copy (a `rejected` DM carries the retry / re-upload buttons).
+   */
+  notify: (
+    telegramId: bigint,
+    message: string,
+    kind: TerminalVerificationStatus,
+  ) => Promise<void>;
   /**
    * Surface the post-verification Telegram app shell after a green face-match:
    * main menu + pinned "next match" status banner. Kept as a hook so the pure
@@ -166,6 +177,8 @@ export interface PipelineUserRow {
   telegramId: bigint;
   status: string;
   gender: string | null;
+  /** Drives the localized outcome DM; `en` when unset. */
+  language: Language | null;
   verificationStatus: string;
   personaInquiryId: string | null;
   faceMatchedAt: Date | null;
@@ -274,7 +287,7 @@ export async function runFaceMatchVerification(
       verifiedSelfiePath: null,
       shouldActivate: false,
     });
-    await sendOutcomeMessage(deps, user.telegramId, "pending_review");
+    await sendOutcomeMessage(deps, user.telegramId, "pending_review", user.language);
     return { kind: "pending_review", userId, reason: "no_profile_photos" };
   }
 
@@ -296,7 +309,7 @@ export async function runFaceMatchVerification(
       verifiedSelfiePath: null,
       shouldActivate: false,
     });
-    await sendOutcomeMessage(deps, user.telegramId, "pending_review");
+    await sendOutcomeMessage(deps, user.telegramId, "pending_review", user.language);
     return { kind: "pending_review", userId, reason: "selfie_fetch_failed" };
   }
 
@@ -396,7 +409,7 @@ export async function runFaceMatchVerification(
       verifiedSelfiePath,
       shouldActivate: false,
     });
-    await sendOutcomeMessage(deps, user.telegramId, "pending_review");
+    await sendOutcomeMessage(deps, user.telegramId, "pending_review", user.language);
     return { kind: "pending_review", userId, reason: "no_source_face" };
   }
 
@@ -413,7 +426,7 @@ export async function runFaceMatchVerification(
       verifiedSelfiePath,
       shouldActivate: false,
     });
-    await sendOutcomeMessage(deps, user.telegramId, "pending_review");
+    await sendOutcomeMessage(deps, user.telegramId, "pending_review", user.language);
     return { kind: "pending_review", userId, reason: infraError, scores };
   }
 
@@ -458,7 +471,7 @@ export async function runFaceMatchVerification(
       verifiedSelfiePath,
       shouldActivate: false,
     });
-    await sendOutcomeMessage(deps, user.telegramId, "pending_review");
+    await sendOutcomeMessage(deps, user.telegramId, "pending_review", user.language);
     return {
       kind: "pending_review",
       userId,
@@ -490,7 +503,7 @@ export async function runFaceMatchVerification(
       verifiedSelfiePath,
       shouldActivate: false,
     });
-    await sendOutcomeMessage(deps, user.telegramId, "rejected");
+    await sendOutcomeMessage(deps, user.telegramId, "rejected", user.language);
     return { kind: "rejected", userId, score: minDetected, scores };
   }
 
@@ -536,7 +549,7 @@ export async function runFaceMatchVerification(
         console.warn(`${LOG_PREFIX} appearance tagging threw (swallowed)`, { userId, err });
       }
     }
-    await sendOutcomeMessage(deps, user.telegramId, "verified");
+    await sendOutcomeMessage(deps, user.telegramId, "verified", user.language);
     if (user.telegramId > 0n) {
       await surfaceVerifiedActivation(deps, {
         userId,
@@ -584,7 +597,7 @@ export async function runFaceMatchVerification(
     verifiedSelfiePath,
     shouldActivate: false,
   });
-  await sendOutcomeMessage(deps, user.telegramId, "pending_review");
+  await sendOutcomeMessage(deps, user.telegramId, "pending_review", user.language);
   return {
     kind: "pending_review",
     userId,
@@ -595,30 +608,24 @@ export async function runFaceMatchVerification(
 }
 
 /**
- * DM copy is intentionally English-only here, matching the style of the
- * pre-existing webhook handler. The bot's i18n strings live in
- * `packages/shared/src/i18n.ts` and would need keys added there + a
- * language lookup; deferred to the i18n sweep, not part of this feature.
+ * Send the terminal-outcome DM in the user's own language. The copy lives in
+ * shared i18n (`verifyOutcome*`) — it used to be hardcoded English here, which
+ * meant a Russian-speaking user whose photos were rejected got an English wall
+ * of text pointing at a Settings entry that no longer exists.
  */
-function outcomeMessage(kind: "verified" | "pending_review" | "rejected"): string {
-  switch (kind) {
-    case "verified":
-      return "Verified ✅ Profile is live. I'll message you when I find a match.";
-    case "pending_review":
-      return "🔍 We're double-checking your profile photos against your verification selfie. This usually takes a few hours — I'll message you the moment it's done.";
-    case "rejected":
-      return "⚠️ The photos in your profile don't appear to match the selfie we captured during verification. Please replace them with clear photos of yourself, then open Settings → Verify your account to retry.";
-  }
-}
-
 async function sendOutcomeMessage(
   deps: Pick<PipelineDeps, "notify">,
   telegramId: bigint,
-  kind: "verified" | "pending_review" | "rejected",
+  kind: TerminalVerificationStatus,
+  language: Language | null,
 ): Promise<void> {
   if (telegramId <= 0n) return; // mobile-only user — no Telegram chat to DM
   try {
-    await deps.notify(telegramId, outcomeMessage(kind));
+    await deps.notify(
+      telegramId,
+      terminalVerificationMessage(language ?? "en", kind),
+      kind,
+    );
   } catch (err) {
     console.warn(`${LOG_PREFIX} outcome DM failed`, { telegramId: String(telegramId), err });
   }
@@ -719,8 +726,24 @@ export async function runFaceMatchVerificationDefault(
               tagAndPersistAppearanceDefault(uid, photos, gender, api),
           }
         : {}),
-      notify: async (telegramId, message) => {
-        await api.sendMessage(Number(telegramId), message);
+      notify: async (telegramId, message, kind) => {
+        // A rejection is the one outcome the user can act on, so it carries the
+        // two recoveries inline instead of sending them hunting through menus:
+        // swap the photos (the pipeline then re-scores them against the selfie
+        // already on file) or re-run Persona.
+        const keyboard =
+          kind === "rejected"
+            ? await buildVerificationKeyboard(
+                (await prisma.user.findUnique({
+                  where: { id: userId },
+                  select: { language: true },
+                }))?.language ?? "en",
+                userId,
+              )
+            : null;
+        await api.sendMessage(Number(telegramId), message, {
+          ...(keyboard ? { reply_markup: keyboard } : {}),
+        });
       },
       surfaceVerifiedActivation: async (input) => {
         await surfaceVerifiedActivationDefault(api, input.userId, input.telegramId);
@@ -739,6 +762,7 @@ export async function runFaceMatchVerificationDefault(
               telegramId: true,
               status: true,
               gender: true,
+              language: true,
               verificationStatus: true,
               personaInquiryId: true,
               faceMatchedAt: true,

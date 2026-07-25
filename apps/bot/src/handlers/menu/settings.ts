@@ -3,7 +3,6 @@ import type { BotContext } from "../../session.js";
 import { prisma, type Theme } from "@gennety/db";
 import { t, type Language, DEFAULT_SESSION, SUPPORTED_LANGUAGES } from "@gennety/shared";
 import { showMainMenu } from "./main.js";
-import { sendVerificationCTABare } from "../onboarding/verification.js";
 import { buildLanguageKeyboard } from "../language-keyboard.js";
 import { sendDeleteFreezeVideoNote } from "../../services/delete-freeze-video.js";
 import { deleteUserAccount } from "../../services/account-deletion.js";
@@ -19,38 +18,19 @@ const VALID_LANGUAGES = new Set<Language>(SUPPORTED_LANGUAGES);
 const VALID_THEMES = new Set<Theme>(["light", "dark"]);
 
 /**
- * Verification statuses for which the "Verify now" button should appear in
- * Settings:
- *   - `unverified` → user tapped Skip during onboarding; can recover the
- *     skip Elo penalty by completing Persona now.
- *   - `rejected` → face-match pipeline rejected the photos; user uploaded
- *     replacements and should be able to retry Persona.
- *   - `pending` → user opened the Persona link but never finished (closed
- *     the tab). Shows a "Continue verification" path so they can resume.
+ * Shared settings rendering logic.
  *
- * Hidden for `verified` (already done — button would be confusing) and
- * `pending_review` (admin is manually moderating; user-triggered retries
- * would race the moderation queue).
+ * There is deliberately no "Verify your account" entry here. Verification is
+ * mandatory since Registration v2, so it is not a setting: a user who hasn't
+ * passed it never reaches this screen (the gate in `services/verification-gate.ts`
+ * holds them), and a user who has passed it has nothing to do. The two cases
+ * that used to need this button now carry their own affordances — the
+ * verification card itself, and the rejection DM.
  */
-const VERIFY_BUTTON_STATUSES = new Set(["unverified", "rejected", "pending"]);
-
-/** Shared settings rendering logic. */
 async function renderSettings(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
-  const telegramId = BigInt(ctx.from!.id);
-
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    select: { verificationStatus: true },
-  });
-  const showVerify = user
-    ? VERIFY_BUTTON_STATUSES.has(user.verificationStatus)
-    : false;
 
   const keyboard = new InlineKeyboard();
-  if (showVerify) {
-    keyboard.text(t(lang, "settingsVerify"), "menu:settings:verify").row();
-  }
   keyboard
     .text(t(lang, "settingsLanguage"), "menu:settings:lang")
     .row()
@@ -64,46 +44,6 @@ async function renderSettings(ctx: BotContext): Promise<void> {
     parse_mode: "Markdown",
     reply_markup: keyboard,
   });
-}
-
-/**
- * Re-send the Persona verification CTA from Settings. Reuses the same
- * `sendVerificationCTABare` helper used at the end of onboarding so the
- * Persona URL, copy and Skip-penalty semantics stay in one place.
- *
- * If the user's status has already flipped to `verified` (race against the
- * webhook) or to `pending_review` (admin moderation), we surface a copy
- * line instead of opening a fresh inquiry — a second hosted-flow link
- * would just confuse them.
- */
-export async function handleSettingsVerify(ctx: BotContext): Promise<void> {
-  await ctx.answerCallbackQuery();
-
-  const lang = ctx.session.language;
-  const telegramId = BigInt(ctx.from!.id);
-
-  const user = await prisma.user.findUnique({
-    where: { telegramId },
-    select: { verificationStatus: true },
-  });
-  if (!user) return;
-
-  if (!VERIFY_BUTTON_STATUSES.has(user.verificationStatus)) {
-    await ctx.reply(t(lang, "settingsVerifyNotNeeded"));
-    return;
-  }
-
-  const sent = await sendVerificationCTABare(
-    ctx.api,
-    ctx.chat!.id,
-    telegramId,
-    lang,
-  );
-  if (!sent) {
-    // Persona disabled or misconfigured (env vars missing). Surface
-    // something rather than going silent so the user isn't stranded.
-    await ctx.reply(t(lang, "settingsVerifyUnavailable"));
-  }
 }
 
 /** Show the Settings sub-menu (callback entry). */

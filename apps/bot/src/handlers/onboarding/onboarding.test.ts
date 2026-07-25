@@ -133,6 +133,7 @@ import {
   handleVerificationSkipConfirm,
   sendVerificationCTABare,
 } from "./verification.js";
+import { VERIFY_PHOTOS_CALLBACK } from "../../services/verification-keyboard.js";
 import { runAgentTurn, injectSystemMessage } from "../../services/onboarding-agent.js";
 import { validateSingleFace } from "../../services/vision/validate-face.js";
 import { showMainMenu } from "../menu/main.js";
@@ -2005,7 +2006,7 @@ describe("sendVerificationCTABare", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the web_app Verification Mini App button (prod path) + Skip fallback", async () => {
+  it("renders the web_app Verification Mini App button (prod path) + photo redo + Skip fallback", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "user-uuid",
       theme: "dark",
@@ -2019,10 +2020,11 @@ describe("sendVerificationCTABare", () => {
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     const [, , options] = api.sendMessage.mock.calls[0]!;
     const keyboard = options.reply_markup.inline_keyboard;
-    // Two rows now: web_app Verify button + Skip callback. The legacy
-    // "I've finished" manual-check button was removed because the embedded
-    // SDK posts back to /v1/verification/mini-app/event automatically.
-    expect(keyboard).toHaveLength(2);
+    // Three rows: web_app Verify button, the "upload different photos" way
+    // back, then the legacy Skip callback. The legacy "I've finished"
+    // manual-check button was removed because the embedded SDK posts back to
+    // /v1/verification/mini-app/event automatically.
+    expect(keyboard).toHaveLength(3);
     const verificationUrl = new URL(keyboard[0]?.[0]?.web_app?.url);
     expect(verificationUrl.pathname).toBe("/calendar/verification.html");
     expect(verificationUrl.searchParams.get("lang")).toBe("en");
@@ -2035,7 +2037,10 @@ describe("sendVerificationCTABare", () => {
     // Make sure we're NOT serving the legacy Persona URL or the legacy
     // verify:check callback — both should be gone from the CTA surface.
     expect(keyboard[0]?.[0]?.url).toBeUndefined();
-    expect(keyboard[1]?.[0]?.callback_data).toBe(VERIFY_SKIP_CALLBACK);
+    // The way back to the photo manager, for a user who now realises the
+    // photos they uploaded are not of them.
+    expect(keyboard[1]?.[0]?.callback_data).toBe(VERIFY_PHOTOS_CALLBACK);
+    expect(keyboard[2]?.[0]?.callback_data).toBe(VERIFY_SKIP_CALLBACK);
     // Side-effect: status flipped to `pending` so the rest of the bot can
     // surface "review in progress" without waiting on the first Persona event.
     expect(prisma.user.update).toHaveBeenCalledWith({
@@ -2067,7 +2072,8 @@ describe("sendVerificationCTABare", () => {
       expect(keyboard[0]?.[0]?.url).toContain("withpersona.test");
       expect(keyboard[0]?.[0]?.url).toContain("start%3Dverify_done");
       expect(keyboard[0]?.[0]?.web_app).toBeUndefined();
-      expect(keyboard[1]?.[0]?.callback_data).toBe(VERIFY_SKIP_CALLBACK);
+      expect(keyboard[1]?.[0]?.callback_data).toBe(VERIFY_PHOTOS_CALLBACK);
+      expect(keyboard[2]?.[0]?.callback_data).toBe(VERIFY_SKIP_CALLBACK);
     } finally {
       cfg.env.WEBAPP_URL = prev;
     }
@@ -2287,7 +2293,7 @@ describe("mandatory verification (Registration v2)", () => {
     } as any;
   }
 
-  it("CTA carries only the Verify button (no Skip) and the mandatory pitch", async () => {
+  it("CTA carries Verify + photo redo (no Skip) and the mandatory pitch", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "user-uuid",
     });
@@ -2299,8 +2305,14 @@ describe("mandatory verification (Registration v2)", () => {
     expect(sent).toBe(true);
     const [, text, options] = api.sendMessage.mock.calls[0]!;
     const keyboard = options.reply_markup.inline_keyboard;
-    expect(keyboard).toHaveLength(1);
+    // No Skip row, but the photo redo stays: it is the only way back for
+    // someone who uploaded another person's photos and now faces a face-match.
+    expect(keyboard).toHaveLength(2);
     expect(keyboard[0]?.[0]?.web_app?.url).toContain("verification.html");
+    expect(keyboard[1]?.[0]?.callback_data).toBe(VERIFY_PHOTOS_CALLBACK);
+    expect(
+      keyboard.flat().some((b: { callback_data?: string }) => b.callback_data === VERIFY_SKIP_CALLBACK),
+    ).toBe(false);
     expect(text).toContain("Verification is required");
     // Re-arm the re-engagement chain so a stall at this CTA still gets nudges.
     const updateArg = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls[0]![0];

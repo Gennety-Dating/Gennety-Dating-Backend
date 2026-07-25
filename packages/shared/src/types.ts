@@ -115,6 +115,15 @@ export interface SessionData {
    * stale button from deleting the wrong index. Null when no manager is open.
    */
   photoManagerMsgId: number | null;
+  /**
+   * True while the photo manager was opened from a verification prompt
+   * ("Upload different photos") rather than from the menu. Changes three things
+   * about the same manager: a "delete all and start over" action appears, the
+   * `MIN_PHOTOS` delete floor is lifted (the user is not in the matching pool
+   * yet, and someone whose four photos are all of another person must be able
+   * to drop them), and finishing returns to verification instead of the menu.
+   */
+  verifyPhotoRedo: boolean;
   /** One-time, expiring confirmation for Telegram Freeze/Delete callbacks. */
   pendingAccountAction: PendingAccountAction | null;
   /** One-time, expiring confirmation for the in-chat Premium cancel button. */
@@ -157,6 +166,7 @@ export const DEFAULT_SESSION: SessionData = {
   pendingPhotoScores: [],
   menuState: "idle",
   photoManagerMsgId: null,
+  verifyPhotoRedo: false,
   pendingAccountAction: null,
   pendingPremiumCancel: null,
   premiumCancelLedgerId: null,

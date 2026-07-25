@@ -7,7 +7,8 @@ vi.mock("@gennety/db", () => ({
 
 import { prisma } from "@gennety/db";
 import { t } from "@gennety/shared";
-import { sendVerificationGateNotice } from "./verification.js";
+import { VERIFY_PHOTOS_CALLBACK } from "../../services/verification-keyboard.js";
+import { blockIfVerificationGated, sendVerificationGateNotice } from "./verification.js";
 
 const findUnique = prisma.user.findUnique as unknown as ReturnType<typeof vi.fn>;
 
@@ -65,6 +66,80 @@ describe("sendVerificationGateNotice", () => {
 
     expect(handled).toBe(true);
     expect(api.sendMessage.mock.calls[0]![1]).toBe(t("ru", "verifyOutcomeRejected"));
+  });
+
+  it("puts both recoveries on the rejected DM: verify again + upload other photos", async () => {
+    findUnique.mockResolvedValue({ id: "u4", verificationStatus: "rejected" });
+    const { api } = makeApi();
+
+    await sendVerificationGateNotice(api as never, 123, 111n, "ru");
+
+    const keyboard = api.sendMessage.mock.calls[0]![2]?.reply_markup;
+    const buttons = keyboard.inline_keyboard.flat();
+    expect(buttons.some((b: { web_app?: unknown }) => Boolean(b.web_app))).toBe(true);
+    expect(
+      buttons.some(
+        (b: { callback_data?: string }) => b.callback_data === VERIFY_PHOTOS_CALLBACK,
+      ),
+    ).toBe(true);
+  });
+
+  it("prefixes the locked notice only when the card answers a blocked tap", async () => {
+    findUnique.mockResolvedValue({ id: "u6", verificationStatus: "pending" });
+    const { api } = makeApi();
+
+    await sendVerificationGateNotice(api as never, 123, 111n, "ru", { locked: true });
+
+    expect(api.sendMessage.mock.calls[0]![1]).toBe(
+      `${t("ru", "verifyGateLocked")}\n\n${t("ru", "verifyReminderNudge")}`,
+    );
+  });
+});
+
+describe("blockIfVerificationGated", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function makeCtx(): {
+    ctx: never;
+    sendMessage: ReturnType<typeof vi.fn>;
+  } {
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    return {
+      sendMessage,
+      ctx: {
+        from: { id: 111 },
+        chat: { id: 123 },
+        api: { sendMessage },
+        session: { language: "ru" },
+      } as never,
+    };
+  }
+
+  it("blocks and shows the gate card while verification is outstanding", async () => {
+    findUnique.mockResolvedValue({
+      id: "u1",
+      status: "onboarding",
+      onboardingStep: "completed",
+      verificationStatus: "pending",
+    });
+    const { ctx, sendMessage } = makeCtx();
+
+    expect(await blockIfVerificationGated(ctx)).toBe(true);
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage.mock.calls[0]![1]).toContain(t("ru", "verifyGateLocked"));
+  });
+
+  it("lets an activated user through untouched", async () => {
+    findUnique.mockResolvedValue({
+      id: "u2",
+      status: "active",
+      onboardingStep: "completed",
+      verificationStatus: "verified",
+    });
+    const { ctx, sendMessage } = makeCtx();
+
+    expect(await blockIfVerificationGated(ctx)).toBe(false);
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it("does not fire (falls back to the normal greeting) for a verified user", async () => {

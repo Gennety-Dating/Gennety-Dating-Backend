@@ -176,6 +176,7 @@ const translations = {
       "Final step. We confirm every member is a real person.\n\n" +
       "We'll compare the selfie captured during verification with every photo in your profile — " +
       "photos that don't match you will be rejected.\n\n" +
+      "If the photos in your profile aren't of you, swap them first with the button below.\n\n" +
       "Verification is required: matching starts right after you pass it.",
     verifyMandatoryNotice:
       "Verification is now required for all new profiles — matching starts right after you pass it. It takes about a minute:",
@@ -188,6 +189,18 @@ const translations = {
       "One sec — listen to this before you skip 👆",
     verifyBtnReconsider: "🟢 OK, I'll verify",
     verifyBtnSkipConfirm: "🔴 Skip anyway",
+    // --- Photo re-upload path (a way back before/after verification) ---
+    verifyBtnRedoPhotos: "📷 Upload different photos",
+    verifyBtnClearPhotos: "🗑 Delete all and start over",
+    verifyGateLocked:
+      "The menu and matching open the moment verification is done. That's the only step left:",
+    verifyPhotosRedoIntro:
+      "No problem — here are your current photos. Delete the ones that aren't you and upload your own.",
+    verifyPhotosCleared: "Photos deleted. Send {min}–{max} photos of yourself.",
+    verifyPhotosSavedRecheck:
+      "Photos updated ✅ I'm re-checking them against your verification selfie — no need to redo it. I'll message you the moment it's done.",
+    verifyPhotosSavedNowVerify:
+      "Photos updated ✅ One step left — verification:",
     verifySkipped:
       "Skipped verification. You can run it later from the profile menu " +
       "to restore your ELO rating.",
@@ -210,7 +223,8 @@ const translations = {
     verifyOutcomePendingReview:
       "🔍 We're double-checking your profile photos against your verification selfie. This usually takes a few hours — I'll message you the moment it's done.",
     verifyOutcomeRejected:
-      "⚠️ The photos in your profile don't appear to match the selfie we captured during verification. Replace them with clear photos of yourself, then open Settings → Verify your account to retry.",
+      "⚠️ The photos in your profile don't appear to match the selfie we captured during verification.\n\n" +
+      "If those photos aren't of you — upload your own and I'll re-check them automatically. If they are you, run verification again in better light.",
     verifyAutoPollStarted:
       "Got it. Grab a coffee ☕ — I'm cross-checking your selfie against your profile photos. " +
       "Should take a minute or two.",
@@ -323,10 +337,6 @@ const translations = {
     settingsThemeSaved: "Theme updated",
     themeDarkOption: "🌙 Dark",
     themeLightOption: "☀️ Light",
-    settingsVerify: "🛡 Verify your account",
-    settingsVerifyNotNeeded: "You're already verified",
-    settingsVerifyUnavailable:
-      "Verification is temporarily unavailable. Try again a bit later.",
     helpBody:
       "*Need help?*\n\n" +
       "We don't do chats between users — that's by design. " +
@@ -1009,6 +1019,7 @@ const translations = {
       "Финальный шаг. Мы подтверждаем, что каждый участник — реальный человек.\n\n" +
       "Селфи, сделанное во время верификации, мы сравним с каждой фотографией в твоём профиле — " +
       "фото, на которых не ты, будут отклонены.\n\n" +
+      "Если на фото в профиле не ты — сначала замени их кнопкой ниже.\n\n" +
       "Верификация обязательна: подбор пар начнётся сразу после её прохождения.",
     verifyMandatoryNotice:
       "Верификация теперь обязательна для всех новых профилей — подбор пар начнётся сразу после её прохождения. Это займёт около минуты:",
@@ -1021,6 +1032,18 @@ const translations = {
       "Секунду — послушай это, прежде чем пропустить 👆",
     verifyBtnReconsider: "🟢 Всё-таки пройти верификацию",
     verifyBtnSkipConfirm: "🔴 Всё равно пропустить",
+    // --- Photo re-upload path (a way back before/after verification) ---
+    verifyBtnRedoPhotos: "📷 Загрузить другие фото",
+    verifyBtnClearPhotos: "🗑 Удалить все и загрузить заново",
+    verifyGateLocked:
+      "Меню и подбор пар откроются сразу после верификации. Остался только этот шаг:",
+    verifyPhotosRedoIntro:
+      "Без проблем — вот твои текущие фото. Удали те, на которых не ты, и загрузи свои.",
+    verifyPhotosCleared: "Фото удалены. Пришли {min}–{max} своих фотографий.",
+    verifyPhotosSavedRecheck:
+      "Фото обновлены ✅ Перепроверяю их по селфи из верификации — проходить её заново не нужно. Напишу, как только закончу.",
+    verifyPhotosSavedNowVerify:
+      "Фото обновлены ✅ Остался последний шаг — верификация:",
     verifySkipped:
       "Верификация пропущена. Можешь пройти её позже из меню профиля, " +
       "чтобы вернуть ELO-рейтинг.",
@@ -1043,7 +1066,8 @@ const translations = {
     verifyOutcomePendingReview:
       "🔍 Мы дополнительно проверяем фото профиля по селфи из верификации. Обычно это занимает несколько часов — я напишу, как только проверка завершится.",
     verifyOutcomeRejected:
-      "⚠️ Фото в профиле не совпали с селфи из верификации. Замени их на чёткие фотографии себя, затем открой Настройки → Верифицировать аккаунт и попробуй ещё раз.",
+      "⚠️ Фото в профиле не совпали с селфи из верификации.\n\n" +
+      "Если на них не ты — загрузи свои, и я перепроверю их автоматически. Если это всё-таки ты — пройди верификацию заново при хорошем свете.",
     verifyAutoPollStarted:
       "Принято. Хватай кофе ☕ — я сверяю твоё селфи с фото из профиля. " +
       "Это займёт минуту-две.",
@@ -1156,10 +1180,6 @@ const translations = {
     settingsThemeSaved: "Тема обновлена",
     themeDarkOption: "🌙 Тёмная",
     themeLightOption: "☀️ Светлая",
-    settingsVerify: "🛡 Пройти верификацию",
-    settingsVerifyNotNeeded: "Ты уже верифицирован",
-    settingsVerifyUnavailable:
-      "Верификация временно недоступна. Попробуй позже.",
     helpBody:
       "*Нужна помощь?*\n\n" +
       "Чатов между юзерами у нас нет — так задумано. " +
@@ -1835,6 +1855,7 @@ const translations = {
       "Фінальний крок. Ми підтверджуємо, що кожен учасник — реальна людина.\n\n" +
       "Селфі, зроблене під час верифікації, ми порівняємо з кожним фото у твоєму профілі — " +
       "фото, на яких не ти, буде відхилено.\n\n" +
+      "Якщо на фото у профілі не ти — спершу заміни їх кнопкою нижче.\n\n" +
       "Верифікація обов'язкова: підбір пар почнеться одразу після її проходження.",
     verifyMandatoryNotice:
       "Верифікація тепер обов'язкова для всіх нових профілів — підбір пар почнеться одразу після її проходження. Це займе близько хвилини:",
@@ -1847,6 +1868,18 @@ const translations = {
       "Секунду — послухай це, перш ніж пропустити 👆",
     verifyBtnReconsider: "🟢 Все ж таки пройти верифікацію",
     verifyBtnSkipConfirm: "🔴 Все одно пропустити",
+    // --- Photo re-upload path (a way back before/after verification) ---
+    verifyBtnRedoPhotos: "📷 Завантажити інші фото",
+    verifyBtnClearPhotos: "🗑 Видалити всі та завантажити заново",
+    verifyGateLocked:
+      "Меню й підбір пар відкриються одразу після верифікації. Залишився тільки цей крок:",
+    verifyPhotosRedoIntro:
+      "Без проблем — ось твої поточні фото. Видали ті, на яких не ти, і завантаж свої.",
+    verifyPhotosCleared: "Фото видалено. Надішли {min}–{max} своїх фотографій.",
+    verifyPhotosSavedRecheck:
+      "Фото оновлено ✅ Перевіряю їх за селфі з верифікації — проходити її заново не треба. Напишу, щойно закінчу.",
+    verifyPhotosSavedNowVerify:
+      "Фото оновлено ✅ Залишився останній крок — верифікація:",
     verifySkipped:
       "Верифікацію пропущено. Можеш пройти її пізніше з меню профілю, " +
       "щоб повернути ELO-рейтинг.",
@@ -1869,7 +1902,8 @@ const translations = {
     verifyOutcomePendingReview:
       "🔍 Ми додатково перевіряємо фото профілю за селфі з верифікації. Зазвичай це займає кілька годин — я напишу, щойно перевірка завершиться.",
     verifyOutcomeRejected:
-      "⚠️ Фото в профілі не збіглися з селфі з верифікації. Заміни їх на чіткі фото себе, потім відкрий Налаштування → Верифікувати акаунт і спробуй ще раз.",
+      "⚠️ Фото в профілі не збіглися з селфі з верифікації.\n\n" +
+      "Якщо на них не ти — завантаж свої, і я перевірю їх автоматично. Якщо це все ж ти — пройди верифікацію заново при доброму освітленні.",
     verifyAutoPollStarted:
       "Прийнято. Хапай каву ☕ — я звіряю твоє селфі з фото у профілі. " +
       "Це займе хвилину-дві.",
@@ -1982,10 +2016,6 @@ const translations = {
     settingsThemeSaved: "Тему оновлено",
     themeDarkOption: "🌙 Темна",
     themeLightOption: "☀️ Світла",
-    settingsVerify: "🛡 Пройти верифікацію",
-    settingsVerifyNotNeeded: "Ти вже верифікований",
-    settingsVerifyUnavailable:
-      "Верифікація тимчасово недоступна. Спробуй пізніше.",
     helpBody:
       "*Потрібна допомога?*\n\n" +
       "Чатів між юзерами у нас немає — так задумано. " +
@@ -2592,6 +2622,7 @@ const deTranslations: TranslationTable = {
     "Letzter Schritt. Wir bestätigen, dass jedes Mitglied eine echte Person ist.\n\n" +
     "Wir vergleichen das Selfie aus der Verifizierung mit jedem Foto in deinem Profil — " +
     "Fotos, die nicht zu dir passen, werden abgelehnt.\n\n" +
+    "Wenn du auf den Profilfotos nicht zu sehen bist, tausch sie zuerst über den Button unten aus.\n\n" +
     "Die Verifizierung ist verpflichtend: das Matching startet direkt nach dem Bestehen.",
   verifyMandatoryNotice:
     "Die Verifizierung ist jetzt für alle neuen Profile verpflichtend — das Matching startet direkt nach dem Bestehen. Dauert etwa eine Minute:",
@@ -2604,6 +2635,18 @@ const deTranslations: TranslationTable = {
     "Kurz — hör dir das an, bevor du überspringst 👆",
   verifyBtnReconsider: "🟢 OK, ich verifiziere mich",
   verifyBtnSkipConfirm: "🔴 Trotzdem überspringen",
+  // --- Photo re-upload path (a way back before/after verification) ---
+  verifyBtnRedoPhotos: "📷 Andere Fotos hochladen",
+  verifyBtnClearPhotos: "🗑 Alle löschen und neu hochladen",
+  verifyGateLocked:
+    "Menü und Matching öffnen sich direkt nach der Verifizierung. Nur dieser Schritt fehlt noch:",
+  verifyPhotosRedoIntro:
+    "Kein Problem — hier sind deine aktuellen Fotos. Lösch die, auf denen du nicht zu sehen bist, und lade deine eigenen hoch.",
+  verifyPhotosCleared: "Fotos gelöscht. Schick {min}–{max} Fotos von dir.",
+  verifyPhotosSavedRecheck:
+    "Fotos aktualisiert ✅ Ich prüfe sie erneut gegen dein Verifizierungs-Selfie — du musst sie nicht wiederholen. Ich melde mich, sobald es fertig ist.",
+  verifyPhotosSavedNowVerify:
+    "Fotos aktualisiert ✅ Ein Schritt fehlt noch — die Verifizierung:",
   verifySkipped:
     "Verifizierung übersprungen. Du kannst sie später im Profilmenü starten, " +
     "um dein ELO wiederherzustellen.",
@@ -2625,7 +2668,8 @@ const deTranslations: TranslationTable = {
   verifyOutcomePendingReview:
     "🔍 Wir prüfen deine Profilfotos noch einmal gegen dein Verifizierungs-Selfie. Das dauert normalerweise ein paar Stunden - ich melde mich, sobald es erledigt ist.",
   verifyOutcomeRejected:
-    "⚠️ Die Fotos in deinem Profil scheinen nicht zum Selfie aus der Verifizierung zu passen. Ersetze sie bitte durch klare Fotos von dir und öffne dann Einstellungen → Konto verifizieren, um es erneut zu versuchen.",
+    "⚠️ Die Fotos in deinem Profil scheinen nicht zum Selfie aus der Verifizierung zu passen.\n\n" +
+    "Wenn du darauf nicht zu sehen bist — lade eigene hoch, ich prüfe sie automatisch erneut. Wenn du es doch bist, starte die Verifizierung bei besserem Licht noch einmal.",
   verifyAutoPollStarted:
     "Verstanden. Hol dir einen Kaffee ☕ - ich vergleiche dein Selfie mit deinen Profilfotos. " +
     "Das dauert ein bis zwei Minuten.",
@@ -2792,9 +2836,6 @@ const deTranslations: TranslationTable = {
   settingsThemeSaved: "Thema aktualisiert",
   themeDarkOption: "🌙 Dunkel",
   themeLightOption: "☀️ Hell",
-  settingsVerify: "🛡 Account verifizieren",
-  settingsVerifyNotNeeded: "Du bist schon verifiziert",
-  settingsVerifyUnavailable: "Verifizierung ist vorübergehend nicht verfügbar. Versuch es später erneut.",
   helpBody:
     "*Brauchst du Hilfe?*\n\n" +
     "Wir machen bewusst keine Chats zwischen Nutzern. " +
@@ -3379,6 +3420,7 @@ const plTranslations: TranslationTable = {
     "Ostatni krok. Potwierdzamy, że każdy uczestnik to prawdziwa osoba.\n\n" +
     "Porównamy selfie z weryfikacji z każdym zdjęciem w Twoim profilu — " +
     "zdjęcia, które nie pasują do Ciebie, zostaną odrzucone.\n\n" +
+    "Jeśli na zdjęciach w profilu nie ma Ciebie — najpierw wymień je przyciskiem poniżej.\n\n" +
     "Weryfikacja jest obowiązkowa: dobieranie par zacznie się zaraz po jej zaliczeniu.",
   verifyMandatoryNotice:
     "Weryfikacja jest teraz obowiązkowa dla wszystkich nowych profili — dobieranie par zacznie się zaraz po jej zaliczeniu. Zajmie to około minuty:",
@@ -3391,6 +3433,18 @@ const plTranslations: TranslationTable = {
     "Chwila — posłuchaj tego, zanim pominiesz 👆",
   verifyBtnReconsider: "🟢 Dobra, zweryfikuję się",
   verifyBtnSkipConfirm: "🔴 Pomiń mimo to",
+  // --- Photo re-upload path (a way back before/after verification) ---
+  verifyBtnRedoPhotos: "📷 Wgraj inne zdjęcia",
+  verifyBtnClearPhotos: "🗑 Usuń wszystkie i wgraj od nowa",
+  verifyGateLocked:
+    "Menu i dobieranie par otworzą się zaraz po weryfikacji. Został tylko ten krok:",
+  verifyPhotosRedoIntro:
+    "Bez problemu — oto Twoje obecne zdjęcia. Usuń te, na których nie ma Ciebie, i wgraj własne.",
+  verifyPhotosCleared: "Zdjęcia usunięte. Prześlij {min}–{max} swoich zdjęć.",
+  verifyPhotosSavedRecheck:
+    "Zdjęcia zaktualizowane ✅ Sprawdzam je ponownie względem selfie z weryfikacji — nie musisz jej powtarzać. Napiszę, gdy skończę.",
+  verifyPhotosSavedNowVerify:
+    "Zdjęcia zaktualizowane ✅ Został ostatni krok — weryfikacja:",
   verifySkipped:
     "Weryfikacja pominięta. Możesz uruchomić ją później z menu profilu, " +
     "aby przywrócić swój ranking ELO.",
@@ -3412,7 +3466,8 @@ const plTranslations: TranslationTable = {
   verifyOutcomePendingReview:
     "🔍 Jeszcze raz sprawdzamy zdjęcia z profilu względem selfie z weryfikacji. Zwykle zajmuje to kilka godzin - napiszę, gdy będzie gotowe.",
   verifyOutcomeRejected:
-    "⚠️ Zdjęcia w profilu nie wyglądają na zgodne z selfie z weryfikacji. Zmień je na wyraźne zdjęcia siebie, potem otwórz Ustawienia → Zweryfikuj konto i spróbuj ponownie.",
+    "⚠️ Zdjęcia w profilu nie wyglądają na zgodne z selfie z weryfikacji.\n\n" +
+    "Jeśli nie ma na nich Ciebie — wgraj własne, a sprawdzę je automatycznie. Jeśli to jednak Ty — przejdź weryfikację ponownie przy dobrym świetle.",
   verifyAutoPollStarted:
     "Jasne. Złap kawę ☕ - porównuję selfie z Twoimi zdjęciami profilowymi. " +
     "To potrwa minutę albo dwie.",
@@ -3579,9 +3634,6 @@ const plTranslations: TranslationTable = {
   settingsThemeSaved: "Motyw zaktualizowany",
   themeDarkOption: "🌙 Ciemny",
   themeLightOption: "☀️ Jasny",
-  settingsVerify: "🛡 Zweryfikuj konto",
-  settingsVerifyNotNeeded: "Masz już weryfikację",
-  settingsVerifyUnavailable: "Weryfikacja jest tymczasowo niedostępna. Spróbuj później.",
   helpBody:
     "*Potrzebujesz pomocy?*\n\n" +
     "Nie tworzymy czatów między użytkownikami - tak działa nasz model. " +

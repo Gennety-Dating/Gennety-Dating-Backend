@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { SessionData } from "@gennety/shared";
-import { DEFAULT_SESSION, MIN_PHOTOS, MAX_PHOTOS } from "@gennety/shared";
+import { DEFAULT_SESSION, MIN_PHOTOS, MAX_PHOTOS, t } from "@gennety/shared";
 
 // Mock prisma before importing handlers.
 vi.mock("@gennety/db", () => ({
@@ -109,6 +109,13 @@ const photoConsensusMocks = vi.hoisted(() => ({
 }));
 vi.mock("../../services/profile-media-validation/identity-consensus.js", () => photoConsensusMocks);
 
+// edit-profile.ts falls back to the verification CTA when a photo redo finishes
+// on a user who never ran Persona. Only that one export is reachable from here.
+const verificationCtaMocks = vi.hoisted(() => ({
+  sendVerificationCTABare: vi.fn().mockResolvedValue(true),
+}));
+vi.mock("../onboarding/verification.js", () => verificationCtaMocks);
+
 import { prisma } from "@gennety/db";
 import { findActiveMatchForTelegramId } from "../../services/active-match.js";
 import { showMainMenu, buildMainMenuKeyboard } from "./main.js";
@@ -140,6 +147,8 @@ import {
   handleEditPhotosUpload,
   handleEditPhotosAdd,
   handleEditPhotosDelete,
+  handleVerifyPhotosRedo,
+  handleVerifyPhotosClear,
 } from "./edit-profile.js";
 import {
   handleEditVideoStart,
@@ -155,6 +164,7 @@ import {
   gateProfilePhoto,
 } from "../../services/face-match-gate.js";
 import { refreshUserEmbedding } from "../../workers/embedding-refresh.js";
+import { triggerVerificationRerun } from "../../services/verification-pipeline.js";
 
 function createMockCtx(overrides: {
   session?: Partial<SessionData>;
@@ -1367,5 +1377,178 @@ describe("Menu — Profile Video", () => {
     const updateArg = (prisma.profile.update as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
     expect(JSON.stringify(updateArg.data.profileMedia)).not.toContain("vid-old");
     expect(ctx.session.menuState).toBe("idle");
+  });
+});
+
+describe("Menu — verification photo redo", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-user-1",
+      status: "onboarding",
+    });
+    (prisma.profile.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      photos: ["p0", "p1", "p2", "p3"],
+      profileMedia: [],
+      photoFaceScores: [0.1, 0.1, 0.1, 0.1],
+      uploadedPhotoHashes: ["h0", "h1", "h2", "h3"],
+    });
+    (triggerVerificationRerun as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+  });
+
+  it("opens the photo manager in redo mode and offers the clear-all shortcut", async () => {
+    const ctx = createMockCtx({ callbackData: "verify:photos" });
+
+    await handleVerifyPhotosRedo(ctx);
+
+    expect(ctx.session.verifyPhotoRedo).toBe(true);
+    expect(ctx.session.menuState).toBe("edit_photos");
+    expect(ctx.session.pendingPhotos).toEqual(["p0", "p1", "p2", "p3"]);
+    // The manager's keyboard is the last reply; it carries the one-tap reset.
+    const keyboards = ctx.reply.mock.calls
+      .map((call: unknown[]) => (call[1] as { reply_markup?: unknown })?.reply_markup)
+      .filter(Boolean);
+    expect(JSON.stringify(keyboards)).toContain("verify:photos:clear");
+  });
+
+  it("lets a redo user delete below MIN_PHOTOS (all four photos may be someone else)", async () => {
+    const photos = Array.from({ length: MIN_PHOTOS }, (_, i) => `p${i}`);
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        verifyPhotoRedo: true,
+        pendingPhotos: [...photos],
+        pendingProfileMedia: photos.map((photo) => ({ type: "photo", photo })),
+        pendingPhotoScores: photos.map(() => 0.1),
+        pendingPhotoHashes: photos.map((_, i) => `h${i}`),
+        pendingPhotoUniqueIds: photos.map((_, i) => `u${i}`),
+      },
+      callbackData: "menu:edit:photos:del:0",
+    });
+    photoConsensusMocks.removeProfilePhotoByRef.mockResolvedValue({
+      found: true,
+      photos: photos.slice(1),
+      profileMedia: photos.slice(1).map((photo) => ({ type: "photo", photo })),
+      uploadedPhotoHashes: ["h1", "h2", "h3"],
+      photoFaceScores: [0.1, 0.1, 0.1],
+    });
+
+    await handleEditPhotosDelete(ctx);
+
+    expect(ctx.session.pendingPhotos).toEqual(photos.slice(1));
+    expect(photoConsensusMocks.removeProfilePhotoByRef).toHaveBeenCalledWith(
+      "uuid-user-1",
+      "p0",
+    );
+  });
+
+  it("clear-all drops every photo through the locked removal service", async () => {
+    const photos = ["p0", "p1", "p2", "p3"];
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        verifyPhotoRedo: true,
+        pendingPhotos: [...photos],
+        pendingProfileMedia: photos.map((photo) => ({ type: "photo", photo })),
+        pendingPhotoScores: photos.map(() => 0.1),
+        pendingPhotoHashes: photos.map((_, i) => `h${i}`),
+        pendingPhotoUniqueIds: photos.map((_, i) => `u${i}`),
+      },
+      callbackData: "verify:photos:clear",
+    });
+    let remaining = [...photos];
+    photoConsensusMocks.removeProfilePhotoByRef.mockImplementation(async (_id, ref) => {
+      remaining = remaining.filter((p) => p !== ref);
+      return {
+        found: true,
+        photos: [...remaining],
+        profileMedia: remaining.map((photo) => ({ type: "photo", photo })),
+        uploadedPhotoHashes: remaining.map((_, i) => `h${i}`),
+        photoFaceScores: remaining.map(() => 0.1),
+      };
+    });
+
+    await handleVerifyPhotosClear(ctx);
+
+    expect(photoConsensusMocks.removeProfilePhotoByRef).toHaveBeenCalledTimes(4);
+    expect(ctx.session.pendingPhotos).toEqual([]);
+    expect(ctx.session.pendingPhotoUniqueIds).toEqual([]);
+  });
+
+  it("refuses to finish below MIN_PHOTOS instead of silently doing nothing", async () => {
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        verifyPhotoRedo: true,
+        pendingPhotos: ["p0"],
+      },
+      callbackData: "menu:edit:photos:continue",
+    });
+
+    await handleEditPhotosUpload(ctx);
+
+    expect(ctx.reply).toHaveBeenCalledWith(
+      t("en", "photoManagerMinReached", { min: MIN_PHOTOS }),
+    );
+    expect(ctx.session.menuState).toBe("edit_photos");
+  });
+
+  it("finishing a redo with a Persona inquiry on file promises an automatic re-check", async () => {
+    (triggerVerificationRerun as ReturnType<typeof vi.fn>).mockResolvedValue({
+      kind: "started",
+      inquiryId: "inq_1",
+    });
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        verifyPhotoRedo: true,
+        pendingPhotos: ["p0", "p1", "p2", "p3"],
+      },
+      callbackData: "menu:edit:photos:continue",
+    });
+
+    await handleEditPhotosUpload(ctx);
+
+    expect(ctx.reply).toHaveBeenCalledWith(t("en", "verifyPhotosSavedRecheck"));
+    // No second Persona pass, and no main menu (it is still gate-locked).
+    expect(verificationCtaMocks.sendVerificationCTABare).not.toHaveBeenCalled();
+    expect(ctx.reply).not.toHaveBeenCalledWith(t("en", "editProfilePhotosSaved"));
+    expect(ctx.session.verifyPhotoRedo).toBe(false);
+  });
+
+  it("finishing a redo with no inquiry yet hands the user straight to verification", async () => {
+    (triggerVerificationRerun as ReturnType<typeof vi.fn>).mockResolvedValue({
+      kind: "no_inquiry",
+    });
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        verifyPhotoRedo: true,
+        pendingPhotos: ["p0", "p1", "p2", "p3"],
+      },
+      callbackData: "menu:edit:photos:continue",
+    });
+
+    await handleEditPhotosUpload(ctx);
+
+    expect(ctx.reply).toHaveBeenCalledWith(t("en", "verifyPhotosSavedNowVerify"));
+    expect(verificationCtaMocks.sendVerificationCTABare).toHaveBeenCalledTimes(1);
+    expect(ctx.session.verifyPhotoRedo).toBe(false);
+  });
+
+  it("a normal menu photo edit still ends on the main menu", async () => {
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        verifyPhotoRedo: false,
+        pendingPhotos: ["p0", "p1", "p2", "p3"],
+      },
+      callbackData: "menu:edit:photos:continue",
+    });
+
+    await handleEditPhotosUpload(ctx);
+
+    expect(ctx.reply).toHaveBeenCalledWith(t("en", "editProfilePhotosSaved"));
+    expect(verificationCtaMocks.sendVerificationCTABare).not.toHaveBeenCalled();
   });
 });

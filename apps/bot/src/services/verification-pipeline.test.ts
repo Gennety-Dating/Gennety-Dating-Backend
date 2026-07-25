@@ -46,6 +46,7 @@ function makeHarness(
     telegramId: 999_001n,
     status: "onboarding",
     gender: "male",
+    language: "en",
     verificationStatus: "pending",
     personaInquiryId: null,
     faceMatchedAt: null,

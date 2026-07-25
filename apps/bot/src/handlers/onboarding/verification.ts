@@ -1,9 +1,8 @@
 import { fileURLToPath } from "node:url";
 import { InlineKeyboard, InputFile, type Api } from "grammy";
-import { prisma, type Theme } from "@gennety/db";
+import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
-import { buildPersonaHostedUrl } from "../../services/persona.js";
 import { terminalVerificationMessage } from "../../services/verification-messages.js";
 import { pullVerificationStatus } from "../../services/verification-pipeline.js";
 import { showMainMenu } from "../menu/main.js";
@@ -13,8 +12,12 @@ import { UNVERIFIED_ELO_PENALTY } from "../../utils/elo-calculator.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { skipAnalysisSteps } from "../../services/analysis-status.js";
 import { computeNextTouch } from "../../workers/re-engagement-schedule.js";
+import { isVerificationGated } from "../../services/verification-gate.js";
+import {
+  appendVerifyNowButton,
+  buildVerificationKeyboard,
+} from "../../services/verification-keyboard.js";
 import type { BotContext } from "../../session.js";
-import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 
 /**
  * Callback data for the "Skip verification" button on the CTA card. This is now
@@ -39,15 +42,20 @@ export const VERIFY_CHECK_CALLBACK = "verify:check";
 /**
  * Send the Persona liveness CTA to the user at the end of onboarding.
  *
- * Two buttons:
+ * Buttons:
  *   • Verify now → `web_app` button opening the Verification Mini App
  *     (`verification.html`), which mounts Persona's Embedded SDK inline
  *     inside the Telegram WebView — no redirect to withpersona.com,
  *     no in-app browser frame. The Mini App POSTs back to
  *     `/v1/verification/mini-app/event` on terminal SDK events, which
  *     fires the same pull-fallback the old "I've finished" button used.
+ *   • Upload different photos → the way back. This screen is the first place
+ *     the user learns their photos will be face-matched, so someone who
+ *     uploaded photos of another person must be able to retreat and swap them
+ *     rather than being stranded in front of a check they know they will fail.
  *   • Skip for now → callback button (`verify:skip`) that drops the
  *     user into the voice-nudge confirmation step without applying a penalty.
+ *     Retired while `MANDATORY_VERIFICATION_ENABLED` is on.
  *
  * The legacy hosted-URL path is kept as a dev/fallback safety net when
  * `WEBAPP_URL` isn't configured (local dev without a tunnel) — see below.
@@ -108,11 +116,10 @@ export async function sendVerificationCTABare(
     })
     .catch(() => {});
 
-  const keyboard = new InlineKeyboard();
-  if (!(await appendVerifyNowButton(keyboard, lang, user.id, t(lang, "verifyBtnGo"), user.theme))) {
-    return false;
-  }
-  keyboard.success();
+  const keyboard = await buildVerificationKeyboard(lang, user.id, {
+    theme: user.theme,
+  });
+  if (!keyboard) return false;
   // Registration v2 (mandatory liveness): no Skip affordance — verification is
   // the only path to activation. The soft-skip flow survives solely for legacy
   // CTA messages sent before the flag flip (see the skip handlers below).
@@ -132,51 +139,6 @@ export async function sendVerificationCTABare(
     },
   );
   return true;
-}
-
-/**
- * Append the "Verify now" affordance to a keyboard: the embedded Verification
- * Mini App in production (no browser frame, native camera permissions inside
- * Telegram), or the hosted Persona URL as a dev/fallback when WEBAPP_URL isn't
- * a real HTTPS host (local dev without a tunnel, where Telegram can't open the
- * Mini App over `example.invalid`).
- *
- * Returns false when neither could be built (hosted-URL construction threw) so
- * the caller can decide whether that is fatal (CTA aborts; the skip-nudge fork
- * just drops the button and keeps the "Skip anyway" option).
- */
-async function appendVerifyNowButton(
-  keyboard: InlineKeyboard,
-  lang: Language,
-  userId: string,
-  label: string,
-  knownTheme?: Theme,
-): Promise<boolean> {
-  const miniAppHost = env.WEBAPP_URL;
-  const useMiniApp =
-    miniAppHost.startsWith("https://") &&
-    !miniAppHost.includes("example.invalid");
-
-  if (useMiniApp) {
-    const theme = knownTheme ?? (await prisma.user.findUnique({
-      where: { id: userId },
-      select: { theme: true },
-    }))?.theme ?? "dark";
-    const miniAppUrl = buildMiniAppUrl("verification", { lang, theme });
-    keyboard.webApp(label, miniAppUrl);
-    return true;
-  }
-  try {
-    const url = buildPersonaHostedUrl(userId);
-    keyboard.url(label, url);
-    console.warn(
-      "[verification] WEBAPP_URL not configured — falling back to hosted Persona URL",
-    );
-    return true;
-  } catch (err) {
-    console.error("[persona] CTA URL build failed:", err);
-    return false;
-  }
 }
 
 /**
@@ -305,11 +267,9 @@ async function sendMandatoryVerifyNotice(
   lang: Language,
   userId: string,
 ): Promise<void> {
-  const keyboard = new InlineKeyboard();
-  const hasButton = await appendVerifyNowButton(keyboard, lang, userId, t(lang, "verifyBtnGo"));
-  if (hasButton) keyboard.success();
+  const keyboard = await buildVerificationKeyboard(lang, userId);
   await api.sendMessage(chatId, t(lang, "verifyMandatoryNotice"), {
-    ...(hasButton ? { reply_markup: keyboard } : {}),
+    ...(keyboard ? { reply_markup: keyboard } : {}),
   });
 }
 
@@ -323,12 +283,12 @@ export async function sendVerificationReminder(
   chatId: number,
   lang: Language,
   userId: string,
+  prefix?: string,
 ): Promise<void> {
-  const keyboard = new InlineKeyboard();
-  const hasButton = await appendVerifyNowButton(keyboard, lang, userId, t(lang, "verifyBtnGo"));
-  if (hasButton) keyboard.success();
-  await api.sendMessage(chatId, t(lang, "verifyReminderNudge"), {
-    ...(hasButton ? { reply_markup: keyboard } : {}),
+  const keyboard = await buildVerificationKeyboard(lang, userId);
+  const body = t(lang, "verifyReminderNudge");
+  await api.sendMessage(chatId, prefix ? `${prefix}\n\n${body}` : body, {
+    ...(keyboard ? { reply_markup: keyboard } : {}),
   });
 }
 
@@ -358,6 +318,7 @@ export async function sendVerificationGateNotice(
   chatId: number,
   telegramId: bigint,
   lang: Language,
+  options: { locked?: boolean } = {},
 ): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { telegramId },
@@ -365,21 +326,63 @@ export async function sendVerificationGateNotice(
   });
   if (!user) return false;
 
+  // Only prefix the "the menu opens right after verification" line when the
+  // card was triggered by a blocked tap — on /start it would read as a scold.
+  const prefix = options.locked ? t(lang, "verifyGateLocked") : undefined;
+  const withPrefix = (body: string): string =>
+    prefix ? `${prefix}\n\n${body}` : body;
+
   switch (user.verificationStatus) {
     case "verified":
       // A verified user should already be `active`; if we somehow land here,
       // let the caller show the normal greeting rather than a stale nudge.
       return false;
     case "pending_review":
+      // Nothing for the user to do — an admin is moderating. No buttons.
       await api.sendMessage(chatId, t(lang, "verifyOutcomePendingReview"));
       return true;
-    case "rejected":
-      await api.sendMessage(chatId, t(lang, "verifyOutcomeRejected"));
+    case "rejected": {
+      // The photos didn't match the selfie. Both recoveries ride the message:
+      // swap the photos (the pipeline then re-checks them against the selfie
+      // already on file) or re-run Persona.
+      const keyboard = await buildVerificationKeyboard(lang, user.id);
+      await api.sendMessage(chatId, withPrefix(t(lang, "verifyOutcomeRejected")), {
+        ...(keyboard ? { reply_markup: keyboard } : {}),
+      });
       return true;
+    }
     default:
-      await sendVerificationReminder(api, chatId, lang, user.id);
+      await sendVerificationReminder(api, chatId, lang, user.id, prefix);
       return true;
   }
+}
+
+/**
+ * Gate helper for entry points that live OUTSIDE the FSM router — the
+ * `/menu`, `/edit`, `/profile` and `/settings` commands are registered on the
+ * `start` composer, which runs before `handlers/router.ts` and its gate.
+ *
+ * Returns true when the caller is verification-gated and the card was sent, in
+ * which case the command must not proceed.
+ */
+export async function blockIfVerificationGated(ctx: BotContext): Promise<boolean> {
+  if (!ctx.from?.id || !ctx.chat) return false;
+
+  const telegramId = BigInt(ctx.from.id);
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { status: true, onboardingStep: true },
+  });
+  if (!isVerificationGated(user)) return false;
+
+  await sendVerificationGateNotice(
+    ctx.api,
+    ctx.chat.id,
+    telegramId,
+    ctx.session.language,
+    { locked: true },
+  );
+  return true;
 }
 
 /**

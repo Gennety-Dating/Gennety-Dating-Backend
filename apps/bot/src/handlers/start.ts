@@ -11,7 +11,10 @@ import { showSettingsMenu } from "./menu/settings.js";
 import { sendConsentPrompt } from "./onboarding/consent.js";
 import { computeDevBypassFields } from "./dev-bypass.js";
 import { startPoll } from "../services/verification-poller.js";
-import { sendVerificationGateNotice } from "./onboarding/verification.js";
+import {
+  blockIfVerificationGated,
+  sendVerificationGateNotice,
+} from "./onboarding/verification.js";
 import {
   clearStaleStatusPins,
   pinStatusBanner,
@@ -272,8 +275,10 @@ start.command("start", async (ctx) => {
     // liveness gate hasn't been cleared, so the user is NOT active and the
     // matchmaker has NOT started searching for them. Greeting them with
     // "your AI is already looking for a match" (onboardingComplete) misleads
-    // them — surface their real verification state + the Verify button instead,
-    // then the menu, and do NOT pin the next-match banner.
+    // them — surface their real verification state + the Verify/photo buttons
+    // instead. The menu is deliberately NOT shown and the next-match banner is
+    // not pinned: verification is mandatory, so nothing behind the menu is
+    // available to them yet (see services/verification-gate.ts).
     if (user.status === "onboarding") {
       const handled = await sendVerificationGateNotice(
         ctx.api,
@@ -281,10 +286,7 @@ start.command("start", async (ctx) => {
         telegramId,
         ctx.session.language,
       );
-      if (handled) {
-        await showMainMenu(ctx);
-        return;
-      }
+      if (handled) return;
     }
 
     await ctx.reply(t(ctx.session.language, "onboardingComplete"));
@@ -415,12 +417,18 @@ start.command("start", async (ctx) => {
   await sendStepPrompt(ctx);
 });
 
+// These four commands live on the `start` composer, which `bot.ts` registers
+// BEFORE `handlers/router.ts` — so the router's verification gate never sees
+// them. Each re-checks it here: a user still held at the liveness gate has no
+// menu, profile editor, or settings until they clear it.
+
 // /menu — summon the main menu at any time (only valid for completed users).
 start.command("menu", async (ctx) => {
   if (ctx.session.onboardingStep !== "completed") {
     await ctx.reply(t(ctx.session.language, "finishOnboardingFirst"));
     return;
   }
+  if (await blockIfVerificationGated(ctx)) return;
   ctx.session.menuState = "idle";
   await showMainMenu(ctx);
 });
@@ -431,6 +439,7 @@ start.command("edit", async (ctx) => {
     await ctx.reply(t(ctx.session.language, "finishOnboardingFirst"));
     return;
   }
+  if (await blockIfVerificationGated(ctx)) return;
   ctx.session.menuState = "idle";
   await showEditProfileMenu(ctx);
 });
@@ -441,6 +450,7 @@ start.command("profile", async (ctx) => {
     await ctx.reply(t(ctx.session.language, "finishOnboardingFirst"));
     return;
   }
+  if (await blockIfVerificationGated(ctx)) return;
   await showMyProfile(ctx);
 });
 
@@ -450,6 +460,7 @@ start.command("settings", async (ctx) => {
     await ctx.reply(t(ctx.session.language, "finishOnboardingFirst"));
     return;
   }
+  if (await blockIfVerificationGated(ctx)) return;
   await showSettingsMenu(ctx);
 });
 

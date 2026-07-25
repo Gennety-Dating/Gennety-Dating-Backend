@@ -31,7 +31,6 @@ import {
   handleSettingsLanguageSet,
   handleSettingsThemeOpen,
   handleSettingsThemeSet,
-  handleSettingsVerify,
   handleDeleteAccountStart,
   handleFreezeAccount,
   handleDeleteAccountConfirm,
@@ -102,6 +101,7 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     }
     // If the user taps another menu action mid-upload, fall through and reset state.
     ctx.session.menuState = "idle";
+    ctx.session.verifyPhotoRedo = false;
     ctx.session.pendingPhotos = [];
     ctx.session.pendingProfileMedia = [];
     ctx.session.pendingPhotoUniqueIds = [];
@@ -286,9 +286,6 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       return;
     case "menu:settings:theme":
       await handleSettingsThemeOpen(ctx);
-      return;
-    case "menu:settings:verify":
-      await handleSettingsVerify(ctx);
       return;
     case "menu:settings:delete":
       await handleDeleteAccountStart(ctx);

@@ -402,6 +402,21 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   retired); the CTA copy only frames the ELO cost of skipping. Historical
   `verification_bonus` `TicketLedger` rows granted before the change stay valid
   and are never clawed back.
+- **📷 Upload different photos** — the way BACK, present on every screen that
+  asks for verification (the CTA, the mandatory notice, the stall reminder, the
+  gate card, and the rejection DM). The verification CTA is the first place a
+  user learns their photos will be face-matched, so someone who uploaded another
+  person's photos must be able to retreat and swap them instead of being
+  stranded in front of a check they know they will fail. It reopens the existing
+  photo manager (§2.1 My Profile → My photos) in a **redo mode** with three
+  deltas: a one-tap **🗑 Delete all and start over**, no `MIN_PHOTOS` delete
+  floor (the user is not in the matching pool, and at exactly 4 photos the
+  ordinary per-photo delete is refused outright), and a finish path that returns
+  to verification rather than the main menu. Finishing still requires
+  `MIN_PHOTOS`. Which follow-up lands depends on whether a Persona inquiry
+  already exists: with one (a `rejected` user), the pipeline re-scores the new
+  photos against the selfie already on file — **no second liveness pass**; with
+  none, the verification CTA follows. Telegram-only.
 - **Skip for now** — *(retired production path — hidden when
   `MANDATORY_VERIFICATION_ENABLED` is on: the CTA then carries only the Verify
   button with the `verifyPitchMandatory` copy, and taps on pre-flip
@@ -478,6 +493,24 @@ are discarded rather than corrupting the `photos[i] ↔ photoFaceScores[i]`
 alignment. The admin "rerun verification" endpoint shares the same code
 path.
 
+**Outcome DM.** Every terminal outcome is DM'd in the user's own
+`User.language` (shared i18n `verifyOutcome*`; the copy used to be hardcoded
+English). `rejected` is the one outcome the user can act on, so it carries both
+recoveries inline — **📷 Upload different photos** and **🟢 Verify now** — rather
+than sending them hunting through menus.
+
+**Verification gate (the app stays locked).** `status='onboarding'` with
+`onboardingStep='completed'` means the profile is finished but Persona is not,
+and since verification is mandatory that user is NOT in the app yet. While they
+are in that state the ONLY reachable actions are the two that can clear it:
+running/retrying verification, and re-uploading photos. Every other Telegram
+surface — the main menu, My Profile, pause/resume, Settings, tickets, premium,
+referral, the free-text menu agent, and the `/menu` `/edit` `/profile`
+`/settings` commands — answers with the verification card instead. `/start`
+likewise surfaces their verification state and stops there (no menu, no pinned
+banner). Matching, date, and Profiler workers already filter on `status='active'`
+and never touch them.
+
 **Match-pool inclusion.** A user is eligible only when
 `verificationStatus='verified'`, or when they belong to the explicit legacy
 cohort `verificationStatus='unverified' AND verificationSkippedAt IS NOT NULL`.
@@ -509,12 +542,13 @@ activated user (`status='onboarding'`, `onboardingStep='completed'`) reopens the
 bot, `/start` must NOT show the `onboardingComplete` "your AI is already looking
 for a match" greeting — the matchmaker has not started for them. It instead
 surfaces their real verification state (`handlers/onboarding/verification.ts`
-`sendVerificationGateNotice`): the `verifyReminderNudge` + Verify button for
-`pending`/`unverified`, `verifyOutcomePendingReview` for `pending_review`,
-`verifyOutcomeRejected` for `rejected`, then the menu — and it does not pin the
-next-match banner. This holds independent of `MANDATORY_VERIFICATION_ENABLED`
-(the same `onboarding`/`completed` state exists whenever Persona liveness is
-enabled and the user hasn't yet cleared it).
+`sendVerificationGateNotice`): the `verifyReminderNudge` + Verify/photo buttons
+for `pending`/`unverified`, `verifyOutcomePendingReview` for `pending_review`,
+`verifyOutcomeRejected` + both recovery buttons for `rejected` — and it stops
+there. The menu is **not** shown and the next-match banner is not pinned; the
+gate above owns everything until verification clears. This holds independent of
+`MANDATORY_VERIFICATION_ENABLED` (the same `onboarding`/`completed` state exists
+whenever Persona liveness is enabled and the user hasn't yet cleared it).
 
 ## Phase 1b — Profiler
 
@@ -660,9 +694,16 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
   stale render is prevented from writing the old variant back. The shared Mini
   App URL builder always carries current `lang` + `theme` for Calendar,
   Feedback, Location, Onboarding, Verification, Ticket, Ticket Store, and Venue
-  Change. Settings also re-opens verification when applicable and provides
-  **Delete Account**, which now offers a softer alternative first (Telegram-only,
-  see below).
+  Change. Settings also provides **Delete Account**, which now offers a softer
+  alternative first (Telegram-only, see below). It carries **no "Verify your
+  account" entry** (removed 2026-07-24): verification is mandatory, so it is not
+  a setting — a user who hasn't passed it never reaches this screen (§1.4's gate
+  holds them), and one who has has nothing to do there. The two cases that used
+  to need it now carry their own affordances: the verification card itself and
+  the `rejected` outcome DM. Consequence: the legacy pre-flip skip cohort
+  (`verificationSkippedAt != null`) no longer has a self-serve way to clear
+  their `UNVERIFIED_ELO_PENALTY` — an accepted trade for a cohort that can no
+  longer be created.
 - **Profile Video** — the first single-button row: an **always-visible**
   main-menu entry to add, replace, or
   remove the optional display-only profile **video** *after* onboarding (the same
