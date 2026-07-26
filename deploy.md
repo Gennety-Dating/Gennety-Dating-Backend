@@ -1,6 +1,38 @@
 # Gennety Dating Deploy
 
-**Deployed 2026-07-26 (later) — a missing reference selfie is retryable, not a
+**Deployed 2026-07-26 (latest) — card-based photo manager, honest liveness-retry
+copy, branded detector (`9b3e51e`, 8 commits since `2c5f206`).** Code + Mini App:
+no Prisma schema change, no env change, no flag change. Ships the §2.1 card-based
+photo manager (one message per photo with its own 🗑 button, coalesced upload
+bursts, per-frame rejection replies), the §1.4 outcome-split liveness-retry copy
+(`not_live` / `expired`/`in_progress` / `no_reference` instead of one generic
+"shaky camera" guess), the theme-aware branding of the Face Liveness detector,
+a body-encoded-404 fix in `services/storage.ts` that could wedge account
+deletion, and the drop of the hourglass emoji from the pinned-banner countdown
+button.
+
+Preflight green locally: **typecheck clean, all tests pass (bot 169 files /
+2212 tests), `pnpm build` clean**, working tree clean and level with
+`origin/main`. Ran Deploy Full Server Code → `db:drift-check` (**OK**, nothing to
+push — the diff touches no `schema.prisma`) → `pm2 restart`, then Deploy Mini App
+Only (`apps/webapp` changed: `liveness-theme.css`, `liveness-detector.tsx`,
+`verification.html`). The rsync dry-run listed only the 2 usual stale
+`apps/video/build` artifacts as deletions.
+
+Post-deploy verified: `Bot @gennetybot started`, all 14 crons registered,
+`:3100`/`:3101` listening, `/v1/ping` ok, admin `401`, all 11 Mini App pages
+`200`, the self-hosted liveness assets still serve correctly
+(`/liveness/tfjs-wasm/*.wasm` → `application/wasm`, `/liveness/blazeface/
+model.json` → `application/json`), restart count 27 → 28 (single restart, no
+crash loop), and no new lines in the error log — the `face mismatch → rejected`
+entry there is the pre-existing 2026-07-26 session, and the `status-banner …
+chat not found` lines are the documented unreachable-chat cooldown. The 113
+`P2022` hits in the historical log all predate earlier pushes.
+
+**Rollback:** re-sync a checkout at `2c5f206` and redeploy the Mini App from it.
+Nothing else to undo — no schema, no env, no flag.
+
+**Prior: 2026-07-26 (later) — a missing reference selfie is retryable, not a
 dead end (`2c5f206`).** Code-only: no Prisma schema change, no env change, no
 flag change, no Mini App change. A verification run that cannot fetch the
 reference selfie used to write `pending_review` — a status with no button, that
