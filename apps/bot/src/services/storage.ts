@@ -333,6 +333,18 @@ export async function downloadChatImage(path: string): Promise<Buffer | null> {
  * successful delete or when the object is already absent, `false` otherwise
  * (including "not configured" and transient errors). Ordinary media edits may
  * proceed best-effort; account deletion treats `false` as a retryable blocker.
+ *
+ * The HTTP status alone cannot decide this. Supabase does NOT answer a missing
+ * object with an HTTP 404 — it returns **HTTP 400** carrying a body-encoded
+ * `{"statusCode":"404","error":"not_found"}`. Reading only `res.status` made
+ * "already absent" look like a failure, which permanently wedged account
+ * deletion for anyone whose stored path no longer resolves (config drift, a
+ * half-finished earlier cleanup).
+ *
+ * A missing *bucket* returns that identical shape, so "absent" is only treated
+ * as erased once the bucket we were pointed at is confirmed to exist —
+ * otherwise a typo'd bucket name would silently report every object as erased
+ * while the real files live on.
  */
 export async function deleteStorageObject(
   bucket: string,
@@ -349,9 +361,59 @@ export async function deleteStorageObject(
       },
       signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
     });
-    // A retry after a partial account cleanup commonly sees 404 for objects
-    // removed by the first attempt. "Already absent" satisfies deletion.
-    return res.ok || res.status === 404;
+    if (res.ok) return true;
+    if (!(await isAbsentObjectResponse(res))) return false;
+
+    // Ambiguous branch only: the object is gone, or the bucket never existed.
+    if (!(await storageBucketExists(bucket))) {
+      console.error("[storage] delete target bucket is unreachable", { bucket, path });
+      return false;
+    }
+    console.warn("[storage] object already absent, treating as erased", { bucket, path });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Minimal shape of the error responses this module inspects. */
+interface InspectableResponse {
+  status: number;
+  json: () => Promise<unknown>;
+}
+
+/**
+ * Does this failed response mean "the object isn't there"? Accepts both a real
+ * HTTP 404 and Supabase's body-encoded one. Anything else — notably a 403
+ * `Invalid Compact JWS` from a bad service-role key — must stay a failure so
+ * account deletion keeps failing closed on credential/permission problems.
+ */
+async function isAbsentObjectResponse(res: InspectableResponse): Promise<boolean> {
+  if (res.status === 404) return true;
+  if (res.status !== 400) return false;
+  try {
+    const body = (await res.json()) as { statusCode?: unknown } | null;
+    return String(body?.statusCode) === "404";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Confirm a bucket actually exists. Unlike the object endpoint, this one does
+ * distinguish the two "404"s (`error: "Bucket not found"`), which is what lets
+ * the caller above tell an erased object from a misconfigured destination.
+ * Unreachable counts as "no" — fail closed.
+ */
+async function storageBucketExists(bucket: string): Promise<boolean> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return false;
+
+  try {
+    const res = await fetch(`${env.SUPABASE_URL}/storage/v1/bucket/${bucket}`, {
+      headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+      signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+    });
+    return res.ok;
   } catch {
     return false;
   }

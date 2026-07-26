@@ -13,8 +13,13 @@ vi.mock("../config.js", () => ({
   },
 }));
 
-const { downloadProfileImage, downloadTelegramFile, uploadSelfie, normalizeImageMime } =
-  await import("./storage.js");
+const {
+  downloadProfileImage,
+  downloadTelegramFile,
+  uploadSelfie,
+  normalizeImageMime,
+  deleteStorageObject,
+} = await import("./storage.js");
 
 const TG_TOKEN = "999:fake-bot-token";
 const TG_FILE_ID = "AgACAgIAAxkBAAIClGn6b1_fakeTelegramFileId";
@@ -185,6 +190,102 @@ describe("normalizeImageMime — Content-Type safety", () => {
     expect(result).toBe("image/jpeg");
     // The result must be a valid HTTP header value (Latin-1 ByteString).
     expect([...result].every((ch) => ch.charCodeAt(0) <= 255)).toBe(true);
+  });
+});
+
+describe("deleteStorageObject — Supabase encodes 'missing' as HTTP 400", () => {
+  /** Supabase's real "object isn't there" answer: HTTP 400, body-encoded 404. */
+  const absentObject = {
+    ok: false,
+    status: 400,
+    json: async () => ({
+      statusCode: "404",
+      error: "not_found",
+      message: "Object not found",
+    }),
+  };
+
+  it("reports a plain successful delete", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200 });
+
+    await expect(deleteStorageObject("selfies", "u/1.jpg")).resolves.toBe(true);
+    // The happy path must not pay for the bucket confirmation.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a body-encoded 404 as erased once the bucket is confirmed real", async () => {
+    // This is the exact response that used to wedge account deletion forever.
+    fetchMock
+      .mockResolvedValueOnce(absentObject)
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+
+    await expect(deleteStorageObject("selfies", "u/1.jpg")).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]![0]).toBe(
+      "https://supabase.test/storage/v1/bucket/selfies",
+    );
+  });
+
+  it("fails closed when the bucket itself does not exist (same body shape)", async () => {
+    // A typo'd bucket name is indistinguishable at the object endpoint, so
+    // reporting it as erased would silently skip real GDPR erasure.
+    fetchMock
+      .mockResolvedValueOnce(absentObject)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ statusCode: "404", error: "Bucket not found" }),
+      });
+
+    await expect(deleteStorageObject("typo-bucket", "u/1.jpg")).resolves.toBe(false);
+  });
+
+  it("fails closed when the bucket check is unreachable", async () => {
+    fetchMock
+      .mockResolvedValueOnce(absentObject)
+      .mockRejectedValueOnce(new Error("network down"));
+
+    await expect(deleteStorageObject("selfies", "u/1.jpg")).resolves.toBe(false);
+  });
+
+  it("fails closed on a bad service-role key rather than reading it as absent", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        statusCode: "403",
+        error: "Unauthorized",
+        message: "Invalid Compact JWS",
+      }),
+    });
+
+    await expect(deleteStorageObject("selfies", "u/1.jpg")).resolves.toBe(false);
+    // No bucket probe: this never entered the ambiguous branch.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed on a server error", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: async () => ({}),
+    });
+
+    await expect(deleteStorageObject("selfies", "u/1.jpg")).resolves.toBe(false);
+  });
+
+  it("still honours a literal HTTP 404, confirming the bucket first", async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+
+    await expect(deleteStorageObject("selfies", "u/1.jpg")).resolves.toBe(true);
+  });
+
+  it("fails closed when the delete request throws", async () => {
+    fetchMock.mockRejectedValueOnce(new Error("timeout"));
+
+    await expect(deleteStorageObject("selfies", "u/1.jpg")).resolves.toBe(false);
   });
 });
 
