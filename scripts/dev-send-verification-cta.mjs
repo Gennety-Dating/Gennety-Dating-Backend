@@ -2,7 +2,7 @@
 /**
  * Dev-only E2E helper.
  *
- * Sends the Persona verification CTA directly to a specific Telegram user,
+ * Sends the liveness verification CTA directly to a specific Telegram user,
  * bypassing the conversational onboarding agent. Used when the agent is
  * broken or paused and we still want to test the verification Mini App
  * end-to-end.
@@ -12,8 +12,8 @@
  *   - looks up user by telegram_id
  *   - flips verificationStatus to "pending"
  *   - sends a message with two inline buttons: "Verify now" (web_app) + "Skip"
- *   - when WEBAPP_URL is the example.invalid placeholder, falls back to the
- *     hosted Persona URL
+ *   - refuses when WEBAPP_URL is not a real HTTPS host (Face Liveness runs in
+ *     our own Mini App — there is no hosted fallback to link to)
  *
  * Implemented via raw HTTPS POST to the Telegram Bot API to avoid pulling
  * grammy into this scripts/ resolution context. The PROD code path is
@@ -78,12 +78,8 @@ if (!botToken) {
   console.error("BOT_TOKEN missing — check .env.local / .env");
   process.exit(1);
 }
-if (!process.env.ENABLE_PERSONA_VERIFICATION || process.env.ENABLE_PERSONA_VERIFICATION !== "true") {
-  console.error("ENABLE_PERSONA_VERIFICATION is not 'true' — refusing to send CTA");
-  process.exit(2);
-}
-if (!process.env.PERSONA_TEMPLATE_ID || !process.env.PERSONA_ENVIRONMENT_ID) {
-  console.error("PERSONA_TEMPLATE_ID and/or PERSONA_ENVIRONMENT_ID not set");
+if (process.env.FACE_LIVENESS_ENABLED !== "true") {
+  console.error("FACE_LIVENESS_ENABLED is not 'true' — refusing to send CTA");
   process.exit(2);
 }
 
@@ -106,37 +102,26 @@ await prisma.user.update({
   data: { verificationStatus: "pending" },
 });
 
-// Mirror sendVerificationCTABare's WEBAPP_URL gate. In dev (tunnel set up
-// correctly) we use the web_app button; if WEBAPP_URL is the placeholder
-// we fall back to the hosted Persona URL.
+// Mirror sendVerificationCTABare's WEBAPP_URL gate. Face Liveness runs inside
+// our own Mini App, so there is no fallback link — without a real HTTPS host
+// (a tunnel in dev) there is genuinely nowhere to send the user.
 const webappUrl = process.env.WEBAPP_URL ?? "";
-const useMiniApp =
-  webappUrl.startsWith("https://") && !webappUrl.includes("example.invalid");
-
-let primaryButton;
-if (useMiniApp) {
-  // Append a cache-buster timestamp so Telegram WebView doesn't serve a
-  // previously-cached version when we've fixed something in dev.
-  const cacheBust = Date.now().toString(36);
-  const miniAppUrl = `${webappUrl.replace(/\/+$/, "")}/verification.html?lang=${lang}&v=${cacheBust}`;
-  primaryButton = { text: btnLabel("verifyBtnGo", lang), web_app: { url: miniAppUrl } };
-  console.log(`[dev-send-verification-cta] using web_app button: ${miniAppUrl}`);
-} else {
-  const params = new URLSearchParams({
-    "inquiry-template-id": process.env.PERSONA_TEMPLATE_ID,
-    "environment-id": process.env.PERSONA_ENVIRONMENT_ID,
-    "reference-id": user.id,
-  });
-  if (process.env.BOT_USERNAME) {
-    params.set("redirect-uri", `https://t.me/${process.env.BOT_USERNAME}?start=verify_done`);
-  }
-  const hostedBase = process.env.PERSONA_HOSTED_URL_BASE ?? "https://withpersona.com/verify";
-  const url = `${hostedBase}?${params.toString()}`;
-  primaryButton = { text: btnLabel("verifyBtnGo", lang), url };
-  console.log(
-    `[dev-send-verification-cta] WEBAPP_URL not configured for Telegram — using hosted Persona URL`,
+if (!webappUrl.startsWith("https://") || webappUrl.includes("example.invalid")) {
+  console.error(
+    "WEBAPP_URL is not a real HTTPS host — start a tunnel and point WEBAPP_URL at it",
   );
+  process.exit(2);
 }
+
+// Append a cache-buster timestamp so Telegram WebView doesn't serve a
+// previously-cached version when we've fixed something in dev.
+const cacheBust = Date.now().toString(36);
+const miniAppUrl = `${webappUrl.replace(/\/+$/, "")}/verification.html?lang=${lang}&v=${cacheBust}`;
+const primaryButton = {
+  text: btnLabel("verifyBtnGo", lang),
+  web_app: { url: miniAppUrl },
+};
+console.log(`[dev-send-verification-cta] using web_app button: ${miniAppUrl}`);
 
 const replyMarkup = {
   inline_keyboard: [

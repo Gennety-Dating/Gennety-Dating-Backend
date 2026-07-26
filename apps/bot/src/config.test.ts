@@ -11,12 +11,10 @@ function productionReady(
     OTP_LOG_TO_CONSOLE: false,
     DEV_OTP_BYPASS_TELEGRAM_IDS: new Set(),
     MANDATORY_VERIFICATION_ENABLED: true,
-    ENABLE_PERSONA_VERIFICATION: true,
-    PERSONA_TEMPLATE_ID: "itmpl_live",
-    PERSONA_ENVIRONMENT_ID: "env_live",
-    PERSONA_API_KEY: "persona_prod_live",
-    PERSONA_WEBHOOK_SECRET: "webhook-live",
-    ALLOW_SANDBOX_PERSONA: false,
+    FACE_LIVENESS_ENABLED: true,
+    LIVENESS_STS_ROLE_ARN: "arn:aws:iam::147010141827:role/GennetyLivenessClient",
+    AWS_ACCESS_KEY_ID: "AKIA_LIVE",
+    AWS_SECRET_ACCESS_KEY: "secret-live",
     FACE_MATCH_PROVIDER: "rekognition",
     PROFILE_MEDIA_VALIDATION_ENABLED: true,
     ...overrides,
@@ -28,33 +26,43 @@ describe("identity trust configuration", () => {
     expect(identityTrustConfigurationErrors(productionReady(), "production")).toEqual([]);
   });
 
-  it("rejects the legacy soft gate and Persona sandbox in production", () => {
+  it("rejects the legacy soft gate and a disabled liveness provider", () => {
     const errors = identityTrustConfigurationErrors(
       productionReady({
         MANDATORY_VERIFICATION_ENABLED: false,
-        PERSONA_API_KEY: "persona_sand_test",
+        FACE_LIVENESS_ENABLED: false,
       }),
       "production",
     );
     expect(errors).toContain("MANDATORY_VERIFICATION_ENABLED must be true");
-    expect(errors).toContain("PERSONA_API_KEY must be a production key, not persona_sand*");
+    expect(errors).toContain("FACE_LIVENESS_ENABLED must be true");
   });
 
-  it("waives only the sandbox-key check under ALLOW_SANDBOX_PERSONA", () => {
-    expect(
-      identityTrustConfigurationErrors(
-        productionReady({
-          PERSONA_API_KEY: "persona_sand_test",
-          ALLOW_SANDBOX_PERSONA: true,
-        }),
-        "production",
-      ),
-    ).toEqual([]);
-
+  it("refuses to boot a half-configured liveness deploy", () => {
+    // Flag on but no credentials / no STS role means the verification CTA
+    // opens a Mini App that cannot start a check — fail at boot, not at the
+    // user's first tap.
     const errors = identityTrustConfigurationErrors(
       productionReady({
-        PERSONA_API_KEY: "persona_sand_test",
-        ALLOW_SANDBOX_PERSONA: true,
+        AWS_ACCESS_KEY_ID: "",
+        AWS_SECRET_ACCESS_KEY: "",
+        LIVENESS_STS_ROLE_ARN: "",
+      }),
+      "production",
+    );
+
+    expect(errors).toContain("AWS_ACCESS_KEY_ID must be configured");
+    expect(errors).toContain("AWS_SECRET_ACCESS_KEY must be configured");
+    expect(errors).toContain("LIVENESS_STS_ROLE_ARN must be configured");
+  });
+
+  it("has no sandbox escape hatch left to waive the identity gate", () => {
+    // The Persona era shipped `ALLOW_SANDBOX_PERSONA`, which let production
+    // run test-only KYC. Face Liveness has no sandbox/production key split, so
+    // there is nothing equivalent to opt into — a production-like config is
+    // either complete or it does not boot.
+    const errors = identityTrustConfigurationErrors(
+      productionReady({
         MANDATORY_VERIFICATION_ENABLED: false,
         PROFILE_MEDIA_VALIDATION_ENABLED: false,
       }),
@@ -62,9 +70,6 @@ describe("identity trust configuration", () => {
     );
     expect(errors).toContain("MANDATORY_VERIFICATION_ENABLED must be true");
     expect(errors).toContain("PROFILE_MEDIA_VALIDATION_ENABLED must be true");
-    expect(errors).not.toContain(
-      "PERSONA_API_KEY must be a production key, not persona_sand*",
-    );
   });
 
   it("rejects console OTP and dev bypass accounts outside development", () => {
@@ -95,8 +100,7 @@ describe("identity trust configuration", () => {
     const unsafe = productionReady({
       OTP_LOG_TO_CONSOLE: true,
       MANDATORY_VERIFICATION_ENABLED: false,
-      ENABLE_PERSONA_VERIFICATION: false,
-      PERSONA_API_KEY: "persona_sand_test",
+      FACE_LIVENESS_ENABLED: false,
       FACE_MATCH_PROVIDER: "disabled",
     });
     expect(identityTrustConfigurationErrors(unsafe, "development")).toEqual([]);

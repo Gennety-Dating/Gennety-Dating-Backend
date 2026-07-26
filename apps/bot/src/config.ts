@@ -20,11 +20,8 @@ function required(name: string): string {
 
 export const env = {
   BOT_TOKEN: required("BOT_TOKEN"),
-  /// Telegram username of the bot (without @). Used to build the
-  /// `https://t.me/<username>` redirect URL passed to Persona Hosted Flow,
-  /// so users land back in the bot chat after finishing verification.
-  /// Empty value disables the redirect (Persona just shows its "thank you"
-  /// page and the user closes the tab manually).
+  /// Telegram username of the bot (without @). Used to build `t.me/<username>`
+  /// deep links (referral invites, coordination contact exchange).
   BOT_USERNAME: process.env.BOT_USERNAME ?? "",
   DATABASE_URL: required("DATABASE_URL"),
   RESEND_API_KEY: process.env.RESEND_API_KEY ?? process.env.SMTP_PASS ?? "",
@@ -92,7 +89,7 @@ export const env = {
   /// Empty (default) → no forced update. Set e.g. "1.2.0" only when an old
   /// build must be retired (broken contract, security issue).
   IOS_MIN_SUPPORTED_APP_VERSION: process.env.IOS_MIN_SUPPORTED_APP_VERSION ?? "",
-  /// Registration v2: mandatory Persona liveness. On → the verification CTA
+  /// Registration v2: mandatory liveness. On → the verification CTA
   /// carries no Skip button and the legacy soft-skip callbacks refuse with a
   /// "verification is required" notice, so activation happens ONLY through the
   /// pipeline's `verified` outcome. Existing users with a persisted legacy
@@ -230,38 +227,6 @@ export const env = {
   /// to be PRIVATE; the chat endpoint fetches signed URLs (5 min TTL) just
   /// long enough for the OpenAI vision call to dereference them.
   SUPABASE_CHAT_BUCKET: process.env.SUPABASE_CHAT_BUCKET ?? "chat-attachments",
-
-  // ── Persona liveness / biometric verification (Phase 6.3) ────
-  /// Master switch for the Persona step. Production-like processes fail closed
-  /// at startup unless this and mandatory verification are enabled with live
-  /// credentials. Local/test environments may still turn it off explicitly.
-  ENABLE_PERSONA_VERIFICATION: process.env.ENABLE_PERSONA_VERIFICATION === "true",
-  /// Inquiry Template id from the Persona Dashboard — defines which steps the
-  /// user goes through (selfie + government ID + liveness). Empty value
-  /// disables the verification feature: users auto-activate after onboarding.
-  PERSONA_TEMPLATE_ID: process.env.PERSONA_TEMPLATE_ID ?? "",
-  /// Sandbox vs production environment id from the Persona Dashboard. The
-  /// `PERSONA_API_KEY` must belong to the same environment or API calls 401.
-  PERSONA_ENVIRONMENT_ID: process.env.PERSONA_ENVIRONMENT_ID ?? "",
-  /// Server-to-server API key. Not required for the hosted-flow URL (which is
-  /// fully client-constructed from template-id + environment-id + reference-id)
-  /// but needed if we ever call Persona's REST API to re-read inquiry details.
-  PERSONA_API_KEY: process.env.PERSONA_API_KEY ?? "",
-  /// Founder-approved escape hatch: lets a production-like process boot with a
-  /// Persona SANDBOX key. Sandbox inquiries are test flows, not real KYC —
-  /// every `verified` granted while this is on carries no identity guarantee
-  /// and stays `verified` in the database after the flag is removed. The
-  /// startup assertion logs a loud warning whenever the override is active.
-  /// Only the sandbox-key check is waived; every other identity trust
-  /// requirement still fails closed.
-  ALLOW_SANDBOX_PERSONA: process.env.ALLOW_SANDBOX_PERSONA === "true",
-  /// Shared secret for validating incoming webhook HMAC signatures
-  /// (`Persona-Signature: t=<ts>,v1=<hex>` header). Rotate per webhook in the
-  /// dashboard — different from `PERSONA_API_KEY`.
-  PERSONA_WEBHOOK_SECRET: process.env.PERSONA_WEBHOOK_SECRET ?? "",
-  /// Base URL of the Persona hosted flow. Override only if Persona migrates
-  /// their user-facing domain.
-  PERSONA_HOSTED_URL_BASE: process.env.PERSONA_HOSTED_URL_BASE ?? "https://withpersona.com/verify",
 
   // ── AWS Rekognition Face Liveness (identity provider) ────────
   /// Master switch for the Face Liveness step — the provider that captures the
@@ -557,7 +522,7 @@ export const env = {
   REFERRAL_LADDER: parseReferralLadder(process.env.REFERRAL_LADDER),
   /// Anti-abuse: max referral reward events credited to one referrer per rolling
   /// 24h. Invited friends beyond this are still counted but reward is deferred/
-  /// skipped (matters mostly while Persona is sandbox). Default 3.
+  /// skipped. Default 3.
   REFERRAL_DAILY_REWARD_CAP: Math.max(
     0,
     Number(process.env.REFERRAL_DAILY_REWARD_CAP ?? "3"),
@@ -646,12 +611,10 @@ export interface IdentityTrustConfiguration {
   OTP_LOG_TO_CONSOLE: boolean;
   DEV_OTP_BYPASS_TELEGRAM_IDS: ReadonlySet<bigint>;
   MANDATORY_VERIFICATION_ENABLED: boolean;
-  ENABLE_PERSONA_VERIFICATION: boolean;
-  PERSONA_TEMPLATE_ID: string;
-  PERSONA_ENVIRONMENT_ID: string;
-  PERSONA_API_KEY: string;
-  PERSONA_WEBHOOK_SECRET: string;
-  ALLOW_SANDBOX_PERSONA: boolean;
+  FACE_LIVENESS_ENABLED: boolean;
+  LIVENESS_STS_ROLE_ARN: string;
+  AWS_ACCESS_KEY_ID: string;
+  AWS_SECRET_ACCESS_KEY: string;
   FACE_MATCH_PROVIDER: "rekognition" | "disabled";
   PROFILE_MEDIA_VALIDATION_ENABLED: boolean;
 }
@@ -680,22 +643,20 @@ export function identityTrustConfigurationErrors(
   if (!config.MANDATORY_VERIFICATION_ENABLED) {
     errors.push("MANDATORY_VERIFICATION_ENABLED must be true");
   }
-  if (!config.ENABLE_PERSONA_VERIFICATION) {
-    errors.push("ENABLE_PERSONA_VERIFICATION must be true");
+  if (!config.FACE_LIVENESS_ENABLED) {
+    errors.push("FACE_LIVENESS_ENABLED must be true");
   }
+  // Face Liveness has no sandbox/production key split to police (that was the
+  // Persona-era `ALLOW_SANDBOX_PERSONA` escape hatch, now gone with the
+  // provider). What it does need is real credentials and the role whose
+  // short-lived grant lets a device stream its video — without either, the
+  // verification CTA would open a Mini App that cannot start a check.
   for (const [name, value] of [
-    ["PERSONA_TEMPLATE_ID", config.PERSONA_TEMPLATE_ID],
-    ["PERSONA_ENVIRONMENT_ID", config.PERSONA_ENVIRONMENT_ID],
-    ["PERSONA_API_KEY", config.PERSONA_API_KEY],
-    ["PERSONA_WEBHOOK_SECRET", config.PERSONA_WEBHOOK_SECRET],
+    ["AWS_ACCESS_KEY_ID", config.AWS_ACCESS_KEY_ID],
+    ["AWS_SECRET_ACCESS_KEY", config.AWS_SECRET_ACCESS_KEY],
+    ["LIVENESS_STS_ROLE_ARN", config.LIVENESS_STS_ROLE_ARN],
   ] as const) {
     if (!value) errors.push(`${name} must be configured`);
-  }
-  if (
-    /^persona_sand/i.test(config.PERSONA_API_KEY) &&
-    !config.ALLOW_SANDBOX_PERSONA
-  ) {
-    errors.push("PERSONA_API_KEY must be a production key, not persona_sand*");
   }
   if (config.FACE_MATCH_PROVIDER !== "rekognition") {
     errors.push("FACE_MATCH_PROVIDER must be rekognition");
@@ -714,19 +675,6 @@ export function assertIdentityTrustConfiguration(
   if (errors.length > 0) {
     throw new Error(
       `Unsafe identity verification configuration:\n- ${errors.join("\n- ")}`,
-    );
-  }
-  if (
-    runtime !== "test" &&
-    config.ALLOW_SANDBOX_PERSONA &&
-    /^persona_sand/i.test(config.PERSONA_API_KEY)
-  ) {
-    console.warn(
-      "⚠️  ALLOW_SANDBOX_PERSONA override active: Persona is running with a " +
-        "SANDBOX key. Identity verification is a TEST flow, not real KYC — " +
-        "every `verified` granted now has no identity guarantee and will " +
-        "persist after switching to a production key. Remove the override " +
-        "as soon as a live Persona key is configured.",
     );
   }
 }

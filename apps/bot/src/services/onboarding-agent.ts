@@ -1699,23 +1699,24 @@ async function execFinalizeOnboarding(
     }
   }
 
-  // Gate activation on Persona liveness verification (Phase 6.3). The
-  // master kill switch is `ENABLE_PERSONA_VERIFICATION`; the credential
-  // check is a defensive secondary gate so a half-configured deploy
-  // (flag on, creds missing) doesn't strand users at a broken CTA.
+  // Gate activation on liveness verification (Phase 6.3). The master kill
+  // switch is `FACE_LIVENESS_ENABLED`; the credential check is a defensive
+  // secondary gate so a half-configured deploy (flag on, no AWS creds or no
+  // STS role) doesn't strand users at a CTA that cannot start a check.
   // When the gate passes, the user stays in `onboarding` status with
-  // `onboardingStep: completed` until either the webhook flips them to
+  // `onboardingStep: completed` until the face-match pipeline flips them to
   // `active` (verified) or they tap "Skip" in `handleVerificationSkip`.
-  const personaEnabled = env.ENABLE_PERSONA_VERIFICATION
-    && Boolean(
-      env.PERSONA_TEMPLATE_ID && env.PERSONA_ENVIRONMENT_ID && env.PERSONA_WEBHOOK_SECRET,
+  const livenessEnabled =
+    env.FACE_LIVENESS_ENABLED &&
+    Boolean(
+      env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY && env.LIVENESS_STS_ROLE_ARN,
     );
 
   const finalized = await prisma.user.update({
     where: { telegramId },
     data: {
       onboardingStep: "completed",
-      ...(personaEnabled ? {} : { status: "active" }),
+      ...(livenessEnabled ? {} : { status: "active" }),
       ...reEngagementStopPatch,
     },
     select: { id: true, profile: { select: { profilerStartedAt: true } } },
@@ -1735,17 +1736,17 @@ async function execFinalizeOnboarding(
     });
   }
 
-  // Founder ops feed: when this finalize also activated the user (persona off),
+  // Founder ops feed: when this finalize also activated the user (liveness off),
   // DM the founder the new profile. Idempotent + status-gated inside the
-  // notifier, so it safely no-ops when persona keeps the user in `onboarding`.
+  // notifier, so it safely no-ops when liveness keeps the user in `onboarding`.
   void notifyFounderNewUser(finalized.id).catch(() => {});
 
   return JSON.stringify({
     success: true,
-    message: personaEnabled
-      ? "Onboarding data saved. User must complete Persona verification before matching."
+    message: livenessEnabled
+      ? "Onboarding data saved. User must complete liveness verification before matching."
       : "Onboarding complete. User is now active.",
-    verificationRequired: personaEnabled,
+    verificationRequired: livenessEnabled,
   });
 }
 

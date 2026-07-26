@@ -1,24 +1,29 @@
 /**
  * face-eval-user — DRY-RUN end-to-end check of one real user's verification.
  *
- * Reads the user from the (dev) DB, fetches the Persona selfie via the real
- * Persona REST API, fetches each profile photo (from Telegram by file_id, or
- * from Supabase by path), and runs AWS Rekognition CompareFaces on every
- * pair. Dumps all images to tmp/face-eval-user/<userId>/ so you can eyeball
- * what Persona actually returned.
+ * Reads the user from the (dev) DB, downloads the stored reference selfie from
+ * the selfies bucket, fetches each profile photo (from Telegram by file_id, or
+ * from Supabase by path), and runs AWS Rekognition CompareFaces on every pair.
+ * Dumps all images to tmp/face-eval-user/<userId>/ so you can eyeball exactly
+ * what the pipeline compared.
+ *
+ * Note the selfie comes from OUR storage, not the provider: an AWS Face
+ * Liveness session (and its reference image) expires 3 minutes after it is
+ * created, so a user whose selfie was scrubbed at 90 days simply has nothing
+ * left to evaluate here.
  *
  * Does NOT write to the DB and does NOT DM anyone — safe to re-run.
  *
  * Usage:
- *   pnpm face-eval-user --user=<id|email|telegramId> [--inquiry=<personaId>]
- *   pnpm face-eval-user --user=glebw2008@gmail.com --inquiry=inq_xxx
+ *   pnpm face-eval-user --user=<id|email|telegramId>
+ *   pnpm face-eval-user --user=glebw2008@gmail.com
  *   pnpm face-eval-user --help
  *
  * Env required (typically from .env.local for the dev bot):
  *   DATABASE_URL                  → dev Postgres on :5434
  *   BOT_TOKEN                     → @gennetytestbot token (for Telegram getFile)
- *   PERSONA_API_KEY               → matching env of the inquiry (sandbox vs prod)
  *   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+ *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  (the selfies bucket)
  *   FACE_MATCH_THRESHOLD_VERIFY   (optional, default 0.85)
  *   FACE_MATCH_THRESHOLD_REVIEW   (optional, default 0.75)
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  (only if photos are Supabase paths)
@@ -36,8 +41,9 @@ loadEnv({ path: join(repoRoot, ".env") });
 const { prisma } = await import("@gennety/db");
 const { Bot } = await import("grammy");
 const { compareFaces } = await import("../src/services/face-match.js");
-const { fetchInquirySelfie } = await import("../src/services/persona-api.js");
-const { downloadProfileImage } = await import("../src/services/storage.js");
+const { downloadProfileImage, downloadSelfie } = await import(
+  "../src/services/storage.js"
+);
 const { RekognitionClient } = await import("@aws-sdk/client-rekognition");
 
 const args = parseArgs(process.argv.slice(2));
@@ -47,7 +53,6 @@ if (args.help !== undefined || args.h !== undefined) {
 }
 
 const userArg = args.user;
-const inquiryArg = args.inquiry ?? null;
 const noDump = args["no-dump"] !== undefined;
 const thresholdVerify = Number(args.verify ?? process.env.FACE_MATCH_THRESHOLD_VERIFY ?? "0.85");
 const thresholdReview = Number(args.review ?? process.env.FACE_MATCH_THRESHOLD_REVIEW ?? "0.75");
@@ -59,7 +64,8 @@ if (!userArg) {
 
 requireEnv("DATABASE_URL");
 requireEnv("BOT_TOKEN");
-requireEnv("PERSONA_API_KEY");
+requireEnv("SUPABASE_URL");
+requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 requireEnv("AWS_ACCESS_KEY_ID");
 requireEnv("AWS_SECRET_ACCESS_KEY");
 
@@ -74,19 +80,7 @@ console.log(`User:           ${user.id}`);
 console.log(`Email:          ${user.email}`);
 console.log(`Telegram id:    ${user.telegramId}`);
 console.log(`Status:         ${user.status}  (verification=${user.verificationStatus})`);
-console.log(`Persona inq id: ${user.personaInquiryId ?? "(none in DB)"}`);
-
-const inquiryId = inquiryArg ?? user.personaInquiryId;
-if (!inquiryId) {
-  console.error(
-    "\n✖ No Persona inquiry id available — pass --inquiry=<id> manually.\n" +
-      "  (Locally the Persona webhook never reached the bot, so the DB row is empty;\n" +
-      "  copy the inquiry id from the Persona dashboard after finishing the flow.)",
-  );
-  await prisma.$disconnect();
-  process.exit(1);
-}
-console.log(`Inquiry used:   ${inquiryId}\n`);
+console.log(`Selfie path:    ${user.verifiedSelfiePath ?? "(none — never verified, or scrubbed)"}\n`);
 
 const photos = user.profile?.photos ?? [];
 if (photos.length === 0) {
@@ -98,25 +92,34 @@ console.log(`Profile photos: ${photos.length}`);
 photos.forEach((p, i) => console.log(`  [${i}] ${truncate(p, 60)}`));
 console.log("");
 
-// ── Step 1: fetch Persona selfie ───────────────────────────────────────────
-console.log("→ Fetching Persona selfie via REST API…");
-const selfieResult = await fetchInquirySelfie(inquiryId);
-if (!selfieResult.ok) {
-  console.error(`✖ fetchInquirySelfie failed: ${selfieResult.error}`);
+// ── Step 1: download the stored reference selfie ───────────────────────────
+console.log("→ Downloading the stored reference selfie…");
+if (!user.verifiedSelfiePath) {
+  console.error(
+    "✖ no verifiedSelfiePath on this user — either they never passed liveness, " +
+      "or the 90-day retention scrub already removed the reference.",
+  );
   await prisma.$disconnect();
   process.exit(1);
 }
-console.log(
-  `  ✓ got selfie (${selfieResult.selfie.buffer.length} bytes, ${selfieResult.selfie.mime}, verificationId=${selfieResult.selfie.verificationId})`,
-);
+const selfieBuffer = await downloadSelfie(user.verifiedSelfiePath);
+if (!selfieBuffer) {
+  console.error(`✖ could not download ${user.verifiedSelfiePath} from the selfies bucket`);
+  await prisma.$disconnect();
+  process.exit(1);
+}
+const selfieResult = {
+  selfie: { buffer: selfieBuffer, mime: "image/jpeg" },
+};
+console.log(`  ✓ got selfie (${selfieBuffer.length} bytes) from ${user.verifiedSelfiePath}`);
 
 // ── Step 2: dump everything for visual inspection ──────────────────────────
 const dumpDir = join(repoRoot, "tmp", "face-eval-user", user.id);
 if (!noDump) {
   mkdirSync(dumpDir, { recursive: true });
   const selfieExt = mimeToExt(selfieResult.selfie.mime);
-  writeFileSync(join(dumpDir, `persona-selfie.${selfieExt}`), selfieResult.selfie.buffer);
-  console.log(`  ✓ dumped selfie → ${dumpDir}/persona-selfie.${selfieExt}`);
+  writeFileSync(join(dumpDir, `reference-selfie.${selfieExt}`), selfieResult.selfie.buffer);
+  console.log(`  ✓ dumped selfie → ${dumpDir}/reference-selfie.${selfieExt}`);
 }
 
 // ── Step 3: fetch each profile photo (Telegram file_id OR Supabase path) ──
@@ -250,7 +253,7 @@ async function resolveUser(arg: string): Promise<{
   telegramId: bigint;
   status: string;
   verificationStatus: string;
-  personaInquiryId: string | null;
+  verifiedSelfiePath: string | null;
   profile: { photos: string[] } | null;
 } | null> {
   const select = {
@@ -259,7 +262,7 @@ async function resolveUser(arg: string): Promise<{
     telegramId: true,
     status: true,
     verificationStatus: true,
-    personaInquiryId: true,
+    verifiedSelfiePath: true,
     profile: { select: { photos: true } },
   } as const;
 
@@ -298,7 +301,6 @@ function printHelp(): void {
     pnpm face-eval-user --user=<id|email|telegramId> [options]
 
   Options:
-    --inquiry=<personaId>   override personaInquiryId (when DB doesn't have it)
     --verify=0.85           verify threshold
     --review=0.75           review threshold
     --no-dump               skip writing images to tmp/face-eval-user/
