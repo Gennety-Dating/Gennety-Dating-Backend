@@ -23,6 +23,7 @@ import {
   gateProfilePhoto,
 } from "../../services/face-match-gate.js";
 import { triggerVerificationRerun } from "../../services/verification-pipeline.js";
+import { buildVerificationKeyboard } from "../../services/verification-keyboard.js";
 import { showMainMenu } from "./main.js";
 import { showMyProfile } from "./my-profile.js";
 import {
@@ -965,7 +966,17 @@ async function flushPhotoBatch(batch: PhotoUploadBatch): Promise<void> {
   };
   const lang = session.language ?? batch.language;
 
+  // `reference_expired` is the one rejection that isn't about the photo it
+  // arrived with — the account's verification selfie was scrubbed at 90 days,
+  // so EVERY frame in the burst failed for the same account-level reason.
+  // Replying it onto each frame would read as "these photos are bad" and give
+  // the user nothing to act on, so it is hoisted out: one message, one Verify
+  // button, and the per-frame replies cover only genuine per-photo problems.
+  const expiredReference = batch.rejections.some(
+    (r) => r.reason === "reference_expired",
+  );
   for (const rejection of batch.rejections) {
+    if (rejection.reason === "reference_expired") continue;
     await batch.api
       .sendMessage(batch.chatId, photoValidationMessage(lang, rejection.reason), {
         parse_mode: "Markdown",
@@ -974,6 +985,9 @@ async function flushPhotoBatch(batch: PhotoUploadBatch): Promise<void> {
           : {}),
       })
       .catch(() => {});
+  }
+  if (expiredReference) {
+    await sendReferenceExpiredPrompt(batch.api, batch.chatId, lang);
   }
   if (batch.hadInfraError) {
     await batch.api.sendMessage(batch.chatId, t(lang, "photoVisionError")).catch(() => {});
@@ -1082,6 +1096,31 @@ async function handlePhotoStageVideo(
     await ctx.reply(videoSavedAck(lang));
   }
   await renderPhotoManager(ctx, { showAlbum: false });
+}
+
+/**
+ * Ask for one more liveness check because the reference selfie is gone.
+ *
+ * The copy ends on a colon and is useless without the button under it, so the
+ * two always travel together. Sent once per burst, never per photo.
+ */
+async function sendReferenceExpiredPrompt(
+  api: Api,
+  chatId: number,
+  language: Language,
+): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(chatId) },
+    select: { id: true },
+  });
+  const keyboard = user
+    ? await buildVerificationKeyboard(language, user.id, { withPhotoRedo: false })
+    : null;
+  await api
+    .sendMessage(chatId, t(language, "verifyReferenceExpired"), {
+      ...(keyboard ? { reply_markup: keyboard } : {}),
+    })
+    .catch(() => {});
 }
 
 function photoValidationMessage(
@@ -1235,9 +1274,15 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
   // The call resolves once the rerun is KICKED OFF (not once it finishes), so
   // awaiting it costs nothing and tells us whether a Persona selfie is on file.
   let rerunStarted = false;
+  let referenceExpired = false;
   try {
     const rerun = await triggerVerificationRerun(userId, ctx.api);
     rerunStarted = rerun?.kind === "started";
+    // The 90-day scrub already removed the selfie we would re-score against,
+    // and AWS cannot re-issue it. Nothing was lost — the rerun deliberately
+    // left the user's verified status alone — but they need one more check
+    // before the new photo set can be confirmed.
+    referenceExpired = rerun?.kind === "reference_expired";
   } catch (err) {
     console.error("[edit-profile] verification rerun failed:", err);
   }
@@ -1256,9 +1301,11 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
     // Came from a verification prompt: return there, not to the main menu
     // (which may well still be locked behind the gate).
     if (rerunStarted) {
-      // A Persona inquiry already exists, so the pipeline re-scores the new
-      // photos against the selfie it captured — no second liveness pass.
+      // A stored reference selfie exists, so the pipeline re-scores the new
+      // photos against it — no second liveness pass.
       await ctx.reply(t(lang, "verifyPhotosSavedRecheck"));
+    } else if (referenceExpired && ctx.chat) {
+      await sendReferenceExpiredPrompt(ctx.api, ctx.chat.id, lang);
     } else {
       await ctx.reply(t(lang, "verifyPhotosSavedNowVerify"));
       if (ctx.chat) {
@@ -1274,6 +1321,9 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
   }
 
   await ctx.reply(t(lang, "editProfilePhotosSaved"));
+  if (referenceExpired && ctx.chat) {
+    await sendReferenceExpiredPrompt(ctx.api, ctx.chat.id, lang);
+  }
   await showMainMenu(ctx);
 }
 

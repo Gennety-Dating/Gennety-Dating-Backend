@@ -47,7 +47,8 @@ const CREDENTIALS = {
 };
 const REFERENCE = Buffer.from([0xff, 0xd8, 0xff]);
 
-const api = { sendMessage: vi.fn().mockResolvedValue({}) } as never;
+const api = { sendMessage: vi.fn().mockResolvedValue({}) };
+const apiArg = api as unknown as Parameters<typeof completeLivenessCheck>[2];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -131,7 +132,7 @@ describe("beginLivenessCheck", () => {
 
 describe("completeLivenessCheck", () => {
   it("passes the reference bytes straight into the face-match pipeline", async () => {
-    const result = await completeLivenessCheck("user-1", SESSION_ID, api);
+    const result = await completeLivenessCheck("user-1", SESSION_ID, apiArg);
 
     expect(result).toEqual({ ok: true, outcome: "processing" });
     expect(runFaceMatchVerificationDefault).toHaveBeenCalledWith(
@@ -152,7 +153,7 @@ describe("completeLivenessCheck", () => {
         status: "FAILED",
       });
 
-      const result = await completeLivenessCheck("user-1", SESSION_ID, api);
+      const result = await completeLivenessCheck("user-1", SESSION_ID, apiArg);
 
       expect(result).toEqual({ ok: true, outcome: "retry" });
       expect(runFaceMatchVerificationDefault).not.toHaveBeenCalled();
@@ -175,7 +176,7 @@ describe("completeLivenessCheck", () => {
       status: "FAILED",
     });
 
-    const result = await completeLivenessCheck("user-1", SESSION_ID, api);
+    const result = await completeLivenessCheck("user-1", SESSION_ID, apiArg);
 
     expect(result).toEqual({ ok: true, outcome: "retry" });
     expect(api.sendMessage).not.toHaveBeenCalled();
@@ -184,7 +185,7 @@ describe("completeLivenessCheck", () => {
   it("surfaces a provider read failure instead of guessing", async () => {
     getLivenessResult.mockResolvedValueOnce({ ok: false, error: "api" });
 
-    const result = await completeLivenessCheck("user-1", SESSION_ID, api);
+    const result = await completeLivenessCheck("user-1", SESSION_ID, apiArg);
 
     expect(result).toEqual({ ok: false, error: "provider" });
     expect(runFaceMatchVerificationDefault).not.toHaveBeenCalled();
@@ -192,7 +193,7 @@ describe("completeLivenessCheck", () => {
 
   it("returns user_not_found for an unknown user", async () => {
     userFindUnique.mockResolvedValueOnce(null);
-    const result = await completeLivenessCheck("ghost", SESSION_ID, api);
+    const result = await completeLivenessCheck("ghost", SESSION_ID, apiArg);
     expect(result).toEqual({ ok: false, error: "user_not_found" });
   });
 });
