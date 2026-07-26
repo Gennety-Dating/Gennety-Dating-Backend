@@ -833,9 +833,16 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
   "card") with a single 🗑 delete button directly under it, followed by a
   persistent counter + actions panel (➕ add, ✅ Done — plus 🗑 Delete all in
   redo mode, §1.4). Deleting a card drops only that one message and updates
-  the panel's count in place; the panel is replaced rather than edited only
-  when new cards were just sent, since Telegram has no way to move a message
-  below newer ones. (Replaced 2026-07-26: the previous design put a numbered
+  the panel's count in place; the panel is replaced rather than edited
+  whenever new cards were just sent **or the panel carries a burst summary**,
+  since Telegram cannot move a message below newer ones and a summary the user
+  must read may not stay quietly above their own uploads and rejection replies.
+  Closing the manager (✅ Done, or reopening it) leaves the cards in the chat as
+  the reviewed gallery but **strips their delete buttons** — nothing tracks what
+  they point at once the session ends, and a button that does nothing is its own
+  bug. A card whose message can no longer be deleted (Telegram allows that for
+  48 h only) is instead captioned as deleted and loses its button.
+  (Replaced 2026-07-26: the previous design put a numbered
   delete button per photo under one shared album, which required counting
   positions in a Telegram-arranged grid — a wrong tap was easy — and re-sent
   the whole album on every single delete.) Uploads

@@ -310,6 +310,10 @@ const translations = {
     editProfilePhotosSaved: "Photos updated",
     photoManagerTitle: "Photos: {count}/{max} · minimum {min}",
     photoManagerCardDeleteBtn: "🗑 Delete this photo",
+    // Fallback caption when a card's own message can no longer be deleted
+    // (Telegram only lets a bot delete its own messages for 48 hours), so an
+    // abandoned-then-resumed manager can't leave a live-looking card behind.
+    photoManagerCardRemoved: "🗑 Photo deleted",
     photoManagerAddBtn: "➕ Add photo",
     photoManagerDoneBtn: "Done",
     photoManagerMinReached: "You need at least {min} photos. Add a new one first.",
@@ -1195,6 +1199,7 @@ const translations = {
     editProfilePhotosSaved: "Фото обновлены",
     photoManagerTitle: "Фото: {count}/{max} · минимум {min}",
     photoManagerCardDeleteBtn: "🗑 Удалить это фото",
+    photoManagerCardRemoved: "🗑 Фото удалено",
     photoManagerAddBtn: "➕ Добавить",
     photoManagerDoneBtn: "Готово",
     photoManagerMinReached: "Нужно минимум {min} фото. Сначала добавь новое.",
@@ -2067,6 +2072,7 @@ const translations = {
     editProfilePhotosSaved: "Фото оновлено",
     photoManagerTitle: "Фото: {count}/{max} · мінімум {min}",
     photoManagerCardDeleteBtn: "🗑 Видалити це фото",
+    photoManagerCardRemoved: "🗑 Фото видалено",
     photoManagerAddBtn: "➕ Додати",
     photoManagerDoneBtn: "Готово",
     photoManagerMinReached: "Потрібно щонайменше {min} фото. Спершу додай нове.",
@@ -2933,6 +2939,7 @@ const deTranslations: TranslationTable = {
   editProfilePhotosSaved: "Fotos aktualisiert",
   photoManagerTitle: "Fotos: {count}/{max} · mindestens {min}",
   photoManagerCardDeleteBtn: "🗑 Dieses Foto löschen",
+  photoManagerCardRemoved: "🗑 Foto gelöscht",
   photoManagerAddBtn: "➕ Hinzufügen",
   photoManagerDoneBtn: "Fertig",
   photoManagerMinReached: "Du brauchst mindestens {min} Fotos. Füge zuerst ein neues hinzu.",
@@ -3772,6 +3779,7 @@ const plTranslations: TranslationTable = {
   editProfilePhotosSaved: "Zdjęcia zaktualizowane",
   photoManagerTitle: "Zdjęcia: {count}/{max} · minimum {min}",
   photoManagerCardDeleteBtn: "🗑 Usuń to zdjęcie",
+  photoManagerCardRemoved: "🗑 Zdjęcie usunięte",
   photoManagerAddBtn: "➕ Dodaj",
   photoManagerDoneBtn: "Gotowe",
   photoManagerMinReached: "Potrzebujesz co najmniej {min} zdjęć. Najpierw dodaj nowe.",

@@ -228,6 +228,7 @@ function createMockCtx(overrides: {
       sendMediaGroup: vi.fn().mockResolvedValue([{ message_id: 78 }]),
       editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
       editMessageText: vi.fn().mockResolvedValue(undefined),
+      editMessageCaption: vi.fn().mockResolvedValue(undefined),
       deleteMessage: vi.fn().mockResolvedValue(undefined),
       sendVideoNote: vi.fn().mockResolvedValue(undefined),
       unpinAllChatMessages: vi.fn().mockResolvedValue(undefined),
@@ -951,6 +952,49 @@ describe("Menu — Edit Profile", () => {
     );
     expect(ctx.api.sendMessage).not.toHaveBeenCalled();
     expect(ctx.session.photoManagerMsgId).toBe(999);
+  });
+
+  it("falls back to a 'deleted' caption when the card message can't be deleted", async () => {
+    const photos = Array.from({ length: MAX_PHOTOS }, (_, i) => `p${i}`);
+    const cards = photos.map((ref, i) => ({ msgId: 100 + i, ref }));
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        pendingPhotos: [...photos],
+        pendingProfileMedia: photos.map((photo) => ({ type: "photo", photo })),
+        pendingPhotoScores: photos.map(() => 0.1),
+        pendingPhotoHashes: photos.map((_, i) => `h${i}`),
+        pendingPhotoUniqueIds: photos.map((_, i) => `u${i}`),
+        photoCards: [...cards],
+      },
+      callbackData: "menu:edit:photos:delcard",
+      callbackMessageId: 101,
+    });
+    // Telegram only lets a bot delete its own messages for 48h.
+    (ctx.api.deleteMessage as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("message can't be deleted"),
+    );
+    const remaining = photos.filter((_, i) => i !== 1);
+    photoConsensusMocks.removeProfilePhotoByRef.mockResolvedValue({
+      found: true,
+      photos: remaining,
+      profileMedia: remaining.map((photo) => ({ type: "photo", photo })),
+      uploadedPhotoHashes: remaining.map((_, i) => `h${i}`),
+      photoFaceScores: remaining.map(() => 0.1),
+    });
+
+    await handleEditPhotosDelete(ctx);
+
+    // The ghost card is marked deleted and loses its button (no reply_markup
+    // in the edit clears the keyboard) instead of staying live-looking.
+    expect(ctx.api.editMessageCaption).toHaveBeenCalledWith(12345, 101, {
+      caption: t("en", "photoManagerCardRemoved"),
+    });
+    // The photo itself is still gone from the profile.
+    expect(photoConsensusMocks.removeProfilePhotoByRef).toHaveBeenCalledWith(
+      "uuid-user-1",
+      "p1",
+    );
   });
 
   it("a stale tap on an already-removed card is a no-op", async () => {
@@ -1723,6 +1767,30 @@ describe("Menu — verification photo redo", () => {
     expect(ctx.reply).toHaveBeenCalledWith(t("en", "editProfilePhotosSaved"));
     expect(verificationCtaMocks.sendVerificationCTABare).not.toHaveBeenCalled();
   });
+
+  it("finishing strips the delete buttons off the cards it leaves behind", async () => {
+    const cards = ["p0", "p1", "p2", "p3"].map((ref, i) => ({ msgId: 100 + i, ref }));
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        pendingPhotos: ["p0", "p1", "p2", "p3"],
+        photoCards: [...cards],
+        photoManagerMsgId: 999,
+      },
+      callbackData: "menu:edit:photos:continue",
+    });
+
+    await handleEditPhotosUpload(ctx);
+
+    // Cards stay in the chat as the reviewed gallery, but nothing tracks what
+    // they point at any more — so their buttons must not survive.
+    for (const card of cards) {
+      expect(ctx.api.editMessageReplyMarkup).toHaveBeenCalledWith(12345, card.msgId);
+    }
+    expect(ctx.api.editMessageReplyMarkup).toHaveBeenCalledWith(12345, 999);
+    expect(ctx.session.photoCards).toEqual([]);
+    expect(ctx.session.photoManagerMsgId).toBeNull();
+  });
 });
 
 describe("Menu — photo upload burst coalescing", () => {
@@ -1784,6 +1852,51 @@ describe("Menu — photo upload burst coalescing", () => {
       );
       expect(withKeyboard).toHaveLength(1);
       expect(String(withKeyboard[0]![1])).toContain("4");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resends the panel for an all-rejected burst so the summary lands at the bottom", async () => {
+    vi.useFakeTimers();
+    try {
+      // Already-tracked card for the one existing photo, so reconciliation has
+      // nothing to send and cannot force the resend on its own.
+      const session: Partial<SessionData> = {
+        menuState: "edit_photos",
+        pendingPhotos: ["p0"],
+        pendingProfileMedia: [{ type: "photo", photo: "p0" }],
+        pendingPhotoUniqueIds: ["dup"],
+        pendingPhotoHashes: ["h0"],
+        pendingPhotoScores: [0.1],
+        photoCards: [{ msgId: 100, ref: "p0" }],
+        photoManagerMsgId: 999,
+      };
+      const ctx = createMockCtx({
+        session,
+        // Same file_unique_id as the one on file → rejected as an exact dupe.
+        message: {
+          photo: [{ file_id: "p_new", file_unique_id: "dup" }],
+          message_id: 400,
+        },
+      });
+      (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        key: "12345",
+        data: { ...DEFAULT_SESSION, ...session },
+      });
+
+      await handleEditPhotosUpload(ctx);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      const panelSends = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls.filter(
+        (c: unknown[]) => (c[2] as { reply_markup?: unknown })?.reply_markup,
+      );
+      // A fresh panel is sent below the rejection replies — never quietly
+      // edited into the old one, which by now has scrolled out of view.
+      expect(panelSends).toHaveLength(1);
+      expect(String(panelSends[0]![1])).toContain(t("en", "photoBatchNoneAdded"));
+      expect(ctx.api.editMessageText).not.toHaveBeenCalled();
+      expect(ctx.api.deleteMessage).toHaveBeenCalledWith(12345, 999);
     } finally {
       vi.useRealTimers();
     }
