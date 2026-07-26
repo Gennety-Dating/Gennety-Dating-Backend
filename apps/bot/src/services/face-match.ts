@@ -9,6 +9,10 @@ import {
   type DetectModerationLabelsCommandOutput,
 } from "@aws-sdk/client-rekognition";
 import { env } from "../config.js";
+import {
+  __resetRekognitionClientForTests,
+  getRekognitionClient,
+} from "./rekognition-client.js";
 import type {
   DetectedFace,
   FaceAttribute,
@@ -107,29 +111,12 @@ export interface RekognitionImageOptions {
   moderationMinConfidence?: number;
 }
 
-let cachedClient: RekognitionClient | null = null;
-
 /**
- * Lazily build (and cache) a Rekognition client. We don't construct one at
- * module load time because:
- *   1. Production deploys may not have AWS creds yet during a partial roll.
- *   2. Tests stub out the SDK entirely and never need a real client.
- *
- * Returns `null` when credentials are missing — caller treats that as
- * `not_configured` and falls back to `pending_review` upstream.
+ * The lazily-cached Rekognition client now lives in `rekognition-client.ts`
+ * — `services/face-liveness.ts` needs the exact same client, and two modules
+ * each holding their own socket pool / credential resolution is pure waste.
  */
-function getClient(): RekognitionClient | null {
-  if (cachedClient) return cachedClient;
-  if (!env.AWS_ACCESS_KEY_ID || !env.AWS_SECRET_ACCESS_KEY) return null;
-  cachedClient = new RekognitionClient({
-    region: env.AWS_REGION,
-    credentials: {
-      accessKeyId: env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-    },
-  });
-  return cachedClient;
-}
+const getClient = getRekognitionClient;
 
 /**
  * Compare two face images using AWS Rekognition CompareFaces.
@@ -427,8 +414,9 @@ function imageProviderError(error: unknown): ProviderError {
 /**
  * Reset the cached Rekognition client. Test-only — production code never
  * needs to invalidate the cache because the env values are read once at
- * boot.
+ * boot. Re-exported under the historical name so existing tests keep working
+ * after the client moved to `rekognition-client.ts`.
  */
 export function __resetClientForTests(): void {
-  cachedClient = null;
+  __resetRekognitionClientForTests();
 }

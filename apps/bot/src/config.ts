@@ -263,7 +263,31 @@ export const env = {
   /// their user-facing domain.
   PERSONA_HOSTED_URL_BASE: process.env.PERSONA_HOSTED_URL_BASE ?? "https://withpersona.com/verify",
 
-  // ── Face matching (Persona-selfie ↔ profile photos) ──────────
+  // ── AWS Rekognition Face Liveness (identity provider) ────────
+  /// Master switch for the Face Liveness step — the provider that captures the
+  /// reference selfie and proves a live human is in front of the camera.
+  /// Production-like processes fail closed unless this is true (see
+  /// `identityTrustConfigurationErrors`).
+  FACE_LIVENESS_ENABLED: process.env.FACE_LIVENESS_ENABLED === "true",
+  /// Minimum liveness confidence (0..1) for the check to count as passed. AWS
+  /// returns 0..100; we normalise on read, mirroring `face-match.ts`. Below
+  /// this the check is RETRYABLE (a new session), never `rejected` — a shaky
+  /// capture is not an impostor.
+  FACE_LIVENESS_MIN_CONFIDENCE: Number(
+    process.env.FACE_LIVENESS_MIN_CONFIDENCE ?? "0.8",
+  ),
+  /// IAM role the backend assumes to mint the short-lived credentials the
+  /// on-device Amplify component uses to sign its Rekognition stream. Scoped
+  /// to `rekognition:StartFaceLivenessSession` only — see deploy.md.
+  LIVENESS_STS_ROLE_ARN: process.env.LIVENESS_STS_ROLE_ARN ?? "",
+  /// Lifetime of those credentials. AWS floors AssumeRole at 900s, which is
+  /// also plenty: a liveness session itself expires after 3 minutes.
+  LIVENESS_CREDENTIALS_TTL_SECONDS: Math.max(
+    900,
+    Number(process.env.LIVENESS_CREDENTIALS_TTL_SECONDS ?? "900"),
+  ),
+
+  // ── Face matching (liveness selfie ↔ profile photos) ─────────
   /// Provider used by `services/face-match.ts`. `rekognition` calls AWS
   /// Rekognition CompareFaces. `disabled` short-circuits every call to
   /// `{ ok: true, similarity: 1, faceFound: true }` so the rest of the
@@ -272,7 +296,7 @@ export const env = {
     | "rekognition"
     | "disabled",
   /// Minimum similarity (0..1) for an automatic `verified` decision when
-  /// comparing the Persona selfie against a profile photo. Defaults to
+  /// comparing the verified liveness selfie against a profile photo. Defaults to
   /// 0.85 — AWS recommends ≥80 for security-grade applications; we lean
   /// slightly stricter because dating-profile mismatches have higher harm
   /// than the friction of a manual review.
@@ -319,9 +343,12 @@ export const env = {
   /// `eloSeededAt` stays null — no OpenAI call, no surprises.
   ELO_VISION_SEED_ENABLED: process.env.ELO_VISION_SEED_ENABLED === "true",
 
-  // ── AWS (Rekognition CompareFaces) ───────────────────────────
-  /// IAM user with `rekognition:CompareFaces` + `rekognition:DetectFaces`.
-  /// See AGENTS.md for the IAM policy template. Empty values disable the
+  // ── AWS (Rekognition: face match + Face Liveness) ────────────
+  /// IAM user with `rekognition:CompareFaces`, `DetectFaces`,
+  /// `DetectModerationLabels`, `CreateFaceLivenessSession`,
+  /// `GetFaceLivenessSessionResults`, plus `sts:AssumeRole` on
+  /// `LIVENESS_STS_ROLE_ARN`.
+  /// See deploy.md for the IAM policy template. Empty values disable the
   /// SDK client (provider falls through to `disabled` semantics even when
   /// `FACE_MATCH_PROVIDER=rekognition`).
   AWS_REGION: process.env.AWS_REGION ?? "eu-central-1",

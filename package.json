@@ -44,6 +44,7 @@
     "typecheck": "pnpm -r typecheck",
     "face-eval": "pnpm --filter @gennety/bot exec tsx scripts/face-eval.ts",
     "face-eval-user": "pnpm --filter @gennety/bot exec tsx scripts/face-eval-user.ts",
+    "probe-liveness": "pnpm --filter @gennety/bot exec tsx scripts/probe-face-liveness.ts",
     "render:video": "pnpm --filter @gennety/video render"
   },
   "engines": {
