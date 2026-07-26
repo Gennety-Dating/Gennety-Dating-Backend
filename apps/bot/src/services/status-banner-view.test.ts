@@ -74,7 +74,7 @@ describe("renderStatusBanner", () => {
   });
 
   it.each([
-    [new Date("2026-07-23T09:31:00.000Z"), "⏳ До дропа: 5ч 29мин"],
+    [new Date("2026-07-23T09:31:00.000Z"), "До дропа: 5ч 29мин"],
     [new Date("2026-07-23T14:42:00.000Z"), "✨ До дропа: 18мин"],
   ])("renders the short timer phase at %s", (now, expected) => {
     const view = renderStatusBanner({
