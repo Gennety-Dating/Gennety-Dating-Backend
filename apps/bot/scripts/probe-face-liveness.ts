@@ -17,7 +17,8 @@
  *   pnpm probe-liveness            # against whatever .env.local/.env resolve to
  *
  * Env required:
- *   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+ *   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+ *   FACE_LIVENESS_REGION (default eu-west-1 — NOT the same as AWS_REGION)
  *   LIVENESS_STS_ROLE_ARN
  */
 import { join, resolve } from "node:path";
@@ -47,8 +48,9 @@ function required(name: string, value: string): void {
 required("AWS_ACCESS_KEY_ID", env.AWS_ACCESS_KEY_ID);
 required("AWS_SECRET_ACCESS_KEY", env.AWS_SECRET_ACCESS_KEY);
 
-console.log(`region: ${env.AWS_REGION}`);
-console.log(`role:   ${env.LIVENESS_STS_ROLE_ARN || "(unset)"}`);
+console.log(`liveness region: ${env.FACE_LIVENESS_REGION}`);
+console.log(`face-match region: ${env.AWS_REGION}  (CompareFaces/moderation — unrelated)`);
+console.log(`role:            ${env.LIVENESS_STS_ROLE_ARN || "(unset)"}`);
 console.log("");
 
 // ── 1. CreateFaceLivenessSession ───────────────────────────────
@@ -56,10 +58,20 @@ const session = await createLivenessSession();
 if (!session.ok) {
   console.error(`✖ CreateFaceLivenessSession → ${session.error}`);
   if (session.error === "api") {
+    // Learned the hard way (2026-07-26): in a region that does not serve Face
+    // Liveness, Rekognition answers AccessDeniedException with an EMPTY message
+    // — indistinguishable from an IAM denial. Check the region first; it is the
+    // cheaper hypothesis to rule out.
     console.error(
-      "  Most likely the IAM user lacks rekognition:CreateFaceLivenessSession,",
+      `  Two candidates, region first:\n` +
+        `   1. FACE_LIVENESS_REGION=${env.FACE_LIVENESS_REGION} may not serve Face Liveness.\n` +
+        `      A region without it returns a MESSAGE-LESS AccessDeniedException that\n` +
+        `      looks exactly like an IAM problem. eu-west-1 is the only EU region that\n` +
+        `      works for this account; eu-central-1 does NOT.\n` +
+        `   2. The IAM user lacks rekognition:CreateFaceLivenessSession.\n` +
+        `  Step 2 below distinguishes them: if AssumeRole succeeds, the policy is\n` +
+        `  live and propagated, so the problem is the region.`,
     );
-    console.error("  or Face Liveness is unavailable in this region.");
   }
   process.exit(1);
 }

@@ -111,7 +111,10 @@ export async function beginLivenessCheck(
   return {
     ok: true,
     sessionId: session.sessionId,
-    region: env.AWS_REGION,
+    // Must be the region the session was created in — the detector opens its
+    // WebSocket against this value. Handing it AWS_REGION would fail every
+    // check, since liveness lives in a different region (see config).
+    region: env.FACE_LIVENESS_REGION,
     credentials: credentials.credentials,
     language: user.language ?? "en",
   };

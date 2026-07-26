@@ -33,6 +33,10 @@ import { getRekognitionClient } from "./rekognition-client.js";
  * and never `pending_review` (there is nothing for an admin to adjudicate on a
  * shaky camera capture).
  *
+ * Region: liveness runs in `FACE_LIVENESS_REGION` (eu-west-1), NOT the
+ * `AWS_REGION` the rest of Rekognition uses (eu-central-1 does not serve Face
+ * Liveness). See `rekognition-client.ts`.
+ *
  * Never throws — branch on the discriminated `ok` field.
  */
 
@@ -103,7 +107,7 @@ export interface LivenessOptions {
 export async function createLivenessSession(
   options: LivenessOptions = {},
 ): Promise<CreateLivenessSessionResult> {
-  const client = options.client ?? getRekognitionClient();
+  const client = options.client ?? getRekognitionClient(env.FACE_LIVENESS_REGION);
   if (!client) return { ok: false, error: "not_configured" };
 
   const controller = new AbortController();
@@ -145,7 +149,7 @@ export async function getLivenessResult(
   sessionId: string,
   options: LivenessOptions = {},
 ): Promise<LivenessResult> {
-  const client = options.client ?? getRekognitionClient();
+  const client = options.client ?? getRekognitionClient(env.FACE_LIVENESS_REGION);
   if (!client) return { ok: false, error: "not_configured" };
 
   const minConfidence = options.minConfidence ?? env.FACE_LIVENESS_MIN_CONFIDENCE;

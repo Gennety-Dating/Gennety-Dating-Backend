@@ -19,7 +19,7 @@
 > 3. **Dev E2E on `@gennetytestbot`** — the Telegram-WebView capture has NOT
 >    been proven yet. It is the one unvalidated assumption in the migration:
 >    Amplify's detector needs camera access, a WebSocket to
->    `streaming-rekognition.eu-central-1.amazonaws.com`, and a model fetch from
+>    `streaming-rekognition.eu-west-1.amazonaws.com`, and a model fetch from
 >    public CDNs, all inside Telegram's WebView. Run a full check on a real
 >    device against a tunnelled `WEBAPP_URL` before touching production.
 > 4. **Deploy** — Deploy Full Server Code (no `db:push` needed: the migration is
@@ -781,10 +781,25 @@ us-east-1 list price; eu-central-1 may differ slightly) plus the existing
 retry costs another $0.015. At 1,000 registrations/month that is ~$25 versus
 Persona's $250 floor.
 
-**Required AWS setup** (account `147010141827`, region `eu-central-1` — Face
-Liveness is available there; a `CreateFaceLivenessSession` probe returns
-`AccessDeniedException`, not `UnknownOperationException`, before the policy is
-applied). Two changes, both console-side:
+**⚠️ Region: Face Liveness runs in `eu-west-1`, not `eu-central-1`.**
+`FACE_LIVENESS_REGION` (default `eu-west-1`) is deliberately separate from
+`AWS_REGION`, which stays `eu-central-1` for `CompareFaces` / `DetectFaces` /
+moderation. Measured across every EU region on 2026-07-26, **`eu-west-1`
+(Ireland) is the only one that serves Face Liveness** for this account —
+`eu-central-1` and `eu-west-2` refuse it, and the rest have no Rekognition
+endpoint at all. This is also where our Supabase project lives, so the
+reference selfie never leaves that region.
+
+**The trap that cost us a debugging session:** a region that does not serve Face
+Liveness answers `CreateFaceLivenessSession` with an `AccessDeniedException`
+carrying an **empty message** — indistinguishable from an IAM denial, and
+nothing like the `UnknownOperationException` you would expect. If the probe
+fails, rule out the region before touching IAM: `sts:AssumeRole` lives in the
+same policy as the Rekognition permissions, so if step 2 of the probe succeeds
+the policy is live and the region is your problem.
+
+**Required AWS setup** (account `147010141827`; IAM is global, so no region
+applies to these two steps). Both console-side:
 
 1. Add to the `gennety-bot-rekognition` user policy:
    `rekognition:CreateFaceLivenessSession`,

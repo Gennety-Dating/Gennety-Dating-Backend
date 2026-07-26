@@ -13,7 +13,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const env = {
   FACE_LIVENESS_ENABLED: true,
   LIVENESS_STS_ROLE_ARN: "arn:aws:iam::147010141827:role/GennetyLivenessClient",
+  // Deliberately different values: liveness runs in its own region because
+  // eu-central-1 does not serve Face Liveness. See the region test below.
   AWS_REGION: "eu-central-1",
+  FACE_LIVENESS_REGION: "eu-west-1",
 };
 vi.mock("../config.js", () => ({ env }));
 
@@ -81,7 +84,7 @@ describe("beginLivenessCheck", () => {
     expect(result).toEqual({
       ok: true,
       sessionId: SESSION_ID,
-      region: "eu-central-1",
+      region: "eu-west-1",
       credentials: CREDENTIALS,
       language: "en",
     });
@@ -89,6 +92,20 @@ describe("beginLivenessCheck", () => {
       where: { id: "user-1" },
       data: { verificationStatus: "pending" },
     });
+  });
+
+  it("hands the client FACE_LIVENESS_REGION, never AWS_REGION", async () => {
+    // Regression guard for a real incident (2026-07-26). Face Liveness is not
+    // served in our AWS_REGION (eu-central-1) — and a region that lacks it
+    // answers with a MESSAGE-LESS AccessDeniedException, which reads exactly
+    // like an IAM denial and burned a debugging session. The detector opens its
+    // WebSocket against whatever region we return here, so returning the
+    // face-match region would fail every check in the field while every unit
+    // test still passed.
+    const result = await beginLivenessCheck("user-1");
+
+    expect(result).toMatchObject({ region: env.FACE_LIVENESS_REGION });
+    expect(result).not.toMatchObject({ region: env.AWS_REGION });
   });
 
   it("refuses when the feature flag is off, before touching AWS", async () => {

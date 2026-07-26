@@ -234,6 +234,15 @@ export const env = {
   /// Production-like processes fail closed unless this is true (see
   /// `identityTrustConfigurationErrors`).
   FACE_LIVENESS_ENABLED: process.env.FACE_LIVENESS_ENABLED === "true",
+  /// Region for Face Liveness ONLY — deliberately separate from `AWS_REGION`.
+  /// Face Liveness is not served in every Rekognition region: our
+  /// `AWS_REGION=eu-central-1` (Frankfurt) does NOT have it, and returns a
+  /// message-less `AccessDeniedException` that reads exactly like an IAM
+  /// problem. `eu-west-1` (Ireland) is the only EU region that serves it, and
+  /// also hosts our Supabase project — so the selfie stays in one EU region.
+  /// The on-device detector MUST stream to the same region the session was
+  /// created in, so this value is handed to the client verbatim.
+  FACE_LIVENESS_REGION: process.env.FACE_LIVENESS_REGION ?? "eu-west-1",
   /// Minimum liveness confidence (0..1) for the check to count as passed. AWS
   /// returns 0..100; we normalise on read, mirroring `face-match.ts`. Below
   /// this the check is RETRYABLE (a new session), never `rejected` — a shaky
