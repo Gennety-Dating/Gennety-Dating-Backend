@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   runFaceMatchVerification,
   type PersistOutcomeInput,
+  type PersistRetryableInput,
   type PipelineConfig,
   type PipelineDeps,
   type PipelineUserRow,
@@ -26,7 +27,8 @@ const CONFIG: PipelineConfig = {
 interface Harness {
   user: PipelineUserRow;
   persisted: PersistOutcomeInput[];
-  notifications: Array<{ telegramId: bigint; message: string }>;
+  retryPersisted: PersistRetryableInput[];
+  notifications: Array<{ telegramId: bigint; message: string; kind: string }>;
   activationSurfaces: Array<{ userId: string; telegramId: bigint }>;
   referralSettles: string[];
   deps: PipelineDeps;
@@ -71,7 +73,8 @@ function makeHarness(
   let compareIndex = 0;
 
   const persisted: PersistOutcomeInput[] = [];
-  const notifications: Array<{ telegramId: bigint; message: string }> = [];
+  const retryPersisted: PersistRetryableInput[] = [];
+  const notifications: Array<{ telegramId: bigint; message: string; kind: string }> = [];
   const activationSurfaces: Array<{ userId: string; telegramId: bigint }> = [];
   const referralSettles: string[] = [];
 
@@ -87,8 +90,8 @@ function makeHarness(
       if (!r) throw new Error("compareFaces called more times than expected");
       return r;
     }),
-    notify: vi.fn(async (telegramId: bigint, message: string) => {
-      notifications.push({ telegramId, message });
+    notify: vi.fn(async (telegramId: bigint, message: string, kind: string) => {
+      notifications.push({ telegramId, message, kind });
     }),
     surfaceVerifiedActivation: vi.fn(async (input) => {
       activationSurfaces.push(input);
@@ -101,12 +104,16 @@ function makeHarness(
       persistOutcome: vi.fn(async (input: PersistOutcomeInput) => {
         persisted.push(input);
       }),
+      persistRetryable: vi.fn(async (input: PersistRetryableInput) => {
+        retryPersisted.push(input);
+      }),
     },
   };
 
   return {
     user,
     persisted,
+    retryPersisted,
     notifications,
     activationSurfaces,
     referralSettles,
@@ -400,35 +407,76 @@ describe("runFaceMatchVerification — reference selfie source", () => {
     expect(h.persisted[0]!.verifiedSelfiePath).toBe("user-1/selfie-original.jpg");
   });
 
-  it("pending_review with a distinct reason when the reference is gone entirely", async () => {
+  it("retryable (never pending_review) when the reference is gone entirely", async () => {
     const h = makeHarness({ selfie: { ok: false, error: "reference_expired" } });
     const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome).toEqual({
-      kind: "pending_review",
+      kind: "retry_required",
       userId: USER_ID,
       reason: "reference_expired",
+      keptVerified: false,
     });
+    // The regression this guards: a `pending_review` here is a dead end —
+    // no button, and the re-engagement stall sweep skips that status — so a
+    // user routed there could never get out.
+    expect(h.persisted).toHaveLength(0);
+    expect(h.retryPersisted).toEqual([
+      { userId: USER_ID, verificationStatus: "pending", clearFaceMatchedAt: true },
+    ]);
+  });
+
+  it("nudges the user with the retry affordance so the gate is escapable", async () => {
+    const h = makeHarness({ selfie: { ok: false, error: "reference_expired" } });
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(h.notifications).toHaveLength(1);
+    expect(h.notifications[0]!.kind).toBe("retry");
+  });
+
+  it("does not demote an already-verified user when our storage blips", async () => {
+    const h = makeHarness({
+      user: { verificationStatus: "pending" }, // the rerun already flipped it
+      selfie: { ok: false, error: "download_failed" },
+    });
+
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG, {
+      previousVerificationStatus: "verified",
+    });
+
+    expect(outcome).toEqual({
+      kind: "retry_required",
+      userId: USER_ID,
+      reason: "selfie_fetch_failed",
+      keptVerified: true,
+    });
+    // Verified status restored → the user stays in the match pool, and they
+    // are not nagged about an outage that is ours, not theirs.
+    expect(h.retryPersisted[0]!.verificationStatus).toBe("verified");
+    expect(h.notifications).toHaveLength(0);
   });
 });
 
 describe("runFaceMatchVerification — infrastructure failures", () => {
-  it("pending_review when the stored selfie cannot be downloaded", async () => {
+  it("retryable when the stored selfie cannot be downloaded", async () => {
     const h = makeHarness({
       selfie: { ok: false, error: "download_failed" },
     });
     const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome).toEqual({
-      kind: "pending_review",
+      kind: "retry_required",
       userId: USER_ID,
       reason: "selfie_fetch_failed",
+      keptVerified: false,
     });
-    expect(h.persisted[0]).toMatchObject({
-      verificationStatus: "pending_review",
-      faceMatchScore: null,
-      verifiedSelfiePath: null,
+    expect(h.retryPersisted[0]).toMatchObject({
+      verificationStatus: "pending",
+      clearFaceMatchedAt: true,
     });
+    // Nothing was learned about the score or the reference, so nothing about
+    // them is overwritten.
+    expect(h.persisted).toHaveLength(0);
   });
 
   it("pending_review when the reference selfie has no source face (pipeline bug)", async () => {

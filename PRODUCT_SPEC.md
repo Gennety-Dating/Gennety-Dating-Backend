@@ -540,9 +540,24 @@ shaky camera capture).
    - `pending_review` — anything else: all-borderline, mixed pass +
      borderline under quorum, or zero detected-face photos
      (`no_detected_faces` reason).
-4. Any *infrastructure* failure (Rekognition / storage) routes the
-   user to `pending_review`, never `rejected` — we don't penalise users for
-   our outages.
+4. Any *infrastructure* failure routes the user to `pending_review`, never
+   `rejected` — we don't penalise users for our outages — **except when the
+   failure was getting the reference selfie at all**, which is retryable
+   instead (corrected 2026-07-26). The distinction is whether a verdict was
+   even possible: a Rekognition error or a photo that wouldn't download still
+   leaves per-photo evidence for an admin to look at, but with no reference
+   selfie nothing was compared, so there is nothing to adjudicate.
+   `pending_review` is a deliberate dead end for the user — no button, the
+   verification-stall re-engagement sweep skips it (§1.5), and the gate below
+   keeps the app locked — so a user routed there over our own storage blip or
+   an already-scrubbed reference was stuck permanently behind
+   "we're double-checking your photos", with nothing in the product able to
+   move them. Such a run now writes `pending` and DMs the ordinary
+   `verifyReminderNudge` **with the Verify button**, exactly like a shaky
+   liveness capture. One exception, mirroring rule 5: if the user was already
+   `verified` going into the run, that status is *restored* rather than
+   downgraded — our outage must never drop a verified user out of the match
+   pool — and they are not nudged at all.
 5. `selfie-retention` cron deletes `verifiedSelfiePath` 90 days after
    `verifiedAt` (GDPR Article 9). The user stays `verified`; only the
    reference image is scrubbed — and because AWS cannot re-issue it, that

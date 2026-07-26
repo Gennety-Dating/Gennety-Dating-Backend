@@ -16,7 +16,10 @@ import { pinStatusBanner } from "./status-banner.js";
 import { downloadProfileImage, uploadSelfie } from "./storage.js";
 import { notifyFounderNewUser } from "./founder-notify.js";
 import { settleReferralOnVerified } from "./referral-notify.js";
-import { terminalVerificationMessage } from "./verification-messages.js";
+import {
+  terminalVerificationMessage,
+  verificationRetryMessage,
+} from "./verification-messages.js";
 import { buildVerificationKeyboard } from "./verification-keyboard.js";
 
 /**
@@ -51,10 +54,17 @@ import { buildVerificationKeyboard } from "./verification-keyboard.js";
  * face below `THRESHOLD_REVIEW` still hard-fails, so a fake-photo attack
  * cannot hide behind a quorum of legitimate shots.
  *
- * Any *infrastructure* failure (storage down, Rekognition error, photo
- * download failure) routes the user to `pending_review` rather than
- * `rejected` — we don't penalise users for our own outages. Admin sees the
- * row in the dashboard and either reruns the pipeline or approves manually.
+ * Infrastructure failures never come out as `rejected` — we don't penalise
+ * users for our own outages — but they split by whether a verdict was even
+ * possible:
+ *   - A failure *while scoring* (Rekognition error, photo download failure)
+ *     still produced per-photo evidence, so it goes to `pending_review` for an
+ *     admin to look at.
+ *   - A failure to get the **reference selfie at all** produces no evidence
+ *     and no verdict, so it is `retry_required` (see `RetryReason`). It used
+ *     to be `pending_review` too, which stranded users: that status has no
+ *     button, the re-engagement stall sweep skips it, and the app gate keeps
+ *     them locked — so nothing in the product could ever move them.
  *
  * The pipeline is deliberately separated from the verification routes so:
  *   1. The route can fire-and-forget (it answers the client before
@@ -70,10 +80,6 @@ import { buildVerificationKeyboard } from "./verification-keyboard.js";
 
 export type PendingReviewReason =
   | "borderline_score"
-  | "selfie_fetch_failed"
-  /** No reference selfie at all (90-day scrub already ran). Normally caught
-   *  before the pipeline starts — see `triggerVerificationRerun`. */
-  | "reference_expired"
   | "no_source_face"
   | "no_profile_photos"
   | "no_detected_faces"
@@ -81,6 +87,27 @@ export type PendingReviewReason =
   | "photo_download_failed"
   | "face_match_disabled"
   | "photos_changed_during_run";
+
+/**
+ * Why the run could not reach a verdict at all, because the **reference
+ * selfie** — the thing every photo is compared against — was unavailable.
+ *
+ * Deliberately NOT `PendingReviewReason`. `pending_review` means "an admin
+ * adjudicates a borderline score", and it is a dead end for the user by
+ * design: no button, no retry, and `re-engagement.ts` skips it. Routing our
+ * own storage/retention failure there stranded users behind a card that only
+ * repeated "we're double-checking your photos" forever, with nothing in the
+ * product able to move them. A missing reference is not a verdict about the
+ * user — it is retryable, exactly like a shaky liveness capture
+ * (PRODUCT_SPEC §1.4).
+ */
+export type RetryReason =
+  /** Storage had the object but it didn't come back. Transient, our side. */
+  | "selfie_fetch_failed"
+  /** No reference selfie at all (90-day GDPR scrub ran, or one was never
+   *  stored). AWS cannot re-issue it — a liveness session dies after 3
+   *  minutes — so the only way forward is one more liveness check. */
+  | "reference_expired";
 
 /**
  * `score` is the **representative** face-match score (0..1) that drove the
@@ -101,9 +128,26 @@ export type VerificationOutcome =
       score?: number;
       scores?: number[];
     }
-  | { kind: "rejected"; userId: string; score: number; scores: number[] };
+  | { kind: "rejected"; userId: string; score: number; scores: number[] }
+  | {
+      kind: "retry_required";
+      userId: string;
+      reason: RetryReason;
+      /**
+       * True when the user was already `verified` going into this run and we
+       * left them that way. Our own outage must never demote someone out of
+       * the match pool — see the branch that raises this outcome.
+       */
+      keptVerified: boolean;
+    };
 
 export type TerminalVerificationStatus = "verified" | "pending_review" | "rejected";
+
+/**
+ * What `persistRetryable` writes: either the user's pre-run status restored
+ * (`verified`) or the retryable gate state they can act on.
+ */
+export type RetryableVerificationStatus = "verified" | "pending";
 
 /**
  * Injectable dependencies — production wires them up to the real services
@@ -132,12 +176,13 @@ export interface PipelineDeps {
    * DM the user with the outcome. No-op when telegramId ≤ 0 (mobile-only user).
    * `message` is already localized to the user's language; `kind` is passed so
    * the production wiring can attach the right affordances without re-deriving
-   * them from the copy (a `rejected` DM carries the retry / re-upload buttons).
+   * them from the copy (a `rejected` or `retry` DM carries the verify /
+   * re-upload buttons).
    */
   notify: (
     telegramId: bigint,
     message: string,
-    kind: TerminalVerificationStatus,
+    kind: TerminalVerificationStatus | "retry",
   ) => Promise<void>;
   /**
    * Surface the post-verification Telegram app shell after a green face-match:
@@ -188,7 +233,32 @@ export interface PipelineDeps {
   db: {
     findUser: (userId: string) => Promise<PipelineUserRow | null>;
     persistOutcome: (input: PersistOutcomeInput) => Promise<void>;
+    /**
+     * Write the outcome of a run that never reached a verdict because the
+     * reference selfie was unavailable. Deliberately narrower than
+     * `persistOutcome`: it touches `verificationStatus` and the idempotency
+     * marker only, and never writes `faceMatchScore`, `verifiedSelfiePath`, or
+     * per-photo scores — there is nothing new to say about any of them.
+     */
+    persistRetryable: (input: PersistRetryableInput) => Promise<void>;
   };
+}
+
+export interface PersistRetryableInput {
+  userId: string;
+  /**
+   * `verified` restores a user our outage would otherwise have demoted;
+   * `pending` is the retryable gate state, which the verification card and the
+   * re-engagement stall sweep both know how to act on.
+   */
+  verificationStatus: RetryableVerificationStatus;
+  /**
+   * Always cleared. The spent session produced no usable reference, so the
+   * `(personaInquiryId, faceMatchedAt)` idempotency guard must not treat this
+   * run as a completed decision — otherwise a retry with the same session id
+   * silently no-ops.
+   */
+  clearFaceMatchedAt: true;
 }
 
 export interface PipelineUserRow {
@@ -338,27 +408,43 @@ export async function runFaceMatchVerification(
   // stored copy on a rerun — see `identity-selfie.ts`).
   const selfieResult = await deps.fetchReferenceSelfie();
   if (!selfieResult.ok) {
+    // No reference selfie → no verdict is possible. This is OUR failure
+    // (storage blip, or the retention scrub already ran), never a statement
+    // about the user, so it must not land in `pending_review`: that state is
+    // for an admin to adjudicate a borderline score, it carries no button, and
+    // the re-engagement stall sweep skips it — a user routed there is stuck
+    // forever behind "we're double-checking your photos" with nothing in the
+    // product able to move them. Retryable instead (PRODUCT_SPEC §1.4).
     console.error(`${LOG_PREFIX} reference selfie unavailable`, {
       userId,
       sessionId,
       error: selfieResult.error,
     });
-    const reason: PendingReviewReason =
+    const reason: RetryReason =
       selfieResult.error === "reference_expired"
         ? "reference_expired"
         : "selfie_fetch_failed";
-    await deps.db.persistOutcome({
+
+    // `triggerVerificationRerun` flips the row to `pending` BEFORE launching
+    // us, so the row's own status no longer tells us what the user was — hence
+    // the pre-run status carried in options. A verified user whose photo edit
+    // happened to race our storage must stay verified and stay in the match
+    // pool; only someone who was never verified gets moved to the gate.
+    const statusBeforeRun = options.previousVerificationStatus ?? user.verificationStatus;
+    const keptVerified = statusBeforeRun === "verified";
+    await deps.db.persistRetryable({
       userId,
-      sessionId,
-      verificationStatus: "pending_review",
-      faceMatchScore: null,
-      photoFaceScores: [],
-      photosSnapshot,
-      verifiedSelfiePath: null,
-      shouldActivate: false,
+      verificationStatus: keptVerified ? "verified" : "pending",
+      clearFaceMatchedAt: true,
     });
-    await sendOutcomeMessage(deps, user.telegramId, "pending_review", user.language);
-    return { kind: "pending_review", userId, reason };
+    // Nudge only the user who actually has something to do. Telling a verified
+    // user to re-verify because our bucket hiccuped would be noise; when their
+    // reference is genuinely gone, the photo-edit handler already asks them
+    // once per upload burst via `triggerVerificationRerun`'s pre-check.
+    if (!keptVerified) {
+      await sendRetryMessage(deps, user.telegramId, user.language);
+    }
+    return { kind: "retry_required", userId, reason, keptVerified };
   }
 
   const {
@@ -699,6 +785,25 @@ async function sendOutcomeMessage(
   }
 }
 
+/**
+ * DM the "run the check" nudge for a run that could not reach a verdict. Same
+ * copy and same affordances as the ordinary verification reminder — from the
+ * user's side nothing happened yet, and the one thing that moves them forward
+ * is starting a fresh liveness check.
+ */
+async function sendRetryMessage(
+  deps: Pick<PipelineDeps, "notify">,
+  telegramId: bigint,
+  language: Language | null,
+): Promise<void> {
+  if (telegramId <= 0n) return; // mobile-only user — no Telegram chat to DM
+  try {
+    await deps.notify(telegramId, verificationRetryMessage(language ?? "en"), "retry");
+  } catch (err) {
+    console.warn(`${LOG_PREFIX} retry DM failed`, { telegramId: String(telegramId), err });
+  }
+}
+
 async function surfaceVerifiedActivation(
   deps: Pick<PipelineDeps, "surfaceVerifiedActivation">,
   input: { userId: string; telegramId: bigint },
@@ -808,12 +913,14 @@ export async function runFaceMatchVerificationDefault(
           }
         : {}),
       notify: async (telegramId, message, kind) => {
-        // A rejection is the one outcome the user can act on, so it carries the
-        // two recoveries inline instead of sending them hunting through menus:
-        // swap the photos (the pipeline then re-scores them against the selfie
-        // already on file) or re-run the liveness check.
+        // `rejected` and `retry` are the outcomes the user can act on, so they
+        // carry the recoveries inline instead of sending them hunting through
+        // menus: swap the photos (the pipeline then re-scores them against the
+        // selfie already on file) or re-run the liveness check. A `retry` DM
+        // without the button would be the same dead end this branch exists to
+        // remove — the verification gate is the only thing the user can reach.
         const keyboard =
-          kind === "rejected"
+          kind === "rejected" || kind === "retry"
             ? await buildVerificationKeyboard(
                 (await prisma.user.findUnique({
                   where: { id: userId },
@@ -848,6 +955,22 @@ export async function runFaceMatchVerificationDefault(
               personaInquiryId: true,
               faceMatchedAt: true,
               profile: { select: { photos: true, eloSeededAt: true } },
+            },
+          });
+        },
+        persistRetryable: async (input) => {
+          // Narrow on purpose: status + idempotency marker only. `verifiedAt`,
+          // `faceMatchScore`, `verifiedSelfiePath` and the per-photo scores all
+          // keep whatever they held — this run learned nothing about them.
+          // Clearing `faceMatchedAt` is what makes the state actually
+          // retryable: the guard at the top of the pipeline keys on
+          // (personaInquiryId, faceMatchedAt), so leaving it stamped would make
+          // the next attempt on the same session a silent no-op.
+          await prisma.user.update({
+            where: { id: input.userId },
+            data: {
+              verificationStatus: input.verificationStatus,
+              faceMatchedAt: null,
             },
           });
         },

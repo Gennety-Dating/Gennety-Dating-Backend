@@ -14,3 +14,15 @@ export function terminalVerificationMessage(
       return t(language, "verifyOutcomeRejected");
   }
 }
+
+/**
+ * Copy for a run that could not reach a verdict because the reference selfie
+ * was unavailable (PRODUCT_SPEC §1.4 — retryable, never `pending_review`).
+ *
+ * Reuses the ordinary reminder rather than inventing a fifth outcome string:
+ * nothing about the user's own state changed, and the action is identical —
+ * start the check. Also keeps the five-language copy in one place.
+ */
+export function verificationRetryMessage(language: Language): string {
+  return t(language, "verifyReminderNudge");
+}
