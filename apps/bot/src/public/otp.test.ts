@@ -83,12 +83,13 @@ describe("OTP challenge state", () => {
     ).resolves.toMatchObject({ status: "exhausted", attemptsRemaining: 0 });
   });
 
-  it("rolls back the challenge transaction when email delivery fails", async () => {
+  it("deletes the challenge when email delivery fails, so a retry is not blocked", async () => {
     emailOtpFindFirst.mockResolvedValue(null);
     emailOtpCreate.mockResolvedValue({
       id: "otp-1",
       createdAt: new Date(),
     });
+    emailOtpDelete.mockResolvedValue({});
     const send = vi.fn().mockRejectedValue(new Error("provider unavailable"));
 
     await expect(createAndSendOtp("alice@stanford.edu", send)).rejects.toThrow(
@@ -98,6 +99,30 @@ describe("OTP challenge state", () => {
       "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
       "alice@stanford.edu",
     );
+    // Delivery now happens after the commit (so the pooled connection is not
+    // held across a 15s HTTP call), so an un-delivered challenge is cleaned up
+    // by a compensating delete instead of a transaction rollback.
+    expect(emailOtpDelete).toHaveBeenCalledWith({ where: { id: "otp-1" } });
+  });
+
+  it("commits the challenge BEFORE sending, so no DB connection is held across the send", async () => {
+    emailOtpFindFirst.mockResolvedValue(null);
+    emailOtpCreate.mockResolvedValue({ id: "otp-2", createdAt: new Date() });
+    const order: string[] = [];
+    prismaMock.$transaction.mockImplementationOnce(
+      async (callback: (tx: unknown) => unknown) => {
+        const out = await callback(prismaMock);
+        order.push("commit");
+        return out;
+      },
+    );
+    const send = vi.fn().mockImplementation(async () => {
+      order.push("send");
+    });
+
+    await createAndSendOtp("alice@stanford.edu", send);
+
+    expect(order).toEqual(["commit", "send"]);
   });
 
   it("returns the existing challenge without sending during the cooldown", async () => {

@@ -27,10 +27,19 @@ export async function createAndSendOtp(
   // The cooldown check and challenge creation must be serialized per email.
   // A plain find-then-create lets simultaneous requests all send a code. A
   // transaction-scoped PostgreSQL advisory lock works across every Node/PM2
-  // process without a schema change. Delivery remains inside the bounded
-  // transaction (the email client has a 15s timeout), so a failed send rolls
-  // the challenge back and a waiting retry can safely create the next one.
-  return prisma.$transaction(
+  // process without a schema change.
+  //
+  // Delivery deliberately happens OUTSIDE this transaction. It used to be
+  // inside it, which meant every OTP request held a pooled DB connection AND
+  // the advisory lock for the duration of an outbound HTTP call — up to the
+  // email client's 15s timeout. Prisma's default pool on the production droplet
+  // is a handful of connections, so a slow email provider (or simply enough
+  // concurrent signups from distinct emails, which the per-email rate limiter
+  // does not bound) starved the pool and stalled the bot, both APIs, and every
+  // cron worker. The anti-double-send property comes from the lock plus the
+  // persisted row, not from holding the connection across the network call, so
+  // nothing is lost by committing first and sending after.
+  const created = await prisma.$transaction(
     async (tx) => {
       // $executeRawUnsafe, not $queryRawUnsafe: pg_advisory_xact_lock returns
       // `void`, which Prisma 6.19+ refuses to deserialize as a result column
@@ -52,13 +61,17 @@ export async function createAndSendOtp(
         existing.attempts < OTP_MAX_ATTEMPTS &&
         now.getTime() - existing.createdAt.getTime() < OTP_RESEND_COOLDOWN_MS
       ) {
+        // Still inside the cooldown — an earlier code is live, nothing to send.
         return {
-          status: "pending" as const,
-          expiresAt: existing.expiresAt,
-          resendAvailableAt: new Date(
-            existing.createdAt.getTime() + OTP_RESEND_COOLDOWN_MS,
-          ),
-          attemptsRemaining: Math.max(0, OTP_MAX_ATTEMPTS - existing.attempts),
+          pending: null,
+          state: {
+            status: "pending" as const,
+            expiresAt: existing.expiresAt,
+            resendAvailableAt: new Date(
+              existing.createdAt.getTime() + OTP_RESEND_COOLDOWN_MS,
+            ),
+            attemptsRemaining: Math.max(0, OTP_MAX_ATTEMPTS - existing.attempts),
+          },
         };
       }
 
@@ -68,18 +81,37 @@ export async function createAndSendOtp(
       const challenge = await tx.emailOtp.create({
         data: { email: normalisedEmail, codeHash, expiresAt },
       });
-      await send(email, code);
       return {
-        status: "pending" as const,
-        expiresAt,
-        resendAvailableAt: new Date(
-          challenge.createdAt.getTime() + OTP_RESEND_COOLDOWN_MS,
-        ),
-        attemptsRemaining: OTP_MAX_ATTEMPTS,
+        pending: { id: challenge.id, code },
+        state: {
+          status: "pending" as const,
+          expiresAt,
+          resendAvailableAt: new Date(
+            challenge.createdAt.getTime() + OTP_RESEND_COOLDOWN_MS,
+          ),
+          attemptsRemaining: OTP_MAX_ATTEMPTS,
+        },
       };
     },
     { timeout: 20_000 },
   );
+
+  if (!created.pending) return created.state;
+
+  // Send after the commit. On failure, delete the row we just wrote so the
+  // caller's retry is not blocked by its own un-delivered challenge — the same
+  // net effect the old in-transaction rollback had, without holding a
+  // connection across the network call.
+  try {
+    await send(email, created.pending.code);
+  } catch (err) {
+    await prisma.emailOtp
+      .delete({ where: { id: created.pending.id } })
+      .catch(() => {});
+    throw err;
+  }
+
+  return created.state;
 }
 
 export async function getOtpChallengeState(

@@ -23,6 +23,19 @@ interface Attribution {
 
 const store = new Map<string, Attribution>();
 
+/**
+ * Hard ceiling on live entries. `GET /v1/promo/:code` is public and pre-auth,
+ * and the fingerprint includes the fully attacker-controlled `User-Agent`, so
+ * distinct entries are free to manufacture. A Map with no ceiling grows for the
+ * whole TTL; combined with the old sweep-on-every-access (below) that was
+ * quadratic work on a public endpoint. Insertion order makes the oldest key the
+ * first one `keys()` yields, so eviction is O(1).
+ */
+const MAX_ENTRIES = 10_000;
+
+/** How often the background sweep runs. */
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+
 /** Coarse, privacy-light fingerprint: IP + UA family + language, hashed. */
 export function fingerprint(parts: {
   ip: string | undefined;
@@ -39,7 +52,7 @@ function ttlMs(): number {
   return env.PROMO_ATTRIBUTION_TTL_MIN * 60 * 1000;
 }
 
-/** Opportunistic sweep of expired rows (called on every write/read). */
+/** Drop every expired row. Called on a timer, never per request. */
 function sweep(now: number): void {
   if (store.size === 0) return;
   for (const [key, row] of store) {
@@ -47,10 +60,24 @@ function sweep(now: number): void {
   }
 }
 
+/**
+ * Background sweeper. `.unref()` so an idle timer never keeps the process
+ * alive — this store is best-effort and must not influence shutdown.
+ */
+const sweepTimer = setInterval(() => sweep(Date.now()), SWEEP_INTERVAL_MS);
+sweepTimer.unref?.();
+
 /** Record a landing-page touch: this fingerprint saw this promo code. */
 export function recordAttribution(fp: string, code: string): void {
   const now = Date.now();
-  sweep(now);
+  // Bound the map without scanning it: evict the oldest key(s) when full.
+  // Re-setting an existing key does not grow the map, so only genuinely new
+  // fingerprints can trip this.
+  while (!store.has(fp) && store.size >= MAX_ENTRIES) {
+    const oldest = store.keys().next();
+    if (oldest.done) break;
+    store.delete(oldest.value);
+  }
   store.set(fp, { code, expiresAt: now + ttlMs() });
 }
 
@@ -61,9 +88,13 @@ export function recordAttribution(fp: string, code: string): void {
  */
 export function matchAttribution(fp: string): string | null {
   const now = Date.now();
-  sweep(now);
   const row = store.get(fp);
-  if (!row || row.expiresAt <= now) return null;
+  // Expiry is enforced per-lookup rather than by the sweep, so a stale row that
+  // the timer has not reached yet can never be handed out.
+  if (!row || row.expiresAt <= now) {
+    if (row) store.delete(fp);
+    return null;
+  }
   store.delete(fp);
   return row.code;
 }

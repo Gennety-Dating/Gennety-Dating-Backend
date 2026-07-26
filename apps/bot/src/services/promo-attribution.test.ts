@@ -53,4 +53,21 @@ describe("record / match attribution", () => {
     vi.advanceTimersByTime(61 * 60 * 1000); // TTL is 60 min
     expect(matchAttribution(fp)).toBeNull();
   });
+
+  it("stays bounded under a flood of unique fingerprints", () => {
+    // `GET /v1/promo/:code` is public and pre-auth, and the fingerprint folds in
+    // the attacker-controlled User-Agent, so unique entries are free to
+    // manufacture. Without a ceiling the map grew for the whole TTL — and the
+    // old sweep-on-every-access made that quadratic work on a public endpoint.
+    for (let i = 0; i < 12_000; i++) recordAttribution(`flood-${i}`, "SUMMER3M");
+
+    // The oldest keys were evicted; the most recent ones still resolve.
+    expect(matchAttribution("flood-0")).toBeNull();
+    expect(matchAttribution("flood-11999")).toBe("SUMMER3M");
+  });
+
+  it("re-recording the same fingerprint does not consume capacity", () => {
+    for (let i = 0; i < 20_000; i++) recordAttribution("stable-fp", "SUMMER3M");
+    expect(matchAttribution("stable-fp")).toBe("SUMMER3M");
+  });
 });
