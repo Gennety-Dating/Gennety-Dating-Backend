@@ -177,14 +177,21 @@ describe("handleError", () => {
     const postEvent = vi.fn().mockResolvedValue({ ok: true });
 
     await mod.handleError(
-      { message: "camera permission denied" },
+      {
+        message: "RUNTIME_ERROR",
+        detail: "msg=boom || MediaRecorder=false | codecs=[NONE]",
+      },
       baseDeps(stub, { render, postEvent }),
     );
 
     expect(stub.notify).toHaveBeenCalledWith("error");
+    // `detail` carries the real exception plus the WebView's media
+    // capabilities. Without it a field failure reports only the coarse
+    // `RUNTIME_ERROR` label, which is not enough to diagnose anything.
     expect(postEvent).toHaveBeenCalledWith("tma-init-data", {
       kind: "error",
-      message: "camera permission denied",
+      message: "RUNTIME_ERROR",
+      detail: "msg=boom || MediaRecorder=false | codecs=[NONE]",
     });
     expect(render).toHaveBeenCalledWith("error");
     expect(stub.mainSetText).toHaveBeenCalledWith("Close");

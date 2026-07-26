@@ -585,7 +585,14 @@ export async function postVerificationEvent(
   payload: {
     kind: VerificationEventKind;
     sessionId?: string | null;
+    /** Amplify's `LivenessErrorState` — the coarse label. */
     message?: string | null;
+    /**
+     * The underlying exception plus a snapshot of the WebView's media
+     * capabilities. `RUNTIME_ERROR` on its own is undebuggable in the field;
+     * this is what makes a field report actionable.
+     */
+    detail?: string | null;
   },
 ): Promise<{ ok: boolean; outcome?: VerificationEventOutcome }> {
   const res = await fetch(`${apiBase}/v1/verification/mini-app/event`, {

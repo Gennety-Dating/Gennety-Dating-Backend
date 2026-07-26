@@ -84,7 +84,12 @@ verificationRouter.post(
   "/native-event",
   async (req: Request, res: Response): Promise<void> => {
     const body = req.body as
-      | { kind?: unknown; sessionId?: unknown; message?: unknown }
+      | {
+          kind?: unknown;
+          sessionId?: unknown;
+          message?: unknown;
+          detail?: unknown;
+        }
       | undefined;
     const kind = body?.kind;
     const sessionId =
@@ -92,6 +97,7 @@ verificationRouter.post(
         ? body.sessionId.slice(0, 64)
         : null;
     const message = typeof body?.message === "string" ? body.message.slice(0, 512) : null;
+    const detail = typeof body?.detail === "string" ? body.detail.slice(0, 2000) : null;
 
     if (kind !== "complete" && kind !== "cancel" && kind !== "error") {
       res.status(400).json({ error: "invalid-kind" });
@@ -101,7 +107,11 @@ verificationRouter.post(
     const userId = req.userId!;
 
     if (kind === "cancel" || kind === "error") {
-      console.warn(`[verification] native detector ${kind}`, { userId, message });
+      console.warn(`[verification] native detector ${kind}`, {
+        userId,
+        state: message,
+        detail,
+      });
       res.json({ ok: true });
       return;
     }

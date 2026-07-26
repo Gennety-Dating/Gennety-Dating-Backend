@@ -32,7 +32,43 @@ export interface LivenessDetectorOptions {
   onComplete: () => void;
   /** User backed out of the detector. */
   onCancel: () => void;
-  onError: (message: string) => void;
+  /**
+   * @param state  Amplify's coarse `LivenessErrorState` label.
+   * @param detail The underlying exception + a snapshot of what this WebView can
+   *               actually do. `RUNTIME_ERROR` alone is undebuggable in the
+   *               field, and Telegram's WebView is where these surface.
+   */
+  onError: (state: string, detail: string) => void;
+}
+
+/**
+ * What the embedded browser can actually do. The detector needs `getUserMedia`,
+ * a `MediaRecorder` that can encode one of a few specific codecs, and a secure
+ * context — and Telegram's WebView does not always provide all three. Capturing
+ * this alongside the exception turns an unreproducible field report into a
+ * one-line diagnosis.
+ */
+function describeMediaSupport(): string {
+  const parts: string[] = [];
+  const rec = (globalThis as { MediaRecorder?: { isTypeSupported?: (t: string) => boolean } })
+    .MediaRecorder;
+  parts.push(`secureContext=${globalThis.isSecureContext}`);
+  parts.push(`getUserMedia=${Boolean(navigator?.mediaDevices?.getUserMedia)}`);
+  parts.push(`MediaRecorder=${Boolean(rec)}`);
+  if (rec?.isTypeSupported) {
+    const codecs = [
+      "video/webm;codecs=vp8",
+      "video/webm;codecs=vp9",
+      "video/mp4;codecs=avc1.42E01E",
+      "video/mp4",
+    ];
+    parts.push(
+      `codecs=[${codecs.filter((c) => rec.isTypeSupported!(c)).join(", ") || "NONE"}]`,
+    );
+  }
+  parts.push(`wasm=${typeof WebAssembly !== "undefined"}`);
+  parts.push(`ua=${navigator?.userAgent ?? "?"}`);
+  return parts.join(" | ");
 }
 
 let root: Root | null = null;
@@ -58,9 +94,16 @@ export function mountLivenessDetector(
         }}
         onUserCancel={() => options.onCancel()}
         onError={(error) => {
-          options.onError(
-            typeof error?.state === "string" ? error.state : "liveness error",
-          );
+          const state = typeof error?.state === "string" ? error.state : "liveness error";
+          const inner = error?.error;
+          const detail = [
+            inner?.message ? `msg=${inner.message}` : "msg=(none)",
+            inner?.stack ? `stack=${inner.stack.split("\n").slice(0, 4).join(" ⏎ ")}` : "",
+            describeMediaSupport(),
+          ]
+            .filter(Boolean)
+            .join(" || ");
+          options.onError(state, detail);
         }}
         // The Get Ready screen is deliberately NOT disabled. It is tempting to
         // skip (the bot's CTA already explained the step), but it also carries

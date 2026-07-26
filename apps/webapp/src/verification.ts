@@ -107,7 +107,7 @@ export async function handleCancel(deps: HandlerDeps): Promise<void> {
 }
 
 export async function handleError(
-  event: { message?: string },
+  event: { message?: string; detail?: string },
   deps: HandlerDeps,
 ): Promise<void> {
   deps.app.HapticFeedback?.notificationOccurred?.("error");
@@ -115,6 +115,7 @@ export async function handleError(
     await deps.postEvent(deps.initData, {
       kind: "error",
       message: event.message ?? null,
+      detail: event.detail ?? null,
     });
   } catch (err) {
     console.warn("[verification] /event error POST failed", err);
@@ -359,8 +360,8 @@ async function bootstrap(
     onCancel: () => {
       void handleCancel(deps);
     },
-    onError: (message) => {
-      void handleError({ message }, deps);
+    onError: (message, detail) => {
+      void handleError({ message, detail }, deps);
     },
   });
 }

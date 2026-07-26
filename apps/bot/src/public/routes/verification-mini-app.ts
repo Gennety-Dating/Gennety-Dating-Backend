@@ -113,7 +113,12 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
       }
 
       const body = req.body as
-        | { kind?: unknown; sessionId?: unknown; message?: unknown }
+        | {
+            kind?: unknown;
+            sessionId?: unknown;
+            message?: unknown;
+            detail?: unknown;
+          }
         | undefined;
       const kind = body?.kind;
       const sessionId =
@@ -122,6 +127,11 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
           : null;
       const message =
         typeof body?.message === "string" ? body.message.slice(0, 512) : null;
+      // The underlying exception + the WebView's media capabilities. Roomy on
+      // purpose: `RUNTIME_ERROR` with no detail is undebuggable, and this is
+      // the only channel through which a field failure can explain itself.
+      const detail =
+        typeof body?.detail === "string" ? body.detail.slice(0, 2000) : null;
 
       if (kind !== "complete" && kind !== "cancel" && kind !== "error") {
         res.status(400).json({ error: "invalid-kind" });
@@ -148,7 +158,8 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
       if (kind === "error") {
         console.error("[verification-mini-app] detector error", {
           userId: user.id,
-          message,
+          state: message,
+          detail,
         });
         res.status(200).json({ ok: true });
         return;
