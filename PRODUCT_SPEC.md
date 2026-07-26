@@ -1,7 +1,8 @@
 # Gennety Dating — Product Specification
 
-> **Version:** 2.1 (rewritten 2026-05-04 to reflect the actual code; clarified
-> 2026-05-06 as product-invariants documentation; the
+> **Version:** 2.2 (rewritten 2026-05-04 to reflect the actual code; clarified
+> 2026-05-06 as product-invariants documentation; identity verification moved
+> from Persona to AWS Rekognition Face Liveness 2026-07-26 — §1.4; the
 > 1.x linear-FSM onboarding and visual-screening sections are obsolete.)
 > Tech stack and coding rules are in [AGENTS.md](AGENTS.md).
 > Database schema and system architecture are in [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -72,20 +73,22 @@ out of Telegram-only workers.
   return the long psychological analysis. Declined users continue without it;
   the backend generates a deterministic fallback summary + embedding from
   their ordinary onboarding answers.
-- **Identity-Verified, Mandatory at Launch** — Liveness (Persona) +
-  photo↔selfie face-match (AWS Rekognition) gate full match eligibility. With
+- **Identity-Verified, Mandatory at Launch** — Liveness (AWS Rekognition Face
+  Liveness, migrated off Persona 2026-07-26) + photo↔selfie face-match (AWS
+  Rekognition `CompareFaces`) gate full match eligibility. With
   `MANDATORY_VERIFICATION_ENABLED` on (Registration v2), the CTA has no Skip
   button and activation happens ONLY through the pipeline's `verified`
   outcome; legacy skip callbacks refuse politely and pre-flip skippers are
   grandfathered with their `UNVERIFIED_ELO_PENALTY`. A production-like process
-  refuses to boot when the flag is off, Persona uses a sandbox key, Rekognition
-  is disabled, or profile-media validation is disabled. One founder-approved
-  escape hatch exists: `ALLOW_SANDBOX_PERSONA=true` waives ONLY the
-  sandbox-key check (every other requirement still fails closed) and logs a
-  loud startup warning — verifications made under it are Persona test flows,
-  not real KYC, and the `verified` statuses they grant persist after the
-  override is removed. It exists for the deliberate early-launch window before
-  a live Persona key; remove it as soon as one is configured.
+  refuses to boot when liveness is disabled or unconfigured (no AWS
+  credentials, no `LIVENESS_STS_ROLE_ARN`), Rekognition is disabled, or
+  profile-media validation is disabled. **There is no sandbox escape hatch any
+  more:** the Persona era shipped `ALLOW_SANDBOX_PERSONA`, which let production
+  run test-only KYC, and it is gone with the provider — Face Liveness has no
+  sandbox/production key split, so a production-like config is either complete
+  or it does not start. (Historical note: `verified` statuses granted during
+  the sandbox window carry no real identity guarantee and were never
+  retroactively cleared.)
 - **Progressive Logistics** — The AI auto-proposes timeslots first; if both
   rounds fail it hands off to the Calendar Mini App; venue is chosen by an
   AI concierge from each user's free-text *vibe* + commute pin.
@@ -300,7 +303,7 @@ Hard rules enforced by the collector:
   Exact duplicates (same Telegram `file_unique_id` within a batch) and
   re-encoded / cropped copies (perceptual `differenceHash` within
   `DUPLICATE_HASH_DISTANCE` (8) of any accepted hash) are not counted and
-  receive an explicit explanation. **Identity is enforced only by Persona
+  receive an explicit explanation. **Identity is enforced only by liveness
   verification, not by an upload-time gate before it (simplified 2026-06-23).**
   Before the user has a `verifiedSelfiePath`, each static photo that passes
   safety, usable-face presence (Rekognition face confidence ≥ 0.55 and face
@@ -321,7 +324,7 @@ Hard rules enforced by the collector:
   threshold, leaving them with zero accepted photos and no way to finish
   onboarding. `pendingPhotoCandidates` / `referenceFaceEmbedding` columns are
   retained but no longer written by the upload flow.) Once the user is
-  Persona-verified, every uploaded or edited photo is compared against the
+  liveness-verified, every uploaded or edited photo is compared against the
   verified selfie — the real identity gate — and the verification pipeline
   re-runs on every photo edit (§1.4), so a wrong-person photo on a verified
   profile is caught there. Unsafe, no-face, duplicate, and technical-processing
@@ -348,7 +351,7 @@ Hard rules enforced by the collector:
   profile **video**. A Live Photo counts as one profile media item toward
   `MIN_PHOTOS` / `MAX_PHOTOS`, but its static frame is still stored in
   `Profile.photos[]` and must pass the same safety, usable-face, and duplicate
-  checks as a normal profile photo (identity only against the Persona selfie,
+  checks as a normal profile photo (identity only against the liveness selfie,
   once verified). Live Photos without a static frame are rejected.
   A **video** (`ProfileMedia` `{ type: "video" }`) remains display-only and is
   NOT added to `photos[]` or counted toward `MIN_PHOTOS`, preserving the
@@ -428,17 +431,19 @@ After `finalize_onboarding` the bot sends the **verification CTA**
 (`handlers/onboarding/verification.ts`):
 
 - **Verify now** — opens the **Verification Mini App**
-  (`apps/webapp/verification.html`) via `InlineKeyboardButton.web_app`,
-  so Persona's KYC flow runs inline inside the native Telegram WebView
-  (no redirect to `withpersona.com`, no in-app browser frame). The Mini
-  App mounts Persona Embedded SDK v5 against `/v1/verification/mini-app/init`
-  config; terminal SDK events POST to `/v1/verification/mini-app/event`
-  which triggers the existing pull-fallback pipeline. `verificationStatus
-  → pending` is written on `/init`. When `WEBAPP_URL` isn't a real HTTPS
-  host (dev without a tunnel) the bot silently falls back to the legacy
-  `InlineKeyboardButton.url` opening the hosted flow at
-  `buildPersonaHostedUrl(userId)`. Mobile (Expo) still uses the hosted
-  URL via `/v1/me/verification/url` — it isn't a Telegram client. Passing
+  (`apps/webapp/verification.html`) via `InlineKeyboardButton.web_app`, so the
+  liveness check runs inline inside the native Telegram WebView (no redirect
+  anywhere, no in-app browser frame). `/v1/verification/mini-app/init` mints an
+  AWS Face Liveness session plus short-lived, single-action AWS credentials and
+  writes `verificationStatus → pending`; the Mini App mounts Amplify's
+  `FaceLivenessDetectorCore`, which streams the selfie video **device → AWS**
+  (it never passes through our server). Terminal detector events POST to
+  `/v1/verification/mini-app/event`, and that request reads AWS's verdict
+  server-side. **There is no non-Mini-App fallback:** when `WEBAPP_URL` isn't a
+  real HTTPS host (dev without a tunnel) the CTA refuses to send rather than
+  render a dead button, because unlike Persona's hosted page the check only
+  exists inside our own page. The native iOS client runs the same two steps
+  through `/v1/me/verification/native-init` + `native-event`. Passing
   verification grants no free Date Ticket (the `verification_bonus` reward was
   retired); the CTA copy only frames the ELO cost of skipping. Historical
   `verification_bonus` `TicketLedger` rows granted before the change stay valid
@@ -454,10 +459,10 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   floor (the user is not in the matching pool, and at exactly 4 photos the
   ordinary per-photo delete is refused outright), and a finish path that returns
   to verification rather than the main menu. Finishing still requires
-  `MIN_PHOTOS`. Which follow-up lands depends on whether a Persona inquiry
-  already exists: with one (a `rejected` user), the pipeline re-scores the new
-  photos against the selfie already on file — **no second liveness pass**; with
-  none, the verification CTA follows. Telegram-only.
+  `MIN_PHOTOS`. Which follow-up lands depends on whether a **stored reference
+  selfie** exists: with one (a `rejected` user), the pipeline re-scores the new
+  photos against it — **no second liveness pass**; with none, the verification
+  CTA follows. Telegram-only.
 - **Skip for now** — *(retired production path — hidden when
   `MANDATORY_VERIFICATION_ENABLED` is on: the CTA then carries only the Verify
   button with the `verifyPitchMandatory` copy, and taps on pre-flip
@@ -476,19 +481,36 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   `unverified`. Telegram's native inline-button styles
   render the reconsider action as `success` (green) and the final skip action as
   `danger` (red), with emoji labels retained for older clients. Reversible by
-  later running Persona. The voice assets are
+  later passing the liveness check. The voice assets are
   bundled in the bot (`apps/bot/src/assets/verify-skip/`) and sent with an
   in-memory `file_id` cache; a missing asset or send failure degrades
   gracefully to a text message carrying the same fork.
 
-When Persona sends a trusted terminal webhook that maps to passed liveness
-(`inquiry.approved` or the configured terminal equivalent), the verification
-pipeline (`services/verification-pipeline.ts`) runs. The manual pull fallback
-is stricter and runs the pipeline only once Persona's REST status is
-`approved`; `completed` without approval is treated as still processing.
+**The 3-minute rule — the constraint the whole flow is shaped around.** An AWS
+Face Liveness `SessionId` **expires 3 minutes after it is created, and all
+liveness data with it** (confidence score, reference image). Unlike Persona,
+there is no webhook and no way to re-read a session later. Two consequences run
+through everything below: the `/event` request is the ONLY chance to read the
+verdict, so it does that work synchronously before answering; and the reference
+selfie must be persisted immediately, because our storage becomes its only
+copy.
 
-1. Pull the captured selfie via Persona's API; upload to
-   `SUPABASE_SELFIE_BUCKET` as `verifiedSelfiePath`.
+When `/event` reports `complete`, the server calls
+`GetFaceLivenessSessionResults`. A pass (`Status: SUCCEEDED` and
+`Confidence/100 ≥ FACE_LIVENESS_MIN_CONFIDENCE`) hands the reference image to
+the verification pipeline (`services/verification-pipeline.ts`). Anything else
+— `FAILED`, `EXPIRED`, still in progress, a pass with no reference frame, or an
+AWS outage — is **retryable**: the user is DM'd a nudge with a fresh Verify
+button and stays `pending`. It is deliberately neither `rejected` (that status
+is reserved for a real detected face in the photo set that isn't the verified
+person) nor `pending_review` (there is nothing for an admin to adjudicate on a
+shaky camera capture).
+
+1. Take the reference selfie — the bytes AWS just returned on a fresh check, or
+   the stored copy on a rerun (`services/identity-selfie.ts`) — and, when it is
+   fresh, upload it to `SUPABASE_SELFIE_BUCKET` as `verifiedSelfiePath`. A
+   rerun reuses the existing path rather than writing a duplicate object on
+   every photo edit.
 2. AWS Rekognition `CompareFaces` against every profile photo; record each
    score in `Profile.photoFaceScores` (1:1 with `photos[]`). Each photo is
    bucketed as **pass** (≥ `FACE_MATCH_THRESHOLD_VERIFY`), **borderline**
@@ -511,12 +533,19 @@ is stricter and runs the pipeline only once Persona's REST status is
    - `pending_review` — anything else: all-borderline, mixed pass +
      borderline under quorum, or zero detected-face photos
      (`no_detected_faces` reason).
-4. Any *infrastructure* failure (Persona / Rekognition / storage) routes the
+4. Any *infrastructure* failure (Rekognition / storage) routes the
    user to `pending_review`, never `rejected` — we don't penalise users for
    our outages.
 5. `selfie-retention` cron deletes `verifiedSelfiePath` 90 days after
    `verifiedAt` (GDPR Article 9). The user stays `verified`; only the
-   reference image is scrubbed. Re-verifications re-fetch from Persona.
+   reference image is scrubbed — and because AWS cannot re-issue it, that
+   genuinely ends the reference's life. A verified user who edits their photos
+   after the scrub is asked for **one more liveness check** rather than being
+   refused with a dead-end error (`reference_expired`, surfaced once per upload
+   burst with a Verify button, not per rejected photo). Their `verified` status
+   and match eligibility are untouched while they do it: the rerun bails
+   *before* flipping anything, so deleting a photo can never silently drop a
+   long-tenured user out of matching.
 
 For Telegram Live Photos, verification always uses the static photo frame
 stored in `Profile.photos[]`; the short video part is display-only for
@@ -525,7 +554,8 @@ profile and match cards.
 The same pipeline runs again on every photo edit. The bot/mobile photo
 handlers and Aether's `attach_profile_photo` tool fire
 `triggerVerificationRerun` after every add/delete/replace,
-which clears the `(personaInquiryId, faceMatchedAt)` idempotency marker,
+which clears the `(personaInquiryId, faceMatchedAt)` idempotency marker (the
+column keeps its historical name and now holds the liveness session id),
 flips `verificationStatus` back to `pending`, and re-launches the
 pipeline against the new photo array. Persistence of `photoFaceScores`
 is gated on the photo array still matching the snapshot taken at
@@ -550,7 +580,7 @@ existing `statusMessageId` guard that already stops the menu + pinned banner
 from being re-sent on a rerun.
 
 **Verification gate (the app stays locked).** `status='onboarding'` with
-`onboardingStep='completed'` means the profile is finished but Persona is not,
+`onboardingStep='completed'` means the profile is finished but liveness is not,
 and since verification is mandatory that user is NOT in the app yet. While they
 are in that state the ONLY reachable actions are the two that can clear it:
 running/retrying verification, and re-uploading photos. Every other Telegram
@@ -579,7 +609,7 @@ nulls `reEngagementNextAt` permanently.
 
 **Verification-stall nudges (Registration v2).** With
 `MANDATORY_VERIFICATION_ENABLED` on, a user who finalized onboarding but
-hasn't passed Persona (`status='onboarding'`, `onboardingStep='completed'`,
+hasn't passed liveness (`status='onboarding'`, `onboardingStep='completed'`,
 `verificationStatus ∈ {pending, unverified}`) would otherwise fall outside the
 chain above. The verification CTA re-arms the chain, and the same worker runs
 a second sweep that sends the localized `verifyReminderNudge` (with the Verify
@@ -598,7 +628,7 @@ for `pending`/`unverified`, `verifyOutcomePendingReview` for `pending_review`,
 there. The menu is **not** shown and the next-match banner is not pinned; the
 gate above owns everything until verification clears. This holds independent of
 `MANDATORY_VERIFICATION_ENABLED` (the same `onboarding`/`completed` state exists
-whenever Persona liveness is enabled and the user hasn't yet cleared it).
+whenever liveness verification is enabled and the user hasn't yet cleared it).
 
 ## Phase 1b — Profiler
 
@@ -871,7 +901,7 @@ direct APNs, the general track verifies phones with a Twilio-first code, and
 the hybrid-chat `ui_hint` field names the native control per interview step.
 Supported first-class flows:
 
-- Onboarding / consent / OTP / Persona via `/v1/onboarding/*`,
+- Onboarding / consent / OTP / liveness via `/v1/onboarding/*`,
   `/v1/auth/*`, `/v1/me/verification/*`.
 - **Aether Concierge** (`/v1/chat/*`) — multimodal AI chat that gathers
   profile facts in the background via `update_profile` / `attach_profile_photo`
@@ -1829,7 +1859,7 @@ AND complimentary Premium months, so it rides the already-on
   verified friend also grows the local pool that decides whether the referrer
   themselves gets matched — the reward is framed as *"give a date, get a date"*.
 - **Trigger = verification.** The referrer is paid only when an invited friend
-  reaches `verificationStatus='verified'` — the same anti-fraud gate (Persona +
+  reaches `verificationStatus='verified'` — the same anti-fraud gate (liveness +
   `phone @unique`) that admits a user to matching, so the reward condition IS
   the "real, matchable human" condition. The `verified` settlement
   (`grantReferralRewardsForVerifiedInvitee`) is exactly-once across every path
@@ -2106,7 +2136,7 @@ excluding an otherwise-complete user from matching.
 
 - Account deletion (`/v1/me` `DELETE`, or admin) cascades through Prisma
   (`onDelete: Cascade` on every relation).
-- Persona-captured selfies are auto-deleted 90 days after `verifiedAt`
+- Liveness-captured reference selfies are auto-deleted 90 days after `verifiedAt`
   (`selfie-retention` cron); the user stays `verified`, only the reference
   image is scrubbed.
 - `researchOptIn` is opt-in; default false. Audit is via `User.consentedAt`,

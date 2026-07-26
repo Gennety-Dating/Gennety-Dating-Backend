@@ -710,68 +710,58 @@ paths:
                   status: { $ref: "#/components/schemas/VerificationStatus" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
-  /v1/me/verification/url:
-    get:
-      tags: [me]
-      operationId: getVerificationUrl
-      summary: Mint the Persona hosted-flow URL (marks status pending)
-      responses:
-        "200":
-          description: Hosted flow URL bound to this user
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [url, referenceId]
-                properties:
-                  url: { type: string, format: uri }
-                  referenceId: { type: string, format: uuid }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409":
-          description: Already verified
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-        "429": { $ref: "#/components/responses/RateLimited" }
-        "503":
-          description: Persona not configured
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-
   /v1/me/verification/native-init:
     get:
       tags: [me]
       operationId: getNativeVerificationConfig
-      summary: Persona Inquiry SDK config for the native client
+      summary: Mint an AWS Face Liveness session for the native client
       description: |
-        JWT twin of the Mini App's embedded-flow init: same fields, flips
-        verificationStatus to `pending`. Only the HMAC webhook / pull
-        pipeline can ever write `verified`/`rejected`.
+        Returns the session id, region, and short-lived AWS credentials that
+        `FaceLivenessDetectorView(sessionID:region:credentialsProvider:)`
+        needs to stream its selfie video straight to Rekognition. The video
+        never passes through our server. Flips verificationStatus to
+        `pending`.
+
+        **The session expires 3 minutes after this call**, taking its
+        reference image with it. Present the detector immediately and report
+        the result to `native-event` in the same sitting; a stale session
+        cannot be resumed, only replaced by a new one.
+
+        Credentials are clamped server-side to
+        `rekognition:StartFaceLivenessSession` and last ~15 minutes. Only the
+        face-match pipeline can write `verified`/`rejected`.
+
+        Replaces the Persona Inquiry SDK config. The hosted-flow endpoint
+        `GET /v1/me/verification/url` was removed with the provider.
       responses:
         "200":
-          description: SDK config
+          description: Liveness session + scoped credentials
           content:
             application/json:
               schema:
                 type: object
-                required: [referenceId, templateId, environmentId, language]
+                required: [sessionId, region, credentials, language]
                 properties:
-                  referenceId: { type: string, format: uuid }
-                  templateId: { type: string }
-                  environmentId: { type: string }
+                  sessionId:
+                    type: string
+                    format: uuid
+                    description: Single-use. A new check needs a new session.
+                  region:
+                    type: string
+                    example: eu-central-1
+                    description: Must match the region the detector streams to.
+                  credentials: { $ref: "#/components/schemas/LivenessCredentials" }
                   language: { $ref: "#/components/schemas/Language" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: Already verified
+          description: Already verified — no session is minted
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503":
-          description: Persona not configured
+          description: Liveness not configured, or the provider is unavailable
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -780,11 +770,18 @@ paths:
     post:
       tags: [me]
       operationId: reportNativeVerificationEvent
-      summary: Terminal event from the native Persona SDK
+      summary: Report the terminal event from the native liveness detector
       description: |
-        `complete` records the inquiry id (CAS — never overwrites) and
-        triggers the server's pull-fallback pipeline; `cancel`/`error` are
-        logged only. Poll GET /v1/me/verification for the outcome.
+        `complete` reads AWS's verdict **inside this request** — the session
+        dies 3 minutes after `native-init`, so there is no later chance — and
+        starts the face-match pipeline on a pass. `cancel`/`error` are logged
+        only.
+
+        The `outcome` tells the client what to show next: `processing` means
+        the check passed and face-matching is running (the terminal result
+        arrives by push, or poll `GET /v1/me/verification`); `retry` means
+        liveness could not be confirmed. `retry` is NOT a rejection and
+        changes no verification state — mint a new session and try again.
       requestBody:
         required: true
         content:
@@ -796,17 +793,33 @@ paths:
                 kind:
                   type: string
                   enum: [complete, cancel, error]
-                inquiryId: { type: string, maxLength: 128 }
+                sessionId:
+                  type: string
+                  maxLength: 64
+                  description: Required when `kind` is `complete`.
                 message: { type: string, maxLength: 512 }
       responses:
         "200":
           description: Acknowledged
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Ok" }
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+                  outcome:
+                    type: string
+                    enum: [processing, retry]
+                    description: Present only when kind is `complete`.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "503":
+          description: Could not read the verdict — the check can be re-run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /v1/me/photos:
     get:
@@ -1639,6 +1652,20 @@ components:
     VerificationStatus:
       type: string
       enum: [unverified, pending, pending_review, verified, rejected]
+
+    LivenessCredentials:
+      type: object
+      description: |
+        Short-lived AWS credentials for the on-device Face Liveness detector,
+        minted per session behind this API's own auth. Server-clamped to
+        `rekognition:StartFaceLivenessSession`; hand them straight to the
+        detector's credentials provider and never persist them.
+      required: [accessKeyId, secretAccessKey, sessionToken, expiration]
+      properties:
+        accessKeyId: { type: string }
+        secretAccessKey: { type: string }
+        sessionToken: { type: string }
+        expiration: { type: string, format: date-time }
 
     MatchStatus:
       type: string

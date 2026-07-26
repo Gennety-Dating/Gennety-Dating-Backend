@@ -15,7 +15,7 @@ The DigitalOcean droplet (`167.172.178.229`) terminates TLS via **Caddy**
 | Subdomain | Reverse-proxies to | Purpose |
 |---|---|---|
 | `api-admin.gennety.com` | `localhost:3100` | Admin analytics dashboard API (`ADMIN_API_KEY` Bearer auth, `helmet` + IP rate-limit + timing-safe key compare). |
-| `dating-api.gennety.com` | `localhost:3101` | Public `/v1/*` API for the Expo/mobile client **and** the Persona liveness webhook (`/v1/webhooks/persona`). |
+| `dating-api.gennety.com` | `localhost:3101` | Public `/v1/*` API for the native iOS client and the Telegram Mini Apps. |
 
 **Domain isolation:** `api.gennety.com` is owned by a sibling project — never
 use it for Gennety Dating. Always pick names prefixed with `dating-` here.
@@ -25,7 +25,10 @@ it does not need an inbound subdomain. Telegram delivers updates to whichever
 process is currently polling — so prod (`@gennetybot`) and local dev
 (`@gennetytestbot`) MUST use different bot tokens.
 
-Persona production webhook target: `https://dating-api.gennety.com/v1/webhooks/persona`.
+**No identity-provider webhook.** The Persona era exposed
+`/v1/webhooks/persona` here; AWS Face Liveness has no webhook at all — a
+session's verdict is read server-to-server inside the client's own `/event`
+request, within the session's 3-minute lifetime (PRODUCT_SPEC §1.4).
 
 ## Top-Level Topology
 
@@ -49,7 +52,7 @@ Persona production webhook target: `https://dating-api.gennety.com/v1/webhooks/p
        │ pgvector  │ OpenAI     │ External APIs
        ▼           ▼            ▼
 ┌───────────┐ ┌──────────┐ ┌──────────────────────────┐
-│ Postgres  │ │ OpenAI / │ │ Persona (liveness)       │
+│ Postgres  │ │ OpenAI / │ │ AWS Rekognition          │
 │ + pgvector│ │ Whisper  │ │ AWS Rekognition (face)   │
 │ (Supabase)│ │          │ │ Google Places (venue)    │
 └───────────┘ └──────────┘ │ Supabase Storage (media) │
@@ -78,14 +81,14 @@ graph TD
       Aether[Aether concierge<br/>multimodal chat]
       Match[Match engine<br/>SQL+Node re-rank]
       DispatchQ[Dispatch queue<br/>rate-limited DM]
-      Verify[Verification pipeline<br/>Persona+Rekognition]
+      Verify[Verification pipeline<br/>Face Liveness + CompareFaces]
       DateLC[Date-lifecycle service]
       Push[Push service<br/>Expo SDK]
     end
 
     %% ── External services ──────────────────────────
     OpenAI[(OpenAI<br/>GPT + embeddings + Whisper)]
-    PersonaSvc[(Persona<br/>hosted KYC)]
+    Liveness[(AWS Rekognition<br/>Face Liveness)]
     Rekog[(AWS Rekognition<br/>CompareFaces)]
     Places[(Google Places API)]
     Email[(Resend/email provider)]
@@ -119,7 +122,7 @@ graph TD
     MenuAgent <--> OpenAI
     Aether <--> OpenAI
     Match <--> OpenAI
-    Verify -->|trusted terminal inquiry webhook| PersonaSvc
+    Verify -->|CreateSession / GetSessionResults| Liveness
     Verify -->|CompareFaces| Rekog
     Verify -->|selfie/photo storage| Supabase
     Aether -->|chat images| Supabase
@@ -136,7 +139,6 @@ graph TD
     Verify --> PG
 
     %% ── Webhooks back into process ─────────────────
-    PersonaSvc -.HMAC-signed webhook<br/>POST /v1/webhooks/persona.-> PublicAPI
 ```
 
 ## Process Layout
@@ -146,7 +148,7 @@ A **single** Node.js process (`apps/bot`) hosts everything:
 - **grammY bot** — long-polling Telegram updates; routes via Composer-based
   handlers (`handlers/router.ts`).
 - **Public Express server** on `PUBLIC_PORT` (default `3101`). Mobile client
-  consumer; also receives the Persona webhook and the signed Calendar
+  consumer; also receives the signed Calendar
   Mini App POST. Refuses to start if `JWT_SECRET` is shorter than 32 bytes.
   Access JWTs are pinned to HS256, issuer `gennety-public-api`, audience
   `gennety-mobile`, and a UUID subject.
@@ -201,7 +203,7 @@ Columns (≈ 35; grouped by purpose):
 | Trust & safety | `strikes`, `suspendedUntil` |
 | Telegram UI | `statusMessageId` (pinned banner) |
 | Push (mobile) | `pushToken`, `pushPlatform` |
-| Verification | `verificationStatus`, `personaInquiryId` (unique), `verifiedAt`, `verificationSkippedAt`, `verifiedSelfiePath`, `faceMatchScore`, `faceMatchedAt`, `selfiePath` (legacy). Matching admits only `verified` plus the persisted pre-flip cohort (`unverified` with non-null `verificationSkippedAt`). Production-like startup fails closed unless Persona is live/mandatory and Rekognition/profile-media validation are enabled. |
+| Verification | `verificationStatus`, `personaInquiryId` (unique), `verifiedAt`, `verificationSkippedAt`, `verifiedSelfiePath`, `faceMatchScore`, `faceMatchedAt`, `selfiePath` (legacy). Matching admits only `verified` plus the persisted pre-flip cohort (`unverified` with non-null `verificationSkippedAt`). `personaInquiryId` keeps its historical name but now holds the AWS Face Liveness session id (the provider swap was deliberately schema-free); it stays the `(session, faceMatchedAt)` idempotency marker. Production-like startup fails closed unless liveness is enabled and configured (AWS credentials + `LIVENESS_STS_ROLE_ARN`), verification is mandatory, and Rekognition/profile-media validation are enabled — there is no sandbox escape hatch any more. |
 | Attribution | `referralSource` (`tg:start_param` / `mobile:utm=…` / `referral:USER_ID`) |
 | Tickets (feature-flagged) | `ticketBalance` — materialized ticket-wallet balance; running sum of `TicketLedger.delta` (see `ticket_ledger`). `ticketDiscountPct` / `ticketDiscountGrantedAt` / `ticketDiscountExpiresAt` / `ticketDiscountConsumedAt` — one-time famine single-ticket discount (PRODUCT_SPEC §3.5b; active ⇔ `pct > 0 AND consumedAt IS NULL AND expiresAt > now`), owned by `services/ticket-discount.ts`. |
 | Premium (feature-flagged) | `premiumUntil` / `premiumSince` / `premiumProvider` (`telegram_stars`\|`app_store`\|`referral`) / `premiumAutoRenew` / `premiumExternalId` — Gennety Premium subscription head (PRODUCT_SPEC §3.8 / §Premium). Materialized from the append-only `subscription_ledger`; active ⇔ `premiumUntil > now`. `premiumExternalId` is the recurring anchor (Stars charge id / App Store `originalTransactionId`) used to reconcile renewals + find the owner from a webhook. Owned by `services/premium.ts`; inert-to-write unless `PREMIUM_FEATURE_ENABLED`, but an existing entitlement is honored regardless of the flag. `provider: "referral"` marks a complimentary comp grant (`grantComplimentaryPremiumMonths`) that never sets an auto-renew anchor. |
@@ -251,7 +253,7 @@ Columns (≈ 25):
 | Demographics | `userId` (unique), `ethnicity`, `height`, `hobbies` (`String[]`), `partnerPreferences`, `psychologicalSummary` (redacted signal-only AI-memory summary or onboarding fallback; never the raw pasted export), `negativeConstraints`, `ageRangeMin`, `ageRangeMax` (stated preferred-**partner** age band, user-editable post-onboarding; read by the match engine as the soft `V_agePref` multiplier — see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.2) |
 | Vector | `embedding` (`vector(1536)`), `embeddingDirty`, `embeddingDirtyAt` |
 | Elo | `eloScore` (default 500), seeded from the server-side mean of all per-photo vision scores; `eloMatchesPlayed`; `eloSeededAt`; auditable aggregate/per-photo output in `eloSeedDetails` |
-| Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `referenceFaceEmbedding` (`Json?` legacy self-photo identity-anchor metadata — retained, no longer written by the upload flow since identity moved to Persona-only, 2026-06-23), `uploadedPhotoHashes` (`String[]`, strictly 1:1 with `photos`; perceptual hash or `""` sentinel at every index), `pendingPhotoCandidates` (`Json[]` legacy consensus pool — retained, no longer written), `acceptedPhotoCount` (`Int`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
+| Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `referenceFaceEmbedding` (`Json?` legacy self-photo identity-anchor metadata — retained, no longer written by the upload flow since identity moved to liveness-only, 2026-06-23), `uploadedPhotoHashes` (`String[]`, strictly 1:1 with `photos`; perceptual hash or `""` sentinel at every index), `pendingPhotoCandidates` (`Json[]` legacy consensus pool — retained, no longer written), `acceptedPhotoCount` (`Int`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
 | Geo / radius | `matchRadius` (`campus_only` / `citywide`), `homeCity`, `homeCountryCode`, `homeCityKey`, `homePlaceId`, `latitude`, `longitude`, `locationUpdatedAt`, `timeZone` (IANA, derived from the dating city; drives the Profiler's local-time batch windows) |
 | Match priority | `lastMatchedAt`, `missedWeeks`, `standbyCount`, `lastMissedAt`, `silentIgnoreCount` |
 | Profiler (Phase 1b) | `profilerStartedAt`, `profilerNextAt`, `profilerActiveQuestionId`, `profilerBatchRemaining` — scheduler state for the post-onboarding Q&A batches that fuel icebreakers/hints (see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §Phase 1b). `profilerActiveQuestionId` is the concurrency token: every answer/skip claims it with a compare-and-set, so exactly one reply resolves a question. `profilerNextAt` is dual-purpose — the next batch window while idle, and the **stall deadline** of the question currently in flight, which is what lets the worker reclaim a question the user never answered. Indexed `@@index([profilerNextAt])` for the worker sweep. |
@@ -595,7 +597,7 @@ so a touch landing in quiet hours is deferred to the next allowed window.
 ## Public `/v1/*` API Surface
 
 Mounted by `apps/bot/src/public/server.ts`. JWT bearer auth on all routes
-except `auth/*`, `webhooks/persona`, `calendar/*`, and `ping`.
+except `auth/*`, `calendar/*`, and `ping`.
 
 **Machine-readable contract (mobile surface):** the JWT-authed subset consumed
 by the native iOS client is specified in [`openapi/gennety-v1.yaml`](openapi/gennety-v1.yaml)
@@ -631,9 +633,8 @@ auth) are deliberately outside the spec.
 | POST | `/v1/me/live-activity-token` | Register an ActivityKit push token — `activityType ∈ {match_decision, date_day}`, `kind ∈ {start, update}`; upsert per (user, type, kind). `DELETE /:activityType/:kind` drops it when the activity ends locally. Backs `sendLiveActivityUpdateToUser` in `services/push.ts`. |
 | GET  | `/v1/me/photos` / POST / DELETE | Photo CRUD with content-sniffed image types and face-match gate. Add/delete array mutations serialize on the user row; the database rechecks limit/duplicate state, and failed post-upload commits clean the new storage object. |
 | GET  | `/v1/me/verification` | Read current verification state |
-| GET  | `/v1/me/verification/url` | Mint Persona hosted-flow URL (legacy webview fallback) |
-| GET  | `/v1/me/verification/native-init` | Persona Inquiry SDK config for the native iOS client (JWT twin of the Mini App embedded init — same fields, flips status to `pending`; webhook/pull pipeline remain the only writers of terminal statuses) |
-| POST | `/v1/me/verification/native-event` | Terminal event from the native Persona SDK: `complete` CAS-writes `personaInquiryId` + fires the pull-fallback; `cancel`/`error` logged only |
+| GET  | `/v1/me/verification/native-init` | Mint an AWS Face Liveness session for the native iOS client: `{sessionId, region, credentials, language}`, flips status to `pending`. Credentials are STS-minted and clamped to `rekognition:StartFaceLivenessSession`. **The session expires 3 minutes later** — present the detector immediately. (JWT twin of the Mini App init. The Persona hosted-URL endpoint `/v1/me/verification/url` was removed with the provider.) |
+| POST | `/v1/me/verification/native-event` | Terminal detector event. `complete` reads AWS's verdict IN-REQUEST (no webhook exists) and starts the face-match pipeline on a pass, answering `{ok, outcome: "processing" \| "retry"}`; `cancel`/`error` logged only. `retry` is not a rejection and writes no verification state. |
 | GET  | `/v1/onboarding/interview` | Resume server-owned conversational onboarding |
 | POST | `/v1/onboarding/interview/answer` | Send text to the shared onboarding collector; rejected until ToS acceptance and language selection are persisted. Ordinary answers allow 4,000 chars; while the server-owned question is `context_dump`, up to 32,000 chars are accepted and routed as a typed AI-memory payload (Telegram parity). |
 | POST | `/v1/onboarding/interview/voice` | Transcribe voice and send it to the same collector; uses the same legal/language gate |
@@ -659,7 +660,7 @@ auth) are deliberately outside the spec.
 | POST | `/v1/tickets/store/confirm` | Confirm bundle "payment" → credit `ticketBalance` (+`TicketLedger`). **404 (PAY-1) while `TICKET_STARS_ENABLED` is on.** `initData` HMAC auth. |
 | GET  | `/v1/countdown` | Status banner / next-batch countdown |
 | POST | `/v1/tickets/appstore/transaction` | Native-app StoreKit 2 purchase report (JWT — mounted before the initData `/v1/tickets` router): client JWS is decoded ONLY for the transactionId, the authoritative state comes from the App Store Server API; wallet credit exactly-once via `TicketLedger.externalPaymentId = appstore:<txId>`. 404 while `TICKET_FEATURE_ENABLED` off; 503 without `APPSTORE_*` config. |
-| POST | `/v1/webhooks/appstore` | App Store Server Notifications V2. Trust model mirrors Persona: the signedPayload only names a transaction, consequences are applied after an authoritative API re-fetch (a forged webhook can at worst trigger a harmless lookup). REFUND/REVOKE claw back the store credit exactly-once (`appstore:<txId>:refund`, balance may go negative — honest accounting). 500 on lookup outage so Apple retries. |
+| POST | `/v1/webhooks/appstore` | App Store Server Notifications V2. The signedPayload only names a transaction, consequences are applied after an authoritative API re-fetch (a forged webhook can at worst trigger a harmless lookup). REFUND/REVOKE claw back the store credit exactly-once (`appstore:<txId>:refund`, balance may go negative — honest accounting). 500 on lookup outage so Apple retries. |
 | GET  | `/v1/calendar/state` | Calendar Mini App snapshot — slot allowlist, both sides' picks, agreed time (Telegram `initData` HMAC auth; polled by the Mini App for live peer visibility) |
 | POST | `/v1/calendar/pick` | Calendar Mini App availability submission — accepts `pickedIsos: string[]` (legacy single `pickedIso` still tolerated). Response carries `agreedTime` (set on single-overlap auto-lock), `overlapCandidates: string[]` (set when intersection > 1, Mini App shows confirm card), `mySlots`, `peerSlots`, `bothPicked`. Telegram `initData` HMAC auth. |
 | GET  | `/v1/location/search` | Location Mini App autocomplete — proxies to Google Places (New) `searchText` so the API key stays server-side. `q` query is debounced client-side at 350ms; min length 2 chars. Optional `lat`/`lng` for location-bias. Telegram `initData` HMAC auth. |
@@ -674,11 +675,10 @@ auth) are deliberately outside the spec.
 | POST | `/v1/venue-change/keep-original` | The way back — withdraw my marks and, if an agreement was reached, call it off so the originally assigned venue simply stands (neutral DM to the partner; silent for a hidden express mint). Retires the session entirely once neither side has marks. Telegram `initData` HMAC auth. |
 | POST | `/v1/venue-change/pay-decline` | His single, final "not this time" from the Mini App fork (twin of the wish-card callback). **Ends the change**: closes the session back to the originally-assigned venue and DMs her a neutral `venueDeclinedKeepDm` (no price, no pay button — she is never pushed to pay). Telegram `initData` HMAC auth. |
 | POST | `/v1/venue-change/stars-invoice` | Mint the `VENUE_CHANGE_STARS` (150⭐) invoice link — body `{matchId, mode: "agreed"}` (payer / her parallel pay-self) or `{matchId, mode: "express", key}` (stamps her hidden express mint first). Settled by the bot's `successful_payment` handler (payload `venue:<matchId>:<mode>`); `pre_checkout_query` declines stale links. Telegram `initData` HMAC auth. |
-| GET  | `/v1/verification/mini-app/init` | Verification Mini App SDK config — returns `{referenceId, templateId, environmentId, language, environment}` for the Persona Embedded SDK and flips `verificationStatus` to `pending`. 503 if Persona feature flag/ids missing, 409 if already verified. Telegram `initData` HMAC auth. |
-| POST | `/v1/verification/mini-app/event` | Verification Mini App terminal SDK callback — body `{kind: "complete"\|"cancel"\|"error", inquiryId?, status?, message?}`. `complete` writes `personaInquiryId` (CAS on null) and triggers `pullVerificationStatus` fire-and-forget; `cancel`/`error` are logged only. Does NOT write `verified`/`rejected` — the HMAC webhook is the only path that can. Telegram `initData` HMAC auth. |
+| GET  | `/v1/verification/mini-app/init` | Verification Mini App session mint — returns `{sessionId, region, credentials, language}` for Amplify's `FaceLivenessDetectorCore` and flips `verificationStatus` to `pending`. 503 if liveness is off/unconfigured or the provider is unavailable, 409 if already verified. Telegram `initData` HMAC auth. Shares `services/liveness-flow.ts` with the JWT twin. |
+| POST | `/v1/verification/mini-app/event` | Verification Mini App terminal detector callback — body `{kind: "complete"\|"cancel"\|"error", sessionId?, message?}`. `complete` calls `GetFaceLivenessSessionResults` synchronously (the session dies 3 minutes after `/init`, so this is the only chance), then starts the face-match pipeline on a pass; `cancel`/`error` are logged only. The client only ever reports "I finished" — the verdict is AWS's, so a forged `complete` reads an unfinished session and changes nothing. Telegram `initData` HMAC auth. |
 | GET  | `/v1/founder/report/:token` | Founder weekly-matches report page (feature-flagged ops feed). Tokenized, login-free — the unguessable `FounderReport.token` is the sole auth; renders a self-contained `noindex` HTML page of the week's pairs (both users + photos + attractiveness). Inert unless `FOUNDER_NOTIFY_ENABLED` (no report rows exist otherwise). |
 | GET  | `/v1/founder/report/:token/media?ref=` | Scoped image proxy for the report page — streams a photo ref via the MAIN bot, but only refs present in THAT report's snapshot (not an arbitrary proxy). |
-| POST | `/v1/webhooks/persona` | Persona inquiry webhook (HMAC of raw body, mounted **before** `express.json`) |
 | GET  | `/v1/premium/state` | Gennety Premium Mini App state — `{active, premiumUntil, autoRenew, provider, priceStars, priceDisplay}`. Telegram `initData` HMAC auth; feature-flagged (`PREMIUM_FEATURE_ENABLED`, else 404). See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.8. |
 | POST | `/v1/premium/stars-invoice` | Mint the recurring Telegram Stars subscription invoice link (`createInvoiceLink` + `subscription_period=2592000`, payload `sub:premium`), opened via `WebApp.openInvoice`; settled + auto-renewed by the `successful_payment` handler. `initData` HMAC auth; 404 when feature off. |
 | GET | `/v1/referral/state` | Referral Mini App ladder (§3.9): progress + per-rung $ value + invite link. `initData` HMAC auth; feature-flagged (`REFERRAL_FEATURE_ENABLED`, else 404). |
@@ -775,8 +775,11 @@ so normal fast use never trips them, and add no Prisma schema or dependency.
 
 ## Storage Buckets (Supabase)
 
-- `SUPABASE_SELFIE_BUCKET` — Persona-captured selfie used as the face-match
-  reference. Auto-deleted by `selfie-retention` 90 d after `verifiedAt`.
+- `SUPABASE_SELFIE_BUCKET` — the Face Liveness reference selfie, used as the
+  face-match reference. This is the ONLY copy: the AWS session that produced it
+  expires after 3 minutes, so nothing can re-issue it. Auto-deleted by
+  `selfie-retention` 90 d after `verifiedAt`, after which a photo edit asks the
+  user for a fresh liveness check (PRODUCT_SPEC §1.4).
 - `SUPABASE_PHOTO_BUCKET` — mobile-uploaded profile photos. Telegram-uploaded
   profile photos remain Telegram `file_id`s.
 - `SUPABASE_CHAT_BUCKET` — Aether chat images, stored as opaque object paths
@@ -796,7 +799,7 @@ Aether append or delete updates photos, media, face score, and hash together.
 Telegram deletion uses the same per-user lock as Telegram/mobile/Aether append,
 then replaces its session from the locked canonical state; a stale Telegram
 album can therefore never erase a photo concurrently added on another surface.
-**Identity is enforced only by Persona verification, not at upload time
+**Identity is enforced only by liveness verification, not at upload time
 (simplified 2026-06-23).** A static photo that passes per-photo safety,
 usable-face (Rekognition confidence ≥ 0.55, area ≥ 0.8%; plus a light
 `face_obscured` reject on dark sunglasses ≥ 0.90 / mask-occlusion ≥ 0.99), and duplicate gates is accepted
@@ -807,7 +810,7 @@ photos invisible until two clustered with `CompareFaces`) and the
 `referenceFaceEmbedding` self-anchor were removed from the upload flow because
 they stranded legitimate users whose genuine same-person photos scored just
 below threshold. Those columns are retained (no longer written by uploads) and
-no schema change is required. Once a user is Persona-verified, the upload gate
+no schema change is required. Once a user is liveness-verified, the upload gate
 compares each new photo against `verifiedSelfiePath`, and the verification
 pipeline re-runs on every photo edit — the real identity gate. Video remains
 display-only and is excluded from `photos[]`; admission is validated for
@@ -828,8 +831,8 @@ currently bot-side only.
 | Service | Role |
 |---|---|
 | OpenAI | Onboarding / menu / Aether agents, embeddings, Whisper voice/video-audio transcription, image/text moderation, vision Elo seed |
-| Persona | Hosted KYC / liveness flow; HMAC-signed terminal inquiry webhooks |
-| AWS Rekognition | `CompareFaces`, `DetectFaces`, and `DetectModerationLabels` for profile photo/video admission and Persona verification; `DetectFaces` boxes also drive the date-card share-copy face blur (§3.7a) |
+| AWS Rekognition Face Liveness | Identity liveness: `CreateFaceLivenessSession` + `GetFaceLivenessSessionResults` server-side (`services/face-liveness.ts`); the device streams its selfie video straight to `StartFaceLivenessSession` using STS credentials minted per session by `services/liveness-credentials.ts`. Replaced Persona 2026-07-26. ~$0.015 per check with no monthly floor, so a paused ad campaign costs nothing. A session and its reference image expire 3 minutes after creation — see PRODUCT_SPEC §1.4. |
+| AWS Rekognition | `CompareFaces`, `DetectFaces`, and `DetectModerationLabels` for profile photo/video admission and the face-match decision; `DetectFaces` boxes also drive the date-card share-copy face blur (§3.7a) |
 | Google Places (New) v1 | **Fallback** concierge venue search (primary is the first-party `curated_venues` base) at the great-circle midpoint via `places.googleapis.com/v1/places:searchNearby` (+ text fallback). Strict quality gate (operational + place-type deny-list + rating ≥ 4.0 + ≥ 30 reviews + student-friendly price tier for food) and weighted scoring on top of the raw API. Also used by `scripts/seed-venues.mjs` (via `searchVenueCandidates`) to source curated-base candidates under the same gate. The `places.photos` field + the Places **media** endpoint supply the date-card venue cover photo (fetched at render time, credited on the card, never persisted). |
 | satori + @resvg/resvg-js + @napi-rs/canvas | In-process date-card PNG rendering (§3.7a, feature-flagged): `satori` builds an SVG from a plain element tree, `@resvg/resvg-js` rasterizes it to PNG, and `@napi-rs/canvas` pixelates the partner's face for the share copy plus applies the venue-photo duotone and the film-grain tile. Pure Node (no headless browser); bundled Roboto + Archivo Black TTFs live in `apps/bot/src/assets/fonts/`. The same satori/resvg pair (no canvas) also renders the always-on **locked-time card** (`services/time-card.ts`, PRODUCT_SPEC §3.6) — text only, no photos or network, so it is fast enough to send inline. NB: satori does **not** fall through *within* a font family, so the Unbounded latin/cyrillic subsets must be registered under distinct family names or mixed-script strings silently drop to Roboto. |
 | Supabase | Postgres + pgvector primary store, Storage for selfies, mobile profile photos, and chat images |

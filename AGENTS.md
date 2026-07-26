@@ -42,7 +42,8 @@ When prose and code disagree:
   OpenAPI contract is `openapi/gennety-v1.yaml` here). The legacy Expo
   `mobile-handoff/` components were removed 2026-07-18.
 - **Database**: PostgreSQL + pgvector through Prisma (`packages/db`).
-- **AI / media / verification**: OpenAI, Persona, AWS Rekognition, Supabase
+- **AI / media / verification**: OpenAI, AWS Rekognition (Face Liveness for
+  identity + CompareFaces/moderation for media; replaced Persona 2026-07-26), Supabase
   Storage, Google Places, Expo push.
 - **Shared package**: `packages/shared` for constants, types, i18n, and prompts.
 - **Workspace**: pnpm workspaces.
@@ -124,10 +125,11 @@ When asked to review, lead with findings, ordered by severity, with file/line
 references. Focus on:
 
 - Product invariant violations from PRODUCT_SPEC.md.
-- Trust boundary mistakes: Telegram initData, JWT, Persona HMAC, admin bearer auth.
+- Trust boundary mistakes: Telegram initData, JWT, liveness session verdicts
+  (never a client claim), admin bearer auth.
 - Database safety: Prisma schema drift, raw SQL, vector indexes, cascade behavior.
 - Matchmaking invariants: no repeated pair, blind decision, no in-app user chat.
-- Verification bypasses: corporate email, Persona, face-match, skip penalties.
+- Verification bypasses: corporate email, liveness, face-match, skip penalties.
 - Worker side effects: cron idempotency, duplicate DMs, quiet hours, rate limits.
 - Mobile parity: does the change touch the `/v1/*` JWT surface or a product
   flow the iOS app consumes? Spec updated same-commit; Telegram-only scope
@@ -179,10 +181,12 @@ and confirms the tradeoff:
 - Onboarding steps and required data are not skipped.
 - Blind decision invariant: users do not learn the partner's decision before
   making their own.
-- Persona/face-match verification stays meaningful: mandatory (no skip, no
+- Liveness/face-match verification stays meaningful: mandatory (no skip, no
   unverified activation) when `MANDATORY_VERIFICATION_ENABLED` is on; the
   legacy soft-skip + unverified Elo penalty applies only while it is off /
-  for grandfathered pre-flip users.
+  for grandfathered pre-flip users. A liveness check that does not clearly pass
+  is retryable, never `rejected` — that status is reserved for a real detected
+  face in the photo set that isn't the verified person.
 - Scheduled-date confirmations use Telegram `date_time` entity where applicable.
 - Telegram Bot API calls should go through grammY abstractions unless the API
   surface is not typed yet; raw Bot API usage must be isolated and justified.

@@ -1,5 +1,36 @@
 # Gennety Dating Deploy
 
+> ## ⚠️ NOT YET DEPLOYED — identity provider swap on `main` (2026-07-26)
+>
+> `main` has migrated identity verification from **Persona** to **AWS
+> Rekognition Face Liveness**. Production is still running the old code, so the
+> droplet is behind `main` and **must not be deployed until the checklist below
+> is complete** — a plain code deploy would leave the bot refusing to boot
+> (`FACE_LIVENESS_ENABLED` / `LIVENESS_STS_ROLE_ARN` unset) and, if forced past
+> that, would open a verification Mini App with no session to run.
+>
+> Blocking, in order:
+> 1. **AWS IAM** — apply both changes in "Verification production gate" below,
+>    then confirm with `pnpm probe-liveness` (free; no camera, no billed check).
+> 2. **Env** — add `FACE_LIVENESS_ENABLED=true`,
+>    `FACE_LIVENESS_MIN_CONFIDENCE=0.8`, `LIVENESS_STS_ROLE_ARN=…`,
+>    `LIVENESS_CREDENTIALS_TTL_SECONDS=900`; remove every `PERSONA_*` key and
+>    `ALLOW_SANDBOX_PERSONA`. Back up `.env` first.
+> 3. **Dev E2E on `@gennetytestbot`** — the Telegram-WebView capture has NOT
+>    been proven yet. It is the one unvalidated assumption in the migration:
+>    Amplify's detector needs camera access, a WebSocket to
+>    `streaming-rekognition.eu-central-1.amazonaws.com`, and a model fetch from
+>    public CDNs, all inside Telegram's WebView. Run a full check on a real
+>    device against a tunnelled `WEBAPP_URL` before touching production.
+> 4. **Deploy** — Deploy Full Server Code (no `db:push` needed: the migration is
+>    deliberately schema-free, `personaInquiryId` now holds the liveness session
+>    id) **and** Deploy Mini App Only (`verification.html` changed).
+>
+> No Prisma schema change. Rollback is `git revert` of the migration commits
+> plus restoring the `PERSONA_*` keys from an `.env.bak.*` — realistic because
+> production identity was sandbox-only, i.e. never real KYC, and almost no user
+> holds a meaningful `verified` from it.
+
 Last verified: 2026-07-25 — phone-based account login (`d1ad29f`), code-only.
 Prior the same day: full catch-up release (85 commits), additive
 `db:push`, flag alignment, and a dev↔prod isolation fix (details in the dated
@@ -233,7 +264,7 @@ testing. Nothing may flow between them. Audited 2026-07-25 — current state:
 | Supabase Storage | `selfies-dev` / `profile-photos-dev` / `chat-attachments-dev` | `selfies` / `profile-photos` / `chat-attachments` | ✅ since 2026-07-25 (same project, separate buckets) |
 | OpenAI / Resend / AWS / Places | shared keys | shared keys | ⚪ stateless — no cross-contamination |
 | Founder ops bot | shared `FOUNDER_BOT_TOKEN` + chat, feed OFF | same token/chat, feed ON | ✅ since 2026-07-25 — see below |
-| Persona | shared template/environment/API key | same | ⚠️ **see below** |
+| Identity liveness | shared AWS creds; sessions are per-request | same | ✅ since 2026-07-26 — AWS Face Liveness sessions carry no shared server-side config and no webhook, so dev and prod cannot reach each other (this row used to be Persona's ⚠️) |
 
 **Fixed 2026-07-25 — founder-feed leak (dev registrations in the real ops
 DM).** There is only ONE founder bot and ONE founder chat, and `.env.local`
@@ -265,15 +296,15 @@ its 8 user-id prefixes belong to no prod user row (`6efffed1…`, `5a61bdad…`,
 `2a899ad8…` are real prod selfies. Deleting the six is a destructive prod
 storage operation — do it deliberately, not as part of a deploy.
 
-**Known shared state — Persona webhooks.** Dev and prod share one Persona
-template/environment, and Persona's webhook target is configured once, at
-prod (`https://dating-api.gennety.com/v1/webhooks/persona`). So a **dev**
-verification fires a webhook at **prod**, which correctly no-ops
-(`[persona] unknown reference-id`) — no prod data is touched. Two
-consequences: the prod error log carries dev noise, and the dev bot never
-receives a webhook at all (its verifications only ever complete through the
-pull fallback, which is why dev shows `webhook signature mismatch`). A
-separate Persona sandbox environment per surface is the real fix.
+**Resolved 2026-07-26 — the Persona webhook cross-talk is gone.** Dev and prod
+used to share one Persona template whose webhook target pointed at prod, so a
+**dev** verification fired a webhook at **production** (it no-op'd on an unknown
+reference-id, but it polluted the prod error log, and the dev bot never received
+a webhook at all). AWS Face Liveness has no webhook and no shared template: each
+session is created and read within one request, by whichever process created it.
+Dev and prod share only the stateless AWS credentials, so a dev check is
+invisible to prod. Billing is shared — a dev liveness check costs the same
+$0.015 as a real one, which is worth remembering during test loops.
 
 **Never** point local code at prod: keep `.env.local` present (deleting it
 makes the local process load `.env`, i.e. the **production** bot token and
@@ -298,7 +329,7 @@ all credential locations documented here:
 | Supabase Postgres/storage | Supabase dashboard; URL/key values are in `.env` / `/opt/gennety/.env` |
 | OpenAI | OpenAI dashboard; key is `OPENAI_API_KEY` |
 | Resend | Resend dashboard; key is `RESEND_API_KEY` |
-| Persona | Persona dashboard; current env comments say sandbox credentials |
+| AWS Face Liveness | Same IAM user as Rekognition (`gennety-bot-rekognition`) plus the `GennetyLivenessClient` role — see "Verification production gate" |
 | AWS Rekognition | AWS IAM user `gennety-bot-rekognition` |
 | Google Places | Google Cloud API key `PLACES_API_KEY` |
 | APNs push (native iOS) | Apple Developer → Certificates → Keys: `.p8` APNs Auth Key (`APNS_KEY_PATH` on the droplet) + Key ID + Team ID |
@@ -342,16 +373,15 @@ process using the production token can steal updates from production.
 
 | Endpoint | Target | Purpose |
 |---|---|---|
-| `https://dating-api.gennety.com` | Caddy -> `localhost:3101` | Public `/v1/*` API for mobile app and Persona webhook |
+| `https://dating-api.gennety.com` | Caddy -> `localhost:3101` | Public `/v1/*` API for the mobile app and the Telegram Mini Apps |
 | `https://api-admin.gennety.com` | Caddy -> `localhost:3100` | Admin analytics API, `ADMIN_API_KEY` bearer auth |
 | `https://dating-calendar.gennety.com` | `/var/www/dating-app` | Telegram Mini App static bundles |
 | `@gennetybot` | PM2 process `gennety-bot` | Production Telegram bot, long polling |
 
-Persona production webhook target:
-
-```text
-https://dating-api.gennety.com/v1/webhooks/persona
-```
+There is no identity-provider webhook any more: Face Liveness verdicts are read
+server-to-server inside the client's `/event` request (the session expires 3
+minutes after it is minted). `/v1/webhooks/persona` was removed — Persona's
+dashboard webhook can be deleted on their side.
 
 Known Caddy config:
 
@@ -401,7 +431,7 @@ Identity and profile-media validation preflight:
 ffmpeg -version
 ffprobe -version
 # The process must refuse to boot unless all of these are production-ready:
-grep -E '^(MANDATORY_VERIFICATION_ENABLED|ENABLE_PERSONA_VERIFICATION|FACE_MATCH_PROVIDER|PROFILE_MEDIA_VALIDATION_ENABLED)=' .env
+grep -E '^(MANDATORY_VERIFICATION_ENABLED|FACE_LIVENESS_ENABLED|LIVENESS_STS_ROLE_ARN|FACE_MATCH_PROVIDER|PROFILE_MEDIA_VALIDATION_ENABLED)=' .env
 ```
 
 These local checks do not prove that the production droplet has the package.
@@ -410,8 +440,8 @@ Dependency** during the production rollout.
 
 Verify the three narrow Rekognition actions and run consenting/synthetic QA
 media before deployment. Production must have
-`MANDATORY_VERIFICATION_ENABLED=true`, `ENABLE_PERSONA_VERIFICATION=true`, a
-non-sandbox Persona key, `FACE_MATCH_PROVIDER=rekognition`, and
+`MANDATORY_VERIFICATION_ENABLED=true`, `FACE_LIVENESS_ENABLED=true`, a
+configured `LIVENESS_STS_ROLE_ARN`, `FACE_MATCH_PROVIDER=rekognition`, and
 `PROFILE_MEDIA_VALIDATION_ENABLED=true`. The process now fails closed before
 starting if any trust boundary is weakened. An identity-provider outage is not
 rolled back by disabling verification; pause new onboarding or roll back code
@@ -595,7 +625,7 @@ apps/webapp/dist/ -> root@167.172.178.229:/var/www/dating-app/
 Vite is configured for multiple entries (`vite.config.ts`), so the same rsync
 deploys the Mini Apps together — `index.html` (calendar), `feedback.html`
 (post-date feedback), `location.html` (venue handoff), `onboarding.html`
-(full-screen Telegram onboarding), `verification.html` (Persona
+(full-screen Telegram onboarding), `verification.html` (AWS Face Liveness
 Embedded SDK KYC flow), `ticket.html` (Date Ticket, feature-flagged
 premium post-accept gate), `tickets.html` (ticket store / wallet,
 feature-flagged pre-purchase bundles), and `venue-change.html` (feature-flagged
@@ -603,14 +633,16 @@ female-exclusive venue swap). Caddy's `try_files {path} /index.html` resolves
 direct hits like `/feedback.html` and `/onboarding.html` before the SPA
 fallback.
 
-Persona embedded flow needs two one-time setup steps on the provider side
-(they don't affect rsync output, but skipping either breaks the Mini App):
+The liveness flow needs one one-time provider-side setup step (it doesn't
+affect rsync output, but skipping it breaks the Mini App):
 1. **BotFather** `/setdomain` → `dating-calendar.gennety.com` for
    `@gennetybot`. Without this, the Mini App can't request camera
    permissions inside the Telegram WebView.
-2. **Persona Dashboard** → Embedded flow → Allowed origins must include
-   `https://dating-calendar.gennety.com`. Without this, the SDK rejects
-   the iframe mount with a CORS error.
+
+Note the detector fetches its TF.js wasm backend and Blazeface model from
+public CDNs by default. If a client network can't reach them, self-host both
+from `/var/www/dating-app` and set `config.binaryPath` / `config.faceModelUrl`
+in `apps/webapp/src/liveness-detector.tsx`.
 
 The webapp production build bakes in:
 
@@ -654,9 +686,10 @@ and `VENUE_INTENT_V2_ROLLOUT_PERCENT=100` / `SHADOW_PERCENT=0`. See the
 2026-07-25 block at the top of this file, including the note that the venue
 rollout skipped the staged 10→50→100 guard. `PROMO_FEATURE_ENABLED=true` was
 added at the same time; `REFERRAL_FEATURE_ENABLED=false` is set explicitly
-because the referral program is unfinished. Persona is still the sandbox key
-(`ALLOW_SANDBOX_PERSONA=true`) — real KYC awaits a live Persona key, not a
-flag. No schema/webapp work remains.
+because the referral program is unfinished. **Superseded 2026-07-26 for
+identity:** Persona and its `ALLOW_SANDBOX_PERSONA` override are gone; the
+provider is AWS Face Liveness and the sandbox-vs-real-KYC question no longer
+exists (see the block at the top of this file). No schema work remains.
 
 Every product feature is now **on** in `/opt/gennety/.env`: tickets + Telegram
 Stars, Registration v2's phone track, the fact collector (which is what actually
@@ -666,9 +699,10 @@ venue change v2, the date card, the match card, and Rekognition face-match.
 `ENABLE_PERSONA_VERIFICATION` was on, while
 `MANDATORY_VERIFICATION_ENABLED` was still off. After the identity trust-gate
 hardening that state stopped booting; as of 2026-07-17
-`MANDATORY_VERIFICATION_ENABLED=true` is set and production runs the sandbox
-Persona key behind the explicit `ALLOW_SANDBOX_PERSONA=true` override (see
-"Verification production gate" below).
+`MANDATORY_VERIFICATION_ENABLED=true` was set and production ran the sandbox
+Persona key behind an explicit `ALLOW_SANDBOX_PERSONA=true` override. **That
+whole arrangement was retired on 2026-07-26** when identity moved to AWS Face
+Liveness — see "Verification production gate" below for the current gate.
 
 **Provider credentials, verified by probing each one from the droplet** (a flag
 is worthless without its provider):
@@ -676,7 +710,7 @@ is worthless without its provider):
 | Credential | State | Consequence |
 |---|---|---|
 | Supabase (DB + Storage) | **migrated 2026-07-13 to a new project** — see below | Storage works for the first time (the old project's keys were never filled in — they were the literal `your_supabase_…` placeholders from `.env.example`, so uploads 403'd with `Invalid Compact JWS`). |
-| `PERSONA_API_KEY` | **works, but it is a SANDBOX key** (`persona_sand…`) | The API answers 200 on the endpoints the pipeline actually calls (`GET /inquiries/:id`). Identity checks run against Persona's sandbox, i.e. they are test flows, not real KYC. A production key is needed before liveness *means* anything. (A 403 on `/inquiry-templates` is a red herring — that endpoint is outside the key's scope and the product never calls it.) |
+| `PERSONA_API_KEY` | **retired 2026-07-26** (was a SANDBOX key, `persona_sand…`, so identity checks were test flows rather than real KYC) | Replaced by AWS Face Liveness on the existing `AWS_*` credentials + the `GennetyLivenessClient` STS role. Verify with `pnpm probe-liveness`; delete the `PERSONA_*` keys from `/opt/gennety/.env`. |
 | `PLACES_API_KEY` | ~~empty~~ → **set** (re-verified on the droplet 2026-07-25; a live Place Details probe of a real curated Kyiv venue returned its cover photo) | Google Places: the venue fallback when no curated venue is in range, the Location Mini App autocomplete, the venue-change catalog beyond curated rows, and — since 2026-07-25 — **every** venue photo, including for curated venues (resolved from `placeId` at assignment). Without it the curated base still covers Kyiv/Kharkiv/Odesa, so scheduling degrades to gradient-only cards rather than dying. |
 | `EXPO_ACCESS_TOKEN` | retired 2026-07-18 (Expo rail removed; native push is direct APNs via `APNS_*`) | Can be deleted from `/opt/gennety/.env`; the process no longer reads it. |
 
@@ -718,23 +752,67 @@ code. If it ever has to be repeated:
 
 ### Verification production gate
 
-Storage works, but the Persona credential is still sandbox-only and no user has
-reached a production `verified` outcome. The end state remains: obtain a live
-Persona key, walk one consenting end-to-end verification through staging, and
-set the mandatory production values. The service intentionally refuses to start
-rather than admit unverified users.
+**Provider: AWS Rekognition Face Liveness (migrated off Persona 2026-07-26).**
+The migration's whole point was ending the sandbox era: production had been
+running `ALLOW_SANDBOX_PERSONA=true` since 2026-07-17, i.e. Persona TEST flows
+rather than real KYC, because a live Persona key costs a fixed ~$250/mo
+regardless of volume. Face Liveness is ~$0.015 per check with no monthly floor
+(so a paused ad campaign costs nothing), and our Persona template only ever
+used selfie-liveness — no document checks — so nothing was lost functionally.
 
-**Deliberate interim state (since 2026-07-17):** production runs with
-`ALLOW_SANDBOX_PERSONA=true` — a founder-approved override that waives ONLY the
-sandbox-key startup check so the current sandbox Persona flow can serve the
-early-launch window. Every other identity requirement
-(`MANDATORY_VERIFICATION_ENABLED`, Rekognition, profile-media validation, no
-OTP bypasses) still fails closed, and the bot logs a loud warning at boot while
-the override is active. Consequences to keep in mind: verifications are Persona
-TEST flows (not real KYC), and every `verified` granted during this window
-persists after switching to a live key — plan to audit/re-verify that cohort.
-When the live key lands: set `PERSONA_API_KEY`, remove `ALLOW_SANDBOX_PERSONA`,
-restart.
+There is **no sandbox/production key split to police any more**, and therefore
+no override to remove. `identityTrustConfigurationErrors` requires
+`FACE_LIVENESS_ENABLED=true`, real `AWS_ACCESS_KEY_ID` /
+`AWS_SECRET_ACCESS_KEY`, and `LIVENESS_STS_ROLE_ARN`, alongside the unchanged
+`MANDATORY_VERIFICATION_ENABLED=true`, `FACE_MATCH_PROVIDER=rekognition` and
+`PROFILE_MEDIA_VALIDATION_ENABLED=true`. A production-like process refuses to
+start unless all of them hold — the credential check matters because
+flag-on-but-unconfigured would render a verification CTA that opens a Mini App
+with no session to run.
+
+**Historical debt:** `verified` statuses granted during the sandbox window
+(2026-07-17 → 2026-07-26) carry no real identity guarantee and were never
+retroactively cleared. Audit that cohort before it matters commercially.
+
+**Cost per verified user.** One liveness check ≈ **$0.015** (first 500k/mo,
+us-east-1 list price; eu-central-1 may differ slightly) plus the existing
+`CompareFaces` calls — one per profile photo, ≈ $0.001 each, so 4–10 photos add
+≈ $0.004–0.010. A verified user therefore costs roughly **$0.02–0.03**, and a
+retry costs another $0.015. At 1,000 registrations/month that is ~$25 versus
+Persona's $250 floor.
+
+**Required AWS setup** (account `147010141827`, region `eu-central-1` — Face
+Liveness is available there; a `CreateFaceLivenessSession` probe returns
+`AccessDeniedException`, not `UnknownOperationException`, before the policy is
+applied). Two changes, both console-side:
+
+1. Add to the `gennety-bot-rekognition` user policy:
+   `rekognition:CreateFaceLivenessSession`,
+   `rekognition:GetFaceLivenessSessionResults` (Resource `*`), and
+   `sts:AssumeRole` on
+   `arn:aws:iam::147010141827:role/GennetyLivenessClient`.
+2. Create role **`GennetyLivenessClient`** — trust policy: Principal =
+   `arn:aws:iam::147010141827:user/gennety-bot-rekognition`, Action
+   `sts:AssumeRole`. Permission policy: `rekognition:StartFaceLivenessSession`
+   on `*` and nothing else. This is the grant a user's browser/phone briefly
+   holds (15 min, the AssumeRole floor) to sign its own video stream;
+   Rekognition supports no resource-level ARN for that action, so the narrow
+   action list plus the short TTL is the containment. The backend re-asserts
+   the same ceiling as an inline session policy, so widening the role later
+   does not silently widen what a client gets.
+
+Verify all three permissions without a camera or a billed check:
+
+```sh
+pnpm probe-liveness   # CreateSession → AssumeRole → GetSessionResults
+```
+
+An unused session is not billed as a check and expires on its own after 3
+minutes, so the probe is free and safe to re-run.
+
+**BotFather `/setdomain` must include `dating-calendar.gennety.com`** — the
+detector needs camera permission inside the Telegram WebView. (The Persona
+"Allowed origins" dashboard step is gone with the provider.)
 
 Matching admits only verified users and the persisted pre-flip skip cohort. The
 AI vision Elo seed runs inside the verification pipeline, so live verification
@@ -820,7 +898,7 @@ Required/high-impact env keys:
   below the preview, and that tradeoff must be chosen deliberately per flow.
   Two categories of stream exist:
   - **Thinking-status beats** (`runStatusSequence`, the "agent is analysing /
-    working" lines): AI-memory analysis, Persona verify check, verification
+    working" lines): AI-memory analysis, liveness verify check, verification
     soft-skip, profile-video upload check, concierge venue selection, date-card
     render + share, plus the Profiler batch boundary, the Profiler in-batch
     questions (PRODUCT_SPEC §Phase 1b), and the periodic profile-survey
@@ -887,11 +965,17 @@ Required/high-impact env keys:
   works. **Requires `db:push` of the additive `live_activity_tokens` table
   first** (non-destructive). `EXPO_ACCESS_TOKEN` is retired and can be
   removed from `/opt/gennety/.env`.
-- Persona: `ENABLE_PERSONA_VERIFICATION`, `PERSONA_TEMPLATE_ID`,
-  `PERSONA_ENVIRONMENT_ID`, `PERSONA_API_KEY`,
-  `PERSONA_WEBHOOK_SECRET`, `PERSONA_HOSTED_URL_BASE`,
-  `ALLOW_SANDBOX_PERSONA` (deliberate interim override — see "Verification
-  production gate" above; remove once a live Persona key is configured)
+- Liveness (AWS Rekognition Face Liveness — replaced Persona 2026-07-26):
+  `FACE_LIVENESS_ENABLED` (must be `true` in production — startup fails
+  closed), `FACE_LIVENESS_MIN_CONFIDENCE` (default `0.8`; below it the check is
+  RETRYABLE, never `rejected`), `LIVENESS_STS_ROLE_ARN`
+  (`arn:aws:iam::147010141827:role/GennetyLivenessClient`),
+  `LIVENESS_CREDENTIALS_TTL_SECONDS` (default/floor `900`). Reuses the existing
+  `AWS_*` credentials and region. **Removed with the provider:**
+  `ENABLE_PERSONA_VERIFICATION`, `PERSONA_TEMPLATE_ID`,
+  `PERSONA_ENVIRONMENT_ID`, `PERSONA_API_KEY`, `PERSONA_WEBHOOK_SECRET`,
+  `PERSONA_HOSTED_URL_BASE`, `ALLOW_SANDBOX_PERSONA` — delete these from
+  `/opt/gennety/.env`; the process no longer reads them.
 - Face match: `FACE_MATCH_PROVIDER`, `FACE_MATCH_THRESHOLD_VERIFY`
   (default 0.85), `FACE_MATCH_THRESHOLD_REVIEW` (default 0.75),
   `FACE_MATCH_MIN_VERIFIED_PHOTOS` (default 1), `AWS_REGION`,
@@ -1153,8 +1237,7 @@ Required/high-impact env keys:
   `REFERRAL_LADDER` (default `1:1:1,3:1:1,5:1:1,10:2:2` =
   `<count>:<ticketsDelta>:<monthsDelta>`, the referrer's milestone ladder —
   cumulative 1/1, 2/2, 3/3, 5/5), and `REFERRAL_DAILY_REWARD_CAP` (default `3`,
-  a per-referrer 24h anti-fraud reward-hold that matters while Persona is
-  sandbox). The reward fires at the invited friend's **verification** (the
+  a per-referrer 24h anti-fraud reward-hold). The reward fires at the invited friend's **verification** (the
   anti-fraud gate); the invitee's Premium month is granted at the onboarding
   screen. **Requires `db:push` of the additive `users.referral_verified_count`
   (default 0) / `referral_counted_at` / `referral_invitee_premium_at` columns
