@@ -1,6 +1,53 @@
 # Gennety Dating Deploy
 
-**Deployed 2026-07-26 — identity verification moved from Persona to AWS
+**Deployed 2026-07-26 (later) — a missing reference selfie is retryable, not a
+dead end (`2c5f206`).** Code-only: no Prisma schema change, no env change, no
+flag change, no Mini App change. A verification run that cannot fetch the
+reference selfie used to write `pending_review` — a status with no button, that
+the re-engagement stall sweep skips, behind an app gate that stays locked — so
+the user could never get out (PRODUCT_SPEC §1.4 rule 4). It now writes `pending`
+and DMs the Verify button, and it restores `verified` instead of demoting a user
+our own outage tripped over.
+
+Found via a live incident: one prod account (`telegramId 782065541`) had sat in
+that dead end since 2026-07-25 20:16 UTC — a photo-edit rerun against a
+Persona inquiry whose selfie was never stored (`selfie fetch failed
+{ error: 'no_selfie' }`, Persona-era code, ~9.5 h before the Face Liveness
+migration commit). **The account was recovered by hand** (`pending_review` →
+`unverified`, `personaInquiryId`/`faceMatchedAt`/`faceMatchScore` → null);
+`photoFaceScores` was deliberately left as `[0,0,0,0]` to preserve the
+`photos[i] ↔ photoFaceScores[i]` 1:1 invariant — the next successful run
+overwrites it. It was the only row in `pending_review` (plus 1 `rejected`, 7
+`unverified`).
+
+The bug was NOT Persona-specific — the migration carried that branch over
+verbatim and only swapped the selfie source underneath it. The live AWS-era
+trigger is the 90-day `selfie-retention` scrub plus the admin
+"rerun verification" button, which checks `personaInquiryId` but **not**
+`verifiedSelfiePath`: before this fix, one click on any user verified 90+ days
+ago would have demoted them out of the match pool into the same inescapable
+state. No such user exists yet, which is why it had not fired.
+
+Preflight green locally: bot suite **167 files / 2181 tests**, typecheck clean.
+Ran Deploy Full Server Code → `db:drift-check` (**OK**, nothing to push) →
+`pm2 restart`. rsync dry-run listed only the 2 usual stale `apps/video/build`
+artifacts as deletions. Post-deploy verified: `Bot @gennetybot started`, all 14
+crons registered, `:3100`/`:3101` listening, `/v1/ping` ok, admin `401`, all 11
+Mini App pages `200`, restart count 26 → 27 (single restart, no crash loop), and
+no new lines in the error log.
+
+**Also confirmed by this deploy's log review:** the "still to confirm" item from
+the migration block below — one live end-to-end verification from a real
+production account — has happened. A real AWS liveness session
+(`4c74f6d7-cd00-4e40-99c2-59f6a5be333b`, a UUID, not an `inq_*`) ran the full
+pipeline and returned a well-formed `rejected` (4 photos scored 0.027–0.046
+against the selfie). Face Liveness is working end-to-end in production.
+
+**Rollback:** `git revert 2c5f206`, redeploy. Nothing else to undo — no schema,
+no env. The hand-recovered account is independent of the code and stays
+recovered either way.
+
+**Prior: 2026-07-26 — identity verification moved from Persona to AWS
 Rekognition Face Liveness.** The sandbox-Persona era is over: production had
 been running test-only KYC behind `ALLOW_SANDBOX_PERSONA=true` since
 2026-07-17, and that override no longer exists because Face Liveness has no
