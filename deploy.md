@@ -1,37 +1,60 @@
 # Gennety Dating Deploy
 
-> ## ⚠️ NOT YET DEPLOYED — identity provider swap on `main` (2026-07-26)
->
-> `main` has migrated identity verification from **Persona** to **AWS
-> Rekognition Face Liveness**. Production is still running the old code, so the
-> droplet is behind `main` and **must not be deployed until the checklist below
-> is complete** — a plain code deploy would leave the bot refusing to boot
-> (`FACE_LIVENESS_ENABLED` / `LIVENESS_STS_ROLE_ARN` unset) and, if forced past
-> that, would open a verification Mini App with no session to run.
->
-> Blocking, in order:
-> 1. **AWS IAM** — apply both changes in "Verification production gate" below,
->    then confirm with `pnpm probe-liveness` (free; no camera, no billed check).
-> 2. **Env** — add `FACE_LIVENESS_ENABLED=true`,
->    `FACE_LIVENESS_MIN_CONFIDENCE=0.8`, `LIVENESS_STS_ROLE_ARN=…`,
->    `LIVENESS_CREDENTIALS_TTL_SECONDS=900`; remove every `PERSONA_*` key and
->    `ALLOW_SANDBOX_PERSONA`. Back up `.env` first.
-> 3. **Dev E2E on `@gennetytestbot`** — the Telegram-WebView capture has NOT
->    been proven yet. It is the one unvalidated assumption in the migration:
->    Amplify's detector needs camera access, a WebSocket to
->    `streaming-rekognition.eu-west-1.amazonaws.com`, and a model fetch from
->    public CDNs, all inside Telegram's WebView. Run a full check on a real
->    device against a tunnelled `WEBAPP_URL` before touching production.
-> 4. **Deploy** — Deploy Full Server Code (no `db:push` needed: the migration is
->    deliberately schema-free, `personaInquiryId` now holds the liveness session
->    id) **and** Deploy Mini App Only (`verification.html` changed).
->
-> No Prisma schema change. Rollback is `git revert` of the migration commits
-> plus restoring the `PERSONA_*` keys from an `.env.bak.*` — realistic because
-> production identity was sandbox-only, i.e. never real KYC, and almost no user
-> holds a meaningful `verified` from it.
+**Deployed 2026-07-26 — identity verification moved from Persona to AWS
+Rekognition Face Liveness.** The sandbox-Persona era is over: production had
+been running test-only KYC behind `ALLOW_SANDBOX_PERSONA=true` since
+2026-07-17, and that override no longer exists because Face Liveness has no
+sandbox/production key split to waive.
 
-Last verified: 2026-07-25 — phone-based account login (`d1ad29f`), code-only.
+Sequence: env delta first (the bot refuses to boot without the new keys, so
+they must precede the restart) → rsync → install/build → `db:push` →
+`db:drift-check` → `pm2 restart` → Mini App deploy.
+
+- **Env** (`/opt/gennety/.env`, backed up to `.env.bak.20260726-160202`):
+  removed all seven Persona keys (`ENABLE_PERSONA_VERIFICATION`,
+  `PERSONA_TEMPLATE_ID`, `PERSONA_ENVIRONMENT_ID`, `PERSONA_API_KEY`,
+  `PERSONA_WEBHOOK_SECRET`, `PERSONA_HOSTED_URL_BASE`,
+  `ALLOW_SANDBOX_PERSONA`); added `FACE_LIVENESS_ENABLED=true`,
+  `FACE_LIVENESS_REGION=eu-west-1`, `FACE_LIVENESS_MIN_CONFIDENCE=0.8`,
+  `LIVENESS_STS_ROLE_ARN=arn:aws:iam::147010141827:role/GennetyLivenessClient`,
+  `LIVENESS_CREDENTIALS_TTL_SECONDS=900`. No new AWS credentials were needed —
+  the existing `gennety-bot-rekognition` user gained two Rekognition actions
+  plus `sts:AssumeRole`, and a new `GennetyLivenessClient` role carries the
+  single `StartFaceLivenessSession` grant a user's device briefly holds.
+- **⚠️ An unrelated schema drift surfaced and had to be resolved first.**
+  `db:drift-check` failed on the **Rematch** tables (`matches.source`,
+  `matches.rematch_paid_by_id`, `rematch_purchases`) — committed to `main`
+  earlier and never deployed, exactly as this file's Rematch section warns.
+  Verified additive before pushing: `prisma migrate diff --script` produced 6
+  statements, all `ALTER TABLE ADD COLUMN` / `CREATE TABLE` / `CREATE INDEX`,
+  **zero `DROP`** (the only "DELETE" match was `ON DELETE CASCADE` in the new
+  table's FK). `db:push` then `db:drift-check` → OK. The liveness migration
+  itself is schema-free: `personaInquiryId` now holds the AWS session id.
+- **rsync** dry-run listed 12 deletions, all intended: the 9 deleted
+  Persona/poller files, the dead `verification.css`, and 2 stale
+  `apps/video/build` artifacts.
+- **Verified after restart:** `Bot @gennetybot started`, all 14 crons
+  registered, `:3100`/`:3101` listening, restart count 25 → 26 (single restart,
+  no crash loop), and **no new lines in the error log** — the `[persona] handler
+  error` entries there predate the deploy by two hours and belong to the
+  webhook that no longer exists. `pnpm probe-liveness` **on the droplet** passed
+  all three AWS permissions with production env. `/v1/ping` ok, admin `401`, all
+  11 Mini App pages `200`, the self-hosted model + wasm assets serve with
+  `application/wasm`, and `POST /v1/webhooks/persona` now `404`s.
+  (`GET /v1/me/verification/url` answers `401` rather than `404` because
+  `requireAuth` runs before routing in that router — the route is genuinely
+  gone.)
+- **Still to confirm:** one live end-to-end verification from a real account.
+  The dev run on `@gennetytestbot` passed fully (real AWS session, reference
+  selfie stored, `CompareFaces` [1.000, 0.988, 1.000, 0.999] → `verified`), so
+  the remaining unknown is only production's own Mini App host.
+
+**Rollback:** `git revert` the migration commits, restore
+`.env.bak.20260726-160202`, redeploy. Realistic because production identity was
+sandbox-only — no real `verified` cohort depends on it. The additive Rematch
+schema can stay either way.
+
+Prior: 2026-07-25 — phone-based account login (`d1ad29f`), code-only.
 Prior the same day: full catch-up release (85 commits), additive
 `db:push`, flag alignment, and a dev↔prod isolation fix (details in the dated
 blocks below). Prior: 2026-07-23 — dev↔prod schema-drift reconciliation + the
