@@ -1,0 +1,206 @@
+/**
+ * Gennety brand theme for the AWS Face Liveness detector.
+ *
+ * Loaded by `liveness-detector.tsx` immediately after
+ * `@aws-amplify/ui-react/styles.css`, so it lands later in the bundled CSS AND
+ * carries higher specificity (`:root[data-theme=…]` beats Amplify's
+ * `:root, [data-amplify-theme]`). Both, deliberately — either alone would win,
+ * and neither is worth relying on by itself across an Amplify bump.
+ *
+ * ── Why CSS variables and not `<ThemeProvider>` ────────────────────────────
+ * `@aws-amplify/ui-react-liveness@3.6.7` never renders a `data-amplify-theme`
+ * scope of its own (verified against dist/), so every token it reads resolves
+ * straight off `:root`. A `ThemeProvider` would mount a scoped
+ * `[data-amplify-theme="gennety"]` element *inside* the tree, which would then
+ * shadow these `:root` values for its own subtree — i.e. it would fight this
+ * file rather than help it. It would also introduce a second source of truth
+ * for light/dark, wired through React state, when the app already resolves the
+ * theme pre-paint via `<html data-theme>`. So: one mechanism, one source of
+ * truth, no re-render on theme change.
+ *
+ * ── Palette ────────────────────────────────────────────────────────────────
+ *   dark  — near-black surface, warm off-white text, burgundy accent
+ *   light — white surface,      near-black text,     burgundy accent
+ * The accent (#8B253B / brighter #B6304F on dark) is the shared brand colour;
+ * everything else flips with `data-theme`.
+ *
+ * ── What is deliberately NOT touched (compliance) ──────────────────────────
+ * The biometric surface belongs to AWS and stays untouched:
+ *   • `.amplify-liveness-freshness-canvas` — the light challenge. Its colours
+ *     come from the session's server-issued colour sequence and ARE the
+ *     liveness signal.
+ *   • `.amplify-liveness-oval-canvas` / `.amplify-liveness-video` — oval
+ *     geometry, the `scaleX(-1)` mirroring, and the hardcoded `#fff` mask AWS
+ *     paints around the oval mid-check (that white surround lights the face;
+ *     it is not a styling accident, and it will flash white even in dark mode
+ *     — by design, do not "fix" it).
+ *   • `--amplify-colors-border-secondary` — read by `getComputedStyle` as the
+ *     oval's stroke colour. Left at Amplify's light neutral so the oval keeps
+ *     maximum contrast against that white mask in both themes.
+ *   • `.amplify-liveness-recording-icon` — the "recording" pill. Left at its
+ *     white-on-any-video treatment so it stays unmistakable over an arbitrary
+ *     camera feed.
+ *   • Every `animation-duration` / scan timing.
+ * `liveness-theme.test.ts` enforces this list.
+ */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   1. Typography + accent ramp — theme-independent
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Amplify ships Inter and falls back to a generic stack; match the system
+     font every other Gennety Mini App uses so the detector doesn't read as a
+     bolted-on third-party screen. */
+  --amplify-fonts-default-variable: -apple-system, system-ui, "Segoe UI", Roboto,
+    sans-serif;
+  --amplify-fonts-default-static: -apple-system, system-ui, "Segoe UI", Roboto,
+    sans-serif;
+
+  /* Text that sits ON the burgundy accent (primary buttons, the primary toast,
+     error toasts). White in both themes. */
+  --amplify-colors-font-inverse: #ffffff;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   2. Dark theme — the brand default
+   Bare `:root` is included so a document that somehow never got its
+   `data-theme` stamped still renders dark rather than Amplify's white/teal.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root,
+:root[data-theme="dark"] {
+  /* Makes the native camera <select> and scrollbars render dark. The page's
+     own stylesheet sets this too; the detector mounts into the same document,
+     but stating it here keeps this file self-sufficient. */
+  color-scheme: dark;
+
+  /* Burgundy ramp. Amplify keys almost everything off `primary-80` (button
+     background, the primary hint toast, the match-indicator fill) and uses
+     90/100 for hover/active/focus. On a near-black page the accent has to sit
+     ABOVE the base burgundy to stay legible, so dark mode leads with
+     `--accent-bright` (#B6304F, 4.6:1 against white label text) and gets
+     LIGHTER on interaction — the correct affordance direction on dark. */
+  --amplify-colors-primary-10: rgba(139, 37, 59, 0.14);
+  --amplify-colors-primary-20: rgba(139, 37, 59, 0.24);
+  --amplify-colors-primary-40: #6d1d2f;
+  --amplify-colors-primary-60: #8b253b;
+  --amplify-colors-primary-80: #b6304f;
+  --amplify-colors-primary-90: #c93b5c;
+  --amplify-colors-primary-100: #d8496b;
+
+  /* Surfaces. `background-primary` is the one token the detector reads back
+     out through `getComputedStyle()` to fill the start-screen canvas, so it is
+     a LITERAL colour rather than a `var()` indirection: a canvas `fillStyle`
+     that receives an unresolved `var(...)` fails silently to transparent. */
+  --amplify-colors-background-primary: #030303;
+  --amplify-colors-background-secondary: #161616;
+  --amplify-colors-background-tertiary: #202020;
+  --amplify-components-liveness-camera-module-background-color: #030303;
+
+  --amplify-colors-font-primary: #e9e6e5;
+  --amplify-colors-font-secondary: #8e8895;
+  --amplify-colors-font-tertiary: #6a656b;
+
+  --amplify-colors-border-primary: rgba(255, 255, 255, 0.18);
+
+  /* The scrim behind the instruction overlay. A touch heavier than Amplify's
+     40% so the copy holds up over a bright camera feed. */
+  --amplify-colors-overlay-40: rgba(0, 0, 0, 0.55);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   3. Light theme
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  /* On white, the base burgundy is the legible one (8.7:1 against white label
+     text) and interaction DARKENS it. */
+  --amplify-colors-primary-10: rgba(139, 37, 59, 0.1);
+  --amplify-colors-primary-20: rgba(139, 37, 59, 0.18);
+  --amplify-colors-primary-40: #c95a72;
+  --amplify-colors-primary-60: #a52d47;
+  --amplify-colors-primary-80: #8b253b;
+  --amplify-colors-primary-90: #741e31;
+  --amplify-colors-primary-100: #5d1827;
+
+  /* Literal for the same canvas-readback reason as dark. */
+  --amplify-colors-background-primary: #ffffff;
+  --amplify-colors-background-secondary: #f5f5f5;
+  --amplify-colors-background-tertiary: #ececec;
+  --amplify-components-liveness-camera-module-background-color: #ffffff;
+
+  --amplify-colors-font-primary: #1d1d1d;
+  --amplify-colors-font-secondary: #6b6670;
+  --amplify-colors-font-tertiary: #9a949c;
+
+  --amplify-colors-border-primary: rgba(0, 0, 0, 0.2);
+
+  --amplify-colors-overlay-40: rgba(0, 0, 0, 0.45);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   4. Rules for colours Amplify hardcodes, which no token can reach
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* The detector's own root. Fill the mount and inherit the page font. */
+.liveness-detector {
+  width: 100%;
+  height: 100%;
+  font-family: var(--amplify-fonts-default-variable);
+  background-color: var(--amplify-colors-background-primary);
+}
+
+/* The camera frame's hairline is `--amplify-colors-neutral-40` — a light grey
+   that reads as a bright box outline on a near-black page. */
+.amplify-liveness-camera-module {
+  border-color: var(--amplify-colors-border-primary);
+}
+
+/* "Cancel the check", pinned over the live camera feed. Amplify hardcodes
+   `background:#fff; color:hsl(190,95%,30%)` — a white pill with an Amplify-teal
+   label, the single most obviously-not-ours element on screen. Kept as a solid
+   (not translucent) surface: it sits over arbitrary video, so a glass treatment
+   would be unreadable against a bright frame. */
+.amplify-liveness-cancel-button {
+  background-color: var(--amplify-colors-background-primary);
+  color: var(--amplify-colors-primary-80);
+  border: 1px solid var(--amplify-colors-border-primary);
+  border-radius: var(--amplify-radii-medium);
+  font-weight: 600;
+}
+
+/* The instruction bubble over the camera. Amplify gives it no border, which on
+   dark leaves a near-black bubble floating on a dark video with no edge. */
+.amplify-liveness-toast {
+  border: 1px solid var(--amplify-colors-border-primary);
+  border-radius: var(--amplify-radii-medium);
+}
+
+/* The primary-variant bubble already carries the burgundy fill via
+   `primary-80`; drop the hairline there so the accent reads as one solid mark. */
+.amplify-liveness-toast--primary {
+  border-color: transparent;
+}
+
+/* Photosensitivity notice on the Get Ready screen. Amplify styles it
+   blue-90-on-blue-10, i.e. a pale blue block that is near-white on our dark
+   page and off-brand on the light one. Re-tinted to the accent so it stays a
+   distinct, deliberately-noticeable callout — the text keeps full
+   `font-primary` contrast because this is a safety warning before a flashing
+   sequence, not decoration. */
+.amplify-liveness-start-screen-warning {
+  color: var(--amplify-colors-font-primary);
+  background-color: var(--amplify-colors-primary-10);
+  border-radius: var(--amplify-radii-medium);
+}
+
+/* The "more about photosensitivity" popover inherits `background-primary`, so
+   on dark it is a near-black card whose default border still resolves to a
+   light neutral. Align it with the rest of the surface language. */
+.amplify-liveness-popover__container {
+  border-color: var(--amplify-colors-border-primary);
+  border-radius: var(--amplify-radii-medium);
+}

@@ -29,6 +29,15 @@ export default defineConfig({
       },
     },
   },
+  test: {
+    /// Vitest stubs every CSS import to an empty string by default, which also
+    /// swallows an explicit `?raw` one. `liveness-theme.test.ts` reads the Face
+    /// Liveness brand stylesheet as text to assert it never restyles the
+    /// biometric capture surface (oval, light challenge, recording indicator),
+    /// so that one file has to come through for real. Scoped rather than
+    /// `css: true` so no other test starts paying for CSS processing.
+    css: { include: [/liveness-theme\.css/] },
+  },
   server: {
     host: "0.0.0.0",
     port: 5173,

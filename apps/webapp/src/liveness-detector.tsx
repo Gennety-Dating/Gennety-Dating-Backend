@@ -2,6 +2,11 @@ import { StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { FaceLivenessDetectorCore } from "@aws-amplify/ui-react-liveness";
 import "@aws-amplify/ui-react/styles.css";
+// Brand theme. Must stay AFTER the Amplify stylesheet: it re-points Amplify's
+// design tokens at the Gennety palette and overrides the handful of colours
+// Amplify hardcodes past its own tokens. See the file header for what it
+// deliberately leaves alone (oval, light challenge, recording indicator).
+import "./liveness-theme.css";
 import type { LivenessCredentials } from "./api.js";
 import type { Lang } from "./i18n.js";
 import { livenessText } from "./liveness-i18n.js";
