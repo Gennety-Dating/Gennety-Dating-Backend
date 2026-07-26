@@ -71,6 +71,27 @@ function describeMediaSupport(): string {
   return parts.join(" | ");
 }
 
+/**
+ * Face detection runs on-device, and out of the box the detector fetches its
+ * two assets from third-party CDNs: the TF.js wasm backend from jsdelivr and
+ * the Blazeface model from tfhub.dev (which itself redirects to Google
+ * storage). That is how the first field run failed — three hosts, a redirect
+ * chain and a fixed load timeout, over a phone's mobile connection. The check
+ * never started; the user just saw a bare camera and no oval.
+ *
+ * So we serve both from our own origin, the one the Mini App is already loaded
+ * from. Fewer hosts than the camera stream itself needs, nothing to be blocked
+ * or slow in a market we do not control, and no silent dependency on a CDN
+ * staying up for a step the product cannot skip.
+ *
+ * The wasm binaries are copied verbatim from the installed
+ * `@tensorflow/tfjs-backend-wasm` (4.11.0) — Amplify's own default points at
+ * 3.11.0, which does not match what npm actually installs, and their docs are
+ * explicit that the two must agree.
+ */
+const FACE_MODEL_URL = "/liveness/blazeface/model.json";
+const TFJS_WASM_PATH = "/liveness/tfjs-wasm/";
+
 let root: Root | null = null;
 
 /**
@@ -111,6 +132,8 @@ export function mountLivenessDetector(
         // flashing colours, and it puts the camera permission prompt behind an
         // explicit tap. Neither is ours to drop.
         config={{
+          binaryPath: TFJS_WASM_PATH,
+          faceModelUrl: FACE_MODEL_URL,
           credentialProvider: async () => ({
             accessKeyId: options.credentials.accessKeyId,
             secretAccessKey: options.credentials.secretAccessKey,
