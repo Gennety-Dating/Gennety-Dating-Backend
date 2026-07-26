@@ -7,80 +7,32 @@ import {
 import { pickLang, tr, type Lang } from "./i18n.js";
 
 /**
- * Verification Mini App entry point (Phase 6.3 — Persona embedded flow).
+ * Verification Mini App — AWS Rekognition Face Liveness.
  *
  * UX flow:
- *   1. User taps "🟢 Verify now" on the bot's onboarding CTA. Telegram
- *      opens this page via `InlineKeyboardButton.web_app` inside the
- *      native WebView — no browser frame, no in-app browser handoff.
- *   2. `GET /v1/verification/mini-app/init` returns the Persona template
- *      / environment ids and the user's stable referenceId (= User.id).
- *   3. Persona Embedded SDK mounts inline in the iframe (#persona-mount).
- *      Selfie/document capture happens *inside* the Telegram WebView, so
- *      camera permissions piggyback on Telegram's pre-granted Mini App
- *      camera grant — no second permission prompt sequence.
- *   4. On a terminal SDK event (`onComplete` / `onCancel` / `onError`) we
- *      POST to `/v1/verification/mini-app/event`. `complete` triggers the
- *      bot's pull-fallback pipeline so the result DM lands even when
- *      Persona's webhook is delayed; cancel/error are best-effort logs.
+ *   1. User taps "🟢 Verify now" on the bot's CTA. Telegram opens this page via
+ *      `InlineKeyboardButton.web_app` inside the native WebView — no browser
+ *      frame, no redirect to any third party.
+ *   2. `GET /v1/verification/mini-app/init` returns a liveness `sessionId`, the
+ *      region, and short-lived AWS credentials scoped to a single action.
+ *   3. Amplify's `FaceLivenessDetector` (mounted as a React island by
+ *      `liveness-detector.tsx`) runs the check on-device and streams the selfie
+ *      video straight to Rekognition. The video never touches our server.
+ *   4. On completion we POST `/event`, which reads AWS's verdict server-side
+ *      and either starts face-matching or asks the user to try again.
  *
- * Trust boundary (re-emphasised):
- *   The Mini App NEVER writes `verified` / `rejected` directly. The HMAC
- *   webhook (routes/persona-webhook.ts) is the only path that can flip a
- *   user to `verified` — even the `complete` event handler only triggers
- *   a server-to-server check against Persona's REST API.
+ * Two things drive the design:
+ *   • The session expires 3 MINUTES after step 2, taking the reference image
+ *     with it. So the `complete` POST is not a nudge — it is the only chance to
+ *     read the result, and the user must not sit on the loading screen.
+ *   • The client never learns whether it passed. The bot DMs the outcome; this
+ *     page only distinguishes "we're checking" from "run it again".
  *
- * Backwards-compat: if the Mini App fails to load entirely (offline mode,
- * blocked CDN, etc.) the bot's CTA falls back to the hosted-URL flow —
- * see handlers/onboarding/verification.ts.
+ * Why an island instead of a React page: the surrounding screens (loading,
+ * error, success, already-verified) are four mutually-exclusive states of plain
+ * HTML, and the Telegram lifecycle (fullscreen, theme, BackButton, closing
+ * confirmation) is imperative. Only the detector needs React.
  */
-
-// ---------------------------------------------------------------------------
-// Persona SDK type shim — minimal subset used by this Mini App. Imported as
-// a global at runtime (`<script src="…/persona-v5.x.x.js">`). Pinned to v5
-// in verification.html; this shim mirrors the v5 client constructor surface.
-// ---------------------------------------------------------------------------
-interface PersonaClient {
-  open(): void;
-  cancel?(): void;
-  destroy?(): void;
-}
-
-interface PersonaCompleteEvent {
-  inquiryId?: string;
-  status?: string;
-}
-
-interface PersonaErrorEvent {
-  message?: string;
-  code?: string;
-}
-
-interface PersonaClientOptions {
-  templateId: string;
-  environmentId: string;
-  referenceId: string;
-  language?: string;
-  frameAncestors?: string[];
-  /** Where to render the iframe. Without it, Persona injects into <body>. */
-  parent?: HTMLElement;
-  onLoad?: () => void;
-  onReady?: () => void;
-  onEvent?: (name: string, meta?: unknown) => void;
-  onComplete?: (event: PersonaCompleteEvent) => void;
-  onCancel?: (event: { inquiryId?: string }) => void;
-  onError?: (event: PersonaErrorEvent) => void;
-}
-
-interface PersonaGlobal {
-  Client: new (opts: PersonaClientOptions) => PersonaClient;
-}
-
-declare global {
-  interface Window {
-    Persona?: PersonaGlobal;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Pure handlers — exported so verification.test.ts can drive them with
@@ -91,6 +43,8 @@ declare global {
 export interface HandlerDeps {
   initData: string;
   lang: Lang;
+  /** Session being reported on. Null only for cancel, which needs no verdict. */
+  sessionId: string | null;
   app: {
     HapticFeedback?: { notificationOccurred?: (kind: "success" | "error") => void };
     close(): void;
@@ -102,28 +56,39 @@ export interface HandlerDeps {
       offClick?(handler: () => void): void;
     };
   };
-  render: (view: "loading" | "finishing" | "error" | "success") => void;
+  render: (view: Screen) => void;
   postEvent: typeof postVerificationEvent;
   closeDelayMs?: number;
 }
 
-export async function handleComplete(
-  event: PersonaCompleteEvent,
-  deps: HandlerDeps,
-): Promise<void> {
+/**
+ * The detector finished capturing. Unlike the Persona flow this POST is
+ * load-bearing: the server reads AWS's verdict inside it, so we wait for the
+ * response and branch on the outcome instead of closing optimistically.
+ */
+export async function handleComplete(deps: HandlerDeps): Promise<void> {
   deps.render("finishing");
-  deps.app.HapticFeedback?.notificationOccurred?.("success");
   try {
-    await deps.postEvent(deps.initData, {
+    const result = await deps.postEvent(deps.initData, {
       kind: "complete",
-      inquiryId: event.inquiryId ?? null,
-      status: event.status ?? null,
+      sessionId: deps.sessionId,
     });
+    if (result.outcome === "retry") {
+      // Not a failure of ours and not a rejection of them — the capture just
+      // wasn't convincing. The bot has already sent a fresh Verify button.
+      deps.app.HapticFeedback?.notificationOccurred?.("error");
+      deps.render("retry");
+      showCloseButton(deps);
+      return;
+    }
+    deps.app.HapticFeedback?.notificationOccurred?.("success");
   } catch (err) {
-    // The webhook is the source of truth for status anyway; a failed POST
-    // here only loses the pull-fallback nudge. Log + carry on closing so
-    // the user doesn't get stuck on the success screen forever.
+    // The check may well have passed; we just couldn't tell the server. Say so
+    // honestly rather than showing a success tick we can't back up.
     console.warn("[verification] /event complete POST failed", err);
+    deps.render("error");
+    showCloseButton(deps);
+    return;
   }
   // Brief delay so the success checkmark animation can play out before the
   // WebView dismisses — the disc-pop + tick-draw + halo settle in ~1s, so we
@@ -142,7 +107,7 @@ export async function handleCancel(deps: HandlerDeps): Promise<void> {
 }
 
 export async function handleError(
-  event: PersonaErrorEvent,
+  event: { message?: string },
   deps: HandlerDeps,
 ): Promise<void> {
   deps.app.HapticFeedback?.notificationOccurred?.("error");
@@ -155,25 +120,34 @@ export async function handleError(
     console.warn("[verification] /event error POST failed", err);
   }
   deps.render("error");
+  showCloseButton(deps);
+}
+
+function showCloseButton(deps: HandlerDeps): void {
   const button = deps.app.MainButton;
-  if (button) {
-    button.setText(tr(deps.lang, "verifyMiniAppCloseBtn"));
-    button.onClick(() => deps.app.close());
-    button.show();
-  }
+  if (!button) return;
+  button.setText(tr(deps.lang, "verifyMiniAppCloseBtn"));
+  button.onClick(() => deps.app.close());
+  button.show();
 }
 
 // ---------------------------------------------------------------------------
 // Page-level rendering — swaps inner HTML of #root for the requested screen.
-// Kept as a single function (not a component framework) because we only have
-// 4 mutually-exclusive views and React would mean a 30KB+ bundle hit for
-// a screen that's 95% Persona's iframe.
+// Kept as a single function (not a component framework) because these are
+// mutually-exclusive static views; only the detector itself needs React.
 // ---------------------------------------------------------------------------
 
-type Screen = "loading" | "finishing" | "error" | "success" | "already-verified" | "unavailable";
+export type Screen =
+  | "loading"
+  | "finishing"
+  | "error"
+  | "retry"
+  | "success"
+  | "already-verified"
+  | "unavailable";
 
 /**
- * Animated success checkmark — the "all done" moment after Persona passes.
+ * Animated success checkmark — the "all done" moment after the check passes.
  *
  * Implemented as an inline animated SVG (no Lottie runtime, no CDN) so it can
  * never fail to load inside the Telegram WebView the way an external player or
@@ -201,7 +175,17 @@ function successScreen(lang: Lang, textKey: Parameters<typeof tr>[1]): string {
     </div>`;
 }
 
-function renderScreen(root: HTMLElement, screen: Screen, lang: Lang): void {
+function panelScreen(lang: Lang, glyph: string, textKey: Parameters<typeof tr>[1]): string {
+  return `
+    <div class="screen">
+      <div class="screen__panel">
+        <div class="error-glyph">${glyph}</div>
+        <p class="screen-title">${escapeHtml(tr(lang, textKey))}</p>
+      </div>
+    </div>`;
+}
+
+export function renderScreen(root: HTMLElement, screen: Screen, lang: Lang): void {
   switch (screen) {
     case "loading":
       root.innerHTML = `
@@ -216,14 +200,11 @@ function renderScreen(root: HTMLElement, screen: Screen, lang: Lang): void {
     case "success":
       root.innerHTML = successScreen(lang, "verifyMiniAppFinishing");
       return;
+    case "retry":
+      root.innerHTML = panelScreen(lang, "🙈", "verifyMiniAppRetry");
+      return;
     case "error":
-      root.innerHTML = `
-        <div class="screen">
-          <div class="screen__panel">
-            <div class="error-glyph">⚠️</div>
-            <p class="screen-title">${escapeHtml(tr(lang, "verifyMiniAppError"))}</p>
-          </div>
-        </div>`;
+      root.innerHTML = panelScreen(lang, "⚠️", "verifyMiniAppError");
       return;
     case "already-verified":
       root.innerHTML = successScreen(lang, "verifyMiniAppAlreadyVerified");
@@ -276,7 +257,7 @@ function boot(): void {
 
   app.ready();
   app.expand();
-  // Bot API 8.0+ — immersive fullscreen for KYC capture. Older clients
+  // Bot API 8.0+ — immersive fullscreen for the capture. Older clients
   // gracefully fall through to expanded-but-not-fullscreen. Paint Telegram's
   // chrome to match the active theme so it doesn't flash the wrong color.
   const bootTheme = document.documentElement.dataset.theme === "light" ? "light" : "dark";
@@ -290,15 +271,16 @@ function boot(): void {
     console.warn("[verification] fullscreen/chrome setup failed (non-fatal)", err);
   }
 
-  // Dev-only screen preview: `?screen=loading|success|error|unavailable|...`
-  // renders that state and skips Persona init, so every themed status screen
-  // can be reviewed without a live Persona session. Inert in production builds.
+  // Dev-only screen preview: `?screen=loading|success|retry|error|...` renders
+  // that state and skips the liveness session, so every themed status screen
+  // can be reviewed without burning a real check. Inert in production builds.
   if (import.meta.env.DEV) {
     const forced = params.get("screen");
     const allowed: Screen[] = [
       "loading",
       "finishing",
       "success",
+      "retry",
       "error",
       "unavailable",
       "already-verified",
@@ -308,7 +290,7 @@ function boot(): void {
       return;
     }
   }
-  // Catch accidental swipe-down dismissals during selfie capture.
+  // Catch accidental swipe-down dismissals during capture.
   try {
     (app as unknown as { enableClosingConfirmation?: () => void }).enableClosingConfirmation?.();
   } catch {
@@ -317,7 +299,7 @@ function boot(): void {
   // Back button as an explicit "I want out" affordance during the flow.
   app.BackButton?.show();
   app.BackButton?.onClick(() => {
-    void handleCancel(buildDeps(app, root, lang));
+    void handleCancel(buildDeps(app, root, lang, null));
   });
 
   void bootstrap(app, root, lang);
@@ -344,8 +326,8 @@ async function bootstrap(
       renderScreen(root, "error", lang);
     }
     // Surface a Close MainButton so the user has an obvious exit when the
-    // initial GET fails — Persona never mounted, so they're staring at a
-    // dead screen otherwise.
+    // initial GET fails — nothing mounted, so they're staring at a dead screen
+    // otherwise.
     const button = app.MainButton;
     button.setText(tr(lang, "verifyMiniAppCloseBtn"));
     button.onClick(() => app.close());
@@ -353,125 +335,41 @@ async function bootstrap(
     return;
   }
 
-  // Lightweight console-only diagnostic logger. Useful when remote-
-  // debugging the Mini App in iOS Telegram WebView via Safari Web
-  // Inspector or Android Chrome via `chrome://inspect`. Avoid coupling
-  // diagnostics to the /event endpoint — sending every Persona lifecycle
-  // event to the server as a synthetic "error" floods bot logs and makes
-  // real failures hard to spot.
-  const debugLog = (stage: string, extra?: unknown): void => {
-    console.log("[verification]", stage, extra ?? "");
-  };
+  const deps = buildDeps(app, root, lang, init.sessionId);
 
-  debugLog("init-ok", {
-    templateId: init.templateId.slice(0, 12) + "…",
-    environmentId: init.environmentId.slice(0, 12) + "…",
-    language: init.language,
-    hasPersonaGlobal: typeof window.Persona,
-    location: location.origin,
-    tgVersion: app.version ?? "unknown",
-    tgPlatform: app.platform ?? "unknown",
-  });
+  // The detector bundle (Amplify + its Rekognition streaming client) is heavy,
+  // so it is only fetched once a session actually exists — a user who bounces
+  // off the 409/503 screens never downloads it.
+  const { mountLivenessDetector } = await import("./liveness-detector.js");
 
-  if (!window.Persona) {
-    // SDK script tag failed to load — same dead-screen risk; show the error
-    // card with Close-button affordance.
-    debugLog("persona-global-missing");
-    renderScreen(root, "error", lang);
-    const button = app.MainButton;
-    button.setText(tr(lang, "verifyMiniAppCloseBtn"));
-    button.onClick(() => app.close());
-    button.show();
+  root.innerHTML = `<div class="liveness-mount" id="liveness-mount"></div>`;
+  const mount = document.getElementById("liveness-mount");
+  if (!mount) {
+    void handleError({ message: "liveness mount missing" }, deps);
     return;
   }
 
-  // Persona SDK v5 on mobile injects an overlay and applies
-  // `body > *:not(#persona-widget-id) { display: none }` once `client.open()`
-  // fires. If we mount Persona inside `#root` (a `body > *` child) that
-  // selector also hides the Persona overlay itself. Letting Persona default
-  // to mounting at `document.body` keeps the overlay rule consistent.
-  //
-  // We keep the loading screen visible inside `#root` until `onReady`
-  // confirms the SDK actually mounted. On `onReady` we clear `#root` so
-  // only Persona's body-level overlay remains.
-  //
-  // Diagnostic message-bus listener so we can see Persona's postMessage
-  // traffic from inside the user's WebView. Forwarded server-side via
-  // debugLog so bot logs surface what the browser console shows.
-  window.addEventListener("message", (e) => {
-    if (typeof e.origin === "string" && e.origin.includes("persona")) {
-      debugLog("persona-postmessage", {
-        origin: e.origin,
-        data: typeof e.data === "object" ? Object.keys((e.data as object) ?? {}) : String(e.data),
-      });
-    }
-  });
-
-  // Also probe any iframe that Persona injects so we can see its src/load/error
-  // events server-side. We scan body and root for new iframes shortly after
-  // SDK construction.
-  setTimeout(() => {
-    const iframes = document.querySelectorAll("iframe");
-    debugLog("iframe-scan", {
-      count: iframes.length,
-      srcs: Array.from(iframes).map((f) => (f as HTMLIFrameElement).src.slice(0, 200)),
-    });
-  }, 1500);
-
-  const deps = buildDeps(app, root, lang);
-
-  let readyFired = false;
-  const readyTimeout = window.setTimeout(() => {
-    if (readyFired) return;
-    debugLog("timeout-10s-no-onReady");
-    void handleError(
-      { message: "Persona SDK did not initialize within 10s" },
-      deps,
-    );
-  }, 10_000);
-
-  // No `parent`, no `frameAncestors` — defer to SDK defaults per Persona
-  // v5 troubleshooting guidance for WebView contexts.
-  debugLog("persona-client-construct-start");
-  const client = new window.Persona.Client({
-    templateId: init.templateId,
-    environmentId: init.environmentId,
-    referenceId: init.referenceId,
-    language: init.language,
-    onLoad: () => {
-      debugLog("persona-onLoad");
-    },
-    onReady: () => {
-      debugLog("persona-onReady");
-      readyFired = true;
-      window.clearTimeout(readyTimeout);
-      root.innerHTML = "";
-      client.open();
-    },
-    onEvent: (name: string, meta?: unknown) => {
-      debugLog("persona-onEvent", { name, meta });
-    },
-    onComplete: (event) => {
-      window.clearTimeout(readyTimeout);
-      void handleComplete(event, deps);
+  mountLivenessDetector(mount, {
+    sessionId: init.sessionId,
+    region: init.region,
+    credentials: init.credentials,
+    onComplete: () => {
+      void handleComplete(deps);
     },
     onCancel: () => {
-      window.clearTimeout(readyTimeout);
       void handleCancel(deps);
     },
-    onError: (event) => {
-      window.clearTimeout(readyTimeout);
-      debugLog("persona-onError", event);
-      void handleError(event, deps);
+    onError: (message) => {
+      void handleError({ message }, deps);
     },
   });
-  debugLog("persona-client-construct-done", { hasClient: !!client });
 }
 
 function buildDeps(
   app: NonNullable<typeof window.Telegram>["WebApp"],
   root: HTMLElement,
   lang: Lang,
+  sessionId: string | null,
 ): HandlerDeps {
   // Conditional spread keeps `HapticFeedback` absent from the deps object
   // when the host client doesn't expose it — `exactOptionalPropertyTypes`
@@ -480,6 +378,7 @@ function buildDeps(
   return {
     initData: app.initData,
     lang,
+    sessionId,
     app: {
       ...(app.HapticFeedback ? { HapticFeedback: app.HapticFeedback } : {}),
       close: () => app.close(),
@@ -492,7 +391,7 @@ function buildDeps(
 
 // Side-effect: run the bootstrap when this module is loaded as a page entry.
 // In tests `window.Telegram` is absent — checking for it (instead of just
-// `typeof window`) keeps the importer-side from instantiating the SDK or
+// `typeof window`) keeps the importer-side from mounting the detector or
 // touching `document.getElementById`, which the test stubs intentionally
 // don't provide.
 if (

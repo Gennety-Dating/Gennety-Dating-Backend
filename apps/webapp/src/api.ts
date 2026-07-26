@@ -537,15 +537,37 @@ export async function completeTelegramOnboardingGate(
 // Verification Mini App API (Phase 6.3 — Persona embedded flow)
 // ---------------------------------------------------------------------------
 
+/**
+ * Short-lived AWS credentials the on-device Face Liveness detector uses to
+ * sign its own video stream to Rekognition. Minted per session by the server
+ * and clamped to `rekognition:StartFaceLivenessSession`.
+ */
+export interface LivenessCredentials {
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken: string;
+  /** ISO-8601. ~15 minutes, against a session that itself dies in 3. */
+  expiration: string;
+}
+
 export interface VerificationInit {
-  referenceId: string;
-  templateId: string;
-  /** Persona env id (`env_xxxxx`) — fully encodes sandbox vs production. */
-  environmentId: string;
+  /** AWS Face Liveness session id. Single-use, expires 3 minutes after mint. */
+  sessionId: string;
+  region: string;
+  credentials: LivenessCredentials;
   language: "en" | "ru" | "uk" | "de" | "pl";
 }
 
 export type VerificationEventKind = "complete" | "cancel" | "error";
+
+/**
+ * What the server decided after reading the AWS verdict.
+ *   - `processing` — liveness passed; face-matching runs in the background and
+ *     the bot DMs the real outcome.
+ *   - `retry`      — we couldn't confirm a live person. Nothing is held against
+ *     the user; they run a new session.
+ */
+export type VerificationEventOutcome = "processing" | "retry";
 
 export async function fetchVerificationInit(
   initData: string,
@@ -562,11 +584,10 @@ export async function postVerificationEvent(
   initData: string,
   payload: {
     kind: VerificationEventKind;
-    inquiryId?: string | null;
-    status?: string | null;
+    sessionId?: string | null;
     message?: string | null;
   },
-): Promise<void> {
+): Promise<{ ok: boolean; outcome?: VerificationEventOutcome }> {
   const res = await fetch(`${apiBase}/v1/verification/mini-app/event`, {
     method: "POST",
     headers: {
@@ -576,6 +597,7 @@ export async function postVerificationEvent(
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw await toError(res);
+  return (await res.json()) as { ok: boolean; outcome?: VerificationEventOutcome };
 }
 
 // ---------------------------------------------------------------------------

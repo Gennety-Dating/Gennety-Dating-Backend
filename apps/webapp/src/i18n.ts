@@ -72,6 +72,7 @@ interface Strings {
   verifyMiniAppLoading: string;
   verifyMiniAppFinishing: string;
   verifyMiniAppError: string;
+  verifyMiniAppRetry: string;
   verifyMiniAppCloseBtn: string;
   verifyMiniAppAlreadyVerified: string;
   verifyMiniAppNotConfigured: string;
@@ -139,6 +140,8 @@ const dict: Record<Lang, Strings> = {
     verifyMiniAppLoading: "Opening verification…",
     verifyMiniAppFinishing: "Almost done. Checking results…",
     verifyMiniAppError: "Couldn't start verification. Try again.",
+    verifyMiniAppRetry:
+      "Couldn't quite confirm it's you. Nothing lost — tap Verify in the chat and try once more.",
     verifyMiniAppCloseBtn: "Close",
     verifyMiniAppAlreadyVerified:
       "You're already verified — nothing to do here.",
@@ -206,6 +209,8 @@ const dict: Record<Lang, Strings> = {
     verifyMiniAppLoading: "Открываем верификацию…",
     verifyMiniAppFinishing: "Готово. Проверяем результат…",
     verifyMiniAppError: "Не удалось запустить проверку. Попробуйте ещё раз.",
+    verifyMiniAppRetry:
+      "Не получилось убедиться, что это вы. Ничего страшного — нажмите «Пройти верификацию» в чате и попробуйте ещё раз.",
     verifyMiniAppCloseBtn: "Закрыть",
     verifyMiniAppAlreadyVerified:
       "Ты уже верифицирован — здесь делать нечего.",
@@ -273,6 +278,8 @@ const dict: Record<Lang, Strings> = {
     verifyMiniAppLoading: "Відкриваємо верифікацію…",
     verifyMiniAppFinishing: "Готово. Перевіряємо результат…",
     verifyMiniAppError: "Не вдалося запустити перевірку. Спробуйте ще раз.",
+    verifyMiniAppRetry:
+      "Не вдалося переконатися, що це ви. Нічого страшного — натисніть «Пройти верифікацію» в чаті і спробуйте ще раз.",
     verifyMiniAppCloseBtn: "Закрити",
     verifyMiniAppAlreadyVerified:
       "Ти вже верифікований — тут робити нічого.",
@@ -341,6 +348,8 @@ const dict: Record<Lang, Strings> = {
     verifyMiniAppFinishing: "Gleich fertig. Ergebnis wird geprüft...",
     verifyMiniAppError:
       "Verifizierung konnte nicht gestartet werden. Versuch es gleich noch mal.",
+    verifyMiniAppRetry:
+      "Wir konnten nicht ganz bestätigen, dass du es bist. Nichts verloren - tippe im Chat auf Verifizieren und versuch es noch einmal.",
     verifyMiniAppCloseBtn: "Schließen",
     verifyMiniAppAlreadyVerified:
       "Du bist bereits verifiziert - hier gibt's nichts zu tun.",
@@ -409,6 +418,8 @@ const dict: Record<Lang, Strings> = {
     verifyMiniAppFinishing: "Już prawie. Sprawdzamy wynik...",
     verifyMiniAppError:
       "Nie udało się uruchomić weryfikacji. Spróbuj ponownie.",
+    verifyMiniAppRetry:
+      "Nie udało się do końca potwierdzić, że to ty. Nic straconego - kliknij Zweryfikuj na czacie i spróbuj jeszcze raz.",
     verifyMiniAppCloseBtn: "Zamknij",
     verifyMiniAppAlreadyVerified:
       "Jesteś już zweryfikowany - tu nie ma co robić.",

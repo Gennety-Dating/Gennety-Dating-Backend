@@ -2,10 +2,16 @@
  * Unit tests for the Verification Mini App handler functions
  * (`handleComplete` / `handleCancel` / `handleError`).
  *
- * These cover the pure handler surface — the Persona SDK callbacks all
- * land in these three functions, so testing them is equivalent to testing
- * the SDK→backend bridge. The page-bootstrap path (DOMContentLoaded,
- * Persona iframe mount) is exercised manually in dev — see the plan file.
+ * These cover the pure handler surface — every detector callback lands in one
+ * of these three functions, so testing them is equivalent to testing the
+ * detector→backend bridge. The page-bootstrap path (DOMContentLoaded, mounting
+ * the React island) is exercised manually in dev.
+ *
+ * The behaviour that matters most here is new to Face Liveness: `complete` is
+ * no longer fire-and-forget. The AWS session expires 3 minutes after /init, so
+ * the server reads the verdict inside that POST — which means the handler must
+ * wait for the response and branch on it, and must NOT show a success tick it
+ * cannot back up.
  *
  * We mock the Telegram WebApp surface and the api.ts POST helper so the
  * handlers can be driven deterministically without a real WebView. Test
@@ -13,8 +19,10 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Stub out the Telegram WebApp + window.Persona BEFORE importing the module
-// under test, so the side-effecting `boot()` block doesn't fire on import.
+const SESSION_ID = "11111111-2222-3333-4444-555555555555";
+
+// Stub out the Telegram WebApp BEFORE importing the module under test, so the
+// side-effecting `boot()` block doesn't fire on import.
 beforeEach(() => {
   (globalThis as unknown as { window: Record<string, unknown> }).window = {};
   (globalThis as unknown as { document: Record<string, unknown> }).document = {};
@@ -49,33 +57,51 @@ function makeAppStub() {
   };
 }
 
+type Deps = Parameters<
+  Awaited<ReturnType<typeof importModule>>["handleCancel"]
+>[0];
+
+function baseDeps(
+  stub: ReturnType<typeof makeAppStub>,
+  overrides: Partial<{
+    lang: Deps["lang"];
+    render: Deps["render"];
+    postEvent: Deps["postEvent"];
+    closeDelayMs: number;
+    sessionId: string | null;
+  }> = {},
+): Deps {
+  return {
+    initData: "tma-init-data",
+    lang: overrides.lang ?? "en",
+    sessionId: overrides.sessionId === undefined ? SESSION_ID : overrides.sessionId,
+    app: stub.app,
+    render: overrides.render ?? vi.fn(),
+    postEvent: overrides.postEvent ?? vi.fn().mockResolvedValue({ ok: true }),
+    ...(overrides.closeDelayMs !== undefined
+      ? { closeDelayMs: overrides.closeDelayMs }
+      : {}),
+  };
+}
+
 describe("handleComplete", () => {
-  it("POSTs `complete` with inquiryId, renders finishing, and schedules WebApp.close", async () => {
+  it("POSTs the sessionId, renders finishing, and schedules WebApp.close", async () => {
     vi.useFakeTimers();
     const mod = await importModule();
     const stub = makeAppStub();
     const render = vi.fn();
-    const postEvent = vi.fn().mockResolvedValue(undefined);
+    const postEvent = vi
+      .fn()
+      .mockResolvedValue({ ok: true, outcome: "processing" });
 
-    await mod.handleComplete(
-      { inquiryId: "inq_xyz", status: "approved" },
-      {
-        initData: "tma-init-data",
-        lang: "en",
-        app: stub.app,
-        render,
-        postEvent,
-        closeDelayMs: 1000,
-      },
-    );
+    await mod.handleComplete(baseDeps(stub, { render, postEvent, closeDelayMs: 1000 }));
 
     expect(render).toHaveBeenCalledWith("finishing");
     expect(stub.notify).toHaveBeenCalledWith("success");
     expect(postEvent).toHaveBeenCalledTimes(1);
     expect(postEvent).toHaveBeenCalledWith("tma-init-data", {
       kind: "complete",
-      inquiryId: "inq_xyz",
-      status: "approved",
+      sessionId: SESSION_ID,
     });
     expect(stub.closeFn).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1000);
@@ -83,54 +109,39 @@ describe("handleComplete", () => {
     vi.useRealTimers();
   });
 
-  it("still closes the WebApp even when the POST fails (DM lands via webhook anyway)", async () => {
+  it("shows the retry screen and stays open when liveness wasn't confirmed", async () => {
+    vi.useFakeTimers();
+    const mod = await importModule();
+    const stub = makeAppStub();
+    const render = vi.fn();
+    const postEvent = vi.fn().mockResolvedValue({ ok: true, outcome: "retry" });
+
+    await mod.handleComplete(baseDeps(stub, { render, postEvent, closeDelayMs: 10 }));
+
+    expect(render).toHaveBeenLastCalledWith("retry");
+    expect(stub.notify).toHaveBeenCalledWith("error");
+    // Must not auto-close on a retry: the user needs to read why nothing
+    // happened before the WebView disappears.
+    vi.advanceTimersByTime(1000);
+    expect(stub.closeFn).not.toHaveBeenCalled();
+    expect(stub.mainShow).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it("shows an error rather than a success tick when the POST fails", async () => {
     vi.useFakeTimers();
     const mod = await importModule();
     const stub = makeAppStub();
     const render = vi.fn();
     const postEvent = vi.fn().mockRejectedValue(new Error("network down"));
 
-    await mod.handleComplete(
-      { inquiryId: "inq_xyz" },
-      {
-        initData: "tma-init-data",
-        lang: "en",
-        app: stub.app,
-        render,
-        postEvent,
-        closeDelayMs: 500,
-      },
-    );
+    await mod.handleComplete(baseDeps(stub, { render, postEvent, closeDelayMs: 500 }));
 
-    expect(render).toHaveBeenCalledWith("finishing");
-    vi.advanceTimersByTime(500);
-    expect(stub.closeFn).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
-  });
-
-  it("sends null inquiryId when Persona doesn't surface one", async () => {
-    vi.useFakeTimers();
-    const mod = await importModule();
-    const stub = makeAppStub();
-    const postEvent = vi.fn().mockResolvedValue(undefined);
-
-    await mod.handleComplete(
-      {},
-      {
-        initData: "tma-init-data",
-        lang: "ru",
-        app: stub.app,
-        render: vi.fn(),
-        postEvent,
-        closeDelayMs: 0,
-      },
-    );
-
-    expect(postEvent).toHaveBeenCalledWith("tma-init-data", {
-      kind: "complete",
-      inquiryId: null,
-      status: null,
-    });
+    // The check may well have passed, but we couldn't tell the server — and
+    // there is no webhook to settle it later, so claiming success would lie.
+    expect(render).toHaveBeenLastCalledWith("error");
+    vi.advanceTimersByTime(1000);
+    expect(stub.closeFn).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 });
@@ -139,32 +150,20 @@ describe("handleCancel", () => {
   it("POSTs `cancel` and immediately closes the WebApp", async () => {
     const mod = await importModule();
     const stub = makeAppStub();
-    const postEvent = vi.fn().mockResolvedValue(undefined);
+    const postEvent = vi.fn().mockResolvedValue({ ok: true });
 
-    await mod.handleCancel({
-      initData: "tma-init-data",
-      lang: "en",
-      app: stub.app,
-      render: vi.fn(),
-      postEvent,
-    });
+    await mod.handleCancel(baseDeps(stub, { postEvent }));
 
     expect(postEvent).toHaveBeenCalledWith("tma-init-data", { kind: "cancel" });
     expect(stub.closeFn).toHaveBeenCalledTimes(1);
   });
 
-  it("still closes the WebApp when the POST fails (server lifecycle dojuet)", async () => {
+  it("still closes the WebApp when the POST fails", async () => {
     const mod = await importModule();
     const stub = makeAppStub();
     const postEvent = vi.fn().mockRejectedValue(new Error("network down"));
 
-    await mod.handleCancel({
-      initData: "tma-init-data",
-      lang: "en",
-      app: stub.app,
-      render: vi.fn(),
-      postEvent,
-    });
+    await mod.handleCancel(baseDeps(stub, { postEvent }));
 
     expect(stub.closeFn).toHaveBeenCalledTimes(1);
   });
@@ -175,17 +174,11 @@ describe("handleError", () => {
     const mod = await importModule();
     const stub = makeAppStub();
     const render = vi.fn();
-    const postEvent = vi.fn().mockResolvedValue(undefined);
+    const postEvent = vi.fn().mockResolvedValue({ ok: true });
 
     await mod.handleError(
       { message: "camera permission denied" },
-      {
-        initData: "tma-init-data",
-        lang: "en",
-        app: stub.app,
-        render,
-        postEvent,
-      },
+      baseDeps(stub, { render, postEvent }),
     );
 
     expect(stub.notify).toHaveBeenCalledWith("error");
@@ -202,18 +195,8 @@ describe("handleError", () => {
   it("does NOT close the WebApp automatically — user has to tap Close", async () => {
     const mod = await importModule();
     const stub = makeAppStub();
-    const postEvent = vi.fn().mockResolvedValue(undefined);
 
-    await mod.handleError(
-      {},
-      {
-        initData: "tma-init-data",
-        lang: "en",
-        app: stub.app,
-        render: vi.fn(),
-        postEvent,
-      },
-    );
+    await mod.handleError({}, baseDeps(stub));
 
     expect(stub.closeFn).not.toHaveBeenCalled();
   });
@@ -222,16 +205,7 @@ describe("handleError", () => {
     const mod = await importModule();
     const stub = makeAppStub();
 
-    await mod.handleError(
-      {},
-      {
-        initData: "tma-init-data",
-        lang: "ru",
-        app: stub.app,
-        render: vi.fn(),
-        postEvent: vi.fn().mockResolvedValue(undefined),
-      },
-    );
+    await mod.handleError({}, baseDeps(stub, { lang: "ru" }));
 
     expect(stub.mainSetText).toHaveBeenCalledWith("Закрыть");
   });
