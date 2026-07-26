@@ -54,6 +54,12 @@ export interface PendingPremiumCancel {
   messageId: number;
 }
 
+/** One photo's own card message in the photo manager — see `SessionData.photoCards`. */
+export interface PhotoManagerCard {
+  msgId: number;
+  ref: string;
+}
+
 /**
  * Sub-state for the matching / scheduling flow. `idle` means no match is
  * currently awaiting the user's free-text input.
@@ -124,6 +130,16 @@ export interface SessionData {
    * to drop them), and finishing returns to verification instead of the menu.
    */
   verifyPhotoRedo: boolean;
+  /**
+   * One entry per photo currently shown as its own card message in the photo
+   * manager (photo + a single delete button), in no particular order.
+   * `ref` is the photo's `pendingPhotos` entry (Telegram file_id or Supabase
+   * path) — the delete button on a card resolves straight to this ref via the
+   * TAPPED MESSAGE's id (`ctx.callbackQuery.message.message_id`), never an
+   * array index, so cards stay independently deletable/addable without any
+   * renumbering. Cleared when the manager closes (Done) or is abandoned.
+   */
+  photoCards: PhotoManagerCard[];
   /** One-time, expiring confirmation for Telegram Freeze/Delete callbacks. */
   pendingAccountAction: PendingAccountAction | null;
   /** One-time, expiring confirmation for the in-chat Premium cancel button. */
@@ -167,6 +183,7 @@ export const DEFAULT_SESSION: SessionData = {
   menuState: "idle",
   photoManagerMsgId: null,
   verifyPhotoRedo: false,
+  photoCards: [],
   pendingAccountAction: null,
   pendingPremiumCancel: null,
   premiumCancelLedgerId: null,

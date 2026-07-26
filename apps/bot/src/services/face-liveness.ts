@@ -72,6 +72,13 @@ export type CreateLivenessSessionResult =
  * - `no_reference`— passed the check but AWS returned no reference image. AWS's
  *                   own guidance is to retry the liveness check.
  */
+/**
+ * The four non-pass terminals, exported so callers that branch on `outcome`
+ * (the retry-copy picker in `verification-messages.ts`) can name the type
+ * instead of re-deriving it from `LivenessResult`.
+ */
+export type LivenessRetryOutcome = "not_live" | "expired" | "in_progress" | "no_reference";
+
 export type LivenessResult =
   | {
       ok: true;
@@ -81,7 +88,7 @@ export type LivenessResult =
     }
   | {
       ok: true;
-      outcome: "not_live" | "expired" | "in_progress" | "no_reference";
+      outcome: LivenessRetryOutcome;
       confidence: number | null;
       status: string;
     }

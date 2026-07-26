@@ -14,7 +14,6 @@ const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
   "btnLike",
   "btnDislike",
   "myProfileBody",
-  "photoManagerDeleteBtn",
   "matchPhotoCaption",
   "coordProxyRelayNamedPrefix",
   // Bare domain on the referral card — a URL, not prose.

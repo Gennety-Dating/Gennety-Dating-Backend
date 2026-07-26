@@ -1,4 +1,4 @@
-import { InlineKeyboard, InputMediaBuilder, type Api } from "grammy";
+import { InlineKeyboard, type Api } from "grammy";
 import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
 import {
@@ -16,6 +16,7 @@ import {
   escapeMd,
   type Language,
   type SessionData,
+  type PhotoManagerCard,
 } from "@gennety/shared";
 import { validateSingleFace } from "../../services/vision/validate-face.js";
 import {
@@ -315,8 +316,18 @@ export async function handleEditAgeRangeInput(ctx: BotContext): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Edit Photos (existing logic, preserved)
+// Edit Photos — card-based manager
 // ---------------------------------------------------------------------------
+
+/**
+ * Callback data for a card's own delete button. Every card shares this SAME
+ * constant — the tapped card is identified by the message the button lives on
+ * (`ctx.callbackQuery.message.message_id`), never an index encoded in the
+ * payload, so cards stay independently addable/removable with no renumbering
+ * (the same "resolve by the exact tapped message" pattern already used by the
+ * Freeze/Delete and Premium-cancel confirmation cards).
+ */
+const PHOTO_CARD_DELETE_CALLBACK = "menu:edit:photos:delcard";
 
 /**
  * Put the session into "edit_photos" mode and prompt for new photos.
@@ -336,6 +347,11 @@ export async function handleEditPhotosStart(ctx: BotContext): Promise<void> {
  * Load the current photo set into the session and render the manager. Split out
  * of {@link handleEditPhotosStart} so the verification redo entry point can
  * reuse it without acking the same callback query twice.
+ *
+ * `photoCards` / `photoManagerMsgId` are reset first because we are about to
+ * rebuild the manager from the DB's canonical photo list — anything tracked
+ * from a PRIOR session (abandoned without tapping Done) is stale, so this
+ * always sends a fresh set of cards rather than trying to reuse old ones.
  */
 async function openPhotoManager(ctx: BotContext): Promise<void> {
   const telegramId = BigInt(ctx.from!.id);
@@ -370,6 +386,8 @@ async function openPhotoManager(ctx: BotContext): Promise<void> {
     ...existingScores,
     ...Array(Math.max(0, existing.length - existingScores.length)).fill(0),
   ];
+  ctx.session.photoCards = [];
+  ctx.session.photoManagerMsgId = null;
 
   await renderPhotoManager(ctx);
 }
@@ -383,12 +401,28 @@ async function openPhotoManager(ctx: BotContext): Promise<void> {
  * finish path that returns to verification instead of the main menu. This is
  * the ONE menu surface reachable while the app is verification-locked (see
  * `services/verification-gate.ts`).
+ *
+ * The intro promises an automatic recheck ("no need to redo the selfie") ONLY
+ * when a reference selfie is actually still on file — after the 90-day GDPR
+ * scrub (PRODUCT_SPEC §1.4), or for a user who was never liveness-verified in
+ * the first place, that promise would be false, and "will I have to film
+ * myself again?" is exactly the worry that stalls someone on this screen.
  */
 export async function handleVerifyPhotosRedo(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
   discardPhotoBatch(ctx.chat?.id);
   ctx.session.verifyPhotoRedo = true;
-  await ctx.reply(t(ctx.session.language, "verifyPhotosRedoIntro"));
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId: BigInt(ctx.from!.id) },
+    select: { verifiedSelfiePath: true },
+  });
+  await ctx.reply(
+    t(
+      ctx.session.language,
+      user?.verifiedSelfiePath ? "verifyPhotosRedoIntroRecheck" : "verifyPhotosRedoIntro",
+    ),
+  );
   await openPhotoManager(ctx);
 }
 
@@ -400,6 +434,9 @@ export async function handleVerifyPhotosRedo(ctx: BotContext): Promise<void> {
  *
  * Each removal goes through the same per-user-locked service the manager's
  * delete button uses, so a concurrent mobile/Aether edit can't be clobbered.
+ * The card MESSAGES themselves are torn down by {@link renderPhotoManager}'s
+ * own reconciliation afterwards (`pendingPhotos` is empty, so every tracked
+ * card gets pruned) rather than by this loop.
  */
 export async function handleVerifyPhotosClear(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
@@ -426,104 +463,151 @@ export async function handleVerifyPhotosClear(ctx: BotContext): Promise<void> {
   await ctx.reply(
     t(lang, "verifyPhotosCleared", { min: MIN_PHOTOS, max: MAX_PHOTOS }),
   );
-  await renderPhotoManager(ctx, { showAlbum: false });
+  await renderPhotoManager(ctx);
 }
 
 /**
- * Render the photo-manager screen: the current album followed by a control
- * message with a 🗑 button per photo, an ➕ add button (hidden at MAX), and a
- * ✅ done button.
+ * Reconcile `session.photoCards` against `session.pendingPhotos`: delete the
+ * card message for any ref no longer present (a concurrent mobile/Aether edit,
+ * or an explicit delete/clear-all that already spliced its own arrays before
+ * calling this), and send a fresh card — the photo plus a single delete
+ * button — for any ref that doesn't have one yet.
  *
- * The previous control message's keyboard is stripped first (tracked via
- * `session.photoManagerMsgId`) so a stale 🗑 button from an earlier render can
- * never target the wrong index after the set changed.
- *
- * `showAlbum` re-sends the album (used on entry and after a delete, to reflect
- * the new set); on a fresh upload it's skipped — the user's own photo message
- * is already visible, so only the controls are refreshed to reduce chat noise.
+ * Returns true when at least one card was newly SENT, which is the caller's
+ * signal that the bottom panel must move below the new cards rather than
+ * being edited in place (Telegram has no "move a message").
  */
-async function renderPhotoManager(
-  ctx: BotContext,
-  opts: { showAlbum?: boolean; lead?: string } = {},
-): Promise<void> {
-  if (!ctx.chat) return;
-  await sendPhotoManager(ctx.api, ctx.chat.id, ctx.session, opts);
-}
-
-/**
- * Ctx-free core of {@link renderPhotoManager}. `session` is mutated in place
- * (`photoManagerMsgId`), so the caller owns persisting it — the live
- * `ctx.session` is written back by grammY, while the debounced batch flush
- * (which runs outside the update lifecycle) upserts the `bot_sessions` row
- * itself.
- *
- * `lead` prepends a summary line to the control message, which is how a whole
- * upload burst reports itself in ONE message instead of one reply per frame.
- */
-async function sendPhotoManager(
+async function ensurePhotoCards(
   api: Api,
   chatId: number,
   session: SessionData,
-  opts: { showAlbum?: boolean; lead?: string } = {},
+): Promise<boolean> {
+  const wanted = new Set(session.pendingPhotos);
+  const kept: PhotoManagerCard[] = [];
+  for (const card of session.photoCards) {
+    if (wanted.has(card.ref)) {
+      kept.push(card);
+    } else {
+      await api.deleteMessage(chatId, card.msgId).catch(() => {});
+    }
+  }
+
+  const known = new Set(kept.map((c) => c.ref));
+  let addedAny = false;
+  for (const ref of session.pendingPhotos) {
+    if (known.has(ref)) continue;
+    try {
+      const msg = await api.sendPhoto(chatId, ref, {
+        reply_markup: new InlineKeyboard().text(
+          t(session.language, "photoManagerCardDeleteBtn"),
+          PHOTO_CARD_DELETE_CALLBACK,
+        ),
+      });
+      kept.push({ msgId: msg.message_id, ref });
+      addedAny = true;
+    } catch {
+      // Stale file_id or a transient send failure — the photo stays counted
+      // toward MIN/MAX either way; the next re-render retries its card.
+    }
+  }
+
+  session.photoCards = kept;
+  return addedAny;
+}
+
+/**
+ * Render (or update) the bottom panel: a photo counter, then in order the
+ * redo-only clear-all action, ➕ Add (hidden at MAX), and ✅ Done.
+ *
+ * `forceResend` is set whenever {@link ensurePhotoCards} just sent new cards:
+ * since Telegram has no "move a message", the only way to keep the panel
+ * BELOW the freshly-arrived cards is to delete the old one and send a new
+ * one. Otherwise (a delete, or a re-render with no new cards) the panel is
+ * already the newest message in the chat, so it is edited in place — cheaper,
+ * and it avoids the panel visibly flickering out and back for a one-line
+ * count change.
+ */
+async function renderPhotoManagerPanel(
+  api: Api,
+  chatId: number,
+  session: SessionData,
+  opts: { forceResend: boolean; lead?: string },
 ): Promise<void> {
-  const { showAlbum = true, lead } = opts;
+  const { forceResend, lead } = opts;
   const lang = session.language;
   const photos = session.pendingPhotos;
 
-  // Strip the previous manager keyboard so its now-stale delete buttons can't
-  // fire against a changed photo array.
-  if (session.photoManagerMsgId != null) {
-    try {
-      await api.editMessageReplyMarkup(chatId, session.photoManagerMsgId);
-    } catch {
-      // Message already gone or has no keyboard — nothing to strip.
-    }
-    session.photoManagerMsgId = null;
-  }
-
-  if (showAlbum && photos.length > 0) {
-    try {
-      if (photos.length === 1) {
-        await api.sendPhoto(chatId, photos[0]!);
-      } else {
-        await api.sendMediaGroup(
-          chatId,
-          photos.slice(0, 10).map((id) => InputMediaBuilder.photo(id)),
-        );
-      }
-    } catch {
-      // Stale file_ids — skip the album and still show the controls.
-    }
-  }
-
   const keyboard = new InlineKeyboard();
-  photos.forEach((_, i) => {
-    keyboard.text(
-      t(lang, "photoManagerDeleteBtn", { n: i + 1 }),
-      `menu:edit:photos:del:${i}`,
-    );
-    if ((i + 1) % 3 === 0) keyboard.row();
-  });
-  keyboard.row();
   // Verification redo only: one tap to drop a whole set of someone else's
-  // photos instead of up to ten individual deletes.
+  // photos instead of deleting each card individually.
   if (session.verifyPhotoRedo && photos.length > 0) {
-    keyboard
-      .text(t(lang, "verifyBtnClearPhotos"), VERIFY_PHOTOS_CLEAR_CALLBACK)
-      .row();
+    keyboard.text(t(lang, "verifyBtnClearPhotos"), VERIFY_PHOTOS_CLEAR_CALLBACK).row();
   }
   if (photos.length < MAX_PHOTOS) {
     keyboard.text(t(lang, "photoManagerAddBtn"), "menu:edit:photos:add").row();
   }
   keyboard.text(t(lang, "photoManagerDoneBtn"), "menu:edit:photos:continue");
 
-  const title = t(lang, "photoManagerTitle", { min: MIN_PHOTOS, max: MAX_PHOTOS });
-  const msg = await api.sendMessage(
-    chatId,
-    lead ? `${lead}\n\n${title}` : title,
-    { reply_markup: keyboard },
-  );
+  const counter = t(lang, "photoManagerTitle", {
+    count: photos.length,
+    min: MIN_PHOTOS,
+    max: MAX_PHOTOS,
+  });
+  const text = lead ? `${lead}\n\n${counter}` : counter;
+
+  if (!forceResend && session.photoManagerMsgId != null) {
+    try {
+      await api.editMessageText(chatId, session.photoManagerMsgId, text, {
+        reply_markup: keyboard,
+      });
+      return;
+    } catch {
+      // Gone (or, in principle, byte-identical content — unreachable here
+      // since the count always changes between renders) — fall through to a
+      // fresh send.
+    }
+  }
+
+  if (session.photoManagerMsgId != null) {
+    await api.deleteMessage(chatId, session.photoManagerMsgId).catch(() => {});
+  }
+  const msg = await api.sendMessage(chatId, text, { reply_markup: keyboard });
   session.photoManagerMsgId = msg?.message_id ?? null;
+}
+
+/**
+ * Render the photo-manager screen: reconcile the per-photo cards, then render
+ * the bottom counter/actions panel below them.
+ */
+async function renderPhotoManager(
+  ctx: BotContext,
+  opts: { lead?: string } = {},
+): Promise<void> {
+  if (!ctx.chat) return;
+  await renderPhotoManagerCore(ctx.api, ctx.chat.id, ctx.session, opts);
+}
+
+/**
+ * Ctx-free core of {@link renderPhotoManager}. `session` is mutated in place
+ * (`photoCards`, `photoManagerMsgId`), so the caller owns persisting it — the
+ * live `ctx.session` is written back by grammY, while the debounced batch
+ * flush (which runs outside the update lifecycle) upserts the `bot_sessions`
+ * row itself.
+ *
+ * `lead` prepends a summary line to the panel, which is how a whole upload
+ * burst reports itself in ONE message instead of one reply per frame.
+ */
+async function renderPhotoManagerCore(
+  api: Api,
+  chatId: number,
+  session: SessionData,
+  opts: { lead?: string } = {},
+): Promise<void> {
+  const addedAny = await ensurePhotoCards(api, chatId, session);
+  await renderPhotoManagerPanel(api, chatId, session, {
+    forceResend: addedAny,
+    ...(opts.lead !== undefined ? { lead: opts.lead } : {}),
+  });
 }
 
 /**
@@ -544,11 +628,15 @@ export async function handleEditPhotosAdd(ctx: BotContext): Promise<void> {
 }
 
 /**
- * Delete one photo from the manager (`menu:edit:photos:del:<index>`).
+ * Delete one photo's own card (`menu:edit:photos:delcard`) — the tapped card is
+ * resolved via the MESSAGE the button lives on
+ * (`ctx.callbackQuery.message.message_id`), never an index in the payload, so
+ * cards stay independently addable/removable with no renumbering.
  *
- * Splices the index out of every index-aligned array so media, score, hash and
- * Telegram unique id always continue to describe the same photo. This also
- * permits a deliberately deleted photo to be uploaded again in the session.
+ * Splices the photo's index out of every index-aligned array so media, score,
+ * hash and Telegram unique id always continue to describe the same photo. This
+ * also permits a deliberately deleted photo to be uploaded again in the
+ * session.
  *
  * The reduced set is persisted immediately so it stays consistent with the
  * consensus upload path (`commitProfilePhotoCandidate` reads `photos` from the
@@ -558,16 +646,16 @@ export async function handleEditPhotosAdd(ctx: BotContext): Promise<void> {
 export async function handleEditPhotosDelete(ctx: BotContext): Promise<void> {
   const lang = ctx.session.language;
   discardPhotoBatch(ctx.chat?.id);
-  const data = ctx.callbackQuery?.data ?? "";
-  const idx = Number.parseInt(
-    data.slice("menu:edit:photos:del:".length),
-    10,
-  );
-  if (
-    !Number.isInteger(idx) ||
-    idx < 0 ||
-    idx >= ctx.session.pendingPhotos.length
-  ) {
+
+  const cardMsgId = ctx.callbackQuery?.message?.message_id;
+  const card =
+    cardMsgId != null
+      ? ctx.session.photoCards.find((c) => c.msgId === cardMsgId)
+      : undefined;
+  const idx = card ? ctx.session.pendingPhotos.indexOf(card.ref) : -1;
+  if (!card || idx < 0) {
+    // Stale tap — the card was already removed (double-tap, or a concurrent
+    // edit dropped this photo elsewhere).
     await ctx.answerCallbackQuery();
     return;
   }
@@ -585,7 +673,14 @@ export async function handleEditPhotosDelete(ctx: BotContext): Promise<void> {
   }
   await ctx.answerCallbackQuery({ text: t(lang, "photoManagerDeleted") });
 
-  const deletedPhotoRef = ctx.session.pendingPhotos[idx]!;
+  // Drop the card's own message right away — its own tap is confirmation
+  // enough, no need to wait for the panel re-render below.
+  if (ctx.chat) {
+    await ctx.api.deleteMessage(ctx.chat.id, cardMsgId!).catch(() => {});
+  }
+  ctx.session.photoCards = ctx.session.photoCards.filter((c) => c.msgId !== cardMsgId);
+
+  const deletedPhotoRef = card.ref;
   const priorPhotos = [...ctx.session.pendingPhotos];
   const priorUniqueIds = [...ctx.session.pendingPhotoUniqueIds];
 
@@ -1005,8 +1100,7 @@ async function flushPhotoBatch(batch: PhotoUploadBatch): Promise<void> {
   if (batch.capped > 0) leadLines.push(t(lang, "photoBatchAtMax", { max: MAX_PHOTOS }));
   leadLines.push(...batch.notes);
 
-  await sendPhotoManager(batch.api, batch.chatId, session, {
-    showAlbum: false,
+  await renderPhotoManagerCore(batch.api, batch.chatId, session, {
     ...(leadLines.length > 0 ? { lead: leadLines.join("\n") } : {}),
   });
 
@@ -1051,7 +1145,7 @@ async function handlePhotoStageVideo(
             mb: Math.round(PROFILE_VIDEO_MAX_FILE_SIZE_BYTES / (1024 * 1024)),
           }),
     );
-    await renderPhotoManager(ctx, { showAlbum: false });
+    await renderPhotoManager(ctx);
     return;
   }
 
@@ -1067,7 +1161,7 @@ async function handlePhotoStageVideo(
     reply: (text) => ctx.reply(text),
   });
   if (prepared.kind === "rejected") {
-    await renderPhotoManager(ctx, { showAlbum: false });
+    await renderPhotoManager(ctx);
     return;
   }
 
@@ -1095,7 +1189,7 @@ async function handlePhotoStageVideo(
   } else {
     await ctx.reply(videoSavedAck(lang));
   }
-  await renderPhotoManager(ctx, { showAlbum: false });
+  await renderPhotoManager(ctx);
 }
 
 /**
@@ -1294,6 +1388,10 @@ async function finishEditPhotos(ctx: BotContext): Promise<void> {
   ctx.session.pendingPhotoHashes = [];
   ctx.session.pendingPhotoScores = [];
   ctx.session.photoManagerMsgId = null;
+  // Stop tracking the card messages — they stay visible in the chat as a
+  // review-able gallery, exactly like the old album did after Done; only the
+  // session's bookkeeping (which enables their delete buttons) is dropped.
+  ctx.session.photoCards = [];
   ctx.session.menuState = "idle";
   ctx.session.verifyPhotoRedo = false;
 

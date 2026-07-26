@@ -457,19 +457,31 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   and are never clawed back.
 - **📷 Upload different photos** — the way BACK, present on every screen that
   asks for verification (the CTA, the mandatory notice, the stall reminder, the
-  gate card, and the rejection DM). The verification CTA is the first place a
-  user learns their photos will be face-matched, so someone who uploaded another
-  person's photos must be able to retreat and swap them instead of being
-  stranded in front of a check they know they will fail. It reopens the existing
-  photo manager (§2.1 My Profile → My photos) in a **redo mode** with three
-  deltas: a one-tap **🗑 Delete all and start over**, no `MIN_PHOTOS` delete
-  floor (the user is not in the matching pool, and at exactly 4 photos the
-  ordinary per-photo delete is refused outright), and a finish path that returns
-  to verification rather than the main menu. Finishing still requires
-  `MIN_PHOTOS`. Which follow-up lands depends on whether a **stored reference
-  selfie** exists: with one (a `rejected` user), the pipeline re-scores the new
-  photos against it — **no second liveness pass**; with none, the verification
-  CTA follows. Telegram-only.
+  gate card, the liveness-retry nudge, and the rejection DM). The verification
+  CTA is the first place a user learns their photos will be face-matched, so
+  someone who uploaded another person's photos must be able to retreat and swap
+  them instead of being stranded in front of a check they know they will fail.
+  It reopens the existing photo manager (§2.1 My Profile → My photos, now
+  card-based) in a **redo mode** with three deltas: a one-tap **🗑 Delete all
+  and start over**, no `MIN_PHOTOS` delete floor (the user is not in the
+  matching pool, and at exactly 4 photos the ordinary per-photo delete is
+  refused outright), and a finish path that returns to verification rather than
+  the main menu. Finishing still requires `MIN_PHOTOS`. The entry line
+  (`verifyPhotosRedoIntro*`) promises the automatic recheck — "no need to redo
+  the selfie" — only when a reference selfie is actually still on file; after
+  the 90-day GDPR scrub, or for a user who was never liveness-verified, that
+  promise would be false, and "will I have to film myself again?" is exactly
+  the worry that stalls someone on this screen. Which follow-up lands after
+  Finish depends on whether a **stored reference selfie** exists: with one (a
+  `rejected` user), the pipeline re-scores the new photos against it — **no
+  second liveness pass**; with none, the verification CTA follows.
+  **The button's framing is context-aware** (2026-07-26): on the `rejected`
+  outcome — a face WAS detected there and didn't match — it leads, above
+  Verify, labelled `verifyBtnRedoPhotos`; on the liveness-retry nudge (photos
+  are never even looked at on that path) it appears second, labelled
+  `verifyBtnRedoPhotosSecondary` ("📷 It's my photos instead") so it reads as an
+  unrelated escape hatch rather than a second attempt at the same fix.
+  Telegram-only.
 - **Skip for now** — *(retired production path — hidden when
   `MANDATORY_VERIFICATION_ENABLED` is on: the CTA then carries only the Verify
   button with the `verifyPitchMandatory` copy, and taps on pre-flip
@@ -512,6 +524,19 @@ button and stays `pending`. It is deliberately neither `rejected` (that status
 is reserved for a real detected face in the photo set that isn't the verified
 person) nor `pending_review` (there is nothing for an admin to adjudicate on a
 shaky camera capture).
+
+**The retry nudge is split by outcome (2026-07-26), not one generic line.**
+Profile photos are never even looked at on this path — `CompareFaces` only
+runs after a `passed` result — so every variant leads with that reassurance,
+then gives advice that actually matches what happened: `not_live` (the check
+ran to completion but confidence didn't clear the bar — `verifyRetryNotLive`,
+lighting/framing/obstruction tips); `expired`/`in_progress` (the check never
+finished at all — `verifyRetryUnfinished`, "go through it without switching
+away"); `no_reference` (a genuine pass, but OUR side dropped the frame —
+`verifyRetryTechnical`, an apology and "try again", no advice owed). AWS
+returns no failure-reason code, so these three are the full granularity
+available — a single "shaky camera or low light" guess used to cover all of
+them, which was wrong for the two cases where the user did nothing wrong.
 
 1. Take the reference selfie — the bytes AWS just returned on a fresh check, or
    the stored copy on a rerun (`services/identity-selfie.ts`) — and, when it is
@@ -589,8 +614,14 @@ path.
 **Outcome DM.** Every terminal outcome is DM'd in the user's own
 `User.language` (shared i18n `verifyOutcome*`; the copy used to be hardcoded
 English). `rejected` is the one outcome the user can act on, so it carries both
-recoveries inline — **📷 Upload different photos** and **🟢 Verify now** — rather
-than sending them hunting through menus. One exception, so the success copy is
+recoveries inline — **📷 Upload different photos** (leading, above Verify —
+the more likely fix when a face WAS detected and didn't match) and
+**🟢 Verify now** — rather than sending them hunting through menus. The copy
+itself states both branches explicitly: if the photos aren't the user, swap
+them and the pipeline re-checks automatically; if they are, the match just
+came out weak and re-running verification in better light is the fix (rewritten
+2026-07-26 — the two-branch split used to be far less explicit). One
+exception, so the success copy is
 not repeated at users who have nothing to do with it: a **rerun that merely
 re-confirms an already-`verified` user** sends no DM. Every profile-photo edit
 auto-reruns the pipeline (menu photo manager, mobile `/v1/me/photos`, Aether),
@@ -798,7 +829,16 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
   (max 500 characters) and edits them independently. `firstName`, `age`,
   `email`, and `universityDomain` remain fixed post-onboarding. When no video
   is set, a one-line hint points to the Profile Video entry.
-  **My photos** opens the photo manager (🗑 per photo, ➕ add, ✅ Done). Uploads
+  **My photos** opens the photo manager: each photo is its own message (a
+  "card") with a single 🗑 delete button directly under it, followed by a
+  persistent counter + actions panel (➕ add, ✅ Done — plus 🗑 Delete all in
+  redo mode, §1.4). Deleting a card drops only that one message and updates
+  the panel's count in place; the panel is replaced rather than edited only
+  when new cards were just sent, since Telegram has no way to move a message
+  below newer ones. (Replaced 2026-07-26: the previous design put a numbered
+  delete button per photo under one shared album, which required counting
+  positions in a Telegram-arranged grid — a wrong tap was easy — and re-sent
+  the whole album on every single delete.) Uploads
   into it are **coalesced into one burst**, matching the onboarding media stage
   (§1.3): a single held "uploading your photos" shimmer covers the whole batch,
   and one control message reports the result — `n` added, the running

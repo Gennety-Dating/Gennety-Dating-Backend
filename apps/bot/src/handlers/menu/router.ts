@@ -95,7 +95,7 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
       await handleEditPhotosAdd(ctx);
       return;
     }
-    if (data.startsWith("menu:edit:photos:del:")) {
+    if (data === "menu:edit:photos:delcard") {
       await handleEditPhotosDelete(ctx);
       return;
     }
@@ -108,6 +108,9 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     ctx.session.pendingPhotoHashes = [];
     ctx.session.pendingPhotoScores = [];
     ctx.session.photoManagerMsgId = null;
+    // Stale card-delete taps become no-ops naturally once this is cleared —
+    // there's nothing to look up their message id against.
+    ctx.session.photoCards = [];
   }
 
   // Edit video: consumes a raw video message; Remove/Back are callbacks.

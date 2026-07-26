@@ -81,7 +81,7 @@ describe("isVerificationGateAllowed", () => {
     // …and its own buttons.
     for (const data of [
       "menu:edit:photos:add",
-      "menu:edit:photos:del:0",
+      "menu:edit:photos:delcard",
       "menu:edit:photos:continue",
     ]) {
       expect(

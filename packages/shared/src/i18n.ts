@@ -190,11 +190,17 @@ const translations = {
     verifyBtnSkipConfirm: "🔴 Skip anyway",
     // --- Photo re-upload path (a way back before/after verification) ---
     verifyBtnRedoPhotos: "📷 Upload different photos",
+    verifyBtnRedoPhotosSecondary: "📷 It's my photos instead",
     verifyBtnClearPhotos: "🗑 Delete all and start over",
     verifyGateLocked:
       "The menu and matching open the moment verification is done. That's the only step left:",
     verifyPhotosRedoIntro:
       "No problem — here are your current photos. Delete the ones that aren't you and upload your own.",
+    // Used instead of the line above only when a reference selfie is still on
+    // file, so the promise of an automatic recheck is never made falsely (see
+    // PRODUCT_SPEC §1.4 — the 90-day scrub can make it untrue).
+    verifyPhotosRedoIntroRecheck:
+      "No problem — here are your current photos. Delete the ones that aren't you and upload your own; I'll re-check them automatically once you're done, no new selfie needed.",
     verifyPhotosCleared: "Photos deleted. Send {min}–{max} photos of yourself.",
     verifyPhotosSavedRecheck:
       "Photos updated ✅ I'm re-checking them against your verification selfie — no need to redo it. I'll message you the moment it's done.",
@@ -206,9 +212,24 @@ const translations = {
     verifyCheckAlreadyDone:
       "Already processed — you should have gotten the result message above. " +
       "If something looks wrong, tap 🟢 Verify now to retry.",
-    verifyLivenessRetry:
-      "Couldn't confirm it was really you that time — usually a shaky camera or " +
-      "low light, nothing to worry about. Tap 🟢 Verify now and give it another go.",
+    // --- Liveness retry copy (PRODUCT_SPEC §1.4) ---
+    // Split by the outcome AWS actually returned, because these are genuinely
+    // different situations and profile photos are never even in scope on this
+    // path: CompareFaces only runs after a `passed` liveness result.
+    verifyRetryNotLive:
+      "Your photos aren't the problem here — the check never got that far, it " +
+      "just couldn't confirm a live face that time. A few things that help: bright " +
+      "light facing you (not behind you), your whole face inside the frame, no " +
+      "sunglasses or anything covering it. Tap 🟢 Verify now and try again.",
+    verifyRetryUnfinished:
+      "Your photos aren't the problem — this check never got to look at them, it " +
+      "just didn't finish. Don't switch away from Telegram or close the camera " +
+      "mid-check; go through it start to finish in one go, it only takes about 15 " +
+      "seconds. Tap 🟢 Verify now to try again.",
+    verifyRetryTechnical:
+      "That one was on us, not you — a technical hiccup on our side, nothing to " +
+      "do with your camera or your photos. Sorry about that. Tap 🟢 Verify now and " +
+      "try again — it should go through cleanly this time.",
     verifyReferenceExpired:
       "We delete your verification selfie after 90 days, so there's nothing left " +
       "here to check your new photos against. One more 10-second check and " +
@@ -218,8 +239,8 @@ const translations = {
     verifyOutcomePendingReview:
       "🔍 We're double-checking your profile photos against your verification selfie. This usually takes a few hours — I'll message you the moment it's done.",
     verifyOutcomeRejected:
-      "⚠️ The photos in your profile don't appear to match the selfie we captured during verification.\n\n" +
-      "If those photos aren't of you — upload your own and I'll re-check them automatically. If they are you, run verification again in better light.",
+      "⚠️ Your profile photos don't match the selfie from your verification.\n\n" +
+      "If those photos aren't you — tap 📷 below to swap them, and I'll re-check automatically (no new selfie needed). If they are you, the match just came out weak — run verification again in good lighting.",
     verifyMiniAppLoading: "Opening verification…",
     verifyMiniAppFinishing: "Almost done. Checking results…",
     verifyMiniAppError:
@@ -285,11 +306,10 @@ const translations = {
     editAgeRangePrompt: "What partner age range are you looking for? (e.g. 20-28)\nMin: {min}, Max: {max}.",
     editAgeRangeInvalid: "Didn't get that. Two numbers like 20-28 (range {min}–{max}).",
     editAgeRangeSaved: "Age range updated",
-    editProfilePhotosStart: "Send new photos ({min}–{max}). One at a time.",
+    editProfilePhotosStart: "Send new photos ({min}–{max}) — one by one or as an album.",
     editProfilePhotosSaved: "Photos updated",
-    photoManagerTitle:
-      "Your photos. Delete the ones you don't want or add new ones (min {min}, max {max}).",
-    photoManagerDeleteBtn: "🗑 {n}",
+    photoManagerTitle: "Photos: {count}/{max} · minimum {min}",
+    photoManagerCardDeleteBtn: "🗑 Delete this photo",
     photoManagerAddBtn: "➕ Add photo",
     photoManagerDoneBtn: "Done",
     photoManagerMinReached: "You need at least {min} photos. Add a new one first.",
@@ -1062,11 +1082,14 @@ const translations = {
     verifyBtnSkipConfirm: "🔴 Всё равно пропустить",
     // --- Photo re-upload path (a way back before/after verification) ---
     verifyBtnRedoPhotos: "📷 Загрузить другие фото",
+    verifyBtnRedoPhotosSecondary: "📷 На самом деле дело в фото",
     verifyBtnClearPhotos: "🗑 Удалить все и загрузить заново",
     verifyGateLocked:
       "Меню и подбор пар откроются сразу после верификации. Остался только этот шаг:",
     verifyPhotosRedoIntro:
       "Без проблем — вот твои текущие фото. Удали те, на которых не ты, и загрузи свои.",
+    verifyPhotosRedoIntroRecheck:
+      "Без проблем — вот твои текущие фото. Удали те, на которых не ты, и загрузи свои — как закончишь, я перепроверю их автоматически, новое селфи не понадобится.",
     verifyPhotosCleared: "Фото удалены. Пришли {min}–{max} своих фотографий.",
     verifyPhotosSavedRecheck:
       "Фото обновлены ✅ Перепроверяю их по селфи из верификации — проходить её заново не нужно. Напишу, как только закончу.",
@@ -1078,9 +1101,20 @@ const translations = {
     verifyCheckAlreadyDone:
       "Уже обработано — сообщение с результатом должно быть выше. " +
       "Если что-то пошло не так — нажми 🟢 Пройти верификацию ещё раз.",
-    verifyLivenessRetry:
-      "Не получилось убедиться, что это правда ты — обычно виноваты дрожащая " +
-      "камера или тусклый свет. Ничего страшного: нажми 🟢 Пройти верификацию и попробуй ещё раз.",
+    verifyRetryNotLive:
+      "Дело не в твоих фото — проверка до них даже не дошла, просто в этот раз " +
+      "не получилось подтвердить живое лицо. Что обычно помогает: яркий свет " +
+      "спереди (не сзади), лицо целиком в кадре, без очков и без всего, что его " +
+      "закрывает. Нажми 🟢 Пройти верификацию и попробуй ещё раз.",
+    verifyRetryUnfinished:
+      "Дело не в твоих фото — проверка до них не дошла, она просто не была " +
+      "завершена. Не сворачивай Telegram и не закрывай камеру на середине — " +
+      "пройди её от начала до конца за один раз, это займёт секунд 15. Нажми " +
+      "🟢 Пройти верификацию и попробуй снова.",
+    verifyRetryTechnical:
+      "На этот раз дело в нас, а не в тебе — небольшой технический сбой на " +
+      "нашей стороне, камера и фото ни при чём. Извини за это. Нажми " +
+      "🟢 Пройти верификацию и попробуй ещё раз — в этот раз всё должно пройти гладко.",
     verifyReferenceExpired:
       "Мы удаляем селфи с верификации через 90 дней, так что сверить новые фото " +
       "уже не с чем. Ещё одна проверка на 10 секунд — и всё готово. Профиль пока " +
@@ -1090,8 +1124,8 @@ const translations = {
     verifyOutcomePendingReview:
       "🔍 Мы дополнительно проверяем фото профиля по селфи из верификации. Обычно это занимает несколько часов — я напишу, как только проверка завершится.",
     verifyOutcomeRejected:
-      "⚠️ Фото в профиле не совпали с селфи из верификации.\n\n" +
-      "Если на них не ты — загрузи свои, и я перепроверю их автоматически. Если это всё-таки ты — пройди верификацию заново при хорошем свете.",
+      "⚠️ Фото в твоём профиле не совпадают с селфи из верификации.\n\n" +
+      "Если на них не ты — нажми 📷 ниже и замени их, я перепроверю автоматически (новое селфи не нужно). Если это всё-таки ты — совпадение просто получилось слабым, пройди верификацию заново при хорошем свете.",
     verifyMiniAppLoading: "Открываем верификацию…",
     verifyMiniAppFinishing: "Готово. Проверяем результат…",
     verifyMiniAppError:
@@ -1157,11 +1191,10 @@ const translations = {
     editAgeRangePrompt: "В каком возрастном диапазоне искать тебе пару? (напр. 20-28)\nМин: {min}, Макс: {max}.",
     editAgeRangeInvalid: "Не понял. Два числа через дефис, напр. 20-28 (от {min} до {max}).",
     editAgeRangeSaved: "Диапазон обновлён",
-    editProfilePhotosStart: "Скинь новые фото ({min}–{max}). По одному.",
+    editProfilePhotosStart: "Скинь новые фото ({min}–{max}) — по одному или альбомом.",
     editProfilePhotosSaved: "Фото обновлены",
-    photoManagerTitle:
-      "Твои фото. Удали лишние или добавь новые (мин {min}, макс {max}).",
-    photoManagerDeleteBtn: "🗑 {n}",
+    photoManagerTitle: "Фото: {count}/{max} · минимум {min}",
+    photoManagerCardDeleteBtn: "🗑 Удалить это фото",
     photoManagerAddBtn: "➕ Добавить",
     photoManagerDoneBtn: "Готово",
     photoManagerMinReached: "Нужно минимум {min} фото. Сначала добавь новое.",
@@ -1921,11 +1954,14 @@ const translations = {
     verifyBtnSkipConfirm: "🔴 Все одно пропустити",
     // --- Photo re-upload path (a way back before/after verification) ---
     verifyBtnRedoPhotos: "📷 Завантажити інші фото",
+    verifyBtnRedoPhotosSecondary: "📷 Насправді річ у фото",
     verifyBtnClearPhotos: "🗑 Видалити всі та завантажити заново",
     verifyGateLocked:
       "Меню й підбір пар відкриються одразу після верифікації. Залишився тільки цей крок:",
     verifyPhotosRedoIntro:
       "Без проблем — ось твої поточні фото. Видали ті, на яких не ти, і завантаж свої.",
+    verifyPhotosRedoIntroRecheck:
+      "Без проблем — ось твої поточні фото. Видали ті, на яких не ти, і завантаж свої — коли закінчиш, я перевірю їх автоматично, нове селфі не знадобиться.",
     verifyPhotosCleared: "Фото видалено. Надішли {min}–{max} своїх фотографій.",
     verifyPhotosSavedRecheck:
       "Фото оновлено ✅ Перевіряю їх за селфі з верифікації — проходити її заново не треба. Напишу, щойно закінчу.",
@@ -1937,9 +1973,20 @@ const translations = {
     verifyCheckAlreadyDone:
       "Вже оброблено — повідомлення з результатом має бути вище. " +
       "Якщо щось не так — натисни 🟢 Пройти верифікацію ще раз.",
-    verifyLivenessRetry:
-      "Не вдалося переконатися, що це справді ти — зазвичай через тремтливу " +
-      "камеру або тьмяне світло. Нічого страшного: натисни 🟢 Пройти верифікацію і спробуй ще раз.",
+    verifyRetryNotLive:
+      "Річ не у твоїх фото — перевірка до них навіть не дійшла, просто цього " +
+      "разу не вдалося підтвердити живе обличчя. Що зазвичай допомагає: яскраве " +
+      "світло спереду (не ззаду), обличчя цілком у кадрі, без окулярів і без " +
+      "нічого, що його закриває. Натисни 🟢 Пройти верифікацію і спробуй ще раз.",
+    verifyRetryUnfinished:
+      "Річ не у твоїх фото — перевірка до них не дійшла, вона просто не була " +
+      "завершена. Не згортай Telegram і не закривай камеру посередині — пройди " +
+      "її від початку до кінця за один раз, це займе секунд 15. Натисни " +
+      "🟢 Пройти верифікацію і спробуй знову.",
+    verifyRetryTechnical:
+      "Цього разу річ у нас, а не в тобі — невеликий технічний збій на нашому " +
+      "боці, камера і фото ні до чого. Вибач за це. Натисни 🟢 Пройти верифікацію " +
+      "і спробуй ще раз — цього разу все має пройти гладко.",
     verifyReferenceExpired:
       "Ми видаляємо селфі з верифікації через 90 днів, тож звірити нові фото вже " +
       "нема з чим. Ще одна перевірка на 10 секунд — і все готово. Профіль поки " +
@@ -1949,8 +1996,8 @@ const translations = {
     verifyOutcomePendingReview:
       "🔍 Ми додатково перевіряємо фото профілю за селфі з верифікації. Зазвичай це займає кілька годин — я напишу, щойно перевірка завершиться.",
     verifyOutcomeRejected:
-      "⚠️ Фото в профілі не збіглися з селфі з верифікації.\n\n" +
-      "Якщо на них не ти — завантаж свої, і я перевірю їх автоматично. Якщо це все ж ти — пройди верифікацію заново при доброму освітленні.",
+      "⚠️ Фото в твоєму профілі не збігаються з селфі з верифікації.\n\n" +
+      "Якщо на них не ти — натисни 📷 нижче і заміни їх, я перевірю автоматично (нове селфі не потрібне). Якщо це все ж таки ти — збіг просто вийшов слабким, пройди верифікацію знову при хорошому світлі.",
     verifyMiniAppLoading: "Відкриваємо верифікацію…",
     verifyMiniAppFinishing: "Готово. Перевіряємо результат…",
     verifyMiniAppError:
@@ -2016,11 +2063,10 @@ const translations = {
     editAgeRangePrompt: "У якому віковому діапазоні шукати тобі пару? (напр. 20-28)\nМін: {min}, Макс: {max}.",
     editAgeRangeInvalid: "Не зрозумів. Два числа через дефіс, напр. 20-28 (від {min} до {max}).",
     editAgeRangeSaved: "Діапазон оновлено",
-    editProfilePhotosStart: "Скинь нові фото ({min}–{max}). По одному.",
+    editProfilePhotosStart: "Скинь нові фото ({min}–{max}) — по одному або альбомом.",
     editProfilePhotosSaved: "Фото оновлено",
-    photoManagerTitle:
-      "Твої фото. Видали зайві або додай нові (мін {min}, макс {max}).",
-    photoManagerDeleteBtn: "🗑 {n}",
+    photoManagerTitle: "Фото: {count}/{max} · мінімум {min}",
+    photoManagerCardDeleteBtn: "🗑 Видалити це фото",
     photoManagerAddBtn: "➕ Додати",
     photoManagerDoneBtn: "Готово",
     photoManagerMinReached: "Потрібно щонайменше {min} фото. Спершу додай нове.",
@@ -2711,11 +2757,14 @@ const deTranslations: TranslationTable = {
   verifyBtnSkipConfirm: "🔴 Trotzdem überspringen",
   // --- Photo re-upload path (a way back before/after verification) ---
   verifyBtnRedoPhotos: "📷 Andere Fotos hochladen",
+  verifyBtnRedoPhotosSecondary: "📷 Eigentlich meine Fotos",
   verifyBtnClearPhotos: "🗑 Alle löschen und neu hochladen",
   verifyGateLocked:
     "Menü und Matching öffnen sich direkt nach der Verifizierung. Nur dieser Schritt fehlt noch:",
   verifyPhotosRedoIntro:
     "Kein Problem — hier sind deine aktuellen Fotos. Lösch die, auf denen du nicht zu sehen bist, und lade deine eigenen hoch.",
+  verifyPhotosRedoIntroRecheck:
+    "Kein Problem — hier sind deine aktuellen Fotos. Lösch die, auf denen du nicht zu sehen bist, und lade deine eigenen hoch — sobald du fertig bist, prüfe ich sie automatisch erneut, ein neues Selfie brauchst du dafür nicht.",
   verifyPhotosCleared: "Fotos gelöscht. Schick {min}–{max} Fotos von dir.",
   verifyPhotosSavedRecheck:
     "Fotos aktualisiert ✅ Ich prüfe sie erneut gegen dein Verifizierungs-Selfie — du musst sie nicht wiederholen. Ich melde mich, sobald es fertig ist.",
@@ -2727,10 +2776,23 @@ const deTranslations: TranslationTable = {
   verifyCheckAlreadyDone:
     "Schon verarbeitet - du solltest die Ergebnisnachricht oben bekommen haben. " +
     "Wenn etwas falsch wirkt, tippe auf 🟢 Jetzt verifizieren, um es erneut zu versuchen.",
-  verifyLivenessRetry:
-    "Wir konnten diesmal nicht bestätigen, dass du es wirklich bist - meist liegt " +
-    "es an einer wackeligen Kamera oder schwachem Licht. Kein Problem: tippe auf " +
-    "🟢 Jetzt verifizieren und versuch es noch einmal.",
+  verifyRetryNotLive:
+    "Deine Fotos sind hier nicht das Problem — die Prüfung ist gar nicht erst so " +
+    "weit gekommen, sie konnte diesmal nur kein lebendiges Gesicht bestätigen. Was " +
+    "meist hilft: helles Licht von vorne (nicht von hinten), dein ganzes Gesicht " +
+    "im Bild, keine Sonnenbrille oder Verdeckung. Tipp auf 🟢 Jetzt verifizieren " +
+    "und versuch es noch einmal.",
+  verifyRetryUnfinished:
+    "Deine Fotos sind nicht das Problem — die Prüfung ist gar nicht bis dahin " +
+    "gekommen, sie wurde einfach nicht zu Ende geführt. Wechsle währenddessen " +
+    "nicht aus Telegram raus und schließ die Kamera nicht zwischendurch; geh " +
+    "einmal am Stück durch, das dauert nur etwa 15 Sekunden. Tipp auf " +
+    "🟢 Jetzt verifizieren und versuch es erneut.",
+  verifyRetryTechnical:
+    "Das lag diesmal an uns, nicht an dir — ein technischer Hänger auf unserer " +
+    "Seite, deine Kamera und deine Fotos haben damit nichts zu tun. Tut uns leid. " +
+    "Tipp auf 🟢 Jetzt verifizieren und versuch es noch einmal — das sollte " +
+    "diesmal glatt laufen.",
   verifyReferenceExpired:
     "Wir löschen dein Verifizierungs-Selfie nach 90 Tagen, deshalb gibt es hier " +
     "nichts mehr, womit wir deine neuen Fotos abgleichen könnten. Eine weitere " +
@@ -2740,8 +2802,8 @@ const deTranslations: TranslationTable = {
   verifyOutcomePendingReview:
     "🔍 Wir prüfen deine Profilfotos noch einmal gegen dein Verifizierungs-Selfie. Das dauert normalerweise ein paar Stunden - ich melde mich, sobald es erledigt ist.",
   verifyOutcomeRejected:
-    "⚠️ Die Fotos in deinem Profil scheinen nicht zum Selfie aus der Verifizierung zu passen.\n\n" +
-    "Wenn du darauf nicht zu sehen bist — lade eigene hoch, ich prüfe sie automatisch erneut. Wenn du es doch bist, starte die Verifizierung bei besserem Licht noch einmal.",
+    "⚠️ Deine Profilfotos passen nicht zum Selfie aus deiner Verifizierung.\n\n" +
+    "Wenn du auf diesen Fotos nicht zu sehen bist — tipp unten auf 📷, tausch sie aus, ich prüfe automatisch erneut (kein neues Selfie nötig). Wenn du es doch bist, ist der Abgleich einfach schwach ausgefallen — starte die Verifizierung bei gutem Licht noch einmal.",
   verifyMiniAppLoading: "Verifizierung wird geöffnet…",
   verifyMiniAppFinishing: "Gleich fertig. Ergebnis wird geprüft…",
   verifyMiniAppError: "Verifizierung konnte nicht gestartet werden. Versuch es gleich noch mal.",
@@ -2867,11 +2929,10 @@ const deTranslations: TranslationTable = {
   editAgeRangePrompt: "In welcher Altersspanne sollen wir nach einem Partner für dich suchen? (z. B. 20-28)\nMin: {min}, Max: {max}.",
   editAgeRangeInvalid: "Das habe ich nicht verstanden. Zwei Zahlen wie 20-28 (Bereich {min}-{max}).",
   editAgeRangeSaved: "Altersbereich aktualisiert",
-  editProfilePhotosStart: "Sende neue Fotos ({min}-{max}). Eins nach dem anderen.",
+  editProfilePhotosStart: "Sende neue Fotos ({min}-{max}) — einzeln oder als Album.",
   editProfilePhotosSaved: "Fotos aktualisiert",
-  photoManagerTitle:
-    "Deine Fotos. Lösche unerwünschte oder füge neue hinzu (min {min}, max {max}).",
-  photoManagerDeleteBtn: "🗑 {n}",
+  photoManagerTitle: "Fotos: {count}/{max} · mindestens {min}",
+  photoManagerCardDeleteBtn: "🗑 Dieses Foto löschen",
   photoManagerAddBtn: "➕ Hinzufügen",
   photoManagerDoneBtn: "Fertig",
   photoManagerMinReached: "Du brauchst mindestens {min} Fotos. Füge zuerst ein neues hinzu.",
@@ -3536,11 +3597,14 @@ const plTranslations: TranslationTable = {
   verifyBtnSkipConfirm: "🔴 Pomiń mimo to",
   // --- Photo re-upload path (a way back before/after verification) ---
   verifyBtnRedoPhotos: "📷 Wgraj inne zdjęcia",
+  verifyBtnRedoPhotosSecondary: "📷 Właściwie problem ze zdjęciami",
   verifyBtnClearPhotos: "🗑 Usuń wszystkie i wgraj od nowa",
   verifyGateLocked:
     "Menu i dobieranie par otworzą się zaraz po weryfikacji. Został tylko ten krok:",
   verifyPhotosRedoIntro:
     "Bez problemu — oto Twoje obecne zdjęcia. Usuń te, na których nie ma Ciebie, i wgraj własne.",
+  verifyPhotosRedoIntroRecheck:
+    "Bez problemu — oto Twoje obecne zdjęcia. Usuń te, na których nie ma Ciebie, i wgraj własne — gdy skończysz, sprawdzę je automatycznie ponownie, nowe selfie nie będzie potrzebne.",
   verifyPhotosCleared: "Zdjęcia usunięte. Prześlij {min}–{max} swoich zdjęć.",
   verifyPhotosSavedRecheck:
     "Zdjęcia zaktualizowane ✅ Sprawdzam je ponownie względem selfie z weryfikacji — nie musisz jej powtarzać. Napiszę, gdy skończę.",
@@ -3552,10 +3616,22 @@ const plTranslations: TranslationTable = {
   verifyCheckAlreadyDone:
     "Już przetworzone - powinna pojawić się wiadomość z wynikiem powyżej. " +
     "Jeśli coś wygląda źle, kliknij 🟢 Zweryfikuj teraz, aby spróbować ponownie.",
-  verifyLivenessRetry:
-    "Tym razem nie udało się potwierdzić, że to naprawdę ty - zwykle winna jest " +
-    "drżąca kamera albo słabe światło. Nic się nie stało: kliknij 🟢 Zweryfikuj " +
-    "teraz i spróbuj jeszcze raz.",
+  verifyRetryNotLive:
+    "Twoje zdjęcia nie są tu problemem — weryfikacja w ogóle do nich nie doszła, " +
+    "po prostu tym razem nie udało się potwierdzić żywej twarzy. Co zwykle " +
+    "pomaga: jasne światło z przodu (nie z tyłu), cała twarz w kadrze, bez " +
+    "okularów przeciwsłonecznych i niczego, co ją zasłania. Kliknij " +
+    "🟢 Zweryfikuj teraz i spróbuj jeszcze raz.",
+  verifyRetryUnfinished:
+    "Twoje zdjęcia nie są problemem — weryfikacja w ogóle do nich nie doszła, po " +
+    "prostu nie została dokończona. Nie przełączaj się z Telegrama i nie zamykaj " +
+    "kamery w trakcie — przejdź całość za jednym razem, to zajmuje około 15 " +
+    "sekund. Kliknij 🟢 Zweryfikuj teraz i spróbuj ponownie.",
+  verifyRetryTechnical:
+    "Tym razem to była nasza wina, nie Twoja — drobna usterka techniczna po " +
+    "naszej stronie, Twoja kamera i zdjęcia nie mają z tym nic wspólnego. " +
+    "Przepraszamy. Kliknij 🟢 Zweryfikuj teraz i spróbuj ponownie — tym razem " +
+    "powinno przejść bez problemu.",
   verifyReferenceExpired:
     "Usuwamy selfie z weryfikacji po 90 dniach, więc nie mamy już do czego " +
     "porównać twoich nowych zdjęć. Jeszcze jedna 10-sekundowa kontrola i gotowe - " +
@@ -3565,8 +3641,8 @@ const plTranslations: TranslationTable = {
   verifyOutcomePendingReview:
     "🔍 Jeszcze raz sprawdzamy zdjęcia z profilu względem selfie z weryfikacji. Zwykle zajmuje to kilka godzin - napiszę, gdy będzie gotowe.",
   verifyOutcomeRejected:
-    "⚠️ Zdjęcia w profilu nie wyglądają na zgodne z selfie z weryfikacji.\n\n" +
-    "Jeśli nie ma na nich Ciebie — wgraj własne, a sprawdzę je automatycznie. Jeśli to jednak Ty — przejdź weryfikację ponownie przy dobrym świetle.",
+    "⚠️ Twoje zdjęcia profilowe nie pasują do selfie z weryfikacji.\n\n" +
+    "Jeśli nie ma Cię na tych zdjęciach — kliknij 📷 poniżej, podmień je, a ja sprawdzę je ponownie automatycznie (nowe selfie nie jest potrzebne). Jeśli to jednak Ty, dopasowanie po prostu wyszło słabe — zweryfikuj się jeszcze raz przy dobrym świetle.",
   verifyMiniAppLoading: "Otwieramy weryfikację…",
   verifyMiniAppFinishing: "Już prawie. Sprawdzamy wynik…",
   verifyMiniAppError: "Nie udało się uruchomić weryfikacji. Spróbuj ponownie.",
@@ -3692,11 +3768,10 @@ const plTranslations: TranslationTable = {
   editAgeRangePrompt: "W jakim przedziale wiekowym mamy szukać dla Ciebie partnera? (np. 20-28)\nMin: {min}, Max: {max}.",
   editAgeRangeInvalid: "Nie łapię. Podaj dwie liczby, np. 20-28 (zakres {min}-{max}).",
   editAgeRangeSaved: "Zakres wieku zaktualizowany",
-  editProfilePhotosStart: "Wyślij nowe zdjęcia ({min}-{max}). Po jednym.",
+  editProfilePhotosStart: "Wyślij nowe zdjęcia ({min}-{max}) — pojedynczo lub jako album.",
   editProfilePhotosSaved: "Zdjęcia zaktualizowane",
-  photoManagerTitle:
-    "Twoje zdjęcia. Usuń niechciane lub dodaj nowe (min {min}, maks {max}).",
-  photoManagerDeleteBtn: "🗑 {n}",
+  photoManagerTitle: "Zdjęcia: {count}/{max} · minimum {min}",
+  photoManagerCardDeleteBtn: "🗑 Usuń to zdjęcie",
   photoManagerAddBtn: "➕ Dodaj",
   photoManagerDoneBtn: "Gotowe",
   photoManagerMinReached: "Potrzebujesz co najmniej {min} zdjęć. Najpierw dodaj nowe.",

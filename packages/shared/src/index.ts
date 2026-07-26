@@ -82,6 +82,7 @@ export type {
   MatchFlowState,
   WeeklyMatchStatus,
   SessionData,
+  PhotoManagerCard,
 } from "./types.js";
 export { DEFAULT_SESSION, SUPPORTED_LANGUAGES, LANGUAGE_LABELS } from "./types.js";
 export * from "./venue-intent.js";

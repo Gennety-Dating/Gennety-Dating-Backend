@@ -72,13 +72,30 @@ export interface VerificationKeyboardOptions {
   verifyLabel?: string;
   /** Include the "Upload different photos" row. Default true. */
   withPhotoRedo?: boolean;
+  /**
+   * Override the photo-redo row's label. Defaults to `verifyBtnRedoPhotos`
+   * ("📷 Upload different photos"). Screens where photos are NOT the likely
+   * cause (the liveness retry nudge — profile photos are never even looked at
+   * on that path) pass `verifyBtnRedoPhotosSecondary` instead, so the row
+   * reads as an unrelated escape hatch for "I realize I uploaded someone
+   * else's photos" rather than a second attempt at fixing THIS problem.
+   */
+  photoRedoLabel?: string;
+  /**
+   * Put the photo-redo row ABOVE the Verify button. Used only for the
+   * `rejected` outcome: a face WAS detected there and didn't match the
+   * verification selfie, so "these aren't my photos" is the more likely fix
+   * and should be the more prominent action.
+   */
+  photoRedoFirst?: boolean;
   /** Pre-loaded theme, to skip the extra user lookup. */
   theme?: Theme;
 }
 
 /**
- * The standard verification keyboard: a green "Verify now" button over the
- * "Upload different photos" escape hatch.
+ * The standard verification keyboard: a green "Verify now" button plus the
+ * "Upload different photos" escape hatch, ordered by which is more likely to
+ * be the actual fix for the screen it's attached to (see `photoRedoFirst`).
  *
  * Lives here rather than in the verification handler so the face-match pipeline
  * can attach the same affordances to its rejection DM without importing a
@@ -94,9 +111,20 @@ export async function buildVerificationKeyboard(
   userId: string,
   options: VerificationKeyboardOptions = {},
 ): Promise<InlineKeyboard | null> {
-  const { verifyLabel = t(lang, "verifyBtnGo"), withPhotoRedo = true, theme } = options;
+  const {
+    verifyLabel = t(lang, "verifyBtnGo"),
+    withPhotoRedo = true,
+    photoRedoLabel = t(lang, "verifyBtnRedoPhotos"),
+    photoRedoFirst = false,
+    theme,
+  } = options;
 
   const keyboard = new InlineKeyboard();
+
+  if (withPhotoRedo && photoRedoFirst) {
+    keyboard.text(photoRedoLabel, VERIFY_PHOTOS_CALLBACK).row();
+  }
+
   const hasVerify = await appendVerifyNowButton(
     keyboard,
     lang,
@@ -107,8 +135,8 @@ export async function buildVerificationKeyboard(
   if (!hasVerify) return null;
   keyboard.success();
 
-  if (withPhotoRedo) {
-    keyboard.row().text(t(lang, "verifyBtnRedoPhotos"), VERIFY_PHOTOS_CALLBACK);
+  if (withPhotoRedo && !photoRedoFirst) {
+    keyboard.row().text(photoRedoLabel, VERIFY_PHOTOS_CALLBACK);
   }
   return keyboard;
 }

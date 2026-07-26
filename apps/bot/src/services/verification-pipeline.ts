@@ -927,6 +927,12 @@ export async function runFaceMatchVerificationDefault(
                   select: { language: true },
                 }))?.language ?? "en",
                 userId,
+                // `rejected` means a face WAS detected here and didn't match the
+                // verification selfie, so "these aren't my photos" is the more
+                // likely fix — lead with it. `retry` on this path is the infra
+                // case (selfie fetch failed), where photos were never at fault
+                // either way, so it keeps the default Verify-first order.
+                kind === "rejected" ? { photoRedoFirst: true } : undefined,
               )
             : null;
         await api.sendMessage(Number(telegramId), message, {

@@ -327,7 +327,7 @@ describe("runFaceMatchVerification — impostor detection", () => {
     if (outcome.kind !== "rejected") return;
     expect(outcome.score).toBeCloseTo(0.3, 5);
     expect(h.persisted[0]!.verificationStatus).toBe("rejected");
-    expect(h.notifications[0]!.message).toContain("don't appear to match");
+    expect(h.notifications[0]!.message).toContain("don't match");
     expect(h.activationSurfaces).toHaveLength(0);
   });
 

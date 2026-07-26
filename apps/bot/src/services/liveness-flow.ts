@@ -2,10 +2,15 @@ import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
-import { createLivenessSession, getLivenessResult } from "./face-liveness.js";
+import {
+  createLivenessSession,
+  getLivenessResult,
+  type LivenessRetryOutcome,
+} from "./face-liveness.js";
 import { mintLivenessCredentials, type LivenessCredentials } from "./liveness-credentials.js";
 import { runFaceMatchVerificationDefault } from "./verification-pipeline.js";
 import { buildVerificationKeyboard } from "./verification-keyboard.js";
+import { livenessRetryMessage } from "./verification-messages.js";
 
 /**
  * The identity-verification flow, shared by both client surfaces.
@@ -159,7 +164,7 @@ export async function completeLivenessCheck(
       status: result.status,
       confidence: result.confidence,
     });
-    await sendRetryPrompt(api, user.id, user.telegramId, user.language ?? "en");
+    await sendRetryPrompt(api, user.id, user.telegramId, user.language ?? "en", result.outcome);
     return { ok: true, outcome: "retry" };
   }
 
@@ -180,11 +185,20 @@ async function sendRetryPrompt(
   userId: string,
   telegramId: bigint,
   language: Language,
+  outcome: LivenessRetryOutcome,
 ): Promise<void> {
   if (telegramId <= 0n) return; // mobile-only user — the app shows its own retry screen
   try {
-    const keyboard = await buildVerificationKeyboard(language, userId);
-    await api.sendMessage(Number(telegramId), t(language, "verifyLivenessRetry"), {
+    // The photo-redo row here is a deliberate escape hatch, not a second fix
+    // for THIS problem — profile photos are never looked at on this path (see
+    // `livenessRetryMessage`'s doc comment). It stays available for the person
+    // who realizes mid-retry that they uploaded someone else's photos, but its
+    // label says exactly that so it reads as an unrelated fork, not a second
+    // "try this instead".
+    const keyboard = await buildVerificationKeyboard(language, userId, {
+      photoRedoLabel: t(language, "verifyBtnRedoPhotosSecondary"),
+    });
+    await api.sendMessage(Number(telegramId), livenessRetryMessage(language, outcome), {
       ...(keyboard ? { reply_markup: keyboard } : {}),
     });
   } catch (err) {

@@ -331,8 +331,12 @@ export async function sendVerificationGateNotice(
     case "rejected": {
       // The photos didn't match the selfie. Both recoveries ride the message:
       // swap the photos (the pipeline then re-checks them against the selfie
-      // already on file) or re-run the liveness check.
-      const keyboard = await buildVerificationKeyboard(lang, user.id);
+      // already on file) or re-run the liveness check. A face WAS detected here
+      // and didn't match, so "these aren't my photos" is the more likely fix —
+      // lead with it (see `buildVerificationKeyboard`'s `photoRedoFirst`).
+      const keyboard = await buildVerificationKeyboard(lang, user.id, {
+        photoRedoFirst: true,
+      });
       await api.sendMessage(chatId, withPrefix(t(lang, "verifyOutcomeRejected")), {
         ...(keyboard ? { reply_markup: keyboard } : {}),
       });

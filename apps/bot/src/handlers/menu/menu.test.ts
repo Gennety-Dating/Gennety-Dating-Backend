@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { SessionData } from "@gennety/shared";
+import type { SessionData, PhotoManagerCard } from "@gennety/shared";
 import { DEFAULT_SESSION, MIN_PHOTOS, MAX_PHOTOS, t } from "@gennety/shared";
 
 // Mock prisma before importing handlers.
@@ -201,6 +201,12 @@ function createMockCtx(overrides: {
       }
     : undefined;
 
+  // Each photo-manager card is its own `sendPhoto` call and needs its own
+  // message id (the delete button on a card resolves by the exact message it
+  // lives on — see `ensurePhotoCards`), so this counts up per call instead of
+  // returning one fixed id for every card.
+  let nextPhotoMsgId = 200;
+
   return {
     session,
     from: { id: overrides.fromId ?? 12345 },
@@ -216,7 +222,9 @@ function createMockCtx(overrides: {
     api: {
       getFile: vi.fn(),
       sendMessage: vi.fn().mockResolvedValue({ message_id: 77 }),
-      sendPhoto: vi.fn().mockResolvedValue({ message_id: 78 }),
+      sendPhoto: vi.fn().mockImplementation(() =>
+        Promise.resolve({ message_id: nextPhotoMsgId++ }),
+      ),
       sendMediaGroup: vi.fn().mockResolvedValue([{ message_id: 78 }]),
       editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
       editMessageText: vi.fn().mockResolvedValue(undefined),
@@ -749,7 +757,7 @@ describe("Menu — Edit Profile", () => {
     expect(prisma.profile.update).not.toHaveBeenCalled();
   });
 
-  it("handleEditPhotosStart renders the manager with delete/add/done controls", async () => {
+  it("handleEditPhotosStart renders one card per photo plus an add/done panel", async () => {
     (prisma.profile.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
       photos: ["file_1", "file_2", "file_3"],
       profileMedia: [],
@@ -761,15 +769,30 @@ describe("Menu — Edit Profile", () => {
 
     expect(ctx.session.menuState).toBe("edit_photos");
     expect(ctx.session.pendingPhotos).toEqual(["file_1", "file_2", "file_3"]);
-    // The last sent message is the control message; it carries one delete
-    // button per photo plus add + done.
+
+    // Every photo gets its own card (a `sendPhoto` call) carrying the shared
+    // per-card delete callback — no numbered per-photo buttons any more.
+    const photoCalls = (ctx.api.sendPhoto as ReturnType<typeof vi.fn>).mock.calls;
+    expect(photoCalls).toHaveLength(3);
+    expect(photoCalls.map((call) => call[1])).toEqual(["file_1", "file_2", "file_3"]);
+    for (const call of photoCalls) {
+      const markup = (call[2] as { reply_markup?: unknown } | undefined)?.reply_markup;
+      expect(JSON.stringify(markup)).toContain("menu:edit:photos:delcard");
+    }
+    expect(ctx.session.photoCards.map((c: PhotoManagerCard) => c.ref)).toEqual([
+      "file_1",
+      "file_2",
+      "file_3",
+    ]);
+
+    // The bottom panel is the last sendMessage call: add + done, no per-photo
+    // delete buttons (those live on the cards themselves).
     const sendCalls = (ctx.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
     const markup = sendCalls[sendCalls.length - 1][2].reply_markup;
     const serialized = JSON.stringify(markup);
-    expect(serialized).toContain("menu:edit:photos:del:0");
-    expect(serialized).toContain("menu:edit:photos:del:2");
     expect(serialized).toContain("menu:edit:photos:add");
     expect(serialized).toContain("menu:edit:photos:continue");
+    expect(serialized).not.toContain("menu:edit:photos:delcard");
   });
 
   it("handleEditPhotosDelete removes one photo and persists aligned arrays", async () => {
@@ -779,6 +802,9 @@ describe("Menu — Edit Profile", () => {
     const media = photos.map((photo) => ({ type: "photo" as const, photo }));
     const hashes = photos.map((_, i) => `h${i}`);
     const uniqueIds = photos.map((_, i) => `u${i}`);
+    // One card per photo, msgId 100+i — the tap resolves the deleted photo by
+    // the MESSAGE the button lives on, never an index in the payload.
+    const cards = photos.map((ref, i) => ({ msgId: 100 + i, ref }));
     const expectedPhotos = photos.filter((_, i) => i !== 1);
     const expectedScores = scores.filter((_, i) => i !== 1);
     const expectedHashes = hashes.filter((_, i) => i !== 1);
@@ -791,8 +817,10 @@ describe("Menu — Edit Profile", () => {
         pendingPhotoScores: [...scores],
         pendingPhotoHashes: [...hashes],
         pendingPhotoUniqueIds: [...uniqueIds],
+        photoCards: [...cards],
       },
-      callbackData: "menu:edit:photos:del:1",
+      callbackData: "menu:edit:photos:delcard",
+      callbackMessageId: 101, // the card for p1
     });
     photoConsensusMocks.removeProfilePhotoByRef.mockResolvedValue({
       found: true,
@@ -803,6 +831,10 @@ describe("Menu — Edit Profile", () => {
     });
 
     await handleEditPhotosDelete(ctx);
+
+    // The tapped card's own message is dropped immediately.
+    expect(ctx.api.deleteMessage).toHaveBeenCalledWith(12345, 101);
+    expect(ctx.session.photoCards.map((c: PhotoManagerCard) => c.msgId)).not.toContain(101);
 
     // photos[i] ↔ photoFaceScores[i] alignment preserved after the splice.
     expect(ctx.session.pendingPhotos).toEqual(expectedPhotos);
@@ -823,23 +855,128 @@ describe("Menu — Edit Profile", () => {
 
   it("handleEditPhotosDelete is blocked at the MIN_PHOTOS floor", async () => {
     const photos = Array.from({ length: MIN_PHOTOS }, (_, i) => `p${i}`);
+    const cards = photos.map((ref, i) => ({ msgId: 100 + i, ref }));
     const ctx = createMockCtx({
       session: {
         menuState: "edit_photos",
         pendingPhotos: [...photos],
         pendingProfileMedia: photos.map((photo) => ({ type: "photo", photo })),
         pendingPhotoScores: photos.map(() => 0.1),
+        photoCards: [...cards],
       },
-      callbackData: "menu:edit:photos:del:0",
+      callbackData: "menu:edit:photos:delcard",
+      callbackMessageId: 100, // the card for p0
     });
 
     await handleEditPhotosDelete(ctx);
 
     expect(ctx.session.pendingPhotos).toEqual(photos);
+    expect(ctx.session.photoCards).toEqual(cards);
+    expect(ctx.api.deleteMessage).not.toHaveBeenCalled();
     expect(prisma.profile.update).not.toHaveBeenCalled();
     expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
       expect.objectContaining({ show_alert: true }),
     );
+  });
+
+  it("a delete never re-sends the surviving cards (no album resend)", async () => {
+    const photos = Array.from({ length: MAX_PHOTOS }, (_, i) => `p${i}`);
+    const cards = photos.map((ref, i) => ({ msgId: 100 + i, ref }));
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        pendingPhotos: [...photos],
+        pendingProfileMedia: photos.map((photo) => ({ type: "photo", photo })),
+        pendingPhotoScores: photos.map(() => 0.1),
+        pendingPhotoHashes: photos.map((_, i) => `h${i}`),
+        pendingPhotoUniqueIds: photos.map((_, i) => `u${i}`),
+        photoCards: [...cards],
+      },
+      callbackData: "menu:edit:photos:delcard",
+      callbackMessageId: 101, // the card for p1
+    });
+    const remaining = photos.filter((_, i) => i !== 1);
+    photoConsensusMocks.removeProfilePhotoByRef.mockResolvedValue({
+      found: true,
+      photos: remaining,
+      profileMedia: remaining.map((photo) => ({ type: "photo", photo })),
+      uploadedPhotoHashes: remaining.map((_, i) => `h${i}`),
+      photoFaceScores: remaining.map(() => 0.1),
+    });
+
+    await handleEditPhotosDelete(ctx);
+
+    // The nine surviving photos already have cards — reconciliation must not
+    // resend a single one of them, and the retired media-group album path
+    // must never fire either.
+    expect(ctx.api.sendPhoto).not.toHaveBeenCalled();
+    expect(ctx.api.sendMediaGroup).not.toHaveBeenCalled();
+  });
+
+  it("a delete edits the existing panel in place instead of sending a new one", async () => {
+    const photos = Array.from({ length: MAX_PHOTOS }, (_, i) => `p${i}`);
+    const cards = photos.map((ref, i) => ({ msgId: 100 + i, ref }));
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        pendingPhotos: [...photos],
+        pendingProfileMedia: photos.map((photo) => ({ type: "photo", photo })),
+        pendingPhotoScores: photos.map(() => 0.1),
+        pendingPhotoHashes: photos.map((_, i) => `h${i}`),
+        pendingPhotoUniqueIds: photos.map((_, i) => `u${i}`),
+        photoCards: [...cards],
+        photoManagerMsgId: 999,
+      },
+      callbackData: "menu:edit:photos:delcard",
+      callbackMessageId: 101, // the card for p1
+    });
+    const remaining = photos.filter((_, i) => i !== 1);
+    photoConsensusMocks.removeProfilePhotoByRef.mockResolvedValue({
+      found: true,
+      photos: remaining,
+      profileMedia: remaining.map((photo) => ({ type: "photo", photo })),
+      uploadedPhotoHashes: remaining.map((_, i) => `h${i}`),
+      photoFaceScores: remaining.map(() => 0.1),
+    });
+
+    await handleEditPhotosDelete(ctx);
+
+    // No new cards were sent, so the panel is edited in place — the existing
+    // message id is reused, not replaced.
+    expect(ctx.api.editMessageText).toHaveBeenCalledWith(
+      12345,
+      999,
+      expect.stringContaining(String(MAX_PHOTOS - 1)),
+      expect.anything(),
+    );
+    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
+    expect(ctx.session.photoManagerMsgId).toBe(999);
+  });
+
+  it("a stale tap on an already-removed card is a no-op", async () => {
+    const photos = Array.from({ length: MAX_PHOTOS }, (_, i) => `p${i}`);
+    // No card for msgId 555 — as if it was already deleted (double-tap) or
+    // the ref it pointed at was dropped by a concurrent mobile/Aether edit.
+    const cards = photos.map((ref, i) => ({ msgId: 100 + i, ref }));
+    const ctx = createMockCtx({
+      session: {
+        menuState: "edit_photos",
+        pendingPhotos: [...photos],
+        pendingProfileMedia: photos.map((photo) => ({ type: "photo", photo })),
+        pendingPhotoScores: photos.map(() => 0.1),
+        photoCards: [...cards],
+      },
+      callbackData: "menu:edit:photos:delcard",
+      callbackMessageId: 555,
+    });
+
+    await handleEditPhotosDelete(ctx);
+
+    expect(ctx.session.pendingPhotos).toEqual(photos);
+    expect(ctx.session.photoCards).toEqual(cards);
+    expect(ctx.api.deleteMessage).not.toHaveBeenCalled();
+    expect(photoConsensusMocks.removeProfilePhotoByRef).not.toHaveBeenCalled();
+    expect(ctx.answerCallbackQuery).toHaveBeenCalledWith();
   });
 
   it("handleEditPhotosAdd re-opens the upload prompt and stays in edit_photos", async () => {
@@ -1417,8 +1554,35 @@ describe("Menu — verification photo redo", () => {
     expect(JSON.stringify(keyboards)).toContain("verify:photos:clear");
   });
 
+  it("uses the neutral intro when no reference selfie is on file", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-user-1",
+      verifiedSelfiePath: null,
+    });
+    const ctx = createMockCtx({ callbackData: "verify:photos" });
+
+    await handleVerifyPhotosRedo(ctx);
+
+    // No promise of a selfie-free recheck — that would be false for someone
+    // who never ran liveness (or whose reference was already GDPR-scrubbed).
+    expect(ctx.reply).toHaveBeenCalledWith(t("en", "verifyPhotosRedoIntro"));
+  });
+
+  it("promises the automatic recheck when a reference selfie IS on file", async () => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-user-1",
+      verifiedSelfiePath: "selfies/uuid-user-1.jpg",
+    });
+    const ctx = createMockCtx({ callbackData: "verify:photos" });
+
+    await handleVerifyPhotosRedo(ctx);
+
+    expect(ctx.reply).toHaveBeenCalledWith(t("en", "verifyPhotosRedoIntroRecheck"));
+  });
+
   it("lets a redo user delete below MIN_PHOTOS (all four photos may be someone else)", async () => {
     const photos = Array.from({ length: MIN_PHOTOS }, (_, i) => `p${i}`);
+    const cards = photos.map((ref, i) => ({ msgId: 100 + i, ref }));
     const ctx = createMockCtx({
       session: {
         menuState: "edit_photos",
@@ -1428,8 +1592,10 @@ describe("Menu — verification photo redo", () => {
         pendingPhotoScores: photos.map(() => 0.1),
         pendingPhotoHashes: photos.map((_, i) => `h${i}`),
         pendingPhotoUniqueIds: photos.map((_, i) => `u${i}`),
+        photoCards: [...cards],
       },
-      callbackData: "menu:edit:photos:del:0",
+      callbackData: "menu:edit:photos:delcard",
+      callbackMessageId: 100, // the card for p0
     });
     photoConsensusMocks.removeProfilePhotoByRef.mockResolvedValue({
       found: true,
