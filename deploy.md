@@ -525,7 +525,19 @@ git status --short
 pnpm install
 pnpm test
 pnpm build
+pnpm security:secrets
+pnpm security:audit
 ```
+
+`pnpm security:audit` is a **mandatory** preflight step (added 2026-07-26). It
+existed as a script long before it was in this runbook, and the gap is exactly
+how a CRITICAL `fast-xml-parser` advisory reached the shipped Mini App bundle —
+the package rides in via `@aws-amplify/ui-react-liveness`, so a client-side CVE
+was invisible to any server-side check. Fix transitive advisories with an entry
+in the root `pnpm.overrides` block (already used for seven packages) rather than
+waiting on the upstream dependency. **Never pin an override BELOW the patched
+version** — `postcss` was held at `8.5.10` while the fix was `8.5.18`, so the
+override itself was the vulnerability.
 
 Identity and profile-media validation preflight:
 

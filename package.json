@@ -54,11 +54,13 @@
   "pnpm": {
     "overrides": {
       "form-data": "4.0.6",
-      "postcss": "8.5.10",
+      "postcss": "8.5.18",
       "qs": "6.15.2",
       "vite": "6.4.3",
       "fast-uri": "3.1.4",
-      "body-parser": "2.3.0"
+      "fast-xml-parser": "5.7.0",
+      "body-parser": "2.3.0",
+      "brace-expansion": "5.0.8"
     }
   },
   "devDependencies": {
