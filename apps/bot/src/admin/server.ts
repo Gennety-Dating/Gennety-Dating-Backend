@@ -487,6 +487,29 @@ const USER_SELECT = {
  * the Prisma enum so the admin can drill into `pending_review` rows
  * directly without scrolling. Unknown values are ignored (no filter).
  */
+/**
+ * Parse `?limit`/`?offset` into values Prisma can actually take.
+ *
+ * The previous `Math.min(Number(limit), 100)` + `Number.isFinite` pair let two
+ * bad values through: a negative limit became `take: -N`, which Prisma reads as
+ * "take backwards" and silently returns the OLDEST rows instead of the newest;
+ * and a fractional limit reached Prisma and threw, surfacing as a 500 rather
+ * than a 400. Truncate and clamp instead. Returns null for genuinely
+ * unparseable input so the caller can answer 400.
+ */
+function parsePagination(
+  rawLimit: unknown,
+  rawOffset: unknown,
+): { limit: number; offset: number } | null {
+  const limitNum = Number(rawLimit ?? 20);
+  const offsetNum = Number(rawOffset ?? 0);
+  if (!Number.isFinite(limitNum) || !Number.isFinite(offsetNum)) return null;
+  return {
+    limit: Math.min(Math.max(Math.trunc(limitNum), 1), 100),
+    offset: Math.max(Math.trunc(offsetNum), 0),
+  };
+}
+
 const VERIFICATION_STATUS_FILTER = new Set([
   "unverified",
   "pending",
@@ -497,13 +520,12 @@ const VERIFICATION_STATUS_FILTER = new Set([
 
 app.get("/admin/users", async (req: Request, res: Response) => {
   try {
-    const limit = Math.min(Number(req.query.limit ?? 20), 100);
-    const offset = Math.max(Number(req.query.offset ?? 0), 0);
-
-    if (!Number.isFinite(limit) || !Number.isFinite(offset)) {
+    const page = parsePagination(req.query.limit, req.query.offset);
+    if (!page) {
       res.status(400).json({ error: "limit and offset must be integers" });
       return;
     }
+    const { limit, offset } = page;
 
     const verificationStatus = String(req.query.verificationStatus ?? "");
     const where =
@@ -557,14 +579,27 @@ app.post(
       const id = req.params["id"] as string;
       const user = await prisma.user.findUnique({
         where: { id },
-        select: { id: true, personaInquiryId: true },
+        select: { id: true, personaInquiryId: true, verifiedSelfiePath: true },
       });
       if (!user) {
         res.status(404).json({ error: "User not found" });
         return;
       }
       if (!user.personaInquiryId) {
-        res.status(400).json({ error: "User has no Persona inquiry to rerun" });
+        res.status(400).json({ error: "User has no liveness session to rerun" });
+        return;
+      }
+      // A rerun compares the photo set against the STORED reference selfie, and
+      // AWS cannot re-issue one (the session died 3 minutes after it was
+      // created). Without a selfie the pipeline has nothing to compare, so the
+      // run can only end in the retryable `pending` branch — telling the admin
+      // that up front beats a wasted run plus a confusing retry DM to the user.
+      // The 90-day `selfie-retention` scrub is the common way to land here.
+      if (!user.verifiedSelfiePath) {
+        res.status(400).json({
+          error:
+            "Reference selfie has been scrubbed — the user must run liveness again; a rerun cannot compare anything",
+        });
         return;
       }
 
@@ -858,13 +893,12 @@ app.get("/admin/reports/stats", async (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 app.get("/admin/reports", async (req: Request, res: Response) => {
   try {
-    const limit = Math.min(Number(req.query.limit ?? 20), 100);
-    const offset = Math.max(Number(req.query.offset ?? 0), 0);
-
-    if (!Number.isFinite(limit) || !Number.isFinite(offset)) {
+    const page = parsePagination(req.query.limit, req.query.offset);
+    if (!page) {
       res.status(400).json({ error: "limit and offset must be integers" });
       return;
     }
+    const { limit, offset } = page;
 
     // Optional filters
     const tierFilter = req.query.tier ? Number(req.query.tier) : undefined;

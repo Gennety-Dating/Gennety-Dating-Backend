@@ -40,7 +40,11 @@ export function createPromoRouter(): Router {
     const resolved = await resolvePromoCode(code);
     if (resolved) recordAttribution(clientFingerprint(req), resolved.code);
 
+    // `PROMO_APP_STORE_URL` is already validated as an https: URL at config
+    // load; escaping here is the second layer, so a value carrying `"` can
+    // never break out of the attribute below.
     const dest = env.PROMO_APP_STORE_URL;
+    const safeDest = escapeHtmlAttribute(dest);
     const safeCode = code.replace(/[^A-Z0-9_-]/g, "");
     // Minimal, self-contained landing: copy the code, then bounce to the store.
     const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -65,7 +69,7 @@ export function createPromoRouter(): Router {
   <h1>Your Gennety gift is waiting</h1>
   <p>A free date ticket and 3 months of Premium are attached to this code. Open the app to claim them.</p>
   <div class="code">${safeCode}</div>
-  ${dest ? `<a class="btn" id="go" href="${dest}">Open Gennety</a>` : ""}
+  ${dest ? `<a class="btn" id="go" href="${safeDest}">Open Gennety</a>` : ""}
 </div>
 <script>
   (function(){
@@ -96,4 +100,13 @@ export function createPromoRouter(): Router {
   });
 
   return router;
+}
+
+/** Escape a value destined for a double-quoted HTML attribute. */
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

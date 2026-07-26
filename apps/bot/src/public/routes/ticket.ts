@@ -179,10 +179,11 @@ export function createTicketRouter(api: Api<RawApi>): Router {
   });
 
   // Stream a participant's first profile photo for the Mini App avatars. Auth
-  // via `?a=<initData>` (see authenticate). `side` = self | partner, resolved
+  // via `?a=<initData>` (see authenticatePhotoRequest — this is the ONLY route
+  // that accepts the query-param form). `side` = self | partner, resolved
   // relative to the authenticated caller so no one can enumerate others' photos.
   router.get("/photo/:side", async (req: Request, res: Response): Promise<void> => {
-    const auth = authenticate(req);
+    const auth = authenticatePhotoRequest(req);
     if (!auth.ok) {
       res.status(401).json(auth.body);
       return;
@@ -380,21 +381,46 @@ function parseScope(body: unknown): TicketScope | null {
 type AuthOk = { ok: true; user: { id: number } };
 type AuthErr = { ok: false; body: { error: string; reason?: string } };
 
+/**
+ * Header-only initData auth. Every route on this router uses it EXCEPT
+ * `GET /photo/:side`, which opts into the query-param variant below.
+ *
+ * The `?a=` fallback used to live here, which meant it also authenticated
+ * state-changing POSTs like `/use` (spending the caller's ticket wallet).
+ * initData is a bearer-equivalent credential valid for two hours, and a query
+ * string lands in reverse-proxy access logs, browser history, and `Referer`
+ * headers on cross-origin subresources — so the fallback is now scoped to the
+ * one route that genuinely cannot send a header. This mirrors
+ * `routes/venue-change.ts`, which already keeps its photo-proxy check inline.
+ */
 function authenticate(req: Request): AuthOk | AuthErr {
-  let authHeader = req.header("authorization") ?? req.header("Authorization");
-  // `<img>` tags can't set an Authorization header, so the photo route passes
-  // initData via the `?a=` query param instead. validateInitData still enforces
-  // the HMAC signature, so this is no weaker than the header path.
-  if (!authHeader) {
-    const q = (req.query as { a?: unknown }).a;
-    if (typeof q === "string" && q.length > 0) authHeader = `tma ${q}`;
-  }
+  const authHeader = req.header("authorization") ?? req.header("Authorization");
   if (!authHeader?.startsWith("tma ")) {
     return { ok: false, body: { error: "Missing tma initData" } };
   }
   const initData = authHeader.slice(4).trim();
   if (!initData) return { ok: false, body: { error: "Empty initData" } };
   const validation = validateInitData(initData, env.BOT_TOKEN);
+  if (!validation.valid) {
+    return { ok: false, body: { error: "Invalid initData", reason: validation.reason } };
+  }
+  return { ok: true, user: { id: validation.user.id } };
+}
+
+/**
+ * `GET /photo/:side` only. An `<img src>` cannot carry an Authorization header,
+ * so initData rides `?a=` there and is HMAC-verified exactly like the header
+ * path. Accepts the header too, so a non-`<img>` caller needn't downgrade.
+ */
+function authenticatePhotoRequest(req: Request): AuthOk | AuthErr {
+  const header = req.header("authorization") ?? req.header("Authorization");
+  if (header?.startsWith("tma ")) return authenticate(req);
+
+  const q = (req.query as { a?: unknown }).a;
+  if (typeof q !== "string" || q.length === 0) {
+    return { ok: false, body: { error: "Missing tma initData" } };
+  }
+  const validation = validateInitData(q.trim(), env.BOT_TOKEN);
   if (!validation.valid) {
     return { ok: false, body: { error: "Invalid initData", reason: validation.reason } };
   }

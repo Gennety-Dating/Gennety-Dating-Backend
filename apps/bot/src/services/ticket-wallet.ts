@@ -299,6 +299,21 @@ export async function grantPhotoBonusIfEligible(userId: string): Promise<BonusRe
   }
 
   return prisma.$transaction(async (tx) => {
+    // Re-read the photo count inside the transaction. The check above races a
+    // concurrent delete, and Prisma cannot express "array length >= N" in a
+    // `where`, so the eligibility condition has to be re-asserted here rather
+    // than folded into the CAS below.
+    const fresh = await tx.profile.findUnique({
+      where: { userId },
+      select: { photos: true },
+    });
+    if (!fresh || fresh.photos.length < PHOTO_BONUS_TICKET_THRESHOLD) {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { ticketBalance: true },
+      });
+      return { granted: false, balance: user?.ticketBalance ?? 0 };
+    }
     const claim = await tx.profile.updateMany({
       where: { userId, photoBonusTicketAt: null },
       data: { photoBonusTicketAt: new Date() },
@@ -341,6 +356,23 @@ export async function grantVideoBonusIfEligible(userId: string): Promise<BonusRe
   }
 
   return prisma.$transaction(async (tx) => {
+    // Same reasoning as the photo bonus: re-assert eligibility inside the
+    // transaction, since a concurrent video removal can land between the read
+    // above and the claim below.
+    const fresh = await tx.profile.findUnique({
+      where: { userId },
+      select: { photos: true, profileMedia: true },
+    });
+    if (
+      !fresh ||
+      !profileMediaHasVideo(normalizeProfileMedia(fresh.profileMedia, fresh.photos))
+    ) {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { ticketBalance: true },
+      });
+      return { granted: false, balance: user?.ticketBalance ?? 0 };
+    }
     const claim = await tx.profile.updateMany({
       where: { userId, videoBonusTicketAt: null },
       data: { videoBonusTicketAt: new Date() },

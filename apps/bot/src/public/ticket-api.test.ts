@@ -344,4 +344,34 @@ describe("POST /v1/matches/:id/ticket/use", () => {
     expect(res.status).toBe(401);
     expect(useTicketFromBalance).not.toHaveBeenCalled();
   });
+
+  it("rejects initData passed in the query string (spend must use the header)", async () => {
+    // initData is a bearer-equivalent credential valid for two hours, and a
+    // query string leaks into proxy logs, browser history and Referer headers.
+    // The `?a=` form exists only for `<img>` on the photo route.
+    const initData = signInitData(BOT_TOKEN);
+    const res = await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/ticket/use?a=${encodeURIComponent(initData)}`)
+      .send({ scope: "self" });
+    expect(res.status).toBe(401);
+    expect(useTicketFromBalance).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /v1/matches/:id/ticket/photo/:side", () => {
+  it("still accepts initData via ?a= (an <img> cannot send a header)", async () => {
+    const initData = signInitData(BOT_TOKEN);
+    const res = await request(buildApp()).get(
+      `/v1/matches/${VALID_UUID}/ticket/photo/self?a=${encodeURIComponent(initData)}`,
+    );
+    // Auth passed — we get the route's own not-found/participant answer, not 401.
+    expect(res.status).not.toBe(401);
+  });
+
+  it("returns 401 for a query param that isn't validly signed", async () => {
+    const res = await request(buildApp()).get(
+      `/v1/matches/${VALID_UUID}/ticket/photo/self?a=${encodeURIComponent("user=%7B%22id%22%3A1%7D&hash=deadbeef")}`,
+    );
+    expect(res.status).toBe(401);
+  });
 });

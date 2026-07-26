@@ -68,6 +68,7 @@ vi.mock("@gennety/db", () => ({
               ...MOCK_USER,
               messageHistory: [{ role: "user", content: "Hi" }],
               personaInquiryId: "inq_xyz",
+              verifiedSelfiePath: "00000000-0000-0000-0000-000000000001/selfie.jpg",
             })
           : Promise.resolve(null),
       ),
@@ -407,6 +408,30 @@ describe("POST /admin/users/:id/rerun-verification", () => {
       .post(`/admin/users/00000000-0000-0000-0000-000000000099/rerun-verification`)
       .set(AUTH);
     expect(res.status).toBe(404);
+  });
+
+  it("refuses when the reference selfie was scrubbed instead of running headless", async () => {
+    // The 90-day `selfie-retention` scrub is the common way to land here. AWS
+    // cannot re-issue a reference image, so a rerun has nothing to compare and
+    // can only end in the retryable `pending` branch — the admin should be told,
+    // not handed a wasted run plus a confusing retry DM to the user.
+    setAdminBotApi({} as never);
+    runPipeline.mockClear();
+    const findUnique = (prisma.user as unknown as { findUnique: ReturnType<typeof vi.fn> })
+      .findUnique;
+    findUnique.mockResolvedValueOnce({
+      id: MOCK_USER.id,
+      personaInquiryId: "inq_xyz",
+      verifiedSelfiePath: null,
+    });
+
+    const res = await request(app)
+      .post(`/admin/users/${MOCK_USER.id}/rerun-verification`)
+      .set(AUTH);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("scrubbed");
+    expect(runPipeline).not.toHaveBeenCalled();
   });
 });
 

@@ -562,7 +562,15 @@ export const env = {
   /// App Store product URL the promo landing page (`GET /v1/promo/:code`)
   /// bounces an iOS visitor to after stashing the clipboard code + fingerprint.
   /// Empty → the landing shows the code + "open the app" copy without a redirect.
-  PROMO_APP_STORE_URL: process.env.PROMO_APP_STORE_URL ?? "",
+  ///
+  /// Validated at load: the landing page interpolates this into an `href` and a
+  /// `location.href` assignment, so a typo'd or hostile value would become
+  /// stored XSS on a public page. A non-`https:` value is dropped to "" with a
+  /// warning rather than rendered.
+  PROMO_APP_STORE_URL: safeHttpsUrl(
+    process.env.PROMO_APP_STORE_URL,
+    "PROMO_APP_STORE_URL",
+  ),
 
   /// Dev-only preview switch. When true, the `/previewlocation` bot command is
   /// live: it DMs the sender the venue location-picker Mini App button pointed
@@ -754,6 +762,28 @@ function parseReferralLadder(raw: string | undefined): readonly ReferralLadderRu
   if (out.length === 0) return fallback;
   out.sort((a, b) => a.atCount - b.atCount);
   return out;
+}
+
+/**
+ * Accept an operator-supplied URL only if it is a well-formed `https:` URL.
+ *
+ * Used for values that get interpolated into HTML we serve publicly, where a
+ * `javascript:` scheme (or a value carrying a quote that breaks out of an
+ * attribute) would turn a config typo into stored XSS. Returns "" and warns
+ * rather than throwing — the affected surfaces all degrade gracefully when the
+ * URL is absent, and refusing to boot over a cosmetic landing-page link would
+ * be a worse trade.
+ */
+function safeHttpsUrl(raw: string | undefined, name: string): string {
+  const value = (raw ?? "").trim();
+  if (!value) return "";
+  try {
+    if (new URL(value).protocol === "https:") return value;
+  } catch {
+    // fall through to the warning below
+  }
+  console.warn(`[config] ${name} is not a valid https: URL — ignoring it.`);
+  return "";
 }
 
 function parseTelegramIdSet(raw: string | undefined): ReadonlySet<bigint> {
