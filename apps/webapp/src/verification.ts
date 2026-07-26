@@ -354,6 +354,9 @@ async function bootstrap(
     sessionId: init.sessionId,
     region: init.region,
     credentials: init.credentials,
+    // `/init` returns the user's own `User.language`, which is more
+    // trustworthy than the URL param or the Telegram client locale.
+    lang: init.language,
     onComplete: () => {
       void handleComplete(deps);
     },

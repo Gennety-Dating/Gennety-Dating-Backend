@@ -3,6 +3,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { FaceLivenessDetectorCore } from "@aws-amplify/ui-react-liveness";
 import "@aws-amplify/ui-react/styles.css";
 import type { LivenessCredentials } from "./api.js";
+import type { Lang } from "./i18n.js";
+import { livenessText } from "./liveness-i18n.js";
 
 /**
  * The one React island in the Verification Mini App.
@@ -28,6 +30,12 @@ export interface LivenessDetectorOptions {
   sessionId: string;
   region: string;
   credentials: LivenessCredentials;
+  /**
+   * The user's language. Not cosmetic here: the detector's on-screen line IS
+   * the instruction — move closer, hold still, recentre — and a user holding a
+   * phone at arm's length cannot stop to translate it.
+   */
+  lang: Lang;
   /** Capture finished. The verdict is read server-side, not here. */
   onComplete: () => void;
   /** User backed out of the detector. */
@@ -113,6 +121,7 @@ export function mountLivenessDetector(
         onAnalysisComplete={async () => {
           options.onComplete();
         }}
+        displayText={livenessText(options.lang)}
         onUserCancel={() => options.onCancel()}
         onError={(error) => {
           const state = typeof error?.state === "string" ? error.state : "liveness error";

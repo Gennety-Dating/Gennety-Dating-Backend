@@ -439,7 +439,14 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   `FaceLivenessDetectorCore`, which streams the selfie video **device → AWS**
   (it never passes through our server). Terminal detector events POST to
   `/v1/verification/mini-app/event`, and that request reads AWS's verdict
-  server-side. **There is no non-Mini-App fallback:** when `WEBAPP_URL` isn't a
+  server-side. **The detector's on-screen copy renders in the user's own
+  `User.language`** (all five, `services`-side default English): its single
+  line — "move closer", "hold still", "centre your face" — IS the instruction,
+  read at a glance while the camera is up, so an untranslated one does not make
+  the check harder, it makes it unpassable. The face-detection model and its
+  wasm backend are served from our own origin rather than the component's
+  default third-party CDNs, which could not load inside the Telegram WebView on
+  a mobile connection within the component's fixed timeout. **There is no non-Mini-App fallback:** when `WEBAPP_URL` isn't a
   real HTTPS host (dev without a tunnel) the CTA refuses to send rather than
   render a dead button, because unlike Persona's hosted page the check only
   exists inside our own page. The native iOS client runs the same two steps
