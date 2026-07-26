@@ -496,6 +496,32 @@ there is no counter that can drift out of sync with the money. Indexed
 `(userId, createdAt)` (limit lookup) and `(status, createdAt)` (sweep).
 `onDelete: Cascade` from `users`. Inert unless `REMATCH_FEATURE_ENABLED`.
 
+### `venue_change_purchases` (feature-flagged)
+
+Append-only audit of every paid venue change (PRODUCT_SPEC §3.7b, gated by
+`VENUE_CHANGE_FEATURE_ENABLED`; owned by `handlers/matching/venue-change.ts` +
+`services/venue-change-refund.ts`). Deliberately a table of its own rather than
+`ticket_ledger` rows: a venue change is a one-off purchase, not a wallet
+movement, so it follows `rematch_purchases` rather than the date gate.
+
+Columns: `userId`, `matchId` (free-form, no FK, so deleting a match never breaks
+the payment trail), `status` (`processing` → `settled` | `refunded_race` |
+`refunded_stale` | `refund_failed` — string, not a Prisma enum), unique
+`externalPaymentId` (the Telegram Stars `telegram_payment_charge_id`),
+`amountStars` (frozen at purchase — `VENUE_CHANGE_STARS` is env-tunable),
+`resolvedAt`/`refundError`, `createdAt`. Indexed `(userId, createdAt)` and
+`(status, createdAt)` (sweep). `onDelete: Cascade` from `users`.
+
+The row is written from the `successful_payment` trust boundary **before** the
+`agreed → settled` CAS, so a crash mid-settle still leaves a durable record that
+money moved, which the hourly `venue-change-refund` sweep refunds. The unique
+charge id is also what distinguishes the two "the CAS claimed nothing" cases: a
+`P2002` on insert is a redelivered payment (idempotent no-op), while a
+successful insert is a genuinely second charge and must be refunded. Before this
+table existed both looked identical and a second charge from the same payer was
+silently kept, while a failed refund lost the Stars with no row to reconcile
+from. Inert unless `VENUE_CHANGE_FEATURE_ENABLED`.
+
 ### `profiler_answers`
 
 One row per (user, Profiler question) — `questionId`, `priority`
@@ -588,6 +614,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `0 4 * * *` | Europe/Kyiv | Curated venue re-validation (closure/rating sweep + hours refresh, ≤30 rows/tick) | `services/venue-revalidation.ts` |
 | `0 * * * *` (only when `TICKET_FEATURE_ENABLED`) | UTC | Date Ticket expiry: retry durable Stars refunds, reverse stalled `partial` payments, then open the Calendar for free | `workers/ticket-expiry.ts` → `handlers/matching/ticket-gate.ts` |
 | `0 * * * *` (only when `REMATCH_FEATURE_ENABLED`) | UTC | Rematch refunds: retry `refund_failed` rows and refund purchases abandoned mid-run (`processing` past 5 min). What makes "never keep money without delivering a match" durable | `services/rematch-refund.ts` (`sweepRematchRefunds`) |
+| `0 * * * *` (only when `VENUE_CHANGE_FEATURE_ENABLED`) | UTC | Venue-change refunds: retry `refund_failed` rows and refund purchases abandoned mid-settle (`processing` past 5 min). The twin of the rematch sweep for §3.7b | `services/venue-change-refund.ts` (`sweepVenueChangeRefunds`) |
 | `setInterval(2 min)` | — | Date lifecycle: **venue-change lapse sweep** (an unpaid `agreed` swap lapses — original venue stands, match untouched; an abandoned express mint quietly reverts — feature-flagged), ice-breakers (T-5 h), emergency window, T-1.5 h pre-date safety, T+24 h feedback, wingman; **pre-date coordination** (T-60 m offer, T-30 m proxy open, T+2 h proxy close — feature-flagged) | `services/date-lifecycle.ts` + `services/pre-date-safety.ts` + `services/coordination.ts` + `handlers/matching/venue-change.ts` |
 
 Quiet hours **23:00–09:00 Europe/Kyiv** are enforced inside `re-engagement`

@@ -12,6 +12,11 @@ vi.mock("@gennety/db", () => ({
       findMany: vi.fn(),
       update: vi.fn(),
     },
+    venueChangePurchase: {
+      create: vi.fn(),
+      update: vi.fn(),
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -53,6 +58,14 @@ const mMatch = prisma.match as unknown as {
   update: MockFn;
 };
 const mUpdate = mMatch.update;
+const mPurchase = (prisma as unknown as {
+  venueChangePurchase: { create: MockFn; update: MockFn; findMany: MockFn };
+}).venueChangePurchase;
+
+/** Prisma unique-constraint violation — a redelivered `successful_payment`. */
+function uniqueViolation(): Error & { code: string } {
+  return Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+}
 
 const HOUR = 60 * 60 * 1000;
 const FAR_AGREED = new Date(Date.now() + 24 * HOUR);
@@ -182,6 +195,16 @@ beforeEach(() => {
   mMatch.update.mockReset();
   mMatch.updateMany.mockResolvedValue({ count: 1 });
   mMatch.update.mockResolvedValue({});
+  mPurchase.create.mockReset();
+  mPurchase.update.mockReset();
+  mPurchase.findMany.mockReset();
+  // Default: this charge id is new (no redelivery).
+  mPurchase.create.mockResolvedValue({
+    id: "vp1",
+    status: "processing",
+    externalPaymentId: "charge-1",
+  });
+  mPurchase.update.mockResolvedValue({});
 });
 
 // ---------------------------------------------------------------------------
@@ -646,24 +669,99 @@ describe("settleVenuePayment", () => {
     expect(hisText).toContain("New Cafe");
   });
 
+  it("records the charge BEFORE the settle CAS, then marks it settled", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+
+    await settleVenuePayment(api, 200n, "m1", "charge-1");
+
+    // The durable record is what makes a crash mid-settle recoverable.
+    expect(mPurchase.create).toHaveBeenCalledTimes(1);
+    expect(mPurchase.create.mock.calls[0][0].data).toMatchObject({
+      userId: "b",
+      matchId: "m1",
+      status: "processing",
+      externalPaymentId: "charge-1",
+      amountStars: 150,
+    });
+    expect(mPurchase.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "vp1" },
+        data: expect.objectContaining({ status: "settled" }),
+      }),
+    );
+  });
+
+  it("treats a redelivered payment (duplicate charge id) as an idempotent no-op", async () => {
+    const api = fakeApi();
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+    mPurchase.create.mockRejectedValue(uniqueViolation());
+
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-4");
+    expect(res).toEqual({ ok: true });
+    // Nothing is claimed and nothing is refunded — the first delivery did it all.
+    expect(mMatch.updateMany).not.toHaveBeenCalled();
+    expect(api.refundStarPayment).not.toHaveBeenCalled();
+  });
+
   it("refunds a payment that lost the parallel-pay race", async () => {
     const api = fakeApi();
     mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangePaidById: "a" }));
     mMatch.updateMany.mockResolvedValue({ count: 0 });
+    mPurchase.create.mockResolvedValue({
+      id: "vp3",
+      status: "processing",
+      externalPaymentId: "charge-3",
+    });
 
     const res = await settleVenuePayment(api, 200n, "m1", "charge-3");
     expect(res.ok).toBe(false);
     expect(api.refundStarPayment).toHaveBeenCalledWith(200, "charge-3");
+    expect(mPurchase.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "refunded_race" }),
+      }),
+    );
   });
 
-  it("treats a redelivered payment from the same payer as a no-op (no refund)", async () => {
+  it("refunds a SECOND distinct charge from the same payer (double-pay race)", async () => {
+    // The old `venueChangePaidById === payer.id` heuristic read this as a
+    // redelivery and silently kept the money. A distinct charge id proves it is
+    // a real second payment.
     const api = fakeApi();
     mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangePaidById: "b" }));
     mMatch.updateMany.mockResolvedValue({ count: 0 });
+    mPurchase.create.mockResolvedValue({
+      id: "vp5",
+      status: "processing",
+      externalPaymentId: "charge-5",
+    });
 
-    const res = await settleVenuePayment(api, 200n, "m1", "charge-4");
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-5");
     expect(res.ok).toBe(false);
-    expect(api.refundStarPayment).not.toHaveBeenCalled();
+    expect(api.refundStarPayment).toHaveBeenCalledWith(200, "charge-5");
+  });
+
+  it("parks a failed refund in refund_failed and never claims it succeeded", async () => {
+    const api = fakeApi();
+    api.refundStarPayment.mockRejectedValue(new Error("telegram down"));
+    mMatch.findUnique.mockResolvedValue(agreedMatch({ venueChangePaidById: "a" }));
+    mMatch.updateMany.mockResolvedValue({ count: 0 });
+    mPurchase.create.mockResolvedValue({
+      id: "vp6",
+      status: "processing",
+      externalPaymentId: "charge-6",
+    });
+
+    const res = await settleVenuePayment(api, 200n, "m1", "charge-6");
+    expect(res.ok).toBe(false);
+    expect(mPurchase.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "refund_failed" }),
+      }),
+    );
+    // The user is never told their Stars came back when they did not.
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 });
 

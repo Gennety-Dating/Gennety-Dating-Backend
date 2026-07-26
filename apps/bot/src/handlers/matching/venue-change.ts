@@ -54,6 +54,15 @@ import {
 } from "../../services/venue-change.js";
 import { fetchPlacePhotoName } from "../../services/venue.js";
 import { isPremiumHeadActive } from "../../services/premium.js";
+import { isUniqueViolation } from "../../services/ticket-wallet.js";
+import {
+  refundVenueChangePurchase,
+  VENUE_PURCHASE_PROCESSING,
+  VENUE_PURCHASE_REFUNDED_RACE,
+  VENUE_PURCHASE_SELECT,
+  VENUE_PURCHASE_SETTLED,
+  type VenueChangePurchaseRecord,
+} from "../../services/venue-change-refund.js";
 
 /** How long an abandoned express mint holds the board before quietly reverting. */
 const EXPRESS_HOLD_MINUTES = 30;
@@ -1483,9 +1492,22 @@ export async function handleVenuePayDecline(ctx: BotContext): Promise<void> {
 
 /**
  * Telegram confirmed the Stars moved — settle the venue change: copy the
- * agreed venue onto the canonical venue* fields and notify both sides. The
- * status CAS makes a redelivered payment a no-op; a payment that LOSES the CAS
- * (parallel-pay race — both invoices were open) is refunded.
+ * agreed venue onto the canonical venue* fields and notify both sides.
+ *
+ * Order is load-bearing, and mirrors the Rematch purchase path: the
+ * `VenueChangePurchase` row is written FIRST, keyed by the unique charge id, so
+ * that from here exactly one of two things becomes true and stays true — the
+ * venue changes, or the Stars come back. Writing before the CAS means a crash
+ * mid-settle still leaves a durable record that money was taken, which the
+ * hourly sweep refunds.
+ *
+ * The unique charge id is also what makes the two "the CAS did not claim
+ * anything" cases distinguishable, which they previously were not:
+ *   • P2002 on insert  ⇒ Telegram redelivered the SAME payment ⇒ no-op.
+ *   • insert succeeded ⇒ a genuinely SECOND charge (parallel-pay race, or two
+ *     open invoice links both paid inside the pre-checkout window) ⇒ refund.
+ * The old `venueChangePaidById !== payer.id` heuristic silently kept the money
+ * whenever the same person paid twice.
  */
 export async function settleVenuePayment(
   api: Api<RawApi>,
@@ -1498,6 +1520,30 @@ export async function settleVenuePayment(
   const side = sideOfUser(match, payerTelegramId);
   if (!side) return { ok: false, reason: "not-participant" };
   const payer = userOfSide(match, side);
+
+  // (1) Durable pre-settle record. Unique charge id ⇒ exactly-once.
+  let purchase: VenueChangePurchaseRecord;
+  try {
+    purchase = await prisma.venueChangePurchase.create({
+      data: {
+        userId: payer.id,
+        matchId,
+        status: VENUE_PURCHASE_PROCESSING,
+        externalPaymentId: telegramChargeId,
+        amountStars: env.VENUE_CHANGE_STARS,
+      },
+      select: VENUE_PURCHASE_SELECT,
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      console.info(
+        `[venue-change] duplicate successful_payment ignored match=${matchId} ` +
+          `charge=${telegramChargeId}`,
+      );
+      return { ok: true };
+    }
+    throw err;
+  }
 
   const wasExpress = match.venueChangeExpressAt != null;
   const claim = await prisma.match.updateMany({
@@ -1523,18 +1569,26 @@ export async function settleVenuePayment(
     },
   });
   if (claim.count === 0) {
-    // Redelivery of an already-settled payment is a no-op; a genuinely lost
-    // parallel-pay race must give the Stars back.
-    if (match.venueChangePaidById && match.venueChangePaidById !== payer.id) {
-      console.warn(
-        `[venue-change] parallel-pay race lost match=${matchId} — refunding ${telegramChargeId}`,
-      );
-      await api
-        .refundStarPayment(Number(payerTelegramId), telegramChargeId)
-        .catch((err) => console.error("[venue-change] refund failed:", err));
-    }
+    // The insert above already proved this is a NEW charge (a redelivery would
+    // have thrown P2002), so the swap being unclaimable means these Stars
+    // bought nothing — always give them back. A failed refund parks the row in
+    // `refund_failed` for the sweep and is never announced as a success.
+    console.warn(
+      `[venue-change] settle claimed nothing match=${matchId} — refunding ${telegramChargeId}`,
+    );
+    await refundVenueChangePurchase(
+      api,
+      purchase,
+      payerTelegramId,
+      VENUE_PURCHASE_REFUNDED_RACE,
+    );
     return { ok: false, reason: "not-agreed" };
   }
+
+  await prisma.venueChangePurchase.update({
+    where: { id: purchase.id },
+    data: { status: VENUE_PURCHASE_SETTLED, resolvedAt: new Date() },
+  });
 
   console.info(
     `[venue-change] settled match=${matchId} payer=${payer.id} express=${wasExpress} ` +

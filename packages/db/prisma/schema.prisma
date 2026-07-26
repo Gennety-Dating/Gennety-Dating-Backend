@@ -302,6 +302,7 @@ model User {
   ticketLedger              TicketLedger[]
   subscriptionLedger        SubscriptionLedger[]
   rematchPurchases          RematchPurchase[]
+  venueChangePurchases      VenueChangePurchase[]
   liveActivityTokens        LiveActivityToken[]
   mediaValidationRejections MediaValidationRejection[]
 
@@ -503,6 +504,53 @@ model RematchPurchase {
   /// Backs the hourly `refund_failed` retry sweep.
   @@index([status, createdAt])
   @@map("rematch_purchases")
+}
+
+/// Append-only audit of every paid §3.7b venue change (gated by
+/// `VENUE_CHANGE_FEATURE_ENABLED`). Mirrors `rematch_purchases`, and for the
+/// same reason: a venue change is a one-off purchase, not a wallet movement, so
+/// it does not belong in `ticket_ledger`.
+///
+/// The row is written BEFORE the agreed→settled CAS, so a crash between
+/// "Telegram confirmed the Stars moved" and the settle still leaves a durable
+/// record that money was taken — which the hourly sweep then refunds. The
+/// unique `externalPaymentId` is what distinguishes a redelivered
+/// `successful_payment` (P2002 ⇒ idempotent no-op) from a genuinely second
+/// charge (insert succeeds ⇒ must be refunded). Before this table existed both
+/// looked identical and the second charge was silently kept.
+model VenueChangePurchase {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  /// The match whose venue swap this paid for. Free-form (no FK) so deleting a
+  /// match never breaks the payment audit trail — same rule as
+  /// `RematchPurchase.resultMatchId` / `TicketLedger.matchId`.
+  matchId String @map("match_id") @db.Uuid
+  /// `processing`     — Stars moved; written before the settle CAS. Rows stuck
+  ///                    here past `VENUE_PROCESSING_STALE_MS` are refunded by
+  ///                    the hourly sweep.
+  /// `settled`        — the swap was claimed and both sides notified.
+  /// `refunded_race`  — a parallel-pay race lost the CAS; Stars returned.
+  /// `refunded_stale` — abandoned mid-settle; Stars returned by the sweep.
+  /// `refund_failed`  — the refund API call failed; the sweep owns this row
+  ///                    until it flips to a refunded state. NEVER announced to
+  ///                    the user as a completed refund.
+  status String
+  /// Unique Telegram Stars charge id → exactly-once settle + the key
+  /// `refundStarPayment` needs later.
+  externalPaymentId String @unique @map("external_payment_id")
+  /// Price frozen at purchase time (`VENUE_CHANGE_STARS` is env-tunable, so the
+  /// row must not re-derive it later).
+  amountStars Int       @map("amount_stars")
+  resolvedAt  DateTime? @map("resolved_at")
+  refundError String?   @map("refund_error")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  /// Backs the hourly `processing` / `refund_failed` sweep.
+  @@index([status, createdAt])
+  @@map("venue_change_purchases")
 }
 
 model OnboardingProgress {

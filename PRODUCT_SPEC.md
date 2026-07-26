@@ -1794,7 +1794,18 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
     pushed to foot the bill** for a change he wouldn't. **While the fork is still
     open** (before he decides) both invoices can be open in parallel — her
     pay-self path and his — and the settle CAS makes the first payment win, with
-    `refundStarPayment` returning the Stars of a lost race. `pre_checkout_query`
+    `refundStarPayment` returning the Stars of a lost race. **Every Stars charge
+    is recorded in `venue_change_purchases` (unique `telegram_payment_charge_id`)
+    BEFORE the settle CAS runs**, so the invariant is the same one Rematch
+    states: a payment either changes the venue or comes back, never neither.
+    That record is also what tells a *redelivered* payment (duplicate charge id →
+    idempotent no-op) apart from a genuinely *second* charge (new charge id →
+    always refunded, including when the same person paid twice). A refund whose
+    provider call fails is parked in `refund_failed` for the hourly
+    `venue-change-refund` sweep and is **never announced to the user as
+    completed** (corrected 2026-07-26: previously the charge id was not stored at
+    all, a failed refund was a fire-and-forget `console.error`, and a second
+    charge from the same payer was silently kept). `pre_checkout_query`
     re-validates amount + that the swap is still `agreed`, so stale (reusable)
     invoice links are declined before any Stars move (a decline having closed the
     session also invalidates any open link). She never sees a price anywhere in

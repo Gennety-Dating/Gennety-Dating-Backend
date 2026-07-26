@@ -38,6 +38,7 @@ import { createStatusTimerRunner } from "./workers/status-timer-runner.js";
 import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
 import { ticketExpiryTick } from "./workers/ticket-expiry.js";
 import { sweepRematchRefunds } from "./services/rematch-refund.js";
+import { sweepVenueChangeRefunds } from "./services/venue-change-refund.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
 import { venueRevalidationTick } from "./services/venue-revalidation.js";
 import { retryDueVenueSelections } from "./services/venue-intent-v2.js";
@@ -217,6 +218,14 @@ const TICKET_EXPIRY_CRON_SCHEDULE =
  */
 const REMATCH_REFUND_CRON_SCHEDULE =
   process.env.REMATCH_REFUND_CRON_SCHEDULE ?? "0 * * * *";
+
+/**
+ * Venue-change refund retry (PRODUCT_SPEC §3.7b). Hourly twin of the rematch
+ * sweep: retries refunds whose provider call failed, and refunds purchases
+ * abandoned mid-settle. Registered only when VENUE_CHANGE_FEATURE_ENABLED.
+ */
+const VENUE_CHANGE_REFUND_CRON_SCHEDULE =
+  process.env.VENUE_CHANGE_REFUND_CRON_SCHEDULE ?? "0 * * * *";
 
 /**
  * Profiler scheduler (Phase 1b). Every 15 min: lazy-seed never-armed users and
@@ -474,6 +483,22 @@ bot.start({
         ),
       );
       console.log(`[cron] Rematch refund retry scheduled: "${REMATCH_REFUND_CRON_SCHEDULE}"`);
+    }
+
+    // Venue-change refunds: retry failed refunds + reverse purchases abandoned
+    // mid-settle. Same discipline as the rematch sweep above — this is what
+    // makes "a venue-change payment either changes the venue or comes back"
+    // durable rather than best-effort.
+    if (env.VENUE_CHANGE_FEATURE_ENABLED) {
+      cron.schedule(
+        VENUE_CHANGE_REFUND_CRON_SCHEDULE,
+        guardedTick("venue-change-refund", () =>
+          sweepVenueChangeRefunds(bot.api).then(() => undefined),
+        ),
+      );
+      console.log(
+        `[cron] Venue-change refund retry scheduled: "${VENUE_CHANGE_REFUND_CRON_SCHEDULE}"`,
+      );
     }
 
     // Pre-match announce: Wednesday teaser before Thursday batch.

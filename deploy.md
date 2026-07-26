@@ -1293,9 +1293,16 @@ Required/high-impact env keys:
   `refundStarPayment`. The wish-card PNG reuses the date-card satori stack +
   bundled fonts (no new system dependency); Places venue photos stream through
   `GET /v1/venue-change/photo`, so `PLACES_API_KEY` is needed (already required
-  for the venue picker). Runs on the existing date-lifecycle `setInterval`
-  (lapse/express-revert sweep) — no new cron schedule. Rollback: flip the flag
-  off; the additive columns may stay.
+  for the venue picker). The lapse/express-revert sweep runs on the existing
+  date-lifecycle `setInterval`. **Since 2026-07-26 there is also one new hourly
+  cron** — `VENUE_CHANGE_REFUND_CRON_SCHEDULE` (default `0 * * * *`, registered
+  only when the flag is on) — retrying failed Stars refunds and reversing
+  purchases abandoned mid-settle, the twin of `REMATCH_REFUND_CRON_SCHEDULE`.
+  **Requires `db:push` of the new additive `venue_change_purchases` table
+  first** (non-destructive; the settle path writes to it on every payment, so a
+  DB missing it throws `P2022` on the `successful_payment` boundary — push the
+  schema BEFORE restarting). Rollback: flip the flag off; the additive
+  columns/table may stay.
 - Gennety Premium (feature-flagged, recurring subscription, §Premium):
   `PREMIUM_FEATURE_ENABLED` (default `false` — leave off until launch),
   `PREMIUM_STARS` (default `500`, the monthly Telegram Stars price ≈ $10),
@@ -1516,7 +1523,7 @@ Required/high-impact env keys:
   `STATUS_TIMER_CRON_SCHEDULE`, `AUTO_UNSUSPEND_CRON_SCHEDULE`,
   `EMBEDDING_REFRESH_CRON_SCHEDULE`, `SELFIE_RETENTION_CRON_SCHEDULE`,
   `VENUE_REVALIDATION_CRON_SCHEDULE`, `TICKET_EXPIRY_CRON_SCHEDULE`,
-  `REMATCH_REFUND_CRON_SCHEDULE`,
+  `REMATCH_REFUND_CRON_SCHEDULE`, `VENUE_CHANGE_REFUND_CRON_SCHEDULE`,
   `PROFILER_CRON_SCHEDULE`, `DATE_LIFECYCLE_TICK_MS`, `DISPATCH_DELAY_MS`,
   `MATCH_PREROLL_DELAY_MS`
 - Onboarding funnel analytics (always-on, no feature flag): step-level
