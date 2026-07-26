@@ -25,6 +25,12 @@ algorithmRouter.get(
       const data = await getOrCompute("algorithm:v1", 1800, async () => {
         // ── 1. Matches with side decisions for accept-rate calculations
         const matches = await prisma.match.findMany({
+          // Weekly-optimizer quality only. A `rematch` pair (REMATCH_PRODUCT_SPEC.md)
+          // comes from a paid single-seeker run against whatever pool was left at
+          // that moment — not from the globally-greedy Thursday allocation — and its
+          // score log has no pairwise embedding distance or starvation bonus. Mixing
+          // the two would quietly bias every component average and accept-rate here.
+          where: { source: "weekly" },
           select: {
             id: true,
             synergyScore: true,

@@ -1899,6 +1899,44 @@ a richer welcome gift. Full spec:
   `subscription_ledger` `promo`); the blind-decision, no-in-app-chat, and ledger
   exactly-once invariants are unaffected.
 
+### 3.11 Rematch (feature-flagged, paid on-demand re-run)
+
+An optional **$2.99** (150 ⭐) purchase that re-runs the matching engine for
+**one man**, gated by `REMATCH_FEATURE_ENABLED` (default **off**). Telegram-only
+in v1. Full spec: [REMATCH_PRODUCT_SPEC.md](REMATCH_PRODUCT_SPEC.md).
+
+- **The asymmetry is the product.** Only men buy. A woman never buys, never sees
+  a price, and never opts in — she becomes the **candidate** of a man's run and
+  receives an ordinary pitch prefixed with **gift framing** ("I kept looking, and
+  found someone"). One code path monetizes one side and gifts the other.
+- **Not a new algorithm.** `findCandidatesFor()` is already a single-seeker
+  engine, so a rematch inherits every §3.2 invariant unchanged: the lifetime pair
+  ban (so "rematch" always means *someone new*, including after a decline), the
+  single-live-match rule, the verification/contact-rail gates, city scoping, and
+  the 24 h candidate cooldown. **A paid run never lowers the admission bar and
+  never buys a score boost.** The cooldown is deliberately kept: right after the
+  Thursday batch the only available candidates are the *unpaired* women, which is
+  exactly the cohort the famine gift is meant for.
+- **Two pain-triggered entry points only** (no menu row): the Thursday no-match
+  DM, and a match that expired without a date. The offer states before payment
+  that it buys an introduction, not a date.
+- **Money rule.** Payment buys a pitch. A decline, a ghost, or a failed
+  negotiation is **not** refunded (stated in the offer copy). The only refundable
+  outcome is "the engine found nobody", and it is automatic. The flow is
+  check → pay → re-check → deliver-or-refund, with a durable hourly retry so a
+  failed refund is never announced as successful and never silently kept.
+- **Limits.** 2 purchases per rolling 7 days with a 24 h cooldown between them
+  (the cooldown is what stops decline-and-instantly-retry, preserving the weight
+  of a decision); a candidate who already received a rematch pitch within 7 days
+  is protected from another; and a blackout window before the weekly batch keeps
+  a single-seeker run from taking a candidate the globally-optimal Thursday
+  allocation needed. A rematch pairing clears both sides' famine counters exactly
+  like the weekly batch.
+- `Match.source` (`weekly`/`rematch`) is stamped inside the creating transaction;
+  weekly-optimizer analytics filter to `weekly` so on-demand runs never pollute
+  the scoring A/B. The blind-decision, no-in-app-chat, single-live-match, and
+  ledger exactly-once invariants are unaffected.
+
 ## Phase 4 — Date Lifecycle
 
 Driven by `services/date-lifecycle.ts` + `services/pre-date-safety.ts`,

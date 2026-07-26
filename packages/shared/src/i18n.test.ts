@@ -23,6 +23,12 @@ const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
   "menuPremium",
   "premiumHubTitle",
   "premiumInvoiceTitle",
+  // "Rematch" is the product name on the Telegram payment sheet. It is an
+  // established loanword in de/pl, so translating it would invent a term users
+  // never see anywhere else in the product. ru/uk do localize it ("Реметч"),
+  // because there the Latin spelling would read as foreign in Cyrillic copy.
+  "rematchInvoiceTitle",
+  "rematchInvoiceLabel",
 ]);
 
 describe("t (translation)", () => {

@@ -282,6 +282,7 @@ never by PostgreSQL enum declaration order.
 | Nudges | `nudge1SentAt`, `nudge2SentAt` (legacy), `proposalNudge1SentAt`, `proposalNudge2SentAt`, `schedNudge1SentAt`, `schedNudge2SentAt`, `proposalDeadlineNudgeSentAt` (idempotency for the single deadline-anchored "window closing" DM ~2h before the 24h TTL — see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5) |
 | Date Ticket (feature-flagged) | `ticketPriceCents`, `ticketPaidA/B`, `paidForPartnerByA/B`, `partnerPaidSeenAt` / `partnerPaidNudgedAt` (goodwill-cover read-receipt: first-seen stamp gating the payer's "she saw it ❤️" DM, and the completion-nudge guard — §3.5b), `ticketStatus` (`pending`/`partial`/`completed`/`refund_pending`/`refunded`/`expired` — string, not a Prisma enum), `ticketExpiresAt`. `refund_pending` is the durable retry boundary: scheduling opens only after the provider/wallet reversal succeeds. Monetization sub-state machine that runs while `status = negotiating`; inert when `TICKET_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.5b. |
 | Pre-date coordination (feature-flagged) | `coordOfferSentAt`, `coordInitiatorId`, `coordMethod` (`share_self`/`request_partner`/`proxy` — string, not a Prisma enum), `coordChosenAt`, `coordPartnerConsent` (Variant B only), `coordResolvedAt`, `proxyOpenedAt`, `proxyClosesAt`, `proxyClosedAt`. Sub-state machine running on a `scheduled` match; inert when `COORDINATION_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §Phase 4. |
+| Allocation source (feature-flagged) | `source` (`weekly`/`rematch` — string, not a Prisma enum; default `weekly`, stamped INSIDE the creating transaction by `createProposedMatch`), `rematchPaidById` (the buyer of a paid on-demand run; null for weekly pairs). Weekly-optimizer analytics filter to `source = 'weekly'` so on-demand runs never bias the scoring A/B. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.11 / `REMATCH_PRODUCT_SPEC.md`. |
 | Venue change v2 (feature-flagged) | `venueChangeStatus` (null/`liking`/`agreed`/`settled`/`lapsed` — string, not a Prisma enum), `venueChangeProposerId`/`ProposedAt` (session initiator — first like / express mint), `venueLikesA/B` (`Json[]` server-resolved like snapshots), `venueChangeName`/`Address`/`Lat`/`Lng`/`MapsUri`/`PlaceId`/`PhotoUrl`/`PhotoName` (agreed venue snapshot), `venueChangeExpiresAt` (payment deadline)/`ResolvedAt`, `venueChangePaidById`/`PaidAt` (settle stamp), `venueChangePayDeclinedAt` (vestigial v2 — his decline now ENDS the change/closes the session rather than stamping a lingering `agreed` state, so this is no longer written or read for a decision), `venueChangeOfferPaySentAt` (wish-card guard), `venueChangePingSentToA/BAt` (board-invite guards), `venueChangeExpressAt` (her hidden unilateral mint), `venueChangeTier` (`base`/`premium` of the agreed venue, stamped at agreement — drives the §Premium fee waiver: a premium venue, or a base venue settled by a premium user, is free), `venueChangeComment` (legacy v1, no longer written). Paid multiplayer venue-board sub-state on a `scheduled` match — a lapse never cancels the match; inert when `VENUE_CHANGE_FEATURE_ENABLED` is off. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.7b / §3.8. |
 
 Indexes: `(status, createdAt)`, `(userAId, userBId)`, `(ticketStatus, ticketExpiresAt)` (ticket-expiry cron sweep), `(status, coordOfferSentAt)` (coordination offer sweep), `(coordMethod, proxyClosedAt)` (proxy open/close sweeps), `(venueChangeStatus, venueChangeExpiresAt)` (venue-change expiry sweep), plus the functional
@@ -472,6 +473,27 @@ hash, one-shot match), matching the single-process `usage-limiter` pattern.
 `onDelete: Cascade` from `promo_codes` / `users`. Inert unless
 `PROMO_FEATURE_ENABLED`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.10.
 
+### `rematch_purchases` (feature-flagged)
+
+Append-only audit of every paid Rematch (PRODUCT_SPEC §3.11 /
+`REMATCH_PRODUCT_SPEC.md`, gated by `REMATCH_FEATURE_ENABLED`; owned by
+`services/rematch.ts` + `services/rematch-refund.ts`). Mirrors `ticket_ledger`:
+the unique `externalPaymentId` (Telegram Stars `telegram_payment_charge_id`)
+makes a redelivered `successful_payment` exactly-once **and** preserves the
+charge key `refundStarPayment` needs later. Columns: `userId`, `status`
+(`processing` → `settled` | `refunded_no_candidate` | `refunded_ineligible` |
+`refund_failed` — string, not a Prisma enum), `amountStars`/`amountCents` (price
+frozen at purchase), `resultMatchId` (free-form, no FK, so deleting a match never
+breaks the payment trail), `framing` (which gift framing the partner's pitch
+used), `resolvedAt`/`refundError`, `createdAt`. Rows are written ONLY from the
+`successful_payment` trust boundary, and written **before** the engine runs, so a
+crash mid-run still leaves a durable record that money moved; the hourly
+`rematch-refund` sweep refunds rows stranded in `processing`. There is **no
+materialized head on `User`** — the rate limits are derived from these rows, so
+there is no counter that can drift out of sync with the money. Indexed
+`(userId, createdAt)` (limit lookup) and `(status, createdAt)` (sweep).
+`onDelete: Cascade` from `users`. Inert unless `REMATCH_FEATURE_ENABLED`.
+
 ### `profiler_answers`
 
 One row per (user, Profiler question) — `questionId`, `priority`
@@ -563,6 +585,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `30 3 * * *` | Europe/Kyiv | GDPR Article 9 selfie scrub (90 d post-`verifiedAt`) | `services/selfie-retention.ts` |
 | `0 4 * * *` | Europe/Kyiv | Curated venue re-validation (closure/rating sweep + hours refresh, ≤30 rows/tick) | `services/venue-revalidation.ts` |
 | `0 * * * *` (only when `TICKET_FEATURE_ENABLED`) | UTC | Date Ticket expiry: retry durable Stars refunds, reverse stalled `partial` payments, then open the Calendar for free | `workers/ticket-expiry.ts` → `handlers/matching/ticket-gate.ts` |
+| `0 * * * *` (only when `REMATCH_FEATURE_ENABLED`) | UTC | Rematch refunds: retry `refund_failed` rows and refund purchases abandoned mid-run (`processing` past 5 min). What makes "never keep money without delivering a match" durable | `services/rematch-refund.ts` (`sweepRematchRefunds`) |
 | `setInterval(2 min)` | — | Date lifecycle: **venue-change lapse sweep** (an unpaid `agreed` swap lapses — original venue stands, match untouched; an abandoned express mint quietly reverts — feature-flagged), ice-breakers (T-5 h), emergency window, T-1.5 h pre-date safety, T+24 h feedback, wingman; **pre-date coordination** (T-60 m offer, T-30 m proxy open, T+2 h proxy close — feature-flagged) | `services/date-lifecycle.ts` + `services/pre-date-safety.ts` + `services/coordination.ts` + `handlers/matching/venue-change.ts` |
 
 Quiet hours **23:00–09:00 Europe/Kyiv** are enforced inside `re-engagement`

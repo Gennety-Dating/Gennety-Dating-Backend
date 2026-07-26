@@ -447,6 +447,50 @@ export const env = {
   PREMIUM_APPSTORE_PRODUCT_ID:
     process.env.PREMIUM_APPSTORE_PRODUCT_ID ?? "premium_monthly",
 
+  // ── Rematch (paid on-demand re-run of the matching engine) ─────
+  /// Master flag for Rematch (REMATCH_PRODUCT_SPEC.md). When false (default),
+  /// nothing renders, the invoice route refuses, and a `rematch:` payload that
+  /// somehow arrives is refunded — the feature ships dark. When true, a man who
+  /// was left unpaired by the weekly batch or whose match ended badly can pay
+  /// once to re-run the engine for himself. The woman never buys and never sees
+  /// a price: she receives an ordinary pitch wrapped in gift framing.
+  /// Telegram-only in v1 (explicit decision — Stars is a Telegram rail).
+  REMATCH_FEATURE_ENABLED: process.env.REMATCH_FEATURE_ENABLED === "true",
+  /// Telegram Stars (XTR) price of one rematch. 150⭐ matches VENUE_CHANGE_STARS
+  /// and the ticket rate ($6.99 / 350⭐ = $0.02/⭐ → 150⭐ ≈ $3.00 ≈ the $2.99
+  /// founder price). NB: PREMIUM_STARS documents a more conservative
+  /// $0.024/⭐ small-pack rate, at which 150⭐ bills nearer $3.59. If we want the
+  /// strict "never under-promise the charge" convention Premium follows, either
+  /// drop this to 125 or raise REMATCH_PRICE_USD_DISPLAY — both are env-only.
+  REMATCH_STARS: Number(process.env.REMATCH_STARS ?? "150"),
+  /// Human-readable price shown in the offer copy (the Stars amount is the
+  /// actual charge; this is display-only).
+  REMATCH_PRICE_USD_DISPLAY: process.env.REMATCH_PRICE_USD_DISPLAY ?? "$2.99",
+  /// D3 limit: paid rematches allowed per rolling 7 days, per buyer. Caps both
+  /// pool burn (every rematch permanently consumes one never-seen candidate via
+  /// the lifetime pair ban) and the "paid swipe app" failure mode.
+  REMATCH_MAX_PER_WEEK: Number(process.env.REMATCH_MAX_PER_WEEK ?? "2"),
+  /// D3 cooldown: minimum hours between two paid rematches by the same buyer.
+  /// Specifically prevents decline-and-instantly-retry, which is what preserves
+  /// the weight of a decision.
+  REMATCH_COOLDOWN_HOURS: Number(process.env.REMATCH_COOLDOWN_HOURS ?? "24"),
+  /// Candidate protection: a woman who already received a rematch-sourced pitch
+  /// within this many days is excluded from rematch candidate pools. The
+  /// single-live-match invariant stops SIMULTANEOUS matches but not a series, so
+  /// without this a popular candidate could be serially gift-pitched.
+  REMATCH_GIFT_CAP_DAYS: Number(process.env.REMATCH_GIFT_CAP_DAYS ?? "7"),
+  /// Blackout before the weekly batch. The Thursday run is globally greedy-
+  /// optimal; a single-seeker rematch shortly before it can take a candidate the
+  /// optimal pairing needed. Set to 0 to disable.
+  REMATCH_PRE_BATCH_BLACKOUT_HOURS: Number(
+    process.env.REMATCH_PRE_BATCH_BLACKOUT_HOURS ?? "6",
+  ),
+  /// Lookback window for choosing the `failed` gift framing (her most recent
+  /// match ended `cancelled`/`expired` within this many days).
+  REMATCH_FAILED_LOOKBACK_DAYS: Number(
+    process.env.REMATCH_FAILED_LOOKBACK_DAYS ?? "14",
+  ),
+
   // ── Date card (shareable PNG for a fully scheduled date) ─────
   /// Master flag for the date-card feature. When false (default), the
   /// scheduled-date confirmation is the existing plain-text DM. When true, both

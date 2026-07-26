@@ -24,6 +24,7 @@ import {
 } from "../../services/profile-media-dispatch.js";
 import { sendPartnerMatchCards } from "../../services/match-card/send.js";
 import { grantWelcomeGiftIfEligible } from "../../services/ticket-wallet.js";
+import { getGiftFramingForMatch } from "../../services/rematch.js";
 import {
   sendWelcomeGiftPreroll,
   type WelcomeGiftGender,
@@ -379,6 +380,9 @@ export async function sendMatchProposal(
       synergyScore: true,
       synergyReason: true,
       synergyReasonB: true,
+      // Rematch (REMATCH_PRODUCT_SPEC.md): drives the partner's gift framing.
+      source: true,
+      rematchPaidById: true,
       userA: {
         select: {
           id: true,
@@ -517,15 +521,39 @@ export async function sendMatchProposal(
   // sees the irreversibility warning before any analysis fluff. The live
   // countdown rides the keyboard button (below), so the FINAL chunk is just
   // the synergy header + pitch text — the worker never rewrites this body.
+  // Rematch gift framing (REMATCH_PRODUCT_SPEC.md). On a `rematch` pair the
+  // participant who did NOT buy it receives the pitch as a gift: the matchmaker
+  // "kept working". The line is a prefix on the ordinary headline — the pitch,
+  // cards, decision flow, and 24h TTL are all unchanged, so the blind-decision
+  // invariant holds. It must never hint that anyone paid, and it is only ever
+  // shown to the non-buyer.
+  let giftHeadlineA = t(langA, "matchHeadline");
+  let giftHeadlineB = t(langB, "matchHeadline");
+  if (match.source === "rematch" && match.rematchPaidById) {
+    const framing = (await getGiftFramingForMatch(matchId)) ?? "neutral";
+    const key =
+      framing === "famine"
+        ? "rematchGiftFamine"
+        : framing === "failed"
+          ? "rematchGiftFailed"
+          : "rematchGiftNeutral";
+    if (match.rematchPaidById !== match.userA.id) {
+      giftHeadlineA = `${t(langA, key)}\n\n${giftHeadlineA}`;
+    }
+    if (match.rematchPaidById !== match.userB.id) {
+      giftHeadlineB = `${t(langB, key)}\n\n${giftHeadlineB}`;
+    }
+  }
+
   const draftsA = [
-    t(langA, "matchHeadline"),
+    giftHeadlineA,
     t(langA, "matchDeadlineNotice"),
     t(langA, "matchStreamStart"),
     ...chunksA,
     finalA,
   ];
   const draftsB = [
-    t(langB, "matchHeadline"),
+    giftHeadlineB,
     t(langB, "matchDeadlineNotice"),
     t(langB, "matchStreamStart"),
     ...chunksB,

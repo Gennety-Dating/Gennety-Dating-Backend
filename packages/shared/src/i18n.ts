@@ -853,6 +853,40 @@ const translations = {
       "Thanks for being with us 🤍 If you don't mind — what made you cancel? A word or two really helps us improve.",
     premiumCancelReasonSkipBtn: "Rather not say",
     premiumCancelReasonThanks: "Thank you — noted 🤍 You can bring Premium back anytime.",
+
+    // --- Rematch (paid on-demand re-run, REMATCH_PRODUCT_SPEC.md) ---
+    // Buyer-facing. The offer must state the honest terms BEFORE payment:
+    // it buys an introduction, not a date, and only "found nobody" is refunded.
+    rematchOfferFamine:
+      "No match this week — that's the pool, not you.\n\n" +
+      "I can run the search again right now, just for you. One new person, picked the same way: {price}.\n\n" +
+      "It buys a new introduction, not a guaranteed date. If I find nobody, your Stars come straight back.",
+    rematchOfferFailed:
+      "That one didn't land. Happens.\n\n" +
+      "I can go again right now and bring you someone new — {price}.\n\n" +
+      "It buys a new introduction, not a guaranteed date. If I find nobody, your Stars come straight back.",
+    rematchOfferBtn: "Search again — {price}",
+    rematchInvoiceTitle: "Rematch",
+    rematchInvoiceDesc: "One more search, right now — a new person picked by your matchmaker.",
+    rematchInvoiceLabel: "Rematch",
+    rematchFound: "Found someone. Sending you the details now ✨",
+    rematchNoCandidate:
+      "I looked — there's nobody new for you in your city right now. Your Stars are back. You stay in the next round.",
+    rematchRefundPending:
+      "I found nobody new, and the refund didn't go through on the first try. I'm on it — your Stars will be back shortly.",
+    rematchRefunded: "Your Stars for the rematch are back ✨",
+    rematchLimitReached:
+      "You've used your rematches for this week. The next one opens in a few days — your weekly match is still coming.",
+    rematchUnavailable:
+      "Can't run a rematch right now. If you have a match in progress, finish that one first.",
+    // Partner-facing gift framing. NEVER mentions payment, the buyer, or any
+    // decision state — it is a prefix on her ordinary pitch.
+    rematchGiftFamine:
+      "I know I said there was no match for you this week. I kept looking — and found someone worth your time.",
+    rematchGiftFailed:
+      "The last one didn't work out. I went back to the search and found someone who fits you better.",
+    rematchGiftNeutral:
+      "I kept working this week — and there's someone I'd like you to meet.",
   },
   ru: {
     // --- Onboarding ---
@@ -1697,6 +1731,36 @@ const translations = {
       "Спасибо, что был с нами 🤍 Если не сложно — расскажи в двух словах, почему решил отменить? Это правда помогает нам стать лучше.",
     premiumCancelReasonSkipBtn: "Не хочу отвечать",
     premiumCancelReasonThanks: "Спасибо, учтём 🤍 Premium всегда можно вернуть.",
+
+    // --- Rematch ---
+    rematchOfferFamine:
+      "На этой неделе пары не нашлось — это про пул, не про тебя.\n\n" +
+      "Могу прогнать поиск заново прямо сейчас, только для тебя. Один новый человек, подбор тот же: {price}.\n\n" +
+      "Это новое знакомство, а не гарантия свидания. Если никого не найду — звёзды сразу вернутся.",
+    rematchOfferFailed:
+      "Не сложилось. Бывает.\n\n" +
+      "Могу пойти на второй заход прямо сейчас и найти тебе нового человека — {price}.\n\n" +
+      "Это новое знакомство, а не гарантия свидания. Если никого не найду — звёзды сразу вернутся.",
+    rematchOfferBtn: "Искать заново — {price}",
+    rematchInvoiceTitle: "Реметч",
+    rematchInvoiceDesc: "Ещё один поиск прямо сейчас — новый человек от твоего мэтчмейкера.",
+    rematchInvoiceLabel: "Реметч",
+    rematchFound: "Нашёл. Сейчас пришлю ✨",
+    rematchNoCandidate:
+      "Посмотрел — новых вариантов в твоём городе сейчас нет. Звёзды вернул. В следующем раунде ты остаёшься.",
+    rematchRefundPending:
+      "Никого нового не нашёл, а возврат с первого раза не прошёл. Уже занимаюсь — звёзды вернутся в ближайшее время.",
+    rematchRefunded: "Звёзды за реметч вернулись ✨",
+    rematchLimitReached:
+      "Реметчи на эту неделю закончились. Следующий откроется через пару дней — недельный мэтч всё равно будет.",
+    rematchUnavailable:
+      "Сейчас реметч не сделать. Если у тебя есть мэтч в работе — сначала закончи с ним.",
+    rematchGiftFamine:
+      "Я говорил, что на этой неделе пары для тебя нет. Продолжил искать — и нашёл человека, на которого стоит посмотреть.",
+    rematchGiftFailed:
+      "В прошлый раз не сложилось. Я вернулся к поиску и нашёл того, кто подходит тебе больше.",
+    rematchGiftNeutral:
+      "Я продолжал работать на этой неделе — и есть человек, которого хочу тебе показать.",
   },
   uk: {
     // --- Onboarding ---
@@ -2541,6 +2605,36 @@ const translations = {
       "Дякуємо, що був із нами 🤍 Якщо не важко — розкажи двома словами, чому вирішив скасувати? Це справді допомагає нам ставати кращими.",
     premiumCancelReasonSkipBtn: "Не хочу відповідати",
     premiumCancelReasonThanks: "Дякуємо, врахуємо 🤍 Premium завжди можна повернути.",
+
+    // --- Rematch ---
+    rematchOfferFamine:
+      "Цього тижня пари не знайшлося — це про пул, не про тебе.\n\n" +
+      "Можу запустити пошук заново просто зараз, тільки для тебе. Одна нова людина, добір той самий: {price}.\n\n" +
+      "Це нове знайомство, а не гарантія побачення. Якщо нікого не знайду — зірки одразу повернуться.",
+    rematchOfferFailed:
+      "Не склалося. Буває.\n\n" +
+      "Можу піти на другий захід просто зараз і знайти тобі нову людину — {price}.\n\n" +
+      "Це нове знайомство, а не гарантія побачення. Якщо нікого не знайду — зірки одразу повернуться.",
+    rematchOfferBtn: "Шукати заново — {price}",
+    rematchInvoiceTitle: "Реметч",
+    rematchInvoiceDesc: "Ще один пошук просто зараз — нова людина від твого метчмейкера.",
+    rematchInvoiceLabel: "Реметч",
+    rematchFound: "Знайшов. Зараз надішлю ✨",
+    rematchNoCandidate:
+      "Подивився — нових варіантів у твоєму місті зараз немає. Зірки повернув. У наступному раунді ти лишаєшся.",
+    rematchRefundPending:
+      "Нікого нового не знайшов, а повернення з першого разу не пройшло. Уже займаюся — зірки повернуться найближчим часом.",
+    rematchRefunded: "Зірки за реметч повернулися ✨",
+    rematchLimitReached:
+      "Реметчі на цей тиждень закінчилися. Наступний відкриється за кілька днів — тижневий метч усе одно буде.",
+    rematchUnavailable:
+      "Зараз реметч не зробити. Якщо в тебе є метч у роботі — спершу заверши його.",
+    rematchGiftFamine:
+      "Я казав, що цього тижня пари для тебе немає. Продовжив шукати — і знайшов людину, на яку варто подивитися.",
+    rematchGiftFailed:
+      "Минулого разу не склалося. Я повернувся до пошуку і знайшов того, хто підходить тобі більше.",
+    rematchGiftNeutral:
+      "Я продовжував працювати цього тижня — і є людина, яку хочу тобі показати.",
   },
 } as const;
 
@@ -3355,6 +3449,36 @@ const deTranslations: TranslationTable = {
     "Danke, dass du dabei warst 🤍 Wenn es dir nichts ausmacht — warum kündigst du? Ein, zwei Worte helfen uns wirklich, besser zu werden.",
   premiumCancelReasonSkipBtn: "Lieber nicht",
   premiumCancelReasonThanks: "Danke, notiert 🤍 Du kannst Premium jederzeit zurückholen.",
+
+  // --- Rematch ---
+  rematchOfferFamine:
+    "Diese Woche kein Match — das liegt am Pool, nicht an dir.\n\n" +
+    "Ich kann die Suche sofort noch mal starten, nur für dich. Eine neue Person, gleiche Auswahl: {price}.\n\n" +
+    "Das kauft ein neues Kennenlernen, kein garantiertes Date. Finde ich niemanden, bekommst du deine Stars direkt zurück.",
+  rematchOfferFailed:
+    "Hat nicht gepasst. Kommt vor.\n\n" +
+    "Ich kann sofort noch mal suchen und dir jemand Neues bringen — {price}.\n\n" +
+    "Das kauft ein neues Kennenlernen, kein garantiertes Date. Finde ich niemanden, bekommst du deine Stars direkt zurück.",
+  rematchOfferBtn: "Neu suchen — {price}",
+  rematchInvoiceTitle: "Rematch",
+  rematchInvoiceDesc: "Noch eine Suche, sofort — eine neue Person von deinem Matchmaker.",
+  rematchInvoiceLabel: "Rematch",
+  rematchFound: "Hab jemanden. Schicke dir gleich die Details ✨",
+  rematchNoCandidate:
+    "Ich habe geschaut — in deiner Stadt gibt es gerade niemand Neues für dich. Deine Stars sind zurück. Für die nächste Runde bist du dabei.",
+  rematchRefundPending:
+    "Ich habe niemanden Neues gefunden, und die Rückerstattung hat beim ersten Versuch nicht geklappt. Ich kümmere mich — deine Stars sind gleich zurück.",
+  rematchRefunded: "Deine Stars für den Rematch sind zurück ✨",
+  rematchLimitReached:
+    "Deine Rematches für diese Woche sind aufgebraucht. Der nächste geht in ein paar Tagen — dein wöchentliches Match kommt trotzdem.",
+  rematchUnavailable:
+    "Gerade geht kein Rematch. Wenn du ein laufendes Match hast, mach das zuerst zu Ende.",
+  rematchGiftFamine:
+    "Ich hatte gesagt, diese Woche gibt es kein Match für dich. Ich habe weitergesucht — und jemanden gefunden, der deine Zeit wert ist.",
+  rematchGiftFailed:
+    "Letztes Mal hat es nicht geklappt. Ich bin zurück in die Suche und habe jemanden gefunden, der besser zu dir passt.",
+  rematchGiftNeutral:
+    "Ich habe diese Woche weitergearbeitet — und da ist jemand, den du kennenlernen solltest.",
 };
 
 const plTranslations: TranslationTable = {
@@ -4164,6 +4288,36 @@ const plTranslations: TranslationTable = {
     "Dzięki, że byłeś z nami 🤍 Jeśli możesz — napisz w dwóch słowach, czemu rezygnujesz? To naprawdę pomaga nam być lepszymi.",
   premiumCancelReasonSkipBtn: "Wolę nie mówić",
   premiumCancelReasonThanks: "Dziękujemy, zapiszemy 🤍 Premium zawsze można przywrócić.",
+
+  // --- Rematch ---
+  rematchOfferFamine:
+    "W tym tygodniu nie było pary — to kwestia puli, nie ciebie.\n\n" +
+    "Mogę puścić wyszukiwanie jeszcze raz, teraz, tylko dla ciebie. Jedna nowa osoba, ten sam dobór: {price}.\n\n" +
+    "To nowe poznanie, nie gwarancja randki. Jeśli nikogo nie znajdę — gwiazdki wracają od razu.",
+  rematchOfferFailed:
+    "Nie wyszło. Zdarza się.\n\n" +
+    "Mogę pójść na drugie podejście teraz i znaleźć ci nową osobę — {price}.\n\n" +
+    "To nowe poznanie, nie gwarancja randki. Jeśli nikogo nie znajdę — gwiazdki wracają od razu.",
+  rematchOfferBtn: "Szukaj jeszcze raz — {price}",
+  rematchInvoiceTitle: "Rematch",
+  rematchInvoiceDesc: "Jeszcze jedno wyszukiwanie, teraz — nowa osoba od twojego matchmakera.",
+  rematchInvoiceLabel: "Rematch",
+  rematchFound: "Mam kogoś. Zaraz wysyłam szczegóły ✨",
+  rematchNoCandidate:
+    "Sprawdziłem — w twoim mieście nie ma teraz nikogo nowego. Gwiazdki wróciły. W kolejnej rundzie zostajesz.",
+  rematchRefundPending:
+    "Nie znalazłem nikogo nowego, a zwrot za pierwszym razem nie przeszedł. Zajmuję się tym — gwiazdki wrócą niedługo.",
+  rematchRefunded: "Gwiazdki za rematch wróciły ✨",
+  rematchLimitReached:
+    "Rematche na ten tydzień się skończyły. Następny otworzy się za kilka dni — tygodniowa para i tak będzie.",
+  rematchUnavailable:
+    "Teraz nie zrobię rematchu. Jeśli masz parę w toku — najpierw dokończ tamto.",
+  rematchGiftFamine:
+    "Mówiłem, że w tym tygodniu nie ma dla ciebie pary. Szukałem dalej — i znalazłem kogoś, na kogo warto spojrzeć.",
+  rematchGiftFailed:
+    "Ostatnio nie wyszło. Wróciłem do szukania i znalazłem kogoś, kto pasuje ci bardziej.",
+  rematchGiftNeutral:
+    "Pracowałem dalej w tym tygodniu — i jest ktoś, kogo chcę ci pokazać.",
 };
 
 const translationsByLanguage: Record<Language, TranslationTable> = {

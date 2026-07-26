@@ -10,6 +10,7 @@ import { streamDraftsToChat } from "./ai-stream.js";
 import { AI_EMOJI } from "./ai-emoji.js";
 import { grantFamineDiscountIfEligible } from "./ticket-discount.js";
 import { isUniqueViolation } from "./ticket-wallet.js";
+import { sendRematchOfferIfEligible } from "../handlers/matching/rematch.js";
 
 /**
  * Empathetic "no match this week" DM.
@@ -219,6 +220,15 @@ export async function sendNoMatchNotices(
       if (tier === 1) result.tier1++;
       else if (tier === 2) result.tier2++;
       else result.tier3plus++;
+
+      // Rematch offer (REMATCH_PRODUCT_SPEC.md, D4) — one of the two pain
+      // moments the feature exists for. Sent as its OWN follow-up DM rather than
+      // folded into the stream above: the no-match message is a deliberately
+      // short, empathetic rich stream (§3.1) and bolting a price onto it would
+      // undercut the empathy and complicate a carefully-tuned primitive.
+      // Self-gating (flag, male-only, eligibility) lives in the sender, so this
+      // is inert for everyone who can't or shouldn't buy.
+      await sendRematchOfferIfEligible(api, u.id, "famine", now).catch(() => {});
     } catch (err) {
       // NOMATCH-1: the send failed after the claim landed. A famine discount
       // may already be durably granted and folded into `body` above (its own

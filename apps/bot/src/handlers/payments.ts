@@ -7,6 +7,7 @@ import {
   parseGateInvoicePayload,
   parseVenueInvoicePayload,
   parseSubInvoicePayload,
+  parseRematchInvoicePayload,
   ticketBundleFor,
   PREMIUM_SUBSCRIPTION_PERIOD_SECONDS,
 } from "@gennety/shared";
@@ -48,7 +49,35 @@ export async function handlePreCheckout(ctx: BotContext): Promise<void> {
   const venue = count == null ? parseVenueInvoicePayload(query.invoice_payload) : null;
   const sub =
     count == null && venue == null ? parseSubInvoicePayload(query.invoice_payload) : null;
-  if (count != null) {
+  const rematch =
+    count == null && venue == null && sub == null
+      ? parseRematchInvoicePayload(query.invoice_payload)
+      : null;
+  if (rematch != null) {
+    // Rematch — payload `rematch:v1`. Like the venue branch, invoice links are
+    // reusable, so we re-validate eligibility here and decline BEFORE any Stars
+    // move: a man who acquired a live match, blew his D3 limit, or entered the
+    // pre-batch blackout since minting the link is stopped at the door rather
+    // than being charged and refunded. That refund path still exists at settle
+    // (state can change inside the 10s window), but this keeps it rare.
+    if (
+      env.REMATCH_FEATURE_ENABLED &&
+      query.currency === "XTR" &&
+      query.total_amount === env.REMATCH_STARS
+    ) {
+      const buyer = await prisma.user
+        .findUnique({
+          where: { telegramId: BigInt(query.from.id) },
+          select: { id: true },
+        })
+        .catch(() => null);
+      if (buyer) {
+        const { checkRematchEligibility } = await import("../services/rematch.js");
+        const eligibility = await checkRematchEligibility(buyer.id).catch(() => null);
+        ok = eligibility?.ok === true;
+      }
+    }
+  } else if (count != null) {
     const expectedStars = env.TICKET_BUNDLE_STARS[count];
     ok =
       ticketBundleFor(count) != null &&
@@ -150,6 +179,11 @@ export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
     const venue = parseVenueInvoicePayload(payment.invoice_payload);
     if (venue != null) {
       await handleVenueSuccessfulPayment(ctx, venue.matchId, payment);
+      return;
+    }
+    const rematch = parseRematchInvoicePayload(payment.invoice_payload);
+    if (rematch != null) {
+      await handleRematchSuccessfulPayment(ctx, payment);
       return;
     }
     await handleGateSuccessfulPayment(ctx, payment);
@@ -301,6 +335,118 @@ async function handleVenueSuccessfulPayment(
         `reason=${result.reason}`,
     );
   }
+}
+
+/**
+ * Rematch Star payment (payload `rematch:v1`) — REMATCH_PRODUCT_SPEC.md.
+ *
+ * THE money-critical path. Telegram has confirmed the Stars moved, so from here
+ * exactly one of two things must become true and stay true: he gets a match, or
+ * he gets his Stars back. The order below is what guarantees that:
+ *
+ *   1. Write the purchase row FIRST, keyed by the unique charge id. A P2002 is a
+ *      redelivered `successful_payment` (Telegram retry / crash before grammY
+ *      committed the offset) → idempotent no-op. Writing before the run means a
+ *      crash mid-run still leaves a durable record that money was taken, which
+ *      the hourly sweep refunds.
+ *   2. Re-validate + run. Invoice links are reusable and state moves, so
+ *      pre-checkout's answer is not trusted here.
+ *   3. Commit the outcome: dispatch + `settled`, or refund + a refunded status.
+ *      A refund that fails is parked in `refund_failed` and NOT announced.
+ */
+async function handleRematchSuccessfulPayment(
+  ctx: BotContext,
+  payment: {
+    invoice_payload: string;
+    total_amount: number;
+    telegram_payment_charge_id: string;
+  },
+): Promise<void> {
+  const telegramId = BigInt(ctx.from!.id);
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true, language: true },
+  });
+  if (!user) return;
+  const lang = (user.language ?? "en") as Language;
+
+  const { runRematch, REMATCH_PROCESSING, REMATCH_SETTLED } = await import(
+    "../services/rematch.js"
+  );
+  const { refundRematchPurchase, refundStatusForReason } = await import(
+    "../services/rematch-refund.js"
+  );
+
+  console.info(
+    `[stars] rematch purchase user=${user.id} stars=${payment.total_amount} ` +
+      `charge=${payment.telegram_payment_charge_id}`,
+  );
+
+  // (1) Durable pre-transaction record. Unique charge id ⇒ exactly-once.
+  let purchase: { id: string; externalPaymentId: string; status: string };
+  try {
+    purchase = await prisma.rematchPurchase.create({
+      data: {
+        userId: user.id,
+        status: REMATCH_PROCESSING,
+        externalPaymentId: payment.telegram_payment_charge_id,
+        amountStars: payment.total_amount,
+        amountCents: null,
+      },
+      select: { id: true, externalPaymentId: true, status: true },
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      console.info(
+        `[stars] rematch duplicate ignored user=${user.id} ` +
+          `charge=${payment.telegram_payment_charge_id}`,
+      );
+      return;
+    }
+    throw err;
+  }
+
+  // (2) Re-validate + run. Any throw leaves the row `processing`, which the
+  // hourly sweep refunds — never a silent loss.
+  const run = await runRematch(user.id);
+
+  // (3a) Nothing delivered → refund (D1). This is the ONLY refundable class:
+  // a decline or a ghost later on is explicitly not refunded, and the offer copy
+  // says so before payment.
+  if (!run.ok || !run.matchId) {
+    const refunded = await refundRematchPurchase(
+      ctx.api,
+      purchase,
+      telegramId,
+      refundStatusForReason(run.reason),
+    );
+    await ctx
+      .reply(t(lang, refunded ? "rematchNoCandidate" : "rematchRefundPending", {}))
+      .catch(() => {});
+    return;
+  }
+
+  // (3b) Delivered. Mark settled BEFORE dispatching: the match already exists,
+  // so if dispatch throws we must not let the sweep refund a live pair.
+  await prisma.rematchPurchase.update({
+    where: { id: purchase.id },
+    data: {
+      status: REMATCH_SETTLED,
+      resolvedAt: new Date(),
+      resultMatchId: run.matchId,
+      framing: run.framing ?? null,
+    },
+  });
+
+  await ctx.reply(t(lang, "rematchFound", {})).catch(() => {});
+
+  const { dispatchMatches } = await import("../services/dispatch-queue.js");
+  await dispatchMatches(ctx.api, [run.matchId]).catch((err) => {
+    // The pair exists and is stamped; the pitch failing to render is a delivery
+    // problem, not a payment problem. Surfaced loudly for ops rather than
+    // reversed — reversing would strand an already-created live match.
+    console.error(`[rematch] dispatch failed match=${run.matchId}:`, err);
+  });
 }
 
 /**

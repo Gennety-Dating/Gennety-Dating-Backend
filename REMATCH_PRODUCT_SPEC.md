@@ -1,9 +1,15 @@
 # Gennety Rematch — Product Specification
 
-> **Version:** 1.0 (2026-07-25). Feature-flagged (`REMATCH_FEATURE_ENABLED`,
-> default **off**). Telegram-only in v1 (explicit, recorded decision — see
-> *Two clients*). Product invariants live in [PRODUCT_SPEC.md](PRODUCT_SPEC.md);
-> architecture in [ARCHITECTURE.md](ARCHITECTURE.md); deploy in [deploy.md](deploy.md).
+> **Version:** 1.1 (2026-07-26 — implemented; reconciled with the shipped code).
+> Feature-flagged (`REMATCH_FEATURE_ENABLED`, default **off**). Telegram-only in
+> v1 (explicit, recorded decision — see *Two clients*). Product invariants live in
+> [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.11; architecture in
+> [ARCHITECTURE.md](ARCHITECTURE.md); deploy in [deploy.md](deploy.md).
+>
+> **Implementation map:** `services/rematch.ts` (eligibility, candidate, framing,
+> run), `services/rematch-refund.ts` (refunds + hourly sweep),
+> `handlers/matching/rematch.ts` (offer card + invoice mint),
+> `handlers/payments.ts` (`rematch:v1` pre-checkout + settle trust boundary).
 
 ## Overview
 
@@ -122,9 +128,13 @@ The flow is therefore **check → pay → re-check → deliver-or-refund**:
    Telegram's 10 s window (it deliberately does **not** re-run the engine — too
    slow for the window).
 4. **`successful_payment` is the trust boundary.** In order:
-   a. Insert `RematchPurchase` keyed by unique `externalPaymentId` =
-      `telegram_payment_charge_id`. A unique violation means Telegram
-      redelivered → no-op (exactly-once, same pattern as `TicketLedger`).
+   a. Insert `RematchPurchase` as `processing`, keyed by unique
+      `externalPaymentId` = `telegram_payment_charge_id`. A unique violation
+      means Telegram redelivered → no-op (exactly-once, same pattern as
+      `TicketLedger`). Writing **before** the run means a crash mid-run still
+      leaves a durable record that money moved — the hourly sweep refunds rows
+      left in `processing` past `REMATCH_PROCESSING_STALE_MS` (5 min), mirroring
+      how an abandoned `gate_payment` ticket row is swept.
    b. Re-validate **every** eligibility rule from above (a reusable invoice link
       can be opened twice, and state can change between steps).
    c. Run `findRematchCandidate()`.
@@ -162,7 +172,7 @@ pattern):
 |---|---|
 | `id`, `userId`, `createdAt` | Buyer + when. `@@index([userId, createdAt])` backs the D3 limit query. |
 | `externalPaymentId` **unique** | `telegram_payment_charge_id` — exactly-once settle **and** the key `refundStarPayment` needs later. |
-| `status` | `settled` \| `refunded_no_candidate` \| `refunded_ineligible` \| `refund_failed` |
+| `status` | `processing` \| `settled` \| `refunded_no_candidate` \| `refunded_ineligible` \| `refund_failed`. `@@index([status, createdAt])` backs the sweep. Only `settled` consumes D3 quota — a refunded run delivered nothing, so it must not cost an attempt. |
 | `amountStars`, `amountCents` | Frozen price at purchase time (prices are env-tunable). |
 | `resultMatchId` | The delivered match, when settled. |
 | `framing` | Which gift framing her pitch used — for copy A/B later. |
@@ -173,21 +183,28 @@ derived from these rows, so there is no counter to drift.
 
 ## Surfaces (D4 — pain-triggered only)
 
-1. **No-match DM** (Thursday 18:15, `no-match-notifier.ts`) — for eligible men,
-   the DM carries a rematch CTA button. *Implementation note:* this DM is a rich
-   AI-compose stream; the CTA must ride the **final plain `sendMessage`**, which
-   is where §3.1 already says the persisted message lands.
-2. **Terminal failed match** — after his own decline ack, after the mixed/both-
-   declined reveal, and after TTL expiry (`expiry-notify.ts`). Fired only once
-   the match is genuinely terminal (`cancelled` / `expired`), so the
-   single-live-match invariant holds.
+1. **No-match DM** (Thursday 18:15, `no-match-notifier.ts`) — the offer follows
+   as its **own** short DM rather than being folded into the no-match message.
+   That message is a deliberately short, empathetic rich stream (§3.1); bolting a
+   price onto it would undercut the empathy and complicate a carefully-tuned
+   primitive. Variant: `famine`.
+2. **Terminal failed match** — after TTL expiry (`expiry-notify.ts`), once the
+   match is genuinely terminal (`expired`), so the single-live-match eligibility
+   check passes. Variant: `failed`.
 3. **NOT in the main menu** (D4) and **not** in the My Date hub (by definition
    there is no live date).
 
-**The offer card** must state, before payment: the price, that it buys **a new
-introduction — not a guaranteed date**, that the person will be someone he has
-not seen before, and that Stars are returned only if we cannot find anyone.
-Copy in all five locales, per §Languages.
+**Two taps by design** (`handlers/matching/rematch.ts`). The DM carries the full
+terms and a callback button; tapping mints the Stars invoice and swaps the same
+card's button for the pay button. That ordering keeps the honest terms on screen
+immediately before payment, and it means an invoice is only minted for someone
+who actually wants one. Both the render and the tap re-check eligibility, so a
+durable card sitting in the chat past a cooldown refuses with a real reason
+instead of charging and refunding.
+
+**The offer card** states, before payment: the price, that it buys **a new
+introduction — not a guaranteed date**, and that Stars are returned only if we
+cannot find anyone. Copy in all five locales, per §Languages.
 
 ## Risks and mitigations
 
@@ -241,6 +258,14 @@ untouched.
 | `REMATCH_GIFT_CAP_DAYS` | `7` | Candidate protection window. |
 | `REMATCH_PRE_BATCH_BLACKOUT_HOURS` | `6` | Blackout before the weekly batch. |
 | `REMATCH_FAILED_LOOKBACK_DAYS` | `14` | Window for the `failed` gift framing. |
+| `REMATCH_REFUND_CRON_SCHEDULE` | `0 * * * *` | Refund retry / abandoned-purchase sweep. Registered only when the feature is on. |
+
+**Pricing note.** 150⭐ follows the ticket rate ($6.99 / 350⭐ = $0.02/⭐ → 150⭐ ≈
+$3.00 ≈ the $2.99 label). `PREMIUM_STARS` documents a more conservative
+$0.024/⭐ small-pack rate, at which 150⭐ bills nearer $3.59. If we want the strict
+"never under-promise the charge" convention Premium follows, either drop
+`REMATCH_STARS` to `125` or raise `REMATCH_PRICE_USD_DISPLAY` — both env-only,
+no redeploy.
 
 ## Implementation phases
 

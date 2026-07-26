@@ -37,6 +37,7 @@ import { statusTimerTick } from "./workers/status-timer.js";
 import { createStatusTimerRunner } from "./workers/status-timer-runner.js";
 import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
 import { ticketExpiryTick } from "./workers/ticket-expiry.js";
+import { sweepRematchRefunds } from "./services/rematch-refund.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
 import { venueRevalidationTick } from "./services/venue-revalidation.js";
 import { retryDueVenueSelections } from "./services/venue-intent-v2.js";
@@ -206,6 +207,16 @@ const VENUE_REVALIDATION_CRON_SCHEDULE =
  */
 const TICKET_EXPIRY_CRON_SCHEDULE =
   process.env.TICKET_EXPIRY_CRON_SCHEDULE ?? "0 * * * *";
+
+/**
+ * Rematch refund retry (REMATCH_PRODUCT_SPEC.md, D1). Hourly: retries refunds
+ * whose provider call failed, and refunds purchases abandoned mid-run (the
+ * process died between "Stars moved" and the terminal write). This is what makes
+ * "we never keep money without delivering a match" durable rather than
+ * best-effort. Registered only when REMATCH_FEATURE_ENABLED.
+ */
+const REMATCH_REFUND_CRON_SCHEDULE =
+  process.env.REMATCH_REFUND_CRON_SCHEDULE ?? "0 * * * *";
 
 /**
  * Profiler scheduler (Phase 1b). Every 15 min: lazy-seed never-armed users and
@@ -452,6 +463,17 @@ bot.start({
         ),
       );
       console.log(`[cron] Ticket expiry scheduled: "${TICKET_EXPIRY_CRON_SCHEDULE}"`);
+    }
+
+    // Rematch refunds: retry failed refunds + reverse abandoned purchases.
+    if (env.REMATCH_FEATURE_ENABLED) {
+      cron.schedule(
+        REMATCH_REFUND_CRON_SCHEDULE,
+        guardedTick("rematch-refund", () =>
+          sweepRematchRefunds(bot.api).then(() => undefined),
+        ),
+      );
+      console.log(`[cron] Rematch refund retry scheduled: "${REMATCH_REFUND_CRON_SCHEDULE}"`);
     }
 
     // Pre-match announce: Wednesday teaser before Thursday batch.

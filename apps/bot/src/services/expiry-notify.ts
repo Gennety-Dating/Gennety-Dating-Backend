@@ -3,6 +3,7 @@ import { GrammyError } from "grammy";
 import { t, type Language } from "@gennety/shared";
 import type { MatchExpiry, SideClassification } from "./match-expiry.js";
 import { isTelegramTarget } from "../utils/telegram-target.js";
+import { sendRematchOfferIfEligible } from "../handlers/matching/rematch.js";
 
 /**
  * Rate-limited dispatch of post-expiry DMs. Mirrors `dispatchMatches` /
@@ -131,6 +132,12 @@ export async function sendExpiryNotifications(
     try {
       await api.sendMessage(Number(side.telegramId), body);
       notified++;
+      // Rematch offer (REMATCH_PRODUCT_SPEC.md, D4) — the second pain moment:
+      // the match window closed with no date. The match is already terminal
+      // (`expired`) by the time this runs, so the single-live-match eligibility
+      // check inside the sender passes. Self-gating (flag, male-only, D3 limits)
+      // lives there, so this is inert for anyone who can't or shouldn't buy.
+      await sendRematchOfferIfEligible(api, side.userId, "failed").catch(() => {});
     } catch (err) {
       failed++;
       const message = err instanceof Error ? err.message : String(err);

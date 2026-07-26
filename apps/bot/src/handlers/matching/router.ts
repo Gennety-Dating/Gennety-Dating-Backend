@@ -19,6 +19,7 @@ import {
 } from "./report.js";
 import { handleVenueLocation, handleVenueVibe } from "./venue-negotiation.js";
 import { handleVenuePayDecline } from "./venue-change.js";
+import { handleRematchBuyCallback, REMATCH_BUY_CALLBACK } from "./rematch.js";
 
 /**
  * Matching router — activates only for users who have already completed
@@ -76,6 +77,13 @@ matchingRouter.use(async (ctx, next) => {
   // Scheduling callbacks: iteration 1/2 slot picks
   if (data?.startsWith("sched:pick:")) {
     await handleSchedulePick(ctx);
+    return;
+  }
+
+  // Rematch offer tap → mint the Stars invoice (REMATCH_PRODUCT_SPEC.md). The
+  // purchase itself settles in the `successful_payment` trust boundary.
+  if (data === REMATCH_BUY_CALLBACK) {
+    await handleRematchBuyCallback(ctx);
     return;
   }
 

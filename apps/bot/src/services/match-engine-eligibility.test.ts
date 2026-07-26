@@ -114,8 +114,18 @@ describe("match allocation active-slot guard", () => {
   it("creates the proposal only after the locked active-match re-check passes", async () => {
     await expect(createProposedMatch("aaaa", "bbbb")).resolves.toEqual({ id: "match-new" });
 
+    // A caller with no `allocation` is the weekly batch: the pair is stamped
+    // `weekly` with no rematch payer (REMATCH_PRODUCT_SPEC.md). Written
+    // explicitly rather than left to the column default so the allocation source
+    // is decided in one place.
     expect(mocks.tx.match.create).toHaveBeenCalledWith({
-      data: { userAId: "aaaa", userBId: "bbbb", status: "proposed" },
+      data: {
+        userAId: "aaaa",
+        userBId: "bbbb",
+        status: "proposed",
+        source: "weekly",
+        rematchPaidById: null,
+      },
       select: { id: true },
     });
   });

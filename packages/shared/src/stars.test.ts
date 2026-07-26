@@ -10,6 +10,9 @@ import {
   SUB_INVOICE_PREFIX,
   buildSubInvoicePayload,
   parseSubInvoicePayload,
+  REMATCH_INVOICE_PREFIX,
+  buildRematchInvoicePayload,
+  parseRematchInvoicePayload,
 } from "./stars.js";
 
 const UUID = "22222222-2222-4222-8222-222222222222";
@@ -122,5 +125,33 @@ describe("subscription invoice payload", () => {
     expect(parseStoreInvoicePayload(buildSubInvoicePayload())).toBeNull();
     expect(parseVenueInvoicePayload(buildSubInvoicePayload())).toBeNull();
     expect(parseSubInvoicePayload(buildStoreInvoicePayload(3))).toBeNull();
+  });
+});
+
+describe("rematch invoice payload", () => {
+  it("round-trips build → parse", () => {
+    expect(buildRematchInvoicePayload()).toBe(`${REMATCH_INVOICE_PREFIX}v1`);
+    expect(parseRematchInvoicePayload(buildRematchInvoicePayload("v1"))).toEqual({
+      version: "v1",
+    });
+  });
+
+  it("returns null for non-rematch, malformed, or unknown-version payloads", () => {
+    expect(parseRematchInvoicePayload("")).toBeNull();
+    expect(parseRematchInvoicePayload(null)).toBeNull();
+    expect(parseRematchInvoicePayload(undefined)).toBeNull();
+    expect(parseRematchInvoicePayload("rematch:")).toBeNull();
+    // An unknown version must NOT settle under current pricing/semantics.
+    expect(parseRematchInvoicePayload("rematch:v2")).toBeNull();
+    expect(parseRematchInvoicePayload("store:3")).toBeNull();
+  });
+
+  it("does not cross-parse with the other helpers", () => {
+    expect(parseStoreInvoicePayload(buildRematchInvoicePayload())).toBeNull();
+    expect(parseVenueInvoicePayload(buildRematchInvoicePayload())).toBeNull();
+    expect(parseSubInvoicePayload(buildRematchInvoicePayload())).toBeNull();
+    expect(parseGateInvoicePayload(buildRematchInvoicePayload())).toBeNull();
+    expect(parseRematchInvoicePayload(buildStoreInvoicePayload(3))).toBeNull();
+    expect(parseRematchInvoicePayload(buildSubInvoicePayload())).toBeNull();
   });
 });

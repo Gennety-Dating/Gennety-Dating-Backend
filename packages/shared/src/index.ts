@@ -118,6 +118,10 @@ export {
   buildSubInvoicePayload,
   parseSubInvoicePayload,
   type SubInvoiceProduct,
+  REMATCH_INVOICE_PREFIX,
+  buildRematchInvoicePayload,
+  parseRematchInvoicePayload,
+  type RematchInvoiceVersion,
 } from "./stars.js";
 export {
   MAGIC_CONTEXT_PROMPT,

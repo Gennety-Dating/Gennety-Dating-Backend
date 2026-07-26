@@ -301,6 +301,7 @@ model User {
   profilerAnswers           ProfilerAnswer[]
   ticketLedger              TicketLedger[]
   subscriptionLedger        SubscriptionLedger[]
+  rematchPurchases          RematchPurchase[]
   liveActivityTokens        LiveActivityToken[]
   mediaValidationRejections MediaValidationRejection[]
 
@@ -449,6 +450,59 @@ model SubscriptionLedger {
 
   @@index([userId, createdAt])
   @@map("subscription_ledger")
+}
+
+/// Append-only audit of every paid Rematch purchase (gated by
+/// `REMATCH_FEATURE_ENABLED`). See REMATCH_PRODUCT_SPEC.md.
+///
+/// Mirrors `ticket_ledger`/`subscription_ledger`: the unique
+/// `externalPaymentId` (Telegram Stars `telegram_payment_charge_id`) makes a
+/// redelivered `successful_payment` exactly-once AND preserves the charge key
+/// `refundStarPayment` needs later. There is no materialized head on `User` —
+/// the D3 rate limits are derived from these rows, so there is no counter to
+/// drift out of sync with the money.
+///
+/// Rows are written ONLY from the `successful_payment` trust boundary: a row
+/// exists ⇔ Stars actually moved. Every row therefore ends in a terminal state
+/// where the user either got a match or got their Stars back.
+model RematchPurchase {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  /// `processing`          — Stars moved; the row is written BEFORE the engine
+  ///                         runs so a crash mid-run still leaves a durable
+  ///                         record that money was taken. The hourly worker
+  ///                         refunds rows stuck here (mirrors how an abandoned
+  ///                         `gate_payment` ticket row is swept).
+  /// `settled`             — a match was created and dispatched.
+  /// `refunded_no_candidate` — the engine found nobody; Stars returned (D1).
+  /// `refunded_ineligible` — eligibility/limits failed at settle; Stars returned.
+  /// `refund_failed`       — the refund API call failed; the hourly retry worker
+  ///                         owns this row until it flips to a refunded state.
+  status String
+  /// Unique Telegram Stars charge id → exactly-once settle + refund key.
+  externalPaymentId String @unique @map("external_payment_id")
+  /// Price frozen at purchase time (prices are env-tunable, so the row must not
+  /// re-derive them later).
+  amountStars Int  @map("amount_stars")
+  amountCents Int? @map("amount_cents")
+  /// The delivered match, when `settled`. Free-form (no FK) so deleting a match
+  /// never breaks the payment audit trail.
+  resultMatchId String? @map("result_match_id") @db.Uuid
+  /// Which gift framing the partner's pitch used (`famine`/`failed`/`neutral`) —
+  /// kept for copy A/B. Never contains her identity or any decision state.
+  framing String?
+  /// Terminal-state stamp + last refund error (retry bookkeeping).
+  resolvedAt  DateTime? @map("resolved_at")
+  refundError String?   @map("refund_error")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Backs the D3 rolling-window limit + cooldown lookup.
+  @@index([userId, createdAt])
+  /// Backs the hourly `refund_failed` retry sweep.
+  @@index([status, createdAt])
+  @@map("rematch_purchases")
 }
 
 model OnboardingProgress {
@@ -1126,6 +1180,19 @@ model Match {
   /// a non-premium user costs VENUE_CHANGE_STARS + shows the counterfactual
   /// upsell. Null = no agreed venue / legacy row. See PRODUCT_SPEC.md §Premium.
   venueChangeTier           String?   @map("venue_change_tier")
+
+  /// How this pair was allocated: `weekly` (the Thursday batch — the default and
+  /// the only value before Rematch) or `rematch` (a paid, on-demand single-seeker
+  /// run bought by one man, REMATCH_PRODUCT_SPEC.md). String, not a Prisma enum,
+  /// matching `ticketStatus`/`venueChangeStatus`/`coordMethod`; whitelist lives
+  /// in app code. Analytics that measure the weekly optimizer's quality filter to
+  /// `weekly` so on-demand runs don't pollute the score A/B.
+  source          String  @default("weekly")
+  /// The buyer of a `rematch`-sourced pair (always the male participant). Null
+  /// for weekly pairs. The reverse link (match ← purchase) lives on
+  /// `RematchPurchase.resultMatchId`; this side exists so support/founder
+  /// surfaces can see "who paid for this" without a second query.
+  rematchPaidById String? @map("rematch_paid_by_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

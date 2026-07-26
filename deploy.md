@@ -1200,6 +1200,33 @@ Required/high-impact env keys:
   flag off; the additive columns/tables may stay. Launch: deploy code + push
   schema BEFORE flipping the flag (the new columns are read by onboarding state),
   create at least one code, then set `PROMO_FEATURE_ENABLED=true`.
+- Rematch (feature-flagged, paid on-demand engine re-run, PRODUCT_SPEC §3.11 /
+  `REMATCH_PRODUCT_SPEC.md`): `REMATCH_FEATURE_ENABLED` (default `false` — leave
+  off until launch). When on, a man whom the Thursday batch left unpaired, or
+  whose match expired without a date, gets a DM offering one paid re-run of the
+  matching engine for himself; the woman it finds never buys and never sees a
+  price — she gets an ordinary pitch with gift framing. Telegram-only (Stars is a
+  Telegram rail); no `/v1/*` or OpenAPI change. Tunables: `REMATCH_STARS`
+  (default `150`), `REMATCH_PRICE_USD_DISPLAY` (`$2.99`, display-only),
+  `REMATCH_MAX_PER_WEEK` (`2`), `REMATCH_COOLDOWN_HOURS` (`24`),
+  `REMATCH_GIFT_CAP_DAYS` (`7`, protects a candidate from serial gift-pitching),
+  `REMATCH_PRE_BATCH_BLACKOUT_HOURS` (`6`, keeps a single-seeker run from taking
+  a candidate the globally-optimal Thursday batch needed; `0` disables),
+  `REMATCH_FAILED_LOOKBACK_DAYS` (`14`), and `REMATCH_REFUND_CRON_SCHEDULE`
+  (`0 * * * *`). **Requires `db:push` of the additive `matches.source` (default
+  `'weekly'`) / `matches.rematch_paid_by_id` columns and the new
+  `rematch_purchases` table FIRST** (non-destructive, but `matches.source` is
+  read unconditionally by the pitch + the admin algorithm route, so a DB missing
+  it throws `P2022` on every dispatch — push the schema BEFORE restarting).
+  Payments ride the existing Stars rails (`rematch:v1` payload in
+  `handlers/payments.ts`; no merchant account, same XTR mechanics as tickets and
+  independent of `TICKET_STARS_ENABLED`). The refund-retry cron is registered
+  only when the flag is on. No Mini App change, no new system dependency.
+  **Pricing note:** 150⭐ follows the ticket rate ($6.99/350⭐ = $0.02/⭐ → ≈$3.00);
+  at the more conservative $0.024/⭐ rate documented under `PREMIUM_STARS`, 150⭐
+  bills nearer $3.59 — if you want Premium's strict "never under-promise the
+  charge" convention, set `REMATCH_STARS=125` or raise the display price (both
+  env-only). Rollback: flip the flag off; the additive columns/table may stay.
 - Date card (feature-flagged): `DATE_CARD_FEATURE_ENABLED` (default `false` —
   leave off until launch). When on, each side's `scheduled` confirmation is a
   rendered PNG date card (partner photo + venue photo + details) sent
@@ -1289,6 +1316,7 @@ Required/high-impact env keys:
   `STATUS_TIMER_CRON_SCHEDULE`, `AUTO_UNSUSPEND_CRON_SCHEDULE`,
   `EMBEDDING_REFRESH_CRON_SCHEDULE`, `SELFIE_RETENTION_CRON_SCHEDULE`,
   `VENUE_REVALIDATION_CRON_SCHEDULE`, `TICKET_EXPIRY_CRON_SCHEDULE`,
+  `REMATCH_REFUND_CRON_SCHEDULE`,
   `PROFILER_CRON_SCHEDULE`, `DATE_LIFECYCLE_TICK_MS`, `DISPATCH_DELAY_MS`,
   `MATCH_PREROLL_DELAY_MS`
 - Onboarding funnel analytics (always-on, no feature flag): step-level

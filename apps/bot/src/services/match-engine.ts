@@ -395,6 +395,14 @@ export interface SeekerProfile {
   typePrefTags?: TypePrefTags | null;
 }
 
+/**
+ * How a pair was allocated (`Match.source`). `weekly` is the Thursday batch and
+ * the default for every historical row; `rematch` is a paid on-demand
+ * single-seeker run (REMATCH_PRODUCT_SPEC.md). A string union rather than a
+ * Prisma enum, matching `ticketStatus`/`venueChangeStatus`/`coordMethod`.
+ */
+export type MatchSource = "weekly" | "rematch";
+
 export interface ScoredCandidate {
   userId: string;
   telegramId: bigint;
@@ -1080,6 +1088,14 @@ export async function createProposedMatch(
     userA: string;
     userB: string;
   },
+  /**
+   * How this pair was allocated. Omitted → the weekly batch (`source: "weekly"`,
+   * the column default). Passed by the paid Rematch flow so the row is stamped
+   * INSIDE the same transaction that creates it — a follow-up UPDATE would leave
+   * a window where a rematch pair is indistinguishable from a weekly one, which
+   * is exactly what the analytics filter must never see.
+   */
+  allocation?: { source: MatchSource; rematchPaidById?: string },
 ): Promise<{ id: string } | null> {
   const now = new Date();
   return prisma.$transaction(async (tx) => {
@@ -1134,7 +1150,13 @@ export async function createProposedMatch(
     if (existingConflict) return null;
 
     const match = await tx.match.create({
-      data: { userAId, userBId, status: "proposed" },
+      data: {
+        userAId,
+        userBId,
+        status: "proposed",
+        source: allocation?.source ?? "weekly",
+        rematchPaidById: allocation?.rematchPaidById ?? null,
+      },
       select: { id: true },
     });
     await tx.profile.updateMany({

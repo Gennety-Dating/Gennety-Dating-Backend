@@ -140,3 +140,41 @@ export function parseSubInvoicePayload(
   if (product !== "premium") return null;
   return { product };
 }
+
+/**
+ * Rematch (REMATCH_PRODUCT_SPEC.md) Star payment payload. A one-off purchase
+ * that re-runs the matching engine for the buyer alone.
+ *
+ * Like `sub:premium` — and unlike `gate:`/`venue:` — the payload carries NO
+ * per-user or per-match data: there is no match yet at invoice time, and the
+ * buyer is identified from `ctx.from` at the trust boundary. The version tag
+ * exists so a payload minted before a future pricing/semantics change can be
+ * recognised (and refunded) rather than silently settled under new rules.
+ * Format: `rematch:v1`.
+ */
+export const REMATCH_INVOICE_PREFIX = "rematch:";
+
+/** The only rematch payload version in circulation. */
+export type RematchInvoiceVersion = "v1";
+
+/** Build the invoice payload for a rematch Star payment. */
+export function buildRematchInvoicePayload(
+  version: RematchInvoiceVersion = "v1",
+): string {
+  return `${REMATCH_INVOICE_PREFIX}${version}`;
+}
+
+/**
+ * Parse a rematch invoice payload back into `{ version }`. Returns null for any
+ * non-rematch, malformed, or unknown-version payload — so a foreign or tampered
+ * invoice never triggers a rematch run. Eligibility, D3 limits, and the
+ * male-only rule remain the trust boundary in the settle handler.
+ */
+export function parseRematchInvoicePayload(
+  payload: string | null | undefined,
+): { version: RematchInvoiceVersion } | null {
+  if (!payload || !payload.startsWith(REMATCH_INVOICE_PREFIX)) return null;
+  const version = payload.slice(REMATCH_INVOICE_PREFIX.length);
+  if (version !== "v1") return null;
+  return { version };
+}
