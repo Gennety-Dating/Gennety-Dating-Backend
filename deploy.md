@@ -1539,9 +1539,25 @@ Required/high-impact env keys:
   `STATUS_TIMER_CRON_SCHEDULE`, `AUTO_UNSUSPEND_CRON_SCHEDULE`,
   `EMBEDDING_REFRESH_CRON_SCHEDULE`, `SELFIE_RETENTION_CRON_SCHEDULE`,
   `VENUE_REVALIDATION_CRON_SCHEDULE`, `TICKET_EXPIRY_CRON_SCHEDULE`,
+  `RETENTION_CRON_SCHEDULE`,
   `REMATCH_REFUND_CRON_SCHEDULE`, `VENUE_CHANGE_REFUND_CRON_SCHEDULE`,
   `PROFILER_CRON_SCHEDULE`, `DATE_LIFECYCLE_TICK_MS`, `DISPATCH_DELAY_MS`,
   `MATCH_PREROLL_DELAY_MS`
+- Data retention (always-on, no feature flag, added 2026-07-26):
+  `RETENTION_CRON_SCHEDULE` (default `45 3 * * *`, Europe/Kyiv) deletes aged OTP
+  challenges (7 d), dead refresh sessions (30 d past unusable), and proxy-chat
+  messages (90 d). No schema change, no new env beyond the schedule, no new
+  system dependency. **Deletes are irreversible, so verify the backlog before
+  the first production run**: check `SELECT count(*) FROM phone_otps WHERE
+  created_at < now() - interval '7 days';` (and the same for `email_otps`,
+  `user_sessions`, `proxy_messages`) so the first sweep's numbers are expected
+  rather than a surprise. Batched at ≤1000 rows per table per tick, so a large
+  backlog drains over several nights instead of one long-running transaction.
+  **The `user_sessions` window is deliberately tied to `JWT_REFRESH_TTL` (30 d)
+  — if you raise that env var, raise `SESSION_RETENTION_MS` with it**, or
+  refresh-token reuse detection quietly stops firing for long-lived tokens.
+  Rollback: set the schedule far-future (e.g. `0 0 31 2 *`); nothing else reads
+  the worker.
 - Onboarding funnel analytics (always-on, no feature flag): step-level
   drop-off + hesitation telemetry feeding `GET /admin/analytics/onboarding-funnel`
   and the weekly `GET /admin/analytics/founder-digest` (consumed by the external

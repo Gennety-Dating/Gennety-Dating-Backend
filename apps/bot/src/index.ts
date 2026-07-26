@@ -40,6 +40,7 @@ import { ticketExpiryTick } from "./workers/ticket-expiry.js";
 import { sweepRematchRefunds } from "./services/rematch-refund.js";
 import { sweepVenueChangeRefunds } from "./services/venue-change-refund.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
+import { retentionTick } from "./workers/retention.js";
 import { venueRevalidationTick } from "./services/venue-revalidation.js";
 import { retryDueVenueSelections } from "./services/venue-intent-v2.js";
 import { guardedTick } from "./utils/guarded-tick.js";
@@ -191,6 +192,15 @@ const EMBEDDING_REFRESH_CRON_SCHEDULE =
  */
 const SELFIE_RETENTION_CRON_SCHEDULE =
   process.env.SELFIE_RETENTION_CRON_SCHEDULE ?? "30 3 * * *";
+
+/**
+ * General data retention (audit DATA-1): expired OTP challenges, dead refresh
+ * sessions, and aged proxy-chat messages. Daily at 03:45 Europe/Kyiv — just
+ * after the selfie scrub, still off-peak. Batched, so a large backlog drains
+ * over several days rather than in one long-running tick.
+ */
+const RETENTION_CRON_SCHEDULE =
+  process.env.RETENTION_CRON_SCHEDULE ?? "45 3 * * *";
 
 /**
  * Curated-venue re-validation: re-check the oldest-verified active venues
@@ -565,6 +575,18 @@ bot.start({
     );
     console.log(
       `[cron] Selfie retention scheduled: "${SELFIE_RETENTION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+    );
+
+    // General data retention: expired OTP challenges (including phone numbers
+    // of people who never finished signing up, which no user cascade reaches),
+    // dead refresh sessions, and aged proxy-chat messages.
+    cron.schedule(
+      RETENTION_CRON_SCHEDULE,
+      guardedTick("retention", () => retentionTick().then(() => undefined)),
+      { timezone: CRON_TIMEZONE },
+    );
+    console.log(
+      `[cron] Data retention scheduled: "${RETENTION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
     );
 
     // Curated venue re-validation — deactivate closed/degraded venues and

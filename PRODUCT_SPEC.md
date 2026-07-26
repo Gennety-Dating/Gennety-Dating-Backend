@@ -2247,6 +2247,25 @@ excluding an otherwise-complete user from matching.
 - Liveness-captured reference selfies are auto-deleted 90 days after `verifiedAt`
   (`selfie-retention` cron); the user stays `verified`, only the reference
   image is scrubbed.
+- **Retention windows (added 2026-07-26, `retention` cron).** Four tables used
+  to accumulate rows forever — nothing deleted from them and no cron touched
+  them. Now: OTP challenges (`email_otps`, `phone_otps`) are deleted after
+  **7 days**; refresh sessions (`user_sessions`) **30 days** after they became
+  unusable; relayed proxy-chat messages (`proxy_messages`) after **90 days**.
+  Two of these are load-bearing rather than housekeeping:
+  - `phone_otps` is keyed by NUMBER, not by user, because the phone funnel
+    starts before a `User` row exists. A number belonging to someone who never
+    finished signing up therefore has no row for the account-deletion cascade to
+    reach, and was retained indefinitely. This sweep is the only thing that
+    erases it.
+  - The `user_sessions` window is pinned to `JWT_REFRESH_TTL` (30 d) **on
+    purpose**: refresh-token reuse detection works by finding an already-revoked
+    session by its hash and revoking the whole family, so deleting revoked rows
+    earlier would silently downgrade that defence to "token not found". Raising
+    `JWT_REFRESH_TTL` means raising this window with it.
+  - The `proxy_messages` window is a moderation-policy choice, not a technical
+    one — PRODUCT_SPEC names that log as the justification for the narrow
+    carve-out to NO-IN-APP-CHAT. 90 days matches the reference-selfie window.
 - `researchOptIn` is opt-in; default false. Audit is via `User.consentedAt`,
   `User.termsAcceptedAt`.
 
