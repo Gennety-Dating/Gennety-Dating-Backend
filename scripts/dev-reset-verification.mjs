@@ -27,11 +27,17 @@
  *
  * Usage:
  *   pnpm dev:reset-verification --tg=782065541
+ *   pnpm dev:reset-verification --tg=782065541 --lang=de
  *   pnpm dev:reset-verification --tg=782065541 --expire-selfie
  *
  * `--expire-selfie` additionally clears `verifiedSelfiePath`, which simulates
  * the 90-day GDPR scrub — the state where a photo edit must ask for one more
  * liveness check (PRODUCT_SPEC §1.4).
+ *
+ * `--lang` switches `User.language`, which is what the liveness detector reads
+ * for its on-screen instructions. Settings is unreachable from inside the
+ * verification gate, so without this there is no way to eyeball the check in
+ * another language.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -68,11 +74,19 @@ const args = Object.fromEntries(
   }),
 );
 
+const LANGUAGES = ["en", "ru", "uk", "de", "pl"];
+
 if (args.help !== undefined || args.h !== undefined || !args.tg) {
   console.log(
-    "usage: pnpm dev:reset-verification --tg=<telegram_id> [--expire-selfie]",
+    "usage: pnpm dev:reset-verification --tg=<telegram_id> " +
+      `[--lang=${LANGUAGES.join("|")}] [--expire-selfie]`,
   );
   process.exit(args.tg ? 0 : 1);
+}
+
+if (args.lang !== undefined && !LANGUAGES.includes(args.lang)) {
+  console.error(`✖ --lang must be one of: ${LANGUAGES.join(", ")}`);
+  process.exit(1);
 }
 
 // Guard: this writes to whatever DATABASE_URL is in scope, and pointing it at
@@ -97,6 +111,7 @@ const before = await prisma.user.findUnique({
     firstName: true,
     status: true,
     onboardingStep: true,
+    language: true,
     verificationStatus: true,
     verifiedAt: true,
     verifiedSelfiePath: true,
@@ -140,6 +155,7 @@ await prisma.user.update({
     faceMatchScore: null,
     personaInquiryId: null,
     ...(args["expire-selfie"] !== undefined ? { verifiedSelfiePath: null } : {}),
+    ...(args.lang !== undefined ? { language: args.lang } : {}),
   },
 });
 
@@ -148,6 +164,9 @@ console.log(
 );
 if (args["expire-selfie"] !== undefined) {
   console.log("✓ verifiedSelfiePath cleared (simulates the 90-day GDPR scrub)");
+}
+if (args.lang !== undefined) {
+  console.log(`✓ language set to "${args.lang}" — the detector reads this`);
 }
 console.log("\nSend /start to the dev bot — the verification gate will offer the Verify button.");
 
