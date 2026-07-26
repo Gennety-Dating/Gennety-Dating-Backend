@@ -2,7 +2,6 @@ import { InlineKeyboard } from "grammy";
 import { prisma, type Theme } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
-import { buildPersonaHostedUrl } from "./persona.js";
 import { buildMiniAppUrl } from "./mini-app-url.js";
 
 /**
@@ -25,15 +24,16 @@ export const VERIFY_PHOTOS_CALLBACK = "verify:photos";
 export const VERIFY_PHOTOS_CLEAR_CALLBACK = "verify:photos:clear";
 
 /**
- * Append the "Verify now" affordance to a keyboard: the embedded Verification
- * Mini App in production (no browser frame, native camera permissions inside
- * Telegram), or the hosted Persona URL as a dev/fallback when WEBAPP_URL isn't
- * a real HTTPS host (local dev without a tunnel, where Telegram can't open the
- * Mini App over `example.invalid`).
+ * Append the "Verify now" affordance to a keyboard: a `web_app` button into the
+ * Verification Mini App, where AWS Face Liveness captures the selfie video
+ * inside Telegram's own WebView (camera permission piggybacks on Telegram's
+ * Mini App grant — no browser frame, no redirect).
  *
- * Returns false when neither could be built (hosted-URL construction threw) so
- * the caller can decide whether that is fatal (CTA aborts; the skip-nudge fork
- * just drops the button and keeps the "Skip anyway" option).
+ * There is no non-Mini-App fallback any more. The Persona era had a hosted URL
+ * to fall back on when `WEBAPP_URL` wasn't a real HTTPS host; Face Liveness
+ * runs entirely in our own page, so without that host there is genuinely
+ * nowhere to send the user. Returns false in that case so the caller can react
+ * honestly (the CTA aborts rather than rendering a dead button).
  */
 export async function appendVerifyNowButton(
   keyboard: InlineKeyboard,
@@ -47,31 +47,24 @@ export async function appendVerifyNowButton(
     miniAppHost.startsWith("https://") &&
     !miniAppHost.includes("example.invalid");
 
-  if (useMiniApp) {
-    const theme =
-      knownTheme ??
-      (
-        await prisma.user.findUnique({
-          where: { id: userId },
-          select: { theme: true },
-        })
-      )?.theme ??
-      "dark";
-    const miniAppUrl = buildMiniAppUrl("verification", { lang, theme });
-    keyboard.webApp(label, miniAppUrl);
-    return true;
-  }
-  try {
-    const url = buildPersonaHostedUrl(userId);
-    keyboard.url(label, url);
-    console.warn(
-      "[verification] WEBAPP_URL not configured — falling back to hosted Persona URL",
+  if (!useMiniApp) {
+    console.error(
+      "[verification] WEBAPP_URL is not a real HTTPS host — cannot offer verification",
     );
-    return true;
-  } catch (err) {
-    console.error("[persona] CTA URL build failed:", err);
     return false;
   }
+
+  const theme =
+    knownTheme ??
+    (
+      await prisma.user.findUnique({
+        where: { id: userId },
+        select: { theme: true },
+      })
+    )?.theme ??
+    "dark";
+  keyboard.webApp(label, buildMiniAppUrl("verification", { lang, theme }));
+  return true;
 }
 
 export interface VerificationKeyboardOptions {
@@ -92,9 +85,9 @@ export interface VerificationKeyboardOptions {
  * handler (`handlers/onboarding/verification.ts` already imports the pipeline —
  * the reverse direction would be a cycle).
  *
- * Returns null when the Verify button could not be built at all (Persona
- * misconfigured), so callers can fall back to plain text rather than showing a
- * keyboard whose only remaining action is unrelated.
+ * Returns null when the Verify button could not be built at all (no Mini App
+ * host configured), so callers can fall back to plain text rather than showing
+ * a keyboard whose only remaining action is unrelated.
  */
 export async function buildVerificationKeyboard(
   lang: Language,

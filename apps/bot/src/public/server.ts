@@ -6,7 +6,6 @@ import { env } from "../config.js";
 import {
   globalLimiter,
   mapTileLimiter,
-  personaWebhookLimiter,
 } from "./rate-limit.js";
 import { authRouter } from "./routes/auth.js";
 import { meRouter } from "./routes/me.js";
@@ -24,7 +23,6 @@ import { premiumAppStoreRouter } from "./routes/premium-appstore.js";
 import { appStoreWebhookRouter } from "./routes/appstore-webhook.js";
 import { founderReportRouter } from "./routes/founder-report.js";
 import { verificationRouter } from "./routes/verification.js";
-import { createPersonaWebhookRouter } from "./routes/persona-webhook.js";
 import { createCalendarRouter } from "./routes/calendar.js";
 import { createFeedbackRouter } from "./routes/feedback.js";
 import { createLocationRouter } from "./routes/location.js";
@@ -89,15 +87,10 @@ app.use(
     methods: ["GET", "POST", "PUT", "PATCH", "OPTIONS"],
   }),
 );
-// Persona webhook MUST be mounted before express.json — the signature is HMAC
-// of the raw bytes, and JSON re-serialisation would change key order /
-// whitespace. The route itself mounts `express.raw` internally.
-//
 // The bot Api is injected lazily (see `startPublicServer`) because importing
-// `./bot.js` here would cycle with `./index.ts`. Until wired, the webhook
-// returns 503.
+// `./bot.js` here would cycle with `./index.ts`. Until wired, the routers that
+// need it answer 503.
 let injectedBotApi: Api<RawApi> | null = null;
-let personaRouter: ReturnType<typeof createPersonaWebhookRouter> | null = null;
 let calendarRouter: ReturnType<typeof createCalendarRouter> | null = null;
 let feedbackRouter: ReturnType<typeof createFeedbackRouter> | null = null;
 let locationRouter: ReturnType<typeof createLocationRouter> | null = null;
@@ -109,15 +102,6 @@ let radarRouter: ReturnType<typeof createRadarRouter> | null = null;
 let venueChangeRouter: ReturnType<typeof createVenueChangeRouter> | null = null;
 let premiumRouter: ReturnType<typeof createPremiumRouter> | null = null;
 let referralRouter: ReturnType<typeof createReferralRouter> | null = null;
-app.use("/v1/webhooks/persona", personaWebhookLimiter, (req, res, next) => {
-  if (!injectedBotApi) {
-    res.status(503).json({ error: "Persona webhook not ready" });
-    return;
-  }
-  if (!personaRouter) personaRouter = createPersonaWebhookRouter(injectedBotApi);
-  personaRouter(req, res, next);
-});
-
 // Public map-tile proxy for the location Mini App. Some client networks can't
 // reach the tile CDN directly (regional CDN blocks), so the bot fetches tiles
 // server-side and streams them — the phone only ever talks to our own origin,
@@ -237,8 +221,8 @@ app.use("/v1/venue-change", (req, res, next) => {
   venueChangeRouter(req, res, next);
 });
 
-// Verification Mini App — Persona embedded flow inside the Telegram WebView
-// (no redirect to withpersona.com). Same TMA-auth boundary as
+// Verification Mini App — AWS Face Liveness capture inside the Telegram
+// WebView (no redirect anywhere). Same TMA-auth boundary as
 // /v1/calendar/* /v1/location/* /v1/feedback/*. Mounted under
 // /v1/verification/mini-app to avoid colliding with the JWT-auth
 // /v1/me/verification/* mobile routes.
@@ -409,9 +393,8 @@ export function startPublicServer(api?: Api<RawApi>): void {
 }
 
 /** Test-only: inject the bot api without starting the HTTP listener. */
-export function __setPersonaBotApiForTests(api: Api<RawApi> | null): void {
+export function __setBotApiForTests(api: Api<RawApi> | null): void {
   injectedBotApi = api;
-  personaRouter = null;
   calendarRouter = null;
   feedbackRouter = null;
   locationRouter = null;

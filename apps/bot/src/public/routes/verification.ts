@@ -1,137 +1,95 @@
 import { Router, type Request, type Response } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
-import { prisma } from "@gennety/db";
-import type { Language } from "@gennety/shared";
-import { env } from "../../config.js";
 import { requireAuth } from "../auth-middleware.js";
-import { buildPersonaHostedUrl } from "../../services/persona.js";
-import { pullVerificationStatus } from "../../services/verification-pipeline.js";
+import {
+  beginLivenessCheck,
+  completeLivenessCheck,
+} from "../../services/liveness-flow.js";
 import { getBotApi } from "../server.js";
+
+/**
+ * Native-client identity verification (AWS Rekognition Face Liveness).
+ *
+ * JWT twin of the Telegram Mini App router: same two steps, same trust
+ * boundary, different auth. The iOS client runs Amplify's
+ * `FaceLivenessDetectorView(sessionID:region:credentialsProvider:)` with what
+ * `/native-init` returns.
+ *
+ * The Persona hosted-URL endpoint (`GET /v1/me/verification/url`) is gone with
+ * the provider — there is no hosted page to send anyone to, and the native SDK
+ * needs a session, not a URL.
+ */
 
 export const verificationRouter: Router = Router();
 
 verificationRouter.use(requireAuth);
 
-/** Persona hosted-URL mint — 10/min/user. Cheap but not free if mobile hot-retries. */
-const urlLimiter = rateLimit({
+/** Session mint — 10/min/user. A liveness session is cheap but not free. */
+const initLimiter = rateLimit({
   windowMs: 60_000,
   limit: 10,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   keyGenerator: (req): string =>
-    `persona-url:${req.userId ?? ipKeyGenerator(req.ip ?? "") ?? "anon"}`,
-  message: { error: "Too many verification URL requests, slow down." },
+    `liveness-init:${req.userId ?? ipKeyGenerator(req.ip ?? "") ?? "anon"}`,
+  message: { error: "Too many verification requests, slow down." },
 });
 
 /**
- * GET /v1/me/verification/url
- *
- * Returns the Persona hosted-flow URL bound to the caller's user id. The
- * mobile app opens it in a webview; the Telegram bot opens it via an inline
- * `web_app` button (see `handlers/onboarding/verification.ts`).
- *
- * Persona's hosted flow is fully self-contained — no access token to mint.
- * The URL is safe to expose client-side because the template-id and
- * environment-id alone cannot be used to forge a completed verification;
- * only an HMAC-signed webhook from Persona flips `verificationStatus`.
- */
-verificationRouter.get("/url", urlLimiter, async (req: Request, res: Response): Promise<void> => {
-  if (!env.PERSONA_TEMPLATE_ID || !env.PERSONA_ENVIRONMENT_ID) {
-    res.status(503).json({ error: "Verification feature not configured" });
-    return;
-  }
-  const userId = req.userId!;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, verificationStatus: true },
-  });
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
-  if (user.verificationStatus === "verified") {
-    res.status(409).json({ error: "Already verified" });
-    return;
-  }
-
-  const url = buildPersonaHostedUrl(userId);
-
-  // Mark pending so UI can surface "review in progress" without waiting for
-  // the first webhook. If the user never completes the flow, the status stays
-  // at `pending` — this is intentional (matches Persona's own semantics).
-  await prisma.user.update({
-    where: { id: userId },
-    data: { verificationStatus: "pending" },
-  });
-
-  res.json({ url, referenceId: userId });
-});
-
-/**
- * GET /v1/me/verification/native-init — Persona Inquiry SDK config for the
- * native iOS client (IOS_APP_ROADMAP task 0.11). JWT twin of the Mini App's
- * `/v1/verification/mini-app/init`: same fields, same pending flip, same
- * trust boundary (only the HMAC webhook / pull-fallback pipeline can ever
- * write `verified`/`rejected`).
+ * GET /v1/me/verification/native-init — mint a Face Liveness session plus the
+ * short-lived, single-action AWS credentials the on-device component uses to
+ * stream its video. Flips `verificationStatus` to `pending`.
  */
 verificationRouter.get(
   "/native-init",
-  urlLimiter,
+  initLimiter,
   async (req: Request, res: Response): Promise<void> => {
-    if (
-      !env.ENABLE_PERSONA_VERIFICATION ||
-      !env.PERSONA_TEMPLATE_ID ||
-      !env.PERSONA_ENVIRONMENT_ID
-    ) {
-      res.status(503).json({ error: "Verification feature not configured" });
-      return;
+    const begun = await beginLivenessCheck(req.userId!);
+    if (!begun.ok) {
+      switch (begun.error) {
+        case "user_not_found":
+          res.status(404).json({ error: "User not found" });
+          return;
+        case "already_verified":
+          res.status(409).json({ error: "Already verified" });
+          return;
+        case "not_configured":
+          res.status(503).json({ error: "Verification feature not configured" });
+          return;
+        default:
+          res.status(503).json({ error: "Verification provider unavailable" });
+          return;
+      }
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: req.userId! },
-      select: { id: true, language: true, verificationStatus: true },
-    });
-    if (!user) {
-      res.status(404).json({ error: "User not found" });
-      return;
-    }
-    if (user.verificationStatus === "verified") {
-      res.status(409).json({ error: "Already verified" });
-      return;
-    }
-
-    await prisma.user
-      .update({ where: { id: user.id }, data: { verificationStatus: "pending" } })
-      .catch((err) => {
-        console.warn(`[verification] failed to mark pending for ${user.id}:`, err);
-      });
-
-    const language: Language = user.language ?? "en";
     res.json({
-      referenceId: user.id,
-      templateId: env.PERSONA_TEMPLATE_ID,
-      environmentId: env.PERSONA_ENVIRONMENT_ID,
-      language,
+      sessionId: begun.sessionId,
+      region: begun.region,
+      credentials: begun.credentials,
+      language: begun.language,
     });
   },
 );
 
 /**
- * POST /v1/me/verification/native-event — terminal callback from the native
- * Persona SDK. `complete` CAS-writes `personaInquiryId` and fires the
- * pull-fallback pipeline (which itself trusts only Persona's REST answer);
- * `cancel`/`error` are logged. Never writes `verified`/`rejected` directly.
+ * POST /v1/me/verification/native-event — the detector finished.
+ *
+ * `complete` reads AWS's verdict in-request (the session expires 3 minutes
+ * after `native-init`, so there is no later chance) and starts the face-match
+ * pipeline on a pass. `cancel`/`error` are logged only. The response's
+ * `outcome` tells the app whether to show "checking your photos" or "try
+ * again"; the terminal result arrives via push / `GET /v1/me/verification`.
  */
 verificationRouter.post(
   "/native-event",
   async (req: Request, res: Response): Promise<void> => {
     const body = req.body as
-      | { kind?: unknown; inquiryId?: unknown; message?: unknown }
+      | { kind?: unknown; sessionId?: unknown; message?: unknown }
       | undefined;
     const kind = body?.kind;
-    const inquiryId =
-      typeof body?.inquiryId === "string" && body.inquiryId.length > 0
-        ? body.inquiryId.slice(0, 128)
+    const sessionId =
+      typeof body?.sessionId === "string" && body.sessionId.length > 0
+        ? body.sessionId.slice(0, 64)
         : null;
     const message = typeof body?.message === "string" ? body.message.slice(0, 512) : null;
 
@@ -140,48 +98,37 @@ verificationRouter.post(
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: req.userId! },
-      select: { id: true, personaInquiryId: true },
-    });
-    if (!user) {
-      res.status(404).json({ error: "User not found" });
-      return;
-    }
+    const userId = req.userId!;
 
     if (kind === "cancel" || kind === "error") {
-      console.warn(`[verification] native SDK ${kind}`, { userId: user.id, message });
+      console.warn(`[verification] native detector ${kind}`, { userId, message });
       res.json({ ok: true });
       return;
     }
 
-    if (inquiryId && user.personaInquiryId === null) {
-      const updated = await prisma.user.updateMany({
-        where: { id: user.id, personaInquiryId: null },
-        data: { personaInquiryId: inquiryId },
-      });
-      if (updated.count === 0) {
-        console.warn("[verification] personaInquiryId already set, skipping write", {
-          userId: user.id,
-          inquiryId,
-        });
-      }
+    if (!sessionId) {
+      res.status(400).json({ error: "missing-session-id" });
+      return;
     }
 
-    // Pull-fallback so the outcome lands even when the HMAC webhook is
-    // delayed. Needs the bot Api for the pipeline's Telegram-side effects;
-    // during boot races the webhook remains the guaranteed path.
+    // The pipeline needs the bot API (Telegram-hosted profile photos, outcome
+    // DMs). During a boot race it may not exist yet — better to fail this
+    // request, which the user can simply re-run, than to consume a passing
+    // liveness check we cannot act on.
     const api = getBotApi();
-    if (api) {
-      void pullVerificationStatus(user.id, api).catch((err) => {
-        console.error("[verification] native pullVerificationStatus threw", {
-          userId: user.id,
-          inquiryId,
-          err,
-        });
-      });
+    if (!api) {
+      res.status(503).json({ error: "Verification temporarily unavailable" });
+      return;
     }
 
-    res.json({ ok: true });
+    const completed = await completeLivenessCheck(userId, sessionId, api);
+    if (!completed.ok) {
+      res
+        .status(completed.error === "user_not_found" ? 404 : 503)
+        .json({ error: completed.error.replace(/_/g, "-") });
+      return;
+    }
+
+    res.json({ ok: true, outcome: completed.outcome });
   },
 );

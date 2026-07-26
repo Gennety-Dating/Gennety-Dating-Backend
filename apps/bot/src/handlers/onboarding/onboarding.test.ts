@@ -102,10 +102,7 @@ vi.mock("../../config.js", () => ({
     CUSTOM_EMOJI_LIKE_ID: "",
     CUSTOM_EMOJI_DISLIKE_ID: "",
     CUSTOM_EMOJI_MENU_ID: "",
-    ENABLE_PERSONA_VERIFICATION: true,
-    PERSONA_TEMPLATE_ID: "tmpl-test",
-    PERSONA_ENVIRONMENT_ID: "env-test",
-    PERSONA_HOSTED_URL_BASE: "https://withpersona.test/verify",
+    FACE_LIVENESS_ENABLED: true,
     BOT_USERNAME: "gennetytestbot",
     WEBAPP_URL: "https://test.invalid/calendar",
     TICKET_FEATURE_ENABLED: true,
@@ -2034,31 +2031,31 @@ describe("sendVerificationCTABare", () => {
     // promises one — it only frames the ELO cost of skipping.
     expect(api.sendMessage.mock.calls[0]?.[1]).not.toContain("Date Ticket");
     expect(api.sendMessage.mock.calls[0]?.[1]).toContain("ELO");
-    // Make sure we're NOT serving the legacy Persona URL or the legacy
-    // verify:check callback — both should be gone from the CTA surface.
+    // The button is always a Mini App `web_app`, never a plain URL — Face
+    // Liveness runs in our own page and there is no hosted flow to link to.
     expect(keyboard[0]?.[0]?.url).toBeUndefined();
     // The way back to the photo manager, for a user who now realises the
     // photos they uploaded are not of them.
     expect(keyboard[1]?.[0]?.callback_data).toBe(VERIFY_PHOTOS_CALLBACK);
     expect(keyboard[2]?.[0]?.callback_data).toBe(VERIFY_SKIP_CALLBACK);
     // Side-effect: status flipped to `pending` so the rest of the bot can
-    // surface "review in progress" without waiting on the first Persona event.
+    // surface "review in progress" before the check even starts.
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: "user-uuid" },
       data: { verificationStatus: "pending" },
     });
   });
 
-  it("falls back to hosted Persona URL when WEBAPP_URL is the example.invalid placeholder", async () => {
+  it("refuses to send the CTA when WEBAPP_URL is the example.invalid placeholder", async () => {
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "user-uuid",
     });
     (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
     const api = { sendMessage: vi.fn().mockResolvedValue(undefined) };
 
-    // Temporarily flip the env mock to the dev-default placeholder. The
-    // production prefix check is the only differentiator between web_app
-    // and hosted-URL paths — see sendVerificationCTABare.
+    // The Persona era fell back to a hosted URL here. Face Liveness runs
+    // inside our own Mini App, so without a real host there is nowhere to
+    // send the user — the CTA must refuse rather than render a dead button.
     const cfg = (await import("../../config.js")) as unknown as {
       env: Record<string, unknown>;
     };
@@ -2066,14 +2063,8 @@ describe("sendVerificationCTABare", () => {
     cfg.env.WEBAPP_URL = "https://example.invalid/calendar";
     try {
       const sent = await sendVerificationCTABare(api as any, 12345, 12345n, "en");
-      expect(sent).toBe(true);
-      const [, , options] = api.sendMessage.mock.calls[0]!;
-      const keyboard = options.reply_markup.inline_keyboard;
-      expect(keyboard[0]?.[0]?.url).toContain("withpersona.test");
-      expect(keyboard[0]?.[0]?.url).toContain("start%3Dverify_done");
-      expect(keyboard[0]?.[0]?.web_app).toBeUndefined();
-      expect(keyboard[1]?.[0]?.callback_data).toBe(VERIFY_PHOTOS_CALLBACK);
-      expect(keyboard[2]?.[0]?.callback_data).toBe(VERIFY_SKIP_CALLBACK);
+      expect(sent).toBe(false);
+      expect(api.sendMessage).not.toHaveBeenCalled();
     } finally {
       cfg.env.WEBAPP_URL = prev;
     }

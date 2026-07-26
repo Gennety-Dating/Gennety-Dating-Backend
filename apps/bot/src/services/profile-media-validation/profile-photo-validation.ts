@@ -37,7 +37,6 @@ export async function validateUserProfilePhoto(
     select: {
       verificationStatus: true,
       verifiedSelfiePath: true,
-      personaInquiryId: true,
       profile: {
         select: {
           photos: true,
@@ -49,14 +48,17 @@ export async function validateUserProfilePhoto(
   });
   if (!user) return unavailable();
 
-  // Identity is enforced ONLY against the Persona-captured selfie (our ground
+  // Identity is enforced ONLY against the liveness-captured selfie (our ground
   // truth). Before verification we deliberately do NOT compare an uploaded
   // photo to any self-uploaded "anchor": cross-photo CompareFaces was
   // brittle (same person scoring below threshold on a different angle / light)
-  // and stranded honest users with zero accepted photos. Persona verification
+  // and stranded honest users with zero accepted photos. Liveness verification
   // is the real identity gate; an unverified user already carries the Elo
   // penalty and is re-checked against the selfie on every later photo edit.
   const resolvedReference = await resolveVerifiedIdentityReference(user);
+  if (resolvedReference.kind === "reference_expired") {
+    return { ok: false, reason: "reference_expired", retryable: false };
+  }
   if (resolvedReference.kind === "unavailable") return unavailable();
   const identityReference =
     resolvedReference.kind === "available" ? resolvedReference.buffer : null;

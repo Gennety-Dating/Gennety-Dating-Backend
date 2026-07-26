@@ -1,25 +1,21 @@
 /**
  * Integration tests for the Verification Mini App API
- * (`/v1/verification/mini-app/*`).
+ * (`/v1/verification/mini-app/*`), now backed by AWS Rekognition Face Liveness.
  *
- * Same shape as location.test.ts — real Express + supertest, mocked Prisma
- * and the verification-pipeline pull-fallback helper. We verify:
- *   - TMA initData auth on both endpoints (missing / wrong scheme / wrong token).
- *   - GET /init 503s when Persona feature flag is off OR when template/env ids are missing.
- *   - GET /init 409s when the user is already verified.
- *   - GET /init flips verificationStatus to `pending` on the happy path
- *     and returns the Persona SDK config blob.
- *   - POST /event invalid `kind` returns 400.
- *   - POST /event `complete` writes personaInquiryId (idempotent CAS on null)
- *     and triggers `pullVerificationStatus` exactly once.
- *   - POST /event `complete` second time without overwriting an existing
- *     personaInquiryId — the CAS is enforced via `updateMany` with `null` filter.
- *   - POST /event `cancel` does NOT change verificationStatus or call the pipeline.
- *   - POST /event `error` does NOT change verificationStatus or call the pipeline.
- *
- * Trust boundary kept invisible to this layer: even on `complete`, the route
- * only updates personaInquiryId and triggers the existing pull-fallback —
- * which itself only writes `verified` after Persona's REST API says approved.
+ * Same shape as location.test.ts — real Express + supertest, mocked Prisma and
+ * mocked `liveness-flow` (the shared service both client surfaces call). We
+ * verify:
+ *   - TMA initData auth on both endpoints (missing / wrong token).
+ *   - GET /init maps every `beginLivenessCheck` failure to the right status
+ *     (503 not-configured / 503 provider / 404 / 409 already-verified).
+ *   - GET /init returns the session + the short-lived AWS credentials the
+ *     on-device detector needs.
+ *   - POST /event rejects an unknown `kind`, and rejects `complete` without a
+ *     sessionId (we cannot read a verdict without one).
+ *   - POST /event `complete` settles the check IN-REQUEST — the session dies 3
+ *     minutes after /init, so this is the only chance to read the result.
+ *   - POST /event surfaces the retry outcome without touching verification.
+ *   - POST /event `cancel` / `error` never settle anything.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
@@ -28,38 +24,36 @@ import { createHmac } from "node:crypto";
 
 const BOT_TOKEN = "123456:test-bot-token-for-verification-mini-app";
 
-vi.mock("../config.js", () => ({
-  env: {
-    BOT_TOKEN,
-    ENABLE_PERSONA_VERIFICATION: true,
-    PERSONA_TEMPLATE_ID: "itmpl_test_template",
-    PERSONA_ENVIRONMENT_ID: "env_test_environment",
-  },
-}));
+vi.mock("../config.js", () => ({ env: { BOT_TOKEN } }));
 
 const userFindUnique = vi.fn();
-const userUpdate = vi.fn();
-const userUpdateMany = vi.fn();
 vi.mock("@gennety/db", () => ({
-  prisma: {
-    user: {
-      findUnique: userFindUnique,
-      update: userUpdate,
-      updateMany: userUpdateMany,
-    },
-  },
+  prisma: { user: { findUnique: userFindUnique } },
 }));
 
-const pullVerificationStatus = vi.fn().mockResolvedValue({ kind: "still_pending" });
-vi.mock("../services/verification-pipeline.js", () => ({
-  pullVerificationStatus,
+const beginLivenessCheck = vi.fn();
+const completeLivenessCheck = vi.fn();
+vi.mock("../services/liveness-flow.js", () => ({
+  beginLivenessCheck,
+  completeLivenessCheck,
 }));
+
+const runStatusSequence = vi.fn().mockResolvedValue(undefined);
+vi.mock("../services/ai-stream.js", () => ({ runStatusSequence }));
 
 const { createVerificationMiniAppRouter } = await import(
   "./routes/verification-mini-app.js"
 );
 
 const fakeApi = {} as Parameters<typeof createVerificationMiniAppRouter>[0];
+
+const CREDENTIALS = {
+  accessKeyId: "ASIA_TEMP",
+  secretAccessKey: "temp-secret",
+  sessionToken: "temp-token",
+  expiration: "2026-07-26T12:15:00.000Z",
+};
+const SESSION_ID = "11111111-2222-3333-4444-555555555555";
 
 function buildApp() {
   const app = express();
@@ -96,21 +90,24 @@ function signInitData(
   return params.toString();
 }
 
-beforeEach(async () => {
+function auth(): string {
+  return `tma ${signInitData(BOT_TOKEN)}`;
+}
+
+beforeEach(() => {
   userFindUnique.mockReset();
-  userUpdate.mockReset();
-  userUpdateMany.mockReset();
-  pullVerificationStatus.mockReset();
-  pullVerificationStatus.mockResolvedValue({ kind: "still_pending" });
-  // The route flips verificationStatus to `pending`; let it succeed by default.
-  userUpdate.mockResolvedValue({});
-  // Re-mock the env between tests so cases that disable Persona stay scoped.
-  const cfg = (await import("../config.js")) as unknown as {
-    env: Record<string, unknown>;
-  };
-  cfg.env.ENABLE_PERSONA_VERIFICATION = true;
-  cfg.env.PERSONA_TEMPLATE_ID = "itmpl_test_template";
-  cfg.env.PERSONA_ENVIRONMENT_ID = "env_test_environment";
+  beginLivenessCheck.mockReset();
+  completeLivenessCheck.mockReset();
+  runStatusSequence.mockClear();
+  userFindUnique.mockResolvedValue({ id: "uid-1", language: "en" });
+  beginLivenessCheck.mockResolvedValue({
+    ok: true,
+    sessionId: SESSION_ID,
+    region: "eu-central-1",
+    credentials: CREDENTIALS,
+    language: "en",
+  });
+  completeLivenessCheck.mockResolvedValue({ ok: true, outcome: "processing" });
 });
 
 describe("GET /v1/verification/mini-app/init", () => {
@@ -120,101 +117,61 @@ describe("GET /v1/verification/mini-app/init", () => {
   });
 
   it("returns 401 when initData was signed by a different bot token", async () => {
-    const initData = signInitData("999:other-token");
     const res = await request(buildApp())
       .get("/v1/verification/mini-app/init")
-      .set("Authorization", `tma ${initData}`);
+      .set("Authorization", `tma ${signInitData("999:other-token")}`);
     expect(res.status).toBe(401);
-  });
-
-  it("returns 503 when the Persona feature flag is off", async () => {
-    const cfg = (await import("../config.js")) as unknown as {
-      env: Record<string, unknown>;
-    };
-    cfg.env.ENABLE_PERSONA_VERIFICATION = false;
-    const initData = signInitData(BOT_TOKEN);
-    const res = await request(buildApp())
-      .get("/v1/verification/mini-app/init")
-      .set("Authorization", `tma ${initData}`);
-    expect(res.status).toBe(503);
-    expect(userFindUnique).not.toHaveBeenCalled();
-  });
-
-  it("returns 503 when PERSONA_TEMPLATE_ID is empty (half-configured deploy)", async () => {
-    const cfg = (await import("../config.js")) as unknown as {
-      env: Record<string, unknown>;
-    };
-    cfg.env.PERSONA_TEMPLATE_ID = "";
-    const initData = signInitData(BOT_TOKEN);
-    const res = await request(buildApp())
-      .get("/v1/verification/mini-app/init")
-      .set("Authorization", `tma ${initData}`);
-    expect(res.status).toBe(503);
   });
 
   it("returns 404 when the Telegram user has no DB row", async () => {
     userFindUnique.mockResolvedValueOnce(null);
-    const initData = signInitData(BOT_TOKEN);
     const res = await request(buildApp())
       .get("/v1/verification/mini-app/init")
-      .set("Authorization", `tma ${initData}`);
+      .set("Authorization", auth());
     expect(res.status).toBe(404);
     expect(res.body.error).toBe("user-not-found");
+    expect(beginLivenessCheck).not.toHaveBeenCalled();
   });
 
-  it("returns 409 when the user is already verified — no Persona re-launch", async () => {
-    userFindUnique.mockResolvedValueOnce({
-      id: "uid-1",
-      language: "en",
-      verificationStatus: "verified",
-    });
-    const initData = signInitData(BOT_TOKEN);
+  it("returns the session id, region and short-lived credentials", async () => {
     const res = await request(buildApp())
       .get("/v1/verification/mini-app/init")
-      .set("Authorization", `tma ${initData}`);
-    expect(res.status).toBe(409);
-    expect(res.body.error).toBe("already-verified");
-    expect(userUpdate).not.toHaveBeenCalled();
-  });
+      .set("Authorization", auth());
 
-  it("flips verificationStatus to `pending` and returns Persona SDK config", async () => {
-    userFindUnique.mockResolvedValueOnce({
-      id: "uid-1",
-      language: "ru",
-      verificationStatus: "unverified",
-    });
-    const initData = signInitData(BOT_TOKEN);
-    const res = await request(buildApp())
-      .get("/v1/verification/mini-app/init")
-      .set("Authorization", `tma ${initData}`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
-      referenceId: "uid-1",
-      templateId: "itmpl_test_template",
-      environmentId: "env_test_environment",
-      language: "ru",
+      sessionId: SESSION_ID,
+      region: "eu-central-1",
+      credentials: CREDENTIALS,
+      language: "en",
     });
-    expect(userUpdate).toHaveBeenCalledTimes(1);
-    const updateArg = userUpdate.mock.calls[0]![0] as {
-      where: { id: string };
-      data: Record<string, unknown>;
-    };
-    expect(updateArg.where.id).toBe("uid-1");
-    expect(updateArg.data).toEqual({ verificationStatus: "pending" });
+    expect(beginLivenessCheck).toHaveBeenCalledWith("uid-1");
   });
 
-  it("defaults missing language to `en` (mirrors `User.language ?? \"en\"` everywhere)", async () => {
-    userFindUnique.mockResolvedValueOnce({
-      id: "uid-1",
-      language: null,
-      verificationStatus: "unverified",
-    });
-    const initData = signInitData(BOT_TOKEN);
+  it("returns 503 when the deploy is half-configured", async () => {
+    beginLivenessCheck.mockResolvedValueOnce({ ok: false, error: "not_configured" });
     const res = await request(buildApp())
       .get("/v1/verification/mini-app/init")
-      .set("Authorization", `tma ${initData}`);
-    expect(res.status).toBe(200);
-    expect(res.body.language).toBe("en");
+      .set("Authorization", auth());
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe("not-configured");
+  });
+
+  it("returns 503 when AWS could not mint a session", async () => {
+    beginLivenessCheck.mockResolvedValueOnce({ ok: false, error: "provider" });
+    const res = await request(buildApp())
+      .get("/v1/verification/mini-app/init")
+      .set("Authorization", auth());
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 409 when the user is already verified — no session is burned", async () => {
+    beginLivenessCheck.mockResolvedValueOnce({ ok: false, error: "already_verified" });
+    const res = await request(buildApp())
+      .get("/v1/verification/mini-app/init")
+      .set("Authorization", auth());
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("already-verified");
   });
 });
 
@@ -222,16 +179,14 @@ describe("POST /v1/verification/mini-app/event", () => {
   it("returns 401 when Authorization is missing", async () => {
     const res = await request(buildApp())
       .post("/v1/verification/mini-app/event")
-      .send({ kind: "complete" });
+      .send({ kind: "complete", sessionId: SESSION_ID });
     expect(res.status).toBe(401);
   });
 
   it("returns 400 on an invalid kind", async () => {
-    const initData = signInitData(BOT_TOKEN);
-    userFindUnique.mockResolvedValueOnce({ id: "uid-1", personaInquiryId: null });
     const res = await request(buildApp())
       .post("/v1/verification/mini-app/event")
-      .set("Authorization", `tma ${initData}`)
+      .set("Authorization", auth())
       .send({ kind: "🐢" });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("invalid-kind");
@@ -239,78 +194,79 @@ describe("POST /v1/verification/mini-app/event", () => {
 
   it("returns 404 when the Telegram user has no DB row", async () => {
     userFindUnique.mockResolvedValueOnce(null);
-    const initData = signInitData(BOT_TOKEN);
     const res = await request(buildApp())
       .post("/v1/verification/mini-app/event")
-      .set("Authorization", `tma ${initData}`)
-      .send({ kind: "complete", inquiryId: "inq_x" });
+      .set("Authorization", auth())
+      .send({ kind: "complete", sessionId: SESSION_ID });
     expect(res.status).toBe(404);
-    expect(pullVerificationStatus).not.toHaveBeenCalled();
+    expect(completeLivenessCheck).not.toHaveBeenCalled();
   });
 
-  it("`complete` writes personaInquiryId on null-CAS and triggers pull-fallback", async () => {
-    userFindUnique.mockResolvedValueOnce({ id: "uid-1", personaInquiryId: null });
-    userUpdateMany.mockResolvedValueOnce({ count: 1 });
-    const initData = signInitData(BOT_TOKEN);
+  it("returns 400 on `complete` without a sessionId", async () => {
+    // Without the session id there is no verdict to read, and the session is
+    // already counting down its 3 minutes — fail loudly rather than silently.
     const res = await request(buildApp())
       .post("/v1/verification/mini-app/event")
-      .set("Authorization", `tma ${initData}`)
-      .send({ kind: "complete", inquiryId: "inq_abc", status: "approved" });
+      .set("Authorization", auth())
+      .send({ kind: "complete" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("missing-session-id");
+    expect(completeLivenessCheck).not.toHaveBeenCalled();
+  });
+
+  it("`complete` settles the check in-request and reports `processing`", async () => {
+    const res = await request(buildApp())
+      .post("/v1/verification/mini-app/event")
+      .set("Authorization", auth())
+      .send({ kind: "complete", sessionId: SESSION_ID });
 
     expect(res.status).toBe(200);
-    expect(userUpdateMany).toHaveBeenCalledTimes(1);
-    const casArg = userUpdateMany.mock.calls[0]![0] as {
-      where: Record<string, unknown>;
-      data: Record<string, unknown>;
-    };
-    expect(casArg.where).toEqual({ id: "uid-1", personaInquiryId: null });
-    expect(casArg.data).toEqual({ personaInquiryId: "inq_abc" });
-    // Wait for the void Promise to settle before asserting on the pipeline call.
-    await new Promise((r) => setTimeout(r, 0));
-    expect(pullVerificationStatus).toHaveBeenCalledTimes(1);
-    expect(pullVerificationStatus).toHaveBeenCalledWith("uid-1", fakeApi);
+    expect(res.body).toEqual({ ok: true, outcome: "processing" });
+    // Awaited, not fire-and-forget: the AWS session (and its reference image)
+    // expires 3 minutes after /init, so the verdict must be read now.
+    expect(completeLivenessCheck).toHaveBeenCalledWith("uid-1", SESSION_ID, fakeApi);
+    expect(runStatusSequence).toHaveBeenCalledTimes(1);
   });
 
-  it("`complete` skips the personaInquiryId write when it's already set (idempotent)", async () => {
-    userFindUnique.mockResolvedValueOnce({
-      id: "uid-1",
-      personaInquiryId: "inq_prior",
-    });
-    const initData = signInitData(BOT_TOKEN);
+  it("`complete` reports `retry` without narrating face-match work", async () => {
+    completeLivenessCheck.mockResolvedValueOnce({ ok: true, outcome: "retry" });
     const res = await request(buildApp())
       .post("/v1/verification/mini-app/event")
-      .set("Authorization", `tma ${initData}`)
-      .send({ kind: "complete", inquiryId: "inq_new" });
+      .set("Authorization", auth())
+      .send({ kind: "complete", sessionId: SESSION_ID });
 
     expect(res.status).toBe(200);
-    expect(userUpdateMany).not.toHaveBeenCalled();
-    await new Promise((r) => setTimeout(r, 0));
-    expect(pullVerificationStatus).toHaveBeenCalledTimes(1);
+    expect(res.body).toEqual({ ok: true, outcome: "retry" });
+    // Nothing is being checked, and the flow already DM'd the retry prompt.
+    expect(runStatusSequence).not.toHaveBeenCalled();
   });
 
-  it("`cancel` does not call the pipeline or write inquiryId", async () => {
-    userFindUnique.mockResolvedValueOnce({ id: "uid-1", personaInquiryId: null });
-    const initData = signInitData(BOT_TOKEN);
+  it("surfaces a provider failure as 503", async () => {
+    completeLivenessCheck.mockResolvedValueOnce({ ok: false, error: "provider" });
     const res = await request(buildApp())
       .post("/v1/verification/mini-app/event")
-      .set("Authorization", `tma ${initData}`)
+      .set("Authorization", auth())
+      .send({ kind: "complete", sessionId: SESSION_ID });
+    expect(res.status).toBe(503);
+  });
+
+  it("`cancel` settles nothing", async () => {
+    const res = await request(buildApp())
+      .post("/v1/verification/mini-app/event")
+      .set("Authorization", auth())
       .send({ kind: "cancel" });
 
     expect(res.status).toBe(200);
-    expect(userUpdateMany).not.toHaveBeenCalled();
-    expect(pullVerificationStatus).not.toHaveBeenCalled();
+    expect(completeLivenessCheck).not.toHaveBeenCalled();
   });
 
-  it("`error` does not call the pipeline or write inquiryId", async () => {
-    userFindUnique.mockResolvedValueOnce({ id: "uid-1", personaInquiryId: null });
-    const initData = signInitData(BOT_TOKEN);
+  it("`error` settles nothing", async () => {
     const res = await request(buildApp())
       .post("/v1/verification/mini-app/event")
-      .set("Authorization", `tma ${initData}`)
+      .set("Authorization", auth())
       .send({ kind: "error", message: "camera denied" });
 
     expect(res.status).toBe(200);
-    expect(userUpdateMany).not.toHaveBeenCalled();
-    expect(pullVerificationStatus).not.toHaveBeenCalled();
+    expect(completeLivenessCheck).not.toHaveBeenCalled();
   });
 });

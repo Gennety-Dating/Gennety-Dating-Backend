@@ -3,15 +3,20 @@
  * entry point (called from the bot/mobile photo handlers and Aether's
  * `attach_profile_photo` tool). Verifies the three observable branches:
  *   - user missing            → `{ kind: "user_missing" }`, no DB write
- *   - no persona inquiry yet   → `{ kind: "no_inquiry" }`, no DB write
- *   - inquiry present          → resets the `(personaInquiryId, faceMatchedAt)`
+ *   - never verified          → `{ kind: "no_inquiry" }`, no DB write
+ *   - reference selfie gone   → `{ kind: "reference_expired" }`, no DB write.
+ *                               Critically it must return BEFORE the `pending`
+ *                               flip, or deleting a photo after the 90-day
+ *                               scrub would knock a verified user out of the
+ *                               match pool over a check we cannot run.
+ *   - reference present       → resets the `(personaInquiryId, faceMatchedAt)`
  *                                idempotency marker + flips status to `pending`,
  *                                then kicks off the pipeline (fire-and-forget)
  *
  * The pipeline the `started` branch launches is left to run against the same
  * mocked Prisma; giving the user an empty photo array makes it short-circuit to
- * `pending_review` before any Persona/Rekognition/storage call, so the test
- * needs no network and no extra module mocks.
+ * `pending_review` before any Rekognition/storage call, so the test needs no
+ * network and no extra module mocks.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -47,6 +52,7 @@ function fullUserRow(overrides: Record<string, unknown> = {}) {
     gender: null,
     verificationStatus: "pending",
     personaInquiryId: "inq_x",
+    verifiedSelfiePath: "user-1/selfie.jpg",
     faceMatchedAt: null,
     // Empty photos → pipeline short-circuits to pending_review offline.
     profile: { photos: [], eloSeededAt: null },
@@ -70,12 +76,28 @@ describe("triggerVerificationRerun", () => {
     expect(userUpdateMany).not.toHaveBeenCalled();
   });
 
-  it("returns no_inquiry and writes nothing when the user never ran Persona", async () => {
+  it("returns no_inquiry and writes nothing when the user never ran a check", async () => {
     userFindUnique.mockResolvedValueOnce({ personaInquiryId: null });
 
     const result = await triggerVerificationRerun("user-1", fakeApi);
 
     expect(result).toEqual({ kind: "no_inquiry" });
+    expect(userUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("returns reference_expired WITHOUT touching status once the selfie is scrubbed", async () => {
+    // The 90-day scrub cleared `verifiedSelfiePath` and AWS cannot re-issue it.
+    // Flipping this user to `pending` here would silently drop a verified,
+    // active user out of matching because they deleted a photo.
+    userFindUnique.mockResolvedValueOnce({
+      personaInquiryId: "inq_x",
+      verificationStatus: "verified",
+      verifiedSelfiePath: null,
+    });
+
+    const result = await triggerVerificationRerun("user-1", fakeApi);
+
+    expect(result).toEqual({ kind: "reference_expired" });
     expect(userUpdateMany).not.toHaveBeenCalled();
   });
 
@@ -87,9 +109,9 @@ describe("triggerVerificationRerun", () => {
 
     const result = await triggerVerificationRerun("user-1", fakeApi);
 
-    expect(result).toEqual({ kind: "started", inquiryId: "inq_x" });
-    // The reset is pinned on the current inquiry id so a concurrent webhook
-    // that moved the user to a newer inquiry isn't clobbered.
+    expect(result).toEqual({ kind: "started", sessionId: "inq_x" });
+    // The reset is pinned on the current session id so a concurrent liveness
+    // check that moved the user to a newer session isn't clobbered.
     expect(userUpdateMany).toHaveBeenCalledWith({
       where: { id: "user-1", personaInquiryId: "inq_x" },
       data: { faceMatchedAt: null, verificationStatus: "pending" },

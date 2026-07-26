@@ -731,6 +731,15 @@ meRouter.post(
         });
         return;
       }
+      if (gate.kind === "reference_expired") {
+        // Not a 503: retrying achieves nothing. The client should route the
+        // user back into verification, then re-upload.
+        res.status(409).json({
+          error: "Verification selfie expired — verify again to change your photos",
+          code: "reference_expired",
+        });
+        return;
+      }
       if (gate.kind === "unavailable") {
         res.status(503).json({ error: "Identity verification unavailable, please retry" });
         return;
@@ -845,6 +854,8 @@ function photoValidationApiMessage(reason: string): string {
     case "identity_mismatch":
     case "identity_uncertain":
       return "All photos must belong to the same person";
+    case "reference_expired":
+      return "Your verification selfie has expired — run verification again to change your photos";
     default:
       return "Media validation is temporarily unavailable";
   }

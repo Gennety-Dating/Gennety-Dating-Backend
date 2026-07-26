@@ -11,7 +11,7 @@ import {
 
 /**
  * Photo-upload gate: enforces that any photo a verified user adds to their
- * profile actually depicts the same person as the verified Persona selfie.
+ * profile actually depicts the same person as the verified liveness selfie.
  *
  * Without this gate, the verification pipeline (Step 3) is a one-shot
  * check: a user could verify with an honest selfie, then swap in someone
@@ -21,9 +21,10 @@ import {
  *
  * Failure-mode policy:
  *   - User not verified → allow (no reference selfie to compare against).
- *   - Selfie expired (90-day retention scrubbed it) → re-fetch it from
- *     Persona for this comparison without retaining a new copy.
- *   - Rekognition / Supabase / Persona outage → fail closed and ask the
+ *   - Selfie scrubbed at 90 days → `reference_expired`. It cannot be
+ *     re-fetched (an AWS liveness session dies after 3 minutes), so the photo
+ *     is held and the user is asked for one more liveness check.
+ *   - Rekognition / Supabase outage → fail closed and ask the
  *     caller to retry; never publish a verified user's unchecked photo.
  *   - Photo doesn't match → BLOCK. The whole point of the gate.
  *   - Photo has no detectable face → BLOCK. Already gated by
@@ -34,6 +35,13 @@ import {
 export type GateOutcome =
   | { kind: "allowed"; score: number | null }
   | { kind: "blocked"; reason: "mismatch"; score: number }
+  /**
+   * The reference selfie was scrubbed at 90 days and cannot be re-fetched
+   * (AWS liveness sessions die after 3 minutes). Retrying the upload won't
+   * help — the user needs one more liveness check — so callers must say that
+   * instead of showing a generic "try again".
+   */
+  | { kind: "reference_expired" }
   | { kind: "unavailable" };
 
 export interface GateOptions {
@@ -47,7 +55,6 @@ export interface GateDeps {
   findUser: (userId: string) => Promise<{
     verificationStatus: string;
     verifiedSelfiePath: string | null;
-    personaInquiryId: string | null;
   } | null>;
   resolveIdentityReference: (
     user: VerifiedIdentityUser,
@@ -78,7 +85,6 @@ export async function gateProfilePhoto(
         select: {
           verificationStatus: true,
           verifiedSelfiePath: true,
-          personaInquiryId: true,
         },
       }),
     resolveIdentityReference: resolveVerifiedIdentityReference,
@@ -92,6 +98,9 @@ export async function gateProfilePhoto(
   const reference = await deps.resolveIdentityReference(user);
   if (reference.kind === "not_required") {
     return { kind: "allowed", score: null };
+  }
+  if (reference.kind === "reference_expired") {
+    return { kind: "reference_expired" };
   }
   if (reference.kind === "unavailable") {
     console.warn(`${LOG_PREFIX} verified selfie unavailable, failing closed`, {

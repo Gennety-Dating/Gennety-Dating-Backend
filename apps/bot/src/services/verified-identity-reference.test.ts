@@ -8,20 +8,11 @@ import {
 const VERIFIED_USER: VerifiedIdentityUser = {
   verificationStatus: "verified",
   verifiedSelfiePath: "user-1/selfie.jpg",
-  personaInquiryId: "inq_1",
 };
 
 function makeDeps(): VerifiedIdentityReferenceDeps {
   return {
     downloadSelfie: vi.fn(async () => Buffer.from("stored")),
-    fetchInquirySelfie: vi.fn(async () => ({
-      ok: true as const,
-      selfie: {
-        buffer: Buffer.from("persona"),
-        mime: "image/jpeg",
-        verificationId: "ver_1",
-      },
-    })),
   };
 }
 
@@ -35,7 +26,6 @@ describe("resolveVerifiedIdentityReference", () => {
 
     expect(result).toEqual({ kind: "not_required" });
     expect(deps.downloadSelfie).not.toHaveBeenCalled();
-    expect(deps.fetchInquirySelfie).not.toHaveBeenCalled();
   });
 
   it("uses the retained storage copy when available", async () => {
@@ -47,30 +37,27 @@ describe("resolveVerifiedIdentityReference", () => {
       buffer: Buffer.from("stored"),
       source: "storage",
     });
-    expect(deps.fetchInquirySelfie).not.toHaveBeenCalled();
   });
 
-  it("re-fetches from Persona after the retained copy was scrubbed", async () => {
+  it("reports reference_expired once the 90-day scrub cleared the path", async () => {
+    // Distinct from `unavailable` on purpose: AWS cannot re-issue the selfie
+    // (a liveness session dies after 3 minutes), so retrying is pointless and
+    // callers must ask for a fresh liveness check instead.
     const deps = makeDeps();
-    vi.mocked(deps.downloadSelfie).mockResolvedValue(null);
 
-    const result = await resolveVerifiedIdentityReference(VERIFIED_USER, deps);
+    const result = await resolveVerifiedIdentityReference(
+      { ...VERIFIED_USER, verifiedSelfiePath: null },
+      deps,
+    );
 
-    expect(result).toEqual({
-      kind: "available",
-      buffer: Buffer.from("persona"),
-      source: "persona",
-    });
-    expect(deps.fetchInquirySelfie).toHaveBeenCalledWith("inq_1");
+    expect(result).toEqual({ kind: "reference_expired" });
+    expect(deps.downloadSelfie).not.toHaveBeenCalled();
   });
 
-  it("fails closed when neither retained nor Persona selfie is available", async () => {
+  it("fails closed when storage should have the object but doesn't return it", async () => {
     const deps = makeDeps();
     vi.mocked(deps.downloadSelfie).mockResolvedValue(null);
-    vi.mocked(deps.fetchInquirySelfie).mockResolvedValue({
-      ok: false,
-      error: "api",
-    });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const result = await resolveVerifiedIdentityReference(VERIFIED_USER, deps);
 

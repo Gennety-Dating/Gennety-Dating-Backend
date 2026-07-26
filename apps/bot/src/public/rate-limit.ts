@@ -113,12 +113,6 @@ export const publicReadLimiter = make({
   message: { error: "Too many requests, try again later." },
 });
 
-/** Persona webhook ingress — protects raw-body parsing before global limits. */
-export const personaWebhookLimiter = make({
-  windowMs: 60_000,
-  limit: 60,
-  keyGenerator: (req): string => `persona-webhook:${ipKey(req)}`,
-});
 
 /** Public raster-tile proxy — enough for many map pans, bounded against proxy abuse. */
 export const mapTileLimiter = make({

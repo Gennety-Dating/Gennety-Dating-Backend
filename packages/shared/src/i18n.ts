@@ -183,7 +183,6 @@ const translations = {
     verifyReminderNudge:
       "Your profile is ready — verification is the only step left. It takes about a minute, and matching starts right after:",
     verifyBtnGo: "🟢 Verify now",
-    verifyBtnCheck: "I've finished verification",
     verifyBtnSkip: "⚪️ Skip for now",
     verifySkipNudgeCaption:
       "One sec — listen to this before you skip 👆",
@@ -204,20 +203,16 @@ const translations = {
     verifySkipped:
       "Skipped verification. You can run it later from the profile menu " +
       "to restore your ELO rating.",
-    verifyCheckPending:
-      "🔍 Persona has your verification but is still processing it. " +
-      "Give it a minute and tap the button again.",
-    verifyCheckNoInquiry:
-      "I don't see a verification attempt yet. Tap 🟢 Verify now first, " +
-      "complete the flow, then come back and tap this button.",
-    verifyCheckPersonaFailed:
-      "Verification didn't pass on Persona's side. Tap 🟢 Verify now " +
-      "to try again.",
     verifyCheckAlreadyDone:
       "Already processed — you should have gotten the result message above. " +
       "If something looks wrong, tap 🟢 Verify now to retry.",
-    verifyCheckInfraError:
-      "Couldn't reach the verification service just now. Try again in a moment.",
+    verifyLivenessRetry:
+      "Couldn't confirm it was really you that time — usually a shaky camera or " +
+      "low light, nothing to worry about. Tap 🟢 Verify now and give it another go.",
+    verifyReferenceExpired:
+      "We delete your verification selfie after 90 days, so there's nothing left " +
+      "here to check your new photos against. One more 10-second check and " +
+      "you're set — your profile stays live in the meantime:",
     verifyOutcomeVerified:
       "Verified ✨ Profile is live. I'll message you when I find a match.",
     verifyOutcomePendingReview:
@@ -225,16 +220,6 @@ const translations = {
     verifyOutcomeRejected:
       "⚠️ The photos in your profile don't appear to match the selfie we captured during verification.\n\n" +
       "If those photos aren't of you — upload your own and I'll re-check them automatically. If they are you, run verification again in better light.",
-    verifyAutoPollStarted:
-      "Got it. Grab a coffee ☕ — I'm cross-checking your selfie against your profile photos. " +
-      "Should take a minute or two.",
-    verifyAutoPollTimeout:
-      "Hmm, taking longer than usual. Tap the button below when you want me to check again.",
-    verifyAutoPollPersonaFailed:
-      "Verification didn't pass on Persona's side. Tap 🟢 Verify now to retry.",
-    verifyAutoPollInfraError:
-      "Couldn't reach the verification service. Try again in a moment.",
-    // Persona Embedded Mini App copy (verification.html)
     verifyMiniAppLoading: "Opening verification…",
     verifyMiniAppFinishing: "Almost done. Checking results…",
     verifyMiniAppError:
@@ -1070,7 +1055,6 @@ const translations = {
     verifyReminderNudge:
       "Твой профиль готов — остался только шаг верификации. Это займёт около минуты, и подбор пар начнётся сразу после:",
     verifyBtnGo: "🟢 Пройти верификацию",
-    verifyBtnCheck: "Я прошёл проверку",
     verifyBtnSkip: "⚪️ Пропустить пока",
     verifySkipNudgeCaption:
       "Секунду — послушай это, прежде чем пропустить 👆",
@@ -1091,20 +1075,16 @@ const translations = {
     verifySkipped:
       "Верификация пропущена. Можешь пройти её позже из меню профиля, " +
       "чтобы вернуть ELO-рейтинг.",
-    verifyCheckPending:
-      "🔍 Persona получила твою верификацию, но ещё обрабатывает её. " +
-      "Подожди минуту и нажми кнопку ещё раз.",
-    verifyCheckNoInquiry:
-      "Пока не вижу попытки верификации. Сначала нажми 🟢 Пройти верификацию, " +
-      "пройди флоу, потом возвращайся и нажми эту кнопку.",
-    verifyCheckPersonaFailed:
-      "Верификация не прошла на стороне Persona. Нажми 🟢 Пройти верификацию, " +
-      "чтобы попробовать ещё раз.",
     verifyCheckAlreadyDone:
       "Уже обработано — сообщение с результатом должно быть выше. " +
       "Если что-то пошло не так — нажми 🟢 Пройти верификацию ещё раз.",
-    verifyCheckInfraError:
-      "Не получилось достучаться до сервиса верификации. Попробуй ещё раз через минуту.",
+    verifyLivenessRetry:
+      "Не получилось убедиться, что это правда ты — обычно виноваты дрожащая " +
+      "камера или тусклый свет. Ничего страшного: нажми 🟢 Пройти верификацию и попробуй ещё раз.",
+    verifyReferenceExpired:
+      "Мы удаляем селфи с верификации через 90 дней, так что сверить новые фото " +
+      "уже не с чем. Ещё одна проверка на 10 секунд — и всё готово. Профиль пока " +
+      "остаётся активным:",
     verifyOutcomeVerified:
       "Проверка пройдена ✨ Профиль активен. Напишу, когда найду метч.",
     verifyOutcomePendingReview:
@@ -1112,16 +1092,6 @@ const translations = {
     verifyOutcomeRejected:
       "⚠️ Фото в профиле не совпали с селфи из верификации.\n\n" +
       "Если на них не ты — загрузи свои, и я перепроверю их автоматически. Если это всё-таки ты — пройди верификацию заново при хорошем свете.",
-    verifyAutoPollStarted:
-      "Принято. Хватай кофе ☕ — я сверяю твоё селфи с фото из профиля. " +
-      "Это займёт минуту-две.",
-    verifyAutoPollTimeout:
-      "Хм, дольше обычного. Нажми кнопку ниже, когда захочешь, чтобы я проверил ещё раз.",
-    verifyAutoPollPersonaFailed:
-      "Верификация не прошла на стороне Persona. Нажми 🟢 Пройти верификацию, чтобы попробовать ещё раз.",
-    verifyAutoPollInfraError:
-      "Не получилось достучаться до сервиса верификации. Попробуй ещё раз через минуту.",
-    // Persona Embedded Mini App copy (verification.html)
     verifyMiniAppLoading: "Открываем верификацию…",
     verifyMiniAppFinishing: "Готово. Проверяем результат…",
     verifyMiniAppError:
@@ -1944,7 +1914,6 @@ const translations = {
     verifyReminderNudge:
       "Твій профіль готовий — залишився тільки крок верифікації. Це займе близько хвилини, і підбір пар почнеться одразу після:",
     verifyBtnGo: "🟢 Пройти верифікацію",
-    verifyBtnCheck: "Я пройшов перевірку",
     verifyBtnSkip: "⚪️ Пропустити поки",
     verifySkipNudgeCaption:
       "Секунду — послухай це, перш ніж пропустити 👆",
@@ -1965,20 +1934,16 @@ const translations = {
     verifySkipped:
       "Верифікацію пропущено. Можеш пройти її пізніше з меню профілю, " +
       "щоб повернути ELO-рейтинг.",
-    verifyCheckPending:
-      "🔍 Persona отримала твою верифікацію, але ще обробляє її. " +
-      "Зачекай хвилину і натисни кнопку ще раз.",
-    verifyCheckNoInquiry:
-      "Поки не бачу спроби верифікації. Спочатку натисни 🟢 Пройти верифікацію, " +
-      "пройди флоу, потім повертайся і натисни цю кнопку.",
-    verifyCheckPersonaFailed:
-      "Верифікація не пройшла на стороні Persona. Натисни 🟢 Пройти верифікацію, " +
-      "щоб спробувати ще раз.",
     verifyCheckAlreadyDone:
       "Вже оброблено — повідомлення з результатом має бути вище. " +
       "Якщо щось не так — натисни 🟢 Пройти верифікацію ще раз.",
-    verifyCheckInfraError:
-      "Не вдалося достукатися до сервісу верифікації. Спробуй ще раз за хвилину.",
+    verifyLivenessRetry:
+      "Не вдалося переконатися, що це справді ти — зазвичай через тремтливу " +
+      "камеру або тьмяне світло. Нічого страшного: натисни 🟢 Пройти верифікацію і спробуй ще раз.",
+    verifyReferenceExpired:
+      "Ми видаляємо селфі з верифікації через 90 днів, тож звірити нові фото вже " +
+      "нема з чим. Ще одна перевірка на 10 секунд — і все готово. Профіль поки " +
+      "лишається активним:",
     verifyOutcomeVerified:
       "Перевірку пройдено ✨ Профіль активний. Напишу, коли знайду метч.",
     verifyOutcomePendingReview:
@@ -1986,16 +1951,6 @@ const translations = {
     verifyOutcomeRejected:
       "⚠️ Фото в профілі не збіглися з селфі з верифікації.\n\n" +
       "Якщо на них не ти — завантаж свої, і я перевірю їх автоматично. Якщо це все ж ти — пройди верифікацію заново при доброму освітленні.",
-    verifyAutoPollStarted:
-      "Прийнято. Хапай каву ☕ — я звіряю твоє селфі з фото у профілі. " +
-      "Це займе хвилину-дві.",
-    verifyAutoPollTimeout:
-      "Хм, довше ніж зазвичай. Натисни кнопку нижче, коли захочеш, щоб я перевірив ще раз.",
-    verifyAutoPollPersonaFailed:
-      "Верифікація не пройшла на стороні Persona. Натисни 🟢 Пройти верифікацію, щоб спробувати ще раз.",
-    verifyAutoPollInfraError:
-      "Не вдалося достукатися до сервісу верифікації. Спробуй ще раз за хвилину.",
-    // Persona Embedded Mini App copy (verification.html)
     verifyMiniAppLoading: "Відкриваємо верифікацію…",
     verifyMiniAppFinishing: "Готово. Перевіряємо результат…",
     verifyMiniAppError:
@@ -2749,7 +2704,6 @@ const deTranslations: TranslationTable = {
   verifyReminderNudge:
     "Dein Profil ist fertig — es fehlt nur noch die Verifizierung. Sie dauert etwa eine Minute, und das Matching startet direkt danach:",
   verifyBtnGo: "🟢 Jetzt verifizieren",
-  verifyBtnCheck: "Ich habe die Verifizierung abgeschlossen",
   verifyBtnSkip: "⚪️ Erstmal überspringen",
   verifySkipNudgeCaption:
     "Kurz — hör dir das an, bevor du überspringst 👆",
@@ -2770,19 +2724,17 @@ const deTranslations: TranslationTable = {
   verifySkipped:
     "Verifizierung übersprungen. Du kannst sie später im Profilmenü starten, " +
     "um dein ELO wiederherzustellen.",
-  verifyCheckPending:
-    "🔍 Persona hat deine Verifizierung, verarbeitet sie aber noch. " +
-    "Warte kurz und tippe dann nochmal auf den Button.",
-  verifyCheckNoInquiry:
-    "Ich sehe noch keinen Verifizierungsversuch. Tippe zuerst auf 🟢 Jetzt verifizieren, " +
-    "schließe den Flow ab und komm dann zurück.",
-  verifyCheckPersonaFailed:
-    "Die Verifizierung ist bei Persona fehlgeschlagen. Tippe auf 🟢 Jetzt verifizieren, " +
-    "um es erneut zu versuchen.",
   verifyCheckAlreadyDone:
     "Schon verarbeitet - du solltest die Ergebnisnachricht oben bekommen haben. " +
     "Wenn etwas falsch wirkt, tippe auf 🟢 Jetzt verifizieren, um es erneut zu versuchen.",
-  verifyCheckInfraError: "Der Verifizierungsdienst ist gerade nicht erreichbar. Versuch es gleich nochmal.",
+  verifyLivenessRetry:
+    "Wir konnten diesmal nicht bestätigen, dass du es wirklich bist - meist liegt " +
+    "es an einer wackeligen Kamera oder schwachem Licht. Kein Problem: tippe auf " +
+    "🟢 Jetzt verifizieren und versuch es noch einmal.",
+  verifyReferenceExpired:
+    "Wir löschen dein Verifizierungs-Selfie nach 90 Tagen, deshalb gibt es hier " +
+    "nichts mehr, womit wir deine neuen Fotos abgleichen könnten. Eine weitere " +
+    "10-Sekunden-Prüfung und du bist fertig - dein Profil bleibt solange online:",
   verifyOutcomeVerified:
     "Verifiziert ✨ Dein Profil ist live. Ich melde mich, wenn ich ein Match finde.",
   verifyOutcomePendingReview:
@@ -2790,14 +2742,6 @@ const deTranslations: TranslationTable = {
   verifyOutcomeRejected:
     "⚠️ Die Fotos in deinem Profil scheinen nicht zum Selfie aus der Verifizierung zu passen.\n\n" +
     "Wenn du darauf nicht zu sehen bist — lade eigene hoch, ich prüfe sie automatisch erneut. Wenn du es doch bist, starte die Verifizierung bei besserem Licht noch einmal.",
-  verifyAutoPollStarted:
-    "Verstanden. Hol dir einen Kaffee ☕ - ich vergleiche dein Selfie mit deinen Profilfotos. " +
-    "Das dauert ein bis zwei Minuten.",
-  verifyAutoPollTimeout:
-    "Hm, das dauert länger als sonst. Tippe unten auf den Button, wenn ich nochmal prüfen soll.",
-  verifyAutoPollPersonaFailed: "Die Verifizierung ist bei Persona fehlgeschlagen. Tippe auf 🟢 Jetzt verifizieren, um es erneut zu versuchen.",
-  verifyAutoPollInfraError: "Der Verifizierungsdienst ist nicht erreichbar. Versuch es gleich nochmal.",
-  // Persona Embedded Mini App copy (verification.html)
   verifyMiniAppLoading: "Verifizierung wird geöffnet…",
   verifyMiniAppFinishing: "Gleich fertig. Ergebnis wird geprüft…",
   verifyMiniAppError: "Verifizierung konnte nicht gestartet werden. Versuch es gleich noch mal.",
@@ -3585,7 +3529,6 @@ const plTranslations: TranslationTable = {
   verifyReminderNudge:
     "Twój profil jest gotowy — został tylko krok weryfikacji. Zajmie to około minuty, a dobieranie par zacznie się zaraz potem:",
   verifyBtnGo: "🟢 Zweryfikuj teraz",
-  verifyBtnCheck: "Zakończyłem/am weryfikację",
   verifyBtnSkip: "⚪️ Pomiń na razie",
   verifySkipNudgeCaption:
     "Chwila — posłuchaj tego, zanim pominiesz 👆",
@@ -3606,19 +3549,17 @@ const plTranslations: TranslationTable = {
   verifySkipped:
     "Weryfikacja pominięta. Możesz uruchomić ją później z menu profilu, " +
     "aby przywrócić swój ranking ELO.",
-  verifyCheckPending:
-    "🔍 Persona ma Twoją weryfikację, ale nadal ją przetwarza. " +
-    "Daj jej chwilę i kliknij przycisk ponownie.",
-  verifyCheckNoInquiry:
-    "Nie widzę jeszcze próby weryfikacji. Najpierw kliknij 🟢 Zweryfikuj teraz, " +
-    "przejdź flow, potem wróć i kliknij ten przycisk.",
-  verifyCheckPersonaFailed:
-    "Weryfikacja nie przeszła po stronie Persona. Kliknij 🟢 Zweryfikuj teraz, " +
-    "aby spróbować ponownie.",
   verifyCheckAlreadyDone:
     "Już przetworzone - powinna pojawić się wiadomość z wynikiem powyżej. " +
     "Jeśli coś wygląda źle, kliknij 🟢 Zweryfikuj teraz, aby spróbować ponownie.",
-  verifyCheckInfraError: "Nie udało się teraz połączyć z usługą weryfikacji. Spróbuj za chwilę.",
+  verifyLivenessRetry:
+    "Tym razem nie udało się potwierdzić, że to naprawdę ty - zwykle winna jest " +
+    "drżąca kamera albo słabe światło. Nic się nie stało: kliknij 🟢 Zweryfikuj " +
+    "teraz i spróbuj jeszcze raz.",
+  verifyReferenceExpired:
+    "Usuwamy selfie z weryfikacji po 90 dniach, więc nie mamy już do czego " +
+    "porównać twoich nowych zdjęć. Jeszcze jedna 10-sekundowa kontrola i gotowe - " +
+    "twój profil w tym czasie pozostaje aktywny:",
   verifyOutcomeVerified:
     "Zweryfikowane ✨ Profil aktywny. Odezwę się, gdy znajdę dopasowanie.",
   verifyOutcomePendingReview:
@@ -3626,14 +3567,6 @@ const plTranslations: TranslationTable = {
   verifyOutcomeRejected:
     "⚠️ Zdjęcia w profilu nie wyglądają na zgodne z selfie z weryfikacji.\n\n" +
     "Jeśli nie ma na nich Ciebie — wgraj własne, a sprawdzę je automatycznie. Jeśli to jednak Ty — przejdź weryfikację ponownie przy dobrym świetle.",
-  verifyAutoPollStarted:
-    "Jasne. Złap kawę ☕ - porównuję selfie z Twoimi zdjęciami profilowymi. " +
-    "To potrwa minutę albo dwie.",
-  verifyAutoPollTimeout:
-    "Hm, trwa to dłużej niż zwykle. Kliknij przycisk poniżej, gdy mam sprawdzić ponownie.",
-  verifyAutoPollPersonaFailed: "Weryfikacja nie przeszła po stronie Persona. Kliknij 🟢 Zweryfikuj teraz, aby spróbować ponownie.",
-  verifyAutoPollInfraError: "Nie udało się połączyć z usługą weryfikacji. Spróbuj za chwilę.",
-  // Persona Embedded Mini App copy (verification.html)
   verifyMiniAppLoading: "Otwieramy weryfikację…",
   verifyMiniAppFinishing: "Już prawie. Sprawdzamy wynik…",
   verifyMiniAppError: "Nie udało się uruchomić weryfikacji. Spróbuj ponownie.",

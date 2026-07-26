@@ -62,6 +62,8 @@ export function videoValidationMessage(
       return t(language, "videoMostlyOtherPerson");
     case "video_identity_reference_missing":
       return t(language, "videoNeedsPhotoFirst");
+    case "reference_expired":
+      return t(language, "verifyReferenceExpired");
     case "video_too_large_to_check":
       return t(language, "videoTooLarge", {
         mb: Math.round(PROFILE_VIDEO_MAX_FILE_SIZE_BYTES / (1024 * 1024)),

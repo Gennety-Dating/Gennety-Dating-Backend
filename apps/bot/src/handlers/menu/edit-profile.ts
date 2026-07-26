@@ -786,6 +786,9 @@ async function processPhotoFrame(
 
   const gate = await gateProfilePhoto(userRow.id, photoBytes);
   if (gate.kind === "blocked") return { kind: "rejected", reason: "identity_mismatch" };
+  if (gate.kind === "reference_expired") {
+    return { kind: "rejected", reason: "reference_expired" };
+  }
   if (gate.kind === "unavailable") return { kind: "infra_error" };
   gateScore = gate.score ?? 0;
 
@@ -1101,6 +1104,8 @@ function photoValidationMessage(
     case "identity_mismatch":
     case "identity_uncertain":
       return t(language, "photoIdentityMismatch");
+    case "reference_expired":
+      return t(language, "verifyReferenceExpired");
     case "no_face":
       return t(language, "photoRejected");
     default:

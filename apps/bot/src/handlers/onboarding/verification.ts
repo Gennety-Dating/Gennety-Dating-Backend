@@ -4,7 +4,6 @@ import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { terminalVerificationMessage } from "../../services/verification-messages.js";
-import { pullVerificationStatus } from "../../services/verification-pipeline.js";
 import { showMainMenu } from "../menu/main.js";
 import { pinStatusBanner } from "../../services/status-banner.js";
 import { notifyFounderNewUser } from "../../services/founder-notify.js";
@@ -33,22 +32,23 @@ export const VERIFY_SKIP_CALLBACK = "verify:skip";
  */
 export const VERIFY_SKIP_CONFIRM_CALLBACK = "verify:skip:confirm";
 /**
- * Callback data for the "I'm done" button — pull-fallback when Persona's
- * webhook hasn't landed yet (or never will, e.g. local dev). See
- * `pullVerificationStatus` for the full semantic.
+ * Callback data for the legacy "I'm done" button. Nothing renders it any more
+ * (Face Liveness returns its verdict synchronously, so there is no pull to
+ * make) — the handler survives only so a stale keyboard isn't a dead tap.
+ * See {@link handleVerificationCheck}.
  */
 export const VERIFY_CHECK_CALLBACK = "verify:check";
 
 /**
- * Send the Persona liveness CTA to the user at the end of onboarding.
+ * Send the liveness CTA to the user at the end of onboarding.
  *
  * Buttons:
  *   • Verify now → `web_app` button opening the Verification Mini App
- *     (`verification.html`), which mounts Persona's Embedded SDK inline
- *     inside the Telegram WebView — no redirect to withpersona.com,
+ *     (`verification.html`), which runs AWS Face Liveness inline
+ *     inside the Telegram WebView — no redirect anywhere,
  *     no in-app browser frame. The Mini App POSTs back to
- *     `/v1/verification/mini-app/event` on terminal SDK events, which
- *     fires the same pull-fallback the old "I've finished" button used.
+ *     `/v1/verification/mini-app/event` on terminal detector events. That
+ *     request reads AWS's verdict directly and starts the face-match pipeline.
  *   • Upload different photos → the way back. This screen is the first place
  *     the user learns their photos will be face-matched, so someone who
  *     uploaded photos of another person must be able to retreat and swap them
@@ -57,14 +57,12 @@ export const VERIFY_CHECK_CALLBACK = "verify:check";
  *     user into the voice-nudge confirmation step without applying a penalty.
  *     Retired while `MANDATORY_VERIFICATION_ENABLED` is on.
  *
- * The legacy hosted-URL path is kept as a dev/fallback safety net when
- * `WEBAPP_URL` isn't configured (local dev without a tunnel) — see below.
- * `handleVerificationCheck` and the `verify:check` callback stay registered
- * because the deep-link auto-poll (`?start=verify_done`) still routes
- * through them as a webhook fallback.
+ * There is no non-Mini-App fallback: Face Liveness runs in our own page, so a
+ * deploy without a real `WEBAPP_URL` has nowhere to send the user and the CTA
+ * refuses rather than rendering a dead button.
  *
  * Returns true when the CTA was sent, false when the caller should fall
- * back to the normal main-menu flow (Persona disabled or misconfigured).
+ * back to the normal main-menu flow (liveness disabled or misconfigured).
  */
 export async function sendVerificationCTA(ctx: BotContext): Promise<boolean> {
   return sendVerificationCTABare(
@@ -86,10 +84,7 @@ export async function sendVerificationCTABare(
   telegramId: bigint,
   lang: Language,
 ): Promise<boolean> {
-  if (!env.ENABLE_PERSONA_VERIFICATION) return false;
-  if (!env.PERSONA_TEMPLATE_ID || !env.PERSONA_ENVIRONMENT_ID) {
-    return false;
-  }
+  if (!env.FACE_LIVENESS_ENABLED) return false;
   const user = await prisma.user.findUnique({
     where: { telegramId },
     select: { id: true, theme: true },
@@ -97,8 +92,7 @@ export async function sendVerificationCTABare(
   if (!user) return false;
 
   // Mark pending so elsewhere in the bot we can surface "review in progress".
-  // Mirrors the same write the Mini App's /init endpoint does — leaving
-  // it here keeps the dev/fallback URL path consistent with prod.
+  // Mirrors the same write the Mini App's /init endpoint does.
   // Registration v2 (mandatory liveness): re-arm the re-engagement chain at the
   // CTA so a user who stalls here (onboardingStep=completed, still not active)
   // gets the verification-stall nudges — the main onboarding chain stops at
@@ -210,12 +204,17 @@ async function sendSkipNudge(
 }
 
 /**
- * Handle the "✅ I'm done" button — pull Persona's REST API for the user's
- * latest inquiry and run the pipeline if it's `approved`. Used for cases
- * where the webhook hasn't arrived yet (or never will, in local dev).
+ * Handle a tap on the legacy "✅ I'm done" button.
  *
- * Webhook stays primary in production — this is a safety net + the only
- * path that works locally without a public tunnel.
+ * Under Persona this pulled their REST API, because the verification result
+ * arrived asynchronously (a webhook that might be late, or in local dev never
+ * arrive at all). Face Liveness has no async leg — the result is read inside
+ * the `/event` request and the outcome DM follows immediately — so there is
+ * nothing left to poll and no surface still renders this button.
+ *
+ * The handler stays only so a stale keyboard in an old chat isn't a dead tap:
+ * it reports the stored status, and re-offers verification when there is still
+ * something to do.
  */
 export async function handleVerificationCheck(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
@@ -224,36 +223,24 @@ export async function handleVerificationCheck(ctx: BotContext): Promise<void> {
 
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { id: true },
+    select: { id: true, verificationStatus: true },
   });
   if (!user) return;
 
-  const outcome = await pullVerificationStatus(user.id, ctx.api);
-
-  switch (outcome.kind) {
-    case "pipeline_ran":
-      // The pipeline already DM'd the user (verified / pending_review /
-      // rejected outcome message). Nothing more to do here.
-      return;
-    case "already_done":
-      // Webhook beat us to it OR user double-tapped after a previous pull.
-      // Remind them of the stored terminal state so the click is never silent
-      // and doesn't rely on an older message still being visible.
-      await ctx.reply(terminalVerificationMessage(lang, outcome.verificationStatus));
-      return;
-    case "no_inquiry":
-      await ctx.reply(t(lang, "verifyCheckNoInquiry"));
-      return;
-    case "still_pending":
-      await ctx.reply(t(lang, "verifyCheckPending"));
-      return;
-    case "persona_failed":
-      await ctx.reply(t(lang, "verifyCheckPersonaFailed"));
-      return;
-    case "infra_error":
-      await ctx.reply(t(lang, "verifyCheckInfraError"));
-      return;
+  if (
+    user.verificationStatus === "verified" ||
+    user.verificationStatus === "rejected" ||
+    user.verificationStatus === "pending_review"
+  ) {
+    await ctx.reply(terminalVerificationMessage(lang, user.verificationStatus));
+    return;
   }
+
+  // `pending` / `unverified` — they never finished a check. Re-offer it.
+  const keyboard = await buildVerificationKeyboard(lang, user.id);
+  await ctx.reply(t(lang, "verifyReminderNudge"), {
+    ...(keyboard ? { reply_markup: keyboard } : {}),
+  });
 }
 
 /**
@@ -275,7 +262,7 @@ async function sendMandatoryVerifyNotice(
 
 /**
  * Registration v2 (mandatory liveness): the verification-stall re-engagement
- * touch — the profile is done, only Persona remains. Sent by the re-engagement
+ * touch — the profile is done, only the liveness check remains. Sent by the re-engagement
  * worker on the standard decaying cadence (see `runReEngagementSweep`).
  */
 export async function sendVerificationReminder(
@@ -295,7 +282,7 @@ export async function sendVerificationReminder(
 /**
  * A user who FINALIZED onboarding (`onboardingStep = completed`) but is still
  * held at `status = onboarding` reopened the bot. The only thing that leaves a
- * user in that state is the Persona liveness gate (see `finalize_onboarding`):
+ * user in that state is the liveness gate (see `finalize_onboarding`):
  * they have NOT been activated and the matchmaker has NOT started searching for
  * them. Surfacing the normal "your AI is already looking for a match" greeting
  * here misleads them — matching is paused until they clear verification.
@@ -305,7 +292,7 @@ export async function sendVerificationReminder(
  *     photos; nothing for them to do, so no button.
  *   • `rejected` — their photos didn't match the selfie; the copy points them
  *     at Settings → re-verify (fix photos, retry).
- *   • `pending` / `unverified` (default) — they never completed Persona, so
+ *   • `pending` / `unverified` (default) — they never completed the check, so
  *     re-offer the Verify button; matching begins right after it passes.
  *
  * Returns true when a gate notice was sent (the caller should then SKIP the
@@ -344,7 +331,7 @@ export async function sendVerificationGateNotice(
     case "rejected": {
       // The photos didn't match the selfie. Both recoveries ride the message:
       // swap the photos (the pipeline then re-checks them against the selfie
-      // already on file) or re-run Persona.
+      // already on file) or re-run the liveness check.
       const keyboard = await buildVerificationKeyboard(lang, user.id);
       await api.sendMessage(chatId, withPrefix(t(lang, "verifyOutcomeRejected")), {
         ...(keyboard ? { reply_markup: keyboard } : {}),
@@ -493,7 +480,7 @@ export async function handleVerificationSkipConfirm(
   // Idempotent + status-gated inside the notifier; fire-and-forget.
   void notifyFounderNewUser(user.id).catch(() => {});
 
-  // Even when the user skips Persona, narrate the profile build so the app
+  // Even when the user skips verification, narrate the profile build so the app
   // feels like it's working rather than going silent on activation.
   if (ctx.chat?.id !== undefined) {
     await runStatusSequence(ctx.api, ctx.chat.id, skipAnalysisSteps(lang), { rich: true });

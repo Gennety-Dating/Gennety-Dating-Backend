@@ -285,6 +285,13 @@ export async function attachAetherProfilePhoto(
     if (gate.kind === "blocked") {
       return { ok: false, detail: "Photo does not match verification selfie" };
     }
+    if (gate.kind === "reference_expired") {
+      return {
+        ok: false,
+        detail:
+          "The user's verification selfie has expired — they must run verification again before changing photos",
+      };
+    }
     if (gate.kind === "unavailable") {
       return { ok: false, detail: "Identity verification is temporarily unavailable" };
     }
@@ -366,6 +373,8 @@ function aetherPhotoValidationDetail(reason: MediaValidationReason): string {
     case "identity_mismatch":
     case "identity_uncertain":
       return "All photos must belong to the same person";
+    case "reference_expired":
+      return "The user's verification selfie has expired — they must run verification again before changing photos";
     default:
       return "Media validation is temporarily unavailable";
   }

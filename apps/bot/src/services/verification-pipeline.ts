@@ -6,7 +6,12 @@ import { sendMainMenu } from "../handlers/menu/main.js";
 import { seedEloFromVisionDefault, type SeedEloResult } from "./elo-seed.js";
 import { tagAndPersistAppearanceDefault } from "./appearance-tags.js";
 import { compareFaces } from "./face-match.js";
-import { fetchInquirySelfie, fetchLatestInquiryByReference } from "./persona-api.js";
+import {
+  capturedSelfieSource,
+  storedSelfieSource,
+  type CapturedSelfie,
+  type ReferenceSelfieResult,
+} from "./identity-selfie.js";
 import { pinStatusBanner } from "./status-banner.js";
 import { downloadProfileImage, uploadSelfie } from "./storage.js";
 import { notifyFounderNewUser } from "./founder-notify.js";
@@ -17,10 +22,11 @@ import { buildVerificationKeyboard } from "./verification-keyboard.js";
 /**
  * Face-match verification pipeline (Phase 6.3 — third iteration).
  *
- * Runs after Persona's hosted-flow webhook reports `inquiry.approved`.
- * Compares the verified Persona selfie against every photo in the user's
- * profile and decides the verification outcome from the per-photo scores
- * using a quorum rule that tolerates uninformative shots.
+ * Runs once AWS Rekognition Face Liveness confirms a live human and hands back
+ * a reference selfie (previously: Persona's `inquiry.approved` webhook).
+ * Compares that verified selfie against every photo in the user's profile and
+ * decides the verification outcome from the per-photo scores using a quorum
+ * rule that tolerates uninformative shots.
  *
  * Each photo is bucketed by its `compareFaces` result:
  *   - `pass`       — score ≥ FACE_MATCH_THRESHOLD_VERIFY
@@ -45,22 +51,29 @@ import { buildVerificationKeyboard } from "./verification-keyboard.js";
  * face below `THRESHOLD_REVIEW` still hard-fails, so a fake-photo attack
  * cannot hide behind a quorum of legitimate shots.
  *
- * Any *infrastructure* failure (Persona API down, Rekognition error, photo
+ * Any *infrastructure* failure (storage down, Rekognition error, photo
  * download failure) routes the user to `pending_review` rather than
  * `rejected` — we don't penalise users for our own outages. Admin sees the
  * row in the dashboard and either reruns the pipeline or approves manually.
  *
- * The pipeline is deliberately separated from `persona-webhook.ts` so:
- *   1. The webhook can fire-and-forget (it returns 200 to Persona before
+ * The pipeline is deliberately separated from the verification routes so:
+ *   1. The route can fire-and-forget (it answers the client before
  *      Rekognition latency lands), and
  *   2. The same logic can be triggered from an admin "rerun verification"
  *      button or by `triggerVerificationRerun` (called from the photo
  *      upload/delete handlers when a user edits their profile photos).
+ *
+ * Where the reference selfie comes from is NOT this module's business — see
+ * `identity-selfie.ts`. A fresh liveness capture and a rerun reading the
+ * stored copy enter through the same `fetchReferenceSelfie` dep.
  */
 
 export type PendingReviewReason =
   | "borderline_score"
   | "selfie_fetch_failed"
+  /** No reference selfie at all (90-day scrub already ran). Normally caught
+   *  before the pipeline starts — see `triggerVerificationRerun`. */
+  | "reference_expired"
   | "no_source_face"
   | "no_profile_photos"
   | "no_detected_faces"
@@ -98,7 +111,13 @@ export type TerminalVerificationStatus = "verified" | "pending_review" | "reject
  * payloads so the pipeline's branching logic can be verified deterministically.
  */
 export interface PipelineDeps {
-  fetchInquirySelfie: typeof fetchInquirySelfie;
+  /**
+   * Resolve the reference selfie for this run. A thunk, not a lookup by id,
+   * because the two origins differ structurally: a fresh liveness capture
+   * already holds the bytes, while a rerun reads them back out of storage.
+   * See `identity-selfie.ts`.
+   */
+  fetchReferenceSelfie: () => Promise<ReferenceSelfieResult>;
   uploadSelfie: typeof uploadSelfie;
   /**
    * Source-aware profile-photo download. Pre-bound to the bot's `Api`
@@ -221,11 +240,13 @@ export interface PipelineRunOptions {
 export interface PersistOutcomeInput {
   userId: string;
   /**
-   * Persona inquiry that drove this decision. Persisted so admin can
-   * deep-link back to Persona on appeal, and so the idempotency guard
-   * `(personaInquiryId, faceMatchedAt)` is complete on subsequent runs.
+   * Face Liveness session that produced the reference selfie for this
+   * decision. Persisted (in the legacy `personaInquiryId` column, kept under
+   * its old name so the provider swap needed no migration) so the idempotency
+   * guard `(personaInquiryId, faceMatchedAt)` is complete on subsequent runs
+   * and so ops can correlate a decision with a CloudTrail entry.
    */
-  inquiryId: string;
+  sessionId: string;
   /** Final verification status to write. */
   verificationStatus: "verified" | "pending_review" | "rejected";
   /**
@@ -267,21 +288,21 @@ const LOG_PREFIX = "[verification-pipeline]";
  */
 export async function runFaceMatchVerification(
   userId: string,
-  inquiryId: string,
+  sessionId: string,
   deps: PipelineDeps,
   config: PipelineConfig,
   options: PipelineRunOptions = {},
 ): Promise<VerificationOutcome> {
   const user = await deps.db.findUser(userId);
   if (!user) {
-    console.warn(`${LOG_PREFIX} user not found`, { userId, inquiryId });
+    console.warn(`${LOG_PREFIX} user not found`, { userId, sessionId });
     return { kind: "skipped_user_missing", userId };
   }
 
   // Idempotency: if we've already run the pipeline for THIS inquiry, skip.
-  // We key on `inquiryId` (not on `verifiedAt` alone) so a re-verification
-  // attempt — new Persona inquiry, possibly different result — DOES re-run.
-  if (user.personaInquiryId === inquiryId && user.faceMatchedAt !== null) {
+  // We key on `sessionId` (not on `verifiedAt` alone) so a re-verification
+  // attempt — new liveness session, possibly different result — DOES re-run.
+  if (user.personaInquiryId === sessionId && user.faceMatchedAt !== null) {
     return { kind: "skipped_idempotent", userId };
   }
 
@@ -298,10 +319,10 @@ export async function runFaceMatchVerification(
   const photos = user.profile?.photos ?? [];
   const photosSnapshot = [...photos];
   if (photos.length === 0) {
-    console.warn(`${LOG_PREFIX} no profile photos to compare`, { userId, inquiryId });
+    console.warn(`${LOG_PREFIX} no profile photos to compare`, { userId, sessionId });
     await deps.db.persistOutcome({
       userId,
-      inquiryId,
+      sessionId,
       verificationStatus: "pending_review",
       faceMatchScore: null,
       photoFaceScores: [],
@@ -313,17 +334,22 @@ export async function runFaceMatchVerification(
     return { kind: "pending_review", userId, reason: "no_profile_photos" };
   }
 
-  // Step 1: pull the verified selfie from Persona.
-  const selfieResult = await deps.fetchInquirySelfie(inquiryId);
+  // Step 1: resolve the reference selfie (fresh liveness capture, or the
+  // stored copy on a rerun — see `identity-selfie.ts`).
+  const selfieResult = await deps.fetchReferenceSelfie();
   if (!selfieResult.ok) {
-    console.error(`${LOG_PREFIX} selfie fetch failed`, {
+    console.error(`${LOG_PREFIX} reference selfie unavailable`, {
       userId,
-      inquiryId,
+      sessionId,
       error: selfieResult.error,
     });
+    const reason: PendingReviewReason =
+      selfieResult.error === "reference_expired"
+        ? "reference_expired"
+        : "selfie_fetch_failed";
     await deps.db.persistOutcome({
       userId,
-      inquiryId,
+      sessionId,
       verificationStatus: "pending_review",
       faceMatchScore: null,
       photoFaceScores: [],
@@ -332,26 +358,37 @@ export async function runFaceMatchVerification(
       shouldActivate: false,
     });
     await sendOutcomeMessage(deps, user.telegramId, "pending_review", user.language);
-    return { kind: "pending_review", userId, reason: "selfie_fetch_failed" };
+    return { kind: "pending_review", userId, reason };
   }
 
-  const { buffer: selfieBuffer, mime: selfieMime } = selfieResult.selfie;
+  const {
+    buffer: selfieBuffer,
+    mime: selfieMime,
+    storedPath,
+  } = selfieResult.selfie;
 
-  // Step 2: persist the selfie in our `selfies` bucket. We store it for
-  // (a) re-checks when the user uploads a new photo within the 90-day
-  // window and (b) admin spot-checks. A failed upload is not fatal —
-  // we proceed to the compare step and persist verifiedSelfiePath=null
-  // (re-fetch from Persona on demand).
-  let verifiedSelfiePath: string | null = null;
-  try {
-    const uploaded = await deps.uploadSelfie(userId, selfieBuffer, selfieMime);
-    verifiedSelfiePath = uploaded.path;
-  } catch (err) {
-    console.warn(`${LOG_PREFIX} selfie storage upload failed (non-fatal)`, {
-      userId,
-      inquiryId,
-      err,
-    });
+  // Step 2: persist the selfie in our `selfies` bucket. It is the ONLY copy
+  // that survives — the liveness session that produced it expires after 3
+  // minutes — so it backs every later re-check (photo edits, admin reruns)
+  // until the 90-day retention scrub. A failed upload is not fatal here: we
+  // still score this run, but with no stored reference the user will have to
+  // re-run liveness the next time their photos change.
+  //
+  // When the bytes CAME from storage (a rerun) there is nothing to upload —
+  // re-uploading would litter the bucket with a duplicate object on every
+  // photo edit — so we carry the existing path through instead.
+  let verifiedSelfiePath: string | null = storedPath ?? null;
+  if (!storedPath) {
+    try {
+      const uploaded = await deps.uploadSelfie(userId, selfieBuffer, selfieMime);
+      verifiedSelfiePath = uploaded.path;
+    } catch (err) {
+      console.warn(`${LOG_PREFIX} selfie storage upload failed (non-fatal)`, {
+        userId,
+        sessionId,
+        err,
+      });
+    }
   }
 
   // Step 3: download profile photos and compare each against the selfie.
@@ -371,7 +408,7 @@ export async function runFaceMatchVerification(
     if (!photoBuffer) {
       console.warn(`${LOG_PREFIX} profile photo download failed`, {
         userId,
-        inquiryId,
+        sessionId,
         path,
       });
       scores.push(0);
@@ -383,12 +420,12 @@ export async function runFaceMatchVerification(
     const result = await deps.compareFaces(selfieBuffer, photoBuffer);
     if (!result.ok) {
       if (result.error === "no_source_face") {
-        // Persona accepted a selfie without a detectable face. Pipeline
-        // bug, not user bug. Bail to pending_review with a distinct reason
-        // so the admin sees this and re-runs the inquiry.
-        console.error(`${LOG_PREFIX} no_source_face on Persona selfie`, {
+        // The liveness provider handed us a reference frame with no
+        // detectable face. Pipeline bug, not user bug. Bail to pending_review
+        // with a distinct reason so the admin sees this and re-runs.
+        console.error(`${LOG_PREFIX} no_source_face on reference selfie`, {
           userId,
-          inquiryId,
+          sessionId,
         });
         sourceFaceMissing = true;
         scores.push(0);
@@ -397,7 +434,7 @@ export async function runFaceMatchVerification(
       }
       console.warn(`${LOG_PREFIX} compareFaces error`, {
         userId,
-        inquiryId,
+        sessionId,
         path,
         error: result.error,
       });
@@ -423,7 +460,7 @@ export async function runFaceMatchVerification(
   if (sourceFaceMissing) {
     await deps.db.persistOutcome({
       userId,
-      inquiryId,
+      sessionId,
       verificationStatus: "pending_review",
       faceMatchScore: null,
       photoFaceScores: [],
@@ -440,7 +477,7 @@ export async function runFaceMatchVerification(
     // photo failed; the user lands in pending_review either way.
     await deps.db.persistOutcome({
       userId,
-      inquiryId,
+      sessionId,
       verificationStatus: "pending_review",
       faceMatchScore: null,
       photoFaceScores: scores,
@@ -480,12 +517,12 @@ export async function runFaceMatchVerification(
     // upload solo shots.
     console.warn(`${LOG_PREFIX} no detected faces in any photo`, {
       userId,
-      inquiryId,
+      sessionId,
       scores,
     });
     await deps.db.persistOutcome({
       userId,
-      inquiryId,
+      sessionId,
       verificationStatus: "pending_review",
       faceMatchScore: null,
       photoFaceScores: scores,
@@ -508,7 +545,7 @@ export async function runFaceMatchVerification(
     const minDetected = Math.min(...detectedScores);
     console.warn(`${LOG_PREFIX} face mismatch → rejected`, {
       userId,
-      inquiryId,
+      sessionId,
       passCount,
       failCount,
       minDetected,
@@ -517,7 +554,7 @@ export async function runFaceMatchVerification(
     });
     await deps.db.persistOutcome({
       userId,
-      inquiryId,
+      sessionId,
       verificationStatus: "rejected",
       faceMatchScore: minDetected,
       photoFaceScores: scores,
@@ -534,7 +571,7 @@ export async function runFaceMatchVerification(
     const maxDetected = Math.max(...detectedScores);
     await deps.db.persistOutcome({
       userId,
-      inquiryId,
+      sessionId,
       verificationStatus: "verified",
       faceMatchScore: maxDetected,
       photoFaceScores: scores,
@@ -611,7 +648,7 @@ export async function runFaceMatchVerification(
     detectedScores.reduce((a, b) => a + b, 0) / detectedScores.length;
   console.warn(`${LOG_PREFIX} borderline → pending_review`, {
     userId,
-    inquiryId,
+    sessionId,
     passCount,
     minVerifiedPhotos: config.minVerifiedPhotos,
     avgDetected,
@@ -620,7 +657,7 @@ export async function runFaceMatchVerification(
   });
   await deps.db.persistOutcome({
     userId,
-    inquiryId,
+    sessionId,
     verificationStatus: "pending_review",
     faceMatchScore: avgDetected,
     photoFaceScores: scores,
@@ -719,23 +756,35 @@ async function surfaceVerifiedActivationDefault(
   await pinStatusBanner(api, user.telegramId, lang);
 }
 
+export interface DefaultPipelineOptions extends PipelineRunOptions {
+  /**
+   * Bytes AWS Face Liveness just returned. Present ONLY on a fresh check —
+   * the liveness session (and this image with it) expires 3 minutes after it
+   * was created, so the route that read it must pass it straight through.
+   * Absent on every rerun, which reads the stored copy instead.
+   */
+  capturedSelfie?: CapturedSelfie;
+}
+
 /**
  * Production wiring: builds default deps from the bot's `Api` + the real
- * services and runs the pipeline. Called by the Persona webhook handler
- * after liveness passes; will also be called by the admin "rerun" button
- * once that ships in Step 4.
+ * services and runs the pipeline. Called by the verification routes right
+ * after a liveness pass, by the admin "rerun" button, and by
+ * `triggerVerificationRerun` on every profile-photo edit.
  */
 export async function runFaceMatchVerificationDefault(
   userId: string,
-  inquiryId: string,
+  sessionId: string,
   api: Api<RawApi>,
-  options: PipelineRunOptions = {},
+  options: DefaultPipelineOptions = {},
 ): Promise<VerificationOutcome> {
   return runFaceMatchVerification(
     userId,
-    inquiryId,
+    sessionId,
     {
-      fetchInquirySelfie,
+      fetchReferenceSelfie: options.capturedSelfie
+        ? capturedSelfieSource(options.capturedSelfie)
+        : storedSelfieSource(userId),
       uploadSelfie,
       downloadProfileImage: (path) => downloadProfileImage(path, api),
       compareFaces,
@@ -762,7 +811,7 @@ export async function runFaceMatchVerificationDefault(
         // A rejection is the one outcome the user can act on, so it carries the
         // two recoveries inline instead of sending them hunting through menus:
         // swap the photos (the pipeline then re-scores them against the selfie
-        // already on file) or re-run Persona.
+        // already on file) or re-run the liveness check.
         const keyboard =
           kind === "rejected"
             ? await buildVerificationKeyboard(
@@ -817,7 +866,7 @@ export async function runFaceMatchVerificationDefault(
                 faceMatchScore: input.faceMatchScore,
                 faceMatchedAt: now,
                 verifiedSelfiePath: input.verifiedSelfiePath,
-                personaInquiryId: input.inquiryId,
+                personaInquiryId: input.sessionId,
               },
             });
             if (activated.count === 0) {
@@ -829,7 +878,7 @@ export async function runFaceMatchVerificationDefault(
                   faceMatchScore: input.faceMatchScore,
                   faceMatchedAt: now,
                   verifiedSelfiePath: input.verifiedSelfiePath,
-                  personaInquiryId: input.inquiryId,
+                  personaInquiryId: input.sessionId,
                 },
               });
             }
@@ -841,7 +890,7 @@ export async function runFaceMatchVerificationDefault(
                 faceMatchScore: input.faceMatchScore,
                 faceMatchedAt: now,
                 verifiedSelfiePath: input.verifiedSelfiePath,
-                personaInquiryId: input.inquiryId,
+                personaInquiryId: input.sessionId,
               },
             });
           }
@@ -874,7 +923,7 @@ export async function runFaceMatchVerificationDefault(
                 "[verification-pipeline] photos changed during run — scores discarded",
                 {
                   userId: input.userId,
-                  inquiryId: input.inquiryId,
+                  sessionId: input.sessionId,
                   snapshotLen: input.photosSnapshot.length,
                 },
               );
@@ -894,13 +943,19 @@ export async function runFaceMatchVerificationDefault(
 
 /**
  * Re-trigger the face-match pipeline for a user whose profile photos just
- * changed. Fire-and-forget by design: the photo-edit handlers don't block
- * on Persona / Rekognition latency, but the user's verification state must
- * eventually reconcile with the new photo set.
+ * changed. Fire-and-forget by design: the photo-edit handlers don't block on
+ * Rekognition latency, but the user's verification state must eventually
+ * reconcile with the new photo set.
  *
  * Behaviour:
- *   - If the user has no `personaInquiryId` (never ran Persona), this is a
- *     no-op — there's no reference selfie to compare against.
+ *   - No `personaInquiryId` (never ran a liveness check) → no-op; there is no
+ *     reference selfie to compare against.
+ *   - No `verifiedSelfiePath` → `reference_expired`. The 90-day GDPR scrub
+ *     already removed the reference and AWS cannot re-issue it (a liveness
+ *     session dies after 3 minutes), so the only way forward is one more
+ *     liveness check. Critically, this returns BEFORE the `pending` flip
+ *     below: a rerun we cannot complete must not knock a `verified` user out
+ *     of the match pool over a photo they deleted.
  *   - Otherwise, clears the `(personaInquiryId, faceMatchedAt)` idempotency
  *     marker so the pipeline re-runs against the new photos, and flips
  *     `verificationStatus` back to `pending` for UI clarity (the user sees
@@ -915,7 +970,8 @@ export async function runFaceMatchVerificationDefault(
 export type RerunOutcome =
   | { kind: "no_inquiry" }
   | { kind: "user_missing" }
-  | { kind: "started"; inquiryId: string };
+  | { kind: "reference_expired" }
+  | { kind: "started"; sessionId: string };
 
 export async function triggerVerificationRerun(
   userId: string,
@@ -923,10 +979,15 @@ export async function triggerVerificationRerun(
 ): Promise<RerunOutcome> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { personaInquiryId: true, verificationStatus: true },
+    select: {
+      personaInquiryId: true,
+      verificationStatus: true,
+      verifiedSelfiePath: true,
+    },
   });
   if (!user) return { kind: "user_missing" };
   if (!user.personaInquiryId) return { kind: "no_inquiry" };
+  if (!user.verifiedSelfiePath) return { kind: "reference_expired" };
 
   // Captured BEFORE the `pending` flip below, which would otherwise erase it.
   // Lets the pipeline stay silent when the rerun just re-confirms an
@@ -935,121 +996,20 @@ export async function triggerVerificationRerun(
 
   // Reset the idempotency marker AND flip status to `pending` so the
   // user sees we're re-checking. We pin the WHERE on `personaInquiryId`
-  // to avoid racing with a concurrent webhook that just moved them to a
-  // newer inquiry.
+  // to avoid racing with a concurrent liveness check that just moved them
+  // to a newer session.
   await prisma.user.updateMany({
     where: { id: userId, personaInquiryId: user.personaInquiryId },
     data: { faceMatchedAt: null, verificationStatus: "pending" },
   });
 
-  const inquiryId = user.personaInquiryId;
+  const sessionId = user.personaInquiryId;
   // Fire-and-forget; do not await. Errors land in the bot logs.
-  void runFaceMatchVerificationDefault(userId, inquiryId, api, {
+  void runFaceMatchVerificationDefault(userId, sessionId, api, {
     previousVerificationStatus,
   }).catch((err) => {
-    console.error("[verification-pipeline] rerun failed", { userId, inquiryId, err });
+    console.error("[verification-pipeline] rerun failed", { userId, sessionId, err });
   });
 
-  return { kind: "started", inquiryId };
-}
-
-/**
- * Outcome of a pull-style verification check, fired when the user taps
- * "I'm done" in the bot. The bot maps each variant to a localised DM.
- */
-export type PullVerificationOutcome =
-  /** Pipeline ran (or was already run idempotently) — see `pipelineOutcome`. */
-  | { kind: "pipeline_ran"; pipelineOutcome: VerificationOutcome }
-  /** User already in a terminal state — nothing to do. Caller should be silent
-   *  or just remind them of their current status. */
-  | { kind: "already_done"; verificationStatus: TerminalVerificationStatus }
-  /** Persona REST API or our DB lookup failed transiently — ask user to retry. */
-  | { kind: "infra_error"; reason: "not_configured" | "api" | "timeout" | "user_missing" }
-  /** No inquiry yet for this user (they opened the URL but never started). */
-  | { kind: "no_inquiry" }
-  /** Persona has the inquiry but it's still being processed (status created/pending/completed-unapproved). */
-  | { kind: "still_pending"; personaStatus: string }
-  /** Persona declined / the user failed liveness — they need to try again. */
-  | { kind: "persona_failed"; personaStatus: string };
-
-/**
- * Pull-fallback for the verification webhook. When the user taps "I'm done"
- * after returning from Persona's hosted flow, we sidestep the webhook (which
- * may not have arrived yet, or in local dev never will) and ask Persona's
- * REST API directly for the most recent inquiry attached to this user's
- * `reference-id`.
- *
- * Idempotency:
- *   - Terminal verification states (`verified` / `rejected` / `pending_review`)
- *     short-circuit BEFORE we hit Persona — no API call, no AWS spend.
- *   - When we do run the pipeline, `runFaceMatchVerification` is itself
- *     idempotent on `(personaInquiryId, faceMatchedAt)`, so a button-mash
- *     during processing is harmless.
- *
- * The webhook path stays primary in production. This is the safety net.
- */
-export async function pullVerificationStatus(
-  userId: string,
-  api: Api<RawApi>,
-): Promise<PullVerificationOutcome> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, telegramId: true, verificationStatus: true },
-  });
-  if (!user) return { kind: "infra_error", reason: "user_missing" };
-
-  // Already-terminal short-circuit. Cheap DB lookup avoids burning a
-  // Persona API call (and any downstream AWS calls) every time the user
-  // re-taps the button after the webhook already settled the case.
-  if (
-    user.verificationStatus === "verified" ||
-    user.verificationStatus === "rejected" ||
-    user.verificationStatus === "pending_review"
-  ) {
-    if (user.verificationStatus === "verified") {
-      await surfaceVerifiedActivationDefault(api, userId, user.telegramId);
-      // Idempotent referral settle — covers a `verified` set outside the pipeline
-      // body; a genuine double never double-pays (unique ledger ids).
-      if (env.REFERRAL_FEATURE_ENABLED) {
-        await settleReferralOnVerified(userId, api).catch(() => {});
-      }
-    }
-    return { kind: "already_done", verificationStatus: user.verificationStatus };
-  }
-
-  const lookup = await fetchLatestInquiryByReference(userId);
-  if (!lookup.ok) {
-    return { kind: "infra_error", reason: lookup.error };
-  }
-  if (lookup.inquiryId === null) {
-    return { kind: "no_inquiry" };
-  }
-
-  // Persona statuses we treat as "go run the pipeline":
-  //   `approved` — explicit pass.
-  // Everything else (created/pending/completed/needs_review/declined/failed/expired)
-  // is either still in flight or a hard fail — neither should kick the
-  // pipeline. `completed` without `approved` is intentionally treated as
-  // pending: Persona occasionally emits `completed` first, then flips to
-  // `approved` after their post-processing.
-  const personaStatus = lookup.status;
-  if (personaStatus === "approved") {
-    const pipelineOutcome = await runFaceMatchVerificationDefault(
-      userId,
-      lookup.inquiryId,
-      api,
-    );
-    return { kind: "pipeline_ran", pipelineOutcome };
-  }
-
-  if (
-    personaStatus === "declined" ||
-    personaStatus === "failed" ||
-    personaStatus === "expired"
-  ) {
-    return { kind: "persona_failed", personaStatus };
-  }
-
-  // created / pending / completed / needs_review / anything new Persona adds
-  return { kind: "still_pending", personaStatus };
+  return { kind: "started", sessionId };
 }

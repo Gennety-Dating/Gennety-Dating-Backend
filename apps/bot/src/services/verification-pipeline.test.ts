@@ -6,11 +6,11 @@ import {
   type PipelineDeps,
   type PipelineUserRow,
 } from "./verification-pipeline.js";
-import type { FetchSelfieResult } from "./persona-api.js";
+import type { ReferenceSelfieResult } from "./identity-selfie.js";
 import type { FaceMatchResult } from "./face-match.js";
 
 const USER_ID = "user-1";
-const INQUIRY_ID = "inq_abc";
+const SESSION_ID = "inq_abc";
 const SELFIE_BUFFER = Buffer.from("selfie-bytes");
 const PHOTO_PATH_A = "user-1/photo-a.jpg";
 const PHOTO_PATH_B = "user-1/photo-b.jpg";
@@ -35,7 +35,7 @@ interface Harness {
 function makeHarness(
   overrides: {
     user?: Partial<PipelineUserRow>;
-    selfie?: FetchSelfieResult;
+    selfie?: ReferenceSelfieResult;
     photoBuffers?: Record<string, Buffer | null>;
     compareScores?: FaceMatchResult[];
     uploadFails?: boolean;
@@ -54,9 +54,9 @@ function makeHarness(
     ...overrides.user,
   };
 
-  const selfie: FetchSelfieResult = overrides.selfie ?? {
+  const selfie: ReferenceSelfieResult = overrides.selfie ?? {
     ok: true,
-    selfie: { buffer: SELFIE_BUFFER, mime: "image/jpeg", verificationId: "ver_1" },
+    selfie: { buffer: SELFIE_BUFFER, mime: "image/jpeg" },
   };
 
   const photoBuffers = overrides.photoBuffers ?? {
@@ -76,7 +76,7 @@ function makeHarness(
   const referralSettles: string[] = [];
 
   const deps: PipelineDeps = {
-    fetchInquirySelfie: vi.fn(async () => selfie),
+    fetchReferenceSelfie: vi.fn(async () => selfie),
     uploadSelfie: vi.fn(async (uid: string, _buf, _mime) => {
       if (overrides.uploadFails) throw new Error("upload failed");
       return { path: `${uid}/selfie-stored.jpg` };
@@ -121,7 +121,7 @@ afterEach(() => {
 describe("runFaceMatchVerification — happy path (quorum)", () => {
   it("verifies when all detected-face photos clear the verify threshold", async () => {
     const h = makeHarness();
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
     if (outcome.kind !== "verified") return;
@@ -131,7 +131,7 @@ describe("runFaceMatchVerification — happy path (quorum)", () => {
 
     expect(h.persisted).toHaveLength(1);
     expect(h.persisted[0]).toMatchObject({
-      inquiryId: INQUIRY_ID,
+      sessionId: SESSION_ID,
       verificationStatus: "verified",
       shouldActivate: true,
       verifiedSelfiePath: "user-1/selfie-stored.jpg",
@@ -158,7 +158,7 @@ describe("runFaceMatchVerification — happy path (quorum)", () => {
         { ok: true, similarity: 0.78, faceFound: true }, // borderline
       ],
     });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
     if (outcome.kind !== "verified") return;
@@ -176,7 +176,7 @@ describe("runFaceMatchVerification — happy path (quorum)", () => {
         { ok: true, similarity: 0, faceFound: false }, // group shot
       ],
     });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
     if (outcome.kind !== "verified") return;
@@ -198,7 +198,7 @@ describe("runFaceMatchVerification — rerun outcome DM", () => {
       user: {
         status: "active",
         verificationStatus: "pending",
-        personaInquiryId: INQUIRY_ID,
+        personaInquiryId: SESSION_ID,
         faceMatchedAt: null,
         ...overrides.user,
       },
@@ -207,7 +207,7 @@ describe("runFaceMatchVerification — rerun outcome DM", () => {
 
   it("stays silent when a rerun only re-confirms an already-verified user", async () => {
     const h = rerunHarness();
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG, {
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG, {
       previousVerificationStatus: "verified",
     });
 
@@ -219,7 +219,7 @@ describe("runFaceMatchVerification — rerun outcome DM", () => {
   it("announces the pass when the user was NOT verified before the rerun", async () => {
     // A rejected user who swapped in their own photos must hear the good news.
     const h = rerunHarness();
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG, {
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG, {
       previousVerificationStatus: "rejected",
     });
 
@@ -237,7 +237,7 @@ describe("runFaceMatchVerification — rerun outcome DM", () => {
         { ok: true, similarity: 0.31, faceFound: true }, // impostor photo
       ],
     });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG, {
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG, {
       previousVerificationStatus: "verified",
     });
 
@@ -247,7 +247,7 @@ describe("runFaceMatchVerification — rerun outcome DM", () => {
 
   it("announces the pass on a first-time run (no options passed)", async () => {
     const h = makeHarness();
-    await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
     expect(h.notifications).toHaveLength(1);
   });
 });
@@ -260,7 +260,7 @@ describe("runFaceMatchVerification — quorum gating", () => {
         { ok: true, similarity: 0.84, faceFound: true },
       ],
     });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("pending_review");
     if (outcome.kind !== "pending_review") return;
@@ -281,7 +281,7 @@ describe("runFaceMatchVerification — quorum gating", () => {
         { ok: true, similarity: 0.8, faceFound: true }, // borderline
       ],
     });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, strict);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, strict);
 
     expect(outcome.kind).toBe("pending_review");
     if (outcome.kind !== "pending_review") return;
@@ -295,7 +295,7 @@ describe("runFaceMatchVerification — quorum gating", () => {
         { ok: true, similarity: 0, faceFound: false },
       ],
     });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("pending_review");
     if (outcome.kind !== "pending_review") return;
@@ -314,7 +314,7 @@ describe("runFaceMatchVerification — impostor detection", () => {
         { ok: true, similarity: 0.3, faceFound: true }, // wrong-person photo
       ],
     });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("rejected");
     if (outcome.kind !== "rejected") return;
@@ -349,7 +349,7 @@ describe("runFaceMatchVerification — impostor detection", () => {
         { ok: true, similarity: 0.4, faceFound: true }, // impostor
       ],
     });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("rejected");
   });
@@ -361,7 +361,7 @@ describe("runFaceMatchVerification — impostor detection", () => {
         { ok: true, similarity: 0.7, faceFound: true },
       ],
     });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("rejected");
     expect(h.persisted[0]!.verificationStatus).toBe("rejected");
@@ -369,12 +369,55 @@ describe("runFaceMatchVerification — impostor detection", () => {
   });
 });
 
-describe("runFaceMatchVerification — infrastructure failures", () => {
-  it("pending_review when Persona selfie fetch fails", async () => {
+describe("runFaceMatchVerification — reference selfie source", () => {
+  it("uploads a fresh liveness capture and records the new path", async () => {
+    const h = makeHarness();
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    // A fresh capture exists nowhere else — the AWS session holding it dies
+    // after 3 minutes — so persisting it is the pipeline's first job.
+    expect(h.deps.uploadSelfie).toHaveBeenCalledTimes(1);
+    expect(h.persisted[0]!.verifiedSelfiePath).toBe(`${USER_ID}/selfie-stored.jpg`);
+  });
+
+  it("keeps the existing path and re-uploads nothing on a rerun", async () => {
+    // Every photo edit reruns the pipeline against the STORED selfie. Writing
+    // it back would litter the bucket with a duplicate object each time.
     const h = makeHarness({
-      selfie: { ok: false, error: "api" },
+      selfie: {
+        ok: true,
+        selfie: {
+          buffer: SELFIE_BUFFER,
+          mime: "image/jpeg",
+          storedPath: "user-1/selfie-original.jpg",
+        },
+      },
     });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(h.deps.uploadSelfie).not.toHaveBeenCalled();
+    expect(h.persisted[0]!.verifiedSelfiePath).toBe("user-1/selfie-original.jpg");
+  });
+
+  it("pending_review with a distinct reason when the reference is gone entirely", async () => {
+    const h = makeHarness({ selfie: { ok: false, error: "reference_expired" } });
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(outcome).toEqual({
+      kind: "pending_review",
+      userId: USER_ID,
+      reason: "reference_expired",
+    });
+  });
+});
+
+describe("runFaceMatchVerification — infrastructure failures", () => {
+  it("pending_review when the stored selfie cannot be downloaded", async () => {
+    const h = makeHarness({
+      selfie: { ok: false, error: "download_failed" },
+    });
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome).toEqual({
       kind: "pending_review",
@@ -388,11 +431,11 @@ describe("runFaceMatchVerification — infrastructure failures", () => {
     });
   });
 
-  it("pending_review when Persona selfie has no source face (Persona pipeline bug)", async () => {
+  it("pending_review when the reference selfie has no source face (pipeline bug)", async () => {
     const h = makeHarness({
       compareScores: [{ ok: false, error: "no_source_face" }],
     });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome).toEqual({
       kind: "pending_review",
@@ -409,7 +452,7 @@ describe("runFaceMatchVerification — infrastructure failures", () => {
       },
       compareScores: [{ ok: true, similarity: 0.9, faceFound: true }],
     });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("pending_review");
     if (outcome.kind !== "pending_review") return;
@@ -424,7 +467,7 @@ describe("runFaceMatchVerification — infrastructure failures", () => {
         { ok: false, error: "api" },
       ],
     });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("pending_review");
     if (outcome.kind !== "pending_review") return;
@@ -433,7 +476,7 @@ describe("runFaceMatchVerification — infrastructure failures", () => {
 
   it("non-fatal: continues when uploading selfie to storage fails", async () => {
     const h = makeHarness({ uploadFails: true });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
     expect(h.persisted[0]!.verifiedSelfiePath).toBeNull();
@@ -443,21 +486,21 @@ describe("runFaceMatchVerification — infrastructure failures", () => {
 describe("runFaceMatchVerification — preconditions", () => {
   it("pending_review when user has zero profile photos", async () => {
     const h = makeHarness({ user: { profile: { photos: [], eloSeededAt: null } } });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome).toEqual({
       kind: "pending_review",
       userId: USER_ID,
       reason: "no_profile_photos",
     });
-    expect(h.deps.fetchInquirySelfie).not.toHaveBeenCalled();
+    expect(h.deps.fetchReferenceSelfie).not.toHaveBeenCalled();
     // Snapshot is empty array; persistOutcome receives it.
     expect(h.persisted[0]!.photosSnapshot).toEqual([]);
   });
 
   it("pending_review when user has no profile at all", async () => {
     const h = makeHarness({ user: { profile: null } });
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("pending_review");
     if (outcome.kind !== "pending_review") return;
@@ -468,31 +511,31 @@ describe("runFaceMatchVerification — preconditions", () => {
     const h = makeHarness();
     h.deps.db.findUser = vi.fn(async () => null);
 
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
     expect(outcome).toEqual({ kind: "skipped_user_missing", userId: USER_ID });
   });
 });
 
 describe("runFaceMatchVerification — idempotency", () => {
-  it("skips when the same inquiry already ran (faceMatchedAt set)", async () => {
+  it("skips when the same session already ran (faceMatchedAt set)", async () => {
     const h = makeHarness({
       user: {
         verificationStatus: "verified",
-        personaInquiryId: INQUIRY_ID,
+        personaInquiryId: SESSION_ID,
         faceMatchedAt: new Date("2026-04-29T10:00:00Z"),
       },
     });
 
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome).toEqual({ kind: "skipped_idempotent", userId: USER_ID });
-    expect(h.deps.fetchInquirySelfie).not.toHaveBeenCalled();
+    expect(h.deps.fetchReferenceSelfie).not.toHaveBeenCalled();
     expect(h.persisted).toHaveLength(0);
     expect(h.notifications).toHaveLength(0);
     expect(h.activationSurfaces).toHaveLength(0);
   });
 
-  it("re-runs when a NEW inquiry arrives for a previously verified user", async () => {
+  it("re-runs when a NEW liveness session arrives for a previously verified user", async () => {
     const h = makeHarness({
       user: {
         personaInquiryId: "inq_old",
@@ -503,30 +546,30 @@ describe("runFaceMatchVerification — idempotency", () => {
     const outcome = await runFaceMatchVerification(USER_ID, "inq_new", h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
-    expect(h.deps.fetchInquirySelfie).toHaveBeenCalledWith("inq_new");
+    expect(h.deps.fetchReferenceSelfie).toHaveBeenCalled();
   });
 
   it("re-runs when the rerun helper has cleared faceMatchedAt", async () => {
     // triggerVerificationRerun clears faceMatchedAt before launching the
-    // pipeline; same inquiry id should re-run, not idempotent-skip.
+    // pipeline; the same session id should re-run, not idempotent-skip.
     const h = makeHarness({
       user: {
-        personaInquiryId: INQUIRY_ID,
+        personaInquiryId: SESSION_ID,
         faceMatchedAt: null,
       },
     });
 
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
-    expect(h.deps.fetchInquirySelfie).toHaveBeenCalledWith(INQUIRY_ID);
+    expect(h.deps.fetchReferenceSelfie).toHaveBeenCalled();
   });
 });
 
 describe("runFaceMatchVerification — DM behavior", () => {
   it("does not DM when telegramId is non-positive (mobile-only user)", async () => {
     const h = makeHarness({ user: { telegramId: -1n } });
-    await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
     expect(h.notifications).toHaveLength(0);
     expect(h.activationSurfaces).toHaveLength(0);
   });
@@ -540,7 +583,7 @@ describe("runFaceMatchVerification — DM behavior", () => {
       throw swallowedErr;
     });
 
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
     expect(outcome.kind).toBe("verified");
     expect(i).toBe(1);
     expect(h.activationSurfaces).toHaveLength(1);
@@ -552,7 +595,7 @@ describe("runFaceMatchVerification — DM behavior", () => {
       throw new Error("Telegram menu down");
     });
 
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
     expect(h.persisted[0]!.verificationStatus).toBe("verified");
@@ -566,7 +609,7 @@ describe("runFaceMatchVerification — Elo seeding hook", () => {
     const seed = vi.fn(async () => ({ ok: true as const, elo: 650, score: 75 }));
     h.deps.seedEloFromVision = seed;
 
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
     expect(seed).toHaveBeenCalledTimes(1);
@@ -585,7 +628,7 @@ describe("runFaceMatchVerification — Elo seeding hook", () => {
     const seed = vi.fn(async () => ({ ok: true as const, elo: 999, score: 99 }));
     h.deps.seedEloFromVision = seed;
 
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
     expect(seed).not.toHaveBeenCalled();
@@ -595,7 +638,7 @@ describe("runFaceMatchVerification — Elo seeding hook", () => {
     const h = makeHarness();
     expect(h.deps.seedEloFromVision).toBeUndefined();
 
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
     // No throw, no behavior change — verification still completes cleanly.
@@ -612,7 +655,7 @@ describe("runFaceMatchVerification — Elo seeding hook", () => {
       ],
     });
     borderline.deps.seedEloFromVision = seed;
-    await runFaceMatchVerification(USER_ID, INQUIRY_ID, borderline.deps, CONFIG);
+    await runFaceMatchVerification(USER_ID, SESSION_ID, borderline.deps, CONFIG);
 
     const rejected = makeHarness({
       compareScores: [
@@ -621,7 +664,7 @@ describe("runFaceMatchVerification — Elo seeding hook", () => {
       ],
     });
     rejected.deps.seedEloFromVision = seed;
-    await runFaceMatchVerification(USER_ID, INQUIRY_ID, rejected.deps, CONFIG);
+    await runFaceMatchVerification(USER_ID, SESSION_ID, rejected.deps, CONFIG);
 
     expect(seed).not.toHaveBeenCalled();
   });
@@ -632,7 +675,7 @@ describe("runFaceMatchVerification — Elo seeding hook", () => {
       throw new Error("vision API down");
     });
 
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
     expect(h.persisted[0]!.verificationStatus).toBe("verified");
@@ -646,7 +689,7 @@ describe("runFaceMatchVerification — Elo seeding hook", () => {
       error: "vision" as const,
     }));
 
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
   });
@@ -658,7 +701,7 @@ describe("runFaceMatchVerification — Elo seeding hook", () => {
       error: "photos_changed" as const,
     }));
 
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
     expect(h.persisted[0]!.verificationStatus).toBe("verified");
@@ -674,7 +717,7 @@ describe("runFaceMatchVerification — persistence shape", () => {
       ],
     });
 
-    await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(h.persisted[0]!.photoFaceScores).toEqual([0.91, 0.87]);
   });
@@ -685,7 +728,7 @@ describe("runFaceMatchVerification — persistence shape", () => {
     // the conditional update itself lives in runFaceMatchVerificationDefault
     // and is integration-tested via the real Prisma client.
     const h = makeHarness();
-    await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(h.persisted[0]!.photosSnapshot).toEqual([PHOTO_PATH_A, PHOTO_PATH_B]);
   });
@@ -719,7 +762,7 @@ describe("runFaceMatchVerification — downloadProfileImage contract", () => {
       ],
     });
 
-    const outcome = await runFaceMatchVerification(USER_ID, INQUIRY_ID, h.deps, CONFIG);
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
     expect(outcome.kind).toBe("verified");
     if (outcome.kind !== "verified") return;

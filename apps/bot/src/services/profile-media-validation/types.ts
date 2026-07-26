@@ -8,6 +8,12 @@ export type MediaValidationReason =
   | "multiple_faces_photo"
   | "identity_mismatch"
   | "identity_uncertain"
+  /**
+   * The verified user's reference selfie was scrubbed at 90 days and cannot be
+   * re-fetched (an AWS liveness session dies after 3 minutes). Not retryable
+   * by re-uploading — the user needs one more liveness check first.
+   */
+  | "reference_expired"
   | "video_owner_missing"
   | "video_owner_too_brief"
   | "video_mostly_other_person"

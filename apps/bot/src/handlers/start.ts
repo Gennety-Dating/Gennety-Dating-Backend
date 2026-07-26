@@ -10,7 +10,6 @@ import { showMyProfile } from "./menu/my-profile.js";
 import { showSettingsMenu } from "./menu/settings.js";
 import { sendConsentPrompt } from "./onboarding/consent.js";
 import { computeDevBypassFields } from "./dev-bypass.js";
-import { startPoll } from "../services/verification-poller.js";
 import {
   blockIfVerificationGated,
   sendVerificationGateNotice,
@@ -26,14 +25,6 @@ import { promoSourceFromParam } from "../services/promo.js";
 import { shouldUseOnboardingMiniApp } from "./onboarding-mini-app-gate.js";
 import { transitionAccountStatus } from "../services/account-status-transitions.js";
 import { buildMiniAppUrl } from "../services/mini-app-url.js";
-
-/**
- * Deep-link payload set on Persona's `redirect-uri` so the bot knows the
- * user has just returned from completing the Persona hosted flow. Triggers
- * the auto-poll for verification status. See
- * `services/verification-poller.ts`.
- */
-const VERIFY_DONE_START_PARAM = "verify_done";
 
 const start = new Composer<BotContext>();
 
@@ -232,20 +223,17 @@ start.command("start", async (ctx) => {
     // First-touch attribution: capture deep-link start_param from
     // `/start <param>` (e.g. `https://t.me/bot?start=ig_story`). Stored
     // once, never overwritten on later /start invocations so the
-    // attribution is stable across re-onboarding. The `verify_done`
-    // payload is a control signal, not an attribution source — skip it.
+    // attribution is stable across re-onboarding.
     // A `referral_<userId>` payload is stored as the resolvable
     // `referral:<userId>` so the referral engine can pay the referrer when this
     // invitee verifies (PRODUCT_SPEC §Referral); a `promo_<CODE>` payload is
     // stored as `promo:<CODE>` so the promo engine grants this new user their
     // welcome gift at the wow screen (PROMO_CODES_PRODUCT_SPEC.md); every other
-    // payload keeps the `tg:` campaign prefix. `verify_done` is a control
-    // signal, not attribution. Referral and promo are mutually exclusive by
-    // first touch — a single `referralSource` value holds one or the other.
+    // payload keeps the `tg:` campaign prefix. Referral and promo are mutually
+    // exclusive by first touch — a single `referralSource` value holds one or
+    // the other.
     const referralSource =
-      startPayload.length > 0 &&
-      startPayload.length <= 64 &&
-      startPayload !== VERIFY_DONE_START_PARAM
+      startPayload.length > 0 && startPayload.length <= 64
         ? /^promo_/i.test(startPayload)
           ? promoSourceFromParam(startPayload, "tg")
           : referralSourceFromParam(startPayload, "tg")
@@ -297,17 +285,9 @@ start.command("start", async (ctx) => {
     ctx.session.language = user.language as typeof ctx.session.language;
   }
 
-  // Persona deep-link: `?start=verify_done` is set on the hosted flow's
-  // redirect-uri so we know the user has just tapped Persona's "Done".
-  // Acknowledge once and kick off the auto-poll. We must NOT fall through
-  // to the normal /start handlers below — those would either greet the
-  // user as if they'd just opened the bot ("welcome back!") or re-prompt
-  // for a step they're past.
-  if (startPayload === VERIFY_DONE_START_PARAM) {
-    await ctx.reply(t(ctx.session.language, "verifyAutoPollStarted"));
-    startPoll(user.id, telegramId, ctx.session.language, ctx.api);
-    return;
-  }
+  // (The Persona-era `?start=verify_done` deep link is gone with the hosted
+  // flow: Face Liveness runs inside the Mini App and never leaves Telegram, so
+  // there is no return trip to intercept and no verification status to poll.)
 
   // If user already completed onboarding, greet them and open the main menu.
   if (user.onboardingStep === "completed") {
