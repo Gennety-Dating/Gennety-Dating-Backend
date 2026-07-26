@@ -1668,7 +1668,16 @@ model FounderReport {
   weekOf    DateTime @map("week_of")
   /// Assembled `WeeklyMatchesReport` snapshot (pairs + user cards + photo refs).
   dataJson  Json     @map("data_json")
-  createdAt DateTime @default(now()) @map("created_at")
+  /// When the token stops working. The page shows real users' names, photos,
+  /// cities and attractiveness scores behind a token-in-the-URL sole-auth
+  /// boundary, so that token also lands in reverse-proxy access logs and
+  /// browser history. An expiry bounds how long a leaked log line stays useful.
+  ///
+  /// Nullable, and null means "never expires": rows created before this column
+  /// existed must keep working, so old founder links are not broken by the
+  /// upgrade. New rows are stamped by `notifyFounderWeeklyMatches`.
+  expiresAt DateTime? @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   @@index([createdAt])
   @@map("founder_reports")

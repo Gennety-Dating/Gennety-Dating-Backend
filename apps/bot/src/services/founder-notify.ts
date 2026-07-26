@@ -311,7 +311,12 @@ export async function notifyFounderWeeklyMatches(matchIds: string[]): Promise<vo
     const weekOf = startOfUtcDay(new Date());
     await prisma.founderReport.create({
       // Prisma Json — the report is a plain serializable snapshot.
-      data: { token, weekOf, dataJson: report as unknown as object },
+      data: {
+        token,
+        weekOf,
+        dataJson: report as unknown as object,
+        expiresAt: new Date(Date.now() + FOUNDER_REPORT_TTL_MS),
+      },
     });
 
     const url = `${env.PUBLIC_BASE_URL.replace(/\/+$/, "")}/v1/founder/report/${token}`;
@@ -418,6 +423,18 @@ function buildDateScheduledHeader(input: FounderDateScheduledInput): string {
 // ───────────────────────────────────────────────────────────────────────────
 // Helpers
 // ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * How long a weekly-report link stays live.
+ *
+ * The token in the URL is the page's sole authorization and the page shows real
+ * users' names, photos, cities and attractiveness scores — so the token also
+ * sits in reverse-proxy access logs and browser history indefinitely. 90 days
+ * (matching the reference-selfie GDPR window) keeps the link usable well past
+ * the week it reports on while bounding how long a leaked log line is worth
+ * anything.
+ */
+export const FOUNDER_REPORT_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
 /** URL-safe crypto-random token for the report page (32 bytes → 43 chars). */
 function randomToken(): string {

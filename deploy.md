@@ -1531,7 +1531,11 @@ Required/high-impact env keys:
   activation / venue-finalize / the weekly cron — no new cron schedule. The
   founder-facing dashboard "Weekly matches" tab lives in the separate
   `gennety-dating-dashboard` repo and consumes `GET /admin/analytics/weekly-matches`.
-  Rollback: flip the flag off; the additive column/table may stay.
+  **Since 2026-07-26 also requires `db:push` of the additive nullable
+  `founder_reports.expires_at` column** — report links now expire after 90 days
+  (the token is the page's sole auth and rides in the URL, so it also sits in
+  access logs). A null means never-expires, so links created before the upgrade
+  keep working. Rollback: flip the flag off; the additive column/table may stay.
 - Optional cron overrides: `MATCH_CRON_SCHEDULE`, `CRON_TIMEZONE`,
   `EXPIRY_CRON_SCHEDULE`, `NO_MATCH_NOTICE_CRON_SCHEDULE`,
   `PROPOSAL_COUNTDOWN_CRON_SCHEDULE`, `RE_ENGAGEMENT_CRON_SCHEDULE`,

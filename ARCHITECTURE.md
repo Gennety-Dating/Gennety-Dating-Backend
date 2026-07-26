@@ -551,7 +551,12 @@ tokenized report page (`GET /v1/founder/report/:token`). Columns: `token`
 (unique crypto-random URL token = the page's sole authorization, never logged),
 `weekOf` (UTC day of the batch), `dataJson` (the assembled `WeeklyMatchesReport`
 snapshot — pairs + user cards + photo refs; **never** `psychologicalSummary` /
-AI-memory dumps), `createdAt`. Indexed `(createdAt)`. Standalone model (no user
+AI-memory dumps), `expiresAt`, `createdAt`. Indexed `(createdAt)`.
+`expiresAt` (added 2026-07-26) bounds how long a leaked link is worth anything:
+the token is the sole authorization AND rides in the URL, so it also lands in
+reverse-proxy access logs and browser history. New rows get 90 days; a **null**
+means never-expires, so rows predating the column keep working. Both the page
+and its media proxy check it. Standalone model (no user
 relation); PII lives only in the snapshot. Because no foreign key can cascade
 into JSON, the shared account-deletion service explicitly deletes every report
 whose snapshot contains the departing `userId` before deleting the User row.

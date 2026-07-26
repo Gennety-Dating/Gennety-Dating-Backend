@@ -27,10 +27,16 @@ interface LoadedReport {
   allowedRefs: Set<string>;
 }
 
-async function loadReport(token: string): Promise<LoadedReport | null> {
+async function loadReport(
+  token: string,
+  now: Date = new Date(),
+): Promise<LoadedReport | null> {
   if (!TOKEN_RE.test(token)) return null;
   const row = await prisma.founderReport.findUnique({ where: { token } });
   if (!row) return null;
+  // A null `expiresAt` means "never expires" — rows predating the column must
+  // keep working, so an old founder link is not broken by the upgrade.
+  if (row.expiresAt && row.expiresAt <= now) return null;
   const report = row.dataJson as unknown as WeeklyMatchesReport;
   const allowedRefs = new Set<string>();
   for (const pair of report.pairs) {

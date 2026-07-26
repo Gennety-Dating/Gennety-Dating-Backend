@@ -98,3 +98,46 @@ describe("GET /v1/founder/report/:token/media", () => {
     expect(res.headers["x-robots-tag"]).toBe("noindex");
   });
 });
+
+describe("token expiry (FOUNDER-1)", () => {
+  it("404s the page once the token has expired", async () => {
+    founderReportFindUnique.mockResolvedValue({
+      ...reportRow(["ref-a", "ref-b"]),
+      expiresAt: new Date(Date.now() - 1000),
+    });
+
+    const res = await request(buildApp()).get(`/v1/founder/report/${TOKEN}`);
+    expect(res.status).toBe(404);
+  });
+
+  it("404s the media proxy too, so an expired link leaks no photos", async () => {
+    founderReportFindUnique.mockResolvedValue({
+      ...reportRow(["ref-a", "ref-b"]),
+      expiresAt: new Date(Date.now() - 1000),
+    });
+
+    const res = await request(buildApp()).get(`/v1/founder/report/${TOKEN}/media?ref=ref-a`);
+    expect(res.status).toBe(404);
+    expect(downloadProfileImage).not.toHaveBeenCalled();
+  });
+
+  it("serves a token that has not expired yet", async () => {
+    founderReportFindUnique.mockResolvedValue({
+      ...reportRow(["ref-a", "ref-b"]),
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    const res = await request(buildApp()).get(`/v1/founder/report/${TOKEN}`);
+    expect(res.status).toBe(200);
+  });
+
+  it("treats a null expiresAt as never-expires, so pre-upgrade links keep working", async () => {
+    founderReportFindUnique.mockResolvedValue({
+      ...reportRow(["ref-a", "ref-b"]),
+      expiresAt: null,
+    });
+
+    const res = await request(buildApp()).get(`/v1/founder/report/${TOKEN}`);
+    expect(res.status).toBe(200);
+  });
+});
