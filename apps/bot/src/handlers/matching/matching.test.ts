@@ -93,6 +93,20 @@ vi.mock("../../services/wingman-hint.js", () => ({
   generateAndSaveWingmanHints: vi.fn().mockResolvedValue(null),
 }));
 
+// Rematch offer (REMATCH_PRODUCT_SPEC.md). Stubbed so these tests assert WHEN
+// the offer fires — the "may this user buy" decision has its own suite in
+// services/rematch.test.ts.
+const { mOfferRematchAfterCancellation } = vi.hoisted(() => ({
+  mOfferRematchAfterCancellation: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("./rematch.js", () => ({
+  offerRematchAfterCancellation: (...args: unknown[]) =>
+    mOfferRematchAfterCancellation(...args),
+  sendRematchOfferIfEligible: vi.fn().mockResolvedValue(false),
+  handleRematchBuyCallback: vi.fn(),
+  REMATCH_BUY_CALLBACK: "rematch:buy",
+}));
+
 import { prisma } from "@gennety/db";
 import {
   handleMatchDecision,
@@ -1581,6 +1595,134 @@ describe("matching decision flow", () => {
         }),
       }),
     );
+  });
+
+  // --- Rematch offer timing (REMATCH_PRODUCT_SPEC.md, D4) -------------------
+  // The explicit decline is the PRIMARY rematch moment — far more common than
+  // the 24h silence `expiry-notify` covers. These lock in that it fires exactly
+  // when the match is terminal, and never while it is still live.
+
+  it("offers a rematch to both sides once a decline cancels the match", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ acceptedByA: true, acceptedByB: null }),
+    );
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: true,
+      acceptedByB: false,
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
+
+    await handleMatchDecision(
+      createCtx({
+        session: { onboardingStep: "completed" },
+        callbackData: "match:do:decline:match-1",
+        fromId: 1002,
+      }),
+    );
+
+    // Both participants are free now; the sender decides who may actually buy.
+    expect(mOfferRematchAfterCancellation).toHaveBeenCalledTimes(1);
+    expect(mOfferRematchAfterCancellation).toHaveBeenCalledWith(
+      expect.anything(),
+      "uid-A",
+      "uid-B",
+    );
+  });
+
+  it("offers a rematch when he accepted but she had already passed", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ acceptedByA: false, acceptedByB: null }),
+    );
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: false,
+      acceptedByB: true,
+    });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
+
+    await handleMatchDecision(
+      createCtx({
+        session: { onboardingStep: "completed" },
+        callbackData: "match:accept:match-1",
+        fromId: 1002,
+      }),
+    );
+
+    expect(mOfferRematchAfterCancellation).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT offer a rematch to the first decider — the match is still live", async () => {
+    // Blind-decision path: the row stays `proposed`, so both users still have a
+    // live match. Offering here would contradict the single-live-match rule and
+    // sell a rematch to someone whose current one is not finished.
+    mMatch.findUnique.mockResolvedValueOnce(matchRow());
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: false,
+      acceptedByB: null,
+    });
+
+    await handleMatchDecision(
+      createCtx({
+        session: { onboardingStep: "completed" },
+        callbackData: "match:do:decline:match-1",
+        fromId: 1001,
+      }),
+    );
+
+    expect(mOfferRematchAfterCancellation).not.toHaveBeenCalled();
+  });
+
+  it("does NOT offer a rematch on mutual accept", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ acceptedByA: null, acceptedByB: true }),
+    );
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: true,
+      acceptedByB: true,
+    });
+
+    await handleMatchDecision(
+      createCtx({
+        session: { onboardingStep: "completed" },
+        callbackData: "match:accept:match-1",
+        fromId: 1001,
+      }),
+    );
+
+    expect(mOfferRematchAfterCancellation).not.toHaveBeenCalled();
+  });
+
+  it("does NOT offer a rematch when another caller won the terminal CAS", async () => {
+    // A concurrent decision already cancelled the row; this caller must not
+    // double-send the offer.
+    mMatch.findUnique.mockResolvedValueOnce(
+      matchRow({ acceptedByA: true, acceptedByB: null }),
+    );
+    mClaimMatchDecision.mockResolvedValueOnce({
+      claimed: true,
+      status: "proposed",
+      acceptedByA: true,
+      acceptedByB: false,
+    });
+    mMatch.updateMany.mockResolvedValueOnce({ count: 0 });
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-B" });
+
+    await handleMatchDecision(
+      createCtx({
+        session: { onboardingStep: "completed" },
+        callbackData: "match:do:decline:match-1",
+        fromId: 1002,
+      }),
+    );
+
+    expect(mOfferRematchAfterCancellation).not.toHaveBeenCalled();
   });
 
   it("second decline after a peer decline stays neutral and does not boost priority", async () => {

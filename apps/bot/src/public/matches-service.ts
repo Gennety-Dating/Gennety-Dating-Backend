@@ -36,6 +36,7 @@ import {
   outcomeRevealKey,
 } from "../services/match-decision-shared.js";
 import { getBotApi } from "./server.js";
+import { offerRematchAfterCancellation } from "../handlers/matching/rematch.js";
 import { PROPOSAL_TTL_MS } from "../utils/countdown-plate.js";
 import { PRE_DATE_WINGMAN_HOURS } from "@gennety/shared";
 import {
@@ -479,6 +480,12 @@ export async function applyMatchDecision(
         title: "Gennety",
         matchId,
       });
+      // Rematch is Telegram-only, but a decision taken in the iOS app still
+      // frees a TELEGRAM participant — without this hook their offer would be
+      // silently lost purely because their partner used the other client.
+      // `sendRematchOfferIfEligible` skips synthetic negative telegramIds, so a
+      // mobile-only user correctly gets nothing.
+      await offerRematchAfterCancellation(getBotApi(), match.userAId, match.userBId);
       return getCurrentMatchForUser(userId);
     }
 
@@ -535,6 +542,9 @@ export async function applyMatchDecision(
     title: "Gennety",
     matchId,
   });
+  // Same reason as the mixed-verdict branch above: a decline taken in the iOS
+  // app still frees a Telegram participant, who should still get the offer.
+  await offerRematchAfterCancellation(getBotApi(), match.userAId, match.userBId);
   return getCurrentMatchForUser(userId);
 }
 

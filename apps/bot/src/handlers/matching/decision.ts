@@ -15,6 +15,7 @@ import {
 } from "../../services/match-decision-shared.js";
 import { claimMatchDecision } from "../../services/match-decision-claim.js";
 import { sendOrEditPostAcceptMessage } from "./post-accept-message.js";
+import { offerRematchAfterCancellation } from "./rematch.js";
 
 /**
  * Match decision handler — Accept / Decline.
@@ -419,6 +420,11 @@ async function handleAccept(
     const acceptedSidePriorityBoosted = await boostAcceptedSidePriority(actorId);
     await sendActorReveal(ctx, peerPrior, lang, true, acceptedSidePriorityBoosted);
     await sendPeerOutcomeReveal(ctx, match, side, peerPrior, true, acceptedSidePriorityBoosted);
+    // He accepted and she had already passed — the sharpest version of the pain
+    // Rematch exists for. Offered only now: the match is terminal, both reveals
+    // have landed, and the priority boost above compensates the NEXT weekly
+    // batch, while this offers not having to wait for it.
+    await offerRematchAfterCancellation(ctx.api, match.userAId, match.userBId);
     return;
   }
 
@@ -499,4 +505,7 @@ async function handleDecline(
     peerPrior === true ? await boostAcceptedSidePriority(targetId) : false;
   await sendActorReveal(ctx, peerPrior, lang, false, acceptedSidePriorityBoosted);
   await sendPeerOutcomeReveal(ctx, match, side, peerPrior, false, acceptedSidePriorityBoosted);
+  // Terminal decline (his pass, or hers after he accepted). Both sides are free
+  // again, so both are offered — the sender decides who may actually buy.
+  await offerRematchAfterCancellation(ctx.api, match.userAId, match.userBId);
 }

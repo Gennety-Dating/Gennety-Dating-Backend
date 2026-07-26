@@ -71,6 +71,42 @@ export async function sendRematchOfferIfEligible(
 }
 
 /**
+ * Both participants are free again after a match was terminally cancelled —
+ * offer each of them a paid rematch.
+ *
+ * This is THE primary rematch moment: an explicit decline (his, hers, or both)
+ * is far more common than the 24h silence `expiry-notify` covers, and it is the
+ * exact frustration the feature answers — "this one didn't work, I don't want to
+ * wait another week".
+ *
+ * Call ONLY after winning the `proposed → cancelled` CAS, so the match is
+ * genuinely terminal and the single-live-match eligibility check can pass, and
+ * only AFTER the outcome reveals have been sent, so the user learns what
+ * happened before being offered a next step.
+ *
+ * Sent to both sides because either may be the eligible buyer;
+ * `sendRematchOfferIfEligible` self-gates on male-only + D3 limits, so a woman
+ * (or an ineligible/rate-limited man) simply receives nothing. The copy is
+ * static and identical for both sides, so it discloses nothing about who decided
+ * what — the blind-decision invariant is untouched.
+ */
+export async function offerRematchAfterCancellation(
+  // Nullable because the public API's `getBotApi()` is: an API-only process (or
+  // a test harness) has no bot to send through, and that must be a silent no-op
+  // rather than an exception thrown out of a decision commit.
+  api: Api<RawApi> | null,
+  userAId: string,
+  userBId: string,
+  now: Date = new Date(),
+): Promise<void> {
+  if (!api) return;
+  await Promise.all([
+    sendRematchOfferIfEligible(api, userAId, "failed", now).catch(() => {}),
+    sendRematchOfferIfEligible(api, userBId, "failed", now).catch(() => {}),
+  ]);
+}
+
+/**
  * Offer button tap → mint the Stars invoice and hand back a pay button.
  *
  * Re-checks eligibility because the card is durable: it can sit in the chat past

@@ -2016,9 +2016,12 @@ in v1. Full spec: [REMATCH_PRODUCT_SPEC.md](REMATCH_PRODUCT_SPEC.md).
   never buys a score boost.** The cooldown is deliberately kept: right after the
   Thursday batch the only available candidates are the *unpaired* women, which is
   exactly the cohort the famine gift is meant for.
-- **Two pain-triggered entry points only** (no menu row): the Thursday no-match
-  DM, and a match that expired without a date. The offer states before payment
-  that it buys an introduction, not a date.
+- **Pain-triggered entry points only** (no menu row): the Thursday no-match DM,
+  and any match that died without a date — an explicit decline (his, hers, or
+  both; the primary case), the same decision taken from the iOS app, or a 24 h
+  TTL expiry. The offer fires only once the match is terminal and the outcome
+  reveals have landed, never to a first decider whose match is still live. It
+  states before payment that it buys an introduction, not a date.
 - **Money rule.** Payment buys a pitch. A decline, a ghost, or a failed
   negotiation is **not** refunded (stated in the offer copy). The only refundable
   outcome is "the engine found nobody", and it is automatic. The flow is

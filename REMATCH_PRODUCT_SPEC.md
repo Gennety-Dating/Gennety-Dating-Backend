@@ -188,9 +188,24 @@ derived from these rows, so there is no counter to drift.
    That message is a deliberately short, empathetic rich stream (§3.1); bolting a
    price onto it would undercut the empathy and complicate a carefully-tuned
    primitive. Variant: `famine`.
-2. **Terminal failed match** — after TTL expiry (`expiry-notify.ts`), once the
-   match is genuinely terminal (`expired`), so the single-live-match eligibility
-   check passes. Variant: `failed`.
+2. **Terminal failed match** — variant `failed`, fired from
+   `offerRematchAfterCancellation` at every point a match dies without a date:
+   - **an explicit decline** (`handlers/matching/decision.ts`) — his pass, hers
+     after he accepted, or both. **This is the primary rematch moment**: an
+     explicit decline is far more common than silence, and it is the exact
+     frustration the feature answers.
+   - **the mobile twin** (`public/matches-service.ts`) — a decision taken in the
+     iOS app still frees a *Telegram* participant, who would otherwise lose the
+     offer purely because their partner used the other client.
+   - **TTL expiry** (`expiry-notify.ts`) — nobody answered within 24 h.
+
+   Fired only after the `proposed → cancelled` CAS is won (so a concurrent
+   decision cannot double-send) and only after the outcome reveals have landed,
+   so the user learns what happened before being offered a next step. Never on
+   the first-decider path, where the row stays `proposed` and both users still
+   have a live match. Sent to both sides; the sender self-gates on male-only +
+   D3 limits, and the copy is static and identical for both, so it discloses
+   nothing about who decided what.
 3. **NOT in the main menu** (D4) and **not** in the My Date hub (by definition
    there is no live date).
 
