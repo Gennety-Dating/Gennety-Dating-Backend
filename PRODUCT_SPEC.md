@@ -2168,6 +2168,25 @@ Free-text reason is LLM-triaged into a `tier`:
 | **2 — Ethical** | Unethical / boundary issues | `reported.strikes += 1`. **Strike 1** → warning DM. **Strike 2** → `status = suspended`, `suspendedUntil = now + 14 d`. **Strike ≥3** → `status = banned`. Cancel in-flight matches at strike ≥2. |
 | **3 — Safety** | Safety threat | `status = pending_investigation` immediately, cancel in-flight matches, report row stays `adminReviewed = false` for the manual queue. |
 
+**The reported category bounds the tier in BOTH directions (2026-07-26).** The
+reporter picks a category, and that category sets a floor *and* a ceiling; the
+LLM only refines within the band. The floor has always existed (the classifier
+can never downgrade below what the category implies). The ceiling is new, and
+closes a real escalation path: the classifier's only input beyond the category
+label is the reporter's free text, so before this a reporter could choose the
+mildest category and write text engineered to produce Tier 3 — freezing an
+innocent partner's account and cancelling their in-flight matches on the
+classifier's word alone. **Tier 3 is now reachable only from the three
+categories the reporter themselves marked safety-grade** (`wrong_person`,
+`unsafe_red_flag`, `spam_or_fraud`), where floor and ceiling coincide and the
+LLM has no say. `fake_photos` / `offensive_behavior` / `inappropriate_profile`
+cap at 2; `other` caps at 2 as well — an unclassified free-text report can still
+produce a strike, but cannot auto-freeze anyone. Nothing is lost for genuine
+safety reports filed under a mild category: Tier 2 already suspends at strike
+≥2, and the row reaches the moderation queue either way. The report text is
+additionally fenced as untrusted data in the triage prompt, but the clamp — not
+the prompt — is what bounds the outcome.
+
 Other safeguards:
 - `(reporterId, matchId)` is unique — duplicate reports rejected at write
   time and surfaced as `reportDuplicate` to the user.

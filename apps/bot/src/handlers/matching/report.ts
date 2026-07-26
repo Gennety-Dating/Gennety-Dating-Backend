@@ -95,6 +95,39 @@ const REPORT_CATEGORY_TIER_FLOOR: Record<ReportCategory, ReportTier | null> = {
   other: null,
 };
 
+/**
+ * The highest Tier the LLM may reach for a given reported category.
+ *
+ * The floor above has always existed, so the classifier could never DOWNgrade a
+ * report below the severity the reporter's own category implies. There was no
+ * matching ceiling, which left the classifier unbounded authority in the other
+ * direction — and its only input beyond the category label is the reporter's
+ * free text. A reporter could therefore pick the mildest category and write text
+ * engineered to produce `tier: 3`, which freezes the reported user
+ * (`pending_investigation`) and cancels every in-flight match on the spot.
+ *
+ * The ceiling restores the design the floors already implied: the CATEGORY
+ * decides the severity band, and the LLM refines *within* it. Tier 3 — the only
+ * outcome that auto-freezes an account — is now reachable only from the three
+ * categories the reporter explicitly chose as safety-grade
+ * (`wrong_person`, `unsafe_red_flag`, `spam_or_fraud`), where floor and ceiling
+ * coincide and the LLM has no say at all.
+ *
+ * `other` is capped at 2: an unclassified free-text report can still produce a
+ * strike, but cannot auto-freeze someone on the classifier's word alone. Real
+ * safety reports filed under `other` are not lost — Tier 2 at strike ≥2 already
+ * suspends, and the row lands in the moderation queue either way.
+ */
+const REPORT_CATEGORY_TIER_CEILING: Record<ReportCategory, ReportTier> = {
+  fake_photos: 2,
+  wrong_person: 3,
+  offensive_behavior: 2,
+  unsafe_red_flag: 3,
+  spam_or_fraud: 3,
+  inappropriate_profile: 2,
+  other: 2,
+};
+
 interface ReportTriageResult {
   tier: number;
   reason_summary: string;
@@ -510,19 +543,40 @@ async function resolveStructuredTriage(input: {
 
   try {
     const systemPrompt = parseReportTriagePrompt({ language: input.language });
+    // The report text is untrusted and goes to an LLM whose answer drives
+    // automated penalties, so it is fenced with the markers the prompt tells the
+    // model to treat as data. The fence is defence in depth only — the clamp
+    // below is what actually bounds the outcome.
     const triageText =
       `Category: ${REPORT_CATEGORY_CANONICAL_LABELS[input.category]}\n` +
-      `Details: ${input.detailText}`;
+      `Details:\n<<<REPORT\n${input.detailText}\nREPORT>>>`;
     const parsed = await callOpenAIJson<ReportTriageResult>(systemPrompt, triageText);
     if (!parsed) return fallback;
 
     const parsedTier = normalizeTier(parsed.tier);
+    const ceiling = REPORT_CATEGORY_TIER_CEILING[input.category];
     const wasPromoted = categoryFloor != null && parsedTier < categoryFloor;
-    const tier = wasPromoted ? categoryFloor : parsedTier;
+    const wasCapped = parsedTier > ceiling;
+    const tier: ReportTier = wasPromoted
+      ? categoryFloor
+      : wasCapped
+        ? ceiling
+        : parsedTier;
+    if (wasCapped) {
+      // Worth a log line: either the classifier is mis-grading this category, or
+      // someone is trying to escalate through the free-text field.
+      console.warn(
+        `[report] triage tier capped category=${input.category} ` +
+          `parsed=${parsedTier} ceiling=${ceiling}`,
+      );
+    }
     const parsedSummary = (parsed.reason_summary ?? "").trim().slice(0, 240);
-    const summary = wasPromoted
-      ? categorySummary
-      : parsedSummary || categorySummary || fallback.reason_summary;
+    // A clamped tier makes the model's own summary untrustworthy as a
+    // description of the outcome, so fall back to the category's neutral one.
+    const summary =
+      wasPromoted || wasCapped
+        ? categorySummary
+        : parsedSummary || categorySummary || fallback.reason_summary;
     return { tier, reason_summary: summary, manualReviewRequired: false };
   } catch {
     return fallback;
