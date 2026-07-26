@@ -197,6 +197,16 @@ model User {
   /// retries don't double-process the same inquiry; also used to cross-link
   /// the Persona dashboard audit trail.
   personaInquiryId           String?                  @unique @map("persona_inquiry_id")
+  /// The AWS Face Liveness session THIS user most recently minted, written at
+  /// `beginLivenessCheck` and cleared when the check reaches a terminal state.
+  ///
+  /// Deliberately separate from `personaInquiryId`, which means "the session
+  /// that produced the stored reference selfie" — `triggerVerificationRerun`
+  /// reruns against that value, so a not-yet-completed session must never land
+  /// there. This column exists purely so `completeLivenessCheck` can refuse a
+  /// `sessionId` the caller did not create: the client reports only "I
+  /// finished", and without the binding it could report any session id.
+  pendingLivenessSessionId   String?                  @map("pending_liveness_session_id")
   /// Timestamp the inquiry flipped this user to `verified`. Re-verifications
   /// overwrite.
   verifiedAt                 DateTime?                @map("verified_at")

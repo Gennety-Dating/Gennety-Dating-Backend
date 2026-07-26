@@ -174,9 +174,17 @@ export function createVerificationMiniAppRouter(api: Api<RawApi>): Router {
 
       const completed = await completeLivenessCheck(user.id, sessionId, api);
       if (!completed.ok) {
-        res
-          .status(completed.error === "user_not_found" ? 404 : 503)
-          .json({ error: completed.error.replace(/_/g, "-") });
+        // `session_mismatch` is a 409, not a 503: nothing is wrong with the
+        // deploy, the reported session simply isn't this user's (a stale tab,
+        // or a client reporting a session it doesn't own). The Mini App's
+        // answer is to start a fresh check.
+        const status =
+          completed.error === "user_not_found"
+            ? 404
+            : completed.error === "session_mismatch"
+              ? 409
+              : 503;
+        res.status(status).json({ error: completed.error.replace(/_/g, "-") });
         return;
       }
 

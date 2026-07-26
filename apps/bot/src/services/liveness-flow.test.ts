@@ -62,6 +62,8 @@ beforeEach(() => {
     telegramId: 555n,
     language: "en",
     verificationStatus: "unverified",
+    // The session this user minted at /init. `complete()` refuses anything else.
+    pendingLivenessSessionId: SESSION_ID,
   });
   userUpdate.mockResolvedValue({});
   createLivenessSession.mockResolvedValue({ ok: true, sessionId: SESSION_ID });
@@ -90,7 +92,9 @@ describe("beginLivenessCheck", () => {
     });
     expect(userUpdate).toHaveBeenCalledWith({
       where: { id: "user-1" },
-      data: { verificationStatus: "pending" },
+      // The session is bound to the user here so `complete()` can refuse a
+      // session id the caller did not mint.
+      data: { verificationStatus: "pending", pendingLivenessSessionId: SESSION_ID },
     });
   });
 
@@ -174,7 +178,12 @@ describe("completeLivenessCheck", () => {
 
       expect(result).toEqual({ ok: true, outcome: "retry" });
       expect(runFaceMatchVerificationDefault).not.toHaveBeenCalled();
-      expect(userUpdate).not.toHaveBeenCalled();
+      // The ONLY write on a retryable outcome is releasing the session binding
+      // — `verificationStatus` must be untouched, because a failed capture is
+      // not evidence of an impostor.
+      for (const call of userUpdate.mock.calls) {
+        expect(call[0].data).toEqual({ pendingLivenessSessionId: null });
+      }
       // The user gets a nudge with a fresh Verify button, not a rejection.
       expect(api.sendMessage).toHaveBeenCalledTimes(1);
     },
@@ -185,6 +194,7 @@ describe("completeLivenessCheck", () => {
       id: "user-1",
       telegramId: -42n,
       language: "en",
+      pendingLivenessSessionId: SESSION_ID,
     });
     getLivenessResult.mockResolvedValueOnce({
       ok: true,
@@ -212,5 +222,56 @@ describe("completeLivenessCheck", () => {
     userFindUnique.mockResolvedValueOnce(null);
     const result = await completeLivenessCheck("ghost", SESSION_ID, apiArg);
     expect(result).toEqual({ ok: false, error: "user_not_found" });
+  });
+
+  it("refuses a session id this user did not mint, before calling AWS", async () => {
+    // The client reports only "I finished" and the verdict comes from AWS — but
+    // the session id is client-supplied. Without this binding a caller could
+    // name someone else's session and have that person's reference selfie fed
+    // into their own face-match run.
+    const result = await completeLivenessCheck(
+      "user-1",
+      "99999999-9999-4999-8999-999999999999",
+      apiArg,
+    );
+
+    expect(result).toEqual({ ok: false, error: "session_mismatch" });
+    expect(getLivenessResult).not.toHaveBeenCalled();
+    expect(runFaceMatchVerificationDefault).not.toHaveBeenCalled();
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the user has no session in flight at all", async () => {
+    userFindUnique.mockResolvedValueOnce({
+      id: "user-1",
+      telegramId: 555n,
+      language: "en",
+      pendingLivenessSessionId: null,
+    });
+
+    const result = await completeLivenessCheck("user-1", SESSION_ID, apiArg);
+
+    expect(result).toEqual({ ok: false, error: "session_mismatch" });
+    expect(getLivenessResult).not.toHaveBeenCalled();
+  });
+
+  it("releases the binding once the session reaches a terminal state", async () => {
+    await completeLivenessCheck("user-1", SESSION_ID, apiArg);
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { pendingLivenessSessionId: null },
+    });
+  });
+
+  it("keeps the binding when the provider read fails (not a terminal outcome)", async () => {
+    getLivenessResult.mockResolvedValueOnce({ ok: false, error: "api" });
+
+    const result = await completeLivenessCheck("user-1", SESSION_ID, apiArg);
+
+    expect(result).toEqual({ ok: false, error: "provider" });
+    // The session may still be readable within its 3-minute life, so a blip
+    // must not force the user to start over.
+    expect(userUpdate).not.toHaveBeenCalled();
   });
 });

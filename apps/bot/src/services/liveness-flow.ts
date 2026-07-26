@@ -60,7 +60,12 @@ export type CompleteLivenessOutcome = "processing" | "retry";
 
 export type CompleteLivenessResult =
   | { ok: true; outcome: CompleteLivenessOutcome }
-  | { ok: false; error: "user_not_found" | "provider" };
+  /**
+   * `session_mismatch` — the reported session is not the one this user minted.
+   * Either a stale tab finishing after a newer `/init`, or a client reporting a
+   * session it does not own. Neither is a verdict, so nothing is written.
+   */
+  | { ok: false; error: "user_not_found" | "provider" | "session_mismatch" };
 
 /**
  * Step 1 — mint a session and the credentials that let the device stream to
@@ -105,10 +110,19 @@ export async function beginLivenessCheck(
     };
   }
 
-  // Best-effort: losing this write costs nothing, the terminal status is
-  // written by the pipeline either way.
+  // Bind the session to this user. Unlike the `pending` flip beside it, this
+  // write is NOT best-effort in spirit — `complete()` refuses a session id that
+  // does not match it, so losing the write means the user has to re-run. That
+  // is the right failure direction: the alternative is accepting any session id
+  // the client cares to send.
   await prisma.user
-    .update({ where: { id: user.id }, data: { verificationStatus: "pending" } })
+    .update({
+      where: { id: user.id },
+      data: {
+        verificationStatus: "pending",
+        pendingLivenessSessionId: session.sessionId,
+      },
+    })
     .catch((err) => {
       console.warn(`${LOG_PREFIX} failed to mark pending`, { userId, err });
     });
@@ -141,18 +155,50 @@ export async function completeLivenessCheck(
 ): Promise<CompleteLivenessResult> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, telegramId: true, language: true },
+    select: {
+      id: true,
+      telegramId: true,
+      language: true,
+      pendingLivenessSessionId: true,
+    },
   });
   if (!user) return { ok: false, error: "user_not_found" };
 
+  // The client only ever reports "I finished", and the verdict itself comes
+  // from AWS — but the session id is client-supplied, so without this check a
+  // caller could ask us to read a session someone else created. AWS would
+  // answer for it happily; the reference selfie handed to the face-match
+  // pipeline would simply be the wrong person's. Refuse before spending the
+  // provider call.
+  if (user.pendingLivenessSessionId !== sessionId) {
+    console.warn(`${LOG_PREFIX} session id does not belong to this user`, {
+      userId,
+      reported: sessionId,
+      expected: user.pendingLivenessSessionId,
+    });
+    return { ok: false, error: "session_mismatch" };
+  }
+
   const result = await getLivenessResult(sessionId);
   if (!result.ok) {
+    // Deliberately do NOT clear the binding: a provider blip is not a terminal
+    // outcome, and the session may still be readable on a retry within its
+    // 3-minute life.
     console.error(`${LOG_PREFIX} could not read session result`, {
       userId,
       error: result.error,
     });
     return { ok: false, error: "provider" };
   }
+
+  // The session reached a terminal state, so release the binding. A replayed
+  // `/event` for the same id now answers `session_mismatch` instead of
+  // re-entering the flow, and a genuine retry mints a fresh session anyway.
+  await prisma.user
+    .update({ where: { id: user.id }, data: { pendingLivenessSessionId: null } })
+    .catch((err) => {
+      console.warn(`${LOG_PREFIX} failed to clear session binding`, { userId, err });
+    });
 
   if (result.outcome !== "passed") {
     // Every non-pass is retryable by design: a failed capture is not evidence

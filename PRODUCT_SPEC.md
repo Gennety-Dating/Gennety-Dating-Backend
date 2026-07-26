@@ -439,7 +439,13 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   `FaceLivenessDetectorCore`, which streams the selfie video **device → AWS**
   (it never passes through our server). Terminal detector events POST to
   `/v1/verification/mini-app/event`, and that request reads AWS's verdict
-  server-side. **The detector's on-screen copy renders in the user's own
+  server-side. **The session is bound to the user who minted it**
+  (`User.pendingLivenessSessionId`, written at `/init` and released at any
+  terminal outcome): the verdict is always AWS's, but the session *id* is
+  client-supplied, so a `complete` naming a session the caller does not own is
+  refused with `409 session-mismatch` before AWS is called — otherwise someone
+  else's reference selfie could be fed into this user's face-match run
+  (added 2026-07-26). **The detector's on-screen copy renders in the user's own
   `User.language`** (all five, `services`-side default English): its single
   line — "move closer", "hold still", "centre your face" — IS the instruction,
   read at a glance while the camera is up, so an untranslated one does not make

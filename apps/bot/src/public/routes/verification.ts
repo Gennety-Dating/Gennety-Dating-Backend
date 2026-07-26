@@ -133,9 +133,15 @@ verificationRouter.post(
 
     const completed = await completeLivenessCheck(userId, sessionId, api);
     if (!completed.ok) {
-      res
-        .status(completed.error === "user_not_found" ? 404 : 503)
-        .json({ error: completed.error.replace(/_/g, "-") });
+      // See the Mini App twin: `session_mismatch` is a 409 (the reported
+      // session isn't this user's), not a 503 (a broken deploy).
+      const status =
+        completed.error === "user_not_found"
+          ? 404
+          : completed.error === "session_mismatch"
+            ? 409
+            : 503;
+      res.status(status).json({ error: completed.error.replace(/_/g, "-") });
       return;
     }
 

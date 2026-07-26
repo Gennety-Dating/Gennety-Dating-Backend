@@ -1100,7 +1100,11 @@ Required/high-impact env keys:
   RETRYABLE, never `rejected`), `LIVENESS_STS_ROLE_ARN`
   (`arn:aws:iam::147010141827:role/GennetyLivenessClient`),
   `LIVENESS_CREDENTIALS_TTL_SECONDS` (default/floor `900`). Reuses the existing
-  `AWS_*` credentials and region. **Removed with the provider:**
+  `AWS_*` credentials and region. **Since 2026-07-26 requires `db:push` of the
+  additive `users.pending_liveness_session_id` column** (nullable,
+  non-destructive) — it binds a liveness session to the user who minted it, and
+  the `/event` handler reads it unconditionally, so a DB missing it throws
+  `P2022` on every completed check. Push the schema BEFORE restarting. **Removed with the provider:**
   `ENABLE_PERSONA_VERIFICATION`, `PERSONA_TEMPLATE_ID`,
   `PERSONA_ENVIRONMENT_ID`, `PERSONA_API_KEY`, `PERSONA_WEBHOOK_SECRET`,
   `PERSONA_HOSTED_URL_BASE`, `ALLOW_SANDBOX_PERSONA` — delete these from
