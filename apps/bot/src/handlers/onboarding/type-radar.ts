@@ -11,6 +11,7 @@ import type { BotContext } from "../../session.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import { typeRadarInviteCopy } from "../../services/type-radar-copy.js";
 import { runAgentTurn, type AgentTurnResult } from "../../services/onboarding-agent.js";
+import { photoStagePanelMarkup } from "../../services/photo-stage-panel.js";
 
 /**
  * Type Radar onboarding gate wiring (§Type Radar, step 5B). The agent raises
@@ -118,11 +119,33 @@ export async function resumeOnboardingAfterRadar(
     }
   }
 
+  const sessionPatch = sessionPatchAfterRadar(result);
+
   if (result.reply) {
-    await api.sendMessage(chatId, result.reply).catch(() => {});
+    // On the declined path this reply IS the photo request — i.e. the upload
+    // stage's first plain-text message, which is where the persistent bottom
+    // panel attaches (PRODUCT_SPEC §1.3). The radar gate intercepts the photos
+    // question before `handleConversational` ever sends it, so without doing it
+    // here the panel simply never appears while TYPE_RADAR_ENABLED is on —
+    // which is every environment since 2026-07-23.
+    //
+    // The flag is set only after the send actually succeeds: marking the panel
+    // shown when its message was lost would suppress every later attempt to
+    // establish it, leaving the user with no way into the editor at all.
+    let panelMarkup: ReturnType<typeof photoStagePanelMarkup> | undefined;
+    if (sessionPatch.expectingPhoto === true) {
+      panelMarkup = photoStagePanelMarkup((await userLanguage(telegramId)) ?? "en");
+    }
+    try {
+      await api.sendMessage(chatId, result.reply, panelMarkup ?? {});
+      if (panelMarkup) sessionPatch.photoStagePanelShown = true;
+    } catch {
+      // Best-effort, unchanged: a failed resume message must not fail the radar
+      // save the Mini App depends on.
+    }
   }
 
-  return { sessionPatch: sessionPatchAfterRadar(result) };
+  return { sessionPatch };
 }
 
 /**

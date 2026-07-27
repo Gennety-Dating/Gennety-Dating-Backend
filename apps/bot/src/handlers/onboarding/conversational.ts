@@ -1197,6 +1197,35 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
       ...((row?.data ?? {}) as Partial<SessionData>),
     };
 
+    const persistSession = (): Promise<unknown> =>
+      prisma.botSession.upsert({
+        where: { key },
+        create: { key, data: session as unknown as object },
+        update: { data: session as unknown as object },
+      });
+
+    /**
+     * Report where the stage stands, then persist.
+     *
+     * The persist is what makes the bottom panel's show-once bookkeeping
+     * survive: `photoStagePanelSync` flips `photoStagePanelShown` DURING the
+     * send, while every branch here upserts BEFORE sending. Without writing
+     * afterwards the flag drifts from what Telegram actually shows — and the
+     * damaging direction ("shown in Telegram, false in the DB") leaves the
+     * keyboard orphaned, since the teardown only fires when the flag is set.
+     */
+    const reportStage = async (): Promise<void> => {
+      await sendPhotoStageUpdate(
+        acc.api,
+        acc.chatId,
+        acc.telegramId,
+        session,
+        session.pendingPhotos.length,
+        sessionHasProfileVideo(session),
+      );
+      await persistSession();
+    };
+
     if (acc.validatedCount === 0) {
       // Every frame was rejected, errored, or was an extra past MAX.
       if (acc.hadInfraError) {
@@ -1206,28 +1235,14 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
           t(session.language, "photoVisionError"),
         );
         if (!acc.unsolicited) {
-          await sendPhotoStageUpdate(
-            acc.api,
-            acc.chatId,
-            acc.telegramId,
-            session,
-            session.pendingPhotos.length,
-            sessionHasProfileVideo(session),
-          );
+          await reportStage();
         }
         return;
       }
       if (acc.rejectedCount > 0) {
         if (!acc.unsolicited) {
           await sendPhotoRejectionNotices(acc, session.language);
-          await sendPhotoStageUpdate(
-            acc.api,
-            acc.chatId,
-            acc.telegramId,
-            session,
-            session.pendingPhotos.length,
-            sessionHasProfileVideo(session),
-          );
+          await reportStage();
           return;
         }
         // `sendPhotoRejectionNotices` already injected the reasons for the agent.
@@ -1242,19 +1257,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
       if (acc.extraIgnoredCount > 0) {
         if (!acc.unsolicited) {
           session.expectingPhoto = true;
-          await prisma.botSession.upsert({
-            where: { key },
-            create: { key, data: session as unknown as object },
-            update: { data: session as unknown as object },
-          });
-          await sendPhotoStageUpdate(
-            acc.api,
-            acc.chatId,
-            acc.telegramId,
-            session,
-            session.pendingPhotos.length,
-            sessionHasProfileVideo(session),
-          );
+          await reportStage();
           return;
         }
         // User sent extras on top of an already-complete set. Nudge the
@@ -1278,14 +1281,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
       }
       if (acc.duplicateCount > 0 && !acc.unsolicited) {
         await sendPhotoRejectionNotices(acc, session.language);
-        await sendPhotoStageUpdate(
-          acc.api,
-          acc.chatId,
-          acc.telegramId,
-          session,
-          session.pendingPhotos.length,
-          sessionHasProfileVideo(session),
-        );
+        await reportStage();
       }
       return;
     }
@@ -1315,14 +1311,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
         acc.telegramId,
         session.language,
       );
-      await sendPhotoStageUpdate(
-        acc.api,
-        acc.chatId,
-        acc.telegramId,
-        session,
-        count,
-        sessionHasProfileVideo(session),
-      );
+      await reportStage();
       return;
     }
 

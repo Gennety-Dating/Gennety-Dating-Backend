@@ -56,19 +56,34 @@ export function photoStagePanelSync(
   if (session.expectingPhoto) {
     if (session.photoStagePanelShown) return {};
     session.photoStagePanelShown = true;
-    return {
-      reply_markup: {
-        keyboard: [[{ text: photoStagePanelLabel(session.language) }]],
-        resize_keyboard: true,
-        is_persistent: true,
-        input_field_placeholder: t(session.language, "photoStagePanelPlaceholder"),
-      },
-    };
+    return photoStagePanelMarkup(session.language);
   }
 
   if (!session.photoStagePanelShown) return {};
   session.photoStagePanelShown = false;
   return { reply_markup: { remove_keyboard: true } };
+}
+
+/**
+ * The panel markup on its own, for the one stage-entry path that has no live
+ * session object to sync against: the Type Radar resume
+ * (`handlers/onboarding/type-radar.ts`), which sends the photo request from the
+ * Mini App route / Skip callback and hands its session patch back to the caller.
+ *
+ * Callers that DO hold a session must use {@link photoStagePanelSync} instead —
+ * it owns the show-once / remove-once bookkeeping.
+ */
+export function photoStagePanelMarkup(
+  language: Language,
+): { reply_markup: ReplyKeyboardMarkup } {
+  return {
+    reply_markup: {
+      keyboard: [[{ text: photoStagePanelLabel(language) }]],
+      resize_keyboard: true,
+      is_persistent: true,
+      input_field_placeholder: t(language, "photoStagePanelPlaceholder"),
+    },
+  };
 }
 
 function photoStagePanelLabel(language: Language): string {
