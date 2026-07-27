@@ -108,7 +108,7 @@ export async function profilerTick(
   });
   for (const p of stalled) {
     try {
-      if (await expireStalledProfilerQuestion(p.userId, now)) result.expired++;
+      if (await expireStalledProfilerQuestion(p.userId, now, api)) result.expired++;
     } catch (err) {
       console.error(`[profiler] stall reclaim failed for ${p.userId}:`, err);
     }

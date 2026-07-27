@@ -745,10 +745,24 @@ model Profile {
   ///     null = not awaiting. Used by the answer/skip handler.
   ///   - `profilerBatchRemaining`: questions left to send in the current batch
   ///     before pausing to the next window.
-  profilerStartedAt        DateTime?                    @map("profiler_started_at")
-  profilerNextAt           DateTime?                    @map("profiler_next_at")
-  profilerActiveQuestionId String?                      @map("profiler_active_question_id")
-  profilerBatchRemaining   Int                          @default(0) @map("profiler_batch_remaining")
+  ///   - `profilerAnswerWindowUntil`: deadline for the *implicit* capture of
+  ///     plain text as an answer to the active question. Set to
+  ///     now + PROFILER_ANSWER_WINDOW_MS when a question is sent, and cleared
+  ///     the moment the user does anything else (a command, a menu tap, another
+  ///     flow) — after that the question is no longer the default addressee of
+  ///     free text, which falls through to the menu agent instead. Distinct
+  ///     from the much longer `profilerNextAt` stall deadline, which only
+  ///     governs when the schedule re-opens.
+  ///   - `profilerQuestionMessageId`: Telegram message id of the active
+  ///     question. Lets an explicit reply-to be recognised as an answer even
+  ///     after the implicit window closed, and lets the Skip keyboard be
+  ///     stripped once the question stops being live.
+  profilerStartedAt         DateTime?                   @map("profiler_started_at")
+  profilerNextAt            DateTime?                   @map("profiler_next_at")
+  profilerActiveQuestionId  String?                     @map("profiler_active_question_id")
+  profilerBatchRemaining    Int                         @default(0) @map("profiler_batch_remaining")
+  profilerAnswerWindowUntil DateTime?                   @map("profiler_answer_window_until")
+  profilerQuestionMessageId Int?                        @map("profiler_question_message_id")
   /// One-time onboarding ticket-bonus idempotency markers (gated by
   /// `TICKET_FEATURE_ENABLED`). Set the first time the profile reaches 6+
   /// face-validated photos (`photoBonusTicketAt`) or gains a profile video

@@ -21,9 +21,25 @@ import { PROFILER_PRIORITY_WEIGHTS } from "./constants.js";
  * question). The remaining bank is icebreaker-only flavor that onboarding does
  * NOT capture (chronotype, sport, turn-offs, shared-interests, media, surprises,
  * communication style).
+ *
+ * Two kinds of question live here (`refresh`):
+ *   - **`"once"`** (default) — a stable trait. Asked once, answered forever
+ *     (lark/owl doesn't change).
+ *   - **`"cycle"`** — a *situational* question whose answer is a snapshot of
+ *     right now ("what are you watching", "plans for the weekend"). Re-asked
+ *     each drop cycle, its answer overwriting the previous one. Without these
+ *     the bank simply runs out after a couple of days and the Profiler goes
+ *     quiet; with them the icebreaker fuel stays current, which is the whole
+ *     point of asking weekly rather than at signup.
  */
 
 export type ProfilerPriority = "high" | "medium" | "low";
+
+/**
+ * Whether a question is asked once for good, or re-asked every drop cycle
+ * because its answer is a snapshot of the present.
+ */
+export type ProfilerRefresh = "once" | "cycle";
 
 export interface ProfilerQuestion {
   /** Stable identifier persisted on `ProfilerAnswer.questionId`. */
@@ -31,8 +47,15 @@ export interface ProfilerQuestion {
   /** Which gender's bank this question belongs to. */
   gender: Gender;
   priority: ProfilerPriority;
+  /** Re-ask policy; omitted = `"once"`. */
+  refresh?: ProfilerRefresh;
   /** Localized prompt text, keyed by language. */
   text: Record<Language, string>;
+}
+
+/** True when the question's answer goes stale and should be re-asked each cycle. */
+export function isRefreshableProfilerQuestion(question: ProfilerQuestion): boolean {
+  return question.refresh === "cycle";
 }
 
 /** Weight an answer carries in icebreaker/hint generation (spec §5.3). */
@@ -90,6 +113,31 @@ const FEMALE_QUESTIONS: ProfilerQuestion[] = [
     },
   },
   {
+    id: "f_weekend_plans",
+    gender: "female",
+    priority: "high",
+    refresh: "cycle",
+    text: {
+      en: "Any plans for the coming weekend?",
+      ru: "Какие планы на ближайшие выходные?",
+      uk: "Які плани на найближчі вихідні?",
+      de: "Hast du Pläne für das kommende Wochenende?",
+      pl: "Masz jakieś plany na najbliższy weekend?",
+    },
+  },
+  {
+    id: "f_initiative",
+    gender: "female",
+    priority: "high",
+    text: {
+      en: "Do you like it when a guy plans the date himself, or would you rather decide together?",
+      ru: "Тебе нравится, когда парень сам планирует свидание, или лучше решать вместе?",
+      uk: "Тобі подобається, коли хлопець сам планує побачення, чи краще вирішувати разом?",
+      de: "Magst du es, wenn ein Typ das Date selbst plant, oder entscheidest du lieber gemeinsam?",
+      pl: "Lubisz, gdy chłopak sam planuje randkę, czy wolisz decydować wspólnie?",
+    },
+  },
+  {
     id: "f_turnoffs",
     gender: "female",
     priority: "medium",
@@ -114,15 +162,89 @@ const FEMALE_QUESTIONS: ProfilerQuestion[] = [
     },
   },
   {
+    id: "f_food",
+    gender: "female",
+    priority: "medium",
+    text: {
+      en: "What food could you eat any day — and is there anything you never eat?",
+      ru: "Какую еду ты могла бы есть хоть каждый день — и есть ли то, что не ешь совсем?",
+      uk: "Яку їжу ти могла б їсти хоч щодня — і чи є те, чого не їси зовсім?",
+      de: "Welches Essen könntest du jeden Tag essen — und gibt es etwas, das du gar nicht isst?",
+      pl: "Jakie jedzenie mogłabyś jeść codziennie — i czy jest coś, czego w ogóle nie jesz?",
+    },
+  },
+  {
+    id: "f_humor",
+    gender: "female",
+    priority: "medium",
+    text: {
+      en: "What actually makes you laugh?",
+      ru: "Что тебя правда смешит?",
+      uk: "Що тебе справді смішить?",
+      de: "Worüber lachst du wirklich?",
+      pl: "Co naprawdę cię śmieszy?",
+    },
+  },
+  {
+    id: "f_week_highlight",
+    gender: "female",
+    priority: "medium",
+    refresh: "cycle",
+    text: {
+      en: "What was the best part of your week?",
+      ru: "Что было самым классным на этой неделе?",
+      uk: "Що було найкращим цього тижня?",
+      de: "Was war das Beste an deiner Woche?",
+      pl: "Co było najlepsze w twoim tygodniu?",
+    },
+  },
+  {
     id: "f_media",
     gender: "female",
     priority: "low",
+    refresh: "cycle",
     text: {
       en: "What are you watching, reading, or listening to right now?",
       ru: "Что ты сейчас смотришь, читаешь или слушаешь?",
       uk: "Що ти зараз дивишся, читаєш або слухаєш?",
       de: "Was schaust, liest oder hörst du gerade?",
       pl: "Co teraz oglądasz, czytasz albo czego słuchasz?",
+    },
+  },
+  {
+    id: "f_travel",
+    gender: "female",
+    priority: "low",
+    text: {
+      en: "If you could leave for anywhere tomorrow, where would you go?",
+      ru: "Если бы завтра можно было уехать куда угодно — куда бы поехала?",
+      uk: "Якби завтра можна було поїхати куди завгодно — куди б поїхала?",
+      de: "Wenn du morgen überallhin könntest — wohin würdest du fahren?",
+      pl: "Gdybyś jutro mogła wyjechać gdziekolwiek — dokąd byś pojechała?",
+    },
+  },
+  {
+    id: "f_learning",
+    gender: "female",
+    priority: "low",
+    text: {
+      en: "Is there something you'd love to learn but keep putting off?",
+      ru: "Есть что-то, чему хотела бы научиться, но всё откладываешь?",
+      uk: "Є щось, чого хотіла б навчитися, але все відкладаєш?",
+      de: "Gibt es etwas, das du gern lernen würdest, aber immer aufschiebst?",
+      pl: "Jest coś, czego chciałabyś się nauczyć, ale ciągle to odkładasz?",
+    },
+  },
+  {
+    id: "f_pets",
+    gender: "female",
+    priority: "low",
+    text: {
+      en: "Animals — do you have any, or want to?",
+      ru: "Животные — есть или хотелось бы?",
+      uk: "Тварини — є чи хотілося б?",
+      de: "Tiere — hast du welche oder hättest du gern welche?",
+      pl: "Zwierzaki — masz jakieś albo chciałabyś mieć?",
     },
   },
 ];
@@ -153,6 +275,31 @@ const MALE_QUESTIONS: ProfilerQuestion[] = [
     },
   },
   {
+    id: "m_chronotype",
+    gender: "male",
+    priority: "high",
+    text: {
+      en: "Are you an early bird or a night owl?",
+      ru: "Ты жаворонок или сова?",
+      uk: "Ти жайворонок чи сова?",
+      de: "Bist du eher Frühaufsteher oder Nachteule?",
+      pl: "Jesteś rannym ptaszkiem czy nocnym markiem?",
+    },
+  },
+  {
+    id: "m_weekend_plans",
+    gender: "male",
+    priority: "high",
+    refresh: "cycle",
+    text: {
+      en: "Any plans for the coming weekend?",
+      ru: "Какие планы на ближайшие выходные?",
+      uk: "Які плани на найближчі вихідні?",
+      de: "Hast du Pläne für das kommende Wochenende?",
+      pl: "Masz jakieś plany na najbliższy weekend?",
+    },
+  },
+  {
     id: "m_planner",
     gender: "male",
     priority: "medium",
@@ -177,15 +324,101 @@ const MALE_QUESTIONS: ProfilerQuestion[] = [
     },
   },
   {
+    id: "m_food",
+    gender: "male",
+    priority: "medium",
+    text: {
+      en: "What food could you eat any day — and is there anything you never eat?",
+      ru: "Какую еду ты мог бы есть хоть каждый день — и есть ли то, что не ешь совсем?",
+      uk: "Яку їжу ти міг би їсти хоч щодня — і чи є те, чого не їси зовсім?",
+      de: "Welches Essen könntest du jeden Tag essen — und gibt es etwas, das du gar nicht isst?",
+      pl: "Jakie jedzenie mógłbyś jeść codziennie — i czy jest coś, czego w ogóle nie jesz?",
+    },
+  },
+  {
+    id: "m_humor",
+    gender: "male",
+    priority: "medium",
+    text: {
+      en: "What actually makes you laugh?",
+      ru: "Что тебя правда смешит?",
+      uk: "Що тебе справді смішить?",
+      de: "Worüber lachst du wirklich?",
+      pl: "Co naprawdę cię śmieszy?",
+    },
+  },
+  {
+    id: "m_friends_say",
+    gender: "male",
+    priority: "medium",
+    text: {
+      en: "How would your friends describe you in three words?",
+      ru: "Как тебя описали бы друзья тремя словами?",
+      uk: "Як тебе описали б друзі трьома словами?",
+      de: "Wie würden dich deine Freunde in drei Worten beschreiben?",
+      pl: "Jak opisaliby cię znajomi w trzech słowach?",
+    },
+  },
+  {
+    id: "m_week_highlight",
+    gender: "male",
+    priority: "medium",
+    refresh: "cycle",
+    text: {
+      en: "What was the best part of your week?",
+      ru: "Что было самым классным на этой неделе?",
+      uk: "Що було найкращим цього тижня?",
+      de: "Was war das Beste an deiner Woche?",
+      pl: "Co było najlepsze w twoim tygodniu?",
+    },
+  },
+  {
     id: "m_media",
     gender: "male",
     priority: "low",
+    refresh: "cycle",
     text: {
       en: "What are you watching, reading, or listening to right now?",
       ru: "Что ты сейчас смотришь, читаешь или слушаешь?",
       uk: "Що ти зараз дивишся, читаєш або слухаєш?",
       de: "Was schaust, liest oder hörst du gerade?",
       pl: "Co teraz oglądasz, czytasz albo czego słuchasz?",
+    },
+  },
+  {
+    id: "m_travel",
+    gender: "male",
+    priority: "low",
+    text: {
+      en: "If you could leave for anywhere tomorrow, where would you go?",
+      ru: "Если бы завтра можно было уехать куда угодно — куда бы поехал?",
+      uk: "Якби завтра можна було поїхати куди завгодно — куди б поїхав?",
+      de: "Wenn du morgen überallhin könntest — wohin würdest du fahren?",
+      pl: "Gdybyś jutro mógł wyjechać gdziekolwiek — dokąd byś pojechał?",
+    },
+  },
+  {
+    id: "m_learning",
+    gender: "male",
+    priority: "low",
+    text: {
+      en: "Is there something you'd love to learn but keep putting off?",
+      ru: "Есть что-то, чему хотел бы научиться, но всё откладываешь?",
+      uk: "Є щось, чого хотів би навчитися, але все відкладаєш?",
+      de: "Gibt es etwas, das du gern lernen würdest, aber immer aufschiebst?",
+      pl: "Jest coś, czego chciałbyś się nauczyć, ale ciągle to odkładasz?",
+    },
+  },
+  {
+    id: "m_pets",
+    gender: "male",
+    priority: "low",
+    text: {
+      en: "Animals — do you have any, or want to?",
+      ru: "Животные — есть или хотелось бы?",
+      uk: "Тварини — є чи хотілося б?",
+      de: "Tiere — hast du welche oder hättest du gern welche?",
+      pl: "Zwierzaki — masz jakieś albo chciałbyś mieć?",
     },
   },
 ];

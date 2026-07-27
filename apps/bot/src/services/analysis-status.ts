@@ -164,24 +164,28 @@ export function dateCardShareSteps(lang: Language): StatusStep[] {
  * answers (or skips) a question and the next one is about to be composed
  * (PRODUCT_SPEC §Phase 1b). A short two-beat thinking line (acknowledge →
  * formulating) that makes the next question feel written *for* the user instead
- * of dumped instantly; deleted at the end so the streamed question lands in its
- * place. Uneven holds so the cadence reads as thinking, not a progress bar.
+ * of dumped instantly.
+ *
+ * Deliberately **bare**: no `emojiId`, and the labels themselves carry no
+ * leading glyph, so the shimmer is a plain thinking line. Holds are half of the
+ * original 2500ms — the Profiler runs this beat several times per batch, and at
+ * the old pace the pause read as the bot being slow rather than attentive.
  */
 export function profilerNextQuestionSteps(lang: Language): StatusStep[] {
   return [
-    { text: t(lang, "profilerNextAck"), holdMs: 2500, emojiId: AI_EMOJI.accept },
-    { text: t(lang, "profilerNextFormulating"), holdMs: 2500, emojiId: AI_EMOJI.think },
+    { text: t(lang, "profilerNextAck"), holdMs: 1200 },
+    { text: t(lang, "profilerNextFormulating"), holdMs: 1200 },
   ];
 }
 
 /**
  * Shown before the FIRST question of a Profiler batch — it follows a long
  * window pause, not a user answer, so there's nothing to "acknowledge": just
- * the "thinking" shimmer, then the question streams. Keeps every question on the
- * same native compose path (PRODUCT_SPEC §Phase 1b).
+ * the "thinking" shimmer, then the question lands. Same bare, halved treatment
+ * as `profilerNextQuestionSteps` (PRODUCT_SPEC §Phase 1b).
  */
 export function profilerOpenQuestionSteps(lang: Language): StatusStep[] {
-  return [{ text: t(lang, "profilerNextFormulating"), holdMs: 2500, emojiId: AI_EMOJI.think }];
+  return [{ text: t(lang, "profilerNextFormulating"), holdMs: 1250 }];
 }
 
 /**
@@ -189,11 +193,12 @@ export function profilerOpenQuestionSteps(lang: Language): StatusStep[] {
  * Opens on a short generic "thinking" beat, then "saving". The final "saved"
  * line PERSISTS (`deleteAtEnd: false`) — it is the between-batch message, so it
  * carries no thinking icon (it is finalised as a real message, not a shimmer).
+ * The two shimmer beats are bare and halved like the in-batch ones.
  */
 export function profilerBatchSteps(lang: Language): StatusStep[] {
   return [
-    { text: t(lang, "profilerBatchThinking"), holdMs: 2000, emojiId: AI_EMOJI.think },
-    { text: t(lang, "profilerBatchSaving"), holdMs: 1700, emojiId: AI_EMOJI.spark },
+    { text: t(lang, "profilerBatchThinking"), holdMs: 1000 },
+    { text: t(lang, "profilerBatchSaving"), holdMs: 850 },
     { text: t(lang, "profilerBatchSaved"), holdMs: 0 },
   ];
 }

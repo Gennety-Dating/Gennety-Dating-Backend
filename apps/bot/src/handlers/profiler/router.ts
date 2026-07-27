@@ -6,8 +6,10 @@ import type { BotContext } from "../../session.js";
 import { dispatchToChat } from "../../chat-queue.js";
 import {
   PROFILER_SKIP_PREFIX,
+  closeProfilerAnswerWindow,
   recordProfilerAnswer,
   recordProfilerSkip,
+  resolveProfilerCapture,
 } from "../../services/profiler.js";
 
 /**
@@ -24,6 +26,12 @@ import {
  * plain-text / skip-callback updates from completed users not in another flow.
  * Recording itself is guarded by an atomic claim on that column, so a stale or
  * replayed tap can never record twice or push out an extra question.
+ *
+ * An active question does NOT own the chat indefinitely. Free text is recorded
+ * as its answer only while the question still owns the conversation — a short
+ * implicit window, closed early by any other interaction — or when the user
+ * replies to the question message directly (`resolveProfilerCapture`).
+ * Everything else falls through to the menu agent.
  */
 export const profilerRouter = new Composer<BotContext>();
 
@@ -148,16 +156,18 @@ profilerRouter.use(async (ctx, next) => {
     !ctx.session.expectingPhoto;
 
   if (text && !isCommand && idle) {
-    const user = await prisma.user.findUnique({
-      where: { telegramId: BigInt(ctx.from.id) },
-      select: { id: true, profile: { select: { profilerActiveQuestionId: true } } },
+    // An active question is NOT enough to claim the text: it must still own the
+    // conversation (fresh implicit window) or be replied to directly. Anything
+    // else is a message to the assistant — "when is my date?" typed hours after
+    // a question must reach the menu agent, not be recorded as its answer.
+    const capture = await resolveProfilerCapture(BigInt(ctx.from.id), {
+      replyToMessageId: ctx.message?.reply_to_message?.message_id,
     });
-    const activeQuestionId = user?.profile?.profilerActiveQuestionId;
-    if (user && activeQuestionId && ctx.chat) {
+    if (capture && ctx.chat) {
       bufferAnswerLine(
         ctx.chat.id,
-        user.id,
-        activeQuestionId,
+        capture.userId,
+        capture.questionId,
         ctx.api,
         text,
         ctx.message?.message_id,
@@ -166,9 +176,16 @@ profilerRouter.use(async (ctx, next) => {
     }
   }
 
-  // Anything else (a command, a menu tap, another flow) abandons a half-typed
-  // answer instead of letting it flush into a run the user has left.
-  if (!text || isCommand || !idle) cancelAnswerFlush(ctx.chat?.id);
+  // Anything else (a command, a menu tap, another flow) means the conversation
+  // has moved on: abandon a half-typed answer, and close the implicit capture
+  // window so the NEXT message isn't mis-read as an answer either. The question
+  // itself stays active — Skip and reply-to still resolve it.
+  if (!text || isCommand || !idle) {
+    cancelAnswerFlush(ctx.chat?.id);
+    await closeProfilerAnswerWindow(BigInt(ctx.from.id)).catch((err) =>
+      console.error("[profiler] closing answer window failed:", err),
+    );
+  }
 
   await next();
 });

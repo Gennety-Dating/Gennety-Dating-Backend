@@ -4,6 +4,7 @@ import { prisma, type MatchStatus } from "@gennety/db";
 import {
   t,
   type Language,
+  PROFILER_ANSWER_WINDOW_MS,
   PROFILER_MAX_ANSWER_LEN,
   PROFILER_STALL_TIMEOUT_MS,
   profilerQuestionById,
@@ -24,6 +25,7 @@ import {
   nextWindowAt,
   resolveZone,
   selectNextProfilerQuestion,
+  shouldCaptureProfilerAnswer,
   skipTransition,
   type ProfilerAnswerRow,
 } from "./profiler-schedule.js";
@@ -150,67 +152,68 @@ function profilerSkipKeyboard(questionId: string, lang: Language): InlineKeyboar
 }
 
 /**
- * Cumulative typewriter reveal of a question: up to two partials (≈⅓, ≈⅔ of the
- * words, suffixed "…") then the full text. Very short questions (<3 words) are
- * sent in one go — a one-word partial reads worse than no reveal.
- */
-function buildQuestionReveal(text: string): string[] {
-  const words = text.trim().split(/\s+/);
-  if (words.length < 3) return [text];
-  const cuts = [Math.ceil(words.length / 3), Math.ceil((2 * words.length) / 3)];
-  const chunks: string[] = [];
-  for (const cut of cuts) {
-    const partial = `${words.slice(0, cut).join(" ")} …`;
-    if (!chunks.includes(partial)) chunks.push(partial);
-  }
-  chunks.push(text);
-  return chunks;
-}
-
-/**
- * Deliver one question through the **native Telegram AI compose** surface (Bot
- * API 10.1 rich messages) — used for EVERY question so the experience is uniform
- * (PRODUCT_SPEC §Phase 1b). A single rich-message draft carries:
- *   1. the `<tg-thinking>` **shimmer** status (animated AI Actions `<tg-emoji>`
- *      leading glyph) — `"advance"` shows acknowledge → "thinking"
- *      (`profilerNextQuestionSteps`); `"open"` (a batch's first question, after a
- *      window pause, nothing to acknowledge) shows just "thinking"
- *      (`profilerOpenQuestionSteps`);
- *   2. the question streamed in as growing rich-message drafts;
- *   3. the final question persisted as a real message carrying the Skip keyboard.
+ * Deliver one question: a short `<tg-thinking>` **shimmer** beat, then the
+ * question as an ordinary message carrying the Skip keyboard.
  *
- * Everything shares ONE draft id (`streamComposedRich`), so the AI-answer scroll
- * space is reserved/collapsed exactly once per question — no mid-stream jump from
- * a separate status draft, and no question is delivered as a plain (non-streamed)
- * message. Degrades to the classic edited-message stream when the client can't
- * render rich drafts. Returns false on delivery failure so the caller can
- * reschedule at the next window.
+ * The beats differ only by context — `"advance"` acknowledges the answer just
+ * given (`profilerNextQuestionSteps`), `"open"` follows a long window pause and
+ * has nothing to acknowledge (`profilerOpenQuestionSteps`). Both are bare
+ * (no emoji) and deliberately short.
+ *
+ * The question text itself is passed as a SINGLE chunk, so it lands whole
+ * instead of typing itself out word by word: the reveal read as latency rather
+ * than craft, and a question the user must actually think about is better shown
+ * at once. Everything still shares one draft id (`streamComposedRich`), so the
+ * client reserves and collapses the compose space exactly once. Degrades to the
+ * classic edited-message stream when the client can't render rich drafts.
+ *
+ * Returns the sent message id (needed to recognise a later reply and to strip
+ * the Skip keyboard), or null on delivery failure so the caller can reschedule.
  */
-async function sendQuestionStreamed(
+async function sendQuestion(
   api: Api<RawApi>,
   telegramId: bigint,
   question: ProfilerQuestion,
   lang: Language,
   mode: "open" | "advance",
   wait?: Wait,
-): Promise<boolean> {
-  if (telegramId <= 0n) return false;
+): Promise<number | null> {
+  if (telegramId <= 0n) return null;
   const beats = mode === "advance" ? profilerNextQuestionSteps(lang) : profilerOpenQuestionSteps(lang);
   try {
     const message = await streamComposedRich(
       api,
       Number(telegramId),
       beats,
-      buildQuestionReveal(profilerQuestionText(question, lang)),
+      [profilerQuestionText(question, lang)],
       { replyMarkup: profilerSkipKeyboard(question.id, lang), ...(wait ? { wait } : {}) },
     );
-    return message !== undefined;
+    return message?.message_id ?? null;
   } catch (err) {
     console.warn(
-      `[profiler] streamed question send failed for ${telegramId}:`,
+      `[profiler] question send failed for ${telegramId}:`,
       err instanceof Error ? err.message : err,
     );
-    return false;
+    return null;
+  }
+}
+
+/**
+ * Best-effort removal of the Skip keyboard from a question that is no longer
+ * live (answered, or reclaimed as an implicit skip). Leaves the question text
+ * in place — the point is to stop it *looking* like it is still waiting on the
+ * user, not to erase the conversation. Never throws.
+ */
+async function stripQuestionKeyboard(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  messageId: number | null,
+): Promise<void> {
+  if (!messageId || telegramId <= 0n) return;
+  try {
+    await api.editMessageReplyMarkup(Number(telegramId), messageId);
+  } catch {
+    // Message deleted, too old to edit, or already without a keyboard.
   }
 }
 
@@ -235,15 +238,17 @@ async function sendOneFromBatch(
     return "done";
   }
   // Every question — first of a batch ("open") or a follow-up ("advance") —
-  // goes through the same native AI-compose stream; only the status beats differ.
-  const ok = await sendQuestionStreamed(api, state.telegramId, question, state.language, mode, wait);
-  if (!ok) {
+  // goes through the same native AI-compose beat; only the status differs.
+  const messageId = await sendQuestion(api, state.telegramId, question, state.language, mode, wait);
+  if (messageId === null) {
     // Couldn't deliver (e.g. blocked) — retry at the next window rather than
     // burning the active slot. Leaves active=null so the worker re-picks it up.
     await prisma.profile.update({
       where: { userId: state.userId },
       data: {
         profilerActiveQuestionId: null,
+        profilerAnswerWindowUntil: null,
+        profilerQuestionMessageId: null,
         profilerNextAt: nextWindowAt(now, resolveZone(state.timeZone)),
       },
     });
@@ -254,6 +259,11 @@ async function sendOneFromBatch(
     data: {
       profilerActiveQuestionId: question.id,
       profilerBatchRemaining: state.profilerBatchRemaining - 1,
+      // The question owns free text only for this short window; after it (or
+      // after the user does anything else) plain text belongs to the menu
+      // agent again. See `shouldCaptureProfilerAnswer`.
+      profilerAnswerWindowUntil: new Date(now.getTime() + PROFILER_ANSWER_WINDOW_MS),
+      profilerQuestionMessageId: messageId,
       // NOT null: while a question is active, `profilerNextAt` carries its
       // stall deadline so `expireStalledProfilerQuestion` can reclaim a user
       // who simply never replied. The dispatch sweep is unaffected — it also
@@ -282,6 +292,8 @@ async function pauseOrFinish(
     where: { userId: state.userId },
     data: {
       profilerActiveQuestionId: null,
+      profilerAnswerWindowUntil: null,
+      profilerQuestionMessageId: null,
       profilerBatchRemaining: 0,
       profilerNextAt: nextWindowAt(now, resolveZone(state.timeZone)),
     },
@@ -312,12 +324,90 @@ async function pauseOrFinish(
  * it is answered or skipped, `selectNextProfilerQuestion` would hand back the
  * very question still sitting unanswered on screen — sending it twice.
  */
-async function claimActiveQuestion(userId: string, questionId: string): Promise<boolean> {
+async function claimActiveQuestion(
+  userId: string,
+  questionId: string,
+): Promise<{ claimed: boolean; messageId: number | null }> {
+  // Read the message id BEFORE the claim nulls it — the winner uses it to strip
+  // the now-dead Skip keyboard. A lost race simply skips that cosmetic step.
+  const before = await prisma.profile.findUnique({
+    where: { userId },
+    select: { profilerQuestionMessageId: true },
+  });
   const { count } = await prisma.profile.updateMany({
     where: { userId, profilerActiveQuestionId: questionId },
-    data: { profilerActiveQuestionId: null },
+    data: {
+      profilerActiveQuestionId: null,
+      profilerAnswerWindowUntil: null,
+      profilerQuestionMessageId: null,
+    },
   });
-  return count === 1;
+  return { claimed: count === 1, messageId: before?.profilerQuestionMessageId ?? null };
+}
+
+/**
+ * Resolve whether an incoming plain-text message belongs to the user's active
+ * Profiler question (see `shouldCaptureProfilerAnswer` for the rule). Returns
+ * the ids the router needs to buffer the answer, or null when the text is not
+ * an answer and should fall through to the menu agent.
+ */
+export async function resolveProfilerCapture(
+  telegramId: bigint,
+  options: { now?: Date; replyToMessageId?: number | undefined } = {},
+): Promise<{ userId: string; questionId: string } | null> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: {
+      id: true,
+      profile: {
+        select: {
+          profilerActiveQuestionId: true,
+          profilerAnswerWindowUntil: true,
+          profilerQuestionMessageId: true,
+        },
+      },
+    },
+  });
+  const profile = user?.profile;
+  if (!user || !profile?.profilerActiveQuestionId) return null;
+  const capture = shouldCaptureProfilerAnswer(
+    {
+      activeQuestionId: profile.profilerActiveQuestionId,
+      answerWindowUntil: profile.profilerAnswerWindowUntil,
+      questionMessageId: profile.profilerQuestionMessageId,
+    },
+    {
+      now: options.now ?? new Date(),
+      replyToMessageId: options.replyToMessageId,
+    },
+  );
+  if (!capture) return null;
+  return { userId: user.id, questionId: profile.profilerActiveQuestionId };
+}
+
+/**
+ * The conversation moved on — the user ran a command, tapped a menu button, or
+ * was busy in another flow — so the question on screen stops being the default
+ * addressee of whatever they type next.
+ *
+ * Only the implicit window is closed. The question stays *active* (the stall
+ * sweep still owns it) and keeps its Skip button and its message id, so the two
+ * explicit ways to resolve it — tapping Skip, or replying directly to the
+ * question — keep working. Cheap by design: one indexed read that finds nothing
+ * in the common case where no window is open.
+ */
+export async function closeProfilerAnswerWindow(telegramId: bigint): Promise<boolean> {
+  if (telegramId <= 0n) return false;
+  const open = await prisma.profile.findFirst({
+    where: { user: { telegramId }, profilerAnswerWindowUntil: { not: null } },
+    select: { userId: true },
+  });
+  if (!open) return false;
+  await prisma.profile.update({
+    where: { userId: open.userId },
+    data: { profilerAnswerWindowUntil: null },
+  });
+  return true;
 }
 
 /**
@@ -333,15 +423,25 @@ async function claimActiveQuestion(userId: string, questionId: string): Promise<
 export async function expireStalledProfilerQuestion(
   userId: string,
   now: Date = new Date(),
+  api?: Api<RawApi>,
 ): Promise<boolean> {
   const profile = await prisma.profile.findUnique({
     where: { userId },
-    select: { profilerActiveQuestionId: true, timeZone: true },
+    select: {
+      profilerActiveQuestionId: true,
+      timeZone: true,
+      user: { select: { telegramId: true } },
+    },
   });
   const questionId = profile?.profilerActiveQuestionId;
   if (!questionId) return false;
   // Claim it first — if the user answered in the same instant, they win.
-  if (!(await claimActiveQuestion(userId, questionId))) return false;
+  const claim = await claimActiveQuestion(userId, questionId);
+  if (!claim.claimed) return false;
+  // The question is done waiting; drop its Skip button so it stops looking live.
+  if (api && profile.user) {
+    await stripQuestionKeyboard(api, profile.user.telegramId, claim.messageId);
+  }
 
   const question = profilerQuestionById(questionId);
   if (question) {
@@ -380,6 +480,8 @@ export async function expireStalledProfilerQuestion(
     where: { userId },
     data: {
       profilerActiveQuestionId: null,
+      profilerAnswerWindowUntil: null,
+      profilerQuestionMessageId: null,
       profilerBatchRemaining: 0,
       profilerNextAt: nextWindowAt(now, resolveZone(profile?.timeZone ?? null)),
     },
@@ -393,6 +495,8 @@ async function finish(userId: string): Promise<void> {
     where: { userId },
     data: {
       profilerActiveQuestionId: null,
+      profilerAnswerWindowUntil: null,
+      profilerQuestionMessageId: null,
       profilerBatchRemaining: 0,
       profilerNextAt: null,
     },
@@ -455,7 +559,8 @@ export async function recordProfilerAnswer(
   const cycleId = profilerCycleId(now);
 
   // Only the reply that actually owns the active question may record + advance.
-  if (!(await claimActiveQuestion(userId, questionId))) return false;
+  const claim = await claimActiveQuestion(userId, questionId);
+  if (!claim.claimed) return false;
 
   await prisma.profilerAnswer.upsert({
     where: { userId_questionId: { userId, questionId } },
@@ -482,6 +587,13 @@ export async function recordProfilerAnswer(
     await reactToMessage(api, options.reactionTarget, MESSAGE_REACTION.like);
   }
 
+  // The answered question keeps its text but loses its Skip button — a live
+  // button on a question already answered is only confusing (a later tap is a
+  // silent no-op, since the claim above is authoritative).
+  if (options.reactionTarget?.chatId !== undefined && claim.messageId) {
+    await stripQuestionKeyboard(api, BigInt(options.reactionTarget.chatId), claim.messageId);
+  }
+
   return advanceAfterReply(api, userId, now, options.wait);
 }
 
@@ -500,9 +612,10 @@ export async function recordProfilerSkip(
   const now = options.now ?? new Date();
   const cycleId = profilerCycleId(now);
 
-  // A stale Skip button (they are never stripped from older question messages)
-  // must not record a second skip or push out another question.
-  if (!(await claimActiveQuestion(userId, questionId))) return false;
+  // A stale Skip button must not record a second skip or push out another
+  // question (the router strips the tapped message's keyboard, but an older
+  // question's button may still be sitting in the chat).
+  if (!(await claimActiveQuestion(userId, questionId)).claimed) return false;
 
   const existing = await prisma.profilerAnswer.findUnique({
     where: { userId_questionId: { userId, questionId } },
@@ -551,6 +664,8 @@ async function advanceAfterReply(
       where: { userId },
       data: {
         profilerActiveQuestionId: null,
+        profilerAnswerWindowUntil: null,
+        profilerQuestionMessageId: null,
         profilerBatchRemaining: 0,
         profilerNextAt: nextWindowAt(now, resolveZone(state.timeZone)),
       },

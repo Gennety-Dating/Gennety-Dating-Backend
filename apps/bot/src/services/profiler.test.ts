@@ -14,6 +14,7 @@ vi.mock("@gennety/db", () => ({
 }));
 
 import { prisma } from "@gennety/db";
+import { PROFILER_ANSWER_WINDOW_MS, profilerQuestionBank } from "@gennety/shared";
 import {
   startProfilerBatch,
   recordProfilerAnswer,
@@ -103,8 +104,8 @@ describe("startProfilerBatch", () => {
     const res = await startProfilerBatch(fakeApi, "u1", new Date("2026-06-10T07:00:00Z"), noWait);
 
     expect(res).toBe("sent");
-    // The opener also streams (native compose) and is finalised via
-    // sendRichMessage carrying the Skip keyboard.
+    // The opener plays its shimmer and is finalised via sendRichMessage
+    // carrying the Skip keyboard.
     expect(sendRichMessage).toHaveBeenCalledTimes(1);
     const params = sendRichMessage.mock.calls[0]![0] as {
       rich_message?: { markdown?: string };
@@ -112,17 +113,47 @@ describe("startProfilerBatch", () => {
     };
     expect(params.rich_message?.markdown).toMatch(/first date/i);
     expect(JSON.stringify(params.reply_markup)).toContain("profiler:skip:f_date_spots");
-    // Opener streams via the native compose path (a `<tg-thinking>` shimmer first).
-    expect(richHtmls().some((h) => /<tg-thinking>/.test(h))).toBe(true);
-    expect(activeUpdate()?.profilerActiveQuestionId).toBe("f_date_spots");
+    // One bare `<tg-thinking>` shimmer beat, then the question whole — the
+    // opener never types itself out.
+    const htmls = richHtmls();
+    expect(htmls).toHaveLength(1);
+    expect(htmls[0]).toMatch(/<tg-thinking>/);
+    expect(htmls[0]).not.toContain("<tg-emoji");
+
+    const active = activeUpdate()!;
+    expect(active.profilerActiveQuestionId).toBe("f_date_spots");
+    // The question owns free text only for a bounded window, and its message id
+    // is anchored so a later explicit reply is still recognised as an answer.
+    expect(active.profilerQuestionMessageId).toBe(1);
+    expect((active.profilerAnswerWindowUntil as Date).getTime()).toBe(
+      new Date("2026-06-10T07:00:00Z").getTime() + PROFILER_ANSWER_WINDOW_MS,
+    );
+  });
+
+  it("clears the capture window when delivery fails", async () => {
+    mUserFind.mockResolvedValue(userState([]));
+    // Rich unsupported AND the classic fallback blocked → nothing was delivered.
+    sendRichMessageDraft.mockRejectedValueOnce(new Error("rich unsupported"));
+    sendMessage.mockRejectedValue(new Error("blocked"));
+    try {
+      const res = await startProfilerBatch(fakeApi, "u1", new Date("2026-06-10T07:00:00Z"), noWait);
+
+      expect(res).toBe("paused");
+      const last = mProfileUpdate.mock.calls.at(-1)![0].data;
+      expect(last.profilerActiveQuestionId).toBeNull();
+      expect(last.profilerAnswerWindowUntil).toBeNull();
+      expect(last.profilerQuestionMessageId).toBeNull();
+    } finally {
+      sendMessage.mockResolvedValue({ message_id: 1, chat: { id: 1 } });
+    }
   });
 
   it("finishes silently when nothing is pending", async () => {
-    const allAnswered = [
-      "f_date_spots", "f_comm_style", "f_chronotype", "f_sport_pref",
-      "f_turnoffs", "f_shared_interests", "f_activity_pref", "f_media",
-    ].map((questionId) => ({
-      questionId, answerText: "x", skipped: false, skipReturned: false,
+    // Derived from the bank (not hardcoded) so adding a question can't quietly
+    // turn this into "all but the new ones". Everything answered in the CURRENT
+    // cycle, so the situational questions aren't due for a refresh either.
+    const allAnswered = profilerQuestionBank("female").map((q) => ({
+      questionId: q.id, answerText: "x", skipped: false, skipReturned: false,
       cycleId: profilerCycleId(new Date("2026-06-10T07:00:00Z")),
     }));
     mUserFind.mockResolvedValue(userState(allAnswered));
@@ -156,19 +187,16 @@ describe("recordProfilerAnswer", () => {
     expect(mAnswerUpsert).toHaveBeenCalledTimes(1);
     expect(mAnswerUpsert.mock.calls[0]![0].create.answerText).toBe("rooftop cafes");
 
-    // The thinking status is a native `<tg-thinking>` shimmer; the ack beat
-    // carries the operator-chosen custom `<tg-emoji>` glyph.
+    // The thinking status is a native `<tg-thinking>` shimmer, and it is BARE:
+    // no `<tg-emoji>` glyph on either beat.
     const htmls = richHtmls();
-    expect(
-      htmls.some(
-        (h) =>
-          /<tg-thinking>/.test(h) &&
-          h.includes('emoji-id="5537203062138994712"') &&
-          /Got it/.test(h),
-      ),
-    ).toBe(true);
-    // The second beat is the "Thinking…" shimmer.
+    expect(htmls.some((h) => /<tg-thinking>/.test(h) && /Got it/.test(h))).toBe(true);
     expect(htmls.some((h) => /<tg-thinking>/.test(h) && /Thinking/.test(h))).toBe(true);
+    expect(htmls.some((h) => h.includes("<tg-emoji"))).toBe(false);
+
+    // The question itself is NOT typed out: the only drafts are the two status
+    // beats, then the whole question lands in one message.
+    expect(htmls).toHaveLength(2);
 
     // The next question (f_comm_style) is finalised via sendRichMessage (so the
     // streaming draft resolves in place — no orphaned reserved space) carrying
@@ -315,9 +343,15 @@ describe("active-question claim (stale/duplicate taps)", () => {
     mUserFind.mockResolvedValue(userState([], 2));
     await recordProfilerAnswer(fakeApi, "u1", "f_date_spots", "cafes", { wait: noWait });
 
+    // The claim also closes the capture window and drops the message anchor:
+    // the resolved question must stop owning the user's free text.
     expect(mProfileUpdateMany).toHaveBeenCalledWith({
       where: { userId: "u1", profilerActiveQuestionId: "f_date_spots" },
-      data: { profilerActiveQuestionId: null },
+      data: {
+        profilerActiveQuestionId: null,
+        profilerAnswerWindowUntil: null,
+        profilerQuestionMessageId: null,
+      },
     });
   });
 

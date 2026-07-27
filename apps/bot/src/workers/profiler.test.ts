@@ -59,7 +59,8 @@ describe("profilerTick — stalled question reclaim", () => {
 
     expect(res.expired).toBe(2);
     expect(mExpire).toHaveBeenCalledTimes(2);
-    expect(mExpire).toHaveBeenCalledWith("u1", NOW);
+    // `api` rides along so the reclaimed question can lose its Skip keyboard.
+    expect(mExpire).toHaveBeenCalledWith("u1", NOW, api);
   });
 
   it("targets exactly the due-but-still-active set", async () => {

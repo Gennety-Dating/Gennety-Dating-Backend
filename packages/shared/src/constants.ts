@@ -204,11 +204,30 @@ export const PROFILER_MAX_ANSWER_LEN = 1000;
  * Without this the Profiler dead-locks: a sent question sets
  * `profilerActiveQuestionId` and the dispatch sweep only picks users whose
  * active question is null, so one ignored question silences the Profiler for
- * that user forever. Deliberately generous (a full day) so a genuine
- * "answered the next morning" reply still lands on the question it was
- * written for, rather than being re-attributed to a newer one.
+ * that user forever.
+ *
+ * Sized to the daily window rhythm rather than to "maybe they'll answer
+ * tomorrow": at a full day, one ignored morning question cost the user the
+ * whole day of Profiler. At 6h an ignored morning question is reclaimed in
+ * time for the evening window. A late genuine answer is not lost by the
+ * shorter deadline — it lands through the reply-to path
+ * (`profilerQuestionMessageId`), which does not depend on the question still
+ * being active.
  */
-export const PROFILER_STALL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+export const PROFILER_STALL_TIMEOUT_MS = 6 * 60 * 60 * 1000;
+/**
+ * How long plain text is *implicitly* treated as the answer to the question on
+ * screen. Deliberately far shorter than the stall deadline above: a question
+ * asked hours ago must not silently swallow an unrelated message ("when is my
+ * date?"), which the user is writing to the assistant, not to the Profiler.
+ *
+ * The window is also closed early — the moment the user does anything else at
+ * all (a command, a menu tap, another flow) the conversation has moved on and
+ * the question stops being the default addressee. Two escape hatches keep a
+ * genuine slow answer working: the Skip button stays live, and an explicit
+ * Telegram reply to the question message is always recorded as an answer.
+ */
+export const PROFILER_ANSWER_WINDOW_MS = 90 * 60 * 1000;
 /**
  * Debounce window for free-text Profiler answers. People split one thought
  * across several messages ("люблю кино" + "и музыку"); without coalescing,

@@ -1653,6 +1653,16 @@ Required/high-impact env keys:
   far-future to effectively pause. Requires `db:push` of the new
   `profiler_answers` table, `ProfilerPriority` enum, and the
   `Profile.time_zone` / `profiler_*` columns first (additive, non-destructive).
+  **2026-07-26 update — requires `db:push` of two more additive
+  `profiles` columns before deploying the code**: `profiler_answer_window_until`
+  and `profiler_question_message_id` (both nullable; a DB missing them throws
+  `P2022` on the first question sent, which surfaces as a PM2 restart loop).
+  They bound how long an open question may claim the user's free text
+  (PRODUCT_SPEC §Phase 1b), so an unrelated message no longer gets recorded as
+  its answer. No new env and no new system dependency; the same release also
+  halves the Profiler shimmer, drops its emoji, stops streaming the question
+  text, shortens `PROFILER_STALL_TIMEOUT_MS` to 6 h, and expands the question
+  bank with situational questions that repeat each drop cycle — all code-only.
 
 Production safety checks:
 

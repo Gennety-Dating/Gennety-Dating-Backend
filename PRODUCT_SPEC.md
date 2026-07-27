@@ -704,23 +704,25 @@ Telegram-only in v1.
 - **Batches.** Questions are sent in **batches of 3** (`PROFILER_BATCH_SIZE_NORMAL`).
   **Every** question — the first of a batch and every follow-up — is delivered
   through the same **native Telegram AI-compose** path (Bot API 10.1 rich
-  messages, `streamComposedRich`), so the experience is uniform: one question is
-  never a plain dump while the next streams. Each question is **one** rich-message
-  draft (a single `draft_id`) carrying, in order: a `<tg-thinking>` **shimmer
-  status** whose leading glyph is an animated **AI Actions** `<tg-emoji>`, then
-  the question streamed in as growing rich-message drafts, then the question
-  persisted as a real message carrying the Skip button. Because it's a single
-  draft, the client reserves/collapses the "AI is composing" scroll space exactly
-  **once** per question — no mid-stream jump. The status beats differ only by
-  context: a **follow-up** (after an answer/skip) shows acknowledge → "thinking"
-  (`profilerNextQuestionSteps`, ~2.5s + ~4.5s); the **batch opener** (after a
+  messages, `streamComposedRich`), so the experience is uniform. Each question is
+  **one** rich-message draft (a single `draft_id`) carrying, in order: a
+  `<tg-thinking>` **shimmer status**, then the question persisted as a real
+  message carrying the Skip button. Because it's a single draft, the client
+  reserves/collapses the "AI is composing" scroll space exactly **once** per
+  question — no mid-stream jump. The status beats differ only by context: a
+  **follow-up** (after an answer/skip) shows acknowledge → "thinking"
+  (`profilerNextQuestionSteps`, 1.2s + 1.2s); the **batch opener** (after a
   long window pause, nothing to acknowledge) shows just "thinking"
-  (`profilerOpenQuestionSteps`). The between-batch confirmation ("Preference card
-  updated ✅") uses the same shimmer path. If a client can't render rich drafts
-  every path falls back to the classic edited-message stream. Like the
-  thinking-status beats in §1.3, this streamed-question flow opts into the rich
-  `<tg-thinking>` path; it accepts that the client may reserve scroll space under
-  the draft, because the AI-compose feel is the goal here.
+  (`profilerOpenQuestionSteps`, 1.25s). The between-batch confirmation
+  ("Preference card updated ✅") uses the same shimmer path. If a client can't
+  render rich drafts every path falls back to the classic edited-message stream.
+  Two deliberate departures from the other rich-status flows (§1.3), both
+  because the Profiler repeats this beat several times per batch rather than
+  once per rare event: the shimmer is **bare** — no `<tg-emoji>` glyph and no
+  leading emoji in the label — and the **question text is NOT streamed**. It is
+  sent as a single chunk, so it lands whole as an ordinary message instead of
+  typing itself out; the old word-by-word reveal read as latency, and a question
+  the user has to think about is better shown at once.
   Between batches the Profiler pauses to the next **morning (09:00) / evening
   (18:00) window in the user's local time** (`Profile.timeZone`, derived from
   the dating city; `Europe/Kyiv` fallback). When the next weekly drop is within
@@ -741,16 +743,38 @@ Telegram-only in v1.
   on a `scheduled` date, never during the pitch/scheduling/venue steps.
 - **Skip.** Every question has a **Skip** button. A skipped question returns
   **once** at the end of the current cycle; skipped twice in a cycle, it drops
-  until the next drop cycle. Answered questions are never re-asked. **Silence
-  is an implicit skip**: a question left unanswered for
-  `PROFILER_STALL_TIMEOUT_MS` (24 h) is recorded with the same return-once
-  semantics and the schedule re-opens at the user's next local window — without
-  this the Profiler dead-locked, since the dispatch sweep only picks users with
-  no active question, so one ignored question silenced it permanently.
+  until the next drop cycle. Answered questions are never re-asked (except the
+  situational ones below). **Silence is an implicit skip**: a question left
+  unanswered for `PROFILER_STALL_TIMEOUT_MS` (**6 h**) is recorded with the same
+  return-once semantics, loses its Skip keyboard, and the schedule re-opens at
+  the user's next local window — without this the Profiler dead-locked, since
+  the dispatch sweep only picks users with no active question, so one ignored
+  question silenced it permanently. The deadline is sized to the daily window
+  rhythm: at a full day, one ignored morning question cost the user the whole
+  day of Profiler; at 6 h it is reclaimed in time for the evening window.
+- **A question owns the chat only while it is live.** An active question is NOT
+  a standing claim on everything the user types. Plain text is recorded as its
+  answer only when the question still owns the conversation:
+  - the **implicit window** (`PROFILER_ANSWER_WINDOW_MS`, 90 min from sending,
+    `Profile.profilerAnswerWindowUntil`) is still open, AND
+  - the user hasn't done anything else since — any command, menu tap, or other
+    flow closes the window immediately, because the next thing they type is for
+    the assistant, not for the question.
+
+  Outside that, free text falls through to the menu agent as normal. Two
+  explicit escapes keep a slow answer working regardless of the window: the Skip
+  button stays live until the stall deadline, and a Telegram **reply** to the
+  question message (anchored by `Profile.profilerQuestionMessageId`) is always
+  recorded as its answer. Without this bound the Profiler mis-read ordinary
+  conversation: a question asked hours earlier turned "when is my date?" into an
+  answer, complete with an acknowledge shimmer and the next question, leaving
+  the user's actual question unanswered.
 - **One reply per question.** A question is resolved by an atomic claim on
   `Profile.profilerActiveQuestionId`, so exactly ONE answer or skip can ever
   advance the batch. The Skip keyboard is stripped from a question once it is
-  used, and a stale/replayed tap on an older question's button is a no-op — it
+  resolved — skipped, answered, or reclaimed as an implicit skip — so a dead
+  question stops looking like it is still waiting. A stale/replayed tap on an
+  older question's button is a no-op — it
   neither records a second skip nor pushes out an extra question. Free-text
   answers are coalesced over a short debounce window
   (`PROFILER_ANSWER_DEBOUNCE_MS`), so an answer split across several messages
@@ -760,14 +784,27 @@ Telegram-only in v1.
   (no "profile complete" ping). No progress indicator, no "why we ask" copy.
 - **Questions.** Women are asked from the "what you want in a partner/date"
   angle (fuels the man's *hints*); men from the "who you are" angle (fuels the
-  woman's *icebreakers*). The bank lives in `packages/shared/profiler-questions.ts`.
-  Questions the onboarding §1.3 vibe answers now cover were **removed** to avoid
-  duplication: `f_activity_pref` ("active vs calm" = the energy axis) and
-  `m_ideal_evening` (≈ the ideal-Friday question). The remaining bank is
-  icebreaker-only flavor that onboarding does not capture (chronotype, sport,
-  turn-offs, shared interests, media, surprises, communication style).
+  woman's *icebreakers*). The bank lives in `packages/shared/profiler-questions.ts`
+  (~14 per gender) and covers icebreaker flavor that onboarding does not capture:
+  chronotype, sport, turn-offs, shared interests, media, food, humor, travel,
+  pets, surprises, communication style. Questions the onboarding §1.3 vibe
+  answers already cover were **removed** to avoid duplication: `f_activity_pref`
+  ("active vs calm" = the energy axis) and `m_ideal_evening` (≈ the ideal-Friday
+  question).
+- **Situational questions repeat (`refresh: "cycle"`).** A question is one of
+  two kinds. **Stable** traits (lark/owl, sport, turn-offs) are asked once and
+  answered forever. **Situational** ones — "what are you watching / reading /
+  listening to", "plans for the coming weekend", "best part of your week" —
+  describe *right now*, so they are re-asked once per drop cycle and their new
+  answer overwrites the previous one. This is what makes a weekly cadence worth
+  having: without it the bank simply runs out after a couple of days and the
+  Profiler goes quiet, and the icebreakers keep quoting a month-old answer.
+  Selection order is unchanged for the first two passes (never-asked, then a
+  skipped question eligible to return); the refresh pass comes last, so a stale
+  situational question never crowds out something never asked.
 - **Storage.** One `ProfilerAnswer` row per (user, question): `priority`,
-  `answerText`, `skipped`, `skipReturned`, `cycleId`.
+  `answerText`, `skipped`, `skipReturned`, `cycleId`. A refreshed answer
+  overwrites the row (only the current snapshot matters for icebreakers).
 - **Weighting.** Icebreaker/wingman-hint generation emphasises a partner's
   answers by priority weight (`high 1.0 / medium 0.5 / low 0.2`,
   `PROFILER_PRIORITY_WEIGHTS`). Profiler answers are the **primary** source;

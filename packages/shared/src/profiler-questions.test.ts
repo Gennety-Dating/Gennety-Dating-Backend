@@ -4,22 +4,44 @@ import {
   profilerQuestionById,
   profilerQuestionText,
   profilerPriorityWeight,
+  isRefreshableProfilerQuestion,
   scoreProfilerAnswers,
   formatProfilerAnswersBlock,
 } from "./profiler-questions.js";
 
 describe("profilerQuestionBank", () => {
   it("returns priority-ordered, gender-specific banks", () => {
-    const female = profilerQuestionBank("female");
-    const male = profilerQuestionBank("male");
-    expect(female.length).toBe(7);
-    expect(male.length).toBe(5);
-    // High-priority questions lead each bank.
-    expect(female[0].priority).toBe("high");
-    expect(male[0].priority).toBe("high");
-    // Last is the low-priority media question.
-    expect(female[female.length - 1].priority).toBe("low");
-    expect(male[male.length - 1].priority).toBe("low");
+    // Array order IS the ask order, so the real invariant is monotonically
+    // non-increasing priority — asserted instead of a fixed length, which only
+    // ever forced a mechanical edit whenever a question was added.
+    const rank = { high: 0, medium: 1, low: 2 } as const;
+    for (const gender of ["female", "male"] as const) {
+      const bank = profilerQuestionBank(gender);
+      expect(bank.length).toBeGreaterThan(5);
+      expect(bank[0].priority).toBe("high");
+      expect(bank[bank.length - 1].priority).toBe("low");
+      for (let i = 1; i < bank.length; i++) {
+        expect(rank[bank[i].priority], `${bank[i].id} out of order`).toBeGreaterThanOrEqual(
+          rank[bank[i - 1].priority],
+        );
+      }
+      expect(bank.every((q) => q.gender === gender)).toBe(true);
+    }
+  });
+
+  it("carries situational questions that are re-asked each cycle", () => {
+    // Without refreshables the bank runs dry in a couple of days and the
+    // Profiler goes silent; these are what keep the icebreaker fuel current.
+    for (const gender of ["female", "male"] as const) {
+      const refreshable = profilerQuestionBank(gender).filter((q) =>
+        isRefreshableProfilerQuestion(q),
+      );
+      expect(refreshable.length, `${gender} bank has no refreshable question`).toBeGreaterThan(0);
+    }
+  });
+
+  it("treats a question without an explicit policy as ask-once", () => {
+    expect(isRefreshableProfilerQuestion(profilerQuestionById("f_chronotype")!)).toBe(false);
   });
 
   it("returns empty for unknown gender", () => {

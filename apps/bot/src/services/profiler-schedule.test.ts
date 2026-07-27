@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { profilerQuestionBank } from "@gennety/shared";
 import {
   batchSizeFor,
   isQuietHourLocal,
@@ -6,6 +7,7 @@ import {
   nextWindowAt,
   resolveZone,
   selectNextProfilerQuestion,
+  shouldCaptureProfilerAnswer,
   skipTransition,
   type ProfilerAnswerRow,
 } from "./profiler-schedule.js";
@@ -142,6 +144,92 @@ describe("selectNextProfilerQuestion", () => {
     const rows = profilerAllAsked().map((id) => row({ questionId: id, answerText: "x" }));
     expect(selectNextProfilerQuestion("female", rows, CYCLE)).toBeNull();
   });
+
+  it("re-asks a situational question answered in an EARLIER cycle", () => {
+    // Everything answered, but the refreshables were answered last week — those
+    // are exactly the questions worth asking again ("what are you watching").
+    const rows = profilerAllAsked().map((id) =>
+      row({ questionId: id, answerText: "x", cycleId: "2026-06-04" }),
+    );
+    const next = selectNextProfilerQuestion("female", rows, CYCLE);
+    expect(next?.refresh).toBe("cycle");
+    expect(next?.id).toBe("f_weekend_plans");
+  });
+
+  it("does not re-ask a situational question already refreshed this cycle", () => {
+    const refreshable = profilerQuestionBank("female").filter((q) => q.refresh === "cycle");
+    expect(refreshable.length).toBeGreaterThan(0);
+    const rows = profilerAllAsked().map((id) =>
+      row({
+        questionId: id,
+        answerText: "x",
+        cycleId: refreshable.some((q) => q.id === id) ? CYCLE : "2026-06-04",
+      }),
+    );
+    expect(selectNextProfilerQuestion("female", rows, CYCLE)).toBeNull();
+  });
+
+  it("prefers a never-asked question over a stale situational one", () => {
+    const rows = [row({ questionId: "f_media", answerText: "a book", cycleId: "2026-06-04" })];
+    expect(selectNextProfilerQuestion("female", rows, CYCLE)?.id).toBe("f_date_spots");
+  });
+});
+
+describe("shouldCaptureProfilerAnswer", () => {
+  const NOW = new Date("2026-06-10T12:00:00Z");
+  const OPEN = new Date("2026-06-10T12:30:00Z");
+  const CLOSED = new Date("2026-06-10T11:30:00Z");
+
+  it("captures plain text while the implicit window is open", () => {
+    const state = {
+      activeQuestionId: "f_media",
+      answerWindowUntil: OPEN,
+      questionMessageId: 42,
+    };
+    expect(shouldCaptureProfilerAnswer(state, { now: NOW })).toBe(true);
+  });
+
+  it("does NOT capture once the window has expired", () => {
+    // The reported bug: a question asked hours ago swallowing "when is my date?".
+    const state = {
+      activeQuestionId: "f_media",
+      answerWindowUntil: CLOSED,
+      questionMessageId: 42,
+    };
+    expect(shouldCaptureProfilerAnswer(state, { now: NOW })).toBe(false);
+  });
+
+  it("does NOT capture after the window was closed by another interaction", () => {
+    const state = {
+      activeQuestionId: "f_media",
+      answerWindowUntil: null,
+      questionMessageId: 42,
+    };
+    expect(shouldCaptureProfilerAnswer(state, { now: NOW })).toBe(false);
+  });
+
+  it("captures an explicit reply to the question however late it is", () => {
+    const state = {
+      activeQuestionId: "f_media",
+      answerWindowUntil: null,
+      questionMessageId: 42,
+    };
+    expect(shouldCaptureProfilerAnswer(state, { now: NOW, replyToMessageId: 42 })).toBe(true);
+  });
+
+  it("ignores a reply to some other message", () => {
+    const state = {
+      activeQuestionId: "f_media",
+      answerWindowUntil: null,
+      questionMessageId: 42,
+    };
+    expect(shouldCaptureProfilerAnswer(state, { now: NOW, replyToMessageId: 7 })).toBe(false);
+  });
+
+  it("never captures without an active question", () => {
+    const state = { activeQuestionId: null, answerWindowUntil: OPEN, questionMessageId: 42 };
+    expect(shouldCaptureProfilerAnswer(state, { now: NOW, replyToMessageId: 42 })).toBe(false);
+  });
 });
 
 describe("skipTransition", () => {
@@ -171,16 +259,12 @@ describe("skipTransition", () => {
   });
 });
 
-/** All 8 female question ids, for "everything asked" setups. */
+/**
+ * Every female question id, for "everything asked" setups. Derived from the
+ * bank rather than hardcoded — a hardcoded list silently rots as questions are
+ * added or removed, turning "all asked" into "all but the new ones", which
+ * makes the skip/return assertions below pass for the wrong reason.
+ */
 function profilerAllAsked(): string[] {
-  return [
-    "f_date_spots",
-    "f_comm_style",
-    "f_chronotype",
-    "f_sport_pref",
-    "f_turnoffs",
-    "f_shared_interests",
-    "f_activity_pref",
-    "f_media",
-  ];
+  return profilerQuestionBank("female").map((q) => q.id);
 }

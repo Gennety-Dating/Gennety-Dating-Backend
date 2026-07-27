@@ -592,12 +592,12 @@ const translations = {
     skipAnalyzeStep1: "✨ Polishing your profile…",
     skipAnalyzeStep2: "🧮 Tying it all together…",
     skipAnalyzeStep3: "💞 Prepping you for matching…",
-    profilerBatchThinking: "💭 Thinking…",
-    profilerBatchSaving: "🧩 Saving your answers…",
+    profilerBatchThinking: "Thinking…",
+    profilerBatchSaving: "Saving your answers…",
     profilerBatchSaved:
       "Preference card updated ✨ I'll use it for the next match.",
-    profilerNextAck: "✍️ Got it…",
-    profilerNextFormulating: "💭 Thinking…",
+    profilerNextAck: "Got it…",
+    profilerNextFormulating: "Thinking…",
 
     // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
     venueChangeButton: "🔄 Change venue",
@@ -1474,12 +1474,12 @@ const translations = {
     skipAnalyzeStep1: "✨ Дорабатываю профиль…",
     skipAnalyzeStep2: "🧮 Свожу всё воедино…",
     skipAnalyzeStep3: "💞 Готовлю к подбору…",
-    profilerBatchThinking: "💭 Думаю…",
-    profilerBatchSaving: "🧩 Сохраняю твои ответы…",
+    profilerBatchThinking: "Думаю…",
+    profilerBatchSaving: "Сохраняю твои ответы…",
     profilerBatchSaved:
       "Карточка обновлена ✨ Учту при следующем подборе.",
-    profilerNextAck: "✍️ Принято…",
-    profilerNextFormulating: "💭 Думаю…",
+    profilerNextAck: "Принято…",
+    profilerNextFormulating: "Думаю…",
 
     // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
     venueChangeButton: "🔄 Сменить место",
@@ -2349,12 +2349,12 @@ const translations = {
     skipAnalyzeStep1: "✨ Допрацьовую профіль…",
     skipAnalyzeStep2: "🧮 Зводжу все воєдино…",
     skipAnalyzeStep3: "💞 Готую до підбору…",
-    profilerBatchThinking: "💭 Думаю…",
-    profilerBatchSaving: "🧩 Зберігаю твої відповіді…",
+    profilerBatchThinking: "Думаю…",
+    profilerBatchSaving: "Зберігаю твої відповіді…",
     profilerBatchSaved:
       "Картку оновлено ✨ Врахую під час наступного підбору.",
-    profilerNextAck: "✍️ Прийнято…",
-    profilerNextFormulating: "💭 Думаю…",
+    profilerNextAck: "Прийнято…",
+    profilerNextFormulating: "Думаю…",
 
     // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
     venueChangeButton: "🔄 Змінити місце",
@@ -3201,12 +3201,12 @@ const deTranslations: TranslationTable = {
   skipAnalyzeStep1: "✨ Verfeinere dein Profil…",
   skipAnalyzeStep2: "🧮 Füge alles zusammen…",
   skipAnalyzeStep3: "💞 Bereite dich aufs Matching vor…",
-  profilerBatchThinking: "💭 Denke nach…",
-  profilerBatchSaving: "🧩 Speichere deine Antworten…",
+  profilerBatchThinking: "Denke nach…",
+  profilerBatchSaving: "Speichere deine Antworten…",
   profilerBatchSaved:
     "Präferenzkarte aktualisiert ✨ Ich nutze sie beim nächsten Match.",
-  profilerNextAck: "✍️ Notiert…",
-  profilerNextFormulating: "💭 Denke nach…",
+  profilerNextAck: "Notiert…",
+  profilerNextFormulating: "Denke nach…",
 
   // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
   venueChangeButton: "🔄 Ort ändern",
@@ -4042,12 +4042,12 @@ const plTranslations: TranslationTable = {
   skipAnalyzeStep1: "✨ Dopracowuję twój profil…",
   skipAnalyzeStep2: "🧮 Składam wszystko w całość…",
   skipAnalyzeStep3: "💞 Przygotowuję cię do doboru…",
-  profilerBatchThinking: "💭 Myślę…",
-  profilerBatchSaving: "🧩 Zapisuję twoje odpowiedzi…",
+  profilerBatchThinking: "Myślę…",
+  profilerBatchSaving: "Zapisuję twoje odpowiedzi…",
   profilerBatchSaved:
     "Karta preferencji zaktualizowana ✨ Uwzględnię ją przy następnym doborze.",
-  profilerNextAck: "✍️ Zapisane…",
-  profilerNextFormulating: "💭 Myślę…",
+  profilerNextAck: "Zapisane…",
+  profilerNextFormulating: "Myślę…",
 
   // --- Phase 3.7b: Venue change v2 (paid multiplayer board) ---
   venueChangeButton: "🔄 Zmień miejsce",

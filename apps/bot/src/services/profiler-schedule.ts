@@ -15,6 +15,7 @@ import {
   PROFILER_EVENING_HOUR,
   PROFILER_MORNING_HOUR,
   PROFILER_RUSH_WINDOW_HOURS,
+  isRefreshableProfilerQuestion,
   profilerQuestionBank,
   type ProfilerQuestion,
 } from "@gennety/shared";
@@ -170,7 +171,15 @@ export interface ProfilerAnswerRow {
  *      a skip that has NOT already been re-offered-and-re-skipped in the
  *      current cycle. A question skip-suppressed in a *previous* cycle
  *      becomes eligible again (spec §2.3/§2.4).
- * Answered questions are done forever. Returns null when nothing's pending.
+ *   3. Otherwise the first **refreshable** question whose answer is from an
+ *      earlier drop cycle. These are the situational ones ("what are you
+ *      watching", "plans for the weekend") whose answer is a snapshot of the
+ *      moment: re-asking them each cycle is what keeps icebreaker fuel current
+ *      and stops the bank from running dry after a couple of days. The new
+ *      answer overwrites the stale one.
+ *
+ * Answered `once` questions are done forever. Returns null when nothing's
+ * pending.
  */
 export function selectNextProfilerQuestion(
   gender: Gender | null,
@@ -188,12 +197,66 @@ export function selectNextProfilerQuestion(
   for (const q of bank) {
     const row = byId.get(q.id);
     if (!row) continue;
-    if (row.answerText) continue; // answered → done
+    if (row.answerText) continue; // answered → done (unless refreshable, pass 3)
     if (!row.skipped) continue;
     const suppressedThisCycle = row.skipReturned && row.cycleId === currentCycleId;
     if (!suppressedThisCycle) return q;
   }
+  // Pass 3: refreshable questions answered in an earlier cycle.
+  for (const q of bank) {
+    if (!isRefreshableProfilerQuestion(q)) continue;
+    const row = byId.get(q.id);
+    if (!row?.answerText) continue;
+    if (row.cycleId === currentCycleId) continue; // already refreshed this cycle
+    return q;
+  }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Answer capture (is this text an answer, or a message to the assistant?)
+// ---------------------------------------------------------------------------
+
+/** The Profiler columns that decide whether plain text counts as an answer. */
+export interface ProfilerCaptureState {
+  activeQuestionId: string | null;
+  answerWindowUntil: Date | null;
+  questionMessageId: number | null;
+}
+
+/**
+ * Whether a plain-text message should be recorded as the answer to the user's
+ * active Profiler question.
+ *
+ * The naive rule — "there is an active question, so any text is its answer" —
+ * is what made the bot swallow unrelated messages: a question stays active for
+ * hours, so a user who had long moved on and asked "when is my date?" got an
+ * acknowledge shimmer and the next Profiler question instead of an answer.
+ * Capture is therefore bounded twice over:
+ *
+ *   - an **explicit reply** to the question message is always an answer, no
+ *     matter how much time passed (the deliberate escape hatch for a slow
+ *     answer);
+ *   - otherwise the implicit window must still be open — it is set to
+ *     `PROFILER_ANSWER_WINDOW_MS` when the question is sent and cleared the
+ *     moment the user does anything else at all.
+ *
+ * Everything else falls through to the menu agent, where it belongs.
+ */
+export function shouldCaptureProfilerAnswer(
+  state: ProfilerCaptureState,
+  options: { now: Date; replyToMessageId?: number | undefined },
+): boolean {
+  if (!state.activeQuestionId) return false;
+  if (
+    options.replyToMessageId !== undefined &&
+    state.questionMessageId !== null &&
+    options.replyToMessageId === state.questionMessageId
+  ) {
+    return true;
+  }
+  if (!state.answerWindowUntil) return false;
+  return state.answerWindowUntil.getTime() > options.now.getTime();
 }
 
 /**

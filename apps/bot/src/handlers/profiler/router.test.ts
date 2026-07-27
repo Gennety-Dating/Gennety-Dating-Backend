@@ -12,29 +12,61 @@ vi.mock("../../services/profiler.js", async () => {
     PROFILER_SKIP_PREFIX: actual.PROFILER_SKIP_PREFIX,
     recordProfilerAnswer: vi.fn().mockResolvedValue(true),
     recordProfilerSkip: vi.fn().mockResolvedValue(true),
+    resolveProfilerCapture: vi.fn(),
+    closeProfilerAnswerWindow: vi.fn().mockResolvedValue(false),
   };
 });
 
 import { prisma } from "@gennety/db";
 import { PROFILER_ANSWER_DEBOUNCE_MS } from "@gennety/shared";
 import { profilerRouter } from "./router.js";
-import { recordProfilerAnswer, recordProfilerSkip } from "../../services/profiler.js";
+import {
+  closeProfilerAnswerWindow,
+  recordProfilerAnswer,
+  recordProfilerSkip,
+  resolveProfilerCapture,
+} from "../../services/profiler.js";
 import type { BotContext } from "../../session.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mUserFind = (prisma.user as unknown as { findUnique: MockFn }).findUnique;
 const mAnswer = recordProfilerAnswer as unknown as MockFn;
 const mSkip = recordProfilerSkip as unknown as MockFn;
+const mCapture = resolveProfilerCapture as unknown as MockFn;
+const mCloseWindow = closeProfilerAnswerWindow as unknown as MockFn;
 
 const answerCallbackQuery = vi.fn().mockResolvedValue(true);
 const editMessageReplyMarkup = vi.fn().mockResolvedValue(true);
 
 /** Minimal ctx for a plain text message from a completed, idle user. */
-function textCtx(text: string, messageId: number): BotContext {
+function textCtx(text: string, messageId: number, replyToMessageId?: number): BotContext {
   return {
     from: { id: 555 },
     chat: { id: 555 },
-    message: { text, message_id: messageId },
+    message: {
+      text,
+      message_id: messageId,
+      ...(replyToMessageId ? { reply_to_message: { message_id: replyToMessageId } } : {}),
+    },
+    api: {},
+    session: {
+      onboardingStep: "completed",
+      matchFlow: "idle",
+      menuState: "idle",
+      awaitingContextDump: false,
+      expectingPhoto: false,
+    },
+    answerCallbackQuery,
+    editMessageReplyMarkup,
+  } as unknown as BotContext;
+}
+
+/** Any non-Profiler callback — e.g. the user tapping into the main menu. */
+function menuTapCtx(): BotContext {
+  return {
+    from: { id: 555 },
+    chat: { id: 555 },
+    callbackQuery: { data: "menu:open" },
     api: {},
     session: {
       onboardingStep: "completed",
@@ -85,6 +117,8 @@ beforeEach(() => {
   });
   mAnswer.mockClear().mockResolvedValue(true);
   mSkip.mockClear().mockResolvedValue(true);
+  mCapture.mockReset().mockResolvedValue({ userId: "u1", questionId: "f_date_spots" });
+  mCloseWindow.mockClear().mockResolvedValue(false);
   answerCallbackQuery.mockClear();
   editMessageReplyMarkup.mockClear();
 });
@@ -131,7 +165,7 @@ describe("profiler router — free-text answers", () => {
   });
 
   it("passes text through when no question is active", async () => {
-    mUserFind.mockResolvedValue({ id: "u1", profile: { profilerActiveQuestionId: null } });
+    mCapture.mockResolvedValue(null);
 
     const next = await run(textCtx("hey", 1));
     await elapseDebounce();
@@ -140,12 +174,52 @@ describe("profiler router — free-text answers", () => {
     expect(mAnswer).not.toHaveBeenCalled();
   });
 
+  it("passes text to the menu agent once the question no longer owns the chat", async () => {
+    // The reported bug: a question asked hours ago (or before the user went off
+    // into the menu) turned "when is my date?" into a Profiler answer, complete
+    // with an acknowledge shimmer and the next question. Capture is now denied,
+    // so the message reaches the menu agent it was written for.
+    mCapture.mockResolvedValue(null);
+
+    const next = await run(textCtx("когда моё свидание?", 1));
+    await elapseDebounce();
+
+    expect(mAnswer).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("forwards an explicit reply so a late answer still counts", async () => {
+    await run(textCtx("сова", 9, 4));
+
+    expect(mCapture).toHaveBeenCalledWith(555n, { replyToMessageId: 4 });
+  });
+
   it("abandons a half-typed answer when the user runs a command", async () => {
     await run(textCtx("wait let me think", 1));
     await run(textCtx("/menu", 2));
     await elapseDebounce();
 
     expect(mAnswer).not.toHaveBeenCalled();
+  });
+
+  it("closes the capture window when the user runs a command", async () => {
+    await run(textCtx("/menu", 1));
+
+    expect(mCloseWindow).toHaveBeenCalledWith(555n);
+  });
+
+  it("closes the capture window when the user taps into the menu", async () => {
+    // Tapping a button is the clearest signal the conversation moved on — the
+    // next thing they type is for the assistant, not for the open question.
+    await run(menuTapCtx());
+
+    expect(mCloseWindow).toHaveBeenCalledWith(555n);
+  });
+
+  it("does not close the window while the user is answering", async () => {
+    await run(textCtx("rooftop cafes", 1));
+
+    expect(mCloseWindow).not.toHaveBeenCalled();
   });
 });
 
