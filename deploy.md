@@ -151,6 +151,45 @@ expected second heartbeat with `eligible=2`, `unchanged=2`, no new errors, no
 six-hour unreachable cooldown; there was no reachable active chat for a live
 client rendering check.)
 
+**2026-07-27 (env-only) — Rematch turned ON.** Founder decision, immediately
+after the release below verified clean. Added a single line to
+`/opt/gennety/.env` (backed up to `.env.bak.20260727-033937` first):
+
+```
+REMATCH_FEATURE_ENABLED=true
+```
+
+then `pm2 restart gennety-bot --update-env` + `pm2 save`. No schema step — the
+`matches.source` / `rematch_paid_by_id` columns and the `rematch_purchases`
+table were already in the prod DB (see the release note below). No Mini App
+change; Rematch is Telegram-only and has no Mini App surface.
+
+**The flag flip is confirmed by the cron, not by the env line.** The startup
+block after the restart now carries `[cron] Rematch refund retry scheduled:
+"0 * * * *"`, which is registered only when the flag is on — the block
+immediately before it (same log, pre-restart) does not. That cron is what makes
+"never keep money without delivering a match" durable, so its presence is the
+real proof the feature is live rather than half-on. Also verified: `Bot
+@gennetybot started`, `:3100`/`:3101` listening, `/v1/ping` ok, PM2 restart
+count 29 → 30 (single restart, no crash loop), no new `P2022` / `FATAL` /
+unhandled rejections.
+
+Every other `REMATCH_*` key is left unset, so the code defaults apply:
+`REMATCH_STARS=150`, `REMATCH_MAX_PER_WEEK=2`, `REMATCH_COOLDOWN_HOURS=24`,
+`REMATCH_GIFT_CAP_DAYS=7`, `REMATCH_PRE_BATCH_BLACKOUT_HOURS=6`.
+
+**⚠️ Open pricing decision — the label may under-promise the charge.** 150⭐ is
+$3.00 at the ticket rate ($6.99/350⭐ = $0.02/⭐) but ≈$3.59 at the more
+conservative $0.024/⭐ rate documented under `PREMIUM_STARS`, while the offer
+copy says **$2.99**. Both fixes are env-only: `REMATCH_STARS=125`, or raise
+`REMATCH_PRICE_USD_DISPLAY`. Not resolved at flip time.
+
+**Rollback is one line:** delete `REMATCH_FEATURE_ENABLED` (or set `false`) and
+`pm2 restart gennety-bot --update-env`. The additive schema may stay. Note that
+rollback stops *new* offers but does not refund an in-flight purchase — the
+refund sweep is itself flag-gated, so if a purchase is stranded in `processing`,
+flip the flag back on long enough for the hourly sweep to settle it.
+
 **Deployed 2026-07-27 — Rematch + audit hardening + retention (`35df65b`, 40
 commits).** Carried the paid **Rematch** feature (`REMATCH_PRODUCT_SPEC.md`,
 PRODUCT_SPEC §3.11) plus the security/audit hardening batch (AUTH-1, XSS-1,
@@ -175,12 +214,12 @@ snapshots survived.
 `matches.rematch_paid_by_id`, `rematch_purchases`) were **already present in the
 prod DB** and so did not appear in the plan.
 
-**Rematch shipped dark and is verified inert:** no `REMATCH_*` keys exist in
-`/opt/gennety/.env`, so `REMATCH_FEATURE_ENABLED` defaults to `false`; the
-startup log correctly shows **no** "Rematch refund retry" cron (it registers
-only when the flag is on) while the new "Venue-change refund retry" and "Data
-retention" crons did appear. To launch it, add `REMATCH_FEATURE_ENABLED=true`
-(env-only, `pm2 restart --update-env`) — the schema is already in place.
+**Rematch shipped dark and was verified inert** *(superseded the same day — see
+the env-only flip above)*: no `REMATCH_*` keys existed in `/opt/gennety/.env`,
+so `REMATCH_FEATURE_ENABLED` defaulted to `false`; the startup log correctly
+showed **no** "Rematch refund retry" cron (it registers only when the flag is
+on) while the new "Venue-change refund retry" and "Data retention" crons did
+appear.
 
 Post-deploy verified: `Bot @gennetybot started`, all crons registered,
 `:3100`/`:3101` listening, `/v1/ping` ok, admin `401`, **all 11 Mini App pages
