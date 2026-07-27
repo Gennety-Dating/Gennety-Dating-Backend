@@ -1,4 +1,4 @@
-import { InlineKeyboard, type Api } from "grammy";
+import type { Api } from "grammy";
 import type { BotContext } from "../../session.js";
 import { prisma } from "@gennety/db";
 import { sendTypeRadarInvite } from "./type-radar.js";
@@ -12,7 +12,6 @@ import {
   magicContextPrompt,
   DEFAULT_SESSION,
   normalizeProfileMedia,
-  profileMediaHasVideo,
   t,
   type ProfileMedia,
   type ProfileVideoMedia,
@@ -67,8 +66,20 @@ import {
 import { sendTicketRewardDM } from "../../services/ticket-reward.js";
 import {
   isPhotoStageContinueText,
-  onboardingPhotoStageText,
+  sendPhotoStagePrompt,
+  sessionHasProfileVideo,
+  ONBOARDING_PHOTOS_CONTINUE_CALLBACK,
 } from "../../services/onboarding-photo-stage.js";
+import { renderPhotoCards } from "../../services/photo-cards.js";
+import {
+  closeStalePhotoEditor,
+  onboardingPhotoSurface,
+  openOnboardingPhotoEditor,
+} from "./photo-editor.js";
+import {
+  isPhotoStagePanelTap,
+  photoStagePanelSync,
+} from "../../services/photo-stage-panel.js";
 import {
   MESSAGE_REACTION,
   reactToMessage,
@@ -76,8 +87,7 @@ import {
 
 /** Backward compatibility for confirmation buttons sent before auto-flush. */
 const DUMP_DONE_CALLBACK = "dump:done";
-export const ONBOARDING_PHOTOS_CONTINUE_CALLBACK =
-  "onboarding:photos:continue";
+export { ONBOARDING_PHOTOS_CONTINUE_CALLBACK };
 const CONTEXT_DUMP_DEBOUNCE_MS = 2_000;
 
 /**
@@ -232,6 +242,28 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     await ctx.answerCallbackQuery();
   }
 
+  // ---- Photo-stage bottom panel ----
+  // A reply-keyboard tap arrives as an ordinary text message carrying the
+  // button's label, so it has to be claimed before anything else can read it
+  // as an answer. Gated on `expectingPhoto` rather than `photoStageActive`
+  // below: the editor must be reachable while the user is still UNDER the
+  // minimum, which is exactly when a bad photo most needs replacing.
+  if (
+    ctx.session.expectingPhoto &&
+    Boolean(ctx.message?.text) &&
+    isPhotoStagePanelTap(text)
+  ) {
+    // The tap's own message would otherwise sit in the chat as a stray line of
+    // the user's "speech" between their photos.
+    if (ctx.chat && ctx.message) {
+      await ctx.api
+        .deleteMessage(ctx.chat.id, ctx.message.message_id)
+        .catch(() => {});
+    }
+    await openOnboardingPhotoEditor(ctx);
+    return;
+  }
+
   const photoStageActive =
     ctx.session.expectingPhoto &&
     ctx.session.pendingPhotos.length >= MIN_PHOTOS;
@@ -246,11 +278,11 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
     !photoStageActive
   ) {
     if (ctx.chat) {
-      await sendPhotoStagePrompt(
+      await sendPhotoStageUpdate(
         ctx.api,
         ctx.chat.id,
         telegramId,
-        ctx.session.language,
+        ctx.session,
         ctx.session.pendingPhotos.length,
         sessionHasProfileVideo(ctx.session),
       );
@@ -260,11 +292,11 @@ export async function handleConversational(ctx: BotContext): Promise<void> {
 
   if (photoStageActive && !continuePhotoStage) {
     if (ctx.chat) {
-      await sendPhotoStagePrompt(
+      await sendPhotoStageUpdate(
         ctx.api,
         ctx.chat.id,
         telegramId,
-        ctx.session.language,
+        ctx.session,
         ctx.session.pendingPhotos.length,
         sessionHasProfileVideo(ctx.session),
       );
@@ -630,7 +662,7 @@ async function flushPersistedContextDump(
       });
     }
 
-    await replyText(acc.api, acc.chatId, result.reply);
+    await replyText(acc.api, acc.chatId, result.reply, session);
 
     if (result.onboardingComplete) {
       const language = session.language;
@@ -669,13 +701,22 @@ async function flushPersistedContextDump(
  * Send the agent's reply with Markdown formatting.
  * Falls back to plain text if the LLM included malformed Markdown that
  * Telegram's parser rejects (e.g. unmatched asterisks or underscores).
+ *
+ * This is also where the photo stage's bottom panel is put up and taken down:
+ * the agent's own "send me your photos" message is the stage's first plain
+ * text, and its next question is the first message after the stage ends. The
+ * markup is resolved ONCE so the plain-text retry below still carries it.
  */
 async function sendAgentReply(ctx: BotContext, reply: string): Promise<void> {
+  if (ctx.chat) {
+    await closeStalePhotoEditor(ctx.api, ctx.chat.id, ctx.session);
+  }
+  const panel = photoStagePanelSync(ctx.session);
   try {
-    await ctx.reply(reply, { parse_mode: "Markdown" });
+    await ctx.reply(reply, { parse_mode: "Markdown", ...panel });
   } catch {
     // Strip Markdown markers and send as plain text
-    await ctx.reply(reply.replace(/[*_`[\]]/g, ""));
+    await ctx.reply(reply.replace(/[*_`[\]]/g, ""), panel);
   }
 }
 
@@ -822,11 +863,11 @@ async function handleProfileVideoMessage(
   });
   if (prepared.kind === "rejected") {
     if (photoStageActive) {
-      await sendPhotoStagePrompt(
+      await sendPhotoStageUpdate(
         ctx.api,
         ctx.chat.id,
         telegramId,
-        ctx.session.language,
+        ctx.session,
         ctx.session.pendingPhotos.length,
         Boolean(existingVideo),
       );
@@ -853,11 +894,11 @@ async function handleProfileVideoMessage(
   }
 
   if (photoStageActive) {
-    await sendPhotoStagePrompt(
+    await sendPhotoStageUpdate(
       ctx.api,
       ctx.chat.id,
       telegramId,
-      ctx.session.language,
+      ctx.session,
       ctx.session.pendingPhotos.length,
       true,
     );
@@ -1165,11 +1206,11 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
           t(session.language, "photoVisionError"),
         );
         if (!acc.unsolicited) {
-          await sendPhotoStagePrompt(
+          await sendPhotoStageUpdate(
             acc.api,
             acc.chatId,
             acc.telegramId,
-            session.language,
+            session,
             session.pendingPhotos.length,
             sessionHasProfileVideo(session),
           );
@@ -1179,11 +1220,11 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
       if (acc.rejectedCount > 0) {
         if (!acc.unsolicited) {
           await sendPhotoRejectionNotices(acc, session.language);
-          await sendPhotoStagePrompt(
+          await sendPhotoStageUpdate(
             acc.api,
             acc.chatId,
             acc.telegramId,
-            session.language,
+            session,
             session.pendingPhotos.length,
             sessionHasProfileVideo(session),
           );
@@ -1195,7 +1236,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
           acc.telegramId,
           { kind: "photos_updated" },
         );
-        await replyText(acc.api, acc.chatId, result.reply);
+        await replyText(acc.api, acc.chatId, result.reply, session);
         return;
       }
       if (acc.extraIgnoredCount > 0) {
@@ -1206,11 +1247,11 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
             create: { key, data: session as unknown as object },
             update: { data: session as unknown as object },
           });
-          await sendPhotoStagePrompt(
+          await sendPhotoStageUpdate(
             acc.api,
             acc.chatId,
             acc.telegramId,
-            session.language,
+            session,
             session.pendingPhotos.length,
             sessionHasProfileVideo(session),
           );
@@ -1232,16 +1273,16 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
           create: { key, data: session as unknown as object },
           update: { data: session as unknown as object },
         });
-        await replyText(acc.api, acc.chatId, result.reply);
+        await replyText(acc.api, acc.chatId, result.reply, session);
         return;
       }
       if (acc.duplicateCount > 0 && !acc.unsolicited) {
         await sendPhotoRejectionNotices(acc, session.language);
-        await sendPhotoStagePrompt(
+        await sendPhotoStageUpdate(
           acc.api,
           acc.chatId,
           acc.telegramId,
-          session.language,
+          session,
           session.pendingPhotos.length,
           sessionHasProfileVideo(session),
         );
@@ -1266,7 +1307,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
       }
       const consensusText = photoConsensusBatchText(session.language, acc);
       if (consensusText) {
-        await replyText(acc.api, acc.chatId, consensusText);
+        await replyText(acc.api, acc.chatId, consensusText, session);
       }
       await maybeGrantPhotoBonus(
         acc.api,
@@ -1274,11 +1315,11 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
         acc.telegramId,
         session.language,
       );
-      await sendPhotoStagePrompt(
+      await sendPhotoStageUpdate(
         acc.api,
         acc.chatId,
         acc.telegramId,
-        session.language,
+        session,
         count,
         sessionHasProfileVideo(session),
       );
@@ -1318,7 +1359,7 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
       update: { data: session as unknown as object },
     });
 
-    await replyText(acc.api, acc.chatId, result.reply);
+    await replyText(acc.api, acc.chatId, result.reply, session);
 
     // One-time "4+ photos" ticket bonus (idempotent, flag-gated).
     await maybeGrantPhotoBonus(acc.api, acc.chatId, acc.telegramId, session.language);
@@ -1360,11 +1401,27 @@ async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
   }
 }
 
-async function replyText(api: Api, chatId: number, text: string): Promise<void> {
+/**
+ * Ctx-free twin of {@link sendAgentReply}, used by the debounced burst flush
+ * (which runs outside the grammY update lifecycle).
+ *
+ * `session` is optional only because a couple of early-failure paths have no
+ * session loaded yet; pass it wherever one exists so the photo-stage bottom
+ * panel can be put up or torn down on this message. The markup is resolved
+ * ONCE so the plain-text retry still carries it.
+ */
+async function replyText(
+  api: Api,
+  chatId: number,
+  text: string,
+  session?: SessionData,
+): Promise<void> {
+  if (session) await closeStalePhotoEditor(api, chatId, session);
+  const panel = session ? photoStagePanelSync(session) : {};
   try {
-    await api.sendMessage(chatId, text, { parse_mode: "Markdown" });
+    await api.sendMessage(chatId, text, { parse_mode: "Markdown", ...panel });
   } catch {
-    await api.sendMessage(chatId, text.replace(/[*_`[\]]/g, ""));
+    await api.sendMessage(chatId, text.replace(/[*_`[\]]/g, ""), panel);
   }
 }
 
@@ -1445,44 +1502,49 @@ function photoProgressMessage(count: number): string {
   return `Total verified: ${count}. Minimum of ${MIN_PHOTOS} is met. STOP asking for more photos. Briefly mention the user may send one more if they want (up to ${MAX_PHOTOS}), then default to moving on — do NOT chain repeated "one more" requests.`;
 }
 
-function sessionHasProfileVideo(session: SessionData): boolean {
-  return profileMediaHasVideo(
-    normalizeProfileMedia(session.pendingProfileMedia, session.pendingPhotos),
-  );
-}
-
-async function sendPhotoStagePrompt(
+/**
+ * Report the state of the photo stage back to the user.
+ *
+ * Normally that is the progress message (count / how many more are needed /
+ * the inline Continue once the minimum is met) plus the persistent bottom
+ * panel. But while the photo EDITOR is open it re-renders the editor instead,
+ * so "delete one, send its replacement" stays one continuous screen rather
+ * than pushing a progress message underneath a stack of cards.
+ *
+ * Every branch that needs to tell the user where the stage stands goes through
+ * here — the burst flush, the text handler, the video handler.
+ */
+async function sendPhotoStageUpdate(
   api: Api,
   chatId: number,
   telegramId: bigint,
-  language: SessionData["language"],
+  session: SessionData,
   photoCount: number,
   hasVideo: boolean,
 ): Promise<void> {
-  const text = onboardingPhotoStageText({
-    language,
-    photoCount,
-    ticketFeatureEnabled: env.TICKET_FEATURE_ENABLED,
-    hasVideo,
-  });
-  await recordOnboardingAssistantReply(telegramId, text);
-
-  if (photoCount < MIN_PHOTOS) {
-    await api.sendMessage(chatId, text);
+  if (session.onboardingPhotoEdit) {
+    await renderPhotoCards(api, chatId, session, onboardingPhotoSurface(session));
     return;
   }
-
-  const keyboard = new InlineKeyboard().text(
-    t(language, "btnContinuePhotos"),
-    ONBOARDING_PHOTOS_CONTINUE_CALLBACK,
+  await sendPhotoStagePrompt(
+    api,
+    chatId,
+    telegramId,
+    session,
+    photoCount,
+    hasVideo,
+    env.TICKET_FEATURE_ENABLED,
   );
-  await api.sendMessage(chatId, text, { reply_markup: keyboard });
 }
 
 function markOnboardingComplete(session: SessionData): void {
   session.onboardingStep = "completed";
   session.menuState = "idle";
   session.expectingPhoto = false;
+  // The editor's card MESSAGES are retired by `closeStalePhotoEditor` on the
+  // next outgoing message; this just makes sure the flag can't outlive the
+  // stage even if that send never happens.
+  session.onboardingPhotoEdit = false;
   session.pendingPhotos = [];
   session.pendingProfileMedia = [];
   session.pendingPhotoUniqueIds = [];

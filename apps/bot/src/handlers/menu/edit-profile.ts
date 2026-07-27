@@ -16,7 +16,6 @@ import {
   escapeMd,
   type Language,
   type SessionData,
-  type PhotoManagerCard,
 } from "@gennety/shared";
 import { validateSingleFace } from "../../services/vision/validate-face.js";
 import {
@@ -59,6 +58,12 @@ import {
 import { refreshUserEmbedding } from "../../workers/embedding-refresh.js";
 import { VERIFY_PHOTOS_CLEAR_CALLBACK } from "../../services/verification-keyboard.js";
 import { sendVerificationCTABare } from "../onboarding/verification.js";
+import {
+  removePhotoCardMessage,
+  renderPhotoCards,
+  retirePhotoCards,
+  type PhotoCardsSurface,
+} from "../../services/photo-cards.js";
 
 async function embeddingRefreshStillPending(userId: string): Promise<boolean> {
   try {
@@ -330,65 +335,36 @@ export async function handleEditAgeRangeInput(ctx: BotContext): Promise<void> {
 const PHOTO_CARD_DELETE_CALLBACK = "menu:edit:photos:delcard";
 
 /**
- * Gap between consecutive card sends. Opening a full 10-photo manager is 10
- * `sendPhoto` calls where the old design was a single `sendMediaGroup`, and an
- * unpaced burst risks a 429 — which would silently cost the user a card while
- * the photo still counts toward the total. Small enough to stay imperceptible
- * (~1s across a full set), large enough to keep the burst civil.
- */
-const PHOTO_CARD_SEND_DELAY_MS = 120;
-
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * Drop one card's message. Telegram only lets a bot delete its own messages
- * for 48 hours, so a manager opened, abandoned, and resumed days later cannot
- * always clean up after itself. In that case the card must at least stop
- * looking live: one `editMessageCaption` both marks it deleted and drops its
- * button (omitting `reply_markup` clears the keyboard).
- */
-async function removePhotoCardMessage(
-  api: Api,
-  chatId: number,
-  msgId: number,
-  language: Language,
-): Promise<void> {
-  try {
-    await api.deleteMessage(chatId, msgId);
-  } catch {
-    await api
-      .editMessageCaption(chatId, msgId, {
-        caption: t(language, "photoManagerCardRemoved"),
-      })
-      .catch(() => {});
-  }
-}
-
-/**
- * Close the manager's live surface: strip the keyboards off every tracked card
- * and off the bottom panel, then stop tracking them.
+ * The menu manager's card surface: 🗑 per card, the redo-only clear-all, ➕ Add
+ * (this surface owns its own upload sub-mode), and ✅ Done.
  *
- * The card messages themselves stay in the chat on purpose — they are the
- * gallery the user just reviewed — but their delete buttons must not survive,
- * because after this the session no longer knows what they point at. Tapping
- * one is already a safe no-op (cards resolve by message id), yet a button that
- * does nothing is its own bug. The pre-card manager stripped its control
- * message's keyboard for exactly this reason.
+ * Rebuilt per render because the clear-all row is conditional on the session
+ * still being in verification-redo mode.
  */
-async function retirePhotoCards(
-  api: Api,
-  chatId: number,
-  session: SessionData,
-): Promise<void> {
-  for (const card of session.photoCards) {
-    await api.editMessageReplyMarkup(chatId, card.msgId).catch(() => {});
-  }
-  session.photoCards = [];
-  if (session.photoManagerMsgId != null) {
-    await api.editMessageReplyMarkup(chatId, session.photoManagerMsgId).catch(() => {});
-    session.photoManagerMsgId = null;
-  }
+function menuPhotoSurface(session: SessionData): PhotoCardsSurface {
+  const lang = session.language;
+  return {
+    deleteCallback: PHOTO_CARD_DELETE_CALLBACK,
+    deleteLabel: t(lang, "photoManagerCardDeleteBtn"),
+    done: {
+      callback: "menu:edit:photos:continue",
+      label: t(lang, "photoManagerDoneBtn"),
+    },
+    add: {
+      callback: "menu:edit:photos:add",
+      label: t(lang, "photoManagerAddBtn"),
+    },
+    // Verification redo only: one tap to drop a whole set of someone else's
+    // photos instead of deleting each card individually.
+    ...(session.verifyPhotoRedo
+      ? {
+          clearAll: {
+            callback: VERIFY_PHOTOS_CLEAR_CALLBACK,
+            label: t(lang, "verifyBtnClearPhotos"),
+          },
+        }
+      : {}),
+  };
 }
 
 /**
@@ -533,121 +509,6 @@ export async function handleVerifyPhotosClear(ctx: BotContext): Promise<void> {
 }
 
 /**
- * Reconcile `session.photoCards` against `session.pendingPhotos`: delete the
- * card message for any ref no longer present (a concurrent mobile/Aether edit,
- * or an explicit delete/clear-all that already spliced its own arrays before
- * calling this), and send a fresh card — the photo plus a single delete
- * button — for any ref that doesn't have one yet.
- *
- * Returns true when at least one card was newly SENT, which is the caller's
- * signal that the bottom panel must move below the new cards rather than
- * being edited in place (Telegram has no "move a message").
- */
-async function ensurePhotoCards(
-  api: Api,
-  chatId: number,
-  session: SessionData,
-): Promise<boolean> {
-  const wanted = new Set(session.pendingPhotos);
-  const kept: PhotoManagerCard[] = [];
-  for (const card of session.photoCards) {
-    if (wanted.has(card.ref)) {
-      kept.push(card);
-    } else {
-      await removePhotoCardMessage(api, chatId, card.msgId, session.language);
-    }
-  }
-
-  const known = new Set(kept.map((c) => c.ref));
-  let addedAny = false;
-  for (const ref of session.pendingPhotos) {
-    if (known.has(ref)) continue;
-    // Pace the burst: a full set is up to 10 sends where the old design used
-    // one media group (see PHOTO_CARD_SEND_DELAY_MS).
-    if (addedAny) await sleep(PHOTO_CARD_SEND_DELAY_MS);
-    try {
-      const msg = await api.sendPhoto(chatId, ref, {
-        reply_markup: new InlineKeyboard().text(
-          t(session.language, "photoManagerCardDeleteBtn"),
-          PHOTO_CARD_DELETE_CALLBACK,
-        ),
-      });
-      kept.push({ msgId: msg.message_id, ref });
-      addedAny = true;
-    } catch (err) {
-      // Stale file_id, or a rate limit we paced for but still hit. The photo
-      // stays counted toward MIN/MAX either way and the next re-render retries
-      // its card — but this must not stay silent, because the visible symptom
-      // (panel says 10/10, fewer cards on screen) looks like a render bug.
-      console.warn("[edit-profile] photo card send failed:", err);
-    }
-  }
-
-  session.photoCards = kept;
-  return addedAny;
-}
-
-/**
- * Render (or update) the bottom panel: a photo counter, then in order the
- * redo-only clear-all action, ➕ Add (hidden at MAX), and ✅ Done.
- *
- * `forceResend` is set whenever {@link ensurePhotoCards} just sent new cards:
- * since Telegram has no "move a message", the only way to keep the panel
- * BELOW the freshly-arrived cards is to delete the old one and send a new
- * one. Otherwise (a delete, or a re-render with no new cards) the panel is
- * already the newest message in the chat, so it is edited in place — cheaper,
- * and it avoids the panel visibly flickering out and back for a one-line
- * count change.
- */
-async function renderPhotoManagerPanel(
-  api: Api,
-  chatId: number,
-  session: SessionData,
-  opts: { forceResend: boolean; lead?: string },
-): Promise<void> {
-  const { forceResend, lead } = opts;
-  const lang = session.language;
-  const photos = session.pendingPhotos;
-
-  const keyboard = new InlineKeyboard();
-  // Verification redo only: one tap to drop a whole set of someone else's
-  // photos instead of deleting each card individually.
-  if (session.verifyPhotoRedo && photos.length > 0) {
-    keyboard.text(t(lang, "verifyBtnClearPhotos"), VERIFY_PHOTOS_CLEAR_CALLBACK).row();
-  }
-  if (photos.length < MAX_PHOTOS) {
-    keyboard.text(t(lang, "photoManagerAddBtn"), "menu:edit:photos:add").row();
-  }
-  keyboard.text(t(lang, "photoManagerDoneBtn"), "menu:edit:photos:continue");
-
-  const counter = t(lang, "photoManagerTitle", {
-    count: photos.length,
-    min: MIN_PHOTOS,
-    max: MAX_PHOTOS,
-  });
-  const text = lead ? `${lead}\n\n${counter}` : counter;
-
-  if (!forceResend && session.photoManagerMsgId != null) {
-    try {
-      await api.editMessageText(chatId, session.photoManagerMsgId, text, {
-        reply_markup: keyboard,
-      });
-      return;
-    } catch {
-      // Either the message is gone, or the text is byte-identical and Telegram
-      // rejects the no-op edit (the video path re-renders without changing the
-      // count). Both are handled the same way — send a fresh panel below.
-    }
-  }
-
-  if (session.photoManagerMsgId != null) {
-    await api.deleteMessage(chatId, session.photoManagerMsgId).catch(() => {});
-  }
-  const msg = await api.sendMessage(chatId, text, { reply_markup: keyboard });
-  session.photoManagerMsgId = msg?.message_id ?? null;
-}
-
-/**
  * Render the photo-manager screen: reconcile the per-photo cards, then render
  * the bottom counter/actions panel below them.
  */
@@ -656,35 +517,13 @@ async function renderPhotoManager(
   opts: { lead?: string } = {},
 ): Promise<void> {
   if (!ctx.chat) return;
-  await renderPhotoManagerCore(ctx.api, ctx.chat.id, ctx.session, opts);
-}
-
-/**
- * Ctx-free core of {@link renderPhotoManager}. `session` is mutated in place
- * (`photoCards`, `photoManagerMsgId`), so the caller owns persisting it — the
- * live `ctx.session` is written back by grammY, while the debounced batch
- * flush (which runs outside the update lifecycle) upserts the `bot_sessions`
- * row itself.
- *
- * `lead` prepends a summary line to the panel, which is how a whole upload
- * burst reports itself in ONE message instead of one reply per frame.
- */
-async function renderPhotoManagerCore(
-  api: Api,
-  chatId: number,
-  session: SessionData,
-  opts: { lead?: string } = {},
-): Promise<void> {
-  const addedAny = await ensurePhotoCards(api, chatId, session);
-  await renderPhotoManagerPanel(api, chatId, session, {
-    // A `lead` is a burst summary the user has to actually SEE, and by the
-    // time it exists the chat already holds their uploads plus any per-frame
-    // rejection replies. Editing it into a panel that has scrolled above all
-    // of that hides exactly the message that matters most — notably the
-    // "nothing was added" case, where no new card forces a resend on its own.
-    forceResend: addedAny || opts.lead !== undefined,
-    ...(opts.lead !== undefined ? { lead: opts.lead } : {}),
-  });
+  await renderPhotoCards(
+    ctx.api,
+    ctx.chat.id,
+    ctx.session,
+    menuPhotoSurface(ctx.session),
+    opts,
+  );
 }
 
 /**
@@ -1177,7 +1016,7 @@ async function flushPhotoBatch(batch: PhotoUploadBatch): Promise<void> {
   if (batch.capped > 0) leadLines.push(t(lang, "photoBatchAtMax", { max: MAX_PHOTOS }));
   leadLines.push(...batch.notes);
 
-  await renderPhotoManagerCore(batch.api, batch.chatId, session, {
+  await renderPhotoCards(batch.api, batch.chatId, session, menuPhotoSurface(session), {
     ...(leadLines.length > 0 ? { lead: leadLines.join("\n") } : {}),
   });
 

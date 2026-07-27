@@ -13,6 +13,7 @@ vi.mock("@gennety/db", () => ({
     profile: {
       upsert: vi.fn(),
       updateMany: vi.fn(),
+      findFirst: vi.fn(),
     },
     botSession: {
       findUnique: vi.fn(),
@@ -123,6 +124,7 @@ import {
   handleConversational,
   ONBOARDING_PHOTOS_CONTINUE_CALLBACK,
 } from "./conversational.js";
+import { photoStagePanelSync } from "../../services/photo-stage-panel.js";
 import {
   VERIFY_SKIP_CALLBACK,
   VERIFY_SKIP_CONFIRM_CALLBACK,
@@ -1202,6 +1204,11 @@ describe("Album (media_group_id) photo coalescing", () => {
       getFile: vi.fn(),
       sendChatAction: vi.fn().mockResolvedValue(undefined),
       setMessageReaction: vi.fn().mockResolvedValue(undefined),
+      sendPhoto: vi.fn().mockResolvedValue({ message_id: 900 }),
+      deleteMessage: vi.fn().mockResolvedValue(undefined),
+      editMessageText: vi.fn().mockResolvedValue(undefined),
+      editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
+      editMessageCaption: vi.fn().mockResolvedValue(undefined),
     };
     return {
       session,
@@ -1539,10 +1546,15 @@ describe("Album (media_group_id) photo coalescing", () => {
     (prisma.botSession.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({});
     await vi.advanceTimersByTimeAsync(800);
 
-    // Below the minimum: bare progress, no Continue button, no ticket copy yet.
+    // Below the minimum: progress only, no inline Continue and no ticket copy
+    // yet — but the persistent bottom panel (the photo-editor entry) rides
+    // along, since it is a reply keyboard rather than an inline one.
     expect(first.api.sendMessage).toHaveBeenCalledWith(
       99001,
       expect.stringContaining(`1/${MIN_PHOTOS}`),
+      expect.objectContaining({
+        reply_markup: expect.objectContaining({ keyboard: expect.any(Array) }),
+      }),
     );
 
     let atMinimum!: Awaited<ReturnType<typeof uploadPhoto>>;
@@ -1581,6 +1593,41 @@ describe("Album (media_group_id) photo coalescing", () => {
       expect.objectContaining({ reply_markup: expect.any(Object) }),
     );
     expect(shared.pendingPhotos).toHaveLength(6);
+  });
+
+  it("re-renders the editor, not the progress message, for a burst sent while it is open", async () => {
+    // "Delete one, send its replacement" has to stay one continuous screen —
+    // a progress message pushed under a stack of cards reads as a dead end.
+    const shared: SessionData = {
+      ...DEFAULT_SESSION,
+      onboardingStep: "conversational",
+      expectingPhoto: true,
+      onboardingPhotoEdit: true,
+      pendingPhotos: [],
+      pendingPhotoUniqueIds: [],
+    };
+
+    const ctx = createAlbumCtx({
+      photoFileId: "replacement_1",
+      photoUniqueId: "replacement_uid_1",
+      mediaGroupId: "",
+    });
+    delete ctx.message.media_group_id;
+    ctx.session = shared;
+    await handleConversational(ctx);
+    (prisma.botSession.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      key: "99001",
+      data: shared,
+    });
+    (prisma.botSession.upsert as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    await vi.advanceTimersByTimeAsync(800);
+
+    // A card for the new photo, and the editor's own panel — not the
+    // "N/MIN photos" stage progress copy.
+    expect(ctx.api.sendPhoto).toHaveBeenCalledTimes(1);
+    const texts = ctx.api.sendMessage.mock.calls.map((c: unknown[]) => String(c[1]));
+    expect(texts.some((text: string) => text.includes(`minimum ${MIN_PHOTOS}`))).toBe(true);
+    expect(texts.some((text: string) => text.includes(`1/${MIN_PHOTOS}`))).toBe(false);
   });
 
   it("explains that a repeated photo was not counted", async () => {
@@ -1628,6 +1675,9 @@ describe("Album (media_group_id) photo coalescing", () => {
     expect(ctx.api.sendMessage).toHaveBeenCalledWith(
       99001,
       expect.stringContaining(`1/${MIN_PHOTOS}`),
+      expect.objectContaining({
+        reply_markup: expect.objectContaining({ keyboard: expect.any(Array) }),
+      }),
     );
   });
 
@@ -2361,5 +2411,120 @@ describe("mandatory verification (Registration v2)", () => {
     expect(ctx.answerCallbackQuery).toHaveBeenCalledTimes(1);
     expect(ctx.api.sendMessage).not.toHaveBeenCalled();
     expect(prisma.profile.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Photo-stage bottom panel → photo editor (PRODUCT_SPEC §1.3)
+// ---------------------------------------------------------------------------
+describe("Onboarding photo stage — editor entry", () => {
+  const agentMock = runAgentTurn as ReturnType<typeof vi.fn>;
+
+  function panelLabel(language: SessionData["language"] = "en"): string {
+    const probe: SessionData = {
+      ...DEFAULT_SESSION,
+      language,
+      expectingPhoto: true,
+    };
+    const markup = photoStagePanelSync(probe).reply_markup as {
+      keyboard: { text: string }[][];
+    };
+    return markup.keyboard[0]![0]!.text;
+  }
+
+  function createTextCtx(session: Partial<SessionData>, text: string) {
+    const api = {
+      sendMessage: vi.fn().mockResolvedValue({ message_id: 999 }),
+      sendPhoto: vi.fn().mockResolvedValue({ message_id: 900 }),
+      deleteMessage: vi.fn().mockResolvedValue(undefined),
+      editMessageText: vi.fn().mockResolvedValue(undefined),
+      editMessageReplyMarkup: vi.fn().mockResolvedValue(undefined),
+      sendChatAction: vi.fn().mockResolvedValue(undefined),
+      setMessageReaction: vi.fn().mockResolvedValue(undefined),
+    };
+    return {
+      session: { ...DEFAULT_SESSION, onboardingStep: "conversational", ...session },
+      from: { id: 77001 },
+      chat: { id: 77001 },
+      api,
+      message: { message_id: 555, text },
+      reply: vi.fn().mockResolvedValue(undefined),
+      replyWithChatAction: vi.fn().mockResolvedValue(undefined),
+      answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+    } as any;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    agentMock.mockResolvedValue({
+      reply: "Got it!",
+      expectingPhoto: false,
+      onboardingComplete: false,
+      contextPromptRequested: false,
+      contextDumpStarted: false,
+    });
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-editor",
+    });
+    (prisma.profile.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      photos: ["p1", "p2"],
+      profileMedia: [],
+      photoFaceScores: [0.9, 0.8],
+      uploadedPhotoHashes: ["h1", "h2"],
+    });
+  });
+
+  it("opens the editor when the bottom panel is tapped", async () => {
+    const ctx = createTextCtx(
+      { expectingPhoto: true, pendingPhotos: ["p1", "p2"] },
+      panelLabel(),
+    );
+
+    await handleConversational(ctx);
+
+    expect(ctx.session.onboardingPhotoEdit).toBe(true);
+    expect(ctx.api.sendPhoto).toHaveBeenCalledTimes(2);
+    // The tap never reaches the agent — it is not an answer to anything.
+    expect(agentMock).not.toHaveBeenCalled();
+  });
+
+  it("opens the editor while still UNDER the minimum", async () => {
+    // The whole point: a bad photo is most worth replacing before the set is
+    // complete, and `photoStageActive` (>= MIN_PHOTOS) must not gate this.
+    (prisma.profile.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      photos: ["p1"],
+      profileMedia: [],
+      photoFaceScores: [0.9],
+      uploadedPhotoHashes: ["h1"],
+    });
+    const ctx = createTextCtx(
+      { expectingPhoto: true, pendingPhotos: ["p1"] },
+      panelLabel(),
+    );
+
+    await handleConversational(ctx);
+
+    expect(ctx.session.onboardingPhotoEdit).toBe(true);
+    expect(agentMock).not.toHaveBeenCalled();
+  });
+
+  it("removes the tap's own message so it doesn't read as user speech", async () => {
+    const ctx = createTextCtx(
+      { expectingPhoto: true, pendingPhotos: ["p1", "p2"] },
+      panelLabel(),
+    );
+
+    await handleConversational(ctx);
+
+    expect(ctx.api.deleteMessage).toHaveBeenCalledWith(77001, 555);
+  });
+
+  it("ignores the label outside the photo stage", async () => {
+    const ctx = createTextCtx({ expectingPhoto: false }, panelLabel());
+
+    await handleConversational(ctx);
+
+    expect(ctx.session.onboardingPhotoEdit).toBe(false);
+    expect(agentMock).toHaveBeenCalled();
   });
 });

@@ -326,6 +326,13 @@ const translations = {
     photoBatchNoneAdded: "Nothing was added from that batch.",
     photoBatchAtMax: "You're at the {max}-photo limit — delete one to add another.",
     photoManagerDeleted: "Photo deleted.",
+    // Onboarding upload stage: the persistent bottom panel (reply keyboard)
+    // and the photo editor it opens. PRODUCT_SPEC §1.3.
+    photoStagePanelBtn: "🗂 My photos",
+    photoStagePanelPlaceholder: "Send more photos, or tap 🗂 to edit",
+    photoEditorIntro:
+      "Here's everything you've sent. Tap 🗑 under any photo to remove it, or send new ones right here.",
+    photoEditorBackBtn: "← Back to uploading",
     menuVideo: "🎬 Profile Video",
     editVideoPrompt:
       "🎬 Send a short profile video (up to {sec}s, max {mb} MB). Friends, scenery, or a party clip are all fine — it just makes your profile feel alive.",
@@ -1212,6 +1219,11 @@ const translations = {
     photoBatchNoneAdded: "Из этой партии ничего не добавилось.",
     photoBatchAtMax: "Достигнут лимит в {max} фото — удали одно, чтобы добавить новое.",
     photoManagerDeleted: "Фото удалено.",
+    photoStagePanelBtn: "🗂 Мои фото",
+    photoStagePanelPlaceholder: "Пришли ещё фото или нажми 🗂",
+    photoEditorIntro:
+      "Вот всё, что ты прислал. Нажми 🗑 под любым фото, чтобы убрать его, или пришли новые прямо сюда.",
+    photoEditorBackBtn: "← Вернуться к загрузке",
     menuVideo: "🎬 Видео профиля",
     editVideoPrompt:
       "🎬 Пришли короткое видео для профиля (до {sec} сек, не больше {mb} МБ). Друзья, пейзаж или клип с вечеринки — всё подойдёт, видео оживляет анкету.",
@@ -2087,6 +2099,11 @@ const translations = {
     photoBatchNoneAdded: "З цієї партії нічого не додалося.",
     photoBatchAtMax: "Досягнуто ліміт у {max} фото — видали одне, щоб додати нове.",
     photoManagerDeleted: "Фото видалено.",
+    photoStagePanelBtn: "🗂 Мої фото",
+    photoStagePanelPlaceholder: "Надішли ще фото або натисни 🗂",
+    photoEditorIntro:
+      "Ось усе, що ти надіслав. Натисни 🗑 під будь-яким фото, щоб прибрати його, або надішли нові прямо сюди.",
+    photoEditorBackBtn: "← Повернутися до завантаження",
     menuVideo: "🎬 Відео профілю",
     editVideoPrompt:
       "🎬 Надішли коротке відео для профілю (до {sec} сек, не більше {mb} МБ). Друзі, краєвид чи кліп з вечірки — усе підійде, відео оживляє анкету.",
@@ -2956,6 +2973,11 @@ const deTranslations: TranslationTable = {
   photoBatchNoneAdded: "Aus diesem Schwung wurde nichts übernommen.",
   photoBatchAtMax: "Du bist am Limit von {max} Fotos — lösch eins, um ein neues hinzuzufügen.",
   photoManagerDeleted: "Foto gelöscht.",
+  photoStagePanelBtn: "🗂 Meine Fotos",
+  photoStagePanelPlaceholder: "Schick mehr Fotos oder tippe auf 🗂",
+  photoEditorIntro:
+    "Das hast du bisher geschickt. Tippe auf 🗑 unter einem Foto, um es zu entfernen, oder schick neue direkt hier.",
+  photoEditorBackBtn: "← Zurück zum Hochladen",
   menuVideo: "🎬 Profilvideo",
   editVideoPrompt:
     "🎬 Sende ein kurzes Profilvideo (bis {sec} Sek., max. {mb} MB). Freunde, Landschaft oder ein Party-Clip sind völlig okay — es macht dein Profil lebendiger.",
@@ -3798,6 +3820,11 @@ const plTranslations: TranslationTable = {
   photoBatchNoneAdded: "Z tej partii nic nie zostało dodane.",
   photoBatchAtMax: "Masz limit {max} zdjęć — usuń jedno, aby dodać nowe.",
   photoManagerDeleted: "Zdjęcie usunięte.",
+  photoStagePanelBtn: "🗂 Moje zdjęcia",
+  photoStagePanelPlaceholder: "Wyślij więcej zdjęć lub kliknij 🗂",
+  photoEditorIntro:
+    "To wszystko, co wysłałeś. Kliknij 🗑 pod dowolnym zdjęciem, aby je usunąć, albo wyślij nowe tutaj.",
+  photoEditorBackBtn: "← Wróć do wysyłania",
   menuVideo: "🎬 Wideo profilu",
   editVideoPrompt:
     "🎬 Wyślij krótkie wideo do profilu (do {sec} s, maks. {mb} MB). Znajomi, krajobraz czy klip z imprezy — wszystko pasuje, wideo ożywia profil.",

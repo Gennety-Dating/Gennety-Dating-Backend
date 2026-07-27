@@ -29,6 +29,12 @@ import {
   isVerificationGated,
 } from "../services/verification-gate.js";
 import { RADAR_SKIP_CALLBACK, handleRadarSkip } from "./onboarding/type-radar.js";
+import {
+  ONBOARDING_PHOTO_BACK_CALLBACK,
+  ONBOARDING_PHOTO_DELETE_CALLBACK,
+  handleOnboardingPhotoBack,
+  handleOnboardingPhotoDelete,
+} from "./onboarding/photo-editor.js";
 import { menuRouter } from "./menu/router.js";
 
 const router = new Composer<BotContext>();
@@ -108,6 +114,18 @@ router.use(async (ctx, next) => {
   // delegation below. No-op unless TYPE_RADAR_ENABLED (the button is never sent).
   if (ctx.callbackQuery?.data === RADAR_SKIP_CALLBACK) {
     await handleRadarSkip(ctx);
+    return;
+  }
+  // Onboarding photo editor (PRODUCT_SPEC §1.3). It carries its OWN `onb:ph:*`
+  // prefix rather than reusing the menu manager's `menu:edit:photos:*` — those
+  // are refused mid-onboarding by the guard below, and the two surfaces differ
+  // (no delete floor, no ➕, back to the upload stage instead of a menu).
+  if (ctx.callbackQuery?.data === ONBOARDING_PHOTO_DELETE_CALLBACK) {
+    await handleOnboardingPhotoDelete(ctx);
+    return;
+  }
+  if (ctx.callbackQuery?.data === ONBOARDING_PHOTO_BACK_CALLBACK) {
+    await handleOnboardingPhotoBack(ctx);
     return;
   }
   await next();

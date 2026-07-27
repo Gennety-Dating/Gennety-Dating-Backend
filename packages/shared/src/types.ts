@@ -131,6 +131,27 @@ export interface SessionData {
    */
   verifyPhotoRedo: boolean;
   /**
+   * True while the onboarding photo EDITOR is open — the card manager reached
+   * from the upload stage's bottom panel (PRODUCT_SPEC §1.3). It reuses the
+   * same cards as the menu manager but is driven by the onboarding router
+   * (`onb:ph:*`), has no `MIN_PHOTOS` delete floor (the user is not in the
+   * matching pool yet, and "Continue" already refuses to appear under the
+   * minimum), and returns to the upload stage instead of a menu.
+   *
+   * While it is open, an incoming photo burst re-renders the editor rather
+   * than the ordinary stage progress message, so "delete one, send its
+   * replacement" stays one continuous screen.
+   */
+  onboardingPhotoEdit: boolean;
+  /**
+   * True while the onboarding upload stage's persistent bottom panel (a reply
+   * keyboard carrying the editor entry) is on screen. It is what lets the
+   * teardown ride the next outgoing message once the stage ends — a reply
+   * keyboard survives until explicitly removed, and it hides the user's normal
+   * keyboard, so an orphaned one would block the next onboarding question.
+   */
+  photoStagePanelShown: boolean;
+  /**
    * One entry per photo currently shown as its own card message in the photo
    * manager (photo + a single delete button), in no particular order.
    * `ref` is the photo's `pendingPhotos` entry (Telegram file_id or Supabase
@@ -183,6 +204,8 @@ export const DEFAULT_SESSION: SessionData = {
   menuState: "idle",
   photoManagerMsgId: null,
   verifyPhotoRedo: false,
+  onboardingPhotoEdit: false,
+  photoStagePanelShown: false,
   photoCards: [],
   pendingAccountAction: null,
   pendingPremiumCancel: null,

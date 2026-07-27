@@ -301,6 +301,28 @@ Hard rules enforced by the collector:
   Albums and rapid standalone photos are coalesced into one progress response,
   so a 4- or 10-photo burst does not produce one reply per frame. At 5 photos the
   bot uses a short progress reminder rather than repeating the full pitch.
+  **The stage is an editor, not an append-only log (2026-07-27).** A persistent
+  bottom panel (Telegram *reply* keyboard, one button — "🗂 My photos") sits
+  under the chat for the whole stage and opens the **photo editor**: the same
+  card manager as §2.1 — one message per photo with its own 🗑 — and a
+  "← Back to uploading" action. Deleting is available from the first photo
+  onward, with **no `MIN_PHOTOS` floor** (the user is not in the matching pool,
+  and going under the minimum simply withholds Continue and restores the
+  "you need N more" copy). New photos sent while the editor is open flow
+  through the ordinary validation/coalescing path but re-render the editor
+  instead of the progress message, so "delete one, send its replacement" stays
+  one continuous screen. The panel is a reply keyboard rather than an inline
+  button because the progress message scrolls away the moment the next batch
+  (plus any per-frame rejection reply) lands below it — and because Telegram
+  allows one `reply_markup` per message, the panel attaches to the stage's
+  first plain-text message and persists chat-wide, while Continue keeps its own
+  inline keyboard. It is removed on the first message the bot sends after the
+  stage ends, whichever path ended it. Before this the first upload was
+  write-only: a user who disliked a photo could only pile more on top until
+  `MAX_PHOTOS`, then walk into verification with photos they never wanted —
+  the one place where the photo set is actually FORMED was the one place with
+  no way to revise it. Telegram-only; the editor runs no verification rerun
+  (nothing is verified yet — the pipeline runs at finalization).
   Exact duplicates (same Telegram `file_unique_id` within a batch) and
   re-encoded / cropped copies (perceptual `differenceHash` within
   `DUPLICATE_HASH_DISTANCE` (8) of any accepted hash) are not counted and
