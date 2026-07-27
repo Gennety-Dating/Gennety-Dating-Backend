@@ -801,7 +801,13 @@ Telegram-only in v1.
   Profiler goes quiet, and the icebreakers keep quoting a month-old answer.
   Selection order is unchanged for the first two passes (never-asked, then a
   skipped question eligible to return); the refresh pass comes last, so a stale
-  situational question never crowds out something never asked.
+  situational question never crowds out something never asked. Once every
+  once-question is answered and the current cycle's refreshables are also
+  answered, the scheduler does not go permanently silent: it keeps a silent,
+  cost-free check at each daily window (`finishOrAwaitNextCycle`) so a
+  refreshable question becomes due again the moment the cycle rolls over — a
+  true `finish()` (which nulls the schedule forever) fires only for the
+  theoretical case of a bank with no refreshable question at all.
 - **Storage.** One `ProfilerAnswer` row per (user, question): `priority`,
   `answerText`, `skipped`, `skipReturned`, `cycleId`. A refreshed answer
   overwrites the row (only the current snapshot matters for icebreakers).

@@ -7,6 +7,8 @@ import {
   PROFILER_ANSWER_WINDOW_MS,
   PROFILER_MAX_ANSWER_LEN,
   PROFILER_STALL_TIMEOUT_MS,
+  isRefreshableProfilerQuestion,
+  profilerQuestionBank,
   profilerQuestionById,
   profilerQuestionText,
   type ProfilerQuestion,
@@ -234,7 +236,7 @@ async function sendOneFromBatch(
   }
   const question = selectNextProfilerQuestion(state.gender, state.answers, cycleId);
   if (!question) {
-    await finish(state.userId);
+    await finishOrAwaitNextCycle(state.userId, state.gender, now, state.timeZone);
     return "done";
   }
   // Every question — first of a batch ("open") or a follow-up ("advance") —
@@ -285,7 +287,7 @@ async function pauseOrFinish(
   if (!pending) {
     // All questions exhausted — completion is SILENT per spec §Phase 1b
     // (no "profile complete" ping). Do NOT play a status here.
-    await finish(state.userId);
+    await finishOrAwaitNextCycle(state.userId, state.gender, now, state.timeZone);
     return "done";
   }
   await prisma.profile.update({
@@ -499,6 +501,47 @@ async function finish(userId: string): Promise<void> {
       profilerQuestionMessageId: null,
       profilerBatchRemaining: 0,
       profilerNextAt: null,
+    },
+  });
+}
+
+/**
+ * Nothing is pending in the CURRENT drop cycle. If the bank has no
+ * **refreshable** ("cycle") question at all, this really is the end — quiesce
+ * forever via `finish()`.
+ *
+ * Otherwise it only LOOKS finished: a refreshable question becomes eligible
+ * again once the cycle rolls over (`profilerCycleId` advances at the next
+ * weekly batch), so a true `finish()` here would be a bug — its null
+ * `profilerNextAt` means the dispatch sweep (`profilerNextAt: { lte: now }`)
+ * never looks at this user again, EVER, so the "situational questions repeat
+ * weekly" mechanic would silently never fire in production. Instead this
+ * schedules a silent re-check at the next window, same as an ordinary pause;
+ * `selectNextProfilerQuestion` keeps returning null on each check until the
+ * cycle actually changes, at which point the refreshable questions become due
+ * and the batch fires for real. Cheap: 2 no-op checks a day, capped by the
+ * worker's existing per-tick limits, and every current gender bank guarantees
+ * at least one refreshable question (see profiler-questions.test.ts).
+ */
+async function finishOrAwaitNextCycle(
+  userId: string,
+  gender: "male" | "female" | null,
+  now: Date,
+  timeZone: string | null,
+): Promise<void> {
+  const hasRefreshable = profilerQuestionBank(gender).some(isRefreshableProfilerQuestion);
+  if (!hasRefreshable) {
+    await finish(userId);
+    return;
+  }
+  await prisma.profile.update({
+    where: { userId },
+    data: {
+      profilerActiveQuestionId: null,
+      profilerAnswerWindowUntil: null,
+      profilerQuestionMessageId: null,
+      profilerBatchRemaining: 0,
+      profilerNextAt: nextWindowAt(now, resolveZone(timeZone)),
     },
   });
 }

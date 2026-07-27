@@ -148,10 +148,13 @@ describe("startProfilerBatch", () => {
     }
   });
 
-  it("finishes silently when nothing is pending", async () => {
+  it("silently defers to the next window when only THIS cycle is exhausted (refreshables pending next cycle)", async () => {
     // Derived from the bank (not hardcoded) so adding a question can't quietly
     // turn this into "all but the new ones". Everything answered in the CURRENT
-    // cycle, so the situational questions aren't due for a refresh either.
+    // cycle, so nothing is due for a refresh *yet* — but the female bank always
+    // carries refreshable questions, so this must NOT be treated as final: a
+    // null `profilerNextAt` would stop the dispatch sweep from ever checking
+    // this user again, and next week's refresh would silently never fire.
     const allAnswered = profilerQuestionBank("female").map((q) => ({
       questionId: q.id, answerText: "x", skipped: false, skipReturned: false,
       cycleId: profilerCycleId(new Date("2026-06-10T07:00:00Z")),
@@ -161,10 +164,30 @@ describe("startProfilerBatch", () => {
     const res = await startProfilerBatch(fakeApi, "u1", new Date("2026-06-10T07:00:00Z"), noWait);
     expect(res).toBe("done");
     expect(sendMessage).not.toHaveBeenCalled();
-    // Final update nulls the schedule.
+    expect(sendRichMessage).not.toHaveBeenCalled();
+    // Rescheduled to the next window, NOT nulled — the silent heartbeat that
+    // lets the schedule revive once the cycle actually rolls over.
+    const last = mProfileUpdate.mock.calls.at(-1)![0].data;
+    expect(last.profilerNextAt).toBeInstanceOf(Date);
+    expect(last.profilerActiveQuestionId).toBeNull();
+  });
+
+  it("truly finishes (nulls the schedule) only when the bank has no refreshable question at all", async () => {
+    // A null gender resolves to an empty bank (no refreshable questions ever),
+    // which is the one case where going fully silent is actually correct.
+    mUserFind.mockResolvedValue({
+      id: "u1",
+      telegramId: 123n,
+      gender: null,
+      language: "en",
+      profile: { timeZone: "Europe/Kyiv", profilerBatchRemaining: 0, profilerActiveQuestionId: null },
+      profilerAnswers: [],
+    });
+
+    const res = await startProfilerBatch(fakeApi, "u1", new Date("2026-06-10T07:00:00Z"), noWait);
+    expect(res).toBe("done");
     const last = mProfileUpdate.mock.calls.at(-1)![0].data;
     expect(last.profilerNextAt).toBeNull();
-    expect(last.profilerActiveQuestionId).toBeNull();
   });
 });
 
