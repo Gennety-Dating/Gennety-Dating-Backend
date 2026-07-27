@@ -217,18 +217,20 @@ const translations = {
     // different situations and profile photos are never even in scope on this
     // path: CompareFaces only runs after a `passed` liveness result.
     verifyRetryNotLive:
-      "Your photos aren't the problem here — the check never got that far, it " +
-      "just couldn't confirm a live face that time. A few things that help: bright " +
+      "The check stopped before it ever reached your photos — it just couldn't " +
+      "confirm a live face that time, so they haven't been looked at yet. A few " +
+      "things that help: bright " +
       "light facing you (not behind you), your whole face inside the frame, no " +
       "sunglasses or anything covering it. Tap 🟢 Verify now and try again.",
     verifyRetryUnfinished:
-      "Your photos aren't the problem — this check never got to look at them, it " +
-      "just didn't finish. Don't switch away from Telegram or close the camera " +
+      "This check didn't finish, so it never got as far as your photos — they " +
+      "haven't been looked at yet. Don't switch away from Telegram or close the camera " +
       "mid-check; go through it start to finish in one go, it only takes about 15 " +
       "seconds. Tap 🟢 Verify now to try again.",
     verifyRetryTechnical:
-      "That one was on us, not you — a technical hiccup on our side, nothing to " +
-      "do with your camera or your photos. Sorry about that. Tap 🟢 Verify now and " +
+      "That one was on us, not you — a technical hiccup on our side. It stopped " +
+      "before your photos were checked, so nothing about them has been decided " +
+      "either way. Sorry about that. Tap 🟢 Verify now and " +
       "try again — it should go through cleanly this time.",
     verifyReferenceExpired:
       "We delete your verification selfie after 90 days, so there's nothing left " +
@@ -1120,18 +1122,20 @@ const translations = {
       "Уже обработано — сообщение с результатом должно быть выше. " +
       "Если что-то пошло не так — нажми 🟢 Пройти верификацию ещё раз.",
     verifyRetryNotLive:
-      "Дело не в твоих фото — проверка до них даже не дошла, просто в этот раз " +
-      "не получилось подтвердить живое лицо. Что обычно помогает: яркий свет " +
+      "Проверка остановилась раньше, чем дошла до твоих фото, — просто в этот раз " +
+      "не получилось подтвердить живое лицо, так что фото ещё никто не смотрел. " +
+      "Что обычно помогает: яркий свет " +
       "спереди (не сзади), лицо целиком в кадре, без очков и без всего, что его " +
       "закрывает. Нажми 🟢 Пройти верификацию и попробуй ещё раз.",
     verifyRetryUnfinished:
-      "Дело не в твоих фото — проверка до них не дошла, она просто не была " +
-      "завершена. Не сворачивай Telegram и не закрывай камеру на середине — " +
+      "Проверка не была завершена, поэтому до твоих фото она не дошла — их ещё " +
+      "никто не смотрел. Не сворачивай Telegram и не закрывай камеру на середине — " +
       "пройди её от начала до конца за один раз, это займёт секунд 15. Нажми " +
       "🟢 Пройти верификацию и попробуй снова.",
     verifyRetryTechnical:
       "На этот раз дело в нас, а не в тебе — небольшой технический сбой на " +
-      "нашей стороне, камера и фото ни при чём. Извини за это. Нажми " +
+      "нашей стороне. Всё оборвалось до проверки фото, так что по ним пока ничего " +
+      "не решено. Извини за это. Нажми " +
       "🟢 Пройти верификацию и попробуй ещё раз — в этот раз всё должно пройти гладко.",
     verifyReferenceExpired:
       "Мы удаляем селфи с верификации через 90 дней, так что сверить новые фото " +
@@ -2005,18 +2009,20 @@ const translations = {
       "Вже оброблено — повідомлення з результатом має бути вище. " +
       "Якщо щось не так — натисни 🟢 Пройти верифікацію ще раз.",
     verifyRetryNotLive:
-      "Річ не у твоїх фото — перевірка до них навіть не дійшла, просто цього " +
-      "разу не вдалося підтвердити живе обличчя. Що зазвичай допомагає: яскраве " +
+      "Перевірка зупинилася раніше, ніж дійшла до твоїх фото, — просто цього разу " +
+      "не вдалося підтвердити живе обличчя, тож фото ще ніхто не дивився. " +
+      "Що зазвичай допомагає: яскраве " +
       "світло спереду (не ззаду), обличчя цілком у кадрі, без окулярів і без " +
       "нічого, що його закриває. Натисни 🟢 Пройти верифікацію і спробуй ще раз.",
     verifyRetryUnfinished:
-      "Річ не у твоїх фото — перевірка до них не дійшла, вона просто не була " +
-      "завершена. Не згортай Telegram і не закривай камеру посередині — пройди " +
+      "Перевірку не було завершено, тому до твоїх фото вона не дійшла — їх ще " +
+      "ніхто не дивився. Не згортай Telegram і не закривай камеру посередині — пройди " +
       "її від початку до кінця за один раз, це займе секунд 15. Натисни " +
       "🟢 Пройти верифікацію і спробуй знову.",
     verifyRetryTechnical:
       "Цього разу річ у нас, а не в тобі — невеликий технічний збій на нашому " +
-      "боці, камера і фото ні до чого. Вибач за це. Натисни 🟢 Пройти верифікацію " +
+      "боці. Усе обірвалося до перевірки фото, тож щодо них поки нічого не " +
+      "вирішено. Вибач за це. Натисни 🟢 Пройти верифікацію " +
       "і спробуй ще раз — цього разу все має пройти гладко.",
     verifyReferenceExpired:
       "Ми видаляємо селфі з верифікації через 90 днів, тож звірити нові фото вже " +
@@ -2821,20 +2827,22 @@ const deTranslations: TranslationTable = {
     "Schon verarbeitet - du solltest die Ergebnisnachricht oben bekommen haben. " +
     "Wenn etwas falsch wirkt, tippe auf 🟢 Jetzt verifizieren, um es erneut zu versuchen.",
   verifyRetryNotLive:
-    "Deine Fotos sind hier nicht das Problem — die Prüfung ist gar nicht erst so " +
-    "weit gekommen, sie konnte diesmal nur kein lebendiges Gesicht bestätigen. Was " +
+    "Die Prüfung ist abgebrochen, bevor sie überhaupt bei deinen Fotos angekommen " +
+    "ist — sie konnte diesmal kein lebendiges Gesicht bestätigen, deine Fotos hat " +
+    "sich also noch niemand angesehen. Was " +
     "meist hilft: helles Licht von vorne (nicht von hinten), dein ganzes Gesicht " +
     "im Bild, keine Sonnenbrille oder Verdeckung. Tipp auf 🟢 Jetzt verifizieren " +
     "und versuch es noch einmal.",
   verifyRetryUnfinished:
-    "Deine Fotos sind nicht das Problem — die Prüfung ist gar nicht bis dahin " +
-    "gekommen, sie wurde einfach nicht zu Ende geführt. Wechsle währenddessen " +
+    "Diese Prüfung wurde nicht zu Ende geführt, deshalb kam sie gar nicht erst " +
+    "bis zu deinen Fotos — die hat sich noch niemand angesehen. Wechsle währenddessen " +
     "nicht aus Telegram raus und schließ die Kamera nicht zwischendurch; geh " +
     "einmal am Stück durch, das dauert nur etwa 15 Sekunden. Tipp auf " +
     "🟢 Jetzt verifizieren und versuch es erneut.",
   verifyRetryTechnical:
     "Das lag diesmal an uns, nicht an dir — ein technischer Hänger auf unserer " +
-    "Seite, deine Kamera und deine Fotos haben damit nichts zu tun. Tut uns leid. " +
+    "Seite. Es hat abgebrochen, bevor deine Fotos geprüft wurden, über sie ist " +
+    "also noch nichts entschieden. Tut uns leid. " +
     "Tipp auf 🟢 Jetzt verifizieren und versuch es noch einmal — das sollte " +
     "diesmal glatt laufen.",
   verifyReferenceExpired:
@@ -3674,19 +3682,21 @@ const plTranslations: TranslationTable = {
     "Już przetworzone - powinna pojawić się wiadomość z wynikiem powyżej. " +
     "Jeśli coś wygląda źle, kliknij 🟢 Zweryfikuj teraz, aby spróbować ponownie.",
   verifyRetryNotLive:
-    "Twoje zdjęcia nie są tu problemem — weryfikacja w ogóle do nich nie doszła, " +
-    "po prostu tym razem nie udało się potwierdzić żywej twarzy. Co zwykle " +
+    "Weryfikacja zatrzymała się, zanim w ogóle doszła do Twoich zdjęć — tym razem " +
+    "nie udało się potwierdzić żywej twarzy, więc nikt ich jeszcze nie oglądał. " +
+    "Co zwykle " +
     "pomaga: jasne światło z przodu (nie z tyłu), cała twarz w kadrze, bez " +
     "okularów przeciwsłonecznych i niczego, co ją zasłania. Kliknij " +
     "🟢 Zweryfikuj teraz i spróbuj jeszcze raz.",
   verifyRetryUnfinished:
-    "Twoje zdjęcia nie są problemem — weryfikacja w ogóle do nich nie doszła, po " +
-    "prostu nie została dokończona. Nie przełączaj się z Telegrama i nie zamykaj " +
+    "Ta weryfikacja nie została dokończona, więc w ogóle nie doszła do Twoich " +
+    "zdjęć — nikt ich jeszcze nie oglądał. Nie przełączaj się z Telegrama i nie zamykaj " +
     "kamery w trakcie — przejdź całość za jednym razem, to zajmuje około 15 " +
     "sekund. Kliknij 🟢 Zweryfikuj teraz i spróbuj ponownie.",
   verifyRetryTechnical:
     "Tym razem to była nasza wina, nie Twoja — drobna usterka techniczna po " +
-    "naszej stronie, Twoja kamera i zdjęcia nie mają z tym nic wspólnego. " +
+    "naszej stronie. Przerwało się, zanim zdjęcia zostały sprawdzone, więc nic o " +
+    "nich jeszcze nie rozstrzygnięto. " +
     "Przepraszamy. Kliknij 🟢 Zweryfikuj teraz i spróbuj ponownie — tym razem " +
     "powinno przejść bez problemu.",
   verifyReferenceExpired:

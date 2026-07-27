@@ -590,8 +590,9 @@ shaky camera capture).
 
 **The retry nudge is split by outcome (2026-07-26), not one generic line.**
 Profile photos are never even looked at on this path — `CompareFaces` only
-runs after a `passed` result — so every variant leads with that reassurance,
-then gives advice that actually matches what happened: `not_live` (the check
+runs after a `passed` result — so every variant states that as a **fact about
+where the check stopped**, then gives advice that actually matches what
+happened: `not_live` (the check
 ran to completion but confidence didn't clear the bar — `verifyRetryNotLive`,
 lighting/framing/obstruction tips); `expired`/`in_progress` (the check never
 finished at all — `verifyRetryUnfinished`, "go through it without switching
@@ -600,6 +601,15 @@ away"); `no_reference` (a genuine pass, but OUR side dropped the frame —
 returns no failure-reason code, so these three are the full granularity
 available — a single "shaky camera or low light" guess used to cover all of
 them, which was wrong for the two cases where the user did nothing wrong.
+**The copy states "we haven't looked at your photos yet", never "your photos
+aren't the problem" (corrected 2026-07-27).** All three variants used to open
+with the latter, which is a verdict the system has no basis for: `CompareFaces`
+has not run, so nothing is known about the photos either way. It is also
+straightforwardly false whenever a photo genuinely is someone else — found by
+uploading two real photos plus one of a different person, failing liveness at
+0.79 confidence, and being told the photos were fine. The reassurance the
+variants exist to give (don't go re-upload anything, the camera is what needs
+another try) survives intact; the unfounded verdict does not.
 
 1. Take the reference selfie — the bytes AWS just returned on a fresh check, or
    the stored copy on a rerun (`services/identity-selfie.ts`) — and, when it is
