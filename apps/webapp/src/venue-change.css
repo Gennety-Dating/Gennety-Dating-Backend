@@ -1870,26 +1870,50 @@ a.vc-info-row .vc-info-text {
   background: var(--accent-soft);
   color: var(--accent-bright);
 }
+/* Solid burgundy pill with a light sheen sprayed around the WHOLE inner
+   perimeter (matches the "university email" onboarding path button and the
+   radar "my type" verdict button) — the brand's one visual language for "the
+   premium choice", reused here so the free-with-Premium hint reads the same
+   way. Text + a single minimalist lock glyph only, no other emoji. */
 .vc-premium-hint {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 8px;
   width: 100%;
   margin-top: 10px;
-  padding: 11px 14px;
-  border: 1px dashed var(--accent);
-  border-radius: 14px;
-  background: var(--accent-soft);
-  color: var(--accent-bright);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
+  padding: 14px 18px;
+  border: none;
+  border-radius: 16px;
   cursor: pointer;
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 15%, rgba(255, 255, 255, 0) 85%, rgba(255, 255, 255, 0.24)),
+    linear-gradient(160deg, var(--accent-bright) 0%, var(--accent) 55%, var(--accent-deep) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 9px 18px -14px rgba(255, 255, 255, 0.65),
+    inset 0 -9px 18px -14px rgba(255, 255, 255, 0.5),
+    inset 8px 0 18px -13px rgba(255, 255, 255, 0.55),
+    inset -8px 0 18px -13px rgba(255, 255, 255, 0.55),
+    inset 0 -2px 6px rgba(74, 16, 31, 0.18),
+    0 10px 26px -8px rgba(139, 37, 59, 0.7),
+    0 2px 8px rgba(139, 37, 59, 0.4);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.vc-premium-hint:active {
+  transform: scale(0.98);
+  filter: brightness(0.96);
 }
 .vc-premium-hint-ico {
   width: 15px;
   height: 15px;
+  opacity: 0.92;
 }
 
 /* ── Photo skeletons ──────────────────────────────────────────────────── */

@@ -256,7 +256,7 @@ const T: Record<Lang, Strings> = {
     payFailed: "The payment didn't go through. Nothing was charged — try again.",
     premiumPlate: "Premium",
     premiumUnlockConfirm: "This is a Premium venue. Unlock Premium to pick it — and your venue changes become free. Subscribe now?",
-    premiumFreeWithSub: "✨ Free with Gennety Premium",
+    premiumFreeWithSub: "Free with Gennety Premium",
     premiumUnlocked: "Premium unlocked ✨ Pick your spot.",
   },
   ru: {
@@ -337,7 +337,7 @@ const T: Record<Lang, Strings> = {
     payFailed: "Оплата не прошла. Ничего не списано — попробуйте ещё раз.",
     premiumPlate: "Premium",
     premiumUnlockConfirm: "Это премиум-место. Оформи Premium, чтобы выбрать его — и смена места станет бесплатной. Оформить сейчас?",
-    premiumFreeWithSub: "✨ Бесплатно с Gennety Premium",
+    premiumFreeWithSub: "Бесплатно с Gennety Premium",
     premiumUnlocked: "Premium открыт ✨ Выбирай место.",
   },
   uk: {
@@ -418,7 +418,7 @@ const T: Record<Lang, Strings> = {
     payFailed: "Оплата не пройшла. Нічого не списано — спробуйте ще раз.",
     premiumPlate: "Premium",
     premiumUnlockConfirm: "Це преміум-місце. Оформи Premium, щоб обрати його — і зміна місця стане безкоштовною. Оформити зараз?",
-    premiumFreeWithSub: "✨ Безкоштовно з Gennety Premium",
+    premiumFreeWithSub: "Безкоштовно з Gennety Premium",
     premiumUnlocked: "Premium відкрито ✨ Обирай місце.",
   },
   de: {
@@ -499,7 +499,7 @@ const T: Record<Lang, Strings> = {
     payFailed: "Die Zahlung ging nicht durch. Nichts wurde abgebucht — versuch es erneut.",
     premiumPlate: "Premium",
     premiumUnlockConfirm: "Das ist ein Premium-Ort. Schalte Premium frei, um ihn zu wählen — und Ortswechsel werden kostenlos. Jetzt abonnieren?",
-    premiumFreeWithSub: "✨ Gratis mit Gennety Premium",
+    premiumFreeWithSub: "Gratis mit Gennety Premium",
     premiumUnlocked: "Premium freigeschaltet ✨ Wähl deinen Ort.",
   },
   pl: {
@@ -580,7 +580,7 @@ const T: Record<Lang, Strings> = {
     payFailed: "Płatność nie przeszła. Nic nie pobrano — spróbuj ponownie.",
     premiumPlate: "Premium",
     premiumUnlockConfirm: "To miejsce premium. Odblokuj Premium, aby je wybrać — a zmiany miejsca będą darmowe. Subskrybować teraz?",
-    premiumFreeWithSub: "✨ Za darmo z Gennety Premium",
+    premiumFreeWithSub: "Za darmo z Gennety Premium",
     premiumUnlocked: "Premium odblokowane ✨ Wybierz miejsce.",
   },
 };
@@ -1165,6 +1165,20 @@ async function promptPremiumUnlock(): Promise<void> {
       app?.showAlert(s.payFailed);
     }
   });
+}
+
+/**
+ * §Premium: hand off the "free with Premium" hint to our own Premium Mini App
+ * (`premium.html`) instead of minting a Stars invoice in place — the founder
+ * wants the subscribe decision made on our sales screen, not a bare native
+ * Telegram payment sheet. Same-origin navigation within the Telegram WebView
+ * (mirrors the ticket Mini App's `location.href` handoff to the calendar).
+ * `theme` rides along via localStorage (`gennety-theme`, already set at this
+ * page's own boot), so only `lang` needs to be carried explicitly.
+ */
+function openPremiumMiniApp(): void {
+  haptic("light");
+  location.href = `premium.html?lang=${lang}`;
 }
 
 /** Native confirm popup with a graceful fallback for old clients. */
@@ -1913,8 +1927,10 @@ function renderAgreed(st: VenueBoardState): void {
   }
 
   // §Premium counterfactual: a non-premium payer sees, right at the pay step,
-  // that this change would be free on Gennety Premium. Tapping it opens the
-  // subscribe flow (loss-aversion in the real moment).
+  // that this change would be free on Gennety Premium. Tapping it hands off to
+  // our own Premium Mini App sales screen (not a direct native Stars sheet) —
+  // the founder wants the purchase decision made on our page, not sprung as a
+  // bare Telegram invoice.
   if (st.premiumWouldWaive) {
     nodes.push(
       el(
@@ -1922,7 +1938,7 @@ function renderAgreed(st: VenueBoardState): void {
         {
           class: "vc-premium-hint",
           type: "button",
-          onClick: () => void promptPremiumUnlock(),
+          onClick: () => openPremiumMiniApp(),
         },
         [icon("lock", "icon vc-premium-hint-ico"), el("span", { text: s.premiumFreeWithSub })],
       ),
@@ -2147,6 +2163,9 @@ function mockState(): VenueBoardState {
       myAction: (params.get("action") as VenueBoardState["myAction"]) ?? "pay_or_offer",
       canOfferPartner: true,
       expressAvailable: false,
+      // Dev preview of the §Premium "free with Gennety Premium" pay-step hint
+      // button — pass `&nopremium=1` to preview the screen without it.
+      premiumWouldWaive: params.get("nopremium") == null,
     };
   }
   if (view === "settled") {
