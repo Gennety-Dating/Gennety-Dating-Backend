@@ -2,8 +2,7 @@ import { Composer } from "grammy";
 import type { BotContext } from "../session.js";
 import { t } from "@gennety/shared";
 import { prisma } from "@gennety/db";
-import { handleConsent } from "./onboarding/consent.js";
-import { handleLanguageSelection } from "./onboarding/language.js";
+import { sendOnboardingEntry } from "./onboarding/mini-app-entry.js";
 import { handleConversational } from "./onboarding/conversational.js";
 import { handlePhoneContact } from "./onboarding/phone.js";
 import { env } from "../config.js";
@@ -167,11 +166,13 @@ router.on(["message", "callback_query:data"], async (ctx) => {
   const step = ctx.session.onboardingStep;
 
   switch (step) {
+    // Consent and language are Mini App screens, not chat screens. Whatever
+    // the user did to get here — typed a message, tapped a stale button from a
+    // previous account — the answer is the one current entry point, so the
+    // chat can never start a second, divergent onboarding (PRODUCT_SPEC §1.1).
     case "consent":
-      await handleConsent(ctx);
-      break;
     case "language":
-      await handleLanguageSelection(ctx);
+      await sendOnboardingEntry(ctx);
       break;
     case "conversational":
       await handleConversational(ctx);

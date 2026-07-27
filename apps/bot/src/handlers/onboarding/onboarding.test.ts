@@ -118,8 +118,7 @@ vi.mock("../../config.js", () => ({
 }));
 
 import { prisma } from "@gennety/db";
-import { handleConsent, sendConsentPrompt } from "./consent.js";
-import { handleLanguageSelection } from "./language.js";
+import { sendOnboardingEntry } from "./mini-app-entry.js";
 import {
   handleConversational,
   ONBOARDING_PHOTOS_CONTINUE_CALLBACK,
@@ -250,181 +249,91 @@ function createMockCtx(overrides: {
   } as any;
 }
 
-describe("Consent gatekeeper", () => {
+describe("Onboarding single entry (Mini App)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
-  });
-
-  it("sends the consent prompt for a fresh user", async () => {
-    const ctx = createMockCtx({
-      session: { onboardingStep: "consent" },
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "uuid-1",
+      language: "en",
+      theme: "dark",
+      isEmailVerified: false,
     });
-
-    await sendConsentPrompt(ctx);
-
-    expect(ctx.reply).toHaveBeenCalledTimes(1);
-    const callArgs = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0];
-    // Message text contains consent wording
-    expect(callArgs[0]).toContain("Privacy Policy");
-    // Has inline keyboard with consent:agree callback
-    const markup = callArgs[1]?.reply_markup;
-    expect(markup).toBeDefined();
   });
 
-  it("re-shows consent prompt when user sends arbitrary text instead of clicking agree", async () => {
+  // Later describes in this file inherit whatever `findUnique` was left
+  // resolving (vi.clearAllMocks keeps implementations), so hand it back in the
+  // shape they expect instead of leaking this block's null case.
+  afterEach(() => {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "uuid-1" });
+  });
+
+  it("answers a consent-step touch with the Mini App entry card", async () => {
     const ctx = createMockCtx({
       session: { onboardingStep: "consent" },
       messageText: "hello",
     });
 
-    await handleConsent(ctx);
+    await sendOnboardingEntry(ctx);
 
-    // Should re-show consent (reply called), NOT advance
-    expect(ctx.reply).toHaveBeenCalled();
+    expect(ctx.reply).toHaveBeenCalledTimes(1);
+    const [, options] = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0];
+    const button = options?.reply_markup?.inline_keyboard?.[0]?.[0];
+    expect(button?.web_app?.url).toContain("onboarding.html");
+    // The chat must never advance onboarding on its own any more.
     expect(ctx.session.onboardingStep).toBe("consent");
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
-  it("re-shows consent prompt on unrelated callback data", async () => {
+  it("sends the same card at the language step", async () => {
     const ctx = createMockCtx({
-      session: { onboardingStep: "consent" },
+      session: { onboardingStep: "language" },
       callbackData: "lang:en",
     });
 
-    await handleConsent(ctx);
-
-    expect(ctx.session.onboardingStep).toBe("consent");
-    expect(prisma.user.update).not.toHaveBeenCalled();
-  });
-
-  it("advances to language step on consent:agree callback", async () => {
-    const ctx = createMockCtx({
-      session: { onboardingStep: "consent" },
-      callbackData: "consent:agree",
-    });
-
-    await handleConsent(ctx);
+    await sendOnboardingEntry(ctx);
 
     expect(ctx.answerCallbackQuery).toHaveBeenCalled();
-    expect(ctx.session.onboardingStep).toBe("language");
-    expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          hasConsented: true,
-          termsAccepted: true,
-          termsAcceptedAt: expect.any(Date),
-          onboardingStep: "language",
-        }),
-      }),
+    const [, options] = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(options?.reply_markup?.inline_keyboard?.[0]?.[0]?.web_app?.url).toContain(
+      "onboarding.html",
     );
-    // Should show language picker immediately after consent
-    expect(ctx.reply).toHaveBeenCalled();
-    const markup = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[1]
-      ?.reply_markup;
-    const serializedMarkup = JSON.stringify(markup);
-    expect(serializedMarkup).toContain("lang:en");
-    expect(serializedMarkup).toContain("lang:ru");
-    expect(serializedMarkup).toContain("lang:uk");
-    expect(serializedMarkup).toContain("lang:de");
-    expect(serializedMarkup).toContain("lang:pl");
-  });
-});
-
-describe("Language selection → conversational transition", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
-    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "uuid-1" });
-  });
-
-  it("language -> conversational on lang:en callback", async () => {
-    const ctx = createMockCtx({
-      session: { onboardingStep: "language" },
-      callbackData: "lang:en",
-    });
-
-    await handleLanguageSelection(ctx);
-
     expect(ctx.session.language).toBe("en");
-    expect(ctx.session.onboardingStep).toBe("conversational");
-    expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ language: "en", onboardingStep: "conversational" }),
-      }),
-    );
-  });
-
-  it("language -> conversational on lang:ru callback", async () => {
-    const ctx = createMockCtx({
-      session: { onboardingStep: "language" },
-      callbackData: "lang:ru",
-    });
-
-    await handleLanguageSelection(ctx);
-    expect(ctx.session.language).toBe("ru");
-    expect(ctx.session.onboardingStep).toBe("conversational");
-  });
-
-  it("language -> conversational on lang:de callback", async () => {
-    const ctx = createMockCtx({
-      session: { onboardingStep: "language" },
-      callbackData: "lang:de",
-    });
-
-    await handleLanguageSelection(ctx);
-    expect(ctx.session.language).toBe("de");
-    expect(ctx.session.onboardingStep).toBe("conversational");
-  });
-
-  it("language -> conversational on lang:pl callback", async () => {
-    const ctx = createMockCtx({
-      session: { onboardingStep: "language" },
-      callbackData: "lang:pl",
-    });
-
-    await handleLanguageSelection(ctx);
-    expect(ctx.session.language).toBe("pl");
-    expect(ctx.session.onboardingStep).toBe("conversational");
-  });
-
-  it("kicks off the agent with an intro message after language selection", async () => {
-    const ctx = createMockCtx({
-      session: { onboardingStep: "language" },
-      callbackData: "lang:en",
-    });
-
-    await handleLanguageSelection(ctx);
-
-    expect(runAgentTurn).toHaveBeenCalledWith(
-      BigInt(12345),
-      { kind: "resume" },
-    );
-    // Agent reply is sent to user
-    expect(ctx.reply).toHaveBeenCalledWith("Welcome to Gennety!", { parse_mode: "Markdown" });
-  });
-
-  it("ignores invalid language callback", async () => {
-    const ctx = createMockCtx({
-      session: { onboardingStep: "language" },
-      callbackData: "lang:fr",
-    });
-
-    await handleLanguageSelection(ctx);
-    expect(ctx.session.onboardingStep).toBe("language");
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
-  it("ignores non-lang callback", async () => {
+  it("still sends the card when the account has no User row", async () => {
+    // The incident case: a stale inline button tapped after the row was gone.
+    // The Mini App's own /state resolves the caller through
+    // findOrCreateTelegramUser, so the button is self-healing.
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     const ctx = createMockCtx({
-      session: { onboardingStep: "language" },
-      callbackData: "other:value",
+      session: { onboardingStep: "consent" },
+      callbackData: "profiler:skip:f_chronotype",
     });
 
-    await handleLanguageSelection(ctx);
-    expect(ctx.session.onboardingStep).toBe("language");
+    await sendOnboardingEntry(ctx);
+
+    expect(ctx.reply).toHaveBeenCalledTimes(1);
+    const [, options] = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(options?.reply_markup?.inline_keyboard?.[0]?.[0]?.web_app?.url).toContain(
+      "onboarding.html",
+    );
+  });
+
+  it("renders the card in the session language", async () => {
+    const ctx = createMockCtx({
+      session: { onboardingStep: "consent", language: "ru" },
+      messageText: "привет",
+    });
+
+    await sendOnboardingEntry(ctx);
+
+    const [text, options] = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(text).toContain("Mini App");
+    expect(options?.reply_markup?.inline_keyboard?.[0]?.[0]?.text).toBe("Открыть Gennety");
   });
 });
+
 
 describe("Context dump processing delay", () => {
   const agentMock = runAgentTurn as ReturnType<typeof vi.fn>;

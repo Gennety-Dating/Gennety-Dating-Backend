@@ -184,6 +184,21 @@ out of Telegram-only workers.
 - In the Telegram entry Mini App, language selection precedes legal consent so
   the consent screen is immediately understandable. Email and every later gate
   remain blocked until terms are accepted.
+- **`consent` and `language` are Mini App-owned states with no chat screens of
+  their own (2026-07-27).** Telegram used to carry its own consent card and
+  language picker, and the router's step switch had no Mini App gate at all, so
+  a user who typed anything instead of tapping the button entered a second,
+  divergent onboarding: it skipped the sign-up fork (a general-track user was
+  never offered the phone rail), the dating city, the theme pick and the
+  AI-memory choice, then dead-ended at the finalize gate, which requires a
+  `homeCityKey` the chat flow cannot collect. Both screens are deleted; every
+  touch on either step — `/start`, a stray message, a stale inline button from a
+  previous account — answers with the one current Mini App entry card
+  (`handlers/onboarding/mini-app-entry.ts`). The card is self-healing for an
+  account with no `User` row: the Mini App's `/v1/telegram-onboarding/state`
+  resolves the caller through `findOrCreateTelegramUser`, so tapping it creates
+  the row and starts the current flow. The chat only regains ownership at
+  `conversational`, after the Mini App hands off (§1.3).
 - Server-owned question templates match the user's language thereafter and are
   forbidden from injecting English enum words ("male/female/men/women") into
   non-English replies.
