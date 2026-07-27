@@ -633,6 +633,23 @@ them, which was wrong for the two cases where the user did nothing wrong.
      DM'd `verifyPhotosDropped`, including on an otherwise-silent re-confirm
      rerun, because photos vanishing with no explanation is its own bug. The
      Elo seed and appearance tagging score only the kept photos.
+     **Activation is withheld when the drop leaves the profile under
+     `MIN_PHOTOS`.** Dropping photos must not become a back door into the
+     matching pool with a near-empty profile: every other surface (menu photo
+     manager, mobile `/v1/me/photos`) enforces the same floor on a live
+     profile, and `buildCandidateSql` has no photo-count filter of its own to
+     catch it. Such a user keeps `verificationStatus='verified'` — that is
+     permanent and never undone — but stays `status='onboarding'` with
+     `onboardingStep='completed'`, i.e. behind the verification gate below,
+     and receives ONE combined message (`verifyPhotosBelowMinimum`, notify kind
+     `photos_needed`) carrying the outcome, the shortfall, and the photo-manager
+     button — not the plain success copy, which would claim they are live. No
+     menu, no pinned banner. The Elo seed and appearance tagging are also
+     deferred: both are once-only, so seeding attractiveness off a single
+     surviving photo would permanently miscalibrate the user's league. Adding
+     photos re-runs the pipeline (§1.4 photo-edit rerun), which activates them
+     and seeds off the complete set. `/start` in this state surfaces the same
+     card via `sendVerificationGateNotice`.
    - `rejected` — at least one `fail` photo **and no pass quorum**: nothing in
      the set identifies this person, while something in it is a different
      person's face.
@@ -717,7 +734,10 @@ from being re-sent on a rerun.
 
 **Verification gate (the app stays locked).** `status='onboarding'` with
 `onboardingStep='completed'` means the profile is finished but liveness is not,
-and since verification is mandatory that user is NOT in the app yet. While they
+and since verification is mandatory that user is NOT in the app yet. The one
+exception — same state, but `verificationStatus='verified'` — is the
+under-`MIN_PHOTOS` case above: liveness passed, the photo set did not survive
+it, and the same gate holds them until they refill the profile. While they
 are in that state the ONLY reachable actions are the two that can clear it:
 running/retrying verification, and re-uploading photos. Every other Telegram
 surface — the main menu, My Profile, pause/resume, Settings, tickets, premium,

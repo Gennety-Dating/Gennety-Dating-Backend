@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { InlineKeyboard, InputFile, type Api } from "grammy";
 import { prisma } from "@gennety/db";
-import { t, type Language } from "@gennety/shared";
+import { MIN_PHOTOS, t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { terminalVerificationMessage } from "../../services/verification-messages.js";
 import { showMainMenu } from "../menu/main.js";
@@ -15,6 +15,7 @@ import { isVerificationGated } from "../../services/verification-gate.js";
 import {
   appendVerifyNowButton,
   buildVerificationKeyboard,
+  VERIFY_PHOTOS_CALLBACK,
 } from "../../services/verification-keyboard.js";
 import type { BotContext } from "../../session.js";
 
@@ -309,7 +310,11 @@ export async function sendVerificationGateNotice(
 ): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { id: true, verificationStatus: true },
+    select: {
+      id: true,
+      verificationStatus: true,
+      profile: { select: { photos: true } },
+    },
   });
   if (!user) return false;
 
@@ -320,10 +325,31 @@ export async function sendVerificationGateNotice(
     prefix ? `${prefix}\n\n${body}` : body;
 
   switch (user.verificationStatus) {
-    case "verified":
-      // A verified user should already be `active`; if we somehow land here,
-      // let the caller show the normal greeting rather than a stale nudge.
-      return false;
+    case "verified": {
+      // A verified user is normally already `active`. The one real way to be
+      // verified AND still gated: the pipeline dropped photos that didn't match
+      // the selfie and the profile fell under `MIN_PHOTOS`, so activation was
+      // withheld (§1.4). Say exactly that and hand them the photo manager —
+      // the success greeting would claim they are live when they are not.
+      const photoCount = user.profile?.photos.length ?? 0;
+      if (photoCount >= MIN_PHOTOS) return false;
+      await api.sendMessage(
+        chatId,
+        withPrefix(
+          t(lang, "verifyPhotosBelowMinimum", {
+            min: MIN_PHOTOS,
+            need: MIN_PHOTOS - photoCount,
+          }),
+        ),
+        {
+          reply_markup: new InlineKeyboard().text(
+            t(lang, "verifyBtnRedoPhotos"),
+            VERIFY_PHOTOS_CALLBACK,
+          ),
+        },
+      );
+      return true;
+    }
     case "pending_review":
       // Nothing for the user to do — an admin is moderating. No buttons.
       await api.sendMessage(chatId, t(lang, "verifyOutcomePendingReview"));

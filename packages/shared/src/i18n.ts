@@ -243,6 +243,9 @@ const translations = {
       "If those photos aren't you — tap 📷 below to swap them, and I'll re-check automatically (no new selfie needed). If they are you, the match just came out weak — run verification again in good lighting.",
     verifyPhotosDropped:
       "One thing: some photos didn't match your verification selfie, so I took them off your profile. Everything else is live. Add a couple more shots of yourself whenever you like 📷",
+    verifyPhotosBelowMinimum:
+      "You're verified ✅ — that part is done for good.\n\n" +
+      "But some photos didn't match your selfie, so I took them off, and now your profile is under the {min}-photo minimum. Add {need} more of yourself and I'll start looking for a match right away 📷",
     verifyMiniAppLoading: "Opening verification…",
     verifyMiniAppFinishing: "Almost done. Checking results…",
     verifyMiniAppError:
@@ -1143,6 +1146,9 @@ const translations = {
       "Если на них не ты — нажми 📷 ниже и замени их, я перепроверю автоматически (новое селфи не нужно). Если это всё-таки ты — совпадение просто получилось слабым, пройди верификацию заново при хорошем свете.",
     verifyPhotosDropped:
       "Один момент: часть фото не совпала с селфи из верификации, я убрал их из профиля. Всё остальное на месте. Добавь ещё пару своих снимков, когда будет удобно 📷",
+    verifyPhotosBelowMinimum:
+      "Верификация пройдена ✅ — это уже навсегда.\n\n" +
+      "Но часть фото не совпала с селфи, я их убрал, и теперь в профиле меньше {min} фотографий. Добавь ещё {need} своих — и я сразу начну искать тебе пару 📷",
     verifyMiniAppLoading: "Открываем верификацию…",
     verifyMiniAppFinishing: "Готово. Проверяем результат…",
     verifyMiniAppError:
@@ -2025,6 +2031,9 @@ const translations = {
       "Якщо на них не ти — натисни 📷 нижче і заміни їх, я перевірю автоматично (нове селфі не потрібне). Якщо це все ж таки ти — збіг просто вийшов слабким, пройди верифікацію знову при хорошому світлі.",
     verifyPhotosDropped:
       "Один момент: частина фото не збіглася з селфі з верифікації, я прибрав їх із профілю. Усе інше на місці. Додай ще пару своїх знімків, коли буде зручно 📷",
+    verifyPhotosBelowMinimum:
+      "Верифікацію пройдено ✅ — це вже назавжди.\n\n" +
+      "Але частина фото не збіглася з селфі, я їх прибрав, і тепер у профілі менше ніж {min} фотографій. Додай ще {need} своїх — і я одразу почну шукати тобі пару 📷",
     verifyMiniAppLoading: "Відкриваємо верифікацію…",
     verifyMiniAppFinishing: "Готово. Перевіряємо результат…",
     verifyMiniAppError:
@@ -2841,6 +2850,9 @@ const deTranslations: TranslationTable = {
     "Wenn du auf diesen Fotos nicht zu sehen bist — tipp unten auf 📷, tausch sie aus, ich prüfe automatisch erneut (kein neues Selfie nötig). Wenn du es doch bist, ist der Abgleich einfach schwach ausgefallen — starte die Verifizierung bei gutem Licht noch einmal.",
   verifyPhotosDropped:
     "Eine Sache noch: Ein paar Fotos passten nicht zum Selfie aus deiner Verifizierung, die habe ich aus deinem Profil genommen. Alles andere ist online. Lad einfach ein paar neue Aufnahmen von dir hoch, wenn du magst 📷",
+  verifyPhotosBelowMinimum:
+    "Du bist verifiziert ✅ — das ist dauerhaft erledigt.\n\n" +
+    "Ein paar Fotos passten allerdings nicht zu deinem Selfie, die habe ich entfernt, und jetzt liegt dein Profil unter dem Minimum von {min} Fotos. Lad noch {need} von dir hoch, dann suche ich sofort nach einem Match 📷",
   verifyMiniAppLoading: "Verifizierung wird geöffnet…",
   verifyMiniAppFinishing: "Gleich fertig. Ergebnis wird geprüft…",
   verifyMiniAppError: "Verifizierung konnte nicht gestartet werden. Versuch es gleich noch mal.",
@@ -3690,6 +3702,9 @@ const plTranslations: TranslationTable = {
     "Jeśli nie ma Cię na tych zdjęciach — kliknij 📷 poniżej, podmień je, a ja sprawdzę je ponownie automatycznie (nowe selfie nie jest potrzebne). Jeśli to jednak Ty, dopasowanie po prostu wyszło słabe — zweryfikuj się jeszcze raz przy dobrym świetle.",
   verifyPhotosDropped:
     "Jedna rzecz: część zdjęć nie pasowała do selfie z weryfikacji, więc zdjąłem je z profilu. Reszta jest widoczna. Dorzuć jeszcze kilka swoich ujęć, kiedy będziesz mieć chwilę 📷",
+  verifyPhotosBelowMinimum:
+    "Jesteś zweryfikowany ✅ — to już na stałe.\n\n" +
+    "Ale część zdjęć nie pasowała do selfie, więc je zdjąłem i teraz w profilu jest mniej niż {min} zdjęć. Dodaj jeszcze {need} swoich, a od razu zacznę szukać pary 📷",
   verifyMiniAppLoading: "Otwieramy weryfikację…",
   verifyMiniAppFinishing: "Już prawie. Sprawdzamy wynik…",
   verifyMiniAppError: "Nie udało się uruchomić weryfikacji. Spróbuj ponownie.",

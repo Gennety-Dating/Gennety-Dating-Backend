@@ -1,6 +1,6 @@
-import type { Api, RawApi } from "grammy";
+import { InlineKeyboard, type Api, type RawApi } from "grammy";
 import { Prisma, prisma } from "@gennety/db";
-import { t, type Language } from "@gennety/shared";
+import { MIN_PHOTOS, t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { sendMainMenu } from "../handlers/menu/main.js";
 import { seedEloFromVisionDefault, type SeedEloResult } from "./elo-seed.js";
@@ -20,7 +20,10 @@ import {
   terminalVerificationMessage,
   verificationRetryMessage,
 } from "./verification-messages.js";
-import { buildVerificationKeyboard } from "./verification-keyboard.js";
+import {
+  buildVerificationKeyboard,
+  VERIFY_PHOTOS_CALLBACK,
+} from "./verification-keyboard.js";
 import { alignPhotoHashes } from "./profile-media-validation/photo-state.js";
 
 /**
@@ -195,7 +198,7 @@ export interface PipelineDeps {
   notify: (
     telegramId: bigint,
     message: string,
-    kind: TerminalVerificationStatus | "retry",
+    kind: TerminalVerificationStatus | "retry" | "photos_needed",
   ) => Promise<void>;
   /**
    * Surface the post-verification Telegram app shell after a green face-match:
@@ -708,6 +711,23 @@ export async function runFaceMatchVerification(
     // approve. Any individual photo that did NOT match is dropped from the
     // profile rather than held against the account (see the reject branch).
     const maxDetected = Math.max(...detectedScores);
+
+    // Activation is conditional on the profile still clearing `MIN_PHOTOS`
+    // AFTER the mismatching photos come off. Dropping photos must not be a
+    // back door into the matching pool with a half-empty profile: every other
+    // surface (menu photo manager, mobile `/v1/me/photos`) enforces the same
+    // floor on a live profile, and matching has no photo-count filter of its
+    // own to catch it.
+    //
+    // The count is PREDICTED here because ordering is forced: `persistOutcome`
+    // writes the per-photo scores gated on `photos` still equalling
+    // `photosSnapshot`, so it has to run before the drop rewrites that array.
+    // If the drop then no-ops (a concurrent photo edit moved the snapshot),
+    // the user simply stays unactivated with a full photo set — and that
+    // edit's own auto-rerun re-decides on the fresh set moments later.
+    const projectedPhotoCount = photos.length - failedIndexes.length;
+    const meetsPhotoMinimum = projectedPhotoCount >= MIN_PHOTOS;
+
     await deps.db.persistOutcome({
       userId,
       sessionId,
@@ -716,7 +736,7 @@ export async function runFaceMatchVerification(
       photoFaceScores: scores,
       photosSnapshot,
       verifiedSelfiePath,
-      shouldActivate: true,
+      shouldActivate: meetsPhotoMinimum,
     });
 
     // Drop the mismatching photos. Best-effort ON PURPOSE: the user is already
@@ -748,7 +768,13 @@ export async function runFaceMatchVerification(
     // verified. Idempotency guard: skip if a previous run already seeded
     // (e.g. an admin rerun on the same already-verified user). Wrapped in
     // try/catch so a vision/Supabase outage never demotes a verified user.
+    //
+    // Deliberately also skipped while the profile is under `MIN_PHOTOS`: the
+    // seed is once-only, and seeding attractiveness off a single surviving
+    // photo would permanently miscalibrate this user's league. The rerun that
+    // fires when they finish adding photos seeds off the complete set instead.
     if (
+      meetsPhotoMinimum &&
       deps.seedEloFromVision &&
       user.profile &&
       user.profile.eloSeededAt === null &&
@@ -766,7 +792,7 @@ export async function runFaceMatchVerification(
     // Type Radar candidate tagging (§Type Radar, step 6): an isolated vision
     // pass, independent of the Elo seed above. Best-effort and flag-gated at the
     // dep level; a failure only leaves `V_type` neutral for this candidate.
-    if (deps.tagAppearance && keptPhotos.length > 0) {
+    if (meetsPhotoMinimum && deps.tagAppearance && keptPhotos.length > 0) {
       try {
         await deps.tagAppearance(userId, keptPhotos, user.gender);
       } catch (err) {
@@ -780,6 +806,38 @@ export async function runFaceMatchVerification(
     // there is nothing to act on, so stay silent. (Same spirit as the
     // `statusMessageId` guard in `surfaceVerifiedActivationDefault`, which
     // already stops the menu + banner from being re-sent on a rerun.)
+    if (!meetsPhotoMinimum) {
+      // Verified, but held out of the pool until the profile is refilled. This
+      // is ONE message, not "verified ✨" followed by a correction: the user
+      // needs the outcome and the ask together, or the success copy reads as
+      // "you're live" when they are not. It always sends, including on a
+      // re-confirm rerun — the photo count is what changed, and it is the only
+      // thing standing between them and matching.
+      if (user.telegramId > 0n) {
+        try {
+          await deps.notify(
+            user.telegramId,
+            t(user.language ?? "en", "verifyPhotosBelowMinimum", {
+              min: MIN_PHOTOS,
+              need: MIN_PHOTOS - projectedPhotoCount,
+            }),
+            "photos_needed",
+          );
+        } catch (err) {
+          console.warn(`${LOG_PREFIX} below-minimum DM failed`, { userId, err });
+        }
+      }
+      // No menu, no pinned banner: `status` is still `onboarding`, so the
+      // verification gate owns every surface until the photos are back.
+      console.warn(`${LOG_PREFIX} verified but below photo minimum`, {
+        userId,
+        kept: projectedPhotoCount,
+        min: MIN_PHOTOS,
+        dropped: droppedCount,
+      });
+      return { kind: "verified", userId, score: maxDetected, scores };
+    }
+
     if (options.previousVerificationStatus !== "verified") {
       await sendOutcomeMessage(deps, user.telegramId, "verified", user.language);
     }
@@ -1013,6 +1071,27 @@ export async function runFaceMatchVerificationDefault(
         // selfie already on file) or re-run the liveness check. A `retry` DM
         // without the button would be the same dead end this branch exists to
         // remove — the verification gate is the only thing the user can reach.
+        // `photos_needed` means verification already PASSED — there is nothing
+        // to re-verify, so it gets the photo-manager button alone rather than
+        // the Verify-first keyboard (which would invite a pointless second
+        // liveness check).
+        if (kind === "photos_needed") {
+          await api.sendMessage(Number(telegramId), message, {
+            reply_markup: new InlineKeyboard().text(
+              t(
+                (
+                  await prisma.user.findUnique({
+                    where: { id: userId },
+                    select: { language: true },
+                  })
+                )?.language ?? "en",
+                "verifyBtnRedoPhotos",
+              ),
+              VERIFY_PHOTOS_CALLBACK,
+            ),
+          });
+          return;
+        }
         const keyboard =
           kind === "rejected" || kind === "retry"
             ? await buildVerificationKeyboard(

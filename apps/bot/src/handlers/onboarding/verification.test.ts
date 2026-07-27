@@ -143,13 +143,40 @@ describe("blockIfVerificationGated", () => {
   });
 
   it("does not fire (falls back to the normal greeting) for a verified user", async () => {
-    findUnique.mockResolvedValue({ id: "u5", verificationStatus: "verified" });
+    findUnique.mockResolvedValue({
+      id: "u5",
+      verificationStatus: "verified",
+      profile: { photos: ["a", "b", "c"] },
+    });
     const { api } = makeApi();
 
     const handled = await sendVerificationGateNotice(api as never, 123, 111n, "ru");
 
     expect(handled).toBe(false);
     expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("asks a verified user for more photos when the drop left them under the floor", async () => {
+    // The one real way to be verified AND still gated: the pipeline removed
+    // photos that didn't match the selfie and the profile fell under
+    // MIN_PHOTOS, so activation was withheld. The success greeting would tell
+    // them they are live when matching cannot see them.
+    findUnique.mockResolvedValue({
+      id: "u6",
+      verificationStatus: "verified",
+      profile: { photos: ["a"] },
+    });
+    const { api } = makeApi();
+
+    const handled = await sendVerificationGateNotice(api as never, 123, 111n, "ru");
+
+    expect(handled).toBe(true);
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    const [, text, extra] = (api.sendMessage as ReturnType<typeof vi.fn>).mock
+      .calls[0]!;
+    expect(String(text)).toContain("2");
+    // The photo manager, not a pointless second liveness check.
+    expect(JSON.stringify(extra)).toContain("verify:photos");
   });
 
   it("does nothing when the user row is missing", async () => {

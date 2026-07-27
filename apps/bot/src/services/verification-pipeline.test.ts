@@ -15,8 +15,13 @@ const SESSION_ID = "inq_abc";
 const SELFIE_BUFFER = Buffer.from("selfie-bytes");
 const PHOTO_PATH_A = "user-1/photo-a.jpg";
 const PHOTO_PATH_B = "user-1/photo-b.jpg";
+// MIN_PHOTOS is 3, so the default fixture carries three photos: a profile with
+// fewer is not a state the product can reach, and the pipeline now withholds
+// activation below the floor.
+const PHOTO_PATH_C = "user-1/photo-c.jpg";
 const PHOTO_BUFFER_A = Buffer.from("photo-a-bytes");
 const PHOTO_BUFFER_B = Buffer.from("photo-b-bytes");
+const PHOTO_BUFFER_C = Buffer.from("photo-c-bytes");
 
 const CONFIG: PipelineConfig = {
   thresholdVerify: 0.85,
@@ -53,7 +58,10 @@ function makeHarness(
     verificationStatus: "pending",
     personaInquiryId: null,
     faceMatchedAt: null,
-    profile: { photos: [PHOTO_PATH_A, PHOTO_PATH_B], eloSeededAt: null },
+    profile: {
+      photos: [PHOTO_PATH_A, PHOTO_PATH_B, PHOTO_PATH_C],
+      eloSeededAt: null,
+    },
     ...overrides.user,
   };
 
@@ -65,12 +73,16 @@ function makeHarness(
   const photoBuffers = overrides.photoBuffers ?? {
     [PHOTO_PATH_A]: PHOTO_BUFFER_A,
     [PHOTO_PATH_B]: PHOTO_BUFFER_B,
+    [PHOTO_PATH_C]: PHOTO_BUFFER_C,
   };
 
   const compareScores = overrides.compareScores ?? [
     { ok: true, similarity: 0.92, faceFound: true },
     { ok: true, similarity: 0.88, faceFound: true },
+    { ok: true, similarity: 0.9, faceFound: true },
   ];
+  // Shorter override lists repeat their LAST entry for the remaining photos, so
+  // a fixture only has to spell out the scores it actually cares about.
   let compareIndex = 0;
 
   const persisted: PersistOutcomeInput[] = [];
@@ -88,8 +100,9 @@ function makeHarness(
     }),
     downloadProfileImage: vi.fn(async (path: string) => photoBuffers[path] ?? null),
     compareFaces: vi.fn(async () => {
-      const r = compareScores[compareIndex++];
-      if (!r) throw new Error("compareFaces called more times than expected");
+      const r =
+        compareScores[compareIndex++] ?? compareScores[compareScores.length - 1];
+      if (!r) throw new Error("compareFaces called with no scores configured");
       return r;
     }),
     notify: vi.fn(async (telegramId: bigint, message: string, kind: string) => {
@@ -141,7 +154,7 @@ describe("runFaceMatchVerification — happy path (quorum)", () => {
     if (outcome.kind !== "verified") return;
     // Representative score is now the MAX detected (most confident), not min.
     expect(outcome.score).toBeCloseTo(0.92, 5);
-    expect(outcome.scores).toEqual([0.92, 0.88]);
+    expect(outcome.scores).toEqual([0.92, 0.88, 0.9]);
 
     expect(h.persisted).toHaveLength(1);
     expect(h.persisted[0]).toMatchObject({
@@ -149,8 +162,8 @@ describe("runFaceMatchVerification — happy path (quorum)", () => {
       verificationStatus: "verified",
       shouldActivate: true,
       verifiedSelfiePath: "user-1/selfie-stored.jpg",
-      photoFaceScores: [0.92, 0.88],
-      photosSnapshot: [PHOTO_PATH_A, PHOTO_PATH_B],
+      photoFaceScores: [0.92, 0.88, 0.9],
+      photosSnapshot: [PHOTO_PATH_A, PHOTO_PATH_B, PHOTO_PATH_C],
     });
     expect(h.persisted[0]!.faceMatchScore).toBeCloseTo(0.92, 5);
 
@@ -187,6 +200,7 @@ describe("runFaceMatchVerification — happy path (quorum)", () => {
     const h = makeHarness({
       compareScores: [
         { ok: true, similarity: 0.9, faceFound: true },
+        { ok: true, similarity: 0.88, faceFound: true },
         { ok: true, similarity: 0, faceFound: false }, // group shot
       ],
     });
@@ -194,10 +208,10 @@ describe("runFaceMatchVerification — happy path (quorum)", () => {
 
     expect(outcome.kind).toBe("verified");
     if (outcome.kind !== "verified") return;
-    expect(outcome.scores).toEqual([0.9, 0]);
+    expect(outcome.scores).toEqual([0.9, 0.88, 0]);
     // Persisted score array still records the 0 so the admin dashboard
     // can spot which photo is the no-face one.
-    expect(h.persisted[0]!.photoFaceScores).toEqual([0.9, 0]);
+    expect(h.persisted[0]!.photoFaceScores).toEqual([0.9, 0.88, 0]);
   });
 });
 
@@ -274,6 +288,7 @@ describe("runFaceMatchVerification — quorum gating", () => {
       compareScores: [
         { ok: true, similarity: 0.8, faceFound: true },
         { ok: true, similarity: 0.84, faceFound: true },
+        { ok: true, similarity: 0.82, faceFound: true },
       ],
     });
     const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
@@ -318,7 +333,7 @@ describe("runFaceMatchVerification — quorum gating", () => {
     expect(outcome.reason).toBe("no_detected_faces");
     expect(h.persisted[0]!.verificationStatus).toBe("pending_review");
     // The 0 scores are still persisted for admin visibility.
-    expect(h.persisted[0]!.photoFaceScores).toEqual([0, 0]);
+    expect(h.persisted[0]!.photoFaceScores).toEqual([0, 0, 0]);
   });
 });
 
@@ -383,6 +398,55 @@ describe("runFaceMatchVerification — impostor detection", () => {
     expect(
       h.notifications.some((n) => n.message.includes("took them off your profile")),
     ).toBe(true);
+  });
+
+  it("withholds activation when dropping leaves the profile under MIN_PHOTOS", async () => {
+    // 3 photos, only 1 matches. Verification itself passes — the account holder
+    // IS in the set — but 2 photos come off and 1 is below the MIN_PHOTOS floor
+    // every other surface enforces. Activating here would put a near-empty
+    // profile into Thursday's matching batch, which has no photo-count filter
+    // of its own.
+    const h = makeHarness({
+      compareScores: [
+        { ok: true, similarity: 0.93, faceFound: true },
+        { ok: true, similarity: 0.3, faceFound: true },
+        { ok: true, similarity: 0.25, faceFound: true },
+      ],
+    });
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(outcome.kind).toBe("verified");
+    // Status is verified — that part is permanent and must not be undone...
+    expect(h.persisted[0]!.verificationStatus).toBe("verified");
+    // ...but the user is NOT activated, so the verification gate keeps holding
+    // every surface and matching never sees them.
+    expect(h.persisted[0]!.shouldActivate).toBe(false);
+    expect(h.activationSurfaces).toHaveLength(0);
+    expect(h.drops[0]).toMatchObject({ dropIndexes: [1, 2] });
+
+    // One combined message: outcome + the ask. The plain "verified, profile is
+    // live" copy would be a lie while they sit under the floor.
+    expect(h.notifications).toHaveLength(1);
+    expect(h.notifications[0]!.kind).toBe("photos_needed");
+    expect(h.notifications[0]!.message).toContain("verified");
+    expect(h.notifications[0]!.message).toContain("2 more");
+  });
+
+  it("seeds Elo only once the profile clears MIN_PHOTOS", async () => {
+    // The seed is once-only, so seeding off the single surviving photo would
+    // permanently miscalibrate this user's league.
+    const seed = vi.fn(async () => ({ ok: true, elo: 500, score: 50 }) as const);
+    const h = makeHarness({
+      compareScores: [
+        { ok: true, similarity: 0.93, faceFound: true },
+        { ok: true, similarity: 0.3, faceFound: true },
+        { ok: true, similarity: 0.25, faceFound: true },
+      ],
+    });
+    h.deps.seedEloFromVision = seed;
+    await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(seed).not.toHaveBeenCalled();
   });
 
   it("does not drop anything when every photo matches", async () => {
@@ -532,6 +596,7 @@ describe("runFaceMatchVerification — infrastructure failures", () => {
       photoBuffers: {
         [PHOTO_PATH_A]: PHOTO_BUFFER_A,
         [PHOTO_PATH_B]: null, // S3 transient outage
+        [PHOTO_PATH_C]: PHOTO_BUFFER_C,
       },
       compareScores: [{ ok: true, similarity: 0.9, faceFound: true }],
     });
@@ -540,7 +605,7 @@ describe("runFaceMatchVerification — infrastructure failures", () => {
     expect(outcome.kind).toBe("pending_review");
     if (outcome.kind !== "pending_review") return;
     expect(outcome.reason).toBe("photo_download_failed");
-    expect(outcome.scores).toEqual([0.9, 0]);
+    expect(outcome.scores).toEqual([0.9, 0, 0.9]);
   });
 
   it("pending_review when Rekognition errors mid-flight", async () => {
@@ -696,14 +761,14 @@ describe("runFaceMatchVerification — Elo seeding hook", () => {
 
     expect(outcome.kind).toBe("verified");
     expect(seed).toHaveBeenCalledTimes(1);
-    expect(seed).toHaveBeenCalledWith(USER_ID, [PHOTO_PATH_A, PHOTO_PATH_B]);
+    expect(seed).toHaveBeenCalledWith(USER_ID, [PHOTO_PATH_A, PHOTO_PATH_B, PHOTO_PATH_C]);
   });
 
   it("skips seeding when eloSeededAt is already set (admin rerun)", async () => {
     const h = makeHarness({
       user: {
         profile: {
-          photos: [PHOTO_PATH_A, PHOTO_PATH_B],
+          photos: [PHOTO_PATH_A, PHOTO_PATH_B, PHOTO_PATH_C],
           eloSeededAt: new Date("2026-01-15T10:00:00Z"),
         },
       },
@@ -797,12 +862,13 @@ describe("runFaceMatchVerification — persistence shape", () => {
       compareScores: [
         { ok: true, similarity: 0.91, faceFound: true },
         { ok: true, similarity: 0.87, faceFound: true },
+        { ok: true, similarity: 0.93, faceFound: true },
       ],
     });
 
     await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
-    expect(h.persisted[0]!.photoFaceScores).toEqual([0.91, 0.87]);
+    expect(h.persisted[0]!.photoFaceScores).toEqual([0.91, 0.87, 0.93]);
   });
 
   it("hands the photos snapshot to persistOutcome (race-detection input)", async () => {
@@ -813,7 +879,7 @@ describe("runFaceMatchVerification — persistence shape", () => {
     const h = makeHarness();
     await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
-    expect(h.persisted[0]!.photosSnapshot).toEqual([PHOTO_PATH_A, PHOTO_PATH_B]);
+    expect(h.persisted[0]!.photosSnapshot).toEqual([PHOTO_PATH_A, PHOTO_PATH_B, PHOTO_PATH_C]);
   });
 });
 
