@@ -365,7 +365,7 @@ function aetherPhotoValidationDetail(reason: MediaValidationReason): string {
     case "unsafe_content":
       return "Photo can't be published — choose a different, non-explicit photo";
     case "face_obscured":
-      return "Face is obscured by sunglasses or a covering — ask for a clearer photo";
+      return "Face is covered by a mask or scarf — ask for a photo where it isn't hidden";
     case "no_face":
       return "Photo must show the user's face";
     case "multiple_faces_photo":

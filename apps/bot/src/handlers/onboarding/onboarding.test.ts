@@ -1790,7 +1790,7 @@ describe("Album (media_group_id) photo coalescing", () => {
         pendingPhotos: ["photo_1"],
         pendingPhotoUniqueIds: ["uid_1"],
       },
-      photo: { file_id: "photo_sunglasses", file_unique_id: "uid_sunglasses" },
+      photo: { file_id: "photo_masked", file_unique_id: "uid_masked" },
       messageId: 777,
       fromId: 99001,
     });
@@ -1802,10 +1802,10 @@ describe("Album (media_group_id) photo coalescing", () => {
     await vi.advanceTimersByTimeAsync(800);
 
     expect(ctx.session.pendingPhotos).toEqual(["photo_1"]);
-    // Reason is the concrete one (sunglasses / covering), not a generic bounce…
+    // Reason is the concrete one (a covering), not a generic bounce…
     expect(ctx.api.sendMessage).toHaveBeenCalledWith(
       99001,
-      expect.stringContaining("sunglasses"),
+      expect.stringContaining("mask"),
       {
         reply_parameters: {
           message_id: 777,

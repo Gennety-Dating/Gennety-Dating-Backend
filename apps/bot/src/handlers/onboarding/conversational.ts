@@ -1672,7 +1672,8 @@ function photoRejectionSystemNote(acc: PhotoBatchAccumulator): string {
     `so the user knows WHICH one failed. Keep this in mind for the rest of the photo stage: ` +
     `if the user asks why a photo did not count, or pushes back ("but I sent 4!"), explain the ` +
     `actual reason above in their language and tell them what the next photo should look like ` +
-    `(e.g. face_obscured -> no dark sunglasses / nothing covering the face; no_face -> the face ` +
+    `(e.g. face_obscured -> nothing covering the face, such as a mask or scarf; sunglasses are ` +
+    `fine and are NEVER a rejection reason; no_face -> the face ` +
     `must be clearly visible; duplicate_* -> it must be a different shot, not a re-send or a crop ` +
     `of one already uploaded). Never respond by simply repeating the request for photos.`
   );

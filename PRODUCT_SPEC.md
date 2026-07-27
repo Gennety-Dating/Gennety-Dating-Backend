@@ -310,11 +310,25 @@ Hard rules enforced by the collector:
   area ≥ 0.8% of the frame, lenient by design — angled / partially-turned /
   full-body shots are normal; lowered from 0.75/1.5% after a calibration run
   found legit photos bounced as `no_face`), a light **obstruction** check on
-  the largest face (reject `face_obscured` only on dark `Sunglasses` ≥ 0.90 or a
-  `FaceOccluded` mask/covering ≥ 0.99 — clear prescription glasses and noisy
-  sub-0.99 occlusion pass; pose / lighting / sharpness are deliberately NOT
+  the largest face (reject `face_obscured` only on a `FaceOccluded`
+  mask/covering ≥ 0.99 — noisy sub-0.99 occlusion passes; pose / lighting /
+  sharpness are deliberately NOT
   gated since extreme turned-away / dark / blurred / cropped shots already fail
-  the presence floor), and the duplicate
+  the presence floor. **Sunglasses stopped being a rejection reason
+  2026-07-26**: a production audit of `media_validation_rejections` plus the PM2
+  logs found `face_obscured` was 9 of the 11 real rejections ever recorded
+  across prod and dev — ~82% of all upload friction — while `unsafe_content` had
+  never fired once and `no_face` had fired exactly once in six weeks. Dark
+  glasses are an ordinary dating photo, and the gate protected neither safety
+  (that is the separate moderation layer) nor identity (liveness-only since
+  2026-06-23); it was a "nice to look at" judgment, i.e. the same class of
+  signal as sharpness and pose, which this flow already refuses to gate on. The
+  covering half is kept for a non-aesthetic reason: a genuinely covered face
+  still returns `faceFound=true` with a low similarity at verification, landing
+  in the `fail` bucket, and a single `fail` hard-rejects the entire account
+  under the §1.4 quorum rule — bouncing that one photo at upload is strictly
+  kinder than letting it sink the user's verification. `CompareFaces` matches
+  reliably through sunglasses, so they carry no such risk), and the duplicate
   checks is accepted and counted toward `MIN_PHOTOS` **immediately**: there is
   no cross-photo "same person" clustering and no self-photo identity anchor.
   (The earlier hidden `pendingPhotoCandidates[]` consensus pool — which held the

@@ -53,7 +53,7 @@ const translations = {
     photoUnsafeContent:
       "That photo can't be published in a profile. Pick a different, non-explicit one.",
     photoFaceObscured:
-      "Your face is hard to make out. Take off sunglasses or a face covering and send a clearer shot.",
+      "Your face is covered in this one. Send a shot where a mask or scarf isn't hiding it.",
     photoMultipleFaces:
       "Your face needs to be visible in the photo. Try another shot.",
     photoIdentityMismatch:
@@ -951,7 +951,7 @@ const translations = {
     photoUnsafeContent:
       "Это фото нельзя публиковать в профиле. Выбери другой снимок без откровенного контента.",
     photoFaceObscured:
-      "Лицо плохо видно. Сними тёмные очки или маску и пришли более чёткий снимок.",
+      "На этом фото лицо закрыто. Пришли снимок, где его не скрывает маска или шарф.",
     photoMultipleFaces:
       "На фото должно быть видно твоё лицо. Попробуй другой снимок.",
     photoIdentityMismatch:
@@ -1826,7 +1826,7 @@ const translations = {
     photoUnsafeContent:
       "Це фото не можна публікувати у профілі. Обери інший знімок без відвертого контенту.",
     photoFaceObscured:
-      "Обличчя погано видно. Зніми темні окуляри або маску й надішли чіткіший знімок.",
+      "На цьому фото обличчя закрите. Надішли знімок, де його не приховує маска чи шарф.",
     photoMultipleFaces:
       "На фото має бути видно твоє обличчя. Спробуй інший знімок.",
     photoIdentityMismatch:
@@ -2710,7 +2710,7 @@ const deTranslations: TranslationTable = {
   photoUnsafeContent:
     "Dieses Foto kann nicht im Profil veröffentlicht werden. Wähle bitte ein anderes, nicht explizites Foto.",
   photoFaceObscured:
-    "Dein Gesicht ist schlecht zu erkennen. Nimm Sonnenbrille oder Maske ab und sende ein klareres Foto.",
+    "Auf diesem Foto ist dein Gesicht verdeckt. Schick eins, auf dem es nicht hinter Maske oder Schal verschwindet.",
   photoMultipleFaces:
     "Dein Gesicht muss auf dem Foto sichtbar sein. Versuch ein anderes Bild.",
   photoIdentityMismatch:
@@ -3553,7 +3553,7 @@ const plTranslations: TranslationTable = {
   photoUnsafeContent:
     "Tego zdjęcia nie można opublikować w profilu. Wybierz inne zdjęcie bez treści erotycznych.",
   photoFaceObscured:
-    "Twarz jest słabo widoczna. Zdejmij okulary przeciwsłoneczne lub maskę i wyślij wyraźniejsze zdjęcie.",
+    "Na tym zdjęciu twarz jest zasłonięta. Wyślij ujęcie, na którym nie zakrywa jej maska ani szalik.",
   photoMultipleFaces:
     "Na zdjęciu musi być widoczna Twoja twarz. Spróbuj innego ujęcia.",
   photoIdentityMismatch:

@@ -846,7 +846,7 @@ function photoValidationApiMessage(reason: string): string {
     case "unsafe_content":
       return "That photo can't be published in a profile. Choose a different, non-explicit photo";
     case "face_obscured":
-      return "Your face is hard to make out — take off sunglasses or a face covering";
+      return "Your face is covered — send one where a mask or scarf isn't hiding it";
     case "no_face":
       return "Your face must be visible in the photo";
     case "multiple_faces_photo":

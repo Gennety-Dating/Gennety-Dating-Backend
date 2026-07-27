@@ -265,7 +265,7 @@ describe("validateProfilePhoto", () => {
     expect(result).toMatchObject({ ok: false, reason: "no_face" });
   });
 
-  it("rejects sunglasses and a face covering, but allows clear glasses and noisy occlusion", async () => {
+  it("rejects a face covering, but allows sunglasses and noisy occlusion", async () => {
     const obscured = async (face: DetectedFace) =>
       validateProfilePhoto(
         { candidate: candidateJpeg, mime: "image/jpeg" },
@@ -279,21 +279,25 @@ describe("validateProfilePhoto", () => {
         },
       );
 
-    // Dark glasses hiding the eyes -> reject.
-    expect(
-      await obscured({
-        ...clearFace,
-        sunglasses: { value: true, confidence: 0.99 },
-      }),
-    ).toMatchObject({ ok: false, reason: "face_obscured" });
-
-    // A mask / covering at high confidence -> reject.
+    // A mask / covering at high confidence -> reject. This one stays because a
+    // genuinely covered face scores as a `fail` at verification, and one `fail`
+    // hard-rejects the whole account under the §1.4 quorum rule.
     expect(
       await obscured({
         ...clearFace,
         occluded: { value: true, confidence: 1 },
       }),
     ).toMatchObject({ ok: false, reason: "face_obscured" });
+
+    // Dark sunglasses -> PASS since 2026-07-26. They were ~82% of all upload
+    // friction while protecting neither safety nor identity, and CompareFaces
+    // matches reliably through them.
+    expect(
+      await obscured({
+        ...clearFace,
+        sunglasses: { value: true, confidence: 1 },
+      }),
+    ).toMatchObject({ ok: true });
 
     // Clear prescription glasses report Sunglasses=false -> pass.
     expect(
@@ -318,10 +322,10 @@ describe("validateProfilePhoto", () => {
       ...clearFace,
       boundingBox: { left: 0.3, top: 0.2, width: 0.4, height: 0.5 },
     };
-    const bystanderInSunglasses: DetectedFace = {
+    const maskedBystander: DetectedFace = {
       ...clearFace,
       boundingBox: { left: 0.02, top: 0.02, width: 0.06, height: 0.06 },
-      sunglasses: { value: true, confidence: 0.99 },
+      occluded: { value: true, confidence: 1 },
     };
     const result = await validateProfilePhoto(
       { candidate: candidateJpeg, mime: "image/jpeg" },
@@ -329,7 +333,7 @@ describe("validateProfilePhoto", () => {
         deps: deps({
           detectFaces: vi.fn(async () => ({
             ok: true as const,
-            faces: [bystanderInSunglasses, subject],
+            faces: [maskedBystander, subject],
           })),
         }),
       },

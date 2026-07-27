@@ -839,7 +839,10 @@ album can therefore never erase a photo concurrently added on another surface.
 **Identity is enforced only by liveness verification, not at upload time
 (simplified 2026-06-23).** A static photo that passes per-photo safety,
 usable-face (Rekognition confidence ≥ 0.55, area ≥ 0.8%; plus a light
-`face_obscured` reject on dark sunglasses ≥ 0.90 / mask-occlusion ≥ 0.99), and duplicate gates is accepted
+`face_obscured` reject on mask-occlusion ≥ 0.99 only — sunglasses stopped being
+a rejection reason 2026-07-26 after a production audit showed `face_obscured`
+was ~82% of all upload rejections while protecting neither safety nor identity;
+see PRODUCT_SPEC §1.3), and duplicate gates is accepted
 and counted toward `MIN_PHOTOS` immediately. There is no pre-verification
 cross-photo "same person" clustering and no self-photo identity anchor: the
 former hidden `Profile.pendingPhotoCandidates[]` consensus pool (held the first

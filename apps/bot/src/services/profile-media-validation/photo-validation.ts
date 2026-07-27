@@ -44,18 +44,33 @@ import type {
 const MIN_FACE_CONFIDENCE = 0.55;
 const MIN_FACE_AREA = 0.008;
 
-// The face must also be *recognizable*. We reject only two clearly-detectable
-// obstructions, tuned against a calibration run so ordinary photos pass:
-//   - sunglasses ≥ 0.90 — dark glasses hiding the eyes (clear prescription
-//     glasses report `Sunglasses=false`, so they pass);
-//   - a face covering ≥ 0.99 — a mask / scarf over the face. The floor is high
-//     on purpose: AWS `FaceOccluded` fired falsely up to 0.93 on perfectly
-//     clear faces in calibration, while real masks/coverings read 1.00, so 0.99
-//     catches the real cases without bouncing clear photos.
+// The face must also be *recognizable*. We reject exactly ONE obstruction: a
+// face covering (mask / scarf) at ≥ 0.99. The floor is high on purpose: AWS
+// `FaceOccluded` fired falsely up to 0.93 on perfectly clear faces in
+// calibration, while real coverings read 1.00, so 0.99 catches the real cases
+// without bouncing clear photos.
+//
+// The **sunglasses gate was removed 2026-07-26** after a production audit of
+// `media_validation_rejections` + the PM2 logs across prod and dev: 9 of the 11
+// real (non-retryable) rejections ever recorded were `face_obscured`, making it
+// ~82% of all upload friction, while `unsafe_content` had never once fired and
+// `no_face` had fired exactly once in six weeks. Dark glasses are an ordinary
+// dating photo, and this gate protects neither safety (that is the separate
+// moderation layer) nor identity (enforced only by liveness + CompareFaces
+// against the verified selfie since 2026-06-23) — it was purely a "nice to look
+// at" judgment, which is the uploader's own concern, exactly like the sharpness
+// and pose signals we already refuse to gate on below.
+//
+// The covering check STAYS, and not for aesthetics: a genuinely covered face
+// still yields `faceFound=true` with a low similarity at verification, which is
+// the `fail` bucket — and one `fail` hard-rejects the whole account under the
+// §1.4 quorum rule. Bouncing that photo at upload is strictly kinder than
+// letting it sink the user's verification. Sunglasses do not carry that risk:
+// CompareFaces matches reliably through them.
+//
 // Everything else about pose / lighting / sharpness is left lenient — extreme
 // "turned away / too dark / blurred / face cropped out" shots already fail the
 // face-presence gate above (Rekognition returns no face or a sub-floor one).
-const MIN_SUNGLASSES_CONFIDENCE = 0.9;
 const MIN_FACE_OCCLUSION_CONFIDENCE = 0.99;
 
 export interface ExistingPhotoForValidation {
@@ -236,19 +251,11 @@ function isUsablePhotoFace(face: DetectedFace): boolean {
 }
 
 function isFaceObscured(face: DetectedFace): boolean {
-  if (
-    face.sunglasses?.value &&
-    face.sunglasses.confidence >= MIN_SUNGLASSES_CONFIDENCE
-  ) {
-    return true;
-  }
-  if (
+  // Sunglasses are deliberately NOT checked here — see the constant block above.
+  return Boolean(
     face.occluded?.value &&
-    face.occluded.confidence >= MIN_FACE_OCCLUSION_CONFIDENCE
-  ) {
-    return true;
-  }
-  return false;
+      face.occluded.confidence >= MIN_FACE_OCCLUSION_CONFIDENCE,
+  );
 }
 
 function isSupportedImageMime(mime: string): boolean {
