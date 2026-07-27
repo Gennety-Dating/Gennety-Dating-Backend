@@ -131,7 +131,13 @@ export function App(): ReactElement {
   useEffect(() => {
     // Poll while waiting on the partner (also on the male's "cover-partner"
     // screen, where the partner may pay herself in the meantime).
-    if (screen !== "waiting" && screen !== "cover-partner") return;
+    //
+    // "offer" polls too, because it is the screen a user can sit on for a long
+    // time and the one where a stale render is actually expensive: the partner
+    // may cover her ticket (she must flip to the surprise reveal, not keep
+    // staring at a pay button she'd pay twice on), and the gate may expire and
+    // open the Calendar for free (the buttons must become the "closed" screen).
+    if (screen !== "waiting" && screen !== "cover-partner" && screen !== "offer") return;
     const id = setInterval(() => void load(), 4000);
     return () => clearInterval(id);
   }, [screen, load]);
@@ -174,6 +180,9 @@ export function App(): ReactElement {
         });
       } catch (err) {
         app?.showAlert(errorText(err, s));
+        // Refused invoice = stale screen (partner already paid, gate closed).
+        // Re-read rather than leave a button that will keep failing.
+        void load();
       }
     },
     [s, load],
@@ -190,9 +199,13 @@ export function App(): ReactElement {
       } catch (err) {
         haptic("error");
         app?.showAlert(errorText(err, s));
+        // A refused spend usually means the screen is stale (the gate expired,
+        // or the partner settled first). Re-read so the user lands on the
+        // correct screen instead of re-tapping a button that can't work.
+        void load();
       }
     },
-    [s],
+    [s, load],
   );
 
   // Male "cover both" holding exactly one wallet ticket: spend it on his own

@@ -384,6 +384,18 @@ export type ApplyPaymentResult =
   | { ok: true; state: TicketStateView };
 
 /**
+ * The only two `ticketStatus` values a slot may still be claimed in. Every slot
+ * CAS carries this, because `status` alone does NOT close the gate: the expiry
+ * cron leaves the match `negotiating` and merely flips `ticketStatus` to
+ * `expired`/`refunded` after opening the Calendar for FREE. Without it a stale
+ * Mini App (the ticket card is permanent and re-openable) could still pay a day
+ * later and claim a slot for a date that no longer costs anything — burning a
+ * wallet ticket, or taking real Stars. An unclaimed Stars charge falls into the
+ * existing `gate_refund_pending` path, so the money comes back either way.
+ */
+const OPEN_GATE_STATUSES = ["pending", "partial"] as const;
+
+/**
  * Settle one or two ticket slots on a match (idempotent + race-safe) and
  * advance the gate. Shared by the money path (`applyTicketPayment`) and the
  * wallet path (`useTicketFromBalance`); the balance spend itself is handled by
@@ -440,7 +452,12 @@ async function settleTicket(
       claimAttempted = true;
       const claim = await claimTicketSlots(
         {
-          where: { id: matchId, status: "negotiating", [partnerPaidField]: null },
+          where: {
+            id: matchId,
+            status: "negotiating",
+            ticketStatus: { in: [...OPEN_GATE_STATUSES] },
+            [partnerPaidField]: null,
+          },
           data: { [partnerPaidField]: now, [paidForPartnerField]: true },
         },
         1,
@@ -474,6 +491,7 @@ async function settleTicket(
         where: {
           id: matchId,
           status: "negotiating",
+          ticketStatus: { in: [...OPEN_GATE_STATUSES] },
           [paidField]: null,
           // A stale "both" read must not overwrite a partner payment that landed
           // concurrently. Losing this stronger CAS causes the whole charge/spend

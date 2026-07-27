@@ -413,6 +413,49 @@ describe("useTicketFromBalance — wallet refund accounting", () => {
     expect(mGrant).not.toHaveBeenCalled();
   });
 
+  // The expiry cron leaves the match `negotiating` and only flips ticketStatus,
+  // after opening the Calendar for free. The ticket card is permanent and
+  // re-openable, so without a ticketStatus guard a stale screen could still pay
+  // for a date that already costs nothing.
+  it("refuses to claim a slot once the gate closed, and returns the spent ticket", async () => {
+    mMatch.findUnique.mockResolvedValue(matchRow({ ticketStatus: "expired" }));
+    mMatch.updateMany.mockResolvedValue({ count: 0 });
+    const api = createApi();
+
+    const result = await useTicketFromBalance(api, 1001n, "match-1", "self");
+
+    expect(result).toEqual({ ok: false, reason: "wrong-state" });
+    expect(mMatch.updateMany.mock.calls[0]![0].where).toEqual(
+      expect.objectContaining({ ticketStatus: { in: ["pending", "partial"] } }),
+    );
+    expect(mGrant).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "uid-A", count: 1, reason: "refund" }),
+    );
+  });
+
+  it("refuses a 'partner' cover once the gate closed", async () => {
+    mMatch.findUnique.mockResolvedValue(
+      matchRow({ ticketStatus: "refunded", ticketPaidA: new Date("2026-06-19T10:00:00Z") }),
+    );
+    mMatch.updateMany.mockResolvedValue({ count: 0 });
+    const api = createApi();
+
+    const result = await useTicketFromBalance(api, 1001n, "match-1", "partner");
+
+    expect(mMatch.updateMany.mock.calls[0]![0].where).toEqual(
+      expect.objectContaining({ ticketStatus: { in: ["pending", "partial"] } }),
+    );
+    // Nothing was claimed, so the spent ticket comes back. The call still
+    // reports ok with the FRESH state — a closed gate renders the Mini App's
+    // "closed" screen (scheduling is already open, free), which is the honest
+    // outcome here rather than an error.
+    expect(mGrant).toHaveBeenCalledWith(
+      expect.objectContaining({ count: 1, reason: "refund" }),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.state.ticketStatus).toBe("refunded");
+  });
+
   it("refunds both wallet tickets when a stale 'both' claim loses to the partner payment", async () => {
     const partnerPaid = new Date("2026-06-19T10:00:00Z");
     mMatch.findUnique
