@@ -1,6 +1,6 @@
 import type { Api, RawApi } from "grammy";
-import { prisma } from "@gennety/db";
-import type { Language } from "@gennety/shared";
+import { Prisma, prisma } from "@gennety/db";
+import { t, type Language } from "@gennety/shared";
 import { env } from "../config.js";
 import { sendMainMenu } from "../handlers/menu/main.js";
 import { seedEloFromVisionDefault, type SeedEloResult } from "./elo-seed.js";
@@ -21,6 +21,7 @@ import {
   verificationRetryMessage,
 } from "./verification-messages.js";
 import { buildVerificationKeyboard } from "./verification-keyboard.js";
+import { alignPhotoHashes } from "./profile-media-validation/photo-state.js";
 
 /**
  * Face-match verification pipeline (Phase 6.3 — third iteration).
@@ -39,20 +40,32 @@ import { buildVerificationKeyboard } from "./verification-keyboard.js";
  *
  * Decision over the detected-face photos (no_face is excluded from the
  * decision — it's not informative either way):
- *   - `verified`        — `pass` count ≥ FACE_MATCH_MIN_VERIFIED_PHOTOS
- *                         AND no `fail` photos. The user is who they say.
- *   - `rejected`        — at least one `fail` photo. A face that *isn't* the
- *                         verified selfie is sitting in the profile —
- *                         likely impostor / wrong-person photo. Hard reject.
+ *   - `verified`        — `pass` count ≥ FACE_MATCH_MIN_VERIFIED_PHOTOS.
+ *                         The account holder is provably in the photo set.
+ *                         Any `fail` photos are REMOVED from the profile
+ *                         (`db.dropMismatchedPhotos`) instead of counting
+ *                         against the account.
+ *   - `rejected`        — a `fail` photo AND no pass quorum. Nothing in the
+ *                         set identifies this person, while something in it
+ *                         is a different person's face. Hard reject.
  *   - `pending_review`  — anything else (all-borderline, mixed pass+borderline
  *                         under quorum, zero detected faces).
  *
- * This replaces the previous strict-min strategy: a single mislit shot or
- * group photo would tank the whole profile, even when 4 of 5 photos
- * matched cleanly. The new rule excludes uninformative shots (no_face)
- * from scoring while keeping the original anti-impostor floor — a real
- * face below `THRESHOLD_REVIEW` still hard-fails, so a fake-photo attack
- * cannot hide behind a quorum of legitimate shots.
+ * The `verified` branch's photo-dropping REPLACED an "any fail hard-rejects"
+ * rule on 2026-07-27. That rule made a single weak score fatal to an account
+ * that also carried solid matches, and its blast radius reached all the way
+ * back into upload: the photo gate had to pre-emptively bounce anything that
+ * might score low (a covered face, a hand near the mouth), which a production
+ * audit found was ~82% of all upload friction — the largest single source of
+ * registration drop-off, protecting against a threat the drop now handles
+ * proportionately. The anti-impostor property is intact in both directions:
+ * a set with no genuine match still rejects, and a planted photo never
+ * survives on the profile either way. What changed is only WHO pays for one
+ * bad photo — that photo, rather than the whole account.
+ *
+ * The quorum also excludes uninformative shots (no_face) from scoring, so a
+ * group photo or scenery shot never tanks a profile where the solo photos
+ * matched cleanly.
  *
  * Infrastructure failures never come out as `rejected` — we don't penalise
  * users for our own outages — but they split by whether a verdict was even
@@ -241,6 +254,26 @@ export interface PipelineDeps {
      * per-photo scores — there is nothing new to say about any of them.
      */
     persistRetryable: (input: PersistRetryableInput) => Promise<void>;
+    /**
+     * Remove the photos at `dropIndexes` from the profile after a `verified`
+     * outcome, keeping `photos` / `photoFaceScores` / `uploadedPhotoHashes` /
+     * `profileMedia` aligned. Returns how many were actually removed (0 when
+     * the guard below declines).
+     *
+     * This is what lets a mismatching photo cost the user that photo instead
+     * of their whole account (§1.4). Optional so tests and mobile-only paths
+     * can omit it; when absent the photo simply stays, which is the same
+     * behaviour as a failed drop.
+     *
+     * MUST be snapshot-gated: apply only while `Profile.photos` still equals
+     * `photosSnapshot`, so a photo edit that landed mid-run makes this a no-op
+     * rather than deleting by a stale index.
+     */
+    dropMismatchedPhotos?: (input: {
+      userId: string;
+      photosSnapshot: string[];
+      dropIndexes: number[];
+    }) => Promise<number>;
   };
 }
 
@@ -625,9 +658,27 @@ export async function runFaceMatchVerification(
     };
   }
 
-  if (failCount > 0) {
-    // At least one detected face is well below threshold → impostor or
-    // wrong-person photo. Hard reject.
+  // Indexes (into `photosSnapshot`) of the photos that carry a detected face
+  // scoring below `thresholdReview` — a wrong-person / impostor shot.
+  const failedIndexes = scores.reduce<number[]>((acc, score, index) => {
+    if (kinds[index] === "scored" && score < config.thresholdReview) {
+      acc.push(index);
+    }
+    return acc;
+  }, []);
+
+  if (failCount > 0 && passCount < config.minVerifiedPhotos) {
+    // A mismatching face AND nothing that proves the account holder is in the
+    // photo set at all. Nothing here identifies this person, so hard reject.
+    //
+    // Narrowed 2026-07-27: this used to fire on `failCount > 0` alone, so ONE
+    // weak photo destroyed an account that also carried solid matches. That is
+    // what forced the upload-time obstruction gate to over-reject (a covered
+    // face can score low), which in turn was ~82% of all upload friction. When
+    // a pass quorum exists we now keep the account and drop the offending
+    // photo instead — see the verified branch below. The anti-impostor
+    // property is preserved in both directions: a set with no genuine match
+    // still lands here, and a planted photo never survives on the profile.
     const minDetected = Math.min(...detectedScores);
     console.warn(`${LOG_PREFIX} face mismatch → rejected`, {
       userId,
@@ -653,7 +704,9 @@ export async function runFaceMatchVerification(
   }
 
   if (passCount >= config.minVerifiedPhotos) {
-    // Quorum cleared and no impostor faces detected — approve.
+    // Quorum cleared — the account holder is provably in the photo set, so
+    // approve. Any individual photo that did NOT match is dropped from the
+    // profile rather than held against the account (see the reject branch).
     const maxDetected = Math.max(...detectedScores);
     await deps.db.persistOutcome({
       userId,
@@ -665,6 +718,32 @@ export async function runFaceMatchVerification(
       verifiedSelfiePath,
       shouldActivate: true,
     });
+
+    // Drop the mismatching photos. Best-effort ON PURPOSE: the user is already
+    // committed as verified above, so a storage/DB hiccup here must leave the
+    // photo in place rather than unwind an approval. The drop is snapshot-gated
+    // inside the dep, so a concurrent photo edit makes it a no-op instead of
+    // corrupting the photos[i] ↔ photoFaceScores[i] alignment; the edit's own
+    // auto-rerun then re-decides on the fresh set.
+    let droppedCount = 0;
+    if (failedIndexes.length > 0 && deps.db.dropMismatchedPhotos) {
+      try {
+        droppedCount = await deps.db.dropMismatchedPhotos({
+          userId,
+          photosSnapshot,
+          dropIndexes: failedIndexes,
+        });
+      } catch (err) {
+        console.warn(`${LOG_PREFIX} mismatched-photo drop threw (swallowed)`, {
+          userId,
+          err,
+        });
+      }
+    }
+    const keptPhotos =
+      droppedCount > 0
+        ? photos.filter((_, index) => !failedIndexes.includes(index))
+        : photos;
     // Cold-start Elo seed runs only here, after the user is committed as
     // verified. Idempotency guard: skip if a previous run already seeded
     // (e.g. an admin rerun on the same already-verified user). Wrapped in
@@ -673,10 +752,10 @@ export async function runFaceMatchVerification(
       deps.seedEloFromVision &&
       user.profile &&
       user.profile.eloSeededAt === null &&
-      photos.length > 0
+      keptPhotos.length > 0
     ) {
       try {
-        const seed = await deps.seedEloFromVision(userId, photos);
+        const seed = await deps.seedEloFromVision(userId, keptPhotos);
         if (!seed.ok) {
           console.warn(`${LOG_PREFIX} elo seed skipped`, { userId, reason: seed.error });
         }
@@ -687,9 +766,9 @@ export async function runFaceMatchVerification(
     // Type Radar candidate tagging (§Type Radar, step 6): an isolated vision
     // pass, independent of the Elo seed above. Best-effort and flag-gated at the
     // dep level; a failure only leaves `V_type` neutral for this candidate.
-    if (deps.tagAppearance && photos.length > 0) {
+    if (deps.tagAppearance && keptPhotos.length > 0) {
       try {
-        await deps.tagAppearance(userId, photos, user.gender);
+        await deps.tagAppearance(userId, keptPhotos, user.gender);
       } catch (err) {
         console.warn(`${LOG_PREFIX} appearance tagging threw (swallowed)`, { userId, err });
       }
@@ -703,6 +782,21 @@ export async function runFaceMatchVerification(
     // already stops the menu + banner from being re-sent on a rerun.)
     if (options.previousVerificationStatus !== "verified") {
       await sendOutcomeMessage(deps, user.telegramId, "verified", user.language);
+    }
+    // Say it out loud when the photo set shrank — including on a re-confirm
+    // rerun that stays otherwise silent. Photos vanishing from a profile with
+    // no explanation would be its own bug, and this is the user's cue to add
+    // replacements.
+    if (droppedCount > 0 && user.telegramId > 0n) {
+      try {
+        await deps.notify(
+          user.telegramId,
+          t(user.language ?? "en", "verifyPhotosDropped"),
+          "verified",
+        );
+      } catch (err) {
+        console.warn(`${LOG_PREFIX} dropped-photo DM failed`, { userId, err });
+      }
     }
     if (user.telegramId > 0n) {
       await surfaceVerifiedActivation(deps, {
@@ -978,6 +1072,74 @@ export async function runFaceMatchVerificationDefault(
               verificationStatus: input.verificationStatus,
               faceMatchedAt: null,
             },
+          });
+        },
+        dropMismatchedPhotos: async ({ userId, photosSnapshot, dropIndexes }) => {
+          const drop = new Set(dropIndexes);
+          if (drop.size === 0) return 0;
+          const keep = (index: number): boolean => !drop.has(index);
+
+          return await prisma.$transaction(async (tx) => {
+            const profile = await tx.profile.findUnique({
+              where: { userId },
+              select: {
+                photos: true,
+                photoFaceScores: true,
+                uploadedPhotoHashes: true,
+                profileMedia: true,
+              },
+            });
+            if (!profile) return 0;
+
+            // Snapshot guard — the indexes are only meaningful against the
+            // photo array we scored. A photo edit that landed mid-run makes
+            // this a no-op; that edit's own auto-rerun re-decides.
+            const unchanged =
+              profile.photos.length === photosSnapshot.length &&
+              profile.photos.every((ref, i) => ref === photosSnapshot[i]);
+            if (!unchanged) return 0;
+
+            // Never leave photos[i] ↔ photoFaceScores[i] misaligned. If the
+            // score array is not already 1:1 we decline to touch anything —
+            // losing the drop is recoverable, corrupting the alignment is not.
+            if (profile.photoFaceScores.length !== profile.photos.length) {
+              return 0;
+            }
+
+            const droppedRefs = new Set(
+              profile.photos.filter((_, i) => !keep(i)),
+            );
+            const photos = profile.photos.filter((_, i) => keep(i));
+            const photoFaceScores = profile.photoFaceScores.filter((_, i) =>
+              keep(i),
+            );
+            const uploadedPhotoHashes = alignPhotoHashes(
+              profile.photos,
+              profile.uploadedPhotoHashes,
+            ).filter((_, i) => keep(i));
+
+            // `profileMedia` is keyed by photo ref, not by index: a video item
+            // carries no `photo` and must survive untouched.
+            const profileMedia = (
+              Array.isArray(profile.profileMedia) ? profile.profileMedia : []
+            ).filter((item) => {
+              if (item === null || item === undefined) return false;
+              if (typeof item !== "object" || Array.isArray(item)) return true;
+              const ref = (item as Record<string, unknown>).photo;
+              return typeof ref !== "string" || !droppedRefs.has(ref);
+            }) as Prisma.InputJsonValue[];
+
+            await tx.profile.update({
+              where: { userId },
+              data: {
+                photos,
+                photoFaceScores,
+                uploadedPhotoHashes,
+                profileMedia,
+                acceptedPhotoCount: photos.length,
+              },
+            });
+            return droppedRefs.size;
           });
         },
         persistOutcome: async (input) => {

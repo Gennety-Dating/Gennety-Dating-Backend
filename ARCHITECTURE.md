@@ -837,11 +837,17 @@ then replaces its session from the locked canonical state; a stale Telegram
 album can therefore never erase a photo concurrently added on another surface.
 **Identity is enforced only by liveness verification, not at upload time
 (simplified 2026-06-23).** A static photo that passes per-photo safety,
-usable-face (Rekognition confidence ≥ 0.55, area ≥ 0.8%; plus a light
-`face_obscured` reject on mask-occlusion ≥ 0.99 only — sunglasses stopped being
-a rejection reason 2026-07-26 after a production audit showed `face_obscured`
-was ~82% of all upload rejections while protecting neither safety nor identity;
-see PRODUCT_SPEC §1.3), and duplicate gates is accepted
+usable-face (Rekognition confidence ≥ 0.55, area ≥ 0.8% — there is no
+obstruction gate at all: the `face_obscured` reject was removed in two steps,
+sunglasses 2026-07-26 and the remaining `FaceOccluded` mask/covering branch
+2026-07-27, after a production audit showed it was ~82% of all upload
+rejections while protecting neither safety nor identity. Its last
+justification — that a covered face could hard-reject the whole account at
+verification — was removed at the source when the §1.4 quorum began dropping
+the offending photo instead; the `face_obscured` reason survives in
+`MediaValidationRejectionReason` only for historical
+`media_validation_rejections` rows and is never produced. See PRODUCT_SPEC
+§1.3), and duplicate gates is accepted
 and counted toward `MIN_PHOTOS` immediately. There is no pre-verification
 cross-photo "same person" clustering and no self-photo identity anchor: the
 former hidden `Profile.pendingPhotoCandidates[]` consensus pool (held the first

@@ -347,27 +347,32 @@ Hard rules enforced by the collector:
   safety, usable-face presence (Rekognition face confidence ≥ 0.55 and face
   area ≥ 0.8% of the frame, lenient by design — angled / partially-turned /
   full-body shots are normal; lowered from 0.75/1.5% after a calibration run
-  found legit photos bounced as `no_face`), a light **obstruction** check on
-  the largest face (reject `face_obscured` only on a `FaceOccluded`
-  mask/covering ≥ 0.99 — noisy sub-0.99 occlusion passes; pose / lighting /
-  sharpness are deliberately NOT
-  gated since extreme turned-away / dark / blurred / cropped shots already fail
-  the presence floor. **Sunglasses stopped being a rejection reason
-  2026-07-26**: a production audit of `media_validation_rejections` plus the PM2
-  logs found `face_obscured` was 9 of the 11 real rejections ever recorded
-  across prod and dev — ~82% of all upload friction — while `unsafe_content` had
-  never fired once and `no_face` had fired exactly once in six weeks. Dark
-  glasses are an ordinary dating photo, and the gate protected neither safety
-  (that is the separate moderation layer) nor identity (liveness-only since
-  2026-06-23); it was a "nice to look at" judgment, i.e. the same class of
-  signal as sharpness and pose, which this flow already refuses to gate on. The
-  covering half is kept for a non-aesthetic reason: a genuinely covered face
-  still returns `faceFound=true` with a low similarity at verification, landing
-  in the `fail` bucket, and a single `fail` hard-rejects the entire account
-  under the §1.4 quorum rule — bouncing that one photo at upload is strictly
-  kinder than letting it sink the user's verification. `CompareFaces` matches
-  reliably through sunglasses, so they carry no such risk), and the duplicate
-  checks is accepted and counted toward `MIN_PHOTOS` **immediately**: there is
+  found legit photos bounced as `no_face`; pose / lighting / sharpness /
+  obstruction are deliberately NOT gated, since extreme turned-away / dark /
+  blurred / cropped shots already fail the presence floor. **The whole
+  `face_obscured` obstruction gate was removed — sunglasses 2026-07-26, the
+  remaining `FaceOccluded` mask/covering branch 2026-07-27.** A production
+  audit of `media_validation_rejections` plus the PM2 logs found
+  `face_obscured` was 9 of the 11 real rejections ever recorded across prod and
+  dev — **~82% of all upload friction**, the single largest source of
+  registration drop-off — while `unsafe_content` had never fired once and
+  `no_face` had fired exactly once in six weeks. Removing only the sunglasses
+  branch did not move that number: `FaceOccluded` is ONE signal covering masks,
+  scarves, hands, hair and frames alike, so the same photos kept bouncing under
+  a new explanation (a hand near the face is among the most common real dating
+  poses). The signal was never trustworthy enough to gate on either — in
+  calibration it read 0.93 on a completely clear face, which is why the floor
+  had to sit at 0.99: we were not filtering confidently, only where false
+  positives thinned out. The gate protected neither safety (that is the
+  separate moderation layer) nor identity (liveness-only since 2026-06-23); its
+  one real justification was that a covered face can score low at verification,
+  where a single `fail` used to hard-reject the entire account — and that
+  justification was removed at the source by the §1.4 quorum change below, which
+  now drops the offending photo instead of the account. With the account no
+  longer at stake, an upload-time obstruction gate protects nothing. What
+  remains is only "is there a usable human face here at all", and the duplicate
+  checks; such a photo is accepted and counted toward `MIN_PHOTOS`
+  **immediately**: there is
   no cross-photo "same person" clustering and no self-photo identity anchor.
   (The earlier hidden `pendingPhotoCandidates[]` consensus pool — which held the
   first photos invisible until two of them clustered at
@@ -611,15 +616,35 @@ them, which was wrong for the two cases where the user did nothing wrong.
    no_face bucket is excluded from the decision (group photos aren't
    informative either way; their 0 score is still persisted so admins
    can spot the offending photo):
-   - `verified` — pass count ≥ `FACE_MATCH_MIN_VERIFIED_PHOTOS` (default 1)
-     AND zero `fail` photos. Auto-activate if still onboarding; seed
-     `eloScore` via one cold-start AI vision request containing every profile
-     photo. The model returns an independent score for each photo; the server
-     uses their arithmetic mean for the 0..100 attractiveness score and stores
-     both the aggregate and per-photo audit details in `eloSeedDetails`.
-   - `rejected` — at least one `fail` photo (a real, detected face that
-     doesn't match the verified selfie — likely impostor / wrong-person).
-     A pass quorum cannot rescue an impostor: any `fail` is a hard reject.
+   - `verified` — pass count ≥ `FACE_MATCH_MIN_VERIFIED_PHOTOS` (default 1).
+     The account holder is provably in the photo set. Auto-activate if still
+     onboarding; seed `eloScore` via one cold-start AI vision request
+     containing every profile photo. The model returns an independent score for
+     each photo; the server uses their arithmetic mean for the 0..100
+     attractiveness score and stores both the aggregate and per-photo audit
+     details in `eloSeedDetails`. **Any `fail` photos in a verified set are
+     removed from the profile** rather than held against the account
+     (`photos`, `photoFaceScores`, `uploadedPhotoHashes`, `profileMedia` and
+     `acceptedPhotoCount` are rewritten together, guarded on the photo array
+     still matching the snapshot taken at pipeline start, so a concurrent edit
+     makes it a no-op instead of deleting by a stale index). The drop is
+     best-effort and runs AFTER the user is committed as verified — an outage
+     must leave the photo in place, never unwind an approval — and the user is
+     DM'd `verifyPhotosDropped`, including on an otherwise-silent re-confirm
+     rerun, because photos vanishing with no explanation is its own bug. The
+     Elo seed and appearance tagging score only the kept photos.
+   - `rejected` — at least one `fail` photo **and no pass quorum**: nothing in
+     the set identifies this person, while something in it is a different
+     person's face.
+     **Narrowed 2026-07-27 from "any `fail` is a hard reject".** The old rule
+     let one weak score destroy an account that also carried solid matches, and
+     its blast radius reached back into upload: the photo gate had to
+     pre-emptively bounce anything that *might* score low (a covered face, a
+     hand near the mouth), which the audit in §1.3 found was ~82% of all upload
+     friction. The anti-impostor property is intact in both directions — a set
+     with no genuine match still rejects, and a planted photo never survives on
+     the profile either way. What changed is only who pays for one bad photo:
+     that photo, not the whole account.
    - `pending_review` — anything else: all-borderline, mixed pass +
      borderline under quorum, or zero detected-face photos
      (`no_detected_faces` reason).

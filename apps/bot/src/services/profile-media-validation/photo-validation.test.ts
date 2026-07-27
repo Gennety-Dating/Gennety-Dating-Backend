@@ -265,7 +265,7 @@ describe("validateProfilePhoto", () => {
     expect(result).toMatchObject({ ok: false, reason: "no_face" });
   });
 
-  it("rejects a face covering, but allows sunglasses and noisy occlusion", async () => {
+  it("never rejects for obstruction — sunglasses, masks and hands all pass", async () => {
     const obscured = async (face: DetectedFace) =>
       validateProfilePhoto(
         { candidate: candidateJpeg, mime: "image/jpeg" },
@@ -279,19 +279,19 @@ describe("validateProfilePhoto", () => {
         },
       );
 
-    // A mask / covering at high confidence -> reject. This one stays because a
-    // genuinely covered face scores as a `fail` at verification, and one `fail`
-    // hard-rejects the whole account under the §1.4 quorum rule.
+    // The whole `face_obscured` gate is gone (2026-07-27). `FaceOccluded` fires
+    // on masks, scarves, hands, hair and frames alike, so keeping it after the
+    // sunglasses branch was dropped simply re-rejected the same photos under a
+    // new name. It is safe to drop because the §1.4 quorum rule no longer lets
+    // one weak photo destroy an account — it drops the photo instead.
     expect(
       await obscured({
         ...clearFace,
         occluded: { value: true, confidence: 1 },
       }),
-    ).toMatchObject({ ok: false, reason: "face_obscured" });
+    ).toMatchObject({ ok: true });
 
-    // Dark sunglasses -> PASS since 2026-07-26. They were ~82% of all upload
-    // friction while protecting neither safety nor identity, and CompareFaces
-    // matches reliably through them.
+    // Dark sunglasses -> pass (dropped 2026-07-26).
     expect(
       await obscured({
         ...clearFace,
@@ -307,8 +307,8 @@ describe("validateProfilePhoto", () => {
       }),
     ).toMatchObject({ ok: true });
 
-    // Noisy FaceOccluded below the 0.99 floor (clear faces scored up to 0.93 in
-    // calibration) -> pass, so the gate doesn't bounce ordinary photos.
+    // Noisy FaceOccluded on a demonstrably clear face (0.93 in calibration) —
+    // the reason this signal was never trustworthy enough to gate on.
     expect(
       await obscured({
         ...clearFace,
@@ -317,12 +317,12 @@ describe("validateProfilePhoto", () => {
     ).toMatchObject({ ok: true });
   });
 
-  it("checks obstruction only on the largest (subject) face, not a bystander", async () => {
+  it("accepts a group shot as long as one face clears the presence floor", async () => {
     const subject = {
       ...clearFace,
       boundingBox: { left: 0.3, top: 0.2, width: 0.4, height: 0.5 },
     };
-    const maskedBystander: DetectedFace = {
+    const bystander: DetectedFace = {
       ...clearFace,
       boundingBox: { left: 0.02, top: 0.02, width: 0.06, height: 0.06 },
       occluded: { value: true, confidence: 1 },
@@ -333,7 +333,7 @@ describe("validateProfilePhoto", () => {
         deps: deps({
           detectFaces: vi.fn(async () => ({
             ok: true as const,
-            faces: [maskedBystander, subject],
+            faces: [bystander, subject],
           })),
         }),
       },

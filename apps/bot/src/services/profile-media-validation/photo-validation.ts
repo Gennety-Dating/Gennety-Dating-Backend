@@ -44,34 +44,35 @@ import type {
 const MIN_FACE_CONFIDENCE = 0.55;
 const MIN_FACE_AREA = 0.008;
 
-// The face must also be *recognizable*. We reject exactly ONE obstruction: a
-// face covering (mask / scarf) at ≥ 0.99. The floor is high on purpose: AWS
-// `FaceOccluded` fired falsely up to 0.93 on perfectly clear faces in
-// calibration, while real coverings read 1.00, so 0.99 catches the real cases
-// without bouncing clear photos.
+// The **whole `face_obscured` gate is gone (2026-07-27)** — first its
+// sunglasses branch (2026-07-26), now the `FaceOccluded` branch with it.
 //
-// The **sunglasses gate was removed 2026-07-26** after a production audit of
-// `media_validation_rejections` + the PM2 logs across prod and dev: 9 of the 11
-// real (non-retryable) rejections ever recorded were `face_obscured`, making it
-// ~82% of all upload friction, while `unsafe_content` had never once fired and
-// `no_face` had fired exactly once in six weeks. Dark glasses are an ordinary
-// dating photo, and this gate protects neither safety (that is the separate
-// moderation layer) nor identity (enforced only by liveness + CompareFaces
-// against the verified selfie since 2026-06-23) — it was purely a "nice to look
-// at" judgment, which is the uploader's own concern, exactly like the sharpness
-// and pose signals we already refuse to gate on below.
+// The audit that killed the sunglasses branch found `face_obscured` was 9 of
+// the 11 real (non-retryable) rejections ever recorded across prod and dev,
+// i.e. ~82% of ALL upload friction, while `unsafe_content` had never once
+// fired and `no_face` had fired exactly once in six weeks. Removing one branch
+// did not move that number: `FaceOccluded` is a single signal that fires on
+// masks, scarves, hands, hair and frames alike, so the same photos kept
+// bouncing under a different explanation. A hand near the face is one of the
+// most common poses in a real dating photo.
 //
-// The covering check STAYS, and not for aesthetics: a genuinely covered face
-// still yields `faceFound=true` with a low similarity at verification, which is
-// the `fail` bucket — and one `fail` hard-rejects the whole account under the
-// §1.4 quorum rule. Bouncing that photo at upload is strictly kinder than
-// letting it sink the user's verification. Sunglasses do not carry that risk:
-// CompareFaces matches reliably through them.
+// The signal was never trustworthy enough to gate on either: in calibration
+// `FaceOccluded` read 0.93 on a *completely clear* face, which is why the floor
+// had to sit at 0.99 — we were not filtering confidently, we were filtering
+// where the false positives thinned out.
 //
-// Everything else about pose / lighting / sharpness is left lenient — extreme
-// "turned away / too dark / blurred / face cropped out" shots already fail the
-// face-presence gate above (Rekognition returns no face or a sub-floor one).
-const MIN_FACE_OCCLUSION_CONFIDENCE = 0.99;
+// The one argument for keeping it was NOT aesthetics: a covered face can score
+// low at verification, and under the old §1.4 quorum rule a single `fail`
+// hard-rejected the entire account, so bouncing the photo early was the lesser
+// harm. That argument is now void — the quorum rule was fixed at the source
+// (`verification-pipeline.ts`): a mismatching photo is dropped from the profile
+// instead of destroying an account that has a genuine match on file. With the
+// account no longer at stake, an upload-time obstruction gate protects nothing.
+//
+// What remains is deliberately only "is there a usable human face here at all".
+// Pose, lighting, sharpness and obstruction are the uploader's own concern —
+// extreme "turned away / too dark / face cropped out" shots already fail the
+// presence floor above, because Rekognition returns no face or a sub-floor one.
 
 export interface ExistingPhotoForValidation {
   buffer: Buffer;
@@ -189,13 +190,6 @@ export async function validateProfilePhoto(
   const usableFaces = faceDetection.faces.filter(isUsablePhotoFace);
   if (usableFaces.length === 0) return reject("no_face");
 
-  // Check obstruction only on the most prominent (largest) face — the subject
-  // of a selfie — so a background bystander's sunglasses never bounce a photo.
-  const primaryFace = usableFaces.reduce((largest, face) =>
-    faceArea(face) > faceArea(largest) ? face : largest,
-  );
-  if (isFaceObscured(primaryFace)) return reject("face_obscured");
-
   const reference = input.identityReference ?? null;
   if (!reference) {
     return {
@@ -248,14 +242,6 @@ function faceArea(face: DetectedFace): number {
 
 function isUsablePhotoFace(face: DetectedFace): boolean {
   return face.confidence >= MIN_FACE_CONFIDENCE && faceArea(face) >= MIN_FACE_AREA;
-}
-
-function isFaceObscured(face: DetectedFace): boolean {
-  // Sunglasses are deliberately NOT checked here — see the constant block above.
-  return Boolean(
-    face.occluded?.value &&
-      face.occluded.confidence >= MIN_FACE_OCCLUSION_CONFIDENCE,
-  );
 }
 
 function isSupportedImageMime(mime: string): boolean {

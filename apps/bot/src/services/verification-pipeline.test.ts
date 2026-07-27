@@ -31,6 +31,7 @@ interface Harness {
   notifications: Array<{ telegramId: bigint; message: string; kind: string }>;
   activationSurfaces: Array<{ userId: string; telegramId: bigint }>;
   referralSettles: string[];
+  drops: Array<{ userId: string; photosSnapshot: string[]; dropIndexes: number[] }>;
   deps: PipelineDeps;
 }
 
@@ -77,6 +78,7 @@ function makeHarness(
   const notifications: Array<{ telegramId: bigint; message: string; kind: string }> = [];
   const activationSurfaces: Array<{ userId: string; telegramId: bigint }> = [];
   const referralSettles: string[] = [];
+  const drops: Harness["drops"] = [];
 
   const deps: PipelineDeps = {
     fetchReferenceSelfie: vi.fn(async () => selfie),
@@ -107,6 +109,10 @@ function makeHarness(
       persistRetryable: vi.fn(async (input: PersistRetryableInput) => {
         retryPersisted.push(input);
       }),
+      dropMismatchedPhotos: vi.fn(async (input) => {
+        drops.push(input);
+        return input.dropIndexes.length;
+      }),
     },
   };
 
@@ -117,6 +123,7 @@ function makeHarness(
     notifications,
     activationSurfaces,
     referralSettles,
+    drops,
     deps,
   };
 }
@@ -240,8 +247,10 @@ describe("runFaceMatchVerification — rerun outcome DM", () => {
     // act on is always DM'd.
     const h = rerunHarness({
       compareScores: [
-        { ok: true, similarity: 0.92, faceFound: true },
-        { ok: true, similarity: 0.31, faceFound: true }, // impostor photo
+        // Both below review: no pass quorum can rescue this set, so it is a
+        // genuine rejection rather than a drop-one-photo case.
+        { ok: true, similarity: 0.44, faceFound: true },
+        { ok: true, similarity: 0.31, faceFound: true },
       ],
     });
     const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG, {
@@ -314,10 +323,10 @@ describe("runFaceMatchVerification — quorum gating", () => {
 });
 
 describe("runFaceMatchVerification — impostor detection", () => {
-  it("rejected when a detected face is below review threshold (impostor)", async () => {
+  it("rejected when a face mismatches and nothing else proves the account holder", async () => {
     const h = makeHarness({
       compareScores: [
-        { ok: true, similarity: 0.9, faceFound: true },
+        { ok: true, similarity: 0.8, faceFound: true }, // borderline, no quorum
         { ok: true, similarity: 0.3, faceFound: true }, // wrong-person photo
       ],
     });
@@ -329,12 +338,15 @@ describe("runFaceMatchVerification — impostor detection", () => {
     expect(h.persisted[0]!.verificationStatus).toBe("rejected");
     expect(h.notifications[0]!.message).toContain("don't match");
     expect(h.activationSurfaces).toHaveLength(0);
+    expect(h.drops).toHaveLength(0);
   });
 
-  it("rejects even if quorum was otherwise met (any fail outvotes pass)", async () => {
-    // 3 of 4 photos pass, but one is a different-person face. Hard reject
-    // — the security threat model is "one fake photo is enough to mislead a
-    // match", so a verified pass count cannot rescue an impostor.
+  it("keeps the account and drops the mismatching photo when quorum is met", async () => {
+    // 3 of 4 photos match; one is a different-person face. Changed 2026-07-27:
+    // this used to hard-reject the whole account, which is what forced the
+    // upload gate to over-reject anything that might score low (a hand near
+    // the face, a covering). The account holder IS provably in the photo set,
+    // so the proportionate answer is to remove the odd photo out.
     const fourPathUser: Partial<PipelineUserRow> = {
       profile: {
         photos: ["a", "b", "c", "d"],
@@ -353,12 +365,35 @@ describe("runFaceMatchVerification — impostor detection", () => {
         { ok: true, similarity: 0.95, faceFound: true },
         { ok: true, similarity: 0.92, faceFound: true },
         { ok: true, similarity: 0.9, faceFound: true },
-        { ok: true, similarity: 0.4, faceFound: true }, // impostor
+        { ok: true, similarity: 0.4, faceFound: true }, // wrong person
       ],
     });
     const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
 
-    expect(outcome.kind).toBe("rejected");
+    expect(outcome.kind).toBe("verified");
+    expect(h.persisted[0]!.verificationStatus).toBe("verified");
+    expect(h.drops).toHaveLength(1);
+    expect(h.drops[0]).toMatchObject({
+      userId: USER_ID,
+      photosSnapshot: ["a", "b", "c", "d"],
+      dropIndexes: [3],
+    });
+    // The user is told their photo set shrank — photos silently vanishing
+    // from a profile would be its own bug.
+    expect(
+      h.notifications.some((n) => n.message.includes("took them off your profile")),
+    ).toBe(true);
+  });
+
+  it("does not drop anything when every photo matches", async () => {
+    const h = makeHarness();
+    const outcome = await runFaceMatchVerification(USER_ID, SESSION_ID, h.deps, CONFIG);
+
+    expect(outcome.kind).toBe("verified");
+    expect(h.drops).toHaveLength(0);
+    expect(
+      h.notifications.some((n) => n.message.includes("took them off your profile")),
+    ).toBe(false);
   });
 
   it("all photos below review threshold → rejected", async () => {

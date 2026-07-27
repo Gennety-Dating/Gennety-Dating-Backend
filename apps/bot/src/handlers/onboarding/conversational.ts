@@ -1723,10 +1723,11 @@ function photoRejectionSystemNote(acc: PhotoBatchAccumulator): string {
     `so the user knows WHICH one failed. Keep this in mind for the rest of the photo stage: ` +
     `if the user asks why a photo did not count, or pushes back ("but I sent 4!"), explain the ` +
     `actual reason above in their language and tell them what the next photo should look like ` +
-    `(e.g. face_obscured -> nothing covering the face, such as a mask or scarf; sunglasses are ` +
-    `fine and are NEVER a rejection reason; no_face -> the face ` +
-    `must be clearly visible; duplicate_* -> it must be a different shot, not a re-send or a crop ` +
-    `of one already uploaded). Never respond by simply repeating the request for photos.`
+    `(e.g. no_face -> a face must actually be visible in the frame; duplicate_* -> it must be a ` +
+    `different shot, not a re-send or a crop of one already uploaded). Sunglasses, masks, scarves, ` +
+    `a hand near the face, an angled or dim shot are all FINE and are NEVER rejection reasons — ` +
+    `never invent such a rule or ask the user for a "clearer" face. ` +
+    `Never respond by simply repeating the request for photos.`
   );
 }
 
