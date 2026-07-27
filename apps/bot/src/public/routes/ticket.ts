@@ -37,6 +37,21 @@ function gateStarsView(): { self: number; both: number; partner: number } | null
 }
 
 /**
+ * The single shape every state-returning gate route answers with. `/use` and
+ * `/confirm` MUST decorate their new state exactly like `GET /state` does: the
+ * Mini App re-renders straight from those responses (it does not re-fetch), so
+ * a response missing `starsEnabled`/`stars` reads as "Stars is off" and routes
+ * the next tap into the mock `/intent` path — which 404s under the PAY-1 guard
+ * while Stars is the live rail. That is exactly what broke the male
+ * "cover both with my ticket + pay hers" combo: his wallet ticket was spent,
+ * then the follow-up partner payment fell back to the mock rail and died with a
+ * generic error.
+ */
+function stateResponse(state: TicketStateView): Record<string, unknown> {
+  return { ok: true, ...state, starsEnabled: env.TICKET_STARS_ENABLED, stars: gateStarsView() };
+}
+
+/**
  * Charged amount for a gate action. The `self` scope honours the famine
  * single-ticket discount (`selfPriceCents` is pre-discounted by the gate state
  * builder); `both`/`partner` always charge full per-ticket price × count.
@@ -90,12 +105,7 @@ export function createTicketRouter(api: Api<RawApi>): Router {
     }
     // When Stars is on, the gate Mini App renders Star-priced pay buttons and
     // pays natively via WebApp.openInvoice (see POST /stars-invoice).
-    res.status(200).json({
-      ok: true,
-      ...result.state,
-      starsEnabled: env.TICKET_STARS_ENABLED,
-      stars: gateStarsView(),
-    });
+    res.status(200).json(stateResponse(result.state));
   });
 
   // Native Telegram Stars (XTR) payment for the §3.5b date gate. Returns a
@@ -326,7 +336,7 @@ export function createTicketRouter(api: Api<RawApi>): Router {
       res.status(status).json({ error: result.reason });
       return;
     }
-    res.status(200).json({ ok: true, ...result.state });
+    res.status(200).json(stateResponse(result.state));
   });
 
   // Spend a ticket from the wallet instead of paying. No payment intent — the
@@ -361,7 +371,7 @@ export function createTicketRouter(api: Api<RawApi>): Router {
       res.status(status).json({ error: result.reason });
       return;
     }
-    res.status(200).json({ ok: true, ...result.state });
+    res.status(200).json(stateResponse(result.state));
   });
 
   return router;

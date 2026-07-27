@@ -13,7 +13,8 @@ import { createHmac } from "node:crypto";
 const BOT_TOKEN = "123456:test-bot-token-for-ticket-suite";
 const VALID_UUID = "22222222-2222-4222-8222-222222222222";
 
-vi.mock("../config.js", () => ({ env: { BOT_TOKEN } }));
+const env = { BOT_TOKEN, TICKET_STARS_ENABLED: false };
+vi.mock("../config.js", () => ({ env }));
 
 const getTicketState = vi.fn();
 const applyTicketPayment = vi.fn();
@@ -32,6 +33,7 @@ vi.mock("../services/ticket-payment.js", () => ({
   createTicketIntent: (...a: unknown[]) => createTicketIntent(...a),
   verifyTicketPayment: (...a: unknown[]) => verifyTicketPayment(...a),
   amountForScope: (scope: string, price: number) => (scope === "both" ? price * 2 : price),
+  gateStarsForScope: (scope: string) => (scope === "both" ? 700 : 350),
 }));
 
 vi.mock("../services/ticket-analytics.js", () => ({ emitTicketEvent: vi.fn() }));
@@ -84,6 +86,7 @@ beforeEach(() => {
   notePartnerPaidSeen.mockResolvedValue(undefined);
   createTicketIntent.mockReset();
   verifyTicketPayment.mockReset();
+  env.TICKET_STARS_ENABLED = false;
 });
 
 describe("GET /v1/matches/:id/ticket/state", () => {
@@ -316,6 +319,25 @@ describe("POST /v1/matches/:id/ticket/use", () => {
       .send({ scope: "partner" });
     expect(res.status).toBe(200);
     expect(useTicketFromBalance).toHaveBeenCalledWith(expect.anything(), 5986970093n, VALID_UUID, "partner");
+  });
+
+  // Regression: the Mini App re-renders from THIS response instead of
+  // re-fetching /state, so dropping the Stars fields here made the next screen
+  // believe Stars was off and sent the male "cover both" combo's follow-up
+  // partner payment into the mock /intent rail, which 404s under PAY-1.
+  it("carries the Stars fields so the follow-up screen keeps the Stars rail", async () => {
+    env.TICKET_STARS_ENABLED = true;
+    useTicketFromBalance.mockResolvedValueOnce({
+      ok: true,
+      state: { ...baseState, iPaid: true, ticketStatus: "partial" },
+    });
+    const res = await request(buildApp())
+      .post(`/v1/matches/${VALID_UUID}/ticket/use`)
+      .set("Authorization", `tma ${signInitData(BOT_TOKEN)}`)
+      .send({ scope: "self" });
+    expect(res.status).toBe(200);
+    expect(res.body.starsEnabled).toBe(true);
+    expect(res.body.stars).toEqual({ self: 350, both: 700, partner: 350 });
   });
 
   it("maps insufficient-balance → 409", async () => {
