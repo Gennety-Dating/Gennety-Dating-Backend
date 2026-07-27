@@ -1,6 +1,56 @@
 # Gennety Dating Deploy
 
-**Deployed 2026-07-27 (latest) — sunglasses stop rejecting profile photos, plus
+**Deployed 2026-07-27 (latest) — onboarding photo editor, MIN_PHOTOS 3, one
+onboarding entry point, pre-drop teaser removed (`867129e`, 11 code commits
+since `e774daa`).** Code only: **no Prisma schema change** (`db:drift-check`
+returned OK with nothing to push), no env change, no flag change, **no Mini App
+redeploy** (`apps/webapp` was untouched by every commit in the range).
+
+Carries: the in-onboarding photo editor (`photo-editor.ts` / `photo-cards.ts` /
+`photo-stage-panel.ts` — the first upload is no longer write-only, PRODUCT_SPEC
+§1.3), `MIN_PHOTOS` lowered 4 → 3, the removal of the whole `face_obscured`
+obstruction gate, the §1.4 quorum change that drops a failing photo instead of
+the account (plus the withheld activation when that leaves the profile under the
+minimum), one onboarding entry point (the legacy chat consent/language screens
+are deleted), and the removal of the pre-drop teaser worker.
+
+**The teaser removal is the deploy's own proof of freshness.** The pre-restart
+log block carried `[cron] Pre-match announce scheduled: "0 18 * * 3"`; the
+post-restart block does not. That cron disappearing is what confirms the new
+code is actually live, the same way the Rematch cron appearing confirmed its
+flag flip.
+
+rsync dry-run listed **7** deletions and every one was intended: the 5 files git
+actually deletes in this range (`consent.ts`, `language.ts`, `prompts.ts`,
+`pre-match-announce.ts` + its test) and the 2 usual stale `apps/video/build`
+artifacts. `.env` survived with all 8 `.env.bak.*` snapshots intact.
+
+Preflight green locally: **typecheck clean, 172 bot test files / 2281 tests
+passed, `pnpm build` clean, `security:secrets` passed (845 files),
+`security:audit` clean (0 advisories)**, tree clean and level with `origin/main`.
+
+Post-deploy verified: `Bot @gennetybot started`, all crons registered (Rematch +
+venue-change refund retries present, so both flags still on; Pre-match announce
+correctly absent), `:3100`/`:3101` listening, `/v1/ping` ok, admin `401`, **all
+12 Mini App pages `200`**, zero `P2022` / `FATAL` / unhandled rejections, restart
+count 31 → 32 (single restart, PID stable). Server markers confirm the new code:
+`MIN_PHOTOS = 3`, `photo-editor.ts` present, `pre-match-announce.ts` gone. The
+only error-log lines are the documented `status-banner … chat not found` pair —
+the `status-timer` heartbeat reads `eligible:3 unchanged:3 permanentFailures:2`,
+i.e. the same two unreachable Telegram rows under their 6-hour cooldown.
+
+**Production state recorded at this deploy (baseline before the ad launch):** 9
+users total (6 `onboarding`, 3 `active`), verification funnel 6 `unverified` / 1
+`verified` / 2 `rejected`, Kyiv holds 6 of them — **4 male, 0 female** — and
+there have been **0 matches and 0 dates ever**. So the entire post-match half of
+the product has never executed once in production. `REFERRAL_FEATURE_ENABLED`
+stays `false` (still under development); its code shipped in this range only in
+the sense that it was already there and untouched.
+
+**Rollback:** re-sync a checkout at `e774daa` and restart. No schema, no env, no
+flag, no Mini App to undo.
+
+**Prior: 2026-07-27 — sunglasses stop rejecting profile photos, plus
 the overdue Profiler schema (`e774daa`, 3 commits since `35df65b`).** Code only:
 no env change, no flag change, **no Mini App redeploy** (`apps/webapp` carries
 its own inlined i18n and does not import `@gennety/shared` strings, so the
