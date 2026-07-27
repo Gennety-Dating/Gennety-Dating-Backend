@@ -151,6 +151,44 @@ expected second heartbeat with `eligible=2`, `unchanged=2`, no new errors, no
 six-hour unreachable cooldown; there was no reachable active chat for a live
 client rendering check.)
 
+**Deployed 2026-07-27 — Rematch + audit hardening + retention (`35df65b`, 40
+commits).** Carried the paid **Rematch** feature (`REMATCH_PRODUCT_SPEC.md`,
+PRODUCT_SPEC §3.11) plus the security/audit hardening batch (AUTH-1, XSS-1,
+ADMIN-1/2, BONUS-1, liveness-session binding, report-triage bounding, OTP
+connection handling, 12 dependency advisories), the data-retention sweep, the
+durable venue-change refund rail, and the founder-report 90-day link expiry.
+
+Preflight green locally: **171 bot / 15 webapp / 13 shared test files (2251 /
+144 / 205 tests)**, all typechecks clean, `pnpm build` clean, tree clean and
+level with `origin/main`.
+
+Ran Deploy Full Server Code → `db:push` → `db:drift-check` (**OK**) →
+`pm2 restart`, then Deploy Mini App Only (`apps/webapp` changed). The rsync
+dry-run listed exactly **2** deletions, both stale `apps/video/build`
+artifacts; `.env*` and `keys/` were excluded and the 5 `.env.bak.*` rollback
+snapshots survived.
+
+**Schema step was verified additive before running:** `prisma migrate diff
+--script` produced **zero DROP statements** — only `founder_reports.expires_at`,
+`users.pending_liveness_session_id`, and the new `venue_change_purchases` table
+(+ its unique/FK indexes). Notably the Rematch objects (`matches.source`,
+`matches.rematch_paid_by_id`, `rematch_purchases`) were **already present in the
+prod DB** and so did not appear in the plan.
+
+**Rematch shipped dark and is verified inert:** no `REMATCH_*` keys exist in
+`/opt/gennety/.env`, so `REMATCH_FEATURE_ENABLED` defaults to `false`; the
+startup log correctly shows **no** "Rematch refund retry" cron (it registers
+only when the flag is on) while the new "Venue-change refund retry" and "Data
+retention" crons did appear. To launch it, add `REMATCH_FEATURE_ENABLED=true`
+(env-only, `pm2 restart --update-env`) — the schema is already in place.
+
+Post-deploy verified: `Bot @gennetybot started`, all crons registered,
+`:3100`/`:3101` listening, `/v1/ping` ok, admin `401`, **all 11 Mini App pages
+`200`**, zero `P2022` / `FATAL` / unhandled rejections, and the PM2 restart
+count moved exactly 28 → 29 (no crash loop). The status-timer heartbeat's
+`permanentFailures: 2` is the known pre-existing "chat not found" for two
+unreachable Telegram rows, not a regression.
+
 **Deployed 2026-07-25 (later) — phone-based account login (`d1ad29f`).**
 Code-only: no Prisma schema change, no env change, no flag change. A verified
 phone number now resolves to the existing account instead of dead-ending on
