@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MIN_PHOTOS } from "@gennety/shared";
 import {
   isPhotoStageContinueText,
   onboardingPhotoStageText,
@@ -13,13 +14,13 @@ describe("onboardingPhotoStageText", () => {
         ticketFeatureEnabled: true,
         hasVideo: false,
       }),
-    ).toContain("1/4");
+    ).toContain(`1/${MIN_PHOTOS}`);
   });
 
   it("offers both ticket paths after the minimum", () => {
     const text = onboardingPhotoStageText({
       language: "en",
-      photoCount: 4,
+      photoCount: MIN_PHOTOS,
       ticketFeatureEnabled: true,
       hasVideo: false,
     });

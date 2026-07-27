@@ -122,9 +122,9 @@ const translations = {
     onboardingPhotosBonusOfferAfterVideo:
       "Your required photos are ready, and your video bonus is secured.\n\nReach {threshold} photos ({remaining} remaining) to earn a second free Date Ticket, or continue.",
     onboardingPhotosBonusProgress:
-      "{count}/{threshold} photos. One more unlocks a free Date Ticket. Send it now or continue.",
+      "{count}/{threshold} photos. {remaining} more unlocks a free Date Ticket. Send them now or continue.",
     onboardingPhotosBonusProgressAfterVideo:
-      "{count}/{threshold} photos. One more unlocks your second free Date Ticket. Send it now or continue.",
+      "{count}/{threshold} photos. {remaining} more unlocks your second free Date Ticket. Send them now or continue.",
     onboardingPhotosPhotoBonusEarned:
       "{count} photos are ready, and your free photo Date Ticket is secured ✨\n\nYou may still add photos up to {max}, or send one short profile video for another free ticket. Otherwise, continue.",
     onboardingPhotosBothBonusesEarned:
@@ -1020,9 +1020,9 @@ const translations = {
     onboardingPhotosBonusOfferAfterVideo:
       "Обязательные фото готовы, а билет за видео уже твой.\n\nДоведи количество фото до {threshold} (осталось: {remaining}) и получишь второй бесплатный билет. Или продолжай.",
     onboardingPhotosBonusProgress:
-      "{count}/{threshold} фото. Ещё одно откроет бесплатный билет на свидание. Пришли его сейчас или продолжай.",
+      "{count}/{threshold} фото. Ещё {remaining} — и бесплатный билет на свидание твой. Пришли сейчас или продолжай.",
     onboardingPhotosBonusProgressAfterVideo:
-      "{count}/{threshold} фото. Ещё одно откроет второй бесплатный билет. Пришли его сейчас или продолжай.",
+      "{count}/{threshold} фото. Ещё {remaining} — и второй бесплатный билет твой. Пришли сейчас или продолжай.",
     onboardingPhotosPhotoBonusEarned:
       "Готово {count} фото, и бесплатный билет за фотографии уже твой ✨\n\nМожно добавить фото до {max} или короткое видео за ещё один бесплатный билет. Либо продолжай.",
     onboardingPhotosBothBonusesEarned:
@@ -1895,9 +1895,9 @@ const translations = {
     onboardingPhotosBonusOfferAfterVideo:
       "Обов'язкові фото готові, а квиток за відео вже твій.\n\nДоведи кількість фото до {threshold} (залишилося: {remaining}) й отримаєш другий безкоштовний квиток. Або продовжуй.",
     onboardingPhotosBonusProgress:
-      "{count}/{threshold} фото. Ще одне відкриє безкоштовний квиток на побачення. Надішли його зараз або продовжуй.",
+      "{count}/{threshold} фото. Ще {remaining} — і безкоштовний квиток на побачення твій. Надішли зараз або продовжуй.",
     onboardingPhotosBonusProgressAfterVideo:
-      "{count}/{threshold} фото. Ще одне відкриє другий безкоштовний квиток. Надішли його зараз або продовжуй.",
+      "{count}/{threshold} фото. Ще {remaining} — і другий безкоштовний квиток твій. Надішли зараз або продовжуй.",
     onboardingPhotosPhotoBonusEarned:
       "Готово {count} фото, і безкоштовний квиток за фотографії вже твій ✨\n\nМожна додати фото до {max} або коротке відео за ще один безкоштовний квиток. Або продовжуй.",
     onboardingPhotosBothBonusesEarned:
@@ -2875,9 +2875,9 @@ const deTranslations: TranslationTable = {
   onboardingPhotosBonusOfferAfterVideo:
     "Die Pflichtfotos sind fertig und dein Video-Bonus ist gesichert.\n\nErreiche {threshold} Fotos (noch {remaining}), um ein zweites kostenloses Date-Ticket zu bekommen, oder fahre fort.",
   onboardingPhotosBonusProgress:
-    "{count}/{threshold} Fotos. Noch ein Foto schaltet ein kostenloses Date-Ticket frei. Sende es jetzt oder fahre fort.",
+    "{count}/{threshold} Fotos. Noch {remaining}, um ein kostenloses Date-Ticket freizuschalten. Sende sie jetzt oder fahre fort.",
   onboardingPhotosBonusProgressAfterVideo:
-    "{count}/{threshold} Fotos. Noch ein Foto schaltet dein zweites kostenloses Date-Ticket frei. Sende es jetzt oder fahre fort.",
+    "{count}/{threshold} Fotos. Noch {remaining}, um dein zweites kostenloses Date-Ticket freizuschalten. Sende sie jetzt oder fahre fort.",
   onboardingPhotosPhotoBonusEarned:
     "{count} Fotos sind fertig und dein kostenloses Foto-Date-Ticket ist gesichert ✨\n\nDu kannst noch Fotos bis maximal {max} oder ein kurzes Profilvideo für ein weiteres kostenloses Ticket senden. Sonst fahre fort.",
   onboardingPhotosBothBonusesEarned:
@@ -3717,9 +3717,9 @@ const plTranslations: TranslationTable = {
   onboardingPhotosBonusOfferAfterVideo:
     "Wymagane zdjęcia są gotowe, a bonus za wideo jest już zabezpieczony.\n\nDodaj zdjęcia do {threshold} (pozostało: {remaining}), aby zdobyć drugi darmowy bilet, albo przejdź dalej.",
   onboardingPhotosBonusProgress:
-    "{count}/{threshold} zdjęć. Jeszcze jedno odblokuje darmowy bilet na randkę. Wyślij je teraz albo przejdź dalej.",
+    "{count}/{threshold} zdjęć. Jeszcze {remaining}, aby odblokować darmowy bilet na randkę. Wyślij je teraz albo przejdź dalej.",
   onboardingPhotosBonusProgressAfterVideo:
-    "{count}/{threshold} zdjęć. Jeszcze jedno odblokuje drugi darmowy bilet. Wyślij je teraz albo przejdź dalej.",
+    "{count}/{threshold} zdjęć. Jeszcze {remaining}, aby odblokować drugi darmowy bilet. Wyślij je teraz albo przejdź dalej.",
   onboardingPhotosPhotoBonusEarned:
     "Masz {count} zdjęć, a darmowy bilet za zdjęcia jest już zabezpieczony ✨\n\nMożesz dodać zdjęcia do {max} lub krótkie wideo profilowe za kolejny darmowy bilet. Albo przejdź dalej.",
   onboardingPhotosBothBonusesEarned:

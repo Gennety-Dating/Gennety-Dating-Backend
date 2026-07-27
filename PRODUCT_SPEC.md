@@ -289,11 +289,12 @@ Hard rules enforced by the collector:
 - Nationality/ethnicity is asked at most once and may be explicitly skipped.
 - "No hobbies" / a single hobby is a valid answer; the agent must NOT chain
   "one more, one more" requests.
-- `MIN_PHOTOS` (4) is a hard floor; anything beyond up to `MAX_PHOTOS` (10) is
+- `MIN_PHOTOS` (3, lowered from 4 on 2026-07-27) is a hard floor; anything
+  beyond up to `MAX_PHOTOS` (10) is
   purely optional. In Telegram conversational onboarding, the media stage is
   deterministic rather than LLM-owned:
   before the minimum, the bot reports exactly how many valid photos are still
-  needed; once 4 photos are valid, it keeps the stage open and shows one
+  needed; once 3 photos are valid, it keeps the stage open and shows one
   **Continue** action instead of finalizing automatically. The user may keep
   sending photos one-by-one or as a Telegram album, send a short profile video,
   tap Continue, or type a localized equivalent such as "done" / "дальше".
@@ -484,7 +485,7 @@ After `finalize_onboarding` the bot sends the **verification CTA**
   It reopens the existing photo manager (§2.1 My Profile → My photos, now
   card-based) in a **redo mode** with three deltas: a one-tap **🗑 Delete all
   and start over**, no `MIN_PHOTOS` delete floor (the user is not in the
-  matching pool, and at exactly 4 photos the ordinary per-photo delete is
+  matching pool, and at exactly `MIN_PHOTOS` the ordinary per-photo delete is
   refused outright), and a finish path that returns to verification rather than
   the main menu. Finishing still requires `MIN_PHOTOS`. The entry line
   (`verifyPhotosRedoIntro*`) promises the automatic recheck — "no need to redo

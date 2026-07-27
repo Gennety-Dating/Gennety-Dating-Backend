@@ -27,7 +27,7 @@ export const OTP_TTL_MS = 10 * 60 * 1000;
 export const OTP_LENGTH = 6;
 
 /** Min/max photos allowed during onboarding */
-export const MIN_PHOTOS = 4;
+export const MIN_PHOTOS = 3;
 export const MAX_PHOTOS = 10;
 
 /**

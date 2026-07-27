@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { SessionData } from "@gennety/shared";
-import { DEFAULT_SESSION } from "@gennety/shared";
+import { DEFAULT_SESSION, MIN_PHOTOS } from "@gennety/shared";
 
 // Mock prisma before importing handlers
 vi.mock("@gennety/db", () => ({
@@ -1493,7 +1493,7 @@ describe("Album (media_group_id) photo coalescing", () => {
     );
   });
 
-  it("guides one-by-one uploads through the minimum (4) up to the bonus (6)", async () => {
+  it("guides one-by-one uploads through the minimum up to the bonus (6)", async () => {
     // First 5 photos: no bonus yet; the 6th (PHOTO_BONUS_TICKET_THRESHOLD) grants it.
     ticketMocks.grantPhotoBonusIfEligible
       .mockResolvedValueOnce({ granted: false, balance: 0 })
@@ -1542,15 +1542,14 @@ describe("Album (media_group_id) photo coalescing", () => {
     // Below the minimum: bare progress, no Continue button, no ticket copy yet.
     expect(first.api.sendMessage).toHaveBeenCalledWith(
       99001,
-      expect.stringContaining("1/4"),
+      expect.stringContaining(`1/${MIN_PHOTOS}`),
     );
 
-    await uploadPhoto(2);
-    await uploadPhoto(3);
+    let atMinimum!: Awaited<ReturnType<typeof uploadPhoto>>;
+    for (let n = 2; n <= MIN_PHOTOS; n++) atMinimum = await uploadPhoto(n);
 
-    // Minimum reached at 4 photos: the initial free-ticket offer + Continue.
-    const fourth = await uploadPhoto(4);
-    expect(fourth.api.sendMessage).toHaveBeenCalledWith(
+    // Minimum reached: the initial free-ticket offer + Continue.
+    expect(atMinimum.api.sendMessage).toHaveBeenCalledWith(
       99001,
       expect.stringContaining("free Date Ticket"),
       expect.objectContaining({ reply_markup: expect.any(Object) }),
@@ -1559,6 +1558,7 @@ describe("Album (media_group_id) photo coalescing", () => {
     expect(agentMock).not.toHaveBeenCalled();
 
     // One below the bonus threshold: progress toward 6.
+    for (let n = MIN_PHOTOS + 1; n <= 4; n++) await uploadPhoto(n);
     const fifth = await uploadPhoto(5);
     expect(fifth.api.sendMessage).toHaveBeenCalledWith(
       99001,
@@ -1627,11 +1627,11 @@ describe("Album (media_group_id) photo coalescing", () => {
     );
     expect(ctx.api.sendMessage).toHaveBeenCalledWith(
       99001,
-      expect.stringContaining("1/4"),
+      expect.stringContaining(`1/${MIN_PHOTOS}`),
     );
   });
 
-  it.each([4, 6])(
+  it.each([MIN_PHOTOS, 6])(
     "keeps onboarding open after a %i-photo album and shows Continue",
     async (photoCount) => {
       const shared: SessionData = {
@@ -1681,7 +1681,7 @@ describe("Album (media_group_id) photo coalescing", () => {
       session: {
         onboardingStep: "conversational",
         expectingPhoto: true,
-        pendingPhotos: ["photo_1", "photo_2", "photo_3", "photo_4"],
+        pendingPhotos: Array.from({ length: MIN_PHOTOS }, (_, i) => `photo_${i + 1}`),
       },
       video: {
         file_id: "video_1",

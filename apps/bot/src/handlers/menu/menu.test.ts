@@ -1851,7 +1851,9 @@ describe("Menu — photo upload burst coalescing", () => {
         (c) => (c[2] as { reply_markup?: unknown })?.reply_markup,
       );
       expect(withKeyboard).toHaveLength(1);
-      expect(String(withKeyboard[0]![1])).toContain("4");
+      // The single message is the control panel (counter + minimum), not a
+      // per-frame acknowledgement.
+      expect(String(withKeyboard[0]![1])).toContain(`minimum ${MIN_PHOTOS}`);
     } finally {
       vi.useRealTimers();
     }

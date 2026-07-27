@@ -12,7 +12,7 @@ import request from "supertest";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
-import { MAX_PHOTOS } from "@gennety/shared";
+import { MAX_PHOTOS, MIN_PHOTOS } from "@gennety/shared";
 
 const embeddingRefreshMocks = vi.hoisted(() => ({
   refreshUserEmbedding: vi.fn().mockResolvedValue({
@@ -2089,7 +2089,7 @@ describe("DELETE /v1/me/photos/:index", () => {
       .delete("/v1/me/photos/0")
       .set("Authorization", `Bearer ${signAccess(user.id)}`);
     expect(res.status).toBe(409);
-    expect(res.body.min).toBe(4);
+    expect(res.body.min).toBe(MIN_PHOTOS);
     // Profile untouched
     expect(userById(user.id)?.profile?.photos).toEqual(["a.jpg", "b.jpg"]);
   });
