@@ -1,6 +1,55 @@
 # Gennety Dating Deploy
 
-**Deployed 2026-07-26 (latest) — card-based photo manager, honest liveness-retry
+**Deployed 2026-07-27 (latest) — sunglasses stop rejecting profile photos, plus
+the overdue Profiler schema (`e774daa`, 3 commits since `35df65b`).** Code only:
+no env change, no flag change, **no Mini App redeploy** (`apps/webapp` carries
+its own inlined i18n and does not import `@gennety/shared` strings, so the
+changed `photoFaceObscured` copy is bot-side only).
+
+Driven by a production audit rather than a guess: `media_validation_rejections`
+plus the PM2 logs, across prod AND dev, showed `face_obscured` was **9 of the 11
+real (non-retryable) rejections ever recorded — ~82% of all upload friction** —
+while `unsafe_content` had never fired once and `no_face` had fired exactly once
+in six weeks. So the fix is one sub-check, not the feature: the sunglasses branch
+is gone, the mask/covering branch stays (PRODUCT_SPEC §1.3 records why — a
+covered face becomes a `fail` at verification, and one `fail` hard-rejects the
+whole account under the §1.4 quorum rule).
+
+**⚠️ The mandatory `db:drift-check` gate earned its keep on this deploy.** It
+failed *before* the restart — not from this change, which touches no
+`schema.prisma`, but from the **Profiler** columns `profiles.profiler_answer_
+window_until` / `profiler_question_message_id`, committed to `main` in `f54d53a`
+after the last deploy and never pushed. Prod had been running pre-Profiler code,
+so nothing was broken yet; restarting the freshly-synced code against that DB
+would have thrown `P2022` on the first Profiler question and surfaced as a PM2
+crash loop — exactly the failure mode this file warns about. Verified additive
+before pushing: `prisma migrate diff --script` produced **two nullable
+`ADD COLUMN`s and zero DROPs**. Ran `db:push` → `db:drift-check` **OK** → restart.
+
+Preflight green locally: **bot 171 files / 2267 tests, webapp 144, shared 207,
+all typechecks clean, `pnpm build` clean, `security:secrets` passed,
+`security:audit` clean**, tree clean and level with `origin/main`. The rsync
+dry-run listed only the 2 usual stale `apps/video/build` artifacts as deletions,
+and the 7 `.env.bak.*` snapshots survived it.
+
+Post-deploy verified: `Bot @gennetybot started`, **all 16 crons** registered
+(incl. Rematch + venue-change refund retries, so both flags are still on),
+`:3100`/`:3101` listening, `/v1/ping` ok, admin `401`, **all 12 Mini App pages
+`200`**, zero `P2022` / `FATAL` / unhandled rejections, restart count 30 → 31
+(single restart, same PID holding — no crash loop). The only error-log lines are
+the documented `status-banner … chat not found` pair for two unreachable
+Telegram rows. Confirmed on the live droplet that `MIN_SUNGLASSES_CONFIDENCE` is
+gone from the deployed source and the new RU rejection copy is in place.
+
+**How to tell whether this was the right gate — no new instrumentation needed.**
+Watch `media_validation_rejections`: if `face_obscured` drops toward zero,
+sunglasses were the cause; if it continues at the same rate, what remains are
+genuine coverings.
+
+**Rollback:** `git revert e774daa`, redeploy. The additive Profiler columns may
+stay either way — they are required by current `main` regardless.
+
+**Prior: 2026-07-26 — card-based photo manager, honest liveness-retry
 copy, branded detector (`9b3e51e`, 8 commits since `2c5f206`).** Code + Mini App:
 no Prisma schema change, no env change, no flag change. Ships the §2.1 card-based
 photo manager (one message per photo with its own 🗑 button, coalesced upload
