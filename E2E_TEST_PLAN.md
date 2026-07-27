@@ -11,7 +11,7 @@
 > идентификация мигрировала с Persona на **AWS Rekognition Face Liveness**
 > (26.07, нет вебхука/hosted-fallback, mandatory без Skip), онбординг работает
 > по **Registration v2** (student email-OTP / general phone-контакт), фото
-> `MIN_PHOTOS=4`/`MAX_PHOTOS=10` (бонус за 6+), venue-негоциация — **Venue
+> `MIN_PHOTOS=3`/`MAX_PHOTOS=10` (бонус за 6+), venue-негоциация — **Venue
 > Intent V2** (departure → vibe → чипы → confirm), **Venue Change v2** (платная
 > shared-доска сердечек вместо female-only комментария), плюс новые
 > платные/бонусные ветки — **Premium, Referral, Promo Codes, Type Radar** —
@@ -170,7 +170,7 @@ Registration v2 (не через email-обход). Placeholder существу
   (имя+возраст→пол→предпочтение→рост→хобби→требования→нац/этнос→**vibe
   (friday_vibe/vibe_focus)**→**Type Radar (опц., скипаемо)**→AI-memory→фото),
   голосовой ввод (Whisper), ветки AI-memory `accepted`/`declined`/`undecided`,
-  фото `MIN_PHOTOS=4`/`MAX_PHOTOS=10` + дедуп + usable-face/obstruction гейт +
+  фото `MIN_PHOTOS=3`/`MAX_PHOTOS=10` + дедуп + usable-face/obstruction гейт +
   альбомы, Live Photos + видео, тикет-бонусы (6+ фото, видео), студенческий
   бонус (+2 тикета при верификации email), re-engagement.
 - **Верификация (AWS Rekognition Face Liveness):** Verification Mini App —
@@ -268,9 +268,12 @@ Registration v2 (не через email-обход). Placeholder существу
 ### Pass 1 — Онбординг
 - [ ] A (`@GN01001`, **student-трек**): полный email-OTP (реальный
       корпоративный), Mini App все экраны, город, тема, **AI-memory =
-      accepted** (Magic Prompt → анимация анализа), фото 4..10
+      accepted** (Magic Prompt → анимация анализа), фото 3..10
 - [ ] A: дедуп — отправить копию/скрин/кроп → отклонение с объяснением
 - [ ] A: тикет-бонус за 6+ фото; добавить видео → второй бонус
+- [ ] A: во время загрузки фото открыть панель «🗂 Мои фото» (reply-клавиатура
+      под чатом) → удалить одно фото (без пола `MIN_PHOTOS` на этой стадии) →
+      «← Назад к загрузке» → отправить замену — экран не должен «прыгать»
 - [ ] B (`@gennetysupport`, **general-трек**): вместо email — Telegram
       one-tap «поделиться контактом» (`message.contact`, трастед Telegram),
       **AI-memory = declined** (fallback-summary + эмбеддинг), фото, видео
