@@ -13,6 +13,7 @@
     "openapi:lint": "npx --yes @redocly/cli@latest lint openapi/gennety-v1.yaml",
     "security:secrets": "node scripts/check-tracked-secrets.mjs",
     "db:drift-check": "node scripts/check-schema-drift.mjs",
+    "prod:status": "node scripts/prod-status.mjs",
     "security:audit": "pnpm audit --audit-level moderate",
     "test": "pnpm -r test",
     "test:integration": "pnpm --filter @gennety/bot test:integration",
