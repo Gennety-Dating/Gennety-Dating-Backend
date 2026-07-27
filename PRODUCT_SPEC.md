@@ -1095,13 +1095,23 @@ Supported first-class flows:
 
 ### 3.1 Cadence
 
-- **Pre-match teaser** — Wednesday 18:00 Europe/Kyiv (`PRE_MATCH_ANNOUNCE_CRON_SCHEDULE = "0 18 * * 3"`).
-  A warm "your match is coming tomorrow" DM goes **only to users the batch
-  preview (`previewWeeklyBatch`) actually pairs** and who haven't been announced
-  for the current cycle. Users the preview leaves unpaired are deliberately NOT
-  pre-notified — the empathetic no-match notice below already tells them after
-  the real Thursday batch, so a day-early "no match this week" heads-up would
-  only reject them twice.
+- **No pre-drop teaser (removed 2026-07-27).** There is no Wednesday "your match
+  is coming tomorrow" DM, and no pre-drop notification of any kind — the pitch
+  itself is the first thing a user hears about a given cycle. The retired worker
+  ran the FULL matching engine a day early (`previewWeeklyBatch`) and DM'd only
+  the users that dry run happened to pair, which made the message a promise the
+  Thursday batch could not keep: nothing reserved the previewed pair, so 24 h of
+  new registrations, status changes, profile edits, or a paid Rematch could
+  re-route either side. The gap was structural rather than a rare race —
+  `runWeeklyBatch` refreshes dirty embeddings and auto-unsuspends *before*
+  pairing while the teaser did neither, so Thursday's pool was systematically
+  larger than Wednesday's preview. A user could therefore be promised a match
+  and then receive the no-match notice. Framing the teaser as a neutral
+  "drop is tomorrow" line was considered and rejected as well: the pinned status
+  banner (§2.1) already carries a live countdown to the exact drop time, so a
+  second reminder would restate it while adding a weekly full-pool matching run.
+  The agent's product playbook must not describe a teaser
+  (`services/product-playbook.ts`).
 - **Weekly batch** — Thursday 18:00 Europe/Kyiv (`MATCH_CRON_SCHEDULE = "0 18 * * 4"`).
 - **No-match notice** — Thursday 18:15 Kyiv (`NO_MATCH_NOTICE_CRON_SCHEDULE = "15 18 * * 4"`).
   An empathetic DM goes to every eligible-but-unpaired user. Tier escalates

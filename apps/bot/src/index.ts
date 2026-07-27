@@ -32,7 +32,6 @@ import { reEngagementTick } from "./workers/re-engagement.js";
 import { profilerTick } from "./workers/profiler.js";
 import { matchNudgeTick } from "./workers/match-nudge.js";
 import { proposalCountdownTick } from "./workers/proposal-countdown.js";
-import { preMatchAnnounceTick } from "./workers/pre-match-announce.js";
 import { statusTimerTick } from "./workers/status-timer.js";
 import { createStatusTimerRunner } from "./workers/status-timer-runner.js";
 import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
@@ -145,12 +144,6 @@ const RE_ENGAGEMENT_CRON_SCHEDULE = process.env.RE_ENGAGEMENT_CRON_SCHEDULE ?? "
  * Quiet hours enforced inside the worker.
  */
 const MATCH_NUDGE_CRON_SCHEDULE = process.env.MATCH_NUDGE_CRON_SCHEDULE ?? "0 * * * *";
-
-/**
- * Pre-match announce: Wednesday 18:00 Europe/Kyiv (24h before Thursday batch).
- * Sends a warm teaser to all active users who haven't been announced to this week.
- */
-const PRE_MATCH_ANNOUNCE_CRON_SCHEDULE = process.env.PRE_MATCH_ANNOUNCE_CRON_SCHEDULE ?? "0 18 * * 3";
 
 /**
  * Pinned status banner (live discrete timer). Runs every minute so the
@@ -510,18 +503,6 @@ bot.start({
         `[cron] Venue-change refund retry scheduled: "${VENUE_CHANGE_REFUND_CRON_SCHEDULE}"`,
       );
     }
-
-    // Pre-match announce: Wednesday teaser before Thursday batch.
-    cron.schedule(
-      PRE_MATCH_ANNOUNCE_CRON_SCHEDULE,
-      guardedTick("pre-match-announce", () =>
-        preMatchAnnounceTick(bot.api).then((r) => {
-          if (r.announced > 0) console.log(`[pre-match-announce] ${r.announced} user(s) notified`);
-        }),
-      ),
-      { timezone: CRON_TIMEZONE },
-    );
-    console.log(`[cron] Pre-match announce scheduled: "${PRE_MATCH_ANNOUNCE_CRON_SCHEDULE}" (${CRON_TIMEZONE})`);
 
     // M-6: hourly auto-unsuspend. Lifts Tier 2 suspensions whose
     // `suspendedUntil` has elapsed without waiting for the weekly batch.

@@ -51,7 +51,7 @@ export function buildProductPlaybook(features: PlaybookFeatures): string {
 - Both people must decide within 24h. A pass is final — the exact same pair is never shown twice.`);
 
   sections.push(`## Stage — waiting for the next match (no active match)
-- Tell them when the next batch lands (see "Next match batch" in context) and that a teaser arrives the day before.
+- Tell them when the next batch lands (see "Next match batch" in context).
 - They can raise match quality by keeping photos/bio/preferences fresh, and can Pause matching or Freeze the account anytime from the menu.
 - If they were left unpaired this week, reassure them: their priority rises each week they wait (a starvation boost), so a longer wait makes the next match stronger, not weaker.`);
 

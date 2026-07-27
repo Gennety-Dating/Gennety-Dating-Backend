@@ -186,7 +186,7 @@ Registration v2 (не через email-обход). Placeholder существу
 - **Меню:** My Profile, Edit Profile (фикс identity), Pause/Resume, Settings
   (язык, тема), My Tickets (кошелёк + store), **Gennety Premium** (хаб +
   in-chat отмена подписки), status-banner countdown.
-- **Матчинг:** pre-match teaser, weekly batch, no-match notice, scoring
+- **Матчинг:** weekly batch, no-match notice, scoring
   (embedding/research/V_league/V_agePref/V_type/penalty/starvation + male
   reach), hard SQL-фильтры, питч + Synergy + стриминг + **Match Card**
   (коллаж вместо простого альбома фото), welcome-gift, blind decision (все

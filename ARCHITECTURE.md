@@ -75,7 +75,7 @@ graph TD
       Bot[grammY bot<br/>long-polling]
       PublicAPI["Public /v1/* API<br/>(Express :3101)"]
       AdminAPI["Admin /admin/* API<br/>(Express :3100)"]
-      Crons["14× node-cron schedules<br/>+ date lifecycle interval"]
+      Crons["16× node-cron schedules<br/>+ date lifecycle interval"]
       OnboAgent[Onboarding collector<br/>server state + LLM extractor]
       MenuAgent[Menu LLM agent]
       Aether[Aether concierge<br/>multimodal chat]
@@ -154,9 +154,9 @@ A **single** Node.js process (`apps/bot`) hosts everything:
   `gennety-mobile`, and a UUID subject.
 - **Admin Express server** on `ADMIN_PORT` (default `3100`). Started only
   when `ADMIN_API_KEY` is set. Bearer-auth + helmet + per-IP rate limit.
-- **Background jobs** — 14 `node-cron` schedules (one, ticket-expiry, is only
-  registered when `TICKET_FEATURE_ENABLED`) plus the date-lifecycle interval
-  (see *Cron & Workers* below).
+- **Background jobs** — 16 `node-cron` schedules (three — ticket-expiry,
+  rematch-refund, venue-change-refund — are registered only when their feature
+  flag is on) plus the date-lifecycle interval (see *Cron & Workers* below).
 
 Importing `./config.js` is the very first thing `index.ts` does — this
 ensures `.env.local` overrides `.env` *before* `@gennety/db` evaluates
@@ -610,7 +610,6 @@ All schedules are env-overridable (the canonical names are listed below).
 |---|---|---|---|
 | `0 18 * * 4` (Thu 18:00) | Europe/Kyiv | **Weekly matching batch** — full dirty-embedding snapshot preflight, then same-city global greedy + single-live-match locked allocation + dispatch | `services/match-engine.ts` → `services/dispatch-queue.ts` |
 | `15 18 * * 4` (Thu 18:15) | Europe/Kyiv | "No match this week" empathetic DM | `services/no-match-notifier.ts` |
-| `0 18 * * 3` (Wed 18:00) | Europe/Kyiv | Pre-match teaser (24 h ahead of batch) | `workers/pre-match-announce.ts` |
 | `*/15 * * * *` | UTC | 24 h TTL match expiry | `services/match-expiry.ts` + `services/expiry-notify.ts` |
 | `* * * * *` | UTC | Live reply-deadline countdown **button** re-render on the pitch keyboard (`editMessageReplyMarkup`, hours+minutes; per-minute since 2026-07-25 so the label moves on every pass — markup edits raise no notification) | `workers/proposal-countdown.ts` |
 | `0 * * * *` | UTC | Match nudges — proposal (3 h / 10 h), scheduling (6 h / 12 h), deadline (~2 h before the 24 h TTL) | `workers/match-nudge.ts` |

@@ -272,19 +272,19 @@ lifetime-ban anti-join через canonical-pair index, cooldown 24ч; (5) singl
 match_score_logs (включая scoreAgePref, дефолт 1 на старых строках). Отчёт по правилам сессии.
 ```
 
-## 11. Еженедельная каденция (teaser / batch / no-match)
+## 11. Еженедельная каденция (batch / no-match)
 
-- **Область:** pre-match teaser (Wed 18:00), weekly batch (Thu 18:00), no-match notice (Thu 18:15); тиры famine; famine-скидка (tier ≥ 2).
-- **Ключевые файлы:** `workers/pre-match-announce.ts`; `services/match-engine.ts` (`runWeeklyBatch`); `services/no-match-notifier.ts`, `dispatch-queue.ts`, `next-batch.ts`; `ticket-discount.ts`; `no_match_notices`.
-- **Замысел:** teaser активным неанонсированным за цикл; batch — full dirty preflight → greedy allocation → dispatch через rate-limited очередь. No-match DM эмпатичный, тиры 1/2/3+ по consecutive famine, идемпотентен `(userId, dropDate)`, стримится rich (короткий 2-chunk), Telegram-only. При tier ≥ 2 и `TICKET_FEATURE_ENABLED` — famine-скидка на 1 тикет.
-- **Инварианты:** дедуп анонсов/нотисов; mobile-only исключаются из Telegram-only DM; famine-скидка USD-only.
+- **Область:** weekly batch (Thu 18:00), no-match notice (Thu 18:15); тиры famine; famine-скидка (tier ≥ 2).
+- **Ключевые файлы:** `services/match-engine.ts` (`runWeeklyBatch`); `services/no-match-notifier.ts`, `dispatch-queue.ts`, `next-batch.ts`; `ticket-discount.ts`; `no_match_notices`.
+- **Замысел:** batch — full dirty preflight → greedy allocation → dispatch через rate-limited очередь. No-match DM эмпатичный, тиры 1/2/3+ по consecutive famine, идемпотентен `(userId, dropDate)`, стримится rich (короткий 2-chunk), Telegram-only. При tier ≥ 2 и `TICKET_FEATURE_ENABLED` — famine-скидка на 1 тикет.
+- **Инварианты:** дедуп нотисов; mobile-only исключаются из Telegram-only DM; famine-скидка USD-only. Пред-дроп тизера НЕТ (удалён 2026-07-27, PRODUCT_SPEC §3.1) — никаких уведомлений до самого питча.
 
 ```
 Проведи аудит еженедельной каденции матчинга.
-Прочитай: workers/pre-match-announce.ts; runWeeklyBatch в services/match-engine.ts;
+Прочитай: runWeeklyBatch в services/match-engine.ts;
 services/no-match-notifier.ts, dispatch-queue.ts, next-batch.ts; services/ticket-discount.ts.
 Сверь с PRODUCT_SPEC §3.1 и §3.5b (famine discount) + ARCHITECTURE (no_match_notices, cron).
-Проверь: (1) идемпотентность teaser (lastPreMatchAnnounceAt) и no-match (unique userId+dropDate,
+Проверь: (1) идемпотентность no-match (unique userId+dropDate,
 dropDate truncate к UTC-дню) — двойной запуск cron не дублирует DM; (2) правильность тиров
 famine по consecutive-count и старвейшн-компенсация при peer-declined; (3) что dispatch-queue
 rate-limit (≈2с) и welcome-gift preroll pause не ломают порядок; (4) rich-стрим no-match падает
