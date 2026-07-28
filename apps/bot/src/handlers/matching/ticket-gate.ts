@@ -352,6 +352,11 @@ export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promis
 
   emitTicketEvent("ticket_offer_sent", { matchId });
 
+  // This card carries the "It's mutual 🤍" reveal, so it is the moment the
+  // falling-hearts effect belongs to — it's the first (and, with the gate on,
+  // the only) message that tells each side the sympathy went both ways.
+  const mutualEffectId = env.MESSAGE_EFFECT_MUTUAL_ID || undefined;
+
   const sends: Array<Promise<unknown>> = [];
   for (const user of [match.userA, match.userB]) {
     if (!isTelegramTarget(user.telegramId)) continue;
@@ -362,6 +367,7 @@ export async function sendTicketOffer(api: Api<RawApi>, matchId: string): Promis
         {
           parse_mode: "Markdown",
           reply_markup: buildTicketKeyboard(matchId, langOf(user), user.theme),
+          ...(mutualEffectId ? { message_effect_id: mutualEffectId } : {}),
         },
       ),
     );

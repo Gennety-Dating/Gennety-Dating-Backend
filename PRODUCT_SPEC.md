@@ -1454,7 +1454,19 @@ committed.
   Peer receives a neutral nudge `matchPeerDecided` ("your match has answered,
   your turn") that is **identical** for accept and decline.
 - **Mutual accept** — atomic `proposed → negotiating`; both sides get
-  `matchBothAccepted` with symmetric reveal.
+  `matchBothAccepted` with symmetric reveal. On Telegram that reveal is
+  whichever card actually carries the "It's mutual 🤍" copy — the Date Ticket
+  card when the §3.5b gate is on, the celebratory Calendar card when it is off
+  — and it plays a **falling-hearts message effect**
+  (`MESSAGE_EFFECT_MUTUAL_ID`, Bot API 7.6+, default ❤️
+  `5159385139981059251`, empty disables). Deliberately kept off the individual
+  "you accepted, waiting on them" receipt, which rides the separate
+  `MESSAGE_EFFECT_MATCH_ID` and must stay quiet: hearts there would hint at an
+  outcome the user has not earned yet (blind-decision invariant). Telegram
+  cannot attach an effect to an `editMessageText`, so on the ticket-off path a
+  side whose post-accept card is edited in place (the first decider) gets the
+  copy without the animation; the ticket-on path sends both sides a fresh
+  message and always animates.
 - **Mixed / both declined** — second decider gets their own
   `matchAccepted`/`matchDeclined` ack PLUS a follow-up
   `matchPeerWasAccepted`/`matchPeerWasDeclined` reveal; the first decider
@@ -1556,7 +1568,9 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   of the flow and the covered woman can always reopen it for the surprise. This
   is a deliberate, scoped exception to the one-live-post-accept-card rule
   (§3.6): the ticket card and the Calendar card are two distinct, coexisting
-  buttons.
+  buttons. It also carries the **mutual-match reveal** ("It's mutual 🤍"), so
+  it is the message that plays the falling-hearts `message_effect_id`
+  (`MESSAGE_EFFECT_MUTUAL_ID`, default ❤️) — see §3.4.
 - **Welcome gift.** Every new user is gifted **one free Date Ticket** as a
   personal "your first date is on me" gesture, delivered as a **pre-roll before
   their first-ever match pitch** (`handlers/matching/pitch.ts` →

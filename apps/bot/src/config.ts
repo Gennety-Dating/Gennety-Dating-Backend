@@ -135,6 +135,16 @@ export const env = {
   /// Empty by default → no floating-hearts animation on match-accept messages.
   /// Set a Telegram effect id via env to re-enable.
   MESSAGE_EFFECT_MATCH_ID: process.env.MESSAGE_EFFECT_MATCH_ID ?? "",
+  /// Bot API 7.6+ message effect played on the MUTUAL-match reveal — the one
+  /// message that tells a user the sympathy went both ways (the Date Ticket
+  /// card when the gate is on, the celebratory Calendar card when it's off).
+  /// Distinct from `MESSAGE_EFFECT_MATCH_ID` (that one rides the individual
+  /// "you accepted, waiting on them" receipt, which must stay quiet — it
+  /// reveals nothing about the partner, per the blind-decision invariant).
+  /// Defaults to ❤️ falling hearts; set empty to disable (the reveal still
+  /// sends, just without the animation).
+  MESSAGE_EFFECT_MUTUAL_ID:
+    process.env.MESSAGE_EFFECT_MUTUAL_ID ?? "5159385139981059251",
   /// Optional Bot API 7.6+ message effect attached to the post-date feedback
   /// DM. Uses a different effect id from `MESSAGE_EFFECT_MATCH_ID` so the
   /// "your match accepted" sparkle and "tell us how it went" reaction read

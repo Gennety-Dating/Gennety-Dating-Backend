@@ -1183,7 +1183,12 @@ Required/high-impact env keys:
   primary-styled "My Date" main-menu row; empty → the 💫 label still renders,
   just without an `icon_custom_emoji_id`), `MESSAGE_EFFECT_MATCH_ID`,
   `MESSAGE_EFFECT_FEEDBACK_ID` (optional — Bot API 7.6 effect on the T+24 h
-  feedback DM; empty = no effect)
+  feedback DM; empty = no effect),
+  `MESSAGE_EFFECT_MUTUAL_ID` (falling-hearts effect on the mutual-match reveal
+  — the Date Ticket card with the gate on, the celebratory Calendar card with
+  it off; **defaults to ❤️ `5159385139981059251`, so no env change is needed**
+  — set it empty to disable, or to another effect id to change the animation.
+  Code-only otherwise: no schema, no flag, no Mini App change.)
 - **My Date hub + scheduled-date banner (always-on — no feature flag).** The
   conditional "My Date" main-menu row and its hub (PRODUCT_SPEC §2.1) plus the
   status-banner countdown-to-your-date are always active; they degrade to the

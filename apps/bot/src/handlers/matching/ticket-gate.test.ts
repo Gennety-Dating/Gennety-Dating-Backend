@@ -29,6 +29,7 @@ vi.mock("../../config.js", () => ({
     TICKET_PAYMENT_WINDOW_HOURS: 1,
     TICKET_PRICE_CENTS: 699,
     TICKET_PAYMENT_MODE: "mock",
+    MESSAGE_EFFECT_MUTUAL_ID: "fx-hearts",
   },
 }));
 
@@ -182,6 +183,20 @@ describe("ticket gate post-accept status message", () => {
     expect(updateDataKeys).toContain("ticketStatus");
     expect(updateDataKeys).not.toContain("calendarMessageIdA");
     expect(updateDataKeys).not.toContain("calendarMessageIdB");
+  });
+
+  it("plays the falling-hearts effect on BOTH sides' mutual-match reveal", async () => {
+    mMatch.findUnique.mockResolvedValueOnce(matchRow());
+    const api = createApi();
+
+    await sendTicketOffer(api, "match-1");
+
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    for (const call of api.sendMessage.mock.calls) {
+      expect((call[2] as { message_effect_id?: string }).message_effect_id).toBe(
+        "fx-hearts",
+      );
+    }
   });
 
   it("never edits the persistent ticket card after the first ticket (Mini App shows waiting)", async () => {
