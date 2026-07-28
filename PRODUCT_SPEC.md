@@ -2027,7 +2027,23 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   initiated**; same-sex: the initiator pays. The finalizer (whoever completed
   the agreement, definitionally the first to see the final screen) resolves it:
   - *he initiated* → he pays "no questions": invoice right in his Mini App if
-    he finalized, else a pay-prompt DM with the invoice link;
+    he finalized, else a pay-prompt DM. **That DM opens the board, not a bare
+    invoice (2026-07-28).** Whoever finalizes decides inside the Mini App, on a
+    screen that shows the venue and carries "keep this place" beside the pay
+    button; this side wasn't in the Mini App when the agreement landed, so a
+    chat message is the only way to reach them — and while it carried a
+    `url`-to-invoice button it was a one-way door: the tap jumped straight to
+    Telegram's native payment sheet, with no venue to look at and no way to say
+    "actually, let's stay where we were". The way back did exist, but only on the
+    earlier "📍 Change venue" message, which by then had scrolled off — so the
+    product silently required knowing that an older message was the real
+    surface. Same decision, same screen, whichever side you are. Consequence:
+    the price now rides the DM's text rather than its button, which is also more
+    honest than a button labelled with a charge it doesn't make. The wish card
+    (below) is deliberately NOT changed — it renders the venue itself and
+    carries an explicit decline, so it is neither blind nor a dead end. Opening
+    the board cold this way also loads no catalog, so the agreed screen pulls
+    it in the background to fill its venue photo instead of showing a bare pin.
   - *she initiated, he finalized* → his in-app fork `[⭐ Lock it in]` /
     `[Not this time]`;
   - *she initiated, she finalized* → her fork `[Lock it in myself — ⭐]` /

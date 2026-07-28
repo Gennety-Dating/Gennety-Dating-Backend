@@ -627,8 +627,9 @@ const translations = {
       "The venue change didn't go through, so your Stars are back. Your date is on as planned, at the original place.",
     venuePayPromptDm:
       "You two picked a new place for your date.\n📍 {venue}\n" +
-      "Lock it in — I'll update your date cards.",
-    venuePayBtn: "⭐ Lock it in — {stars}",
+      "Open it to see the place — you can lock it in for {stars}⭐, or keep the " +
+      "original, from the same screen.",
+    venuePayOpenBtn: "📍 See it and decide",
     venueWishText:
       "{name} found a place she loves for your date.\n📍 {venue}\n" +
       "She'd be happy if you locked it in.",
@@ -1523,8 +1524,9 @@ const translations = {
       "Смена места не прошла, звёзды вернулись к вам. Свидание в силе — в том месте, о котором договаривались изначально.",
     venuePayPromptDm:
       "Вы вместе выбрали новое место для свидания.\n📍 {venue}\n" +
-      "Закрепи его — и я обновлю ваши карточки.",
-    venuePayBtn: "⭐ Закрепить — {stars}",
+      "Открой — покажу место. Там же можно закрепить его за {stars}⭐ или " +
+      "остаться в прежнем.",
+    venuePayOpenBtn: "📍 Посмотреть и решить",
     venueWishText:
       "{name} нашла место, которое ей очень нравится.\n📍 {venue}\n" +
       "Ей будет приятно, если закрепишь его ты.",
@@ -2412,8 +2414,9 @@ const translations = {
       "Зміна місця не пройшла, тож зірки повернулися до вас. Побачення в силі — у тому місці, про яке домовлялися спочатку.",
     venuePayPromptDm:
       "Ви разом обрали нове місце для побачення.\n📍 {venue}\n" +
-      "Закріпи його — і я оновлю ваші картки.",
-    venuePayBtn: "⭐ Закріпити — {stars}",
+      "Відкрий — покажу місце. Там же можна закріпити його за {stars}⭐ або " +
+      "залишитися в попередньому.",
+    venuePayOpenBtn: "📍 Подивитися й вирішити",
     venueWishText:
       "{name} знайшла місце, яке їй дуже подобається.\n📍 {venue}\n" +
       "Їй буде приємно, якщо закріпиш його ти.",
@@ -3278,8 +3281,9 @@ const deTranslations: TranslationTable = {
     "Der Ortswechsel hat nicht geklappt, deine Sterne sind zurück. Das Date bleibt wie geplant — am ursprünglichen Ort.",
   venuePayPromptDm:
     "Ihr habt zusammen einen neuen Ort für euer Date gewählt.\n📍 {venue}\n" +
-    "Sichere ihn — ich aktualisiere eure Karten.",
-  venuePayBtn: "⭐ Sichern — {stars}",
+    "Öffne ihn, um den Ort zu sehen — dort kannst du ihn für {stars}⭐ sichern " +
+    "oder beim ursprünglichen bleiben.",
+  venuePayOpenBtn: "📍 Ansehen und entscheiden",
   venueWishText:
     "{name} hat einen Ort gefunden, der ihr sehr gefällt.\n📍 {venue}\n" +
     "Sie würde sich freuen, wenn du ihn sicherst.",
@@ -4133,8 +4137,9 @@ const plTranslations: TranslationTable = {
     "Zmiana miejsca nie doszła do skutku, gwiazdki wróciły do Ciebie. Randka jest aktualna — w pierwotnym miejscu.",
   venuePayPromptDm:
     "Razem wybraliście nowe miejsce na randkę.\n📍 {venue}\n" +
-    "Zatwierdź je — zaktualizuję wasze karty.",
-  venuePayBtn: "⭐ Zatwierdź — {stars}",
+    "Otwórz, żeby zobaczyć miejsce — tam możesz je zatwierdzić za {stars}⭐ albo " +
+    "zostać w poprzednim.",
+  venuePayOpenBtn: "📍 Zobacz i zdecyduj",
   venueWishText:
     "{name} znalazła miejsce, które bardzo jej się podoba.\n📍 {venue}\n" +
     "Będzie jej miło, jeśli to Ty je zatwierdzisz.",

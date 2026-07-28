@@ -302,10 +302,19 @@ describe("submitVenueLikes", () => {
     expect(agree.length).toBe(1);
     expect(agree[0][0].data).toMatchObject({ venueChangeName: "New Cafe" });
 
-    // Payer (he, the initiator) wasn't the finalizer → invoice DM to him.
-    expect(api.createInvoiceLink).toHaveBeenCalledTimes(1);
+    // Payer (he, the initiator) wasn't the finalizer → prompt DM to him.
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     expect(api.sendMessage.mock.calls[0][0]).toBe(200);
+
+    // It opens the BOARD, never a bare Stars invoice: this side never saw the
+    // agreed screen, so the message is their only route to the venue AND to
+    // "keep this place". A url-to-invoice button was a one-way door to the
+    // payment sheet.
+    expect(api.createInvoiceLink).not.toHaveBeenCalled();
+    const kb = api.sendMessage.mock.calls[0][2].reply_markup.inline_keyboard;
+    expect(kb[0][0].web_app.url).toContain("venue-change.html");
+    expect(kb[0][0].web_app.url).toContain("match=m1");
+    expect(kb[0][0].url).toBeUndefined();
   });
 
   it("she initiated + he finalizes → agreement with NO DM (his in-app fork)", async () => {

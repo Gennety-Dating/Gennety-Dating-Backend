@@ -1900,6 +1900,12 @@ function renderAgreed(st: VenueBoardState): void {
   const hero = venue
     ? venueThumb(venue, "vc-agreed-photo")
     : el("div", { class: "vc-agreed-photo" }, [icon("pin", "icon vc-shot-icon")]);
+  // Entering straight from the payer's chat prompt, this session never had the
+  // board open, so no catalog was loaded and the hero above is a bare pin — on
+  // the one screen where someone decides whether to pay for a place. Pull the
+  // catalog in the background and repaint once it lands, rather than blocking
+  // the screen on it.
+  if (!venue) void hydrateAgreedPhoto(st);
 
   // Borderless and unbadged — the photo carries it. Tapping opens the place, so
   // you can double-check what you are about to pay for and come back. A chevron
@@ -2018,6 +2024,19 @@ function renderAgreed(st: VenueBoardState): void {
   );
 
   mount(page(nodes, bar));
+}
+
+/**
+ * Late-load the catalog so the agreed screen's hero photo can appear. Repaints
+ * at most once: the guard is the photo actually being resolvable now, so a
+ * failed fetch (or a venue no longer in the 3 km list) leaves the placeholder
+ * standing instead of looping.
+ */
+async function hydrateAgreedPhoto(st: VenueBoardState): Promise<void> {
+  if (catalog.length > 0 || previewMode) return;
+  await ensureCatalog();
+  const key = st.agreed?.key;
+  if (screen === "agreed" && key && catalogByKey(key)) renderAgreed(st);
 }
 
 async function payAgreed(): Promise<void> {

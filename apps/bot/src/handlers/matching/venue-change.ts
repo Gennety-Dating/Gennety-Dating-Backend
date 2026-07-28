@@ -938,12 +938,22 @@ async function reachAgreement(
     return { agreed: true, kept: false };
   }
 
-  // Payment routing: DM the payer an invoice ONLY when they weren't the
-  // finalizer AND no in-app fork covers them —
+  // Payment routing: DM the payer ONLY when they weren't the finalizer AND no
+  // in-app fork covers them —
   //   • hetero, initiator = male, finalizer = female → DM him (he pays, no fork);
   //   • same-sex, finalizer ≠ initiator → DM the initiator;
   //   • hetero, initiator = female → NO DM: he either finalized (his in-app
   //     fork) or she did (her pay/offer fork decides what he sees).
+  //
+  // The button opens the BOARD, not a bare Stars invoice. The finalizer decides
+  // inside the Mini App, on a screen that shows the venue and carries "keep this
+  // place" next to the pay button; this side wasn't in the Mini App when the
+  // agreement landed, so a chat message is the only way to reach them — and an
+  // invoice link made that message a one-way door: tapping it went straight to
+  // Telegram's native payment sheet, with no venue to look at and no way to say
+  // "actually, let's stay where we were" (the way back existed only on the
+  // earlier "Change venue" message, which by then had scrolled off). Same
+  // decision, same screen, whichever side you are.
   const payer = payerSide(fresh);
   if (!payer) return { agreed: true, kept: false };
   const payerUser = userOfSide(fresh, payer);
@@ -952,14 +962,16 @@ async function reachAgreement(
   if (payerUser.id !== finalizerUserId && payerInitiated && isTelegramTarget(payerUser.telegramId)) {
     const lang = langOf(payerUser.language);
     try {
-      const link = await createVenueInvoiceLink(api, lang, matchId, "agreed", venue.name);
-      const kb = new InlineKeyboard().url(
-        t(lang, "venuePayBtn", { stars: env.VENUE_CHANGE_STARS }),
-        link,
+      const kb = new InlineKeyboard().webApp(
+        t(lang, "venuePayOpenBtn"),
+        venueChangeUrl(matchId, lang, payerUser.theme),
       );
       await api.sendMessage(
         toTelegramChatId(payerUser.telegramId),
-        t(lang, "venuePayPromptDm", { venue: venueLabel(venue.name, venue.address) }),
+        t(lang, "venuePayPromptDm", {
+          venue: venueLabel(venue.name, venue.address),
+          stars: env.VENUE_CHANGE_STARS,
+        }),
         { reply_markup: kb },
       );
     } catch (err) {
