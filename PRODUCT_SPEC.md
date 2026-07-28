@@ -1456,19 +1456,19 @@ committed.
   **accepted** gets their post-accept card preceded by the §3.6b hand-off beats,
   since from here they wait on the partner with no live affordance of their own.
 - **Mutual accept** — atomic `proposed → negotiating`; both sides get
-  `matchBothAccepted` with symmetric reveal. On Telegram that reveal is
-  whichever card actually carries the "It's mutual 🤍" copy — the Date Ticket
-  card when the §3.5b gate is on, the celebratory Calendar card when it is off
-  — and it plays a **falling-hearts message effect**
+  `matchBothAccepted` with symmetric reveal. On Telegram, the **Date Ticket
+  card** — the message that carries the "It's mutual 🤍" copy when the §3.5b
+  gate is on — plays a **falling-hearts message effect**
   (`MESSAGE_EFFECT_MUTUAL_ID`, Bot API 7.6+, default ❤️
-  `5159385139981059251`, empty disables). Deliberately kept off the individual
-  "you accepted, waiting on them" receipt, which rides the separate
-  `MESSAGE_EFFECT_MATCH_ID` and must stay quiet: hearts there would hint at an
-  outcome the user has not earned yet (blind-decision invariant). Telegram
-  cannot attach an effect to an `editMessageText`, so on the ticket-off path a
-  side whose post-accept card is edited in place (the first decider) gets the
-  copy without the animation; the ticket-on path sends both sides a fresh
-  message and always animates.
+  `5159385139981059251`, empty disables). It rides that card and nothing else.
+  Two deliberate exclusions: the individual "you accepted, waiting on them"
+  receipt (separate `MESSAGE_EFFECT_MATCH_ID`) must stay quiet, since hearts
+  there would hint at an outcome the user has not earned yet (blind-decision
+  invariant); and the **celebratory Calendar card** on the ticket-off path
+  carries no effect either (founder decision 2026-07-28) — that card's job is
+  to get a time picked, and it is also the one card that gets *edited* in place
+  from the waiting receipt, which Telegram cannot attach an effect to, so the
+  animation would land for one side and not the other.
 - **Mixed / both declined** — second decider gets their own
   `matchAccepted`/`matchDeclined` ack PLUS a follow-up
   `matchPeerWasAccepted`/`matchPeerWasDeclined` reveal; the first decider

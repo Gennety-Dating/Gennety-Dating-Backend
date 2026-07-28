@@ -4,7 +4,6 @@ import type { InlineKeyboardMarkup } from "grammy/types";
 import { prisma, type Theme } from "@gennety/db";
 import { t, tv, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
-import { env } from "../../config.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
 import { zonedParts, wallToUtc } from "../../services/profiler-schedule.js";
@@ -156,16 +155,6 @@ export async function startScheduling(
   const captionKey = opts?.afterTicketGate
     ? "matchScheduleAfterTicket"
     : "matchScheduleIter3";
-  // With the ticket gate off this Calendar card IS the mutual-match reveal
-  // ("It's mutual 🤍"), so it carries the falling-hearts effect. After the
-  // gate the ticket card already played it, and this card only says "now pick
-  // a time" — no second animation. Telegram cannot attach an effect to an
-  // `editMessageText`, so a side whose post-accept card already exists (the
-  // first decider's "waiting on them" receipt) gets the copy without the
-  // animation; `sendOrEditPostAcceptMessage` drops it on the edit path.
-  const mutualEffectId = opts?.afterTicketGate
-    ? undefined
-    : env.MESSAGE_EFFECT_MUTUAL_ID || undefined;
   const slots = generateProposalSlots();
   await prisma.match.update({
     where: { id: matchId },
@@ -207,8 +196,6 @@ export async function startScheduling(
         t(langA, captionKey),
         langA,
         match.userA.theme,
-        false,
-        mutualEffectId,
       ),
     );
   }
@@ -223,8 +210,6 @@ export async function startScheduling(
         t(langB, captionKey),
         langB,
         match.userB.theme,
-        false,
-        mutualEffectId,
       ),
     );
   }
@@ -288,13 +273,11 @@ async function replaceCalendarMessage(
   lang: Language,
   theme: Theme,
   resend = false,
-  effectId?: string,
 ): Promise<void> {
   if (!isTelegramTarget(telegramId)) return;
 
   const options = {
     reply_markup: buildCalendarKeyboard(calendarUrl(matchId, lang, theme), lang),
-    ...(effectId ? { message_effect_id: effectId } : {}),
   };
 
   await sendOrEditPostAcceptMessage({
