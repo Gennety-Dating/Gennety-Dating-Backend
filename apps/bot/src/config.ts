@@ -343,6 +343,13 @@ export const env = {
   /// stays a shadow no-op until `TYPE_PREF_FLOOR` is lowered below 1 (read
   /// directly by the match engine, mirroring `AGE_RANGE_PREF_*`).
   TYPE_RADAR_ENABLED: process.env.TYPE_RADAR_ENABLED === "true",
+  /// The ~10s "thinking state" status sequence played in chat after the radar
+  /// Mini App closes (PRODUCT_SPEC §Type Radar). On by default; rides
+  /// `TYPE_RADAR_ENABLED` (the submit route 404s when the radar is off). Set
+  /// `false` to drop straight to the next onboarding question — a kill switch
+  /// for a purely cosmetic beat that nonetheless holds the user ~10s, flippable
+  /// with `pm2 restart --update-env` rather than a redeploy.
+  RADAR_THINKING_ENABLED: process.env.RADAR_THINKING_ENABLED !== "false",
   /// Payment backend. `mock` (default) fully simulates Stripe with no
   /// credentials — `services/ticket-payment.ts` mints a fake clientSecret and
   /// trusts the client confirm. `stripe` is the production path (real

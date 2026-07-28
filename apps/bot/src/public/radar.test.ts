@@ -32,6 +32,15 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 
+// The chat-side continuation runs detached, after the response — stub it so the
+// route's ordering and gating can be asserted without a real bot.
+const radarHandler = vi.hoisted(() => ({
+  runRadarThinkingThenResume: vi.fn(),
+  resumeOnboardingAfterRadar: vi.fn(),
+  patchOnboardingSession: vi.fn(),
+}));
+vi.mock("../handlers/onboarding/type-radar.js", () => radarHandler);
+
 const { createRadarRouter } = await import("./routes/radar.js");
 const mutableEnv = (await import("../config.js")).env as unknown as {
   TYPE_RADAR_ENABLED: boolean;
@@ -231,5 +240,117 @@ describe("POST /v1/radar/submit", () => {
     expect(arg.update.typePrefTags.female).toBeDefined();
     // ...and the previously-stored male set is preserved, not dropped.
     expect(arg.update.typePrefTags.male).toEqual(existingMaleVector);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The chat-side continuation: the ~10s thinking sequence, then the onboarding
+// resume (TYPE_RADAR_PRODUCT_SPEC.md). It runs DETACHED, after the response.
+// ---------------------------------------------------------------------------
+describe("POST /v1/radar/submit — chat continuation", () => {
+  const api = {} as never;
+
+  function appWithBot() {
+    const app = express();
+    app.use(express.json());
+    app.use("/v1/radar", createRadarRouter(api));
+    return app;
+  }
+
+  const answers = FEMALE_PHOTOS.map((p) => ({ photoId: p.id, verdict: "like" }));
+
+  function submit() {
+    return request(appWithBot())
+      .post("/v1/radar/submit")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ answers });
+  }
+
+  beforeEach(() => {
+    profileUpsert.mockResolvedValue(undefined);
+    radarHandler.runRadarThinkingThenResume.mockResolvedValue({ sessionPatch: { expectingPhoto: true } });
+    radarHandler.resumeOnboardingAfterRadar.mockResolvedValue({ sessionPatch: { expectingPhoto: true } });
+    radarHandler.patchOnboardingSession.mockResolvedValue(undefined);
+  });
+
+  it("answers the Mini App BEFORE playing the ~10s sequence", async () => {
+    let resolveSequence: (v: unknown) => void = () => {};
+    radarHandler.runRadarThinkingThenResume.mockReturnValue(
+      new Promise((r) => {
+        resolveSequence = r;
+      }),
+    );
+    userFindUnique.mockResolvedValue({
+      id: "u1", age: 24, preference: "women", onboardingStep: "conversational", profile: null,
+    });
+
+    // Blocking the response on the sequence would strand the user on the Mini
+    // App's spinner and then play the beats to a chat they can't see yet.
+    const res = await submit();
+    expect(res.status).toBe(200);
+    expect(radarHandler.patchOnboardingSession).not.toHaveBeenCalled();
+
+    resolveSequence({ sessionPatch: { expectingPhoto: true } });
+    await vi.waitFor(() => expect(radarHandler.patchOnboardingSession).toHaveBeenCalled());
+  });
+
+  it("plays the sequence on the first completion", async () => {
+    userFindUnique.mockResolvedValue({
+      id: "u1", age: 24, preference: "women", onboardingStep: "conversational",
+      profile: { typePrefTags: null, typeRadarCompletedAt: null },
+    });
+
+    await submit();
+
+    await vi.waitFor(() => expect(radarHandler.runRadarThinkingThenResume).toHaveBeenCalledTimes(1));
+    expect(radarHandler.resumeOnboardingAfterRadar).not.toHaveBeenCalled();
+    expect(radarHandler.patchOnboardingSession).toHaveBeenCalledWith(
+      BigInt(TELEGRAM_ID),
+      { expectingPhoto: true },
+    );
+  });
+
+  it("resumes without replaying the sequence on a re-submit", async () => {
+    // Sitting through a ~10s animation a second time is worse than no animation.
+    userFindUnique.mockResolvedValue({
+      id: "u1", age: 24, preference: "women", onboardingStep: "conversational",
+      profile: { typePrefTags: null, typeRadarCompletedAt: new Date("2026-07-27T10:00:00Z") },
+    });
+
+    await submit();
+
+    await vi.waitFor(() => expect(radarHandler.resumeOnboardingAfterRadar).toHaveBeenCalledTimes(1));
+    expect(radarHandler.runRadarThinkingThenResume).not.toHaveBeenCalled();
+  });
+
+  it("touches neither on a post-onboarding retake", async () => {
+    userFindUnique.mockResolvedValue({
+      id: "u1", age: 24, preference: "women", onboardingStep: "completed",
+      profile: { typePrefTags: null, typeRadarCompletedAt: null },
+    });
+
+    const res = await submit();
+    expect(res.status).toBe(200);
+
+    await vi.waitFor(() => expect(profileUpsert).toHaveBeenCalled());
+    expect(radarHandler.runRadarThinkingThenResume).not.toHaveBeenCalled();
+    expect(radarHandler.resumeOnboardingAfterRadar).not.toHaveBeenCalled();
+  });
+
+  it("swallows a failure in the detached continuation", async () => {
+    // An escaping rejection here is an unhandled promise rejection, which takes
+    // the whole bot process down.
+    userFindUnique.mockResolvedValue({
+      id: "u1", age: 24, preference: "women", onboardingStep: "conversational", profile: null,
+    });
+    radarHandler.runRadarThinkingThenResume.mockRejectedValue(new Error("agent down"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const res = await submit();
+    expect(res.status).toBe(200);
+
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(warn.mock.calls[0]![0]).toContain("[radar] onboarding resume after submit failed");
+    warn.mockRestore();
   });
 });

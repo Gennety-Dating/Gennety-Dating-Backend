@@ -6,14 +6,20 @@ const dbMocks = vi.hoisted(() => ({ findUnique: vi.fn() }));
 vi.mock("@gennety/db", () => ({
   prisma: { user: { findUnique: dbMocks.findUnique } },
 }));
-vi.mock("../../config.js", () => ({ env: { WEBAPP_URL: "https://x.invalid" } }));
+vi.mock("../../config.js", () => ({
+  env: { WEBAPP_URL: "https://x.invalid", RADAR_THINKING_ENABLED: true },
+}));
 const agentMocks = vi.hoisted(() => ({ runAgentTurn: vi.fn() }));
 vi.mock("../../services/onboarding-agent.js", () => ({
   runAgentTurn: agentMocks.runAgentTurn,
 }));
 vi.mock("../../services/mini-app-url.js", () => ({ buildMiniAppUrl: () => "https://x.invalid/radar.html" }));
 
-const { sessionPatchAfterRadar, resumeOnboardingAfterRadar } = await import("./type-radar.js");
+const { sessionPatchAfterRadar, resumeOnboardingAfterRadar, runRadarThinkingThenResume } =
+  await import("./type-radar.js");
+const mutableEnv = (await import("../../config.js")).env as unknown as {
+  RADAR_THINKING_ENABLED: boolean;
+};
 
 function result(overrides: Record<string, unknown>) {
   return {
@@ -137,5 +143,91 @@ describe("resumeOnboardingAfterRadar — photo-stage bottom panel", () => {
 
     expect(sessionPatch.photoStagePanelShown).toBeUndefined();
     expect(sessionPatch.expectingPhoto).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The ~10s "thinking state" played between the radar Mini App closing and the
+// next onboarding question (TYPE_RADAR_PRODUCT_SPEC.md). Cosmetic — it must never
+// cost the user their next step.
+// ---------------------------------------------------------------------------
+describe("runRadarThinkingThenResume", () => {
+  const api = {
+    sendMessage: vi.fn(),
+    editMessageText: vi.fn(),
+    deleteMessage: vi.fn(),
+    raw: { sendRichMessageDraft: vi.fn(), sendRichMessage: vi.fn() },
+  };
+  /** Records every hold so timings are asserted without burning real seconds. */
+  let waited: number[];
+  const wait = (ms: number) => {
+    waited.push(ms);
+    return Promise.resolve();
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    waited = [];
+    mutableEnv.RADAR_THINKING_ENABLED = true;
+    api.sendMessage.mockResolvedValue({ message_id: 1 });
+    api.raw.sendRichMessageDraft.mockResolvedValue(true);
+    dbMocks.findUnique.mockResolvedValue({ language: "ru" });
+    agentMocks.runAgentTurn.mockResolvedValue(result({ reply: "Пришли мне свои фото", expectingPhoto: true }));
+  });
+
+  it("waits out the Mini App close before the first beat, then resumes", async () => {
+    const { sessionPatch } = await runRadarThinkingThenResume(api as never, BigInt(500), 500, {
+      wait,
+      rng: () => 0.5,
+    });
+
+    // The chat is still covered by the Mini App's ✓ screen until this elapses.
+    expect(waited[0]).toBe(2200);
+    // Then the four scripted beats, in order, ahead of the counter frames.
+    expect(waited.slice(1, 5)).toEqual([900, 1800, 2500, 1000]);
+    expect(waited.length).toBeGreaterThan(10);
+
+    // The resume still happened, and still owns the session patch.
+    expect(agentMocks.runAgentTurn).toHaveBeenCalledTimes(1);
+    expect(sessionPatch.expectingPhoto).toBe(true);
+  });
+
+  it("streams the beats as rich thinking drafts in the user's language", async () => {
+    await runRadarThinkingThenResume(api as never, BigInt(500), 500, { wait, rng: () => 0.5 });
+
+    const drafts = api.raw.sendRichMessageDraft.mock.calls.map(
+      (c) => (c[0] as { rich_message: { html: string } }).rich_message.html,
+    );
+    expect(drafts[0]).toContain("Смотрю твои оценки");
+    expect(drafts[0]).toContain("<tg-thinking>");
+    expect(drafts.at(-1)).toMatch(/Просматриваю профили \d+/);
+    // One draft id for the whole sequence, so the client animates it in place.
+    const ids = new Set(
+      api.raw.sendRichMessageDraft.mock.calls.map((c) => (c[0] as { draft_id: number }).draft_id),
+    );
+    expect(ids.size).toBe(1);
+  });
+
+  it("resumes anyway when the sequence blows up", async () => {
+    // A cosmetic status must never strand the user before their next question.
+    dbMocks.findUnique.mockRejectedValueOnce(new Error("db down"));
+
+    const { sessionPatch } = await runRadarThinkingThenResume(api as never, BigInt(500), 500, {
+      wait,
+      rng: () => 0.5,
+    });
+
+    expect(agentMocks.runAgentTurn).toHaveBeenCalledTimes(1);
+    expect(sessionPatch.expectingPhoto).toBe(true);
+  });
+
+  it("skips straight to the resume when the kill switch is off", async () => {
+    mutableEnv.RADAR_THINKING_ENABLED = false;
+
+    await runRadarThinkingThenResume(api as never, BigInt(500), 500, { wait, rng: () => 0.5 });
+
+    expect(waited).toEqual([]);
+    expect(api.raw.sendRichMessageDraft).not.toHaveBeenCalled();
+    expect(agentMocks.runAgentTurn).toHaveBeenCalledTimes(1);
   });
 });

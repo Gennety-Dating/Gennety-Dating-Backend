@@ -441,9 +441,18 @@ Hard rules enforced by the collector:
   beats at verification submission, the verification soft-skip, each Profiler
   batch boundary, every Profiler question's compose beat (§Phase 1b),
   concierge venue selection, the profile-video upload check,
+  the **Type Radar close** (`TYPE_RADAR_PRODUCT_SPEC.md`),
   and the date-card PNG render (§3.7a). Most of these are cosmetic pacing only —
   fixed-duration stubs that narrate real but usually sub-second work and never
-  gate the flow. Concierge venue selection is hybrid: the first three beats
+  gate the flow. The **Type Radar close** is the one that narrates no work at
+  all: it plays after the radar Mini App submits (never after a Skip — nothing
+  was rated), the verdicts are already persisted before it starts, and at ~10.7s
+  it is by far the longest of these beats. It is also the only one whose copy
+  describes something that has not happened yet — "looking for matches" /
+  "scanning profiles N" fires mid-onboarding, before photos and liveness, days
+  before the Thursday batch. That is a deliberate, founder-approved labor
+  illusion, and `RADAR_THINKING_ENABLED` is its kill switch. Concierge venue
+  selection is hybrid: the first three beats
   always play out, then the final atmosphere beat tracks
   `until: <venue promise>` and is held until the venue is ready. The
   **date-card render** remains the genuinely slow render

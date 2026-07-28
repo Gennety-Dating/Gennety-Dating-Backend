@@ -19,6 +19,7 @@ import {
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
 import {
+  runRadarThinkingThenResume,
   resumeOnboardingAfterRadar,
   patchOnboardingSession,
 } from "../../handlers/onboarding/type-radar.js";
@@ -172,7 +173,7 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
         age: true,
         preference: true,
         onboardingStep: true,
-        profile: { select: { typePrefTags: true } },
+        profile: { select: { typePrefTags: true, typeRadarCompletedAt: true } },
       },
     });
     if (!user) {
@@ -270,27 +271,39 @@ export function createRadarRouter(api: Api<RawApi> | null): Router {
       },
     });
 
+    // Answer the Mini App BEFORE the chat-side work. The thinking sequence
+    // (TYPE_RADAR_PRODUCT_SPEC.md) holds the chat ~10s, and the Mini App waits
+    // on this response to show its ✓ screen and close — blocking it here would
+    // strand the user on a spinner and then play the sequence to a chat they
+    // only reach once it is over.
+    res.json({ ok: true, counted: answers.length });
+
     // Resume the onboarding conversation past the radar gate (accepted → Magic
     // Prompt, declined → photos) and persist the resulting session state. Only
     // while the user is still onboarding; a post-onboarding retake just saves.
     // Best-effort: a resume hiccup never fails the save the Mini App relies on.
     if (api && user.onboardingStep !== "completed") {
-      try {
-        const { sessionPatch } = await resumeOnboardingAfterRadar(
-          api,
-          auth.telegramId,
-          Number(auth.telegramId),
-        );
-        await patchOnboardingSession(auth.telegramId, sessionPatch);
-      } catch (err) {
-        console.warn("[radar] onboarding resume after submit failed", {
-          telegramId: String(auth.telegramId),
-          err,
-        });
-      }
+      // The thinking sequence decorates the FIRST completion only. A re-submit
+      // (retry, replay) still resumes exactly as before, but must not replay a
+      // ~10s animation the user already sat through.
+      const firstCompletion = user.profile?.typeRadarCompletedAt == null;
+      // Detached: the response is already sent, so this owns its own errors —
+      // an escaping rejection here would be an unhandled promise rejection,
+      // which takes the whole bot process down.
+      void (async () => {
+        try {
+          const { sessionPatch } = firstCompletion
+            ? await runRadarThinkingThenResume(api, auth.telegramId, Number(auth.telegramId))
+            : await resumeOnboardingAfterRadar(api, auth.telegramId, Number(auth.telegramId));
+          await patchOnboardingSession(auth.telegramId, sessionPatch);
+        } catch (err) {
+          console.warn("[radar] onboarding resume after submit failed", {
+            telegramId: String(auth.telegramId),
+            err,
+          });
+        }
+      })();
     }
-
-    res.json({ ok: true, counted: answers.length });
   });
 
   return router;

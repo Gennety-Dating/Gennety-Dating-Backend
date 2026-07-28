@@ -12,6 +12,11 @@ import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 import { typeRadarInviteCopy } from "../../services/type-radar-copy.js";
 import { runAgentTurn, type AgentTurnResult } from "../../services/onboarding-agent.js";
 import { photoStagePanelMarkup } from "../../services/photo-stage-panel.js";
+import { runStatusSequence } from "../../services/ai-stream.js";
+import {
+  radarThinkingSteps,
+  RADAR_MINI_APP_CLOSE_LEAD_MS,
+} from "../../services/radar-thinking.js";
 
 /**
  * Type Radar onboarding gate wiring (§Type Radar, step 5B). The agent raises
@@ -146,6 +151,57 @@ export async function resumeOnboardingAfterRadar(
   }
 
   return { sessionPatch };
+}
+
+export interface RadarThinkingOptions {
+  /** Injectable wait — tests pass a no-op so the ~10s sequence costs nothing. */
+  wait?: (ms: number) => Promise<void>;
+  /** Injectable `[0,1)` source for the scan-counter curve (tests seed it). */
+  rng?: () => number;
+}
+
+/**
+ * Play the Type Radar "thinking state" sequence, then resume onboarding —
+ * the completion path for a user who actually rated the deck
+ * (`TYPE_RADAR_PRODUCT_SPEC.md`).
+ *
+ * Ordering matters. The caller has already answered the Mini App's submit
+ * request, so this runs detached while the Mini App finishes its own ✓ screen;
+ * we wait {@link RADAR_MINI_APP_CLOSE_LEAD_MS} for it to close, play the status
+ * beats in the now-visible chat, and only then resume the agent — whose next
+ * message (Magic Prompt or photo request) lands in the deleted status's place.
+ *
+ * The sequence is cosmetic and must never cost the user their next onboarding
+ * step: everything up to the resume is caught, and `runStatusSequence` already
+ * swallows send/edit/delete failures on its own. A resume failure still
+ * propagates so the caller logs it exactly as before.
+ *
+ * NOT used by the Skip path — nothing was rated there, so "Checking your
+ * ratings" would be a straight-up lie.
+ */
+export async function runRadarThinkingThenResume(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  chatId: number,
+  options: RadarThinkingOptions = {},
+): Promise<{ sessionPatch: Partial<SessionData> }> {
+  if (env.RADAR_THINKING_ENABLED) {
+    const wait = options.wait ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+    try {
+      await wait(RADAR_MINI_APP_CLOSE_LEAD_MS);
+      const lang = (await userLanguage(telegramId)) ?? "en";
+      await runStatusSequence(api, chatId, radarThinkingSteps(lang, options.rng), {
+        rich: true,
+        ...(options.wait ? { wait: options.wait } : {}),
+      });
+    } catch (err) {
+      console.warn("[radar] thinking sequence failed", {
+        telegramId: String(telegramId),
+        err,
+      });
+    }
+  }
+  return resumeOnboardingAfterRadar(api, telegramId, chatId);
 }
 
 /**

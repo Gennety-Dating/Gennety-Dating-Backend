@@ -1686,6 +1686,29 @@ Required/high-impact env keys:
   re-rank. `WEBAPP_URL` must be a real HTTPS host for the picker button (dev
   without a tunnel degrades to Skip-only). Rollback: flip the flag off; the
   additive columns/images may stay.
+- Type Radar "thinking state" (always-on, rides `TYPE_RADAR_ENABLED`):
+  `RADAR_THINKING_ENABLED` (default **`true`** — `config.ts` reads
+  `!== "false"`). The ~10.7s status sequence played in chat between the radar
+  Mini App closing and the next onboarding question
+  (`TYPE_RADAR_PRODUCT_SPEC.md` → *Close → "thinking state" → next question*;
+  PRODUCT_SPEC §1.3): four scripted beats then a profile counter decelerating
+  onto a 160–220 total. **No schema change, no Mini App redeploy, no new
+  dependency** — it is bot-side only and reuses the existing
+  `runStatusSequence` primitive, so a full server code deploy carries it.
+  Localized in all five languages.
+  Two things worth knowing before flipping it:
+  - It is a **deliberate labor illusion**. Nothing is scanned — the radar
+    verdicts are saved before it starts, and matching doesn't run until the
+    Thursday batch. Founder-approved (2026-07-27) with the copy as specified.
+  - It **holds the user ~10.7s** (plus a 2.2s lead-in that waits out the Mini
+    App's own close animation) before their next onboarding question. That is
+    real added time in the funnel — watch
+    `GET /admin/analytics/onboarding-funnel` for a drop-off bump at the
+    AI-memory / photos step after enabling it.
+
+  Set `RADAR_THINKING_ENABLED=false` + `pm2 restart gennety-bot --update-env`
+  to drop straight to the next question; nothing else changes. That kill switch
+  is the whole rollback.
 - Founder notifications (feature-flagged private ops feed): `FOUNDER_NOTIFY_ENABLED`
   — **ON in production since 2026-07-16** (founder bot `@sverkausbot`, chat id set).
   When on, a SEPARATE founder bot DMs the founder four things: (1) each new user's

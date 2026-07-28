@@ -90,6 +90,45 @@ calibrate your type"); on completion it proceeds to the Magic Prompt (or, for
 decliners, to photos). The Mini App still authenticates with
 `tma <initData>`.
 
+### Close → "thinking state" → next question
+
+Between the Mini App closing and that next question the bot plays a **~10.7s
+status sequence** in the chat (`services/radar-thinking.ts` +
+`services/radar-scan-counter.ts`, rendered by the shared `runStatusSequence` —
+PRODUCT_SPEC §1.3). Four scripted beats (900 / 1800 / 2500 / 1000 ms —
+"checking your ratings", "reading your preferences", "looking for matches",
+"running deep search") then a fifth whose profile counter climbs from 3–6 to a
+target of 160–220 on a three-phase deceleration curve: small fast ticks
+(+6…10 every 120–180 ms), then bigger slower ones (+11…19 / 280–380 ms,
++20…33 / 450–600 ms), landing exactly on the target and holding it 500 ms.
+~16 frames, ~4.5 s.
+
+Four things about it are load-bearing:
+
+- **It is an explicit labor illusion** (founder decision, 2026-07-27). Nothing
+  is being scanned: the verdicts were persisted before the sequence starts, and
+  the matching it narrates does not run until the Thursday batch — days later,
+  after photos and liveness. The copy ships as specified anyway; the accepted
+  risk is a user reading "scanning profiles 187" as an imminent match.
+- **Submit only, never Skip.** A skipper rated nothing, so "checking your
+  ratings" would be a straight lie. `handleRadarSkip` resumes immediately as
+  before.
+- **First completion only.** A re-submit still resumes but never replays the
+  animation.
+- **It runs detached, after the HTTP response.** `POST /v1/radar/submit`
+  answers immediately — the Mini App waits on that response to show its ✓ and
+  close, so blocking it would strand the user on a spinner and then play the
+  beats to a chat they only reach once it's over. The bot instead waits
+  `RADAR_MINI_APP_CLOSE_LEAD_MS` (2200 ms, mirroring the Mini App's own
+  2100 ms `CLOSE_DELAY`) before beat 1. Consequence: the session patch now
+  lands ~13 s after submit instead of ~1 s, widening (not creating) the
+  existing race with anything the user types in that window.
+
+Kill switch: `RADAR_THINKING_ENABLED` (default on; also inert whenever
+`TYPE_RADAR_ENABLED` is off, since the submit route 404s). Any failure in the
+sequence is swallowed and the resume still happens — a cosmetic beat must never
+cost the user their next onboarding step.
+
 Flow: intent tap → 12 binary cards (preload next 2–3 images; tap or swipe),
 with a one-tap **reason-chip** question after the first 2 verdicts and after
 model-surprising verdicts (cap 4/session, always skippable) → optional
