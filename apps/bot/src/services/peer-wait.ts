@@ -34,3 +34,35 @@ export async function sendPeerWaitAck(
     ...(options.wait ? { wait: options.wait } : {}),
   });
 }
+
+/**
+ * The same two hand-off beats, but WITHOUT persisting a final line — the caller
+ * sends its own durable message immediately afterwards, and the ephemeral draft
+ * resolves into it.
+ *
+ * This variant exists for the pitch decision (§3.4). The first decider's
+ * "accepted, waiting on them" receipt is not a throwaway line: it is the tracked
+ * post-accept card (`Match.calendarMessageIdA/B`) that later morphs in place into
+ * the Date Ticket card and then the Calendar (§3.6), and it carries
+ * `MESSAGE_EFFECT_MATCH_ID`. So `sendPeerWaitAck` cannot own that send — it would
+ * neither return the message id to track nor carry the effect. Playing beats-only
+ * and leaving the card to `sendOrEditPostAcceptMessage` keeps that whole lifecycle
+ * untouched while still giving the moment its motion.
+ *
+ * MUST be awaited: the beats have to land before the card, or the two race and
+ * the card arrives first.
+ */
+export async function sendPeerWaitBeats(
+  api: Api<RawApi>,
+  chatId: number,
+  lang: Language,
+  options: { wait?: (ms: number) => Promise<void> } = {},
+): Promise<void> {
+  // Drop the trailing final-line step — the caller supplies that message.
+  const beats = peerWaitSteps(lang, "").slice(0, -1);
+  await runStatusSequence(api, chatId, beats, {
+    rich: true,
+    deleteAtEnd: true,
+    ...(options.wait ? { wait: options.wait } : {}),
+  });
+}

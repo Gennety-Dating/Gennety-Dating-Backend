@@ -1452,7 +1452,9 @@ committed.
 - **First commit** — row stays `proposed` (even on a single decline). The
   peer's keyboard is still live until both have decided or 24 h elapses.
   Peer receives a neutral nudge `matchPeerDecided` ("your match has answered,
-  your turn") that is **identical** for accept and decline.
+  your turn") that is **identical** for accept and decline. A first decider who
+  **accepted** gets their post-accept card preceded by the §3.6b hand-off beats,
+  since from here they wait on the partner with no live affordance of their own.
 - **Mutual accept** — atomic `proposed → negotiating`; both sides get
   `matchBothAccepted` with symmetric reveal. On Telegram that reveal is
   whichever card actually carries the "It's mutual 🤍" copy — the Date Ticket
@@ -1803,16 +1805,32 @@ message (a Profiler question, a nudge, `/start`) landed. So the sequence is
 bounded at ~2.5 s and the persisted line carries the state afterwards.
 
 Applied at exactly the surfaces where a user commits and then has nothing to do:
-the calendar first-mover receipt (§3.6) and the venue "waiting on partner" ack
+the calendar first-mover receipt (§3.6), the venue "waiting on partner" ack
 (§3.7 `venueWaitingPeer`, both the Venue Intent V2 Mini App confirm and the
-legacy concierge path). Deliberately NOT applied to:
+legacy concierge path), and the **first decider who accepted** (§3.4).
+
+That last one is the longest one-sided wait in the product and had the least
+feedback: the proposal-countdown worker deliberately stops re-rendering for a
+side that already accepted (`workers/proposal-countdown.ts` skips
+`accepted === true`), so from the moment they answer the user had a static card
+and silence for up to 24 h. It uses a **beats-only** variant
+(`sendPeerWaitBeats`) rather than the full ack, because that receipt is not a
+throwaway line: it is the tracked post-accept card (`Match.calendarMessageIdA/B`)
+that later morphs in place into the Date Ticket card and then the Calendar
+(§3.6), and it carries `MESSAGE_EFFECT_MATCH_ID`. The beats play as ephemeral
+drafts and the existing sender still owns the card, so the message-id tracking,
+the effect, and the edit-in-place lifecycle are untouched. It is
+blind-decision-safe: the actor has already committed, and the beats are static
+copy identical for accept and decline. Deliberately NOT applied to:
 
 - The other two venue ack branches (`venueVibeNoted` / `venueLocationNoted`) —
   they hand the turn straight back to the same user, so a hand-off animation
   would be misleading.
-- The **pitch decision** (§3.3) — the user is waiting on their own decision, not
-  on the partner, and that message already carries a live reply-deadline
-  countdown button.
+- The **decliner** (§3.4) — a pass is irreversible, so they are not waiting on
+  the partner for anything they can act on, and the next thing they see is the
+  free-text "what was the main reason?" prompt.
+- A **mutual accept** — nobody is waiting on anybody; the flow goes straight to
+  the ticket/Calendar card.
 - The **Date Ticket gate** (§3.5b) — there is no chat-side waiting line to
   decorate. The ticket card is standalone and never edited, and the live
   waiting/both-secured/surprise state is owned by the Mini App by design.

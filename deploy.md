@@ -1259,7 +1259,8 @@ Required/high-impact env keys:
     soft-skip, profile-video upload check, onboarding photo-burst check
     (`photoReviewSteps`), concierge venue selection, date-card
     render + share, the **peer-wait ack** (PRODUCT_SPEC §3.6b — the calendar
-    first-mover receipt and the venue `venueWaitingPeer` line, `services/
+    first-mover receipt, the venue `venueWaitingPeer` line, and the beats-only
+    variant before the first decider's post-accept card, `services/
     peer-wait.ts`), plus the Profiler batch boundary, the Profiler in-batch
     questions (PRODUCT_SPEC §Phase 1b), and the periodic profile-survey
     "thinking" pause (PRODUCT_SPEC §1.3). These all call with `rich: true` so

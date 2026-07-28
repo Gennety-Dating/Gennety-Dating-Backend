@@ -5,7 +5,7 @@ vi.mock("../config.js", () => ({
   env: { CUSTOM_EMOJI_THINKING_ID: "" },
 }));
 
-import { sendPeerWaitAck } from "./peer-wait.js";
+import { sendPeerWaitAck, sendPeerWaitBeats } from "./peer-wait.js";
 import { peerWaitSteps } from "./analysis-status.js";
 
 const noWait = () => Promise.resolve();
@@ -67,7 +67,7 @@ describe("peerWaitSteps", () => {
   });
 });
 
-describe("sendPeerWaitAck", () => {
+describe("sendPeerWaitAck / sendPeerWaitBeats", () => {
   it("shimmers the two beats as drafts, then persists the waiting line", async () => {
     const { api, drafts, sendRichMessage } = createRichApi();
     const waiting = t("en", "venueWaitingPeer");
@@ -103,6 +103,42 @@ describe("sendPeerWaitAck", () => {
     const edits = typed.editMessageText.mock.calls;
     expect(edits[edits.length - 1]![2]).toBe(waiting);
     expect(typed.deleteMessage).not.toHaveBeenCalled();
+  });
+
+  it("beats-only variant persists nothing — the caller owns the durable message", async () => {
+    const { api, drafts, sendRichMessage } = createRichApi();
+
+    await sendPeerWaitBeats(api, 444, "en", { wait: noWait });
+
+    // The leading glyph is upgraded to an animated <tg-emoji>, so match on the
+    // label text rather than the raw i18n string.
+    const label = (key: "peerWaitSaving" | "peerWaitHandoff") =>
+      t("en", key).split(" ").slice(1).join(" ");
+    expect(drafts).toHaveLength(2);
+    expect(drafts.map((d) => d.html)).toEqual([
+      expect.stringContaining(label("peerWaitSaving")),
+      expect.stringContaining(label("peerWaitHandoff")),
+    ]);
+    // Nothing persisted: the post-accept card that follows is tracked in
+    // `calendarMessageIdA/B` and carries its own message effect, so this
+    // variant must never send a message of its own.
+    expect(sendRichMessage).not.toHaveBeenCalled();
+    expect(
+      (api as unknown as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("beats-only cleans up its fallback message so no stray line survives", async () => {
+    const api = createPlainApi();
+
+    await sendPeerWaitBeats(api, 555, "en", { wait: noWait });
+
+    const typed = api as unknown as {
+      sendMessage: ReturnType<typeof vi.fn>;
+      deleteMessage: ReturnType<typeof vi.fn>;
+    };
+    expect(typed.sendMessage).toHaveBeenCalledTimes(1);
+    expect(typed.deleteMessage).toHaveBeenCalledWith(555, 1);
   });
 
   it("never throws when the chat rejects every send (blocked bot)", async () => {

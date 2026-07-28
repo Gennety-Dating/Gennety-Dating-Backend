@@ -99,6 +99,14 @@ vi.mock("../../services/wingman-hint.js", () => ({
 const { mOfferRematchAfterCancellation } = vi.hoisted(() => ({
   mOfferRematchAfterCancellation: vi.fn().mockResolvedValue(undefined),
 }));
+// The first decider's hand-off beats are awaited (they must land before the
+// post-accept card) and hold ~2.5s. Stub them so these tests assert WHICH paths
+// play them without burning real timers; peer-wait.test.ts covers the beats.
+vi.mock("../../services/peer-wait.js", () => ({
+  sendPeerWaitBeats: vi.fn().mockResolvedValue(undefined),
+  sendPeerWaitAck: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("./rematch.js", () => ({
   offerRematchAfterCancellation: (...args: unknown[]) =>
     mOfferRematchAfterCancellation(...args),
@@ -117,6 +125,7 @@ import { buildDeclineReasonKeyboard, handleDeclineReasonCallback } from "./decli
 import { buildMatchKeyboard, sendMatchProposal } from "./pitch.js";
 import { appendNegativeConstraint, normalizeReason } from "./negative-constraints.js";
 import { startScheduling } from "./scheduler.js";
+import { sendPeerWaitBeats } from "../../services/peer-wait.js";
 import { tryFinalize } from "./venue-negotiation.js";
 import {
   buildCandidateSql,
@@ -1346,6 +1355,14 @@ describe("matching decision flow", () => {
       where: { id: "match-1" },
       data: { calendarMessageIdA: 9001 },
     });
+    // The hand-off beats cover the commit — this is the branch where the actor
+    // now waits on a partner who hasn't answered, with the countdown worker
+    // already silent for them.
+    expect(sendPeerWaitBeats).toHaveBeenCalledTimes(1);
+    expect((sendPeerWaitBeats as unknown as MockFn).mock.calls[0]!.slice(1, 3)).toEqual([
+      1001,
+      "en",
+    ]);
     expect(startScheduling).not.toHaveBeenCalled();
   });
 
@@ -1391,6 +1408,9 @@ describe("matching decision flow", () => {
       }),
     );
     expect(startScheduling).toHaveBeenCalledWith(expect.anything(), "match-1");
+    // No hand-off beats on a mutual accept — nobody is waiting on anybody, the
+    // flow goes straight to the ticket/Calendar card.
+    expect(sendPeerWaitBeats).not.toHaveBeenCalled();
     expect(ctx.reply).not.toHaveBeenCalled();
   });
 
@@ -1455,6 +1475,9 @@ describe("matching decision flow", () => {
     expect(peerChatId).toBe(1002); // userB
     expect(peerText).toMatch(/your match has already given their answer/i);
     expect(peerText).not.toMatch(/passed|declined|not in/i);
+    // A decliner is not waiting on anything — a pass is irreversible and the
+    // next thing they see is the "why?" prompt, not a hand-off.
+    expect(sendPeerWaitBeats).not.toHaveBeenCalled();
   });
 
   it("first accept sends BLIND nudge to peer (no 'they accepted' leak)", async () => {

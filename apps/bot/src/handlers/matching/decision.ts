@@ -16,6 +16,8 @@ import {
 import { claimMatchDecision } from "../../services/match-decision-claim.js";
 import { sendOrEditPostAcceptMessage } from "./post-accept-message.js";
 import { offerRematchAfterCancellation } from "./rematch.js";
+import { sendPeerWaitBeats } from "../../services/peer-wait.js";
+import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.js";
 
 /**
  * Match decision handler — Accept / Decline.
@@ -430,6 +432,21 @@ async function handleAccept(
 
   // Peer hasn't decided yet → first-decider path. Stay in `proposed`,
   // ack the actor, fire the blind nudge to the peer.
+  //
+  // This is the longest one-sided wait in the product: the countdown worker
+  // deliberately stops re-rendering for a side that already accepted
+  // (`workers/proposal-countdown.ts`), so from here the user has a static card
+  // and silence for up to 24h. Cover the commit itself with the shared
+  // hand-off beats (§3.6b) so answering visibly *does* something. Beats-only:
+  // the card below is tracked in `calendarMessageIdA/B` and later morphs into
+  // the ticket/Calendar card, so it must stay the caller's own send.
+  //
+  // Blind-decision safe: the actor has already committed, and the beats are
+  // static copy identical for accept and decline.
+  const actorTelegramId = actorTelegramIdOf(match, side);
+  if (isTelegramTarget(actorTelegramId)) {
+    await sendPeerWaitBeats(ctx.api, toTelegramChatId(actorTelegramId), lang);
+  }
   await sendOrEditPostAcceptMessage({
     api: ctx.api,
     matchId: match.id,
