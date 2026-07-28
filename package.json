@@ -38,6 +38,8 @@
     "seed-venues:pull": "pnpm --filter @gennety/bot exec tsx ../../scripts/seed-venues.mjs --pull",
     "seed-venues:import": "pnpm --filter @gennety/bot exec tsx ../../scripts/seed-venues.mjs --import",
     "sync-venues:kyiv": "node scripts/sync-kyiv-venue-catalog.mjs",
+    "resolve-venues:kyiv": "node scripts/resolve-kyiv-venue-ids.mjs",
+    "merge-venues:kyiv": "node scripts/merge-kyiv-venue-additions.mjs",
     "backfill-venue-facets": "pnpm --filter @gennety/bot exec tsx ../../scripts/backfill-venue-facets.mjs",
     "promo:create": "pnpm --filter @gennety/bot exec tsx ../../scripts/promo-codes.mjs create",
     "promo:disable": "pnpm --filter @gennety/bot exec tsx ../../scripts/promo-codes.mjs disable",

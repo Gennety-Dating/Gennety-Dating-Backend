@@ -140,45 +140,54 @@ async function fetchPlace(apiKey, place) {
   return response.json();
 }
 
+/**
+ * Collect EVERY problem with a place rather than exiting on the first. A
+ * 200-place manifest re-validated one failure per run costs one full Places
+ * sweep per fix; the operator needs the whole list in one pass.
+ */
 function validatePlace(config, details) {
+  const problems = [];
   if (details.businessStatus !== "OPERATIONAL") {
     if (!(config.allowMissingStatus && details.businessStatus == null)) {
-      fail(
-        `${config.name}: status is ${details.businessStatus ?? "missing"}, expected OPERATIONAL`,
+      problems.push(
+        `status is ${details.businessStatus ?? "missing"}, expected OPERATIONAL`,
       );
     }
   }
 
   const qualityOverride = config.allowQualityOverride === true;
   if (!qualityOverride && details.rating != null && details.rating < 4) {
-    fail(`${config.name}: rating ${details.rating} is below 4.0`);
+    problems.push(`rating ${details.rating} is below 4.0`);
   }
   if (
     !qualityOverride &&
     details.userRatingCount != null &&
     details.userRatingCount < 30
   ) {
-    fail(`${config.name}: only ${details.userRatingCount} reviews`);
+    problems.push(`only ${details.userRatingCount} reviews`);
   }
 
+  // The ≤ MODERATE cap protects the AUTOMATIC first assignment, which only
+  // ever picks `base`. `premium` and `alternative` are board-only inventory the
+  // couple opts into themselves, so neither is held to the student price cap.
   const food = new Set(["cafe", "coffee_shop", "restaurant", "lounge"]);
   if (
     config.tier !== "premium" &&
+    config.tier !== "alternative" &&
     food.has(config.category) &&
     ["PRICE_LEVEL_EXPENSIVE", "PRICE_LEVEL_VERY_EXPENSIVE"].includes(
       details.priceLevel,
     )
   ) {
-    fail(
-      `${config.name}: price level ${details.priceLevel} is not student-friendly`,
-    );
+    problems.push(`price level ${details.priceLevel} is not student-friendly`);
   }
   if (
     typeof details.location?.latitude !== "number" ||
     typeof details.location?.longitude !== "number"
   ) {
-    fail(`${config.name}: missing coordinates`);
+    problems.push("missing coordinates");
   }
+  return problems;
 }
 
 async function mapWithConcurrency(items, concurrency, mapper) {
@@ -212,12 +221,18 @@ async function main() {
   const details = await mapWithConcurrency(
     manifest.places,
     5,
-    async (place) => {
-      const result = await fetchPlace(apiKey, place);
-      validatePlace(place, result);
-      return result;
-    },
+    async (place) => fetchPlace(apiKey, place),
   );
+
+  const problems = manifest.places.flatMap((place, index) =>
+    validatePlace(place, details[index]).map(
+      (problem) => `${place.name} (${place.placeId}): ${problem}`,
+    ),
+  );
+  if (problems.length > 0) {
+    for (const problem of problems) console.error(`x ${problem}`);
+    fail(`${problems.length} place(s) failed validation; fix the manifest and re-run.`);
+  }
 
   const expansionIds = new Set(manifest.places.map((place) => place.placeId));
   const excludedIds = new Set(
@@ -230,6 +245,20 @@ async function main() {
       !excludedIds.has(row.placeId),
   );
 
+  // Venue Intent V2 facets are NOT derivable from Places — they come from the
+  // `backfill-venue-facets` pass. Rebuilding a row must carry them over, or a
+  // re-sync silently blinds every existing venue to the ambience chips and the
+  // indoor/outdoor hard filter.
+  const facetsByRow = new Map(
+    catalog.map((row) => [
+      `${row.placeId}|${row.universityDomain}`,
+      {
+        facetTags: row.facetTags ?? [],
+        hardCapabilities: row.hardCapabilities ?? [],
+      },
+    ]),
+  );
+
   const additionsByDomain = new Map(
     manifest.universityDomains.map((domain) => [domain, []]),
   );
@@ -237,6 +266,7 @@ async function main() {
     const config = manifest.places[index];
     const place = details[index];
     for (const universityDomain of manifest.universityDomains) {
+      const carried = facetsByRow.get(`${place.id ?? config.placeId}|${universityDomain}`);
       additionsByDomain.get(universityDomain).push({
         approved: true,
         universityDomain,
@@ -250,6 +280,8 @@ async function main() {
         priority: config.priority,
         tier: config.tier ?? "base",
         vibeTags: config.vibeTags,
+        facetTags: carried?.facetTags ?? [],
+        hardCapabilities: carried?.hardCapabilities ?? [],
         utcOffsetMinutes: place.utcOffsetMinutes ?? null,
         openingHours: place.regularOpeningHours ?? null,
         _rating: place.rating ?? null,

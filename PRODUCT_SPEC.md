@@ -1745,6 +1745,21 @@ populated by `scripts/seed-venues.mjs` (Places-backed pull → manual review →
 import); it shares the exact production quality gate via `searchVenueCandidates`,
 so a curated spot can never be something the live gate would reject.
 
+**Only `base`-tier venues are ever auto-assigned.** `CuratedVenue.tier` decides
+which pool a venue belongs to, and the automatic first assignment reads `base`
+only (§Premium for `premium`; §3.7b for the board). The third value,
+**`alternative`**, is the operator's *heavier-cuisine* pool — Georgian, Uzbek,
+Azerbaijani, Middle-Eastern, Central-Asian and similar. These are good venues,
+but not the call Gennety makes FOR a pair sight-unseen on a first date, so the
+concierge never proposes one: they exist purely as options the couple can pick
+themselves in the post-assignment Venue Change board (§3.7b), where they are
+unlocked and priced exactly like base (it is a *cuisine* classification, not a
+price tier, and carries no Premium gate). Because neither `premium` nor
+`alternative` is ever auto-assigned, neither is held to the ≤ MODERATE
+student-friendly price cap — that cap exists to protect the automatic
+assignment. Operator classification lives in the replayable Kyiv manifest
+(`scripts/curated-venues.kyiv.expansion.json`).
+
 Operator-blocked brands are excluded at every venue boundary: curated ranking,
 candidate seeding/import, and live Google Places fallback. The Kyiv catalog
 currently blocks all Musafir locations. Kyiv's reviewed additions and explicit
@@ -1927,6 +1942,10 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   eternal default that stands whenever nothing settles), then alternatives
   within **`VENUE_CHANGE_RADIUS_KM` (3 km)** of the original venue center,
   **curated-first** with the Places fallback under the production quality gate.
+  This board is the ONLY place `alternative`-tier venues (§3.7 — the operator's
+  heavier-cuisine pool) ever appear: they are always included, unlocked, and
+  priced like base, independent of `PREMIUM_FEATURE_ENABLED` and of whether
+  either side subscribes. Only `premium` venues are shown-locked (§3.8).
   Each side hearts any number of places (full-set submissions, server-resolved
   against the catalog — client venue data is never trusted); the partner's
   hearts land live (~4 s polling). The FIRST like of a session claims the

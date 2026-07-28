@@ -6,7 +6,7 @@ export const INITIAL_VENUE_MAX_PRICE: VenuePriceLimit = "moderate";
 export const INITIAL_VENUE_ALLOWED_TIER = "base" as const;
 
 export type InitialVenueRejectionReason =
-  | "premium_tier"
+  | "non_base_tier"
   | "quality_below_floor"
   | "unknown_price"
   | "too_expensive";
@@ -62,12 +62,13 @@ function canonicalPrice(value: string | null | undefined): VenuePriceLimit | "ex
  *
  * This is deliberately separate from each participant's hard constraints:
  * the pair did not ask for a budget filter. Gennety guarantees a good,
- * base-tier, non-premium first assignment; price/exclusivity choices belong to
- * the post-assignment Venue Change flow.
+ * base-tier first assignment; price/exclusivity choices — and the operator's
+ * `alternative` (heavier-cuisine) pool — belong to the post-assignment Venue
+ * Change flow, where the couple picks for themselves.
  */
 export function evaluateInitialVenuePolicy(input: InitialVenuePolicyInput): InitialVenuePolicyResult {
   if (input.tier !== INITIAL_VENUE_ALLOWED_TIER) {
-    return { eligible: false, reason: "premium_tier" };
+    return { eligible: false, reason: "non_base_tier" };
   }
   if ((input.rating ?? 0) < MIN_RATING || (input.reviews ?? 0) < MIN_RATING_COUNT) {
     return { eligible: false, reason: "quality_below_floor" };

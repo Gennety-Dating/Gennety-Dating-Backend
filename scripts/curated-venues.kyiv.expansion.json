@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-07-21",
+  "checkedAt": "2026-07-28",
   "universityDomains": [
     "kneu.edu.ua",
     "knu.ua",
@@ -10,7 +10,11 @@
   "blockedBrands": [
     {
       "name": "Musafir",
-      "aliases": ["Musafir", "Мусафір", "Мусафир"],
+      "aliases": [
+        "Musafir",
+        "Мусафір",
+        "Мусафир"
+      ],
       "reason": "Operator decision: exclude every Musafir location from curated and live venue search."
     }
   ],
@@ -20,287 +24,453 @@
       "name": "Сенс на Хрещатику",
       "category": "cafe",
       "priority": 1,
-      "vibeTags": ["books", "coffee", "quiet"]
+      "vibeTags": [
+        "books",
+        "coffee",
+        "quiet"
+      ]
     },
     {
       "placeId": "ChIJT1iUylvO1EARHrf3f5LGsQg",
       "name": "Завертайло біля Софії",
       "category": "cafe",
       "priority": 1,
-      "vibeTags": ["bakery", "brunch", "cozy"]
+      "vibeTags": [
+        "bakery",
+        "brunch",
+        "cozy"
+      ]
     },
     {
       "placeId": "ChIJqZOBepbP1EARY6CtPS3Qmdg",
       "name": "Франик Поділ",
       "category": "restaurant",
       "priority": 2,
-      "vibeTags": ["bakery", "brunch", "cozy"]
+      "vibeTags": [
+        "bakery",
+        "brunch",
+        "cozy"
+      ]
     },
     {
       "placeId": "ChIJFZFlIwDR1EARgXpd6rgQexs",
       "name": "Франик Оболонь",
       "category": "cafe",
       "priority": 2,
-      "vibeTags": ["bakery", "brunch", "coffee"]
+      "vibeTags": [
+        "bakery",
+        "brunch",
+        "coffee"
+      ]
     },
     {
       "placeId": "ChIJM3_CCwDP1EARzp7BKXDz2hk",
       "name": "Франик Русанівка",
       "category": "cafe",
       "priority": 2,
-      "vibeTags": ["bakery", "brunch", "walk"]
+      "vibeTags": [
+        "bakery",
+        "brunch",
+        "walk"
+      ]
     },
     {
       "placeId": "ChIJ5caRbFbF1EARwdbWpybcN5M",
       "name": "Франик Осокорки",
       "category": "cafe",
       "priority": 3,
-      "vibeTags": ["bakery", "brunch", "coffee"]
+      "vibeTags": [
+        "bakery",
+        "brunch",
+        "coffee"
+      ]
     },
     {
       "placeId": "ChIJq-mHYvzP1EAROhWtcsX63Vo",
       "name": "Honey",
       "category": "cafe",
       "priority": 2,
-      "vibeTags": ["dessert", "coffee", "cozy"]
+      "vibeTags": [
+        "dessert",
+        "coffee",
+        "cozy"
+      ]
     },
     {
       "placeId": "ChIJj90eZFbO1EARc367sFtODIA",
       "name": "Honey у ЦУМ",
       "category": "cafe",
       "priority": 2,
-      "vibeTags": ["dessert", "view", "coffee"]
+      "vibeTags": [
+        "dessert",
+        "view",
+        "coffee"
+      ]
     },
     {
       "placeId": "ChIJ4eA0DrPP1EARTC7X3XWgYLc",
       "name": "Idealist Coffee",
       "category": "coffee_shop",
       "priority": 2,
-      "vibeTags": ["coffee", "study", "brunch"]
+      "vibeTags": [
+        "coffee",
+        "study",
+        "brunch"
+      ]
     },
     {
       "placeId": "ChIJPfFdQgDP1EARhxHlBoYGrqc",
       "name": "Idealist Coffee біля Планетарію",
       "category": "coffee_shop",
       "priority": 2,
-      "vibeTags": ["coffee", "study", "casual"]
+      "vibeTags": [
+        "coffee",
+        "study",
+        "casual"
+      ]
     },
     {
       "placeId": "ChIJY_r2IgzP1EARZiFx5DQAScU",
       "name": "Idealist Coffee на Коновальця",
       "category": "coffee_shop",
       "priority": 2,
-      "vibeTags": ["coffee", "study", "quiet"]
+      "vibeTags": [
+        "coffee",
+        "study",
+        "quiet"
+      ]
     },
     {
       "placeId": "ChIJi_TsrOXP1EAR_eL2qxVHnHw",
       "name": "Idealist Coffee Maidan Plaza",
       "category": "coffee_shop",
       "priority": 3,
-      "vibeTags": ["coffee", "central", "casual"]
+      "vibeTags": [
+        "coffee",
+        "central",
+        "casual"
+      ]
     },
     {
       "placeId": "ChIJvZZxU9HP1EARAAuRNjHcoYk",
       "name": "Idealist Coffee Senator",
       "category": "coffee_shop",
       "priority": 3,
-      "vibeTags": ["coffee", "quiet", "study"]
+      "vibeTags": [
+        "coffee",
+        "quiet",
+        "study"
+      ]
     },
     {
       "placeId": "ChIJOXoqTynP1EAR00Q-y_jVNps",
       "name": "Idealist Coffee Astarta",
       "category": "coffee_shop",
       "priority": 3,
-      "vibeTags": ["coffee", "quiet", "study"]
+      "vibeTags": [
+        "coffee",
+        "quiet",
+        "study"
+      ]
     },
     {
       "placeId": "ChIJ1dQaUPbP1EARCGgtfzxUbX8",
       "name": "Idealist Coffee IQ",
       "category": "coffee_shop",
       "priority": 3,
-      "vibeTags": ["coffee", "quiet", "study"]
+      "vibeTags": [
+        "coffee",
+        "quiet",
+        "study"
+      ]
     },
     {
       "placeId": "ChIJZ9gJY_7O1EARTFI33f_QilI",
       "name": "Кав'ярня Турка",
       "category": "coffee_shop",
       "priority": 2,
-      "vibeTags": ["coffee", "cozy", "quiet"]
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "quiet"
+      ]
     },
     {
       "placeId": "ChIJUUOQ8AXR1EAR_2tp5TdzoL4",
       "name": "Турка на Градинській",
       "category": "coffee_shop",
       "priority": 3,
-      "vibeTags": ["coffee", "cozy", "casual"]
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
     },
     {
       "placeId": "ChIJR3t7_VPO1EARwueTLppDE0o",
       "name": "Very Well Cafe",
       "category": "cafe",
       "priority": 1,
-      "vibeTags": ["brunch", "cozy", "central"]
+      "vibeTags": [
+        "brunch",
+        "cozy",
+        "central"
+      ]
     },
     {
       "placeId": "ChIJveSJ_CHM1EARu0Bq038eIfM",
       "name": "Very Well Cafe",
       "category": "cafe",
       "priority": 2,
-      "vibeTags": ["brunch", "cozy", "casual"]
+      "vibeTags": [
+        "brunch",
+        "cozy",
+        "casual"
+      ]
     },
     {
       "placeId": "ChIJJRhQOkrM1EARzxkDLL1VtV0",
       "name": "Very Well Cafe",
       "category": "cafe",
       "priority": 2,
-      "vibeTags": ["brunch", "cozy", "casual"]
+      "vibeTags": [
+        "brunch",
+        "cozy",
+        "casual"
+      ]
     },
     {
       "placeId": "ChIJh2I74yHF1EARa0FEFZ5Jbv8",
       "name": "Very Well Cafe",
       "category": "restaurant",
       "priority": 3,
-      "vibeTags": ["dinner", "cozy", "casual"]
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "casual"
+      ]
     },
     {
       "placeId": "ChIJy2RNyrfF1EAROqd57BUgZNY",
       "name": "Very Well Cafe",
       "category": "cafe",
       "priority": 2,
-      "vibeTags": ["brunch", "view", "casual"]
+      "vibeTags": [
+        "brunch",
+        "view",
+        "casual"
+      ]
     },
     {
       "placeId": "ChIJZ6Q_9sbP1EARrKL3q5bf1s8",
       "name": "Milk Bar у ЦУМ",
       "category": "cafe",
       "priority": 2,
-      "vibeTags": ["dessert", "brunch", "central"]
+      "vibeTags": [
+        "dessert",
+        "brunch",
+        "central"
+      ]
     },
     {
       "placeId": "ChIJaZ6ZU_bP1EARKSl4xWdSVrI",
       "name": "UnderWu Vinyl Bar",
       "category": "lounge",
       "priority": 2,
-      "vibeTags": ["music", "vinyl", "cocktail"]
+      "vibeTags": [
+        "music",
+        "vinyl",
+        "cocktail"
+      ]
     },
     {
       "placeId": "ChIJrQT1cfTO1EARRqt39nbDSRA",
       "name": "VERY TASTY CAFE",
       "category": "restaurant",
       "priority": 2,
-      "vibeTags": ["italian", "pizza", "casual"]
+      "vibeTags": [
+        "italian",
+        "pizza",
+        "casual"
+      ]
     },
     {
       "placeId": "ChIJNcm42JDP1EARvYE9myXaNyg",
       "name": "Бістро Пекаря",
       "category": "restaurant",
       "priority": 2,
-      "vibeTags": ["bakery", "dinner", "cozy"]
+      "vibeTags": [
+        "bakery",
+        "dinner",
+        "cozy"
+      ]
     },
     {
       "placeId": "ChIJq6pq3ADP1EARczzWH8kOv5c",
       "name": "Blur Coffee",
       "category": "coffee_shop",
       "priority": 1,
-      "vibeTags": ["coffee", "specialty", "modern"]
+      "vibeTags": [
+        "coffee",
+        "specialty",
+        "modern"
+      ]
     },
     {
       "placeId": "ChIJpZPFK1HP1EARmHGRS5ks1IU",
       "name": "HUMANS: coffee in tech",
       "category": "coffee_shop",
       "priority": 2,
-      "vibeTags": ["coffee", "tech", "study"]
+      "vibeTags": [
+        "coffee",
+        "tech",
+        "study"
+      ]
     },
     {
       "placeId": "ChIJVVVlQ0XO1EAR7zf09PBjJSE",
       "name": "Кава на Двох",
       "category": "coffee_shop",
       "priority": 1,
-      "vibeTags": ["coffee", "cozy", "central"]
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "central"
+      ]
     },
     {
       "placeId": "ChIJW6SZOeDP1EARQB3PkNIRjy8",
       "name": "Крапка.Кави",
       "category": "coffee_shop",
       "priority": 2,
-      "vibeTags": ["coffee", "cozy", "central"]
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "central"
+      ]
     },
     {
       "placeId": "ChIJSbmGRmvO1EARDxE6XTc7-B0",
       "name": "BUCK COFFEE ROASTERS",
       "category": "coffee_shop",
       "priority": 1,
-      "vibeTags": ["coffee", "roastery", "podil"]
+      "vibeTags": [
+        "coffee",
+        "roastery",
+        "podil"
+      ]
     },
     {
       "placeId": "ChIJE9HLtO_P1EARyrCgZaGHMxA",
       "name": "BUCK COFFEE ROASTERS",
       "category": "coffee_shop",
       "priority": 1,
-      "vibeTags": ["coffee", "roastery", "podil"]
+      "vibeTags": [
+        "coffee",
+        "roastery",
+        "podil"
+      ]
     },
     {
       "placeId": "ChIJofOOJqvP1EARV6A_l6fwNUQ",
       "name": "Кава та троянди",
       "category": "coffee_shop",
       "priority": 1,
-      "vibeTags": ["coffee", "flowers", "cozy"]
+      "vibeTags": [
+        "coffee",
+        "flowers",
+        "cozy"
+      ]
     },
     {
       "placeId": "ChIJwaRXnDLP1EARXVg-qFN4KWA",
       "name": "Сімона",
       "category": "restaurant",
       "priority": 1,
-      "vibeTags": ["italian", "cozy", "dinner"]
+      "vibeTags": [
+        "italian",
+        "cozy",
+        "dinner"
+      ]
     },
     {
       "placeId": "ChIJY0Qe_QDP1EARRu5WyS2lK04",
       "name": "BARVY",
       "category": "restaurant",
       "priority": 1,
-      "vibeTags": ["ukrainian", "modern", "dinner"]
+      "vibeTags": [
+        "ukrainian",
+        "modern",
+        "dinner"
+      ]
     },
     {
       "placeId": "ChIJM7oDHV7P1EAROolLz6ZFUrQ",
       "name": "Passenger Gastro Bar",
       "category": "restaurant",
       "priority": 1,
-      "vibeTags": ["gastro", "casual", "dinner"]
+      "vibeTags": [
+        "gastro",
+        "casual",
+        "dinner"
+      ]
     },
     {
       "placeId": "ChIJh4zct2rO1EARV6qSAAuLU-Y",
       "name": "Win Bar",
       "category": "lounge",
       "priority": 1,
-      "vibeTags": ["wine", "podil", "conversation"]
+      "vibeTags": [
+        "wine",
+        "podil",
+        "conversation"
+      ],
+      "tier": "premium",
+      "note": "Re-tiered 2026-07-27: Google now prices it VERY_EXPENSIVE, so it can no longer be base (the auto-assign price cap would reject it anyway). Same rule as the other expensive venues in this batch."
     },
     {
       "placeId": "ChIJTYHrR3PP1EARKSJMXZ7hI9c",
       "name": "Beatnik Bar",
       "category": "lounge",
       "priority": 2,
-      "vibeTags": ["cocktail", "music", "evening"]
+      "vibeTags": [
+        "cocktail",
+        "music",
+        "evening"
+      ]
     },
     {
       "placeId": "ChIJR8EW4P7P1EARgxhsebtwGVk",
       "name": "Drunken Monkey",
       "category": "lounge",
       "priority": 2,
-      "vibeTags": ["beer", "podil", "casual"]
+      "vibeTags": [
+        "beer",
+        "podil",
+        "casual"
+      ]
     },
     {
       "placeId": "ChIJLdWSJBXO1EARqTgpEiBfOeU",
       "name": "Мистецький Барбакан",
       "category": "lounge",
       "priority": 2,
-      "vibeTags": ["art", "podil", "evening"]
+      "vibeTags": [
+        "art",
+        "podil",
+        "evening"
+      ]
     },
     {
       "placeId": "ChIJ50j3KqzP1EARjDA3fn8hQ1A",
       "name": "Маріїнський парк",
       "category": "park",
       "priority": 1,
-      "vibeTags": ["walk", "view", "quiet"],
+      "vibeTags": [
+        "walk",
+        "view",
+        "quiet"
+      ],
       "allowMissingStatus": true
     },
     {
@@ -308,14 +478,22 @@
       "name": "Парк Феофанія",
       "category": "park",
       "priority": 2,
-      "vibeTags": ["walk", "nature", "quiet"]
+      "vibeTags": [
+        "walk",
+        "nature",
+        "quiet"
+      ]
     },
     {
       "placeId": "ChIJH9SXyGnO1EARYgJQEpDAPLI",
       "name": "Воздвиженка",
       "category": "park",
       "priority": 2,
-      "vibeTags": ["walk", "architecture", "podil"],
+      "vibeTags": [
+        "walk",
+        "architecture",
+        "podil"
+      ],
       "allowMissingStatus": true
     },
     {
@@ -323,7 +501,11 @@
       "name": "Оболонська набережна",
       "category": "park",
       "priority": 2,
-      "vibeTags": ["walk", "water", "view"],
+      "vibeTags": [
+        "walk",
+        "water",
+        "view"
+      ],
       "allowMissingStatus": true
     },
     {
@@ -331,7 +513,11 @@
       "name": "Андріївський узвіз",
       "category": "park",
       "priority": 1,
-      "vibeTags": ["walk", "art", "history"],
+      "vibeTags": [
+        "walk",
+        "art",
+        "history"
+      ],
       "allowMissingStatus": true
     },
     {
@@ -339,7 +525,11 @@
       "name": "Міст закоханих",
       "category": "park",
       "priority": 3,
-      "vibeTags": ["walk", "view", "romantic"],
+      "vibeTags": [
+        "walk",
+        "view",
+        "romantic"
+      ],
       "allowQualityOverride": true
     },
     {
@@ -347,77 +537,123 @@
       "name": "Ботанічний сад ім. акад. О. В. Фоміна",
       "category": "park",
       "priority": 1,
-      "vibeTags": ["walk", "nature", "quiet"]
+      "vibeTags": [
+        "walk",
+        "nature",
+        "quiet"
+      ]
     },
     {
       "placeId": "ChIJM6zQ4FvO1EARCeqAXgHuR3Y",
       "name": "Зиґзаґ",
       "category": "cafe",
       "priority": 1,
-      "vibeTags": ["brunch", "cozy", "central"]
+      "vibeTags": [
+        "brunch",
+        "cozy",
+        "central"
+      ]
     },
     {
       "placeId": "ChIJf8RaLTfP1EARAtLVFgD4d5w",
       "name": "Львівські Круасани на Володимирській",
       "category": "cafe",
       "priority": 2,
-      "vibeTags": ["bakery", "brunch", "casual"]
+      "vibeTags": [
+        "bakery",
+        "brunch",
+        "casual"
+      ]
     },
     {
       "placeId": "ChIJk1HPosDP1EARSv5hbF1USIo",
       "name": "Breakfast Club",
       "category": "cafe",
       "priority": 1,
-      "vibeTags": ["breakfast", "brunch", "cozy"]
+      "vibeTags": [
+        "breakfast",
+        "brunch",
+        "cozy"
+      ]
     },
     {
       "placeId": "ChIJb45VZ5jP1EARH-EQG5dSDS8",
       "name": "Coffee Records",
       "category": "coffee_shop",
       "priority": 1,
-      "vibeTags": ["coffee", "vinyl", "podil"]
+      "vibeTags": [
+        "coffee",
+        "vinyl",
+        "podil"
+      ]
     },
     {
       "placeId": "ChIJjYxLUgDP1EARzrKYQjfmm2g",
       "name": "Remi Cafe",
       "category": "cafe",
       "priority": 1,
-      "vibeTags": ["bakery", "brunch", "cozy"]
+      "vibeTags": [
+        "bakery",
+        "brunch",
+        "cozy"
+      ]
     },
     {
       "placeId": "ChIJ87hEd2fP1EAREidDScA3ydY",
       "name": "Suite13",
       "category": "cafe",
       "priority": 2,
-      "vibeTags": ["coffee", "cocktail", "design"]
+      "vibeTags": [
+        "coffee",
+        "cocktail",
+        "design"
+      ]
     },
     {
       "placeId": "ChIJDVUrV3fP1EARE-RN0R0LtQc",
       "name": "СПÉЛЬТА",
       "category": "cafe",
       "priority": 1,
-      "vibeTags": ["bakery", "sourdough", "podil"]
+      "vibeTags": [
+        "bakery",
+        "sourdough",
+        "podil"
+      ]
     },
     {
       "placeId": "ChIJpxHcJFPP1EAREJ03iyBOhn0",
       "name": "Кицуня",
       "category": "restaurant",
       "priority": 2,
-      "vibeTags": ["asian", "ramen", "casual"]
+      "vibeTags": [
+        "asian",
+        "ramen",
+        "casual"
+      ]
     },
     {
       "placeId": "ChIJvTIlPVnO1EAR2PGvU34cUbM",
       "name": "Китайський Привіт",
       "category": "restaurant",
       "priority": 1,
-      "vibeTags": ["chinese", "casual", "central"]
+      "vibeTags": [
+        "chinese",
+        "casual",
+        "central"
+      ]
     },
     {
       "placeId": "ChIJrX1QmYTP1EARwo1gg9RYh_k",
       "name": "Японський Привіт",
       "category": "restaurant",
       "priority": 1,
-      "vibeTags": ["japanese", "sushi", "retro"]
+      "vibeTags": [
+        "japanese",
+        "sushi",
+        "retro"
+      ],
+      "tier": "premium",
+      "note": "Re-tiered 2026-07-27: Google now prices it EXPENSIVE, above the base-tier cap."
     },
     {
       "placeId": "ChIJFf1HDl3P1EARZH3FZawwBJI",
@@ -425,7 +661,11 @@
       "category": "cafe",
       "priority": 1,
       "tier": "premium",
-      "vibeTags": ["romantic", "terrace", "cozy"]
+      "vibeTags": [
+        "romantic",
+        "terrace",
+        "cozy"
+      ]
     },
     {
       "placeId": "ChIJKYK2Xm3P1EAREj1aU0yDQ8s",
@@ -433,7 +673,11 @@
       "category": "restaurant",
       "priority": 2,
       "tier": "premium",
-      "vibeTags": ["italian", "dessert", "romantic"]
+      "vibeTags": [
+        "italian",
+        "dessert",
+        "romantic"
+      ]
     },
     {
       "placeId": "ChIJ_1OYiqrP1EAR9QHwuIzPZ5M",
@@ -441,7 +685,11 @@
       "category": "restaurant",
       "priority": 1,
       "tier": "premium",
-      "vibeTags": ["terrace", "garden", "romantic"]
+      "vibeTags": [
+        "terrace",
+        "garden",
+        "romantic"
+      ]
     },
     {
       "placeId": "ChIJEzB7aT3P1EAR6HPkRP8d0nw",
@@ -449,7 +697,11 @@
       "category": "restaurant",
       "priority": 1,
       "tier": "premium",
-      "vibeTags": ["sushi", "seafood", "design"]
+      "vibeTags": [
+        "sushi",
+        "seafood",
+        "design"
+      ]
     },
     {
       "placeId": "ChIJud7obz_O1EARvvaO3Gl5BUk",
@@ -457,7 +709,11 @@
       "category": "restaurant",
       "priority": 1,
       "tier": "premium",
-      "vibeTags": ["italian", "terrace", "podil"]
+      "vibeTags": [
+        "italian",
+        "terrace",
+        "podil"
+      ]
     },
     {
       "placeId": "ChIJESt9sljP1EARBFD_tyn-rT8",
@@ -465,7 +721,11 @@
       "category": "restaurant",
       "priority": 1,
       "tier": "premium",
-      "vibeTags": ["italian", "dinner", "design"]
+      "vibeTags": [
+        "italian",
+        "dinner",
+        "design"
+      ]
     },
     {
       "placeId": "ChIJnwP4sETO1EARIT8t_OC3vZM",
@@ -473,7 +733,11 @@
       "category": "restaurant",
       "priority": 1,
       "tier": "premium",
-      "vibeTags": ["seafood", "raw", "dinner"]
+      "vibeTags": [
+        "seafood",
+        "raw",
+        "dinner"
+      ]
     },
     {
       "placeId": "ChIJ95ClDVjO1EARZxFUI5Yi5lo",
@@ -481,7 +745,11 @@
       "category": "restaurant",
       "priority": 1,
       "tier": "premium",
-      "vibeTags": ["french", "romantic", "dinner"]
+      "vibeTags": [
+        "french",
+        "romantic",
+        "dinner"
+      ]
     },
     {
       "placeId": "ChIJdXIBUfzO1EARWHFVG97WzMM",
@@ -489,7 +757,11 @@
       "category": "restaurant",
       "priority": 1,
       "tier": "premium",
-      "vibeTags": ["vietnamese", "design", "dinner"]
+      "vibeTags": [
+        "vietnamese",
+        "design",
+        "dinner"
+      ]
     },
     {
       "placeId": "ChIJ38FRLAfP1EARxPwOz5ylfjY",
@@ -497,7 +769,11 @@
       "category": "restaurant",
       "priority": 1,
       "tier": "premium",
-      "vibeTags": ["chinese", "design", "dinner"]
+      "vibeTags": [
+        "chinese",
+        "design",
+        "dinner"
+      ]
     },
     {
       "placeId": "ChIJmwWDTgfP1EARab2RAvhE788",
@@ -505,7 +781,11 @@
       "category": "restaurant",
       "priority": 1,
       "tier": "premium",
-      "vibeTags": ["wine", "dinner", "upscale"]
+      "vibeTags": [
+        "wine",
+        "dinner",
+        "upscale"
+      ]
     },
     {
       "placeId": "ChIJCT8LqyfP1EAR0OvPuoTt7ko",
@@ -513,7 +793,11 @@
       "category": "restaurant",
       "priority": 1,
       "tier": "premium",
-      "vibeTags": ["rooftop", "view", "cocktail"]
+      "vibeTags": [
+        "rooftop",
+        "view",
+        "cocktail"
+      ]
     },
     {
       "placeId": "ChIJhalizqnP1EAReP85e7Ckmn8",
@@ -521,7 +805,11 @@
       "category": "restaurant",
       "priority": 1,
       "tier": "premium",
-      "vibeTags": ["italian", "pasta", "romantic"]
+      "vibeTags": [
+        "italian",
+        "pasta",
+        "romantic"
+      ]
     },
     {
       "placeId": "ChIJX4dpWHvO1EARPMfnxsa7cCs",
@@ -529,7 +817,1617 @@
       "category": "restaurant",
       "priority": 1,
       "tier": "premium",
-      "vibeTags": ["italian", "wine", "cozy"]
+      "vibeTags": [
+        "italian",
+        "wine",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJu0wQo2nO1EAR64H_rvAPURI",
+      "name": "Oxota na Ovets",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "asian",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJdVfCZfbO1EARlHtJzjyiTW0",
+      "name": "Park Kitchen",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJOaEBw-zO1EARrRgeY1j1DCU",
+      "name": "Semifreddo",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "italian",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJhyonX1HO1EART38bhLQ9hQM",
+      "name": "Mama Gochi",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "hearty",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJK1srmUHO1EARlvGa1bRdvIk",
+      "name": "Львівська Майстерня Шоколаду",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "dessert",
+        "coffee",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJz_K5WgfP1EARfPU3oviOW3w",
+      "name": "Шоті",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJJbq1kUbO1EARf9RL_n9ngQ4",
+      "name": "Happy Grill Bar",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJw0O7Q1DO1EARxxUyvNkBeg8",
+      "name": "Дуже по-французьки",
+      "category": "cafe",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "wine",
+        "romantic"
+      ]
+    },
+    {
+      "placeId": "ChIJdxucv_7O1EAR4bOUtAS7tzQ",
+      "name": "Under Wonder",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "dinner",
+        "italian",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJS3ZJKQDP1EAREQjpNe6pywQ",
+      "name": "Чічіко",
+      "category": "cafe",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "hearty",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJD4DbnJ3L1EAR895DNtv3FdM",
+      "name": "CHINA MA",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "asian",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJlc0QEv_O1EARvvMKn4wQcNw",
+      "name": "The Burger",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "casual",
+        "meat",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJC-BGYhrP1EARjbpnVMcMVOY",
+      "name": "О'Панас",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "local",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJYYyhxB3P1EARTQxinfljACo",
+      "name": "Кувшин",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "hearty",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJk1Hmrv_O1EARoViZRK0Fmk8",
+      "name": "Petrus-ь",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "local",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJ38h3N_XO1EAROmiNSMLS-bY",
+      "name": "Piccolino",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "italian",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJj5MtLVjO1EARO1QyBhuU79U",
+      "name": "Кафе Fandom",
+      "category": "cafe",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJubvfIqbF1EARGT7IStWJ2BI",
+      "name": "Аргентина Гриль",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJb3pPNQDL1EARt4xpG8mGBM8",
+      "name": "Юність",
+      "category": "coffee_shop",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJYZVNGVfO1EARhFFugdLxzqY",
+      "name": "The Blue Cup Coffee Shop",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJXwyQ0GHJ1EARU0L5DhUwZyY",
+      "name": "Nebos Plus • Кафе живої кухні",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJ-QcdtZLP1EARDdqpFJHIuW4",
+      "name": "Ink Липки",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJ9V8_bUDO1EARiXjNanApD-w",
+      "name": "Каффа",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJ6ZKeqVnO1EARYnOXe-r0swY",
+      "name": "Très Branché",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "wine",
+        "romantic"
+      ]
+    },
+    {
+      "placeId": "ChIJX31WnQ_P1EARPNcar64s3Ps",
+      "name": "Grill do Brasil",
+      "category": "cafe",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJyTCHmx7P1EARmOddRN6F76s",
+      "name": "Кав'ярня ONE LOVE espresso bar",
+      "category": "coffee_shop",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJt7Fi4lnO1EARimfmtM1yN6o",
+      "name": "Sanatrelo",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "hearty",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJJxruqAPP1EARQ-OFoeVBKqE",
+      "name": "ONE LOVE coffee",
+      "category": "coffee_shop",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJmXMfBxHP1EARTERJS0iRjk0",
+      "name": "CAPULETI",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "italian",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJrfRtGUHO1EARtwvpjV2nK1Q",
+      "name": "Casa Nori",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "italian",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJ3_H8OFDO1EAR6SeTa5GIJYg",
+      "name": "Éclair Little Artwork",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJj2G2jL_P1EAR_q3-gW_t9bw",
+      "name": "DIM #10",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ],
+      "tier": "premium",
+      "note": "Tiered premium 2026-07-27: Place Details prices it EXPENSIVE (text search reported no price level)."
+    },
+    {
+      "placeId": "ChIJAZDNL_nO1EAR25Gfhq6vJ4g",
+      "name": "Antwerpen",
+      "category": "restaurant",
+      "priority": 1,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJ6UuhaQDP1EARGmF8hD1UFrw",
+      "name": "Steakhouse",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJoy7cBgbP1EARqE_S4rsxUZc",
+      "name": "Чорноморка на Чикаленка",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "dinner",
+        "seafood",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJy3gqpUvP1EARWs4eCSGAkxg",
+      "name": "Чорноморка Велика Васильківська",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "seafood",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJHbBFuYvP1EARexURbJxw6pA",
+      "name": "Чорноморка Поділ",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "dinner",
+        "seafood",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJoRZ2M4bP1EARUj-8d3fk4us",
+      "name": "Чорноморка на Берестейському",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "seafood",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJGWt6D0bP1EARZH8fF_Hozlo",
+      "name": "Чорноморка на Лаврській",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJ2c1uvLPP1EARKW00GY84fu0",
+      "name": "Чорноморка Печерськ",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "seafood",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJvTSrpsfO1EARyE3iPz2loCU",
+      "name": "Чорноморка на Соломʼянці",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "seafood",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJn0ve4WbP1EARivQ9ojjB47A",
+      "name": "Чорноморка на Русанівці",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "seafood",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJ7dWr3dnP1EARP9abjZZHVpk",
+      "name": "Urban Grill meat&cider",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJ1z679CbP1EARL1fnvLfR2C8",
+      "name": "Georgia",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "hearty",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJ14VhhrHF1EARZqXP4-dmD-I",
+      "name": "Фламбер",
+      "category": "restaurant",
+      "priority": 1,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJVxpa0WjP1EARbOanJrPPh2c",
+      "name": "Moon Rabbits Local",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "dinner",
+        "local",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJ85hE68vN1EARS0XiBKJmu04",
+      "name": "Trullo D'oro Cafe",
+      "category": "restaurant",
+      "priority": 1,
+      "vibeTags": [
+        "dinner",
+        "italian",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJN9NfIFzO1EARPcsplglyynU",
+      "name": "Буланжері",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "bakery",
+        "coffee",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
+      "name": "Elevato",
+      "category": "restaurant",
+      "priority": 3,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJw8BMp-TO1EARa6rEcrFvVX0",
+      "name": "Sam's Steak House",
+      "category": "lounge",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "meat",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJKbaGLEHO1EARpOBLT0zFx6g",
+      "name": "KIN KAO",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJYafZxs5x5kcRiDaXQXadCBY",
+      "name": "La Coupole",
+      "category": "cafe",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "wine",
+        "romantic"
+      ]
+    },
+    {
+      "placeId": "ChIJhesrUhTS1EARDutoX0xn8wk",
+      "name": "Перець",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJVz5E2GrO1EART34YLwGkegQ",
+      "name": "LONDON COFFEE",
+      "category": "coffee_shop",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJAWHymsbO1EARmEJypVHa_SY",
+      "name": "Lucca",
+      "category": "restaurant",
+      "priority": 1,
+      "vibeTags": [
+        "dinner",
+        "italian",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJsY0_lqnP1EARmQdA0d1uon8",
+      "name": "Софра • Смак Криму",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJEQKeZ__O1EARQ9tEzn0M2Ag",
+      "name": "Даш кафе",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "hearty",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJm72w_LzP1EAR-wRiorLPIsc",
+      "name": "Ресторан \"ШахГранат\"",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJ9YLtXWjP1EARf_xhRk-5tEc",
+      "name": "OTTOMAN HOUSE CAFE",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJazZH99vN1EAR2jgvQH8UPgA",
+      "name": "Ресторан Portfolio",
+      "category": "lounge",
+      "priority": 2,
+      "vibeTags": [
+        "drinks",
+        "evening",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJEdVZwjzP1EARNcvC5hHVZAc",
+      "name": "Аріранг",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "asian",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJBTSChvTO1EARMzQLBBinDD4",
+      "name": "1900 coffee Saksaganskogo",
+      "category": "coffee_shop",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJk_xpx13P1EARB_IW__wfdQ8",
+      "name": "Вершки суспільства",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJGcN45IPP1EAR-b3P1YIh73Y",
+      "name": "Gelarty café glacé",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJWxt4AlHO1EAR9-M_HQ6TQtE",
+      "name": "Арбекіна",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "wine",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJ17gYHITS1EARVwUoSxKo2xg",
+      "name": "Мансарда",
+      "category": "restaurant",
+      "priority": 1,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJK_4AivvO1EARThcI8sgQWpI",
+      "name": "Клюква і Брюква",
+      "category": "restaurant",
+      "priority": 3,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJq60opR3J1EARg534cx2oep4",
+      "name": "Ресторан-кондитерська \"Щастя\"",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJfTtKqsPP1EARUZGPuleQV9g",
+      "name": "Beijing Style",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "asian",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJl1qkehPO1EARUsePlXRygQ0",
+      "name": "Таки Да",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJ4WxDpGLO1EAR1ynbhdEmM2Y",
+      "name": "Волконський",
+      "category": "cafe",
+      "priority": 3,
+      "tier": "premium",
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJ0yHYdULP1EARrdsdNdCODfM",
+      "name": "Тірамісу",
+      "category": "restaurant",
+      "priority": 3,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ],
+      "allowQualityOverride": true
+    },
+    {
+      "placeId": "ChIJCf0hmzbP1EARL6cbjd3G1i4",
+      "name": "ТРІШКИ БІЛЬШЕ на Золотих Воротах",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJG_R5BxfS1EARkyPslwP59vs",
+      "name": "Prynada Ukrainian Cafe",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "dinner",
+        "local",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJ3zJKYdrN1EARiop7TK_wflY",
+      "name": "NLSN & FRNDS CF",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJ20byAgnP1EARkekusKLSizk",
+      "name": "Matílda cafe",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJg4UttULF1EARh9VMywLN2Ig",
+      "name": "Villaggio",
+      "category": "restaurant",
+      "priority": 1,
+      "vibeTags": [
+        "pizza",
+        "casual",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJu1c5V3LdOkcR9ThcQFao394",
+      "name": "KREDENS CAFE",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJq6rqYu7I1EAR7hF-uGJKWI8",
+      "name": "HayLoft 2.0",
+      "category": "lounge",
+      "priority": 1,
+      "vibeTags": [
+        "drinks",
+        "evening",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJ29ptlv7O1EARf3pPJtBHI0I",
+      "name": "Кав'ярня Come and Stay",
+      "category": "coffee_shop",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJHQLA60bO1EARxYH2Z_fyYT4",
+      "name": "Світ кави",
+      "category": "coffee_shop",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJ64pKjT_O1EAR2LaMLP3lUsU",
+      "name": "Vagabond Cafe & Vintage Corner",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJ5SwRA-3P1EARTmBh7Vizr0E",
+      "name": "Kim Kimchi Korean BBQ (Київ)",
+      "category": "cafe",
+      "priority": 1,
+      "tier": "alternative",
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJx12QTgfP1EARn8TCKECs9U4",
+      "name": "Йеллоу Плейс",
+      "category": "cafe",
+      "priority": 3,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ],
+      "allowQualityOverride": true
+    },
+    {
+      "placeId": "ChIJWxt4AlHO1EARkK6MsrexPJo",
+      "name": "Бейрут",
+      "category": "cafe",
+      "priority": 3,
+      "tier": "alternative",
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJJUybSL3P1EAR3Wg2lJWpQ0A",
+      "name": "Músse",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "dessert",
+        "coffee",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJPQmx9kDO1EAR9UpSOr9fkyM",
+      "name": "Café 17",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJSdmS6GzO1EARdPg8ybJGq_w",
+      "name": "Пікнік",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "dessert",
+        "coffee",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJ5dSpugbP1EARD_9ZvJ150h8",
+      "name": "Buffalino",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "italian",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJ8RTs2KHP1EARr_o4830cwCg",
+      "name": "ELECTRON CAFE",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJu6njez_P1EARxxeX16uiGrE",
+      "name": "Чайний клуб",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "tea",
+        "quiet",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJvy6wlmzS1EARxvsvtyu_ZDM",
+      "name": "Китайський чай NewTea.UA",
+      "category": "coffee_shop",
+      "priority": 2,
+      "vibeTags": [
+        "tea",
+        "quiet",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJNUr-1GrO1EARxU0cO-Khsnw",
+      "name": "Hum:Hum",
+      "category": "lounge",
+      "priority": 2,
+      "tier": "alternative",
+      "vibeTags": [
+        "drinks",
+        "evening",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJV23oHADP1EARmAFstfkzB_0",
+      "name": "Щиро",
+      "category": "coffee_shop",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJ9ZtmNRXD1EARBfLA27Xj7Ng",
+      "name": "Frankly",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJVzhy9NrP1EAREkYjGLtO6aQ",
+      "name": "Публіцист",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJAbqdmWvO1EARwtJZqnd2aGU",
+      "name": "Автостанція Поділ",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": [
+        "pizza",
+        "casual",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJXyuOGiLP1EARfbIavAdjk5g",
+      "name": "SUPRA Daily Restaurant",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJBb6RWZnP1EARM0pecqvoFlM",
+      "name": "Hey Guys",
+      "category": "restaurant",
+      "priority": 1,
+      "vibeTags": [
+        "dinner",
+        "wine",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJFUGFLZrP1EARN0nd3uDPRKI",
+      "name": "Soul Cafe",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJowmmz_HP1EARag2S4k5-08Y",
+      "name": "ЛИПА",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJ90psQebP1EARjfhtLoeGqhw",
+      "name": "t.c.pizza",
+      "category": "restaurant",
+      "priority": 3,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJs9KLLAHP1EARAXg11su0JkI",
+      "name": "Cafe Marko",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJwUwWslLP1EARUVjRrPtPzNI",
+      "name": "Mirali",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJ2fWsteHP1EAR3g4vMiOgXaU",
+      "name": "Shalom",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJuTx6kYXP1EAR3r6cBZ7cYoE",
+      "name": "Good Girl",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJodr2XdbP1EARDpI0YsjpPbc",
+      "name": "дублер",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJE8bcxKrP1EARGOGL5B7039c",
+      "name": "дилетант",
+      "category": "cafe",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJO1kBW_7O1EARY-p6E-TsY04",
+      "name": "BEEF meat&wine",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJPx62BgDP1EARjgU-iXOagHQ",
+      "name": "Lip Lip",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJg47zgfDP1EAR9NNcUgcI-oA",
+      "name": "Селям",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJoZPiLDbP1EARwjjqS9GxNFU",
+      "name": "16.coffee",
+      "category": "coffee_shop",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJ19NA1__P1EAR5yd3Uo9prns",
+      "name": "Зона Комфорту",
+      "category": "coffee_shop",
+      "priority": 3,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJFRueUvzO1EARm1lmAm6UugY",
+      "name": "TAKAVA 1.0",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJey3vVMHP1EARk9I2lm7z4SQ",
+      "name": "Такава",
+      "category": "coffee_shop",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJAQCEW1HO1EARc9GXgU-Uv0U",
+      "name": "PAUL (Велика васильківська, 32)",
+      "category": "cafe",
+      "priority": 2,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "wine",
+        "romantic"
+      ]
+    },
+    {
+      "placeId": "ChIJo4OTHVzO1EARp1kupS6Gu5c",
+      "name": "Paul",
+      "category": "restaurant",
+      "priority": 3,
+      "tier": "premium",
+      "vibeTags": [
+        "dinner",
+        "wine",
+        "romantic"
+      ]
+    },
+    {
+      "placeId": "ChIJH7CqRbLP1EARpTgOUH7srIs",
+      "name": "Katimō Cafe",
+      "category": "cafe",
+      "priority": 3,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ],
+      "allowQualityOverride": true
+    },
+    {
+      "placeId": "ChIJWx_PpevP1EARqtyCfKAmkNI",
+      "name": "HANH CAFE",
+      "category": "restaurant",
+      "priority": 2,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "asian",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJzSpHd4nJ1EAREpG0qgWzqRQ",
+      "name": "Samsara",
+      "category": "cafe",
+      "priority": 1,
+      "tier": "alternative",
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJ6_dNT7TP1EARKMHFxW_4vrY",
+      "name": "Cafe 128 |2",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJHxmwtBTO1EAR1OJUOvRAJH4",
+      "name": "First Point Espresso Bar",
+      "category": "coffee_shop",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJB8SNdvrP1EARMyalWuNVvUs",
+      "name": "Дружба",
+      "category": "coffee_shop",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJkYfIycnN1EARw2VouYGA3WI",
+      "name": "Ресторан ЯПІКО на пр. Берестейському 45",
+      "category": "restaurant",
+      "priority": 1,
+      "tier": "alternative",
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJ-5emGa3P1EARTlmzmAjctiA",
+      "name": "ЇСТЕТИКА",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJAwBnbBzP1EAR5JSTqvV7NOs",
+      "name": "Альпака",
+      "category": "restaurant",
+      "priority": 1,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJFSlcIADP1EAREWCYQYIzySY",
+      "name": "SLOU COFFEE",
+      "category": "coffee_shop",
+      "priority": 3,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJbcQKBofP1EARypQImmD_8E0",
+      "name": "OCTO tower",
+      "category": "coffee_shop",
+      "priority": 3,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ]
+    },
+    {
+      "placeId": "ChIJVb3WG6_P1EAREjzyGjt1CLY",
+      "name": "GARAGE",
+      "category": "cafe",
+      "priority": 3,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJlQ5nEQDP1EARYS10-n9fEQA",
+      "name": "Марчук Хліб",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "bakery",
+        "coffee",
+        "cozy"
+      ]
+    },
+    {
+      "placeId": "ChIJ69obD8rP1EARgQINx1wXlKo",
+      "name": "Афтернун",
+      "category": "restaurant",
+      "priority": 2,
+      "vibeTags": [
+        "dinner",
+        "cozy",
+        "lively"
+      ]
+    },
+    {
+      "placeId": "ChIJecOqPxTP1EARQ_km6czs5Uw",
+      "name": "Пиріжкова Тітка Клара",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJR4Nmog3b1EAR57YaBKbRZKM",
+      "name": "Пиріжкова Тітка Клара",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJ__-vsEbO1EARfClE88iwARU",
+      "name": "Пиріжкова Тітка Клара",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJ7xqC-_7O1EAR7w0cRgOzrYs",
+      "name": "Пиріжкова Тітка Клара",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJfwbn12nO1EARNPG4tVzKTFo",
+      "name": "Пиріжкова Тітка Клара",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJSb3CLWvO1EARh3zoxTwsplg",
+      "name": "Пиріжкова Тітка Клара",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJVVWFavPO1EARx7LOCAmle-E",
+      "name": "Пиріжкова Тітка Клара",
+      "category": "cafe",
+      "priority": 1,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJwdvpWALP1EARE-qdDeC17ZM",
+      "name": "Пиріжкова Тітка Клара",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJ856qEbfP1EAR0s8NrOiZIV8",
+      "name": "Пиріжкова Тітка Клара",
+      "category": "cafe",
+      "priority": 2,
+      "vibeTags": [
+        "coffee",
+        "cozy",
+        "casual"
+      ]
+    },
+    {
+      "placeId": "ChIJa3nRszvP1EARNO7bE_m5v4k",
+      "name": "Пиріжкова Тітка Клара",
+      "category": "coffee_shop",
+      "priority": 3,
+      "vibeTags": [
+        "coffee",
+        "casual",
+        "study"
+      ],
+      "allowQualityOverride": true
     }
   ],
   "excludedPlaces": [
@@ -564,16 +2462,6 @@
       "reason": "Rating 2.6 with 13 reviews is below the production quality floor."
     },
     {
-      "name": "PAUL",
-      "placeId": "ChIJAQCEW1HO1EARc9GXgU-Uv0U",
-      "reason": "The qualifying central branches are PRICE_LEVEL_EXPENSIVE, above the base-tier price ceiling."
-    },
-    {
-      "name": "Good Girl",
-      "placeId": "ChIJuTx6kYXP1EAR3r6cBZ7cYoE",
-      "reason": "Google price level is EXPENSIVE, above the requested base tier."
-    },
-    {
       "name": "Bonco біля Львівської площі",
       "placeId": "ChIJX6HAICzP1EARYw55niFbK6I",
       "reason": "Only 15 reviews, below the production floor of 30; the qualifying Vatslava Havela branch is not the requested central location."
@@ -597,6 +2485,191 @@
       "name": "La Maison",
       "placeId": "ChIJmVjAKoTP1EARj--aKFvR5Rg",
       "reason": "Google Places reports CLOSED_PERMANENTLY and rating 3.9, below the production floor."
+    },
+    {
+      "name": "Turquaze (Туркуаз)",
+      "placeId": "ChIJ21bibBvP1EAR4VZbCH9XBQo",
+      "reason": "Google Places reports CLOSED_TEMPORARILY."
+    },
+    {
+      "name": "Життя чудових людей -ЖЧЛ",
+      "placeId": "ChIJmWCCF_zO1EARf3xvrw9Umis",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "Marinara Kiev",
+      "placeId": "ChIJR9E5wUHP1EARN8s6h8lVK6E",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "Літературне кафе Імбир",
+      "placeId": "ChIJVxkSMP3O1EARhI4kOVvHh48",
+      "reason": "Google Places reports CLOSED_TEMPORARILY."
+    },
+    {
+      "name": "Madame Josy",
+      "placeId": "ChIJE4TqjVDO1EARnywYPHcBlJM",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "Public cafe",
+      "placeId": "ChIJP_lkw1HO1EARD7KQz-AxbTA",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "Urban Space 500",
+      "placeId": "ChIJJ_5aAILP1EARAU6GtJNuGXw",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "Chef Dash",
+      "placeId": "ChIJP3yrIxrP1EARHBdL7bxekxY",
+      "reason": "Google Places reports CLOSED_TEMPORARILY."
+    },
+    {
+      "name": "Balmelli Casual Cafe",
+      "placeId": "ChIJUQva8P7O1EARu2rQt4rtuDI",
+      "reason": "Google Places reports CLOSED_TEMPORARILY."
+    },
+    {
+      "name": "Мамина Хустка",
+      "placeId": "ChIJ3Yf84FnO1EARvaDx8AL7bn4",
+      "reason": "No confident Google Places match for the operator's name."
+    },
+    {
+      "name": "Тратторія Зукка",
+      "placeId": "ChIJrTPcMojO1EARJUZ3WtSzvKY",
+      "reason": "Google Places reports CLOSED_TEMPORARILY."
+    },
+    {
+      "name": "Чорноморка",
+      "placeId": "ChIJheRifQDP1EARqfhPuvCquUk",
+      "reason": "No public rating on Google Places (quality gate needs one)."
+    },
+    {
+      "name": "Мітерія",
+      "placeId": "ChIJ64ZPVMrP1EARB3OTCGVsuTs",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "Вино і люди",
+      "placeId": "ChIJjz9ybmbP1EAR0kwfu7jyjX8",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "Ygli Restaurant",
+      "placeId": "ChIJQ4oSagjP1EARNbD8FZUzEug",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "GRKY Espresso Bar ☕",
+      "placeId": "ChIJkytmF9rP1EARawVMKThZ3so",
+      "reason": "No confident Google Places match for the operator's name."
+    },
+    {
+      "name": "КОЛО",
+      "placeId": "ChIJ7_cNbj_O1EARf7tEyprCcK4",
+      "reason": "Google Places reports CLOSED_TEMPORARILY."
+    },
+    {
+      "name": "Perfetto coffee",
+      "placeId": "ChIJa0ijCUPT1EARCtdamaYzBEk",
+      "reason": "Only 18 Google reviews (min 30)."
+    },
+    {
+      "name": "Molodist",
+      "placeId": "ChIJB08KywbP1EARkf7j-FHX7Xc",
+      "reason": "No confident Google Places match for the operator's name."
+    },
+    {
+      "name": "Philadelphia Roll&Bowl",
+      "placeId": "ChIJ-RN90mXN1EARHuzlvDocgtk",
+      "reason": "No confident Google Places match for the operator's name."
+    },
+    {
+      "name": "Стигла Встигла (Spelaya Kanareyka)",
+      "placeId": "ChIJETp-c7jP1EARgW_yZXUvP-g",
+      "reason": "Google Places reports CLOSED_TEMPORARILY."
+    },
+    {
+      "name": "Файна Фамілія",
+      "placeId": "ChIJi6YTyWvO1EARhOAUEkI1Z7I",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "Charlatan Café",
+      "placeId": "ChIJM-KN6KXP1EARROeTMtnxcfA",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "Сезам",
+      "placeId": "ChIJzw3me4vM1EAR5yzNM9FVn38",
+      "reason": "Google Places reports CLOSED_TEMPORARILY."
+    },
+    {
+      "name": "UK CAFE",
+      "placeId": "ChIJTXsOu2vP1EARziLRJUf4gjo",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "Альтруїст",
+      "placeId": "ChIJh9ooWPnO1EARLkIasBz7dDs",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "Savage Food",
+      "placeId": "ChIJmYMfuaXP1EARdwICFCILgHI",
+      "reason": "Google Places reports CLOSED_TEMPORARILY."
+    },
+    {
+      "name": "Alazani",
+      "placeId": "ChIJedeir1LP1EARlKpi8UAYS08",
+      "reason": "No confident Google Places match for the operator's name."
+    },
+    {
+      "name": "Теплиця",
+      "placeId": "ChIJj5d7VfPO1EARRYkzMc3dWKw",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "Глек",
+      "placeId": "ChIJQY7kJwDP1EARqoScYBaigQA",
+      "reason": "No public rating on Google Places (quality gate needs one)."
+    },
+    {
+      "name": "Кафе-пекарня «Хліб-сіль»",
+      "placeId": "ChIJuURpZPvO1EARKiNm8zSfwQQ",
+      "reason": "No confident Google Places match for the operator's name."
+    },
+    {
+      "name": "Primavera",
+      "placeId": "ChIJ5Y_0RnjO1EARyLAtSNggLGk",
+      "reason": "Google Places reports CLOSED_TEMPORARILY."
+    },
+    {
+      "name": "NOVENKIY",
+      "placeId": "ChIJo7dRfd_P1EARBzue4Q9HGbE",
+      "reason": "Google Places reports CLOSED_TEMPORARILY."
+    },
+    {
+      "name": "Віскі Корнер",
+      "placeId": "ChIJrWJL9FrO1EARlg8iMqL3lAo",
+      "reason": "No confident Google Places match for the operator's name."
+    },
+    {
+      "name": "The Kitchen 21",
+      "placeId": "ChIJu0vLm0bO1EARbIhdJp8sSnY",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "Polverol",
+      "placeId": "ChIJKbO49ULO1EARwbAa36AWago",
+      "reason": "Google Places reports CLOSED_PERMANENTLY."
+    },
+    {
+      "name": "СУБОТА",
+      "placeId": "ChIJTQjhTE_P1EARIGy6sv10gf8",
+      "reason": "Google rating 3.6 is below 4.0."
     }
   ]
 }

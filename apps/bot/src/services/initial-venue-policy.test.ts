@@ -29,7 +29,10 @@ describe("initial venue policy", () => {
   );
 
   it("rejects premium and expensive candidates before ranking", () => {
-    expect(evaluateInitialVenuePolicy(input({ tier: "premium" }))).toEqual({ eligible: false, reason: "premium_tier" });
+    expect(evaluateInitialVenuePolicy(input({ tier: "premium" }))).toEqual({ eligible: false, reason: "non_base_tier" });
+    // `alternative` is the operator's heavier-cuisine pool: a fine venue, but
+    // never one Gennety picks FOR a pair — it only exists in the change board.
+    expect(evaluateInitialVenuePolicy(input({ tier: "alternative" }))).toEqual({ eligible: false, reason: "non_base_tier" });
     expect(evaluateInitialVenuePolicy(input({ priceLevel: "PRICE_LEVEL_EXPENSIVE" }))).toEqual({ eligible: false, reason: "too_expensive" });
   });
 

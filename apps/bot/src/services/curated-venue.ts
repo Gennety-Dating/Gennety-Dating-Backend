@@ -340,13 +340,22 @@ export function isValidVenueCategory(value: string): value is VenueCategory {
 }
 
 /**
- * Curated-venue tiers (PRODUCT_SPEC §Premium). `base` is the default
- * student-friendly pool; `premium` venues may exceed the ≤ MODERATE price cap
- * and are shown-but-locked in the venue-change board unless a participant has
- * an active Gennety Premium subscription. Whitelist-validated in app code, not
- * a Prisma enum (mirrors `category`).
+ * Curated-venue tiers (PRODUCT_SPEC §Premium / §3.7b). The tier decides which
+ * POOL a venue belongs to, and only `base` is ever auto-assigned:
+ *
+ * - `base` — the default student-friendly pool (≤ MODERATE price cap). The
+ *   only tier the concierge picks for the first, automatic assignment.
+ * - `premium` — may exceed the price cap; shown-but-LOCKED in the venue-change
+ *   board unless a participant has an active Gennety Premium subscription.
+ * - `alternative` — operator-classified heavier cuisine (Georgian, Uzbek,
+ *   Azerbaijani, Middle-Eastern, Central-Asian and similar). A perfectly good
+ *   venue, but not a call Gennety makes FOR a pair on a first date: it only
+ *   surfaces in the venue-change board, unlocked and priced like base, where
+ *   the couple chooses it themselves. Not a price tier — no Premium gate.
+ *
+ * Whitelist-validated in app code, not a Prisma enum (mirrors `category`).
  */
-export const VENUE_TIER_WHITELIST = ["base", "premium"] as const;
+export const VENUE_TIER_WHITELIST = ["base", "premium", "alternative"] as const;
 export type VenueTier = (typeof VENUE_TIER_WHITELIST)[number];
 
 /** Validate a tier string; used by the seeder import path before DB writes. */

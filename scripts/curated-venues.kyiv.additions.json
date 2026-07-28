@@ -1,0 +1,599 @@
+{
+  "_comment": "Operator-supplied Kyiv additions (2026-07-27). Input to `pnpm resolve-venues:kyiv`, which resolves each name to a stable Google Place id and emits reviewable manifest entries for curated-venues.kyiv.expansion.json. `tier`: base (default) | premium | alternative. `alternative` = heavier Georgian/Uzbek/Azerbaijani/Middle-Eastern/Central-Asian style cuisine the concierge must never auto-assign — it may only appear in the post-assignment Venue Change board.",
+  "cityKey": "ua:kyiv",
+  "center": {
+    "lat": 50.4501,
+    "lng": 30.5234
+  },
+  "radiusMeters": 25000,
+  "venues": [
+    {
+      "name": "Oxota NA Ovets",
+      "tier": "premium"
+    },
+    {
+      "name": "Park Kitchen",
+      "tier": "premium"
+    },
+    {
+      "name": "Semifreddo",
+      "tier": "premium"
+    },
+    {
+      "name": "Turquaze",
+      "tier": "alternative"
+    },
+    {
+      "name": "Mama Gochi",
+      "tier": "alternative"
+    },
+    {
+      "name": "Zhyttya Chudovykh Lyudey"
+    },
+    {
+      "name": "Lviv Handmade Chocolate Cafe",
+      "acceptMatch": true
+    },
+    {
+      "name": "Shoti"
+    },
+    {
+      "name": "Happy Grill Bar"
+    },
+    {
+      "name": "Tres FRANCAIS",
+      "acceptMatch": true
+    },
+    {
+      "name": "Under Wonder"
+    },
+    {
+      "name": "Chichiko",
+      "tier": "premium"
+    },
+    {
+      "name": "CHINA MA",
+      "tier": "alternative"
+    },
+    {
+      "name": "Marinara Caffe di Famiglia",
+      "acceptMatch": true
+    },
+    {
+      "name": "Imbir",
+      "tier": "alternative",
+      "acceptMatch": true
+    },
+    {
+      "name": "The Burger"
+    },
+    {
+      "name": "O'Panas",
+      "tier": "alternative"
+    },
+    {
+      "name": "Kuvshin"
+    },
+    {
+      "name": "Petrus-b Restaurant"
+    },
+    {
+      "name": "Piccolino",
+      "tier": "premium"
+    },
+    {
+      "name": "Cafe Fandom",
+      "tier": "premium"
+    },
+    {
+      "name": "Argentina Grill",
+      "acceptMatch": true
+    },
+    {
+      "name": "Yunost",
+      "query": "Юність кафе Київ",
+      "acceptMatch": true
+    },
+    {
+      "name": "Madame Josy"
+    },
+    {
+      "name": "Public Cafe"
+    },
+    {
+      "name": "The Blue Cup Coffee Shop"
+    },
+    {
+      "name": "Nebos Plus"
+    },
+    {
+      "name": "INK Lypky",
+      "tier": "premium"
+    },
+    {
+      "name": "Kaffa"
+    },
+    {
+      "name": "Tres BRANCHE",
+      "tier": "premium"
+    },
+    {
+      "name": "Steak House Grill do Brasil"
+    },
+    {
+      "name": "Urban Space 500"
+    },
+    {
+      "name": "Chef Dash Restaurant",
+      "query": "Chef Dash ресторан Київ"
+    },
+    {
+      "name": "Balmelli Casual Cafe"
+    },
+    {
+      "name": "ONE LOVE Espresso Bar"
+    },
+    {
+      "name": "Mitla"
+    },
+    {
+      "name": "Sanatrelo",
+      "tier": "alternative"
+    },
+    {
+      "name": "Trattoria Zucca"
+    },
+    {
+      "name": "ONE LOVE Coffee"
+    },
+    {
+      "name": "Montecchi v Capuleti"
+    },
+    {
+      "name": "Casa Nori",
+      "tier": "premium"
+    },
+    {
+      "name": "Art Eclair"
+    },
+    {
+      "name": "Dom №10"
+    },
+    {
+      "name": "Antwerpen"
+    },
+    {
+      "name": "Steakhouse"
+    },
+    {
+      "name": "Чорноморка",
+      "chain": true,
+      "maxBranches": 12,
+      "chainMatch": "чорноморка",
+      "chainExclude": [
+        "кози та матроси"
+      ]
+    },
+    {
+      "name": "Urban Grill Meat&Cider"
+    },
+    {
+      "name": "Miteria"
+    },
+    {
+      "name": "Georgia",
+      "tier": "alternative"
+    },
+    {
+      "name": "Vino i Lyudi",
+      "acceptMatch": true
+    },
+    {
+      "name": "Flamber"
+    },
+    {
+      "name": "Moon Rabbits Local"
+    },
+    {
+      "name": "Ygli"
+    },
+    {
+      "name": "Trullo D'Oro Osteria"
+    },
+    {
+      "name": "Boulangerie Artisan",
+      "acceptMatch": true
+    },
+    {
+      "name": "MRKN",
+      "query": "MRKN кафе Київ"
+    },
+    {
+      "name": "Elevato",
+      "tier": "premium"
+    },
+    {
+      "name": "Sams Steak House",
+      "tier": "premium"
+    },
+    {
+      "name": "KOLO Vegan Restaurant"
+    },
+    {
+      "name": "Kin Kao",
+      "tier": "alternative"
+    },
+    {
+      "name": "La Coupole Restaurant",
+      "tier": "premium",
+      "acceptMatch": true
+    },
+    {
+      "name": "Perfetto",
+      "query": "Perfetto ресторан Київ"
+    },
+    {
+      "name": "Meat Restaurant Perets"
+    },
+    {
+      "name": "Smorodina"
+    },
+    {
+      "name": "Coffee House LONDON"
+    },
+    {
+      "name": "Lucca"
+    },
+    {
+      "name": "Phi-Phi",
+      "tier": "alternative"
+    },
+    {
+      "name": "Sofra",
+      "tier": "alternative"
+    },
+    {
+      "name": "Cafe Dash"
+    },
+    {
+      "name": "ShahGranat",
+      "tier": "alternative",
+      "query": "ШахГранат Київ"
+    },
+    {
+      "name": "OTTOMAN HOUSE CAFE",
+      "tier": "alternative"
+    },
+    {
+      "name": "Portfolio"
+    },
+    {
+      "name": "Стигла Встигла"
+    },
+    {
+      "name": "Arirang",
+      "tier": "alternative"
+    },
+    {
+      "name": "Faina Familia",
+      "query": "Faina Familia Верхній Вал 10 Київ"
+    },
+    {
+      "name": "Charlatan Cafe"
+    },
+    {
+      "name": "1900 Coffee",
+      "query": "1900 Coffee Саксаганського Київ"
+    },
+    {
+      "name": "Slivki Obschestva",
+      "acceptMatch": true
+    },
+    {
+      "name": "Gelarty"
+    },
+    {
+      "name": "Arbequina"
+    },
+    {
+      "name": "Mansarda Cafe"
+    },
+    {
+      "name": "Klukva&Brukva"
+    },
+    {
+      "name": "Restaurant-Konditerskaya Schastye"
+    },
+    {
+      "name": "Sezam Restaurant",
+      "tier": "alternative"
+    },
+    {
+      "name": "UK Cafe"
+    },
+    {
+      "name": "AllTrueEast",
+      "tier": "alternative"
+    },
+    {
+      "name": "Beijing Style",
+      "tier": "alternative"
+    },
+    {
+      "name": "Savage Food"
+    },
+    {
+      "name": "Taki Da"
+    },
+    {
+      "name": "Volkonskiy"
+    },
+    {
+      "name": "Tiramisu Bar"
+    },
+    {
+      "name": "Trishki Bilshe"
+    },
+    {
+      "name": "Prynada Ukrainian Cafe"
+    },
+    {
+      "name": "NlSN & FRNDS CF"
+    },
+    {
+      "name": "Matílda Cafe"
+    },
+    {
+      "name": "Pizzeria Villaggio"
+    },
+    {
+      "name": "Kredens Cafe"
+    },
+    {
+      "name": "Baklazhan",
+      "tier": "alternative",
+      "query": "Баклажан ресторан Київ"
+    },
+    {
+      "name": "HayLoft 2.0"
+    },
+    {
+      "name": "Teplitsa",
+      "query": "Теплиця кафе Київ"
+    },
+    {
+      "name": "Come and Stay"
+    },
+    {
+      "name": "Svit Kavy"
+    },
+    {
+      "name": "Vagabond Cafe & Vintage Corner"
+    },
+    {
+      "name": "Kim Kimchi Korean BBQ",
+      "tier": "alternative"
+    },
+    {
+      "name": "Hlek Restaurant"
+    },
+    {
+      "name": "Khlib & Soul"
+    },
+    {
+      "name": "Yellow Place",
+      "acceptMatch": true
+    },
+    {
+      "name": "Primavera"
+    },
+    {
+      "name": "Novenkiy"
+    },
+    {
+      "name": "Italian from Beirut",
+      "tier": "alternative"
+    },
+    {
+      "name": "Musse"
+    },
+    {
+      "name": "Brams",
+      "query": "Brams Київ"
+    },
+    {
+      "name": "Cafe 17"
+    },
+    {
+      "name": "Picnic"
+    },
+    {
+      "name": "Negorkiy"
+    },
+    {
+      "name": "Buffalino"
+    },
+    {
+      "name": "The Kitchen 21"
+    },
+    {
+      "name": "Electron Corp."
+    },
+    {
+      "name": "Tea Club",
+      "query": "Tea Club чайний клуб Київ",
+      "category": "cafe",
+      "acceptMatch": true
+    },
+    {
+      "name": "Polverol"
+    },
+    {
+      "name": "Newtea"
+    },
+    {
+      "name": "Hum:Hum",
+      "tier": "alternative"
+    },
+    {
+      "name": "Щиро"
+    },
+    {
+      "name": "Frankly"
+    },
+    {
+      "name": "Publitsyst"
+    },
+    {
+      "name": "Автостанція Піцерія"
+    },
+    {
+      "name": "SUPRA Daily Restaurant",
+      "tier": "alternative"
+    },
+    {
+      "name": "Hey Guys"
+    },
+    {
+      "name": "Soul Cafe"
+    },
+    {
+      "name": "LYPA"
+    },
+    {
+      "name": "t.c.pizza"
+    },
+    {
+      "name": "Cafe Markó"
+    },
+    {
+      "name": "Mirali",
+      "tier": "premium"
+    },
+    {
+      "name": "SHALOM",
+      "tier": "alternative"
+    },
+    {
+      "name": "Good Girl"
+    },
+    {
+      "name": "Dubler"
+    },
+    {
+      "name": "Dyletant"
+    },
+    {
+      "name": "BEEF meat & wine",
+      "tier": "premium"
+    },
+    {
+      "name": "Lip Lip"
+    },
+    {
+      "name": "Selyam",
+      "tier": "alternative"
+    },
+    {
+      "name": "16.coffee"
+    },
+    {
+      "name": "Зона Комфорту"
+    },
+    {
+      "name": "TAKAVA 1.0"
+    },
+    {
+      "name": "Takava"
+    },
+    {
+      "name": "PAUL",
+      "query": "PAUL Велика Васильківська 32 Київ"
+    },
+    {
+      "name": "PAUL",
+      "query": "PAUL Ярославів Вал Київ"
+    },
+    {
+      "name": "Katimō Cafe"
+    },
+    {
+      "name": "HANH cafe & market",
+      "tier": "alternative"
+    },
+    {
+      "name": "Samsara",
+      "tier": "alternative"
+    },
+    {
+      "name": "Cafe 128",
+      "query": "Cafe 128 |2 Джона Маккейна Київ"
+    },
+    {
+      "name": "First Point Espresso Bar"
+    },
+    {
+      "name": "Druzhba",
+      "query": "Дружба кава Київ"
+    },
+    {
+      "name": "YAPİKO",
+      "query": "YAPIKO Берестейський проспект 45 Київ",
+      "tier": "alternative",
+      "acceptMatch": true
+    },
+    {
+      "name": "Yistetyka"
+    },
+    {
+      "name": "Альпака"
+    },
+    {
+      "name": "SLOU COFFEE"
+    },
+    {
+      "name": "OCTO tower"
+    },
+    {
+      "name": "GARAGE"
+    },
+    {
+      "name": "Субота"
+    },
+    {
+      "name": "Marchuk Khlib"
+    },
+    {
+      "name": "Афтернун"
+    },
+    {
+      "name": "Пиріжкова Тітка Клара",
+      "chain": true,
+      "maxBranches": 12,
+      "query": "Пиріжкова Тітка Клара Київ",
+      "chainMatch": "тітка клара"
+    }
+  ],
+  "qualityOverrides": [
+    {
+      "placeId": "ChIJx12QTgfP1EARn8TCKECs9U4",
+      "name": "Йеллоу Плейс (Yellow Place)",
+      "note": "Operator waiver 2026-07-27: rating 3.8."
+    },
+    {
+      "placeId": "ChIJH7CqRbLP1EARpTgOUH7srIs",
+      "name": "Katimō Cafe",
+      "note": "Operator waiver 2026-07-27: rating 3.6."
+    },
+    {
+      "placeId": "ChIJ0yHYdULP1EARrdsdNdCODfM",
+      "name": "Тірамісу (Tiramisu Bar)",
+      "note": "Operator waiver 2026-07-27: rating 3.4 on only 5 reviews — thin listing, re-check after the first date sent there."
+    },
+    {
+      "placeId": "ChIJa3nRszvP1EARNO7bE_m5v4k",
+      "name": "Пиріжкова Тітка Клара (Шевченка 54/1)",
+      "note": "Operator waiver 2026-07-27: rating 3.9; the chain's other 8 Kyiv branches pass unaided."
+    }
+  ]
+}

@@ -218,7 +218,7 @@ describe("buildVenueChangeCatalog", () => {
 });
 
 describe("capCatalog (§Premium slot reservation)", () => {
-  const venue = (i: number, tier: "base" | "premium"): CatalogVenue => ({
+  const venue = (i: number, tier: "base" | "premium" | "alternative"): CatalogVenue => ({
     source: "curated",
     placeId: `${tier}-${i}`,
     name: `${tier} ${i}`,
@@ -268,5 +268,14 @@ describe("capCatalog (§Premium slot reservation)", () => {
     const capped = capCatalog(base);
     expect(capped).toHaveLength(12);
     expect(capped.every((v) => v.tier === "base")).toBe(true);
+  });
+
+  it("treats `alternative` as ordinary board inventory, not a reserved tier", () => {
+    // The heavier-cuisine pool competes on distance like base — it is not
+    // scarce, locked, or slot-reserved the way §Premium is.
+    const alternative = Array.from({ length: 15 }, (_, i) => venue(i + 1, "alternative"));
+    const capped = capCatalog(alternative);
+    expect(capped).toHaveLength(12);
+    expect(capped.every((v) => v.tier === "alternative")).toBe(true);
   });
 });

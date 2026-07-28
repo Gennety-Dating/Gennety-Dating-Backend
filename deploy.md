@@ -1907,6 +1907,31 @@ pnpm sync-venues:kyiv --check
 pnpm seed-venues:import --in=scripts/curated-venues.kyiv.approved.json --apply
 ```
 
+When the operator hands over a raw list of venue NAMES (no place ids), resolve
+and triage it first — `sync-venues:kyiv` needs stable place ids and fails on
+anything below the quality gate:
+
+```sh
+# 1. Put the names in scripts/curated-venues.kyiv.additions.json
+#    ({"name": "...", "tier": "base|premium|alternative"}).
+pnpm resolve-venues:kyiv --write          # names -> place ids + review flags
+# 2. Read the flags. A `name-mismatch` is Google answering with a DIFFERENT
+#    venue — confirm the address, then set "acceptMatch": true, or fix "query".
+pnpm merge-venues:kyiv                    # dry run: what is accepted/rejected
+pnpm merge-venues:kyiv --apply            # fold into the expansion manifest
+#    --promote-expensive re-tiers EXPENSIVE base venues to premium instead of
+#    dropping them (an operator decision — off by default).
+# 3. Reconcile + re-tag, then import as above.
+pnpm sync-venues:kyiv --apply
+pnpm backfill-venue-facets --only-missing --apply
+```
+
+`backfill-venue-facets --only-missing` matters: `sync-venues:kyiv` rebuilds rows
+from Google Places, which knows nothing about Venue Intent V2 facets. It now
+carries existing `facetTags`/`hardCapabilities` across a rebuild, but venues
+added for the first time have none, and without `hardCapabilities` a row fails
+the V2 indoor/outdoor hard filter and never gets picked.
+
 ## Caddy Or Domain Changes
 
 Edit and validate:

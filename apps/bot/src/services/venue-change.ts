@@ -182,8 +182,10 @@ export interface BuildCatalogInput {
   /**
    * Include `premium`-tier curated venues in the catalog (shown but locked in
    * the board). Pass `PREMIUM_FEATURE_ENABLED`; when false the catalog is
-   * base-only, so premium venues never surface while the feature is off.
-   * Places-fallback rows are always base. See PRODUCT_SPEC.md §Premium.
+   * base + `alternative` only, so premium venues never surface while the
+   * feature is off. `alternative` venues are NOT gated by this — they are
+   * unlocked board-only inventory. Places-fallback rows are always base.
+   * See PRODUCT_SPEC.md §Premium / §3.7b.
    */
   includePremium?: boolean;
 }
@@ -211,9 +213,12 @@ export async function listCuratedVenuesNear(
     where: {
       universityDomain: input.universityDomain,
       active: true,
-      // Premium venues only surface when the feature is on (they're then shown
-      // locked in the board). Base-only otherwise.
-      ...(input.includePremium ? {} : { tier: "base" }),
+      // `alternative` venues exist ONLY for this board (never auto-assigned),
+      // so they are always in — unlocked and priced like base. Premium venues
+      // only surface when the feature is on (they're then shown locked).
+      tier: input.includePremium
+        ? { in: ["base", "premium", "alternative"] }
+        : { in: ["base", "alternative"] },
     },
     select: {
       name: true,

@@ -574,13 +574,16 @@ cross-domain city matches (see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §3.7). Standa
 relation) — the venue pool is now first-party data we own, not a per-request
 Places lookup. Columns: `name`, `address`, `lat`, `lng`, `googleMapsUri`,
 `category` (validated against the shared whitelist in app code, not a Prisma
-enum), `priority` (1 best … 3 acceptable), `tier` (`base`/`premium`,
-whitelist-validated in app code — a `premium` venue may exceed the ≤ MODERATE
-price cap and is shown-but-locked in the venue-change board unless a participant
-has Gennety Premium; the auto-assign picker reads only quality-qualified `base`
-rows with positive non-premium price evidence for commercial/admission venues;
-PRODUCT_SPEC
-§3.8), `vibeTags`, `active`,
+enum), `priority` (1 best … 3 acceptable), `tier` (`base`/`premium`/
+`alternative`, whitelist-validated in app code — a `premium` venue may exceed
+the ≤ MODERATE price cap and is shown-but-locked in the venue-change board
+unless a participant has Gennety Premium; an `alternative` venue is the
+operator's heavier-cuisine pool (Georgian / Uzbek / Azerbaijani /
+Middle-Eastern / Central-Asian), board-only but unlocked and ungated by
+Premium — a cuisine classification, not a price tier; the auto-assign picker
+reads only quality-qualified `base` rows with positive non-premium price
+evidence for commercial/admission venues, so neither non-base tier is held to
+the student price cap; PRODUCT_SPEC §3.7 / §3.7b / §3.8), `vibeTags`, `active`,
 `lastVerifiedAt`, plus `placeId` (Places resource id for exact re-fetch),
 `utcOffsetMinutes` + `openingHours` (Places `regularOpeningHours`, for the
 open-at-slot check). Curated rows deliberately store **no imagery**: venue

@@ -155,8 +155,23 @@ async function main() {
   if (!existsSync(inPath)) fail(`Not found: ${inPath}`);
   const apply = args.get("apply") === "true";
 
-  const rows = JSON.parse(readFileSync(inPath, "utf8"));
-  if (!Array.isArray(rows)) fail("Candidates file must be a JSON array.");
+  const allRows = JSON.parse(readFileSync(inPath, "utf8"));
+  if (!Array.isArray(allRows)) fail("Candidates file must be a JSON array.");
+
+  // `--only-missing` re-tags just the rows that have no facets yet (e.g. venues
+  // a fresh expansion added). Without it, re-running re-bills the LLM for the
+  // whole catalog and churns tags that were already reviewed.
+  const onlyMissing = args.get("only-missing") === "true";
+  const rows = onlyMissing
+    ? allRows.filter((row) => !(row.hardCapabilities?.length > 0))
+    : allRows;
+  if (onlyMissing) {
+    console.log(`--only-missing: ${rows.length}/${allRows.length} rows need facets.`);
+  }
+  if (rows.length === 0) {
+    console.log("Nothing to do.");
+    return;
+  }
 
   const { callOpenAIJson } = await import("../apps/bot/src/services/openai.js");
   if (!process.env.OPENAI_API_KEY) fail("Missing OPENAI_API_KEY in env.");
@@ -183,7 +198,9 @@ async function main() {
   console.log(JSON.stringify(sample, null, 2));
 
   if (apply) {
-    writeFileSync(inPath, JSON.stringify(rows, null, 2) + "\n", "utf8");
+    // `rows` may be a filtered VIEW of `allRows`, but its entries are the same
+    // objects, mutated in place — so writing `allRows` keeps untouched rows.
+    writeFileSync(inPath, JSON.stringify(allRows, null, 2) + "\n", "utf8");
     console.log(`\n✓ Wrote ${inPath}. Now run: pnpm seed-venues:import --in=${inPath} --apply`);
   } else {
     console.log("\nDry run only. Re-run with --apply to write the file.");
