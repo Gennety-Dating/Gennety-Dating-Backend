@@ -259,6 +259,12 @@ export interface TelegramOnboardingState {
     promoCode: string | null;
     promoTickets: number;
     promoMonths: number;
+    /**
+     * Cities Gennety has actually launched in. Matching is strictly same-city,
+     * so the picker offers only these — a new market goes live with the server,
+     * without a bundle redeploy.
+     */
+    supportedCities: TelegramCityHit[];
     homeLocation: TelegramHomeLocation | null;
     completed: boolean;
   };
@@ -460,11 +466,21 @@ export async function searchTelegramOnboardingCities(
   return body.results;
 }
 
+/**
+ * Geolocation → launched market. `supported: false` (city `null`) means the
+ * user is outside every city Gennety operates in; the caller must explain that
+ * rather than save anything.
+ */
+export interface TelegramCityResolution {
+  supported: boolean;
+  city: TelegramCityHit | null;
+}
+
 export async function resolveTelegramOnboardingCity(
   initData: string,
   latitude: number,
   longitude: number,
-): Promise<TelegramCityHit> {
+): Promise<TelegramCityResolution> {
   const res = await fetch(`${apiBase}/v1/telegram-onboarding/city/resolve`, {
     method: "POST",
     headers: {
@@ -474,8 +490,12 @@ export async function resolveTelegramOnboardingCity(
     body: JSON.stringify({ latitude, longitude }),
   });
   if (!res.ok) throw await toError(res);
-  const body = (await res.json()) as { ok: true; city: TelegramCityHit };
-  return body.city;
+  const body = (await res.json()) as {
+    ok: true;
+    supported: boolean;
+    city: TelegramCityHit | null;
+  };
+  return { supported: body.supported, city: body.city };
 }
 
 export async function selectTelegramOnboardingCity(

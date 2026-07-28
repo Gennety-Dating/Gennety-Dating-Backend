@@ -1,5 +1,5 @@
 import { prisma, type Profile } from "@gennety/db";
-import { cityKeyToTimeZone } from "@gennety/shared";
+import { cityKeyToTimeZone, findMarketByCityKey, type Market } from "@gennety/shared";
 
 const MAX_CITY_LENGTH = 120;
 const MAX_COUNTRY_CODE_LENGTH = 8;
@@ -95,16 +95,34 @@ export function validateHomeLocationPayload(
     return { ok: false, error: "Invalid homePlaceId" };
   }
 
+  // The market gate. Matching is strictly same-city, so a city we have not
+  // launched is a pool of one — refuse it here rather than let the user
+  // register into a dead end. This is the ONLY writer of `homeCityKey`, so the
+  // single check covers Telegram (`/city/select`) and iOS (`/me/home-location`)
+  // alike.
+  const market = findMarketByCityKey(homeCityKey);
+  if (!market) return { ok: false, error: "city-not-supported" };
+
+  return { ok: true, data: homeLocationForMarket(market, providedPlaceId || null) };
+}
+
+/**
+ * Canonical payload for a launched market. The client's city name and
+ * coordinates are replaced by the market's own — they only ever identify WHICH
+ * market was picked, and a drifting/spoofed centroid would land in
+ * `Profile.latitude/longitude`, which the venue picker and city analytics read.
+ */
+export function homeLocationForMarket(
+  market: Market,
+  homePlaceId: string | null = null,
+): HomeLocationInput {
   return {
-    ok: true,
-    data: {
-      homeCity,
-      homeCountryCode,
-      homeCityKey,
-      homePlaceId: providedPlaceId || null,
-      latitude,
-      longitude,
-    },
+    homeCity: market.city,
+    homeCountryCode: market.countryCode,
+    homeCityKey: market.cityKey,
+    homePlaceId,
+    latitude: market.latitude,
+    longitude: market.longitude,
   };
 }
 

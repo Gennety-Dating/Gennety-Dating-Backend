@@ -285,6 +285,60 @@ describe("sendNoMatchNotices", () => {
     expect(body).not.toMatch(/% off/);
   });
 
+  // Kyiv-only market gate (PRODUCT_SPEC §1.1/§3.1).
+  it("tells a user in an unlaunched city the truth instead of a famine tier", async () => {
+    mUserFindMany.mockResolvedValueOnce([
+      {
+        id: "u1",
+        telegramId: 111n,
+        language: "en",
+        profile: { homeCityKey: "de:berlin", homeCity: "Berlin" },
+      },
+    ]);
+    mMatchFindFirst.mockResolvedValueOnce(null);
+    mNoticeCount.mockResolvedValueOnce(2); // would be tier 3 + a famine discount
+    const api = makeApi();
+    const stream = makeStream();
+
+    const result = await sendNoMatchNotices(api as never, NOW, 0, stream as never);
+
+    expect(result.notified).toBe(1);
+    // Plain send with the switch button, not the "we really looked" stream.
+    expect(stream).not.toHaveBeenCalled();
+    const [chatId, body, options] = api.sendMessage.mock.calls[0]!;
+    expect(chatId).toBe(111);
+    expect(body).toMatch(/Berlin/);
+    expect(body).not.toMatch(/quality bar/);
+    expect(JSON.stringify(options.reply_markup)).toContain("menu:city:switch");
+    // No famine discount for a drop they were never in.
+    expect(mGrant).not.toHaveBeenCalled();
+    // The notice row still lands, so the drop stays idempotent.
+    expect(mNoticeCreate).toHaveBeenCalledWith({
+      data: { userId: "u1", tier: 3, dropDate: getDropDate(NOW) },
+    });
+  });
+
+  it("keeps the ordinary famine copy for a user in a launched city", async () => {
+    mUserFindMany.mockResolvedValueOnce([
+      {
+        id: "u1",
+        telegramId: 111n,
+        language: "en",
+        profile: { homeCityKey: "ua:kyiv", homeCity: "Kyiv" },
+      },
+    ]);
+    mMatchFindFirst.mockResolvedValueOnce(null);
+    mNoticeCount.mockResolvedValueOnce(0);
+    const api = makeApi();
+    const stream = makeStream();
+
+    await sendNoMatchNotices(api as never, NOW, 0, stream as never);
+
+    expect(stream).toHaveBeenCalled();
+    const [, body] = api.sendMessage.mock.calls[0]!;
+    expect(body).toMatch(/quality bar/);
+  });
+
   it("defaults to English when the user has no language set", async () => {
     mUserFindMany.mockResolvedValueOnce([
       { id: "u1", telegramId: 111n, language: null },

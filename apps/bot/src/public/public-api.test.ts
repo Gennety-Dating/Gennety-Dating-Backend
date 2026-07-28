@@ -1303,14 +1303,52 @@ describe("POST /v1/me/home-location", () => {
       .post("/v1/me/home-location")
       .set("Authorization", `Bearer ${signAccess(user.id)}`)
       .send({
+        homeCity: "Kyiv",
+        homeCountryCode: "UA",
+        latitude: 50.4501,
+        longitude: 30.5234,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.profile.homeCityKey).toBe("ua:kyiv");
+  });
+
+  it("refuses a city Gennety has not launched", async () => {
+    const user = await seedUser({ profile: null });
+    const res = await request(app)
+      .post("/v1/me/home-location")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({
         homeCity: "Lviv",
         homeCountryCode: "UA",
         latitude: 49.8397,
         longitude: 24.0297,
       });
 
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("city-not-supported");
+    expect(userById(user.id)!.profile?.homeCityKey ?? null).toBeNull();
+  });
+
+  it("canonicalizes a launched market's name and coordinates", async () => {
+    // The client only ever picks WHICH market; a drifting/spoofed centroid
+    // would land in Profile.latitude/longitude, which the venue picker reads.
+    const user = await seedUser({ profile: null });
+    const res = await request(app)
+      .post("/v1/me/home-location")
+      .set("Authorization", `Bearer ${signAccess(user.id)}`)
+      .send({
+        homeCity: "kyiv city",
+        homeCountryCode: "UA",
+        homeCityKey: "ua:kyiv",
+        latitude: 50.9,
+        longitude: 30.9,
+      });
+
     expect(res.status).toBe(200);
-    expect(res.body.profile.homeCityKey).toBe("ua:lviv");
+    expect(res.body.profile.homeCity).toBe("Kyiv");
+    expect(res.body.profile.latitude).toBe(50.4501);
+    expect(res.body.profile.longitude).toBe(30.5234);
   });
 
   it("rejects invalid lat/lng", async () => {

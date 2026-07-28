@@ -578,7 +578,7 @@ function App(): ReactElement {
         ) : null}
       </Scene>
       <Scene active={phase.kind === "city"}>
-        <CityGate onState={onState} />
+        <CityGate markets={remoteUser?.supportedCities ?? []} onState={onState} />
       </Scene>
       <Scene active={phase.kind === "theme"}>
         <ThemeGate selected={remoteUser?.theme ?? "dark"} onState={onState} />
@@ -1968,21 +1968,35 @@ function OtpGate(props: {
   );
 }
 
-function CityGate(props: { onState: (state: TelegramOnboardingState) => void }): ReactElement {
+/**
+ * Dating-city gate. Gennety is live in Kyiv only, and matching is strictly
+ * same-city, so this screen offers ONLY launched markets (`markets`, served
+ * from `/state.supportedCities`): they are tappable straight away, search
+ * filters the same list server-side, and geolocation outside every market
+ * explains that instead of saving somewhere the person can never be matched.
+ */
+function CityGate(props: {
+  markets: TelegramCityHit[];
+  onState: (state: TelegramOnboardingState) => void;
+}): ReactElement {
   const s = useOnboardingStrings();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<TelegramCityHit[]>([]);
+  const [results, setResults] = useState<TelegramCityHit[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [geoBusy, setGeoBusy] = useState(false);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // No search yet → the launched markets themselves are the options.
+  const options = results ?? props.markets;
 
   useEffect(() => {
     if (!app?.initData) return;
     const trimmed = query.trim();
     if (trimmed.length < 2) {
-      setResults([]);
+      setResults(null);
       setSearching(false);
       return;
     }
@@ -2003,6 +2017,11 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
     return () => window.clearTimeout(timer);
   }, [query]);
 
+  // A query that matches no launched market is not a typo to shrug at — it is
+  // the "we're not there yet" case, and it deserves the same explanation the
+  // geolocation branch gives.
+  const searchMissed = results !== null && results.length === 0 && !searching && !error;
+
   // Reveal the city list above the keyboard. Telegram's WebView overlays the
   // keyboard without scrolling the focused field up, so when matches land we
   // pull the input to the top of the (keyboard-bounded) scrollable card — the
@@ -2010,7 +2029,7 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
   // when the card actually overflows, so a no-keyboard / desktop layout that
   // already shows everything is left untouched.
   useEffect(() => {
-    if (results.length === 0) return;
+    if (!results || results.length === 0) return;
     const frame = window.requestAnimationFrame(() => {
       const input = inputRef.current;
       const card = input?.closest(".gate-card");
@@ -2026,6 +2045,7 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
     if (!app?.initData || busy || (geoBusy && !allowWhileGeo)) return;
     setBusy(true);
     setError(null);
+    setNote(null);
     try {
       const state = await selectTelegramOnboardingCity(app.initData, city);
       app.HapticFeedback?.notificationOccurred("success");
@@ -2051,6 +2071,7 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
 
     setGeoBusy(true);
     setError(null);
+    setNote(null);
     navigator.geolocation.getCurrentPosition(
       (position) => {
         void resolveAndChoose(position);
@@ -2067,13 +2088,21 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
   async function resolveAndChoose(position: GeolocationPosition): Promise<void> {
     if (!app?.initData) return;
     try {
-      const city = await resolveTelegramOnboardingCity(
+      const resolved = await resolveTelegramOnboardingCity(
         app.initData,
         position.coords.latitude,
         position.coords.longitude,
       );
-      setQuery(city.label);
-      await choose(city, true);
+      // Outside every launched market: say so and leave the choice open. The
+      // launched cities are already on screen, so the user can still pick one
+      // if they're ready to date there.
+      if (!resolved.supported || !resolved.city) {
+        setNote(s.cityOutsideMarket);
+        app.HapticFeedback?.notificationOccurred("warning");
+        return;
+      }
+      setQuery(resolved.city.label);
+      await choose(resolved.city, true);
     } catch (err) {
       setError(errorCopy(err, s));
       app.HapticFeedback?.notificationOccurred("error");
@@ -2087,6 +2116,9 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
       <h1>{s.cityTitle}</h1>
       <p>{s.cityLead}</p>
       {error ? <div className="gate-error">{error}</div> : null}
+      {note ?? (searchMissed ? s.cityOutsideMarket : null) ? (
+        <div className="gate-note">{note ?? s.cityOutsideMarket}</div>
+      ) : null}
       <div className="gate-stack">
         <button className="choice-button" disabled={busy || geoBusy || !app?.initData} onClick={useCurrentLocation}>
           <span>
@@ -2105,7 +2137,7 @@ function CityGate(props: { onState: (state: TelegramOnboardingState) => void }):
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
         <div className="choice-row">
-          {results.map((city) => (
+          {options.map((city) => (
             <button
               key={`${city.homeCityKey}:${city.homePlaceId ?? city.label}`}
               className="choice-button"

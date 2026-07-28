@@ -124,7 +124,8 @@ out of Telegram-only workers.
   mirrored to the client as `phoneAuthEnabled` in `/state`): student →
   corporate-email OTP gate; general → phone one-tap gate (PhoneGate polls
   `/state` until the bot records the trusted `message.contact`); then dating
-  city, a **light/dark theme picker** (right after the city gate, before the
+  city (a **launched market** only — Kyiv today, mirrored to the client as
+  `supportedCities` in `/state`; see §1.3), a **light/dark theme picker** (right after the city gate, before the
   visual intro; default `dark`, changeable later in Settings — `POST /theme`
   records it), and the final AI memory export choice, using Telegram `initData`
   HMAC auth for all writes (`POST /track` persists the re-choosable fork pick).
@@ -249,6 +250,56 @@ must also choose a **dating city** (`Profile.homeCityKey`). This is framed as
 "where you want to receive matches", not as a home address. Users can search
 for a city manually or let the Mini App resolve their browser geolocation to a
 city; raw coordinates alone do not satisfy the matching gate.
+
+**The city must be a launched market — Kyiv only today (2026-07-28).**
+`packages/shared/src/markets.ts` (`SUPPORTED_MARKETS`) is the single source of
+truth, shared by the bot, the Mini App and the `/v1/*` API. Registration used to
+accept any city Google Places could name, which was a promise the product could
+not keep: matching is strictly same-city (§3.2 filter 5), so a user who picked a
+city we have not launched landed in a **pool of one** — no ad spend there, no
+curated venue catalog, no operations, and no possible partner — while the app
+kept counting down to a drop they could never be in. Now:
+
+- **Search** offers only launched markets (`searchMarkets`, matched on the city
+  name and its local-language aliases). The Google Places city lookup is gone
+  entirely: with a curated market set, a global geocoder can only ever propose
+  cities the server must refuse. (`PLACES_API_KEY` is still required for
+  venues.)
+- **Geolocation** answers one question — "are you inside a launched market?" —
+  as pure geometry against the market centroid + `radiusKm` (60 km for Kyiv,
+  generous so the commuter belt counts). Outside every market it resolves to
+  **nothing**, and the Mini App explains that Gennety has not launched there yet
+  and leaves the choice open, rather than saving a city the person is not in.
+  This also ends a real bug: the old reverse-geocode silently resolved ANY
+  coordinates to the first fallback city (Kyiv) whenever `PLACES_API_KEY` was
+  unset.
+- **The write is the enforcement point.** `validateHomeLocationPayload` is the
+  only writer of `homeCityKey`, so one check covers Telegram
+  (`POST /v1/telegram-onboarding/city/select`) and the native app
+  (`POST /v1/me/home-location`) alike: an unlaunched city is refused with
+  `city-not-supported`, and a launched one is **canonicalized** to the market's
+  own name and coordinates — the client only ever picks WHICH market, so a
+  drifting or spoofed centroid can never land in `Profile.latitude/longitude`
+  (which the venue picker and city analytics read). iOS renders the constraint
+  from `AppConfig.supportedCities` (`GET /v1/app/config`) instead of discovering
+  it as a 400.
+
+**Launching a new city is a deliberate code change, not a flag.** A market is
+only real once its curated venue catalog (`curated_venues.cityKey`), ad
+campaign, and ops processes exist — all of which already ship as code/scripts.
+An env toggle would let someone open a city before any of that is ready, which
+is precisely the failure this gate removes. Adding a market: seed + review its
+venues, add the `SUPPORTED_MARKETS` entry (its `cityKey` must match the venue
+rows), confirm the timezone resolves. Until then the product must never suggest
+the service is available there.
+
+**Accounts registered before the gate keep their data and are offered the
+move.** Nothing is rewritten, frozen, or deleted: status, profile, photos,
+verification, tickets and Premium are untouched, and they were already
+unmatchable under the same-city rule. What changes is that the product stops
+promising them a match it cannot deliver, and gives them a one-tap way into a
+launched market — the conditional menu row and the honest weekly DM in §2.1 /
+§3.1. On iOS the same move is `POST /v1/me/home-location` with a supported city.
 
 **Kill switch (`AI_MEMORY_EXPORT_ENABLED`, default on).** The whole AI-memory
 branch can be turned off with one env var while it is reworked, without a
@@ -967,13 +1018,30 @@ when `CUSTOM_EMOJI_MENU_ID` is set. **Bot API limitation:** inline keyboard
 button labels CANNOT carry `custom_emoji` entities — buttons fall back to
 plain Unicode emoji.
 
-Layout: a conditional **My Date** row can come first (only while a live match
+Layout: a conditional **Switch city** row leads when the account's city is not
+a launched market (see below), then a conditional **My Date** row (only while a live match
 exists — see below), then the combined **My Profile** row, the paired
 **Pause/Resume Matching · Settings** row, followed by the single-button
 rows in order: **Profile Video**, **My Tickets** (feature-flagged),
 **Report / Help**.
 
-- **My Date** — a conditional first row, present **only** while the user has an
+- **Switch city to a launched market** (`menu:city`) — a conditional
+  native-`primary` first row, present **only** for an account whose
+  `Profile.homeCityKey` is not a launched market (§1.3). Registration can no
+  longer create one, so this exists for accounts made before that gate: matching
+  is same-city, so nothing else in this menu can work for them until they move.
+  It leads because it is the only thing standing between them and a match, and
+  it never competes with the My Date anchor below — such a user cannot have a
+  live match. Tapping it opens a card naming their city and explaining why, with
+  one confirm (`menu:city:switch`) that moves the dating city to the launched
+  market. **Deliberately not a city picker**: it is a one-way move to the one
+  place Gennety operates, and the only city change the product offers after
+  onboarding. Non-destructive — only `Profile.home*`/coordinates/`timeZone`
+  change; status, profile, photos, verification, tickets and Premium are
+  untouched, so the user lands in the next Thursday drop as they are. A failed
+  save says so rather than claiming success. Telegram-only; iOS uses
+  `POST /v1/me/home-location`.
+- **My Date** — a conditional row, present **only** while the user has an
   in-flight match (`proposed` / `negotiating` / `negotiating_venue` /
   `scheduled`, via `services/active-match.ts`). A `proposed` match becomes
   visible to each side only after that side's own `pitchMessageIdA/B` exists;
@@ -1189,6 +1257,16 @@ venue appear below the drop status. Telegram-only delivery follows the same
 `MATCH_CRON_SCHEDULE` + `CRON_TIMEZONE` source as `/v1/countdown`; the native
 iOS surface keeps rendering its own countdown from that API.
 
+**One account state gets no countdown at all**: a dating city that is not a
+launched market (§1.3). That user is not in the pool, so a live "your next drop
+in Xd Yh" pinned above every conversation is the product's most persistent
+false promise. The banner instead names their city, says Gennety has not
+launched there, and points at the menu's switch row; the button drops the timer
+for a plain "open menu" (same `menu:open` target). No upcoming-date block
+either — a live match is impossible without a same-city partner. The
+`status-timer` worker resolves this per user each tick, so a legacy banner
+self-heals within a minute without touching any other call site.
+
 The banner is self-healing: active Telegram users with a null/stale message id
 get a replacement, deleted messages are recreated in the same tick, and an
 hourly physical-pin audit re-pins a tracked message that is no longer on top.
@@ -1222,7 +1300,11 @@ Supported first-class flows:
   push via `services/push.ts` for the same events that DM Telegram users.
 - `/v1/me/home-location` persists canonical dating city + coordinates for
   match eligibility; `/v1/me/location` remains raw coordinate storage for
-  Meet-Halfway and does not by itself unlock matching.
+  Meet-Halfway and does not by itself unlock matching. The city must be one of
+  `AppConfig.supportedCities` (§1.3) — anything else is `city-not-supported`
+  (400), and a launched one is canonicalized server-side. The client renders
+  the constraint from `GET /v1/app/config` rather than discovering it as an
+  error. The same endpoint is how an existing account moves to a launched city.
 - `/v1/me/preferences` (`matchRadius` ∈ `campus_only` / `citywide`) stores
   the user's future radius preference.
 
@@ -1262,6 +1344,16 @@ Supported first-class flows:
   When `TICKET_FEATURE_ENABLED` and the famine streak reaches **tier ≥ 2**
   (2nd consecutive week+), the same DM also grants and announces a one-time
   **single-ticket discount** (see §3.5b — *Famine discount*).
+  **One branch is not a famine message at all (2026-07-28):** an account whose
+  city is not a launched market (§1.3) was never in the drop, so "no match this
+  week" would misdescribe what happened and the escalating tiers would sell
+  patience for a queue they are not in. Such a user gets
+  `noMatchCityNotLaunched` — a plain `sendMessage` (not the "we really looked"
+  rich stream, which would be a lie: nothing was searched) naming their city,
+  saying we have not launched there, and carrying the one-tap switch to a
+  launched market. The famine discount and the paid Rematch offer are both
+  skipped — a paid re-run cannot find them anyone either. The `NoMatchNotice`
+  row is still written, so the drop stays idempotent.
 
 ### 3.2 Scoring (`services/match-engine.ts`)
 
@@ -1347,6 +1439,11 @@ Hard SQL filters (`buildCandidateSql`):
    other's credential.
 5. Same canonical dating city (`Profile.homeCityKey`) and saved city
    coordinates. Different university domains can match inside the same city.
+   This exact-equality join is *why* registration is restricted to launched
+   markets (§1.3): an unlaunched city can only ever be a pool of one. The
+   engine itself is unchanged and deliberately carries no market list — an
+   account left over from before that gate simply finds no candidate, exactly
+   as it always did.
 6. **Lifetime ban** — exclude any pair that EVER appeared in a `matches` row,
    regardless of terminal status. Backed by the canonical-pair functional
    index. A user never sees the same partner twice.

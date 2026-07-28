@@ -27,6 +27,8 @@ export type CreateStatusBannerResult =
 export interface CreateStatusBannerOptions {
   now?: Date;
   upcomingDate?: StatusBannerUpcomingDate;
+  /** §1.1 — the account's city is one Gennety hasn't launched. */
+  marketPending?: { city: string | null };
   clearExistingPins?: boolean;
   beforeApiCall?: () => Promise<void>;
 }
@@ -43,6 +45,7 @@ export function buildStatusBannerView(
   language: Language,
   now: Date = new Date(),
   upcomingDate?: StatusBannerUpcomingDate,
+  marketPending?: { city: string | null },
 ): StatusBannerView {
   return renderStatusBanner({
     now,
@@ -51,6 +54,7 @@ export function buildStatusBannerView(
     language,
     timeZone: CRON_TIMEZONE,
     ...(upcomingDate ? { upcomingDate } : {}),
+    ...(marketPending ? { marketPending } : {}),
   });
 }
 
@@ -112,6 +116,7 @@ async function createStatusBannerLocked(
     language,
     options.now ?? new Date(),
     options.upcomingDate,
+    options.marketPending,
   );
   const existing = await prisma.user.findUnique({
     where: { telegramId },

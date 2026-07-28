@@ -16,6 +16,17 @@ export type {
   ScoredProfilerAnswer,
 } from "./profiler-questions.js";
 export { cityKeyToTimeZone, isValidTimeZone, DEFAULT_TIME_ZONE } from "./timezone.js";
+export {
+  SUPPORTED_MARKETS,
+  SUPPORTED_CITY_KEYS,
+  DEFAULT_MARKET,
+  findMarketByCityKey,
+  isSupportedCityKey,
+  searchMarkets,
+  marketForCoordinates,
+  distanceKm,
+} from "./markets.js";
+export type { Market } from "./markets.js";
 export { t, escapeMd, interpolate } from "./i18n.js";
 export type { TranslationKey } from "./i18n.js";
 export { tv, setVariantRng, variantAlternates, VARIANT_KEYS } from "./i18n-variants.js";

@@ -3,6 +3,7 @@ import type { BotContext } from "../../session.js";
 import { showMainMenu } from "./main.js";
 import { handleMyProfile } from "./my-profile.js";
 import { handleMyDate } from "./my-date.js";
+import { handleCitySwitchConfirm, handleCitySwitchOpen } from "./city-switch.js";
 import {
   handleEditOpen,
   handleEditBioStart,
@@ -239,6 +240,15 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
     // My Date hub (conditional row — only present while a live match exists)
     case "menu:date":
       await handleMyDate(ctx);
+      return;
+
+    // Switch to a launched market (conditional row — only present for an
+    // account registered in a city Gennety hasn't launched, §1.1)
+    case "menu:city":
+      await handleCitySwitchOpen(ctx);
+      return;
+    case "menu:city:switch":
+      await handleCitySwitchConfirm(ctx);
       return;
 
     // Edit Profile

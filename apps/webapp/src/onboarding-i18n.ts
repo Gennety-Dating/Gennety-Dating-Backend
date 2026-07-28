@@ -67,6 +67,8 @@ export interface OnboardingStrings {
   citySearching: string;
   cityGeoUnavailable: string;
   cityGeoDenied: string;
+  /** Shown when geolocation / search lands outside every launched market. */
+  cityOutsideMarket: string;
   aiMemoryTitle: string;
   aiMemoryAria: string;
   aiMemoryAccept: string;
@@ -208,14 +210,17 @@ const en: OnboardingStrings = {
   otpResendIn: (seconds) => `Send again in ${seconds}s`,
   otpChangeEmail: "Change email",
   cityTitle: "Your matching city",
-  cityLead: "Choose where you are ready to go on dates now. We do not save your home address.",
+  cityLead:
+    "Gennety is live in Kyiv for now. Choose it if you're ready to go on dates there — we do not save your home address.",
   cityDetect: "Detect automatically",
   cityDetecting: "Detecting city...",
   cityGeoMeta: "Location is used only to choose your city",
-  cityPlaceholder: "Kyiv, Lviv, Warsaw...",
+  cityPlaceholder: "Kyiv",
   citySearching: "Searching for a city...",
   cityGeoUnavailable: "We couldn't open location access. Choose a city using search.",
   cityGeoDenied: "Location isn't available. Choose a city using search.",
+  cityOutsideMarket:
+    "Gennety hasn't launched in your city yet — we're only in Kyiv so far, so there'd be nobody to match you with. Pick Kyiv if you're ready to go on dates there.",
   aiMemoryTitle: "Would you like to import memory from other AI apps to give your personal AI matchmaker more context about you?",
   aiMemoryAria: "ChatGPT, Claude and Gemini",
   aiMemoryAccept: "Yes, connect",
@@ -267,6 +272,7 @@ const en: OnboardingStrings = {
     "invalid-ai-memory-preference": "We couldn't save your choice. Try again.",
     "email-required": "Verify your university email first.",
     "location-required": "Choose your matching city first.",
+    "city-not-supported": "Gennety isn't live in that city yet. Choose Kyiv to continue.",
     "Invalid initData": "Open the Mini App from the bot chat to continue.",
     "Missing tma initData": "Open the Mini App from the bot chat to continue.",
     "Empty initData": "Open the Mini App from the bot chat to continue.",
@@ -376,13 +382,17 @@ const ru: OnboardingStrings = {
   otpResendIn: (seconds) => `Отправить снова через ${seconds} сек.`,
   otpChangeEmail: "Изменить почту",
   cityTitle: "Город для мэтчей",
-  cityLead: "Выбери город, где ты сейчас готов ходить на свидания. Мы не сохраняем домашний адрес.",
+  cityLead:
+    "Пока Gennety работает в Киеве. Выбери его, если готов ходить на свидания там — домашний адрес мы не сохраняем.",
   cityDetect: "Определить автоматически",
   cityDetecting: "Определяю город...",
   cityGeoMeta: "Используем геопозицию только для выбора города",
+  cityPlaceholder: "Киев",
   citySearching: "Ищу город...",
   cityGeoUnavailable: "Не получилось открыть геолокацию. Выбери город через поиск.",
   cityGeoDenied: "Геолокация недоступна. Выбери город через поиск.",
+  cityOutsideMarket:
+    "В твоём городе Gennety пока не запущен — мы работаем только в Киеве, и мэтчить тебя было бы не с кем. Выбери Киев, если готов ходить на свидания там.",
   aiMemoryTitle: "Хочешь импортировать память из других AI-приложений, чтобы дать личному AI-матчмейкеру больше контекста о тебе?",
   aiMemoryAria: "ChatGPT, Claude и Gemini",
   aiMemoryAccept: "Да, подключить",
@@ -434,6 +444,7 @@ const ru: OnboardingStrings = {
     "invalid-ai-memory-preference": "Не получилось сохранить выбор. Попробуй ещё раз.",
     "email-required": "Сначала подтверди университетскую почту.",
     "location-required": "Сначала выбери город для мэтчей.",
+    "city-not-supported": "В этом городе Gennety пока не работает. Выбери Киев, чтобы продолжить.",
     "Invalid initData": "Открой Mini App из чата с ботом, чтобы продолжить.",
     "Missing tma initData": "Открой Mini App из чата с ботом, чтобы продолжить.",
     "Empty initData": "Открой Mini App из чата с ботом, чтобы продолжить.",
@@ -543,13 +554,17 @@ const uk: OnboardingStrings = {
   otpResendIn: (seconds) => `Надіслати знову через ${seconds} с`,
   otpChangeEmail: "Змінити пошту",
   cityTitle: "Місто для метчів",
-  cityLead: "Обери місто, де ти зараз готовий ходити на побачення. Ми не зберігаємо домашню адресу.",
+  cityLead:
+    "Поки Gennety працює в Києві. Обери його, якщо готовий ходити на побачення там — домашню адресу ми не зберігаємо.",
   cityDetect: "Визначити автоматично",
   cityDetecting: "Визначаю місто...",
   cityGeoMeta: "Геопозицію використовуємо лише для вибору міста",
+  cityPlaceholder: "Київ",
   citySearching: "Шукаю місто...",
   cityGeoUnavailable: "Не вдалося відкрити геолокацію. Обери місто через пошук.",
   cityGeoDenied: "Геолокація недоступна. Обери місто через пошук.",
+  cityOutsideMarket:
+    "У твоєму місті Gennety ще не запущено — ми працюємо лише в Києві, тож метчити тебе не було б з ким. Обери Київ, якщо готовий ходити на побачення там.",
   aiMemoryTitle: "Хочеш імпортувати пам'ять з інших AI-застосунків, щоб дати особистому AI-матчмейкеру більше контексту про тебе?",
   aiMemoryAria: "ChatGPT, Claude і Gemini",
   aiMemoryAccept: "Так, підключити",
@@ -602,6 +617,7 @@ const uk: OnboardingStrings = {
     "invalid-ai-memory-preference": "Не вдалося зберегти вибір. Спробуй ще раз.",
     "email-required": "Спочатку підтвердь університетську пошту.",
     "location-required": "Спочатку обери місто для метчів.",
+    "city-not-supported": "У цьому місті Gennety ще не працює. Обери Київ, щоб продовжити.",
     "Invalid initData": "Відкрий Mini App із чату з ботом, щоб продовжити.",
     "Missing tma initData": "Відкрий Mini App із чату з ботом, щоб продовжити.",
     "Empty initData": "Відкрий Mini App із чату з ботом, щоб продовжити.",
@@ -711,13 +727,17 @@ const de: OnboardingStrings = {
   otpResendIn: (seconds) => `Erneut senden in ${seconds} Sek.`,
   otpChangeEmail: "E-Mail ändern",
   cityTitle: "Stadt für deine Matches",
-  cityLead: "Wähle die Stadt, in der du aktuell auf Dates gehen möchtest. Deine Wohnadresse speichern wir nicht.",
+  cityLead:
+    "Gennety ist vorerst in Kyjiw am Start. Wähle die Stadt, wenn du dort auf Dates gehen möchtest — deine Wohnadresse speichern wir nicht.",
   cityDetect: "Automatisch erkennen",
   cityDetecting: "Stadt wird erkannt...",
   cityGeoMeta: "Der Standort wird nur zur Auswahl der Stadt verwendet",
+  cityPlaceholder: "Kyjiw",
   citySearching: "Stadt wird gesucht...",
   cityGeoUnavailable: "Standortzugriff konnte nicht geöffnet werden. Wähle die Stadt über die Suche.",
   cityGeoDenied: "Standort ist nicht verfügbar. Wähle die Stadt über die Suche.",
+  cityOutsideMarket:
+    "In deiner Stadt ist Gennety noch nicht gestartet — wir sind bisher nur in Kyjiw, es gäbe also niemanden zum Matchen. Wähle Kyjiw, wenn du dort auf Dates gehen möchtest.",
   aiMemoryTitle: "Möchtest du Erinnerungen aus anderen KI-Apps importieren, damit dein persönlicher KI-Matchmaker mehr Kontext über dich hat?",
   aiMemoryAria: "ChatGPT, Claude und Gemini",
   aiMemoryAccept: "Ja, verbinden",
@@ -770,6 +790,7 @@ const de: OnboardingStrings = {
     "invalid-ai-memory-preference": "Deine Auswahl konnte nicht gespeichert werden. Versuch es erneut.",
     "email-required": "Bestätige zuerst deine Universitäts-E-Mail.",
     "location-required": "Wähle zuerst deine Match-Stadt.",
+    "city-not-supported": "In dieser Stadt gibt es Gennety noch nicht. Wähle Kyjiw, um fortzufahren.",
     "Invalid initData": "Öffne die Mini App aus dem Bot-Chat, um fortzufahren.",
     "Missing tma initData": "Öffne die Mini App aus dem Bot-Chat, um fortzufahren.",
     "Empty initData": "Öffne die Mini App aus dem Bot-Chat, um fortzufahren.",
@@ -879,13 +900,17 @@ const pl: OnboardingStrings = {
   otpResendIn: (seconds) => `Wyślij ponownie za ${seconds} s`,
   otpChangeEmail: "Zmień e-mail",
   cityTitle: "Miasto dopasowań",
-  cityLead: "Wybierz miasto, w którym chcesz teraz chodzić na randki. Nie zapisujemy adresu domowego.",
+  cityLead:
+    "Na razie Gennety działa w Kijowie. Wybierz je, jeśli chcesz tam chodzić na randki — nie zapisujemy adresu domowego.",
   cityDetect: "Wykryj automatycznie",
   cityDetecting: "Wykrywanie miasta...",
   cityGeoMeta: "Lokalizacja służy wyłącznie do wyboru miasta",
+  cityPlaceholder: "Kijów",
   citySearching: "Szukanie miasta...",
   cityGeoUnavailable: "Nie udało się otworzyć lokalizacji. Wybierz miasto przez wyszukiwarkę.",
   cityGeoDenied: "Lokalizacja jest niedostępna. Wybierz miasto przez wyszukiwarkę.",
+  cityOutsideMarket:
+    "W Twoim mieście Gennety jeszcze nie wystartowało — jesteśmy na razie tylko w Kijowie, więc nie byłoby kogo dopasować. Wybierz Kijów, jeśli chcesz tam chodzić na randki.",
   aiMemoryTitle: "Chcesz zaimportować pamięć z innych aplikacji AI, aby Twój osobisty AI-matchmaker miał więcej kontekstu o Tobie?",
   aiMemoryAria: "ChatGPT, Claude i Gemini",
   aiMemoryAccept: "Tak, połącz",
@@ -938,6 +963,7 @@ const pl: OnboardingStrings = {
     "invalid-ai-memory-preference": "Nie udało się zapisać wyboru. Spróbuj ponownie.",
     "email-required": "Najpierw potwierdź uczelniany e-mail.",
     "location-required": "Najpierw wybierz miasto dopasowań.",
+    "city-not-supported": "W tym mieście Gennety jeszcze nie działa. Wybierz Kijów, aby kontynuować.",
     "Invalid initData": "Otwórz Mini App z czatu z botem, aby kontynuować.",
     "Missing tma initData": "Otwórz Mini App z czatu z botem, aby kontynuować.",
     "Empty initData": "Otwórz Mini App z czatu z botem, aby kontynuować.",

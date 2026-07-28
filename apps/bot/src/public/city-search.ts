@@ -1,184 +1,64 @@
-import { buildHomeCityKey, type HomeLocationInput } from "./home-location.js";
-
-const PLACES_TIMEOUT_MS = 10_000;
+import {
+  SUPPORTED_MARKETS,
+  marketForCoordinates,
+  searchMarkets,
+  type Market,
+} from "@gennety/shared";
+import type { HomeLocationInput } from "./home-location.js";
 
 /**
- * City lookup shared by the Telegram onboarding Mini App and the website's
- * pre-registration form (the student track picks its dating city on the web).
+ * City lookup for the onboarding "dating city" step.
  *
- * Google Places is the source when `PLACES_API_KEY` is set; without it — and
- * on any Places failure — the search degrades to the small first-party city
- * list below rather than dead-ending the user.
+ * First-party by design (2026-07-28): the picker only ever offers a **launched
+ * market** (`packages/shared/src/markets.ts`). It used to query Google Places,
+ * which could only ever propose cities the server must then refuse — matching
+ * is strictly same-city, so registering elsewhere creates an isolated pool of
+ * one. Dropping the provider also removes a real bug: without `PLACES_API_KEY`
+ * the reverse-geocode silently resolved ANY coordinates to the first fallback
+ * city (Kyiv). `PLACES_API_KEY` is still required for venues — only the city
+ * lookup stopped using it.
  */
 export interface CitySearchHit extends HomeLocationInput {
   label: string;
 }
 
-interface PlacesTextPlace {
-  id?: string;
-  displayName?: { text?: string };
-  formattedAddress?: string;
-  types?: string[];
-  location?: { latitude?: number; longitude?: number };
-  addressComponents?: Array<{
-    longText?: string;
-    shortText?: string;
-    types?: string[];
-  }>;
-}
-
-const FALLBACK_CITIES: CitySearchHit[] = [
-  cityHit("Kyiv", "UA", 50.4501, 30.5234, "fallback:ua:kyiv"),
-  cityHit("Kharkiv", "UA", 49.9935, 36.2304, "fallback:ua:kharkiv"),
-  cityHit("Odesa", "UA", 46.4846, 30.7233, "fallback:ua:odesa"),
-  cityHit("Lviv", "UA", 49.8397, 24.0297, "fallback:ua:lviv"),
-  cityHit("Warsaw", "PL", 52.2297, 21.0122, "fallback:pl:warsaw"),
-  cityHit("Berlin", "DE", 52.52, 13.405, "fallback:de:berlin"),
-];
-
-function cityHit(
-  city: string,
-  countryCode: string,
-  latitude: number,
-  longitude: number,
-  placeId: string | null,
-): CitySearchHit {
+export function cityHitForMarket(market: Market): CitySearchHit {
   return {
-    label: `${city}, ${countryCode}`,
-    homeCity: city,
-    homeCountryCode: countryCode,
-    homeCityKey: buildHomeCityKey(city, countryCode),
-    homePlaceId: placeId,
-    latitude,
-    longitude,
+    label: `${market.city}, ${market.countryCode}`,
+    homeCity: market.city,
+    homeCountryCode: market.countryCode,
+    homeCityKey: market.cityKey,
+    homePlaceId: null,
+    latitude: market.latitude,
+    longitude: market.longitude,
   };
 }
 
-export async function searchCities(query: string): Promise<CitySearchHit[]> {
-  const apiKey = process.env.PLACES_API_KEY;
-  if (!apiKey) return fallbackCitySearch(query);
-
-  try {
-    const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask":
-          "places.id,places.displayName,places.formattedAddress,places.location,places.addressComponents,places.types",
-      },
-      body: JSON.stringify({
-        textQuery: query,
-        includedType: "locality",
-        maxResultCount: 8,
-      }),
-      signal: AbortSignal.timeout(PLACES_TIMEOUT_MS),
-    });
-    if (!response.ok) return fallbackCitySearch(query);
-    const json = (await response.json()) as { places?: PlacesTextPlace[] };
-    const hits = (json.places ?? [])
-      .map(cityHitFromPlace)
-      .filter((hit): hit is CitySearchHit => hit !== null);
-    return hits.length ? hits : fallbackCitySearch(query);
-  } catch {
-    return fallbackCitySearch(query);
-  }
+/** Every launched market, in display order — the picker's default list. */
+export function supportedCityHits(): CitySearchHit[] {
+  return SUPPORTED_MARKETS.map(cityHitForMarket);
 }
 
-function fallbackCitySearch(query: string): CitySearchHit[] {
-  const lower = query.toLowerCase();
-  return FALLBACK_CITIES.filter((city) => city.homeCity.toLowerCase().includes(lower)).slice(0, 8);
+/** Manual search. Never returns a city we have not launched. */
+export function searchCities(query: string): CitySearchHit[] {
+  return searchMarkets(query).map(cityHitForMarket);
 }
 
-function cityHitFromPlace(place: PlacesTextPlace): CitySearchHit | null {
-  const lat = place.location?.latitude;
-  const lng = place.location?.longitude;
-  if (lat == null || lng == null) return null;
-
-  const city =
-    component(place, "locality", "longText") ??
-    component(place, "administrative_area_level_1", "longText") ??
-    place.displayName?.text ??
-    "";
-  const countryCode = component(place, "country", "shortText");
-  if (!city || !countryCode) return null;
-  return {
-    ...cityHit(city, countryCode.toUpperCase(), lat, lng, place.id ?? null),
-    label: place.formattedAddress ?? `${city}, ${countryCode.toUpperCase()}`,
-  };
+export interface CityResolution {
+  /** True when the coordinates fall inside a launched market. */
+  supported: boolean;
+  /** The market to select; `null` when the user is outside every market. */
+  city: CitySearchHit | null;
 }
 
-function component(
-  place: PlacesTextPlace,
-  type: string,
-  field: "longText" | "shortText",
-): string | null {
-  for (const item of place.addressComponents ?? []) {
-    if (item.types?.includes(type) && item[field]) return item[field]!;
-  }
-  return null;
-}
-
-interface GeocodeResult {
-  place_id?: string;
-  types?: string[];
-  formatted_address?: string;
-  geometry?: { location?: { lat?: number; lng?: number } };
-  address_components?: Array<{
-    long_name?: string;
-    short_name?: string;
-    types?: string[];
-  }>;
-}
-
-export async function resolveCityFromCoordinates(lat: number, lng: number): Promise<CitySearchHit> {
-  const apiKey = process.env.PLACES_API_KEY;
-  if (!apiKey) return FALLBACK_CITIES[0]!;
-
-  try {
-    const params = new URLSearchParams({
-      latlng: `${lat},${lng}`,
-      key: apiKey,
-      result_type: "locality|administrative_area_level_1",
-    });
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`,
-      { signal: AbortSignal.timeout(PLACES_TIMEOUT_MS) },
-    );
-    if (!response.ok) return FALLBACK_CITIES[0]!;
-    const json = (await response.json()) as { results?: GeocodeResult[] };
-    for (const result of json.results ?? []) {
-      const hit = cityHitFromGeocode(result);
-      if (hit) return hit;
-    }
-    return FALLBACK_CITIES[0]!;
-  } catch {
-    return FALLBACK_CITIES[0]!;
-  }
-}
-
-function cityHitFromGeocode(result: GeocodeResult): CitySearchHit | null {
-  const city =
-    geocodeComponent(result, "locality", "long_name") ??
-    geocodeComponent(result, "administrative_area_level_1", "long_name") ??
-    "";
-  const countryCode = geocodeComponent(result, "country", "short_name");
-  const lat = result.geometry?.location?.lat;
-  const lng = result.geometry?.location?.lng;
-  if (!city || !countryCode || lat == null || lng == null) return null;
-  return {
-    ...cityHit(city, countryCode.toUpperCase(), lat, lng, result.place_id ?? null),
-    label: result.formatted_address ?? `${city}, ${countryCode.toUpperCase()}`,
-  };
-}
-
-function geocodeComponent(
-  result: GeocodeResult,
-  type: string,
-  field: "long_name" | "short_name",
-): string | null {
-  for (const item of result.address_components ?? []) {
-    if (item.types?.includes(type) && item[field]) return item[field]!;
-  }
-  return null;
+/**
+ * Resolve a geolocation fix into a launched market. Deliberately geometric
+ * rather than a geocode: the only question the onboarding step asks is "are you
+ * in a city we operate in", and an unresolvable answer must be `null` — never a
+ * market the person is not actually in.
+ */
+export function resolveMarketFromCoordinates(lat: number, lng: number): CityResolution {
+  const market = marketForCoordinates(lat, lng);
+  if (!market) return { supported: false, city: null };
+  return { supported: true, city: cityHitForMarket(market) };
 }

@@ -329,6 +329,34 @@ describe("Menu — main keyboard", () => {
     // Planning-stage label (⏳), not a countdown.
     expect(firstBtn.text).toContain("⏳");
   });
+
+  // Kyiv-only market gate (PRODUCT_SPEC §1.1): the switch row exists only for
+  // an account registered in a city we have not launched.
+  it("omits the city-switch row for a user in a launched market", async () => {
+    (findActiveMatchForTelegramId as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "active",
+      profile: { videoBonusTicketAt: null, homeCityKey: "ua:kyiv" },
+    });
+    const ctx = createMockCtx({});
+    await showMainMenu(ctx);
+    const kb = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
+    expect(JSON.stringify(kb.inline_keyboard)).not.toContain("menu:city");
+  });
+
+  it("leads with a primary city-switch row for an unlaunched city", async () => {
+    (findActiveMatchForTelegramId as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "active",
+      profile: { videoBonusTicketAt: null, homeCityKey: "de:berlin" },
+    });
+    const ctx = createMockCtx({});
+    await showMainMenu(ctx);
+    const kb = (ctx.reply as ReturnType<typeof vi.fn>).mock.calls[0][1].reply_markup;
+    const firstBtn = kb.inline_keyboard[0][0];
+    expect(firstBtn.callback_data).toBe("menu:city");
+    expect(firstBtn.style).toBe("primary");
+  });
 });
 
 describe("Menu router — Telegram service messages", () => {

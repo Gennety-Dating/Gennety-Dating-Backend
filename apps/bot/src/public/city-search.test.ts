@@ -1,64 +1,51 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resolveCityFromCoordinates, searchCities } from "./city-search.js";
-
-const originalPlacesKey = process.env.PLACES_API_KEY;
+import {
+  resolveMarketFromCoordinates,
+  searchCities,
+  supportedCityHits,
+} from "./city-search.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  if (originalPlacesKey === undefined) delete process.env.PLACES_API_KEY;
-  else process.env.PLACES_API_KEY = originalPlacesKey;
 });
 
-describe("city search provider boundaries", () => {
-  it("bounds the Places text-search request", async () => {
-    process.env.PLACES_API_KEY = "test-key";
-    const fetchMock = vi.fn().mockResolvedValue(
-      Response.json({
-        places: [
-          {
-            id: "place-1",
-            displayName: { text: "Kyiv" },
-            formattedAddress: "Kyiv, Ukraine",
-            location: { latitude: 50.45, longitude: 30.52 },
-            addressComponents: [
-              { longText: "Kyiv", types: ["locality"] },
-              { shortText: "UA", types: ["country"] },
-            ],
-          },
-        ],
-      }),
-    );
+describe("city search", () => {
+  it("offers only launched markets and never calls a provider", () => {
+    const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(searchCities("Kyiv")).resolves.toMatchObject([
-      { homeCity: "Kyiv", homeCountryCode: "UA" },
+    expect(searchCities("Kyiv")).toMatchObject([
+      { homeCity: "Kyiv", homeCountryCode: "UA", homeCityKey: "ua:kyiv" },
     ]);
-    expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(searchCities("Киев")).toHaveLength(1);
+    expect(searchCities("Berlin")).toEqual([]);
+    expect(searchCities("Lviv")).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("bounds the reverse-geocode request", async () => {
-    process.env.PLACES_API_KEY = "test-key";
-    const fetchMock = vi.fn().mockResolvedValue(
-      Response.json({
-        results: [
-          {
-            place_id: "place-1",
-            formatted_address: "Kyiv, Ukraine",
-            geometry: { location: { lat: 50.45, lng: 30.52 } },
-            address_components: [
-              { long_name: "Kyiv", types: ["locality"] },
-              { short_name: "UA", types: ["country"] },
-            ],
-          },
-        ],
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
+  it("exposes the default picker list", () => {
+    expect(supportedCityHits().map((hit) => hit.homeCityKey)).toEqual(["ua:kyiv"]);
+  });
+});
 
-    await expect(resolveCityFromCoordinates(50.45, 30.52)).resolves.toMatchObject({
-      homeCity: "Kyiv",
-      homeCountryCode: "UA",
+describe("resolveMarketFromCoordinates", () => {
+  it("pre-selects the market a user is actually in", () => {
+    expect(resolveMarketFromCoordinates(50.4501, 30.5234)).toMatchObject({
+      supported: true,
+      city: { homeCityKey: "ua:kyiv", latitude: 50.4501, longitude: 30.5234 },
     });
-    expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("refuses to guess a market for coordinates outside every launched city", () => {
+    // Pre-2026-07-28 this silently answered "Kyiv" for any point on earth
+    // whenever PLACES_API_KEY was unset.
+    expect(resolveMarketFromCoordinates(52.52, 13.405)).toEqual({
+      supported: false,
+      city: null,
+    });
+    expect(resolveMarketFromCoordinates(49.8397, 24.0297)).toEqual({
+      supported: false,
+      city: null,
+    });
   });
 });

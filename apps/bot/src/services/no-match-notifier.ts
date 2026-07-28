@@ -11,6 +11,10 @@ import { AI_EMOJI } from "./ai-emoji.js";
 import { grantFamineDiscountIfEligible } from "./ticket-discount.js";
 import { isUniqueViolation } from "./ticket-wallet.js";
 import { sendRematchOfferIfEligible } from "../handlers/matching/rematch.js";
+import {
+  buildCitySwitchKeyboard,
+  isMarketPending,
+} from "../handlers/menu/city-switch.js";
 
 /**
  * Empathetic "no match this week" DM.
@@ -139,7 +143,12 @@ export async function sendNoMatchNotices(
         },
       ],
     },
-    select: { id: true, telegramId: true, language: true },
+    select: {
+      id: true,
+      telegramId: true,
+      language: true,
+      profile: { select: { homeCityKey: true, homeCity: true } },
+    },
   });
 
   const result: NoMatchNotifyResult = {
@@ -163,12 +172,23 @@ export async function sendNoMatchNotices(
 
     const tier = await computeTier(u.id, dropDate);
     const lang: Language = u.language ?? "en";
-    let body = t(lang, templateKeyForTier(tier), {});
+
+    // An account registered in a city we haven't launched (PRODUCT_SPEC §1.1).
+    // Matching is same-city, so the honest answer isn't "no match this week" —
+    // it's "we're not in your city yet", plus the one-tap move to a launched
+    // market. Escalating famine tiers, granting a discount, or offering a paid
+    // Rematch would all sell a drop they cannot be in.
+    const marketPending = isMarketPending(u.profile?.homeCityKey);
+    let body = marketPending
+      ? t(lang, "noMatchCityNotLaunched", {
+          city: u.profile?.homeCity ?? u.profile?.homeCityKey ?? "",
+        })
+      : t(lang, templateKeyForTier(tier), {});
 
     // 2nd consecutive famine week+ → grant the one-time single-ticket discount
     // and tell them in the same DM. Inert unless TICKET_FEATURE_ENABLED (the
     // grant self-gates), so the flag-off path keeps the plain tier template.
-    if (tier >= FAMINE_DISCOUNT_MIN_TIER) {
+    if (!marketPending && tier >= FAMINE_DISCOUNT_MIN_TIER) {
       const grant = await grantFamineDiscountIfEligible(u.id);
       if (grant.granted && grant.pct) {
         body += `\n\n${t(lang, "noMatchDiscountOffer", { pct: grant.pct })}`;
@@ -200,21 +220,30 @@ export async function sendNoMatchNotices(
     }
 
     try {
-      // Deliberately SHORT stream (anti-drumroll): one "thinking" lead beat —
-      // "we really looked" — then the full empathetic body as the persisted
-      // send. We never spell out bad news slowly. Streams via the native rich
-      // AI-compose path (`rich: true`): the lead beat (`thinkingIndex: 0`)
-      // renders as a `<tg-thinking>` shimmer, the body is the plain final
-      // `sendMessage`. The templates carry no Markdown (emoji + `•` bullets +
-      // newlines only), so the plain final send renders identically —
-      // `parse_mode` is intentionally dropped. Degrades to the classic edited
-      // stream on clients without rich-draft support.
-      await streamImpl(
-        api,
-        Number(u.telegramId),
-        [t(lang, "noMatchStreamStart"), body],
-        { rich: true, thinkingIndex: 0, thinkingEmojiId: AI_EMOJI.think },
-      );
+      if (marketPending) {
+        // Plain send, not the rich "we really looked" stream — nothing was
+        // searched for this user, so that beat would be a lie. It also carries
+        // the switch button, which the draft-stream primitive cannot attach.
+        await api.sendMessage(Number(u.telegramId), body, {
+          reply_markup: buildCitySwitchKeyboard(lang),
+        });
+      } else {
+        // Deliberately SHORT stream (anti-drumroll): one "thinking" lead beat —
+        // "we really looked" — then the full empathetic body as the persisted
+        // send. We never spell out bad news slowly. Streams via the native rich
+        // AI-compose path (`rich: true`): the lead beat (`thinkingIndex: 0`)
+        // renders as a `<tg-thinking>` shimmer, the body is the plain final
+        // `sendMessage`. The templates carry no Markdown (emoji + `•` bullets +
+        // newlines only), so the plain final send renders identically —
+        // `parse_mode` is intentionally dropped. Degrades to the classic edited
+        // stream on clients without rich-draft support.
+        await streamImpl(
+          api,
+          Number(u.telegramId),
+          [t(lang, "noMatchStreamStart"), body],
+          { rich: true, thinkingIndex: 0, thinkingEmojiId: AI_EMOJI.think },
+        );
+      }
 
       result.notified++;
       if (tier === 1) result.tier1++;
@@ -227,8 +256,11 @@ export async function sendNoMatchNotices(
       // short, empathetic rich stream (§3.1) and bolting a price onto it would
       // undercut the empathy and complicate a carefully-tuned primitive.
       // Self-gating (flag, male-only, eligibility) lives in the sender, so this
-      // is inert for everyone who can't or shouldn't buy.
-      await sendRematchOfferIfEligible(api, u.id, "famine", now).catch(() => {});
+      // is inert for everyone who can't or shouldn't buy. Skipped entirely for
+      // a market-pending user: a paid re-run cannot find them anyone either.
+      if (!marketPending) {
+        await sendRematchOfferIfEligible(api, u.id, "famine", now).catch(() => {});
+      }
     } catch (err) {
       // NOMATCH-1: the send failed after the claim landed. A famine discount
       // may already be durably granted and folded into `body` above (its own

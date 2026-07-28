@@ -50,6 +50,18 @@ function user(
     promoCode: null,
     promoTickets: 1,
     promoMonths: 3,
+    // Launched markets: Kyiv only (packages/shared/src/markets.ts).
+    supportedCities: [
+      {
+        label: "Kyiv, UA",
+        homeCity: "Kyiv",
+        homeCountryCode: "UA",
+        homeCityKey: "ua:kyiv",
+        homePlaceId: null,
+        latitude: 50.4501,
+        longitude: 30.5234,
+      },
+    ],
     homeLocation: null,
     completed: false,
     ...overrides,

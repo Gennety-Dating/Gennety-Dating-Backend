@@ -25,6 +25,12 @@ export interface StatusBannerViewInput {
   language: Language;
   timeZone: string;
   upcomingDate?: StatusBannerUpcomingDate;
+  /**
+   * Set for an account registered in a city Gennety hasn't launched
+   * (PRODUCT_SPEC §1.1). Matching is same-city, so counting down to a drop
+   * they cannot be in is a promise we can't keep — the banner says so instead.
+   */
+  marketPending?: { city: string | null };
 }
 
 export interface StatusBannerView {
@@ -37,6 +43,26 @@ export interface StatusBannerView {
 
 /** Build the complete Telegram render state, independent of grammY. */
 export function renderStatusBanner(input: StatusBannerViewInput): StatusBannerView {
+  // Market-pending accounts get no drop countdown at all: they are not in the
+  // pool, and there is no upcoming date to show either (a live match is
+  // impossible without a same-city partner). The button still opens the menu —
+  // that is where the switch-to-a-launched-market row lives.
+  if (input.marketPending) {
+    const view = {
+      text: [
+        "✦ GENNETY",
+        "",
+        t(input.language, "statusBannerMarketPending", {
+          city: input.marketPending.city ?? "",
+        }),
+      ].join("\n"),
+      buttonText: t(input.language, "statusButtonMenu"),
+      callbackData: "menu:open" as const,
+      buttonStyle: "primary" as const,
+    };
+    return { ...view, signature: JSON.stringify(view) };
+  }
+
   const locale = LANGUAGE_LOCALES[input.language];
   const date = new Intl.DateTimeFormat(locale, {
     weekday: "long",

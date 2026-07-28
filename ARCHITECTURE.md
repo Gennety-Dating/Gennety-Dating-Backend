@@ -254,7 +254,7 @@ Columns (≈ 25):
 | Vector | `embedding` (`vector(1536)`), `embeddingDirty`, `embeddingDirtyAt` |
 | Elo | `eloScore` (default 500), seeded from the server-side mean of all per-photo vision scores; `eloMatchesPlayed`; `eloSeededAt`; auditable aggregate/per-photo output in `eloSeedDetails` |
 | Photos | `photos` (`String[]` of static Telegram `file_id` or Supabase path), `profileMedia` (`Json[]` structured display media; empty legacy rows normalize from `photos[]`), `referenceFaceEmbedding` (`Json?` legacy self-photo identity-anchor metadata — retained, no longer written by the upload flow since identity moved to liveness-only, 2026-06-23), `uploadedPhotoHashes` (`String[]`, strictly 1:1 with `photos`; perceptual hash or `""` sentinel at every index), `pendingPhotoCandidates` (`Json[]` legacy consensus pool — retained, no longer written), `acceptedPhotoCount` (`Int`), `photoFaceScores` (`Float[]`, 1:1 with `photos`) |
-| Geo / radius | `matchRadius` (`campus_only` / `citywide`), `homeCity`, `homeCountryCode`, `homeCityKey`, `homePlaceId`, `latitude`, `longitude`, `locationUpdatedAt`, `timeZone` (IANA, derived from the dating city; drives the Profiler's local-time batch windows) |
+| Geo / radius | `matchRadius` (`campus_only` / `citywide`), `homeCity`, `homeCountryCode`, `homeCityKey`, `homePlaceId`, `latitude`, `longitude`, `locationUpdatedAt`, `timeZone` (IANA, derived from the dating city; drives the Profiler's local-time batch windows). `homeCityKey` must be a **launched market** (`packages/shared/src/markets.ts`; PRODUCT_SPEC §1.3) — `validateHomeLocationPayload` (`public/home-location.ts`) is the single writer and canonicalizes name + coordinates from the market, so Telegram and the `/v1/*` API are gated by one check. Rows created before that gate keep their city and are offered a one-tap move (`handlers/menu/city-switch.ts`). |
 | Match priority | `lastMatchedAt`, `missedWeeks`, `standbyCount`, `lastMissedAt`, `silentIgnoreCount` |
 | Profiler (Phase 1b) | `profilerStartedAt`, `profilerNextAt`, `profilerActiveQuestionId`, `profilerBatchRemaining`, `profilerAnswerWindowUntil`, `profilerQuestionMessageId` — scheduler + capture state for the post-onboarding Q&A batches that fuel icebreakers/hints (see [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §Phase 1b). `profilerActiveQuestionId` is the concurrency token: every answer/skip claims it with a compare-and-set, so exactly one reply resolves a question. `profilerNextAt` is dual-purpose — the next batch window while idle, and the **stall deadline** of the question currently in flight (6 h), which is what lets the worker reclaim a question the user never answered. `profilerAnswerWindowUntil` is the much shorter (90 min) deadline for *implicitly* treating plain text as that question's answer; it is cleared the moment the user does anything else, so an active question can never swallow an unrelated message meant for the menu agent. `profilerQuestionMessageId` anchors the question message, so an explicit Telegram reply is still recognised after the window closed, a resolved question can have its Skip keyboard stripped, and a question reclaimed as an implicit skip can be **deleted** — otherwise a dead question keeps sitting in the chat inviting an answer nothing can route (PRODUCT_SPEC §Phase 1b). Indexed `@@index([profilerNextAt])` for the worker sweep. |
 | Vibe (matching) | `fridayVibeText`, `vibeFocusText` (raw onboarding §1.3 answers), `energyAxis` / `orientationAxis` (`Float?` `[-1,1]`, scored by `V_research` quadrant proximity), `socialRole` (`String?` initiator/participant/observer — whitelist-validated in app code, **stored but not scored** in v1), `anchorTags` (`String[]`), `vibeExtractedAt`. Written at finalize by `services/vibe-axes.ts`; the raw Friday text is also folded into `psychologicalSummary`. See [PRODUCT_SPEC.md](PRODUCT_SPEC.md) §1.3 / §3.2. |
@@ -692,11 +692,11 @@ auth) are deliberately outside the spec.
 | Method | Path | Purpose |
 |---|---|---|
 | GET  | `/v1/ping` | Liveness probe |
-| GET  | `/v1/app/config` | Pre-auth mobile bootstrap: `minSupportedIosVersion` (forced-update kill switch, env `IOS_MIN_SUPPORTED_APP_VERSION`, empty → null) + client feature flags (`phoneAuth`/`tickets`/`coordination`). Unauthenticated by design — the client must learn "update required" before it can log in. |
+| GET  | `/v1/app/config` | Pre-auth mobile bootstrap: `minSupportedIosVersion` (forced-update kill switch, env `IOS_MIN_SUPPORTED_APP_VERSION`, empty → null), `supportedCities` (the launched markets from `packages/shared/src/markets.ts` — the dating-city step must offer only these), and client feature flags (`phoneAuth`/`tickets`/`coordination`). Unauthenticated by design — the client must learn "update required" before it can log in. |
 | GET | `/v1/maptiles/:z/:x/:y` | Public CARTO raster-tile proxy with strict coordinate validation, a dedicated per-IP limiter, 8-second upstream timeout, 1 MiB response ceiling, and immutable caching. |
 | GET | `/v1/promo/:code` | Promo landing (§3.10, pre-install, no auth): stashes a coarse device fingerprint → code (iOS deferred attribution) and serves a self-contained page that copies `GENNETY:<CODE>` to the clipboard, then bounces to `PROMO_APP_STORE_URL`. 404 when `PROMO_FEATURE_ENABLED` off. |
 | POST | `/v1/promo/attribution` | Record the same fingerprint→code for a landing hosted off-origin (`gennety.com/promo/:code`). No auth; 404 when off. |
-| GET/POST | `/v1/telegram-onboarding/*` | Telegram full-screen Onboarding Mini App state/consent/language/**sign-up fork (`POST /track`, Registration v2)**/email OTP/**phone gate**/city/AI-memory choice/completion handoff. Authenticates with `Authorization: tma <initData>`; `/state` mirrors `phoneAuthEnabled` + `isPhoneVerified`/`phone`/`registrationTrack`, `POST /track` persists the re-choosable fork pick (404 while `PHONE_AUTH_ENABLED` is off), and `/complete` runs the track-aware contact gate (`email-required` \| `phone-required`) before city + AI-memory checks. `/state` also returns `theme` + `themeChosen`, and `POST /theme` records the light/dark pick (`theme` + `themeChosenAt`) — reused by the bot's Settings "Change theme" flow. `/state` also exposes the promo wow-screen fields (`invitedByPromo`/`promoGiftSeen`/`promoCode`/`promoTickets`/`promoMonths`, §3.10, precedence over referral), and `POST /promo-gift` grants the promo welcome gift (Date Ticket + Premium months). |
+| GET/POST | `/v1/telegram-onboarding/*` | Telegram full-screen Onboarding Mini App state/consent/language/**sign-up fork (`POST /track`, Registration v2)**/email OTP/**phone gate**/city/AI-memory choice/completion handoff. Authenticates with `Authorization: tma <initData>`; `/state` mirrors `phoneAuthEnabled` + `isPhoneVerified`/`phone`/`registrationTrack`, `POST /track` persists the re-choosable fork pick (404 while `PHONE_AUTH_ENABLED` is off), and `/complete` runs the track-aware contact gate (`email-required` \| `phone-required`) before city + AI-memory checks. `/state` also returns `theme` + `themeChosen`, and `POST /theme` records the light/dark pick (`theme` + `themeChosenAt`) — reused by the bot's Settings "Change theme" flow. `/state` also exposes the promo wow-screen fields (`invitedByPromo`/`promoGiftSeen`/`promoCode`/`promoTickets`/`promoMonths`, §3.10, precedence over referral), and `POST /promo-gift` grants the promo welcome gift (Date Ticket + Premium months). The city step is **launched-markets only** (PRODUCT_SPEC §1.3): `/state` carries `supportedCities`, `GET /city/search` filters the first-party market list (no Google Places — a global geocoder can only propose cities the server must refuse), `POST /city/resolve` answers `{supported, city}` from pure geometry against each market's centroid + radius (`city: null` outside every market, never a guess), and `POST /city/select` rejects anything else with `city-not-supported`. |
 | POST | `/v1/auth/otp/request` | Send corp-email OTP (IP/email rate-limited; per-email creation serialized in PostgreSQL) |
 | POST | `/v1/auth/otp/verify` | Verify OTP → mint access + refresh JWT |
 | POST | `/v1/auth/phone/request` | Native-app phone rail (general track): send a code with a server-side provider fork — order is env-driven (`PHONE_CODE_PRIMARY_PROVIDER`, **default `twilio`** — founder decision 2026-07-18): **Twilio Verify SMS primary**, Telegram Gateway optional secondary (`checkSendAbility` → code as an official Telegram service message, our bcrypt-hashed code). Whichever is primary, the other configured rail auto-falls back; `channel: "sms"` always forces Twilio. Per-phone cooldown + daily cap serialized via advisory lock (`phone_otps`); 404 while `PHONE_AUTH_ENABLED` off. Response carries `deliveredVia: telegram\|sms`. |
@@ -963,3 +963,29 @@ without exposing one participant's feedback to the other.
 JWT routes live under `/v1/matches/{id}/venue-intent`; Telegram Mini App routes
 under `/v1/location/venue-intent/*` authenticate with signed initData and call
 the same service.
+
+# Launched-market ownership
+
+`packages/shared/src/markets.ts` owns `SUPPORTED_MARKETS` — the cities Gennety
+operates in (Kyiv only today) — plus `findMarketByCityKey` /
+`isSupportedCityKey` / `searchMarkets` / `marketForCoordinates`. It is shared
+data, not a per-surface list: the bot menu, the Telegram Onboarding Mini App
+(via `/v1/telegram-onboarding/state.supportedCities`) and the native client
+(via `GET /v1/app/config.supportedCities`) all read the same array, so a new
+market goes live with the server rather than a bundle redeploy.
+
+Enforcement has exactly one choke point. `validateHomeLocationPayload`
+(`apps/bot/src/public/home-location.ts`) is the only writer of
+`Profile.homeCityKey`, so the single market check covers both
+`POST /v1/telegram-onboarding/city/select` and `POST /v1/me/home-location`; it
+also canonicalizes the stored city name and coordinates from the market entry,
+because the client's role is to pick WHICH market, not to supply a centroid.
+`apps/bot/src/public/city-search.ts` is the read side (search + the geometric
+geolocation resolve) and makes no network calls at all.
+
+The match engine deliberately knows nothing about markets: it still joins on an
+exact `Profile.homeCityKey` equality (PRODUCT_SPEC §3.2 filter 5), which is
+precisely why registration has to be gated. Accounts created before the gate
+keep their city and are offered a one-tap move to a launched market
+(`apps/bot/src/handlers/menu/city-switch.ts`, reused by the weekly no-match DM
+and reflected in the pinned status banner).

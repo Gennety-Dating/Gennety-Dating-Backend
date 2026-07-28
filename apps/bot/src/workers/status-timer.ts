@@ -9,6 +9,7 @@ import {
   createStatusBanner,
   type StatusBannerFailureKind,
 } from "../services/status-banner.js";
+import { isMarketPending } from "../handlers/menu/city-switch.js";
 
 const MAX_EDITS_PER_SECOND = 25;
 const PIN_AUDIT_INTERVAL_MS = 60 * 60 * 1000;
@@ -72,6 +73,9 @@ export async function statusTimerTick(
       language: true,
       status: true,
       statusMessageId: true,
+      // §1.1 — an account registered in a city we haven't launched gets a
+      // waitlist banner instead of a countdown to a drop it can't be in.
+      profile: { select: { homeCityKey: true, homeCity: true } },
     },
   });
 
@@ -168,12 +172,16 @@ export async function statusTimerTick(
 
     const language: Language = user.language ?? "en";
     const upcomingDate = dateByUser.get(user.id);
-    const view = buildStatusBannerView(language, now, upcomingDate);
+    const marketPending = isMarketPending(user.profile?.homeCityKey)
+      ? { city: user.profile?.homeCity ?? user.profile?.homeCityKey ?? null }
+      : undefined;
+    const view = buildStatusBannerView(language, now, upcomingDate, marketPending);
 
     if (user.statusMessageId === null) {
       const created = await createStatusBanner(api, user.telegramId, language, {
         now,
         ...(upcomingDate ? { upcomingDate } : {}),
+        ...(marketPending ? { marketPending } : {}),
         clearExistingPins: true,
         beforeApiCall: takeApiSlot,
       });
@@ -221,6 +229,7 @@ export async function statusTimerTick(
               language,
               now,
               upcomingDate,
+              marketPending,
               view.signature,
               cache,
               retryState,
@@ -271,6 +280,7 @@ export async function statusTimerTick(
           language,
           now,
           upcomingDate,
+          marketPending,
           view.signature,
           cache,
           retryState,
@@ -307,6 +317,7 @@ async function replaceMissingBanner(
   language: Language,
   now: Date,
   upcomingDate: { at: Date; venueName: string | null } | undefined,
+  marketPending: { city: string | null } | undefined,
   signature: string,
   cache: Map<string, string>,
   retryState: Map<string, RetryEntry>,
@@ -322,6 +333,7 @@ async function replaceMissingBanner(
   const created = await createStatusBanner(api, user.telegramId, language, {
     now,
     ...(upcomingDate ? { upcomingDate } : {}),
+    ...(marketPending ? { marketPending } : {}),
     clearExistingPins: false,
     beforeApiCall,
   });

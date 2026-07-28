@@ -762,6 +762,36 @@ const translations = {
     statusButtonMinutes: "✨ Drop in {m}m",
     statusButtonProcessing: "✨ Matching in progress",
 
+    // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
+    // For an account registered in a city we haven't launched: matching is
+    // strictly same-city, so counting down to a drop they cannot be in would
+    // be a promise we can't keep.
+    statusBannerMarketPending:
+      "Gennety is live in Kyiv for now — we haven't launched in {city} yet, " +
+      "so there's nobody here to match you with.\n\n" +
+      "Ready to go on dates in Kyiv? Switch your city from the menu.",
+    statusButtonMenu: "Open menu",
+    menuCitySwitch: "📍 Switch city to Kyiv",
+    citySwitchCard:
+      "📍 *Your city: {city}*\n\n" +
+      "Gennety is live in Kyiv only for now. Matches are always within one city, " +
+      "so until we launch in {city} there's nobody here to introduce you to.\n\n" +
+      "If you're ready to go on dates in Kyiv, switch — your profile, photos and " +
+      "verification all stay exactly as they are, and you're in the next Thursday drop.",
+    citySwitchConfirm: "📍 Yes, match me in Kyiv",
+    citySwitchDone:
+      "Done — your matching city is Kyiv 🤍\n\n" +
+      "You're in the next drop: Thursday, 18:00.",
+    citySwitchFailed: "Couldn't switch the city just now. Try again in a moment.",
+    noMatchCityNotLaunched:
+      "Hey\n\n" +
+      "Straight up: Gennety hasn't launched in {city} yet — we're only in Kyiv so far. " +
+      "Matches always happen inside one city, so there's nobody here I could introduce you to, " +
+      "and I'd rather say that than keep you waiting on a drop that can't include you.\n\n" +
+      "Your profile stays as it is, and we'll tell you the moment we open your city.\n\n" +
+      "If you're ready to go on dates in Kyiv, switch below — you'll be in the next drop.",
+    noMatchCitySwitchBtn: "📍 Switch to Kyiv",
+
     // --- My date (menu row + hub) + scheduled-date banner ---
     statusDateDaysHours: "💫 Date in {d}d {h}h",
     statusDateHoursMinutes: "💫 Date in {h}h {m}m",
@@ -1658,6 +1688,33 @@ const translations = {
     statusButtonMinutes: "✨ До дропа: {m}мин",
     statusButtonProcessing: "✨ Подбираем мэтчи",
 
+    // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
+    statusBannerMarketPending:
+      "Пока Gennety работает только в Киеве — в городе {city} мы ещё не запустились, " +
+      "и мэтчить тебя здесь не с кем.\n\n" +
+      "Готов ходить на свидания в Киеве? Смени город в меню.",
+    statusButtonMenu: "Открыть меню",
+    menuCitySwitch: "📍 Сменить город на Киев",
+    citySwitchCard:
+      "📍 *Твой город: {city}*\n\n" +
+      "Пока Gennety работает только в Киеве. Мэтчи всегда внутри одного города, " +
+      "поэтому до запуска в городе {city} знакомить тебя здесь не с кем.\n\n" +
+      "Если готов ходить на свидания в Киеве — переключись. Анкета, фото и верификация " +
+      "останутся как есть, и ты попадёшь в ближайший четверговый дроп.",
+    citySwitchConfirm: "📍 Да, ищите мне пару в Киеве",
+    citySwitchDone:
+      "Готово — твой город для мэтчей теперь Киев 🤍\n\n" +
+      "Ты в ближайшем дропе: четверг, 18:00.",
+    citySwitchFailed: "Не получилось сменить город. Попробуй ещё раз через минуту.",
+    noMatchCityNotLaunched:
+      "Привет\n\n" +
+      "Скажу честно: в городе {city} Gennety ещё не запущен — пока мы работаем только в Киеве. " +
+      "Мэтчи всегда внутри одного города, поэтому знакомить тебя здесь не с кем, " +
+      "и лучше сказать это прямо, чем держать тебя в ожидании дропа, в который ты не попадаешь.\n\n" +
+      "Анкета остаётся как есть, и мы напишем, как только откроем твой город.\n\n" +
+      "А если готов ходить на свидания в Киеве — переключись ниже и попадёшь в ближайший дроп.",
+    noMatchCitySwitchBtn: "📍 Перейти на Киев",
+
     // --- My date (menu row + hub) + scheduled-date banner ---
     statusDateDaysHours: "💫 Свидание через {d}д {h}ч",
     statusDateHoursMinutes: "💫 Свидание через {h}ч {m}мин",
@@ -2550,6 +2607,33 @@ const translations = {
     statusButtonMinutes: "✨ До дропу: {m}хв",
     statusButtonProcessing: "✨ Підбираємо метчі",
 
+    // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
+    statusBannerMarketPending:
+      "Поки Gennety працює лише в Києві — у місті {city} ми ще не запустилися, " +
+      "і метчити тебе тут немає з ким.\n\n" +
+      "Готовий ходити на побачення в Києві? Зміни місто в меню.",
+    statusButtonMenu: "Відкрити меню",
+    menuCitySwitch: "📍 Змінити місто на Київ",
+    citySwitchCard:
+      "📍 *Твоє місто: {city}*\n\n" +
+      "Поки Gennety працює лише в Києві. Метчі завжди в межах одного міста, " +
+      "тож до запуску в місті {city} знайомити тебе тут немає з ким.\n\n" +
+      "Якщо готовий ходити на побачення в Києві — перемкнись. Анкета, фото та верифікація " +
+      "залишаться як є, і ти потрапиш у найближчий четверговий дроп.",
+    citySwitchConfirm: "📍 Так, шукайте мені пару в Києві",
+    citySwitchDone:
+      "Готово — твоє місто для метчів тепер Київ 🤍\n\n" +
+      "Ти в найближчому дропі: четвер, 18:00.",
+    citySwitchFailed: "Не вдалося змінити місто. Спробуй ще раз за хвилину.",
+    noMatchCityNotLaunched:
+      "Привіт\n\n" +
+      "Скажу чесно: у місті {city} Gennety ще не запущено — поки ми працюємо лише в Києві. " +
+      "Метчі завжди в межах одного міста, тож знайомити тебе тут немає з ким, " +
+      "і краще сказати це прямо, ніж тримати тебе в очікуванні дропу, в який ти не потрапляєш.\n\n" +
+      "Анкета залишається як є, і ми напишемо, щойно відкриємо твоє місто.\n\n" +
+      "А якщо готовий ходити на побачення в Києві — перемкнись нижче й потрапиш у найближчий дроп.",
+    noMatchCitySwitchBtn: "📍 Перейти на Київ",
+
     // --- My date (menu row + hub) + scheduled-date banner ---
     statusDateDaysHours: "💫 Побачення через {d}д {h}г",
     statusDateHoursMinutes: "💫 Побачення через {h}г {m}хв",
@@ -3403,6 +3487,33 @@ const deTranslations: TranslationTable = {
   statusButtonHoursMinutes: "Drop in {h}Std {m}Min",
   statusButtonMinutes: "✨ Drop in {m}Min",
   statusButtonProcessing: "✨ Matching läuft",
+
+  // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
+  statusBannerMarketPending:
+    "Gennety ist vorerst nur in Kyjiw am Start — in {city} sind wir noch nicht gestartet, " +
+    "hier gibt es also niemanden, mit dem wir dich matchen könnten.\n\n" +
+    "Bereit für Dates in Kyjiw? Wechsle deine Stadt im Menü.",
+  statusButtonMenu: "Menü öffnen",
+  menuCitySwitch: "📍 Stadt auf Kyjiw wechseln",
+  citySwitchCard:
+    "📍 *Deine Stadt: {city}*\n\n" +
+    "Gennety ist vorerst nur in Kyjiw am Start. Matches finden immer innerhalb einer Stadt statt — " +
+    "bis wir in {city} starten, gibt es hier niemanden, den wir dir vorstellen könnten.\n\n" +
+    "Wenn du bereit bist, in Kyjiw auf Dates zu gehen, wechsle einfach: Profil, Fotos und " +
+    "Verifizierung bleiben genau so, und du bist beim nächsten Donnerstags-Drop dabei.",
+  citySwitchConfirm: "📍 Ja, matcht mich in Kyjiw",
+  citySwitchDone:
+    "Erledigt — deine Match-Stadt ist jetzt Kyjiw 🤍\n\n" +
+    "Du bist beim nächsten Drop dabei: Donnerstag, 18:00.",
+  citySwitchFailed: "Der Stadtwechsel hat gerade nicht geklappt. Versuch es gleich noch einmal.",
+  noMatchCityNotLaunched:
+    "Hey\n\n" +
+    "Ganz ehrlich: In {city} ist Gennety noch nicht gestartet — bisher sind wir nur in Kyjiw. " +
+    "Matches finden immer innerhalb einer Stadt statt, hier könnte ich dir also niemanden vorstellen. " +
+    "Das sage ich dir lieber direkt, statt dich auf einen Drop warten zu lassen, bei dem du nicht dabei sein kannst.\n\n" +
+    "Dein Profil bleibt wie es ist, und wir melden uns, sobald wir deine Stadt öffnen.\n\n" +
+    "Und wenn du bereit bist, in Kyjiw auf Dates zu gehen: unten wechseln — dann bist du beim nächsten Drop dabei.",
+  noMatchCitySwitchBtn: "📍 Zu Kyjiw wechseln",
 
   // --- My date (menu row + hub) + scheduled-date banner ---
   statusDateDaysHours: "💫 Date in {d}T {h}Std",
@@ -4261,6 +4372,33 @@ const plTranslations: TranslationTable = {
   statusButtonHoursMinutes: "Do dropu: {h}h {m}min",
   statusButtonMinutes: "✨ Do dropu: {m}min",
   statusButtonProcessing: "✨ Dobieramy dopasowania",
+
+  // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
+  statusBannerMarketPending:
+    "Na razie Gennety działa tylko w Kijowie — w mieście {city} jeszcze nie wystartowaliśmy, " +
+    "więc nie ma tu kogo Ci dopasować.\n\n" +
+    "Gotowy na randki w Kijowie? Zmień miasto w menu.",
+  statusButtonMenu: "Otwórz menu",
+  menuCitySwitch: "📍 Zmień miasto na Kijów",
+  citySwitchCard:
+    "📍 *Twoje miasto: {city}*\n\n" +
+    "Na razie Gennety działa tylko w Kijowie. Dopasowania zawsze są w obrębie jednego miasta, " +
+    "więc dopóki nie wystartujemy w mieście {city}, nie ma tu kogo Ci przedstawić.\n\n" +
+    "Jeśli jesteś gotowy chodzić na randki w Kijowie — przełącz się. Profil, zdjęcia i weryfikacja " +
+    "zostaną bez zmian, a Ty trafisz do najbliższego czwartkowego dropu.",
+  citySwitchConfirm: "📍 Tak, szukajcie mi pary w Kijowie",
+  citySwitchDone:
+    "Gotowe — Twoje miasto dopasowań to teraz Kijów 🤍\n\n" +
+    "Jesteś w najbliższym dropie: czwartek, 18:00.",
+  citySwitchFailed: "Nie udało się teraz zmienić miasta. Spróbuj ponownie za chwilę.",
+  noMatchCityNotLaunched:
+    "Hej\n\n" +
+    "Szczerze: w mieście {city} Gennety jeszcze nie wystartowało — na razie jesteśmy tylko w Kijowie. " +
+    "Dopasowania zawsze są w obrębie jednego miasta, więc nie mam Ci tu kogo przedstawić. " +
+    "Wolę powiedzieć to wprost, niż trzymać Cię w oczekiwaniu na drop, w którym nie możesz być.\n\n" +
+    "Twój profil zostaje bez zmian, a odezwiemy się, gdy tylko otworzymy Twoje miasto.\n\n" +
+    "A jeśli jesteś gotowy chodzić na randki w Kijowie — przełącz się poniżej i trafisz do najbliższego dropu.",
+  noMatchCitySwitchBtn: "📍 Przejdź na Kijów",
 
   // --- My date (menu row + hub) + scheduled-date banner ---
   statusDateDaysHours: "💫 Randka za {d}d {h}h",

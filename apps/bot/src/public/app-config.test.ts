@@ -28,12 +28,26 @@ describe("GET /v1/app/config", () => {
     expect(new Date(res.body.serverNow).getTime()).not.toBeNaN();
   });
 
+  it("advertises the launched markets so the client can gate the city step", async () => {
+    const res = await request(buildApp()).get("/v1/app/config");
+    expect(res.body.supportedCities).toEqual([
+      {
+        cityKey: "ua:kyiv",
+        city: "Kyiv",
+        countryCode: "UA",
+        latitude: 50.4501,
+        longitude: 30.5234,
+      },
+    ]);
+  });
+
   it("does not leak server-internal config keys", async () => {
     const res = await request(buildApp()).get("/v1/app/config");
     expect(Object.keys(res.body).sort()).toEqual([
       "features",
       "minSupportedIosVersion",
       "serverNow",
+      "supportedCities",
     ]);
   });
 });

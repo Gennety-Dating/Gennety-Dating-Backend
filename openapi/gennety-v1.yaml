@@ -419,6 +419,11 @@ paths:
       tags: [me]
       operationId: setHomeLocation
       summary: Persist the canonical dating city (matching eligibility gate)
+      description: |
+        The city must be one of `AppConfig.supportedCities` — anything else is
+        rejected with `city-not-supported` (400). The resolved market's own
+        name and coordinates are stored: the request only selects WHICH market.
+        Also the endpoint an existing account uses to move to a launched city.
       requestBody:
         required: true
         content:
@@ -444,7 +449,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MeResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
+        "400":
+          description: Invalid payload, or `city-not-supported` for an unlaunched city
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /v1/me/referral:
@@ -1574,11 +1583,29 @@ components:
 
     AppConfig:
       type: object
-      required: [minSupportedIosVersion, features, serverNow]
+      required: [minSupportedIosVersion, supportedCities, features, serverNow]
       properties:
         minSupportedIosVersion:
           type: [string, "null"]
           description: Semver floor; a lower client build must block behind an update screen
+        supportedCities:
+          type: array
+          description: |
+            Cities Gennety has launched in. The dating-city step MUST offer only
+            these: matching is strictly same-city, so any other city is a pool of
+            one. `POST /v1/me/home-location` rejects anything else with
+            `city-not-supported`.
+          items:
+            type: object
+            required: [cityKey, city, countryCode, latitude, longitude]
+            properties:
+              cityKey:
+                type: string
+                description: Canonical `cc:slug`; the value stored in `homeCityKey`
+              city: { type: string }
+              countryCode: { type: string }
+              latitude: { type: number }
+              longitude: { type: number }
         features:
           type: object
           required: [phoneAuth, tickets, coordination]

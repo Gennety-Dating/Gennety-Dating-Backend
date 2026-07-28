@@ -342,6 +342,62 @@ describe("Telegram onboarding city gate", () => {
     );
     expect(res.body.user.homeLocation.homeCityKey).toBe("ua:kyiv");
     expect(res.body.user.homeLocation.homeCity).toBe("Kyiv");
+    // Launched markets ride along so the Mini App can offer them in one tap.
+    expect(res.body.user.supportedCities).toMatchObject([{ homeCityKey: "ua:kyiv" }]);
+  });
+
+  it("refuses a city Gennety has not launched", async () => {
+    userFindUnique.mockResolvedValue(miniUser());
+
+    const res = await request(buildApp())
+      .post("/v1/telegram-onboarding/city/select")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({
+        homeCity: "Berlin",
+        homeCountryCode: "DE",
+        homeCityKey: "de:berlin",
+        latitude: 52.52,
+        longitude: 13.405,
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("city-not-supported");
+    expect(profileUpsert).not.toHaveBeenCalled();
+  });
+
+  it("only offers launched markets in search", async () => {
+    userFindUnique.mockResolvedValue(miniUser());
+    const app = buildApp();
+
+    const kyiv = await request(app)
+      .get("/v1/telegram-onboarding/city/search?q=Киев")
+      .set("Authorization", `tma ${signInitData()}`);
+    expect(kyiv.body.results).toMatchObject([{ homeCityKey: "ua:kyiv" }]);
+
+    const berlin = await request(app)
+      .get("/v1/telegram-onboarding/city/search?q=Berlin")
+      .set("Authorization", `tma ${signInitData()}`);
+    expect(berlin.body.results).toEqual([]);
+  });
+
+  it("reports an unlaunched market for geolocation instead of guessing", async () => {
+    userFindUnique.mockResolvedValue(miniUser());
+    const app = buildApp();
+
+    const inside = await request(app)
+      .post("/v1/telegram-onboarding/city/resolve")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ latitude: 50.4501, longitude: 30.5234 });
+    expect(inside.body).toMatchObject({
+      supported: true,
+      city: { homeCityKey: "ua:kyiv" },
+    });
+
+    const outside = await request(app)
+      .post("/v1/telegram-onboarding/city/resolve")
+      .set("Authorization", `tma ${signInitData()}`)
+      .send({ latitude: 52.52, longitude: 13.405 });
+    expect(outside.body).toMatchObject({ supported: false, city: null });
   });
 
   it.each(["accepted", "declined"] as const)(

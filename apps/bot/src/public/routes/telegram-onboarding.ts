@@ -30,7 +30,12 @@ import {
   saveHomeLocationForUser,
   validateHomeLocationPayload,
 } from "../home-location.js";
-import { resolveCityFromCoordinates, searchCities } from "../city-search.js";
+import {
+  resolveMarketFromCoordinates,
+  searchCities,
+  supportedCityHits,
+  type CitySearchHit,
+} from "../city-search.js";
 import { unresolvedTrackContactGate } from "../../services/contact-verification.js";
 import { grantInviteePremium, parseReferrer, referralSourceFromParam } from "../../services/referral.js";
 import {
@@ -371,8 +376,7 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
       return;
     }
 
-    const results = await searchCities(q);
-    res.json({ ok: true, results });
+    res.json({ ok: true, results: searchCities(q) });
   });
 
   router.post("/city/resolve", async (req: Request, res: Response): Promise<void> => {
@@ -403,8 +407,12 @@ export function createTelegramOnboardingRouter(api: Api<RawApi>): Router {
       return;
     }
 
-    const city = await resolveCityFromCoordinates(lat, lng);
-    res.json({ ok: true, city });
+    // Geolocation can only ever PRE-SELECT a launched market. Outside every
+    // market the answer is an explicit `supported: false` with no city — the
+    // Mini App then explains that Gennety hasn't launched there yet instead of
+    // silently saving somewhere the user isn't.
+    const resolution = resolveMarketFromCoordinates(lat, lng);
+    res.json({ ok: true, supported: resolution.supported, city: resolution.city });
   });
 
   router.post("/city/select", async (req: Request, res: Response): Promise<void> => {
@@ -803,6 +811,10 @@ async function serializeState(user: MiniUser): Promise<TelegramOnboardingStateDt
       promoCode,
       promoTickets,
       promoMonths,
+      // Launched markets (packages/shared/src/markets.ts). The Mini App renders
+      // them as one-tap options and never has to hardcode a city list, so a new
+      // market goes live with the server rather than a bundle redeploy.
+      supportedCities: supportedCityHits(),
       homeLocation: user.profile?.homeCityKey
         ? {
             homeCity: user.profile.homeCity,
@@ -860,6 +872,8 @@ interface TelegramOnboardingStateDto {
     promoCode: string | null;
     promoTickets: number;
     promoMonths: number;
+    /** Every city registration currently accepts (Kyiv-only at launch). */
+    supportedCities: CitySearchHit[];
     homeLocation: {
       homeCity: string | null;
       homeCountryCode: string | null;

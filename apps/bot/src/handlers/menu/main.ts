@@ -6,6 +6,7 @@ import { computeStatusSnapshot, t, type Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { menuToggleStateFor, type MenuToggleState } from "../../services/user-status.js";
 import { findActiveMatchForTelegramId } from "../../services/active-match.js";
+import { citySwitchLabel, isMarketPending } from "./city-switch.js";
 
 /** Minimal descriptor for the conditional "My date" menu row. */
 export interface ActiveDateDescriptor {
@@ -55,8 +56,18 @@ function buildMainMenuKeyboardFor(
   videoReward: boolean,
   activeDate: ActiveDateDescriptor | null = null,
   now: Date = new Date(),
+  marketPending = false,
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
+
+  // Conditional row for an account registered in a city we haven't launched:
+  // matching is same-city, so nothing else in this menu can work for them until
+  // they move to a launched market (PRODUCT_SPEC §1.1). It leads because it is
+  // the only thing standing between them and a match; such a user cannot have a
+  // live match, so it never competes with the "My date" anchor below.
+  if (marketPending) {
+    kb.text(citySwitchLabel(lang), "menu:city").primary().row();
+  }
 
   // Conditional first row: a primary-styled "My date" entry, shown ONLY while
   // the user has a live match. The native `primary` style + optional animated
@@ -113,13 +124,23 @@ export async function showMainMenu(ctx: BotContext): Promise<void> {
 
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { status: true, profile: { select: { videoBonusTicketAt: true } } },
+    select: {
+      status: true,
+      profile: { select: { videoBonusTicketAt: true, homeCityKey: true } },
+    },
   });
   const status = menuToggleStateFor(user?.status);
   const videoReward = videoRewardAvailable(user?.profile?.videoBonusTicketAt ?? null);
   const activeDate = await loadActiveDate(telegramId);
+  const marketPending = isMarketPending(user?.profile?.homeCityKey);
 
-  const { text, options } = buildMainMenuPayload(lang, status, videoReward, activeDate);
+  const { text, options } = buildMainMenuPayload(
+    lang,
+    status,
+    videoReward,
+    activeDate,
+    marketPending,
+  );
   await ctx.reply(text, options);
 }
 
@@ -135,13 +156,23 @@ export async function sendMainMenu(
 ): Promise<void> {
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { status: true, profile: { select: { videoBonusTicketAt: true } } },
+    select: {
+      status: true,
+      profile: { select: { videoBonusTicketAt: true, homeCityKey: true } },
+    },
   });
   const status = menuToggleStateFor(user?.status);
   const videoReward = videoRewardAvailable(user?.profile?.videoBonusTicketAt ?? null);
   const activeDate = await loadActiveDate(telegramId);
+  const marketPending = isMarketPending(user?.profile?.homeCityKey);
 
-  const { text, options } = buildMainMenuPayload(lang, status, videoReward, activeDate);
+  const { text, options } = buildMainMenuPayload(
+    lang,
+    status,
+    videoReward,
+    activeDate,
+    marketPending,
+  );
   await api.sendMessage(chatId, text, options);
 }
 
@@ -166,8 +197,17 @@ function buildMainMenuPayload(
   status: MenuToggleState,
   videoReward: boolean,
   activeDate: ActiveDateDescriptor | null = null,
+  marketPending = false,
 ): { text: string; options: Record<string, unknown> } {
   const menuEmojiId = env.CUSTOM_EMOJI_MENU_ID;
+  const keyboard = buildMainMenuKeyboardFor(
+    lang,
+    status,
+    videoReward,
+    activeDate,
+    new Date(),
+    marketPending,
+  );
 
   if (menuEmojiId) {
     // When custom emoji is configured we must use explicit entities because
@@ -192,7 +232,7 @@ function buildMainMenuPayload(
       text: plainText,
       options: {
         entities,
-        reply_markup: buildMainMenuKeyboardFor(lang, status, videoReward, activeDate),
+        reply_markup: keyboard,
       },
     };
   }
@@ -201,7 +241,7 @@ function buildMainMenuPayload(
     text: t(lang, "menuTitle"),
     options: {
       parse_mode: "Markdown",
-      reply_markup: buildMainMenuKeyboardFor(lang, status, videoReward, activeDate),
+      reply_markup: keyboard,
     },
   };
 }

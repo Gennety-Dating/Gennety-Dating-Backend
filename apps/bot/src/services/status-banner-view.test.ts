@@ -87,4 +87,38 @@ describe("renderStatusBanner", () => {
 
     expect(view.buttonText).toBe(expected);
   });
+
+  // Kyiv-only market gate (PRODUCT_SPEC §1.1): an account registered in a city
+  // we haven't launched is not in the pool, so the banner must not count down
+  // to a drop it cannot be in.
+  it("replaces the drop countdown with the waitlist copy for an unlaunched city", () => {
+    const view = renderStatusBanner({
+      now: new Date("2026-07-21T09:00:00.000Z"),
+      nextDropAt: NEXT_DROP,
+      isProcessing: false,
+      language: "ru",
+      timeZone: "Europe/Kyiv",
+      marketPending: { city: "Берлин" },
+    });
+
+    expect(view.text).toContain("Берлин");
+    expect(view.text).not.toContain("Следующий дроп");
+    expect(view.buttonText).toBe("Открыть меню");
+    // Still opens the menu — that's where the switch row lives.
+    expect(view.callbackData).toBe("menu:open");
+  });
+
+  it("shows no date countdown either for an unlaunched city", () => {
+    const view = renderStatusBanner({
+      now: new Date("2026-07-21T09:00:00.000Z"),
+      nextDropAt: NEXT_DROP,
+      isProcessing: false,
+      language: "en",
+      timeZone: "Europe/Kyiv",
+      upcomingDate: { at: new Date("2026-07-22T16:00:00.000Z"), venueName: "Blur Cafe" },
+      marketPending: { city: "Berlin" },
+    });
+
+    expect(view.text).not.toContain("Blur Cafe");
+  });
 });

@@ -1,5 +1,51 @@
 # Gennety Dating Deploy
 
+**PENDING — Kyiv-only market gate.** Not deployed yet. **No Prisma schema
+change, no env change, no flag change.** Requires a **Mini App redeploy**
+(`apps/webapp` changed: `onboarding.tsx` / `onboarding-i18n.ts` /
+`onboarding.css` / `api.ts`), so the sequence is Deploy Full Server Code →
+`db:drift-check` → `pm2 restart` → `./scripts/deploy-webapp.sh`.
+
+What ships: registration accepts **Kyiv only** (PRODUCT_SPEC §1.3). The
+launched-market list is a code constant
+(`packages/shared/src/markets.ts` → `SUPPORTED_MARKETS`), deliberately NOT an
+env var — a market is only real once its curated venue catalog, ads and ops
+exist, and an env toggle would let someone open a city before any of that is
+ready. Launching a city is: seed + review its `curated_venues` rows, add the
+`SUPPORTED_MARKETS` entry (its `cityKey` must match the venue rows'
+`cityKey`), redeploy.
+
+Two behaviour notes worth knowing before the restart:
+
+- **The city step no longer calls Google Places at all** (search and the
+  geolocation resolve are both first-party now). `PLACES_API_KEY` is still
+  required for venues and the date card — do not remove it. This also removes a
+  latent bug: without the key, the old reverse-geocode resolved ANY coordinates
+  to Kyiv.
+- **Accounts already registered outside Kyiv are not touched** — no status
+  change, no data rewrite. They gain a `menu:city` row offering a one-tap move
+  to Kyiv, their pinned banner switches from the drop countdown to waitlist
+  copy (the `status-timer` worker self-heals it within a minute), and the
+  Thursday no-match DM becomes an honest "we haven't launched in {city}" with
+  the switch button (no famine tier, no discount, no Rematch offer). Production
+  held 9 users at the last deploy with Kyiv covering 6, so expect roughly 3
+  accounts on this path.
+
+Post-deploy checks (beyond the standard checklist):
+
+```sh
+curl -s https://dating-api.gennety.com/v1/app/config | grep -o 'supportedCities.*ua:kyiv'
+# The city step is Kyiv-only end to end; confirm on the dev bot that a search
+# for "Berlin" returns nothing and geolocation outside Kyiv explains itself.
+psql "$DATABASE_URL" -c "select home_city_key, count(*) from profiles group by 1 order by 2 desc;"
+```
+
+**Rollback:** revert the code, restart, and redeploy the Mini App from the
+previous checkout. Nothing else to undo — no schema, no env, no flag. A city
+switched to Kyiv stays switched (it is an ordinary profile write).
+
+---
+
 **PENDING — chat timeline for the concierge agent (`chat_events`).** Not
 deployed yet. Code-only otherwise: **no env change, no flag change, no Mini App
 change** (`apps/webapp` untouched).
