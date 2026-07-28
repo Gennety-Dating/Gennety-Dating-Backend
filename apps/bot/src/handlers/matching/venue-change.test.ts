@@ -470,7 +470,26 @@ describe("offerPartnerPay / declineVenuePay", () => {
     expect(api.createInvoiceLink).toHaveBeenCalledTimes(1);
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     expect(api.sendMessage.mock.calls[0][0]).toBe(200);
-    expect(String(api.sendMessage.mock.calls[0][1])).toContain("Alina");
+    // No card rendered, so the text is the ONLY thing naming the place he is
+    // being asked to pay for — it must carry the venue.
+    const text = String(api.sendMessage.mock.calls[0][1]);
+    expect(text).toContain("Alina");
+    expect(text).toContain("New Cafe");
+  });
+
+  it("does not repeat the venue in the caption when the card rendered", async () => {
+    const api = fakeApi();
+    const { renderVenueWishCard } = await import("../../services/venue-wish-card.js");
+    vi.mocked(renderVenueWishCard).mockResolvedValueOnce(Buffer.from("png"));
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+
+    expect(await offerPartnerPay(api, 100n, "m1")).toEqual({ ok: true });
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(api.sendPhoto).toHaveBeenCalledTimes(1);
+    const caption = String(api.sendPhoto.mock.calls[0][2].caption);
+    expect(caption).toContain("Alina");
+    // The PNG already shows the name + address.
+    expect(caption).not.toContain("New Cafe");
   });
 
   it("releases the one-shot stamp when the card never reached his chat", async () => {

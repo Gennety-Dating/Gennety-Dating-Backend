@@ -1423,16 +1423,23 @@ async function sendWishCard(
 
   const { renderVenueWishCard } = await import("../../services/venue-wish-card.js");
   const png = await renderVenueWishCard(api, match.id).catch(() => null);
-  const caption = t(lang, "venueWishText", { name: herName, venue: label });
   if (png) {
+    // The card itself shows the venue name + address, so the caption must not
+    // print them a second time.
     const { InputFile } = await import("grammy");
     await api.sendPhoto(toTelegramChatId(him.telegramId), new InputFile(png, "venue-wish.png"), {
-      caption,
+      caption: t(lang, "venueWishText", { name: herName }),
       reply_markup: kb,
       protect_content: true,
     });
   } else {
-    await api.sendMessage(toTelegramChatId(him.telegramId), caption, { reply_markup: kb });
+    // No card — the text is the only thing naming the place he is asked to pay
+    // for, so this variant keeps the venue line.
+    await api.sendMessage(
+      toTelegramChatId(him.telegramId),
+      t(lang, "venueWishTextFallback", { name: herName, venue: label }),
+      { reply_markup: kb },
+    );
   }
 }
 

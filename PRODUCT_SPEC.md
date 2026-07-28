@@ -2053,7 +2053,12 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
     date-card layout re-rendered with HER polaroid over the new venue's duotone
     hero (`services/venue-wish-card.ts`, headline "Her pick. Your move.",
     protected; text fallback so the offer never wedges) with pay/decline
-    buttons. One offer per session. **Handing the payment over is confirmed to
+    buttons. Its caption is **her ask only** — the card already renders the venue
+    name and address, so repeating them in text was pure duplication
+    (`venueWishText`, two short lines split by a paragraph break). The
+    no-PNG fallback keeps the venue line (`venueWishTextFallback`): with no card
+    there is nothing else naming the place he is being asked to pay for.
+    One offer per session. **Handing the payment over is confirmed to
     her, not silent (2026-07-27).** Rendering the wish card and delivering it
     takes seconds inside her request, so the tap holds a named spinner
     ("sending your ask to {name}…") and then lands on a success screen of its own

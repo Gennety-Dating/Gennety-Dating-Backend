@@ -627,8 +627,15 @@ const translations = {
       "The venue change didn't go through, so your Stars are back. Your date is on as planned, at the original place.",
     venuePayPromptDm: "You two picked a new place for your date.\n\n📍 {venue}",
     venuePayOpenBtn: "📍 See it and decide",
+    // Caption under the wish-card PNG, which already shows the venue name and
+    // address — so the text must not repeat them.
     venueWishText:
-      "{name} found a place she loves for your date.\n📍 {venue}\n" +
+      "{name} found a place she loves for your date.\n\n" +
+      "She'd be happy if you locked it in.",
+    // Same message when the PNG could not be rendered: with no card there is
+    // nothing else naming the place he is being asked to pay for.
+    venueWishTextFallback:
+      "{name} found a place she loves for your date.\n\n📍 {venue}\n\n" +
       "She'd be happy if you locked it in.",
     venueWishPayBtn: "Lock it in — {stars} ⭐",
     venueWishDeclineBtn: "Not this time",
@@ -1522,7 +1529,10 @@ const translations = {
     venuePayPromptDm: "Вы вместе выбрали новое место для свидания.\n\n📍 {venue}",
     venuePayOpenBtn: "📍 Посмотреть и решить",
     venueWishText:
-      "{name} нашла место, которое ей очень нравится.\n📍 {venue}\n" +
+      "{name} нашла место, которое ей очень нравится.\n\n" +
+      "Ей будет приятно, если закрепишь его ты.",
+    venueWishTextFallback:
+      "{name} нашла место, которое ей очень нравится.\n\n📍 {venue}\n\n" +
       "Ей будет приятно, если закрепишь его ты.",
     venueWishPayBtn: "Закрепить — {stars} ⭐",
     venueWishDeclineBtn: "Не в этот раз",
@@ -2409,7 +2419,10 @@ const translations = {
     venuePayPromptDm: "Ви разом обрали нове місце для побачення.\n\n📍 {venue}",
     venuePayOpenBtn: "📍 Подивитися й вирішити",
     venueWishText:
-      "{name} знайшла місце, яке їй дуже подобається.\n📍 {venue}\n" +
+      "{name} знайшла місце, яке їй дуже подобається.\n\n" +
+      "Їй буде приємно, якщо закріпиш його ти.",
+    venueWishTextFallback:
+      "{name} знайшла місце, яке їй дуже подобається.\n\n📍 {venue}\n\n" +
       "Їй буде приємно, якщо закріпиш його ти.",
     venueWishPayBtn: "Закріпити — {stars} ⭐",
     venueWishDeclineBtn: "Не цього разу",
@@ -3273,7 +3286,10 @@ const deTranslations: TranslationTable = {
   venuePayPromptDm: "Ihr habt zusammen einen neuen Ort für euer Date gewählt.\n\n📍 {venue}",
   venuePayOpenBtn: "📍 Ansehen und entscheiden",
   venueWishText:
-    "{name} hat einen Ort gefunden, der ihr sehr gefällt.\n📍 {venue}\n" +
+    "{name} hat einen Ort gefunden, der ihr sehr gefällt.\n\n" +
+    "Sie würde sich freuen, wenn du ihn sicherst.",
+  venueWishTextFallback:
+    "{name} hat einen Ort gefunden, der ihr sehr gefällt.\n\n📍 {venue}\n\n" +
     "Sie würde sich freuen, wenn du ihn sicherst.",
   venueWishPayBtn: "Sichern — {stars} ⭐",
   venueWishDeclineBtn: "Nicht diesmal",
@@ -4126,7 +4142,10 @@ const plTranslations: TranslationTable = {
   venuePayPromptDm: "Razem wybraliście nowe miejsce na randkę.\n\n📍 {venue}",
   venuePayOpenBtn: "📍 Zobacz i zdecyduj",
   venueWishText:
-    "{name} znalazła miejsce, które bardzo jej się podoba.\n📍 {venue}\n" +
+    "{name} znalazła miejsce, które bardzo jej się podoba.\n\n" +
+    "Będzie jej miło, jeśli to Ty je zatwierdzisz.",
+  venueWishTextFallback:
+    "{name} znalazła miejsce, które bardzo jej się podoba.\n\n📍 {venue}\n\n" +
     "Będzie jej miło, jeśli to Ty je zatwierdzisz.",
   venueWishPayBtn: "Zatwierdź — {stars} ⭐",
   venueWishDeclineBtn: "Nie tym razem",
