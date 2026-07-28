@@ -5,9 +5,13 @@ import {
   claimInFlightMatchCancellations,
   deliverCancelledPartnerEffects,
 } from "./cancel-in-flight-matches.js";
-import { notifyFounderAccountClosed } from "./founder-notify.js";
-import { deleteStorageObject } from "./storage.js";
+import { FOUNDER_ACCOUNT_CLOSED_SELECT, notifyFounderAccountClosed } from "./founder-notify.js";
+import { getMainBotApi } from "./main-bot-api.js";
+import { deleteStorageObject, downloadProfileImage } from "./storage.js";
 import { unpinKnownStatusBanner } from "./status-banner.js";
+
+/** Cap mirrored from `founder-notify.ts`'s Telegram media-group ceiling. */
+const FOUNDER_MEDIA_GROUP_MAX = 10;
 
 export class AccountDeletionCleanupError extends Error {
   constructor(readonly failedObjects: readonly string[]) {
@@ -25,14 +29,20 @@ export interface DeleteUserAccountResult {
 
 /**
  * One owner for destructive account deletion across Telegram and the public
- * mobile API. The sequence is intentionally privacy-first:
+ * mobile API. The sequence is intentionally ordered so nothing is lost before
+ * it is captured, and nothing external happens before the DB state is final:
  *
+ * 0. snapshot the founder-DM profile fields and download any profile-photo
+ *    bytes, since both the row and any Supabase-hosted photos are about to
+ *    be erased;
  * 1. remove every known user-owned Supabase object, failing closed so a retry
  *    remains possible while the DB references still exist;
  * 2. claim live-match cancellation, remove founder report snapshots, and
  *    delete the User row (all relational data cascades) in one DB transaction;
- * 3. after commit only, deliver partner notifications/compensation and emit
- *    an anonymous lifecycle counter to the founder feed.
+ * 3. after commit only, deliver partner notifications/compensation and DM the
+ *    founder feed the full profile + phone + photos of the departing user
+ *    (an internal ops channel to one trusted operator — see
+ *    `legal/privacy-policy.md` §12.2).
  */
 export async function deleteUserAccount(
   userId: string,
@@ -42,6 +52,7 @@ export async function deleteUserAccount(
     prisma.user.findUnique({
       where: { id: userId },
       select: {
+        ...FOUNDER_ACCOUNT_CLOSED_SELECT,
         id: true,
         telegramId: true,
         statusMessageId: true,
@@ -49,6 +60,7 @@ export async function deleteUserAccount(
         verifiedSelfiePath: true,
         profile: {
           select: {
+            ...FOUNDER_ACCOUNT_CLOSED_SELECT.profile.select,
             photos: true,
             profileMedia: true,
             pendingPhotoCandidates: true,
@@ -70,6 +82,14 @@ export async function deleteUserAccount(
       deletedStorageObjects: 0,
     };
   }
+
+  // Snapshot the founder-DM photo bytes BEFORE storage cleanup below removes
+  // the Supabase objects. Telegram file_ids stay resolvable after the row and
+  // its storage objects are gone, but a Supabase path does not — so the only
+  // safe moment to read either kind is right now, before anything is erased.
+  const founderPhotoBuffers = env.FOUNDER_NOTIFY_ENABLED
+    ? await downloadFounderPhotoBuffers(user.profile?.photos ?? [])
+    : [];
 
   const selfiePaths = collectOwnedPaths(
     [user.selfiePath, user.verifiedSelfiePath],
@@ -133,9 +153,11 @@ export async function deleteUserAccount(
   // both the account and every in-flight match untouched for a safe retry.
   await deliverCancelledPartnerEffects(cancelled, api);
 
-  // No user payload is accepted by this notifier: deletion cannot create a
-  // fresh external PII copy after the relational data has been erased.
-  void notifyFounderAccountClosed("deleted").catch(() => {});
+  // Full profile + phone + photos, using the snapshot and photo bytes
+  // captured before the row/storage objects were erased above.
+  void notifyFounderAccountClosed("deleted", user, founderPhotoBuffers).catch(
+    () => {},
+  );
 
   return {
     deleted: true,
@@ -144,6 +166,19 @@ export async function deleteUserAccount(
     deletedStorageObjects:
       selfiePaths.length + profilePaths.length + chatPaths.length,
   };
+}
+
+async function downloadFounderPhotoBuffers(
+  photoRefs: readonly string[],
+): Promise<Buffer[]> {
+  const botApi = getMainBotApi();
+  if (!botApi) return [];
+  const buffers: Buffer[] = [];
+  for (const ref of photoRefs.slice(0, FOUNDER_MEDIA_GROUP_MAX)) {
+    const buf = await downloadProfileImage(ref, botApi);
+    if (buf) buffers.push(buf);
+  }
+  return buffers;
 }
 
 function collectOwnedPaths(values: unknown, userId: string): string[] {

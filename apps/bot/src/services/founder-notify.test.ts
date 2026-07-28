@@ -61,7 +61,34 @@ import {
   notifyFounderAccountClosed,
   isFounderFeedSuppressedRuntime,
   __resetFounderApiForTests,
+  type FounderAccountUser,
 } from "./founder-notify.js";
+
+function accountUser(over: Partial<FounderAccountUser> = {}): FounderAccountUser {
+  return {
+    firstName: "Alice",
+    age: 22,
+    gender: "female",
+    preference: "men",
+    phone: "+380991234567",
+    email: "a@uni.edu",
+    language: "en",
+    registrationTrack: "general",
+    verificationStatus: "verified",
+    telegramUsername: "alice",
+    telegramId: 12345n,
+    profile: {
+      homeCity: "Kyiv",
+      height: 170,
+      hobbies: ["art"],
+      partnerPreferences: "kind",
+      ethnicity: null,
+      photos: ["f1"],
+      eloSeedDetails: { score: 66 },
+    },
+    ...over,
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -162,32 +189,45 @@ describe("notifyFounderNewUser", () => {
 describe("notifyFounderAccountClosed", () => {
   it("is a no-op when disabled", async () => {
     env.FOUNDER_NOTIFY_ENABLED = false;
-    await notifyFounderAccountClosed("deleted");
+    await notifyFounderAccountClosed("deleted", accountUser());
     expect(ApiCtor).not.toHaveBeenCalled();
     expect(sendPhoto).not.toHaveBeenCalled();
   });
 
-  it("sends an anonymous delete event without profile media or PII", async () => {
+  it("DMs the founder the profile + phone with a delete title, using pre-downloaded photo buffers", async () => {
     env.FOUNDER_NOTIFY_ENABLED = true;
-    await notifyFounderAccountClosed("deleted");
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-    const [chatId, text] = sendMessage.mock.calls[0]!;
+    await notifyFounderAccountClosed("deleted", accountUser(), [Buffer.from("img")]);
+    // One buffer → sendPhoto with a caption. The generic download path
+    // (downloadProfileImage) must NOT be used since buffers were supplied.
+    expect(sendPhoto).toHaveBeenCalledTimes(1);
+    expect(downloadProfileImage).not.toHaveBeenCalled();
+    const [chatId, , opts] = sendPhoto.mock.calls[0]!;
     expect(chatId).toBe(999);
-    expect(text).toContain("удалён");
-    expect(text).toContain("анонимное");
-    expect(text).not.toContain("+380991234567");
-    expect(text).not.toContain("Alice");
-    expect(sendPhoto).not.toHaveBeenCalled();
-    expect(sendMediaGroup).not.toHaveBeenCalled();
+    const caption = (opts as { caption?: string }).caption ?? "";
+    expect(caption).toContain("УДАЛЁН");
+    expect(caption).toContain("+380991234567");
+    expect(caption).toContain("Alice");
   });
 
-  it("uses the freeze title for a frozen account", async () => {
+  it("downloads photos itself when no buffers are supplied (freeze path)", async () => {
     env.FOUNDER_NOTIFY_ENABLED = true;
-    await notifyFounderAccountClosed("frozen");
+    await notifyFounderAccountClosed("frozen", accountUser());
+    expect(downloadProfileImage).toHaveBeenCalledTimes(1);
+    expect(sendPhoto).toHaveBeenCalledTimes(1);
+    const [, , opts] = sendPhoto.mock.calls[0]!;
+    const caption = (opts as { caption?: string }).caption ?? "";
+    expect(caption).toContain("ЗАМОРОЖЕН");
+    expect(caption).toContain("+380991234567");
+  });
+
+  it("falls back to a plain message when there is no profile", async () => {
+    env.FOUNDER_NOTIFY_ENABLED = true;
+    await notifyFounderAccountClosed("frozen", accountUser({ profile: null }));
+    // No profile → no photos → header sent as a plain message.
     expect(sendMessage).toHaveBeenCalledTimes(1);
     const [, text] = sendMessage.mock.calls[0]!;
-    expect(text).toContain("заморожен");
-    expect(text).toContain("анонимное");
+    expect(text).toContain("ЗАМОРОЖЕН");
+    expect(text).toContain("+380991234567");
   });
 });
 

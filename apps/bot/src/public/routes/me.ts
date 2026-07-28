@@ -375,9 +375,10 @@ function isValidAgeBound(v: unknown): v is number | null | undefined {
 /**
  * DELETE /v1/me — GDPR "Right to be Forgotten".
  *
- * Uses the same privacy-safe workflow as Telegram Settings: partner
- * cancellation, strict storage erasure, founder-report cleanup, relational
- * cascade, then an anonymous lifecycle event.
+ * Uses the same workflow as Telegram Settings: partner cancellation, strict
+ * storage erasure, founder-report cleanup, relational cascade, then a
+ * founder-ops notification (full profile + phone + photos, snapshotted
+ * before the cascade — see `services/founder-notify.ts`).
  */
 meRouter.delete(
   "/",

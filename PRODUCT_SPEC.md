@@ -1089,8 +1089,20 @@ path is visually distinct: a blue (`primary`) **❄️ Freeze account** over a r
   (Telegram and/or APNs push). A storage failure therefore leaves both the
   account and live matches intact for a safe retry instead of creating a
   half-deleted account with real partner effects.
-  The founder receives only an anonymous lifecycle event — deletion never
-  creates a fresh copy of the user's contact data, profile, or photos.
+  The founder receives the departing user's full profile, phone number, and
+  photos in the private founder-ops DM (`services/founder-notify.ts`
+  `notifyFounderAccountClosed`, gated by `FOUNDER_NOTIFY_ENABLED`) — mirroring
+  the new-registration notification. Because a hard delete cascades the row
+  and its Supabase-hosted photos away, the profile snapshot and any photo
+  bytes are captured immediately before deletion/storage cleanup runs, and
+  the founder DM itself is sent only after the deletion commits. Freeze uses
+  the same notifier with a plain post-commit read, since the row survives a
+  freeze. (2026-07-16 → 2026-07-28: this briefly sent an anonymous
+  lifecycle-only event instead, over a GDPR "right to be forgotten" concern —
+  reverted as a deliberate founder decision: this is a private, single-operator
+  ops channel, not a second public copy of the erased data, and it mirrors the
+  same profile+photos disclosure the founder already gets on every new
+  registration.)
 - Freeze/Delete confirmation keyboards are bound to a cryptographically random
   nonce, the exact Telegram message, a single stage, and a 10-minute expiry.
   They are one-use: Back, another menu action, free text, a wrong/replayed tap,

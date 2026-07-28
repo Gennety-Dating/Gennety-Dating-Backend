@@ -1718,7 +1718,10 @@ Required/high-impact env keys:
   weekly-matches report link after the Thursday batch, (3) both date cards + venue
   when a date locks in, (4) the full profile + **phone number** + photos when a
   user freezes or hard-deletes their account (bot Settings→Delete/Freeze and mobile
-  `DELETE /v1/me`; the delete path snapshots the row before the Prisma cascade).
+  `DELETE /v1/me`; the delete path snapshots the row and downloads any photo
+  bytes before the storage cleanup + Prisma cascade run). (Item 4 briefly sent
+  an anonymous event instead, 2026-07-16 → 2026-07-28, over a since-reverted
+  GDPR concern — see PRODUCT_SPEC.md §2.1 and `legal/privacy-policy.md` §12.2.)
   Requires `FOUNDER_BOT_TOKEN` (a bot from BotFather —
   kept distinct from `BOT_TOKEN`; `file_id`s are per-bot so the founder bot uploads
   raw bytes), `FOUNDER_TELEGRAM_ID` (the founder's numeric chat id — they must

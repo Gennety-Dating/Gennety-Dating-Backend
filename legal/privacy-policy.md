@@ -41,7 +41,7 @@ below.
 | Do you use biometrics? | Yes — a liveness selfie and face comparison against your photos, only with your explicit consent. The selfie is deleted after 90 days (Sections 6 and 10). |
 | Do you sell my data? | **No.** We never sell personal data and we do not run advertising profiling. |
 | Do you show my data to other users? | Only to the one person you are matched with, in a forward/save-protected form (Section 12). |
-| Does a human see my data? | Yes — a small, named operations team, and an internal founder feed that receives new-profile and weekly-match notifications (Section 12.2). |
+| Does a human see my data? | Yes — a small, named operations team, and an internal founder feed that receives new-profile, weekly-match, and account-closure notifications (Section 12.2). |
 | Can I delete everything? | Yes — freeze (reversible) or delete (irreversible cascading erasure). See Sections 16 and 18. |
 | Who do I complain to? | Us first at **legal@gennety.com**; then your data-protection authority (Section 22). |
 
@@ -393,12 +393,22 @@ Telegram bot. It carries:
   kind of profile cards and photos. Access to that page is controlled by an
   unguessable token in the URL.
 - **When a date is confirmed:** the two date cards and the venue.
-- **When an account is frozen or deleted:** an **anonymous counter event only** —
-  no identity, no profile, no contact data, no photos. Deleting your account
-  never creates a new copy of your data anywhere.
+- **When an account is frozen or deleted:** the same kind of profile card
+  described above (first name, age, gender, preference, city, height, hobbies,
+  partner preferences, optional nationality/ethnicity, language, sign-up
+  track, verification status, attractiveness score, Telegram `@username` if
+  any), your phone number, and your profile photos, so the founder can review
+  or personally follow up on a departing account. It still excludes your
+  psychological summary and any AI memory export. This notification goes to
+  the same single, private, founder-only Telegram bot as every other item on
+  this list — it is not published, not shared further, and not retained
+  anywhere beyond that one operator's own chat history with their own bot.
 
 We also delete any stored weekly-report snapshot that contains your account when
-you delete your account.
+you delete your account. Deleting your account erases it from every
+Gennety-operated system other than this one operational notification, which
+exists to let a single founder of a small, early-stage service know a real
+person just left and, when appropriate, reach out.
 
 ### 12.3 Staff and administrative access
 

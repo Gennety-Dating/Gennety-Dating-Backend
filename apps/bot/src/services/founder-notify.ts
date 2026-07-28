@@ -1,6 +1,6 @@
 import { Api, InputFile, type RawApi } from "grammy";
 import type { InputMediaPhoto } from "grammy/types";
-import { prisma } from "@gennety/db";
+import { prisma, type Prisma } from "@gennety/db";
 import { env } from "../config.js";
 import { downloadProfileImage } from "./storage.js";
 import { getMainBotApi } from "./main-bot-api.js";
@@ -262,30 +262,134 @@ function buildNewUserHeader(user: UserWithProfile): string {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// Feature 4 — anonymous account lifecycle counters (freeze / delete)
+// Feature 4 — account closed (freeze / delete)
 // ───────────────────────────────────────────────────────────────────────────
 
+/** Minimal shape the account-closed notifier reads. On a hard delete the
+ * caller MUST pre-fetch this (and any photo bytes) BEFORE the delete/storage
+ * cleanup runs, since the row and Supabase-hosted photos are gone afterward.
+ * `FOUNDER_ACCOUNT_CLOSED_SELECT` below is the matching Prisma `select`. */
+export interface FounderAccountUser {
+  firstName: string | null;
+  age: number | null;
+  gender: string | null;
+  preference: string | null;
+  phone: string | null;
+  email: string | null;
+  language: string | null;
+  registrationTrack: string | null;
+  verificationStatus: string;
+  telegramUsername: string | null;
+  telegramId: bigint;
+  profile: {
+    homeCity: string | null;
+    height: number | null;
+    hobbies: string[];
+    partnerPreferences: string | null;
+    ethnicity: string | null;
+    photos: string[];
+    eloSeedDetails: unknown;
+  } | null;
+}
+
+/** Prisma `select` shape matching {@link FounderAccountUser}. */
+export const FOUNDER_ACCOUNT_CLOSED_SELECT = {
+  firstName: true,
+  age: true,
+  gender: true,
+  preference: true,
+  phone: true,
+  email: true,
+  language: true,
+  registrationTrack: true,
+  verificationStatus: true,
+  telegramUsername: true,
+  telegramId: true,
+  profile: {
+    select: {
+      homeCity: true,
+      height: true,
+      hobbies: true,
+      partnerPreferences: true,
+      ethnicity: true,
+      photos: true,
+      eloSeedDetails: true,
+    },
+  },
+} satisfies Prisma.UserSelect;
+
 /**
- * DM the founder an aggregate account-lifecycle event. Deliberately carries no
- * user id, Telegram id, name, contact data, profile facts, or photos. A hard
- * delete must not create a fresh external copy of the data the user asked us
- * to erase.
+ * DM the founder when a user closes their account — freeze (soft) or delete
+ * (hard). Includes the full profile, PHONE NUMBER, and photos, so the founder
+ * can react to (or personally reach out about) a departing user. This is an
+ * internal ops channel to a single trusted operator, not a public/second
+ * copy of the data — see `legal/privacy-policy.md` §12.2, which documents
+ * this notification alongside the new-registration one it mirrors.
+ *
+ * Because a hard delete cascades the row away and removes Supabase-hosted
+ * photos, the CALLER must pre-fetch `user` (with profile) and, for a delete,
+ * pass pre-downloaded `photoBuffers` — Telegram `file_id`s stay resolvable
+ * after the row is gone, but a Supabase storage path does not survive the
+ * cleanup that runs before the delete transaction. When `photoBuffers` is
+ * omitted (the freeze path, where the row still exists), photos are
+ * downloaded here from `user.profile.photos` directly.
  */
 export async function notifyFounderAccountClosed(
   action: "frozen" | "deleted",
+  user: FounderAccountUser,
+  photoBuffers?: Buffer[],
 ): Promise<void> {
   const api = getFounderApi();
   if (!api) return;
 
   try {
-    const text =
-      action === "deleted"
-        ? "🗑 Аккаунт удалён (анонимное событие)"
-        : "❄️ Аккаунт заморожен (анонимное событие)";
-    await api.sendMessage(founderChatId(), text);
+    const header = buildAccountClosedHeader(action, user);
+    let buffers = photoBuffers;
+    if (!buffers) {
+      buffers = [];
+      const botApi = getMainBotApi();
+      const photoRefs = user.profile?.photos ?? [];
+      if (botApi) {
+        for (const ref of photoRefs.slice(0, MEDIA_GROUP_MAX)) {
+          const buf = await downloadProfileImage(ref, botApi);
+          if (buf) buffers.push(buf);
+        }
+      }
+    }
+    await sendHeaderWithPhotos(api, founderChatId(), header, buffers);
   } catch (err) {
     console.warn(`${FOUNDER_LOG} notifyFounderAccountClosed failed`, { action, err });
   }
+}
+
+function buildAccountClosedHeader(
+  action: "frozen" | "deleted",
+  user: FounderAccountUser,
+): string {
+  const p = user.profile;
+  const title = action === "deleted" ? "🗑 Аккаунт УДАЛЁН" : "❄️ Аккаунт ЗАМОРОЖЕН";
+  const lines: string[] = [title];
+  const name = user.firstName ?? "—";
+  const age = user.age != null ? `, ${user.age}` : "";
+  lines.push(`👤 ${name}${age}`);
+  // The phone number is the headline datum for this notification.
+  lines.push(`📞 Телефон: ${user.phone ?? "—"}`);
+  if (user.email) lines.push(`✉️ Email: ${user.email}`);
+  if (user.gender) lines.push(`Пол: ${user.gender}`);
+  if (user.preference) lines.push(`Искал(а): ${user.preference}`);
+  if (p?.homeCity) lines.push(`Город: ${p.homeCity}`);
+  if (p?.height) lines.push(`Рост: ${p.height} см`);
+  if (p?.hobbies && p.hobbies.length) lines.push(`Хобби: ${p.hobbies.join(", ")}`);
+  if (p?.partnerPreferences) lines.push(`Хотел(а) в партнёре: ${p.partnerPreferences}`);
+  if (p?.ethnicity) lines.push(`Национальность/этнос: ${p.ethnicity}`);
+  if (user.language) lines.push(`Язык: ${user.language}`);
+  if (user.registrationTrack) lines.push(`Трек: ${user.registrationTrack}`);
+  lines.push(`Верификация: ${user.verificationStatus}`);
+  const score = attractivenessOf((p ?? null) as Record<string, unknown> | null);
+  if (score != null) lines.push(`⭐ Attractiveness: ${score}/100`);
+  if (user.telegramUsername) lines.push(`TG: @${user.telegramUsername}`);
+  lines.push(`Telegram ID: ${user.telegramId.toString()}`);
+  return truncateCaption(lines.join("\n"));
 }
 
 // ───────────────────────────────────────────────────────────────────────────

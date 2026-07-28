@@ -27,7 +27,33 @@ vi.mock("./cancel-in-flight-matches.js", () => ({
 }));
 
 const notifyFounderAccountClosed = vi.fn(async () => {});
-vi.mock("./founder-notify.js", () => ({ notifyFounderAccountClosed }));
+vi.mock("./founder-notify.js", () => ({
+  notifyFounderAccountClosed,
+  FOUNDER_ACCOUNT_CLOSED_SELECT: {
+    firstName: true,
+    age: true,
+    gender: true,
+    preference: true,
+    phone: true,
+    email: true,
+    language: true,
+    registrationTrack: true,
+    verificationStatus: true,
+    telegramUsername: true,
+    telegramId: true,
+    profile: {
+      select: {
+        homeCity: true,
+        height: true,
+        hobbies: true,
+        partnerPreferences: true,
+        ethnicity: true,
+        photos: true,
+        eloSeedDetails: true,
+      },
+    },
+  },
+}));
 
 const unpinStatusBanner = vi.fn(async () => {});
 vi.mock("./status-banner.js", () => ({ unpinStatusBanner }));
@@ -150,7 +176,10 @@ describe("freezeAccount", () => {
         { strict: true },
       );
       expect(deliverCancelledPartnerEffects).toHaveBeenCalledWith(cancelled, api);
-      expect(notifyFounderAccountClosed).toHaveBeenCalledWith("frozen");
+      expect(notifyFounderAccountClosed).toHaveBeenCalledWith(
+        "frozen",
+        expect.objectContaining({ id: BASE_USER.id }),
+      );
       expect(unpinStatusBanner).toHaveBeenCalledWith(api, BASE_USER.telegramId);
     },
   );

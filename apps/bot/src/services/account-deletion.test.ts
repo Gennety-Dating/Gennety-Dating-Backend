@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   claimMatches: vi.fn(),
   deliverEffects: vi.fn(),
   deleteStorageObject: vi.fn(),
+  downloadProfileImage: vi.fn(),
+  getMainBotApi: vi.fn(),
   notifyFounder: vi.fn(),
   unpinKnownStatusBanner: vi.fn(),
 }));
@@ -29,13 +31,13 @@ vi.mock("@gennety/db", () => {
   };
 });
 
-vi.mock("../config.js", () => ({
-  env: {
-    SUPABASE_SELFIE_BUCKET: "selfies",
-    SUPABASE_PHOTO_BUCKET: "profile-photos",
-    SUPABASE_CHAT_BUCKET: "chat-attachments",
-  },
+const testEnv = vi.hoisted(() => ({
+  SUPABASE_SELFIE_BUCKET: "selfies",
+  SUPABASE_PHOTO_BUCKET: "profile-photos",
+  SUPABASE_CHAT_BUCKET: "chat-attachments",
+  FOUNDER_NOTIFY_ENABLED: true,
 }));
+vi.mock("../config.js", () => ({ env: testEnv }));
 
 vi.mock("./cancel-in-flight-matches.js", () => ({
   claimInFlightMatchCancellations: mocks.claimMatches,
@@ -43,9 +45,37 @@ vi.mock("./cancel-in-flight-matches.js", () => ({
 }));
 vi.mock("./storage.js", () => ({
   deleteStorageObject: mocks.deleteStorageObject,
+  downloadProfileImage: mocks.downloadProfileImage,
+}));
+vi.mock("./main-bot-api.js", () => ({
+  getMainBotApi: mocks.getMainBotApi,
 }));
 vi.mock("./founder-notify.js", () => ({
   notifyFounderAccountClosed: mocks.notifyFounder,
+  FOUNDER_ACCOUNT_CLOSED_SELECT: {
+    firstName: true,
+    age: true,
+    gender: true,
+    preference: true,
+    phone: true,
+    email: true,
+    language: true,
+    registrationTrack: true,
+    verificationStatus: true,
+    telegramUsername: true,
+    telegramId: true,
+    profile: {
+      select: {
+        homeCity: true,
+        height: true,
+        hobbies: true,
+        partnerPreferences: true,
+        ethnicity: true,
+        photos: true,
+        eloSeedDetails: true,
+      },
+    },
+  },
 }));
 vi.mock("./status-banner.js", () => ({
   unpinKnownStatusBanner: mocks.unpinKnownStatusBanner,
@@ -60,6 +90,7 @@ const USER_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  testEnv.FOUNDER_NOTIFY_ENABLED = true;
   mocks.userFindUnique.mockResolvedValue({
     id: USER_ID,
     telegramId: 42n,
@@ -95,6 +126,8 @@ beforeEach(() => {
   mocks.claimMatches.mockResolvedValue([{ matchId: "m1" }]);
   mocks.deliverEffects.mockResolvedValue(undefined);
   mocks.deleteStorageObject.mockResolvedValue(true);
+  mocks.getMainBotApi.mockReturnValue({ token: "main-bot" });
+  mocks.downloadProfileImage.mockResolvedValue(Buffer.from("img"));
   mocks.notifyFounder.mockResolvedValue(undefined);
   mocks.unpinKnownStatusBanner.mockResolvedValue(undefined);
 });
@@ -124,13 +157,42 @@ describe("deleteUserAccount", () => {
       where: { id: { in: ["report-hit"] } },
     });
     expect(mocks.userDelete).toHaveBeenCalledWith({ where: { id: USER_ID } });
-    expect(mocks.notifyFounder).toHaveBeenCalledWith("deleted");
+    expect(mocks.notifyFounder).toHaveBeenCalledWith(
+      "deleted",
+      expect.objectContaining({ id: USER_ID }),
+      [Buffer.from("img"), Buffer.from("img")],
+    );
     expect(result).toEqual({
       deleted: true,
       cancelledMatches: 1,
       deletedFounderReports: 1,
       deletedStorageObjects: 5,
     });
+  });
+
+  it("downloads the founder-DM photo bytes before storage cleanup deletes them", async () => {
+    await deleteUserAccount(USER_ID, null);
+
+    // profile.photos = [`${USER_ID}/photo.jpg`, "telegram-file-id"] → both
+    // downloaded, and strictly BEFORE any Supabase object is removed.
+    expect(mocks.downloadProfileImage).toHaveBeenCalledTimes(2);
+    const lastDownloadOrder =
+      mocks.downloadProfileImage.mock.invocationCallOrder[1]!;
+    const firstDeleteOrder =
+      mocks.deleteStorageObject.mock.invocationCallOrder[0]!;
+    expect(lastDownloadOrder).toBeLessThan(firstDeleteOrder);
+  });
+
+  it("skips the photo download entirely when the founder feed is off", async () => {
+    testEnv.FOUNDER_NOTIFY_ENABLED = false;
+    await deleteUserAccount(USER_ID, null);
+
+    expect(mocks.downloadProfileImage).not.toHaveBeenCalled();
+    expect(mocks.notifyFounder).toHaveBeenCalledWith(
+      "deleted",
+      expect.objectContaining({ id: USER_ID }),
+      [],
+    );
   });
 
   it("fails closed and preserves the DB row when storage cannot be erased", async () => {

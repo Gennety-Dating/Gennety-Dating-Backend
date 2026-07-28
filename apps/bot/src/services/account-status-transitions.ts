@@ -5,7 +5,7 @@ import {
   deliverCancelledPartnerEffects,
   type CancelledPartner,
 } from "./cancel-in-flight-matches.js";
-import { notifyFounderAccountClosed } from "./founder-notify.js";
+import { FOUNDER_ACCOUNT_CLOSED_SELECT, notifyFounderAccountClosed } from "./founder-notify.js";
 import { unpinStatusBanner } from "./status-banner.js";
 
 export type AccountStatusAction = "pause" | "resume" | "return_from_freeze";
@@ -180,7 +180,18 @@ export async function freezeAccount(
   if (result.kind !== "changed") return result;
 
   await deliverCancelledPartnerEffects(result.cancelled, api);
-  void notifyFounderAccountClosed("frozen").catch(() => {});
+  // Freeze keeps the row, so the founder-DM snapshot is a plain fresh read
+  // (unlike delete, which must pre-fetch before the row is gone). The DB read
+  // is awaited; only the best-effort Telegram send itself is fire-and-forget.
+  const founderSnapshot = await prisma.user
+    .findUnique({
+      where: { id: result.user.id },
+      select: FOUNDER_ACCOUNT_CLOSED_SELECT,
+    })
+    .catch(() => null);
+  if (founderSnapshot) {
+    void notifyFounderAccountClosed("frozen", founderSnapshot).catch(() => {});
+  }
   if (api) {
     await unpinStatusBanner(api, result.user.telegramId).catch(() => {});
   }
