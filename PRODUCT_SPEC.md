@@ -862,12 +862,27 @@ Telegram-only in v1.
   until the next drop cycle. Answered questions are never re-asked (except the
   situational ones below). **Silence is an implicit skip**: a question left
   unanswered for `PROFILER_STALL_TIMEOUT_MS` (**6 h**) is recorded with the same
-  return-once semantics, loses its Skip keyboard, and the schedule re-opens at
-  the user's next local window — without this the Profiler dead-locked, since
-  the dispatch sweep only picks users with no active question, so one ignored
-  question silenced it permanently. The deadline is sized to the daily window
-  rhythm: at a full day, one ignored morning question cost the user the whole
-  day of Profiler; at 6 h it is reclaimed in time for the evening window.
+  return-once semantics, **the question message is deleted**, and the schedule
+  re-opens at the user's next local window — without this the Profiler
+  dead-locked, since the dispatch sweep only picks users with no active
+  question, so one ignored question silenced it permanently. The deadline is
+  sized to the daily window rhythm: at a full day, one ignored morning question
+  cost the user the whole day of Profiler; at 6 h it is reclaimed in time for
+  the evening window.
+- **An expired question is removed from the chat, not just de-buttoned
+  (2026-07-28).** Reclaiming used to only strip the Skip keyboard, leaving the
+  question text sitting there — which reads exactly like an open question the
+  bot is waiting on. Nothing on the server still pointed at it (the active-question
+  claim was released), so a user who came back and answered it fell through to
+  the menu agent, which replied with no idea what they were referring to. The
+  missing button was the only visible signal, and it is not one a user reads as
+  "this is dead". Deleting the message is what makes the chat agree with the
+  server. Telegram only lets a bot delete its own message for 48 h — the 6 h
+  deadline clears that comfortably, but the worker's legacy backlog arm can
+  reclaim far older questions, so a refused delete falls back to stripping the
+  keyboard. A **resolved** question (answered or explicitly skipped) is never
+  deleted: it is the context for the answer below it, and the user knows they
+  dealt with it — only its Skip button goes.
 - **A question owns the chat only while it is live.** An active question is NOT
   a standing claim on everything the user types. Plain text is recorded as its
   answer only when the question still owns the conversation:
@@ -888,8 +903,9 @@ Telegram-only in v1.
 - **One reply per question.** A question is resolved by an atomic claim on
   `Profile.profilerActiveQuestionId`, so exactly ONE answer or skip can ever
   advance the batch. The Skip keyboard is stripped from a question once it is
-  resolved — skipped, answered, or reclaimed as an implicit skip — so a dead
-  question stops looking like it is still waiting. A stale/replayed tap on an
+  resolved — skipped or answered — so a dead question stops looking like it is
+  still waiting; a question reclaimed as an implicit skip is deleted outright
+  (above). A stale/replayed tap on an
   older question's button is a no-op — it
   neither records a second skip nor pushes out an extra question. Free-text
   answers are coalesced over a short debounce window

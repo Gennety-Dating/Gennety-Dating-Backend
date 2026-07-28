@@ -201,10 +201,10 @@ async function sendQuestion(
 }
 
 /**
- * Best-effort removal of the Skip keyboard from a question that is no longer
- * live (answered, or reclaimed as an implicit skip). Leaves the question text
- * in place — the point is to stop it *looking* like it is still waiting on the
- * user, not to erase the conversation. Never throws.
+ * Best-effort removal of the Skip keyboard from a question that was **resolved**
+ * (answered, or explicitly skipped). Leaves the question text in place — it is
+ * the context for the answer sitting right below it, and the user knows they
+ * dealt with it. Never throws.
  */
 async function stripQuestionKeyboard(
   api: Api<RawApi>,
@@ -216,6 +216,36 @@ async function stripQuestionKeyboard(
     await api.editMessageReplyMarkup(Number(telegramId), messageId);
   } catch {
     // Message deleted, too old to edit, or already without a keyboard.
+  }
+}
+
+/**
+ * Delete a question that expired **unresolved** — the user never replied and the
+ * stall sweep reclaimed it.
+ *
+ * Stripping the keyboard is not enough here. The question text stays in the chat
+ * looking like an open question the bot is waiting on, but nothing on our side
+ * still points at it: the active-question claim is gone, so a reply to it falls
+ * through to the menu agent, which answers with no idea what the user is talking
+ * about. The absence of a Skip button is the only visible difference, and it is
+ * not something a user reads as "this is dead". Removing the message is what
+ * actually makes the chat state and the server state agree.
+ *
+ * Falls back to stripping the keyboard when the delete is refused — Telegram
+ * only lets a bot delete its own message for 48 h, which the 6 h stall deadline
+ * clears comfortably, but the worker's legacy `profilerNextAt: null` backlog arm
+ * can reclaim questions far older than that. Never throws.
+ */
+async function retireExpiredQuestion(
+  api: Api<RawApi>,
+  telegramId: bigint,
+  messageId: number | null,
+): Promise<void> {
+  if (!messageId || telegramId <= 0n) return;
+  try {
+    await api.deleteMessage(Number(telegramId), messageId);
+  } catch {
+    await stripQuestionKeyboard(api, telegramId, messageId);
   }
 }
 
@@ -415,8 +445,9 @@ export async function closeProfilerAnswerWindow(telegramId: bigint): Promise<boo
 /**
  * Reclaim a question the user simply never replied to: record the silence as an
  * implicit skip (so it returns once, then steps aside for the rest of the drop
- * cycle — the same courtesy an explicit Skip gets) and re-arm the schedule at
- * the user's next local window.
+ * cycle — the same courtesy an explicit Skip gets), delete the question message
+ * so a dead question stops inviting an answer nothing can route, and re-arm the
+ * schedule at the user's next local window.
  *
  * Called by the worker sweep for users whose active question passed its
  * `PROFILER_STALL_TIMEOUT_MS` deadline. Sends nothing: the point is to stop
@@ -440,9 +471,10 @@ export async function expireStalledProfilerQuestion(
   // Claim it first — if the user answered in the same instant, they win.
   const claim = await claimActiveQuestion(userId, questionId);
   if (!claim.claimed) return false;
-  // The question is done waiting; drop its Skip button so it stops looking live.
+  // Nothing points at this question any more, so it must not keep sitting in the
+  // chat inviting an answer the bot can no longer route (see `retireExpiredQuestion`).
   if (api && profile.user) {
-    await stripQuestionKeyboard(api, profile.user.telegramId, claim.messageId);
+    await retireExpiredQuestion(api, profile.user.telegramId, claim.messageId);
   }
 
   const question = profilerQuestionById(questionId);

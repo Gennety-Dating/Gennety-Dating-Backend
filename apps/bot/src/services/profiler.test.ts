@@ -35,6 +35,7 @@ const mMatchFind = (prisma.match as unknown as { findFirst: MockFn }).findFirst;
 
 const sendMessage = vi.fn().mockResolvedValue({ message_id: 1, chat: { id: 1 } });
 const editMessageText = vi.fn().mockResolvedValue({});
+const editMessageReplyMarkup = vi.fn().mockResolvedValue({});
 const deleteMessage = vi.fn().mockResolvedValue(true);
 const setMessageReaction = vi.fn().mockResolvedValue(true);
 // Bot API 10.1 rich surface (api.raw.*) — the in-batch Profiler delivery uses
@@ -44,6 +45,7 @@ const sendRichMessage = vi.fn().mockResolvedValue({ message_id: 1, chat: { id: 1
 const fakeApi = {
   sendMessage,
   editMessageText,
+  editMessageReplyMarkup,
   deleteMessage,
   setMessageReaction,
   raw: { sendRichMessageDraft, sendRichMessage },
@@ -92,7 +94,8 @@ beforeEach(() => {
   mMatchFind.mockReset().mockResolvedValue(null);
   sendMessage.mockClear();
   editMessageText.mockClear();
-  deleteMessage.mockClear();
+  editMessageReplyMarkup.mockClear();
+  deleteMessage.mockReset().mockResolvedValue(true);
   setMessageReaction.mockClear();
   sendRichMessageDraft.mockClear();
   sendRichMessage.mockClear();
@@ -430,6 +433,39 @@ describe("expireStalledProfilerQuestion", () => {
     // Nothing is sent — reclaiming is not a nag.
     expect(sendRichMessage).not.toHaveBeenCalled();
     expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("deletes the dead question message so it can't be answered into the void", async () => {
+    mProfileFind.mockResolvedValueOnce({
+      profilerActiveQuestionId: "f_date_spots",
+      timeZone: "Europe/Kyiv",
+      user: { telegramId: 123n },
+    });
+    // claimActiveQuestion re-reads the profile for the message id before nulling it.
+    mProfileFind.mockResolvedValueOnce({ profilerQuestionMessageId: 77 });
+    mAnswerFind.mockResolvedValue(null);
+
+    await expireStalledProfilerQuestion("u1", new Date("2026-06-10T07:00:00Z"), fakeApi);
+
+    expect(deleteMessage).toHaveBeenCalledWith(123, 77);
+    // Deleted outright, not merely de-buttoned: a question with no button still
+    // reads as open, and a reply to it reaches the menu agent with no context.
+    expect(editMessageReplyMarkup).not.toHaveBeenCalled();
+  });
+
+  it("falls back to stripping the keyboard when the message is too old to delete", async () => {
+    mProfileFind.mockResolvedValueOnce({
+      profilerActiveQuestionId: "f_date_spots",
+      timeZone: "Europe/Kyiv",
+      user: { telegramId: 123n },
+    });
+    mProfileFind.mockResolvedValueOnce({ profilerQuestionMessageId: 77 });
+    mAnswerFind.mockResolvedValue(null);
+    deleteMessage.mockRejectedValueOnce(new Error("message can't be deleted"));
+
+    await expireStalledProfilerQuestion("u1", new Date("2026-06-10T07:00:00Z"), fakeApi);
+
+    expect(editMessageReplyMarkup).toHaveBeenCalledWith(123, 77);
   });
 
   it("never overwrites an answer that landed in the same instant", async () => {
