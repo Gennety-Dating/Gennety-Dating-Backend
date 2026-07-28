@@ -248,15 +248,32 @@ function normalizeTimeline(row: TimelineRow): UnifiedMessage {
 }
 
 /**
- * `ChatEvent` is newer than the rest of the admin surface, so a database that
- * predates it must degrade rather than fail. Any error here means "no timeline
- * available" — the two older stores still answer.
+ * A missing chat timeline is a steady state, not an incident, so it is
+ * announced at most once an hour. Without this the endpoint wrote several
+ * stack traces into the PM2 error log per request — the same log the deploy
+ * checklist reads to decide whether a release is healthy.
+ */
+let timelineWarnedAt = 0;
+const TIMELINE_WARN_INTERVAL_MS = 60 * 60 * 1000;
+
+/**
+ * `ChatEvent` is newer than the rest of the admin surface, so a database (or a
+ * generated Prisma client) that predates it must degrade rather than fail. Any
+ * error here means "no timeline available" — the two older stores still answer,
+ * and the response says so via `sources.timeline`.
  */
 async function readTimeline<T>(run: () => Promise<T>, fallback: T): Promise<{ value: T; ok: boolean }> {
   try {
     return { value: await run(), ok: true };
   } catch (err) {
-    console.warn("[admin] dialogs: chat timeline unavailable:", err);
+    const now = Date.now();
+    if (now - timelineWarnedAt > TIMELINE_WARN_INTERVAL_MS) {
+      timelineWarnedAt = now;
+      const reason = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[admin] dialogs: chat timeline unavailable, serving agent+aether only (${reason})`,
+      );
+    }
     return { value: fallback, ok: false };
   }
 }
