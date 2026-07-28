@@ -314,7 +314,14 @@ Hard rules enforced by the collector:
   sending photos one-by-one or as a Telegram album, send a short profile video,
   tap Continue, or type a localized equivalent such as "done" / "дальше".
   Albums and rapid standalone photos are coalesced into one progress response,
-  so a 4- or 10-photo burst does not produce one reply per frame. At 5 photos the
+  so a 4- or 10-photo burst does not produce one reply per frame. Because that
+  one response only lands after every frame has been through vision validation
+  (seconds per photo), the burst is covered by a single held **"looking at your
+  photos" shimmer** (`photoReviewSteps`, `runStatusSequence` with
+  `until: <batch flush>`, so it ends when the work does rather than on a timer)
+  — the same treatment the §2.1 photo manager already gives an upload burst.
+  Without it the user sends three photos at once and sits in silence with only
+  the typing indicator, which reads as the bot having missed them. At 5 photos the
   bot uses a short progress reminder rather than repeating the full pitch.
   **The stage is an editor, not an append-only log (2026-07-27).** A persistent
   bottom panel (Telegram *reply* keyboard, one button — "🗂 My photos") sits
@@ -441,7 +448,8 @@ Hard rules enforced by the collector:
   beats at verification submission, the verification soft-skip, each Profiler
   batch boundary, every Profiler question's compose beat (§Phase 1b),
   concierge venue selection, the peer-wait ack (§3.6b), the profile-video
-  upload check, the **Type Radar close** (`TYPE_RADAR_PRODUCT_SPEC.md`),
+  upload check, the **onboarding photo-burst check** (below), the
+  **Type Radar close** (`TYPE_RADAR_PRODUCT_SPEC.md`),
   and the date-card PNG render (§3.7a). Most of these are cosmetic pacing only —
   fixed-duration stubs that narrate real but usually sub-second work and never
   gate the flow. The **Type Radar close** is the one that narrates no work at

@@ -1244,9 +1244,16 @@ describe("Album (media_group_id) photo coalescing", () => {
     ctx4.session = shared;
     await handleConversational(ctx4);
 
-    // Before debounce fires: no agent turn, no user-visible reply
+    // Before debounce fires: no agent turn, and no progress reply — only the
+    // burst shimmer ("looking at your photos"), which covers the validation
+    // wait and is torn down by the flush. The rich draft is unsupported by
+    // this mocked api, so it degrades to the classic edited-message status.
     expect(agentMock).not.toHaveBeenCalled();
-    expect(ctx1.api.sendMessage).not.toHaveBeenCalled();
+    expect(ctx1.api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(ctx1.api.sendMessage).toHaveBeenCalledWith(
+      99001,
+      "Looking at your photos…",
+    );
     expect(ctx2.api.sendMessage).not.toHaveBeenCalled();
     expect(ctx3.api.sendMessage).not.toHaveBeenCalled();
     expect(ctx4.api.sendMessage).not.toHaveBeenCalled();
@@ -1268,8 +1275,9 @@ describe("Album (media_group_id) photo coalescing", () => {
 
     expect(agentMock).not.toHaveBeenCalled();
 
-    // Exactly ONE user-visible reply (on the api captured by the first frame)
-    expect(ctx1.api.sendMessage).toHaveBeenCalledTimes(1);
+    // Exactly ONE user-visible reply on top of the shimmer (on the api
+    // captured by the first frame).
+    expect(ctx1.api.sendMessage).toHaveBeenCalledTimes(2);
     expect(ctx1.api.sendMessage).toHaveBeenCalledWith(
       99001,
       expect.stringContaining("free Date Ticket"),

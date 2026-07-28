@@ -56,6 +56,7 @@ import { profileMediaToJson } from "../../services/profile-media-json.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import {
   onboardingThinkingSteps,
+  photoReviewSteps,
   profileAnalysisSteps,
 } from "../../services/analysis-status.js";
 import { env } from "../../config.js";
@@ -807,6 +808,19 @@ interface PhotoBatchAccumulator {
   /** True when the batch arrived before `request_photos` was called */
   unsolicited: boolean;
   timer: NodeJS.Timeout | null;
+  /**
+   * Resolved when the burst is done being validated — the shimmer below is held
+   * `until` this, so it ends the moment the work does rather than on a timer.
+   */
+  finish: () => void;
+  /**
+   * The "looking at your photos" shimmer covering the whole burst, awaited
+   * before the progress reply so it is torn down first. Validation takes
+   * seconds per frame, so without it the user sits in silence after sending
+   * three photos at once and starts re-sending. Best-effort: a status failure
+   * must never break the stage it decorates.
+   */
+  status: Promise<void>;
 }
 
 const photoBatchAccumulators = new Map<number, PhotoBatchAccumulator>();
@@ -955,6 +969,10 @@ async function handlePhotoFrame(
 
   let acc = photoBatchAccumulators.get(chatId);
   if (!acc) {
+    let finish!: () => void;
+    const done = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
     acc = {
       mediaGroupId,
       chatId,
@@ -972,6 +990,14 @@ async function handlePhotoFrame(
       hadInfraError: false,
       unsolicited: !ctx.session.expectingPhoto,
       timer: null,
+      finish,
+      // One shimmer for the whole burst, held until the last frame settles.
+      status: runStatusSequence(
+        ctx.api,
+        chatId,
+        photoReviewSteps(ctx.session.language),
+        { rich: true, until: done },
+      ).catch(() => {}),
     };
     photoBatchAccumulators.set(chatId, acc);
   }
@@ -1189,6 +1215,11 @@ function schedulePhotoBatchFlush(chatId: number): NodeJS.Timeout {
  * because we're outside any update).
  */
 async function flushPhotoBatch(acc: PhotoBatchAccumulator): Promise<void> {
+  // Tear the burst shimmer down first, so the progress reply lands in its
+  // place instead of underneath a still-running "looking at your photos" line.
+  acc.finish();
+  await acc.status;
+
   try {
     const key = acc.chatId.toString();
     const row = await prisma.botSession.findUnique({ where: { key } });

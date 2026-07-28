@@ -80,6 +80,23 @@ export function photoUploadSteps(lang: Language): StatusStep[] {
   ];
 }
 
+/**
+ * Held while an ONBOARDING photo burst is validated (the first time the user is
+ * asked for photos). Same shape as {@link photoUploadSteps}, different copy: at
+ * this point nothing is "uploaded" from the user's side yet — they sent three
+ * or more photos at once and then wait several seconds while each frame goes
+ * through vision validation, with only the typing indicator to go on. Two short
+ * beats, and — like the photo manager's burst — passed with
+ * `until: <batch flush>`, so the shimmer ends the moment the batch settles
+ * rather than on a fixed timer.
+ */
+export function photoReviewSteps(lang: Language): StatusStep[] {
+  return [
+    { text: t(lang, "photoReviewStep1"), holdMs: 2200, emojiId: AI_EMOJI.scan },
+    { text: t(lang, "photoReviewStep2"), holdMs: 3000, emojiId: AI_EMOJI.spark },
+  ];
+}
+
 export function videoCheckSteps(lang: Language): StatusStep[] {
   return [
     { text: t(lang, "videoCheckStep1"), holdMs: 2800, emojiId: AI_EMOJI.video },
