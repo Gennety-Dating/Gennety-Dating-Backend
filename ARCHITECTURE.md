@@ -830,6 +830,33 @@ Conversation viewer (inline routes in `server.ts`, behind the global
 | GET | `/admin/users/:id/conversation` | Normalized, chronological transcript for one user, merging BOTH conversation stores — `User.messageHistory` (Telegram onboarding/menu agents, array order, no timestamps/images) then `Message` rows (Aether mobile concierge, real `createdAt` + `imageUrl`). `system`/`tool`/null-content turns are flagged `technical`; `tool_calls` are surfaced; `Profile.photos[]` ride along as a separate `photos[]` gallery (not interleaved). Image fields are refs streamed via `/admin/media`. Stringifies BigInt; 404 unknown user. |
 | GET | `/admin/media` | Authenticated image proxy that streams private/Telegram image bytes (`type ∈ {telegram, photo, chat}` → `downloadTelegramFile` / `downloadProfileImage` / `downloadChatImage` from `services/storage.ts`). The Bearer key is never accepted via query string; the dashboard fetches with the header and converts to a blob URL. Supabase `ref` shape is validated against path traversal; `503` when `botApi` is null and Telegram is needed; `404` (never 500) on a missing/expired image. Exempted from the global 60/min `adminLimiter` and given its own higher-ceiling `mediaLimiter` so a gallery doesn't exhaust the admin budget. |
 
+Dialog reader (`routes/dialogs.ts`, same `requireApiKey` gate) — the
+conversation surface the external **Hermes** agent reads (see
+`HERMES_AGENT_PROMPT.md`). Distinct from the single-user viewer above: it is
+list-first, paginated, and merges a THIRD store (`chat_events`) so the reader
+sees the messages the bot sends from its ~276 non-agent call sites, not just
+agent turns.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/admin/dialogs` | Paginated dialog list, one row per user, newest-active first (`User.lastMessageAt`, then `createdAt`). Each row carries `participant` (identity + status + city, BigInt `telegramId` stringified), per-store `counts`, `lastMessageAt`, and a ≤200-char `lastMessage` preview. Filters: `status`, `platform`, `activeSince` (ISO), `search` (name/email/`telegramUsername`, plus exact `telegramId` when the term is all digits). `includeMessages=true` inlines the tail of each dialog (`messageLimit`, default 20, max 200). `limit`/`offset` are truncated and clamped, never passed through raw. |
+| GET | `/admin/dialogs/:id` | One dialog's transcript; `:id` **is the user id**, since a dialog is user↔bot and has exactly one human participant. `limit` (default 200, max 1000), `order` (`asc`\|`desc`), `includeTechnical` (default false — `system`/`tool`/null-content turns are hidden). Returns `participant`, `counts`, `sources`, `messages`, and the `photos[]` gallery as refs for `/admin/media`. 404 on unknown id. |
+
+Both return one **unified message shape** across the three stores:
+`{id, source: "agent"|"aether"|"timeline", direction: "in"|"out", role, text,
+createdAt, technical}` plus per-source extras (`toolCalls` for agent, `image`
+for Aether, `kind`/`surface`/`actions`/`matchId` for the timeline).
+`direction` is what identifies the speaker — `in` = the human, `out` = the bot.
+`agent` rows carry **no timestamp** (`User.messageHistory` has none), so they
+are emitted as a leading block rather than interleaved on a fabricated clock;
+the two timestamped stores merge by `createdAt`.
+
+Every `chat_events` read is guarded (`readTimeline`): a database predating that
+table degrades to the two older stores with `sources.timeline = false` instead
+of failing the request. The feature-flagged pre-date proxy chat
+(`proxy_messages`) is deliberately **not** exposed here — it is match-scoped
+moderation evidence, not a dialog.
+
 ## Rate Limiting & Token Budget
 
 Two surfaces, one in-memory mechanism (`services/usage-limiter.ts`; single PM2

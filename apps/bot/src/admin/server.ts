@@ -21,6 +21,7 @@ import { datesRouter } from "./routes/dates.js";
 import { verificationRouter } from "./routes/verification.js";
 import { citiesRouter } from "./routes/cities.js";
 import { onboardingFunnelRouter } from "./routes/onboarding-funnel.js";
+import { dialogsRouter } from "./routes/dialogs.js";
 
 // ---------------------------------------------------------------------------
 // Auth middleware — Bearer token matching ADMIN_API_KEY (timing-safe)
@@ -157,6 +158,9 @@ app.use(datesRouter);
 app.use(verificationRouter);
 app.use(citiesRouter);
 app.use(onboardingFunnelRouter);
+// Conversation-reading surface for the external Hermes agent: the dialog list
+// and per-dialog transcripts. Same Bearer gate as everything else here.
+app.use(dialogsRouter);
 
 type AdminProfileSnapshot = {
   height: number | null;
