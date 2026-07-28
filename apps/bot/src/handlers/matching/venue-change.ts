@@ -968,10 +968,7 @@ async function reachAgreement(
       );
       await api.sendMessage(
         toTelegramChatId(payerUser.telegramId),
-        t(lang, "venuePayPromptDm", {
-          venue: venueLabel(venue.name, venue.address),
-          stars: env.VENUE_CHANGE_STARS,
-        }),
+        t(lang, "venuePayPromptDm", { venue: venueLabel(venue.name, venue.address) }),
         { reply_markup: kb },
       );
     } catch (err) {

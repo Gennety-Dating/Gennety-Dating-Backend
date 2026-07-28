@@ -2037,9 +2037,11 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
     "actually, let's stay where we were". The way back did exist, but only on the
     earlier "📍 Change venue" message, which by then had scrolled off — so the
     product silently required knowing that an older message was the real
-    surface. Same decision, same screen, whichever side you are. Consequence:
-    the price now rides the DM's text rather than its button, which is also more
-    honest than a button labelled with a charge it doesn't make. The wish card
+    surface. Same decision, same screen, whichever side you are. The DM is
+    deliberately two lines — the news, then the venue — and names **no price**
+    (founder call): the button no longer charges anything, so pricing it would
+    misdescribe the tap, and the real number is stated on the pay button one
+    screen later, before any money moves. The wish card
     (below) is deliberately NOT changed — it renders the venue itself and
     carries an explicit decline, so it is neither blind nor a dead end. Opening
     the board cold this way also loads no catalog, so the agreed screen pulls
