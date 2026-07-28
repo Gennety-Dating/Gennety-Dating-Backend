@@ -2,7 +2,7 @@ import type { Api, RawApi } from "grammy";
 import { InlineKeyboard } from "grammy";
 import type { InlineKeyboardMarkup } from "grammy/types";
 import { prisma, type Theme } from "@gennety/db";
-import { t, tv, type Language } from "@gennety/shared";
+import { t, type Language } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
 import { isTelegramTarget } from "../../utils/telegram-target.js";
@@ -12,7 +12,7 @@ import {
   type PostAcceptSide,
 } from "./post-accept-message.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
-import { sendPeerWaitAck } from "../../services/peer-wait.js";
+import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 
 /**
  * Calendar-only scheduler.
@@ -438,7 +438,6 @@ export async function processCalendarSlotsUpdate(
 
   const peerLang = ((isA ? match.userB.language : match.userA.language) ?? "en") as Language;
   const peerTelegramId = isA ? match.userB.telegramId : match.userA.telegramId;
-  const actorLang = (user.language ?? "en") as Language;
   const actorTelegramId = telegramId;
 
   if (intersection.length === 1) {
@@ -506,17 +505,13 @@ export async function processCalendarSlotsUpdate(
       );
     }
     if (isTelegramTarget(actorTelegramId)) {
-      // Deliberately NOT pushed into `sends`: the shimmer runs ~2.5s, and this
-      // function's return value IS the Mini App's save response — awaiting it
-      // would stall the actor's "saved" screen behind an animation they cannot
-      // see while the web view is still on top. Fire-and-forget instead, so the
-      // beats play (and the waiting line lands) behind the Mini App.
-      void sendPeerWaitAck(
-        api,
-        Number(actorTelegramId),
-        actorLang,
-        tv(actorLang, "matchScheduleSavedConfirmation"),
-      ).catch(() => {});
+      // No confirmation MESSAGE any more (PRODUCT_SPEC §3.6b): the actor gets
+      // the waiting shimmer instead, held by `workers/peer-wait-shimmer.ts` for
+      // as long as the peer hasn't picked. Started here rather than left to the
+      // next worker tick so the chat isn't empty for up to 20s behind the still
+      // open Mini App. Fire-and-forget — this function's return value is the
+      // Mini App's save response and must not wait on a cosmetic draft.
+      startPeerWaitShimmer(api, matchId, user.id);
     }
     await Promise.all(sends);
   } else if (

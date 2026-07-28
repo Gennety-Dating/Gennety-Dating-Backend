@@ -1124,6 +1124,21 @@ model Match {
   calendarMessageIdA Int? @map("calendar_message_id_a")
   calendarMessageIdB Int? @map("calendar_message_id_b")
 
+  /// Telegram `message_id` of the peer-wait FALLBACK line per side — the plain
+  /// message shown to clients that cannot render a `<tg-thinking>` rich draft
+  /// (PRODUCT_SPEC §3.6b). The rich path needs no column at all: a draft is
+  /// ephemeral and simply stops being re-issued. The fallback message is a real
+  /// message that must be edited on each rotation and DELETED when the wait
+  /// ends, so its id has to survive a process restart — an in-memory map would
+  /// strand a permanent "waiting for them…" line in the chat after any deploy.
+  peerWaitMessageIdA Int? @map("peer_wait_message_id_a")
+  peerWaitMessageIdB Int? @map("peer_wait_message_id_b")
+  /// When the fallback line's text was last rewritten. The shimmer rotates on
+  /// every ~20s tick, but an edit is a real API call on a real message, so the
+  /// fallback rotates at most once a minute.
+  peerWaitEditedAtA  DateTime? @map("peer_wait_edited_at_a")
+  peerWaitEditedAtB  DateTime? @map("peer_wait_edited_at_b")
+
   /// Legacy nudge columns from the pre-C-6 era when proposal-phase and
   /// scheduling-phase nudges shared the same two slots. Kept nullable so old
   /// rows still parse — new code reads/writes the four phase-specific columns

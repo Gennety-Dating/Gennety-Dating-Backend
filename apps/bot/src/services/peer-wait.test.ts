@@ -5,150 +5,200 @@ vi.mock("../config.js", () => ({
   env: { CUSTOM_EMOJI_THINKING_ID: "" },
 }));
 
-import { sendPeerWaitAck, sendPeerWaitBeats } from "./peer-wait.js";
-import { peerWaitSteps } from "./analysis-status.js";
+vi.mock("@gennety/db", () => ({
+  prisma: { match: { findUnique: vi.fn() } },
+}));
 
-const noWait = () => Promise.resolve();
+import { prisma } from "@gennety/db";
+import {
+  issuePeerWaitDraft,
+  peerWaitDraftId,
+  peerWaitLabel,
+  startPeerWaitShimmer,
+} from "./peer-wait.js";
 
-/** Minimal grammY `Api` double with a working `raw` for the rich-draft path. */
-function createRichApi() {
-  const drafts: Array<{ draft_id: number; html?: string; markdown?: string }> = [];
-  const sendRichMessage = vi.fn().mockResolvedValue({ message_id: 9 });
+type MockFn = ReturnType<typeof vi.fn>;
+const mMatch = prisma.match as unknown as { findUnique: MockFn };
+
+function createApi() {
+  const drafts: Array<{ chat_id: number; draft_id: number; html?: string }> = [];
   return {
     api: {
-      sendMessage: vi.fn().mockResolvedValue({ message_id: 1 }),
-      editMessageText: vi.fn().mockResolvedValue(true),
-      deleteMessage: vi.fn().mockResolvedValue(true),
       raw: {
-        sendRichMessageDraft: vi.fn(async (p: { draft_id: number; rich_message: { html?: string; markdown?: string } }) => {
-          drafts.push({ draft_id: p.draft_id, ...p.rich_message });
-          return true as const;
-        }),
-        sendRichMessage,
+        sendRichMessageDraft: vi.fn(
+          async (p: {
+            chat_id: number;
+            draft_id: number;
+            rich_message: { html?: string };
+          }) => {
+            drafts.push({ chat_id: p.chat_id, draft_id: p.draft_id, ...p.rich_message });
+            return true as const;
+          },
+        ),
       },
     } as never,
     drafts,
-    sendRichMessage,
   };
-}
-
-/** `Api` double with no rich support at all — forces the classic fallback. */
-function createPlainApi() {
-  return {
-    sendMessage: vi.fn().mockResolvedValue({ message_id: 1 }),
-    editMessageText: vi.fn().mockResolvedValue(true),
-    deleteMessage: vi.fn().mockResolvedValue(true),
-    raw: {
-      sendRichMessageDraft: vi.fn().mockRejectedValue(new Error("unsupported")),
-    },
-  } as never;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mMatch.findUnique.mockReset();
 });
 
-describe("peerWaitSteps", () => {
-  it("ends on the caller's waiting line so the final message is unchanged copy", () => {
-    const steps = peerWaitSteps("ru", t("ru", "venueWaitingPeer"));
-    expect(steps).toHaveLength(3);
-    expect(steps[2]!.text).toBe(t("ru", "venueWaitingPeer"));
-    expect(steps[2]!.holdMs).toBe(0);
+describe("peerWaitDraftId", () => {
+  it("is stable for the same (chat, match, side)", () => {
+    // Stability is the whole point: an id that changed per tick would start a
+    // NEW draft every 20s instead of refreshing the one on screen.
+    expect(peerWaitDraftId(111, "m1", "A")).toBe(peerWaitDraftId(111, "m1", "A"));
   });
 
-  it("stays short — the wait itself can last hours and must not be shimmered", () => {
-    const total = peerWaitSteps("en", "waiting").reduce((sum, s) => sum + s.holdMs, 0);
-    expect(total).toBeLessThanOrEqual(3000);
+  it("differs per side and per match", () => {
+    expect(peerWaitDraftId(111, "m1", "A")).not.toBe(peerWaitDraftId(111, "m1", "B"));
+    expect(peerWaitDraftId(111, "m1", "A")).not.toBe(peerWaitDraftId(111, "m2", "A"));
   });
 
-  it("localises the beats", () => {
-    expect(peerWaitSteps("ru", "x")[0]!.text).toBe(t("ru", "peerWaitSaving"));
-    expect(peerWaitSteps("pl", "x")[1]!.text).toBe(t("pl", "peerWaitHandoff"));
+  it("stays a valid non-zero int32", () => {
+    for (const chatId of [1, 782065541, -1001234567890]) {
+      const id = peerWaitDraftId(chatId, "abc-def", "B");
+      expect(Number.isInteger(id)).toBe(true);
+      expect(id).toBeGreaterThan(0);
+      expect(id).toBeLessThan(0x7fffffff);
+    }
   });
 });
 
-describe("sendPeerWaitAck / sendPeerWaitBeats", () => {
-  it("shimmers the two beats as drafts, then persists the waiting line", async () => {
-    const { api, drafts, sendRichMessage } = createRichApi();
-    const waiting = t("en", "venueWaitingPeer");
+describe("peerWaitLabel", () => {
+  it("rotates through the three phrasings so a long wait never reads frozen", () => {
+    const seen = [0, 1, 2].map((i) => peerWaitLabel("en", "Anna", i));
+    expect(new Set(seen).size).toBe(3);
+    expect(peerWaitLabel("en", "Anna", 3)).toBe(seen[0]);
+  });
 
-    await sendPeerWaitAck(api, 111, "en", waiting, { wait: noWait });
+  it("interpolates the partner's name", () => {
+    expect(peerWaitLabel("ru", "Аня", 0)).toContain("Аня");
+    expect(peerWaitLabel("ru", "Аня", 0)).not.toContain("{name}");
+  });
 
-    // Two thinking beats — and only two: the final line must be a real message,
-    // not an ephemeral draft that would vanish while the partner is still deciding.
-    expect(drafts).toHaveLength(2);
+  it("falls back to the anonymous line when there is no name", () => {
+    // Substituting a generic noun into the personalised templates breaks case
+    // agreement in de/pl, so a nameless partner gets its own sentence.
+    for (const empty of [null, undefined, "  "]) {
+      expect(peerWaitLabel("de", empty, 0)).toBe(t("de", "peerWaitLoopAnon"));
+    }
+  });
+
+  it("localises every rotation in every language", () => {
+    for (const lang of ["en", "ru", "uk", "de", "pl"] as const) {
+      for (let i = 0; i < 3; i++) {
+        const label = peerWaitLabel(lang, "Anna", i);
+        expect(label).not.toContain("{name}");
+        expect(label.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("tolerates a negative or fractional rotation index", () => {
+    expect(() => peerWaitLabel("en", "Anna", -7)).not.toThrow();
+    expect(() => peerWaitLabel("en", "Anna", 2.9)).not.toThrow();
+  });
+});
+
+describe("issuePeerWaitDraft", () => {
+  it("sends a tg-thinking draft under the stable id", async () => {
+    const { api, drafts } = createApi();
+
+    await issuePeerWaitDraft(api, 111, "m1", "A", "en", "Anna", 0);
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]!.chat_id).toBe(111);
+    expect(drafts[0]!.draft_id).toBe(peerWaitDraftId(111, "m1", "A"));
     expect(drafts[0]!.html).toContain("tg-thinking");
-    expect(drafts[1]!.html).toContain("tg-thinking");
-    // One shared draft id → the client reserves the compose space exactly once.
-    expect(drafts[0]!.draft_id).toBe(drafts[1]!.draft_id);
-
-    expect(sendRichMessage).toHaveBeenCalledTimes(1);
-    expect(sendRichMessage.mock.calls[0]![0].rich_message.markdown).toBe(waiting);
+    expect(drafts[0]!.html).toContain("Anna");
   });
 
-  it("falls back to the classic edited stream and still lands the waiting line", async () => {
-    const api = createPlainApi();
-    const waiting = t("en", "matchScheduleSavedConfirmation");
-
-    await sendPeerWaitAck(api, 222, "en", waiting, { wait: noWait });
-
-    const typed = api as unknown as {
-      sendMessage: ReturnType<typeof vi.fn>;
-      editMessageText: ReturnType<typeof vi.fn>;
-      deleteMessage: ReturnType<typeof vi.fn>;
-    };
-    expect(typed.sendMessage).toHaveBeenCalledWith(222, t("en", "peerWaitSaving"));
-    // The last edit carries the waiting copy, and the message is NOT deleted —
-    // it is the durable receipt the user comes back to.
-    const edits = typed.editMessageText.mock.calls;
-    expect(edits[edits.length - 1]![2]).toBe(waiting);
-    expect(typed.deleteMessage).not.toHaveBeenCalled();
-  });
-
-  it("beats-only variant persists nothing — the caller owns the durable message", async () => {
-    const { api, drafts, sendRichMessage } = createRichApi();
-
-    await sendPeerWaitBeats(api, 444, "en", { wait: noWait });
-
-    // The leading glyph is upgraded to an animated <tg-emoji>, so match on the
-    // label text rather than the raw i18n string.
-    const label = (key: "peerWaitSaving" | "peerWaitHandoff") =>
-      t("en", key).split(" ").slice(1).join(" ");
-    expect(drafts).toHaveLength(2);
-    expect(drafts.map((d) => d.html)).toEqual([
-      expect.stringContaining(label("peerWaitSaving")),
-      expect.stringContaining(label("peerWaitHandoff")),
-    ]);
-    // Nothing persisted: the post-accept card that follows is tracked in
-    // `calendarMessageIdA/B` and carries its own message effect, so this
-    // variant must never send a message of its own.
-    expect(sendRichMessage).not.toHaveBeenCalled();
-    expect(
-      (api as unknown as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage,
-    ).not.toHaveBeenCalled();
-  });
-
-  it("beats-only cleans up its fallback message so no stray line survives", async () => {
-    const api = createPlainApi();
-
-    await sendPeerWaitBeats(api, 555, "en", { wait: noWait });
-
-    const typed = api as unknown as {
-      sendMessage: ReturnType<typeof vi.fn>;
-      deleteMessage: ReturnType<typeof vi.fn>;
-    };
-    expect(typed.sendMessage).toHaveBeenCalledTimes(1);
-    expect(typed.deleteMessage).toHaveBeenCalledWith(555, 1);
-  });
-
-  it("never throws when the chat rejects every send (blocked bot)", async () => {
+  it("propagates failure so callers can decide (worker falls back)", async () => {
     const api = {
-      sendMessage: vi.fn().mockRejectedValue(new Error("bot was blocked")),
       raw: { sendRichMessageDraft: vi.fn().mockRejectedValue(new Error("unsupported")) },
     } as never;
 
-    await expect(
-      sendPeerWaitAck(api, 333, "en", "waiting", { wait: noWait }),
-    ).resolves.toBeUndefined();
+    await expect(issuePeerWaitDraft(api, 111, "m1", "A", "en", "Anna", 0)).rejects.toThrow();
+  });
+});
+
+describe("startPeerWaitShimmer", () => {
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it("resolves the side, language and partner name from the match", async () => {
+    const { api, drafts } = createApi();
+    mMatch.findUnique.mockResolvedValue({
+      userAId: "uid-A",
+      userA: { telegramId: 111n, language: "ru", firstName: "Глеб" },
+      userB: { telegramId: 222n, language: "en", firstName: "Anna" },
+    });
+
+    startPeerWaitShimmer(api, "m1", "uid-A");
+    await flush();
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]!.chat_id).toBe(111); // side A's own chat
+    expect(drafts[0]!.html).toContain("Anna"); // …naming the PARTNER
+    // …in the ACTOR's language. The leading glyph is swapped for an animated
+    // <tg-emoji>, so match on the words after it.
+    const ruPrefix = t("ru", "peerWaitLoop1").split("{name}")[0]!.split(" ").slice(1).join(" ");
+    expect(drafts[0]!.html).toContain(ruPrefix.trim());
+  });
+
+  it("flips sides correctly for user B", async () => {
+    const { api, drafts } = createApi();
+    mMatch.findUnique.mockResolvedValue({
+      userAId: "uid-A",
+      userA: { telegramId: 111n, language: "en", firstName: "Gleb" },
+      userB: { telegramId: 222n, language: "en", firstName: "Anna" },
+    });
+
+    startPeerWaitShimmer(api, "m1", "uid-B");
+    await flush();
+
+    expect(drafts[0]!.chat_id).toBe(222);
+    expect(drafts[0]!.html).toContain("Gleb");
+  });
+
+  it("skips a mobile-only user (synthetic negative telegramId)", async () => {
+    const { api, drafts } = createApi();
+    mMatch.findUnique.mockResolvedValue({
+      userAId: "uid-A",
+      userA: { telegramId: -42n, language: "en", firstName: "Gleb" },
+      userB: { telegramId: 222n, language: "en", firstName: "Anna" },
+    });
+
+    startPeerWaitShimmer(api, "m1", "uid-A");
+    await flush();
+
+    expect(drafts).toHaveLength(0);
+  });
+
+  it("never throws — a failed draft must not break the flow it decorates", async () => {
+    const api = {
+      raw: { sendRichMessageDraft: vi.fn().mockRejectedValue(new Error("unsupported")) },
+    } as never;
+    mMatch.findUnique.mockResolvedValue({
+      userAId: "uid-A",
+      userA: { telegramId: 111n, language: "en", firstName: "Gleb" },
+      userB: { telegramId: 222n, language: "en", firstName: "Anna" },
+    });
+
+    expect(() => startPeerWaitShimmer(api, "m1", "uid-A")).not.toThrow();
+    await flush();
+  });
+
+  it("no-ops on a match that vanished", async () => {
+    const { api, drafts } = createApi();
+    mMatch.findUnique.mockResolvedValue(null);
+
+    startPeerWaitShimmer(api, "gone", "uid-A");
+    await flush();
+
+    expect(drafts).toHaveLength(0);
   });
 });

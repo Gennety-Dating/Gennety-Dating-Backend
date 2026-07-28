@@ -53,7 +53,7 @@ import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import { renderTimeCard, type TimeCardTheme } from "../../services/time-card.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { venueSearchSteps } from "../../services/analysis-status.js";
-import { sendPeerWaitAck } from "../../services/peer-wait.js";
+import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 
 /**
@@ -270,6 +270,8 @@ export async function sendVenuePostSaveAck(
       vibeLngA: true,
       vibeLatB: true,
       vibeLngB: true,
+      userAId: true,
+      userBId: true,
       userA: { select: { theme: true } },
       userB: { select: { theme: true } },
     },
@@ -293,14 +295,13 @@ export async function sendVenuePostSaveAck(
     key = "venueLocationNoted";
   }
 
-  // Only the "waiting on the partner" branch gets the shimmer: it is the one
-  // where the user has finished their side and now has nothing to do. The other
-  // two branches hand the turn straight back ("now pick where you're coming
-  // from"), so a hand-off animation there would be misleading.
+  // "Waiting on the partner" no longer sends a message at all (PRODUCT_SPEC
+  // §3.6b) — the user gets the shimmer, held for the whole wait. The other two
+  // branches keep their message: they hand the turn straight back ("now pick
+  // where you're coming from"), so there is nothing to wait on.
   if (key === "venueWaitingPeer") {
-    await sendPeerWaitAck(api, Number(telegramId), lang, tv(lang, key)).catch((err) => {
-      console.warn(`[venue-ack] peer-wait ack failed for ${telegramId}:`, err);
-    });
+    const userId = side === "A" ? m.userAId : m.userBId;
+    startPeerWaitShimmer(api, matchId, userId);
     return key;
   }
 

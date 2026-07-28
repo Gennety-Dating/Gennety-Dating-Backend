@@ -103,8 +103,7 @@ const { mOfferRematchAfterCancellation } = vi.hoisted(() => ({
 // post-accept card) and hold ~2.5s. Stub them so these tests assert WHICH paths
 // play them without burning real timers; peer-wait.test.ts covers the beats.
 vi.mock("../../services/peer-wait.js", () => ({
-  sendPeerWaitBeats: vi.fn().mockResolvedValue(undefined),
-  sendPeerWaitAck: vi.fn().mockResolvedValue(undefined),
+  startPeerWaitShimmer: vi.fn(),
 }));
 
 vi.mock("./rematch.js", () => ({
@@ -125,7 +124,7 @@ import { buildDeclineReasonKeyboard, handleDeclineReasonCallback } from "./decli
 import { buildMatchKeyboard, sendMatchProposal } from "./pitch.js";
 import { appendNegativeConstraint, normalizeReason } from "./negative-constraints.js";
 import { startScheduling } from "./scheduler.js";
-import { sendPeerWaitBeats } from "../../services/peer-wait.js";
+import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 import { tryFinalize } from "./venue-negotiation.js";
 import {
   buildCandidateSql,
@@ -1358,10 +1357,10 @@ describe("matching decision flow", () => {
     // The hand-off beats cover the commit — this is the branch where the actor
     // now waits on a partner who hasn't answered, with the countdown worker
     // already silent for them.
-    expect(sendPeerWaitBeats).toHaveBeenCalledTimes(1);
-    expect((sendPeerWaitBeats as unknown as MockFn).mock.calls[0]!.slice(1, 3)).toEqual([
-      1001,
-      "en",
+    expect(startPeerWaitShimmer).toHaveBeenCalledTimes(1);
+    expect((startPeerWaitShimmer as unknown as MockFn).mock.calls[0]!.slice(1)).toEqual([
+      "match-1",
+      "uid-A",
     ]);
     expect(startScheduling).not.toHaveBeenCalled();
   });
@@ -1410,7 +1409,7 @@ describe("matching decision flow", () => {
     expect(startScheduling).toHaveBeenCalledWith(expect.anything(), "match-1");
     // No hand-off beats on a mutual accept — nobody is waiting on anybody, the
     // flow goes straight to the ticket/Calendar card.
-    expect(sendPeerWaitBeats).not.toHaveBeenCalled();
+    expect(startPeerWaitShimmer).not.toHaveBeenCalled();
     expect(ctx.reply).not.toHaveBeenCalled();
   });
 
@@ -1477,7 +1476,7 @@ describe("matching decision flow", () => {
     expect(peerText).not.toMatch(/passed|declined|not in/i);
     // A decliner is not waiting on anything — a pass is irreversible and the
     // next thing they see is the "why?" prompt, not a hand-off.
-    expect(sendPeerWaitBeats).not.toHaveBeenCalled();
+    expect(startPeerWaitShimmer).not.toHaveBeenCalled();
   });
 
   it("first accept sends BLIND nudge to peer (no 'they accepted' leak)", async () => {

@@ -32,6 +32,7 @@ import { reEngagementTick } from "./workers/re-engagement.js";
 import { profilerTick } from "./workers/profiler.js";
 import { matchNudgeTick } from "./workers/match-nudge.js";
 import { proposalCountdownTick } from "./workers/proposal-countdown.js";
+import { peerWaitShimmerTick } from "./workers/peer-wait-shimmer.js";
 import { statusTimerTick } from "./workers/status-timer.js";
 import { createStatusTimerRunner } from "./workers/status-timer-runner.js";
 import { embeddingRefreshTick } from "./workers/embedding-refresh.js";
@@ -97,6 +98,30 @@ function resolveDateLifecycleTickMs(raw: string | undefined): number {
   return parsed;
 }
 const DATE_LIFECYCLE_TICK_MS = resolveDateLifecycleTickMs(process.env.DATE_LIFECYCLE_TICK_MS);
+
+/**
+ * Peer-wait shimmer interval (PRODUCT_SPEC §3.6b). A `<tg-thinking>` draft dies
+ * ~30s after it is issued, so this MUST stay comfortably under that or the
+ * shimmer will visibly blink out between ticks. It is an interval rather than a
+ * cron because node-cron's finest granularity is one minute — already too slow.
+ * `0` disables the whole feature (every waiting user simply sees nothing), which
+ * is the kill switch: no redeploy, just `pm2 restart --update-env`.
+ */
+const DEFAULT_PEER_WAIT_TICK_MS = 20 * 1000;
+function resolvePeerWaitTickMs(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === "") return DEFAULT_PEER_WAIT_TICK_MS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    console.warn(
+      `[config] PEER_WAIT_TICK_MS="${raw}" is not a non-negative number — ` +
+        `falling back to ${DEFAULT_PEER_WAIT_TICK_MS}ms. Use a millisecond ` +
+        `integer (or 0 to disable the peer-wait shimmer).`,
+    );
+    return DEFAULT_PEER_WAIT_TICK_MS;
+  }
+  return parsed;
+}
+const PEER_WAIT_TICK_MS = resolvePeerWaitTickMs(process.env.PEER_WAIT_TICK_MS);
 
 /**
  * Expiry cron schedule. Runs every 15 minutes to expire proposals
@@ -421,6 +446,27 @@ bot.start({
     // Date lifecycle (icebreakers, emergencies, feedback) — kept on setInterval.
     if (DATE_LIFECYCLE_TICK_MS > 0) {
       setInterval(guardedTick("date-lifecycle", dateLifecycleTick), DATE_LIFECYCLE_TICK_MS);
+    }
+
+    // "Waiting on your partner" shimmer — re-issues the ephemeral rich draft so
+    // it survives the whole wait. setInterval, not cron: the draft's ~30s TTL is
+    // shorter than cron's one-minute floor.
+    if (PEER_WAIT_TICK_MS > 0) {
+      setInterval(
+        guardedTick("peer-wait", () =>
+          peerWaitShimmerTick(bot.api).then((r) => {
+            if (r.fallbackSent > 0 || r.clearedFallback > 0 || r.errors > 0) {
+              console.log(
+                `[peer-wait] scanned=${r.scanned} refreshed=${r.refreshed} ` +
+                  `fallbackSent=${r.fallbackSent} fallbackEdited=${r.fallbackEdited} ` +
+                  `cleared=${r.clearedFallback} errors=${r.errors}`,
+              );
+            }
+          }),
+        ),
+        PEER_WAIT_TICK_MS,
+      );
+      console.log(`[worker] Peer-wait shimmer every ${PEER_WAIT_TICK_MS}ms`);
     }
 
     // Re-engagement: remind users who dropped off onboarding (all steps).

@@ -42,7 +42,7 @@ vi.mock("./venue-negotiation.js", () => ({
 // deliberately fire-and-forget (it must not delay the Mini App's save response).
 // Stub it so the tests assert it fired without leaving a live timer behind.
 vi.mock("../../services/peer-wait.js", () => ({
-  sendPeerWaitAck: vi.fn().mockResolvedValue(undefined),
+  startPeerWaitShimmer: vi.fn(),
 }));
 
 import { prisma } from "@gennety/db";
@@ -60,13 +60,13 @@ import {
   CALENDAR_TIME_SLOTS,
 } from "./scheduler.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
-import { sendPeerWaitAck } from "../../services/peer-wait.js";
+import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as { findUnique: MockFn; update: MockFn };
 const mUser = prisma.user as unknown as { findUnique: MockFn };
 const mStartVenue = startVenueNegotiation as unknown as MockFn;
-const mPeerWaitAck = sendPeerWaitAck as unknown as MockFn;
+const mPeerWaitShimmer = startPeerWaitShimmer as unknown as MockFn;
 
 function createApi() {
   let nextMessageId = 500;
@@ -296,8 +296,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     mUser.findUnique.mockReset();
     mStartVenue.mockReset();
     mStartVenue.mockResolvedValue(undefined);
-    mPeerWaitAck.mockReset();
-    mPeerWaitAck.mockResolvedValue(undefined);
+    mPeerWaitShimmer.mockReset();
   });
 
   function mockMatchInState(overrides: {
@@ -425,14 +424,10 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     // The peer gets the plain calendar-button DM…
     expect(api.sendMessage).toHaveBeenCalledTimes(1);
     expect(api.sendMessage.mock.calls[0]![0]).toBe(1002);
-    // …while the actor's receipt goes through the shimmer ack, which ends on the
-    // same confirmation copy it used to send flat.
-    expect(mPeerWaitAck).toHaveBeenCalledTimes(1);
-    expect(mPeerWaitAck.mock.calls[0]!.slice(1)).toEqual([
-      1001,
-      "en",
-      t("en", "matchScheduleSavedConfirmation"),
-    ]);
+    // …while the actor gets NO message at all: the waiting shimmer replaces the
+    // old "saved, we'll tell you when they reply" line (PRODUCT_SPEC §3.6b).
+    expect(mPeerWaitShimmer).toHaveBeenCalledTimes(1);
+    expect(mPeerWaitShimmer.mock.calls[0]!.slice(1)).toEqual(["match-1", "uid-A"]);
     expect(mStartVenue).not.toHaveBeenCalled();
   });
 

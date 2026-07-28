@@ -16,8 +16,7 @@ import {
 import { claimMatchDecision } from "../../services/match-decision-claim.js";
 import { sendOrEditPostAcceptMessage } from "./post-accept-message.js";
 import { offerRematchAfterCancellation } from "./rematch.js";
-import { sendPeerWaitBeats } from "../../services/peer-wait.js";
-import { isTelegramTarget, toTelegramChatId } from "../../utils/telegram-target.js";
+import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 
 /**
  * Match decision handler — Accept / Decline.
@@ -435,18 +434,18 @@ async function handleAccept(
   //
   // This is the longest one-sided wait in the product: the countdown worker
   // deliberately stops re-rendering for a side that already accepted
-  // (`workers/proposal-countdown.ts`), so from here the user has a static card
-  // and silence for up to 24h. Cover the commit itself with the shared
-  // hand-off beats (§3.6b) so answering visibly *does* something. Beats-only:
-  // the card below is tracked in `calendarMessageIdA/B` and later morphs into
-  // the ticket/Calendar card, so it must stay the caller's own send.
+  // (`workers/proposal-countdown.ts`), so from here the user had a static card
+  // and silence for up to 24h. The waiting shimmer (§3.6b) now sits under the
+  // card for the whole window, held by `workers/peer-wait-shimmer.ts`.
   //
-  // Blind-decision safe: the actor has already committed, and the beats are
-  // static copy identical for accept and decline.
-  const actorTelegramId = actorTelegramIdOf(match, side);
-  if (isTelegramTarget(actorTelegramId)) {
-    await sendPeerWaitBeats(ctx.api, toTelegramChatId(actorTelegramId), lang);
-  }
+  // The card itself STAYS (founder decision): unlike the calendar and venue
+  // waiting lines, it is not a throwaway receipt — it is tracked in
+  // `calendarMessageIdA/B`, carries `MESSAGE_EFFECT_MATCH_ID`, and later morphs
+  // in place into the ticket card and then the Calendar. So the shimmer is
+  // started alongside it rather than replacing it.
+  //
+  // Blind-decision safe: the actor has already committed, and the shimmer says
+  // only that we're waiting — nothing about what the partner chose.
   await sendOrEditPostAcceptMessage({
     api: ctx.api,
     matchId: match.id,
@@ -458,6 +457,7 @@ async function handleAccept(
       ...(effectId ? { message_effect_id: effectId } : {}),
     },
   });
+  startPeerWaitShimmer(ctx.api, match.id, actorId);
   await sendPeerDecidedNudge(ctx, match, side);
 }
 

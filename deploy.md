@@ -1,5 +1,54 @@
 # Gennety Dating Deploy
 
+**PENDING — peer-wait shimmer (PRODUCT_SPEC §3.6b).** Not deployed yet.
+Code-only otherwise: **no flag change, no Mini App change** (`apps/webapp`
+untouched). One new optional env var, one **required additive `db:push`**.
+
+**⚠️ Push the schema BEFORE the restart.** The new
+`matches.peer_wait_message_id_a/_b` + `peer_wait_edited_at_a/_b` columns are
+selected by a worker that runs every 20 s, so a DB missing them throws `P2022`
+on the first tick — the PM2 crash-loop this file warns about. Verify additive
+first (expect four `ADD COLUMN`, zero `DROP`):
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # must exit 0 before pm2 restart
+```
+
+What ships: instead of a flat "saved, we'll tell you when they reply" line, the
+side that has committed and is now blocked on its partner sees a
+`<tg-thinking>` shimmer for the WHOLE wait, wording rotating, gone the moment
+the partner answers. Applies to the pitch decision (the card stays, shimmer
+under it), the calendar first-mover, and the venue confirm (both of which now
+send NO message at all).
+
+**`PEER_WAIT_TICK_MS`** (optional, default `20000`, `0` disables the whole
+feature) — the re-issue interval. A rich draft dies ~30 s after it is issued, so
+this must stay comfortably under that or the shimmer visibly blinks out between
+ticks. `0` is the kill switch: no redeploy, just
+`pm2 restart gennety-bot --update-env`.
+
+**Watch on the first day: call volume.** This is a per-waiter heartbeat — one
+draft re-issue every 20 s for every side currently waiting. Confirm the worker is
+only touching real waits:
+
+```sh
+# Logs only when something notable happened (fallback sent/cleared, or errors).
+pm2 logs gennety-bot --lines 200 --nostream | grep '\[peer-wait\]'
+# Should stay empty on the rich path: the fallback is for clients that cannot
+# render rich drafts, and a non-empty column means someone is on that path.
+psql "$DATABASE_URL" -c "select count(*) from matches where peer_wait_message_id_a is not null or peer_wait_message_id_b is not null;"
+```
+
+**Rollback:** set `PEER_WAIT_TICK_MS=0` and restart (feature off, no code
+change), or revert the code. The additive columns can stay either way. Note that
+with the feature off the calendar/venue waits show nothing at all — the old
+confirmation messages were removed, not merely decorated.
+
 **PENDING — Kyiv-only market gate.** Not deployed yet. **No Prisma schema
 change, no env change, no flag change.** Requires a **Mini App redeploy**
 (`apps/webapp` changed: `onboarding.tsx` / `onboarding-i18n.ts` /
@@ -1304,10 +1353,7 @@ Required/high-impact env keys:
     working" lines): AI-memory analysis, liveness verify check, verification
     soft-skip, profile-video upload check, onboarding photo-burst check
     (`photoReviewSteps`), concierge venue selection, date-card
-    render + share, the **peer-wait ack** (PRODUCT_SPEC §3.6b — the calendar
-    first-mover receipt, the venue `venueWaitingPeer` line, and the beats-only
-    variant before the first decider's post-accept card, `services/
-    peer-wait.ts`), plus the Profiler batch boundary, the Profiler in-batch
+    render + share, plus the Profiler batch boundary, the Profiler in-batch
     questions (PRODUCT_SPEC §Phase 1b), and the periodic profile-survey
     "thinking" pause (PRODUCT_SPEC §1.3). These all call with `rich: true` so
     they render as the native `<tg-thinking>` shimmer + AI Actions `<tg-emoji>`

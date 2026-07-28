@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
-import { tv, type Language } from "@gennety/shared";
+import type { Language } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
 import { locationSearchLimiter } from "../rate-limit.js";
@@ -9,7 +9,7 @@ import {
   tryFinalize,
   sendVenuePostSaveAck,
 } from "../../handlers/matching/venue-negotiation.js";
-import { sendPeerWaitAck } from "../../services/peer-wait.js";
+import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 import { recordMiniAppAction } from "../../services/chat-events.js";
 import {
   confirmVenueIntent,
@@ -108,15 +108,12 @@ export function createLocationRouter(api: Api<RawApi>): Router {
     }
     // Telegram chat cue: finalization only runs once BOTH sides have confirmed
     // (tryFinalizeVenueIntentV2 returns early otherwise). If the partner hasn't
-    // confirmed yet, send the classic "waiting for the other side" DM so closing
-    // the Mini App leaves a chat receipt — matching the legacy concierge flow.
-    // When the partner HAS confirmed, finalize already delivered the scheduled
-    // confirmation (date card), so no waiting cue is needed. This lives on the
-    // Telegram-only Mini App route (not the shared confirmVenueIntent service) so
-    // the iOS path — which has its own waiting UI — is never DM'd.
-    // Fire-and-forget: the Mini App dismisses itself ~200ms after this response,
-    // so the user is back in the chat while the short shimmer plays and lands on
-    // the waiting line. Blocking the response on it would just delay that close.
+    // confirmed yet, the actor gets the waiting SHIMMER — no chat message any
+    // more (PRODUCT_SPEC §3.6b) — held by `workers/peer-wait-shimmer.ts` until
+    // the partner confirms. When the partner HAS confirmed, finalize already
+    // delivered the scheduled confirmation (date card), so there is no wait.
+    // Telegram-only route (not the shared confirmVenueIntent service) so the
+    // iOS path, which has its own waiting UI, is never touched.
     recordMiniAppAction(
       actor.telegramId,
       state.partnerSubmitted
@@ -125,15 +122,7 @@ export function createLocationRouter(api: Api<RawApi>): Router {
       { surface: "venue_intent", matchId },
     );
     if (!state.partnerSubmitted) {
-      const waitingLang = (actor.language ?? "en") as Language;
-      void sendPeerWaitAck(
-        api,
-        Number(actor.telegramId),
-        waitingLang,
-        tv(waitingLang, "venueWaitingPeer"),
-      ).catch((err) => {
-        console.warn(`[venue-intent/confirm] waiting DM failed for ${matchId}:`, err);
-      });
+      startPeerWaitShimmer(api, matchId, actor.id);
     }
     res.json({ ok: true, ...state });
   });
