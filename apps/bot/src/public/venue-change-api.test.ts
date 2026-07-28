@@ -315,6 +315,16 @@ describe("POST /v1/venue-change/offer-pay", () => {
     expect(res.status).toBe(403);
   });
 
+  it("502 maps send-failed, so the Mini App can say it did NOT land", async () => {
+    offerPartnerPay.mockResolvedValue({ ok: false, reason: "send-failed" });
+    const res = await request(buildApp())
+      .post(`/v1/venue-change/offer-pay`)
+      .set("Authorization", tmaHeader())
+      .send({ matchId: VALID_UUID });
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBe("send-failed");
+  });
+
   it("200 on success", async () => {
     offerPartnerPay.mockResolvedValue({ ok: true });
     const res = await request(buildApp())

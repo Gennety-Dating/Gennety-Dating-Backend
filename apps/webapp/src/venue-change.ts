@@ -131,6 +131,10 @@ interface Strings {
   okKeptSub: string;
   okKeepAskedTitle: string;
   okKeepAskedSub: (name: string) => string;
+  /** Her wish card just reached the partner's chat. */
+  okOfferSentTitle: string;
+  okOfferSentSub: (name: string) => string;
+  okOfferSentNote: string;
   okDone: string;
   okContinue: string;
   catalogEmpty: string;
@@ -156,6 +160,10 @@ interface Strings {
   payBtn: (stars: number) => string;
   paySelfBtn: (stars: number) => string;
   offerBtn: string;
+  /** Held while the wish card is rendered and delivered to his chat. */
+  offerSending: (name: string) => string;
+  /** The card never reached his chat — nothing was consumed, retrying is safe. */
+  offerSendFailed: string;
   offerSentNote: string;
   declineBtn: string;
   finalizing: string;
@@ -211,6 +219,10 @@ const T: Record<Lang, Strings> = {
     okKeptSub: "Your date keeps the place we picked for you. Nothing changed.",
     okKeepAskedTitle: "You'd rather keep this one",
     okKeepAskedSub: (name) => `We let ${name} know. They can still suggest another spot — and it only changes if you both agree.`,
+    okOfferSentTitle: "Sent to your match",
+    okOfferSentSub: (name) =>
+      `${name} just got this place in chat with a button to lock it in. You'll hear the moment they do.`,
+    okOfferSentNote: "You can still lock it in yourself anytime.",
     okDone: "Back to places",
     okContinue: "Continue",
     catalogEmpty: "No suitable places nearby right now. Your venue stays as is.",
@@ -240,6 +252,8 @@ const T: Record<Lang, Strings> = {
     payBtn: (stars) => `Lock it in — ${stars}`,
     paySelfBtn: (stars) => `Lock it in myself — ${stars}`,
     offerBtn: "Ask them to lock it in",
+    offerSending: (name) => (name ? `Sending your ask to ${name}…` : "Sending your ask…"),
+    offerSendFailed: "We couldn't deliver it to your match. Nothing was used up — try again.",
     offerSentNote: "Your ask is on its way. You can still lock it in yourself anytime.",
     declineBtn: "Not this time",
     finalizing: "Locking in your new spot…",
@@ -292,6 +306,10 @@ const T: Record<Lang, Strings> = {
     okKeptSub: "Свидание проходит там, где мы для вас выбрали. Ничего не изменилось.",
     okKeepAskedTitle: "Вы предпочли остаться здесь",
     okKeepAskedSub: (name) => `Мы сообщили ${name}. Партнёр всё ещё может предложить другое место — и оно сменится, только если вы оба согласитесь.`,
+    okOfferSentTitle: "Отправили партнёру",
+    okOfferSentSub: (name) =>
+      `${name || "Партнёр"} получил в чате это место и кнопку, чтобы его закрепить. Как только он это сделает — вы сразу узнаете.`,
+    okOfferSentNote: "Закрепить самой можно в любой момент.",
     okDone: "К местам",
     okContinue: "Продолжить",
     catalogEmpty: "Подходящих мест рядом сейчас нет. Ваше место остаётся в силе.",
@@ -321,6 +339,9 @@ const T: Record<Lang, Strings> = {
     payBtn: (stars) => `Закрепить — ${stars}`,
     paySelfBtn: (stars) => `Закрепить самой — ${stars}`,
     offerBtn: "Предложить закрепить партнёру",
+    offerSending: (name) =>
+      name ? `Отправляем предложение ${name}…` : "Отправляем предложение партнёру…",
+    offerSendFailed: "Не получилось отправить партнёру. Ничего не потрачено — попробуйте ещё раз.",
     offerSentNote: "Предложение отправлено. Закрепить самой можно в любой момент.",
     declineBtn: "Не в этот раз",
     finalizing: "Закрепляем новое место…",
@@ -373,6 +394,10 @@ const T: Record<Lang, Strings> = {
     okKeptSub: "Побачення відбудеться там, де ми для вас обрали. Нічого не змінилося.",
     okKeepAskedTitle: "Ви віддали перевагу цьому місцю",
     okKeepAskedSub: (name) => `Ми повідомили ${name}. Партнер усе ще може запропонувати інше місце — і воно зміниться, лише якщо ви обоє погодитесь.`,
+    okOfferSentTitle: "Надіслали партнеру",
+    okOfferSentSub: (name) =>
+      `${name || "Партнер"} отримав у чаті це місце та кнопку, щоб його закріпити. Щойно він це зробить — ви одразу дізнаєтесь.`,
+    okOfferSentNote: "Закріпити самій можна будь-коли.",
     okDone: "До місць",
     okContinue: "Продовжити",
     catalogEmpty: "Підходящих місць поруч зараз немає. Ваше місце залишається.",
@@ -402,6 +427,9 @@ const T: Record<Lang, Strings> = {
     payBtn: (stars) => `Закріпити — ${stars}`,
     paySelfBtn: (stars) => `Закріпити самій — ${stars}`,
     offerBtn: "Запропонувати закріпити партнеру",
+    offerSending: (name) =>
+      name ? `Надсилаємо пропозицію ${name}…` : "Надсилаємо пропозицію партнеру…",
+    offerSendFailed: "Не вдалося надіслати партнеру. Нічого не витрачено — спробуйте ще раз.",
     offerSentNote: "Пропозицію надіслано. Закріпити самій можна будь-коли.",
     declineBtn: "Не цього разу",
     finalizing: "Закріплюємо нове місце…",
@@ -454,6 +482,10 @@ const T: Record<Lang, Strings> = {
     okKeptSub: "Euer Date bleibt an dem Ort, den wir für euch gewählt haben. Nichts hat sich geändert.",
     okKeepAskedTitle: "Du bleibst lieber bei diesem Ort",
     okKeepAskedSub: (name) => `Wir haben ${name} Bescheid gegeben. Sie können weiterhin einen anderen Ort vorschlagen — geändert wird nur, wenn ihr beide zustimmt.`,
+    okOfferSentTitle: "An dein Match gesendet",
+    okOfferSentSub: (name) =>
+      `${name || "Dein Match"} hat diesen Ort gerade im Chat bekommen — mit einem Button zum Sichern. Du erfährst es sofort, sobald es passiert.`,
+    okOfferSentNote: "Du kannst jederzeit selbst sichern.",
     okDone: "Zu den Orten",
     okContinue: "Weiter",
     catalogEmpty: "Gerade keine passenden Orte in der Nähe. Euer Ort bleibt bestehen.",
@@ -483,6 +515,10 @@ const T: Record<Lang, Strings> = {
     payBtn: (stars) => `Sichern — ${stars}`,
     paySelfBtn: (stars) => `Selbst sichern — ${stars}`,
     offerBtn: "Deinem Match das Sichern anbieten",
+    offerSending: (name) =>
+      name ? `Anfrage an ${name} wird gesendet…` : "Anfrage wird gesendet…",
+    offerSendFailed:
+      "Wir konnten es deinem Match nicht zustellen. Es wurde nichts verbraucht — versuch es erneut.",
     offerSentNote: "Anfrage unterwegs. Du kannst jederzeit selbst sichern.",
     declineBtn: "Nicht diesmal",
     finalizing: "Neuer Ort wird gesichert…",
@@ -535,6 +571,10 @@ const T: Record<Lang, Strings> = {
     okKeptSub: "Randka odbędzie się tam, gdzie wybraliśmy dla was. Nic się nie zmieniło.",
     okKeepAskedTitle: "Wolisz zostać w tym miejscu",
     okKeepAskedSub: (name) => `Daliśmy znać ${name}. Może nadal zaproponować inne miejsce — zmieni się tylko, jeśli oboje się zgodzicie.`,
+    okOfferSentTitle: "Wysłane do pary",
+    okOfferSentSub: (name) =>
+      `${name || "Twoja para"} właśnie dostał na czacie to miejsce i przycisk, żeby je zatwierdzić. Dowiesz się od razu, gdy to zrobi.`,
+    okOfferSentNote: "Możesz zatwierdzić samodzielnie w każdej chwili.",
     okDone: "Do miejsc",
     okContinue: "Dalej",
     catalogEmpty: "Brak odpowiednich miejsc w pobliżu. Wasze miejsce pozostaje.",
@@ -564,6 +604,8 @@ const T: Record<Lang, Strings> = {
     payBtn: (stars) => `Zatwierdź — ${stars}`,
     paySelfBtn: (stars) => `Zatwierdź samodzielnie — ${stars}`,
     offerBtn: "Zaproponuj parze zatwierdzenie",
+    offerSending: (name) => (name ? `Wysyłamy prośbę do ${name}…` : "Wysyłamy prośbę…"),
+    offerSendFailed: "Nie udało się wysłać do pary. Nic nie zostało zużyte — spróbuj ponownie.",
     offerSentNote: "Propozycja wysłana. Możesz zatwierdzić samodzielnie w każdej chwili.",
     declineBtn: "Nie tym razem",
     finalizing: "Zatwierdzamy nowe miejsce…",
@@ -827,6 +869,8 @@ function errorMessage(err: unknown): string {
       return s.closedChanged;
     case "past-cutoff":
       return s.closedCutoff;
+    case "send-failed":
+      return s.offerSendFailed;
     default:
       return s.errGeneric;
   }
@@ -880,7 +924,10 @@ async function main(): Promise<void> {
     confirmed = new Set(boardState.myLikes);
     selection = new Set(boardState.myLikes);
     peerSeen = new Set();
-    route();
+    // The success screens are not reachable through the router (they follow an
+    // action), so preview them by name.
+    if (params.get("preview") === "offer-sent") renderSuccess("offer-sent");
+    else route();
     return;
   }
 
@@ -1742,35 +1789,41 @@ async function confirmOverlap(v: VenueChangeCatalogItem): Promise<void> {
 
 /**
  * The moment right after a confirm. `suggested` = my marks just went to the
- * partner; `agreed` = we landed on the same place and it can now be locked in.
+ * partner; `agreed` = we landed on the same place and it can now be locked in;
+ * `offer-sent` = the wish card just landed in the partner's chat.
  * Deliberately a screen of its own: confirming is the one committing act on the
  * board, so it should feel like it landed rather than silently redraw a list.
  */
-function renderSuccess(kind: "suggested" | "agreed" | "kept" | "keep-asked"): void {
+function renderSuccess(kind: "suggested" | "agreed" | "kept" | "keep-asked" | "offer-sent"): void {
   screen = "success";
   setBack(null);
   const st = boardState;
   const agreed = kind === "agreed";
   const keptLike = kind === "kept" || kind === "keep-asked";
+  const offerSent = kind === "offer-sent";
 
   const medallion = el("div", { class: `vc-ok-mark${agreed ? " is-agreed" : ""}` }, [
-    icon(agreed ? "spark" : keptLike ? "pin" : "check", "icon vc-ok-glyph"),
+    icon(agreed ? "spark" : offerSent ? "letter" : keptLike ? "pin" : "check", "icon vc-ok-glyph"),
   ]);
 
   const title = agreed
     ? s.okAgreedTitle
-    : kind === "keep-asked"
-      ? s.okKeepAskedTitle
-      : kind === "kept"
-        ? s.okKeptTitle
-        : s.okSuggestTitle;
+    : offerSent
+      ? s.okOfferSentTitle
+      : kind === "keep-asked"
+        ? s.okKeepAskedTitle
+        : kind === "kept"
+          ? s.okKeptTitle
+          : s.okSuggestTitle;
   const sub = agreed
     ? s.okAgreedSub
-    : kind === "keep-asked"
-      ? s.okKeepAskedSub(st?.partnerName ?? "")
-      : kind === "kept"
-        ? s.okKeptSub
-        : s.okSuggestSub(st?.partnerName ?? "");
+    : offerSent
+      ? s.okOfferSentSub(st?.partnerName ?? "")
+      : kind === "keep-asked"
+        ? s.okKeepAskedSub(st?.partnerName ?? "")
+        : kind === "kept"
+          ? s.okKeptSub
+          : s.okSuggestSub(st?.partnerName ?? "");
 
   const nodes: Node[] = [
     el("div", { class: "vc-ok-halo" }, [medallion]),
@@ -1781,10 +1834,10 @@ function renderSuccess(kind: "suggested" | "agreed" | "kept" | "keep-asked"): vo
   // Name the place — and let them tap through to it. Confirming a venue you
   // have only seen as a line of text is a leap of faith; this is the way to
   // double-check the place and come straight back.
-  const venue = agreed ? st?.agreed : keptLike ? st?.original : null;
+  const venue = agreed || offerSent ? st?.agreed : keptLike ? st?.original : null;
   if (venue?.name) {
     const ref: VenueRef = {
-      key: agreed ? (st?.agreed?.key ?? null) : null,
+      key: agreed || offerSent ? (st?.agreed?.key ?? null) : null,
       name: venue.name,
       address: venue.address ?? "",
       mapsUri: venue.mapsUri ?? null,
@@ -1811,13 +1864,21 @@ function renderSuccess(kind: "suggested" | "agreed" | "kept" | "keep-asked"): vo
     );
   }
 
+  // She just handed the payment over — say plainly that her own path is still
+  // open, so "asked him" never reads as "I'm now locked out of this".
+  if (offerSent) {
+    nodes.push(el("p", { class: "vc-note vc-note-center", text: s.okOfferSentNote }));
+  }
+
   const cta = el("button", {
     class: "btn-primary",
     type: "button",
     text: agreed ? s.okContinue : s.okDone,
     onClick: () => {
       haptic("light");
-      if (agreed) route();
+      // `offer-sent` goes back through the router, not to the board: the agreed
+      // screen is where her own "lock it in" button still lives.
+      if (agreed || offerSent) route();
       else renderBoard();
     },
   });
@@ -2050,13 +2111,25 @@ async function declinePay(): Promise<void> {
   route();
 }
 
+/**
+ * "Ask them to lock it in." The server renders her wish card and hands it to
+ * Telegram before answering, which takes seconds — so the tap gets an immediate
+ * spinner naming what is happening, and lands on a success screen that says the
+ * message actually reached him. Without both, the one moment where she hands the
+ * decision over looked like nothing had happened.
+ */
 async function offerPay(): Promise<void> {
   if (previewMode) return;
   busy = true;
+  haptic("light");
+  showLoading(s.offerSending(boardState?.partnerName ?? ""));
   try {
     await offerVenuePay(getInitData(), matchId);
     boardState = await fetchVenueBoardState(getInitData(), matchId);
+    busy = false;
     haptic("success");
+    renderSuccess("offer-sent");
+    return;
   } catch (err) {
     haptic("error");
     app?.showAlert(errorMessage(err));
@@ -2154,14 +2227,16 @@ function mockState(): VenueBoardState {
     expressAvailable: true,
     settled: null,
   };
-  if (view === "agreed") {
+  if (view === "agreed" || view === "offer-sent") {
+    const offered = view === "offer-sent";
     return {
       ...base,
       status: "agreed",
       open: false,
       agreed: { key: "p1", name: "Кофейня «Молоко»", address: "ул. Крещатик, 14", mapsUri: null, expiresAt: null },
       myAction: (params.get("action") as VenueBoardState["myAction"]) ?? "pay_or_offer",
-      canOfferPartner: true,
+      canOfferPartner: !offered,
+      offerSent: offered,
       expressAvailable: false,
       // Dev preview of the §Premium "free with Gennety Premium" pay-step hint
       // button — pass `&nopremium=1` to preview the screen without it.

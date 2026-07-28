@@ -1980,7 +1980,21 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
     date-card layout re-rendered with HER polaroid over the new venue's duotone
     hero (`services/venue-wish-card.ts`, headline "Her pick. Your move.",
     protected; text fallback so the offer never wedges) with pay/decline
-    buttons. One offer per session.
+    buttons. One offer per session. **Handing the payment over is confirmed to
+    her, not silent (2026-07-27).** Rendering the wish card and delivering it
+    takes seconds inside her request, so the tap holds a named spinner
+    ("sending your ask to {name}…") and then lands on a success screen of its own
+    — the same treatment every other committing act on the board gets — stating
+    that he now has this place in chat with a button to lock it in, and that her
+    own "lock it in myself" path is still open. Before this the one moment where
+    she hands the decision to someone else produced no reaction at all: the
+    button sat dead for the render, then the same agreed screen redrew with one
+    small note at the bottom, so the honest read was "nothing happened". Because
+    that screen now asserts the card *landed*, the assertion is made true: a
+    failed send releases the one-shot stamp and answers `send-failed`, so she is
+    told it did not go through and can retry, instead of being told it arrived
+    while the single offer is spent (previously the send error was swallowed and
+    the API still answered ok).
   - His "not this time" (wish card button or Mini App fork) is **single and
     final, and ENDS the change**: the session closes, the originally-assigned
     venue simply stands, and she gets a neutral notice (`venueDeclinedKeepDm` —

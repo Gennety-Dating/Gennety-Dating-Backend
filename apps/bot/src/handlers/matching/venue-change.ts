@@ -1329,7 +1329,8 @@ export type OfferPayResult =
         | "wrong-state"
         | "not-allowed"
         | "already-offered"
-        | "pay-declined";
+        | "pay-declined"
+        | "send-failed";
     }
   | { ok: true };
 
@@ -1358,17 +1359,36 @@ export async function offerPartnerPay(
   // change and closes the session, so an `agreed` row never carries a decline
   // stamp — `venueChangePayDeclinedAt` is vestigial, never read for a decision.)
 
+  const offeredAt = new Date();
   const claim = await prisma.match.updateMany({
     where: { id: matchId, venueChangeStatus: "agreed", venueChangeOfferPaySentAt: null },
-    data: { venueChangeOfferPaySentAt: new Date() },
+    data: { venueChangeOfferPaySentAt: offeredAt },
   });
   if (claim.count === 0) return { ok: false, reason: "already-offered" };
 
   const him = userOfSide(match, otherSide(side));
   if (isTelegramTarget(him.telegramId)) {
-    await sendWishCard(api, match, me.firstName ?? "", him).catch((err) => {
-      console.warn("[venue-change] wish card send failed:", err);
-    });
+    const sent = await sendWishCard(api, match, me.firstName ?? "", him)
+      .then(() => true)
+      .catch((err) => {
+        console.warn("[venue-change] wish card send failed:", err);
+        return false;
+      });
+    // The offer is one-shot, and the Mini App now tells her outright that the
+    // card reached his chat — so a failed send must NOT keep the stamp, or she
+    // is told it landed with no way to try again. Release only our own claim, so
+    // a concurrent success/settle is never reopened.
+    if (!sent) {
+      await prisma.match
+        .updateMany({
+          where: { id: matchId, venueChangeOfferPaySentAt: offeredAt },
+          data: { venueChangeOfferPaySentAt: null },
+        })
+        .catch((err) => {
+          console.warn("[venue-change] releasing offer stamp failed:", err);
+        });
+      return { ok: false, reason: "send-failed" };
+    }
   }
   return { ok: true };
 }

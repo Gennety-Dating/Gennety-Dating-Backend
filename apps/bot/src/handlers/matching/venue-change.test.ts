@@ -464,6 +464,24 @@ describe("offerPartnerPay / declineVenuePay", () => {
     expect(String(api.sendMessage.mock.calls[0][1])).toContain("Alina");
   });
 
+  it("releases the one-shot stamp when the card never reached his chat", async () => {
+    const api = fakeApi();
+    api.sendMessage.mockRejectedValue(new Error("telegram down"));
+    mMatch.findUnique.mockResolvedValue(agreedMatch());
+
+    // The Mini App tells her the card landed, so a failed send must report a
+    // failure AND leave the offer retryable rather than burning it.
+    expect(await offerPartnerPay(api, 100n, "m1")).toEqual({
+      ok: false,
+      reason: "send-failed",
+    });
+    const released = updateCalls((d) => d.venueChangeOfferPaySentAt === null);
+    expect(released.length).toBe(1);
+    // Scoped to OUR claim, so a concurrent success/settle is never reopened.
+    expect(released[0][0].where).toMatchObject({ id: "m1" });
+    expect(released[0][0].where.venueChangeOfferPaySentAt).toBeInstanceOf(Date);
+  });
+
   it("refuses the offer from the male / when already sent", async () => {
     mMatch.findUnique.mockResolvedValue(agreedMatch());
     expect((await offerPartnerPay(fakeApi(), 200n, "m1")).ok).toBe(false);

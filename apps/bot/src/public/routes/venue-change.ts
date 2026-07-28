@@ -388,6 +388,11 @@ function statusForReason(reason: string): number {
     // Premium-gated pick — the Mini App turns this into the subscribe CTA.
     case "premium-locked":
       return 402;
+    // The wish card never reached his chat; the one-shot stamp was released, so
+    // the Mini App can honestly say "not sent — try again" instead of claiming it
+    // landed.
+    case "send-failed":
+      return 502;
     case "already-changed":
     case "past-cutoff":
     case "already-offered":
