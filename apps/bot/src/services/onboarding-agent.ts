@@ -35,6 +35,7 @@ import {
   saveFallbackProfileAnalysis,
 } from "./profile-analysis.js";
 import { extractVibeAxes, saveVibeAxes } from "./vibe-axes.js";
+import { invalidateChatTarget } from "./chat-events.js";
 import { createAndSendOtp, verifyOtp as verifyStoredOtp } from "../public/otp.js";
 import {
   onboardingActivityPatch,
@@ -1721,6 +1722,12 @@ async function execFinalizeOnboarding(
     },
     select: { id: true, profile: { select: { profilerStartedAt: true } } },
   });
+
+  // The chat-timeline recorder caches "is this chat recordable yet" for 5
+  // minutes and only records post-onboarding users. Drop the stale "no" now
+  // that they are through, so the verification CTA and everything after it is
+  // in the timeline from the first message.
+  invalidateChatTarget(telegramId);
 
   // Arm the Profiler (PRODUCT_SPEC §Phase 1b): first question fires ~10 min
   // after onboarding completes (the worker defers it out of local quiet

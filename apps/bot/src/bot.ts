@@ -10,6 +10,8 @@ import { matchingRouter } from "./handlers/matching/router.js";
 import { dateRouter } from "./handlers/date/router.js";
 import { profilerRouter } from "./handlers/profiler/router.js";
 import { voiceHandler } from "./handlers/voice.js";
+import { interactionRecorder } from "./handlers/interaction-recorder.js";
+import { outboundRecorder } from "./services/outbound-recorder.js";
 import { invalidatePendingAccountAction } from "./handlers/menu/account-action.js";
 
 function isPendingAccountActionCallback(data: string | undefined): boolean {
@@ -22,6 +24,12 @@ function isPendingAccountActionCallback(data: string | undefined): boolean {
 
 export function createBot(token: string): Bot<BotContext> {
   const bot = new Bot<BotContext>(token);
+
+  // Chat timeline — outbound half. Installed on the Api itself rather than as
+  // middleware, because most of what a user sees is sent OUTSIDE a handler
+  // (cron workers, the date lifecycle, Mini App routes) and all of it goes
+  // through this one `Api`. See services/outbound-recorder.ts.
+  bot.api.config.use(outboundRecorder);
 
   // Middleware chain
   bot.use(sequentializeByChat());
@@ -56,6 +64,13 @@ export function createBot(token: string): Bot<BotContext> {
   // before any handler runs. Needs `ctx.session.language`; never throttles
   // inline-button callbacks. See bot-rate-limit.ts.
   bot.use(botRateLimit);
+
+  // Chat timeline — inbound half. Records what the user did (typed, tapped,
+  // sent) before any handler consumes it, so a button tap is remembered by its
+  // own visible label rather than only as raw callback data. Placed after the
+  // rate limiter so throttled floods are not recorded, and before `start` so
+  // /start is. See handlers/interaction-recorder.ts.
+  bot.use(interactionRecorder);
 
   // /start command — entry point & resume
   bot.use(start);

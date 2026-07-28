@@ -315,6 +315,7 @@ model User {
   venueChangePurchases      VenueChangePurchase[]
   liveActivityTokens        LiveActivityToken[]
   mediaValidationRejections MediaValidationRejection[]
+  chatEvents                ChatEvent[]
 
   matchesAsA          Match[]      @relation("MatchUserA")
   matchesAsB          Match[]      @relation("MatchUserB")
@@ -612,6 +613,63 @@ model OnboardingStepEvent {
   @@index([userId, createdAt])
   @@index([step, kind, createdAt])
   @@map("onboarding_step_events")
+}
+
+/// Append-only timeline of what actually happened in a user's Telegram chat:
+/// every durable message the bot SENT (`direction = out`) and every action the
+/// user TOOK (`direction = in`) — typed text, a voice note's transcript, a
+/// button tap, a Mini App submission, a settled payment.
+///
+/// It exists because the menu agent could not see its own product. Outbound
+/// messages are written from ~276 scattered call sites (`api.sendMessage` /
+/// `ctx.reply`) while `User.messageHistory` only ever held the agent's OWN
+/// turns, so a user answering "why?" right under a bot message was answered
+/// against conversation from days earlier. The rows are written by a single
+/// grammY API transformer (`services/outbound-recorder.ts`) plus one inbound
+/// middleware (`handlers/interaction-recorder.ts`), and read back by
+/// `services/prompt-builder.ts` as the agent's "Recent chat timeline".
+///
+/// Deliberately NOT a second copy of the conversation: `summary` is truncated,
+/// only post-onboarding users are recorded (which keeps OTP codes, phone
+/// numbers and AI-memory pastes out by construction), ephemeral status
+/// shimmers and per-minute banner/countdown re-renders are skipped, and rows
+/// are swept after 30 days by `workers/retention.ts`.
+model ChatEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  /// `out` = the bot sent it; `in` = the user did it.
+  direction String
+  /// Form of the event, so the agent knows a PNG card from a plain message:
+  /// `text` | `photo` | `album` | `video` | `video_note` | `voice` | `document`
+  /// | `user_text` | `user_voice` | `user_media` | `user_contact`
+  /// | `callback_tap` | `mini_app_action` | `payment`.
+  kind      String
+  /// Coarse product area derived from callback prefixes / Mini App page /
+  /// route (`venue_change`, `match`, `calendar`, `ticket`, `menu`, …).
+  /// Null when nothing identifiable was attached.
+  surface   String?
+  /// Human-readable one-liner: the message text or caption, the tapped
+  /// button's own label, or the Mini App action. Truncated — never the full
+  /// body, never media bytes.
+  summary   String
+  /// Buttons that were offered on an outbound message: `[{ label, data?,
+  /// webApp? }]`. This is what lets the agent answer "what do I tap".
+  actions   Json?
+  /// Telegram message id, when the event has one. Used to reconcile a
+  /// `deleteMessage` back to the row it created.
+  telegramMessageId Int? @map("telegram_message_id")
+  /// Free-form, no FK (mirrors `rematch_purchases`) so deleting a match never
+  /// breaks the timeline.
+  matchId   String?  @map("match_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Backs the "last N events for this user" read on every agent turn.
+  @@index([userId, createdAt])
+  /// Backs the `deleteMessage` reconciliation lookup.
+  @@index([telegramMessageId])
+  @@map("chat_events")
 }
 
 model Profile {

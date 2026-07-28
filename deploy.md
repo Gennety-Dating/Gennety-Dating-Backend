@@ -1,5 +1,52 @@
 # Gennety Dating Deploy
 
+**PENDING — chat timeline for the concierge agent (`chat_events`).** Not
+deployed yet. Code-only otherwise: **no env change, no flag change, no Mini App
+change** (`apps/webapp` untouched).
+
+**⚠️ Requires an additive `db:push` BEFORE the restart.** The new
+`chat_events` table is read on every menu-agent turn and written by the
+outbound API transformer on every message the bot sends, so a DB missing it
+throws `P2022` on the first message after restart — the PM2 crash-loop this
+file warns about. Verify additive first (expect one `CREATE TABLE` + two
+`CREATE INDEX`, zero `DROP`):
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # must exit 0 before pm2 restart
+```
+
+What ships: the concierge agent can finally see what the user is reacting to
+(PRODUCT_SPEC §2.1) — every durable outbound message, every button tap by its
+visible label, and Mini App submissions, rendered into its prompt as a "Recent
+chat timeline". Written at three boundaries (grammY API transformer, one
+inbound middleware, ~12 explicit calls in the initData routes), not at the ~276
+individual send sites.
+
+**Two things to watch on the first day, both about write volume.** The
+transformer records only `send*` methods — every `edit*` is skipped precisely
+because the pinned status banner and the pitch countdown re-render **once a
+minute per user**. Confirm that holds in production:
+
+```sh
+# Should grow roughly with real messages, NOT by ~1 row/user/minute.
+psql "$DATABASE_URL" -c "select count(*), max(created_at) from chat_events;"
+# No 'analysing…' / status-beat rows: those sends are marked ephemeral and a
+# deleteMessage also removes whatever row it created.
+psql "$DATABASE_URL" -c "select direction, kind, left(summary,60) from chat_events order by created_at desc limit 20;"
+```
+
+Retention: the existing `retention` cron (`45 3 * * *` Kyiv) now also sweeps
+`chat_events` older than **30 days**, batched at 1000 rows/tick — no new cron,
+no new env.
+
+**Rollback:** revert the code and restart. The table can stay (nothing else
+reads it) or be dropped separately; no env, flag, or Mini App state to undo.
+
 **Deployed 2026-07-27 (latest) — onboarding photo editor, MIN_PHOTOS 3, one
 onboarding entry point, pre-drop teaser removed (`867129e`, 11 code commits
 since `e774daa`).** Code only: **no Prisma schema change** (`db:drift-check`

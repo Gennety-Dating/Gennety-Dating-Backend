@@ -15,6 +15,9 @@ vi.mock("@gennety/db", () => ({
     match: {
       findFirst: vi.fn(),
     },
+    chatEvent: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -32,19 +35,38 @@ import {
   fetchKnowledgeBase,
   clearKnowledgeCache,
   describeActiveMatch,
+  renderChatTimeline,
   type ActiveMatchView,
 } from "./prompt-builder.js";
 import type { PlaybookFeatures } from "./product-playbook.js";
+import type { ChatEventView } from "./chat-events.js";
 
 const mockKnowledge = prisma.systemKnowledge.findMany as ReturnType<typeof vi.fn>;
 const mockUserFind = prisma.user.findUnique as ReturnType<typeof vi.fn>;
 const mockMatchFindFirst = prisma.match.findFirst as ReturnType<typeof vi.fn>;
+const mockChatEvents = prisma.chatEvent.findMany as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
   clearKnowledgeCache();
   mockMatchFindFirst.mockResolvedValue(null);
+  mockChatEvents.mockResolvedValue([]);
 });
+
+/** Shorthand for a stored timeline row. */
+function event(partial: Partial<ChatEventView>): ChatEventView {
+  return {
+    id: "e1",
+    direction: "out",
+    kind: "text",
+    surface: null,
+    summary: "",
+    actions: null,
+    telegramMessageId: null,
+    createdAt: new Date("2026-07-28T11:02:00Z"),
+    ...partial,
+  };
+}
 
 describe("fetchKnowledgeBase", () => {
   it("returns formatted knowledge entries", async () => {
@@ -316,5 +338,100 @@ describe("describeActiveMatch", () => {
     );
     expect(text).toContain("choosing the meeting place");
     expect(text).toContain("Partner: Sasha");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Recent chat timeline
+// ---------------------------------------------------------------------------
+
+describe("renderChatTimeline", () => {
+  it("tells the agent to ask rather than guess when nothing is recorded", () => {
+    expect(renderChatTimeline([], "en-US")).toContain("ask what they mean");
+  });
+
+  it("renders who acted, in what form, and the buttons offered", () => {
+    const text = renderChatTimeline(
+      [
+        event({
+          direction: "out",
+          kind: "photo",
+          summary: "Aroma Kava · Sat 16 May, 19:00",
+          actions: [
+            { label: "📍 Open in Maps" },
+            { label: "📍 Change venue", webApp: "venue-change" },
+          ],
+        }),
+        event({ direction: "in", kind: "user_text", summary: "Почему?" }),
+      ],
+      "en-US",
+    );
+
+    expect(text).toContain("bot · photo card: Aroma Kava · Sat 16 May, 19:00");
+    expect(text).toContain("buttons: [📍 Open in Maps] [📍 Change venue]");
+    expect(text).toContain("user · said: Почему?");
+  });
+});
+
+describe("buildSystemPrompt — chat timeline", () => {
+  /**
+   * The bug this whole feature exists for (PRODUCT_SPEC §2.1). The user tapped
+   * "Keep this place" in the venue-change Mini App, the bot confirmed it, and
+   * they asked "Почему?" — and the agent, which could see none of that,
+   * answered about their onboarding profile being complete.
+   */
+  it("carries the venue-change exchange the agent used to be blind to", async () => {
+    mockKnowledge.mockResolvedValue([]);
+    mockUserFind.mockResolvedValue({
+      id: "u1",
+      firstName: "Gleb",
+      gender: "male",
+      universityDomain: "kpi.ua",
+      status: "active",
+      language: "ru",
+      matchesAsA: [],
+      matchesAsB: [],
+    });
+    mockChatEvents.mockResolvedValue([
+      event({
+        direction: "out",
+        kind: "text",
+        summary: "You're keeping Aroma Kava, as originally planned.",
+        surface: "venue_change",
+      }),
+      event({
+        direction: "in",
+        kind: "mini_app_action",
+        summary:
+          'in the Change venue Mini App, chose "Keep this place" — no venue change',
+        surface: "venue_change",
+      }),
+    ]);
+
+    const prompt = await buildSystemPrompt(BigInt(12345));
+
+    expect(prompt).toContain("Recent chat timeline");
+    expect(prompt).toContain("You're keeping Aroma Kava, as originally planned.");
+    expect(prompt).toContain('chose "Keep this place"');
+    // The rule that makes the timeline binding for a bare follow-up.
+    expect(prompt).toContain("refers to the LAST timeline entry");
+  });
+
+  it("still builds a prompt when the timeline read fails", async () => {
+    mockKnowledge.mockResolvedValue([]);
+    mockChatEvents.mockRejectedValue(new Error("db down"));
+    mockUserFind.mockResolvedValue({
+      id: "u1",
+      firstName: "Alice",
+      universityDomain: "stanford.edu",
+      status: "active",
+      language: "en",
+      matchesAsA: [],
+      matchesAsB: [],
+    });
+
+    const prompt = await buildSystemPrompt(BigInt(12345));
+    expect(prompt).toContain("Recent chat timeline");
+    expect(prompt).toContain("nothing recorded yet");
   });
 });

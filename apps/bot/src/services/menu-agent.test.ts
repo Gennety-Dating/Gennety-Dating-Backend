@@ -26,6 +26,9 @@ vi.mock("@gennety/db", () => ({
     systemKnowledge: {
       findMany: vi.fn().mockResolvedValue([]),
     },
+    chatEvent: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   },
 }));
 
@@ -52,7 +55,15 @@ vi.mock("../handlers/matching/negative-constraints.js", () => ({
 }));
 
 import { prisma } from "@gennety/db";
-import { runMenuAgentTurn, splitReplyIntoBubbles } from "./menu-agent.js";
+import {
+  AGENT_HISTORY_MAX_MESSAGES,
+  AGENT_HISTORY_WINDOW_MS,
+  recentAgentHistory,
+  runMenuAgentTurn,
+  splitReplyIntoBubbles,
+  toApiMessages,
+  type StoredChatMessage,
+} from "./menu-agent.js";
 import { clearKnowledgeCache } from "./prompt-builder.js";
 import { appendNegativeConstraint } from "../handlers/matching/negative-constraints.js";
 
@@ -111,6 +122,7 @@ describe("menu-agent record_rejection_feedback", () => {
     (appendNegativeConstraint as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     // `systemKnowledge.findMany` is reset too — re-stub.
     (prisma.systemKnowledge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.chatEvent.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
     // Default: buildSystemPrompt → no pending rejection
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockImplementation(
@@ -359,6 +371,7 @@ describe("menu-agent resume_matching", () => {
     vi.resetAllMocks();
     clearKnowledgeCache();
     (prisma.systemKnowledge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.chatEvent.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
     (prisma.user.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockImplementation(
@@ -456,6 +469,7 @@ describe("menu-agent offer_cancel_premium", () => {
     vi.resetAllMocks();
     clearKnowledgeCache();
     (prisma.systemKnowledge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.chatEvent.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
     (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockImplementation(
       async (args: { select?: Record<string, unknown> }) => {
@@ -543,5 +557,82 @@ describe("menu-agent offer_cancel_premium", () => {
     });
 
     expect(result.action).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// History window
+// ---------------------------------------------------------------------------
+
+describe("recentAgentHistory", () => {
+  const NOW = Date.UTC(2026, 6, 28, 11, 0, 0);
+
+  /**
+   * The second half of the bug in PRODUCT_SPEC §2.1: `messageHistory` is shared
+   * with the ONBOARDING agent, and replaying all of it meant a "Почему?" typed
+   * under a venue-change notice was answered against the tail of onboarding.
+   * Onboarding turns carry no `ts`, so they are never replayed.
+   */
+  it("drops untimestamped onboarding-era turns", () => {
+    const stored: StoredChatMessage[] = [
+      { role: "assistant", content: "Отлично! Анкета собрана: фото, ответы, запрос к партнёру." },
+      { role: "user", content: "why is my match late?", ts: NOW - 60_000 },
+    ];
+    expect(recentAgentHistory(stored, NOW)).toEqual([
+      { role: "user", content: "why is my match late?", ts: NOW - 60_000 },
+    ]);
+  });
+
+  it("drops turns older than the window", () => {
+    const stored: StoredChatMessage[] = [
+      { role: "user", content: "old", ts: NOW - AGENT_HISTORY_WINDOW_MS - 1 },
+      { role: "user", content: "fresh", ts: NOW - 1000 },
+    ];
+    expect(recentAgentHistory(stored, NOW).map((m) => m.content)).toEqual(["fresh"]);
+  });
+
+  it("keeps only the newest N turns", () => {
+    const stored: StoredChatMessage[] = Array.from({ length: 30 }, (_, i) => ({
+      role: "user" as const,
+      content: `m${i}`,
+      ts: NOW - 1000,
+    }));
+    const kept = recentAgentHistory(stored, NOW);
+    expect(kept).toHaveLength(AGENT_HISTORY_MAX_MESSAGES);
+    expect(kept[kept.length - 1]!.content).toBe("m29");
+  });
+
+  it("never opens the replay on an orphaned tool result", () => {
+    const stored: StoredChatMessage[] = [
+      { role: "assistant", content: null, ts: NOW - 5000 },
+      ...Array.from({ length: AGENT_HISTORY_MAX_MESSAGES }, (_, i) => ({
+        role: (i === 0 ? "tool" : "user") as "tool" | "user",
+        content: `m${i}`,
+        ts: NOW - 1000,
+      })),
+    ];
+    expect(recentAgentHistory(stored, NOW)[0]!.role).not.toBe("tool");
+  });
+
+  it("never replays a stored system message", () => {
+    const stored: StoredChatMessage[] = [
+      { role: "system", content: "stale prompt", ts: NOW - 1000 },
+      { role: "user", content: "hi", ts: NOW - 1000 },
+    ];
+    expect(recentAgentHistory(stored, NOW).map((m) => m.role)).toEqual(["user"]);
+  });
+});
+
+describe("toApiMessages", () => {
+  it("strips `ts` — OpenAI rejects unknown message fields", () => {
+    const out = toApiMessages([
+      { role: "user", content: "hi", ts: 123 } as StoredChatMessage,
+      { role: "assistant", content: "hey" },
+    ]);
+    expect(out).toEqual([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: "hey" },
+    ]);
+    expect(Object.hasOwn(out[0]!, "ts")).toBe(false);
   });
 });

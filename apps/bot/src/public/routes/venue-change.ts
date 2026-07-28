@@ -18,6 +18,12 @@ import {
   settleFreeVenueChange,
   createVenueInvoiceLink,
 } from "../../handlers/matching/venue-change.js";
+import { recordMiniAppAction } from "../../services/chat-events.js";
+
+/** Chat-timeline shorthand — every action on this board is one surface. */
+function noteBoardAction(telegramId: number, matchId: string, what: string): void {
+  recordMiniAppAction(telegramId, what, { surface: "venue_change", matchId });
+}
 
 /**
  * Venue change v2 Mini App endpoints (PRODUCT_SPEC §3.7b — paid multiplayer
@@ -180,6 +186,13 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       res.status(statusForReason(result.reason)).json({ error: result.reason });
       return;
     }
+    noteBoardAction(
+      auth.user.id,
+      matchId,
+      result.agreed
+        ? "in the Change venue Mini App, liked a place their partner had also liked — the pair agreed on a new venue"
+        : `in the Change venue Mini App, hearted ${keys.length} alternative place(s)`,
+    );
     res
       .status(200)
       .json({ ok: true, agreed: result.agreed, overlapCandidates: result.overlapCandidates });
@@ -204,6 +217,11 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       res.status(statusForReason(result.reason)).json({ error: result.reason });
       return;
     }
+    noteBoardAction(
+      auth.user.id,
+      matchId,
+      "in the Change venue Mini App, picked which of the mutually-liked places the pair agreed on",
+    );
     res.status(200).json({ ok: true });
   });
 
@@ -224,6 +242,11 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       res.status(statusForReason(result.reason)).json({ error: result.reason });
       return;
     }
+    noteBoardAction(
+      auth.user.id,
+      matchId,
+      "in the Change venue Mini App, asked their partner to lock in the new venue (the wish card was sent to him)",
+    );
     res.status(200).json({ ok: true });
   });
 
@@ -245,6 +268,11 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       res.status(statusForReason(result.reason)).json({ error: result.reason });
       return;
     }
+    noteBoardAction(
+      auth.user.id,
+      matchId,
+      'in the Change venue Mini App, chose "Keep this place" — no venue change, the originally assigned venue stands',
+    );
     res.status(200).json({ ok: true, toldPartner: result.toldPartner });
   });
 
@@ -265,6 +293,11 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       res.status(409).json({ error: "wrong-state" });
       return;
     }
+    noteBoardAction(
+      auth.user.id,
+      matchId,
+      'in the Change venue Mini App, chose "Not this time" — the venue change is off and the original venue stands',
+    );
     res.status(200).json({ ok: true });
   });
 
@@ -306,6 +339,11 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
           res.status(409).json({ error: settled.reason ?? "wrong-state" });
           return;
         }
+        noteBoardAction(
+          auth.user.id,
+          matchId,
+          `in the Change venue Mini App, changed the venue to ${mint.venueName} (free with Premium)`,
+        );
         res.status(200).json({ ok: true, settled: true, free: true });
         return;
       }
@@ -331,6 +369,11 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
     const lang = await langForTelegramId(auth.user.id);
     try {
       const link = await createVenueInvoiceLink(api, lang, matchId, mode, venueName);
+      noteBoardAction(
+        auth.user.id,
+        matchId,
+        `in the Change venue Mini App, opened the Stars payment sheet for ${venueName} (not paid yet)`,
+      );
       res.status(200).json({ ok: true, link, stars: env.VENUE_CHANGE_STARS });
     } catch (err) {
       console.error("[venue-change] createInvoiceLink failed:", err);

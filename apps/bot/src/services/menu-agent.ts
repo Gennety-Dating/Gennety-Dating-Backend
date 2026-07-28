@@ -108,6 +108,64 @@ export interface MenuAgentDeps {
 }
 
 // ---------------------------------------------------------------------------
+// History window
+// ---------------------------------------------------------------------------
+
+/**
+ * A stored turn. `ts` is written by this agent only — it is NOT part of the
+ * OpenAI message schema and is stripped before every API call.
+ */
+export type StoredChatMessage = ChatMessage & { ts?: number };
+
+/** How far back a stored turn may be and still be replayed. */
+export const AGENT_HISTORY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** How many stored turns may be replayed, newest last. */
+export const AGENT_HISTORY_MAX_MESSAGES = 12;
+
+/**
+ * Pick the slice of `messageHistory` worth replaying into the model.
+ *
+ * `User.messageHistory` is a single column shared with the ONBOARDING agent,
+ * and this agent used to replay all of it. So a user who asked "почему?" right
+ * under a venue-change notice was answered against the tail of their
+ * onboarding conversation — the bot cheerfully explained that their profile
+ * was complete. Turns are kept only when they are this agent's own (they carry
+ * `ts`) and recent; everything else stays in the column for the admin
+ * conversation viewer and the re-engagement worker, which both read it, and is
+ * simply not replayed. Live product state comes from the system prompt's
+ * timeline instead, which does not decay.
+ */
+export function recentAgentHistory(
+  stored: StoredChatMessage[],
+  now: number = Date.now(),
+): StoredChatMessage[] {
+  const fresh = stored.filter(
+    (msg) =>
+      msg.role !== "system" &&
+      typeof msg.ts === "number" &&
+      now - msg.ts <= AGENT_HISTORY_WINDOW_MS,
+  );
+  const windowed = fresh.slice(-AGENT_HISTORY_MAX_MESSAGES);
+  // Never open the replay on an orphaned tool result — OpenAI rejects a `tool`
+  // message whose `assistant` tool_calls turn isn't in the same request.
+  let start = 0;
+  while (start < windowed.length && windowed[start]!.role === "tool") start++;
+  return windowed.slice(start);
+}
+
+/**
+ * Strip fields OpenAI's schema doesn't know about (`ts`) before sending.
+ * Leaving them in returns a 400.
+ */
+export function toApiMessages(history: ChatMessage[]): ChatMessage[] {
+  return history.map((msg) => {
+    const { ts: _ts, ...rest } = msg as StoredChatMessage;
+    return rest as ChatMessage;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Tool Definitions
 // ---------------------------------------------------------------------------
 
@@ -615,20 +673,17 @@ export async function runMenuAgentTurn(
     select: { messageHistory: true },
   });
 
-  const stored: ChatMessage[] = (
+  const stored: StoredChatMessage[] = (
     (user?.messageHistory ?? []) as unknown[]
-  ).map((m) => m as unknown as ChatMessage);
+  ).map((m) => m as unknown as StoredChatMessage);
 
-  // Build conversation: fresh system prompt + non-system history + new user msg
+  // Build conversation: fresh system prompt + recent history + new user msg
   const history: ChatMessage[] = [
     { role: "system", content: systemPrompt },
   ];
 
-  // Carry over previous non-system messages (preserves conversation continuity)
-  for (const msg of stored) {
-    if (msg.role !== "system") {
-      history.push(msg);
-    }
+  for (const msg of recentAgentHistory(stored)) {
+    history.push(msg);
   }
 
   history.push({ role: "user", content: userMessage });
@@ -638,7 +693,10 @@ export async function runMenuAgentTurn(
 
   // Agent loop
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const response = await callOpenAI(truncateForApi(history, MAX_HISTORY_FOR_API), fetchFn);
+    const response = await callOpenAI(
+      toApiMessages(truncateForApi(history, MAX_HISTORY_FOR_API)),
+      fetchFn,
+    );
     const choice = response.choices[0];
     if (!choice) break;
 
@@ -715,8 +773,13 @@ export async function runMenuAgentTurn(
     }
   }
 
-  // Persist history (only non-system messages to keep it lean; system prompt is rebuilt)
-  const toStore = history.filter((m) => m.role !== "system");
+  // Persist history (only non-system messages to keep it lean; system prompt is
+  // rebuilt). Each turn is stamped so the next call can replay only this
+  // agent's own recent conversation — see `recentAgentHistory`.
+  const stamp = Date.now();
+  const toStore: StoredChatMessage[] = history
+    .filter((m) => m.role !== "system")
+    .map((m) => ({ ...m, ts: (m as StoredChatMessage).ts ?? stamp }));
   await prisma.user.update({
     where: { telegramId },
     data: {

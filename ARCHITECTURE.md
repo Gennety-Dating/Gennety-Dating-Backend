@@ -396,6 +396,50 @@ the time-boxed carve-out to the "NO IN-APP CHAT" invariant — relayed content i
 fully logged and each relayed message carries an in-line Report button. Written
 by `handlers/date/coordination.ts`; inert unless `COORDINATION_FEATURE_ENABLED`.
 
+### `chat_events`
+
+Append-only timeline of what actually happened in a user's Telegram chat: every
+durable message the bot SENT (`direction = out`) and every action the user TOOK
+(`direction = in`) — typed text, a voice note's transcript, a button tap, a Mini
+App submission, a settled Stars payment. Columns: `userId` (cascade),
+`direction`, `kind` (`text`/`photo`/`album`/`video`/`video_note`/`voice`/
+`document`/`user_text`/`user_voice`/`user_media`/`user_contact`/`callback_tap`/
+`mini_app_action`/`payment`), `surface` (coarse product area derived from
+callback prefixes / Mini App page), `summary` (truncated to 300 chars),
+`actions` (`Json?` — the buttons offered: `[{label, data?, webApp?}]`),
+`telegramMessageId`, `matchId` (free-form, no FK — mirrors `rematch_purchases`),
+`createdAt`. Indexed `(userId, createdAt)` and `(telegramMessageId)`.
+
+It exists because the menu agent could not see its own product. Outbound
+messages are written from ~276 scattered call sites while `User.messageHistory`
+only ever held the agent's own turns, so a user answering "why?" directly under
+a bot message was answered against conversation from days earlier (PRODUCT_SPEC
+§2.1). Read back by `services/prompt-builder.ts` as the agent's "Recent chat
+timeline" (last 12 events per turn).
+
+**Written at three boundaries, not per call site:**
+
+| Boundary | Module | Covers |
+|---|---|---|
+| grammY **API transformer** on `bot.api` | `services/outbound-recorder.ts` | Everything the bot sends — handlers, cron workers, the date lifecycle, Mini App routes — because they all share the one `Api` (`setMainBotApi(bot.api)`). |
+| Inbound **middleware** (after `botRateLimit`) | `handlers/interaction-recorder.ts` | Typed text, media, contact share, and button taps — stored by the button's own visible label, resolved from the message's `reply_markup`. |
+| Explicit calls in `/v1/*` initData routes | `recordMiniAppAction` | Mini App submissions (venue-change board, calendar picks, venue intent, ticket use, post-date feedback), which never touch the chat. |
+
+Only `send*` methods are recorded: every `edit*` is skipped because the pinned
+status banner and the pitch's reply-deadline button re-render **every minute per
+user**. Ephemeral sends are excluded two ways — `withEphemeralSends` marks the
+self-deleting "thinking" status beats (`services/ai-stream.ts`), and a
+`deleteMessage` deletes the row it created, so an untagged path self-heals. A
+stream that edits one message through several chunks marks its transient send
+ephemeral and records the FINAL text once via `recordOutboundMessage`.
+
+Recording is scoped to `onboardingStep = 'completed'` users (resolved through a
+5-minute `chatId → user` cache), which is the menu agent's own scope and keeps
+onboarding-era content — OTP codes, the phone number, a pasted AI-memory export
+— out of the table by construction. Every write is fire-and-forget and swallows
+its errors: the recorder sits in the path of every outgoing Telegram call and
+must never fail a send. Swept after 30 days by `workers/retention.ts`.
+
 ### `media_validation_rejections`
 
 Append-only audit of upload-time profile-media rejections. Stores only
@@ -622,7 +666,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `*/5 * * * *` | UTC | Embedding refresh (dirty-flag scan, ≤20 rows/tick) | `workers/embedding-refresh.ts` |
 | `0 * * * *` | UTC | Auto-unsuspend elapsed Tier-2 suspensions | `services/match-engine.ts` (`autoUnsuspendElapsed`) |
 | `30 3 * * *` | Europe/Kyiv | GDPR Article 9 selfie scrub (90 d post-`verifiedAt`) | `services/selfie-retention.ts` |
-| `45 3 * * *` | Europe/Kyiv | Data retention: OTP challenges (7 d), dead refresh sessions (30 d past unusable), proxy-chat messages (90 d). Batched ≤1000 rows/table/tick | `workers/retention.ts` (`retentionTick`) |
+| `45 3 * * *` | Europe/Kyiv | Data retention: OTP challenges (7 d), dead refresh sessions (30 d past unusable), proxy-chat messages (90 d), chat-timeline events (30 d). Batched ≤1000 rows/table/tick | `workers/retention.ts` (`retentionTick`) |
 | `0 4 * * *` | Europe/Kyiv | Curated venue re-validation (closure/rating sweep + hours refresh, ≤30 rows/tick) | `services/venue-revalidation.ts` |
 | `0 * * * *` (only when `TICKET_FEATURE_ENABLED`) | UTC | Date Ticket expiry: retry durable Stars refunds, reverse stalled `partial` payments, then open the Calendar for free | `workers/ticket-expiry.ts` → `handlers/matching/ticket-gate.ts` |
 | `0 * * * *` (only when `REMATCH_FEATURE_ENABLED`) | UTC | Rematch refunds: retry `refund_failed` rows and refund purchases abandoned mid-run (`processing` past 5 min). What makes "never keep money without delivering a match" durable | `services/rematch-refund.ts` (`sweepRematchRefunds`) |

@@ -1061,6 +1061,41 @@ rows in order: **Profile Video**, **My Tickets** (feature-flagged),
   (`tickets.html`) to pre-purchase bundles ahead of any date. See §3.5b.
 - **Report / Help** — opens the support handle.
 
+**The concierge answers in the context of the last thing on screen
+(2026-07-28).** Free text (and a transcribed voice note) goes to the menu
+agent, and until now that agent could see only its OWN previous replies:
+`User.messageHistory` is written by the agent, while everything else a user
+sees — the pitch, the date card, the calendar prompt, a venue-change notice, a
+nudge — is sent from ~276 other call sites. So a user who tapped "Keep this
+place" in the venue-change Mini App, got "You're keeping Aroma Kava, as
+originally planned", and asked **"Почему?"** was answered about their
+onboarding profile being complete: the most recent thing in the agent's history
+was the tail of onboarding, days earlier, and it answered that instead.
+
+The agent now reads a **chat timeline** (`ChatEvent`, ARCHITECTURE.md) of the
+last ~12 things that happened in the chat, rendered into its system prompt
+after the live match status. Each entry says who acted, **in what form** (a
+plain message, a photo card, a video note, a Mini App action), **what buttons
+were on offer** by their visible labels, and what the user did next — a tap is
+recorded as *"tapped «📍 Сменить место»"*, not as raw callback data. Mini App
+submissions are included, because that is where much of the product actually
+happens and none of it passes through the chat. The prompt states the rule
+explicitly: a bare follow-up with no subject of its own ("почему?", "и что
+теперь?", "это точно?") refers to the LAST timeline entry, and when the
+timeline does not say why something happened the agent says what it can see and
+asks, rather than inventing a reason.
+
+Two deliberate boundaries. The timeline is recorded only for post-onboarding
+users — the agent's own scope, which also keeps OTP codes, phone numbers and
+pasted AI-memory exports out of it by construction. And it is **read-only
+context in v1**: the agent understands the last screen but presses nothing on
+the user's behalf; every action still needs the user's own tap. Rows are swept
+after 30 days (§GDPR). The same change stops the agent replaying onboarding-era
+turns from `messageHistory` at all: only its own turns from the last 24 h are
+replayed, while the full column is retained for the admin conversation viewer
+and the re-engagement worker. Telegram-only (the menu agent is Telegram-only);
+the mobile Aether concierge keeps its own `Message`-row history unchanged.
+
 **Account deletion → Freeze fork (Telegram-only).** Tapping **Delete Account**
 no longer goes straight to a destructive confirm. The bot first plays a
 per-language founder **video note** (кружок) explaining why freezing beats
@@ -2543,7 +2578,8 @@ excluding an otherwise-complete user from matching.
   to accumulate rows forever — nothing deleted from them and no cron touched
   them. Now: OTP challenges (`email_otps`, `phone_otps`) are deleted after
   **7 days**; refresh sessions (`user_sessions`) **30 days** after they became
-  unusable; relayed proxy-chat messages (`proxy_messages`) after **90 days**.
+  unusable; relayed proxy-chat messages (`proxy_messages`) after **90 days**;
+  chat-timeline events (`chat_events`, §2.1) after **30 days**.
   Two of these are load-bearing rather than housekeeping:
   - `phone_otps` is keyed by NUMBER, not by user, because the phone funnel
     starts before a `User` row exists. A number belonging to someone who never
@@ -2558,6 +2594,11 @@ excluding an otherwise-complete user from matching.
   - The `proxy_messages` window is a moderation-policy choice, not a technical
     one — PRODUCT_SPEC names that log as the justification for the narrow
     carve-out to NO-IN-APP-CHAT. 90 days matches the reference-selfie window.
+  - `chat_events` gets the shortest window of the five because it is the only
+    one holding ordinary message text. It exists so the concierge can answer a
+    follow-up against the message right above it — minutes, occasionally days —
+    and the agent reads 12 events per turn, so a month is already far past
+    anything it uses.
 - `researchOptIn` is opt-in; default false. Audit is via `User.consentedAt`,
   `User.termsAcceptedAt`.
 

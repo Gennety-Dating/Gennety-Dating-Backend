@@ -52,6 +52,17 @@ export const SESSION_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
  */
 export const PROXY_MESSAGE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
+/**
+ * Chat-timeline events (`ChatEvent`).
+ *
+ * The timeline exists so the concierge agent can answer a follow-up against
+ * the message right above it — a question of minutes, occasionally days. It is
+ * not an archive, and it holds message text, so the window is the shortest of
+ * the four: a month is already far beyond anything the agent reads (12 events
+ * per turn) while still covering a date planned a couple of weeks out.
+ */
+export const CHAT_EVENT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
 /** Rows removed per table per tick. */
 const BATCH_LIMIT = 1_000;
 
@@ -60,6 +71,7 @@ export interface RetentionSweepResult {
   phoneOtps: number;
   sessions: number;
   proxyMessages: number;
+  chatEvents: number;
 }
 
 /**
@@ -84,6 +96,7 @@ export async function retentionTick(
   const otpCutoff = new Date(now.getTime() - OTP_RETENTION_MS);
   const sessionCutoff = new Date(now.getTime() - SESSION_RETENTION_MS);
   const proxyCutoff = new Date(now.getTime() - PROXY_MESSAGE_RETENTION_MS);
+  const chatEventCutoff = new Date(now.getTime() - CHAT_EVENT_RETENTION_MS);
 
   const emailOtps = await deleteOldest(
     (take) =>
@@ -135,12 +148,23 @@ export async function retentionTick(
     (ids) => prisma.proxyMessage.deleteMany({ where: { id: { in: ids } } }),
   );
 
-  const total = emailOtps + phoneOtps + sessions + proxyMessages;
+  const chatEvents = await deleteOldest(
+    (take) =>
+      prisma.chatEvent.findMany({
+        where: { createdAt: { lt: chatEventCutoff } },
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+        take,
+      }),
+    (ids) => prisma.chatEvent.deleteMany({ where: { id: { in: ids } } }),
+  );
+
+  const total = emailOtps + phoneOtps + sessions + proxyMessages + chatEvents;
   if (total > 0) {
     console.log(
       `[retention] emailOtps=${emailOtps} phoneOtps=${phoneOtps} ` +
-        `sessions=${sessions} proxyMessages=${proxyMessages}`,
+        `sessions=${sessions} proxyMessages=${proxyMessages} chatEvents=${chatEvents}`,
     );
   }
-  return { emailOtps, phoneOtps, sessions, proxyMessages };
+  return { emailOtps, phoneOtps, sessions, proxyMessages, chatEvents };
 }

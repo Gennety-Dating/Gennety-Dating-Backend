@@ -12,6 +12,7 @@ import {
   notePartnerPaidSeen,
 } from "../../handlers/matching/ticket-gate.js";
 import { downloadProfileImage } from "../../services/storage.js";
+import { recordMiniAppAction } from "../../services/chat-events.js";
 import {
   createTicketIntent,
   verifyTicketPayment,
@@ -181,6 +182,11 @@ export function createTicketRouter(api: Api<RawApi>): Router {
         [{ label: t(lang, "ticketStoreInvoiceLabel", { count }), amount: stars }],
       );
       emitTicketEvent("ticket_intent_created", { matchId, scope, amountCents: stars });
+      recordMiniAppAction(
+        auth.user.id,
+        `in the Date Ticket Mini App, opened the Stars payment sheet for ${count} ticket(s) (not paid yet)`,
+        { surface: "ticket", matchId },
+      );
       res.status(200).json({ ok: true, link, stars });
     } catch (err) {
       console.error("[ticket] createInvoiceLink (stars gate) failed:", err);
@@ -371,6 +377,15 @@ export function createTicketRouter(api: Api<RawApi>): Router {
       res.status(status).json({ error: result.reason });
       return;
     }
+    recordMiniAppAction(
+      auth.user.id,
+      scope === "both"
+        ? "in the Date Ticket Mini App, used 2 tickets — covering both their own and their partner's"
+        : scope === "partner"
+          ? "in the Date Ticket Mini App, used a ticket to cover their partner's"
+          : "in the Date Ticket Mini App, used a ticket for their own slot",
+      { surface: "ticket", matchId },
+    );
     res.status(200).json(stateResponse(result.state));
   });
 

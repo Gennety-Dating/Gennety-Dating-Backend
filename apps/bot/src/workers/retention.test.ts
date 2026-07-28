@@ -4,9 +4,10 @@ const emailOtp = { findMany: vi.fn(), deleteMany: vi.fn() };
 const phoneOtp = { findMany: vi.fn(), deleteMany: vi.fn() };
 const userSession = { findMany: vi.fn(), deleteMany: vi.fn() };
 const proxyMessage = { findMany: vi.fn(), deleteMany: vi.fn() };
+const chatEvent = { findMany: vi.fn(), deleteMany: vi.fn() };
 
 vi.mock("@gennety/db", () => ({
-  prisma: { emailOtp, phoneOtp, userSession, proxyMessage },
+  prisma: { emailOtp, phoneOtp, userSession, proxyMessage, chatEvent },
 }));
 
 const {
@@ -14,12 +15,13 @@ const {
   OTP_RETENTION_MS,
   SESSION_RETENTION_MS,
   PROXY_MESSAGE_RETENTION_MS,
+  CHAT_EVENT_RETENTION_MS,
 } = await import("./retention.js");
 
 const NOW = new Date("2026-08-01T03:45:00.000Z");
 
 beforeEach(() => {
-  for (const model of [emailOtp, phoneOtp, userSession, proxyMessage]) {
+  for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent]) {
     model.findMany.mockReset().mockResolvedValue([]);
     model.deleteMany.mockReset().mockResolvedValue({ count: 0 });
   }
@@ -34,8 +36,9 @@ describe("retentionTick", () => {
       phoneOtps: 0,
       sessions: 0,
       proxyMessages: 0,
+      chatEvents: 0,
     });
-    for (const model of [emailOtp, phoneOtp, userSession, proxyMessage]) {
+    for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent]) {
       expect(model.deleteMany).not.toHaveBeenCalled();
     }
   });
@@ -95,9 +98,20 @@ describe("retentionTick", () => {
     expect(PROXY_MESSAGE_RETENTION_MS).toBe(90 * 24 * 60 * 60 * 1000);
   });
 
+  it("sweeps the chat timeline on a shorter, 30-day window", async () => {
+    // The timeline is what the concierge agent reads to answer a follow-up
+    // ("why?") against the message above it — a question of minutes. It holds
+    // message text, so it gets the shortest window of the four.
+    await retentionTick(NOW);
+    expect(chatEvent.findMany.mock.calls[0][0].where).toEqual({
+      createdAt: { lt: new Date(NOW.getTime() - CHAT_EVENT_RETENTION_MS) },
+    });
+    expect(CHAT_EVENT_RETENTION_MS).toBe(30 * 24 * 60 * 60 * 1000);
+  });
+
   it("batches each table so one tick cannot run away", async () => {
     await retentionTick(NOW);
-    for (const model of [emailOtp, phoneOtp, userSession, proxyMessage]) {
+    for (const model of [emailOtp, phoneOtp, userSession, proxyMessage, chatEvent]) {
       expect(model.findMany.mock.calls[0][0].take).toBe(1_000);
     }
   });
@@ -115,6 +129,7 @@ describe("retentionTick", () => {
       phoneOtps: 0,
       sessions: 0,
       proxyMessages: 2,
+      chatEvents: 0,
     });
   });
 });

@@ -14,6 +14,7 @@ import {
   buildProductPlaybook,
   type PlaybookFeatures,
 } from "./product-playbook.js";
+import { getRecentChatEvents, type ChatEventView } from "./chat-events.js";
 
 // ---------------------------------------------------------------------------
 // Base Persona (static)
@@ -110,6 +111,8 @@ interface UserContext {
    * collecting it and call `record_rejection_feedback`.
    */
   pendingRejectionHint: string;
+  /** Rendered "what just happened in this chat" block — see `renderChatTimeline`. */
+  chatTimeline: string;
 }
 
 /** How far back to look for an un-explained decline (24 hours). */
@@ -265,6 +268,70 @@ export function describeActiveMatch(
   return "No active match.";
 }
 
+// ---------------------------------------------------------------------------
+// Recent chat timeline
+// ---------------------------------------------------------------------------
+
+/** How the timeline names each event kind. */
+const KIND_LABEL: Record<string, string> = {
+  text: "message",
+  photo: "photo card",
+  album: "photo album",
+  video: "video",
+  video_note: "video note",
+  voice: "voice message",
+  document: "file",
+  user_text: "said",
+  user_voice: "said (voice)",
+  user_media: "",
+  user_contact: "",
+  callback_tap: "",
+  mini_app_action: "",
+  payment: "",
+};
+
+/** "11:02" in the user's own locale — enough to read the ordering. */
+function formatEventClock(date: Date, locale: string): string {
+  return date.toLocaleTimeString(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+/**
+ * Render the chat timeline the agent reads before answering.
+ *
+ * This is the fix for the concierge answering a bare "why?" against the wrong
+ * thing: almost everything a user sees is sent outside the agent (cards,
+ * nudges, Mini App follow-ups), so without this the model's most recent
+ * context was whatever it last said itself — sometimes days old. Each line
+ * carries who acted, in what form, and what buttons were on offer, because
+ * "what do I tap" is the other half of "what just happened".
+ */
+export function renderChatTimeline(
+  events: ChatEventView[],
+  locale: string,
+): string {
+  if (events.length === 0) {
+    return "(nothing recorded yet — if the user refers to something you can't see here, ask what they mean instead of guessing.)";
+  }
+
+  return events
+    .map((event) => {
+      const who = event.direction === "out" ? "bot" : "user";
+      const label = KIND_LABEL[event.kind] ?? event.kind;
+      const head = label ? `${who} · ${label}` : who;
+      const parts = [`- ${formatEventClock(event.createdAt, locale)} · ${head}: ${event.summary}`];
+      if (event.actions && event.actions.length > 0) {
+        const buttons = event.actions.map((a) => `[${a.label}]`).join(" ");
+        parts.push(`  buttons: ${buttons}`);
+      }
+      return parts.join("\n");
+    })
+    .join("\n");
+}
+
 /** Build the side-resolved view + select shape used to load the live match. */
 const MATCH_CONTEXT_SELECT = {
   status: true,
@@ -368,6 +435,10 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
 
   const matchSummary = describeActiveMatch(activeMatch, new Date(), locale, features);
 
+  const chatTimeline = user?.id
+    ? renderChatTimeline(await getRecentChatEvents(user.id), locale)
+    : renderChatTimeline([], locale);
+
   let pendingRejectionHint = "";
   if (user?.id) {
     const since = new Date(Date.now() - PENDING_REJECTION_WINDOW_MS);
@@ -398,6 +469,7 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
     nextBatchDate: formatNextBatchDate(new Date(), undefined, locale),
     enabledFeatures,
     pendingRejectionHint,
+    chatTimeline,
   };
 }
 
@@ -438,6 +510,22 @@ The user recently declined match \`${userCtx.pendingRejectionHint}\` and has not
 
 ### Live match status
 ${userCtx.matchSummary}
+
+### Recent chat timeline (oldest first — what actually happened in this chat)
+${userCtx.chatTimeline}
+
+**Read the timeline before you answer.** It is the ground truth for what the
+user is reacting to: the last thing the bot sent, the form it took (a plain
+message, a photo card, a Mini App), the buttons that were on it, and what the
+user did next. Most of it was NOT written by you — cards, nudges and Mini App
+follow-ups are sent by the product itself.
+
+- A short follow-up with no subject of its own — "почему?", "why?", "и что
+  теперь?", "это точно?", "а дальше?" — refers to the LAST timeline entry, not
+  to whatever you happen to have talked about before. Answer that.
+- Never dress up a guess as an explanation. If the timeline doesn't say why
+  something happened, say plainly what you can see and ask what they mean.
+- Talk about buttons by the label the user actually sees in the timeline.
 
 Respond in the user's preferred language (${userCtx.language}) unless they switch.${pendingSection}`;
 

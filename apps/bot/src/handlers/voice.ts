@@ -3,6 +3,7 @@ import { t } from "@gennety/shared";
 import type { BotContext } from "../session.js";
 import { env } from "../config.js";
 import { transcribeVoice } from "../services/whisper.js";
+import { recordChatEventForChat } from "../services/chat-events.js";
 import { readResponseBuffer } from "../utils/bounded-response.js";
 
 const MAX_VOICE_DURATION_SEC = 300;
@@ -79,6 +80,16 @@ voiceHandler.on("message:voice", async (ctx, next) => {
   if (!transcript) {
     await ctx.reply(t(language, "voiceTranscriptionFailed"));
     return;
+  }
+
+  // Chat timeline: the inbound recorder skips voice on purpose and defers to
+  // here, so the agent reads what was SAID rather than "(voice note)".
+  if (ctx.chat?.id !== undefined && ctx.chat.id > 0) {
+    void recordChatEventForChat(ctx.chat.id, {
+      direction: "in",
+      kind: "user_voice",
+      summary: transcript,
+    });
   }
 
   // Inject the transcript into the text pipeline. Downstream handlers read

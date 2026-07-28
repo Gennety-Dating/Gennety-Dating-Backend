@@ -14,6 +14,7 @@ import {
 import { env } from "../config.js";
 import { grantTickets, isUniqueViolation } from "../services/ticket-wallet.js";
 import { gateStarsForScope } from "../services/ticket-payment.js";
+import { recordChatEventForChat } from "../services/chat-events.js";
 import { activateOrExtendPremium, formatPremiumUntil } from "../services/premium.js";
 
 /**
@@ -165,6 +166,18 @@ async function langForTelegramId(telegramId: number | undefined): Promise<Langua
 export async function handleSuccessfulPayment(ctx: BotContext): Promise<void> {
   const payment = ctx.message?.successful_payment;
   if (!payment) return;
+
+  // Chat timeline. Recorded here rather than by the inbound middleware because
+  // this handler is registered ahead of it (Telegram's 10s pre-checkout window)
+  // and terminates the update. Money moving is exactly the kind of thing a user
+  // asks a follow-up question about.
+  if (ctx.chat?.id !== undefined && ctx.chat.id > 0) {
+    void recordChatEventForChat(ctx.chat.id, {
+      direction: "in",
+      kind: "payment",
+      summary: `paid ${payment.total_amount} Telegram Stars (${payment.invoice_payload})`,
+    });
+  }
 
   const count = parseStoreInvoicePayload(payment.invoice_payload);
   if (count == null || ticketBundleFor(count) == null) {

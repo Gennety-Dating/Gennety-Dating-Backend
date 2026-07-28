@@ -10,6 +10,7 @@ import {
   sendVenuePostSaveAck,
 } from "../../handlers/matching/venue-negotiation.js";
 import { sendPeerWaitAck } from "../../services/peer-wait.js";
+import { recordMiniAppAction } from "../../services/chat-events.js";
 import {
   confirmVenueIntent,
   getVenueIntentState,
@@ -116,6 +117,13 @@ export function createLocationRouter(api: Api<RawApi>): Router {
     // Fire-and-forget: the Mini App dismisses itself ~200ms after this response,
     // so the user is back in the chat while the short shimmer plays and lands on
     // the waiting line. Blocking the response on it would just delay that close.
+    recordMiniAppAction(
+      actor.telegramId,
+      state.partnerSubmitted
+        ? "in the venue Mini App, confirmed their departure point and vibe — both sides are in, the concierge is picking the place"
+        : "in the venue Mini App, confirmed their departure point and vibe (waiting on their partner)",
+      { surface: "venue_intent", matchId },
+    );
     if (!state.partnerSubmitted) {
       const waitingLang = (actor.language ?? "en") as Language;
       void sendPeerWaitAck(
@@ -252,6 +260,14 @@ export function createLocationRouter(api: Api<RawApi>): Router {
         ? { vibeLatA: lat, vibeLngA: lng, vibeAddressA: address }
         : { vibeLatB: lat, vibeLngB: lng, vibeAddressB: address },
     });
+
+    recordMiniAppAction(
+      auth.user.id,
+      address
+        ? `in the venue Mini App, marked their departure point: ${address}`
+        : "in the venue Mini App, marked their departure point on the map",
+      { surface: "venue_intent", matchId },
+    );
 
     // Send the side-aware "what's next" ACK so the chat reflects the
     // Mini App save. Without this, closing the Mini App leaves the

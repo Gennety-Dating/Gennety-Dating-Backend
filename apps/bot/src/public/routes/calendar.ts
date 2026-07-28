@@ -6,6 +6,7 @@ import {
   processCalendarSlotsUpdate,
   getCalendarState,
 } from "../../handlers/matching/scheduler.js";
+import { recordMiniAppAction } from "../../services/chat-events.js";
 
 /**
  * RFC 4122 UUID shape. We pre-validate `matchId` here because Prisma rejects a
@@ -84,6 +85,14 @@ export function createCalendarRouter(api: Api<RawApi>): Router {
       res.status(status).json({ error: result.reason });
       return;
     }
+
+    recordMiniAppAction(
+      BigInt(validation.user.id),
+      result.agreedTime
+        ? "in the Calendar Mini App, saved availability — a slot both sides had marked locked the date in"
+        : `in the Calendar Mini App, marked ${pickedIsos.length} time slot(s) as free (waiting on their partner)`,
+      { surface: "calendar", matchId },
+    );
 
     res.status(200).json({
       ok: true,

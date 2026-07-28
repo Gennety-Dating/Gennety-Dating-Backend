@@ -5,6 +5,7 @@ import { t, type Language, SUPPORTED_LANGUAGES } from "@gennety/shared";
 import { env } from "../../config.js";
 import { validateInitData } from "../init-data.js";
 import { recordPostDateFeedback } from "../../handlers/date/feedback.js";
+import { recordMiniAppAction } from "../../services/chat-events.js";
 
 /**
  * Same UUID guard as the calendar endpoint — Prisma would otherwise throw a
@@ -228,6 +229,12 @@ export function createFeedbackRouter(api: Api<RawApi>): Router {
         await prisma.match.update({ where: { id: matchId }, data: { venueFitByB: venueFit, venueFitReasonsByB: venueFitReasons } });
       }
     }
+
+    recordMiniAppAction(
+      validation.user.id,
+      `in the post-date Feedback Mini App, rated the date ${chemistry}/10 and answered "${wantsSecondDate}" on a second date`,
+      { surface: "post_date_feedback", matchId },
+    );
 
     // Confirmation DM — symmetric with the voice path's `ctx.reply`. Best-effort:
     // a 200 to the Mini App is the authoritative success signal.

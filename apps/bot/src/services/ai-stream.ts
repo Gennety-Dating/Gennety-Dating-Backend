@@ -8,6 +8,7 @@ import {
   thinkingHtml,
   type InputRichMessage,
 } from "./telegram-rich.js";
+import { recordOutboundMessage, withEphemeralSends } from "./outbound-recorder.js";
 
 /**
  * Streams a sequence of status chunks in the bottom of the chat by sending one
@@ -215,7 +216,10 @@ export async function runStatusSequence(
   // treat them as generated AI replies and can scroll/reserve space for output.
   if (options.rich === true) {
     const handled = await runThinkingStatusSequence(api, chatId, steps, options);
-    if (handled) return;
+    if (handled) {
+      if (options.deleteAtEnd === false) recordStatusFinalLine(chatId, steps);
+      return;
+    }
   }
 
   const wait = options.wait ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
@@ -225,7 +229,13 @@ export async function runStatusSequence(
 
   let messageId: number;
   try {
-    const sent = await api.sendMessage(chatId, steps[0]!.text);
+    // The status message is a moving target — it is edited step by step and
+    // usually deleted. Recording it verbatim would put "analysing…" in the
+    // chat timeline; the durable final line (when there is one) is recorded
+    // once below instead.
+    const sent = await withEphemeralSends(() =>
+      api.sendMessage(chatId, steps[0]!.text),
+    );
     messageId = sent.message_id;
   } catch (err) {
     console.warn("runStatusSequence: initial send failed, skipping status:", err);
@@ -258,7 +268,24 @@ export async function runStatusSequence(
     } catch {
       // Best-effort cleanup; leaving the last line up is acceptable.
     }
+  } else {
+    recordStatusFinalLine(chatId, steps);
   }
+}
+
+/**
+ * Put a status sequence's PERSISTED last line into the chat timeline.
+ *
+ * Only `deleteAtEnd: false` sequences leave anything behind — today the
+ * peer-wait ack (§3.6b), whose final line is the user's durable "waiting on
+ * your partner" receipt and therefore something the agent must know about when
+ * they ask "and now what?". The transient beats above it are marked ephemeral,
+ * so this is the one row the sequence contributes. Fire-and-forget.
+ */
+function recordStatusFinalLine(chatId: number, steps: readonly StatusStep[]): void {
+  const finalText = steps[steps.length - 1]?.text;
+  if (!finalText) return;
+  recordOutboundMessage(chatId, finalText);
 }
 
 /**
@@ -345,8 +372,10 @@ export async function runThinkingStatusSequence(
       });
     } catch {
       // The rich finaliser may be unsupported — persist the line as plain text.
+      // Marked ephemeral only so the transformer doesn't ALSO record it: the
+      // caller (`runStatusSequence`) records this line once for both paths.
       try {
-        await api.sendMessage(chatId, finalText);
+        await withEphemeralSends(() => api.sendMessage(chatId, finalText));
       } catch {
         // Cosmetic between-batch line; losing it must never break the flow.
       }
@@ -458,7 +487,10 @@ export async function streamDraftsToChat(
 
   let current: Message.TextMessage;
   try {
-    current = await api.sendMessage(chatId, chunks[0]!);
+    // The streamed message is edited chunk by chunk in place, so at send time
+    // it carries the lead "analysing…" beat rather than what the user ends up
+    // reading. It is recorded once below, with the final text.
+    current = await withEphemeralSends(() => api.sendMessage(chatId, chunks[0]!));
   } catch (err) {
     console.warn("streamDraftsToChat: initial send failed, sending final message:", err);
     return await api.sendMessage(chatId, finalText, finalOptions);
@@ -486,6 +518,10 @@ export async function streamDraftsToChat(
     }
   }
 
+  recordOutboundMessage(chatId, finalText, {
+    replyMarkup: finalOptions.reply_markup,
+    telegramMessageId: current.message_id,
+  });
   return current;
 }
 
