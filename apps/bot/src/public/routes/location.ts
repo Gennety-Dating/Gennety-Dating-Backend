@@ -9,6 +9,7 @@ import {
   tryFinalize,
   sendVenuePostSaveAck,
 } from "../../handlers/matching/venue-negotiation.js";
+import { sendPeerWaitAck } from "../../services/peer-wait.js";
 import {
   confirmVenueIntent,
   getVenueIntentState,
@@ -112,12 +113,19 @@ export function createLocationRouter(api: Api<RawApi>): Router {
     // confirmation (date card), so no waiting cue is needed. This lives on the
     // Telegram-only Mini App route (not the shared confirmVenueIntent service) so
     // the iOS path — which has its own waiting UI — is never DM'd.
+    // Fire-and-forget: the Mini App dismisses itself ~200ms after this response,
+    // so the user is back in the chat while the short shimmer plays and lands on
+    // the waiting line. Blocking the response on it would just delay that close.
     if (!state.partnerSubmitted) {
-      void api
-        .sendMessage(Number(actor.telegramId), tv((actor.language ?? "en") as Language, "venueWaitingPeer"))
-        .catch((err) => {
-          console.warn(`[venue-intent/confirm] waiting DM failed for ${matchId}:`, err);
-        });
+      const waitingLang = (actor.language ?? "en") as Language;
+      void sendPeerWaitAck(
+        api,
+        Number(actor.telegramId),
+        waitingLang,
+        tv(waitingLang, "venueWaitingPeer"),
+      ).catch((err) => {
+        console.warn(`[venue-intent/confirm] waiting DM failed for ${matchId}:`, err);
+      });
     }
     res.json({ ok: true, ...state });
   });

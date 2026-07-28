@@ -189,6 +189,29 @@ export function profilerOpenQuestionSteps(lang: Language): StatusStep[] {
 }
 
 /**
+ * Shown the moment a user commits their side of a two-sided step and the flow
+ * starts waiting on the PARTNER (calendar availability, venue intent). Two short
+ * beats — saving, handing off — then the caller's existing waiting line is
+ * persisted (`deleteAtEnd: false`) as the durable receipt.
+ *
+ * Deliberately short (~2.5s), and deliberately NOT held for the wait itself. A
+ * `<tg-thinking>` draft is ephemeral (~30s, kept alive by a 20s re-issue in
+ * `holdLastRichDraft`), so it is a primitive for "work is happening right now",
+ * never for "another human hasn't answered yet" — that wait runs for hours, any
+ * real bot message would collapse the draft, and holding it would occupy the
+ * chat's compose area indefinitely. The shimmer therefore covers only the moment
+ * of the action, which is the moment the user is actually looking at the chat;
+ * the persisted final line is what carries the state afterwards.
+ */
+export function peerWaitSteps(lang: Language, finalText: string): StatusStep[] {
+  return [
+    { text: t(lang, "peerWaitSaving"), holdMs: 1100, emojiId: AI_EMOJI.check },
+    { text: t(lang, "peerWaitHandoff"), holdMs: 1400, emojiId: AI_EMOJI.matching },
+    { text: finalText, holdMs: 0 },
+  ];
+}
+
+/**
  * Shown at a Profiler batch boundary (batch exhausted, more questions pending).
  * Opens on a short generic "thinking" beat, then "saving". The final "saved"
  * line PERSISTS (`deleteAtEnd: false`) — it is the between-batch message, so it

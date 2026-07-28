@@ -53,6 +53,7 @@ import { buildDateTimeEntity } from "../../services/datetime-entity.js";
 import { renderTimeCard, type TimeCardTheme } from "../../services/time-card.js";
 import { runStatusSequence } from "../../services/ai-stream.js";
 import { venueSearchSteps } from "../../services/analysis-status.js";
+import { sendPeerWaitAck } from "../../services/peer-wait.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
 
 /**
@@ -290,6 +291,17 @@ export async function sendVenuePostSaveAck(
     withMapButton = true; // user just saved vibe; surface map button next
   } else {
     key = "venueLocationNoted";
+  }
+
+  // Only the "waiting on the partner" branch gets the shimmer: it is the one
+  // where the user has finished their side and now has nothing to do. The other
+  // two branches hand the turn straight back ("now pick where you're coming
+  // from"), so a hand-off animation there would be misleading.
+  if (key === "venueWaitingPeer") {
+    await sendPeerWaitAck(api, Number(telegramId), lang, tv(lang, key)).catch((err) => {
+      console.warn(`[venue-ack] peer-wait ack failed for ${telegramId}:`, err);
+    });
+    return key;
   }
 
   await api

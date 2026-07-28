@@ -440,8 +440,8 @@ Hard rules enforced by the collector:
   `services/analysis-status.ts`) backs the equivalent "agent is working"
   beats at verification submission, the verification soft-skip, each Profiler
   batch boundary, every Profiler question's compose beat (§Phase 1b),
-  concierge venue selection, the profile-video upload check,
-  the **Type Radar close** (`TYPE_RADAR_PRODUCT_SPEC.md`),
+  concierge venue selection, the peer-wait ack (§3.6b), the profile-video
+  upload check, the **Type Radar close** (`TYPE_RADAR_PRODUCT_SPEC.md`),
   and the date-card PNG render (§3.7a). Most of these are cosmetic pacing only —
   fixed-duration stubs that narrate real but usually sub-second work and never
   gate the flow. The **Type Radar close** is the one that narrates no work at
@@ -1629,7 +1629,12 @@ better UX than three separate retries.
   finds zero overlap and the peer hasn't picked yet, the bot fires two
   DMs: peer gets `matchSchedulePeerProposed` with the calendar button;
   actor gets `matchScheduleSavedConfirmation` so the chat shows a
-  confirmation receipt the moment they close the Mini App.
+  confirmation receipt the moment they close the Mini App. The actor's
+  receipt is delivered through the **peer-wait ack** (`services/peer-wait.ts`,
+  §3.6b) rather than as a flat send, and is deliberately fire-and-forget: this
+  call's return value IS the Mini App's save response, so awaiting a ~2.5 s
+  shimmer would stall the "saved" screen behind an animation the user cannot see
+  while the web view is still on top.
 - **One live post-accept card per side.** Telegram post-accept prompts are
   tracked in `Match.calendarMessageIdA/B`. The same message can move from
   accepted/waiting → Date Ticket → Calendar; new peer proposals and
@@ -1686,6 +1691,53 @@ better UX than three separate retries.
   `sched:pick:*` callbacks are caught by a graceful fallback that
   re-delivers the calendar button instead of failing silently.
 
+### 3.6b Peer-wait ack (always-on, Telegram-only)
+
+The two-sided negotiation steps have a shared shape: one participant commits
+their side, and the flow then blocks on the other. Before 2026-07-27 that moment
+was a single flat `sendMessage` — you saved your availability, or confirmed your
+venue intent, and the chat answered with one static line. Committing your side
+produced no sense that anything had *happened*, which is the one moment the user
+is actually looking for a reaction.
+
+`services/peer-wait.ts` (`sendPeerWaitAck`) replaces that flat send with a short
+`runStatusSequence` on the rich path: two `<tg-thinking>` beats — saving
+(`peerWaitSaving`), handing off (`peerWaitHandoff`) — then the caller's existing
+waiting line persisted as the durable receipt (`deleteAtEnd: false`). The final
+copy is byte-identical to what the flat send delivered, so nothing downstream
+changes; only the moment of the action gains motion.
+
+**The shimmer covers the action, NOT the wait — and this is a hard boundary, not
+a stylistic one.** A `<tg-thinking>` draft is ephemeral (~30 s, kept alive only
+by a 20 s re-issue in `holdLastRichDraft`), so it is a primitive for "work is
+happening right now". Waiting on another human runs for hours: the calendar has
+no deadline at all beyond the §3.5 scheduling nudges (6 h / 12 h). Holding a
+shimmer across that would mean a permanent per-user 20 s heartbeat, would occupy
+the chat's compose area indefinitely, and would collapse the moment any real bot
+message (a Profiler question, a nudge, `/start`) landed. So the sequence is
+bounded at ~2.5 s and the persisted line carries the state afterwards.
+
+Applied at exactly the surfaces where a user commits and then has nothing to do:
+the calendar first-mover receipt (§3.6) and the venue "waiting on partner" ack
+(§3.7 `venueWaitingPeer`, both the Venue Intent V2 Mini App confirm and the
+legacy concierge path). Deliberately NOT applied to:
+
+- The other two venue ack branches (`venueVibeNoted` / `venueLocationNoted`) —
+  they hand the turn straight back to the same user, so a hand-off animation
+  would be misleading.
+- The **pitch decision** (§3.3) — the user is waiting on their own decision, not
+  on the partner, and that message already carries a live reply-deadline
+  countdown button.
+- The **Date Ticket gate** (§3.5b) — there is no chat-side waiting line to
+  decorate. The ticket card is standalone and never edited, and the live
+  waiting/both-secured/surprise state is owned by the Mini App by design.
+- The **venue-change board** (§3.7b) — the wait happens inside the Mini App,
+  which already polls at ~4 s; liveness there belongs on the board, not in chat.
+
+Degrades to the classic edited-message stream on clients that can't render rich
+drafts, which lands the identical final text. A send failure is swallowed exactly
+as the flat send's `.catch()` was.
+
 ### 3.7 Concierge Venue Negotiation (`negotiating_venue`)
 
 Once `agreedTime` is locked, both users are asked for two things, **in
@@ -1731,7 +1783,10 @@ happened:
   be coming from:" + 🗺️ Pick on map inline button (re-surfacing the
   Mini App entry point in the chat). Defensive — the Telegram bot path no
   longer reaches it, but a vibe-first mobile/legacy save still can.
-- both done → `venueWaitingPeer` ("Got yours, waiting on partner…").
+- both done → `venueWaitingPeer` ("Got yours, waiting on partner…"), delivered
+  through the §3.6b peer-wait ack — this is the branch where the user has
+  finished their side and now has nothing to do, so it is the one that earns the
+  hand-off shimmer.
 
 The same `sendVenuePostSaveAck` helper drives all three paths
 (`handleVenueLocation` / `handleVenueVibe` / `POST /v1/location/select`)

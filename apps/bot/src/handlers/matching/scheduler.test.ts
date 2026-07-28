@@ -1,6 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import type { SessionData } from "@gennety/shared";
-import { DEFAULT_SESSION, t } from "@gennety/shared";
+import { DEFAULT_SESSION, t, setVariantRng } from "@gennety/shared";
+
+// Pin the variant picker to the canonical i18n string so `tv`-sourced copy can
+// be asserted exactly (the scheduler DMs are variant-rotated in production).
+setVariantRng(() => 0);
+afterAll(() => setVariantRng(null));
 
 vi.mock("@gennety/db", () => ({
   prisma: {
@@ -33,6 +38,13 @@ vi.mock("./venue-negotiation.js", () => ({
   startVenueNegotiation: vi.fn().mockResolvedValue(undefined),
 }));
 
+// The actor's "saved, now we wait on them" receipt plays a ~2.5s shimmer and is
+// deliberately fire-and-forget (it must not delay the Mini App's save response).
+// Stub it so the tests assert it fired without leaving a live timer behind.
+vi.mock("../../services/peer-wait.js", () => ({
+  sendPeerWaitAck: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { prisma } from "@gennety/db";
 import {
   generateProposalSlots,
@@ -48,11 +60,13 @@ import {
   CALENDAR_TIME_SLOTS,
 } from "./scheduler.js";
 import { startVenueNegotiation } from "./venue-negotiation.js";
+import { sendPeerWaitAck } from "../../services/peer-wait.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as { findUnique: MockFn; update: MockFn };
 const mUser = prisma.user as unknown as { findUnique: MockFn };
 const mStartVenue = startVenueNegotiation as unknown as MockFn;
+const mPeerWaitAck = sendPeerWaitAck as unknown as MockFn;
 
 function createApi() {
   let nextMessageId = 500;
@@ -282,6 +296,8 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     mUser.findUnique.mockReset();
     mStartVenue.mockReset();
     mStartVenue.mockResolvedValue(undefined);
+    mPeerWaitAck.mockReset();
+    mPeerWaitAck.mockResolvedValue(undefined);
   });
 
   function mockMatchInState(overrides: {
@@ -406,10 +422,17 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     ]);
 
     expect(res.ok).toBe(true);
-    expect(api.sendMessage).toHaveBeenCalledTimes(2);
-    // Both DM targets — peer (1002) + actor (1001) — fired exactly once.
-    const targets = api.sendMessage.mock.calls.map((c: any[]) => c[0]).sort();
-    expect(targets).toEqual([1001, 1002]);
+    // The peer gets the plain calendar-button DM…
+    expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    expect(api.sendMessage.mock.calls[0]![0]).toBe(1002);
+    // …while the actor's receipt goes through the shimmer ack, which ends on the
+    // same confirmation copy it used to send flat.
+    expect(mPeerWaitAck).toHaveBeenCalledTimes(1);
+    expect(mPeerWaitAck.mock.calls[0]!.slice(1)).toEqual([
+      1001,
+      "en",
+      t("en", "matchScheduleSavedConfirmation"),
+    ]);
     expect(mStartVenue).not.toHaveBeenCalled();
   });
 

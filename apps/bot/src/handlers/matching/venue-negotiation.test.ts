@@ -38,6 +38,13 @@ vi.mock("../../services/time-card.js", () => ({
   renderTimeCard: vi.fn().mockResolvedValue(Buffer.from("png")),
 }));
 
+// The waiting-on-peer ACK plays a ~2.5s shimmer before persisting its final
+// line. Stub it so these tests assert WHICH ack fired (and with what copy)
+// without burning real timers; the shimmer itself is covered in peer-wait.test.ts.
+vi.mock("../../services/peer-wait.js", () => ({
+  sendPeerWaitAck: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { prisma } from "@gennety/db";
 import {
   startVenueNegotiation,
@@ -46,6 +53,7 @@ import {
 import { parseVibe } from "../../services/vibe-parser.js";
 import { runVenueFinalizationOnce } from "../../services/venue-finalization-flight.js";
 import { renderTimeCard } from "../../services/time-card.js";
+import { sendPeerWaitAck } from "../../services/peer-wait.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
 const mMatch = prisma.match as unknown as {
@@ -58,6 +66,7 @@ const mUser = prisma.user as unknown as { findUnique: MockFn };
 const mParseVibe = parseVibe as unknown as MockFn;
 const mFinalize = runVenueFinalizationOnce as unknown as MockFn;
 const mRenderTimeCard = renderTimeCard as unknown as MockFn;
+const mPeerWaitAck = sendPeerWaitAck as unknown as MockFn;
 
 function createApi() {
   return {
@@ -75,6 +84,7 @@ beforeEach(() => {
   mParseVibe.mockReset().mockResolvedValue({ category: "cafe", keywords: [], safe: true });
   mFinalize.mockReset().mockResolvedValue(undefined);
   mRenderTimeCard.mockReset().mockResolvedValue(Buffer.from("png"));
+  mPeerWaitAck.mockReset().mockResolvedValue(undefined);
 });
 
 describe("startVenueNegotiation — location-first intro", () => {
@@ -267,12 +277,16 @@ describe("handleVenueVibe — location-first ordering", () => {
     });
     expect(mFinalize).toHaveBeenCalledTimes(1);
 
-    // ACK fired: both sets present for side A → waiting-on-peer.
-    expect(ctx.api.sendMessage).toHaveBeenCalledWith(
+    // ACK fired: both sets present for side A → waiting-on-peer. This branch is
+    // the one that hands off to the partner, so it goes through the shimmer ack
+    // and NOT the plain sendMessage the other two branches use.
+    expect(mPeerWaitAck).toHaveBeenCalledWith(
+      ctx.api,
       111,
+      "en",
       t("en", "venueWaitingPeer"),
-      expect.any(Object),
     );
+    expect(ctx.api.sendMessage).not.toHaveBeenCalled();
     // No redirect this time.
     expect(ctx.reply).not.toHaveBeenCalled();
   });

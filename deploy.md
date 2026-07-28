@@ -1205,7 +1205,9 @@ Required/high-impact env keys:
   - **Thinking-status beats** (`runStatusSequence`, the "agent is analysing /
     working" lines): AI-memory analysis, liveness verify check, verification
     soft-skip, profile-video upload check, concierge venue selection, date-card
-    render + share, plus the Profiler batch boundary, the Profiler in-batch
+    render + share, the **peer-wait ack** (PRODUCT_SPEC §3.6b — the calendar
+    first-mover receipt and the venue `venueWaitingPeer` line, `services/
+    peer-wait.ts`), plus the Profiler batch boundary, the Profiler in-batch
     questions (PRODUCT_SPEC §Phase 1b), and the periodic profile-survey
     "thinking" pause (PRODUCT_SPEC §1.3). These all call with `rich: true` so
     they render as the native `<tg-thinking>` shimmer + AI Actions `<tg-emoji>`

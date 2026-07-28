@@ -12,6 +12,7 @@ import {
   type PostAcceptSide,
 } from "./post-accept-message.js";
 import { buildMiniAppUrl } from "../../services/mini-app-url.js";
+import { sendPeerWaitAck } from "../../services/peer-wait.js";
 
 /**
  * Calendar-only scheduler.
@@ -505,14 +506,17 @@ export async function processCalendarSlotsUpdate(
       );
     }
     if (isTelegramTarget(actorTelegramId)) {
-      sends.push(
-        api
-          .sendMessage(
-            Number(actorTelegramId),
-            tv(actorLang, "matchScheduleSavedConfirmation"),
-          )
-          .catch(() => {}),
-      );
+      // Deliberately NOT pushed into `sends`: the shimmer runs ~2.5s, and this
+      // function's return value IS the Mini App's save response — awaiting it
+      // would stall the actor's "saved" screen behind an animation they cannot
+      // see while the web view is still on top. Fire-and-forget instead, so the
+      // beats play (and the waiting line lands) behind the Mini App.
+      void sendPeerWaitAck(
+        api,
+        Number(actorTelegramId),
+        actorLang,
+        tv(actorLang, "matchScheduleSavedConfirmation"),
+      ).catch(() => {});
     }
     await Promise.all(sends);
   } else if (
