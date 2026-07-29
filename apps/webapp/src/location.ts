@@ -67,6 +67,11 @@ const GEOLOCATION_OPTIONS: PositionOptions = {
   timeout: 10_000,
   maximumAge: 60_000,
 };
+// Hard cap on the loading cover (#boot in location.html). It normally lifts the
+// moment the first map tile paints; this is the floor under that, so a tile
+// proxy outage shows a blank map with working controls rather than trapping the
+// user behind a loader that will never finish.
+const BOOT_REVEAL_MAX_MS = 2500;
 
 const app = window.Telegram?.WebApp;
 app?.ready();
@@ -110,6 +115,33 @@ const shareTextEl = shareCurrentEl?.querySelector(".loc-btn-text") ?? null;
 const addrLabelEl = document.getElementById("addr-label");
 const selectedEl = document.getElementById("selected");
 const noContextEl = document.getElementById("no-context");
+const bootEl = document.getElementById("boot");
+
+let bootDismissed = false;
+
+/**
+ * Lift the loading cover and reveal the screen behind it.
+ *
+ * Telegram opens a Mini App at ~half the screen height and expands it only when
+ * loading finishes, so this page's opening frame is on screen long enough to be
+ * a design surface. `#boot` covers it (location.html carries both the markup and
+ * its critical CSS, since this module's stylesheet hasn't landed yet at that
+ * point); this is where it comes off.
+ *
+ * Called by whichever comes first: the map painting its first tile (the honest
+ * "there is a real screen here now" moment), one of the paths that never shows a
+ * map at all, or the BOOT_REVEAL_MAX_MS cap. Idempotent — every one of those may
+ * fire.
+ */
+function dismissBoot(): void {
+  const el = bootEl;
+  if (bootDismissed || !el) return;
+  bootDismissed = true;
+  el.classList.add("done");
+  // Drop it once the fade is over so it can never swallow a tap on the map.
+  setTimeout(() => el.remove(), 400);
+}
+setTimeout(dismissBoot, BOOT_REVEAL_MAX_MS);
 
 let map: L.Map | null = null;
 let selectedLat: number = DEFAULT_CENTER[0];
@@ -197,6 +229,7 @@ function showNoContext(): void {
     noContextEl.style.display = "flex";
     noContextEl.textContent = tr(lang, "noContext");
   }
+  dismissBoot();
 }
 
 function initMap(): void {
@@ -205,6 +238,7 @@ function initMap(): void {
   // graceful message rather than crashing.
   if (!window.L) {
     if (selectedEl) selectedEl.textContent = tr(lang, "locErrMapUnavailable");
+    dismissBoot();
     return;
   }
 
@@ -233,10 +267,17 @@ function initMap(): void {
     // Drop Leaflet's "Leaflet" prefix from the attribution so no library
     // watermark shows — only the required OSM/CARTO credit remains.
     map.attributionControl?.setPrefix?.(false);
-    window.L.tileLayer(MAP_TILES_URL, {
+    const tiles = window.L.tileLayer(MAP_TILES_URL, {
       attribution: MAP_ATTRIBUTION,
       maxZoom: 20,
-    }).addTo(map);
+    });
+    // First painted tile = the map is genuinely showing something, so that is
+    // when the loading cover lifts. Deliberately `tileload` (one real tile) and
+    // not the layer's `load` (all visible tiles): in this WebView the container
+    // can still measure 0×0 at init, which builds a zero-tile grid — `load`
+    // would then resolve against nothing and reveal a blank map.
+    tiles.once?.("tileload", dismissBoot);
+    tiles.addTo(map);
 
     // The point under the fixed centre pin is the selection. Any manual pan
     // makes it a "custom point"; programmatic recentres (search / geolocation)
@@ -269,6 +310,7 @@ function initMap(): void {
   } catch {
     map = null;
     if (selectedEl) selectedEl.textContent = tr(lang, "locErrMapUnavailable");
+    dismissBoot();
   }
 }
 
@@ -693,6 +735,9 @@ function applyVibeUi(): void {
 function showVibeStage(): void {
   const stage = document.getElementById("vibe-stage") as HTMLElement | null;
   if (stage) stage.hidden = false;
+  // A restored draft/confirmed intent opens straight on step 2, so the map may
+  // never paint a tile — the stage itself is the screen the cover was hiding.
+  dismissBoot();
   applyVibeUi();
   const priceNote = document.getElementById("vibe-price-note");
   if (priceNote) priceNote.textContent = INITIAL_PRICE_NOTE[lang];

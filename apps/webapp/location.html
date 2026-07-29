@@ -7,13 +7,153 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <title>Gennety Location</title>
-    <!-- Paint the dark backdrop on the very first frame so the Mini App doesn't
-         flash a white/unstyled screen before the bundled CSS loads. -->
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin href="https://fonts.gstatic.com" rel="preconnect" />
+    <!-- Critical first-paint CSS — the loading screen.
+
+         Unlike every other Mini App (an empty `#root` that JS fills), this page
+         ships a REAL screen in its markup, while `location.css` is imported from
+         the deferred `location.ts` module. So between the first frame and the
+         bundle landing, this block is the only stylesheet the page has, and the
+         markup below paints raw: the pin SVG dropped in normal flow, a naked
+         <input>, and two default pill buttons. Telegram opens a Mini App at
+         roughly half the screen height and expands it only once loading
+         finishes, so that unstyled frame is exactly what the user stares at for
+         the whole opening sheet.
+
+         `#boot` is an opaque, theme-correct cover over that window carrying the
+         "locating" mark; `location.ts` fades it out as soon as the map paints
+         (see `dismissBoot`). The backdrop colors are the shared theme tokens
+         (theme.css --bg) rather than the old hardcoded `#120e1c`, which belonged
+         to no theme and flashed dark before a light-theme app. -->
     <style>
+      :root {
+        --boot-bg: #030303;
+        --boot-ring: rgba(182, 48, 79, 0.34);
+        --boot-pin-shadow: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
+      }
+      :root[data-theme="light"] {
+        --boot-bg: #f5f5f5;
+        --boot-ring: rgba(139, 37, 59, 0.22);
+        --boot-pin-shadow: drop-shadow(0 3px 6px rgba(109, 28, 46, 0.22));
+      }
+
       html,
       body {
         margin: 0;
-        background: #120e1c;
+        height: 100%;
+        background: var(--boot-bg);
+        overflow: hidden;
+      }
+
+      #boot {
+        position: fixed;
+        inset: 0;
+        /* Above every app layer — .vibe-stage tops the stack at 10000. */
+        z-index: 99999;
+        background: var(--boot-bg);
+        transition: opacity 0.32s ease;
+        /* Dead-man's switch: if the bundle never executes at all (a dropped
+           connection mid-open), nothing would ever call dismissBoot and the
+           cover would sit there forever. This fires far past the JS cap, so a
+           merely slow boot never reaches it. */
+        animation: bootFailsafe 0s linear 8s forwards;
+      }
+      #boot.done {
+        opacity: 0;
+        pointer-events: none;
+      }
+      @keyframes bootFailsafe {
+        to {
+          opacity: 0;
+          visibility: hidden;
+        }
+      }
+      /* A faint accent bloom so a near-black page with one small mark on it
+         reads as composed rather than empty. */
+      #boot::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(40% 26% at 50% 50%, var(--boot-ring), transparent 72%);
+        opacity: 0.5;
+      }
+
+      /* The mark sits at the viewport centre — exactly where the real map pin
+         lands — so the reveal reads as the map arriving underneath a pin that
+         never moved, not as one screen swapping for another. */
+      #boot-mark {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 136px;
+        height: 136px;
+        transform: translate(-50%, -50%);
+      }
+      .boot-ping {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 20px;
+        height: 20px;
+        margin: -10px 0 0 -10px;
+        border: 1.5px solid var(--boot-ring);
+        border-radius: 50%;
+        opacity: 0;
+        animation: bootPing 2.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+      }
+      .boot-ping.d2 {
+        animation-delay: 0.87s;
+      }
+      .boot-ping.d3 {
+        animation-delay: 1.74s;
+      }
+      @keyframes bootPing {
+        0% {
+          transform: scale(0.55);
+          opacity: 0;
+        }
+        12% {
+          opacity: 1;
+        }
+        100% {
+          transform: scale(6);
+          opacity: 0;
+        }
+      }
+      /* Same glyph, colors and shadow as the live `#pin` (location.css), so the
+         handover is invisible. */
+      #boot-pin {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        filter: var(--boot-pin-shadow);
+        animation: bootFloat 2.6s ease-in-out infinite;
+      }
+      @keyframes bootFloat {
+        0%,
+        100% {
+          transform: translate(-50%, calc(-100% + 4px));
+        }
+        50% {
+          transform: translate(-50%, calc(-100% - 3px));
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .boot-ping {
+          animation: none;
+          transform: scale(3.2);
+          opacity: 0.5;
+        }
+        .boot-ping.d2,
+        .boot-ping.d3 {
+          display: none;
+        }
+        #boot-pin {
+          animation: none;
+          transform: translate(-50%, calc(-100% + 4px));
+        }
       }
     </style>
     <script>(function(){try{var q=new URLSearchParams(location.search).get("theme");if(q==="light"||q==="dark"){try{localStorage.setItem("gennety-theme",q);}catch(e){}}var t=(q==="light"||q==="dark")?q:localStorage.getItem("gennety-theme");document.documentElement.dataset.theme=(t==="light"||t==="dark")?t:"dark";}catch(e){document.documentElement.dataset.theme="dark";}})();</script>
@@ -31,6 +171,25 @@
     ></script>
   </head>
   <body>
+    <!-- Loading cover. Styled entirely by the critical CSS above (it can never
+         itself be unstyled), removed by location.ts once the map has painted. -->
+    <div id="boot" aria-hidden="true">
+      <div id="boot-mark">
+        <span class="boot-ping"></span>
+        <span class="boot-ping d2"></span>
+        <span class="boot-ping d3"></span>
+        <svg id="boot-pin" width="34" height="34" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7z"
+            fill="#8b253b"
+            stroke="#b6304f"
+            stroke-width="1.2"
+          />
+          <circle cx="12" cy="9" r="2.6" fill="#ffffff" />
+        </svg>
+      </div>
+    </div>
+
     <!-- Full-bleed map backdrop -->
     <div id="map"></div>
     <div id="scrim"></div>

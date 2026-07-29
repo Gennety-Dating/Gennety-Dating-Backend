@@ -48,6 +48,9 @@ declare namespace L {
   }
 
   class TileLayer {
+    /** Optional so a stubbed layer without it degrades instead of throwing
+        inside `initMap`'s try/catch and taking the whole map down with it. */
+    once?(type: "tileload" | "load", listener: () => void): this;
     addTo(map: Map): this;
   }
 

@@ -76,6 +76,11 @@ class FakeElement {
     return target === this;
   }
 
+  removed = false;
+  remove(): void {
+    this.removed = true;
+  }
+
   querySelector(): FakeElement | null {
     // The location app only reaches for the `.cta-text` span inside #confirm;
     // returning null is fine — the code guards every ctaTextEl access.
@@ -94,6 +99,7 @@ class FakeDocument {
 
   constructor() {
     for (const id of [
+      "boot",
       "search",
       "results",
       "share-current",
@@ -183,6 +189,8 @@ async function loadLocationApp(options: {
   geolocation?: Geolocation | undefined;
   isSecureContext?: boolean;
   venueState?: unknown;
+  /** `null` opens the app with no match context (the no-context fallback). */
+  matchId?: string | null;
 } = {}) {
   vi.resetModules();
   vi.useFakeTimers();
@@ -237,15 +245,30 @@ async function loadLocationApp(options: {
     remove: vi.fn(),
   };
   // Leaflet's `L.map(el, opts)` returns the map instance; `L.tileLayer(url, opts)`
-  // returns a layer with `.addTo(map)`.
+  // returns a layer with `.addTo(map)` plus the Evented `.once(type, fn)` the app
+  // subscribes to so the loading cover lifts on the first painted tile.
+  const tileListeners = new Map<string, () => void>();
+  const fakeTileLayer: {
+    once: (type: string, listener: () => void) => typeof fakeTileLayer;
+    addTo: (map: unknown) => typeof fakeMap;
+  } = {
+    once: vi.fn((type: string, listener: () => void) => {
+      tileListeners.set(type, listener);
+      return fakeTileLayer;
+    }),
+    addTo: vi.fn(() => fakeMap),
+  };
   const L = {
     map: vi.fn(() => fakeMap),
-    tileLayer: vi.fn(() => ({ addTo: vi.fn(() => fakeMap) })),
+    tileLayer: vi.fn(() => fakeTileLayer),
   };
 
   vi.stubGlobal("document", document);
   vi.stubGlobal("Node", FakeElement);
-  vi.stubGlobal("location", { search: `?match=${MATCH_ID}&lang=en` });
+  const matchId = options.matchId === undefined ? MATCH_ID : options.matchId;
+  vi.stubGlobal("location", {
+    search: matchId ? `?match=${matchId}&lang=en` : "?lang=en",
+  });
   vi.stubGlobal("window", {
     Telegram: { WebApp: app },
     L,
@@ -263,6 +286,8 @@ async function loadLocationApp(options: {
     fakeMap,
     mainButton,
     shareButton: document.getElementById("share-current")!,
+    boot: document.getElementById("boot")!,
+    paintFirstTile: () => tileListeners.get("tileload")?.(),
   };
 }
 
@@ -498,5 +523,75 @@ describe("Venue Intent V2 initial price policy", () => {
     expect(document.getElementById("vibe-error")!.textContent).toBe("");
     vi.advanceTimersByTime(400);
     expect(app.close).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Location Mini App loading cover", () => {
+  it("stays up until the map paints its first tile, then fades and is removed", async () => {
+    const { boot, paintFirstTile } = await loadLocationApp();
+    await flushPromises();
+
+    // Boot finished, but no tile has painted — the map is still blank, so the
+    // cover is exactly what should be on screen.
+    expect(boot.classList.contains("done")).toBe(false);
+
+    paintFirstTile();
+    expect(boot.classList.contains("done")).toBe(true);
+
+    // Removed only after the fade, so it can never swallow a tap on the map.
+    expect(boot.removed).toBe(false);
+    vi.advanceTimersByTime(400);
+    expect(boot.removed).toBe(true);
+  });
+
+  it("lifts even when no tile ever paints, so a tile outage cannot trap the user", async () => {
+    const { boot } = await loadLocationApp();
+    await flushPromises();
+
+    expect(boot.classList.contains("done")).toBe(false);
+    vi.advanceTimersByTime(2500);
+    expect(boot.classList.contains("done")).toBe(true);
+  });
+
+  it("lifts immediately when there is no match context and no map is shown", async () => {
+    const { boot, document } = await loadLocationApp({ matchId: null });
+    await flushPromises();
+
+    expect(document.getElementById("no-context")!.style.display).toBe("flex");
+    expect(boot.classList.contains("done")).toBe(true);
+  });
+
+  it("lifts when a restored intent opens straight on the vibe stage", async () => {
+    const venueState = {
+      intent: {
+        rawText: "quiet coffee",
+        experiences: ["coffee_treats"],
+        ambiences: ["quiet"],
+        formats: ["seated"],
+        hardConstraints: {
+          dietary: [],
+          alcoholFree: false,
+          stepFree: false,
+          setting: null,
+          maxPrice: null,
+          maxCommuteKm: 8,
+        },
+        parserConfidence: 1,
+        state: "draft",
+        manualConfirmationRequired: false,
+        origin: { lat: 50.45, lng: 30.52, address: null },
+      },
+      status: "draft",
+      partnerSubmitted: false,
+      suggestions: [],
+      selectionError: null,
+      mode: "live",
+    };
+
+    const { boot, document } = await loadLocationApp({ venueState });
+    await flushPromises();
+
+    expect(document.getElementById("vibe-stage")!.hidden).toBe(false);
+    expect(boot.classList.contains("done")).toBe(true);
   });
 });
