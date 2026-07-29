@@ -460,6 +460,71 @@ describe("splitReplyIntoBubbles", () => {
       "как дела",
     ]);
   });
+
+  // BASE_PERSONA asks the model to author the bubbles with blank lines; when it
+  // doesn't, a long reply must still land as chat rather than a wall of text.
+  describe("auto-split fallback for a single block", () => {
+    it("splits a long multi-sentence block at the boundary nearest the midpoint", () => {
+      // Nearest-the-middle, not "before the last sentence": two balanced
+      // bubbles read as texting, a 120/14 split reads as an afterthought.
+      const out = splitReplyIntoBubbles(
+        "твоё свидание в четверг в 19:00, Kyiv Food Market. адрес и карта — на карточке в «My Date». приходи к самому входу, там легко найтись.",
+      );
+      expect(out).toEqual([
+        "твоё свидание в четверг в 19:00, Kyiv Food Market.",
+        "адрес и карта — на карточке в «My Date». приходи к самому входу, там легко найтись.",
+      ]);
+    });
+
+    it("does not mistake a clock time for a sentence boundary", () => {
+      const out = splitReplyIntoBubbles(
+        "твоё свидание в четверг в 19:00, Kyiv Food Market. адрес и карта — на карточке в «My Date». приходи к самому входу, там легко найтись.",
+      );
+      expect(out[0]).toContain("19:00");
+      expect(out.every((bubble) => !bubble.startsWith("00"))).toBe(true);
+    });
+
+    it("leaves a short reply alone even when it has two sentences", () => {
+      // Splitting "готово. жду." is worse, not chattier.
+      expect(splitReplyIntoBubbles("готово ✨ жду вторую сторону. напишу сразу.")).toEqual([
+        "готово ✨ жду вторую сторону. напишу сразу.",
+      ]);
+    });
+
+    it("leaves a long single sentence alone — there is no honest cut point", () => {
+      const oneSentence =
+        "матчей пока нет потому что в Киеве прямо сейчас слишком мало анкет твоего профиля, и следующий заход в четверг";
+      expect(oneSentence.length).toBeGreaterThan(90);
+      expect(splitReplyIntoBubbles(oneSentence)).toEqual([oneSentence]);
+    });
+
+    it("never produces a third bubble on its own", () => {
+      const out = splitReplyIntoBubbles(
+        "первое предложение здесь. второе предложение здесь. третье предложение здесь. четвёртое предложение здесь.",
+      );
+      expect(out).toHaveLength(2);
+    });
+
+    it("splits on ? too, and keeps the terminator with its sentence", () => {
+      const out = splitReplyIntoBubbles(
+        "хочешь поменять место? это можно до пяти часов до свидания, кнопка «Сменить место» на карточке свидания.",
+      );
+      expect(out).toEqual([
+        "хочешь поменять место?",
+        "это можно до пяти часов до свидания, кнопка «Сменить место» на карточке свидания.",
+      ]);
+    });
+
+    it("does not fire when the model already authored the bubbles", () => {
+      const out = splitReplyIntoBubbles(
+        "ага, понял.\n\nтвоё свидание в четверг в 19:00, Kyiv Food Market. адрес — на карточке в «My Date».",
+      );
+      expect(out).toEqual([
+        "ага, понял.",
+        "твоё свидание в четверг в 19:00, Kyiv Food Market. адрес — на карточке в «My Date».",
+      ]);
+    });
+  });
 });
 
 describe("menu-agent offer_cancel_premium", () => {

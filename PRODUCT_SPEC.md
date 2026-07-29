@@ -1241,6 +1241,32 @@ nothing to restore from.
 turn, so every tool above is reachable by speaking to the bot — no separate
 voice surface exists or is needed.
 
+**It answers in two messages, and it is a man (2026-07-29).** Two voice
+corrections, both `VOICE.md`-owned (§1.1, §3.1):
+
+- The reply arrives as **two Telegram bubbles by default** — a short reaction to
+  what the user just said, then the substance; three only when there is a third
+  thought, one when there is nothing to react to. Brevity is measured per
+  message, so each bubble stays 1–2 short sentences and the reply overall may
+  run slightly longer than the single line it used to be. The delivery already
+  split on blank lines with a `typing` beat between bubbles
+  (`splitReplyIntoBubbles`); the persona was the thing telling the model that
+  *"most replies are ONE bubble"*, so it never happened. The sender now also
+  cuts an over-long single block in two at an interior sentence boundary, as a
+  floor under a non-compliant reply. Scoped to the concierge: onboarding is
+  unchanged (a founder decision — and those questions are deterministic
+  templates, not model output), and the pitch / no-match / ice-breaker streams
+  keep their single final message, which `proposal-countdown` live-edits by
+  `pitchMessageId`.
+- The bot **refers to itself in the masculine** in every language that inflects
+  it (ru «понял / нашёл», uk «зрозумів», pl «zrozumiałem»). `VOICE.md` had
+  described the archetype as male since it was written, but only in English, so
+  nothing reached the output and the model produced «поняла» about half the
+  time. Encoded once as `VOICE_SELF_GENDER` and injected into every prose
+  surface — the concierge, Aether, the onboarding agent, and the pitch /
+  scheduling / venue / wingman prompts. The brand "we" in static copy is
+  unaffected: that is the company speaking and is already gender-neutral.
+
 **Access gate.** `services/agent-access.ts` decides who may run a turn at all,
 and BOTH doors ask it. Previously each had its own partial idea: the Telegram
 side enforced the verification gate but nothing else, so a `banned` /

@@ -24,6 +24,7 @@ import {
   magicContextPrompt,
   t,
   PROFILER_ENTRY_DELAY_MS,
+  VOICE_SELF_GENDER,
 } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
@@ -227,7 +228,8 @@ async function generateClarificationReply(
               `The user is being asked this onboarding question: "${canonical}". ` +
               `Instead of answering, they replied with a question or confusion. ` +
               `Reply in language "${language}" with a warm, concise 1–2 sentence clarification that helps them answer. ` +
-              `Do NOT ask a new question and do NOT restate the onboarding question — it is appended separately. Plain text, no markdown.`,
+              `Do NOT ask a new question and do NOT restate the onboarding question — it is appended separately. Plain text, no markdown.\n\n` +
+              VOICE_SELF_GENDER,
           },
           { role: "user", content: userText },
         ],
@@ -470,6 +472,8 @@ function buildSystemPrompt(
   return `You are the onboarding assistant for Gennety Dating — an AI-first matchmaking service for university students.
 
 Your mission: guide the user through the onboarding process via natural conversation. Extract the required information and use the provided tools to progress through each step.
+
+${VOICE_SELF_GENDER}
 
 ## Strict Rules
 ${emailRule}

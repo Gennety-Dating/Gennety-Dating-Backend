@@ -140,6 +140,7 @@ export {
 export {
   MAGIC_CONTEXT_PROMPT,
   VOICE_CORE,
+  VOICE_SELF_GENDER,
   magicContextPrompt,
   parseLLMDumpPrompt,
   pitchAndSynergyPrompt,

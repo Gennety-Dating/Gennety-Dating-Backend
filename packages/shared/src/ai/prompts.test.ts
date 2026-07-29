@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   MAGIC_CONTEXT_PROMPT,
+  VOICE_CORE,
+  VOICE_SELF_GENDER,
   magicContextPrompt,
   parseLLMDumpPrompt,
   pitchAndSynergyPrompt,
@@ -13,6 +15,93 @@ import {
   parsePostDateFeedbackPrompt,
   parseReportTriagePrompt,
 } from "./prompts.js";
+
+describe("VOICE_SELF_GENDER", () => {
+  it("states the persona is male", () => {
+    expect(VOICE_SELF_GENDER).toMatch(/you are MALE/i);
+  });
+
+  it("names the masculine forms for every language that inflects them", () => {
+    // The rule only bites in languages with a gendered first-person past, so
+    // naming the actual forms is the whole point — "be masculine" alone left
+    // the model to guess, which is how «поняла» shipped.
+    expect(VOICE_SELF_GENDER).toContain("понял");
+    expect(VOICE_SELF_GENDER).toContain("нашёл");
+    expect(VOICE_SELF_GENDER).toContain("зрозумів");
+    expect(VOICE_SELF_GENDER).toContain("знайшов");
+    expect(VOICE_SELF_GENDER).toContain("zrozumiałem");
+    expect(VOICE_SELF_GENDER).toContain("znalazłem");
+  });
+
+  it("bans the feminine forms explicitly, not just by implication", () => {
+    expect(VOICE_SELF_GENDER).toContain("поняла");
+    expect(VOICE_SELF_GENDER).toContain("нашла");
+    expect(VOICE_SELF_GENDER).toContain("зрозуміла");
+    expect(VOICE_SELF_GENDER).toMatch(/NEVER/);
+  });
+
+  it("scopes the rule to the bot itself, leaving the brand 'we' alone", () => {
+    // Static copy speaks as the company ("мы подобрали место") and is already
+    // gender-neutral; only 1st-person-singular self-reference changes.
+    expect(VOICE_SELF_GENDER).toContain("мы");
+    expect(VOICE_SELF_GENDER).toMatch(/governs YOU only/i);
+  });
+
+  it("answers a direct question without inventing a human backstory", () => {
+    expect(VOICE_SELF_GENDER).toMatch(/human backstory/i);
+    expect(VOICE_SELF_GENDER).toMatch(/AI matchmaker/i);
+  });
+});
+
+describe("VOICE_CORE", () => {
+  it("carries the self-gender rule so one-shot surfaces inherit it", () => {
+    // re-engagement + match-nudge inject VOICE_CORE and nothing else.
+    expect(VOICE_CORE).toContain(VOICE_SELF_GENDER);
+  });
+});
+
+describe("self-gender rule reaches every prose surface", () => {
+  it("is present in the pitch, scheduling, venue and wingman prompts", () => {
+    const prompts = [
+      pitchAndSynergyPrompt({
+        selfFirstName: "Alex",
+        otherFirstName: "Sam",
+        selfSummary: "a",
+        otherSummary: "b",
+        language: "ru",
+      }),
+      proposeSchedulingPrompt({
+        selfFirstName: "Alex",
+        otherFirstName: "Sam",
+        selfSummary: "a",
+        otherSummary: "b",
+        language: "ru",
+        iteration: 1,
+        proposedSlots: ["Mon 19:00"],
+      }),
+      venueSelectionPrompt({
+        selfFirstName: "Alex",
+        otherFirstName: "Sam",
+        selfSummary: "a",
+        otherSummary: "b",
+        venueName: "Aroma Kava",
+        venueAddress: "Khreshchatyk 14",
+        agreedTime: "Sat 19:00",
+        language: "ru",
+      }),
+      generateWingmanHintPrompt({
+        viewerFirstName: "Alex",
+        targetFirstName: "Sam",
+        viewerSummary: "a",
+        targetSummary: "b",
+        language: "ru",
+      }),
+    ];
+    for (const prompt of prompts) {
+      expect(prompt).toContain(VOICE_SELF_GENDER);
+    }
+  });
+});
 
 describe("magicContextPrompt", () => {
   it("instructs the LLM to output a single JSON object only", () => {

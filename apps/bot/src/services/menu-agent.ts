@@ -104,6 +104,52 @@ export interface MenuAgentResult {
 const MAX_REPLY_BUBBLES = 3;
 
 /**
+ * Below this length a reply is one thought and ships as one message, however
+ * many sentences it happens to contain — «готово ✨ жду вторую сторону» split in
+ * two is worse, not chattier. Above it, the reply carries enough substance that
+ * two smaller messages read better than one line.
+ */
+const AUTO_SPLIT_MIN_CHARS = 90;
+
+/** Sentence end followed by whitespace — the only place an auto-split may cut. */
+const SENTENCE_BOUNDARY = /(?<=[.!?…])\s+/g;
+
+/**
+ * Split a single-block reply in two at the sentence boundary nearest its
+ * midpoint, or return null when it should stay one message.
+ *
+ * BASE_PERSONA asks the model to author the bubbles itself with blank lines,
+ * and that is the good path — the model knows where a thought ends. This is the
+ * floor under it: the model does not always comply, and "the concierge answers
+ * in one wall of text" is the actual complaint. Deliberately narrow — two
+ * guards, both of which protect a reply that is genuinely one breath:
+ * `AUTO_SPLIT_MIN_CHARS` and needing a real interior sentence boundary. It
+ * yields at most TWO bubbles; three stay model-authored, because guessing two
+ * cut points inside prose we didn't write is how this reads as a machine
+ * chopping text.
+ */
+function autoSplitSingleBlock(text: string): [string, string] | null {
+  if (text.length < AUTO_SPLIT_MIN_CHARS) return null;
+
+  const cuts: number[] = [];
+  for (const match of text.matchAll(SENTENCE_BOUNDARY)) {
+    const end = match.index + match[0].length;
+    // A boundary at the very end isn't interior — there'd be nothing after it.
+    if (end < text.length) cuts.push(end);
+  }
+  if (cuts.length === 0) return null;
+
+  const mid = text.length / 2;
+  const cut = cuts.reduce((best, candidate) =>
+    Math.abs(candidate - mid) < Math.abs(best - mid) ? candidate : best,
+  );
+  const head = text.slice(0, cut).trim();
+  const tail = text.slice(cut).trim();
+  if (!head || !tail) return null;
+  return [head, tail];
+}
+
+/**
  * The menu agent's replies are sent WITHOUT a parse_mode, so any markdown the
  * model sneaks in ("**bold**", "__underline__", "`code`") shows up as literal
  * symbols in the chat. BASE_PERSONA forbids it; this is the safety net.
@@ -118,7 +164,9 @@ function stripMarkdownEmphasis(text: string): string {
 /**
  * Split a model reply into chat bubbles on blank lines (BASE_PERSONA asks the
  * model to separate distinct thoughts that way). Overflow folds into the last
- * bubble so nothing is dropped; a reply without blank lines stays one bubble.
+ * bubble so nothing is dropped; a single block that is long enough and has an
+ * interior sentence boundary is split in two by `autoSplitSingleBlock`, so a
+ * non-compliant reply still lands as chat rather than as a wall of text.
  * Also strips markdown emphasis — the bubbles are sent as plain text.
  */
 export function splitReplyIntoBubbles(reply: string): string[] {
@@ -127,6 +175,9 @@ export function splitReplyIntoBubbles(reply: string): string[] {
     .map((p) => p.trim())
     .filter(Boolean);
   if (parts.length === 0) return [reply.trim()].filter(Boolean);
+  if (parts.length === 1) {
+    return autoSplitSingleBlock(parts[0]!) ?? parts;
+  }
   if (parts.length > MAX_REPLY_BUBBLES) {
     return [
       ...parts.slice(0, MAX_REPLY_BUBBLES - 1),

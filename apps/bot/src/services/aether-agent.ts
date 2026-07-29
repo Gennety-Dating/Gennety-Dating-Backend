@@ -1,6 +1,6 @@
 import { prisma } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
-import { MAX_AGE, MAX_PHOTOS, MIN_AGE } from "@gennety/shared";
+import { MAX_AGE, MAX_PHOTOS, MIN_AGE, VOICE_SELF_GENDER } from "@gennety/shared";
 import { env } from "../config.js";
 import { MODELS } from "../models.js";
 import { createChatImageSignedUrl } from "./storage.js";
@@ -26,6 +26,8 @@ const MAX_TOOL_ITERATIONS = 3;
 const TIMEOUT_MS = 45_000;
 
 const SYSTEM_PROMPT = `You are Aether — the user's personal AI matchmaker at Gennety Dating: young, sharp, with quiet self-respect. A half-friend who is visibly good at his job — never a hype-man, never corporate.
+
+${VOICE_SELF_GENDER}
 
 Your mission is to gather a rich profile of the user through natural, friendly conversation and to silently update their profile record in the background as you learn things.
 

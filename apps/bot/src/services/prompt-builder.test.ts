@@ -30,6 +30,7 @@ vi.mock("../config.js", () => ({
 }));
 
 import { prisma } from "@gennety/db";
+import { VOICE_SELF_GENDER } from "@gennety/shared";
 import {
   buildSystemPrompt,
   fetchKnowledgeBase,
@@ -146,6 +147,48 @@ describe("buildSystemPrompt", () => {
 
     // Next batch date — must contain a real day name, not a hallucinated one
     expect(prompt).toMatch(/Next match batch:.*day/i);
+  });
+
+  it("tells the model to write two bubbles by default", async () => {
+    // The delivery side has always split on blank lines; the persona used to
+    // say "Most replies are ONE bubble", so it never actually happened.
+    mockKnowledge.mockResolvedValue([]);
+    mockUserFind.mockResolvedValue({
+      firstName: "Alice",
+      universityDomain: "stanford.edu",
+      status: "active",
+      language: "ru",
+      matchesAsA: [],
+      matchesAsB: [],
+    });
+
+    const prompt = await buildSystemPrompt(BigInt(12345));
+
+    expect(prompt).toMatch(/default to TWO/i);
+    expect(prompt).toMatch(/BLANK line/);
+    expect(prompt).not.toMatch(/Most replies are ONE bubble/i);
+    // The opener must vary — a fixed "принял" every turn is the ✅ failure again.
+    expect(prompt).toMatch(/Vary that first bubble/i);
+  });
+
+  it("carries the masculine self-reference rule", async () => {
+    mockKnowledge.mockResolvedValue([]);
+    mockUserFind.mockResolvedValue({
+      firstName: "Alice",
+      universityDomain: "stanford.edu",
+      status: "active",
+      language: "ru",
+      matchesAsA: [],
+      matchesAsB: [],
+    });
+
+    const prompt = await buildSystemPrompt(BigInt(12345));
+
+    expect(prompt).toContain(VOICE_SELF_GENDER);
+    // Sanity: the rule and the user's own gender line coexist — the persona
+    // adapts emphasis to the user without changing its own grammatical gender.
+    expect(prompt).toMatch(/you are MALE/i);
+    expect(prompt).toContain("- Gender:");
   });
 
   it("includes active match info when user has a pending proposal", async () => {
