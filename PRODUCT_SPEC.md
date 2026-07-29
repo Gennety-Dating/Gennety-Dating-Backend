@@ -1321,30 +1321,72 @@ path is visually distinct: a blue (`primary`) **❄️ Freeze account** over a r
 
 A pinned **status banner** is created on activation
 (`services/status-banner.ts`) and reconciled every minute by the
-`status-timer` worker. Its first blue (`primary`) inline button always carries
-the discrete countdown to the next configured weekly batch ("Xd Yh", "Xh
-Ym", "Xm") and opens the current main menu; the message body repeats the exact
-localized batch date/time. Because Telegram's collapsed pinned-message preview
-is a single truncated line that never renders inline buttons, the **non-English**
-(`ru`/`uk`/`de`/`pl`) body **leads with that same discrete countdown as its first
-line**, so the remaining time always survives the preview truncation and shows
-"at the top"; the longer localized schedule line had otherwise pushed the time
-past the cut-off. English keeps its original layout — its shorter schedule line
-already fits the preview. **An upcoming `scheduled` date is additional
-context, never a replacement for the next-drop countdown**: its countdown and
-venue appear below the drop status. Telegram-only delivery follows the same
-`MATCH_CRON_SCHEDULE` + `CRON_TIMEZONE` source as `/v1/countdown`; the native
-iOS surface keeps rendering its own countdown from that API.
+`status-timer` worker. Its single blue (`primary`) inline button carries a live
+discrete countdown ("Xd Yh", "Xh Ym", "Xm"); the message body is a short
+heading naming **what that countdown is for**. The countdown deliberately lives
+on the button and is never repeated in the body: Telegram renders the button as
+its own block in the pinned message, so it is the timer the user actually reads.
+
+**The banner is stage-aware (2026-07-29): it counts down whatever is actually
+next for this user, not always the weekly drop.** A user occupying a live-match
+slot is *excluded from the Thursday batch* (§3.2 filter 8), so a pinned
+"your next drop in Xd Yh" above every conversation was the same kind of promise
+the product cannot keep as the unlaunched-city case below — and it pointed at
+the wrong thing anyway, since on a `proposed` match the user's whole attention is
+on a 24-hour accept/decline decision. `resolveBannerStage`
+(`workers/status-timer.ts`) resolves one mode per user per tick, first match
+winning:
+
+1. **Unlaunched city** (below) — outranks every stage; unchanged.
+2. **Date** — `scheduled` with `agreedTime` in the future. Body: the date is
+   set, plus the venue name. Button: `💫 Date in Xd Yh` (the same `statusDate*`
+   phrasing the My Date menu row uses) → the My Date hub.
+3. **Decision** — `proposed`, *this* side hasn't answered, TTL not yet elapsed.
+   Body: your match is waiting, answer yes or no in the chat. Button: the reply
+   deadline, rendered through the same `renderCountdownButtonLabel` as the pitch
+   keyboard's own deadline button, so the two are byte-identical → My Date hub.
+4. **Planning** — any other live match (`negotiating`, `negotiating_venue`, or
+   `proposed` after this side already answered). Nothing to count down, so the
+   button reuses the existing `menuMyDatePlanning` label ("⏳ Date being
+   planned") — the same wording the main-menu row has always shown for these
+   stages → My Date hub.
+5. **Drop** — no live match: the original next-batch countdown, unchanged.
+
+Two states fall back to mode 5 on purpose, because there the next drop is
+genuinely the relevant thing again: a `scheduled` date that has already happened
+(the row lingers until the T+24h feedback flow closes it) and a `proposed` match
+past its TTL (the expiry cron is at most 15 minutes behind).
+
+**Blind-decision safe.** Modes 3 and 4 are static copy that never reflects the
+partner's choice, and mode 3 reads only *this* side's `acceptedBy` column — to
+know whether an answer is still owed, never what the other side picked. A
+`proposed` match is also invisible to a side until that side's own
+`pitchMessageIdA/B` exists, the same visibility rule the My Date row uses, so
+the banner cannot announce a match mid-dispatch.
+
+The pitch message itself is deliberately **not** pinned. It already carries a
+live deadline button (the `proposal-countdown` worker re-renders it every
+minute), but pinning it would mean unpinning and restoring the banner on every
+stage transition while `unpinAllChatMessages` is already called from banner
+creation, pause, and account deletion — a race with orphaned pins as its failure
+mode. One dedicated self-healing message covers every stage with no new state.
+It is also the only option for the `scheduled` stage: that countdown runs to
+`agreedTime`, and the date card is an immutable `file_id`-cached PNG (§3.7a).
+
+Telegram-only delivery follows the same `MATCH_CRON_SCHEDULE` + `CRON_TIMEZONE`
+source as `/v1/countdown`; the native iOS surface keeps rendering its own
+countdown from that API and is unaffected.
 
 **One account state gets no countdown at all**: a dating city that is not a
 launched market (§1.3). That user is not in the pool, so a live "your next drop
 in Xd Yh" pinned above every conversation is the product's most persistent
 false promise. The banner instead names their city, says Gennety has not
 launched there, and points at the menu's switch row; the button drops the timer
-for a plain "open menu" (same `menu:open` target). No upcoming-date block
-either — a live match is impossible without a same-city partner. The
-`status-timer` worker resolves this per user each tick, so a legacy banner
-self-heals within a minute without touching any other call site.
+for a plain "open menu" (same `menu:open` target). It outranks every live-match
+stage above — a live match is impossible without a same-city partner, so a stage
+there would mean corrupt data. The `status-timer` worker resolves this per user
+each tick, so a legacy banner self-heals within a minute without touching any
+other call site.
 
 The banner is self-healing: active Telegram users with a null/stale message id
 get a replacement, deleted messages are recreated in the same tick, and an

@@ -817,6 +817,20 @@ const translations = {
     statusButtonMinutes: "✨ Drop in {m}m",
     statusButtonProcessing: "✨ Matching in progress",
 
+    // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
+    // A user with a live match is excluded from the weekly batch (§3.2 filter 8),
+    // so the drop countdown would be a promise we can't keep. Each of these leads
+    // with a heading naming what the button below is counting down to.
+    statusBannerDecision:
+      "Your match is waiting on you ✦\n\n" +
+      "Answer yes or no right here in the chat — the button below shows how long you have.",
+    statusBannerPlanning:
+      "Your date is being planned ✦\n\n" +
+      "You both said yes. Details are coming together — everything is in My date.",
+    statusBannerDate:
+      "Your date is set ✦\n\n" +
+      "The button below counts down to it. Venue and details are in My date.",
+
     // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
     // For an account registered in a city we haven't launched: matching is
     // strictly same-city, so counting down to a drop they cannot be in would
@@ -1792,6 +1806,17 @@ const translations = {
     statusButtonMinutes: "✨ До дропа: {m}мин",
     statusButtonProcessing: "✨ Подбираем мэтчи",
 
+    // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
+    statusBannerDecision:
+      "Твой мэтч ждёт ответа ✦\n\n" +
+      "Ответь «да» или «нет» прямо здесь, в чате — на кнопке ниже видно, сколько у тебя времени.",
+    statusBannerPlanning:
+      "Свидание планируется ✦\n\n" +
+      "Вы оба сказали «да». Договариваетесь о деталях — всё в «Моём свидании».",
+    statusBannerDate:
+      "Свидание назначено ✦\n\n" +
+      "На кнопке ниже — сколько до него осталось. Место и детали — в «Моём свидании».",
+
     // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
     statusBannerMarketPending:
       "Пока Gennety работает только в Киеве — в городе {city} мы ещё не запустились, " +
@@ -2760,6 +2785,17 @@ const translations = {
     statusButtonMinutes: "✨ До дропу: {m}хв",
     statusButtonProcessing: "✨ Підбираємо метчі",
 
+    // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
+    statusBannerDecision:
+      "Твій метч чекає на відповідь ✦\n\n" +
+      "Відповідай «так» або «ні» просто тут, у чаті — на кнопці нижче видно, скільки в тебе часу.",
+    statusBannerPlanning:
+      "Побачення планується ✦\n\n" +
+      "Ви обоє сказали «так». Домовляєтеся про деталі — усе в «Моєму побаченні».",
+    statusBannerDate:
+      "Побачення призначено ✦\n\n" +
+      "На кнопці нижче — скільки до нього залишилось. Місце й деталі — у «Моєму побаченні».",
+
     // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
     statusBannerMarketPending:
       "Поки Gennety працює лише в Києві — у місті {city} ми ще не запустилися, " +
@@ -3686,6 +3722,17 @@ const deTranslations: TranslationTable = {
   statusButtonHoursMinutes: "Drop in {h}Std {m}Min",
   statusButtonMinutes: "✨ Drop in {m}Min",
   statusButtonProcessing: "✨ Matching läuft",
+
+  // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
+  statusBannerDecision:
+    "Dein Match wartet auf deine Antwort ✦\n\n" +
+    "Antworte hier im Chat mit ja oder nein — der Button unten zeigt, wie viel Zeit du noch hast.",
+  statusBannerPlanning:
+    "Dein Date wird geplant ✦\n\n" +
+    "Ihr habt beide ja gesagt. Ihr klärt gerade die Details — alles findest du unter Mein Date.",
+  statusBannerDate:
+    "Dein Date steht ✦\n\n" +
+    "Der Button unten zählt herunter. Ort und Details findest du unter Mein Date.",
 
   // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
   statusBannerMarketPending:
@@ -4621,6 +4668,17 @@ const plTranslations: TranslationTable = {
   statusButtonHoursMinutes: "Do dropu: {h}h {m}min",
   statusButtonMinutes: "✨ Do dropu: {m}min",
   statusButtonProcessing: "✨ Dobieramy dopasowania",
+
+  // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
+  statusBannerDecision:
+    "Twój match czeka na odpowiedź ✦\n\n" +
+    "Odpowiedz tak lub nie tutaj, na czacie — przycisk poniżej pokazuje, ile masz czasu.",
+  statusBannerPlanning:
+    "Randka jest planowana ✦\n\n" +
+    "Oboje powiedzieliście tak. Ustalacie szczegóły — wszystko jest w Mojej randce.",
+  statusBannerDate:
+    "Randka jest ustalona ✦\n\n" +
+    "Przycisk poniżej odlicza czas do niej. Miejsce i szczegóły są w Mojej randce.",
 
   // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
   statusBannerMarketPending:

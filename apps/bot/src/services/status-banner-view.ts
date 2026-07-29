@@ -4,6 +4,7 @@ import {
   t,
   type Language,
 } from "@gennety/shared";
+import { renderCountdownButtonLabel } from "../utils/countdown-plate.js";
 
 const LANGUAGE_LOCALES: Record<Language, string> = {
   en: "en-US",
@@ -13,10 +14,23 @@ const LANGUAGE_LOCALES: Record<Language, string> = {
   pl: "pl-PL",
 };
 
-export interface StatusBannerUpcomingDate {
-  at: Date;
-  venueName?: string | null;
-}
+/**
+ * The stage of the caller's single live match, when they have one
+ * (PRODUCT_SPEC §2.1). A user occupying a live-match slot is excluded from the
+ * weekly batch (§3.2 filter 8), so the next-drop countdown would be a promise
+ * we can't keep — the banner counts down whatever is actually next for them.
+ *
+ * Resolved from the match row by `resolveBannerStage` (workers/status-timer.ts),
+ * which also decides when NO stage applies and the drop countdown is right
+ * again (a date that already happened, a proposal past its TTL).
+ */
+export type StatusBannerStage =
+  /** `scheduled`, still in the future — count down to the date itself. */
+  | { kind: "date"; at: Date; venueName: string | null }
+  /** `proposed`, this side hasn't answered — count down their reply window. */
+  | { kind: "decision"; minutesLeft: number }
+  /** Any other live match: nothing to count, the date is being arranged. */
+  | { kind: "planning" };
 
 export interface StatusBannerViewInput {
   now: Date;
@@ -24,7 +38,7 @@ export interface StatusBannerViewInput {
   isProcessing: boolean;
   language: Language;
   timeZone: string;
-  upcomingDate?: StatusBannerUpcomingDate;
+  stage?: StatusBannerStage;
   /**
    * Set for an account registered in a city Gennety hasn't launched
    * (PRODUCT_SPEC §1.1). Matching is same-city, so counting down to a drop
@@ -36,7 +50,8 @@ export interface StatusBannerViewInput {
 export interface StatusBannerView {
   text: string;
   buttonText: string;
-  callbackData: "menu:open";
+  /** `menu:date` opens the My Date hub; the stage modes point there. */
+  callbackData: "menu:open" | "menu:date";
   buttonStyle: "primary";
   signature: string;
 }
@@ -60,6 +75,14 @@ export function renderStatusBanner(input: StatusBannerViewInput): StatusBannerVi
       callbackData: "menu:open" as const,
       buttonStyle: "primary" as const,
     };
+    return { ...view, signature: JSON.stringify(view) };
+  }
+
+  // A live match owns the banner: the countdown rides the button (Telegram
+  // renders it as its own block in the pinned message) and the body is a
+  // heading naming what that countdown is for.
+  if (input.stage) {
+    const view = { ...renderStage(input.stage, input), buttonStyle: "primary" as const };
     return { ...view, signature: JSON.stringify(view) };
   }
 
@@ -110,33 +133,62 @@ export function renderStatusBanner(input: StatusBannerViewInput): StatusBannerVi
       break;
   }
 
-  const lines: string[] = [];
-  lines.push(
-    "✦ GENNETY DROP",
-    "",
-    t(input.language, "statusBannerSchedule", { date, time }),
-    "",
-    t(input.language, "statusBannerActive"),
-  );
-  if (input.upcomingDate) {
-    lines.push(
-      "",
-      formatDateCountdownText(
-        {
-          now: input.now,
-          dateAt: input.upcomingDate.at,
-          venueName: input.upcomingDate.venueName ?? null,
-        },
-        input.language,
-      ),
-    );
-  }
-
   const view = {
-    text: lines.join("\n"),
+    text: [
+      "✦ GENNETY DROP",
+      "",
+      t(input.language, "statusBannerSchedule", { date, time }),
+      "",
+      t(input.language, "statusBannerActive"),
+    ].join("\n"),
     buttonText: countdown,
     callbackData: "menu:open" as const,
     buttonStyle: "primary" as const,
   };
   return { ...view, signature: JSON.stringify(view) };
+}
+
+/**
+ * Body + button for a live match. Every button label reuses an existing
+ * localized renderer, so nothing here invents a second countdown format:
+ * the decision label is byte-identical to the pitch keyboard's own deadline
+ * button (both go through `renderCountdownButtonLabel`), and the date label
+ * reuses the same `statusDate*` phrasing the My Date menu row shows.
+ */
+function renderStage(
+  stage: StatusBannerStage,
+  input: StatusBannerViewInput,
+): Omit<StatusBannerView, "buttonStyle" | "signature"> {
+  const lang = input.language;
+  switch (stage.kind) {
+    case "date": {
+      const lines = [t(lang, "statusBannerDate")];
+      // The venue is a proper noun — no i18n key, same as
+      // `formatDateCountdownText` appending it verbatim.
+      const venue = stage.venueName?.trim();
+      if (venue) lines.push("", `📍 ${venue}`);
+      return {
+        text: lines.join("\n"),
+        buttonText: formatDateCountdownText(
+          { now: input.now, dateAt: stage.at, venueName: null },
+          lang,
+        ),
+        callbackData: "menu:date",
+      };
+    }
+    case "decision":
+      return {
+        text: t(lang, "statusBannerDecision"),
+        buttonText: renderCountdownButtonLabel(lang, stage.minutesLeft),
+        callbackData: "menu:date",
+      };
+    case "planning":
+      return {
+        text: t(lang, "statusBannerPlanning"),
+        // The main-menu "My date" row already labels every pre-scheduled stage
+        // this way; reusing the key keeps the two surfaces from drifting.
+        buttonText: t(lang, "menuMyDatePlanning"),
+        callbackData: "menu:date",
+      };
+  }
 }

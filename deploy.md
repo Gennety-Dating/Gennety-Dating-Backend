@@ -1,5 +1,51 @@
 # Gennety Dating Deploy
 
+**PENDING — stage-aware pinned banner (PRODUCT_SPEC §2.1).** Not deployed yet.
+**This change adds no Prisma schema change, no env change, no flag change, and no
+Mini App change** (`apps/webapp` untouched) — but it ships alongside the planning
+stall chain below, which DOES need an additive `db:push`, so follow that block's
+schema step. Sequence: Deploy Full Server Code → `db:push` (for §3.5c) →
+`pnpm db:drift-check` → `pm2 restart`.
+
+What ships: the pinned banner stops always counting down to Thursday. A user
+holding a live match is excluded from that batch (§3.2 filter 8), so the banner
+now counts down whatever is actually next for them — the 24 h reply deadline on a
+`proposed` pitch (label byte-identical to the pitch keyboard's own button), the
+time to the date once `scheduled`, or a neutral "date being planned" in between,
+each opening the My Date hub instead of the menu. No live match → the original
+drop countdown, unchanged. The unlaunched-city waitlist banner still outranks
+everything.
+
+**No new API-call volume.** The banner was already re-edited every minute per
+active user, and the per-tick match query is still one `findMany` (widened from
+`scheduled` to all four live statuses — a user holds at most one live row, so
+cardinality is unchanged). Nothing new is sent; only the text of the message that
+was already being edited changes.
+
+Two things worth knowing before the restart:
+
+- **The scheduled-date line moved rather than being added.** It used to be an
+  extra line *below* the drop status; a scheduled date now owns the whole banner.
+  Anyone with a live date sees the drop schedule leave the pin — intended, with
+  the reasoning in §2.1.
+- **Production had 0 matches ever at the last deploy**, so on day one every
+  active account is on the unchanged drop mode and this is invisible until the
+  first Thursday batch actually pairs someone. The new modes therefore get their
+  first real exercise in production — verify them on `@gennetytestbot` first.
+
+Post-deploy check (beyond the standard checklist): the `status-timer` heartbeat's
+`eligible`/`unchanged` counts should look exactly like the previous deploy's, and
+no new banner errors should appear.
+
+```sh
+pm2 logs gennety-bot --lines 200 --nostream | grep 'status-banner'
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo — no schema, no
+env, no flag, no Mini App state.
+
+---
+
 **PENDING — planning stall chain (PRODUCT_SPEC §3.5c).** Code-only otherwise:
 **no env change, no flag change, no Mini App change** (`apps/webapp` untouched).
 Always-on — there is no feature flag, because the thing it fixes is a hole rather

@@ -8,7 +8,7 @@ import {
 } from "./next-batch.js";
 import {
   renderStatusBanner,
-  type StatusBannerUpcomingDate,
+  type StatusBannerStage,
   type StatusBannerView,
 } from "./status-banner-view.js";
 
@@ -26,7 +26,8 @@ export type CreateStatusBannerResult =
 
 export interface CreateStatusBannerOptions {
   now?: Date;
-  upcomingDate?: StatusBannerUpcomingDate;
+  /** §2.1 — the caller's live-match stage, when they have one. */
+  stage?: StatusBannerStage;
   /** §1.1 — the account's city is one Gennety hasn't launched. */
   marketPending?: { city: string | null };
   clearExistingPins?: boolean;
@@ -41,20 +42,27 @@ export function buildStatusBannerKeyboard(view: StatusBannerView): InlineKeyboar
     .primary();
 }
 
+export interface BuildStatusBannerViewOptions {
+  now?: Date;
+  /** §2.1 — the caller's live-match stage, when they have one. */
+  stage?: StatusBannerStage;
+  /** §1.1 — the account's city is one Gennety hasn't launched. */
+  marketPending?: { city: string | null };
+}
+
 export function buildStatusBannerView(
   language: Language,
-  now: Date = new Date(),
-  upcomingDate?: StatusBannerUpcomingDate,
-  marketPending?: { city: string | null },
+  options: BuildStatusBannerViewOptions = {},
 ): StatusBannerView {
+  const now = options.now ?? new Date();
   return renderStatusBanner({
     now,
     nextDropAt: getNextBatchDate(now),
     isProcessing: isWeeklyBatchProcessing(now),
     language,
     timeZone: CRON_TIMEZONE,
-    ...(upcomingDate ? { upcomingDate } : {}),
-    ...(marketPending ? { marketPending } : {}),
+    ...(options.stage ? { stage: options.stage } : {}),
+    ...(options.marketPending ? { marketPending: options.marketPending } : {}),
   });
 }
 
@@ -112,12 +120,11 @@ async function createStatusBannerLocked(
   language: Language,
   options: CreateStatusBannerOptions,
 ): Promise<CreateStatusBannerResult> {
-  const view = buildStatusBannerView(
-    language,
-    options.now ?? new Date(),
-    options.upcomingDate,
-    options.marketPending,
-  );
+  const view = buildStatusBannerView(language, {
+    now: options.now ?? new Date(),
+    ...(options.stage ? { stage: options.stage } : {}),
+    ...(options.marketPending ? { marketPending: options.marketPending } : {}),
+  });
   const existing = await prisma.user.findUnique({
     where: { telegramId },
     select: { statusMessageId: true },

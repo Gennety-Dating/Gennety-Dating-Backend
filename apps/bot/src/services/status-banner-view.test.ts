@@ -44,24 +44,6 @@ describe("renderStatusBanner", () => {
     },
   );
 
-  it("keeps the next drop primary while adding an upcoming date", () => {
-    const view = renderStatusBanner({
-      now: new Date("2026-07-21T09:00:00.000Z"),
-      nextDropAt: NEXT_DROP,
-      isProcessing: false,
-      language: "ru",
-      timeZone: "Europe/Kyiv",
-      upcomingDate: {
-        at: new Date("2026-07-21T18:00:00.000Z"),
-        venueName: "Blur Cafe",
-      },
-    });
-
-    expect(view.buttonText).toContain("До дропа");
-    expect(view.text).toContain("Свидание через");
-    expect(view.text).toContain("Blur Cafe");
-  });
-
   it("renders the processing state in the blue button", () => {
     const view = renderStatusBanner({
       now: NEXT_DROP,
@@ -108,17 +90,101 @@ describe("renderStatusBanner", () => {
     expect(view.callbackData).toBe("menu:open");
   });
 
-  it("shows no date countdown either for an unlaunched city", () => {
+  it("outranks every live-match stage for an unlaunched city", () => {
     const view = renderStatusBanner({
       now: new Date("2026-07-21T09:00:00.000Z"),
       nextDropAt: NEXT_DROP,
       isProcessing: false,
       language: "en",
       timeZone: "Europe/Kyiv",
-      upcomingDate: { at: new Date("2026-07-22T16:00:00.000Z"), venueName: "Blur Cafe" },
+      stage: { kind: "date", at: new Date("2026-07-22T16:00:00.000Z"), venueName: "Blur Cafe" },
       marketPending: { city: "Berlin" },
     });
 
     expect(view.text).not.toContain("Blur Cafe");
+    expect(view.callbackData).toBe("menu:open");
+  });
+
+  // Stage-aware banner (PRODUCT_SPEC §2.1): a user holding a live match is
+  // excluded from the weekly batch, so the drop countdown is replaced by
+  // whatever is actually next for them.
+  describe("live-match stages", () => {
+    const base = {
+      now: new Date("2026-07-21T09:00:00.000Z"),
+      nextDropAt: NEXT_DROP,
+      isProcessing: false,
+      timeZone: "Europe/Kyiv",
+    } as const;
+
+    it("counts down to a scheduled date instead of the drop", () => {
+      const view = renderStatusBanner({
+        ...base,
+        language: "ru",
+        stage: {
+          kind: "date",
+          at: new Date("2026-07-23T15:00:00.000Z"),
+          venueName: "Blur Cafe",
+        },
+      });
+
+      expect(view.text).toContain("Свидание назначено");
+      expect(view.text).toContain("📍 Blur Cafe");
+      expect(view.buttonText).toBe("💫 Свидание через 2д 6ч");
+      expect(view.callbackData).toBe("menu:date");
+      expect(view.text).not.toContain("Следующий дроп");
+    });
+
+    it("omits the venue line when the venue is unknown", () => {
+      const view = renderStatusBanner({
+        ...base,
+        language: "ru",
+        stage: { kind: "date", at: NEXT_DROP, venueName: null },
+      });
+
+      expect(view.text).not.toContain("📍");
+    });
+
+    it("counts down the reply window while a decision is open", () => {
+      const view = renderStatusBanner({
+        ...base,
+        language: "ru",
+        stage: { kind: "decision", minutesLeft: 320 },
+      });
+
+      expect(view.text).toContain("Твой мэтч ждёт ответа");
+      // Byte-identical to the pitch keyboard's own deadline button.
+      expect(view.buttonText).toBe("⏳ Осталось на ответ: 5ч 20м");
+      expect(view.callbackData).toBe("menu:date");
+    });
+
+    it("shows the neutral planning copy for the middle stages", () => {
+      const view = renderStatusBanner({
+        ...base,
+        language: "ru",
+        stage: { kind: "planning" },
+      });
+
+      expect(view.text).toContain("Свидание планируется");
+      // Same label the main-menu "My date" row already uses.
+      expect(view.buttonText).toBe("⏳ Свидание планируется");
+      expect(view.callbackData).toBe("menu:date");
+    });
+
+    it.each(["en", "ru", "uk", "de", "pl"] as const)(
+      "leads with a heading naming what is counted, in %s",
+      (language) => {
+        for (const stage of [
+          { kind: "date", at: NEXT_DROP, venueName: null },
+          { kind: "decision", minutesLeft: 90 },
+          { kind: "planning" },
+        ] as const) {
+          const view = renderStatusBanner({ ...base, language, stage });
+          // The countdown rides the button; the body never repeats it.
+          expect(view.text).not.toContain(view.buttonText);
+          expect(view.text.split("\n")[0]!.length).toBeGreaterThan(0);
+          expect(view.text).not.toContain("GENNETY DROP");
+        }
+      },
+    );
   });
 });

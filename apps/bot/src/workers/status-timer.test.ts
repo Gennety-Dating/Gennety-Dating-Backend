@@ -16,7 +16,7 @@ const { mockPrisma } = vi.hoisted(() => ({
 vi.mock("@gennety/db", () => ({ prisma: mockPrisma }));
 
 import { buildStatusBannerView } from "../services/status-banner.js";
-import { statusTimerTick } from "./status-timer.js";
+import { resolveBannerStage, statusTimerTick } from "./status-timer.js";
 
 const NOW = new Date("2026-07-21T09:00:00.000Z");
 
@@ -41,6 +41,23 @@ function active(overrides: Record<string, unknown> = {}) {
     language: "ru",
     status: "active",
     statusMessageId: 100,
+    ...overrides,
+  };
+}
+
+/** A live-match row shaped like the worker's own `select`. `u1` is side A. */
+function liveMatch(overrides: Record<string, unknown> = {}) {
+  return {
+    status: "negotiating",
+    userAId: "u1",
+    userBId: "u2",
+    agreedTime: null,
+    venueName: null,
+    dispatchedAt: null,
+    acceptedByA: null,
+    acceptedByB: null,
+    pitchMessageIdA: null,
+    pitchMessageIdB: null,
     ...overrides,
   };
 }
@@ -88,15 +105,17 @@ describe("statusTimerTick", () => {
     });
   });
 
-  it("keeps the drop button primary and appends the scheduled date", async () => {
+  // PRODUCT_SPEC §2.1 — a scheduled date OWNS the banner: the user is out of
+  // the weekly batch (§3.2 filter 8), so the drop countdown is replaced rather
+  // than supplemented.
+  it("replaces the drop countdown with the date countdown", async () => {
     mockPrisma.user.findMany.mockResolvedValue([active()]);
     mockPrisma.match.findMany.mockResolvedValue([
-      {
-        userAId: "u1",
-        userBId: "u2",
+      liveMatch({
+        status: "scheduled",
         agreedTime: new Date("2026-07-21T18:00:00.000Z"),
         venueName: "Blur Cafe",
-      },
+      }),
     ]);
     const api = makeApi();
 
@@ -109,20 +128,79 @@ describe("statusTimerTick", () => {
     expect(result.edited).toBe(1);
     const [, , text, options] = api.editMessageText.mock.calls[0]!;
     expect(text).toContain("Blur Cafe");
+    expect(text).not.toContain("Следующий дроп");
     expect(options.reply_markup.inline_keyboard[0][0]).toEqual(
       expect.objectContaining({
-        callback_data: "menu:open",
+        callback_data: "menu:date",
         style: "primary",
       }),
     );
-    expect(options.reply_markup.inline_keyboard[0][0].text).toContain("До дропа");
+    expect(options.reply_markup.inline_keyboard[0][0].text).toContain("Свидание через");
+  });
+
+  it("shows the reply deadline while the user's own decision is open", async () => {
+    mockPrisma.user.findMany.mockResolvedValue([active()]);
+    mockPrisma.match.findMany.mockResolvedValue([
+      liveMatch({
+        status: "proposed",
+        dispatchedAt: new Date("2026-07-21T03:40:00.000Z"),
+        pitchMessageIdA: 7,
+      }),
+    ]);
+    const api = makeApi();
+
+    const result = await statusTimerTick(api, { now: NOW, renderCache: new Map() });
+
+    expect(result.edited).toBe(1);
+    const [, , text, options] = api.editMessageText.mock.calls[0]!;
+    expect(text).toContain("Твой мэтч ждёт ответа");
+    expect(options.reply_markup.inline_keyboard[0][0].text).toBe(
+      "⏳ Осталось на ответ: 18ч 40м",
+    );
+    expect(options.reply_markup.inline_keyboard[0][0].callback_data).toBe("menu:date");
+  });
+
+  it("ignores a proposed match whose pitch has not reached this side yet", async () => {
+    mockPrisma.user.findMany.mockResolvedValue([active()]);
+    mockPrisma.match.findMany.mockResolvedValue([
+      liveMatch({
+        status: "proposed",
+        dispatchedAt: new Date("2026-07-21T03:40:00.000Z"),
+        pitchMessageIdA: null,
+        pitchMessageIdB: 9,
+      }),
+    ]);
+    const api = makeApi();
+
+    await statusTimerTick(api, { now: NOW, renderCache: new Map() });
+
+    const [, , text] = api.editMessageText.mock.calls[0]!;
+    expect(text).toContain("✦ GENNETY DROP");
+  });
+
+  it("prefers the most progressed row when legacy data has several live matches", async () => {
+    mockPrisma.user.findMany.mockResolvedValue([active()]);
+    mockPrisma.match.findMany.mockResolvedValue([
+      liveMatch({ status: "negotiating" }),
+      liveMatch({
+        status: "scheduled",
+        agreedTime: new Date("2026-07-21T18:00:00.000Z"),
+        venueName: "Blur Cafe",
+      }),
+    ]);
+    const api = makeApi();
+
+    await statusTimerTick(api, { now: NOW, renderCache: new Map() });
+
+    const [, , text] = api.editMessageText.mock.calls[0]!;
+    expect(text).toContain("Blur Cafe");
   });
 
   it("re-pins a tracked message during the hourly physical audit", async () => {
     mockPrisma.user.findMany.mockResolvedValue([active()]);
     const api = makeApi();
     api.getChat.mockResolvedValue({ pinned_message: { message_id: 999 } });
-    const signature = buildStatusBannerView("ru", NOW).signature;
+    const signature = buildStatusBannerView("ru", { now: NOW }).signature;
 
     const result = await statusTimerTick(api, {
       now: NOW,
@@ -260,4 +338,69 @@ describe("statusTimerTick", () => {
       NOW.getTime() + 5 * 60 * 60 * 1000,
     );
   });
+});
+
+// The whole product decision of PRODUCT_SPEC §2.1 lives in this pure function.
+describe("resolveBannerStage", () => {
+  const scheduled = (agreedTime: Date | null, venueName: string | null = "Blur Cafe") =>
+    liveMatch({ status: "scheduled", agreedTime, venueName }) as never;
+
+  it("counts down to a future date", () => {
+    const at = new Date("2026-07-23T15:00:00.000Z");
+    expect(resolveBannerStage(scheduled(at), "A", NOW)).toEqual({
+      kind: "date",
+      at,
+      venueName: "Blur Cafe",
+    });
+  });
+
+  // The row lingers until the T+24h feedback flow closes it; by then the next
+  // drop is genuinely the relevant thing again.
+  it("falls back to the drop countdown once the date has passed", () => {
+    expect(
+      resolveBannerStage(scheduled(new Date("2026-07-20T15:00:00.000Z")), "A", NOW),
+    ).toBeUndefined();
+    expect(resolveBannerStage(scheduled(null), "A", NOW)).toBeUndefined();
+  });
+
+  it("reads only the caller's own side of the decision", () => {
+    const match = liveMatch({
+      status: "proposed",
+      dispatchedAt: new Date("2026-07-21T03:00:00.000Z"),
+      acceptedByA: true,
+      acceptedByB: null,
+    }) as never;
+
+    // A already answered — waiting on the peer, never revealing their choice.
+    expect(resolveBannerStage(match, "A", NOW)).toEqual({ kind: "planning" });
+    // B still owes an answer.
+    expect(resolveBannerStage(match, "B", NOW)).toEqual({
+      kind: "decision",
+      minutesLeft: 18 * 60,
+    });
+  });
+
+  // Past the TTL the expiry cron owns the row (≤15 min behind), so claiming
+  // there is still time to answer would be false.
+  it("falls back to the drop countdown for an expired proposal", () => {
+    const match = liveMatch({
+      status: "proposed",
+      dispatchedAt: new Date("2026-07-20T08:00:00.000Z"),
+    }) as never;
+    expect(resolveBannerStage(match, "A", NOW)).toBeUndefined();
+  });
+
+  it("treats an undispatched proposal as no stage at all", () => {
+    const match = liveMatch({ status: "proposed", dispatchedAt: null }) as never;
+    expect(resolveBannerStage(match, "A", NOW)).toBeUndefined();
+  });
+
+  it.each(["negotiating", "negotiating_venue"] as const)(
+    "shows the planning stage during %s",
+    (status) => {
+      expect(resolveBannerStage(liveMatch({ status }) as never, "A", NOW)).toEqual({
+        kind: "planning",
+      });
+    },
+  );
 });
