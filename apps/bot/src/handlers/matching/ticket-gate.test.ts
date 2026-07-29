@@ -216,10 +216,73 @@ describe("ticket gate post-accept status message", () => {
     const result = await applyTicketPayment(api, 1001n, "match-1", "self");
 
     expect(result.ok).toBe(true);
-    // No in-chat edit and no new message — the persistent ticket card is left
-    // alone; its live state ("waiting") lives in the Mini App.
+    // No in-chat EDIT — the persistent ticket card is left alone (its live
+    // state lives in the Mini App). The two sends below are fresh DMs, not a
+    // rewrite of that card.
     expect(api.editMessageText).not.toHaveBeenCalled();
-    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(mMatch.update).not.toHaveBeenCalled();
+  });
+
+  it("a self-only payment tells HIM it landed and tells HER she's the last one", async () => {
+    // Before this the payment left no chat trace at all on either side: the
+    // Mini App jumped straight to the cover offer, and closing it lost the fact
+    // that he had paid — while her deadline was silently reset to +24h.
+    mMatch.findUnique
+      .mockResolvedValueOnce(matchRow())
+      .mockResolvedValueOnce(matchRow({ ticketPaidA: new Date("2026-06-19T10:00:00Z") }))
+      .mockResolvedValueOnce(
+        matchRow({ ticketStatus: "partial", ticketPaidA: new Date("2026-06-19T10:00:00Z") }),
+      );
+    const api = createApi();
+
+    await applyTicketPayment(api, 1001n, "match-1", "self");
+
+    expect(api.sendMessage).toHaveBeenCalledTimes(2);
+    expect(api.sendMessage).toHaveBeenCalledWith(1001, t("en", "ticketGateWaiting"));
+    expect(api.sendMessage).toHaveBeenCalledWith(
+      1002,
+      t("en", "ticketPeerTookTheirs", { name: "Alex" }),
+      expect.objectContaining({ reply_markup: expect.anything() }),
+    );
+  });
+
+  it("does not send the waiting pair when the payment covered BOTH slots", async () => {
+    // The gate completes here, so the Calendar follows — a "you're the last
+    // one" DM would be both wrong and a spoiler for the cover surprise.
+    const paid = new Date("2026-06-19T10:00:00Z");
+    mMatch.findUnique
+      .mockResolvedValueOnce(matchRow())
+      .mockResolvedValueOnce(
+        matchRow({
+          ticketStatus: "partial",
+          ticketPaidA: paid,
+          ticketPaidB: paid,
+          paidForPartnerByA: true,
+        }),
+      )
+      .mockResolvedValueOnce(
+        matchRow({
+          ticketStatus: "completed",
+          ticketPaidA: paid,
+          ticketPaidB: paid,
+          paidForPartnerByA: true,
+        }),
+      )
+      .mockResolvedValue(
+        matchRow({
+          ticketStatus: "completed",
+          ticketPaidA: paid,
+          ticketPaidB: paid,
+          paidForPartnerByA: true,
+        }),
+      );
+    const api = createApi();
+
+    await applyTicketPayment(api, 1001n, "match-1", "both");
+
+    const texts = api.sendMessage.mock.calls.map((c: unknown[]) => c[1] as string);
+    expect(texts).not.toContain(t("en", "ticketGateWaiting"));
+    expect(texts).not.toContain(t("en", "ticketPeerTookTheirs", { name: "Alex" }));
   });
 
   it("pay-for-both confirms the gesture to him (takt 1) and nudges her since she hadn't opened", async () => {

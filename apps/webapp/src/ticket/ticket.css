@@ -448,6 +448,30 @@ body {
 .btn-secondary:active {
   background: var(--glass-press);
 }
+
+/* GHOST — the declining action ("I'll let them grab it"). Sits between the
+   glass secondary and the bare text link: outlined, full-width and the same
+   size as the others, so it is unmistakably a button, but carries no fill so it
+   never competes with the two paying options above it. This rung exists because
+   the decline used to be a 14px `.btn-text` under a shimmering burgundy hero,
+   which read as "no alternative offered". */
+.btn-ghost {
+  width: 100%;
+  border: 1px solid var(--fill-strong);
+  border-radius: 18px;
+  padding: 16px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.btn-ghost:active {
+  background: var(--fill);
+  transform: scale(0.98);
+}
 .btn-hero:active,
 .btn-primary:active,
 .btn-secondary:active {
@@ -748,6 +772,36 @@ body {
   box-shadow: var(--glass-edge);
   font-size: 14px;
   font-weight: 600;
+  color: var(--text-dim);
+}
+
+/* ── Cover-your-date offer card ───────────────────────────────────────── */
+/* Shown under his own "ticket secured" result. A bounded card rather than a
+   page headline: the screen's first message is that HIS ticket is done, and
+   this is an offer sitting beside it — with her face on it, because that is
+   what the gesture is actually about. */
+.tkt-cover-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 360px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: var(--glass);
+  box-shadow: var(--glass-edge);
+  text-align: left;
+}
+.tkt-cover-copy h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.tkt-cover-copy p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
   color: var(--text-dim);
 }
 

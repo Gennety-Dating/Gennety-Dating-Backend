@@ -540,6 +540,11 @@ const translations = {
     ticketViewButton: "🎟️ View your date ticket",
     ticketStatusButton: "Open date",
     ticketGateWaiting: "Ticket ready ✨ Waiting on them.",
+    // The other side settled only their own ticket. Without this she learns
+    // nothing — her deadline is silently pushed to 24h from HIS payment and the
+    // only entry point left is a card that has scrolled away.
+    ticketPeerTookTheirs:
+      "{name} just grabbed their date ticket 🎟️ Yours is the last one — then we open planning.",
     ticketBothSecuredDm: "Both tickets secured 🎟️ Your date is on — let's pick a time.",
     ticketPartnerPaidDm: "{name} already covered your date ticket ❤️ You're all set — nothing to pay.",
     // Goodwill "he covered her ticket" read-receipt (§3.5b): confirm his gesture
@@ -1488,6 +1493,8 @@ const translations = {
     ticketViewButton: "🎟️ Посмотреть свой билет на свидание",
     ticketStatusButton: "Открыть свидание",
     ticketGateWaiting: "Билет готов ✨ Ждём вторую сторону.",
+    ticketPeerTookTheirs:
+      "{name} только что взял(а) свой билет на свидание 🎟️ Твой — последний, и мы открываем планирование.",
     ticketBothSecuredDm: "Оба билета у вас 🎟️ Свидание в силе — давай выберем время.",
     ticketPartnerPaidDm: "{name} уже оплатил твой билет на свидание ❤️ Тебе ничего не нужно делать.",
     ticketCoveredHerConfirm:
@@ -2403,6 +2410,8 @@ const translations = {
     ticketViewButton: "🎟️ Переглянути свій квиток на побачення",
     ticketStatusButton: "Відкрити побачення",
     ticketGateWaiting: "Квиток готовий ✨ Чекаємо на іншу сторону.",
+    ticketPeerTookTheirs:
+      "{name} щойно взяв(ла) свій квиток на побачення 🎟️ Твій — останній, і ми відкриваємо планування.",
     ticketBothSecuredDm: "Обидва квитки у вас 🎟️ Побачення в силі — оберімо час.",
     ticketPartnerPaidDm: "{name} вже сплатив твій квиток на побачення ❤️ Тобі нічого не потрібно робити.",
     ticketCoveredHerConfirm:
@@ -3311,6 +3320,8 @@ const deTranslations: TranslationTable = {
   ticketViewButton: "🎟️ Dein Date-Ticket ansehen",
   ticketStatusButton: "Date öffnen",
   ticketGateWaiting: "Ticket bereit ✨ Warten auf die andere Person.",
+  ticketPeerTookTheirs:
+    "{name} hat gerade das eigene Date-Ticket geholt 🎟️ Deins ist das letzte — dann öffnen wir die Planung.",
   matchScheduleNoOverlap: "Noch keine Überschneidung - nächste Runde.",
   matchScheduled: "Fixiert — bis dann 🤝\n\n{venue}",
   matchScheduledNoReservation:
@@ -4200,6 +4211,8 @@ const plTranslations: TranslationTable = {
   ticketViewButton: "🎟️ Zobacz swój bilet na randkę",
   ticketStatusButton: "Otwórz randkę",
   ticketGateWaiting: "Bilet gotowy ✨ Czekamy na drugą osobę.",
+  ticketPeerTookTheirs:
+    "{name} właśnie odebrał(a) swój bilet na randkę 🎟️ Twój jest ostatni — potem otwieramy planowanie.",
   matchScheduleNoOverlap: "Jeszcze brak wspólnego terminu - kolejna runda.",
   matchScheduled: "Ustalone — do zobaczenia 🤝\n\n{venue}",
   matchScheduledNoReservation:

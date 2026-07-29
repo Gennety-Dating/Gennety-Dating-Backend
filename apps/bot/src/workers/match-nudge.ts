@@ -384,8 +384,22 @@ async function handleSchedulingNudges(
     where: {
       status: "negotiating",
       schedNudge2SentAt: null,
-      // At least one side hasn't picked a slot yet.
-      OR: [{ pickedTimeA: null }, { pickedTimeB: null }],
+      // `negotiating` also covers the §3.5b Date Ticket gate, where the
+      // Calendar has NOT been sent yet — nudging "pick a time" there points at
+      // a screen the user doesn't have. Only `completed`/`refunded`/`expired`
+      // mean scheduling is actually open.
+      //
+      // The flag guard is load-bearing, not defensive: `ticketStatus` defaults
+      // to "pending" in the schema, and with TICKET_FEATURE_ENABLED off
+      // `decision.ts` calls startScheduling directly and never advances it — so
+      // an unconditional filter here would silently kill EVERY scheduling nudge.
+      ...(env.TICKET_FEATURE_ENABLED
+        ? { ticketStatus: { notIn: ["pending", "partial", "refund_pending"] } }
+        : {}),
+      // At least one side hasn't marked any availability yet. (`pickedTime*` is
+      // the dead pre-2026-05 column — nothing writes it, so keying off it made
+      // this always fire at BOTH sides, including one who had already picked.)
+      OR: [{ availableTimesA: { isEmpty: true } }, { availableTimesB: { isEmpty: true } }],
       dispatchedAt: { not: null, lt: nudge1Cutoff },
     },
     select: {
@@ -393,8 +407,8 @@ async function handleSchedulingNudges(
       dispatchedAt: true,
       schedNudge1SentAt: true,
       schedNudge2SentAt: true,
-      pickedTimeA: true,
-      pickedTimeB: true,
+      availableTimesA: true,
+      availableTimesB: true,
       schedulingIteration: true,
       userA: { select: { telegramId: true, language: true, firstName: true } },
       userB: { select: { telegramId: true, language: true, firstName: true } },
@@ -428,8 +442,8 @@ async function handleSchedulingNudges(
     if (claim.count === 0) continue;
 
     const targets = [
-      ...(match.pickedTimeA == null && match.userA.telegramId > 0n ? [match.userA] : []),
-      ...(match.pickedTimeB == null && match.userB.telegramId > 0n ? [match.userB] : []),
+      ...(match.availableTimesA.length === 0 && match.userA.telegramId > 0n ? [match.userA] : []),
+      ...(match.availableTimesB.length === 0 && match.userB.telegramId > 0n ? [match.userB] : []),
     ];
 
     for (const target of targets) {

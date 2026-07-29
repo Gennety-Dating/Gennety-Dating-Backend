@@ -603,6 +603,31 @@ async function settleTicket(
   if (!after) return { result: { ok: false, reason: "match-not-found" }, claimedCount };
   const bothPaid = after.ticketPaidA !== null && after.ticketPaidB !== null;
 
+  // Settled ONE slot — their own — and the gate is still half-open. Until now
+  // this produced no chat trace whatsoever: the Mini App jumped straight to the
+  // cover offer, so closing it left the payer with nothing showing they had
+  // paid, and left the peer with nothing at all — even though the line below
+  // quietly resets HER deadline to 24h from this moment. The `claimedCount > 0`
+  // guard is the same CAS that settled the slot, so each side hears this
+  // exactly once per real payment; no extra idempotency column is needed.
+  if (claimedCount > 0 && !coveredPartnerNow && !bothPaid) {
+    const peer = peerUser(match, side);
+    if (isTelegramTarget(me.telegramId)) {
+      await api
+        .sendMessage(toTelegramChatId(me.telegramId), t(langOf(me), "ticketGateWaiting"))
+        .catch(() => {});
+    }
+    if (isTelegramTarget(peer.telegramId)) {
+      await api
+        .sendMessage(
+          toTelegramChatId(peer.telegramId),
+          t(langOf(peer), "ticketPeerTookTheirs", { name: me.firstName ?? "" }),
+          { reply_markup: buildTicketKeyboard(matchId, langOf(peer), peer.theme) },
+        )
+        .catch(() => {});
+    }
+  }
+
   if (bothPaid && after.ticketStatus !== "completed") {
     await completeTicketGateAndUnlockScheduling(api, matchId);
   } else if (!bothPaid && after.ticketStatus === "pending") {

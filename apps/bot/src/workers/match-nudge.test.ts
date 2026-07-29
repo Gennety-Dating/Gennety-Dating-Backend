@@ -10,9 +10,18 @@ vi.mock("@gennety/db", () => ({
   },
 }));
 
-vi.mock("../config.js", () => ({
-  env: { OPENAI_API_KEY: "test-key" },
+// Mutable so a test can flip the Date Ticket gate — the scheduling query only
+// filters on `ticketStatus` while that feature is on (see the worker's comment:
+// with it off, `ticketStatus` never leaves its "pending" default and an
+// unconditional filter would suppress every scheduling nudge).
+const { mockEnv } = vi.hoisted(() => ({
+  mockEnv: { OPENAI_API_KEY: "test-key", TICKET_FEATURE_ENABLED: false } as {
+    OPENAI_API_KEY: string;
+    TICKET_FEATURE_ENABLED: boolean;
+  },
 }));
+
+vi.mock("../config.js", () => ({ env: mockEnv }));
 
 import { prisma } from "@gennety/db";
 import {
@@ -59,16 +68,16 @@ function makeProposedMatch(overrides: Record<string, unknown> = {}) {
 }
 
 function makeNegotiatingMatch(overrides: Record<string, unknown> = {}) {
-  // Both accepted, neither has picked a slot. Anchor `dispatchedAt` 6h+1m ago
-  // to clear the scheduling-phase nudge1 cutoff (SCHED_NUDGE1_MS = 6h).
+  // Both accepted, neither has marked availability. Anchor `dispatchedAt` 6h+1m
+  // ago to clear the scheduling-phase nudge1 cutoff (SCHED_NUDGE1_MS = 6h).
   const dispatched = new Date(DAY_TIME.getTime() - 6 * 60 * 60_000 - 60_000);
   return {
     id: "match-2",
     dispatchedAt: dispatched,
     schedNudge1SentAt: null,
     schedNudge2SentAt: null,
-    pickedTimeA: null,
-    pickedTimeB: null,
+    availableTimesA: [],
+    availableTimesB: [],
     schedulingIteration: 1,
     userA: { telegramId: BigInt(11), language: "en", firstName: "Carol" },
     userB: { telegramId: BigInt(12), language: "en", firstName: "Dan" },
@@ -79,6 +88,7 @@ function makeNegotiatingMatch(overrides: Record<string, unknown> = {}) {
 describe("matchNudgeTick", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockEnv.TICKET_FEATURE_ENABLED = false;
     (prisma.match.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
     (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
     // Default so the third (deadline) findMany call in matchNudgeTick returns
@@ -176,6 +186,56 @@ describe("matchNudgeTick", () => {
     expect(prisma.match.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { schedNudge1SentAt: DAY_TIME } }),
     );
+  });
+
+  it("nudges only the side that hasn't marked availability", async () => {
+    // Regression: this used to key off `pickedTimeA/B`, the dead pre-2026-05
+    // columns nothing writes — so both sides were always nudged, including one
+    // who had already opened the Calendar and marked their slots.
+    const match = makeNegotiatingMatch({
+      availableTimesA: [new Date("2024-06-20T16:00:00Z")],
+    });
+
+    (prisma.match.findMany as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([match]);
+
+    const api = createMockApi();
+    const result = await matchNudgeTick(api, {
+      fetchFn: vi.fn().mockResolvedValue(openaiOk("Pick a time!")),
+      now: DAY_TIME,
+    });
+
+    expect(result.schedNudges).toBe(1);
+    expect(api.sendMessage).toHaveBeenCalledOnce();
+    expect(api.sendMessage).toHaveBeenCalledWith(12, expect.any(String), expect.anything());
+  });
+
+  it("excludes matches still on the Date Ticket gate when the gate is on", async () => {
+    // `negotiating` also covers the §3.5b ticket gate, where the Calendar has
+    // not been sent — "pick a time" there points at a screen the user lacks.
+    mockEnv.TICKET_FEATURE_ENABLED = true;
+
+    const api = createMockApi();
+    await matchNudgeTick(api, { fetchFn: vi.fn(), now: DAY_TIME });
+
+    const schedWhere = (prisma.match.findMany as ReturnType<typeof vi.fn>).mock.calls[1]![0].where;
+    expect(schedWhere.ticketStatus).toEqual({
+      notIn: ["pending", "partial", "refund_pending"],
+    });
+  });
+
+  it("does NOT filter on ticketStatus when the gate is off", async () => {
+    // With the feature off nothing ever advances `ticketStatus` past its
+    // "pending" schema default, so an unconditional filter would silently
+    // suppress EVERY scheduling nudge.
+    mockEnv.TICKET_FEATURE_ENABLED = false;
+
+    const api = createMockApi();
+    await matchNudgeTick(api, { fetchFn: vi.fn(), now: DAY_TIME });
+
+    const schedWhere = (prisma.match.findMany as ReturnType<typeof vi.fn>).mock.calls[1]![0].where;
+    expect(schedWhere.ticketStatus).toBeUndefined();
   });
 
   it("C-6: scheduling phase skips mobile-only users (telegramId <= 0n)", async () => {

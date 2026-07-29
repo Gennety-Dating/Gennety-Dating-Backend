@@ -25,6 +25,12 @@ export interface TicketStrings {
   coverPartnerTitle: string;
   coverPartnerSub: string;
   justWait: string;
+  /**
+   * Quiet way back from the waiting screen after he declined the cover offer.
+   * Deliberately a text link, not a button: he already said no once, so this
+   * reopens the door without pushing him through it.
+   */
+  coverReconsider: string;
   balanceNote: string;
   mockBadge: string;
   mockTitle: string;
@@ -85,6 +91,7 @@ const en: TicketStrings = {
   coverPartnerTitle: "Cover your date? 🎟️",
   coverPartnerSub: "Your ticket's set. Want to cover {name}'s too, or let them grab it?",
   justWait: "I'll let them grab it",
+  coverReconsider: "Actually — cover their ticket",
   balanceNote: "Your wallet: {n} 🎟️",
   mockBadge: "Test mode — no real charge",
   mockTitle: "Payment",
@@ -134,6 +141,7 @@ const ru: TicketStrings = {
   coverPartnerTitle: "Оплатить за пару? 🎟️",
   coverPartnerSub: "Твой билет уже есть. Оплатить и за {name} или пусть берёт сам(а)?",
   justWait: "Пусть берёт сам(а)",
+  coverReconsider: "Всё-таки оплатить за пару",
   balanceNote: "Твой кошелёк: {n} 🎟️",
   mockBadge: "Тестовый режим — без реальной оплаты",
   mockTitle: "Оплата",
@@ -150,7 +158,9 @@ const ru: TicketStrings = {
   goToScheduling: "Перейти к планированию даты",
   waitingTitle: "Билет закреплён 🎟️",
   waitingSub: "Ждём, пока собеседник возьмёт свой. Напишем сразу, как это случится.",
-  waitingTimer: "У него осталось {time}",
+  // Gender-neutral: the male now reaches this screen too (he can decline the
+  // cover offer), so "У него" would be wrong for half the viewers.
+  waitingTimer: "Осталось {time}",
   partnerPaidTitle: "{name} уже оплатил твой билет",
   partnerPaidSub: "Платить не нужно — всё уже оплачено.",
   partnerPaidStamp: "Оплачено",
@@ -183,6 +193,7 @@ const uk: TicketStrings = {
   coverPartnerTitle: "Сплатити за пару? 🎟️",
   coverPartnerSub: "Твій квиток уже є. Сплатити й за {name} чи нехай бере сам(а)?",
   justWait: "Нехай бере сам(а)",
+  coverReconsider: "Все-таки сплатити за пару",
   balanceNote: "Твій гаманець: {n} 🎟️",
   mockBadge: "Тестовий режим — без реальної оплати",
   mockTitle: "Оплата",
@@ -199,7 +210,7 @@ const uk: TicketStrings = {
   goToScheduling: "Перейти до планування побачення",
   waitingTitle: "Квиток закріплено 🎟️",
   waitingSub: "Чекаємо, поки співрозмовник візьме свій. Напишемо щойно це станеться.",
-  waitingTimer: "У нього лишилося {time}",
+  waitingTimer: "Залишилось {time}",
   partnerPaidTitle: "{name} вже сплатив твій квиток",
   partnerPaidSub: "Платити не потрібно — усе вже сплачено.",
   partnerPaidStamp: "Сплачено",
@@ -232,6 +243,7 @@ const de: TicketStrings = {
   coverPartnerTitle: "Date übernehmen? 🎟️",
   coverPartnerSub: "Dein Ticket steht. Auch {name} übernehmen oder selbst holen lassen?",
   justWait: "Sollen sie selbst holen",
+  coverReconsider: "Doch für dein Date zahlen",
   balanceNote: "Dein Guthaben: {n} 🎟️",
   mockBadge: "Testmodus — keine echte Abbuchung",
   mockTitle: "Zahlung",
@@ -281,6 +293,7 @@ const pl: TicketStrings = {
   coverPartnerTitle: "Pokryć randkę? 🎟️",
   coverPartnerSub: "Twój bilet jest. Pokryć też {name} czy niech weźmie sam(a)?",
   justWait: "Niech weźmie sam(a)",
+  coverReconsider: "Jednak zapłać za swoją randkę",
   balanceNote: "Twój portfel: {n} 🎟️",
   mockBadge: "Tryb testowy — bez prawdziwej opłaty",
   mockTitle: "Płatność",

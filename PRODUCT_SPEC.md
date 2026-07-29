@@ -1599,7 +1599,17 @@ result to the *decliner's* `Profile.negativeConstraints`.
 - **Proposal phase** (status `proposed`, awaiting decision) — ≥3 h after
   `dispatchedAt`, then ≥10 h.
 - **Scheduling phase** (status `negotiating`, both accepted, no agreed slot)
-  — ≥6 h since last update, then ≥12 h.
+  — ≥6 h since last update, then ≥12 h. Two corrections, 2026-07-29:
+  it is sent **only to a side that has actually marked no availability**
+  (it keyed off `pickedTimeA/B`, the deprecated pre-2026-05 columns nothing
+  writes any more, so it always nagged BOTH sides — including one who had
+  already picked their slots); and while the §3.5b Date Ticket gate is open
+  (`ticketStatus ∈ pending | partial | refund_pending`) it does not fire at
+  all, because `negotiating` also covers the gate and the Calendar has not
+  been sent yet — "pick a time" pointed at a screen the user did not have.
+  That exclusion is conditional on `TICKET_FEATURE_ENABLED`: with the gate
+  off, `ticketStatus` never leaves its `pending` default, so an unconditional
+  filter would suppress every scheduling nudge.
 - **Deadline nudge** (status `proposed`) — one final "your window closes in
   about Xh, decide now" DM fired **~2 h before the 24 h TTL expires**
   (`PROPOSAL_DEADLINE_NUDGE_LEAD_MS`), anchored to the *deadline* rather than
@@ -1656,6 +1666,40 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   sets `paidForPartnerBy*`) plus "Pay only mine — $6.99". Female users get a
   single "Pay my ticket — $6.99". The server re-validates that pay-for-both is
   male-only.
+  **The covering option is always the hero button** — the one burgundy,
+  shimmering rung of the Mini App's button ladder — at every wallet balance
+  (corrected 2026-07-29). It used to invert at exactly `balance === 1`, where
+  "use my ticket for myself" became the hero and covering dropped to the quiet
+  secondary. That is the single most common state a man reaches this screen in:
+  the welcome gift (§3.5b) is exactly one ticket, so for most first-time payers
+  the nudge pointed the wrong way. Covering is offered, never forced — see the
+  decline path below.
+- **After he settles only his own ticket: a result, then an offer** (reworked
+  2026-07-29). A male who paid just his own slot lands on the "cover your date"
+  screen, and that screen now **leads with his own outcome** ("Ticket secured 🎟️
+  — waiting on {name}", plus her remaining window), with the cover proposal as a
+  distinct card below it carrying her photo, and the hero button carrying her
+  avatar. Declining is a **real bordered button** (`I'll let them grab it`) that
+  moves him to the ordinary `waiting` screen — the same one a female sees — with
+  a quiet text link back in case he changes his mind. Before this the screen was
+  an upsell dead end: his payment was reframed as the headline of another request
+  for money, the only alternative was a 14px ghost text link under a shimmering
+  burgundy button, and tapping it just closed the Mini App. The `waiting` screen
+  was literally unreachable for a male, so his own purchase never resolved into a
+  state of its own. The decline is deliberately **not persisted** (session-only,
+  no schema): being asked again on a later open is harmless now that the screen's
+  first message is his status rather than the ask.
+- **A self-only settle is announced in chat, on both sides** (added 2026-07-29).
+  Paying just your own ticket used to leave **no chat trace at all** — the Mini
+  App jumped straight to the cover offer, so closing it lost the fact that you
+  had paid, and the peer learned nothing even though the settle silently resets
+  *their* deadline to 24 h from that moment. The payer now gets
+  `ticketGateWaiting`, and the peer gets `ticketPeerTookTheirs` ("{name} just
+  grabbed their ticket — yours is the last one") with a button back to the ticket
+  Mini App. Both ride the same CAS that claimed the slot, so each fires exactly
+  once per real payment with no extra idempotency column. A **cover** payment is
+  excluded: it completes the gate and would spoil the §3.5b surprise. The
+  persistent chat card itself is still never edited.
 - **Persistent ticket card + Calendar follows.** The ticket card is a
   **standalone, re-openable** message sent once per side and **never edited or
   deleted** — it is intentionally NOT tracked in `calendarMessageId*`. Tapping
@@ -1704,9 +1748,11 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   with tickets sees **"Use a ticket"** instead of paying:
   - female / single-self → "Use my ticket" when `balance ≥ 1`;
   - male with `balance ≥ 2` → "Use 2 tickets (you + your date)" or "Use 1 (self)";
-  - male with `balance = 1` → "Use 1 (self)" and may still **additionally** pay
-    or use a ticket for his date afterwards (the post-self "cover your date"
-    screen, scope `partner`).
+  - male with `balance = 1` → "Pay for both 🎟️ + $6.99" (his ticket on his own
+    slot + one ticket's price for hers — never the doubled `both` price) as the
+    hero, "Use 1 (self)" as the alternative; either way he may still
+    **additionally** pay or use a ticket for his date afterwards (the post-self
+    "cover your date" screen, scope `partner`).
   Spends are atomic and guarded against going negative; a spend whose match-slot
   claim doesn't apply is refunded to the ledger. New TMA endpoints:
   `POST /v1/matches/:id/ticket/use` (gate spend) and `/v1/tickets/*`

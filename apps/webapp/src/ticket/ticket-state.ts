@@ -14,7 +14,17 @@ export type TicketScreen =
   | "partner-paid" // partner covered MY ticket (pay-for-both) — nothing to do
   | "closed"; // ticket refunded/expired — scheduling already opened free
 
-export function deriveScreen(state: TicketState): TicketScreen {
+export interface ScreenOptions {
+  /**
+   * The male tapped "let them grab it" on the cover screen. In-memory only (it
+   * lives in React state for the session and is deliberately NOT persisted):
+   * the cover screen leads with his OWN secured ticket, so being asked again on
+   * a fresh open is no longer the pushy dead end it used to be.
+   */
+  coverDeferred?: boolean;
+}
+
+export function deriveScreen(state: TicketState, opts: ScreenOptions = {}): TicketScreen {
   if (
     state.ticketStatus === "refund_pending" ||
     state.ticketStatus === "refunded" ||
@@ -28,8 +38,11 @@ export function deriveScreen(state: TicketState): TicketScreen {
   if (state.bothPaid) return "success";
   if (state.iPaid) {
     // A male who covered himself can still optionally cover his date instead of
-    // just waiting for her to pay; everyone else waits.
-    return state.myGender === "male" ? "cover-partner" : "waiting";
+    // just waiting for her to pay; everyone else waits. Declining the offer
+    // drops him into the same "secured, waiting on them" screen a female gets —
+    // before this he had NO way to reach it, so his own purchase never resolved
+    // into a state of its own, only into another request for money.
+    return state.myGender === "male" && !opts.coverDeferred ? "cover-partner" : "waiting";
   }
   return "offer";
 }
@@ -71,10 +84,16 @@ function useSelfPayPartner(price: number, primary: boolean): OfferButton {
  * yet), balance-aware:
  *   female/unknown → use my ticket (if any) else pay my ticket
  *   male, balance≥2 → use 2 tickets (both) + use 1 (self)
- *   male, balance=1 → use 1 (self) + cover both (ticket for self + pay partner)
+ *   male, balance=1 → cover both (ticket for self + pay partner) + use 1 (self)
  *   male, balance=0 → pay for both + pay only mine
  * Unknown gender is treated as female — never offer pay/use-for-both without a
  * confirmed male gender (the server enforces this too).
+ *
+ * The covering option is ALWAYS the hero (the loud burgundy button — see the
+ * `.btn-hero` ladder in ticket.css), whatever the balance. It used to invert at
+ * exactly `balance === 1`, which is the single most common state a man reaches
+ * this screen in: every new user is gifted one Date Ticket before their first
+ * pitch, so the nudge was pointing the wrong way for most first-time payers.
  *
  * A male whose partner ALREADY settled her own slot has nothing left to cover,
  * so he is offered the `self` scope only. Without this he'd be shown "pay for
@@ -92,7 +111,7 @@ export function deriveOfferButtons(state: TicketState): OfferButton[] {
       return [use("both", 2, true), use("self", 1, false)];
     }
     if (state.myBalance === 1) {
-      return [use("self", 1, true), useSelfPayPartner(price, false)];
+      return [useSelfPayPartner(price, true), use("self", 1, false)];
     }
     return [pay("both", price * 2, true), pay("self", selfPrice, false)];
   }
@@ -103,7 +122,10 @@ export function deriveOfferButtons(state: TicketState): OfferButton[] {
 /**
  * Buttons for the "cover-partner" screen — a male who already settled his own
  * ticket may optionally cover his date's ticket (with a wallet ticket or money)
- * or just wait for her to pay herself.
+ * or just wait for her to pay herself. The "just wait" alternative is rendered
+ * as a real secondary button next to these (App.tsx) rather than a ghost text
+ * link, and it moves him to the `waiting` screen instead of closing the app —
+ * offering is the point, cornering him is not.
  */
 export function deriveCoverPartnerButtons(state: TicketState): OfferButton[] {
   if (state.myBalance >= 1) {

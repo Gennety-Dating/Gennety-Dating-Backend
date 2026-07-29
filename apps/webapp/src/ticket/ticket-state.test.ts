@@ -42,6 +42,19 @@ describe("deriveScreen", () => {
   it("cover-partner when a male paid his own but partner hasn't", () => {
     expect(deriveScreen(state({ myGender: "male", iPaid: true, ticketStatus: "partial" }))).toBe("cover-partner");
   });
+  it("a male who declined the cover offer reaches the same waiting screen a female gets", () => {
+    // Before `coverDeferred` existed, `waiting` was unreachable for a male: his
+    // own payment only ever resolved into another request for money.
+    const male = state({ myGender: "male", iPaid: true, ticketStatus: "partial" });
+    expect(deriveScreen(male, { coverDeferred: true })).toBe("waiting");
+  });
+  it("deferring the cover offer never overrides a terminal screen", () => {
+    const opts = { coverDeferred: true };
+    expect(deriveScreen(state({ iPaid: true, partnerPaid: true, bothPaid: true }), opts)).toBe("success");
+    expect(deriveScreen(state({ partnerPaidForMe: true }), opts)).toBe("partner-paid");
+    expect(deriveScreen(state({ ticketStatus: "expired" }), opts)).toBe("closed");
+    expect(deriveScreen(state({ myGender: "male" }), opts)).toBe("offer");
+  });
   it("success when both paid and I acted", () => {
     expect(deriveScreen(state({ iPaid: true, partnerPaid: true, bothPaid: true, ticketStatus: "completed" }))).toBe(
       "success",
@@ -109,18 +122,29 @@ describe("deriveOfferButtons (balance-aware)", () => {
     expect(btns[0]).toEqual({ action: "use", scope: "both", amountCents: 0, ticketCost: 2, primary: true });
     expect(btns[1]).toEqual({ action: "use", scope: "self", amountCents: 0, ticketCost: 1, primary: false });
   });
-  it("male with 1 ticket uses it for self, covers both via ticket + single price", () => {
+  it("male with 1 ticket leads with cover-both (ticket + single price), self second", () => {
     const btns = deriveOfferButtons(state({ myGender: "male", myBalance: 1 }));
-    expect(btns[0]).toEqual({ action: "use", scope: "self", amountCents: 0, ticketCost: 1, primary: true });
     // Cover-both shortcut: 🎫 on his own slot + one ticket's price for the
-    // partner — never the doubled $13.98 when he already holds a ticket.
-    expect(btns[1]).toEqual({
+    // partner — never the doubled $13.98 when he already holds a ticket. It is
+    // the HERO here: balance 1 is the state most men reach this screen in (the
+    // welcome gift is exactly one ticket), and the ladder used to invert at
+    // precisely that balance, pointing the nudge the wrong way.
+    expect(btns[0]).toEqual({
       action: "use-self-pay-partner",
       scope: "both",
       amountCents: 699,
       ticketCost: 1,
-      primary: false,
+      primary: true,
     });
+    expect(btns[1]).toEqual({ action: "use", scope: "self", amountCents: 0, ticketCost: 1, primary: false });
+  });
+
+  it("the covering option is the hero at every balance", () => {
+    for (const myBalance of [0, 1, 2, 5]) {
+      const [hero] = deriveOfferButtons(state({ myGender: "male", myBalance }));
+      expect(hero!.primary).toBe(true);
+      expect(hero!.scope).toBe("both");
+    }
   });
 
   // Regression: she settled her own slot first (she had a wallet ticket, or

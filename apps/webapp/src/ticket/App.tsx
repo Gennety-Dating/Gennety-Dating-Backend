@@ -78,8 +78,13 @@ function screenPhotoSrcs(state: TicketState): string[] {
   const urls: Array<string | null> = [];
   if (sc === "partner-paid") urls.push(partner); // his photo on her reveal card
   else if (sc === "success" && state.iCoveredPartner) urls.push(partner); // her photo
-  else if ((sc === "offer" || sc === "cover-partner") && state.myGender === "male") {
+  else if (sc === "offer" && state.myGender === "male") {
     urls.push(mine, partner); // pay-for-both button avatars
+  } else if (sc === "cover-partner") {
+    // Her face only — the cover screen shows the person he'd be covering, not
+    // the pair. (It used to preload BOTH photos here and render neither, so the
+    // spinner waited on images the screen never displayed.)
+    urls.push(partner);
   }
   return urls.filter((u): u is string => Boolean(u));
 }
@@ -98,6 +103,10 @@ async function preloadScreenPhotos(state: TicketState): Promise<void> {
 export function App(): ReactElement {
   const s = strings(lang);
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
+  // "I'll let them grab it" — session-only (see ScreenOptions in ticket-state).
+  // It survives the 4s poll because React state isn't remounted by it, and it
+  // is reversible from the waiting screen.
+  const [coverDeferred, setCoverDeferred] = useState(false);
   const myName = app?.initDataUnsafe?.user?.first_name ?? s.youFallback;
 
   // Ref to the latest phase so imperative MainButton handlers read fresh values.
@@ -127,7 +136,8 @@ export function App(): ReactElement {
 
   // Poll while waiting on the partner so partner-payment / refund transitions
   // land without the user reopening the Mini App.
-  const screen: TicketScreen | null = phase.kind === "view" ? deriveScreen(phase.state) : null;
+  const screen: TicketScreen | null =
+    phase.kind === "view" ? deriveScreen(phase.state, { coverDeferred }) : null;
   useEffect(() => {
     // Poll while waiting on the partner (also on the male's "cover-partner"
     // screen, where the partner may pay herself in the meantime).
@@ -303,9 +313,13 @@ export function App(): ReactElement {
   }
 
   const state = phase.state;
-  const sc = deriveScreen(state);
+  const sc = deriveScreen(state, { coverDeferred });
   const myPhotoSrc = ticketPhotoSrc(state.myPhotoUrl, initData);
   const partnerPhotoSrc = ticketPhotoSrc(state.partnerPhotoUrl, initData);
+  // He deferred the cover offer but nothing is settled on her side yet — keep a
+  // quiet way back so "let them grab it" is a choice, not a one-way door.
+  const canReconsiderCover =
+    sc === "waiting" && coverDeferred && state.myGender === "male" && !state.partnerPaid;
 
   return (
     <div className="ticket-page has-bar">
@@ -344,6 +358,19 @@ export function App(): ReactElement {
 
             {(sc === "waiting" || sc === "cover-partner") && (
               <PartialTimer expiresAt={state.expiresAt} template={s.waitingTimer} />
+            )}
+
+            {/* The cover offer is a distinct block UNDER his own "ticket
+                secured" result, not the headline. Her face is the whole point
+                of the gesture, so it leads the card. */}
+            {sc === "cover-partner" && (
+              <section className="tkt-cover-card">
+                <Avatar src={partnerPhotoSrc} name={state.partnerName} size={64} />
+                <div className="tkt-cover-copy">
+                  <h2>{s.coverPartnerTitle}</h2>
+                  <p>{fill(s.coverPartnerSub, { name: state.partnerName ?? s.matchFallback })}</p>
+                </div>
+              </section>
             )}
           </>
         )}
@@ -391,13 +418,20 @@ export function App(): ReactElement {
               <button
                 key={`${b.action}:${b.scope}`}
                 type="button"
-                className={b.primary ? "btn-hero" : "btn-secondary"}
+                className={b.primary ? "btn-hero btn-with-avatars" : "btn-secondary"}
                 onClick={() => onOfferButton(state, b)}
               >
+                {b.primary && (
+                  <span className="btn-avatars" aria-hidden="true">
+                    <Avatar src={partnerPhotoSrc} name={state.partnerName} size={44} />
+                  </span>
+                )}
                 {offerLabel(b, state, s)}
               </button>
             ))}
-            <button type="button" className="btn-text" onClick={() => app?.close()}>
+            {/* A real, bordered alternative — not a ghost text link — and it
+                moves him to the waiting screen instead of closing the app. */}
+            <button type="button" className="btn-ghost" onClick={() => setCoverDeferred(true)}>
               {s.justWait}
             </button>
           </>
@@ -410,9 +444,16 @@ export function App(): ReactElement {
         )}
 
         {sc === "waiting" && (
-          <button type="button" className="btn-secondary" onClick={() => app?.close()}>
-            {s.close}
-          </button>
+          <>
+            <button type="button" className="btn-secondary" onClick={() => app?.close()}>
+              {s.close}
+            </button>
+            {canReconsiderCover && (
+              <button type="button" className="btn-text" onClick={() => setCoverDeferred(false)}>
+                {s.coverReconsider}
+              </button>
+            )}
+          </>
         )}
       </footer>
     </div>
@@ -440,8 +481,10 @@ function headerTitle(sc: TicketScreen, state: TicketState, s: TicketStrings): st
   switch (sc) {
     case "offer":
       return s.heading;
+    // He just paid: the headline is HIS result, and the cover offer lives in
+    // its own card below. `coverPartnerTitle`/`Sub` moved there.
     case "cover-partner":
-      return s.coverPartnerTitle;
+      return s.waitingTitle;
     case "waiting":
       return s.waitingTitle;
     case "success":
@@ -458,7 +501,7 @@ function headerSub(sc: TicketScreen, state: TicketState, s: TicketStrings): stri
     case "offer":
       return s.sub;
     case "cover-partner":
-      return fill(s.coverPartnerSub, { name: state.partnerName ?? s.matchFallback });
+      return s.waitingSub;
     case "waiting":
       return s.waitingSub;
     case "success":
