@@ -877,7 +877,9 @@ agent turns.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/admin/dialogs` | Paginated dialog list, one row per user, newest-active first (`User.lastMessageAt`, then `createdAt`). Each row carries `participant` (identity + status + city, BigInt `telegramId` stringified), per-store `counts`, `lastMessageAt`, and a ≤200-char `lastMessage` preview. Filters: `status`, `platform`, `activeSince` (ISO), `search` (name/email/`telegramUsername`, plus exact `telegramId` when the term is all digits). `includeMessages=true` inlines the tail of each dialog (`messageLimit`, default 20, max 200). `limit`/`offset` are truncated and clamped, never passed through raw. |
+| GET | `/admin/dialogs` | Paginated dialog list, one row per user, newest-active first (`User.lastMessageAt`, then `createdAt`). Each row carries `participant` (identity + status + city, BigInt `telegramId` stringified), per-store `counts`, `lastMessageAt`, and `lastMessage` — an **object**
+`{source, direction, text, createdAt}` whose `text` is the ≤200-char preview,
+not a bare string (rendering the object as a value is a client-side crash). Filters: `status`, `platform`, `activeSince` (ISO), `search` (name/email/`telegramUsername`, plus exact `telegramId` when the term is all digits). `includeMessages=true` inlines the tail of each dialog (`messageLimit`, default 20, max 200). `limit`/`offset` are truncated and clamped, never passed through raw. |
 | GET | `/admin/dialogs/:id` | One dialog's transcript; `:id` **is the user id**, since a dialog is user↔bot and has exactly one human participant. `limit` (default 200, max 1000), `order` (`asc`\|`desc`), `includeTechnical` (default false — `system`/`tool`/null-content turns are hidden). Returns `participant`, `counts`, `sources`, `messages`, and the `photos[]` gallery as refs for `/admin/media`. 404 on unknown id. |
 
 Both return one **unified message shape** across the three stores:
