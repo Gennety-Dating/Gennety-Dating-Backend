@@ -596,6 +596,10 @@ const translations = {
     ticketPartnerSawItDm: "❤️ {name} saw that you covered her ticket.",
     ticketRefundedDm:
       "Your match didn't grab their ticket in time, so we've refunded yours. No worries — we've opened scheduling for free. Let's find a time 📅",
+    ticketRefundedToWallet:
+      "🎟️ Your Date Ticket is back in your wallet — yours to use on the next date.",
+    ticketRefundedToWalletBoth:
+      "🎟️ Both Date Tickets you paid for are back in your wallet — yours to use on the next date.",
     matchScheduleNoOverlap:
       "No overlap yet — next round.",
     matchScheduled: "Locked in — see you there 🤝\n\n{venue}",
@@ -1583,6 +1587,10 @@ const translations = {
     ticketPartnerSawItDm: "❤️ {name} увидела, что ты оплатил её билет.",
     ticketRefundedDm:
       "Собеседник не успел взять свой билет, поэтому твой мы вернули. Ничего страшного — открыли планирование бесплатно. Давай найдём время 📅",
+    ticketRefundedToWallet:
+      "🎟️ Билет вернулся в твой кошелёк — используешь его на следующем свидании.",
+    ticketRefundedToWalletBoth:
+      "🎟️ Оба билета, которые ты оплатил, вернулись в твой кошелёк — используешь их на следующем свидании.",
     matchScheduleNoOverlap: "Не совпало — попробуем ещё.",
     matchScheduled: "Готово — до встречи 🤝\n\n{venue}",
     matchScheduledNoReservation:
@@ -2539,6 +2547,10 @@ const translations = {
     ticketPartnerSawItDm: "❤️ {name} побачила, що ти оплатив її квиток.",
     ticketRefundedDm:
       "Співрозмовник не встиг узяти свій квиток, тож твій ми повернули. Нічого страшного — відкрили планування безкоштовно. Знайдімо час 📅",
+    ticketRefundedToWallet:
+      "🎟️ Квиток повернувся до твого гаманця — використаєш його на наступному свіданні.",
+    ticketRefundedToWalletBoth:
+      "🎟️ Обидва квитки, які ти оплатив, повернулися до твого гаманця — використаєш їх на наступному свіданні.",
     matchScheduleNoOverlap: "Не збіглося — спробуємо ще.",
     matchScheduled: "Готово — до зустрічі 🤝\n\n{venue}",
     matchScheduledNoReservation:
@@ -3742,6 +3754,10 @@ const deTranslations: TranslationTable = {
   ticketPartnerSawItDm: "❤️ {name} hat gesehen, dass du ihr Ticket übernommen hast.",
   ticketRefundedDm:
     "Dein Match hat sein Ticket nicht rechtzeitig geholt — deins ist erstattet. Kein Stress: die Terminplanung ist jetzt gratis offen 📅",
+  ticketRefundedToWallet:
+    "🎟️ Dein Date-Ticket liegt wieder in deiner Wallet — für das nächste Date.",
+  ticketRefundedToWalletBoth:
+    "🎟️ Beide von dir bezahlten Date-Tickets liegen wieder in deiner Wallet — für das nächste Date.",
 
   // --- Pre-date coordination ---
   coordOfferIntro:
@@ -4677,6 +4693,10 @@ const plTranslations: TranslationTable = {
   ticketPartnerSawItDm: "❤️ {name} już wie, że bilet jest od Ciebie.",
   ticketRefundedDm:
     "Twój bilet został zwrócony — druga strona nie odebrała swojego na czas. Bez stresu: planowanie terminu jest teraz otwarte za darmo 📅",
+  ticketRefundedToWallet:
+    "🎟️ Twój bilet wrócił do portfela — wykorzystasz go na następnej randce.",
+  ticketRefundedToWalletBoth:
+    "🎟️ Oba bilety, które opłaciłeś, wróciły do twojego portfela — wykorzystasz je na następnej randce.",
 
   // --- Pre-date coordination ---
   coordOfferIntro:

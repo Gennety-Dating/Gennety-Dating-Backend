@@ -15,9 +15,19 @@ vi.mock("./match-decision-shared.js", () => ({
   boostAcceptedSidePriority: vi.fn().mockResolvedValue(true),
 }));
 
+// Wiring only — the refund semantics live in ticket-refund.test.ts.
+vi.mock("./ticket-refund.js", async () => {
+  const actual = await import("./ticket-refund.js");
+  return {
+    refundMatchTickets: vi.fn().mockResolvedValue([]),
+    ticketRefundNoticeKey: actual.ticketRefundNoticeKey,
+  };
+});
+
 import { prisma } from "@gennety/db";
 import { applySilentIgnorePenalty } from "../utils/elo-calculator.js";
 import { boostAcceptedSidePriority } from "./match-decision-shared.js";
+import { refundMatchTickets } from "./ticket-refund.js";
 import {
   STALL_CHECK_IN_MS,
   STALL_TIMEOUT_MS,
@@ -211,6 +221,7 @@ function mockApi() {
 describe("cancelStalledMatch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (refundMatchTickets as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
     (prisma.profile.update as ReturnType<typeof vi.fn>).mockResolvedValue({
       silentIgnoreCount: 1,
@@ -320,6 +331,7 @@ describe("cancelStalledMatch", () => {
 describe("cancelPlanningByUser", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (refundMatchTickets as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
   });
 
@@ -351,6 +363,102 @@ describe("cancelPlanningByUser", () => {
     expect(result.ackText).toContain("Alice");
     expect(Number(api.sendMessage.mock.calls[0][0])).toBe(11);
     expect(String(api.sendMessage.mock.calls[0][1])).toContain("Bob's plans changed");
+  });
+});
+
+
+
+describe("cancelStalledMatch — ticket refunds", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (refundMatchTickets as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+    (prisma.profile.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      silentIgnoreCount: 1,
+    });
+  });
+
+  it("refunds the ghost too, and tells both sides (PRODUCT_SPEC §3.5b)", async () => {
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(dbRow());
+    (refundMatchTickets as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { userId: "user-a", refunded: 1, telegramId: 11n, language: "en", platform: "telegram" },
+      { userId: "user-b", refunded: 1, telegramId: 22n, language: "en", platform: "telegram" },
+    ]);
+    const api = mockApi() as unknown as { sendMessage: ReturnType<typeof vi.fn> };
+
+    await cancelStalledMatch(api as never, "match-1", NOW);
+
+    expect(refundMatchTickets).toHaveBeenCalledWith("match-1");
+    // Ghosting is priced in Elo above; taking the ticket on top would make
+    // silence cost money that an honest "plans changed" does not.
+    const bodies = api.sendMessage.mock.calls.map((c) => String(c[1]));
+    expect(bodies).toHaveLength(2);
+    for (const body of bodies) expect(body).toContain("back in your wallet");
+  });
+
+  it("does not mention a wallet when no ticket was paid", async () => {
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(dbRow());
+    const api = mockApi() as unknown as { sendMessage: ReturnType<typeof vi.fn> };
+
+    await cancelStalledMatch(api as never, "match-1", NOW);
+
+    for (const call of api.sendMessage.mock.calls) {
+      expect(String(call[1])).not.toContain("wallet");
+    }
+  });
+
+  it("still cancels when the refund throws", async () => {
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(dbRow());
+    (refundMatchTickets as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("wallet down"));
+
+    const result = await cancelStalledMatch(mockApi(), "match-1", NOW);
+
+    expect(result.cancelled).toBe(true);
+  });
+});
+
+describe("cancelPlanningByUser — ticket refunds", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (refundMatchTickets as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+  });
+
+  it("refunds the actor who took the honest exit and says so in the ack", async () => {
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(dbRow());
+    (refundMatchTickets as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { userId: "user-b", refunded: 2, telegramId: 22n, language: "en", platform: "telegram" },
+    ]);
+    const api = mockApi() as unknown as { sendMessage: ReturnType<typeof vi.fn> };
+
+    const result = await cancelPlanningByUser(api as never, "match-1", "user-b");
+
+    expect(refundMatchTickets).toHaveBeenCalledWith("match-1");
+    // He covered both tickets and is ending it himself — both come back.
+    expect(result.ackText).toContain("Both Date Tickets");
+    // The partner paid nothing, so their notice stays refund-free.
+    expect(String(api.sendMessage.mock.calls[0][1])).not.toContain("wallet");
+  });
+
+  it("tells the waiting partner when it was their ticket", async () => {
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(dbRow());
+    (refundMatchTickets as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { userId: "user-a", refunded: 1, telegramId: 11n, language: "en", platform: "telegram" },
+    ]);
+    const api = mockApi() as unknown as { sendMessage: ReturnType<typeof vi.fn> };
+
+    const result = await cancelPlanningByUser(api as never, "match-1", "user-b");
+
+    expect(String(api.sendMessage.mock.calls[0][1])).toContain("back in your wallet");
+    expect(result.ackText).not.toContain("wallet");
+  });
+});
+
+describe("cancelPlanningByUser (guards)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (refundMatchTickets as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
   });
 
   it("refuses a caller who is not in the match", async () => {

@@ -1275,7 +1275,9 @@ path is visually distinct: a blue (`primary`) **❄️ Freeze account** over a r
   Profile, embedding, verification, photos, and coordinates intact, removes the
   user from the matching pool (the engine matches only `active`), cancels any
   in-flight matches (the partner gets a neutral notice + the small emergency-cancel
-  priority/Elo comp), and unpins the status banner. On the user's next `/start`
+  priority/Elo comp, **and any Date Ticket they paid for back in their wallet** —
+  §3.5b; the freezing user is refunded too, and keeps it for when they return),
+  and unpins the status banner. On the user's next `/start`
   they are **silently reactivated** to `active` straight into their ready
   profile — no re-onboarding, no re-verification, no re-embedding.
   Freeze is offered only from `active` or `paused`; the status transition and
@@ -1888,6 +1890,54 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   ticket), durably retries provider failures, and only after a successful refund
   **opens the Calendar for free**. An already-accepted match is never killed by
   a payment stall, and a failed refund is never announced as successful.
+- **The date didn't happen → the ticket comes back (2026-07-29).** One rule, no
+  fault-finding: whenever a live match dies before the date, every ticket that
+  was actually paid for returns to whoever paid for it. **The person who
+  cancelled is refunded exactly like the person who was cancelled on.** The
+  penalty for flaking already exists in Elo / `silentIgnoreCount`; taking the
+  money on top would make an honest cancellation more expensive than a silent
+  no-show, which is precisely backwards. Before this, a paid ticket burned in
+  every one of these paths — a partner cancelling an hour before the meeting
+  simply destroyed both tickets — and the ONLY refund in the product was the
+  §3.5b expiry rail, which covers just the gate failing to close on time.
+  - **The refund lands in the ticket WALLET** (`grantTickets`, reason `refund`),
+    not as a reverse Telegram Stars transaction. A Stars reversal is a provider
+    call that fails, and making it durable needs its own purchase table plus an
+    hourly sweep (the `venue_change_purchases` / `rematch_purchases` pattern).
+    A wallet credit is immediate, local, and exactly-once — the user keeps the
+    value they paid for and spends it on the next date. Deliberately NOT a
+    money-back path: this is scoped as "you don't lose what you paid for", not
+    as a cash refund rail.
+  - **Who gets what.** Slot A refunds to user A and slot B to user B, EXCEPT
+    when `paidForPartnerBy*` records that one side covered the other — then the
+    covered slot refunds to the coverer, who gets **two** tickets back. Without
+    that exception the "I'm paying for us both" gesture (§3.5b) would quietly
+    turn into gifting the partner a ticket she never bought.
+  - **Every path that kills a live match** refunds: freeze, GDPR hard delete,
+    and moderation suspend/ban/investigation (all four share
+    `services/cancel-in-flight-matches.ts`), plus emergency cancellation of a
+    `scheduled` date (§Phase 4) and the §3.5c 48-hour planning-stall end. The
+    24 h proposal TTL needs no hook — every slot claim is guarded on
+    `status = 'negotiating'` and the gate only opens after mutual accept, so a
+    `proposed` row can never hold a paid slot.
+  - **Exactly once, and never negative.** Idempotency is a synthetic unique
+    `TicketLedger.externalPaymentId` (`refund:match:<matchId>:<userId>:<slot>`),
+    so a re-run, a retry, or two paths firing on the same match credit nothing
+    twice; each slot is its own transaction, so a partial failure is resumable
+    rather than lost. A payer whose account no longer exists (hard delete) is
+    skipped, and their partner is still refunded — which is why the plan is read
+    inside the cancelling transaction, while the match row still exists, and
+    applied after it commits.
+  - **Not silent.** A refund nobody notices isn't a refund: the partner's
+    cancellation notice carries the localized "your ticket is back in your
+    wallet" line (all five languages), and a refunded user this rail sends
+    nothing else to gets that line as its own short DM.
+  - **The expiry rail keeps ownership of its own cases.** A `ticketStatus` of
+    `refunded`, `refund_pending`, or `expired` means `ticket-expiry` has already
+    returned the money, is mid-retry, or found nothing paid — this rail stands
+    down on all three. `partial` (one side paid, the other never did) IS
+    refunded here, since a cancelled match never reaches the expiry sweep's
+    `negotiating` filter.
 - **State machine.** The whole gate runs while `Match.status = negotiating`;
   `ticketStatus` is a sub-state so the scheduling/venue/lifecycle code is
   untouched. Blind-decision and all other invariants are unaffected.
@@ -1942,6 +1992,13 @@ drop is what this section is actually for; the reminders are the polite part.
   pitch stage uses (§3.4), then the decline-grade Elo penalty. Either way the
   other side gets next-batch priority (`boostAcceptedSidePriority`), because
   their week is gone regardless.
+- **A paid Date Ticket comes back on both endings** (§3.5b), and this is the
+  stage where that matters most: the ticket gate sits inside `negotiating`, so a
+  stall here is the likeliest way a paid ticket dies. The ghost is refunded too —
+  their silence is already priced in Elo above, and charging a ticket on top
+  would make going quiet cost money that the honest red button does not, which
+  inverts the whole point of this chain. The line is appended to each side's
+  existing notice / ack.
 - **The notices say what actually happened**, and never guess. Someone who did
   their part hears that the partner never answered, framed as the save it is
   ("better now than on the day"). Someone whose partner cancelled hears that
@@ -2890,6 +2947,11 @@ on the date-lifecycle tick; handlers in `handlers/date/coordination.ts`.
   (`EMERGENCY_CANCEL_PEER_ELO_BOOST = 5`). The canceller is not penalised
   because emergency reasons may be legitimate; `eloMatchesPlayed` is not
   incremented because no accept/decline contest resolved.
+- **Both sides get their Date Ticket back** (§3.5b — the date didn't happen, so
+  every paid ticket returns to its payer, the canceller included). The refund
+  line rides each side's existing message: the canceller's confirmation, and —
+  appended *after* the verbatim quote, so the blockquote entity still covers the
+  exact reason — the partner's notice.
 
 ## Phase 5 — Trust & Safety (Reports + Strikes)
 

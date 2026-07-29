@@ -45,6 +45,15 @@ vi.mock("../../utils/elo-calculator.js", () => ({
   applyEmergencyCancellationPeerBoost: vi.fn().mockResolvedValue(505),
 }));
 
+// Wiring only — the refund semantics themselves live in ticket-refund.test.ts.
+vi.mock("../../services/ticket-refund.js", async () => {
+  const actual = await import("../../services/ticket-refund.js");
+  return {
+    refundMatchTickets: vi.fn().mockResolvedValue([]),
+    ticketRefundNoticeKey: actual.ticketRefundNoticeKey,
+  };
+});
+
 import { prisma } from "@gennety/db";
 import {
   handleEmergencyStart,
@@ -53,6 +62,7 @@ import {
   handleEmergencyReason,
 } from "./emergency.js";
 import { applyEmergencyCancellationPeerBoost } from "../../utils/elo-calculator.js";
+import { refundMatchTickets } from "../../services/ticket-refund.js";
 import {
   handleFeedbackVoiceStart,
   handleFeedbackVoiceText,
@@ -71,6 +81,7 @@ const mUser = prisma.user as unknown as { findUnique: MockFn };
 const mProfile = prisma.profile as unknown as { findUnique: MockFn };
 const mApplyEmergencyCancellationPeerBoost =
   applyEmergencyCancellationPeerBoost as unknown as MockFn;
+const mRefundMatchTickets = refundMatchTickets as unknown as MockFn;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -143,6 +154,7 @@ describe("emergency cancellation", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mApplyEmergencyCancellationPeerBoost.mockResolvedValue(505);
+    mRefundMatchTickets.mockResolvedValue([]);
   });
 
   it("handleEmergencyStart shows a confirmation guard without touching session", async () => {
@@ -281,6 +293,86 @@ describe("emergency cancellation", () => {
       .entities[0]!;
     expect(entity.type).toBe("blockquote");
     expect((body as string).slice(entity.offset, entity.offset + entity.length)).toBe(reason);
+  });
+
+  it("handleEmergencyReason refunds both tickets and tells each side", async () => {
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+    mMatch.findUnique.mockResolvedValueOnce(matchRow());
+    mMatch.update.mockResolvedValueOnce({});
+    // The canceller covered both tickets, so both come back to him.
+    mRefundMatchTickets.mockResolvedValueOnce([
+      {
+        userId: "uid-A",
+        refunded: 2,
+        telegramId: 1001n,
+        language: "en",
+        platform: "telegram",
+      },
+    ]);
+
+    const reason = "sorry, I'm ill";
+    const ctx = createCtx({
+      session: { matchFlow: "awaiting_emergency_reason", activeMatchId: "match-1" },
+      messageText: reason,
+      fromId: 1001,
+    });
+
+    await handleEmergencyReason(ctx);
+
+    expect(mRefundMatchTickets).toHaveBeenCalledWith("match-1");
+    // The one who cancelled honestly is refunded too — the Elo/ghosting penalty
+    // is the only penalty (PRODUCT_SPEC §3.5b).
+    expect(ctx.reply.mock.calls[0][0]).toContain("Both Date Tickets");
+    // The partner paid nothing here, so their notice carries no refund line and
+    // the verbatim blockquote offsets still line up.
+    const [, body, options] = ctx.api.sendMessage.mock.calls[0]!;
+    expect(body).not.toContain("wallet");
+    const entity = (options as { entities: Array<{ offset: number; length: number }> }).entities[0]!;
+    expect((body as string).slice(entity.offset, entity.offset + entity.length)).toBe(reason);
+  });
+
+  it("handleEmergencyReason appends the partner's refund line after the quote", async () => {
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+    mMatch.findUnique.mockResolvedValueOnce(matchRow());
+    mMatch.update.mockResolvedValueOnce({});
+    mRefundMatchTickets.mockResolvedValueOnce([
+      { userId: "uid-B", refunded: 1, telegramId: 1002n, language: "en", platform: "telegram" },
+    ]);
+
+    const reason = "family emergency";
+    const ctx = createCtx({
+      session: { matchFlow: "awaiting_emergency_reason", activeMatchId: "match-1" },
+      messageText: reason,
+      fromId: 1001,
+    });
+
+    await handleEmergencyReason(ctx);
+
+    const [, body, options] = ctx.api.sendMessage.mock.calls[0]!;
+    expect(body).toContain("back in your wallet");
+    // Appended AFTER the quote, so the entity still covers the exact reason.
+    const entity = (options as { entities: Array<{ offset: number; length: number }> }).entities[0]!;
+    expect((body as string).slice(entity.offset, entity.offset + entity.length)).toBe(reason);
+    // Nothing was refunded to the canceller, so his ack stays clean.
+    expect(ctx.reply.mock.calls[0][0]).not.toContain("wallet");
+  });
+
+  it("handleEmergencyReason still cancels when the refund throws", async () => {
+    mUser.findUnique.mockResolvedValueOnce({ id: "uid-A" });
+    mMatch.findUnique.mockResolvedValueOnce(matchRow());
+    mMatch.update.mockResolvedValueOnce({});
+    mRefundMatchTickets.mockRejectedValueOnce(new Error("wallet down"));
+
+    const ctx = createCtx({
+      session: { matchFlow: "awaiting_emergency_reason", activeMatchId: "match-1" },
+      messageText: "reason",
+      fromId: 1001,
+    });
+
+    await handleEmergencyReason(ctx);
+
+    expect(mMatch.update).toHaveBeenCalled();
+    expect(ctx.api.sendMessage).toHaveBeenCalledTimes(1);
   });
 
   it("handleEmergencyReason no-ops when match is not scheduled", async () => {

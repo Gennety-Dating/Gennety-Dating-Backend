@@ -4,6 +4,7 @@ import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { applySilentIgnorePenalty } from "../utils/elo-calculator.js";
 import { boostAcceptedSidePriority } from "./match-decision-shared.js";
+import { refundMatchTickets, ticketRefundNoticeKey } from "./ticket-refund.js";
 
 /**
  * Stall handling for the two open-ended planning phases (PRODUCT_SPEC §3.5c).
@@ -324,6 +325,20 @@ export async function cancelStalledMatch(
     await boostAcceptedSidePriority(side.user.id);
   }
 
+  // The date isn't happening, so every paid ticket goes back to its payer — the
+  // ghost included (PRODUCT_SPEC §3.5b). Ghosting is already priced in Elo
+  // above; charging a ticket on top would make silence cost money that an
+  // honest "plans changed" does not, which is the opposite of what this whole
+  // stall chain is built to encourage.
+  const refunds = await refundMatchTickets(matchId).catch((err: unknown) => {
+    console.warn(`[match-stall] ticket refund failed for ${matchId}:`, err);
+    return [];
+  });
+  const refundLineFor = (userId: string, lang: Language): string => {
+    const key = ticketRefundNoticeKey(refunds.find((r) => r.userId === userId)?.refunded ?? 0);
+    return key ? `\n\n${t(lang, key)}` : "";
+  };
+
   // Notices. Someone who did their part hears what actually happened (their
   // partner never answered); a ghost hears why it lapsed and — the part that
   // matters for next time — that saying "plans changed" is a normal thing to do.
@@ -335,7 +350,7 @@ export async function cancelStalledMatch(
     try {
       await api.sendMessage(
         Number(side.user.telegramId),
-        t(lang, key, { name: partnerName(other, lang) }),
+        `${t(lang, key, { name: partnerName(other, lang) })}${refundLineFor(side.user.id, lang)}`,
       );
     } catch (err) {
       console.warn(
@@ -399,12 +414,25 @@ export async function cancelPlanningByUser(
 
   await boostAcceptedSidePriority(other.id);
 
+  // Same rule as the timeout above: no date, so every paid ticket goes home.
+  // The actor is refunded too — this is the honest exit the flow wants used, and
+  // it must not be the expensive one (PRODUCT_SPEC §3.5b).
+  const refunds = await refundMatchTickets(matchId).catch((err: unknown) => {
+    console.warn(`[match-stall] ticket refund failed for ${matchId}:`, err);
+    return [];
+  });
+  const refundLineFor = (userId: string, lang: Language): string => {
+    const key = ticketRefundNoticeKey(refunds.find((r) => r.userId === userId)?.refunded ?? 0);
+    return key ? `\n\n${t(lang, key)}` : "";
+  };
+
   if (stallReachableFor(other.telegramId)) {
     const otherLang = (other.language ?? "en") as Language;
     try {
       await api.sendMessage(
         Number(other.telegramId),
-        t(otherLang, "stallPeerCancelled", { name: partnerName(actor, otherLang) }),
+        `${t(otherLang, "stallPeerCancelled", { name: partnerName(actor, otherLang) })}` +
+          refundLineFor(other.id, otherLang),
       );
     } catch (err) {
       console.warn(
@@ -418,6 +446,8 @@ export async function cancelPlanningByUser(
 
   return {
     cancelled: true,
-    ackText: t(actorLang, "stallCancelDone", { name: partnerName(other, actorLang) }),
+    ackText:
+      t(actorLang, "stallCancelDone", { name: partnerName(other, actorLang) }) +
+      refundLineFor(actor.id, actorLang),
   };
 }

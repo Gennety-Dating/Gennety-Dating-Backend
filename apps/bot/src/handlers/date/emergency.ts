@@ -5,6 +5,10 @@ import type { MessageEntity } from "grammy/types";
 import type { BotContext } from "../../session.js";
 import { applyEmergencyCancellationPeerBoost } from "../../utils/elo-calculator.js";
 import { withRedactedSummary } from "../../services/outbound-recorder.js";
+import {
+  refundMatchTickets,
+  ticketRefundNoticeKey,
+} from "../../services/ticket-refund.js";
 
 /**
  * Emergency cancellation flow (PRODUCT_SPEC.md §Phase 4.2).
@@ -192,8 +196,23 @@ export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
   const otherUserId = isA ? match.userBId : match.userAId;
   await applyEmergencyCancellationPeerBoost(otherUserId);
 
+  // The date isn't happening, so every paid ticket goes back to its payer —
+  // including this user's, who cancelled honestly (PRODUCT_SPEC §3.5b). Safe as
+  // a plain post-cancel call: the ticket-expiry rail only touches `negotiating`
+  // rows, and this path only ever cancels a `scheduled` one.
+  const refunds = await refundMatchTickets(matchId).catch((err: unknown) => {
+    console.warn("[emergency] ticket refund failed:", err);
+    return [];
+  });
+  const refundLineFor = (userId: string, refundLang: Language): string => {
+    const key = ticketRefundNoticeKey(
+      refunds.find((r) => r.userId === userId)?.refunded ?? 0,
+    );
+    return key ? `\n\n${t(refundLang, key)}` : "";
+  };
+
   const lang = ctx.session.language;
-  await ctx.reply(t(lang, "emergencyConfirmed"));
+  await ctx.reply(`${t(lang, "emergencyConfirmed")}${refundLineFor(user.id, lang)}`);
 
   // Quote exact reason to the other person — Telegram side only. Mobile
   // peers see the cancellation via the `/v1/matches/current` poll, plus a
@@ -202,6 +221,9 @@ export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
   if (other.telegramId > 0n) {
     const otherLang = (other.language ?? "en") as Language;
     const notice = buildEmergencyCancellationNotice(otherLang, forwardedReason);
+    // Appended AFTER the quote, so the blockquote entity's offset/length still
+    // line up with the verbatim reason.
+    const noticeText = `${notice.text}${refundLineFor(otherUserId, otherLang)}`;
     // The body is this user's free text, quoted verbatim into someone else's
     // chat. That chat's timeline is read back into THEIR menu agent's system
     // prompt, next to tools that write to their profile — so the timeline gets
@@ -210,7 +232,7 @@ export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
     await withRedactedSummary(
       "(partner sent a reason for cancelling the date — the full text was shown to the user)",
       () =>
-        ctx.api.sendMessage(Number(other.telegramId), notice.text, {
+        ctx.api.sendMessage(Number(other.telegramId), noticeText, {
           entities: notice.entities,
         }),
     ).catch((err: unknown) => {

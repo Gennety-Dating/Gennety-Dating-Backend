@@ -480,7 +480,17 @@ student bonus (+2 at university-email verification) use a serializable ledger
 claim on `welcome_gift` / `student_bonus`.
 **`externalPaymentId`** is either the unique provider charge id (Telegram Stars
 `telegram_payment_charge_id`) for a paid store/date-gate purchase or a synthetic
-id for an exactly-once wallet reversal. For the date gate, zero-delta
+id for an exactly-once wallet reversal. The synthetic forms in use are
+`wallet-expiry-refund:<matchId>:<payerId>` (the §3.5b expiry rail) and
+`refund:match:<matchId>:<userId>:<slot>` — the **dead-match refund**
+(`services/ticket-refund.ts`, PRODUCT_SPEC §3.5b): when a live match dies before
+the date, every paid slot returns to its payer as a wallet ticket, and the unique
+index is what makes that exactly-once across the six paths that can trigger it
+(freeze / hard delete / moderation via `cancel-in-flight-matches.ts`, emergency
+cancellation, and both §3.5c stall endings). One row per slot, so a payer who
+covered both sides gets two rows and a partial failure stays resumable. The
+planner deliberately stands down on `ticketStatus ∈ {refunded, refund_pending,
+expired}`, which the expiry rail owns. For the date gate, zero-delta
 `gate_payment` rows retain the charge needed by `refundStarPayment`; their
 settlement reason advances atomically with the match-slot CAS to `gate_settled`
 or a durable refund/surplus state. The hourly worker retries pending provider
