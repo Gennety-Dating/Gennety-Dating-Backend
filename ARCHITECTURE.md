@@ -790,7 +790,32 @@ internal analytics dashboard.
 
 Top-level routers: `audience`, `algorithm`, `gender`, `retention`, `dates`,
 `verification` (incl. a "rerun face-match pipeline" admin button), `cities`,
-`onboarding-funnel`.
+`onboarding-funnel`, `ops`.
+
+The `ops` router (`routes/ops.ts`) carries the endpoints that are not
+analytics tabs, added 2026-07-29 because every one of them was a 404 that
+external callers kept reaching for:
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/admin/health` | Liveness + readiness. Answers **503**, not 200, when the database is unreachable — a health check that reports healthy while Postgres is down silences the one alarm that matters. Carries `uptimeSeconds`, `nodeVersion`, and DB latency. |
+| GET | `/admin/stats` | Headline counters in ONE call: users by status, onboarding by step, verification by status, matches by status (+ `live` = the single-live-match states), reports by tier. Every bucket is zero-filled, so a missing group reads as `0` rather than `undefined`. |
+| GET | `/admin/dashboard` | The `/admin/stats` superset plus derived rates (`signupsLast7Days`, `activeRate`, `verifiedRate`, `matchAcceptanceRate`) and the 10 most recent matches. Shares `collectStats()` with `/admin/stats` so the two can never drift. |
+| GET | `/admin/matches` | The match **row** list — the pairs themselves, newest first, both participants inlined, `?status=` filtered and paginated. Distinct from `/admin/analytics/matches`, which is the aggregate funnel and cannot answer "which pairs exist right now". `telegramId` is serialized to a string (BigInt is not JSON-safe). |
+
+Two paths are **aliases**, registered on the same handler as their canonical
+route rather than reimplemented, so they cannot drift: `/admin/conversations`
+(+ `/:id`) → the dialogs reader, and `/admin/analytics/founder-weekly` →
+`/admin/analytics/weekly-matches`. They exist because a 404 on the name a
+caller reaches for first is indistinguishable from "the feature does not
+exist".
+
+**Every `:id` on this surface is validated as a UUID before it reaches
+Prisma** (`utils/uuid.ts`). A non-UUID id does not return "not found" — Prisma
+throws `P2023` ("Error creating UUID"), which the routes reported as a 500 with
+a stack trace. `/admin/users/:id`, `/admin/users/:id/conversation`, and
+`/admin/dialogs/:id` now answer `400 {"error":"id must be a UUID"}`, so a caller
+can tell a typo from an outage.
 
 `GET /admin/analytics/weekly-matches?weekOf=YYYY-MM-DD` returns the full
 per-pair report (both users' name/age/gender/city/verification/attractiveness +

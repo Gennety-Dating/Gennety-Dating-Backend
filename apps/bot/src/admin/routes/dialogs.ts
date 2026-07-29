@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
+import { isUuid } from "../utils/uuid.js";
 
 // ---------------------------------------------------------------------------
 // GET /admin/dialogs          — paginated list of dialogs (one per user)
@@ -299,7 +300,11 @@ function groupByUser<T extends { userId: string }>(rows: T[]): Map<string, T[]> 
 // ---------------------------------------------------------------------------
 // GET /admin/dialogs
 // ---------------------------------------------------------------------------
-dialogsRouter.get("/admin/dialogs", async (req: Request, res: Response) => {
+// `/admin/conversations` is an alias, not a second implementation: the same
+// handler is registered on both paths so the two can never drift. It exists
+// because "conversations" is the name external callers reach for first, and a
+// 404 there is indistinguishable from "the feature does not exist".
+dialogsRouter.get(["/admin/dialogs", "/admin/conversations"], async (req: Request, res: Response) => {
   try {
     const limit = parseIntParam(req.query.limit, 20, 1, 100);
     const offset = parseIntParam(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER);
@@ -537,9 +542,15 @@ dialogsRouter.get("/admin/dialogs", async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /admin/dialogs/:id — transcript for one dialog (id == user id)
 // ---------------------------------------------------------------------------
-dialogsRouter.get("/admin/dialogs/:id", async (req: Request, res: Response) => {
+dialogsRouter.get(["/admin/dialogs/:id", "/admin/conversations/:id"], async (req: Request, res: Response) => {
   try {
     const id = req.params["id"] as string;
+    // A non-UUID id makes Prisma throw P2023, which would surface as a 500.
+    // Answer the caller's actual mistake instead.
+    if (!isUuid(id)) {
+      res.status(400).json({ error: "id must be a UUID" });
+      return;
+    }
 
     const limit = parseIntParam(req.query.limit, 200, 1, 1000);
     if (limit === null) {

@@ -22,6 +22,8 @@ import { verificationRouter } from "./routes/verification.js";
 import { citiesRouter } from "./routes/cities.js";
 import { onboardingFunnelRouter } from "./routes/onboarding-funnel.js";
 import { dialogsRouter } from "./routes/dialogs.js";
+import { opsRouter } from "./routes/ops.js";
+import { isUuid } from "./utils/uuid.js";
 
 // ---------------------------------------------------------------------------
 // Auth middleware — Bearer token matching ADMIN_API_KEY (timing-safe)
@@ -161,6 +163,10 @@ app.use(onboardingFunnelRouter);
 // Conversation-reading surface for the external Hermes agent: the dialog list
 // and per-dialog transcripts. Same Bearer gate as everything else here.
 app.use(dialogsRouter);
+// Operational endpoints (`/admin/health`, `/admin/stats`, `/admin/dashboard`)
+// plus the match ROW list. Mounted after the analytics routers so a future
+// `/admin/analytics/*` path can never be shadowed by one of these.
+app.use(opsRouter);
 
 type AdminProfileSnapshot = {
   height: number | null;
@@ -368,7 +374,10 @@ app.get("/admin/analytics/matches", async (_req: Request, res: Response) => {
 // /admin/media) + synergy. Shares the assembler with the founder report page.
 // `weekOf` selects that day's 7-day window; omitted → the last 7 days.
 // ---------------------------------------------------------------------------
-app.get("/admin/analytics/weekly-matches", async (req: Request, res: Response) => {
+// `founder-weekly` is an alias for the same report: it is the name the weekly
+// founder digest refers to it by, and answering 404 there reads as "the
+// founder report does not exist" rather than "it is spelled differently".
+app.get(["/admin/analytics/weekly-matches", "/admin/analytics/founder-weekly"], async (req: Request, res: Response) => {
   try {
     const weekOfRaw = typeof req.query.weekOf === "string" ? req.query.weekOf : "";
     let since: Date;
@@ -633,6 +642,12 @@ app.post(
 app.get("/admin/users/:id", async (req: Request, res: Response) => {
   try {
     const id = req.params["id"] as string;
+    // Without this, a non-UUID id reaches Prisma and throws P2023 — reported
+    // to the caller as a 500 and logged as if the server had broken.
+    if (!isUuid(id)) {
+      res.status(400).json({ error: "id must be a UUID" });
+      return;
+    }
 
     const user = await prisma.user.findUnique({
       where: { id },
@@ -683,6 +698,10 @@ type NormalizedMessage = {
 app.get("/admin/users/:id/conversation", async (req: Request, res: Response) => {
   try {
     const id = req.params["id"] as string;
+    if (!isUuid(id)) {
+      res.status(400).json({ error: "id must be a UUID" });
+      return;
+    }
 
     const [user, aetherRows] = await Promise.all([
       prisma.user.findUnique({
