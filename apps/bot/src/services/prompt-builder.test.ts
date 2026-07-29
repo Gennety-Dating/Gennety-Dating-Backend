@@ -288,6 +288,8 @@ describe("describeActiveMatch", () => {
       // Venue-stage only; a `scheduled` match is past it.
       venueSelfSubmitted: null,
       venuePartnerSubmitted: null,
+      // Planning stages only — a booked date can't be stalled.
+      stallCheckInPending: false,
       ...overrides,
     };
   }
@@ -361,6 +363,39 @@ describe("describeActiveMatch", () => {
     expect(text).toContain("waiting on Sasha");
     // The whole point: the agent must not re-ask for something already saved.
     expect(text).toContain("Do NOT ask them to pick a point or a vibe again");
+  });
+
+  it("tells the agent a stall check-in is open, and what each answer means", () => {
+    // Without this, someone who types "да, всё в силе" instead of tapping
+    // reaches an agent with no idea a question is on screen.
+    for (const status of ["negotiating", "negotiating_venue"]) {
+      const text = describeActiveMatch(
+        scheduled({
+          status,
+          agreedTime: null,
+          venueName: null,
+          venueSelfSubmitted: status === "negotiating_venue" ? false : null,
+          stallCheckInPending: true,
+        }),
+        NOW,
+        "en-US",
+        FEATURES_OFF,
+      );
+      expect(text).toContain('"still in?" check-in is open');
+      expect(text).toContain("green button");
+      expect(text).toContain("propose_cancel_date");
+      expect(text).toContain("cancelled after 48h");
+    }
+  });
+
+  it("says nothing about a check-in when none is open", () => {
+    const text = describeActiveMatch(
+      scheduled({ status: "negotiating", agreedTime: null, venueName: null }),
+      NOW,
+      "en-US",
+      FEATURES_OFF,
+    );
+    expect(text).not.toContain("check-in");
   });
 
   it("tells the agent this side still owes a departure point and vibe", () => {

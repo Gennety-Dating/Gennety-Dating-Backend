@@ -156,6 +156,13 @@ export interface ActiveMatchView {
    */
   venueSelfSubmitted: boolean | null;
   venuePartnerSubmitted: boolean | null;
+  /**
+   * Planning stages only (§3.5c): a "still in?" check-in is on screen awaiting
+   * THIS user's answer. Set when the question was sent and hasn't been answered.
+   * Without it, someone who types "да, всё в силе" instead of tapping reaches an
+   * agent that has no idea a question is open.
+   */
+  stallCheckInPending: boolean;
 }
 
 /** Compact local clock label ("19:00"). */
@@ -209,6 +216,20 @@ export function describeActiveMatch(
   const partner = match.partnerFirstName ?? "their match";
   const lines: string[] = [];
 
+  /**
+   * Appended to both planning stages. The green button is the only thing that
+   * records "still in" — text never commits it — but the agent must at least
+   * know the question is open, and that wanting out is a legitimate answer it
+   * has a tool for.
+   */
+  const stallLine = () =>
+    match.stallCheckInPending
+      ? "A \"still in?\" check-in is open and waiting for THIS user's answer (they have gone quiet for ~24h). " +
+        "If they say they're still in, point them at the green button on that message — text alone does not record it. " +
+        "If they say their plans changed, call propose_cancel_date. If nobody answers, the match is cancelled after 48h " +
+        "and both are freed for the next weekly batch."
+      : null;
+
   if (match.status === "proposed") {
     lines.push("Has a pending match proposal — waiting for accept/decline.");
     lines.push(`Partner: ${partner}. Has 24h from the proposal to decide; decision is blind and final.`);
@@ -221,6 +242,8 @@ export function describeActiveMatch(
     if (features.tickets && match.ticketStatus && match.ticketStatus !== "completed") {
       lines.push(`Date Ticket gate: ${match.ticketStatus} (Calendar unlocks once both tickets are settled).`);
     }
+    const stall = stallLine();
+    if (stall) lines.push(stall);
     return lines.join("\n");
   }
 
@@ -238,6 +261,8 @@ export function describeActiveMatch(
         "This user has NOT submitted theirs yet — they still need to open the venue Mini App (the \"Pick on map\" button) and mark their departure point, then describe the vibe.",
       );
     }
+    const stall = stallLine();
+    if (stall) lines.push(stall);
     return lines.join("\n");
   }
 
@@ -414,7 +439,32 @@ const MATCH_CONTEXT_SELECT = {
   vibeTextB: true,
   vibeLatB: true,
   vibeLngB: true,
+  // Stall check-in state (§3.5c), per side.
+  stallCheckInSentAtA: true,
+  stallCheckInSentAtB: true,
+  stallConfirmedAtA: true,
+  stallConfirmedAtB: true,
 } as const;
+
+/**
+ * Is a "still in?" question currently unanswered for this side? A confirmation
+ * at or after the question's own timestamp means it was already answered — the
+ * same comparison the callback handler uses to decide eligibility.
+ */
+function stallCheckInPendingFor(
+  row: {
+    stallCheckInSentAtA?: Date | null;
+    stallCheckInSentAtB?: Date | null;
+    stallConfirmedAtA?: Date | null;
+    stallConfirmedAtB?: Date | null;
+  },
+  side: "A" | "B",
+): boolean {
+  const asked = side === "A" ? row.stallCheckInSentAtA : row.stallCheckInSentAtB;
+  if (!asked) return false;
+  const confirmed = side === "A" ? row.stallConfirmedAtA : row.stallConfirmedAtB;
+  return !(confirmed && confirmed >= asked);
+}
 
 /** Whether one side has a complete venue submission (departure point + vibe). */
 function venueSideSubmitted(
@@ -516,6 +566,7 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
             ? (asA as { userB?: { firstName: string | null } }).userB?.firstName
             : (asB as { userA?: { firstName: string | null } }).userA?.firstName) ??
           null,
+        stallCheckInPending: stallCheckInPendingFor(raw, asA ? "A" : "B"),
         venueSelfSubmitted: venueSideSubmitted(raw, asA ? "A" : "B"),
         venuePartnerSubmitted: venueSideSubmitted(raw, asA ? "B" : "A"),
       }

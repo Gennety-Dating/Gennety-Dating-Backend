@@ -6,6 +6,20 @@ import { MODELS } from "../models.js";
 import { openaiFetch } from "../services/openai-fetch.js";
 import { PROPOSAL_TTL_MS } from "../utils/countdown-plate.js";
 import { PAIR_NOT_BOTH_ACCEPTED } from "../utils/match-filters.js";
+import { buildLocationMapKeyboard } from "../handlers/matching/venue-negotiation.js";
+import {
+  STALL_MATCH_SELECT,
+  VENUE_NUDGE1_MS,
+  VENUE_NUDGE2_MS,
+  buildStallCheckInKeyboard,
+  cancelStalledMatch,
+  sideOwesAction,
+  stallCheckInDueAt,
+  stallDeadlineAt,
+  stallPhaseOf,
+  stallReachableFor,
+  type MatchSide,
+} from "../services/match-stall.js";
 import { isQuietHours } from "./quiet-hours.js";
 
 /**
@@ -48,25 +62,49 @@ export interface NudgeResult {
   proposalNudges: number;
   schedNudges: number;
   deadlineNudges: number;
+  venueNudges: number;
+  stallCheckIns: number;
+  stallTimeouts: number;
 }
+
+const EMPTY_RESULT: NudgeResult = {
+  proposalNudges: 0,
+  schedNudges: 0,
+  deadlineNudges: 0,
+  venueNudges: 0,
+  stallCheckIns: 0,
+  stallTimeouts: 0,
+};
 
 export async function matchNudgeTick(
   api: Api<RawApi>,
   options: NudgeOptions = {},
 ): Promise<NudgeResult> {
   const now = options.now ?? new Date();
-  if (isQuietHours(now)) return { proposalNudges: 0, schedNudges: 0, deadlineNudges: 0 };
+  // Quiet hours suppress the stall chain too, including the 48h cancellation:
+  // that outcome is a real notification, so it waits for 09:00 like every other
+  // one. A few hours of extra grace on a two-day deadline costs nothing.
+  if (isQuietHours(now)) return { ...EMPTY_RESULT };
 
   const fetchFn = options.fetchFn ?? openaiFetch;
   const batchSize = options.batchSize ?? 50;
 
-  const [proposalNudges, schedNudges, deadlineNudges] = await Promise.all([
+  const [proposalNudges, schedNudges, deadlineNudges, venueNudges, stall] = await Promise.all([
     handleProposalNudges(api, now, fetchFn, batchSize),
     handleSchedulingNudges(api, now, fetchFn, batchSize),
     handleDeadlineNudges(api, now, batchSize),
+    handleVenueNudges(api, now, batchSize),
+    handleStallChain(api, now, batchSize),
   ]);
 
-  return { proposalNudges, schedNudges, deadlineNudges };
+  return {
+    proposalNudges,
+    schedNudges,
+    deadlineNudges,
+    venueNudges,
+    stallCheckIns: stall.checkIns,
+    stallTimeouts: stall.timeouts,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -396,15 +434,30 @@ async function handleSchedulingNudges(
       ...(env.TICKET_FEATURE_ENABLED
         ? { ticketStatus: { notIn: ["pending", "partial", "refund_pending"] } }
         : {}),
-      // At least one side hasn't marked any availability yet. (`pickedTime*` is
-      // the dead pre-2026-05 column — nothing writes it, so keying off it made
-      // this always fire at BOTH sides, including one who had already picked.)
-      OR: [{ availableTimesA: { isEmpty: true } }, { availableTimesB: { isEmpty: true } }],
-      dispatchedAt: { not: null, lt: nudge1Cutoff },
+      // Two independent OR groups (availability + anchor), so they have to be
+      // AND-ed explicitly — a second bare `OR` key would overwrite the first.
+      AND: [
+        // At least one side hasn't marked any availability yet. (`pickedTime*` is
+        // the dead pre-2026-05 column — nothing writes it, so keying off it made
+        // this always fire at BOTH sides, including one who had already picked.)
+        { OR: [{ availableTimesA: { isEmpty: true } }, { availableTimesB: { isEmpty: true } }] },
+        // Anchor on when the Calendar actually opened, not on dispatch. A pair
+        // that accepted at hour 23 of the 24h decision window was already "6h
+        // past dispatch", so the first nudge could land right behind the
+        // Calendar card itself. Rows predating `schedulingOpenedAt` keep the old
+        // dispatch anchor — a slightly early nudge beats none at all.
+        {
+          OR: [
+            { schedulingOpenedAt: { lt: nudge1Cutoff } },
+            { schedulingOpenedAt: null, dispatchedAt: { not: null, lt: nudge1Cutoff } },
+          ],
+        },
+      ],
     },
     select: {
       id: true,
       dispatchedAt: true,
+      schedulingOpenedAt: true,
       schedNudge1SentAt: true,
       schedNudge2SentAt: true,
       availableTimesA: true,
@@ -419,9 +472,8 @@ async function handleSchedulingNudges(
   let count = 0;
 
   for (const match of matches) {
-    const dispatched = match.dispatchedAt!;
-    const isNudge2 =
-      dispatched <= nudge2Cutoff && !match.schedNudge2SentAt;
+    const anchor = match.schedulingOpenedAt ?? match.dispatchedAt!;
+    const isNudge2 = anchor <= nudge2Cutoff && !match.schedNudge2SentAt;
     const isNudge1 = !match.schedNudge1SentAt;
     const nudgeIndex = isNudge2 ? 2 : isNudge1 ? 1 : 0;
     if (nudgeIndex === 0) continue;
@@ -528,6 +580,196 @@ Output ONLY the message text.`;
   } catch {
     return getSchedulingFallback(name, lang);
   }
+}
+
+// ---------------------------------------------------------------------------
+// D) Venue nudges — the mirror of (B) for the departure-point + vibe step,
+//    which had no reminder of any kind. Anchored on `venuePromptAskedAt`, the
+//    moment the concierge actually asked, at the same 6h/12h cadence.
+//
+//    Static copy rather than an LLM line, because the useful part of this
+//    message is the Mini App button next to it: the departure point can only be
+//    marked on the map, so a generated sentence with no entry point would just
+//    describe a screen the user can't reach from the chat.
+// ---------------------------------------------------------------------------
+
+async function handleVenueNudges(
+  api: Api<RawApi>,
+  now: Date,
+  batchSize: number,
+): Promise<number> {
+  const nudge1Cutoff = new Date(now.getTime() - VENUE_NUDGE1_MS);
+  const nudge2Cutoff = new Date(now.getTime() - VENUE_NUDGE2_MS);
+
+  const matches = await prisma.match.findMany({
+    where: {
+      status: "negotiating_venue",
+      venueNudge2SentAt: null,
+      venuePromptAskedAt: { not: null, lt: nudge1Cutoff },
+    },
+    select: STALL_MATCH_SELECT,
+    take: batchSize,
+  });
+
+  let count = 0;
+
+  for (const match of matches) {
+    const asked = match.venuePromptAskedAt!;
+    const isNudge2 = asked <= nudge2Cutoff && !match.venueNudge2SentAt;
+    const isNudge1 = !match.venueNudge1SentAt;
+    const nudgeIndex = isNudge2 ? 2 : isNudge1 ? 1 : 0;
+    if (nudgeIndex === 0) continue;
+
+    const targets = (["A", "B"] as MatchSide[])
+      .filter((side) => sideOwesAction(match, side))
+      .map((side) => (side === "A" ? match.userA : match.userB))
+      .filter((user) => stallReachableFor(user.telegramId));
+    if (targets.length === 0) continue;
+
+    const claim = await prisma.match.updateMany({
+      where: {
+        id: match.id,
+        status: "negotiating_venue",
+        ...(nudgeIndex === 2 ? { venueNudge2SentAt: null } : { venueNudge1SentAt: null }),
+      },
+      data: nudgeIndex === 2 ? { venueNudge2SentAt: now } : { venueNudge1SentAt: now },
+    });
+    if (claim.count === 0) continue;
+
+    for (const target of targets) {
+      const lang = (target.language ?? "en") as Language;
+      try {
+        await api.sendMessage(Number(target.telegramId), t(lang, "stallVenueNudge"), {
+          reply_markup: buildLocationMapKeyboard(match.id, lang, target.theme),
+        });
+        count++;
+      } catch (err) {
+        console.warn(
+          `[match-nudge] venue send failed for ${target.telegramId}:`,
+          (err as Error).message,
+        );
+      }
+    }
+  }
+
+  return count;
+}
+
+// ---------------------------------------------------------------------------
+// E) Stall chain — the "still in?" check-in at 24h and the cancellation at 48h
+//    for the two phases that otherwise never end (PRODUCT_SPEC §3.5c).
+//
+//    Both phases are handled in one pass because the question, the deadline and
+//    the ownership predicate are identical; only the anchor and the wording
+//    differ. Timeouts are evaluated BEFORE check-ins so a match already past
+//    its deadline is never handed a fresh question on its way out.
+// ---------------------------------------------------------------------------
+
+async function handleStallChain(
+  api: Api<RawApi>,
+  now: Date,
+  batchSize: number,
+): Promise<{ checkIns: number; timeouts: number }> {
+  const matches = await prisma.match.findMany({
+    where: { status: { in: ["negotiating", "negotiating_venue"] } },
+    select: STALL_MATCH_SELECT,
+    orderBy: { createdAt: "asc" },
+    take: batchSize,
+  });
+
+  let checkIns = 0;
+  let timeouts = 0;
+
+  for (const match of matches) {
+    const phase = stallPhaseOf(match);
+    // `negotiating` with no slots yet means the Date Ticket gate is still open;
+    // its own expiry worker owns that wait, so there is nothing to stall on.
+    if (!phase) continue;
+
+    const owing = (["A", "B"] as MatchSide[]).filter((side) => sideOwesAction(match, side));
+    if (owing.length === 0) continue;
+
+    // Past the deadline on any owing side → the match ends here. The service
+    // re-reads the row and re-checks reachability, so it is safe to just ask.
+    const expired = owing.some((side) => {
+      const deadline = stallDeadlineAt(match, side);
+      return deadline !== null && deadline <= now;
+    });
+    if (expired) {
+      const outcome = await cancelStalledMatch(api, match.id, now);
+      if (outcome.cancelled) timeouts++;
+      continue;
+    }
+
+    for (const side of owing) {
+      const user = side === "A" ? match.userA : match.userB;
+      // A side that cannot receive an inline keyboard is never asked, and
+      // (see `cancelStalledMatch`) never timed out either.
+      if (!stallReachableFor(user.telegramId)) continue;
+
+      const alreadyAsked =
+        side === "A" ? match.stallCheckInSentAtA : match.stallCheckInSentAtB;
+      if (alreadyAsked) continue;
+
+      const due = stallCheckInDueAt(match, side);
+      if (!due || due > now) continue;
+
+      const claim = await prisma.match.updateMany({
+        where: {
+          id: match.id,
+          status: match.status,
+          ...(side === "A" ? { stallCheckInSentAtA: null } : { stallCheckInSentAtB: null }),
+        },
+        data: side === "A" ? { stallCheckInSentAtA: now } : { stallCheckInSentAtB: now },
+      });
+      if (claim.count === 0) continue;
+
+      const partner = side === "A" ? match.userB : match.userA;
+      const lang = (user.language ?? "en") as Language;
+      const partnerLabel = partner.firstName ?? t(lang, "stallPartnerFallbackName");
+
+      try {
+        await api.sendMessage(
+          Number(user.telegramId),
+          t(lang, phase === "venue" ? "stallCheckInVenue" : "stallCheckInScheduling", {
+            name: partnerLabel,
+          }),
+          { reply_markup: buildStallCheckInKeyboard(match.id, lang) },
+        );
+        checkIns++;
+      } catch (err) {
+        console.warn(
+          `[match-nudge] stall check-in failed for ${user.telegramId}:`,
+          (err as Error).message,
+        );
+        continue;
+      }
+
+      // Tell the side that DID their part that something is happening. This is
+      // the whole reason the check-in exists: without it, doing everything right
+      // and then waiting days is indistinguishable from the product being
+      // broken. Skipped when both sides are quiet — nobody is owed an update on
+      // a wait they are themselves causing.
+      const partnerOwes = sideOwesAction(match, side === "A" ? "B" : "A");
+      if (partnerOwes || !stallReachableFor(partner.telegramId)) continue;
+
+      const partnerLang = (partner.language ?? "en") as Language;
+      const askedLabel = user.firstName ?? t(partnerLang, "stallPartnerFallbackName");
+      try {
+        await api.sendMessage(
+          Number(partner.telegramId),
+          t(partnerLang, "stallPeerAsked", { name: askedLabel }),
+        );
+      } catch (err) {
+        console.warn(
+          `[match-nudge] stall peer notice failed for ${partner.telegramId}:`,
+          (err as Error).message,
+        );
+      }
+    }
+  }
+
+  return { checkIns, timeouts };
 }
 
 // VOICE.md §9: the nudge is understated, not an imperative with ⏰ — "the time

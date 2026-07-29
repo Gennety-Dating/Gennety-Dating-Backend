@@ -492,6 +492,40 @@ const translations = {
     pitchCountdownTapToast: "Just say yes or no whenever you're ready — the window's still open ✨",
     pitchDeadlineNudge:
       "Heads up — your window to answer this match closes in about {hours}h. If you'd like to go, just say yes now; no worries if not.",
+    // Planning-stage stall chain (PRODUCT_SPEC §3.5c). Deliberately written
+    // without gendered past-tense forms about the PARTNER, so ru/uk/pl need no
+    // M/F variants — the only gendered voice is the bot's own.
+    stallPartnerFallbackName: "your match",
+    stallVenueNudge:
+      "All that's left is marking where you'll be setting off from — then I'll pick a place that works for both of you.",
+    stallCheckInScheduling:
+      "{name} is waiting — you two stopped at picking a time.\nStill on?",
+    stallCheckInVenue:
+      "{name} is waiting — you two stopped at picking the place.\nStill on?",
+    stallBtnStillOn: "🟢 Yes, still on",
+    stallBtnPlansChanged: "Plans changed",
+    stallPeerAsked:
+      "Nudged {name} about you two — waiting to hear back.\n\n" +
+      "Nothing needed from you for now. I won't leave you hanging — I'll come back either way.",
+    stallStillOnAck: "Got it, still on ✨",
+    stallPeerStillOn: "{name} is around, still on ✨",
+    stallCancelConfirmPrompt:
+      "Cancel the date with {name}?\n\nThis is final — I won't offer this pair again.",
+    stallBtnCancelConfirm: "🔴 Yes, cancel",
+    stallBtnCancelBack: "🟢 ← Back",
+    stallCancelAborted: "Alright — still on. 👍",
+    stallCancelDone:
+      "Got it. I've let {name} know — no details.\n\nYou're back in the pool.",
+    stallPeerCancelled:
+      "Date cancelled — {name}'s plans changed.\n\n" +
+      "This isn't about you. I've bumped your priority in the next drop.",
+    stallTimeoutPartnerGone:
+      "Date cancelled — {name} never got back to us.\n\n" +
+      "A shame, but better now than on the day. I've bumped your priority in the next drop.",
+    stallTimeoutSelf:
+      "Your date with {name} is cancelled — there was no answer for two days, " +
+      "and I couldn't keep you both hanging.\n\n" +
+      "If plans change, just tell me. That's completely fine.",
     pitchExpired: "⏳ Time's up — this proposal expired.",
     matchExpiredSilentWarning:
       "Time's up — you didn't reply to your match in 24h. " +
@@ -1446,6 +1480,37 @@ const translations = {
     pitchCountdownTapToast: "Просто скажи да или нет, когда решишь — окно ещё открыто ✨",
     pitchDeadlineNudge:
       "Небольшое напоминание — окно, чтобы ответить на этот мэтч, закроется примерно через {hours}ч. Если хочешь пойти, просто скажи да сейчас; если нет — тоже окей.",
+    stallPartnerFallbackName: "твой мэтч",
+    stallVenueNudge:
+      "Осталось отметить, откуда поедешь — и я подберу место, удобное вам обоим.",
+    stallCheckInScheduling:
+      "{name} ждёт — вы остановились на выборе времени.\nВсё ещё в силе?",
+    stallCheckInVenue:
+      "{name} ждёт — вы остановились на выборе места.\nВсё ещё в силе?",
+    stallBtnStillOn: "🟢 Да, всё в силе",
+    stallBtnPlansChanged: "Планы изменились",
+    stallPeerAsked:
+      "Напомнил {name} про вас — жду ответа.\n\n" +
+      "От тебя пока ничего не нужно. Висеть в неизвестности не оставлю — вернусь с новостями в любом случае.",
+    stallStillOnAck: "Понял, всё в силе ✨",
+    stallPeerStillOn: "{name} на связи, всё в силе ✨",
+    stallCancelConfirmPrompt:
+      "Отменяем свидание с {name}?\n\nРешение окончательное — эту пару я больше не предложу.",
+    stallBtnCancelConfirm: "🔴 Да, отменить",
+    stallBtnCancelBack: "🟢 ← Назад",
+    stallCancelAborted: "Хорошо — всё в силе. 👍",
+    stallCancelDone:
+      "Понял. {name} я предупредил — без подробностей.\n\nТы снова в подборе.",
+    stallPeerCancelled:
+      "Свидание отменено — у {name} изменились планы.\n\n" +
+      "Это не про тебя. Поднял твой приоритет в следующем подборе.",
+    stallTimeoutPartnerGone:
+      "Свидание отменено — от {name} так и не было ответа.\n\n" +
+      "Обидно, но лучше сейчас, чем в день встречи. Поднял твой приоритет в следующем подборе.",
+    stallTimeoutSelf:
+      "Свидание с {name} отменено — ответа не было двое суток, " +
+      "а держать вас обоих в подвешенном состоянии я не мог.\n\n" +
+      "Если планы меняются — просто напиши мне. Это нормально.",
     pitchExpired: "⏳ Время вышло — предложение больше не актуально.",
     matchExpiredSilentWarning:
       "Время вышло — за сутки ты так и не ответил(-а) на мэтч. " +
@@ -2379,6 +2444,37 @@ const translations = {
     pitchCountdownTapToast: "Просто скажи так чи ні, коли вирішиш — вікно ще відкрите ✨",
     pitchDeadlineNudge:
       "Невелике нагадування — вікно, щоб відповісти на цей метч, закриється приблизно за {hours}год. Якщо хочеш піти, просто скажи так зараз; якщо ні — теж окей.",
+    stallPartnerFallbackName: "твій метч",
+    stallVenueNudge:
+      "Залишилося відмітити, звідки поїдеш — і я підберу місце, зручне вам обом.",
+    stallCheckInScheduling:
+      "{name} чекає — ви зупинилися на виборі часу.\nВсе ще в силі?",
+    stallCheckInVenue:
+      "{name} чекає — ви зупинилися на виборі місця.\nВсе ще в силі?",
+    stallBtnStillOn: "🟢 Так, все в силі",
+    stallBtnPlansChanged: "Плани змінилися",
+    stallPeerAsked:
+      "Нагадав {name} про вас — чекаю відповіді.\n\n" +
+      "Від тебе поки нічого не потрібно. Висіти в невідомості не залишу — повернуся з новинами в будь-якому разі.",
+    stallStillOnAck: "Зрозумів, усе в силі ✨",
+    stallPeerStillOn: "{name} на зв'язку, усе в силі ✨",
+    stallCancelConfirmPrompt:
+      "Скасовуємо побачення з {name}?\n\nРішення остаточне — цю пару я більше не запропоную.",
+    stallBtnCancelConfirm: "🔴 Так, скасувати",
+    stallBtnCancelBack: "🟢 ← Назад",
+    stallCancelAborted: "Добре — усе в силі. 👍",
+    stallCancelDone:
+      "Зрозумів. {name} я попередив — без подробиць.\n\nТи знову в підборі.",
+    stallPeerCancelled:
+      "Побачення скасовано — у {name} змінилися плани.\n\n" +
+      "Це не про тебе. Підняв твій пріоритет у наступному підборі.",
+    stallTimeoutPartnerGone:
+      "Побачення скасовано — від {name} так і не було відповіді.\n\n" +
+      "Шкода, але краще зараз, ніж у день зустрічі. Підняв твій пріоритет у наступному підборі.",
+    stallTimeoutSelf:
+      "Побачення з {name} скасовано — відповіді не було дві доби, " +
+      "а тримати вас обох у підвішеному стані я не міг.\n\n" +
+      "Якщо плани змінюються — просто напиши мені. Це нормально.",
     pitchExpired: "⏳ Час вийшов — пропозиція більше не актуальна.",
     matchExpiredSilentWarning:
       "Час вийшов — за добу ти так і не відповів(-ла) на метч. " +
@@ -3300,6 +3396,37 @@ const deTranslations: TranslationTable = {
   pitchCountdownTapToast: "Sag einfach ja oder nein, wenn du so weit bist — das Fenster ist noch offen ✨",
   pitchDeadlineNudge:
     "Kurzer Hinweis — dein Fenster, um auf dieses Match zu antworten, schließt in etwa {hours}h. Wenn du hingehen möchtest, sag jetzt einfach ja; kein Problem, wenn nicht.",
+  stallPartnerFallbackName: "dein Match",
+  stallVenueNudge:
+    "Es fehlt nur noch, wo du losfährst — dann finde ich einen Ort, der für euch beide passt.",
+  stallCheckInScheduling:
+    "{name} wartet — ihr seid bei der Zeitwahl stehen geblieben.\nAlles noch aktuell?",
+  stallCheckInVenue:
+    "{name} wartet — ihr seid bei der Ortswahl stehen geblieben.\nAlles noch aktuell?",
+  stallBtnStillOn: "🟢 Ja, alles bleibt",
+  stallBtnPlansChanged: "Pläne haben sich geändert",
+  stallPeerAsked:
+    "Habe {name} an euch erinnert — warte auf Antwort.\n\n" +
+    "Von dir braucht es erstmal nichts. Ich lasse dich nicht hängen — ich melde mich auf jeden Fall.",
+  stallStillOnAck: "Alles klar, bleibt so ✨",
+  stallPeerStillOn: "{name} ist da, alles bleibt ✨",
+  stallCancelConfirmPrompt:
+    "Das Date mit {name} absagen?\n\nDas ist endgültig — dieses Paar schlage ich nicht wieder vor.",
+  stallBtnCancelConfirm: "🔴 Ja, absagen",
+  stallBtnCancelBack: "🟢 ← Zurück",
+  stallCancelAborted: "Gut — bleibt so. 👍",
+  stallCancelDone:
+    "Verstanden. {name} habe ich informiert — ohne Details.\n\nDu bist wieder im Pool.",
+  stallPeerCancelled:
+    "Date abgesagt — bei {name} haben sich die Pläne geändert.\n\n" +
+    "Das liegt nicht an dir. Ich habe deine Priorität für den nächsten Drop erhöht.",
+  stallTimeoutPartnerGone:
+    "Date abgesagt — von {name} kam keine Antwort.\n\n" +
+    "Schade, aber besser jetzt als am Tag selbst. Ich habe deine Priorität für den nächsten Drop erhöht.",
+  stallTimeoutSelf:
+    "Dein Date mit {name} ist abgesagt — zwei Tage keine Antwort, " +
+    "und ich konnte euch beide nicht länger hängen lassen.\n\n" +
+    "Wenn sich Pläne ändern, sag es mir einfach. Das ist völlig okay.",
   pitchExpired: "⏳ Zeit abgelaufen - dieser Vorschlag ist verfallen.",
   matchExpiredSilentWarning:
     "Zeit abgelaufen - du hast deinem Match innerhalb von 24h nicht geantwortet. " +
@@ -4200,6 +4327,37 @@ const plTranslations: TranslationTable = {
   pitchCountdownTapToast: "Po prostu powiedz tak lub nie, gdy będziesz gotowy — okno wciąż jest otwarte ✨",
   pitchDeadlineNudge:
     "Małe przypomnienie — okno na odpowiedź na to dopasowanie zamknie się za około {hours}h. Jeśli chcesz iść, po prostu powiedz teraz tak; jeśli nie — też w porządku.",
+  stallPartnerFallbackName: "twoje dopasowanie",
+  stallVenueNudge:
+    "Zostało tylko zaznaczyć, skąd wyruszasz — wtedy znajdę miejsce wygodne dla was oboje.",
+  stallCheckInScheduling:
+    "{name} czeka — zatrzymaliście się na wyborze godziny.\nWciąż aktualne?",
+  stallCheckInVenue:
+    "{name} czeka — zatrzymaliście się na wyborze miejsca.\nWciąż aktualne?",
+  stallBtnStillOn: "🟢 Tak, wszystko aktualne",
+  stallBtnPlansChanged: "Plany się zmieniły",
+  stallPeerAsked:
+    "Przypomniałem {name} o was — czekam na odpowiedź.\n\n" +
+    "Od ciebie na razie nic nie trzeba. Nie zostawię cię w zawieszeniu — wrócę z wieściami tak czy inaczej.",
+  stallStillOnAck: "Jasne, wszystko aktualne ✨",
+  stallPeerStillOn: "{name} jest w kontakcie, wszystko aktualne ✨",
+  stallCancelConfirmPrompt:
+    "Odwołujemy randkę z {name}?\n\nTo decyzja ostateczna — tej pary już nie zaproponuję.",
+  stallBtnCancelConfirm: "🔴 Tak, odwołaj",
+  stallBtnCancelBack: "🟢 ← Wróć",
+  stallCancelAborted: "Dobrze — wszystko zostaje. 👍",
+  stallCancelDone:
+    "Rozumiem. {name} poinformowałem — bez szczegółów.\n\nWracasz do puli.",
+  stallPeerCancelled:
+    "Randka odwołana — u {name} zmieniły się plany.\n\n" +
+    "To nie o ciebie. Podniosłem twój priorytet w następnym doborze.",
+  stallTimeoutPartnerGone:
+    "Randka odwołana — od {name} nie było odpowiedzi.\n\n" +
+    "Szkoda, ale lepiej teraz niż w dniu spotkania. Podniosłem twój priorytet w następnym doborze.",
+  stallTimeoutSelf:
+    "Twoja randka z {name} została odwołana — dwa dni bez odpowiedzi, " +
+    "a nie mogłem trzymać was oboje w zawieszeniu.\n\n" +
+    "Jeśli plany się zmieniają — po prostu napisz. To normalne.",
   pitchExpired: "⏳ Czas minął - ta propozycja wygasła.",
   matchExpiredSilentWarning:
     "Czas minął - nie odpowiedziałeś/odpowiedziałaś na dopasowanie w ciągu 24h. " +

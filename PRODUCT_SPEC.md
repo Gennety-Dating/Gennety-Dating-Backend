@@ -1892,6 +1892,84 @@ purchase rail; the free wallet "Use a ticket" path is unaffected.
   `ticketStatus` is a sub-state so the scheduling/venue/lifecycle code is
   untouched. Blind-decision and all other invariants are unaffected.
 
+### 3.5c Planning stall: the check-in and the 48h end (always-on, Telegram-only)
+
+The 24 h TTL covers only the pitch decision. Once both sides accept, the
+scheduling (§3.6) and venue (§3.7) steps had **no deadline of any kind** — a
+partner who went quiet left the other person waiting indefinitely, with no chat
+to ask through and, before this, no way to cancel either (the emergency button
+only exists once a date is `scheduled` and within T-5 h).
+
+**The cost was never the silence.** Both sides occupy a live match, and the
+single-live-match invariant (§3.2 filter 8) excludes them from every weekly
+batch until it resolves. One ghost therefore cost the other person an entire
+cycle — and nothing in the product could end it. Freeing both sides for the next
+drop is what this section is actually for; the reminders are the polite part.
+
+**The chain**, per side, counted from when the phase opened:
+
+| When | Who | What |
+|---|---|---|
+| 6 h / 12 h | the side that still owes an action | gentle nudge (the venue step's is new; scheduling already had this pair) |
+| 24 h | same | **check-in: 🟢 "Still on" / "Plans changed"** — and the side that already did its part is told it happened |
+| 48 h | — | the match is cancelled; both are freed |
+
+- **The anchor is the phase, not the pitch.** Venue counts from
+  `venuePromptAskedAt`; scheduling from the new `Match.schedulingOpenedAt`,
+  written by `startScheduling`. The scheduling nudges used to count from
+  `dispatchedAt`, which also covers the up-to-24 h decision window — a pair that
+  accepted at hour 23 was already "6 h past dispatch", so the first "pick a time"
+  nudge could land right behind the Calendar card. Rows predating the column keep
+  the dispatch anchor.
+- **`negotiating` with no `proposedTimes` is not a stall.** That state is the
+  §3.5b Date Ticket gate, which has its own deadline, refund policy and expiry
+  worker. `proposedTimes` is the honest discriminator because `startScheduling`
+  writes it when (and only when) the Calendar opens; `ticketStatus` cannot be
+  used — it defaults to `pending` even with tickets switched off entirely.
+- **🟢 commits instantly, 🔴 always confirms.** Green needs no confirmation:
+  it changes nothing the user could regret, pushes that side's 48 h out from now,
+  and re-arms the question **once** (gated on it being the first confirmation, so
+  the chain is bounded at two questions and green cannot hold a match open
+  forever). Each sent question can be confirmed exactly once — the write is a CAS
+  on the confirmation timestamp and requires it to predate the question — so a
+  tap on a stale button is a no-op rather than another 48 h. Red opens a
+  confirmation card with a way back, like passing on a pitch: cancelling is
+  irreversible under the lifetime pair ban (§3.2 filter 6).
+- **Penalties are asymmetric on purpose.** An honest "plans changed" costs
+  **nothing** — that is the behaviour the check-in exists to produce, and pricing
+  it would make silence the cheaper move. Running the clock out is treated as a
+  **silent ignore**: `silentIgnoreCount++` with the same forgive-once rule the
+  pitch stage uses (§3.4), then the decline-grade Elo penalty. Either way the
+  other side gets next-batch priority (`boostAcceptedSidePriority`), because
+  their week is gone regardless.
+- **The notices say what actually happened**, and never guess. Someone who did
+  their part hears that the partner never answered, framed as the save it is
+  ("better now than on the day"). Someone whose partner cancelled hears that
+  their plans changed, plus the existing "this isn't about you". The quiet side
+  hears why it lapsed and — the part that matters next time — that telling us is
+  a normal thing to do. The copy says **priority in the next drop**, never
+  "rating": what moves is `standbyCount`, not attractiveness Elo.
+- **Cancellation by text and voice, at every stage.** The agent's
+  `propose_cancel_date` (§2.1, class **confirm**) used to filter on `scheduled`
+  alone and told the model to "explain that instead", so a user who wrote *"I
+  want to cancel"* mid-planning got a polite explanation and zero ways out. It
+  now also resolves the two planning phases and hands over the same confirmation
+  card. Text and voice still never commit anything — the irreversible step is
+  always the user's own red tap on a real handler. When the message is ambiguous
+  between *how does cancelling work* and *cancel it*, the agent asks one short
+  clarifying question first. The agent also learns when a check-in is open, so
+  someone who types "да, всё в силе" instead of tapping gets pointed at the green
+  button rather than a blank stare.
+- **Telegram-only, and fail-safe about it.** The check-in is an inline-keyboard
+  question, so a mobile-only participant (synthetic negative `telegramId`) could
+  never answer it. A stall whose owing side is unreachable is therefore left
+  **completely alone** — never asked, never timed out. Cancelling on someone we
+  never asked would be indefensible.
+- Quiet hours (23:00–09:00 Kyiv) suppress the whole chain, cancellation
+  included — that outcome is a real notification. A few hours of extra grace on a
+  two-day deadline costs nothing. Runs on the existing hourly `match-nudge` cron;
+  no new schedule.
+
 ### 3.6 Calendar Scheduling
 
 After mutual accept (or, when the Date Ticket gate of §3.5b is enabled, after

@@ -72,6 +72,16 @@ export function buildProductPlaybook(features: PlaybookFeatures): string {
 - Both see each other's marks live. The instant there is exactly one shared slot it auto-locks; if several overlap, the responder taps one to confirm.
 - They never message about timing — they just tap availability and the date locks itself.`);
 
+  // The one thing users ask that the playbook had no answer for: "what if they
+  // just never reply?" Before §3.5c the honest answer was "nothing happens,
+  // ever" — so this had to be documented the moment it stopped being true.
+  sections.push(`## What happens if the OTHER person goes quiet while planning
+- Applies to both planning steps (picking a time, picking the place). Nobody waits forever.
+- Reminders go to whoever still owes an action after ~6h and ~12h.
+- At ~24h that person gets a direct "still on?" question with two buttons; if they confirm, the person waiting is told so.
+- If nobody answers, the match is cancelled after ~48h. Both people are freed for the next weekly batch and the one who was waiting gets a priority boost. Say this plainly if asked — it is a real end date, not a vague "we'll see".
+- Either person can also end it themselves at any point during planning: they just say so, and a confirmation button appears (with a way back). Saying "my plans changed" carries no penalty at all — going silent does.`);
+
   sections.push(`## Stage — picking the place (venue)
 - After the time locks, each person is asked, in order: (1) their departure point — where they'll set OFF from — via a map Mini App, then (2) a short "vibe" (e.g. quiet cafe, park walk).
 - The concierge then picks ONE venue that's fair for both commutes (it minimises the worse of the two commutes), operational, well-rated, and student-priced. They don't pick from a list — we choose and confirm it.

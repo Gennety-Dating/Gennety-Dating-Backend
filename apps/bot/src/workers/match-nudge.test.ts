@@ -4,10 +4,22 @@ vi.mock("@gennety/db", () => ({
   prisma: {
     match: {
       findMany: vi.fn(),
+      findUnique: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    profile: { update: vi.fn() },
   },
+}));
+
+// The stall chain's cancellation settles Elo/priority — stub both so the worker
+// tests stay about scheduling and dispatch. Their own behaviour is covered in
+// `services/match-stall.test.ts`.
+vi.mock("../services/match-decision-shared.js", () => ({
+  boostAcceptedSidePriority: vi.fn().mockResolvedValue(true),
+}));
+vi.mock("../utils/elo-calculator.js", () => ({
+  applySilentIgnorePenalty: vi.fn().mockResolvedValue(495),
 }));
 
 // Mutable so a test can flip the Date Ticket gate — the scheduling query only
@@ -15,9 +27,15 @@ vi.mock("@gennety/db", () => ({
 // with it off, `ticketStatus` never leaves its "pending" default and an
 // unconditional filter would suppress every scheduling nudge).
 const { mockEnv } = vi.hoisted(() => ({
-  mockEnv: { OPENAI_API_KEY: "test-key", TICKET_FEATURE_ENABLED: false } as {
+  mockEnv: {
+    OPENAI_API_KEY: "test-key",
+    TICKET_FEATURE_ENABLED: false,
+    // The venue nudge attaches the Location Mini App button.
+    WEBAPP_URL: "https://test.invalid",
+  } as {
     OPENAI_API_KEY: string;
     TICKET_FEATURE_ENABLED: boolean;
+    WEBAPP_URL: string;
   },
 }));
 
@@ -101,7 +119,14 @@ describe("matchNudgeTick", () => {
     const api = createMockApi();
     const result = await matchNudgeTick(api, { now: QUIET_TIME });
 
-    expect(result).toEqual({ proposalNudges: 0, schedNudges: 0, deadlineNudges: 0 });
+    expect(result).toEqual({
+      proposalNudges: 0,
+      schedNudges: 0,
+      deadlineNudges: 0,
+      venueNudges: 0,
+      stallCheckIns: 0,
+      stallTimeouts: 0,
+    });
     expect(prisma.match.findMany).not.toHaveBeenCalled();
   });
 
@@ -348,5 +373,209 @@ describe("matchNudgeTick", () => {
 
     expect(result.proposalNudges).toBe(0);
     expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Venue nudges + the planning-stall chain (PRODUCT_SPEC §3.5c).
+//
+// These route `findMany` by the queried status instead of chaining
+// `mockResolvedValueOnce`: five queries now run in one tick, and an
+// order-dependent chain would silently re-point at a different branch the next
+// time a handler is added.
+// ---------------------------------------------------------------------------
+
+const STALL_CHECK_IN_MS = 24 * 60 * 60 * 1000;
+const STALL_TIMEOUT_MS = 48 * 60 * 60 * 1000;
+const SLOT = new Date("2026-08-01T16:00:00Z");
+
+function makeVenueMatch(overrides: Record<string, unknown> = {}) {
+  // Side A owes its departure point + vibe; side B is done and waiting.
+  return {
+    id: "match-v",
+    status: "negotiating_venue",
+    userAId: "user-a",
+    userBId: "user-b",
+    dispatchedAt: new Date(DAY_TIME.getTime() - 40 * 60 * 60_000),
+    schedulingOpenedAt: new Date(DAY_TIME.getTime() - 30 * 60 * 60_000),
+    venuePromptAskedAt: new Date(DAY_TIME.getTime() - 7 * 60 * 60_000),
+    proposedTimes: [SLOT],
+    availableTimesA: [SLOT],
+    availableTimesB: [SLOT],
+    vibeTextA: null,
+    vibeLatA: null,
+    vibeLngA: null,
+    vibeTextB: "park walk",
+    vibeLatB: 50.4,
+    vibeLngB: 30.5,
+    venueNudge1SentAt: null,
+    venueNudge2SentAt: null,
+    stallCheckInSentAtA: null,
+    stallCheckInSentAtB: null,
+    stallConfirmedAtA: null,
+    stallConfirmedAtB: null,
+    userA: { id: "user-a", telegramId: 21n, language: "en", firstName: "Alice", theme: "dark" },
+    userB: { id: "user-b", telegramId: 22n, language: "en", firstName: "Bob", theme: "dark" },
+    ...overrides,
+  };
+}
+
+/** Route each of the tick's queries to its own fixture by queried status. */
+function routeFindMany(rows: { venue?: unknown[]; stall?: unknown[] }) {
+  (prisma.match.findMany as ReturnType<typeof vi.fn>).mockImplementation(
+    (args: { where?: { status?: unknown } }) => {
+      const status = args?.where?.status;
+      if (status === "negotiating_venue") return Promise.resolve(rows.venue ?? []);
+      if (typeof status === "object" && status !== null && "in" in status) {
+        return Promise.resolve(rows.stall ?? []);
+      }
+      return Promise.resolve([]);
+    },
+  );
+}
+
+describe("matchNudgeTick — venue nudges", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnv.TICKET_FEATURE_ENABLED = false;
+    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+  });
+
+  it("nudges only the side that still owes, and carries the map button", async () => {
+    routeFindMany({ venue: [makeVenueMatch()] });
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { now: DAY_TIME });
+
+    expect(result.venueNudges).toBe(1);
+    expect(api.sendMessage).toHaveBeenCalledOnce();
+    const [chatId, , opts] = api.sendMessage.mock.calls[0];
+    expect(chatId).toBe(21);
+    // Static copy is pointless without the Mini App entry — the departure point
+    // can only be marked on the map.
+    expect(JSON.stringify(opts)).toContain("location.html");
+  });
+
+  it("says nothing once both sides have submitted", async () => {
+    routeFindMany({
+      venue: [makeVenueMatch({ vibeTextA: "quiet cafe", vibeLatA: 50.45, vibeLngA: 30.52 })],
+    });
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { now: DAY_TIME });
+
+    expect(result.venueNudges).toBe(0);
+    expect(prisma.match.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("matchNudgeTick — stall chain", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnv.TICKET_FEATURE_ENABLED = false;
+    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+    (prisma.profile.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      silentIgnoreCount: 1,
+    });
+  });
+
+  it("asks the quiet side at 24h and tells the waiting side it happened", async () => {
+    const asked = new Date(DAY_TIME.getTime() - STALL_CHECK_IN_MS - 60_000);
+    routeFindMany({ stall: [makeVenueMatch({ venuePromptAskedAt: asked })] });
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { now: DAY_TIME });
+
+    expect(result.stallCheckIns).toBe(1);
+    const byChat = new Map<number, unknown[]>(
+      (api.sendMessage.mock.calls as unknown[][]).map((c) => [Number(c[0]), c]),
+    );
+    // The quiet side gets the question, with both answers on it.
+    expect(JSON.stringify(byChat.get(21)?.[2])).toContain("stall:ok:match-v");
+    expect(JSON.stringify(byChat.get(21)?.[2])).toContain("stall:no:match-v");
+    // The side that did its part learns something is being done about the wait.
+    expect(String(byChat.get(22)?.[1])).toContain("Alice");
+  });
+
+  it("stays quiet before the 24h mark", async () => {
+    const asked = new Date(DAY_TIME.getTime() - STALL_CHECK_IN_MS + 60 * 60_000);
+    routeFindMany({ stall: [makeVenueMatch({ venuePromptAskedAt: asked })] });
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { now: DAY_TIME });
+
+    expect(result.stallCheckIns).toBe(0);
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("asks once — a stamped check-in is not repeated", async () => {
+    const asked = new Date(DAY_TIME.getTime() - STALL_CHECK_IN_MS - 60_000);
+    routeFindMany({
+      stall: [
+        makeVenueMatch({
+          venuePromptAskedAt: asked,
+          stallCheckInSentAtA: new Date(DAY_TIME.getTime() - 60 * 60_000),
+        }),
+      ],
+    });
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { now: DAY_TIME });
+
+    expect(result.stallCheckIns).toBe(0);
+  });
+
+  it("cancels at 48h instead of asking again", async () => {
+    const asked = new Date(DAY_TIME.getTime() - STALL_TIMEOUT_MS - 60_000);
+    const match = makeVenueMatch({ venuePromptAskedAt: asked });
+    routeFindMany({ stall: [match] });
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(match);
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { now: DAY_TIME });
+
+    expect(result.stallTimeouts).toBe(1);
+    expect(result.stallCheckIns).toBe(0);
+    expect(prisma.match.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "cancelled" } }),
+    );
+  });
+
+  it("leaves the Date Ticket gate alone (negotiating with no slots yet)", async () => {
+    // That wait has its own deadline and refund policy; stalling it here could
+    // cancel a match over an unpaid ticket.
+    routeFindMany({
+      stall: [
+        makeVenueMatch({
+          status: "negotiating",
+          proposedTimes: [],
+          venuePromptAskedAt: null,
+          schedulingOpenedAt: new Date(DAY_TIME.getTime() - STALL_TIMEOUT_MS - 60_000),
+        }),
+      ],
+    });
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { now: DAY_TIME });
+
+    expect(result.stallCheckIns).toBe(0);
+    expect(result.stallTimeouts).toBe(0);
+    expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("never asks or cancels on a side with no Telegram presence", async () => {
+    const asked = new Date(DAY_TIME.getTime() - STALL_TIMEOUT_MS - 60_000);
+    const match = makeVenueMatch({
+      venuePromptAskedAt: asked,
+      userA: { id: "user-a", telegramId: -21n, language: "en", firstName: "Alice", theme: "dark" },
+    });
+    routeFindMany({ stall: [match] });
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(match);
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { now: DAY_TIME });
+
+    expect(result.stallCheckIns).toBe(0);
+    expect(result.stallTimeouts).toBe(0);
   });
 });

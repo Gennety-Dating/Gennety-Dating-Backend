@@ -495,14 +495,25 @@ bot.start({
     );
     console.log(`[cron] Profiler scheduled: "${PROFILER_CRON_SCHEDULE}"`);
 
-    // Match nudge: proposal (3h/10h) and scheduling (6h/12h) reminders.
+    // Match nudge: proposal (3h/10h), scheduling and venue (6h/12h) reminders,
+    // plus the planning-stage stall chain — "still in?" at 24h, cancellation at
+    // 48h (PRODUCT_SPEC §3.5c).
     cron.schedule(
       MATCH_NUDGE_CRON_SCHEDULE,
       guardedTick("match-nudge", () =>
         matchNudgeTick(bot.api).then((r) => {
-          if (r.proposalNudges > 0 || r.schedNudges > 0 || r.deadlineNudges > 0) {
+          const total =
+            r.proposalNudges +
+            r.schedNudges +
+            r.deadlineNudges +
+            r.venueNudges +
+            r.stallCheckIns +
+            r.stallTimeouts;
+          if (total > 0) {
             console.log(
-              `[match-nudge] proposal=${r.proposalNudges} sched=${r.schedNudges} deadline=${r.deadlineNudges}`,
+              `[match-nudge] proposal=${r.proposalNudges} sched=${r.schedNudges} ` +
+                `deadline=${r.deadlineNudges} venue=${r.venueNudges} ` +
+                `stallCheckIns=${r.stallCheckIns} stallTimeouts=${r.stallTimeouts}`,
             );
           }
         }),

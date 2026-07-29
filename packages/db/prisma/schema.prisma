@@ -1090,6 +1090,14 @@ model Match {
   /// Phase 4: Safety note sent to the female user 1.5h before `agreedTime`.
   /// Idempotency marker — null = not yet sent, timestamp = sent.
   safetyNoteSentAt     DateTime? @map("safety_note_sent_at")
+  /// The participant who ended this match by hand. Named for the emergency
+  /// cancellation of a `scheduled` date (§Phase 4), but also written by the
+  /// planning-stage cancellation (§3.5c — "plans changed" at the scheduling or
+  /// venue step), so the column means "who cancelled" rather than "who used the
+  /// emergency button". Safe to share: both readers of it
+  /// (`handlers/date/emergency.ts`, the agent's `propose_cancel_date`) are
+  /// scoped to `status = 'scheduled'`, and a cancelled row has left that status.
+  /// Null on a match that expired or was cancelled by the system.
   emergencyCancelledBy String?   @map("emergency_cancelled_by") @db.Uuid
   emergencyReason      String?   @map("emergency_reason")
   feedbackByA          String?   @map("feedback_by_a")
@@ -1159,6 +1167,33 @@ model Match {
   /// TTL expires (not anchored to dispatch like the two above), sent only to
   /// sides that still haven't decided. Idempotency marker for that single DM.
   proposalDeadlineNudgeSentAt DateTime? @map("proposal_deadline_nudge_sent_at")
+  /// Venue-phase nudges (status = "negotiating_venue", a side hasn't submitted
+  /// its departure point + vibe yet). Same 6h/12h cadence as the scheduling
+  /// pair above, anchored on `venuePromptAskedAt`.
+  venueNudge1SentAt    DateTime? @map("venue_nudge1_sent_at")
+  venueNudge2SentAt    DateTime? @map("venue_nudge2_sent_at")
+
+  /// When the Calendar was actually opened for this pair (`startScheduling`).
+  /// The scheduling-phase cadence anchors here, NOT on `dispatchedAt`: a pair
+  /// that accepted at hour 23 of the 24h decision window was already "6h past
+  /// dispatch", so the first "pick a time" nudge could land minutes after the
+  /// Calendar itself. It is also the stall anchor for the same phase. Null on
+  /// rows created before this column existed — those fall back to
+  /// `dispatchedAt`, preserving the old behaviour rather than never nudging.
+  schedulingOpenedAt   DateTime? @map("scheduling_opened_at")
+
+  /// Stall check-in (PRODUCT_SPEC §3.5c) — the "still in?" question sent to a
+  /// side that has owed an action for ~24h at the scheduling or venue phase.
+  /// PER SIDE, unlike every nudge column above, because both participants can
+  /// independently go quiet and each needs their own question and their own
+  /// answer. `stallConfirmedAt*` records a 🟢 "still in" tap: it pushes that
+  /// side's timeout deadline out and re-arms the check-in exactly once (the
+  /// re-arm is gated on this column having been null, so the chain is bounded
+  /// at two questions and can't be held open forever by tapping green).
+  stallCheckInSentAtA  DateTime? @map("stall_check_in_sent_at_a")
+  stallCheckInSentAtB  DateTime? @map("stall_check_in_sent_at_b")
+  stallConfirmedAtA    DateTime? @map("stall_confirmed_at_a")
+  stallConfirmedAtB    DateTime? @map("stall_confirmed_at_b")
 
   /// Phase 4 mobile: personalised ice-breakers persisted per side so the
   /// Expo app can display the same topics that Telegram users receive via DM.

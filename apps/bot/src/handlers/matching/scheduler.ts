@@ -167,6 +167,11 @@ export async function startScheduling(
       proposedTimes: slots,
       availableTimesA: [],
       availableTimesB: [],
+      // The anchor every scheduling-phase reminder counts from. Without it the
+      // cadence ran off `dispatchedAt`, which also covers the up-to-24h decision
+      // window — a pair that accepted late was already "6h past dispatch", so
+      // the first "pick a time" nudge could land right behind the Calendar card.
+      schedulingOpenedAt: new Date(),
     },
   });
 

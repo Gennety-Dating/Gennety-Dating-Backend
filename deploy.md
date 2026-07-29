@@ -1,5 +1,77 @@
 # Gennety Dating Deploy
 
+**PENDING — planning stall chain (PRODUCT_SPEC §3.5c).** Code-only otherwise:
+**no env change, no flag change, no Mini App change** (`apps/webapp` untouched).
+Always-on — there is no feature flag, because the thing it fixes is a hole rather
+than a feature: the scheduling and venue steps had no deadline, so a partner who
+went quiet kept BOTH sides out of every weekly batch indefinitely.
+
+**⚠️ Requires an additive `db:push` BEFORE the restart.** Seven new nullable
+`matches` columns are selected by a worker that runs every hour AND written by
+`startScheduling` on every mutual accept, so a DB missing them throws `P2022` —
+the PM2 crash-loop this file warns about. Verify additive first (expect seven
+`ADD COLUMN`, zero `DROP`):
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # must exit 0 before pm2 restart
+```
+
+New columns: `venue_nudge1_sent_at`, `venue_nudge2_sent_at`,
+`scheduling_opened_at`, `stall_check_in_sent_at_a/_b`,
+`stall_confirmed_at_a/_b`.
+
+What ships: 6 h/12 h reminders on the venue step (which had none), a "still in?"
+check-in with 🟢/🔴 at 24 h, and cancellation at 48 h that frees both sides for
+the next drop. Plus cancellation by **text or voice at every planning stage** —
+the agent's `propose_cancel_date` filtered on `scheduled` alone, so someone
+writing "I want to cancel" mid-planning got an explanation and no way out.
+
+**Two behaviours worth knowing before the restart:**
+
+- **The existing scheduling nudge cadence changes anchor.** It counted from
+  `dispatchedAt`, which also covers the up-to-24 h decision window, so a pair
+  that accepted at hour 23 could get "pick a time" seconds after the Calendar
+  card. It now counts from `scheduling_opened_at`. In-flight rows have that
+  column null and keep the old dispatch anchor, so nothing in flight changes
+  behaviour mid-deploy.
+- **The 48 h cancellation is real and irreversible.** Production currently holds
+  0 matches ever, so there is nothing in flight to sweep on the first tick — but
+  check before restarting if that has changed:
+
+```sh
+psql "$DATABASE_URL" -c "select status, count(*) from matches where status in ('negotiating','negotiating_venue') group by 1;"
+# Any such row older than 48h will be cancelled on the first non-quiet-hours
+# tick. Both sides get a notice and next-batch priority; nothing is lost, but
+# know it is coming rather than discovering it in the logs.
+```
+
+Watch the first day via the cron line — it only logs when something happened:
+
+```sh
+pm2 logs gennety-bot --lines 200 --nostream | grep '\[match-nudge\]'
+pm2 logs gennety-bot --lines 200 --nostream | grep '\[match-stall\]'
+```
+
+**Known gap, deliberately deferred:** a stall cancellation does **not** refund a
+paid Date Ticket. That hole already exists on every other cancellation path
+(emergency cancel of a scheduled date burns both tickets today — neither
+`cancel-in-flight-matches.ts` nor `handlers/date/emergency.ts` mentions refunds).
+It is being fixed in a separate pass under one rule: the date didn't happen → the
+ticket returns to the wallet, for everyone who paid. Until then this change
+widens the existing hole slightly, so don't leave the two deploys far apart.
+
+**Rollback:** revert the code and restart. The additive columns can stay. There
+is no flag to flip — if the chain has to be stopped without a code revert, set
+`MATCH_NUDGE_CRON_SCHEDULE` far-future (e.g. `0 0 31 2 *`), which also silences
+every other match nudge.
+
+---
+
 **Deployed 2026-07-29 — admin ops endpoints + the three blocks that had been
 sitting PENDING below (`f9e08eb`, 30 commits since `58134b8`… i.e. everything
 after the 2026-07-27 release).** Full server code + Mini App + **both** additive

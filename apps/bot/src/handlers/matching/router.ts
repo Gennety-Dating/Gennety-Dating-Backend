@@ -22,6 +22,18 @@ import {
   resolveVenueRoutingState,
 } from "./venue-negotiation.js";
 import { handleVenuePayDecline } from "./venue-change.js";
+import {
+  handleStallAskCancel,
+  handleStallCancelBack,
+  handleStallCancelConfirm,
+  handleStallStillOn,
+} from "./stall-checkin.js";
+import {
+  STALL_ASK_CANCEL_PREFIX,
+  STALL_CANCEL_BACK_PREFIX,
+  STALL_CANCEL_CONFIRM_PREFIX,
+  STALL_OK_PREFIX,
+} from "../../services/match-stall.js";
 import { handleRematchBuyCallback, REMATCH_BUY_CALLBACK } from "./rematch.js";
 
 /**
@@ -94,6 +106,25 @@ matchingRouter.use(async (ctx, next) => {
   // (wish-card inline button). Payment itself rides Stars invoice links.
   if (data?.startsWith("vchg:paydecline:")) {
     await handleVenuePayDecline(ctx);
+    return;
+  }
+
+  // Planning-stage stall check-in (§3.5c). The four prefixes don't nest, so
+  // dispatch order here carries no hidden meaning.
+  if (data?.startsWith(STALL_OK_PREFIX)) {
+    await handleStallStillOn(ctx);
+    return;
+  }
+  if (data?.startsWith(STALL_ASK_CANCEL_PREFIX)) {
+    await handleStallAskCancel(ctx);
+    return;
+  }
+  if (data?.startsWith(STALL_CANCEL_CONFIRM_PREFIX)) {
+    await handleStallCancelConfirm(ctx);
+    return;
+  }
+  if (data?.startsWith(STALL_CANCEL_BACK_PREFIX)) {
+    await handleStallCancelBack(ctx);
     return;
   }
 

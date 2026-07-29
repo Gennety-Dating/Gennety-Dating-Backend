@@ -896,7 +896,8 @@ describe("menu-agent propose_cancel_date", () => {
   it("hands over the existing emergency button and cancels nothing itself", async () => {
     (prisma.match.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "match-9",
-      agreedTime: new Date("2026-08-01T17:00:00Z"),
+      status: "scheduled",
+      proposedTimes: [],
     });
     const fetchFn = vi
       .fn()
@@ -916,7 +917,7 @@ describe("menu-agent propose_cancel_date", () => {
     });
   });
 
-  it("offers no button when there is no scheduled date", async () => {
+  it("offers no button when there is nothing booked or being planned", async () => {
     (prisma.match.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     const fetchFn = vi
       .fn()
@@ -930,6 +931,33 @@ describe("menu-agent propose_cancel_date", () => {
     });
 
     expect(result.action).toBeUndefined();
+  });
+
+  it("reaches the planning-stage cancellation too, not just a booked date", async () => {
+    // Before §3.5c this tool filtered on `scheduled` alone, so someone writing
+    // "I want to cancel" mid-planning got a polite explanation and no way out.
+    (prisma.match.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "match-7",
+      status: "negotiating_venue",
+      proposedTimes: [new Date("2026-08-01T16:00:00Z")],
+    });
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "propose_cancel_date", args: {} }]),
+      )
+      .mockResolvedValueOnce(textResponse("here's the button"));
+
+    const result = await runMenuAgentTurn(telegramId, "мои планы поменялись, отмени", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    // Still only OPENS the confirmation card — nothing is cancelled by text.
+    expect(prisma.match.update).not.toHaveBeenCalled();
+    expect(result.action).toMatchObject({
+      kind: "entry_point",
+      entry: { callbackData: "stall:no:match-7" },
+    });
   });
 });
 

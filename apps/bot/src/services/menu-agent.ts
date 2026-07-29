@@ -31,6 +31,7 @@ import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
 import { transitionAccountStatus } from "./account-status-transitions.js";
 import { getPremiumCancelContext, formatPremiumUntil } from "./premium.js";
 import { explainMatch, getMatchmakingStanding } from "./agent-insights.js";
+import { STALL_ASK_CANCEL_PREFIX } from "./match-stall.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -398,7 +399,7 @@ const TOOLS = [
     function: {
       name: "propose_cancel_date",
       description:
-        "Call when the user wants to CANCEL their upcoming scheduled date (something came up, they can't make it, they changed their mind). This only surfaces the cancellation button — you NEVER cancel a date yourself and text alone never cancels one. Cancelling is irreversible and the match cannot be restored, so the user still confirms on a red button afterwards. Do NOT call for questions about the date, for changing the venue, or for running late.",
+        "Call when the user wants to CANCEL their date — whether it is already booked or still being planned (they are picking a time, or marking where they'll set off from). Covers 'something came up', 'I can't make it', 'my plans changed', and 'how do I cancel'. This only surfaces the cancellation button — you NEVER cancel a date yourself and text alone never cancels one. Cancelling is irreversible and the match cannot be restored, so the user still confirms on a red button afterwards. If their message is ambiguous between asking HOW cancelling works and actually wanting to cancel, ask one short clarifying question first ('have your plans changed?') and call this only once they say yes. Do NOT call for questions about the date, for changing the venue, or for running late.",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
@@ -1002,30 +1003,53 @@ async function execProposeCancelDate(
     return { toolResult: JSON.stringify({ success: false, error: "User not found." }), action: null };
   }
 
+  // A booked date and a date still being planned are cancelled through
+  // different handlers, but from the user's side it is one request ("my plans
+  // changed"). Scheduled wins when both somehow exist — it is the more
+  // consequential one, and the single-live-match invariant means it shouldn't.
   const match = await prisma.match.findFirst({
     where: {
-      status: "scheduled",
-      emergencyCancelledBy: null,
       OR: [{ userAId: user.id }, { userBId: user.id }],
+      AND: [
+        {
+          OR: [
+            { status: "scheduled", emergencyCancelledBy: null },
+            // The planning stages. `negotiating` with no slots written yet is
+            // the Date Ticket gate, which nobody is committed to and which
+            // lapses on its own — so it is deliberately excluded.
+            { status: "negotiating", proposedTimes: { isEmpty: false } },
+            { status: "negotiating_venue" },
+          ],
+        },
+      ],
     },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, agreedTime: true },
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    select: { id: true, status: true, proposedTimes: true },
   });
   if (!match) {
     return {
       toolResult: JSON.stringify({
         success: false,
         error:
-          "There is no scheduled date to cancel. If they are still deciding on a proposal or scheduling, explain that instead — show no button.",
+          "There is no date to cancel — they have nothing booked and nothing being planned. " +
+          "If a proposal is still awaiting their decision, that is a decline rather than a cancellation: " +
+          "explain that and show no button.",
       }),
       action: null,
     };
   }
 
   const lang = (user.language ?? "en") as Language;
+  // The planning stages had no cancellation path at all until §3.5c — this tool
+  // used to filter on `scheduled` alone and told the model to "explain that
+  // instead", so someone who wrote "I want to cancel" mid-planning received a
+  // polite explanation and zero ways out. Both entries below only OPEN a
+  // confirmation card; the irreversible step is always the user's own red tap.
+  const scheduled = match.status === "scheduled";
   return {
     toolResult: JSON.stringify({
       success: true,
+      stage: scheduled ? "scheduled_date" : "still_being_planned",
       instruction:
         "The cancellation button is attached automatically, and tapping it still asks for an explicit confirmation. " +
         "Reply with ONE short line: no pressure, no guilt, and make clear cancelling can't be undone. Do not restate the buttons.",
@@ -1033,8 +1057,10 @@ async function execProposeCancelDate(
     action: {
       kind: "entry_point",
       entry: {
-        label: t(lang, "emergencyBtnConfirm"),
-        callbackData: `emerg:start:${match.id}`,
+        label: scheduled ? t(lang, "emergencyBtnConfirm") : t(lang, "stallBtnPlansChanged"),
+        callbackData: scheduled
+          ? `emerg:start:${match.id}`
+          : `${STALL_ASK_CANCEL_PREFIX}${match.id}`,
       },
     },
   };
