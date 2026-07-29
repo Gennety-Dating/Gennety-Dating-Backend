@@ -285,6 +285,9 @@ describe("describeActiveMatch", () => {
       proxyClosedAt: null,
       venueChangeStatus: null,
       partnerFirstName: "Sasha",
+      // Venue-stage only; a `scheduled` match is past it.
+      venueSelfSubmitted: null,
+      venuePartnerSubmitted: null,
       ...overrides,
     };
   }
@@ -339,6 +342,57 @@ describe("describeActiveMatch", () => {
     );
     expect(text).toContain("choosing the meeting place");
     expect(text).toContain("Partner: Sasha");
+  });
+
+  it("tells the agent this side is done and waiting on the partner", () => {
+    const text = describeActiveMatch(
+      scheduled({
+        status: "negotiating_venue",
+        agreedTime: null,
+        venueName: null,
+        venueSelfSubmitted: true,
+        venuePartnerSubmitted: false,
+      }),
+      NOW,
+      "en-US",
+      FEATURES_OFF,
+    );
+    expect(text).toContain("HAS submitted theirs");
+    expect(text).toContain("waiting on Sasha");
+    // The whole point: the agent must not re-ask for something already saved.
+    expect(text).toContain("Do NOT ask them to pick a point or a vibe again");
+  });
+
+  it("tells the agent this side still owes a departure point and vibe", () => {
+    const text = describeActiveMatch(
+      scheduled({
+        status: "negotiating_venue",
+        agreedTime: null,
+        venueName: null,
+        venueSelfSubmitted: false,
+        venuePartnerSubmitted: true,
+      }),
+      NOW,
+      "en-US",
+      FEATURES_OFF,
+    );
+    expect(text).toContain("has NOT submitted theirs yet");
+  });
+
+  it("says the concierge is picking once both sides have submitted", () => {
+    const text = describeActiveMatch(
+      scheduled({
+        status: "negotiating_venue",
+        agreedTime: null,
+        venueName: null,
+        venueSelfSubmitted: true,
+        venuePartnerSubmitted: true,
+      }),
+      NOW,
+      "en-US",
+      FEATURES_OFF,
+    );
+    expect(text).toContain("picking the venue now");
   });
 });
 

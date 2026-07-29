@@ -49,6 +49,7 @@ import { prisma } from "@gennety/db";
 import {
   startVenueNegotiation,
   handleVenueVibe,
+  resolveVenueRoutingState,
 } from "./venue-negotiation.js";
 import { parseVibe } from "../../services/vibe-parser.js";
 import { runVenueFinalizationOnce } from "../../services/venue-finalization-flight.js";
@@ -287,5 +288,115 @@ describe("handleVenueVibe — location-first ordering", () => {
     expect(ctx.api.sendMessage).not.toHaveBeenCalled();
     // No redirect this time.
     expect(ctx.reply).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveVenueRoutingState — who still owes the venue stage an answer
+//
+// The routing gate behind the "my picks got reset" bug: the venue stage used to
+// claim EVERY plain message while the match sat in `negotiating_venue`, so a
+// user who had already confirmed their departure point and vibe and asked a
+// question ("what happens now?") was answered with the fixed "mark where you're
+// setting off from" card + Mini App button. Nothing was written — the branch
+// only replied — but the chat read as a reset, and the question never reached
+// the concierge agent.
+// ---------------------------------------------------------------------------
+describe("resolveVenueRoutingState", () => {
+  const ROW = {
+    id: "m1",
+    userAId: "u1",
+    vibeTextA: null as string | null,
+    vibeLatA: null as number | null,
+    vibeLngA: null as number | null,
+    vibeTextB: null as string | null,
+    vibeLatB: null as number | null,
+    vibeLngB: null as number | null,
+  };
+
+  it("returns null when the user has no venue negotiation", async () => {
+    mUser.findUnique.mockResolvedValue({ id: "u1" });
+    mMatch.findFirst.mockResolvedValue(null);
+
+    expect(await resolveVenueRoutingState(111n)).toBeNull();
+  });
+
+  it("returns null for an unknown Telegram id", async () => {
+    mUser.findUnique.mockResolvedValue(null);
+
+    expect(await resolveVenueRoutingState(111n)).toBeNull();
+    expect(mMatch.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("marks a side that has submitted nothing as still owing an answer", async () => {
+    mUser.findUnique.mockResolvedValue({ id: "u1" });
+    mMatch.findFirst.mockResolvedValue({ ...ROW });
+
+    expect(await resolveVenueRoutingState(111n)).toEqual({
+      matchId: "m1",
+      side: "A",
+      submitted: false,
+    });
+  });
+
+  it("still owes an answer with a departure point but no vibe", async () => {
+    mUser.findUnique.mockResolvedValue({ id: "u1" });
+    mMatch.findFirst.mockResolvedValue({ ...ROW, vibeLatA: 50.45, vibeLngA: 30.52 });
+
+    expect((await resolveVenueRoutingState(111n))?.submitted).toBe(false);
+  });
+
+  it("still owes an answer with a vibe but no departure point", async () => {
+    mUser.findUnique.mockResolvedValue({ id: "u1" });
+    mMatch.findFirst.mockResolvedValue({ ...ROW, vibeTextA: "quiet cafe" });
+
+    expect((await resolveVenueRoutingState(111n))?.submitted).toBe(false);
+  });
+
+  it("reports a complete submission as submitted, so text falls through to the agent", async () => {
+    mUser.findUnique.mockResolvedValue({ id: "u1" });
+    mMatch.findFirst.mockResolvedValue({
+      ...ROW,
+      vibeTextA: "quiet cafe",
+      vibeLatA: 50.45,
+      vibeLngA: 30.52,
+    });
+
+    expect(await resolveVenueRoutingState(111n)).toEqual({
+      matchId: "m1",
+      side: "A",
+      submitted: true,
+    });
+  });
+
+  it("reads the caller's OWN side — a submitted partner does not count", async () => {
+    // Caller is side B; side A is complete, B has nothing.
+    mUser.findUnique.mockResolvedValue({ id: "u2" });
+    mMatch.findFirst.mockResolvedValue({
+      ...ROW,
+      userAId: "u1",
+      vibeTextA: "quiet cafe",
+      vibeLatA: 50.45,
+      vibeLngA: 30.52,
+    });
+
+    expect(await resolveVenueRoutingState(222n)).toEqual({
+      matchId: "m1",
+      side: "B",
+      submitted: false,
+    });
+  });
+
+  it("resolves side B's own complete submission", async () => {
+    mUser.findUnique.mockResolvedValue({ id: "u2" });
+    mMatch.findFirst.mockResolvedValue({
+      ...ROW,
+      userAId: "u1",
+      vibeTextB: "park walk",
+      vibeLatB: 50.45,
+      vibeLngB: 30.52,
+    });
+
+    expect((await resolveVenueRoutingState(222n))?.submitted).toBe(true);
   });
 });

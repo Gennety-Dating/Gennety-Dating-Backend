@@ -122,18 +122,25 @@ let draft: VenueIntentDraft | null = null;
 // Venue Intent V2: the Location Mini App owns the WHOLE two-step flow again —
 // origin (the map) then the vibe + canonical chips on the in-app "step 2" screen
 // (2026-07: reverted from the short-lived chat-chip presentation because inline
-// Telegram buttons can't carry the brand's liquid-glass design). On reopen, if a
-// draft (or a confirmed-but-no_candidates intent needing relaxation) already
-// exists, jump straight back to the vibe stage so the user doesn't re-pick their
-// origin. Applies to every mode; shadow/off simply never create an in-app draft.
+// Telegram buttons can't carry the brand's liquid-glass design). On reopen, any
+// intent already on file — draft OR confirmed — restores the vibe stage with the
+// saved origin and chips, so the user never re-picks their origin.
+// Applies to every mode; shadow/off simply never create an in-app draft.
+//
+// `confirmed` restores for the same reason `draft` does. Reopening after
+// confirming used to drop the user on a blank map centred on the city default,
+// with nothing on screen acknowledging the submission they had already made —
+// indistinguishable from the flow having reset, on the one screen where being
+// wrong about that is most alarming. The data was always safe (the server
+// refuses to let a stray interpret clobber a confirmed intent), so this only
+// makes the screen agree with the server. It also gives the stage its first
+// way to change your mind before the partner submits: re-confirming overwrites
+// this side's intent and is otherwise a no-op.
 if (matchId && app) {
   void fetchVenueIntentState(app.initData, matchId)
     .then((state) => {
       venueState = state;
-      if (
-        state.intent?.state === "draft" ||
-        (state.intent?.state === "confirmed" && state.selectionError?.startsWith("no_candidates:"))
-      ) {
+      if (state.intent?.state === "draft" || state.intent?.state === "confirmed") {
         draft = state.intent;
         if (draft.origin) {
           selectedLat = draft.origin.lat;

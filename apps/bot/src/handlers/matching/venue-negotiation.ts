@@ -327,6 +327,69 @@ export async function sendVenuePostSaveAck(
   return key;
 }
 
+/** What the router needs to decide whether the venue stage owns this message. */
+export interface VenueRoutingState {
+  matchId: string;
+  side: "A" | "B";
+  /**
+   * This side already has a COMPLETE submission on file (departure point +
+   * vibe), so the venue stage has nothing left to collect from them.
+   *
+   * Read off the legacy `vibeText/vibeLat/vibeLng` columns deliberately: both
+   * write paths land there — the chat handler directly, and the Venue Intent
+   * V2 Mini App confirm mirrors the confirmed origin and text onto them
+   * (`confirmVenueIntent`) — so one check covers every rollout mode. It is the
+   * same pair `sendVenuePostSaveAck` uses to decide "waiting on peer".
+   */
+  submitted: boolean;
+}
+
+/**
+ * Resolve the caller's in-flight venue negotiation, if any, plus whether their
+ * own side is already done. Returns null when they have no `negotiating_venue`
+ * match — in which case the router must not consume the message.
+ *
+ * Exists so the routing decision and the handlers below read the SAME row: the
+ * router used to run its own narrower query and then the handler re-resolved
+ * the match independently.
+ */
+export async function resolveVenueRoutingState(
+  telegramId: bigint,
+): Promise<VenueRoutingState | null> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (!user) return null;
+
+  const match = await prisma.match.findFirst({
+    where: {
+      status: "negotiating_venue",
+      OR: [{ userAId: user.id }, { userBId: user.id }],
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      userAId: true,
+      vibeTextA: true,
+      vibeLatA: true,
+      vibeLngA: true,
+      vibeTextB: true,
+      vibeLatB: true,
+      vibeLngB: true,
+    },
+  });
+  if (!match) return null;
+
+  const side: "A" | "B" = match.userAId === user.id ? "A" : "B";
+  const submitted =
+    side === "A"
+      ? Boolean(match.vibeTextA) && match.vibeLatA != null && match.vibeLngA != null
+      : Boolean(match.vibeTextB) && match.vibeLatB != null && match.vibeLngB != null;
+
+  return { matchId: match.id, side, submitted };
+}
+
 /**
  * Handler for `message:location` during `negotiating_venue`. Writes the
  * pin to the appropriate side of the match and triggers finalisation if

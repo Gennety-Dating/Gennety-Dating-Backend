@@ -1,5 +1,4 @@
 import { Composer } from "grammy";
-import { prisma } from "@gennety/db";
 import type { BotContext } from "../../session.js";
 import {
   handleMatchDecision,
@@ -17,7 +16,11 @@ import {
   handleReportSkip,
   handleReportText,
 } from "./report.js";
-import { handleVenueLocation, handleVenueVibe } from "./venue-negotiation.js";
+import {
+  handleVenueLocation,
+  handleVenueVibe,
+  resolveVenueRoutingState,
+} from "./venue-negotiation.js";
 import { handleVenuePayDecline } from "./venue-change.js";
 import { handleRematchBuyCallback, REMATCH_BUY_CALLBACK } from "./rematch.js";
 
@@ -124,31 +127,33 @@ matchingRouter.use(async (ctx, next) => {
   // match. Same for plain text when in that state. We check the DB
   // directly (rather than a session flag) because matches are shared
   // state across devices and sessions aren't.
+  //
+  // The text branch is scoped to a side that still OWES an answer. The venue
+  // stage used to claim every plain message for as long as the match sat in
+  // `negotiating_venue` — including from someone who had already confirmed
+  // their departure point and vibe and was only waiting on their partner. For
+  // them the venue handler has nothing to collect, so it answered the fixed
+  // "mark where you're setting off from" card with the Mini App button; a
+  // question ("а что дальше?") got a prompt they had already completed, which
+  // reads as the flow having reset, and the question itself never reached the
+  // concierge agent. A submitted side now falls through to the agent, which
+  // sees the venue stage and who is still pending (`describeActiveMatch`).
+  // Nothing was ever actually lost — the branch only replied, it wrote no
+  // state — but the chat said otherwise.
   if (ctx.message?.location || ctx.message?.text) {
     const fromId = ctx.from?.id;
     if (fromId) {
-      const user = await prisma.user.findUnique({
-        where: { telegramId: BigInt(fromId) },
-        select: { id: true },
-      });
-      if (user) {
-        const activeVenueMatch = await prisma.match.findFirst({
-          where: {
-            status: "negotiating_venue",
-            OR: [{ userAId: user.id }, { userBId: user.id }],
-          },
-          select: { id: true },
-        });
-        if (activeVenueMatch) {
-          if (ctx.message.location) {
-            await handleVenueLocation(ctx);
-            return;
-          }
-          if (ctx.message.text && !ctx.message.text.startsWith("/")) {
-            await handleVenueVibe(ctx);
-            return;
-          }
+      const venue = await resolveVenueRoutingState(BigInt(fromId));
+      if (venue) {
+        if (ctx.message.location) {
+          await handleVenueLocation(ctx);
+          return;
         }
+        if (ctx.message.text && !ctx.message.text.startsWith("/") && !venue.submitted) {
+          await handleVenueVibe(ctx);
+          return;
+        }
+        // A submitted side's text can only be a question → fall through.
       }
     }
   }

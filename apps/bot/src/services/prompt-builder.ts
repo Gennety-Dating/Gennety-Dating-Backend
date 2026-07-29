@@ -147,6 +147,15 @@ export interface ActiveMatchView {
   proxyClosedAt: Date | null;
   venueChangeStatus: string | null;
   partnerFirstName: string | null;
+  /**
+   * Venue stage only: has THIS side / the partner already submitted their
+   * departure point + vibe. Without them the agent could only restate the
+   * mechanic ("each submits a point then a vibe") when asked "what now?" —
+   * useless to someone who is done and waiting, which is exactly who asks.
+   * Best-effort like every field below `status`; null means unknown.
+   */
+  venueSelfSubmitted: boolean | null;
+  venuePartnerSubmitted: boolean | null;
 }
 
 /** Compact local clock label ("19:00"). */
@@ -218,6 +227,17 @@ export function describeActiveMatch(
   if (match.status === "negotiating_venue") {
     lines.push("Match accepted — now choosing the meeting place.");
     lines.push(`Partner: ${partner}. Each submits a departure point (map) then a short vibe; the concierge then picks the venue.`);
+    if (match.venueSelfSubmitted === true) {
+      lines.push(
+        match.venuePartnerSubmitted === true
+          ? "This user HAS submitted theirs, and so has the partner — the concierge is picking the venue now. Nothing is left for them to do; the place lands in this chat shortly."
+          : `This user HAS submitted theirs (departure point and vibe are saved). Nothing is left for them to do — they are waiting on ${partner}. Do NOT ask them to pick a point or a vibe again, and do not imply anything was lost or reset.`,
+      );
+    } else if (match.venueSelfSubmitted === false) {
+      lines.push(
+        "This user has NOT submitted theirs yet — they still need to open the venue Mini App (the \"Pick on map\" button) and mark their departure point, then describe the vibe.",
+      );
+    }
     return lines.join("\n");
   }
 
@@ -384,7 +404,34 @@ const MATCH_CONTEXT_SELECT = {
   proxyClosesAt: true,
   proxyClosedAt: true,
   venueChangeStatus: true,
+  // Venue-stage per-side submission. The legacy vibe columns are the reliable
+  // signal in every rollout mode: the V2 Mini App confirm mirrors the confirmed
+  // origin + text onto them (`confirmVenueIntent`), and the legacy chat path
+  // writes them directly.
+  vibeTextA: true,
+  vibeLatA: true,
+  vibeLngA: true,
+  vibeTextB: true,
+  vibeLatB: true,
+  vibeLngB: true,
 } as const;
+
+/** Whether one side has a complete venue submission (departure point + vibe). */
+function venueSideSubmitted(
+  row: {
+    vibeTextA?: string | null;
+    vibeLatA?: number | null;
+    vibeLngA?: number | null;
+    vibeTextB?: string | null;
+    vibeLatB?: number | null;
+    vibeLngB?: number | null;
+  },
+  side: "A" | "B",
+): boolean {
+  return side === "A"
+    ? Boolean(row.vibeTextA) && row.vibeLatA != null && row.vibeLngA != null
+    : Boolean(row.vibeTextB) && row.vibeLatB != null && row.vibeLngB != null;
+}
 
 /** Live match statuses the concierge should be aware of. */
 const ACTIVE_MATCH_STATUSES = [
@@ -469,6 +516,8 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
             ? (asA as { userB?: { firstName: string | null } }).userB?.firstName
             : (asB as { userA?: { firstName: string | null } }).userA?.firstName) ??
           null,
+        venueSelfSubmitted: venueSideSubmitted(raw, asA ? "A" : "B"),
+        venuePartnerSubmitted: venueSideSubmitted(raw, asA ? "B" : "A"),
       }
     : null;
 

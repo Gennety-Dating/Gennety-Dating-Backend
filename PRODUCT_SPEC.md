@@ -2116,6 +2116,38 @@ point is saved:
    vibe: `handleVenueVibe` redirects it back to the map
    (`venueLocationFirst`) so the location-first order holds.
 
+**The venue stage claims a message only from a side that still owes one
+(2026-07-29).** The stage used to consume EVERY plain message for as long as the
+match sat in `negotiating_venue`, including from someone who had already
+submitted both fields and was only waiting on their partner. For that user there
+is nothing to collect, so the handler answered with the fixed
+`venueConciergeIntro` card + "Pick on map" button — a prompt they had already
+completed. Asking "so what happens now?" therefore got the opening instruction
+back, which reads as the flow having reset, and the question never reached the
+concierge agent at all. (Nothing was ever actually lost: that branch only
+replied, it wrote no state, and the server separately refuses to let a stray
+message overwrite a confirmed intent — see *Venue Intent V2* below.)
+`resolveVenueRoutingState` now decides ownership from whether the caller's OWN
+side has a complete submission, so a submitted side's text falls through to the
+menu agent like it does at every other stage. "Complete" is read off the legacy
+`vibeText`/`vibeLat`/`vibeLng` columns because both write paths land there — the
+chat handler directly, and the V2 Mini App confirm mirrors the confirmed origin
+and text onto them — so one check covers every rollout mode. A **location pin**
+is still always consumed by the stage regardless: falling through would leave it
+silently unanswered. The agent is told which sides have submitted
+(`describeActiveMatch`), so "what now?" is answered with the real state —
+waiting on the named partner, still owing a pin, or the concierge already
+picking — instead of a restatement of the mechanic.
+
+**Reopening the Location Mini App after confirming restores the submission.**
+A confirmed intent used to reopen on a blank map centred on the city default,
+with nothing on screen acknowledging what had already been saved — on the one
+screen where being wrong about that is most alarming. The Mini App now restores
+the vibe stage with the saved origin and chips for a `confirmed` intent exactly
+as it already did for a `draft`. This also gives the stage its first way to
+change your mind before the partner submits: re-confirming overwrites this
+side's intent and is otherwise a no-op.
+
 **Per-side "what's next" ACK.** The underlying collector stays idempotent —
 either field can technically land first (e.g. a mobile submission, or a raw
 attach-menu pin) — but the Telegram *prompts* are sequenced, and each save
