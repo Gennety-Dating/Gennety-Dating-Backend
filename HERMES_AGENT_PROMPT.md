@@ -174,25 +174,30 @@ context_dump → photos → verification`
 **`GET /admin/dialogs`** — список диалогов, по одному на пользователя,
 свежеактивные сверху.
 
-| Параметр | По умолчанию | Что делает |
-|---|---|---|
-| `limit` | `20` (макс. 100) | Размер страницы. |
-| `offset` | `0` | Смещение. |
-| `search` | — | Подстрока по имени/фамилии/email/`telegramUsername`. Если строка целиком из цифр — ищет ещё и точный `telegramId`. |
-| `status` | — | `onboarding` \| `active` \| `paused` \| `frozen` \| `suspended` \| `pending_investigation` \| `banned`. |
-| `platform` | — | `telegram` \| `mobile` \| `both`. |
-| `activeSince` | — | ISO-дата. Только диалоги с активностью после неё. |
-| `includeMessages` | `false` | `true` — вложить хвост переписки прямо в список. |
-| `messageLimit` | `20` (макс. 200) | Сколько сообщений вкладывать при `includeMessages=true`. |
+Параметры:
+
+- `limit` — размер страницы. По умолчанию 20, максимум 100.
+- `offset` — смещение. По умолчанию 0.
+- `search` — подстрока по имени, фамилии, email или `telegramUsername`. Если
+  строка целиком из цифр — ищет ещё и точный `telegramId`.
+- `status` — фильтр по статусу: `onboarding`, `active`, `paused`, `frozen`,
+  `suspended`, `pending_investigation`, `banned`.
+- `platform` — фильтр по платформе: `telegram`, `mobile`, `both`.
+- `activeSince` — ISO-дата. Только диалоги с активностью после неё.
+- `includeMessages` — `true` вкладывает хвост переписки прямо в список. По
+  умолчанию `false`.
+- `messageLimit` — сколько сообщений вкладывать при `includeMessages=true`. По
+  умолчанию 20, максимум 200.
 
 **`GET /admin/dialogs/:id`** — одна переписка целиком. **`:id` — это `userId`**
 (диалог всегда «пользователь ↔ бот», человек в нём ровно один).
 
-| Параметр | По умолчанию | Что делает |
-|---|---|---|
-| `limit` | `200` (макс. 1000) | Сколько сообщений вернуть. |
-| `order` | `asc` | `asc` — хронологически, `desc` — с конца. |
-| `includeTechnical` | `false` | `true` — показать и служебные turn'ы (`system`/`tool`/пустые). Обычно не нужно. |
+Параметры:
+
+- `limit` — сколько сообщений вернуть. По умолчанию 200, максимум 1000.
+- `order` — `asc` (хронологически, по умолчанию) или `desc` (с конца).
+- `includeTechnical` — `true` покажет и служебные turn'ы (`system`, `tool`,
+  пустые). По умолчанию `false`, и обычно они не нужны.
 
 Ошибки: `401` без ключа, `400` на неизвестный `status`/`platform`/`order` и на
 кривой `activeSince`, `404` на несуществующий `id`. `limit`/`offset` не
