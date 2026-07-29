@@ -46,6 +46,38 @@ function isEphemeral(): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Third-party text redaction
+// ---------------------------------------------------------------------------
+
+const redactedSummaryStorage = new AsyncLocalStorage<string>();
+
+/**
+ * Record every send made inside `fn` under a fixed neutral `marker` instead of
+ * its real body.
+ *
+ * A handful of outbound messages carry text written by ANOTHER user, relayed
+ * to this one deliberately: the emergency cancellation reason (quoted verbatim
+ * by product rule — no rewrite, no stripping) and every message relayed through
+ * the pre-date proxy chat. The timeline those sends land in is rendered straight
+ * into the menu agent's system prompt, and that agent holds tools that write to
+ * the reader's own profile — so a partner's free text would otherwise become
+ * untrusted instructions sitting inside this user's prompt.
+ *
+ * The timeline only needs to know WHAT happened on screen, never to quote it, so
+ * the marker preserves everything the agent legitimately uses ("the partner sent
+ * a cancellation reason") while the body — the part an attacker controls — is
+ * never stored. Sanitising the text instead was rejected: the relay is verbatim
+ * by design and no filter is a trust boundary.
+ */
+export function withRedactedSummary<T>(marker: string, fn: () => Promise<T>): Promise<T> {
+  return redactedSummaryStorage.run(marker, fn);
+}
+
+function redactedSummary(): string | null {
+  return redactedSummaryStorage.getStore() ?? null;
+}
+
+// ---------------------------------------------------------------------------
 // Method classification
 // ---------------------------------------------------------------------------
 
@@ -312,7 +344,7 @@ export const outboundRecorder: Transformer = async (prev, method, payload, signa
     void recordChatEventForChat(chatId, {
       direction: "out",
       kind,
-      summary: summaryFor(kind, loose),
+      summary: redactedSummary() ?? summaryFor(kind, loose),
       surface: surfaceFromActions(actions),
       actions,
       telegramMessageId: messageIdFromResult(result.result),

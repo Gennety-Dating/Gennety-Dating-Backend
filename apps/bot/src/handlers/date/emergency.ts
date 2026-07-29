@@ -4,6 +4,7 @@ import { t, type Language } from "@gennety/shared";
 import type { MessageEntity } from "grammy/types";
 import type { BotContext } from "../../session.js";
 import { applyEmergencyCancellationPeerBoost } from "../../utils/elo-calculator.js";
+import { withRedactedSummary } from "../../services/outbound-recorder.js";
 
 /**
  * Emergency cancellation flow (PRODUCT_SPEC.md §Phase 4.2).
@@ -201,13 +202,22 @@ export async function handleEmergencyReason(ctx: BotContext): Promise<void> {
   if (other.telegramId > 0n) {
     const otherLang = (other.language ?? "en") as Language;
     const notice = buildEmergencyCancellationNotice(otherLang, forwardedReason);
-    await ctx.api
-      .sendMessage(Number(other.telegramId), notice.text, { entities: notice.entities })
-      .catch((err: unknown) => {
-        console.warn(
-          `[emergency] forward failed for ${other.telegramId}:`,
-          err instanceof Error ? err.message : err,
-        );
-      });
+    // The body is this user's free text, quoted verbatim into someone else's
+    // chat. That chat's timeline is read back into THEIR menu agent's system
+    // prompt, next to tools that write to their profile — so the timeline gets
+    // a neutral marker and never the text itself. The recipient still sees the
+    // full quote in Telegram; only the agent's context is kept clean.
+    await withRedactedSummary(
+      "(partner sent a reason for cancelling the date — the full text was shown to the user)",
+      () =>
+        ctx.api.sendMessage(Number(other.telegramId), notice.text, {
+          entities: notice.entities,
+        }),
+    ).catch((err: unknown) => {
+      console.warn(
+        `[emergency] forward failed for ${other.telegramId}:`,
+        err instanceof Error ? err.message : err,
+      );
+    });
   }
 }

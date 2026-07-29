@@ -4,7 +4,16 @@ import { prisma } from "@gennety/db";
 import { requireAuth } from "../auth-middleware.js";
 import { usageGuard } from "../usage-middleware.js";
 import { agentTextLimiter, voiceLimiter } from "../rate-limit.js";
-import { runMenuAgentTurn } from "../../services/menu-agent.js";
+import {
+  runMenuAgentTurn,
+  type AgentEntryPoint,
+  type MenuAgentResult,
+} from "../../services/menu-agent.js";
+import {
+  agentAccessHttpStatus,
+  evaluateAgentAccess,
+  type AgentAccessDenial,
+} from "../../services/agent-access.js";
 import { transcribeVoice, WHISPER_MAX_BYTES } from "../../services/whisper.js";
 
 export const assistantRouter: Router = Router();
@@ -20,13 +29,52 @@ const upload = multer({
 interface AssistantReplyDto {
   reply: string;
   transcript?: string | null;
+  /**
+   * A native affordance the agent asked for but cannot render itself.
+   *
+   * Previously dropped on the floor here while the Telegram router acted on it,
+   * so an API caller was told "a confirmation card is shown" and no card ever
+   * appeared — the agent's whole confirm class was silently inert on this
+   * surface. Client-side rendering is the client's concern; leaving it out of
+   * the response is not.
+   */
+  action?:
+    | { kind: "premium_cancel_confirm" }
+    | { kind: "premium_cancel_appstore" }
+    | { kind: "entry_point"; entry: AgentEntryPoint };
+  /** Code-owned confirmations of writes that actually landed. */
+  receipts?: string[];
+}
+
+/** Shape one agent turn into the wire DTO, carrying action + receipts through. */
+function toReplyDto(
+  result: MenuAgentResult,
+  transcript?: string,
+): AssistantReplyDto {
+  return {
+    reply: result.reply,
+    ...(transcript ? { transcript } : {}),
+    ...(result.action ? { action: result.action } : {}),
+    ...(result.receipts ? { receipts: result.receipts } : {}),
+  };
 }
 
 async function loadUserForAgent(userId: string) {
   return prisma.user.findUniqueOrThrow({
     where: { id: userId },
-    select: { telegramId: true, language: true, status: true, onboardingStep: true },
+    select: {
+      telegramId: true,
+      language: true,
+      status: true,
+      onboardingStep: true,
+      suspendedUntil: true,
+    },
   });
+}
+
+/** Denial payload for the JWT surface — same rule the Telegram router applies. */
+function denyResponse(res: Response, reason: AgentAccessDenial): void {
+  res.status(agentAccessHttpStatus(reason)).json({ error: reason });
 }
 
 /**
@@ -49,14 +97,17 @@ assistantRouter.post("/ask", agentTextLimiter, async (req: Request, res: Respons
   }
 
   const user = await loadUserForAgent(req.userId!);
-  if (user.onboardingStep !== "completed") {
-    res.status(409).json({ error: "Onboarding not complete" });
+  // The same gate the Telegram surface applies. Without it a verification-gated
+  // or moderated account reached the identical agent — and its write tools — by
+  // switching transport.
+  const access = evaluateAgentAccess(user);
+  if (!access.allowed) {
+    denyResponse(res, access.reason);
     return;
   }
 
   const result = await runMenuAgentTurn(user.telegramId, text);
-  const dto: AssistantReplyDto = { reply: result.reply };
-  res.json(dto);
+  res.json(toReplyDto(result));
 });
 
 assistantRouter.post(
@@ -70,8 +121,9 @@ assistantRouter.post(
     }
 
     const user = await loadUserForAgent(req.userId!);
-    if (user.onboardingStep !== "completed") {
-      res.status(409).json({ error: "Onboarding not complete" });
+    const access = evaluateAgentAccess(user);
+    if (!access.allowed) {
+      denyResponse(res, access.reason);
       return;
     }
 
@@ -85,7 +137,6 @@ assistantRouter.post(
     }
 
     const result = await runMenuAgentTurn(user.telegramId, transcript);
-    const dto: AssistantReplyDto = { reply: result.reply, transcript };
-    res.json(dto);
+    res.json(toReplyDto(result, transcript));
   },
 );

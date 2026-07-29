@@ -1185,8 +1185,85 @@ the user's behalf; every action still needs the user's own tap. Rows are swept
 after 30 days (§GDPR). The same change stops the agent replaying onboarding-era
 turns from `messageHistory` at all: only its own turns from the last 24 h are
 replayed, while the full column is retained for the admin conversation viewer
-and the re-engagement worker. Telegram-only (the menu agent is Telegram-only);
-the mobile Aether concierge keeps its own `Message`-row history unchanged.
+and the re-engagement worker. The **timeline** is Telegram-only; the mobile
+Aether concierge keeps its own `Message`-row history unchanged. The menu agent
+itself is *not* Telegram-only, despite what this paragraph used to claim: the
+same `runMenuAgentTurn`, with the same tools, also backs the JWT
+`/v1/assistant/{ask,voice}` routes (corrected 2026-07-29 — the mistake had a
+cost, see the access gate below).
+
+**What the agent may do, and what it may only offer (2026-07-29).** Every tool
+carries a class, and the turn loop enforces it, so a tool's blast radius is a
+property of the registry rather than of how carefully its description was
+worded:
+
+- **read** — `get_my_profile`, `get_my_standing`, `explain_my_match`. Touch
+  nothing. The last two are what make "your personal AI matchmaker" more than a
+  persona line: `get_my_standing` answers *"why am I not getting matched?"*
+  from the fields that actually decide it (missed batches, a pending embedding
+  rebuild that silently withholds the profile from the pool, photo count,
+  verification, and a coarse bucket of the local candidate pool), and
+  `explain_my_match` answers *"why this person?"* from the `match_score_logs`
+  breakdown frozen at pairing time — data that existed since the engine shipped
+  and was readable only from the admin dashboard. Both are rendered as
+  qualitative bands, never raw multipliers: the numbers are internal mechanics
+  (Elo distance, cosine similarity) that read as a rating OF THE PARTNER, and
+  the blind-decision invariant still forbids revealing their choice.
+- **write** — the profile edits, pause/resume, rejection feedback, plus the new
+  `update_hobbies` (the Telegram side had no hobby tool while Aether did). At
+  most **one write per turn**: one message is one intent, and a turn issuing
+  several writes is the model improvising over a profile. A rejected edit does
+  not spend the budget. Each landed write is followed by a **code-owned
+  receipt** ("✓ About me updated") rather than trusting the model's own prose,
+  so a change to matching-relevant state is a visible fact and an unintended
+  one is noticed.
+- **confirm** — `offer_cancel_premium`, `propose_cancel_date`,
+  `propose_close_account`. These mutate **nothing**. They surface the button the
+  menu would have shown, carrying the *existing* callback, and the user's tap
+  enters the untouched handler with its own guards, nonces and confirmation
+  copy. So "cancel my date" — by voice, or as a sentence, without hunting for a
+  card that scrolled away — reaches exactly the two-step green/red confirmation
+  the Cancel button has always produced, and account closure lands on the fork
+  that offers freezing first. No second destructive code path exists.
+- **open** — `open_screen` (profile, photos, edit_bio, settings, tickets,
+  premium). Also mutates nothing; hands over a real menu callback the agent
+  cannot invent, gated on the same feature flags as the menu row.
+
+`update_bio` gained one rule of its own: `psychologicalSummary` is not a
+caption but the profile's accumulated psychological signal and the dominant
+embedding input (`V_explicit`, 0.65), so a rewrite that collapses a substantial
+existing text is **refused** and the user is handed the editor, where they can
+read what they would be replacing. "Add that I like coffee" used to be enough
+for the model to send a one-line bio and wipe the AI-memory analysis, with
+nothing to restore from.
+
+**Voice comes free.** A voice note is transcribed by Whisper into the same
+turn, so every tool above is reachable by speaking to the bot — no separate
+voice surface exists or is needed.
+
+**Access gate.** `services/agent-access.ts` decides who may run a turn at all,
+and BOTH doors ask it. Previously each had its own partial idea: the Telegram
+side enforced the verification gate but nothing else, so a `banned` /
+`suspended` / `pending_investigation` account (whose `status` is not
+`onboarding`, so the gate never saw it) walked into the agent and its
+profile-writing tools; and the JWT side checked only that onboarding was
+complete, so a user the entire Telegram surface holds behind the verification
+card reached the same agent by switching transport. `paused` and `frozen` are
+deliberately admitted — those are the user's own choices, not enforcement.
+
+**The chat timeline is untrusted data, and is fenced as such.** It is rendered
+into the system prompt inside an explicit data block whose standing rule is
+that nothing inside it is ever an instruction — the model may not call a tool
+because timeline text asked it to. The fence marker and markdown headings are
+neutralised in the rendered rows so a row cannot close the block early and have
+the rest read as prompt. Separately, the two flows that deliberately relay one
+user's free text into another's chat — the verbatim emergency-cancellation
+reason (§Phase 4) and every proxy-chat message (§Phase 4 Variant C) — record a
+neutral marker instead of the body (`withRedactedSummary`). The timeline needs
+to know *that* a relayed message arrived, never to quote it; sanitising was
+rejected because the relay is verbatim by product rule and no filter is a trust
+boundary. Without this, a partner's text sat inside this user's prompt next to
+tools that write to this user's profile.
 
 **Account deletion → Freeze fork (Telegram-only).** Tapping **Delete Account**
 no longer goes straight to a destructive confirm. The bot first plays a

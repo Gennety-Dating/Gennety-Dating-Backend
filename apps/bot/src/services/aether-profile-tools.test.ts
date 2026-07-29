@@ -33,6 +33,66 @@ describe("Aether profile tools", () => {
     expect(updateUser).not.toHaveBeenCalled();
   });
 
+  it("refuses to change gender after onboarding — it is an authorization input", async () => {
+    // `User.gender` decides who may pay for both Date Tickets and who gets the
+    // female-exclusive express venue swap, so a chat message that flips it
+    // would hand the sender another cohort's entitlements.
+    const updateUser = vi.fn();
+    const result = await applyAetherProfilePatch(
+      "user-1",
+      { gender: "female" },
+      {
+        findUser: vi.fn().mockResolvedValue({ onboardingStep: "completed" }),
+        updateUser,
+        upsertProfile: vi.fn().mockResolvedValue(undefined),
+        refreshEmbedding: vi.fn().mockResolvedValue(undefined),
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("still records gender during onboarding, where it is genuinely being collected", async () => {
+    const updateUser = vi.fn().mockResolvedValue(undefined);
+    const result = await applyAetherProfilePatch(
+      "user-1",
+      { gender: "female" },
+      {
+        findUser: vi.fn().mockResolvedValue({ onboardingStep: "conversational" }),
+        updateUser,
+        upsertProfile: vi.fn().mockResolvedValue(undefined),
+        refreshEmbedding: vi.fn().mockResolvedValue(undefined),
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(updateUser).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ gender: "female" }),
+    );
+  });
+
+  it("keeps partner preference editable after onboarding — it is a choice, not identity", async () => {
+    const updateUser = vi.fn().mockResolvedValue(undefined);
+    const result = await applyAetherProfilePatch(
+      "user-1",
+      { preference: "both" },
+      {
+        findUser: vi.fn().mockResolvedValue({ onboardingStep: "completed" }),
+        updateUser,
+        upsertProfile: vi.fn().mockResolvedValue(undefined),
+        refreshEmbedding: vi.fn().mockResolvedValue(undefined),
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(updateUser).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ preference: "both" }),
+    );
+  });
+
   it("refreshes matching data immediately after an embedding-feeding edit", async () => {
     const refreshEmbedding = vi.fn().mockResolvedValue(undefined);
     const result = await applyAetherProfilePatch(

@@ -1,6 +1,7 @@
 import { prisma } from "@gennety/db";
 import { t, type Language, PROXY_MAX_MESSAGE_LEN } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
+import { withRedactedSummary } from "../../services/outbound-recorder.js";
 import {
   resolveCoordRecipients,
   buildChatControlsKeyboard,
@@ -370,10 +371,16 @@ export async function handleProxyRelay(ctx: BotContext): Promise<void> {
   const prefix = senderName
     ? t(partnerLang, "coordProxyRelayNamedPrefix", { name: senderName })
     : t(partnerLang, "coordProxyRelayPrefix");
-  await dmCatch(
-    ctx,
-    partner.telegramId,
-    `${prefix}${clamped}`,
-    { reply_markup: buildChatControlsKeyboard(matchId, partnerLang) },
+  // Relayed text is written by the OTHER user. The recipient's chat timeline
+  // feeds their menu agent's system prompt, which holds profile-writing tools,
+  // so the timeline records only that a relayed message arrived — never its
+  // body. `proxy_messages` remains the full moderation log (PRODUCT_SPEC §4).
+  await withRedactedSummary(
+    "(relayed message from the date partner in the anonymous coordination chat)",
+    async () => {
+      await dmCatch(ctx, partner.telegramId, `${prefix}${clamped}`, {
+        reply_markup: buildChatControlsKeyboard(matchId, partnerLang),
+      });
+    },
   );
 }

@@ -19,6 +19,7 @@ import {
   MIN_AGE,
   MAX_AGE,
   MAX_HISTORY_FOR_API,
+  t,
   type Language,
 } from "@gennety/shared";
 import { env } from "../config.js";
@@ -29,6 +30,7 @@ import { recordRejectionFeedback } from "./rejection-feedback.js";
 import { refreshUserEmbedding } from "../workers/embedding-refresh.js";
 import { transitionAccountStatus } from "./account-status-transitions.js";
 import { getPremiumCancelContext, formatPremiumUntil } from "./premium.js";
+import { explainMatch, getMatchmakingStanding } from "./agent-insights.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -52,19 +54,49 @@ interface ChatCompletionResponse {
 }
 
 /**
- * A post-reply UI action the caller (the Telegram menu router) performs after
- * sending the agent's text bubbles. Used so a tool can trigger a native
- * affordance the agent can't render itself — e.g. the Premium cancel-confirm
- * card. `premium_cancel_confirm` → send the nonce-bound Yes/Keep card (Stars);
- * `premium_cancel_appstore` → send the iOS-Settings cancellation guide.
+ * A single button the agent offers, carrying an EXISTING product callback.
+ *
+ * This is what makes the agent's reach safe. The agent never runs a sensitive
+ * flow itself — it hands the user the same button the menu would have shown,
+ * and the user's tap enters the untouched handler with its own guards, nonces
+ * and confirmation copy. So "cancel my date" reaches exactly the two-step red
+ * confirmation the Cancel button has always produced, and no second
+ * destructive code path exists to keep in sync.
+ */
+export interface AgentEntryPoint {
+  /** Already localized — resolved server-side, never model-authored. */
+  label: string;
+  /** Existing `callback_data`; the agent cannot invent one. */
+  callbackData: string;
+}
+
+/**
+ * A post-reply UI action the caller performs after sending the agent's text.
+ * Used so a tool can surface a native affordance the agent can't render itself.
+ *
+ * `premium_cancel_confirm` / `premium_cancel_appstore` send the nonce-bound
+ * Stars card / the iOS-Settings guide. `entry_point` sends one button into an
+ * existing flow (see `AgentEntryPoint`).
  */
 export type MenuAgentAction =
   | { kind: "premium_cancel_confirm" }
-  | { kind: "premium_cancel_appstore" };
+  | { kind: "premium_cancel_appstore" }
+  | { kind: "entry_point"; entry: AgentEntryPoint };
 
 export interface MenuAgentResult {
   reply: string;
   action?: MenuAgentAction;
+  /**
+   * Code-owned confirmation lines for writes that actually landed, appended
+   * after the model's bubbles.
+   *
+   * Without these the only evidence of a profile change was the model's own
+   * prose, which it is free to phrase however it likes — including describing
+   * an edit that silently failed, or staying quiet about one the user did not
+   * intend. A change to matching-relevant state should be visible as a fact,
+   * not as a claim.
+   */
+  receipts?: string[];
 }
 
 /** Max bubbles per reply — more reads as spam, not chat. */
@@ -323,32 +355,192 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "update_hobbies",
+      description:
+        "Replace the user's hobbies/interests list. Call when the user tells you what they're into and wants it on their profile. Send the COMPLETE list you want them to end up with, not just the new additions.",
+      parameters: {
+        type: "object",
+        properties: {
+          hobbies: {
+            type: "array",
+            items: { type: "string", maxLength: 48 },
+            maxItems: 12,
+            description: "Complete hobby list, short phrases (max 12).",
+          },
+        },
+        required: ["hobbies"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "get_my_standing",
+      description:
+        "Read why the user is or isn't getting matched: how many weekly batches they've missed, whether their profile is still syncing, photo count, verification, account status, and how big the candidate pool is in their city. Call whenever the user asks why they have no matches, why it's taking so long, or what they could improve. Read-only.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "explain_my_match",
+      description:
+        "Read the stored reasoning behind the user's current (or most recent) pairing — the synergy score and how strongly each factor contributed. Call when the user asks why this person, why they were matched, or what the algorithm saw. Read-only. NEVER reveal the partner's decision, and never present the factors as a rating of the partner.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "propose_cancel_date",
+      description:
+        "Call when the user wants to CANCEL their upcoming scheduled date (something came up, they can't make it, they changed their mind). This only surfaces the cancellation button — you NEVER cancel a date yourself and text alone never cancels one. Cancelling is irreversible and the match cannot be restored, so the user still confirms on a red button afterwards. Do NOT call for questions about the date, for changing the venue, or for running late.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "propose_close_account",
+      description:
+        "Call ONLY when the user clearly wants to delete, close, or take a long break from their account. This surfaces the account-closure entry, which offers freezing (keeps everything, reversible with /start) before deletion. You NEVER delete or freeze anything yourself. Do NOT call for a temporary pause of matching — use pause_matching for that.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "open_screen",
+      description:
+        "Give the user a button that opens an existing screen, when what they want lives there rather than in chat. Use it instead of describing where to tap. Choose: profile (view their profile card), photos (add/remove photos), edit_bio (rewrite 'About me' in the editor, where they can see the current text first), settings (language, theme, account), tickets (Date Ticket balance and store), premium (subscription).",
+      parameters: {
+        type: "object",
+        properties: {
+          screen: {
+            type: "string",
+            enum: ["profile", "photos", "edit_bio", "settings", "tickets", "premium"],
+          },
+        },
+        required: ["screen"],
+      },
+    },
+  },
 ];
+
+/**
+ * What each tool is allowed to do. The loop enforces this, so a tool's blast
+ * radius is a property of the registry rather than of how carefully its
+ * description was worded:
+ *
+ *  - `read`    — returns facts, touches nothing.
+ *  - `write`   — mutates this user's own data. Budgeted (see MAX_WRITES_PER_TURN).
+ *  - `confirm` — mutates NOTHING; may only surface a native confirmation the
+ *                user still has to tap. Every irreversible action lives here.
+ *  - `open`    — mutates nothing; hands over a button into an existing screen.
+ */
+export type ToolKind = "read" | "write" | "confirm" | "open";
+
+export const TOOL_KINDS: Record<string, ToolKind> = {
+  get_my_profile: "read",
+  get_my_standing: "read",
+  explain_my_match: "read",
+  update_bio: "write",
+  update_major: "write",
+  update_age_range: "write",
+  update_partner_preferences: "write",
+  update_hobbies: "write",
+  pause_matching: "write",
+  resume_matching: "write",
+  record_rejection_feedback: "write",
+  offer_cancel_premium: "confirm",
+  propose_cancel_date: "confirm",
+  propose_close_account: "confirm",
+  open_screen: "open",
+};
+
+/**
+ * How many `write` tools may execute in one turn.
+ *
+ * One message from the user is one intent. A turn that issues several writes is
+ * the model improvising, and improvisation over a profile is exactly the shape
+ * a prompt-injection payload would take — the timeline the prompt renders holds
+ * text this user did not necessarily author (see `prompt-builder.ts`). Capping
+ * it at one keeps a bad turn to a single, visible, reversible field change
+ * instead of a rewritten profile.
+ */
+export const MAX_WRITES_PER_TURN = 1;
 
 // ---------------------------------------------------------------------------
 // Tool Executors
 // ---------------------------------------------------------------------------
 
+/**
+ * A bio this long is treated as real accumulated signal rather than a line the
+ * user typed — in practice it is the redacted AI-memory analysis plus the
+ * folded-in vibe answers written at finalization.
+ */
+const SUBSTANTIAL_BIO_LENGTH = 200;
+
+/** Below this fraction of the existing text, a rewrite is a deletion. */
+const BIO_SHRINK_LIMIT = 0.5;
+
 async function execUpdateBio(
   telegramId: bigint,
   args: { bio: string },
-): Promise<string> {
+): Promise<{ toolResult: string; action: MenuAgentAction | null }> {
+  const fail = (error: string) => ({
+    toolResult: JSON.stringify({ success: false, error }),
+    action: null,
+  });
+
   if (typeof args.bio !== "string" || !args.bio.trim()) {
-    return JSON.stringify({ success: false, error: "Bio cannot be empty." });
+    return fail("Bio cannot be empty.");
   }
   const bio = args.bio.trim();
   if (bio.length > MAX_BIO_LENGTH) {
-    return JSON.stringify({
-      success: false,
-      error: `Bio must be ${MAX_BIO_LENGTH} characters or less (currently ${bio.length}).`,
-    });
+    return fail(
+      `Bio must be ${MAX_BIO_LENGTH} characters or less (currently ${bio.length}).`,
+    );
   }
 
   const user = await prisma.user.findUnique({
     where: { telegramId },
-    select: { id: true },
+    select: { id: true, language: true, profile: { select: { psychologicalSummary: true } } },
   });
-  if (!user) return JSON.stringify({ success: false, error: "User not found." });
+  if (!user) return fail("User not found.");
+
+  // `psychologicalSummary` is not a caption — it is the profile's accumulated
+  // psychological signal and the dominant embedding input (V_explicit, 0.65).
+  // A casual "add that I like coffee" used to be enough for the model to send
+  // a one-line bio and wipe the whole analysis, with no snapshot to restore
+  // from. A collapse like that is a deliberate act, so it belongs in the editor
+  // where the user can read what they are replacing first.
+  const current = user.profile?.psychologicalSummary?.trim() ?? "";
+  const collapses =
+    current.length >= SUBSTANTIAL_BIO_LENGTH &&
+    bio.length < current.length * BIO_SHRINK_LIMIT;
+  if (collapses) {
+    const lang = (user.language ?? "en") as Language;
+    return {
+      toolResult: JSON.stringify({
+        success: false,
+        error: "replacement_too_destructive",
+        instruction:
+          "That would delete most of their existing profile text, so it was NOT saved. " +
+          "Tell them briefly that their current description is long and you don't want to wipe it, and that the editor (button attached automatically) shows the current text so they can edit it themselves. " +
+          "If they only wanted to ADD something, offer to call update_bio again with the existing text plus their addition.",
+        currentBio: current,
+      }),
+      action: {
+        kind: "entry_point",
+        entry: { label: t(lang, "editBioBtn"), callbackData: "menu:edit:bio" },
+      },
+    };
+  }
 
   await prisma.profile.update({
     where: { userId: user.id },
@@ -361,13 +553,16 @@ async function execUpdateBio(
   });
   const sync = await refreshUserEmbedding(user.id).catch(() => ({ stillDirty: 1 }));
 
-  return JSON.stringify({
-    success: true,
-    message:
-      sync.stillDirty === 0
-        ? "Bio updated and applied to matching."
-        : "Bio saved; matching will apply it after automatic profile sync.",
-  });
+  return {
+    toolResult: JSON.stringify({
+      success: true,
+      message:
+        sync.stillDirty === 0
+          ? "Bio updated and applied to matching."
+          : "Bio saved; matching will apply it after automatic profile sync.",
+    }),
+    action: null,
+  };
 }
 
 async function execUpdateMajor(
@@ -385,12 +580,105 @@ async function execUpdateMajor(
     });
   }
 
+  // Checked like its sibling tools rather than relying on the update to throw:
+  // a raw P2025 escapes the tool loop and the caller can only fall back to the
+  // main menu, so the user's edit silently becomes an unexplained menu.
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (!user) return JSON.stringify({ success: false, error: "User not found." });
+
   await prisma.user.update({
     where: { telegramId },
     data: { major },
   });
 
   return JSON.stringify({ success: true, message: "Major updated." });
+}
+
+async function execUpdateHobbies(
+  telegramId: bigint,
+  args: { hobbies: unknown },
+): Promise<string> {
+  if (!Array.isArray(args.hobbies)) {
+    return JSON.stringify({ success: false, error: "Hobbies must be a list." });
+  }
+  const hobbies = args.hobbies
+    .filter((h): h is string => typeof h === "string")
+    .map((h) => h.trim().slice(0, 48))
+    .filter((h) => h.length > 0)
+    .slice(0, 12);
+  if (hobbies.length === 0) {
+    return JSON.stringify({
+      success: false,
+      error: "Hobby list cannot be empty. Ask what they're into before calling again.",
+    });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (!user) return JSON.stringify({ success: false, error: "User not found." });
+
+  await prisma.profile.update({
+    where: { userId: user.id },
+    // Hobbies feed `buildEmbeddingInput` — mark dirty like the other embedding
+    // inputs, or matching keeps scoring the previous list.
+    data: {
+      hobbies,
+      embeddingDirty: true,
+      embeddingDirtyAt: new Date(),
+    },
+  });
+  const sync = await refreshUserEmbedding(user.id).catch(() => ({ stillDirty: 1 }));
+
+  return JSON.stringify({
+    success: true,
+    hobbies,
+    message:
+      sync.stillDirty === 0
+        ? "Hobbies updated and applied to matching."
+        : "Hobbies saved; matching will apply them after automatic profile sync.",
+  });
+}
+
+async function execGetMyStanding(telegramId: bigint): Promise<string> {
+  const standing = await getMatchmakingStanding(telegramId);
+  if (!standing) return JSON.stringify({ success: false, error: "User not found." });
+
+  return JSON.stringify({
+    success: true,
+    standing,
+    instruction:
+      "Explain in plain language, warmly, and lead with the ONE thing that actually matters most. " +
+      "`profileSyncPending` true means their profile is temporarily out of the pool until sync finishes — say so honestly, it resolves by itself. " +
+      "`cityPool` describes local supply: 'none'/'very_small' means the honest answer is that their city is still filling up, not that something is wrong with them. " +
+      "`photosForBonusTicket` is how many more photos would earn a free Date Ticket. " +
+      "Never invent a reason that isn't in this data, and never promise a match next week.",
+  });
+}
+
+async function execExplainMyMatch(telegramId: bigint): Promise<string> {
+  const explanation = await explainMatch(telegramId);
+  if (!explanation) {
+    return JSON.stringify({
+      success: false,
+      error: "No match to explain yet — they haven't been paired with anyone.",
+    });
+  }
+
+  return JSON.stringify({
+    success: true,
+    explanation,
+    instruction:
+      "Explain why these two were put together, in one or two sentences, as a matchmaker would. " +
+      "Lead with `synergyReason` if present. The factor words describe the PAIRING, never a rating of the partner — " +
+      "never say a partner scored low on anything, and never mention Elo, attractiveness scoring, embeddings or internal numbers. " +
+      "`attractivenessBalance` may only be described as how close a fit the two are overall. " +
+      "Never reveal the partner's accept/decline decision.",
+  });
 }
 
 async function execUpdateAgeRange(
@@ -626,6 +914,159 @@ async function evaluatePremiumCancelOffer(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Entry points (confirm + open classes)
+// ---------------------------------------------------------------------------
+
+/** Screens `open_screen` may hand over, mapped to the real menu callbacks. */
+const SCREEN_ENTRIES: Record<
+  string,
+  { labelKey: Parameters<typeof t>[1]; data: string; flag?: "tickets" | "premium" }
+> = {
+  profile: { labelKey: "menuMyProfile", data: "menu:profile" },
+  photos: { labelKey: "editProfilePhotosBtn", data: "menu:edit:photos" },
+  edit_bio: { labelKey: "editBioBtn", data: "menu:edit:bio" },
+  settings: { labelKey: "menuSettings", data: "menu:settings" },
+  tickets: { labelKey: "menuMyTickets", data: "menu:tickets", flag: "tickets" },
+  premium: { labelKey: "menuPremium", data: "menu:premium", flag: "premium" },
+};
+
+async function userLanguage(telegramId: bigint): Promise<Language> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { language: true },
+  });
+  return (user?.language ?? "en") as Language;
+}
+
+function featureOn(flag: "tickets" | "premium" | undefined): boolean {
+  if (!flag) return true;
+  if (flag === "tickets") return env.TICKET_FEATURE_ENABLED === true;
+  return env.PREMIUM_FEATURE_ENABLED === true;
+}
+
+async function execOpenScreen(
+  telegramId: bigint,
+  args: { screen?: unknown },
+): Promise<{ toolResult: string; action: MenuAgentAction | null }> {
+  const screen = typeof args.screen === "string" ? args.screen : "";
+  const entry = SCREEN_ENTRIES[screen];
+  if (!entry) {
+    return {
+      toolResult: JSON.stringify({ success: false, error: `Unknown screen: ${screen}` }),
+      action: null,
+    };
+  }
+  if (!featureOn(entry.flag)) {
+    return {
+      toolResult: JSON.stringify({
+        success: false,
+        error: "That part of the product isn't available right now. Say so plainly; show no button.",
+      }),
+      action: null,
+    };
+  }
+
+  const lang = await userLanguage(telegramId);
+  return {
+    toolResult: JSON.stringify({
+      success: true,
+      instruction:
+        "The button is attached to your reply automatically. Say one short line about what it opens — do NOT describe where to tap or repeat the button label.",
+    }),
+    action: {
+      kind: "entry_point",
+      entry: { label: t(lang, entry.labelKey), callbackData: entry.data },
+    },
+  };
+}
+
+/**
+ * Surface the date-cancellation button for a live scheduled date.
+ *
+ * Deliberately hands over `emerg:start:<id>` rather than cancelling: that
+ * callback is the existing emergency flow, which asks its own two-step
+ * confirmation (green "keep the date" above red "yes, cancel") and only then
+ * takes the free-text reason. So the agent widens how the flow can be REACHED —
+ * by voice, by a sentence, without hunting for a card that scrolled away — and
+ * changes nothing about what it takes to actually cancel.
+ */
+async function execProposeCancelDate(
+  telegramId: bigint,
+): Promise<{ toolResult: string; action: MenuAgentAction | null }> {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true, language: true },
+  });
+  if (!user) {
+    return { toolResult: JSON.stringify({ success: false, error: "User not found." }), action: null };
+  }
+
+  const match = await prisma.match.findFirst({
+    where: {
+      status: "scheduled",
+      emergencyCancelledBy: null,
+      OR: [{ userAId: user.id }, { userBId: user.id }],
+    },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, agreedTime: true },
+  });
+  if (!match) {
+    return {
+      toolResult: JSON.stringify({
+        success: false,
+        error:
+          "There is no scheduled date to cancel. If they are still deciding on a proposal or scheduling, explain that instead — show no button.",
+      }),
+      action: null,
+    };
+  }
+
+  const lang = (user.language ?? "en") as Language;
+  return {
+    toolResult: JSON.stringify({
+      success: true,
+      instruction:
+        "The cancellation button is attached automatically, and tapping it still asks for an explicit confirmation. " +
+        "Reply with ONE short line: no pressure, no guilt, and make clear cancelling can't be undone. Do not restate the buttons.",
+    }),
+    action: {
+      kind: "entry_point",
+      entry: {
+        label: t(lang, "emergencyBtnConfirm"),
+        callbackData: `emerg:start:${match.id}`,
+      },
+    },
+  };
+}
+
+/**
+ * Surface the account-closure entry. Points at `menu:settings:delete`, which is
+ * the FORK — it plays the founder video note and offers freezing (reversible,
+ * keeps the profile) above deleting, then runs its own nonce-bound two-step
+ * confirmation. The agent must not be able to skip past the softer option.
+ */
+async function execProposeCloseAccount(
+  telegramId: bigint,
+): Promise<{ toolResult: string; action: MenuAgentAction | null }> {
+  const lang = await userLanguage(telegramId);
+  return {
+    toolResult: JSON.stringify({
+      success: true,
+      instruction:
+        "The account button is attached automatically; it opens a screen that offers freezing (fully reversible, nothing is lost) before deletion, and deletion still needs its own confirmations. " +
+        "Reply with ONE short line — no guilt-tripping, no sales pitch, and mention that freezing exists so they don't have to lose anything.",
+    }),
+    action: {
+      kind: "entry_point",
+      entry: {
+        label: t(lang, "settingsDeleteAccount"),
+        callbackData: "menu:settings:delete",
+      },
+    },
+  };
+}
+
 async function execResumeMatching(telegramId: bigint): Promise<string> {
   const result = await transitionAccountStatus({ telegramId }, "resume");
   if (result.kind === "not_found") {
@@ -690,6 +1131,14 @@ export async function runMenuAgentTurn(
 
   // A tool may request a post-reply UI action (e.g. the Premium cancel card).
   let pendingAction: MenuAgentAction | null = null;
+  // Writes actually applied this turn, and the code-owned line each earned.
+  let writesUsed = 0;
+  const receipts: string[] = [];
+  let language: Language | null = null;
+  const receiptLine = async (key: Parameters<typeof t>[1]): Promise<void> => {
+    language ??= await userLanguage(telegramId);
+    receipts.push(t(language, key));
+  };
 
   // Agent loop
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -720,34 +1169,73 @@ export async function runMenuAgentTurn(
         args = {};
       }
 
+      // Budget check before anything runs: a write beyond the first is refused
+      // outright rather than executed and reported. The model is told to ask,
+      // so the second change becomes the user's next message — one intent, one
+      // write, always visible.
+      if (TOOL_KINDS[fnName] === "write" && writesUsed >= MAX_WRITES_PER_TURN) {
+        history.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({
+            success: false,
+            error: "write_budget_exhausted",
+            instruction:
+              "You already changed something this turn, so this second change was NOT saved. Tell the user what you changed, name what else you were about to change, and ask them to confirm it in their next message.",
+          }),
+        });
+        continue;
+      }
+
       let result: string;
+      /** Set by a write executor that actually persisted something. */
+      let receiptKey: Parameters<typeof t>[1] | null = null;
       switch (fnName) {
-        case "update_bio":
-          result = await execUpdateBio(telegramId, args as { bio: string });
+        case "update_bio": {
+          const outcome = await execUpdateBio(telegramId, args as { bio: string });
+          result = outcome.toolResult;
+          if (outcome.action) pendingAction = outcome.action;
+          else receiptKey = "editBioSaved";
           break;
+        }
         case "update_major":
           result = await execUpdateMajor(telegramId, args as { major: string });
+          receiptKey = "editMajorSaved";
           break;
         case "update_age_range":
           result = await execUpdateAgeRange(
             telegramId,
             args as { min_age: number; max_age: number },
           );
+          receiptKey = "editAgeRangeSaved";
           break;
         case "update_partner_preferences":
           result = await execUpdatePartnerPreferences(
             telegramId,
             args as { preferences: string },
           );
+          receiptKey = "editPrefsDescriptionSaved";
+          break;
+        case "update_hobbies":
+          result = await execUpdateHobbies(telegramId, args as { hobbies: unknown });
+          receiptKey = "editHobbiesSaved";
           break;
         case "get_my_profile":
           result = await execGetMyProfile(telegramId);
           break;
+        case "get_my_standing":
+          result = await execGetMyStanding(telegramId);
+          break;
+        case "explain_my_match":
+          result = await execExplainMyMatch(telegramId);
+          break;
         case "pause_matching":
           result = await execPauseMatching(telegramId);
+          receiptKey = "pauseConfirmed";
           break;
         case "resume_matching":
           result = await execResumeMatching(telegramId);
+          receiptKey = "resumeConfirmed";
           break;
         case "record_rejection_feedback":
           result = await execRecordRejectionFeedback(
@@ -761,8 +1249,33 @@ export async function runMenuAgentTurn(
           if (outcome.action) pendingAction = outcome.action;
           break;
         }
+        case "propose_cancel_date": {
+          const outcome = await execProposeCancelDate(telegramId);
+          result = outcome.toolResult;
+          if (outcome.action) pendingAction = outcome.action;
+          break;
+        }
+        case "propose_close_account": {
+          const outcome = await execProposeCloseAccount(telegramId);
+          result = outcome.toolResult;
+          if (outcome.action) pendingAction = outcome.action;
+          break;
+        }
+        case "open_screen": {
+          const outcome = await execOpenScreen(telegramId, args as { screen?: unknown });
+          result = outcome.toolResult;
+          if (outcome.action) pendingAction = outcome.action;
+          break;
+        }
         default:
           result = JSON.stringify({ error: `Unknown tool: ${fnName}` });
+      }
+
+      // Only count and acknowledge a write that reported success — a rejected
+      // edit must neither burn the turn's budget nor tell the user it landed.
+      if (TOOL_KINDS[fnName] === "write" && result.includes('"success":true')) {
+        writesUsed++;
+        if (receiptKey) await receiptLine(receiptKey);
       }
 
       history.push({
@@ -794,7 +1307,11 @@ export async function runMenuAgentTurn(
   const reply =
     lastAssistant?.content ?? "Something went wrong. Try again in a moment.";
 
-  return { reply, ...(pendingAction ? { action: pendingAction } : {}) };
+  return {
+    reply,
+    ...(pendingAction ? { action: pendingAction } : {}),
+    ...(receipts.length > 0 ? { receipts } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------

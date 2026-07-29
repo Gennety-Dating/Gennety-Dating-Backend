@@ -1,5 +1,8 @@
-import { Composer } from "grammy";
+import { Composer, InlineKeyboard } from "grammy";
+import { prisma } from "@gennety/db";
+import { t } from "@gennety/shared";
 import type { BotContext } from "../../session.js";
+import { AGENT_DENIAL_COPY, evaluateAgentAccess } from "../../services/agent-access.js";
 import { showMainMenu } from "./main.js";
 import { handleMyProfile } from "./my-profile.js";
 import { handleMyDate } from "./my-date.js";
@@ -194,6 +197,26 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
 
     try {
       const telegramId = BigInt(ctx.from!.id);
+
+      // Who may talk to the agent at all. Shared with the JWT surface, so a
+      // moderated or still-gated account cannot reach the tools by switching
+      // transport (see `services/agent-access.ts`).
+      const account = await prisma.user.findUnique({
+        where: { telegramId },
+        select: { status: true, onboardingStep: true, suspendedUntil: true },
+      });
+      const access = evaluateAgentAccess(account);
+      if (!access.allowed) {
+        // `not_onboarded` is unreachable here (this router only runs for
+        // completed users) but is handled rather than asserted away.
+        await ctx.reply(
+          access.reason === "not_onboarded"
+            ? t(ctx.session.language, "finishOnboardingFirst")
+            : t(ctx.session.language, AGENT_DENIAL_COPY[access.reason]),
+        );
+        return;
+      }
+
       const result = await runMenuAgentTurn(telegramId, text);
       const bubbles = splitReplyIntoBubbles(result.reply);
       for (let i = 0; i < bubbles.length; i++) {
@@ -207,12 +230,23 @@ menuRouter.on(["message", "callback_query:data"], async (ctx) => {
         }
         await ctx.reply(bubbles[i]!);
       }
+      // Code-owned confirmation of anything that was actually written, so a
+      // profile change is a visible fact rather than the model's own claim.
+      for (const receipt of result.receipts ?? []) {
+        await ctx.reply(`✓ ${receipt}`);
+      }
       // A tool may ask us to follow the reply with a native affordance the
-      // agent can't render — the Premium cancel-confirm card / iOS guide.
+      // agent can't render — the Premium cancel-confirm card / iOS guide, or a
+      // single button into an existing flow.
       if (result.action?.kind === "premium_cancel_confirm") {
         await sendPremiumCancelConfirm(ctx);
       } else if (result.action?.kind === "premium_cancel_appstore") {
         await sendPremiumCancelAppStoreGuide(ctx);
+      } else if (result.action?.kind === "entry_point") {
+        const { label, callbackData } = result.action.entry;
+        await ctx.reply(t(ctx.session.language, "agentEntryPrompt"), {
+          reply_markup: new InlineKeyboard().text(label, callbackData),
+        });
       }
     } catch (err) {
       console.error("Menu agent error:", err);

@@ -307,6 +307,14 @@ const translations = {
     editPrefsDescriptionEmpty: "Please add a short description — it can't be empty.",
     editPrefsDescriptionTooLong: "Too long — keep it under 500.",
     editPrefsDescriptionSaved: "Partner preferences updated",
+    editHobbiesSaved: "Interests updated",
+    agentEntryPrompt: "Here you go:",
+    agentBlockedVerification: "Finish verification first — everything else opens up after that.",
+    agentBlockedSuspended:
+      "Your account is on hold right now, so I can't help with this. Questions go to @gennetysupport.",
+    agentBlockedInvestigation:
+      "Your account is under review right now. Nothing to do here for the moment — @gennetysupport can tell you more.",
+    agentBlockedBanned: "This account is closed. If you think that's wrong, write to @gennetysupport.",
     profileEmbeddingSyncPending:
       "Saved. Matching will apply it after the automatic profile sync finishes.",
     editPrefsBack: "⬅️ Back to Edit",
@@ -1263,6 +1271,14 @@ const translations = {
     editPrefsDescriptionEmpty: "Добавь короткое описание — оно не может быть пустым.",
     editPrefsDescriptionTooLong: "Слишком длинно — уложись в 500.",
     editPrefsDescriptionSaved: "Предпочтения обновлены",
+    editHobbiesSaved: "Интересы обновлены",
+    agentEntryPrompt: "Держи:",
+    agentBlockedVerification: "Сначала пройди верификацию — дальше откроется всё остальное.",
+    agentBlockedSuspended:
+      "Аккаунт сейчас на паузе с нашей стороны, так что тут не помогу. Вопросы — в @gennetysupport.",
+    agentBlockedInvestigation:
+      "Аккаунт сейчас на проверке. Пока делать нечего — подробности расскажут в @gennetysupport.",
+    agentBlockedBanned: "Этот аккаунт закрыт. Если считаешь, что это ошибка — напиши в @gennetysupport.",
     profileEmbeddingSyncPending:
       "Сохранено. Подбор применит это после автоматической синхронизации профиля.",
     editPrefsBack: "⬅️ К редактированию",
@@ -2188,6 +2204,14 @@ const translations = {
     editPrefsDescriptionEmpty: "Додай короткий опис — він не може бути порожнім.",
     editPrefsDescriptionTooLong: "Задовге — вклади в 500.",
     editPrefsDescriptionSaved: "Уподобання оновлено",
+    editHobbiesSaved: "Інтереси оновлено",
+    agentEntryPrompt: "Тримай:",
+    agentBlockedVerification: "Спочатку пройди верифікацію — далі відкриється все інше.",
+    agentBlockedSuspended:
+      "Акаунт зараз на паузі з нашого боку, тож тут не допоможу. Питання — у @gennetysupport.",
+    agentBlockedInvestigation:
+      "Акаунт зараз на перевірці. Поки що робити нічого — подробиці розкажуть у @gennetysupport.",
+    agentBlockedBanned: "Цей акаунт закрито. Якщо вважаєш, що це помилка — напиши в @gennetysupport.",
     profileEmbeddingSyncPending:
       "Збережено. Підбір застосує це після автоматичної синхронізації профілю.",
     editPrefsBack: "⬅️ До редагування",
@@ -3107,6 +3131,15 @@ const deTranslations: TranslationTable = {
   editPrefsDescriptionEmpty: "Füge eine kurze Beschreibung hinzu — sie darf nicht leer sein.",
   editPrefsDescriptionTooLong: "Zu lang — bleib unter 500 Zeichen.",
   editPrefsDescriptionSaved: "Partnerwünsche aktualisiert",
+  editHobbiesSaved: "Interessen aktualisiert",
+  agentEntryPrompt: "Hier, bitte:",
+  agentBlockedVerification: "Mach zuerst die Verifizierung — danach geht alles andere auf.",
+  agentBlockedSuspended:
+    "Dein Konto ist gerade von unserer Seite pausiert, da kann ich hier nicht helfen. Fragen an @gennetysupport.",
+  agentBlockedInvestigation:
+    "Dein Konto wird gerade geprüft. Im Moment gibt es nichts zu tun — Details bekommst du bei @gennetysupport.",
+  agentBlockedBanned:
+    "Dieses Konto ist geschlossen. Wenn das ein Fehler ist, schreib an @gennetysupport.",
   profileEmbeddingSyncPending:
     "Gespeichert. Das Matching übernimmt es nach der automatischen Profilsynchronisierung.",
   editPrefsBack: "⬅️ Zurück zu Bearbeiten",
@@ -3999,6 +4032,15 @@ const plTranslations: TranslationTable = {
   editPrefsDescriptionEmpty: "Dodaj krótki opis — nie może być pusty.",
   editPrefsDescriptionTooLong: "Za długie — zmieść się w 500 znakach.",
   editPrefsDescriptionSaved: "Preferencje zaktualizowane",
+  editHobbiesSaved: "Zainteresowania zaktualizowane",
+  agentEntryPrompt: "Proszę:",
+  agentBlockedVerification: "Najpierw przejdź weryfikację — potem otworzy się reszta.",
+  agentBlockedSuspended:
+    "Twoje konto jest teraz wstrzymane po naszej stronie, więc tu nie pomogę. Pytania na @gennetysupport.",
+  agentBlockedInvestigation:
+    "Twoje konto jest w trakcie weryfikacji. Na razie nie ma co robić — szczegóły powie @gennetysupport.",
+  agentBlockedBanned:
+    "To konto jest zamknięte. Jeśli uważasz, że to błąd, napisz na @gennetysupport.",
   profileEmbeddingSyncPending:
     "Zapisano. Matching zastosuje to po automatycznej synchronizacji profilu.",
   editPrefsBack: "⬅️ Wróć do edycji",

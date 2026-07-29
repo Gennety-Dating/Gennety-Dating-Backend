@@ -79,14 +79,23 @@ export async function applyAetherProfilePatch(
   const userPatch: Prisma.UserUncheckedUpdateInput = {};
   let touchedEmbedding = false;
 
+  const onboarded = user.onboardingStep === "completed";
+
   if (typeof args.age === "number" && Number.isInteger(args.age)) {
     if (args.age < MIN_AGE || args.age > MAX_AGE) {
       return { ok: false, detail: `Age must be ${MIN_AGE}-${MAX_AGE}` };
     }
-    if (user.onboardingStep !== "completed") userPatch.age = args.age;
+    if (!onboarded) userPatch.age = args.age;
   }
   if (args.gender === "male" || args.gender === "female") {
-    userPatch.gender = args.gender;
+    // Frozen after onboarding, exactly like `age` — and for a stronger reason
+    // than "it is identity data". `User.gender` is a live AUTHORIZATION input:
+    // the date gate lets only a male pay for both tickets, and the venue-change
+    // board derives its payer matrix and the female-exclusive express swap from
+    // it. A chat message that flips this field would hand the sender another
+    // cohort's entitlements, so the concierge must not be able to write it.
+    // Correcting a genuinely wrong gender is a support action, not a chat one.
+    if (!onboarded) userPatch.gender = args.gender;
   }
   if (args.preference === "men" || args.preference === "women" || args.preference === "both") {
     userPatch.preference = args.preference;

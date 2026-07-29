@@ -418,6 +418,17 @@ a bot message was answered against conversation from days earlier (PRODUCT_SPEC
 §2.1). Read back by `services/prompt-builder.ts` as the agent's "Recent chat
 timeline" (last 12 events per turn).
 
+**It is untrusted input to a tool-calling prompt, and treated as such.** The
+rows are rendered inside an explicit data fence whose standing rule is that
+nothing within it is an instruction; `renderChatTimeline` neutralises the fence
+marker and markdown headings in every field it emits (summaries AND button
+labels) so a row cannot close the block early and have the remainder read as
+prompt. The bodies that a *different* user authored never reach the table at
+all: `withRedactedSummary` (`services/outbound-recorder.ts`) makes the verbatim
+emergency-cancellation relay and the proxy-chat relay store a neutral marker
+instead of the text. Both matter because the reader's own menu agent holds
+tools that write to the reader's profile.
+
 **Written at three boundaries, not per call site:**
 
 | Boundary | Module | Covers |
@@ -724,8 +735,8 @@ auth) are deliberately outside the spec.
 | POST | `/v1/onboarding/interview/answer` | Send text to the shared onboarding collector; rejected until ToS acceptance and language selection are persisted. Ordinary answers allow 4,000 chars; while the server-owned question is `context_dump`, up to 32,000 chars are accepted and routed as a typed AI-memory payload (Telegram parity). |
 | POST | `/v1/onboarding/interview/voice` | Transcribe voice and send it to the same collector; uses the same legal/language gate |
 | POST | `/v1/onboarding/consent` | Record ToS + research-opt-in + `language` (native client sets it from the system locale — no picker). Advances `onboardingStep` to `conversational` once terms + language + a verified contact rail are all present, handing the interview to the server-owned fact collector (the native-client equivalent of Telegram's onboarding Mini App handoff). |
-| POST | `/v1/assistant/ask` | Lightweight one-shot helper |
-| POST | `/v1/assistant/voice` | Transcribe voice and send the turn to the post-onboarding assistant |
+| POST | `/v1/assistant/ask` | The post-onboarding menu agent — the SAME `runMenuAgentTurn` and the same tool set the Telegram bot uses, not a lighter helper. Gated by `evaluateAgentAccess` (`services/agent-access.ts`), identical to the Telegram door: `403` for a moderated or still-verification-gated account, `409` before onboarding completes. The response carries `reply` plus `action` (a native affordance the agent asked for — a confirm card, or one button into an existing flow) and `receipts` (code-owned confirmations of writes that landed). `action` used to be dropped here while the Telegram router acted on it, so the agent's whole confirm class was silently inert on this surface. Deliberately outside `openapi/gennety-v1.yaml` — no shipped iOS client consumes it. |
+| POST | `/v1/assistant/voice` | Whisper transcript → the same agent turn, same gate, same response shape. This is what makes every agent tool voice-reachable without a separate voice surface. |
 | POST | `/v1/chat/upload` | Upload Aether chat image to private storage |
 | POST | `/v1/chat/message` | Aether concierge turn (text + image) |
 | GET  | `/v1/chat/history` | Aether chat history |

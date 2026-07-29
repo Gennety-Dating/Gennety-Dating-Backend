@@ -62,6 +62,7 @@ import {
   runMenuAgentTurn,
   splitReplyIntoBubbles,
   toApiMessages,
+  TOOL_KINDS,
   type StoredChatMessage,
 } from "./menu-agent.js";
 import { clearKnowledgeCache } from "./prompt-builder.js";
@@ -634,5 +635,378 @@ describe("toApiMessages", () => {
       { role: "assistant", content: "hey" },
     ]);
     expect(Object.hasOwn(out[0]!, "ts")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tool safety envelope
+// ---------------------------------------------------------------------------
+
+describe("menu-agent tool classes", () => {
+  it("classifies every advertised tool", () => {
+    // A tool with no entry in TOOL_KINDS silently escapes the write budget, so
+    // the registry has to stay exhaustive rather than best-effort.
+    for (const name of Object.keys(TOOL_KINDS)) {
+      expect(TOOL_KINDS[name]).toBeDefined();
+    }
+    expect(TOOL_KINDS.update_bio).toBe("write");
+    expect(TOOL_KINDS.get_my_standing).toBe("read");
+    expect(TOOL_KINDS.propose_cancel_date).toBe("confirm");
+    expect(TOOL_KINDS.open_screen).toBe("open");
+  });
+
+  it("never classifies an irreversible action as a write", () => {
+    // Cancelling a date / closing an account / cancelling a subscription must
+    // stay in the confirm class: those tools may only surface a button.
+    expect(TOOL_KINDS.propose_cancel_date).toBe("confirm");
+    expect(TOOL_KINDS.propose_close_account).toBe("confirm");
+    expect(TOOL_KINDS.offer_cancel_premium).toBe("confirm");
+  });
+});
+
+describe("menu-agent write budget", () => {
+  const telegramId = BigInt(2002);
+
+  /**
+   * How many times a `major` edit actually reached the database. Every turn
+   * also calls `user.update` once to persist message history, so a raw call
+   * count would always be one too high.
+   */
+  function majorWrites(): number {
+    return (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call) => (call[0] as { data?: { major?: unknown } })?.data?.major !== undefined,
+    ).length;
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    clearKnowledgeCache();
+    (prisma.systemKnowledge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.chatEvent.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { select?: Record<string, unknown> }) => {
+        if (args.select && "matchesAsA" in args.select) {
+          return {
+            id: "uid-A",
+            firstName: "Alice",
+            universityDomain: "stanford.edu",
+            status: "active",
+            language: "en",
+            matchesAsA: [],
+            matchesAsB: [],
+          };
+        }
+        if (args.select && "messageHistory" in args.select) return { messageHistory: [] };
+        if (args.select && "profile" in args.select) {
+          return { id: "uid-A", language: "en", profile: { psychologicalSummary: "" } };
+        }
+        return { id: "uid-A", language: "en" };
+      },
+    );
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prisma.profile.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+  });
+
+  it("applies only the first write in a turn and refuses the rest", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          { id: "c1", name: "update_major", args: { major: "Design" } },
+          { id: "c2", name: "update_age_range", args: { min_age: 22, max_age: 30 } },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("done"));
+
+    const result = await runMenuAgentTurn(telegramId, "change both", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    // The major landed; the age range never reached the database. (Every turn
+    // also calls `user.update` once to persist history — match on the payload.)
+    expect(majorWrites()).toBe(1);
+    expect(prisma.profile.update).not.toHaveBeenCalled();
+    expect(result.receipts).toHaveLength(1);
+
+    const secondRequest = JSON.parse(
+      (fetchFn.mock.calls[1]![1] as { body: string }).body,
+    ) as { messages: Array<{ role: string; content: string }> };
+    const refusal = secondRequest.messages.find(
+      (m) => m.role === "tool" && m.content.includes("write_budget_exhausted"),
+    );
+    expect(refusal).toBeDefined();
+  });
+
+  it("does not spend the budget on a write that failed validation", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          // Rejected: min > max.
+          { id: "c1", name: "update_age_range", args: { min_age: 40, max_age: 20 } },
+          { id: "c2", name: "update_major", args: { major: "Design" } },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("ok"));
+
+    const result = await runMenuAgentTurn(telegramId, "fix it", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    // The second call still ran, because the first never wrote anything.
+    expect(majorWrites()).toBe(1);
+    expect(result.receipts).toEqual(["Saved"]);
+  });
+
+  it("emits no receipt when nothing was written", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(textResponse("just chatting"));
+    const result = await runMenuAgentTurn(telegramId, "hey", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    expect(result.receipts).toBeUndefined();
+  });
+});
+
+describe("menu-agent update_bio destructive-replacement guard", () => {
+  const telegramId = BigInt(3003);
+  const longBio = "x".repeat(400);
+
+  function mockUser(existingBio: string) {
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { select?: Record<string, unknown> }) => {
+        if (args.select && "matchesAsA" in args.select) {
+          return {
+            id: "uid-A",
+            firstName: "Alice",
+            universityDomain: "stanford.edu",
+            status: "active",
+            language: "en",
+            matchesAsA: [],
+            matchesAsB: [],
+          };
+        }
+        if (args.select && "messageHistory" in args.select) return { messageHistory: [] };
+        if (args.select && "profile" in args.select) {
+          return {
+            id: "uid-A",
+            language: "en",
+            profile: { psychologicalSummary: existingBio },
+          };
+        }
+        return { id: "uid-A", language: "en" };
+      },
+    );
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    clearKnowledgeCache();
+    (prisma.systemKnowledge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.chatEvent.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    (prisma.profile.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+  });
+
+  it("refuses to collapse a long existing bio into one line", async () => {
+    mockUser(longBio);
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "update_bio", args: { bio: "I like coffee." } }]),
+      )
+      .mockResolvedValueOnce(textResponse("that would wipe your description"));
+
+    const result = await runMenuAgentTurn(telegramId, "add that I like coffee", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(prisma.profile.update).not.toHaveBeenCalled();
+    expect(result.receipts).toBeUndefined();
+    // The user is handed the editor, where the current text is visible first.
+    expect(result.action).toEqual({
+      kind: "entry_point",
+      entry: { label: expect.any(String), callbackData: "menu:edit:bio" },
+    });
+  });
+
+  it("allows a rewrite that keeps the substance", async () => {
+    mockUser(longBio);
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([
+          { id: "c1", name: "update_bio", args: { bio: `${longBio} And I like coffee.` } },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("added"));
+
+    const result = await runMenuAgentTurn(telegramId, "add that I like coffee", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(prisma.profile.update).toHaveBeenCalledTimes(1);
+    expect(result.receipts).toEqual(["About me updated"]);
+  });
+
+  it("lets a user with no bio yet write a short one", async () => {
+    mockUser("");
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "update_bio", args: { bio: "I like coffee." } }]),
+      )
+      .mockResolvedValueOnce(textResponse("saved"));
+
+    await runMenuAgentTurn(telegramId, "write my bio", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(prisma.profile.update).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("menu-agent propose_cancel_date", () => {
+  const telegramId = BigInt(4004);
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    clearKnowledgeCache();
+    (prisma.systemKnowledge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.chatEvent.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { select?: Record<string, unknown> }) => {
+        if (args.select && "matchesAsA" in args.select) {
+          return {
+            id: "uid-A",
+            firstName: "Alice",
+            universityDomain: "stanford.edu",
+            status: "active",
+            language: "en",
+            matchesAsA: [],
+            matchesAsB: [],
+          };
+        }
+        if (args.select && "messageHistory" in args.select) return { messageHistory: [] };
+        return { id: "uid-A", language: "en" };
+      },
+    );
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+  });
+
+  it("hands over the existing emergency button and cancels nothing itself", async () => {
+    (prisma.match.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "match-9",
+      agreedTime: new Date("2026-08-01T17:00:00Z"),
+    });
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "propose_cancel_date", args: {} }]),
+      )
+      .mockResolvedValueOnce(textResponse("here's the button"));
+
+    const result = await runMenuAgentTurn(telegramId, "I can't make it, cancel", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(prisma.match.update).not.toHaveBeenCalled();
+    expect(result.action).toMatchObject({
+      kind: "entry_point",
+      entry: { callbackData: "emerg:start:match-9" },
+    });
+  });
+
+  it("offers no button when there is no scheduled date", async () => {
+    (prisma.match.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "propose_cancel_date", args: {} }]),
+      )
+      .mockResolvedValueOnce(textResponse("nothing scheduled"));
+
+    const result = await runMenuAgentTurn(telegramId, "cancel my date", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(result.action).toBeUndefined();
+  });
+});
+
+describe("menu-agent open_screen", () => {
+  const telegramId = BigInt(5005);
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    clearKnowledgeCache();
+    (prisma.systemKnowledge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.chatEvent.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { select?: Record<string, unknown> }) => {
+        if (args.select && "matchesAsA" in args.select) {
+          return {
+            id: "uid-A",
+            firstName: "Alice",
+            universityDomain: "stanford.edu",
+            status: "active",
+            language: "en",
+            matchesAsA: [],
+            matchesAsB: [],
+          };
+        }
+        if (args.select && "messageHistory" in args.select) return { messageHistory: [] };
+        return { id: "uid-A", language: "en" };
+      },
+    );
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({});
+  });
+
+  it("hands over a real menu callback, never a model-authored one", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "open_screen", args: { screen: "photos" } }]),
+      )
+      .mockResolvedValueOnce(textResponse("here"));
+
+    const result = await runMenuAgentTurn(telegramId, "I want to change my photos", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(result.action).toMatchObject({
+      kind: "entry_point",
+      entry: { callbackData: "menu:edit:photos" },
+    });
+  });
+
+  it("offers nothing for an unknown screen", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "open_screen", args: { screen: "admin" } }]),
+      )
+      .mockResolvedValueOnce(textResponse("can't do that"));
+
+    const result = await runMenuAgentTurn(telegramId, "open admin", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(result.action).toBeUndefined();
+  });
+
+  it("offers nothing for a screen whose feature is off", async () => {
+    // TICKET_FEATURE_ENABLED is absent from the mocked env, so tickets are off.
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "open_screen", args: { screen: "tickets" } }]),
+      )
+      .mockResolvedValueOnce(textResponse("not available"));
+
+    const result = await runMenuAgentTurn(telegramId, "buy tickets", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(result.action).toBeUndefined();
   });
 });
