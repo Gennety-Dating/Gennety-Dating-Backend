@@ -1,6 +1,65 @@
 # Gennety Dating Deploy
 
-**PENDING — peer-wait shimmer (PRODUCT_SPEC §3.6b).** Not deployed yet.
+**Deployed 2026-07-29 — admin ops endpoints + the three blocks that had been
+sitting PENDING below (`f9e08eb`, 30 commits since `58134b8`… i.e. everything
+after the 2026-07-27 release).** Full server code + Mini App + **both** additive
+migrations. The three PENDING blocks that used to head this file
+(peer-wait shimmer, Kyiv-only market gate, chat timeline) all shipped in this
+one deploy and are marked *Deployed* in place below; their env/rollback notes
+stay valid as reference.
+
+What prompted it: six `/admin/*` paths were 404ing. The finding was that **none
+of them was a stale deploy** — prod's admin surface was byte-identical to HEAD.
+They had never been written, and three already existed under a different name
+(`/admin/analytics/matches`, `/admin/dialogs`, `/admin/analytics/weekly-matches`).
+New: `/admin/health` `/admin/stats` `/admin/dashboard` `/admin/matches`
+(`admin/routes/ops.ts`), plus `/admin/conversations` and
+`/admin/analytics/founder-weekly` as aliases on the existing handlers.
+
+Schema step was verified additive before running — `prisma migrate diff --script`
+produced **zero DROPs**: 4 × `ADD COLUMN` (`matches.peer_wait_*`) and
+`CREATE TABLE chat_events` + 2 indexes + FK. `db:push` → `db:drift-check` **OK**
+→ restart.
+
+Preflight green: **183 bot test files / 2503 tests**, all typechecks, `pnpm build`,
+`security:secrets` (875 files), `security:audit` 0 advisories.
+
+Post-deploy verified: `Bot @gennetybot started`, **all crons registered plus
+`[worker] Peer-wait shimmer every 20000ms`** (that line is the proof the new code
+is live — it did not exist before), `:3100`/`:3101` listening, `/v1/ping` ok,
+admin `401` unauthenticated, **all 12 Mini App pages 200**, `supportedCities`
+now Kyiv-only via `/v1/app/config`, `/admin/dialogs/:id` `sources.timeline: true`
+(was `false` — the table finally exists), restart count 1 with no crash loop, and
+**zero new `P2022`/`P2023`** (counts held at 113/14, all historical — confirmed by
+firing fresh requests and re-counting).
+
+Two live bugs were found and fixed while verifying, both pre-existing:
+- **`/admin/users/:id` 500'd on a malformed id.** A non-UUID does not read as
+  "not found" to Prisma — it throws `P2023`, which the route reported as
+  "Internal server error" with a stack trace. Now `400 {"error":"id must be a
+  UUID"}` on `/admin/users/:id`, its `/conversation`, and `/admin/dialogs/:id`.
+- **`datingadmin.gennety.com` is DOWN** (not caused by this deploy, not fixed by
+  it): its Let's Encrypt certificate has **expired**, and even ignoring the cert
+  the host answers `404`, so the domain is no longer attached to the Vercel
+  project. DNS still points at Vercel. The dashboard is reachable only at
+  `https://gennety-dating-dashboard.vercel.app`. Note `ADMIN_DASHBOARD_ORIGIN`
+  still lists the dead domain, which is harmless but should be re-pointed when
+  the domain is restored.
+
+rsync dry-run listed exactly 2 deletions (the usual stale `apps/video/build`
+artifacts). **The exclude list was widened for this run** with
+`--exclude 'prod-backup-*.json' --exclude '*.bak.*'`: the droplet holds
+`prod-backup-2026-07-27T14-08-06-066Z.json` (a logical DB dump that exists
+nowhere else) and a hand-edit `.bak` of `admin/server.ts`, both of which the
+documented flag set would have deleted. Consider keeping those excludes.
+
+**Rollback:** re-sync a checkout at `58134b8`, restart, redeploy the Mini App
+from it. The additive columns/table can stay. `PEER_WAIT_TICK_MS=0` disables the
+shimmer without a redeploy.
+
+---
+
+**Deployed 2026-07-29 (was PENDING) — peer-wait shimmer (PRODUCT_SPEC §3.6b).**
 Code-only otherwise: **no flag change, no Mini App change** (`apps/webapp`
 untouched). One new optional env var, one **required additive `db:push`**.
 
@@ -49,7 +108,7 @@ change), or revert the code. The additive columns can stay either way. Note that
 with the feature off the calendar/venue waits show nothing at all — the old
 confirmation messages were removed, not merely decorated.
 
-**PENDING — Kyiv-only market gate.** Not deployed yet. **No Prisma schema
+**Deployed 2026-07-29 (was PENDING) — Kyiv-only market gate.** **No Prisma schema
 change, no env change, no flag change.** Requires a **Mini App redeploy**
 (`apps/webapp` changed: `onboarding.tsx` / `onboarding-i18n.ts` /
 `onboarding.css` / `api.ts`), so the sequence is Deploy Full Server Code →
@@ -95,8 +154,8 @@ switched to Kyiv stays switched (it is an ordinary profile write).
 
 ---
 
-**PENDING — chat timeline for the concierge agent (`chat_events`).** Not
-deployed yet. Code-only otherwise: **no env change, no flag change, no Mini App
+**Deployed 2026-07-29 (was PENDING) — chat timeline for the concierge agent
+(`chat_events`).** Code-only otherwise: **no env change, no flag change, no Mini App
 change** (`apps/webapp` untouched).
 
 **⚠️ Requires an additive `db:push` BEFORE the restart.** The new
