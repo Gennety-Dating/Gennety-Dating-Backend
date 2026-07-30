@@ -16,7 +16,9 @@ import {
  *
  *   - not OPERATIONAL, or rating/review-count below the seed gate floor
  *     (`MIN_RATING` / `MIN_RATING_COUNT`) → `active = false`.
- *   - healthy → refresh `openingHours` + `utcOffsetMinutes` + `lastVerifiedAt`.
+ *   - healthy → refresh `openingHours`, `utcOffsetMinutes`, the quality/price
+ *     metadata the V2 eligibility gate reads (`rating`, `userRatingCount`,
+ *     `priceLevel`, `primaryType`, `editorialSummary`), and `lastVerifiedAt`.
  *
  * Safety: an infra failure (fetch throws) NEVER deactivates a row — we don't
  * punish a venue for our own outage; it's retried next tick. A successful fetch
@@ -109,6 +111,23 @@ export async function venueRevalidationTick(
         data: {
           openingHours: (details.openingHours ?? Prisma.JsonNull) as Prisma.InputJsonValue,
           utcOffsetMinutes: details.utcOffsetMinutes,
+          // Persist the quality/price metadata too. The fitness check above
+          // already reads these values; before 2026-07-30 they were then
+          // thrown away, so a row seeded before the columns existed kept a
+          // null `rating`/`priceLevel` forever — and the V2 eligibility gate
+          // rejects exactly that (`quality_below_floor` / `unknown_price`).
+          // The cron was silently unable to heal the rows it exists to keep
+          // fresh. Only overwrite with a real value: a field absent from a
+          // Places response must not erase what we already hold.
+          ...(details.rating != null ? { rating: details.rating } : {}),
+          ...(details.userRatingCount != null
+            ? { userRatingCount: details.userRatingCount }
+            : {}),
+          ...(details.priceLevel != null ? { priceLevel: details.priceLevel } : {}),
+          ...(details.primaryType != null ? { primaryType: details.primaryType } : {}),
+          ...(details.editorialSummary != null
+            ? { editorialSummary: details.editorialSummary }
+            : {}),
           lastVerifiedAt: new Date(),
         },
       });

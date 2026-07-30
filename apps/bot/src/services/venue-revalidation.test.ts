@@ -26,6 +26,9 @@ function details(overrides: Partial<PlaceDetails> = {}): PlaceDetails {
     userRatingCount: 200,
     openingHours: { periods: [{ open: { day: 1, hour: 9 }, close: { day: 1, hour: 22 } }] },
     utcOffsetMinutes: 180,
+    priceLevel: "PRICE_LEVEL_MODERATE",
+    primaryType: "cafe",
+    editorialSummary: "A cosy neighbourhood cafe.",
     ...overrides,
   };
 }
@@ -81,6 +84,50 @@ describe("venueRevalidationTick", () => {
     const arg = mUpdate.mock.calls[0]![0] as { data: Record<string, unknown> };
     expect(arg.data.active).toBeUndefined(); // never touches `active` on a healthy row
     expect(arg.data.utcOffsetMinutes).toBe(120);
+    expect(arg.data.lastVerifiedAt).toBeInstanceOf(Date);
+  });
+
+  it("persists the quality/price metadata the V2 eligibility gate reads", async () => {
+    // Regression: the tick used to read `rating`/`priceLevel` for its fitness
+    // check and then write back only the hours, so a row seeded before those
+    // columns existed kept a null `priceLevel` forever and was permanently
+    // rejected as `unknown_price`. The cron could not heal what it exists for.
+    mFindMany.mockResolvedValue([{ id: "v5", placeId: "p5", name: "Stale Row" }]);
+    const res = await venueRevalidationTick({
+      apiKey: "k",
+      fetchDetails: async () =>
+        details({
+          rating: 4.4,
+          userRatingCount: 812,
+          priceLevel: "PRICE_LEVEL_INEXPENSIVE",
+          primaryType: "coffee_shop",
+          editorialSummary: "Specialty roaster.",
+        }),
+    });
+    expect(res.refreshed).toBe(1);
+    const arg = mUpdate.mock.calls[0]![0] as { data: Record<string, unknown> };
+    expect(arg.data.rating).toBe(4.4);
+    expect(arg.data.userRatingCount).toBe(812);
+    expect(arg.data.priceLevel).toBe("PRICE_LEVEL_INEXPENSIVE");
+    expect(arg.data.primaryType).toBe("coffee_shop");
+    expect(arg.data.editorialSummary).toBe("Specialty roaster.");
+  });
+
+  it("leaves a stored value alone when Places omits that field", async () => {
+    // A field absent from a Places response is "unknown", not "now empty".
+    // Writing null would erase good data — and for `priceLevel` that alone
+    // drops the venue out of the pool.
+    mFindMany.mockResolvedValue([{ id: "v6", placeId: "p6", name: "Sparse Response" }]);
+    await venueRevalidationTick({
+      apiKey: "k",
+      fetchDetails: async () =>
+        details({ priceLevel: null, primaryType: null, editorialSummary: null }),
+    });
+    const arg = mUpdate.mock.calls[0]![0] as { data: Record<string, unknown> };
+    expect("priceLevel" in arg.data).toBe(false);
+    expect("primaryType" in arg.data).toBe(false);
+    expect("editorialSummary" in arg.data).toBe(false);
+    // The hours refresh still happens — those are always written.
     expect(arg.data.lastVerifiedAt).toBeInstanceOf(Date);
   });
 

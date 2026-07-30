@@ -603,6 +603,16 @@ export interface PlaceDetails {
   userRatingCount: number | null;
   openingHours: RegularOpeningHours | null;
   utcOffsetMinutes: number | null;
+  /**
+   * Quality/price metadata the Venue Intent V2 eligibility gate reads
+   * (`services/initial-venue-policy.ts`). Fetched here so the re-validation
+   * cron can keep them fresh — a curated row whose `priceLevel` is null is
+   * rejected as `unknown_price` for every price-evidence category, so a stale
+   * or never-populated value silently removes the venue from the pool.
+   */
+  priceLevel: string | null;
+  primaryType: string | null;
+  editorialSummary: string | null;
 }
 
 const PLACE_DETAILS_FIELD_MASK = [
@@ -612,6 +622,9 @@ const PLACE_DETAILS_FIELD_MASK = [
   "userRatingCount",
   "regularOpeningHours",
   "utcOffsetMinutes",
+  "priceLevel",
+  "primaryType",
+  "editorialSummary",
 ].join(",");
 
 /**
@@ -646,6 +659,9 @@ export async function fetchPlaceDetails(
     userRatingCount: p.userRatingCount ?? null,
     openingHours: p.regularOpeningHours ?? null,
     utcOffsetMinutes: p.utcOffsetMinutes ?? null,
+    priceLevel: p.priceLevel ?? null,
+    primaryType: p.primaryType ?? null,
+    editorialSummary: p.editorialSummary?.text ?? null,
   };
 }
 

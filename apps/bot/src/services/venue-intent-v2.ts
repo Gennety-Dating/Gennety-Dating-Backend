@@ -623,9 +623,21 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       ...(cityKey ? { cityKey } : universityDomain ? { universityDomain } : {}),
     },
     orderBy: [{ priority: "asc" }, { updatedAt: "desc" }],
-    // Read past temporarily ineligible/stale rows, then cap the eligible base
-    // pool below. Invalid rows must not crowd good base venues out of ranking.
-    take: 60,
+    // Read the city's whole base catalog and let the eligibility filter below
+    // do the culling, because the cap and the filter cannot be swapped: the
+    // gates (hours, open-at-slot, price evidence, quality floor) are logic, not
+    // SQL, so anything the cap drops is never even considered.
+    //
+    // This was `take: 60`, which meant "60 rows by priority, THEN keep whatever
+    // survives". On the production Kyiv catalog that yielded 20 usable venues
+    // out of 186 eligible — a block of high-priority rows with no price
+    // evidence consumed the budget and pushed 166 good venues out of reach,
+    // which is exactly what the old comment here claimed to prevent.
+    //
+    // The remaining number is a sanity bound, not a working limit: no city
+    // catalog is near it (Kyiv, the largest, is 448 base rows), and the read is
+    // a handful of milliseconds once per scheduled date.
+    take: 2000,
   });
   const selections: SelectionRecord[] = curated.flatMap((row) => {
     if (!row.googleMapsUri) return [];
