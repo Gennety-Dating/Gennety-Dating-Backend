@@ -23,10 +23,18 @@
 
   /* The sheen that sweeps a photo tile while its bytes are in flight. */
   --photo-sheen: rgba(255, 255, 255, 0.09);
+
+  /* Lift under a detail-gallery tile. Deliberately tighter than the shared
+     --glass-shadow (40px blur, no spread → it throws ~58px past the tile)
+     because it renders inside the rail's vertical clip: the shallower the
+     shadow, the less room .vc-gallery has to reclaim for it. Same read at a
+     glance — the negative spread pulls the halo in rather than dimming it. */
+  --shot-shadow: 0 12px 26px -10px rgba(0, 0, 0, 0.6);
 }
 :root[data-theme="light"] {
   --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
   --photo-sheen: rgba(0, 0, 0, 0.05);
+  --shot-shadow: 0 12px 26px -10px rgba(0, 0, 0, 0.24);
 }
 
 * {
@@ -303,8 +311,16 @@ body {
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
-  margin: 0 -20px 4px;
-  padding: 0 20px;
+  /* A horizontal scroller cannot leave the other axis `visible`, so this rail
+     clips vertically — and the tiles' drop shadow was being sheared off dead
+     square at its bottom edge. The vertical padding gives the shadow room
+     INSIDE the clip box; the negative margins take exactly that room back out
+     of the layout, so nothing on screen moves (net top 0, net bottom 4px, as
+     before) and only the shadow stops hitting a wall. The two must stay in
+     step with `--shot-shadow`, which reaches ~28px below a tile and ~4px
+     above it. */
+  margin: -6px -20px -26px;
+  padding: 6px 20px 30px;
   scrollbar-width: none;
 }
 .vc-gallery::-webkit-scrollbar {
@@ -320,7 +336,7 @@ body {
   background-size: cover;
   background-position: center;
   box-shadow:
-    var(--glass-shadow),
+    var(--shot-shadow),
     inset 0 1px 0 var(--glass-highlight);
   display: grid;
   place-items: center;
@@ -658,8 +674,16 @@ a.vc-info-row .vc-info-text {
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
-  margin: 0 -20px 4px;
-  padding: 0 20px;
+  /* A horizontal scroller cannot leave the other axis `visible`, so this rail
+     clips vertically — and the tiles' drop shadow was being sheared off dead
+     square at its bottom edge. The vertical padding gives the shadow room
+     INSIDE the clip box; the negative margins take exactly that room back out
+     of the layout, so nothing on screen moves (net top 0, net bottom 4px, as
+     before) and only the shadow stops hitting a wall. The two must stay in
+     step with `--shot-shadow`, which reaches ~28px below a tile and ~4px
+     above it. */
+  margin: -6px -20px -26px;
+  padding: 6px 20px 30px;
   scrollbar-width: none;
 }
 .vc-gallery::-webkit-scrollbar {
@@ -675,7 +699,7 @@ a.vc-info-row .vc-info-text {
   background-size: cover;
   background-position: center;
   box-shadow:
-    var(--glass-shadow),
+    var(--shot-shadow),
     inset 0 1px 0 var(--glass-highlight);
   display: grid;
   place-items: center;
