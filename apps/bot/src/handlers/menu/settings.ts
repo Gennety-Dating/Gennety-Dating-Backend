@@ -4,7 +4,6 @@ import { prisma, type Theme } from "@gennety/db";
 import { t, type Language, DEFAULT_SESSION, SUPPORTED_LANGUAGES } from "@gennety/shared";
 import { showMainMenu } from "./main.js";
 import { buildLanguageKeyboard } from "../language-keyboard.js";
-import { sendDeleteFreezeVideoNote } from "../../services/delete-freeze-video.js";
 import { deleteUserAccount } from "../../services/account-deletion.js";
 import { freezeAccount } from "../../services/account-status-transitions.js";
 import {
@@ -167,22 +166,16 @@ export async function handleSettingsThemeSet(ctx: BotContext): Promise<void> {
 /**
  * Step 1 — user tapped "Delete Account".
  *
- * Before doing anything irreversible we offer the softer alternative: a founder
- * video note (кружок) explains why freezing beats deleting, then a two-button
- * fork — a red "delete anyway" and a blue "freeze" (with a snowflake) — so the
- * destructive path is visually distinct from the safe one. No state is touched
- * here; a stray tap is a pure no-op until the user picks a branch.
+ * Before doing anything irreversible we offer the softer alternative: text
+ * explains why freezing beats deleting, then a two-button fork — a red
+ * "delete anyway" and a blue "freeze" (with a snowflake) — so the destructive
+ * path is visually distinct from the safe one. No state is touched here; a
+ * stray tap is a pure no-op until the user picks a branch.
  */
 export async function handleDeleteAccountStart(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
   const lang = ctx.session.language;
   await invalidatePendingAccountAction(ctx);
-
-  // Best-effort founder кружок — skipped gracefully when no asset exists for
-  // this language; the fork below is always sent regardless.
-  if (ctx.chat) {
-    await sendDeleteFreezeVideoNote(ctx.api, ctx.chat.id, lang);
-  }
 
   const user = await prisma.user.findUnique({
     where: { telegramId: BigInt(ctx.from!.id) },
