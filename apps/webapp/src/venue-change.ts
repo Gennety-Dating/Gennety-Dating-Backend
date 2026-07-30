@@ -1728,6 +1728,17 @@ function openVenuePreview(ref: VenueRef, back: () => void): void {
 // Overlap sheet (>1 simultaneous matches — the actor picks one)
 // ---------------------------------------------------------------------------
 
+/**
+ * Several places matched at once — the actor picks ONE.
+ *
+ * A tap only PICKS; the bar below is what commits. Before that a single tap on
+ * this list changed the venue outright, with no way back (the change is
+ * irreversible once agreed) — on a screen of near-identical cards, reached by
+ * surprise right after saving marks, where the finger is still moving. Same
+ * shape as the Calendar's multi-overlap screen: choose a card, a Confirm
+ * appears at the bottom. The bar is hidden until something is chosen, so the
+ * button can never fire against an empty choice.
+ */
 function renderOverlapSheet(keys: string[]): void {
   screen = "overlap";
   setBack(() => {
@@ -1737,18 +1748,20 @@ function renderOverlapSheet(keys: string[]): void {
     el("h1", { class: "vc-h1", text: s.overlapTitle }),
     el("p", { class: "vc-lead", text: s.overlapLead }),
   ]);
+
+  let choice: string | null = null;
+  const cardByKey = new Map<string, HTMLElement>();
+
   const cards = keys
     .map((k) => catalogByKey(k))
     .filter((v): v is VenueChangeCatalogItem => v != null)
-    .map((v) =>
-      el(
+    .map((v) => {
+      const key = keyOf(v);
+      const card = el(
         "div",
         {
-          class: "vc-card is-match",
-          onClick: () => {
-            haptic("success");
-            void confirmOverlap(v);
-          },
+          class: "vc-card vc-pick",
+          onClick: () => pick(key),
         },
         [
           venueThumb(v),
@@ -1756,11 +1769,45 @@ function renderOverlapSheet(keys: string[]): void {
             el("div", { class: "vc-card-name", text: v.name }),
             el("div", { class: "vc-card-addr", text: v.address }),
           ]),
-          icon("chevron", "icon vc-card-chevron"),
+          // Replaces the chevron: this row is a choice, not a way deeper in.
+          el("span", { class: "vc-pick-mark" }, [icon("check", "icon vc-pick-glyph")]),
         ],
-      ),
-    );
-  mount(page([header, el("div", { class: "vc-list" }, cards)]));
+      );
+      cardByKey.set(key, card);
+      return card;
+    });
+
+  const confirmBtn = el("button", {
+    class: "btn-primary",
+    type: "button",
+    text: s.ctaConfirm,
+    onClick: () => {
+      if (busy || choice == null) return;
+      const picked = catalogByKey(choice);
+      if (!picked) return;
+      haptic("success");
+      void confirmOverlap(picked);
+    },
+  });
+  const bar = el("div", { class: "vc-bar vc-bar-float is-hidden" }, [
+    confirmBtn,
+    el("p", { class: "vc-note vc-note-center", text: s.confirmHint }),
+  ]);
+  const pageEl = el("div", { class: "vc-page" }, [
+    el("div", { class: "vc-scroll" }, [header, el("div", { class: "vc-list" }, cards)]),
+    bar,
+  ]);
+
+  function pick(key: string): void {
+    if (busy || choice === key) return;
+    choice = key;
+    haptic("select");
+    for (const [k, node] of cardByKey) node.classList.toggle("is-picked", k === key);
+    bar.classList.remove("is-hidden");
+    pageEl.classList.add("has-cta");
+  }
+
+  mount(pageEl);
 }
 
 async function confirmOverlap(v: VenueChangeCatalogItem): Promise<void> {

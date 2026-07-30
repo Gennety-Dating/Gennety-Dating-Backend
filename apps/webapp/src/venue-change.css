@@ -2011,3 +2011,40 @@ a.vc-info-row .vc-info-text {
     animation: none;
   }
 }
+
+/* ── Overlap list: a choice you can take back ─────────────────────────── */
+/* Several places matched at once, so this list is a radio group, not a stack
+   of buttons that each fire. The card therefore has to READ as chosen before
+   the Confirm below it is pressed — a burgundy ring plus a filled check, the
+   same accent the board spends on "we agree". Deliberately a ring rather than
+   the board's solid burgundy plate: the plate means "the partner marked this",
+   and every card here already is that. */
+.vc-pick {
+  gap: 12px;
+}
+.vc-pick-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  /* An empty ring is the unpicked state — no glyph inside it. */
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
+  color: transparent;
+  transition: box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+.vc-pick-glyph {
+  width: 13px;
+  height: 13px;
+  stroke-width: 3;
+}
+.vc-card.is-picked {
+  background: var(--surface);
+  box-shadow: 0 0 0 1.5px var(--accent), var(--glass-edge);
+}
+.vc-card.is-picked .vc-pick-mark {
+  background: var(--accent);
+  box-shadow: none;
+  color: var(--on-accent);
+}
