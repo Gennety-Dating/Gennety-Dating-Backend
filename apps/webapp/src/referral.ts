@@ -274,7 +274,12 @@ async function onShare(btn: HTMLButtonElement): Promise<void> {
   btn.disabled = true;
   if (PREVIEW) {
     // No Telegram share sheet in a plain browser — just acknowledge.
-    app?.showAlert?.(s.shareSent) ?? alert(s.shareSent);
+    // Not `showAlert(...) ?? alert(...)`: showAlert returns undefined even when
+    // it works, so `??` always ran the fallback too. PREVIEW is also reachable
+    // inside Telegram via `?preview`, where that stacked a browser dialog on
+    // top of the native one.
+    if (app?.showAlert) app.showAlert(s.shareSent);
+    else alert(s.shareSent);
     sharing = false;
     btn.disabled = false;
     return;
