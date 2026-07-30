@@ -23,6 +23,7 @@ import {
 } from "@gennety/shared";
 import { haversineDistanceKm, type LatLng } from "./geo.js";
 import { isVenueOpenAt } from "./curated-venue.js";
+import { meetsVenueQualityFloor } from "./initial-venue-policy.js";
 import {
   searchVenueCandidates,
   type RegularOpeningHours,
@@ -253,6 +254,10 @@ export async function listCuratedVenuesNear(
       utcOffsetMinutes: true,
       openingHours: true,
       placeId: true,
+      // Feed the quality floor below. Not surfaced to the client for curated
+      // rows (the board shows no rating for them), only used to gate.
+      rating: true,
+      userRatingCount: true,
     },
   });
 
@@ -260,6 +265,13 @@ export async function listCuratedVenuesNear(
   for (const r of rows) {
     const distanceKm = haversineDistanceKm(input.center, { lat: r.lat, lng: r.lng });
     if (distanceKm > radiusKm) continue;
+    // Quality floor — the board had none, so a row the auto-assign picker would
+    // refuse (and one the nightly revalidation had already deactivated, until
+    // the importer stopped resurrecting them) was still offered here as a
+    // pickable option. Same category-aware floor as the initial assignment;
+    // price/tier rules deliberately do NOT apply, since paying for a premium or
+    // alternative venue is exactly what this board is for.
+    if (!meetsVenueQualityFloor(r.category, r.rating, r.userRatingCount)) continue;
     if (
       !isVenueOpenAt(
         (r.openingHours as RegularOpeningHours | null) ?? null,

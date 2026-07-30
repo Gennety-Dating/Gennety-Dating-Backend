@@ -28,13 +28,61 @@ export function applyInitialVenueConstraintPolicy(hard: VenueHardConstraints): V
   return { ...hard, maxPrice: null };
 }
 
+/**
+ * Categories that must prove a non-premium price before they can be the
+ * automatic first assignment.
+ *
+ * `museum` is deliberately ABSENT (2026-07-30). It was here on the theory that
+ * an admission venue can be expensive, but Google does not report `priceLevel`
+ * for museums at all — measured across the curated catalog, 0 of 43 museum rows
+ * carried one, so the rule rejected every museum that ever existed and the
+ * `art_culture` experience was unreachable in the product. The protection it
+ * was meant to give survives regardless: the `expensive` check below runs
+ * BEFORE this one, so a museum with a known premium price is still refused.
+ * What changed is only that "Google told us nothing" stopped meaning "too
+ * expensive". Parks were never in this set (public space, no commercial price).
+ */
 const PRICE_EVIDENCE_REQUIRED = new Set<VenueCategory>([
   "cafe",
   "coffee_shop",
   "restaurant",
   "lounge",
-  "museum",
 ]);
+
+/**
+ * Per-category quality floor.
+ *
+ * The 4.0 / 30-review bar is calibrated for commercial venues, where reviews
+ * are plentiful and a low score is a real signal. Applied to public space it
+ * mostly measures how many people bothered to rate an embankment: three of the
+ * catalog's parks (Маріїнський парк, Воздвиженка, Оболонська набережна) carry
+ * no Google rating at all and were rejected for it, even though they are
+ * exactly the kind of operator-curated public place a walking date wants.
+ *
+ * So `park` keeps the same rating bar when a rating exists — a genuinely
+ * badly-reviewed place is still refused — but needs far fewer reviews, and is
+ * admitted on operator curation when the provider has no data whatsoever.
+ */
+export function qualityFloorFor(category: VenueCategory): { minRating: number; minReviews: number } {
+  if (category === "park") return { minRating: MIN_RATING, minReviews: 5 };
+  return { minRating: MIN_RATING, minReviews: MIN_RATING_COUNT };
+}
+
+/**
+ * Standalone quality check, shared by the auto-assign policy and the paid
+ * venue-change board so the two cannot drift. Takes the category as a plain
+ * string because the board reads whatever the catalog row holds; an unknown
+ * category falls back to the strict commercial floor.
+ */
+export function meetsVenueQualityFloor(
+  category: string,
+  rating: number | null | undefined,
+  reviews: number | null | undefined,
+): boolean {
+  const floor = qualityFloorFor(category as VenueCategory);
+  if (category === "park" && rating == null && reviews == null) return true;
+  return (rating ?? 0) >= floor.minRating && (reviews ?? 0) >= floor.minReviews;
+}
 
 function canonicalPrice(value: string | null | undefined): VenuePriceLimit | "expensive" | null {
   switch (value) {
@@ -70,7 +118,14 @@ export function evaluateInitialVenuePolicy(input: InitialVenuePolicyInput): Init
   if (input.tier !== INITIAL_VENUE_ALLOWED_TIER) {
     return { eligible: false, reason: "non_base_tier" };
   }
-  if ((input.rating ?? 0) < MIN_RATING || (input.reviews ?? 0) < MIN_RATING_COUNT) {
+  const floor = qualityFloorFor(input.category);
+  // Public space with no provider data at all rides on operator curation: a
+  // named park in a hand-reviewed catalog is evidence, and "Google has no
+  // rating for this embankment" is not a quality signal. Any data present is
+  // still judged — a park rated 3.8 is refused like anything else.
+  const hasProviderQuality = input.rating != null || input.reviews != null;
+  const exemptUnrated = input.category === "park" && !hasProviderQuality;
+  if (!exemptUnrated && ((input.rating ?? 0) < floor.minRating || (input.reviews ?? 0) < floor.minReviews)) {
     return { eligible: false, reason: "quality_below_floor" };
   }
 

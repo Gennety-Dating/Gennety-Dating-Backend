@@ -316,7 +316,6 @@ async function importVenues() {
       hoursConfidence: r.hoursConfidence ?? (r.openingHours ? "provider" : "unknown"),
       utcOffsetMinutes: Number.isFinite(r.utcOffsetMinutes) ? r.utcOffsetMinutes : null,
       openingHours: r.openingHours ?? null,
-      active: true,
       lastVerifiedAt: new Date(),
     };
 
@@ -340,6 +339,13 @@ async function importVenues() {
       select: { id: true },
     });
     if (existing) {
+      // `active` is deliberately NOT written on an update. The nightly
+      // revalidation cron deactivates venues that closed or dropped below the
+      // quality floor, and this import used to set `active: true`
+      // unconditionally — so every catalog re-import silently resurrected them,
+      // and the cron only re-checks ~30 rows a night, meaning a closed venue
+      // could be offered for weeks before being caught again. Reactivation is
+      // the cron's call, on live evidence, not a side effect of a data push.
       await prisma.curatedVenue.update({ where: { id: existing.id }, data });
       updated++;
     } else {

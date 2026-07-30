@@ -24552,7 +24552,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -24713,7 +24714,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -24744,7 +24746,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -24775,7 +24778,8 @@
     "_rating": 4.8,
     "_reviews": 664,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -24807,7 +24811,8 @@
     "_rating": 3.8,
     "_reviews": 4,
     "_priceLevel": null,
-    "_primaryType": "tourist_attraction"
+    "_primaryType": "tourist_attraction",
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -24839,7 +24844,9 @@
     "_rating": 4.6,
     "_reviews": 27892,
     "_priceLevel": null,
-    "_primaryType": "botanical_garden"
+    "_primaryType": "botanical_garden",
+    "hoursConfidence": "unknown",
+    "reviewNote": "Gated, ticketed grounds with real closing hours — must NOT be marked always_open. Needs operator-confirmed hours before it can be auto-assigned."
   },
   {
     "approved": true,
@@ -34495,7 +34502,7 @@
     "_primaryType": "korean_barbecue_restaurant"
   },
   {
-    "approved": true,
+    "approved": false,
     "universityDomain": "kneu.edu.ua",
     "name": "La Coupole",
     "address": "102 Bd du Montparnasse, 75014 Paris, Франція",
@@ -34621,7 +34628,8 @@
     "_rating": 4.4,
     "_reviews": 16311,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "french_restaurant"
+    "_primaryType": "french_restaurant",
+    "reviewNote": "Rejected 2026-07-30: address is 102 Bd du Montparnasse, Paris, France — not a Kyiv venue. Kept as an explicit rejection so a future pull cannot silently re-approve it."
   },
   {
     "approved": true,
@@ -51095,7 +51103,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -51256,7 +51265,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -51287,7 +51297,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -51318,7 +51329,8 @@
     "_rating": 4.8,
     "_reviews": 664,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -51349,7 +51361,8 @@
     "_rating": 3.8,
     "_reviews": 4,
     "_priceLevel": null,
-    "_primaryType": "tourist_attraction"
+    "_primaryType": "tourist_attraction",
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -51381,7 +51394,9 @@
     "_rating": 4.6,
     "_reviews": 27892,
     "_priceLevel": null,
-    "_primaryType": "botanical_garden"
+    "_primaryType": "botanical_garden",
+    "hoursConfidence": "unknown",
+    "reviewNote": "Gated, ticketed grounds with real closing hours — must NOT be marked always_open. Needs operator-confirmed hours before it can be auto-assigned."
   },
   {
     "approved": true,
@@ -61033,7 +61048,7 @@
     "_primaryType": "korean_barbecue_restaurant"
   },
   {
-    "approved": true,
+    "approved": false,
     "universityDomain": "knu.ua",
     "name": "La Coupole",
     "address": "102 Bd du Montparnasse, 75014 Paris, Франція",
@@ -61159,7 +61174,8 @@
     "_rating": 4.4,
     "_reviews": 16311,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "french_restaurant"
+    "_primaryType": "french_restaurant",
+    "reviewNote": "Rejected 2026-07-30: address is 102 Bd du Montparnasse, Paris, France — not a Kyiv venue. Kept as an explicit rejection so a future pull cannot silently re-approve it."
   },
   {
     "approved": true,
@@ -77640,7 +77656,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -77801,7 +77818,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -77832,7 +77850,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -77863,7 +77882,8 @@
     "_rating": 4.8,
     "_reviews": 664,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -77894,7 +77914,8 @@
     "_rating": 3.8,
     "_reviews": 4,
     "_priceLevel": null,
-    "_primaryType": "tourist_attraction"
+    "_primaryType": "tourist_attraction",
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -77926,7 +77947,9 @@
     "_rating": 4.6,
     "_reviews": 27892,
     "_priceLevel": null,
-    "_primaryType": "botanical_garden"
+    "_primaryType": "botanical_garden",
+    "hoursConfidence": "unknown",
+    "reviewNote": "Gated, ticketed grounds with real closing hours — must NOT be marked always_open. Needs operator-confirmed hours before it can be auto-assigned."
   },
   {
     "approved": true,
@@ -87576,7 +87599,7 @@
     "_primaryType": "korean_barbecue_restaurant"
   },
   {
-    "approved": true,
+    "approved": false,
     "universityDomain": "kpi.ua",
     "name": "La Coupole",
     "address": "102 Bd du Montparnasse, 75014 Paris, Франція",
@@ -87702,7 +87725,8 @@
     "_rating": 4.4,
     "_reviews": 16311,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "french_restaurant"
+    "_primaryType": "french_restaurant",
+    "reviewNote": "Rejected 2026-07-30: address is 102 Bd du Montparnasse, Paris, France — not a Kyiv venue. Kept as an explicit rejection so a future pull cannot silently re-approve it."
   },
   {
     "approved": true,
@@ -104185,7 +104209,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -104346,7 +104371,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -104377,7 +104403,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -104409,7 +104436,8 @@
     "_rating": 4.8,
     "_reviews": 664,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -104441,7 +104469,8 @@
     "_rating": 3.8,
     "_reviews": 4,
     "_priceLevel": null,
-    "_primaryType": "tourist_attraction"
+    "_primaryType": "tourist_attraction",
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -104473,7 +104502,9 @@
     "_rating": 4.6,
     "_reviews": 27892,
     "_priceLevel": null,
-    "_primaryType": "botanical_garden"
+    "_primaryType": "botanical_garden",
+    "hoursConfidence": "unknown",
+    "reviewNote": "Gated, ticketed grounds with real closing hours — must NOT be marked always_open. Needs operator-confirmed hours before it can be auto-assigned."
   },
   {
     "approved": true,
@@ -114124,7 +114155,7 @@
     "_primaryType": "korean_barbecue_restaurant"
   },
   {
-    "approved": true,
+    "approved": false,
     "universityDomain": "stud.nau.edu.ua",
     "name": "La Coupole",
     "address": "102 Bd du Montparnasse, 75014 Paris, Франція",
@@ -114250,7 +114281,8 @@
     "_rating": 4.4,
     "_reviews": 16311,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "french_restaurant"
+    "_primaryType": "french_restaurant",
+    "reviewNote": "Rejected 2026-07-30: address is 102 Bd du Montparnasse, Paris, France — not a Kyiv venue. Kept as an explicit rejection so a future pull cannot silently re-approve it."
   },
   {
     "approved": true,
@@ -130729,7 +130761,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -130890,7 +130923,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -130921,7 +130955,8 @@
     "_rating": null,
     "_reviews": null,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -130952,7 +130987,8 @@
     "_rating": 4.8,
     "_reviews": 664,
     "_priceLevel": null,
-    "_primaryType": null
+    "_primaryType": null,
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -130984,7 +131020,8 @@
     "_rating": 3.8,
     "_reviews": 4,
     "_priceLevel": null,
-    "_primaryType": "tourist_attraction"
+    "_primaryType": "tourist_attraction",
+    "hoursConfidence": "always_open"
   },
   {
     "approved": true,
@@ -131016,7 +131053,9 @@
     "_rating": 4.6,
     "_reviews": 27892,
     "_priceLevel": null,
-    "_primaryType": "botanical_garden"
+    "_primaryType": "botanical_garden",
+    "hoursConfidence": "unknown",
+    "reviewNote": "Gated, ticketed grounds with real closing hours — must NOT be marked always_open. Needs operator-confirmed hours before it can be auto-assigned."
   },
   {
     "approved": true,
@@ -140674,7 +140713,7 @@
     "_primaryType": "korean_barbecue_restaurant"
   },
   {
-    "approved": true,
+    "approved": false,
     "universityDomain": "ukma.edu.ua",
     "name": "La Coupole",
     "address": "102 Bd du Montparnasse, 75014 Paris, Франція",
@@ -140800,7 +140839,8 @@
     "_rating": 4.4,
     "_reviews": 16311,
     "_priceLevel": "PRICE_LEVEL_EXPENSIVE",
-    "_primaryType": "french_restaurant"
+    "_primaryType": "french_restaurant",
+    "reviewNote": "Rejected 2026-07-30: address is 102 Bd du Montparnasse, Paris, France — not a Kyiv venue. Kept as an explicit rejection so a future pull cannot silently re-approve it."
   },
   {
     "approved": true,
