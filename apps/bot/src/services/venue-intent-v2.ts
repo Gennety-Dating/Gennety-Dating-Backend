@@ -43,6 +43,7 @@ import { notifyFounderVenueSelectionFailure } from "./founder-notify.js";
 import { deliverScheduledConfirmation } from "./scheduled-confirmation.js";
 import { applyInitialVenueConstraintPolicy, evaluateInitialVenuePolicy } from "./initial-venue-policy.js";
 import { runStatusSequence } from "./ai-stream.js";
+import { applyVenueDiversity, loadVenueUsage } from "./venue-diversity.js";
 import { venueSearchSteps } from "./analysis-status.js";
 
 /**
@@ -728,7 +729,41 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   // above: it truncated by position before anything was scored.
   const deduped = [...new Map(selections.map((row) => [row.rank.placeId, row])).values()];
   const ranked = rankVenueCandidates(deduped.map((row) => row.rank), a, b);
-  const best = ranked[0];
+
+  // Diversity layer. The ranker is deterministic, so on a stable catalog it
+  // answers the same thing for every pair in the city — which is how a handful
+  // of venues ended up carrying nearly every date. This picks between options
+  // the ranker considers near-equal, never below them (see venue-diversity.ts).
+  // Best-effort: a failure here must not cost the pair their date, so it falls
+  // back to the plain argmax.
+  let best = ranked[0];
+  let diversityReason = "argmax-unfiltered";
+  if (ranked.length > 0) {
+    try {
+      const usage = await loadVenueUsage({
+        userAId: match.userA.id,
+        userBId: match.userB.id,
+        agreedTime: match.agreedTime,
+      });
+      const decision = applyVenueDiversity(
+        ranked.map((row) => ({
+          id: row.candidate.placeId,
+          score: row.score.finalScore,
+          pairFit: row.score.pairFit,
+          row,
+        })),
+        usage,
+        matchId,
+      );
+      if (decision.chosen) {
+        best = decision.chosen.row;
+        diversityReason = decision.reason;
+      }
+    } catch (error) {
+      console.warn(`[venue-intent-v2] diversity layer failed for ${matchId}, using argmax:`, error);
+    }
+  }
+
   const chosen = best ? deduped.find((row) => row.rank.id === best.candidate.id) ?? null : null;
   const mode = venueIntentMode(matchId) === "shadow" ? "shadow" : "live";
   // Curated candidates store no imagery of their own, so the winner's cover
@@ -784,7 +819,7 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
     chipCorrections: chipCorrectionCount(a) + chipCorrectionCount(b),
   } });
   if (mode === "shadow") return;
-  const reason = `Pair intent: ${resolveVenueBridge(a, b).join(", ")}; verified fit ${(best.score.pairFit * 100).toFixed(0)}%; route imbalance ${Math.abs(chosen.rank.distanceA - chosen.rank.distanceB).toFixed(1)} km.`;
+  const reason = `Pair intent: ${resolveVenueBridge(a, b).join(", ")}; verified fit ${(best.score.pairFit * 100).toFixed(0)}%; route imbalance ${Math.abs(chosen.rank.distanceA - chosen.rank.distanceB).toFixed(1)} km; pick ${diversityReason} of ${ranked.length}.`;
   const committed = await prisma.match.updateMany({
     where: { id: matchId, status: "negotiating_venue" },
     data: {
