@@ -27,9 +27,18 @@
  *
  * Usage:
  *   pnpm seed-venues:pull   [--config=PATH] [--out=PATH] [--per-category=8]
- *   pnpm seed-venues:import [--in=PATH] [--apply]
+ *   pnpm seed-venues:import [--in=PATH] [--apply] [--city-key=ua:lviv]
  *
  * `--import` is a dry-run by default; pass `--apply` to write.
+ *
+ * `cityKey` is MANDATORY and never inferred (see `assertCityKey`). It is the
+ * primary scope the live Venue Intent V2 selector filters on
+ * (`services/venue-intent-v2.ts` — university domain is affinity only), so a
+ * wrong or missing value does not raise an error at runtime: the venue simply
+ * never appears for anyone, while a wrong one surfaces the venue in another
+ * city. Until 2026-07-30 this was inferred from a regex over the input FILE
+ * PATH (`/kharkiv/i ? … : /odesa/i ? … : "ua:kyiv"`), which silently sent every
+ * unrecognised city's catalog to Kyiv.
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
@@ -93,6 +102,33 @@ function fail(msg) {
   process.exit(1);
 }
 
+/**
+ * `<country>:<city-slug>`, matching `buildHomeCityKey()`
+ * (`apps/bot/src/public/home-location.ts`) — the value a real user's
+ * `Profile.homeCityKey` holds. The live V2 selector compares the two as exact
+ * strings, so a case or format drift ("UA:Lviv") is as fatal as a missing one,
+ * and just as silent.
+ */
+const CITY_KEY_SHAPE = /^[a-z]{2}:[a-z0-9-]+$/;
+
+function assertCityKey(value, where) {
+  if (!value) {
+    fail(
+      `Missing cityKey (${where}).\n` +
+        `  cityKey is the primary scope the live venue selector filters on and is never inferred.\n` +
+        `  Set it explicitly, e.g. "cityKey": "ua:lviv" in the config, or pass --city-key=ua:lviv.\n` +
+        `  It must equal the users' Profile.homeCityKey for that city (buildHomeCityKey → "<country>:<city-slug>").`,
+    );
+  }
+  if (!CITY_KEY_SHAPE.test(value)) {
+    fail(
+      `Malformed cityKey "${value}" (${where}).\n` +
+        `  Expected lowercase "<country>:<city-slug>", e.g. "ua:lviv" — it is compared as an exact string.`,
+    );
+  }
+  return value;
+}
+
 async function pull() {
   const apiKey = process.env.PLACES_API_KEY;
   if (!apiKey) fail("Missing PLACES_API_KEY in env.");
@@ -112,10 +148,14 @@ async function pull() {
 
   const candidates = [];
   for (const uni of config) {
-    const { universityDomain, lat, lng, cityKey = "ua:kyiv" } = uni;
+    const { universityDomain, lat, lng } = uni;
     if (!universityDomain || typeof lat !== "number" || typeof lng !== "number") {
       fail(`Bad config entry (need universityDomain, lat, lng): ${JSON.stringify(uni)}`);
     }
+    const cityKey = assertCityKey(
+      uni.cityKey ?? args.get("city-key"),
+      `config entry for ${universityDomain} @ ${lat},${lng}`,
+    );
     const categories = uni.categories ?? DEFAULT_CATEGORIES;
     const radiusMeters = uni.radiusMeters ?? DEFAULT_RADIUS_M;
     const defaultPriority = uni.defaultPriority ?? 2;
@@ -182,11 +222,11 @@ async function importVenues() {
 
   const rows = JSON.parse(readFileSync(inPath, "utf8"));
   if (!Array.isArray(rows)) fail("Candidates file must be a JSON array.");
-  const inferredCityKey = /kharkiv/i.test(inPath)
-    ? "ua:kharkiv"
-    : /odesa|odessa/i.test(inPath)
-      ? "ua:odesa"
-      : "ua:kyiv";
+
+  // `--city-key` is the fallback for catalogs seeded before `pull` stamped a
+  // cityKey (the three original city files carry none). It is never inferred.
+  const cityKeyOverride = args.get("city-key");
+  if (cityKeyOverride) assertCityKey(cityKeyOverride, "--city-key");
 
   const { prisma } = await import("@gennety/db");
   const { isValidVenueCategory, isValidVenueTier } = await import(
@@ -200,6 +240,24 @@ async function importVenues() {
     (r) => r.approved === true && !isBlockedVenueName(r.name),
   );
   console.log(`${approved.length}/${rows.length} approved.${apply ? "" : " (dry run — pass --apply to write)"}`);
+
+  // Resolve + validate every cityKey BEFORE writing anything, so a bad catalog
+  // fails whole rather than half-imported. A silently wrong cityKey is the one
+  // mistake this script cannot surface later: the rows land fine and are simply
+  // never selected.
+  const missingCityKey = approved.filter((r) => !r.cityKey && !cityKeyOverride);
+  if (missingCityKey.length > 0) {
+    fail(
+      `${missingCityKey.length}/${approved.length} approved row(s) have no cityKey, and no --city-key was passed.\n` +
+        `  e.g. ${[...new Set(missingCityKey.map((r) => r.name))].slice(0, 3).join(", ")}\n` +
+        `  Re-run as: pnpm seed-venues:import --in=${inPath.replace(root + "/", "")} --city-key=<ua:city> --apply`,
+    );
+  }
+  for (const r of approved) {
+    assertCityKey(r.cityKey ?? cityKeyOverride, `row "${r.name}"`);
+  }
+  const cityKeysSeen = [...new Set(approved.map((r) => r.cityKey ?? cityKeyOverride))];
+  console.log(`  cityKey → ${cityKeysSeen.join(", ")}`);
 
   let created = 0;
   let updated = 0;
@@ -235,7 +293,7 @@ async function importVenues() {
 
     const data = {
       universityDomain: r.universityDomain,
-      cityKey: r.cityKey ?? inferredCityKey,
+      cityKey: r.cityKey ?? cityKeyOverride,
       name: r.name,
       address: r.address,
       lat: r.lat,
@@ -264,7 +322,7 @@ async function importVenues() {
 
     if (!apply) {
       console.log(
-        `  would upsert: [${data.universityDomain}] ${data.name} (${data.category}, p${data.priority}, ${data.tier})`,
+        `  would upsert: [${data.cityKey}/${data.universityDomain}] ${data.name} (${data.category}, p${data.priority}, ${data.tier})`,
       );
       continue;
     }
@@ -301,7 +359,11 @@ async function importVenues() {
 async function main() {
   if (args.has("help") || (!args.has("pull") && !args.has("import"))) {
     console.log(
-      "Usage:\n  pnpm seed-venues:pull   [--config=PATH] [--out=PATH] [--per-category=8]\n  pnpm seed-venues:import [--in=PATH] [--apply]",
+      "Usage:\n" +
+        "  pnpm seed-venues:pull   [--config=PATH] [--out=PATH] [--per-category=8] [--city-key=ua:lviv]\n" +
+        "  pnpm seed-venues:import [--in=PATH] [--apply] [--city-key=ua:lviv]\n\n" +
+        "cityKey is mandatory (config field or --city-key) and is never inferred —\n" +
+        "it is the scope the live venue selector filters on.",
     );
     process.exit(0);
   }

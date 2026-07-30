@@ -11,6 +11,20 @@ This sits on top of the curated-first venue system (PRODUCT_SPEC §3.7). The
 Google Places quality gate already guarantees *not-a-gas-station* everywhere;
 this playbook adds the *taste* layer that Places rating alone can't capture.
 
+> **Read this first (updated 2026-07-30).** Venue Intent V2 changed the unit of
+> expansion from **university domain** to **city**. Curated inventory is scoped
+> by `cityKey`; `universityDomain` is now **affinity only** — a small ranking
+> bump when *both* participants share the venue's domain
+> (`services/venue-intent-v2.ts`). Two consequences run through every step
+> below:
+>
+> 1. **`cityKey` is the load-bearing field.** Get it wrong and the venue is
+>    invisible — no error, no log line, it simply never gets picked.
+> 2. **A venue in the table is not a venue in the pool.** V2 applies four gates
+>    (§0b) at selection time. A row that fails any of them is silently skipped,
+>    so "537 rows imported" says nothing about how many are actually reachable.
+>    Always finish with the effective-pool check in §7.
+
 ---
 
 ## 0. The quality bar (what "great" means here)
@@ -34,6 +48,33 @@ if it clears ALL of:
 Categories (must be one of the whitelist — `isValidVenueCategory` enforces):
 `cafe`, `coffee_shop`, `restaurant`, `park`, `museum`, `lounge`.
 
+## 0b. The machine gate (what silently drops a venue)
+
+Everything above is taste. These four are enforced in code at selection time
+(`services/venue-intent-v2.ts` + `services/initial-venue-policy.ts`). A row that
+fails any of them stays in the table looking healthy and is never proposed:
+
+| Gate | Requirement | Bites hardest on |
+|---|---|---|
+| **Scope** | `cityKey` equals the pair's `Profile.homeCityKey` exactly | any new city (§1b) |
+| **Hours** | `hoursConfidence ∈ {always_open, operator_confirmed}` **or** both `openingHours` and `utcOffsetMinutes` present | **parks** — Places rarely returns hours for them |
+| **Quality** | `tier = base`, `rating ≥ 4.0`, `userRatingCount ≥ 30` | thin/new venues |
+| **Price evidence** | `cafe`, `coffee_shop`, `restaurant`, `lounge`, **`museum`** need a known price of `free`/`inexpensive`/`moderate`. `expensive` is rejected. **`park` is exempt.** | **museums** — Places almost never returns `priceLevel` for them |
+
+Two of these are counter-intuitive enough to call out separately, because both
+produce a curated category that reads as fully stocked and contributes zero:
+
+- **Parks need `"hoursConfidence": "always_open"` set by hand.** The pull leaves
+  them `unknown` whenever Places returns no hours, and `unknown` is dropped.
+- **Museums need a hand-added price tag** (`free` / `inexpensive` / `moderate`
+  in `facetTags`). Without it every museum you approve is rejected as
+  `unknown_price`.
+
+Also note the selector reads `take: 60` ordered by `priority ASC` **before**
+applying these gates, so a block of ineligible high-priority rows can crowd out
+eligible ones. Keep `priority: 1` for venues you have actually verified pass the
+gate.
+
 ---
 
 ## 1. Inputs (ask the user / confirm before starting)
@@ -49,7 +90,19 @@ Categories (must be one of the whitelist — `isValidVenueCategory` enforces):
 If the user didn't give domains, find the official student-email domains first
 (university IT pages) — the domain must match `ALLOWED_EMAIL_DOMAINS` shape.
 
-### 1a. Resolve & whitelist the student email domain  (DO THIS FIRST)
+### 1a. Resolve & whitelist the student email domain  (BLOCKING — DO THIS FIRST)
+
+**This is the only step that can block the whole city, and it ships as code, not
+data.** If a university's email domain doesn't end in a whitelisted suffix, its
+students cannot register *at all* — no amount of curated venues changes that,
+and the fix (`constants.ts` + rebuild + redeploy) is a deploy, not a data edit.
+So resolve and merge the whitelist change **before** spending a day on venues.
+
+> Scope note: this is the *student* track only. General-track users register by
+> phone and never touch a university domain, so a city can launch for them with
+> the whitelist untouched. Matching itself does not read `universityDomain` at
+> all — it is not a filter and not a scoring factor. It matters here purely as
+> the **student registration gate**, plus the small venue affinity bump.
 
 There are **two different "domains"** and both matter:
 
@@ -95,6 +148,29 @@ Procedure per university:
 > big ones like KPI/KNU use bare `.ua` domains that the current whitelist blocks.
 > Always verify; never assume the suffix.
 
+### 1b. Resolve the `cityKey`  (the field that decides visibility)
+
+`cityKey` is the primary scope the live selector filters curated inventory on.
+It must equal, **as an exact lowercase string**, the `Profile.homeCityKey` that
+real users in that city carry.
+
+That value is built by `buildHomeCityKey()`
+(`apps/bot/src/public/home-location.ts`) as `` `${countryCode}:${citySlug}` ``,
+both lowercased — so Lviv is `ua:lviv`, Kraków is `pl:krakow`, Berlin is
+`de:berlin`. Confirm rather than assume the slug for any city whose name
+transliterates more than one way, by checking what the city picker actually
+stores:
+
+```sql
+select home_city_key, count(*) from profiles group by 1 order by 2 desc;
+```
+
+`seed-venues` requires it explicitly — as a `"cityKey"` field on each config
+entry, or `--city-key=ua:lviv` on the command line — and refuses to run without
+one. It is deliberately **never inferred**: until 2026-07-30 the importer
+guessed it from a regex over the input *file path*, defaulting to `ua:kyiv`,
+which would have silently filed an entire new city's catalog under Kyiv.
+
 ---
 
 ## 2. Define anchor points
@@ -110,20 +186,26 @@ Get each anchor's lat/lng from Google Maps (right-click → first numbers) or vi
 the research in Step 1. Radius per anchor: **2500–4000 m** (dense districts →
 smaller; spread-out campuses → larger).
 
-Write them into `scripts/curated-venues.config.json` (array; one entry per
-anchor — same `universityDomain` repeated is fine):
+Write them into a per-city config file — `scripts/curated-venues.<city>.config.json`
+(array; one entry per anchor — same `universityDomain` repeated is fine).
+**Every entry carries `cityKey`** (§1b); the pull stamps it onto each candidate
+so the import can't lose it:
 
 ```json
 [
   {
+    "_anchor": "Mitte — main campus",
     "universityDomain": "hu-berlin.de",
+    "cityKey": "de:berlin",
     "lat": 52.5186, "lng": 13.3936,
     "radiusMeters": 3000,
     "categories": ["cafe", "coffee_shop", "restaurant", "park", "museum"],
     "defaultPriority": 2
   },
   {
+    "_anchor": "Neukölln — student cafe belt",
     "universityDomain": "hu-berlin.de",
+    "cityKey": "de:berlin",
     "lat": 52.4996, "lng": 13.4187,
     "radiusMeters": 3000,
     "categories": ["cafe", "coffee_shop", "restaurant", "lounge"],
@@ -131,6 +213,9 @@ anchor — same `universityDomain` repeated is fine):
   }
 ]
 ```
+
+`_anchor` is a free-text note, ignored by the seeder — use it, the config is the
+only record of *why* a coordinate was chosen.
 
 ---
 
@@ -158,8 +243,9 @@ ground truth you'll match the Places pull against in Step 5.
 ## 4. Pull Places-vetted candidates
 
 ```sh
-pnpm seed-venues:pull            # reads config.json → writes candidates.json
-# optional: --per-category=12  --config=PATH  --out=PATH
+pnpm seed-venues:pull --config=scripts/curated-venues.lviv.config.json \
+                      --out=scripts/curated-venues.lviv.candidates.json
+# optional: --per-category=12
 ```
 
 This returns, per anchor × category, the top places that **pass the production
@@ -190,12 +276,26 @@ using the Step 1 bar and the Step 3 shortlist:
   `dessert`, `study`. Keep 2–4 per venue.
 - Leave `placeId` / `openingHours` / `utcOffsetMinutes` untouched (auto-filled).
 
-**Coverage targets per university domain** (rough, tune per city):
-- ~10–15 `cafe`/`coffee_shop` total, ~8–12 `restaurant`, 2–4 `park`,
-  2–4 `museum`, 1–3 `lounge`.
+**Two manual edits the pull cannot make for you** (both from §0b — skip them and
+the category ships dead):
+
+- On **every approved `park`** that came back without hours, add
+  `"hoursConfidence": "always_open"`.
+- On **every approved `museum`**, add a real price to `facetTags` — `free`,
+  `inexpensive` or `moderate` — based on its actual admission. If you can't
+  confirm it, drop the museum rather than guess: the tag feeds a hard policy
+  gate, not a display string.
+
+**Coverage targets per CITY** (not per domain — V2 scopes inventory by city):
+- ~20–30 `cafe`/`coffee_shop` combined, ~15–25 `restaurant`, 4–8 `park`,
+  3–6 `museum`, 4–8 `lounge`.
+- These are targets for venues that **pass §0b**, not for approved rows. Expect
+  to approve meaningfully more than this and lose some at the gate — verify with
+  §7 and top up rather than assuming.
 - Geographic spread: don't let one district dominate — students come from all
   over. Aim for picks near each anchor.
-- Price mix skewed cheap; at least a few free options (parks/museums).
+- Price mix skewed cheap; at least a few free options (parks are the reliable
+  free tier — they're the one category exempt from price evidence).
 
 ### Adding a specific named venue that the pull missed
 If a must-have spot isn't in the pull (outside radius / odd Places category),
@@ -229,52 +329,127 @@ the live Places gate so fallback search cannot reintroduce them.
 
 ---
 
-## 6. Import
+## 6. Backfill V2 facet tags  (do this BEFORE importing)
+
+`facetTags` is what makes the user's chosen ambience actually change the pick.
+With it empty, every ambience chip (quiet / cozy_public / lively /
+design_forward / scenic / romantic_public) scores **zero for every candidate** —
+the vibe step runs, and silently decides nothing.
+
+Part of it is worse than a soft signal: `indoor` / `outdoor` / `seated` /
+`walking` feed the **hard** `VenueHardConstraints.setting` filter, so a park
+without `outdoor`+`walking` is excluded outright when someone asks for a walk.
 
 ```sh
-pnpm seed-venues:import                 # dry-run: prints what WOULD be written
-pnpm seed-venues:import --apply         # writes (idempotent upsert on domain+Place id)
-# custom manual file:
-pnpm seed-venues:import --in=scripts/manual-venues.json --apply
+pnpm --filter @gennety/bot exec tsx ../../scripts/backfill-venue-facets.mjs \
+  --in=scripts/curated-venues.lviv.approved.json          # dry run
+pnpm --filter @gennety/bot exec tsx ../../scripts/backfill-venue-facets.mjs \
+  --in=scripts/curated-venues.lviv.approved.json --apply  # writes the JSON in place
 ```
+
+The script derives the hard setting facets deterministically from `category`
+(never an LLM guess on a hard gate) and classifies the soft ambiences in small
+LLM batches, leaving them empty when confidence is low. `hardCapabilities`
+(dietary / alcohol_free / step_free) are deliberately untouched — those need
+operator evidence.
+
+---
+
+## 7. Import
+
+```sh
+# dry-run first — prints the resolved cityKey and every row it would write:
+pnpm seed-venues:import --in=scripts/curated-venues.lviv.approved.json
+pnpm seed-venues:import --in=scripts/curated-venues.lviv.approved.json --apply
+```
+
+`cityKey` comes from the rows (stamped at pull). For a legacy catalog that
+predates the field, pass it explicitly — `--city-key=ua:lviv`. The import
+**refuses to run** rather than guess; check the `cityKey → …` line it echoes
+before passing `--apply`.
 
 Targets whichever DB `DATABASE_URL` points at: `.env.local` → dev,
 **prod env (no `.env.local`) → production.** Seed prod with prod env.
 
 ---
 
-## 7. Verify
+## 8. Verify — count the EFFECTIVE pool, not the rows
 
-- `pnpm dev:db:studio` (or Supabase Table editor) → `curated_venues`: confirm
-  counts, `active=true`, sensible `priority`, `last_verified_at` set.
-- Quick SQL sanity:
-  ```sql
-  select category, count(*), min(priority), max(priority)
-  from curated_venues where university_domain = 'hu-berlin.de' and active
-  group by category;
-  ```
+Row count is not coverage. Reproduce the live gate and count what survives:
+
+```sql
+-- Rows the selector can actually reach, by category.
+-- Mirrors services/venue-intent-v2.ts + initial-venue-policy.ts (§0b).
+select category, count(*) as eligible
+from curated_venues
+where active
+  and tier = 'base'
+  and city_key = 'ua:lviv'                       -- the exact key from §1b
+  and google_maps_uri is not null
+  -- NB: `opening_hours` is a JSON column and empty rows hold the JSON literal
+  -- `null`, which `is not null` treats as PRESENT while the code treats it as
+  -- absent. Without the `::text <> 'null'` guard this query overcounts.
+  and (hours_confidence in ('always_open','operator_confirmed')
+       or (opening_hours is not null and opening_hours::text <> 'null'
+           and utc_offset_minutes is not null))
+  and rating >= 4.0
+  and user_rating_count >= 30
+  and (category = 'park'
+       or price_level in ('PRICE_LEVEL_FREE','PRICE_LEVEL_INEXPENSIVE','PRICE_LEVEL_MODERATE')
+       or facet_tags && array['free','inexpensive','moderate'])
+group by category order by 2 desc;
+```
+
+Then check the three things that fail quietly:
+
+```sql
+-- 1. Nothing stranded outside the city scope (must be 0):
+select count(*) from curated_venues where city_key is distinct from 'ua:lviv'
+  and university_domain in ('lnu.edu.ua');       -- this city's domains
+
+-- 2. Facets landed (should be ~all rows):
+select count(*) filter (where facet_tags = '{}') as no_facets, count(*)
+from curated_venues where city_key = 'ua:lviv';
+
+-- 3. Parks are reachable (unknown hours = dropped):
+select hours_confidence, count(*) from curated_venues
+where city_key = 'ua:lviv' and category = 'park' group by 1;
+```
+
 - Spot-check 3–5 `googleMapsUri` links — right place, open evenings, looks cool.
-- (Optional) `pnpm dev:trigger-test-match` with two test users on that domain
-  and walk the calendar → vibe/location flow to see a real pick.
+- (Optional) `pnpm dev:trigger-test-match` with two test users in that city and
+  walk the calendar → vibe/location flow to see a real pick.
 
 ---
 
-## 8. Definition of done
+## 9. Definition of done
 
-- Each university domain has venues across ≥3 categories with the coverage above.
+- The §8 eligibility query returns venues across **≥4 categories**, at or near
+  the §5 per-city targets. A category returning `0` there ships as "curated"
+  and is dead — fix it before launching the city.
+- `city_key` is correct on every row and nothing is stranded (§8 query 1).
+- `facet_tags` populated (§8 query 2) — otherwise the vibe step decides nothing.
+- Parks carry `always_open`; museums carry a real price tag.
 - No mediocre/touristy/expensive entries slipped through (re-read the approved
   list once more before `--apply`).
-- All seeded rows have `placeId` + hours (so the cron keeps them fresh).
-- Verified a couple of real Maps links and, ideally, one test match.
+- All seeded rows have `placeId` + hours (so the re-validation cron keeps them
+  fresh).
+- The student email domain(s) are whitelisted **and deployed** (§1a) — otherwise
+  the student track for this city is closed regardless of venue coverage.
 
 ---
 
 ## Quick recipe (TL;DR for a new session)
 
 1. Confirm city + university domains + districts.
-2. `/browse` → editorial + student shortlist per district/category.
-3. Fill `curated-venues.config.json` with 3–6 anchors → `pnpm seed-venues:pull`.
-4. Curate `candidates.json`: approve the cool ones, set `priority` + `vibeTags`,
-   drop the rest.
-5. `pnpm seed-venues:import` (dry-run) → `--apply` (prod env for prod).
-6. Verify in Studio + spot-check links.
+2. **Whitelist the student email domains and ship it** (§1a) — blocking, it's a
+   deploy. Resolve the `cityKey` (§1b) — everything below is scoped by it.
+3. `/browse` → editorial + student shortlist per district/category.
+4. Fill `curated-venues.<city>.config.json` with 3–6 anchors, each carrying
+   `cityKey` → `pnpm seed-venues:pull --config=… --out=…`.
+5. Curate the candidates: approve the cool ones, set `priority` + `vibeTags`,
+   drop the rest. Add `always_open` to parks and a price tag to museums (§5).
+6. `backfill-venue-facets.mjs --apply` on the approved file (§6).
+7. `pnpm seed-venues:import --in=…` (dry-run) → `--apply` (prod env for prod).
+8. Run the §8 **eligibility** query — not a row count. Any category at `0` is
+   dead inventory; fix before launch.
