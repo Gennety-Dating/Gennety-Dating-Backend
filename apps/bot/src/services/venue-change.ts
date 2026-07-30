@@ -199,6 +199,14 @@ export interface BuildCatalogInput {
    * See PRODUCT_SPEC.md §Premium / §3.7b.
    */
   includePremium?: boolean;
+  /**
+   * Stable seed for the tail shuffle in `capCatalog` — pass the match id. The
+   * board is re-fetched (Mini App reopen, post-unlock repaint), so the scatter
+   * MUST be deterministic per match: an unseeded `Math.random()` would deal a
+   * different order every fetch and the cards would visibly jump under the
+   * user. Omitted → stable distance order, no scatter.
+   */
+  seed?: string;
 }
 
 export interface BuildCatalogDeps {
@@ -342,14 +350,19 @@ export async function listPlacesVenuesNear(
 }
 
 /**
- * Cap on how many premium-tier cards lead the board. Product intent (§Premium
- * upsell): a non-subscriber should always see what they're missing, so premium
- * venues are pinned FIRST, unconditionally — not distance-sorted in with base,
- * and not merely "reserved a few slots so they aren't crowded out". Still
- * capped so a dense premium pool near the venue can't turn the board into an
- * all-locked wall with zero pickable options.
+ * Leading slots reserved for premium venues. Product intent (§Premium upsell):
+ * a non-subscriber must see the locked tier immediately, at the top, before
+ * anything else — not distance-sorted in with base where it can land mid-list.
  */
-export const VENUE_CHANGE_PREMIUM_RESERVED = 4;
+export const VENUE_CHANGE_PREMIUM_PINNED = 3;
+
+/**
+ * Total premium cards allowed on the board (pinned + scattered). The premium
+ * pool near a central venue can easily exceed the whole catalog limit, and a
+ * board that is mostly padlocks reads as a paywall rather than a choice — the
+ * user still needs real, pickable options. Anything past this is dropped.
+ */
+export const VENUE_CHANGE_PREMIUM_MAX = 5;
 
 /**
  * Build the venue-change catalog: curated rows within range win; only when
@@ -365,28 +378,71 @@ export async function buildVenueChangeCatalog(
 
   const curated = await listCurated(input);
   const chosen = curated.length > 0 ? curated : await listPlaces(input);
-  return capCatalog(chosen);
+  return capCatalog(chosen, input.seed);
+}
+
+/** FNV-1a → 32-bit seed. Small, stable, and dependency-free. */
+function hashSeed(value: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < value.length; i++) {
+    h ^= value.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/** mulberry32 — tiny deterministic PRNG, enough for shuffling a 12-card list. */
+function seededRandom(seed: number): () => number {
+  let a = seed;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Fisher-Yates against a seeded PRNG — same seed, same order, every fetch. */
+function seededShuffle<T>(items: T[], seed: string): T[] {
+  const out = [...items];
+  const rand = seededRandom(hashSeed(seed));
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
 }
 
 /**
- * Premium-first cap: up to `VENUE_CHANGE_PREMIUM_RESERVED` nearest premium
- * venues always lead the list (conversion visibility — see the constant doc),
- * then the remaining slots up to `VENUE_CHANGE_CATALOG_LIMIT` fill with the
- * nearest non-premium (base + alternative). Each group is distance-sorted
- * within itself; the list as a whole is grouped by tier, not globally
- * distance-sorted. Places-fallback rows are always `tier: "base"`, so this is
- * a no-op premium-wise for that path.
+ * Board ordering (§Premium upsell, §3.7b):
+ *
+ *   1. The `VENUE_CHANGE_PREMIUM_PINNED` nearest premium venues lead the list,
+ *      unconditionally — the locked tier is the first thing a non-subscriber
+ *      sees, which is the whole conversion mechanic.
+ *   2. Any premium past that (up to `VENUE_CHANGE_PREMIUM_MAX` total) is
+ *      **scattered** through the remainder rather than stacked on top, so the
+ *      board reads as a mixed choice instead of a paywall wall — a locked card
+ *      keeps turning up as the user scrolls.
+ *   3. The rest of the slots go to the nearest non-premium (base +
+ *      alternative), and the whole tail is shuffled together.
+ *
+ * The shuffle is seeded by `seed` (the match id), so the order is stable across
+ * re-fetches — without that the cards would re-deal on every catalog load. With
+ * no seed it degrades to plain distance order. Places-fallback rows are always
+ * `tier: "base"`, so that path is unaffected.
  */
-export function capCatalog(venues: CatalogVenue[]): CatalogVenue[] {
+export function capCatalog(venues: CatalogVenue[], seed?: string): CatalogVenue[] {
+  const byDistance = (a: CatalogVenue, b: CatalogVenue): number => a.distanceKm - b.distanceKm;
   const premium = venues
     .filter((v) => v.tier === "premium")
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .slice(0, VENUE_CHANGE_PREMIUM_RESERVED);
-  const rest = venues
-    .filter((v) => v.tier !== "premium")
-    .sort((a, b) => a.distanceKm - b.distanceKm)
-    .slice(0, Math.max(0, VENUE_CHANGE_CATALOG_LIMIT - premium.length));
-  return [...premium, ...rest];
+    .sort(byDistance)
+    .slice(0, VENUE_CHANGE_PREMIUM_MAX);
+  const pinned = premium.slice(0, VENUE_CHANGE_PREMIUM_PINNED);
+  const scattered = premium.slice(VENUE_CHANGE_PREMIUM_PINNED);
+  const tailSlots = Math.max(0, VENUE_CHANGE_CATALOG_LIMIT - pinned.length - scattered.length);
+  const rest = venues.filter((v) => v.tier !== "premium").sort(byDistance).slice(0, tailSlots);
+  const tail = [...scattered, ...rest];
+  return [...pinned, ...(seed ? seededShuffle(tail, seed) : tail)];
 }
 
 /**

@@ -599,6 +599,8 @@ type LoadVenueChangeCatalog = (args: {
   agreedTime: Date;
   /** §Premium: include premium-tier venues (shown locked). Pass the feature flag. */
   includePremium?: boolean;
+  /** Match id — seeds the stable tail scatter in `capCatalog`. */
+  seed?: string;
 }) => Promise<CatalogVenue[]>;
 
 export async function getVenueChangeCatalog(
@@ -633,6 +635,7 @@ export async function getVenueChangeCatalog(
     ...venueCatalogScope(match),
     center: { lat: match.venueLat, lng: match.venueLng },
     agreedTime: match.agreedTime,
+    seed: match.id,
     // §Premium: surface premium venues (locked) whenever the feature is on.
     includePremium: env.PREMIUM_FEATURE_ENABLED,
   });
@@ -709,6 +712,7 @@ export async function submitVenueLikes(
     ...venueCatalogScope(match),
     center: { lat: match.venueLat, lng: match.venueLng },
     agreedTime: match.agreedTime,
+    seed: match.id,
     // §Premium: surface premium venues (locked) whenever the feature is on.
     includePremium: env.PREMIUM_FEATURE_ENABLED,
   });
@@ -1112,6 +1116,7 @@ export async function mintExpressChange(
     ...venueCatalogScope(match),
     center: { lat: match.venueLat, lng: match.venueLng },
     agreedTime: match.agreedTime,
+    seed: match.id,
     // §Premium: surface premium venues (locked) whenever the feature is on.
     includePremium: env.PREMIUM_FEATURE_ENABLED,
   });

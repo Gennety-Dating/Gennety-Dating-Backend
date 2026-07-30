@@ -2699,10 +2699,15 @@ was replaced wholesale in 2026-07 before ever launching; design doc:
   heavier-cuisine pool) ever appear: they are always included, unlocked, and
   priced like base, independent of `PREMIUM_FEATURE_ENABLED` and of whether
   either side subscribes. Only `premium` venues are shown-locked (§3.8).
-  **`premium` venues always lead the alternatives list** (nearest-first within
-  the tier, capped at `VENUE_CHANGE_PREMIUM_RESERVED`), ahead of base/
-  alternative by distance — a deliberate conversion-visibility choice: a
-  non-subscriber sees the locked tier first, not buried mid-list.
+  **Board ordering is pin-then-scatter** (deliberate conversion mechanic): the
+  `VENUE_CHANGE_PREMIUM_PINNED` (3) nearest `premium` venues lead the list
+  unconditionally, so a non-subscriber meets the locked tier before anything
+  else; any further premium (to `VENUE_CHANGE_PREMIUM_MAX` (5) total) is then
+  **shuffled into the remainder** alongside base/alternative rather than stacked
+  on top, so a locked card keeps resurfacing as the user scrolls instead of the
+  board reading as a paywall wall. The tail shuffle is seeded by the match id,
+  so the order is stable across re-fetches (Mini App reopen, post-unlock
+  repaint) — an unseeded shuffle would re-deal the cards under the user.
   Each side hearts any number of places (full-set submissions, server-resolved
   against the catalog — client venue data is never trusted); the partner's
   hearts land live (~4 s polling). The FIRST like of a session claims the

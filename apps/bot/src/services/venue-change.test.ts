@@ -10,7 +10,8 @@ import {
   buildVenueChangeCatalog,
   listCuratedVenuesNear,
   capCatalog,
-  VENUE_CHANGE_PREMIUM_RESERVED,
+  VENUE_CHANGE_PREMIUM_PINNED,
+  VENUE_CHANGE_PREMIUM_MAX,
   isWithinRadius,
   type CatalogVenue,
   type VenueBoardEligibilityInput,
@@ -234,7 +235,7 @@ describe("buildVenueChangeCatalog", () => {
   });
 });
 
-describe("capCatalog (§Premium slot reservation)", () => {
+describe("capCatalog (§Premium pin + scatter)", () => {
   const venue = (i: number, tier: "base" | "premium" | "alternative"): CatalogVenue => ({
     source: "curated",
     placeId: `${tier}-${i}`,
@@ -282,14 +283,48 @@ describe("capCatalog (§Premium slot reservation)", () => {
     ]);
   });
 
-  it("reserves at most VENUE_CHANGE_PREMIUM_RESERVED premium slots", () => {
+  it("caps total premium at VENUE_CHANGE_PREMIUM_MAX so the board isn't a paywall wall", () => {
     const base = Array.from({ length: 12 }, (_, i) => venue(i + 1, "base"));
     const premium = Array.from({ length: 8 }, (_, i) => venue(30 + i, "premium"));
     const capped = capCatalog([...base, ...premium]);
     expect(capped).toHaveLength(12);
-    expect(capped.filter((v) => v.tier === "premium").length).toBe(
-      VENUE_CHANGE_PREMIUM_RESERVED,
+    expect(capped.filter((v) => v.tier === "premium").length).toBe(VENUE_CHANGE_PREMIUM_MAX);
+  });
+
+  it("pins exactly VENUE_CHANGE_PREMIUM_PINNED at the top and scatters the rest", () => {
+    const base = Array.from({ length: 12 }, (_, i) => venue(i + 1, "base"));
+    const premium = Array.from({ length: 5 }, (_, i) => venue(30 + i, "premium"));
+    const capped = capCatalog([...base, ...premium], "match-seed");
+
+    const head = capped.slice(0, VENUE_CHANGE_PREMIUM_PINNED);
+    expect(head.every((v) => v.tier === "premium")).toBe(true);
+    // The leftover premium lives in the tail, not stacked behind the pinned ones.
+    const tail = capped.slice(VENUE_CHANGE_PREMIUM_PINNED);
+    expect(tail.filter((v) => v.tier === "premium")).toHaveLength(
+      VENUE_CHANGE_PREMIUM_MAX - VENUE_CHANGE_PREMIUM_PINNED,
     );
+    expect(tail.every((v) => v.tier === "premium")).toBe(false);
+  });
+
+  it("is deterministic for a given seed and differs across seeds", () => {
+    // The Mini App re-fetches the catalog (reopen, post-unlock repaint); an
+    // unseeded shuffle would re-deal the cards under the user every time.
+    const base = Array.from({ length: 12 }, (_, i) => venue(i + 1, "base"));
+    const premium = Array.from({ length: 5 }, (_, i) => venue(30 + i, "premium"));
+    const input = [...base, ...premium];
+
+    const a1 = capCatalog(input, "match-1").map((v) => v.placeId);
+    const a2 = capCatalog(input, "match-1").map((v) => v.placeId);
+    const b1 = capCatalog(input, "match-2").map((v) => v.placeId);
+
+    expect(a1).toEqual(a2);
+    expect(a1).not.toEqual(b1);
+  });
+
+  it("falls back to plain distance order when no seed is given", () => {
+    const base = Array.from({ length: 4 }, (_, i) => venue(i + 1, "base"));
+    const capped = capCatalog(base);
+    expect(capped.map((v) => v.placeId)).toEqual(["base-1", "base-2", "base-3", "base-4"]);
   });
 
   it("plain distance cap when there are no premium venues", () => {
