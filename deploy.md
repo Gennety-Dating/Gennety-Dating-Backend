@@ -1551,6 +1551,18 @@ Required/high-impact env keys:
     the branch returns exactly as it was. In-flight effects when turning it
     off: users parked on the choice screen / Magic Prompt step advance straight
     to photos, and a paste already buffered is dropped instead of saved.
+    **Current state (2026-07-30): OFF in production AND off in dev.** Prod has
+    carried `AI_MEMORY_EXPORT_ENABLED=false` in `/opt/gennety/.env` since
+    2026-07-26; `.env.local` (+ `.env.local.example`) now sets the same, because
+    the default is `true` and a dev box without the line walks an onboarding
+    flow no production user can reach — choice screen → Magic Prompt paste →
+    an AI-derived `psychologicalSummary` feeding `V_explicit`. Nothing in the
+    production pool is AI-memory-derived: audited 2026-07-30, **zero** users
+    have ever held `aiMemoryExportPreference = accepted` (15 rows: 14
+    `undecided`, 1 `declined`), so the five populated `psychologicalSummary`
+    values are all the deterministic vibe fallback. **Rollback trap:** four env
+    backups predating 2026-07-26 (`.env.bak.20260713`…`20260725`) have no such
+    line, so restoring one silently turns the feature back on.
   - **Vibe onboarding questions (no flag of their own).** The two §1.3 vibe
     questions (`friday_vibe` / `vibe_focus`) and their matching signal live in
     the collector, so they are active only when
