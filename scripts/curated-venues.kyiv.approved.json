@@ -28854,7 +28854,7 @@
     "placeId": "ChIJw0O7Q1DO1EARxxUyvNkBeg8",
     "category": "cafe",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
@@ -29370,7 +29370,7 @@
     "placeId": "ChIJlc0QEv_O1EARvvMKn4wQcNw",
     "category": "restaurant",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "casual",
       "meat",
@@ -30017,7 +30017,7 @@
     "placeId": "ChIJj5MtLVjO1EARO1QyBhuU79U",
     "category": "cafe",
     "priority": 1,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "coffee",
       "cozy",
@@ -34116,7 +34116,7 @@
     "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
     "category": "restaurant",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -36950,7 +36950,7 @@
     "placeId": "ChIJ4WxDpGLO1EAR1ynbhdEmM2Y",
     "category": "cafe",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "coffee",
       "cozy",
@@ -55392,7 +55392,7 @@
     "placeId": "ChIJw0O7Q1DO1EARxxUyvNkBeg8",
     "category": "cafe",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
@@ -55908,7 +55908,7 @@
     "placeId": "ChIJlc0QEv_O1EARvvMKn4wQcNw",
     "category": "restaurant",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "casual",
       "meat",
@@ -56555,7 +56555,7 @@
     "placeId": "ChIJj5MtLVjO1EARO1QyBhuU79U",
     "category": "cafe",
     "priority": 1,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "coffee",
       "cozy",
@@ -60654,7 +60654,7 @@
     "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
     "category": "restaurant",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -63488,7 +63488,7 @@
     "placeId": "ChIJ4WxDpGLO1EAR1ynbhdEmM2Y",
     "category": "cafe",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "coffee",
       "cozy",
@@ -81935,7 +81935,7 @@
     "placeId": "ChIJw0O7Q1DO1EARxxUyvNkBeg8",
     "category": "cafe",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
@@ -82451,7 +82451,7 @@
     "placeId": "ChIJlc0QEv_O1EARvvMKn4wQcNw",
     "category": "restaurant",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "casual",
       "meat",
@@ -83098,7 +83098,7 @@
     "placeId": "ChIJj5MtLVjO1EARO1QyBhuU79U",
     "category": "cafe",
     "priority": 1,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "coffee",
       "cozy",
@@ -87197,7 +87197,7 @@
     "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
     "category": "restaurant",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -90031,7 +90031,7 @@
     "placeId": "ChIJ4WxDpGLO1EAR1ynbhdEmM2Y",
     "category": "cafe",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "coffee",
       "cozy",
@@ -108483,7 +108483,7 @@
     "placeId": "ChIJw0O7Q1DO1EARxxUyvNkBeg8",
     "category": "cafe",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
@@ -108999,7 +108999,7 @@
     "placeId": "ChIJlc0QEv_O1EARvvMKn4wQcNw",
     "category": "restaurant",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "casual",
       "meat",
@@ -109645,7 +109645,7 @@
     "placeId": "ChIJj5MtLVjO1EARO1QyBhuU79U",
     "category": "cafe",
     "priority": 1,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "coffee",
       "cozy",
@@ -113745,7 +113745,7 @@
     "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
     "category": "restaurant",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -116579,7 +116579,7 @@
     "placeId": "ChIJ4WxDpGLO1EAR1ynbhdEmM2Y",
     "category": "cafe",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "coffee",
       "cozy",
@@ -135032,7 +135032,7 @@
     "placeId": "ChIJw0O7Q1DO1EARxxUyvNkBeg8",
     "category": "cafe",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
@@ -135548,7 +135548,7 @@
     "placeId": "ChIJlc0QEv_O1EARvvMKn4wQcNw",
     "category": "restaurant",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "casual",
       "meat",
@@ -136194,7 +136194,7 @@
     "placeId": "ChIJj5MtLVjO1EARO1QyBhuU79U",
     "category": "cafe",
     "priority": 1,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "coffee",
       "cozy",
@@ -140295,7 +140295,7 @@
     "placeId": "ChIJIaYEbQDP1EARmi6K2-meTrQ",
     "category": "restaurant",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "cozy",
@@ -143130,7 +143130,7 @@
     "placeId": "ChIJ4WxDpGLO1EAR1ynbhdEmM2Y",
     "category": "cafe",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "coffee",
       "cozy",
