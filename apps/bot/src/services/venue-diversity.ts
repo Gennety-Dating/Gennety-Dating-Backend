@@ -43,6 +43,14 @@ export interface VenueUsage {
   sameSlot: Map<string, number>;
   /** Place keys that have never been assigned in the lookback window. */
   everUsed: Set<string>;
+  /**
+   * Place key → how our own couples actually rated the place, as
+   * `{ good, bad }` counts. This is the only quality signal in the system that
+   * comes from real Gennety dates rather than from Google's general public:
+   * `Match.venueFitBy{A,B}` has been collected after every date since the
+   * feedback flow shipped and fed nothing but a suggestion list.
+   */
+  reputation: Map<string, { good: number; bad: number }>;
 }
 
 export interface DiversityOptions {
@@ -54,6 +62,21 @@ export interface DiversityOptions {
   fatigueWeight: number;
   /** Additive bonus for a venue never assigned in the window. */
   explorationBonus: number;
+  /**
+   * How far our own couples' verdicts may move a venue, as a +/- fraction of
+   * its score. At the default a venue everyone loved gains 10% and one everyone
+   * rejected loses 10% — enough to reorder near-equals, never enough to promote
+   * a poor fit, and it takes several dates to reach either extreme (see
+   * `reputationPrior`).
+   */
+  reputationWeight: number;
+  /**
+   * Bayesian prior strength: how many neutral dates a new venue is treated as
+   * already having. Keeps one bad night from condemning a place, which matters
+   * because the sample is tiny — a single "no" on a venue's first date would
+   * otherwise bury it permanently.
+   */
+  reputationPrior: number;
   /** Max pairs allowed at one venue inside the same slot window. */
   slotCap: number;
   /** Relative band below the top score that competes in the sampling draw. */
@@ -69,10 +92,27 @@ export interface DiversityOptions {
 export const DEFAULT_DIVERSITY_OPTIONS: DiversityOptions = {
   fatigueWeight: 0.08,
   explorationBonus: 0.03,
+  reputationWeight: 0.1,
+  reputationPrior: 3,
   slotCap: 1,
   samplingBand: 0.05,
   minPairFit: 0.25,
 };
+
+/**
+ * Smoothed share of positive verdicts, centred on 0.5 (neutral). Returns a
+ * multiplier in `[1 - weight, 1 + weight]`.
+ */
+export function reputationMultiplier(
+  entry: { good: number; bad: number } | undefined,
+  options: Pick<DiversityOptions, "reputationWeight" | "reputationPrior">,
+): number {
+  if (!entry) return 1;
+  const total = entry.good + entry.bad;
+  if (total === 0) return 1;
+  const smoothed = (entry.good + 0.5 * options.reputationPrior) / (total + options.reputationPrior);
+  return 1 + (smoothed - 0.5) * 2 * options.reputationWeight;
+}
 
 /** How far back a personal repeat still counts. */
 export const VENUE_HISTORY_DAYS = 180;
@@ -117,14 +157,37 @@ export async function loadVenueUsage(input: {
       venuePlaceId: { not: null },
       agreedTime: { not: null, gte: historySince },
     },
-    select: { venuePlaceId: true, agreedTime: true, userAId: true, userBId: true },
+    select: {
+      venuePlaceId: true,
+      agreedTime: true,
+      userAId: true,
+      userBId: true,
+      venueFitByA: true,
+      venueFitByB: true,
+      venueChangeStatus: true,
+      // A settled change rewrites the canonical venue fields, so the venue the
+      // ENGINE picked — the one that was rejected — survives only here.
+      venueSelectionLogs: {
+        where: { selectedPlaceId: { not: null } },
+        select: { selectedPlaceId: true },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+      },
+    },
   });
 
   const personal = new Set<string>();
   const fatigue = new Map<string, number>();
   const sameSlot = new Map<string, number>();
   const everUsed = new Set<string>();
+  const reputation = new Map<string, { good: number; bad: number }>();
   const participants = new Set([input.userAId, input.userBId]);
+
+  const bump = (key: string, field: "good" | "bad"): void => {
+    const entry = reputation.get(key) ?? { good: 0, bad: 0 };
+    entry[field] += 1;
+    reputation.set(key, entry);
+  };
 
   for (const row of rows) {
     const key = row.venuePlaceId;
@@ -140,9 +203,26 @@ export async function loadVenueUsage(input: {
     if (when >= slotFrom && when <= slotTo) {
       sameSlot.set(key, (sameSlot.get(key) ?? 0) + 1);
     }
+
+    // Post-date verdicts, one per side. `partly` is deliberately neither —
+    // it is the honest middle answer and should not push a venue either way.
+    for (const fit of [row.venueFitByA, row.venueFitByB]) {
+      if (fit === "yes") bump(key, "good");
+      else if (fit === "no") bump(key, "bad");
+    }
+    // Paying to leave the venue we picked is the strongest rejection the
+    // product can observe — stronger than a survey answer, because it cost
+    // them money before the date even happened. It must land on the venue the
+    // ENGINE chose, which after a settled change is no longer `venuePlaceId`
+    // (that now holds the venue they moved TO, and penalising it would invert
+    // the signal onto the place they actively picked).
+    if (row.venueChangeStatus === "settled") {
+      const rejected = row.venueSelectionLogs[0]?.selectedPlaceId;
+      if (rejected && rejected !== key) bump(rejected, "bad");
+    }
   }
 
-  return { personal, fatigue, sameSlot, everUsed };
+  return { personal, fatigue, sameSlot, everUsed, reputation };
 }
 
 /** FNV-1a → 32-bit seed. Mirrors the venue-change board's stable shuffle. */
@@ -198,11 +278,12 @@ export function applyVenueDiversity<T extends DiversityCandidate>(
     .map((row) => {
       const n = usage.fatigue.get(row.id) ?? 0;
       const fatigued = row.score / (1 + options.fatigueWeight * n);
+      const reputed = fatigued * reputationMultiplier(usage.reputation.get(row.id), options);
       const explore =
         !usage.everUsed.has(row.id) && row.pairFit >= options.minPairFit
           ? options.explorationBonus
           : 0;
-      return { row, score: fatigued + explore };
+      return { row, score: reputed + explore };
     })
     .sort((left, right) => right.score - left.score);
 

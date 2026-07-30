@@ -1632,6 +1632,14 @@ export async function settleVenuePayment(
       venueLat: match.venueChangeLat,
       venueLng: match.venueChangeLng,
       venueGoogleMapsUri: match.venueChangeMapsUri,
+      // `venuePlaceId` MUST move with the rest of the snapshot. It used to be
+      // left pointing at the originally-assigned venue, so the row ended up
+      // self-contradictory — name/address/coords of the new place, place id of
+      // the old one — and anything keyed on the id (the diversity layer's
+      // "where has this person already been", any Places re-fetch) read the
+      // wrong venue. The originally-assigned one is still recoverable from
+      // `venue_selection_logs.selectedPlaceId`.
+      venuePlaceId: match.venueChangePlaceId,
       venuePhotoName: match.venueChangePhotoName,
       // The cached date-card PNG has the OLD venue baked into its pixels
       // (services/scheduled-confirmation.ts renders it once at initial
@@ -1734,6 +1742,14 @@ async function finalizeVenueChangeFree(
       venueLat: match.venueChangeLat,
       venueLng: match.venueChangeLng,
       venueGoogleMapsUri: match.venueChangeMapsUri,
+      // `venuePlaceId` MUST move with the rest of the snapshot. It used to be
+      // left pointing at the originally-assigned venue, so the row ended up
+      // self-contradictory — name/address/coords of the new place, place id of
+      // the old one — and anything keyed on the id (the diversity layer's
+      // "where has this person already been", any Places re-fetch) read the
+      // wrong venue. The originally-assigned one is still recoverable from
+      // `venue_selection_logs.selectedPlaceId`.
+      venuePlaceId: match.venueChangePlaceId,
       venuePhotoName: match.venueChangePhotoName,
       // See settleVenuePayment: the cached date-card PNG bakes in the OLD
       // venue, so it must be invalidated here too.

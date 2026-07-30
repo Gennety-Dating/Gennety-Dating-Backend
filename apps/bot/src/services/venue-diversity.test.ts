@@ -3,6 +3,7 @@ import {
   applyVenueDiversity,
   fatigueWeightForAge,
   DEFAULT_DIVERSITY_OPTIONS,
+  reputationMultiplier,
   type DiversityCandidate,
   type VenueUsage,
 } from "./venue-diversity.js";
@@ -15,6 +16,7 @@ function usage(over: Partial<VenueUsage> = {}): VenueUsage {
     fatigue: new Map(),
     sameSlot: new Map(),
     everUsed: new Set(),
+    reputation: new Map(),
     ...over,
   };
 }
@@ -154,5 +156,68 @@ describe("applyVenueDiversity — sampling", () => {
       seen.add(applyVenueDiversity(ranked, usage(), `m-${i}`, wide).chosen!.id);
     }
     expect(seen.size).toBe(2);
+  });
+});
+
+describe("reputationMultiplier — our own couples' verdicts", () => {
+  const opts = { reputationWeight: 0.1, reputationPrior: 3 };
+
+  it("is neutral with no data", () => {
+    expect(reputationMultiplier(undefined, opts)).toBe(1);
+    expect(reputationMultiplier({ good: 0, bad: 0 }, opts)).toBe(1);
+  });
+
+  it("barely moves on a single verdict — the sample is tiny", () => {
+    // One bad night must not condemn a venue permanently.
+    const one = reputationMultiplier({ good: 0, bad: 1 }, opts);
+    expect(one).toBeGreaterThan(0.96);
+    expect(one).toBeLessThan(1);
+  });
+
+  it("converges toward the bounds as evidence accumulates", () => {
+    const loved = reputationMultiplier({ good: 30, bad: 0 }, opts);
+    const hated = reputationMultiplier({ good: 0, bad: 30 }, opts);
+    expect(loved).toBeGreaterThan(1.08);
+    expect(loved).toBeLessThanOrEqual(1.1);
+    expect(hated).toBeLessThan(0.92);
+    expect(hated).toBeGreaterThanOrEqual(0.9);
+  });
+
+  it("is symmetric around neutral", () => {
+    expect(reputationMultiplier({ good: 5, bad: 5 }, opts)).toBeCloseTo(1, 10);
+  });
+});
+
+describe("applyVenueDiversity — reputation", () => {
+  it("prefers the venue our couples actually liked, between near-equals", () => {
+    const ranked = [cand("liked", 0.8), cand("rejected", 0.8)];
+    const out = applyVenueDiversity(
+      ranked,
+      usage({
+        everUsed: new Set(["liked", "rejected"]),
+        reputation: new Map([
+          ["liked", { good: 12, bad: 0 }],
+          ["rejected", { good: 0, bad: 12 }],
+        ]),
+      }),
+      "m1",
+    );
+    expect(out.pool[0]!.id).toBe("liked");
+  });
+
+  it("cannot promote a clearly worse venue on reputation alone (T4)", () => {
+    const ranked = [cand("better", 0.9), cand("beloved", 0.6)];
+    const out = applyVenueDiversity(
+      ranked,
+      usage({
+        everUsed: new Set(["better", "beloved"]),
+        reputation: new Map([
+          ["better", { good: 0, bad: 20 }],
+          ["beloved", { good: 20, bad: 0 }],
+        ]),
+      }),
+      "m1",
+    );
+    expect(out.chosen?.id).toBe("better");
   });
 });
