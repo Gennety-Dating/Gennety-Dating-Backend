@@ -16,6 +16,7 @@ import {
   type PlaybookFeatures,
 } from "./product-playbook.js";
 import { getRecentChatEvents, type ChatEventView } from "./chat-events.js";
+import { stallCheckInPending } from "./match-stall.js";
 
 // ---------------------------------------------------------------------------
 // Base Persona (static)
@@ -444,32 +445,19 @@ const MATCH_CONTEXT_SELECT = {
   vibeTextB: true,
   vibeLatB: true,
   vibeLngB: true,
-  // Stall check-in state (§3.5c), per side.
+  // Stall check-in state (§3.5c), per side — plus the phase anchors, because
+  // "is a question open" is scoped to the phase currently running and a stamp
+  // left over from the scheduling step must not read as a live venue-step
+  // question. See `stallCheckInPending`.
   stallCheckInSentAtA: true,
   stallCheckInSentAtB: true,
   stallConfirmedAtA: true,
   stallConfirmedAtB: true,
+  proposedTimes: true,
+  dispatchedAt: true,
+  schedulingOpenedAt: true,
+  venuePromptAskedAt: true,
 } as const;
-
-/**
- * Is a "still in?" question currently unanswered for this side? A confirmation
- * at or after the question's own timestamp means it was already answered — the
- * same comparison the callback handler uses to decide eligibility.
- */
-function stallCheckInPendingFor(
-  row: {
-    stallCheckInSentAtA?: Date | null;
-    stallCheckInSentAtB?: Date | null;
-    stallConfirmedAtA?: Date | null;
-    stallConfirmedAtB?: Date | null;
-  },
-  side: "A" | "B",
-): boolean {
-  const asked = side === "A" ? row.stallCheckInSentAtA : row.stallCheckInSentAtB;
-  if (!asked) return false;
-  const confirmed = side === "A" ? row.stallConfirmedAtA : row.stallConfirmedAtB;
-  return !(confirmed && confirmed >= asked);
-}
 
 /** Whether one side has a complete venue submission (departure point + vibe). */
 function venueSideSubmitted(
@@ -571,7 +559,14 @@ async function fetchUserContext(telegramId: bigint): Promise<UserContext> {
             ? (asA as { userB?: { firstName: string | null } }).userB?.firstName
             : (asB as { userA?: { firstName: string | null } }).userA?.firstName) ??
           null,
-        stallCheckInPending: stallCheckInPendingFor(raw, asA ? "A" : "B"),
+        // The SAME predicate the green button enforces, deliberately shared:
+        // if these two ever disagreed, the agent would tell someone to tap a
+        // button that no longer does anything (or stay silent about one that
+        // does).
+        stallCheckInPending: stallCheckInPending(
+          raw as unknown as Parameters<typeof stallCheckInPending>[0],
+          asA ? "A" : "B",
+        ),
         venueSelfSubmitted: venueSideSubmitted(raw, asA ? "A" : "B"),
         venuePartnerSubmitted: venueSideSubmitted(raw, asA ? "B" : "A"),
       }

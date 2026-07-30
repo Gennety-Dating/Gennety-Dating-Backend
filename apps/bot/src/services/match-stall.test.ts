@@ -37,6 +37,8 @@ import {
   stallBaseFor,
   stallCheckInDueAt,
   stallDeadlineAt,
+  stallCheckInAskedAt,
+  stallCheckInPending,
   stallPhaseOf,
   stallReachableFor,
   type StallMatchRow,
@@ -188,7 +190,7 @@ describe("stallReachableFor", () => {
 
 function dbRow(overrides: Record<string, unknown> = {}) {
   return {
-    ...venueRow(),
+    ...venueRow({ venuePromptAskedAt: new Date(NOW.getTime() - 60 * 60 * 60 * 1000) }),
     id: "match-1",
     userAId: "user-a",
     userBId: "user-b",
@@ -479,5 +481,92 @@ describe("cancelPlanningByUser (guards)", () => {
 
     expect(result.cancelled).toBe(false);
     expect(prisma.match.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Audit regressions (2026-07-30). Each of these shipped broken in a9c87d4.
+// ---------------------------------------------------------------------------
+
+describe("stall phase scoping", () => {
+  it("a stamp from the scheduling step does not count in the venue step", () => {
+    // The bug: stamps are per side but not per phase, and a match walks through
+    // both. Someone asked at the calendar who answered by PICKING A TIME (not by
+    // tapping green) carried the stamp into the venue step, where it suppressed
+    // the question forever while the 48h clock kept running — cancelled at a
+    // step they were never asked about.
+    const row = venueRow({
+      stallCheckInSentAtA: new Date(NOW.getTime() - 40 * 60 * 60 * 1000), // pre-venue
+    } as Partial<StallMatchRow> as never);
+    expect(stallCheckInAskedAt(row as never, "A")).toBeNull();
+    expect(stallCheckInPending(row as never, "A")).toBe(false);
+  });
+
+  it("a stamp from the current phase does count", () => {
+    const asked = new Date(NOW.getTime() - 2 * 60 * 60 * 1000);
+    const row = venueRow({ stallCheckInSentAtA: asked } as Partial<StallMatchRow> as never);
+    expect(stallCheckInAskedAt(row as never, "A")).toEqual(asked);
+    expect(stallCheckInPending(row as never, "A")).toBe(true);
+  });
+
+  it("an answered question is no longer pending", () => {
+    const asked = new Date(NOW.getTime() - 2 * 60 * 60 * 1000);
+    const row = venueRow({
+      stallCheckInSentAtA: asked,
+      stallConfirmedAtA: new Date(asked.getTime() + 60_000),
+    } as Partial<StallMatchRow> as never);
+    expect(stallCheckInPending(row as never, "A")).toBe(false);
+  });
+});
+
+describe("cancelStalledMatch — who actually ghosted", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+    (prisma.profile.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      silentIgnoreCount: 1,
+    });
+  });
+
+  it("never penalises a side that answered the check-in, even though it still owes", async () => {
+    // A owes but tapped 🟢 an hour ago (fresh 48h). B owes and blew its deadline.
+    // The match dies because of B; charging A a silent-ignore for it would
+    // punish exactly the behaviour the check-in exists to produce.
+    const bothOwe = dbRow({
+      vibeTextA: null,
+      vibeLatA: null,
+      vibeLngA: null,
+      stallConfirmedAtA: new Date(NOW.getTime() - 60 * 60 * 1000),
+    });
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(bothOwe);
+    const api = mockApi() as unknown as { sendMessage: ReturnType<typeof vi.fn> };
+
+    const result = await cancelStalledMatch(api as never, "match-1", NOW);
+
+    expect(result.cancelled).toBe(true);
+    expect(result.ghostUserIds).toEqual(["user-b"]);
+    expect(prisma.profile.update).toHaveBeenCalledTimes(1);
+    expect(prisma.profile.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: "user-b" } }),
+    );
+    // A is told the truth: their partner never came back.
+    const byChat = new Map(
+      api.sendMessage.mock.calls.map((c) => [Number(c[0]), String(c[1])]),
+    );
+    expect(byChat.get(11)).toContain("Bob never got back to us");
+  });
+
+  it("abandons the cancellation if nobody's own clock has actually run out", async () => {
+    // Closes the race where 🟢 lands between the worker's scan and this call:
+    // the deadline moves, and the timeout must yield to the answer.
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+      dbRow({ stallConfirmedAtB: new Date(NOW.getTime() - 60_000) }),
+    );
+
+    const result = await cancelStalledMatch(mockApi(), "match-1", NOW);
+
+    expect(result.cancelled).toBe(false);
+    expect(prisma.match.updateMany).not.toHaveBeenCalled();
+    expect(prisma.profile.update).not.toHaveBeenCalled();
   });
 });

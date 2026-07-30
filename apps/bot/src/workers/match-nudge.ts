@@ -14,6 +14,7 @@ import {
   buildStallCheckInKeyboard,
   cancelStalledMatch,
   sideOwesAction,
+  stallCheckInAskedAt,
   stallCheckInDueAt,
   stallDeadlineAt,
   stallPhaseOf,
@@ -707,9 +708,9 @@ async function handleStallChain(
       // (see `cancelStalledMatch`) never timed out either.
       if (!stallReachableFor(user.telegramId)) continue;
 
-      const alreadyAsked =
-        side === "A" ? match.stallCheckInSentAtA : match.stallCheckInSentAtB;
-      if (alreadyAsked) continue;
+      // Phase-scoped: a stamp left over from the scheduling step must not
+      // suppress the venue step's question (see `stallCheckInAskedAt`).
+      if (stallCheckInAskedAt(match, side)) continue;
 
       const due = stallCheckInDueAt(match, side);
       if (!due || due > now) continue;

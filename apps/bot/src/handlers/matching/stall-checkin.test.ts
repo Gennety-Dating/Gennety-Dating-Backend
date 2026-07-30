@@ -16,6 +16,13 @@ vi.mock("../../utils/elo-calculator.js", () => ({
   applySilentIgnorePenalty: vi.fn().mockResolvedValue(495),
 }));
 
+// Ticket refunds have their own suite; stub them so this file's output stays
+// about the buttons and doesn't log a swallowed wallet error on every cancel.
+vi.mock("../../services/ticket-refund.js", () => ({
+  refundMatchTickets: vi.fn().mockResolvedValue([]),
+  ticketRefundNoticeKey: vi.fn().mockReturnValue(null),
+}));
+
 import { prisma } from "@gennety/db";
 import type { BotContext } from "../../session.js";
 import {
@@ -115,7 +122,9 @@ describe("handleStallStillOn (🟢)", () => {
       language: "en",
     });
     (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
-    // Second question, answered again — the chain must not reopen a third time.
+    // Second question of the SAME phase, answered again — the chain must not
+    // reopen a third time. The prior confirmation sits after the venue anchor
+    // (2026-07-28T06:00Z), which is what marks it as "already used this phase".
     (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
       row({
         stallCheckInSentAtA: new Date("2026-07-30T09:00:00Z"),
@@ -235,5 +244,43 @@ describe("handleStallCancelConfirm", () => {
     await handleStallCancelConfirm(c);
 
     expect(c.reply).not.toHaveBeenCalled();
+  });
+});
+
+describe("handleStallStillOn — phase scoping (audit regression)", () => {
+  it("re-arms in the venue phase even though scheduling already used its re-arm", async () => {
+    // Both leftovers belong to the scheduling step (before the venue anchor at
+    // 2026-07-28T06:00Z), so neither may suppress the venue question nor spend
+    // the venue step's single re-arm.
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+      row({
+        stallCheckInSentAtA: new Date("2026-07-29T10:00:00Z"), // this phase
+        stallConfirmedAtA: new Date("2026-07-27T20:00:00Z"), // previous phase
+      }),
+    );
+
+    await handleStallStillOn(ctx("stall:ok:match-1"));
+
+    expect(prisma.match.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ stallCheckInSentAtA: null }),
+      }),
+    );
+  });
+
+  it("answers a dead button out loud instead of swallowing the tap", async () => {
+    // The check-in message keeps its buttons after the match resolves; a silent
+    // no-op there reads as the bot being broken.
+    (prisma.match.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+      row({ status: "cancelled" }),
+    );
+    const c = ctx("stall:ok:match-1");
+
+    await handleStallStillOn(c);
+
+    expect(c.answerCallbackQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ show_alert: true }),
+    );
+    expect(prisma.match.updateMany).not.toHaveBeenCalled();
   });
 });

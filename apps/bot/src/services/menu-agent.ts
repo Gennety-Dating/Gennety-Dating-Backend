@@ -1056,9 +1056,8 @@ async function execProposeCancelDate(
 
   // A booked date and a date still being planned are cancelled through
   // different handlers, but from the user's side it is one request ("my plans
-  // changed"). Scheduled wins when both somehow exist — it is the more
-  // consequential one, and the single-live-match invariant means it shouldn't.
-  const match = await prisma.match.findFirst({
+  // changed").
+  const candidates = await prisma.match.findMany({
     where: {
       OR: [{ userAId: user.id }, { userBId: user.id }],
       AND: [
@@ -1074,9 +1073,19 @@ async function execProposeCancelDate(
         },
       ],
     },
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    orderBy: { createdAt: "desc" },
     select: { id: true, status: true, proposedTimes: true },
   });
+  // The single-live-match invariant means there should be exactly one, but
+  // legacy/corrupt data can carry several — so pick by PRODUCT PROGRESSION, in
+  // code. `orderBy: { status: "asc" }` looks like it would do this and does the
+  // opposite: Postgres sorts an enum by DECLARATION order, and `MatchStatus`
+  // declares `negotiating` before `scheduled`, so ascending would hand back the
+  // planning match and offer a planning-stage cancel button to someone with a
+  // date already booked. ARCHITECTURE.md warns about exactly this.
+  const PROGRESSION = ["scheduled", "negotiating_venue", "negotiating"] as const;
+  const match =
+    PROGRESSION.map((s) => candidates.find((c) => c.status === s)).find(Boolean) ?? null;
   if (!match) {
     return {
       toolResult: JSON.stringify({

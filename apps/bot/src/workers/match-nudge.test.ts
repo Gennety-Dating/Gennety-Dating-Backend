@@ -579,3 +579,48 @@ describe("matchNudgeTick — stall chain", () => {
     expect(result.stallTimeouts).toBe(0);
   });
 });
+
+describe("matchNudgeTick — stall phase scoping (audit regression)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnv.TICKET_FEATURE_ENABLED = false;
+    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
+  });
+
+  it("still asks at the venue step when the stamp is left over from scheduling", async () => {
+    // Regression: the stamp is per side but not per phase. A user asked at the
+    // calendar who answered by picking a time (never tapping green) carried the
+    // stamp into the venue step, where it suppressed the question forever while
+    // the 48h clock kept running — cancelled at a step they were never asked about.
+    const askedDuringScheduling = new Date(DAY_TIME.getTime() - 40 * 60 * 60_000);
+    const venueOpened = new Date(DAY_TIME.getTime() - STALL_CHECK_IN_MS - 60_000);
+    routeFindMany({
+      stall: [
+        makeVenueMatch({
+          venuePromptAskedAt: venueOpened,
+          stallCheckInSentAtA: askedDuringScheduling,
+        }),
+      ],
+    });
+    const api = createMockApi();
+
+    const result = await matchNudgeTick(api, { now: DAY_TIME });
+
+    expect(result.stallCheckIns).toBe(1);
+  });
+
+  it("does not re-ask when the stamp belongs to the phase in progress", async () => {
+    const venueOpened = new Date(DAY_TIME.getTime() - STALL_CHECK_IN_MS - 60_000);
+    routeFindMany({
+      stall: [
+        makeVenueMatch({
+          venuePromptAskedAt: venueOpened,
+          stallCheckInSentAtA: new Date(venueOpened.getTime() + 60_000),
+        }),
+      ],
+    });
+    const api = createMockApi();
+
+    expect((await matchNudgeTick(api, { now: DAY_TIME })).stallCheckIns).toBe(0);
+  });
+});

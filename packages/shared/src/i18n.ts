@@ -496,6 +496,9 @@ const translations = {
     // without gendered past-tense forms about the PARTNER, so ru/uk/pl need no
     // M/F variants — the only gendered voice is the bot's own.
     stallPartnerFallbackName: "your match",
+    // Toast on a check-in button whose match has since resolved. The question
+    // message keeps its buttons forever, so this is a normal tap, not an edge case.
+    stallActionExpired: "That one's already settled — nothing left to answer here.",
     stallVenueNudge:
       "All that's left is marking where you'll be setting off from — then I'll pick a place that works for both of you.",
     stallCheckInScheduling:
@@ -1509,6 +1512,7 @@ const translations = {
     pitchDeadlineNudge:
       "Небольшое напоминание — окно, чтобы ответить на этот мэтч, закроется примерно через {hours}ч. Если хочешь пойти, просто скажи да сейчас; если нет — тоже окей.",
     stallPartnerFallbackName: "твой мэтч",
+    stallActionExpired: "Здесь уже всё решилось — отвечать больше не нужно.",
     stallVenueNudge:
       "Осталось отметить, откуда поедешь — и я подберу место, удобное вам обоим.",
     stallCheckInScheduling:
@@ -2490,6 +2494,7 @@ const translations = {
     pitchDeadlineNudge:
       "Невелике нагадування — вікно, щоб відповісти на цей метч, закриється приблизно за {hours}год. Якщо хочеш піти, просто скажи так зараз; якщо ні — теж окей.",
     stallPartnerFallbackName: "твій метч",
+    stallActionExpired: "Тут уже все вирішилося — відповідати більше не потрібно.",
     stallVenueNudge:
       "Залишилося відмітити, звідки поїдеш — і я підберу місце, зручне вам обом.",
     stallCheckInScheduling:
@@ -3459,6 +3464,7 @@ const deTranslations: TranslationTable = {
   pitchDeadlineNudge:
     "Kurzer Hinweis — dein Fenster, um auf dieses Match zu antworten, schließt in etwa {hours}h. Wenn du hingehen möchtest, sag jetzt einfach ja; kein Problem, wenn nicht.",
   stallPartnerFallbackName: "dein Match",
+  stallActionExpired: "Das hat sich schon erledigt — hier gibt es nichts mehr zu beantworten.",
   stallVenueNudge:
     "Es fehlt nur noch, wo du losfährst — dann finde ich einen Ort, der für euch beide passt.",
   stallCheckInScheduling:
@@ -4407,6 +4413,7 @@ const plTranslations: TranslationTable = {
   pitchDeadlineNudge:
     "Małe przypomnienie — okno na odpowiedź na to dopasowanie zamknie się za około {hours}h. Jeśli chcesz iść, po prostu powiedz teraz tak; jeśli nie — też w porządku.",
   stallPartnerFallbackName: "twoje dopasowanie",
+  stallActionExpired: "To już się rozstrzygnęło — nie ma tu na co odpowiadać.",
   stallVenueNudge:
     "Zostało tylko zaznaczyć, skąd wyruszasz — wtedy znajdę miejsce wygodne dla was oboje.",
   stallCheckInScheduling:

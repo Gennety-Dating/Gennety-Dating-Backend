@@ -18,6 +18,7 @@ vi.mock("@gennety/db", () => ({
     match: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
     },
     matchEvent: {
@@ -959,11 +960,9 @@ describe("menu-agent propose_cancel_date", () => {
   });
 
   it("hands over the existing emergency button and cancels nothing itself", async () => {
-    (prisma.match.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: "match-9",
-      status: "scheduled",
-      proposedTimes: [],
-    });
+    (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "match-9", status: "scheduled", proposedTimes: [] },
+    ]);
     const fetchFn = vi
       .fn()
       .mockResolvedValueOnce(
@@ -983,7 +982,7 @@ describe("menu-agent propose_cancel_date", () => {
   });
 
   it("offers no button when there is nothing booked or being planned", async () => {
-    (prisma.match.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     const fetchFn = vi
       .fn()
       .mockResolvedValueOnce(
@@ -998,14 +997,39 @@ describe("menu-agent propose_cancel_date", () => {
     expect(result.action).toBeUndefined();
   });
 
+  it("prefers a booked date over a planning one — enum order would pick the wrong one", async () => {
+    // `orderBy: { status: "asc" }` looks like it sorts by progression and does
+    // the opposite: Postgres orders an enum by DECLARATION order, and
+    // `MatchStatus` declares `negotiating` before `scheduled`. Ascending would
+    // hand back the planning row and offer a planning-stage cancel button to
+    // someone whose date is already booked.
+    (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "match-plan", status: "negotiating_venue", proposedTimes: [] },
+      { id: "match-booked", status: "scheduled", proposedTimes: [] },
+    ]);
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "propose_cancel_date", args: {} }]),
+      )
+      .mockResolvedValueOnce(textResponse("here's the button"));
+
+    const result = await runMenuAgentTurn(telegramId, "cancel it", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(result.action).toMatchObject({
+      kind: "entry_point",
+      entry: { callbackData: "emerg:start:match-booked" },
+    });
+  });
+
   it("reaches the planning-stage cancellation too, not just a booked date", async () => {
     // Before §3.5c this tool filtered on `scheduled` alone, so someone writing
     // "I want to cancel" mid-planning got a polite explanation and no way out.
-    (prisma.match.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: "match-7",
-      status: "negotiating_venue",
-      proposedTimes: [new Date("2026-08-01T16:00:00Z")],
-    });
+    (prisma.match.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "match-7", status: "negotiating_venue", proposedTimes: [new Date("2026-08-01T16:00:00Z")] },
+    ]);
     const fetchFn = vi
       .fn()
       .mockResolvedValueOnce(

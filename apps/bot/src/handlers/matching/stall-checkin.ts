@@ -10,6 +10,8 @@ import {
   buildStallCancelConfirmKeyboard,
   cancelPlanningByUser,
   sideOwesAction,
+  stallAnchorAt,
+  stallCheckInAskedAt,
   stallPhaseOf,
   stallReachableFor,
   type MatchSide,
@@ -25,11 +27,19 @@ import {
  * the lifetime pair ban, so it gets the same treatment as passing on a pitch.
  */
 
+type StallMatch = Awaited<ReturnType<typeof loadStallMatch>>;
+
+async function loadStallMatch(matchId: string) {
+  return prisma.match.findUnique({ where: { id: matchId }, select: STALL_MATCH_SELECT });
+}
+
 interface StallActor {
   matchId: string;
   userId: string;
   side: MatchSide;
   lang: Language;
+  /** The row the guard already read — callers must not re-fetch it. */
+  match: NonNullable<StallMatch>;
 }
 
 /**
@@ -51,22 +61,33 @@ async function resolveStallActor(
   });
   if (!user) return null;
 
-  const match = await prisma.match.findUnique({
-    where: { id: matchId },
-    select: STALL_MATCH_SELECT,
-  });
-  if (!match || !stallPhaseOf(match)) return null;
+  const match = await loadStallMatch(matchId);
+  if (!match) return null;
 
   const side: MatchSide | null =
     match.userAId === user.id ? "A" : match.userBId === user.id ? "B" : null;
   if (!side) return null;
 
-  return {
-    matchId,
-    userId: user.id,
-    side,
-    lang: (user.language ?? ctx.session.language ?? "en") as Language,
-  };
+  const lang = (user.language ?? ctx.session.language ?? "en") as Language;
+
+  // The check-in message keeps its buttons indefinitely — nothing deletes it
+  // when the match resolves, and the 48h cancellation doesn't know its id. So a
+  // tap on a dead button is a normal thing to happen, and it has to SAY
+  // something: swallowing it silently reads as the bot being broken, on the one
+  // screen whose entire job is to prove that it isn't.
+  //
+  // This is also why the callback is answered HERE rather than eagerly at the
+  // top of each handler: a query can only be answered once, so an eager plain
+  // answer would make this alert impossible.
+  if (!stallPhaseOf(match)) {
+    await ctx.answerCallbackQuery({ text: t(lang, "stallActionExpired"), show_alert: true });
+    // The buttons are provably dead now, so take them with it where we can.
+    await ctx.editMessageReplyMarkup().catch(() => {});
+    return null;
+  }
+
+  await ctx.answerCallbackQuery();
+  return { matchId, userId: user.id, side, lang, match };
 }
 
 /**
@@ -88,27 +109,31 @@ export async function handleStallStillOn(ctx: BotContext): Promise<void> {
   if (!data?.startsWith(STALL_OK_PREFIX)) return;
   const matchId = data.slice(STALL_OK_PREFIX.length);
 
-  await ctx.answerCallbackQuery();
-
   const actor = await resolveStallActor(ctx, matchId);
   if (!actor) return;
 
-  const match = await prisma.match.findUnique({
-    where: { id: matchId },
-    select: STALL_MATCH_SELECT,
-  });
-  if (!match) return;
-
+  // Reuse the guard's row rather than reading again: two reads mean two
+  // different snapshots, and the eligibility check below compares timestamps
+  // across them.
+  const match = actor.match;
   const isA = actor.side === "A";
-  const asked = isA ? match.stallCheckInSentAtA : match.stallCheckInSentAtB;
   const confirmed = isA ? match.stallConfirmedAtA : match.stallConfirmedAtB;
 
-  // No live question to answer (or it was answered already).
+  // No live question to answer — none sent in THIS phase, or already answered.
+  const asked = stallCheckInAskedAt(match, actor.side);
   if (!asked) return;
   if (confirmed && confirmed >= asked) return;
 
   const now = new Date();
-  const firstConfirmation = confirmed === null;
+  // "First confirmation IN THIS PHASE" — measured against the phase anchor, not
+  // against the question. Anchor-relative keeps the two-question cap per phase
+  // (a second green in the same phase does not re-arm, so the chain can't be
+  // held open forever); question-relative would make every answered question
+  // re-arm, which is an unbounded loop. And a confirmation left over from the
+  // scheduling step sits at or before the venue anchor, so it correctly does not
+  // spend the venue step's single re-arm.
+  const anchor = stallAnchorAt(match);
+  const firstConfirmation = confirmed === null || (anchor !== null && confirmed <= anchor);
 
   const claim = await prisma.match.updateMany({
     where: {
@@ -164,18 +189,10 @@ export async function handleStallAskCancel(ctx: BotContext): Promise<void> {
   if (!data?.startsWith(STALL_ASK_CANCEL_PREFIX)) return;
   const matchId = data.slice(STALL_ASK_CANCEL_PREFIX.length);
 
-  await ctx.answerCallbackQuery();
-
   const actor = await resolveStallActor(ctx, matchId);
   if (!actor) return;
 
-  const match = await prisma.match.findUnique({
-    where: { id: matchId },
-    select: { userAId: true, userA: { select: { firstName: true } }, userB: { select: { firstName: true } } },
-  });
-  if (!match) return;
-
-  const partner = actor.side === "A" ? match.userB : match.userA;
+  const partner = actor.side === "A" ? actor.match.userB : actor.match.userA;
   const name = partner.firstName ?? t(actor.lang, "stallPartnerFallbackName");
 
   await ctx.reply(t(actor.lang, "stallCancelConfirmPrompt", { name }), {
@@ -202,8 +219,6 @@ export async function handleStallCancelConfirm(ctx: BotContext): Promise<void> {
   const data = ctx.callbackQuery?.data;
   if (!data?.startsWith(STALL_CANCEL_CONFIRM_PREFIX)) return;
   const matchId = data.slice(STALL_CANCEL_CONFIRM_PREFIX.length);
-
-  await ctx.answerCallbackQuery();
 
   const actor = await resolveStallActor(ctx, matchId);
   if (!actor) return;

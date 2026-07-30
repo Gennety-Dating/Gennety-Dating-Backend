@@ -5,6 +5,7 @@ import { t, type Language } from "@gennety/shared";
 import { applySilentIgnorePenalty } from "../utils/elo-calculator.js";
 import { boostAcceptedSidePriority } from "./match-decision-shared.js";
 import { refundMatchTickets, ticketRefundNoticeKey } from "./ticket-refund.js";
+import { sendPushToUser } from "./push.js";
 
 /**
  * Stall handling for the two open-ended planning phases (PRODUCT_SPEC §3.5c).
@@ -172,6 +173,45 @@ export function stallCheckInDueAt(row: StallMatchRow, side: MatchSide): Date | n
   return base ? new Date(base.getTime() + STALL_CHECK_IN_MS) : null;
 }
 
+/**
+ * The live "still in?" question for this side, or null — **scoped to the phase
+ * currently running**.
+ *
+ * The stamps are per side but not per phase, and a match walks through both
+ * (scheduling → venue). Without this scoping a side asked during scheduling —
+ * who then answered by simply picking a time rather than tapping 🟢 — carried
+ * its stamp into the venue phase, where `alreadyAsked` suppressed the question
+ * forever while the 48h clock kept running. They would have been cancelled at
+ * the venue step having never been asked at that step. Anything stamped before
+ * the current phase opened belongs to the previous one and does not count; this
+ * is the same rule `stallBaseFor` already applies to confirmations, so in-flight
+ * rows self-heal with no reset write at the transition.
+ */
+export function stallCheckInAskedAt(
+  row: StallMatchRow & { stallCheckInSentAtA: Date | null; stallCheckInSentAtB: Date | null },
+  side: MatchSide,
+): Date | null {
+  const anchor = stallAnchorAt(row);
+  if (!anchor) return null;
+  const asked = side === "A" ? row.stallCheckInSentAtA : row.stallCheckInSentAtB;
+  return asked && asked > anchor ? asked : null;
+}
+
+/**
+ * Is a question on screen awaiting this side's answer? A confirmation at or
+ * after the question means it was already answered — the same comparison the
+ * callback handler uses, so the agent's context and the button can't disagree.
+ */
+export function stallCheckInPending(
+  row: StallMatchRow & { stallCheckInSentAtA: Date | null; stallCheckInSentAtB: Date | null },
+  side: MatchSide,
+): boolean {
+  const asked = stallCheckInAskedAt(row, side);
+  if (!asked) return false;
+  const confirmed = side === "A" ? row.stallConfirmedAtA : row.stallConfirmedAtB;
+  return !(confirmed && confirmed >= asked);
+}
+
 /** When an unanswered stall on this side cancels the match. */
 export function stallDeadlineAt(row: StallMatchRow, side: MatchSide): Date | null {
   const base = stallBaseFor(row, side);
@@ -289,18 +329,40 @@ export async function cancelStalledMatch(
   const phase = stallPhaseOf(match);
   if (!phase) return empty;
 
-  const sides: Array<{ side: MatchSide; user: StallParticipant; owes: boolean }> = [
-    { side: "A", user: match.userA, owes: sideOwesAction(match, "A") },
-    { side: "B", user: match.userB, owes: sideOwesAction(match, "B") },
-  ];
+  // "Owes something" and "ran out of time" are NOT the same thing, and only the
+  // second one is ghosting. A side that tapped 🟢 an hour ago still owes its
+  // action but has a fresh 48h; if the OTHER side then blows its own deadline
+  // and the match dies, penalising the one who answered would be exactly
+  // backwards — they did the thing the check-in asks for.
+  const sides: Array<{
+    side: MatchSide;
+    user: StallParticipant;
+    owes: boolean;
+    ghosted: boolean;
+  }> = (["A", "B"] as MatchSide[]).map((side) => {
+    const owes = sideOwesAction(match, side);
+    const deadline = stallDeadlineAt(match, side);
+    return {
+      side,
+      user: side === "A" ? match.userA : match.userB,
+      owes,
+      ghosted: owes && deadline !== null && deadline <= now,
+    };
+  });
 
   // Never cancel over a side that could not have answered the question.
   if (sides.some((s) => s.owes && !stallReachableFor(s.user.telegramId))) return empty;
-  if (!sides.some((s) => s.owes)) return empty;
+  // The deadline is re-derived here, from a row read AFTER the caller decided.
+  // That closes the race where someone taps 🟢 in the window between the
+  // worker's scan and this call: their deadline moves, nothing has expired any
+  // more, and the cancellation is abandoned instead of overriding their answer.
+  if (!sides.some((s) => s.ghosted)) return empty;
 
   if (!(await claimCancellation(matchId, phase, null))) return empty;
 
-  const ghosts = sides.filter((s) => s.owes);
+  const ghosts = sides.filter((s) => s.ghosted);
+  // Compensated only for actually doing their part. Someone who owes but whose
+  // own clock hadn't run out gets neither the penalty nor the boost.
   const waiting = sides.filter((s) => !s.owes);
 
   for (const ghost of ghosts) {
@@ -343,15 +405,30 @@ export async function cancelStalledMatch(
   // partner never answered); a ghost hears why it lapsed and — the part that
   // matters for next time — that saying "plans changed" is a normal thing to do.
   for (const side of sides) {
-    if (!stallReachableFor(side.user.telegramId)) continue;
     const lang = (side.user.language ?? "en") as Language;
     const other = side.side === "A" ? match.userB : match.userA;
-    const key = side.owes ? "stallTimeoutSelf" : "stallTimeoutPartnerGone";
+    // Keyed on who actually ran the clock out, not on who still owes: a side
+    // that answered the check-in and was cancelled by the OTHER one is told the
+    // truth — their partner never came back.
+    const key = side.ghosted ? "stallTimeoutSelf" : "stallTimeoutPartnerGone";
+    const body = `${t(lang, key, { name: partnerName(other, lang) })}${refundLineFor(side.user.id, lang)}`;
+
+    if (!stallReachableFor(side.user.telegramId)) {
+      // A mobile-only participant can't be asked (which is why they are never
+      // the ghost), but their match still just ended — silently dropping it from
+      // `/v1/matches/current` on the next poll is not an explanation.
+      await sendPushToUser(side.user.id, {
+        title: "Gennety",
+        body,
+        data: { type: "match.cancelled", matchId },
+      }).catch((err: unknown) => {
+        console.warn(`[match-stall] timeout push failed for ${side.user.id}:`, err);
+      });
+      continue;
+    }
+
     try {
-      await api.sendMessage(
-        Number(side.user.telegramId),
-        `${t(lang, key, { name: partnerName(other, lang) })}${refundLineFor(side.user.id, lang)}`,
-      );
+      await api.sendMessage(Number(side.user.telegramId), body);
     } catch (err) {
       console.warn(
         `[match-stall] timeout notice failed for ${side.user.telegramId}:`,
@@ -426,20 +503,30 @@ export async function cancelPlanningByUser(
     return key ? `\n\n${t(lang, key)}` : "";
   };
 
+  const otherLang = (other.language ?? "en") as Language;
+  const otherBody =
+    `${t(otherLang, "stallPeerCancelled", { name: partnerName(actor, otherLang) })}` +
+    refundLineFor(other.id, otherLang);
+
   if (stallReachableFor(other.telegramId)) {
-    const otherLang = (other.language ?? "en") as Language;
     try {
-      await api.sendMessage(
-        Number(other.telegramId),
-        `${t(otherLang, "stallPeerCancelled", { name: partnerName(actor, otherLang) })}` +
-          refundLineFor(other.id, otherLang),
-      );
+      await api.sendMessage(Number(other.telegramId), otherBody);
     } catch (err) {
       console.warn(
         `[match-stall] cancel notice failed for ${other.telegramId}:`,
         (err as Error).message,
       );
     }
+  } else {
+    // Mobile-only partner: the match vanishing from their next poll is not an
+    // explanation, and this one has a real cause worth stating.
+    await sendPushToUser(other.id, {
+      title: "Gennety",
+      body: otherBody,
+      data: { type: "match.cancelled", matchId },
+    }).catch((err: unknown) => {
+      console.warn(`[match-stall] cancel push failed for ${other.id}:`, err);
+    });
   }
 
   console.log(`[match-stall] user cancelled planning match=${matchId} by=${actorUserId}`);
