@@ -1,9 +1,38 @@
 /* Referral Mini App (§Referral) — milestone ladder + one-tap invite.
    Minimal, neutral black-and-white identity (the onboarding AI-memory register):
-   the burgundy accent and every glow/bloom are gone. Depth is a single hairline
-   and a flat surface tint; the one action is the neutral primary pill (white on
-   the dark theme, ink on the cream one). Symbols are borderless line icons from
-   icons.ts, never platform emoji. Base tokens live in theme.css. */
+   structure carries NO colour at all. Every section is BORDERLESS — there is not
+   one hairline on this screen; a card is defined purely by its own inner fill
+   stepping away from the page, and a "reached" rung by that fill stepping again.
+   Symbols are borderless line icons from icons.ts, never platform emoji.
+
+   The one exception, spent deliberately and exactly once: the single action
+   (Invite a friend) is the burgundy accent carrying the inner-perimeter sheen —
+   the same treatment as the university-email option on the sign-up fork
+   (`.choice-button.is-priority`, onboarding.css). The light is sprayed from the
+   button's own edges INWARD (inset shadows with a negative spread), never bloomed
+   outward onto the page, which is what keeps it soft rather than neon. Nothing
+   else on the screen glows, so the eye lands on the one thing to press.
+
+   Base tokens live in theme.css; the surface ladder below is local because a
+   borderless screen needs its own, slightly stronger fills to hold shape without
+   a border to lean on. */
+
+:root,
+:root[data-theme="dark"] {
+  /* Borderless surface ladder — page → card → reached card, and the chip that
+     sits on top of a card (so it needs its own step above the card it's in). */
+  --ref-card: rgba(255, 255, 255, 0.065);
+  --ref-card-strong: rgba(255, 255, 255, 0.11);
+  --ref-chip: rgba(255, 255, 255, 0.09);
+}
+
+:root[data-theme="light"] {
+  /* Same direction as theme.css uses on the cream page: a card steps DOWN in
+     lightness, because the page is already near-white. */
+  --ref-card: rgba(0, 0, 0, 0.055);
+  --ref-card-strong: rgba(0, 0, 0, 0.1);
+  --ref-chip: rgba(0, 0, 0, 0.075);
+}
 
 /* Fullscreen (Bot API 8.0+) floats the close × / menu ⋯ over the page; reserve
    room so the hero never slides under them. wireContentInsets overrides these
@@ -72,7 +101,7 @@ body {
   line-height: 1.45;
 }
 
-/* ── Stats — flat neutral cards, one hairline, no shadow ───────────────── */
+/* ── Stats — borderless neutral cards: fill alone draws the shape ──────── */
 .ref-stats {
   display: flex;
   gap: 0.6rem;
@@ -84,8 +113,7 @@ body {
   padding: 0.85rem 0.4rem;
   text-align: center;
   min-width: 0;
-  background: var(--fill);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--ref-card);
 }
 .ref-stat b {
   display: block;
@@ -117,7 +145,7 @@ body {
   color: var(--text);
 }
 
-/* ── Progress — neutral track + neutral fill, no glow ─────────────────── */
+/* ── Progress — borderless neutral track + neutral fill, no glow ───────── */
 .ref-progress {
   display: flex;
   justify-content: center;
@@ -129,8 +157,7 @@ body {
   height: 8px;
   border-radius: 99px;
   overflow: hidden;
-  background: var(--fill);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--ref-card);
 }
 .ref-bar > i {
   display: block;
@@ -155,13 +182,13 @@ body {
   gap: 0.85rem;
   padding: 0.85rem 0.9rem;
   border-radius: 14px;
-  background: var(--fill);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--ref-card);
 }
-/* Reached rung — a slightly stronger neutral surface (no colour, no glow). */
+/* Reached rung — the SAME surface stepped once further from the page. With no
+   hairline anywhere, that step is the entire signal, so it is deliberately a
+   wider gap than the old bordered version needed. */
 .ref-rung.done {
-  background: var(--fill-strong);
-  box-shadow: inset 0 0 0 1px var(--border-strong);
+  background: var(--ref-card-strong);
 }
 .ref-n {
   width: 34px;
@@ -173,7 +200,7 @@ body {
   font-size: 0.92rem;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
-  background: var(--fill-strong);
+  background: var(--ref-chip);
 }
 /* Reached marker — a filled neutral chip (white on dark, ink on cream) with the
    check punched out in the page colour. */
@@ -213,7 +240,17 @@ body {
   text-transform: uppercase;
 }
 
-/* ── The one action — the neutral primary pill (theme-correct), no glow ── */
+/* ── The one action — the ONLY colour and the ONLY glow on this screen ────
+   Burgundy fill carrying an inner-perimeter sheen: light sprayed from each of
+   the four edges INWARD. Mechanically that is four `inset` shadows with a
+   negative spread (`-14px`), which pulls the shadow's own body back past the
+   edge so only its soft outer falloff survives just inside the border — the
+   effect reads as the edge quietly lighting the button's interior rather than
+   as a stroke. The side edges keep the stronger catchlight; top/bottom get a
+   softer version, so the pill looks lit rather than outlined. Deliberately NO
+   outward bloom and no drop shadow: the light must stay inside the shape, which
+   is what makes it soft on the page instead of neon. Same treatment as the
+   university-email option on the sign-up fork. */
 .ref-share {
   display: flex;
   align-items: center;
@@ -228,17 +265,43 @@ body {
   font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: -0.005em;
-  color: var(--btn-primary-fg);
-  background: var(--btn-primary-bg);
-  box-shadow: 0 6px 18px var(--shadow);
-  transition: transform 140ms ease, opacity 160ms ease;
+  color: #fff;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.26),
+      rgba(255, 255, 255, 0) 16%,
+      rgba(255, 255, 255, 0) 84%,
+      rgba(255, 255, 255, 0.2)
+    ),
+    linear-gradient(160deg, #a23350 0%, #8b253b 55%, #6f1c2f 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 10px 20px -14px rgba(255, 255, 255, 0.62),
+    inset 0 -10px 20px -14px rgba(255, 255, 255, 0.48),
+    inset 9px 0 20px -13px rgba(255, 255, 255, 0.55),
+    inset -9px 0 20px -13px rgba(255, 255, 255, 0.55),
+    inset 0 -2px 6px rgba(74, 16, 31, 0.18);
+  transition:
+    transform 140ms ease,
+    box-shadow 180ms ease,
+    opacity 160ms ease;
 }
 .ref-share-ic {
   width: 19px;
   height: 19px;
 }
+/* Press lifts the sheen slightly rather than dimming the button — the light
+   answers the touch, which is the whole point of putting it inside the shape. */
 .ref-share:active {
   transform: scale(0.98);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 10px 20px -14px rgba(255, 255, 255, 0.7),
+    inset 0 -10px 20px -14px rgba(255, 255, 255, 0.54),
+    inset 9px 0 20px -13px rgba(255, 255, 255, 0.62),
+    inset -9px 0 20px -13px rgba(255, 255, 255, 0.62),
+    inset 0 -2px 6px rgba(74, 16, 31, 0.18);
 }
 .ref-share:disabled {
   opacity: 0.55;
@@ -254,8 +317,7 @@ body {
 .ref-skeleton {
   height: 60vh;
   border-radius: 16px;
-  background: var(--fill);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--ref-card);
   opacity: 0.7;
 }
 .ref-error {
