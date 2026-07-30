@@ -9,6 +9,7 @@ import {
   VENUE_PRICE_LIMITS,
   VENUE_SELECTION_VERSION,
   defaultVenueHardConstraints,
+  mapVibeTagsToFacets,
   isConfirmedVenueIntent,
   normalizeVenueIntent,
   rankVenueCandidates,
@@ -448,20 +449,39 @@ function searchCategories(a: VenueIntentV2, b: VenueIntentV2): Array<"cafe" | "c
   return [...new Set(laneCategories)].slice(0, 3);
 }
 
-function categoryFacets(category: string, tags: string[] = []): VenueCandidateFacets {
+/**
+ * Build a candidate's facet vector.
+ *
+ * `tags` are canonical ids (`facetTags` + `hardCapabilities`); `vibeTags` are
+ * the operator's free-text vocabulary, translated through
+ * `mapVibeTagsToFacets`. Before that translation the venue side of the vibe was
+ * almost empty — experiences came from `category` alone, so every cafe in the
+ * city was indistinguishable on the axis the user actually chose from.
+ *
+ * The category-derived experiences stay as the floor (a cafe IS a coffee
+ * place), with tags adding on top rather than replacing.
+ */
+function categoryFacets(category: string, tags: string[] = [], vibeTags: string[] = []): VenueCandidateFacets {
   const tagSet = new Set(tags);
+  const fromVibe = mapVibeTagsToFacets(vibeTags);
   const experienceMap: Record<string, VenueExperience[]> = {
     cafe: ["coffee_treats", "conversation"], coffee_shop: ["coffee_treats", "conversation"],
     restaurant: ["meal_discovery", "conversation"], park: ["walk_view", "conversation"],
     museum: ["art_culture", "conversation"], lounge: ["drinks_evening", "conversation"],
   };
   return {
-    experiences: [...new Set([...(experienceMap[category] ?? ["conversation"]), ...VENUE_EXPERIENCES.filter((v) => tagSet.has(v))])],
-    ambiences: VENUE_AMBIENCES.filter((v) => tagSet.has(v)),
-    formats: VENUE_FORMATS.filter((v) => tagSet.has(v)),
+    experiences: [...new Set([
+      ...(experienceMap[category] ?? ["conversation"]),
+      ...VENUE_EXPERIENCES.filter((v) => tagSet.has(v)),
+      ...fromVibe.experiences,
+    ])],
+    ambiences: [...new Set([...VENUE_AMBIENCES.filter((v) => tagSet.has(v)), ...fromVibe.ambiences])],
+    formats: [...new Set([...VENUE_FORMATS.filter((v) => tagSet.has(v)), ...fromVibe.formats])],
     dietary: VENUE_DIETARY_CONSTRAINTS.filter((v) => tagSet.has(v)),
     alcoholFree: tagSet.has("alcohol_free") ? true : null,
     stepFree: tagSet.has("step_free") ? true : null,
+    // `setting` gates a HARD constraint, so it stays sourced from the
+    // deterministic capability tags only — never from a soft vibe word.
     setting: tagSet.has("indoor") && tagSet.has("outdoor") ? "both" : tagSet.has("indoor") ? "indoor" : tagSet.has("outdoor") ? "outdoor" : null,
     price: VENUE_PRICE_LIMITS.find((v) => tagSet.has(v)) ?? null,
   };
@@ -650,7 +670,7 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
     if (row.hoursConfidence !== "always_open" && row.hoursConfidence !== "operator_confirmed" && (!row.openingHours || row.utcOffsetMinutes == null)) return [];
     if (row.hoursConfidence !== "always_open" && !isVenueOpenAt(row.openingHours as RegularOpeningHours | null, row.utcOffsetMinutes, match.agreedTime!)) return [];
     const tags = [...row.facetTags, ...row.hardCapabilities];
-    const facets = categoryFacets(row.category, tags);
+    const facets = categoryFacets(row.category, tags, row.vibeTags);
     const policy = evaluateInitialVenuePolicy({
       category: row.category,
       tier: row.tier,

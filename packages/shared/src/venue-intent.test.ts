@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   VENUE_INTENT_PARSER_VERSION,
   defaultVenueHardConstraints,
+  mapVibeTagsToFacets,
   normalizeVenueIntent,
   rankVenueCandidates,
   resolveVenueBridge,
@@ -155,5 +156,77 @@ describe("Venue Intent V2", () => {
       candidate({ id: "a", placeId: "a", priority: 1, reviews: 50 }),
     ], ...pair);
     expect(rows[0]?.candidate.placeId).toBe("a");
+  });
+});
+
+describe("mapVibeTagsToFacets", () => {
+  it("translates the operator vocabulary into canonical ids", () => {
+    expect(mapVibeTagsToFacets(["coffee", "cozy", "books"])).toEqual({
+      experiences: ["coffee_treats", "art_culture"],
+      ambiences: ["cozy_public"],
+      formats: [],
+    });
+  });
+
+  it("maps a tag onto several axes at once", () => {
+    // `walk` is both an experience and a format; `view` adds a scenic ambience.
+    expect(mapVibeTagsToFacets(["walk", "view"])).toEqual({
+      experiences: ["walk_view"],
+      ambiences: ["scenic"],
+      formats: ["walking"],
+    });
+  });
+
+  it("drops locational and stylistic tags rather than forcing them", () => {
+    expect(mapVibeTagsToFacets(["podil", "central", "casual", "upscale", "campus"])).toEqual({
+      experiences: [],
+      ambiences: [],
+      formats: [],
+    });
+  });
+
+  it("is case- and whitespace-insensitive and dedupes", () => {
+    expect(mapVibeTagsToFacets([" Coffee ", "COFFEE", "tea"]).experiences).toEqual(["coffee_treats"]);
+  });
+
+  it("returns empty for an empty tag list", () => {
+    expect(mapVibeTagsToFacets([])).toEqual({ experiences: [], ambiences: [], formats: [] });
+  });
+});
+
+describe("facet affinity (partial coverage)", () => {
+  const pair = (want: VenueIntentV2["ambiences"]) =>
+    [
+      intent(["coffee_treats"], { ambiences: want }),
+      intent(["coffee_treats"], { ambiences: want }),
+    ] as const;
+
+  function withAmbiences(id: string, ambiences: VenueRankCandidate["facets"]["ambiences"]) {
+    return candidate({ id, placeId: id, facets: { ...candidate().facets, ambiences } });
+  }
+
+  it("gives an adjacent ambience partial credit, below an exact match", () => {
+    const exact = withAmbiences("exact", ["quiet"]);
+    const adjacent = withAmbiences("adj", ["cozy_public"]);
+    const rows = rankVenueCandidates([adjacent, exact], ...pair(["quiet"]));
+    expect(rows[0]?.candidate.placeId).toBe("exact");
+    expect(rows[1]!.score.userFitA).toBeGreaterThan(0);
+    expect(rows[1]!.score.userFitA).toBeLessThan(rows[0]!.score.userFitA);
+  });
+
+  it("keeps opposites at zero — a lively room never partly satisfies quiet", () => {
+    const opposite = withAmbiences("opp", ["lively"]);
+    const [row] = rankVenueCandidates([opposite], ...pair(["quiet"]));
+    // Only the experience axis contributes; the ambience axis stays at 0.
+    const noAmbience = withAmbiences("none", []);
+    const [baseline] = rankVenueCandidates([noAmbience], ...pair(["quiet"]));
+    expect(row!.score.userFitA).toBe(baseline!.score.userFitA);
+  });
+
+  it("separates venues that previously all tied at zero", () => {
+    const adjacent = withAmbiences("adj", ["cozy_public"]);
+    const unrelated = withAmbiences("unrel", ["lively"]);
+    const rows = rankVenueCandidates([unrelated, adjacent], ...pair(["quiet"]));
+    expect(rows[0]?.candidate.placeId).toBe("adj");
   });
 });

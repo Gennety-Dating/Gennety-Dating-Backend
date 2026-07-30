@@ -188,6 +188,67 @@ export function normalizeVenueIntent(input: VenueIntentV2): VenueIntentV2 {
   };
 }
 
+/**
+ * Operator `vibeTags` → canonical facet ids.
+ *
+ * The curated catalog carries a 67-word free-text vocabulary written by hand
+ * (`coffee`, `wine`, `books`, `rooftop`, …) on 100% of its rows, and the V2
+ * selector ignored all of it — candidate facets were derived from `category`
+ * alone, which is why eight experiences collapsed onto six categories. This is
+ * the translation layer.
+ *
+ * Deliberately partial: a tag only appears here when its canonical meaning is
+ * unambiguous. Purely locational (`podil`, `central`, `campus`), stylistic
+ * (`casual`, `classic`, `upscale`) and dietary-adjacent (`hearty`, `raw`) tags
+ * map to nothing rather than being forced into the nearest id.
+ */
+const VIBE_TAG_FACETS: Record<string, readonly string[]> = {
+  // experiences
+  coffee: ["coffee_treats"], roastery: ["coffee_treats"], specialty: ["coffee_treats"],
+  tea: ["coffee_treats"], dessert: ["coffee_treats"], bakery: ["coffee_treats"],
+  brunch: ["coffee_treats"], breakfast: ["coffee_treats"], sourdough: ["coffee_treats"],
+  dinner: ["meal_discovery"], pizza: ["meal_discovery"], pasta: ["meal_discovery"],
+  sushi: ["meal_discovery"], ramen: ["meal_discovery"], seafood: ["meal_discovery"],
+  meat: ["meal_discovery"], asian: ["meal_discovery"], chinese: ["meal_discovery"],
+  japanese: ["meal_discovery"], vietnamese: ["meal_discovery"], italian: ["meal_discovery"],
+  french: ["meal_discovery"], ukrainian: ["meal_discovery"], gastro: ["meal_discovery"],
+  walk: ["walk_view", "walking"], view: ["walk_view", "scenic"], nature: ["walk_view", "scenic"],
+  garden: ["walk_view", "scenic", "outdoor"], water: ["walk_view", "scenic"],
+  culture: ["art_culture"], art: ["art_culture"], history: ["art_culture"],
+  science: ["art_culture"], books: ["art_culture"], architecture: ["art_culture"],
+  wine: ["drinks_evening"], cocktail: ["drinks_evening"], drinks: ["drinks_evening"],
+  beer: ["drinks_evening"], evening: ["drinks_evening"],
+  interactive: ["playful_activity", "interactive"], fun: ["playful_activity"],
+  conversation: ["conversation"],
+  // ambiences
+  cozy: ["cozy_public"], quiet: ["quiet"], study: ["quiet"], lively: ["lively"],
+  romantic: ["romantic_public"], design: ["design_forward"], modern: ["design_forward"],
+  retro: ["design_forward"], vinyl: ["design_forward"], rooftop: ["scenic"],
+  // formats
+  outdoor: ["outdoor"], terrace: ["outdoor"],
+};
+
+/**
+ * Translate operator vibe tags into canonical facet ids, split by axis.
+ * Unknown tags are dropped. Exported so the catalog seeder and the selector
+ * share one definition.
+ */
+export function mapVibeTagsToFacets(tags: readonly string[]): {
+  experiences: VenueExperience[];
+  ambiences: VenueAmbience[];
+  formats: VenueFormat[];
+} {
+  const hits = new Set<string>();
+  for (const tag of tags) {
+    for (const id of VIBE_TAG_FACETS[tag.trim().toLowerCase()] ?? []) hits.add(id);
+  }
+  return {
+    experiences: VENUE_EXPERIENCES.filter((id) => hits.has(id)),
+    ambiences: VENUE_AMBIENCES.filter((id) => hits.has(id)),
+    formats: VENUE_FORMATS.filter((id) => hits.has(id)),
+  };
+}
+
 export function isConfirmedVenueIntent(value: unknown): value is VenueIntentV2 {
   if (!value || typeof value !== "object") return false;
   const intent = value as Partial<VenueIntentV2>;
@@ -246,9 +307,57 @@ export function resolveVenueBridge(a: VenueIntentV2, b: VenueIntentV2): VenueBri
   return lanes.slice(0, 3);
 }
 
+/**
+ * Partial credit between two facets of the same axis, symmetric, 0..1.
+ *
+ * Exact-match-only coverage (the previous behaviour) collapsed the catalog into
+ * a few enormous equivalence classes: a venue either carried the exact id the
+ * user picked or scored a flat zero, so most candidates tied and the ranking
+ * fell through to rating. These pairs are deliberately conservative — an exact
+ * match still scores 1.0, so partial credit only ever separates venues that
+ * used to be indistinguishable at zero. Opposites (quiet/lively,
+ * indoor/outdoor) are absent on purpose: they must stay at 0.
+ */
+const FACET_AFFINITY: Record<string, number> = {};
+function affinity(a: string, b: string, weight: number): void {
+  FACET_AFFINITY[`${a}|${b}`] = weight;
+  FACET_AFFINITY[`${b}|${a}`] = weight;
+}
+// Ambience neighbourhoods.
+affinity("quiet", "cozy_public", 0.6);
+affinity("cozy_public", "romantic_public", 0.6);
+affinity("scenic", "romantic_public", 0.4);
+affinity("quiet", "scenic", 0.3);
+affinity("design_forward", "romantic_public", 0.3);
+affinity("design_forward", "lively", 0.3);
+// Experience neighbourhoods — "where can you actually talk" drives these.
+affinity("conversation", "coffee_treats", 0.6);
+affinity("conversation", "meal_discovery", 0.5);
+affinity("conversation", "drinks_evening", 0.4);
+affinity("conversation", "art_culture", 0.3);
+affinity("coffee_treats", "meal_discovery", 0.4);
+affinity("meal_discovery", "drinks_evening", 0.4);
+affinity("walk_view", "art_culture", 0.3);
+// Format neighbourhoods.
+affinity("seated", "indoor", 0.5);
+affinity("walking", "outdoor", 0.6);
+
+/**
+ * How well `actual` covers `wanted`, averaged over the wanted facets, with each
+ * one credited by its best match (exact 1.0, adjacent per `FACET_AFFINITY`).
+ */
 function coverage(wanted: readonly string[], actual: readonly string[]): number {
   if (wanted.length === 0 || wanted.includes("surprise_me")) return 1;
-  return wanted.filter((value) => actual.includes(value)).length / wanted.length;
+  let total = 0;
+  for (const want of wanted) {
+    let best = 0;
+    for (const have of actual) {
+      const score = have === want ? 1 : (FACET_AFFINITY[`${want}|${have}`] ?? 0);
+      if (score > best) best = score;
+    }
+    total += best;
+  }
+  return total / wanted.length;
 }
 
 /**
