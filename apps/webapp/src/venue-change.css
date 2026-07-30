@@ -30,11 +30,21 @@
      shadow, the less room .vc-gallery has to reclaim for it. Same read at a
      glance — the negative spread pulls the halo in rather than dimming it. */
   --shot-shadow: 0 12px 26px -10px rgba(0, 0, 0, 0.6);
+
+  /* An unvisited gallery dot. It has to say "there are N photos here" BEFORE
+     you scroll, so it is a contrast value, not a decoration: it steps away
+     from the page in whichever direction the page allows — lighter on the
+     dark stage, darker on the cream one. Same ~0.25 delta either way, and
+     well clear of the burgundy --accent the current dot wears. */
+  --dot-idle: rgba(244, 236, 255, 0.25);
 }
 :root[data-theme="light"] {
   --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
   --photo-sheen: rgba(0, 0, 0, 0.05);
   --shot-shadow: 0 12px 26px -10px rgba(0, 0, 0, 0.24);
+  /* A near-white dot at 25% is invisible on #f5f5f5 — the count of photos
+     simply did not exist until you started swiping. Flip it to ink. */
+  --dot-idle: rgba(29, 29, 29, 0.28);
 }
 
 * {
@@ -357,7 +367,7 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: rgba(244, 236, 255, 0.25);
+  background: var(--dot-idle);
   transition: background 0.2s ease, transform 0.2s ease;
 }
 .vc-dot.is-active {
@@ -720,7 +730,7 @@ a.vc-info-row .vc-info-text {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: rgba(244, 236, 255, 0.25);
+  background: var(--dot-idle);
   transition: background 0.2s ease, transform 0.2s ease;
 }
 .vc-dot.is-active {
