@@ -116,6 +116,7 @@ const VC_SELECT = {
       firstName: true,
       universityDomain: true,
       premiumUntil: true,
+      profile: { select: { homeCityKey: true } },
     },
   },
   userB: {
@@ -126,7 +127,9 @@ const VC_SELECT = {
       theme: true,
       gender: true,
       firstName: true,
+      universityDomain: true,
       premiumUntil: true,
+      profile: { select: { homeCityKey: true } },
     },
   },
 } as const;
@@ -155,6 +158,21 @@ function userOfSide(match: VcMatch, side: Side) {
 
 function otherSide(side: Side): Side {
   return side === "A" ? "B" : "A";
+}
+
+/**
+ * Catalog scope for a match: `cityKey` first (matches `venue-intent-v2.ts`'s
+ * auto-assign selector — university domain is affinity-only per
+ * ARCHITECTURE.md), falling back to `universityDomain`. Reads BOTH sides —
+ * previously this only ever read `userA`, so a domain/city set only on `userB`
+ * silently emptied the whole curated catalog (base + premium + alternative)
+ * for that pair, same bug shape venue-intent-v2.ts already avoids.
+ */
+function venueCatalogScope(match: VcMatch): { cityKey: string | null; universityDomain: string | null } {
+  return {
+    cityKey: match.userA.profile?.homeCityKey ?? match.userB.profile?.homeCityKey ?? null,
+    universityDomain: match.userA.universityDomain ?? match.userB.universityDomain ?? null,
+  };
 }
 
 /**
@@ -575,6 +593,7 @@ export type VenueChangeCatalogResult =
 
 /** Catalog loader signature — injectable so tests need no DB / Places network. */
 type LoadVenueChangeCatalog = (args: {
+  cityKey: string | null;
   universityDomain: string | null;
   center: { lat: number; lng: number };
   agreedTime: Date;
@@ -611,7 +630,7 @@ export async function getVenueChangeCatalog(
   }
 
   const venues = await loadCatalog({
-    universityDomain: match.userA.universityDomain,
+    ...venueCatalogScope(match),
     center: { lat: match.venueLat, lng: match.venueLng },
     agreedTime: match.agreedTime,
     // §Premium: surface premium venues (locked) whenever the feature is on.
@@ -687,7 +706,7 @@ export async function submitVenueLikes(
 
   // Resolve every submitted key against the server catalog.
   const catalog = await loadCatalog({
-    universityDomain: match.userA.universityDomain,
+    ...venueCatalogScope(match),
     center: { lat: match.venueLat, lng: match.venueLng },
     agreedTime: match.agreedTime,
     // §Premium: surface premium venues (locked) whenever the feature is on.
@@ -1090,7 +1109,7 @@ export async function mintExpressChange(
   }
 
   const catalog = await loadCatalog({
-    universityDomain: match.userA.universityDomain,
+    ...venueCatalogScope(match),
     center: { lat: match.venueLat, lng: match.venueLng },
     agreedTime: match.agreedTime,
     // §Premium: surface premium venues (locked) whenever the feature is on.

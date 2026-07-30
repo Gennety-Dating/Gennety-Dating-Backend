@@ -39,6 +39,7 @@ import {
   submitVenueLikes,
   confirmVenueAgreement,
   getVenueBoardState,
+  getVenueChangeCatalog,
   offerPartnerPay,
   declineVenuePay,
   settleVenuePayment,
@@ -149,8 +150,18 @@ function fakeMatch(over: Record<string, unknown> = {}) {
       gender: "female",
       firstName: "Alina",
       universityDomain: "kyiv.edu",
+      profile: { homeCityKey: "ua:kyiv" },
     },
-    userB: { id: "b", telegramId: 200n, language: "en", theme: "light", gender: "male", firstName: "Max" },
+    userB: {
+      id: "b",
+      telegramId: 200n,
+      language: "en",
+      theme: "light",
+      gender: "male",
+      firstName: "Max",
+      universityDomain: null,
+      profile: { homeCityKey: null },
+    },
     ...over,
   };
 }
@@ -205,6 +216,94 @@ beforeEach(() => {
     externalPaymentId: "charge-1",
   });
   mPurchase.update.mockResolvedValue({});
+});
+
+// ---------------------------------------------------------------------------
+// getVenueChangeCatalog — city/domain scope (regression: userA-only read)
+// ---------------------------------------------------------------------------
+
+describe("getVenueChangeCatalog — catalog scope", () => {
+  it("scopes by userA's cityKey/domain when present", async () => {
+    mMatch.findUnique.mockResolvedValue(fakeMatch());
+    const spy = vi.fn().mockResolvedValue([]);
+
+    await getVenueChangeCatalog(100n, "m1", new Date(), spy);
+
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ cityKey: "ua:kyiv", universityDomain: "kyiv.edu" }),
+    );
+  });
+
+  it("falls back to userB's cityKey/domain when userA has neither (general/phone-track userA)", async () => {
+    // This is the exact shape that silently emptied the curated catalog
+    // (base + premium + alternative) in production: a general-track userA
+    // paired with a student userB. Reading only `userA` returned {} scope and
+    // the board fell through to the un-tiered Places fallback.
+    mMatch.findUnique.mockResolvedValue(
+      fakeMatch({
+        userA: {
+          id: "a",
+          telegramId: 100n,
+          language: "en",
+          theme: "dark",
+          gender: "female",
+          firstName: "Alina",
+          universityDomain: null,
+          profile: { homeCityKey: null },
+        },
+        userB: {
+          id: "b",
+          telegramId: 200n,
+          language: "en",
+          theme: "light",
+          gender: "male",
+          firstName: "Max",
+          universityDomain: "kpi.ua",
+          profile: { homeCityKey: "ua:kyiv" },
+        },
+      }),
+    );
+    const spy = vi.fn().mockResolvedValue([]);
+
+    await getVenueChangeCatalog(100n, "m1", new Date(), spy);
+
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ cityKey: "ua:kyiv", universityDomain: "kpi.ua" }),
+    );
+  });
+
+  it("passes null scope through (never crashes) when neither side has a city or domain", async () => {
+    mMatch.findUnique.mockResolvedValue(
+      fakeMatch({
+        userA: {
+          id: "a",
+          telegramId: 100n,
+          language: "en",
+          theme: "dark",
+          gender: "female",
+          firstName: "Alina",
+          universityDomain: null,
+          profile: { homeCityKey: null },
+        },
+        userB: {
+          id: "b",
+          telegramId: 200n,
+          language: "en",
+          theme: "light",
+          gender: "male",
+          firstName: "Max",
+          universityDomain: null,
+          profile: { homeCityKey: null },
+        },
+      }),
+    );
+    const spy = vi.fn().mockResolvedValue([]);
+
+    const res = await getVenueChangeCatalog(100n, "m1", new Date(), spy);
+
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ cityKey: null, universityDomain: null }));
+    expect(res).toEqual({ ok: true, venues: [] });
+  });
 });
 
 // ---------------------------------------------------------------------------

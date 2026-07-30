@@ -174,6 +174,17 @@ export function venueChangeDeadline(now: Date, agreedTime: Date): Date {
 // ---------------------------------------------------------------------------
 
 export interface BuildCatalogInput {
+  /**
+   * Primary scope key — matches `curated_venues.cityKey` (ARCHITECTURE.md:
+   * "University domain is now affinity only"). Wins over `universityDomain`
+   * when both are present, mirroring `venue-intent-v2.ts`'s auto-assign
+   * selector. Required for a general/phone-track pair, who never have a
+   * `universityDomain` at all — without this scope, the curated catalog
+   * (base + premium + alternative) was silently empty for them and the
+   * board fell through to the un-tiered Places fallback, which can never
+   * show a premium badge.
+   */
+  cityKey: string | null;
   universityDomain: string | null;
   center: LatLng;
   agreedTime: Date;
@@ -200,18 +211,21 @@ function round1(n: number): number {
 }
 
 /**
- * Curated rows for the pair's domain that sit within `radiusKm` of `center` and
- * are open at `agreedTime`. Sorted nearest-first.
+ * Curated rows for the pair's city/domain that sit within `radiusKm` of
+ * `center` and are open at `agreedTime`. Sorted nearest-first.
  */
 export async function listCuratedVenuesNear(
   input: BuildCatalogInput,
 ): Promise<CatalogVenue[]> {
-  if (!input.universityDomain) return [];
+  if (!input.cityKey && !input.universityDomain) return [];
   const radiusKm = input.radiusKm ?? VENUE_CHANGE_RADIUS_KM;
 
   const rows = await prisma.curatedVenue.findMany({
     where: {
-      universityDomain: input.universityDomain,
+      // `cityKey` is the primary scope; `universityDomain` is affinity-only
+      // and kept as the fallback for rows never backfilled with a city (see
+      // `BuildCatalogInput.cityKey`).
+      ...(input.cityKey ? { cityKey: input.cityKey } : { universityDomain: input.universityDomain }),
       active: true,
       // `alternative` venues exist ONLY for this board (never auto-assigned),
       // so they are always in — unlocked and priced like base. Premium venues
@@ -328,9 +342,12 @@ export async function listPlacesVenuesNear(
 }
 
 /**
- * Max premium-tier slots reserved in the capped catalog so the §Premium tier is
- * always discoverable even when nearer base venues would otherwise fill every
- * slot. Only ever reserves slots that premium venues actually occupy.
+ * Cap on how many premium-tier cards lead the board. Product intent (§Premium
+ * upsell): a non-subscriber should always see what they're missing, so premium
+ * venues are pinned FIRST, unconditionally — not distance-sorted in with base,
+ * and not merely "reserved a few slots so they aren't crowded out". Still
+ * capped so a dense premium pool near the venue can't turn the board into an
+ * all-locked wall with zero pickable options.
  */
 export const VENUE_CHANGE_PREMIUM_RESERVED = 4;
 
@@ -352,23 +369,24 @@ export async function buildVenueChangeCatalog(
 }
 
 /**
- * Distance-sorted cap that guarantees premium venues a few slots — otherwise a
- * dense base pool could crowd every premium spot past the cap and the tier would
- * never surface (§Premium). Reserves up to `VENUE_CHANGE_PREMIUM_RESERVED`
- * nearest premium venues, fills the rest with nearest base, and re-sorts by
- * distance so the list still reads nearest-first.
+ * Premium-first cap: up to `VENUE_CHANGE_PREMIUM_RESERVED` nearest premium
+ * venues always lead the list (conversion visibility — see the constant doc),
+ * then the remaining slots up to `VENUE_CHANGE_CATALOG_LIMIT` fill with the
+ * nearest non-premium (base + alternative). Each group is distance-sorted
+ * within itself; the list as a whole is grouped by tier, not globally
+ * distance-sorted. Places-fallback rows are always `tier: "base"`, so this is
+ * a no-op premium-wise for that path.
  */
 export function capCatalog(venues: CatalogVenue[]): CatalogVenue[] {
-  if (venues.length <= VENUE_CHANGE_CATALOG_LIMIT) return venues;
-  const premium = venues.filter((v) => v.tier === "premium");
-  if (premium.length === 0) return venues.slice(0, VENUE_CHANGE_CATALOG_LIMIT);
-  const base = venues.filter((v) => v.tier !== "premium");
-  const premiumSlots = Math.min(premium.length, VENUE_CHANGE_PREMIUM_RESERVED);
-  const kept = [
-    ...base.slice(0, VENUE_CHANGE_CATALOG_LIMIT - premiumSlots),
-    ...premium.slice(0, premiumSlots),
-  ];
-  return kept.sort((a, b) => a.distanceKm - b.distanceKm);
+  const premium = venues
+    .filter((v) => v.tier === "premium")
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, VENUE_CHANGE_PREMIUM_RESERVED);
+  const rest = venues
+    .filter((v) => v.tier !== "premium")
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, Math.max(0, VENUE_CHANGE_CATALOG_LIMIT - premium.length));
+  return [...premium, ...rest];
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   venueChangeCutoff,
   venueChangeDeadline,
   buildVenueChangeCatalog,
+  listCuratedVenuesNear,
   capCatalog,
   VENUE_CHANGE_PREMIUM_RESERVED,
   isWithinRadius,
@@ -141,8 +142,24 @@ describe("isWithinRadius", () => {
   });
 });
 
+describe("listCuratedVenuesNear", () => {
+  it("returns [] without querying when neither cityKey nor universityDomain is set", async () => {
+    // A general/phone-track pair has no universityDomain; if the caller also
+    // failed to resolve a cityKey, there is no scope to query by — this must
+    // stay a fast no-op, not an unscoped (and unsafe) full-table read.
+    const out = await listCuratedVenuesNear({
+      cityKey: null,
+      universityDomain: null,
+      center: { lat: 50.45, lng: 30.52 },
+      agreedTime: new Date("2026-06-10T16:00:00Z"),
+    });
+    expect(out).toEqual([]);
+  });
+});
+
 describe("buildVenueChangeCatalog", () => {
   const input = {
+    cityKey: null as string | null,
     universityDomain: "kyiv.edu",
     center: { lat: 50.45, lng: 30.52 },
     agreedTime: new Date("2026-06-10T16:00:00Z"),
@@ -247,10 +264,22 @@ describe("capCatalog (§Premium slot reservation)", () => {
     const capped = capCatalog([...base, ...premium]);
     expect(capped).toHaveLength(12);
     expect(capped.filter((v) => v.tier === "premium")).toHaveLength(2);
-    // Still sorted nearest-first.
-    for (let i = 1; i < capped.length; i++) {
-      expect(capped[i].distanceKm).toBeGreaterThanOrEqual(capped[i - 1].distanceKm);
-    }
+    // Premium leads even though it's farther away — grouped by tier, not
+    // globally distance-sorted (§Premium conversion visibility).
+    expect(capped.slice(0, 2).every((v) => v.tier === "premium")).toBe(true);
+    expect(capped.slice(2).every((v) => v.tier === "base")).toBe(true);
+  });
+
+  it("pins premium first even when the whole list is well under the cap", () => {
+    // A far premium venue (2.0 km) still leads three much nearer base ones.
+    const list = [venue(1, "base"), venue(2, "base"), venue(3, "base"), venue(20, "premium")];
+    const capped = capCatalog(list);
+    expect(capped[0].tier).toBe("premium");
+    expect(capped.slice(1).map((v) => v.distanceKm)).toEqual([
+      expect.closeTo(0.1),
+      expect.closeTo(0.2),
+      expect.closeTo(0.3),
+    ]);
   });
 
   it("reserves at most VENUE_CHANGE_PREMIUM_RESERVED premium slots", () => {
