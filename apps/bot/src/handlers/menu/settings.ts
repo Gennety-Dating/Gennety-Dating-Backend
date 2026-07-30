@@ -6,6 +6,7 @@ import { showMainMenu } from "./main.js";
 import { buildLanguageKeyboard } from "../language-keyboard.js";
 import { deleteUserAccount } from "../../services/account-deletion.js";
 import { freezeAccount } from "../../services/account-status-transitions.js";
+import { setUserLanguage, setUserTheme } from "../../services/user-preferences.js";
 import {
   consumePendingAccountAction,
   invalidatePendingAccountAction,
@@ -85,22 +86,7 @@ export async function handleSettingsLanguageSet(ctx: BotContext): Promise<void> 
   ctx.session.language = newLang;
   ctx.session.menuState = "idle";
 
-  const telegramId = BigInt(ctx.from!.id);
-  await prisma.$transaction(async (tx) => {
-    const user = await tx.user.update({
-      where: { telegramId },
-      data: { language: newLang },
-      select: { id: true },
-    });
-    await tx.match.updateMany({
-      where: { userAId: user.id, status: "scheduled" },
-      data: { dateCardFileIdA: null },
-    });
-    await tx.match.updateMany({
-      where: { userBId: user.id, status: "scheduled" },
-      data: { dateCardFileIdB: null },
-    });
-  });
+  await setUserLanguage(BigInt(ctx.from!.id), newLang);
 
   await ctx.reply(t(newLang, "settingsLanguageSaved"));
   await showMainMenu(ctx);
@@ -141,22 +127,7 @@ export async function handleSettingsThemeSet(ctx: BotContext): Promise<void> {
   await ctx.answerCallbackQuery();
   ctx.session.menuState = "idle";
 
-  const telegramId = BigInt(ctx.from!.id);
-  await prisma.$transaction(async (tx) => {
-    const user = await tx.user.update({
-      where: { telegramId },
-      data: { theme: newTheme, themeChosenAt: new Date() },
-      select: { id: true },
-    });
-    await tx.match.updateMany({
-      where: { userAId: user.id, status: "scheduled" },
-      data: { dateCardFileIdA: null },
-    });
-    await tx.match.updateMany({
-      where: { userBId: user.id, status: "scheduled" },
-      data: { dateCardFileIdB: null },
-    });
-  });
+  await setUserTheme(BigInt(ctx.from!.id), newTheme);
 
   const lang = ctx.session.language;
   await ctx.reply(t(lang, "settingsThemeSaved"));

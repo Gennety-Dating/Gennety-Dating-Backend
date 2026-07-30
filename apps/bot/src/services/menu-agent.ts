@@ -10,7 +10,7 @@
  * onboarding, but the system prompt is rebuilt fresh each session).
  */
 
-import { prisma, Prisma } from "@gennety/db";
+import { prisma, Prisma, type Theme } from "@gennety/db";
 import { openaiFetch } from "./openai-fetch.js";
 import {
   MAX_BIO_LENGTH,
@@ -19,6 +19,7 @@ import {
   MIN_AGE,
   MAX_AGE,
   MAX_HISTORY_FOR_API,
+  SUPPORTED_LANGUAGES,
   t,
   type Language,
 } from "@gennety/shared";
@@ -32,6 +33,7 @@ import { transitionAccountStatus } from "./account-status-transitions.js";
 import { getPremiumCancelContext, formatPremiumUntil } from "./premium.js";
 import { explainMatch, getMatchmakingStanding } from "./agent-insights.js";
 import { STALL_ASK_CANCEL_PREFIX } from "./match-stall.js";
+import { setUserLanguage, setUserTheme } from "./user-preferences.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -430,6 +432,40 @@ const TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "set_language",
+      description:
+        "Switch the language the bot replies in and every screen shows. Call when the user asks to change language — 'switch to Russian', 'переключи на английский', 'parle français' (say it's not supported if the target isn't in the list). After this succeeds, write the REST of your reply in the new language.",
+      parameters: {
+        type: "object",
+        properties: {
+          language: {
+            type: "string",
+            enum: [...SUPPORTED_LANGUAGES],
+            description: "Target language code.",
+          },
+        },
+        required: ["language"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "set_theme",
+      description:
+        "Switch the app-wide light/dark look, used by every Mini App and rendered card. Call when the user asks for dark mode, light mode, or to change the theme/appearance.",
+      parameters: {
+        type: "object",
+        properties: {
+          theme: { type: "string", enum: ["light", "dark"] },
+        },
+        required: ["theme"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "get_my_standing",
       description:
         "Read why the user is or isn't getting matched: how many weekly batches they've missed, whether their profile is still syncing, photo count, verification, account status, and how big the candidate pool is in their city. Call whenever the user asks why they have no matches, why it's taking so long, or what they could improve. Read-only.",
@@ -505,6 +541,8 @@ export const TOOL_KINDS: Record<string, ToolKind> = {
   update_age_range: "write",
   update_partner_preferences: "write",
   update_hobbies: "write",
+  set_language: "write",
+  set_theme: "write",
   pause_matching: "write",
   resume_matching: "write",
   record_rejection_feedback: "write",
@@ -694,6 +732,63 @@ async function execUpdateHobbies(
         ? "Hobbies updated and applied to matching."
         : "Hobbies saved; matching will apply them after automatic profile sync.",
   });
+}
+
+const SUPPORTED_LANGUAGE_SET = new Set<string>(SUPPORTED_LANGUAGES);
+const VALID_THEMES = new Set(["light", "dark"]);
+
+/**
+ * Same DB write the Settings menu's language picker performs
+ * (`services/user-preferences.ts` — shared so both paths keep the invariant
+ * that a switch clears this user's own cached date-card render, which bakes
+ * the language into its blurb text).
+ */
+async function execSetLanguage(
+  telegramId: bigint,
+  args: { language?: unknown },
+): Promise<string> {
+  const language = typeof args.language === "string" ? args.language : "";
+  if (!SUPPORTED_LANGUAGE_SET.has(language)) {
+    return JSON.stringify({
+      success: false,
+      error: `Unsupported language "${language}". Supported: ${SUPPORTED_LANGUAGES.join(", ")}.`,
+    });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (!user) return JSON.stringify({ success: false, error: "User not found." });
+
+  await setUserLanguage(telegramId, language as Language);
+
+  return JSON.stringify({
+    success: true,
+    message: "Language updated.",
+    instruction: `The switch already applied — write the rest of THIS reply in ${language}.`,
+  });
+}
+
+/** Same DB write the Settings menu's theme picker performs. */
+async function execSetTheme(
+  telegramId: bigint,
+  args: { theme?: unknown },
+): Promise<string> {
+  const theme = typeof args.theme === "string" ? args.theme : "";
+  if (!VALID_THEMES.has(theme)) {
+    return JSON.stringify({ success: false, error: "Theme must be 'light' or 'dark'." });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true },
+  });
+  if (!user) return JSON.stringify({ success: false, error: "User not found." });
+
+  await setUserTheme(telegramId, theme as Theme);
+
+  return JSON.stringify({ success: true, message: "Theme updated." });
 }
 
 async function execGetMyStanding(telegramId: bigint): Promise<string> {
@@ -1305,6 +1400,16 @@ export async function runMenuAgentTurn(
         case "update_hobbies":
           result = await execUpdateHobbies(telegramId, args as { hobbies: unknown });
           receiptKey = "editHobbiesSaved";
+          break;
+        case "set_language":
+          result = await execSetLanguage(telegramId, args as { language?: unknown });
+          // Read AFTER the write, so this picks up the language just set —
+          // the receipt lands in the language the user is switching TO.
+          receiptKey = "settingsLanguageSaved";
+          break;
+        case "set_theme":
+          result = await execSetTheme(telegramId, args as { theme?: unknown });
+          receiptKey = "settingsThemeSaved";
           break;
         case "get_my_profile":
           result = await execGetMyProfile(telegramId);

@@ -20,6 +20,7 @@ vi.mock("@gennety/db", () => ({
       findFirst: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     matchEvent: {
       updateMany: vi.fn(),
@@ -30,6 +31,12 @@ vi.mock("@gennety/db", () => ({
     chatEvent: {
       findMany: vi.fn().mockResolvedValue([]),
     },
+    // `set_language` / `set_theme` go through `services/user-preferences.ts`,
+    // which wraps its write in `prisma.$transaction`. Given a default
+    // implementation here (invoking the callback with `prisma` itself as the
+    // transaction client) so every describe block exercises the real
+    // transaction body without needing its own setup.
+    $transaction: vi.fn(),
   },
 }));
 
@@ -719,6 +726,10 @@ describe("menu-agent tool classes", () => {
     expect(TOOL_KINDS.get_my_standing).toBe("read");
     expect(TOOL_KINDS.propose_cancel_date).toBe("confirm");
     expect(TOOL_KINDS.open_screen).toBe("open");
+    // set_language / set_theme are fully reversible, single-field settings
+    // edits — same class as update_bio, budgeted at one write per turn.
+    expect(TOOL_KINDS.set_language).toBe("write");
+    expect(TOOL_KINDS.set_theme).toBe("write");
   });
 
   it("never classifies an irreversible action as a write", () => {
@@ -1125,5 +1136,156 @@ describe("menu-agent open_screen", () => {
     });
 
     expect(result.action).toBeUndefined();
+  });
+});
+
+describe("menu-agent set_language / set_theme", () => {
+  const telegramId = BigInt(6006);
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    clearKnowledgeCache();
+    (prisma.systemKnowledge.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.chatEvent.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { select?: Record<string, unknown> }) => {
+        if (args.select && "matchesAsA" in args.select) {
+          return {
+            id: "uid-A",
+            firstName: "Alice",
+            universityDomain: "stanford.edu",
+            status: "active",
+            language: "en",
+            matchesAsA: [],
+            matchesAsB: [],
+          };
+        }
+        if (args.select && "messageHistory" in args.select) return { messageHistory: [] };
+        return { id: "uid-A", language: "en" };
+      },
+    );
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "uid-A" });
+    (prisma.match.updateMany as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0 });
+    // `setUserLanguage`/`setUserTheme` wrap their write in `prisma.$transaction`;
+    // run the callback against the same mocked `prisma` client.
+    (prisma.$transaction as ReturnType<typeof vi.fn>).mockImplementation(
+      async (work: (tx: typeof prisma) => unknown) => work(prisma),
+    );
+  });
+
+  it("switches the language and clears this user's own cached date-card side", async () => {
+    // Stateful this one time: the shared mock always answers `language: "en"`,
+    // which would make the assertion below pass even if the receipt used STALE
+    // state instead of re-reading the DB. Track the write so the test can tell
+    // the difference.
+    let storedLanguage = "en";
+    (prisma.user.findUnique as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { select?: Record<string, unknown> }) => {
+        if (args.select && "matchesAsA" in args.select) {
+          return {
+            id: "uid-A",
+            firstName: "Alice",
+            universityDomain: "stanford.edu",
+            status: "active",
+            language: storedLanguage,
+            matchesAsA: [],
+            matchesAsB: [],
+          };
+        }
+        if (args.select && "messageHistory" in args.select) return { messageHistory: [] };
+        return { id: "uid-A", language: storedLanguage };
+      },
+    );
+    (prisma.user.update as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { data?: { language?: string } }) => {
+        if (args.data?.language) storedLanguage = args.data.language;
+        return { id: "uid-A" };
+      },
+    );
+
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "set_language", args: { language: "ru" } }]),
+      )
+      .mockResolvedValueOnce(textResponse("switched"));
+
+    const result = await runMenuAgentTurn(telegramId, "switch to Russian", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { language: "ru" } }),
+    );
+    expect(prisma.match.updateMany).toHaveBeenCalledWith({
+      where: { userAId: "uid-A", status: "scheduled" },
+      data: { dateCardFileIdA: null },
+    });
+    expect(prisma.match.updateMany).toHaveBeenCalledWith({
+      where: { userBId: "uid-A", status: "scheduled" },
+      data: { dateCardFileIdB: null },
+    });
+    // The receipt is read AFTER the write, so it reflects the NEW language
+    // (ru) even though the request arrived in English.
+    expect(result.receipts).toEqual(["Язык обновлён"]);
+  });
+
+  it("refuses an unsupported language and writes nothing", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "set_language", args: { language: "fr" } }]),
+      )
+      .mockResolvedValueOnce(textResponse("we don't have French yet"));
+
+    const result = await runMenuAgentTurn(telegramId, "parle français", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    // Every turn also calls `user.update` once to persist message history, so
+    // check no call carried a `language` field rather than a raw call count.
+    const languageWrites = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call) => (call[0] as { data?: { language?: unknown } })?.data?.language !== undefined,
+    );
+    expect(languageWrites).toHaveLength(0);
+    expect(result.receipts).toBeUndefined();
+  });
+
+  it("switches the theme and clears the date-card cache the same way", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "set_theme", args: { theme: "light" } }]),
+      )
+      .mockResolvedValueOnce(textResponse("done"));
+
+    const result = await runMenuAgentTurn(telegramId, "switch to light mode", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ theme: "light" }) }),
+    );
+    expect(prisma.match.updateMany).toHaveBeenCalledTimes(2);
+    expect(result.receipts).toEqual(["Theme updated"]);
+  });
+
+  it("refuses an invalid theme", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        toolCallResponse([{ id: "c1", name: "set_theme", args: { theme: "sepia" } }]),
+      )
+      .mockResolvedValueOnce(textResponse("only light or dark"));
+
+    const result = await runMenuAgentTurn(telegramId, "sepia theme please", {
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+
+    const themeWrites = (prisma.user.update as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call) => (call[0] as { data?: { theme?: unknown } })?.data?.theme !== undefined,
+    );
+    expect(themeWrites).toHaveLength(0);
+    expect(result.receipts).toBeUndefined();
   });
 });

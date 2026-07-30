@@ -1209,14 +1209,21 @@ worded:
   qualitative bands, never raw multipliers: the numbers are internal mechanics
   (Elo distance, cosine similarity) that read as a rating OF THE PARTNER, and
   the blind-decision invariant still forbids revealing their choice.
-- **write** — the profile edits, pause/resume, rejection feedback, plus the new
-  `update_hobbies` (the Telegram side had no hobby tool while Aether did). At
-  most **one write per turn**: one message is one intent, and a turn issuing
-  several writes is the model improvising over a profile. A rejected edit does
-  not spend the budget. Each landed write is followed by a **code-owned
-  receipt** ("✓ About me updated") rather than trusting the model's own prose,
-  so a change to matching-relevant state is a visible fact and an unintended
-  one is noticed.
+- **write** — the profile edits, pause/resume, rejection feedback, plus
+  `update_hobbies` (the Telegram side had no hobby tool while Aether did) and
+  `set_language` / `set_theme` (the same DB write the Settings menu's pickers
+  perform, factored into `services/user-preferences.ts` so both paths keep the
+  invariant that a switch clears only this user's own cached scheduled-date PNG
+  render — the card bakes language/theme into the image, so a stale cached
+  `file_id` would keep re-sending the old one after a switch). At most **one
+  write per turn**: one message is one intent, and a turn issuing several
+  writes is the model improvising over a profile. A rejected edit does not
+  spend the budget. Each landed write is followed by a **code-owned receipt**
+  ("✓ About me updated") rather than trusting the model's own prose, so a
+  change to matching-relevant state is a visible fact and an unintended one is
+  noticed — for a language switch the receipt is read back from the database
+  AFTER the write, so it renders in the new language rather than the one the
+  request arrived in.
 - **confirm** — `offer_cancel_premium`, `propose_cancel_date`,
   `propose_close_account`. These mutate **nothing**. They surface the button the
   menu would have shown, carrying the *existing* callback, and the user's tap
