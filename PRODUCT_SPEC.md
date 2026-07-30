@@ -2245,16 +2245,26 @@ is sent to the chat at all.
 a rotation counter.** The first revision rotated three phrasings on a global 60 s
 clock, so minute two and hour twenty read identically — which made the shimmer
 decorative, and made the copy wrap onto two lines in a block meant to hold one.
-Five tiers replace it, each one line and each with its own animated `<tg-emoji>`
-glyph instead of the same "thinking" cloud throughout:
+Five tiers replace it, one line each:
 
 | Tier | Elapsed | Reads (RU) |
 |---|---|---|
-| 1 | < 5 min | `📨 Ушло к {name}` |
-| 2 | 5 min – 1 h | `⏳ Ждём {name}` |
-| 3 | 1 – 6 h | `🌙 От {name} пока тихо` |
-| 4 | 6 – 24 h | `🔔 Напомнил {name}` |
-| 5 | > 24 h | `⌛ Ждём {name} — время на исходе` |
+| 1 | < 5 min | `Ушло к {name}` |
+| 2 | 5 min – 1 h | `Ждём {name}` |
+| 3 | 1 – 6 h | `От {name} пока тихо` |
+| 4 | 6 – 24 h | `Напомнил {name}` |
+| 5 | > 24 h | `Ждём {name} — время на исходе` |
+
+**These lines carry no icon — no leading emoji and no animated `<tg-emoji>`
+glyph** (founder decision 2026-07-30). An intermediate revision gave each tier
+its own AIActions glyph, on the reasoning that the icon should escalate with the
+wording; that was dropped because a status here is a *description of state*, and
+an icon on it is decoration the state does not need. The `<tg-thinking>` shimmer
+already carries "something is in progress" on its own, which is exactly the job
+an icon would have been doing. This is deliberately narrower than the rest of
+§1.3: the "agent is working" beats elsewhere keep their glyphs, because those
+narrate work the bot is doing, while these describe another human not having
+answered yet.
 
 The two late tiers are **claims about machinery that really ran**, and that is why
 their boundaries are where they are: the §3.5 scheduling/venue nudge fires at 6 h,

@@ -185,15 +185,19 @@ describe("issuePeerWaitDraft", () => {
     expect(drafts[0]!.html).toContain("Anna");
   });
 
-  it("carries a per-tier animated glyph, not one shared thinking cloud", async () => {
+  it("carries no glyph at all — the status is plain text", async () => {
+    // Founder decision 2026-07-30: a status here describes state, and an icon on
+    // it is decoration the state doesn't need; the shimmer already signals
+    // "in progress". Guards against a glyph creeping back in via `thinkingHtml`.
     const { api, drafts } = createApi();
 
-    await issuePeerWaitDraft(api, { ...base, startedAt: ago(1 * MIN), now: NOW });
-    await issuePeerWaitDraft(api, { ...base, startedAt: ago(30 * HOUR), now: NOW });
+    for (const elapsed of [1 * MIN, 30 * HOUR]) {
+      await issuePeerWaitDraft(api, { ...base, startedAt: ago(elapsed), now: NOW });
+    }
 
-    const glyph = (html: string) => /<tg-emoji emoji-id="(\d+)"/.exec(html)?.[1];
-    expect(glyph(drafts[0]!.html!)).toBeDefined();
-    expect(glyph(drafts[0]!.html!)).not.toBe(glyph(drafts[1]!.html!));
+    for (const draft of drafts) {
+      expect(draft.html).not.toContain("<tg-emoji");
+    }
   });
 
   it("propagates failure so callers can decide (worker falls back)", async () => {
@@ -225,10 +229,8 @@ describe("startPeerWaitShimmer", () => {
     expect(drafts[0]!.chat_id).toBe(111); // side A's own chat
     expect(drafts[0]!.html).toContain("Anna"); // …naming the PARTNER
     // …in the ACTOR's language, and always at tier 1: this only fires the
-    // instant the user commits. The leading glyph is swapped for an animated
-    // <tg-emoji>, so match on the words after it.
-    const ruPrefix = t("ru", "peerWaitT1Sent").split("{name}")[0]!.split(" ").slice(1).join(" ");
-    expect(drafts[0]!.html).toContain(ruPrefix.trim());
+    // instant the user commits. The line is plain text, so it appears verbatim.
+    expect(drafts[0]!.html).toContain(t("ru", "peerWaitT1Sent", { name: "Anna" }));
   });
 
   it("accepts a Telegram id, for the initData Mini App routes", async () => {

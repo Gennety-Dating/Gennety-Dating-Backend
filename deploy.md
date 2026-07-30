@@ -22,8 +22,8 @@ pnpm db:drift-check   # must exit 0 before pm2 restart
 
 What ships: the shimmer's wording stops rotating on a 60 s clock and instead
 climbs a **five-tier ladder keyed to how long that side has actually waited**
-(<5 m / 5 m–1 h / 1–6 h / 6–24 h / >24 h), one line each, each with its own
-animated glyph. Plus two coverage fixes: the calendar's **both-picked-no-overlap**
+(<5 m / 5 m–1 h / 1–6 h / 6–24 h / >24 h), one line each, plain text with no
+icon. Plus two coverage fixes: the calendar's **both-picked-no-overlap**
 state (previously silent for BOTH sides until the §3.5c 24 h check-in) and the
 **§3.7b venue-change board** (previously no shimmer at all — its ~4 s polling only
 covers an open Mini App).
@@ -34,12 +34,10 @@ covers an open Mini App).
   true only because `match-nudge` fires there, and "время на исходе" at 24 h only
   because the §3.5c check-in does. If either schedule is retuned, retune these
   boundaries with it (`TIERS` in `services/peer-wait.ts`).
-- **The five animated glyphs are PLACEHOLDERS pending an operator pick.** They
-  point at existing AIActions ids so the ladder works, but were not chosen by
-  looking at the animations. Run
-  `pnpm --filter @gennety/bot exec tsx scripts/dev/preview-ai-emojis.ts <chatId>`
-  (dev env, numbered preview of all 48) and replace the five `peerWait*` ids in
-  `services/ai-emoji.ts`. Cosmetic — safe to ship before deciding.
+- **These statuses carry no emoji or animated glyph at all** (founder decision
+  2026-07-30) — unlike every other `<tg-thinking>` beat in the product, which
+  keeps its AIActions glyph. If a future edit adds one back, that is a product
+  change, not a fix; a test in `services/peer-wait.test.ts` asserts the absence.
 - **One venue-change interaction is expected, not a bug.** That branch runs on
   `scheduled`, which is not a Profiler-blocking status, so a Profiler question can
   land mid-wait and collapse the draft; the next tick (≤20 s) re-issues it. The

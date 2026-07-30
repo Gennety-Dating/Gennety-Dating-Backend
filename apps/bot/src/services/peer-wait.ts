@@ -2,7 +2,6 @@ import type { Api, RawApi } from "grammy";
 import { prisma } from "@gennety/db";
 import { t, type Language } from "@gennety/shared";
 import { isTelegramTarget, toTelegramChatId } from "../utils/telegram-target.js";
-import { AI_EMOJI } from "./ai-emoji.js";
 import { sendRichMessageDraft, thinkingHtml } from "./telegram-rich.js";
 
 /**
@@ -46,6 +45,11 @@ export function peerWaitDraftId(chatId: number, matchId: string, side: "A" | "B"
  * one twenty hours old used to read identically, which is what made the shimmer
  * feel decorative.
  *
+ * The lines are **plain text** — no leading emoji and no animated `<tg-emoji>`
+ * glyph (founder decision 2026-07-30). A status here is a description of state,
+ * and an icon on it is decoration the state does not need; the `<tg-thinking>`
+ * shimmer already signals "something is in progress" on its own.
+ *
  * The two late tiers deliberately describe machinery that really ran, so the
  * copy reports state instead of just filling space:
  *   - `t4` ≥ 6h  — the §3.5 scheduling/venue nudge has actually been sent.
@@ -55,11 +59,11 @@ export function peerWaitDraftId(chatId: number, matchId: string, side: "A" | "B"
  * first (`workers/match-nudge.ts`, `services/match-stall.ts`).
  */
 const TIERS = [
-  { afterMs: 24 * 60 * 60 * 1000, key: "peerWaitT5Deadline", emoji: AI_EMOJI.peerWaitDeadline },
-  { afterMs: 6 * 60 * 60 * 1000, key: "peerWaitT4Nudged", emoji: AI_EMOJI.peerWaitNudged },
-  { afterMs: 60 * 60 * 1000, key: "peerWaitT3Quiet", emoji: AI_EMOJI.peerWaitQuiet },
-  { afterMs: 5 * 60 * 1000, key: "peerWaitT2Waiting", emoji: AI_EMOJI.peerWaitWaiting },
-  { afterMs: 0, key: "peerWaitT1Sent", emoji: AI_EMOJI.peerWaitSent },
+  { afterMs: 24 * 60 * 60 * 1000, key: "peerWaitT5Deadline" },
+  { afterMs: 6 * 60 * 60 * 1000, key: "peerWaitT4Nudged" },
+  { afterMs: 60 * 60 * 1000, key: "peerWaitT3Quiet" },
+  { afterMs: 5 * 60 * 1000, key: "peerWaitT2Waiting" },
+  { afterMs: 0, key: "peerWaitT1Sent" },
 ] as const;
 
 /**
@@ -89,30 +93,6 @@ function elapsedMs(startedAt: Date | null | undefined, now: Date): number {
  * breaks case agreement in German and Polish. The no-overlap lines name no one,
  * so they stay correct without it.
  */
-export function peerWaitBeat(
-  lang: Language,
-  partnerName: string | null | undefined,
-  startedAt: Date | null | undefined,
-  now: Date = new Date(),
-  variant: PeerWaitVariant = "default",
-): { label: string; emojiId: string } {
-  const elapsed = elapsedMs(startedAt, now);
-  const late = elapsed >= TIERS[0].afterMs;
-
-  if (variant === "no_overlap") {
-    return {
-      label: t(lang, late ? "peerWaitNoOverlapLate" : "peerWaitNoOverlap"),
-      emojiId: late ? AI_EMOJI.peerWaitDeadline : AI_EMOJI.peerWaitWaiting,
-    };
-  }
-
-  const tier = TIERS.find((candidate) => elapsed >= candidate.afterMs) ?? TIERS[TIERS.length - 1]!;
-  const name = partnerName?.trim();
-  if (!name) return { label: t(lang, "peerWaitAnon"), emojiId: tier.emoji };
-  return { label: t(lang, tier.key, { name }), emojiId: tier.emoji };
-}
-
-/** Text-only view of {@link peerWaitBeat}, for the plain-message fallback path. */
 export function peerWaitLabel(
   lang: Language,
   partnerName: string | null | undefined,
@@ -120,7 +100,16 @@ export function peerWaitLabel(
   now: Date = new Date(),
   variant: PeerWaitVariant = "default",
 ): string {
-  return peerWaitBeat(lang, partnerName, startedAt, now, variant).label;
+  const elapsed = elapsedMs(startedAt, now);
+
+  if (variant === "no_overlap") {
+    return t(lang, elapsed >= TIERS[0].afterMs ? "peerWaitNoOverlapLate" : "peerWaitNoOverlap");
+  }
+
+  const name = partnerName?.trim();
+  if (!name) return t(lang, "peerWaitAnon");
+  const tier = TIERS.find((candidate) => elapsed >= candidate.afterMs) ?? TIERS[TIERS.length - 1]!;
+  return t(lang, tier.key, { name });
 }
 
 /** Everything `issuePeerWaitDraft` needs to render one beat. */
@@ -149,17 +138,18 @@ export async function issuePeerWaitDraft(
   api: Api<RawApi>,
   input: PeerWaitDraftInput,
 ): Promise<void> {
-  const beat = peerWaitBeat(
+  const label = peerWaitLabel(
     input.lang,
     input.partnerName,
     input.startedAt,
     input.now ?? new Date(),
     input.variant ?? "default",
   );
+  // No `emojiId`: these lines carry no glyph at all (see the TIERS comment).
   await sendRichMessageDraft(api, {
     chat_id: input.chatId,
     draft_id: peerWaitDraftId(input.chatId, input.matchId, input.side),
-    rich_message: { html: thinkingHtml(beat.label, beat.emojiId) },
+    rich_message: { html: thinkingHtml(label) },
   });
 }
 

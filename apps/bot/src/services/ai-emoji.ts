@@ -36,26 +36,4 @@ export const AI_EMOJI = {
   think: "5535034915403333642",
   /** Operator-chosen "got it / accepted" glyph (Profiler ack beat). */
   accept: "5537203062138994712",
-
-  /**
-   * The five peer-wait tiers (PRODUCT_SPEC §3.6b). One glyph per tier so an
-   * hours-long wait does not lead with the same "thinking" cloud from minute one
-   * to hour twenty — the icon carries the same escalation the wording does.
-   *
-   * PENDING OPERATOR PICK: these currently point at existing ids so the ladder
-   * is functional, but they were NOT chosen by looking at the animations. Run
-   * `scripts/dev/preview-ai-emojis.ts` (numbered preview of all 48 AIActions
-   * glyphs) and replace the five ids below with the picks — nothing else needs
-   * touching.
-   */
-  /** Tier 1 (<5m) — handed off to the partner. */
-  peerWaitSent: "5537203062138994712",
-  /** Tier 2 (5m–1h) — plain waiting. */
-  peerWaitWaiting: "5535034915403333642",
-  /** Tier 3 (1–6h) — still quiet on their side. */
-  peerWaitQuiet: "5537511986251694100",
-  /** Tier 4 (6–24h) — we have nudged them. */
-  peerWaitNudged: "5535458420653555733",
-  /** Tier 5 (>24h) — the §3.5c deadline is closing in. */
-  peerWaitDeadline: "5573473356579078196",
 } as const;
