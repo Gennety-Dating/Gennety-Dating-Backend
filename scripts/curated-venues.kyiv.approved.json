@@ -42785,7 +42785,7 @@
     "placeId": "ChIJAQCEW1HO1EARc9GXgU-Uv0U",
     "category": "cafe",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
@@ -42914,7 +42914,7 @@
     "placeId": "ChIJo4OTHVzO1EARp1kupS6Gu5c",
     "category": "restaurant",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
@@ -69324,7 +69324,7 @@
     "placeId": "ChIJAQCEW1HO1EARc9GXgU-Uv0U",
     "category": "cafe",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
@@ -69453,7 +69453,7 @@
     "placeId": "ChIJo4OTHVzO1EARp1kupS6Gu5c",
     "category": "restaurant",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
@@ -95866,7 +95866,7 @@
     "placeId": "ChIJAQCEW1HO1EARc9GXgU-Uv0U",
     "category": "cafe",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
@@ -95995,7 +95995,7 @@
     "placeId": "ChIJo4OTHVzO1EARp1kupS6Gu5c",
     "category": "restaurant",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
@@ -122414,7 +122414,7 @@
     "placeId": "ChIJAQCEW1HO1EARc9GXgU-Uv0U",
     "category": "cafe",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
@@ -122543,7 +122543,7 @@
     "placeId": "ChIJo4OTHVzO1EARp1kupS6Gu5c",
     "category": "restaurant",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
@@ -148965,7 +148965,7 @@
     "placeId": "ChIJAQCEW1HO1EARc9GXgU-Uv0U",
     "category": "cafe",
     "priority": 2,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
@@ -149094,7 +149094,7 @@
     "placeId": "ChIJo4OTHVzO1EARp1kupS6Gu5c",
     "category": "restaurant",
     "priority": 3,
-    "tier": "premium",
+    "tier": "base",
     "vibeTags": [
       "dinner",
       "wine",
