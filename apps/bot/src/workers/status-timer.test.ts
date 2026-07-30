@@ -380,6 +380,25 @@ describe("resolveBannerStage", () => {
     });
   });
 
+  // A first decider leaves the row `proposed` whichever way they went (§3.4),
+  // so both verdicts reach this function and they mean opposite things. A pass
+  // must never produce a banner about the date they just declined.
+  it("shows nothing at all to a side that declined", () => {
+    const match = liveMatch({
+      status: "proposed",
+      dispatchedAt: new Date("2026-07-21T03:00:00.000Z"),
+      acceptedByA: false,
+      acceptedByB: null,
+    }) as never;
+
+    expect(resolveBannerStage(match, "A", NOW)).toBeUndefined();
+    // The peer's own window is untouched by the decline.
+    expect(resolveBannerStage(match, "B", NOW)).toEqual({
+      kind: "decision",
+      minutesLeft: 18 * 60,
+    });
+  });
+
   // Past the TTL the expiry cron owns the row (≤15 min behind), so claiming
   // there is still time to answer would be false.
   it("falls back to the drop countdown for an expired proposal", () => {

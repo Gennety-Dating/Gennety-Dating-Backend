@@ -1371,24 +1371,31 @@ winning:
    Body: your match is waiting, answer yes or no in the chat. Button: the reply
    deadline, rendered through the same `renderCountdownButtonLabel` as the pitch
    keyboard's own deadline button, so the two are byte-identical → My Date hub.
-4. **Planning** — any other live match (`negotiating`, `negotiating_venue`, or
-   `proposed` after this side already answered). Nothing to count down, so the
+4. **Planning** — `negotiating`, `negotiating_venue`, or `proposed` where this
+   side **accepted** and the peer is still silent. Nothing to count down, so the
    button reuses the existing `menuMyDatePlanning` label ("⏳ Date being
    planned") — the same wording the main-menu row has always shown for these
    stages → My Date hub.
 5. **Drop** — no live match: the original next-batch countdown, unchanged.
 
-Two states fall back to mode 5 on purpose, because there the next drop is
+Three states fall back to mode 5 on purpose. Two because the next drop is
 genuinely the relevant thing again: a `scheduled` date that has already happened
 (the row lingers until the T+24h feedback flow closes it) and a `proposed` match
-past its TTL (the expiry cron is at most 15 minutes behind).
+past its TTL (the expiry cron is at most 15 minutes behind). The third is the
+side that **declined**: a first decider leaves the row `proposed` whichever way
+they went (§3.4), so a pass arrives here looking exactly like an accept, and
+anything other than the ordinary drop countdown would be a pinned banner about a
+date they just turned down.
 
-**Blind-decision safe.** Modes 3 and 4 are static copy that never reflects the
-partner's choice, and mode 3 reads only *this* side's `acceptedBy` column — to
-know whether an answer is still owed, never what the other side picked. A
-`proposed` match is also invisible to a side until that side's own
-`pitchMessageIdA/B` exists, the same visibility rule the My Date row uses, so
-the banner cannot announce a match mid-dispatch.
+**Blind-decision safe, and the planning copy is where that is actually load-
+bearing.** Mode 3 reads only *this* side's `acceptedBy` column — to know whether
+an answer is still owed, never what the other side picked. Mode 4 covers an
+accepted-but-unanswered proposal, where the partner may yet decline, so its body
+states only that details are still coming together: it must never say the two
+sides agreed, because at that moment the product does not know it and the user is
+not entitled to it. A `proposed` match is also invisible to a side until that
+side's own `pitchMessageIdA/B` exists, the same visibility rule the My Date row
+uses, so the banner cannot announce a match mid-dispatch.
 
 The pitch message itself is deliberately **not** pinned. It already carries a
 live deadline button (the `proposal-countdown` worker re-renders it every

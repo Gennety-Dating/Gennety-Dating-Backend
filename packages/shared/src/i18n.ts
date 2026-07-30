@@ -824,9 +824,11 @@ const translations = {
     statusBannerDecision:
       "Your match is waiting on you ✦\n\n" +
       "Answer yes or no right here in the chat — the button below shows how long you have.",
+    // Covers an accepted-but-unanswered proposal too, so it must never assert
+    // what the partner chose (blind-decision invariant §3.4).
     statusBannerPlanning:
       "Your date is being planned ✦\n\n" +
-      "You both said yes. Details are coming together — everything is in My date.",
+      "The details are still coming together — everything about it is in My date.",
     statusBannerDate:
       "Your date is set ✦\n\n" +
       "The button below counts down to it. Venue and details are in My date.",
@@ -1812,7 +1814,7 @@ const translations = {
       "Ответь «да» или «нет» прямо здесь, в чате — на кнопке ниже видно, сколько у тебя времени.",
     statusBannerPlanning:
       "Свидание планируется ✦\n\n" +
-      "Вы оба сказали «да». Договариваетесь о деталях — всё в «Моём свидании».",
+      "Детали ещё утрясаются — всё по нему в «Моём свидании».",
     statusBannerDate:
       "Свидание назначено ✦\n\n" +
       "На кнопке ниже — сколько до него осталось. Место и детали — в «Моём свидании».",
@@ -2791,7 +2793,7 @@ const translations = {
       "Відповідай «так» або «ні» просто тут, у чаті — на кнопці нижче видно, скільки в тебе часу.",
     statusBannerPlanning:
       "Побачення планується ✦\n\n" +
-      "Ви обоє сказали «так». Домовляєтеся про деталі — усе в «Моєму побаченні».",
+      "Деталі ще узгоджуються — усе по ньому в «Моєму побаченні».",
     statusBannerDate:
       "Побачення призначено ✦\n\n" +
       "На кнопці нижче — скільки до нього залишилось. Місце й деталі — у «Моєму побаченні».",
@@ -3729,7 +3731,7 @@ const deTranslations: TranslationTable = {
     "Antworte hier im Chat mit ja oder nein — der Button unten zeigt, wie viel Zeit du noch hast.",
   statusBannerPlanning:
     "Dein Date wird geplant ✦\n\n" +
-    "Ihr habt beide ja gesagt. Ihr klärt gerade die Details — alles findest du unter Mein Date.",
+    "Die Details werden noch geklärt — alles dazu findest du unter Mein Date.",
   statusBannerDate:
     "Dein Date steht ✦\n\n" +
     "Der Button unten zählt herunter. Ort und Details findest du unter Mein Date.",
@@ -4675,7 +4677,7 @@ const plTranslations: TranslationTable = {
     "Odpowiedz tak lub nie tutaj, na czacie — przycisk poniżej pokazuje, ile masz czasu.",
   statusBannerPlanning:
     "Randka jest planowana ✦\n\n" +
-    "Oboje powiedzieliście tak. Ustalacie szczegóły — wszystko jest w Mojej randce.",
+    "Szczegóły są jeszcze ustalane — wszystko o niej jest w Mojej randce.",
   statusBannerDate:
     "Randka jest ustalona ✦\n\n" +
     "Przycisk poniżej odlicza czas do niej. Miejsce i szczegóły są w Mojej randce.",

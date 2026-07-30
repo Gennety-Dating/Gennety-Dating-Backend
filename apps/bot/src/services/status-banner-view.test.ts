@@ -170,6 +170,30 @@ describe("renderStatusBanner", () => {
       expect(view.callbackData).toBe("menu:date");
     });
 
+    // The planning stage also covers an accepted-but-unanswered proposal, so
+    // its copy must not assert what the partner picked — that would hand the
+    // user a verdict the product has not made (blind-decision invariant §3.4).
+    it.each(["en", "ru", "uk", "de", "pl"] as const)(
+      "never claims the partner agreed, in %s",
+      (language) => {
+        const text = renderStatusBanner({
+          ...base,
+          language,
+          stage: { kind: "planning" },
+        }).text.toLowerCase();
+
+        for (const claim of [
+          "you both said yes",
+          "вы оба сказали",
+          "ви обоє сказали",
+          "beide ja gesagt",
+          "oboje powiedzieli",
+        ]) {
+          expect(text).not.toContain(claim);
+        }
+      },
+    );
+
     it.each(["en", "ru", "uk", "de", "pl"] as const)(
       "leads with a heading naming what is counted, in %s",
       (language) => {

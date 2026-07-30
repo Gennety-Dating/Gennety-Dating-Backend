@@ -318,9 +318,18 @@ export function resolveBannerStage(
 
   if (match.status === "proposed") {
     const decided = side === "A" ? match.acceptedByA : match.acceptedByB;
-    if (decided !== null) {
-      // Already answered — waiting on the peer. Neutral by construction: it
-      // never reflects the partner's choice (blind-decision invariant §3.4).
+    // A first decider leaves the row `proposed` either way (§3.4), so both
+    // verdicts land here and they mean opposite things.
+    if (decided === false) {
+      // They passed. Nothing is being planned and nothing is owed — the row
+      // just waits out the peer or the TTL. Anything else here would be a
+      // banner about a date they declined.
+      return undefined;
+    }
+    if (decided === true) {
+      // Accepted, peer still silent. Deliberately says only that something is
+      // in flight: the copy must never assert what the partner chose
+      // (blind-decision invariant §3.4).
       return { kind: "planning" };
     }
     if (!match.dispatchedAt) return undefined;
