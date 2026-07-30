@@ -1,5 +1,65 @@
 # Gennety Dating Deploy
 
+**PENDING — peer-wait shimmer v2 (PRODUCT_SPEC §3.6b).** Not deployed yet.
+**No env change, no flag change, no Mini App change** (`apps/webapp` untouched) —
+but it needs an **additive `db:push` BEFORE the restart**, and it ships alongside
+the two blocks below, which need their own schema steps. Do all three schema
+steps, then one restart.
+
+Two new nullable `matches` columns (`peer_wait_started_at_a/_b`) are SELECTED by a
+worker that runs every 20 s, so a DB missing them throws `P2022` on the first tick
+— the PM2 crash-loop this file warns about. Verify additive first (expect two
+`ADD COLUMN`, zero `DROP`):
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # must exit 0 before pm2 restart
+```
+
+What ships: the shimmer's wording stops rotating on a 60 s clock and instead
+climbs a **five-tier ladder keyed to how long that side has actually waited**
+(<5 m / 5 m–1 h / 1–6 h / 6–24 h / >24 h), one line each, each with its own
+animated glyph. Plus two coverage fixes: the calendar's **both-picked-no-overlap**
+state (previously silent for BOTH sides until the §3.5c 24 h check-in) and the
+**§3.7b venue-change board** (previously no shimmer at all — its ~4 s polling only
+covers an open Mini App).
+
+**Three things worth knowing before the restart:**
+
+- **Tiers 4 and 5 are claims about other workers.** "Напомнил {name}" at 6 h is
+  true only because `match-nudge` fires there, and "время на исходе" at 24 h only
+  because the §3.5c check-in does. If either schedule is retuned, retune these
+  boundaries with it (`TIERS` in `services/peer-wait.ts`).
+- **The five animated glyphs are PLACEHOLDERS pending an operator pick.** They
+  point at existing AIActions ids so the ladder works, but were not chosen by
+  looking at the animations. Run
+  `pnpm --filter @gennety/bot exec tsx scripts/dev/preview-ai-emojis.ts <chatId>`
+  (dev env, numbered preview of all 48) and replace the five `peerWait*` ids in
+  `services/ai-emoji.ts`. Cosmetic — safe to ship before deciding.
+- **One venue-change interaction is expected, not a bug.** That branch runs on
+  `scheduled`, which is not a Profiler-blocking status, so a Profiler question can
+  land mid-wait and collapse the draft; the next tick (≤20 s) re-issues it. The
+  other three scenarios sit on statuses where the waiting side's chat is quiet.
+
+Watch on the first day that the anchor is only written on real waits — it should
+NOT grow by one row per user per tick:
+
+```sh
+psql "$DATABASE_URL" -c "select count(*) from matches where peer_wait_started_at_a is not null or peer_wait_started_at_b is not null;"
+pm2 logs gennety-bot --lines 200 --nostream | grep '\[peer-wait\]'
+```
+
+**Rollback:** `PEER_WAIT_TICK_MS=0` + `pm2 restart gennety-bot --update-env`
+disables the whole feature with no code change (note that with it off the
+calendar/venue waits show nothing at all — the old confirmation messages were
+removed, not merely decorated). Or revert the code; the additive columns can stay.
+
+---
+
 **PENDING — stage-aware pinned banner (PRODUCT_SPEC §2.1).** Not deployed yet.
 **This change adds no Prisma schema change, no env change, no flag change, and no
 Mini App change** (`apps/webapp` untouched) — but it ships alongside the planning

@@ -12,8 +12,8 @@ import { prisma } from "@gennety/db";
 import {
   isSideWaitingOnPeer,
   peerWaitShimmerTick,
-  rotationIndexAt,
-  PEER_WAIT_ROTATE_MS,
+  resolvePeerWaitVariant,
+  PEER_WAIT_FALLBACK_EDIT_MS,
   type PeerWaitMatchRow,
 } from "./peer-wait-shimmer.js";
 
@@ -42,6 +42,15 @@ function row(overrides: Partial<PeerWaitMatchRow> = {}): PeerWaitMatchRow {
     vibeLngA: null,
     vibeLatB: null,
     vibeLngB: null,
+    venueChangeStatus: null,
+    venueChangeProposerId: null,
+    venueLikesA: [],
+    venueLikesB: [],
+    venueChangeOfferPaySentAt: null,
+    venueChangeExpressAt: null,
+    venueChangePaidAt: null,
+    userA: { id: "uid-A", gender: null },
+    userB: { id: "uid-B", gender: null },
     ...overrides,
   };
 }
@@ -54,9 +63,25 @@ function dbRow(overrides: Record<string, unknown> = {}) {
     peerWaitMessageIdB: null,
     peerWaitEditedAtA: null,
     peerWaitEditedAtB: null,
-    userA: { telegramId: 111n, language: "en", firstName: "Gleb" },
-    userB: { telegramId: 222n, language: "en", firstName: "Anna" },
+    peerWaitStartedAtA: null,
+    peerWaitStartedAtB: null,
     ...overrides,
+    userA: {
+      id: "uid-A",
+      telegramId: 111n,
+      language: "en",
+      firstName: "Gleb",
+      gender: null,
+      ...((overrides.userA as Record<string, unknown>) ?? {}),
+    },
+    userB: {
+      id: "uid-B",
+      telegramId: 222n,
+      language: "en",
+      firstName: "Anna",
+      gender: null,
+      ...((overrides.userB as Record<string, unknown>) ?? {}),
+    },
   };
 }
 
@@ -145,7 +170,7 @@ describe("isSideWaitingOnPeer — calendar", () => {
     expect(isSideWaitingOnPeer(m, "A")).toBe(false);
   });
 
-  it("stops once the peer marks anything", () => {
+  it("stops once the peer marks a slot we share (the date auto-locks)", () => {
     const m = row({
       status: "negotiating",
       proposedTimes: [slot],
@@ -153,6 +178,43 @@ describe("isSideWaitingOnPeer — calendar", () => {
       availableTimesB: [slot],
     });
     expect(isSideWaitingOnPeer(m, "A")).toBe(false);
+    expect(isSideWaitingOnPeer(m, "B")).toBe(false);
+  });
+
+  it("keeps BOTH sides waiting when both picked and nothing overlaps", () => {
+    // The regression this rewrite exists for. A picks Monday, B picks Tuesday:
+    // the shimmer used to vanish for A and never appear for B, while
+    // `handleSchedulingNudges` skips a pair where both have picked — so the
+    // state was silent until the §3.5c 24h check-in.
+    const other = new Date("2026-08-02T16:00:00.000Z");
+    const m = row({
+      status: "negotiating",
+      proposedTimes: [slot, other],
+      availableTimesA: [slot],
+      availableTimesB: [other],
+    });
+    expect(resolvePeerWaitVariant(m, "A")).toBe("no_overlap");
+    expect(resolvePeerWaitVariant(m, "B")).toBe("no_overlap");
+  });
+
+  it("detects overlap by instant, not by array identity", () => {
+    const m = row({
+      status: "negotiating",
+      proposedTimes: [slot],
+      availableTimesA: [new Date(slot.getTime())],
+      availableTimesB: [new Date(slot.getTime())],
+    });
+    expect(resolvePeerWaitVariant(m, "A")).toBeNull();
+  });
+
+  it("labels the one-sided calendar wait as the default ladder", () => {
+    const m = row({
+      status: "negotiating",
+      proposedTimes: [slot],
+      availableTimesA: [slot],
+      availableTimesB: [],
+    });
+    expect(resolvePeerWaitVariant(m, "A")).toBe("default");
   });
 });
 
@@ -207,18 +269,108 @@ describe("isSideWaitingOnPeer — venue", () => {
 
 describe("isSideWaitingOnPeer — terminal states", () => {
   it("never waits on a match that ended", () => {
-    for (const status of ["scheduled", "cancelled", "completed", "expired"]) {
+    for (const status of ["cancelled", "completed", "expired"]) {
       const m = row({ status, acceptedByA: true, acceptedByB: null });
       expect(isSideWaitingOnPeer(m, "A")).toBe(false);
     }
   });
+
+  it("ignores a scheduled date with no venue-change board", () => {
+    // `scheduled` is now scanned for the §3.7b board, so it must not become a
+    // catch-all: an ordinary locked-in date has nobody waiting.
+    const m = row({ status: "scheduled", acceptedByA: true, acceptedByB: true });
+    expect(isSideWaitingOnPeer(m, "A")).toBe(false);
+    expect(isSideWaitingOnPeer(m, "B")).toBe(false);
+  });
 });
 
-describe("rotationIndexAt", () => {
-  it("advances once per rotation window", () => {
-    const base = rotationIndexAt(NOW);
-    expect(rotationIndexAt(new Date(NOW.getTime() + PEER_WAIT_ROTATE_MS - 1))).toBe(base);
-    expect(rotationIndexAt(new Date(NOW.getTime() + PEER_WAIT_ROTATE_MS))).toBe(base + 1);
+// ---------------------------------------------------------------------------
+// §3.7b venue-change board
+// ---------------------------------------------------------------------------
+
+describe("isSideWaitingOnPeer — venue change", () => {
+  const hetero = { userA: { id: "uid-A", gender: "male" }, userB: { id: "uid-B", gender: "female" } };
+  const board = (overrides: Partial<PeerWaitMatchRow> = {}) =>
+    row({ status: "scheduled", ...hetero, ...overrides });
+
+  it("waits while I hearted places and the partner hasn't opened the board", () => {
+    const m = board({ venueChangeStatus: "liking", venueLikesA: [{ key: "x" }], venueLikesB: [] });
+    expect(isSideWaitingOnPeer(m, "A")).toBe(true);
+    expect(isSideWaitingOnPeer(m, "B")).toBe(false);
+  });
+
+  it("stops once the partner hearts anything", () => {
+    const m = board({
+      venueChangeStatus: "liking",
+      venueLikesA: [{ key: "x" }],
+      venueLikesB: [{ key: "y" }],
+    });
+    expect(isSideWaitingOnPeer(m, "A")).toBe(false);
+  });
+
+  it("makes the NON-payer wait once a swap is agreed", () => {
+    // Hetero → the man pays, whoever initiated. He has an action; she waits.
+    const m = board({ venueChangeStatus: "agreed", venueChangeProposerId: "uid-A" });
+    expect(isSideWaitingOnPeer(m, "A")).toBe(false); // payer owes the Stars
+    expect(isSideWaitingOnPeer(m, "B")).toBe(true);
+  });
+
+  it("does NOT make her wait while she can still offer — she holds the decision", () => {
+    const m = board({
+      venueChangeStatus: "agreed",
+      venueChangeProposerId: "uid-B", // she initiated
+      venueChangeOfferPaySentAt: null,
+    });
+    expect(isSideWaitingOnPeer(m, "B")).toBe(false);
+  });
+
+  it("starts her wait the moment she hands the payment over", () => {
+    const m = board({
+      venueChangeStatus: "agreed",
+      venueChangeProposerId: "uid-B",
+      venueChangeOfferPaySentAt: new Date("2026-07-30T10:00:00.000Z"),
+    });
+    expect(isSideWaitingOnPeer(m, "B")).toBe(true);
+  });
+
+  it("never shimmers at the partner during a hidden express mint", () => {
+    // An express mint is invisible until paid — the surprise IS the product. A
+    // shimmer in his chat would announce that something is pending.
+    const m = board({
+      venueChangeStatus: "agreed",
+      venueChangeProposerId: "uid-B",
+      venueChangeExpressAt: new Date("2026-07-30T10:00:00.000Z"),
+    });
+    expect(isSideWaitingOnPeer(m, "A")).toBe(false);
+    expect(isSideWaitingOnPeer(m, "B")).toBe(false);
+  });
+
+  it("stops once the change is paid for", () => {
+    const m = board({
+      venueChangeStatus: "agreed",
+      venueChangeProposerId: "uid-A",
+      venueChangePaidAt: new Date("2026-07-30T11:00:00.000Z"),
+    });
+    expect(isSideWaitingOnPeer(m, "B")).toBe(false);
+  });
+
+  it("falls back to the initiator as payer in a same-sex pair", () => {
+    const m = row({
+      status: "scheduled",
+      venueChangeStatus: "agreed",
+      venueChangeProposerId: "uid-A",
+      userA: { id: "uid-A", gender: "female" },
+      userB: { id: "uid-B", gender: "female" },
+    });
+    expect(isSideWaitingOnPeer(m, "A")).toBe(false); // initiator pays
+    expect(isSideWaitingOnPeer(m, "B")).toBe(true);
+  });
+
+  it("does not wait on a lapsed or settled board", () => {
+    for (const venueChangeStatus of ["settled", "lapsed", null]) {
+      const m = board({ venueChangeStatus, venueLikesA: [{ key: "x" }] });
+      expect(isSideWaitingOnPeer(m, "A")).toBe(false);
+    }
   });
 });
 
@@ -257,19 +409,70 @@ describe("peerWaitShimmerTick", () => {
     expect(calls[0]![0].draft_id).toBe(calls[1]![0].draft_id);
   });
 
-  it("rotates the wording as the window advances", async () => {
+  it("climbs the wording as the wait ages", async () => {
+    const api = createApi();
+    mMatch.findMany.mockResolvedValue([
+      dbRow({
+        status: "proposed",
+        acceptedByA: true,
+        acceptedByB: null,
+        peerWaitStartedAtA: NOW,
+      }),
+    ]);
+
+    await peerWaitShimmerTick(api, { now: NOW });
+    await peerWaitShimmerTick(api, { now: new Date(NOW.getTime() + 2 * 60 * 60 * 1000) });
+
+    const calls = typed(api).raw.sendRichMessageDraft.mock.calls;
+    expect(calls[0]![0].rich_message.html).not.toBe(calls[1]![0].rich_message.html);
+  });
+
+  it("stamps the anchor on the first tick and leaves it alone afterwards", async () => {
     const api = createApi();
     mMatch.findMany.mockResolvedValue([
       dbRow({ status: "proposed", acceptedByA: true, acceptedByB: null }),
     ]);
 
     await peerWaitShimmerTick(api, { now: NOW });
-    await peerWaitShimmerTick(api, {
-      now: new Date(NOW.getTime() + PEER_WAIT_ROTATE_MS),
-    });
 
-    const calls = typed(api).raw.sendRichMessageDraft.mock.calls;
-    expect(calls[0]![0].rich_message.html).not.toBe(calls[1]![0].rich_message.html);
+    expect(mMatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { peerWaitStartedAtA: NOW } }),
+    );
+
+    // Second tick, anchor already present → no further write.
+    mMatch.update.mockClear();
+    mMatch.findMany.mockResolvedValue([
+      dbRow({
+        status: "proposed",
+        acceptedByA: true,
+        acceptedByB: null,
+        peerWaitStartedAtA: NOW,
+      }),
+    ]);
+    await peerWaitShimmerTick(api, { now: new Date(NOW.getTime() + 20_000) });
+    expect(mMatch.update).not.toHaveBeenCalled();
+  });
+
+  it("releases the anchor when the wait ends, so a later wait restarts at tier 1", async () => {
+    // Without this a second wait on the same match would inherit a stale
+    // "waiting since" and open on the 24h deadline copy.
+    const api = createApi();
+    mMatch.findMany.mockResolvedValue([
+      dbRow({
+        status: "proposed",
+        acceptedByA: true,
+        acceptedByB: true, // both answered → nobody waiting
+        peerWaitStartedAtA: NOW,
+      }),
+    ]);
+
+    await peerWaitShimmerTick(api, { now: new Date(NOW.getTime() + 60_000) });
+
+    expect(mMatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ peerWaitStartedAtA: null }),
+      }),
+    );
   });
 
   it("skips a side that is not waiting and has nothing to clean up", async () => {
@@ -349,7 +552,7 @@ describe("peerWaitShimmerTick", () => {
     expect(typed(api).editMessageText).not.toHaveBeenCalled();
 
     await peerWaitShimmerTick(api, {
-      now: new Date(NOW.getTime() + PEER_WAIT_ROTATE_MS),
+      now: new Date(NOW.getTime() + PEER_WAIT_FALLBACK_EDIT_MS),
     });
     expect(typed(api).editMessageText).toHaveBeenCalledTimes(1);
   });
@@ -373,7 +576,7 @@ describe("peerWaitShimmerTick", () => {
     expect(typed(api).deleteMessage).toHaveBeenCalledWith(111, 900);
     expect(mMatch.update).toHaveBeenCalledWith({
       where: { id: "m1" },
-      data: { peerWaitMessageIdA: null, peerWaitEditedAtA: null },
+      data: { peerWaitMessageIdA: null, peerWaitEditedAtA: null, peerWaitStartedAtA: null },
     });
   });
 
@@ -395,7 +598,7 @@ describe("peerWaitShimmerTick", () => {
     expect(res.clearedFallback).toBe(1);
     expect(mMatch.update).toHaveBeenCalledWith({
       where: { id: "m1" },
-      data: { peerWaitMessageIdB: null, peerWaitEditedAtB: null },
+      data: { peerWaitMessageIdB: null, peerWaitEditedAtB: null, peerWaitStartedAtB: null },
     });
   });
 

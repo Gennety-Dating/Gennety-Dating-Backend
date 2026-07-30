@@ -68,47 +68,115 @@ describe("peerWaitDraftId", () => {
   });
 });
 
-describe("peerWaitLabel", () => {
-  it("rotates through the three phrasings so a long wait never reads frozen", () => {
-    const seen = [0, 1, 2].map((i) => peerWaitLabel("en", "Anna", i));
-    expect(new Set(seen).size).toBe(3);
-    expect(peerWaitLabel("en", "Anna", 3)).toBe(seen[0]);
+const NOW = new Date("2026-07-30T12:00:00Z");
+const ago = (ms: number) => new Date(NOW.getTime() - ms);
+const MIN = 60_000;
+const HOUR = 60 * MIN;
+
+describe("peerWaitLabel — tier ladder", () => {
+  // The whole point of the rewrite: the wording is a function of how long this
+  // side has been waiting, not of a rotation counter.
+  const cases = [
+    { elapsed: 0, key: "peerWaitT1Sent" },
+    { elapsed: 5 * MIN - 1, key: "peerWaitT1Sent" },
+    { elapsed: 5 * MIN, key: "peerWaitT2Waiting" },
+    { elapsed: HOUR - 1, key: "peerWaitT2Waiting" },
+    { elapsed: HOUR, key: "peerWaitT3Quiet" },
+    { elapsed: 6 * HOUR - 1, key: "peerWaitT3Quiet" },
+    { elapsed: 6 * HOUR, key: "peerWaitT4Nudged" },
+    { elapsed: 24 * HOUR - 1, key: "peerWaitT4Nudged" },
+    { elapsed: 24 * HOUR, key: "peerWaitT5Deadline" },
+    { elapsed: 40 * HOUR, key: "peerWaitT5Deadline" },
+  ] as const;
+
+  it.each(cases)("$elapsed ms into the wait renders $key", ({ elapsed, key }) => {
+    expect(peerWaitLabel("en", "Anna", ago(elapsed), NOW)).toBe(t("en", key, { name: "Anna" }));
+  });
+
+  it("climbs strictly — every tier is a distinct line", () => {
+    const seen = [0, 10 * MIN, 2 * HOUR, 8 * HOUR, 30 * HOUR].map((e) =>
+      peerWaitLabel("en", "Anna", ago(e), NOW),
+    );
+    expect(new Set(seen).size).toBe(5);
+  });
+
+  it("treats a missing anchor as tier 1 rather than throwing", () => {
+    expect(peerWaitLabel("en", "Anna", null, NOW)).toBe(t("en", "peerWaitT1Sent", { name: "Anna" }));
+  });
+
+  it("treats a future anchor as tier 1 (clock skew must not jump to the deadline copy)", () => {
+    const future = new Date(NOW.getTime() + HOUR);
+    expect(peerWaitLabel("en", "Anna", future, NOW)).toBe(
+      t("en", "peerWaitT1Sent", { name: "Anna" }),
+    );
   });
 
   it("interpolates the partner's name", () => {
-    expect(peerWaitLabel("ru", "Аня", 0)).toContain("Аня");
-    expect(peerWaitLabel("ru", "Аня", 0)).not.toContain("{name}");
+    const label = peerWaitLabel("ru", "Аня", ago(10 * MIN), NOW);
+    expect(label).toContain("Аня");
+    expect(label).not.toContain("{name}");
   });
 
   it("falls back to the anonymous line when there is no name", () => {
     // Substituting a generic noun into the personalised templates breaks case
     // agreement in de/pl, so a nameless partner gets its own sentence.
     for (const empty of [null, undefined, "  "]) {
-      expect(peerWaitLabel("de", empty, 0)).toBe(t("de", "peerWaitLoopAnon"));
+      expect(peerWaitLabel("de", empty, ago(HOUR), NOW)).toBe(t("de", "peerWaitAnon"));
     }
   });
 
-  it("localises every rotation in every language", () => {
+  it("localises every tier in every language and stays one line", () => {
     for (const lang of ["en", "ru", "uk", "de", "pl"] as const) {
-      for (let i = 0; i < 3; i++) {
-        const label = peerWaitLabel(lang, "Anna", i);
+      for (const { elapsed } of cases) {
+        const label = peerWaitLabel(lang, "Anna", ago(elapsed), NOW);
         expect(label).not.toContain("{name}");
-        expect(label.length).toBeGreaterThan(0);
+        expect(label).not.toContain("\n");
+        // The thinking block is meant to hold ONE line; anything much longer
+        // wraps, which is the bug this rewrite set out to fix.
+        expect(label.length).toBeLessThanOrEqual(45);
       }
     }
   });
+});
 
-  it("tolerates a negative or fractional rotation index", () => {
-    expect(() => peerWaitLabel("en", "Anna", -7)).not.toThrow();
-    expect(() => peerWaitLabel("en", "Anna", 2.9)).not.toThrow();
+describe("peerWaitLabel — no-overlap variant", () => {
+  // The calendar state where the partner DID answer and the two selections just
+  // don't intersect. "No word from them yet" / "nudged them" would both be
+  // false there, so it gets its own two-step ladder.
+  it("uses the dedicated line instead of the default ladder", () => {
+    for (const elapsed of [0, 10 * MIN, 2 * HOUR, 8 * HOUR]) {
+      expect(peerWaitLabel("en", "Anna", ago(elapsed), NOW, "no_overlap")).toBe(
+        t("en", "peerWaitNoOverlap"),
+      );
+    }
+  });
+
+  it("escalates to the deadline line past 24h", () => {
+    expect(peerWaitLabel("en", "Anna", ago(25 * HOUR), NOW, "no_overlap")).toBe(
+      t("en", "peerWaitNoOverlapLate"),
+    );
+  });
+
+  it("names nobody, so it is correct without a partner name", () => {
+    const label = peerWaitLabel("pl", null, ago(HOUR), NOW, "no_overlap");
+    expect(label).toBe(t("pl", "peerWaitNoOverlap"));
+    expect(label).not.toContain("{name}");
   });
 });
 
 describe("issuePeerWaitDraft", () => {
+  const base = {
+    chatId: 111,
+    matchId: "m1",
+    side: "A" as const,
+    lang: "en" as const,
+    partnerName: "Anna",
+  };
+
   it("sends a tg-thinking draft under the stable id", async () => {
     const { api, drafts } = createApi();
 
-    await issuePeerWaitDraft(api, 111, "m1", "A", "en", "Anna", 0);
+    await issuePeerWaitDraft(api, { ...base, startedAt: ago(10 * MIN), now: NOW });
 
     expect(drafts).toHaveLength(1);
     expect(drafts[0]!.chat_id).toBe(111);
@@ -117,12 +185,25 @@ describe("issuePeerWaitDraft", () => {
     expect(drafts[0]!.html).toContain("Anna");
   });
 
+  it("carries a per-tier animated glyph, not one shared thinking cloud", async () => {
+    const { api, drafts } = createApi();
+
+    await issuePeerWaitDraft(api, { ...base, startedAt: ago(1 * MIN), now: NOW });
+    await issuePeerWaitDraft(api, { ...base, startedAt: ago(30 * HOUR), now: NOW });
+
+    const glyph = (html: string) => /<tg-emoji emoji-id="(\d+)"/.exec(html)?.[1];
+    expect(glyph(drafts[0]!.html!)).toBeDefined();
+    expect(glyph(drafts[0]!.html!)).not.toBe(glyph(drafts[1]!.html!));
+  });
+
   it("propagates failure so callers can decide (worker falls back)", async () => {
     const api = {
       raw: { sendRichMessageDraft: vi.fn().mockRejectedValue(new Error("unsupported")) },
     } as never;
 
-    await expect(issuePeerWaitDraft(api, 111, "m1", "A", "en", "Anna", 0)).rejects.toThrow();
+    await expect(
+      issuePeerWaitDraft(api, { ...base, startedAt: ago(MIN), now: NOW }),
+    ).rejects.toThrow();
   });
 });
 
@@ -137,16 +218,48 @@ describe("startPeerWaitShimmer", () => {
       userB: { telegramId: 222n, language: "en", firstName: "Anna" },
     });
 
-    startPeerWaitShimmer(api, "m1", "uid-A");
+    startPeerWaitShimmer(api, "m1", { userId: "uid-A" });
     await flush();
 
     expect(drafts).toHaveLength(1);
     expect(drafts[0]!.chat_id).toBe(111); // side A's own chat
     expect(drafts[0]!.html).toContain("Anna"); // …naming the PARTNER
-    // …in the ACTOR's language. The leading glyph is swapped for an animated
+    // …in the ACTOR's language, and always at tier 1: this only fires the
+    // instant the user commits. The leading glyph is swapped for an animated
     // <tg-emoji>, so match on the words after it.
-    const ruPrefix = t("ru", "peerWaitLoop1").split("{name}")[0]!.split(" ").slice(1).join(" ");
+    const ruPrefix = t("ru", "peerWaitT1Sent").split("{name}")[0]!.split(" ").slice(1).join(" ");
     expect(drafts[0]!.html).toContain(ruPrefix.trim());
+  });
+
+  it("accepts a Telegram id, for the initData Mini App routes", async () => {
+    const { api, drafts } = createApi();
+    mMatch.findUnique.mockResolvedValue({
+      userAId: "uid-A",
+      userA: { telegramId: 111n, language: "en", firstName: "Gleb" },
+      userB: { telegramId: 222n, language: "en", firstName: "Anna" },
+    });
+
+    startPeerWaitShimmer(api, "m1", { telegramId: 222n });
+    await flush();
+
+    expect(drafts[0]!.chat_id).toBe(222);
+    expect(drafts[0]!.html).toContain("Gleb");
+  });
+
+  it("no-ops on an id belonging to neither participant", async () => {
+    // Must not degenerate into "not A, therefore B" — that would put the
+    // shimmer in the wrong person's chat.
+    const { api, drafts } = createApi();
+    mMatch.findUnique.mockResolvedValue({
+      userAId: "uid-A",
+      userA: { telegramId: 111n, language: "en", firstName: "Gleb" },
+      userB: { telegramId: 222n, language: "en", firstName: "Anna" },
+    });
+
+    startPeerWaitShimmer(api, "m1", { telegramId: 999n });
+    await flush();
+
+    expect(drafts).toHaveLength(0);
   });
 
   it("flips sides correctly for user B", async () => {
@@ -157,7 +270,7 @@ describe("startPeerWaitShimmer", () => {
       userB: { telegramId: 222n, language: "en", firstName: "Anna" },
     });
 
-    startPeerWaitShimmer(api, "m1", "uid-B");
+    startPeerWaitShimmer(api, "m1", { userId: "uid-B" });
     await flush();
 
     expect(drafts[0]!.chat_id).toBe(222);
@@ -172,7 +285,7 @@ describe("startPeerWaitShimmer", () => {
       userB: { telegramId: 222n, language: "en", firstName: "Anna" },
     });
 
-    startPeerWaitShimmer(api, "m1", "uid-A");
+    startPeerWaitShimmer(api, "m1", { userId: "uid-A" });
     await flush();
 
     expect(drafts).toHaveLength(0);
@@ -188,7 +301,7 @@ describe("startPeerWaitShimmer", () => {
       userB: { telegramId: 222n, language: "en", firstName: "Anna" },
     });
 
-    expect(() => startPeerWaitShimmer(api, "m1", "uid-A")).not.toThrow();
+    expect(() => startPeerWaitShimmer(api, "m1", { userId: "uid-A" })).not.toThrow();
     await flush();
   });
 
@@ -196,7 +309,7 @@ describe("startPeerWaitShimmer", () => {
     const { api, drafts } = createApi();
     mMatch.findUnique.mockResolvedValue(null);
 
-    startPeerWaitShimmer(api, "gone", "uid-A");
+    startPeerWaitShimmer(api, "gone", { userId: "uid-A" });
     await flush();
 
     expect(drafts).toHaveLength(0);

@@ -40,32 +40,105 @@ export function peerWaitDraftId(chatId: number, matchId: string, side: "A" | "B"
   return id === 0 ? 1 : id;
 }
 
-const ROTATION = ["peerWaitLoop1", "peerWaitLoop2", "peerWaitLoop3"] as const;
+/**
+ * The wording ladder, keyed by how long THIS side has been waiting rather than
+ * by a rotation counter. Time is the variation now: a wait two minutes old and
+ * one twenty hours old used to read identically, which is what made the shimmer
+ * feel decorative.
+ *
+ * The two late tiers deliberately describe machinery that really ran, so the
+ * copy reports state instead of just filling space:
+ *   - `t4` ≥ 6h  — the §3.5 scheduling/venue nudge has actually been sent.
+ *   - `t5` ≥ 24h — the §3.5c "still on?" check-in is out and the 48h
+ *                  cancellation is the next thing that happens.
+ * Move a boundary and you are making a claim about those workers; check them
+ * first (`workers/match-nudge.ts`, `services/match-stall.ts`).
+ */
+const TIERS = [
+  { afterMs: 24 * 60 * 60 * 1000, key: "peerWaitT5Deadline", emoji: AI_EMOJI.peerWaitDeadline },
+  { afterMs: 6 * 60 * 60 * 1000, key: "peerWaitT4Nudged", emoji: AI_EMOJI.peerWaitNudged },
+  { afterMs: 60 * 60 * 1000, key: "peerWaitT3Quiet", emoji: AI_EMOJI.peerWaitQuiet },
+  { afterMs: 5 * 60 * 1000, key: "peerWaitT2Waiting", emoji: AI_EMOJI.peerWaitWaiting },
+  { afterMs: 0, key: "peerWaitT1Sent", emoji: AI_EMOJI.peerWaitSent },
+] as const;
 
 /**
- * The line to show on this tick. Rotates through three phrasings so a wait that
- * lasts hours does not read as one frozen string, and personalises with the
+ * What KIND of wait this is. The default ladder assumes the partner simply
+ * hasn't acted; `no_overlap` is the calendar state where they DID act and the
+ * two selections just don't intersect, which makes "no word from them yet" and
+ * "nudged them" both false — the scheduling nudge deliberately skips a pair
+ * where both sides have picked (`workers/match-nudge.ts`). It therefore gets its
+ * own two-step ladder rather than a mislabelled five.
+ */
+export type PeerWaitVariant = "default" | "no_overlap";
+
+/** Wall-clock tiers are only meaningful against a real anchor; guard the maths. */
+function elapsedMs(startedAt: Date | null | undefined, now: Date): number {
+  if (!startedAt) return 0;
+  const ms = now.getTime() - startedAt.getTime();
+  return ms > 0 ? ms : 0;
+}
+
+/**
+ * The line to show for a wait that started at `startedAt`, personalised with the
  * partner's first name.
  *
  * `firstName` is a required onboarding field and these waits only happen on a
  * live match, so the anonymous variant is defensive rather than expected — but
  * it exists because substituting a generic noun into the personalised templates
- * breaks case agreement in German and Polish.
+ * breaks case agreement in German and Polish. The no-overlap lines name no one,
+ * so they stay correct without it.
  */
+export function peerWaitBeat(
+  lang: Language,
+  partnerName: string | null | undefined,
+  startedAt: Date | null | undefined,
+  now: Date = new Date(),
+  variant: PeerWaitVariant = "default",
+): { label: string; emojiId: string } {
+  const elapsed = elapsedMs(startedAt, now);
+  const late = elapsed >= TIERS[0].afterMs;
+
+  if (variant === "no_overlap") {
+    return {
+      label: t(lang, late ? "peerWaitNoOverlapLate" : "peerWaitNoOverlap"),
+      emojiId: late ? AI_EMOJI.peerWaitDeadline : AI_EMOJI.peerWaitWaiting,
+    };
+  }
+
+  const tier = TIERS.find((candidate) => elapsed >= candidate.afterMs) ?? TIERS[TIERS.length - 1]!;
+  const name = partnerName?.trim();
+  if (!name) return { label: t(lang, "peerWaitAnon"), emojiId: tier.emoji };
+  return { label: t(lang, tier.key, { name }), emojiId: tier.emoji };
+}
+
+/** Text-only view of {@link peerWaitBeat}, for the plain-message fallback path. */
 export function peerWaitLabel(
   lang: Language,
   partnerName: string | null | undefined,
-  rotationIndex: number,
+  startedAt: Date | null | undefined,
+  now: Date = new Date(),
+  variant: PeerWaitVariant = "default",
 ): string {
-  const name = partnerName?.trim();
-  if (!name) return t(lang, "peerWaitLoopAnon");
-  const key = ROTATION[Math.abs(Math.trunc(rotationIndex)) % ROTATION.length]!;
-  return t(lang, key, { name });
+  return peerWaitBeat(lang, partnerName, startedAt, now, variant).label;
+}
+
+/** Everything `issuePeerWaitDraft` needs to render one beat. */
+export interface PeerWaitDraftInput {
+  chatId: number;
+  matchId: string;
+  side: "A" | "B";
+  lang: Language;
+  partnerName: string | null | undefined;
+  /** When this side started waiting; null renders tier 1. */
+  startedAt: Date | null | undefined;
+  now?: Date;
+  variant?: PeerWaitVariant;
 }
 
 /**
  * Put (or refresh) the shimmer on screen once. Re-issuing the same `draft_id`
- * with new html is what both animates the rotation and resets the ~30s TTL.
+ * with new html is what both advances the wording and resets the ~30s TTL.
  *
  * Throws on failure — callers decide what that means. For the worker it means
  * "this chat can't render rich drafts, use the fallback line"; for an action
@@ -74,19 +147,19 @@ export function peerWaitLabel(
  */
 export async function issuePeerWaitDraft(
   api: Api<RawApi>,
-  chatId: number,
-  matchId: string,
-  side: "A" | "B",
-  lang: Language,
-  partnerName: string | null | undefined,
-  rotationIndex = 0,
+  input: PeerWaitDraftInput,
 ): Promise<void> {
+  const beat = peerWaitBeat(
+    input.lang,
+    input.partnerName,
+    input.startedAt,
+    input.now ?? new Date(),
+    input.variant ?? "default",
+  );
   await sendRichMessageDraft(api, {
-    chat_id: chatId,
-    draft_id: peerWaitDraftId(chatId, matchId, side),
-    rich_message: {
-      html: thinkingHtml(peerWaitLabel(lang, partnerName, rotationIndex), AI_EMOJI.think),
-    },
+    chat_id: input.chatId,
+    draft_id: peerWaitDraftId(input.chatId, input.matchId, input.side),
+    rich_message: { html: thinkingHtml(beat.label, beat.emojiId) },
   });
 }
 
@@ -103,11 +176,20 @@ export async function issuePeerWaitDraft(
  * Swallows everything. A chat that can't render rich drafts is picked up by the
  * worker's fallback path on its next tick; a chat we can't reach at all needs no
  * shimmer. Neither may break the flow this decorates.
+ *
+ * Always renders tier 1, and deliberately writes no anchor: this only ever fires
+ * the instant the user commits, so "just handed off" is true by construction,
+ * and leaving `peerWaitStartedAt*` to the worker keeps that column single-writer
+ * (see the schema comment).
  */
 export function startPeerWaitShimmer(
   api: Api<RawApi>,
   matchId: string,
-  userId: string,
+  // Discriminated on purpose: the bot handlers hold a DB user id, while the
+  // initData Mini App routes only ever hold a Telegram id. Taking a bare string
+  // made those two silently interchangeable, and passing the wrong one resolves
+  // to the WRONG SIDE of the match — a shimmer in the partner's chat.
+  actor: { userId: string } | { telegramId: bigint },
 ): void {
   void (async () => {
     const match = await prisma.match.findUnique({
@@ -119,17 +201,28 @@ export function startPeerWaitShimmer(
       },
     });
     if (!match) return;
-    const isA = match.userAId === userId;
+    // Resolve the side explicitly rather than "A if it matches, else B": an id
+    // belonging to NEITHER participant must be a no-op, not a shimmer aimed at
+    // side B.
+    const isA =
+      "userId" in actor
+        ? match.userAId === actor.userId
+        : match.userA.telegramId === actor.telegramId;
+    const isB =
+      "userId" in actor
+        ? match.userAId !== actor.userId
+        : match.userB.telegramId === actor.telegramId;
+    if (!isA && !isB) return;
     const me = isA ? match.userA : match.userB;
     const peer = isA ? match.userB : match.userA;
     if (!isTelegramTarget(me.telegramId)) return;
-    await issuePeerWaitDraft(
-      api,
-      toTelegramChatId(me.telegramId),
+    await issuePeerWaitDraft(api, {
+      chatId: toTelegramChatId(me.telegramId),
       matchId,
-      isA ? "A" : "B",
-      (me.language ?? "en") as Language,
-      peer.firstName,
-    );
+      side: isA ? "A" : "B",
+      lang: (me.language ?? "en") as Language,
+      partnerName: peer.firstName,
+      startedAt: null,
+    });
   })().catch(() => {});
 }

@@ -427,7 +427,7 @@ describe("scheduler: processCalendarSlotsUpdate", () => {
     // …while the actor gets NO message at all: the waiting shimmer replaces the
     // old "saved, we'll tell you when they reply" line (PRODUCT_SPEC §3.6b).
     expect(mPeerWaitShimmer).toHaveBeenCalledTimes(1);
-    expect(mPeerWaitShimmer.mock.calls[0]!.slice(1)).toEqual(["match-1", "uid-A"]);
+    expect(mPeerWaitShimmer.mock.calls[0]!.slice(1)).toEqual(["match-1", { userId: "uid-A" }]);
     expect(mStartVenue).not.toHaveBeenCalled();
   });
 

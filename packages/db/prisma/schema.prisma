@@ -1141,11 +1141,25 @@ model Match {
   /// strand a permanent "waiting for them…" line in the chat after any deploy.
   peerWaitMessageIdA Int? @map("peer_wait_message_id_a")
   peerWaitMessageIdB Int? @map("peer_wait_message_id_b")
-  /// When the fallback line's text was last rewritten. The shimmer rotates on
+  /// When the fallback line's text was last rewritten. The shimmer re-issues on
   /// every ~20s tick, but an edit is a real API call on a real message, so the
-  /// fallback rotates at most once a minute.
+  /// fallback text is rewritten at most once a minute.
   peerWaitEditedAtA  DateTime? @map("peer_wait_edited_at_a")
   peerWaitEditedAtB  DateTime? @map("peer_wait_edited_at_b")
+  /// When THIS side started waiting on its partner — the anchor the shimmer's
+  /// five-tier wording ladder is measured from (PRODUCT_SPEC §3.6b). Nothing
+  /// else answers "how long has this side been waiting": `acceptedByA/B` are
+  /// booleans, `availableTimesA/B` carry no submission time, and the row's
+  /// `updatedAt` moves for unrelated reasons.
+  ///
+  /// Written ONLY by `workers/peer-wait-shimmer.ts`, stamped on the first tick
+  /// the side is seen waiting and cleared alongside `peerWaitMessageId*` when
+  /// the wait ends. A single writer is deliberate — the action handlers that
+  /// kick off the shimmer render tier 1 unconditionally (they only ever fire
+  /// the instant the user commits), so they need no anchor of their own and
+  /// cannot race the worker for it.
+  peerWaitStartedAtA DateTime? @map("peer_wait_started_at_a")
+  peerWaitStartedAtB DateTime? @map("peer_wait_started_at_b")
 
   /// Legacy nudge columns from the pre-C-6 era when proposal-phase and
   /// scheduling-phase nudges shared the same two slots. Kept nullable so old

@@ -516,7 +516,7 @@ export async function processCalendarSlotsUpdate(
       // next worker tick so the chat isn't empty for up to 20s behind the still
       // open Mini App. Fire-and-forget — this function's return value is the
       // Mini App's save response and must not wait on a cosmetic draft.
-      startPeerWaitShimmer(api, matchId, user.id);
+      startPeerWaitShimmer(api, matchId, { userId: user.id });
     }
     await Promise.all(sends);
   } else if (

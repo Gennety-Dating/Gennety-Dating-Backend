@@ -19,6 +19,7 @@ import {
   createVenueInvoiceLink,
 } from "../../handlers/matching/venue-change.js";
 import { recordMiniAppAction } from "../../services/chat-events.js";
+import { startPeerWaitShimmer } from "../../services/peer-wait.js";
 
 /** Chat-timeline shorthand — every action on this board is one surface. */
 function noteBoardAction(telegramId: number, matchId: string, what: string): void {
@@ -193,6 +194,11 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
         ? "in the Change venue Mini App, liked a place their partner had also liked — the pair agreed on a new venue"
         : `in the Change venue Mini App, hearted ${keys.length} alternative place(s)`,
     );
+    // Chat cue for the wait that follows (PRODUCT_SPEC §3.6b). The board polls
+    // at ~4s, but only while the Mini App is OPEN — close it and the chat used
+    // to say nothing at all. Started here so it is already on screen behind the
+    // Mini App; `workers/peer-wait-shimmer.ts` re-derives and holds it.
+    startPeerWaitShimmer(api, matchId, { telegramId: BigInt(auth.user.id) });
     res
       .status(200)
       .json({ ok: true, agreed: result.agreed, overlapCandidates: result.overlapCandidates });
@@ -222,6 +228,7 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       matchId,
       "in the Change venue Mini App, picked which of the mutually-liked places the pair agreed on",
     );
+    startPeerWaitShimmer(api, matchId, { telegramId: BigInt(auth.user.id) });
     res.status(200).json({ ok: true });
   });
 
@@ -247,6 +254,9 @@ export function createVenueChangeRouter(api: Api<RawApi>): Router {
       matchId,
       "in the Change venue Mini App, asked their partner to lock in the new venue (the wish card was sent to him)",
     );
+    // She has just handed the decision over — this is the exact moment she
+    // starts waiting on him (see `peer-wait-venue-change.ts`).
+    startPeerWaitShimmer(api, matchId, { telegramId: BigInt(auth.user.id) });
     res.status(200).json({ ok: true });
   });
 

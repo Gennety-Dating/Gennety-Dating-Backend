@@ -301,7 +301,7 @@ export async function sendVenuePostSaveAck(
   // where you're coming from"), so there is nothing to wait on.
   if (key === "venueWaitingPeer") {
     const userId = side === "A" ? m.userAId : m.userBId;
-    startPeerWaitShimmer(api, matchId, userId);
+    startPeerWaitShimmer(api, matchId, { userId });
     return key;
   }
 

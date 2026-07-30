@@ -457,7 +457,7 @@ async function handleAccept(
       ...(effectId ? { message_effect_id: effectId } : {}),
     },
   });
-  startPeerWaitShimmer(ctx.api, match.id, actorId);
+  startPeerWaitShimmer(ctx.api, match.id, { userId: actorId });
   await sendPeerDecidedNudge(ctx, match, side);
 }
 

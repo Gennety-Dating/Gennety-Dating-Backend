@@ -157,8 +157,21 @@ function otherSide(side: Side): Side {
   return side === "A" ? "B" : "A";
 }
 
+/**
+ * The minimal shape the payer matrix reads. Deliberately structural rather than
+ * `VcMatch`: `workers/peer-wait-shimmer.ts` has to answer "is this side waiting
+ * on the payer?" on every ~20s tick across all live matches, and forcing it to
+ * select the full `VC_SELECT` for that would be an absurd per-tick cost. This
+ * way the payer rule stays defined exactly once — `VcMatch` satisfies the shape.
+ */
+export interface VenuePayerRow {
+  userA: { id: string; gender: string | null };
+  userB: { id: string; gender: string | null };
+  venueChangeProposerId: string | null;
+}
+
 /** Exactly one male + one female → the hetero payer matrix applies. */
-function isHeteroPair(match: VcMatch): boolean {
+export function isHeteroPair(match: VenuePayerRow): boolean {
   const genders = [match.userA.gender, match.userB.gender];
   return genders.includes("male") && genders.includes("female");
 }
@@ -167,7 +180,7 @@ function isHeteroPair(match: VcMatch): boolean {
  * Who pays for a settled change. Hetero → the male, whoever initiated;
  * same-sex/unknown → the session initiator (first like / express minter).
  */
-function payerSide(match: VcMatch): Side | null {
+export function payerSide(match: VenuePayerRow): Side | null {
   if (isHeteroPair(match)) return match.userA.gender === "male" ? "A" : "B";
   if (match.venueChangeProposerId === match.userA.id) return "A";
   if (match.venueChangeProposerId === match.userB.id) return "B";

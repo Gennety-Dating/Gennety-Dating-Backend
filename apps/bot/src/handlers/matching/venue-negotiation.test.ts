@@ -284,7 +284,7 @@ describe("handleVenueVibe — location-first ordering", () => {
     // message any more: the shimmer replaces the `venueWaitingPeer` line and is
     // then held for the whole wait (PRODUCT_SPEC §3.6b). The other two branches
     // still send their plain message — they hand the turn straight back.
-    expect(mPeerWaitShimmer).toHaveBeenCalledWith(ctx.api, "m1", "uid-A");
+    expect(mPeerWaitShimmer).toHaveBeenCalledWith(ctx.api, "m1", { userId: "uid-A" });
     expect(ctx.api.sendMessage).not.toHaveBeenCalled();
     // No redirect this time.
     expect(ctx.reply).not.toHaveBeenCalled();

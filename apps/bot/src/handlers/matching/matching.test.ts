@@ -1358,10 +1358,7 @@ describe("matching decision flow", () => {
     // now waits on a partner who hasn't answered, with the countdown worker
     // already silent for them.
     expect(startPeerWaitShimmer).toHaveBeenCalledTimes(1);
-    expect((startPeerWaitShimmer as unknown as MockFn).mock.calls[0]!.slice(1)).toEqual([
-      "match-1",
-      "uid-A",
-    ]);
+    expect((startPeerWaitShimmer as unknown as MockFn).mock.calls[0]!.slice(1)).toEqual(["match-1", { userId: "uid-A" }]);
     expect(startScheduling).not.toHaveBeenCalled();
   });
 

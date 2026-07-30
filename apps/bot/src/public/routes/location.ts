@@ -122,7 +122,7 @@ export function createLocationRouter(api: Api<RawApi>): Router {
       { surface: "venue_intent", matchId },
     );
     if (!state.partnerSubmitted) {
-      startPeerWaitShimmer(api, matchId, actor.id);
+      startPeerWaitShimmer(api, matchId, { userId: actor.id });
     }
     res.json({ ok: true, ...state });
   });

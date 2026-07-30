@@ -2232,15 +2232,46 @@ proposal-countdown worker deliberately stops re-rendering for a side that has
 already accepted, so the single longest wait in the product (up to 24 h) was the
 one with the least feedback.
 
-**A `<tg-thinking>` shimmer now plays for the WHOLE wait**, its wording rotating,
-and it disappears when the partner answers and the flow moves on. On the calendar
-and venue steps it *replaces* the waiting message entirely — nothing is sent to
-the chat at all.
+**A `<tg-thinking>` shimmer now plays for the WHOLE wait**, its wording climbing a
+time ladder, and it disappears when the partner answers and the flow moves on. On
+the calendar and venue steps it *replaces* the waiting message entirely — nothing
+is sent to the chat at all.
 
 `services/peer-wait.ts` owns the two primitives: which line to show
-(`peerWaitLabel`, rotating three phrasings and naming the partner) and how to put
-it on screen once (`issuePeerWaitDraft`). `workers/peer-wait-shimmer.ts` keeps it
-there.
+(`peerWaitBeat` / `peerWaitLabel`) and how to put it on screen once
+(`issuePeerWaitDraft`). `workers/peer-wait-shimmer.ts` keeps it there.
+
+**The wording is a function of how long THIS side has waited (2026-07-30), not of
+a rotation counter.** The first revision rotated three phrasings on a global 60 s
+clock, so minute two and hour twenty read identically — which made the shimmer
+decorative, and made the copy wrap onto two lines in a block meant to hold one.
+Five tiers replace it, each one line and each with its own animated `<tg-emoji>`
+glyph instead of the same "thinking" cloud throughout:
+
+| Tier | Elapsed | Reads (RU) |
+|---|---|---|
+| 1 | < 5 min | `📨 Ушло к {name}` |
+| 2 | 5 min – 1 h | `⏳ Ждём {name}` |
+| 3 | 1 – 6 h | `🌙 От {name} пока тихо` |
+| 4 | 6 – 24 h | `🔔 Напомнил {name}` |
+| 5 | > 24 h | `⌛ Ждём {name} — время на исходе` |
+
+The two late tiers are **claims about machinery that really ran**, and that is why
+their boundaries are where they are: the §3.5 scheduling/venue nudge fires at 6 h,
+and the §3.5c "still on?" check-in at 24 h with cancellation at 48 h. Move a
+boundary and you are asserting something about those workers — check them first.
+Copy constraints: one line (~30 chars), and **no gendered verb about the
+partner**, since a gendered ladder would double the key count in ru/uk/pl; the bot
+referring to itself stays masculine per `VOICE_SELF_GENDER` (§2.1).
+
+Tiers need an anchor, and nothing existing answers "how long has this side been
+waiting" (`acceptedByA/B` are booleans, `availableTimesA/B` carry no submission
+time, the row's `updatedAt` moves for unrelated reasons), so
+`Match.peerWaitStartedAtA/B` carries it. The worker is its **only** writer —
+stamped on the first tick a side is seen waiting, released when the wait ends so a
+later wait on the same match restarts at tier 1 rather than opening on the
+deadline copy. The action handlers deliberately write no anchor: they only ever
+fire the instant the user commits, so tier 1 is true for them by construction.
 
 **Why a worker.** A rich draft is ephemeral — it dies ~30 s after it is issued,
 and the only way to hold one is to re-issue the same `draft_id`. So a shimmer
@@ -2258,17 +2289,34 @@ throttling.**
 Each tick re-derives who is waiting rather than tracking it, so there is no state
 to leak and nothing to "stop": when the partner answers, the side stops matching
 the predicate, the draft stops being re-issued, and it expires on its own. Per
-side (`isSideWaitingOnPeer`):
+side (`resolvePeerWaitVariant`):
 
 | Step | Waiting when |
 |---|---|
 | Pitch decision | `proposed`, this side accepted, peer hasn't answered |
-| Calendar | `negotiating`, `proposedTimes` non-empty, this side marked slots, peer hasn't |
+| Calendar | `negotiating`, `proposedTimes` non-empty, this side marked slots, and either the peer hasn't **or** both did and nothing overlaps |
 | Venue | `negotiating_venue`, this side submitted, peer hasn't |
+| Venue change — board | `scheduled` + `liking`, this side hearted places, peer has none |
+| Venue change — payment | `scheduled` + `agreed`, this side is not the payer |
+| Venue change — wish card | `scheduled` + `agreed`, she handed the payment over (`venueChangeOfferPaySentAt`) |
 
 Notes on the edges, each of which is a real trap:
 - **Only an accept waits.** A decline is irreversible (§3.2 lifetime pair ban)
   and the decliner's next screen is the "what was the main reason?" prompt.
+- **Both picked and nothing overlaps is a wait for BOTH sides (2026-07-30).**
+  The predicate used to read "waiting" as *the peer's slot array is empty*, so
+  when A picked Monday and B picked Tuesday the shimmer vanished for A and never
+  appeared for B — and `handleSchedulingNudges` filters the same way, so no 6 h /
+  12 h nudge fired either. That state was completely silent until the §3.5c 24 h
+  check-in, on the one screen where a negotiation is actually happening. It is a
+  wait for both because each is genuinely blocked on the other widening their
+  selection, and each keeps its own anchor, so the side that submitted first
+  legitimately sits higher on the ladder. It renders a **separate two-step
+  ladder** (`peerWaitNoOverlap` → `peerWaitNoOverlapLate` past 24 h), because the
+  default tiers 3 and 4 would both be lies here: the partner DID answer, and no
+  nudge is going to be sent. That ladder names nobody, so it needs no partner
+  name. A shared slot auto-locks the date (§3.6), so "still here" means "no
+  overlap" without a second check.
 - **The calendar gate is `proposedTimes`, not `ticketStatus`.** `negotiating`
   also covers the Date Ticket gate, whose waiting state its Mini App owns by
   design. `proposedTimes` is written by `startScheduling`, which runs only once
@@ -2277,6 +2325,19 @@ Notes on the edges, each of which is a real trap:
   silenced the calendar shimmer for everyone.
 - **Venue "submitted"** means a confirmed Venue Intent V2 snapshot, or — on the
   legacy concierge path — both the vibe text and the departure pin.
+- **The venue-change board is covered (2026-07-30), reversing an earlier
+  exclusion.** It was left out on the grounds that its Mini App already polls at
+  ~4 s — true only while that Mini App is OPEN. Close it and the chat said
+  nothing at all, which is the exact silence this feature exists to end. Three
+  rules keep it honest: the **payer never waits** (they owe the Stars, that is an
+  action); a hetero **female initiator does not start waiting merely because she
+  isn't the payer** — while she can still offer she holds a live decision of her
+  own, and her wait begins at the moment she actually hands it over; and a hidden
+  **express mint shimmers for nobody**, since it is invisible to the partner until
+  paid and a shimmer in their chat would announce that something is pending. The
+  payer matrix is not reimplemented — `isHeteroPair` / `payerSide` are shared from
+  `handlers/matching/venue-change.ts` through a narrow structural row type, so the
+  20 s tick never has to load the board's full select.
 
 **The action handlers start it immediately** (`startPeerWaitShimmer`) so the chat
 isn't empty for up to a tick; the worker takes over from there. Quiet hours do
@@ -2285,12 +2346,14 @@ reasoning that exempts the pinned status banner and the pitch countdown.
 
 **Fallback for clients that can't render rich drafts.** They would otherwise see
 nothing at all, so they get one ordinary message whose text is rewritten as the
-wording rotates — at most once a minute, since an edit is a real API call on a
-real message (and raises no notification). It is deleted when the wait ends. Its
-id lives in `Match.peerWaitMessageIdA/B` (+ `peerWaitEditedAtA/B`) rather than in
-memory: a PM2 restart would otherwise strand a permanent "waiting for them…" line
-in someone's chat. Once a side is on the fallback it stays there for that wait —
-retrying the draft every tick would be a guaranteed failing call forever.
+wording climbs — at most once a minute, since an edit is a real API call on a
+real message (and raises no notification); that budget is comfortably finer than
+the narrowest tier (5 min), so a tier change is never visibly late there either.
+It is deleted when the wait ends. Its id lives in `Match.peerWaitMessageIdA/B`
+(+ `peerWaitEditedAtA/B`) rather than in memory: a PM2 restart would otherwise
+strand a permanent "waiting for them…" line in someone's chat. Once a side is on
+the fallback it stays there for that wait — retrying the draft every tick would be
+a guaranteed failing call forever.
 
 **What is NOT replaced.** On the pitch decision the "you accepted" card **stays**
 and the shimmer sits under it. Unlike the calendar and venue lines that card is
@@ -2301,10 +2364,19 @@ shown only to someone who has already committed, and says only that we are
 waiting, never what the partner chose.
 
 Deliberately not applied to: the other two venue ack branches (`venueVibeNoted` /
-`venueLocationNoted`, which hand the turn straight back to the same user), the
+`venueLocationNoted`, which hand the turn straight back to the same user) and the
 Date Ticket gate (no chat-side waiting line exists — the Mini App owns that
-state), and the venue-change board (the wait happens inside a Mini App that
-already polls at ~4 s).
+state).
+
+**One known interaction, on the venue-change branch only.** A rich draft is
+collapsed by a real message landing in the chat, and the other three scenarios sit
+on statuses where the waiting side's chat is quiet by construction — nudges and
+check-ins go to the side that owes an action, and the Profiler is gated on
+`PROFILER_BLOCKING_MATCH_STATUSES`. Venue change runs on `scheduled`, which is
+deliberately **not** a blocking status, so a Profiler question or a date-lifecycle
+DM can land mid-wait. The next tick re-issues the draft below it (≤20 s), so the
+shimmer returns rather than dying — but it is the one place where it can visibly
+blink.
 
 
 ### 3.7 Concierge Venue Negotiation (`negotiating_venue`)
