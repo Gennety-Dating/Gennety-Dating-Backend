@@ -3,6 +3,7 @@ import {
   midpoint,
   haversineDistanceKm,
   venueSearchRadiusMeters,
+  commuteBoundingBox,
 } from "./geo.js";
 
 describe("geo: midpoint", () => {
@@ -96,5 +97,65 @@ describe("geo: venueSearchRadiusMeters", () => {
   it("scales roughly with 30% of the spread in the middle band", () => {
     // 10 km spread → 3000m search radius (well under the cap).
     expect(venueSearchRadiusMeters(10)).toBe(3000);
+  });
+});
+
+describe("geo: commuteBoundingBox", () => {
+  const kyivA = { lat: 50.45, lng: 30.52 };
+  const kyivB = { lat: 50.47, lng: 30.56 };
+
+  it("contains a venue reachable from both origins", () => {
+    const box = commuteBoundingBox(kyivA, kyivB, 8);
+    expect(box).not.toBeNull();
+    const venue = { lat: 50.46, lng: 30.54 }; // between the two
+    expect(haversineDistanceKm(kyivA, venue)).toBeLessThan(8);
+    expect(haversineDistanceKm(kyivB, venue)).toBeLessThan(8);
+    expect(venue.lat).toBeGreaterThanOrEqual(box!.minLat);
+    expect(venue.lat).toBeLessThanOrEqual(box!.maxLat);
+    expect(venue.lng).toBeGreaterThanOrEqual(box!.minLng);
+    expect(venue.lng).toBeLessThanOrEqual(box!.maxLng);
+  });
+
+  it("is a superset of the true intersection — never excludes a valid venue", () => {
+    // Sample a grid and assert: reachable from both => inside the box.
+    const box = commuteBoundingBox(kyivA, kyivB, 8)!;
+    for (let dLat = -0.15; dLat <= 0.15; dLat += 0.01) {
+      for (let dLng = -0.25; dLng <= 0.25; dLng += 0.01) {
+        const v = { lat: kyivA.lat + dLat, lng: kyivA.lng + dLng };
+        const reachable =
+          haversineDistanceKm(kyivA, v) <= 8 && haversineDistanceKm(kyivB, v) <= 8;
+        if (!reachable) continue;
+        const inside =
+          v.lat >= box.minLat && v.lat <= box.maxLat &&
+          v.lng >= box.minLng && v.lng <= box.maxLng;
+        expect(inside).toBe(true);
+      }
+    }
+  });
+
+  it("excludes a venue far outside the commute limit", () => {
+    const box = commuteBoundingBox(kyivA, kyivB, 8)!;
+    const lviv = { lat: 49.84, lng: 24.03 };
+    const inside =
+      lviv.lat >= box.minLat && lviv.lat <= box.maxLat &&
+      lviv.lng >= box.minLng && lviv.lng <= box.maxLng;
+    expect(inside).toBe(false);
+  });
+
+  it("returns null when the origins are more than 2x the limit apart", () => {
+    // No venue can be within 8 km of both Kyiv and Lviv.
+    expect(commuteBoundingBox(kyivA, { lat: 49.84, lng: 24.03 }, 8)).toBeNull();
+  });
+
+  it("returns null for a non-positive or non-finite limit", () => {
+    expect(commuteBoundingBox(kyivA, kyivB, 0)).toBeNull();
+    expect(commuteBoundingBox(kyivA, kyivB, Number.NaN)).toBeNull();
+  });
+
+  it("widens with the limit", () => {
+    const tight = commuteBoundingBox(kyivA, kyivB, 8)!;
+    const loose = commuteBoundingBox(kyivA, kyivB, 12)!;
+    expect(loose.maxLat - loose.minLat).toBeGreaterThan(tight.maxLat - tight.minLat);
+    expect(loose.maxLng - loose.minLng).toBeGreaterThan(tight.maxLng - tight.minLng);
   });
 });

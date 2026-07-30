@@ -97,6 +97,57 @@ describe("Venue Intent V2", () => {
     expect(rankVenueCandidates([candidate({ distanceA: 1, distanceB: 4.1 })], ...pair)).toEqual([]);
   });
 
+  it("prefers the nearer venue when both commutes are equally balanced", () => {
+    // Regression: commuteFairness used to measure ONLY |distA - distB|, so a
+    // venue 7.9 km from both scored exactly like one 0.3 km from both and the
+    // pair's own coordinates never entered the ranking.
+    const pair = [intent(["coffee_treats"]), intent(["coffee_treats"])] as const;
+    const near = candidate({ id: "near", placeId: "near", distanceA: 0.3, distanceB: 0.3 });
+    const far = candidate({ id: "far", placeId: "far", distanceA: 7.5, distanceB: 7.5 });
+    const rows = rankVenueCandidates([far, near], ...pair);
+    expect(rows[0]?.candidate.placeId).toBe("near");
+    expect(rows[0]!.score.commuteFairness).toBeGreaterThan(rows[1]!.score.commuteFairness);
+  });
+
+  it("still penalises an unbalanced commute even when it is close", () => {
+    const pair = [intent(["coffee_treats"]), intent(["coffee_treats"])] as const;
+    const balanced = candidate({ id: "bal", placeId: "bal", distanceA: 2, distanceB: 2 });
+    const lopsided = candidate({ id: "lop", placeId: "lop", distanceA: 0.1, distanceB: 2.9 });
+    const rows = rankVenueCandidates([lopsided, balanced], ...pair);
+    expect(rows[0]?.candidate.placeId).toBe("bal");
+  });
+
+  it("scores facet coverage across the full 0..1 range", () => {
+    // `softModifiers` is no longer scored; with it, a perfect match capped at
+    // 0.9 and a total miss floored at 0.1, compressing every real difference.
+    const wants = intent(["coffee_treats"], { ambiences: ["quiet"], formats: ["seated"] });
+    const perfect = candidate({
+      facets: {
+        experiences: ["coffee_treats"], ambiences: ["quiet"], formats: ["seated"],
+        dietary: [], alcoholFree: null, stepFree: null, setting: null, price: "inexpensive",
+      },
+    });
+    const miss = candidate({
+      facets: {
+        experiences: ["drinks_evening"], ambiences: ["lively"], formats: ["walking"],
+        dietary: [], alcoholFree: null, stepFree: null, setting: null, price: "inexpensive",
+      },
+    });
+    const [best] = rankVenueCandidates([perfect], wants, wants);
+    const [worst] = rankVenueCandidates([miss], wants, wants);
+    expect(best!.score.userFitA).toBe(1);
+    expect(worst!.score.userFitA).toBe(0);
+  });
+
+  it("ignores softModifiers entirely (reserved, unscored)", () => {
+    const pair = [intent(["coffee_treats"]), intent(["coffee_treats"])] as const;
+    const plain = candidate({ id: "p", placeId: "p" });
+    const decorated = candidate({ id: "d", placeId: "d", softModifiers: ["a", "b", "c"] });
+    const [rowPlain] = rankVenueCandidates([plain], ...pair);
+    const [rowDecorated] = rankVenueCandidates([decorated], ...pair);
+    expect(rowDecorated!.score.finalScore).toBe(rowPlain!.score.finalScore);
+  });
+
   it("uses stable priority, reviews, placeId tie breakers", () => {
     const pair = [intent(["coffee_treats"]), intent(["coffee_treats"])] as const;
     const rows = rankVenueCandidates([

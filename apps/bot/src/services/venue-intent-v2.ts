@@ -24,7 +24,7 @@ import {
   type VenueRankCandidate,
 } from "@gennety/shared";
 import { env } from "../config.js";
-import { midpoint, haversineDistanceKm, venueSearchRadiusMeters } from "./geo.js";
+import { midpoint, haversineDistanceKm, venueSearchRadiusMeters, commuteBoundingBox } from "./geo.js";
 import { callOpenAIJson } from "./openai.js";
 import { isValidVenueCategory, isVenueOpenAt } from "./curated-venue.js";
 import {
@@ -616,29 +616,34 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   };
   const cityKey = match.userA.profile?.homeCityKey ?? match.userB.profile?.homeCityKey ?? null;
   const universityDomain = match.userA.universityDomain ?? match.userB.universityDomain ?? null;
-  const curated = await prisma.curatedVenue.findMany({
-    where: {
-      active: true,
-      tier: "base",
-      ...(cityKey ? { cityKey } : universityDomain ? { universityDomain } : {}),
-    },
-    orderBy: [{ priority: "asc" }, { updatedAt: "desc" }],
-    // Read the city's whole base catalog and let the eligibility filter below
-    // do the culling, because the cap and the filter cannot be swapped: the
-    // gates (hours, open-at-slot, price evidence, quality floor) are logic, not
-    // SQL, so anything the cap drops is never even considered.
-    //
-    // This was `take: 60`, which meant "60 rows by priority, THEN keep whatever
-    // survives". On the production Kyiv catalog that yielded 20 usable venues
-    // out of 186 eligible — a block of high-priority rows with no price
-    // evidence consumed the budget and pushed 166 good venues out of reach,
-    // which is exactly what the old comment here claimed to prevent.
-    //
-    // The remaining number is a sanity bound, not a working limit: no city
-    // catalog is near it (Kyiv, the largest, is 448 base rows), and the read is
-    // a handful of milliseconds once per scheduled date.
-    take: 2000,
-  });
+  // Geographic pre-filter. A venue has to sit within the commute limit of BOTH
+  // origins, so the box is the intersection of the two circles (see
+  // `commuteBoundingBox`). Without it the query returned the whole city and the
+  // pair's actual location had no say in which venues were even considered —
+  // the single biggest reason the same handful of places kept winning.
+  const commuteLimitKm = Math.min(a.hardConstraints.maxCommuteKm, b.hardConstraints.maxCommuteKm);
+  const box = commuteBoundingBox(originA, originB, commuteLimitKm);
+  const curated = box
+    ? await prisma.curatedVenue.findMany({
+        where: {
+          active: true,
+          tier: "base",
+          ...(cityKey ? { cityKey } : universityDomain ? { universityDomain } : {}),
+          lat: { gte: box.minLat, lte: box.maxLat },
+          lng: { gte: box.minLng, lte: box.maxLng },
+        },
+        orderBy: [{ priority: "asc" }, { updatedAt: "desc" }],
+        // Sanity bound, not a working limit: the eligibility gates below (hours,
+        // open-at-slot, price evidence, quality floor) are logic rather than SQL,
+        // so anything a small cap dropped would never even be considered. This
+        // was `take: 60`, which on the production Kyiv catalog left 20 usable
+        // venues out of 186 eligible — a block of high-priority rows with no
+        // price evidence ate the budget. No city catalog comes near 2000.
+        take: 2000,
+      })
+    : // Origins more than 2x the commute limit apart: no venue can satisfy both,
+      // so skip the query rather than run one that cannot return a usable row.
+      [];
   const selections: SelectionRecord[] = curated.flatMap((row) => {
     if (!row.googleMapsUri) return [];
     if (!isValidVenueCategory(row.category)) return [];
@@ -669,7 +674,13 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
       category: row.category as VenueCategory,
       placeId: row.placeId, photoName: null,
     }];
-  }).slice(0, 20);
+  });
+  // No `.slice()` here on purpose. It used to cut the eligible set to 20 by
+  // LIST POSITION (`priority ASC, updatedAt DESC`), which meant the winner was
+  // drawn from the same 20 city-wide venues for every pair, ordered by a column
+  // the nightly revalidation cron churns. Ranking is pure CPU over plain
+  // objects, so the whole eligible set is scored and the cap moved to `ranked`
+  // below — a cap by SCORE rather than by position.
 
   let placesCalls = 0;
   let providerFailed = false;
@@ -693,7 +704,9 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   } else {
     providerFailed = true;
   }
-  const deduped = [...new Map(selections.map((row) => [row.rank.placeId, row])).values()].slice(0, 30);
+  // Dedupe only — the old `.slice(0, 30)` here had the same defect as the one
+  // above: it truncated by position before anything was scored.
+  const deduped = [...new Map(selections.map((row) => [row.rank.placeId, row])).values()];
   const ranked = rankVenueCandidates(deduped.map((row) => row.rank), a, b);
   const best = ranked[0];
   const chosen = best ? deduped.find((row) => row.rank.id === best.candidate.id) ?? null : null;

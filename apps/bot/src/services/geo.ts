@@ -91,3 +91,52 @@ export function venueSearchRadiusMeters(distanceKm: number): number {
   const radius = Math.round(distanceKm * 1000 * 0.3);
   return Math.max(MIN_M, Math.min(MAX_M, radius));
 }
+
+export interface BoundingBox {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+}
+
+/** Degrees of latitude per kilometre (constant everywhere). */
+const KM_PER_DEG_LAT = 110.574;
+
+/**
+ * Bounding box containing every point within `maxKm` of **both** origins.
+ *
+ * The venue must satisfy `max(distA, distB) <= maxKm`, i.e. it lies in the
+ * INTERSECTION of two circles — so the box is the intersection of the two
+ * per-origin boxes, not a box around the midpoint (which would wrongly admit
+ * venues near one origin and far from the other, and wrongly exclude valid
+ * ones when the origins are far apart).
+ *
+ * Returns `null` when the intersection is empty — the origins are more than
+ * `2 * maxKm` apart, so no venue can satisfy both commutes and the caller
+ * should skip the query entirely rather than run an impossible one.
+ *
+ * A deliberate SUPERSET of the true (circular) intersection: it is a cheap SQL
+ * pre-filter, and the exact `haversine` check still runs in `scoreVenueCandidate`.
+ * Longitude degrees shrink with latitude, so the lng delta uses the widest
+ * latitude in the box (nearest the equator) to stay conservative.
+ */
+export function commuteBoundingBox(a: LatLng, b: LatLng, maxKm: number): BoundingBox | null {
+  if (!Number.isFinite(maxKm) || maxKm <= 0) return null;
+  const dLat = maxKm / KM_PER_DEG_LAT;
+
+  const minLat = Math.max(a.lat, b.lat) - dLat;
+  const maxLat = Math.min(a.lat, b.lat) + dLat;
+  if (minLat > maxLat) return null;
+
+  // Widest longitude span occurs at whichever bound sits closest to the equator.
+  const widestLat = Math.min(Math.abs(minLat), Math.abs(maxLat));
+  const kmPerDegLng = KM_PER_DEG_LAT * Math.cos(toRad(widestLat));
+  // Near the poles a degree of longitude collapses; fall back to the whole range.
+  const dLng = kmPerDegLng < 1e-6 ? 180 : maxKm / kmPerDegLng;
+
+  const minLng = Math.max(a.lng, b.lng) - dLng;
+  const maxLng = Math.min(a.lng, b.lng) + dLng;
+  if (minLng > maxLng) return null;
+
+  return { minLat, maxLat, minLng, maxLng };
+}

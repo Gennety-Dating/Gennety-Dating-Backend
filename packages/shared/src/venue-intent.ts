@@ -103,6 +103,12 @@ export interface VenueRankCandidate {
   distanceA: number;
   distanceB: number;
   facets: VenueCandidateFacets;
+  /**
+   * Reserved, **not scored**. No producer has ever populated it, so scoring it
+   * meant adding the same constant to every candidate (see `userFit`). Kept on
+   * the type for compatibility; wire it into `userFit` only once something
+   * actually writes it.
+   */
   softModifiers?: string[];
 }
 
@@ -110,6 +116,12 @@ export interface VenueScoreBreakdown {
   userFitA: number;
   userFitB: number;
   pairFit: number;
+  /**
+   * Commute component = fairness x proximity (`commuteScore`). Keeps its
+   * historical name so `venue_selection_logs` rows stay comparable, but it is
+   * no longer fairness alone — a balanced-but-distant venue now scores below a
+   * balanced-and-near one.
+   */
   commuteFairness: number;
   venueQuality: number;
   evidenceConfidence: number;
@@ -239,12 +251,44 @@ function coverage(wanted: readonly string[], actual: readonly string[]): number 
   return wanted.filter((value) => actual.includes(value)).length / wanted.length;
 }
 
+/**
+ * How well one participant's stated intent is met by a candidate.
+ *
+ * `softModifiers` is deliberately NOT scored: nothing in the codebase has ever
+ * populated it, so the old `modifiers` term resolved to the literal 0.5 for
+ * every candidate — a flat 0.1 added to all of them, i.e. 20% of this score
+ * spent on a constant that could not discriminate between two venues. Dropping
+ * it and renormalising the three real dimensions also widens the usable range
+ * from [0.1, 0.9] to [0, 1], so genuinely different venues separate further.
+ */
 function userFit(intent: VenueIntentV2, candidate: VenueRankCandidate): number {
   const experience = coverage(intent.experiences, candidate.facets.experiences);
   const ambience = coverage(intent.ambiences, candidate.facets.ambiences);
   const format = coverage(intent.formats, candidate.facets.formats);
-  const modifiers = candidate.softModifiers?.length ? Math.min(1, candidate.softModifiers.length / 2) : 0.5;
-  return 0.4 * experience + 0.25 * ambience + 0.15 * format + 0.2 * modifiers;
+  return 0.5 * experience + 0.3 * ambience + 0.2 * format;
+}
+
+/** Worst-commute decay: 1.0 at the doorstep, `PROXIMITY_FLOOR` at the limit. */
+const PROXIMITY_FLOOR = 0.4;
+
+/**
+ * Commute score = fairness x proximity.
+ *
+ * Fairness alone (the previous behaviour) only asked "are the two commutes
+ * equal?", so a venue 7.9 km from both scored a perfect 1.0 exactly like one
+ * 300 m from both. Since the pair's own coordinates entered the score nowhere
+ * else, the ranking was effectively location-blind and the same central venues
+ * kept winning for everyone. Proximity restores the half that was missing.
+ */
+function commuteScore(candidate: VenueRankCandidate, limitKm: number): number {
+  const imbalance = Math.abs(candidate.distanceA - candidate.distanceB);
+  const fairness = Math.max(0, 1 - imbalance / 3);
+  const worst = Math.max(candidate.distanceA, candidate.distanceB);
+  const proximity = Math.max(
+    PROXIMITY_FLOOR,
+    1 - (worst / limitKm) * (1 - PROXIMITY_FLOOR),
+  );
+  return fairness * proximity;
 }
 
 const PRICE_ORDER: Record<VenueCandidateFacets["price"] & string, number> = {
@@ -279,7 +323,7 @@ export function scoreVenueCandidate(
   const userFitA = userFit(a, candidate);
   const userFitB = userFit(b, candidate);
   const pairFit = 0.6 * Math.min(userFitA, userFitB) + 0.4 * ((userFitA + userFitB) / 2);
-  const commuteFairness = Math.max(0, 1 - Math.abs(candidate.distanceA - candidate.distanceB) / 3);
+  const commuteFairness = commuteScore(candidate, commuteLimit);
   const rating = candidate.rating == null ? 0.5 : Math.max(0, Math.min(1, (candidate.rating - 3) / 2));
   const reviews = candidate.reviews == null ? 0.5 : Math.min(1, Math.log10(candidate.reviews + 1) / 4);
   const priority = Math.max(0, Math.min(1, (4 - candidate.priority) / 3));
