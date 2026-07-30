@@ -1,10 +1,4 @@
-import {
-  computeStatusSnapshot,
-  formatDateCountdownText,
-  t,
-  type Language,
-} from "@gennety/shared";
-import { renderCountdownButtonLabel } from "../utils/countdown-plate.js";
+import { computeStatusSnapshot, t, type Language } from "@gennety/shared";
 
 const LANGUAGE_LOCALES: Record<Language, string> = {
   en: "en-US",
@@ -149,11 +143,21 @@ export function renderStatusBanner(input: StatusBannerViewInput): StatusBannerVi
 }
 
 /**
- * Body + button for a live match. Every button label reuses an existing
- * localized renderer, so nothing here invents a second countdown format:
- * the decision label is byte-identical to the pitch keyboard's own deadline
- * button (both go through `renderCountdownButtonLabel`), and the date label
- * reuses the same `statusDate*` phrasing the My Date menu row shows.
+ * Body + button for a live match.
+ *
+ * **The button carries the bare time and nothing else** (2026-07-30). Telegram's
+ * collapsed pinned bar shows two things side by side: the first few words of the
+ * body on the left, and the button as a badge on the right — and the badge is
+ * itself truncated. A label inside it ("Time left to reply: 23h 39m") therefore
+ * ate the badge's whole width and the actual number never rendered: users saw
+ * "Your match is wai…" next to "⌛ Time left to r…", i.e. two truncated halves
+ * of the same sentence and no timer at all.
+ *
+ * So the split is: the body's FIRST LINE names what is being counted and ends
+ * with a colon, the badge holds only the digits. The pinned bar then reads as
+ * one sentence — "Time left to reply:" ▸ "23h 39m". The drop mode is
+ * deliberately left alone: its label is short enough to survive the badge, and
+ * it reads fine today.
  */
 function renderStage(
   stage: StatusBannerStage,
@@ -167,28 +171,52 @@ function renderStage(
       // `formatDateCountdownText` appending it verbatim.
       const venue = stage.venueName?.trim();
       if (venue) lines.push("", `📍 ${venue}`);
+      // Ceil, matching `computeStatusSnapshot` — so this badge and the "My date"
+      // menu row never disagree by a minute about the same date.
+      const minutesToDate = Math.ceil(
+        (stage.at.getTime() - input.now.getTime()) / 60_000,
+      );
       return {
         text: lines.join("\n"),
-        buttonText: formatDateCountdownText(
-          { now: input.now, dateAt: stage.at, venueName: null },
-          lang,
-        ),
+        buttonText: formatBareCountdown(lang, minutesToDate),
         callbackData: "menu:date",
       };
     }
     case "decision":
       return {
         text: t(lang, "statusBannerDecision"),
-        buttonText: renderCountdownButtonLabel(lang, stage.minutesLeft),
+        // Fed from `minutesLeftFromDispatch` (floor), the same value the pitch
+        // keyboard's deadline button renders — so the two timers on screen show
+        // the same number even though only one of them carries a label.
+        buttonText: formatBareCountdown(lang, stage.minutesLeft),
         callbackData: "menu:date",
       };
     case "planning":
       return {
         text: t(lang, "statusBannerPlanning"),
-        // The main-menu "My date" row already labels every pre-scheduled stage
-        // this way; reusing the key keeps the two surfaces from drifting.
-        buttonText: t(lang, "menuMyDatePlanning"),
+        // No countdown exists here, so the badge is an action rather than a
+        // status — repeating the body's own first line in it would be pure
+        // duplication in the pinned bar.
+        buttonText: t(lang, "statusButtonDateOpen"),
         callbackData: "menu:date",
       };
   }
+}
+
+/**
+ * Digits only, no label and no emoji — see {@link renderStage} for why. Buckets
+ * exactly like `computeStatusSnapshot` so the banner never disagrees with the
+ * other surfaces rendering the same remaining time.
+ */
+function formatBareCountdown(lang: Language, totalMinutes: number): string {
+  const safe = Math.max(totalMinutes, 0);
+  const totalHours = Math.floor(safe / 60);
+  const days = Math.floor(totalHours / 24);
+  if (days >= 1) {
+    return t(lang, "statusTimeDaysHours", { d: days, h: totalHours % 24 });
+  }
+  if (totalHours >= 1) {
+    return t(lang, "statusTimeHoursMinutes", { h: totalHours, m: safe % 60 });
+  }
+  return t(lang, "statusTimeMinutes", { m: Math.max(1, safe) });
 }

@@ -127,9 +127,10 @@ describe("renderStatusBanner", () => {
         },
       });
 
-      expect(view.text).toContain("Свидание назначено");
+      // First line names what is counted; the badge holds only the digits.
+      expect(view.text.split("\n")[0]).toBe("До свидания:");
       expect(view.text).toContain("📍 Blur Cafe");
-      expect(view.buttonText).toBe("💫 Свидание через 2д 6ч");
+      expect(view.buttonText).toBe("2д 6ч");
       expect(view.callbackData).toBe("menu:date");
       expect(view.text).not.toContain("Следующий дроп");
     });
@@ -151,9 +152,10 @@ describe("renderStatusBanner", () => {
         stage: { kind: "decision", minutesLeft: 320 },
       });
 
-      expect(view.text).toContain("Твой мэтч ждёт ответа");
-      // Byte-identical to the pitch keyboard's own deadline button.
-      expect(view.buttonText).toBe("⏳ Осталось на ответ: 5ч 20м");
+      expect(view.text.split("\n")[0]).toBe("Осталось на ответ:");
+      // Digits only — a label here would eat the truncated badge's width and
+      // the number would never render (see renderStage).
+      expect(view.buttonText).toBe("5ч 20мин");
       expect(view.callbackData).toBe("menu:date");
     });
 
@@ -165,8 +167,10 @@ describe("renderStatusBanner", () => {
       });
 
       expect(view.text).toContain("Свидание планируется");
-      // Same label the main-menu "My date" row already uses.
-      expect(view.buttonText).toBe("⏳ Свидание планируется");
+      // No countdown exists here, so the badge is an action — and must not
+      // just repeat the body's own first line.
+      expect(view.buttonText).toBe("Подробности");
+      expect(view.text).not.toContain(view.buttonText);
       expect(view.callbackData).toBe("menu:date");
     });
 
@@ -194,18 +198,27 @@ describe("renderStatusBanner", () => {
       },
     );
 
+    // The collapsed pinned bar shows the body's first line on the left and the
+    // button as a TRUNCATED badge on the right. A label inside the badge eats
+    // its width and the number never renders, which is exactly the bug this
+    // guards: the badge must be digits + unit only.
     it.each(["en", "ru", "uk", "de", "pl"] as const)(
-      "leads with a heading naming what is counted, in %s",
+      "keeps the badge to a bare countdown, in %s",
       (language) => {
         for (const stage of [
           { kind: "date", at: NEXT_DROP, venueName: null },
           { kind: "decision", minutesLeft: 90 },
-          { kind: "planning" },
         ] as const) {
           const view = renderStatusBanner({ ...base, language, stage });
-          // The countdown rides the button; the body never repeats it.
+
+          // Digits, a unit, at most one space-separated pair — nothing else.
+          expect(view.buttonText).toMatch(/^\d+\s*\p{L}+( \d+\s*\p{L}+)?$/u);
+          expect(view.buttonText.length).toBeLessThanOrEqual(14);
+          // The heading carries the meaning and ends with a colon so the two
+          // halves read as one sentence in the pinned bar.
+          expect(view.text.split("\n")[0]).toMatch(/:$/);
+          // The countdown rides the badge; the body never repeats it.
           expect(view.text).not.toContain(view.buttonText);
-          expect(view.text.split("\n")[0]!.length).toBeGreaterThan(0);
           expect(view.text).not.toContain("GENNETY DROP");
         }
       },

@@ -28,6 +28,11 @@ const ALLOWED_IDENTICAL_TO_EN = new Set<string>([
   // because there the Latin spelling would read as foreign in Cyrillic copy.
   "rematchInvoiceTitle",
   "rematchInvoiceLabel",
+  // "Details" is the ordinary German word, spelled exactly as in English.
+  "statusButtonDateOpen",
+  // Bare "{d}d {h}h" — Polish abbreviates days/hours the same way English does,
+  // matching the existing `statusButtonDaysHours` ("Do dropu: {d}d {h}h").
+  "statusTimeDaysHours",
 ]);
 
 describe("t (translation)", () => {

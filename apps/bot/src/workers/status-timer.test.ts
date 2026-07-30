@@ -135,7 +135,9 @@ describe("statusTimerTick", () => {
         style: "primary",
       }),
     );
-    expect(options.reply_markup.inline_keyboard[0][0].text).toContain("Свидание через");
+    expect(text.split("\n")[0]).toBe("До свидания:");
+    // Bare countdown — a label here would be truncated away in the pinned bar.
+    expect(options.reply_markup.inline_keyboard[0][0].text).toBe("9ч 0мин");
   });
 
   it("shows the reply deadline while the user's own decision is open", async () => {
@@ -153,9 +155,9 @@ describe("statusTimerTick", () => {
 
     expect(result.edited).toBe(1);
     const [, , text, options] = api.editMessageText.mock.calls[0]!;
-    expect(text).toContain("Твой мэтч ждёт ответа");
+    expect(text).toContain("Осталось на ответ:");
     expect(options.reply_markup.inline_keyboard[0][0].text).toBe(
-      "⏳ Осталось на ответ: 18ч 40м",
+      "18ч 40мин",
     );
     expect(options.reply_markup.inline_keyboard[0][0].callback_data).toBe("menu:date");
   });

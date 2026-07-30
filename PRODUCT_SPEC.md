@@ -1353,6 +1353,18 @@ heading naming **what that countdown is for**. The countdown deliberately lives
 on the button and is never repeated in the body: Telegram renders the button as
 its own block in the pinned message, so it is the timer the user actually reads.
 
+**The split between the two halves is load-bearing, not cosmetic (2026-07-30).**
+Telegram's collapsed pinned bar shows the body's first line on the left and the
+button as a badge on the right, and **the badge truncates**. So on the stage
+banners the button holds the bare time and nothing else — no label, no emoji —
+while the body's FIRST LINE names what is being counted and ends with a colon.
+The bar then reads as one sentence: "Time left to reply:" ▸ "23h 39m". Putting
+the label inside the badge is what this rule exists to prevent: it consumed the
+badge's whole width and the number never rendered at all, leaving two truncated
+halves of the same phrase ("Your match is wai…" ▸ "⌛ Time left to r…") and no
+visible timer anywhere. The drop mode (5) is the one exception and is
+deliberately left as it was — its label is short enough to survive the badge.
+
 **The banner is stage-aware (2026-07-29): it counts down whatever is actually
 next for this user, not always the weekly drop.** A user occupying a live-match
 slot is *excluded from the Thursday batch* (§3.2 filter 8), so a pinned
@@ -1364,18 +1376,20 @@ on a 24-hour accept/decline decision. `resolveBannerStage`
 winning:
 
 1. **Unlaunched city** (below) — outranks every stage; unchanged.
-2. **Date** — `scheduled` with `agreedTime` in the future. Body: the date is
-   set, plus the venue name. Button: `💫 Date in Xd Yh` (the same `statusDate*`
-   phrasing the My Date menu row uses) → the My Date hub.
+2. **Date** — `scheduled` with `agreedTime` in the future. Body: "Time until
+   your date:" + the venue name. Button: the bare time ("2d 7h"), ceiled exactly
+   like `computeStatusSnapshot` so it can never disagree with the My Date menu
+   row about the same date → the My Date hub.
 3. **Decision** — `proposed`, *this* side hasn't answered, TTL not yet elapsed.
-   Body: your match is waiting, answer yes or no in the chat. Button: the reply
-   deadline, rendered through the same `renderCountdownButtonLabel` as the pitch
-   keyboard's own deadline button, so the two are byte-identical → My Date hub.
+   Body: "Time left to reply:" + answer yes or no in the chat. Button: the bare
+   remaining time, fed from the same `minutesLeftFromDispatch` the pitch
+   keyboard's own deadline button uses, so both timers on screen show the same
+   number even though only the pitch one carries a label → My Date hub.
 4. **Planning** — `negotiating`, `negotiating_venue`, or `proposed` where this
-   side **accepted** and the peer is still silent. Nothing to count down, so the
-   button reuses the existing `menuMyDatePlanning` label ("⏳ Date being
-   planned") — the same wording the main-menu row has always shown for these
-   stages → My Date hub.
+   side **accepted** and the peer is still silent. There is no countdown here at
+   all, so the badge is an action ("Details") rather than a status: repeating the
+   body's own first line in it would just print the same phrase twice in the
+   pinned bar → My Date hub.
 5. **Drop** — no live match: the original next-batch countdown, unchanged.
 
 Three states fall back to mode 5 on purpose. Two because the next drop is

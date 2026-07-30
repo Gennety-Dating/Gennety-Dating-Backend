@@ -819,19 +819,27 @@ const translations = {
 
     // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
     // A user with a live match is excluded from the weekly batch (§3.2 filter 8),
-    // so the drop countdown would be a promise we can't keep. Each of these leads
-    // with a heading naming what the button below is counting down to.
+    // so the drop countdown would be a promise we can't keep.
+    //
+    // The FIRST LINE names what is being counted and ends with a colon: the
+    // collapsed pinned bar shows it on the left and the button's bare time as a
+    // badge on the right, so together they read as one sentence. Never put the
+    // time itself here, and never let the first line grow — it truncates.
     statusBannerDecision:
-      "Your match is waiting on you ✦\n\n" +
-      "Answer yes or no right here in the chat — the button below shows how long you have.",
+      "Time left to reply:\n\n" +
+      "Your match is waiting. Answer yes or no right here in the chat.",
     // Covers an accepted-but-unanswered proposal too, so it must never assert
     // what the partner chose (blind-decision invariant §3.4).
     statusBannerPlanning:
       "Your date is being planned ✦\n\n" +
       "The details are still coming together — everything about it is in My date.",
-    statusBannerDate:
-      "Your date is set ✦\n\n" +
-      "The button below counts down to it. Venue and details are in My date.",
+    statusBannerDate: "Time until your date:",
+    // Bare countdowns for the banner badge — digits and units only, no label
+    // and no emoji, because the badge truncates.
+    statusTimeDaysHours: "{d}d {h}h",
+    statusTimeHoursMinutes: "{h}h {m}m",
+    statusTimeMinutes: "{m}m",
+    statusButtonDateOpen: "Details",
 
     // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
     // For an account registered in a city we haven't launched: matching is
@@ -1810,14 +1818,16 @@ const translations = {
 
     // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
     statusBannerDecision:
-      "Твой мэтч ждёт ответа ✦\n\n" +
-      "Ответь «да» или «нет» прямо здесь, в чате — на кнопке ниже видно, сколько у тебя времени.",
+      "Осталось на ответ:\n\n" +
+      "Твой мэтч ждёт. Ответь «да» или «нет» прямо здесь, в чате.",
     statusBannerPlanning:
       "Свидание планируется ✦\n\n" +
       "Детали ещё утрясаются — всё по нему в «Моём свидании».",
-    statusBannerDate:
-      "Свидание назначено ✦\n\n" +
-      "На кнопке ниже — сколько до него осталось. Место и детали — в «Моём свидании».",
+    statusBannerDate: "До свидания:",
+    statusTimeDaysHours: "{d}д {h}ч",
+    statusTimeHoursMinutes: "{h}ч {m}мин",
+    statusTimeMinutes: "{m}мин",
+    statusButtonDateOpen: "Подробности",
 
     // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
     statusBannerMarketPending:
@@ -2789,14 +2799,16 @@ const translations = {
 
     // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
     statusBannerDecision:
-      "Твій метч чекає на відповідь ✦\n\n" +
-      "Відповідай «так» або «ні» просто тут, у чаті — на кнопці нижче видно, скільки в тебе часу.",
+      "Залишилось на відповідь:\n\n" +
+      "Твій метч чекає. Відповідай «так» або «ні» просто тут, у чаті.",
     statusBannerPlanning:
       "Побачення планується ✦\n\n" +
       "Деталі ще узгоджуються — усе по ньому в «Моєму побаченні».",
-    statusBannerDate:
-      "Побачення призначено ✦\n\n" +
-      "На кнопці нижче — скільки до нього залишилось. Місце й деталі — у «Моєму побаченні».",
+    statusBannerDate: "До побачення:",
+    statusTimeDaysHours: "{d}д {h}г",
+    statusTimeHoursMinutes: "{h}год {m}хв",
+    statusTimeMinutes: "{m}хв",
+    statusButtonDateOpen: "Деталі",
 
     // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
     statusBannerMarketPending:
@@ -3727,14 +3739,16 @@ const deTranslations: TranslationTable = {
 
   // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
   statusBannerDecision:
-    "Dein Match wartet auf deine Antwort ✦\n\n" +
-    "Antworte hier im Chat mit ja oder nein — der Button unten zeigt, wie viel Zeit du noch hast.",
+    "Zeit zum Antworten:\n\n" +
+    "Dein Match wartet. Antworte hier im Chat mit ja oder nein.",
   statusBannerPlanning:
     "Dein Date wird geplant ✦\n\n" +
     "Die Details werden noch geklärt — alles dazu findest du unter Mein Date.",
-  statusBannerDate:
-    "Dein Date steht ✦\n\n" +
-    "Der Button unten zählt herunter. Ort und Details findest du unter Mein Date.",
+  statusBannerDate: "Bis zu deinem Date:",
+  statusTimeDaysHours: "{d}T {h}Std",
+  statusTimeHoursMinutes: "{h}Std {m}Min",
+  statusTimeMinutes: "{m}Min",
+  statusButtonDateOpen: "Details",
 
   // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
   statusBannerMarketPending:
@@ -4673,14 +4687,16 @@ const plTranslations: TranslationTable = {
 
   // --- Stage-aware banner (PRODUCT_SPEC §2.1) ---
   statusBannerDecision:
-    "Twój match czeka na odpowiedź ✦\n\n" +
-    "Odpowiedz tak lub nie tutaj, na czacie — przycisk poniżej pokazuje, ile masz czasu.",
+    "Zostało na odpowiedź:\n\n" +
+    "Twój match czeka. Odpowiedz tak lub nie tutaj, na czacie.",
   statusBannerPlanning:
     "Randka jest planowana ✦\n\n" +
     "Szczegóły są jeszcze ustalane — wszystko o niej jest w Mojej randce.",
-  statusBannerDate:
-    "Randka jest ustalona ✦\n\n" +
-    "Przycisk poniżej odlicza czas do niej. Miejsce i szczegóły są w Mojej randce.",
+  statusBannerDate: "Do randki:",
+  statusTimeDaysHours: "{d}d {h}h",
+  statusTimeHoursMinutes: "{h}h {m}min",
+  statusTimeMinutes: "{m}min",
+  statusButtonDateOpen: "Szczegóły",
 
   // --- Kyiv-only market gate (PRODUCT_SPEC §1.1) ---
   statusBannerMarketPending:
