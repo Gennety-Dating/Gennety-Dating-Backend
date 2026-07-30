@@ -1,5 +1,33 @@
 # Gennety Dating Deploy
 
+**PENDING — `reference_expired` is escapable again (PRODUCT_SPEC §1.4 rule 5).**
+Not deployed yet. **Code-only: no Prisma schema change, no env change, no flag
+change, no Mini App change** (`apps/webapp` untouched). Ships with whatever
+restart carries the blocks below.
+
+What it fixes: `beginLivenessCheck` refused every `verified` user, so a user
+whose reference selfie the 90-day scrub removed was told by three surfaces to
+"verify again to change your photos" and then refused `409 already_verified` by
+the only call that could do it. The refusal is now conditional on
+`verifiedSelfiePath`. Such a re-run deliberately does **not** write `pending` —
+matching admits `verified` only, so a downgrade would drop a long-tenured user
+out of the pool over a photo edit.
+
+**Probably nobody is in this state yet — not verified against the live DB.** The
+scrub keys off `verifiedAt + 90 days`, and the production state recorded at the
+2026-07-27 deploy was a single `verified` account whose check ran 2026-07-26, so
+its reference is not due for scrubbing until late October. That is an inference
+from a three-day-old note, not a measurement. Run this before assuming the fix is
+still theoretical (and note the admin API cannot answer it — it needs the DB):
+
+```sh
+psql "$DATABASE_URL" -c "select count(*) from users where verification_status='verified' and verified_selfie_path is null;"
+```
+
+**Rollback:** revert the code and restart. Nothing else to undo.
+
+---
+
 **PENDING — peer-wait shimmer v2 (PRODUCT_SPEC §3.6b).** Not deployed yet.
 **No env change, no flag change, no Mini App change** (`apps/webapp` untouched) —
 but it needs an **additive `db:push` BEFORE the restart**, and it ships alongside

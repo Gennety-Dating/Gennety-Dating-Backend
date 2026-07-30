@@ -131,10 +131,48 @@ describe("beginLivenessCheck", () => {
       id: "user-1",
       language: "en",
       verificationStatus: "verified",
+      verifiedSelfiePath: "selfies/user-1.jpg",
     });
     const result = await beginLivenessCheck("user-1");
     expect(result).toEqual({ ok: false, error: "already_verified" });
     expect(createLivenessSession).not.toHaveBeenCalled();
+  });
+
+  it("lets a verified user re-run once the 90-day scrub took their reference", async () => {
+    // The dead end this closes: every photo surface answers `reference_expired`
+    // with "verify again to change your photos", and this was the call that
+    // refused to let them. AWS cannot re-issue an expired reference image, so a
+    // fresh liveness check is the only way back — on Telegram and iOS alike.
+    userFindUnique.mockResolvedValueOnce({
+      id: "user-1",
+      language: "en",
+      verificationStatus: "verified",
+      verifiedSelfiePath: null,
+    });
+
+    const result = await beginLivenessCheck("user-1");
+
+    expect(result).toMatchObject({ ok: true, sessionId: SESSION_ID });
+  });
+
+  it("keeps that user verified while they re-run, so matching never drops them", async () => {
+    // Matching admits `verified` and nothing else (§3.2 filter). Flipping a
+    // long-tenured user to `pending` for the duration would take them out of
+    // the pool over a photo edit — the same reason `triggerVerificationRerun`
+    // bails before its own `pending` flip.
+    userFindUnique.mockResolvedValueOnce({
+      id: "user-1",
+      language: "en",
+      verificationStatus: "verified",
+      verifiedSelfiePath: null,
+    });
+
+    await beginLivenessCheck("user-1");
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { pendingLivenessSessionId: SESSION_ID },
+    });
   });
 
   it("reports a provider failure rather than returning an empty session", async () => {

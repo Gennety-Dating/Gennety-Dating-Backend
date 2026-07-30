@@ -771,6 +771,24 @@ another try) survives intact; the unfounded verdict does not.
    and match eligibility are untouched while they do it: the rerun bails
    *before* flipping anything, so deleting a photo can never silently drop a
    long-tenured user out of matching.
+   **The re-run is actually reachable (fixed 2026-07-30).** `beginLivenessCheck`
+   refused every `verified` user outright — "re-running would burn a check for
+   no decision" — which was true of a user whose reference selfie still exists
+   and false of exactly the cohort this rule is about. So both surfaces asked
+   the user to verify again and then the only call that could do it answered
+   `409 already_verified`: the Telegram `verifyReferenceExpired` prompt, its
+   Verify button, and the iOS `409 reference_expired` path all dead-ended in the
+   same place. The refusal is now conditional on `verifiedSelfiePath` still
+   being there. Nothing else about the rule changes — in particular the session
+   mint does **not** write `pending` for such a user, because matching admits
+   `verified` and nothing else (§3.2), so a downgrade for the duration of the
+   check would take a long-tenured user out of the pool over a photo edit — the
+   same demotion `triggerVerificationRerun` already refuses to make.
+   **Sequencing the client must respect:** the new reference selfie is written
+   at the END of the pipeline (`persistOutcome`), not when the check passes, so
+   `native-event` answering `processing` does not yet mean a photo upload will
+   pass the gate. The retry belongs on the client, as a short bounded wait —
+   never as a re-prompt for the photo the user already chose.
 
 For Telegram Live Photos, verification always uses the static photo frame
 stored in `Profile.photos[]`; the short video part is display-only for

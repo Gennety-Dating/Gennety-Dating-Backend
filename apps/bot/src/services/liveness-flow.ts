@@ -81,12 +81,26 @@ export async function beginLivenessCheck(
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, language: true, verificationStatus: true },
+    select: {
+      id: true,
+      language: true,
+      verificationStatus: true,
+      verifiedSelfiePath: true,
+    },
   });
   if (!user) return { ok: false, error: "user_not_found" };
   // Re-running liveness on an already-verified user would burn a check and a
   // session for no decision; the client renders a "you're verified" screen.
-  if (user.verificationStatus === "verified") {
+  //
+  // ONE exception, and it is the whole point of `reference_expired`
+  // (PRODUCT_SPEC §1.4 rule 5): the 90-day scrub deleted the reference selfie,
+  // AWS cannot re-issue it, and every surface that touches photos — the photo
+  // manager, `POST /v1/me/photos`, Aether — answers "verify again to change
+  // your photos". Refusing here made that instruction impossible to follow:
+  // the user was told to re-verify by the only product that could refuse it.
+  const referenceExpired = !user.verifiedSelfiePath;
+  const alreadyVerified = user.verificationStatus === "verified";
+  if (alreadyVerified && !referenceExpired) {
     return { ok: false, error: "already_verified" };
   }
 
@@ -119,7 +133,13 @@ export async function beginLivenessCheck(
     .update({
       where: { id: user.id },
       data: {
-        verificationStatus: "pending",
+        // A verified user re-running only because their reference expired keeps
+        // `verified` throughout. Matching admits `verified` and nothing else
+        // (§3.2), so flipping them to `pending` would drop a long-tenured user
+        // out of the pool over a photo edit — exactly what
+        // `triggerVerificationRerun` already refuses to do by bailing before
+        // its own `pending` flip.
+        ...(alreadyVerified ? {} : { verificationStatus: "pending" as const }),
         pendingLivenessSessionId: session.sessionId,
       },
     })

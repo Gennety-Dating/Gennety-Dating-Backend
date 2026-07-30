@@ -729,7 +729,15 @@ paths:
         `FaceLivenessDetectorView(sessionID:region:credentialsProvider:)`
         needs to stream its selfie video straight to Rekognition. The video
         never passes through our server. Flips verificationStatus to
-        `pending`.
+        `pending` — with one exception, below.
+
+        An already-verified user is refused with `409`, because re-running
+        would burn a check for no decision. The exception is a verified user
+        whose reference selfie the 90-day retention scrub removed: they are
+        admitted, because that is the only way to satisfy the
+        `409 reference_expired` a photo upload answers with. Such a user keeps
+        `verified` for the whole check — matching admits `verified` only, so a
+        downgrade would drop them out of the pool over a photo edit.
 
         **The session expires 3 minutes after this call**, taking its
         reference image with it. Present the detector immediately and report
@@ -866,7 +874,18 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "409":
-          description: Photo limit reached or duplicate
+          description: |
+            Photo limit reached, duplicate, or `code: "reference_expired"`.
+
+            `reference_expired` is not a verdict on this photo: the 90-day
+            retention scrub removed the verification selfie the server matches
+            faces against, and AWS cannot re-issue it. Retrying the upload
+            achieves nothing — send the user through `native-init` +
+            `native-event` once more, then re-upload the SAME bytes rather
+            than asking them to pick the photo again. Note the new reference
+            is stored when the face-match pipeline finishes, not when
+            `native-event` answers `processing`, so allow a short bounded
+            retry.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
