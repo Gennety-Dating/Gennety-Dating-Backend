@@ -1,6 +1,9 @@
 import { Composer } from "grammy";
 import type { BotContext } from "../session.js";
-import { recordChatEventForChat } from "../services/chat-events.js";
+import {
+  recordChatEventForChat,
+  type ChatEventMedia,
+} from "../services/chat-events.js";
 import {
   matchIdFromCallbackData,
   surfaceFromCallbackData,
@@ -94,21 +97,71 @@ function recordInteraction(ctx: BotContext): void {
     return;
   }
 
-  const mediaKind = describeMedia(message);
-  if (mediaKind) {
+  const media = describeMedia(message);
+  if (media) {
     void recordChatEventForChat(chatId, {
       direction: "in",
       kind: "user_media",
-      summary: mediaKind,
+      summary: message.caption?.trim() || media.summary,
+      media: [media.item],
     });
   }
 }
 
-/** Human label for the media a user just sent, or null if it isn't media. */
-function describeMedia(message: NonNullable<BotContext["message"]>): string | null {
-  if ("photo" in message) return "sent a photo";
-  if ("video_note" in message) return "sent a video note";
-  if ("video" in message) return "sent a video";
-  if ("document" in message) return "sent a file";
+interface InboundMedia {
+  summary: string;
+  item: ChatEventMedia;
+}
+
+/**
+ * What the user just sent, plus the `file_id` needed to show it later.
+ *
+ * Recording only the sentence ("sent a photo") is what made the admin
+ * transcript blind to every image a user ever sent: the moment is in the
+ * timeline, the picture is nowhere. A photo stores its largest size; the
+ * moving formats store their poster frame, since the admin media proxy
+ * streams images.
+ */
+function describeMedia(message: NonNullable<BotContext["message"]>): InboundMedia | null {
+  if (message.photo?.length) {
+    const largest = message.photo[message.photo.length - 1];
+    return {
+      summary: "sent a photo",
+      item: { kind: "photo", ...(largest?.file_id ? { ref: largest.file_id } : {}) },
+    };
+  }
+  if (message.video_note) {
+    const thumb = message.video_note.thumbnail?.file_id;
+    return {
+      summary: "sent a video note",
+      item: { kind: "video_note", ...(thumb ? { ref: thumb } : {}) },
+    };
+  }
+  if (message.video) {
+    const thumb = message.video.thumbnail?.file_id;
+    return { summary: "sent a video", item: { kind: "video", ...(thumb ? { ref: thumb } : {}) } };
+  }
+  if (message.animation) {
+    const thumb = message.animation.thumbnail?.file_id;
+    return {
+      summary: "sent a GIF",
+      item: { kind: "animation", ...(thumb ? { ref: thumb } : {}) },
+    };
+  }
+  if (message.document) {
+    const thumb = message.document.thumbnail?.file_id;
+    return {
+      summary: `sent a file${message.document.file_name ? ` (${message.document.file_name})` : ""}`,
+      item: { kind: "document", ...(thumb ? { ref: thumb } : {}) },
+    };
+  }
+  if (message.sticker) {
+    // A sticker's own file is .webp/.tgs; only the static thumb is renderable.
+    const thumb = message.sticker.thumbnail?.file_id;
+    return {
+      summary: `sent a sticker${message.sticker.emoji ? ` ${message.sticker.emoji}` : ""}`,
+      item: { kind: "sticker", ...(thumb ? { ref: thumb } : {}) },
+    };
+  }
   return null;
 }

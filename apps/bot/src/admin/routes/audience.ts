@@ -29,7 +29,7 @@ export const audienceRouter: Router = Router();
  */
 audienceRouter.get(
   "/admin/analytics/audience",
-  async (_req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const data = await getOrCompute("audience:v2", 600, async () => {
         // Single broad query — joins we'd otherwise issue separately.
@@ -164,7 +164,7 @@ audienceRouter.get(
             knownPct: users.length > 0 ? +(geoKnown / users.length).toFixed(4) : 0,
           },
         };
-      });
+      }, { req, res });
 
       res.json(data);
     } catch (err) {
@@ -183,7 +183,7 @@ audienceRouter.get(
  */
 audienceRouter.get(
   "/admin/analytics/audience/heatmap",
-  async (_req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const data = await getOrCompute("heatmap:v1", 3600, async () => {
         const profiles = await prisma.profile.findMany({
@@ -214,7 +214,7 @@ audienceRouter.get(
           totalAggregated: safeCells.reduce((acc, c) => acc + c.count, 0),
           cells: safeCells,
         };
-      });
+      }, { req, res });
 
       res.json(data);
     } catch (err) {

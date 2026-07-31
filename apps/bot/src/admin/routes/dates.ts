@@ -11,7 +11,7 @@ export const datesRouter: Router = Router();
 
 datesRouter.get(
   "/admin/analytics/dates",
-  async (_req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const data = await getOrCompute("dates:v1", 600, async () => {
         const [matches, chemistryEvents, profiles] = await Promise.all([
@@ -96,7 +96,7 @@ datesRouter.get(
           silentIgnoreHistogram,
           totalSilentIgnores: silentIgnoreVals.reduce((a, b) => a + b, 0),
         };
-      });
+      }, { req, res });
 
       res.json(data);
     } catch (err) {

@@ -9,7 +9,7 @@ const STUCK_PENDING_REVIEW_DAYS = 7;
 
 verificationRouter.get(
   "/admin/analytics/verification",
-  async (_req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const data = await getOrCompute("verification:v1", 600, async () => {
         const [users, reports] = await Promise.all([
@@ -141,7 +141,7 @@ verificationRouter.get(
           falsePositiveProxy,
           falsePositiveRate,
         };
-      });
+      }, { req, res });
 
       res.json(data);
     } catch (err) {

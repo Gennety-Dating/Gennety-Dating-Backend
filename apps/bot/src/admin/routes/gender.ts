@@ -13,7 +13,7 @@ const STALE_ACTIVE_DAYS = 21; // >3 weeks active without a match
  */
 genderRouter.get(
   "/admin/analytics/gender",
-  async (_req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const data = await getOrCompute("gender:v1", 600, async () => {
         const [allUsers, matchEvents, allMatches, noMatchNotices] = await Promise.all([
@@ -182,7 +182,7 @@ genderRouter.get(
           staleActive,
           staleActiveThresholdDays: STALE_ACTIVE_DAYS,
         };
-      });
+      }, { req, res });
 
       res.json(data);
     } catch (err) {

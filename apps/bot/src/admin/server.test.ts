@@ -77,8 +77,12 @@ vi.mock("@gennety/db", () => ({
     match: {
       groupBy: vi.fn().mockResolvedValue([]),
       count: vi.fn().mockResolvedValue(0),
+      findMany: vi.fn().mockResolvedValue([]),
     },
     message: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    profilerAnswer: {
       findMany: vi.fn().mockResolvedValue([]),
     },
     noMatchNotice: {

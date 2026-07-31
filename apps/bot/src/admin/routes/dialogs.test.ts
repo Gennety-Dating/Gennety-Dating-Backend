@@ -253,3 +253,75 @@ describe("GET /admin/dialogs/:id", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("timeline media", () => {
+  it("hands the transcript refs it can render, tagged as Telegram media", async () => {
+    state.timelineRows = [
+      {
+        id: "ev-photo",
+        userId: USER_ID,
+        direction: "in",
+        kind: "user_media",
+        surface: null,
+        summary: "sent a photo",
+        actions: null,
+        media: [{ kind: "photo", ref: "AgACAgIAAx" }],
+        matchId: null,
+        createdAt: new Date("2026-07-21T09:00:00Z"),
+      },
+    ];
+
+    const res = await request(app).get(`/admin/dialogs/${USER_ID}`);
+
+    expect(res.status).toBe(200);
+    const message = res.body.messages.find((m: { id: string }) => m.id === "ev-photo");
+    expect(message.media).toEqual([
+      { type: "telegram", kind: "photo", ref: "AgACAgIAAx" },
+    ]);
+  });
+
+  it("keeps a ref-less attachment, so a voice note still reads as one", async () => {
+    state.timelineRows = [
+      {
+        id: "ev-voice",
+        userId: USER_ID,
+        direction: "out",
+        kind: "voice",
+        surface: null,
+        summary: "(voice note)",
+        actions: null,
+        media: [{ kind: "voice" }],
+        matchId: null,
+        createdAt: new Date("2026-07-21T09:00:00Z"),
+      },
+    ];
+
+    const res = await request(app).get(`/admin/dialogs/${USER_ID}`);
+
+    const message = res.body.messages.find((m: { id: string }) => m.id === "ev-voice");
+    expect(message.media).toEqual([{ type: "telegram", kind: "voice" }]);
+  });
+
+  it("drops malformed media instead of shipping a half-shaped object", async () => {
+    state.timelineRows = [
+      {
+        id: "ev-bad",
+        userId: USER_ID,
+        direction: "out",
+        kind: "photo",
+        surface: null,
+        summary: "(photo card, no caption)",
+        // Rows written before the column existed, or hand-edited in the DB.
+        actions: null,
+        media: [{ ref: "no-kind" }, null, "nonsense", { kind: 7 }],
+        matchId: null,
+        createdAt: new Date("2026-07-21T09:00:00Z"),
+      },
+    ];
+
+    const res = await request(app).get(`/admin/dialogs/${USER_ID}`);
+
+    const message = res.body.messages.find((m: { id: string }) => m.id === "ev-bad");
+    expect(message.media).toBeUndefined();
+  });
+});

@@ -655,6 +655,12 @@ model ChatEvent {
   /// Buttons that were offered on an outbound message: `[{ label, data?,
   /// webApp? }]`. This is what lets the agent answer "what do I tap".
   actions   Json?
+  /// Displayable media attached to the event: `[{ kind, ref }]`, where `ref`
+  /// is a Telegram `file_id` the admin media proxy can re-download. Never the
+  /// bytes. Without this a photo, an album or a video note is recorded as the
+  /// bare string "(photo card, no caption)" and the admin transcript can only
+  /// say that something visual happened, never show it.
+  media     Json?
   /// Telegram message id, when the event has one. Used to reconcile a
   /// `deleteMessage` back to the row it created.
   telegramMessageId Int? @map("telegram_message_id")

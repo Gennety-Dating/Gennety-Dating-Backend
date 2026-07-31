@@ -236,7 +236,7 @@ export const citiesRouter: Router = Router();
 
 citiesRouter.get(
   "/admin/analytics/cities",
-  async (_req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const data = await getOrCompute("cities:v1", 600, async () => {
         const [users, pinRows] = await Promise.all([
@@ -295,7 +295,7 @@ citiesRouter.get(
         }));
 
         return computeCityDistribution(userInputs, pins);
-      });
+      }, { req, res });
 
       res.json(data);
     } catch (err) {

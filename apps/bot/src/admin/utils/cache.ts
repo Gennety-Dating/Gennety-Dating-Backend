@@ -16,22 +16,51 @@ const CACHE_KEY_PREFIX = "admin_cache:";
  * If JSON parsing of a cached row fails (schema drift, partial write), the
  * cache miss is treated like a stale entry — recompute and overwrite.
  */
+/**
+ * Request/response pair a cached route can hand in.
+ *
+ * Two things the cache knows and the caller cannot: whether the operator asked
+ * for a forced recompute (`?fresh=1`), and how old the numbers on screen
+ * actually are. Both are reported here rather than reimplemented per route, so
+ * every cached endpoint answers them the same way.
+ *
+ * Structurally typed rather than importing Express, so the helper stays
+ * testable without spinning up a request.
+ */
+export interface CacheContext {
+  req?: { query?: Record<string, unknown> } | undefined;
+  res?: { setHeader(name: string, value: string): void } | undefined;
+}
+
+/** `?fresh=1` — the dashboard's Refresh button. */
+export function wantsFresh(ctx: CacheContext | undefined): boolean {
+  return String(ctx?.req?.query?.["fresh"] ?? "") === "1";
+}
+
 export async function getOrCompute<T>(
   key: string,
   ttlSeconds: number,
   compute: () => Promise<T>,
+  ctx?: CacheContext,
 ): Promise<T> {
   const cacheKey = `${CACHE_KEY_PREFIX}${key}`;
 
-  const row = await prisma.systemKnowledge.findUnique({
-    where: { key: cacheKey },
-  });
+  const stamp = (generatedAt: Date, hit: boolean): void => {
+    ctx?.res?.setHeader("X-Data-Generated-At", generatedAt.toISOString());
+    ctx?.res?.setHeader("X-Data-Cache", hit ? "hit" : "miss");
+  };
+
+  const row = wantsFresh(ctx)
+    ? null
+    : await prisma.systemKnowledge.findUnique({ where: { key: cacheKey } });
 
   if (row && row.active) {
     const ageSec = (Date.now() - row.updatedAt.getTime()) / 1000;
     if (ageSec < ttlSeconds) {
       try {
-        return JSON.parse(row.content) as T;
+        const parsed = JSON.parse(row.content) as T;
+        stamp(row.updatedAt, true);
+        return parsed;
       } catch {
         // fall through to recompute
       }
@@ -40,6 +69,7 @@ export async function getOrCompute<T>(
 
   const value = await compute();
   const serialized = JSON.stringify(value);
+  stamp(new Date(), false);
 
   await prisma.systemKnowledge.upsert({
     where: { key: cacheKey },

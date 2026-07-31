@@ -10,7 +10,7 @@ const COHORT_OFFSETS = [1, 2, 4, 8] as const;
 
 retentionRouter.get(
   "/admin/analytics/retention",
-  async (_req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const data = await getOrCompute("retention:v1", 1800, async () => {
         const now = new Date();
@@ -170,7 +170,7 @@ retentionRouter.get(
           topReferralSources,
           referralUnknown,
         };
-      });
+      }, { req, res });
 
       res.json(data);
     } catch (err) {

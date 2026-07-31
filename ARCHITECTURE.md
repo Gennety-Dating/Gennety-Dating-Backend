@@ -409,8 +409,24 @@ App submission, a settled Stars payment. Columns: `userId` (cascade),
 `mini_app_action`/`payment`), `surface` (coarse product area derived from
 callback prefixes / Mini App page), `summary` (truncated to 300 chars),
 `actions` (`Json?` — the buttons offered: `[{label, data?, webApp?}]`),
+**`media`** (`Json?` — the attachments: `[{kind, ref}]`, where `ref` is a
+Telegram `file_id` the admin media proxy can re-download; never the bytes),
 `telegramMessageId`, `matchId` (free-form, no FK — mirrors `rematch_purchases`),
 `createdAt`. Indexed `(userId, createdAt)` and `(telegramMessageId)`.
+
+**`media` is read from the API RESULT, not the request payload** (added
+2026-07-31). Much of the product's media goes out as raw bytes — a
+satori-rendered date card, a bundled кружок, a generated voice note — so the
+outgoing payload carries no `file_id` at all; Telegram assigns one on the way
+back. Reading the result is therefore the only capture point that works for
+every send, and it is what makes `GET /admin/media?type=telegram&ref=…` able to
+show the image weeks later. Video, video note, animation and sticker store
+their POSTER frame rather than the moving file, because that proxy streams
+images; a voice note stores `{kind}` with no `ref`, which still tells the admin
+transcript one was sent. Before this the table recorded only the sentence
+("(photo card, no caption)", "sent a photo"), so the admin dialog reader could
+say that something visual happened and never show it — every image in every
+conversation was invisible.
 
 It exists because the menu agent could not see its own product. Outbound
 messages are written from ~276 scattered call sites while `User.messageHistory`
@@ -802,6 +818,28 @@ internal analytics dashboard.
 Top-level routers: `audience`, `algorithm`, `gender`, `retention`, `dates`,
 `verification` (incl. a "rerun face-match pipeline" admin button), `cities`,
 `onboarding-funnel`, `ops`.
+
+**Cache freshness is part of the contract (added 2026-07-31).** The heavy
+analytics endpoints are served from `getOrCompute` with TTLs of 10–60 minutes,
+so a freshly loaded dashboard can be showing hour-old numbers. Every cached
+route now hands the request/response pair to the cache helper, which answers
+two things the caller cannot: `?fresh=1` bypasses the cached row entirely (the
+dashboard's Refresh button — one that re-served the same payload would assert a
+currency it did not deliver), and every response carries
+`X-Data-Generated-At` + `X-Data-Cache: hit|miss` naming when the numbers were
+actually computed. Both headers are listed in the CORS `exposedHeaders`,
+without which a browser cannot read them at all.
+
+`GET /admin/users/:id` is the single-user card and is deliberately fatter than
+the paginated list: on top of the list fields it carries the wallet/entitlement
+state, the contact rails, the `Profile` columns that decide eligibility
+(`embeddingDirty`, `homeCityKey`, `standbyCount`, `silentIgnoreCount`,
+`lastMatchedAt`), the attractiveness seed and its per-photo audit
+(`eloScore`/`eloSeededAt`/`eloSeedDetails`/`photoFaceScores`), the vibe axes,
+plus every `Match` this user has been in (both decisions inlined) and their
+Profiler answers. The blind-decision invariant is a USER-facing rule, not an
+admin one — "he accepted, she never answered" is the whole answer to most
+support questions, so both sides' decisions are shown here.
 
 The `ops` router (`routes/ops.ts`) carries the endpoints that are not
 analytics tabs, added 2026-07-29 because every one of them was a 404 that

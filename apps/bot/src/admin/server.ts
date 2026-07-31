@@ -115,6 +115,12 @@ app.use(
   cors({
     origin: adminCorsOrigin,
     methods: ["GET", "POST", "PATCH", "OPTIONS"],
+    // The analytics endpoints are served from a cache with TTLs up to 30
+    // minutes, so a dashboard that only shows numbers cannot tell the operator
+    // whether they are looking at now or at half an hour ago. These headers
+    // carry that, and a browser can only READ a non-simple response header
+    // when it is exposed here.
+    exposedHeaders: ["X-Data-Generated-At", "X-Data-Cache"],
   }),
 );
 
@@ -457,6 +463,7 @@ app.get("/admin/analytics/no-match-notices", async (req: Request, res: Response)
 const USER_SELECT = {
   id: true,
   telegramId: true,
+  telegramUsername: true,
   firstName: true,
   surname: true,
   age: true,
@@ -464,11 +471,14 @@ const USER_SELECT = {
   preference: true,
   major: true,
   language: true,
+  platform: true,
   status: true,
   onboardingStep: true,
+  registrationTrack: true,
   universityDomain: true,
   email: true,
   createdAt: true,
+  lastMessageAt: true,
   // Face-match verification surface — admin needs to spot pending_review
   // rows and dig into per-photo scores before approving / rejecting.
   verificationStatus: true,
@@ -488,9 +498,73 @@ const USER_SELECT = {
       ageRangeMax: true,
       photos: true,
       photoFaceScores: true,
+      // The attractiveness league. `eloScore` is seeded from the AI vision
+      // pass at verification (0..100 → Elo 200..800), so it is the number the
+      // matching engine's `V_league` multiplier actually reads.
       eloScore: true,
       eloMatchesPlayed: true,
+      eloSeededAt: true,
+      homeCity: true,
+      homeCityKey: true,
       // embedding (vector(1536)) intentionally excluded — saves bandwidth
+    },
+  },
+} as const;
+
+/**
+ * Everything the single-user card shows on top of the list payload.
+ *
+ * The list stays lean because it is paginated; the card is one row, so it can
+ * afford the fields that answer "why is this person not getting matched" —
+ * eligibility (verification, contact rail, embedding freshness, city),
+ * standing (Elo + its per-photo audit, standby, silent ignores), and the
+ * wallet/entitlement state that decides what they can do next.
+ */
+const USER_DETAIL_SELECT = {
+  ...USER_SELECT,
+  surname: true,
+  phone: true,
+  phoneVerifiedAt: true,
+  isEmailVerified: true,
+  verificationSkippedAt: true,
+  theme: true,
+  researchOptIn: true,
+  termsAcceptedAt: true,
+  aiMemoryExportPreference: true,
+  referralSource: true,
+  ticketBalance: true,
+  premiumUntil: true,
+  premiumProvider: true,
+  strikes: true,
+  suspendedUntil: true,
+  messageHistory: true,
+  profile: {
+    select: {
+      ...USER_SELECT.profile.select,
+      ethnicity: true,
+      profileMedia: true,
+      eloSeedDetails: true,
+      matchRadius: true,
+      timeZone: true,
+      latitude: true,
+      longitude: true,
+      lastMatchedAt: true,
+      standbyCount: true,
+      missedWeeks: true,
+      lastMissedAt: true,
+      silentIgnoreCount: true,
+      embeddingDirty: true,
+      embeddingDirtyAt: true,
+      fridayVibeText: true,
+      vibeFocusText: true,
+      energyAxis: true,
+      orientationAxis: true,
+      socialRole: true,
+      anchorTags: true,
+      appearanceTags: true,
+      typeRadarCompletedAt: true,
+      createdAt: true,
+      updatedAt: true,
     },
   },
 } as const;
@@ -649,20 +723,67 @@ app.get("/admin/users/:id", async (req: Request, res: Response) => {
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id },
-      select: {
-        ...USER_SELECT,
-        messageHistory: true,
-      },
-    });
+    const [user, matches, profilerAnswers] = await Promise.all([
+      prisma.user.findUnique({ where: { id }, select: USER_DETAIL_SELECT }),
+      // Every pairing this person has been in, either side. The card's job is
+      // to explain a user's situation, and "has never been matched" vs "was
+      // matched and it expired" are completely different situations.
+      prisma.match.findMany({
+        where: { OR: [{ userAId: id }, { userBId: id }] },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          status: true,
+          source: true,
+          createdAt: true,
+          agreedTime: true,
+          venueName: true,
+          synergyScore: true,
+          userAId: true,
+          acceptedByA: true,
+          acceptedByB: true,
+          userA: { select: { id: true, firstName: true } },
+          userB: { select: { id: true, firstName: true } },
+        },
+      }),
+      prisma.profilerAnswer.findMany({
+        where: { userId: id },
+        orderBy: { updatedAt: "desc" },
+        select: { questionId: true, priority: true, answerText: true, skipped: true },
+      }),
+    ]);
 
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
     }
 
-    res.json({ ...user, telegramId: user.telegramId.toString() });
+    res.json({
+      ...user,
+      telegramId: user.telegramId.toString(),
+      matches: matches.map((m) => {
+        const isA = m.userAId === id;
+        const partner = isA ? m.userB : m.userA;
+        return {
+          id: m.id,
+          status: m.status,
+          source: m.source,
+          createdAt: m.createdAt.toISOString(),
+          agreedTime: m.agreedTime?.toISOString() ?? null,
+          venueName: m.venueName,
+          synergyScore: m.synergyScore,
+          partnerId: partner?.id ?? null,
+          partnerName: partner?.firstName ?? null,
+          // Blind-decision is a USER-facing invariant, not an admin one: the
+          // dashboard exists to explain outcomes, and "he accepted, she never
+          // answered" is the whole answer to most support questions.
+          myDecision: isA ? m.acceptedByA : m.acceptedByB,
+          partnerDecision: isA ? m.acceptedByB : m.acceptedByA,
+        };
+      }),
+      profilerAnswers,
+    });
   } catch (err) {
     console.error("[admin] user detail error:", err);
     res.status(500).json({ error: "Internal server error" });

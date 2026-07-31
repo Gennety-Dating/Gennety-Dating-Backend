@@ -263,3 +263,101 @@ describe("withRedactedSummary", () => {
     );
   });
 });
+
+describe("media capture", () => {
+  it("stores the largest size of a sent photo", async () => {
+    const prev = vi.fn().mockResolvedValue({
+      ok: true,
+      result: {
+        message_id: 5,
+        photo: [
+          { file_id: "small", width: 90 },
+          { file_id: "full", width: 1280 },
+        ],
+      },
+    });
+    const { promise } = call("sendPhoto", { chat_id: 7, caption: "your date" }, prev);
+    await promise;
+    await flush();
+
+    expect(record).toHaveBeenCalledWith(
+      7n,
+      expect.objectContaining({ kind: "photo", media: [{ kind: "photo", ref: "full" }] }),
+    );
+  });
+
+  it("reads the ref off the RESULT, so bytes-only sends are still displayable", async () => {
+    // A rendered date card / match card goes out as a Buffer: the payload has
+    // no file_id at all, and Telegram only assigns one on the way back.
+    const prev = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { message_id: 6, photo: [{ file_id: "assigned-on-send" }] },
+    });
+    const { promise } = call("sendPhoto", { chat_id: 7, photo: { name: "card.png" } }, prev);
+    await promise;
+    await flush();
+
+    const [, payload] = record.mock.calls[0]!;
+    expect((payload as { media: unknown }).media).toEqual([
+      { kind: "photo", ref: "assigned-on-send" },
+    ]);
+  });
+
+  it("records one entry per message of an album", async () => {
+    const prev = vi.fn().mockResolvedValue({
+      ok: true,
+      result: [
+        { message_id: 1, photo: [{ file_id: "a" }] },
+        { message_id: 2, photo: [{ file_id: "b" }] },
+        { message_id: 3, photo: [{ file_id: "c" }] },
+      ],
+    });
+    const { promise } = call("sendMediaGroup", { chat_id: 7, media: [] }, prev);
+    await promise;
+    await flush();
+
+    const [, payload] = record.mock.calls[0]!;
+    expect((payload as { media: unknown }).media).toEqual([
+      { kind: "photo", ref: "a" },
+      { kind: "photo", ref: "b" },
+      { kind: "photo", ref: "c" },
+    ]);
+  });
+
+  it("represents a video note by its poster frame", async () => {
+    const prev = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { message_id: 8, video_note: { file_id: "vn", thumbnail: { file_id: "poster" } } },
+    });
+    const { promise } = call("sendVideoNote", { chat_id: 7 }, prev);
+    await promise;
+    await flush();
+
+    const [, payload] = record.mock.calls[0]!;
+    expect((payload as { media: unknown }).media).toEqual([
+      { kind: "video_note", ref: "poster" },
+    ]);
+  });
+
+  it("records a voice note with no ref rather than dropping the event", async () => {
+    const prev = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { message_id: 9, voice: { file_id: "v" } },
+    });
+    const { promise } = call("sendVoice", { chat_id: 7 }, prev);
+    await promise;
+    await flush();
+
+    const [, payload] = record.mock.calls[0]!;
+    expect((payload as { media: unknown }).media).toEqual([{ kind: "voice" }]);
+  });
+
+  it("attaches no media to a plain text message", async () => {
+    const { promise } = call("sendMessage", { chat_id: 7, text: "hi" });
+    await promise;
+    await flush();
+
+    const [, payload] = record.mock.calls[0]!;
+    expect((payload as { media: unknown[] }).media).toEqual([]);
+  });
+});

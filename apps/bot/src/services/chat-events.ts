@@ -32,6 +32,26 @@ export interface ChatEventAction {
   webApp?: string;
 }
 
+/**
+ * One displayable attachment on a timeline event.
+ *
+ * `ref` is always a Telegram `file_id` — resolved from the API RESULT rather
+ * than the request payload, because half the product's media is sent as raw
+ * bytes (a rendered date card, a bundled voice note) and carries no id going
+ * out. Telegram assigns one on the way back, and that is what the admin media
+ * proxy can re-download later.
+ *
+ * A video, a video note and an animation store their POSTER frame, because the
+ * proxy streams images: a moving format would otherwise have to be represented
+ * by a label alone.
+ */
+export interface ChatEventMedia {
+  /** `photo` | `video` | `video_note` | `voice` | `document` | `animation`. */
+  kind: string;
+  /** Telegram file_id of the image to display, when one exists. */
+  ref?: string;
+}
+
 export interface RecordChatEventInput {
   userId: string;
   direction: ChatEventDirection;
@@ -39,6 +59,7 @@ export interface RecordChatEventInput {
   summary: string;
   surface?: string | null;
   actions?: ChatEventAction[] | null;
+  media?: ChatEventMedia[] | null;
   telegramMessageId?: number | null;
   matchId?: string | null;
 }
@@ -79,6 +100,10 @@ export async function recordChatEvent(input: RecordChatEventInput): Promise<void
         actions:
           input.actions && input.actions.length > 0
             ? (input.actions as unknown as Prisma.InputJsonValue)
+            : Prisma.DbNull,
+        media:
+          input.media && input.media.length > 0
+            ? (input.media as unknown as Prisma.InputJsonValue)
             : Prisma.DbNull,
         telegramMessageId: input.telegramMessageId ?? null,
         matchId: input.matchId ?? null,

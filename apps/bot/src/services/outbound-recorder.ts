@@ -5,6 +5,7 @@ import {
   recordChatEventForChat,
   resolveChatTarget,
   type ChatEventAction,
+  type ChatEventMedia,
 } from "./chat-events.js";
 
 /**
@@ -279,6 +280,81 @@ function messageIdFromResult(result: unknown): number | null {
 }
 
 // ---------------------------------------------------------------------------
+// Media extraction
+// ---------------------------------------------------------------------------
+
+interface LoosePhotoSize {
+  file_id?: unknown;
+}
+
+interface LooseSentMessage {
+  photo?: LoosePhotoSize[];
+  video?: { file_id?: unknown; thumbnail?: LoosePhotoSize };
+  video_note?: { file_id?: unknown; thumbnail?: LoosePhotoSize };
+  animation?: { file_id?: unknown; thumbnail?: LoosePhotoSize };
+  document?: { file_id?: unknown; thumbnail?: LoosePhotoSize };
+  voice?: { file_id?: unknown };
+}
+
+function fileId(value: unknown): string | undefined {
+  return typeof value === "string" && value ? value : undefined;
+}
+
+/** Telegram sizes a photo ascending, so the last entry is the full-size one. */
+function largestPhoto(sizes: LoosePhotoSize[] | undefined): string | undefined {
+  if (!Array.isArray(sizes) || sizes.length === 0) return undefined;
+  return fileId(sizes[sizes.length - 1]?.file_id);
+}
+
+/**
+ * Read displayable attachments off one sent message.
+ *
+ * Deliberately sourced from the RESULT and not the request payload: the
+ * product sends most of its media as raw bytes — a satori-rendered date card,
+ * a bundled кружок, a generated voice note — so the outgoing payload has no
+ * `file_id` to record. Telegram hands one back on every send, and that id is
+ * what `GET /admin/media?type=telegram` can re-download weeks later.
+ */
+function mediaFromSentMessage(message: LooseSentMessage | undefined): ChatEventMedia | null {
+  if (!message) return null;
+
+  const photo = largestPhoto(message.photo);
+  if (photo) return { kind: "photo", ref: photo };
+
+  // Moving formats are represented by their poster frame — the media proxy
+  // streams images, so a thumbnail is the only thing that can actually render.
+  for (const [kind, node] of [
+    ["video", message.video],
+    ["video_note", message.video_note],
+    ["animation", message.animation],
+  ] as const) {
+    if (!node) continue;
+    const thumb = fileId(node.thumbnail?.file_id);
+    return thumb ? { kind, ref: thumb } : { kind };
+  }
+
+  if (message.document) {
+    const thumb = fileId(message.document.thumbnail?.file_id);
+    return thumb ? { kind: "document", ref: thumb } : { kind: "document" };
+  }
+  // A voice note has no visual at all; the row still records that one was sent.
+  if (message.voice) return { kind: "voice" };
+
+  return null;
+}
+
+/** Every attachment across a send — an album resolves to several messages. */
+export function mediaFromResult(result: unknown): ChatEventMedia[] {
+  const messages = Array.isArray(result) ? result : [result];
+  const out: ChatEventMedia[] = [];
+  for (const message of messages) {
+    const item = mediaFromSentMessage(message as LooseSentMessage | undefined);
+    if (item) out.push(item);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Transformer
 // ---------------------------------------------------------------------------
 
@@ -347,6 +423,7 @@ export const outboundRecorder: Transformer = async (prev, method, payload, signa
       summary: redactedSummary() ?? summaryFor(kind, loose),
       surface: surfaceFromActions(actions),
       actions,
+      media: mediaFromResult(result.result),
       telegramMessageId: messageIdFromResult(result.result),
       matchId: matchIdFromActions(actions),
     });

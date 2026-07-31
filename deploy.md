@@ -1,5 +1,78 @@
 # Gennety Dating Deploy
 
+**PENDING — admin dialog media + the fat user card (ARCHITECTURE.md
+→ `chat_events` / Admin API).** Not deployed yet. **No env change, no flag
+change, no Mini App change** (`apps/webapp` untouched) — but it needs an
+**additive `db:push` BEFORE the restart**, and it ships alongside the blocks
+below, which need their own schema steps. Do every schema step, then one
+restart. It also requires a **dashboard redeploy** (separate repo,
+`~/Desktop/gennety-admin-dashboard`, auto-deploys to Vercel on push).
+
+One new nullable `chat_events` column (`media`) is SELECTED by the admin dialogs
+reader and WRITTEN by the outbound API transformer on every media send, so a DB
+missing it throws `P2022` on the first photo the bot sends after the restart —
+the PM2 crash-loop this file warns about. Verify additive first (expect one
+`ADD COLUMN`, zero `DROP`):
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # must exit 0 before pm2 restart
+```
+
+What ships, and why each piece exists:
+
+- **Chat media is finally recorded.** `chat_events` stored only a sentence
+  ("(photo card, no caption)", "sent a photo"), so the admin dialog reader could
+  say a photo happened and never show it — every image in every conversation was
+  invisible, which is what "многое количество форматов контента в чате просто не
+  видно" actually was. The `file_id` is now read off the API **result**, which is
+  the only capture point that works for the bytes-only sends (date card, кружок,
+  generated voice note) that carry no id going out.
+- **Inbound media too**, plus stickers, which previously fell through
+  completely unrecorded.
+- **The user card carries the data it always claimed to.** `eloScore` was
+  already in the payload and simply never rendered; `homeCity`, tickets,
+  Premium, the contact rails, `embeddingDirty`, `standbyCount`, the vibe axes,
+  the match history and the Profiler answers were not in the payload at all.
+- **Cache freshness.** Analytics TTLs run 10–60 min with nothing on screen
+  admitting it. Every cached route now emits `X-Data-Generated-At` /
+  `X-Data-Cache` and honours `?fresh=1`.
+
+**Three things worth knowing before the restart:**
+
+- **`media` is only recorded for post-onboarding users**, because
+  `resolveChatTarget` scopes the whole timeline that way on purpose — it keeps
+  OTP codes, phone numbers and pasted AI-memory exports out of the table by
+  construction. So the registration photo burst still will not appear in the
+  chat; those photos are visible only as the profile gallery. Widening that
+  scope is a privacy decision, not a bug fix, and was deliberately left alone.
+- **Existing rows have `media = NULL` and stay text-only.** Nothing backfills,
+  and nothing can: Telegram `file_id`s were never stored for those sends. The
+  transcript fills in from the first message after the restart.
+- **The CORS `exposedHeaders` addition is load-bearing** for the dashboard's
+  freshness display — without it the browser silently cannot read the header
+  even though the server sends it. `ADMIN_DASHBOARD_ORIGIN` must be a concrete
+  origin (it already is) or CORS is denied outright and this is moot.
+
+Post-deploy check, beyond the standard checklist — the column should start
+filling within minutes of any real bot traffic:
+
+```sh
+psql "$DATABASE_URL" -c "select kind, count(*) from chat_events where media is not null group by 1;"
+curl -sD- -o /dev/null -H "Authorization: Bearer $ADMIN_API_KEY" \
+  https://api-admin.gennety.com/admin/analytics/cities | grep -i 'x-data-'
+```
+
+**Rollback:** revert the code in both repos and restart; the additive column can
+stay. There is no flag — the recorder writes `media` unconditionally, and the
+worst case of leaving it is a nullable column nothing reads.
+
+---
+
 **PENDING — `reference_expired` is escapable again (PRODUCT_SPEC §1.4 rule 5).**
 Not deployed yet. **Code-only: no Prisma schema change, no env change, no flag
 change, no Mini App change** (`apps/webapp` untouched). Ships with whatever

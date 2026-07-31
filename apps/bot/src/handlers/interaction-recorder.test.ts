@@ -120,6 +120,70 @@ describe("interactionRecorder", () => {
     });
   });
 
+  it("keeps the photo's largest file_id so the admin transcript can show it", async () => {
+    await run({
+      chat: { id: 555 } as BotContext["chat"],
+      message: {
+        photo: [{ file_id: "thumb" }, { file_id: "full" }],
+      } as unknown as BotContext["message"],
+    });
+    expect(record.mock.calls[0]![1]).toMatchObject({
+      kind: "user_media",
+      media: [{ kind: "photo", ref: "full" }],
+    });
+  });
+
+  it("prefers the user's own caption over the generic label", async () => {
+    await run({
+      chat: { id: 555 } as BotContext["chat"],
+      message: {
+        photo: [{ file_id: "p" }],
+        caption: "this one is better",
+      } as unknown as BotContext["message"],
+    });
+    expect(record.mock.calls[0]![1]).toMatchObject({
+      summary: "this one is better",
+      media: [{ kind: "photo", ref: "p" }],
+    });
+  });
+
+  it("represents a video note by its poster frame", async () => {
+    await run({
+      chat: { id: 555 } as BotContext["chat"],
+      message: {
+        video_note: { file_id: "vn", thumbnail: { file_id: "poster" } },
+      } as unknown as BotContext["message"],
+    });
+    expect(record.mock.calls[0]![1]).toMatchObject({
+      summary: "sent a video note",
+      media: [{ kind: "video_note", ref: "poster" }],
+    });
+  });
+
+  it("records a thumbnail-less video without a ref rather than dropping it", async () => {
+    await run({
+      chat: { id: 555 } as BotContext["chat"],
+      message: { video: { file_id: "v" } } as unknown as BotContext["message"],
+    });
+    expect(record.mock.calls[0]![1]).toMatchObject({
+      summary: "sent a video",
+      media: [{ kind: "video" }],
+    });
+  });
+
+  it("records stickers, which used to fall through unrecorded", async () => {
+    await run({
+      chat: { id: 555 } as BotContext["chat"],
+      message: {
+        sticker: { file_id: "s", emoji: "🔥", thumbnail: { file_id: "st" } },
+      } as unknown as BotContext["message"],
+    });
+    expect(record.mock.calls[0]![1]).toMatchObject({
+      summary: "sent a sticker 🔥",
+      media: [{ kind: "sticker", ref: "st" }],
+    });
+  });
+
   it("always continues the middleware chain, even when recording throws", async () => {
     record.mockImplementation(() => {
       throw new Error("db down");

@@ -32,7 +32,7 @@ const WEEK_MS = 7 * 86_400_000;
 // ---------------------------------------------------------------------------
 onboardingFunnelRouter.get(
   "/admin/analytics/onboarding-funnel",
-  async (_req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const data = await getOrCompute("onboarding_funnel:v1", 900, async () => {
         const [events, users] = await Promise.all([
@@ -76,7 +76,7 @@ onboardingFunnelRouter.get(
         };
 
         return { generatedAt: new Date().toISOString(), ...funnel, tail };
-      });
+      }, { req, res });
 
       res.json(data);
     } catch (err) {
@@ -92,7 +92,7 @@ onboardingFunnelRouter.get(
 // ---------------------------------------------------------------------------
 onboardingFunnelRouter.get(
   "/admin/analytics/founder-digest",
-  async (_req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const data = await getOrCompute("founder_digest:v1", 900, async () => {
         const now = Date.now();
@@ -267,7 +267,7 @@ onboardingFunnelRouter.get(
               verifDecided > 0 ? +(verifiedCount / verifDecided).toFixed(3) : null,
           },
         };
-      });
+      }, { req, res });
 
       res.json(data);
     } catch (err) {
@@ -286,7 +286,7 @@ const DORMANT_DAYS = 14;
 
 onboardingFunnelRouter.get(
   "/admin/analytics/growth",
-  async (_req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const data = await getOrCompute("growth:v1", 900, async () => {
         const dormantBefore = new Date(Date.now() - DORMANT_DAYS * 86_400_000);
@@ -372,7 +372,7 @@ onboardingFunnelRouter.get(
               activeTotal > 0 ? +(referredSignups / activeTotal).toFixed(3) : 0,
           },
         };
-      });
+      }, { req, res });
 
       res.json(data);
     } catch (err) {

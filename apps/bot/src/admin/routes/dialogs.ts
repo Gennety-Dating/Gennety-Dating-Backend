@@ -51,6 +51,13 @@ type UnifiedMessage = {
   matchId?: string;
   toolCalls?: Array<{ name: string; arguments: string }>;
   image?: { type: "chat"; ref: string };
+  /**
+   * Attachments the transcript can actually render, streamed through
+   * `GET /admin/media?type=telegram`. Telegram-sourced media is a `file_id`,
+   * so it is a different media type from the Aether `image` above (a Supabase
+   * object path) and carries its own field rather than overloading that one.
+   */
+  media?: Array<{ type: "telegram"; kind: string; ref?: string }>;
 };
 
 type RawHistoryEntry = {
@@ -74,6 +81,7 @@ type TimelineRow = {
   surface: string | null;
   summary: string;
   actions: unknown;
+  media: unknown;
   matchId: string | null;
   createdAt: Date;
 };
@@ -99,6 +107,7 @@ const TIMELINE_SELECT = {
   surface: true,
   summary: true,
   actions: true,
+  media: true,
   matchId: true,
   createdAt: true,
 } as const;
@@ -232,7 +241,30 @@ function normalizeAether(row: AetherRow): UnifiedMessage {
   };
 }
 
+/**
+ * Timeline media is JSON written by the recorders, so it is validated rather
+ * than trusted: a row from an older writer, or one hand-edited in the DB, must
+ * not reach the dashboard as a half-shaped object it would then have to
+ * defend against.
+ */
+function normalizeMedia(raw: unknown): UnifiedMessage["media"] {
+  if (!Array.isArray(raw)) return undefined;
+  const out = raw.flatMap((entry) => {
+    const item = entry as { kind?: unknown; ref?: unknown } | null;
+    if (!item || typeof item.kind !== "string" || !item.kind) return [];
+    return [
+      {
+        type: "telegram" as const,
+        kind: item.kind,
+        ...(typeof item.ref === "string" && item.ref ? { ref: item.ref } : {}),
+      },
+    ];
+  });
+  return out.length > 0 ? out : undefined;
+}
+
 function normalizeTimeline(row: TimelineRow): UnifiedMessage {
+  const media = normalizeMedia(row.media);
   return {
     id: row.id,
     source: "timeline",
@@ -244,6 +276,7 @@ function normalizeTimeline(row: TimelineRow): UnifiedMessage {
     kind: row.kind,
     ...(row.surface ? { surface: row.surface } : {}),
     ...(row.actions ? { actions: row.actions } : {}),
+    ...(media ? { media } : {}),
     ...(row.matchId ? { matchId: row.matchId } : {}),
   };
 }

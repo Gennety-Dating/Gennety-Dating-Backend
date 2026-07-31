@@ -20,7 +20,7 @@ export const algorithmRouter: Router = Router();
  */
 algorithmRouter.get(
   "/admin/analytics/algorithm",
-  async (_req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const data = await getOrCompute("algorithm:v1", 1800, async () => {
         // ── 1. Matches with side decisions for accept-rate calculations
@@ -222,7 +222,7 @@ algorithmRouter.get(
           totalScoreLogged: explicitVals.length,
           totalMatches: matches.length,
         };
-      });
+      }, { req, res });
 
       res.json(data);
     } catch (err) {
