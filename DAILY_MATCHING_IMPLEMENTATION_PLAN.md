@@ -8,6 +8,18 @@
 >
 > **Схема БД не меняется.** Ни одна задача плана не добавляет колонок и не
 > требует `db:push`. Это делает и деплой, и откат существенно безопаснее.
+>
+> **Обновлено 2026-07-31 после повторного аудита (код по-прежнему не менялся —
+> `git diff origin/main` пуст).** Найдено и исправлено здесь же, без выноса в
+> отдельный документ: (1) предложенная в §1.2 формула дедлайна ломала
+> недельный режим при наивном применении — исправлено на две явные стратегии
+> (`fixed` / `anchored`); (2) мёртвый, но публично экспортируемый дублирующий
+> расчёт даты батча в `packages/shared` — добавлено удаление в Фазу 0; (3)
+> выключение Rematch-флага (D8) молча глушит и его собственный крон-свип
+> рефандов — добавлен обязательный предохранитель в Фазу 5; (4)
+> `HERMES_AGENT_PROMPT.md` и `REMATCH_PRODUCT_SPEC.md` ошибочно числились
+> «не затронуты» — оба реально затронуты, добавлены в Фазу 8. Подробности:
+> [DAILY_MATCHING_MIGRATION_AUDIT.md](DAILY_MATCHING_MIGRATION_AUDIT.md).
 
 ---
 
@@ -83,6 +95,58 @@ deadline = max(
 эта ветка мертва, но пусть будет — иначе включение Rematch обратно тихо
 выдаст кому-то окно в полтора часа.
 
+> **Исправление, найденное при повторной проверке (2026-07-31): формула выше
+> нельзя применять к недельному профилю как есть.**
+>
+> `nextDrop(dispatchedAt)` для `weekly` — это следующий четверг, т.е. ~7 дней
+> от момента диспатча (диспатч всегда идёт сразу после батча). Если
+> `CADENCE.weekly.intervalMs = 7 дней` просто подставить в эту же формулу,
+> дедлайн для недельного режима станет `dispatchedAt + ~7 дней − buffer` —
+> окно решения **вырастет с 24 часов до почти недели**. Это прямо нарушает
+> заявленный критерий выхода Фазы 0 («профиль `weekly` воспроизводит
+> сегодняшнее поведение бит в бит») и деплой-обещание из §3 («Фазы 0–5 катятся
+> в прод с `DROP_CADENCE=weekly` — поведение не меняется»). Сегодняшнее окно
+> 24 ч у `weekly` — это **плоский TTL от `dispatchedAt`, никак не привязанный
+> к следующему батчу** (батч через неделю, TTL — через сутки); гонка с
+> батчем у `weekly` не возникает не потому, что формула её решает, а потому,
+> что 24 ч << 7 дней. Формула «привязка к следующему дропу минус буфер» — это
+> механика, нужная **только** суточной каденции, а не универсальная замена
+> плоского TTL.
+>
+> **Правка:** `deadlineFor` — это ДВЕ разные стратегии, выбираемые каденцией,
+> а не одна формула с разными константами:
+>
+> ```ts
+> // packages/shared/src/cadence.ts
+> export interface DropCadence {
+>   // ...
+>   deadlineStrategy: "fixed" | "anchored";
+>   decisionWindowMs?: number;   // used when strategy === "fixed" (weekly: 24h)
+>   decisionBufferMs?: number;   // used when strategy === "anchored" (daily: 30m)
+>   minDecisionMs?: number;      // used when strategy === "anchored"
+> }
+> ```
+>
+> ```ts
+> // services/proposal-deadline.ts
+> export function deadlineFor(dispatchedAt: Date): Date {
+>   if (CADENCE.deadlineStrategy === "fixed") {
+>     return new Date(dispatchedAt.getTime() + CADENCE.decisionWindowMs!);
+>   }
+>   return new Date(Math.max(
+>     nextDrop(dispatchedAt).getTime() - CADENCE.decisionBufferMs!,
+>     dispatchedAt.getTime() + CADENCE.minDecisionMs!,
+>   ));
+> }
+> ```
+>
+> `weekly` → `{ deadlineStrategy: "fixed", decisionWindowMs: 24h }` (сегодняшнее
+> поведение, дословно). `daily` → `{ deadlineStrategy: "anchored",
+> decisionBufferMs: 30min, minDecisionMs: 90min }` (интент из D1). Тест
+> Фазы 0 («weekly бит в бит») обязан включать явную проверку именно этого
+> случая — «дедлайн под weekly-профилем равен `dispatchedAt + 24ч`, а не
+> `next Thursday − buffer`» — иначе регресс не будет пойман до продакшена.
+
 ### 1.3. Cooldown 24 ч полностью аннулирует D1 — это не отдельная задача, а часть той же
 
 `createProposedMatch` ставит `lastMatchedAt = now` в момент создания пары
@@ -121,8 +185,12 @@ deadline = max(
 export interface DropCadence {
   cron: string;                  // "0 18 * * *"
   intervalMs: number;            // 24 ч
-  decisionBufferMs: number;      // 30 мин — дедлайн = дроп − это
-  minDecisionMs: number;         // пол для внецикловых питчей
+  // Дедлайн предложения — см. правку в §1.2: две разные стратегии, а не
+  // одна формула с разными константами.
+  deadlineStrategy: "fixed" | "anchored";
+  decisionWindowMs?: number;     // fixed (weekly): 24ч, плоский TTL от dispatchedAt
+  decisionBufferMs?: number;     // anchored (daily): 30 мин — дедлайн = дроп − это
+  minDecisionMs?: number;        // anchored (daily): пол для внецикловых питчей
   cooldownMs: number;            // D7
   starvationAlpha: number;       // D6
   famineNoticeIntervalMs: number;// D4
@@ -131,6 +199,8 @@ export interface DropCadence {
   stallCheckInMs: number;
   stallTimeoutMs: number;
   proposalNudgeOffsets: number[];
+  rematchBlackoutHoursMs: number;
+  rematchMaxPerInterval: number;
 }
 
 export const CADENCES: Record<"weekly" | "daily", DropCadence> = { … };
@@ -141,9 +211,18 @@ export const CADENCE = CADENCES[process.env.DROP_CADENCE ?? "weekly"];
 - **Ни один потребитель не читает `process.env` напрямую** — только `CADENCE`.
 - Профиль `weekly` воспроизводит сегодняшнее поведение **бит в бит**. Это
   проверяемое условие: после Фазы 1–5 весь существующий набор тестов должен
-  проходить при `DROP_CADENCE=weekly` без правок ожиданий.
+  проходить при `DROP_CADENCE=weekly` без правок ожиданий — **включая** дедлайн
+  предложения (`weekly.deadlineStrategy = "fixed"`, не `"anchored"`, см. §1.2).
 - `MATCH_CRON_SCHEDULE` остаётся как аварийный override расписания, но
   перестаёт быть способом сменить каденцию.
+- Невалидное/неизвестное значение `DROP_CADENCE` (опечатка, будущее значение)
+  обязано **падать при старте процесса**, а не молча деградировать в `NaN`
+  или в `undefined`-профиль — тот же класс отказа, что и `parseWeeklyCron`
+  сегодня (см. аудит §1.1). `CADENCES[process.env.DROP_CADENCE ?? "weekly"]`
+  без проверки на `undefined` подвержен ровно этой ошибке: опечатка вроде
+  `DROP_CADENCE=Daily` (регистр) даст `CADENCE = undefined`, и первое же
+  обращение к `CADENCE.intervalMs` уронит процесс при первом тике, а не при
+  старте. Нужна явная валидация в момент импорта модуля.
 
 ---
 
@@ -155,7 +234,21 @@ export const CADENCE = CADENCES[process.env.DROP_CADENCE ?? "weekly"];
 
 ### Фаза 0 — Каркас
 - `packages/shared/src/cadence.ts` + экспорт из `index.ts`.
-- Оба профиля, `weekly` — точная копия текущих чисел.
+- Оба профиля, `weekly` — точная копия текущих чисел, включая
+  `deadlineStrategy: "fixed"` (см. правку §1.2 — недельный дедлайн остаётся
+  плоским TTL, а не «дроп минус буфер»).
+- Валидация `DROP_CADENCE` при импорте модуля: неизвестное значение — throw,
+  не молчаливый `undefined`-профиль (см. правку §2).
+- **Удалить мёртвый дублирующий расчёт** `nextMatchDispatchAt` /
+  `isMatchBatchProcessing` из [`packages/shared/src/status/format-status.ts`](packages/shared/src/status/format-status.ts#L140)
+  (найдено при повторной проверке — см. аудит §1.1). Сегодня не вызывается
+  нигде в проде, но экспортируется из публичного API `@gennety/shared` с
+  зашитым «четверг 18:00» и без всякой связи с `DROP_CADENCE` — оставлять его
+  рядом с новым `CADENCE`-профилем значит оставлять ловушку для следующего
+  разработчика. Тест-файл `format-status.test.ts` теряет эти два describe-блока;
+  остальные экспорты файла (`computeStatusSnapshot`, `formatStatusText`,
+  `formatDateCountdownText`) не трогаем — они каденцию не знают, принимают
+  готовую дату параметром.
 - Тест: `weekly` профиль равен сегодняшним константам (защита от дрейфа).
 
 **Критерий выхода:** ничего не подключено, тесты зелёные.
@@ -243,6 +336,14 @@ export const CADENCE = CADENCES[process.env.DROP_CADENCE ?? "weekly"];
 - Rematch: `REMATCH_FEATURE_ENABLED=false` в проде (D8). Кода не трогаем —
   но `REMATCH_PRE_BATCH_BLACKOUT_HOURS` и `MAX_PER_WEEK` вывести из профиля,
   чтобы включение обратно не воспроизвело 25%-й блэкаут.
+  **Предохранитель перед выключением (найдено при повторной проверке):**
+  `REMATCH_REFUND_CRON_SCHEDULE` регистрируется в [`index.ts:538`](apps/bot/src/index.ts#L538)
+  под тем же флагом `REMATCH_FEATURE_ENABLED` — выключение флага глушит не
+  только оферту, но и свип возврата зависших `rematch_purchases.status =
+  'processing'`. Перед флипом обязательна проверка
+  `select count(*) from rematch_purchases where status = 'processing'` — при
+  ненулевом результате сперва дождаться завершения свипа, либо развести
+  регистрацию крона от флага оферты.
 - Profiler:
   - [`constants.ts:197`](packages/shared/src/constants.ts#L197) rush-окно →
     `CADENCE.profilerRushWindowMs` (4 ч для суточного), иначе
@@ -282,8 +383,21 @@ export const CADENCE = CADENCES[process.env.DROP_CADENCE ?? "weekly"];
   либо явно задокументировать, что это агрегат.
 - `PRODUCT_SPEC.md` §3.1, §3.2, §3.5, §3.5c, §2.1, §Phase 1b, §3.11;
   `ARCHITECTURE.md` (таблица кронов); `deploy.md` (новый раздел env +
-  `DROP_CADENCE`); `HERMES_AGENT_PROMPT.md`.
-- Прогон 13 затронутых тестовых файлов **в обоих профилях**.
+  `DROP_CADENCE`).
+- **`HERMES_AGENT_PROMPT.md` — не просто копирайт (исправлено при повторной
+  проверке; см. аудит §1.13/§1.15).** Файл на строках 45-49 задаёт
+  Hermes'у собственный крон («пятница, 10:00 Europe/Kyiv», обоснованный
+  «батч уходит в четверг 18:00»). Это внешний, самостоятельно работающий
+  агент — его расписание не регистрируется в `index.ts` и не попадает под
+  проверку деплоя «строка крона в логе старта». Обновить этот файл нужно
+  явно, отдельным шагом, а не полагаться на то, что общая правка
+  документации его затронет.
+- **`REMATCH_PRODUCT_SPEC.md`** — минимум пометить, что Rematch выключен на
+  время пилота суточной каденции (D8), и что описанные там
+  blackout/cooldown калиброваны под недельный ритм (см. аудит §1.15).
+- Прогон 13 затронутых тестовых файлов **в обоих профилях**, за вычетом двух
+  снесённых в Фазе 0 describe-блоков `format-status.test.ts`
+  (`nextMatchDispatchAt` / `isMatchBatchProcessing` — мёртвый код, см. Фаза 0).
 
 ---
 
