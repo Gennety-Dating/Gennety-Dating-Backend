@@ -44,6 +44,32 @@ interface CacheEntry {
 // cache costs one HTTP call, so persistence would buy nothing.
 const cache = new Map<string, CacheEntry>();
 
+/**
+ * Expiry alone does not free anything: a stale entry stays in the Map, just
+ * unused. Keys are `city:hour`, so the set grows with every hour that has ever
+ * been asked about and never shrinks — slow, but unbounded in a process that
+ * runs for months. Sweeping on insert past a high-water mark keeps it flat
+ * without a timer.
+ */
+const CACHE_MAX_ENTRIES = 500;
+
+function rememberForecast(key: string, value: VenueWeatherSnapshot | null): void {
+  const now = Date.now();
+  if (cache.size >= CACHE_MAX_ENTRIES) {
+    for (const [existing, entry] of cache) {
+      if (entry.expiresAt <= now) cache.delete(existing);
+    }
+    // Every entry was still live — possible only under a burst far larger than
+    // this product produces, but dropping the oldest keeps the bound hard
+    // rather than aspirational. Map iteration is insertion-ordered.
+    if (cache.size >= CACHE_MAX_ENTRIES) {
+      const oldest = cache.keys().next();
+      if (!oldest.done) cache.delete(oldest.value);
+    }
+  }
+  cache.set(key, { value, expiresAt: now + env.VENUE_WEATHER_CACHE_TTL_MS });
+}
+
 /** Test seam: the cache would otherwise leak state between cases. */
 export function __resetWeatherCacheForTests(): void {
   cache.clear();
@@ -121,7 +147,7 @@ export async function fetchWeatherForecast(
   // A failed lookup is cached too, for the same TTL: without that, a provider
   // outage turns into one outbound request per candidate selection, which is
   // precisely when we least want to be hammering a service that is down.
-  cache.set(key, { value, expiresAt: Date.now() + env.VENUE_WEATHER_CACHE_TTL_MS });
+  rememberForecast(key, value);
   return value;
 }
 

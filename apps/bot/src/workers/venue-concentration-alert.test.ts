@@ -15,6 +15,7 @@ const envMock = {
 vi.mock("../config.js", () => ({ env: envMock }));
 
 const { venueConcentrationAlertTick } = await import("./venue-concentration-alert.js");
+const { CONCENTRATION_ROW_LIMIT } = await import("../admin/utils/venue-concentration.js");
 
 function logRow(placeId: string | null, cityKey = "ua:kyiv") {
   return { cityKey, selectedPlaceId: placeId, failureReason: placeId ? null : "provider_unavailable", topCandidates: [] };
@@ -105,6 +106,26 @@ describe("venueConcentrationAlertTick", () => {
     const where = venueSelectionLog.findMany.mock.calls[0]![0].where;
     expect(where.mode).toBe("live");
     expect(where.createdAt.gte).toEqual(new Date("2026-08-01T10:00:00.000Z"));
+  });
+
+  it("flags a truncated scan instead of reporting a partial window as complete", async () => {
+    // Rows arrive newest-first across every city, so hitting the bound can drop
+    // a quiet city entirely and leave the shares computed off a partial
+    // denominator. An alarm that can be quietly wrong is worse than none.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    venueSelectionLog.findMany.mockResolvedValue(
+      Array.from({ length: CONCENTRATION_ROW_LIMIT }, (_, i) => logRow(`p-${i % 50}`)),
+    );
+    const result = await venueConcentrationAlertTick();
+    expect(result.truncated).toBe(true);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("reports an untruncated scan as complete", async () => {
+    venueSelectionLog.findMany.mockResolvedValue([logRow("a")]);
+    const result = await venueConcentrationAlertTick();
+    expect(result.truncated).toBe(false);
   });
 
   it("alerts per city independently", async () => {

@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { prisma } from "@gennety/db";
 import { getOrCompute } from "../utils/cache.js";
 import {
+  CONCENTRATION_ROW_LIMIT,
   computeVenueConcentration,
   parsePoolSizes,
   type SelectionLogRow,
@@ -20,8 +21,6 @@ import {
 
 const DEFAULT_DAYS = 7;
 const MAX_DAYS = 90;
-/** Bounds the scan; a city does not need more than this to show its shape. */
-const ROW_LIMIT = 5000;
 
 export const venueConcentrationRouter: Router = Router();
 
@@ -50,7 +49,7 @@ venueConcentrationRouter.get(
               topCandidates: true,
             },
             orderBy: { createdAt: "desc" },
-            take: ROW_LIMIT,
+            take: CONCENTRATION_ROW_LIMIT,
           });
 
           const parsed: SelectionLogRow[] = rows.map((row) => ({
@@ -65,7 +64,7 @@ venueConcentrationRouter.get(
             windowDays: days,
             since: since.toISOString(),
             runs: parsed.length,
-            truncated: rows.length === ROW_LIMIT,
+            truncated: rows.length === CONCENTRATION_ROW_LIMIT,
             cities,
           };
         },

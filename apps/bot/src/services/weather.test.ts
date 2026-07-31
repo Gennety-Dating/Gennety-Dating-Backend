@@ -173,6 +173,28 @@ describe("fetchWeatherForecast", () => {
     expect(spy).toHaveBeenCalledTimes(2);
   });
 
+  it("evicts expired entries instead of growing without bound", async () => {
+    // Expiry alone frees nothing — a stale entry stays in the Map, just unused.
+    // Keys are `city:hour`, so without a sweep the set grows with every hour
+    // ever asked about and never shrinks: slow, but unbounded in a process that
+    // runs for months.
+    const spy = vi.fn(() => okResponse(body()));
+    vi.stubGlobal("fetch", spy);
+
+    // Fill past the high-water mark with entries that then all expire.
+    for (let i = 0; i < 600; i += 1) {
+      await fetchWeatherForecast(50.45, 30.52, AT, `city-${i}`);
+    }
+    vi.setSystemTime(new Date(NOW.getTime() + envMock.VENUE_WEATHER_CACHE_TTL_MS + 1000));
+    await fetchWeatherForecast(50.45, 30.52, AT, "fresh");
+
+    // The first key must be gone, so asking again is a real request rather
+    // than a hit on an entry that should have been reclaimed long ago.
+    const before = spy.mock.calls.length;
+    await fetchWeatherForecast(50.45, 30.52, AT, "city-0");
+    expect(spy.mock.calls.length).toBe(before + 1);
+  });
+
   it("rejects invalid coordinates and dates without calling out", async () => {
     const spy = vi.fn(() => okResponse(body()));
     vi.stubGlobal("fetch", spy);

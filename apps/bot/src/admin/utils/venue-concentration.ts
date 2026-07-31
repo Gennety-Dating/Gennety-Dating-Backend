@@ -67,6 +67,17 @@ export interface CityConcentration {
 export const UNKNOWN_CITY_KEY = "unknown";
 
 /**
+ * Scan bound, shared by the dashboard route and the alert worker so the two
+ * cannot drift into disagreeing about what they measured.
+ *
+ * Hitting it is not benign: rows are read newest-first across ALL cities, so a
+ * truncated window can drop a quiet city's runs entirely and hand back a share
+ * computed from a partial denominator. Both readers must surface that rather
+ * than reporting the number as if it were complete.
+ */
+export const CONCENTRATION_ROW_LIMIT = 5000;
+
+/**
  * Parse `topCandidates` into a funnel, tolerating every shape the column has
  * ever held: the pre-part-6 bare array, the `{candidates, poolSizes}` object,
  * and anything malformed. Returns null rather than zeros — a row with no funnel

@@ -16,17 +16,18 @@ import { prisma } from "@gennety/db";
 import { env } from "../config.js";
 import { notifyFounderVenueConcentration } from "../services/founder-notify.js";
 import {
+  CONCENTRATION_ROW_LIMIT,
   computeVenueConcentration,
   parsePoolSizes,
   type SelectionLogRow,
 } from "../admin/utils/venue-concentration.js";
 
-const ROW_LIMIT = 5000;
-
 export interface VenueConcentrationAlertResult {
   citiesScanned: number;
   alerts: number;
   skipped: boolean;
+  /** The scan hit its bound, so every share below is off a partial window. */
+  truncated: boolean;
 }
 
 export async function venueConcentrationAlertTick(
@@ -35,7 +36,7 @@ export async function venueConcentrationAlertTick(
   // The founder feed is the only delivery channel, so an alert with the feed
   // off would compute an aggregation nobody receives.
   if (!env.VENUE_CONCENTRATION_ALERT_ENABLED || !env.FOUNDER_NOTIFY_ENABLED) {
-    return { citiesScanned: 0, alerts: 0, skipped: true };
+    return { citiesScanned: 0, alerts: 0, skipped: true, truncated: false };
   }
 
   const windowDays = env.VENUE_CONCENTRATION_ALERT_WINDOW_DAYS;
@@ -44,8 +45,19 @@ export async function venueConcentrationAlertTick(
     where: { mode: "live", createdAt: { gte: since } },
     select: { cityKey: true, selectedPlaceId: true, failureReason: true, topCandidates: true },
     orderBy: { createdAt: "desc" },
-    take: ROW_LIMIT,
+    take: CONCENTRATION_ROW_LIMIT,
   });
+
+  // Rows come newest-first across every city, so a truncated window can drop a
+  // quiet city's runs entirely and leave the shares below computed off a
+  // partial denominator. An alarm that can be quietly wrong is worse than one
+  // that is absent, so say so rather than reporting the number as complete.
+  const truncated = rows.length === CONCENTRATION_ROW_LIMIT;
+  if (truncated) {
+    console.warn(
+      `[venue-concentration] scan hit the ${CONCENTRATION_ROW_LIMIT}-row bound; shares are computed off a partial window`,
+    );
+  }
 
   const parsed: SelectionLogRow[] = rows.map((row) => ({
     cityKey: row.cityKey,
@@ -72,5 +84,5 @@ export async function venueConcentrationAlertTick(
   });
 
   await notifyFounderVenueConcentration(alerts, windowDays);
-  return { citiesScanned: cities.length, alerts: alerts.length, skipped: false };
+  return { citiesScanned: cities.length, alerts: alerts.length, skipped: false, truncated };
 }

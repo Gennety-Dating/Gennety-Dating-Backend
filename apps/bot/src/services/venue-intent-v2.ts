@@ -761,6 +761,12 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   // can reorder near-ties and nothing more.
   const weather = env.VENUE_SEASON_WEATHER_ENABLED ? await weatherPromise : null;
   const categoryById = new Map(deduped.map((row) => [row.rank.id, row.category]));
+  // UTC is safe for the season lookup as long as slots stay in the afternoon
+  // and every market sits east of UTC: the grid is 13:00–19:30 Kyiv local
+  // (= 10:00–17:30 UTC), so the UTC calendar day always matches the local one.
+  // A market WEST of UTC would break that — an evening slot there lands on the
+  // next UTC day and, on four days a year, in the next month. Revisit here when
+  // one launches; the fix is the pair's `Profile.timeZone`, not a wider clamp.
   const month = match.agreedTime.getUTCMonth() + 1;
   const contextFor = (candidate: VenueRankCandidate): number => {
     if (!env.VENUE_SEASON_WEATHER_ENABLED) return 1;
