@@ -4,14 +4,14 @@ import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import type { Language } from "@gennety/shared";
 import { monthsPhrase, t } from "@gennety/shared";
+import { butterflyPng } from "../match-card/collage.js";
 
 /**
  * Referral invite card (§Referral) — the "photo" a referrer forwards in one tap
- * (savePreparedInlineMessage → InlineQueryResultPhoto). Burgundy brand system:
- * wordmark header, "invited you" kicker, the fixed brand-voice headline, and
- * the Premium gift chip. The corner butterfly crest was dropped 2026-07-30
- * (founder call) pending a swap to the real brand logo asset — no accent mark
- * on this card for now.
+ * (savePreparedInlineMessage → InlineQueryResultPhoto). Burgundy brand system,
+ * top down: the brand butterfly + wordmark lockup, the "invited you" kicker,
+ * the fixed brand-voice headline, a row of member portraits (so the card shows
+ * people rather than only claiming them), and the Premium gift chip.
  *
  * Same pure satori→resvg stack as the date/match cards (no headless browser).
  * Returns a PNG Buffer, or null on any failure so the share flow can degrade to
@@ -20,6 +20,12 @@ import { monthsPhrase, t } from "@gennety/shared";
 
 const CARD_W = 900;
 const CARD_H = 1000;
+
+/** Cream the brand mark is tinted to — the card's own body-text colour. */
+const CREAM = "#F7ECEC";
+
+/** How many portrait slots the card lays out. */
+const PORTRAIT_SLOTS = 5;
 
 type SatoriFonts = Parameters<typeof satori>[1]["fonts"];
 let cachedFonts: SatoriFonts | null = null;
@@ -53,26 +59,79 @@ function txt(style: Record<string, unknown>, value: string): Node {
   return { type: "div", props: { style: { display: "flex", ...style }, children: value } };
 }
 
-/**
- * Where the Gennety wordmark sits on the card. Two candidates under founder
- * review (2026-07-31); the loser gets deleted once one is picked.
- *  - `header`     — one centred wordmark at the top, the classic lockup.
- *  - `decorative` — an oversized watermark bleeding off the bottom-left corner,
- *    a small solid wordmark beside it, and a tilted one bleeding off the
- *    top-right, so the mark frames the card instead of labelling it.
- */
-export type ReferralCardLogoVariant = "header" | "decorative";
-
 export interface ReferralCardInput {
   referrerName: string | null;
   giftMonths: number;
   lang: Language;
-  logoVariant?: ReferralCardLogoVariant;
+  /**
+   * Member portraits filling the card's portrait row, as `data:` URIs, in
+   * layout order (left → right). Fewer than `PORTRAIT_SLOTS` is fine; every
+   * unfilled slot renders as a numbered placeholder ring, which is what the
+   * founder reviews the layout against before supplying the real photos.
+   */
+  portraits?: readonly string[];
 }
 
 /** The brand wordmark, set in the logo's own typeface (title-case, not caps). */
 function wordmark(style: Record<string, unknown>): Node {
   return txt({ fontFamily: "Archivo Black", letterSpacing: -1, ...style }, "Gennety");
+}
+
+// The mark keeps its natural aspect ratio (width/height) — forcing it into a
+// square box squishes the butterfly.
+let cachedButterfly: { uri: string; w: number; h: number } | null = null;
+async function butterflyMark(): Promise<{ uri: string; w: number; h: number } | null> {
+  if (cachedButterfly) return cachedButterfly.uri ? cachedButterfly : null;
+  const mark = await butterflyPng(360, CREAM);
+  cachedButterfly = mark
+    ? { uri: `data:image/png;base64,${mark.png.toString("base64")}`, w: mark.width, h: mark.height }
+    : { uri: "", w: 0, h: 0 };
+  return cachedButterfly.uri ? cachedButterfly : null;
+}
+
+/**
+ * The portrait strip: overlapping circular frames, centred. A slot with a photo
+ * renders the photo cropped to the circle; an empty one renders a numbered ring
+ * so the layout can be reviewed and the slots referred to by number.
+ */
+function portraitRow(portraits: readonly string[]): Node {
+  const D = 138;
+  const OVERLAP = 30;
+  const slots: Node[] = [];
+  for (let i = 0; i < PORTRAIT_SLOTS; i++) {
+    const common = {
+      width: D,
+      height: D,
+      borderRadius: 999,
+      ...(i > 0 ? { marginLeft: -OVERLAP } : {}),
+      // A ring in the card's own background keeps overlapping frames legible
+      // against each other instead of merging into one blob.
+      border: "5px solid #2A0E17",
+    };
+    const src = portraits[i];
+    slots.push(
+      src
+        ? {
+            type: "img",
+            props: { src, style: { display: "flex", objectFit: "cover", ...common } },
+          }
+        : box(
+            {
+              ...common,
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(247,236,236,0.10)",
+            },
+            [
+              txt(
+                { fontSize: 34, fontWeight: 700, color: "rgba(247,236,236,0.45)" },
+                String(i + 1),
+              ),
+            ],
+          ),
+    );
+  }
+  return box({ width: "100%", justifyContent: "center", alignItems: "center" }, slots);
 }
 
 export async function renderReferralCard(input: ReferralCardInput): Promise<Buffer | null> {
@@ -125,37 +184,10 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
       ],
     );
 
-    // Corner wordmarks. Absolutely positioned with negative offsets so the big
-    // ones genuinely run off the card edge rather than sitting inside a margin;
-    // the huge bottom-left one is nearly transparent so it reads as texture in
-    // the gradient, never as a second thing to read.
-    const decorative = input.logoVariant === "decorative";
-    const decorations: Node[] = decorative
-      ? [
-          wordmark({
-            position: "absolute",
-            top: 40,
-            right: -18,
-            fontSize: 58,
-            color: "rgba(247,236,236,0.92)",
-            transform: "rotate(-8deg)",
-          }),
-          wordmark({
-            position: "absolute",
-            left: -86,
-            bottom: -74,
-            fontSize: 200,
-            color: "rgba(247,236,236,0.06)",
-          }),
-          wordmark({
-            position: "absolute",
-            left: 72,
-            bottom: 214,
-            fontSize: 28,
-            color: "rgba(247,236,236,0.5)",
-          }),
-        ]
-      : [];
+    const butterfly = await butterflyMark();
+    // Header lockup mark, aspect-correct (never squished into a square box).
+    const markH = 74;
+    const markW = butterfly ? Math.round((butterfly.w / butterfly.h) * markH) : markH;
 
     const tree = box(
       {
@@ -170,18 +202,22 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
         fontFamily: "Roboto",
       },
       [
-        ...decorations,
-        // In the decorative variant the corner marks ARE the branding, so the
-        // header keeps only the tagline (a fourth wordmark would be noise).
-        ...(decorative
-          ? []
-          : [wordmark({ ...center, fontSize: 46 })]),
+        // Brand lockup: the butterfly mark, tinted to the card's own cream, over
+        // the wordmark and tagline.
+        butterfly
+          ? {
+              type: "img",
+              props: {
+                src: butterfly.uri,
+                style: { display: "flex", width: markW, height: markH, marginBottom: 20 },
+              },
+            }
+          : box({}, []),
+        wordmark({ ...center, fontSize: 46 }),
         txt(
           {
             ...center,
-            // Clear the tilted top-right wordmark, which occupies the band the
-            // tagline would otherwise sit in.
-            marginTop: decorative ? 108 : 16,
+            marginTop: 14,
             fontSize: 29,
             fontWeight: 700,
             letterSpacing: 0.5,
@@ -204,6 +240,9 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
         ),
         headline,
         box({ flex: 1 }, []),
+        // Who's actually on the other side of the invite.
+        portraitRow(input.portraits ?? []),
+        box({ height: 46 }, []),
         // The Premium gift badge is the bottom element (replaces gennety.com).
         txt(
           {
