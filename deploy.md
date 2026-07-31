@@ -1,5 +1,60 @@
 # Gennety Dating Deploy
 
+**PENDING — season + weather venue ranking (PRODUCT_SPEC §3.7,
+VENUE_ENGINE_IMPROVEMENT_PLAN 5.3).** Not deployed yet. **No Prisma schema
+change, no Mini App change** (`apps/webapp` untouched) — but it ships alongside
+the observability block below, which DOES need an additive `db:push`, so follow
+that block's schema step. One new external dependency, one new flag, ships
+**off**.
+
+What it does: a park in a January downpour ranks below a comparable indoor spot.
+It is a **soft multiplier, never a filter** — the venue stays fully selectable,
+because a wrong forecast or a dead provider must not be able to withhold a venue
+from a couple. The combined season × weather factor is clamped to `[0.8, 1.1]`
+by a code constant, so it can reorder near-ties and nothing more.
+
+**New external dependency: Open-Meteo** (`api.open-meteo.com`). **No API key, no
+account, no quota, nothing to configure** — that is why it was picked over a
+credentialed provider for a signal worth a few positions of reordering. One
+request per venue selection (not per candidate), cached in-process by city +
+hour. If the droplet's egress is ever firewalled, allow `api.open-meteo.com:443`;
+otherwise there is no setup step at all.
+
+New env (all optional):
+
+| Key | Default | Effect |
+|---|---|---|
+| `VENUE_SEASON_WEATHER_ENABLED` | `false` | Master flag. Off → multiplier is a constant 1.0 and **no forecast is ever requested**. |
+| `VENUE_WEATHER_TIMEOUT_MS` | `2500` | Upper bound on the forecast wait. Past it the run continues weather-blind rather than making the pair wait. |
+| `VENUE_WEATHER_CACHE_TTL_MS` | `3600000` | In-process cache TTL. Failures are cached too, so an outage cannot become a retry storm. |
+
+**Three things worth knowing before flipping the flag:**
+
+- **Every failure is fail-open, by construction.** Network error, timeout,
+  non-200, unparseable body, a date past Open-Meteo's ~16-day horizon — all
+  return null, and null scores exactly like *perfect* weather, never like bad
+  weather. The forecast can only ever make an exposed venue rank slightly
+  better or slightly worse; it can never remove one.
+- **Most of the catalog is unaffected.** Indoor venues score exactly 1.0 in
+  every condition, as does any venue whose exposure the catalog does not
+  record. In practice this moves parks and a handful of scenic/outdoor rows.
+- **It runs on the selection path**, so the flag is safe to flip live with
+  `pm2 restart gennety-bot --update-env`, but production currently has **0
+  matches ever** — nothing will exercise it until the first Thursday batch
+  pairs someone and that pair reaches `negotiating_venue`.
+
+Post-deploy check — the multiplier is named in `venueSelectionReason` only when
+it actually moved a winner, so its absence on indoor picks is correct:
+
+```sh
+psql "$DATABASE_URL" -c "select venue_name, venue_selection_reason from matches where venue_selection_reason like '%context%' order by updated_at desc limit 5;"
+```
+
+**Rollback:** `VENUE_SEASON_WEATHER_ENABLED=false` +
+`pm2 restart gennety-bot --update-env`. No schema, no data, nothing to undo.
+
+---
+
 **PENDING — venue observability (VENUE_ENGINE_IMPROVEMENT_PLAN part 6).** Not
 deployed yet. **No Mini App change** (`apps/webapp` untouched) — but it needs an
 **additive `db:push` BEFORE the restart**, and it ships alongside the blocks

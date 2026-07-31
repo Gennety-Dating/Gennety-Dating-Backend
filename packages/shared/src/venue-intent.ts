@@ -457,6 +457,142 @@ export function scoreVenueCandidate(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Season + weather (VENUE_ENGINE_IMPROVEMENT_PLAN 5.3)
+// ---------------------------------------------------------------------------
+// A park in a downpour is a worse date than the same park in June, and the
+// engine had no way to know that. The product decision (founder, 2026-07-31)
+// is that this NEVER removes a venue — it only sinks it a few places among
+// options the ranker already considers comparable. The reason is stated
+// plainly: a forecast can be wrong, a provider can be down, and neither is
+// allowed to withhold a venue from a couple. That is the same principle the
+// catalog already applies to unknown opening hours (unknown → treated as open,
+// never as a reason to exclude).
+//
+// Everything here is pure. The forecast fetch lives in the bot service so this
+// module stays free of I/O and is exhaustively testable.
+
+/** How exposed a venue is to the weather. `unknown` always scores neutral. */
+export type VenueExposure = "indoor" | "outdoor" | "mixed" | "unknown";
+
+export interface VenueWeatherSnapshot {
+  /** 0..100. */
+  precipitationProbabilityPct: number;
+  temperatureC: number;
+  /** Thunderstorm, hail, heavy snow — a categorical "not today, outdoors". */
+  isSevere: boolean;
+}
+
+/**
+ * Hard bounds on the combined season × weather multiplier.
+ *
+ * Deliberately a code constant rather than an env knob: this is the guarantee
+ * that context can never outrank fit or quality (founder requirement T4), not
+ * a tuning dial. At the floor a venue loses a fifth of its score, which
+ * reorders near-ties and nothing else.
+ */
+export const VENUE_CONTEXT_MULTIPLIER_MIN = 0.8;
+export const VENUE_CONTEXT_MULTIPLIER_MAX = 1.1;
+
+/** Northern-hemisphere seasons; Kyiv is the only launched market (§1.3). */
+function seasonOf(month: number): "winter" | "summer" | "shoulder" {
+  if (month === 12 || month === 1 || month === 2) return "winter";
+  if (month >= 6 && month <= 8) return "summer";
+  return "shoulder";
+}
+
+/**
+ * Calendar-only relevance. Costs nothing and cannot fail, so it keeps working
+ * when the forecast does not.
+ *
+ * Spring and autumn are deliberately neutral: in Kyiv they are the seasons
+ * where the calendar genuinely predicts nothing and the actual weather is the
+ * only real signal.
+ *
+ * @param month 1..12
+ */
+export function seasonalRelevance(
+  exposure: VenueExposure,
+  ambiences: readonly string[],
+  month: number,
+): number {
+  if (exposure === "indoor" || exposure === "unknown") return 1;
+  const season = seasonOf(month);
+  if (season === "shoulder") return 1;
+  const scenic = ambiences.includes("scenic");
+  if (season === "winter") return exposure === "outdoor" ? 0.9 : 0.95;
+  // Summer. A scenic outdoor spot is the best version of the season, so it
+  // gets the amplifier; a plain outdoor one still gains, just less.
+  const base = exposure === "outdoor" ? 1.05 : 1.02;
+  return scenic ? base * 1.03 : base;
+}
+
+/**
+ * Forecast-driven relevance. A null snapshot means "we could not find out",
+ * which scores exactly like perfect weather — never like bad weather. Any
+ * other reading of a failed lookup would let an outage quietly delete the
+ * outdoor half of the catalog.
+ */
+export function weatherRelevanceMultiplier(
+  exposure: VenueExposure,
+  ambiences: readonly string[],
+  weather: VenueWeatherSnapshot | null,
+): number {
+  if (!weather) return 1;
+  if (exposure === "indoor" || exposure === "unknown") return 1;
+
+  let multiplier = 1;
+  if (weather.isSevere || weather.precipitationProbabilityPct >= 50) multiplier *= 0.85;
+  if (weather.temperatureC < 5 || weather.temperatureC > 32) multiplier *= 0.9;
+
+  const pleasant =
+    !weather.isSevere &&
+    weather.precipitationProbabilityPct < 20 &&
+    weather.temperatureC >= 10 &&
+    weather.temperatureC <= 28;
+  if (pleasant) multiplier *= ambiences.includes("scenic") ? 1.05 : 1.03;
+
+  return multiplier;
+}
+
+/**
+ * The value the ranker actually multiplies by: season × weather, clamped.
+ *
+ * The clamp is the whole safety story. Both inputs are individually mild, but
+ * they compound, and without a bound a cold severe winter day could stack to
+ * ~0.69 — enough to push a genuinely better venue below a worse one, which is
+ * exactly the trade T4 forbids.
+ */
+export function venueContextMultiplier(
+  exposure: VenueExposure,
+  ambiences: readonly string[],
+  month: number,
+  weather: VenueWeatherSnapshot | null,
+): number {
+  const combined =
+    seasonalRelevance(exposure, ambiences, month) *
+    weatherRelevanceMultiplier(exposure, ambiences, weather);
+  return Math.min(VENUE_CONTEXT_MULTIPLIER_MAX, Math.max(VENUE_CONTEXT_MULTIPLIER_MIN, combined));
+}
+
+/**
+ * Resolve exposure from what the catalog actually knows.
+ *
+ * `facets.setting` is the authoritative signal, but it is only populated for
+ * rows the facet backfill has run over, so a hand-added park can carry null.
+ * Category is the fallback for exactly that case and ONLY for parks, where the
+ * category alone settles it — a null setting on a restaurant genuinely means
+ * unknown, and guessing "indoor" there would be inventing evidence.
+ */
+export function venueExposureOf(
+  setting: VenueCandidateFacets["setting"],
+  category: string | null,
+): VenueExposure {
+  if (setting === "both") return "mixed";
+  if (setting === "indoor" || setting === "outdoor") return setting;
+  return category === "park" ? "outdoor" : "unknown";
+}
+
 export function rankVenueCandidates(
   candidates: VenueRankCandidate[],
   a: VenueIntentV2,

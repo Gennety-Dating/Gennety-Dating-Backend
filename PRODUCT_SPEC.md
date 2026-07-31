@@ -2561,6 +2561,46 @@ re-checks the oldest-verified active venues against Google Places by stored
 `placeId`, deactivates ones that closed or dropped below the rating/review
 floor, and refreshes opening hours. An infra failure never deactivates a venue.
 
+**Season and weather sink an unsuitable venue, they never remove it
+(feature-flagged `VENUE_SEASON_WEATHER_ENABLED`, added 2026-07-31).** A park in
+a January downpour is a worse date than the same park in June, and the engine
+had no way to know it. The founder decision is explicit about the shape of the
+fix: this is a **ranking** signal, not a filter. A rained-out park drops a few
+places among venues the ranker already considers comparable and stays fully
+selectable — because a forecast can be wrong, a provider can be down, and
+neither is allowed to withhold a venue from a couple. It is the same principle
+the catalog already applies to unknown opening hours (unknown → treated as open,
+never as grounds to exclude), and the same one behind removing the hard
+constraints in §Venue Intent V2: a need this specific belongs to the pair, who
+can change the venue on the §3.7b board or simply agree to walk somewhere else.
+
+Two independent inputs multiply, and the product is clamped to **[0.8, 1.1]**:
+
+- **Season** — a pure function of the date's month, so it costs nothing, cannot
+  fail, and keeps working when the forecast does not. Winter sinks outdoor
+  venues (mixed indoor/outdoor ones less), summer lifts them, and a scenic
+  outdoor spot gets a small extra summer amplifier. **Spring and autumn are
+  deliberately neutral** — in Kyiv they are exactly the seasons where the
+  calendar predicts nothing and only the real weather is informative.
+- **Weather** — the hourly forecast for the agreed slot (Open-Meteo, no key).
+  Heavy rain or severe conditions sink exposed venues, freezing or extreme heat
+  sinks them further, clear and mild weather lifts them. **An unknown forecast
+  scores exactly like perfect weather, never like bad weather**, so an outage
+  can never delete the outdoor half of the catalog.
+
+Indoor venues — most of the catalog — are untouched by both, exactly 1.0. A
+venue whose exposure the catalog does not record is also untouched: exposure is
+read from the venue's indoor/outdoor capability, falling back to the category
+**only for parks**, where the category alone settles it. Guessing "indoor" for
+an untagged restaurant would be inventing evidence.
+
+The clamp is the product guarantee, and it is a code constant rather than a
+tunable: context can never outrank fit or quality (the same rule that bounds the
+§3.7 diversity mechanics). Unclamped, a cold severe winter day compounds to
+~0.69 — enough to push a genuinely better venue below a worse one, which is the
+one trade this whole area of the product refuses to make. When the flag is off,
+the multiplier is a constant 1.0 and no forecast is ever requested.
+
 When no curated venue qualifies (no rows for the domain, or all out of range),
 the bot computes the great-circle midpoint (`services/geo.ts`) and queries the
 **Google Places API (New) v1**

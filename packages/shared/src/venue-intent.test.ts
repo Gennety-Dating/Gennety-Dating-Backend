@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
+  VENUE_CONTEXT_MULTIPLIER_MAX,
+  VENUE_CONTEXT_MULTIPLIER_MIN,
   VENUE_INTENT_PARSER_VERSION,
   defaultVenueHardConstraints,
   mapVibeTagsToFacets,
   normalizeVenueIntent,
   rankVenueCandidates,
   resolveVenueBridge,
+  seasonalRelevance,
+  venueContextMultiplier,
+  venueExposureOf,
+  weatherRelevanceMultiplier,
   type VenueIntentV2,
   type VenueRankCandidate,
+  type VenueWeatherSnapshot,
 } from "./venue-intent.js";
 
 function intent(experiences: VenueIntentV2["experiences"], overrides: Partial<VenueIntentV2> = {}): VenueIntentV2 {
@@ -247,5 +254,148 @@ describe("facet affinity (partial coverage)", () => {
     const unrelated = withAmbiences("unrel", ["lively"]);
     const rows = rankVenueCandidates([unrelated, adjacent], ...pair(["quiet"]));
     expect(rows[0]?.candidate.placeId).toBe("adj");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Season + weather (VENUE_ENGINE_IMPROVEMENT_PLAN 5.3)
+// ---------------------------------------------------------------------------
+
+const CLEAR_MILD: VenueWeatherSnapshot = {
+  precipitationProbabilityPct: 5,
+  temperatureC: 20,
+  isSevere: false,
+};
+const POURING: VenueWeatherSnapshot = {
+  precipitationProbabilityPct: 90,
+  temperatureC: 12,
+  isSevere: false,
+};
+const FREEZING_STORM: VenueWeatherSnapshot = {
+  precipitationProbabilityPct: 95,
+  temperatureC: -8,
+  isSevere: true,
+};
+
+describe("venueExposureOf", () => {
+  it("uses the catalog's setting when it has one", () => {
+    expect(venueExposureOf("outdoor", "cafe")).toBe("outdoor");
+    expect(venueExposureOf("indoor", "park")).toBe("indoor");
+    expect(venueExposureOf("both", "cafe")).toBe("mixed");
+  });
+
+  it("falls back to category ONLY for parks", () => {
+    // A park is outdoor by definition, so an untagged row is still known. A
+    // null setting on a restaurant genuinely means unknown — guessing "indoor"
+    // there would be inventing evidence the catalog does not have.
+    expect(venueExposureOf(null, "park")).toBe("outdoor");
+    expect(venueExposureOf(null, "restaurant")).toBe("unknown");
+    expect(venueExposureOf(null, null)).toBe("unknown");
+  });
+});
+
+describe("seasonalRelevance", () => {
+  it("never touches indoor or unknown venues", () => {
+    for (const month of [1, 4, 7, 10]) {
+      expect(seasonalRelevance("indoor", [], month)).toBe(1);
+      expect(seasonalRelevance("unknown", ["scenic"], month)).toBe(1);
+    }
+  });
+
+  it("sinks outdoor venues in winter and lifts them in summer", () => {
+    expect(seasonalRelevance("outdoor", [], 1)).toBeLessThan(1);
+    expect(seasonalRelevance("outdoor", [], 7)).toBeGreaterThan(1);
+  });
+
+  it("treats spring and autumn as neutral", () => {
+    // The seasons where the calendar predicts nothing and only the actual
+    // forecast is informative.
+    for (const month of [3, 4, 5, 9, 10, 11]) {
+      expect(seasonalRelevance("outdoor", ["scenic"], month)).toBe(1);
+      expect(seasonalRelevance("mixed", [], month)).toBe(1);
+    }
+  });
+
+  it("penalises a fully outdoor venue harder than a mixed one", () => {
+    expect(seasonalRelevance("outdoor", [], 12)).toBeLessThan(seasonalRelevance("mixed", [], 12));
+  });
+
+  it("amplifies a scenic outdoor spot in summer", () => {
+    expect(seasonalRelevance("outdoor", ["scenic"], 7)).toBeGreaterThan(
+      seasonalRelevance("outdoor", [], 7),
+    );
+  });
+});
+
+describe("weatherRelevanceMultiplier", () => {
+  it("treats an unknown forecast exactly like perfect weather", () => {
+    // The single most important property: a provider outage must never be able
+    // to withhold the outdoor half of the catalog.
+    expect(weatherRelevanceMultiplier("outdoor", [], null)).toBe(1);
+    expect(weatherRelevanceMultiplier("mixed", ["scenic"], null)).toBe(1);
+  });
+
+  it("never reads the forecast for indoor or unknown venues", () => {
+    expect(weatherRelevanceMultiplier("indoor", [], FREEZING_STORM)).toBe(1);
+    expect(weatherRelevanceMultiplier("unknown", [], FREEZING_STORM)).toBe(1);
+  });
+
+  it("sinks exposed venues in rain and lifts them in clear mild weather", () => {
+    expect(weatherRelevanceMultiplier("outdoor", [], POURING)).toBeLessThan(1);
+    expect(weatherRelevanceMultiplier("outdoor", [], CLEAR_MILD)).toBeGreaterThan(1);
+  });
+
+  it("stacks severity and temperature", () => {
+    expect(weatherRelevanceMultiplier("outdoor", [], FREEZING_STORM)).toBeLessThan(
+      weatherRelevanceMultiplier("outdoor", [], POURING),
+    );
+  });
+
+  it("does not award the pleasant bonus in borderline cold", () => {
+    const chilly: VenueWeatherSnapshot = { precipitationProbabilityPct: 0, temperatureC: 7, isSevere: false };
+    expect(weatherRelevanceMultiplier("outdoor", [], chilly)).toBe(1);
+  });
+});
+
+describe("venueContextMultiplier", () => {
+  it("stays inside the clamp for every combination", () => {
+    const exposures = ["indoor", "outdoor", "mixed", "unknown"] as const;
+    const weathers = [null, CLEAR_MILD, POURING, FREEZING_STORM];
+    for (const exposure of exposures) {
+      for (const weather of weathers) {
+        for (const ambiences of [[], ["scenic"]]) {
+          for (let month = 1; month <= 12; month += 1) {
+            const value = venueContextMultiplier(exposure, ambiences, month, weather);
+            expect(value).toBeGreaterThanOrEqual(VENUE_CONTEXT_MULTIPLIER_MIN);
+            expect(value).toBeLessThanOrEqual(VENUE_CONTEXT_MULTIPLIER_MAX);
+          }
+        }
+      }
+    }
+  });
+
+  it("clamps the worst case rather than letting the factors compound", () => {
+    // Winter (0.9) x severe (0.85) x freezing (0.9) is ~0.69 unclamped, which
+    // is enough to push a genuinely better venue below a worse one — the exact
+    // trade the clamp exists to forbid.
+    expect(venueContextMultiplier("outdoor", [], 1, FREEZING_STORM)).toBe(VENUE_CONTEXT_MULTIPLIER_MIN);
+  });
+
+  it("is exactly neutral for an indoor venue in any conditions", () => {
+    // Most of the catalog is indoor, so this is the common path: the feature
+    // must be a no-op there rather than a rounding error.
+    for (let month = 1; month <= 12; month += 1) {
+      expect(venueContextMultiplier("indoor", [], month, FREEZING_STORM)).toBe(1);
+    }
+  });
+
+  it("cannot reverse a meaningful quality gap", () => {
+    // The product guarantee (T4): variety and context never cost quality. A
+    // clearly better venue must survive the worst context penalty.
+    const strongIndoor = 0.75;
+    const weakOutdoor = 0.6;
+    const worst = venueContextMultiplier("outdoor", [], 1, FREEZING_STORM);
+    const best = venueContextMultiplier("indoor", [], 7, CLEAR_MILD);
+    expect(strongIndoor * best).toBeGreaterThan(weakOutdoor * worst);
   });
 });

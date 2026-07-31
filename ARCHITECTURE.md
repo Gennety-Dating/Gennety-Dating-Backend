@@ -1069,6 +1069,7 @@ currently bot-side only.
 | AWS Rekognition Face Liveness | Identity liveness: `CreateFaceLivenessSession` + `GetFaceLivenessSessionResults` server-side (`services/face-liveness.ts`); the device streams its selfie video straight to `StartFaceLivenessSession` using STS credentials minted per session by `services/liveness-credentials.ts`. Replaced Persona 2026-07-26. ~$0.015 per check with no monthly floor, so a paused ad campaign costs nothing. A session and its reference image expire 3 minutes after creation — see PRODUCT_SPEC §1.4. **Runs in `FACE_LIVENESS_REGION` = `eu-west-1`, NOT the `AWS_REGION` (eu-central-1) the rest of Rekognition uses** — Frankfurt does not serve Face Liveness, and answers with a message-less `AccessDeniedException` that mimics an IAM denial. `rekognition-client.ts` caches one client per region; the region is returned to the client verbatim because the detector must stream to the region its session was created in. |
 | AWS Rekognition | `CompareFaces`, `DetectFaces`, and `DetectModerationLabels` for profile photo/video admission and the face-match decision; `DetectFaces` boxes also drive the date-card share-copy face blur (§3.7a) |
 | Google Places (New) v1 | **Fallback** concierge venue search (primary is the first-party `curated_venues` base) at the great-circle midpoint via `places.googleapis.com/v1/places:searchNearby` (+ text fallback). Strict quality gate (operational + place-type deny-list + rating ≥ 4.0 + ≥ 30 reviews + student-friendly price tier for food) and weighted scoring on top of the raw API. Also used by `scripts/seed-venues.mjs` (via `searchVenueCandidates`) to source curated-base candidates under the same gate. The `places.photos` field + the Places **media** endpoint supply the date-card venue cover photo (fetched at render time, credited on the card, never persisted). |
+| Open-Meteo | Hourly forecast for the venue-ranking season/weather multiplier (`services/weather.ts`, PRODUCT_SPEC §3.7 / VENUE_ENGINE_IMPROVEMENT_PLAN 5.3). **No API key, no account, no quota** — chosen for exactly that reason: the value it adds is a few positions of reordering among near-equal venues, which does not justify a credentialed dependency. One request per selection run (every candidate sits in one city at one hour), cached in-process by `cityKey` + hour. Every failure path — network, timeout, non-200, unparseable body, a date past the ~16-day horizon — returns `null`, which scores exactly like perfect weather, so an outage can never withhold the outdoor half of the catalog. Gated by `VENUE_SEASON_WEATHER_ENABLED`; off → no request is ever made. |
 | satori + @resvg/resvg-js + @napi-rs/canvas | In-process date-card PNG rendering (§3.7a, feature-flagged): `satori` builds an SVG from a plain element tree, `@resvg/resvg-js` rasterizes it to PNG, and `@napi-rs/canvas` pixelates the partner's face for the share copy plus applies the venue-photo duotone and the film-grain tile. Pure Node (no headless browser); bundled Roboto + Archivo Black TTFs live in `apps/bot/src/assets/fonts/`. The same satori/resvg pair (no canvas) also renders the always-on **locked-time card** (`services/time-card.ts`, PRODUCT_SPEC §3.6) — text only, no photos or network, so it is fast enough to send inline. NB: satori does **not** fall through *within* a font family, so the Unbounded latin/cyrillic subsets must be registered under distinct family names or mixed-script strings silently drop to Roboto. |
 | Supabase | Postgres + pgvector primary store, Storage for selfies, mobile profile photos, and chat images |
 | Resend/email provider | Corporate-email OTP delivery |
@@ -1115,6 +1116,22 @@ that visible without a second table:
   on every dashboard request, the same reason `match_score_logs` freezes its
   breakdown. Nullable, so rows predating it read as `unknown` rather than
   breaking the aggregation.
+
+**Season and weather are a soft ranking multiplier, never a filter.** After the
+ranker scores and before the diversity layer picks,
+`venueContextMultiplier(exposure, ambiences, month, weather)`
+(`packages/shared/src/venue-intent.ts`, pure) multiplies each candidate's score
+and the list is re-sorted once — so both the diversity path and its argmax
+fallback read the same adjusted order, rather than the multiplier being silently
+lost on the runs where diversity bailed. `pairFit` is deliberately NOT adjusted:
+it gates the vibe floor, and weather has no bearing on whether a venue matches
+what the pair asked for. Exposure comes from `facets.setting`, falling back to
+category **only for parks** (a park is outdoor by definition; a null setting on a
+restaurant genuinely means unknown, and guessing would be inventing evidence).
+The combined multiplier is clamped to `[0.8, 1.1]` by a code constant, not an
+env knob — that clamp is the guarantee that context can never outrank fit or
+quality (founder requirement T4), and without it a cold severe winter day would
+compound to ~0.69, enough to push a genuinely better venue below a worse one.
 
 `admin/utils/venue-concentration.ts` is the pure aggregation over those rows,
 shared by `GET /admin/analytics/venue-concentration` and

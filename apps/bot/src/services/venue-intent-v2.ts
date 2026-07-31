@@ -14,6 +14,8 @@ import {
   normalizeVenueIntent,
   rankVenueCandidates,
   resolveVenueBridge,
+  venueContextMultiplier,
+  venueExposureOf,
   type VenueAmbience,
   type VenueCandidateFacets,
   type VenueExperience,
@@ -25,6 +27,7 @@ import {
   type VenueRankCandidate,
 } from "@gennety/shared";
 import { env } from "../config.js";
+import { fetchWeatherForecast } from "./weather.js";
 import { midpoint, haversineDistanceKm, venueSearchRadiusMeters, commuteBoundingBox } from "./geo.js";
 import { callOpenAIJson } from "./openai.js";
 import {
@@ -644,6 +647,12 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   };
   const cityKey = match.userA.profile?.homeCityKey ?? match.userB.profile?.homeCityKey ?? null;
   const universityDomain = match.userA.universityDomain ?? match.userB.universityDomain ?? null;
+  // One forecast per run, not per candidate: every candidate sits in one city
+  // at one hour. Started here so it overlaps the catalog query and the Places
+  // calls instead of adding its own latency; awaited at the ranking step. It
+  // resolves to null on any failure and never rejects, but the guard stays as
+  // a belt-and-braces against an unhandled rejection killing the process.
+  const weatherPromise = fetchWeatherForecast(mid.lat, mid.lng, match.agreedTime, cityKey).catch(() => null);
   // Geographic pre-filter. A venue has to sit within the commute limit of BOTH
   // origins, so the box is the intersection of the two circles (see
   // `commuteBoundingBox`). Without it the query returned the whole city and the
@@ -745,6 +754,20 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   const deduped = [...new Map(selections.map((row) => [row.rank.placeId, row])).values()];
   const ranked = rankVenueCandidates(deduped.map((row) => row.rank), a, b);
 
+  // Season + weather. A soft reorder among comparable venues, never a filter:
+  // a rained-out park sinks a few places and stays selectable, because a wrong
+  // forecast or a dead provider must not be able to withhold a venue. The
+  // multiplier is clamped to [0.8, 1.1] inside `venueContextMultiplier`, so it
+  // can reorder near-ties and nothing more.
+  const weather = env.VENUE_SEASON_WEATHER_ENABLED ? await weatherPromise : null;
+  const categoryById = new Map(deduped.map((row) => [row.rank.id, row.category]));
+  const month = match.agreedTime.getUTCMonth() + 1;
+  const contextFor = (candidate: VenueRankCandidate): number => {
+    if (!env.VENUE_SEASON_WEATHER_ENABLED) return 1;
+    const exposure = venueExposureOf(candidate.facets.setting, categoryById.get(candidate.id) ?? null);
+    return venueContextMultiplier(exposure, candidate.facets.ambiences, month, weather);
+  };
+
   // The selection funnel, frozen into the log below (VENUE_ENGINE_IMPROVEMENT_PLAN
   // part 6). Each number answers a different question when a pair gets a poor or
   // repeated venue: was the geo box empty, did the eligibility gates eat the
@@ -756,26 +779,37 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
     ranked: ranked.length,
   };
 
+  // Context is folded in and the list re-sorted ONCE, so both the diversity
+  // path and the argmax fallback below read the same adjusted order. Applying
+  // it only inside the diversity call would silently drop the multiplier on
+  // exactly the runs where that layer bailed.
+  const contextRanked = ranked
+    .map((row) => ({ row, adjusted: row.score.finalScore * contextFor(row.candidate) }))
+    .sort((left, right) => right.adjusted - left.adjusted);
+
   // Diversity layer. The ranker is deterministic, so on a stable catalog it
   // answers the same thing for every pair in the city — which is how a handful
   // of venues ended up carrying nearly every date. This picks between options
   // the ranker considers near-equal, never below them (see venue-diversity.ts).
   // Best-effort: a failure here must not cost the pair their date, so it falls
   // back to the plain argmax.
-  let best = ranked[0];
+  let best = contextRanked[0]?.row;
   let diversityReason = "argmax-unfiltered";
-  if (ranked.length > 0) {
+  if (contextRanked.length > 0) {
     try {
       const usage = await loadVenueUsage({
         userAId: match.userA.id,
         userBId: match.userB.id,
         agreedTime: match.agreedTime,
-        candidateIds: ranked.map((row) => row.candidate.placeId),
+        candidateIds: contextRanked.map(({ row }) => row.candidate.placeId),
       });
       const decision = applyVenueDiversity(
-        ranked.map((row) => ({
+        contextRanked.map(({ row, adjusted }) => ({
           id: row.candidate.placeId,
-          score: row.score.finalScore,
+          score: adjusted,
+          // Fit is the ranker's own verdict and is deliberately NOT context-
+          // adjusted: it gates the vibe floor, and weather has no bearing on
+          // whether a venue matches what the pair asked for.
           pairFit: row.score.pairFit,
           row,
         })),
@@ -854,7 +888,12 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
     chipCorrections: chipCorrectionCount(a) + chipCorrectionCount(b),
   } });
   if (mode === "shadow") return;
-  const reason = `Pair intent: ${resolveVenueBridge(a, b).join(", ")}; verified fit ${(best.score.pairFit * 100).toFixed(0)}%; route imbalance ${Math.abs(chosen.rank.distanceA - chosen.rank.distanceB).toFixed(1)} km; pick ${diversityReason} of ${ranked.length}.`;
+  // Records the context multiplier only when it actually moved the winner, so
+  // the reason line stays quiet on the common case (indoor venue, or the
+  // feature off) and names the factor on the runs where it mattered.
+  const chosenContext = contextFor(best.candidate);
+  const contextNote = chosenContext === 1 ? "" : ` context ×${chosenContext.toFixed(2)};`;
+  const reason = `Pair intent: ${resolveVenueBridge(a, b).join(", ")}; verified fit ${(best.score.pairFit * 100).toFixed(0)}%; route imbalance ${Math.abs(chosen.rank.distanceA - chosen.rank.distanceB).toFixed(1)} km;${contextNote} pick ${diversityReason} of ${ranked.length}.`;
   const committed = await prisma.match.updateMany({
     where: { id: matchId, status: "negotiating_venue" },
     data: {
