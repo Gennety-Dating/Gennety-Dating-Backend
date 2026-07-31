@@ -223,7 +223,7 @@ covers an open Mini App).
 **Three things worth knowing before the restart:**
 
 - **Tiers 4 and 5 are claims about other workers.** "Напомнил {name}" at 6 h is
-  true only because `match-nudge` fires there, and "время на исходе" at 24 h only
+  true only because `match-nudge` fires there, and "время поджимает" at 24 h only
   because the §3.5c check-in does. If either schedule is retuned, retune these
   boundaries with it (`TIERS` in `services/peer-wait.ts`).
 - **These statuses carry no emoji or animated glyph at all** (founder decision

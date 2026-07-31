@@ -2292,7 +2292,7 @@ Five tiers replace it, one line each:
 | 2 | 5 min – 1 h | `Ждём {name}` |
 | 3 | 1 – 6 h | `От {name} пока тихо` |
 | 4 | 6 – 24 h | `Напомнил {name}` |
-| 5 | > 24 h | `Ждём {name} — время на исходе` |
+| 5 | > 24 h | `Ждём {name} — время поджимает` |
 
 **These lines carry no icon — no leading emoji and no animated `<tg-emoji>`
 glyph** (founder decision 2026-07-30). An intermediate revision gave each tier
