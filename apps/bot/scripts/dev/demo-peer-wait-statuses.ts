@@ -1,10 +1,10 @@
 /**
  * Dev-only: walk through every peer-wait shimmer status (PRODUCT_SPEC §3.6b) in
  * a Telegram chat, one at a time — a caption explaining WHERE it fires and its
- * time window, then the actual `<tg-thinking>` draft held on screen for ~10s
+ * time window, then the actual `<tg-thinking>` draft held on screen for ~20s
  * before moving to the next.
  *
- * A rich draft dies ~30s after it's issued, so "held for 10s" here means
+ * A rich draft dies ~30s after it's issued, so "held for 20s" here means
  * re-issuing the same draft_id every ~4s — the same mechanism
  * `workers/peer-wait-shimmer.ts` uses to keep one alive for hours in production.
  *
@@ -54,7 +54,7 @@ if (!Number.isFinite(chatId)) {
 const api = new Api(token);
 const MATCH_ID = "demo-peer-wait";
 const SIDE = "A" as const;
-const HOLD_MS = 10_000;
+const HOLD_MS = 20_000;
 const REISSUE_EVERY_MS = 4_000; // comfortably under the ~30s draft TTL
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
