@@ -77,6 +77,49 @@ function wordmark(style: Record<string, unknown>): Node {
   return txt({ fontFamily: "Archivo Black", letterSpacing: -1, ...style }, "Gennety");
 }
 
+/**
+ * The production portrait set, bundled with the bot at
+ * `assets/referral-portraits/<n>.<ext>` (1-indexed, left → right). Read once and
+ * cached as data URIs — the card renders on every share and on every public
+ * `GET /v1/referral/card` hit, so this must not touch the disk per request.
+ *
+ * Missing files are not an error: the row simply falls back to numbered
+ * placeholder rings for those slots, which is also how the layout is reviewed
+ * before the photos land. They are ordinary repo assets, so they ship with the
+ * standard code rsync and need no storage bucket or CDN.
+ */
+const PORTRAIT_EXTENSIONS = ["jpg", "jpeg", "png", "webp"] as const;
+const PORTRAIT_MIME: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
+let cachedPortraits: string[] | null = null;
+function bundledPortraits(): string[] {
+  if (cachedPortraits) return cachedPortraits;
+  const out: string[] = [];
+  for (let i = 1; i <= PORTRAIT_SLOTS; i++) {
+    let uri = "";
+    for (const ext of PORTRAIT_EXTENSIONS) {
+      try {
+        const data = readFileSync(
+          fileURLToPath(new URL(`../../assets/referral-portraits/${i}.${ext}`, import.meta.url)),
+        );
+        uri = `data:${PORTRAIT_MIME[ext]};base64,${data.toString("base64")}`;
+        break;
+      } catch {
+        // Try the next extension; a slot with no file stays a placeholder.
+      }
+    }
+    // Keep the index alignment: slot N is always position N, so one missing
+    // file leaves a hole rather than shifting every later photo left.
+    out.push(uri);
+  }
+  cachedPortraits = out;
+  return out;
+}
+
 // The mark keeps its natural aspect ratio (width/height) — forcing it into a
 // square box squishes the butterfly.
 let cachedButterfly: { uri: string; w: number; h: number } | null = null;
@@ -241,7 +284,7 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
         headline,
         box({ flex: 1 }, []),
         // Who's actually on the other side of the invite.
-        portraitRow(input.portraits ?? []),
+        portraitRow(input.portraits ?? bundledPortraits()),
         box({ height: 46 }, []),
         // The Premium gift badge is the bottom element (replaces gennety.com).
         txt(
