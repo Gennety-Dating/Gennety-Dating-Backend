@@ -176,9 +176,9 @@ export async function forgetChatEventForMessage(
 /**
  * Resolved recording target for a Telegram chat.
  *
- * `null` userId means "no such user"; `recordable: false` means the user
- * exists but is still onboarding. Both are cached so the recorder does not hit
- * the DB on every single outgoing message.
+ * `null` userId means "no such user" — the only reason a chat is not
+ * recordable. Cached so the recorder does not hit the DB on every single
+ * outgoing message.
  */
 export interface ChatTarget {
   userId: string | null;
@@ -192,6 +192,16 @@ interface CachedTarget extends ChatTarget {
 /** In-memory, single-process (same assumption as `services/usage-limiter.ts`). */
 const targetCache = new Map<string, CachedTarget>();
 const TARGET_CACHE_TTL_MS = 5 * 60 * 1000;
+/**
+ * A MISS is cached for seconds, not minutes.
+ *
+ * The first `/start` reaches the inbound recorder before the handler that
+ * creates the `User` row, so it resolves to "no such user". Caching that for
+ * the full 5 minutes would silently discard the next five minutes of that
+ * chat — which, now that onboarding is recorded, is most of registration.
+ * A short window still absorbs a flood from a chat that genuinely has no user.
+ */
+const TARGET_CACHE_MISS_TTL_MS = 10 * 1000;
 /** Bound the map so a long-running process can't grow it without limit. */
 const TARGET_CACHE_MAX_ENTRIES = 5_000;
 
@@ -203,9 +213,10 @@ export function clearChatTargetCache(): void {
 /**
  * Forget one chat's cached target.
  *
- * Called when a user finishes onboarding, so their very next message is
- * recorded instead of waiting out the TTL — the first minutes after
- * activation are exactly when the menu agent takes over.
+ * Kept as a seam for any flow that changes what a chat resolves to — the
+ * phone-based account adoption in `services/account-linking.ts` re-points a
+ * `telegramId` at a different row, which is exactly the case a stale cache
+ * entry would get wrong.
  */
 export function invalidateChatTarget(telegramId: bigint | number): void {
   targetCache.delete(String(telegramId));
@@ -214,10 +225,28 @@ export function invalidateChatTarget(telegramId: bigint | number): void {
 /**
  * Resolve a Telegram chat id to the user whose timeline it belongs to.
  *
- * Only post-onboarding users are recordable. That is the menu agent's own
- * scope, and it keeps onboarding-era content (OTP codes, the phone number, a
- * pasted AI-memory export) out of the table by construction rather than by
- * filtering.
+ * **Every real Telegram chat is recorded, from `/start` onward (founder
+ * decision 2026-07-31).** This used to be scoped to `onboardingStep =
+ * 'completed'`, which kept onboarding-era content — the typed OTP code, a
+ * pasted AI-memory export — out of the table by construction. The cost was
+ * that registration, the single most important funnel to be able to read, was
+ * the one stretch of the conversation the admin dialog reader could not see:
+ * no photos, no buttons, no Mini App steps, nothing but the onboarding agent's
+ * own turns. The founder owns that data and reads it in a single-operator
+ * dashboard, so the tradeoff was taken deliberately.
+ *
+ * What that means concretely, since it is not free:
+ *   - a typed OTP code lands in `summary` (already expired by the time anyone
+ *     reads it, and swept after 30 days by `workers/retention.ts`);
+ *   - a pasted AI-memory export lands as a ≤300-char excerpt via
+ *     `truncateSummary`, never in full — PRODUCT_SPEC §1.3's "the raw pasted
+ *     response is transient" now means "except for that excerpt";
+ *   - the phone number itself still never lands here: the contact share is
+ *     recorded as the event, not the digits.
+ *
+ * The rows also reach the menu agent's prompt, where they are already fenced
+ * as untrusted data — so onboarding text is subject to the same handling as
+ * everything else in the timeline.
  */
 export async function resolveChatTarget(
   telegramId: bigint | number,
@@ -237,14 +266,11 @@ export async function resolveChatTarget(
   try {
     const user = await prisma.user.findUnique({
       where: { telegramId: id },
-      select: { id: true, onboardingStep: true },
+      select: { id: true },
     });
-    if (user) {
-      resolved = {
-        userId: user.id,
-        recordable: user.onboardingStep === "completed",
-      };
-    }
+    // A row existing is the whole test now: there is no step at which the
+    // conversation stops being worth recording.
+    if (user) resolved = { userId: user.id, recordable: true };
   } catch (err) {
     console.warn("[chat-events] target lookup failed:", err);
     // Don't cache a lookup that failed for infrastructure reasons.
@@ -252,7 +278,10 @@ export async function resolveChatTarget(
   }
 
   if (targetCache.size >= TARGET_CACHE_MAX_ENTRIES) targetCache.clear();
-  targetCache.set(key, { ...resolved, expiresAt: now + TARGET_CACHE_TTL_MS });
+  targetCache.set(key, {
+    ...resolved,
+    expiresAt: now + (resolved.userId ? TARGET_CACHE_TTL_MS : TARGET_CACHE_MISS_TTL_MS),
+  });
   return resolved;
 }
 
@@ -272,6 +301,9 @@ export function recordMiniAppAction(
   summary: string,
   options: { surface?: string | null; matchId?: string | null } = {},
 ): void {
+  // Now that onboarding is in scope this also covers the registration Mini App
+  // — the city pick, the theme pick, the sign-up fork — which happens entirely
+  // off-chat and was previously invisible on both counts.
   void recordChatEventForChat(telegramId, {
     direction: "in",
     kind: "mini_app_action",

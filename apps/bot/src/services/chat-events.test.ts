@@ -96,17 +96,20 @@ describe("getRecentChatEvents", () => {
 
 describe("resolveChatTarget", () => {
   it("marks a post-onboarding user recordable", async () => {
-    findUser.mockResolvedValue({ id: "u1", onboardingStep: "completed" });
+    findUser.mockResolvedValue({ id: "u1" });
     await expect(resolveChatTarget(555n)).resolves.toEqual({
       userId: "u1",
       recordable: true,
     });
   });
 
-  it("refuses to record a user still in onboarding", async () => {
-    findUser.mockResolvedValue({ id: "u1", onboardingStep: "conversational" });
+  it("records a user still in onboarding too", async () => {
+    // Founder decision 2026-07-31: registration is the funnel most worth
+    // reading, and scoping the timeline to completed users made it the one
+    // stretch of the conversation the admin reader could not see.
+    findUser.mockResolvedValue({ id: "u1" });
     const target = await resolveChatTarget(555n);
-    expect(target.recordable).toBe(false);
+    expect(target.recordable).toBe(true);
   });
 
   it("never records a mobile-only synthetic (negative) id", async () => {
@@ -118,19 +121,50 @@ describe("resolveChatTarget", () => {
   });
 
   it("caches the lookup", async () => {
-    findUser.mockResolvedValue({ id: "u1", onboardingStep: "completed" });
+    findUser.mockResolvedValue({ id: "u1" });
     await resolveChatTarget(555n);
     await resolveChatTarget(555n);
     expect(findUser).toHaveBeenCalledTimes(1);
   });
 
-  it("re-reads after the chat is invalidated (user just finished onboarding)", async () => {
-    findUser.mockResolvedValue({ id: "u1", onboardingStep: "conversational" });
+  it("does not hold on to a miss — a brand-new chat is retried in seconds", async () => {
+    // The first /start reaches the recorder BEFORE the handler that creates
+    // the User row, so it resolves to "no such user". Caching that for the
+    // full 5 minutes would silently discard the next five minutes of that
+    // chat — which is now most of registration.
+    vi.useFakeTimers();
+    try {
+      findUser.mockResolvedValue(null);
+      await expect(resolveChatTarget(555n)).resolves.toEqual({
+        userId: null,
+        recordable: false,
+      });
+
+      // Still inside the short miss window: no second query.
+      vi.advanceTimersByTime(5_000);
+      await resolveChatTarget(555n);
+      expect(findUser).toHaveBeenCalledTimes(1);
+
+      // Past it, and the row now exists.
+      vi.advanceTimersByTime(11_000);
+      findUser.mockResolvedValue({ id: "u1" });
+      await expect(resolveChatTarget(555n)).resolves.toEqual({
+        userId: "u1",
+        recordable: true,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("re-reads after the chat is invalidated", async () => {
+    findUser.mockResolvedValue({ id: "u1" });
     await resolveChatTarget(555n);
     invalidateChatTarget(555n);
-    findUser.mockResolvedValue({ id: "u1", onboardingStep: "completed" });
+    // Account adoption re-points a telegramId at a different row.
+    findUser.mockResolvedValue({ id: "u2" });
     await expect(resolveChatTarget(555n)).resolves.toEqual({
-      userId: "u1",
+      userId: "u2",
       recordable: true,
     });
   });
@@ -138,7 +172,7 @@ describe("resolveChatTarget", () => {
   it("does not cache a failed lookup", async () => {
     findUser.mockRejectedValue(new Error("db down"));
     await resolveChatTarget(555n);
-    findUser.mockResolvedValue({ id: "u1", onboardingStep: "completed" });
+    findUser.mockResolvedValue({ id: "u1" });
     await expect(resolveChatTarget(555n)).resolves.toEqual({
       userId: "u1",
       recordable: true,
@@ -148,14 +182,20 @@ describe("resolveChatTarget", () => {
 
 describe("recordChatEventForChat", () => {
   it("writes for a completed user", async () => {
-    findUser.mockResolvedValue({ id: "u1", onboardingStep: "completed" });
+    findUser.mockResolvedValue({ id: "u1" });
     await recordChatEventForChat(555, { direction: "in", kind: "user_text", summary: "why?" });
     expect(create).toHaveBeenCalledTimes(1);
     expect(create.mock.calls[0]![0].data.userId).toBe("u1");
   });
 
-  it("stays silent for a user still onboarding", async () => {
-    findUser.mockResolvedValue({ id: "u1", onboardingStep: "conversational" });
+  it("writes during onboarding as well", async () => {
+    findUser.mockResolvedValue({ id: "u1" });
+    await recordChatEventForChat(555, { direction: "in", kind: "user_media", summary: "sent a photo" });
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays silent for a chat with no user row yet", async () => {
+    findUser.mockResolvedValue(null);
     await recordChatEventForChat(555, { direction: "in", kind: "user_text", summary: "hi" });
     expect(create).not.toHaveBeenCalled();
   });

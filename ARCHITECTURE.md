@@ -462,12 +462,28 @@ self-deleting "thinking" status beats (`services/ai-stream.ts`), and a
 stream that edits one message through several chunks marks its transient send
 ephemeral and records the FINAL text once via `recordOutboundMessage`.
 
-Recording is scoped to `onboardingStep = 'completed'` users (resolved through a
-5-minute `chatId → user` cache), which is the menu agent's own scope and keeps
-onboarding-era content — OTP codes, the phone number, a pasted AI-memory export
-— out of the table by construction. Every write is fire-and-forget and swallows
-its errors: the recorder sits in the path of every outgoing Telegram call and
-must never fail a send. Swept after 30 days by `workers/retention.ts`.
+**Recording covers every real Telegram chat from `/start` onward** (founder
+decision 2026-07-31, PRODUCT_SPEC §2.1). It used to begin only at
+`onboardingStep = 'completed'`; the cost was that registration was the one
+stretch of the conversation the admin dialog reader could not see. Two
+consequences the code depends on:
+
+- The `chatId → user` cache keeps a **hit** for 5 minutes but a **miss** for
+  only 10 seconds. The first `/start` reaches the inbound recorder before the
+  handler that creates the `User` row, so it resolves to "no such user";
+  caching that for the full TTL would silently discard the next five minutes of
+  that chat, i.e. most of registration.
+- `resolveChatTarget` no longer reads `onboardingStep` at all — a row existing
+  is the whole test. `invalidateChatTarget` survives as the seam for a chat
+  that changes owner (the phone-based account adoption in
+  `services/account-linking.ts` re-points a `telegramId` at a different row).
+
+Every write is fire-and-forget and swallows its errors: the recorder sits in
+the path of every outgoing Telegram call and must never fail a send. Swept
+after 30 days by `workers/retention.ts`, which is also what bounds retention of
+the onboarding-era content this scope now admits (a typed OTP code; a ≤300-char
+excerpt of a pasted AI-memory export — the phone number itself is never stored
+here, only the fact of the contact share).
 
 ### `media_validation_rejections`
 

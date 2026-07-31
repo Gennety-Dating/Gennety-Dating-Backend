@@ -50,14 +50,18 @@ What ships, and why each piece exists:
   admitting it. Every cached route now emits `X-Data-Generated-At` /
   `X-Data-Cache` and honours `?fresh=1`.
 
-**Three things worth knowing before the restart:**
+**Four things worth knowing before the restart:**
 
-- **`media` is only recorded for post-onboarding users**, because
-  `resolveChatTarget` scopes the whole timeline that way on purpose — it keeps
-  OTP codes, phone numbers and pasted AI-memory exports out of the table by
-  construction. So the registration photo burst still will not appear in the
-  chat; those photos are visible only as the profile gallery. Widening that
-  scope is a privacy decision, not a bug fix, and was deliberately left alone.
+- **The timeline now records from `/start`, not from the end of onboarding**
+  (founder decision 2026-07-31 — PRODUCT_SPEC §2.1). Registration was the one
+  stretch of the conversation the dialog reader could not see. Expect
+  `chat_events` to grow faster and to contain onboarding-era content: a typed
+  OTP code, and a ≤300-char excerpt of a pasted AI-memory export (that branch
+  is off in production — `AI_MEMORY_EXPORT_ENABLED=false` — so it is currently
+  theoretical). The 30-day `retention` sweep is what bounds both. The phone
+  number is still never stored; the contact share is recorded as the event.
+  Reverting is a code change, not a flag: `resolveChatTarget` in
+  `services/chat-events.ts`.
 - **Existing rows have `media = NULL` and stay text-only.** Nothing backfills,
   and nothing can: Telegram `file_id`s were never stored for those sends. The
   transcript fills in from the first message after the restart.
@@ -67,10 +71,13 @@ What ships, and why each piece exists:
   origin (it already is) or CORS is denied outright and this is moot.
 
 Post-deploy check, beyond the standard checklist — the column should start
-filling within minutes of any real bot traffic:
+filling within minutes of any real bot traffic, and onboarding chats should
+start appearing at all:
 
 ```sh
 psql "$DATABASE_URL" -c "select kind, count(*) from chat_events where media is not null group by 1;"
+# Was structurally 0 before this deploy — anything here proves the widened scope.
+psql "$DATABASE_URL" -c "select count(*) from chat_events e join users u on u.id=e.user_id where u.onboarding_step <> 'completed';"
 curl -sD- -o /dev/null -H "Authorization: Bearer $ADMIN_API_KEY" \
   https://api-admin.gennety.com/admin/analytics/cities | grep -i 'x-data-'
 ```

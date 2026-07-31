@@ -1195,12 +1195,26 @@ explicitly: a bare follow-up with no subject of its own ("почему?", "и ч
 timeline does not say why something happened the agent says what it can see and
 asks, rather than inventing a reason.
 
-Two deliberate boundaries. The timeline is recorded only for post-onboarding
-users — the agent's own scope, which also keeps OTP codes, phone numbers and
-pasted AI-memory exports out of it by construction. And it is **read-only
-context in v1**: the agent understands the last screen but presses nothing on
-the user's behalf; every action still needs the user's own tap. Rows are swept
-after 30 days (§GDPR). The same change stops the agent replaying onboarding-era
+The timeline is **read-only context in v1**: the agent understands the last
+screen but presses nothing on the user's behalf; every action still needs the
+user's own tap. Rows are swept after 30 days (§GDPR).
+
+**The whole chat is recorded, from `/start` (founder decision 2026-07-31).**
+Recording used to begin only at `onboardingStep = 'completed'`, which kept the
+typed OTP code and a pasted AI-memory export out of the table by construction.
+The cost was that **registration — the funnel most worth being able to read —
+was the one stretch of the conversation the admin dialog reader could not
+see**: no photos, no buttons, no Mini App steps, nothing but the onboarding
+agent's own turns. The founder owns that data and reads it in a
+single-operator dashboard, so the tradeoff was taken deliberately. What it
+costs, stated rather than discovered later: a typed OTP code lands in
+`summary` (expired long before anyone reads it, gone in 30 days), and a pasted
+AI-memory export lands as a **≤300-character excerpt** via the existing
+summary truncation — so §1.3's "the raw pasted response is transient" now
+means "except for that excerpt". The phone number itself still never lands
+there: the contact share is recorded as the event, not the digits. Onboarding
+rows are subject to the same untrusted-data fence as everything else in the
+timeline. The same change stops the agent replaying onboarding-era
 turns from `messageHistory` at all: only its own turns from the last 24 h are
 replayed, while the full column is retained for the admin conversation viewer
 and the re-engagement worker. The **timeline** is Telegram-only; the mobile
@@ -3272,7 +3286,9 @@ excluding an otherwise-complete user from matching.
     one holding ordinary message text. It exists so the concierge can answer a
     follow-up against the message right above it — minutes, occasionally days —
     and the agent reads 12 events per turn, so a month is already far past
-    anything it uses.
+    anything it uses. Since 2026-07-31 it also covers onboarding (§2.1), so the
+    30-day sweep is additionally what bounds the retention of a typed OTP code
+    and of the ≤300-char AI-memory excerpt.
 - `researchOptIn` is opt-in; default false. Audit is via `User.consentedAt`,
   `User.termsAcceptedAt`.
 
