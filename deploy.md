@@ -1,5 +1,81 @@
 # Gennety Dating Deploy
 
+**PENDING — venue observability (VENUE_ENGINE_IMPROVEMENT_PLAN part 6).** Not
+deployed yet. **No Mini App change** (`apps/webapp` untouched) — but it needs an
+**additive `db:push` BEFORE the restart**, and it ships alongside the blocks
+below, which need their own schema steps. Do every schema step, then one
+restart. A **dashboard redeploy** (separate repo, `~/Desktop/gennety-admin-dashboard`)
+is only needed to *render* the new endpoint; the API works without it.
+
+One new nullable `venue_selection_logs` column (`city_key`) plus one index is
+WRITTEN on every venue selection and SELECTED by the new admin route and the
+weekly alert worker, so a DB missing it throws `P2022` on the first date that
+gets a venue after the restart — the PM2 crash-loop this file warns about.
+Verify additive first (expect one `ADD COLUMN` + one `CREATE INDEX`, zero
+`DROP`):
+
+```sh
+export DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env | tail -1 | tr -d '"')"
+pnpm --filter @gennety/db exec prisma migrate diff \
+  --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script
+pnpm --filter @gennety/db db:push
+pnpm db:drift-check   # must exit 0 before pm2 restart
+```
+
+What ships, and why:
+
+- **The selection funnel is recorded.** `topCandidates` now holds
+  `{candidates, poolSizes}` instead of a bare array — `poolSizes` is how many
+  venues survived each stage (`curatedInBox` → `curatedEligible` →
+  `placesAdded` → `ranked`). The engine fails silently (dates keep being
+  scheduled), so the `.slice(0, 20)` that left 20 of 661 eligible Kyiv venues
+  in the running could only ever be found by a hand-written production query.
+- **`GET /admin/analytics/venue-concentration?days=7`** — per city: the funnel,
+  top venues by share, a concentration index, and `failureReason` counts.
+  Cached 15 min, honours `?fresh=1`, emits `X-Data-Generated-At`.
+- **Weekly alarm into the founder ops DM**, Friday 10:00 Kyiv.
+
+New env (all optional, all default to the safe value):
+
+| Key | Default | Effect |
+|---|---|---|
+| `VENUE_CONCENTRATION_ALERT_ENABLED` | `false` | Registers the weekly cron. Also inert unless `FOUNDER_NOTIFY_ENABLED` (the only delivery channel). |
+| `VENUE_CONCENTRATION_ALERT_THRESHOLD_PCT` | `15` | Share of a city's dates one venue may take before it is worth a message. |
+| `VENUE_CONCENTRATION_ALERT_WINDOW_DAYS` | `7` | Lookback window. |
+| `VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE` | `0 10 * * 5` | Friday morning, so the window always contains a full Thursday drop. |
+
+**Three things worth knowing before the restart:**
+
+- **The funnel and `cityKey` are NOT gated by the alert flag.** They are data,
+  useful whether or not anyone is being paged, and they start filling on the
+  first venue selection after the restart. Only the weekly DM is behind
+  `VENUE_CONCENTRATION_ALERT_ENABLED`.
+- **Existing log rows keep the old bare-array `topCandidates` and carry no
+  funnel.** `parsePoolSizes` returns null for them on purpose — a zeroed funnel
+  would drag the median down and fake a pool collapse. They show as
+  `samples: 0` until new rows accumulate.
+- **A thin city will look concentrated and that is arithmetic, not a defect.**
+  Two of three dates in one place is 66%. The alert therefore always carries
+  the sample size; a minimum-sample threshold was deliberately NOT added
+  because it would blind the alarm exactly when a new market launches.
+
+Post-deploy check — production currently has **0 matches ever**, so the log
+table is empty and both surfaces will legitimately return nothing until the
+first Thursday batch pairs someone and that pair reaches `negotiating_venue`:
+
+```sh
+psql "$DATABASE_URL" -c "select count(*), count(city_key) from venue_selection_logs;"
+curl -sD- -o /dev/null -H "Authorization: Bearer $ADMIN_API_KEY" \
+  'https://api-admin.gennety.com/admin/analytics/venue-concentration?days=7' | head -1
+```
+
+**Rollback:** revert the code and restart; the additive column can stay. To stop
+only the DM without a code change, set `VENUE_CONCENTRATION_ALERT_ENABLED=false`
+and `pm2 restart gennety-bot --update-env`.
+
+---
+
 **PENDING — admin dialog media + the fat user card (ARCHITECTURE.md
 → `chat_events` / Admin API).** Not deployed yet. **No env change, no flag
 change, no Mini App change** (`apps/webapp` untouched) — but it needs an

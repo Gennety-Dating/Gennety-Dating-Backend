@@ -41,6 +41,7 @@ import { sweepRematchRefunds } from "./services/rematch-refund.js";
 import { sweepVenueChangeRefunds } from "./services/venue-change-refund.js";
 import { runSelfieRetention } from "./services/selfie-retention.js";
 import { retentionTick } from "./workers/retention.js";
+import { venueConcentrationAlertTick } from "./workers/venue-concentration-alert.js";
 import { venueRevalidationTick } from "./services/venue-revalidation.js";
 import { retryDueVenueSelections } from "./services/venue-intent-v2.js";
 import { guardedTick } from "./utils/guarded-tick.js";
@@ -219,6 +220,10 @@ const SELFIE_RETENTION_CRON_SCHEDULE =
  */
 const RETENTION_CRON_SCHEDULE =
   process.env.RETENTION_CRON_SCHEDULE ?? "45 3 * * *";
+/// Weekly, Friday 10:00 Kyiv — the morning after Thursday's batch, so the
+/// window it reports on always contains a full drop cycle.
+const VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE =
+  process.env.VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE ?? "0 10 * * 5";
 
 /**
  * Curated-venue re-validation: re-check the oldest-verified active venues
@@ -626,6 +631,29 @@ bot.start({
     console.log(
       `[cron] Data retention scheduled: "${RETENTION_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
     );
+
+    // Weekly venue-concentration alarm. Registered only when the alert is on:
+    // the engine's failure mode is silent (dates keep being scheduled), so
+    // without this nobody learns that one venue took the city until a human
+    // queries the database by hand.
+    if (env.VENUE_CONCENTRATION_ALERT_ENABLED) {
+      cron.schedule(
+        VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE,
+        guardedTick("venue-concentration-alert", () =>
+          venueConcentrationAlertTick().then((r) => {
+            if (!r.skipped) {
+              console.log(
+                `[venue-concentration] cities=${r.citiesScanned} alerts=${r.alerts}`,
+              );
+            }
+          }),
+        ),
+        { timezone: CRON_TIMEZONE },
+      );
+      console.log(
+        `[cron] Venue concentration alert scheduled: "${VENUE_CONCENTRATION_ALERT_CRON_SCHEDULE}" (${CRON_TIMEZONE})`,
+      );
+    }
 
     // Curated venue re-validation — deactivate closed/degraded venues and
     // refresh opening hours against Google Places.

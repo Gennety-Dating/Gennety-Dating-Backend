@@ -726,6 +726,7 @@ All schedules are env-overridable (the canonical names are listed below).
 | `0 * * * *` (only when `TICKET_FEATURE_ENABLED`) | UTC | Date Ticket expiry: retry durable Stars refunds, reverse stalled `partial` payments, then open the Calendar for free | `workers/ticket-expiry.ts` → `handlers/matching/ticket-gate.ts` |
 | `0 * * * *` (only when `REMATCH_FEATURE_ENABLED`) | UTC | Rematch refunds: retry `refund_failed` rows and refund purchases abandoned mid-run (`processing` past 5 min). What makes "never keep money without delivering a match" durable | `services/rematch-refund.ts` (`sweepRematchRefunds`) |
 | `0 * * * *` (only when `VENUE_CHANGE_FEATURE_ENABLED`) | UTC | Venue-change refunds: retry `refund_failed` rows and refund purchases abandoned mid-settle (`processing` past 5 min). The twin of the rematch sweep for §3.7b | `services/venue-change-refund.ts` (`sweepVenueChangeRefunds`) |
+| `0 10 * * 5` (only when `VENUE_CONCENTRATION_ALERT_ENABLED`) | Europe/Kyiv | Weekly venue-concentration alarm — DMs the founder ops feed when one venue took more than `VENUE_CONCENTRATION_ALERT_THRESHOLD_PCT` of a city's dates. Friday morning, so the window always contains a full Thursday drop. Deliberately **not** deduplicated by a marker table: a problem still there next week SHOULD be reported again, and the weekly cadence is the whole rate limit | `workers/venue-concentration-alert.ts` (`venueConcentrationAlertTick`) |
 | `setInterval(20 s)` | — | **Peer-wait shimmer** — re-issues the ephemeral `<tg-thinking>` draft for every side currently waiting on its partner (pitch decision / calendar incl. the both-picked-no-overlap state / venue / the §3.7b venue-change board), so the shimmer survives the whole wait; owns the per-side wait anchor that drives the five-tier wording ladder, plus the plain-message fallback and its teardown. `PEER_WAIT_TICK_MS=0` disables. Interval rather than cron: the draft's ~30 s TTL is shorter than cron's one-minute floor | `workers/peer-wait-shimmer.ts` (`peerWaitShimmerTick`) + `workers/peer-wait-venue-change.ts` |
 | `setInterval(2 min)` | — | Date lifecycle: **venue-change lapse sweep** (an unpaid `agreed` swap lapses — original venue stands, match untouched; an abandoned express mint quietly reverts — feature-flagged), ice-breakers (T-5 h), emergency window, T-1.5 h pre-date safety, T+24 h feedback, wingman; **pre-date coordination** (T-60 m offer, T-30 m proxy open, T+2 h proxy close — feature-flagged) | `services/date-lifecycle.ts` + `services/pre-date-safety.ts` + `services/coordination.ts` + `handlers/matching/venue-change.ts` |
 
@@ -903,6 +904,16 @@ the leak), `dropOffRate`, and `dwellMsMedian`/`dwellMsP90` (hesitation), with
 event counts, **no-match this week by famine tier**, a **geography snapshot** of
 active users per city with centroid `lat`/`lng`, and verification pass rate) for
 the external **Hermes** weekly founder report (see `HERMES_AGENT_PROMPT.md`).
+`GET /admin/analytics/venue-concentration?days=7`
+(`routes/venue-concentration.ts`, pure aggregation in
+`utils/venue-concentration.ts`, cached 15 min) answers whether the venue engine
+is still spreading dates across the catalog: per city, the selection funnel
+(median/p90 of each `poolSizes` stage), the top venues by share of that city's
+assignments, a sum-of-squared-shares concentration index, distinct venues used,
+and `failureReason` counts grouped by their actionable head (the raw value
+carries a per-pair sides suffix that would explode the grouping). Failed runs
+are excluded from the share denominator — they assigned nothing, so counting
+them would understate how concentrated the real dates are.
 `GET /admin/analytics/cities` (`routes/cities.ts`) carries the full per-city
 male/female distribution and now also each city's centroid `lat`/`lng` so the
 dashboard can plot the user-geography map. `GET /admin/analytics/growth`
@@ -1083,6 +1094,36 @@ deduplicates legacy domain copies by stable place ID.
 The V2 selector gathers city-curated candidates and canonical Places lanes,
 applies operational/hours/hard/commute gates, ranks top-1, and records a
 raw-text-free `VenueSelectionLog`. Provider retry state is durable on `Match`.
+
+**`VenueSelectionLog` is also the engine's only observability surface.** The
+engine's failure mode is silent — dates keep being scheduled, nothing throws,
+and one venue can quietly take the city (the `.slice(0, 20)` that left 20 of
+661 eligible Kyiv venues in the running was found by a hand-written query
+against production, not by anything the product could see). Two additions make
+that visible without a second table:
+
+- **`topCandidates.poolSizes`** — the selection funnel per run
+  (`curatedInBox` → `curatedEligible` → `placesAdded` → `ranked`). The column
+  was already `Json`, so this is a shape change, not a migration.
+  `curatedEligible` is read BEFORE the Places fallback appends to the same
+  array, so "the curated catalog is thin here" stays distinguishable from
+  "Places carried the run" — two states with completely different fixes. A
+  FAILED run writes the funnel too: that is the case where it matters most,
+  separating an empty geo box from hard filters eating a full one.
+- **`cityKey`** — the pair's matching city, frozen at selection time so
+  concentration analytics group without joining `matches → users → profiles`
+  on every dashboard request, the same reason `match_score_logs` freezes its
+  breakdown. Nullable, so rows predating it read as `unknown` rather than
+  breaking the aggregation.
+
+`admin/utils/venue-concentration.ts` is the pure aggregation over those rows,
+shared by `GET /admin/analytics/venue-concentration` and
+`workers/venue-concentration-alert.ts` so the dashboard and the alarm can never
+disagree about what "concentrated" means. `parsePoolSizes` returns **null**,
+never zeros, for the pre-funnel array shape — a zeroed funnel would drag the
+median down and fake a pool collapse that never happened. Shadow-mode rows are
+excluded by both readers: they assign nothing and reach no user, so counting
+them would dilute every share with dates that never existed.
 Before ranking, `services/initial-venue-policy.ts` applies the product-owned
 initial-assignment gate equally to curated and Places candidates: base tier,
 rating/review floor and a known `FREE`/`INEXPENSIVE`/`MODERATE` price for

@@ -21,6 +21,7 @@ import { datesRouter } from "./routes/dates.js";
 import { verificationRouter } from "./routes/verification.js";
 import { citiesRouter } from "./routes/cities.js";
 import { onboardingFunnelRouter } from "./routes/onboarding-funnel.js";
+import { venueConcentrationRouter } from "./routes/venue-concentration.js";
 import { dialogsRouter } from "./routes/dialogs.js";
 import { opsRouter } from "./routes/ops.js";
 import { isUuid } from "./utils/uuid.js";
@@ -166,6 +167,7 @@ app.use(datesRouter);
 app.use(verificationRouter);
 app.use(citiesRouter);
 app.use(onboardingFunnelRouter);
+app.use(venueConcentrationRouter);
 // Conversation-reading surface for the external Hermes agent: the dialog list
 // and per-dialog transcripts. Same Bearer gate as everything else here.
 app.use(dialogsRouter);

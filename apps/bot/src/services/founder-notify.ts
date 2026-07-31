@@ -122,6 +122,40 @@ export async function notifyFounderVenueSelectionFailure(
   }
 }
 
+/**
+ * Weekly "one venue is taking the city" alert (VENUE_ENGINE_IMPROVEMENT_PLAN
+ * part 6). Carries the sample size on purpose: in a city with three dates a
+ * 66% share is arithmetic, not a defect, and only the reader can tell those
+ * apart. A minimum-sample threshold was considered and rejected — it would
+ * blind the alert exactly when a new market launches.
+ */
+export async function notifyFounderVenueConcentration(
+  alerts: ReadonlyArray<{
+    cityKey: string;
+    placeId: string;
+    count: number;
+    assignments: number;
+    sharePct: number;
+    uniqueVenues: number;
+  }>,
+  windowDays: number,
+): Promise<void> {
+  const api = getFounderApi();
+  if (!api || alerts.length === 0) return;
+  const lines = alerts.map(
+    (row) =>
+      `• ${row.cityKey}: ${row.sharePct.toFixed(0)}% — ${row.count} of ${row.assignments} dates went to one venue (${row.placeId}); ${row.uniqueVenues} distinct venues used`,
+  );
+  try {
+    await api.sendMessage(
+      founderChatId(),
+      `📍 Venue concentration (last ${windowDays}d)\n${lines.join("\n")}\n\nSmall sample sizes skew this — check the count before acting.`,
+    );
+  } catch (err) {
+    console.warn(`${FOUNDER_LOG} venue-concentration notify failed`, err);
+  }
+}
+
 function truncateCaption(text: string): string {
   return text.length <= CAPTION_MAX ? text : `${text.slice(0, CAPTION_MAX - 1)}…`;
 }

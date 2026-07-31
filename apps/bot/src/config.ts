@@ -441,6 +441,45 @@ export const env = {
   /// for every path (agreed board pick, express). Env-tunable at launch.
   VENUE_CHANGE_STARS: Number(process.env.VENUE_CHANGE_STARS ?? "150"),
 
+  // ── Venue observability + context (VENUE_ENGINE_IMPROVEMENT_PLAN 5.3 / 6) ──
+  /// Weekly "one venue is taking the city" alert into the founder ops DM.
+  /// Off by default; also inert unless FOUNDER_NOTIFY_ENABLED, which is the
+  /// only delivery channel. The `/admin/analytics/venue-concentration` view
+  /// and the `poolSizes` funnel in the selection log are NOT gated by this —
+  /// they are data, useful whether or not anyone is being paged.
+  VENUE_CONCENTRATION_ALERT_ENABLED:
+    process.env.VENUE_CONCENTRATION_ALERT_ENABLED === "true",
+  /// Share (%) of a city's assignments one venue may take before it is worth
+  /// a message. Deliberately a soft signal, not a hard rule: at low volume a
+  /// high share is arithmetic, so the alert reports the sample size too.
+  VENUE_CONCENTRATION_ALERT_THRESHOLD_PCT: Math.max(
+    1,
+    Math.min(100, Number(process.env.VENUE_CONCENTRATION_ALERT_THRESHOLD_PCT ?? "15")),
+  ),
+  VENUE_CONCENTRATION_ALERT_WINDOW_DAYS: Math.max(
+    1,
+    Math.min(90, Number(process.env.VENUE_CONCENTRATION_ALERT_WINDOW_DAYS ?? "7")),
+  ),
+  /// Season + weather as a SOFT ranking multiplier (PRODUCT_SPEC §3.7,
+  /// VENUE_ENGINE_IMPROVEMENT_PLAN 5.3). Never a filter: a rained-out park
+  /// sinks a few places, it is never removed — a wrong forecast or a provider
+  /// outage must not be able to withhold a venue. Off → multiplier is a
+  /// constant 1.0 and no forecast is ever requested.
+  VENUE_SEASON_WEATHER_ENABLED: process.env.VENUE_SEASON_WEATHER_ENABLED === "true",
+  /// Upper bound on how long a venue selection may wait for the forecast. The
+  /// run continues weather-blind past it rather than making the pair wait.
+  VENUE_WEATHER_TIMEOUT_MS: Math.max(
+    250,
+    Number(process.env.VENUE_WEATHER_TIMEOUT_MS ?? "2500"),
+  ),
+  /// In-memory forecast cache TTL. Two pairs in the same city on the same date
+  /// share one upstream call; the cache is per-process and resets on restart,
+  /// exactly like `usage-limiter`.
+  VENUE_WEATHER_CACHE_TTL_MS: Math.max(
+    60_000,
+    Number(process.env.VENUE_WEATHER_CACHE_TTL_MS ?? "3600000"),
+  ),
+
   // ── Gennety Premium (recurring subscription, §Premium) ─────
   /// Master flag for Gennety Premium. When false (default), no premium menu
   /// row, no premium purchase surface, and every venue is treated as `base`

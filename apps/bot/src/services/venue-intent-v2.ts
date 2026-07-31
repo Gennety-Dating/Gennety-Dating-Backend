@@ -713,6 +713,11 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   // objects, so the whole eligible set is scored and the cap moved to `ranked`
   // below — a cap by SCORE rather than by position.
 
+  // Read BEFORE the Places fallback appends to the same array, so the funnel
+  // can tell "the curated catalog is thin here" apart from "Places carried the
+  // run". Both are real states with completely different fixes.
+  const curatedEligible = selections.length;
+
   let placesCalls = 0;
   let providerFailed = false;
   const apiKey = process.env.PLACES_API_KEY;
@@ -739,6 +744,17 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   // above: it truncated by position before anything was scored.
   const deduped = [...new Map(selections.map((row) => [row.rank.placeId, row])).values()];
   const ranked = rankVenueCandidates(deduped.map((row) => row.rank), a, b);
+
+  // The selection funnel, frozen into the log below (VENUE_ENGINE_IMPROVEMENT_PLAN
+  // part 6). Each number answers a different question when a pair gets a poor or
+  // repeated venue: was the geo box empty, did the eligibility gates eat the
+  // catalog, or did the ranker simply have one option?
+  const poolSizes = {
+    curatedInBox: curated.length,
+    curatedEligible,
+    placesAdded: selections.length - curatedEligible,
+    ranked: ranked.length,
+  };
 
   // Diversity layer. The ranker is deterministic, so on a stable catalog it
   // answers the same thing for every pair in the city — which is how a handful
@@ -808,7 +824,12 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
     });
     await prisma.venueSelectionLog.create({ data: {
       matchId, mode, parserVersion: VENUE_INTENT_PARSER_VERSION, rankerVersion: VENUE_SELECTION_VERSION,
-      intentA: stripForLog(a), intentB: stripForLog(b), topCandidates: [], failureReason: failure,
+      intentA: stripForLog(a), intentB: stripForLog(b),
+      // A failed run has no candidates but still has a funnel, and this is the
+      // case where the funnel matters MOST: it separates "the geo box was
+      // empty" from "the box was full and the hard filters ate everything".
+      topCandidates: asJson({ candidates: [], poolSizes }),
+      failureReason: failure, cityKey,
       latencyMs: Date.now() - started, placesCallCount: placesCalls,
       chipCorrections: chipCorrectionCount(a) + chipCorrectionCount(b),
     } });
@@ -824,8 +845,11 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
   await prisma.venueSelectionLog.create({ data: {
     matchId, mode, parserVersion: VENUE_INTENT_PARSER_VERSION, rankerVersion: VENUE_SELECTION_VERSION,
     intentA: stripForLog(a), intentB: stripForLog(b),
-    topCandidates: asJson(ranked.slice(0, 5).map((row) => ({ placeId: row.candidate.placeId, score: row.score }))),
-    selectedSource: chosen.source, selectedPlaceId: chosen.rank.placeId,
+    topCandidates: asJson({
+      candidates: ranked.slice(0, 5).map((row) => ({ placeId: row.candidate.placeId, score: row.score })),
+      poolSizes,
+    }),
+    selectedSource: chosen.source, selectedPlaceId: chosen.rank.placeId, cityKey,
     latencyMs: Date.now() - started, placesCallCount: placesCalls,
     chipCorrections: chipCorrectionCount(a) + chipCorrectionCount(b),
   } });
