@@ -39,7 +39,7 @@ import {
   loadOnboardingProgress,
   saveOnboardingProgress,
 } from "./device-storage.js";
-import { type Lang } from "./i18n.js";
+import { type Lang, monthsPhrase } from "./i18n.js";
 import {
   initialOnboardingLanguage,
   onboardingStrings,
@@ -596,6 +596,7 @@ function App(): ReactElement {
       </Scene>
       <Scene active={phase.kind === "referralGift"}>
         <ReferralGiftGate
+          lang={lang}
           months={remoteUser?.referralGiftMonths ?? 1}
           referrerName={remoteUser?.referrerFirstName ?? null}
           onClaimed={(state) => {
@@ -2243,6 +2244,7 @@ function PromoGiftGate(props: {
 }
 
 function ReferralGiftGate(props: {
+  lang: Lang;
   months: number;
   referrerName: string | null;
   onClaimed: (state: TelegramOnboardingState) => void;
@@ -2251,10 +2253,10 @@ function ReferralGiftGate(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const months = String(props.months);
+  const phrase = monthsPhrase(props.lang, props.months);
   const body = props.referrerName
-    ? s.referralGiftBody.replaceAll("{name}", props.referrerName).replaceAll("{months}", months)
-    : s.referralGiftBodyNoName.replaceAll("{months}", months);
+    ? s.referralGiftBody.replaceAll("{name}", props.referrerName).replaceAll("{monthsPhrase}", phrase)
+    : s.referralGiftBodyNoName.replaceAll("{monthsPhrase}", phrase);
 
   async function claim(): Promise<void> {
     if (!app?.initData || busy) return;

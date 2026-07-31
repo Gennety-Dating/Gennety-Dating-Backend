@@ -229,9 +229,9 @@ const en: OnboardingStrings = {
   aiMemorySaving: "Saving...",
   referralGiftTitle: "A friend gifted you Premium",
   referralGiftBody:
-    "Because {name} invited you, your first {months} month of Gennety Premium is on us — active right now.",
+    "Because {name} invited you, your first {monthsPhrase} of Gennety Premium is on us — active right now.",
   referralGiftBodyNoName:
-    "Because a friend invited you, your first {months} month of Gennety Premium is on us — active right now.",
+    "Because a friend invited you, your first {monthsPhrase} of Gennety Premium is on us — active right now.",
   referralGiftContinue: "Claim & continue",
   referralGiftClaiming: "Activating...",
   promoGiftTitle: "Your gift is unlocked",
@@ -401,9 +401,9 @@ const ru: OnboardingStrings = {
   aiMemorySaving: "Сохраняю...",
   referralGiftTitle: "Друг подарил тебе Premium",
   referralGiftBody:
-    "{name} пригласил(а) тебя — поэтому первый {months} месяц Gennety Premium за наш счёт. Уже активен.",
+    "{name} пригласил(а) тебя — поэтому первый {monthsPhrase} Gennety Premium за наш счёт. Уже активен.",
   referralGiftBodyNoName:
-    "Тебя пригласил друг — поэтому первый {months} месяц Gennety Premium за наш счёт. Уже активен.",
+    "Тебя пригласил друг — поэтому первый {monthsPhrase} Gennety Premium за наш счёт. Уже активен.",
   referralGiftContinue: "Забрать и продолжить",
   referralGiftClaiming: "Активирую...",
   promoGiftTitle: "Твой подарок активирован",
@@ -573,9 +573,9 @@ const uk: OnboardingStrings = {
   aiMemorySaving: "Зберігаю...",
   referralGiftTitle: "Друг подарував тобі Premium",
   referralGiftBody:
-    "{name} запросив(ла) тебе — тому перший {months} місяць Gennety Premium за наш рахунок. Уже активний.",
+    "{name} запросив(ла) тебе — тому перший {monthsPhrase} Gennety Premium за наш рахунок. Уже активний.",
   referralGiftBodyNoName:
-    "Тебе запросив друг — тому перший {months} місяць Gennety Premium за наш рахунок. Уже активний.",
+    "Тебе запросив друг — тому перший {monthsPhrase} Gennety Premium за наш рахунок. Уже активний.",
   referralGiftContinue: "Забрати й продовжити",
   referralGiftClaiming: "Активую...",
   promoGiftTitle: "Твій подарунок активовано",
@@ -746,9 +746,9 @@ const de: OnboardingStrings = {
   aiMemorySaving: "Speichern...",
   referralGiftTitle: "Ein Freund hat dir Premium geschenkt",
   referralGiftBody:
-    "Weil {name} dich eingeladen hat, geht dein erster {months} Monat Gennety Premium auf uns — ab sofort aktiv.",
+    "Weil {name} dich eingeladen hat, geht dein erster {monthsPhrase} Gennety Premium auf uns — ab sofort aktiv.",
   referralGiftBodyNoName:
-    "Weil ein Freund dich eingeladen hat, geht dein erster {months} Monat Gennety Premium auf uns — ab sofort aktiv.",
+    "Weil ein Freund dich eingeladen hat, geht dein erster {monthsPhrase} Gennety Premium auf uns — ab sofort aktiv.",
   referralGiftContinue: "Einlösen & weiter",
   referralGiftClaiming: "Wird aktiviert...",
   promoGiftTitle: "Dein Geschenk ist freigeschaltet",
@@ -919,9 +919,9 @@ const pl: OnboardingStrings = {
   aiMemorySaving: "Zapisywanie...",
   referralGiftTitle: "Znajomy podarował ci Premium",
   referralGiftBody:
-    "Ponieważ {name} cię zaprosił(a), twój pierwszy {months} miesiąc Gennety Premium jest na nasz koszt — już aktywny.",
+    "Ponieważ {name} cię zaprosił(a), twój pierwszy {monthsPhrase} Gennety Premium jest na nasz koszt — już aktywny.",
   referralGiftBodyNoName:
-    "Ponieważ zaprosił cię znajomy, twój pierwszy {months} miesiąc Gennety Premium jest na nasz koszt — już aktywny.",
+    "Ponieważ zaprosił cię znajomy, twój pierwszy {monthsPhrase} Gennety Premium jest na nasz koszt — już aktywny.",
   referralGiftContinue: "Odbierz i kontynuuj",
   referralGiftClaiming: "Aktywuję...",
   promoGiftTitle: "Twój prezent został odblokowany",

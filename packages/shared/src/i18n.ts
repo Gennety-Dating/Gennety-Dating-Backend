@@ -975,7 +975,7 @@ const translations = {
     referralCardHeadA: "Real dates.",
     referralCardHeadB: "Zero texting.",
     referralCardSupport: "The AI finds your match on deep compatibility and sets up the meeting in person.",
-    referralCardGift: "{months} month of Premium — on us",
+    referralCardGift: "{monthsPhrase} of Premium — on us",
     referralCardFooter: "gennety.com",
     premiumHubTitle: "✨ Gennety Premium",
     premiumHubBody:
@@ -3908,7 +3908,7 @@ const deTranslations: TranslationTable = {
   referralCardHeadA: "Echte Dates.",
   referralCardHeadB: "Null Chatten.",
   referralCardSupport: "Die KI findet dein Match nach tiefer Kompatibilität und organisiert das Treffen persönlich.",
-  referralCardGift: "{months} Monat Premium — geschenkt",
+  referralCardGift: "{monthsPhrase} Premium — geschenkt",
   referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
@@ -4863,7 +4863,7 @@ const plTranslations: TranslationTable = {
   referralCardHeadA: "Prawdziwe randki.",
   referralCardHeadB: "Zero pisania.",
   referralCardSupport: "AI dobiera parę według głębokiej zgodności i sam organizuje spotkanie na żywo.",
-  referralCardGift: "{months} miesiąc Premium — w prezencie",
+  referralCardGift: "{monthsPhrase} Premium — w prezencie",
   referralCardFooter: "gennety.com",
   premiumHubTitle: "✨ Gennety Premium",
   premiumHubBody:
@@ -4952,6 +4952,41 @@ export function t(
   params?: Record<string, string | number>,
 ): string {
   return interpolate(translationsByLanguage[lang][key], params);
+}
+
+/** Russian/Ukrainian/Polish plural selection (1 → one, 2-4 → few, else → many),
+ * mirroring the equivalent helper in `services/founder-notify.ts`. */
+function slavicPlural(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+  return many;
+}
+
+/**
+ * Fully declined "{count} {unit}" phrase for a Premium-months duration.
+ * `interpolate()` only does flat `{placeholder}` substitution, and Slavic/
+ * Germanic plural rules ("1 month" vs "3 months", "1 месяц" vs "3 месяца" vs
+ * "5 месяцев") can't be expressed as a single translation string — so this is
+ * computed in code and passed in as one interpolated value. Used only where a
+ * whole-word month count is shown (`referralCardGift`, the referral onboarding
+ * wow screen); the abbreviated "mo"/"мес"/"міс"/"Mon"/"mies" forms used
+ * elsewhere don't decline and don't need this.
+ */
+export function monthsPhrase(lang: Language, months: number): string {
+  switch (lang) {
+    case "de":
+      return `${months} Monat${months === 1 ? "" : "e"}`;
+    case "ru":
+      return `${months} ${slavicPlural(months, "месяц", "месяца", "месяцев")}`;
+    case "uk":
+      return `${months} ${slavicPlural(months, "місяць", "місяці", "місяців")}`;
+    case "pl":
+      return `${months} ${slavicPlural(months, "miesiąc", "miesiące", "miesięcy")}`;
+    default:
+      return `${months} month${months === 1 ? "" : "s"}`;
+  }
 }
 
 /**

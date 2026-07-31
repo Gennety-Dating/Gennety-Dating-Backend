@@ -432,6 +432,36 @@ export function pickLang(raw: string | null | undefined): Lang {
   return raw === "ru" || raw === "uk" || raw === "de" || raw === "pl" ? raw : "en";
 }
 
+/** Russian/Ukrainian/Polish plural selection (1 → one, 2-4 → few, else → many). */
+function slavicPlural(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+  return many;
+}
+
+/**
+ * Fully declined "{count} {unit}" phrase for a Premium-months duration (e.g.
+ * "1 month" vs "3 months", "1 месяц" vs "3 месяца" vs "5 месяцев") — used by
+ * the referral welcome-gift screen, where the whole word is spelled out and a
+ * flat `{months}` placeholder can't express plural rules on its own.
+ */
+export function monthsPhrase(lang: Lang, months: number): string {
+  switch (lang) {
+    case "de":
+      return `${months} Monat${months === 1 ? "" : "e"}`;
+    case "ru":
+      return `${months} ${slavicPlural(months, "месяц", "месяца", "месяцев")}`;
+    case "uk":
+      return `${months} ${slavicPlural(months, "місяць", "місяці", "місяців")}`;
+    case "pl":
+      return `${months} ${slavicPlural(months, "miesiąc", "miesiące", "miesięcy")}`;
+    default:
+      return `${months} month${months === 1 ? "" : "s"}`;
+  }
+}
+
 export function tr(lang: Lang, key: keyof Strings): string {
   return dict[lang][key];
 }

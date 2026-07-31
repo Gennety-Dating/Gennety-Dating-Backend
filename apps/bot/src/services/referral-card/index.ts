@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import type { Language } from "@gennety/shared";
-import { t } from "@gennety/shared";
+import { monthsPhrase, t } from "@gennety/shared";
 import { butterflyPng } from "../match-card/collage.js";
 
 /**
@@ -69,7 +69,9 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
     const kicker = input.referrerName
       ? t(input.lang, "referralCardInvitedBy", { name: input.referrerName })
       : t(input.lang, "referralCardInvitedGeneric");
-    const giftLine = t(input.lang, "referralCardGift", { months: String(input.giftMonths) });
+    const giftLine = t(input.lang, "referralCardGift", {
+      monthsPhrase: monthsPhrase(input.lang, input.giftMonths),
+    });
 
     // Bigger butterfly crest, tilted ~20° clockwise — the mark, like our other
     // cards. Aspect-correct (never squished into a square box).

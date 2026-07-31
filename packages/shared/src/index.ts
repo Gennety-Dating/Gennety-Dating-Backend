@@ -27,7 +27,7 @@ export {
   distanceKm,
 } from "./markets.js";
 export type { Market } from "./markets.js";
-export { t, escapeMd, interpolate } from "./i18n.js";
+export { t, escapeMd, interpolate, monthsPhrase } from "./i18n.js";
 export type { TranslationKey } from "./i18n.js";
 export { tv, setVariantRng, variantAlternates, VARIANT_KEYS } from "./i18n-variants.js";
 export type { VariantRng } from "./i18n-variants.js";
