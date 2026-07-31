@@ -85,13 +85,16 @@ function elapsedMs(startedAt: Date | null | undefined, now: Date): number {
 
 /**
  * The line to show for a wait that started at `startedAt`, personalised with the
- * partner's first name.
+ * partner's first name — both ladders name the partner (2026-07-31; the
+ * no-overlap lines used to name no one, but the founder-approved rewrite has
+ * them state whose calendar it is: "Ваше время с {name} не совпало").
  *
  * `firstName` is a required onboarding field and these waits only happen on a
- * live match, so the anonymous variant is defensive rather than expected — but
+ * live match, so the anonymous fallback is defensive rather than expected — but
  * it exists because substituting a generic noun into the personalised templates
- * breaks case agreement in German and Polish. The no-overlap lines name no one,
- * so they stay correct without it.
+ * breaks case agreement in German and Polish. Both variants share ONE fallback
+ * (`peerWaitAnon`) for that edge case rather than each carrying its own, since
+ * it is never meant to actually render.
  */
 export function peerWaitLabel(
   lang: Language,
@@ -101,13 +104,14 @@ export function peerWaitLabel(
   variant: PeerWaitVariant = "default",
 ): string {
   const elapsed = elapsedMs(startedAt, now);
-
-  if (variant === "no_overlap") {
-    return t(lang, elapsed >= TIERS[0].afterMs ? "peerWaitNoOverlapLate" : "peerWaitNoOverlap");
-  }
-
   const name = partnerName?.trim();
   if (!name) return t(lang, "peerWaitAnon");
+
+  if (variant === "no_overlap") {
+    const key = elapsed >= TIERS[0].afterMs ? "peerWaitNoOverlapLate" : "peerWaitNoOverlap";
+    return t(lang, key, { name });
+  }
+
   const tier = TIERS.find((candidate) => elapsed >= candidate.afterMs) ?? TIERS[TIERS.length - 1]!;
   return t(lang, tier.key, { name });
 }

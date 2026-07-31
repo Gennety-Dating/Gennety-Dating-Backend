@@ -146,20 +146,29 @@ describe("peerWaitLabel — no-overlap variant", () => {
   it("uses the dedicated line instead of the default ladder", () => {
     for (const elapsed of [0, 10 * MIN, 2 * HOUR, 8 * HOUR]) {
       expect(peerWaitLabel("en", "Anna", ago(elapsed), NOW, "no_overlap")).toBe(
-        t("en", "peerWaitNoOverlap"),
+        t("en", "peerWaitNoOverlap", { name: "Anna" }),
       );
     }
   });
 
   it("escalates to the deadline line past 24h", () => {
     expect(peerWaitLabel("en", "Anna", ago(25 * HOUR), NOW, "no_overlap")).toBe(
-      t("en", "peerWaitNoOverlapLate"),
+      t("en", "peerWaitNoOverlapLate", { name: "Anna" }),
     );
   });
 
-  it("names nobody, so it is correct without a partner name", () => {
+  it("names the partner, same as the default ladder", () => {
+    const label = peerWaitLabel("en", "Anna", ago(HOUR), NOW, "no_overlap");
+    expect(label).toContain("Anna");
+    expect(label).not.toContain("{name}");
+  });
+
+  it("falls back to the shared anonymous line without a partner name", () => {
+    // No dedicated no-overlap "anon" line — this edge case is never meant to
+    // actually render (firstName is required onboarding), so both variants
+    // share peerWaitAnon rather than each carrying its own unused fallback.
     const label = peerWaitLabel("pl", null, ago(HOUR), NOW, "no_overlap");
-    expect(label).toBe(t("pl", "peerWaitNoOverlap"));
+    expect(label).toBe(t("pl", "peerWaitAnon"));
     expect(label).not.toContain("{name}");
   });
 });

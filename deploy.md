@@ -277,10 +277,18 @@ covers an open Mini App).
 
 **Three things worth knowing before the restart:**
 
-- **Tiers 4 and 5 are claims about other workers.** "Напомнил {name}" at 6 h is
-  true only because `match-nudge` fires there, and "время поджимает" at 24 h only
-  because the §3.5c check-in does. If either schedule is retuned, retune these
-  boundaries with it (`TIERS` in `services/peer-wait.ts`).
+- **Tiers 4 and 5 are claims about other workers.** "Напомнили {name} о вас" at
+  6 h is true only because `match-nudge` fires there, and "{name} долго не
+  отвечает" at 24 h is the window the §3.5c 24 h check-in / 48 h cancellation
+  sits in. If either schedule is retuned, retune these boundaries with it
+  (`TIERS` in `services/peer-wait.ts`).
+- **The copy was rewritten once already, same day (2026-07-31), before ever
+  shipping.** The first five-tier pass (`Ждём {name}` / `От {name} пока тихо` /
+  …) was too terse for a repeat visitor to tell what was actually being waited
+  on; every line now states the mechanic ("ждём ответа") explicitly, chosen from
+  three candidate ladders demoed live in a dev chat. Tier 5 also dropped the
+  "время поджимает" tail — a founder call that the bare fact carries the
+  urgency without an explicit pressure phrase.
 - **These statuses carry no emoji or animated glyph at all** (founder decision
   2026-07-30) — unlike every other `<tg-thinking>` beat in the product, which
   keeps its AIActions glyph. If a future edit adds one back, that is a product

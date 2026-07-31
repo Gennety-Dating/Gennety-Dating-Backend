@@ -2277,8 +2277,8 @@ the calendar and venue steps it *replaces* the waiting message entirely — noth
 is sent to the chat at all.
 
 `services/peer-wait.ts` owns the two primitives: which line to show
-(`peerWaitBeat` / `peerWaitLabel`) and how to put it on screen once
-(`issuePeerWaitDraft`). `workers/peer-wait-shimmer.ts` keeps it there.
+(`peerWaitLabel`) and how to put it on screen once (`issuePeerWaitDraft`).
+`workers/peer-wait-shimmer.ts` keeps it there.
 
 **The wording is a function of how long THIS side has waited (2026-07-30), not of
 a rotation counter.** The first revision rotated three phrasings on a global 60 s
@@ -2288,11 +2288,24 @@ Five tiers replace it, one line each:
 
 | Tier | Elapsed | Reads (RU) |
 |---|---|---|
-| 1 | < 5 min | `Ушло к {name}` |
-| 2 | 5 min – 1 h | `Ждём {name}` |
-| 3 | 1 – 6 h | `От {name} пока тихо` |
-| 4 | 6 – 24 h | `Напомнил {name}` |
-| 5 | > 24 h | `Ждём {name} — время поджимает` |
+| 1 | < 5 min | `Передали {name}, ждём ответа` |
+| 2 | 5 min – 1 h | `{name} ещё думает над ответом` |
+| 3 | 1 – 6 h | `{name} пока молчит, ждём` |
+| 4 | 6 – 24 h | `Напомнили {name} о вас, ждём ответа` |
+| 5 | > 24 h | `{name} долго не отвечает` |
+
+**Rewritten 2026-07-31 from a first pass that was too terse.** The first
+five-tier ladder (`Ждём {name}` / `От {name} пока тихо` / …) was compact enough
+to fit one line, but a user opening the chat several times in an hour couldn't
+tell WHAT was being waited on or WHY from the noun phrase alone. Every line now
+states the mechanic explicitly — "ждём ответа" / "ждём решения" — instead of
+just naming the partner, chosen after a live founder review of three candidate
+ladders sent to a dev chat and held on screen long enough to actually read.
+Tier 5 also drops the "время поджимает" / "time's running short" tail that the
+2026-07-30 pass added: a founder call that the bare fact ("{name} долго не
+отвечает") carries the urgency on its own without an explicit pressure phrase.
+The no-overlap ladder mirrors the same edit (`peerWaitNoOverlapLate` loses its
+matching tail).
 
 **These lines carry no icon — no leading emoji and no animated `<tg-emoji>`
 glyph** (founder decision 2026-07-30). An intermediate revision gave each tier
