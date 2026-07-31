@@ -1950,7 +1950,7 @@ const translations = {
     referralProgressNext: "Ещё верифицированных друзей: {remaining} — и откроется следующая награда.",
     referralProgressMaxed: "Ты достиг(ла) высшей награды — легенда. 💛",
     referralShareCaption:
-      "Gennety — про реальные свидания, а не переписку. ИИ подбирает пару и сам организует встречу.",
+      "Gennety — про реальные свидания, а не переписку. ИИ подбирает лучшую пару и сам организует встречу.",
     referralShareJoin: "Присоединиться к Gennety 💫",
     referralRewardDm:
       "{name} прошёл(ла) проверку по твоей ссылке.\n\nНачислено: +{tickets} 🎟 · +{months} мес Premium.\n{next}",

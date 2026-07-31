@@ -4,13 +4,14 @@ import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import type { Language } from "@gennety/shared";
 import { monthsPhrase, t } from "@gennety/shared";
-import { butterflyPng } from "../match-card/collage.js";
 
 /**
  * Referral invite card (§Referral) — the "photo" a referrer forwards in one tap
- * (savePreparedInlineMessage → InlineQueryResultPhoto). Burgundy brand system,
- * matching the approved mockup: wordmark + butterfly header, "invited you"
- * kicker, the fixed brand-voice headline, and the Premium gift chip.
+ * (savePreparedInlineMessage → InlineQueryResultPhoto). Burgundy brand system:
+ * wordmark header, "invited you" kicker, the fixed brand-voice headline, and
+ * the Premium gift chip. The corner butterfly crest was dropped 2026-07-30
+ * (founder call) pending a swap to the real brand logo asset — no accent mark
+ * on this card for now.
  *
  * Same pure satori→resvg stack as the date/match cards (no headless browser).
  * Returns a PNG Buffer, or null on any failure so the share flow can degrade to
@@ -31,20 +32,15 @@ function loadFonts(): SatoriFonts {
     { name: "Roboto", data: read("Roboto-Medium.ttf"), weight: 500, style: "normal" },
     { name: "Roboto", data: read("Roboto-Bold.ttf"), weight: 700, style: "normal" },
     { name: "Archivo Black", data: read("ArchivoBlack-Regular.ttf"), weight: 400, style: "normal" },
+    // Archivo Black ships Latin-only (no Cyrillic glyphs at all) — registering
+    // a second font under the SAME name does NOT give satori per-glyph
+    // fallthrough within a family (verified empirically: it only ever primary-
+    // matches the first entry for a given name/weight/style, same trap
+    // ARCHITECTURE.md flags for Unbounded). The fix is a distinct family name
+    // that resolves unambiguously, picked per-language below.
+    { name: "Headline Cyr", data: read("unbounded-cyr-700.woff"), weight: 400, style: "normal" },
   ];
   return cachedFonts;
-}
-
-// The mark keeps its natural aspect ratio (width/height) — forcing it into a
-// square box squished the butterfly on the card.
-let cachedButterfly: { uri: string; w: number; h: number } | null = null;
-async function butterflyMark(): Promise<{ uri: string; w: number; h: number } | null> {
-  if (cachedButterfly) return cachedButterfly.uri ? cachedButterfly : null;
-  const mark = await butterflyPng(180, "#F0C9B0");
-  cachedButterfly = mark
-    ? { uri: `data:image/png;base64,${mark.png.toString("base64")}`, w: mark.width, h: mark.height }
-    : { uri: "", w: 0, h: 0 };
-  return cachedButterfly.uri ? cachedButterfly : null;
 }
 
 // Minimal satori node helpers (this is a .ts file, so no JSX). Every box carries
@@ -65,34 +61,51 @@ export interface ReferralCardInput {
 
 export async function renderReferralCard(input: ReferralCardInput): Promise<Buffer | null> {
   try {
-    const butterfly = await butterflyMark();
     const kicker = input.referrerName
       ? t(input.lang, "referralCardInvitedBy", { name: input.referrerName })
       : t(input.lang, "referralCardInvitedGeneric");
+    // en/de/pl spell the unit word out (`{monthsPhrase}`, fully declined);
+    // ru/uk keep the abbreviated `{months} мес`/`міс`, which doesn't decline —
+    // pass both so either template resolves.
     const giftLine = t(input.lang, "referralCardGift", {
+      months: input.giftMonths,
       monthsPhrase: monthsPhrase(input.lang, input.giftMonths),
     });
-
-    // Bigger butterfly crest, tilted ~20° clockwise — the mark, like our other
-    // cards. Aspect-correct (never squished into a square box).
-    const bfH = 122;
-    const bfW = butterfly ? Math.round((butterfly.w / butterfly.h) * bfH) : bfH;
 
     // Everything is centre-formatted: a full-width row with the text centred.
     const center = { width: "100%", justifyContent: "center", textAlign: "center" } as const;
 
+    // Archivo Black has no Cyrillic glyphs, so ru/uk headlines use the bundled
+    // Unbounded Cyrillic weight instead (see loadFonts) — same bold display
+    // register, different (but already-established, match-card) typeface.
+    // Unbounded's letterforms run wider than Archivo Black's at the same size,
+    // so the Cyrillic headline is set a size down to keep each line to one row
+    // (the same two-line "Head A. / Head B." shape every other language gets).
+    const isCyrillicHeadline = input.lang === "ru" || input.lang === "uk";
+    const headlineFontFamily = isCyrillicHeadline ? "Headline Cyr" : "Archivo Black";
+
+    // Archivo Black/Unbounded are already the heaviest weight each family
+    // ships, so "bolder" is faked with a same-colour text stroke that thickens
+    // the strokes without changing the letterforms (satori honors
+    // WebkitTextStroke).
     const headline = box(
       {
         width: "100%",
         flexDirection: "column",
         alignItems: "center",
-        fontFamily: "Archivo Black",
-        fontSize: 76,
+        fontFamily: headlineFontFamily,
+        fontSize: isCyrillicHeadline ? 56 : 76,
         lineHeight: 1.03,
       },
       [
-        txt({ ...center, color: "#F7ECEC" }, t(input.lang, "referralCardHeadA")),
-        txt({ ...center, color: "#F0B7A0" }, t(input.lang, "referralCardHeadB")),
+        txt(
+          { ...center, color: "#F7ECEC", WebkitTextStroke: "2px #F7ECEC" },
+          t(input.lang, "referralCardHeadA"),
+        ),
+        txt(
+          { ...center, color: "#F0B7A0", WebkitTextStroke: "2px #F0B7A0" },
+          t(input.lang, "referralCardHeadB"),
+        ),
       ],
     );
 
@@ -109,24 +122,6 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
         fontFamily: "Roboto",
       },
       [
-        // Butterfly crest — bigger, in the top-right corner, tilted ~20° clockwise.
-        butterfly
-          ? {
-              type: "img",
-              props: {
-                src: butterfly.uri,
-                style: {
-                  display: "flex",
-                  position: "absolute",
-                  top: 52,
-                  right: 58,
-                  width: bfW,
-                  height: bfH,
-                  transform: "rotate(20deg)",
-                },
-              },
-            }
-          : box({}, []),
         // Heavier wordmark — Archivo Black (Roboto tops out at 700).
         txt(
           { ...center, fontFamily: "Archivo Black", fontSize: 40, letterSpacing: 4, textTransform: "uppercase" },
