@@ -192,6 +192,25 @@ describe("mapVibeTagsToFacets", () => {
   it("returns empty for an empty tag list", () => {
     expect(mapVibeTagsToFacets([])).toEqual({ experiences: [], ambiences: [], formats: [] });
   });
+
+  it("survives tags that collide with Object.prototype members", () => {
+    // A plain object literal would resolve these to inherited members, which
+    // are truthy — `?? []` would not catch them and the for-of would throw,
+    // taking down venue selection for that pair. Operator-authored data, so a
+    // venue tagged "constructor" is unlikely but entirely possible.
+    expect(() => mapVibeTagsToFacets(["constructor", "__proto__", "toString", "hasOwnProperty"]))
+      .not.toThrow();
+    expect(mapVibeTagsToFacets(["constructor", "coffee"])).toEqual({
+      experiences: ["coffee_treats"],
+      ambiences: [],
+      formats: [],
+    });
+  });
+
+  it("ignores non-string entries rather than throwing", () => {
+    expect(mapVibeTagsToFacets([null as never, 42 as never, "coffee"]).experiences)
+      .toEqual(["coffee_treats"]);
+  });
 });
 
 describe("facet affinity (partial coverage)", () => {

@@ -744,6 +744,7 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
         userAId: match.userA.id,
         userBId: match.userB.id,
         agreedTime: match.agreedTime,
+        candidateIds: ranked.map((row) => row.candidate.placeId),
       });
       const decision = applyVenueDiversity(
         ranked.map((row) => ({

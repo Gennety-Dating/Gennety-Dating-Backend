@@ -202,7 +202,7 @@ export function normalizeVenueIntent(input: VenueIntentV2): VenueIntentV2 {
  * (`casual`, `classic`, `upscale`) and dietary-adjacent (`hearty`, `raw`) tags
  * map to nothing rather than being forced into the nearest id.
  */
-const VIBE_TAG_FACETS: Record<string, readonly string[]> = {
+const VIBE_TAG_FACETS: Record<string, readonly string[]> = Object.assign(Object.create(null), {
   // experiences
   coffee: ["coffee_treats"], roastery: ["coffee_treats"], specialty: ["coffee_treats"],
   tea: ["coffee_treats"], dessert: ["coffee_treats"], bakery: ["coffee_treats"],
@@ -226,7 +226,12 @@ const VIBE_TAG_FACETS: Record<string, readonly string[]> = {
   retro: ["design_forward"], vinyl: ["design_forward"], rooftop: ["scenic"],
   // formats
   outdoor: ["outdoor"], terrace: ["outdoor"],
-};
+  // Null-prototype on purpose: a plain object literal would resolve
+  // `VIBE_TAG_FACETS["constructor"]` (or "toString", "__proto__", …) to an
+  // inherited member, which is truthy — so `?? []` would not catch it and the
+  // `for…of` below would throw on a curated venue that happened to carry such
+  // a tag, taking down venue selection for that pair.
+});
 
 /**
  * Translate operator vibe tags into canonical facet ids, split by axis.
@@ -240,7 +245,10 @@ export function mapVibeTagsToFacets(tags: readonly string[]): {
 } {
   const hits = new Set<string>();
   for (const tag of tags) {
-    for (const id of VIBE_TAG_FACETS[tag.trim().toLowerCase()] ?? []) hits.add(id);
+    if (typeof tag !== "string") continue;
+    const mapped = VIBE_TAG_FACETS[tag.trim().toLowerCase()];
+    if (!Array.isArray(mapped)) continue;
+    for (const id of mapped) hits.add(id);
   }
   return {
     experiences: VENUE_EXPERIENCES.filter((id) => hits.has(id)),

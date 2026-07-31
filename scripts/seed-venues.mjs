@@ -219,6 +219,13 @@ async function importVenues() {
   const inPath = resolveCliPath("in", DEFAULT_CANDIDATES);
   if (!existsSync(inPath)) fail(`Candidates file not found: ${inPath} (run --pull first).`);
   const apply = args.get("apply") === "true";
+  // Opt-in reactivation. `active` is normally left alone on update (the nightly
+  // revalidation owns it, and an import used to silently resurrect venues it
+  // had deactivated for closing). But revalidation only SCANS active rows, so
+  // it can never bring one back on its own — without this flag a deactivated
+  // row would be permanently dead even after the operator fixed it. Explicit,
+  // never the default.
+  const reactivate = args.get("reactivate") === "true";
 
   const rows = JSON.parse(readFileSync(inPath, "utf8"));
   if (!Array.isArray(rows)) fail("Candidates file must be a JSON array.");
@@ -346,7 +353,10 @@ async function importVenues() {
       // and the cron only re-checks ~30 rows a night, meaning a closed venue
       // could be offered for weeks before being caught again. Reactivation is
       // the cron's call, on live evidence, not a side effect of a data push.
-      await prisma.curatedVenue.update({ where: { id: existing.id }, data });
+      await prisma.curatedVenue.update({
+        where: { id: existing.id },
+        data: reactivate ? { ...data, active: true } : data,
+      });
       updated++;
     } else {
       await prisma.curatedVenue.create({ data });

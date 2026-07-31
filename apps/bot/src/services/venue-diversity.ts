@@ -145,16 +145,48 @@ export async function loadVenueUsage(input: {
   userAId: string;
   userBId: string;
   agreedTime: Date;
+  /**
+   * The place keys actually in play for this pair. Bounds the global read to
+   * the candidates that can possibly win — without it this scanned every match
+   * in the system (all cities) for every scheduled date, which is invisible at
+   * today's volume and a full-table scan at any real one.
+   */
+  candidateIds: readonly string[];
   now?: Date;
 }): Promise<VenueUsage> {
   const now = input.now ?? new Date();
   const historySince = new Date(now.getTime() - VENUE_HISTORY_DAYS * DAY_MS);
   const slotFrom = new Date(input.agreedTime.getTime() - VENUE_SLOT_WINDOW_HOURS * 60 * 60 * 1000);
   const slotTo = new Date(input.agreedTime.getTime() + VENUE_SLOT_WINDOW_HOURS * 60 * 60 * 1000);
+  const candidates = [...new Set(input.candidateIds)];
+
+  // Personal history is read by PARTICIPANT, not by venue: a user's own match
+  // count is inherently small, and the exclusion has to hold for venues that
+  // are not in today's candidate list too (they may return next time).
+  const ownRows = await prisma.match.findMany({
+    where: {
+      venuePlaceId: { not: null },
+      agreedTime: { not: null, gte: historySince },
+      OR: [
+        { userAId: { in: [input.userAId, input.userBId] } },
+        { userBId: { in: [input.userAId, input.userBId] } },
+      ],
+    },
+    select: { venuePlaceId: true },
+  });
+
+  const personal = new Set<string>();
+  for (const row of ownRows) if (row.venuePlaceId) personal.add(row.venuePlaceId);
+
+  const fatigue = new Map<string, number>();
+  const sameSlot = new Map<string, number>();
+  const everUsed = new Set<string>();
+  const reputation = new Map<string, { good: number; bad: number }>();
+  if (candidates.length === 0) return { personal, fatigue, sameSlot, everUsed, reputation };
 
   const rows = await prisma.match.findMany({
     where: {
-      venuePlaceId: { not: null },
+      venuePlaceId: { in: candidates },
       agreedTime: { not: null, gte: historySince },
     },
     select: {
@@ -176,13 +208,6 @@ export async function loadVenueUsage(input: {
     },
   });
 
-  const personal = new Set<string>();
-  const fatigue = new Map<string, number>();
-  const sameSlot = new Map<string, number>();
-  const everUsed = new Set<string>();
-  const reputation = new Map<string, { good: number; bad: number }>();
-  const participants = new Set([input.userAId, input.userBId]);
-
   const bump = (key: string, field: "good" | "bad"): void => {
     const entry = reputation.get(key) ?? { good: 0, bad: 0 };
     entry[field] += 1;
@@ -195,9 +220,6 @@ export async function loadVenueUsage(input: {
     if (!key || !when) continue;
     everUsed.add(key);
 
-    if (participants.has(row.userAId) || participants.has(row.userBId)) {
-      personal.add(key);
-    }
     const weight = fatigueWeightForAge(now.getTime() - when.getTime());
     if (weight > 0) fatigue.set(key, (fatigue.get(key) ?? 0) + weight);
     if (when >= slotFrom && when <= slotTo) {
