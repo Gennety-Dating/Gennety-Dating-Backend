@@ -3342,15 +3342,25 @@ enforcement code in `satisfiesVenueHardConstraints` is left intact and goes
 inert on empty/false input, so re-enabling any of them is a one-line change once
 the catalog can actually back it.
 
+**Museums are not offered at all (founder decision 2026-07-31).** `museum` is
+listed in `EXCLUDED_VENUE_CATEGORIES` (`services/curated-venue.ts`), which both
+surfaces filter on: the automatic first assignment never picks one, and the
+§3.7b venue-change board never lists one. A museum is a poor default for a
+first meeting — timed, ticketed, quiet in the wrong way, and closing early
+enough to rule out most of the evening slot grid. The catalog rows stay
+`active` rather than being deleted, so the category is re-enabled by removing
+one entry from that list. This does **not** empty the `art_culture` experience:
+that facet is also carried through `vibeTags` by book cafes, art bars and
+historic streets (7 Kyiv venues at the time of the decision), which are
+arguably the better first-date answer anyway.
+
 The automatic first assignment has a separate server-owned baseline policy:
 only quality-eligible `base` inventory is considered; commercial venues need
 positive price evidence at `FREE`, `INEXPENSIVE` or `MODERATE`; `EXPENSIVE`,
 `VERY_EXPENSIVE`, `premium` and `exclusive` candidates are excluded before
-ranking. Public parks may have no commercial price, and **museums are exempt
-from the price-evidence requirement** (Google reports no `priceLevel` for them
-at all, so requiring it rejected every museum in the catalog and made
-`art_culture` unreachable; a museum with a *known* premium price is still
-refused). This is
+ranking. Public parks may have no commercial price. (`museum` also sits outside
+`PRICE_EVIDENCE_REQUIRED` — Google reports no `priceLevel` for museums at all —
+but that is now moot while the category is excluded outright.) This is
 not written as a participant preference and the initial clients show no price
 chips. Price/exclusivity choice belongs to the post-assignment Venue Change.
 

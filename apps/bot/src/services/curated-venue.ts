@@ -362,3 +362,29 @@ export type VenueTier = (typeof VENUE_TIER_WHITELIST)[number];
 export function isValidVenueTier(value: string): value is VenueTier {
   return (VENUE_TIER_WHITELIST as readonly string[]).includes(value);
 }
+
+/**
+ * Categories the product does not offer as a date venue, on EITHER surface —
+ * neither the automatic first assignment nor the paid venue-change board.
+ *
+ * `museum` (founder decision 2026-07-31): a museum is a poor default for a
+ * first meeting — timed, ticketed, quiet in the wrong way, and closing early
+ * enough that it rules out most of the evening slot grid. The rows stay in the
+ * catalog `active` rather than being deleted: they cost nothing, they keep
+ * their curation, and re-enabling the category is removing one entry here.
+ *
+ * NOTE this does not empty the `art_culture` experience. That facet is also
+ * carried through `vibeTags` by book cafes, art bars and historic streets
+ * (7 venues in the Kyiv catalog at the time of the decision), so a pair asking
+ * for art still has real inventory — arguably better suited to a first date
+ * than a museum was.
+ */
+export const EXCLUDED_VENUE_CATEGORIES: readonly VenueCategory[] = ["museum"];
+
+/** Prisma-ready form of the exclusion, for a `category: { notIn }` filter. */
+export const OFFERABLE_CATEGORY_FILTER: string[] = [...EXCLUDED_VENUE_CATEGORIES];
+
+/** True when the product may offer this category as a date venue. */
+export function isOfferableVenueCategory(category: string): boolean {
+  return !(EXCLUDED_VENUE_CATEGORIES as readonly string[]).includes(category);
+}

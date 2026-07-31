@@ -27,7 +27,12 @@ import {
 import { env } from "../config.js";
 import { midpoint, haversineDistanceKm, venueSearchRadiusMeters, commuteBoundingBox } from "./geo.js";
 import { callOpenAIJson } from "./openai.js";
-import { isValidVenueCategory, isVenueOpenAt } from "./curated-venue.js";
+import {
+  isValidVenueCategory,
+  isVenueOpenAt,
+  isOfferableVenueCategory,
+  OFFERABLE_CATEGORY_FILTER,
+} from "./curated-venue.js";
 import {
   fetchPlacePhotoName,
   searchVenueCandidates,
@@ -447,7 +452,12 @@ function searchCategories(a: VenueIntentV2, b: VenueIntentV2): Array<"cafe" | "c
       default: return [...a.experiences, ...b.experiences].map(experienceToLegacyCategory);
     }
   });
-  return [...new Set(laneCategories)].slice(0, 3);
+  // Drop categories the product does not offer before they reach the Places
+  // fallback — otherwise an `art_culture` intent would still spend a search
+  // call on museums and could surface one that the curated path excludes.
+  // `cafe` backstops the case where filtering empties the list.
+  const offerable = [...new Set(laneCategories)].filter((category) => isOfferableVenueCategory(category));
+  return (offerable.length > 0 ? offerable : (["cafe"] as const)).slice(0, 3);
 }
 
 /**
@@ -646,6 +656,9 @@ async function finalizeVenueIntentV2(matchId: string): Promise<void> {
         where: {
           active: true,
           tier: "base",
+          // Categories the product does not offer at all (see
+          // `EXCLUDED_VENUE_CATEGORIES`) — currently museums.
+          category: { notIn: OFFERABLE_CATEGORY_FILTER },
           ...(cityKey ? { cityKey } : universityDomain ? { universityDomain } : {}),
           lat: { gte: box.minLat, lte: box.maxLat },
           lng: { gte: box.minLng, lte: box.maxLng },

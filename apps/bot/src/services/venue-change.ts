@@ -22,7 +22,7 @@ import {
   VENUE_CHANGE_TTL_HOURS,
 } from "@gennety/shared";
 import { haversineDistanceKm, type LatLng } from "./geo.js";
-import { isVenueOpenAt } from "./curated-venue.js";
+import { isVenueOpenAt, OFFERABLE_CATEGORY_FILTER } from "./curated-venue.js";
 import { meetsVenueQualityFloor } from "./initial-venue-policy.js";
 import {
   searchVenueCandidates,
@@ -242,6 +242,9 @@ export async function listCuratedVenuesNear(
       tier: input.includePremium
         ? { in: ["base", "premium", "alternative"] }
         : { in: ["base", "alternative"] },
+      // Same product-level exclusion as the automatic assignment: a category we
+      // never pick FOR the pair should not be offered TO them either.
+      category: { notIn: OFFERABLE_CATEGORY_FILTER },
     },
     select: {
       name: true,

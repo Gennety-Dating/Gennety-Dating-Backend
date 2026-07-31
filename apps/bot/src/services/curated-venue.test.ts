@@ -4,6 +4,7 @@
  * with injected deps so neither the DB nor Google Places is touched.
  */
 
+import { VENUE_CATEGORY_WHITELIST } from "./vibe-parser.js";
 import { describe, it, expect, vi } from "vitest";
 import {
   rankCuratedVenues,
@@ -13,6 +14,9 @@ import {
   isVenueOpenAt,
   type CuratedVenueRow,
   type ResolveVenueInput,
+  EXCLUDED_VENUE_CATEGORIES,
+  OFFERABLE_CATEGORY_FILTER,
+  isOfferableVenueCategory,
 } from "./curated-venue.js";
 import type { RegularOpeningHours } from "./venue.js";
 
@@ -307,5 +311,27 @@ describe("isValidVenueCategory", () => {
     expect(isValidVenueCategory("museum")).toBe(true);
     expect(isValidVenueCategory("gas_station")).toBe(false);
     expect(isValidVenueCategory("")).toBe(false);
+  });
+});
+
+describe("EXCLUDED_VENUE_CATEGORIES", () => {
+  it("excludes museums from what the product offers", () => {
+    expect(isOfferableVenueCategory("museum")).toBe(false);
+  });
+
+  it("leaves every other whitelisted category offerable", () => {
+    for (const category of VENUE_CATEGORY_WHITELIST) {
+      if (category === "museum") continue;
+      expect(isOfferableVenueCategory(category)).toBe(true);
+    }
+  });
+
+  it("exposes a Prisma-ready notIn filter that matches the exclusion list", () => {
+    expect(OFFERABLE_CATEGORY_FILTER).toEqual([...EXCLUDED_VENUE_CATEGORIES]);
+    expect(OFFERABLE_CATEGORY_FILTER).toContain("museum");
+  });
+
+  it("treats an unknown category as offerable (only the listed ones are barred)", () => {
+    expect(isOfferableVenueCategory("something-new")).toBe(true);
   });
 });
