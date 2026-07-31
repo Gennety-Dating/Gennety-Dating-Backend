@@ -53,10 +53,26 @@ function txt(style: Record<string, unknown>, value: string): Node {
   return { type: "div", props: { style: { display: "flex", ...style }, children: value } };
 }
 
+/**
+ * Where the Gennety wordmark sits on the card. Two candidates under founder
+ * review (2026-07-31); the loser gets deleted once one is picked.
+ *  - `header`     — one centred wordmark at the top, the classic lockup.
+ *  - `decorative` — an oversized watermark bleeding off the bottom-left corner,
+ *    a small solid wordmark beside it, and a tilted one bleeding off the
+ *    top-right, so the mark frames the card instead of labelling it.
+ */
+export type ReferralCardLogoVariant = "header" | "decorative";
+
 export interface ReferralCardInput {
   referrerName: string | null;
   giftMonths: number;
   lang: Language;
+  logoVariant?: ReferralCardLogoVariant;
+}
+
+/** The brand wordmark, set in the logo's own typeface (title-case, not caps). */
+function wordmark(style: Record<string, unknown>): Node {
+  return txt({ fontFamily: "Archivo Black", letterSpacing: -1, ...style }, "Gennety");
 }
 
 export async function renderReferralCard(input: ReferralCardInput): Promise<Buffer | null> {
@@ -109,6 +125,38 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
       ],
     );
 
+    // Corner wordmarks. Absolutely positioned with negative offsets so the big
+    // ones genuinely run off the card edge rather than sitting inside a margin;
+    // the huge bottom-left one is nearly transparent so it reads as texture in
+    // the gradient, never as a second thing to read.
+    const decorative = input.logoVariant === "decorative";
+    const decorations: Node[] = decorative
+      ? [
+          wordmark({
+            position: "absolute",
+            top: 40,
+            right: -18,
+            fontSize: 58,
+            color: "rgba(247,236,236,0.92)",
+            transform: "rotate(-8deg)",
+          }),
+          wordmark({
+            position: "absolute",
+            left: -86,
+            bottom: -74,
+            fontSize: 200,
+            color: "rgba(247,236,236,0.06)",
+          }),
+          wordmark({
+            position: "absolute",
+            left: 72,
+            bottom: 214,
+            fontSize: 28,
+            color: "rgba(247,236,236,0.5)",
+          }),
+        ]
+      : [];
+
     const tree = box(
       {
         width: CARD_W,
@@ -122,15 +170,18 @@ export async function renderReferralCard(input: ReferralCardInput): Promise<Buff
         fontFamily: "Roboto",
       },
       [
-        // Heavier wordmark — Archivo Black (Roboto tops out at 700).
-        txt(
-          { ...center, fontFamily: "Archivo Black", fontSize: 40, letterSpacing: 4, textTransform: "uppercase" },
-          "GENNETY",
-        ),
+        ...decorations,
+        // In the decorative variant the corner marks ARE the branding, so the
+        // header keeps only the tagline (a fourth wordmark would be noise).
+        ...(decorative
+          ? []
+          : [wordmark({ ...center, fontSize: 46 })]),
         txt(
           {
             ...center,
-            marginTop: 16,
+            // Clear the tilted top-right wordmark, which occupies the band the
+            // tagline would otherwise sit in.
+            marginTop: decorative ? 108 : 16,
             fontSize: 29,
             fontWeight: 700,
             letterSpacing: 0.5,

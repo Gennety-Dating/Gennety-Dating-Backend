@@ -961,8 +961,7 @@ const translations = {
     referralRewardsSoFar: "You've earned {tickets} 🎟 and {months} months of Premium — worth {usd}.",
     referralProgressNext: "{remaining} more verified friend(s) unlocks the next reward.",
     referralProgressMaxed: "You've reached the top reward — legend. 💛",
-    referralShareCaption:
-      "Gennety is about real dates, not texting — the AI finds your match and sets up the meeting.",
+    referralShareCaption: "The AI finds your best match and sets up the meeting itself.",
     referralShareJoin: "Join Gennety 💫",
     referralRewardDm:
       "{name} passed verification via your link.\n\nCredited: +{tickets} 🎟 · +{months} mo Premium.\n{next}",
@@ -1949,8 +1948,7 @@ const translations = {
     referralRewardsSoFar: "Ты получил(а) {tickets} 🎟 и {months} мес. Premium — на сумму {usd}.",
     referralProgressNext: "Ещё верифицированных друзей: {remaining} — и откроется следующая награда.",
     referralProgressMaxed: "Ты достиг(ла) высшей награды — легенда. 💛",
-    referralShareCaption:
-      "Gennety — про реальные свидания, а не переписку. ИИ подбирает лучшую пару и сам организует встречу.",
+    referralShareCaption: "ИИ подбирает лучшую пару и сам организует встречу.",
     referralShareJoin: "Присоединиться к Gennety 💫",
     referralRewardDm:
       "{name} прошёл(ла) проверку по твоей ссылке.\n\nНачислено: +{tickets} 🎟 · +{months} мес Premium.\n{next}",
@@ -2933,8 +2931,7 @@ const translations = {
     referralRewardsSoFar: "Ти отримав(ла) {tickets} 🎟 і {months} міс. Premium — на суму {usd}.",
     referralProgressNext: "Ще верифікованих друзів: {remaining} — і відкриється наступна нагорода.",
     referralProgressMaxed: "Ти досяг(ла) найвищої нагороди — легенда. 💛",
-    referralShareCaption:
-      "Gennety — про справжні побачення, а не листування. ШІ підбирає пару й сам організовує зустріч.",
+    referralShareCaption: "ШІ підбирає найкращу пару й сам організовує зустріч.",
     referralShareJoin: "Приєднатися до Gennety 💫",
     referralRewardDm:
       "{name} пройшов(ла) перевірку за твоїм посиланням.\n\nНараховано: +{tickets} 🎟 · +{months} міс Premium.\n{next}",
@@ -3894,8 +3891,7 @@ const deTranslations: TranslationTable = {
   referralRewardsSoFar: "Du hast {tickets} 🎟 und {months} Monate Premium verdient — im Wert von {usd}.",
   referralProgressNext: "Noch {remaining} verifizierte Freunde bis zur nächsten Belohnung.",
   referralProgressMaxed: "Du hast die höchste Belohnung erreicht — Legende. 💛",
-  referralShareCaption:
-    "Gennety steht für echte Dates statt Chatten — die KI findet dein Match und plant das Treffen.",
+  referralShareCaption: "Die KI findet dein bestes Match und plant das Treffen selbst.",
   referralShareJoin: "Gennety beitreten 💫",
   referralRewardDm:
     "{name} hat die Verifizierung über deinen Link bestanden.\n\nGutgeschrieben: +{tickets} 🎟 · +{months} Mon Premium.\n{next}",
@@ -4849,8 +4845,7 @@ const plTranslations: TranslationTable = {
   referralRewardsSoFar: "Zdobyłeś(-aś) {tickets} 🎟 i {months} mies. Premium — o wartości {usd}.",
   referralProgressNext: "Jeszcze {remaining} zweryfikowanych znajomych do następnej nagrody.",
   referralProgressMaxed: "Osiągnąłeś(-aś) najwyższą nagrodę — legenda. 💛",
-  referralShareCaption:
-    "Gennety to prawdziwe randki, nie pisanie — AI dobiera parę i sam organizuje spotkanie.",
+  referralShareCaption: "AI dobiera najlepszą parę i sam organizuje spotkanie.",
   referralShareJoin: "Dołącz do Gennety 💫",
   referralRewardDm:
     "{name} przeszedł(-eszła) weryfikację przez twój link.\n\nNaliczono: +{tickets} 🎟 · +{months} mies Premium.\n{next}",
