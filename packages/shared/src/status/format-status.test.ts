@@ -3,8 +3,6 @@ import {
   computeStatusSnapshot,
   formatStatusText,
   formatDateCountdownText,
-  nextMatchDispatchAt,
-  isMatchBatchProcessing,
 } from "./format-status.js";
 
 /**
@@ -221,28 +219,6 @@ describe("formatStatusText", () => {
   });
 });
 
-describe("nextMatchDispatchAt", () => {
-  it("lands on Thursday 18:00 Kyiv in April (UTC+3)", () => {
-    const now = new Date("2026-04-14T09:00:00Z");
-    expect(nextMatchDispatchAt(now).toISOString()).toBe("2026-04-16T15:00:00.000Z");
-  });
-
-  it("lands on Thursday 18:00 Kyiv in January (UTC+2)", () => {
-    const now = new Date("2026-01-13T09:00:00Z");
-    expect(nextMatchDispatchAt(now).toISOString()).toBe("2026-01-15T16:00:00.000Z");
-  });
-
-  it("bumps to next week when called after Thursday 18:00 Kyiv", () => {
-    const now = new Date("2026-04-16T16:00:00Z");
-    expect(nextMatchDispatchAt(now).toISOString()).toBe("2026-04-23T15:00:00.000Z");
-  });
-
-  it("returns current Thursday at exactly 18:00 Kyiv", () => {
-    const now = new Date("2026-04-16T15:00:00Z");
-    expect(nextMatchDispatchAt(now).toISOString()).toBe("2026-04-16T15:00:00.000Z");
-  });
-});
-
 describe("formatDateCountdownText", () => {
   const DATE_AT = new Date("2026-04-16T16:00:00.000Z");
 
@@ -274,16 +250,3 @@ describe("formatDateCountdownText", () => {
   });
 });
 
-describe("isMatchBatchProcessing", () => {
-  it("is true within 10 min after Thursday 18:00 Kyiv", () => {
-    expect(isMatchBatchProcessing(new Date("2026-04-16T15:05:00Z"))).toBe(true);
-  });
-
-  it("is false 30 min after Thursday 18:00 Kyiv", () => {
-    expect(isMatchBatchProcessing(new Date("2026-04-16T15:30:00Z"))).toBe(false);
-  });
-
-  it("is false on Wednesday", () => {
-    expect(isMatchBatchProcessing(new Date("2026-04-15T15:05:00Z"))).toBe(false);
-  });
-});
