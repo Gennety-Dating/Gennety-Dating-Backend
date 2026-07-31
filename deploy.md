@@ -34,6 +34,14 @@ What ships, and why each piece exists:
   generated voice note) that carry no id going out.
 - **Inbound media too**, plus stickers, which previously fell through
   completely unrecorded.
+- **The rich AI-compose finaliser now records itself.** `streamComposedRich`
+  persists its final message with `sendRichMessage`, a raw Bot API call the
+  outbound transformer does not classify, and unlike the classic stream it
+  never called `recordOutboundMessage`. So **every Profiler question was absent
+  from the timeline** — the reader showed a user's answers with nothing above
+  them, and the concierge agent resolving a bare "why?" against the last thing
+  on screen could not see the question either. Visible in production today: the
+  06:01 answers in one live dialog have no questions above them.
 - **The user card carries the data it always claimed to.** `eloScore` was
   already in the payload and simply never rendered; `homeCity`, tickets,
   Premium, the contact rails, `embeddingDirty`, `standbyCount`, the vibe axes,

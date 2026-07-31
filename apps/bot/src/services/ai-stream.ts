@@ -712,16 +712,29 @@ export async function streamComposedRich(
   // rich finaliser is unavailable.
   if (richStarted) {
     try {
-      return await sendRichMessage(api, {
+      const sent = await sendRichMessage(api, {
         chat_id: chatId,
         rich_message: { markdown: finalText },
         ...(options.replyMarkup ? { reply_markup: options.replyMarkup } : {}),
       });
+      // `sendRichMessage` is a raw Bot API call, so the outbound transformer —
+      // which only classifies the `send*` methods it knows — never sees it, and
+      // this whole path was invisible to the chat timeline. That is the
+      // Profiler's entire question stream: the reader showed a user's answers
+      // with nothing above them, and the concierge agent resolving "why?"
+      // against the last thing on screen could not see the question either.
+      recordOutboundMessage(chatId, finalText, {
+        replyMarkup: options.replyMarkup,
+        telegramMessageId: sent?.message_id ?? null,
+      });
+      return sent;
     } catch (err) {
       console.warn("streamComposedRich: rich final failed, falling back to plain send:", err);
     }
   }
   try {
+    // The plain fallback DOES go through the transformer, so recording here
+    // would double-count it.
     return await api.sendMessage(chatId, finalText, finalOptions);
   } catch (err) {
     console.warn("streamComposedRich: final send failed:", err);
