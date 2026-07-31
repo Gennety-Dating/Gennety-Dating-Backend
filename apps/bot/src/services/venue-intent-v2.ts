@@ -540,14 +540,11 @@ function candidateFromPlaces(row: VenueCandidate, a: VenueIntentV2, b: VenueInte
 }
 
 function minimalRelaxation(a: VenueIntentV2, b: VenueIntentV2): { key: string; sides: string } {
-  const affected = (predicate: (hard: VenueHardConstraints) => boolean): string =>
-    `${predicate(a.hardConstraints) ? "A" : ""}${predicate(b.hardConstraints) ? "B" : ""}`;
-  const stepSides = affected((hard) => hard.stepFree);
-  if (stepSides) return { key: "step_free", sides: stepSides };
-  if (a.hardConstraints.dietary.length) return { key: a.hardConstraints.dietary[0]!, sides: "A" };
-  if (b.hardConstraints.dietary.length) return { key: b.hardConstraints.dietary[0]!, sides: "B" };
-  const alcoholSides = affected((hard) => hard.alcoholFree);
-  if (alcoholSides) return { key: "alcohol_free", sides: alcoholSides };
+  // The step-free / dietary / alcohol-free branches are gone with the chips
+  // themselves (`applyInitialVenueConstraintPolicy`). They used to lead this
+  // list, so the one relaxation the product suggested was almost always an
+  // accessibility or religious requirement — the exact thing a user cannot
+  // "just relax". What is left are the two constraints the catalog can answer.
   if (a.hardConstraints.setting) return { key: a.hardConstraints.setting, sides: "A" };
   if (b.hardConstraints.setting) return { key: b.hardConstraints.setting, sides: "B" };
   return { key: "commute_12_km", sides: "AB" };

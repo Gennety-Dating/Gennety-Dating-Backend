@@ -3320,14 +3320,37 @@ Experience IDs: `conversation`, `coffee_treats`, `meal_discovery`, `walk_view`,
 `art_culture`, `drinks_evening`, `playful_activity`, `surprise_me`. Ambience IDs:
 `quiet`, `cozy_public`, `lively`, `design_forward`, `scenic`,
 `romantic_public`. Format IDs: `seated`, `walking`, `interactive`, `indoor`,
-`outdoor`. These are soft preferences. Only explicitly confirmed dietary,
-alcohol-free, step-free, required setting and commute relaxation are hard.
+`outdoor`. These are soft preferences. The only hard constraints are the
+**required setting** (indoor/outdoor) and the **commute relaxation**.
+
+**Dietary, alcohol-free and step-free were retired 2026-07-30** (founder
+decision) — removed from the Mini App's Must-haves group and neutralized
+server-side by `applyInitialVenueConstraintPolicy`, so a cached bundle or an
+older native client resolves to the same state (the `/v1/*` fields stay in the
+shape, marked `deprecated`, exactly like `maxPrice`). They were enforced as hard
+filters requiring **positive** evidence on the venue — "unknown" counted as a
+refusal — while the curated catalog carried that evidence for **0 of 1207
+rows**, because Google publishes none of it and no operator pass had marked any.
+Every one of those seven chips was therefore a guaranteed `no_candidates`, and
+the failure copy then named the user's own requirement as the thing to relax:
+a wheelchair user was told to drop step-free access, someone keeping halal was
+told to drop halal. `minimalRelaxation` no longer has those branches. The
+product's position is that needs this specific belong to the person rather than
+to the matchmaker: if the assigned venue doesn't suit them, they change it on
+the §3.7b board, or the couple simply agrees to walk somewhere else. The
+enforcement code in `satisfiesVenueHardConstraints` is left intact and goes
+inert on empty/false input, so re-enabling any of them is a one-line change once
+the catalog can actually back it.
 
 The automatic first assignment has a separate server-owned baseline policy:
-only quality-eligible `base` inventory is considered; commercial venues and
-admission venues need positive price evidence at `FREE`, `INEXPENSIVE` or
-`MODERATE`; `EXPENSIVE`, `VERY_EXPENSIVE`, `premium` and `exclusive` candidates
-are excluded before ranking. Public parks may have no commercial price. This is
+only quality-eligible `base` inventory is considered; commercial venues need
+positive price evidence at `FREE`, `INEXPENSIVE` or `MODERATE`; `EXPENSIVE`,
+`VERY_EXPENSIVE`, `premium` and `exclusive` candidates are excluded before
+ranking. Public parks may have no commercial price, and **museums are exempt
+from the price-evidence requirement** (Google reports no `priceLevel` for them
+at all, so requiring it rejected every museum in the catalog and made
+`art_culture` unreachable; a museum with a *known* premium price is still
+refused). This is
 not written as a participant preference and the initial clients show no price
 chips. Price/exclusivity choice belongs to the post-assignment Venue Change.
 

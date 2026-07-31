@@ -13,7 +13,6 @@ import {
   type VenueExperience,
   type VenueAmbience,
   type VenueFormat,
-  type VenueDietary,
 } from "./api.js";
 import { pickLang, tr, type Lang } from "./i18n.js";
 import { wireContentInsets } from "./telegram-insets.js";
@@ -573,7 +572,6 @@ const AMBIENCE_IDS: VenueAmbience[] = ["quiet", "cozy_public", "lively", "design
 // indoor/outdoor setting is dropped here (its hard form lives in Must-haves as
 // required_indoor/outdoor), so the group can't offer contradictory picks.
 const FORMAT_DISPLAY_IDS: VenueFormat[] = ["seated", "walking", "interactive"];
-const DIET_IDS: VenueDietary[] = ["vegan", "vegetarian", "halal", "kosher", "gluten_free"];
 const VIBE_ERRORS: Record<Lang, { describe: string; experience: string; relax: string }> = {
   en: { describe: "Please describe the vibe first.", experience: "Choose at least one experience.", relax: "No verified place matches every requirement. Please relax: " },
   ru: { describe: "Сначала опишите вайб.", experience: "Выберите хотя бы один формат встречи.", relax: "Нет проверенного места со всеми условиями. Ослабьте ограничение: " },
@@ -825,15 +823,20 @@ function renderDraft(): void {
   );
 
   const constraints = document.getElementById("vibe-constraints");
-  const constraintIds = [...DIET_IDS, "alcohol_free", "step_free", "required_indoor", "required_outdoor", ...(venueState?.selectionError?.startsWith("no_candidates:commute_12_km:") ? ["commute_12_km"] : [])];
+  // Dietary / alcohol-free / step-free chips were removed 2026-07-30 (founder
+  // decision). They were hard filters needing positive evidence on the venue,
+  // the catalog had that evidence for 0 of 1207 rows, so each one guaranteed
+  // "no place found" and the failure copy then asked the user to relax exactly
+  // the requirement they cannot relax. Needs this specific are the person's own
+  // to solve — via the venue-change board, or between the two of them on the
+  // day. The server neutralises them too (`applyInitialVenueConstraintPolicy`),
+  // so a cached bundle still sending them changes nothing.
+  const constraintIds = ["required_indoor", "required_outdoor", ...(venueState?.selectionError?.startsWith("no_candidates:commute_12_km:") ? ["commute_12_km"] : [])];
   if (constraints) constraints.replaceChildren(...constraintIds.map((id) => {
     const hard = draft!.hardConstraints;
-    const active = DIET_IDS.includes(id as VenueDietary) ? hard.dietary.includes(id as VenueDietary) : id === "alcohol_free" ? hard.alcoholFree : id === "step_free" ? hard.stepFree : id === "required_indoor" ? hard.setting === "indoor" : id === "required_outdoor" ? hard.setting === "outdoor" : hard.maxCommuteKm === 12;
+    const active = id === "required_indoor" ? hard.setting === "indoor" : id === "required_outdoor" ? hard.setting === "outdoor" : hard.maxCommuteKm === 12;
     return chipButton(label(id), active, () => {
-      if (DIET_IDS.includes(id as VenueDietary)) hard.dietary = toggleList(hard.dietary, id as VenueDietary);
-      else if (id === "alcohol_free") hard.alcoholFree = !hard.alcoholFree;
-      else if (id === "step_free") hard.stepFree = !hard.stepFree;
-      else if (id === "required_indoor") hard.setting = hard.setting === "indoor" ? null : "indoor";
+      if (id === "required_indoor") hard.setting = hard.setting === "indoor" ? null : "indoor";
       else if (id === "required_outdoor") hard.setting = hard.setting === "outdoor" ? null : "outdoor";
       else if (id === "commute_12_km") hard.maxCommuteKm = hard.maxCommuteKm === 12 ? 8 : 12;
       renderDraft();

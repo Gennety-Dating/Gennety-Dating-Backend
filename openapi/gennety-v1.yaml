@@ -1935,8 +1935,20 @@ components:
           type: array
           uniqueItems: true
           items: { type: string, enum: [vegan, vegetarian, halal, kosher, gluten_free] }
-        alcoholFree: { type: boolean }
-        stepFree: { type: boolean }
+          deprecated: true
+          description: >-
+            Compatibility field, retired 2026-07-30 and normalized to [] server-side.
+            It was a hard filter requiring positive evidence on the venue, and the
+            curated catalog carries that evidence for no venue at all, so any value
+            here guaranteed "no place found". Clients should stop offering it.
+        alcoholFree:
+          type: boolean
+          deprecated: true
+          description: Compatibility field, retired 2026-07-30 and normalized to false server-side. See `dietary`.
+        stepFree:
+          type: boolean
+          deprecated: true
+          description: Compatibility field, retired 2026-07-30 and normalized to false server-side. See `dietary`.
         setting: { type: [string, "null"], enum: [indoor, outdoor, null] }
         maxPrice:
           type: [string, "null"]

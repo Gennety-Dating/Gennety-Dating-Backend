@@ -24,8 +24,36 @@ export type InitialVenuePolicyResult =
   | { eligible: true; price: VenuePriceLimit | null }
   | { eligible: false; reason: InitialVenueRejectionReason };
 
+/**
+ * Neutralise the participant constraints the product no longer offers.
+ *
+ * `maxPrice` was retired first: price is a product-owned policy for the initial
+ * assignment, not a participant control.
+ *
+ * `dietary` / `alcoholFree` / `stepFree` were retired 2026-07-30 (founder
+ * decision). They were enforced as hard filters requiring POSITIVE evidence on
+ * the venue — `!== true` fails on "unknown" — and the catalog carried that
+ * evidence for exactly zero of its 1207 rows, because Google publishes none of
+ * it and no operator pass had marked any. So every one of those seven chips was
+ * a guaranteed `no_candidates`, and the failure message then asked the user to
+ * drop the requirement: a wheelchair user was told to relax step-free access,
+ * someone keeping halal was told to relax halal. The product's answer is that
+ * needs this specific belong to the person, not to the matchmaker — if the
+ * assigned venue does not suit them they change it on the board (§3.7b) or the
+ * couple simply walks somewhere else.
+ *
+ * Applied on BOTH read and write (`parseStored` and `confirmVenueIntent`), so a
+ * cached Mini App bundle, an older native client, or an intent stored before
+ * this change all resolve to the same neutral state. The enforcement code in
+ * `satisfiesVenueHardConstraints` is deliberately left intact and simply goes
+ * inert on empty/false input — re-enabling any of these is one line here, once
+ * the catalog can actually back it.
+ *
+ * `setting` (indoor/outdoor) and `maxCommuteKm` are NOT retired: the catalog
+ * carries `indoor` on 1136 rows and `outdoor` on 71, so they are answerable.
+ */
 export function applyInitialVenueConstraintPolicy(hard: VenueHardConstraints): VenueHardConstraints {
-  return { ...hard, maxPrice: null };
+  return { ...hard, maxPrice: null, dietary: [], alcoholFree: false, stepFree: false };
 }
 
 /**

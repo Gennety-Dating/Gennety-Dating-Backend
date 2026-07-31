@@ -22,6 +22,33 @@ describe("initial venue policy", () => {
     expect(applyInitialVenueConstraintPolicy({ ...defaultVenueHardConstraints(), maxPrice: "free" }).maxPrice).toBeNull();
   });
 
+  it("neutralises the retired dietary / alcohol-free / step-free constraints", () => {
+    // A cached Mini App bundle or an older native client can still send these.
+    // They must resolve to the same neutral state as a fresh client, because
+    // the catalog cannot positively confirm any of them for any venue and the
+    // hard filter would therefore return nothing at all.
+    const sent = {
+      ...defaultVenueHardConstraints(),
+      dietary: ["vegan", "halal"] as never,
+      alcoholFree: true,
+      stepFree: true,
+    };
+    expect(applyInitialVenueConstraintPolicy(sent)).toEqual({
+      ...defaultVenueHardConstraints(),
+      dietary: [],
+      alcoholFree: false,
+      stepFree: false,
+      maxPrice: null,
+    });
+  });
+
+  it("keeps the constraints the catalog CAN answer", () => {
+    const sent = { ...defaultVenueHardConstraints(), setting: "outdoor" as const, maxCommuteKm: 12 as const };
+    const out = applyInitialVenueConstraintPolicy(sent);
+    expect(out.setting).toBe("outdoor");
+    expect(out.maxCommuteKm).toBe(12);
+  });
+
   it.each(["PRICE_LEVEL_FREE", "PRICE_LEVEL_INEXPENSIVE", "PRICE_LEVEL_MODERATE"])(
     "accepts the base price band %s",
     (priceLevel) => {
