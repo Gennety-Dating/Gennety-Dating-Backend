@@ -9,6 +9,10 @@
 
 import { prisma } from "@gennety/db";
 import { VOICE_SELF_GENDER } from "@gennety/shared";
+import {
+  ADMIN_CACHE_CATEGORY,
+  ADMIN_CACHE_KEY_PREFIX,
+} from "../admin/utils/cache.js";
 import { env } from "../config.js";
 import { formatNextBatchDate } from "./next-batch.js";
 import {
@@ -77,8 +81,32 @@ let knowledgeCache: { text: string; fetchedAt: number } | null = null;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
+ * Ceiling on the whole operator-knowledge block.
+ *
+ * This section is an OPTIONAL extension point — the real product knowledge is
+ * the code-owned playbook — so it is never worth more than a few paragraphs of
+ * the agent's context. The cap exists because the failure mode here is silent:
+ * one oversized row (or a namespace nobody filtered) simply eats the prompt,
+ * costs money on every single turn, and nothing surfaces it.
+ */
+const MAX_KNOWLEDGE_CHARS = 4_000;
+
+/**
  * Fetch active knowledge entries from the database, ordered by priority.
  * Results are cached in-memory for 5 minutes to avoid DB hits on every message.
+ *
+ * **Admin analytics rows are excluded, on both of their markers.**
+ * `admin/utils/cache.ts` uses this same table as a JSON cache for the heavy
+ * dashboard queries, and this query used to have no category filter — so every
+ * `admin_cache:*` blob (user counts, gender funnel, city centroids, growth
+ * metrics) was injected into the menu agent's system prompt, at `priority: 0`,
+ * i.e. ABOVE the actual playbook: ~23k characters on every turn, for every
+ * user. That is a confidentiality problem before it is a cost one — the model
+ * could recite internal metrics to whoever asked.
+ *
+ * Filtered by category AND key prefix deliberately: the namespace is declared
+ * in two places, and a row written with only one of them set is exactly the
+ * shape of the bug this guards against.
  */
 export async function fetchKnowledgeBase(): Promise<string> {
   const now = Date.now();
@@ -87,14 +115,29 @@ export async function fetchKnowledgeBase(): Promise<string> {
   }
 
   const entries = await prisma.systemKnowledge.findMany({
-    where: { active: true },
+    where: {
+      active: true,
+      category: { not: ADMIN_CACHE_CATEGORY },
+      NOT: { key: { startsWith: ADMIN_CACHE_KEY_PREFIX } },
+    },
     orderBy: { priority: "asc" },
-    select: { title: true, content: true },
+    select: { key: true, title: true, content: true },
   });
 
-  const text = entries
+  const full = entries
+    // Belt and braces: a row that slipped past the query (hand-inserted with a
+    // different category, say) still never reaches the prompt.
+    .filter((e) => !e.key.startsWith(ADMIN_CACHE_KEY_PREFIX))
     .map((e) => `### ${e.title}\n${e.content}`)
     .join("\n\n");
+
+  let text = full;
+  if (full.length > MAX_KNOWLEDGE_CHARS) {
+    console.warn(
+      `[prompt-builder] operator knowledge is ${full.length} chars — truncating to ${MAX_KNOWLEDGE_CHARS}. Something is writing bulk data into system_knowledge.`,
+    );
+    text = `${full.slice(0, MAX_KNOWLEDGE_CHARS)}…`;
+  }
 
   knowledgeCache = { text, fetchedAt: now };
   return text;

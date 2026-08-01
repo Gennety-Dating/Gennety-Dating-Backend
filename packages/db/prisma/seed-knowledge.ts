@@ -1,61 +1,59 @@
 import { PrismaClient } from "@prisma/client";
 
+/**
+ * `system_knowledge` seeding.
+ *
+ * **This file no longer seeds product rules, and that is the point.** It used
+ * to carry five rows describing photo limits, the emergency window, the
+ * verification rail and the scheduling flow — and every one of them drifted
+ * away from the product, silently, because nothing ties a DB row to the code
+ * it describes. Production was still serving "minimum 2 photos, maximum 4"
+ * (really 3/10), "3 hours before the date" (really 5), "all users must verify
+ * a university email" (false since Registration v2's phone track) and "AI
+ * proposes times, then calendar if needed" (that flow was removed 2026-05-07).
+ * The repo copy had already been half-corrected, which made it worse: two
+ * versions of the same wrong thing.
+ *
+ * Product knowledge now lives in `apps/bot/src/services/product-playbook.ts` —
+ * code-owned, flag-aware, unit-tested, and reviewed alongside the behaviour it
+ * describes. `system_knowledge` remains ONLY as an extension point for genuine
+ * operator notes that have no home in code (a temporary launch caveat, a
+ * support instruction). It is deliberately empty by default.
+ *
+ * `zero_chat_philosophy` is retired for the same reason as the rest: it
+ * asserts users "NEVER message each other through our platform", which stopped
+ * being unconditionally true once the pre-date proxy chat shipped
+ * (PRODUCT_SPEC §Phase 4). The playbook states the carve-out correctly.
+ *
+ * NOTE: rows under `admin_cache:*` in this table are the admin dashboard's
+ * analytics cache, not knowledge. `fetchKnowledgeBase` excludes them; never
+ * add them here.
+ */
+
 const prisma = new PrismaClient();
 
-const entries = [
-  {
-    key: "zero_chat_philosophy",
-    title: "Zero-Chat Philosophy",
-    category: "philosophy",
-    priority: 0,
-    content: `Gennety Dating is a Zero-Chat dating service. Users NEVER message each other through our platform.
-The AI matchmaker finds compatible matches, proposes them with a personalized pitch, and negotiates the logistics of the first date.
-Users just show up. No swiping, no chatting, no awkward first messages.
-If a user asks to message their match, explain that our philosophy is to skip the texting phase entirely — science shows that real chemistry is best discovered in person.`,
-  },
-  {
-    key: "match_timing_faq",
-    title: "Match Timing & Batch Schedule",
-    category: "faq",
-    priority: 1,
-    content: `Matches are generated in weekly batches. The system runs a global matching algorithm once per week.
-After the batch runs, matched users receive a personalized AI-generated pitch.
-Both users must accept the match within 24 hours or it expires.
-If both accept, the progressive scheduling flow begins (AI proposes times, then calendar if needed).
-Users should keep their profile active and updated to maximize match quality.`,
-  },
-  {
-    key: "profile_rules",
-    title: "Profile & Editing Rules",
-    category: "rules",
-    priority: 2,
-    content: `Core identity data (Name, Age, University/Email) is FIXED after onboarding and cannot be changed.
-Users CAN edit: bio/psychological summary, major, age range preferences, visual preferences, and photos.
-Minimum 4 photos are required for an active profile. Maximum 10 photos.
-Bio length is capped at 500 characters.
-Encourage users to keep their profile fresh — updated photos and preferences improve match quality.`,
-  },
-  {
-    key: "emergency_protocol",
-    title: "Emergency Protocol & Date Lifecycle",
-    category: "rules",
-    priority: 3,
-    content: `5 hours before a scheduled date, the emergency cancellation window unlocks.
-To cancel, the user MUST provide a written explanation. The bot forwards the EXACT text to the other person — no filtering, no AI rewriting.
-Ice-breaker conversation starters are sent 5 hours before the date to both users.
-The day after a date, the bot asks both users for feedback to improve future matching.
-Cancelling too frequently may affect future match quality.`,
-  },
-  {
-    key: "university_verification",
-    title: "University Email Verification",
-    category: "rules",
-    priority: 4,
-    content: `All users must verify a corporate university email address (.edu, .ac.uk, etc.) during onboarding.
-This cannot be changed after verification. It ensures all users are real university students.
-If a user has trouble verifying, they can request a new OTP code.
-We do not accept personal email addresses (Gmail, Yahoo, etc.).`,
-  },
+/** Operator notes to (re)create. Empty by design — see the header. */
+const entries: Array<{
+  key: string;
+  title: string;
+  category: string;
+  priority: number;
+  content: string;
+}> = [];
+
+/**
+ * Legacy product-rule rows to switch OFF wherever this runs.
+ *
+ * Deactivated rather than deleted so the historical content stays inspectable
+ * and re-running is idempotent. `fetchKnowledgeBase` filters on `active`, so
+ * flipping the flag is what actually removes them from the agent's prompt.
+ */
+const RETIRED_KEYS = [
+  "zero_chat_philosophy",
+  "match_timing_faq",
+  "profile_rules",
+  "emergency_protocol",
+  "university_verification",
 ];
 
 async function main() {
@@ -70,10 +68,17 @@ async function main() {
         content: entry.content,
         category: entry.category,
         priority: entry.priority,
+        active: true,
       },
     });
     console.log(`  ✓ ${entry.key}`);
   }
+
+  const retired = await prisma.systemKnowledge.updateMany({
+    where: { key: { in: RETIRED_KEYS }, active: true },
+    data: { active: false },
+  });
+  console.log(`  ✓ retired ${retired.count} legacy product-rule row(s)`);
 
   console.log("Done.");
 }

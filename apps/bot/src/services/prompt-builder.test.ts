@@ -73,8 +73,8 @@ function event(partial: Partial<ChatEventView>): ChatEventView {
 describe("fetchKnowledgeBase", () => {
   it("returns formatted knowledge entries", async () => {
     mockKnowledge.mockResolvedValue([
-      { title: "Zero-Chat Philosophy", content: "No in-app chat." },
-      { title: "Match Timing", content: "Weekly batches." },
+      { key: "philosophy", title: "Zero-Chat Philosophy", content: "No in-app chat." },
+      { key: "timing", title: "Match Timing", content: "Weekly batches." },
     ]);
 
     const result = await fetchKnowledgeBase();
@@ -86,7 +86,7 @@ describe("fetchKnowledgeBase", () => {
 
   it("caches results for subsequent calls", async () => {
     mockKnowledge.mockResolvedValue([
-      { title: "Test", content: "Cached content." },
+      { key: "test", title: "Test", content: "Cached content." },
     ]);
 
     await fetchKnowledgeBase();
@@ -97,27 +97,67 @@ describe("fetchKnowledgeBase", () => {
 
   it("re-fetches after cache is cleared", async () => {
     mockKnowledge.mockResolvedValue([
-      { title: "Test", content: "First." },
+      { key: "test", title: "Test", content: "First." },
     ]);
 
     await fetchKnowledgeBase();
     clearKnowledgeCache();
 
     mockKnowledge.mockResolvedValue([
-      { title: "Test", content: "Second." },
+      { key: "test", title: "Test", content: "Second." },
     ]);
 
     const result = await fetchKnowledgeBase();
     expect(result).toContain("Second.");
     expect(mockKnowledge).toHaveBeenCalledTimes(2);
   });
+
+  // The admin dashboard caches its heavy analytics queries as rows in this same
+  // table. They are internal metrics, not knowledge, and they used to ride into
+  // every agent turn (~23k chars) because this query had no category filter.
+  it("excludes admin analytics cache rows at the query level", async () => {
+    mockKnowledge.mockResolvedValue([]);
+    await fetchKnowledgeBase();
+
+    const where = mockKnowledge.mock.calls[0]?.[0]?.where;
+    expect(where.category).toEqual({ not: "admin_cache" });
+    expect(where.NOT).toEqual({ key: { startsWith: "admin_cache:" } });
+  });
+
+  it("drops an admin_cache row that slipped past the query", async () => {
+    mockKnowledge.mockResolvedValue([
+      {
+        key: "admin_cache:growth:v1",
+        title: "Admin analytics cache: growth:v1",
+        content: '{"totalUsers":13,"activationRate":0.385}',
+      },
+      { key: "ops_note", title: "Ops note", content: "Launch caveat." },
+    ]);
+
+    const result = await fetchKnowledgeBase();
+    expect(result).not.toContain("totalUsers");
+    expect(result).not.toContain("Admin analytics cache");
+    expect(result).toContain("Launch caveat.");
+  });
+
+  it("truncates an oversized knowledge block and warns", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mockKnowledge.mockResolvedValue([
+      { key: "huge", title: "Huge", content: "x".repeat(9_000) },
+    ]);
+
+    const result = await fetchKnowledgeBase();
+    expect(result.length).toBeLessThanOrEqual(4_001);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
 });
 
 describe("buildSystemPrompt", () => {
   it("assembles persona + knowledge + user context with accurate next batch date", async () => {
     mockKnowledge.mockResolvedValue([
-      { title: "Zero-Chat Philosophy", content: "Users NEVER message each other." },
-      { title: "Match Timing FAQ", content: "Matches are generated weekly." },
+      { key: "philosophy", title: "Zero-Chat Philosophy", content: "Users NEVER message each other." },
+      { key: "faq", title: "Match Timing FAQ", content: "Matches are generated weekly." },
     ]);
 
     mockUserFind.mockResolvedValue({

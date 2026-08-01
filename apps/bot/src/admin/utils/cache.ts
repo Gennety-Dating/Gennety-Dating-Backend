@@ -1,14 +1,29 @@
 import { prisma } from "@gennety/db";
 
-const CACHE_KEY_PREFIX = "admin_cache:";
+/**
+ * The two markers that identify a row as analytics cache rather than operator
+ * knowledge. Exported because `services/prompt-builder.ts` filters on BOTH of
+ * them — a duplicated literal there is exactly what let this namespace leak.
+ */
+export const ADMIN_CACHE_KEY_PREFIX = "admin_cache:";
+export const ADMIN_CACHE_CATEGORY = "admin_cache";
+
+const CACHE_KEY_PREFIX = ADMIN_CACHE_KEY_PREFIX;
 
 /**
  * SystemKnowledge-backed JSON cache for heavy analytics queries.
  *
  * Reuses the existing `system_knowledge` table (already in the schema)
- * instead of pulling in Redis. Rows under the `admin_cache` category are
- * never read by the bot's runtime knowledge lookups — the prefix on the
- * key + the dedicated category keep the two namespaces from colliding.
+ * instead of pulling in Redis.
+ *
+ * **These rows must never reach the menu agent's prompt.** They are not
+ * knowledge — they are internal analytics (user counts, gender funnel, city
+ * centroids, growth) — and the isolation is enforced by ONE place:
+ * `fetchKnowledgeBase` in `services/prompt-builder.ts`, which excludes both
+ * `ADMIN_CACHE_CATEGORY` and `ADMIN_CACHE_KEY_PREFIX`. This comment used to
+ * claim the namespaces "never collide" on their own; they did, for months —
+ * that query had no category filter at all, so ~23k characters of analytics
+ * rode into every single agent turn.
  *
  * Returns the cached value if its `updatedAt` is younger than `ttlSeconds`,
  * otherwise recomputes via `compute()` and writes the new value.
@@ -77,7 +92,7 @@ export async function getOrCompute<T>(
       key: cacheKey,
       title: `Admin analytics cache: ${key}`,
       content: serialized,
-      category: "admin_cache",
+      category: ADMIN_CACHE_CATEGORY,
     },
     update: { content: serialized, active: true },
   });
