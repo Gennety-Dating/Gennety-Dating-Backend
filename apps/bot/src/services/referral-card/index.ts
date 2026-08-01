@@ -155,13 +155,13 @@ interface PortraitSlot {
 }
 
 const PORTRAIT_LAYOUT: readonly PortraitSlot[] = [
-  { left: -62, top: 54, w: 168, h: 250, rotate: -9, opacity: 0.62 },
-  { right: -70, top: 128, w: 156, h: 232, rotate: 8, opacity: 0.55 },
-  { left: -80, top: 452, w: 162, h: 240, rotate: 7, opacity: 0.42 },
-  { right: -58, top: 566, w: 170, h: 252, rotate: -8, opacity: 0.5 },
+  { left: -34, top: 54, w: 168, h: 250, rotate: -9, opacity: 0.62 },
+  { right: -40, top: 128, w: 156, h: 232, rotate: 8, opacity: 0.55 },
+  { left: -46, top: 452, w: 162, h: 240, rotate: 7, opacity: 0.42 },
+  { right: -32, top: 566, w: 170, h: 252, rotate: -8, opacity: 0.5 },
   // Bleeds off the left rather than sitting inside it: the gift chip's fill is
   // semi-transparent, so a tile under its left end shows through and muddies it.
-  { left: -52, bottom: -86, w: 158, h: 236, rotate: 6, opacity: 0.55 },
+  { left: -28, bottom: -58, w: 158, h: 236, rotate: 6, opacity: 0.55 },
 ];
 
 /**
