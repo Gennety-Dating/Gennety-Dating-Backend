@@ -109,6 +109,12 @@ What ships:
   three currently-`unverified` production accounts are the only ones affected,
   and nobody loses `verified` status.
 
+Also lands `pnpm gdpr:export` — the subject-access / portability tool the policy
+now promises. It needs no deploy step of its own (it is a script run against
+whichever `DATABASE_URL` is in scope; pass `--prod` for production) but note
+that its output is a full personal-data dump written OUTSIDE the repo: deliver
+it over a channel the requester controls, then delete it.
+
 Legal documents were rewritten in the same commit (Privacy Policy v4.0, Terms
 v3.0). **They are not live until the website is redeployed** — see
 `legal/README.md`, which also records the two remaining publication blockers

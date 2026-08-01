@@ -86,8 +86,12 @@ placeholders left in the text:
 - **No DPIA (Art. 35) and no RoPA (Art. 30) exist yet.** Both are mandatory for
   this processing (biometrics + large-scale profiling + special categories) and
   are the next deliverables after these documents.
-- **No self-service data export** for Art. 15 / Art. 20 requests; they would be
-  fulfilled by hand today.
+- Art. 15 / Art. 20 requests are served by `pnpm gdpr:export -- --telegram=<id>
+  --prod` (also `--user` / `--email` / `--phone`). It discovers tables from
+  `information_schema` rather than a hand-written list, so a table added later
+  cannot fall out of the export silently, and it redacts another user's
+  free-text account of a report under Art. 15(4). There is still no
+  *self-service* export in the product — the operator runs it.
 
 ## Follow-up code tasks (separate from these drafts)
 
