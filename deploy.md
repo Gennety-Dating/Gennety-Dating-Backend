@@ -649,7 +649,28 @@ Two live bugs were found and fixed while verifying, both pre-existing:
   project. DNS still points at Vercel. The dashboard is reachable only at
   `https://gennety-dating-dashboard.vercel.app`. Note `ADMIN_DASHBOARD_ORIGIN`
   still lists the dead domain, which is harmless but should be re-pointed when
-  the domain is restored.
+  the domain is restored. **Superseded 2026-08-01** — see below.
+
+**2026-08-01 (env-only) — `admin.gennety.com` added to `ADMIN_DASHBOARD_ORIGIN`.**
+The dashboard's Vercel domain was changed to `admin.gennety.com`, and the admin
+API's CORS allowlist is a concrete-origin list (empty/`*` DENIES cross-origin),
+so every request from the new domain failed at the preflight — surfacing in the
+browser as `Failed to fetch` with nothing loading at all, not even the user
+list. Fixed by editing `/opt/gennety/.env` (backed up first) +
+`pm2 restart gennety-bot --update-env`:
+
+```
+ADMIN_DASHBOARD_ORIGIN=https://admin.gennety.com,https://datingadmin.gennety.com,https://gennety-dating-dashboard.vercel.app
+```
+
+All three are kept so the old Vercel URL keeps working during the cutover. The
+dead `datingadmin` entry is still listed and still harmless. Verified live: a
+preflight carrying `Origin: https://admin.gennety.com` answers `204` with
+`access-control-allow-origin` echoing that origin, while a foreign origin gets
+`204` with **no** `access-control-allow-origin` (i.e. the allowlist is still a
+real gate, not a wildcard). **This is the only change needed when the dashboard
+moves domains** — no code, no schema, no redeploy. Rollback: restore the
+`.env.bak.*` snapshot and restart.
 
 rsync dry-run listed exactly 2 deletions (the usual stale `apps/video/build`
 artifacts). **The exclude list was widened for this run** with
